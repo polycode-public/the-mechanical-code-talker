@@ -3,8 +3,8 @@
 // harness. Maintainer-only tooling: never imported by src/ or bin/, never run
 // by `npm test`. Offline, $0 — no network, no LLM.
 //
-// Measures how much of a real, human-written prose corpus (this repo's own
-// *.md docs — see scripts/lib/text-corpus.mjs for why) tmct's ACE-OWL grammar
+// Measures how much of a real, human-written prose corpus (corpus/prose/, the
+// frozen external corpus — see scripts/lib/text-corpus.mjs for why) tmct's ACE-OWL grammar
 // (src/domain/grammar/ace.mjs's parseAce) already parses. Three buckets per sentence:
 //   hit     — parseAce returned a pattern with at least one triple (a genuine,
 //             emittable axiom — every word resolved against the lexicon)
@@ -27,15 +27,16 @@
 // demonstrably moves the coverage number without touching
 // src/domain/grammar/lexicon-core.json or any other product file.
 
-import { readdir, readFile, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { parseAce } from "../src/domain/grammar/ace.mjs";
 import { loadLexicon } from "../src/domain/grammar/lexicon.mjs";
-import { loadMarkdownCorpus } from "./lib/text-corpus.mjs";
+import { loadProseCorpus, proseCorpusFiles } from "./lib/text-corpus.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..");
+const PROSE_DIR = join(REPO_ROOT, "corpus", "prose");
 
 function classify(sentence, lexicon) {
   const r = parseAce(sentence, lexicon);
@@ -48,28 +49,53 @@ function arg(name) {
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : null;
 }
 
+/** Split a classified corpus by its top-level family directory (the
+ *  corpus/prose/ subdirectory a sentence came from), so the sources can be
+ *  compared against each other rather than only in aggregate. */
+function perFamily(rows, lexicon) {
+  const families = new Map();
+  for (const row of rows) {
+    const family = row.file.split("/")[0];
+    if (!families.has(family)) families.set(family, { hit: 0, residue: 0, miss: 0, total: 0 });
+    const counts = families.get(family);
+    counts[classify(row.sentence, lexicon)]++;
+    counts.total++;
+  }
+  return families;
+}
+
 async function main() {
   const lexicon = loadLexicon();
-  const files = (await readdir(REPO_ROOT)).filter((f) => f.endsWith(".md")).sort();
-  const corpus = await loadMarkdownCorpus(REPO_ROOT, { files });
+  const files = await proseCorpusFiles(PROSE_DIR);
+  const corpus = await loadProseCorpus(PROSE_DIR, { files });
 
   const buckets = { hit: [], residue: [], miss: [] };
   for (const row of corpus) buckets[classify(row.sentence, lexicon)].push(row);
 
   const total = corpus.length;
+  const families = perFamily(corpus, lexicon);
   const report = {
-    corpus: `${files.length} root *.md files`,
+    corpus: `corpus/prose/ — ${files.length} frozen text files`,
     total,
     hit: buckets.hit.length,
     residue: buckets.residue.length,
     miss: buckets.miss.length,
     hitRate: total ? buckets.hit.length / total : 0,
+    byFamily: Object.fromEntries(families),
   };
 
-  console.log(`template-coverage: ${files.length} markdown files, ${total} sentences`);
+  console.log(`template-coverage: ${files.length} frozen prose files (corpus/prose/), ${total} sentences`);
   console.log(`  hit:     ${buckets.hit.length} (${(report.hitRate * 100).toFixed(1)}%) — full ACE axiom emitted`);
   console.log(`  residue: ${buckets.residue.length} (${((buckets.residue.length / total) * 100).toFixed(1)}%) — pattern shape matched, undeclared word(s)`);
   console.log(`  miss:    ${buckets.miss.length} (${((buckets.miss.length / total) * 100).toFixed(1)}%) — no pattern fit at all`);
+  for (const [family, c] of [...families].sort()) {
+    console.log(
+      `    ${family.padEnd(10)} ${String(c.total).padStart(5)} sentences — ` +
+        `hit ${c.hit} (${((c.hit / c.total) * 100).toFixed(1)}%), ` +
+        `residue ${c.residue} (${((c.residue / c.total) * 100).toFixed(1)}%), ` +
+        `miss ${c.miss} (${((c.miss / c.total) * 100).toFixed(1)}%)`,
+    );
+  }
 
   const rescuePath = arg("--rescue");
   if (rescuePath) {

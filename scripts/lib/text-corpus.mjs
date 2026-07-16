@@ -1,20 +1,30 @@
 // scripts/lib/text-corpus.mjs — shared, maintainer-only corpus loading for
-// PLAN_TEMPLATE_COVERAGE.md's §6 harness (scripts/template-coverage.mjs) and
-// generator (scripts/generate-template-variants.mjs). Not part of the product
-// path — never imported by src/ or bin/, never run by `npm test`.
+// the coverage harness (scripts/template-coverage.mjs) and the generator
+// (scripts/generate-template-variants.mjs). Not part of the product path —
+// never imported by src/ or bin/, never run by `npm test`.
 //
-// Corpus choice: this repo's own committed *.md docs — real, human-written
-// prose about a real codebase, already committed, MPL-2.0 licensed (this
-// project's own license — zero licensing question), and simpler to extract
-// than SemCor's YAML-wrapped running text (PLAN_TEMPLATE_COVERAGE.md records
-// the comparison that led here). A deliberately plain splitter: strip fenced
-// code blocks (the thing most likely to look like a "sentence" but isn't),
-// strip markdown structural noise (headers, tables, bare list markers), then
-// split on sentence-ending punctuation. Not an NLP sentence segmenter — a
-// simple regex/period-based one, exactly as the plan calls for.
+// Corpus choice: corpus/prose/, an EXTERNAL, FROZEN corpus of public-domain
+// SQLite documentation and CC-BY-SA-4.0 Wikipedia text, fetched by
+// scripts/fetch-prose-corpus.mjs and committed with a per-file sha256.
+//
+// It used to be this repo's own root *.md docs, and the reason that had to go
+// is the reason this file exists: the corpus moved every time anyone edited a
+// doc. A sentence written into a plan that morning would appear in the next
+// day's committed corpus/generated/ace-surface-variants.jsonl, and
+// template-coverage's hit rate could not be compared between two versions
+// because the thing being measured shifted underneath the measurement. Frozen
+// text with a recorded URL and checksum holds still.
+//
+// The splitter is deliberately plain: strip fenced code blocks (the thing most
+// likely to look like a "sentence" but isn't), strip markdown structural noise
+// (headers, tables, bare list markers), then split on sentence-ending
+// punctuation. Not an NLP sentence segmenter — a simple regex/period-based one.
+// It still runs the markdown strip over corpus/prose/'s plain text, which is a
+// no-op on prose that has no markdown in it and cheap insurance against any
+// that sneaks through.
 
 import { readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { join, relative, sep } from "node:path";
 
 /** Strip ``` fenced code blocks (any language tag) from markdown text. */
 function stripFencedCode(text) {
@@ -66,14 +76,31 @@ export function splitProseSentences(text) {
     .filter((s) => s.split(/\s+/).filter(Boolean).length >= 3); // drop stray fragments
 }
 
-/** Load every root-level *.md file in `repoDir` (default: this repo) and
- *  return `[{sentence, file}]` across all of them, in file-then-position
- *  order (deterministic — same input tree always yields the same array). */
-export async function loadMarkdownCorpus(repoDir, { files } = {}) {
-  const names = files || (await readdir(repoDir)).filter((f) => f.endsWith(".md")).sort();
+/** Every *.txt under `dir`, recursively, as paths relative to `dir` with "/"
+ *  separators, sorted — one deterministic order on every platform. */
+export async function proseCorpusFiles(dir) {
+  const walk = async (current) => {
+    const entries = await readdir(current, { withFileTypes: true });
+    const found = [];
+    for (const entry of entries) {
+      const path = join(current, entry.name);
+      if (entry.isDirectory()) found.push(...(await walk(path)));
+      else if (entry.name.endsWith(".txt")) found.push(relative(dir, path).split(sep).join("/"));
+    }
+    return found;
+  };
+  return (await walk(dir)).sort();
+}
+
+/** Load the frozen prose corpus under `proseDir` (corpus/prose/) and return
+ *  `[{sentence, file}]` across every *.txt in it, in file-then-position order
+ *  (deterministic — the same tree always yields the same array). `file` is the
+ *  corpus-relative path, e.g. "wikipedia/Penguin.txt". */
+export async function loadProseCorpus(proseDir, { files } = {}) {
+  const names = files || (await proseCorpusFiles(proseDir));
   const out = [];
   for (const name of names) {
-    const text = await readFile(join(repoDir, name), "utf8");
+    const text = await readFile(join(proseDir, name), "utf8");
     for (const sentence of splitProseSentences(text)) out.push({ sentence, file: name });
   }
   return out;

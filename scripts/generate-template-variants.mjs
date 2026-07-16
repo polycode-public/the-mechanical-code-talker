@@ -9,7 +9,8 @@
 // (a generated row that doesn't actually re-parse is DROPPED, never written
 // — the committed file is proof-checked, not merely produced):
 //
-//   1. RESCUE — for every docs-corpus sentence (scripts/lib/text-corpus.mjs)
+//   1. RESCUE — for every frozen prose-corpus sentence (corpus/prose/, loaded
+//      by scripts/lib/text-corpus.mjs)
 //      that parseAce almost fits (exactly one undeclared "residue" word),
 //      look up that word's real WordNet synset and try substituting each
 //      member that is ALSO already declared in tmct's own lexicon
@@ -38,18 +39,19 @@
 //
 //   node scripts/generate-template-variants.mjs [--out <path>] [--limit <n>]
 
-import { readdir, readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { createHash } from "node:crypto";
 import { parseAce } from "../src/domain/grammar/ace.mjs";
 import { loadLexicon } from "../src/domain/grammar/lexicon.mjs";
-import { loadMarkdownCorpus } from "./lib/text-corpus.mjs";
+import { loadProseCorpus } from "./lib/text-corpus.mjs";
 import { synsetsFor } from "./lib/wordnet-synonyms.mjs";
 import { classify } from "./template-coverage.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..");
+const PROSE_DIR = join(REPO_ROOT, "corpus", "prose");
 const OUT_DEFAULT = join(REPO_ROOT, "corpus", "generated", "ace-surface-variants.jsonl");
 const SEED_CORPORA = ["human-examples.jsonl", "human-examples-medium.jsonl", "human-examples-large.jsonl"];
 
@@ -83,8 +85,7 @@ function declaredLemmas(lexicon, pos) {
 // ---- 1. RESCUE: docs-corpus near-misses -----------------------------------
 
 async function generateRescues(lexicon, limit) {
-  const files = (await readdir(REPO_ROOT)).filter((f) => f.endsWith(".md")).sort();
-  const corpus = await loadMarkdownCorpus(REPO_ROOT, { files });
+  const corpus = await loadProseCorpus(PROSE_DIR);
   const declared = {
     noun: declaredLemmas(lexicon, "noun"),
     verb: declaredLemmas(lexicon, "verb"),
@@ -231,7 +232,11 @@ async function writeManifest(outPath, rowCount, bytes) {
     rows: rowCount,
     bytes,
     sha256,
-    license: "CC-BY-4.0 (WordNet-derived synonym substitutions of Open English WordNet / SemCor example sentences and this repo's own MPL-2.0 docs prose — see corpus/generated/README.md)",
+    license:
+      "CC-BY-SA-4.0 (WordNet-derived synonym substitutions of Open English WordNet / SemCor example " +
+      "sentences (CC-BY-4.0) and corpus/prose/, which includes CC-BY-SA-4.0 Wikipedia text. Share-alike " +
+      "is viral and the rescue rows quote and modify that text, so the combined file is CC-BY-SA-4.0 — " +
+      "the stricter of the two. See corpus/prose/wikipedia/LICENSE-NOTICE and corpus/generated/README.md)",
   };
   await writeFile(join(dirname(outPath), "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
   return manifest;
@@ -242,7 +247,7 @@ async function main() {
   const limit = Number(arg("--limit", "300"));
   const lexicon = loadLexicon();
 
-  console.log("generate-template-variants: 1/3 rescue pass (docs corpus near-misses)...");
+  console.log("generate-template-variants: 1/3 rescue pass (frozen prose corpus near-misses)...");
   const rescues = await generateRescues(lexicon, limit);
   console.log(`  ${rescues.length} rescued sentence(s)`);
 
