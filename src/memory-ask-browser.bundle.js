@@ -2137,9 +2137,17 @@
     }
   });
 
-  // adapter-stub-ask-nlp.mjs:../ask-nlp.mjs
-  var init_ask_nlp = __esm({
-    "adapter-stub-ask-nlp.mjs:../ask-nlp.mjs"() {
+  // src/interpret/nlp-registry.mjs
+  function setDefaultNlpAdapter(factory) {
+    defaultAdapterFactory = factory;
+  }
+  function defaultNlp() {
+    return typeof defaultAdapterFactory === "function" ? defaultAdapterFactory() : null;
+  }
+  var defaultAdapterFactory;
+  var init_nlp_registry = __esm({
+    "src/interpret/nlp-registry.mjs"() {
+      defaultAdapterFactory = null;
     }
   });
 
@@ -2165,7 +2173,7 @@
       init_ace();
       init_constructions();
       init_merge();
-      init_ask_nlp();
+      init_nlp_registry();
       OPTIONAL_STRATEGIES = [
         ...typeof aceStrategy !== "undefined" ? [aceStrategy] : [],
         // eslint-disable-next-line no-undef
@@ -2241,14 +2249,6 @@
     }
   });
 
-  // adapter-stub-ask-nlp.mjs:./ask-nlp.mjs
-  var nlpAdapter2;
-  var init_ask_nlp2 = __esm({
-    "adapter-stub-ask-nlp.mjs:./ask-nlp.mjs"() {
-      nlpAdapter2 = void 0;
-    }
-  });
-
   // src/ask.mjs
   var ask_exports = {};
   __export(ask_exports, {
@@ -2299,9 +2299,6 @@
   }
   function verbFor(kind) {
     return REVERSE_MISS_VERB[kind] || kind;
-  }
-  function defaultNlp() {
-    return typeof nlpAdapter2 === "function" ? nlpAdapter2() : null;
   }
   function pruneSpuriousMeaningAmbiguity(parsed) {
     if (!parsed?.ambiguousParse || !Array.isArray(parsed.candidates) || parsed.candidates.length !== 2) return parsed;
@@ -4947,7 +4944,7 @@ ${lines.join("\n")}`;
       init_merge();
       init_prose();
       init_answer_variants();
-      init_ask_nlp2();
+      init_nlp_registry();
       askEdgesOfKindCache = /* @__PURE__ */ new WeakMap();
       SYMBOL_GRAIN_SIBLING = { calls: "callsSymbol", touches: "touchesSymbol" };
       FINE_ENTITY_TYPES = /* @__PURE__ */ new Set(["Function", "Method", "Class", "Attribute", "GlobalVariable"]);
@@ -6781,6 +6778,14 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
+  // adapter-stub-ask-nlp.mjs:./ask-nlp.mjs
+  var nlpAdapter;
+  var init_ask_nlp = __esm({
+    "adapter-stub-ask-nlp.mjs:./ask-nlp.mjs"() {
+      nlpAdapter = void 0;
+    }
+  });
+
   // node_modules/smol-toml/dist/date.js
   var init_date = __esm({
     "node_modules/smol-toml/dist/date.js"() {
@@ -8168,6 +8173,9 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_ask();
   init_graph_service();
   init_core();
+  init_nlp_registry();
+  init_ask_nlp();
+  setDefaultNlpAdapter(nlpAdapter);
   var TOOLS = [
     {
       name: "tmct_context",
@@ -8261,8 +8269,11 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   // src/chat.mjs
   init_ask_vocab();
   init_normalize();
+  init_nlp_registry();
+  init_ask_nlp();
   init_fuzzy();
   init_answer_variants();
+  setDefaultNlpAdapter(nlpAdapter);
   var CONTEXT_WORDS = /* @__PURE__ */ new Set(["it", "this", "that", "here"]);
   var isPronoun = (s) => CONTEXT_WORDS.has(String(s || "").trim().toLowerCase());
   var GOAL_BY_KIND = {

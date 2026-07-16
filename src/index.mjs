@@ -19,6 +19,12 @@ export { ask, resolveObject } from "./ask.mjs";
 // ({raw, normalized, normalizationChanged, results, parsed, class, alternates}).
 export { interpret } from "./interpret/pipeline.mjs";
 
+// Composition: the library entry wires the domain parser's default lemma/POS
+// adapter, same as the chat and tool surfaces do for themselves.
+import { setDefaultNlpAdapter } from "./interpret/nlp-registry.mjs";
+import { nlpAdapter } from "./ask-nlp.mjs";
+setDefaultNlpAdapter(nlpAdapter);
+
 // Graph traversal primitives.
 export { relationKind, impactClosure } from "./codegraph.mjs";
 

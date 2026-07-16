@@ -43,8 +43,15 @@ import {
   stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS,
 } from "./ask-vocab.mjs";
 import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint } from "./interpret/normalize.mjs";
+import { setDefaultNlpAdapter } from "./interpret/nlp-registry.mjs";
+import { nlpAdapter } from "./ask-nlp.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { pickPhrase } from "./answer-variants.mjs";
+
+// Composition: the chat surface supplies the domain parser's default lemma/POS
+// adapter (the browser bundle's ask-nlp stub carries no factory, so this is a
+// no-op there and the parser stays adapter-less).
+setDefaultNlpAdapter(nlpAdapter);
 
 // uuidv7 lives in ./uuid.mjs (shared with telemetry + the bench stamp); re-exported
 // here because callers/tests still import it from chat.mjs.

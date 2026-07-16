@@ -36,7 +36,7 @@ import { pickPhrase } from "./answer-variants.mjs";
 
 // Normalization stays importable from its original site (tests + chat surface).
 export { normalizeQuery, applyNegationFrames };
-import { nlpAdapter } from "./ask-nlp.mjs";
+import { defaultNlp } from "./interpret/nlp-registry.mjs";
 
 // Per-graph, per-kind memo; a local copy of codegraph.mjs's private
 // edgesOfKind. Named differently from codegraph.mjs's own cache: the inlined
@@ -119,12 +119,6 @@ const LEADING_RELATION_VERB_RE = new RegExp(
     .join("|")})(?:s|ing|ed)?\\s+`,
   "i",
 );
-
-/** The default lemma/POS adapter: wink-nlp when Node has the optional deps
- *  installed, null otherwise. */
-function defaultNlp() {
-  return typeof nlpAdapter === "function" ? nlpAdapter() : null;
-}
 
 /** Compile a free-text question into {shape, kind, entityType, modifier,
  *  object[, subject]}, or null if no strategy fits. When strategies parse and

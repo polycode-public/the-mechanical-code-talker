@@ -54,6 +54,12 @@ import { createGraphService } from "./providers/graph-service.mjs";
 // the code-map graph.json). Used by the fall-through bridge below: when the code-map
 // resolves nothing for a concept query, answer from the reified isa-family facts instead.
 import { loadMemory, readFactRows, normFactTerm } from "./memory/core.mjs";
+import { setDefaultNlpAdapter } from "./interpret/nlp-registry.mjs";
+import { nlpAdapter } from "./ask-nlp.mjs";
+
+// Composition: the tool layer supplies the domain parser's default lemma/POS
+// adapter, so dispatchTool-only consumers get the same NL tier chat wires.
+setDefaultNlpAdapter(nlpAdapter);
 
 const SNIPPET_MAX_LINES = 200;
 

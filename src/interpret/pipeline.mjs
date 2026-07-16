@@ -19,7 +19,7 @@ import { noiseStripStrategy } from "./strategies/noise-strip.mjs";
 import { aceStrategy } from "./strategies/ace.mjs";
 import { constructionsStrategy } from "./strategies/constructions.mjs";
 import { mergeStrategyResults } from "./merge.mjs";
-import { nlpAdapter } from "../ask-nlp.mjs";
+import { defaultNlp } from "./nlp-registry.mjs";
 
 /** Registered strategies, in precedence order: grammar + keyword-spot (shared
  *  "graph-query" class), noise-strip (fires only when the anchored grammar
@@ -41,10 +41,6 @@ export function normalizeInput(input) {
   const raw = String(input || "").trim().replace(/\s+/g, " ");
   const text = raw ? applyPhrasingFrames(applyNegationFrames(normalizeQuery(raw))) : "";
   return { raw, text, changed: text !== raw };
-}
-
-function defaultNlp() {
-  return typeof nlpAdapter === "function" ? nlpAdapter() : null;
 }
 
 /** Synchronous strategy run (ask.mjs's parseQuery path). Skips a Promise-
