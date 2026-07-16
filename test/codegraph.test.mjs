@@ -42,7 +42,6 @@ import {
   rankModulesByProximity,
   renderCalls,
   callHint,
-  renderToolsCatalog,
   renderContextMore,
   renderFileHistory,
   renderMethodHistory,
@@ -726,20 +725,6 @@ test("renderContextMore renders only the omitted sections (siblings/tests/cochan
   assert.match(text, /sibling symbols/);
   assert.match(text, /Class Widget/);
   assert.match(text, /covering tests: app\/unit-tests\/b\.test\.mjs/);
-});
-
-test("renderToolsCatalog lists the cold tools with exact CLI invocations", () => {
-  const cat = renderToolsCatalog("/abs/bin/cli.mjs");
-  assert.match(cat, /# tmct cold-tool catalog/);
-  // hot tools are NOT given a cold ## entry
-  assert.doesNotMatch(cat, /## tmct_context\n/);
-  assert.doesNotMatch(cat, /## tmct_snippet\n/);
-  // representative cold tools + their exact Bash invocation
-  for (const name of ["tmct_describe", "tmct_calls", "tmct_file_history", "tmct_method_history", "tmct_class_history", "tmct_context_more", "tmct_impact"]) {
-    assert.ok(cat.includes(`## ${name}`), `missing ${name}`);
-  }
-  assert.match(cat, /node \/abs\/bin\/cli\.mjs cli tmct_describe '\{"symbol":"django\/utils\/text\.py"\}'/);
-  assert.match(cat, /node \/abs\/bin\/cli\.mjs cli tmct_calls '\{"symbol":"slugify"\}'/);
 });
 
 test("structural ranking: a structurally-closer sibling outranks a far one within a name tier", () => {

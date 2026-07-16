@@ -8,6 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dispatchTool, TOOLS } from "../src/tools/server.mjs";
+import { renderToolsCatalog } from "../src/tools/catalog.mjs";
+import { TOOL_DEFINITIONS, HOT_TOOLS, COLD_TOOLS } from "../src/tools/definitions.mjs";
 import { ToolError } from "../src/adapters/config.mjs";
 
 const fixture = JSON.parse(
@@ -21,15 +23,6 @@ const call = (name, args, source = stubSource) => dispatchTool(name, args, { con
 // The hot-tool catalog survives the MCP drop as plain data: lean descriptions +
 // JSON schemas the chat surface and any future front-end can render.
 const EXPECTED_TOOLS = ["tmct_context", "tmct_snippet", "tmct_ask"];
-
-// The cold tools dispatchTool must still serve by name even though they are not
-// in the hot catalog.
-const COLD_TOOLS = [
-  "tmct_describe", "tmct_signature", "tmct_impact", "tmct_search", "tmct_members",
-  "tmct_subclasses", "tmct_architecture", "tmct_exports", "tmct_tests_for", "tmct_untested",
-  "tmct_history", "tmct_callers", "tmct_callees", "tmct_cochanges", "tmct_calls",
-  "tmct_file_history", "tmct_method_history", "tmct_class_history", "tmct_context_more",
-];
 
 test("TOOLS catalog: exactly the hot tools, lean descriptions, JSON schemas", () => {
   assert.deepEqual(TOOLS.map((t) => t.name), EXPECTED_TOOLS);
@@ -48,7 +41,7 @@ test("TOOLS catalog: exactly the hot tools, lean descriptions, JSON schemas", ()
 
 test("cold tools stay dispatchable by name though outside the hot catalog", async () => {
   const listed = new Set(TOOLS.map((t) => t.name));
-  for (const name of COLD_TOOLS) assert.ok(!listed.has(name), `${name} should be unlisted`);
+  for (const { name } of COLD_TOOLS) assert.ok(!listed.has(name), `${name} should be unlisted`);
   // a representative cold tool still answers through the dispatcher
   const desc = await call("tmct_describe", { symbol: "a.mjs" });
   assert.match(desc, /app\/lib\/a\.mjs — Module/);
@@ -362,3 +355,34 @@ test("security: tmct_context never leaks a path-traversal site.path's content en
     await rm(secretPath, { force: true });
   }
 });
+
+test("the cold-tool catalog lists every cold tool with its exact CLI invocation", () => {
+  const cat = renderToolsCatalog("/abs/bin/cli.mjs");
+  assert.match(cat, /# tmct cold-tool catalog/);
+  // hot tools are NOT given a cold ## entry
+  assert.doesNotMatch(cat, /## tmct_context\n/);
+  assert.doesNotMatch(cat, /## tmct_snippet\n/);
+  for (const { name, example } of COLD_TOOLS) {
+    assert.ok(cat.includes(`## ${name}`), `missing ${name}`);
+    assert.ok(
+      cat.includes(`node /abs/bin/cli.mjs cli ${name} '${JSON.stringify(example)}'`),
+      `missing invocation for ${name}`,
+    );
+  }
+});
+
+test("the catalog names the hot tools without giving them a cold entry", () => {
+  const cat = renderToolsCatalog("/abs/bin/cli.mjs");
+  for (const { name } of HOT_TOOLS) assert.ok(cat.includes(`\`${name}\``), `missing ${name}`);
+});
+
+test("every tool the definitions declare is dispatchable, and nothing else is", async () => {
+  await assert.rejects(call("tmct_not_a_tool", {}), (e) => e instanceof ToolError && /unknown tool/.test(e.message));
+  // an unknown name is rejected before any graph load; a declared name never reports "unknown tool"
+  for (const { name } of TOOL_DEFINITIONS) {
+    const err = await call(name, {}).then(() => null, (e) => e);
+    if (err) assert.doesNotMatch(err.message, /unknown tool/, `${name} reported unknown`);
+  }
+});
+
+

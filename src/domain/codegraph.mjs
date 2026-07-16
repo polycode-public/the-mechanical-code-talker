@@ -2217,52 +2217,6 @@ export function renderGraphOnlyBundle(plan, mask) {
   return out.join("\n");
 }
 
-// ---- cold-tool catalog (written to <repo>/.tmct/TOOLS.md by the index step) -----
-
-/** Markdown catalog of the COLD tools (everything except the hot catalog tools): each
- *  with a one-line purpose and the exact Bash invocation via the CLI `cli <tool>` route.
- *  Pure — `cliPath` is the absolute path to bin/cli.mjs the caller wants embedded. */
-export function renderToolsCatalog(cliPath) {
-  const cold = [
-    ["tmct_describe", "Locate one symbol and list its typed edges (both directions) with provenance.", { symbol: "django/utils/text.py" }],
-    ["tmct_signature", "One symbol's API surface (params, returns, raises/catches, flags, decorators, doc) without the body.", { symbol: "Truncator.chars" }],
-    ["tmct_impact", "Transitive reverse closure over imports/calls — what breaks if a module changes, by depth, with tests.", { module: "django/utils/text.py" }],
-    ["tmct_search", "Free-text/ranked lookup over the code-map to find the right module or symbol.", { query: "template filters", kind: "function" }],
-    ["tmct_members", "A class's methods + attributes (file:line, decorators) in one slice.", { class: "Truncator" }],
-    ["tmct_subclasses", "A class's base classes plus the transitive set of classes that extend it.", { class: "Field" }],
-    ["tmct_architecture", "Package/module map + the most-imported hub modules (optionally scoped to a package).", { package: "django/template" }],
-    ["tmct_exports", "A module's public __all__ surface, each name resolved to the module that defines it.", { module: "django/db/models/__init__.py" }],
-    ["tmct_tests_for", "The test modules covering a symbol or module, from the typed test edges.", { symbol: "django/utils/text.py" }],
-    ["tmct_untested", "Source modules with no covering test module — a coverage-gap view (no arguments).", {}],
-    ["tmct_history", "Recent commits that touched a symbol's module (newest first).", { symbol: "django/utils/text.py" }],
-    ["tmct_file_history", "Commits that touched a symbol's module, each with author / date / subject.", { symbol: "django/utils/text.py" }],
-    ["tmct_method_history", "Commits that touched a specific method symbol (fine-grained), with author / date / subject.", { symbol: "Truncator.chars" }],
-    ["tmct_class_history", "Commits that touched a specific class symbol (fine-grained), with author / date / subject.", { symbol: "Truncator" }],
-    ["tmct_callers", "Modules that call into a symbol's module (one hop).", { symbol: "django/utils/text.py" }],
-    ["tmct_callees", "Modules a symbol's module calls into (one hop).", { symbol: "django/utils/text.py" }],
-    ["tmct_calls", "The in-repo symbols a function calls (fn→fn), each with file:line.", { symbol: "slugify" }],
-    ["tmct_cochanges", "Modules that historically change in the same commit as a symbol's module (git co-change).", { symbol: "django/utils/text.py" }],
-    ["tmct_context_more", "The bundle sections a lean tmct_context omitted (siblings / tests / cochange / class members / re-exports).", { symbol: "django/utils/text.py" }],
-  ];
-  const lines = [
-    "# tmct cold-tool catalog",
-    "",
-    "The hot tools — `tmct_context` (start here to add/modify code; supports `depth: min|auto|full`) and `tmct_snippet` (exact source of one symbol) — carry full schemas in the TOOLS catalog.",
-    "",
-    "The cold tools below invoke via the CLI:",
-    "",
-  ];
-  for (const [name, purpose, args] of cold) {
-    lines.push(`## ${name}`);
-    lines.push(purpose);
-    lines.push("```bash");
-    lines.push(`node ${cliPath} cli ${name} '${JSON.stringify(args)}'`);
-    lines.push("```");
-    lines.push("");
-  }
-  return lines.join("\n");
-}
-
 // ---- change-coupling (git co-change) — "what usually changes together" ----------
 
 /** [{label, weight}] modules co-changed with modId, sorted by count desc. Pure. */

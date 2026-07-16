@@ -16,6 +16,7 @@
 
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { HOT_TOOLS, TOOL_NAMES } from "./definitions.mjs";
 import { ToolError } from "../adapters/config.mjs";
 import { sliceSpan, readSpanSafe } from "../adapters/source-slice.mjs";
 import * as defaultSource from "../adapters/source.mjs";
@@ -128,47 +129,13 @@ function renderMemoryDefinition(rows, term) {
 // Tiered tool surface: the hot tools carry full descriptions/schemas in this
 // catalog; every COLD tool (describe/members/impact/history/…) is still served
 // by dispatchTool below and is reachable via the CLI `cli <tool>` route +
-// the generated <repo>/.tmct/TOOLS.md catalog (renderToolsCatalog).
-export const TOOLS = [
-  {
-    name: "tmct_context",
-    // Lean resident schema (re-billed every turn): the minimum that still steers the agent to
-    // ONE call → write, not Read.
-    description:
-      "START HERE to add/modify code: ONE call returns a sized edit bundle (exemplar source, sibling signatures, registration, insertion region) — then write directly, don't Read.",
-    inputSchema: {
-      type: "object",
-      required: ["symbol"],
-      properties: {
-        symbol: { type: "string", description: "Module path (e.g. path/to/module) or a sibling function/class name defined in it." },
-        depth: { type: "string", enum: ["min", "auto", "full"], default: "auto", description: "auto (sized to the task) | min (leanest) | full (every section)." },
-      },
-    },
-  },
-  {
-    name: "tmct_snippet",
-    description: "EXACT source of one function/class/Class.method by name (its line span only) + a one-line in-repo call hint. Prefer over Read for a single symbol.",
-    inputSchema: {
-      type: "object",
-      required: ["symbol"],
-      properties: {
-        symbol: { type: "string", description: "function/class name, Class.method, or fn:<path>#name." },
-      },
-    },
-  },
-  {
-    name: "tmct_ask",
-    description:
-      "Ask a structural question in plain English: \"which functions call X\", \"what uses X\", \"where is X defined\", \"when did X change\". One call, no model. A clean miss beats a guess.",
-    inputSchema: {
-      type: "object",
-      required: ["query"],
-      properties: {
-        query: { type: "string", description: "A free-text question, e.g. \"which functions explicitly couple to logging\"." },
-      },
-    },
-  },
-];
+// the generated <repo>/.tmct/TOOLS.md catalog (renderToolsCatalog). Both tiers,
+// and the schemas themselves, come from the tool definitions.
+export const TOOLS = HOT_TOOLS.map(({ name, agentDescription, inputSchema }) => ({
+  name,
+  description: agentDescription,
+  inputSchema,
+}));
 
 // Exported so chat.mjs's compare lane can load the SAME graph dispatchTool's
 // own tools load — no new loading path, just direct reuse of the existing
@@ -346,13 +313,7 @@ export async function buildContextBundle(args, { config, source = defaultSource,
 
 // The full set of tool names dispatchTool serves (hot catalog + cold tools). Used
 // to reject an unknown tool before any graph load.
-const DISPATCH_TOOLS = new Set([
-  "tmct_context", "tmct_context_more", "tmct_describe", "tmct_snippet", "tmct_signature",
-  "tmct_impact", "tmct_search", "tmct_members", "tmct_subclasses", "tmct_architecture",
-  "tmct_exports", "tmct_untested", "tmct_ask", "tmct_tests_for", "tmct_history",
-  "tmct_callers", "tmct_callees", "tmct_cochanges", "tmct_calls",
-  "tmct_file_history", "tmct_method_history", "tmct_class_history",
-]);
+const DISPATCH_TOOLS = new Set(TOOL_NAMES);
 
 export async function dispatchTool(name, args, { config, source = defaultSource, tel = null } = {}) {
   // tmct_context builds (and loads) its own edit bundle — return early so we don't

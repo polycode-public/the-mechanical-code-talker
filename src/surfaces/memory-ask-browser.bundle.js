@@ -72,374 +72,6 @@
     }
   });
 
-  // src/adapters/config.mjs
-  var DEFAULT_GRAPH_REL;
-  var init_config = __esm({
-    "src/adapters/config.mjs"() {
-      init_node_path();
-      DEFAULT_GRAPH_REL = join(".tmct", "graph.json");
-    }
-  });
-
-  // src/adapters/source-slice.mjs
-  var init_source_slice = __esm({
-    "src/adapters/source-slice.mjs"() {
-      init_node_path();
-      init_config();
-    }
-  });
-
-  // src/domain/prose.mjs
-  function splitIdentifierWords(raw) {
-    if (!raw) return [];
-    let s = String(raw).replace(/\.[A-Za-z0-9]+$/, "");
-    s = s.replace(/[/\\]/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2").replace(/([A-Za-z])([0-9])/g, "$1 $2").replace(/([0-9])([A-Za-z])/g, "$1 $2").replace(/[_\-.]+/g, " ");
-    return s.split(/\s+/).map((w) => w.toLowerCase()).filter((w) => w.length > 1 && w.length <= MAX_TOKEN_LEN);
-  }
-  function tokenizeProse(text) {
-    if (!text) return [];
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const raw of String(text).toLowerCase().split(/[^a-z0-9]+/)) {
-      if (raw.length < 2 || raw.length > MAX_TOKEN_LEN || STOPWORDS.has(raw)) continue;
-      if (seen.has(raw)) continue;
-      seen.add(raw);
-      out.push(raw);
-      if (out.length >= MAX_TOKENS_PER_DOC) break;
-    }
-    return out;
-  }
-  function lookupByProseTokens(proseIndex, query, { limit = 10 } = {}) {
-    const queryTokens = [.../* @__PURE__ */ new Set([...splitIdentifierWords(query), ...tokenizeProse(query)])];
-    if (!queryTokens.length) return [];
-    const scoreById = /* @__PURE__ */ new Map();
-    for (const word of queryTokens) {
-      for (const id of proseIndex?.[word] || []) {
-        scoreById.set(id, (scoreById.get(id) || 0) + 1);
-      }
-    }
-    return [...scoreById.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(b[0])).slice(0, limit).map(([id, score]) => ({ id, score }));
-  }
-  var STOPWORDS, MAX_TOKEN_LEN, MAX_TOKENS_PER_DOC;
-  var init_prose = __esm({
-    "src/domain/prose.mjs"() {
-      STOPWORDS = new Set(
-        "a an and or but the of to in on at for with from by as is are was were be been being it its this that these those i you he she they we me my your our do does did not no yes if then else than so such can will would should could may might about into over under out up down off again more most some any all what which who whom whose when where why how".split(/\s+/)
-      );
-      MAX_TOKEN_LEN = 40;
-      MAX_TOKENS_PER_DOC = 120;
-    }
-  });
-
-  // node-stub:node:fs
-  var unavailable3, createRequire3, readFileSync3, readFile3, writeFile3, appendFile3, mkdir3, mkdtemp3, rename3, unlink3, rm3, stat3, copyFile3, readdir3, createReadStream3, createWriteStream3, randomBytes3, spawnSync3, createInterface3;
-  var init_node_fs = __esm({
-    "node-stub:node:fs"() {
-      unavailable3 = (name) => () => {
-        throw new Error(name + " unavailable in the browser ask bundle");
-      };
-      createRequire3 = unavailable3("createRequire");
-      readFileSync3 = unavailable3("readFileSync");
-      readFile3 = unavailable3("readFile");
-      writeFile3 = unavailable3("writeFile");
-      appendFile3 = unavailable3("appendFile");
-      mkdir3 = unavailable3("mkdir");
-      mkdtemp3 = unavailable3("mkdtemp");
-      rename3 = unavailable3("rename");
-      unlink3 = unavailable3("unlink");
-      rm3 = unavailable3("rm");
-      stat3 = unavailable3("stat");
-      copyFile3 = unavailable3("copyFile");
-      readdir3 = unavailable3("readdir");
-      createReadStream3 = unavailable3("createReadStream");
-      createWriteStream3 = unavailable3("createWriteStream");
-      randomBytes3 = unavailable3("randomBytes");
-      spawnSync3 = unavailable3("spawnSync");
-      createInterface3 = unavailable3("createInterface");
-    }
-  });
-
-  // node-stub:node:url
-  var unavailable4, createRequire4, readFileSync4, readFile4, writeFile4, appendFile4, mkdir4, mkdtemp4, rename4, unlink4, rm4, stat4, copyFile4, readdir4, createReadStream4, createWriteStream4, fileURLToPath, randomBytes4, spawnSync4, createInterface4;
-  var init_node_url = __esm({
-    "node-stub:node:url"() {
-      unavailable4 = (name) => () => {
-        throw new Error(name + " unavailable in the browser ask bundle");
-      };
-      createRequire4 = unavailable4("createRequire");
-      readFileSync4 = unavailable4("readFileSync");
-      readFile4 = unavailable4("readFile");
-      writeFile4 = unavailable4("writeFile");
-      appendFile4 = unavailable4("appendFile");
-      mkdir4 = unavailable4("mkdir");
-      mkdtemp4 = unavailable4("mkdtemp");
-      rename4 = unavailable4("rename");
-      unlink4 = unavailable4("unlink");
-      rm4 = unavailable4("rm");
-      stat4 = unavailable4("stat");
-      copyFile4 = unavailable4("copyFile");
-      readdir4 = unavailable4("readdir");
-      createReadStream4 = unavailable4("createReadStream");
-      createWriteStream4 = unavailable4("createWriteStream");
-      fileURLToPath = (u) => String(u);
-      randomBytes4 = unavailable4("randomBytes");
-      spawnSync4 = unavailable4("spawnSync");
-      createInterface4 = unavailable4("createInterface");
-    }
-  });
-
-  // src/adapters/embed.mjs
-  var init_embed = __esm({
-    "src/adapters/embed.mjs"() {
-      init_node_fs();
-      init_node_path();
-      init_node_url();
-    }
-  });
-
-  // src/domain/memory/trust.mjs
-  function parseChatTagRest(rest) {
-    const at = rest.indexOf("@");
-    const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
-    const createdAt = at >= 0 ? rest.slice(at + 1) : "";
-    const colon = beforeAt.indexOf(":");
-    const sessionId = colon >= 0 ? beforeAt.slice(colon + 1) : "";
-    return { createdAt, ...sessionId ? { sessionId } : {} };
-  }
-  function provenanceTagToSource(tag) {
-    const t = String(tag || "").trim();
-    if (!t) return null;
-    const head = t.split(/\s+/)[0];
-    if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
-    if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
-    if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
-    if (head.startsWith("teach:")) {
-      return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
-    }
-    if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
-    if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
-    if (head.startsWith("extracted:")) return { kind: "extracted", name: head.slice("extracted:".length) || "unknown" };
-    if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };
-    if (head.startsWith("chat:") || head.startsWith("session:") || head.startsWith("operator")) return { kind: "operator" };
-    return null;
-  }
-  function sourceReliabilityOf(s) {
-    const raw = (s?.attributes || []).find((a) => a.prop === "mgx:sourceReliability")?.value;
-    if (raw === void 0) return SOURCE_RELIABILITY_NEUTRAL;
-    const n = Number(raw);
-    if (!Number.isFinite(n)) return SOURCE_RELIABILITY_NEUTRAL;
-    return Math.max(SOURCE_RELIABILITY_MIN, Math.min(SOURCE_RELIABILITY_MAX, n));
-  }
-  function recencyNudge(createdAt, now = Date.now(), halfLifeMs = RECENCY_HALF_LIFE_MS) {
-    const t = Date.parse(createdAt);
-    if (!Number.isFinite(t)) return 1;
-    const ageMs = Math.max(0, now - t);
-    return RECENCY_FLOOR + (1 - RECENCY_FLOOR) * Math.pow(0.5, ageMs / halfLifeMs);
-  }
-  function computeTrust(fact, sourcesById = {}, opts = {}) {
-    const now = typeof opts.now === "number" ? opts.now : Date.now();
-    const ids = Array.isArray(fact?.sourceIds) ? fact.sourceIds : [];
-    const seen = /* @__PURE__ */ new Set();
-    const types = [];
-    const priors = [];
-    for (const id of ids) {
-      if (seen.has(id)) continue;
-      seen.add(id);
-      const source = sourcesById[id];
-      const t = sourceTypeOf(source);
-      if (!t) continue;
-      types.push(t);
-      const p = (SOURCE_PRIOR[t] ?? 0) * sourceReliabilityOf(source);
-      priors.push(Math.max(0, Math.min(1, p)));
-    }
-    let base = 0;
-    let complement = 1;
-    for (const p of priors) complement *= 1 - p;
-    if (priors.length) base = Math.min(1, 1 - complement);
-    if (types.includes("entailed") && Array.isArray(opts.premiseTrusts) && opts.premiseTrusts.length) {
-      const rc = typeof opts.ruleConfidence === "number" ? opts.ruleConfidence : 1;
-      base = Math.max(0, Math.min(1, Math.min(...opts.premiseTrusts) * rc));
-    }
-    const recency = recencyNudge(fact?.createdAt, now, opts.halfLifeMs);
-    const score = round(Math.min(1, base * recency));
-    const inputs = {
-      sourceTypes: types.slice().sort(),
-      corroboration: types.length,
-      createdAt: fact?.createdAt || "",
-      recency: round(recency)
-    };
-    return { score, inputs };
-  }
-  function sessionReliabilityFrom({ factsAsserted = 0, factsContradicted = 0 } = {}) {
-    const asserted = Math.max(0, Number(factsAsserted) || 0);
-    const contradicted = Math.max(0, Number(factsContradicted) || 0);
-    const net = Math.max(-1, Math.min(1, (asserted - 2 * contradicted) / Math.max(1, asserted)));
-    const confidence = asserted / (asserted + RELIABILITY_CONFIDENCE_PSEUDOCOUNT);
-    const ratio = (net * confidence + 1) / 2;
-    return round(SOURCE_RELIABILITY_MIN + (SOURCE_RELIABILITY_MAX - SOURCE_RELIABILITY_MIN) * ratio);
-  }
-  var TRUST_SCORE_PROP, TRUST_INPUTS_PROP, CREATED_AT_PROP, UPDATED_AT_PROP, SOURCE_PRIOR, RECENCY_HALF_LIFE_MS, RECENCY_FLOOR, SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX, SOURCE_RELIABILITY_NEUTRAL, round, sourceTypeOf, RELIABILITY_CONFIDENCE_PSEUDOCOUNT;
-  var init_trust = __esm({
-    "src/domain/memory/trust.mjs"() {
-      TRUST_SCORE_PROP = "mgx:trustScore";
-      TRUST_INPUTS_PROP = "mgx:trustInputs";
-      CREATED_AT_PROP = "mgx:createdAt";
-      UPDATED_AT_PROP = "mgx:updatedAt";
-      SOURCE_PRIOR = Object.freeze({
-        operator: 1,
-        teach: 0.95,
-        provider: 0.9,
-        corpus: 0.7,
-        corpusWeak: 0.55,
-        web: 0.4,
-        extracted: 0.45,
-        entailed: 0.3
-      });
-      RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1e3;
-      RECENCY_FLOOR = 0.9;
-      SOURCE_RELIABILITY_MIN = 0.5;
-      SOURCE_RELIABILITY_MAX = 1.5;
-      SOURCE_RELIABILITY_NEUTRAL = 1;
-      round = (n, p = 6) => Number(n.toFixed(p));
-      sourceTypeOf = (s) => (s?.attributes || []).find((a) => a.prop === "mgx:sourceType")?.value || "";
-      RELIABILITY_CONFIDENCE_PSEUDOCOUNT = 19;
-    }
-  });
-
-  // src/domain/codegraph.mjs
-  function relationKind(group) {
-    const prop = String(group?.prop || "").toLowerCase();
-    if (PROP_KIND[prop]) return PROP_KIND[prop];
-    if (prop.startsWith("factrel:")) return group.predicate || null;
-    const pred = String(group?.predicate || "").toLowerCase();
-    if (/symbol/.test(pred)) {
-      if (/\b(call|invoke)/.test(pred)) return "callsSymbol";
-      if (/(touch|chang|modif)/.test(pred)) return "touchesSymbol";
-    }
-    if (/\bimport/.test(pred)) return "imports";
-    if (/\b(call|invoke)/.test(pred)) return "calls";
-    if (/\b(define|export|declare)/.test(pred)) return "defines";
-    if (/\b(test|cover)/.test(pred)) return "tests";
-    if (/\b(touch|chang|modif)/.test(pred)) return "touches";
-    if (/\bcontain/.test(pred)) return "contains";
-    if (/\b(inherit|subclass|extend|specializ)/.test(pred)) return "inherits";
-    return null;
-  }
-  function normPath(s) {
-    return String(s || "").trim().toLowerCase().replace(/^\.\//, "").replace(/^\//, "");
-  }
-  function siteOf(ind) {
-    const a = (ind?.attributes || []).find((x) => x.key === "site");
-    if (!a) return null;
-    const m = String(a.value).match(/^(.*):(\d+)(?:-(\d+))?$/);
-    if (!m) return null;
-    return { path: m[1], start: Number(m[2]), end: m[3] ? Number(m[3]) : Number(m[2]) };
-  }
-  function impactClosure(graph, ind, { maxDepth = 8 } = {}) {
-    const dependents = /* @__PURE__ */ new Map();
-    const coveredBy = /* @__PURE__ */ new Map();
-    const addDependent = (objectId, subjectId, subjectLabel, via) => {
-      if (!objectId || !subjectId || objectId === subjectId) return;
-      if (!dependents.has(objectId)) dependents.set(objectId, []);
-      dependents.get(objectId).push({ id: subjectId, label: subjectLabel, via });
-    };
-    for (const g of graph.relations) {
-      const kind = relationKind(g);
-      if (kind === "imports" || kind === "calls") {
-        for (const e of g.edges) addDependent(e.object, e.subject, e.subjectLabel || e.subject, g.predicate);
-      } else if (kind === "callsSymbol") {
-        for (const e of g.edges) {
-          const subjModId = moduleIdOfId(graph, e.subject);
-          const objModId = moduleIdOfId(graph, e.object);
-          if (!subjModId || !objModId) continue;
-          const subjLabel = graph.byId.get(subjModId)?.label || subjModId;
-          addDependent(objModId, subjModId, subjLabel, g.predicate);
-        }
-      } else if (kind === "tests") {
-        for (const e of g.edges) {
-          if (!coveredBy.has(e.object)) coveredBy.set(e.object, []);
-          coveredBy.get(e.object).push(e.subjectLabel || e.subject);
-        }
-      }
-    }
-    const levels = [];
-    const visited = /* @__PURE__ */ new Set([ind.id]);
-    let frontier = [ind.id];
-    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
-      const next = [];
-      const level = [];
-      for (const id of frontier) {
-        for (const dep of dependents.get(id) || []) {
-          if (visited.has(dep.id)) continue;
-          visited.add(dep.id);
-          level.push({ ...dep, tests: coveredBy.get(dep.id) || [] });
-          next.push(dep.id);
-        }
-      }
-      if (level.length) {
-        level.sort((a, b) => String(a.label).localeCompare(String(b.label)));
-        levels.push(level);
-      }
-      frontier = next;
-    }
-    return levels;
-  }
-  function moduleIdOfId(graph, id) {
-    const ind = graph.byId?.get?.(id);
-    if (ind) return moduleIdOf(graph, ind);
-    const m = String(id || "").match(/^fn:(.+)#/);
-    return m ? `mod:${m[1]}` : null;
-  }
-  function moduleIdOf(graph, ind) {
-    if ((ind?.class || "") === "Module") return ind.id;
-    const site = siteOf(ind);
-    if (site) return `mod:${site.path}`;
-    const m = String(ind?.id || "").match(/^fn:(.+)#/);
-    return m ? `mod:${m[1]}` : null;
-  }
-  var PROP_KIND, HISTORY_CAP;
-  var init_codegraph = __esm({
-    "src/domain/codegraph.mjs"() {
-      init_prose();
-      init_embed();
-      init_trust();
-      PROP_KIND = {
-        // v2.0 faithful tokens (SEON-faithful realign)
-        "mgx:importsnamespace": "imports",
-        "mgx:callscoarse": "calls",
-        "seon:declaresmethod": "defines",
-        "mgx:testscoverage": "tests",
-        "mgx:touchedbycommit": "touches",
-        "seon:containscodeentity": "contains",
-        "seon:hassupertype": "inherits",
-        "mgx:changecoupledwith": "cochange",
-        "mgx:reexports": "reexports",
-        // symbol-level edges stay separate kinds so the module-coarse impact closure is unchanged
-        "mgx:touchessymbol": "touchesSymbol",
-        "mgx:callssymbol": "callsSymbol",
-        // legacy tokens (pre-realign graphs) — kept so a stale artifact still classifies
-        "seon:usescomplextype": "imports",
-        "seon:invokesmethod": "calls",
-        "seon:history": "touches",
-        "mgx:subclassof": "inherits",
-        "mg:imports": "imports",
-        "mg:calls": "calls",
-        "mg:defines": "defines",
-        "mg:tests": "tests",
-        "mg:touches": "touches",
-        // memory-graph predicates map to themselves so adjacencyForKinds/edgesOfKind can walk them too
-        "mgx:saidinsession": "saidInSession",
-        "mgx:inreplyto": "inReplyTo",
-        "mgx:statedby": "statedBy",
-        "mgx:canonicalisedfrom": "canonicalisedFrom",
-        // structural links deriveFactTermGraph synthesizes on every Fact (Fact -> its own subject/object Term)
-        "mgx:factsubjectterm": "factSubjectTerm",
-        "mgx:factobjectterm": "factObjectTerm"
-      };
-      HISTORY_CAP = 15;
-    }
-  });
-
   // src/domain/ask-vocab.mjs
   function stripTrailingScopeFiller(text) {
     return text.replace(TRAILING_SCOPE_FILLER_RE, "").trim();
@@ -1201,6 +833,374 @@
         "syntax",
         "options"
       ]);
+    }
+  });
+
+  // src/adapters/config.mjs
+  var DEFAULT_GRAPH_REL;
+  var init_config = __esm({
+    "src/adapters/config.mjs"() {
+      init_node_path();
+      DEFAULT_GRAPH_REL = join(".tmct", "graph.json");
+    }
+  });
+
+  // src/adapters/source-slice.mjs
+  var init_source_slice = __esm({
+    "src/adapters/source-slice.mjs"() {
+      init_node_path();
+      init_config();
+    }
+  });
+
+  // src/domain/prose.mjs
+  function splitIdentifierWords(raw) {
+    if (!raw) return [];
+    let s = String(raw).replace(/\.[A-Za-z0-9]+$/, "");
+    s = s.replace(/[/\\]/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2").replace(/([A-Za-z])([0-9])/g, "$1 $2").replace(/([0-9])([A-Za-z])/g, "$1 $2").replace(/[_\-.]+/g, " ");
+    return s.split(/\s+/).map((w) => w.toLowerCase()).filter((w) => w.length > 1 && w.length <= MAX_TOKEN_LEN);
+  }
+  function tokenizeProse(text) {
+    if (!text) return [];
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const raw of String(text).toLowerCase().split(/[^a-z0-9]+/)) {
+      if (raw.length < 2 || raw.length > MAX_TOKEN_LEN || STOPWORDS.has(raw)) continue;
+      if (seen.has(raw)) continue;
+      seen.add(raw);
+      out.push(raw);
+      if (out.length >= MAX_TOKENS_PER_DOC) break;
+    }
+    return out;
+  }
+  function lookupByProseTokens(proseIndex, query, { limit = 10 } = {}) {
+    const queryTokens = [.../* @__PURE__ */ new Set([...splitIdentifierWords(query), ...tokenizeProse(query)])];
+    if (!queryTokens.length) return [];
+    const scoreById = /* @__PURE__ */ new Map();
+    for (const word of queryTokens) {
+      for (const id of proseIndex?.[word] || []) {
+        scoreById.set(id, (scoreById.get(id) || 0) + 1);
+      }
+    }
+    return [...scoreById.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(b[0])).slice(0, limit).map(([id, score]) => ({ id, score }));
+  }
+  var STOPWORDS, MAX_TOKEN_LEN, MAX_TOKENS_PER_DOC;
+  var init_prose = __esm({
+    "src/domain/prose.mjs"() {
+      STOPWORDS = new Set(
+        "a an and or but the of to in on at for with from by as is are was were be been being it its this that these those i you he she they we me my your our do does did not no yes if then else than so such can will would should could may might about into over under out up down off again more most some any all what which who whom whose when where why how".split(/\s+/)
+      );
+      MAX_TOKEN_LEN = 40;
+      MAX_TOKENS_PER_DOC = 120;
+    }
+  });
+
+  // node-stub:node:fs
+  var unavailable3, createRequire3, readFileSync3, readFile3, writeFile3, appendFile3, mkdir3, mkdtemp3, rename3, unlink3, rm3, stat3, copyFile3, readdir3, createReadStream3, createWriteStream3, randomBytes3, spawnSync3, createInterface3;
+  var init_node_fs = __esm({
+    "node-stub:node:fs"() {
+      unavailable3 = (name) => () => {
+        throw new Error(name + " unavailable in the browser ask bundle");
+      };
+      createRequire3 = unavailable3("createRequire");
+      readFileSync3 = unavailable3("readFileSync");
+      readFile3 = unavailable3("readFile");
+      writeFile3 = unavailable3("writeFile");
+      appendFile3 = unavailable3("appendFile");
+      mkdir3 = unavailable3("mkdir");
+      mkdtemp3 = unavailable3("mkdtemp");
+      rename3 = unavailable3("rename");
+      unlink3 = unavailable3("unlink");
+      rm3 = unavailable3("rm");
+      stat3 = unavailable3("stat");
+      copyFile3 = unavailable3("copyFile");
+      readdir3 = unavailable3("readdir");
+      createReadStream3 = unavailable3("createReadStream");
+      createWriteStream3 = unavailable3("createWriteStream");
+      randomBytes3 = unavailable3("randomBytes");
+      spawnSync3 = unavailable3("spawnSync");
+      createInterface3 = unavailable3("createInterface");
+    }
+  });
+
+  // node-stub:node:url
+  var unavailable4, createRequire4, readFileSync4, readFile4, writeFile4, appendFile4, mkdir4, mkdtemp4, rename4, unlink4, rm4, stat4, copyFile4, readdir4, createReadStream4, createWriteStream4, fileURLToPath, randomBytes4, spawnSync4, createInterface4;
+  var init_node_url = __esm({
+    "node-stub:node:url"() {
+      unavailable4 = (name) => () => {
+        throw new Error(name + " unavailable in the browser ask bundle");
+      };
+      createRequire4 = unavailable4("createRequire");
+      readFileSync4 = unavailable4("readFileSync");
+      readFile4 = unavailable4("readFile");
+      writeFile4 = unavailable4("writeFile");
+      appendFile4 = unavailable4("appendFile");
+      mkdir4 = unavailable4("mkdir");
+      mkdtemp4 = unavailable4("mkdtemp");
+      rename4 = unavailable4("rename");
+      unlink4 = unavailable4("unlink");
+      rm4 = unavailable4("rm");
+      stat4 = unavailable4("stat");
+      copyFile4 = unavailable4("copyFile");
+      readdir4 = unavailable4("readdir");
+      createReadStream4 = unavailable4("createReadStream");
+      createWriteStream4 = unavailable4("createWriteStream");
+      fileURLToPath = (u) => String(u);
+      randomBytes4 = unavailable4("randomBytes");
+      spawnSync4 = unavailable4("spawnSync");
+      createInterface4 = unavailable4("createInterface");
+    }
+  });
+
+  // src/adapters/embed.mjs
+  var init_embed = __esm({
+    "src/adapters/embed.mjs"() {
+      init_node_fs();
+      init_node_path();
+      init_node_url();
+    }
+  });
+
+  // src/domain/memory/trust.mjs
+  function parseChatTagRest(rest) {
+    const at = rest.indexOf("@");
+    const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
+    const createdAt = at >= 0 ? rest.slice(at + 1) : "";
+    const colon = beforeAt.indexOf(":");
+    const sessionId = colon >= 0 ? beforeAt.slice(colon + 1) : "";
+    return { createdAt, ...sessionId ? { sessionId } : {} };
+  }
+  function provenanceTagToSource(tag) {
+    const t = String(tag || "").trim();
+    if (!t) return null;
+    const head = t.split(/\s+/)[0];
+    if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
+    if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
+    if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
+    if (head.startsWith("teach:")) {
+      return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
+    }
+    if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
+    if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
+    if (head.startsWith("extracted:")) return { kind: "extracted", name: head.slice("extracted:".length) || "unknown" };
+    if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };
+    if (head.startsWith("chat:") || head.startsWith("session:") || head.startsWith("operator")) return { kind: "operator" };
+    return null;
+  }
+  function sourceReliabilityOf(s) {
+    const raw = (s?.attributes || []).find((a) => a.prop === "mgx:sourceReliability")?.value;
+    if (raw === void 0) return SOURCE_RELIABILITY_NEUTRAL;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) return SOURCE_RELIABILITY_NEUTRAL;
+    return Math.max(SOURCE_RELIABILITY_MIN, Math.min(SOURCE_RELIABILITY_MAX, n));
+  }
+  function recencyNudge(createdAt, now = Date.now(), halfLifeMs = RECENCY_HALF_LIFE_MS) {
+    const t = Date.parse(createdAt);
+    if (!Number.isFinite(t)) return 1;
+    const ageMs = Math.max(0, now - t);
+    return RECENCY_FLOOR + (1 - RECENCY_FLOOR) * Math.pow(0.5, ageMs / halfLifeMs);
+  }
+  function computeTrust(fact, sourcesById = {}, opts = {}) {
+    const now = typeof opts.now === "number" ? opts.now : Date.now();
+    const ids = Array.isArray(fact?.sourceIds) ? fact.sourceIds : [];
+    const seen = /* @__PURE__ */ new Set();
+    const types = [];
+    const priors = [];
+    for (const id of ids) {
+      if (seen.has(id)) continue;
+      seen.add(id);
+      const source = sourcesById[id];
+      const t = sourceTypeOf(source);
+      if (!t) continue;
+      types.push(t);
+      const p = (SOURCE_PRIOR[t] ?? 0) * sourceReliabilityOf(source);
+      priors.push(Math.max(0, Math.min(1, p)));
+    }
+    let base = 0;
+    let complement = 1;
+    for (const p of priors) complement *= 1 - p;
+    if (priors.length) base = Math.min(1, 1 - complement);
+    if (types.includes("entailed") && Array.isArray(opts.premiseTrusts) && opts.premiseTrusts.length) {
+      const rc = typeof opts.ruleConfidence === "number" ? opts.ruleConfidence : 1;
+      base = Math.max(0, Math.min(1, Math.min(...opts.premiseTrusts) * rc));
+    }
+    const recency = recencyNudge(fact?.createdAt, now, opts.halfLifeMs);
+    const score = round(Math.min(1, base * recency));
+    const inputs = {
+      sourceTypes: types.slice().sort(),
+      corroboration: types.length,
+      createdAt: fact?.createdAt || "",
+      recency: round(recency)
+    };
+    return { score, inputs };
+  }
+  function sessionReliabilityFrom({ factsAsserted = 0, factsContradicted = 0 } = {}) {
+    const asserted = Math.max(0, Number(factsAsserted) || 0);
+    const contradicted = Math.max(0, Number(factsContradicted) || 0);
+    const net = Math.max(-1, Math.min(1, (asserted - 2 * contradicted) / Math.max(1, asserted)));
+    const confidence = asserted / (asserted + RELIABILITY_CONFIDENCE_PSEUDOCOUNT);
+    const ratio = (net * confidence + 1) / 2;
+    return round(SOURCE_RELIABILITY_MIN + (SOURCE_RELIABILITY_MAX - SOURCE_RELIABILITY_MIN) * ratio);
+  }
+  var TRUST_SCORE_PROP, TRUST_INPUTS_PROP, CREATED_AT_PROP, UPDATED_AT_PROP, SOURCE_PRIOR, RECENCY_HALF_LIFE_MS, RECENCY_FLOOR, SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX, SOURCE_RELIABILITY_NEUTRAL, round, sourceTypeOf, RELIABILITY_CONFIDENCE_PSEUDOCOUNT;
+  var init_trust = __esm({
+    "src/domain/memory/trust.mjs"() {
+      TRUST_SCORE_PROP = "mgx:trustScore";
+      TRUST_INPUTS_PROP = "mgx:trustInputs";
+      CREATED_AT_PROP = "mgx:createdAt";
+      UPDATED_AT_PROP = "mgx:updatedAt";
+      SOURCE_PRIOR = Object.freeze({
+        operator: 1,
+        teach: 0.95,
+        provider: 0.9,
+        corpus: 0.7,
+        corpusWeak: 0.55,
+        web: 0.4,
+        extracted: 0.45,
+        entailed: 0.3
+      });
+      RECENCY_HALF_LIFE_MS = 30 * 24 * 60 * 60 * 1e3;
+      RECENCY_FLOOR = 0.9;
+      SOURCE_RELIABILITY_MIN = 0.5;
+      SOURCE_RELIABILITY_MAX = 1.5;
+      SOURCE_RELIABILITY_NEUTRAL = 1;
+      round = (n, p = 6) => Number(n.toFixed(p));
+      sourceTypeOf = (s) => (s?.attributes || []).find((a) => a.prop === "mgx:sourceType")?.value || "";
+      RELIABILITY_CONFIDENCE_PSEUDOCOUNT = 19;
+    }
+  });
+
+  // src/domain/codegraph.mjs
+  function relationKind(group) {
+    const prop = String(group?.prop || "").toLowerCase();
+    if (PROP_KIND[prop]) return PROP_KIND[prop];
+    if (prop.startsWith("factrel:")) return group.predicate || null;
+    const pred = String(group?.predicate || "").toLowerCase();
+    if (/symbol/.test(pred)) {
+      if (/\b(call|invoke)/.test(pred)) return "callsSymbol";
+      if (/(touch|chang|modif)/.test(pred)) return "touchesSymbol";
+    }
+    if (/\bimport/.test(pred)) return "imports";
+    if (/\b(call|invoke)/.test(pred)) return "calls";
+    if (/\b(define|export|declare)/.test(pred)) return "defines";
+    if (/\b(test|cover)/.test(pred)) return "tests";
+    if (/\b(touch|chang|modif)/.test(pred)) return "touches";
+    if (/\bcontain/.test(pred)) return "contains";
+    if (/\b(inherit|subclass|extend|specializ)/.test(pred)) return "inherits";
+    return null;
+  }
+  function normPath(s) {
+    return String(s || "").trim().toLowerCase().replace(/^\.\//, "").replace(/^\//, "");
+  }
+  function siteOf(ind) {
+    const a = (ind?.attributes || []).find((x) => x.key === "site");
+    if (!a) return null;
+    const m = String(a.value).match(/^(.*):(\d+)(?:-(\d+))?$/);
+    if (!m) return null;
+    return { path: m[1], start: Number(m[2]), end: m[3] ? Number(m[3]) : Number(m[2]) };
+  }
+  function impactClosure(graph, ind, { maxDepth = 8 } = {}) {
+    const dependents = /* @__PURE__ */ new Map();
+    const coveredBy = /* @__PURE__ */ new Map();
+    const addDependent = (objectId, subjectId, subjectLabel, via) => {
+      if (!objectId || !subjectId || objectId === subjectId) return;
+      if (!dependents.has(objectId)) dependents.set(objectId, []);
+      dependents.get(objectId).push({ id: subjectId, label: subjectLabel, via });
+    };
+    for (const g of graph.relations) {
+      const kind = relationKind(g);
+      if (kind === "imports" || kind === "calls") {
+        for (const e of g.edges) addDependent(e.object, e.subject, e.subjectLabel || e.subject, g.predicate);
+      } else if (kind === "callsSymbol") {
+        for (const e of g.edges) {
+          const subjModId = moduleIdOfId(graph, e.subject);
+          const objModId = moduleIdOfId(graph, e.object);
+          if (!subjModId || !objModId) continue;
+          const subjLabel = graph.byId.get(subjModId)?.label || subjModId;
+          addDependent(objModId, subjModId, subjLabel, g.predicate);
+        }
+      } else if (kind === "tests") {
+        for (const e of g.edges) {
+          if (!coveredBy.has(e.object)) coveredBy.set(e.object, []);
+          coveredBy.get(e.object).push(e.subjectLabel || e.subject);
+        }
+      }
+    }
+    const levels = [];
+    const visited = /* @__PURE__ */ new Set([ind.id]);
+    let frontier = [ind.id];
+    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
+      const next = [];
+      const level = [];
+      for (const id of frontier) {
+        for (const dep of dependents.get(id) || []) {
+          if (visited.has(dep.id)) continue;
+          visited.add(dep.id);
+          level.push({ ...dep, tests: coveredBy.get(dep.id) || [] });
+          next.push(dep.id);
+        }
+      }
+      if (level.length) {
+        level.sort((a, b) => String(a.label).localeCompare(String(b.label)));
+        levels.push(level);
+      }
+      frontier = next;
+    }
+    return levels;
+  }
+  function moduleIdOfId(graph, id) {
+    const ind = graph.byId?.get?.(id);
+    if (ind) return moduleIdOf(graph, ind);
+    const m = String(id || "").match(/^fn:(.+)#/);
+    return m ? `mod:${m[1]}` : null;
+  }
+  function moduleIdOf(graph, ind) {
+    if ((ind?.class || "") === "Module") return ind.id;
+    const site = siteOf(ind);
+    if (site) return `mod:${site.path}`;
+    const m = String(ind?.id || "").match(/^fn:(.+)#/);
+    return m ? `mod:${m[1]}` : null;
+  }
+  var PROP_KIND, HISTORY_CAP;
+  var init_codegraph = __esm({
+    "src/domain/codegraph.mjs"() {
+      init_prose();
+      init_embed();
+      init_trust();
+      PROP_KIND = {
+        // v2.0 faithful tokens (SEON-faithful realign)
+        "mgx:importsnamespace": "imports",
+        "mgx:callscoarse": "calls",
+        "seon:declaresmethod": "defines",
+        "mgx:testscoverage": "tests",
+        "mgx:touchedbycommit": "touches",
+        "seon:containscodeentity": "contains",
+        "seon:hassupertype": "inherits",
+        "mgx:changecoupledwith": "cochange",
+        "mgx:reexports": "reexports",
+        // symbol-level edges stay separate kinds so the module-coarse impact closure is unchanged
+        "mgx:touchessymbol": "touchesSymbol",
+        "mgx:callssymbol": "callsSymbol",
+        // legacy tokens (pre-realign graphs) — kept so a stale artifact still classifies
+        "seon:usescomplextype": "imports",
+        "seon:invokesmethod": "calls",
+        "seon:history": "touches",
+        "mgx:subclassof": "inherits",
+        "mg:imports": "imports",
+        "mg:calls": "calls",
+        "mg:defines": "defines",
+        "mg:tests": "tests",
+        "mg:touches": "touches",
+        // memory-graph predicates map to themselves so adjacencyForKinds/edgesOfKind can walk them too
+        "mgx:saidinsession": "saidInSession",
+        "mgx:inreplyto": "inReplyTo",
+        "mgx:statedby": "statedBy",
+        "mgx:canonicalisedfrom": "canonicalisedFrom",
+        // structural links deriveFactTermGraph synthesizes on every Fact (Fact -> its own subject/object Term)
+        "mgx:factsubjectterm": "factSubjectTerm",
+        "mgx:factobjectterm": "factObjectTerm"
+      };
+      HISTORY_CAP = 15;
     }
   });
 
@@ -8025,6 +8025,257 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   // src/tools/server.mjs
   init_promises();
   init_node_path();
+
+  // src/tools/definitions.mjs
+  init_ask_vocab();
+  var symbolArg = (description) => ({
+    type: "object",
+    required: ["symbol"],
+    properties: { symbol: { type: "string", description } }
+  });
+  var moduleArg = (description) => ({
+    type: "object",
+    required: ["module"],
+    properties: { module: { type: "string", description } }
+  });
+  var classArg = (description) => ({
+    type: "object",
+    required: ["class"],
+    properties: { class: { type: "string", description } }
+  });
+  var TOOL_DEFINITIONS = Object.freeze([
+    {
+      name: "tmct_context",
+      tier: "hot",
+      summary: "A sized edit bundle for one symbol \u2014 exemplar source, sibling signatures, registration anchor and the insertion region, in one call.",
+      // Lean resident schema (re-billed every turn): the minimum that still steers the agent to
+      // ONE call → write, not Read.
+      agentDescription: "START HERE to add/modify code: ONE call returns a sized edit bundle (exemplar source, sibling signatures, registration, insertion region) \u2014 then write directly, don't Read.",
+      inputSchema: {
+        type: "object",
+        required: ["symbol"],
+        properties: {
+          symbol: { type: "string", description: "Module path (e.g. path/to/module) or a sibling function/class name defined in it." },
+          depth: { type: "string", enum: ["min", "auto", "full"], default: "auto", description: "auto (sized to the task) | min (leanest) | full (every section)." }
+        }
+      },
+      example: { symbol: "django/utils/text.py" }
+    },
+    {
+      name: "tmct_snippet",
+      tier: "hot",
+      summary: "The exact source of one function, class or Class.method \u2014 its line span only, plus a one-line in-repo call hint.",
+      agentDescription: "EXACT source of one function/class/Class.method by name (its line span only) + a one-line in-repo call hint. Prefer over Read for a single symbol.",
+      inputSchema: {
+        type: "object",
+        required: ["symbol"],
+        properties: {
+          symbol: { type: "string", description: "function/class name, Class.method, or fn:<path>#name." }
+        }
+      },
+      example: { symbol: "Truncator.chars" }
+    },
+    {
+      name: "tmct_ask",
+      tier: "hot",
+      summary: "A structural question in plain English, answered from the graph in one call \u2014 no model, and a clean miss instead of a guess.",
+      agentDescription: 'Ask a structural question in plain English: "which functions call X", "what uses X", "where is X defined", "when did X change". One call, no model. A clean miss beats a guess.',
+      inputSchema: {
+        type: "object",
+        required: ["query"],
+        properties: {
+          query: { type: "string", description: 'A free-text question, e.g. "which functions explicitly couple to logging".' }
+        }
+      },
+      example: { query: "which modules import src/core/model.mjs" },
+      chat: {
+        // The canonical question shapes ask.mjs resolves to a traversal. Every example runs
+        // against examples/mini-webapp, which is what the README's worked block invokes.
+        exampleRepo: "examples/mini-webapp",
+        grammar: [
+          {
+            form: "which <things> <relation-verb> <entity>",
+            example: "which modules import src/core/model.mjs",
+            answers: "the imports edge, read forwards"
+          },
+          {
+            form: "what is <relation-verb-passive> <entity>",
+            example: "what is imported by src/core/store.mjs",
+            answers: "the same edge, read backwards \u2014 a passive is the opposite direction, not a synonym"
+          },
+          {
+            form: "what <relation-verb> <entity>",
+            example: "what uses src/lib/http.mjs",
+            answers: "the uses union: imports plus calls"
+          },
+          {
+            form: "where is <entity> <where-marker>",
+            example: "where is saveStore defined",
+            answers: "the definition's file and line span"
+          },
+          {
+            form: "when did <entity> change",
+            example: "when did src/core/store.mjs change",
+            answers: "the commits that touched it, newest first"
+          }
+        ],
+        whereMarkers: WHERE_MARKERS
+      }
+    },
+    {
+      name: "tmct_describe",
+      tier: "cold",
+      summary: "Locate one symbol and list its typed edges (both directions) with provenance.",
+      inputSchema: symbolArg("A module path, symbol name, or Class.method."),
+      example: { symbol: "django/utils/text.py" }
+    },
+    {
+      name: "tmct_signature",
+      tier: "cold",
+      summary: "One symbol's API surface (params, returns, raises/catches, flags, decorators, doc) without the body.",
+      inputSchema: symbolArg("A function, method, or Class.method name."),
+      example: { symbol: "Truncator.chars" }
+    },
+    {
+      name: "tmct_impact",
+      tier: "cold",
+      summary: "Transitive reverse closure over imports/calls \u2014 what breaks if a module changes, by depth, with tests.",
+      inputSchema: moduleArg("The module whose dependents you want."),
+      example: { module: "django/utils/text.py" }
+    },
+    {
+      name: "tmct_search",
+      tier: "cold",
+      summary: "Free-text/ranked lookup over the code-map to find the right module or symbol.",
+      inputSchema: {
+        type: "object",
+        required: [],
+        properties: {
+          query: { type: "string", description: "Free text to rank against the code-map. Required unless kind narrows the search on its own." },
+          kind: { type: "string", description: "Restrict to an entity class, e.g. function, class, module." },
+          decorator: { type: "string", description: "Restrict to definitions carrying this decorator." },
+          name: { type: "string", description: "Restrict to definitions whose name matches." }
+        }
+      },
+      example: { query: "template filters", kind: "function" }
+    },
+    {
+      name: "tmct_members",
+      tier: "cold",
+      summary: "A class's methods + attributes (file:line, decorators) in one slice.",
+      inputSchema: classArg("The class whose members you want."),
+      example: { class: "Truncator" }
+    },
+    {
+      name: "tmct_subclasses",
+      tier: "cold",
+      summary: "A class's base classes plus the transitive set of classes that extend it.",
+      inputSchema: classArg("The class to walk the inheritance edges of."),
+      example: { class: "Field" }
+    },
+    {
+      name: "tmct_architecture",
+      tier: "cold",
+      summary: "Package/module map + the most-imported hub modules (optionally scoped to a package).",
+      inputSchema: {
+        type: "object",
+        required: [],
+        properties: {
+          package: { type: "string", description: "Scope the map to one package. Omit for the whole repository." }
+        }
+      },
+      example: { package: "django/template" }
+    },
+    {
+      name: "tmct_exports",
+      tier: "cold",
+      summary: "A module's public __all__ surface, each name resolved to the module that defines it.",
+      inputSchema: moduleArg("The module whose public API surface you want."),
+      example: { module: "django/db/models/__init__.py" }
+    },
+    {
+      name: "tmct_tests_for",
+      tier: "cold",
+      summary: "The test modules covering a symbol or module, from the typed test edges.",
+      inputSchema: symbolArg("The symbol or module to find covering tests for."),
+      example: { symbol: "django/utils/text.py" }
+    },
+    {
+      name: "tmct_untested",
+      tier: "cold",
+      summary: "Source modules with no covering test module \u2014 a coverage-gap view (no arguments).",
+      inputSchema: { type: "object", required: [], properties: {} },
+      example: {}
+    },
+    {
+      name: "tmct_history",
+      tier: "cold",
+      summary: "Recent commits that touched a symbol's module (newest first).",
+      inputSchema: symbolArg("The symbol whose module's history you want."),
+      example: { symbol: "django/utils/text.py" }
+    },
+    {
+      name: "tmct_file_history",
+      tier: "cold",
+      summary: "Commits that touched a symbol's module, each with author / date / subject.",
+      inputSchema: symbolArg("The symbol whose module's history you want."),
+      example: { symbol: "django/utils/text.py" }
+    },
+    {
+      name: "tmct_method_history",
+      tier: "cold",
+      summary: "Commits that touched a specific method symbol (fine-grained), with author / date / subject.",
+      inputSchema: symbolArg("A Class.method name."),
+      example: { symbol: "Truncator.chars" }
+    },
+    {
+      name: "tmct_class_history",
+      tier: "cold",
+      summary: "Commits that touched a specific class symbol (fine-grained), with author / date / subject.",
+      inputSchema: symbolArg("A class name."),
+      example: { symbol: "Truncator" }
+    },
+    {
+      name: "tmct_callers",
+      tier: "cold",
+      summary: "Modules that call into a symbol's module (one hop).",
+      inputSchema: symbolArg("The symbol whose callers you want."),
+      example: { symbol: "django/utils/text.py" }
+    },
+    {
+      name: "tmct_callees",
+      tier: "cold",
+      summary: "Modules a symbol's module calls into (one hop).",
+      inputSchema: symbolArg("The symbol whose callees you want."),
+      example: { symbol: "django/utils/text.py" }
+    },
+    {
+      name: "tmct_calls",
+      tier: "cold",
+      summary: "The in-repo symbols a function calls (fn\u2192fn), each with file:line.",
+      inputSchema: symbolArg("The function whose in-repo call sites you want."),
+      example: { symbol: "slugify" }
+    },
+    {
+      name: "tmct_cochanges",
+      tier: "cold",
+      summary: "Modules that historically change in the same commit as a symbol's module (git co-change).",
+      inputSchema: symbolArg("The symbol whose module's change-coupling you want."),
+      example: { symbol: "django/utils/text.py" }
+    },
+    {
+      name: "tmct_context_more",
+      tier: "cold",
+      summary: "The bundle sections a lean tmct_context omitted (siblings / tests / cochange / class members / re-exports).",
+      inputSchema: symbolArg("The symbol a lean tmct_context bundle was built for."),
+      example: { symbol: "django/utils/text.py" }
+    }
+  ]);
+  var HOT_TOOLS = TOOL_DEFINITIONS.filter((t) => t.tier === "hot");
+  var COLD_TOOLS = TOOL_DEFINITIONS.filter((t) => t.tier === "cold");
+  var TOOL_NAMES = Object.freeze(TOOL_DEFINITIONS.map((t) => t.name));
+
+  // src/tools/server.mjs
   init_config();
   init_source_slice();
 
@@ -8052,44 +8303,12 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   // src/tools/server.mjs
   setDefaultNlpAdapter(nlpAdapter);
   setConstructionBanks(readConstructionFiles);
-  var TOOLS = [
-    {
-      name: "tmct_context",
-      // Lean resident schema (re-billed every turn): the minimum that still steers the agent to
-      // ONE call → write, not Read.
-      description: "START HERE to add/modify code: ONE call returns a sized edit bundle (exemplar source, sibling signatures, registration, insertion region) \u2014 then write directly, don't Read.",
-      inputSchema: {
-        type: "object",
-        required: ["symbol"],
-        properties: {
-          symbol: { type: "string", description: "Module path (e.g. path/to/module) or a sibling function/class name defined in it." },
-          depth: { type: "string", enum: ["min", "auto", "full"], default: "auto", description: "auto (sized to the task) | min (leanest) | full (every section)." }
-        }
-      }
-    },
-    {
-      name: "tmct_snippet",
-      description: "EXACT source of one function/class/Class.method by name (its line span only) + a one-line in-repo call hint. Prefer over Read for a single symbol.",
-      inputSchema: {
-        type: "object",
-        required: ["symbol"],
-        properties: {
-          symbol: { type: "string", description: "function/class name, Class.method, or fn:<path>#name." }
-        }
-      }
-    },
-    {
-      name: "tmct_ask",
-      description: 'Ask a structural question in plain English: "which functions call X", "what uses X", "where is X defined", "when did X change". One call, no model. A clean miss beats a guess.',
-      inputSchema: {
-        type: "object",
-        required: ["query"],
-        properties: {
-          query: { type: "string", description: 'A free-text question, e.g. "which functions explicitly couple to logging".' }
-        }
-      }
-    }
-  ];
+  var TOOLS = HOT_TOOLS.map(({ name, agentDescription, inputSchema }) => ({
+    name,
+    description: agentDescription,
+    inputSchema
+  }));
+  var DISPATCH_TOOLS = new Set(TOOL_NAMES);
 
   // src/services/chat.mjs
   init_config();
