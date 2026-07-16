@@ -46,8 +46,8 @@ Confirmed by direct read of this repo, not assumed:
 - **`src/domain/codegraph.mjs`** (2,405 lines) — `parseEntities(payload)` (`codegraph.mjs:31-63`) takes an
   **already-built** JS object and reshapes it; its own doc comment calls it "pure (no-network, no-fs)
   query logic over the typed `entities` payload that the deterministic indexer writes to
-  `<repo>/.tmct/graph.json`." `spiralExpand` and `buildVizNodesAndEdges` are pure in-memory graph
-  walks. None of the three touches a source file.
+  `<repo>/.tmct/graph.json`." `spiralExpand` is a pure in-memory graph walk. Neither touches a
+  source file.
 - **`src/adapters/repository-interface.mjs`** (332 lines) — a versioned (`INTERFACE_VERSION = "1.1.0"`,
   line 21) typed contract: 17 named services across six groups (resolution, traversal, source,
   aggregate, temporal, search), a closed `MISS_REASONS` set (`UNRESOLVED_TERM`, `CAPABILITY_ABSENT`,

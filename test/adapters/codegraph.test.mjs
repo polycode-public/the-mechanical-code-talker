@@ -13,7 +13,6 @@ import {
   relationKind,
   adjacencyForKinds,
   spiralExpand,
-  derivedUpdatedAt,
   impactClosure,
   renderDescribe,
   renderCompare,
@@ -1241,40 +1240,7 @@ test("beamSearch: an invalid beamWidth (0, negative, non-finite) falls back to t
   }
 });
 
-// ── derivedUpdatedAt / spiralExpand generalization ──
-
-test("derivedUpdatedAt: own updatedAt/createdAt attribute, or the max edge createdAt touching the node, whichever is newer; tolerates missing timestamps; \"\" when nothing carries one", () => {
-  const g = parseEntities({
-    individuals: [
-      { id: "a", label: "a", class: "Thing", attributes: [{ prop: CREATED_AT_PROP, key: "createdAt", value: "2026-01-01T00:00:00.000Z" }] },
-      { id: "b", label: "b", class: "Thing", attributes: [
-        { prop: CREATED_AT_PROP, key: "createdAt", value: "2026-01-01T00:00:00.000Z" },
-        { prop: UPDATED_AT_PROP, key: "updatedAt", value: "2026-01-05T00:00:00.000Z" },
-      ] },
-      { id: "c", label: "c", class: "Thing", attributes: [] }, // no timestamp at all, no edges either
-      { id: "d", label: "d", class: "Thing", attributes: [{ prop: CREATED_AT_PROP, key: "createdAt", value: "2026-01-01T00:00:00.000Z" }] },
-    ],
-    objectProperties: [
-      // endpoints ("src:dummy"/"session:dummy") deliberately don't resolve to a real individual —
-      // derivedUpdatedAt only reads e.subject/e.object as plain ids, never dereferences them —
-      // and are each used by only ONE edge, so "b"'s own-attribute case stays uncontaminated by
-      // any edge (it carries zero edges of its own in this fixture).
-      { predicate: "statedBy", prop: "mgx:statedBy", count: 1, examples: [
-        { subject: "d", object: "src:dummy", createdAt: "2026-01-10T00:00:00.000Z" }, // newer than d's own createdAt
-      ] },
-      { predicate: "saidInSession", prop: "mgx:saidInSession", count: 1, examples: [
-        { subject: "a", object: "session:dummy" }, // NO createdAt field at all — must be tolerated, not thrown on
-      ] },
-    ],
-  });
-  const byId = (id) => g.individuals.find((i) => i.id === id);
-
-  assert.equal(derivedUpdatedAt(g, byId("c")), "", "no own timestamp and no edges at all -> \"\"");
-  assert.equal(derivedUpdatedAt(g, byId("b")), "2026-01-05T00:00:00.000Z", "own mgx:updatedAt wins when it's the newest signal");
-  assert.equal(derivedUpdatedAt(g, byId("d")), "2026-01-10T00:00:00.000Z", "a newer edge createdAt beats the node's own (older) createdAt");
-  assert.equal(derivedUpdatedAt(g, byId("a")), "2026-01-01T00:00:00.000Z", "an edge touching the node with NO createdAt field is skipped, never thrown on — falls back to its own createdAt");
-  assert.equal(derivedUpdatedAt(g, null), "", "null individual -> \"\"");
-});
+// ── spiralExpand generalization ──
 
 test("spiralExpand walks the MEMORY graph (provenance edge kinds, idNormalizer=(id)=>id, classPredicate=()=>true): a single Utterance seed reaches its Session (saidInSession), its canonicalised Fact, and that Fact's Source (statedBy)", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-mem-spiral-"));

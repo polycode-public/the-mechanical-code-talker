@@ -809,7 +809,7 @@ function upsertIndividual(payload, ind) {
  *  on the edge, first-write-wins over the same (subject,object) pair — mirrors
  *  `firstWriteCreatedAt`'s discipline: a re-upserted edge keeps its original creation time
  *  rather than resetting to "now" on every write. This is the only place in the codebase edges
- *  get a timestamp at all — `codegraph.mjs`'s `derivedUpdatedAt` reads it back. */
+ *  get a timestamp at all. */
 function upsertEdge(payload, { predicate, prop }, edge) {
   let group = payload.objectProperties.find((g) => g?.prop === prop);
   if (!group) {

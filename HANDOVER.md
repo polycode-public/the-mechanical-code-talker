@@ -148,49 +148,28 @@ fan-out set.
 
 ### 3. Memory and predicate unification (`src/adapters/memory/*`, `src/domain/memory/*`)
 
-- **19 import-layer violations remain allowlisted.** `test/estate/layer-allowlist.mjs` is a
+- **3 import-layer violations remain allowlisted.** `test/estate/layer-allowlist.mjs` is a
   shrink-only ratchet: the checker fails on any edge not listed and on any listed edge that
   no longer occurs. Each fix deletes its line; never add one. What is left:
 
-  - **`completions/*` (9 lines)** reaches down into `memory/{core,blocks}` and up into
-    `services/finish`. The store handles are already half-injected — `generateCompletion`
-    receives `memory` and `graphService` from its caller and then loads the store again
-    itself. The pure helpers it imports (`tokenizeBlock`, `normFactTerm`, `degreeOf`,
-    `OVERLAP_MIN`) are the same shared-home problem as the store's own reaches below.
-  - **The store reaching up for pure helpers (3 lines)**: `core.mjs -> domain/hash.mjs`,
-    `core.mjs` and `blocks.mjs -> domain/memory/trust.mjs`. Both were examined and left
-    rather than forced. `hash.mjs` has three domain importers, so moving it down trades 1
-    violation for 3. `trust.mjs`'s scoring half (`computeTrust`, `SOURCE_PRIOR`,
-    `sessionReliabilityFrom`) has no domain consumer at all, but splitting it shaves one
-    line and leaves a domain module named `trust.mjs` that no longer computes trust beside
-    a second `trust.mjs` in adapters. The shape of a real fix: `adapters` (rank 0) may
-    import nothing, and `domain` (rank 1) may import nothing outside itself, so a pure
-    helper both layers need has nowhere legal to live. Give `codegraph.mjs`'s three
-    provenance imports (`CREATED_AT_PROP`, `UPDATED_AT_PROP`, `provenanceTagToSource`) a
-    home the store can also reach and the trust lines go together.
   - **`services/{chat,index}.mjs -> tools/server.mjs` (2 lines)** — services reaching up for
-    dispatch. The tool layer is now one module per tool behind a thin `server.mjs` entry,
-    so the seam a fix would follow is narrower than it was.
-  - **`providers/{bootstrap,fixture,graph-service}.mjs -> domain/codegraph.mjs` (3 lines)**,
-    **`domain/codegraph.mjs -> adapters/embed.mjs` (1)**, and **`wink-model.mjs calls
-    require()` (1)**.
+    dispatch. The tool layer is one module per tool behind a thin `server.mjs` entry, so the
+    seam a fix would follow is narrow. Worth asking first whether `tools` sitting above
+    `services` is the right ranking, given chat is a service that wants to dispatch tools.
+  - **`wink-model.mjs calls require()` (1 line)** — examined and kept, with the alternatives
+    measured. `loadWinkModel()` is synchronous and sits under `parseQueryFull`, an exported
+    sync domain API, so making it async ripples through `domain/`, `services/`, `tools/` and
+    `bin/`. Top-level await is rejected outright by the ledger bundle's `iife` format, and
+    `await import("wink-nlp")` drags wink into that bundle: 4,013,990 bytes against the
+    bundle's own 477,206. `createRequire` is what keeps it out. Renaming the local so the
+    checker's regex stops matching would be dodging, not fixing.
 
-### 4. Surfaces and build
+### 4. Visualisation code (plan-viz)
 
-- **Version bumps now touch `public/index.html`.** The page carries a version stamp and a test
-  enforces that it matches `package.json`.
-
-### 5. Visualisation code (`src/domain/codegraph.mjs`, plan-viz)
-
-- **codegraph.mjs post-viz-removal prune.** `buildVizNodesAndEdges`, `deriveFactTermGraph`,
-  `pickLegendDimension`, `edgeKindsFor`, `mostRecentIndividual`, `MEMORY_SPIRAL_EXPAND_KINDS`,
-  `legendValueFor` now have no consumers outside their own tests — prune together with those
-  tests.
-
-- **plan-viz animation vs co-travel.** The plan page's recorded assumption that consecutive
-  snapshots differ by one moved piece is broken by river-crossing's two-piece ferry moves —
-  validate or extend the animation for multi-effect steps (risk named in `archive/PLAN_HANOI.md`'s
-  addendum).
+- **The plan page labels every puzzle's steps with Hanoi's phases.** `phasesFor` calls river's
+  crossings "free wolf-1 / the pivot / rebuild on wolf-1" — a largest-disk-pivot heuristic that
+  means nothing for a crossing puzzle. What a phase IS for river is the open question, not how
+  to word it. Found while fixing the river layout.
 
 ## Discipline (unchanged)
 

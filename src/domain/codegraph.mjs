@@ -1096,25 +1096,6 @@ export function edgesOfKind(graph, kind) {
   return out;
 }
 
-/** A node's "last touched" moment: its own updatedAt/createdAt attribute, or
- *  the max `createdAt` over every edge touching it, whichever is newer. ""
- *  when nothing carries a timestamp. Skips edges with no `createdAt` rather than throwing. */
-export function derivedUpdatedAt(graph, ind, { createdAtProp = CREATED_AT_PROP, updatedAtProp = UPDATED_AT_PROP } = {}) {
-  if (!ind) return "";
-  const attrs = ind.attributes || [];
-  const own = attrs.find((a) => a?.prop === updatedAtProp)?.value || attrs.find((a) => a?.prop === createdAtProp)?.value || "";
-  let best = own || "";
-  for (const g of graph?.relations || []) {
-    for (const e of g.edges || []) {
-      if (!e || (e.subject !== ind.id && e.object !== ind.id)) continue;
-      const c = e.createdAt;
-      if (!c) continue; // no timestamp on this edge — skip, never throw
-      if (!best || c > best) best = c;
-    }
-  }
-  return best;
-}
-
 /** moduleIdOf by raw edge-endpoint id: resolves through byId when the individual exists,
  *  else falls back to parsing an `fn:<path>#name` id directly (callsSymbol objects may name
  *  symbols with no individual of their own). Null if it cannot be mapped. */
