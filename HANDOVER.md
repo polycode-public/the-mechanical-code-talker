@@ -31,39 +31,11 @@ download, not reachable from data in hand).
 
 ### 1. Reader coverage — inputs with no lane at all
 
-Each needs a new reader rather than a fix to an existing one, so this group is the natural
-fan-out set.
-
-- **Capability read-back over taught Rule rows.** "can you move a disk onto a peg?" is still a
-  graph-question miss even when that exact signature was taught — a closed ask-lane reader over
-  action-signature rules.
-
-- **Verbless want-goal.** "i want every disk on peg-b" (no infinitive verb) still gets the
-  teach lane's pronoun decline; recognizing it means inferring the location verb — a
-  desire-frame family of its own. The verbed forms
-  ("i want every disk to rest on peg-b") work.
-
-- **Topic-shift ellipsis.** "what is a dog" → "what about cats" has no reader; the elliptical
-  follow-up falls to the wall.
-
-- **Anaphora depth.** The vocabulary antecedent decays after one turn, and a cold pronoun
-  ("can it bark" with no prior turn) falls to the generic wall.
-
-- **Negative capability as data.** "a penguin cannot fly" declines honestly (no
-  fact-vocabulary predicate for it) and "what cannot fly" has no reverse listing.
-
-- **Prepositional-fact leftovers.** Determiner-led multi-word subjects ("the small disk rests
-  on the middle disk") decline; bare-copula "what is on peg-a" misses; "does disk-1 rest on
-  peg-b" falls to the generic wall instead of a specific miss.
-
-- **In-chat recovery for deep chains.** 3+-hop derivations need the `syllogise` CLI; chat has
-  no `/syllogise` command and the honest deep-chain miss doesn't mention the recovery.
-
-- **The reverse cleft rung has no reader.** "what is it that calls Y" misses — the leftover
-  "it that" becomes the subject. The forward clefts work and assert nothing false: "is it X
-  that calls Y" discriminates a false agent, "what X calls is Y" parses to the plain
-  canonical. No cleft reaches the taught-fact lane. Measured across 14 probes.
-
+- **Negative capability as data.** "a penguin cannot fly" declines, and "what cannot fly" has
+  no reverse listing. Being built now: sourced negatives (`mgxneg:` in the predicate, so the
+  positive and negative keep separate fact ids and separate `mgx:statedBy` edges), capability
+  inheritance across `subClassOf`, and one resolver ordering direct over inherited before
+  trust is consulted. See `PLAN_DEFEASIBLE_NEGATION.md`.
 
 ## Discipline (unchanged)
 
