@@ -1,9 +1,8 @@
-// test/synth-rules.test.mjs — PLAN_CODE.md Track 1, Stages 1-4 (§1/§6): the
-// GOAL_RULE synthesis harness. Four groups, one per staged build unit:
+// The GOAL_RULE synthesis harness, in four groups, one per build unit:
 //   1. the labeled-example harness (synthbench/rules/cases.jsonl) round-trips
 //      losslessly through agentbench/grade.mjs's OWN parseCases — reused, not
-//      reinvented, exactly as PLAN_CODE.md §6 directs ("a labeled example for
-//      rule synthesis IS an agentbench case").
+//      reinvented ("a labeled example for rule synthesis IS an agentbench
+//      case").
 //   2. the bounded field-grammar enumerator (synthbench/rules/enumerate.mjs)
 //      — count + structural validity, no engine wiring yet.
 //   3. the verification oracle (synthbench/rules/oracle.mjs) — a candidate
@@ -20,17 +19,17 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { parseCases, hallucinationsIn } from "../agentbench/grade.mjs";
-import { createRunCtx, loadFixtureLabels } from "../agentbench/run.mjs";
-import { GOAL_RULES, goalReason } from "../src/router/goal-reasoner.mjs";
-import { backwardChain } from "../src/router/resolver.mjs";
+import { parseCases, hallucinationsIn } from "../../agentbench/grade.mjs";
+import { createRunCtx, loadFixtureLabels } from "../../agentbench/run.mjs";
+import { GOAL_RULES, goalReason } from "../../src/router/goal-reasoner.mjs";
+import { backwardChain } from "../../src/router/resolver.mjs";
 import {
   enumerateCandidates, allTopics, partitionTopics, FOCUS_CLASSES, MODE_SETS, COMPOSE_OPS,
-} from "../synthbench/rules/enumerate.mjs";
-import { runCandidate, passesExample, groundableInToolset } from "../synthbench/rules/oracle.mjs";
-import { synthesizeGoalRule } from "../synthbench/rules/synthesize.mjs";
+} from "../../synthbench/rules/enumerate.mjs";
+import { runCandidate, passesExample, groundableInToolset } from "../../synthbench/rules/oracle.mjs";
+import { synthesizeGoalRule } from "../../synthbench/rules/synthesize.mjs";
 
-const CASES_FILE = fileURLToPath(new URL("../synthbench/rules/cases.jsonl", import.meta.url));
+const CASES_FILE = fileURLToPath(new URL("../../synthbench/rules/cases.jsonl", import.meta.url));
 
 async function loadCases() {
   const knownLabels = await loadFixtureLabels();
@@ -44,9 +43,9 @@ const byId = (cases, id) => {
   return c;
 };
 
-// ---- 1. Stage 1: the labeled-example harness round-trips losslessly --------
+// ---- 1. the labeled-example harness round-trips losslessly ------------------
 
-test("stage 1: synthbench/rules/cases.jsonl round-trips losslessly through agentbench's OWN parseCases", async () => {
+test("labeled examples: synthbench/rules/cases.jsonl round-trips losslessly through agentbench's OWN parseCases", async () => {
   const { cases, errors } = await loadCases();
   assert.deepEqual(errors, [], "zero lint errors — every case is well-formed against the real registry + fixture");
   assert.equal(cases.length, 13);
@@ -62,9 +61,9 @@ test("stage 1: synthbench/rules/cases.jsonl round-trips losslessly through agent
   assert.deepEqual(c.expect.result, ["app/lib/a.mjs", "app/lib/c.mjs", "app/lib/e.mjs", "app/lib/f.mjs", "scripts/g.mjs"]);
 });
 
-// ---- 2. Stage 2: the bounded enumerator -------------------------------------
+// ---- 2. the bounded enumerator -----------------------------------------------
 
-test("stage 2: enumerateCandidates is bounded (\"low thousands\", not combinatorial explosion) and grounded in the CURRENT registry", () => {
+test("enumerator: enumerateCandidates is bounded (\"low thousands\", not combinatorial explosion) and grounded in the CURRENT registry", () => {
   const topics = allTopics();
   const { relationTopics, coverageTopics } = partitionTopics();
   assert.ok(topics.length >= 10, "the registry declares a real topic set");
@@ -76,7 +75,7 @@ test("stage 2: enumerateCandidates is bounded (\"low thousands\", not combinator
   const candidates = enumerateCandidates();
   const expected = FOCUS_CLASSES.length * MODE_SETS.length * coverageTopics.length * relationTopics.length * 2 * COMPOSE_OPS.length * 4;
   assert.equal(candidates.length, expected, "the enumerated count matches the declared field-grammar's own arithmetic exactly");
-  assert.ok(candidates.length < 20000, "bounded — the plan's own \"low thousands\" order of magnitude, not an explosion");
+  assert.ok(candidates.length < 20000, "bounded — a \"low thousands\" order of magnitude, not an explosion");
 
   // dry-run sanity: EVERY candidate is well-formed, closed-grammar data — no
   // enumerated field ever escapes what the registry/resolver declare.
@@ -99,9 +98,9 @@ test("stage 2: enumerateCandidates is bounded (\"low thousands\", not combinator
   }
 });
 
-// ---- 3. Stage 3: the verification oracle reproduces BOTH hand-written rules -
+// ---- 3. the verification oracle reproduces BOTH hand-written rules -----------
 
-test("stage 3: a synthesized candidate reproduces coverage-invariant byte-for-byte on its own labeled examples", async () => {
+test("oracle: a synthesized candidate reproduces coverage-invariant byte-for-byte on its own labeled examples", async () => {
   const { cases } = await loadCases();
   const given = ["synth-cov-safe-to-change", "synth-cov-touch-f", "synth-cov-worry-c", "synth-cov-keystone"].map((id) => byId(cases, id));
   const { ctx, cleanup } = await createRunCtx();
@@ -128,7 +127,7 @@ test("stage 3: a synthesized candidate reproduces coverage-invariant byte-for-by
   }
 });
 
-test("stage 3: a synthesized candidate reproduces cochange-risk-invariant byte-for-byte on its own labeled examples", async () => {
+test("oracle: a synthesized candidate reproduces cochange-risk-invariant byte-for-byte on its own labeled examples", async () => {
   const { cases } = await loadCases();
   const given = ["synth-coch-ship-a", "synth-coch-precheck-a", "synth-coch-regress-a", "synth-coch-refuse-global"].map((id) => byId(cases, id));
   const { ctx, cleanup } = await createRunCtx();
@@ -150,7 +149,7 @@ test("stage 3: a synthesized candidate reproduces cochange-risk-invariant byte-f
   }
 });
 
-test("stage 3: groundableInToolset is a sound (never over-eager) pre-filter — it never rejects a candidate applicableRules would accept", async () => {
+test("oracle: groundableInToolset is a sound (never over-eager) pre-filter — it never rejects a candidate applicableRules would accept", async () => {
   const { cases } = await loadCases();
   const example = byId(cases, "synth-cov-safe-to-change");
   const candidates = enumerateCandidates().slice(0, 50); // a bounded sample — this is a soundness spot-check, not exhaustive
@@ -165,9 +164,9 @@ test("stage 3: groundableInToolset is a sound (never over-eager) pre-filter — 
   }
 });
 
-// ---- 4. Stage 4: the full CEGIS loop synthesizes a NOVEL rule ---------------
+// ---- 4. the full CEGIS loop synthesizes a NOVEL rule --------------------------
 
-test("stage 4: CEGIS synthesizes a NOVEL caller-risk rule (not hand-written anywhere) at 0% fabrication, held-out-checked", async () => {
+test("CEGIS synthesizes a NOVEL caller-risk rule (not hand-written anywhere) at 0% fabrication, held-out-checked", async () => {
   const { cases } = await loadCases();
   const given = ["synth-caller-risk-a", "synth-caller-risk-b", "synth-caller-risk-refuse-global"].map((id) => byId(cases, id));
   const heldOut = ["synth-caller-risk-g", "synth-caller-risk-c"].map((id) => byId(cases, id));
@@ -211,7 +210,7 @@ test("stage 4: CEGIS synthesizes a NOVEL caller-risk rule (not hand-written anyw
   }
 });
 
-test("stage 4: CEGIS is deterministic — two runs over the same inputs synthesize a byte-identical rule and trace", async () => {
+test("CEGIS is deterministic — two runs over the same inputs synthesize a byte-identical rule and trace", async () => {
   const { cases } = await loadCases();
   const given = ["synth-caller-risk-a", "synth-caller-risk-b", "synth-caller-risk-refuse-global"].map((id) => byId(cases, id));
   const heldOut = ["synth-caller-risk-g", "synth-caller-risk-c"].map((id) => byId(cases, id));
@@ -229,7 +228,7 @@ test("stage 4: CEGIS is deterministic — two runs over the same inputs synthesi
   }
 });
 
-test("stage 4: an honest miss — a given set no candidate in the grammar can satisfy refuses (never a wrong rule)", async () => {
+test("CEGIS: an honest miss — a given set no candidate in the grammar can satisfy refuses (never a wrong rule)", async () => {
   const { ctx, cleanup } = await createRunCtx();
   try {
     const impossible = [{
@@ -246,7 +245,7 @@ test("stage 4: an honest miss — a given set no candidate in the grammar can sa
   }
 });
 
-test("stage 4: held-out failure is reported honestly, not silently swallowed", async () => {
+test("CEGIS: held-out failure is reported honestly, not silently swallowed", async () => {
   const { cases } = await loadCases();
   const given = [byId(cases, "synth-caller-risk-a")]; // one example alone under-constrains the search
   const badHeldOut = [{

@@ -1,36 +1,36 @@
-// router-resolver.test.mjs — Stage 1 (resolver) + Stage 4 (guardrail) + Stage 3
-// (planner) of the capability router (PLAN_CAPABILITY_ROUTER.md). Deterministic,
-// no-LLM. The headline is the BIDIRECTIONAL CONFORMANCE test: every ask-vocab
-// relation kind maps to a capability (or is explicitly unmapped-with-reason), and
-// every capability is reachable (or tagged not-NL-reachable) — no orphans either
-// way, enforced as a HARD failure (coordinator reinforcement 2).
+// router-resolver.test.mjs — the capability router's resolver, guardrail and
+// planner. Deterministic, no-LLM. The headline is the BIDIRECTIONAL
+// CONFORMANCE test: every ask-vocab relation kind maps to a capability (or is
+// explicitly unmapped-with-reason), and every capability is reachable (or
+// tagged not-NL-reachable) — no orphans either way, enforced as a HARD
+// failure.
 
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { parseEntities } from "../src/codegraph.mjs";
-import { ingestSchemaDocs } from "../src/schema-docs.mjs";
-import { buildEntities } from "../src/graph-build.mjs";
-import { resolveObject } from "../src/ask.mjs";
-import { RELATIONS } from "../src/ask-vocab.mjs";
-import { COMMANDS } from "../src/chat.mjs";
-import { capabilities, isCapability, effectsOf } from "../src/router/registry.mjs";
+import { parseEntities } from "../../src/codegraph.mjs";
+import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { buildEntities } from "../../src/graph-build.mjs";
+import { resolveObject } from "../../src/ask.mjs";
+import { RELATIONS } from "../../src/ask-vocab.mjs";
+import { COMMANDS } from "../../src/chat.mjs";
+import { capabilities, isCapability, effectsOf } from "../../src/router/registry.mjs";
 import {
   NL_INTENTS, UNMAPPED_KINDS, NOT_NL_REACHABLE, FRAMES,
   backwardChain, mapParse, mapFrame, commandCapability, resolveOne,
   reachableCapabilityNames, extractEntity,
-} from "../src/router/resolver.mjs";
-import { guard, admits } from "../src/router/guardrail.mjs";
-import { decompose, isMultiStep, plan, MAX_STEPS } from "../src/router/planner.mjs";
-import { resolverDriver } from "../agentbench/driver-resolver.mjs";
-import { runAgentbench, createRunCtx } from "../agentbench/run.mjs";
-import { parseCases, COMPLETION_FLOOR } from "../agentbench/grade.mjs";
+} from "../../src/router/resolver.mjs";
+import { guard, admits } from "../../src/router/guardrail.mjs";
+import { decompose, isMultiStep, plan, MAX_STEPS } from "../../src/router/planner.mjs";
+import { resolverDriver } from "../../agentbench/driver-resolver.mjs";
+import { runAgentbench, createRunCtx } from "../../agentbench/run.mjs";
+import { parseCases, COMPLETION_FLOOR } from "../../agentbench/grade.mjs";
 
-const CASES_FILE = fileURLToPath(new URL("../agentbench/cases.jsonl", import.meta.url));
+const CASES_FILE = fileURLToPath(new URL("../../agentbench/cases.jsonl", import.meta.url));
 
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 async function graphCtx() {
   const graph = parseEntities(ingestSchemaDocs(JSON.parse(await readFile(FIXTURE, "utf8"))));
   const resolve = (term) => resolveObject(graph, term);
@@ -51,8 +51,8 @@ async function graphCtx() {
 // A genuinely AMBIGUOUS in-memory graph (same construction ask-compound-resolve.
 // test.mjs uses): two distinct Modules that tie on the SAME query term, so
 // resolveObject returns {match, candidates, ambiguous:true} for real — the exact
-// shape PLAN_BREADTH_FIRST_NLU.md §4's breadth-first enrichment (resolveOne /
-// guard's `candidateResults`) is built to run every candidate through.
+// shape the breadth-first enrichment (resolveOne / guard's `candidateResults`)
+// is built to run every candidate through.
 function ambiguousGraphCtx() {
   const entities = buildEntities([
     { path: "old-payment-system.js", dotted: "oldPaymentSystem", imports: [], calls: [], defines: [] },
@@ -165,9 +165,9 @@ test("resolver: imperative frames fill what the grammar + command register miss 
   assert.deepEqual(unt.selected.input, {});
 });
 
-// ---- Stage 2: widened imperative reach + tmct_calls reachability -------------
+// ---- widened imperative reach + tmct_calls reachability -----------------------
 
-test("Stage 2: tmct_calls is now NL-reachable via a dedicated edge-dump frame (NOT_NL_REACHABLE emptied)", async () => {
+test("imperative reach: tmct_calls is NL-reachable via a dedicated edge-dump frame (NOT_NL_REACHABLE emptied)", async () => {
   // the old routing gap is closed: no orphan tag remains, and the cap is reached.
   assert.deepEqual(NOT_NL_REACHABLE, {}, "no capability is tagged unreachable any more");
   assert.ok(reachableCapabilityNames().has("tmct_calls"), "tmct_calls is reachable via a frame");
@@ -187,7 +187,7 @@ test("Stage 2: tmct_calls is now NL-reachable via a dedicated edge-dump frame (N
   assert.equal(callees.selected.name, "tmct_callees");
 });
 
-test("Stage 2: a bare imperative the grammar+command register both miss ('explain X') now binds via the description frame", async () => {
+test("imperative reach: a bare imperative the grammar+command register both miss ('explain X') binds via the description frame", async () => {
   const ctx = UNIT_CTX;
   const r = await resolveOne("explain Widget", ["tmct_describe", "tmct_members"], ctx);
   assert.ok(!r.refused, r.reason);
@@ -195,7 +195,7 @@ test("Stage 2: a bare imperative the grammar+command register both miss ('explai
   assert.deepEqual(r.selected.input, { symbol: "Widget" });
 });
 
-test("Stage 2: an OUT-OF-SET NL parse is rescued by an imperative frame that reaches a DECLARED capability", async () => {
+test("imperative reach: an OUT-OF-SET NL parse is rescued by an imperative frame that reaches a DECLARED capability", async () => {
   const ctx = UNIT_CTX;
   // keyword-spot mis-reads 'outgoing calls of X' toward the relational calls shape
   // (which would select an out-of-set callers/callees); the frame reaches the
@@ -206,7 +206,7 @@ test("Stage 2: an OUT-OF-SET NL parse is rescued by an imperative frame that rea
   assert.deepEqual(r.selected.input, { symbol: "fnAlpha" });
 });
 
-test("Stage 2: the sharp boundary — an UNDECLARED verb ('refactor') is refused, never guessed", async () => {
+test("imperative reach: the sharp boundary — an UNDECLARED verb ('refactor') is refused, never guessed", async () => {
   const ctx = UNIT_CTX;
   const r = await resolveOne("refactor the Widget class", ["tmct_describe", "tmct_members"], ctx);
   assert.equal(r.refused, true);
@@ -225,7 +225,7 @@ test("resolver: HONEST REFUSE — unresolvable entity, out-of-set tool, and unma
   assert.match(imp.reason, /no importer/);
 });
 
-// PLAN_BREADTH_FIRST_NLU.md §4 — every registered capability is read-only (empty
+// Every registered capability is read-only (empty
 // delete-list), so an ambiguous-term refusal ADDITIONALLY dispatches the SAME
 // capability once per tied candidate: `refused:true` is preserved (never a
 // guessed winner) but a machine caller also gets each candidate's real answer.
@@ -258,7 +258,7 @@ test("resolver: a bound call always self-passes the zero-hallucination gate (nev
   assert.deepEqual(r.selected, null);
 });
 
-// ---- 3. the GUARDRAIL (Stage 4) ---------------------------------------------
+// ---- 3. the GUARDRAIL ---------------------------------------------------------
 
 test("guardrail: DEFAULT-DENY — an unregistered / invented tool is denied outright", async () => {
   assert.equal(await admits({ name: "tmct_teleport", input: {} }), false);
@@ -288,7 +288,7 @@ test("guardrail: proves RESOLVABILITY, not ANTECEDENT-CORRECTNESS — a mis-boun
   assert.match(g.provenance, /NOT proven antecedent-correct/);
 });
 
-// PLAN_BREADTH_FIRST_NLU.md §4 — an ambiguous `resolves` term stays a DENIAL
+// An ambiguous `resolves` term stays a DENIAL
 // (never a guess at which candidate is "the" one) but, with a dispatcher wired,
 // ADDITIONALLY carries `candidateResults`: the same tool dispatched once per
 // tied candidate, so a machine caller gets the honest "still ambiguous" verdict
@@ -317,7 +317,7 @@ test("guardrail: an undeclared (but registered) tool is a policy denial when a d
   assert.ok(g.denied.some((d) => d.reason === "undeclared"));
 });
 
-// ---- 4. the PLANNER (Stage 3) -----------------------------------------------
+// ---- 4. the PLANNER -----------------------------------------------------------
 
 test("planner: decompose picks the HTN method — conditional / relative-filter / member-filter / sequence / single", () => {
   assert.equal(decompose("if fnAlpha is untested, describe it").method, "conditional");
@@ -395,11 +395,11 @@ test("agentbench e2e: the resolver driver CLIMBS — A0..C1 clear the gate, well
     assert.ok(rolled.byRung[rung].gatePass, `${rung} clears the honest gate (0% halluc AT >=${COMPLETION_FLOOR * 100}% completion)`);
   }
   // the router is USEFUL, not just safe: it clears every rung it TARGETS (A0-C1)
-  // at high completion, far above the shim floor (~46%). C2 (the goal-reasoner,
-  // Stage 5) is the resolver's honest ESCALATION CEILING — the C2 cases
+  // at high completion, far above the shim floor (~46%). The C2 cases
   // (safe-to-change, the held-out phrasings) are DELIBERATELY beyond the C1
-  // resolver and refused, so usefulness is measured over A0-C1; Stage 5's
-  // driver-goal is what climbs C2 (see test/goal-reasoner.test.mjs).
+  // resolver and refused — the resolver escalates them, so usefulness is
+  // measured over A0-C1; the goal driver is what climbs C2 (see
+  // test/adapters/goal-reasoner.test.mjs).
   const climbed = ["A0", "A1", "A2", "B1", "B2", "C1"];
   const total = climbed.reduce((s, r) => s + rolled.byRung[r].total, 0);
   const completed = climbed.reduce((s, r) => s + rolled.byRung[r].completed, 0);

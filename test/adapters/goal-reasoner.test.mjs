@@ -1,4 +1,4 @@
-// test/goal-reasoner.test.mjs — Stage 5, the closed-world C2 goal-reasoner
+// test/goal-reasoner.test.mjs — the closed-world C2 goal-reasoner
 // (src/router/goal-reasoner.mjs + agentbench/driver-goal.mjs).
 //
 // Three groups:
@@ -10,10 +10,10 @@
 //      (global ranking), HELD-OUT phrasings decompose via the SAME goal-rule,
 //      the open-world seam REFUSES rather than invents a goal, C1 pass-through is
 //      untouched, and the whole thing is bounded, deterministic, 0% hallucination.
-//   3. BUG 8 REGRESSION — global-mode goal deduction must not answer a request
-//      that has nothing to do with the deduced goal just because the caller's
-//      declared toolset happens to ground it (demo/agentic-loop-demo.mjs's
-//      "write a haiku about pizza" gap): the fix is a structural relevance gate
+//   3. the global-mode DOMAIN GATE — global-mode goal deduction must not answer
+//      a request that has nothing to do with the deduced goal just because the
+//      caller's declared toolset happens to ground it ("write a haiku about
+//      pizza"): the gate is a structural relevance check
 //      (ask.mjs's own NL grammar), never a keyword blocklist.
 
 import { test, after } from "node:test";
@@ -23,18 +23,18 @@ import { fileURLToPath } from "node:url";
 
 import {
   GOAL_RULES, MAX_TICKS, backwardChainGoal, applicableRules, threatsAmong, dropCondition, goalReason,
-} from "../src/router/goal-reasoner.mjs";
-import { goalDriver } from "../agentbench/driver-goal.mjs";
-import { cochangesLabels, untestedModules, intersect } from "../agentbench/results.mjs";
-import { capabilities } from "../src/router/registry.mjs";
-import { createRunCtx, runAgentbench, BENCH_VERSION, loadFixtureLabels } from "../agentbench/run.mjs";
-import { parseCases, hallucinationsIn } from "../agentbench/grade.mjs";
-import { resolverDriver } from "../agentbench/driver-resolver.mjs";
+} from "../../src/router/goal-reasoner.mjs";
+import { goalDriver } from "../../agentbench/driver-goal.mjs";
+import { cochangesLabels, untestedModules, intersect } from "../../agentbench/results.mjs";
+import { capabilities } from "../../src/router/registry.mjs";
+import { createRunCtx, runAgentbench, BENCH_VERSION, loadFixtureLabels } from "../../agentbench/run.mjs";
+import { parseCases, hallucinationsIn } from "../../agentbench/grade.mjs";
+import { resolverDriver } from "../../agentbench/driver-resolver.mjs";
 
-const CASES_FILE = fileURLToPath(new URL("../agentbench/cases.jsonl", import.meta.url));
+const CASES_FILE = fileURLToPath(new URL("../../agentbench/cases.jsonl", import.meta.url));
 
-// ONE shared run context (0.8.2-style speed insurance, mirroring
-// test/router-resolver.test.mjs): every consumer below is READ-ONLY over the
+// ONE shared run context (speed insurance, mirroring
+// test/adapters/router-resolver.test.mjs): every consumer below is READ-ONLY over the
 // materialized fixture graph (query dispatch, entity resolution), so sharing is
 // safe — no test mutates ctx/graph state. Cleaned once in the after-hook.
 const SHARED = await createRunCtx();
@@ -43,13 +43,13 @@ after(() => SHARED.cleanup());
 // ---- 1. UNIT: the declared goal model + meta-loop primitives -----------------
 
 test("goal model: GOAL_RULES is a declared, frozen maintenance-invariant set (rule-general fields)", () => {
-  assert.ok(Array.isArray(GOAL_RULES) && GOAL_RULES.length >= 2, "0.8.2: at least two declared goal-rules (C2 is rule-general)");
+  assert.ok(Array.isArray(GOAL_RULES) && GOAL_RULES.length >= 2, "at least two declared goal-rules (C2 is rule-general)");
   for (const r of GOAL_RULES) {
     assert.equal(typeof r.id, "string");
     assert.equal(r.kind, "maintenance");
     assert.ok(Array.isArray(r.subGoals) && r.subGoals.length, `${r.id} declares epistemic sub-goals`);
     assert.equal(typeof r.achieves, "string", `${r.id} declares a meta-goal topic`);
-    // the 0.8.2 rule-general fields: nothing about a rule lives in code any more
+    // the rule-general fields: nothing about a rule lives in code
     assert.equal(typeof r.focusClass, "string", `${r.id} declares the focus entity class`);
     assert.ok(Array.isArray(r.modes) && r.modes.every((m) => ["scoped", "global"].includes(m)), `${r.id} declares its modes`);
     assert.ok(r.compose && r.compose.op === "intersect" && r.compose.a && r.compose.b, `${r.id} declares a compose spec`);
@@ -147,7 +147,7 @@ test("goal-reasoner e2e: HELD-OUT phrasings decompose via the SAME goal-rule (gr
   assert.deepEqual(c.composed, ["app/lib/c.mjs"], "c's only dependent is tested -> singleton gap");
 });
 
-// ---- 0.8.2: the SECOND declared goal-rule (cochange-risk-invariant) ----------
+// ---- the SECOND declared goal-rule (cochange-risk-invariant) ------------------
 
 test("cochangesLabels: mirrors renderCochanges edge-for-edge (SYMMETRIC read of the cochange edge)", () => {
   const g = SHARED.ctx.graph;
@@ -213,7 +213,7 @@ test("goal-reasoner e2e: SCOPED-ONLY + AMBIGUITY seams both refuse honestly", as
   assert.match(String(ambiguous.why), /ambiguous meta-goal.*coverage-invariant.*cochange-risk-invariant/);
 });
 
-// PLAN_BREADTH_FIRST_NLU.md §4 — an AMBIGUOUS focus term must never silently
+// An AMBIGUOUS focus term must never silently
 // collapse to a whole-graph "global" answer (that would silently answer a
 // DIFFERENT goal than the one the user actually named). It stays an honest
 // refuse, but — when the tied candidates share one goal-rule-scoped class and a
@@ -221,10 +221,10 @@ test("goal-reasoner e2e: SCOPED-ONLY + AMBIGUITY seams both refuse honestly", as
 // a machine caller gets both the honest "still ambiguous" signal and every
 // candidate's real composed answer (mirrors resolveOne's candidateResults).
 test("goal-reasoner: an ambiguous FOCUS term stays refused but ADDITIONALLY carries candidateResults (never silently falls back to global)", async () => {
-  const { buildEntities } = await import("../src/graph-build.mjs");
-  const { parseEntities } = await import("../src/codegraph.mjs");
-  const { ingestSchemaDocs } = await import("../src/schema-docs.mjs");
-  const { resolveObject } = await import("../src/ask.mjs");
+  const { buildEntities } = await import("../../src/graph-build.mjs");
+  const { parseEntities } = await import("../../src/codegraph.mjs");
+  const { ingestSchemaDocs } = await import("../../src/schema-docs.mjs");
+  const { resolveObject } = await import("../../src/ask.mjs");
 
   const entities = buildEntities([
     { path: "old-payment-system.js", dotted: "oldPaymentSystem", imports: [], calls: [], defines: [] },
@@ -300,37 +300,29 @@ test("goal driver: C1-routable requests are UNTOUCHED (goal-reasoner adds nothin
   assert.deepEqual(fold.composed, ["app/lib/c.mjs", "app/lib/e.mjs", "app/lib/f.mjs", "scripts/g.mjs"]);
 });
 
-test("goal driver e2e: Stage 5 moves C2 result-completion OFF the floor at 0% hallucination", async () => {
+test("goal driver e2e: the goal-reasoner moves C2 result-completion OFF the floor at 0% hallucination", async () => {
   const knownLabels = await loadFixtureLabels();
   const { cases } = parseCases(await readFile(CASES_FILE, "utf8"), { knownLabels });
   const goal = await runAgentbench(cases, { driver: goalDriver, stamp: BENCH_VERSION, ctx: SHARED.ctx });
   const base = await runAgentbench(cases, { driver: resolverDriver, stamp: BENCH_VERSION, ctx: SHARED.ctx });
 
   // the non-negotiable holds on both axes, on every rung
-  assert.equal(goal.rolled.overall.hallucinationRate, 0, "0% hallucination — the router's floor, preserved by Stage 5");
+  assert.equal(goal.rolled.overall.hallucinationRate, 0, "0% hallucination — the router's floor, preserved by the goal-reasoner");
 
   // the WIN: the goal-reasoner un-gates C2 and lifts its result-completion far off
-  // the C1-only floor (goal-deduction is genuinely doing work). 0.8.2 counts: C2
-  // is 11 cases (6 coverage-era + 3 cochange composes + 2 seam refusals); the goal
-  // driver composes/refuses all 11 on the result axis — 100%.
-  //
-  // UPDATE (TOO_HARD_AUDIT.md M2, fixed): what-to-test ("what most needs a test in
-  // this codebase") used to stay result-incomplete, and this test's own comment
-  // claimed ranking it "would need a request keyword we refuse to add" — that
-  // framing was wrong, not a real ceiling. Traced live: a C1 imperative frame
-  // (resolver.mjs's flat "untested" frame) short-circuited the request to a single
-  // unranked tmct_untested call before the C2 meta-loop — which already had the
-  // keystone-argmax ranking built (goal-reasoner.mjs:421-431) — ever ran; separately
-  // ask.mjs's superlative grammar required an explicit entity noun ("module") this
-  // phrasing never supplies. Both fixed with DECLARED tables, not a new request
-  // keyword: the frame now skips on a superlative cue (resolver.mjs's SUPERLATIVE_RE,
-  // built from ask.mjs's own SUPERLATIVE_EXTREMES) so the request escalates to C2,
-  // and parseSuperlative defaults entityType from a metric that implies exactly one
-  // class (ask-vocab.mjs's METRIC_IMPLIES_ENTITY: tests -> Module).
-  assert.ok(goal.rolled.byRung.C2.completion > base.rolled.byRung.C2.completion, "C2 plan-completion climbs under Stage 5");
-  assert.ok(goal.rolled.byRung.C2.resultCompletion > base.rolled.byRung.C2.resultCompletion, "C2 result-completion climbs under Stage 5");
-  assert.equal(goal.rolled.byRung.C2.resultCompletion, 1, "C2 result-completion is 100% — every case, including what-to-test, now composes for real");
-  assert.ok(goal.rolled.byRung.C2.gatePass, "C2 passes the honest gate under Stage 5");
+  // the C1-only floor (goal-deduction is genuinely doing work). C2 is 11 cases
+  // (6 coverage composes/refusals + 3 cochange composes + 2 seam refusals); the
+  // goal driver composes/refuses all 11 on the result axis — 100%. That includes
+  // what-to-test ("what most needs a test in this codebase"): the C1 flat
+  // "untested" frame skips on a superlative cue (resolver.mjs's SUPERLATIVE_RE,
+  // built from ask.mjs's own SUPERLATIVE_EXTREMES) so the request escalates to
+  // the C2 meta-loop's keystone-argmax ranking, and parseSuperlative defaults
+  // entityType from a metric that implies exactly one class (ask-vocab.mjs's
+  // METRIC_IMPLIES_ENTITY: tests -> Module).
+  assert.ok(goal.rolled.byRung.C2.completion > base.rolled.byRung.C2.completion, "C2 plan-completion climbs under the goal-reasoner");
+  assert.ok(goal.rolled.byRung.C2.resultCompletion > base.rolled.byRung.C2.resultCompletion, "C2 result-completion climbs under the goal-reasoner");
+  assert.equal(goal.rolled.byRung.C2.resultCompletion, 1, "C2 result-completion is 100% — every case, including what-to-test, composes for real");
+  assert.ok(goal.rolled.byRung.C2.gatePass, "C2 passes the honest gate under the goal-reasoner");
 
   const wtt = goal.rows.find((r) => r.caseId === "ab-c2-what-to-test");
   assert.ok(wtt.verdict.completed && wtt.verdict.resultCompleted, "what-to-test is now genuinely result-complete — real keystone-argmax ranking, not a faked pass");
@@ -359,21 +351,21 @@ test("goalReason: an empty declared toolset escalates cleanly (no crash, honest 
   assert.equal(r.terminated, true);
 });
 
-// ---- 3. BUG 8 REGRESSION: the global-mode DOMAIN GATE ------------------------
-// demo/agentic-loop-demo.mjs's "GAP, NOT A REFUSAL" case: global-mode deduction
-// used to gate ONLY on the caller's declared toolset (applicableRules), never on
-// whether the request text has any connection to the deduced goal once no focus
-// entity binds — so "write a haiku about pizza", declaring the SAME tools the
-// keystone case above uses, silently got the "biggest testing risk" answer. The
-// fix reuses ask.mjs's own NL grammar (parseQuery) as a structural relevance
-// gate: does the request even parse to a shape naming the rule's focus class?
-// This must (a) refuse every off-domain request that would otherwise ground
-// through the declared toolset alone, while (b) leaving the genuinely-relevant
-// global keystone case (above) and every scoped case untouched — scoped mode
-// already proves relevance via a bound graph entity, so the gate is global-only.
+// ---- 3. the global-mode DOMAIN GATE -------------------------------------------
+// Global-mode deduction must not gate ONLY on the caller's declared toolset
+// (applicableRules) with no check that the request text has any connection to
+// the deduced goal once no focus entity binds — otherwise "write a haiku about
+// pizza", declaring the SAME tools the keystone case above uses, silently gets
+// the "biggest testing risk" answer. The gate reuses ask.mjs's own NL grammar
+// (parseQuery) as a structural relevance check: does the request even parse to
+// a shape naming the rule's focus class? It must (a) refuse every off-domain
+// request that would otherwise ground through the declared toolset alone,
+// while (b) leaving the genuinely-relevant global keystone case (above) and
+// every scoped case untouched — scoped mode already proves relevance via a
+// bound graph entity, so the gate is global-only.
 
-test("goal-reasoner e2e: BUG 8 FIX — an unrelated global-mode request REFUSES rather than answer a different goal", async () => {
-  // the exact demo repro: same declared tools as the working keystone case
+test("goal-reasoner e2e: domain gate — an unrelated global-mode request REFUSES rather than answer a different goal", async () => {
+  // same declared tools as the working keystone case
   // (which must keep answering, see the test above), but a request with zero
   // connection to testing risk / coverage.
   const r = await goalDriver("write a haiku about pizza", ["tmct_impact", "tmct_untested"], SHARED.ctx);
@@ -383,7 +375,7 @@ test("goal-reasoner e2e: BUG 8 FIX — an unrelated global-mode request REFUSES 
   assert.match(String(r.why), /open-world.*escalate/, "the honest open-world seam, not an invented goal");
 });
 
-test("goal-reasoner e2e: BUG 8 FIX — the gate is DOMAIN-based, not a keyword blocklist (held-out off-domain phrasings)", async () => {
+test("goal-reasoner e2e: the gate is DOMAIN-based, not a keyword blocklist (held-out off-domain phrasings)", async () => {
   const tools = ["tmct_impact", "tmct_untested"];
   for (const request of [
     "tell me a joke",
@@ -398,8 +390,8 @@ test("goal-reasoner e2e: BUG 8 FIX — the gate is DOMAIN-based, not a keyword b
   }
 });
 
-test("goal-reasoner e2e: BUG 8 FIX — the domain gate does not regress genuinely-relevant global deduction", async () => {
-  // re-confirm the keystone case (already covered above) survives the new gate,
+test("goal-reasoner e2e: the domain gate does not regress genuinely-relevant global deduction", async () => {
+  // re-confirm the keystone case (already covered above) survives the gate,
   // plus a second genuinely-relevant global phrasing naming the SAME focus class
   // (Module) via a different surface form.
   const keystone = await goalDriver("which module is the biggest testing risk", ["tmct_untested", "tmct_impact"], SHARED.ctx);
@@ -411,9 +403,9 @@ test("goal-reasoner e2e: BUG 8 FIX — the domain gate does not regress genuinel
   assert.deepEqual(alt.composed, ["app/lib/a.mjs"]);
 });
 
-test("goal-reasoner e2e: BUG 8 FIX — scoped-mode relevance is UNCHANGED (a bound focus already proves relevance)", async () => {
-  // scoped mode never needed the new gate (the focus IS the relevance proof) —
-  // pin that the fix didn't accidentally touch it.
+test("goal-reasoner e2e: scoped-mode relevance is UNCHANGED by the domain gate (a bound focus already proves relevance)", async () => {
+  // scoped mode never needed the gate (the focus IS the relevance proof) —
+  // pin that the gate doesn't touch it.
   const r = await goalDriver("is app/lib/a.mjs safe to change", ["tmct_impact", "tmct_untested"], SHARED.ctx);
   assert.equal(r.refused, false);
   assert.deepEqual(r.composed, ["app/lib/a.mjs", "app/lib/c.mjs", "app/lib/e.mjs", "app/lib/f.mjs", "scripts/g.mjs"]);

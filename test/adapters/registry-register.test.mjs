@@ -9,12 +9,12 @@ import { join } from "node:path";
 import {
   REGISTRY, capabilities, capabilityByName, isCapability,
   registerCapability, PRECOND, VOCAB,
-} from "../src/router/registry.mjs";
-import { guard } from "../src/router/guardrail.mjs";
-import { actionFamilies, capabilityFromActionRules, registerTaughtActions } from "../src/router/taught.mjs";
-import { runTurn } from "../src/chat.mjs";
-import { loadMemory } from "../src/memory/core.mjs";
-import { clearCache } from "../src/source.mjs";
+} from "../../src/router/registry.mjs";
+import { guard } from "../../src/router/guardrail.mjs";
+import { actionFamilies, capabilityFromActionRules, registerTaughtActions } from "../../src/router/taught.mjs";
+import { runTurn } from "../../src/chat.mjs";
+import { loadMemory } from "../../src/memory/core.mjs";
+import { clearCache } from "../../src/source.mjs";
 
 const record = (name, extra = {}) => ({
   name,

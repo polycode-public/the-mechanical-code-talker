@@ -9,20 +9,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { ingestSchemaDocs } from "../src/schema-docs.mjs";
+import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import {
   buildCapabilityPlanCtx, runCapabilityPlan, runTaughtPlan, declaredCapabilityNames,
-} from "../src/router/drive.mjs";
-import { isCapability } from "../src/router/registry.mjs";
-import { actionFamilies, capabilityFromActionRules } from "../src/router/taught.mjs";
-import { runTurn } from "../src/chat.mjs";
+} from "../../src/router/drive.mjs";
+import { isCapability } from "../../src/router/registry.mjs";
+import { actionFamilies, capabilityFromActionRules } from "../../src/router/taught.mjs";
+import { runTurn } from "../../src/chat.mjs";
 import {
   appendRule, loadMemory,
   RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT,
-} from "../src/memory/core.mjs";
-import { clearCache } from "../src/source.mjs";
+} from "../../src/memory/core.mjs";
+import { clearCache } from "../../src/source.mjs";
 
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 
 async function materializeFixtureRepo() {
   const dir = await mkdtemp(join(tmpdir(), "tmct-taught-plan-repo-"));
@@ -116,6 +116,22 @@ test("runTaughtPlan passes on a non-world-goal request instead of claiming it", 
   } finally {
     for (const d of ctx.disposers) d();
   }
+});
+
+test("a chat /plan world-goal turn consumes the taught action family and unregisters it before the turn ends", async () => {
+  const { loadGraph } = await import("../../src/server.mjs");
+  const source = await import("../../src/source.mjs");
+  const planned = await runTurn("/plan make every disk rest on peg-c", {
+    config: GRAPH, graph: await loadGraph(GRAPH, source), memoryDir: MEMORY, sessionId: "taught-plan-chat",
+  });
+  assert.match(String(planned.answer), /driver: taught-0\.1\.0/);
+  const steps = String(planned.answer).match(/taught:move onto/g) || [];
+  assert.equal(steps.length, 7, `expected the 7-move optimum in the reply:\n${planned.answer}`);
+  assert.match(String(planned.answer), /simulated/);
+  assert.match(String(planned.answer), /never dispatched/);
+  // The turn's own cleanup unregistered the taught record: nothing leaks into
+  // the process-global registry between turns.
+  assert.equal(isCapability("taught:move onto"), false);
 });
 
 test("an action-constraint row bridges into the capability record as a precondition entry", async () => {

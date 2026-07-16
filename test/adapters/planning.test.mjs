@@ -1,14 +1,12 @@
 // planning.test.mjs — proves `findActionPath` (src/planning.mjs), the
 // domain-agnostic on-demand-successor generalization of `findIsaChain`'s
-// bounded rooted BFS (see PLAN_HANOI.md's Phase 2 write-up for the design
-// context). The toy domains here are deliberately much smaller than Towers
-// of Hanoi — a handful of hand-authored positions on a small fixed graph, not
-// a stack-of-disks state space — just enough to prove the mechanism (on-
-// demand successor generation, cycle-safe bounded BFS, real path-not-just-
-// boolean return) before anything Hanoi-scale is attempted.
+// bounded rooted BFS. The toy domains here are deliberately tiny — a handful
+// of hand-authored positions on a small fixed graph, not a stack-of-disks
+// state space — just enough to prove the mechanism (on-demand successor
+// generation, cycle-safe bounded BFS, real path-not-just-boolean return).
 import test from "node:test";
 import assert from "node:assert/strict";
-import { findActionPath, findReachableSet } from "../src/planning.mjs";
+import { findActionPath, findReachableSet } from "../../src/planning.mjs";
 
 // ---- Toy domain 1: a small fixed graph with two dead-end branches and a ---
 // ---- cycle, requiring a genuine 3-hop discovery to reach the goal. -------
@@ -80,7 +78,7 @@ test("findActionPath: cycle-safety — a cycle with NO reachable goal still term
 });
 
 // ---------------------------------------------------------------------------
-// findReachableSet — PLAN_TAUGHT_RELATIONS.md Item 6's kernel half: unlike
+// findReachableSet — the goal-less sibling: unlike
 // `findActionPath` above, there is no goal at all — every state reachable
 // from the start, within budget, is a result. Toy domain built specifically
 // to exercise a genuine SAME-LENGTH multi-path convergence (C is reachable
