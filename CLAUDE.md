@@ -25,13 +25,24 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
   `Antony at Polycode`); keep `npm test` green at every commit.
 - Push/publish is gated on the operator (CI publishes on version bump on `main`).
 
-## Never pipe a long-running command straight into `tail`
+## Always tee a long-running command to a file before filtering it
 
-Piping a test run or any long command straight into `tail -N` (`cmd 2>&1 | tail -20`) throws away
-everything before the last N lines for good. If the summary you need sits earlier in the output,
-it's gone, and the whole command has to run again. Always tee it to a file first:
-`cmd 2>&1 | tee /tmp/some-file.log | tail -20`. You still get the quick glance, and the full
-output stays on disk if you need more of it later.
+Never pipe a test run, a playtest sweep, or any long command straight into `tail`, `head`,
+`grep` or anything else. Always tee it first:
+
+    cmd 2>&1 | tee /tmp/some-file.log | tail -20      # or head, grep, whatever
+
+You still get the quick glance, and the full output stays on disk when the part you need turns
+out to sit somewhere else.
+
+Two different things go wrong without the tee. `tail -N` throws away everything before the last
+N lines for good, so if the summary sits earlier it's gone and the whole command runs again.
+`head -N` is worse: once it has its N lines it exits, the producer gets SIGPIPE, and **the
+command itself is killed part-way through**. A 17-session playtest sweep piped into `head`
+died silently at session 7 and reported like a clean run — the truncation showed up only in
+the line count. `head` doesn't just discard output, it stops the work.
+
+If a command's output is worth filtering, it's worth keeping.
 
 ## Name it, don't comment it
 
