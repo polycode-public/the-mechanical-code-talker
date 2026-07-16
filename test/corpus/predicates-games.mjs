@@ -6,18 +6,9 @@
 export {
   answerBody, bodyEquals, bodyMatches,
   answerHasAll, answerLacks, answerMatchesAll, answerMatchesNone,
+  notMiss, isMiss,
 } from "./predicates-grammar.mjs";
 import { answerBody } from "./predicates-grammar.mjs";
-
-/** The turn answered (its record's miss flag is false). */
-export function notMiss(turn) {
-  return turn?.record?.miss === false;
-}
-
-/** The turn is an honest miss (its record's miss flag is true). */
-export function isMiss(turn) {
-  return turn?.record?.miss === true;
-}
 
 /** The turn ended the session (a farewell's `end: true`). */
 export function sessionEnded(turn) {

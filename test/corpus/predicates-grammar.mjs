@@ -46,3 +46,13 @@ export function answerMatchesNone(turn, patterns) {
   const list = Array.isArray(patterns) ? patterns : [patterns];
   return list.every((p) => !new RegExp(p).test(text));
 }
+
+/** The turn answered (its record's miss flag is false). */
+export function notMiss(turn) {
+  return turn?.record?.miss === false;
+}
+
+/** The turn is an honest miss (its record's miss flag is true). */
+export function isMiss(turn) {
+  return turn?.record?.miss === true;
+}

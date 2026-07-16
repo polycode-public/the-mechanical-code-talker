@@ -1,7 +1,11 @@
 // Templates-lane predicates, auto-merged with the shared registry by
 // lanePredicates(). The lane pins rendered wording, so alongside the shared
 // positive checks it needs the negative forms (a template must NOT bleed
-// into a neighbouring shape) and the session-end signal a farewell carries.
+// into a neighbouring shape), the session-end signal a farewell carries,
+// trailer-stripped exact-wording compares, and the record's miss verdict
+// (an honest decline keeps miss:true even when its wording is friendly).
+export { answerBody, bodyEquals, bodyMatches, answerHasAll, answerMatchesAll, answerMatchesNone } from "./predicates-grammar.mjs";
+export { notMiss, isMiss } from "./predicates-games.mjs";
 
 /** The turn's answer does NOT contain `needle`, case-insensitively. */
 export function answerLacks(turn, needle) {

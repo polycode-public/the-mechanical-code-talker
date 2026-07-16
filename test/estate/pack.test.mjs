@@ -18,7 +18,9 @@ test("npm pack would ship exactly the committed manifest", async () => {
     execFile(
       "npm",
       ["pack", "--dry-run", "--json"],
-      { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 120_000 },
+      // Generous timeout: `npm pack --dry-run` takes ~2s idle but has been
+      // observed past 120s when the whole suite runs at full parallelism.
+      { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 480_000 },
       (error, out) => (error ? reject(error) : resolve(out)),
     );
   });
