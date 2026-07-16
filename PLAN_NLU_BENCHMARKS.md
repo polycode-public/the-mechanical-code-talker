@@ -24,11 +24,13 @@ defeats the purpose.
 ## Where tmct stands today (the as-is estimate)
 
 tmct's capability universe is: 15 read-only code-graph capabilities
-(`src/domain/router/registry.mjs`), a commonsense fact/teach surface in `src/services/chat.mjs`
-(IsA/HasA/CapableOf over a small animal-flavoured seed corpus), and runtime-taught game
-actions. None of the CLINC150/HWU64 domains (banking, travel, weather, alarms, music,
-cooking, ...) exist anywhere in the product, and a sweep of all 13 playtest logs confirms
-no probe has ever touched them.
+(`src/domain/router/registry.mjs`, `capabilities()`), three tools on the Messages-API surface
+(`tmct_context`, `tmct_snippet`, `tmct_ask` in `src/tools/server.mjs`'s `TOOLS` table), a
+commonsense fact/teach surface in `src/services/chat.mjs` (IsA/HasA/CapableOf over a small
+animal-flavoured seed corpus), and runtime-taught game actions. None of the CLINC150/HWU64 domains
+(banking, travel, weather, alarms, music, cooking, ...) exist anywhere in the product. A sweep of
+the playtest logs confirms no probe has ever touched them, and no corpus lane keys any of them
+(`node scripts/corpus-matrix.mjs`).
 
 Both benchmarks require the system to emit one label from a fixed vocabulary (150 or 64
 intents). tmct has no mapping to either vocabulary, so every in-scope query scores wrong
@@ -91,11 +93,55 @@ substitute for the matcher. It matters in three places:
 - **The HWU64 gazetteer (step 2):** real hypernym chains help entity typing (jazz → music
   genre), supplementing the training-fold lexicons for the 54 entity types.
 
+## What the test estate gives this plan, and what it does not
+
+The estate is now organised around a tested tool surface and a keyed corpus: `src/` is five layers
+with downward-only imports (`test/estate/import-layers.test.mjs`), `src/tools/` is the tool layer,
+and `test/corpus/` holds 723 rows across 11 JSONL lanes, each row keyed by the production or
+capability it pins and driven through the real session. `node scripts/corpus-matrix.mjs` prints the
+key × lane matrix; `--gaps` names the keys a single row pins and the keys with no negative row.
+That changes three things for this plan, and leaves the central problem untouched.
+
+**What it makes easier.**
+
+- **The as-is baseline (step 1) is a lane, not a new harness.** A lane row already does exactly what
+  step 1 describes: drive turns through `createSession` and assert a named predicate. Run a curated
+  diagnostic slice of benchmark utterances as rows with a miss-wall predicate, and the false-accept
+  inventory becomes a test rather than a one-off report. The read-only requirement comes free: rows
+  run in an ephemeral scratch dir under `TMCT_NO_SEED`, so the wrong-lane-write risk cannot touch
+  user memory.
+- **Wiring the harness up is an existing, keyed pattern.** `test/corpus/bench-smoke.jsonl` carries
+  one row per benchmark (`bench.chatbench`, `bench.infbench`, `bench.agentbench`,
+  `bench.conversation`), each spawning the real script and handing the finished process to a
+  predicate. An `nlubench` adds a `bench.nlubench` row the same way, so "the harness still runs" is
+  checked on every `npm test` instead of rotting between cycles.
+- **Confirmed failure families get a home.** Step 5 folds each confirmed family back as a keyed row
+  that freezes the current wrong answer, so a later fix has to flip it deliberately. The chat-surface
+  debt rows in `PLAN_AGENTS.md` §3 are the worked precedent.
+- **The promotion path is concrete if the matcher is ever promoted.** The layer rule decides where it
+  could live: harness-only means outside `src/` entirely, and a promoted matcher would be a `domain/`
+  module the tool layer calls, with a contract test and a registry entry. That remains a separate,
+  later decision.
+
+**What it does not touch.**
+
+- **The label vocabulary.** tmct still has no mapping to 150 or 64 intents. The lanes pin behaviour;
+  they do not supply a label space, and no fixture carries a CLINC/HWU domain. This is the whole gap,
+  and the reorganisation does not narrow it.
+- **Scale.** The estate is built for ~723 curated rows inside `npm test`; the grammar lane's 224 rows
+  take about 5.5 seconds. CLINC150's test set and HWU64's 25,716 utterances under 10-fold CV are
+  orders of magnitude past that. The scored runs stay in `nlubench/` with their own runner and their
+  own results tree. Only the diagnostic slice belongs in a lane.
+- **Training.** Rows assert; they do not train. The matcher below is still the layer tmct lacks.
+- **Coverage measurement.** `--gaps` measures how thinly the estate pins tmct's own capabilities. It
+  says nothing about benchmark coverage.
+
 ## Design: a benchmark adapter, not a product rewrite
 
 New top-level `nlubench/` directory, sibling to `chatbench/`, holding data plumbing, the
-matcher, the runners and the reports. The matcher trains from the benchmarks' example
-utterances; that is the layer tmct lacks today.
+matcher, the runners and the reports, plus a `bench.nlubench` smoke row in
+`test/corpus/bench-smoke.jsonl`. The matcher trains from the benchmarks' example utterances; that is
+the layer tmct lacks today.
 
 ### The matcher (deterministic, trainable from examples)
 
@@ -148,11 +194,15 @@ product-path domain via `registerCapability` is a separate, later decision.
      scored as non-label. This turns the table above from an estimate into a measured row
      and produces the false-accept inventory (how many benchmark utterances leak into
      fact/graph lanes, PLAYTEST_LOG_001-style).
+   - Keep the full scored run in `nlubench/`. Freeze a small diagnostic slice of the
+     inventory as keyed corpus rows (one per confirmed false-accept family), so the leak
+     is re-checked on every `npm test` rather than only when the harness runs.
 
 **2. Matcher v1 (tier 1) + threshold sweep.**
    - Build the IDF-NN matcher and gazetteer extractor. Sweep the rejection threshold on
-     validation only; freeze it before touching test. Unit tests under `test/` per repo
-     convention; `npm test` stays green.
+     validation only; freeze it before touching test. The matcher is harness-only, so it
+     lives under `nlubench/` and outside `src/`, and its unit tests sit beside it. Add the
+     `bench.nlubench` smoke row so the runner itself stays wired. `npm test` stays green.
 
 **3. CLINC150 run.**
    - The paper's data variants (at minimum `data_full`; add `imbalanced`/`oos+` variants
@@ -172,6 +222,8 @@ product-path domain via `registerCapability` is a separate, later decision.
      does and does not support" section.
    - Fold the confirmed failure families back into the lever board as candidate levers,
      e.g. "short-utterance sink" if the ≤3-word catch-all shape reappears in adapter form.
+     Each confirmed family also becomes a keyed corpus row freezing the current wrong
+     answer, so a later fix has to flip the row rather than argue with a write-up.
 
 ## Minimum success bar: non-degenerate scores
 
@@ -266,8 +318,9 @@ attributable. Deltas are against the spike bases (CLINC150 68.2%/89.7%, HWU64 0.
   decides the beat-Watson-0.488 coin-flip, the strongest single headline in the plan.
 - **L7 — inference uplift: complete OWL 2 RL property reasoning** (transitive / inverse /
   symmetric / functional properties, subPropertyOf, property chains, sameAs,
-  allValuesFrom, hasValue, intersection completion — the ~70 unshipped RL rules; today
-  `src/domain/syllogise.mjs` ships 7 kernels, all class-level). Honest annotation: this does
+  allValuesFrom, hasValue, intersection completion — the bulk of the RL rule set; today
+  `src/domain/syllogise.mjs` ships five rules: `scm-sco` and `scm-svf1` at class level, and
+  `cax-sco`, `cax-dw`, `cls-svf1` over individuals). Honest annotation: this does
   NOT move intent F1 — its benchmark surface is L6 (richer hypernym/role chains behind
   entity typing) plus chatbench groundedness; its main value is product capability
   (kinship, part-whole, role reasoning). Product-path work, delivered under the
@@ -297,7 +350,8 @@ plan builds (the "deterministic, grounded, no model" claim gets its demo), even 
 neither moves a leaderboard number directly — same honest annotation as L7/L8.
 
 - **W1 — a real `/why` proof-rendering lane (days-scale).** Today chat's "why" lane
-  (`src/services/chat.mjs:1011`) only re-renders the previous answer more fully. The feature: on
+  (`src/services/chat.mjs`, the "why"/"say more" re-render group) only re-renders the previous
+  answer more fully. The feature: on
   "why" after an answered fact, re-run the bounded live chase in proof-recording mode
   (the kernels already return `via`/premises; `scm-sco` facts already persist a
   two-premise justification; trust already grades by hop count via
@@ -325,7 +379,8 @@ The far end of the why-spectrum, worked — "why did the American Civil War star
 
 - **Teach:** "secession caused the civil war", "the slavery dispute caused secession",
   "the cotton economy caused the slavery dispute". Causal edges are already first-class:
-  `mgx:causes` is a corpus predicate with a display phrase (`src/services/chat.mjs:4060`), taught
+  `mgx:causes` is a corpus predicate with a display phrase (the predicate-phrase table in
+  `src/services/chat.mjs`), taught
   cause facts store today (the taught `mgx:cause` vs corpus `mgx:causes` predicate
   unification is a known deferred item that W1 would force closed).
 - **Ask "why did the civil war start?" today:** at best a single-hop read-back of one
