@@ -46,9 +46,10 @@ export const TOOLS = HOT_TOOLS.map(({ name, agentDescription, inputSchema }) => 
 
 export async function dispatchTool(name, args, { config, source = defaultSource, tel = null } = {}) {
   // Reject an unknown tool BEFORE touching the graph — an unknown name never
-  // triggers a load.
+  // triggers a load. hasOwn, so an inherited name ("constructor", "toString")
+  // is unknown rather than a callable found on the prototype chain.
+  if (!Object.hasOwn(HANDLERS, name)) throw new ToolError(`unknown tool: ${name}`);
   const handle = HANDLERS[name];
-  if (!handle) throw new ToolError(`unknown tool: ${name}`);
   if (handle.ownsGraphLoad) return handle(args, { config, source, tel });
   const graph = await loadGraph(config, source);
   // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json). Passed to

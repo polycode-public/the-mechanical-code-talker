@@ -386,6 +386,11 @@ test("the handler registry holds exactly one handler per declared tool", () => {
 
 test("every tool the definitions declare is dispatchable, and nothing else is", async () => {
   await assert.rejects(call("tmct_not_a_tool", {}), (e) => e instanceof ToolError && /unknown tool/.test(e.message));
+  // a name inherited from Object.prototype is unknown too, never something callable
+  // found on the registry's prototype chain
+  for (const inherited of ["constructor", "toString", "valueOf", "__proto__", "hasOwnProperty"]) {
+    await assert.rejects(call(inherited, {}), (e) => e instanceof ToolError && /unknown tool/.test(e.message), inherited);
+  }
   // an unknown name is rejected before any graph load; a declared name never reports "unknown tool"
   for (const { name } of TOOL_DEFINITIONS) {
     const err = await call(name, {}).then(() => null, (e) => e);
