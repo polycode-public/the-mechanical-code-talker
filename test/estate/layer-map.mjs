@@ -1,84 +1,12 @@
-// Classifies every module under src/ into one of the five layers. Keys are
-// paths relative to src/; a key ending in "/" claims the whole directory,
-// with an exact file key winning over any directory prefix (memory/ splits
-// between domain logic and the store backends this way).
+// Every module under src/ lives in its layer's own directory, so the path says
+// which layer it is in and there is no list to keep in step with the tree. A
+// module directly under src/, or under any directory that is not a layer, is
+// claimed by nobody and the checker fails on it.
 
 export const LAYER_RANK = { adapters: 0, domain: 1, services: 2, tools: 3, surfaces: 4 };
 
-export const LAYER_OF = {
-  "surfaces/tui/": "surfaces",
-  "surfaces/server-http.mjs": "surfaces",
-  "surfaces/memory-ask-browser-entry.mjs": "surfaces",
-  "surfaces/memory-ask-browser.bundle.js": "surfaces",
-
-  "tools/server.mjs": "tools",
-  "tools/schema-docs.mjs": "tools",
-  "tools/conformance.mjs": "tools",
-
-  "services/chat.mjs": "services",
-  "services/chat-session.mjs": "services",
-  "services/sessions.mjs": "services",
-  "services/init.mjs": "services",
-  "services/import-file.mjs": "services",
-  "services/extensions.mjs": "services",
-  "services/cli-args.mjs": "services",
-  "services/telemetry.mjs": "services",
-  "services/ledger-viz.mjs": "services",
-  "services/plan-viz.mjs": "services",
-  "services/viz-theme.mjs": "services",
-  "services/finish.mjs": "services",
-  "services/sentences.mjs": "services",
-  "services/index.mjs": "services",
-
-  "domain/ask.mjs": "domain",
-  "domain/codegraph.mjs": "domain",
-  "domain/syllogise.mjs": "domain",
-  "domain/planning.mjs": "domain",
-  "domain/domain.mjs": "domain",
-  "domain/prose.mjs": "domain",
-  "domain/ask-vocab.mjs": "domain",
-  "domain/answer-variants.mjs": "domain",
-  "domain/answer-variants.json": "domain",
-  "domain/paraphrase.mjs": "domain",
-  "domain/concept.mjs": "domain",
-  "domain/hash.mjs": "domain",
-  "domain/grammar/": "domain",
-  "domain/interpret/": "domain",
-  "domain/router/": "domain",
-  "domain/memory/trust.mjs": "domain",
-  "domain/memory/fold.mjs": "domain",
-  "domain/memory/bias.mjs": "domain",
-  "domain/memory/shacl.mjs": "domain",
-  "domain/completions/": "domain",
-
-  "adapters/memory/core.mjs": "adapters",
-  "adapters/memory/blocks.mjs": "adapters",
-  "adapters/memory/prose-tokens.mjs": "adapters",
-  "adapters/memory/inspect.mjs": "adapters",
-  "adapters/providers/": "adapters",
-  "adapters/source.mjs": "adapters",
-  "adapters/source-slice.mjs": "adapters",
-  "adapters/config.mjs": "adapters",
-  "adapters/toml-config.mjs": "adapters",
-  "adapters/graph-build.mjs": "adapters",
-  "adapters/graph-merge.mjs": "adapters",
-  "adapters/embed.mjs": "adapters",
-  "adapters/wink-model.mjs": "adapters",
-  "adapters/ask-nlp.mjs": "adapters",
-  "adapters/prose-nlp.mjs": "adapters",
-  "adapters/uuid.mjs": "adapters",
-  "adapters/repository-interface.mjs": "adapters",
-  "adapters/corpus/": "adapters",
-};
-
 /** Layer for a src/-relative path, or null when nothing claims it. */
 export function layerOf(relPath) {
-  if (LAYER_OF[relPath]) return LAYER_OF[relPath];
-  let best = null;
-  for (const key of Object.keys(LAYER_OF)) {
-    if (key.endsWith("/") && relPath.startsWith(key) && (!best || key.length > best.length)) {
-      best = key;
-    }
-  }
-  return best ? LAYER_OF[best] : null;
+  const [top] = relPath.split("/");
+  return Object.hasOwn(LAYER_RANK, top) ? top : null;
 }

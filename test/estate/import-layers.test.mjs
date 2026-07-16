@@ -73,8 +73,8 @@ for (const file of walkModules(SRC)) {
   }
 }
 
-test("every module under src/ is claimed by the layer map", () => {
-  assert.deepEqual(unmapped, [], `unmapped:\n${unmapped.join("\n")}`);
+test("every module under src/ sits in one of the five layer directories", () => {
+  assert.deepEqual(unmapped, [], `not in a layer directory:\n${unmapped.join("\n")}`);
 });
 
 test("every relative import in src/ resolves to an existing file", () => {
