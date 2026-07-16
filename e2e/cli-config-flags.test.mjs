@@ -1,7 +1,7 @@
-// cli-unification.test.mjs — the CLI/config unification batch's bin/tmct.mjs
-// additions: `init --repo/--graph/--ontology/--lexicon` and the generalized
-// (path-accepting) `--corpus`, the new `tmct import` verb, and `--config` on
-// `extend --validate`. Runs the REAL binary (spawnSync) — these are argv/
+// Every bin/tmct.mjs verb honours the shared repo/graph/config flags:
+// `init --repo/--graph/--ontology/--lexicon` and the path-accepting `--corpus`,
+// the `tmct import` verb, and `--config` on `extend --validate`, `serve`,
+// `memory` and `syllogise`. Runs the REAL binary (spawnSync) — these are argv/
 // filesystem integration points, not pure-function units.
 import { test } from "node:test";
 import assert from "node:assert/strict";
