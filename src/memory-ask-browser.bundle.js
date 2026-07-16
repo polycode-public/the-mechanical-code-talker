@@ -15,7 +15,7 @@
   };
 
   // node-stub:node:path
-  var unavailable, createRequire, readFileSync, writeFileSync, readFile, writeFile, appendFile, mkdir, mkdtemp, rename, unlink, rm, stat, access, copyFile, readdir, createReadStream, createWriteStream, join, dirname, randomBytes, createHash, createRequireFromPath, spawnSync, createInterface, createServer, DatabaseSync;
+  var unavailable, createRequire, readFileSync, readFile, writeFile, appendFile, mkdir, mkdtemp, rename, unlink, rm, stat, copyFile, readdir, createReadStream, createWriteStream, join, dirname, randomBytes, spawnSync, createInterface;
   var init_node_path = __esm({
     "node-stub:node:path"() {
       unavailable = (name) => () => {
@@ -23,7 +23,6 @@
       };
       createRequire = unavailable("createRequire");
       readFileSync = unavailable("readFileSync");
-      writeFileSync = unavailable("writeFileSync");
       readFile = unavailable("readFile");
       writeFile = unavailable("writeFile");
       appendFile = unavailable("appendFile");
@@ -33,7 +32,6 @@
       unlink = unavailable("unlink");
       rm = unavailable("rm");
       stat = unavailable("stat");
-      access = unavailable("access");
       copyFile = unavailable("copyFile");
       readdir = unavailable("readdir");
       createReadStream = unavailable("createReadStream");
@@ -41,17 +39,13 @@
       join = (...a) => a.join("/");
       dirname = (p) => String(p).replace(/\/[^/]*$/, "");
       randomBytes = unavailable("randomBytes");
-      createHash = unavailable("createHash");
-      createRequireFromPath = unavailable("createRequireFromPath");
       spawnSync = unavailable("spawnSync");
       createInterface = unavailable("createInterface");
-      createServer = unavailable("createServer");
-      DatabaseSync = unavailable("DatabaseSync");
     }
   });
 
   // node-stub:node:fs/promises
-  var unavailable2, createRequire2, readFileSync2, writeFileSync2, readFile2, writeFile2, appendFile2, mkdir2, mkdtemp2, rename2, unlink2, rm2, stat2, access2, copyFile2, readdir2, createReadStream2, createWriteStream2, randomBytes2, createHash2, createRequireFromPath2, spawnSync2, createInterface2, createServer2, DatabaseSync2;
+  var unavailable2, createRequire2, readFileSync2, readFile2, writeFile2, appendFile2, mkdir2, mkdtemp2, rename2, unlink2, rm2, stat2, copyFile2, readdir2, createReadStream2, createWriteStream2, randomBytes2, spawnSync2, createInterface2;
   var init_promises = __esm({
     "node-stub:node:fs/promises"() {
       unavailable2 = (name) => () => {
@@ -59,7 +53,6 @@
       };
       createRequire2 = unavailable2("createRequire");
       readFileSync2 = unavailable2("readFileSync");
-      writeFileSync2 = unavailable2("writeFileSync");
       readFile2 = unavailable2("readFile");
       writeFile2 = unavailable2("writeFile");
       appendFile2 = unavailable2("appendFile");
@@ -69,18 +62,13 @@
       unlink2 = unavailable2("unlink");
       rm2 = unavailable2("rm");
       stat2 = unavailable2("stat");
-      access2 = unavailable2("access");
       copyFile2 = unavailable2("copyFile");
       readdir2 = unavailable2("readdir");
       createReadStream2 = unavailable2("createReadStream");
       createWriteStream2 = unavailable2("createWriteStream");
       randomBytes2 = unavailable2("randomBytes");
-      createHash2 = unavailable2("createHash");
-      createRequireFromPath2 = unavailable2("createRequireFromPath");
       spawnSync2 = unavailable2("spawnSync");
       createInterface2 = unavailable2("createInterface");
-      createServer2 = unavailable2("createServer");
-      DatabaseSync2 = unavailable2("DatabaseSync");
     }
   });
 
@@ -144,7 +132,7 @@
   });
 
   // node-stub:node:fs
-  var unavailable3, createRequire3, readFileSync3, writeFileSync3, readFile3, writeFile3, appendFile3, mkdir3, mkdtemp3, rename3, unlink3, rm3, stat3, access3, copyFile3, readdir3, createReadStream3, createWriteStream3, randomBytes3, createHash3, createRequireFromPath3, spawnSync3, createInterface3, createServer3, DatabaseSync3;
+  var unavailable3, createRequire3, readFileSync3, readFile3, writeFile3, appendFile3, mkdir3, mkdtemp3, rename3, unlink3, rm3, stat3, copyFile3, readdir3, createReadStream3, createWriteStream3, randomBytes3, spawnSync3, createInterface3;
   var init_node_fs = __esm({
     "node-stub:node:fs"() {
       unavailable3 = (name) => () => {
@@ -152,7 +140,6 @@
       };
       createRequire3 = unavailable3("createRequire");
       readFileSync3 = unavailable3("readFileSync");
-      writeFileSync3 = unavailable3("writeFileSync");
       readFile3 = unavailable3("readFile");
       writeFile3 = unavailable3("writeFile");
       appendFile3 = unavailable3("appendFile");
@@ -162,23 +149,18 @@
       unlink3 = unavailable3("unlink");
       rm3 = unavailable3("rm");
       stat3 = unavailable3("stat");
-      access3 = unavailable3("access");
       copyFile3 = unavailable3("copyFile");
       readdir3 = unavailable3("readdir");
       createReadStream3 = unavailable3("createReadStream");
       createWriteStream3 = unavailable3("createWriteStream");
       randomBytes3 = unavailable3("randomBytes");
-      createHash3 = unavailable3("createHash");
-      createRequireFromPath3 = unavailable3("createRequireFromPath");
       spawnSync3 = unavailable3("spawnSync");
       createInterface3 = unavailable3("createInterface");
-      createServer3 = unavailable3("createServer");
-      DatabaseSync3 = unavailable3("DatabaseSync");
     }
   });
 
   // node-stub:node:url
-  var unavailable4, createRequire4, readFileSync4, writeFileSync4, readFile4, writeFile4, appendFile4, mkdir4, mkdtemp4, rename4, unlink4, rm4, stat4, access4, copyFile4, readdir4, createReadStream4, createWriteStream4, fileURLToPath, randomBytes4, createHash4, createRequireFromPath4, spawnSync4, createInterface4, createServer4, DatabaseSync4;
+  var unavailable4, createRequire4, readFileSync4, readFile4, writeFile4, appendFile4, mkdir4, mkdtemp4, rename4, unlink4, rm4, stat4, copyFile4, readdir4, createReadStream4, createWriteStream4, fileURLToPath, randomBytes4, spawnSync4, createInterface4;
   var init_node_url = __esm({
     "node-stub:node:url"() {
       unavailable4 = (name) => () => {
@@ -186,7 +168,6 @@
       };
       createRequire4 = unavailable4("createRequire");
       readFileSync4 = unavailable4("readFileSync");
-      writeFileSync4 = unavailable4("writeFileSync");
       readFile4 = unavailable4("readFile");
       writeFile4 = unavailable4("writeFile");
       appendFile4 = unavailable4("appendFile");
@@ -196,19 +177,14 @@
       unlink4 = unavailable4("unlink");
       rm4 = unavailable4("rm");
       stat4 = unavailable4("stat");
-      access4 = unavailable4("access");
       copyFile4 = unavailable4("copyFile");
       readdir4 = unavailable4("readdir");
       createReadStream4 = unavailable4("createReadStream");
       createWriteStream4 = unavailable4("createWriteStream");
       fileURLToPath = (u) => String(u);
       randomBytes4 = unavailable4("randomBytes");
-      createHash4 = unavailable4("createHash");
-      createRequireFromPath4 = unavailable4("createRequireFromPath");
       spawnSync4 = unavailable4("spawnSync");
       createInterface4 = unavailable4("createInterface");
-      createServer4 = unavailable4("createServer");
-      DatabaseSync4 = unavailable4("DatabaseSync");
     }
   });
 
@@ -5503,28 +5479,21 @@ ${lines.join("\n")}`;
   // node-stub:node:sqlite
   var node_sqlite_exports = {};
   __export(node_sqlite_exports, {
-    DatabaseSync: () => DatabaseSync5,
-    access: () => access5,
     appendFile: () => appendFile5,
     basename: () => basename,
     copyFile: () => copyFile5,
-    createHash: () => createHash5,
     createInterface: () => createInterface5,
     createReadStream: () => createReadStream5,
     createRequire: () => createRequire5,
-    createRequireFromPath: () => createRequireFromPath5,
-    createServer: () => createServer5,
     createWriteStream: () => createWriteStream5,
     default: () => node_sqlite_default,
     dirname: () => dirname2,
     existsSync: () => existsSync2,
-    extname: () => extname,
     fileURLToPath: () => fileURLToPath2,
     isAbsolute: () => isAbsolute,
     join: () => join2,
     mkdir: () => mkdir5,
     mkdtemp: () => mkdtemp5,
-    pathToFileURL: () => pathToFileURL,
     randomBytes: () => randomBytes5,
     readFile: () => readFile5,
     readFileSync: () => readFileSync5,
@@ -5537,10 +5506,9 @@ ${lines.join("\n")}`;
     stat: () => stat5,
     tmpdir: () => tmpdir,
     unlink: () => unlink5,
-    writeFile: () => writeFile5,
-    writeFileSync: () => writeFileSync5
+    writeFile: () => writeFile5
   });
-  var unavailable5, createRequire5, readFileSync5, writeFileSync5, readFile5, writeFile5, appendFile5, mkdir5, mkdtemp5, rename5, unlink5, rm5, stat5, access5, copyFile5, readdir5, createReadStream5, createWriteStream5, existsSync2, join2, dirname2, resolve2, isAbsolute, basename, extname, sep2, fileURLToPath2, pathToFileURL, randomBytes5, createHash5, createRequireFromPath5, spawnSync5, createInterface5, createServer5, tmpdir, DatabaseSync5, node_sqlite_default;
+  var unavailable5, createRequire5, readFileSync5, readFile5, writeFile5, appendFile5, mkdir5, mkdtemp5, rename5, unlink5, rm5, stat5, copyFile5, readdir5, createReadStream5, createWriteStream5, existsSync2, join2, dirname2, resolve2, isAbsolute, basename, sep2, fileURLToPath2, randomBytes5, spawnSync5, createInterface5, tmpdir, node_sqlite_default;
   var init_node_sqlite = __esm({
     "node-stub:node:sqlite"() {
       unavailable5 = (name) => () => {
@@ -5548,7 +5516,6 @@ ${lines.join("\n")}`;
       };
       createRequire5 = unavailable5("createRequire");
       readFileSync5 = unavailable5("readFileSync");
-      writeFileSync5 = unavailable5("writeFileSync");
       readFile5 = unavailable5("readFile");
       writeFile5 = unavailable5("writeFile");
       appendFile5 = unavailable5("appendFile");
@@ -5558,7 +5525,6 @@ ${lines.join("\n")}`;
       unlink5 = unavailable5("unlink");
       rm5 = unavailable5("rm");
       stat5 = unavailable5("stat");
-      access5 = unavailable5("access");
       copyFile5 = unavailable5("copyFile");
       readdir5 = unavailable5("readdir");
       createReadStream5 = unavailable5("createReadStream");
@@ -5569,21 +5535,12 @@ ${lines.join("\n")}`;
       resolve2 = (...a) => a.join("/");
       isAbsolute = (p) => String(p).startsWith("/");
       basename = (p) => String(p).split("/").pop();
-      extname = (p) => {
-        const m = /\.[^./]+$/.exec(String(p));
-        return m ? m[0] : "";
-      };
       sep2 = "/";
       fileURLToPath2 = (u) => String(u);
-      pathToFileURL = (p) => new URL("file://" + p);
       randomBytes5 = unavailable5("randomBytes");
-      createHash5 = unavailable5("createHash");
-      createRequireFromPath5 = unavailable5("createRequireFromPath");
       spawnSync5 = unavailable5("spawnSync");
       createInterface5 = unavailable5("createInterface");
-      createServer5 = unavailable5("createServer");
       tmpdir = () => "/tmp";
-      DatabaseSync5 = unavailable5("DatabaseSync");
       node_sqlite_default = {};
     }
   });
@@ -5686,8 +5643,8 @@ ${lines.join("\n")}`;
     return { backend: BACKEND_MEMORY, payload: emptyMemory() };
   }
   async function createSqliteMemoryStore(dbPath) {
-    const { DatabaseSync: DatabaseSync12 } = await Promise.resolve().then(() => (init_node_sqlite(), node_sqlite_exports));
-    const db = new DatabaseSync12(dbPath);
+    const { DatabaseSync } = await Promise.resolve().then(() => (init_node_sqlite(), node_sqlite_exports));
+    const db = new DatabaseSync(dbPath);
     db.exec("PRAGMA journal_mode = WAL");
     db.exec("PRAGMA synchronous = NORMAL");
     db.exec(SQLITE_DDL);
@@ -6920,7 +6877,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   });
 
   // node-stub:node:module
-  var unavailable7, createRequire7, readFileSync7, writeFileSync7, readFile7, writeFile7, appendFile7, mkdir7, mkdtemp7, rename7, unlink7, rm7, stat7, access7, copyFile7, readdir7, createReadStream7, createWriteStream7, randomBytes7, createHash7, createRequireFromPath7, spawnSync7, createInterface7, createServer7, DatabaseSync7;
+  var unavailable7, createRequire7, readFileSync7, readFile7, writeFile7, appendFile7, mkdir7, mkdtemp7, rename7, unlink7, rm7, stat7, copyFile7, readdir7, createReadStream7, createWriteStream7, randomBytes7, spawnSync7, createInterface7;
   var init_node_module = __esm({
     "node-stub:node:module"() {
       unavailable7 = (name) => () => {
@@ -6928,7 +6885,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       };
       createRequire7 = unavailable7("createRequire");
       readFileSync7 = unavailable7("readFileSync");
-      writeFileSync7 = unavailable7("writeFileSync");
       readFile7 = unavailable7("readFile");
       writeFile7 = unavailable7("writeFile");
       appendFile7 = unavailable7("appendFile");
@@ -6938,18 +6894,13 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       unlink7 = unavailable7("unlink");
       rm7 = unavailable7("rm");
       stat7 = unavailable7("stat");
-      access7 = unavailable7("access");
       copyFile7 = unavailable7("copyFile");
       readdir7 = unavailable7("readdir");
       createReadStream7 = unavailable7("createReadStream");
       createWriteStream7 = unavailable7("createWriteStream");
       randomBytes7 = unavailable7("randomBytes");
-      createHash7 = unavailable7("createHash");
-      createRequireFromPath7 = unavailable7("createRequireFromPath");
       spawnSync7 = unavailable7("spawnSync");
       createInterface7 = unavailable7("createInterface");
-      createServer7 = unavailable7("createServer");
-      DatabaseSync7 = unavailable7("DatabaseSync");
     }
   });
 
@@ -7014,7 +6965,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   });
 
   // node-stub:node:readline
-  var unavailable11, createRequire11, readFileSync11, writeFileSync11, readFile11, writeFile11, appendFile11, mkdir11, mkdtemp11, rename11, unlink11, rm11, stat11, access11, copyFile11, readdir11, createReadStream11, createWriteStream11, randomBytes11, createHash11, createRequireFromPath11, spawnSync11, createInterface11, createServer11, DatabaseSync11;
+  var unavailable11, createRequire11, readFileSync11, readFile11, writeFile11, appendFile11, mkdir11, mkdtemp11, rename11, unlink11, rm11, stat11, copyFile11, readdir11, createReadStream11, createWriteStream11, randomBytes11, spawnSync11, createInterface11;
   var init_node_readline = __esm({
     "node-stub:node:readline"() {
       unavailable11 = (name) => () => {
@@ -7022,7 +6973,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       };
       createRequire11 = unavailable11("createRequire");
       readFileSync11 = unavailable11("readFileSync");
-      writeFileSync11 = unavailable11("writeFileSync");
       readFile11 = unavailable11("readFile");
       writeFile11 = unavailable11("writeFile");
       appendFile11 = unavailable11("appendFile");
@@ -7032,18 +6982,13 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       unlink11 = unavailable11("unlink");
       rm11 = unavailable11("rm");
       stat11 = unavailable11("stat");
-      access11 = unavailable11("access");
       copyFile11 = unavailable11("copyFile");
       readdir11 = unavailable11("readdir");
       createReadStream11 = unavailable11("createReadStream");
       createWriteStream11 = unavailable11("createWriteStream");
       randomBytes11 = unavailable11("randomBytes");
-      createHash11 = unavailable11("createHash");
-      createRequireFromPath11 = unavailable11("createRequireFromPath");
       spawnSync11 = unavailable11("spawnSync");
       createInterface11 = unavailable11("createInterface");
-      createServer11 = unavailable11("createServer");
-      DatabaseSync11 = unavailable11("DatabaseSync");
     }
   });
 
@@ -8157,7 +8102,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   };
   var createRequire6 = unavailable6("createRequire");
   var readFileSync6 = unavailable6("readFileSync");
-  var writeFileSync6 = unavailable6("writeFileSync");
   var readFile6 = unavailable6("readFile");
   var writeFile6 = unavailable6("writeFile");
   var appendFile6 = unavailable6("appendFile");
@@ -8167,18 +8111,13 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   var unlink6 = unavailable6("unlink");
   var rm6 = unavailable6("rm");
   var stat6 = unavailable6("stat");
-  var access6 = unavailable6("access");
   var copyFile6 = unavailable6("copyFile");
   var readdir6 = unavailable6("readdir");
   var createReadStream6 = unavailable6("createReadStream");
   var createWriteStream6 = unavailable6("createWriteStream");
   var randomBytes6 = unavailable6("randomBytes");
-  var createHash6 = unavailable6("createHash");
-  var createRequireFromPath6 = unavailable6("createRequireFromPath");
   var spawnSync6 = unavailable6("spawnSync");
   var createInterface6 = unavailable6("createInterface");
-  var createServer6 = unavailable6("createServer");
-  var DatabaseSync6 = unavailable6("DatabaseSync");
 
   // src/chat.mjs
   init_templates();
@@ -8227,7 +8166,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   };
   var createRequire8 = unavailable8("createRequire");
   var readFileSync8 = unavailable8("readFileSync");
-  var writeFileSync8 = unavailable8("writeFileSync");
   var readFile8 = unavailable8("readFile");
   var writeFile8 = unavailable8("writeFile");
   var appendFile8 = unavailable8("appendFile");
@@ -8237,18 +8175,13 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   var unlink8 = unavailable8("unlink");
   var rm8 = unavailable8("rm");
   var stat8 = unavailable8("stat");
-  var access8 = unavailable8("access");
   var copyFile8 = unavailable8("copyFile");
   var readdir8 = unavailable8("readdir");
   var createReadStream8 = unavailable8("createReadStream");
   var createWriteStream8 = unavailable8("createWriteStream");
   var randomBytes8 = unavailable8("randomBytes");
-  var createHash8 = unavailable8("createHash");
-  var createRequireFromPath8 = unavailable8("createRequireFromPath");
   var spawnSync8 = unavailable8("spawnSync");
   var createInterface8 = unavailable8("createInterface");
-  var createServer8 = unavailable8("createServer");
-  var DatabaseSync8 = unavailable8("DatabaseSync");
 
   // node-stub:node:readline/promises
   var unavailable9 = (name) => () => {
@@ -8256,7 +8189,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   };
   var createRequire9 = unavailable9("createRequire");
   var readFileSync9 = unavailable9("readFileSync");
-  var writeFileSync9 = unavailable9("writeFileSync");
   var readFile9 = unavailable9("readFile");
   var writeFile9 = unavailable9("writeFile");
   var appendFile9 = unavailable9("appendFile");
@@ -8266,18 +8198,13 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   var unlink9 = unavailable9("unlink");
   var rm9 = unavailable9("rm");
   var stat9 = unavailable9("stat");
-  var access9 = unavailable9("access");
   var copyFile9 = unavailable9("copyFile");
   var readdir9 = unavailable9("readdir");
   var createReadStream9 = unavailable9("createReadStream");
   var createWriteStream9 = unavailable9("createWriteStream");
   var randomBytes9 = unavailable9("randomBytes");
-  var createHash9 = unavailable9("createHash");
-  var createRequireFromPath9 = unavailable9("createRequireFromPath");
   var spawnSync9 = unavailable9("spawnSync");
   var createInterface9 = unavailable9("createInterface");
-  var createServer9 = unavailable9("createServer");
-  var DatabaseSync9 = unavailable9("DatabaseSync");
 
   // node-stub:node:child_process
   var unavailable10 = (name) => () => {
@@ -8285,7 +8212,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   };
   var createRequire10 = unavailable10("createRequire");
   var readFileSync10 = unavailable10("readFileSync");
-  var writeFileSync10 = unavailable10("writeFileSync");
   var readFile10 = unavailable10("readFile");
   var writeFile10 = unavailable10("writeFile");
   var appendFile10 = unavailable10("appendFile");
@@ -8295,18 +8221,13 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   var unlink10 = unavailable10("unlink");
   var rm10 = unavailable10("rm");
   var stat10 = unavailable10("stat");
-  var access10 = unavailable10("access");
   var copyFile10 = unavailable10("copyFile");
   var readdir10 = unavailable10("readdir");
   var createReadStream10 = unavailable10("createReadStream");
   var createWriteStream10 = unavailable10("createWriteStream");
   var randomBytes10 = unavailable10("randomBytes");
-  var createHash10 = unavailable10("createHash");
-  var createRequireFromPath10 = unavailable10("createRequireFromPath");
   var spawnSync10 = unavailable10("spawnSync");
   var createInterface10 = unavailable10("createInterface");
-  var createServer10 = unavailable10("createServer");
-  var DatabaseSync10 = unavailable10("DatabaseSync");
 
   // src/services/chat-session.mjs
   init_config();

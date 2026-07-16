@@ -29,8 +29,9 @@
 // is loadMemory(memoryDir), and the dock always hands it an in-memory
 // Backend-B handle already carrying the page's payload — see
 // src/memory-ask-browser-entry.mjs's own doc comment), it just has to
-// LINK. The node-builtin stub set below is broad enough to satisfy every
-// named import reachable from the entry point.
+// LINK. The node-builtin stub below carries exactly the bindings that graph
+// still references — measured by dropping each and letting esbuild name what
+// breaks, so it shrinks as the monolith's link edges do.
 import { build } from "esbuild";
 import { writeFile, rename } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -44,19 +45,26 @@ const stubNodeBuiltins = {
   setup(b) {
     b.onResolve({ filter: /^node:/ }, (args) => ({ path: args.path, namespace: "node-stub" }));
     b.onLoad({ filter: /.*/, namespace: "node-stub" }, () => ({
-      // A broad, generic set — every fs/promises/path/url/crypto/os/child_process/
-      // readline/sqlite binding any guarded/lazy path in tmct's import graph might
-      // reference at LINK time (the entry point's full transitive import graph,
-      // not just what its OWN code calls). Each throws only if actually
-      // CALLED, which no path in the entry point's real, exercised call chain
-      // ever does (persistence, source-file reads, the optional adapters, and
-      // node:sqlite's opt-in Backend C are all guarded, lazy, or stubbed
-      // separately — see stubOptionalAdapters below).
+      // Exactly the node-builtin bindings that are REACHABLE at link time from
+      // the entry point's full transitive import graph — no more. The set is
+      // measured, not guessed: dropping an export and rebuilding makes esbuild
+      // name any module that still imports it. Two kinds of survivor:
+      //   - path shims that actually RUN — join/dirname/resolve/isAbsolute/
+      //     basename/sep/fileURLToPath do path math on constant paths, plus
+      //     existsSync (→ false) and tmpdir (→ /tmp) on guarded paths;
+      //   - throwers that only LINK — the fs/promises + fs stream + crypto +
+      //     child_process + readline bindings the monolith's persistence,
+      //     seed, corpus-slice, and session-layer modules reference but the
+      //     dock's factAnswer/factReadBack call chain never executes (it reads
+      //     an in-memory Backend-B handle). They throw only if actually called.
+      // Bindings no reachable module imports were removed here: writeFileSync,
+      // access, extname, pathToFileURL, createHash, createRequireFromPath,
+      // createServer (surfaces only), and DatabaseSync (node:sqlite Backend C,
+      // opt-in and never selected in the browser — the store seam keeps it out).
       contents:
         "const unavailable = (name) => () => { throw new Error(name + ' unavailable in the browser ask bundle'); };\n"
         + "export const createRequire = unavailable('createRequire');\n"
         + "export const readFileSync = unavailable('readFileSync');\n"
-        + "export const writeFileSync = unavailable('writeFileSync');\n"
         + "export const readFile = unavailable('readFile');\n"
         + "export const writeFile = unavailable('writeFile');\n"
         + "export const appendFile = unavailable('appendFile');\n"
@@ -66,7 +74,6 @@ const stubNodeBuiltins = {
         + "export const unlink = unavailable('unlink');\n"
         + "export const rm = unavailable('rm');\n"
         + "export const stat = unavailable('stat');\n"
-        + "export const access = unavailable('access');\n"
         + "export const copyFile = unavailable('copyFile');\n"
         + "export const readdir = unavailable('readdir');\n"
         + "export const createReadStream = unavailable('createReadStream');\n"
@@ -77,18 +84,12 @@ const stubNodeBuiltins = {
         + "export const resolve = (...a) => a.join('/');\n"
         + "export const isAbsolute = (p) => String(p).startsWith('/');\n"
         + "export const basename = (p) => String(p).split('/').pop();\n"
-        + "export const extname = (p) => { const m = /\\.[^./]+$/.exec(String(p)); return m ? m[0] : ''; };\n"
         + "export const sep = '/';\n"
         + "export const fileURLToPath = (u) => String(u);\n"
-        + "export const pathToFileURL = (p) => new URL('file://' + p);\n"
         + "export const randomBytes = unavailable('randomBytes');\n"
-        + "export const createHash = unavailable('createHash');\n"
-        + "export const createRequireFromPath = unavailable('createRequireFromPath');\n"
         + "export const spawnSync = unavailable('spawnSync');\n"
         + "export const createInterface = unavailable('createInterface');\n"
-        + "export const createServer = unavailable('createServer');\n"
         + "export const tmpdir = () => '/tmp';\n"
-        + "export const DatabaseSync = unavailable('DatabaseSync');\n"
         + "export default {};\n",
       loader: "js",
     }));
