@@ -20,7 +20,7 @@ const READY_RE = /Anthropic Messages API at (http:\/\/\S+)\/v1\/messages.*— gr
 
 /** Boot `tmct serve` as a child process, resolving once its startup banner
  *  reports the bound URL AND the graph path it resolved — mirrors
- *  test/server-http-smoke.test.mjs's own bootServe helper, trimmed to just
+ *  e2e/server-http-smoke.test.mjs's own bootServe helper, trimmed to just
  *  what this file needs (the banner text, not a full HTTP round trip — that's
  *  already covered elsewhere). */
 function bootServe(args) {

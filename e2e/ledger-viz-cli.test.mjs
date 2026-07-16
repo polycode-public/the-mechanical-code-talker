@@ -1,6 +1,6 @@
 // ledger-viz-cli.test.mjs — bin/tmct.mjs's `viz` mode: the ledger page is THE
 // viz surface, spawned as a real child process against a real memory-seeded
-// repo dir. The data/render contracts live in test/ledger-viz.test.mjs; this
+// repo dir. The data/render contracts live in e2e/ledger-viz.test.mjs; this
 // file owns only the CLI seam.
 import { test } from "node:test";
 import assert from "node:assert/strict";

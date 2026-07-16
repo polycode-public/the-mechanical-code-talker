@@ -519,7 +519,7 @@ async function activatePluggableInput(repoRoot, resolved) {
   }
   if (resolved.manifestEntry) {
     // Preserve the ORIGINAL `--corpus <tier2-id>` wording byte-for-byte
-    // (test/init-cli.test.mjs asserts on this exact shape).
+    // (e2e/init-cli.test.mjs asserts on this exact shape).
     return `seeded tier-2 corpus "${resolved.manifestEntry.id}" (${resolved.manifestEntry.kind}) — ${seeded.appended} fact(s) added`
       + `${seeded.skipped ? `, ${seeded.skipped} already present` : ""}. Source: corpus/tier2/${resolved.manifestEntry.file} (${resolved.manifestEntry.license}). `
       + `Activated in tmct.toml — future \`tmct init\`/chat sessions seed it automatically.\n`;

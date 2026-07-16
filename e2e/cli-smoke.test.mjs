@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
 
 /** A temp repo whose .tmct/graph.json is the test fixture — lets us exercise the cli
  *  query/digest modes without python+git (no real source files; the renderers tolerate
@@ -88,7 +88,7 @@ test("cli digest: machine header line first, then architecture map + per-module 
   }
 });
 
-test("cli digest (B2): primary gets a full bundle, secondaries are ranked + trimmed", async () => {
+test("cli digest: primary gets a full bundle, secondaries are ranked + trimmed", async () => {
   const dir = await repoWithFixtureGraph();
   try {
     // primary app/lib/b.mjs + one secondary (app/lib/a.mjs, which b imports). `untuned` so the
@@ -110,7 +110,7 @@ test("cli digest (B2): primary gets a full bundle, secondaries are ranked + trim
   }
 });
 
-test("cli tmct_locate (TUNING #3): emits ranked <relpath>\\t<score>, highest first", async () => {
+test("cli tmct_locate: emits ranked <relpath>\\t<score>, highest first", async () => {
   const dir = await repoWithFixtureGraph();
   try {
     const res = runCli("cli", "tmct_locate", JSON.stringify({ repo_path: dir, query: "fnAlpha" }));
@@ -134,7 +134,7 @@ test("cli tmct_locate (TUNING #3): emits ranked <relpath>\\t<score>, highest fir
   }
 });
 
-test("cli digest min/untuned (B012: tuning #1 reverted): default==untuned MID; min forces TINY", async () => {
+test("cli digest min/untuned: default==untuned MID; min forces TINY", async () => {
   const dir = await repoWithFixtureGraph();
   try {
     const headerOf = (out) => out.split("\n")[0];

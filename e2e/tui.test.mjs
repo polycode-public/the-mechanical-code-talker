@@ -22,7 +22,7 @@ import { App, statusText, appendTurn, transcriptLines, wrapLines,
 import { createSession } from "../src/chat.mjs";
 
 const h = React.createElement;
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
 
 /** Same fixture-backed temp repo as chat.test.mjs. */
 async function repoWithFixtureGraph() {

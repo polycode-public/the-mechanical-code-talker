@@ -1,10 +1,8 @@
-// test/server-http-smoke.test.mjs — the CROSS-REPO smoke test PLAN_AGENTS.md
-// §3 ("Phase 0 — Foundations") names as the cheapest, highest-value gap to
-// close first: "a real `tmct serve` process, hit over HTTP by bedrock-meter's
-// `httpDispatch`, proving the documented response shape holds outside
-// hand-built fixture objects".
+// server-http-smoke.test.mjs — the cross-repo smoke test: a real `tmct serve`
+// process, hit over HTTP by bedrock-meter's `httpDispatch`, proving the
+// documented response shape holds outside hand-built fixture objects.
 //
-// WHY THIS TEST DIFFERS FROM test/server-http.test.mjs: that file drives
+// WHY THIS TEST DIFFERS FROM e2e/server-http.test.mjs: that file drives
 // `startServer()` IN-PROCESS — a real node:http listener, but the same Node
 // process, same module instances, never through bin/tmct.mjs's CLI arg
 // parsing / env resolution / SIGTERM shutdown path. This test instead spawns
@@ -32,7 +30,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
 
 const READY_RE = /Anthropic Messages API at (http:\/\/\S+)\/v1\/messages/;
 const READY_TIMEOUT_MS = 15000;

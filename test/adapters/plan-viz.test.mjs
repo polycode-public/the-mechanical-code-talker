@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { computeBlocksLayout, renderPlanHtml } from "../src/plan-viz.mjs";
+import { computeBlocksLayout, renderPlanHtml } from "../../src/plan-viz.mjs";
 
 function embeddedJson(html, name) {
   const m = new RegExp(`const ${name} = (.*);`).exec(html);

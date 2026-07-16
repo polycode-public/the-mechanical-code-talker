@@ -1,6 +1,6 @@
 // ledger-viz.test.mjs — unit coverage of computeLedgerData/renderLedgerHtml:
 // this file owns the data derivation + rendered-page contracts; the CLI flag
-// surface lives in test/ledger-viz-cli.test.mjs.
+// surface lives in e2e/ledger-viz-cli.test.mjs.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -213,9 +213,9 @@ test("renderLedgerHtml: a non-empty bundle is inlined and the dock renders enabl
   }
 });
 
-test("phase-2 dock chain: a store taught via runTurn answers through the real bundle in a vm; the canonical exchange upgrades when factReadBack ships on the bundle surface", async () => {
+test("chat dock chain: a store taught via runTurn answers through the real bundle in a vm; the canonical exchange upgrades when factReadBack ships on the bundle surface", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-ledger-dock-"));
-  const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+  const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
   try {
     const TEACH = [
       "ahab is the father of john",

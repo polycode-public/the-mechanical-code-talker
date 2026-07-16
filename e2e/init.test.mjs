@@ -98,11 +98,11 @@ test("seeding: on by default, offline, writes facts into .tmct/memory + a marker
   }
 });
 
-test("DELIBERATE BUG FIX (this batch): `tmct init`'s zero-flag seed now seeds SEON too, matching chat.mjs's own bootstrap (it used to seed ConceptNet ONLY) — exercised via the `code` persona, since PLAN_SEED.md's later flip made seon/conceptnet opt-in", async () => {
+test("the `code` persona's seed lands SEON and ConceptNet together, matching chat.mjs's own bootstrap", async () => {
   const dir = await tmp();
   try {
     const res = await initRepo(dir, { seed: true, persona: PERSONA_PRESETS.code });
-    assert.ok(res.seedResult.seon > 0, "the curated SEON ontology landed (was 0 before this fix)");
+    assert.ok(res.seedResult.seon > 0, "the curated SEON ontology landed");
     assert.ok(res.seedResult.conceptnet > 1000, "the ConceptNet band still landed, uncapped");
     assert.equal(res.seedResult.perBundle.seon.appended, res.seedResult.seon);
     assert.equal(res.seedResult.perBundle.conceptnet.appended, res.seedResult.conceptnet);
@@ -117,7 +117,7 @@ test("DELIBERATE BUG FIX (this batch): `tmct init`'s zero-flag seed now seeds SE
   }
 });
 
-test("`tmct init`'s zero-flag (default) seed: the human persona, not seon/conceptnet, per PLAN_SEED.md's persona flip", async () => {
+test("`tmct init`'s zero-flag (default) seed: the human persona only; seon/conceptnet stay opt-in", async () => {
   const dir = await tmp();
   try {
     const res = await initRepo(dir, { seed: true });

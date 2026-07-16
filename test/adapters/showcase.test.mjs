@@ -17,12 +17,12 @@ import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, PassThrough } from "node:stream";
-import { runTurn, runChat } from "../src/chat.mjs";
-import { clearCache } from "../src/source.mjs";
-import { ingestSchemaDocs } from "../src/schema-docs.mjs";
-import { loadMemory, FACT_CLASS } from "../src/memory/core.mjs";
+import { runTurn, runChat } from "../../src/chat.mjs";
+import { clearCache } from "../../src/source.mjs";
+import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
+import { loadMemory, FACT_CLASS } from "../../src/memory/core.mjs";
 
-const FIXTURE = new URL("./fixtures/entities.fixture.json", import.meta.url).pathname;
+const FIXTURE = new URL("../fixtures/entities.fixture.json", import.meta.url).pathname;
 
 function sink() {
   const out = new PassThrough();
@@ -125,7 +125,7 @@ test("showcase 4: the ambiguity surround — distinct readings are RESOLVED and 
   assert.match(answer, /no imports edge found/, "reading 2's real honest-miss answer is shown");
 });
 
-test("showcase 5: the symbol-level caller surfaced through noise (callsSymbol fix)", async () => {
+test("showcase 5: the symbol-level caller surfaced through noise (the callsSymbol edge)", async () => {
   // CORRECTNESS FIX (cycle W2P): this case previously PINNED the WRONG honest-empty
   //   BEFORE: "No modules found whose module directly calls fnAlpha. (traversal: calls
   //            edges where object = fnAlpha)"   [record.miss === true]

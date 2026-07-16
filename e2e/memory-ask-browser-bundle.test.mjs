@@ -65,7 +65,7 @@ test("e2e: factAnswer answers a real memory-graph question from an in-memory (Ba
 
   const hitPromise = vm.runInContext('tmctMemoryAsk.factAnswer(__handle, "what is a dog", null, true, {})', ctx);
   const hit = await hitPromise;
-  assert.ok(hit && hit.text, "a real answer comes back — Bug 1's whole point: this engine (unlike the code-graph one) knows what a Fact is");
+  assert.ok(hit && hit.text, "a real answer comes back — this engine (unlike the code-graph one) knows what a Fact is");
   assert.match(hit.text, /dog is a kind of animal/);
   assert.match(hit.text, /dog has tail/);
 

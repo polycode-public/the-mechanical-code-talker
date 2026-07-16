@@ -5,7 +5,7 @@
 // discipline as every other table normalizeConfig produces (see its own
 // docblock); these tests pin that discipline for `[memory]` specifically,
 // which had no dedicated direct-unit coverage before this batch (only
-// exercised indirectly via test/init.test.mjs and test/cli-args.test.mjs).
+// exercised indirectly via e2e/init.test.mjs and test/cli-args.test.mjs).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";

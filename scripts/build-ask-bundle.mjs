@@ -32,6 +32,7 @@
 // LINK. The node-builtin stub set below is broad enough to satisfy every
 // named import reachable from the entry point.
 import { build } from "esbuild";
+import { writeFile, rename } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -119,13 +120,15 @@ const stubOptionalAdapters = {
 };
 
 async function buildOne(entryFile, outFile) {
+  const outPath = join(srcDir, outFile);
   const result = await build({
     entryPoints: [join(srcDir, entryFile)],
     bundle: true,
     format: "iife",
     platform: "browser",
     target: "es2022",
-    outfile: join(srcDir, outFile),
+    outfile: outPath,
+    write: false,
     legalComments: "none",
     logLevel: "info",
     plugins: [stubOptionalAdapters, stubNodeBuiltins],
@@ -135,7 +138,13 @@ async function buildOne(entryFile, outFile) {
     console.error(result.errors);
     process.exit(1);
   }
-  console.log(`built ${join(srcDir, outFile)}`);
+  // Write-then-rename so a concurrent reader (`tmct viz` inlining the bundle,
+  // a test evaluating it in a vm) always sees a complete file, old or new,
+  // never a truncated one mid-write.
+  const tmpPath = `${outPath}.tmp-${process.pid}`;
+  await writeFile(tmpPath, result.outputFiles[0].contents);
+  await rename(tmpPath, outPath);
+  console.log(`built ${outPath}`);
 }
 
 await buildOne("memory-ask-browser-entry.mjs", "memory-ask-browser.bundle.js");

@@ -4,8 +4,9 @@
 // home without the build scripts following breaks here, not on deploy.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, statSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -39,4 +40,28 @@ test("build:ask-bundle rebuilds a parseable browser bundle", () => {
   // node --check parses without executing — a truncated or mis-stubbed
   // bundle fails here instead of in a visitor's browser.
   execFileSync(process.execPath, ["--check", path.join(repoRoot, bundle)], { encoding: "utf8" });
+});
+
+// The Pages build script's rendered page, in depth: public/ledger.html must
+// carry the embedded ledger payload and the inlined memory-ask bundle — the
+// page the homepage hero iframes. This runs the same script as demo:build
+// above; it lives in this file so the two runs (and the build:ask-bundle
+// rewrite of the bundle the page inlines) stay sequential — node runs the
+// tests in one file in order, but runs separate e2e files concurrently, and
+// they all write or read the same repo-level artefacts.
+test("build-demo-site writes a public/ledger.html with the ledger payload and a live chat dock", async () => {
+  const SCRIPT = path.join(repoRoot, "scripts", "build-demo-site.mjs");
+  const res = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
+  assert.equal(res.status, 0, res.stderr);
+  assert.match(res.stdout, /wrote .*ledger\.html \(chat dock enabled\)/);
+
+  const html = await readFile(path.join(repoRoot, "public", "ledger.html"), "utf8");
+  const m = /const LEDGER = (.*);/.exec(html);
+  assert.ok(m, "the page embeds const LEDGER");
+  const ledger = JSON.parse(m[1]);
+  assert.ok(ledger.rows.length > 0, "the demo payload renders real fact rows");
+  assert.ok(ledger.rows.some((r) => r.s === "disk-1" || r.o === "disk-1"), "the hanoi-3 demo facts are present");
+  assert.match(html, /tmctMemoryAsk/);
+  assert.match(html, /id="chatform"/);
+  assert.ok(!html.includes("chat unavailable"), "the dock renders enabled, not the disabled note");
 });
