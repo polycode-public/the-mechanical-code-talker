@@ -21,12 +21,22 @@ drives it through that surface and asserts the result. An audit row needs both h
 
 The order below is the order of authority. When two sources disagree, the higher one wins.
 
-**1. Tool-layer contract tests (primary).** `src/tools/` is the tool layer. `server.mjs` holds
-`dispatchTool` and the `TOOLS` table. `conformance.mjs` holds `runConformance`, the provider
-contract check. `schema-docs.mjs` renders the declared schemas. A test that drives `dispatchTool`,
-runs `runConformance` against a provider, or exercises the Repository Interface's 16 services is
-the strongest evidence an audit can cite. It proves two things at once: a caller can reach the
-capability from the surface it really uses, and the contract holds.
+**1. Tool-layer contract tests (primary).** `src/tools/` is the tool layer, and `test/tools/` holds
+its contract tests. `definitions.mjs` declares the tool surface: `TOOL_DEFINITIONS` carries 22
+tools, split into `HOT_TOOLS` (3) and `COLD_TOOLS` (19). `server.mjs` holds `dispatchTool` and the
+`TOOLS` table, the hot tier it advertises. `catalog.mjs` renders the tool catalog from those same
+definitions, so the docs derive from the declared surface instead of describing it by hand.
+`conformance.mjs` holds `runConformance`, the provider contract check. `schema-docs.mjs` renders
+the declared schemas and guards them against drift.
+
+A test that drives `dispatchTool`, renders the catalog, runs `runConformance` against a provider,
+or exercises the Repository Interface's 16 services is the strongest evidence an audit can cite. It
+proves two things at once: a caller can reach the capability from the surface it really uses, and
+the contract holds.
+
+Check which tier a tool sits in before writing the row. A cold tool is declared and documented but
+not in `TOOLS`, so "declared" and "dispatched" are different claims and the audit should not merge
+them.
 
 **2. Corpus lane rows (primary, for chat behaviour).** `test/corpus/` holds 723 rows across 11
 JSONL lanes in six families: `grammar`, `templates`, `inference`, `planning`, `games/*` (six

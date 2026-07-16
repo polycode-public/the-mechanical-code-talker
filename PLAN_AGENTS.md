@@ -81,7 +81,7 @@ other way round. Conclusions only:
 |---|---|---|
 | `POST /v1/messages` HTTP shim (Anthropic-Messages-API-compatible) | **Shipped**, since 0.8.0 | `src/surfaces/server-http.mjs`, `bin/tmct.mjs serve` |
 | Repository Interface `INTERFACE_VERSION` 1.1.0 (16 services, closed `EDGE_KINDS`/`MISS_REASONS`) | **Shipped**, since 0.5.0; 1.0.0 → 1.1.0 at v1.4.0 (§2.2) | `src/adapters/repository-interface.mjs` (`SERVICES`, 16), `src/adapters/providers/graph-service.mjs`, `runConformance` in `src/tools/conformance.mjs` |
-| Tool layer: the `TOOLS` table + `dispatchTool` | **Shipped** — 3 tools (`tmct_context`, `tmct_snippet`, `tmct_ask`) | `src/tools/server.mjs`; the router's registry excludes all three, see `EXCLUDED_FROM_REGISTRY` |
+| Tool layer: declared tool surface + `dispatchTool` | **Shipped** — 22 declared tools (`TOOL_DEFINITIONS`), 3 hot (`tmct_context`, `tmct_snippet`, `tmct_ask`) and 19 cold | `src/tools/definitions.mjs` (`HOT_TOOLS`/`COLD_TOOLS`), `dispatchTool` + `TOOLS` in `src/tools/server.mjs`, catalog rendered by `src/tools/catalog.mjs`; contract tests in `test/tools/`. The router's registry excludes the three hot tools, see `EXCLUDED_FROM_REGISTRY` |
 | Capability router (STRIPS/PDDL registry, resolver, planner, guardrail, goal-reasoner) | **Shipped**, all 6 stages, **and invokable** | `src/domain/router/*`, 15 capabilities in `registry.mjs` (`capabilities()`), measured on AGENTBENCH; `tmct plan`/chat's `/plan`/`./plan` library export — see §1.3 |
 | AGENTBENCH goal-reasoner (Stage 5, the C2 rung) | **Shipped and measured** | 56 cases: 100% plan / 100% result / 0% hallucination across every rung (`archive/TOO_HARD_AUDIT.md` M2, fixed 2026-07-12 — no case held back) |
 | seonix code→graph, driven by tmct | **Shipped, in production**, seonix 0.8.0→0.10.6 | `seonix/src/tmct-provider.mjs` — 37 lines, `createGraphService` reused directly |
@@ -389,7 +389,8 @@ that isn't code at all.
   `src/adapters/corpus/unknown-ingest.mjs` turns a term that only ever appears in a row `toFacts()`
   drops into a real Fact tagged with the passage it came from. `seedMemory` in
   `src/adapters/corpus/conceptnet.mjs` calls it behind `captureUnknownContext`, which defaults false.
-  Only `test/corpus-unknown-ingest.test.mjs` ever sets it true, so no production path activates it.
+  Only `test/adapters/corpus-unknown-ingest.test.mjs` ever sets it true, so no production path
+  activates it.
   The code works; nothing reaches it.
 - ✅ **Config surface, concretely — shipped v1.4.0.** Each named extension/seed set gets an optional
   `bias` weight in `tmct.toml`'s `[bias]` table (a flat bundle-name → weight table, not nested under

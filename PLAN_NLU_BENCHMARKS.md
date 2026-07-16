@@ -24,8 +24,9 @@ defeats the purpose.
 ## Where tmct stands today (the as-is estimate)
 
 tmct's capability universe is: 15 read-only code-graph capabilities
-(`src/domain/router/registry.mjs`, `capabilities()`), three tools on the Messages-API surface
-(`tmct_context`, `tmct_snippet`, `tmct_ask` in `src/tools/server.mjs`'s `TOOLS` table), a
+(`src/domain/router/registry.mjs`, `capabilities()`), a 22-tool declared surface
+(`src/tools/definitions.mjs`, of which `tmct_context`, `tmct_snippet` and `tmct_ask` are the hot
+tier `src/tools/server.mjs` dispatches), a
 commonsense fact/teach surface in `src/services/chat.mjs` (IsA/HasA/CapableOf over a small
 animal-flavoured seed corpus), and runtime-taught game actions. None of the CLINC150/HWU64 domains
 (banking, travel, weather, alarms, music, cooking, ...) exist anywhere in the product. A sweep of
