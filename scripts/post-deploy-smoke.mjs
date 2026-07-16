@@ -13,6 +13,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
+import { parseVersionStamp } from "../src/domain/version-stamp.mjs";
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const { name, version, homepage } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
 
@@ -40,10 +42,9 @@ async function publishedVersion() {
 
 /** The version the Pages home page shows, read from the element that carries it. */
 async function pagesVersion() {
-  const html = await fetchText(PAGES_URL);
-  const stamped = /id="pkg-version"[^>]*>\s*v?(\d+\.\d+\.\d+)\s*</.exec(html);
-  if (!stamped) throw new Error("the page shows no version");
-  return stamped[1];
+  const version = parseVersionStamp(await fetchText(PAGES_URL));
+  if (!version) throw new Error("the page shows no version");
+  return version;
 }
 
 /** One pass over both endpoints. Never throws; the caller decides when to give up. */

@@ -10,19 +10,17 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import { hasVersionStamp, parseVersionStamp } from "../../src/domain/version-stamp.mjs";
+
 const INDEX = fileURLToPath(new URL("../../public/index.html", import.meta.url));
 const PACKAGE = fileURLToPath(new URL("../../package.json", import.meta.url));
 
-// The shape scripts/post-deploy-smoke.mjs reads off the deployed page.
-const VERSION_STAMP = /id="pkg-version"[^>]*>\s*v?([^<\s]*)\s*</;
-
 test("the home page carries the version stamp the build writes and the deploy smoke reads", () => {
-  const html = readFileSync(INDEX, "utf8");
-  assert.match(html, VERSION_STAMP, "the footer keeps a #pkg-version element to stamp");
+  assert.ok(hasVersionStamp(readFileSync(INDEX, "utf8")), "the footer keeps a #pkg-version element to stamp");
 });
 
 test("the version the committed home page documents is the version the package ships", () => {
-  const stamped = VERSION_STAMP.exec(readFileSync(INDEX, "utf8"))?.[1];
+  const stamped = parseVersionStamp(readFileSync(INDEX, "utf8"));
   const { version } = JSON.parse(readFileSync(PACKAGE, "utf8"));
   assert.equal(stamped, version, `the page documents ${stamped}, the package ships ${version} — run \`npm run demo:build\``);
 });

@@ -124,6 +124,7 @@
   "src/domain/router/set-algebra.mjs",
   "src/domain/router/taught.mjs",
   "src/domain/syllogise.mjs",
+  "src/domain/version-stamp.mjs",
   "src/services/chat-session.mjs",
   "src/services/chat.mjs",
   "src/services/cli-args.mjs",

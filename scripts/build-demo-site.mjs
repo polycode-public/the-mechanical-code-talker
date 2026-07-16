@@ -25,6 +25,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join, relative, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 
+import { stampVersion } from "../src/domain/version-stamp.mjs";
+
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..");
 const SRC = join(ROOT, "src");
@@ -66,14 +68,10 @@ function engineImportClosure(entry) {
 // CI stamps it again before it publishes public/, which is what makes a bump
 // reach the deployed page without anyone editing HTML. post-deploy-smoke.mjs
 // reads the same element back off that page.
-const VERSION_STAMP = /(id="pkg-version"[^>]*>)[^<]*(<)/;
-
 function stampPageVersion() {
   const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
   const page = join(SITE, "index.html");
-  const html = readFileSync(page, "utf8");
-  if (!VERSION_STAMP.test(html)) throw new Error(`${page} has no #pkg-version element to stamp`);
-  writeFileSync(page, html.replace(VERSION_STAMP, `$1${version}$2`));
+  writeFileSync(page, stampVersion(readFileSync(page, "utf8"), version));
   console.log(`stamped ${page} with version ${version}`);
 }
 
