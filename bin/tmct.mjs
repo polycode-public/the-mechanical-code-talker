@@ -1235,9 +1235,10 @@ async function main() {
     }
     const { repo, config } = await resolveRuntimeConfig({ argv: rest });
     const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("../src/router/drive.mjs");
+    const { capabilityPlanDeps } = await import("../src/chat.mjs");
     let ctx;
     try {
-      ctx = await buildCapabilityPlanCtx({ config, memoryDir: repo });
+      ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config, memoryDir: repo });
     } catch (e) {
       process.stderr.write(`tmct plan: could not load the graph — ${e?.message || e}\n`);
       process.exit(1);

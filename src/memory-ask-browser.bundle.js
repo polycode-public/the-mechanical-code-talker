@@ -118,108 +118,6 @@
     }
   });
 
-  // node-stub:node:os
-  var unavailable4, createRequire4, readFileSync4, writeFileSync4, readFile4, writeFile4, appendFile4, mkdir4, mkdtemp4, rename4, unlink4, rm4, stat4, access4, copyFile4, readdir4, createReadStream4, createWriteStream4, randomBytes4, createHash4, createRequireFromPath4, spawnSync4, createInterface4, createServer4, DatabaseSync4;
-  var init_node_os = __esm({
-    "node-stub:node:os"() {
-      unavailable4 = (name) => () => {
-        throw new Error(name + " unavailable in the browser ask bundle");
-      };
-      createRequire4 = unavailable4("createRequire");
-      readFileSync4 = unavailable4("readFileSync");
-      writeFileSync4 = unavailable4("writeFileSync");
-      readFile4 = unavailable4("readFile");
-      writeFile4 = unavailable4("writeFile");
-      appendFile4 = unavailable4("appendFile");
-      mkdir4 = unavailable4("mkdir");
-      mkdtemp4 = unavailable4("mkdtemp");
-      rename4 = unavailable4("rename");
-      unlink4 = unavailable4("unlink");
-      rm4 = unavailable4("rm");
-      stat4 = unavailable4("stat");
-      access4 = unavailable4("access");
-      copyFile4 = unavailable4("copyFile");
-      readdir4 = unavailable4("readdir");
-      createReadStream4 = unavailable4("createReadStream");
-      createWriteStream4 = unavailable4("createWriteStream");
-      randomBytes4 = unavailable4("randomBytes");
-      createHash4 = unavailable4("createHash");
-      createRequireFromPath4 = unavailable4("createRequireFromPath");
-      spawnSync4 = unavailable4("spawnSync");
-      createInterface4 = unavailable4("createInterface");
-      createServer4 = unavailable4("createServer");
-      DatabaseSync4 = unavailable4("DatabaseSync");
-    }
-  });
-
-  // node-stub:node:readline/promises
-  var unavailable5, createRequire5, readFileSync5, writeFileSync5, readFile5, writeFile5, appendFile5, mkdir5, mkdtemp5, rename5, unlink5, rm5, stat5, access5, copyFile5, readdir5, createReadStream5, createWriteStream5, randomBytes5, createHash5, createRequireFromPath5, spawnSync5, createInterface5, createServer5, DatabaseSync5;
-  var init_promises2 = __esm({
-    "node-stub:node:readline/promises"() {
-      unavailable5 = (name) => () => {
-        throw new Error(name + " unavailable in the browser ask bundle");
-      };
-      createRequire5 = unavailable5("createRequire");
-      readFileSync5 = unavailable5("readFileSync");
-      writeFileSync5 = unavailable5("writeFileSync");
-      readFile5 = unavailable5("readFile");
-      writeFile5 = unavailable5("writeFile");
-      appendFile5 = unavailable5("appendFile");
-      mkdir5 = unavailable5("mkdir");
-      mkdtemp5 = unavailable5("mkdtemp");
-      rename5 = unavailable5("rename");
-      unlink5 = unavailable5("unlink");
-      rm5 = unavailable5("rm");
-      stat5 = unavailable5("stat");
-      access5 = unavailable5("access");
-      copyFile5 = unavailable5("copyFile");
-      readdir5 = unavailable5("readdir");
-      createReadStream5 = unavailable5("createReadStream");
-      createWriteStream5 = unavailable5("createWriteStream");
-      randomBytes5 = unavailable5("randomBytes");
-      createHash5 = unavailable5("createHash");
-      createRequireFromPath5 = unavailable5("createRequireFromPath");
-      spawnSync5 = unavailable5("spawnSync");
-      createInterface5 = unavailable5("createInterface");
-      createServer5 = unavailable5("createServer");
-      DatabaseSync5 = unavailable5("DatabaseSync");
-    }
-  });
-
-  // node-stub:node:child_process
-  var unavailable6, createRequire6, readFileSync6, writeFileSync6, readFile6, writeFile6, appendFile6, mkdir6, mkdtemp6, rename6, unlink6, rm6, stat6, access6, copyFile6, readdir6, createReadStream6, createWriteStream6, randomBytes6, createHash6, createRequireFromPath6, spawnSync6, createInterface6, createServer6, DatabaseSync6;
-  var init_node_child_process = __esm({
-    "node-stub:node:child_process"() {
-      unavailable6 = (name) => () => {
-        throw new Error(name + " unavailable in the browser ask bundle");
-      };
-      createRequire6 = unavailable6("createRequire");
-      readFileSync6 = unavailable6("readFileSync");
-      writeFileSync6 = unavailable6("writeFileSync");
-      readFile6 = unavailable6("readFile");
-      writeFile6 = unavailable6("writeFile");
-      appendFile6 = unavailable6("appendFile");
-      mkdir6 = unavailable6("mkdir");
-      mkdtemp6 = unavailable6("mkdtemp");
-      rename6 = unavailable6("rename");
-      unlink6 = unavailable6("unlink");
-      rm6 = unavailable6("rm");
-      stat6 = unavailable6("stat");
-      access6 = unavailable6("access");
-      copyFile6 = unavailable6("copyFile");
-      readdir6 = unavailable6("readdir");
-      createReadStream6 = unavailable6("createReadStream");
-      createWriteStream6 = unavailable6("createWriteStream");
-      randomBytes6 = unavailable6("randomBytes");
-      createHash6 = unavailable6("createHash");
-      createRequireFromPath6 = unavailable6("createRequireFromPath");
-      spawnSync6 = unavailable6("spawnSync");
-      createInterface6 = unavailable6("createInterface");
-      createServer6 = unavailable6("createServer");
-      DatabaseSync6 = unavailable6("DatabaseSync");
-    }
-  });
-
   // src/config.mjs
   var DEFAULT_GRAPH_REL;
   var init_config = __esm({
@@ -234,21 +132,6 @@
     "src/source-slice.mjs"() {
       init_node_path();
       init_config();
-    }
-  });
-
-  // src/graph-merge.mjs
-  var init_graph_merge = __esm({
-    "src/graph-merge.mjs"() {
-    }
-  });
-
-  // src/source.mjs
-  var init_source = __esm({
-    "src/source.mjs"() {
-      init_promises();
-      init_config();
-      init_graph_merge();
     }
   });
 
@@ -6932,21 +6815,6 @@ ${lines.join("\n")}`;
     }
   });
 
-  // src/server.mjs
-  var init_server = __esm({
-    "src/server.mjs"() {
-      init_promises();
-      init_node_path();
-      init_config();
-      init_source_slice();
-      init_source();
-      init_codegraph();
-      init_ask();
-      init_graph_service();
-      init_core();
-    }
-  });
-
   // node_modules/smol-toml/dist/date.js
   var init_date = __esm({
     "node_modules/smol-toml/dist/date.js"() {
@@ -7029,18 +6897,6 @@ ${lines.join("\n")}`;
     }
   });
 
-  // src/cli-args.mjs
-  var init_cli_args = __esm({
-    "src/cli-args.mjs"() {
-      init_node_child_process();
-      init_node_path();
-      init_promises();
-      init_node_path();
-      init_toml_config();
-      init_config();
-    }
-  });
-
   // src/sessions.mjs
   var SESSIONS_DIR_REL;
   var init_sessions = __esm({
@@ -7049,22 +6905,6 @@ ${lines.join("\n")}`;
       init_node_path();
       init_core();
       SESSIONS_DIR_REL = join(".tmct", "sessions");
-    }
-  });
-
-  // src/uuid.mjs
-  var init_uuid = __esm({
-    "src/uuid.mjs"() {
-      init_node_crypto();
-    }
-  });
-
-  // src/telemetry.mjs
-  var init_telemetry = __esm({
-    "src/telemetry.mjs"() {
-      init_promises();
-      init_node_path();
-      init_uuid();
     }
   });
 
@@ -7256,29 +7096,6 @@ ${lines.join("\n")}`;
     }
   });
 
-  // src/memory/bias.mjs
-  function biasForSourceId(sourceId, biasByBundle = {}) {
-    const m = CORPUS_SOURCE_RE.exec(String(sourceId || ""));
-    if (!m) return 1;
-    const v = biasByBundle?.[m[1]];
-    return typeof v === "number" && Number.isFinite(v) ? v : 1;
-  }
-  function biasForRow(row, biasByBundle = {}) {
-    const ids = Array.isArray(row?.sourceIds) ? row.sourceIds : [];
-    if (!ids.length) return 1;
-    return Math.max(...ids.map((id) => biasForSourceId(id, biasByBundle)));
-  }
-  function rankByBiasThenTrust(rows, biasByBundle = {}) {
-    const list = Array.isArray(rows) ? rows : [];
-    return list.map((row, index) => ({ row, index, bias: biasForRow(row, biasByBundle) })).sort((a, b) => b.bias - a.bias || (b.row?.trust ?? 0) - (a.row?.trust ?? 0) || a.index - b.index).map((x) => x.row);
-  }
-  var CORPUS_SOURCE_RE;
-  var init_bias = __esm({
-    "src/memory/bias.mjs"() {
-      CORPUS_SOURCE_RE = /^src:corpus:(.+)$/;
-    }
-  });
-
   // src/finish.mjs
   var import_meta5, GRAMMAR_DIR, GRAMMAR_RULES_FILE, SEGMENT_TYPES, PROTECTED_TYPES;
   var init_finish = __esm({
@@ -7377,13 +7194,6 @@ ${lines.join("\n")}`;
     "src/wink-model.mjs"() {
       init_node_module();
       import_meta6 = {};
-    }
-  });
-
-  // src/sentences.mjs
-  var init_sentences = __esm({
-    "src/sentences.mjs"() {
-      init_wink_model();
     }
   });
 
@@ -8210,6 +8020,225 @@ ${lines.join("\n")}`;
   });
 
   // src/chat.mjs
+  init_node_path();
+  init_node_fs();
+  init_promises();
+
+  // node-stub:node:os
+  var unavailable4 = (name) => () => {
+    throw new Error(name + " unavailable in the browser ask bundle");
+  };
+  var createRequire4 = unavailable4("createRequire");
+  var readFileSync4 = unavailable4("readFileSync");
+  var writeFileSync4 = unavailable4("writeFileSync");
+  var readFile4 = unavailable4("readFile");
+  var writeFile4 = unavailable4("writeFile");
+  var appendFile4 = unavailable4("appendFile");
+  var mkdir4 = unavailable4("mkdir");
+  var mkdtemp4 = unavailable4("mkdtemp");
+  var rename4 = unavailable4("rename");
+  var unlink4 = unavailable4("unlink");
+  var rm4 = unavailable4("rm");
+  var stat4 = unavailable4("stat");
+  var access4 = unavailable4("access");
+  var copyFile4 = unavailable4("copyFile");
+  var readdir4 = unavailable4("readdir");
+  var createReadStream4 = unavailable4("createReadStream");
+  var createWriteStream4 = unavailable4("createWriteStream");
+  var randomBytes4 = unavailable4("randomBytes");
+  var createHash4 = unavailable4("createHash");
+  var createRequireFromPath4 = unavailable4("createRequireFromPath");
+  var spawnSync4 = unavailable4("spawnSync");
+  var createInterface4 = unavailable4("createInterface");
+  var createServer4 = unavailable4("createServer");
+  var DatabaseSync4 = unavailable4("DatabaseSync");
+
+  // node-stub:node:readline/promises
+  var unavailable5 = (name) => () => {
+    throw new Error(name + " unavailable in the browser ask bundle");
+  };
+  var createRequire5 = unavailable5("createRequire");
+  var readFileSync5 = unavailable5("readFileSync");
+  var writeFileSync5 = unavailable5("writeFileSync");
+  var readFile5 = unavailable5("readFile");
+  var writeFile5 = unavailable5("writeFile");
+  var appendFile5 = unavailable5("appendFile");
+  var mkdir5 = unavailable5("mkdir");
+  var mkdtemp5 = unavailable5("mkdtemp");
+  var rename5 = unavailable5("rename");
+  var unlink5 = unavailable5("unlink");
+  var rm5 = unavailable5("rm");
+  var stat5 = unavailable5("stat");
+  var access5 = unavailable5("access");
+  var copyFile5 = unavailable5("copyFile");
+  var readdir5 = unavailable5("readdir");
+  var createReadStream5 = unavailable5("createReadStream");
+  var createWriteStream5 = unavailable5("createWriteStream");
+  var randomBytes5 = unavailable5("randomBytes");
+  var createHash5 = unavailable5("createHash");
+  var createRequireFromPath5 = unavailable5("createRequireFromPath");
+  var spawnSync5 = unavailable5("spawnSync");
+  var createInterface5 = unavailable5("createInterface");
+  var createServer5 = unavailable5("createServer");
+  var DatabaseSync5 = unavailable5("DatabaseSync");
+
+  // node-stub:node:child_process
+  var unavailable6 = (name) => () => {
+    throw new Error(name + " unavailable in the browser ask bundle");
+  };
+  var createRequire6 = unavailable6("createRequire");
+  var readFileSync6 = unavailable6("readFileSync");
+  var writeFileSync6 = unavailable6("writeFileSync");
+  var readFile6 = unavailable6("readFile");
+  var writeFile6 = unavailable6("writeFile");
+  var appendFile6 = unavailable6("appendFile");
+  var mkdir6 = unavailable6("mkdir");
+  var mkdtemp6 = unavailable6("mkdtemp");
+  var rename6 = unavailable6("rename");
+  var unlink6 = unavailable6("unlink");
+  var rm6 = unavailable6("rm");
+  var stat6 = unavailable6("stat");
+  var access6 = unavailable6("access");
+  var copyFile6 = unavailable6("copyFile");
+  var readdir6 = unavailable6("readdir");
+  var createReadStream6 = unavailable6("createReadStream");
+  var createWriteStream6 = unavailable6("createWriteStream");
+  var randomBytes6 = unavailable6("randomBytes");
+  var createHash6 = unavailable6("createHash");
+  var createRequireFromPath6 = unavailable6("createRequireFromPath");
+  var spawnSync6 = unavailable6("spawnSync");
+  var createInterface6 = unavailable6("createInterface");
+  var createServer6 = unavailable6("createServer");
+  var DatabaseSync6 = unavailable6("DatabaseSync");
+
+  // src/server.mjs
+  init_promises();
+  init_node_path();
+  init_config();
+  init_source_slice();
+
+  // src/source.mjs
+  init_promises();
+  init_config();
+
+  // src/server.mjs
+  init_codegraph();
+  init_ask();
+  init_graph_service();
+  init_core();
+  var TOOLS = [
+    {
+      name: "tmct_context",
+      // Lean resident schema (re-billed every turn): the minimum that still steers the agent to
+      // ONE call → write, not Read.
+      description: "START HERE to add/modify code: ONE call returns a sized edit bundle (exemplar source, sibling signatures, registration, insertion region) \u2014 then write directly, don't Read.",
+      inputSchema: {
+        type: "object",
+        required: ["symbol"],
+        properties: {
+          symbol: { type: "string", description: "Module path (e.g. path/to/module) or a sibling function/class name defined in it." },
+          depth: { type: "string", enum: ["min", "auto", "full"], default: "auto", description: "auto (sized to the task) | min (leanest) | full (every section)." }
+        }
+      }
+    },
+    {
+      name: "tmct_snippet",
+      description: "EXACT source of one function/class/Class.method by name (its line span only) + a one-line in-repo call hint. Prefer over Read for a single symbol.",
+      inputSchema: {
+        type: "object",
+        required: ["symbol"],
+        properties: {
+          symbol: { type: "string", description: "function/class name, Class.method, or fn:<path>#name." }
+        }
+      }
+    },
+    {
+      name: "tmct_ask",
+      description: 'Ask a structural question in plain English: "which functions call X", "what uses X", "where is X defined", "when did X change". One call, no model. A clean miss beats a guess.',
+      inputSchema: {
+        type: "object",
+        required: ["query"],
+        properties: {
+          query: { type: "string", description: 'A free-text question, e.g. "which functions explicitly couple to logging".' }
+        }
+      }
+    }
+  ];
+
+  // src/chat.mjs
+  init_config();
+
+  // src/cli-args.mjs
+  init_node_path();
+  init_promises();
+  init_node_path();
+  init_toml_config();
+  init_config();
+
+  // src/chat.mjs
+  init_codegraph();
+  init_ask();
+  init_sessions();
+
+  // src/uuid.mjs
+  init_node_crypto();
+
+  // src/telemetry.mjs
+  init_promises();
+  init_node_path();
+
+  // src/chat.mjs
+  init_templates();
+  init_extensions();
+
+  // src/memory/bias.mjs
+  var CORPUS_SOURCE_RE = /^src:corpus:(.+)$/;
+  function biasForSourceId(sourceId, biasByBundle = {}) {
+    const m = CORPUS_SOURCE_RE.exec(String(sourceId || ""));
+    if (!m) return 1;
+    const v = biasByBundle?.[m[1]];
+    return typeof v === "number" && Number.isFinite(v) ? v : 1;
+  }
+  function biasForRow(row, biasByBundle = {}) {
+    const ids = Array.isArray(row?.sourceIds) ? row.sourceIds : [];
+    if (!ids.length) return 1;
+    return Math.max(...ids.map((id) => biasForSourceId(id, biasByBundle)));
+  }
+  function rankByBiasThenTrust(rows, biasByBundle = {}) {
+    const list = Array.isArray(rows) ? rows : [];
+    return list.map((row, index) => ({ row, index, bias: biasForRow(row, biasByBundle) })).sort((a, b) => b.bias - a.bias || (b.row?.trust ?? 0) - (a.row?.trust ?? 0) || a.index - b.index).map((x) => x.row);
+  }
+
+  // src/chat.mjs
+  init_core();
+  init_finish();
+
+  // src/sentences.mjs
+  init_wink_model();
+
+  // src/chat.mjs
+  init_ask_vocab();
+  init_normalize();
+  init_fuzzy();
+  init_answer_variants();
+  var CONTEXT_WORDS = /* @__PURE__ */ new Set(["it", "this", "that", "here"]);
+  var isPronoun = (s) => CONTEXT_WORDS.has(String(s || "").trim().toLowerCase());
+  var GOAL_BY_KIND = {
+    imports: "understand a dependency/import relationship",
+    uses: "understand a dependency/usage relationship (imports and/or calls)",
+    calls: "understand a call relationship",
+    callsSymbol: "understand a call relationship",
+    defines: "locate what a module/class defines",
+    contains: "understand class membership (methods/attributes)",
+    tests: "assess test coverage",
+    inherits: "understand a class hierarchy/inheritance relationship",
+    touches: "understand commit/change history",
+    touchesSymbol: "understand commit/change history",
+    cochange: "understand change-coupling between modules",
+    reexports: "understand a module's public exports/API surface"
+  };
+  var goalNoun = (entityType) => entityType ? `${String(entityType).toLowerCase()}(s)` : "entities";
+  var TAUGHT_FACT_LOOKUP_GOAL = "look up a taught fact about a subject/verb/object";
   function deduceGoalFromParsed(parsed) {
     if (!parsed) return null;
     const { node, shape, kind } = parsed;
@@ -8234,11 +8263,189 @@ ${lines.join("\n")}`;
     if ((shape === "reverse" || shape === "forward") && kind) return GOAL_BY_KIND[kind] || `understand a "${kind}" relationship`;
     return "understand a graph relationship";
   }
+  var COMMANDS = {
+    find: { tool: "tmct_search", arg: "query", help: "lexical search across the graph" },
+    search: { tool: "tmct_search", arg: "query", help: "alias of /find" },
+    context: { tool: "tmct_context", arg: "symbol", help: "the sized edit bundle for a symbol (start here to change code)" },
+    snippet: { tool: "tmct_snippet", arg: "symbol", help: "exact source of one function/class/method" },
+    describe: { tool: "tmct_describe", arg: "symbol", help: "a symbol's definition, kind and relations" },
+    signature: { tool: "tmct_signature", arg: "symbol", help: "a symbol's signature only" },
+    members: { tool: "tmct_members", arg: "class", help: "the methods/attributes of a class" },
+    subclasses: { tool: "tmct_subclasses", arg: "class", help: "the subclasses of a class" },
+    impact: { tool: "tmct_impact", arg: "module", help: "what a change to this module reaches (impact closure)" },
+    callers: { tool: "tmct_callers", arg: "symbol", help: "functions that call this symbol" },
+    callees: { tool: "tmct_callees", arg: "symbol", help: "functions this symbol calls" },
+    tests: { tool: "tmct_tests_for", arg: "symbol", help: "the tests covering this symbol" },
+    untested: { tool: "tmct_untested", arg: null, help: "symbols with no covering test" },
+    history: { tool: "tmct_history", arg: "symbol", help: "the commit history of this symbol" },
+    exports: { tool: "tmct_exports", arg: "module", help: "a module's public exports" },
+    arch: { tool: "tmct_architecture", arg: "package", help: "the architecture overview (optional package filter)", optional: true }
+  };
+  var COMMAND_WORDS = /* @__PURE__ */ new Set(["stats", "memory", "focus", ...Object.keys(COMMANDS)]);
+  var CLASS_LABELS = {
+    Class: ["class", "classes"],
+    Function: ["function", "functions"],
+    Module: ["module", "modules"],
+    Method: ["method", "methods"],
+    Attribute: ["attribute", "attributes"],
+    GlobalVariable: ["variable", "variables"],
+    Commit: ["commit", "commits"],
+    Session: ["session", "sessions"]
+  };
+  var AMBIGUOUS_HAVE_VERBS = /* @__PURE__ */ new Set(["have", "has", "holds", "hold"]);
+  var RESTRICTOR_VERB_RE = new RegExp(
+    `\\b(?:${[...Object.keys(VERB_TO_KIND), ...Object.keys(PASSIVE_PARTICIPLE_TO_KIND)].filter((v) => !AMBIGUOUS_HAVE_VERBS.has(v)).sort((a, b) => b.length - a.length).map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`,
+    "i"
+  );
+  var BACKED_TOOLS = /* @__PURE__ */ new Set([
+    ...TOOLS.map((t) => t.name),
+    ...Object.values(COMMANDS).map((s) => s.tool)
+  ]);
+  var GREET = /* @__PURE__ */ new Set([
+    "hi",
+    "hello",
+    "hey",
+    "yo",
+    "hiya",
+    "howdy",
+    "sup",
+    "greetings",
+    "g'day",
+    "gday",
+    "hey there",
+    "hi there",
+    "hello there",
+    "good morning",
+    "good afternoon",
+    "good evening",
+    "morning",
+    // UK/AU/NZ
+    "alright",
+    "you alright",
+    "alright mate",
+    "morning all",
+    "yeah nah",
+    // US
+    "hey y'all",
+    "howdy there",
+    "hiya there",
+    // formal
+    "good day",
+    "good day to you",
+    "salutations",
+    "good to meet you",
+    "pleased to meet you",
+    // slang
+    "yo yo",
+    "ayy",
+    "wassup",
+    "sup fam",
+    "heya",
+    "hiya!",
+    // texting abbreviation
+    "gm",
+    "ge"
+  ]);
+  var THANKS = /* @__PURE__ */ new Set([
+    "thanks",
+    "thank you",
+    "thankyou",
+    "thx",
+    "ty",
+    "ta",
+    "cheers",
+    "nice one",
+    "much appreciated",
+    "cool thanks",
+    "many thanks",
+    "much obliged",
+    "ta very much",
+    "cheers mate",
+    "cheers for that",
+    "tks",
+    "sweet thanks",
+    "nice",
+    // "brilliant" — a UK-English enthusiasm interjection functioning as a bare
+    // acknowledgement, the same shape as "nice"/"cheers" just above.
+    "brilliant",
+    // "ta for that" — "cheers for that" was already here, but its "ta" sibling
+    // (both dropped-word forms of the SAME "thanks for that" shape) was missing.
+    "ta for that",
+    // A natural session-closing remark — the LAST turn of a session is a bad
+    // place to end on the raw grammar wall instead of a warm sign-off.
+    "cheers, that's everything for now, thanks",
+    "that's everything for now, thanks",
+    "that's all for now, thanks"
+  ]);
+  var BYE = /* @__PURE__ */ new Set([
+    "bye",
+    "goodbye",
+    "quit",
+    "exit",
+    "see ya",
+    "see you",
+    "cya",
+    "later",
+    "farewell",
+    "peace",
+    "peace out",
+    "im off",
+    "i'm off",
+    "gtg",
+    "gotta go",
+    "catch you later",
+    "farewell then"
+    // "good day to you" deliberately does NOT live here: it's a formal-register
+    // GREETING, not a farewell. foldedBye is checked before GREET in
+    // conversationalTurn, so having it here would silently end the session on
+    // a plain formal greeting — every turn piped after it dropped with no log
+    // entry, a worse outcome than any wall.
+  ]);
+  var OK_ACK = /* @__PURE__ */ new Set([
+    "ok",
+    "okay",
+    "cool",
+    "aight",
+    "fair enough",
+    "got it",
+    "gotcha",
+    "noted",
+    "sounds good",
+    "sure",
+    "cool cool",
+    "right"
+  ]);
+  var collapseRuns = (s) => s.replace(/(.)\1+/g, "$1");
   function collapsedIndex(set) {
     const idx = /* @__PURE__ */ new Map();
     for (const phrase of set) if (!idx.has(collapseRuns(phrase))) idx.set(collapseRuns(phrase), phrase);
     return idx;
   }
+  var GREET_COLLAPSED = collapsedIndex(GREET);
+  var THANKS_COLLAPSED = collapsedIndex(THANKS);
+  var BYE_COLLAPSED = collapsedIndex(BYE);
+  var ACK_LEAD_RE = new RegExp(`^(?:${[...OK_ACK].map(escapeRegex).join("|")})\\s+(.+)$`, "i");
+  var CONVERSATIONAL_PHRASES = [
+    ...GREET,
+    ...THANKS,
+    ...BYE,
+    "what can you do",
+    "what do you do",
+    "help",
+    "how do you work",
+    "who are you",
+    "what are you",
+    "what is your name"
+  ];
+  var COMPARATIVE_SRC = "(?:[a-z]+er|better|worse|(?:more|less)\\s+[a-z]+)";
+  var COMPARATIVE_TEACH_RE = new RegExp(`^(?:the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(?:is|are)\\s+(${COMPARATIVE_SRC})\\s+than\\s+(.+)$`, "i");
+  var COMPARATIVE_ASK_RE = new RegExp(`^(?:is|are)\\s+(.+?)\\s+(${COMPARATIVE_SRC})\\s+than\\s+(.+?)[?.!\\s]*$`, "i");
+  var PREP_SRC = "on|in|at|onto|upon|under|over|beside|near|behind|above|below|inside|outside";
+  var OWNED_BY_PREDICATE = "mgx:ownedBy";
+  var HAS_PROPERTY_PREDICATE = "mgx:hasProperty";
+  var SUBCLASS_PREDICATE2 = "rdfs:subClassOf";
+  var TAUGHT_SOURCE_TYPES = /* @__PURE__ */ new Set(["operator", "teach", "entailed"]);
+  var isOperatorTaught = (f) => !!f.sourceTypes?.some((t) => TAUGHT_SOURCE_TYPES.has(t));
   function buildAliasSubClassTrees(rows, predicate = SUBCLASS_PREDICATE2) {
     const strictEdges = [];
     const broadEdges = [];
@@ -8252,6 +8459,38 @@ ${lines.join("\n")}`;
   function chaseAliasEitherTree(chaseFn, role, targetSet, trees, opts) {
     return chaseFn(role, targetSet, [], trees.strictEdges, opts) || chaseFn(role, targetSet, [], trees.broadEdges, opts);
   }
+  var ACTION_SIGNATURE_TEACH_RE = new RegExp(
+    `^you\\s+(?:can|may)\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[.!?]*$`,
+    "i"
+  );
+  var ACTION_SIGNATURE_PASSIVE_RE = new RegExp(
+    `^an?\\s+([a-z][\\w-]*)\\s+(?:can|may)\\s+be\\s+([a-z]+)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[.!?]*$`,
+    "i"
+  );
+  var ACTION_PRECOND_NOTHING_RE = new RegExp(
+    `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*nothing\\s+may\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`,
+    "i"
+  );
+  var ACTION_PRECOND_COMPARATIVE_RE = new RegExp(
+    `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*the\\s+([a-z][\\w-]*)\\s+must\\s+be\\s+(${COMPARATIVE_SRC})\\s+than\\s+the\\s+([a-z][\\w-]*)[.!?]*$`,
+    "i"
+  );
+  var ACTION_EFFECT_TEACH_RE = new RegExp(
+    `^([a-z]+ing)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s+makes\\s+(?:it|the\\s+([a-z][\\w-]*))\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`,
+    "i"
+  );
+  var ACTION_CONSTRAINT_TEACH_RE = new RegExp(
+    `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*the\\s+([a-z][\\w-]*)\\s+may\\s+not\\s+be\\s+with\\s+the\\s+([a-z][\\w-]*)\\s+without\\s+the\\s+([a-z][\\w-]*)[.!?]*$`,
+    "i"
+  );
+  var GOAL_TEACH_RE = new RegExp(
+    `^the\\s+goal\\s+is\\s+that\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+([a-z]+s)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`,
+    "i"
+  );
+  var GOAL_TEACH_INFINITIVE_RE = new RegExp(
+    `^(?:the\\s+goal\\s+is\\s+for|i\\s+want)\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+to\\s+([a-z]+)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`,
+    "i"
+  );
   function singularizeSurface(word) {
     const w = String(word || "").trim();
     if (/[a-z]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
@@ -8259,6 +8498,14 @@ ${lines.join("\n")}`;
     if (/[a-z]s$/i.test(w) && !/ss$/i.test(w)) return w.slice(0, -1);
     return w;
   }
+  var TEACH_ADVERB_SKIP_SRC = "(?:(?:usually|often|sometimes|rarely|never|always|typically|generally|occasionally|frequently|normally|regularly|commonly|mostly|currently|still|also|really|actually)\\s+)?";
+  var GENERAL_VERB_TEACH_RE = new RegExp(`^([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[.!?]*$`, "i");
+  var GENERAL_VERB_EXCLUDE_RE = /^(?:is|are|am|owns|maintains)$/i;
+  var GENERAL_VERB_ANYWHERE_EXCLUDE_RE = /\b(?:is|are|am|owns|maintains)\b/i;
+  var GENERAL_VERB_NOT_A_VERB_RE = new RegExp(
+    "^(?:i|me|you|he|him|she|her|it|we|us|they|them|my|your|his|its|our|their|mine|yours|hers|ours|theirs|this|that|these|those|a|an|the|every|each|all|some|any|no|both|either|neither|in|on|at|to|from|by|with|for|of|about|into|onto|over|under|near|before|after|during|through|up|down|off|out|above|below|between|among|against|without|within|along|across|behind|beyond|upon|toward|towards|per|and|but|or|if|because|although|though|while|when|since|unless|until|whether|so|nor|than|as)$",
+    "i"
+  );
   async function generalVerbPredicate(verb) {
     const v = String(verb || "").toLowerCase();
     if (v === "has" || v === "have") return HAS_A_PREDICATE;
@@ -8273,6 +8520,10 @@ ${lines.join("\n")}`;
       return `mgx:${v}`;
     }
   }
+  var GENERAL_VERB_YESNO_RE = new RegExp(`^(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[?.!\\s]*$`, "i");
+  var GENERAL_VERB_OPEN_RE = new RegExp(`^what\\s+(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+(?:\\s+(?:${PREP_SRC}))?)[?.!\\s]*$`, "i");
+  var GENERAL_VERB_QUERY_EXCLUDE_RE = /^(?:be|own|maintain)$/i;
+  var GENERAL_VERB_PREP_RE = new RegExp(`^(${PREP_SRC})\\s+(.+)$`, "i");
   function foldPrepositionIntoPredicate(predicate, objectRaw) {
     const prepM = String(objectRaw || "").match(GENERAL_VERB_PREP_RE);
     if (prepM && /^mgx:[a-z]+$/.test(predicate)) {
@@ -8280,6 +8531,21 @@ ${lines.join("\n")}`;
     }
     return { predicate, object: String(objectRaw || "").trim() };
   }
+  var TRAILING_ADVERB_RE = "(?:\\s+(?:exactly|really|actually|anyway))?";
+  var MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)\\s+do${TRAILING_ADVERB_RE}\\??$`, "i");
+  var MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB_RE}\\??$`, "i");
+  var AUTHOR_NAME_SRC = "([A-Za-z][\\w'.-]*(?:\\s+[A-Za-z][\\w'.-]*){0,3})";
+  var AUTHOR_WHO_IS_RE = new RegExp(`^who\\s+(?:is|was)\\s+${AUTHOR_NAME_SRC}$`, "i");
+  var AUTHOR_TOUCHED_RE = new RegExp(
+    `^what\\s+(?:did|has)\\s+${AUTHOR_NAME_SRC}\\s+(?:touch(?:ed)?|chang(?:e|ed)|work(?:ed)?\\s+on|commit(?:ted)?)$`,
+    "i"
+  );
+  var OPINION_ADJ_SRC = "(?:good|bad|clean|messy|ugly|nice|great|terrible|awful|solid|elegant|readable|maintainable|well[- ]written|well[- ]structured|spaghetti|ok|okay|decent|healthy)";
+  var OPINION_NUDGE_RE = new RegExp(`^is\\s+(?:this|the)\\s+code(?:base)?\\s+(?:any\\s+)?${OPINION_ADJ_SRC}\\b`, "i");
+  var PERSONAL_ASSISTANT_NUDGE_RE = new RegExp(
+    "^(?:what\\s+time\\s+is\\s+it(?:\\s+(?:now|right\\s+now))?|what(?:'s|s|\\s+is)\\s+the\\s+time(?:\\s+(?:now|right\\s+now))?|what\\s+day\\s+is\\s+it(?:\\s+today)?|what(?:'s|s|\\s+is)\\s+(?:the\\s+)?(?:day|date)(?:\\s+today)?|what(?:'s|s|\\s+is)\\s+today'?s\\s+date|what(?:'s|s|\\s+is)\\s+the\\s+weather(?:\\s+like)?(?:\\s+(?:today|outside))?|how'?s\\s+the\\s+weather(?:\\s+like)?(?:\\s+(?:today|outside))?)\\??$",
+    "i"
+  );
   async function resolveEntity(graph, term) {
     if (!graph || !term) return null;
     try {
@@ -8290,6 +8556,49 @@ ${lines.join("\n")}`;
     }
     return null;
   }
+  var PREDICATE_WORDS = new Set(
+    [
+      ...Object.keys(VERB_TO_KIND).flatMap((phrase) => phrase.split(/[\s-]+/)),
+      ...WHERE_MARKERS,
+      ...MENTION_MARKERS,
+      "owns",
+      "maintains"
+    ].filter((w) => w.length >= 3)
+  );
+  var FACT_PREDICATE_PHRASES = {
+    "rdfs:subClassOf": "is a kind of",
+    "rdf:type": "is a",
+    "owl:disjointWith": "is not a",
+    "mgx:partOf": "is part of",
+    "mgx:hasA": "has",
+    "mgx:usedFor": "is used for",
+    "mgx:capableOf": "can",
+    "mgx:atLocation": "is found in",
+    "mgx:causes": "causes",
+    "mgx:hasProperty": "is",
+    "mgx:madeOf": "is made of",
+    "mgx:receivesAction": "can be",
+    "mgx:createdBy": "is created by",
+    "mgx:mannerOf": "is a way to",
+    "mgx:desires": "wants",
+    "mgx:locatedNear": "is typically near",
+    "mgx:motivatedByGoal": "is motivated by",
+    "mgx:obstructedBy": "can be prevented by",
+    "mgx:causesDesire": "makes you want to",
+    "mgx:hasSubevent": "involves",
+    "mgx:hasFirstSubevent": "begins with",
+    "mgx:hasLastSubevent": "ends with",
+    "mgx:hasPrerequisite": "requires",
+    "mgx:ownedBy": "is owned by",
+    // the teach lane's ownership frame ("Priya owns tasks.mjs")
+    "mgx:rendersAs": "renders as",
+    // the render-template binding ("a disk renders as a block")
+    "mgx:synonym": "means the same as",
+    "mgx:antonym": "is the opposite of",
+    "mgx:similarTo": "is similar to",
+    "mgx:relatedTo": "is related to",
+    "mgx:symbolOf": "is a symbol of"
+  };
   function thirdPersonSingularSurface(lemma) {
     const w = String(lemma || "");
     if (/^have$/i.test(w)) return "has";
@@ -8306,10 +8615,15 @@ ${lines.join("\n")}`;
     if (!m) return predicate;
     return `${thirdPersonSingularSurface(m[1])}${m[2] ? ` ${m[2]}` : ""}`;
   }
+  var factPhrase = (f) => `${f.subject} ${predicatePhrase(f.predicate)} ${f.object}`;
   function relationRoleWord(predicate) {
     const m = /^mgx:([a-z][\w-]*)$/i.exec(String(predicate || ""));
     return m ? m[1].toLowerCase() : null;
   }
+  var TRAILING_PREDICATE_MARKERS = Object.entries(FACT_PREDICATE_PHRASES).map(([predicate, phrase]) => {
+    const m = /^(?:is|are)\s+(.+)$/i.exec(phrase);
+    return m ? { predicate, marker: m[1].trim().toLowerCase() } : null;
+  }).filter((e) => e && e.marker.length > 1).sort((a, b) => b.marker.length - a.marker.length);
   function splitMetaPredicate(term) {
     const t = String(term || "").trim();
     const lower = t.toLowerCase();
@@ -8380,10 +8694,66 @@ ${lines.join("\n")}`;
     }
     return null;
   }
+  var GENERIC_ENTITY_WORDS = /* @__PURE__ */ new Set([
+    "module",
+    "modules",
+    "class",
+    "classes",
+    "function",
+    "functions",
+    "method",
+    "methods",
+    "handler",
+    "handlers",
+    "controller",
+    "controllers",
+    "service",
+    "services",
+    "component",
+    "components",
+    "flow",
+    "flows",
+    "thing",
+    "things",
+    "item",
+    "items",
+    "object",
+    "objects",
+    "commit",
+    "commits"
+  ]);
+  var SYNONYM_DENYLIST = new Set([
+    ["interpreter", "compiler"],
+    // different execution strategies, not synonyms
+    ["string", "thread"],
+    // unrelated CS concepts (text data vs. execution thread)
+    ["heart", "kernel"],
+    // generic-English collision on "kernel"
+    ["battalion", "heap"],
+    // generic-English collision on "heap" (data structure)
+    ["bash", "sock"],
+    // generic-English collision ("bash"/"sock" = to hit)
+    ["command", "skill"],
+    // too loose to be a safe query-time substitution
+    ["docker", "longshoreman"],
+    // proper-noun/tool name vs. unrelated profession
+    ["name", "list"],
+    // generic-English collision, not a domain synonym
+    ["list", "number"]
+    // generic-English collision, not a domain synonym
+  ].map(([a, b]) => [a, b].sort().join("|")));
+  var RELATION_FACT_YESNO_RE = /^(?:is|are|was|were)\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)\s+(?:the|an?)\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
+  var RELATION_WHO_ASK_RE = /^(?:who|what)\s+(?:is|are)\s+(?:the|an?)\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
+  var GENITIVE_WHO_ASK_RE = /^(?:who|what)\s+(?:is|are|was|were)\s+([\w-]+(?:\s+[A-Z][\w-]*)?)'s\s+([a-z][\w-]*)[?.!\s]*$/i;
   function matchGenitiveWhoAsk(q) {
     const g = String(q).match(GENITIVE_WHO_ASK_RE);
     return g ? [g[0], g[2], g[1]] : null;
   }
+  var RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
+  var ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
+  var ISA_PREDICATES = /* @__PURE__ */ new Set(["rdfs:subClassOf", "rdf:type"]);
+  var WHY_ISA_LEAD_RE = /^why\s+(?=(?:is|are)\b)/i;
+  var EXPLAIN_HOW_YOU_KNOW_RE = /^explain\s+how\s+you\s+know\s+(?:that\s+)?(.+?)\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
   function matchWhyIsa(q) {
     const stripped = String(q || "").replace(WHY_ISA_LEAD_RE, "");
     if (stripped !== q) {
@@ -8394,6 +8764,23 @@ ${lines.join("\n")}`;
     if (ehyk) return `is ${ehyk[1].trim()} a ${ehyk[2].trim()}`.match(ISA_ASK_RE);
     return null;
   }
+  var ISA_IDIOM_ROLE_WORDS = /* @__PURE__ */ new Set(["kind", "sort", "type", "subclass", "superclass"]);
+  var CONFIRM_TAG_RE = /^(?:so\s+)?(.+?)\s+(?:is|are)\s+(?:an?\s+)?(.+?)\s*,?\s*(?:now\s+)?(?:right|correct|yeah)\??$/i;
+  var KNOW_ABOUT_RE = /^(?:what\s+do\s+you\s+know\s+about|what(?:'s|s|\s+is)\s+in\s+your\s+memory\s+about|what\s+do\s+you\s+remember\s+about)\s+(.+?)[?.!\s]*$/i;
+  var FACT_ANSWER_CAP = 32;
+  var CAN_ASK_RE = /^(?:can|could)\s+(?:an?\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z]+)[?.!\s]*$/i;
+  var DOES_HAVE_ASK_RE = /^(?:does|do)\s+(?:an?\s+|the\s+)?(.+?)\s+have\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
+  var WHAT_CAN_DO_RE = /^what\s+can\s+(?:an?\s+)?(.+?)\s+do[?.!\s]*$/i;
+  var WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+  var WHAT_USED_FOR_RE = /^what\s+(?:(?:can\s+be|is)\s+used\s+for|is\s+for)\s+(.+?)[?.!\s]*$/i;
+  var WHERE_IS_FACT_RE = /^where(?:'s|\s+is|\s+are)\s+(.+?)(?:\s+now)?\s*[?.!]*$/i;
+  var LOCATIVE_FACT_PREDICATE_RE = /^mgx:[a-z]+-(?:on|in|at|inside|under|below|above|near|beside|behind|by)$/;
+  var DO_VERB_ASK_RE = /^(?:do|does)\s+(all\s+|every\s+)?(?:an?\s+|the\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z-]+)[?.!\s]*$/i;
+  var WHAT_CAN_VERB_RE = /^what\s+can\s+(?!be\s)(.+?)[?.!\s]*$/i;
+  var WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(.+?)[?.!\s]*$/i;
+  var SUPERLATIVE_WORD_SRC = "(?:most|least)\\s+[a-z][\\w-]*|[a-z][\\w-]*est|best|worst";
+  var WHICH_KIND_SUPERLATIVE_RE = new RegExp(`^which\\s+([\\w'-]+)\\s+(?:is|are)\\s+(?:the\\s+)?(${SUPERLATIVE_WORD_SRC})[?.!\\s]*$`, "i");
+  var WHAT_IS_SUPERLATIVE_KIND_RE = new RegExp(`^what(?:'s|s|\\s+is)\\s+the\\s+(${SUPERLATIVE_WORD_SRC})\\s+([\\w'-]+)[?.!\\s]*$`, "i");
   function comparativeOfSuperlative(superlative) {
     const s = String(superlative || "").toLowerCase().trim().replace(/\s+/g, " ");
     if (s === "best") return "better";
@@ -8402,6 +8789,49 @@ ${lines.join("\n")}`;
     if (graded) return `${graded[1] === "most" ? "more" : "less"} ${graded[2]}`;
     return /[a-z]est$/.test(s) && s.length > 4 ? `${s.slice(0, -3)}er` : null;
   }
+  var REVERSE_PREDICATE_EXCLUDE = /* @__PURE__ */ new Set([
+    "rdfs:subClassOf",
+    "rdf:type",
+    "mgx:hasA",
+    "mgx:capableOf",
+    "mgx:usedFor",
+    "mgx:ownedBy",
+    "owl:disjointWith",
+    "mgx:hasProperty",
+    "mgx:receivesAction"
+  ]);
+  var REVERSE_PREDICATE_MARKERS = Object.entries(FACT_PREDICATE_PHRASES).filter(([predicate]) => !REVERSE_PREDICATE_EXCLUDE.has(predicate)).map(([predicate, phrase]) => ({
+    predicate,
+    re: new RegExp(`^what\\s+${escapeRegex(phrase)}\\s+(.+?)[?.!\\s]*$`, "i")
+  })).sort((a, b) => b.re.source.length - a.re.source.length);
+  var FORWARD_YESNO_EXCLUDE = /* @__PURE__ */ new Set([
+    "rdfs:subClassOf",
+    "rdf:type",
+    "owl:disjointWith",
+    "mgx:hasProperty",
+    "mgx:hasA",
+    "mgx:capableOf",
+    // ownership's dedicated reader (OWNS_YESNO_RE) answers a confident
+    // closed-world "no" — a stronger contract than the derived "can't
+    // confirm", so the derived reader must never intercept it.
+    "mgx:ownedBy"
+  ]);
+  var FORWARD_YESNO_MARKERS = Object.entries(FACT_PREDICATE_PHRASES).filter(([predicate]) => !FORWARD_YESNO_EXCLUDE.has(predicate)).map(([predicate, phrase]) => {
+    let re;
+    if (phrase === "can be") {
+      re = new RegExp("^can\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+be\\s+(.+?)[?.!\\s]*$", "i");
+    } else if (phrase.startsWith("is ")) {
+      const rest = escapeRegex(phrase.slice(3));
+      re = new RegExp(`^(?:is|are)\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+${rest}\\s+(?:an?\\s+|the\\s+)?(.+?)[?.!\\s]*$`, "i");
+    } else {
+      const [head, ...tail] = phrase.split(" ");
+      const base = [head.replace(/s$/, ""), ...tail].map(escapeRegex).join("\\s+");
+      re = new RegExp(`^(?:does|do)\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+${base}\\s+(?:an?\\s+|the\\s+)?(.+?)[?.!\\s]*$`, "i");
+    }
+    return { predicate, phrase, re };
+  }).sort((a, b) => b.re.source.length - a.re.source.length);
+  var WHAT_INHERITS_RE = /^what\s+(?:inherits?\s+(?:from\s+)?(?:an?\s+)?|is\s+(?:an?\s+)?(?:kind|sort|type)\s+of\s+|is\s+(?:an?\s+)?subclass\s+of\s+)(.+?)[?.!\s]*$/i;
+  var HAS_TEMPORAL_TAIL = /* @__PURE__ */ new Set(["changed", "change", "changes", "updated", "modified", "happened", "occurred"]);
   function uniqueFacts(rows) {
     const seen = /* @__PURE__ */ new Set();
     const out = [];
@@ -8834,12 +9264,32 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
     }
     return null;
   }
+  var TOLD_ABOUT_RE = /^what\s+(?:did|have)\s+(?:i|we|you)\s+(?:told|tell|said|say)\s+(?:you|me|us)?\s*about\s+(.+?)[?.!\s]*$/i;
+  var KIND_OF_RE = /^what\s+kind\s+of\s+(?:thing|class|type|category|entity)?\s*(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+  var CARD_AT_LEAST_ASK_RE = /^does\s+every\s+(.+?)\s+have\s+at\s+least\s+(\d+)\s+(.+?)[?.!\s]*$/i;
+  var CARD_EXISTENCE_ASK_RE = /^does\s+an?\s+(.+?)\s+have\s+an?\s+(.+?)[?.!\s]*$/i;
+  var CARDINALITY_ROW_PREDICATES = /* @__PURE__ */ new Set(["owl:cardinality", "owl:minCardinality", "owl:maxCardinality", "owl:onClass"]);
+  var WHO_OWNS_RE = /^who\s+(?:owns|maintains)\s+(.+?)[?.!\s]*$/i;
+  var OWNS_YESNO_RE = /^(?:does|did)\s+([\w'-]+)\s+(?:owns?|maintains?)\s+(.+?)[?.!\s]*$/i;
+  var OWNS_PASSIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+owned\s+by\s+([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
+  var HAS_METHOD_YESNO_RE = /^(?:does|did)\s+([\w'-]+)\s+(?:has|have)\s+an?\s+([a-z][\w-]*)\s+method[?.!\s]*$/i;
+  var HAS_METHOD_OPEN_RE = /^what\s+methods\s+does\s+([\w'-]+)\s+have[?.!\s]*$/i;
+  var IS_ADJECTIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+([A-Za-z][\w-]*)[?.!\s]*$/i;
+  var IS_ADJECTIVE_PRONOUN_RE = /^(?:it|this|that)$/i;
+  var IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE = /^(?:you|i|they|he|she|we)\b/i;
+  var unknownAdjectiveOffer = (subject, adjective) => ({
+    text: `I don't know anything about "${subject}" yet \u2014 teach me directly, e.g. "remember that ${subject.toLowerCase()} is ${adjective}".`,
+    replace: true
+  });
+  var WHOLE_RECALL_RE = /^(?:what\s+(?:did|have)\s+(?:i|we)\s+(?:told?|tell|said?|say)\s+(?:you|me|us)?(?:\s+(?:last\s+time|before|earlier|previously|already))?|what\s+facts?\s+do\s+you\s+(?:know|have|remember)|what\s+do\s+you\s+(?:know|remember)|what\s+have\s+you\s+(?:learned|learnt|remembered))[?.!\s]*$/i;
   async function entityClassNoun(graph, term) {
     const ent = await resolveEntity(graph, term);
     if (!ent) return null;
     const cls = (graph?.byId?.get?.(ent.id) || (graph?.individuals || []).find((i) => i?.id === ent.id))?.class;
     return cls && CLASS_LABELS[cls] ? CLASS_LABELS[cls][0] : null;
   }
+  var INHERITS_GROUP_RE = /inherit|supertype|subclass|extend|specializ/i;
+  var INHERITS_MAX_HOPS = 8;
   function inheritsChain(graph, startId) {
     const out = [];
     if (!graph || !startId) return out;
@@ -9500,517 +9950,51 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
     if (!hits.length) return null;
     return renderMany(hits);
   }
-  var CONTEXT_WORDS, isPronoun, GOAL_BY_KIND, goalNoun, TAUGHT_FACT_LOOKUP_GOAL, COMMANDS, COMMAND_WORDS, CLASS_LABELS, AMBIGUOUS_HAVE_VERBS, RESTRICTOR_VERB_RE, GREET, THANKS, BYE, OK_ACK, collapseRuns, GREET_COLLAPSED, THANKS_COLLAPSED, BYE_COLLAPSED, ACK_LEAD_RE, CONVERSATIONAL_PHRASES, COMPARATIVE_SRC, COMPARATIVE_TEACH_RE, COMPARATIVE_ASK_RE, PREP_SRC, OWNED_BY_PREDICATE, HAS_PROPERTY_PREDICATE, SUBCLASS_PREDICATE2, TAUGHT_SOURCE_TYPES, isOperatorTaught, ACTION_SIGNATURE_TEACH_RE, ACTION_SIGNATURE_PASSIVE_RE, ACTION_PRECOND_NOTHING_RE, ACTION_PRECOND_COMPARATIVE_RE, ACTION_EFFECT_TEACH_RE, ACTION_CONSTRAINT_TEACH_RE, GOAL_TEACH_RE, GOAL_TEACH_INFINITIVE_RE, TEACH_ADVERB_SKIP_SRC, GENERAL_VERB_TEACH_RE, GENERAL_VERB_EXCLUDE_RE, GENERAL_VERB_ANYWHERE_EXCLUDE_RE, GENERAL_VERB_NOT_A_VERB_RE, GENERAL_VERB_YESNO_RE, GENERAL_VERB_OPEN_RE, GENERAL_VERB_QUERY_EXCLUDE_RE, GENERAL_VERB_PREP_RE, TRAILING_ADVERB_RE, MODULE_ORIENT_RE, MODULE_ORIENT_SVO_RE, AUTHOR_NAME_SRC, AUTHOR_WHO_IS_RE, AUTHOR_TOUCHED_RE, OPINION_ADJ_SRC, OPINION_NUDGE_RE, PERSONAL_ASSISTANT_NUDGE_RE, PREDICATE_WORDS, FACT_PREDICATE_PHRASES, factPhrase, TRAILING_PREDICATE_MARKERS, GENERIC_ENTITY_WORDS, SYNONYM_DENYLIST, RELATION_FACT_YESNO_RE, RELATION_WHO_ASK_RE, GENITIVE_WHO_ASK_RE, RECURSIVE_LIST_ASK_RE, ISA_ASK_RE, ISA_PREDICATES, WHY_ISA_LEAD_RE, EXPLAIN_HOW_YOU_KNOW_RE, ISA_IDIOM_ROLE_WORDS, CONFIRM_TAG_RE, KNOW_ABOUT_RE, FACT_ANSWER_CAP, CAN_ASK_RE, DOES_HAVE_ASK_RE, WHAT_CAN_DO_RE, WHAT_HAS_RE, WHAT_USED_FOR_RE, WHERE_IS_FACT_RE, LOCATIVE_FACT_PREDICATE_RE, DO_VERB_ASK_RE, WHAT_CAN_VERB_RE, WHICH_KIND_CAN_RE, SUPERLATIVE_WORD_SRC, WHICH_KIND_SUPERLATIVE_RE, WHAT_IS_SUPERLATIVE_KIND_RE, REVERSE_PREDICATE_EXCLUDE, REVERSE_PREDICATE_MARKERS, FORWARD_YESNO_EXCLUDE, FORWARD_YESNO_MARKERS, WHAT_INHERITS_RE, HAS_TEMPORAL_TAIL, TOLD_ABOUT_RE, KIND_OF_RE, CARD_AT_LEAST_ASK_RE, CARD_EXISTENCE_ASK_RE, CARDINALITY_ROW_PREDICATES, WHO_OWNS_RE, OWNS_YESNO_RE, OWNS_PASSIVE_YESNO_RE, HAS_METHOD_YESNO_RE, HAS_METHOD_OPEN_RE, IS_ADJECTIVE_YESNO_RE, IS_ADJECTIVE_PRONOUN_RE, IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE, unknownAdjectiveOffer, WHOLE_RECALL_RE, INHERITS_GROUP_RE, INHERITS_MAX_HOPS, PRONOUN_IN_QUERY_RE, BARE_WHATIS_RE, DESCRIBE_GRAIN_WORD_RE, GOAL_BY_COMMAND, BASE_QUALIFIER_SRC, USES_AS_BASE_WH_ASK_RE, USES_AS_BASE_WHAT_FRONT_RE, USES_AS_BASE_YESNO_RE, USES_AS_BASE_TEACH_RE, SEED_MARKER_REL;
-  var init_chat = __esm({
-    "src/chat.mjs"() {
-      init_node_path();
-      init_node_fs();
-      init_promises();
-      init_node_os();
-      init_promises2();
-      init_node_child_process();
-      init_server();
-      init_config();
-      init_cli_args();
-      init_codegraph();
-      init_ask();
-      init_sessions();
-      init_uuid();
-      init_telemetry();
-      init_source();
-      init_templates();
-      init_extensions();
-      init_bias();
-      init_core();
-      init_finish();
-      init_sentences();
-      init_ask_vocab();
-      init_normalize();
-      init_fuzzy();
-      init_answer_variants();
-      CONTEXT_WORDS = /* @__PURE__ */ new Set(["it", "this", "that", "here"]);
-      isPronoun = (s) => CONTEXT_WORDS.has(String(s || "").trim().toLowerCase());
-      GOAL_BY_KIND = {
-        imports: "understand a dependency/import relationship",
-        uses: "understand a dependency/usage relationship (imports and/or calls)",
-        calls: "understand a call relationship",
-        callsSymbol: "understand a call relationship",
-        defines: "locate what a module/class defines",
-        contains: "understand class membership (methods/attributes)",
-        tests: "assess test coverage",
-        inherits: "understand a class hierarchy/inheritance relationship",
-        touches: "understand commit/change history",
-        touchesSymbol: "understand commit/change history",
-        cochange: "understand change-coupling between modules",
-        reexports: "understand a module's public exports/API surface"
-      };
-      goalNoun = (entityType) => entityType ? `${String(entityType).toLowerCase()}(s)` : "entities";
-      TAUGHT_FACT_LOOKUP_GOAL = "look up a taught fact about a subject/verb/object";
-      COMMANDS = {
-        find: { tool: "tmct_search", arg: "query", help: "lexical search across the graph" },
-        search: { tool: "tmct_search", arg: "query", help: "alias of /find" },
-        context: { tool: "tmct_context", arg: "symbol", help: "the sized edit bundle for a symbol (start here to change code)" },
-        snippet: { tool: "tmct_snippet", arg: "symbol", help: "exact source of one function/class/method" },
-        describe: { tool: "tmct_describe", arg: "symbol", help: "a symbol's definition, kind and relations" },
-        signature: { tool: "tmct_signature", arg: "symbol", help: "a symbol's signature only" },
-        members: { tool: "tmct_members", arg: "class", help: "the methods/attributes of a class" },
-        subclasses: { tool: "tmct_subclasses", arg: "class", help: "the subclasses of a class" },
-        impact: { tool: "tmct_impact", arg: "module", help: "what a change to this module reaches (impact closure)" },
-        callers: { tool: "tmct_callers", arg: "symbol", help: "functions that call this symbol" },
-        callees: { tool: "tmct_callees", arg: "symbol", help: "functions this symbol calls" },
-        tests: { tool: "tmct_tests_for", arg: "symbol", help: "the tests covering this symbol" },
-        untested: { tool: "tmct_untested", arg: null, help: "symbols with no covering test" },
-        history: { tool: "tmct_history", arg: "symbol", help: "the commit history of this symbol" },
-        exports: { tool: "tmct_exports", arg: "module", help: "a module's public exports" },
-        arch: { tool: "tmct_architecture", arg: "package", help: "the architecture overview (optional package filter)", optional: true }
-      };
-      COMMAND_WORDS = /* @__PURE__ */ new Set(["stats", "memory", "focus", ...Object.keys(COMMANDS)]);
-      CLASS_LABELS = {
-        Class: ["class", "classes"],
-        Function: ["function", "functions"],
-        Module: ["module", "modules"],
-        Method: ["method", "methods"],
-        Attribute: ["attribute", "attributes"],
-        GlobalVariable: ["variable", "variables"],
-        Commit: ["commit", "commits"],
-        Session: ["session", "sessions"]
-      };
-      AMBIGUOUS_HAVE_VERBS = /* @__PURE__ */ new Set(["have", "has", "holds", "hold"]);
-      RESTRICTOR_VERB_RE = new RegExp(
-        `\\b(?:${[...Object.keys(VERB_TO_KIND), ...Object.keys(PASSIVE_PARTICIPLE_TO_KIND)].filter((v) => !AMBIGUOUS_HAVE_VERBS.has(v)).sort((a, b) => b.length - a.length).map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`,
-        "i"
-      );
-      GREET = /* @__PURE__ */ new Set([
-        "hi",
-        "hello",
-        "hey",
-        "yo",
-        "hiya",
-        "howdy",
-        "sup",
-        "greetings",
-        "g'day",
-        "gday",
-        "hey there",
-        "hi there",
-        "hello there",
-        "good morning",
-        "good afternoon",
-        "good evening",
-        "morning",
-        // UK/AU/NZ
-        "alright",
-        "you alright",
-        "alright mate",
-        "morning all",
-        "yeah nah",
-        // US
-        "hey y'all",
-        "howdy there",
-        "hiya there",
-        // formal
-        "good day",
-        "good day to you",
-        "salutations",
-        "good to meet you",
-        "pleased to meet you",
-        // slang
-        "yo yo",
-        "ayy",
-        "wassup",
-        "sup fam",
-        "heya",
-        "hiya!",
-        // texting abbreviation
-        "gm",
-        "ge"
-      ]);
-      THANKS = /* @__PURE__ */ new Set([
-        "thanks",
-        "thank you",
-        "thankyou",
-        "thx",
-        "ty",
-        "ta",
-        "cheers",
-        "nice one",
-        "much appreciated",
-        "cool thanks",
-        "many thanks",
-        "much obliged",
-        "ta very much",
-        "cheers mate",
-        "cheers for that",
-        "tks",
-        "sweet thanks",
-        "nice",
-        // "brilliant" — a UK-English enthusiasm interjection functioning as a bare
-        // acknowledgement, the same shape as "nice"/"cheers" just above.
-        "brilliant",
-        // "ta for that" — "cheers for that" was already here, but its "ta" sibling
-        // (both dropped-word forms of the SAME "thanks for that" shape) was missing.
-        "ta for that",
-        // A natural session-closing remark — the LAST turn of a session is a bad
-        // place to end on the raw grammar wall instead of a warm sign-off.
-        "cheers, that's everything for now, thanks",
-        "that's everything for now, thanks",
-        "that's all for now, thanks"
-      ]);
-      BYE = /* @__PURE__ */ new Set([
-        "bye",
-        "goodbye",
-        "quit",
-        "exit",
-        "see ya",
-        "see you",
-        "cya",
-        "later",
-        "farewell",
-        "peace",
-        "peace out",
-        "im off",
-        "i'm off",
-        "gtg",
-        "gotta go",
-        "catch you later",
-        "farewell then"
-        // "good day to you" deliberately does NOT live here: it's a formal-register
-        // GREETING, not a farewell. foldedBye is checked before GREET in
-        // conversationalTurn, so having it here would silently end the session on
-        // a plain formal greeting — every turn piped after it dropped with no log
-        // entry, a worse outcome than any wall.
-      ]);
-      OK_ACK = /* @__PURE__ */ new Set([
-        "ok",
-        "okay",
-        "cool",
-        "aight",
-        "fair enough",
-        "got it",
-        "gotcha",
-        "noted",
-        "sounds good",
-        "sure",
-        "cool cool",
-        "right"
-      ]);
-      collapseRuns = (s) => s.replace(/(.)\1+/g, "$1");
-      GREET_COLLAPSED = collapsedIndex(GREET);
-      THANKS_COLLAPSED = collapsedIndex(THANKS);
-      BYE_COLLAPSED = collapsedIndex(BYE);
-      ACK_LEAD_RE = new RegExp(`^(?:${[...OK_ACK].map(escapeRegex).join("|")})\\s+(.+)$`, "i");
-      CONVERSATIONAL_PHRASES = [
-        ...GREET,
-        ...THANKS,
-        ...BYE,
-        "what can you do",
-        "what do you do",
-        "help",
-        "how do you work",
-        "who are you",
-        "what are you",
-        "what is your name"
-      ];
-      COMPARATIVE_SRC = "(?:[a-z]+er|better|worse|(?:more|less)\\s+[a-z]+)";
-      COMPARATIVE_TEACH_RE = new RegExp(`^(?:the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(?:is|are)\\s+(${COMPARATIVE_SRC})\\s+than\\s+(.+)$`, "i");
-      COMPARATIVE_ASK_RE = new RegExp(`^(?:is|are)\\s+(.+?)\\s+(${COMPARATIVE_SRC})\\s+than\\s+(.+?)[?.!\\s]*$`, "i");
-      PREP_SRC = "on|in|at|onto|upon|under|over|beside|near|behind|above|below|inside|outside";
-      OWNED_BY_PREDICATE = "mgx:ownedBy";
-      HAS_PROPERTY_PREDICATE = "mgx:hasProperty";
-      SUBCLASS_PREDICATE2 = "rdfs:subClassOf";
-      TAUGHT_SOURCE_TYPES = /* @__PURE__ */ new Set(["operator", "teach", "entailed"]);
-      isOperatorTaught = (f) => !!f.sourceTypes?.some((t) => TAUGHT_SOURCE_TYPES.has(t));
-      ACTION_SIGNATURE_TEACH_RE = new RegExp(
-        `^you\\s+(?:can|may)\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[.!?]*$`,
-        "i"
-      );
-      ACTION_SIGNATURE_PASSIVE_RE = new RegExp(
-        `^an?\\s+([a-z][\\w-]*)\\s+(?:can|may)\\s+be\\s+([a-z]+)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[.!?]*$`,
-        "i"
-      );
-      ACTION_PRECOND_NOTHING_RE = new RegExp(
-        `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*nothing\\s+may\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`,
-        "i"
-      );
-      ACTION_PRECOND_COMPARATIVE_RE = new RegExp(
-        `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*the\\s+([a-z][\\w-]*)\\s+must\\s+be\\s+(${COMPARATIVE_SRC})\\s+than\\s+the\\s+([a-z][\\w-]*)[.!?]*$`,
-        "i"
-      );
-      ACTION_EFFECT_TEACH_RE = new RegExp(
-        `^([a-z]+ing)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s+makes\\s+(?:it|the\\s+([a-z][\\w-]*))\\s+([a-z]+)\\s+(${PREP_SRC})\\s+the\\s+([a-z][\\w-]*)[.!?]*$`,
-        "i"
-      );
-      ACTION_CONSTRAINT_TEACH_RE = new RegExp(
-        `^to\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)\\s*,?\\s*the\\s+([a-z][\\w-]*)\\s+may\\s+not\\s+be\\s+with\\s+the\\s+([a-z][\\w-]*)\\s+without\\s+the\\s+([a-z][\\w-]*)[.!?]*$`,
-        "i"
-      );
-      GOAL_TEACH_RE = new RegExp(
-        `^the\\s+goal\\s+is\\s+that\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+([a-z]+s)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`,
-        "i"
-      );
-      GOAL_TEACH_INFINITIVE_RE = new RegExp(
-        `^(?:the\\s+goal\\s+is\\s+for|i\\s+want)\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+to\\s+([a-z]+)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`,
-        "i"
-      );
-      TEACH_ADVERB_SKIP_SRC = "(?:(?:usually|often|sometimes|rarely|never|always|typically|generally|occasionally|frequently|normally|regularly|commonly|mostly|currently|still|also|really|actually)\\s+)?";
-      GENERAL_VERB_TEACH_RE = new RegExp(`^([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[.!?]*$`, "i");
-      GENERAL_VERB_EXCLUDE_RE = /^(?:is|are|am|owns|maintains)$/i;
-      GENERAL_VERB_ANYWHERE_EXCLUDE_RE = /\b(?:is|are|am|owns|maintains)\b/i;
-      GENERAL_VERB_NOT_A_VERB_RE = new RegExp(
-        "^(?:i|me|you|he|him|she|her|it|we|us|they|them|my|your|his|its|our|their|mine|yours|hers|ours|theirs|this|that|these|those|a|an|the|every|each|all|some|any|no|both|either|neither|in|on|at|to|from|by|with|for|of|about|into|onto|over|under|near|before|after|during|through|up|down|off|out|above|below|between|among|against|without|within|along|across|behind|beyond|upon|toward|towards|per|and|but|or|if|because|although|though|while|when|since|unless|until|whether|so|nor|than|as)$",
-        "i"
-      );
-      GENERAL_VERB_YESNO_RE = new RegExp(`^(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[?.!\\s]*$`, "i");
-      GENERAL_VERB_OPEN_RE = new RegExp(`^what\\s+(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+(?:\\s+(?:${PREP_SRC}))?)[?.!\\s]*$`, "i");
-      GENERAL_VERB_QUERY_EXCLUDE_RE = /^(?:be|own|maintain)$/i;
-      GENERAL_VERB_PREP_RE = new RegExp(`^(${PREP_SRC})\\s+(.+)$`, "i");
-      TRAILING_ADVERB_RE = "(?:\\s+(?:exactly|really|actually|anyway))?";
-      MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)\\s+do${TRAILING_ADVERB_RE}\\??$`, "i");
-      MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB_RE}\\??$`, "i");
-      AUTHOR_NAME_SRC = "([A-Za-z][\\w'.-]*(?:\\s+[A-Za-z][\\w'.-]*){0,3})";
-      AUTHOR_WHO_IS_RE = new RegExp(`^who\\s+(?:is|was)\\s+${AUTHOR_NAME_SRC}$`, "i");
-      AUTHOR_TOUCHED_RE = new RegExp(
-        `^what\\s+(?:did|has)\\s+${AUTHOR_NAME_SRC}\\s+(?:touch(?:ed)?|chang(?:e|ed)|work(?:ed)?\\s+on|commit(?:ted)?)$`,
-        "i"
-      );
-      OPINION_ADJ_SRC = "(?:good|bad|clean|messy|ugly|nice|great|terrible|awful|solid|elegant|readable|maintainable|well[- ]written|well[- ]structured|spaghetti|ok|okay|decent|healthy)";
-      OPINION_NUDGE_RE = new RegExp(`^is\\s+(?:this|the)\\s+code(?:base)?\\s+(?:any\\s+)?${OPINION_ADJ_SRC}\\b`, "i");
-      PERSONAL_ASSISTANT_NUDGE_RE = new RegExp(
-        "^(?:what\\s+time\\s+is\\s+it(?:\\s+(?:now|right\\s+now))?|what(?:'s|s|\\s+is)\\s+the\\s+time(?:\\s+(?:now|right\\s+now))?|what\\s+day\\s+is\\s+it(?:\\s+today)?|what(?:'s|s|\\s+is)\\s+(?:the\\s+)?(?:day|date)(?:\\s+today)?|what(?:'s|s|\\s+is)\\s+today'?s\\s+date|what(?:'s|s|\\s+is)\\s+the\\s+weather(?:\\s+like)?(?:\\s+(?:today|outside))?|how'?s\\s+the\\s+weather(?:\\s+like)?(?:\\s+(?:today|outside))?)\\??$",
-        "i"
-      );
-      PREDICATE_WORDS = new Set(
-        [
-          ...Object.keys(VERB_TO_KIND).flatMap((phrase) => phrase.split(/[\s-]+/)),
-          ...WHERE_MARKERS,
-          ...MENTION_MARKERS,
-          "owns",
-          "maintains"
-        ].filter((w) => w.length >= 3)
-      );
-      FACT_PREDICATE_PHRASES = {
-        "rdfs:subClassOf": "is a kind of",
-        "rdf:type": "is a",
-        "owl:disjointWith": "is not a",
-        "mgx:partOf": "is part of",
-        "mgx:hasA": "has",
-        "mgx:usedFor": "is used for",
-        "mgx:capableOf": "can",
-        "mgx:atLocation": "is found in",
-        "mgx:causes": "causes",
-        "mgx:hasProperty": "is",
-        "mgx:madeOf": "is made of",
-        "mgx:receivesAction": "can be",
-        "mgx:createdBy": "is created by",
-        "mgx:mannerOf": "is a way to",
-        "mgx:desires": "wants",
-        "mgx:locatedNear": "is typically near",
-        "mgx:motivatedByGoal": "is motivated by",
-        "mgx:obstructedBy": "can be prevented by",
-        "mgx:causesDesire": "makes you want to",
-        "mgx:hasSubevent": "involves",
-        "mgx:hasFirstSubevent": "begins with",
-        "mgx:hasLastSubevent": "ends with",
-        "mgx:hasPrerequisite": "requires",
-        "mgx:ownedBy": "is owned by",
-        // the teach lane's ownership frame ("Priya owns tasks.mjs")
-        "mgx:rendersAs": "renders as",
-        // the render-template binding ("a disk renders as a block")
-        "mgx:synonym": "means the same as",
-        "mgx:antonym": "is the opposite of",
-        "mgx:similarTo": "is similar to",
-        "mgx:relatedTo": "is related to",
-        "mgx:symbolOf": "is a symbol of"
-      };
-      factPhrase = (f) => `${f.subject} ${predicatePhrase(f.predicate)} ${f.object}`;
-      TRAILING_PREDICATE_MARKERS = Object.entries(FACT_PREDICATE_PHRASES).map(([predicate, phrase]) => {
-        const m = /^(?:is|are)\s+(.+)$/i.exec(phrase);
-        return m ? { predicate, marker: m[1].trim().toLowerCase() } : null;
-      }).filter((e) => e && e.marker.length > 1).sort((a, b) => b.marker.length - a.marker.length);
-      GENERIC_ENTITY_WORDS = /* @__PURE__ */ new Set([
-        "module",
-        "modules",
-        "class",
-        "classes",
-        "function",
-        "functions",
-        "method",
-        "methods",
-        "handler",
-        "handlers",
-        "controller",
-        "controllers",
-        "service",
-        "services",
-        "component",
-        "components",
-        "flow",
-        "flows",
-        "thing",
-        "things",
-        "item",
-        "items",
-        "object",
-        "objects",
-        "commit",
-        "commits"
-      ]);
-      SYNONYM_DENYLIST = new Set([
-        ["interpreter", "compiler"],
-        // different execution strategies, not synonyms
-        ["string", "thread"],
-        // unrelated CS concepts (text data vs. execution thread)
-        ["heart", "kernel"],
-        // generic-English collision on "kernel"
-        ["battalion", "heap"],
-        // generic-English collision on "heap" (data structure)
-        ["bash", "sock"],
-        // generic-English collision ("bash"/"sock" = to hit)
-        ["command", "skill"],
-        // too loose to be a safe query-time substitution
-        ["docker", "longshoreman"],
-        // proper-noun/tool name vs. unrelated profession
-        ["name", "list"],
-        // generic-English collision, not a domain synonym
-        ["list", "number"]
-        // generic-English collision, not a domain synonym
-      ].map(([a, b]) => [a, b].sort().join("|")));
-      RELATION_FACT_YESNO_RE = /^(?:is|are|was|were)\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)\s+(?:the|an?)\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
-      RELATION_WHO_ASK_RE = /^(?:who|what)\s+(?:is|are)\s+(?:the|an?)\s+([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
-      GENITIVE_WHO_ASK_RE = /^(?:who|what)\s+(?:is|are|was|were)\s+([\w-]+(?:\s+[A-Z][\w-]*)?)'s\s+([a-z][\w-]*)[?.!\s]*$/i;
-      RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
-      ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
-      ISA_PREDICATES = /* @__PURE__ */ new Set(["rdfs:subClassOf", "rdf:type"]);
-      WHY_ISA_LEAD_RE = /^why\s+(?=(?:is|are)\b)/i;
-      EXPLAIN_HOW_YOU_KNOW_RE = /^explain\s+how\s+you\s+know\s+(?:that\s+)?(.+?)\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
-      ISA_IDIOM_ROLE_WORDS = /* @__PURE__ */ new Set(["kind", "sort", "type", "subclass", "superclass"]);
-      CONFIRM_TAG_RE = /^(?:so\s+)?(.+?)\s+(?:is|are)\s+(?:an?\s+)?(.+?)\s*,?\s*(?:now\s+)?(?:right|correct|yeah)\??$/i;
-      KNOW_ABOUT_RE = /^(?:what\s+do\s+you\s+know\s+about|what(?:'s|s|\s+is)\s+in\s+your\s+memory\s+about|what\s+do\s+you\s+remember\s+about)\s+(.+?)[?.!\s]*$/i;
-      FACT_ANSWER_CAP = 32;
-      CAN_ASK_RE = /^(?:can|could)\s+(?:an?\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z]+)[?.!\s]*$/i;
-      DOES_HAVE_ASK_RE = /^(?:does|do)\s+(?:an?\s+|the\s+)?(.+?)\s+have\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
-      WHAT_CAN_DO_RE = /^what\s+can\s+(?:an?\s+)?(.+?)\s+do[?.!\s]*$/i;
-      WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
-      WHAT_USED_FOR_RE = /^what\s+(?:(?:can\s+be|is)\s+used\s+for|is\s+for)\s+(.+?)[?.!\s]*$/i;
-      WHERE_IS_FACT_RE = /^where(?:'s|\s+is|\s+are)\s+(.+?)(?:\s+now)?\s*[?.!]*$/i;
-      LOCATIVE_FACT_PREDICATE_RE = /^mgx:[a-z]+-(?:on|in|at|inside|under|below|above|near|beside|behind|by)$/;
-      DO_VERB_ASK_RE = /^(?:do|does)\s+(all\s+|every\s+)?(?:an?\s+|the\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z-]+)[?.!\s]*$/i;
-      WHAT_CAN_VERB_RE = /^what\s+can\s+(?!be\s)(.+?)[?.!\s]*$/i;
-      WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(.+?)[?.!\s]*$/i;
-      SUPERLATIVE_WORD_SRC = "(?:most|least)\\s+[a-z][\\w-]*|[a-z][\\w-]*est|best|worst";
-      WHICH_KIND_SUPERLATIVE_RE = new RegExp(`^which\\s+([\\w'-]+)\\s+(?:is|are)\\s+(?:the\\s+)?(${SUPERLATIVE_WORD_SRC})[?.!\\s]*$`, "i");
-      WHAT_IS_SUPERLATIVE_KIND_RE = new RegExp(`^what(?:'s|s|\\s+is)\\s+the\\s+(${SUPERLATIVE_WORD_SRC})\\s+([\\w'-]+)[?.!\\s]*$`, "i");
-      REVERSE_PREDICATE_EXCLUDE = /* @__PURE__ */ new Set([
-        "rdfs:subClassOf",
-        "rdf:type",
-        "mgx:hasA",
-        "mgx:capableOf",
-        "mgx:usedFor",
-        "mgx:ownedBy",
-        "owl:disjointWith",
-        "mgx:hasProperty",
-        "mgx:receivesAction"
-      ]);
-      REVERSE_PREDICATE_MARKERS = Object.entries(FACT_PREDICATE_PHRASES).filter(([predicate]) => !REVERSE_PREDICATE_EXCLUDE.has(predicate)).map(([predicate, phrase]) => ({
-        predicate,
-        re: new RegExp(`^what\\s+${escapeRegex(phrase)}\\s+(.+?)[?.!\\s]*$`, "i")
-      })).sort((a, b) => b.re.source.length - a.re.source.length);
-      FORWARD_YESNO_EXCLUDE = /* @__PURE__ */ new Set([
-        "rdfs:subClassOf",
-        "rdf:type",
-        "owl:disjointWith",
-        "mgx:hasProperty",
-        "mgx:hasA",
-        "mgx:capableOf",
-        // ownership's dedicated reader (OWNS_YESNO_RE) answers a confident
-        // closed-world "no" — a stronger contract than the derived "can't
-        // confirm", so the derived reader must never intercept it.
-        "mgx:ownedBy"
-      ]);
-      FORWARD_YESNO_MARKERS = Object.entries(FACT_PREDICATE_PHRASES).filter(([predicate]) => !FORWARD_YESNO_EXCLUDE.has(predicate)).map(([predicate, phrase]) => {
-        let re;
-        if (phrase === "can be") {
-          re = new RegExp("^can\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+be\\s+(.+?)[?.!\\s]*$", "i");
-        } else if (phrase.startsWith("is ")) {
-          const rest = escapeRegex(phrase.slice(3));
-          re = new RegExp(`^(?:is|are)\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+${rest}\\s+(?:an?\\s+|the\\s+)?(.+?)[?.!\\s]*$`, "i");
-        } else {
-          const [head, ...tail] = phrase.split(" ");
-          const base = [head.replace(/s$/, ""), ...tail].map(escapeRegex).join("\\s+");
-          re = new RegExp(`^(?:does|do)\\s+(?:an?\\s+|the\\s+)?(.+?)\\s+${base}\\s+(?:an?\\s+|the\\s+)?(.+?)[?.!\\s]*$`, "i");
-        }
-        return { predicate, phrase, re };
-      }).sort((a, b) => b.re.source.length - a.re.source.length);
-      WHAT_INHERITS_RE = /^what\s+(?:inherits?\s+(?:from\s+)?(?:an?\s+)?|is\s+(?:an?\s+)?(?:kind|sort|type)\s+of\s+|is\s+(?:an?\s+)?subclass\s+of\s+)(.+?)[?.!\s]*$/i;
-      HAS_TEMPORAL_TAIL = /* @__PURE__ */ new Set(["changed", "change", "changes", "updated", "modified", "happened", "occurred"]);
-      TOLD_ABOUT_RE = /^what\s+(?:did|have)\s+(?:i|we|you)\s+(?:told|tell|said|say)\s+(?:you|me|us)?\s*about\s+(.+?)[?.!\s]*$/i;
-      KIND_OF_RE = /^what\s+kind\s+of\s+(?:thing|class|type|category|entity)?\s*(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
-      CARD_AT_LEAST_ASK_RE = /^does\s+every\s+(.+?)\s+have\s+at\s+least\s+(\d+)\s+(.+?)[?.!\s]*$/i;
-      CARD_EXISTENCE_ASK_RE = /^does\s+an?\s+(.+?)\s+have\s+an?\s+(.+?)[?.!\s]*$/i;
-      CARDINALITY_ROW_PREDICATES = /* @__PURE__ */ new Set(["owl:cardinality", "owl:minCardinality", "owl:maxCardinality", "owl:onClass"]);
-      WHO_OWNS_RE = /^who\s+(?:owns|maintains)\s+(.+?)[?.!\s]*$/i;
-      OWNS_YESNO_RE = /^(?:does|did)\s+([\w'-]+)\s+(?:owns?|maintains?)\s+(.+?)[?.!\s]*$/i;
-      OWNS_PASSIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+owned\s+by\s+([A-Za-z][\w'-]*(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
-      HAS_METHOD_YESNO_RE = /^(?:does|did)\s+([\w'-]+)\s+(?:has|have)\s+an?\s+([a-z][\w-]*)\s+method[?.!\s]*$/i;
-      HAS_METHOD_OPEN_RE = /^what\s+methods\s+does\s+([\w'-]+)\s+have[?.!\s]*$/i;
-      IS_ADJECTIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+([A-Za-z][\w-]*)[?.!\s]*$/i;
-      IS_ADJECTIVE_PRONOUN_RE = /^(?:it|this|that)$/i;
-      IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE = /^(?:you|i|they|he|she|we)\b/i;
-      unknownAdjectiveOffer = (subject, adjective) => ({
-        text: `I don't know anything about "${subject}" yet \u2014 teach me directly, e.g. "remember that ${subject.toLowerCase()} is ${adjective}".`,
-        replace: true
-      });
-      WHOLE_RECALL_RE = /^(?:what\s+(?:did|have)\s+(?:i|we)\s+(?:told?|tell|said?|say)\s+(?:you|me|us)?(?:\s+(?:last\s+time|before|earlier|previously|already))?|what\s+facts?\s+do\s+you\s+(?:know|have|remember)|what\s+do\s+you\s+(?:know|remember)|what\s+have\s+you\s+(?:learned|learnt|remembered))[?.!\s]*$/i;
-      INHERITS_GROUP_RE = /inherit|supertype|subclass|extend|specializ/i;
-      INHERITS_MAX_HOPS = 8;
-      PRONOUN_IN_QUERY_RE = new RegExp(`\\b(?:${[...CONTEXT_WORDS].join("|")})\\b`, "i");
-      BARE_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
-      DESCRIBE_GRAIN_WORD_RE = new RegExp(
-        `^(?:(?:the|a|an)\\s+)?(.+?)\\s+(${Object.keys(ENTITY_TO_TYPE).join("|")})$`,
-        "i"
-      );
-      GOAL_BY_COMMAND = {
-        find: "locate a specific named entity",
-        search: "locate a specific named entity",
-        context: "gather the sized edit bundle for a symbol before changing code",
-        snippet: "view a symbol's exact source",
-        describe: "look up a symbol's definition and relations",
-        signature: "view a symbol's signature",
-        members: GOAL_BY_KIND.contains,
-        subclasses: GOAL_BY_KIND.inherits,
-        impact: "understand what a change to this module would reach (impact closure)",
-        callers: GOAL_BY_KIND.calls,
-        callees: GOAL_BY_KIND.calls,
-        tests: GOAL_BY_KIND.tests,
-        untested: GOAL_BY_KIND.tests,
-        history: GOAL_BY_KIND.touches,
-        exports: GOAL_BY_KIND.reexports,
-        arch: "understand the overall architecture (package/module boundaries)",
-        capabilities: "see what /plan can plan over \u2014 built-in query tools and taught actions"
-      };
-      BASE_QUALIFIER_SRC = "as\\s+(?:its|the|an?)?\\s*(?:base\\s+class|parent\\s+class|base|parent)";
-      USES_AS_BASE_WH_ASK_RE = new RegExp(
-        `^(.+?)\\s+uses?\\s+(?:which\\s+[\\w'-]+|what)\\s+${BASE_QUALIFIER_SRC}\\s*\\??$`,
-        "i"
-      );
-      USES_AS_BASE_WHAT_FRONT_RE = new RegExp(
-        `^what\\s+(?:does|do|did)\\s+(.+?)\\s+uses?\\s+${BASE_QUALIFIER_SRC}\\s*\\??$`,
-        "i"
-      );
-      USES_AS_BASE_YESNO_RE = new RegExp(
-        `^(?:does|do|did)\\s+(.+?)\\s+uses?\\s+(.+?)\\s+${BASE_QUALIFIER_SRC}\\s*\\??$`,
-        "i"
-      );
-      USES_AS_BASE_TEACH_RE = new RegExp(
-        `^(.+?)\\s+uses?\\s+(.+?)\\s+${BASE_QUALIFIER_SRC}\\s*[.!]*$`,
-        "i"
-      );
-      SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
-    }
-  });
+  var PRONOUN_IN_QUERY_RE = new RegExp(`\\b(?:${[...CONTEXT_WORDS].join("|")})\\b`, "i");
+  var BARE_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+  var DESCRIBE_GRAIN_WORD_RE = new RegExp(
+    `^(?:(?:the|a|an)\\s+)?(.+?)\\s+(${Object.keys(ENTITY_TO_TYPE).join("|")})$`,
+    "i"
+  );
+  var GOAL_BY_COMMAND = {
+    find: "locate a specific named entity",
+    search: "locate a specific named entity",
+    context: "gather the sized edit bundle for a symbol before changing code",
+    snippet: "view a symbol's exact source",
+    describe: "look up a symbol's definition and relations",
+    signature: "view a symbol's signature",
+    members: GOAL_BY_KIND.contains,
+    subclasses: GOAL_BY_KIND.inherits,
+    impact: "understand what a change to this module would reach (impact closure)",
+    callers: GOAL_BY_KIND.calls,
+    callees: GOAL_BY_KIND.calls,
+    tests: GOAL_BY_KIND.tests,
+    untested: GOAL_BY_KIND.tests,
+    history: GOAL_BY_KIND.touches,
+    exports: GOAL_BY_KIND.reexports,
+    arch: "understand the overall architecture (package/module boundaries)",
+    capabilities: "see what /plan can plan over \u2014 built-in query tools and taught actions"
+  };
+  var BASE_QUALIFIER_SRC = "as\\s+(?:its|the|an?)?\\s*(?:base\\s+class|parent\\s+class|base|parent)";
+  var USES_AS_BASE_WH_ASK_RE = new RegExp(
+    `^(.+?)\\s+uses?\\s+(?:which\\s+[\\w'-]+|what)\\s+${BASE_QUALIFIER_SRC}\\s*\\??$`,
+    "i"
+  );
+  var USES_AS_BASE_WHAT_FRONT_RE = new RegExp(
+    `^what\\s+(?:does|do|did)\\s+(.+?)\\s+uses?\\s+${BASE_QUALIFIER_SRC}\\s*\\??$`,
+    "i"
+  );
+  var USES_AS_BASE_YESNO_RE = new RegExp(
+    `^(?:does|do|did)\\s+(.+?)\\s+uses?\\s+(.+?)\\s+${BASE_QUALIFIER_SRC}\\s*\\??$`,
+    "i"
+  );
+  var USES_AS_BASE_TEACH_RE = new RegExp(
+    `^(.+?)\\s+uses?\\s+(.+?)\\s+${BASE_QUALIFIER_SRC}\\s*[.!]*$`,
+    "i"
+  );
+  var SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
 
   // src/memory-ask-browser-entry.mjs
-  init_chat();
   init_core();
   globalThis.tmctMemoryAsk = { factAnswer, factReadBack, createInMemoryStore, normFactTerm };
 })();

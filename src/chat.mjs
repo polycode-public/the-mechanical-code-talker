@@ -23,8 +23,8 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
-import { dispatchTool, loadGraph } from "./server.mjs";
-import { loadConfig, DEFAULT_GRAPH_REL } from "./config.mjs";
+import { dispatchTool, loadGraph, TOOLS } from "./server.mjs";
+import { loadConfig, DEFAULT_GRAPH_REL, ToolError } from "./config.mjs";
 import { resolveRuntimeConfig } from "./cli-args.mjs";
 import { parseEntities, edgesOfKind, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "./codegraph.mjs";
 import { classDisplayName } from "./ask.mjs";
@@ -35,7 +35,7 @@ import * as defaultSource from "./source.mjs";
 import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
 import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
 import { rankByBiasThenTrust } from "./memory/bias.mjs";
-import { HAS_A_PREDICATE } from "./memory/core.mjs";
+import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "./memory/core.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentences } from "./sentences.mjs";
 import {
@@ -886,6 +886,81 @@ export function isConversational(query) {
   if (aiIdentityMatch(raw)) return true;
   const codeish = looksCodeish(raw, q);
   return q.split(/\s+/).filter(Boolean).length <= 3 && !codeish;
+}
+
+/** The tmct tools dispatchTool can back (the set a tool-emitting caller may use).
+ *  A declared tool outside this set is never emitted — the request falls through
+ *  to a text answer. The COMMANDS map names the richer graph tools; TOOLS names
+ *  the hot catalog. Their union is what dispatchTool serves. */
+const BACKED_TOOLS = new Set([
+  ...TOOLS.map((t) => t.name),
+  ...Object.values(COMMANDS).map((s) => s.tool),
+]);
+
+/**
+ * Decide whether a user turn maps to a DECLARED, dispatch-backed graph-query
+ * tool, and bind its arguments. Deterministic, in-ethos (no NL guessing beyond
+ * the chat surface's own command routing):
+ *
+ *   1. A slash/bare command that names a tmct tool ("describe X", "/callers X",
+ *      "untested") → that tool with its argument bound from the exact arg key the
+ *      dispatchTool switch reads (COMMANDS above). Only when the tool is
+ *      declared by the caller.
+ *   2. Otherwise, a non-conversational structural question → tmct_ask{query:…},
+ *      when tmct_ask is declared. Small-talk (isConversational) never emits a
+ *      call — it falls through to a text answer.
+ *
+ * Returns { name, input } or null (→ answer as text).
+ */
+export function selectTool(text, declaredNames) {
+  const t = String(text || "").trim();
+  if (!t) return null;
+
+  // 1. explicit command form → a specific tool, argument bound
+  const cmdLine = t.startsWith("/") ? t : asBareCommand(t);
+  if (cmdLine) {
+    const [first, ...restTok] = cmdLine.replace(/^\//, "").split(/\s+/);
+    const spec = COMMANDS[String(first).toLowerCase()];
+    if (spec && declaredNames.has(spec.tool) && BACKED_TOOLS.has(spec.tool)) {
+      const input = {};
+      if (spec.arg) {
+        const val = restTok.join(" ").trim();
+        if (val) input[spec.arg] = val;
+        // an entity command with no argument can't bind a call — fall through
+        else if (!spec.optional) return askFallback(t, declaredNames);
+      }
+      return { name: spec.tool, input };
+    }
+  }
+
+  // 2. structural question → tmct_ask, unless it's small-talk
+  return askFallback(t, declaredNames);
+}
+
+/** The tmct_ask fallback: emit tmct_ask{query} for a non-conversational line when
+ *  the caller declared tmct_ask; otherwise null (→ text answer). */
+function askFallback(text, declaredNames) {
+  if (declaredNames.has("tmct_ask") && BACKED_TOOLS.has("tmct_ask") && !isConversational(text)) {
+    return { name: "tmct_ask", input: { query: text } };
+  }
+  return null;
+}
+
+/** The live tool-layer dependencies buildCapabilityPlanCtx (router/drive.mjs)
+ *  needs injected: the real dispatchTool, the ToolError classifier, the command
+ *  register, and the memory-store readers the taught world-goal lane reloads
+ *  per request. The router itself stays pure; every caller that wants the real
+ *  tool layer spreads these into its ctx build. */
+export function capabilityPlanDeps() {
+  return {
+    source: defaultSource,
+    dispatchTool,
+    isToolError: (e) => e instanceof ToolError,
+    selectTool,
+    loadMemory: loadMemoryStore,
+    readFactRows: readStoredFactRows,
+    readRuleRows: readStoredRuleRows,
+  };
 }
 
 /** Scoped exemption for the bare-meta-fact lane (2b/2c, further down this file)
@@ -9369,7 +9444,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     if (!argText) return mk("/plan needs a request, e.g. `/plan of the modules impacted by X, which are untested`.", { miss: true });
     if (!graph) return mk("no graph loaded — /plan needs a code graph to plan over.", { miss: true });
     const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("./router/drive.mjs");
-    const planCtx = await buildCapabilityPlanCtx({ config, source, tel, graph, memoryDir });
+    const planCtx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config, source, tel, graph, memoryDir });
     try {
       const result = await runCapabilityPlan(argText, declaredCapabilityNames(), planCtx);
       if (result.refused) {

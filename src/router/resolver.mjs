@@ -5,16 +5,16 @@
 // A request becomes an epistemic GOAL `(knows <topic> ?of)`; backward chaining finds the
 // capability whose add-effect achieves it and binds `?of` to the request's object term.
 // Three fact sources feed the same backward-chaining step, tried in order: the command
-// register (server-http.mjs's terse verbs, ground truth, tried first since a terse command
-// can mis-parse through the NL grammar), the NL parse (ask.mjs's relational grammar, via
-// NL_INTENTS), and imperative intent FRAMES (curated phrasings the relational grammar
-// doesn't carry, and a rescue path when the NL parse selects an out-of-set capability).
+// register (the ctx-injected selectTool — terse verbs, ground truth, tried first since a
+// terse command can mis-parse through the NL grammar), the NL parse (ask.mjs's relational
+// grammar, via NL_INTENTS), and imperative intent FRAMES (curated phrasings the relational
+// grammar doesn't carry, and a rescue path when the NL parse selects an out-of-set
+// capability).
 //
 // Entity binding is delegated to `resolveObject` (ask.mjs); an ambiguous or no-match term
 // is an honest refuse, never a guess.
 
 import { parseQuery } from "../ask.mjs";
-import { selectTool } from "../server-http.mjs";
 import { SUPERLATIVE_EXTREMES } from "../ask-vocab.mjs";
 import {
   capabilities, capabilityByName, preconditionsOf, effectsOf, PRECOND,
@@ -181,11 +181,14 @@ export function mapFrame(request) {
   return null;
 }
 
-/** The command register (server-http.mjs selectTool) filtered to the registry.
- *  Returns { name, input, source:"command", why } or null. selectTool binds the
- *  arg from the terse command; we re-clean a search query (its raw join keeps a
- *  stray "for"). Never reaches outside the declared set. */
-export function commandCapability(request, declaredNames) {
+/** The command register (an injected selectTool — chat.mjs's, in the live
+ *  wiring) filtered to the registry. Returns { name, input, source:"command",
+ *  why } or null. selectTool binds the arg from the terse command; we re-clean
+ *  a search query (its raw join keeps a stray "for"). Never reaches outside
+ *  the declared set. A caller with no command register passes none and the
+ *  lane stays silent. */
+export function commandCapability(request, declaredNames, selectTool) {
+  if (typeof selectTool !== "function") return null;
   const sel = selectTool(request, new Set(declaredNames));
   if (!sel || !capabilityByName(sel.name)) return null;
   const input = { ...sel.input };
@@ -234,7 +237,7 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
 
   // An NL-parse refusal is not terminal: an imperative FRAME may still hit, so we fall
   // through and only surface the NL reason if the frame misses too.
-  let pick = commandCapability(request, declared);
+  let pick = commandCapability(request, declared, ctx && ctx.selectTool);
   let nlRefuse = null;
   let nlUndeclared = null;
   if (!pick) {

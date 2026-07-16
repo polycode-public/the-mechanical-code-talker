@@ -16,6 +16,7 @@ import { fileURLToPath } from "node:url";
 
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } from "../../src/router/drive.mjs";
+import { capabilityPlanDeps } from "../../src/chat.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 
@@ -38,7 +39,7 @@ const REPO = await materializeFixtureRepo();
 after(() => rm(REPO, { recursive: true, force: true }));
 
 test("runCapabilityPlan: a relative-filter request composes the real intersect answer", async () => {
-  const ctx = await buildCapabilityPlanCtx({ config: { graphFile: join(REPO, ".tmct", "graph.json") } });
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: { graphFile: join(REPO, ".tmct", "graph.json") } });
   const tools = declaredCapabilityNames();
   assert.ok(tools.includes("tmct_impact") && tools.includes("tmct_untested"));
 
@@ -50,7 +51,7 @@ test("runCapabilityPlan: a relative-filter request composes the real intersect a
 });
 
 test("runCapabilityPlan: an ungrounded C1 request escalates to the goal-reasoner's keystone answer", async () => {
-  const ctx = await buildCapabilityPlanCtx({ config: { graphFile: join(REPO, ".tmct", "graph.json") } });
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: { graphFile: join(REPO, ".tmct", "graph.json") } });
   const tools = declaredCapabilityNames();
 
   const result = await runCapabilityPlan("what most needs a test in this codebase", tools, ctx);
@@ -60,7 +61,7 @@ test("runCapabilityPlan: an ungrounded C1 request escalates to the goal-reasoner
 });
 
 test("runCapabilityPlan: an unresolvable entity is an honest refuse, never a crash or a guess", async () => {
-  const ctx = await buildCapabilityPlanCtx({ config: { graphFile: join(REPO, ".tmct", "graph.json") } });
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: { graphFile: join(REPO, ".tmct", "graph.json") } });
   const tools = declaredCapabilityNames();
 
   const result = await runCapabilityPlan("who calls zzzNoSuchSymbolzzz", tools, ctx);
@@ -75,7 +76,7 @@ test("runCapabilityPlan: an unresolvable entity is an honest refuse, never a cra
 });
 
 test("runCapabilityPlan: a request over the budget is refused, not silently truncated", async () => {
-  const ctx = await buildCapabilityPlanCtx({ config: { graphFile: join(REPO, ".tmct", "graph.json") } });
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: { graphFile: join(REPO, ".tmct", "graph.json") } });
   const tools = declaredCapabilityNames();
   const nineSteps = Array.from({ length: 9 }, (_, i) => `describe app/lib/${String.fromCharCode(97 + (i % 6))}.mjs`).join(" and then ");
   const result = await runCapabilityPlan(nineSteps, tools, ctx);

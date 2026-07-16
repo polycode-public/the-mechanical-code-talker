@@ -15,7 +15,7 @@ import {
 } from "../../src/router/drive.mjs";
 import { isCapability } from "../../src/router/registry.mjs";
 import { actionFamilies, capabilityFromActionRules } from "../../src/router/taught.mjs";
-import { runTurn } from "../../src/chat.mjs";
+import { runTurn, capabilityPlanDeps } from "../../src/chat.mjs";
 import {
   appendRule, loadMemory,
   RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT,
@@ -71,7 +71,7 @@ after(async () => {
 const WORLD_GOAL = "make every disk rest on peg-c";
 
 test("without a memoryDir the world goal refuses, naming the missing taught operator", async () => {
-  const ctx = await buildCapabilityPlanCtx({ config: GRAPH });
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: GRAPH });
   const result = await runCapabilityPlan(WORLD_GOAL, declaredCapabilityNames(), ctx);
   assert.equal(result.refused, true);
   assert.match(String(result.why), /taught/i);
@@ -79,13 +79,13 @@ test("without a memoryDir the world goal refuses, naming the missing taught oper
 });
 
 test("with a memoryDir the lane selects the taught record and simulates the 7-move plan, dispatching nothing", async () => {
-  const ctx = await buildCapabilityPlanCtx({ config: GRAPH, memoryDir: MEMORY });
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: GRAPH, memoryDir: MEMORY });
   try {
     assert.ok(isCapability("taught:move onto"), "the ctx registered the taught family");
     assert.equal(ctx.disposers.length, 1);
 
     // Registration is idempotent: a second ctx over the same store adds nothing.
-    const again = await buildCapabilityPlanCtx({ config: GRAPH, memoryDir: MEMORY });
+    const again = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: GRAPH, memoryDir: MEMORY });
     assert.equal(again.disposers.length, 0);
 
     const tools = declaredCapabilityNames();
@@ -110,7 +110,7 @@ test("with a memoryDir the lane selects the taught record and simulates the 7-mo
 });
 
 test("runTaughtPlan passes on a non-world-goal request instead of claiming it", async () => {
-  const ctx = await buildCapabilityPlanCtx({ config: GRAPH, memoryDir: MEMORY });
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: GRAPH, memoryDir: MEMORY });
   try {
     assert.equal(await runTaughtPlan("who calls resolveOne", declaredCapabilityNames(), ctx), null);
   } finally {

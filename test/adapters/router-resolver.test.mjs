@@ -15,7 +15,7 @@ import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import { buildEntities } from "../../src/graph-build.mjs";
 import { resolveObject } from "../../src/ask.mjs";
 import { RELATIONS } from "../../src/ask-vocab.mjs";
-import { COMMANDS } from "../../src/chat.mjs";
+import { COMMANDS, selectTool } from "../../src/chat.mjs";
 import { capabilities, isCapability, effectsOf } from "../../src/router/registry.mjs";
 import {
   NL_INTENTS, UNMAPPED_KINDS, NOT_NL_REACHABLE, FRAMES,
@@ -45,7 +45,7 @@ async function graphCtx() {
     }
     return { ok: true, text: `[${name}] ok`, resolved: null };
   };
-  return { resolve, dispatch, graph };
+  return { resolve, dispatch, graph, selectTool };
 }
 
 // A genuinely AMBIGUOUS in-memory graph (same construction ask-compound-resolve.
@@ -62,7 +62,7 @@ function ambiguousGraphCtx() {
   const graph = parseEntities(entities);
   const resolve = (term) => resolveObject(graph, term);
   const dispatch = async (name, input) => ({ ok: true, text: `[${name}] ok for ${input.module ?? input.symbol ?? input.class ?? ""}`, resolved: null });
-  return { resolve, dispatch, graph };
+  return { resolve, dispatch, graph, selectTool };
 }
 
 // ONE module-scope context of each grain (0.8.2 speed insurance): the in-memory

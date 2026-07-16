@@ -27,14 +27,10 @@ import { registerTaughtActions } from "./taught.mjs";
 import { intersect, fallbackIfEmpty, guardIfEmpty, memberIndividuals, membersReaching, resultSetOf } from "./results.mjs";
 import { resolveObject } from "../ask.mjs";
 import { parseEntities } from "../codegraph.mjs";
-import { dispatchTool } from "../server.mjs";
-import { ToolError } from "../config.mjs";
-import { loadMemory, readFactRows, readRuleRows } from "../memory/core.mjs";
 import {
   compileDomain, stateFromFacts, stateKeyFor, movesFromRules, compileGoal, PlanBudgetError,
 } from "../domain.mjs";
 import { findActionPath } from "../planning.mjs";
-import * as defaultSource from "../source.mjs";
 
 export const ROUTER_DRIVER = "resolver-0.8.0";
 export const GOAL_DRIVER = "goal-0.8.1";
@@ -184,7 +180,7 @@ export async function runTaughtPlan(request, tools, ctx) {
   if (!tools.includes(cap.name)) {
     return refuse(`selected ${cap.name} but it is not in the declared toolset`, TAUGHT_DRIVER);
   }
-  if (!ctx.memoryDir) {
+  if (!ctx.readTaughtStore) {
     return refuse(`${cap.name} plans over a taught memory store, and this context carries none`, TAUGHT_DRIVER);
   }
 
@@ -192,9 +188,8 @@ export async function runTaughtPlan(request, tools, ctx) {
   let state;
   let isGoal;
   try {
-    const memory = await loadMemory(ctx.memoryDir);
-    const factRows = readFactRows(memory);
-    domain = compileDomain(factRows, readRuleRows(memory));
+    const { factRows, ruleRows } = await ctx.readTaughtStore();
+    domain = compileDomain(factRows, ruleRows);
     state = stateFromFacts(factRows, domain);
     isGoal = compileGoal([{ universal, term, predicate, object }], domain);
   } catch (e) {
@@ -253,22 +248,31 @@ export async function runCapabilityPlan(request, tools, ctx) {
 }
 
 /** Build a real `{ dispatch, resolve, graph, config }` context against a repo's
- *  actual code graph — the router's window onto the live tool layer. `dispatch`
- *  runs the SAME dispatchTool the chat/CLI/server surfaces call, and computes
- *  the structured `result` label-set (results.mjs's resultSetOf) a multi-step
- *  plan folds. `resolve` delegates to resolveObject over the SAME parsed graph,
- *  so resolve() and dispatch() always agree on what an entity resolves to.
- *  Pass an already-parsed `graph` (e.g. a chat session's own) to skip reloading
- *  it — mirrors the config -> source.fetchEntities -> parseEntities chain
- *  dispatchTool runs internally, so a passed-in graph must come from that same
- *  chain to stay consistent.
+ *  actual code graph — the router's window onto the live tool layer. The tool
+ *  layer itself is INJECTED (this module never imports it): `dispatchTool` runs
+ *  the calls, `isToolError` tells an honest miss from a crash, `selectTool` is
+ *  the command register the resolver tries first, and the `loadMemory`/
+ *  `readFactRows`/`readRuleRows` trio reads the taught store. chat.mjs's
+ *  capabilityPlanDeps() bundles the live implementations; spread it into this
+ *  call. `dispatch` computes the structured `result` label-set (results.mjs's
+ *  resultSetOf) a multi-step plan folds. `resolve` delegates to resolveObject
+ *  over the SAME parsed graph, so resolve() and dispatch() always agree on
+ *  what an entity resolves to. Pass an already-parsed `graph` (e.g. a chat
+ *  session's own) to skip reloading it — mirrors the config ->
+ *  source.fetchEntities -> parseEntities chain dispatchTool runs internally,
+ *  so a passed-in graph must come from that same chain to stay consistent.
  *
  *  Pass a `memoryDir` to open the taught world-goal lane: the memory store's
  *  action families are registered as taught: capability records (idempotent —
  *  an already-registered name is skipped) and runTaughtPlan simulates over the
- *  same store. The new registrations' unregister disposers ride the ctx as
- *  `ctx.disposers`; the caller runs them when the ctx is done. */
-export async function buildCapabilityPlanCtx({ config, source = defaultSource, tel = null, graph = null, memoryDir = null } = {}) {
+ *  same store, re-reading it per request via ctx.readTaughtStore. The new
+ *  registrations' unregister disposers ride the ctx as `ctx.disposers`; the
+ *  caller runs them when the ctx is done. */
+export async function buildCapabilityPlanCtx({
+  config, source, tel = null, graph = null, memoryDir = null,
+  dispatchTool, isToolError = () => false, selectTool = null,
+  loadMemory = null, readFactRows = null, readRuleRows = null,
+} = {}) {
   const g = graph || parseEntities(await source.fetchEntities(config));
   const resolve = (term) => resolveObject(g, term);
   const dispatch = async (name, input) => {
@@ -279,13 +283,18 @@ export async function buildCapabilityPlanCtx({ config, source = defaultSource, t
       const result = resultSetOf(g, name, input, resolved);
       return { ok: true, text, resolved, result };
     } catch (e) {
-      if (e instanceof ToolError) return { ok: false, error: e.message };
+      if (isToolError(e)) return { ok: false, error: e.message };
       throw e;
     }
   };
   const ctx = { dispatch, resolve, graph: g, config };
-  if (memoryDir) {
+  if (selectTool) ctx.selectTool = selectTool;
+  if (memoryDir && loadMemory) {
     ctx.memoryDir = memoryDir;
+    ctx.readTaughtStore = async () => {
+      const memory = await loadMemory(memoryDir);
+      return { factRows: readFactRows(memory), ruleRows: readRuleRows(memory) };
+    };
     ctx.disposers = registerTaughtActions(await loadMemory(memoryDir));
   }
   return ctx;

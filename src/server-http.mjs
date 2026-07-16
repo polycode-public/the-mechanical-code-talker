@@ -15,24 +15,19 @@
 // HTTP surface.
 
 import { createServer } from "node:http";
-import { runTurn, COMMANDS, asBareCommand, isConversational } from "./chat.mjs";
+import { runTurn, selectTool } from "./chat.mjs";
 import { TOOLS } from "./server.mjs";
 import { parseEntities } from "./codegraph.mjs";
 import { uuidv7 } from "./uuid.mjs";
 import * as defaultSource from "./source.mjs";
 
+// The shim's deterministic tool selection lives with the chat surface's own
+// command routing (selectTool in chat.mjs); re-exported here so HTTP-side
+// callers keep one import site for the whole shim seam.
+export { selectTool } from "./chat.mjs";
+
 /** The zero usage every response carries — the meter prices tmct as the $0 floor. */
 const ZERO_USAGE = { input_tokens: 0, output_tokens: 0 };
-
-/** The tmct tools dispatchTool can back (the set the shim will emit a tool_use for).
- *  A declared tool outside this set is ignored for emission (the request falls
- *  through to a text answer) — the shim never emits a call it cannot ground. The
- *  COMMANDS map (chat.mjs) names the richer graph tools; TOOLS names the hot
- *  catalog. Their union is what dispatchTool serves. */
-const BACKED_TOOLS = new Set([
-  ...TOOLS.map((t) => t.name),
-  ...Object.values(COMMANDS).map((s) => s.tool),
-]);
 
 /** Flatten a message's `content` (a string OR a content-block array) into plain
  *  text — concatenating the `text` blocks. Non-text blocks are ignored here. */
@@ -72,55 +67,6 @@ function toolResultText(block) {
   if (Array.isArray(c)) return textOfContent(c);
   if (c == null) return "";
   try { return JSON.stringify(c); } catch { return String(c); }
-}
-
-/**
- * Decide whether a user turn maps to a DECLARED, dispatch-backed graph-query
- * tool, and bind its arguments. Deterministic, in-ethos (no NL guessing beyond
- * the chat surface's own command routing):
- *
- *   1. A slash/bare command that names a tmct tool ("describe X", "/callers X",
- *      "untested") → that tool with its argument bound from the exact arg key the
- *      dispatchTool switch reads (COMMANDS in chat.mjs). Only when the tool is
- *      declared by the caller.
- *   2. Otherwise, a non-conversational structural question → tmct_ask{query:…},
- *      when tmct_ask is declared. Small-talk (isConversational) never emits a
- *      call — it falls through to a text answer.
- *
- * Returns { name, input } or null (→ answer as text).
- */
-export function selectTool(text, declaredNames) {
-  const t = String(text || "").trim();
-  if (!t) return null;
-
-  // 1. explicit command form → a specific tool, argument bound
-  const cmdLine = t.startsWith("/") ? t : asBareCommand(t);
-  if (cmdLine) {
-    const [first, ...restTok] = cmdLine.replace(/^\//, "").split(/\s+/);
-    const spec = COMMANDS[String(first).toLowerCase()];
-    if (spec && declaredNames.has(spec.tool) && BACKED_TOOLS.has(spec.tool)) {
-      const input = {};
-      if (spec.arg) {
-        const val = restTok.join(" ").trim();
-        if (val) input[spec.arg] = val;
-        // an entity command with no argument can't bind a call — fall through
-        else if (!spec.optional) return askFallback(t, declaredNames);
-      }
-      return { name: spec.tool, input };
-    }
-  }
-
-  // 2. structural question → tmct_ask, unless it's small-talk
-  return askFallback(t, declaredNames);
-}
-
-/** The tmct_ask fallback: emit tmct_ask{query} for a non-conversational line when
- *  the caller declared tmct_ask; otherwise null (→ text answer). */
-function askFallback(text, declaredNames) {
-  if (declaredNames.has("tmct_ask") && BACKED_TOOLS.has("tmct_ask") && !isConversational(text)) {
-    return { name: "tmct_ask", input: { query: text } };
-  }
-  return null;
 }
 
 /** Build the assistant message envelope shared by every branch. */
