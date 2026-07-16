@@ -122,6 +122,7 @@
     "build:demo-memory": "node scripts/build-demo-memory.mjs",
     "gen:tool-docs": "node scripts/generate-tool-docs.mjs",
     "gen:collisions": "node scripts/generate-real-word-collisions.mjs",
+    "gen:prose-corpus": "node scripts/fetch-prose-corpus.mjs",
     "gen:variants": "node scripts/generate-template-variants.mjs",
     "extract:facts": "node scripts/extract-facts-from-text.mjs"
   },

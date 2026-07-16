@@ -1,0 +1,94 @@
+LICENSE NOTICE — corpus/prose/wikipedia/
+========================================
+
+The *.txt files in this directory are plain-text extracts of Wikipedia
+articles. They are licensed under the Creative Commons Attribution-ShareAlike
+4.0 International License (CC BY-SA 4.0), NOT under this repository's MPL-2.0.
+
+  https://creativecommons.org/licenses/by-sa/4.0/deed.en
+
+That licence is Wikipedia's own statement of terms, reported by the MediaWiki
+API itself:
+
+  https://en.wikipedia.org/w/api.php?action=query&meta=siteinfo&siprop=rightsinfo
+  -> {"url": "https://creativecommons.org/licenses/by-sa/4.0/deed.en",
+      "text": "Creative Commons Attribution-Share Alike 4.0"}
+
+Attribution
+-----------
+
+This text is from Wikipedia, written by Wikipedia contributors and available
+under CC BY-SA 4.0.
+
+CC BY-SA 4.0 requires attribution of the author(s). Wikipedia articles have no
+single author: each is written by many contributors, and the authoritative
+author list for an article IS its revision history. Per Wikipedia's own reuse
+guidance (https://en.wikipedia.org/wiki/Wikipedia:Reusing_Wikipedia_content),
+linking to the article satisfies attribution, because the article carries its
+own history. The history of any article listed below is at:
+
+  https://simple.wikipedia.org/w/index.php?title=<Title>&action=history
+  https://en.wikipedia.org/w/index.php?title=<Title>&action=history
+
+Articles — simple.wikipedia.org (lead sections only)
+---------------------------------------------------
+
+Everyday concepts, fetched with &exintro=1 so only the lead section is kept.
+File names use the requested title; where a request redirected, the file
+records both the requested and the served title in corpus/prose/manifest.json.
+
+  Apple, Automobile (requested as "Car"), Bee, Bird, Bone, Book, Bread,
+  Butterfly, Cat, Child, City, Clock, Cooking, Doctor, Dog, Eagle, Emotion,
+  Eye, Family, Farm, Fear, Fish, Flower, Food, Grass, Hand, Happiness, Heart,
+  Horse, House, Human, Insect, Knowledge, Language, Learning, Mammal, Memory,
+  Milk, Mountain, Ostrich, Owl, Penguin, Plant, Rain, River, School, Sea,
+  Snow, Sun, Teacher, Team, Tool, Tree, Weather, Wind, Writing
+
+Articles — en.wikipedia.org (full articles)
+-------------------------------------------
+
+tmct's own technical domain, where Simple English has no articles at this depth.
+
+  Attempto_Controlled_English, Automated_planning_and_scheduling,
+  Description_logic, First-order_logic, Interactive_fiction,
+  Knowledge_representation_and_reasoning, Natural_language_processing,
+  Resource_Description_Framework, Semantic_reasoner, Semantic_Web,
+  Text-based_game, Web_Ontology_Language
+
+Source and reproduction
+-----------------------
+
+- Fetched via the MediaWiki API's extracts module:
+  https://<host>/w/api.php?action=query&prop=extracts&explaintext=1&redirects=1&format=json&titles=<Title>
+  (plus &exintro=1 for the simple.wikipedia.org set).
+- The exact URL, byte count and sha256 of every committed file are recorded in
+  corpus/prose/manifest.json, along with the fetch date.
+- Retrieved 2026-07-17 by scripts/fetch-prose-corpus.mjs: `npm run gen:prose-corpus`.
+- Wikipedia is a living text. These files are a FROZEN snapshot as of the fetch
+  date; the live articles have moved on. The manifest's checksums identify the
+  exact bytes this repository ships.
+
+Extraction
+----------
+
+The API returns plain text directly (explaintext=1). Section heading lines
+("== History ==") are removed because they are not sentences, and whitespace is
+collapsed. No text is rewritten, reordered or paraphrased in this directory.
+
+Share-alike — READ THIS BEFORE REUSING
+--------------------------------------
+
+CC BY-SA 4.0's share-alike condition is VIRAL, and it reaches beyond this
+directory. The rescue pass in scripts/generate-template-variants.mjs quotes
+these sentences and substitutes single words into them, then commits the result
+to corpus/generated/ace-surface-variants.jsonl — a published, MODIFIED
+derivative of this text, in a file npm ships. That file is therefore
+CC-BY-SA-4.0 as well, and is labelled so in corpus/LICENSES.json and in
+corpus/generated/manifest.json. It was CC-BY-4.0 before this corpus existed;
+adding Wikipedia is what changed it.
+
+If you redistribute either these files or ace-surface-variants.jsonl, modified
+or not, you must do so under CC-BY-SA 4.0 with this attribution.
+
+The extraction code (scripts/fetch-prose-corpus.mjs) is tmct code under this
+repository's MPL-2.0; only the .txt data files carry CC-BY-SA 4.0.

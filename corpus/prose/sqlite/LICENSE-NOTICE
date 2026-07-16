@@ -1,0 +1,53 @@
+LICENSE NOTICE — corpus/prose/sqlite/
+=====================================
+
+The *.txt files in this directory are plain-text extractions of pages from the
+SQLite documentation (https://www.sqlite.org/). They are in the PUBLIC DOMAIN,
+not under this repository's MPL-2.0 and not under any copyleft terms.
+
+Public-domain dedication
+------------------------
+
+https://www.sqlite.org/copyright.html states:
+
+  "All of the code and documentation in SQLite has been dedicated to the public
+  domain by the authors. All code authors, and representatives of the companies
+  they work for, have signed affidavits dedicating their contributions to the
+  public domain and originals of those signed affidavits are stored in a
+  firesafe at the main offices of Hwaci."
+
+There is therefore NO attribution obligation and NO share-alike obligation on
+this text. This notice records the provenance because the project's practice is
+to say where every committed byte came from, not because the licence demands it.
+
+Source
+------
+
+- Pages: https://www.sqlite.org/<page>.html — one committed .txt per page,
+  named for the page (arch.txt is arch.html, and so on).
+- The exact URL, byte count and sha256 of every committed file are recorded in
+  corpus/prose/manifest.json, along with the fetch date.
+- Retrieved 2026-07-17 by scripts/fetch-prose-corpus.mjs, which is also the
+  reproduction route: `npm run gen:prose-corpus`.
+
+Extraction
+----------
+
+The fetched HTML is reduced to plain text: <script>, <style>, <pre> and <code>
+elements are dropped whole (a code block is the thing most likely to look like
+a sentence without being one), block-level closing tags become newlines, the
+remaining tags are stripped, HTML entities are decoded, and whitespace is
+collapsed. No text is rewritten, reordered or paraphrased in this directory.
+
+How this text is used
+---------------------
+
+This corpus feeds the rescue pass in scripts/generate-template-variants.mjs,
+which substitutes single words and commits the result to
+corpus/generated/ace-surface-variants.jsonl — a published, MODIFIED derivative.
+The public-domain dedication permits that without condition. (Sources that
+allow redistribution but NOT derivatives — IETF RFCs, W3C specifications — were
+rejected for exactly this reason; see scripts/fetch-prose-corpus.mjs's header.)
+
+The extraction code (scripts/fetch-prose-corpus.mjs) is tmct code under this
+repository's MPL-2.0; only the .txt data files are public domain.
