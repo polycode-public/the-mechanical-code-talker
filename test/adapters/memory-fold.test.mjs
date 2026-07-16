@@ -7,7 +7,8 @@ import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSessionLog, turnKey } from "../../src/services/sessions.mjs";
-import { cleanSessionText, foldSessionLogs } from "../../src/domain/memory/fold.mjs";
+import { cleanSessionText } from "../../src/domain/memory/fold.mjs";
+import { foldSessionLogs } from "../../src/services/fold.mjs";
 import { BLOCKS_DIR_REL, loadBlockIndex, retrieveBlocks } from "../../src/adapters/memory/blocks.mjs";
 import { appendFact, appendUtterances, loadMemory, readFactRows, CANONICALISED_FROM_PROP } from "../../src/adapters/memory/core.mjs";
 

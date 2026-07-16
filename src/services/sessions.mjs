@@ -19,6 +19,7 @@
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { appendUtterances, CREATED_AT_PROP, UPDATED_AT_PROP } from "../adapters/memory/core.mjs";
+import { turnKey } from "../domain/memory/session-turns.mjs";
 
 export const SESSIONS_DIR_REL = join(".tmct", "sessions");
 
@@ -236,7 +237,7 @@ async function recordSessionMemory(graphFile, record, repoDirOverride = null) {
     ended = Boolean(parseSessionJsonl(sidecar)?.ended);
   } catch { /* no sidecar — nothing to fold from */ }
   if (ended) {
-    const { foldSessionLogs } = await import("../domain/memory/fold.mjs"); // lazy: fold imports this module
+    const { foldSessionLogs } = await import("./fold.mjs"); // lazy: fold imports this module
     await foldSessionLogs(repoDir, { sessionId: record.id });
   }
 }
@@ -277,9 +278,7 @@ export function parseSessionJsonl(text) {
 // echoed "> <query>" line (chat.mjs's logLines shape).
 const LOG_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
 
-/** Key a transcript answer by its turn: ts + query (ts alone can collide when
- *  two instant turns land in the same millisecond). */
-export const turnKey = (ts, query) => `${ts} ${query}`;
+export { turnKey };
 
 /**
  * Parse a human-readable session transcript (.tmct/session-<id>.log) into a

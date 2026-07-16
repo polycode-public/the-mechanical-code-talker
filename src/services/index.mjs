@@ -39,7 +39,7 @@ export { dispatchTool } from "../tools/server.mjs";
 // .tmct/memory/, distinct from any provider-supplied code graph.
 export { loadMemory, appendUtterance, appendFact } from "../adapters/memory/core.mjs";
 export { retrieveBlocks, saveBlock, rankBlocks } from "../adapters/memory/blocks.mjs";
-export { foldSessionLogs } from "../domain/memory/fold.mjs";
+export { foldSessionLogs } from "./fold.mjs";
 
 // The single graph-load choke point — the adapter's data-provider seam
 // (docs/adapter-contract.md): registerProvider() plugs a producer in;
