@@ -3,7 +3,7 @@
 // This is the REAL router-of-today wired behind the AGENTBENCH seam
 // (driver(request, tools, ctx) => loopResult, see driver-stub.mjs). It reuses
 // the HTTP shim's DETERMINISTIC tool selection — `selectTool` from
-// src/surfaces/server-http.mjs, the exact routing `respondToMessages` calls to emit a
+// src/surfaces/http/server-http.mjs, the exact routing `respondToMessages` calls to emit a
 // tool_use — IN-PROCESS (no socket, no network), executes the chosen call via
 // the real dispatchTool (ctx.dispatch), and closes the loop on the tool_result.
 //
@@ -28,7 +28,7 @@
 // ungrounded call — while completion on NL cases stays low until the resolver lands.
 
 import { hallucinationsIn } from "./grade.mjs";
-import { selectTool } from "../src/surfaces/server-http.mjs";
+import { selectTool } from "../src/surfaces/http/server-http.mjs";
 import { preconditionsOf, effectsOf, PRECOND } from "../src/domain/router/registry.mjs";
 
 const DRIVER = "shim-transport";

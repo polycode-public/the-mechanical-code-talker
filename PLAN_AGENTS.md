@@ -79,7 +79,7 @@ other way round. Conclusions only:
 
 | Capability | Status | Evidence |
 |---|---|---|
-| `POST /v1/messages` HTTP shim (Anthropic-Messages-API-compatible) | **Shipped**, since 0.8.0 | `src/surfaces/server-http.mjs`, `bin/tmct.mjs serve` |
+| `POST /v1/messages` HTTP shim (Anthropic-Messages-API-compatible) | **Shipped**, since 0.8.0 | `src/surfaces/http/server-http.mjs`, `bin/tmct.mjs serve` |
 | Repository Interface `INTERFACE_VERSION` 1.1.0 (16 services, closed `EDGE_KINDS`/`MISS_REASONS`) | **Shipped**, since 0.5.0; 1.0.0 → 1.1.0 at v1.4.0 (§2.2) | `src/adapters/repository-interface.mjs` (`SERVICES`, 16), `src/adapters/providers/graph-service.mjs`, `runConformance` in `src/tools/conformance.mjs` |
 | Tool layer: declared tool surface + `dispatchTool` | **Shipped** — 22 declared tools (`TOOL_DEFINITIONS`), 3 hot (`tmct_context`, `tmct_snippet`, `tmct_ask`) and 19 cold | `src/tools/definitions.mjs` (`HOT_TOOLS`/`COLD_TOOLS`), `dispatchTool` + `TOOLS` in `src/tools/server.mjs`, catalog rendered by `src/tools/catalog.mjs`; contract tests in `test/tools/`. The router's registry excludes the three hot tools, see `EXCLUDED_FROM_REGISTRY` |
 | Capability router (STRIPS/PDDL registry, resolver, planner, guardrail, goal-reasoner) | **Shipped**, all 6 stages, **and invokable** | `src/domain/router/*`, 15 capabilities in `registry.mjs` (`capabilities()`), measured on AGENTBENCH; `tmct plan`/chat's `/plan`/`./plan` library export — see §1.3 |
