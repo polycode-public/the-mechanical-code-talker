@@ -17,14 +17,32 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { createHash } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
 const sha = (buf) => createHash("sha256").update(buf).digest("hex");
+
+// The ACE variants generator reads Open English WordNet from a checkout outside
+// this repo (scripts/lib/wordnet-synonyms.mjs, TMCT_WORDNET_SRC or the default
+// below). Where that checkout is absent the generator cannot run at all, so
+// there is no "today's output" to compare the committed artifact against and
+// the drift guard has nothing to say — it is skipped rather than failed, which
+// is the difference between "this artifact is stale" and "this machine can't
+// regenerate it". The guard keeps its teeth wherever WordNet is present, which
+// is the same machine the artifact is regenerated and committed on.
+const wordnetYamlDir = path.join(
+  process.env.TMCT_WORDNET_SRC || path.join(homedir(), "projects", "globalwordnet", "english-wordnet"),
+  "src",
+  "yaml",
+);
+const missingWordnet = existsSync(wordnetYamlDir)
+  ? false
+  : `Open English WordNet not found at ${wordnetYamlDir} — the variants generator can't run here. `
+    + "Set TMCT_WORDNET_SRC to a checkout to enable this drift guard.";
 
 test("the committed ask bundle is what its source builds today", () => {
   const rel = "surfaces/web/memory-ask-browser.bundle.js";
@@ -69,7 +87,7 @@ test("the committed real-word collision table is what its generator produces tod
   }
 });
 
-test("the committed ACE surface variants are what their generator produces today", () => {
+test("the committed ACE surface variants are what their generator produces today", { skip: missingWordnet }, () => {
   const out = mkdtempSync(path.join(tmpdir(), "tmct-variants-freshness-"));
   try {
     execFileSync("node", [
