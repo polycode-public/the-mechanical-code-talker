@@ -11,6 +11,7 @@ import {
   registerCapability, PRECOND, VOCAB,
 } from "../../src/domain/router/registry.mjs";
 import { guard } from "../../src/domain/router/guardrail.mjs";
+import { resolveOne } from "../../src/domain/router/resolver.mjs";
 import { actionFamilies, capabilityFromActionRules, registerTaughtActions } from "../../src/domain/router/taught.mjs";
 import { runTurn } from "../../src/services/chat.mjs";
 import { loadMemory, readRuleRows } from "../../src/adapters/memory/core.mjs";
@@ -69,6 +70,47 @@ test("dispatch guard: the candidate enrichment never dispatches a readOnly:false
     const builtin = await guard({ name: "tmct_describe", input: { symbol: "amb" } }, null, ctx);
     assert.ok(Array.isArray(builtin.candidateResults));
     assert.ok(calls.length > 0);
+  } finally {
+    unregister();
+  }
+});
+
+const symbolParam = {
+  parameters: [{ type: VOCAB.Parameter, name: "symbol", kind: "seon:CodeEntity", arg: "symbol", required: true }],
+  preconditions: [{ type: VOCAB.Precondition, pred: PRECOND.resolves, param: "symbol", as: "seon:CodeEntity" }],
+};
+
+// The resolver reaches a runtime-registered record only through an injected command
+// register (it backward-chains `knows` topics, which a taught record never carries), so
+// that is the seam these drive the read-only gate through.
+const commandCtx = (capName, calls) => ({
+  selectTool: () => ({ name: capName, input: { symbol: "Widget" } }),
+  resolve: () => ({ match: { label: "Widget" }, ambiguous: false, tier: 1 }),
+  dispatch: async (name, input) => { calls.push({ name, input }); return { ok: true, text: "dispatched" }; },
+});
+
+test("the resolver refuses to dispatch a readOnly:false capability — an observation never fires a write", async () => {
+  const calls = [];
+  const unregister = registerCapability(record("taught:test-resolver-guard", symbolParam));
+  try {
+    const r = await resolveOne("guard Widget", ["taught:test-resolver-guard"], commandCtx("taught:test-resolver-guard", calls));
+    assert.equal(r.refused, true);
+    assert.equal(r.selected, null);
+    assert.match(r.reason, /not read-only/);
+    assert.equal(calls.length, 0, "the gate stops the dispatch, nothing was fired");
+  } finally {
+    unregister();
+  }
+});
+
+test("the resolver's read-only gate admits an otherwise identical readOnly:true record", async () => {
+  const calls = [];
+  const unregister = registerCapability(record("taught:test-resolver-open", { ...symbolParam, readOnly: true }));
+  try {
+    const r = await resolveOne("guard Widget", ["taught:test-resolver-open"], commandCtx("taught:test-resolver-open", calls));
+    assert.ok(!r.refused, r.reason);
+    assert.equal(r.selected.name, "taught:test-resolver-open");
+    assert.deepEqual(calls, [{ name: "taught:test-resolver-open", input: { symbol: "Widget" } }]);
   } finally {
     unregister();
   }

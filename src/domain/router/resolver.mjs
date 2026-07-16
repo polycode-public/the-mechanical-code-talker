@@ -213,11 +213,21 @@ export function proofFor(name, input) {
 
 const REFUSE = (why, extra) => ({ selected: null, refused: true, reason: why, ...(extra || {}) });
 
-/** Breadth-first ambiguity: dispatches the SAME tool once per tied candidate (safe since
- *  every registered capability is read-only). Returns `[{candidate, result}, ...]`, or
- *  undefined when there is no dispatcher to run it with. */
+/** The gate both dispatch sites below go through. Dispatching is an OBSERVATION, so it
+ *  may only ever run a capability whose own record says it performs no writes. A
+ *  world-mutating record (the ones src/domain/router/taught.mjs registers carry
+ *  `readOnly: false`) is planned over and simulated, never fired here. */
+function dispatchPerformsNoWrites(capName) {
+  return capabilityByName(capName)?.readOnly === true;
+}
+
+/** Breadth-first ambiguity: dispatches the SAME tool once per tied candidate, which only
+ *  stays safe while the tool writes nothing. Returns `[{candidate, result}, ...]`, or
+ *  undefined when there is no dispatcher to run it with — or when the capability is not
+ *  read-only. */
 async function dispatchEachCandidate(pool, capName, arg, ctx, execute) {
   if (!execute || !ctx.dispatch) return undefined;
+  if (!dispatchPerformsNoWrites(capName)) return undefined;
   const results = [];
   for (const c of pool) {
     const res = await ctx.dispatch(capName, { [arg]: c.label });
@@ -283,6 +293,9 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
   if (problems.length) return REFUSE(`bound call did not validate: ${problems.map((p) => p.reason).join(",")}`);
 
   if (execute && ctx.dispatch) {
+    if (!dispatchPerformsNoWrites(pick.name)) {
+      return REFUSE(`${pick.name} is not read-only; the resolver observes, it never fires a world-mutating capability`);
+    }
     const res = await ctx.dispatch(pick.name, input);
     if (!res.ok) return REFUSE(`unresolvable at dispatch: ${res.error}`);
     return { selected: call, proof: proofFor(pick.name, input), why, resolved: res.resolved ?? resolved, observed: String(res.text ?? "").slice(0, 240) };
