@@ -124,12 +124,28 @@ license:deps:
     - npm ci
     - node scripts/check-licences.mjs
 
-# The e2e tier: real-binary spawns and build smoke (e2e/*.test.mjs). Its own
-# pipeline column, so the tier's pass/fail is visible at the top level.
+# The e2e tier: real-binary spawns, build smoke, and the browser journeys
+# (e2e/*.test.mjs). Its own pipeline column, so the tier's pass/fail is visible
+# at the top level.
+#
+# Chromium is installed explicitly. .npmrc's ignore-scripts=true stops
+# playwright's install hook, so `npm ci` never downloads a browser as a side
+# effect; the browsers land in the project dir (PLAYWRIGHT_BROWSERS_PATH) so the
+# cache can carry them, keyed on the lockfile because the pinned playwright
+# version lives there and each version wants its own build.
 e2e:
   stage: e2e
+  variables:
+    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.playwright-browsers"
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .playwright-browsers
   script:
     - npm ci
+    - npx playwright install --with-deps chromium
     - npm run test:e2e
 
 # Publish the package to PUBLIC npmjs.org. Automatic on main, but the release
@@ -204,3 +220,25 @@ pages:
   artifacts:
     paths:
       - public
+
+# After a real publish, check that what the world serves is what we built: npm's
+# registry and the Pages home page must both show package.json's version. Both
+# lag a publish by a minute or two, so the script polls before reporting.
+#
+# It runs only on main, only with NPM_TOKEN, and never from a schedule — the
+# same gate publish:npm uses, because there is nothing to smoke without a
+# publish. That also keeps it off merge requests, so it can never gate a merge.
+# `needs` makes it wait for the two jobs whose output it reads. Dependency-free
+# and token-free, so no npm ci.
+smoke:post-deploy:
+  stage: verify
+  needs:
+    - publish:npm
+    - pages
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
+  retry: 2
+  script:
+    - node scripts/post-deploy-smoke.mjs
