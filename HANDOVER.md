@@ -142,9 +142,48 @@ different sentence is gone.
   `test/estate/generated-artifacts.test.mjs` guards the other generated artifacts. Decide whether
   the case set is a derivable artifact or a pinned snapshot. See `BENCHMARK_INFERENCE_2.0.3.md`.
 
+Logged by the `CAPABILITIES_2.0.3.md` audit:
+
+- **`how many facts about horses are there` returns the unrestricted total** (`664 facts.`) —
+  `answerMemoryCount` (`src/services/chat.mjs:692-701`) matches `how many …` with no tail check, so
+  the restriction is dropped. Verified live. The smallest diff of the dropped-input family, and the
+  same shape as the five above. See `CAPABILITIES_2.0.3.md` §4.3 (`PLAN_CLASS_QUERY.md` Finding 2).
+- **Unpinned surfaces are where the silent regressions land** — the fronted-agent passive regressed
+  because all four `grammar.passive.*` rows pin the postposed form and none pins the fronted one.
+  Also unpinned: the `/untested` 7-vs-9 divergence (both sides), row 75's shipped coordination-
+  refusal fix (`7f90b03`), and `agentbench/envelope.json` (whose version stamp has read `1.4.1`
+  through three audits with nothing to catch it). `node scripts/corpus-matrix.mjs --gaps` names 12
+  thin keys and 44 key groups with no negative row — that list is the map. See
+  `CAPABILITIES_2.0.3.md` §6.
+- **`PLAN_AGENTS.md` §3's open-bug count is wrong** — it claims six frozen-wrong rows; four are
+  real. `98df45a` flipped `games/yesno-call-check-reads-callssymbol-edge` and
+  `games/bare-passive-reads-the-patient`, both renamed to record the new behaviour. Its §3
+  root-cause diagnosis is half-stale with them. Logged rather than applied, per this cycle's
+  no-change rule. See `CAPABILITIES_2.0.3.md` §5.
+- **`PLAN_GRAPH_SCAN.md`'s banner is false** — it reads "not yet implemented. Nothing in this
+  document is live code", but all three phases shipped (`6ee6610`, `426e9dc`) and Phase 3's exit
+  criterion is beaten (`init:xl` ~8m25s → 16.6s). Two other plans understate their own delivery the
+  same way: `PLAN_PARAPHRASE_VERIFICATION.md` (its slice is already chat-wired at
+  `chat.mjs:10411-10429`) and `PLAN_SYLLOGIST_EL_DL.md` (defaults-and-exceptions shipped and are
+  archived). See `CAPABILITIES_2.0.3.md` §4.3.
+- **Two plans argue from a premise the tree overtook** — `PLAN_CODE.md` §5 and `PLAN_REPO_INDEX.md`
+  Parts 3/7 both rest on "tmct carries no Playwright"; `package.json:74` has playwright 1.61.1 for
+  the browser e2e tier. That specifically weakens the "move `PLAN_CODE.md` to seonix" argument,
+  which needs re-making on other grounds. `PLAN_REPO_INDEX.md` also says 17 RI services against the
+  verified 16. See `CAPABILITIES_2.0.3.md` §4.3.
+- **`PLAN_CHILD_CORPUS.md`'s baseline is miscounted** — it says "1 kind of bird (`owl`), zero
+  capabilities on it"; `human.jsonl` seeds `owl` **and** `swift`, and `owl` carries
+  `CapableOf hunt_at_night`. The argument survives; the acceptance test does not, and the plan
+  designates those numbers as its own step-5 re-measure target. See `CAPABILITIES_2.0.3.md` §4.3.
+- **Citation rot across the estate's docs** — roughly half the audit's rows cite a line that no
+  longer points at its symbol, and a dozen cite files that no longer exist. One comment
+  (`src/domain/ask.mjs:17`) cites a `temporal.mjs` that **never existed in git history**. Six plans
+  carry pre-layer-refactor line numbers. See `CAPABILITIES_2.0.3.md` §6.
+
 Two designs are waiting on a decision rather than a session: `PLAN_CONSISTENCY_CHECK.md` (tmct as
-a consistency service for an LLM tool loop) and `PLAN_CHILD_CORPUS.md` (a wider default seed, so
-the base rate counts more than one bird).
+a consistency service for an LLM tool loop — INFBENCH's 20 INF-C2 cases are a ceiling already built
+to grade it) and `PLAN_CHILD_CORPUS.md` (a wider default seed, so the base rate counts more than
+one bird).
 
 ## Discipline (unchanged)
 
