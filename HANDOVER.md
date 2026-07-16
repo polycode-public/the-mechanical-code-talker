@@ -30,6 +30,88 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 
 ## Open items
 
+Grouped by the area of code and tests each item changes. Groups with disjoint file ownership
+run in parallel; `src/services/chat.mjs` and `src/domain/ask.mjs` are edited by one dispatch at
+a time, so groups 1 and 2 serialise against each other however they are split.
+
+### 1. Chat parse and ask lanes (`src/services/chat.mjs`, `src/domain/ask.mjs`)
+
+- **Misparse-receipt leakage on ask turns.** Fuzzy/stale Goal+Canonical receipts print under
+  correct fact answers on ask turns ("rests"→"tests", "bigger"→"calls", "defines"): the
+  playtest-015 `fuzzyVerb` drop covers teach and goal turns only. One coherent edge: extend
+  the drop to fact-reader-answered ask turns. Found by the 018 uber retest
+  (`playtests/PLAYTEST_LOG_018.md`), reproduced unchanged by 019.
+
+- **Identical goals accumulate instead of folding.** The same goal restated in another
+  voicing appends "(N goals held)" duplicates; fold a deep-equal incoming goal spec and say
+  so. Found by the 018 uber retest, reproduced unchanged by 019.
+
+- **Six frozen wrong answers.** The agent-debt rows pin answers that are still wrong, waiting
+  for a fix to flip them: the yes/no `callsSymbol` union, a pronoun-echoing empty, a
+  temporal-adverb misread, and a bare passive read as active. Both root causes are live
+  (`KIND_UNIONS` unions `uses` only; `parseKeywordSpot` falls through to `forward`).
+
+- **Three product bugs the migration surfaced, each pinned by a row.** An ask-level honest
+  empty ("list modules in nope") falls through to the teach lane and stores a garbage fact.
+  The describe wrappers disagree: "describe X" describes, "describe about X" misses, "please
+  describe X" gives an orientation card, "please describe about X" describes. `/tests
+  <function>` answers at module level.
+
+- **Closed-set gate coverage (a pattern, not one bug — mined from the strategy advisor's
+  2026-07-12 sweep).** Several dead-ends share one shape: the machinery that would answer
+  correctly exists, but a narrower closed-set gate in front of it rejects a valid input variant.
+  Two instances still live: `looksCodeish` (`src/services/chat.mjs`) flags any CamelCase compound as
+  code-ish and blocks the bare-meta-fact fallback that knows how to answer "what is X"; and
+  `CONTEXT_WORDS` (`src/services/chat.mjs`, four singular pronouns) has no plural/ordinal members, and
+  object-position "that" never consults focus the way subject-position "it" does. A third
+  instance (COUNT_NOUNS not consulting `EDGE_NOUN_TO_METRIC`) has since been fixed via
+  `answerEdgeCount`, confirming the fix pattern: audit one gate, decide which members/table
+  lookups are safe to add, pin the existing exclusions with regressions. Worth one shared design
+  pass over the gates rather than a doc per instance.
+
+- **Where-lane goal-line cosmetic.** "where is disk-1 now" answers correctly but the Goal line
+  echoes the object as "disk-1 now". Named in `playtests/PLAYTEST_LOG_015.md`.
+
+### 2. Reader coverage — inputs with no lane at all
+
+Each needs a new reader rather than a fix to an existing one, so this group is the natural
+fan-out set.
+
+- **Capability read-back over taught Rule rows.** "can you move a disk onto a peg?" is still a
+  graph-question miss even when that exact signature was taught — a closed ask-lane reader over
+  action-signature rules. Named in `playtests/PLAYTEST_LOG_016.md`.
+
+- **Verbless want-goal.** "i want every disk on peg-b" (no infinitive verb) still gets the
+  teach lane's pronoun decline; recognizing it means inferring the location verb — a
+  desire-frame family of its own. Named in `playtests/PLAYTEST_LOG_017.md`. The verbed forms
+  ("i want every disk to rest on peg-b") work.
+
+- **Topic-shift ellipsis.** "what is a dog" → "what about cats" has no reader; the elliptical
+  follow-up falls to the wall. Named in `playtests/PLAYTEST_LOG_002.md` and 005.
+
+- **Anaphora depth.** The vocabulary antecedent decays after one turn, and a cold pronoun
+  ("can it bark" with no prior turn) falls to the generic wall. Named in
+  `playtests/PLAYTEST_LOG_005.md`.
+
+- **Negative capability as data.** "a penguin cannot fly" declines honestly (no
+  fact-vocabulary predicate for it) and "what cannot fly" has no reverse listing. Named in
+  `playtests/PLAYTEST_LOG_003.md`.
+
+- **Prepositional-fact leftovers.** Determiner-led multi-word subjects ("the small disk rests
+  on the middle disk") decline; bare-copula "what is on peg-a" misses; "does disk-1 rest on
+  peg-b" falls to the generic wall instead of a specific miss. Named in
+  `playtests/PLAYTEST_LOG_008.md`.
+
+- **In-chat recovery for deep chains.** 3+-hop derivations need the `syllogise` CLI; chat has
+  no `/syllogise` command and the honest deep-chain miss doesn't mention the recovery. Named
+  in `playtests/PLAYTEST_LOG_007.md`.
+
+### 3. Memory and predicate unification (`src/adapters/memory/*`, `src/domain/memory/*`)
+
+- **Taught↔corpus predicate unification.** A taught "fire causes smoke" mints `mgx:cause`
+  while the corpus fact is `mgx:causes`; the two never unify at read time. Named in
+  `playtests/PLAYTEST_LOG_004.md`.
+
 - **26 import-layer violations remain allowlisted.** `test/estate/layer-allowlist.mjs` is a
   shrink-only ratchet: the checker fails on any edge not listed and on any listed edge that
   no longer occurs. Four clusters remain, each a real piece of design work: `completions/*`
@@ -40,10 +122,22 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
   home); and `services/{chat,index}.mjs` import `tools/server.mjs` (services reaching up for
   dispatch). Each fix deletes its line.
 
+### 4. Tool layer (`src/tools/`)
+
 - **The tool layer is one module, not one module per tool.** `src/tools/server.mjs` still
   holds the whole dispatch switch. Splitting it per tool is restructuring, deliberately not
   done during the moves. `src/tools/definitions.mjs` now holds every tool's schema, doc text
   and examples, so the split has a seam to follow.
+
+- **`renderToolsCatalog` has no product caller.** `src/tools/catalog.mjs` renders a tools
+  catalog that nothing writes and nobody reads — it lives through its test alone. Wire it up
+  or delete it with its test.
+
+- **The `cli` route ignores `--repo` and `--graph`.** It takes `repo_path` inside the JSON
+  payload; passed the flags instead, it answers from the cwd's empty graph and exits 0. An
+  honest error or flag support would do.
+
+### 5. Surfaces, build and bundle
 
 - **`src/surfaces/` is flat.** The design names `surfaces/{tui,web,http}`; the move kept the
   four modules side by side. Sub-bucketing is restructuring, same reason.
@@ -59,45 +153,10 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
   window, never observed failing. The fix is the output-directory treatment
   `build-demo-site.mjs` already has.
 
-- **`renderToolsCatalog` has no product caller.** `src/tools/catalog.mjs` renders a tools
-  catalog that nothing writes and nobody reads — it lives through its test alone. Wire it up
-  or delete it with its test.
-
-- **The `cli` route ignores `--repo` and `--graph`.** It takes `repo_path` inside the JSON
-  payload; passed the flags instead, it answers from the cwd's empty graph and exits 0. An
-  honest error or flag support would do.
-
-- **Corpus rows carry migration provenance.** Many `note` fields read "was
-  chatflow-tier2.test.mjs: …", naming files that no longer exist. They earned their place
-  during the coverage-gated purge, when a reviewer needed both sides in one diff. That review
-  is over, so they are now the doc-reference rot the hygiene rule targets. Strip them, or
-  rewrite each as the behaviour the row pins.
-
-- **Six frozen wrong answers.** The agent-debt rows pin answers that are still wrong, waiting
-  for a fix to flip them: the yes/no `callsSymbol` union, a pronoun-echoing empty, a
-  temporal-adverb misread, and a bare passive read as active. Both root causes are live
-  (`KIND_UNIONS` unions `uses` only; `parseKeywordSpot` falls through to `forward`).
-
-- **Three product bugs the migration surfaced, each pinned by a row.** An ask-level honest
-  empty ("list modules in nope") falls through to the teach lane and stores a garbage fact.
-  The describe wrappers disagree: "describe X" describes, "describe about X" misses, "please
-  describe X" gives an orientation card, "please describe about X" describes. `/tests
-  <function>` answers at module level.
-
 - **Version bumps now touch `public/index.html`.** The page carries a version stamp and a test
   enforces that it matches `package.json`.
 
-- **Capability read-back over taught Rule rows.** "can you move a disk onto a peg?" is still a
-  graph-question miss even when that exact signature was taught — a closed ask-lane reader over
-  action-signature rules. Named in `playtests/PLAYTEST_LOG_016.md`.
-
-- **Verbless want-goal.** "i want every disk on peg-b" (no infinitive verb) still gets the
-  teach lane's pronoun decline; recognizing it means inferring the location verb — a
-  desire-frame family of its own. Named in `playtests/PLAYTEST_LOG_017.md`. The verbed forms
-  ("i want every disk to rest on peg-b") work.
-
-- **Where-lane goal-line cosmetic.** "where is disk-1 now" answers correctly but the Goal line
-  echoes the object as "disk-1 now". Named in `playtests/PLAYTEST_LOG_015.md`.
+### 6. Visualisation code (`src/domain/codegraph.mjs`, plan-viz)
 
 - **codegraph.mjs post-viz-removal prune.** `buildVizNodesAndEdges`, `deriveFactTermGraph`,
   `pickLegendDimension`, `edgeKindsFor`, `mostRecentIndividual`, `MEMORY_SPIRAL_EXPAND_KINDS`,
@@ -109,39 +168,13 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
   validate or extend the animation for multi-effect steps (risk named in `archive/PLAN_HANOI.md`'s
   addendum).
 
-- **Misparse-receipt leakage on ask turns.** Fuzzy/stale Goal+Canonical receipts print under
-  correct fact answers on ask turns ("rests"→"tests", "bigger"→"calls", "defines"): the
-  playtest-015 `fuzzyVerb` drop covers teach and goal turns only. One coherent edge: extend
-  the drop to fact-reader-answered ask turns. Found by the 018 uber retest
-  (`playtests/PLAYTEST_LOG_018.md`), reproduced unchanged by 019.
+### 7. Test estate hygiene
 
-- **Identical goals accumulate instead of folding.** The same goal restated in another
-  voicing appends "(N goals held)" duplicates; fold a deep-equal incoming goal spec and say
-  so. Found by the 018 uber retest, reproduced unchanged by 019.
-
-- **Topic-shift ellipsis.** "what is a dog" → "what about cats" has no reader; the elliptical
-  follow-up falls to the wall. Named in `playtests/PLAYTEST_LOG_002.md` and 005.
-
-- **Anaphora depth.** The vocabulary antecedent decays after one turn, and a cold pronoun
-  ("can it bark" with no prior turn) falls to the generic wall. Named in
-  `playtests/PLAYTEST_LOG_005.md`.
-
-- **Negative capability as data.** "a penguin cannot fly" declines honestly (no
-  fact-vocabulary predicate for it) and "what cannot fly" has no reverse listing. Named in
-  `playtests/PLAYTEST_LOG_003.md`.
-
-- **Taught↔corpus predicate unification.** A taught "fire causes smoke" mints `mgx:cause`
-  while the corpus fact is `mgx:causes`; the two never unify at read time. Named in
-  `playtests/PLAYTEST_LOG_004.md`.
-
-- **Prepositional-fact leftovers.** Determiner-led multi-word subjects ("the small disk rests
-  on the middle disk") decline; bare-copula "what is on peg-a" misses; "does disk-1 rest on
-  peg-b" falls to the generic wall instead of a specific miss. Named in
-  `playtests/PLAYTEST_LOG_008.md`.
-
-- **In-chat recovery for deep chains.** 3+-hop derivations need the `syllogise` CLI; chat has
-  no `/syllogise` command and the honest deep-chain miss doesn't mention the recovery. Named
-  in `playtests/PLAYTEST_LOG_007.md`.
+- **Corpus rows carry migration provenance.** Many `note` fields read "was
+  chatflow-tier2.test.mjs: …", naming files that no longer exist. They earned their place
+  during the coverage-gated purge, when a reviewer needed both sides in one diff. That review
+  is over, so they are now the doc-reference rot the hygiene rule targets. Strip them, or
+  rewrite each as the behaviour the row pins.
 
 - **Contractions on the paraphrase ladder.** Untested rung; for the next edge-hunt dispatch.
 
@@ -149,18 +182,6 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 
 - **Passive↔active beyond UsedFor and the rule signature.** Untested axis; for the next
   edge-hunt dispatch.
-
-- **Closed-set gate coverage (a pattern, not one bug — mined from the strategy advisor's
-  2026-07-12 sweep).** Several dead-ends share one shape: the machinery that would answer
-  correctly exists, but a narrower closed-set gate in front of it rejects a valid input variant.
-  Two instances still live: `looksCodeish` (`src/services/chat.mjs`) flags any CamelCase compound as
-  code-ish and blocks the bare-meta-fact fallback that knows how to answer "what is X"; and
-  `CONTEXT_WORDS` (`src/services/chat.mjs`, four singular pronouns) has no plural/ordinal members, and
-  object-position "that" never consults focus the way subject-position "it" does. A third
-  instance (COUNT_NOUNS not consulting `EDGE_NOUN_TO_METRIC`) has since been fixed via
-  `answerEdgeCount`, confirming the fix pattern: audit one gate, decide which members/table
-  lookups are safe to add, pin the existing exclusions with regressions. Worth one shared design
-  pass over the gates rather than a doc per instance.
 
 ## Discipline (unchanged)
 
