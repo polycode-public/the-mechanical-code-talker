@@ -15,7 +15,7 @@
   };
 
   // node-stub:node:path
-  var unavailable, createRequire, readFileSync, readFile, writeFile, appendFile, mkdir, mkdtemp, rename, unlink, rm, stat, copyFile, readdir, createReadStream, createWriteStream, join, dirname, randomBytes, spawnSync, createInterface;
+  var unavailable, createRequire, readFileSync, readFile, writeFile, appendFile, mkdir, mkdtemp, rename, unlink, rm, stat, copyFile, readdir, createReadStream, createWriteStream, join, dirname, resolve, sep, randomBytes, spawnSync, createInterface;
   var init_node_path = __esm({
     "node-stub:node:path"() {
       unavailable = (name) => () => {
@@ -38,6 +38,8 @@
       createWriteStream = unavailable("createWriteStream");
       join = (...a) => a.join("/");
       dirname = (p) => String(p).replace(/\/[^/]*$/, "");
+      resolve = (...a) => a.join("/");
+      sep = "/";
       randomBytes = unavailable("randomBytes");
       spawnSync = unavailable("spawnSync");
       createInterface = unavailable("createInterface");
@@ -837,19 +839,17 @@
   });
 
   // src/adapters/config.mjs
-  var DEFAULT_GRAPH_REL;
+  var DEFAULT_GRAPH_REL, ToolError;
   var init_config = __esm({
     "src/adapters/config.mjs"() {
       init_node_path();
       DEFAULT_GRAPH_REL = join(".tmct", "graph.json");
-    }
-  });
-
-  // src/adapters/source-slice.mjs
-  var init_source_slice = __esm({
-    "src/adapters/source-slice.mjs"() {
-      init_node_path();
-      init_config();
+      ToolError = class extends Error {
+        constructor(message) {
+          super(message);
+          this.name = "ToolError";
+        }
+      };
     }
   });
 
@@ -884,6 +884,25 @@
     }
     return [...scoreById.entries()].sort((a, b) => b[1] - a[1] || String(a[0]).localeCompare(b[0])).slice(0, limit).map(([id, score]) => ({ id, score }));
   }
+  function proseLayerHits(proseIndex, token) {
+    const src = proseIndex && (proseIndex["tmct:layers"] ? proseIndex : proseIndex.proseIndex);
+    const layers = src && src["tmct:layers"];
+    const t = String(token || "").toLowerCase();
+    const empty = { ids: [], via: null };
+    if (!t || !layers || typeof layers !== "object") return empty;
+    const ids = /* @__PURE__ */ new Set();
+    const via = /* @__PURE__ */ new Set();
+    for (const name of Object.keys(layers)) {
+      const layer = layers[name];
+      if (!layer || typeof layer !== "object") continue;
+      const posting = layer[t];
+      const list = Array.isArray(posting) ? posting : Array.isArray(posting?.ids) ? posting.ids : null;
+      if (!list?.length) continue;
+      for (const id of list) ids.add(id);
+      via.add(name);
+    }
+    return ids.size ? { ids: [...ids].sort(), via: [...via].sort().join("+") } : empty;
+  }
   var STOPWORDS, MAX_TOKEN_LEN, MAX_TOKENS_PER_DOC;
   var init_prose = __esm({
     "src/domain/prose.mjs"() {
@@ -895,69 +914,20 @@
     }
   });
 
-  // node-stub:node:fs
-  var unavailable3, createRequire3, readFileSync3, readFile3, writeFile3, appendFile3, mkdir3, mkdtemp3, rename3, unlink3, rm3, stat3, copyFile3, readdir3, createReadStream3, createWriteStream3, randomBytes3, spawnSync3, createInterface3;
-  var init_node_fs = __esm({
-    "node-stub:node:fs"() {
-      unavailable3 = (name) => () => {
-        throw new Error(name + " unavailable in the browser ask bundle");
-      };
-      createRequire3 = unavailable3("createRequire");
-      readFileSync3 = unavailable3("readFileSync");
-      readFile3 = unavailable3("readFile");
-      writeFile3 = unavailable3("writeFile");
-      appendFile3 = unavailable3("appendFile");
-      mkdir3 = unavailable3("mkdir");
-      mkdtemp3 = unavailable3("mkdtemp");
-      rename3 = unavailable3("rename");
-      unlink3 = unavailable3("unlink");
-      rm3 = unavailable3("rm");
-      stat3 = unavailable3("stat");
-      copyFile3 = unavailable3("copyFile");
-      readdir3 = unavailable3("readdir");
-      createReadStream3 = unavailable3("createReadStream");
-      createWriteStream3 = unavailable3("createWriteStream");
-      randomBytes3 = unavailable3("randomBytes");
-      spawnSync3 = unavailable3("spawnSync");
-      createInterface3 = unavailable3("createInterface");
+  // src/domain/vector.mjs
+  function cosine(a, b) {
+    let dot = 0, na = 0, nb = 0;
+    const n = Math.min(a.length, b.length);
+    for (let i = 0; i < n; i++) {
+      dot += a[i] * b[i];
+      na += a[i] * a[i];
+      nb += b[i] * b[i];
     }
-  });
-
-  // node-stub:node:url
-  var unavailable4, createRequire4, readFileSync4, readFile4, writeFile4, appendFile4, mkdir4, mkdtemp4, rename4, unlink4, rm4, stat4, copyFile4, readdir4, createReadStream4, createWriteStream4, fileURLToPath, randomBytes4, spawnSync4, createInterface4;
-  var init_node_url = __esm({
-    "node-stub:node:url"() {
-      unavailable4 = (name) => () => {
-        throw new Error(name + " unavailable in the browser ask bundle");
-      };
-      createRequire4 = unavailable4("createRequire");
-      readFileSync4 = unavailable4("readFileSync");
-      readFile4 = unavailable4("readFile");
-      writeFile4 = unavailable4("writeFile");
-      appendFile4 = unavailable4("appendFile");
-      mkdir4 = unavailable4("mkdir");
-      mkdtemp4 = unavailable4("mkdtemp");
-      rename4 = unavailable4("rename");
-      unlink4 = unavailable4("unlink");
-      rm4 = unavailable4("rm");
-      stat4 = unavailable4("stat");
-      copyFile4 = unavailable4("copyFile");
-      readdir4 = unavailable4("readdir");
-      createReadStream4 = unavailable4("createReadStream");
-      createWriteStream4 = unavailable4("createWriteStream");
-      fileURLToPath = (u) => String(u);
-      randomBytes4 = unavailable4("randomBytes");
-      spawnSync4 = unavailable4("spawnSync");
-      createInterface4 = unavailable4("createInterface");
-    }
-  });
-
-  // src/adapters/embed.mjs
-  var init_embed = __esm({
-    "src/adapters/embed.mjs"() {
-      init_node_fs();
-      init_node_path();
-      init_node_url();
+    if (na === 0 || nb === 0) return 0;
+    return dot / (Math.sqrt(na) * Math.sqrt(nb));
+  }
+  var init_vector = __esm({
+    "src/domain/vector.mjs"() {
     }
   });
 
@@ -1071,10 +1041,35 @@
   });
 
   // src/domain/codegraph.mjs
+  function parseEntities(payload) {
+    const individuals = Array.isArray(payload?.individuals) ? payload.individuals : [];
+    const byId = /* @__PURE__ */ new Map();
+    for (const ind of individuals) {
+      if (ind && ind.id) byId.set(ind.id, ind);
+    }
+    const relations = (Array.isArray(payload?.objectProperties) ? payload.objectProperties : []).filter((g) => g && (g.predicate || g.prop)).map((g) => {
+      const edges = (Array.isArray(g.examples) ? g.examples : []).filter((e) => e && e.subject && e.object);
+      return {
+        predicate: String(g.predicate || ""),
+        prop: g.prop || null,
+        count: Number(g.count) || edges.length,
+        edges
+      };
+    });
+    const truncated = relations.filter((g) => g.count > g.edges.length).map((g) => ({ predicate: g.predicate, count: g.count, shown: g.edges.length }));
+    return {
+      individuals,
+      byId,
+      relations,
+      truncated,
+      generatedAt: payload?.generated_at || null,
+      // word -> [individual ids]; {} when prose was disabled at build time
+      proseIndex: payload?.proseIndex || {}
+    };
+  }
   function relationKind(group) {
     const prop = String(group?.prop || "").toLowerCase();
     if (PROP_KIND[prop]) return PROP_KIND[prop];
-    if (prop.startsWith("factrel:")) return group.predicate || null;
     const pred = String(group?.predicate || "").toLowerCase();
     if (/symbol/.test(pred)) {
       if (/\b(call|invoke)/.test(pred)) return "callsSymbol";
@@ -1092,12 +1087,106 @@
   function normPath(s) {
     return String(s || "").trim().toLowerCase().replace(/^\.\//, "").replace(/^\//, "");
   }
+  function basename(p) {
+    const parts = normPath(p).split("/");
+    return parts[parts.length - 1];
+  }
+  function turnRefCount(ind) {
+    return (ind?.derived_from || []).filter(isProvRef).length;
+  }
+  function mentionTotal(ind) {
+    const fromMentions = (ind?.mentions || []).reduce((n, m) => n + (Number(m?.count) || 0), 0);
+    return fromMentions + turnRefCount(ind);
+  }
+  function resolveSymbol(graph, symbol) {
+    const s = normPath(symbol);
+    if (!s) return { match: null, candidates: [] };
+    const sBase = basename(s);
+    const scored = [];
+    for (const ind of graph.individuals) {
+      const label = normPath(ind.label);
+      const id = String(ind.id || "").toLowerCase();
+      let score = 0;
+      if (label === s || id === s) score = 100;
+      else if (label.endsWith(`/${s}`) || basename(label) === sBase || basename(label).replace(/\.[a-z]+$/, "") === sBase)
+        score = 80;
+      else if (label.includes(s)) score = Math.max(10, 50 - (label.length - s.length));
+      if (score > 0) scored.push({ ind, score });
+    }
+    scored.sort(
+      (a, b) => b.score - a.score || mentionTotal(b.ind) - mentionTotal(a.ind) || String(a.ind.label).length - String(b.ind.label).length
+    );
+    return {
+      match: scored[0]?.ind || null,
+      candidates: scored.slice(1, 5).map((x) => x.ind)
+    };
+  }
   function siteOf(ind) {
     const a = (ind?.attributes || []).find((x) => x.key === "site");
     if (!a) return null;
     const m = String(a.value).match(/^(.*):(\d+)(?:-(\d+))?$/);
     if (!m) return null;
     return { path: m[1], start: Number(m[2]), end: m[3] ? Number(m[3]) : Number(m[2]) };
+  }
+  function edgesFor(graph, id) {
+    const out = [];
+    const incoming = [];
+    for (const g of graph.relations) {
+      const outgoing = g.edges.filter((e) => e.subject === id);
+      const inbound = g.edges.filter((e) => e.object === id);
+      if (outgoing.length) out.push({ group: g, edges: outgoing });
+      if (inbound.length) incoming.push({ group: g, edges: inbound });
+    }
+    return { out, incoming };
+  }
+  function relLabel(g) {
+    return g.prop ? `${g.predicate} [${g.prop}]` : g.predicate;
+  }
+  function classHeading(cls) {
+    const c = cls || "Entity";
+    const words = splitIdentifierWords(c);
+    if (words.length < 2) return c;
+    return words.map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
+  }
+  function capJoin(items, n, sep3 = ", ") {
+    if (items.length <= n) return items.join(sep3);
+    return items.slice(0, n).join(sep3) + `, +${items.length - n} more`;
+  }
+  function renderDescribe(graph, ind, { candidates = [] } = {}) {
+    const lines = [];
+    lines.push(`${ind.label} \u2014 ${classHeading(ind.class)} (id: ${ind.id})`);
+    const refs = (ind.derived_from || []).filter(isProvRef);
+    if (refs.length) lines.push(`attestation: touched by ${refs.length} commit(s)`);
+    for (const a of ind.attributes || []) {
+      lines.push(`attribute: ${a.key} = ${a.value}${a.prop ? ` [${a.prop}]` : ""}`);
+    }
+    const { out, incoming } = edgesFor(graph, ind.id);
+    if (!out.length && !incoming.length) {
+      lines.push("edges: none in the current artifact");
+    } else {
+      lines.push("edges:");
+      for (const { group, edges } of out) {
+        lines.push(`  ${relLabel(group)} (${edges.length}) \u2192 ${capJoin(edges.map((e) => e.objectLabel || e.object), DESCRIBE_EDGE_CAP)}`);
+      }
+      for (const { group, edges } of incoming) {
+        lines.push(`  \u2190 ${relLabel(group)} (${edges.length}) by ${capJoin(edges.map((e) => e.subjectLabel || e.subject), DESCRIBE_EDGE_CAP)}`);
+      }
+    }
+    const prov = ind.derived_from || [];
+    if (prov.length) {
+      lines.push(`provenance: ${capJoin(prov, PROV_CAP)}`);
+    }
+    if (candidates.length) {
+      lines.push(`other matches: ${candidates.map((c) => `${c.label} (${classHeading(c.class)})`).join(", ")}`);
+    }
+    if (graph.truncated.length) {
+      lines.push(truncationNote(graph));
+    }
+    return lines.join("\n");
+  }
+  function truncationNote(graph) {
+    const list = graph.truncated.map((t) => `${t.predicate} (${t.shown}/${t.count})`).join(", ");
+    return `note: partial edge lists for: ${list}. Counts are complete; the lists are not.`;
   }
   function impactClosure(graph, ind, { maxDepth = 8 } = {}) {
     const dependents = /* @__PURE__ */ new Map();
@@ -1148,6 +1237,523 @@
     }
     return levels;
   }
+  function renderImpact(graph, ind, { maxDepth = 8 } = {}) {
+    const levels = impactClosure(graph, ind, { maxDepth });
+    const lines = [`Impact of changing ${ind.label} (reverse closure over imports/calls edges, module- and function-level):`];
+    if (!levels.length) {
+      lines.push("no dependents found in the current artifact \u2014 nothing imports or calls it (or its edges are not in the extracted graph yet).");
+    }
+    const totalCount = levels.reduce((n, l) => n + l.length, 0);
+    if (levels.length) {
+      lines.push(`total: ${totalCount} dependent(s) across ${levels.length} depth level(s) (lists capped for brevity).`);
+    }
+    levels.forEach((level, i) => {
+      if (i >= IMPACT_DEPTHS_LISTED) {
+        lines.push(`depth ${i + 1}: ${level.length} more dependent(s) (not listed)`);
+        return;
+      }
+      lines.push(i === 0 ? `depth 1 (${level.length} direct dependents):` : `depth ${i + 1} (${level.length}):`);
+      for (const dep of level.slice(0, IMPACT_PER_DEPTH)) {
+        const tests = dep.tests.length ? `tests: ${capJoin(dep.tests, IMPACT_TESTS_PER_DEP)}` : "tests: none recorded";
+        lines.push(`  - ${dep.label} (${dep.via} it) \u2014 ${tests}`);
+      }
+      if (level.length > IMPACT_PER_DEPTH) lines.push(`  \u2026+${level.length - IMPACT_PER_DEPTH} more at depth ${i + 1}`);
+    });
+    const truncatedStructural = graph.truncated.filter((t) => {
+      const kind = relationKind({ predicate: t.predicate });
+      return kind === "imports" || kind === "calls" || kind === "callsSymbol" || kind === "tests";
+    });
+    if (truncatedStructural.length) {
+      lines.push(
+        "warning: partial edge lists (" + truncatedStructural.map((t) => `${t.predicate}: ${t.shown}/${t.count}`).join(", ") + ") \u2014 this closure may be missing edges. Cross-check critical results with tmct_search."
+      );
+    }
+    return lines.join("\n");
+  }
+  function definesIndex(graph) {
+    const idx = /* @__PURE__ */ new Map();
+    for (const g of graph.relations) {
+      if (relationKind(g) !== "defines") continue;
+      for (const e of g.edges) {
+        if (!idx.has(e.subject)) idx.set(e.subject, []);
+        idx.get(e.subject).push(e.objectLabel || e.object);
+      }
+    }
+    return idx;
+  }
+  function moduleEmbedTexts(graph) {
+    const texts = /* @__PURE__ */ new Map();
+    const defIdx = definesIndex(graph);
+    const docs = /* @__PURE__ */ new Map();
+    for (const ind of graph.individuals) {
+      const doc = (ind.attributes || []).find((a) => a.key === "doc")?.value;
+      if (!doc) continue;
+      const modId = (ind.class || "") === "Module" ? ind.id : moduleIdOf(graph, ind);
+      if (!modId) continue;
+      let arr = docs.get(modId);
+      if (!arr) docs.set(modId, arr = []);
+      if (arr.length < EMB_TEXT_DOC_CAP) arr.push(String(doc).split("\n")[0]);
+    }
+    for (const ind of graph.individuals) {
+      if ((ind.class || "") !== "Module") continue;
+      const parts = String(ind.label).split(/[^a-zA-Z0-9_]+/).filter(Boolean);
+      const syms = (defIdx.get(ind.id) || []).slice(0, EMB_TEXT_SYMBOL_CAP);
+      texts.set(ind.id, [...parts, ...syms, ...docs.get(ind.id) || []].join(" "));
+    }
+    return texts;
+  }
+  function identComponents(name) {
+    return new Set(String(name).replace(/([a-z0-9])([A-Z])/g, "$1_$2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+  }
+  function adjacencyForKinds(graph, kinds, idNormalizer = null) {
+    const norm = idNormalizer || ((id) => moduleIdOfId(graph, id));
+    const adj = /* @__PURE__ */ new Map();
+    const link = (a, b) => {
+      if (!a || !b || a === b) return;
+      if (!adj.has(a)) adj.set(a, /* @__PURE__ */ new Set());
+      if (!adj.has(b)) adj.set(b, /* @__PURE__ */ new Set());
+      adj.get(a).add(b);
+      adj.get(b).add(a);
+    };
+    for (const kind of kinds) {
+      for (const e of edgesOfKind(graph, kind)) {
+        link(norm(e.subject), norm(e.object));
+      }
+    }
+    return adj;
+  }
+  function beamExpand(graph, scored, beamWidth) {
+    if (scored.length < 2) return;
+    const byId = new Map(scored.map((s) => [s.ind.id, s]));
+    const baseScore = new Map(scored.map((s) => [s.ind.id, s.score]));
+    const pruneToBeam = (candidates) => {
+      if (!candidates.size) return [[], []];
+      let best = 0;
+      for (const v of candidates.values()) best = Math.max(best, v);
+      const ranked = [...candidates.entries()].sort((a, b) => b[1] - a[1]);
+      const survivors = [];
+      const overflow2 = [];
+      for (const [id, score] of ranked) {
+        if (score >= best * BEAM_MARGIN_FRAC && survivors.length < beamWidth) survivors.push([id, score]);
+        else if (overflow2.length < BEAM_OVERFLOW_CAP) overflow2.push([id, score]);
+      }
+      return [survivors, overflow2];
+    };
+    let [beam, overflow] = pruneToBeam(new Map(scored.map((s) => [s.ind.id, s.score])));
+    const boosted = new Set(beam.map(([id]) => id));
+    for (let ply = 0; ply < BEAM_PLIES && beam.length; ply++) {
+      const merged = /* @__PURE__ */ new Map();
+      const plyOverflow = [];
+      for (const kinds of BEAM_EDGE_GROUPS) {
+        const adj = adjacencyForKinds(graph, kinds);
+        const candidates = /* @__PURE__ */ new Map();
+        for (const [parentId, parentScore] of beam) {
+          for (const neighbourId of adj.get(parentId) || []) {
+            if (!baseScore.has(neighbourId)) continue;
+            candidates.set(neighbourId, Math.max(candidates.get(neighbourId) || 0, parentScore));
+          }
+        }
+        const [survivors, kindOverflow] = pruneToBeam(candidates);
+        for (const [id, score] of survivors) merged.set(id, Math.max(merged.get(id) || 0, score));
+        plyOverflow.push(...kindOverflow);
+      }
+      overflow.push(...plyOverflow);
+      for (const [id, propagated] of merged) {
+        if (boosted.has(id)) continue;
+        const s = byId.get(id);
+        if (!s) continue;
+        s.score += Math.min(propagated * BEAM_PROX_FRAC, s.score * BEAM_PROX_CAP_FRAC);
+        boosted.add(id);
+      }
+      beam = [...merged.entries()];
+      if (!beam.length && overflow.length) {
+        beam = overflow.splice(0, BEAM_OVERFLOW_CAP).filter(([id]) => !boosted.has(id));
+      }
+    }
+  }
+  function spiralExpand(graph, scored = [], {
+    depth = SPIRAL_DEPTH_DEFAULT,
+    q = SPIRAL_Q_DEFAULT,
+    nodeLimit = SPIRAL_NODE_LIMIT_DEFAULT,
+    kinds = SPIRAL_EXPAND_KINDS,
+    classPredicate = (ind) => (ind.class || "") === "Module",
+    idNormalizer = null,
+    seeds: seedsOpt = null,
+    hubDegree = Infinity
+  } = {}) {
+    const byId = new Map(scored.map((s) => [s.ind.id, s]));
+    let maxSeed = 0;
+    for (const s of scored) maxSeed = Math.max(maxSeed, s.score);
+    const nudgeActive = scored.length > 0 && maxSeed > 0;
+    const seeds = new Set(seedsOpt != null ? seedsOpt : byId.keys());
+    if (!seeds.size) return [];
+    const adj = adjacencyForKinds(graph, kinds, idNormalizer);
+    const degree = (id) => adj.get(id)?.size || 0;
+    const heap = [];
+    const less = (a, b) => a.hop !== b.hop ? a.hop < b.hop : a.deg !== b.deg ? a.deg < b.deg : a.id < b.id;
+    const swap = (i, j) => {
+      const t = heap[i];
+      heap[i] = heap[j];
+      heap[j] = t;
+    };
+    const push = (node) => {
+      heap.push(node);
+      let i = heap.length - 1;
+      while (i > 0) {
+        const p = i - 1 >> 1;
+        if (less(heap[i], heap[p])) {
+          swap(i, p);
+          i = p;
+        } else break;
+      }
+    };
+    const pop = () => {
+      const top = heap[0];
+      const last = heap.pop();
+      if (heap.length) {
+        heap[0] = last;
+        let i = 0;
+        for (; ; ) {
+          const l = 2 * i + 1, r = 2 * i + 2;
+          let m = i;
+          if (l < heap.length && less(heap[l], heap[m])) m = l;
+          if (r < heap.length && less(heap[r], heap[m])) m = r;
+          if (m === i) break;
+          swap(i, m);
+          i = m;
+        }
+      }
+      return top;
+    };
+    const visited = new Set(seeds);
+    for (const id of seeds) push({ id, hop: 0, deg: degree(id) });
+    let defIdx = null;
+    let emitted = 0;
+    const results = [];
+    while (heap.length && emitted < nodeLimit) {
+      const node = pop();
+      results.push({ id: node.id, hop: node.hop });
+      if (!seeds.has(node.id)) {
+        if (nudgeActive) {
+          const emitScore = maxSeed * SPIRAL_EMIT_FRAC * Math.pow(SPIRAL_HOP_DECAY, node.hop - 1);
+          const existing = byId.get(node.id);
+          if (existing) {
+            existing.score += Math.min(emitScore * SPIRAL_PROX_FRAC, existing.score * SPIRAL_PROX_CAP_FRAC);
+          } else {
+            const ind = graph.byId?.get?.(node.id);
+            if (ind && classPredicate(ind)) {
+              if (!defIdx) defIdx = definesIndex(graph);
+              const defines = defIdx.get(ind.id) || [];
+              const entry = { ind, score: emitScore, defineCount: defines.length, matching: [], density: 0 };
+              scored.push(entry);
+              byId.set(node.id, entry);
+            }
+          }
+        }
+        emitted++;
+      }
+      if (node.hop >= depth) continue;
+      if (node.hop > 0 && degree(node.id) > hubDegree) continue;
+      const cands = [];
+      for (const nid of adj.get(node.id) || []) {
+        if (visited.has(nid)) continue;
+        const ind = graph.byId?.get?.(nid);
+        if (!ind || !classPredicate(ind)) continue;
+        cands.push({ id: nid, deg: degree(nid) });
+      }
+      if (!cands.length) continue;
+      cands.sort((a, b) => a.deg - b.deg || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      const keep = Math.max(1, Math.floor(q * cands.length));
+      for (let i = 0; i < keep; i++) {
+        const c = cands[i];
+        visited.add(c.id);
+        push({ id: c.id, hop: node.hop + 1, deg: c.deg });
+      }
+    }
+    return results;
+  }
+  function scoreModules(graph, tokens, opts = {}) {
+    const { demoteNonProd = false, callAdjacency = false, implOfInterface = false, beamSearch = false, spiral = false, proseBoost = false, proseLayers = false, literalMention = false, embedRank = false, rawQuery = "" } = opts;
+    const beamWidth = Number.isFinite(opts.beamWidth) && opts.beamWidth > 0 ? opts.beamWidth : 8;
+    const defIdx = definesIndex(graph);
+    const modules = [];
+    for (const ind of graph.individuals) {
+      if ((ind.class || "") !== "Module") continue;
+      const label = String(ind.label);
+      const labelLc = label.toLowerCase();
+      const defines = defIdx.get(ind.id) || [];
+      const symSet = new Set(defines.map((d) => d.toLowerCase()));
+      const symComps = /* @__PURE__ */ new Set();
+      for (const d of defines) for (const c of identComponents(d)) symComps.add(c);
+      const dotted = literalMention ? String((ind.attributes || []).find((a) => a.key === "dotted")?.value || "").toLowerCase() : "";
+      modules.push({ ind, label, labelLc, defines, symSet, symComps, dotted });
+    }
+    const N = modules.length || 1;
+    const idf = /* @__PURE__ */ new Map();
+    for (const t of tokens) {
+      if (idf.has(t)) continue;
+      let df = 0;
+      for (const m of modules) if (m.labelLc.includes(t) || m.symComps.has(t) || m.symSet.has(t)) df++;
+      idf.set(t, Math.log(1 + N / (1 + df)));
+    }
+    const scored = [];
+    for (const m of modules) {
+      let exactScore = 0, pathScore = 0, matchCount = 0;
+      const compWeights = [];
+      for (const t of tokens) {
+        const w = idf.get(t) || 0;
+        if (!w) continue;
+        if (m.symSet.has(t)) {
+          exactScore += w * EXACT_W;
+          matchCount++;
+        } else if (m.symComps.has(t)) {
+          compWeights.push(w);
+          matchCount++;
+        }
+        if (m.labelLc.includes(t)) pathScore += w * PATH_W;
+      }
+      compWeights.sort((a, b) => b - a);
+      let symScore = 0;
+      for (let i = 0; i < Math.min(compWeights.length, SYM_MATCH_CAP); i++) symScore += compWeights[i] * SYM_W;
+      let score = exactScore + pathScore + symScore;
+      if (!score) continue;
+      if (demoteNonProd && (isTestLabel(m.labelLc) || isNonProdLabel(m.labelLc))) score *= NONPROD_DEMOTE;
+      else if (isTestLabel(m.labelLc)) score *= 0.4;
+      const matching = m.defines.filter((d) => {
+        const dl = d.toLowerCase();
+        const cs = identComponents(d);
+        return tokens.some((t) => dl === t || cs.has(t));
+      });
+      const density = m.defines.length ? matchCount / m.defines.length : 0;
+      scored.push({ ind: m.ind, score, defineCount: m.defines.length, matching, density });
+    }
+    if (literalMention && rawQuery && scored.length) {
+      const rawLc = String(rawQuery).toLowerCase();
+      const continues = (ch) => ch != null && /[a-z0-9_./]/.test(ch);
+      const mentioned = (cand) => {
+        for (let i = rawLc.indexOf(cand); i !== -1; i = rawLc.indexOf(cand, i + 1)) {
+          if (!continues(rawLc[i - 1]) && !continues(rawLc[i + cand.length])) return true;
+        }
+        return false;
+      };
+      const idfOf = (t) => {
+        if (!idf.has(t)) {
+          let df = 0;
+          for (const m of modules) if (m.labelLc.includes(t) || m.symComps.has(t) || m.symSet.has(t)) df++;
+          idf.set(t, Math.log(1 + N / (1 + df)));
+        }
+        return idf.get(t);
+      };
+      const byModId = new Map(modules.map((m) => [m.ind.id, m]));
+      let maxBase = 0;
+      for (const s of scored) maxBase = Math.max(maxBase, s.score);
+      for (const s of scored) {
+        const m = byModId.get(s.ind.id);
+        if (!m) continue;
+        let litWeight = 0;
+        for (const cand of /* @__PURE__ */ new Set([m.dotted, m.labelLc])) {
+          if (!cand) continue;
+          if (cand.split(/[./]+/).filter(Boolean).length < LIT_MIN_COMPONENTS) continue;
+          if (!mentioned(cand)) continue;
+          const weights = [...new Set(cand.split(/[^a-z0-9_]+/).filter(Boolean))].map(idfOf).sort((a, b) => b - a);
+          let w = 0;
+          for (let i = 0; i < Math.min(weights.length, LIT_COMP_CAP); i++) w += weights[i] * LIT_W;
+          litWeight = Math.max(litWeight, w);
+        }
+        if (litWeight) s.score += Math.min(litWeight * LIT_FRAC, maxBase * LIT_CAP_FRAC);
+      }
+    }
+    if (scored.length > 1) {
+      const baseById = new Map(scored.map((s) => [s.ind.id, s.score]));
+      const adj = /* @__PURE__ */ new Map();
+      for (const e of edgesOfKind(graph, "imports")) {
+        if (!baseById.has(e.subject) && !baseById.has(e.object)) continue;
+        if (!adj.has(e.subject)) adj.set(e.subject, /* @__PURE__ */ new Set());
+        if (!adj.has(e.object)) adj.set(e.object, /* @__PURE__ */ new Set());
+        adj.get(e.subject).add(e.object);
+        adj.get(e.object).add(e.subject);
+      }
+      for (const s of scored) {
+        let bestNeighbor = 0;
+        for (const nid of adj.get(s.ind.id) || []) bestNeighbor = Math.max(bestNeighbor, baseById.get(nid) || 0);
+        s.score += Math.min(bestNeighbor * PROX_FRAC, s.score * PROX_CAP_FRAC);
+      }
+    }
+    if (callAdjacency && scored.length > 1) {
+      const baseById = new Map(scored.map((s) => [s.ind.id, s.score]));
+      const adj = /* @__PURE__ */ new Map();
+      for (const kind of ["calls", "callsSymbol"]) {
+        for (const e of edgesOfKind(graph, kind)) {
+          const sm = moduleIdOfId(graph, e.subject);
+          const om = moduleIdOfId(graph, e.object);
+          if (!sm || !om || sm === om) continue;
+          if (!baseById.has(sm) && !baseById.has(om)) continue;
+          if (!adj.has(sm)) adj.set(sm, /* @__PURE__ */ new Set());
+          if (!adj.has(om)) adj.set(om, /* @__PURE__ */ new Set());
+          adj.get(sm).add(om);
+          adj.get(om).add(sm);
+        }
+      }
+      for (const s of scored) {
+        let bestNeighbor = 0;
+        for (const nid of adj.get(s.ind.id) || []) bestNeighbor = Math.max(bestNeighbor, baseById.get(nid) || 0);
+        s.score += Math.min(bestNeighbor * CALL_PROX_FRAC, s.score * CALL_PROX_CAP_FRAC);
+      }
+    }
+    if (implOfInterface && scored.length > 1) {
+      const baseById = new Map(scored.map((s) => [s.ind.id, s.score]));
+      const classByLabel = /* @__PURE__ */ new Map();
+      for (const ind of graph.individuals) {
+        if ((ind.class || "") === "Class" && ind.label) classByLabel.set(String(ind.label), ind);
+      }
+      for (const s of scored) {
+        if (!isCsModuleLabel(s.ind.label)) continue;
+        let bestNeighbor = 0;
+        for (const e of edgesOfKind(graph, "inherits")) {
+          const subjModId = moduleIdOfId(graph, e.subject);
+          if (subjModId !== s.ind.id) continue;
+          if (!looksLikeCsInterface(e.objectLabel)) continue;
+          let ifaceModId = moduleIdOfId(graph, e.object);
+          if (!ifaceModId) {
+            const ifaceInd = classByLabel.get(String(e.objectLabel || ""));
+            if (ifaceInd) ifaceModId = moduleIdOf(graph, ifaceInd);
+          }
+          if (ifaceModId) bestNeighbor = Math.max(bestNeighbor, baseById.get(ifaceModId) || 0);
+        }
+        s.score += Math.min(bestNeighbor * IMPL_PROX_FRAC, s.score * IMPL_PROX_CAP_FRAC);
+      }
+    }
+    if (proseBoost && scored.length && graph.proseIndex) {
+      const proseHits = lookupByProseTokens(graph.proseIndex, tokens.join(" "), { limit: PROSE_LOOKUP_LIMIT });
+      if (proseHits.length) {
+        const proseByModule = /* @__PURE__ */ new Map();
+        for (const { id, score } of proseHits) {
+          const modId = moduleIdOfId(graph, id);
+          if (!modId) continue;
+          proseByModule.set(modId, (proseByModule.get(modId) || 0) + score);
+        }
+        for (const s of scored) {
+          const signal = proseByModule.get(s.ind.id) || 0;
+          if (!signal) continue;
+          s.score += Math.min(signal * PROSE_PROX_FRAC, s.score * PROSE_PROX_CAP_FRAC);
+        }
+      }
+    }
+    if (proseLayers && scored.length && graph.proseIndex) {
+      const scoredById = new Map(scored.map((s) => [s.ind.id, s]));
+      const modById = new Map(modules.map((m) => [m.ind.id, m]));
+      const layerSignal = /* @__PURE__ */ new Map();
+      for (const t of new Set(tokens)) {
+        const w = idf.get(t) || 0;
+        if (!w) continue;
+        const { ids } = proseLayerHits(graph.proseIndex, t);
+        if (!ids.length) continue;
+        const hitMods = /* @__PURE__ */ new Set();
+        for (const id of ids) {
+          const modId = moduleIdOfId(graph, id);
+          if (!modId || hitMods.has(modId)) continue;
+          hitMods.add(modId);
+          if (!scoredById.has(modId)) continue;
+          const m = modById.get(modId);
+          if (m && (m.symSet.has(t) || m.symComps.has(t) || m.labelLc.includes(t))) continue;
+          layerSignal.set(modId, (layerSignal.get(modId) || 0) + w * PROSE_LAYER_DISCOUNT);
+        }
+      }
+      for (const s of scored) {
+        const signal = layerSignal.get(s.ind.id) || 0;
+        if (!signal) continue;
+        s.score += Math.min(signal * PROSE_LAYER_FRAC, s.score * PROSE_LAYER_CAP_FRAC);
+      }
+    }
+    if (embedRank) {
+      if (!opts.embedder) {
+        if (!embedWarned) {
+          embedWarned = true;
+          process.stderr.write("tmct: embedRank requested but no embedder available (weights not fetched? see `npm run refs:embeddings`) \u2014 flag is a no-op\n");
+        }
+      } else if (scored.length) {
+        const embedder = opts.embedder;
+        let cache2 = EMB_CACHE.get(graph);
+        if (!cache2 || cache2.embedder !== embedder) {
+          cache2 = { embedder, texts: moduleEmbedTexts(graph), vecs: /* @__PURE__ */ new Map() };
+          EMB_CACHE.set(graph, cache2);
+        }
+        const qv = embedder.embed(rawQuery || tokens.join(" "));
+        let maxBase = 0;
+        for (const s of scored) maxBase = Math.max(maxBase, s.score);
+        for (const s of scored) {
+          let v = cache2.vecs.get(s.ind.id);
+          if (!v) {
+            v = embedder.embed(cache2.texts.get(s.ind.id) || String(s.ind.label));
+            cache2.vecs.set(s.ind.id, v);
+          }
+          const sim = Math.max(0, cosine(qv, v));
+          if (!sim) continue;
+          s.score += Math.min(sim * maxBase * EMB_FRAC, s.score * EMB_CAP_FRAC);
+        }
+      }
+    }
+    if (beamSearch && scored.length > 1) beamExpand(graph, scored, beamWidth);
+    if (spiral && scored.length) spiralExpand(graph, scored, {
+      depth: Number.isFinite(opts.spiralDepth) && opts.spiralDepth > 0 ? opts.spiralDepth : SPIRAL_DEPTH_DEFAULT,
+      q: Number.isFinite(opts.mostDistinctiveBeams) && opts.mostDistinctiveBeams > 0 ? opts.mostDistinctiveBeams : SPIRAL_Q_DEFAULT,
+      nodeLimit: Number.isFinite(opts.spiralNodeLimit) && opts.spiralNodeLimit > 0 ? opts.spiralNodeLimit : SPIRAL_NODE_LIMIT_DEFAULT
+    });
+    scored.sort((a, b) => b.score - a.score || b.density - a.density || a.defineCount - b.defineCount || String(a.ind.label).length - String(b.ind.label).length);
+    return scored;
+  }
+  function searchModulesRanked(graph, query, opts = {}) {
+    const raw = String(query || "");
+    const tokens = raw.toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean);
+    if (!tokens.length) return [];
+    const effOpts = opts.literalMention || opts.embedRank ? { ...opts, rawQuery: raw } : opts;
+    return scoreModules(graph, tokens, effOpts).map((s) => ({ path: String(s.ind.label), score: s.score }));
+  }
+  function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", decorator = "", name = "" } = {}) {
+    const tokens = String(query || "").toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean);
+    const wantKind = String(kind || "").trim().toLowerCase();
+    const decFilter = String(decorator || "").trim().toLowerCase();
+    let nameRe = null;
+    if (name) {
+      try {
+        nameRe = new RegExp(name, "i");
+      } catch {
+        return `invalid name pattern: ${name}`;
+      }
+    }
+    if (wantKind && wantKind !== "module") {
+      return searchSymbols(graph, tokens, { limit, kind: wantKind, decFilter, nameRe });
+    }
+    if (!tokens.length && !nameRe && !decFilter) return "empty query";
+    const scored = scoreModules(graph, tokens);
+    if (!scored.length) {
+      return `no module matches "${query}". Try broader keywords, or tmct_describe <path> if you know where it lives.`;
+    }
+    const hits = scored.slice(0, limit);
+    const lines = [`${scored.length} module(s) match "${query}" (top ${hits.length}):`];
+    for (const { ind, defineCount, matching } of hits) {
+      const m = matching.length ? ` \u2014 matching: ${capJoin([...new Set(matching)], SEARCH_SYMBOLS_SHOWN)}` : "";
+      lines.push(`- ${ind.label} (defines ${defineCount} symbol(s))${m}`);
+    }
+    lines.push("Then tmct_describe <path> for the full sibling list + typed edges, or tmct_impact <path> for dependents.");
+    return lines.join("\n");
+  }
+  function edgesOfKind(graph, kind) {
+    let byKind = edgesOfKindCache.get(graph);
+    if (!byKind) {
+      byKind = /* @__PURE__ */ new Map();
+      edgesOfKindCache.set(graph, byKind);
+    }
+    const cached3 = byKind.get(kind);
+    if (cached3) return cached3;
+    const out = [];
+    for (const g of graph.relations) {
+      if (relationKind(g) !== kind) continue;
+      for (const e of g.edges) out.push(e);
+    }
+    byKind.set(kind, out);
+    return out;
+  }
   function moduleIdOfId(graph, id) {
     const ind = graph.byId?.get?.(id);
     if (ind) return moduleIdOf(graph, ind);
@@ -1161,11 +1767,629 @@
     const m = String(ind?.id || "").match(/^fn:(.+)#/);
     return m ? `mod:${m[1]}` : null;
   }
-  var PROP_KIND, HISTORY_CAP;
+  function spanTag(site) {
+    if (!site) return "";
+    const s = site.end > site.start ? `${site.start}-${site.end}` : `${site.start}`;
+    return ` [${site.path}:${s}]`;
+  }
+  function decoratorOf(ind) {
+    return (ind?.attributes || []).find((a) => a.key === "decorators")?.value || "";
+  }
+  function renderMembers(graph, ind) {
+    const lines = [`${ind.label} \u2014 ${classHeading(ind.class)} (id: ${ind.id})`];
+    const contains = edgesOfKind(graph, "contains").filter((e) => e.subject === ind.id);
+    if (!contains.length) {
+      lines.push("members: none recorded (empty class, or members not in the extracted graph). Use tmct_describe for its edges.");
+      return lines.join("\n");
+    }
+    const methods = [];
+    const attrs = [];
+    for (const e of contains) {
+      const member = graph.byId.get(e.object);
+      const where = spanTag(member ? siteOf(member) : null);
+      const dec = member ? decoratorOf(member) : "";
+      const entry = `${e.objectLabel || e.object}${where}${dec ? ` @${dec}` : ""}`;
+      ((member?.class || "") === "Attribute" ? attrs : methods).push(entry);
+    }
+    if (methods.length) lines.push(`methods (${methods.length}): ${capJoin(methods, MEMBERS_CAP)}`);
+    if (attrs.length) lines.push(`attributes (${attrs.length}): ${capJoin(attrs, MEMBERS_CAP)}`);
+    lines.push("Use tmct_snippet <Class.member> for an exact body.");
+    return lines.join("\n");
+  }
+  function renderSignature(graph, ind) {
+    const site = siteOf(ind);
+    const lines = [`${ind.label} \u2014 ${classHeading(ind.class)}${spanTag(site)}`];
+    const params = attrVal(ind, "params");
+    const returns = attrVal(ind, "returns");
+    if (params || returns || (ind.class || "") === "Method" || (ind.class || "") === "Function") {
+      lines.push(`signature: ${ind.label}(${params})${returns ? ` -> ${returns}` : ""}`);
+    }
+    const flags = [];
+    if (attrVal(ind, "isStatic")) flags.push("static");
+    if (attrVal(ind, "isAbstract")) flags.push("abstract");
+    if (attrVal(ind, "isConstant")) flags.push("constant");
+    const vis = attrVal(ind, "visibility");
+    if (vis) flags.push(vis);
+    if (flags.length) lines.push(`flags: ${flags.join(", ")}`);
+    const dec = decoratorOf(ind);
+    if (dec) lines.push(`decorators: @${dec.split(", ").join(", @")}`);
+    const raises = attrVal(ind, "raises");
+    if (raises) lines.push(`raises: ${raises}`);
+    const catches = attrVal(ind, "catches");
+    if (catches) lines.push(`catches: ${catches}`);
+    const fields = attrVal(ind, "self_fields");
+    if (fields) lines.push(`self fields: ${fields}`);
+    const value = attrVal(ind, "value");
+    if (value) lines.push(`value: ${value}`);
+    const doc = attrVal(ind, "doc");
+    if (doc) lines.push(`doc: ${doc}`);
+    if (lines.length === 1) lines.push("(no signature detail recorded for this symbol \u2014 likely a module or attribute; use tmct_snippet for its source.)");
+    lines.push("Use tmct_snippet for the exact body.");
+    return lines.join("\n");
+  }
+  function renderSubclasses(graph, ind) {
+    const inherits = edgesOfKind(graph, "inherits");
+    const bases = inherits.filter((e) => e.subject === ind.id).map((e) => e.objectLabel || e.object);
+    const childrenOf = /* @__PURE__ */ new Map();
+    for (const e of inherits) {
+      if (!childrenOf.has(e.object)) childrenOf.set(e.object, []);
+      childrenOf.get(e.object).push({ id: e.subject, label: e.subjectLabel || e.subject });
+    }
+    const lines = [`${ind.label} \u2014 ${classHeading(ind.class)} (id: ${ind.id})`];
+    lines.push(bases.length ? `extends: ${capJoin(bases, SUBCLASS_CAP)}` : "extends: (no internal/recorded base classes)");
+    const visited = /* @__PURE__ */ new Set([ind.id]);
+    const levels = [];
+    let frontier = [ind.id];
+    for (let depth = 1; depth <= 8 && frontier.length; depth += 1) {
+      const next = [];
+      const level = [];
+      for (const id of frontier) {
+        for (const c of childrenOf.get(id) || []) {
+          if (visited.has(c.id)) continue;
+          visited.add(c.id);
+          level.push(c.label);
+          next.push(c.id);
+        }
+      }
+      if (level.length) {
+        level.sort((a, b) => String(a).localeCompare(String(b)));
+        levels.push(level);
+      }
+      frontier = next;
+    }
+    const total = levels.reduce((n, l) => n + l.length, 0);
+    if (!total) {
+      lines.push("subclasses: none recorded \u2014 nothing extends it in the extracted graph.");
+    } else {
+      lines.push(`subclasses: ${total} total across ${levels.length} level(s).`);
+      levels.forEach((l, i) => lines.push(`  depth ${i + 1} (${l.length}): ${capJoin(l, SUBCLASS_CAP)}`));
+    }
+    return lines.join("\n");
+  }
+  function renderArchitecture(graph, { pkg = "" } = {}) {
+    const norm = normPath(pkg);
+    const modules = graph.individuals.filter(
+      (i) => (i.class || "") === "Module" && (!norm || normPath(i.label).startsWith(norm))
+    );
+    if (!modules.length) return norm ? `no modules under "${pkg}".` : "no modules in the graph.";
+    const pkgCount = /* @__PURE__ */ new Map();
+    for (const m of modules) {
+      const dir = m.label.includes("/") ? m.label.slice(0, m.label.lastIndexOf("/")) : "(root)";
+      pkgCount.set(dir, (pkgCount.get(dir) || 0) + 1);
+    }
+    const inDeg = /* @__PURE__ */ new Map();
+    for (const e of edgesOfKind(graph, "imports")) inDeg.set(e.object, (inDeg.get(e.object) || 0) + 1);
+    const modSet = new Set(modules.map((m) => m.id));
+    const hubs = [...inDeg.entries()].filter(([id]) => modSet.has(id)).sort((a, b) => b[1] - a[1]).slice(0, ARCH_HUB_CAP).map(([id, n]) => `${graph.byId.get(id)?.label || id} (${n} importers)`);
+    const pkgs = [...pkgCount.entries()].sort((a, b) => b[1] - a[1]);
+    const lines = [`Architecture${norm ? ` of ${pkg}` : ""}: ${modules.length} module(s) in ${pkgs.length} package(s).`];
+    lines.push(`packages (by module count): ${capJoin(pkgs.map(([d, n]) => `${d} (${n})`), ARCH_PKG_CAP)}`);
+    lines.push(hubs.length ? `hub modules (most imported): ${hubs.join(", ")}` : "hub modules: none (no internal imports recorded).");
+    return lines.join("\n");
+  }
+  function renderTestsFor(graph, ind) {
+    const modId = moduleIdOf(graph, ind);
+    if (!modId) return `cannot map ${ind.label} to a module.`;
+    const modLabel = graph.byId.get(modId)?.label || modId;
+    const tests = [...new Set(edgesOfKind(graph, "tests").filter((e) => e.object === modId).map((e) => e.subjectLabel || e.subject))];
+    if (!tests.length) return `${modLabel}: no covering tests recorded (no test module imports it).`;
+    return `${modLabel}: covered by ${tests.length} test module(s):
+  ${capJoin(tests, COVERAGE_CAP, "\n  ")}`;
+  }
+  function renderUntested(graph) {
+    const covered = /* @__PURE__ */ new Set();
+    const testModules = /* @__PURE__ */ new Set();
+    for (const e of edgesOfKind(graph, "tests")) {
+      covered.add(e.object);
+      testModules.add(e.subject);
+    }
+    const untested = graph.individuals.filter(
+      (i) => (i.class || "") === "Module" && !testModules.has(i.id) && !isTestLabel(String(i.label).toLowerCase()) && !covered.has(i.id)
+    ).map((i) => i.label).sort();
+    if (!untested.length) return "every source module has at least one covering test module.";
+    return `${untested.length} source module(s) with no covering test module:
+  ${capJoin(untested, COVERAGE_CAP, "\n  ")}`;
+  }
+  function renderHistory(graph, ind) {
+    const modId = moduleIdOf(graph, ind);
+    if (!modId) return `cannot map ${ind.label} to a module.`;
+    const modLabel = graph.byId.get(modId)?.label || modId;
+    const commits = edgesOfKind(graph, "touches").filter((e) => e.object === modId).map((e) => e.subjectLabel || e.subject);
+    if (!commits.length) return `${modLabel}: no commit history recorded (outside the git-log window or unmodified).`;
+    return `${modLabel}: touched by ${commits.length} recent commit(s): ${capJoin(commits, HISTORY_CAP)}`;
+  }
+  function renderCallers(graph, ind) {
+    if (CALL_SYMBOL_CLASSES.has(ind.class)) {
+      const callers2 = [...new Set(edgesOfKind(graph, "callsSymbol").filter((e) => e.object === ind.id).map((e) => e.subjectLabel || e.subject))];
+      if (!callers2.length) return `${ind.label}: no recorded callers (fine-grained call edges are conservative \u2014 absence is not proof). Try tmct_impact for the full reverse closure.`;
+      return `${ind.label} \u2014 called by ${callers2.length} symbol(s):
+  ${capJoin(callers2, CALL_CAP, "\n  ")}`;
+    }
+    const modId = moduleIdOf(graph, ind);
+    if (!modId) return `cannot map ${ind.label} to a module.`;
+    const modLabel = graph.byId.get(modId)?.label || modId;
+    const callers = [...new Set(edgesOfKind(graph, "calls").filter((e) => e.object === modId).map((e) => e.subjectLabel || e.subject))];
+    if (!callers.length) return `${modLabel}: no recorded callers (calls are coarse/import-backed \u2014 absence is not proof). Try tmct_impact for the full reverse closure.`;
+    return `${modLabel} \u2014 called by ${callers.length} module(s):
+  ${capJoin(callers, CALL_CAP, "\n  ")}`;
+  }
+  function renderCallees(graph, ind) {
+    if (CALL_SYMBOL_CLASSES.has(ind.class)) {
+      const callees2 = [...new Set(edgesOfKind(graph, "callsSymbol").filter((e) => e.subject === ind.id).map((e) => e.objectLabel || e.object))];
+      if (!callees2.length) return `${ind.label}: no recorded callees (calls only stdlib/external, or fine-grained call edges are not in the extracted graph).`;
+      return `${ind.label} \u2014 calls into ${callees2.length} symbol(s):
+  ${capJoin(callees2, CALL_CAP, "\n  ")}`;
+    }
+    const modId = moduleIdOf(graph, ind);
+    if (!modId) return `cannot map ${ind.label} to a module.`;
+    const modLabel = graph.byId.get(modId)?.label || modId;
+    const callees = [...new Set(edgesOfKind(graph, "calls").filter((e) => e.subject === modId).map((e) => e.objectLabel || e.object))];
+    if (!callees.length) return `${modLabel}: no recorded callees.`;
+    return `${modLabel} \u2014 calls into ${callees.length} module(s):
+  ${capJoin(callees, CALL_CAP, "\n  ")}`;
+  }
+  function calleeRef(graph, e) {
+    const callee = graph.byId.get(e.object);
+    const cs = callee ? siteOf(callee) : null;
+    return `${e.objectLabel || callee?.label || e.object}${cs ? ` [${cs.path}:${cs.start}]` : ""}`;
+  }
+  function callHint(graph, ind) {
+    if (!ind?.id) return "";
+    const calls = edgesOfKind(graph, "callsSymbol").filter((e) => e.subject === ind.id);
+    if (!calls.length) return "";
+    return `calls in-repo: ${capJoin(calls.map((e) => calleeRef(graph, e)), CALL_HINT_CAP)}`;
+  }
+  function renderCalls(graph, ind) {
+    const calls = edgesOfKind(graph, "callsSymbol").filter((e) => e.subject === ind.id);
+    if (!calls.length) {
+      return `${ind.label} \u2014 ${classHeading(ind.class)}: no in-repo calls recorded (calls only stdlib/external, or fine-grained call edges are not in the extracted graph).`;
+    }
+    const items = calls.map((e) => calleeRef(graph, e));
+    return `${ind.label} \u2014 ${classHeading(ind.class)} calls ${calls.length} in-repo symbol(s):
+  ${capJoin(items, CALL_CAP, "\n  ")}`;
+  }
+  function commitLine(graph, commitId, fallbackLabel) {
+    const c = graph.byId.get(commitId);
+    const sha = c?.label || fallbackLabel || commitId;
+    const date = attrVal(c, "commitDate") || attrVal(c, "date");
+    const author = attrVal(c, "commitAuthor") || attrVal(c, "author");
+    const msg = attrVal(c, "commitMessage") || attrVal(c, "message");
+    const head = [sha, date, author].filter(Boolean).join(" ");
+    return msg ? `${head} \u2014 ${msg}` : head;
+  }
+  function renderFileHistory(graph, ind) {
+    const modId = moduleIdOf(graph, ind);
+    if (!modId) return `cannot map ${ind.label} to a module.`;
+    const modLabel = graph.byId.get(modId)?.label || modId;
+    const commits = edgesOfKind(graph, "touches").filter((e) => e.object === modId);
+    if (!commits.length) return `${modLabel}: no commit history recorded (outside the git-log window or unmodified).`;
+    const shown = commits.slice(0, HISTORY_CAP).map((e) => `  ${commitLine(graph, e.subject, e.subjectLabel)}`);
+    const tail = commits.length > HISTORY_CAP ? `
+  \u2026+${commits.length - HISTORY_CAP} more` : "";
+    return `${modLabel}: touched by ${commits.length} recent commit(s):
+${shown.join("\n")}${tail}`;
+  }
+  function renderSymbolHistory(graph, ind) {
+    const commits = edgesOfKind(graph, "touchesSymbol").filter((e) => e.object === ind.id);
+    if (!commits.length) {
+      return `${ind.label} \u2014 ${classHeading(ind.class)}: no symbol-level commit history recorded (outside the git-log window, or fine-grained history is not in the extracted graph).`;
+    }
+    const shown = commits.slice(0, HISTORY_CAP).map((e) => `  ${commitLine(graph, e.subject, e.subjectLabel)}`);
+    const tail = commits.length > HISTORY_CAP ? `
+  \u2026+${commits.length - HISTORY_CAP} more` : "";
+    return `${ind.label} \u2014 ${classHeading(ind.class)}: touched by ${commits.length} commit(s):
+${shown.join("\n")}${tail}`;
+  }
+  function renderMethodHistory(graph, ind) {
+    return renderSymbolHistory(graph, ind);
+  }
+  function renderClassHistory(graph, ind) {
+    return renderSymbolHistory(graph, ind);
+  }
+  function scoreSymbolsRanked(graph, tokens, { kind, decFilter = "", nameRe = null } = {}) {
+    const targetClass = SYMBOL_CLASSES[kind];
+    if (!targetClass) return [];
+    const hits = [];
+    for (const ind of graph.individuals) {
+      if ((ind.class || "") !== targetClass) continue;
+      if (nameRe && !nameRe.test(ind.label)) continue;
+      if (decFilter && !decoratorOf(ind).toLowerCase().includes(decFilter)) continue;
+      const label = String(ind.label).toLowerCase();
+      let score = tokens.length ? 0 : 1;
+      for (const t of tokens) if (label.includes(t)) score += 5;
+      if (tokens.length && !score) continue;
+      hits.push({ ind, score });
+    }
+    hits.sort((a, b) => b.score - a.score || String(a.ind.label).length - String(b.ind.label).length);
+    return hits;
+  }
+  function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, nameRe }) {
+    const targetClass = SYMBOL_CLASSES[kind];
+    if (!targetClass) return `unknown kind "${kind}" (use function, class, method, attribute, or module).`;
+    const hits = scoreSymbolsRanked(graph, tokens, { kind, decFilter, nameRe });
+    if (!hits.length) return `no ${kind} matches the given filters.`;
+    const top = hits.slice(0, limit);
+    const lines = [`${hits.length} ${kind}(s) match (top ${top.length}):`];
+    for (const { ind } of top) lines.push(`- ${ind.label}${spanTag(siteOf(ind))}`);
+    lines.push("Then tmct_snippet <name> for the exact body, or tmct_describe for its edges.");
+    return lines.join("\n");
+  }
+  function profileOf(x) {
+    return {
+      paramCount: countParams(x?.params),
+      hasReturns: Boolean(x?.returns),
+      hasRaises: Boolean(x?.raises),
+      callees: x?.callees instanceof Set ? x.callees : /* @__PURE__ */ new Set()
+    };
+  }
+  function dominantProfile(siblings) {
+    if (!siblings.length) return { paramCount: 0, hasReturns: false, hasRaises: false, callees: /* @__PURE__ */ new Set() };
+    const counts = siblings.map((s) => countParams(s.params));
+    const retYes = siblings.filter((s) => Boolean(s.returns)).length;
+    const raiseYes = siblings.filter((s) => Boolean(s.raises)).length;
+    const calleeFreq = /* @__PURE__ */ new Map();
+    for (const s of siblings) for (const c of s.callees || []) calleeFreq.set(c, (calleeFreq.get(c) || 0) + 1);
+    const common = new Set([...calleeFreq.entries()].filter(([, n]) => n >= 2).map(([c]) => c));
+    return {
+      paramCount: modeOf(counts),
+      hasReturns: retYes * 2 >= siblings.length,
+      hasRaises: raiseYes * 2 >= siblings.length,
+      callees: common
+    };
+  }
+  function structuralScore(s, target) {
+    if (!target) return 0;
+    let score = Math.max(0, 4 - Math.abs(countParams(s.params) - target.paramCount));
+    if (Boolean(s.returns) === target.hasReturns) score += 2;
+    if (Boolean(s.raises) === target.hasRaises) score += 2;
+    const shared = [...s.callees || []].filter((c) => target.callees.has(c)).length;
+    return score + Math.min(shared, 4) * 2;
+  }
+  function rankSiblings(siblings, { decorators: anchorDecorators = "", label: anchorLabel = "", site: anchorSite = null } = {}, structuralTarget = null) {
+    const decCount = /* @__PURE__ */ new Map();
+    for (const s of siblings) for (const d of splitDecs(s.decorators)) decCount.set(d, (decCount.get(d) || 0) + 1);
+    let dominant = "";
+    let bestCount = 1;
+    for (const [d, c] of decCount) if (c > bestCount) {
+      bestCount = c;
+      dominant = d;
+    }
+    const anchorDecs = new Set(splitDecs(anchorDecorators));
+    const targetDecs = anchorDecs.size ? anchorDecs : new Set(dominant ? [dominant] : []);
+    const anchorTokens = new Set(tokenize(anchorLabel));
+    const anchorStart = anchorSite?.start ?? null;
+    for (const s of siblings) {
+      const decMatch = splitDecs(s.decorators).some((d) => targetDecs.has(d)) ? 1 : 0;
+      const nameAff = tokenize(s.label).filter((t) => anchorTokens.has(t)).length;
+      const struct = structuralScore(s, structuralTarget);
+      const pos = anchorStart != null && s.site ? 1 / (1 + Math.abs(s.site.start - anchorStart)) : 0;
+      s._score = decMatch * 1e3 + nameAff * 50 + struct + pos;
+    }
+    return [...siblings].sort((a, b) => b._score - a._score || (a.site?.start || 0) - (b.site?.start || 0));
+  }
+  function contextPlan(graph, ind) {
+    const modId = moduleIdOf(graph, ind);
+    const moduleLabel = graph.byId.get(modId)?.label || String(modId || "").replace(/^mod:/, "");
+    const defEdges = edgesOfKind(graph, "defines").filter((e) => e.subject === modId);
+    const calleeMap = /* @__PURE__ */ new Map();
+    for (const e of edgesOfKind(graph, "callsSymbol")) {
+      if (!calleeMap.has(e.subject)) calleeMap.set(e.subject, /* @__PURE__ */ new Set());
+      calleeMap.get(e.subject).add(e.object);
+    }
+    let siblings = [];
+    const globals = [];
+    let insertion = 0;
+    for (const e of defEdges) {
+      const mem = graph.byId.get(e.object);
+      if (!mem) continue;
+      const cls = mem.class || "";
+      const site = siteOf(mem);
+      if (cls === "GlobalVariable") {
+        globals.push({ label: mem.label, value: (mem.attributes || []).find((a) => a.key === "value")?.value || "", site });
+        if (site) insertion = Math.max(insertion, site.end);
+      } else if (cls === "Function" || cls === "Class") {
+        siblings.push({
+          id: mem.id,
+          label: mem.label,
+          class: cls,
+          site,
+          decorators: decoratorOf(mem),
+          raises: attrVal(mem, "raises"),
+          doc: attrVal(mem, "doc"),
+          params: attrVal(mem, "params"),
+          returns: attrVal(mem, "returns"),
+          callees: calleeMap.get(mem.id) || /* @__PURE__ */ new Set()
+        });
+        if (site) insertion = Math.max(insertion, site.end);
+      }
+    }
+    const anchorSite = siteOf(ind);
+    const anchor = anchorSite && (ind.class || "") !== "Module" ? {
+      id: ind.id,
+      label: ind.label,
+      class: ind.class || "",
+      site: anchorSite,
+      decorators: decoratorOf(ind),
+      raises: attrVal(ind, "raises"),
+      params: attrVal(ind, "params"),
+      returns: attrVal(ind, "returns"),
+      callees: calleeMap.get(ind.id) || /* @__PURE__ */ new Set()
+    } : null;
+    const totalSiblings = siblings.length;
+    const structuralTarget = anchor ? profileOf(anchor) : dominantProfile(siblings);
+    siblings = rankSiblings(siblings, anchor || { label: ind.label }, structuralTarget);
+    const exemplar = !anchor ? siblings.find((s) => s.site && s.label !== ind.label) || null : null;
+    const tests = [...new Set(edgesOfKind(graph, "tests").filter((e) => e.object === modId).map((e) => e.subjectLabel || e.subject))].slice(0, CONTEXT_TESTS_CAP);
+    const cochange = cochangeNeighbours(graph, modId).slice(0, COCHANGE_MID_CAP);
+    const exports = edgesOfKind(graph, "reexports").filter((e) => e.subject === modId).map((e) => e.objectLabel || e.object).slice(0, 20);
+    const allExports = attrVal(graph.byId.get(modId), "all");
+    const contains = edgesOfKind(graph, "contains");
+    let classOwnerId = null;
+    if ((ind.class || "") === "Class") classOwnerId = ind.id;
+    else if ((ind.class || "") === "Method") classOwnerId = contains.find((e) => e.object === ind.id)?.subject || null;
+    let classMembers = null;
+    if (classOwnerId) {
+      const owner = graph.byId.get(classOwnerId);
+      const members = contains.filter((e) => e.subject === classOwnerId).map((e) => {
+        const m = graph.byId.get(e.object);
+        return {
+          label: e.objectLabel || m?.label || e.object,
+          class: m?.class || "",
+          site: m ? siteOf(m) : null,
+          decorators: m ? decoratorOf(m) : "",
+          params: m ? attrVal(m, "params") : "",
+          returns: m ? attrVal(m, "returns") : "",
+          raises: m ? attrVal(m, "raises") : ""
+        };
+      }).slice(0, CLASS_MEMBER_CAP);
+      classMembers = { className: owner?.label || String(classOwnerId).replace(/^fn:.*#/, ""), members, total: contains.filter((e) => e.subject === classOwnerId).length };
+    }
+    let lastTop = null;
+    for (const s of [...siblings, ...globals]) {
+      if (s.site && (!lastTop || s.site.start > lastTop.start)) lastTop = s.site;
+    }
+    const insertionRegion = lastTop ? { start: lastTop.start, end: lastTop.end } : null;
+    const focal = anchor || exemplar;
+    const focalInd = focal?.id ? graph.byId.get(focal.id) : null;
+    const callHintStr = focalInd ? callHint(graph, focalInd) : "";
+    let calleeBodies = [];
+    if (focal?.callees) {
+      for (const cid of focal.callees) {
+        const c = graph.byId.get(cid);
+        const cs = c ? siteOf(c) : null;
+        if (cs) calleeBodies.push({ label: c.label, site: cs });
+        if (calleeBodies.length >= INLINE_CALLEE_CAP) break;
+      }
+    }
+    return {
+      modId,
+      moduleLabel,
+      anchor,
+      siblings,
+      totalSiblings,
+      exemplar,
+      globals,
+      tests,
+      cochange,
+      exports,
+      allExports,
+      classMembers,
+      insertion,
+      insertionRegion,
+      calleeBodies,
+      callHint: callHintStr,
+      siblingCap: CONTEXT_SIBLING_CAP
+    };
+  }
+  function bundleMask(tier) {
+    const all = {
+      anchor: true,
+      exemplar: true,
+      registration: true,
+      insertionRegion: true,
+      allExports: true,
+      classMembers: true,
+      siblings: true,
+      reexports: true,
+      tests: true,
+      cochange: true,
+      inlinedCallees: false
+    };
+    if (tier === "TINY") return { ...all, classMembers: false, siblings: false, reexports: false, tests: false, cochange: false };
+    if (tier === "LARGE" || tier === "FULL") return { ...all, inlinedCallees: true };
+    return all;
+  }
+  function trimBundleMask(mask) {
+    return {
+      ...mask,
+      anchor: false,
+      exemplar: false,
+      inlinedCallees: false,
+      classMembers: false,
+      reexports: false,
+      tests: false,
+      cochange: false,
+      registration: true,
+      siblings: true,
+      insertionRegion: true,
+      allExports: true
+    };
+  }
+  function sizeBundle(plan, graph, { untuned = false } = {}) {
+    const focal = plan.anchor || plan.exemplar;
+    let tier = "TINY";
+    const hasExemplarBody = Boolean(plan.anchor && plan.anchor.site || plan.exemplar && plan.exemplar.site);
+    if (!hasExemplarBody) tier = "MID";
+    if (plan.classMembers && plan.classMembers.members && plan.classMembers.members.length) tier = "MID";
+    if (focal) {
+      const loc = focal.site ? focal.site.end - focal.site.start + 1 : Infinity;
+      const arity = countParams(focal.params);
+      if (loc > TINY_MAX_LOC || arity > TINY_MAX_ARITY || Boolean(focal.raises)) tier = "MID";
+      let crossModule = false;
+      if (plan.anchor) {
+        for (const cid of focal.callees || []) {
+          const c = graph.byId.get(cid);
+          const cs = c ? siteOf(c) : null;
+          if (cs && cs.path !== plan.moduleLabel) {
+            crossModule = true;
+            break;
+          }
+        }
+      }
+      const bigClassMethod = (plan.anchor?.class || "") === "Method" && Number(plan.classMembers?.total || plan.classMembers?.members?.length || 0) >= LARGE_CLASS_MEMBERS;
+      if (crossModule || bigClassMethod) tier = "LARGE";
+    } else {
+      tier = "MID";
+    }
+    return { tier, mask: bundleMask(tier), topup: tier !== "TINY" };
+  }
+  function renderContextMore(plan) {
+    const out = [`Additional context for ${plan.moduleLabel} (sections omitted from the lean bundle):`];
+    if (plan.classMembers && plan.classMembers.members.length) {
+      out.push(`
+## members of ${plan.classMembers.className}:`);
+      for (const m of plan.classMembers.members) {
+        const short = String(m.label).split(".").pop();
+        const sig = m.params != null && m.params !== "" ? `(${m.params})${m.returns ? ` -> ${m.returns}` : ""}` : "";
+        const dec = m.decorators ? `@${m.decorators} ` : "";
+        const r = m.raises ? `  raises=${m.raises}` : "";
+        out.push(`  ${m.class} ${short}${m.site ? ` :${m.site.start}` : ""}  ${dec}${short}${sig}${r}`);
+      }
+    }
+    if (plan.siblings.length) {
+      out.push(`
+## sibling symbols (most relevant first; ${plan.siblings.length} total):`);
+      for (const s of plan.siblings.slice(0, plan.siblingCap)) {
+        const dec = s.decorators ? `@${s.decorators} ` : "";
+        const r = s.raises ? `  raises=${s.raises}` : "";
+        out.push(`  ${s.class} ${s.label}${s.site ? ` :${s.site.start}` : ""}  ${dec}${r}`);
+      }
+      if (plan.siblings.length > plan.siblingCap) out.push(`  \u2026+${plan.siblings.length - plan.siblingCap} more`);
+    }
+    if (plan.allExports) out.push(`
+## module __all__: ${plan.allExports}`);
+    if (plan.exports && plan.exports.length) out.push(`
+## re-exported symbols: ${plan.exports.join(", ")}`);
+    if (plan.tests.length) out.push(`
+## covering tests: ${plan.tests.join(", ")}`);
+    if (plan.cochange && plan.cochange.length) {
+      out.push(`
+## usually changed together: ${plan.cochange.map((c) => `${c.label} (\xD7${c.weight})`).join(", ")}`);
+    }
+    if (out.length === 1) out.push("(no omitted sections \u2014 the lean bundle already contained everything for this symbol.)");
+    return out.join("\n");
+  }
+  function renderGraphOnlyBundle(plan, mask) {
+    const out = [
+      `Edit context for ${plan.moduleLabel} (graph-only bundle \u2014 siblings/registration/tests are real graph truth; no source body without a source-capable provider).`
+    ];
+    if (mask.registration && plan.globals.length) {
+      out.push(`
+## registration / module globals (replicate this pattern):`);
+      for (const g of plan.globals) out.push(`  ${g.label} = ${g.value}${g.site ? `  [:${g.site.start}]` : ""}`);
+    }
+    if (mask.classMembers && plan.classMembers && plan.classMembers.members.length) {
+      out.push(`
+## members of ${plan.classMembers.className}:`);
+      for (const m of plan.classMembers.members) {
+        const short = String(m.label).split(".").pop();
+        const sig = m.params != null && m.params !== "" ? `(${m.params})${m.returns ? ` -> ${m.returns}` : ""}` : "";
+        const dec = m.decorators ? `@${m.decorators} ` : "";
+        const r = m.raises ? `  raises=${m.raises}` : "";
+        out.push(`  ${m.class} ${short}${m.site ? ` :${m.site.start}` : ""}  ${dec}${short}${sig}${r}`);
+      }
+    }
+    if (mask.siblings && plan.siblings.length) {
+      out.push(`
+## sibling symbols to copy the style of (most relevant first; ${plan.siblings.length} total):`);
+      for (const s of plan.siblings.slice(0, plan.siblingCap)) {
+        const dec = s.decorators ? `@${s.decorators} ` : "";
+        const r = s.raises ? `  raises=${s.raises}` : "";
+        out.push(`  ${s.class} ${s.label}${s.site ? ` :${s.site.start}` : ""}  ${dec}${r}`);
+      }
+      if (plan.siblings.length > plan.siblingCap) out.push(`  \u2026+${plan.siblings.length - plan.siblingCap} more`);
+    }
+    if (mask.allExports && plan.allExports) out.push(`
+## module __all__: ${plan.allExports}`);
+    if (mask.reexports && plan.exports && plan.exports.length) out.push(`
+## re-exported symbols: ${plan.exports.join(", ")}`);
+    if (mask.insertionRegion) {
+      if (plan.insertionRegion) {
+        out.push(`
+## insertion region starts at ${plan.moduleLabel}:${plan.insertionRegion.start} (write your new sibling here \u2014 no source body in this graph-only bundle).`);
+      } else if (plan.insertion) {
+        out.push(`
+## insert the new sibling after line ~${plan.insertion} (end of the last top-level definition).`);
+      }
+    }
+    if (mask.tests && plan.tests.length) out.push(`
+## covering tests: ${plan.tests.join(", ")}`);
+    if (mask.cochange && plan.cochange && plan.cochange.length) {
+      out.push(`
+## usually changed together (consider editing these too): ${plan.cochange.map((c) => `${c.label} (\xD7${c.weight})`).join(", ")}`);
+    }
+    return out.join("\n");
+  }
+  function cochangeNeighbours(graph, modId) {
+    const hits = [];
+    for (const e of edgesOfKind(graph, "cochange")) {
+      if (e.subject === modId) hits.push({ label: e.objectLabel || e.object, weight: e.weight || 0 });
+      else if (e.object === modId) hits.push({ label: e.subjectLabel || e.subject, weight: e.weight || 0 });
+    }
+    return hits.sort((a, b) => b.weight - a.weight);
+  }
+  function renderCochanges(graph, ind) {
+    const modId = moduleIdOf(graph, ind);
+    if (!modId) return `cannot map ${ind.label} to a module.`;
+    const modLabel = graph.byId.get(modId)?.label || modId;
+    const hits = cochangeNeighbours(graph, modId);
+    if (!hits.length) return `${modLabel}: no change-coupling recorded (rarely co-committed, or outside the git-log window).`;
+    const list = hits.slice(0, COCHANGE_CAP).map((h) => `${h.label} (\xD7${h.weight})`);
+    return `${modLabel} \u2014 usually changes together with ${hits.length} module(s) (edit these too):
+  ${list.join("\n  ")}` + (hits.length > COCHANGE_CAP ? `
+  \u2026+${hits.length - COCHANGE_CAP} more` : "");
+  }
+  function renderExports(graph, ind) {
+    const modId = moduleIdOf(graph, ind);
+    if (!modId) return `cannot map ${ind.label} to a module.`;
+    const modLabel = graph.byId.get(modId)?.label || modId;
+    const edges = edgesOfKind(graph, "reexports").filter((e) => e.subject === modId);
+    if (!edges.length) return `${modLabel}: no public exports recorded (no export list / __all__ found, or none resolved).`;
+    const list = edges.slice(0, EXPORTS_CAP).map((e) => {
+      const origin = graph.byId.get(e.object);
+      const where = origin ? siteOf(origin) : null;
+      const from = where ? ` \u2190 ${where.path}` : "";
+      return `${e.objectLabel || e.object}${from}`;
+    });
+    return `${modLabel} \u2014 public API (${edges.length} export(s)):
+  ${list.join("\n  ")}` + (edges.length > EXPORTS_CAP ? `
+  \u2026+${edges.length - EXPORTS_CAP} more` : "");
+  }
+  var PROP_KIND, isProvRef, DESCRIBE_EDGE_CAP, PROV_CAP, IMPACT_DEPTHS_LISTED, IMPACT_PER_DEPTH, IMPACT_TESTS_PER_DEP, SEARCH_LIMIT, SEARCH_SYMBOLS_SHOWN, PATH_W, SYM_W, EXACT_W, SYM_MATCH_CAP, PROX_FRAC, PROX_CAP_FRAC, isTestLabel, NONPROD_DEMOTE, isNonProdLabel, CALL_PROX_FRAC, CALL_PROX_CAP_FRAC, IMPL_PROX_FRAC, IMPL_PROX_CAP_FRAC, isCsModuleLabel, looksLikeCsInterface, PROSE_PROX_FRAC, PROSE_PROX_CAP_FRAC, PROSE_LOOKUP_LIMIT, PROSE_LAYER_FRAC, PROSE_LAYER_CAP_FRAC, PROSE_LAYER_DISCOUNT, LIT_W, LIT_MIN_COMPONENTS, LIT_COMP_CAP, LIT_FRAC, LIT_CAP_FRAC, EMB_FRAC, EMB_CAP_FRAC, EMB_TEXT_SYMBOL_CAP, EMB_TEXT_DOC_CAP, EMB_CACHE, embedWarned, BEAM_MARGIN_FRAC, BEAM_PROX_FRAC, BEAM_PROX_CAP_FRAC, BEAM_OVERFLOW_CAP, BEAM_PLIES, BEAM_EDGE_GROUPS, SPIRAL_DEPTH_DEFAULT, SPIRAL_NODE_LIMIT_DEFAULT, SPIRAL_Q_DEFAULT, SPIRAL_EXPAND_KINDS, SPIRAL_EMIT_FRAC, SPIRAL_HOP_DECAY, SPIRAL_PROX_FRAC, SPIRAL_PROX_CAP_FRAC, edgesOfKindCache, MEMBERS_CAP, SUBCLASS_CAP, CALL_CAP, attrVal, ARCH_PKG_CAP, ARCH_HUB_CAP, COVERAGE_CAP, HISTORY_CAP, CALL_SYMBOL_CLASSES, CALL_HINT_CAP, SYMBOL_CLASSES, CONTEXT_SIBLING_CAP, CLASS_MEMBER_CAP, COCHANGE_MID_CAP, CONTEXT_TESTS_CAP, TINY_MAX_LOC, TINY_MAX_ARITY, LARGE_CLASS_MEMBERS, INLINE_CALLEE_CAP, splitDecs, tokenize, countParams, modeOf, COCHANGE_CAP, EXPORTS_CAP;
   var init_codegraph = __esm({
     "src/domain/codegraph.mjs"() {
       init_prose();
-      init_embed();
+      init_vector();
       init_trust();
       PROP_KIND = {
         // v2.0 faithful tokens (SEON-faithful realign)
@@ -1195,12 +2419,104 @@
         "mgx:saidinsession": "saidInSession",
         "mgx:inreplyto": "inReplyTo",
         "mgx:statedby": "statedBy",
-        "mgx:canonicalisedfrom": "canonicalisedFrom",
-        // structural links deriveFactTermGraph synthesizes on every Fact (Fact -> its own subject/object Term)
-        "mgx:factsubjectterm": "factSubjectTerm",
-        "mgx:factobjectterm": "factObjectTerm"
+        "mgx:canonicalisedfrom": "canonicalisedFrom"
       };
+      isProvRef = (r) => /^(git|turn):/.test(String(r || ""));
+      DESCRIBE_EDGE_CAP = 30;
+      PROV_CAP = 8;
+      IMPACT_DEPTHS_LISTED = 2;
+      IMPACT_PER_DEPTH = 25;
+      IMPACT_TESTS_PER_DEP = 3;
+      SEARCH_LIMIT = 10;
+      SEARCH_SYMBOLS_SHOWN = 8;
+      PATH_W = 3;
+      SYM_W = 2;
+      EXACT_W = 5;
+      SYM_MATCH_CAP = 4;
+      PROX_FRAC = 0.2;
+      PROX_CAP_FRAC = 0.35;
+      isTestLabel = (s) => /(^|\/)tests?\//.test(s) || /(^|\/)test_[^/]*\.py$/.test(s) || /\.tests(\.|$)/.test(s);
+      NONPROD_DEMOTE = 0.15;
+      isNonProdLabel = (s) => /(^|\/)(examples?|fixtures?|samples?|demos?|benchmarks?|test-[^/]+)(\/|$)/.test(s);
+      CALL_PROX_FRAC = 0.2;
+      CALL_PROX_CAP_FRAC = 0.35;
+      IMPL_PROX_FRAC = 0.2;
+      IMPL_PROX_CAP_FRAC = 0.35;
+      isCsModuleLabel = (s) => /\.cs$/i.test(s);
+      looksLikeCsInterface = (label) => /^I[A-Z]/.test(String(label || ""));
+      PROSE_PROX_FRAC = 0.2;
+      PROSE_PROX_CAP_FRAC = 0.35;
+      PROSE_LOOKUP_LIMIT = 50;
+      PROSE_LAYER_FRAC = 0.2;
+      PROSE_LAYER_CAP_FRAC = 0.35;
+      PROSE_LAYER_DISCOUNT = 0.5;
+      LIT_W = EXACT_W;
+      LIT_MIN_COMPONENTS = 3;
+      LIT_COMP_CAP = 4;
+      LIT_FRAC = 1;
+      LIT_CAP_FRAC = 0.9;
+      EMB_FRAC = 0.2;
+      EMB_CAP_FRAC = 0.35;
+      EMB_TEXT_SYMBOL_CAP = 64;
+      EMB_TEXT_DOC_CAP = 12;
+      EMB_CACHE = /* @__PURE__ */ new WeakMap();
+      embedWarned = false;
+      BEAM_MARGIN_FRAC = 0.5;
+      BEAM_PROX_FRAC = 0.2;
+      BEAM_PROX_CAP_FRAC = 0.35;
+      BEAM_OVERFLOW_CAP = 4;
+      BEAM_PLIES = 2;
+      BEAM_EDGE_GROUPS = [["imports"], ["calls", "callsSymbol"], ["inherits"], ["cochange"]];
+      SPIRAL_DEPTH_DEFAULT = 3;
+      SPIRAL_NODE_LIMIT_DEFAULT = 12;
+      SPIRAL_Q_DEFAULT = 0.9;
+      SPIRAL_EXPAND_KINDS = ["imports", "calls", "callsSymbol", "inherits"];
+      SPIRAL_EMIT_FRAC = 0.5;
+      SPIRAL_HOP_DECAY = 0.6;
+      SPIRAL_PROX_FRAC = 0.2;
+      SPIRAL_PROX_CAP_FRAC = 0.35;
+      edgesOfKindCache = /* @__PURE__ */ new WeakMap();
+      MEMBERS_CAP = 40;
+      SUBCLASS_CAP = 40;
+      CALL_CAP = 30;
+      attrVal = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)?.value || "";
+      ARCH_PKG_CAP = 25;
+      ARCH_HUB_CAP = 15;
+      COVERAGE_CAP = 40;
       HISTORY_CAP = 15;
+      CALL_SYMBOL_CLASSES = /* @__PURE__ */ new Set(["Function", "Method"]);
+      CALL_HINT_CAP = 8;
+      SYMBOL_CLASSES = { function: "Function", class: "Class", method: "Method", attribute: "Attribute" };
+      CONTEXT_SIBLING_CAP = 8;
+      CLASS_MEMBER_CAP = 16;
+      COCHANGE_MID_CAP = 4;
+      CONTEXT_TESTS_CAP = 6;
+      TINY_MAX_LOC = 12;
+      TINY_MAX_ARITY = 2;
+      LARGE_CLASS_MEMBERS = 8;
+      INLINE_CALLEE_CAP = 3;
+      splitDecs = (s) => String(s || "").split(",").map((x) => x.trim()).filter(Boolean);
+      tokenize = (s) => String(s || "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+      countParams = (p) => {
+        const s = String(p || "").trim();
+        return s ? s.split(",").map((x) => x.trim()).filter(Boolean).length : 0;
+      };
+      modeOf = (nums) => {
+        const freq = /* @__PURE__ */ new Map();
+        let best = nums[0] ?? 0;
+        let bestN = 0;
+        for (const n of nums) {
+          const c = (freq.get(n) || 0) + 1;
+          freq.set(n, c);
+          if (c > bestN) {
+            bestN = c;
+            best = n;
+          }
+        }
+        return best;
+      };
+      COCHANGE_CAP = 20;
+      EXPORTS_CAP = 40;
     }
   });
 
@@ -2187,7 +3503,7 @@
     touchesRephraseHint: () => touchesRephraseHint,
     traverse: () => traverse
   });
-  function edgesOfKind(graph, kind) {
+  function edgesOfKind2(graph, kind) {
     let byKind = askEdgesOfKindCache.get(graph);
     if (!byKind) {
       byKind = /* @__PURE__ */ new Map();
@@ -2314,7 +3630,7 @@
   function classesForKinds(graph, kinds) {
     const classes = /* @__PURE__ */ new Set();
     for (const k of kinds) {
-      for (const e of edgesOfKind(graph, k)) {
+      for (const e of edgesOfKind2(graph, k)) {
         const o = graph.byId.get(e.object);
         if (o && o.class) classes.add(o.class);
       }
@@ -2903,12 +4219,12 @@
   function reverseOverSet(graph, kind, entityType, objectIds) {
     const symbolKind = SYMBOL_GRAIN_SIBLING[kind];
     if (symbolKind && FINE_ENTITY_TYPES.has(entityType)) {
-      const edges2 = edgesOfKind(graph, symbolKind).filter((e) => objectIds.has(e.object));
+      const edges2 = edgesOfKind2(graph, symbolKind).filter((e) => objectIds.has(e.object));
       return uniqueById(edges2.map((e) => graph.byId.get(e.subject)).filter((s) => s && s.class === entityType));
     }
     const objHasFine = !!symbolKind && [...objectIds].some((id) => FINE_ENTITY_TYPES.has(graph.byId.get(id)?.class));
     const scanKinds = objHasFine ? [...kindsFor(kind), symbolKind] : kindsFor(kind);
-    const edges = scanKinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => objectIds.has(e.object));
+    const edges = scanKinds.flatMap((k) => edgesOfKind2(graph, k)).filter((e) => objectIds.has(e.object));
     const subjects = uniqueById(edges.map((e) => graph.byId.get(e.subject)).filter(Boolean));
     if (!entityType || entityType === "Change") return subjects;
     const direct = subjects.filter((s) => s.class === entityType);
@@ -2919,7 +4235,7 @@
     return [];
   }
   function forwardOverSet(graph, kind, subjectIds) {
-    const edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => subjectIds.has(e.subject));
+    const edges = kindsFor(kind).flatMap((k) => edgesOfKind2(graph, k)).filter((e) => subjectIds.has(e.subject));
     return uniqueById(edges.map((e) => graph.byId.get(e.object)).filter(Boolean));
   }
   function uniqueById(inds) {
@@ -2941,14 +4257,14 @@
     let c = qualCache.get(graph);
     if (c) return c;
     const exported = /* @__PURE__ */ new Set();
-    for (const e of edgesOfKind(graph, "reexports")) {
+    for (const e of edgesOfKind2(graph, "reexports")) {
       exported.add(String(e.object).toLowerCase());
       const ind = graph.byId.get(e.object);
       if (ind) exported.add(String(ind.label).toLowerCase());
     }
-    const testedModules = new Set(edgesOfKind(graph, "tests").map((e) => e.object));
+    const testedModules = new Set(edgesOfKind2(graph, "tests").map((e) => e.object));
     const moduleOfSymbol = /* @__PURE__ */ new Map();
-    for (const e of edgesOfKind(graph, "defines")) moduleOfSymbol.set(e.object, e.subject);
+    for (const e of edgesOfKind2(graph, "defines")) moduleOfSymbol.set(e.object, e.subject);
     c = { exported, testedModules, moduleOfSymbol };
     qualCache.set(graph, c);
     return c;
@@ -3025,7 +4341,7 @@
     }
   }
   function inheritsEdges(graph) {
-    return edgesOfKind(graph, "inherits");
+    return edgesOfKind2(graph, "inherits");
   }
   function directChildrenOf(graph, id) {
     return inheritsEdges(graph).filter((e) => e.object === id).map((e) => e.subject);
@@ -3143,7 +4459,7 @@
       // Subjects with any edge of a kind; an existential negation differences
       // this off allOfClass to yield "modules that import nothing".
       case "existsEdge": {
-        const subs = new Set(kindsFor(ast.kind).flatMap((k) => edgesOfKind(graph, k)).map((e) => e.subject));
+        const subs = new Set(kindsFor(ast.kind).flatMap((k) => edgesOfKind2(graph, k)).map((e) => e.subject));
         return graph.individuals.filter((i) => subs.has(i.id) && (!ast.entityType || i.class === ast.entityType));
       }
       // Forward complement: the verb's object-grain universe minus what the
@@ -3252,7 +4568,7 @@
       else {
         const sib = SYMBOL_GRAIN_SIBLING[f.clause.kind];
         const kinds = [...kindsFor(f.clause.kind), ...sib ? [sib] : []];
-        const ok = new Set(kinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.object === r.match.id).map((e) => e.subject));
+        const ok = new Set(kinds.flatMap((k) => edgesOfKind2(graph, k)).filter((e) => e.object === r.match.id).map((e) => e.subject));
         items = items.filter((ind) => ok.has(ind.id));
       }
     }
@@ -3264,7 +4580,7 @@
   function degreeMetric(graph, ind, metric) {
     const kinds = metric.kind === "*" ? DEGREE_KINDS : [metric.kind, ...metric.sibling ? [metric.sibling] : []];
     let n = 0;
-    for (const k of kinds) for (const e of edgesOfKind(graph, k)) {
+    for (const k of kinds) for (const e of edgesOfKind2(graph, k)) {
       const out = e.subject === ind.id;
       const inc = e.object === ind.id;
       if (metric.dir === "out" && out) {
@@ -3797,7 +5113,7 @@
   }
   function refineToEntities(graph, moduleIds, entityType) {
     const out = [];
-    for (const e of edgesOfKind(graph, "defines")) {
+    for (const e of edgesOfKind2(graph, "defines")) {
       if (!moduleIds.has(e.subject)) continue;
       const ind = graph.byId.get(e.object);
       if (ind && ind.class === entityType) out.push(ind);
@@ -3809,7 +5125,7 @@
     const wantCoarse = wildcard || entityType === "Module";
     const wantFine = wildcard || FINE_ENTITY_TYPES.has(entityType);
     const kinds = [...wantCoarse ? ["touches"] : [], ...wantFine ? ["touchesSymbol"] : []];
-    let matches = kinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.subject === commit.id).map((e) => graph.byId.get(e.object)).filter(Boolean);
+    let matches = kinds.flatMap((k) => edgesOfKind2(graph, k)).filter((e) => e.subject === commit.id).map((e) => graph.byId.get(e.object)).filter(Boolean);
     if (entityType && FINE_ENTITY_TYPES.has(entityType)) matches = matches.filter((m) => m.class === entityType);
     return {
       matches,
@@ -3930,7 +5246,7 @@
         if (to.class === "Commit" && from.class !== "Commit") [from, to] = [to, from];
         if (from.class === "Commit") kinds = ["touches", "touchesSymbol"];
       }
-      const edges2 = kinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.subject === from.id && e.object === to.id);
+      const edges2 = kinds.flatMap((k) => edgesOfKind2(graph, k)).filter((e) => e.subject === from.id && e.object === to.id);
       return {
         matches: edges2,
         answer: edges2.length > 0,
@@ -3996,7 +5312,7 @@
       if (objMatch.class === "Commit") {
         commits = [objMatch];
       } else {
-        const edges2 = ["touches", "touchesSymbol"].flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.object === objMatch.id);
+        const edges2 = ["touches", "touchesSymbol"].flatMap((k) => edgesOfKind2(graph, k)).filter((e) => e.object === objMatch.id);
         const seen = /* @__PURE__ */ new Set();
         commits = [];
         for (const e of edges2) {
@@ -4019,7 +5335,7 @@
     }
     if (shape === "whoLast") {
       const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "");
-      const edges2 = ["touches", "touchesSymbol"].flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.object === objMatch.id);
+      const edges2 = ["touches", "touchesSymbol"].flatMap((k) => edgesOfKind2(graph, k)).filter((e) => e.object === objMatch.id);
       const seen = /* @__PURE__ */ new Set();
       const commits = [];
       for (const e of edges2) {
@@ -4062,7 +5378,7 @@
           };
         }
       }
-      const edges2 = fwdKinds.flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.subject === objMatch.id);
+      const edges2 = fwdKinds.flatMap((k) => edgesOfKind2(graph, k)).filter((e) => e.subject === objMatch.id);
       const targets = edges2.map((e) => graph.byId.get(e.object)).filter(Boolean);
       const deduped = subjIsFineSymbol ? uniqueById(targets) : targets;
       let matches2 = deduped;
@@ -4095,7 +5411,7 @@
     const symbolKind = SYMBOL_GRAIN_SIBLING[kind];
     const objIsFineSymbol = !!(objMatch.class && FINE_ENTITY_TYPES.has(objMatch.class));
     if (symbolKind && (FINE_ENTITY_TYPES.has(entityType) || objIsFineSymbol)) {
-      const edges2 = edgesOfKind(graph, symbolKind).filter((e) => e.object === objMatch.id);
+      const edges2 = edgesOfKind2(graph, symbolKind).filter((e) => e.object === objMatch.id);
       const subjects2 = uniqueById(edges2.map((e) => graph.byId.get(e.subject)).filter(Boolean));
       let matches2 = !entityType || entityType === "Change" ? subjects2 : subjects2.filter((i) => i.class === entityType);
       let widenNote = "";
@@ -4107,7 +5423,7 @@
           widenNote = `, widened to ${siblingClass} subjects (no ${entityType} recorded)`;
         }
       }
-      const upRefineEligible = (kind === "touches" || kind === "calls") && objMatch.class === "Class" && !edgesOfKind(graph, "contains").some((e) => e.subject === objMatch.id);
+      const upRefineEligible = (kind === "touches" || kind === "calls") && objMatch.class === "Class" && !edgesOfKind2(graph, "contains").some((e) => e.subject === objMatch.id);
       const upRefineModule = upRefineEligible ? graph.byId.get(moduleIdOf2(graph, objMatch) || "") : null;
       if (matches2.length || !(upRefineEligible && upRefineModule)) {
         return { matches: matches2, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}${widenNote}`, ambiguous, matchedVia };
@@ -4157,16 +5473,16 @@
         };
       }
     }
-    let edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.object === gObjMatch.id);
+    let edges = kindsFor(kind).flatMap((k) => edgesOfKind2(graph, k)).filter((e) => e.object === gObjMatch.id);
     if (kind === "cochange") {
       edges = edges.concat(
-        kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => e.subject === gObjMatch.id).map((e) => ({ ...e, subject: e.object, object: e.subject }))
+        kindsFor(kind).flatMap((k) => edgesOfKind2(graph, k)).filter((e) => e.subject === gObjMatch.id).map((e) => ({ ...e, subject: e.object, object: e.subject }))
       );
     }
     let extNote = "";
     if (!edges.length && gObjMatch.class) {
       const extId = `ext:${String(gObjMatch.label).toLowerCase()}`;
-      edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => String(e.object).toLowerCase() === extId);
+      edges = kindsFor(kind).flatMap((k) => edgesOfKind2(graph, k)).filter((e) => String(e.object).toLowerCase() === extId);
       if (edges.length) extNote = ` (by name, via unresolved ${extId} references)`;
     }
     const subjects = [];
@@ -5013,7 +6329,71 @@ ${lines.join("\n")}`;
     }
   });
 
+  // src/adapters/source-slice.mjs
+  function sliceSpan(lines, start, end, maxLines) {
+    const s = Math.max(1, start);
+    let e = Math.min(lines.length, end);
+    let truncated = false;
+    if (maxLines != null && e - s + 1 > maxLines) {
+      e = s + maxLines - 1;
+      truncated = true;
+    }
+    const text = lines.slice(s - 1, e).map((l, i) => `${s + i}	${l}`).join("\n");
+    return { start: s, end: e, text, truncated };
+  }
+  async function readSpanSafe({ readFile: readFile12, repoRoot, path, start, end, maxLines }) {
+    const root = resolve(repoRoot);
+    const resolved = resolve(root, path);
+    if (resolved !== root && !resolved.startsWith(root + sep)) {
+      throw new ToolError(`refusing to read outside the repository root: ${path}`);
+    }
+    const text = await readFile12(resolved, "utf8");
+    const lines = text.split("\n");
+    if (start == null || end == null) return { lines };
+    return { lines, ...sliceSpan(lines, start, end, maxLines) };
+  }
+  var init_source_slice = __esm({
+    "src/adapters/source-slice.mjs"() {
+      init_node_path();
+      init_config();
+    }
+  });
+
   // src/adapters/repository-interface.mjs
+  function hit(value) {
+    return { ok: true, value };
+  }
+  function miss(reason, { detail = "", term = null } = {}) {
+    if (!MISS_REASONS[reason]) {
+      throw new TypeError(`miss(): unknown reason "${reason}" (not in MISS_REASONS)`);
+    }
+    return { ok: false, miss: { reason, detail, term } };
+  }
+  function toIndividual(ind) {
+    if (!ind || !ind.id) return null;
+    return {
+      id: String(ind.id),
+      label: ind.label != null ? String(ind.label) : String(ind.id),
+      class: ind.class || "Entity",
+      attributes: (Array.isArray(ind.attributes) ? ind.attributes : []).map((a) => ({
+        key: a.key,
+        value: a.value,
+        prop: a.prop || null
+      }))
+    };
+  }
+  function toEdge(rawEdge, { predicate = "", prop = null } = {}) {
+    const e = {
+      subject: rawEdge.subject,
+      object: rawEdge.object,
+      predicate,
+      prop: prop || null
+    };
+    if (rawEdge.subjectLabel != null) e.subjectLabel = rawEdge.subjectLabel;
+    if (rawEdge.objectLabel != null) e.objectLabel = rawEdge.objectLabel;
+    if (rawEdge.weight != null) e.weight = rawEdge.weight;
+    return e;
+  }
   var INTERFACE_VERSION, ONTOLOGY_IRI, MISS_REASONS, EDGE_KINDS, EDGE_KIND_TO_TMCT, SERVICE_GROUPS, SERVICES, SOURCE_SERVICES, IND, EDGE, CONCURRENT_SAFE, REPOSITORY_INTERFACE;
   var init_repository_interface = __esm({
     "src/adapters/repository-interface.mjs"() {
@@ -5240,15 +6620,377 @@ ${lines.join("\n")}`;
   });
 
   // src/adapters/providers/graph-service.mjs
+  function edgesAround(graph, id) {
+    const out = [];
+    const incoming = [];
+    for (const g of graph.relations) {
+      for (const e of g.edges) {
+        if (e.subject === id) out.push(toEdge(e, { predicate: g.predicate, prop: g.prop }));
+        if (e.object === id) incoming.push(toEdge(e, { predicate: g.predicate, prop: g.prop }));
+      }
+    }
+    return { out, incoming };
+  }
+  function groupMetaForKind(graph, kind) {
+    for (const g of graph.relations) if (relationKind(g) === kind) return { predicate: g.predicate, prop: g.prop };
+    return { predicate: kind, prop: null };
+  }
+  async function renderSourceBodies(plan, mask, { readFile: readFile12, repoRoot }) {
+    if (!plan.moduleLabel) return "";
+    let lines = null;
+    try {
+      ({ lines } = await readSpanSafe({ readFile: readFile12, repoRoot, path: plan.moduleLabel }));
+    } catch {
+      lines = null;
+    }
+    if (!lines) return "";
+    const out = [];
+    if (mask.anchor && plan.anchor?.site) {
+      const { start, end } = plan.anchor.site;
+      out.push(`
+## anchor: ${plan.anchor.label} (${plan.anchor.class}) @ ${plan.moduleLabel}:${start}-${end}`);
+      out.push(sliceSpan(lines, start, end, CONTEXT_BODY_MAX_LINES).text);
+      if (plan.callHint) out.push(plan.callHint);
+    }
+    if (mask.exemplar && plan.exemplar?.site) {
+      const { start, end } = plan.exemplar.site;
+      const dec = plan.exemplar.decorators ? ` @${plan.exemplar.decorators}` : "";
+      out.push(`
+## closest example (full body) \u2014 copy this style: ${plan.exemplar.label} (${plan.exemplar.class})${dec} @ ${plan.moduleLabel}:${start}-${end}`);
+      out.push(sliceSpan(lines, start, end, CONTEXT_BODY_MAX_LINES).text);
+      if (plan.callHint) out.push(plan.callHint);
+    }
+    if (mask.inlinedCallees && plan.calleeBodies.length) {
+      let budget = CONTEXT_INLINE_CALLEE_LOC;
+      for (const cb of plan.calleeBodies) {
+        if (budget <= 0) break;
+        const start = cb.site.start;
+        const fromThisFile = cb.site.path === plan.moduleLabel;
+        let bodyLines = fromThisFile ? lines : null;
+        if (!bodyLines) {
+          try {
+            ({ lines: bodyLines } = await readSpanSafe({ readFile: readFile12, repoRoot, path: cb.site.path }));
+          } catch {
+            bodyLines = null;
+          }
+        }
+        if (!bodyLines) continue;
+        const sliced = sliceSpan(bodyLines, start, cb.site.end, budget);
+        out.push(`
+## inlined callee body (depth-1 in-repo call): ${cb.label} @ ${cb.site.path}:${start}-${cb.site.end}`);
+        out.push(sliced.text);
+        budget -= sliced.end - start + 1;
+      }
+    }
+    return out.join("\n");
+  }
+  function createGraphService(graph, { sourceAccess = false, repoRoot = null, readFile: readFile12 = null, tel = null, ask: ask2 = null } = {}) {
+    const byId = graph.byId;
+    if (sourceAccess && (!repoRoot || typeof readFile12 !== "function")) {
+      throw new TypeError(
+        "createGraphService({ sourceAccess: true }) requires both repoRoot and readFile \u2014 fs access is an injected capability, not an ambient import."
+      );
+    }
+    const resolveId = (id) => byId.get(id) || null;
+    const svc = {
+      version: INTERFACE_VERSION,
+      /** Advertised services. Source services are listed but honestly answer NO_SOURCE
+       *  unless a source-capable provider overrides them. */
+      capabilities: [...SERVICES],
+      sourceAccess: Boolean(sourceAccess),
+      /** The underlying graph — tmct-internal presentation (render*) reads it; not
+       *  part of the wire contract. */
+      graph,
+      resolve(term) {
+        const { match, candidates } = resolveSymbol(graph, String(term ?? ""));
+        if (!match) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: String(term ?? "") });
+        return hit({ match: toIndividual(match), candidates: candidates.map(toIndividual) });
+      },
+      describe(id) {
+        const ind = resolveId(id);
+        if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: id });
+        const { out, incoming } = edgesAround(graph, id);
+        return hit({ individual: toIndividual(ind), out, incoming });
+      },
+      members(classId) {
+        const ind = resolveId(classId);
+        if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: classId });
+        const contains = edgesOfKind(graph, "contains").filter((e) => e.subject === classId);
+        const methods = [];
+        const attributes = [];
+        for (const e of contains) {
+          const m = byId.get(e.object);
+          const proj = m ? toIndividual(m) : { id: e.object, label: e.objectLabel || e.object, class: "Entity", attributes: [] };
+          if ((m?.class || "") === "Attribute") attributes.push(proj);
+          else methods.push(proj);
+        }
+        return hit({ methods, attributes });
+      },
+      subclasses(classId) {
+        const ind = resolveId(classId);
+        if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: classId });
+        const inherits = edgesOfKind(graph, "inherits");
+        const bases = inherits.filter((e) => e.subject === classId).map((e) => byId.get(e.object) ? toIndividual(byId.get(e.object)) : { id: e.object, label: e.objectLabel || e.object, class: "Class", attributes: [] });
+        const childrenOf = /* @__PURE__ */ new Map();
+        for (const e of inherits) {
+          if (!childrenOf.has(e.object)) childrenOf.set(e.object, []);
+          childrenOf.get(e.object).push(e.subject);
+        }
+        const seen = /* @__PURE__ */ new Set([classId]);
+        const subs = [];
+        let frontier = [classId];
+        for (let d = 0; d < 8 && frontier.length; d += 1) {
+          const next = [];
+          for (const cur of frontier) {
+            for (const childId of childrenOf.get(cur) || []) {
+              if (seen.has(childId)) continue;
+              seen.add(childId);
+              const c = byId.get(childId);
+              subs.push(c ? toIndividual(c) : { id: childId, label: childId, class: "Class", attributes: [] });
+              next.push(childId);
+            }
+          }
+          frontier = next;
+        }
+        return hit({ bases, subclasses: subs });
+      },
+      exports(moduleId) {
+        const ind = resolveId(moduleId);
+        if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: moduleId });
+        const edges = edgesOfKind(graph, "reexports").filter((e) => e.subject === moduleId);
+        const exports = edges.map((e) => byId.get(e.object) ? toIndividual(byId.get(e.object)) : { id: e.object, label: e.objectLabel || e.object, class: "Entity", attributes: [] });
+        return hit({ exports });
+      },
+      signature(id) {
+        const ind = resolveId(id);
+        if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: id });
+        const flags = [];
+        for (const [attr, name] of [["isStatic", "static"], ["isAbstract", "abstract"], ["isConstant", "constant"]]) {
+          if (attrOf(ind, attr)) flags.push(name);
+        }
+        const vis = attrOf(ind, "visibility");
+        if (vis) flags.push(vis);
+        return hit({
+          id: ind.id,
+          label: ind.label,
+          class: ind.class || "Entity",
+          params: attrOf(ind, "params"),
+          returns: attrOf(ind, "returns"),
+          raises: attrOf(ind, "raises"),
+          decorators: attrOf(ind, "decorators"),
+          doc: attrOf(ind, "doc"),
+          selfFields: attrOf(ind, "self_fields"),
+          flags
+        });
+      },
+      edges(id, kind, { limit, offset = 0 } = {}) {
+        if (!EDGE_KINDS.includes(kind)) {
+          throw new TypeError(`edges(): unknown kind "${kind}" (not in EDGE_KINDS)`);
+        }
+        const ind = resolveId(id);
+        if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: id });
+        const meta = groupMetaForKind(graph, kind);
+        let edges = edgesOfKind(graph, kind).filter((e) => e.subject === id).map((e) => toEdge(e, meta));
+        edges = limit == null ? edges.slice(offset) : edges.slice(offset, offset + limit);
+        return hit({ kind, edges });
+      },
+      impact(moduleId, { maxDepth } = {}) {
+        const ind = resolveId(moduleId);
+        if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: moduleId });
+        const levels = maxDepth == null ? impactClosure(graph, ind) : impactClosure(graph, ind, { maxDepth });
+        const total = levels.reduce((n, l) => n + l.length, 0);
+        return hit({ total, levels });
+      },
+      // Async (returns Promise<Result>): callers should always await a source-reaching
+      // service regardless of whether this provider happens to be source-capable.
+      async snippet(id) {
+        const ind = resolveId(id);
+        if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: id });
+        const site = siteOf(ind);
+        if (!svc.sourceAccess) {
+          return miss(MISS_REASONS.NO_SOURCE, {
+            term: id,
+            detail: site ? `span is ${site.path}:${site.start}-${site.end}; this provider exposes no working tree` : "no source span in the graph"
+          });
+        }
+        if (!site) return miss(MISS_REASONS.NO_SOURCE, { term: id, detail: "no source span in the graph (likely a module)" });
+        try {
+          const sliced = await readSpanSafe({
+            readFile: readFile12,
+            repoRoot,
+            path: site.path,
+            start: site.start,
+            end: site.end,
+            maxLines: CONTEXT_BODY_MAX_LINES
+          });
+          return hit({ path: site.path, span: { start: site.start, end: site.end }, body: sliced.text });
+        } catch (e) {
+          return miss(MISS_REASONS.NO_SOURCE, { term: id, detail: `could not read ${site.path}: ${e?.message || e}` });
+        }
+      },
+      // A graph-only HIT for any resolvable symbol (siblings/registration/globals/tests/
+      // exports/insertion-region), everything except anchor/exemplar/inlined-callee body TEXT.
+      // A source-capable provider layers the body sections on top via renderSourceBodies.
+      async context(symbol, { depth = "auto" } = {}) {
+        const { match } = resolveSymbol(graph, String(symbol ?? ""));
+        if (!match) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: String(symbol ?? "") });
+        const plan = contextPlan(graph, match);
+        const d = String(depth || "auto").trim().toLowerCase();
+        let tier, mask;
+        if (d === "min") {
+          tier = "TINY";
+          mask = bundleMask("TINY");
+        } else if (d === "full") {
+          tier = "FULL";
+          mask = bundleMask("FULL");
+        } else ({ tier, mask } = sizeBundle(plan, graph, {}));
+        const graphText = renderGraphOnlyBundle(plan, mask);
+        if (!svc.sourceAccess) return hit({ text: graphText, tier });
+        const bodyText = await renderSourceBodies(plan, mask, { readFile: readFile12, repoRoot });
+        return hit({ text: bodyText ? `${graphText}
+${bodyText}` : graphText, tier });
+      },
+      architecture({ package: pkg = "" } = {}) {
+        const norm = String(pkg || "").trim().toLowerCase().replace(/^\.?\//, "");
+        const modules = graph.individuals.filter(
+          (i) => (i.class || "") === "Module" && (!norm || String(i.label || "").toLowerCase().startsWith(norm))
+        );
+        const pkgCount = /* @__PURE__ */ new Map();
+        for (const m of modules) {
+          const dir = m.label.includes("/") ? m.label.slice(0, m.label.lastIndexOf("/")) : "(root)";
+          pkgCount.set(dir, (pkgCount.get(dir) || 0) + 1);
+        }
+        const modSet = new Set(modules.map((m) => m.id));
+        const inDeg = /* @__PURE__ */ new Map();
+        for (const e of edgesOfKind(graph, "imports")) {
+          if (modSet.has(e.object)) inDeg.set(e.object, (inDeg.get(e.object) || 0) + 1);
+        }
+        const hubs = [...inDeg.entries()].sort((a, b) => b[1] - a[1]).map(([id, n]) => ({ id, label: byId.get(id)?.label || id, importers: n }));
+        const packages = [...pkgCount.entries()].sort((a, b) => b[1] - a[1]);
+        return hit({ modules: modules.length, packages, hubs });
+      },
+      untested() {
+        const covered = new Set(edgesOfKind(graph, "tests").map((e) => e.object));
+        const modules = graph.individuals.filter((i) => (i.class || "") === "Module" && !covered.has(i.id) && !/\.test\./.test(i.label || "")).map(toIndividual);
+        return hit({ modules });
+      },
+      stats() {
+        const counts = /* @__PURE__ */ new Map();
+        for (const i of graph.individuals) {
+          const c = i.class || "Entity";
+          counts.set(c, (counts.get(c) || 0) + 1);
+        }
+        const classes = [...counts.entries()].map(([cls, count]) => ({ class: cls, count })).sort((a, b) => b.count - a.count || a.class.localeCompare(b.class));
+        return hit({ total: graph.individuals.length, classes, truncated: (graph.truncated || []).length > 0 });
+      },
+      history(id) {
+        const ind = resolveId(id);
+        if (!ind) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: id });
+        const touchEdges = [
+          ...edgesOfKind(graph, "touches"),
+          ...edgesOfKind(graph, "touchesSymbol")
+        ].filter((e) => e.object === id);
+        const seen = /* @__PURE__ */ new Set();
+        const commits = [];
+        for (const e of touchEdges) {
+          if (seen.has(e.subject)) continue;
+          seen.add(e.subject);
+          const c = byId.get(e.subject);
+          commits.push({
+            id: e.subject,
+            label: e.subjectLabel || c?.label || e.subject,
+            author: c ? attrOf(c, "author") ?? attrOf(c, "commitAuthor") : null,
+            date: c ? attrOf(c, "date") ?? attrOf(c, "commitDate") : null,
+            message: c ? attrOf(c, "message") ?? attrOf(c, "commitMessage") : null
+          });
+        }
+        return hit({ commits });
+      },
+      // Ranked lexical search: module-mode (no kind, or kind="module") ranks via
+      // searchModulesRanked; symbol-mode (kind names a symbol kind) ranks via
+      // scoreSymbolsRanked, with name/decorator filters. Results capped at `limit`.
+      search(query, { kind = "", name = "", decorator = "", limit = SEARCH_LIMIT, offset = 0 } = {}) {
+        const rawQuery = String(query || "");
+        const k = String(kind || "").trim().toLowerCase();
+        const nm = String(name || "").trim();
+        const dec = String(decorator || "").trim().toLowerCase();
+        let nameRe = null;
+        if (nm) {
+          try {
+            nameRe = new RegExp(nm, "i");
+          } catch {
+            nameRe = null;
+          }
+        }
+        let rankedInds;
+        if (k && k !== "module") {
+          const tokens = rawQuery.toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean);
+          rankedInds = scoreSymbolsRanked(graph, tokens, { kind: k, decFilter: dec, nameRe }).map((s) => s.ind);
+        } else {
+          const byLabel = /* @__PURE__ */ new Map();
+          for (const i of graph.individuals) if ((i.class || "") === "Module") byLabel.set(i.label, i);
+          rankedInds = searchModulesRanked(graph, rawQuery).map(({ path }) => byLabel.get(path)).filter(Boolean);
+        }
+        const results = rankedInds.slice(offset, offset + limit).map(toIndividual);
+        return hit({ results });
+      },
+      ask(query) {
+        if (typeof ask2 !== "function") return miss(MISS_REASONS.CAPABILITY_ABSENT, "this provider was constructed without an ask answerer");
+        const { content, tmct_ask: tmct_ask2 } = ask2(graph, String(query || ""));
+        return hit({ content, tmct_ask: tmct_ask2 });
+      }
+    };
+    if (tel) {
+      for (const name of SERVICES) {
+        const orig = svc[name];
+        if (typeof orig !== "function") continue;
+        svc[name] = (...args) => {
+          const t0 = performance.now();
+          const result = orig.apply(svc, args);
+          if (result && typeof result.then === "function") {
+            return result.then((r) => {
+              recordTelemetry(tel, name, performance.now() - t0, r);
+              return r;
+            });
+          }
+          recordTelemetry(tel, name, performance.now() - t0, result);
+          return result;
+        };
+      }
+    }
+    return svc;
+  }
+  function recordTelemetry(tel, name, ms, result) {
+    try {
+      tel.record({ tool: `ri.${name}`, perf: { ms_total: ms }, response: responseCounts(result) });
+    } catch {
+    }
+  }
+  function responseCounts(result) {
+    if (!result || typeof result !== "object" || result.ok !== true) {
+      return { ok: false, reason: result?.miss?.reason || null };
+    }
+    let count = 0;
+    const value = result.value;
+    if (Array.isArray(value)) count = value.length;
+    else if (value && typeof value === "object") {
+      for (const v of Object.values(value)) if (Array.isArray(v)) count += v.length;
+    }
+    return { ok: true, count };
+  }
+  var attrOf, CONTEXT_BODY_MAX_LINES, CONTEXT_INLINE_CALLEE_LOC;
   var init_graph_service = __esm({
     "src/adapters/providers/graph-service.mjs"() {
       init_codegraph();
       init_source_slice();
       init_repository_interface();
+      attrOf = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)?.value ?? null;
+      CONTEXT_BODY_MAX_LINES = 200;
+      CONTEXT_INLINE_CALLEE_LOC = 120;
     }
   });
 
-  // src/adapters/memory/prose-tokens.mjs
+  // src/adapters/prose-tokens.mjs
   function splitIdentifierWords2(raw) {
     if (!raw) return [];
     let s = String(raw).replace(/\.[A-Za-z0-9]+$/, "");
@@ -5287,7 +7029,7 @@ ${lines.join("\n")}`;
   }
   var STOPWORDS3, MAX_TOKEN_LEN2, MAX_TOKENS_PER_DOC2;
   var init_prose_tokens = __esm({
-    "src/adapters/memory/prose-tokens.mjs"() {
+    "src/adapters/prose-tokens.mjs"() {
       STOPWORDS3 = new Set(
         "a an and or but the of to in on at for with from by as is are was were be been being it its this that these those i you he she they we me my your our do does did not no yes if then else than so such can will would should could may might about into over under out up down off again more most some any all what which who whom whose when where why how".split(/\s+/)
       );
@@ -5316,10 +7058,14 @@ ${lines.join("\n")}`;
     s = s.replace(/^(?:the|an?)\s+/i, "");
     return s.toLowerCase();
   }
-  function factIdForTriple(subject, predicate, object) {
-    return factIdFor(normFactTerm(subject), normText(predicate), normFactTerm(object));
+  function normFactPredicate(p) {
+    const t = normText(p);
+    return CANONICAL_FACT_PREDICATE.get(t) ?? t;
   }
-  var SHA256_K, TEXT_CAP, normText, factIdFor;
+  function factIdForTriple(subject, predicate, object) {
+    return factIdFor(normFactTerm(subject), normFactPredicate(predicate), normFactTerm(object));
+  }
+  var SHA256_K, TEXT_CAP, normText, CANONICAL_FACT_PREDICATE, factIdFor;
   var init_hash = __esm({
     "src/domain/hash.mjs"() {
       SHA256_K = new Uint32Array([
@@ -5390,11 +7136,18 @@ ${lines.join("\n")}`;
       ]);
       TEXT_CAP = 2e3;
       normText = (t) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, TEXT_CAP);
+      CANONICAL_FACT_PREDICATE = /* @__PURE__ */ new Map([
+        ["mgx:cause", "mgx:causes"],
+        ["mgx:desire", "mgx:desires"],
+        ["mgx:want", "mgx:desires"],
+        ["mgx:require", "mgx:hasPrerequisite"],
+        ["mgx:involve", "mgx:hasSubevent"]
+      ]);
       factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
     }
   });
 
-  // src/domain/memory/shacl.mjs
+  // src/adapters/memory/shacl.mjs
   function attrValue(ind, prop) {
     const a = (ind?.attributes || []).find((x) => x?.prop === prop);
     return a ? String(a.value ?? "") : void 0;
@@ -5439,7 +7192,7 @@ ${lines.join("\n")}`;
   }
   var MEMORY_CLASSES, RULE_KINDS, RULE_SLOT_PROPS, nonEmpty;
   var init_shacl = __esm({
-    "src/domain/memory/shacl.mjs"() {
+    "src/adapters/memory/shacl.mjs"() {
       MEMORY_CLASSES = /* @__PURE__ */ new Set(["Utterance", "Fact", "Session", "Source", "Rule"]);
       RULE_KINDS = /* @__PURE__ */ new Set([
         "compose2",
@@ -5479,67 +7232,67 @@ ${lines.join("\n")}`;
   // node-stub:node:sqlite
   var node_sqlite_exports = {};
   __export(node_sqlite_exports, {
-    appendFile: () => appendFile5,
-    basename: () => basename,
-    copyFile: () => copyFile5,
-    createInterface: () => createInterface5,
-    createReadStream: () => createReadStream5,
-    createRequire: () => createRequire5,
-    createWriteStream: () => createWriteStream5,
+    appendFile: () => appendFile3,
+    basename: () => basename2,
+    copyFile: () => copyFile3,
+    createInterface: () => createInterface3,
+    createReadStream: () => createReadStream3,
+    createRequire: () => createRequire3,
+    createWriteStream: () => createWriteStream3,
     default: () => node_sqlite_default,
     dirname: () => dirname2,
-    existsSync: () => existsSync2,
-    fileURLToPath: () => fileURLToPath2,
+    existsSync: () => existsSync,
+    fileURLToPath: () => fileURLToPath,
     isAbsolute: () => isAbsolute,
     join: () => join2,
-    mkdir: () => mkdir5,
-    mkdtemp: () => mkdtemp5,
-    randomBytes: () => randomBytes5,
-    readFile: () => readFile5,
-    readFileSync: () => readFileSync5,
-    readdir: () => readdir5,
-    rename: () => rename5,
+    mkdir: () => mkdir3,
+    mkdtemp: () => mkdtemp3,
+    randomBytes: () => randomBytes3,
+    readFile: () => readFile3,
+    readFileSync: () => readFileSync3,
+    readdir: () => readdir3,
+    rename: () => rename3,
     resolve: () => resolve2,
-    rm: () => rm5,
+    rm: () => rm3,
     sep: () => sep2,
-    spawnSync: () => spawnSync5,
-    stat: () => stat5,
+    spawnSync: () => spawnSync3,
+    stat: () => stat3,
     tmpdir: () => tmpdir,
-    unlink: () => unlink5,
-    writeFile: () => writeFile5
+    unlink: () => unlink3,
+    writeFile: () => writeFile3
   });
-  var unavailable5, createRequire5, readFileSync5, readFile5, writeFile5, appendFile5, mkdir5, mkdtemp5, rename5, unlink5, rm5, stat5, copyFile5, readdir5, createReadStream5, createWriteStream5, existsSync2, join2, dirname2, resolve2, isAbsolute, basename, sep2, fileURLToPath2, randomBytes5, spawnSync5, createInterface5, tmpdir, node_sqlite_default;
+  var unavailable3, createRequire3, readFileSync3, readFile3, writeFile3, appendFile3, mkdir3, mkdtemp3, rename3, unlink3, rm3, stat3, copyFile3, readdir3, createReadStream3, createWriteStream3, existsSync, join2, dirname2, resolve2, isAbsolute, basename2, sep2, fileURLToPath, randomBytes3, spawnSync3, createInterface3, tmpdir, node_sqlite_default;
   var init_node_sqlite = __esm({
     "node-stub:node:sqlite"() {
-      unavailable5 = (name) => () => {
+      unavailable3 = (name) => () => {
         throw new Error(name + " unavailable in the browser ask bundle");
       };
-      createRequire5 = unavailable5("createRequire");
-      readFileSync5 = unavailable5("readFileSync");
-      readFile5 = unavailable5("readFile");
-      writeFile5 = unavailable5("writeFile");
-      appendFile5 = unavailable5("appendFile");
-      mkdir5 = unavailable5("mkdir");
-      mkdtemp5 = unavailable5("mkdtemp");
-      rename5 = unavailable5("rename");
-      unlink5 = unavailable5("unlink");
-      rm5 = unavailable5("rm");
-      stat5 = unavailable5("stat");
-      copyFile5 = unavailable5("copyFile");
-      readdir5 = unavailable5("readdir");
-      createReadStream5 = unavailable5("createReadStream");
-      createWriteStream5 = unavailable5("createWriteStream");
-      existsSync2 = () => false;
+      createRequire3 = unavailable3("createRequire");
+      readFileSync3 = unavailable3("readFileSync");
+      readFile3 = unavailable3("readFile");
+      writeFile3 = unavailable3("writeFile");
+      appendFile3 = unavailable3("appendFile");
+      mkdir3 = unavailable3("mkdir");
+      mkdtemp3 = unavailable3("mkdtemp");
+      rename3 = unavailable3("rename");
+      unlink3 = unavailable3("unlink");
+      rm3 = unavailable3("rm");
+      stat3 = unavailable3("stat");
+      copyFile3 = unavailable3("copyFile");
+      readdir3 = unavailable3("readdir");
+      createReadStream3 = unavailable3("createReadStream");
+      createWriteStream3 = unavailable3("createWriteStream");
+      existsSync = () => false;
       join2 = (...a) => a.join("/");
       dirname2 = (p) => String(p).replace(/\/[^/]*$/, "");
       resolve2 = (...a) => a.join("/");
       isAbsolute = (p) => String(p).startsWith("/");
-      basename = (p) => String(p).split("/").pop();
+      basename2 = (p) => String(p).split("/").pop();
       sep2 = "/";
-      fileURLToPath2 = (u) => String(u);
-      randomBytes5 = unavailable5("randomBytes");
-      spawnSync5 = unavailable5("spawnSync");
-      createInterface5 = unavailable5("createInterface");
+      fileURLToPath = (u) => String(u);
+      randomBytes3 = unavailable3("randomBytes");
+      spawnSync3 = unavailable3("spawnSync");
+      createInterface3 = unavailable3("createInterface");
       tmpdir = () => "/tmp";
       node_sqlite_default = {};
     }
@@ -5595,6 +7348,7 @@ ${lines.join("\n")}`;
     findRuleByName: () => findRuleByName,
     findRulesByName: () => findRulesByName,
     loadMemory: () => loadMemory,
+    normFactPredicate: () => normFactPredicate,
     normFactTerm: () => normFactTerm,
     openMemoryBackend: () => openMemoryBackend,
     provenanceTagToSource: () => provenanceTagToSource,
@@ -5703,20 +7457,20 @@ ${lines.join("\n")}`;
       proseIndex: getMeta("proseIndex", empty.proseIndex)
     };
   }
-  function cacheUpsertIndividual(cache, ind) {
+  function cacheUpsertIndividual(cache2, ind) {
     const clone = cloneJson(ind);
-    const i = cache.individuals.findIndex((x) => x?.id === ind.id);
-    if (i >= 0) cache.individuals[i] = clone;
-    else cache.individuals.push(clone);
+    const i = cache2.individuals.findIndex((x) => x?.id === ind.id);
+    if (i >= 0) cache2.individuals[i] = clone;
+    else cache2.individuals.push(clone);
   }
-  function cacheDropIndividualsExcept(cache, seenIds) {
-    cache.individuals = cache.individuals.filter((i) => seenIds.has(i?.id));
+  function cacheDropIndividualsExcept(cache2, seenIds) {
+    cache2.individuals = cache2.individuals.filter((i) => seenIds.has(i?.id));
   }
-  function cacheGroupFor(cache, prop) {
-    let g = cache.objectProperties.find((x) => x?.prop === prop);
+  function cacheGroupFor(cache2, prop) {
+    let g = cache2.objectProperties.find((x) => x?.prop === prop);
     if (!g) {
       g = { predicate: null, prop, count: 0, examples: [] };
-      cache.objectProperties.push(g);
+      cache2.objectProperties.push(g);
     }
     return g;
   }
@@ -5735,13 +7489,13 @@ ${lines.join("\n")}`;
   function cacheDropEdgesExcept(group, newKeys) {
     group.examples = group.examples.filter((e) => newKeys.has(`${e.subject}\0${e.object}`));
   }
-  function cacheDropGroupsExcept(cache, seenProps) {
-    cache.objectProperties = cache.objectProperties.filter((g) => seenProps.has(g?.prop));
+  function cacheDropGroupsExcept(cache2, seenProps) {
+    cache2.objectProperties = cache2.objectProperties.filter((g) => seenProps.has(g?.prop));
   }
   function persistSqlitePayload(handle, payload) {
     const db = handle.db;
     const empty = emptyMemory();
-    const cache = handle.cachedPayload || null;
+    const cache2 = handle.cachedPayload || null;
     db.exec("BEGIN IMMEDIATE");
     try {
       const setMeta = db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)");
@@ -5751,13 +7505,13 @@ ${lines.join("\n")}`;
       setMeta.run("vocabulary", JSON.stringify(payload.vocabulary ?? empty.vocabulary));
       setMeta.run("classes", JSON.stringify(payload.classes ?? empty.classes));
       setMeta.run("proseIndex", JSON.stringify(payload.proseIndex ?? empty.proseIndex));
-      if (cache) {
-        cache.generated_at = cloneJson(payload.generated_at ?? empty.generated_at);
-        cache.memory = cloneJson(payload.memory ?? empty.memory);
-        cache.prefixes = cloneJson(payload.prefixes ?? empty.prefixes);
-        cache.vocabulary = cloneJson(payload.vocabulary ?? empty.vocabulary);
-        cache.classes = cloneJson(payload.classes ?? empty.classes);
-        cache.proseIndex = cloneJson(payload.proseIndex ?? empty.proseIndex);
+      if (cache2) {
+        cache2.generated_at = cloneJson(payload.generated_at ?? empty.generated_at);
+        cache2.memory = cloneJson(payload.memory ?? empty.memory);
+        cache2.prefixes = cloneJson(payload.prefixes ?? empty.prefixes);
+        cache2.vocabulary = cloneJson(payload.vocabulary ?? empty.vocabulary);
+        cache2.classes = cloneJson(payload.classes ?? empty.classes);
+        cache2.proseIndex = cloneJson(payload.proseIndex ?? empty.proseIndex);
       }
       const getInd = db.prepare("SELECT ord, json FROM individuals WHERE id = ?");
       const maxOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM individuals").get().m;
@@ -5771,13 +7525,13 @@ ${lines.join("\n")}`;
         if (existing && existing.json === json) continue;
         const ord = existing ? existing.ord : nextOrd++;
         upsertInd.run(ind.id, ord, ind.class ?? null, ind.label ?? null, json);
-        if (cache) cacheUpsertIndividual(cache, ind);
+        if (cache2) cacheUpsertIndividual(cache2, ind);
       }
       const deleteInd = db.prepare("DELETE FROM individuals WHERE id = ?");
       for (const row of db.prepare("SELECT id FROM individuals").all()) {
         if (!seenIds.has(row.id)) deleteInd.run(row.id);
       }
-      if (cache) cacheDropIndividualsExcept(cache, seenIds);
+      if (cache2) cacheDropIndividualsExcept(cache2, seenIds);
       const getRelOrd = db.prepare("SELECT ord FROM relations WHERE prop = ?");
       const maxRelOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM relations").get().m;
       let nextRelOrd = maxRelOrd + 1;
@@ -5791,7 +7545,7 @@ ${lines.join("\n")}`;
         const existingRows = edgesForProp.all(group.prop);
         const existingByKey = new Map(existingRows.map((r) => [`${r.subject}\0${r.object}`, r]));
         const newKeys = /* @__PURE__ */ new Set();
-        const cacheGroup = cache ? cacheGroupFor(cache, group.prop) : null;
+        const cacheGroup = cache2 ? cacheGroupFor(cache2, group.prop) : null;
         for (const e of group.examples || []) {
           const key = `${e.subject}\0${e.object}`;
           newKeys.add(key);
@@ -5822,7 +7576,7 @@ ${lines.join("\n")}`;
         db.prepare("DELETE FROM edges WHERE prop = ?").run(row.prop);
         db.prepare("DELETE FROM relations WHERE prop = ?").run(row.prop);
       }
-      if (cache) cacheDropGroupsExcept(cache, seenProps);
+      if (cache2) cacheDropGroupsExcept(cache2, seenProps);
       db.exec("COMMIT");
     } catch (e) {
       db.exec("ROLLBACK");
@@ -6217,7 +7971,7 @@ ${lines.join("\n")}`;
   }
   async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", quantifier = "", premiseTrusts, ruleConfidence } = {}) {
     const s = normFactTerm(subject);
-    const p = normText(predicate);
+    const p = normFactPredicate(predicate);
     const o = normFactTerm(object);
     if (!s || !p || !o) throw new Error("a fact needs subject, predicate and object");
     const id = factIdFor(s, p, o);
@@ -6260,7 +8014,7 @@ ${lines.join("\n")}`;
     let skipped = 0;
     for (const f of facts || []) {
       const s = normFactTerm(f?.subject);
-      const p = normText(f?.predicate);
+      const p = normFactPredicate(f?.predicate);
       const o = normFactTerm(f?.object);
       if (!s || !p || !o) {
         skipped += 1;
@@ -6751,6 +8505,35 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
+  // node-stub:node:url
+  var unavailable5, createRequire5, readFileSync5, readFile5, writeFile5, appendFile5, mkdir5, mkdtemp5, rename5, unlink5, rm5, stat5, copyFile5, readdir5, createReadStream5, createWriteStream5, fileURLToPath2, randomBytes5, spawnSync5, createInterface5;
+  var init_node_url = __esm({
+    "node-stub:node:url"() {
+      unavailable5 = (name) => () => {
+        throw new Error(name + " unavailable in the browser ask bundle");
+      };
+      createRequire5 = unavailable5("createRequire");
+      readFileSync5 = unavailable5("readFileSync");
+      readFile5 = unavailable5("readFile");
+      writeFile5 = unavailable5("writeFile");
+      appendFile5 = unavailable5("appendFile");
+      mkdir5 = unavailable5("mkdir");
+      mkdtemp5 = unavailable5("mkdtemp");
+      rename5 = unavailable5("rename");
+      unlink5 = unavailable5("unlink");
+      rm5 = unavailable5("rm");
+      stat5 = unavailable5("stat");
+      copyFile5 = unavailable5("copyFile");
+      readdir5 = unavailable5("readdir");
+      createReadStream5 = unavailable5("createReadStream");
+      createWriteStream5 = unavailable5("createWriteStream");
+      fileURLToPath2 = (u) => String(u);
+      randomBytes5 = unavailable5("randomBytes");
+      spawnSync5 = unavailable5("spawnSync");
+      createInterface5 = unavailable5("createInterface");
+    }
+  });
+
   // src/adapters/corpus/templates.mjs
   var import_meta, PKG_ROOT, TEMPLATES_FILE, PHRASEBOOK_FILE, TECHNICAL_SLOTS;
   var init_templates = __esm({
@@ -6759,7 +8542,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_node_url();
       init_node_path();
       import_meta = {};
-      PKG_ROOT = join(dirname(fileURLToPath(import_meta.url)), "..", "..", "..");
+      PKG_ROOT = join(dirname(fileURLToPath2(import_meta.url)), "..", "..", "..");
       TEMPLATES_FILE = join(PKG_ROOT, "data", "templates", "responses.jsonl");
       PHRASEBOOK_FILE = join(PKG_ROOT, "data", "phrasebook", "software-phrases.txt");
       TECHNICAL_SLOTS = Object.freeze(/* @__PURE__ */ new Set([
@@ -6773,6 +8556,34 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
         "superlative",
         "provenance"
       ]));
+    }
+  });
+
+  // node-stub:node:fs
+  var unavailable6, createRequire6, readFileSync6, readFile6, writeFile6, appendFile6, mkdir6, mkdtemp6, rename6, unlink6, rm6, stat6, copyFile6, readdir6, createReadStream6, createWriteStream6, randomBytes6, spawnSync6, createInterface6;
+  var init_node_fs = __esm({
+    "node-stub:node:fs"() {
+      unavailable6 = (name) => () => {
+        throw new Error(name + " unavailable in the browser ask bundle");
+      };
+      createRequire6 = unavailable6("createRequire");
+      readFileSync6 = unavailable6("readFileSync");
+      readFile6 = unavailable6("readFile");
+      writeFile6 = unavailable6("writeFile");
+      appendFile6 = unavailable6("appendFile");
+      mkdir6 = unavailable6("mkdir");
+      mkdtemp6 = unavailable6("mkdtemp");
+      rename6 = unavailable6("rename");
+      unlink6 = unavailable6("unlink");
+      rm6 = unavailable6("rm");
+      stat6 = unavailable6("stat");
+      copyFile6 = unavailable6("copyFile");
+      readdir6 = unavailable6("readdir");
+      createReadStream6 = unavailable6("createReadStream");
+      createWriteStream6 = unavailable6("createWriteStream");
+      randomBytes6 = unavailable6("randomBytes");
+      spawnSync6 = unavailable6("spawnSync");
+      createInterface6 = unavailable6("createInterface");
     }
   });
 
@@ -6859,7 +8670,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_dist();
       init_templates();
       import_meta2 = {};
-      GRAMMAR_DIR = dirname(fileURLToPath(import_meta2.url));
+      GRAMMAR_DIR = dirname(fileURLToPath2(import_meta2.url));
       GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "..", "data", "templates", "grammar-rules.toml");
       SEGMENT_TYPES = Object.freeze([
         "prose",
@@ -6953,6 +8764,12 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
+  // src/domain/memory/session-turns.mjs
+  var init_session_turns = __esm({
+    "src/domain/memory/session-turns.mjs"() {
+    }
+  });
+
   // src/services/sessions.mjs
   var SESSIONS_DIR_REL;
   var init_sessions = __esm({
@@ -6960,6 +8777,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_promises();
       init_node_path();
       init_core();
+      init_session_turns();
       SESSIONS_DIR_REL = join(".tmct", "sessions");
     }
   });
@@ -7004,7 +8822,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_dist();
       init_core();
       import_meta4 = {};
-      PKG_ROOT2 = join(dirname(fileURLToPath(import_meta4.url)), "..", "..", "..");
+      PKG_ROOT2 = join(dirname(fileURLToPath2(import_meta4.url)), "..", "..", "..");
       SLICE_FILE = join(PKG_ROOT2, "corpus", "conceptnet", "slice.jsonl");
       MAP_FILE = join(PKG_ROOT2, "src", "adapters", "corpus", "conceptnet-map.toml");
       SEON_CONCEPTS_FILE = join(PKG_ROOT2, "corpus", "seon", "concepts.jsonl");
@@ -7114,7 +8932,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_toml_config();
       init_conceptnet();
       import_meta5 = {};
-      NAMENET_DIR = join(dirname(fileURLToPath(import_meta5.url)), "..", "..", "corpus", "namenet");
+      NAMENET_DIR = join(dirname(fileURLToPath2(import_meta5.url)), "..", "..", "corpus", "namenet");
       EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
       CONCEPTNET_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
       BUILTIN_EXTENSIONS = Object.freeze(builtinExtensions());
@@ -8277,17 +10095,620 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
 
   // src/tools/server.mjs
   init_config();
-  init_source_slice();
 
   // src/adapters/source.mjs
+  var source_exports = {};
+  __export(source_exports, {
+    clearCache: () => clearCache,
+    emptyEntities: () => emptyEntities,
+    fetchEntities: () => fetchEntities,
+    registerProvider: () => registerProvider
+  });
   init_promises();
   init_config();
 
+  // src/adapters/graph-merge.mjs
+  function idsOf(payload) {
+    const s = /* @__PURE__ */ new Set();
+    for (const ind of Array.isArray(payload?.individuals) ? payload.individuals : []) {
+      if (ind && ind.id) s.add(ind.id);
+    }
+    return s;
+  }
+  function mergeEntityPayloads(entries) {
+    const list = (Array.isArray(entries) ? entries : []).map((e, i) => ({
+      file: e?.file,
+      payload: e?.payload || {},
+      name: e?.name != null && String(e.name).length ? String(e.name) : String(i)
+    }));
+    const idSets = list.map(({ payload }) => idsOf(payload));
+    const seenInCount = /* @__PURE__ */ new Map();
+    for (const s of idSets) for (const id of s) seenInCount.set(id, (seenInCount.get(id) || 0) + 1);
+    const colliding = new Set([...seenInCount.entries()].filter(([, n]) => n > 1).map(([id]) => id));
+    const merged = {
+      generated_at: "",
+      classes: [],
+      vocabulary: [],
+      objectProperties: [],
+      individuals: [],
+      proseIndex: {}
+    };
+    let latestGeneratedAt = "";
+    let everyPayloadIsBootstrap = list.length > 0;
+    for (const { payload, name } of list) {
+      everyPayloadIsBootstrap = everyPayloadIsBootstrap && Boolean(payload.bootstrap);
+      if (typeof payload.generated_at === "string" && payload.generated_at > latestGeneratedAt) {
+        latestGeneratedAt = payload.generated_at;
+      }
+      const rewriteId = (id) => colliding.has(id) ? `${name}/${id}` : id;
+      if (Array.isArray(payload.classes)) merged.classes.push(...payload.classes);
+      if (Array.isArray(payload.vocabulary)) merged.vocabulary.push(...payload.vocabulary);
+      for (const ind of Array.isArray(payload.individuals) ? payload.individuals : []) {
+        if (!ind) continue;
+        const out = { ...ind };
+        if (out.id) out.id = rewriteId(out.id);
+        if (Array.isArray(out.derived_from)) {
+          out.derived_from = out.derived_from.map((r) => rewriteId(r));
+        }
+        if (Array.isArray(out.mentions)) {
+          out.mentions = out.mentions.map((m) => m && m.id ? { ...m, id: rewriteId(m.id) } : m);
+        }
+        merged.individuals.push(out);
+      }
+      for (const grp of Array.isArray(payload.objectProperties) ? payload.objectProperties : []) {
+        if (!grp) continue;
+        const out = { ...grp };
+        if (Array.isArray(out.examples)) {
+          out.examples = out.examples.map((e) => {
+            if (!e) return e;
+            const ne = { ...e };
+            if (ne.subject) ne.subject = rewriteId(ne.subject);
+            if (ne.object) ne.object = rewriteId(ne.object);
+            return ne;
+          });
+        }
+        merged.objectProperties.push(out);
+      }
+      const proseIndex = payload.proseIndex && typeof payload.proseIndex === "object" ? payload.proseIndex : {};
+      for (const [word, ids] of Object.entries(proseIndex)) {
+        const bucket = merged.proseIndex[word] || (merged.proseIndex[word] = []);
+        for (const id of Array.isArray(ids) ? ids : []) {
+          const rewritten = rewriteId(id);
+          if (!bucket.includes(rewritten)) bucket.push(rewritten);
+        }
+      }
+    }
+    merged.generated_at = latestGeneratedAt;
+    if (everyPayloadIsBootstrap) merged.bootstrap = true;
+    return merged;
+  }
+
+  // src/adapters/source.mjs
+  var cache = null;
+  var mergedCache = null;
+  var provider = null;
+  function clearCache() {
+    cache = null;
+    mergedCache = null;
+  }
+  function registerProvider(fn) {
+    if (fn != null && typeof fn !== "function") {
+      throw new TypeError("registerProvider expects a function (config) => entities payload, or null");
+    }
+    const prev = provider;
+    provider = fn ?? null;
+    cache = null;
+    return prev;
+  }
+  function emptyEntities() {
+    return {
+      generated_at: "",
+      bootstrap: true,
+      classes: [],
+      vocabulary: [],
+      objectProperties: [],
+      individuals: [],
+      proseIndex: {}
+    };
+  }
+  async function readOneGraphFile(file) {
+    let text;
+    try {
+      text = await readFile2(file, "utf8");
+    } catch (e) {
+      if (e?.code === "ENOENT") return emptyEntities();
+      throw new ToolError(`cannot read graph artifact at ${file} (${e?.code || e?.message || e})`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new ToolError(`graph artifact ${file} is not valid JSON`);
+    }
+  }
+  async function fetchMergedEntities(config) {
+    const files = config.graphFiles;
+    const key = [...files].map(String).sort().join("|");
+    if (mergedCache && mergedCache.key === key) return mergedCache.payload;
+    const entries = [];
+    for (let i = 0; i < files.length; i++) {
+      const payload = await readOneGraphFile(files[i]);
+      entries.push({ file: files[i], payload, name: config.graphNames?.[i] });
+    }
+    const merged = mergeEntityPayloads(entries);
+    mergedCache = { key, payload: merged };
+    return merged;
+  }
+  async function fetchEntities(config) {
+    if (provider) {
+      let payload2;
+      try {
+        payload2 = await provider(config);
+      } catch (e) {
+        if (e instanceof ToolError) throw e;
+        throw new ToolError(`graph provider failed (${e?.message || e})`);
+      }
+      if (!payload2 || typeof payload2 !== "object") {
+        throw new ToolError("graph provider returned no entities payload");
+      }
+      return payload2;
+    }
+    if (Array.isArray(config.graphFiles) && config.graphFiles.length > 1) {
+      return fetchMergedEntities(config);
+    }
+    if (cache && cache.file === config.graphFile) return cache.payload;
+    let text;
+    try {
+      text = await readFile2(config.graphFile, "utf8");
+    } catch (e) {
+      if (e?.code === "ENOENT") return emptyEntities();
+      throw new ToolError(
+        `cannot read graph artifact at ${config.graphFile} (${e?.code || e?.message || e})`
+      );
+    }
+    let payload;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      throw new ToolError(`graph artifact ${config.graphFile} is not valid JSON`);
+    }
+    cache = { file: config.graphFile, payload };
+    return payload;
+  }
+
   // src/tools/server.mjs
+  init_ask();
+  init_graph_service();
+
+  // src/tools/graph-load.mjs
+  init_config();
+  init_codegraph();
+  async function loadGraph(config, source) {
+    const payload = await source.fetchEntities(config);
+    const graph = parseEntities(payload);
+    if (!graph.individuals.length) {
+      throw new ToolError(
+        `the graph at ${config.graphFile} is empty \u2014 no entities to answer from yet (this repo starts with no graph; the chat session folds the conversation into one).`
+      );
+    }
+    return graph;
+  }
+
+  // src/tools/handlers/tmct-context.mjs
+  init_promises();
+  init_node_path();
+  init_config();
+  init_source_slice();
   init_codegraph();
   init_ask();
   init_graph_service();
+
+  // src/tools/handlers/kit.mjs
+  init_config();
+  init_codegraph();
+  var SNIPPET_MAX_LINES = 200;
+  function requiredArg(args, key) {
+    const value = String(args?.[key] || "").trim();
+    if (!value) throw new ToolError(`${key} is required`);
+    return value;
+  }
+  function resolveOrThrow(svc, symbol, what) {
+    const { match, candidates } = resolveSymbol(svc.graph, symbol);
+    if (!match) {
+      throw new ToolError(
+        `no entity matching ${what} "${symbol}" in the code-map graph. Try a repo-relative path (e.g. path/to/module), a basename, or tmct_search for a fuzzy lookup.`
+      );
+    }
+    return { match, candidates };
+  }
+  var symbolHandler = (render3) => (args, { graph, svc }) => {
+    const { match } = resolveOrThrow(svc, requiredArg(args, "symbol"), "symbol");
+    return render3(graph, match);
+  };
+
+  // src/tools/handlers/tmct-context.mjs
+  async function buildContextBundle(args, { config, source = source_exports, trim = false, tel = null } = {}) {
+    const symbol = String(args?.symbol || "").trim();
+    if (!symbol) throw new ToolError("symbol is required");
+    const depth = String(args?.depth || "auto").trim().toLowerCase();
+    const min = Boolean(args?.min);
+    const untuned = Boolean(args?.untuned);
+    const max = Boolean(args?.max);
+    const graph = await loadGraph(config, source);
+    const repoRoot = dirname(dirname(config.graphFile));
+    const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile: readFile2, tel, ask });
+    const { match } = resolveOrThrow(svc, symbol, "symbol");
+    const plan = contextPlan(graph, match);
+    let tier;
+    let mask;
+    let topup = false;
+    if (min || depth === "min") {
+      tier = "TINY";
+      mask = bundleMask("TINY");
+    } else if (max || depth === "full") {
+      tier = "FULL";
+      mask = bundleMask("FULL");
+      topup = true;
+    } else ({ tier, mask, topup } = sizeBundle(plan, graph, { untuned }));
+    if (trim && !max) mask = trimBundleMask(mask);
+    let lines = null;
+    if (plan.moduleLabel) {
+      try {
+        ({ lines } = await readSpanSafe({ readFile: readFile2, repoRoot, path: plan.moduleLabel }));
+      } catch {
+        lines = null;
+      }
+    }
+    const lineAt = (n) => lines && lines[n - 1] != null ? lines[n - 1].trim() : "";
+    const sliceBody = (start, end) => sliceSpan(lines, start, end, SNIPPET_MAX_LINES).text;
+    const out = [
+      `Edit context for ${plan.moduleLabel} [${tier}${trim ? " secondary" : ""}] \u2014 assembled from the typed graph + that file. You do NOT need to Read it; write the new code directly after reviewing this.`
+    ];
+    if (mask.anchor && plan.anchor?.site && lines) {
+      const { start, end } = plan.anchor.site;
+      out.push(`
+## anchor: ${plan.anchor.label} (${plan.anchor.class}) @ ${plan.moduleLabel}:${start}-${end}`);
+      out.push(sliceBody(start, end));
+      if (plan.callHint) out.push(plan.callHint);
+    }
+    if (mask.registration && plan.globals.length) {
+      out.push(`
+## registration / module globals (replicate this pattern):`);
+      for (const g of plan.globals) out.push(`  ${g.label} = ${g.value}${g.site ? `  [:${g.site.start}]` : ""}`);
+    }
+    if (mask.exemplar && plan.exemplar?.site && lines) {
+      const { start, end } = plan.exemplar.site;
+      const dec = plan.exemplar.decorators ? ` @${plan.exemplar.decorators}` : "";
+      out.push(`
+## closest example (full body) \u2014 copy this style: ${plan.exemplar.label} (${plan.exemplar.class})${dec} @ ${plan.moduleLabel}:${start}-${end}`);
+      out.push(sliceBody(start, end));
+      if (plan.callHint) out.push(plan.callHint);
+    }
+    if (mask.inlinedCallees && plan.calleeBodies.length && lines) {
+      let budget = 120;
+      for (const cb of plan.calleeBodies) {
+        if (budget <= 0) break;
+        const start = cb.site.start;
+        const fromThisFile = cb.site.path === plan.moduleLabel;
+        const bodyLines = fromThisFile && lines ? lines : await readSpanSafe({ readFile: readFile2, repoRoot, path: cb.site.path }).then((r) => r.lines).catch(() => null);
+        if (!bodyLines) continue;
+        const sliced = sliceSpan(bodyLines, start, cb.site.end, budget);
+        out.push(`
+## inlined callee body (depth-1 in-repo call): ${cb.label} @ ${cb.site.path}:${start}-${cb.site.end}`);
+        out.push(sliced.text);
+        budget -= sliced.end - start + 1;
+      }
+    }
+    if (mask.classMembers && plan.classMembers && plan.classMembers.members.length) {
+      out.push(`
+## members of ${plan.classMembers.className} (the edit likely lives INSIDE this class \u2014 copy a member's shape, do not read the class body):`);
+      for (const m of plan.classMembers.members) {
+        const short = String(m.label).split(".").pop();
+        const sig = m.params != null && m.params !== "" ? `(${m.params})${m.returns ? ` -> ${m.returns}` : ""}` : "";
+        const dec = m.decorators ? `@${m.decorators} ` : "";
+        const r = m.raises ? `  raises=${m.raises}` : "";
+        out.push(`  ${m.class} ${short}${m.site ? ` :${m.site.start}` : ""}  ${dec}${short}${sig}${r}`);
+      }
+    }
+    if (mask.siblings && plan.siblings.length) {
+      out.push(`
+## sibling symbols to copy the style of (most relevant first; ${plan.siblings.length} total):`);
+      for (const s of plan.siblings.slice(0, plan.siblingCap)) {
+        const sig = s.site ? lineAt(s.site.start) : "";
+        const dec = s.decorators ? `@${s.decorators} ` : "";
+        const r = s.raises ? `  raises=${s.raises}` : "";
+        out.push(`  ${s.class} ${s.label}${s.site ? ` :${s.site.start}` : ""}  ${dec}${sig}${r}`);
+      }
+      if (plan.siblings.length > plan.siblingCap) {
+        out.push(`  \u2026+${plan.siblings.length - plan.siblingCap} more (use tmct_search kind=function or tmct_snippet <name> for any of them)`);
+      }
+    }
+    if (mask.allExports && plan.allExports) {
+      out.push(`
+## module __all__ \u2014 this module curates its public API; ADD your new public symbol to this list so it is importable:
+  ${plan.allExports}`);
+    }
+    if (mask.reexports && plan.exports && plan.exports.length) out.push(`
+## re-exported symbols (resolved __all__ \u2192 defining module): ${plan.exports.join(", ")}`);
+    if (mask.insertionRegion && plan.insertionRegion && lines) {
+      const start = plan.insertionRegion.start;
+      const end = Math.min(lines.length, start + 40 - 1);
+      out.push(`
+## insertion region (write your new sibling here) \u2014 ${plan.moduleLabel}:${start}-${end}`);
+      out.push(lines.slice(start - 1, end).map((l, i) => `${start + i}	${l}`).join("\n"));
+    } else if (plan.insertion) {
+      out.push(`
+## insert the new sibling after line ~${plan.insertion} (end of the last top-level definition).`);
+    }
+    if (mask.tests && plan.tests.length) out.push(`
+## covering tests: ${plan.tests.join(", ")}`);
+    if (mask.cochange && plan.cochange && plan.cochange.length) {
+      out.push(`
+## usually changed together (consider editing these too): ${plan.cochange.map((c) => `${c.label} (\xD7${c.weight})`).join(", ")}`);
+    }
+    out.push(`
+You now have the snippet, the sibling style, the registration anchor and the tests. Write the new code with Edit/Write \u2014 do NOT Read ${plan.moduleLabel}.`);
+    if (tier !== "FULL") {
+      out.push(`(bundle tier ${tier}; for any omitted sections run tmct_context_more {"symbol":"${symbol}"}, or tmct_context with depth="full".)`);
+    }
+    return { text: out.join("\n"), tier, topup };
+  }
+  async function tmct_context(args, { config, source, tel }) {
+    return (await buildContextBundle(args, { config, source, tel })).text;
+  }
+  tmct_context.ownsGraphLoad = true;
+
+  // src/tools/handlers/tmct-context-more.mjs
+  init_codegraph();
+  function tmct_context_more(args, { graph, svc }) {
+    const { match } = resolveOrThrow(svc, requiredArg(args, "symbol"), "symbol");
+    return renderContextMore(contextPlan(graph, match));
+  }
+
+  // src/tools/handlers/tmct-describe.mjs
+  init_codegraph();
+
+  // src/tools/memory-fallthrough.mjs
+  init_node_path();
   init_core();
+  var ISA_PREDICATES = /* @__PURE__ */ new Set(["rdfs:subClassOf", "rdf:type"]);
+  var MEMORY_LIST_CAP = 40;
+  async function memoryFactRows(config) {
+    try {
+      return readFactRows(await loadMemory(dirname(dirname(config.graphFile))));
+    } catch {
+      return [];
+    }
+  }
+  function memoryProvenance(rows) {
+    const provs = [...new Set(rows.map((r) => r.provenance).filter(Boolean))];
+    if (!provs.length) return "provenance: memory/corpus facts";
+    const shown = provs.slice(0, 2).join("; ");
+    return `provenance: ${shown}${provs.length > 2 ? `, +${provs.length - 2} more source(s)` : ""}`;
+  }
+  function renderMemorySubclasses(rows, term) {
+    const t = normFactTerm(term);
+    const hits = rows.filter((r) => ISA_PREDICATES.has(r.predicate) && r.object === t);
+    if (!hits.length) return null;
+    const labels = [...new Set(hits.map((r) => r.subject))].sort();
+    const shown = labels.slice(0, MEMORY_LIST_CAP);
+    const tail = labels.length > MEMORY_LIST_CAP ? `
+  \u2026+${labels.length - MEMORY_LIST_CAP} more` : "";
+    return `"${term}" is not a code-map entity \u2014 answering from memory/corpus facts. ${labels.length} known subclass(es):
+  ${shown.join("\n  ")}${tail}
+(${memoryProvenance(hits)})`;
+  }
+  function renderMemoryDefinition(rows, term) {
+    const t = normFactTerm(term);
+    const isa = rows.filter((r) => ISA_PREDICATES.has(r.predicate) && (r.subject === t || r.object === t));
+    if (!isa.length) return null;
+    const supers = [...new Set(isa.filter((r) => r.subject === t).map((r) => r.object))];
+    const subs = [...new Set(isa.filter((r) => r.object === t).map((r) => r.subject))].sort();
+    const lines = [`"${term}" is not a code-map entity \u2014 answering from memory/corpus facts.`];
+    if (supers.length) lines.push(`is a: ${supers.slice(0, MEMORY_LIST_CAP).join(", ")}`);
+    if (subs.length) {
+      const tail = subs.length > MEMORY_LIST_CAP ? `, +${subs.length - MEMORY_LIST_CAP} more` : "";
+      lines.push(`known subclasses (${subs.length}): ${subs.slice(0, MEMORY_LIST_CAP).join(", ")}${tail}`);
+    }
+    lines.push(`(${memoryProvenance(isa)})`);
+    return lines.join("\n");
+  }
+
+  // src/tools/handlers/tmct-describe.mjs
+  async function tmct_describe(args, { graph, svc, config }) {
+    const symbol = requiredArg(args, "symbol");
+    const { match, candidates } = resolveSymbol(svc.graph, symbol);
+    if (match) return renderDescribe(graph, match, { candidates });
+    const fallback = renderMemoryDefinition(await memoryFactRows(config), symbol);
+    if (fallback) return fallback;
+    resolveOrThrow(svc, symbol, "symbol");
+  }
+
+  // src/tools/handlers/tmct-snippet.mjs
+  init_promises();
+  init_config();
+  init_source_slice();
+  init_codegraph();
+  async function tmct_snippet(args, { graph, svc, repoRoot }) {
+    const symbol = requiredArg(args, "symbol");
+    const { match, candidates } = resolveOrThrow(svc, symbol, "symbol");
+    const site = siteOf(match);
+    if (!site) {
+      throw new ToolError(
+        `"${match.label}" (${match.class || "Entity"}) has no source span in the graph \u2014 it is likely a module. Use tmct_describe for its contents, then tmct_snippet one of the functions/classes it defines.`
+      );
+    }
+    let sliced;
+    try {
+      sliced = await readSpanSafe({
+        readFile: readFile2,
+        repoRoot,
+        path: site.path,
+        start: site.start,
+        end: site.end,
+        maxLines: SNIPPET_MAX_LINES
+      });
+    } catch (e) {
+      if (e instanceof ToolError) throw e;
+      throw new ToolError(`could not read ${site.path} (${e?.code || e?.message || e})`);
+    }
+    const { text: body, truncated } = sliced;
+    const span = site.end > site.start ? `${site.start}-${site.end}` : `${site.start}`;
+    const header = `${match.label} \u2014 ${match.class || "Entity"} @ ${site.path}:${span}`;
+    const note = truncated ? `
+\u2026 (truncated to ${SNIPPET_MAX_LINES} lines; full span ${span})` : "";
+    const cand = candidates.length ? `
+(other matches: ${candidates.map((c) => c.label).join(", ")})` : "";
+    const hint = callHint(graph, match);
+    return `${header}
+${body}${note}${hint ? `
+${hint}` : ""}${cand}`;
+  }
+
+  // src/tools/handlers/tmct-signature.mjs
+  init_codegraph();
+  var tmct_signature = symbolHandler(renderSignature);
+
+  // src/tools/handlers/tmct-impact.mjs
+  init_codegraph();
+  function tmct_impact(args, { graph, svc }) {
+    const { match } = resolveOrThrow(svc, requiredArg(args, "module"), "module");
+    return renderImpact(graph, match);
+  }
+
+  // src/tools/handlers/tmct-search.mjs
+  init_config();
+  init_codegraph();
+  async function tmct_search(args, { graph, config }) {
+    const query = String(args?.query || "").trim();
+    const kind = String(args?.kind || "").trim();
+    if (!query && !kind) throw new ToolError("query is required");
+    const out = renderSearch(graph, query, {
+      kind,
+      decorator: String(args?.decorator || "").trim(),
+      name: String(args?.name || "").trim()
+    });
+    if (!kind && /^no module matches/.test(out)) {
+      const fallback = renderMemoryDefinition(await memoryFactRows(config), query);
+      if (fallback) return fallback;
+    }
+    return out;
+  }
+
+  // src/tools/handlers/tmct-members.mjs
+  init_codegraph();
+  async function tmct_members(args, { graph, svc, config }) {
+    const symbol = requiredArg(args, "class");
+    const { match } = resolveSymbol(svc.graph, symbol);
+    if (match) return renderMembers(graph, match);
+    const fallback = renderMemorySubclasses(await memoryFactRows(config), symbol);
+    if (fallback) return fallback;
+    resolveOrThrow(svc, symbol, "class");
+  }
+
+  // src/tools/handlers/tmct-subclasses.mjs
+  init_codegraph();
+  async function tmct_subclasses(args, { graph, svc, config }) {
+    const symbol = requiredArg(args, "class");
+    const { match } = resolveSymbol(svc.graph, symbol);
+    if (match) return renderSubclasses(graph, match);
+    const fallback = renderMemorySubclasses(await memoryFactRows(config), symbol);
+    if (fallback) return fallback;
+    resolveOrThrow(svc, symbol, "class");
+  }
+
+  // src/tools/handlers/tmct-architecture.mjs
+  init_codegraph();
+  function tmct_architecture(args, { graph }) {
+    return renderArchitecture(graph, { pkg: String(args?.package || "").trim() });
+  }
+
+  // src/tools/handlers/tmct-exports.mjs
+  init_codegraph();
+  function tmct_exports(args, { graph, svc }) {
+    const { match } = resolveOrThrow(svc, requiredArg(args, "module"), "module");
+    return renderExports(graph, match);
+  }
+
+  // src/tools/handlers/tmct-untested.mjs
+  init_codegraph();
+  function tmct_untested(_args, { graph }) {
+    return renderUntested(graph);
+  }
+
+  // src/tools/handlers/tmct-ask.mjs
+  init_config();
+  init_ask();
+  function tmct_ask(args, { graph }) {
+    const { content, tmct_ask: envelope } = ask(graph, requiredArg(args, "query"));
+    return `${content}
+
+---tmct_ask---
+${JSON.stringify(envelope, null, 2)}`;
+  }
+
+  // src/tools/handlers/tmct-tests-for.mjs
+  init_codegraph();
+  var tmct_tests_for = symbolHandler(renderTestsFor);
+
+  // src/tools/handlers/tmct-history.mjs
+  init_codegraph();
+  var tmct_history = symbolHandler(renderHistory);
+
+  // src/tools/handlers/tmct-file-history.mjs
+  init_codegraph();
+  var tmct_file_history = symbolHandler(renderFileHistory);
+
+  // src/tools/handlers/tmct-method-history.mjs
+  init_codegraph();
+  var tmct_method_history = symbolHandler(renderMethodHistory);
+
+  // src/tools/handlers/tmct-class-history.mjs
+  init_codegraph();
+  var tmct_class_history = symbolHandler(renderClassHistory);
+
+  // src/tools/handlers/tmct-callers.mjs
+  init_codegraph();
+  var tmct_callers = symbolHandler(renderCallers);
+
+  // src/tools/handlers/tmct-callees.mjs
+  init_codegraph();
+  var tmct_callees = symbolHandler(renderCallees);
+
+  // src/tools/handlers/tmct-calls.mjs
+  init_codegraph();
+  var tmct_calls = symbolHandler(renderCalls);
+
+  // src/tools/handlers/tmct-cochanges.mjs
+  init_codegraph();
+  var tmct_cochanges = symbolHandler(renderCochanges);
+
+  // src/tools/handlers/index.mjs
+  var HANDLERS = Object.freeze({
+    tmct_context,
+    tmct_context_more,
+    tmct_describe,
+    tmct_snippet,
+    tmct_signature,
+    tmct_impact,
+    tmct_search,
+    tmct_members,
+    tmct_subclasses,
+    tmct_architecture,
+    tmct_exports,
+    tmct_untested,
+    tmct_ask,
+    tmct_tests_for,
+    tmct_history,
+    tmct_file_history,
+    tmct_method_history,
+    tmct_class_history,
+    tmct_callers,
+    tmct_callees,
+    tmct_calls,
+    tmct_cochanges
+  });
+
+  // src/tools/server.mjs
   init_nlp_registry();
 
   // adapter-stub-strategies/constructions.mjs:../domain/interpret/strategies/constructions.mjs
@@ -8308,7 +10729,6 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     description: agentDescription,
     inputSchema
   }));
-  var DISPATCH_TOOLS = new Set(TOOL_NAMES);
 
   // src/services/chat.mjs
   init_config();
@@ -8316,27 +10736,27 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_ask();
 
   // node-stub:node:crypto
-  var unavailable6 = (name) => () => {
+  var unavailable4 = (name) => () => {
     throw new Error(name + " unavailable in the browser ask bundle");
   };
-  var createRequire6 = unavailable6("createRequire");
-  var readFileSync6 = unavailable6("readFileSync");
-  var readFile6 = unavailable6("readFile");
-  var writeFile6 = unavailable6("writeFile");
-  var appendFile6 = unavailable6("appendFile");
-  var mkdir6 = unavailable6("mkdir");
-  var mkdtemp6 = unavailable6("mkdtemp");
-  var rename6 = unavailable6("rename");
-  var unlink6 = unavailable6("unlink");
-  var rm6 = unavailable6("rm");
-  var stat6 = unavailable6("stat");
-  var copyFile6 = unavailable6("copyFile");
-  var readdir6 = unavailable6("readdir");
-  var createReadStream6 = unavailable6("createReadStream");
-  var createWriteStream6 = unavailable6("createWriteStream");
-  var randomBytes6 = unavailable6("randomBytes");
-  var spawnSync6 = unavailable6("spawnSync");
-  var createInterface6 = unavailable6("createInterface");
+  var createRequire4 = unavailable4("createRequire");
+  var readFileSync4 = unavailable4("readFileSync");
+  var readFile4 = unavailable4("readFile");
+  var writeFile4 = unavailable4("writeFile");
+  var appendFile4 = unavailable4("appendFile");
+  var mkdir4 = unavailable4("mkdir");
+  var mkdtemp4 = unavailable4("mkdtemp");
+  var rename4 = unavailable4("rename");
+  var unlink4 = unavailable4("unlink");
+  var rm4 = unavailable4("rm");
+  var stat4 = unavailable4("stat");
+  var copyFile4 = unavailable4("copyFile");
+  var readdir4 = unavailable4("readdir");
+  var createReadStream4 = unavailable4("createReadStream");
+  var createWriteStream4 = unavailable4("createWriteStream");
+  var randomBytes4 = unavailable4("randomBytes");
+  var spawnSync4 = unavailable4("spawnSync");
+  var createInterface4 = unavailable4("createInterface");
 
   // src/services/chat.mjs
   init_templates();
@@ -8765,9 +11185,9 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       const lemma = proseLemma2();
       const l = lemma ? lemma(v) : v;
       if (l === "have") return HAS_A_PREDICATE;
-      return `mgx:${l}`;
+      return normFactPredicate(`mgx:${l}`);
     } catch {
-      return `mgx:${v}`;
+      return normFactPredicate(`mgx:${v}`);
     }
   }
   var GENERAL_VERB_YESNO_RE = new RegExp(`^(?:does|did)\\s+([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[?.!\\s]*$`, "i");
@@ -8914,14 +11334,14 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       return [];
     }
   }
-  async function factRows(memoryDir, cache = null) {
-    if (cache?.rows) return cache.rows;
+  async function factRows(memoryDir, cache2 = null) {
+    if (cache2?.rows) return cache2.rows;
     try {
       const { loadMemory: loadMemory2, readFactRows: readFactRows2 } = await Promise.resolve().then(() => (init_core(), core_exports));
       const rows = readFactRows2(await loadMemory2(memoryDir));
-      if (cache) {
-        cache.rows = rows;
-        cache.reloads = (cache.reloads || 0) + 1;
+      if (cache2) {
+        cache2.rows = rows;
+        cache2.reloads = (cache2.reloads || 0) + 1;
       }
       return rows;
     } catch {
@@ -9001,7 +11421,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   }
   var RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
   var ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
-  var ISA_PREDICATES = /* @__PURE__ */ new Set(["rdfs:subClassOf", "rdf:type"]);
+  var ISA_PREDICATES2 = /* @__PURE__ */ new Set(["rdfs:subClassOf", "rdf:type"]);
   var WHY_ISA_LEAD_RE = /^why\s+(?=(?:is|are)\b)/i;
   var EXPLAIN_HOW_YOU_KNOW_RE = /^explain\s+how\s+you\s+know\s+(?:that\s+)?(.+?)\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
   function matchWhyIsa(q) {
@@ -9093,8 +11513,8 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
     return out;
   }
-  async function factAnswer(memoryDir, query, envelope, miss2, biasByBundle = {}, cache = null) {
-    return withDeducedGoal(await factAnswerReaders(memoryDir, query, envelope, miss2, biasByBundle, cache), envelope, query);
+  async function factAnswer(memoryDir, query, envelope, miss2, biasByBundle = {}, cache2 = null) {
+    return withDeducedGoal(await factAnswerReaders(memoryDir, query, envelope, miss2, biasByBundle, cache2), envelope, query);
   }
   function withDeducedGoal(res, envelope, query) {
     if (!res || res.goal !== void 0) return res;
@@ -9113,7 +11533,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
     return goal ? { ...res, goal } : res;
   }
-  async function factAnswerReaders(memoryDir, query, envelope, miss2, biasByBundle = {}, cache = null) {
+  async function factAnswerReaders(memoryDir, query, envelope, miss2, biasByBundle = {}, cache2 = null) {
     let normFactTerm2;
     try {
       ({ normFactTerm: normFactTerm2 } = await Promise.resolve().then(() => (init_core(), core_exports)));
@@ -9124,7 +11544,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const usedForQ = q.match(WHAT_USED_FOR_RE);
     if (usedForQ) {
       const variants = factTermVariants(normFactTerm2, usedForQ[1]);
-      const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === "mgx:usedFor" && variants.has(f.object));
+      const hits = (await factRows(memoryDir, cache2)).filter((f) => f.predicate === "mgx:usedFor" && variants.has(f.object));
       if (hits.length) {
         const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
         const lines = ranked.map(renderFactLine);
@@ -9139,7 +11559,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       const m = q.match(re);
       if (!m) continue;
       const variants = factTermVariants(normFactTerm2, m[1]);
-      const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === predicate && variants.has(f.object));
+      const hits = (await factRows(memoryDir, cache2)).filter((f) => f.predicate === predicate && variants.has(f.object));
       if (!hits.length) continue;
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
       const lines = ranked.map(renderFactLine);
@@ -9156,10 +11576,10 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const supCompBase = supKindRaw && supWord ? comparativeOfSuperlative(supWord) : null;
     if (supCompBase) {
       const supPredicate = `mgx:${supCompBase.replace(/\s+/g, "-")}-than`;
-      const rows = await factRows(memoryDir, cache);
+      const rows = await factRows(memoryDir, cache2);
       const kindVariants = factTermVariants(normFactTerm2, supKindRaw);
       const kindSingular = [...kindVariants].sort((a, b) => a.length - b.length)[0];
-      const memberOfKind = (node) => kindVariants.has(node) || node.startsWith(`${kindSingular}-`) || node.startsWith(`${kindSingular} `) || rows.some((g) => ISA_PREDICATES.has(g.predicate) && g.subject === node && kindVariants.has(g.object));
+      const memberOfKind = (node) => kindVariants.has(node) || node.startsWith(`${kindSingular}-`) || node.startsWith(`${kindSingular} `) || rows.some((g) => ISA_PREDICATES2.has(g.predicate) && g.subject === node && kindVariants.has(g.object));
       const pairs = uniqueFacts(rows.filter((f) => f.predicate === supPredicate && isOperatorTaught(f))).filter((f) => f.subject !== f.object && memberOfKind(f.subject) && memberOfKind(f.object));
       if (pairs.length) {
         const nodes = /* @__PURE__ */ new Set();
@@ -9205,7 +11625,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const whereQ = miss2 ? q.match(WHERE_IS_FACT_RE) : null;
     if (whereQ) {
       const variants = factTermVariants(normFactTerm2, whereQ[1]);
-      const hits = (await factRows(memoryDir, cache)).filter((f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && variants.has(f.subject));
+      const hits = (await factRows(memoryDir, cache2)).filter((f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && variants.has(f.subject));
       if (hits.length) {
         const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
         const lines = ranked.map(renderFactLine);
@@ -9228,7 +11648,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     if (metaTerm) {
       const { subject, predicate } = splitMetaPredicate(metaTerm);
       const variants = factTermVariants(normFactTerm2, subject);
-      const subjectHits = (await factRows(memoryDir, cache)).filter((f) => variants.has(f.subject));
+      const subjectHits = (await factRows(memoryDir, cache2)).filter((f) => variants.has(f.subject));
       let hits = predicate ? subjectHits.filter((f) => f.predicate === predicate) : subjectHits;
       if (!hits.length) {
         if (predicate && subjectHits.length) {
@@ -9296,7 +11716,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       const subj = factTermVariants(normFactTerm2, isa[1]);
       const obj = factTermVariants(normFactTerm2, isa[2]);
       const hit2 = (await memoryFacts(memoryDir)).find(
-        (f) => ISA_PREDICATES.has(f.predicate) && subj.has(f.subject) && obj.has(f.object)
+        (f) => ISA_PREDICATES2.has(f.predicate) && subj.has(f.subject) && obj.has(f.object)
       );
       if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
       return null;
@@ -9362,7 +11782,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const canDo = q.match(WHAT_CAN_DO_RE);
     if (canDo) {
       const variants = factTermVariants(normFactTerm2, canDo[1]);
-      const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === "mgx:capableOf" && variants.has(f.subject));
+      const hits = (await factRows(memoryDir, cache2)).filter((f) => f.predicate === "mgx:capableOf" && variants.has(f.subject));
       if (!hits.length) return null;
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
       const lines = ranked.map(renderFactLine);
@@ -9376,7 +11796,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     if (whichCan) {
       const kindVariants = factTermVariants(normFactTerm2, whichCan[1]);
       const verbVariants = factTermVariants(normFactTerm2, whichCan[2]);
-      const facts = await factRows(memoryDir, cache);
+      const facts = await factRows(memoryDir, cache2);
       const capable = uniqueFacts(facts.filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object)));
       if (capable.length) {
         const { findIsaChain: findIsaChain2, SUBCLASS_PREDICATE: SC_PRED, TYPE_PREDICATE: TYPE_PRED } = await Promise.resolve().then(() => (init_syllogise(), syllogise_exports));
@@ -9414,7 +11834,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const canVerb = q.match(WHAT_CAN_VERB_RE);
     if (canVerb && canVerb[1].trim().split(/\s+/).at(-1)?.toLowerCase() !== "do") {
       const verbVariants = factTermVariants(normFactTerm2, canVerb[1]);
-      const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object));
+      const hits = (await factRows(memoryDir, cache2)).filter((f) => f.predicate === "mgx:capableOf" && verbVariants.has(f.object));
       if (hits.length) {
         const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
         const lines = ranked.map(renderFactLine);
@@ -9428,7 +11848,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const hasQ = q.match(WHAT_HAS_RE);
     if (hasQ && !HAS_TEMPORAL_TAIL.has(hasQ[1].trim().split(/\s+/)[0]?.toLowerCase())) {
       const variants = factTermVariants(normFactTerm2, hasQ[1]);
-      const hits = (await factRows(memoryDir, cache)).filter((f) => f.predicate === "mgx:hasA" && variants.has(f.object));
+      const hits = (await factRows(memoryDir, cache2)).filter((f) => f.predicate === "mgx:hasA" && variants.has(f.object));
       if (!hits.length) return null;
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
       const lines = ranked.map(renderFactLine);
@@ -9442,7 +11862,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const inheritsObj = envelope?.parsed?.shape === "reverse" && envelope.parsed.kind === "inherits" ? envelope.parsed.object : inheritsQ?.[1];
     if (inheritsObj) {
       const variants = factTermVariants(normFactTerm2, inheritsObj);
-      const hits = (await factRows(memoryDir, cache)).filter((f) => ISA_PREDICATES.has(f.predicate) && variants.has(f.object));
+      const hits = (await factRows(memoryDir, cache2)).filter((f) => ISA_PREDICATES2.has(f.predicate) && variants.has(f.object));
       if (!hits.length) return null;
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
       const lines = ranked.map(renderFactLine);
@@ -9455,9 +11875,9 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const know = q.match(KNOW_ABOUT_RE);
     if (know) {
       const variants = factTermVariants(normFactTerm2, know[1]);
-      const rows = await factRows(memoryDir, cache);
+      const rows = await factRows(memoryDir, cache2);
       const isTaughtFact = (f) => !String(f.provenance || "").includes("corpus:") && !String(f.provenance || "").includes("web:");
-      const isaRows = rows.filter((f) => ISA_PREDICATES.has(f.predicate) && isTaughtFact(f));
+      const isaRows = rows.filter((f) => ISA_PREDICATES2.has(f.predicate) && isTaughtFact(f));
       const subtypeSubjects = /* @__PURE__ */ new Set();
       let frontier = variants;
       for (let hop = 0; hop < 8 && frontier.size; hop += 1) {
@@ -9559,10 +11979,10 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
     }
     return out;
   }
-  async function factReadBack(memoryDir, query, envelope, miss2, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
-    return withDeducedGoal(await factReadBackReaders(memoryDir, query, envelope, miss2, graph, focusLabel, biasByBundle, cache), envelope, query);
+  async function factReadBack(memoryDir, query, envelope, miss2, graph = null, focusLabel = null, biasByBundle = {}, cache2 = null) {
+    return withDeducedGoal(await factReadBackReaders(memoryDir, query, envelope, miss2, graph, focusLabel, biasByBundle, cache2), envelope, query);
   }
-  async function factReadBackReaders(memoryDir, query, envelope, miss2, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
+  async function factReadBackReaders(memoryDir, query, envelope, miss2, graph = null, focusLabel = null, biasByBundle = {}, cache2 = null) {
     if (!miss2) return null;
     let normFactTerm2;
     try {
@@ -9583,7 +12003,7 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
       }
     }
     const qHedge = q.replace(/^(?:actually|really|honestly|yeah\s+nah)\s*,?\s+/i, "");
-    const rows = await factRows(memoryDir, cache);
+    const rows = await factRows(memoryDir, cache2);
     if (!rows.length) {
       if (!ISA_ASK_RE.test(qHedge) && !RELATION_FACT_YESNO_RE.test(qHedge)) {
         const emptyIsAdj = qHedge.match(IS_ADJECTIVE_YESNO_RE);
@@ -9597,7 +12017,7 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
       }
       return null;
     }
-    const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
+    const isa = rows.filter((f) => ISA_PREDICATES2.has(f.predicate));
     const byTrust = (a, b) => b.trust - a.trust;
     const renderMany = (hits2) => {
       const lines = hits2.map(renderFactLine);
@@ -10246,7 +12666,7 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
   );
   var SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
 
-  // src/surfaces/memory-ask-browser-entry.mjs
+  // src/surfaces/web/memory-ask-browser-entry.mjs
   init_core();
   globalThis.tmctMemoryAsk = { factAnswer, factReadBack, createInMemoryStore, normFactTerm };
 })();

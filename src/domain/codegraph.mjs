@@ -1,6 +1,6 @@
 import { lookupByProseTokens, proseLayerHits, splitIdentifierWords } from "./prose.mjs";
-import { cosine } from "../adapters/embed.mjs";
-import { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "./memory/trust.mjs";
+import { cosine } from "./vector.mjs";
+import { CREATED_AT_PROP, UPDATED_AT_PROP } from "./memory/trust.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the
 // deterministic indexer writes to <repo>/.tmct/graph.json (shape produced by
@@ -83,16 +83,11 @@ const PROP_KIND = {
   "mgx:inreplyto": "inReplyTo",
   "mgx:statedby": "statedBy",
   "mgx:canonicalisedfrom": "canonicalisedFrom",
-  // structural links deriveFactTermGraph synthesizes on every Fact (Fact -> its own subject/object Term)
-  "mgx:factsubjectterm": "factSubjectTerm",
-  "mgx:factobjectterm": "factObjectTerm",
 };
 
 export function relationKind(group) {
   const prop = String(group?.prop || "").toLowerCase();
   if (PROP_KIND[prop]) return PROP_KIND[prop];
-  // deriveFactTermGraph namespaces taught predicates as "factrel:<predicate>"
-  if (prop.startsWith("factrel:")) return group.predicate || null;
   const pred = String(group?.predicate || "").toLowerCase();
   // symbol-granular fallbacks first, so a near-miss still classifies fine-grained
   if (/symbol/.test(pred)) {
@@ -536,9 +531,6 @@ const SPIRAL_DEPTH_DEFAULT = 3;
 const SPIRAL_NODE_LIMIT_DEFAULT = 12;
 const SPIRAL_Q_DEFAULT = 0.9; // keep only the least-connected 90% at each step
 const SPIRAL_EXPAND_KINDS = ["imports", "calls", "callsSymbol", "inherits"]; // cochange dropped
-// The memory graph's edge-kind inventory a memory-graph spiralExpand call walks
-// instead of code-graph Modules. mgx:asksAbout is excluded — it lives in the code graph.
-export const MEMORY_SPIRAL_EXPAND_KINDS = ["saidInSession", "inReplyTo", "statedBy", "canonicalisedFrom"];
 const SPIRAL_EMIT_FRAC = 0.5;
 const SPIRAL_HOP_DECAY = 0.6;
 const SPIRAL_PROX_FRAC = 0.2;
@@ -767,19 +759,6 @@ export function spiralExpand(graph, scored = [], {
     }
   }
   return results;
-}
-
-/** The individual with the most recent `createdAtProp` attribute (ties break
- *  on lowest id); null if none carry the attribute. ISO-8601 timestamps
- *  compare correctly as plain strings, so no Date parsing is needed. */
-export function mostRecentIndividual(graph, createdAtProp = CREATED_AT_PROP) {
-  let best = null; // { ind, v }
-  for (const ind of graph?.individuals || []) {
-    const v = (ind?.attributes || []).find((a) => a?.prop === createdAtProp)?.value;
-    if (!v) continue;
-    if (!best || v > best.v || (v === best.v && String(ind.id) < String(best.ind.id))) best = { ind, v };
-  }
-  return best ? best.ind : null;
 }
 
 /** Shared module-ranking core behind renderSearch and searchModulesRanked.
@@ -1134,228 +1113,6 @@ export function derivedUpdatedAt(graph, ind, { createdAtProp = CREATED_AT_PROP, 
     }
   }
   return best;
-}
-
-/** Turn a `spiralExpand` walk into the `{nodes, edges}` shape `tmct viz`
- *  renders, shared between the CLI and the browser bundle's client-side
- *  re-walk. `edges` includes any relation-group edge connecting two walked
- *  nodes, not just kinds the walk itself traversed, de-duped on (subject, object, predicate). */
-export function buildVizNodesAndEdges(graph, walked, { createdAtProp = CREATED_AT_PROP, updatedAtProp = UPDATED_AT_PROP } = {}) {
-  const nodeIds = new Set(walked.map((w) => w.id));
-  const nodes = walked.map(({ id, hop }) => {
-    const ind = graph.byId.get(id) || null;
-    const attrs = ind?.attributes || [];
-    const createdAt = attrs.find((a) => a?.prop === createdAtProp)?.value || "";
-    return {
-      id, hop, label: ind?.label || id, class: ind?.class || "", createdAt,
-      updatedAt: derivedUpdatedAt(graph, ind, { createdAtProp, updatedAtProp }),
-    };
-  });
-  const edges = [];
-  const seen = new Set();
-  for (const group of graph.relations || []) {
-    for (const e of group.edges || []) {
-      if (!nodeIds.has(e.subject) || !nodeIds.has(e.object)) continue;
-      const key = `${e.subject} ${e.object} ${group.predicate}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      edges.push({ source: e.subject, target: e.object, kind: group.predicate });
-    }
-  }
-  return { nodes, edges };
-}
-
-const MEMORY_FACT_CLASS = "Fact";
-const MEMORY_TERM_CLASS = "Term";
-
-/** Derive a term-relation view of a memory graph's reified Facts (never
- *  mutates `graph`, viz-only). A Fact stores subject/predicate/object as
- *  plain string attributes, so the concept structure is invisible to a walk
- *  over `graph.relations` as-is; this synthesizes one Term individual per
- *  distinct subject/object string, one relation group per distinct fact
- *  predicate, and two fixed Fact->Term link groups so a walk seeded on a Fact
- *  can reach the term graph at all. Returns `{ graph: <augmented graph>,
- *  factRelationKinds: [<predicate>, …] }`; a graph with no Facts is a no-op. */
-export function deriveFactTermGraph(graph) {
-  const termById = new Map(); // term:<t> -> individual
-  const groupByPredicate = new Map(); // predicate -> relation group
-  const subjectLinks = []; // Fact -> its subject Term
-  const objectLinks = [];  // Fact -> its object Term
-  const termId = (t) => `term:${t}`;
-  const ensureTerm = (t) => {
-    const id = termId(t);
-    if (!termById.has(id)) termById.set(id, { id, label: t, class: MEMORY_TERM_CLASS, attributes: [] });
-    return id;
-  };
-
-  for (const ind of graph?.individuals || []) {
-    if ((ind?.class || "") !== MEMORY_FACT_CLASS) continue;
-    const attrs = ind.attributes || [];
-    const s = attrs.find((a) => a?.prop === "rdf:subject")?.value;
-    const p = attrs.find((a) => a?.prop === "rdf:predicate")?.value;
-    const o = attrs.find((a) => a?.prop === "rdf:object")?.value;
-    if (!s || !p || !o) continue; // a malformed/legacy Fact — skip, never throw
-    const subjectTermId = ensureTerm(s);
-    const objectTermId = ensureTerm(o);
-    let group = groupByPredicate.get(p);
-    if (!group) {
-      group = { predicate: p, prop: `factrel:${p}`, count: 0, edges: [] };
-      groupByPredicate.set(p, group);
-    }
-    group.edges.push({ subject: subjectTermId, object: objectTermId, subjectLabel: s, objectLabel: o });
-    group.count = group.edges.length;
-    subjectLinks.push({ subject: ind.id, object: subjectTermId, subjectLabel: ind.label, objectLabel: s });
-    objectLinks.push({ subject: ind.id, object: objectTermId, subjectLabel: ind.label, objectLabel: o });
-  }
-
-  if (!termById.size) return { graph, factRelationKinds: [] };
-
-  const individuals = [...(graph.individuals || []), ...termById.values()];
-  const byId = new Map(graph.byId);
-  for (const term of termById.values()) byId.set(term.id, term);
-  const relations = [
-    ...(graph.relations || []),
-    ...groupByPredicate.values(),
-    { predicate: "factSubjectTerm", prop: "mgx:factSubjectTerm", count: subjectLinks.length, edges: subjectLinks },
-    { predicate: "factObjectTerm", prop: "mgx:factObjectTerm", count: objectLinks.length, edges: objectLinks },
-  ];
-
-  return {
-    graph: { ...graph, individuals, byId, relations },
-    factRelationKinds: [...groupByPredicate.keys()],
-  };
-}
-
-/** The two fixed structural link kinds `deriveFactTermGraph` always emits.
- *  Bundled into the "relation" (concept) walk, not "meta" (provenance), so a
- *  user toggling to meta-only still gets the provenance-only view. */
-export const MEMORY_FACT_LINK_KINDS = ["factSubjectTerm", "factObjectTerm"];
-
-/** The combined kinds list a memory-graph walk uses for a given edge-kind
- *  mode: "meta" (provenance-only), "relation" (concept view), or "both"
- *  (default). Lives here, not viz.mjs, so the CLI and the browser bundle's
- *  client-side re-walk share the same function (viz.mjs does real fs I/O and
- *  can't be bundled for the browser). */
-export function edgeKindsFor(mode, factRelationKinds) {
-  const relationKinds = [...factRelationKinds, ...MEMORY_FACT_LINK_KINDS];
-  if (mode === "meta") return [...MEMORY_SPIRAL_EXPAND_KINDS];
-  if (mode === "relation") return relationKinds;
-  return [...MEMORY_SPIRAL_EXPAND_KINDS, ...relationKinds]; // "both" (default)
-}
-
-const LEGEND_MAX_BUCKETS = 20; // too many chips to be usable
-const LEGEND_MIN_BUCKETS = 2;  // nothing to filter with only one bucket
-const LEGEND_COLLAPSE_TOP_N = 15; // "top 15 by count, rest grouped as Other" — stays under the max
-
-/** Normalized Shannon entropy (`H / log2(k)`, `k` = bucket count) of a
- *  {value, count} bucket list — 1.0 for a perfectly even split, ~0 for one
- *  dominant bucket swallowing everything, undefined (returns 0) for k<2. */
-function normalizedEntropy(buckets) {
-  const k = buckets.length;
-  if (k < 2) return 0;
-  const total = buckets.reduce((sum, b) => sum + b.count, 0);
-  if (!total) return 0;
-  let h = 0;
-  for (const b of buckets) {
-    if (!b.count) continue;
-    const p = b.count / total;
-    h -= p * Math.log2(p);
-  }
-  return h / Math.log2(k);
-}
-
-/** Collapse a raw {value,count} bucket list down to at most LEGEND_MAX_BUCKETS
- *  entries: keep the top LEGEND_COLLAPSE_TOP_N by count, fold the rest into a
- *  single "Other" bucket, applied generically (not predicate-only) so
- *  any dimension that happens to be high-cardinality degrades the same way.
- *  A no-op (returns `buckets` unchanged, same array) when already <= the cap.
- *  Exported (not just used internally by pickLegendDimension) so the browser
- *  bundle's client-side legend (live per-view recomputation, viz.mjs's own
- *  computeLegendBuckets) collapses high-cardinality dimensions the SAME way,
- *  never a second hand-rolled copy that could drift. */
-export function collapseToTopN(buckets) {
-  if (buckets.length <= LEGEND_MAX_BUCKETS) return buckets;
-  const sorted = [...buckets].sort((a, b) => b.count - a.count || (a.value < b.value ? -1 : 1));
-  const kept = sorted.slice(0, LEGEND_COLLAPSE_TOP_N);
-  const restCount = sorted.slice(LEGEND_COLLAPSE_TOP_N).reduce((sum, b) => sum + b.count, 0);
-  return restCount ? [...kept, { value: "Other", count: restCount }] : kept;
-}
-
-function bucketCounts(values) {
-  const counts = new Map();
-  for (const v of values) {
-    if (v == null || v === "") continue;
-    counts.set(v, (counts.get(v) || 0) + 1);
-  }
-  return [...counts.entries()].map(([value, count]) => ({ value, count }));
-}
-
-/** The normalized provenance-prefix label for a Fact's FIRST recorded
- *  provenance tag (a Fact may carry a " | "-joined union of several; the
- *  legend buckets on the primary/first-recorded one, not a multiset) —
- *  reuses memory/trust.mjs's own provenanceTagToSource parser (the SAME
- *  collapse-the-session-id/timestamp-suffix, keep-the-corpus/source-name
- *  logic the trust layer already relies on) rather than re-deriving it.
- *  Null when the Fact carries no provenance tag at all (a legacy/malformed
- *  row) or the tag doesn't parse to a known Source kind. */
-function provenanceBucketLabel(rawTag) {
-  const tag = String(rawTag || "").split(" | ")[0].trim();
-  if (!tag) return null;
-  const src = provenanceTagToSource(tag);
-  if (!src) return null;
-  if (src.kind === "corpus" || src.kind === "corpusWeak") {
-    return `${src.kind === "corpusWeak" ? "corpus-weak" : "corpus"}:${src.name || "unknown"}`;
-  }
-  if (src.kind === "extracted") return `extracted:${src.name || "unknown"}`;
-  if (src.kind === "entailed") return `entailed:${src.rule || "unknown"}`;
-  if (src.kind === "operator") return "ace:chat";
-  if (src.kind === "teach") return "teach:chat";
-  if (src.kind === "web") return "web";
-  return src.kind;
-}
-
-/** A single walked node's bucket value under one legend dimension. `"class"`
- *  reads every node; `"predicate"`/`"provenance"` only return non-null for a
- *  Fact-class node. */
-export function legendValueFor(graph, node, dimension) {
-  if (dimension === "class") return node?.class || "(none)";
-  if (!node || node.class !== MEMORY_FACT_CLASS) return null;
-  const attrs = graph?.byId?.get?.(node.id)?.attributes || [];
-  if (dimension === "predicate") return attrs.find((a) => a?.prop === "rdf:predicate")?.value || null;
-  if (dimension === "provenance") return provenanceBucketLabel(attrs.find((a) => a?.prop === "mgx:factProvenance")?.value);
-  return null;
-}
-
-/** Auto-pick the filter/legend dimension: since Fact dominates class-based
- *  legends once real memory-graph data is seeded, this scores class/predicate/
- *  provenance by normalized Shannon entropy over their bucket distribution
- *  and picks the best-scoring qualifying one (LEGEND_MIN_BUCKETS..MAX_BUCKETS).
- *  Falls back to "class" when nothing qualifies. Returns `{ primary,
- *  dimensions: { class, predicate, provenance } }`. */
-export function pickLegendDimension(graph, nodes) {
-  const classBuckets = bucketCounts((nodes || []).map((n) => legendValueFor(graph, n, "class")));
-  const predicateBuckets = bucketCounts((nodes || []).map((n) => legendValueFor(graph, n, "predicate")));
-  const provenanceBuckets = bucketCounts((nodes || []).map((n) => legendValueFor(graph, n, "provenance")));
-
-  const score = (rawBuckets) => {
-    const buckets = collapseToTopN(rawBuckets);
-    const qualifies = buckets.length >= LEGEND_MIN_BUCKETS && buckets.length <= LEGEND_MAX_BUCKETS;
-    return { score: normalizedEntropy(buckets), qualifies, buckets };
-  };
-
-  const dimensions = {
-    class: score(classBuckets),
-    predicate: score(predicateBuckets),
-    provenance: score(provenanceBuckets),
-  };
-
-  let primary = "class";
-  let bestScore = -1;
-  for (const [name, d] of Object.entries(dimensions)) {
-    if (!d.qualifies) continue;
-    if (d.score > bestScore) { bestScore = d.score; primary = name; }
-  }
-  return { primary, dimensions };
 }
 
 /** moduleIdOf by raw edge-endpoint id: resolves through byId when the individual exists,

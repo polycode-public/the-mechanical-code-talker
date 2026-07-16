@@ -1,6 +1,7 @@
-// The hand-maintained homepage (public/index.html, git-tracked, never
-// generated) must keep the ledger hero wired: the iframe onto ledger.html is
-// the deployed site's primary demo surface, and nothing else guards it.
+// The hand-maintained homepage (public/index.html, git-tracked, with only its
+// version stamp generated) must keep the ledger hero wired: the iframe onto
+// ledger.html is the deployed site's primary demo surface, and nothing else
+// guards it.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";

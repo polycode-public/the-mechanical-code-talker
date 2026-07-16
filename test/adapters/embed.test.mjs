@@ -9,7 +9,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadEmbedder, cosine, defaultEmbeddingsDir } from "../../src/adapters/embed.mjs";
+import { loadEmbedder, defaultEmbeddingsDir } from "../../src/adapters/embed.mjs";
+import { cosine } from "../../src/domain/vector.mjs";
 
 // ── synthetic model: 6 vocab rows × 4 dims ──────────────────────────────────────────────────────
 // ids: [PAD]=0 [UNK]=1 hello=2 world=3 walk=4 ##ing=5 — rows are easy-to-check unit-ish vectors.
