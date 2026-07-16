@@ -2,8 +2,8 @@
   "version": 1,
   "generated": "by scripts/generate-template-variants.mjs",
   "file": "ace-surface-variants.jsonl",
-  "rows": 17,
-  "bytes": 4774,
-  "sha256": "5364415f73f7a366371f1fdcc072b5059f81871ef48b106088f05b1441def569",
+  "rows": 18,
+  "bytes": 5012,
+  "sha256": "28fae5a3353f5dd1df365b4407e0ac2a5c66b98b232d8bf454fe3573f2c16760",
   "license": "CC-BY-4.0 (WordNet-derived synonym substitutions of Open English WordNet / SemCor example sentences and this repo's own MPL-2.0 docs prose — see corpus/generated/README.md)"
 }
