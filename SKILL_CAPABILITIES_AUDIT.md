@@ -36,10 +36,14 @@ path the shell uses). A keyed row is machine-checked evidence for the key it nam
 every `npm test`.
 
 **3. The rest of the estate (supporting).** `test/adapters/` is the unit ring: it proves a unit
-computes, not that anything reaches it. `e2e/` drives the real binary and the browser. `test/readme/`
-executes every README example, so a documented example is a checked example. `test/estate/` enforces
-the structure itself, including downward-only imports across the five `src/` layers
-(`test/estate/import-layers.test.mjs`).
+computes, not that anything reaches it. `e2e/` drives the real binary and the browser.
+`test/readme/` runs the README's fast runnable blocks and `e2e/readme-examples.test.mjs` runs the
+heavy ones, so a documented example that stops working fails the suite. Blocks marked skip never
+run, so check the mark before citing an example as proof. `test/estate/` checks the structure
+itself, including downward-only imports across the five `src/` layers
+(`test/estate/import-layers.test.mjs`). That checker is a ratchet, not a clean bill of health: it
+carries an allowlist of known violations (`test/estate/layer-allowlist.mjs`) that can only shrink.
+Read the allowlist before citing the layering as evidence for a capability's reach.
 
 **4. Benchmarks and playtests (quality, not existence).** The four `BENCHMARK_*.md` reports measure
 behaviour under load: routing and planning, conversational quality, dialogue dead-ends, and
