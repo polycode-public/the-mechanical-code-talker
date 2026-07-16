@@ -46,6 +46,35 @@ wrongly). The pattern exists; it is the *decision* to answer anyway that is wron
 
 ---
 
+## Phase 0 (do this before anything) — rescan, because `PLAN_PURGE.md` lands first
+
+Another session is executing `PLAN_PURGE.md`. It will have finished before this plan starts, and it
+moves ground this plan stands on. **Rescan the tree before working any item.** What it changes, and
+what that does to this doc:
+
+| `PLAN_PURGE.md` does | Consequence here |
+|---|---|
+| §4 promotes `scripts/` logic into `src/` | Every `node scripts/…` command in this plan may have moved. `corpus-matrix.mjs`, `generate-real-word-collisions.mjs`, `check-links.mjs`, `extract-facts-from-text.mjs` are all named for promotion. Re-derive the command before quoting it |
+| §6.1 deletes `guardrail.mjs` | `CAPABILITIES_2.0.3.md` row 51 says "capability router, full 6-stage stack" and `PLAN_AGENTS.md` §1 says "all 6 stages". If a stage is deleted, both counts are wrong. **Neither doc is the other's source of truth — fix the count where the audit says it, not twice** |
+| §6.2 deletes `embed.mjs` and `vector.mjs` | No item here cites them. Confirm no capability row does either |
+| §7 deletes 7 tests and renames 13 | Any test this plan names as a pin may have a new name |
+| §8 fixes 81 comments citing deleted docs | Includes `ask.mjs:17` (citing `temporal.mjs`, a module that never existed in git history) and `memory/core.mjs:83` (citing `derivedUpdatedAt`, dropped at `56b4365`). **`PLAN_PURGE.md` owns both**; already removed from Phase 5 so they are not fixed twice |
+| §9.4 fixes dangling references in live docs | **`PLAN_PURGE.md` owns all of this**, and covers it more thoroughly than Phase 5 did |
+| §9.5 fixes duplication and drift | Same |
+
+**The split, so the two plans do not collide.** `PLAN_PURGE.md` owns *pointers* — a citation whose
+target does not exist, a comment naming a deleted doc, two docs saying the same thing. This plan
+owns *claims that are false* — a banner saying "not implemented" about shipped code, a count saying
+six when four is right, a premise saying "no Playwright" when `package.json:74` has it, a baseline
+saying one bird when the corpus seeds two. A broken link and a wrong fact need different work.
+
+Phase 5's table has already been trimmed to match: its pointer rows and its citation-rot paragraph
+are gone, because `PLAN_PURGE.md` §8 and §9.4 carry them. What is left there is only false claims.
+
+---
+
+---
+
 ## Phase 1 — the dropped-input family
 
 ### 1.1 A teach-only line is not sentence-split
@@ -507,14 +536,9 @@ Cheap, and they mislead the next session. `CAPABILITIES_2.0.3.md` §4.3 is the e
 | `PLAN_CHILD_CORPUS.md` | Baseline miscounted: "1 kind of bird (`owl`), zero capabilities on it" — `human.jsonl` seeds `owl` **and** `swift`, and `owl` carries `CapableOf hunt_at_night`. The argument survives; the acceptance test does not, and the plan designates those numbers as its own step-5 re-measure target |
 | `PLAN_NLU_BENCHMARKS.md` | Estate figures stale: "723 rows" → **784 / 11 lanes / 368 keys**; "the grammar lane's 224 rows" → **233**. Its spike table is self-declared unreproducible; leave it, but say so where the deltas are quoted |
 | `README.md` | `:352` claims `next` writes each board state into memory as facts — true of planner state, false of the fact read-back (3.10a). Fix the doc or the code, not neither |
-| `src/domain/ask.mjs:17` | A comment cites `temporal.mjs`'s "time-scrubbing Chronograph surface". **No such module has ever existed in git history.** Delete the reference |
-| `src/adapters/memory/core.mjs:83` | A comment still points at `derivedUpdatedAt`, dropped at `56b4365` |
 
-**Citation rot generally.** Roughly half of `CAPABILITIES_2.0.3.md`'s rows cite a line that no
-longer points at its symbol; a dozen cite files that no longer exist. Six plans carry
-pre-layer-refactor line numbers. **Do not bulk-fix this** — it is churn, another session is doing
-hygiene, and the verdicts survived the rot. Fix a citation when you touch its row for another
-reason.
+**Citation rot, and the 81 comments citing deleted docs, belong to `PLAN_PURGE.md`** (§8, §9.4).
+Not repeated here. Fix a citation when you touch its row for another reason.
 
 ---
 
@@ -658,18 +682,211 @@ everything, and generated artifacts are still wider than the diff.
 
 ---
 
+## Phase 7 — the public surface: every example traces to a test
+
+The `what talks to the payment module?` failure is the worked example for this whole phase, and it
+should be read before the item list. It sat in the README as the headline structural example. The
+README says the suite replays every runnable example. The harness **did** run it, and it **passed**.
+It had never parsed. The block's outputs were `…` elisions, so the harness replayed the input
+against the live CLI and asserted nothing about the answer — it only checked the CLI did not crash.
+
+**An example with no assertion is a claim, not a demo.** That is the rule this phase enforces.
+
+### 7.1 The rule
+
+Every example on a public surface traces to two things:
+
+1. **an implementation** — the code path it actually exercises, named by symbol; and
+2. **a test at the tool layer that touches that execution path** — `test/tools/` driving
+   `dispatchTool`, the catalog, `runConformance`, or the Repository Interface. That is the tier
+   `SKILL_CAPABILITIES_AUDIT.md` §1 calls strongest, because it proves a caller can reach the
+   capability from the surface it really uses.
+
+A corpus row is acceptable where no tool-layer path exists (a chat-only shape). The unit ring is
+not: it proves a unit computes, not that anything reaches it. **No test, no example** — delete the
+example or write the test.
+
+### 7.2 The surfaces to audit
+
+| Surface | What to check |
+|---|---|
+| `README.md` | Every fenced block. Which are `skip`-marked, which elide their output with `…`, which assert nothing. The elided ones are the risk — they read as verified and are not |
+| `public/index.html` | The home page. Its chat transcript, its plan render, its claims about what the demo does |
+| `public/ledger.html` | The memory ledger. Every fact rendered as a sentence, the drill-through, the in-page chat |
+| `public/plan.html` | The animated plan render. **Regenerated at deploy from source, so it is only as good as its generator** — a board-geometry defect shipped here undetected until someone looked at it (`564abce`) |
+| `public/demo-templates.mjs`, `public/demo-ui.mjs`, `public/tmct-browser.mjs` | Anything they hardcode as an example answer |
+| `docs/repository-interface.md`, `docs/adapter-contract.md` | The two contract docs. Every declared service and edge kind against `SERVICES` (16), `EDGE_KINDS` (11), `MISS_REASONS` (4), `INTERFACE_VERSION` (1.1.0) |
+| `docs/references/**` | Citations and status claims. `PLAN_PURGE.md` §9.4 already has the four planning refs |
+| `chatbench/GRADED.md` | The graded-pool design doc. `PLAN_PURGE.md` §9.4 flags five dangling refs; this phase checks its *figures* against the pool |
+| `corpus/*/README.md` | Three corpus READMEs. Counts and licence claims |
+| `examples/teach-and-infer.mjs` | Runs in CI via the README harness. Confirm it still asserts |
+| `.tmct/TOOLS.md` (generated at `init`) | The cold-tool catalog a user actually reads. `test/estate/tool-docs.test.mjs` guards the README's tool section; confirm it guards this too |
+
+### 7.3 The deliverable
+
+A table, committed, one row per example:
+
+```
+| surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
+```
+
+Where the "test" column is empty, the row is the finding. Fix by writing the test or deleting the
+example. **Prefer deleting.** A surface with three examples that all work beats six where two lie.
+
+### 7.4 Known entries before the audit starts
+
+- `README.md` line ~109 — **fixed** at `c720a16`; it now carries real expected output and a
+  deliberately-broken expected line fails the harness. This is the shape every other block should
+  take.
+- `README.md:352` — claims `next` writes each board state into memory as facts. True of planner
+  state, false of the fact read-back (item 3.10a). Doc or code, not neither.
+- `public/plan.html` — the board fix at `564abce` has five regression tests in
+  `test/adapters/plan-viz.test.mjs`. That is the unit ring, not the tool layer. The rendered page
+  has no test at all; `e2e/` is where one would live.
+- `hanoi-3.txt` — advertises `is disk-1 clear?` (item 3.10d, misses) and a 4-disk recipe that does
+  not work (item 3.10e). A shipped file that teaches the user two things that fail.
+
+---
+
+## Phase 8 — say what tmct can do, when it was measured, and how
+
+There is no single artifact a reader can point at to answer "what can this do, and how do you know".
+The evidence exists and is scattered: four `BENCHMARK_*_2.0.3.md` reports, a 151-row
+`CAPABILITIES_2.0.3.md`, four `SKILL_BENCHMARK_*.md` method docs. None of it is on a public surface,
+and the capability table is written in this project's own vocabulary.
+
+### 8.1 What to build
+
+**One page, on a public surface, listing tested capabilities.** Every row carries:
+
+- the capability, named in **terms a 2026 reader already uses** — intent classification,
+  slot filling, entity resolution, coreference, negation scope, quantifier scope, multi-hop
+  entailment, tool selection, tool-call planning, groundedness, faithfulness, abstention/refusal
+  calibration, determinism. Not this project's internal words. `CAPABILITIES_2.0.3.md` §4.1 already
+  makes a start on the mapping; §3's superset lists the NLU terms `PLAN_NLU_BENCHMARKS.md` uses;
+  check both against what the field actually calls these things at the date of writing, and say
+  where tmct's own term differs;
+- the **score, with its units** — and never a bare number;
+- the **version measured** and the **date taken**;
+- a **link to the method** — the `SKILL_BENCHMARK_*.md` that defines the harness. The method is the
+  claim's only warrant. A number without its method is marketing;
+- the **caveat, where one exists**, in the same row and the same size text.
+
+### 8.2 The caveats are load-bearing, not footnotes
+
+Three of the four axes carry a caveat that changes what the number means. Any page that prints the
+number without it is worse than printing nothing:
+
+- **INFBENCH 219/219 includes 50 greens (23%) graded against a declared ceiling.** Their expected
+  answer is the honest floor. **INF-C2's 20/20 measures no consistency checking at all.** A reader
+  seeing "100% at C2" concludes the opposite of the truth.
+- **CEFR 2.0.3 ran at N=1** on a pool covering **9 of 23 construction shapes**. No per-case score is
+  noise-averaged, and 14 shapes are untested.
+- **AGENTBENCH's 56/56** is measured on a case set where all 11 C2 cases now pass — the ladder has
+  more headroom than the corpus tests.
+
+### 8.3 Language scoring in particular
+
+The CEFR axis is the one a reader will most want and most easily misread. Publish the **cell table**,
+not the marginals (§4.2 has it). The marginals hide the floor: `A1 naming-vocabulary` scores **1.475**
+while the `naming-vocabulary` marginal reads 1.675, because the marginal averages the A1 and A2 cells.
+
+Say plainly what the CEFR bands are and are not. They are borrowed as a **difficulty vocabulary for
+construction types**, not a claim that tmct has a language level. The 2.0.3 data shows the ladder is
+not monotonic — A1 (1.676) scores below C1 (1.917) — and four of six grades rest on a single
+construction each, so "B2" and "reversible-passive" are the same sentence. **A page that implies
+"tmct reads at C1" would be inventing a claim the harness does not make.** State the construction,
+the cell, the n, and the date.
+
+Also name the judge: `claude-haiku-4-5-20251001`, prompt `judge-prompt-v1`, pinned. And name where it
+sits — the eval harness, never the product path. That is a design decision a reader should not have
+to infer.
+
+### 8.4 Where it lives
+
+Candidates, and this plan does not choose: a section of the home page; a `CAPABILITIES.md` at root
+that the home page renders; a generated page like the tool catalog (`src/tools/catalog.mjs` renders
+docs from the declared surface, so the docs cannot drift from the code — the same trick would work
+here, reading the reports).
+
+**Prefer generated.** A hand-written capability page is a fifth place for a number to go stale, and
+this cycle found four documents already stale about their own delivery.
+
+---
+
+## Phase 9 — the human-facing prose
+
+`README.md` and `public/index.html` are the two surfaces a stranger reads first. Align both to
+`SKILL_PLAIN_PROSE.md`. This is an editing pass with a stated destination, not a rewrite for taste.
+
+### 9.1 What to cut
+
+`SKILL_PLAIN_PROSE.md` §2 names the tells; these are the ones present:
+
+- **Boasting and selling.** "No cherry-picking, no model anywhere in the loop" is an argument with
+  an imagined sceptic. State what the example is and let it run.
+- **Storytelling.** "Nobody told tmct that ahab is ishmael's grandfather. It combined four facts
+  taught across six turns…" narrates a reveal. Say what it derived and cite the premises.
+- **The ELIZA/PARRY lineage opener.** It places tmct in a story before saying what it does. A reader
+  who does not know PARRY learns nothing; one who does now expects a toy.
+- **Anthropomorphising** (§2): a parser does not want, a benchmark does not think.
+- **Em-dash glue, colon reveals, rule-of-three padding, hype adjectives** (§2).
+- **Delta-framing** (§4): describe the work on its own terms, not as a rebuttal to LLMs. The
+  no-LLM constitution is a design decision with consequences a reader can check; it is not a
+  position in an argument.
+
+Keep the "What tmct deliberately is NOT" section. `SKILL_PLAIN_PROSE.md` §4 explicitly protects it:
+it is factual scope, not a wall.
+
+### 9.2 What to lead with
+
+**Lead with every way to reach it now, then what it demonstrably does.** In this order:
+
+1. **Immediate access, cheapest first.** The browser demo needs no install and runs the real engine
+   client-side. Then `npx tmct`. Then `npm i`. Then `npm run example:mini` against the shipped
+   graph. Each is one line, and each works today.
+2. **What it does**, in plain sentences a reader can check against the demo they just opened.
+   It answers questions about a code graph and a seeded vocabulary. It learns facts you teach it in
+   English. It derives new facts by rule and cites the premises. It plans over a taught domain. It
+   says "I don't know" and means it.
+3. **The evidence**, short — Phase 8's page, linked, not summarised. `SKILL_PLAIN_PROSE.md` §3:
+   keep the shop window short.
+
+The current README leads with a lineage, a set of adjectives (`pure-JS`, `no-LLM`, `offline`, `$0`)
+and a teach-and-infer transcript. The adjectives are true and belong; they are the *second* thing,
+after "here is how to try it in ten seconds".
+
+### 9.3 The same pass on the home page
+
+`public/index.html` leads with the chat, which is right — that is immediate access. Check its prose
+against the same list, and check its claims against Phase 7's table.
+
+### 9.4 The constraint that makes this safe
+
+Every README example is executable and the harness asserts it (Phase 7). So this pass may rewrite
+**prose** freely and may not touch an example's input or output without re-running it. If a rewrite
+changes a block, the harness fails, and that is the design working.
+
+---
+
 ## Sequencing
 
-1. **Phase 6's smoke and fast tiers first.** Everything after this is a code change, and the tiers
-   are what make those changes cheap to check. They are also independent of every other item.
-2. **Phase 2, the fronted-agent passive.** Bisected, mechanism understood, the only regression, and
-   it comes with a row that stops it recurring.
-3. **Phase 1, the dropped-input family**, in the order given. 1.1 and 1.2 first — they are the two
-   proof-shaped ones.
-4. **Phase 4.1**, pinning the unpinned surfaces. Do this while the reasons are fresh.
-5. **Phase 3**, the honest-miss gaps, grouped by fix site.
-6. **Phase 5**, the document corrections. Cheap; fold into whichever commit touches the doc.
-7. **Phase 4.2-4.6**, the instrument work, then re-measure all four axes and re-sweep.
+0. **Rescan after `PLAN_PURGE.md`** (Phase 0). Nothing below is safe to quote until you do.
+1. **Phase 6** — the smoke and fast tiers. Everything after is a code change; these make them cheap
+   to check.
+2. **Phase 2** — the fronted-agent passive.
+3. **Phase 1** — the dropped-input family; 1.1 and 1.2 first.
+4. **Phase 4.1** — pin the unpinned surfaces.
+5. **Phase 7** — the public-surface audit. Do it before Phase 9: knowing which examples are real is
+   a prerequisite for rewriting the prose around them.
+6. **Phase 3** — the honest-miss gaps, grouped by fix site.
+7. **Phase 8** — the tested-capability page. After Phases 1-3, so it describes the fixed product.
+8. **Phase 9** — the prose pass. Last, so it describes what is true after everything above.
+9. **Phase 5** — document corrections; fold into whichever commit touches the doc.
+10. **Phase 4.2-4.6** — the instrument work, then re-measure all four axes and re-sweep.
+
+Phases 7-9 have one ordering constraint between them: **audit, then measure, then describe.**
+Writing the prose first is how a README ends up claiming a headline example that never parsed.
 
 ## Verification
 
@@ -682,6 +899,15 @@ everything, and generated artifacts are still wider than the diff.
 - The CEFR re-run returns to **N=2** and reports the **cell table**, not the marginals.
 - `npm test` green before any commit that reaches `main` or a remote; `test:fast` before a
   checkpoint; `test:smoke` after every edit.
+- Phase 7's deliverable is a committed table. An example whose "test" column is empty is not done —
+  write the test or delete the example, and prefer deleting.
+- Phase 8's page carries no bare number. Every figure has its units, its version, its date, its
+  method link, and its caveat in the same row. If a caveat will not fit, the figure does not go on
+  the page.
+- Phase 9 may rewrite prose freely and may not touch an example's input or output without re-running
+  it. If a rewrite changes a fenced block, the README harness fails — that is the design working.
+- Nothing in Phases 7-9 claims a capability the estate does not pin. `SKILL_CAPABILITIES_AUDIT.md`
+  §1's rule holds on public surfaces too: no test, no claim.
 - Delete each item from `HANDOVER.md` as it closes. `HANDOVER.md` holds open items only — a closed
   item is removed, not annotated.
 
@@ -697,3 +923,5 @@ everything, and generated artifacts are still wider than the diff.
   commit.
 - **Modal negation in set complements** (`playtests/PLAYTEST_LOG_002.md`) and the **canonical
   restatement** of a complement — both shipped at 2.0.1.
+
+---
