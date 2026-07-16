@@ -23,7 +23,9 @@ import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const SRC = join(here, "..", "examples", "mini-webapp", ".tmct", "graph.json");
-const OUT = join(here, "..", "public", "demo-graph.json");
+// Takes the output file as its first argument; build-demo-site.mjs passes one so
+// a build can target a directory other than the repo's own public/.
+const OUT = process.argv[2] ?? join(here, "..", "public", "demo-graph.json");
 
 const payload = JSON.parse(readFileSync(SRC, "utf8"));
 ingestSchemaDocs(payload);
