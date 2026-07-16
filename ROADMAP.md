@@ -100,7 +100,30 @@ blending web-sourced facts with graph/operator facts.
 
 ## Design docs
 
-Every substantial design lives in its own `PLAN_*.md` at the repo root (active) or `archive/`
-(shipped and closed) — this file points to them, it doesn't repeat their content. `SKILL_*.md` docs
-specify the repeatable measurement/build cycles (benchmarks, the background strategy advisor,
-plain-prose writing). `HANDOVER.md` is the single current-open-items list.
+Every substantial design lives in its own `PLAN_*.md` at the repo root; `archive/` holds the shipped
+and closed ones. This file points to them, it doesn't repeat their content. Each plan states its own
+status in its opening lines — read it there, because a status quoted here would rot.
+
+| Plan | What it's for |
+| --- | --- |
+| [PLAN_ADVENTURE.md](PLAN_ADVENTURE.md) | a text adventure as an architectural stretch: imperative command grammar, NPC turn scheduler, room-look digest |
+| [PLAN_AGENTS.md](PLAN_AGENTS.md) | the governing plan for the multi-repo arc (marginalia, seonix, a pluggable LLM rung), with its own phase sequencing |
+| [PLAN_CHILD_CORPUS.md](PLAN_CHILD_CORPUS.md) | a wider default seed corpus, chosen by age of acquisition |
+| [PLAN_CLASS_QUERY.md](PLAN_CLASS_QUERY.md) | "list/count all X of class Y", reconciled against what already shipped |
+| [PLAN_CODE.md](PLAN_CODE.md) | program synthesis over tmct's closed DSLs, plus JS/HTML/CSS fragments and goal-directed program repair |
+| [PLAN_CONSISTENCY_CHECK.md](PLAN_CONSISTENCY_CHECK.md) | tmct as a consistency service for an LLM tool loop |
+| [PLAN_EMBEDDINGS.md](PLAN_EMBEDDINGS.md) | the semantic-similarity axis, and the way back to it |
+| [PLAN_GRAPH_SCAN.md](PLAN_GRAPH_SCAN.md) | seed and query cost at `init:xl`/`init:xxl` corpus scale |
+| [PLAN_GUESS_NUMBER.md](PLAN_GUESS_NUMBER.md) | closed-loop planning over hidden state, via belief-interval bisection |
+| [PLAN_MUD.md](PLAN_MUD.md) | persistent, shared tmct worlds over a `server:` memory backend |
+| [PLAN_NLU_BENCHMARKS.md](PLAN_NLU_BENCHMARKS.md) | scoring tmct on the CLINC150 and HWU64 intent sets |
+| [PLAN_OPEN_ITEMS.md](PLAN_OPEN_ITEMS.md) | the build order closing the backlog `HANDOVER.md` carries |
+| [PLAN_PARAPHRASE_VERIFICATION.md](PLAN_PARAPHRASE_VERIFICATION.md) | checking a paraphrase against the graph before it prints |
+| [PLAN_PURGE.md](PLAN_PURGE.md) | promote the load-bearing code, delete the dead weight |
+| [PLAN_REPO_INDEX.md](PLAN_REPO_INDEX.md) | tmct grows its own code parsers, ported from seonix |
+| [PLAN_SYLLOGIST.md](PLAN_SYLLOGIST.md) | the reasoning engine's incrementality and retraction horizon |
+| [PLAN_SYLLOGIST_EL_DL.md](PLAN_SYLLOGIST_EL_DL.md) | beyond OWL 2 RL: an EL classifier, then a DL tableau prover |
+
+`SKILL_*.md` docs specify the repeatable measurement and build cycles (the benchmarks, the capability
+audit, the background strategy advisor, plain-prose writing). `HANDOVER.md` is the single
+current-open-items list.
