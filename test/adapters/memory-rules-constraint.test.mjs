@@ -9,7 +9,7 @@ import { join } from "node:path";
 import {
   appendRule, loadMemory, readRuleRows, RULE_KIND_ACTION_CONSTRAINT,
 } from "../../src/adapters/memory/core.mjs";
-import { validateIndividual } from "../../src/domain/memory/shacl.mjs";
+import { validateIndividual } from "../../src/adapters/memory/shacl.mjs";
 
 test("an action-constraint rule round-trips its left/right/guard slots", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-rules-constraint-"));

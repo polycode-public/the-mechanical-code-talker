@@ -22,7 +22,7 @@ import {
   RULE_KIND_ACTION_PRECOND,
   RULE_KIND_ACTION_EFFECT,
 } from "../../src/adapters/memory/core.mjs";
-import { validateIndividual } from "../../src/domain/memory/shacl.mjs";
+import { validateIndividual } from "../../src/adapters/memory/shacl.mjs";
 import { findActionPath, findReachableSet } from "../../src/domain/planning.mjs";
 
 const tempDir = () => mkdtemp(join(tmpdir(), "tmct-rules-action-"));

@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { validateIndividual, assertIndividualValid } from "../../src/domain/memory/shacl.mjs";
+import { validateIndividual, assertIndividualValid } from "../../src/adapters/memory/shacl.mjs";
 import {
   appendFact, appendRule, loadMemory,
   RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE,

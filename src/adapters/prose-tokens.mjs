@@ -1,11 +1,12 @@
-// memory/prose-tokens.mjs — the memory store's own tokenizer. The store sits
-// in the adapters layer and may not import the domain layer, while prose.mjs
-// (the graph/ask side's canonical tokenizer) is domain and may not import
-// adapters — so the store carries its own copy of the four primitives it
-// stores tokens with. The two copies must stay byte-identical: the parity
-// suite in test/adapters/memory-prose-tokens.test.mjs pins every function
-// here to its prose.mjs twin, so a change to either side fails loudly until
-// both move together.
+// prose-tokens.mjs — the adapters layer's own tokenizer, shared by every
+// adapter that writes prose tokens (the memory store, graph-build). Adapters
+// may not import the domain layer, while prose.mjs (the graph/ask side's
+// canonical tokenizer) is domain and may not import adapters — so this layer
+// carries its own copy of the primitives it stores tokens with. The two copies
+// must stay byte-identical: the parity suite in
+// test/adapters/prose-tokens.test.mjs pins every function here to its
+// prose.mjs twin, so a change to either side fails loudly until both move
+// together.
 
 const STOPWORDS = new Set(
   ("a an and or but the of to in on at for with from by as is are was were be been being " +
@@ -56,6 +57,27 @@ export function tokenizeProse(text) {
 export function proseTokensFor({ name, doc } = {}) {
   const set = new Set([...splitIdentifierWords(name), ...tokenizeProse(doc)]);
   return [...set].sort();
+}
+
+/** Attach a `prose_tokens` attribute to every individual, from its (decomposed)
+ *  name and captured doc text — except Commit, whose `label` is a truncated
+ *  SHA, not a decomposable identifier: it tokenizes `message` instead. Mutates
+ *  and returns the same array; `enabled=false` is a no-op. */
+export function attachProseTokens(individuals, { enabled = true } = {}) {
+  if (!enabled) return individuals;
+  for (const ind of individuals) {
+    const attrs = ind.attributes || [];
+    const isCommit = ind.class === "Commit";
+    const name = isCommit ? null : ind.label;
+    const doc = isCommit
+      ? attrs.find((a) => a.key === "message")?.value
+      : attrs.find((a) => a.key === "doc")?.value;
+    const tokens = proseTokensFor({ name, doc });
+    if (tokens.length) {
+      ind.attributes = [...(ind.attributes || []), { prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }];
+    }
+  }
+  return individuals;
 }
 
 /** Build the inverted index (word -> sorted, deduped [individual ids]) from individuals

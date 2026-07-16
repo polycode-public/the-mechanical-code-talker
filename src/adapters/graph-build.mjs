@@ -1,6 +1,6 @@
-// graph-build.mjs  the PURE assembly of the typed `entities` payload from
+// graph-build.mjs — the PURE assembly of the typed `entities` payload from
 // already-parsed module + commit records. No subprocesses, no filesystem, no git:
-// data in, graph out  which is why tests build in-memory graphs through it, and
+// data in, graph out — which is why tests build in-memory graphs through it, and
 // why it is the write-path primitive conversation memory grows on (sessions.mjs
 // folds session records into the same shape).
 //
@@ -17,7 +17,7 @@
 //   seon:containsCodeEntity Class  -> Method/Attribute (class membership)
 //   mgx:subclassOf          Class  -> Class    (inheritance)
 
-import { attachProseTokens, buildProseIndex } from "../domain/prose.mjs";
+import { attachProseTokens, buildProseIndex } from "./prose-tokens.mjs";
 
 const isTestPath = (p) =>
   p.startsWith("tests/") || /(^|\/)tests?\//.test(p) || /(^|\/)test_[^/]*\.py$/.test(p) || /\.tests(\.|$)/.test(p);
@@ -287,14 +287,14 @@ export function buildEntities(modules, commits, { generatedAt = "", symbolHistor
   const COCHANGE_MIN = 2;        // co-occur in ≥ N commits
   const COCHANGE_MAX_COMMIT = 50; // skip sweeping refactors (O(n²) noise)
   const COCHANGE_PER_NODE = 12;  // cap neighbours per module
-  const pairCount = new Map();   // "a b" (a<b lexical) -> count
+  const pairCount = new Map();   // "a\0b" (a<b lexical) -> count
   for (const c of commits) {
     const mods = [...new Set((c.files || []).filter((f) => modById.has(f)))];
     if (mods.length < 2 || mods.length > COCHANGE_MAX_COMMIT) continue;
     for (let i = 0; i < mods.length; i += 1) {
       for (let j = i + 1; j < mods.length; j += 1) {
         const [a, b] = mods[i] < mods[j] ? [mods[i], mods[j]] : [mods[j], mods[i]];
-        const key = `${a} ${b}`;
+        const key = `${a}\0${b}`;
         pairCount.set(key, (pairCount.get(key) || 0) + 1);
       }
     }
@@ -302,7 +302,7 @@ export function buildEntities(modules, commits, { generatedAt = "", symbolHistor
   const cochangeEdges = [];
   const cochangePerNode = new Map();
   for (const [key, n] of [...pairCount.entries()].filter(([, c]) => c >= COCHANGE_MIN).sort((x, y) => y[1] - x[1])) {
-    const [a, b] = key.split(" ");
+    const [a, b] = key.split("\0");
     if ((cochangePerNode.get(a) || 0) >= COCHANGE_PER_NODE || (cochangePerNode.get(b) || 0) >= COCHANGE_PER_NODE) continue;
     cochangePerNode.set(a, (cochangePerNode.get(a) || 0) + 1);
     cochangePerNode.set(b, (cochangePerNode.get(b) || 0) + 1);
