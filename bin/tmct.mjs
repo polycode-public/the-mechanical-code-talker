@@ -167,7 +167,7 @@ const TIER_RANK = { NONE: 0, TINY: 1, MID: 2, LARGE: 3, FULL: 4 };
  *   into a caller's prompt.
  *
  *  Two ways to say which modules: an explicit `modules` array (unchanged), or a `query` string —
- *  auto-locate + score-gap-select (R1b, the shipped default as of 2026-07-02) in one call, so a
+ *  auto-locate + score-gap-select (the shipped default) in one call, so a
  *  real caller no longer has to run `tmct_locate` and hand-pick a module themselves. `modules`
  *  wins if both are given. The header reports which modules were actually selected either way.
  *
@@ -741,8 +741,7 @@ async function main() {
     const lexiconVal = strFlag(rest, ["--lexicon"]);
     const graphFlags = repeatedFlag(rest, ["--graph"]);
 
-    // `--memory-backend <default|memory|sqlite>` (PLAN_SEED.md §6's storage-backend
-    // seam, now reachable from `tmct init`): validated BEFORE touching disk, same
+    // `--memory-backend <default|memory|sqlite>`: validated BEFORE touching disk, same
     // discipline as every other pluggable input below. Written into tmct.toml's
     // `[memory] backend` (src/services/init.mjs's renderTomlConfig); chat.mjs's
     // createSession reads it back at CLI-flag > TMCT_MEMORY_BACKEND env >
@@ -798,7 +797,7 @@ async function main() {
       personaPreset = PERSONA_PRESETS[personaName];
     }
 
-    // `--persona-size <medium|large>` (PLAN_SEED.md §3): Small/Medium/Large are
+    // `--persona-size <medium|large>`: Small/Medium/Large are
     // SIZES of the one `human` bundle, not separate corpus ids — human.jsonl
     // (Small, the default) stays exactly as-is; human-medium.jsonl/
     // human-large.jsonl hold ONLY the facts each size adds beyond the previous
@@ -1121,7 +1120,7 @@ async function main() {
   if (mode === "viz") {
     // `tmct viz` — the ledger explorer: one self-contained HTML page rendering
     // the memory graph as readable fact-sentences around a focus term, with
-    // the in-browser chat dock (PLAN_VIZ_LEDGER.md). Same repo resolution as
+    // the in-browser chat dock. Same repo resolution as
     // `memory`/`syllogise` — resolveRuntimeConfig: --repo > git root > cwd.
     // `--ledger` is accepted as a no-op: the ledger IS the viz surface now.
     const rest = process.argv.slice(3);

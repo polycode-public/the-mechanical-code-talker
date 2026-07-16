@@ -1,6 +1,5 @@
 // ledger-viz.mjs — `tmct viz`: the memory graph as a readable ledger of
-// fact-sentences around one focus term, with the in-page chat dock
-// (PLAN_VIZ_LEDGER.md).
+// fact-sentences around one focus term, with the in-page chat dock.
 //
 // Three pure/impure-separated pieces:
 //   - computeLedgerData(repoDir, opts)      — I/O (loadMemory) + derivation
@@ -16,7 +15,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-export const LEDGER_ROW_LIMIT_DEFAULT = 20000;
+const LEDGER_ROW_LIMIT_DEFAULT = 20000;
 
 /** Read the checked-in browser memory-ask-engine bundle
  *  (`src/surfaces/web/memory-ask-browser.bundle.js`) — the real memory-graph answer engine

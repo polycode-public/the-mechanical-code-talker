@@ -42,13 +42,13 @@ function requireStore(store, needed, caller) {
 /** scm-sco: the subClassOf-transitivity rule, and the provenance tag its
  *  conclusions carry. */
 export const SUBCLASS_PREDICATE = "rdfs:subClassOf";
-export const SYLLOGISE_RULE = "subClassOf";
+const SYLLOGISE_RULE = "subClassOf";
 export const ENTAILED_PROVENANCE = `entailed:${SYLLOGISE_RULE}`;
 
 /** cax-sco: the type-propagation rule, and the provenance tag its conclusions
  *  carry. */
 export const TYPE_PREDICATE = "rdf:type";
-export const CAX_SCO_RULE = "type";
+const CAX_SCO_RULE = "type";
 export const ENTAILED_TYPE_PROVENANCE = `entailed:${CAX_SCO_RULE}`;
 
 /** cax-dw: x rdf:type C1, C1 owl:disjointWith C2 |= x is NOT of type C2 — a
@@ -396,7 +396,7 @@ export function deriveSomeValuesFromApplication(propertyEdges, typeEdges, subCla
 // deriveSomeValuesFromApplication reconstructs someValuesFrom restrictions.
 const HAS_PROPERTY_KEY = "has"; // synthetic marker parseCardinality always mints, never a real taught verb
 const CARDINALITY_KIND_OF = { "owl:cardinality": "exactly", "owl:mincardinality": "min", "owl:maxcardinality": "max" };
-export const ON_CLASS_PREDICATE = "owl:onClass";
+const ON_CLASS_PREDICATE = "owl:onClass";
 
 /** Reconstructs pattern-5 cardinality restriction records from raw stored
  *  rows touching a restriction node. A restriction is only admitted when its
@@ -525,7 +525,7 @@ function findOwnCardinalityRestriction(subClassEdges, cardinalityRestrictionEdge
 }
 
 // ---- cardinality monotonicity (outside OWL 2 RL's own decidable profile) ----
-export const SCM_CARD_RULE = "cardinalityMonotonicity";
+const SCM_CARD_RULE = "cardinalityMonotonicity";
 /** Same sub-1 discount as CAX_DW_RULE_CONFIDENCE. No `syllogise()` call site
  *  (this rule is query-rooted, never an enumerable Fact) — defined anyway so
  *  chat.mjs's live proof chase can attach an auditable confidence figure
@@ -557,7 +557,7 @@ export function proveCardinalityAtLeast(subClassEdges, cardinalityRestrictionEdg
 // generalization — see this file's header comment; `cax-` prefix per this
 // ladder's "produces a provable no" naming convention, same epistemic status
 // as cax-dw) ----
-export const CAX_MAXC0_RULE = "maxCardinalityZero";
+const CAX_MAXC0_RULE = "maxCardinalityZero";
 /** Same sub-1 discount and query-rooted caveat as CARDINALITY_RULE_CONFIDENCE. */
 export const CAX_MAXC0_RULE_CONFIDENCE = 0.95;
 
@@ -989,7 +989,7 @@ function buildSurvivorDerivabilityCheck(rows) {
  * A survivor keeps its stale, still-single justification as-is; a later
  * retraction of its OTHER supporting path therefore won't re-examine it.
  * Re-grounding survivors — or tracking every alternate justification set —
- * is the ATMS horizon (PLAN_SYLLOGIST.md §3), not this bounded slice.
+ * is the ATMS horizon, not this bounded slice.
  *
  * Returns { retracted, count, budget, depth, truncated, found } — `found` is
  * false when `subject ⊑ object` was never a stored fact.

@@ -352,7 +352,7 @@ export function buildEntities(modules, commits, { generatedAt = "", symbolHistor
   const countClass = (c) => fnIndividuals.filter((i) => i.class === c).length;
   const sampleClass = (c) => fnIndividuals.filter((i) => i.class === c).slice(0, 3).map((i) => i.label);
 
-  // Second pass (PLAN_PROSE_INDEX.md) — see the returned `proseIndex` field's comment below.
+  // Second pass — see the returned `proseIndex` field's comment below.
   const allIndividuals = attachProseTokens(
     [...moduleIndividuals, ...fnIndividuals, ...commitIndividuals], { enabled: prose },
   );
@@ -361,7 +361,7 @@ export function buildEntities(modules, commits, { generatedAt = "", symbolHistor
   return {
     generated_at: generatedAt,
     // SEON (se-on.org, FAMIX-derived) vocabulary + our `mgx:` extension, documented
-    // for readers; the graph is JSON-label-only (no RDF store — see PLAN_SEON_RDF.md).
+    // for readers; the graph is JSON-label-only (no RDF store).
     prefixes: {
       seon: "http://se-on.org/ontologies/seon.owl#",
       mgx: "urn:tmct:mgx#",
@@ -419,7 +419,7 @@ export function buildEntities(modules, commits, { generatedAt = "", symbolHistor
       rel("reexports", "mgx:reExports", reExportEdges),
     ],
     individuals: allIndividuals,
-    // Second pass (PLAN_PROSE_INDEX.md): word -> [individual ids], inverted from the
+    // Second pass: word -> [individual ids], inverted from the
     // `prose_tokens` attribute attachProseTokens just attached. Disable via
     // TMCT_PROSE_INDEX=0 (indexRepository, below) — {} when off. The typed graph above
     // (individuals' core fields, all edges) is byte-identical either way.

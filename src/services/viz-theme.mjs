@@ -1,7 +1,6 @@
 // viz-theme.mjs — the shared assets for tmct's generated HTML pages
-// (the ledger explorer and the plan player): the visual token table
-// (PLAN_VIZ_LEDGER.md's reference values) plus the escaping helpers every
-// page builder needs.
+// (the ledger explorer and the plan player): the visual token table plus the
+// escaping helpers every page builder needs.
 //
 // Trust tiers are precomputed rgba() values per provenance color so pages
 // render identically on browsers without color-mix() support.
@@ -30,7 +29,7 @@ function rgba(hex, alpha) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-export const TOKENS = Object.freeze({
+const TOKENS = Object.freeze({
   light: Object.freeze({
     bg: "#F7F6F2", ink: "#23272B", muted: "#6E7168", line: "#DDD9D0", card: "#FFFFFF",
     taught: "#2E7D4F", corpus: "#5A80AC", entail: "#B07C2E", alert: "#B0503F",

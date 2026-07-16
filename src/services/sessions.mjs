@@ -24,7 +24,7 @@ import { turnKey } from "../domain/memory/session-turns.mjs";
 export const SESSIONS_DIR_REL = join(".tmct", "sessions");
 
 export const SESSION_CLASS = "Session";
-export const ASKS_ABOUT_PREDICATE = "asksAbout";
+const ASKS_ABOUT_PREDICATE = "asksAbout";
 export const ASKS_ABOUT_PROP = "mgx:asksAbout";
 
 const QUERIES_ATTR_CAP = 500; // joined-queries attribute cap (mirrors commitMessage's cap idea)
@@ -111,9 +111,9 @@ export function upsertSession(entities, record) {
     attributes: [
       // referenced via the imported constant (single-sourced from memory/core.mjs)
       { prop: CREATED_AT_PROP, key: "createdAt", value: priorCreatedAt || started || new Date().toISOString() },
-      // this IS a genuinely-mutated individual (re-written every chat turn, PLAN_VIZ.md §2's
-      // concrete "Session" case) — stamp updatedAt explicitly since the derived "max over edges"
-      // rule can't see an own-attribute rewrite that touches no edge.
+      // a Session really is mutated — re-written every chat turn — so stamp updatedAt
+      // explicitly: the derived "max over edges" rule cannot see an own-attribute rewrite
+      // that touches no edge.
       { prop: UPDATED_AT_PROP, key: "updatedAt", value: new Date().toISOString() },
       { prop: "mgx:sessionStarted", key: "started", value: started },
       { prop: "mgx:sessionEnded", key: "ended", value: ended },
