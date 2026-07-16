@@ -101,11 +101,26 @@
       "notice": "corpus/tier2/manifest.json"
     },
     {
-      "path": "corpus/generated/ace-surface-variants.jsonl",
-      "upstream": "mechanically generated from Open English WordNet / SemCor example sentences and this repository's own docs prose",
-      "license": "CC-BY-4.0",
+      "path": "corpus/prose/sqlite/",
+      "upstream": "SQLite documentation (sqlite.org), plain-text extractions of 12 pages",
+      "license": "public-domain",
       "shareAlike": false,
-      "notice": "corpus/generated/manifest.json"
+      "notice": "corpus/prose/sqlite/LICENSE-NOTICE"
+    },
+    {
+      "path": "corpus/prose/wikipedia/",
+      "upstream": "Wikipedia — simple.wikipedia.org lead sections (56 everyday-concept articles) and en.wikipedia.org full articles (12 in tmct's technical domain), fetched via the MediaWiki extracts API",
+      "license": "CC-BY-SA-4.0",
+      "shareAlike": true,
+      "notice": "corpus/prose/wikipedia/LICENSE-NOTICE"
+    },
+    {
+      "path": "corpus/generated/ace-surface-variants.jsonl",
+      "upstream": "mechanically generated from Open English WordNet / SemCor example sentences (CC-BY-4.0) and corpus/prose/, which includes CC-BY-SA-4.0 Wikipedia text",
+      "license": "CC-BY-SA-4.0",
+      "shareAlike": true,
+      "notice": "corpus/generated/manifest.json",
+      "note": "CC-BY-SA-4.0, not CC-BY-4.0: the rescue rows quote and word-substitute Wikipedia sentences from corpus/prose/wikipedia/, so this published file is a modified derivative of CC-BY-SA-4.0 text and inherits its viral share-alike. It carried CC-BY-4.0 while the prose corpus was this repository's own docs; adding Wikipedia is what changed it. See corpus/prose/wikipedia/LICENSE-NOTICE."
     },
     {
       "path": "data/",
