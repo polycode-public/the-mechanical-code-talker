@@ -23,59 +23,20 @@
 // Usage:
 //   node scripts/generate-real-word-collisions.mjs [--out <path>]
 
+// The -s/-ed/-ing rules and the collision fold live in src/domain/inflect.mjs,
+// where they are unit-tested. This script is the disk half: read the corpus,
+// write the table.
+
 import { readFileSync, writeFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import { STOPWORDS } from "../src/domain/interpret/normalize.mjs";
-import {
-  FUZZY_TARGET_WORDS, FUZZY_REPAIR_MIN_LENGTH, fuzzyMatchInSet, fuzzyBound,
-} from "../src/domain/interpret/fuzzy.mjs";
+import { FUZZY_TARGET_WORDS } from "../src/domain/interpret/fuzzy.mjs";
+import { inflectionsOf, collisionsFrom } from "../src/domain/inflect.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, "..");
-const outFlag = process.argv.indexOf("--out");
-const OUT_FILE = outFlag >= 0 && process.argv[outFlag + 1]
-  ? process.argv[outFlag + 1]
-  : join(REPO, "src", "domain", "real-word-collisions.json");
 
 const WORDNET_FILES = ["wordnet-full.jsonl", "wordnet-xl.jsonl"];
-
-const VOWELS = new Set(["a", "e", "i", "o", "u"]);
-const isVowel = (c) => VOWELS.has(c);
-
-/** A single final consonant after a single vowel doubles before -ed/-ing
- *  ("run" -> "running"). w, x and y never double. */
-function doublesFinalConsonant(w) {
-  const [c3, c2, c1] = [w.at(-3), w.at(-2), w.at(-1)];
-  if (!c3 || isVowel(c1) || "wxy".includes(c1)) return false;
-  return isVowel(c2) && !isVowel(c3);
-}
-
-function pluralOf(w) {
-  if (/(?:s|x|z|ch|sh)$/.test(w)) return `${w}es`;
-  if (/[^aeiou]y$/.test(w)) return `${w.slice(0, -1)}ies`;
-  return `${w}s`;
-}
-
-function pastOf(w) {
-  if (w.endsWith("e")) return `${w}d`;
-  if (/[^aeiou]y$/.test(w)) return `${w.slice(0, -1)}ied`;
-  if (doublesFinalConsonant(w)) return `${w}${w.at(-1)}ed`;
-  return `${w}ed`;
-}
-
-function gerundOf(w) {
-  if (w.endsWith("ie")) return `${w.slice(0, -2)}ying`;
-  if (w.endsWith("e") && !/(?:ee|oe|ye)$/.test(w)) return `${w.slice(0, -1)}ing`;
-  if (doublesFinalConsonant(w)) return `${w}${w.at(-1)}ing`;
-  return `${w}ing`;
-}
-
-/** Every surface form of `w` this generator counts as real English. Generous on
- *  purpose. An extra form costs one repair we decline to make, and the sentence
- *  misses honestly. A missing form costs a real word rewritten into a different
- *  question, answered with confidence. The first is the cheaper mistake. */
-const inflectionsOf = (w) => [w, pluralOf(w), pastOf(w), gerundOf(w)];
 
 /** Single-word lowercase lemmas from the ConceptNet-shaped WordNet JSONL. Every
  *  edge carries a `/c/en/<term>` concept at each end, and a multi-word term
@@ -98,25 +59,28 @@ function wordnetLemmas() {
   return lemmas;
 }
 
-const lemmas = wordnetLemmas();
-const realWords = new Set([...lemmas].flatMap(inflectionsOf));
+function main() {
+  const outFlag = process.argv.indexOf("--out");
+  const outFile = outFlag >= 0 && process.argv[outFlag + 1]
+    ? process.argv[outFlag + 1]
+    : join(REPO, "src", "domain", "real-word-collisions.json");
 
-const collisions = [...realWords]
-  .filter((w) => w.length >= FUZZY_REPAIR_MIN_LENGTH)
-  .filter((w) => !STOPWORDS.has(w))
-  .filter((w) => !FUZZY_TARGET_WORDS.includes(w))
-  .filter((w) => fuzzyMatchInSet(w, FUZZY_TARGET_WORDS, fuzzyBound(w)) !== null)
-  .sort();
+  const lemmas = wordnetLemmas();
+  const realWords = new Set([...lemmas].flatMap(inflectionsOf));
+  const collisions = collisionsFrom(realWords);
 
-// The table answers "which real words does THIS target list attract", so add a
-// verb to the vocabulary and the answer changes. The target list it was built
-// against ships with it, and the suite compares the two.
-const out = {
-  source: "corpus/wordnet/*.jsonl lemmas, expanded through the regular -s/-ed/-ing inflections",
-  generator: "scripts/generate-real-word-collisions.mjs",
-  targets: [...FUZZY_TARGET_WORDS].sort(),
-  words: collisions,
-};
-writeFileSync(OUT_FILE, `${JSON.stringify(out)}\n`);
-console.log(`generate-real-word-collisions: ${lemmas.size} WordNet lemmas -> ${realWords.size} forms with inflections`);
-console.log(`generate-real-word-collisions: ${collisions.length} collide with ${FUZZY_TARGET_WORDS.length} repair targets -> ${OUT_FILE}`);
+  // The table answers "which real words does THIS target list attract", so add a
+  // verb to the vocabulary and the answer changes. The target list it was built
+  // against ships with it, and the suite compares the two.
+  const out = {
+    source: "corpus/wordnet/*.jsonl lemmas, expanded through the regular -s/-ed/-ing inflections",
+    generator: "scripts/generate-real-word-collisions.mjs",
+    targets: [...FUZZY_TARGET_WORDS].sort(),
+    words: collisions,
+  };
+  writeFileSync(outFile, `${JSON.stringify(out)}\n`);
+  console.log(`generate-real-word-collisions: ${lemmas.size} WordNet lemmas -> ${realWords.size} forms with inflections`);
+  console.log(`generate-real-word-collisions: ${collisions.length} collide with ${FUZZY_TARGET_WORDS.length} repair targets -> ${outFile}`);
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) main();
