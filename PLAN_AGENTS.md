@@ -6,18 +6,22 @@ sibling docs — `PLAN_AGI_ARCHITECTURE.md`, `PLAN_CAPABILITY_ROUTER.md`, `PLAN_
 `PLAN_OSS_ACE_PARSER.md`, `PLAN_ontology-hierarchies.md`, `PLAN_ADVANCED_GRAMMAR.md` — now archived.
 See §12, Provenance, for what each contributed.)*
 
-> **STATUS (2026-07-11, v1.4.0 shipped):** the (a)-tier uplift items from §2 landed in full — RI
-> wrapper fixes (ranked search, graph-only `context()` with `INTERFACE_VERSION` 1.1.0, depth-capped
-> `impact()`, source-backed `snippet()`, `edges()`/`search()` pagination), hub-dampened memory-fact
-> ranking (on by default), memory-tree versioning (`snapshotMemory()`, manual trigger), and —
-> further than §2.1 scoped — **actor-level trust shipped in full, unconditionally** (session-scoped
-> Source IDs for operator/teach facts, no config flag; operator decision: single consumer, no
-> backward-compat need). Phase 0's extension-pack seam and Phase 1's bias-weighted ranking + `tmct
-> init --with-persona` also shipped. Still open in Phase 0: cross-repo smoke test, envelope.json,
-> ace-owl extraction, ontology-hierarchies tracks a–d, advanced-grammar tracks a/d/f, the debt
-> re-measure. Still open in Phase 1: the wider general-knowledge seed set itself (shipped-but-inactive
-> tier2 bundles are now activatable via the extension-pack seam, which is real progress, but nobody
-> has grown the corpus further) and context-preserving unknown-word ingestion (not built).
+> **STATUS.** Phase 0 is done. Every item in §3 ships and the tree pins it. The one exception is the
+> `ace-owl` extraction, which shipped and was reverted the same day; `src/domain/grammar/ace.mjs` is
+> the real implementation again and no `packages/` workspace exists.
+>
+> Phase 1 is partial. The `[bias]` table, bias-weighted ranking and `tmct init --with-persona` ship.
+> Two items stay open: the wider general-knowledge seed set is available but opt-in (a fourth tier2
+> bundle, `corpus/tier2/general.jsonl`, 49 rows, config-gated off), and context-preserving unknown-word
+> ingestion is built and unit-tested but dormant (`captureUnknownContext` defaults false and no
+> production call site sets it).
+>
+> The chat-surface debt re-measure is done, and its transcripts are now machine-checked rather than
+> written down. Nine rows carry it in the corpus lanes: three pin behaviour that works, six freeze
+> answers that are still wrong. See §3's debt bullet for the row IDs. The measurement is closed; six
+> fixes are open.
+>
+> Phases 2-5 have not started.
 
 ## 0. The architecture, in one picture
 
@@ -68,14 +72,17 @@ model everywhere tmct cannot answer — same discipline as every other tmct plan
 
 ## 1. Ground truth — what's already real
 
-The two audits this doc supersedes (`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`,
-`PLAN_AGI_ARCHITECTURE.md`, both 2026-07-08) verified this against code, not docs. Conclusions only:
+Every mount below rests on the capability set in this table, so the table moves when capabilities
+move. `SKILL_CAPABILITIES_AUDIT.md` §5 makes refreshing it a step of the audit cycle: the newest
+`CAPABILITIES_<version>.md` is the ground truth here, and this table follows it rather than the
+other way round. Conclusions only:
 
 | Capability | Status | Evidence |
 |---|---|---|
 | `POST /v1/messages` HTTP shim (Anthropic-Messages-API-compatible) | **Shipped**, since 0.8.0 | `src/surfaces/server-http.mjs`, `bin/tmct.mjs serve` |
-| Repository Interface v1.0.0 (15 services, closed `EDGE_KINDS`/`MISS_REASONS`) | **Shipped**, stable since 0.5.0 | `src/adapters/repository-interface.mjs`, `src/adapters/providers/graph-service.mjs`, `src/tools/conformance.mjs` |
-| Capability router (STRIPS/PDDL registry, resolver, planner, guardrail, goal-reasoner) | **Shipped**, all 6 stages, **and now invokable** | `src/domain/router/*`, measured on AGENTBENCH; `tmct plan`/chat's `/plan`/`./plan` library export — see §1.3 |
+| Repository Interface `INTERFACE_VERSION` 1.1.0 (16 services, closed `EDGE_KINDS`/`MISS_REASONS`) | **Shipped**, since 0.5.0; 1.0.0 → 1.1.0 at v1.4.0 (§2.2) | `src/adapters/repository-interface.mjs` (`SERVICES`, 16), `src/adapters/providers/graph-service.mjs`, `runConformance` in `src/tools/conformance.mjs` |
+| Tool layer: the `TOOLS` table + `dispatchTool` | **Shipped** — 3 tools (`tmct_context`, `tmct_snippet`, `tmct_ask`) | `src/tools/server.mjs`; the router's registry excludes all three, see `EXCLUDED_FROM_REGISTRY` |
+| Capability router (STRIPS/PDDL registry, resolver, planner, guardrail, goal-reasoner) | **Shipped**, all 6 stages, **and invokable** | `src/domain/router/*`, 15 capabilities in `registry.mjs` (`capabilities()`), measured on AGENTBENCH; `tmct plan`/chat's `/plan`/`./plan` library export — see §1.3 |
 | AGENTBENCH goal-reasoner (Stage 5, the C2 rung) | **Shipped and measured** | 56 cases: 100% plan / 100% result / 0% hallucination across every rung (`archive/TOO_HARD_AUDIT.md` M2, fixed 2026-07-12 — no case held back) |
 | seonix code→graph, driven by tmct | **Shipped, in production**, seonix 0.8.0→0.10.6 | `seonix/src/tmct-provider.mjs` — 37 lines, `createGraphService` reused directly |
 | bedrock-meter cost-ordered router with a tmct rank-0 ($0) rung | **Shipped and tested** | `router.mjs`/`router-ladder.mjs`/`routing-target.mjs`, 11 passing tests |
@@ -240,13 +247,14 @@ algorithmic capability tmct would have to invent — the logic already sits in t
   conflicts with tmct's "honest ambiguity over guessing" principle — a judgment call, not a clear
   win. (§4 adds a different, complementary answer to the same question — a declared bias rather than
   a frequency heuristic.)
-- **Visualizers (b, optional) — ✅ graph-rendering gap closed 2026-07-11.** `tmct viz` (`src/viz.mjs`,
-  `bin/tmct.mjs`) ships a self-contained, navigable HTML memory-graph view (`npm run viz -- --output
-  graph.html`), including a live embedded "Ask the graph" chat panel running tmct's own `ask.mjs`
-  client-side. Not the same shape as seonix's standalone Cytoscape ego-neighborhood viewer
-  (`viz.mjs`, distinct from Chronograph) — no code-graph mode, no multi-repo incremental re-index
-  (`manifest.mjs`, git-SHA + dirty-worktree fingerprinting) — those remain distinct, unaddressed.
-  Relevant if/when tmct's own use case grows multi-repo; not urgent today.
+- **Visualizers (b, optional) — ◐ shipped, then reshaped.** `tmct viz` now renders the ledger
+  explorer (`src/services/ledger-viz.mjs`), one self-contained HTML page, with the memory-ask
+  browser bundle carrying the embedded "Ask the graph" panel. The earlier node-link memory-graph
+  page is retired: `src/viz.mjs` is gone and `bin/tmct.mjs` prints a named error for the flags that
+  belonged to it. `tmct plan --prompt` renders plans separately (`src/services/plan-viz.mjs`).
+  seonix's standalone Cytoscape ego-neighborhood viewer stays a different shape, and tmct still has
+  no code-graph viz mode and no multi-repo incremental re-index (`manifest.mjs`, git-SHA +
+  dirty-worktree fingerprinting). Those matter if tmct's own use case grows multi-repo.
 
 ### 2.3 What this changes in the phase sequence
 
@@ -264,11 +272,11 @@ now closed except Chronograph-style temporal diffing.
 
 Near-term, mostly known-how, individually small. No item here requires research.
 
-- ✅ **Cross-repo smoke test — shipped 2026-07-10.** `test/server-http-smoke.test.mjs` boots a real
-  `tmct serve` child process and drives it over HTTP with bedrock-meter's `httpDispatch`/
-  `extractUsage` logic mimicked inline (no bedrock-meter dependency added), proving text-only
-  end_turn, tool_use/tool_result, malformed-JSON 400, and usage-folding all hold against a real
-  process outside hand-built fixture objects.
+- ✅ **Cross-repo smoke test — shipped.** `e2e/server-http.test.mjs` spins the real `tmct serve`
+  node:http server on an ephemeral port and drives a full request → `tool_use` → `tool_result` →
+  `end_turn` loop over `fetch`, with bedrock-meter's `httpDispatch`/`extractUsage` logic mimicked
+  inline (no bedrock-meter dependency added). It asserts the block shapes, `stop_reason`, $0 usage
+  and malformed-JSON 400 against a real process rather than hand-built fixture objects.
 - ✅ **Machine-readable capability envelope — shipped 2026-07-10.** `agentbench/envelope.json` +
   `agentbench/generate-envelope.mjs`, generated from the latest gate-PASS AGENTBENCH goal-driver
   ladder run (`rungReached`/`structuredOk`/`toolsOk` derived from the real hallucination-taxonomy
@@ -300,57 +308,44 @@ Near-term, mostly known-how, individually small. No item here requires research.
   hand-curated SEON upper-ontology spine (47 new rows: artifact/agent/event/quality/quantity roots
   + part-whole) and (d) `owl:disjointWith` growth (72 new rows, 42→114 total) shipped 2026-07-10.
 - ✅ **Advanced-grammar tracks a/d/f — shipped.** Track (a) subordination/conditional frames
-  (`SUBORDINATION_FRAMES`/`CONDITIONAL_QUALIFIER_RE` in `src/domain/interpret/normalize.mjs`) found already
+  (`SUBORDINATION_FRAMES_RE`/`CONDITIONAL_QUALIFIER_RE` in `src/domain/interpret/normalize.mjs`) found already
   shipped from an earlier session. Track (d) construction-grammar template bank shipped 2026-07-10:
   `data/templates/constructions/agent-noun-relations.toml` + `src/domain/interpret/strategies/
   constructions.mjs`, three new closed templates (T11-T13: "X of Y", "Y's X", "Y X" relation
   phrasings). Track (f) presupposition-as-honest-nudge (`presuppositionNudge`, `src/services/chat.mjs`) also
   found already shipped from an earlier session, not newly built this session.
-- ◐ **Re-measure inherited chat-surface debt — partially re-measured 2026-07-10, all three narrowed
-  this session, none fully closed.** The capability router doc named three specific gaps
-  (pronoun/focus binding, discourse-count anaphora, temporal-over-relative composition) as blocking
-  its later stages, last measured against the stale CEFR_ENGLISH_0.7.1 baseline. Re-run this session
-  as representative multi-turn conversations via `createSession`/`runTurn` against the current HEAD
-  (`examples/mini-webapp` + `test/fixtures/entities.fixture.json`), independently re-verified turn by
-  turn (not just trusted from an earlier pass) — see `test/chatflow-agents-debt-remeasure.test.mjs`
-  for the frozen transcripts, both passing and confirmed-still-failing.
-  - **Gap 1, pronoun/focus binding — partially closed.** "what calls fnAlpha" → "what does
-    Widget.render call" → "does it call fnAlpha": "it" resolves correctly to Widget.render (the
-    forward turn's own answer proves it), but the yes/no check wrongly answers "No — no calls edge
-    found from Widget.render to fnAlpha" even though the immediately preceding turn just confirmed
-    the call. Root cause pinned: `src/domain/ask.mjs`'s `shape === "ask"` branch calls `kindsFor(kind)`,
-    and `KIND_UNIONS` (~line 134) only defines a union for `kind: "uses"` — never for bare `"calls"`
-  - **Gap 2, discourse-count anaphora — mostly closed for relation filters, one confirmed gap
-    remains.** "which modules import http.mjs" (→ base.mjs/router.mjs/tasks.mjs) → "how many of
-    those also import logger.mjs" correctly answers "1 module" (router.mjs); "...are tested"
-    correctly answers "1 module" (tasks.mjs) — both re-verified against the real mini-webapp graph,
-    not just the earlier pass's word. The gap holds exactly as previously found: a BARE entity-type
-    filter with no relation verb ("which of them are functions") still fails — "couldn't compile this
-    compositional question (the follow-up filter didn't parse)."
-  - **Gap 3, temporal-over-relative composition — single-turn solid, cross-turn composition
-    confirmed unbuilt, and its fallback path has its own bug.** "what changed since 2026-01-01" and
-    "what changed before <sha>" both give real, correctly-dated answers against the mini-webapp
-    graph's actual commit history. Genuine cross-turn composition ("what changed before <sha>"
-    → "was that before <X> was touched") is confirmed NOT built — the follow-up mis-parses as a
-    fresh query. Re-measuring this deepened the root cause: the fresh-query fallback it falls through
-    to is **itself** wrong, independent of any discourse tracking. A bare passive yes/no with no
-    "by"-agent clause ("was store.mjs touched", "is model.mjs imported", "is base.mjs called") is
-    silently misparsed as an ACTIVE `forward` query — the named entity read as the verb's SUBJECT
-    (scanning its OUTGOING edges) — instead of the intended PASSIVE reading (the entity as OBJECT,
-    scanning INCOMING edges). Confirmed with real, asymmetric graph data: `store.mjs` has 3 recorded
-    touching commits (proven by the working phrasing "has store.mjs been touched"), yet "was
-    store.mjs touched"/"is store.mjs touched" both falsely answer "src/core/store.mjs has no touches
-    edges in the index." Root cause pinned: `src/domain/interpret/strategies/keywords.mjs`'s
-    `parseKeywordSpot`, the final `if (beforeText) return { shape: "forward", ... }` fallback — fired
-    whenever text precedes the verb and nothing follows it, true for "X is touched" since there's no
-    explicit object after the participle — never consults `PASSIVE_AUX` the way the "by"-agent
-    reversible-passive branch a few lines above already does. **A second new, previously-undocumented,
-    confidently-wrong bug** — flagged, not fixed, per this pass's read-only scope.
-  - **Overall verdict, unchanged from the read-only pass's own framing:** none of the three are still
-    blockers at their 0.7.1-era severity — each narrowed, temporal single-turn filtering especially —
-    but none are fully closed either, and this pass surfaced two further confidently-wrong bugs beyond
-    the original three gaps. Worth a real fix pass before scoping new comprehension work on top, not
-    just a re-scope of the three original gaps.
+- ✅ **Re-measure inherited chat-surface debt — done, and now machine-checked.** The capability
+  router doc named three gaps (pronoun/focus binding, discourse-count anaphora,
+  temporal-over-relative composition) as blocking its later stages. The re-measure ran them as real
+  multi-turn conversations, and its transcripts no longer live in prose or in a standalone suite.
+  They are nine keyed rows in the corpus lanes, driven through the real session on every `npm test`.
+  Three pin behaviour that works:
+
+  | Row | What it pins |
+  |---|---|
+  | `games/discourse-count-relation-filter` | "how many of those also import Y" counts the prior set |
+  | `games/discourse-count-qualifier-filter` | "how many of those are tested" counts the prior set |
+  | `games/single-turn-temporal-filter-dated-answers` | single-turn temporal filtering gives dated answers |
+
+  Six freeze an answer that is still wrong, so a fix has to flip the row deliberately:
+
+  | Row | The bug it freezes |
+  |---|---|
+  | `games/yesno-call-check-misses-callssymbol-edge` | "does it call X" binds the pronoun, then the yes/no check false-negatives on a `callsSymbol`-only edge |
+  | `games/bare-passive-yesno-reads-active-subject` | bare passive with no by-agent clause ("was X touched") reads X as the active subject |
+  | `games/bare-type-discourse-filter-unbuilt` | a bare entity-type follow-up ("which of them are functions") does not compile |
+  | `games/cross-turn-temporal-composition-unbuilt` | "was that before X was touched" is not composed across turns |
+  | `games/honest-empty-echoes-raw-pronoun` | the honest-empty template echoes the literal word "it" |
+  | `games/temporal-adverb-read-as-object-term` | "was it touched recently" reads "recently" as the object term |
+
+  Two root causes stay pinned in the source. `src/domain/ask.mjs`'s `KIND_UNIONS` still defines a
+  union for `uses` only, never for bare `calls`. `src/domain/interpret/strategies/keywords.mjs`'s
+  `parseKeywordSpot` still falls through to `shape: "forward"` when text precedes the verb and
+  nothing follows it, so the passive reading never fires without a "by" clause. `PASSIVE_AUX` appears
+  in that file and is consulted on other branches, so reading the source suggests the path is
+  handled. Driving it says otherwise, which is why the rows are the evidence and the read is not.
+
+  The measurement is closed. Six fixes are open, each named by its row.
 - ✅ **RI wrapper fixes from the seonix audit (§2.2) — shipped v1.4.0.** Ranked search, real
   `context()` bundling (`INTERFACE_VERSION` 1.1.0), depth-capped `impact()`, source-backed
   `snippet()`, response pagination on `search()`/`edges()`. Also closed a real path-traversal gap
@@ -384,14 +379,18 @@ that isn't code at all.
   declared, inspectable way to rank through it instead of needing to avoid it by staying narrow. Next
   time R3's 2M-word-ontology assessment is revisited, this changes what it should weigh — not a green
   light to build it, but a genuine change in the calculus.
-- ◐ **A wider general-knowledge seed set — partially realized, grown further 2026-07-10.** The
-  three shipped-but-inactive tier2 bundles (aws/python/java) are confirmed genuinely activatable
-  end-to-end via the extension-pack seam (§3, manually verified this session). A fourth bundle,
-  `tier2-general` (49 curated everyday-knowledge facts — animals, weather, natural world, common
-  objects — deliberately zero code-domain framing), was added, same checksum/provenance/
-  config-gated-off-by-default discipline as the existing three. Still ◐: this grows the *available*
-  seed content, but stays opt-in/config-gated — not a default-on wider corpus.
-- ◐ **Context-preserving ingestion for unknown words — built and unit-tested, but DORMANT
+- ◐ **A wider general-knowledge seed set — available, still opt-in.** The three tier2 bundles
+  (`corpus/tier2/aws.jsonl`, `python.jsonl`, `java.jsonl`) are activatable end-to-end through the
+  extension-pack seam (§3). A fourth, `corpus/tier2/general.jsonl`, carries 49 curated
+  everyday-knowledge facts (animals, weather, natural world, common objects) with no code-domain
+  framing, under the same checksum and provenance discipline as the other three. This grows the
+  available seed content. All four stay config-gated off, so the default corpus is unchanged.
+- ◐ **Context-preserving ingestion for unknown words — built, unit-tested, dormant.**
+  `src/adapters/corpus/unknown-ingest.mjs` turns a term that only ever appears in a row `toFacts()`
+  drops into a real Fact tagged with the passage it came from. `seedMemory` in
+  `src/adapters/corpus/conceptnet.mjs` calls it behind `captureUnknownContext`, which defaults false.
+  Only `test/corpus-unknown-ingest.test.mjs` ever sets it true, so no production path activates it.
+  The code works; nothing reaches it.
 - ✅ **Config surface, concretely — shipped v1.4.0.** Each named extension/seed set gets an optional
   `bias` weight in `tmct.toml`'s `[bias]` table (a flat bundle-name → weight table, not nested under
   `[extensions.*]` — a deliberate simplification versus this doc's own illustrative sketch).
@@ -443,7 +442,7 @@ tmct" rather than validate against synthetic benchmarks.
   "focus entity resolved," effect "adds dependsOn topic") so the resolver picks the right predicate
   by deduction over declared preconditions/effects, not keyword-matching; and the provider adapter
   itself, since marginalia's individuals live in oxigraph as RDF, not tmct's in-memory graph shape —
-  a SPARQL-backed implementation of the 15 Repository Interface services, comparable in size to
+  a SPARQL-backed implementation of the 16 Repository Interface services, comparable in size to
   marginalia's own `formulate-grammar.mjs` + `matcher.mjs` (387 lines combined). A multi-day task,
   not a code-generation exercise. Gated on Phase 0's extension-pack seam existing.
 
@@ -587,10 +586,10 @@ Explicit pruning record, so these aren't re-asked:
 
 ## 11. Sequencing
 
-| Phase | What ships | Status (2026-07-11) | Depends on | Repo(s) |
+| Phase | What ships | Status | Depends on | Repo(s) |
 |---|---|---|---|---|
-| 0 | Foundations (§3): smoke test, envelope.json, extension-pack seam, ace-owl extraction, ontology tracks a–d, grammar tracks a/d/f, debt re-measure, RI wrapper fixes + hub-dampened memory ranking (§2) | **Nearly done — extension-pack seam ✅, RI wrapper fixes ✅, hub-dampening ✅ (v1.4.0); smoke test ✅, envelope.json ✅, ontology tracks a–d ✅, grammar tracks a/d/f ✅, chat-surface debt re-measure ✅ (all 2026-07-10). ace-owl extraction shipped 2026-07-10, reverted the same day (see above) — not tracked as done.** | Nothing (all build on shipped work) | tmct |
-| 1 | Bias-weighted ambiguity resolution & wider seed sets (§4): `tmct.toml` `[bias]` table, wider general-knowledge corpus, context-preserving unknown-word ingestion | **Partial — `[bias]` table + ranking + `--with-persona` ✅ (v1.4.0); a fourth tier2 bundle (`tier2-general`) added 2026-07-10 (◐, still opt-in); context-preserving ingestion built + unit-tested 2026-07-10 but its one production call site never activates it (◐, dormant — see §4)** | Phase 0's extension-pack seam | tmct |
+| 0 | Foundations (§3): smoke test, envelope.json, extension-pack seam, ace-owl extraction, ontology tracks a–d, grammar tracks a/d/f, debt re-measure, RI wrapper fixes + hub-dampened memory ranking (§2) | **Done.** Every item ships and the tree pins it. The ace-owl extraction shipped and was reverted the same day, so it is not tracked as done. The debt re-measure is closed and its nine rows run on every `npm test`; six of them freeze bugs that are still open. | Nothing (all build on shipped work) | tmct |
+| 1 | Bias-weighted ambiguity resolution & wider seed sets (§4): `tmct.toml` `[bias]` table, wider general-knowledge corpus, context-preserving unknown-word ingestion | **Partial.** `[bias]` table, ranking and `--with-persona` ship. The wider seed set is available and opt-in (four tier2 bundles, all config-gated off). Context-preserving ingestion is built and unit-tested but dormant: `captureUnknownContext` defaults false and only tests set it. | Phase 0's extension-pack seam | tmct |
 | 2 | tmct as marginalia's interpreter (§5): seon-mcp adapter, Formulate validation, mechanical-chat replacement | Not started | Phase 0's extension-pack seam | tmct, marginalia |
 | 3 | tmct × seonix combined index (§6): mount seonix's (multi-language) graph, re-verify RI depth at scale | Not started | Phase 0's extension-pack seam | tmct, seonix |
 | 4 | marginalia scrape→teach pipeline (§7) | Not started | PLAN_TAUGHT_RELATIONS (shipped); Phase 1 for context-preserving ingestion specifically | marginalia |
