@@ -8,21 +8,14 @@
 //
 //   node scripts/check-licences.mjs
 
+// The allowlist, the SPDX rule and the tree walk live in src/domain/licences.mjs,
+// where they are unit-tested. This script is the disk half: run `npm ls`, read
+// each package.json, report.
+
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-
-const ALLOWED = new Set([
-  "MIT",
-  "ISC",
-  "BSD-2-Clause",
-  "BSD-3-Clause",
-  "Apache-2.0",
-  "MPL-2.0",
-  "0BSD",
-  "CC0-1.0",
-  "Unlicense",
-]);
+import { ALLOWED, isAllowed, licenseFromPackageJson, installedPackages } from "../src/domain/licences.mjs";
 
 function npmLsJson() {
   // npm ls exits non-zero on peer-dep noise while still printing the tree, so
@@ -38,58 +31,32 @@ function npmLsJson() {
   }
 }
 
-function licenseOf(pkgPath) {
-  const pkg = JSON.parse(readFileSync(join(pkgPath, "package.json"), "utf8"));
-  if (typeof pkg.license === "string") return pkg.license;
-  if (pkg.license && typeof pkg.license.type === "string") return pkg.license.type; // legacy object form
-  if (Array.isArray(pkg.licenses)) return pkg.licenses.map((l) => l.type).join(" OR "); // legacy array form
-  return "(none declared)";
-}
+const licenseOf = (pkgPath) =>
+  licenseFromPackageJson(JSON.parse(readFileSync(join(pkgPath, "package.json"), "utf8")));
 
-// A flat SPDX expression like "(MIT OR CC0-1.0)" is fine when the choice it
-// offers includes an allowlisted licence (OR lets the consumer pick); an AND
-// expression needs every part allowlisted. Nested expressions and WITH
-// exceptions are rare enough to just fail and review by hand.
-function isAllowed(license) {
-  if (ALLOWED.has(license)) return true;
-  const inner = license.replace(/^\(/, "").replace(/\)$/, "");
-  if (/[()]|\bWITH\b/.test(inner)) return false;
-  if (inner.includes(" OR ") && !inner.includes(" AND ")) {
-    return inner.split(" OR ").some((part) => ALLOWED.has(part.trim()));
+function main() {
+  const tree = JSON.parse(npmLsJson());
+  const packages = installedPackages(tree.dependencies);
+
+  const violations = [];
+  const counts = new Map();
+  for (const { name, version, path } of packages) {
+    const license = licenseOf(path);
+    counts.set(license, (counts.get(license) ?? 0) + 1);
+    if (!isAllowed(license)) violations.push({ name, version, license });
   }
-  if (inner.includes(" AND ") && !inner.includes(" OR ")) {
-    return inner.split(" AND ").every((part) => ALLOWED.has(part.trim()));
+
+  console.log(`checked ${packages.length} installed production packages`);
+  for (const [license, n] of [...counts.entries()].sort((a, b) => b[1] - a[1])) {
+    console.log(`  ${String(n).padStart(3)}  ${license}`);
   }
-  return false;
-}
 
-const tree = JSON.parse(npmLsJson());
-const seen = new Map(); // "name@version" -> { name, version, path }
-(function walk(deps) {
-  for (const [name, node] of Object.entries(deps ?? {})) {
-    if (node && node.path && node.version) {
-      seen.set(`${name}@${node.version}`, { name, version: node.version, path: node.path });
-    }
-    if (node) walk(node.dependencies);
+  if (violations.length) {
+    console.error(`\n${violations.length} package(s) outside the allowlist (${[...ALLOWED].join(", ")}):`);
+    for (const v of violations) console.error(`  ${v.name}@${v.version}: ${v.license}`);
+    process.exit(1);
   }
-})(tree.dependencies);
-
-const violations = [];
-const counts = new Map();
-for (const { name, version, path } of [...seen.values()].sort((a, b) => a.name.localeCompare(b.name))) {
-  const license = licenseOf(path);
-  counts.set(license, (counts.get(license) ?? 0) + 1);
-  if (!isAllowed(license)) violations.push({ name, version, license });
+  console.log("licence check: OK — every production dependency is inside the allowlist");
 }
 
-console.log(`checked ${seen.size} installed production packages`);
-for (const [license, n] of [...counts.entries()].sort((a, b) => b[1] - a[1])) {
-  console.log(`  ${String(n).padStart(3)}  ${license}`);
-}
-
-if (violations.length) {
-  console.error(`\n${violations.length} package(s) outside the allowlist (${[...ALLOWED].join(", ")}):`);
-  for (const v of violations) console.error(`  ${v.name}@${v.version}: ${v.license}`);
-  process.exit(1);
-}
-console.log("licence check: OK — every production dependency is inside the allowlist");
+if (import.meta.url === `file://${process.argv[1]}`) main();
