@@ -113,5 +113,5 @@ blending web-sourced facts with graph/operator facts.
 
 Every substantial design lives in its own `PLAN_*.md` at the repo root (active) or `archive/`
 (shipped and closed) — this file points to them, it doesn't repeat their content. `SKILL_*.md` docs
-specify the repeatable measurement/build cycles (benchmarks, capability audits, the fast-loop
-trap-catching pattern). `HANDOVER.md` is the single current-open-items list.
+specify the repeatable measurement/build cycles (benchmarks, the background strategy advisor,
+plain-prose writing). `HANDOVER.md` is the single current-open-items list.

@@ -145,9 +145,8 @@ Three hard-won lessons, carried forward:
    fresh instead. This was observed twice: once an agent fell back to operating directly in the
    coordinator's own shared working tree; on a later occasion this went as far as checking out a
    brand-new branch on the shared worktree itself (caught immediately via `git branch
-   --show-current` returning something other than `main`, no work lost). Full detail and the
-   verification recipe live in `SKILL_AGENT_FAST_LOOP.md` §4 — this entry is a cross-reference, not
-   a duplicate. The rule: before resuming any stalled round, check `git worktree list` for its path
+   --show-current` returning something other than `main`, no work lost). The rule: before resuming
+   any stalled round, check `git worktree list` for its path
    — if it's gone, `TaskStop` that round and dispatch a fresh one instead, never `SendMessage` it
    back to life.
 

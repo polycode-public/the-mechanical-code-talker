@@ -38,8 +38,8 @@ over an hour on a single round under concurrent load): this skill's job is the W
 finding where a whole capability's limit sits, across genuinely different frames, so the operator
 can decide where an architectural uplift is worth paying for.** The narrower job — catching and
 fixing LOCAL traps a real visitor would actually hit, quickly, looping until some other work
-finishes — belongs to whichever session picks them up from `HANDOVER.md`'s open items (a
-`SKILL_AGENT_FAST_LOOP.md` run is one way to work that queue), not this doc. This skill periodically
+finishes — belongs to whichever session picks them up from `HANDOVER.md`'s open items, not this
+doc. This skill periodically
 asks the bigger question ("where does this capability actually stop working, and across how many
 different kinds of user"); its small findings become `HANDOVER.md` open items and its architectural
 findings graduate into a `PLAN_*.md` doc rather than a quick patch.
