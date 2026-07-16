@@ -87,10 +87,6 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 - **Version bumps now touch `public/index.html`.** The page carries a version stamp and a test
   enforces that it matches `package.json`.
 
-- **The four-stage pipeline has not been watched through a release.** `test → e2e → deploy →
-  verify` is wired and the smoke job fails honestly against live state, but no session has
-  seen the columns go green on a version-bump push.
-
 - **Capability read-back over taught Rule rows.** "can you move a disk onto a peg?" is still a
   graph-question miss even when that exact signature was taught — a closed ask-lane reader over
   action-signature rules. Named in `playtests/PLAYTEST_LOG_016.md`.
@@ -147,13 +143,12 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
   no `/syllogise` command and the honest deep-chain miss doesn't mention the recovery. Named
   in `playtests/PLAYTEST_LOG_007.md`.
 
-- **Two standing design choices, revisit only with evidence** (decisions of record, not
-  pending work): 3+-word terms stay outside the ACE fragment (`playtests/PLAYTEST_LOG_006.md`);
-  comparative antisymmetry is not derived — asked directions only, an honesty choice
-  (`playtests/PLAYTEST_LOG_009.md`).
+- **Contractions on the paraphrase ladder.** Untested rung; for the next edge-hunt dispatch.
 
-- **Untouched playtest axes** (for the next edge-hunt dispatch): contractions and cleft rungs
-  of the paraphrase ladder; passive↔active beyond UsedFor and the rule signature.
+- **Cleft rungs on the paraphrase ladder.** Untested rung; for the next edge-hunt dispatch.
+
+- **Passive↔active beyond UsedFor and the rule signature.** Untested axis; for the next
+  edge-hunt dispatch.
 
 - **Closed-set gate coverage (a pattern, not one bug — mined from the strategy advisor's
   2026-07-12 sweep).** Several dead-ends share one shape: the machinery that would answer
@@ -166,21 +161,6 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
   `answerEdgeCount`, confirming the fix pattern: audit one gate, decide which members/table
   lookups are safe to add, pin the existing exclusions with regressions. Worth one shared design
   pass over the gates rather than a doc per instance.
-
-- **`PLAN_SYLLOGIST.md` research horizon**: the full ATMS generalization (de Kleer 1986). The
-  four-rule justification slice shipped; the one inherited limit (a surviving conclusion keeps
-  its stale single justification, so a later retraction of its other path won't re-examine it)
-  is recorded in that doc's 2026-07-15 addendum.
-
-- **`PLAN_ADVENTURE.md`** — a text-adventure architectural stretch. Its world-state and
-  actions-as-data substrate shipped generically with the planning lane; still unbuilt and its own:
-  the imperative command grammar, the NPC turn scheduler, the Ashcombe Hall corpus, and the
-  room-look digest.
-
-- **Standing cross-repo note (not closeable from this repo)**: if seonix's own chat surface goes
-  through `runChat`/`createSession`, its `tmct.toml` needs to explicitly re-activate
-  SEON/ConceptNet now that tmct's default persona has flipped to opt-in for those sources. See
-  `ROADMAP.md` around the persona-batch entry.
 
 ## Discipline (unchanged)
 
