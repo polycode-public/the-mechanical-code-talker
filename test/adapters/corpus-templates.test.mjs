@@ -10,7 +10,7 @@ import {
   TEMPLATES_FILE, PHRASEBOOK_FILE,
   loadTemplates, render, slotsOf, loadPhrasebook, TECHNICAL_SLOTS,
   loadTemplatesMerged,
-} from "../../src/corpus/templates.mjs";
+} from "../../src/adapters/corpus/templates.mjs";
 
 test("lint: every responses.jsonl row parses, ids are unique, registers valid, every template has a class", async () => {
   const templates = await loadTemplates(TEMPLATES_FILE); // loud on any bad row

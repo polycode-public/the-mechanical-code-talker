@@ -74,7 +74,7 @@ The two audits this doc supersedes (`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`,
 | Capability | Status | Evidence |
 |---|---|---|
 | `POST /v1/messages` HTTP shim (Anthropic-Messages-API-compatible) | **Shipped**, since 0.8.0 | `src/server-http.mjs`, `bin/tmct.mjs serve` |
-| Repository Interface v1.0.0 (15 services, closed `EDGE_KINDS`/`MISS_REASONS`) | **Shipped**, stable since 0.5.0 | `src/repository-interface.mjs`, `src/providers/graph-service.mjs`, `src/conformance.mjs` |
+| Repository Interface v1.0.0 (15 services, closed `EDGE_KINDS`/`MISS_REASONS`) | **Shipped**, stable since 0.5.0 | `src/adapters/repository-interface.mjs`, `src/adapters/providers/graph-service.mjs`, `src/conformance.mjs` |
 | Capability router (STRIPS/PDDL registry, resolver, planner, guardrail, goal-reasoner) | **Shipped**, all 6 stages, **and now invokable** | `src/router/*`, measured on AGENTBENCH; `tmct plan`/chat's `/plan`/`./plan` library export — see §1.3 |
 | AGENTBENCH goal-reasoner (Stage 5, the C2 rung) | **Shipped and measured** | 56 cases: 100% plan / 100% result / 0% hallucination across every rung (`archive/TOO_HARD_AUDIT.md` M2, fixed 2026-07-12 — no case held back) |
 | seonix code→graph, driven by tmct | **Shipped, in production**, seonix 0.8.0→0.10.6 | `seonix/src/tmct-provider.mjs` — 37 lines, `createGraphService` reused directly |
@@ -85,7 +85,7 @@ The two audits this doc supersedes (`PLAN_TMCT_ECOSYSTEM_INTEGRATION.md`,
 | Chat-taught relations, rules, backward-chaining query dispatch | **Shipped** (`PLAN_TAUGHT_RELATIONS.md`, 2026-07-09) | Rule storage (compose2/filter/recursive kinds) + `resolveRelationChase` — see §1.2 |
 | Bias-weighted ambiguity resolution across seed sets | **Shipped**, v1.4.0 | `src/memory/bias.mjs`, `tmct.toml` `[bias]` table, `tmct init --with-persona` — see §4 |
 | Memory-tree versioning + full actor-level trust | **Shipped**, v1.4.0 | `snapshotMemory()` (manual trigger); session-scoped Source IDs, unconditional — see §2.1 |
-| RI wrapper fixes + hub-dampened memory ranking (the (a)-tier uplift) | **Shipped**, v1.4.0 | `INTERFACE_VERSION` 1.1.0; `src/memory/blocks.mjs` dampening on by default — see §2 |
+| RI wrapper fixes + hub-dampened memory ranking (the (a)-tier uplift) | **Shipped**, v1.4.0 | `INTERFACE_VERSION` 1.1.0; `src/adapters/memory/blocks.mjs` dampening on by default — see §2 |
 | Extension-pack seam | **Shipped**, v1.4.0 | `src/extensions.mjs`, `[extensions]`/`[bias]` in `tmct.toml`, `tmct extend --validate` — see §3 |
 
 ### 1.1 Foundational precedent: seonix proves the integration pattern
@@ -103,7 +103,7 @@ reason — proven twice now, low-risk, staged first (§11).
 
 ### 1.2 Foundational precedent: PLAN_TAUGHT_RELATIONS is a working Stage 0/1 prototype
 
-The chat-taught relations system just shipped (Rule storage in `src/memory/core.mjs`, the
+The chat-taught relations system just shipped (Rule storage in `src/adapters/memory/core.mjs`, the
 backward-chaining query dispatcher `resolveRelationChase`, the bounded successor-function search
 `findActionPath`) is structurally the same shape as the capability router's Stage 0 (capability
 ontology + registry) and Stage 1 (the resolver — unification + backward chaining over
@@ -151,7 +151,7 @@ bounded, (c) genuinely harder — and feed §2.3 below.
 - **Memory-tree versioning (b) — ✅ shipped v1.4.0.** `app/lib/s3-tree.mjs` writes immutable,
   monotonically-versioned snapshots with a tiny manifest pointer to the current version; tmct's
   `.tmct/memory/graph.json` used to overwrite in place. Shipped as `snapshotMemory(dir)` in
-  `src/memory/core.mjs` — `graph.v{N}.json` + `manifest.json`, `[memory] retention_versions` in
+  `src/adapters/memory/core.mjs` — `graph.v{N}.json` + `manifest.json`, `[memory] retention_versions` in
   `tmct.toml` (default 5).
 - **Actor-level, behavior-driven trust (b) — ✅ shipped v1.4.0, further than originally scoped.**
   `app/lib/trust.mjs` tracks a persistent, evolving per-actor score from behavioral signals; tmct's
@@ -175,7 +175,7 @@ bounded, (c) genuinely harder — and feed §2.3 below.
   the shared tree — a standards-based, declarative write-boundary contract. 
 - **Hub-dampening + thin-concept detection (a) — ✅ shipped v1.4.0, on by default.** tmct already
   implements exactly this pattern in `src/codegraph.mjs` (degree-quantile hub gating, min-heap
-  frontier expansion) — for the **code** graph only. Ported into `src/memory/blocks.mjs`'s
+  frontier expansion) — for the **code** graph only. Ported into `src/adapters/memory/blocks.mjs`'s
   `retrieveBlocks` (`/ √(1 + degree)`, degree surfaced from the block-similarity graph's already-
   computed but previously-discarded adjacency). Shipped on unconditionally, per operator decision —
   the build found the original "modest degree, modest penalty" assumption was mathematically wrong
@@ -184,7 +184,7 @@ bounded, (c) genuinely harder — and feed §2.3 below.
   to pass.
 - **Contradiction detection — checked explicitly, tmct is ahead here.** marginalia's `mg:contradicts`
   is only ever LLM-proposed at ingest or materialized via symmetric closure — no algorithm actually
-  detects disagreement. tmct's `findContradictions` (`src/memory/core.mjs`) is fully automatic and
+  detects disagreement. tmct's `findContradictions` (`src/adapters/memory/core.mjs`) is fully automatic and
   deterministic: any two facts sharing (subject, predicate) with a different object, both above a
   trust floor, surface as an explicit unresolved pair on every `/memory` render. Not a finding to
   adopt — confirmation that tmct's own mechanism is more reliable than marginalia's here.
@@ -212,7 +212,7 @@ algorithmic capability tmct would have to invent — the logic already sits in t
   `context()` are source-capable via an injected `{repoRoot, readFile}` on `createGraphService`
   (keeping the module's "pure graph queries, no fs" contract honest — fs access is an explicit,
   injected capability, not an ambient one). Building this surfaced and fixed a real, previously
-  unguarded path-traversal gap in `server.mjs`'s inline readers (`src/source-slice.mjs`'s
+  unguarded path-traversal gap in `server.mjs`'s inline readers (`src/adapters/source-slice.mjs`'s
   `readSpanSafe`, now the shared, guarded implementation both `server.mjs` and `graph-service.mjs`
   use) — found by the strategy-advisor background agent watching the build, not by the original
   brief.
@@ -354,7 +354,7 @@ Near-term, mostly known-how, individually small. No item here requires research.
 - ✅ **RI wrapper fixes from the seonix audit (§2.2) — shipped v1.4.0.** Ranked search, real
   `context()` bundling (`INTERFACE_VERSION` 1.1.0), depth-capped `impact()`, source-backed
   `snippet()`, response pagination on `search()`/`edges()`. Also closed a real path-traversal gap
-  found during the build (`src/source-slice.mjs`).
+  found during the build (`src/adapters/source-slice.mjs`).
 - ✅ **Hub-dampened memory-fact ranking, from the marginalia audit (§2.1) — shipped v1.4.0, on by
   default.** Ported the degree-based hub dampening tmct's own `codegraph.mjs` already implements for
   the code graph into `memory/blocks.mjs`'s `retrieveBlocks`.
@@ -631,7 +631,7 @@ full tick-by-tick record in `STRATEGY_ADVISOR.log`). 1543/1543 tests green at th
 
 - **Track A — security fix + Repository Interface wrapper + telemetry.** 7 commits. Closed a real,
   previously unguarded path-traversal gap in `server.mjs`'s inline file readers (extracted into
-  `src/source-slice.mjs`). Wired real ranking/pagination/depth into `search()`/`edges()`/`impact()`;
+  `src/adapters/source-slice.mjs`). Wired real ranking/pagination/depth into `search()`/`edges()`/`impact()`;
   made `context()` a graph-only hit even without source access (`INTERFACE_VERSION` → 1.1.0, a
   deliberate, documented interface change); wired telemetry (redacts `snippet()` bodies; wraps every
   RI service once at construction, currently exercised only by direct callers/tests, not the live
@@ -656,7 +656,7 @@ full tick-by-tick record in `STRATEGY_ADVISOR.log`). 1543/1543 tests green at th
 - **One bug found by the strategy advisor, not the original brief, fixed during merge**: `src/
   source-slice.mjs`'s path-traversal guard failed closed incorrectly (rejecting *legitimate* reads,
   not just traversal attempts) when `TMCT_GRAPH_FILE` was a relative path, because nothing resolved
-  it to absolute before the containment check. Fixed at the source (`src/config.mjs`) and
+  it to absolute before the containment check. Fixed at the source (`src/adapters/config.mjs`) and
   defensively in the guard itself, with regression tests for both.
 
 Version: `1.3.2 → 1.4.0` (minor — real feature work). Full commit range: `0c31d79..b1b6a95`.

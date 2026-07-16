@@ -1,7 +1,7 @@
 // The reference Repository-Interface service over a parsed code graph.
 //
 // createGraphService(graph) returns a typed service object implementing EVERY
-// service in src/repository-interface.mjs over the `{ individuals, byId,
+// service in src/adapters/repository-interface.mjs over the `{ individuals, byId,
 // relations, … }` shape parseEntities() yields. Every method returns a typed
 // Result (hit/miss) — a clean miss is a value, never a throw. The two providers
 // tmct ships (fixture, bootstrap) are this same builder over a small real graph
@@ -25,7 +25,7 @@ import {
   sizeBundle,
   bundleMask,
   renderGraphOnlyBundle,
-} from "../codegraph.mjs";
+} from "../../codegraph.mjs";
 import { readSpanSafe, sliceSpan } from "../source-slice.mjs";
 import {
   hit,

@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { startServer, respondToMessages, selectTool } from "../src/server-http.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { dispatchTool } from "../src/server.mjs";
-import * as source from "../src/source.mjs";
+import * as source from "../src/adapters/source.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));

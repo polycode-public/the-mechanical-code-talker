@@ -92,7 +92,7 @@ export function renderTomlConfig(config = defaultConfig()) {
 graph_file = ${JSON.stringify(c.graphFile)}
 ${Array.isArray(c.graphFiles) && c.graphFiles.length ? `
 # graph_files — additional graph artifacts (multi-graph). Merged with
-# graph_file at read time (src/graph-merge.mjs); an id that collides
+# graph_file at read time (src/adapters/graph-merge.mjs); an id that collides
 # across graphs is auto-prefixed with its graph's name, everything else
 # passes through unchanged. Written by \`tmct init --graph\`/\`tmct import
 # --graph\`.
@@ -168,7 +168,7 @@ function seedRequested({ optSeed, configEnabled, env }) {
  *   merged into a FRESH config only; name resolution is the caller's job (bin/tmct.mjs).
  * @param {string}  [opts.memoryBackend]  "default" | "memory" | "sqlite" — merged into a
  *   FRESH config's `[memory] backend`, and selects which backend the corpus seed writes
- *   into (via src/memory/core.mjs's openMemoryBackend).
+ *   into (via src/adapters/memory/core.mjs's openMemoryBackend).
  * @returns {Promise<{
  *   created: string[], config: object, seeded: boolean,
  *   alreadyInitialized: boolean, seedResult: (object|null), message: string
@@ -277,7 +277,7 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
     if (backendChoice === "memory") {
       seedNote = "seed skipped (memory backend is in-process only — nothing would persist past this command)";
     } else {
-      const { openMemoryBackend } = await import("./memory/core.mjs");
+      const { openMemoryBackend } = await import("./adapters/memory/core.mjs");
       const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(root, backendChoice);
       try {
         const { resolveExtensions, seedActiveCorpusEntries } = await import("./extensions.mjs");
@@ -348,7 +348,7 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
  *  (toml-config.mjs) is where a bad file surfaces its error. */
 async function readWrittenConfig(tomlPath, base) {
   try {
-    const { loadTomlConfig } = await import("./toml-config.mjs");
+    const { loadTomlConfig } = await import("./adapters/toml-config.mjs");
     const raw = await loadTomlConfig(dirname(tomlPath));
     if (!raw) return base;
     const cfg = { ...base };

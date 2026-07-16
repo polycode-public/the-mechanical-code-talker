@@ -10,7 +10,7 @@
 // parseAce(sentence, lexicon) → { pattern, triples, residue } | null
 //   pattern  one of the PATTERNS below (also exported individually).
 //   triples  [{ subject, predicate, object, kind, n? }] — OWL-labelled string
-//            triples shaped for src/memory/core.mjs's appendFact (which
+//            triples shaped for src/adapters/memory/core.mjs's appendFact (which
 //            normalizes subject/object via normFactTerm: "tmct:module" is
 //            stored as "module"; the predicate keeps its vocabulary casing).
 //   residue  [] on a clean parse; the unknown tokens when the sentence FITS a

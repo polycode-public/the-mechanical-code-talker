@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { parse as parseToml } from "smol-toml";
 
-import { flatten } from "./corpus/templates.mjs";
+import { flatten } from "./adapters/corpus/templates.mjs";
 
 export { flatten };
 

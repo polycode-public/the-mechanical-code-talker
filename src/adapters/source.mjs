@@ -71,7 +71,7 @@ async function readOneGraphFile(file) {
   }
 }
 
-/** The multi-graph path (src/graph-merge.mjs): config.graphFiles names MORE
+/** The multi-graph path (src/adapters/graph-merge.mjs): config.graphFiles names MORE
  *  THAN ONE graph file. Reads each (same per-file ENOENT→bootstrap tolerance
  *  as the single-graph path), merges them via mergeEntityPayloads, and caches
  *  the merge under a composite key (the sorted, joined file list) — so

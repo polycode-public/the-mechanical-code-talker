@@ -9,10 +9,10 @@ import { readFile } from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
-import { buildEntities } from "../../src/graph-build.mjs";
+import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { parseEntities } from "../../src/codegraph.mjs";
 import { parseQuery, ask } from "../../src/ask.mjs";
-import { nlpAdapter } from "../../src/ask-nlp.mjs";
+import { nlpAdapter } from "../../src/adapters/ask-nlp.mjs";
 import { setDefaultNlpAdapter } from "../../src/interpret/nlp-registry.mjs";
 
 // This file exercises the DEFAULT-adapter tier directly against the domain
@@ -87,7 +87,7 @@ test("determinism: two separate node processes produce byte-identical parse+answ
   const script = `
     import { parseQuery, ask } from ${JSON.stringify(join(srcDir, "ask.mjs"))};
     import { setDefaultNlpAdapter } from ${JSON.stringify(join(srcDir, "interpret", "nlp-registry.mjs"))};
-    import { nlpAdapter } from ${JSON.stringify(join(srcDir, "ask-nlp.mjs"))};
+    import { nlpAdapter } from ${JSON.stringify(join(srcDir, "adapters/ask-nlp.mjs"))};
     setDefaultNlpAdapter(nlpAdapter);
     const a = { id: "mod:a.mjs", label: "a.mjs", class: "Module" };
     const b = { id: "mod:b.mjs", label: "b.mjs", class: "Module" };

@@ -12,7 +12,7 @@ import { fileURLToPath } from "node:url";
 
 import { parseEntities } from "../../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
-import { buildEntities } from "../../src/graph-build.mjs";
+import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { resolveObject } from "../../src/ask.mjs";
 import { RELATIONS } from "../../src/ask-vocab.mjs";
 import { COMMANDS, selectTool } from "../../src/chat.mjs";

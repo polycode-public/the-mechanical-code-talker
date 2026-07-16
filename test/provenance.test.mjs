@@ -13,9 +13,9 @@ import {
   STATED_BY_PROP, CREATED_AT_PROP, OPERATOR_SOURCE_ID,
   emptyMemory, loadMemory, appendFact, appendUtterance,
   provenanceTagToSource, readFactRows, findContradictions,
-} from "../src/memory/core.mjs";
-import { saveBlock, retrieveBlocks } from "../src/memory/blocks.mjs";
-import { renderMemory } from "../src/memory/inspect.mjs";
+} from "../src/adapters/memory/core.mjs";
+import { saveBlock, retrieveBlocks } from "../src/adapters/memory/blocks.mjs";
+import { renderMemory } from "../src/adapters/memory/inspect.mjs";
 
 const tmpRepo = () => mkdtemp(join(tmpdir(), "tmct-prov-"));
 const attr = (ind, prop) => (ind?.attributes || []).find((a) => a?.prop === prop)?.value;
@@ -275,7 +275,7 @@ test("(e) two extension bundles asserting a conflicting fact: distinct Fact/Sour
     // would each pass to seedMemory via src/extensions.mjs's resolved entries).
     await writeFile(sliceA, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/red", weight: 1 }) + "\n");
     await writeFile(sliceB, JSON.stringify({ start: "/c/en/widget_x", rel: "/r/HasProperty", end: "/c/en/blue", weight: 1 }) + "\n");
-    const { seedMemory } = await import("../src/corpus/conceptnet.mjs");
+    const { seedMemory } = await import("../src/adapters/corpus/conceptnet.mjs");
     await seedMemory(dir, { slicePath: sliceA, provenancePrefix: "corpus:tier2-aws" });
     await seedMemory(dir, { slicePath: sliceB, provenancePrefix: "corpus:seon" });
 

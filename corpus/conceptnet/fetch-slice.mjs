@@ -12,7 +12,7 @@
 // Filter rules (also documented in README.md here):
 //   - /query?node=/c/en/<term>&other=/c/en — both endpoints English;
 //   - keep only edges whose rel is one of the 34 canonical relations
-//     (src/corpus/conceptnet-map.toml is the same closed set);
+//     (src/adapters/corpus/conceptnet-map.toml is the same closed set);
 //   - drop en→en edges whose start/end still carry a sense suffix mismatch
 //     (we keep the bare /c/en/<term> and /c/en/<term>/<pos> forms, normalized
 //     to the bare term URI);

@@ -12,7 +12,7 @@ import {
   RELATION_MAP, SKIPPED_RELATIONS, encodeTerm, humanize, synonymPairs,
   buildFullFacts, buildXlFacts, hypernymRefCounts, resolveYamlDir, DEFAULT_YAML_DIR,
 } from "../corpus/wordnet/generate.mjs";
-import { termText, loadMap } from "../src/corpus/conceptnet.mjs";
+import { termText, loadMap } from "../src/adapters/corpus/conceptnet.mjs";
 
 test("RELATION_MAP: the closed set of eight structural WordNet relations this converter emits", () => {
   assert.deepEqual(Object.keys(RELATION_MAP).sort(), [

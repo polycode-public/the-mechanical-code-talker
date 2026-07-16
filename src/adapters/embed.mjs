@@ -24,7 +24,7 @@ const CONFIG_FILE = "config.json";
 export function defaultEmbeddingsDir() {
   if (process.env.TMCT_EMBED_DIR) return process.env.TMCT_EMBED_DIR;
   const here = dirname(fileURLToPath(import.meta.url)); // packages/tmct/src
-  return join(here, "..", "..", "..", "vendor", "embeddings", "potion-base-8M");
+  return join(here, "..", "..", "..", "..", "vendor", "embeddings", "potion-base-8M");
 }
 
 // ---- safetensors (hand-rolled: u64le header length + JSON header + raw tensors) -------

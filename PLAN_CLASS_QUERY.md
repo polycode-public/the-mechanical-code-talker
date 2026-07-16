@@ -32,7 +32,7 @@ does not match the current repository.
 ~1,000 lines since this doc's first pass and will drift again):
 
 - `PLURAL_FORMS` gained real noun forms for `Fact`/`Utterance`/`Session`/
-  `Source`/`Rule` — the memory-graph meta-classes `src/memory/core.mjs` writes.
+  `Source`/`Rule` — the memory-graph meta-classes `src/adapters/memory/core.mjs` writes.
 - `resolveDynamicClass(graph, word)` singularizes the asked noun and matches it
   against whatever `individual.class` values are **actually present in the graph passed to `ask()`
   at call time** — never against a fixed vocabulary, so it works for any taught class, not just the

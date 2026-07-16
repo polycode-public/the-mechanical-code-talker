@@ -12,7 +12,7 @@
 // (corpus/conceptnet/slice.jsonl): one JSON object per line,
 //   {"start":"/c/en/<term>","rel":"/r/<Rel>","end":"/c/en/<concept>","weight":N,"surfaceText":"…"}
 // with `rel` drawn ONLY from the mapped relations in
-// src/corpus/conceptnet-map.toml, so a tier-2 file loads through the very same
+// src/adapters/corpus/conceptnet-map.toml, so a tier-2 file loads through the very same
 // loadSlice()/toFacts() path as the tier-1 slice (this file's --verify proves
 // it). The Wave-2 tier-2 SEEDER (see ../README.md) is what stamps the right
 // provenance (`corpus:tier2:<id> /r/…`) instead of the conceptnet default.
@@ -15020,7 +15020,7 @@ async function main() {
   console.error(`wrote manifest.json (${manifest.corpuses.length} corpuses, ${manifest.examples.length} example bundles)`);
 
   if (verify) {
-    const { loadSlice, loadMap, toFacts } = await import("../../src/corpus/conceptnet.mjs");
+    const { loadSlice, loadMap, toFacts } = await import("../../src/adapters/corpus/conceptnet.mjs");
     const map = await loadMap();
     for (const c of manifest.corpuses) {
       const assertions = await loadSlice(join(HERE, c.file));

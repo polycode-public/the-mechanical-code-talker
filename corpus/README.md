@@ -2,7 +2,7 @@
 
 The corpuses tmct ships so that an **empty** tmct still has a vocabulary
 (ROADMAP Phase 2). Everything here is plain, diffable data; the loaders live
-in `src/corpus/`. Related committed data lives in `data/` (response templates
+in `src/adapters/corpus/`. Related committed data lives in `data/` (response templates
 + the SE phrase book — items 4+7).
 
 ## The tiering policy (tier-1 / tier-2 / tier-3)
@@ -57,17 +57,17 @@ data, not a derived corpus):
 
 ## How seeding works
 
-`src/corpus/conceptnet.mjs` turns the slice into tmct memory facts:
+`src/adapters/corpus/conceptnet.mjs` turns the slice into tmct memory facts:
 
 ```js
-import { seedMemory } from "./src/corpus/conceptnet.mjs";
+import { seedMemory } from "./src/adapters/corpus/conceptnet.mjs";
 await seedMemory(repoDir);            // writes <repoDir>/.tmct/memory/graph.json
 await seedMemory(repoDir, { limit: 500 }); // capped (fast bootstrap)
 ```
 
 - Each assertion whose relation maps to an ACE-OWL pattern
-  (`src/corpus/conceptnet-map.toml`, `ace != "none"`) becomes one reified
-  fact via `src/memory/core.mjs` `appendFact`:
+  (`src/adapters/corpus/conceptnet-map.toml`, `ace != "none"`) becomes one reified
+  fact via `src/adapters/memory/core.mjs` `appendFact`:
   `{subject:"software bug", predicate:"rdfs:subClassOf", object:"error",
   provenance:"corpus:conceptnet /r/IsA"}`.
 - **Idempotent**: fact ids are content-hashed from the normalized triple, and
@@ -83,7 +83,7 @@ A tier-2 corpus is a small, curated, LANGUAGE- or DOMAIN-specific fact set in
 the **exact tier-1 fact shape** — one JSON object per line,
 `{"start":"/c/en/…","rel":"/r/…","end":"/c/en/…","weight":N,"surfaceText":"…"}`,
 with `rel` drawn only from the mapped relations in
-`src/corpus/conceptnet-map.toml`. Because the shape is identical, a tier-2 file
+`src/adapters/corpus/conceptnet-map.toml`. Because the shape is identical, a tier-2 file
 loads and seeds through the very same `loadSlice()`/`toFacts()` path as the
 tier-1 slice — `tier2/generate.mjs --verify` proves it (each sample loads and
 all its facts seed cleanly, no `ace=none` dead rows).
@@ -120,7 +120,7 @@ A term that would otherwise be silently dropped when a bundle is seeded (an
 `ace = "none"` relation like RelatedTo/HasContext, e.g. from a broader slice)
 can optionally be captured instead of vanishing: `seedMemory`'s
 `captureUnknownContext: true` option (default off) runs
-`src/corpus/unknown-ingest.mjs` over the same batch — see that module's own
+`src/adapters/corpus/unknown-ingest.mjs` over the same batch — see that module's own
 doc comment.
 
 ## How to regenerate / extend

@@ -21,10 +21,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runTurn } from "../../src/chat.mjs";
-import { loadTemplates, render } from "../../src/corpus/templates.mjs";
+import { loadTemplates, render } from "../../src/adapters/corpus/templates.mjs";
 import { parseSessionJsonl } from "../../src/sessions.mjs";
 import { parseEntities } from "../../src/codegraph.mjs";
-import * as source from "../../src/source.mjs";
+import * as source from "../../src/adapters/source.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };

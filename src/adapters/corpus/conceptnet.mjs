@@ -1,7 +1,7 @@
 // corpus/conceptnet.mjs — the ConceptNet slice loader + memory seeder.
 //
 //   loadSlice(path?)        stream corpus/conceptnet/slice.jsonl → assertions
-//   loadMap(path?)          src/corpus/conceptnet-map.toml → Map(rel → row)
+//   loadMap(path?)          src/adapters/corpus/conceptnet-map.toml → Map(rel → row)
 //   toFacts(assertions,map) assertions → appendFact-shaped triples
 //   seedMemory(dir, opts)   write them into <dir>/.tmct/memory via appendFacts
 //
@@ -18,9 +18,9 @@ import { dirname, join } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { appendFacts, loadMemory, normFactTerm } from "../memory/core.mjs";
 
-const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 export const SLICE_FILE = join(PKG_ROOT, "corpus", "conceptnet", "slice.jsonl");
-export const MAP_FILE = join(PKG_ROOT, "src", "corpus", "conceptnet-map.toml");
+export const MAP_FILE = join(PKG_ROOT, "src", "adapters", "corpus", "conceptnet-map.toml");
 
 // The tier-1 curated Software-Engineering ontology (SEON): concepts.jsonl shares
 // ConceptNet's slice shape and loads through the same loadSlice/loadMap/toFacts path.

@@ -6,7 +6,7 @@
 // real buildEntities/parseEntities graph.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildEntities } from "../../src/graph-build.mjs";
+import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { parseEntities } from "../../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import { ask, classDisplayName } from "../../src/ask.mjs";
@@ -24,7 +24,7 @@ test("classDisplayName leaves nothing behind on empty input", () => {
 });
 
 const MODULES = [
-  { path: "src/config.mjs", dotted: "src.config", imports: [], calls: [],
+  { path: "src/adapters/config.mjs", dotted: "src.config", imports: [], calls: [],
     defines: [{ name: "MAX_RETRIES", kind: "global", lineno: 1, decorators: [] }] },
   { path: "src/user.mjs", dotted: "src.user", imports: [], calls: [],
     defines: [{ name: "User", kind: "class", lineno: 1, decorators: [] }] },

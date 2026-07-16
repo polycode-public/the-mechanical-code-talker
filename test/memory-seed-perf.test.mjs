@@ -1,4 +1,4 @@
-// Regression guard for PLAN_GRAPH_SCAN.md Phase 1: appendFacts (src/memory/core.mjs)
+// Regression guard for PLAN_GRAPH_SCAN.md Phase 1: appendFacts (src/adapters/memory/core.mjs)
 // used to run syncFactSources's six linear scans over payload.individuals / the
 // statedBy edge list PER FACT in a batch, making one appendFacts call O(n^2) in
 // the batch size n — an 8x bigger batch could take ~64x longer, not ~8x. The fix
@@ -12,7 +12,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendFacts } from "../src/memory/core.mjs";
+import { appendFacts } from "../src/adapters/memory/core.mjs";
 
 async function tmpRepo() {
   return mkdtemp(join(tmpdir(), "tmct-mem-seed-perf-"));

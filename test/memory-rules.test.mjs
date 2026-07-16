@@ -10,7 +10,7 @@ import {
   RULE_CLASS, FACT_CLASS, SOURCE_CLASS,
   RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE,
   loadMemory, appendRule, findRuleByName,
-} from "../src/memory/core.mjs";
+} from "../src/adapters/memory/core.mjs";
 
 const attr = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)?.value;
 const propOf = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)?.prop;
@@ -223,7 +223,7 @@ test("provenance/trust: a taught Rule rides the SAME Source-derivation + trust p
     // Confirm this is genuinely the SAME pipeline, not a parallel one: a Fact
     // taught via the identical provenance tag in the SAME store produces the
     // same source id and a comparable trust score.
-    const { appendFact } = await import("../src/memory/core.mjs");
+    const { appendFact } = await import("../src/adapters/memory/core.mjs");
     await appendFact(dir, {
       subject: "ahab", predicate: "isa", object: "captain",
       provenance: "teach:chat:s1@2026-07-09T00:00:00.000Z",

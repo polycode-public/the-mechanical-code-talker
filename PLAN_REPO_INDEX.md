@@ -21,7 +21,7 @@ Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is l
 The framing above reads as a four-part port: parsing tools, ontology linkage, query tools, and a
 later re-integration of seonix as a tmct consumer. Tracing the real code in both repos shows three
 of those four are already done. tmct already ships a versioned, OWL-grounded query and interface
-layer (`src/ask.mjs`, `src/codegraph.mjs`, `src/repository-interface.mjs`), its own ontology already
+layer (`src/ask.mjs`, `src/codegraph.mjs`, `src/adapters/repository-interface.mjs`), its own ontology already
 aligns to seonix's code-entity vocabulary term-for-term (`ontology/tmct-core.ttl`), and seonix
 already depends on tmct as a library and routes its own chat surface through tmct's (confirmed live
 in seonix's `package.json` and `src/chat-shim.mjs`). The one piece that is genuinely, completely
@@ -48,18 +48,18 @@ Confirmed by direct read of this repo, not assumed:
   query logic over the typed `entities` payload that the deterministic indexer writes to
   `<repo>/.tmct/graph.json`." `spiralExpand` and `buildVizNodesAndEdges` are pure in-memory graph
   walks. None of the three touches a source file.
-- **`src/repository-interface.mjs`** (332 lines) — a versioned (`INTERFACE_VERSION = "1.1.0"`,
+- **`src/adapters/repository-interface.mjs`** (332 lines) — a versioned (`INTERFACE_VERSION = "1.1.0"`,
   line 21) typed contract: 17 named services across six groups (resolution, traversal, source,
   aggregate, temporal, search), a closed `MISS_REASONS` set (`UNRESOLVED_TERM`, `CAPABILITY_ABSENT`,
   `TRUNCATED_GRAPH`, `NO_SOURCE`, lines 36-41), and explicit OWL grounding — "every `Individual.class`
   is a `tmct:` class and every `Edge.predicate` a `tmct:` object property" (lines 6-8).
-- **`src/source.mjs`** — the provider seam. Its own header (lines 6-11) states plainly: "any graph
+- **`src/adapters/source.mjs`** — the provider seam. Its own header (lines 6-11) states plainly: "any graph
   producer can feed tmct either by writing the entities-payload JSON where `config.graphFile` points,
   or by registering a custom loader with `registerProvider()` — **no indexer is ever imported here**.
   tmct only READS through this seam." `fetchEntities(config)` (lines 111-146) either calls a
   registered provider or reads and parses `config.graphFile`; a missing file returns an empty
   bootstrap payload, not an error.
-- **`src/graph-build.mjs`** — `buildEntities(modules, commits, opts)` (line 33) is "the PURE assembly
+- **`src/adapters/graph-build.mjs`** — `buildEntities(modules, commits, opts)` (line 33) is "the PURE assembly
   of the typed `entities` payload from **already-parsed** module + commit records. No subprocesses,
   no filesystem, no git" (lines 1-2). This is the function a ported parser would feed. Grepping every
   `.mjs` file in `src/`, `bin/`, `scripts/` for real (non-test) callers of `buildEntities(` returns
@@ -224,7 +224,7 @@ directly, and every one becomes false the moment Phase 1 below ships a working p
 | 1 | `README.md:386` | "**It is not an indexer.** tmct keeps no codebase index of its own. It consumes a graph via a provider seam ... building that graph is a different tool's job." | Superseded. Reword to: tmct can build its own code graph via a ported indexer (name the languages), and still consumes a graph via the same provider seam for any other producer (seonix, CI, hand-written JSON). Both are true after this plan; the "different tool's job" clause is the part that goes. |
 | 2 | `README.md:513` | "tmct is not an indexer, so it consumes a graph through a typed contract any producer can implement." | Superseded. The typed contract stays exactly as-is (this plan adds a producer, not a new consumer path) — reword only the "not an indexer" clause. |
 | 3 | `docs/adapter-contract.md:3` | "tmct **consumes** a code graph; it never produces or mutates one." | Directly false after Phase 1. This is the document that most needs a rewrite: it should state that `graph-build.mjs`'s `buildEntities()` is now a real producer with a real caller (the ported parsers), and that the provider seam remains the path for any *other* producer. |
-| 4 | `src/source.mjs:9` | "no indexer is ever imported here. tmct only READS through this seam." | This one should probably stay true and be preserved as an architectural boundary: `source.mjs` is the read seam; a new `src/index/` (or similar) module tree is the write/producer side, and `source.mjs` itself is not where the parser lives. Reword the comment to say so explicitly rather than delete it, since the boundary itself (reader vs. producer as separate modules) is worth keeping. |
+| 4 | `src/adapters/source.mjs:9` | "no indexer is ever imported here. tmct only READS through this seam." | This one should probably stay true and be preserved as an architectural boundary: `source.mjs` is the read seam; a new `src/index/` (or similar) module tree is the write/producer side, and `source.mjs` itself is not where the parser lives. Reword the comment to say so explicitly rather than delete it, since the boundary itself (reader vs. producer as separate modules) is worth keeping. |
 | 5 | `bin/tmct.mjs:556` | `// with every other subcommand. No --graph: memory reads no code graph.` | Not stale — this is a true statement about the `memory` subcommand specifically, unaffected by this plan. No change needed. |
 | 6 | `bin/tmct.mjs:842` | `// accepts --config for symmetry (syllogise reads no code graph either).` | Same as above — true, subcommand-scoped, no change needed. |
 | 7 | `src/chat.mjs:557-558` | `"I can't count \"${noun}\" — no code graph is loaded yet, so there's nothing to count (point me at one with --repo, or run \"npm run example:mini\")."` | Stays accurate as a *live-session* message (a repo with no graph still has no graph loaded until indexed), but the CLI should eventually offer to index on the spot rather than only pointing at an external `--repo`. Reword once a `tmct index` command exists, to mention it as an option. |
@@ -375,7 +375,7 @@ only. Exit criterion per language: the same conformance suite passes against a r
 language.
 
 **Phase 4 — doc reconciliation.** Reword every stale claim in Part 4's table (README, `docs/adapter-
-contract.md`, `src/source.mjs`, the `src/chat.mjs` live strings) now that they are genuinely false.
+contract.md`, `src/adapters/source.mjs`, the `src/chat.mjs` live strings) now that they are genuinely false.
 Follows `archive/TOO_HARD_AUDIT.md`'s own discipline: name the claim, state the supersession, reword —
 already done in Part 4 above; this phase is where the actual file edits land. `npm test` green
 throughout (some tests likely assert the old strings — expect to update pinned-string tests here).

@@ -7,7 +7,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { resolveExtensions, seedActiveCorpusEntries } from "../src/extensions.mjs";
-import { loadMemory, FACT_CLASS } from "../src/memory/core.mjs";
+import { loadMemory, FACT_CLASS } from "../src/adapters/memory/core.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-extcorpus-"));
 

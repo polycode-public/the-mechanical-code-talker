@@ -25,9 +25,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { saveBlock } from "../src/memory/blocks.mjs";
+import { saveBlock } from "../src/adapters/memory/blocks.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
-import { createGraphService } from "../src/providers/graph-service.mjs";
+import { createGraphService } from "../src/adapters/providers/graph-service.mjs";
 import { broadSearch } from "../src/completions/search.mjs";
 import { groupHits } from "../src/completions/group.mjs";
 

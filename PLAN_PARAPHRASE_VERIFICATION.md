@@ -169,7 +169,7 @@ mechanisms:
   original, with the one swapped slot replaced by the new term.
 - **Alt-phrasing** (possessive-pattern reordering): a genuine word-order change, not a word swap.
   Here `parseAce` earns its place: parse the candidate sentence, and the resulting triple must
-  deep-equal the original Fact row's triple (after `normFactTerm`, `src/memory/core.mjs:1204-1211`,
+  deep-equal the original Fact row's triple (after `normFactTerm`, `src/adapters/memory/core.mjs:1204-1211`,
   which strips CURIE prefixes, articles, and case — the same normalization the graph itself uses for
   term identity).
 

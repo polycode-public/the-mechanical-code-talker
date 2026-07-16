@@ -1,5 +1,5 @@
 // schema-docs.mjs — the single source of truth for tmct's own ontology documentation:
-// every entity class and predicate tmct's typed graph (src/graph-build.mjs's
+// every entity class and predicate tmct's typed graph (src/adapters/graph-build.mjs's
 // buildEntities) actually emits, verified against real `prop:`/`class:` literals.
 // `ingestSchemaDocs()` merges it into a graph build so "what does cochange mean" or
 // "what is a Commit" is answerable by querying the graph like any other question.

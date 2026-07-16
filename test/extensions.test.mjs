@@ -15,7 +15,7 @@ import { join } from "node:path";
 import {
   resolveExtensions, validateExtensionEntry, BUILTIN_EXTENSIONS, EXTENSION_KINDS,
 } from "../src/extensions.mjs";
-import { SEON_CONCEPTS_FILE, SLICE_FILE as CONCEPTNET_SLICE_FILE, TIER2_DIR } from "../src/corpus/conceptnet.mjs";
+import { SEON_CONCEPTS_FILE, SLICE_FILE as CONCEPTNET_SLICE_FILE, TIER2_DIR } from "../src/adapters/corpus/conceptnet.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-ext-"));
 

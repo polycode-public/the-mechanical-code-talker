@@ -9,7 +9,7 @@ import { join } from "node:path";
 import {
   BLOCKS_DIR_REL, tokenizeBlock, rankBlocks, degreeOf, loadBlockIndex,
   saveBlock, removeBlock, retrieveBlocks,
-} from "../src/memory/blocks.mjs";
+} from "../src/adapters/memory/blocks.mjs";
 
 async function tmpRepo() {
   return mkdtemp(join(tmpdir(), "tmct-mem-blocks-"));

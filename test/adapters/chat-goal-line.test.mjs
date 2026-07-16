@@ -7,9 +7,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { runTurn, NARRATE_MARKER, factAnswer, factReadBack } from "../../src/chat.mjs";
-import { createInMemoryStore, appendFact } from "../../src/memory/core.mjs";
+import { createInMemoryStore, appendFact } from "../../src/adapters/memory/core.mjs";
 import { parseEntities } from "../../src/codegraph.mjs";
-import * as source from "../../src/source.mjs";
+import * as source from "../../src/adapters/source.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };

@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertSentence as assertSentenceSeam, provenanceTag } from "../../src/grammar/assert.mjs";
 import { loadLexicon } from "../../src/grammar/lexicon.mjs";
-import { FACT_CLASS, MEMORY_DIR_REL, appendFact, loadMemory, normFactTerm } from "../../src/memory/core.mjs";
+import { FACT_CLASS, MEMORY_DIR_REL, appendFact, loadMemory, normFactTerm } from "../../src/adapters/memory/core.mjs";
 
 // assertSentence takes the store's writer injected; every call in this file
 // wires the real memory/core.mjs appendFact once here.

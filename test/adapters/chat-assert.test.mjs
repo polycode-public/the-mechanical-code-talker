@@ -8,9 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, PassThrough } from "node:stream";
 import { runTurn, runChat } from "../../src/chat.mjs";
-import { loadMemory, FACT_CLASS } from "../../src/memory/core.mjs";
+import { loadMemory, FACT_CLASS } from "../../src/adapters/memory/core.mjs";
 import { parseEntities } from "../../src/codegraph.mjs";
-import * as source from "../../src/source.mjs";
+import * as source from "../../src/adapters/source.mjs";
 
 const FIXTURE = new URL("../fixtures/entities.fixture.json", import.meta.url).pathname;
 

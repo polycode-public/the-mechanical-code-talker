@@ -26,7 +26,7 @@ CC-BY-SA like the ConceptNet slice.
 
 Each line is exactly `{ "start", "rel", "end", "weight" }` with `/c/en/<term>`
 endpoints, so the existing `loadSlice` / `loadMap` / `toFacts` / `seedMemory`
-(`src/corpus/conceptnet.mjs`) consume this file with **no code change** — pass it as
+(`src/adapters/corpus/conceptnet.mjs`) consume this file with **no code change** — pass it as
 the `slicePath`.
 
 ```jsonc
@@ -36,7 +36,7 @@ the `slicePath`.
 {"start":"/c/en/java_class","rel":"/r/IsA","end":"/c/en/class","weight":2}
 ```
 
-Only relations already mapped in `src/corpus/conceptnet-map.toml` are used, so there
+Only relations already mapped in `src/adapters/corpus/conceptnet-map.toml` are used, so there
 is **no slice/map drift** (verified: the file loads through `toFacts` cleanly). The
 emitted-predicate breakdown:
 

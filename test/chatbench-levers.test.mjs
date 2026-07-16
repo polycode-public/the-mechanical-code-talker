@@ -22,7 +22,7 @@ import { ask } from "../src/ask.mjs";
 import { runTurn, asBareCommand } from "../src/chat.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
-import { clearCache } from "../src/source.mjs";
+import { clearCache } from "../src/adapters/source.mjs";
 import { normalizeQuery } from "../src/interpret/normalize.mjs";
 import { stripNoise, noiseStripStrategy } from "../src/interpret/strategies/noise-strip.mjs";
 import { driveTurns } from "./helpers/session.mjs";

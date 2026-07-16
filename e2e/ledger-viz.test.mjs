@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendFact, loadMemory, readFactRows, findContradictions } from "../src/memory/core.mjs";
+import { appendFact, loadMemory, readFactRows, findContradictions } from "../src/adapters/memory/core.mjs";
 import {
   computeLedgerData, computeLedgerDataFromPayload, renderLedgerHtml,
   provBucketFor, phraseFor, familyFor, facetCounts,
@@ -170,12 +170,12 @@ test("renderLedgerHtml: self-contained page with parseable LEDGER/PAYLOAD, both 
 // ---- phase 2: the chat dock ------------------------------------------------
 
 import { resolveAnsweredTerm } from "../src/ledger-viz.mjs";
-import { normFactTerm } from "../src/memory/core.mjs";
+import { normFactTerm } from "../src/adapters/memory/core.mjs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 import { runTurn } from "../src/chat.mjs";
-import { clearCache } from "../src/source.mjs";
+import { clearCache } from "../src/adapters/source.mjs";
 
 test("resolveAnsweredTerm: the earliest term label in the answer text wins", () => {
   const terms = [{ term: "john" }, { term: "ahab" }, { term: "ishmael" }];

@@ -1,4 +1,4 @@
-// Unit tests for src/source-slice.mjs — the shared, safe span-slicing helpers
+// Unit tests for src/adapters/source-slice.mjs — the shared, safe span-slicing helpers
 // factored out of src/server.mjs (security fix: path-traversal guard on the
 // fs-touching half, readSpanSafe).
 import { test } from "node:test";
@@ -7,8 +7,8 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sliceSpan, readSpanSafe } from "../src/source-slice.mjs";
-import { ToolError } from "../src/config.mjs";
+import { sliceSpan, readSpanSafe } from "../src/adapters/source-slice.mjs";
+import { ToolError } from "../src/adapters/config.mjs";
 
 test("sliceSpan: extracts and line-numbers a span", () => {
   const lines = ["a", "b", "c", "d", "e"];
@@ -115,7 +115,7 @@ test("readSpanSafe: a RELATIVE repoRoot is normalized to absolute, not rejected 
   // Regression: resolve(repoRoot, path) is always absolute, so comparing it against a
   // relative repoRoot (e.g. from a relative TMCT_GRAPH_FILE) used to make the guard reject
   // every legitimate read, not just traversal attempts. readSpanSafe must normalize repoRoot
-  // itself (defense in depth — src/config.mjs also normalizes at the source).
+  // itself (defense in depth — src/adapters/config.mjs also normalizes at the source).
   const dir = await mkdtemp(join(tmpdir(), "tmct-slice-"));
   const prevCwd = process.cwd();
   try {

@@ -1,6 +1,6 @@
 // tmct tool layer — query-only tools over the deterministic typed code-graph
 // artifact (<repo>/.tmct/graph.json). The graph source is a LOCAL file
-// (src/source.mjs) and tmct_search is a LOCAL lexical lookup (no remote API,
+// (src/adapters/source.mjs) and tmct_search is a LOCAL lexical lookup (no remote API,
 // no LLM, no model calls anywhere). dispatchTool is the single internal switch
 // the chat surface and the `cli <tool>` route call into.
 //
@@ -16,9 +16,9 @@
 
 import { readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { ToolError } from "./config.mjs";
-import { sliceSpan, readSpanSafe } from "./source-slice.mjs";
-import * as defaultSource from "./source.mjs";
+import { ToolError } from "./adapters/config.mjs";
+import { sliceSpan, readSpanSafe } from "./adapters/source-slice.mjs";
+import * as defaultSource from "./adapters/source.mjs";
 import {
   parseEntities,
   resolveSymbol,
@@ -49,15 +49,15 @@ import {
   renderClassHistory,
 } from "./codegraph.mjs";
 import { ask } from "./ask.mjs";
-import { createGraphService } from "./providers/graph-service.mjs";
+import { createGraphService } from "./adapters/providers/graph-service.mjs";
 // Read-only consumers of the conversational-memory graph (corpus facts, separate from
 // the code-map graph.json). Used by the fall-through bridge below: when the code-map
 // resolves nothing for a concept query, answer from the reified isa-family facts instead.
-import { loadMemory, readFactRows, normFactTerm } from "./memory/core.mjs";
+import { loadMemory, readFactRows, normFactTerm } from "./adapters/memory/core.mjs";
 import { setDefaultNlpAdapter } from "./interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "./interpret/strategies/constructions.mjs";
-import { nlpAdapter } from "./ask-nlp.mjs";
-import { readConstructionFiles } from "./corpus/construction-banks.mjs";
+import { nlpAdapter } from "./adapters/ask-nlp.mjs";
+import { readConstructionFiles } from "./adapters/corpus/construction-banks.mjs";
 
 // Composition: the tool layer supplies the domain parser's default lemma/POS
 // adapter and the construction-grammar banks (lazy loader), so dispatchTool-

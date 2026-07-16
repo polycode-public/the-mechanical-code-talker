@@ -221,7 +221,7 @@ test("goal-reasoner e2e: SCOPED-ONLY + AMBIGUITY seams both refuse honestly", as
 // a machine caller gets both the honest "still ambiguous" signal and every
 // candidate's real composed answer (mirrors resolveOne's candidateResults).
 test("goal-reasoner: an ambiguous FOCUS term stays refused but ADDITIONALLY carries candidateResults (never silently falls back to global)", async () => {
-  const { buildEntities } = await import("../../src/graph-build.mjs");
+  const { buildEntities } = await import("../../src/adapters/graph-build.mjs");
   const { parseEntities } = await import("../../src/codegraph.mjs");
   const { ingestSchemaDocs } = await import("../../src/schema-docs.mjs");
   const { resolveObject } = await import("../../src/ask.mjs");

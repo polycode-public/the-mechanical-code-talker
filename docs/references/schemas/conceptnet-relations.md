@@ -5,7 +5,7 @@ plans (Phase 2) to commit a filtered English/tech-domain **slice** of
 ConceptNet and map each relation onto one of the ACE-OWL surface patterns
 (`ace-owl-fragment.md`), so corpus assertions can be auto-generated as
 controlled-English sentences / OWL-labelled triples. The relation→pattern
-**mapping table itself lives in `src/corpus/conceptnet-map.toml`** when Phase 2
+**mapping table itself lives in `src/adapters/corpus/conceptnet-map.toml`** when Phase 2
 lands — this stub is the reference list it is checked against.
 
 - **Canonical sources:**
@@ -18,8 +18,8 @@ lands — this stub is the reference list it is checked against.
 - **Retrieval date:** 2026-07-04 — VERIFIED against the ConceptNet 5.7.0
   assertions dump (the committed slice's source): the 34-relation canonical
   list below matched the dump exactly (29 of them appear in the tech slice).
-- **Consumer in repo:** `src/corpus/conceptnet.mjs` +
-  `src/corpus/conceptnet-map.toml` (Phase 2).
+- **Consumer in repo:** `src/adapters/corpus/conceptnet.mjs` +
+  `src/adapters/corpus/conceptnet-map.toml` (Phase 2).
 
 ## The relation types
 
@@ -78,4 +78,4 @@ as errors.
   and record the slice's size budget + filter criteria.
 - The right-hand "Notes" column above is a **sketch**, not the mapping — the
   authoritative ~35-row relation→ACE-OWL-pattern table is built and tested in
-  `src/corpus/conceptnet-map.toml` at Phase 2.
+  `src/adapters/corpus/conceptnet-map.toml` at Phase 2.

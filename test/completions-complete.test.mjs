@@ -29,8 +29,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { saveBlock } from "../src/memory/blocks.mjs";
-import { appendFact, loadMemory } from "../src/memory/core.mjs";
+import { saveBlock } from "../src/adapters/memory/blocks.mjs";
+import { appendFact, loadMemory } from "../src/adapters/memory/core.mjs";
 import { generateCompletion } from "../src/completions/complete.mjs";
 
 async function tmpRepo() {

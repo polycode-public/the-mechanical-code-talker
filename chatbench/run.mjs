@@ -371,7 +371,7 @@ export async function runSessionCase(caseDef, deps) {
     for (const [sessionNo, turns] of bySession) {
       // H1a bench-fidelity correction (cycle 2, CHATBENCH_001 §hard-fails,
       // mr-session-count): REAL tmct sessions are separate CLI processes, so
-      // src/source.mjs's process-level read cache never spans two of them. The
+      // src/adapters/source.mjs's process-level read cache never spans two of them. The
       // bench replays every session of a case inside THIS one process — without
       // clearing that cache between sessions, session N+1 is served the stale
       // pre-session payload and never sees what session N folded into
@@ -520,7 +520,7 @@ export async function createRunnerDeps(stamp) {
   const { parseEntities } = await import(join(ROOT, "src", "codegraph.mjs"));
   const { ingestSchemaDocs } = await import(join(ROOT, "src", "schema-docs.mjs"));
   const { parseSessionJsonl, parseSessionLog, turnKey } = await import(join(ROOT, "src", "sessions.mjs"));
-  const { clearCache } = await import(join(ROOT, "src", "source.mjs")); // H1a — see runSessionCase
+  const { clearCache } = await import(join(ROOT, "src", "adapters", "source.mjs")); // H1a — see runSessionCase
 
   // The runner's fixture pipeline mirrors a REAL graph writer's: raw payload ->
   // ingestSchemaDocs() -> the artifact (a real graph.json always carries the

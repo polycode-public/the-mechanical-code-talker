@@ -52,9 +52,9 @@ import {
   pickLegendDimension,
   legendValueFor,
 } from "../src/codegraph.mjs";
-import { buildEntities } from "../src/graph-build.mjs";
+import { buildEntities } from "../src/adapters/graph-build.mjs";
 import { proseLayerHits } from "../src/prose.mjs";
-import { appendUtterance, appendFact, loadMemory, CREATED_AT_PROP, UPDATED_AT_PROP } from "../src/memory/core.mjs";
+import { appendUtterance, appendFact, loadMemory, CREATED_AT_PROP, UPDATED_AT_PROP } from "../src/adapters/memory/core.mjs";
 
 const fixture = JSON.parse(
   readFileSync(fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url)), "utf8"),

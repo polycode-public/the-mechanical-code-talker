@@ -7,8 +7,8 @@
 //   npm run extract:facts -- <text-file> [--repo <path>] [--out <file.jsonl>]
 //
 // How it works: the file is split into sentences with wink-nlp's own
-// sentence-boundary detection (src/wink-model.mjs — the same leaf loader
-// src/ask-nlp.mjs/src/prose-nlp.mjs already use; never a naive regex split).
+// sentence-boundary detection (src/adapters/wink-model.mjs — the same leaf loader
+// src/adapters/ask-nlp.mjs/src/adapters/prose-nlp.mjs already use; never a naive regex split).
 // Each sentence is fed through runTurn() exactly as if an operator had typed
 // it into the live chat. A sentence the recognizer turns into a stored fact
 // (record.via === "assert", record.miss === false) is kept; every other
@@ -45,8 +45,8 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
 import { runTurn, uuidv7 } from "../src/chat.mjs";
-import { loadMemory, readFactRows, appendFact } from "../src/memory/core.mjs";
-import { loadConfig } from "../src/config.mjs";
+import { loadMemory, readFactRows, appendFact } from "../src/adapters/memory/core.mjs";
+import { loadConfig } from "../src/adapters/config.mjs";
 import { splitSentences } from "../src/sentences.mjs";
 
 export { splitSentences };

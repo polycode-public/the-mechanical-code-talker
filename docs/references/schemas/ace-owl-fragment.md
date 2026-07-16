@@ -50,7 +50,7 @@ declines to emit.
   clauses, queries, commands, modality, and maps to full DRS. tmct takes only
   the axiom-shaped declarative core above; growth beyond it is a Phase 2+
   decision driven by chatbench evidence.
-- The planned ConceptNet mapping (`src/corpus/conceptnet-map.toml`) targets
+- The planned ConceptNet mapping (`src/adapters/corpus/conceptnet-map.toml`) targets
   **these same 9 patterns** — each ConceptNet relation is expressed as one of
   the surface templates above so corpus assertions and user assertions land in
   the graph identically. See `conceptnet-relations.md`.

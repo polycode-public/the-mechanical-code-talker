@@ -22,7 +22,7 @@ import {
   appendUtterance, appendUtterances, appendFact, appendFacts, appendRule,
   findRuleByName, readFactRows, RULE_KIND_COMPOSE2,
   resolveMemoryGraphFile, snapshotMemory,
-} from "../src/memory/core.mjs";
+} from "../src/adapters/memory/core.mjs";
 
 const SESSION = "01890000-0000-7000-8000-00000000dead";
 const TS1 = "2026-07-10T09:00:00.000Z";

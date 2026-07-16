@@ -8,7 +8,7 @@ the type system those labels refer back to.
 
 ## What's defined
 
-1. **Conversational memory** (`src/memory/core.mjs`): the `tmct:Utterance`,
+1. **Conversational memory** (`src/adapters/memory/core.mjs`): the `tmct:Utterance`,
    `tmct:Fact` (an `rdf:Statement` reification) and `tmct:Session` classes,
    and every `mgx:` predicate the memory payload emits —
    `mgx:saidInSession`, `mgx:inReplyTo`, the utterance/session datatype

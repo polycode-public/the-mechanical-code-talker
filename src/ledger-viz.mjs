@@ -10,7 +10,7 @@
 // readMemoryAskBundle() is the one extra bit of I/O renderLedgerHtml itself
 // doesn't do: it reads the checked-in chat-dock engine bundle.
 
-import { loadMemory, readFactRows, findContradictions, normFactTerm } from "./memory/core.mjs";
+import { loadMemory, readFactRows, findContradictions, normFactTerm } from "./adapters/memory/core.mjs";
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";

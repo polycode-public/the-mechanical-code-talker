@@ -53,7 +53,7 @@ The subset of the OWL 2 and RDF/RDFS vocabularies that tmct's grammar emits and
 its graph memory stores. Canonical sources: the W3C OWL 2 Primer and the RDF
 1.1 / RDF Schema 1.1 Recommendations (W3C Document License).
 **Consumer:** `src/grammar/ace.mjs` (Phase 2), `ontology/tmct-core.ttl`,
-`src/memory/core.mjs` (Phase 1).
+`src/adapters/memory/core.mjs` (Phase 1).
 
 ## 2. ACE-OWL sub-fragment — [`schemas/ace-owl-fragment.md`](schemas/ace-owl-fragment.md)
 
@@ -66,9 +66,9 @@ high-confidence strategy win.
 ## 3. ConceptNet relations — [`schemas/conceptnet-relations.md`](schemas/conceptnet-relations.md)
 
 ConceptNet's fixed set of ~35 relation types (CC-BY-SA 4.0). The planned
-relation→ACE-OWL-pattern mapping table lives in `src/corpus/conceptnet-map.toml`
+relation→ACE-OWL-pattern mapping table lives in `src/adapters/corpus/conceptnet-map.toml`
 (Phase 2), not here — this stub is the reference list the mapping is checked
-against. **Consumer:** `src/corpus/conceptnet.mjs` (Phase 2).
+against. **Consumer:** `src/adapters/corpus/conceptnet.mjs` (Phase 2).
 
 ## 4. Papers — [`papers/`](papers/README.md)
 

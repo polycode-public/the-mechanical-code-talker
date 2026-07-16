@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { readFileSync, existsSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildEntities } from "../../src/graph-build.mjs";
+import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import { FIXTURE_REPO_MODULES } from "../fixtures/repos/modules.mjs";
 

@@ -18,7 +18,7 @@
 // scoring logic that never touches a real parser).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildEntities } from "../../src/graph-build.mjs";
+import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { parseEntities } from "../../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import { resolveObject } from "../../src/ask.mjs";

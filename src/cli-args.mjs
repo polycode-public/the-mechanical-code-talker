@@ -22,8 +22,8 @@ import { spawnSync } from "node:child_process";
 import { dirname, resolve } from "node:path";
 import { stat } from "node:fs/promises";
 import { join } from "node:path";
-import { loadTomlConfig, normalizeConfig, mergeEffective, CONFIG_FILE } from "./toml-config.mjs";
-import { DEFAULT_GRAPH_REL } from "./config.mjs";
+import { loadTomlConfig, normalizeConfig, mergeEffective, CONFIG_FILE } from "./adapters/toml-config.mjs";
+import { DEFAULT_GRAPH_REL } from "./adapters/config.mjs";
 
 /** The git top-level for `cwd`, or null if not in a repo (or git is
  *  unavailable). A deliberate re-declaration of chat.mjs's gitToplevel (not an

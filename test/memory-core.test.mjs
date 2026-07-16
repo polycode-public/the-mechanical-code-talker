@@ -12,7 +12,7 @@ import {
   emptyMemory, loadMemory, appendUtterance, appendUtterances, appendFact, appendFacts,
   appendRule, findRuleByName, readFactRows, normFactTerm,
   resolveRelationChase, resolveRelationChaseReverse,
-} from "../src/memory/core.mjs";
+} from "../src/adapters/memory/core.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { lookupByProseTokens } from "../src/prose.mjs";
 import { findActionPath, findReachableSet } from "../src/planning.mjs";

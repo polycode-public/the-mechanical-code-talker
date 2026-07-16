@@ -31,7 +31,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { appendFact, loadMemory } from "../src/memory/core.mjs";
+import { appendFact, loadMemory } from "../src/adapters/memory/core.mjs";
 import { inferRelations } from "../src/completions/infer.mjs";
 
 async function tmpRepo() {

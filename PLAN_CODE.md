@@ -153,7 +153,7 @@ working code is a far stronger prior than blank-slate enumeration.
 
 *(Revision note. The first draft framed this track as greedy mutation search with an HTN aside.
 The planning substrate that shipped since — `findActionPath`/`findReachableSet` in
-`src/planning.mjs`, the four action rule kinds in `src/memory/core.mjs`,
+`src/planning.mjs`, the four action rule kinds in `src/adapters/memory/core.mjs`,
 `compileGoal`/`movesFromRules` in `src/domain.mjs`, validated end to end by Hanoi and
 river-crossing in `test/corpus/planning.jsonl` — makes the planning frame primary and the mutation
 search the inner proposal engine. Nothing from the first draft is dropped; §2.4–§2.6 carry it
@@ -170,7 +170,7 @@ mutation operators drawn from a **closed template catalog** (never arbitrary tex
 covers a large fraction of real human-authored fixes.
 
 Each template maps onto the shipped action-rule shape (`RULE_KIND_ACTION_SIGNATURE`/`_PRECOND`/
-`_EFFECT`/`_CONSTRAINT`, `src/memory/core.mjs`) almost slot for slot:
+`_EFFECT`/`_CONSTRAINT`, `src/adapters/memory/core.mjs`) almost slot for slot:
 
 | Action-rule slot | For a mutation template |
 |---|---|

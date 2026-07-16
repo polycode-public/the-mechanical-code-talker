@@ -1,7 +1,7 @@
 // sentences.mjs — sentence-boundary splitting, shared by the extract-facts
 // script, the chat one-shot CLI, and runTurn's multi-sentence pre-split.
 
-import { winkInstance } from "./wink-model.mjs";
+import { winkInstance } from "./adapters/wink-model.mjs";
 
 /** Split text into trimmed, non-empty sentences via wink-nlp's own
  *  sentence-boundary detection — never a naive regex split, matching the

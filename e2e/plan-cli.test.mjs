@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import { ingestSchemaDocs } from "../src/schema-docs.mjs";
 import { runTurn } from "../src/chat.mjs";
-import { clearCache } from "../src/source.mjs";
+import { clearCache } from "../src/adapters/source.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));

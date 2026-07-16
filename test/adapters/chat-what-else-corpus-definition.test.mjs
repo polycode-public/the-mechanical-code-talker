@@ -13,7 +13,7 @@ import { runTurn } from "../../src/chat.mjs";
 test("'what else is X' after a curated prose definition surfaces additional facts, never the definition again", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-what-else-"));
   try {
-    const { seedMemory, SEON_CONCEPTS_FILE } = await import("../../src/corpus/conceptnet.mjs");
+    const { seedMemory, SEON_CONCEPTS_FILE } = await import("../../src/adapters/corpus/conceptnet.mjs");
     await seedMemory(dir, { slicePath: SEON_CONCEPTS_FILE, provenancePrefix: "corpus:seon" });
     const config = { graphFile: join(dir, ".tmct", "graph.json") };
 

@@ -238,9 +238,9 @@ Programmatically, the same pipeline is `generateCompletion()`
 (`src/completions/complete.mjs`):
 
 ```js cwd=repo
-import { fetchEntities } from "./src/source.mjs";
+import { fetchEntities } from "./src/adapters/source.mjs";
 import { parseEntities } from "./src/codegraph.mjs";
-import { loadMemory } from "./src/memory/core.mjs";
+import { loadMemory } from "./src/adapters/memory/core.mjs";
 import { createCompletionsGraphAdapter } from "@polycode-projects/the-mechanical-code-talker/createCompletionsGraphAdapter";
 import { generateCompletion } from "@polycode-projects/the-mechanical-code-talker/generateCompletion";
 
@@ -499,7 +499,7 @@ Usage:
   tmct                         interactive chat (the headline surface)
   tmct chat [--repo <abs>]     chat over a specific repo's graph
        [--graph <path>]        explicit graph file (repeatable — multiple graphs merge;
-                               see src/graph-merge.mjs); wins over --repo/TMCT_GRAPH_FILE/tmct.toml
+                               see src/adapters/graph-merge.mjs); wins over --repo/TMCT_GRAPH_FILE/tmct.toml
        [--config <path>]       an alternate tmct.toml location (a file or a directory)
        [--ephemeral]           read the graph but write nothing back (demo/read-only)
        [--prompt "<text>"]     one-shot: run the prompt's sentences as turns and print
@@ -681,7 +681,7 @@ npx tmct import --corpus wordnet-xl  # init:xxl instead ends with wordnet-full a
 `tmct init` writes a sparse `tmct.toml` with just the keys it needs. The file
 recognizes more keys than that default covers. Below is one config with every
 recognized key set, so you can see the full surface in one place
-(`src/toml-config.mjs` is the source of truth; `src/extensions.mjs` defines the
+(`src/adapters/toml-config.mjs` is the source of truth; `src/extensions.mjs` defines the
 `[extensions.*]`/`[bias]` shape).
 
 ```toml

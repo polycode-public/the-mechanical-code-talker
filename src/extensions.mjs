@@ -20,7 +20,7 @@
 import { isAbsolute, join, resolve, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-import { loadTomlConfig } from "./toml-config.mjs";
+import { loadTomlConfig } from "./adapters/toml-config.mjs";
 import {
   SEON_CONCEPTS_FILE,
   SLICE_FILE as CONCEPTNET_SLICE_FILE,
@@ -30,7 +30,7 @@ import {
   loadSlice,
   loadMap,
   toFacts,
-} from "./corpus/conceptnet.mjs";
+} from "./adapters/corpus/conceptnet.mjs";
 
 // corpus/namenet/generate.mjs's output — a single small top-up bundle.
 const NAMENET_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", "corpus", "namenet");
@@ -258,7 +258,7 @@ export async function resolveExtensions(repoRoot, { configFile } = {}) {
  *  recorded as `perBundle[name].error` while every other bundle still seeds normally.
  *  Returns `{ appended, skipped, total, perBundle: { name: {appended,skipped,total,error?} } }`. */
 export async function seedActiveCorpusEntries(repo, entries) {
-  const { seedMemory } = await import("./corpus/conceptnet.mjs");
+  const { seedMemory } = await import("./adapters/corpus/conceptnet.mjs");
   const perBundle = {};
   let appended = 0;
   let skipped = 0;
@@ -362,7 +362,7 @@ export async function validateExtensionPack(dir, candidate) {
   if (candidate.templatesPath) {
     const path = abs(candidate.templatesPath);
     try {
-      const { loadTemplates } = await import("./corpus/templates.mjs");
+      const { loadTemplates } = await import("./adapters/corpus/templates.mjs");
       const templates = await loadTemplates(path);
       const unnamespaced = [...templates.keys()].filter((id) => !id.includes(":"));
       if (unnamespaced.length) {

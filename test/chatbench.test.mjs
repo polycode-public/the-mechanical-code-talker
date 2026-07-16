@@ -223,7 +223,7 @@ test("runSessionCase: drives full runChat in a temp dir, reads answers + records
 
 test("runSessionCase: clears the product read cache before EVERY session (H1a bench fidelity — real sessions are separate processes)", async () => {
   // Two sessions in one case: without deps.clearCache() between them, session 2
-  // would be served src/source.mjs's process-cached pre-session payload and
+  // would be served src/adapters/source.mjs's process-cached pre-session payload and
   // never see session 1's graph fold-in (the cycle-1 mr-session-count hard
   // fail). The runner must call it once per session run.
   let cleared = 0;

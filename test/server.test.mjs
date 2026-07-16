@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dispatchTool, TOOLS } from "../src/server.mjs";
-import { ToolError } from "../src/config.mjs";
+import { ToolError } from "../src/adapters/config.mjs";
 
 const fixture = JSON.parse(
   readFileSync(fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url)), "utf8"),

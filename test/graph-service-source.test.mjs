@@ -10,10 +10,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseEntities } from "../src/codegraph.mjs";
-import { createGraphService } from "../src/providers/graph-service.mjs";
-import { fixtureProvider, fixtureGraph } from "../src/providers/fixture.mjs";
-import { isHit, isMiss, MISS_REASONS } from "../src/repository-interface.mjs";
-import { ToolError } from "../src/config.mjs";
+import { createGraphService } from "../src/adapters/providers/graph-service.mjs";
+import { fixtureProvider, fixtureGraph } from "../src/adapters/providers/fixture.mjs";
+import { isHit, isMiss, MISS_REASONS } from "../src/adapters/repository-interface.mjs";
+import { ToolError } from "../src/adapters/config.mjs";
 
 const SOURCE_PROVIDER_ROOT = fileURLToPath(new URL("./fixtures/source-provider", import.meta.url));
 

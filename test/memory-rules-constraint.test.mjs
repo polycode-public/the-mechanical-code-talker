@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 import {
   appendRule, loadMemory, readRuleRows, RULE_KIND_ACTION_CONSTRAINT,
-} from "../src/memory/core.mjs";
+} from "../src/adapters/memory/core.mjs";
 import { validateIndividual } from "../src/memory/shacl.mjs";
 
 test("an action-constraint rule round-trips its left/right/guard slots", async () => {

@@ -15,7 +15,7 @@ import { validateIndividual, assertIndividualValid } from "../src/memory/shacl.m
 import {
   appendFact, appendRule, loadMemory,
   RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE,
-} from "../src/memory/core.mjs";
+} from "../src/adapters/memory/core.mjs";
 
 async function tmpRepo() {
   return mkdtemp(join(tmpdir(), "tmct-mem-shacl-"));

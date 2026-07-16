@@ -1,4 +1,4 @@
-// toml-config.test.mjs — direct unit coverage for src/toml-config.mjs's
+// toml-config.test.mjs — direct unit coverage for src/adapters/toml-config.mjs's
 // normalizeConfig, focused on the `[memory]` table (retention_versions +
 // the new `backend` field, PLAN_SEED.md §6's storage-backend seam reaching
 // tmct.toml). Both keys are sparse — present only when actually set — same
@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadTomlConfig, normalizeConfig } from "../src/toml-config.mjs";
+import { loadTomlConfig, normalizeConfig } from "../src/adapters/toml-config.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-toml-config-"));
 

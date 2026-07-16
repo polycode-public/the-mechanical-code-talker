@@ -1,5 +1,5 @@
 // The memory store carries its own copy of the prose tokenizer
-// (src/memory/prose-tokens.mjs) because the store may not import the domain
+// (src/adapters/memory/prose-tokens.mjs) because the store may not import the domain
 // layer and prose.mjs may not import the store. The two copies must never
 // drift: stored mgx:hasProseTokens values and the payload proseIndex have to
 // keep matching what the graph/ask side would compute. This suite pins every
@@ -9,7 +9,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 
 import * as domainProse from "../../src/prose.mjs";
-import * as storeProse from "../../src/memory/prose-tokens.mjs";
+import * as storeProse from "../../src/adapters/memory/prose-tokens.mjs";
 
 const INPUTS = [
   "",

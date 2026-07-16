@@ -14,7 +14,7 @@ that shipped substrate.
 - Actions as taught, graph-resident data with precondition checks before firing (Gap 3) shipped
   richer than proposed here: four action rule kinds (`RULE_KIND_ACTION_SIGNATURE` /
   `RULE_KIND_ACTION_PRECOND` / `RULE_KIND_ACTION_EFFECT` / `RULE_KIND_ACTION_CONSTRAINT` in
-  `src/memory/core.mjs`), live teach frames (the ACTION-RULE TEACH FRAMES in `src/chat.mjs`),
+  `src/adapters/memory/core.mjs`), live teach frames (the ACTION-RULE TEACH FRAMES in `src/chat.mjs`),
   legal-move enumeration with constraint pruning (`movesFromRules` in `src/domain.mjs`), and
   plan search (`findActionPath` / `findReachableSet` in `src/planning.mjs`).
 - Taught action families register as capability records the router executes
@@ -102,7 +102,7 @@ room-look digest over `generateCompletion` (see Design detail).
 ### Gap 3 — actions as graph-resident data, reasoned about before execution (shipped; reuse it)
 
 This document proposed one new rule kind, `RULE_KIND_ACTION`, with `[verb, precondition, effect]`
-slots. The shipped design is finer-grained: four action rule kinds in `src/memory/core.mjs` —
+slots. The shipped design is finer-grained: four action rule kinds in `src/adapters/memory/core.mjs` —
 `RULE_KIND_ACTION_SIGNATURE`, `RULE_KIND_ACTION_PRECOND`, `RULE_KIND_ACTION_EFFECT`,
 `RULE_KIND_ACTION_CONSTRAINT` (`RULE_KINDS` now has seven entries). An action is a named family of
 these rules, taught one sentence at a time through the ACTION-RULE TEACH FRAMES in `src/chat.mjs`,
@@ -201,7 +201,7 @@ subject-predicate-object fact."
 ### The action rules (Gap 3) — reuse the shipped mechanism
 
 This document's original single-kind slot design is superseded. The shipped vocabulary
-(`RULE_KIND_ACTION_SIGNATURE`/`PRECOND`/`EFFECT`/`CONSTRAINT`, `src/memory/core.mjs`) already
+(`RULE_KIND_ACTION_SIGNATURE`/`PRECOND`/`EFFECT`/`CONSTRAINT`, `src/adapters/memory/core.mjs`) already
 stores structure, never prose: a signature names the verb and its slots, preconditions and effects
 are separate rule individuals in the same named family, and constraints prune illegal moves. The
 game teaches its starter verbs through the existing teach frames in `src/chat.mjs`. If one of

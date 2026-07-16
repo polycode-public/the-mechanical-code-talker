@@ -22,8 +22,8 @@ import {
 } from "../../src/domain.mjs";
 import { findActionPath } from "../../src/planning.mjs";
 import { runTurn } from "../../src/chat.mjs";
-import { loadMemory, readFactRows, readRuleRows } from "../../src/memory/core.mjs";
-import { clearCache } from "../../src/source.mjs";
+import { loadMemory, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
+import { clearCache } from "../../src/adapters/source.mjs";
 
 const DOMAIN_SRC = fileURLToPath(new URL("../../src/domain.mjs", import.meta.url));
 

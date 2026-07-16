@@ -40,7 +40,7 @@ import { fileURLToPath } from "node:url";
 
 import { parseAce } from "../src/grammar/ace.mjs";
 import { loadLexicon, thirdPerson } from "../src/grammar/lexicon.mjs";
-import { normFactTerm } from "../src/memory/core.mjs";
+import { normFactTerm } from "../src/adapters/memory/core.mjs";
 import { fnv1a32 as fnv1a } from "../src/hash.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

@@ -13,8 +13,8 @@ import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession } from "../src/chat.mjs";
-import { loadMemory, readFactRows } from "../src/memory/core.mjs";
-import { clearCache } from "../src/source.mjs";
+import { loadMemory, readFactRows } from "../src/adapters/memory/core.mjs";
+import { clearCache } from "../src/adapters/source.mjs";
 
 async function tmpRepo() {
   return mkdtemp(join(tmpdir(), "tmct-chat-backend-"));
@@ -100,7 +100,7 @@ test("createSession({ memoryBackend: 'sqlite' }): env var TMCT_MEMORY_BACKEND=sq
   }
 });
 
-// ---- tmct.toml's [memory] backend (src/toml-config.mjs) + the full
+// ---- tmct.toml's [memory] backend (src/adapters/toml-config.mjs) + the full
 // precedence chain: bin/tmct.mjs's --memory-backend CLI flag (already the
 // resolved `memoryBackend` param by the time it reaches createSession) >
 // TMCT_MEMORY_BACKEND env > tmct.toml's `[memory] backend` > the built-in

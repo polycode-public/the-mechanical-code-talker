@@ -33,7 +33,7 @@ const SRC = join(ROOT, "src");
 // Every tree that may name a src/ module. Fixture and example repositories are
 // excluded on purpose: their graph.json files describe the toy codebases tmct
 // analyses, so their own "src/..." strings mean a different src entirely.
-const SCAN_DIRS = ["src", "test", "e2e", "scripts", "bin", "chatbench", "agentbench", "infbench", "synthbench", "demo", "public", "examples", "corpus", "docs"];
+const SCAN_DIRS = ["src", "test", "e2e", "scripts", "bin", "chatbench", "agentbench", "infbench", "synthbench", "demo", "public", "examples", "corpus", "docs", "ontology", "data"];
 const SCAN_EXTENSIONS = [".mjs", ".js", ".json", ".html", ".md"];
 const SKIP_DIRS = new Set(["node_modules", ".git", "fixtures", "engine", ".tmct"]);
 const SKIP_FILES = new Set(["move-table.json", "memory-ask-browser.bundle.js"]);

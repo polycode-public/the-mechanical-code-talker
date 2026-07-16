@@ -1,5 +1,5 @@
 // ask-nlp.mjs — the optional wink-nlp adapter behind ask.mjs's lemma/POS tier.
-// Loaded lazily via src/wink-model.mjs; failure is cached as null, never a throw.
+// Loaded lazily via src/adapters/wink-model.mjs; failure is cached as null, never a throw.
 
 import { winkInstance } from "./wink-model.mjs";
 

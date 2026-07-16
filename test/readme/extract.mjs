@@ -17,7 +17,7 @@
 //   output:help:<name> an excerpt that must appear verbatim in the live
 //                      `tmct --help` output (<name> labels the section)
 //   toml               not executed; validated by parsing with smol-toml and
-//                      loading through src/toml-config.mjs
+//                      loading through src/adapters/toml-config.mjs
 //   text               illustrative only; never executed or asserted
 //
 // Attributes after the tag refine treatment:

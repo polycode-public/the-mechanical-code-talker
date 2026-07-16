@@ -58,7 +58,7 @@ carried on every fact that backend writes.
 ## Confirmed baseline (tmct's own code, verified this session)
 
 - tmct now has a real, working multi-backend memory seam, landed this same session
-  (`src/memory/core.mjs`): **Backend A** (the flat OWL-labelled JSON file, the default, unchanged),
+  (`src/adapters/memory/core.mjs`): **Backend A** (the flat OWL-labelled JSON file, the default, unchanged),
   **Backend B** (`createInMemoryStore`, pure in-process, `core.mjs:199-220`), **Backend C**
   (`createSqliteMemoryStore`, a resident `node:sqlite` connection, WAL mode, `core.mjs:221-308`).
   Selected via `openMemoryBackend(repoRoot, backendChoice)` (`core.mjs:339`), the ONE shared resolver
@@ -74,7 +74,7 @@ carried on every fact that backend writes.
   (`["default","memory","sqlite"]`). `server:<handle>@<name>` isn't a member of a closed set — it's a
   parameterized value, the same *shape* (not reusing the same function) as this codebase's own
   well-established `scheme:value` provenance-tag convention (`corpus:`, `corpus-weak:`, `web:`,
-  `ace:chat:`, `extracted:` — all parsed by prefix in `src/memory/core.mjs`'s
+  `ace:chat:`, `extracted:` — all parsed by prefix in `src/adapters/memory/core.mjs`'s
   `provenanceTagToSource`). The validator needs a second branch: accept the closed set OR a value
   matching `/^server:([a-z0-9_-]{1,32})@([a-z0-9-]{1,64})$/` — group 1 the handle, group 2 the server
   name (name-length-bounded, since it becomes part of a real AWS resource name below). A bare
@@ -237,7 +237,7 @@ called → attribution; how much should this claim be trusted → tier + TTL) ar
 design keeps them that way rather than conflating "has a handle" with "is trusted."
 
 **Source shape — reuses the `teach` mechanism, keyed by handle instead of session.** A new provenance
-tag shape, `handle:<handle>@<ts>`, parsed by `provenanceTagToSource` (`src/memory/core.mjs`) into
+tag shape, `handle:<handle>@<ts>`, parsed by `provenanceTagToSource` (`src/adapters/memory/core.mjs`) into
 `{ kind: "teach", handle: "<handle>", createdAt: <ts> }`. `sourceIdFor`'s existing `"teach"` branch
 (`core.mjs:808`) currently mints `${TEACH_SOURCE_ID}:${sessionId}` when a session id is present —
 needs a parallel branch minting `src:teach:handle:<handle>` instead when a handle is present, ONE

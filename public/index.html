@@ -7,7 +7,7 @@
 <meta name="description" content="A pure-JS, no-LLM, offline, $0 chatbot in the ELIZA/PARRY lineage: mechanical interpretation, OWL graph memory, honest misses.">
 <!--
   Import map: resolves the tiny set of `node:*` specifiers the copied engine source
-  still carries (src/grammar/lexicon.mjs, src/embed.mjs, src/wink-model.mjs — see
+  still carries (src/grammar/lexicon.mjs, src/adapters/embed.mjs, src/adapters/wink-model.mjs — see
   engine-shims/*.mjs for what each shim actually does and why) to browser-safe
   stand-ins, and resolves the wink-nlp / wink-eng-lite-web-model bare specifiers to
   esm.sh CDN builds pinned to the exact versions package.json depends on. Nothing here

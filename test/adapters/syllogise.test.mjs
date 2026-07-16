@@ -9,7 +9,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendFact, appendFacts, loadMemory, readFactRows, removeFacts } from "../../src/memory/core.mjs";
+import { appendFact, appendFacts, loadMemory, readFactRows, removeFacts } from "../../src/adapters/memory/core.mjs";
 import {
   deriveSubClassClosure, deriveTypePropagation, deriveDisjointViolations,
   deriveSomeValuesFromApplication, findConsistencyViolations, findIsaChain, syllogise as syllogiseSeam,

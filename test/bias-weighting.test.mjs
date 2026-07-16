@@ -3,7 +3,7 @@
 // fact-listing lanes.
 //
 // Pure unit coverage for biasForSourceId/biasForRow/rankByBiasThenTrust, then
-// an end-to-end drive through the REAL seeding path (src/corpus/conceptnet.mjs
+// an end-to-end drive through the REAL seeding path (src/adapters/corpus/conceptnet.mjs
 // seedMemory, two different provenancePrefixes — the exact shape two active
 // extension bundles produce) and runTurn's own fact-listing answer, proving:
 //   - a higher-bias bundle's fact renders FIRST;
@@ -17,8 +17,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { biasForSourceId, biasForRow, rankByBiasThenTrust } from "../src/memory/bias.mjs";
 import { runTurn } from "../src/chat.mjs";
-import { seedMemory } from "../src/corpus/conceptnet.mjs";
-import { clearCache } from "../src/source.mjs";
+import { seedMemory } from "../src/adapters/corpus/conceptnet.mjs";
+import { clearCache } from "../src/adapters/source.mjs";
 
 // ---- pure unit tests --------------------------------------------------------
 

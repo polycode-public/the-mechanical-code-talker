@@ -4,9 +4,9 @@
 // holds — provider payloads are read-only input, memory goes to .tmct/memory/.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fetchEntities, registerProvider, clearCache, emptyEntities } from "../src/source.mjs";
+import { fetchEntities, registerProvider, clearCache, emptyEntities } from "../src/adapters/source.mjs";
 import { parseEntities, resolveSymbol } from "../src/codegraph.mjs";
-import { ToolError } from "../src/config.mjs";
+import { ToolError } from "../src/adapters/config.mjs";
 
 /** A tiny in-memory provider payload in the contract's entities shape. */
 function providerPayload() {

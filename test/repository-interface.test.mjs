@@ -27,10 +27,10 @@ import {
   invoke,
   toIndividual,
   toEdge,
-} from "../src/repository-interface.mjs";
-import { fixtureProvider } from "../src/providers/fixture.mjs";
+} from "../src/adapters/repository-interface.mjs";
+import { fixtureProvider } from "../src/adapters/providers/fixture.mjs";
 import { ask } from "../src/ask.mjs";
-import { bootstrapProvider } from "../src/providers/bootstrap.mjs";
+import { bootstrapProvider } from "../src/adapters/providers/bootstrap.mjs";
 import { runConformance, assertIndividual, assertEdge, assertResult } from "../src/conformance.mjs";
 
 const REASONS = new Set(Object.values(MISS_REASONS));

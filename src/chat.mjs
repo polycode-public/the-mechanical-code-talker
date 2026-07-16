@@ -19,14 +19,14 @@
 
 import { join, dirname } from "node:path";
 import { dispatchTool, loadGraph, TOOLS } from "./server.mjs";
-import { ToolError } from "./config.mjs";
+import { ToolError } from "./adapters/config.mjs";
 import { parseEntities, edgesOfKind, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "./codegraph.mjs";
 import { classDisplayName } from "./ask.mjs";
-import { uuidv7 } from "./uuid.mjs";
-import * as defaultSource from "./source.mjs";
-import { loadTemplates, render as renderTemplate } from "./corpus/templates.mjs";
+import { uuidv7 } from "./adapters/uuid.mjs";
+import * as defaultSource from "./adapters/source.mjs";
+import { loadTemplates, render as renderTemplate } from "./adapters/corpus/templates.mjs";
 import { rankByBiasThenTrust } from "./memory/bias.mjs";
-import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "./memory/core.mjs";
+import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "./adapters/memory/core.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentences } from "./sentences.mjs";
 import {
@@ -36,8 +36,8 @@ import {
 import { COUNTERFACTUAL_RE, correctMisspellings, applyPreambleFrames, normalizeQuery, stripFillerWords, escapeRegex, kindNounAnaphoraHint } from "./interpret/normalize.mjs";
 import { setDefaultNlpAdapter } from "./interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "./interpret/strategies/constructions.mjs";
-import { nlpAdapter } from "./ask-nlp.mjs";
-import { readConstructionFiles } from "./corpus/construction-banks.mjs";
+import { nlpAdapter } from "./adapters/ask-nlp.mjs";
+import { readConstructionFiles } from "./adapters/corpus/construction-banks.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { pickPhrase } from "./answer-variants.mjs";
 
@@ -618,7 +618,7 @@ async function countFromFacts(graph, memoryDir, query, biasByBundle = {}, cache 
   const asked = m[1].toLowerCase();
   if (COUNT_NOUNS[asked]) return null; // a real graph kind — answerCount owns it
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
   const objVariants = factTermVariants(normFactTerm, asked);
   const isa = (await factRows(memoryDir, cache))
     .filter((f) => ISA_PREDICATES.has(f.predicate) && objVariants.has(f.object));
@@ -646,7 +646,7 @@ async function answerQuantifierRecall(memoryDir, query, biasByBundle = {}, cache
   const asked = m[1].toLowerCase();
   if (COUNT_NOUNS[asked]) return null; // a real graph-countable class — answerCount owns it
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
   const subjVariants = factTermVariants(normFactTerm, asked);
   const rows = (await factRows(memoryDir, cache)).filter((f) => ISA_PREDICATES.has(f.predicate) && subjVariants.has(f.subject));
   if (!rows.length) return null; // never heard of this subject at all — let answerCount own the shape
@@ -688,7 +688,7 @@ async function answerMemoryCount(memoryDir, query) {
   }
   if (!cls) return null;
   let loadMemory;
-  try { ({ loadMemory } = await import("./memory/core.mjs")); } catch { return null; }
+  try { ({ loadMemory } = await import("./adapters/memory/core.mjs")); } catch { return null; }
   let mem;
   try { mem = await loadMemory(memoryDir); } catch { return null; }
   const n = (mem.individuals || []).filter((i) => (i.class || "") === cls).length;
@@ -1667,7 +1667,7 @@ async function hasMidSentenceInterrogative(text) {
   }
   if (!whIdx.length) return false;
   try {
-    const { nlpAdapter } = await import("./ask-nlp.mjs");
+    const { nlpAdapter } = await import("./adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
     if (!adapter) return false; // no wink — no signal, never a false positive
     const tags = adapter.posTags(words);
@@ -1928,7 +1928,7 @@ const BARE_KINDOF_TEACH_RE = /^an?\s+([a-z][\w-]+)\s+is\s+a\s+kind\s+of\s+(?:an?
 async function verbLemma(word) {
   const w = String(word || "").toLowerCase();
   try {
-    const { proseLemma } = await import("./prose-nlp.mjs");
+    const { proseLemma } = await import("./adapters/prose-nlp.mjs");
     const lemma = proseLemma();
     return lemma ? lemma(w) : w;
   } catch { return w; }
@@ -2008,7 +2008,7 @@ const teachProvenanceTag = (sessionId, ts) => `teach:chat${sessionId ? `:${sessi
  *  teach-miss text stands), never a crash. */
 async function teachFact(memoryDir, sessionId, { subject, predicate, object, quantifier = "" }) {
   try {
-    const { appendFact, normFactTerm } = await import("./memory/core.mjs");
+    const { appendFact, normFactTerm } = await import("./adapters/memory/core.mjs");
     const s = normFactTerm(subject);
     const o = normFactTerm(object);
     if (!s || !o) return null;
@@ -2108,7 +2108,7 @@ async function isGroundedByFact(term, memoryDir, cache = null) {
   if (!memoryDir) return false;
   const raw = String(term ?? "").trim();
   if (!raw) return false;
-  const { normFactTerm } = await import("./memory/core.mjs");
+  const { normFactTerm } = await import("./adapters/memory/core.mjs");
   const t = normFactTerm(raw);
   if (!t) return false;
   // TAUGHT-only (same discipline factReadBack's own cax-sco/scm-sco proof
@@ -2313,7 +2313,7 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
  *  decline) — matching every other optional-adapter path in this file. */
 async function objectReadsAsNonNoun(word) {
   try {
-    const { nlpAdapter } = await import("./ask-nlp.mjs");
+    const { nlpAdapter } = await import("./adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
     if (!adapter) return false;
     const [tag] = adapter.posTags([String(word || "")]);
@@ -2552,7 +2552,7 @@ async function generalVerbPredicate(verb) {
   // "can a X <verb>" reader finds it (same reasoning as HAS_A above).
   if (v === "can") return "mgx:capableOf";
   try {
-    const { proseLemma } = await import("./prose-nlp.mjs");
+    const { proseLemma } = await import("./adapters/prose-nlp.mjs");
     const lemma = proseLemma();
     const l = lemma ? lemma(v) : v;
     if (l === "have") return HAS_A_PREDICATE;
@@ -2609,7 +2609,7 @@ async function generalVerbTeach(payload) {
  *  this codebase. */
 async function subjectIsNounOrPropn(word) {
   try {
-    const { nlpAdapter } = await import("./ask-nlp.mjs");
+    const { nlpAdapter } = await import("./adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
     if (!adapter) return false;
     const [tag] = adapter.posTags([String(word || "")]);
@@ -2650,7 +2650,7 @@ async function matchRelationalVerbTeach(text) {
     if (GENERAL_VERB_DETERMINER_RE.test(head) || GENERAL_VERB_NOT_A_VERB_RE.test(head)) return null;
   }
   try {
-    const { nlpAdapter } = await import("./ask-nlp.mjs");
+    const { nlpAdapter } = await import("./adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
     if (!adapter) return null;
     const tags = adapter.posTags([...subjWords, verbRaw, ...objWords]);
@@ -2661,7 +2661,7 @@ async function matchRelationalVerbTeach(text) {
   }
   let base = strip;
   try {
-    const { proseLemma } = await import("./prose-nlp.mjs");
+    const { proseLemma } = await import("./adapters/prose-nlp.mjs");
     const lemma = proseLemma();
     if (lemma) {
       const l = lemma(verb);
@@ -2694,7 +2694,7 @@ async function bareTeachWrapperNudgeText(text) {
     if (GENERAL_VERB_DETERMINER_RE.test(head) || GENERAL_VERB_NOT_A_VERB_RE.test(head)) return null;
   }
   try {
-    const { nlpAdapter } = await import("./ask-nlp.mjs");
+    const { nlpAdapter } = await import("./adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
     if (!adapter) return null;
     const tags = adapter.posTags([subj, verbRaw, obj]);
@@ -3096,7 +3096,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     const retractSubject = retractMatch[1].trim();
     const retractObject = retractMatch[2].trim();
     const { retractSubClassOf } = await import("./syllogise.mjs");
-    const { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts } = await import("./memory/core.mjs");
+    const { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts } = await import("./adapters/memory/core.mjs");
     const result = await retractSubClassOf(memoryDir, retractSubject, retractObject, {
       store: { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts },
     });
@@ -3228,7 +3228,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const compose2 = ownSrc.match(COMPOSE2_RULE_TEACH_RE);
   if (compose2 && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     try {
-      const { appendRule, RULE_KIND_COMPOSE2 } = await import("./memory/core.mjs");
+      const { appendRule, RULE_KIND_COMPOSE2 } = await import("./adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: compose2[1],
         kind: RULE_KIND_COMPOSE2,
@@ -3253,7 +3253,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const filterRule = ownSrc.match(FILTER_RULE_TEACH_RE);
   if (filterRule && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     try {
-      const { appendRule, RULE_KIND_FILTER } = await import("./memory/core.mjs");
+      const { appendRule, RULE_KIND_FILTER } = await import("./adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: filterRule[1],
         kind: RULE_KIND_FILTER,
@@ -3282,7 +3282,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const recursiveRule = ownSrc.match(RECURSIVE_RULE_TEACH_RE);
   if (recursiveRule && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
     try {
-      const { appendRule, RULE_KIND_RECURSIVE } = await import("./memory/core.mjs");
+      const { appendRule, RULE_KIND_RECURSIVE } = await import("./adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: recursiveRule[1],
         kind: RULE_KIND_RECURSIVE,
@@ -3318,7 +3318,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     try {
       const verb = await actionLemma(actionSig[1]);
       const prep = actionSig[3].toLowerCase();
-      const { appendRule, RULE_KIND_ACTION_SIGNATURE } = await import("./memory/core.mjs");
+      const { appendRule, RULE_KIND_ACTION_SIGNATURE } = await import("./adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: `${verb} ${prep}`,
         kind: RULE_KIND_ACTION_SIGNATURE,
@@ -3343,7 +3343,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     if (verb !== participle && participle.startsWith(verb.slice(0, Math.min(3, verb.length)))) {
       try {
         const prep = actionSigPassive[3].toLowerCase();
-        const { appendRule, RULE_KIND_ACTION_SIGNATURE } = await import("./memory/core.mjs");
+        const { appendRule, RULE_KIND_ACTION_SIGNATURE } = await import("./adapters/memory/core.mjs");
         const { id } = await appendRule(memoryDir, {
           name: `${verb} ${prep}`,
           kind: RULE_KIND_ACTION_SIGNATURE,
@@ -3374,7 +3374,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const prep = precondNothing[3].toLowerCase();
       const innerVerb = await actionLemma(precondNothing[5]);
       const scopeWord = precondNothing[4].toLowerCase();
-      const { appendRule, RULE_KIND_ACTION_PRECOND } = await import("./memory/core.mjs");
+      const { appendRule, RULE_KIND_ACTION_PRECOND } = await import("./adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: `${verb} ${prep}`,
         kind: RULE_KIND_ACTION_PRECOND,
@@ -3412,7 +3412,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       const verb = await actionLemma(precondComp[1]);
       const prep = precondComp[3].toLowerCase();
       const scopeWord = precondComp[4].toLowerCase();
-      const { appendRule, RULE_KIND_ACTION_PRECOND } = await import("./memory/core.mjs");
+      const { appendRule, RULE_KIND_ACTION_PRECOND } = await import("./adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: `${verb} ${prep}`,
         kind: RULE_KIND_ACTION_PRECOND,
@@ -3438,7 +3438,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     try {
       const verb = await actionLemma(actionConstraint[1]);
       const prep = actionConstraint[3].toLowerCase();
-      const { appendRule, RULE_KIND_ACTION_CONSTRAINT } = await import("./memory/core.mjs");
+      const { appendRule, RULE_KIND_ACTION_CONSTRAINT } = await import("./adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: `${verb} ${prep}`,
         kind: RULE_KIND_ACTION_CONSTRAINT,
@@ -3493,7 +3493,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     try {
       const prep = actionEffect[3].toLowerCase();
       const effVerb = await actionLemma(actionEffect[6]);
-      const { appendRule, RULE_KIND_ACTION_EFFECT } = await import("./memory/core.mjs");
+      const { appendRule, RULE_KIND_ACTION_EFFECT } = await import("./adapters/memory/core.mjs");
       const { id } = await appendRule(memoryDir, {
         name: `${verb} ${prep}`,
         kind: RULE_KIND_ACTION_EFFECT,
@@ -4249,7 +4249,7 @@ async function presuppositionNudge(query, { graph, memoryDir }) {
     let propHit = null;
     if (memoryDir) {
       let normFactTerm;
-      try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { normFactTerm = null; }
+      try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { normFactTerm = null; }
       if (normFactTerm) {
         const facts = await memoryFacts(memoryDir);
         const subjMatches = (f) => normFactTerm(f.subject) === normFactTerm(entityTerm);
@@ -4458,7 +4458,7 @@ async function bestQaPair(blockText, query, graph) {
  *  Lazy + failure-tolerated (chat.mjs ethos): a broken store degrades to null. */
 async function recallFromBlocks(memoryDir, query, graph) {
   try {
-    const { retrieveBlocks } = await import("./memory/blocks.mjs");
+    const { retrieveBlocks } = await import("./adapters/memory/blocks.mjs");
     const hits = await retrieveBlocks(memoryDir, query, RECALL_TOP_K);
     const best = hits[0];
     if (!best || best.score < RECALL_MIN_SCORE || !best.text) return null;
@@ -4638,7 +4638,7 @@ function renderIsaChain(premises) {
  *  object, provenance} rows. Lazy + failure-tolerated: no memory → []. */
 async function memoryFacts(memoryDir) {
   try {
-    const { loadMemory } = await import("./memory/core.mjs");
+    const { loadMemory } = await import("./adapters/memory/core.mjs");
     const m = await loadMemory(memoryDir);
     const out = [];
     for (const ind of m.individuals || []) {
@@ -4671,7 +4671,7 @@ async function memoryFacts(memoryDir) {
 async function factRows(memoryDir, cache = null) {
   if (cache?.rows) return cache.rows;
   try {
-    const { loadMemory, readFactRows } = await import("./memory/core.mjs");
+    const { loadMemory, readFactRows } = await import("./adapters/memory/core.mjs");
     const rows = readFactRows(await loadMemory(memoryDir));
     if (cache) { cache.rows = rows; cache.reloads = (cache.reloads || 0) + 1; }
     return rows;
@@ -4783,7 +4783,7 @@ async function synonymIndex() {
     if (!index.get(tb).some((e) => e.variant === ta)) index.get(tb).push({ variant: ta, source });
   };
   try {
-    const { loadSlice, loadMap, termText } = await import("./corpus/conceptnet.mjs");
+    const { loadSlice, loadMap, termText } = await import("./adapters/corpus/conceptnet.mjs");
     const [assertions, map] = await Promise.all([loadSlice(), loadMap()]);
     const SINGLE_WORD_RE = /^[a-z]+$/;
     for (const a of assertions) {
@@ -4796,7 +4796,7 @@ async function synonymIndex() {
     }
   } catch { /* corpus unavailable — degrade gracefully */ }
   try {
-    const { loadPhrasebook } = await import("./corpus/templates.mjs");
+    const { loadPhrasebook } = await import("./adapters/corpus/templates.mjs");
     const { synonyms } = await loadPhrasebook();
     for (const family of synonyms) {
       for (let i = 0; i < family.length; i += 1) {
@@ -5169,7 +5169,7 @@ function withDeducedGoal(res, envelope, query) {
 
 async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null) {
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
 
   // (a-pre) "what is used for riding" / "what can be used for riding" / "what
@@ -5863,7 +5863,7 @@ async function whatElseAnswer(memoryDir, query, last) {
   const term = m[1].trim();
   if (!term) return null;
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
   const variants = factTermVariants(normFactTerm, term);
   const hits = (await memoryFacts(memoryDir)).filter((f) => variants.has(f.subject));
   const picture = pickPhrase("full-picture", term.toLowerCase(), "the full picture");
@@ -5904,7 +5904,7 @@ async function synonymFactAnswer(memoryDir, query, envelope) {
   const term = metaTermOf(query, envelope);
   if (!term) return null;
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
   const facts = await memoryFacts(memoryDir);
   for (const { variant, source } of await synonymsOf(term)) {
     const variants = factTermVariants(normFactTerm, variant);
@@ -6125,7 +6125,7 @@ export async function factReadBack(memoryDir, query, envelope, miss, graph = nul
 async function factReadBackReaders(memoryDir, query, envelope, miss, graph = null, focusLabel = null, biasByBundle = {}, cache = null) {
   if (!miss) return null;
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
   // DIRECT STRUCTURAL CHECK: "is X a Y"
   // naming a real code-graph inheritance edge needs NO taught fact at all — the
@@ -6330,7 +6330,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       // `relationFactsFor`/`renderFactLine`/`factPhrase`/`factTermVariants`/
       // `byTrust`/`rows`/`HAS_PROPERTY_PREDICATE` are this block's own local
       // closures/constants, threaded through explicitly.
-      const { loadMemory, findRuleByName, resolveRelationChase } = await import("./memory/core.mjs");
+      const { loadMemory, findRuleByName, resolveRelationChase } = await import("./adapters/memory/core.mjs");
       const { findActionPath } = await import("./planning.mjs");
       const memory = await loadMemory(memoryDir);
       const relationChaseHelpers = { relationFactsFor, renderFactLine, factPhrase, factTermVariants, byTrust, rows, HAS_PROPERTY_PREDICATE, findActionPath };
@@ -6401,7 +6401,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         }
         return out;
       };
-      const { loadMemory: loadMemWho, findRuleByName: findRuleByNameWho, resolveRelationChaseReverse } = await import("./memory/core.mjs");
+      const { loadMemory: loadMemWho, findRuleByName: findRuleByNameWho, resolveRelationChaseReverse } = await import("./adapters/memory/core.mjs");
       const memoryWho = await loadMemWho(memoryDir);
       // Generic REVERSE relation-NAME resolver — the mirror image of (a0)'s
       // resolveRelationChase: given a relation/rule name and a FIXED OBJECT,
@@ -6461,7 +6461,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     if (subject) {
       const {
         loadMemory, findRuleByName, RULE_KIND_PROP: ruleKindProp, RULE_KIND_RECURSIVE: recKind,
-      } = await import("./memory/core.mjs");
+      } = await import("./adapters/memory/core.mjs");
       const memory = await loadMemory(memoryDir);
       const rule = findRuleByName(memory, ruleName);
       const ruleKind = rule?.attributes?.find((a) => a.prop === ruleKindProp)?.value;
@@ -7336,7 +7336,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
  *  nothing about this subject. */
 async function describedFacts(memoryDir, label, biasByBundle = {}, cache = null) {
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
   const rows = await factRows(memoryDir, cache);
   if (!rows.length) return null;
   const variants = factTermVariants(normFactTerm, label);
@@ -7367,8 +7367,8 @@ let corpusPromise = null; // the local slice as renderable rows, one load per pr
 function localCorpus() {
   if (!corpusPromise) {
     corpusPromise = (async () => {
-      const { loadSlice, loadMap, termText } = await import("./corpus/conceptnet.mjs");
-      const { normFactTerm } = await import("./memory/core.mjs");
+      const { loadSlice, loadMap, termText } = await import("./adapters/corpus/conceptnet.mjs");
+      const { normFactTerm } = await import("./adapters/memory/core.mjs");
       const [assertions, map] = await Promise.all([loadSlice(), loadMap()]);
       const rows = [];
       for (const a of assertions) {
@@ -7392,7 +7392,7 @@ function localCorpus() {
  *  where the tier-3 network lookup would attach — see CORPUS_LOOKUP_FLAG). */
 async function corpusAside(term) {
   try {
-    const { normFactTerm } = await import("./memory/core.mjs");
+    const { normFactTerm } = await import("./adapters/memory/core.mjs");
     const variants = factTermVariants(normFactTerm, term);
     const rows = (await localCorpus()).filter((r) => variants.has(r.key));
     if (!rows.length) return null;
@@ -7411,7 +7411,7 @@ const RECALL_ASK_RE = /^what (?:did|have) (?:i|we) (?:ask(?:ed)?(?: you)?|talk(?
  *  uuidv7s, so a plain sort is chronological). Null when nothing is folded yet. */
 async function recallSummary(memoryDir) {
   try {
-    const { loadBlockIndex, BLOCKS_DIR_REL } = await import("./memory/blocks.mjs");
+    const { loadBlockIndex, BLOCKS_DIR_REL } = await import("./adapters/memory/blocks.mjs");
     const { readFile } = await import("node:fs/promises");
     const index = await loadBlockIndex(memoryDir);
     const id = Object.keys(index.blocks).sort().at(-1);
@@ -7566,8 +7566,8 @@ let seonDefsPromise = null;
 function seonDefinitions() {
   if (!seonDefsPromise) {
     seonDefsPromise = (async () => {
-      const { SEON_DEFINITIONS_FILE } = await import("./corpus/conceptnet.mjs");
-      const { normFactTerm } = await import("./memory/core.mjs");
+      const { SEON_DEFINITIONS_FILE } = await import("./adapters/corpus/conceptnet.mjs");
+      const { normFactTerm } = await import("./adapters/memory/core.mjs");
       const { readFile } = await import("node:fs/promises");
       const raw = await readFile(SEON_DEFINITIONS_FILE, "utf8");
       const map = new Map();
@@ -7593,7 +7593,7 @@ let seonRelsPromise = null;
 function relationDefinitions() {
   if (!seonRelsPromise) {
     seonRelsPromise = (async () => {
-      const { SEON_DEFINITIONS_FILE } = await import("./corpus/conceptnet.mjs");
+      const { SEON_DEFINITIONS_FILE } = await import("./adapters/corpus/conceptnet.mjs");
       const { readFile } = await import("node:fs/promises");
       const relFile = join(dirname(SEON_DEFINITIONS_FILE), "relations.jsonl");
       const raw = await readFile(relFile, "utf8");
@@ -7685,7 +7685,7 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
   const term = metaTermOf(query, envelope);
   if (!term) return null;
   let normFactTerm;
-  try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { return null; }
+  try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { return null; }
   // lexicon-noun gate: the curated defs are keyed on SE lexicon terms only.
   let lex = lexicon;
   try {
@@ -8039,7 +8039,7 @@ async function completionsRescueAnswer(query, { memoryDir, graph }) {
     // broadSearch can search live graph/memory content, not just saved
     // memory blocks.
     const { createCompletionsGraphAdapter } = await import("./completions/graph-adapter.mjs");
-    const { loadMemory } = await import("./memory/core.mjs");
+    const { loadMemory } = await import("./adapters/memory/core.mjs");
     const memory = await loadMemory(memoryDir);
     const graphService = createCompletionsGraphAdapter(graph, memory);
     const result = await generateCompletion(memoryDir, term, { query: term, graph, memory, graphService });
@@ -8100,7 +8100,7 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
   if (!rawTerm) return null;
   let normFactTerm; let composeConcept; let CONCEPT_CLASS;
   try {
-    ({ normFactTerm } = await import("./memory/core.mjs"));
+    ({ normFactTerm } = await import("./adapters/memory/core.mjs"));
     ({ composeConcept, CONCEPT_CLASS } = await import("./concept.mjs"));
   } catch { return null; }
   const term = normFactTerm(rawTerm);
@@ -8173,7 +8173,7 @@ async function entityOfKindInText(graph, expectedClass, answerText) {
  *  through src/domain.mjs. Fresh-loads memory (never the turn cache) because
  *  the caller may have just written snapshot rows this same turn. */
 async function loadPlanContext(memoryDir) {
-  const { loadMemory, readFactRows, readRuleRows } = await import("./memory/core.mjs");
+  const { loadMemory, readFactRows, readRuleRows } = await import("./adapters/memory/core.mjs");
   const { compileDomain, stateFromFacts } = await import("./domain.mjs");
   const payload = await loadMemory(memoryDir);
   const factRows = readFactRows(payload);
@@ -8202,7 +8202,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
   const thatGoal = q.match(GOAL_TEACH_RE);
   const goalMatch = thatGoal || q.match(GOAL_TEACH_INFINITIVE_RE);
   if (goalMatch) {
-    const { normFactTerm } = await import("./memory/core.mjs");
+    const { normFactTerm } = await import("./adapters/memory/core.mjs");
     const verb = await verbLemma(goalMatch[3]);
     if (!verb) {
       return {
@@ -8357,7 +8357,7 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
   const k = ps.cursor + 1;
   const action = ps.actions[ps.cursor];
   const rows = ps.states[k];
-  const { appendFact, loadMemory, readFactRows } = await import("./memory/core.mjs");
+  const { appendFact, loadMemory, readFactRows } = await import("./adapters/memory/core.mjs");
   for (const row of rows) {
     await appendFact(memoryDir, {
       subject: `${row.subject}@step${k}`, predicate: row.predicate, object: row.object,
@@ -8374,7 +8374,7 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
   }
   // Final step: confirm the goal against the store, from the written facts.
   const { compileDomain, stateFromFacts, compileGoal } = await import("./domain.mjs");
-  const { readRuleRows } = await import("./memory/core.mjs");
+  const { readRuleRows } = await import("./adapters/memory/core.mjs");
   const payload = await loadMemory(memoryDir);
   const factRows = readFactRows(payload);
   const domain = compileDomain(factRows, readRuleRows(payload));
@@ -9202,7 +9202,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const offerTerm = knowAboutTerm || metaTermOf(query, envelope);
     if (offerTerm) {
       let normFactTerm;
-      try { ({ normFactTerm } = await import("./memory/core.mjs")); } catch { normFactTerm = null; }
+      try { ({ normFactTerm } = await import("./adapters/memory/core.mjs")); } catch { normFactTerm = null; }
       if (normFactTerm) {
         const cleanTerm = normFactTerm(offerTerm);
         const ent = knowAboutTerm ? null : await resolveEntity(graph, offerTerm);
@@ -9386,7 +9386,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     note(trace, "goal: inspect tmct's memory store (facts/utterances/sessions)");
     if (!memoryDir) return mk("no memory store here — /memory works inside a repo session.", { miss: true });
     try {
-      const { inspectMemory } = await import("./memory/inspect.mjs");
+      const { inspectMemory } = await import("./adapters/memory/inspect.mjs");
       return mk(await inspectMemory(memoryDir, { verbose: /^(?:-v|--verbose|verbose)$/i.test(argText) }));
     } catch (e) {
       return mk(String(e?.message || e), { miss: true }); // a broken store reads as its own clean error
@@ -9414,7 +9414,7 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     let families = new Map();
     if (memoryDir) {
       try {
-        const { loadMemory, readRuleRows } = await import("./memory/core.mjs");
+        const { loadMemory, readRuleRows } = await import("./adapters/memory/core.mjs");
         families = actionFamilies(readRuleRows(await loadMemory(memoryDir)));
       } catch { /* an unreadable store lists like an empty one */ }
     }
@@ -9571,7 +9571,7 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
     if (!lex) { const { loadLexicon } = await import("./grammar/lexicon.mjs"); lex = loadLexicon(); }
     const ambiguous = parseAceAmbiguous(line, lex);
     if (ambiguous) {
-      const { normFactTerm } = await import("./memory/core.mjs");
+      const { normFactTerm } = await import("./adapters/memory/core.mjs");
       const answer = renderAmbiguousAssert(line, ambiguous, normFactTerm);
       // Genuinely ambiguous — no single triple was committed, so the canonical
       // form is every surviving reading's own would-be triple set, same idiom
@@ -9587,7 +9587,7 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
     const parse = parseAce(line, lex);
     if (!parse || !parse.triples?.length || parse.residue?.length) return null;
     const { assertSentence } = await import("./grammar/assert.mjs");
-    const { normFactTerm, appendFact } = await import("./memory/core.mjs");
+    const { normFactTerm, appendFact } = await import("./adapters/memory/core.mjs");
     const ts = new Date().toISOString();
     const res = await assertSentence(memoryDir, line, {
       lexicon: lex,

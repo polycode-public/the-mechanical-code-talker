@@ -16,7 +16,7 @@
 // DOM or off `window.tmctAnswer` after this module resolves. That is a hard limitation
 // of a static site, not a bug.
 
-import { registerWinkModel } from "./engine/src/wink-model.mjs";
+import { registerWinkModel } from "./engine/src/adapters/wink-model.mjs";
 import { ask } from "./engine/src/ask.mjs";
 import { parseEntities } from "./engine/src/codegraph.mjs";
 

@@ -21,7 +21,7 @@ import {
   RULE_KIND_ACTION_SIGNATURE,
   RULE_KIND_ACTION_PRECOND,
   RULE_KIND_ACTION_EFFECT,
-} from "../src/memory/core.mjs";
+} from "../src/adapters/memory/core.mjs";
 import { validateIndividual } from "../src/memory/shacl.mjs";
 import { findActionPath, findReachableSet } from "../src/planning.mjs";
 

@@ -16,8 +16,8 @@ import {
   initRepo, defaultConfig, renderTomlConfig,
   CONFIG_FILE, PROVENANCE_REL, SEED_MARKER_REL, PERSONA_PRESETS,
 } from "../src/init.mjs";
-import { loadTomlConfig, normalizeConfig } from "../src/toml-config.mjs";
-import { loadMemory, openMemoryBackend } from "../src/memory/core.mjs";
+import { loadTomlConfig, normalizeConfig } from "../src/adapters/toml-config.mjs";
+import { loadMemory, openMemoryBackend } from "../src/adapters/memory/core.mjs";
 import { resolveExtensions, seedActiveCorpusEntries } from "../src/extensions.mjs";
 
 async function tmp() {
@@ -351,7 +351,7 @@ test("bin/tmct.mjs: `tmct init --with-persona code` writes the persona, `--with-
     // tmct.toml WRITE (does `--with-persona code` land the right
     // [bias]/[extensions] text), never about seed CONTENT — but the `code`
     // persona activates seon+conceptnet, and conceptnet's committed slice is
-    // tens of thousands of lines (src/corpus/conceptnet-map.toml's widened
+    // tens of thousands of lines (src/adapters/corpus/conceptnet-map.toml's widened
     // emit). Left to the default seed:true, this single spawnSync blew past
     // two minutes. TMCT_NO_SEED=1 skips that seed entirely (initRepo still
     // scaffolds + writes tmct.toml exactly the same either way — the seed
@@ -491,7 +491,7 @@ test("bin/tmct.mjs: `tmct import --memory-backend memory` on an already-initiali
 // to ALWAYS write into the flat-file backend (Backend A), even when
 // `--memory-backend sqlite` was configured — a split-brain repo where the
 // seeded corpus sat in an inert graph.json a sqlite-backend chat session could
-// never read. Fixed via src/memory/core.mjs's openMemoryBackend, the SAME
+// never read. Fixed via src/adapters/memory/core.mjs's openMemoryBackend, the SAME
 // resolver chat.mjs's createSession uses. These tests reproduce the exact
 // failure the coordinator's review caught: seed, then verify the facts are
 // actually reachable from the CONFIGURED backend, not just that the flag got
@@ -505,7 +505,7 @@ test("initRepo({ memoryBackend: 'sqlite', seed: true }): seeded facts land in gr
     assert.ok(res.seedResult.appended > 0);
     assert.equal(res.config.memory.backend, "sqlite");
 
-    const { openMemoryBackend } = await import("../src/memory/core.mjs");
+    const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
     const { dir: handle, close } = await openMemoryBackend(dir, "sqlite");
     const mem = await loadMemory(handle);
     await close();
@@ -556,7 +556,7 @@ test("bin/tmct.mjs REGRESSION: `tmct init --memory-backend sqlite` then a flagle
     assert.doesNotMatch(chat.stdout, /I don't know "dog" yet/, "the seeded corpus must be reachable from the configured sqlite backend");
     assert.match(chat.stdout, /dog/i);
 
-    const { openMemoryBackend } = await import("../src/memory/core.mjs");
+    const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
     const { dir: handle, close } = await openMemoryBackend(dir, "sqlite");
     const mem = await loadMemory(handle);
     await close();
@@ -584,7 +584,7 @@ test("bin/tmct.mjs REGRESSION: `tmct init --corpus aws --memory-backend sqlite` 
     assert.match(r.stdout, /Seeded \d+ corpus facts/);
     assert.match(r.stdout, /seeded tier-2 corpus "aws"/);
 
-    const { openMemoryBackend } = await import("../src/memory/core.mjs");
+    const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
     const { dir: handle, close } = await openMemoryBackend(dir, "sqlite");
     const mem = await loadMemory(handle);
     await close();
@@ -617,7 +617,7 @@ test("bin/tmct.mjs REGRESSION: a later `tmct import --corpus <id>` (no --memory-
     assert.equal(imp.status, 0, imp.stderr);
     assert.match(imp.stdout, /seeded tier-2 corpus "aws"/);
 
-    const { openMemoryBackend } = await import("../src/memory/core.mjs");
+    const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
     const { dir: handle, close } = await openMemoryBackend(dir, "sqlite");
     const mem = await loadMemory(handle);
     await close();
@@ -699,7 +699,7 @@ test("npm run init:xl's exact bundle set seeds within ±10% of the real measured
 // dominates) is a FOLLOW-UP measurement — a live `npm run init:xxl` run against
 // this same worktree showed corpus seeding is roughly quadratic in total
 // individuals (`syncFactSources`'s per-fact linear scans in
-// src/memory/core.mjs, out of this batch's scope to fix), so a literal
+// src/adapters/memory/core.mjs, out of this batch's scope to fix), so a literal
 // full-scale reseed here would cost this suite something on the order of an
 // hour, every `npm test` run, forever — not a proportionate regression guard.
 // This test instead does two REAL, bounded things: (1) confirms every bundle

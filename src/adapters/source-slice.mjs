@@ -1,5 +1,5 @@
 // Shared, safe source-span slicing for the tool layer (src/server.mjs) and the
-// source-capable Repository Interface provider (src/providers/graph-service.mjs).
+// source-capable Repository Interface provider (src/adapters/providers/graph-service.mjs).
 //
 // Two halves:
 //   - sliceSpan   — PURE. Given an in-memory `lines` array, extracts + line-numbers

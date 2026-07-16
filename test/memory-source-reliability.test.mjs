@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendFact, loadMemory, readFactRows, SOURCE_CLASS, SOURCE_RELIABILITY_PROP, UPDATED_AT_PROP } from "../src/memory/core.mjs";
+import { appendFact, loadMemory, readFactRows, SOURCE_CLASS, SOURCE_RELIABILITY_PROP, UPDATED_AT_PROP } from "../src/adapters/memory/core.mjs";
 import { sessionReliabilityFrom } from "../src/memory/trust.mjs";
 
 const tmpRepo = () => mkdtemp(join(tmpdir(), "tmct-mem-srcrel-"));

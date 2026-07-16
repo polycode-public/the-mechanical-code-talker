@@ -1,5 +1,5 @@
 // completions/infer.mjs — Stage 3 ("inference between groups"): applies resolveRelationChase
-// (src/memory/core.mjs) to relationships BETWEEN retrieved text groups, not just graph facts.
+// (src/adapters/memory/core.mjs) to relationships BETWEEN retrieved text groups, not just graph facts.
 // Four relations (supports/contradicts/elaborates/exemplifies), each with its own named
 // licensing test — see the four test*() functions below. A relation is asserted only when its
 // test concretely licenses it, never from prose similarity.
@@ -7,8 +7,8 @@
 // Entities are a group's content tokens narrowed to graph-known terms (normFactTerm-matched
 // against loaded facts) — sharing an English word alone never licenses a relation.
 
-import { normFactTerm, readFactRows, resolveRelationChase } from "../memory/core.mjs";
-import { tokenizeBlock } from "../memory/blocks.mjs";
+import { normFactTerm, readFactRows, resolveRelationChase } from "../adapters/memory/core.mjs";
+import { tokenizeBlock } from "../adapters/memory/blocks.mjs";
 import { splitSentences } from "./rank.mjs";
 import { STOPWORDS } from "../prose.mjs";
 import { findActionPath, findReachableSet } from "../planning.mjs";

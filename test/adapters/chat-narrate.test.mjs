@@ -10,8 +10,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { runTurn, createSession, NARRATE_MARKER } from "../../src/chat.mjs";
 import { parseEntities } from "../../src/codegraph.mjs";
-import { clearCache } from "../../src/source.mjs";
-import * as source from "../../src/source.mjs";
+import { clearCache } from "../../src/adapters/source.mjs";
+import * as source from "../../src/adapters/source.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };

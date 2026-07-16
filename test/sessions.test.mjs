@@ -14,7 +14,7 @@ import {
 } from "../src/sessions.mjs";
 import { CLASS_DOCS, PREDICATE_DOCS } from "../src/schema-docs.mjs";
 import { runChat } from "../src/chat.mjs";
-import { MEMORY_GRAPH_REL } from "../src/memory/core.mjs";
+import { MEMORY_GRAPH_REL } from "../src/adapters/memory/core.mjs";
 
 const SRC_SESSIONS = fileURLToPath(new URL("../src/sessions.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));

@@ -16,7 +16,7 @@ import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 import { ask } from "../../src/ask.mjs";
 import { composeConcept, composeRelation, CONCEPT_CLASS, RELATION_TERM } from "../../src/concept.mjs";
 import { runTurn } from "../../src/chat.mjs";
-import { clearCache } from "../../src/source.mjs";
+import { clearCache } from "../../src/adapters/source.mjs";
 
 const FIXTURE = new URL("../fixtures/entities.fixture.json", import.meta.url).pathname;
 

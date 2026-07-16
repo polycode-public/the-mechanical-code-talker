@@ -10,8 +10,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { runTurn } from "../../src/chat.mjs";
-import { loadMemory, readFactRows } from "../../src/memory/core.mjs";
-import { clearCache } from "../../src/source.mjs";
+import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { clearCache } from "../../src/adapters/source.mjs";
 
 const DOMAIN = [
   "a disk is a kind of game piece.",

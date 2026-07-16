@@ -17,13 +17,13 @@ import {
 } from "../../src/interpret/normalize.mjs";
 import { stripNoise } from "../../src/interpret/strategies/noise-strip.mjs";
 import { parseQuery, ask } from "../../src/ask.mjs";
-import { nlpAdapter } from "../../src/ask-nlp.mjs";
+import { nlpAdapter } from "../../src/adapters/ask-nlp.mjs";
 import { setDefaultNlpAdapter } from "../../src/interpret/nlp-registry.mjs";
 
 // The wink stop-word tier tests below use the DEFAULT adapter, so this file
 // wires the composition itself, the same way the product surfaces do.
 setDefaultNlpAdapter(nlpAdapter);
-import { buildEntities } from "../../src/graph-build.mjs";
+import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { parseEntities } from "../../src/codegraph.mjs";
 import { ingestSchemaDocs } from "../../src/schema-docs.mjs";
 

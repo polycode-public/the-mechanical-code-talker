@@ -194,7 +194,7 @@ export async function validateTomlBlock(block) {
   const { parse } = await import("smol-toml");
   const raw = parse(block.body);
   assert.ok(Object.keys(raw).length > 0, "the tmct.toml reference parses to a non-empty config");
-  const { loadTomlConfig, CONFIG_FILE } = await import(path.join(repoRoot, "src", "toml-config.mjs"));
+  const { loadTomlConfig, CONFIG_FILE } = await import(path.join(repoRoot, "src", "adapters", "toml-config.mjs"));
   const dir = mkdtempSync(path.join(tmpdir(), "tmct-readme-toml-"));
   try {
     writeFileSync(path.join(dir, CONFIG_FILE), block.body);

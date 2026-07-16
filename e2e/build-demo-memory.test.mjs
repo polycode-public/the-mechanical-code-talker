@@ -8,7 +8,7 @@ import { join } from "node:path";
 
 import { main as buildDemoMemory } from "../scripts/build-demo-memory.mjs";
 import { factReadBack } from "../src/chat.mjs";
-import { createInMemoryStore } from "../src/memory/core.mjs";
+import { createInMemoryStore } from "../src/adapters/memory/core.mjs";
 
 test("build-demo-memory: the payload answers the canonical exchange and carries corpus + hanoi rows", async () => {
   const dir = await mkdtemp(join(tmpdir(), "demo-memory-test-"));

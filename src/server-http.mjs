@@ -18,8 +18,8 @@ import { createServer } from "node:http";
 import { runTurn, selectTool } from "./chat.mjs";
 import { TOOLS } from "./server.mjs";
 import { parseEntities } from "./codegraph.mjs";
-import { uuidv7 } from "./uuid.mjs";
-import * as defaultSource from "./source.mjs";
+import { uuidv7 } from "./adapters/uuid.mjs";
+import * as defaultSource from "./adapters/source.mjs";
 
 // The shim's deterministic tool selection lives with the chat surface's own
 // command routing (selectTool in chat.mjs); re-exported here so HTTP-side

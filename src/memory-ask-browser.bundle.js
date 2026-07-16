@@ -72,18 +72,18 @@
     }
   });
 
-  // src/config.mjs
+  // src/adapters/config.mjs
   var DEFAULT_GRAPH_REL;
   var init_config = __esm({
-    "src/config.mjs"() {
+    "src/adapters/config.mjs"() {
       init_node_path();
       DEFAULT_GRAPH_REL = join(".tmct", "graph.json");
     }
   });
 
-  // src/source-slice.mjs
+  // src/adapters/source-slice.mjs
   var init_source_slice = __esm({
-    "src/source-slice.mjs"() {
+    "src/adapters/source-slice.mjs"() {
       init_node_path();
       init_config();
     }
@@ -188,9 +188,9 @@
     }
   });
 
-  // src/embed.mjs
+  // src/adapters/embed.mjs
   var init_embed = __esm({
-    "src/embed.mjs"() {
+    "src/adapters/embed.mjs"() {
       init_node_fs();
       init_node_path();
       init_node_url();
@@ -5013,10 +5013,10 @@ ${lines.join("\n")}`;
     }
   });
 
-  // src/repository-interface.mjs
+  // src/adapters/repository-interface.mjs
   var INTERFACE_VERSION, ONTOLOGY_IRI, MISS_REASONS, EDGE_KINDS, EDGE_KIND_TO_TMCT, SERVICE_GROUPS, SERVICES, SOURCE_SERVICES, IND, EDGE, CONCURRENT_SAFE, REPOSITORY_INTERFACE;
   var init_repository_interface = __esm({
-    "src/repository-interface.mjs"() {
+    "src/adapters/repository-interface.mjs"() {
       INTERFACE_VERSION = "1.1.0";
       ONTOLOGY_IRI = "urn:tmct:core";
       MISS_REASONS = Object.freeze({
@@ -5239,16 +5239,16 @@ ${lines.join("\n")}`;
     }
   });
 
-  // src/providers/graph-service.mjs
+  // src/adapters/providers/graph-service.mjs
   var init_graph_service = __esm({
-    "src/providers/graph-service.mjs"() {
+    "src/adapters/providers/graph-service.mjs"() {
       init_codegraph();
       init_source_slice();
       init_repository_interface();
     }
   });
 
-  // src/memory/prose-tokens.mjs
+  // src/adapters/memory/prose-tokens.mjs
   function splitIdentifierWords2(raw) {
     if (!raw) return [];
     let s = String(raw).replace(/\.[A-Za-z0-9]+$/, "");
@@ -5287,7 +5287,7 @@ ${lines.join("\n")}`;
   }
   var STOPWORDS3, MAX_TOKEN_LEN2, MAX_TOKENS_PER_DOC2;
   var init_prose_tokens = __esm({
-    "src/memory/prose-tokens.mjs"() {
+    "src/adapters/memory/prose-tokens.mjs"() {
       STOPWORDS3 = new Set(
         "a an and or but the of to in on at for with from by as is are was were be been being it its this that these those i you he she they we me my your our do does did not no yes if then else than so such can will would should could may might about into over under out up down off again more most some any all what which who whom whose when where why how".split(/\s+/)
       );
@@ -5545,7 +5545,7 @@ ${lines.join("\n")}`;
     }
   });
 
-  // src/memory/core.mjs
+  // src/adapters/memory/core.mjs
   var core_exports = {};
   __export(core_exports, {
     CANONICALISED_FROM_PROP: () => CANONICALISED_FROM_PROP,
@@ -6609,7 +6609,7 @@ ${lines.join("\n")}`;
   }
   var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE, MULTI_VALUED_PREDICATES;
   var init_core = __esm({
-    "src/memory/core.mjs"() {
+    "src/adapters/memory/core.mjs"() {
       init_promises();
       init_node_path();
       init_prose_tokens();
@@ -6743,23 +6743,23 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // adapter-stub-ask-nlp.mjs:./ask-nlp.mjs
+  // adapter-stub-adapters/ask-nlp.mjs:./adapters/ask-nlp.mjs
   var nlpAdapter;
   var init_ask_nlp = __esm({
-    "adapter-stub-ask-nlp.mjs:./ask-nlp.mjs"() {
+    "adapter-stub-adapters/ask-nlp.mjs:./adapters/ask-nlp.mjs"() {
       nlpAdapter = void 0;
     }
   });
 
-  // src/corpus/templates.mjs
+  // src/adapters/corpus/templates.mjs
   var import_meta, PKG_ROOT, TEMPLATES_FILE, PHRASEBOOK_FILE, TECHNICAL_SLOTS;
   var init_templates = __esm({
-    "src/corpus/templates.mjs"() {
+    "src/adapters/corpus/templates.mjs"() {
       init_promises();
       init_node_url();
       init_node_path();
       import_meta = {};
-      PKG_ROOT = join(dirname(fileURLToPath(import_meta.url)), "..", "..");
+      PKG_ROOT = join(dirname(fileURLToPath(import_meta.url)), "..", "..", "..");
       TEMPLATES_FILE = join(PKG_ROOT, "data", "templates", "responses.jsonl");
       PHRASEBOOK_FILE = join(PKG_ROOT, "data", "phrasebook", "software-phrases.txt");
       TECHNICAL_SLOTS = Object.freeze(/* @__PURE__ */ new Set([
@@ -6904,7 +6904,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // src/wink-model.mjs
+  // src/adapters/wink-model.mjs
   function loadWinkModel() {
     if (cached !== void 0) return cached;
     try {
@@ -6938,15 +6938,15 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   }
   var import_meta3, injected, cached, instance;
   var init_wink_model = __esm({
-    "src/wink-model.mjs"() {
+    "src/adapters/wink-model.mjs"() {
       init_node_module();
       import_meta3 = {};
     }
   });
 
-  // src/toml-config.mjs
+  // src/adapters/toml-config.mjs
   var init_toml_config = __esm({
-    "src/toml-config.mjs"() {
+    "src/adapters/toml-config.mjs"() {
       init_promises();
       init_node_path();
       init_dist();
@@ -6992,10 +6992,10 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // src/corpus/conceptnet.mjs
+  // src/adapters/corpus/conceptnet.mjs
   var import_meta4, PKG_ROOT2, SLICE_FILE, MAP_FILE, SEON_CONCEPTS_FILE, SEON_DEFINITIONS_FILE, TIER2_DIR, TIER2_MANIFEST_FILE, WORDNET_DIR, WORDNET_MANIFEST_FILE;
   var init_conceptnet = __esm({
-    "src/corpus/conceptnet.mjs"() {
+    "src/adapters/corpus/conceptnet.mjs"() {
       init_node_fs();
       init_promises();
       init_node_readline();
@@ -7004,9 +7004,9 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_dist();
       init_core();
       import_meta4 = {};
-      PKG_ROOT2 = join(dirname(fileURLToPath(import_meta4.url)), "..", "..");
+      PKG_ROOT2 = join(dirname(fileURLToPath(import_meta4.url)), "..", "..", "..");
       SLICE_FILE = join(PKG_ROOT2, "corpus", "conceptnet", "slice.jsonl");
-      MAP_FILE = join(PKG_ROOT2, "src", "corpus", "conceptnet-map.toml");
+      MAP_FILE = join(PKG_ROOT2, "src", "adapters", "corpus", "conceptnet-map.toml");
       SEON_CONCEPTS_FILE = join(PKG_ROOT2, "corpus", "seon", "concepts.jsonl");
       SEON_DEFINITIONS_FILE = join(PKG_ROOT2, "corpus", "seon", "definitions.jsonl");
       TIER2_DIR = join(PKG_ROOT2, "corpus", "tier2");
@@ -7121,7 +7121,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // src/prose-nlp.mjs
+  // src/adapters/prose-nlp.mjs
   var prose_nlp_exports = {};
   __export(prose_nlp_exports, {
     proseLemma: () => proseLemma
@@ -7155,7 +7155,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   }
   var cached2;
   var init_prose_nlp = __esm({
-    "src/prose-nlp.mjs"() {
+    "src/adapters/prose-nlp.mjs"() {
       init_wink_model();
     }
   });
@@ -8028,7 +8028,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   init_config();
   init_source_slice();
 
-  // src/source.mjs
+  // src/adapters/source.mjs
   init_promises();
   init_config();
 
@@ -8046,7 +8046,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   // src/server.mjs
   init_ask_nlp();
 
-  // adapter-stub-corpus/construction-banks.mjs:./corpus/construction-banks.mjs
+  // adapter-stub-adapters/corpus/construction-banks.mjs:./adapters/corpus/construction-banks.mjs
   var readConstructionFiles = () => ({ relations: [], constructions: [] });
 
   // src/server.mjs

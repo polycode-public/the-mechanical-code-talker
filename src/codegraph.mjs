@@ -1,10 +1,10 @@
 import { lookupByProseTokens, proseLayerHits, splitIdentifierWords } from "./prose.mjs";
-import { cosine } from "./embed.mjs";
+import { cosine } from "./adapters/embed.mjs";
 import { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "./memory/trust.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the
 // deterministic indexer writes to <repo>/.tmct/graph.json (shape produced by
-// src/graph-build.mjs):
+// src/adapters/graph-build.mjs):
 //
 //   {
 //     generated_at, classes: [{name, count, sample[]}],

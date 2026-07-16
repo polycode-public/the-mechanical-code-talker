@@ -7,7 +7,7 @@ import { groupHits } from "./group.mjs";
 import { rankSentences } from "./rank.mjs";
 import { inferRelations } from "./infer.mjs";
 import { pruneCompletion } from "./prune.mjs";
-import { loadMemory } from "../memory/core.mjs";
+import { loadMemory } from "../adapters/memory/core.mjs";
 import { finish, grammarRules } from "../finish.mjs";
 
 /** grammarRules() with sentence-capitalisation force-enabled (disabled in live chat only to

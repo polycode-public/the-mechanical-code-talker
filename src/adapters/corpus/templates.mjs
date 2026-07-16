@@ -15,7 +15,7 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 
-const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
+const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 export const TEMPLATES_FILE = join(PKG_ROOT, "data", "templates", "responses.jsonl");
 export const PHRASEBOOK_FILE = join(PKG_ROOT, "data", "phrasebook", "software-phrases.txt");
 

@@ -28,7 +28,7 @@
 
 import { createInterface } from "node:readline";
 import { SEED_TERMS, CANONICAL_RELS, FILTERED_RELS, bareEnTerm } from "./fetch-slice.mjs";
-import { loadMap } from "../../src/corpus/conceptnet.mjs";
+import { loadMap } from "../../src/adapters/corpus/conceptnet.mjs";
 
 const MAX_BYTES = 4_500_000; // committed-slice budget (hard cap 5 MB), grown for the ~40k tier-1 target
 

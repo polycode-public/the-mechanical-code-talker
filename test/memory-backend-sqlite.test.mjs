@@ -21,7 +21,7 @@ import {
   findRuleByName, readFactRows, RULE_KIND_COMPOSE2, RULE_KIND_FILTER,
   createSqliteMemoryStore, closeSqliteMemoryStore,
   resolveMemoryGraphFile, snapshotMemory,
-} from "../src/memory/core.mjs";
+} from "../src/adapters/memory/core.mjs";
 
 const SESSION = "01890000-0000-7000-8000-00000000beef";
 const TS1 = "2026-07-10T10:00:00.000Z";
@@ -168,7 +168,7 @@ test("Backend C: node:sqlite is genuinely gated — importing core.mjs alone nev
   // never calls createSqliteMemoryStore must not have `node:sqlite` resident.
   const { execFileSync } = await import("node:child_process");
   const out = execFileSync(process.execPath, ["-e", `
-    import("${new URL("../src/memory/core.mjs", import.meta.url).href}").then(async () => {
+    import("${new URL("../src/adapters/memory/core.mjs", import.meta.url).href}").then(async () => {
       const cached = process.moduleLoadList ? process.moduleLoadList.some((m) => m.includes("sqlite")) : false;
       console.log(JSON.stringify({ cached }));
     });

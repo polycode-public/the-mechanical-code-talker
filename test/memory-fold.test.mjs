@@ -8,8 +8,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseSessionLog, turnKey } from "../src/sessions.mjs";
 import { cleanSessionText, foldSessionLogs } from "../src/memory/fold.mjs";
-import { BLOCKS_DIR_REL, loadBlockIndex, retrieveBlocks } from "../src/memory/blocks.mjs";
-import { appendFact, appendUtterances, loadMemory, readFactRows, CANONICALISED_FROM_PROP } from "../src/memory/core.mjs";
+import { BLOCKS_DIR_REL, loadBlockIndex, retrieveBlocks } from "../src/adapters/memory/blocks.mjs";
+import { appendFact, appendUtterances, loadMemory, readFactRows, CANONICALISED_FROM_PROP } from "../src/adapters/memory/core.mjs";
 
 const SID = "01890000-0000-7000-8000-00000000f01d";
 const T = (n) => `2026-07-03T10:0${n}:00.000Z`;

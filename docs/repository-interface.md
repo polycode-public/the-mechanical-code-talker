@@ -5,12 +5,12 @@ The versioned contract between **tmct** (the query interpreter — the brittle s
 this shape; a provider **implements** it over its native graph. See `archive/PLAN_REPOSITORY_INTERFACE.md`
 for the why; this file is the normative prose peer of the machine-readable
 `docs/repository-interface.schema.json` (both are generated from / checked against
-`src/repository-interface.mjs`, the single source of truth).
+`src/adapters/repository-interface.mjs`, the single source of truth).
 
 > **Conformance = passing the contract test suite** (`test/repository-interface.test.mjs`), not
 > matching this prose. The suite is the compatibility kit; run it against your implementation to
-> claim conformance. tmct's own reference providers (`src/providers/fixture.mjs`,
-> `src/providers/bootstrap.mjs`) pass it in `npm test`.
+> claim conformance. tmct's own reference providers (`src/adapters/providers/fixture.mjs`,
+> `src/adapters/providers/bootstrap.mjs`) pass it in `npm test`.
 
 ## The type dictionary is OWL, not JSON
 
@@ -176,14 +176,14 @@ provider happens to be source-capable.
 
 ## Reference implementations
 
-- **`src/providers/fixture.mjs`** — a small, real, self-contained graph. Every non-source service
+- **`src/adapters/providers/fixture.mjs`** — a small, real, self-contained graph. Every non-source service
   returns real truth; `snippet` answers `NO_SOURCE` and `context` returns a graph-only bundle unless
   constructed source-capable. Read it first: it is the executable specification.
-- **`src/providers/bootstrap.mjs`** — the empty graph a fresh repo "contains". Every id-taking
+- **`src/adapters/providers/bootstrap.mjs`** — the empty graph a fresh repo "contains". Every id-taking
   service misses `UNRESOLVED_TERM`; every aggregate returns an honest empty. The provider with no data
   must still conform.
 
-Both are `createGraphService(graph, opts)` (`src/providers/graph-service.mjs`) over different graphs;
+Both are `createGraphService(graph, opts)` (`src/adapters/providers/graph-service.mjs`) over different graphs;
 `opts` passes straight through, so either can be constructed source-capable for testing:
 `fixtureProvider({ sourceAccess: true, repoRoot, readFile })`. A host with a real working tree
 constructs its own provider the same way to get real `snippet`/`context` body text.

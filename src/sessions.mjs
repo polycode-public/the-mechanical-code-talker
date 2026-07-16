@@ -18,7 +18,7 @@
 
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { appendUtterances, CREATED_AT_PROP, UPDATED_AT_PROP } from "./memory/core.mjs";
+import { appendUtterances, CREATED_AT_PROP, UPDATED_AT_PROP } from "./adapters/memory/core.mjs";
 
 export const SESSIONS_DIR_REL = join(".tmct", "sessions");
 

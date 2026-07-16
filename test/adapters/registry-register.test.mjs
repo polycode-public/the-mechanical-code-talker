@@ -13,8 +13,8 @@ import {
 import { guard } from "../../src/router/guardrail.mjs";
 import { actionFamilies, capabilityFromActionRules, registerTaughtActions } from "../../src/router/taught.mjs";
 import { runTurn } from "../../src/chat.mjs";
-import { loadMemory, readRuleRows } from "../../src/memory/core.mjs";
-import { clearCache } from "../../src/source.mjs";
+import { loadMemory, readRuleRows } from "../../src/adapters/memory/core.mjs";
+import { clearCache } from "../../src/adapters/source.mjs";
 
 const record = (name, extra = {}) => ({
   name,

@@ -12,7 +12,7 @@ import {
   MEMORY_GRAPH_REL, MEMORY_MANIFEST_REL, DEFAULT_RETENTION,
   appendFact, appendUtterance, loadMemory,
   resolveMemoryGraphFile, snapshotMemory,
-} from "../src/memory/core.mjs";
+} from "../src/adapters/memory/core.mjs";
 
 const tmpRepo = () => mkdtemp(join(tmpdir(), "tmct-mem-vers-"));
 
@@ -182,7 +182,7 @@ test("A1 desync proof: mutateMemory (core.mjs) and writeMemoryGraph (fold.mjs) w
     // file both writers touch.
     const S = "0189eeee-0000-7000-8000-000000000000";
     const TA = "2026-07-05T00:00:00.000Z";
-    await import("../src/memory/core.mjs").then(({ appendUtterances }) =>
+    await import("../src/adapters/memory/core.mjs").then(({ appendUtterances }) =>
       appendUtterances(dir, [{ role: "visitor", text: "every cache is a store", ts: TA, sessionId: S }]));
     await appendFact(dir, { subject: "cache", predicate: "rdfs:subClassOf", object: "store", provenance: `ace:chat:${S}@${TA}` });
     await mkdirSidecar(dir, S, TA);

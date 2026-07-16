@@ -1,4 +1,4 @@
-// source-multigraph.test.mjs — src/source.mjs's fetchEntities multi-graph
+// source-multigraph.test.mjs — src/adapters/source.mjs's fetchEntities multi-graph
 // branch (config.graphFiles.length > 1). The single-graph path (config.graphFile,
 // or a one-element config.graphFiles) is exercised by every other existing
 // test that calls fetchEntities and MUST stay byte-identical — this file only
@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fetchEntities, clearCache } from "../src/source.mjs";
+import { fetchEntities, clearCache } from "../src/adapters/source.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-srcmulti-"));
 

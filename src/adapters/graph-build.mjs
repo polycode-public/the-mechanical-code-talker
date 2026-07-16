@@ -17,7 +17,7 @@
 //   seon:containsCodeEntity Class  -> Method/Attribute (class membership)
 //   mgx:subclassOf          Class  -> Class    (inheritance)
 
-import { attachProseTokens, buildProseIndex } from "./prose.mjs";
+import { attachProseTokens, buildProseIndex } from "../prose.mjs";
 
 const isTestPath = (p) =>
   p.startsWith("tests/") || /(^|\/)tests?\//.test(p) || /(^|\/)test_[^/]*\.py$/.test(p) || /\.tests(\.|$)/.test(p);

@@ -44,7 +44,7 @@ import {
 } from "../src/syllogise.mjs";
 import { parseAce } from "../src/grammar/ace.mjs";
 import { loadLexicon } from "../src/grammar/lexicon.mjs";
-import { normFactTerm } from "../src/memory/core.mjs";
+import { normFactTerm } from "../src/adapters/memory/core.mjs";
 
 // ---- the bands (the classical-logic ladder — INF-A1 -> INF-C2) ----
 export const BANDS = Object.freeze(["INF-A1", "INF-A2", "INF-B1", "INF-B2", "INF-C1", "INF-C2"]);

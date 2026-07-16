@@ -25,7 +25,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runTurn } from "../../src/chat.mjs";
-import { appendFact, loadMemory, readFactRows } from "../../src/memory/core.mjs";
+import { appendFact, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 import { CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE_CONFIDENCE, SCM_SVF_RULE_CONFIDENCE } from "../../src/syllogise.mjs";
 
 const CONFIG = {};

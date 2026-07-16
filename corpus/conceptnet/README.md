@@ -31,7 +31,7 @@ see `LICENSE-NOTICE` in this directory for the full attribution.
    suffixes are stripped (`/c/en/bug/n` → `/c/en/bug`); self-loops after
    stripping are dropped.
 2. **Canonical relations only**: the closed set of 34 relations (the same set
-   mapped in `src/corpus/conceptnet-map.toml`), minus three filtered by
+   mapped in `src/adapters/corpus/conceptnet-map.toml`), minus three filtered by
    policy: `/r/EtymologicallyRelatedTo`, `/r/EtymologicallyDerivedFrom`,
    `/r/ExternalURL` (etymology noise and link-outs — no consumer in tmct).
 3. **Tech-domain seed terms**: at least one endpoint's bare term is in the
@@ -149,14 +149,14 @@ To extend the domain, add seed terms to `EXTRA_SEEDS` in `filter-dump.mjs` (the
 dump route that produces the committed slice) or `SEED_TERMS` in
 `fetch-slice.mjs` (the API route) and re-run. `npm test` guards the contract:
 every relation present in the slice must have a row in
-`src/corpus/conceptnet-map.toml` (drift guard), en→en shape and the ≤ 5 MB
+`src/adapters/corpus/conceptnet-map.toml` (drift guard), en→en shape and the ≤ 5 MB
 budget are asserted, and the seeding path is exercised end-to-end.
 
 ## Consumers
 
-- `src/corpus/conceptnet.mjs` — `loadSlice()` / `toFacts()` / `seedMemory()`:
+- `src/adapters/corpus/conceptnet.mjs` — `loadSlice()` / `toFacts()` / `seedMemory()`:
   maps mappable assertions onto memory facts
   (`{subject, predicate, object, provenance:"corpus:conceptnet /r/…"}`)
   and seeds `.tmct/memory/` via `appendFact` (idempotent).
-- `src/corpus/conceptnet-map.toml` — the relation → ACE-OWL pattern table
+- `src/adapters/corpus/conceptnet-map.toml` — the relation → ACE-OWL pattern table
   deciding which relations emit facts and under which predicate URI.

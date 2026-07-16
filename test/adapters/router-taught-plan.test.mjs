@@ -19,8 +19,8 @@ import { runTurn, capabilityPlanDeps } from "../../src/chat.mjs";
 import {
   appendRule, loadMemory, readRuleRows,
   RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT,
-} from "../../src/memory/core.mjs";
-import { clearCache } from "../../src/source.mjs";
+} from "../../src/adapters/memory/core.mjs";
+import { clearCache } from "../../src/adapters/source.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 
@@ -120,7 +120,7 @@ test("runTaughtPlan passes on a non-world-goal request instead of claiming it", 
 
 test("a chat /plan world-goal turn consumes the taught action family and unregisters it before the turn ends", async () => {
   const { loadGraph } = await import("../../src/server.mjs");
-  const source = await import("../../src/source.mjs");
+  const source = await import("../../src/adapters/source.mjs");
   const planned = await runTurn("/plan make every disk rest on peg-c", {
     config: GRAPH, graph: await loadGraph(GRAPH, source), memoryDir: MEMORY, sessionId: "taught-plan-chat",
   });

@@ -13,7 +13,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 /** The construction-bank directory (data, not code) — every *.toml file inside
  *  is loaded, in filename order, so a future bank is a new committed file, not
  *  an edit to this loader. */
-export const CONSTRUCTIONS_DIR = join(HERE, "..", "..", "data", "templates", "constructions");
+export const CONSTRUCTIONS_DIR = join(HERE, "..", "..", "..", "data", "templates", "constructions");
 
 /** Read every *.toml file in `dir` (sorted, deterministic) and return the raw
  *  parsed tables concatenated: {relations:[...], constructions:[...]}. A

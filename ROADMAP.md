@@ -107,7 +107,7 @@ citations, not stop signs:
   terms in tmct's own closed graph (a bounded reading of Gale/Church/Yarowsky's "one sense per
   discourse" regularity) — not published anywhere found for this application. Fresh live instance
   (2026-07-11): `"tail"` (Unix process vs. animal body part) collides under `normFactTerm`'s
-  cross-corpus flattening, `src/memory/core.mjs:1109-1134`.
+  cross-corpus flattening, `src/adapters/memory/core.mjs:1109-1134`.
 
 **Tier-4: learn-on-miss acquisition**. The strongest
 miss signal tmct can emit: lexicon term recognized, query built cleanly, zero matches anywhere — the

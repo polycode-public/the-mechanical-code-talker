@@ -35,7 +35,7 @@ Usage:
   tmct                         interactive chat (the headline surface)
   tmct chat [--repo <abs>]     chat over a specific repo's graph
        [--graph <path>]        explicit graph file (repeatable — multiple graphs merge;
-                               see src/graph-merge.mjs); wins over --repo/TMCT_GRAPH_FILE/tmct.toml
+                               see src/adapters/graph-merge.mjs); wins over --repo/TMCT_GRAPH_FILE/tmct.toml
        [--config <path>]       an alternate tmct.toml location (a file or a directory)
        [--ephemeral]           read the graph but write nothing back (demo/read-only)
        [--prompt "<text>"]     one-shot: run the prompt's sentences as turns and print
@@ -250,8 +250,8 @@ async function runCliMode() {
   const [, sub, payload] = process.argv.slice(2);
   const { join } = await import("node:path");
   const { dispatchTool, buildContextBundle } = await import("../src/server.mjs");
-  const { loadConfig, DEFAULT_GRAPH_REL } = await import("../src/config.mjs");
-  const source = await import("../src/source.mjs");
+  const { loadConfig, DEFAULT_GRAPH_REL } = await import("../src/adapters/config.mjs");
+  const source = await import("../src/adapters/source.mjs");
   const codegraph = await import("../src/codegraph.mjs");
   const { parseEntities, searchModulesRanked } = codegraph;
 
@@ -349,7 +349,7 @@ async function runCliMode() {
  *  Mirrors `tmct init --corpus`'s original inline config-merge exactly. */
 async function readConfigForRewrite(repoRoot) {
   const { defaultConfig } = await import("../src/init.mjs");
-  const { loadTomlConfig } = await import("../src/toml-config.mjs");
+  const { loadTomlConfig } = await import("../src/adapters/toml-config.mjs");
   const raw = await loadTomlConfig(repoRoot);
   const cfg = { ...defaultConfig() };
   if (raw?.graph_file !== undefined) cfg.graphFile = String(raw.graph_file);
@@ -438,7 +438,7 @@ async function resolvePluggableInput(kind, nameOrPath, { repoRoot }) {
   let manifestIds = null;
   if (kind === "corpus") {
     const { readFile } = await import("node:fs/promises");
-    const { TIER2_MANIFEST_FILE } = await import("../src/corpus/conceptnet.mjs");
+    const { TIER2_MANIFEST_FILE } = await import("../src/adapters/corpus/conceptnet.mjs");
     try {
       const manifest = JSON.parse(await readFile(TIER2_MANIFEST_FILE, "utf8"));
       const corpuses = manifest.corpuses || [];
@@ -501,7 +501,7 @@ async function activatePluggableInput(repoRoot, resolved) {
   // before running any activation). Resolved via the SAME openMemoryBackend
   // createSession/initRepo use, so this bundle's facts land in the store a
   // later `tmct chat` will actually read.
-  const { openMemoryBackend } = await import("../src/memory/core.mjs");
+  const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
   const backendChoice = String(cfg.memory?.backend || "").trim().toLowerCase();
   if (backendChoice === "memory") {
     return `activated "${name}" (${entry.kind}) in tmct.toml — seeding skipped (memory backend is in-process only, nothing would persist past this command).\n`;
@@ -673,14 +673,14 @@ async function main() {
 
   if (mode === "memory") {
     // `tmct memory` — the /memory chat command from the shell: same renderer
-    // (src/memory/inspect.mjs). Repo resolution now goes through the shared
+    // (src/adapters/memory/inspect.mjs). Repo resolution now goes through the shared
     // resolveRuntimeConfig (src/cli-args.mjs) — --repo > git root > cwd, same
     // as before, plus a (currently inert but accepted) `--config` for symmetry
     // with every other subcommand. No `--graph`: memory reads no code graph.
     const rest = process.argv.slice(3);
     const verbose = rest.includes("--verbose") || rest.includes("-v");
     const { resolveRuntimeConfig } = await import("../src/cli-args.mjs");
-    const { inspectMemory } = await import("../src/memory/inspect.mjs");
+    const { inspectMemory } = await import("../src/adapters/memory/inspect.mjs");
     const { repo } = await resolveRuntimeConfig({ argv: rest });
     process.stdout.write(await inspectMemory(repo, { verbose }) + "\n");
     return;
@@ -1074,7 +1074,7 @@ async function main() {
     };
     const { resolveRuntimeConfig } = await import("../src/cli-args.mjs");
     const { syllogise } = await import("../src/syllogise.mjs");
-    const { loadMemory, readFactRows, appendFacts } = await import("../src/memory/core.mjs");
+    const { loadMemory, readFactRows, appendFacts } = await import("../src/adapters/memory/core.mjs");
     const { repo } = await resolveRuntimeConfig({ argv: rest });
     const res = await syllogise(repo, {
       depth: numFlag("--depth", 32), budget: numFlag("--budget", 50),

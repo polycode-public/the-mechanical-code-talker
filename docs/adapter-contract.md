@@ -16,7 +16,7 @@ boundary.
 ## 1. The entities payload (the on-disk / on-the-wire shape)
 
 The payload is a single JSON object. Every field tmct reads is listed here;
-unknown extra fields are ignored (safe to extend). `src/graph-build.mjs`'s
+unknown extra fields are ignored (safe to extend). `src/adapters/graph-build.mjs`'s
 `buildEntities()` is the reference producer of this shape.
 
 ```jsonc
@@ -104,7 +104,7 @@ missing subject/object are dropped, nodes without `id` are skipped.
 ## 3. Where the payload comes from (resolution order)
 
 1. **A registered provider** (in-process): `registerProvider(fn)`
-   (`src/source.mjs`) installs `(config) => payload | Promise<payload>`; while
+   (`src/adapters/source.mjs`) installs `(config) => payload | Promise<payload>`; while
    registered, `fetchEntities(config)` returns the provider's result **as-is
    and uncached** (a live provider owns its own refresh policy). Register
    `null` to restore the default loader; the previous provider is returned so
@@ -141,7 +141,7 @@ up on the next fetch. Any other read/parse failure is a clean `ToolError`.
   `foldInSessions()`.
 - **tmct's own memory never touches the seam.** Conversational memory — the
   OWL-labelled utterance/fact graph and the text-block corpus — lives under
-  `.tmct/memory/` (`src/memory/core.mjs`, `blocks.mjs`, `fold.mjs`), a store
+  `.tmct/memory/` (`src/adapters/memory/core.mjs`, `blocks.mjs`, `fold.mjs`), a store
   the provider never supplies and tmct never routes through `fetchEntities`.
   A provider payload is read-only input; `.tmct/memory/` is tmct-only output.
 - Providers registered via `registerProvider` are **read-only by

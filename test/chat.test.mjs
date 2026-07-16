@@ -18,7 +18,7 @@ import {
 } from "../src/chat.mjs";
 import { dispatchTool } from "../src/server.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
-import * as source from "../src/source.mjs";
+import * as source from "../src/adapters/source.mjs";
 import { CANONICAL_LINE_RE } from "./helpers/session.mjs";
 
 // bin/tmct.mjs: a spawned child has non-TTY stdio, so `chat` takes the --plain

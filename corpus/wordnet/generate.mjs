@@ -100,7 +100,7 @@ export const RELATION_MAP = Object.freeze({
 export const SKIPPED_RELATIONS = Object.freeze(["entails", "exemplifies"]);
 
 // ---- term encoding (pure, unit-tested) -------------------------------------
-// Exact inverse of src/corpus/conceptnet.mjs's termText() decode
+// Exact inverse of src/adapters/corpus/conceptnet.mjs's termText() decode
 // (`/^\/c\/en\/([^/]+)/` then `.replace(/_/g, " ")`): lowercase, spaces ->
 // underscores, wrapped as `/c/en/<term>`. Nothing else is touched — any other
 // punctuation (apostrophes, hyphens) round-trips through termText() unchanged

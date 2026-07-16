@@ -18,7 +18,7 @@ import { mkdtemp, cp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createSession, SEED_LIMIT, SEED_PREFER } from "../../src/chat.mjs";
-import { seedMemory } from "../../src/corpus/conceptnet.mjs";
+import { seedMemory } from "../../src/adapters/corpus/conceptnet.mjs";
 
 let bootstrapSrcPromise = null;
 let conceptNetSrcPromise = null;

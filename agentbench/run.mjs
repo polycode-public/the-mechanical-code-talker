@@ -113,7 +113,7 @@ export async function loadFixtureLabels() {
 export async function createRunCtx() {
   const { dispatchTool } = await import(join(ROOT, "src", "server.mjs"));
   const { ingestSchemaDocs } = await import(join(ROOT, "src", "schema-docs.mjs"));
-  const { ToolError } = await import(join(ROOT, "src", "config.mjs"));
+  const { ToolError } = await import(join(ROOT, "src", "adapters", "config.mjs"));
   const { selectTool } = await import(join(ROOT, "src", "chat.mjs"));
 
   const ingested = ingestSchemaDocs(JSON.parse(await readFile(FIXTURE, "utf8")));

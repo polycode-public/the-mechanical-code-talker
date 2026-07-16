@@ -38,7 +38,7 @@ const SHUTDOWN_TIMEOUT_MS = 5000;
 
 /** Boot the REAL `tmct serve` CLI as a child process on an ephemeral port
  *  (--port 0), pointed at the fixture graph via TMCT_GRAPH_FILE (an absolute
- *  path, so it resolves regardless of cwd — src/config.mjs's loadConfig).
+ *  path, so it resolves regardless of cwd — src/adapters/config.mjs's loadConfig).
  *  Resolves once the startup line (bin/tmct.mjs's own banner) reports the
  *  bound URL; rejects on early exit/timeout with the captured output for
  *  debugging. Returns { proc, baseUrl, stop }. */

@@ -18,13 +18,13 @@ import { mkdir, mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { createInterface } from "node:readline/promises";
 import { spawnSync } from "node:child_process";
-import { loadConfig, DEFAULT_GRAPH_REL } from "../config.mjs";
+import { loadConfig, DEFAULT_GRAPH_REL } from "../adapters/config.mjs";
 import { resolveRuntimeConfig } from "../cli-args.mjs";
 import { parseEntities } from "../codegraph.mjs";
 import { SESSIONS_DIR_REL, appendSessionToGraph } from "../sessions.mjs";
-import { uuidv7 } from "../uuid.mjs";
+import { uuidv7 } from "../adapters/uuid.mjs";
 import { createTelemetry } from "../telemetry.mjs";
-import * as defaultSource from "../source.mjs";
+import * as defaultSource from "../adapters/source.mjs";
 import { resolveExtensions, mergedLexiconExtra } from "../extensions.mjs";
 import { runTurn, hasSeededVocabulary, vocabExampleHint } from "../chat.mjs";
 
@@ -258,7 +258,7 @@ export async function createSession({
   // openMemoryBackend is the ONE shared resolver for this seam — init.mjs's
   // corpus seed calls the exact same function, so a repo's seeded facts and
   // its chat-taught facts always land in the same backend.
-  const { openMemoryBackend } = await import("../memory/core.mjs");
+  const { openMemoryBackend } = await import("../adapters/memory/core.mjs");
   const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
 
   const empty = graph.individuals.length === 0;

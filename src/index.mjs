@@ -24,8 +24,8 @@ export { interpret } from "./interpret/pipeline.mjs";
 // and tool surfaces do for themselves.
 import { setDefaultNlpAdapter } from "./interpret/nlp-registry.mjs";
 import { setConstructionBanks } from "./interpret/strategies/constructions.mjs";
-import { nlpAdapter } from "./ask-nlp.mjs";
-import { readConstructionFiles } from "./corpus/construction-banks.mjs";
+import { nlpAdapter } from "./adapters/ask-nlp.mjs";
+import { readConstructionFiles } from "./adapters/corpus/construction-banks.mjs";
 setDefaultNlpAdapter(nlpAdapter);
 setConstructionBanks(readConstructionFiles);
 
@@ -37,14 +37,14 @@ export { dispatchTool } from "./server.mjs";
 
 // Conversational memory — tmct's OWN OWL-labelled graph under
 // .tmct/memory/, distinct from any provider-supplied code graph.
-export { loadMemory, appendUtterance, appendFact } from "./memory/core.mjs";
-export { retrieveBlocks, saveBlock, rankBlocks } from "./memory/blocks.mjs";
+export { loadMemory, appendUtterance, appendFact } from "./adapters/memory/core.mjs";
+export { retrieveBlocks, saveBlock, rankBlocks } from "./adapters/memory/blocks.mjs";
 export { foldSessionLogs } from "./memory/fold.mjs";
 
 // The single graph-load choke point — the adapter's data-provider seam
 // (docs/adapter-contract.md): registerProvider() plugs a producer in;
 // fetchEntities() is the one read path.
-export { fetchEntities, registerProvider } from "./source.mjs";
+export { fetchEntities, registerProvider } from "./adapters/source.mjs";
 
 // `tmct init` onboarding (also reachable as the `./init` subpath export).
 // init.mjs and toml-config.mjs each export a same-named `CONFIG_FILE`
@@ -53,7 +53,7 @@ export { fetchEntities, registerProvider } from "./source.mjs";
 export { initRepo, defaultConfig, renderTomlConfig, PERSONA_PRESETS, CONFIG_FILE as INIT_CONFIG_FILE } from "./init.mjs";
 
 // tmct.toml loading (also reachable as the `./toml-config` subpath export).
-export { CONFIG_FILE as TOML_CONFIG_FILE } from "./toml-config.mjs";
+export { CONFIG_FILE as TOML_CONFIG_FILE } from "./adapters/toml-config.mjs";
 
 // The "detailed answer" completions pipeline (also reachable as the
 // `./generateCompletion` and `./createCompletionsGraphAdapter` subpath exports).

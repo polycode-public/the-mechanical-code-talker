@@ -12,7 +12,7 @@
 
 import { appendFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { uuidv7 } from "./uuid.mjs";
+import { uuidv7 } from "./adapters/uuid.mjs";
 
 /** Field names whose VALUES are (or embed) raw source and must never be logged. `body` is
  *  the Repository Interface's own field name for real source text (snippet()/context()'s

@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import {
   SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP,
   UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, emptyMemory,
-} from "../../src/memory/core.mjs";
+} from "../../src/adapters/memory/core.mjs";
 import { loadLexicon, predicateOf } from "../../src/grammar/lexicon.mjs";
 
 const TTL_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ontology", "tmct-core.ttl");
@@ -126,7 +126,7 @@ test("the checker itself catches malformed Turtle (it is not a rubber stamp)", (
   assert.throws(() => checkTurtle("@prefix a: <urn:x#> .\nb:oops a:thing .\n"), /prefix "b" used/);
 });
 
-test("the ontology mirrors the memory vocabulary of src/memory/core.mjs exactly", async () => {
+test("the ontology mirrors the memory vocabulary of src/adapters/memory/core.mjs exactly", async () => {
   const text = await readFile(TTL_FILE, "utf8");
   // the edge predicates, by their exported constants
   assert.ok(text.includes(`${SAID_IN_SESSION_PROP} a owl:ObjectProperty`), SAID_IN_SESSION_PROP);
@@ -141,7 +141,7 @@ test("the ontology mirrors the memory vocabulary of src/memory/core.mjs exactly"
     assert.ok(text.includes(`${prop} a owl:DatatypeProperty`), `${prop} declared`);
   }
   // the mgx prefix IRI is the one emptyMemory() declares — one namespace, not two
-  assert.ok(text.includes(`<${emptyMemory().prefixes.mgx}>`), "mgx IRI matches src/memory/core.mjs");
+  assert.ok(text.includes(`<${emptyMemory().prefixes.mgx}>`), "mgx IRI matches src/adapters/memory/core.mjs");
 });
 
 test("the ontology grounds the grammar: every emitted kind appears, and lexicon predicates/classes are declared", async () => {

@@ -21,7 +21,7 @@ export class ToolError extends Error {
 
 export function loadConfig(env = process.env, cwd = process.cwd()) {
   // Always resolve to an absolute path, even when TMCT_GRAPH_FILE is set to a
-  // relative one — src/source-slice.mjs's path-traversal guard compares an
+  // relative one — src/adapters/source-slice.mjs's path-traversal guard compares an
   // always-absolute resolve(repoRoot, site.path) against repoRoot itself, so a
   // relative repoRoot (derived from this graphFile) would make that guard
   // reject every read, not just traversal attempts.

@@ -1,11 +1,11 @@
-// graph-merge.test.mjs — src/graph-merge.mjs's mergeEntityPayloads: the
+// graph-merge.test.mjs — src/adapters/graph-merge.mjs's mergeEntityPayloads: the
 // multi-graph merge used ONLY by source.mjs's fetchEntities when a config
 // carries more than one graph file. Covers the no-collision (ids pass through
 // untouched) and the collision (Option A: only the colliding ids are
 // prefixed) cases, plus proseIndex union and bootstrap/generated_at handling.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mergeEntityPayloads } from "../src/graph-merge.mjs";
+import { mergeEntityPayloads } from "../src/adapters/graph-merge.mjs";
 
 const ind = (id, extra = {}) => ({ id, label: id, class: "Module", derived_from: [], mentions: [], ...extra });
 

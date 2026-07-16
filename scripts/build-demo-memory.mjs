@@ -46,7 +46,7 @@ const ANIMAL_FACTS = [
 /** Build the payload into `outPath` (default public/demo-memory.json). */
 export async function main(outPath = join(ROOT, "public", "demo-memory.json")) {
   const { runTurn, uuidv7 } = await import(join(ROOT, "src", "chat.mjs"));
-  const { appendFact, loadMemory, openMemoryBackend } = await import(join(ROOT, "src", "memory", "core.mjs"));
+  const { appendFact, loadMemory, openMemoryBackend } = await import(join(ROOT, "src", "adapters", "memory", "core.mjs"));
   const { importDefinitionFile } = await import(join(ROOT, "src", "import-file.mjs"));
 
   const repo = await mkdtemp(join(tmpdir(), "tmct-demo-memory-"));

@@ -9,7 +9,7 @@ import { join } from "node:path";
 import {
   HAS_A_PREDICATE, CAPABLE_OF_PREDICATE, MULTI_VALUED_PREDICATES,
   loadMemory, appendFact, findContradictions,
-} from "../src/memory/core.mjs";
+} from "../src/adapters/memory/core.mjs";
 
 const tmpRepo = () => mkdtemp(join(tmpdir(), "tmct-card-"));
 

@@ -100,7 +100,7 @@ utterances; that is the layer tmct lacks today.
 ### The matcher (deterministic, trainable from examples)
 
 - **Tier 1 (default, ethos-clean): IDF-weighted token-overlap nearest neighbour.** Reuse
-  the scoring shape of `retrieveBlocks` (`src/memory/blocks.mjs`): index every training
+  the scoring shape of `retrieveBlocks` (`src/adapters/memory/blocks.mjs`): index every training
   utterance under its intent label, score a test utterance against all of them with
   wink-nlp token/lemma normalisation, take the top-scoring label. Classical IR, no model
   weights, byte-identical output on repeated runs.
@@ -108,7 +108,7 @@ utterances; that is the layer tmct lacks today.
   (CLINC150) or an abstention (HWU64, recorded but scored as wrong under their protocol).
   The threshold is tuned **only on the validation split** (CLINC150 provides one; for
   HWU64 hold out from training folds). Never on test.
-- **Tier 2 (optional, flagged arm): dense cosine via `src/embed.mjs`** (static model2vec
+- **Tier 2 (optional, flagged arm): dense cosine via `src/adapters/embed.mjs`** (static model2vec
   embeddings, offline, deterministic). This is ML-trained weights, so it sits outside the
   ethos-clean tier; run it as a separately-labelled arm so both numbers exist and the claim
   can cite the pure-IR one.
@@ -257,7 +257,7 @@ attributable. Deltas are against the spike bases (CLINC150 68.2%/89.7%, HWU64 0.
   before IDF scoring. Est. +2–4 where token overlap is thinnest (short imperative
   utterances). Post-L3/L4 targets: CLINC150 ~71–73% in-scope at ~90% OOS recall; HWU64
   intent F1 ~0.81–0.83 — knocking on LUIS's 0.855, unlikely to pass any of the four.
-- **L5 — the static-embedding arm (`src/embed.mjs` model2vec), separately labelled row.**
+- **L5 — the static-embedding arm (`src/adapters/embed.mjs` model2vec), separately labelled row.**
   Est. the largest single jump: CLINC150 raw toward 87–90%; HWU64 toward 0.81–0.85,
   i.e. within ~5 points of Rasa's 0.863. Never the headline row; the pure-IR claim
   stays L1–L4 only.

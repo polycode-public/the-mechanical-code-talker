@@ -12,7 +12,7 @@ import {
   buildSpeciesFacts, buildTaxon2CommonFacts, buildOccupationFacts, mergeFacts,
   resolveNamenetDir, DEFAULT_NAMENET_DIR,
 } from "../corpus/namenet/generate.mjs";
-import { termText, loadMap } from "../src/corpus/conceptnet.mjs";
+import { termText, loadMap } from "../src/adapters/corpus/conceptnet.mjs";
 
 test("parseCsvRecords: plain rows, quoted fields with embedded commas, escaped quotes, CRLF", () => {
   assert.deepEqual(parseCsvRecords("a,b,c\n1,2,3\n"), [["a", "b", "c"], ["1", "2", "3"]]);

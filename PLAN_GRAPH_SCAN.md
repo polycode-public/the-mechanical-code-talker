@@ -15,7 +15,7 @@ horse" — took about 13 minutes.
 That session's own handover flagged a starting hypothesis without fully verifying it:
 
 > `syncFactSources`'s per-fact `payload.individuals.find` scan and `recomputeFactTrust`'s per-fact
-> `sourcesByIdMap` full-array rebuild (`src/memory/core.mjs`) each do an O(total individuals) pass per
+> `sourcesByIdMap` full-array rebuild (`src/adapters/memory/core.mjs`) each do an O(total individuals) pass per
 > newly-seeded fact; a single chat query against `init:xl`'s 72,075 facts took ~13 minutes.
 
 This document verifies that claim by reading the real code, measuring the real seed and query paths at
@@ -26,7 +26,7 @@ several corpus sizes, and profiling a real seed + query run — then designs the
 The SEED-side half of the hypothesis is correct and, on inspection, understated. `recomputeFactTrust`
 doesn't do one O(n) scan per fact — `syncFactSources` (which calls it) does **six**.
 
-Every fact `appendFacts` (`src/memory/core.mjs:1319`) touches gets one call to `syncFactSources`
+Every fact `appendFacts` (`src/adapters/memory/core.mjs:1319`) touches gets one call to `syncFactSources`
 (`core.mjs:949`, called from the batch loop at `core.mjs:1391`). Assume the common case of one
 provenance tag per fact (a corpus seed always has exactly one — its own corpus name). Inside that one
 call:
@@ -249,5 +249,5 @@ couldn't reach — confirming or ruling out the three candidates named above for
   gathered here rules out simple total-fact-count scaling as the sole explanation but could not safely
   reach the real 72,075-fact, multi-corpus scale to confirm what does explain it. Phase 3 above is the
   named follow-up, not resolved here.
-- No implementation. This document proposes a design; `src/memory/core.mjs` and `src/chat.mjs` are
+- No implementation. This document proposes a design; `src/adapters/memory/core.mjs` and `src/chat.mjs` are
   unchanged by it.

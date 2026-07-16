@@ -7,11 +7,11 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { sampleSize, balancedSample, renderMemory, inspectMemory } from "../src/memory/inspect.mjs";
-import { appendFact, appendUtterances } from "../src/memory/core.mjs";
-import { saveBlock } from "../src/memory/blocks.mjs";
+import { sampleSize, balancedSample, renderMemory, inspectMemory } from "../src/adapters/memory/inspect.mjs";
+import { appendFact, appendUtterances } from "../src/adapters/memory/core.mjs";
+import { saveBlock } from "../src/adapters/memory/blocks.mjs";
 import { runTurn } from "../src/chat.mjs";
-import { clearCache } from "../src/source.mjs";
+import { clearCache } from "../src/adapters/source.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));

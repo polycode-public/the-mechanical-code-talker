@@ -12,9 +12,9 @@ import { join } from "node:path";
 import {
   knownTermsFrom, passageFor, ingestUnknownFromAssertions,
   CONTEXT_PASSAGE_PREDICATE, CO_OCCURS_PREDICATE,
-} from "../src/corpus/unknown-ingest.mjs";
-import { loadMap, seedMemory } from "../src/corpus/conceptnet.mjs";
-import { loadMemory, normFactTerm } from "../src/memory/core.mjs";
+} from "../src/adapters/corpus/unknown-ingest.mjs";
+import { loadMap, seedMemory } from "../src/adapters/corpus/conceptnet.mjs";
+import { loadMemory, normFactTerm } from "../src/adapters/memory/core.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-unknown-ingest-"));
 const attr = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)?.value;

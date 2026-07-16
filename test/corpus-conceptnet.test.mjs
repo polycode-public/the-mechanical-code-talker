@@ -2,7 +2,7 @@
 // ACE-OWL mapping table, and the memory seeder (ROADMAP Phase 2).
 //
 // The load-bearing guarantee is the DRIFT GUARD: every relation present in
-// corpus/conceptnet/slice.jsonl must have a row in src/corpus/conceptnet-map.toml
+// corpus/conceptnet/slice.jsonl must have a row in src/adapters/corpus/conceptnet-map.toml
 // — regenerating the slice can never silently outrun the mapping.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -11,9 +11,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   SLICE_FILE, MAP_FILE, loadSlice, loadMap, toFacts, termText, seedMemory,
-} from "../src/corpus/conceptnet.mjs";
+} from "../src/adapters/corpus/conceptnet.mjs";
 import { bareEnTerm, toRow, CANONICAL_RELS } from "../corpus/conceptnet/fetch-slice.mjs";
-import { loadMemory, normFactTerm } from "../src/memory/core.mjs";
+import { loadMemory, normFactTerm } from "../src/adapters/memory/core.mjs";
 import { parseEntities } from "../src/codegraph.mjs";
 import { lookupByProseTokens } from "../src/prose.mjs";
 

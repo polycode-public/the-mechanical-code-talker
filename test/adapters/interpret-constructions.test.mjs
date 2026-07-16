@@ -24,7 +24,7 @@ import {
   constructionsStrategy, constructionBank, parseConstruction,
   setConstructionBanks, buildAgentNounTable, buildConstructionTemplates,
 } from "../../src/interpret/strategies/constructions.mjs";
-import { readConstructionFiles, CONSTRUCTIONS_DIR } from "../../src/corpus/construction-banks.mjs";
+import { readConstructionFiles, CONSTRUCTIONS_DIR } from "../../src/adapters/corpus/construction-banks.mjs";
 import { STRATEGIES, normalizeInput, runStrategiesSync } from "../../src/interpret/pipeline.mjs";
 import { mergeStrategyResults } from "../../src/interpret/merge.mjs";
 import { parseQuery, ask } from "../../src/ask.mjs";

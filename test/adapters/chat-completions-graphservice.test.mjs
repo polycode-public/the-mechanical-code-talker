@@ -1,10 +1,10 @@
 // chat-completions-graphservice.test.mjs — HANDOVER.md item 1: "completionsRescueAnswer
 // never passes a graphService adapter through to broadSearch". src/completions/search.mjs's
 // broadSearch() always accepted an optional Repository-Interface `graphService` (its own
-// docblock names createGraphService(graph), src/providers/graph-service.mjs, as the reference
+// docblock names createGraphService(graph), src/adapters/providers/graph-service.mjs, as the reference
 // shape) but nothing in live chat ever constructed and passed one through — so the
 // (4e) COMPLETIONS RESCUE lane (src/chat.mjs's completionsRescueAnswer) could ONLY ever see
-// memory BLOCKS saved via an explicit saveBlock() call (src/memory/blocks.mjs). Ordinary chat
+// memory BLOCKS saved via an explicit saveBlock() call (src/adapters/memory/blocks.mjs). Ordinary chat
 // teaching/asking never calls saveBlock(), so "give me a detailed summary of how X works"
 // declined for ANY subject on its first real mention in a session, no matter how much the
 // already-loaded graph (or any taught Facts) actually knew about it. Confirmed live twice in
@@ -24,10 +24,10 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { runTurn } from "../../src/chat.mjs";
-import { appendFact } from "../../src/memory/core.mjs";
+import { appendFact } from "../../src/adapters/memory/core.mjs";
 import { parseEntities } from "../../src/codegraph.mjs";
-import { clearCache } from "../../src/source.mjs";
-import * as source from "../../src/source.mjs";
+import { clearCache } from "../../src/adapters/source.mjs";
+import * as source from "../../src/adapters/source.mjs";
 
 // Same committed fixture graph test/chat-completions-wiring.test.mjs uses: Widget is a real
 // Class (defined in app/lib/b.mjs, contains a render method + a name attribute, inherits from

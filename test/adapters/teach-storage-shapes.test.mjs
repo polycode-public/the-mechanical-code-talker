@@ -9,8 +9,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runTurn } from "../../src/chat.mjs";
-import { loadMemory, readFactRows, findRuleByName } from "../../src/memory/core.mjs";
-import { clearCache } from "../../src/source.mjs";
+import { loadMemory, readFactRows, findRuleByName } from "../../src/adapters/memory/core.mjs";
+import { clearCache } from "../../src/adapters/source.mjs";
 
 const CONFIG = {};
 const mem = (tag) => mkdtemp(join(tmpdir(), `tmct-teach-shape-${tag}-`));
