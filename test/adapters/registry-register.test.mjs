@@ -13,7 +13,7 @@ import {
 import { guard } from "../../src/router/guardrail.mjs";
 import { actionFamilies, capabilityFromActionRules, registerTaughtActions } from "../../src/router/taught.mjs";
 import { runTurn } from "../../src/chat.mjs";
-import { loadMemory } from "../../src/memory/core.mjs";
+import { loadMemory, readRuleRows } from "../../src/memory/core.mjs";
 import { clearCache } from "../../src/source.mjs";
 
 const record = (name, extra = {}) => ({
@@ -90,7 +90,8 @@ test("taught bridge: the hanoi move family maps to a well-formed record; registr
     }
     const memory = await loadMemory(dir);
     const payload = memory.payload ?? memory;
-    const families = actionFamilies(payload);
+    const ruleRows = readRuleRows(payload);
+    const families = actionFamilies(ruleRows);
     assert.equal(families.size, 1);
     const [name, family] = [...families.entries()][0];
     const cap = capabilityFromActionRules(name, family);
@@ -102,11 +103,11 @@ test("taught bridge: the hanoi move family maps to a well-formed record; registr
     assert.equal(cap.effects.add.length, 1);
     assert.equal(cap.effects.add[0].predicate, "rest-on");
 
-    const disposers = registerTaughtActions(payload);
+    const disposers = registerTaughtActions(ruleRows);
     try {
       assert.equal(disposers.length, 1);
       assert.ok(isCapability(cap.name));
-      assert.equal(registerTaughtActions(payload).length, 0);
+      assert.equal(registerTaughtActions(ruleRows).length, 0);
     } finally {
       for (const d of disposers) d();
     }

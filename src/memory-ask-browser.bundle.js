@@ -221,72 +221,32 @@
     }
   });
 
-  // src/memory/prose-tokens.mjs
-  function splitIdentifierWords2(raw) {
-    if (!raw) return [];
-    let s = String(raw).replace(/\.[A-Za-z0-9]+$/, "");
-    s = s.replace(/[/\\]/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2").replace(/([A-Za-z])([0-9])/g, "$1 $2").replace(/([0-9])([A-Za-z])/g, "$1 $2").replace(/[_\-.]+/g, " ");
-    return s.split(/\s+/).map((w) => w.toLowerCase()).filter((w) => w.length > 1 && w.length <= MAX_TOKEN_LEN2);
-  }
-  function tokenizeProse2(text) {
-    if (!text) return [];
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const raw of String(text).toLowerCase().split(/[^a-z0-9]+/)) {
-      if (raw.length < 2 || raw.length > MAX_TOKEN_LEN2 || STOPWORDS2.has(raw)) continue;
-      if (seen.has(raw)) continue;
-      seen.add(raw);
-      out.push(raw);
-      if (out.length >= MAX_TOKENS_PER_DOC2) break;
-    }
-    return out;
-  }
-  function proseTokensFor({ name, doc } = {}) {
-    const set = /* @__PURE__ */ new Set([...splitIdentifierWords2(name), ...tokenizeProse2(doc)]);
-    return [...set].sort();
-  }
-  function buildProseIndex(individuals) {
-    const index = /* @__PURE__ */ Object.create(null);
-    for (const ind of individuals) {
-      const tokAttr = (ind.attributes || []).find((a) => a.key === "prose_tokens");
-      if (!tokAttr?.value) continue;
-      for (const word of tokAttr.value.split(" ")) {
-        if (!index[word]) index[word] = [];
-        index[word].push(ind.id);
-      }
-    }
-    for (const word of Object.keys(index)) index[word].sort();
-    return index;
-  }
-  var STOPWORDS2, MAX_TOKEN_LEN2, MAX_TOKENS_PER_DOC2;
-  var init_prose_tokens = __esm({
-    "src/memory/prose-tokens.mjs"() {
-      STOPWORDS2 = new Set(
-        "a an and or but the of to in on at for with from by as is are was were be been being it its this that these those i you he she they we me my your our do does did not no yes if then else than so such can will would should could may might about into over under out up down off again more most some any all what which who whom whose when where why how".split(/\s+/)
-      );
-      MAX_TOKEN_LEN2 = 40;
-      MAX_TOKENS_PER_DOC2 = 120;
-    }
-  });
-
-  // src/hash.mjs
-  function fnv1a32(str) {
-    let h = 2166136261;
-    for (let i = 0; i < str.length; i += 1) {
-      h ^= str.charCodeAt(i);
-      h = Math.imul(h, 16777619);
-    }
-    return h >>> 0;
-  }
-  function fnv1aHex(str) {
-    return fnv1a32(str).toString(16).padStart(8, "0");
-  }
-  var init_hash = __esm({
-    "src/hash.mjs"() {
-    }
-  });
-
   // src/memory/trust.mjs
+  function parseChatTagRest(rest) {
+    const at = rest.indexOf("@");
+    const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
+    const createdAt = at >= 0 ? rest.slice(at + 1) : "";
+    const colon = beforeAt.indexOf(":");
+    const sessionId = colon >= 0 ? beforeAt.slice(colon + 1) : "";
+    return { createdAt, ...sessionId ? { sessionId } : {} };
+  }
+  function provenanceTagToSource(tag) {
+    const t = String(tag || "").trim();
+    if (!t) return null;
+    const head = t.split(/\s+/)[0];
+    if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
+    if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
+    if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
+    if (head.startsWith("teach:")) {
+      return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
+    }
+    if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
+    if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
+    if (head.startsWith("extracted:")) return { kind: "extracted", name: head.slice("extracted:".length) || "unknown" };
+    if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };
+    if (head.startsWith("chat:") || head.startsWith("session:") || head.startsWith("operator")) return { kind: "operator" };
+    return null;
+  }
   function sourceReliabilityOf(s) {
     const raw = (s?.attributes || []).find((a) => a.prop === "mgx:sourceReliability")?.value;
     if (raw === void 0) return SOURCE_RELIABILITY_NEUTRAL;
@@ -342,11 +302,13 @@
     const ratio = (net * confidence + 1) / 2;
     return round(SOURCE_RELIABILITY_MIN + (SOURCE_RELIABILITY_MAX - SOURCE_RELIABILITY_MIN) * ratio);
   }
-  var TRUST_SCORE_PROP, TRUST_INPUTS_PROP, SOURCE_PRIOR, RECENCY_HALF_LIFE_MS, RECENCY_FLOOR, SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX, SOURCE_RELIABILITY_NEUTRAL, round, sourceTypeOf, RELIABILITY_CONFIDENCE_PSEUDOCOUNT;
+  var TRUST_SCORE_PROP, TRUST_INPUTS_PROP, CREATED_AT_PROP, UPDATED_AT_PROP, SOURCE_PRIOR, RECENCY_HALF_LIFE_MS, RECENCY_FLOOR, SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX, SOURCE_RELIABILITY_NEUTRAL, round, sourceTypeOf, RELIABILITY_CONFIDENCE_PSEUDOCOUNT;
   var init_trust = __esm({
     "src/memory/trust.mjs"() {
       TRUST_SCORE_PROP = "mgx:trustScore";
       TRUST_INPUTS_PROP = "mgx:trustInputs";
+      CREATED_AT_PROP = "mgx:createdAt";
+      UPDATED_AT_PROP = "mgx:updatedAt";
       SOURCE_PRIOR = Object.freeze({
         operator: 1,
         teach: 0.95,
@@ -365,1413 +327,6 @@
       round = (n, p = 6) => Number(n.toFixed(p));
       sourceTypeOf = (s) => (s?.attributes || []).find((a) => a.prop === "mgx:sourceType")?.value || "";
       RELIABILITY_CONFIDENCE_PSEUDOCOUNT = 19;
-    }
-  });
-
-  // src/memory/shacl.mjs
-  function attrValue(ind, prop) {
-    const a = (ind?.attributes || []).find((x) => x?.prop === prop);
-    return a ? String(a.value ?? "") : void 0;
-  }
-  function checkIndividual(ind, violations) {
-    if (!ind?.class || !MEMORY_CLASSES.has(ind.class)) {
-      violations.push(`must have a class from the closed vocabulary Utterance | Fact | Session | Source | Rule (got ${JSON.stringify(ind?.class)})`);
-    }
-  }
-  function checkFact(ind, violations) {
-    for (const prop of ["rdf:subject", "rdf:predicate", "rdf:object"]) {
-      if (!nonEmpty(attrValue(ind, prop))) violations.push(`a Fact needs a non-empty ${prop}`);
-    }
-    const prov = attrValue(ind, "mgx:factProvenance");
-    if (prov !== void 0 && !nonEmpty(prov)) violations.push("mgx:factProvenance, when present, must be non-empty");
-  }
-  function checkRule(ind, violations) {
-    if (!nonEmpty(attrValue(ind, "mgx:ruleName"))) violations.push("a Rule needs a non-empty mgx:ruleName");
-    const kind = attrValue(ind, "mgx:ruleKind");
-    if (!kind || !RULE_KINDS.has(kind)) {
-      violations.push(`a Rule's mgx:ruleKind must be one of ${[...RULE_KINDS].join(" | ")} (got ${JSON.stringify(kind)})`);
-      return;
-    }
-    for (const prop of RULE_SLOT_PROPS[kind]) {
-      if (!nonEmpty(attrValue(ind, prop))) violations.push(`a ${kind} Rule needs a non-empty ${prop}`);
-    }
-  }
-  function validateIndividual(ind) {
-    const violations = [];
-    checkIndividual(ind, violations);
-    if (ind?.class === "Fact") checkFact(ind, violations);
-    if (ind?.class === "Rule") checkRule(ind, violations);
-    return { ok: violations.length === 0, violations };
-  }
-  function assertIndividualValid(ind) {
-    const r = validateIndividual(ind);
-    if (!r.ok) {
-      const e = new Error(`SHACL validation failed for ${ind?.class} "${ind?.id}": ${r.violations.join(" | ")}`);
-      e.violations = r.violations;
-      throw e;
-    }
-  }
-  var MEMORY_CLASSES, RULE_KINDS, RULE_SLOT_PROPS, nonEmpty;
-  var init_shacl = __esm({
-    "src/memory/shacl.mjs"() {
-      MEMORY_CLASSES = /* @__PURE__ */ new Set(["Utterance", "Fact", "Session", "Source", "Rule"]);
-      RULE_KINDS = /* @__PURE__ */ new Set([
-        "compose2",
-        "filter",
-        "recursive",
-        "action-signature",
-        "action-precond",
-        "action-effect",
-        "action-constraint"
-      ]);
-      RULE_SLOT_PROPS = {
-        compose2: ["mgx:ruleBase1", "mgx:ruleBase2"],
-        filter: ["mgx:ruleBase1", "mgx:ruleFilterProperty"],
-        recursive: ["mgx:ruleBaseCase", "mgx:ruleRecStep"],
-        "action-signature": ["mgx:ruleActionSubjectClass", "mgx:ruleActionTargetClass"],
-        "action-precond": [
-          "mgx:ruleActionPrecondShape",
-          "mgx:ruleActionPrecondPredicate",
-          "mgx:ruleActionPrecondRole",
-          "mgx:ruleActionPrecondScope"
-        ],
-        "action-effect": [
-          "mgx:ruleActionEffectPredicate",
-          "mgx:ruleActionEffectSubject",
-          "mgx:ruleActionEffectObject"
-        ],
-        "action-constraint": [
-          "mgx:ruleActionConstraintLeft",
-          "mgx:ruleActionConstraintRight",
-          "mgx:ruleActionConstraintGuard"
-        ]
-      };
-      nonEmpty = (v) => typeof v === "string" && v.trim().length > 0;
-    }
-  });
-
-  // node-stub:node:sqlite
-  var node_sqlite_exports = {};
-  __export(node_sqlite_exports, {
-    DatabaseSync: () => DatabaseSync8,
-    access: () => access8,
-    appendFile: () => appendFile8,
-    basename: () => basename,
-    copyFile: () => copyFile8,
-    createHash: () => createHash8,
-    createInterface: () => createInterface8,
-    createReadStream: () => createReadStream8,
-    createRequire: () => createRequire8,
-    createRequireFromPath: () => createRequireFromPath8,
-    createServer: () => createServer8,
-    createWriteStream: () => createWriteStream8,
-    default: () => node_sqlite_default,
-    dirname: () => dirname2,
-    existsSync: () => existsSync2,
-    extname: () => extname,
-    fileURLToPath: () => fileURLToPath2,
-    isAbsolute: () => isAbsolute,
-    join: () => join2,
-    mkdir: () => mkdir8,
-    mkdtemp: () => mkdtemp8,
-    pathToFileURL: () => pathToFileURL,
-    randomBytes: () => randomBytes8,
-    readFile: () => readFile8,
-    readFileSync: () => readFileSync8,
-    readdir: () => readdir8,
-    rename: () => rename8,
-    resolve: () => resolve2,
-    rm: () => rm8,
-    sep: () => sep2,
-    spawnSync: () => spawnSync8,
-    stat: () => stat8,
-    tmpdir: () => tmpdir,
-    unlink: () => unlink8,
-    writeFile: () => writeFile8,
-    writeFileSync: () => writeFileSync8
-  });
-  var unavailable8, createRequire8, readFileSync8, writeFileSync8, readFile8, writeFile8, appendFile8, mkdir8, mkdtemp8, rename8, unlink8, rm8, stat8, access8, copyFile8, readdir8, createReadStream8, createWriteStream8, existsSync2, join2, dirname2, resolve2, isAbsolute, basename, extname, sep2, fileURLToPath2, pathToFileURL, randomBytes8, createHash8, createRequireFromPath8, spawnSync8, createInterface8, createServer8, tmpdir, DatabaseSync8, node_sqlite_default;
-  var init_node_sqlite = __esm({
-    "node-stub:node:sqlite"() {
-      unavailable8 = (name) => () => {
-        throw new Error(name + " unavailable in the browser ask bundle");
-      };
-      createRequire8 = unavailable8("createRequire");
-      readFileSync8 = unavailable8("readFileSync");
-      writeFileSync8 = unavailable8("writeFileSync");
-      readFile8 = unavailable8("readFile");
-      writeFile8 = unavailable8("writeFile");
-      appendFile8 = unavailable8("appendFile");
-      mkdir8 = unavailable8("mkdir");
-      mkdtemp8 = unavailable8("mkdtemp");
-      rename8 = unavailable8("rename");
-      unlink8 = unavailable8("unlink");
-      rm8 = unavailable8("rm");
-      stat8 = unavailable8("stat");
-      access8 = unavailable8("access");
-      copyFile8 = unavailable8("copyFile");
-      readdir8 = unavailable8("readdir");
-      createReadStream8 = unavailable8("createReadStream");
-      createWriteStream8 = unavailable8("createWriteStream");
-      existsSync2 = () => false;
-      join2 = (...a) => a.join("/");
-      dirname2 = (p) => String(p).replace(/\/[^/]*$/, "");
-      resolve2 = (...a) => a.join("/");
-      isAbsolute = (p) => String(p).startsWith("/");
-      basename = (p) => String(p).split("/").pop();
-      extname = (p) => {
-        const m = /\.[^./]+$/.exec(String(p));
-        return m ? m[0] : "";
-      };
-      sep2 = "/";
-      fileURLToPath2 = (u) => String(u);
-      pathToFileURL = (p) => new URL("file://" + p);
-      randomBytes8 = unavailable8("randomBytes");
-      createHash8 = unavailable8("createHash");
-      createRequireFromPath8 = unavailable8("createRequireFromPath");
-      spawnSync8 = unavailable8("spawnSync");
-      createInterface8 = unavailable8("createInterface");
-      createServer8 = unavailable8("createServer");
-      tmpdir = () => "/tmp";
-      DatabaseSync8 = unavailable8("DatabaseSync");
-      node_sqlite_default = {};
-    }
-  });
-
-  // src/memory/core.mjs
-  var core_exports = {};
-  __export(core_exports, {
-    CANONICALISED_FROM_PROP: () => CANONICALISED_FROM_PROP,
-    CAPABLE_OF_PREDICATE: () => CAPABLE_OF_PREDICATE,
-    CONTRADICTION_TRUST_FLOOR: () => CONTRADICTION_TRUST_FLOOR,
-    CREATED_AT_PROP: () => CREATED_AT_PROP,
-    DEFAULT_RETENTION: () => DEFAULT_RETENTION,
-    DERIVED_FROM_PROP: () => DERIVED_FROM_PROP,
-    FACT_CLASS: () => FACT_CLASS,
-    HAS_A_PREDICATE: () => HAS_A_PREDICATE,
-    IN_REPLY_TO_PROP: () => IN_REPLY_TO_PROP,
-    MEMORY_DIR_REL: () => MEMORY_DIR_REL,
-    MEMORY_GRAPH_REL: () => MEMORY_GRAPH_REL,
-    MEMORY_MANIFEST_REL: () => MEMORY_MANIFEST_REL,
-    MEMORY_SESSION_CLASS: () => MEMORY_SESSION_CLASS,
-    MULTI_VALUED_PREDICATES: () => MULTI_VALUED_PREDICATES,
-    OPERATOR_SOURCE_ID: () => OPERATOR_SOURCE_ID,
-    RULE_CLASS: () => RULE_CLASS,
-    RULE_KINDS: () => RULE_KINDS2,
-    RULE_KIND_ACTION_CONSTRAINT: () => RULE_KIND_ACTION_CONSTRAINT,
-    RULE_KIND_ACTION_EFFECT: () => RULE_KIND_ACTION_EFFECT,
-    RULE_KIND_ACTION_PRECOND: () => RULE_KIND_ACTION_PRECOND,
-    RULE_KIND_ACTION_SIGNATURE: () => RULE_KIND_ACTION_SIGNATURE,
-    RULE_KIND_COMPOSE2: () => RULE_KIND_COMPOSE2,
-    RULE_KIND_FILTER: () => RULE_KIND_FILTER,
-    RULE_KIND_PROP: () => RULE_KIND_PROP,
-    RULE_KIND_RECURSIVE: () => RULE_KIND_RECURSIVE,
-    RULE_NAME_PROP: () => RULE_NAME_PROP,
-    SAID_IN_SESSION_PROP: () => SAID_IN_SESSION_PROP,
-    SOURCE_CLASS: () => SOURCE_CLASS,
-    SOURCE_RELIABILITY_PROP: () => SOURCE_RELIABILITY_PROP,
-    STATED_BY_PROP: () => STATED_BY_PROP,
-    TEACH_SOURCE_ID: () => TEACH_SOURCE_ID,
-    UPDATED_AT_PROP: () => UPDATED_AT_PROP,
-    UTTERANCE_CLASS: () => UTTERANCE_CLASS,
-    appendFact: () => appendFact,
-    appendFacts: () => appendFacts,
-    appendRule: () => appendRule,
-    appendUtterance: () => appendUtterance,
-    appendUtterances: () => appendUtterances,
-    closeSqliteMemoryStore: () => closeSqliteMemoryStore,
-    createInMemoryStore: () => createInMemoryStore,
-    createSqliteMemoryStore: () => createSqliteMemoryStore,
-    emptyMemory: () => emptyMemory,
-    factIdForTriple: () => factIdForTriple,
-    findContradictions: () => findContradictions,
-    findRuleByName: () => findRuleByName,
-    findRulesByName: () => findRulesByName,
-    loadMemory: () => loadMemory,
-    normFactTerm: () => normFactTerm,
-    openMemoryBackend: () => openMemoryBackend,
-    provenanceTagToSource: () => provenanceTagToSource,
-    readFactRows: () => readFactRows,
-    readRuleRows: () => readRuleRows,
-    removeFacts: () => removeFacts,
-    resolveMemoryGraphFile: () => resolveMemoryGraphFile,
-    resolveRelationChase: () => resolveRelationChase,
-    resolveRelationChaseReverse: () => resolveRelationChaseReverse,
-    snapshotMemory: () => snapshotMemory
-  });
-  function emptyMemory() {
-    return {
-      generated_at: "",
-      memory: true,
-      prefixes: {
-        owl: "http://www.w3.org/2002/07/owl#",
-        rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
-        rdfs: "http://www.w3.org/2000/01/rdf-schema#",
-        mgx: "urn:tmct:mgx#"
-      },
-      vocabulary: MEMORY_VOCABULARY.map((v) => ({ ...v })),
-      classes: [],
-      objectProperties: [],
-      individuals: [],
-      proseIndex: {}
-    };
-  }
-  function resolveMemoryGraphFile(dir, version = null) {
-    if (isMemoryHandle(dir) || isSqliteHandle(dir)) {
-      throw new Error("resolveMemoryGraphFile: dir is a memory/sqlite handle, not a file path (Backend A only)");
-    }
-    if (version === null) return join(dir, MEMORY_GRAPH_REL);
-    return join(dir, MEMORY_DIR_REL, `graph.v${version}.json`);
-  }
-  function isMemoryHandle(dir) {
-    return !!dir && typeof dir === "object" && dir.backend === BACKEND_MEMORY;
-  }
-  function isSqliteHandle(dir) {
-    return !!dir && typeof dir === "object" && dir.backend === BACKEND_SQLITE;
-  }
-  function isMemoryOrSqliteHandle(dir) {
-    return isMemoryHandle(dir) || isSqliteHandle(dir);
-  }
-  function createInMemoryStore() {
-    return { backend: BACKEND_MEMORY, payload: emptyMemory() };
-  }
-  async function createSqliteMemoryStore(dbPath) {
-    const { DatabaseSync: DatabaseSync12 } = await Promise.resolve().then(() => (init_node_sqlite(), node_sqlite_exports));
-    const db = new DatabaseSync12(dbPath);
-    db.exec("PRAGMA journal_mode = WAL");
-    db.exec("PRAGMA synchronous = NORMAL");
-    db.exec(SQLITE_DDL);
-    return { backend: BACKEND_SQLITE, db, dbPath };
-  }
-  function closeSqliteMemoryStore(handle) {
-    if (isSqliteHandle(handle)) handle.db.close();
-  }
-  async function openMemoryBackend(repoRoot, backendChoice) {
-    if (backendChoice === BACKEND_MEMORY) {
-      return { dir: createInMemoryStore(), close: async () => {
-      } };
-    }
-    if (backendChoice === BACKEND_SQLITE) {
-      const dbPath = join(repoRoot, ".tmct", "memory", "graph.sqlite");
-      await mkdir3(dirname(dbPath), { recursive: true });
-      const handle = await createSqliteMemoryStore(dbPath);
-      return { dir: handle, close: async () => closeSqliteMemoryStore(handle) };
-    }
-    return { dir: repoRoot, close: async () => {
-    } };
-  }
-  function readSqlitePayload(handle) {
-    if (!handle.cachedPayload) handle.cachedPayload = buildSqlitePayloadFromRows(handle);
-    return cloneJson(handle.cachedPayload);
-  }
-  function buildSqlitePayloadFromRows(handle) {
-    const db = handle.db;
-    const empty = emptyMemory();
-    const getMeta = (k, fallback) => {
-      const row = db.prepare("SELECT v FROM meta WHERE k = ?").get(k);
-      return row ? JSON.parse(row.v) : fallback;
-    };
-    const individuals = db.prepare("SELECT json FROM individuals ORDER BY ord").all().map((r) => JSON.parse(r.json));
-    const edgesForProp = db.prepare(
-      "SELECT subject, object, subject_label, object_label, extra FROM edges WHERE prop = ? ORDER BY rowid"
-    );
-    const objectProperties = db.prepare("SELECT prop, predicate, count FROM relations ORDER BY ord").all().map((r) => ({
-      predicate: r.predicate,
-      prop: r.prop,
-      count: r.count,
-      examples: edgesForProp.all(r.prop).map((e) => {
-        const edge = { subject: e.subject, object: e.object, subjectLabel: e.subject_label, objectLabel: e.object_label };
-        if (e.extra) Object.assign(edge, JSON.parse(e.extra));
-        return edge;
-      })
-    }));
-    return {
-      generated_at: getMeta("generated_at", empty.generated_at),
-      memory: getMeta("memory", empty.memory),
-      prefixes: getMeta("prefixes", empty.prefixes),
-      vocabulary: getMeta("vocabulary", empty.vocabulary),
-      classes: getMeta("classes", empty.classes),
-      objectProperties,
-      individuals,
-      proseIndex: getMeta("proseIndex", empty.proseIndex)
-    };
-  }
-  function cacheUpsertIndividual(cache, ind) {
-    const clone = cloneJson(ind);
-    const i = cache.individuals.findIndex((x) => x?.id === ind.id);
-    if (i >= 0) cache.individuals[i] = clone;
-    else cache.individuals.push(clone);
-  }
-  function cacheDropIndividualsExcept(cache, seenIds) {
-    cache.individuals = cache.individuals.filter((i) => seenIds.has(i?.id));
-  }
-  function cacheGroupFor(cache, prop) {
-    let g = cache.objectProperties.find((x) => x?.prop === prop);
-    if (!g) {
-      g = { predicate: null, prop, count: 0, examples: [] };
-      cache.objectProperties.push(g);
-    }
-    return g;
-  }
-  function cacheUpsertEdge(group, edge, extraKeys) {
-    const key = `${edge.subject}\0${edge.object}`;
-    group.examples = group.examples.filter((e) => `${e.subject}\0${e.object}` !== key);
-    const cached3 = {
-      subject: edge.subject,
-      object: edge.object,
-      subjectLabel: edge.subjectLabel ?? null,
-      objectLabel: edge.objectLabel ?? null
-    };
-    if (extraKeys.length) Object.assign(cached3, cloneJson(Object.fromEntries(extraKeys.map((k) => [k, edge[k]]))));
-    group.examples.push(cached3);
-  }
-  function cacheDropEdgesExcept(group, newKeys) {
-    group.examples = group.examples.filter((e) => newKeys.has(`${e.subject}\0${e.object}`));
-  }
-  function cacheDropGroupsExcept(cache, seenProps) {
-    cache.objectProperties = cache.objectProperties.filter((g) => seenProps.has(g?.prop));
-  }
-  function persistSqlitePayload(handle, payload) {
-    const db = handle.db;
-    const empty = emptyMemory();
-    const cache = handle.cachedPayload || null;
-    db.exec("BEGIN IMMEDIATE");
-    try {
-      const setMeta = db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)");
-      setMeta.run("generated_at", JSON.stringify(payload.generated_at ?? empty.generated_at));
-      setMeta.run("memory", JSON.stringify(payload.memory ?? empty.memory));
-      setMeta.run("prefixes", JSON.stringify(payload.prefixes ?? empty.prefixes));
-      setMeta.run("vocabulary", JSON.stringify(payload.vocabulary ?? empty.vocabulary));
-      setMeta.run("classes", JSON.stringify(payload.classes ?? empty.classes));
-      setMeta.run("proseIndex", JSON.stringify(payload.proseIndex ?? empty.proseIndex));
-      if (cache) {
-        cache.generated_at = cloneJson(payload.generated_at ?? empty.generated_at);
-        cache.memory = cloneJson(payload.memory ?? empty.memory);
-        cache.prefixes = cloneJson(payload.prefixes ?? empty.prefixes);
-        cache.vocabulary = cloneJson(payload.vocabulary ?? empty.vocabulary);
-        cache.classes = cloneJson(payload.classes ?? empty.classes);
-        cache.proseIndex = cloneJson(payload.proseIndex ?? empty.proseIndex);
-      }
-      const getInd = db.prepare("SELECT ord, json FROM individuals WHERE id = ?");
-      const maxOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM individuals").get().m;
-      let nextOrd = maxOrd + 1;
-      const upsertInd = db.prepare("INSERT OR REPLACE INTO individuals(id, ord, class, label, json) VALUES (?, ?, ?, ?, ?)");
-      const seenIds = /* @__PURE__ */ new Set();
-      for (const ind of payload.individuals || []) {
-        seenIds.add(ind.id);
-        const json = JSON.stringify(ind);
-        const existing = getInd.get(ind.id);
-        if (existing && existing.json === json) continue;
-        const ord = existing ? existing.ord : nextOrd++;
-        upsertInd.run(ind.id, ord, ind.class ?? null, ind.label ?? null, json);
-        if (cache) cacheUpsertIndividual(cache, ind);
-      }
-      const deleteInd = db.prepare("DELETE FROM individuals WHERE id = ?");
-      for (const row of db.prepare("SELECT id FROM individuals").all()) {
-        if (!seenIds.has(row.id)) deleteInd.run(row.id);
-      }
-      if (cache) cacheDropIndividualsExcept(cache, seenIds);
-      const getRelOrd = db.prepare("SELECT ord FROM relations WHERE prop = ?");
-      const maxRelOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM relations").get().m;
-      let nextRelOrd = maxRelOrd + 1;
-      const upsertRel = db.prepare("INSERT OR REPLACE INTO relations(prop, ord, predicate, count) VALUES (?, ?, ?, ?)");
-      const edgesForProp = db.prepare("SELECT subject, object, subject_label, object_label, extra FROM edges WHERE prop = ?");
-      const upsertEdge2 = db.prepare("INSERT OR REPLACE INTO edges(prop, subject, object, subject_label, object_label, extra) VALUES (?, ?, ?, ?, ?, ?)");
-      const deleteEdge = db.prepare("DELETE FROM edges WHERE prop = ? AND subject = ? AND object = ?");
-      const seenProps = /* @__PURE__ */ new Set();
-      for (const group of payload.objectProperties || []) {
-        seenProps.add(group.prop);
-        const existingRows = edgesForProp.all(group.prop);
-        const existingByKey = new Map(existingRows.map((r) => [`${r.subject}\0${r.object}`, r]));
-        const newKeys = /* @__PURE__ */ new Set();
-        const cacheGroup = cache ? cacheGroupFor(cache, group.prop) : null;
-        for (const e of group.examples || []) {
-          const key = `${e.subject}\0${e.object}`;
-          newKeys.add(key);
-          const extraKeys = Object.keys(e).filter((k) => !STD_EDGE_KEYS.has(k));
-          const extra = extraKeys.length ? JSON.stringify(Object.fromEntries(extraKeys.map((k) => [k, e[k]]))) : null;
-          const existing = existingByKey.get(key);
-          const unchanged = existing && (existing.subject_label ?? null) === (e.subjectLabel ?? null) && (existing.object_label ?? null) === (e.objectLabel ?? null) && (existing.extra ?? null) === (extra ?? null);
-          if (unchanged) continue;
-          upsertEdge2.run(group.prop, e.subject, e.object, e.subjectLabel ?? null, e.objectLabel ?? null, extra);
-          if (cacheGroup) cacheUpsertEdge(cacheGroup, e, extraKeys);
-        }
-        for (const key of existingByKey.keys()) {
-          if (newKeys.has(key)) continue;
-          const [s, o] = key.split("\0");
-          deleteEdge.run(group.prop, s, o);
-        }
-        if (cacheGroup) cacheDropEdgesExcept(cacheGroup, newKeys);
-        const relCount = Number.isFinite(group.count) ? group.count : (group.examples || []).length;
-        const relOrd = getRelOrd.get(group.prop)?.ord ?? nextRelOrd++;
-        upsertRel.run(group.prop, relOrd, group.predicate ?? null, relCount);
-        if (cacheGroup) {
-          cacheGroup.predicate = group.predicate ?? null;
-          cacheGroup.count = relCount;
-        }
-      }
-      for (const row of db.prepare("SELECT prop FROM relations").all()) {
-        if (seenProps.has(row.prop)) continue;
-        db.prepare("DELETE FROM edges WHERE prop = ?").run(row.prop);
-        db.prepare("DELETE FROM relations WHERE prop = ?").run(row.prop);
-      }
-      if (cache) cacheDropGroupsExcept(cache, seenProps);
-      db.exec("COMMIT");
-    } catch (e) {
-      db.exec("ROLLBACK");
-      handle.cachedPayload = void 0;
-      throw e;
-    }
-  }
-  async function atomicWriteText(file, text) {
-    const tmp = `${file}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
-    await writeFile3(tmp, text);
-    await rename3(tmp, file);
-  }
-  async function atomicWriteJson(file, obj) {
-    await atomicWriteText(file, JSON.stringify(obj));
-  }
-  async function snapshotMemory(dir, { retentionVersions } = {}) {
-    if (isMemoryOrSqliteHandle(dir)) {
-      throw new Error("snapshotMemory only supports the flat-JSON backend (Backend A) \u2014 a memory/sqlite handle has no on-disk graph.json to snapshot");
-    }
-    const graphFile = resolveMemoryGraphFile(dir);
-    let graphText;
-    try {
-      graphText = await readFile3(graphFile, "utf8");
-    } catch (e) {
-      if (e?.code === "ENOENT") return { skipped: true, version: null, prunedVersion: null };
-      throw e;
-    }
-    const manifestFile = resolveManifestFile(dir);
-    let manifest;
-    try {
-      manifest = JSON.parse(await readFile3(manifestFile, "utf8"));
-    } catch (e) {
-      if (e?.code !== "ENOENT") throw e;
-      manifest = { version: 0, retentionVersions: retentionVersions ?? DEFAULT_RETENTION };
-    }
-    if (!Number.isInteger(manifest.version)) manifest.version = 0;
-    if (!Number.isInteger(manifest.retentionVersions)) manifest.retentionVersions = retentionVersions ?? DEFAULT_RETENTION;
-    const v = manifest.version;
-    const versionedFile = resolveMemoryGraphFile(dir, v);
-    await mkdir3(dirname(versionedFile), { recursive: true });
-    await atomicWriteText(versionedFile, graphText);
-    manifest.version = v + 1;
-    let prunedVersion = null;
-    const pruneTarget = v - manifest.retentionVersions;
-    if (pruneTarget >= 0) {
-      try {
-        await unlink3(resolveMemoryGraphFile(dir, pruneTarget));
-        prunedVersion = pruneTarget;
-      } catch (e) {
-        if (e?.code !== "ENOENT") throw e;
-      }
-    }
-    await atomicWriteJson(manifestFile, manifest);
-    return { skipped: false, version: v, prunedVersion };
-  }
-  async function loadMemory(dir) {
-    if (isMemoryHandle(dir)) return dir.payload;
-    if (isSqliteHandle(dir)) return readSqlitePayload(dir);
-    let text;
-    try {
-      text = await readFile3(memoryGraphFile(dir), "utf8");
-    } catch (e) {
-      if (e?.code === "ENOENT") return emptyMemory();
-      throw e;
-    }
-    return JSON.parse(text);
-  }
-  async function persistMemory(dir, payload) {
-    if (isMemoryHandle(dir)) {
-      dir.payload = payload;
-      return;
-    }
-    if (isSqliteHandle(dir)) {
-      persistSqlitePayload(dir, payload);
-      return;
-    }
-    await mkdir3(dirname(memoryGraphFile(dir)), { recursive: true });
-    await atomicWriteJson(memoryGraphFile(dir), payload);
-  }
-  function buildMemoryIndex(payload) {
-    const individualsById = /* @__PURE__ */ new Map();
-    const sourcesById = /* @__PURE__ */ new Map();
-    const statedByBySubject = /* @__PURE__ */ new Map();
-    for (const ind of payload.individuals || []) {
-      if (!ind?.id) continue;
-      individualsById.set(ind.id, ind);
-      if (ind.class === SOURCE_CLASS) sourcesById.set(ind.id, ind);
-    }
-    const statedGroup = (payload.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
-    for (const e of statedGroup?.examples || []) {
-      if (!e?.subject) continue;
-      const list = statedByBySubject.get(e.subject);
-      if (list) list.push(e.object);
-      else statedByBySubject.set(e.subject, [e.object]);
-    }
-    payload[MEMORY_INDEX] = { individualsById, sourcesById, statedByBySubject };
-    return payload[MEMORY_INDEX];
-  }
-  async function mutateMemory(dir, fn) {
-    const payload = await loadMemory(dir);
-    buildMemoryIndex(payload);
-    const out = await fn(payload) ?? payload;
-    migrateLegacyProvenance(out);
-    recomputeSourceReliability(out);
-    out.proseIndex = buildProseIndex(out.individuals);
-    await persistMemory(dir, out);
-    return out;
-  }
-  function firstWriteCreatedAt(prior, candidate) {
-    return prior?.attributes?.find((a) => a?.prop === CREATED_AT_PROP)?.value || candidate || nowIso();
-  }
-  function setAttr(ind, prop, key, value) {
-    ind.attributes = (ind.attributes || []).filter((a) => a?.prop !== prop);
-    ind.attributes.push({ prop, key, value });
-  }
-  function sourceIdFor(desc) {
-    switch (desc?.kind) {
-      case "operator":
-        return { id: desc.sessionId ? `${OPERATOR_SOURCE_ID}:${desc.sessionId}` : OPERATOR_SOURCE_ID, type: "operator" };
-      case "teach":
-        return { id: desc.sessionId ? `${TEACH_SOURCE_ID}:${desc.sessionId}` : TEACH_SOURCE_ID, type: "teach" };
-      case "provider":
-        return { id: `src:provider:${desc.name}`, type: "provider" };
-      case "corpus":
-        return { id: `src:corpus:${desc.name}`, type: "corpus" };
-      // One Source per source-file basename, not per extraction run.
-      case "extracted":
-        return { id: `src:extracted:${desc.name}`, type: "extracted" };
-      case "web":
-        return { id: `src:learned:web:${fnv1aHex(String(desc.url || ""))}`, type: "web", url: String(desc.url || "") };
-      case "entailed":
-        return { id: `src:entailed:${desc.rule}`, type: "entailed", rule: String(desc.rule || "") };
-      default:
-        return null;
-    }
-  }
-  function upsertSource(payload, desc, createdAtCandidate) {
-    const info = sourceIdFor(desc);
-    if (!info) return null;
-    const idx = memoryIndexOf(payload);
-    const prior = idx ? idx.individualsById.get(info.id) : payload.individuals.find((i) => i?.id === info.id);
-    const created = firstWriteCreatedAt(prior, desc?.createdAt || createdAtCandidate);
-    const ind = {
-      id: info.id,
-      label: sourceLabel(info.id),
-      class: SOURCE_CLASS,
-      derived_from: [],
-      mentions: [],
-      attributes: [
-        { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
-        { prop: "mgx:sourceType", key: "sourceType", value: info.type },
-        { prop: CREATED_AT_PROP, key: "createdAt", value: created },
-        ...info.url ? [{ prop: "mgx:sourceUrl", key: "sourceUrl", value: info.url }] : [],
-        ...info.rule ? [{ prop: "mgx:sourceRule", key: "sourceRule", value: info.rule }] : []
-      ]
-    };
-    const stored = upsertIndividual(payload, ind);
-    if (idx) idx.sourcesById.set(info.id, stored);
-    return info.id;
-  }
-  function parseChatTagRest(rest) {
-    const at = rest.indexOf("@");
-    const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
-    const createdAt = at >= 0 ? rest.slice(at + 1) : "";
-    const colon = beforeAt.indexOf(":");
-    const sessionId = colon >= 0 ? beforeAt.slice(colon + 1) : "";
-    return { createdAt, ...sessionId ? { sessionId } : {} };
-  }
-  function provenanceTagToSource(tag) {
-    const t = String(tag || "").trim();
-    if (!t) return null;
-    const head = t.split(/\s+/)[0];
-    if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
-    if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
-    if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
-    if (head.startsWith("teach:")) {
-      return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
-    }
-    if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
-    if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
-    if (head.startsWith("extracted:")) return { kind: "extracted", name: head.slice("extracted:".length) || "unknown" };
-    if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };
-    if (head.startsWith("chat:") || head.startsWith("session:") || head.startsWith("operator")) return { kind: "operator" };
-    return null;
-  }
-  function sourcesByIdMap(payload) {
-    const idx = memoryIndexOf(payload);
-    const m = {};
-    if (idx) {
-      for (const [id, ind] of idx.sourcesById) m[id] = ind;
-      return m;
-    }
-    for (const i of payload.individuals) if (i?.class === SOURCE_CLASS) m[i.id] = i;
-    return m;
-  }
-  function statedByObjectsFor(payload, factId) {
-    const idx = memoryIndexOf(payload);
-    if (idx) return (idx.statedByBySubject.get(factId) || []).slice();
-    const g = payload.objectProperties.find((x) => x?.prop === STATED_BY_PROP);
-    return (g?.examples || []).filter((e) => e?.subject === factId).map((e) => e.object);
-  }
-  function recomputeFactTrust(payload, fact, nowMs = Date.now(), trustOpts = {}) {
-    const sourceIds = statedByObjectsFor(payload, fact.id);
-    const createdAt = (fact.attributes || []).find((a) => a?.prop === CREATED_AT_PROP)?.value || "";
-    const { score, inputs } = computeTrust({ sourceIds, createdAt }, sourcesByIdMap(payload), {
-      now: nowMs,
-      ...Array.isArray(trustOpts?.premiseTrusts) ? { premiseTrusts: trustOpts.premiseTrusts } : {},
-      ...typeof trustOpts?.ruleConfidence === "number" ? { ruleConfidence: trustOpts.ruleConfidence } : {}
-    });
-    setAttr(fact, TRUST_SCORE_PROP, "trustScore", String(score));
-    setAttr(fact, TRUST_INPUTS_PROP, "trustInputs", JSON.stringify(inputs));
-    setAttr(fact, UPDATED_AT_PROP, "updatedAt", new Date(nowMs).toISOString());
-  }
-  function syncFactSources(payload, fact, nowMs = Date.now(), trustOpts = {}) {
-    const prov = (fact.attributes || []).find((a) => a?.prop === "mgx:factProvenance")?.value || "";
-    const factCreated = (fact.attributes || []).find((a) => a?.prop === CREATED_AT_PROP)?.value || new Date(nowMs).toISOString();
-    for (const tag of prov.split(" | ").filter(Boolean)) {
-      const desc = provenanceTagToSource(tag);
-      if (!desc) continue;
-      const sid = upsertSource(payload, desc, factCreated);
-      if (!sid) continue;
-      upsertEdge(payload, { predicate: "statedBy", prop: STATED_BY_PROP }, {
-        subject: fact.id,
-        object: sid,
-        subjectLabel: fact.label,
-        objectLabel: sourceLabel(sid)
-      });
-    }
-    recomputeFactTrust(payload, fact, nowMs, trustOpts);
-  }
-  function migrateLegacyProvenance(payload) {
-    if (!Array.isArray(payload?.individuals) || !Array.isArray(payload?.objectProperties)) return;
-    const statedGroup = payload.objectProperties.find((g) => g?.prop === STATED_BY_PROP);
-    const haveEdge = new Set((statedGroup?.examples || []).map((e) => e.subject));
-    let changed = false;
-    const now = Date.now();
-    for (const ind of payload.individuals) {
-      if (ind?.class !== FACT_CLASS) continue;
-      if (haveEdge.has(ind.id)) continue;
-      const prov = (ind.attributes || []).find((a) => a?.prop === "mgx:factProvenance")?.value || "";
-      if (!prov) continue;
-      syncFactSources(payload, ind, now);
-      changed = true;
-    }
-    if (changed) recountClasses(payload);
-  }
-  function recomputeSourceReliability(payload) {
-    if (!Array.isArray(payload?.individuals) || !Array.isArray(payload?.objectProperties)) return;
-    const rows = readFactRows(payload);
-    const contradictedFactIds = /* @__PURE__ */ new Set();
-    for (const group of findContradictions(payload)) for (const r of group) contradictedFactIds.add(r.id);
-    const bySource = /* @__PURE__ */ new Map();
-    for (const row of rows) {
-      for (const sid of row.sourceIds) {
-        if (!isSessionScopedSourceId(sid)) continue;
-        const bucket = bySource.get(sid) || { factsAsserted: 0, factsContradicted: 0 };
-        bucket.factsAsserted += 1;
-        if (contradictedFactIds.has(row.id)) bucket.factsContradicted += 1;
-        bySource.set(sid, bucket);
-      }
-    }
-    if (!bySource.size) return;
-    const idx = memoryIndexOf(payload);
-    for (const [sid, counts] of bySource) {
-      const source = idx ? idx.individualsById.get(sid) : payload.individuals.find((i) => i?.id === sid);
-      if (!source) continue;
-      setAttr(source, SOURCE_RELIABILITY_PROP, "sourceReliability", String(sessionReliabilityFrom(counts)));
-      setAttr(source, UPDATED_AT_PROP, "updatedAt", (/* @__PURE__ */ new Date()).toISOString());
-    }
-    const statedGroup = payload.objectProperties.find((g) => g?.prop === STATED_BY_PROP);
-    const affected = /* @__PURE__ */ new Set();
-    for (const e of statedGroup?.examples || []) if (bySource.has(e?.object)) affected.add(e.subject);
-    for (const id of affected) {
-      const ind = idx ? idx.individualsById.get(id) : payload.individuals.find((i) => i?.id === id);
-      if (ind) recomputeFactTrust(payload, ind);
-    }
-  }
-  function upsertIndividual(payload, ind) {
-    const idx = memoryIndexOf(payload);
-    if (idx) {
-      const prior = idx.individualsById.get(ind.id);
-      if (prior) {
-        Object.assign(prior, ind);
-        return prior;
-      }
-      payload.individuals.push(ind);
-      idx.individualsById.set(ind.id, ind);
-      return ind;
-    }
-    const i = payload.individuals.findIndex((x) => x?.id === ind.id);
-    if (i >= 0) {
-      payload.individuals[i] = ind;
-      return ind;
-    }
-    payload.individuals.push(ind);
-    return ind;
-  }
-  function upsertEdge(payload, { predicate, prop }, edge) {
-    let group = payload.objectProperties.find((g) => g?.prop === prop);
-    if (!group) {
-      group = { predicate, prop, count: 0, examples: [] };
-      payload.objectProperties.push(group);
-    }
-    const idx = prop === STATED_BY_PROP ? memoryIndexOf(payload) : null;
-    if (idx) {
-      const existing = idx.statedByBySubject.get(edge.subject);
-      if (!existing || !existing.includes(edge.object)) {
-        group.examples.push({ ...edge, createdAt: edge.createdAt || nowIso() });
-        group.count = group.examples.length;
-        if (existing) existing.push(edge.object);
-        else idx.statedByBySubject.set(edge.subject, [edge.object]);
-        return;
-      }
-    }
-    const prior = (group.examples || []).find((e) => e?.subject === edge.subject && e?.object === edge.object);
-    const createdAt = prior?.createdAt || edge.createdAt || nowIso();
-    group.examples = (group.examples || []).filter(
-      (e) => !(e?.subject === edge.subject && e?.object === edge.object)
-    );
-    group.examples.push({ ...edge, createdAt });
-    group.count = group.examples.length;
-    if (idx) {
-      const list = idx.statedByBySubject.get(edge.subject) || [];
-      if (!list.includes(edge.object)) list.push(edge.object);
-      idx.statedByBySubject.set(edge.subject, list);
-    }
-  }
-  function recountClasses(payload) {
-    const names = [MEMORY_SESSION_CLASS, UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS, RULE_CLASS];
-    payload.classes = payload.classes.filter((c) => !names.includes(c?.name));
-    for (const name of names) {
-      const of = payload.individuals.filter((i) => i?.class === name);
-      if (of.length) payload.classes.push({ name, count: of.length, sample: of.slice(0, 3).map((i) => i.label) });
-    }
-  }
-  function ensureSession(payload, sessionId, started = "") {
-    const sid = `session:${sessionId}`;
-    if (payload.individuals.some((i) => i?.id === sid)) return sid;
-    payload.individuals.push({
-      id: sid,
-      label: String(sessionId).slice(0, 8),
-      class: MEMORY_SESSION_CLASS,
-      derived_from: [],
-      mentions: [],
-      attributes: [
-        { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
-        { prop: CREATED_AT_PROP, key: "createdAt", value: started || nowIso() },
-        ...started ? [{ prop: "mgx:sessionStarted", key: "started", value: started }] : []
-      ]
-    });
-    return sid;
-  }
-  function putUtterance(payload, { role, text, ts, sessionId, sessionStarted = "", parsed = null, replyTo = null, createdAt = "" }) {
-    if (!ROLES.has(role)) throw new Error(`utterance role must be "visitor" or "tmct", got ${JSON.stringify(role)}`);
-    if (!sessionId) throw new Error("utterance needs a sessionId");
-    const cleanTs = String(ts || "");
-    const cleanText = normText(text);
-    const id = `utt:${sessionId}#${cleanTs}#${role}`;
-    const label = labelOf(cleanText) || (role === "visitor" ? "a-visitor-said" : "a-tmct-said");
-    const tokens = proseTokensFor({ doc: cleanText });
-    const prior = payload.individuals.find((x) => x?.id === id);
-    const createdAtVal = firstWriteCreatedAt(prior, createdAt || cleanTs);
-    const ind = {
-      id,
-      label,
-      class: UTTERANCE_CLASS,
-      derived_from: [],
-      mentions: [],
-      attributes: [
-        { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
-        { prop: "mgx:utteranceRole", key: "role", value: role },
-        { prop: "mgx:utteranceText", key: "text", value: cleanText },
-        { prop: "mgx:utteranceTs", key: "ts", value: cleanTs },
-        { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
-        ...parsed != null ? [{ prop: "mgx:utteranceParsed", key: "parsed", value: JSON.stringify(parsed) }] : [],
-        ...tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : []
-      ]
-    };
-    upsertIndividual(payload, ind);
-    const sid = ensureSession(payload, sessionId, sessionStarted);
-    upsertEdge(payload, { predicate: "saidInSession", prop: SAID_IN_SESSION_PROP }, {
-      subject: id,
-      object: sid,
-      subjectLabel: label,
-      objectLabel: String(sessionId).slice(0, 8)
-    });
-    if (replyTo) {
-      const target = payload.individuals.find((i) => i?.id === replyTo);
-      if (target) {
-        upsertEdge(payload, { predicate: "inReplyTo", prop: IN_REPLY_TO_PROP }, {
-          subject: id,
-          object: replyTo,
-          subjectLabel: label,
-          objectLabel: target.label
-        });
-      }
-    }
-    if (cleanTs && cleanTs > String(payload.generated_at || "")) payload.generated_at = cleanTs;
-    return id;
-  }
-  async function appendUtterance(dir, utterance) {
-    let id;
-    await mutateMemory(dir, (payload) => {
-      id = putUtterance(payload, utterance);
-      recountClasses(payload);
-    });
-    return { id };
-  }
-  async function appendUtterances(dir, utterances) {
-    const ids = [];
-    if (!utterances?.length) return { ids };
-    await mutateMemory(dir, (payload) => {
-      for (const u of utterances) ids.push(putUtterance(payload, u));
-      recountClasses(payload);
-    });
-    return { ids };
-  }
-  function normFactTerm(t) {
-    let s = normText(t);
-    s = s.replace(/^\/c\/[a-z]{2,3}\//i, "");
-    s = s.replace(/^[a-z][\w.-]*:/i, "");
-    s = s.replace(/_/g, " ").replace(/\s+/g, " ").trim();
-    s = s.replace(/^(?:the|an?)\s+/i, "");
-    return s.toLowerCase();
-  }
-  function factIdForTriple(subject, predicate, object) {
-    return factIdFor(normFactTerm(subject), normText(predicate), normFactTerm(object));
-  }
-  async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", quantifier = "", premiseTrusts, ruleConfidence } = {}) {
-    const s = normFactTerm(subject);
-    const p = normText(predicate);
-    const o = normFactTerm(object);
-    if (!s || !p || !o) throw new Error("a fact needs subject, predicate and object");
-    const id = `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
-    const text = `${s} ${p} ${o}`;
-    const tokens = proseTokensFor({ doc: text });
-    const q = normText(quantifier);
-    await mutateMemory(dir, async (payload) => {
-      const prior = payload.individuals.find((x) => x?.id === id);
-      const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
-      const provs = [...new Set([...priorProv.split(" | "), normText(provenance)].filter(Boolean))];
-      const createdAtVal = firstWriteCreatedAt(prior, createdAt);
-      const priorQ = prior?.attributes?.find((a) => a?.prop === "mgx:factQuantifier")?.value || "";
-      const qVal = q || priorQ;
-      const candidate = {
-        id,
-        label: labelOf(text),
-        class: FACT_CLASS,
-        derived_from: [],
-        mentions: [],
-        attributes: [
-          { prop: "rdf:type", key: "type", value: "rdf:Statement" },
-          { prop: "rdf:subject", key: "subject", value: s },
-          { prop: "rdf:predicate", key: "predicate", value: p },
-          { prop: "rdf:object", key: "object", value: o },
-          { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
-          ...provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : [],
-          ...tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : [],
-          ...qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : []
-        ]
-      };
-      await assertIndividualValid(candidate);
-      upsertIndividual(payload, candidate);
-      syncFactSources(payload, payload.individuals.find((x) => x?.id === id), void 0, { premiseTrusts, ruleConfidence });
-      recountClasses(payload);
-    });
-    return { id };
-  }
-  async function appendFacts(dir, facts) {
-    const prepared = [];
-    let skipped = 0;
-    for (const f of facts || []) {
-      const s = normFactTerm(f?.subject);
-      const p = normText(f?.predicate);
-      const o = normFactTerm(f?.object);
-      if (!s || !p || !o) {
-        skipped += 1;
-        continue;
-      }
-      const text = `${s} ${p} ${o}`;
-      prepared.push({
-        id: factIdFor(s, p, o),
-        // NUL-delimited — byte-identical to appendFact's id
-        s,
-        p,
-        o,
-        text,
-        tokens: proseTokensFor({ doc: text }),
-        provenance: normText(f?.provenance),
-        createdAt: f?.createdAt || "",
-        quantifier: normText(f?.quantifier),
-        premiseTrusts: Array.isArray(f?.premiseTrusts) ? f.premiseTrusts : void 0,
-        ruleConfidence: typeof f?.ruleConfidence === "number" ? f.ruleConfidence : void 0,
-        justification: Array.isArray(f?.justification) ? f.justification.filter(Boolean) : void 0
-      });
-    }
-    const ids = [];
-    if (!prepared.length) return { ids, appended: 0, skipped };
-    await mutateMemory(dir, (payload) => {
-      const idx = memoryIndexOf(payload);
-      const byId = idx ? idx.individualsById : new Map(payload.individuals.map((i) => [i?.id, i]));
-      const touched = [];
-      const seen = /* @__PURE__ */ new Set();
-      const trustOptsById = /* @__PURE__ */ new Map();
-      for (const f of prepared) {
-        const prior = byId.get(f.id);
-        const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
-        const provs = [...new Set([...priorProv.split(" | "), f.provenance].filter(Boolean))];
-        const createdAtVal = firstWriteCreatedAt(prior, f.createdAt);
-        const priorQ = prior?.attributes?.find((a) => a?.prop === "mgx:factQuantifier")?.value || "";
-        const qVal = f.quantifier || priorQ;
-        const ind = {
-          id: f.id,
-          label: labelOf(f.text),
-          class: FACT_CLASS,
-          derived_from: [],
-          mentions: [],
-          attributes: [
-            { prop: "rdf:type", key: "type", value: "rdf:Statement" },
-            { prop: "rdf:subject", key: "subject", value: f.s },
-            { prop: "rdf:predicate", key: "predicate", value: f.p },
-            { prop: "rdf:object", key: "object", value: f.o },
-            { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
-            ...provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : [],
-            ...f.tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: f.tokens.join(" ") }] : [],
-            ...qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : [],
-            ...f.justification && f.justification.length ? [{ prop: "mgx:factJustification", key: "justification", value: f.justification.join(" ") }] : []
-          ]
-        };
-        const stored = upsertIndividual(payload, ind);
-        byId.set(f.id, stored);
-        ids.push(f.id);
-        if (!seen.has(f.id)) {
-          seen.add(f.id);
-          touched.push(f.id);
-        }
-        if (f.premiseTrusts !== void 0 || f.ruleConfidence !== void 0) {
-          trustOptsById.set(f.id, { premiseTrusts: f.premiseTrusts, ruleConfidence: f.ruleConfidence });
-        }
-      }
-      for (const id of touched) syncFactSources(payload, byId.get(id), void 0, trustOptsById.get(id));
-      recountClasses(payload);
-    });
-    return { ids, appended: ids.length, skipped };
-  }
-  async function appendRule(dir, { name, kind, slots, provenance = "", createdAt = "" } = {}) {
-    const spec = RULE_SLOT_SPEC[kind];
-    if (!spec) throw new Error(`a rule kind must be one of ${RULE_KINDS2.join(", ")}, got ${JSON.stringify(kind)}`);
-    const n = normFactTerm(name);
-    if (!n) throw new Error("a rule needs a name");
-    const slotValues = spec.map(([slotKey]) => normFactTerm(slots?.[slotKey]));
-    if (slotValues.some((v) => !v)) {
-      throw new Error(`a ${kind} rule needs ${spec.map(([slotKey]) => slotKey).join(" + ")}`);
-    }
-    const id = ruleIdFor(kind, n, slotValues);
-    const label = labelOf(`${n} = ${kind}(${slotValues.join(", ")})`);
-    await mutateMemory(dir, async (payload) => {
-      const prior = payload.individuals.find((x) => x?.id === id);
-      const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
-      const provs = [...new Set([...priorProv.split(" | "), normText(provenance)].filter(Boolean))];
-      const createdAtVal = firstWriteCreatedAt(prior, createdAt);
-      const candidate = {
-        id,
-        label,
-        class: RULE_CLASS,
-        derived_from: [],
-        mentions: [],
-        attributes: [
-          { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
-          { prop: RULE_NAME_PROP, key: "ruleName", value: n },
-          { prop: RULE_KIND_PROP, key: "ruleKind", value: kind },
-          ...spec.map(([slotKey, prop], i) => ({ prop, key: slotKey, value: slotValues[i] })),
-          { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
-          ...provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []
-        ]
-      };
-      await assertIndividualValid(candidate);
-      upsertIndividual(payload, candidate);
-      syncFactSources(payload, payload.individuals.find((x) => x?.id === id));
-      recountClasses(payload);
-    });
-    return { id };
-  }
-  function findRuleByName(memory, name) {
-    const n = normFactTerm(name);
-    return (memory?.individuals || []).find(
-      (i) => i?.class === RULE_CLASS && (i.attributes || []).find((a) => a?.prop === RULE_NAME_PROP)?.value === n
-    );
-  }
-  function findRulesByName(memory, name) {
-    const n = normFactTerm(name);
-    const kindOf = (i) => (i.attributes || []).find((a) => a?.prop === RULE_KIND_PROP)?.value || "";
-    return (memory?.individuals || []).filter((i) => i?.class === RULE_CLASS && (i.attributes || []).find((a) => a?.prop === RULE_NAME_PROP)?.value === n).sort((a, b) => kindOf(a).localeCompare(kindOf(b)) || String(a.id).localeCompare(String(b.id)));
-  }
-  function readRuleRows(memory) {
-    const rows = [];
-    for (const ind of memory?.individuals || []) {
-      if (ind?.class !== RULE_CLASS) continue;
-      const attr = (prop) => (ind.attributes || []).find((a) => a?.prop === prop)?.value;
-      const kind = attr(RULE_KIND_PROP);
-      const spec = RULE_SLOT_SPEC[kind];
-      if (!spec) continue;
-      const slots = {};
-      for (const [slotKey, prop] of spec) slots[slotKey] = attr(prop) ?? "";
-      rows.push({
-        id: ind.id,
-        name: attr(RULE_NAME_PROP) || "",
-        kind,
-        slots,
-        provenance: attr("mgx:factProvenance") || ""
-      });
-    }
-    rows.sort((a, b) => a.name.localeCompare(b.name) || a.kind.localeCompare(b.kind) || String(a.id).localeCompare(String(b.id)));
-    return rows;
-  }
-  async function resolveRelationChase(memory, name, subjectTerm, objectTerm, helpers) {
-    const { relationFactsFor, renderFactLine: renderFactLine2, factPhrase: factPhrase2, factTermVariants: factTermVariants2, byTrust, rows, HAS_PROPERTY_PREDICATE: HAS_PROPERTY_PREDICATE2, findActionPath: findActionPath2 } = helpers;
-    const target = String(name || "").trim().toLowerCase();
-    const sv = factTermVariants2(normFactTerm, subjectTerm);
-    const ov = factTermVariants2(normFactTerm, objectTerm);
-    const pairHits = relationFactsFor(target).filter((e) => sv.has(e.fact.subject) && ov.has(e.fact.object));
-    if (pairHits.length) {
-      const hit2 = pairHits.slice().sort((a, b) => byTrust(a.fact, b.fact))[0];
-      return { citation: [renderFactLine2(hit2.fact), ...hit2.aliasFacts.map(
-        (af) => `${factPhrase2(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`
-      )] };
-    }
-    const rule = findRuleByName(memory, target);
-    const ruleKind = rule?.attributes?.find((a) => a.prop === RULE_KIND_PROP)?.value;
-    if (rule && ruleKind === RULE_KIND_COMPOSE2) {
-      const base1 = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
-      const base2 = rule.attributes.find((a) => a.prop === "mgx:ruleBase2")?.value;
-      const startEntity = normFactTerm(subjectTerm);
-      const targetEntity = normFactTerm(objectTerm);
-      if (!base1 || !base2 || !startEntity || !targetEntity) return null;
-      const applyActions = (state) => {
-        if (state.hopsTaken >= 2) return [];
-        const relName = state.hopsTaken === 0 ? base1 : base2;
-        return relationFactsFor(relName).filter((e) => e.fact.subject === state.entity).map((e) => ({ action: e, nextState: { entity: e.fact.object, hopsTaken: state.hopsTaken + 1 } }));
-      };
-      const isGoal = (state) => state.hopsTaken === 2 && state.entity === targetEntity;
-      const stateKey = (state) => `${state.entity}#${state.hopsTaken}`;
-      const found = findActionPath2({ entity: startEntity, hopsTaken: 0 }, isGoal, applyActions, { maxDepth: 2, stateKey });
-      if (!found) return null;
-      const seenAlias = /* @__PURE__ */ new Set();
-      const parts = [];
-      for (const e of found.actions) {
-        parts.push(renderFactLine2(e.fact));
-        for (const af of e.aliasFacts) {
-          const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
-          if (seenAlias.has(key)) continue;
-          seenAlias.add(key);
-          parts.push(`${factPhrase2(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
-        }
-      }
-      return { citation: parts };
-    }
-    if (rule && ruleKind === RULE_KIND_FILTER) {
-      const base = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
-      const property = rule.attributes.find((a) => a.prop === "mgx:ruleFilterProperty")?.value;
-      if (!base || !property) return null;
-      const baseHit = await resolveRelationChase(memory, base, subjectTerm, objectTerm, helpers);
-      if (!baseHit) return null;
-      const subjectEntity = normFactTerm(subjectTerm);
-      const propertyNorm = normFactTerm(property);
-      const propHit = rows.find(
-        (f) => f.predicate === HAS_PROPERTY_PREDICATE2 && f.subject === subjectEntity && normFactTerm(f.object) === propertyNorm
-      );
-      if (!propHit) return null;
-      return { citation: [...baseHit.citation, renderFactLine2(propHit)] };
-    }
-    return null;
-  }
-  async function resolveRelationChaseReverse(memory, name, objectTerm, helpers) {
-    const { relationFactsFor, renderFactLine: renderFactLine2, factPhrase: factPhrase2, factTermVariants: factTermVariants2, byTrust, rows, HAS_PROPERTY_PREDICATE: HAS_PROPERTY_PREDICATE2, findReachableSet: findReachableSet2 } = helpers;
-    const target = String(name || "").trim().toLowerCase();
-    const ov = factTermVariants2(normFactTerm, objectTerm);
-    const directHits = relationFactsFor(target).filter((e) => ov.has(e.fact.object));
-    if (directHits.length) {
-      const bySubject = /* @__PURE__ */ new Map();
-      for (const e of directHits) {
-        if (!bySubject.has(e.fact.subject)) bySubject.set(e.fact.subject, []);
-        bySubject.get(e.fact.subject).push(e);
-      }
-      return [...bySubject.entries()].map(([subj, hits]) => {
-        const hit2 = hits.slice().sort((a, b) => byTrust(a.fact, b.fact))[0];
-        return {
-          subject: subj,
-          citation: [renderFactLine2(hit2.fact), ...hit2.aliasFacts.map(
-            (af) => `${factPhrase2(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`
-          )]
-        };
-      });
-    }
-    const rule = findRuleByName(memory, target);
-    const ruleKind = rule?.attributes?.find((a) => a.prop === RULE_KIND_PROP)?.value;
-    if (rule && ruleKind === RULE_KIND_COMPOSE2) {
-      const base1 = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
-      const base2 = rule.attributes.find((a) => a.prop === "mgx:ruleBase2")?.value;
-      const targetEntity = normFactTerm(objectTerm);
-      if (!base1 || !base2 || !targetEntity) return [];
-      const applyActionsRev = (state) => {
-        if (state.hopsTaken >= 2) return [];
-        const relName = state.hopsTaken === 0 ? base2 : base1;
-        return relationFactsFor(relName).filter((e) => e.fact.object === state.entity).map((e) => ({ action: e, nextState: { entity: e.fact.subject, hopsTaken: state.hopsTaken + 1 } }));
-      };
-      const stateKeyRev = (state) => `${state.entity}#${state.hopsTaken}`;
-      const reached = findReachableSet2(
-        { entity: targetEntity, hopsTaken: 0 },
-        applyActionsRev,
-        { maxDepth: 2, stateKey: stateKeyRev }
-      );
-      return reached.filter((r) => r.node.hopsTaken === 2).map(({ node, path }) => {
-        const seenAlias = /* @__PURE__ */ new Set();
-        const parts = [];
-        for (const e of path.actions.slice().reverse()) {
-          parts.push(renderFactLine2(e.fact));
-          for (const af of e.aliasFacts) {
-            const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
-            if (seenAlias.has(key)) continue;
-            seenAlias.add(key);
-            parts.push(`${factPhrase2(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
-          }
-        }
-        return { subject: node.entity, citation: parts };
-      });
-    }
-    if (rule && ruleKind === RULE_KIND_FILTER) {
-      const base = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
-      const property = rule.attributes.find((a) => a.prop === "mgx:ruleFilterProperty")?.value;
-      if (!base || !property) return [];
-      const baseHits = await resolveRelationChaseReverse(memory, base, objectTerm, helpers);
-      const propertyNorm = normFactTerm(property);
-      const out = [];
-      for (const bh of baseHits) {
-        const subjectEntity = normFactTerm(bh.subject);
-        const propHit = rows.find(
-          (f) => f.predicate === HAS_PROPERTY_PREDICATE2 && f.subject === subjectEntity && normFactTerm(f.object) === propertyNorm
-        );
-        if (propHit) out.push({ subject: bh.subject, citation: [...bh.citation, renderFactLine2(propHit)] });
-      }
-      return out;
-    }
-    return [];
-  }
-  function readFactRows(memory) {
-    const individuals = memory?.individuals || [];
-    const sourcesById = new Map(individuals.filter((i) => i?.class === SOURCE_CLASS).map((i) => [i.id, i]));
-    const statedGroup = (memory?.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
-    const byFact = /* @__PURE__ */ new Map();
-    for (const e of statedGroup?.examples || []) {
-      if (!byFact.has(e.subject)) byFact.set(e.subject, []);
-      byFact.get(e.subject).push(e.object);
-    }
-    const rows = [];
-    for (const ind of individuals) {
-      if (ind?.class !== FACT_CLASS) continue;
-      const get = (k) => (ind.attributes || []).find((a) => a?.key === k)?.value || "";
-      const sourceIds = byFact.get(ind.id) || [];
-      const sourceTypes = sourceIds.map((id) => (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value).filter(Boolean);
-      const justificationRaw = get("justification");
-      rows.push({
-        id: ind.id,
-        subject: get("subject"),
-        predicate: get("predicate"),
-        object: get("object"),
-        provenance: get("provenance"),
-        // legacy compat string, verbatim
-        quantifier: get("quantifier"),
-        // "" unless a plural class-membership teach set one
-        sourceIds,
-        sourceTypes,
-        trust: Number((ind.attributes || []).find((a) => a?.prop === TRUST_SCORE_PROP)?.value) || 0,
-        // [] unless a rule persisted its premise fact ids (justification-tracking,
-        // scm-sco only today; see syllogise.mjs).
-        justification: justificationRaw ? justificationRaw.split(" ").filter(Boolean) : []
-      });
-    }
-    return rows;
-  }
-  async function removeFacts(dir, ids) {
-    const idSet = new Set((ids || []).filter(Boolean));
-    const removed = [];
-    if (!idSet.size) return { removed };
-    await mutateMemory(dir, (payload) => {
-      payload.individuals = (payload.individuals || []).filter((ind) => {
-        if (ind?.class === FACT_CLASS && idSet.has(ind.id)) {
-          removed.push(ind.id);
-          return false;
-        }
-        return true;
-      });
-      if (!removed.length) return;
-      const removedSet = new Set(removed);
-      for (const group of payload.objectProperties || []) {
-        const before = group.examples || [];
-        group.examples = before.filter((e) => !removedSet.has(e?.subject) && !removedSet.has(e?.object));
-        group.count = group.examples.length;
-      }
-      recountClasses(payload);
-    });
-    return { removed };
-  }
-  function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR } = {}) {
-    const rows = readFactRows(memory).filter((r) => r.trust >= floor);
-    const byKey = /* @__PURE__ */ new Map();
-    for (const r of rows) {
-      if (MULTI_VALUED_PREDICATES.has(r.predicate)) continue;
-      const key = `${r.subject} ${r.predicate}`;
-      if (!byKey.has(key)) byKey.set(key, []);
-      byKey.get(key).push(r);
-    }
-    const out = [];
-    for (const group of byKey.values()) {
-      if (new Set(group.map((r) => r.object)).size > 1) {
-        out.push(group.slice().sort((a, b) => b.trust - a.trust || a.object.localeCompare(b.object)));
-      }
-    }
-    return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
-  }
-  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, CREATED_AT_PROP, UPDATED_AT_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, TEXT_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, MEMORY_INDEX, memoryIndexOf, normText, labelOf, nowIso, sourceLabel, isSessionScopedSourceId, factIdFor, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE, MULTI_VALUED_PREDICATES;
-  var init_core = __esm({
-    "src/memory/core.mjs"() {
-      init_promises();
-      init_node_path();
-      init_prose_tokens();
-      init_hash();
-      init_trust();
-      init_shacl();
-      MEMORY_DIR_REL = join(".tmct", "memory");
-      MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
-      UTTERANCE_CLASS = "Utterance";
-      FACT_CLASS = "Fact";
-      MEMORY_SESSION_CLASS = "Session";
-      SOURCE_CLASS = "Source";
-      RULE_CLASS = "Rule";
-      SAID_IN_SESSION_PROP = "mgx:saidInSession";
-      IN_REPLY_TO_PROP = "mgx:inReplyTo";
-      DERIVED_FROM_PROP = "mgx:derivedFrom";
-      STATED_BY_PROP = "mgx:statedBy";
-      CANONICALISED_FROM_PROP = "mgx:canonicalisedFrom";
-      CREATED_AT_PROP = "mgx:createdAt";
-      UPDATED_AT_PROP = "mgx:updatedAt";
-      SOURCE_RELIABILITY_PROP = "mgx:sourceReliability";
-      OPERATOR_SOURCE_ID = "src:operator-chat";
-      TEACH_SOURCE_ID = "src:teach-chat";
-      ROLES = /* @__PURE__ */ new Set(["visitor", "tmct"]);
-      LABEL_CAP = 48;
-      TEXT_CAP = 2e3;
-      MEMORY_VOCABULARY = [
-        { prop: "rdf:type", note: "rdf-ish typing attribute: owl:NamedIndividual (utterances/sessions) or rdf:Statement (reified facts)" },
-        { prop: "mgx:utteranceRole", note: "who said it: visitor (an a-visitor-said item) or tmct (the response alongside it)" },
-        { prop: "mgx:utteranceText", note: "the utterance's normalized text (capped)" },
-        { prop: "mgx:utteranceTs", note: "when it was said, ISO-8601 (the chat turn timestamp)" },
-        { prop: "mgx:utteranceParsed", note: "optional JSON of the parse the interpretation pipeline produced for this request" },
-        { prop: SAID_IN_SESSION_PROP, predicate: "saidInSession", note: "Utterance \u2192 Session it was said in; runtime observation, owned (no SEON term)" },
-        { prop: IN_REPLY_TO_PROP, predicate: "inReplyTo", note: "tmct Utterance \u2192 the visitor Utterance it answers (the Q/A pairing)" },
-        { prop: "rdf:subject", note: "reified fact: the triple's subject term" },
-        { prop: "rdf:predicate", note: "reified fact: the triple's predicate term" },
-        { prop: "rdf:object", note: "reified fact: the triple's object term" },
-        { prop: "mgx:factProvenance", note: "LEGACY COMPAT SHIM: the ' | '-joined provenance tag string a fact came from; the source-of-truth is now the mgx:statedBy edges derived from it" },
-        { prop: "mgx:factQuantifier", note: "OPTIONAL: the quantifier word a plural class-membership teach used ('every'/'some'/'a few'), for literal recall by 'how many Xs are Ys' \u2014 never real cardinality counting" },
-        { prop: "mgx:ruleName", note: "a taught Rule's own name (e.g. 'grandparent') \u2014 the query-dispatcher's lookup key, PLAN_TAUGHT_RELATIONS.md \xA72/\xA73" },
-        { prop: "mgx:ruleKind", note: "a taught Rule's SHAPE tag \u2014 the closed vocabulary compose2 | filter | recursive (structural, like 'Fact'/'Rule' themselves, never a domain word)" },
-        { prop: "mgx:ruleBase1", note: "compose2: the first hop's base relation name; filter: the base rule/relation being filtered (same 'base relation' role in both kinds, so the name is shared)" },
-        { prop: "mgx:ruleBase2", note: "compose2 only: the second hop's base relation name" },
-        { prop: "mgx:ruleFilterProperty", note: "filter only: the property literal candidates are filtered by (an mgx:hasProperty-shaped Fact lookup)" },
-        { prop: "mgx:ruleBaseCase", note: "recursive only: the base-case relation name (hop zero)" },
-        { prop: "mgx:ruleRecStep", note: "recursive only: the self-referential recursive-step relation name" },
-        { prop: CREATED_AT_PROP, note: "when an individual was FIRST written, ISO-8601 (first-write-wins on upsert); the audit 'when', the recency input to trust, the novelty signal" },
-        { prop: UPDATED_AT_PROP, note: "when an individual's OWN attributes were last mutated in place (upsertSession, recomputeFactTrust, recomputeSourceReliability) \u2014 most individuals never carry this and instead derive 'updated' from codegraph.mjs's derivedUpdatedAt (max createdAt over their edges)" },
-        { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
-        { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source \u2014 replaces the factProvenance union)" },
-        { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
-        { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | corpusWeak | extracted | web | entailed (the trust-prior key)" },
-        { prop: "mgx:sourceUrl", note: "a web Source's URL" },
-        { prop: "mgx:sourceRule", note: "an entailed Source's rule id" },
-        { prop: "mgx:sourceReliability", note: "actor-level (session-scoped) trust nudge in [0.5,1.5], neutral 1.0 when absent \u2014 materialised by recomputeSourceReliability from a session's asserted-vs-contradicted track record (memory/trust.mjs's sessionReliabilityFrom); folds into computeTrust's per-source prior" },
-        { prop: TRUST_SCORE_PROP, note: "materialised trust cache in [0,1] \u2014 pure function of a fact's Sources + createdAt (memory/trust.mjs); invalidated when a statedBy edge is added" },
-        { prop: TRUST_INPUTS_PROP, note: "JSON of the inputs the trust score was computed from (source-type multiset, corroboration count, createdAt, recency) \u2014 makes the score auditable" },
-        { prop: "mgx:hasProseTokens", note: "prose tokens (prose.mjs tokenizer) backing the payload's proseIndex" },
-        { prop: "mgx:sessionStarted", note: "session anchor: when the session started, ISO-8601" }
-      ];
-      memoryGraphFile = (dir) => resolveMemoryGraphFile(dir);
-      BACKEND_MEMORY = "memory";
-      BACKEND_SQLITE = "sqlite";
-      SQLITE_DDL = `
-CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS individuals (id TEXT PRIMARY KEY, ord INTEGER NOT NULL, class TEXT, label TEXT, json TEXT NOT NULL);
-CREATE TABLE IF NOT EXISTS relations (prop TEXT PRIMARY KEY, ord INTEGER NOT NULL, predicate TEXT, count INTEGER);
-CREATE TABLE IF NOT EXISTS edges (prop TEXT NOT NULL, subject TEXT NOT NULL, object TEXT NOT NULL, subject_label TEXT, object_label TEXT, extra TEXT, PRIMARY KEY (prop, subject, object));
-CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
-`;
-      STD_EDGE_KEYS = /* @__PURE__ */ new Set(["subject", "object", "subjectLabel", "objectLabel"]);
-      cloneJson = (v) => v === void 0 ? v : structuredClone(v);
-      MEMORY_MANIFEST_REL = join(MEMORY_DIR_REL, "manifest.json");
-      DEFAULT_RETENTION = 5;
-      resolveManifestFile = (dir) => join(dir, MEMORY_MANIFEST_REL);
-      MEMORY_INDEX = /* @__PURE__ */ Symbol("mutateMemory lookup index");
-      memoryIndexOf = (payload) => payload?.[MEMORY_INDEX] || null;
-      normText = (t) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, TEXT_CAP);
-      labelOf = (text) => text.length > LABEL_CAP ? text.slice(0, LABEL_CAP - 1) + "\u2026" : text;
-      nowIso = () => (/* @__PURE__ */ new Date()).toISOString();
-      sourceLabel = (id) => String(id).replace(/^src:/, "");
-      isSessionScopedSourceId = (id) => typeof id === "string" && (id.startsWith(`${OPERATOR_SOURCE_ID}:`) || id.startsWith(`${TEACH_SOURCE_ID}:`));
-      factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
-      RULE_KIND_COMPOSE2 = "compose2";
-      RULE_KIND_FILTER = "filter";
-      RULE_KIND_RECURSIVE = "recursive";
-      RULE_KIND_ACTION_SIGNATURE = "action-signature";
-      RULE_KIND_ACTION_PRECOND = "action-precond";
-      RULE_KIND_ACTION_EFFECT = "action-effect";
-      RULE_KIND_ACTION_CONSTRAINT = "action-constraint";
-      RULE_KINDS2 = Object.freeze([
-        RULE_KIND_COMPOSE2,
-        RULE_KIND_FILTER,
-        RULE_KIND_RECURSIVE,
-        RULE_KIND_ACTION_SIGNATURE,
-        RULE_KIND_ACTION_PRECOND,
-        RULE_KIND_ACTION_EFFECT,
-        RULE_KIND_ACTION_CONSTRAINT
-      ]);
-      RULE_NAME_PROP = "mgx:ruleName";
-      RULE_KIND_PROP = "mgx:ruleKind";
-      RULE_SLOT_SPEC = {
-        [RULE_KIND_COMPOSE2]: [["base1", "mgx:ruleBase1"], ["base2", "mgx:ruleBase2"]],
-        [RULE_KIND_FILTER]: [["base", "mgx:ruleBase1"], ["property", "mgx:ruleFilterProperty"]],
-        [RULE_KIND_RECURSIVE]: [["baseCase", "mgx:ruleBaseCase"], ["recStep", "mgx:ruleRecStep"]],
-        [RULE_KIND_ACTION_SIGNATURE]: [
-          ["subjectClass", "mgx:ruleActionSubjectClass"],
-          ["targetClass", "mgx:ruleActionTargetClass"]
-        ],
-        [RULE_KIND_ACTION_PRECOND]: [
-          ["shape", "mgx:ruleActionPrecondShape"],
-          ["predicate", "mgx:ruleActionPrecondPredicate"],
-          ["role", "mgx:ruleActionPrecondRole"],
-          ["scope", "mgx:ruleActionPrecondScope"]
-        ],
-        [RULE_KIND_ACTION_EFFECT]: [
-          ["predicate", "mgx:ruleActionEffectPredicate"],
-          ["subjectRole", "mgx:ruleActionEffectSubject"],
-          ["objectRole", "mgx:ruleActionEffectObject"]
-        ],
-        // "the <left> may not be with the <right> without the <guard>" — each slot
-        // names a class whose sole member src/domain.mjs resolves at compile time.
-        [RULE_KIND_ACTION_CONSTRAINT]: [
-          ["left", "mgx:ruleActionConstraintLeft"],
-          ["right", "mgx:ruleActionConstraintRight"],
-          ["guard", "mgx:ruleActionConstraintGuard"]
-        ]
-      };
-      ruleIdFor = (kind, name, slotValues) => `rule:${fnv1aHex([kind, name, ...slotValues].join("\0"))}`;
-      CONTRADICTION_TRUST_FLOOR = 0.5;
-      HAS_A_PREDICATE = "mgx:hasA";
-      CAPABLE_OF_PREDICATE = "mgx:capableOf";
-      MULTI_VALUED_PREDICATES = /* @__PURE__ */ new Set([HAS_A_PREDICATE, CAPABLE_OF_PREDICATE]);
     }
   });
 
@@ -1871,7 +426,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     "src/codegraph.mjs"() {
       init_prose();
       init_embed();
-      init_core();
+      init_trust();
       PROP_KIND = {
         // v2.0 faithful tokens (SEON-faithful realign)
         "mgx:importsnamespace": "imports",
@@ -2801,7 +1356,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     if (!predicate) return null;
     return { entWord, predicate };
   }
-  var tableRe, CONTRACTION_RE, correctionRe, MISSPELLING_RE, WRONG_WORD_RE, W_SLASH_RE, FOR_DIGIT_THANKS_RE, FOR_DIGIT_EXAMPLE_RE, KIND_NOUN_ANAPHORA_RE, VERB_ALTERNATION, FILLER_RE, RELATION_VERB_RE, INTERROGATIVE_LEAD_RE, LISTING_TAIL_KINDS, BARE_KIND_RE, isListingRemainder, GREETING_PREAMBLE_RE, THANKS_PREAMBLE_RE, ACK_PREAMBLE_RE, BROWSING_PREAMBLE_RE, HEDGE_ADVERB_PREAMBLE_RE, TROUBLE_ASIDE_RE, MODAL_WRAPPER_RE, EXPLAIN_WRAPPER_RE, TELL_ME_WRAPPER_RE, KNOW_WRAPPER_RE, WANT_KNOW_WRAPPER_RE, EMBEDDED_WHATIS_RE, EMBEDDED_MEANS_RE, SHOW_GIVE_ME_RE, LEADING_CONNECTIVE_RE, QUESTION_AUX_LEAD_RE, TOPIC_SWITCH_PREAMBLE_RE, SUBORDINATION_FRAMES_RE, SELF_CORRECTION_RE, CONDITIONAL_VERB_GERUND, CONDITIONAL_KIND_PLURAL, CONDITIONAL_QUALIFIER_SRC, CONDITIONAL_QUALIFIER_RE, COUNTERFACTUAL_RE, PHRASING_FRAMES, NEGATION_SET_RE, STOPWORDS3, splitWords, wordsOf;
+  var tableRe, CONTRACTION_RE, correctionRe, MISSPELLING_RE, WRONG_WORD_RE, W_SLASH_RE, FOR_DIGIT_THANKS_RE, FOR_DIGIT_EXAMPLE_RE, KIND_NOUN_ANAPHORA_RE, VERB_ALTERNATION, FILLER_RE, RELATION_VERB_RE, INTERROGATIVE_LEAD_RE, LISTING_TAIL_KINDS, BARE_KIND_RE, isListingRemainder, GREETING_PREAMBLE_RE, THANKS_PREAMBLE_RE, ACK_PREAMBLE_RE, BROWSING_PREAMBLE_RE, HEDGE_ADVERB_PREAMBLE_RE, TROUBLE_ASIDE_RE, MODAL_WRAPPER_RE, EXPLAIN_WRAPPER_RE, TELL_ME_WRAPPER_RE, KNOW_WRAPPER_RE, WANT_KNOW_WRAPPER_RE, EMBEDDED_WHATIS_RE, EMBEDDED_MEANS_RE, SHOW_GIVE_ME_RE, LEADING_CONNECTIVE_RE, QUESTION_AUX_LEAD_RE, TOPIC_SWITCH_PREAMBLE_RE, SUBORDINATION_FRAMES_RE, SELF_CORRECTION_RE, CONDITIONAL_VERB_GERUND, CONDITIONAL_KIND_PLURAL, CONDITIONAL_QUALIFIER_SRC, CONDITIONAL_QUALIFIER_RE, COUNTERFACTUAL_RE, PHRASING_FRAMES, NEGATION_SET_RE, STOPWORDS2, splitWords, wordsOf;
   var init_normalize = __esm({
     "src/interpret/normalize.mjs"() {
       init_ask_vocab();
@@ -2987,7 +1542,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
         "^(?:which|what|who|list|show(?:\\s+me)?|find|give\\s+me)?\\s*(?:the\\s+|all\\s+)?([a-z][a-z-]*)\\s+(?:(?:that|which|who)\\s+)?(?:(?:do|does|did|are|is|was|were|have|has)\\s+)?not\\s+(.+)$",
         "i"
       );
-      STOPWORDS3 = /* @__PURE__ */ new Set([
+      STOPWORDS2 = /* @__PURE__ */ new Set([
         "what",
         "who",
         "which",
@@ -3065,7 +1620,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     return prev[b.length];
   }
   function eligibleForCanon(w) {
-    return /^[a-z]+$/.test(w) && !STOPWORDS3.has(w) && !VOCAB_WORDS.has(w);
+    return /^[a-z]+$/.test(w) && !STOPWORDS2.has(w) && !VOCAB_WORDS.has(w);
   }
   function fuzzyVocabWord(w) {
     return fuzzyMatchInSet(w, FUZZY_TARGET_WORDS, fuzzyBound(w));
@@ -3259,7 +1814,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     if (lcWords.includes("where") && !findPhrase(lcWords, VERB_TO_KIND)) {
       const mention = lcWords.some((w) => MENTION_MARKERS.includes(w));
       const markers = /* @__PURE__ */ new Set([...WHERE_MARKERS, ...MENTION_MARKERS]);
-      const objText = words.filter((w, i) => !STOPWORDS3.has(lcWords[i]) && !markers.has(lcWords[i])).join(" ").trim();
+      const objText = words.filter((w, i) => !STOPWORDS2.has(lcWords[i]) && !markers.has(lcWords[i])).join(" ").trim();
       if (objText) {
         const kind2 = mention ? "mentions" : "where";
         return { shape: kind2, entityType: null, modifier: "direct", kind: kind2, object: objText };
@@ -3271,7 +1826,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       while (end > 1 && (lcWords[end - 1] === "ever" || lcWords[end - 1] === "been")) end -= 1;
       const tailVerb = end > 1 ? VERB_TO_KIND[lcWords[end - 1]] : null;
       if (tailVerb === "touches") {
-        const objText = words.slice(1, end - 1).filter((_, j) => !STOPWORDS3.has(lcWords[1 + j])).join(" ").trim();
+        const objText = words.slice(1, end - 1).filter((_, j) => !STOPWORDS2.has(lcWords[1 + j])).join(" ").trim();
         if (objText) return { shape: "when", entityType: null, modifier: "direct", kind: "touches", object: objText };
       }
     }
@@ -3312,7 +1867,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       if ((det === "the" || det === "these" || det === "those") && lcWords[i + 1] === "of") {
         const tags = nlp.posTags(words);
         if (tags[i] === "NOUN") {
-          const objText = words.slice(i + 2).filter((w, j) => !STOPWORDS3.has(lcWords[i + 2 + j])).join(" ").trim();
+          const objText = words.slice(i + 2).filter((w, j) => !STOPWORDS2.has(lcWords[i + 2 + j])).join(" ").trim();
           if (objText) return stamp({ shape: "forward", entityType: null, modifier: "direct", kind: verbHit.kind, object: objText });
         }
       }
@@ -3335,7 +1890,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     mark(entityHit);
     const modifierHit = findPhrase(canonWords, MODIFIER_TO_KIND, consumed);
     mark(modifierHit);
-    const sideText = (from, to) => words.slice(from, to).filter((_, j) => !consumed.has(from + j) && !STOPWORDS3.has(lcWords[from + j])).join(" ").trim();
+    const sideText = (from, to) => words.slice(from, to).filter((_, j) => !consumed.has(from + j) && !STOPWORDS2.has(lcWords[from + j])).join(" ").trim();
     const beforeText = sideText(0, verbHit.start);
     const afterText = sideText(verbHit.end, words.length);
     const kind = verbHit.kind;
@@ -3355,7 +1910,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       const roleWords = [];
       for (let i = 0; i < words.length; i += 1) {
         const w = lcWords[i];
-        if (consumed.has(i) || STOPWORDS3.has(w) || w === "by" || PASSIVE_AUX.has(w) || WH_WORDS.has(w) || PLACEHOLDER_SET.has(w)) continue;
+        if (consumed.has(i) || STOPWORDS2.has(w) || w === "by" || PASSIVE_AUX.has(w) || WH_WORDS.has(w) || PLACEHOLDER_SET.has(w)) continue;
         roleWords.push(words[i]);
       }
       const object = roleWords.join(" ").trim();
@@ -3445,7 +2000,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       init_grammar();
       init_keywords();
       KEEP = /* @__PURE__ */ new Set([
-        ...STOPWORDS3,
+        ...STOPWORDS2,
         ...wordsOf(CONTEXT_PRONOUNS),
         ...wordsOf(Object.keys(VERB_TO_KIND)),
         ...wordsOf(Object.keys(ENTITY_TO_TYPE)),
@@ -3621,36 +2176,36 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   });
 
   // node-stub:node:crypto
-  var unavailable9, createRequire9, readFileSync9, writeFileSync9, readFile9, writeFile9, appendFile9, mkdir9, mkdtemp9, rename9, unlink9, rm9, stat9, access9, copyFile9, readdir9, createReadStream9, createWriteStream9, randomBytes9, createHash9, createRequireFromPath9, spawnSync9, createInterface9, createServer9, DatabaseSync9;
+  var unavailable8, createRequire8, readFileSync8, writeFileSync8, readFile8, writeFile8, appendFile8, mkdir8, mkdtemp8, rename8, unlink8, rm8, stat8, access8, copyFile8, readdir8, createReadStream8, createWriteStream8, randomBytes8, createHash8, createRequireFromPath8, spawnSync8, createInterface8, createServer8, DatabaseSync8;
   var init_node_crypto = __esm({
     "node-stub:node:crypto"() {
-      unavailable9 = (name) => () => {
+      unavailable8 = (name) => () => {
         throw new Error(name + " unavailable in the browser ask bundle");
       };
-      createRequire9 = unavailable9("createRequire");
-      readFileSync9 = unavailable9("readFileSync");
-      writeFileSync9 = unavailable9("writeFileSync");
-      readFile9 = unavailable9("readFile");
-      writeFile9 = unavailable9("writeFile");
-      appendFile9 = unavailable9("appendFile");
-      mkdir9 = unavailable9("mkdir");
-      mkdtemp9 = unavailable9("mkdtemp");
-      rename9 = unavailable9("rename");
-      unlink9 = unavailable9("unlink");
-      rm9 = unavailable9("rm");
-      stat9 = unavailable9("stat");
-      access9 = unavailable9("access");
-      copyFile9 = unavailable9("copyFile");
-      readdir9 = unavailable9("readdir");
-      createReadStream9 = unavailable9("createReadStream");
-      createWriteStream9 = unavailable9("createWriteStream");
-      randomBytes9 = unavailable9("randomBytes");
-      createHash9 = unavailable9("createHash");
-      createRequireFromPath9 = unavailable9("createRequireFromPath");
-      spawnSync9 = unavailable9("spawnSync");
-      createInterface9 = unavailable9("createInterface");
-      createServer9 = unavailable9("createServer");
-      DatabaseSync9 = unavailable9("DatabaseSync");
+      createRequire8 = unavailable8("createRequire");
+      readFileSync8 = unavailable8("readFileSync");
+      writeFileSync8 = unavailable8("writeFileSync");
+      readFile8 = unavailable8("readFile");
+      writeFile8 = unavailable8("writeFile");
+      appendFile8 = unavailable8("appendFile");
+      mkdir8 = unavailable8("mkdir");
+      mkdtemp8 = unavailable8("mkdtemp");
+      rename8 = unavailable8("rename");
+      unlink8 = unavailable8("unlink");
+      rm8 = unavailable8("rm");
+      stat8 = unavailable8("stat");
+      access8 = unavailable8("access");
+      copyFile8 = unavailable8("copyFile");
+      readdir8 = unavailable8("readdir");
+      createReadStream8 = unavailable8("createReadStream");
+      createWriteStream8 = unavailable8("createWriteStream");
+      randomBytes8 = unavailable8("randomBytes");
+      createHash8 = unavailable8("createHash");
+      createRequireFromPath8 = unavailable8("createRequireFromPath");
+      spawnSync8 = unavailable8("spawnSync");
+      createInterface8 = unavailable8("createInterface");
+      createServer8 = unavailable8("createServer");
+      DatabaseSync8 = unavailable8("DatabaseSync");
     }
   });
 
@@ -3670,7 +2225,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const variants = data?.pools?.[poolId]?.variants;
     if (!Array.isArray(variants) || !variants.length) return base;
     const forms = [base, ...variants];
-    const digest = createHash9("sha256").update(`${poolId}:${String(key)}`).digest();
+    const digest = createHash8("sha256").update(`${poolId}:${String(key)}`).digest();
     const idx = digest[0] % forms.length;
     return forms[idx];
   }
@@ -3815,7 +2370,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
     const vh = findPhrase(predLc, VERB_TO_KIND);
     if (!vh) return { node: "miss", reason: "a negated set query needs a known relation verb (import, call, inherit from, test, \u2026)" };
-    const objWords = predWords.filter((_, i) => (i < vh.start || i >= vh.end) && !STOPWORDS3.has(predLc[i]) && predLc[i] !== "from");
+    const objWords = predWords.filter((_, i) => (i < vh.start || i >= vh.end) && !STOPWORDS2.has(predLc[i]) && predLc[i] !== "from");
     if (!objWords.length) {
       return complementAst(entityType, { op: "difference", kind: "set", ast: { node: "existsEdge", entityType, kind: vh.kind } });
     }
@@ -3836,7 +2391,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     if (notIdx < 0) return null;
     const vh = findPhrase(restLc, VERB_TO_KIND);
     if (!vh) return null;
-    const subjTokens = rest.filter((_, j) => j !== notIdx && (j < vh.start || j >= vh.end) && restLc[j] !== "from" && !STOPWORDS3.has(restLc[j]));
+    const subjTokens = rest.filter((_, j) => j !== notIdx && (j < vh.start || j >= vh.end) && restLc[j] !== "from" && !STOPWORDS2.has(restLc[j]));
     const subjectTerm = subjTokens.join(" ").trim();
     if (!subjectTerm) return null;
     return { node: "forwardComplement", kind: vh.kind, subjectTerm };
@@ -4078,7 +2633,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const entWord = lc[i];
     i += 1;
     const tail = w.slice(i);
-    const tailMeaningful = lc.slice(i).some((t) => !STOPWORDS3.has(t) && !AGG_TAIL_FILLER.has(t));
+    const tailMeaningful = lc.slice(i).some((t) => !STOPWORDS2.has(t) && !AGG_TAIL_FILLER.has(t));
     let base;
     if (tailMeaningful) {
       const setAst = parseSetPhrase(`which ${entWord} ${tail.join(" ")}`, nlp, 1);
@@ -4125,7 +2680,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const entWord = lc[i];
     i += 1;
     const tail = w.slice(i);
-    const tailMeaningful = lc.slice(i).some((t) => !STOPWORDS3.has(t) && !AGG_TAIL_FILLER.has(t));
+    const tailMeaningful = lc.slice(i).some((t) => !STOPWORDS2.has(t) && !AGG_TAIL_FILLER.has(t));
     let scopeTailLc = lc.slice(i);
     let scopeTailWords = tail;
     if (scopeTailLc[0] === "is" || scopeTailLc[0] === "are") {
@@ -4305,7 +2860,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
           return { node: "recentCommits" };
         }
       }
-      if ((framed || quals.length) && nextNoun && /^[a-z]+$/.test(lc[i]) && !VERB_TO_KIND[lc[i]] && !STOPWORDS3.has(lc[i]) && !CASCADE_NOISE_SET.has(lc[i])) {
+      if ((framed || quals.length) && nextNoun && /^[a-z]+$/.test(lc[i]) && !VERB_TO_KIND[lc[i]] && !STOPWORDS2.has(lc[i]) && !CASCADE_NOISE_SET.has(lc[i])) {
         return { node: "find", entityType: nextNoun.entityType, term: w[i] };
       }
       return null;
@@ -6510,7 +5065,7 @@ ${lines.join("\n")}`;
         ...wordsOf(RELATIVE_PRONOUNS),
         ...wordsOf(Object.keys(CASCADE_SYNONYMS))
       ]);
-      STRUCTURAL_WORDS = /* @__PURE__ */ new Set([...STOPWORDS3, ...FRAME_WORDS, ...CONTEXT_PRONOUNS]);
+      STRUCTURAL_WORDS = /* @__PURE__ */ new Set([...STOPWORDS2, ...FRAME_WORDS, ...CONTEXT_PRONOUNS]);
       CASCADE_NOISE_SET = new Set(wordsOf(CASCADE_NOISE));
       NOISE_OR_SCAFFOLD = /* @__PURE__ */ new Set([...CASCADE_NOISE_SET, ...STRUCTURAL_WORDS]);
       TRIGGER_FUZZY_WORDS = [
@@ -6532,7 +5087,7 @@ ${lines.join("\n")}`;
         ...wordsOf(Object.keys(VERB_TO_KIND)),
         ...Object.keys(ENTITY_TO_TYPE),
         ...TRIGGER_FUZZY_WORDS
-      ])].filter((wd) => /^[a-z]+$/.test(wd) && wd.length >= 4 && !STOPWORDS3.has(wd));
+      ])].filter((wd) => /^[a-z]+$/.test(wd) && wd.length >= 4 && !STOPWORDS2.has(wd));
       LAST_COMMIT_PHRASE_RE = /\b(?:the\s+)?(?:last|latest|most\s+recent)\s+commit\b/i;
       BARE_WHEN_COMMIT_RE = /^when\s+(?:was|were|is|did|does|do)\s+commit\s+[0-9a-fA-F:]+$/i;
       DYNAMIC_LIST_TRIGGER_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][a-z'-]*)\s*(.*)$/i;
@@ -6775,6 +5330,1454 @@ ${lines.join("\n")}`;
       init_codegraph();
       init_source_slice();
       init_repository_interface();
+    }
+  });
+
+  // src/memory/prose-tokens.mjs
+  function splitIdentifierWords2(raw) {
+    if (!raw) return [];
+    let s = String(raw).replace(/\.[A-Za-z0-9]+$/, "");
+    s = s.replace(/[/\\]/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2").replace(/([A-Za-z])([0-9])/g, "$1 $2").replace(/([0-9])([A-Za-z])/g, "$1 $2").replace(/[_\-.]+/g, " ");
+    return s.split(/\s+/).map((w) => w.toLowerCase()).filter((w) => w.length > 1 && w.length <= MAX_TOKEN_LEN2);
+  }
+  function tokenizeProse2(text) {
+    if (!text) return [];
+    const out = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const raw of String(text).toLowerCase().split(/[^a-z0-9]+/)) {
+      if (raw.length < 2 || raw.length > MAX_TOKEN_LEN2 || STOPWORDS3.has(raw)) continue;
+      if (seen.has(raw)) continue;
+      seen.add(raw);
+      out.push(raw);
+      if (out.length >= MAX_TOKENS_PER_DOC2) break;
+    }
+    return out;
+  }
+  function proseTokensFor({ name, doc } = {}) {
+    const set = /* @__PURE__ */ new Set([...splitIdentifierWords2(name), ...tokenizeProse2(doc)]);
+    return [...set].sort();
+  }
+  function buildProseIndex(individuals) {
+    const index = /* @__PURE__ */ Object.create(null);
+    for (const ind of individuals) {
+      const tokAttr = (ind.attributes || []).find((a) => a.key === "prose_tokens");
+      if (!tokAttr?.value) continue;
+      for (const word of tokAttr.value.split(" ")) {
+        if (!index[word]) index[word] = [];
+        index[word].push(ind.id);
+      }
+    }
+    for (const word of Object.keys(index)) index[word].sort();
+    return index;
+  }
+  var STOPWORDS3, MAX_TOKEN_LEN2, MAX_TOKENS_PER_DOC2;
+  var init_prose_tokens = __esm({
+    "src/memory/prose-tokens.mjs"() {
+      STOPWORDS3 = new Set(
+        "a an and or but the of to in on at for with from by as is are was were be been being it its this that these those i you he she they we me my your our do does did not no yes if then else than so such can will would should could may might about into over under out up down off again more most some any all what which who whom whose when where why how".split(/\s+/)
+      );
+      MAX_TOKEN_LEN2 = 40;
+      MAX_TOKENS_PER_DOC2 = 120;
+    }
+  });
+
+  // src/hash.mjs
+  function fnv1a32(str) {
+    let h = 2166136261;
+    for (let i = 0; i < str.length; i += 1) {
+      h ^= str.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    return h >>> 0;
+  }
+  function fnv1aHex(str) {
+    return fnv1a32(str).toString(16).padStart(8, "0");
+  }
+  function normFactTerm(t) {
+    let s = normText(t);
+    s = s.replace(/^\/c\/[a-z]{2,3}\//i, "");
+    s = s.replace(/^[a-z][\w.-]*:/i, "");
+    s = s.replace(/_/g, " ").replace(/\s+/g, " ").trim();
+    s = s.replace(/^(?:the|an?)\s+/i, "");
+    return s.toLowerCase();
+  }
+  function factIdForTriple(subject, predicate, object) {
+    return factIdFor(normFactTerm(subject), normText(predicate), normFactTerm(object));
+  }
+  var TEXT_CAP, normText, factIdFor;
+  var init_hash = __esm({
+    "src/hash.mjs"() {
+      TEXT_CAP = 2e3;
+      normText = (t) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, TEXT_CAP);
+      factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
+    }
+  });
+
+  // src/memory/shacl.mjs
+  function attrValue(ind, prop) {
+    const a = (ind?.attributes || []).find((x) => x?.prop === prop);
+    return a ? String(a.value ?? "") : void 0;
+  }
+  function checkIndividual(ind, violations) {
+    if (!ind?.class || !MEMORY_CLASSES.has(ind.class)) {
+      violations.push(`must have a class from the closed vocabulary Utterance | Fact | Session | Source | Rule (got ${JSON.stringify(ind?.class)})`);
+    }
+  }
+  function checkFact(ind, violations) {
+    for (const prop of ["rdf:subject", "rdf:predicate", "rdf:object"]) {
+      if (!nonEmpty(attrValue(ind, prop))) violations.push(`a Fact needs a non-empty ${prop}`);
+    }
+    const prov = attrValue(ind, "mgx:factProvenance");
+    if (prov !== void 0 && !nonEmpty(prov)) violations.push("mgx:factProvenance, when present, must be non-empty");
+  }
+  function checkRule(ind, violations) {
+    if (!nonEmpty(attrValue(ind, "mgx:ruleName"))) violations.push("a Rule needs a non-empty mgx:ruleName");
+    const kind = attrValue(ind, "mgx:ruleKind");
+    if (!kind || !RULE_KINDS.has(kind)) {
+      violations.push(`a Rule's mgx:ruleKind must be one of ${[...RULE_KINDS].join(" | ")} (got ${JSON.stringify(kind)})`);
+      return;
+    }
+    for (const prop of RULE_SLOT_PROPS[kind]) {
+      if (!nonEmpty(attrValue(ind, prop))) violations.push(`a ${kind} Rule needs a non-empty ${prop}`);
+    }
+  }
+  function validateIndividual(ind) {
+    const violations = [];
+    checkIndividual(ind, violations);
+    if (ind?.class === "Fact") checkFact(ind, violations);
+    if (ind?.class === "Rule") checkRule(ind, violations);
+    return { ok: violations.length === 0, violations };
+  }
+  function assertIndividualValid(ind) {
+    const r = validateIndividual(ind);
+    if (!r.ok) {
+      const e = new Error(`SHACL validation failed for ${ind?.class} "${ind?.id}": ${r.violations.join(" | ")}`);
+      e.violations = r.violations;
+      throw e;
+    }
+  }
+  var MEMORY_CLASSES, RULE_KINDS, RULE_SLOT_PROPS, nonEmpty;
+  var init_shacl = __esm({
+    "src/memory/shacl.mjs"() {
+      MEMORY_CLASSES = /* @__PURE__ */ new Set(["Utterance", "Fact", "Session", "Source", "Rule"]);
+      RULE_KINDS = /* @__PURE__ */ new Set([
+        "compose2",
+        "filter",
+        "recursive",
+        "action-signature",
+        "action-precond",
+        "action-effect",
+        "action-constraint"
+      ]);
+      RULE_SLOT_PROPS = {
+        compose2: ["mgx:ruleBase1", "mgx:ruleBase2"],
+        filter: ["mgx:ruleBase1", "mgx:ruleFilterProperty"],
+        recursive: ["mgx:ruleBaseCase", "mgx:ruleRecStep"],
+        "action-signature": ["mgx:ruleActionSubjectClass", "mgx:ruleActionTargetClass"],
+        "action-precond": [
+          "mgx:ruleActionPrecondShape",
+          "mgx:ruleActionPrecondPredicate",
+          "mgx:ruleActionPrecondRole",
+          "mgx:ruleActionPrecondScope"
+        ],
+        "action-effect": [
+          "mgx:ruleActionEffectPredicate",
+          "mgx:ruleActionEffectSubject",
+          "mgx:ruleActionEffectObject"
+        ],
+        "action-constraint": [
+          "mgx:ruleActionConstraintLeft",
+          "mgx:ruleActionConstraintRight",
+          "mgx:ruleActionConstraintGuard"
+        ]
+      };
+      nonEmpty = (v) => typeof v === "string" && v.trim().length > 0;
+    }
+  });
+
+  // node-stub:node:sqlite
+  var node_sqlite_exports = {};
+  __export(node_sqlite_exports, {
+    DatabaseSync: () => DatabaseSync9,
+    access: () => access9,
+    appendFile: () => appendFile9,
+    basename: () => basename,
+    copyFile: () => copyFile9,
+    createHash: () => createHash9,
+    createInterface: () => createInterface9,
+    createReadStream: () => createReadStream9,
+    createRequire: () => createRequire9,
+    createRequireFromPath: () => createRequireFromPath9,
+    createServer: () => createServer9,
+    createWriteStream: () => createWriteStream9,
+    default: () => node_sqlite_default,
+    dirname: () => dirname2,
+    existsSync: () => existsSync2,
+    extname: () => extname,
+    fileURLToPath: () => fileURLToPath2,
+    isAbsolute: () => isAbsolute,
+    join: () => join2,
+    mkdir: () => mkdir9,
+    mkdtemp: () => mkdtemp9,
+    pathToFileURL: () => pathToFileURL,
+    randomBytes: () => randomBytes9,
+    readFile: () => readFile9,
+    readFileSync: () => readFileSync9,
+    readdir: () => readdir9,
+    rename: () => rename9,
+    resolve: () => resolve2,
+    rm: () => rm9,
+    sep: () => sep2,
+    spawnSync: () => spawnSync9,
+    stat: () => stat9,
+    tmpdir: () => tmpdir,
+    unlink: () => unlink9,
+    writeFile: () => writeFile9,
+    writeFileSync: () => writeFileSync9
+  });
+  var unavailable9, createRequire9, readFileSync9, writeFileSync9, readFile9, writeFile9, appendFile9, mkdir9, mkdtemp9, rename9, unlink9, rm9, stat9, access9, copyFile9, readdir9, createReadStream9, createWriteStream9, existsSync2, join2, dirname2, resolve2, isAbsolute, basename, extname, sep2, fileURLToPath2, pathToFileURL, randomBytes9, createHash9, createRequireFromPath9, spawnSync9, createInterface9, createServer9, tmpdir, DatabaseSync9, node_sqlite_default;
+  var init_node_sqlite = __esm({
+    "node-stub:node:sqlite"() {
+      unavailable9 = (name) => () => {
+        throw new Error(name + " unavailable in the browser ask bundle");
+      };
+      createRequire9 = unavailable9("createRequire");
+      readFileSync9 = unavailable9("readFileSync");
+      writeFileSync9 = unavailable9("writeFileSync");
+      readFile9 = unavailable9("readFile");
+      writeFile9 = unavailable9("writeFile");
+      appendFile9 = unavailable9("appendFile");
+      mkdir9 = unavailable9("mkdir");
+      mkdtemp9 = unavailable9("mkdtemp");
+      rename9 = unavailable9("rename");
+      unlink9 = unavailable9("unlink");
+      rm9 = unavailable9("rm");
+      stat9 = unavailable9("stat");
+      access9 = unavailable9("access");
+      copyFile9 = unavailable9("copyFile");
+      readdir9 = unavailable9("readdir");
+      createReadStream9 = unavailable9("createReadStream");
+      createWriteStream9 = unavailable9("createWriteStream");
+      existsSync2 = () => false;
+      join2 = (...a) => a.join("/");
+      dirname2 = (p) => String(p).replace(/\/[^/]*$/, "");
+      resolve2 = (...a) => a.join("/");
+      isAbsolute = (p) => String(p).startsWith("/");
+      basename = (p) => String(p).split("/").pop();
+      extname = (p) => {
+        const m = /\.[^./]+$/.exec(String(p));
+        return m ? m[0] : "";
+      };
+      sep2 = "/";
+      fileURLToPath2 = (u) => String(u);
+      pathToFileURL = (p) => new URL("file://" + p);
+      randomBytes9 = unavailable9("randomBytes");
+      createHash9 = unavailable9("createHash");
+      createRequireFromPath9 = unavailable9("createRequireFromPath");
+      spawnSync9 = unavailable9("spawnSync");
+      createInterface9 = unavailable9("createInterface");
+      createServer9 = unavailable9("createServer");
+      tmpdir = () => "/tmp";
+      DatabaseSync9 = unavailable9("DatabaseSync");
+      node_sqlite_default = {};
+    }
+  });
+
+  // src/memory/core.mjs
+  var core_exports = {};
+  __export(core_exports, {
+    CANONICALISED_FROM_PROP: () => CANONICALISED_FROM_PROP,
+    CAPABLE_OF_PREDICATE: () => CAPABLE_OF_PREDICATE,
+    CONTRADICTION_TRUST_FLOOR: () => CONTRADICTION_TRUST_FLOOR,
+    CREATED_AT_PROP: () => CREATED_AT_PROP,
+    DEFAULT_RETENTION: () => DEFAULT_RETENTION,
+    DERIVED_FROM_PROP: () => DERIVED_FROM_PROP,
+    FACT_CLASS: () => FACT_CLASS,
+    HAS_A_PREDICATE: () => HAS_A_PREDICATE,
+    IN_REPLY_TO_PROP: () => IN_REPLY_TO_PROP,
+    MEMORY_DIR_REL: () => MEMORY_DIR_REL,
+    MEMORY_GRAPH_REL: () => MEMORY_GRAPH_REL,
+    MEMORY_MANIFEST_REL: () => MEMORY_MANIFEST_REL,
+    MEMORY_SESSION_CLASS: () => MEMORY_SESSION_CLASS,
+    MULTI_VALUED_PREDICATES: () => MULTI_VALUED_PREDICATES,
+    OPERATOR_SOURCE_ID: () => OPERATOR_SOURCE_ID,
+    RULE_CLASS: () => RULE_CLASS,
+    RULE_KINDS: () => RULE_KINDS2,
+    RULE_KIND_ACTION_CONSTRAINT: () => RULE_KIND_ACTION_CONSTRAINT,
+    RULE_KIND_ACTION_EFFECT: () => RULE_KIND_ACTION_EFFECT,
+    RULE_KIND_ACTION_PRECOND: () => RULE_KIND_ACTION_PRECOND,
+    RULE_KIND_ACTION_SIGNATURE: () => RULE_KIND_ACTION_SIGNATURE,
+    RULE_KIND_COMPOSE2: () => RULE_KIND_COMPOSE2,
+    RULE_KIND_FILTER: () => RULE_KIND_FILTER,
+    RULE_KIND_PROP: () => RULE_KIND_PROP,
+    RULE_KIND_RECURSIVE: () => RULE_KIND_RECURSIVE,
+    RULE_NAME_PROP: () => RULE_NAME_PROP,
+    SAID_IN_SESSION_PROP: () => SAID_IN_SESSION_PROP,
+    SOURCE_CLASS: () => SOURCE_CLASS,
+    SOURCE_RELIABILITY_PROP: () => SOURCE_RELIABILITY_PROP,
+    STATED_BY_PROP: () => STATED_BY_PROP,
+    TEACH_SOURCE_ID: () => TEACH_SOURCE_ID,
+    UPDATED_AT_PROP: () => UPDATED_AT_PROP,
+    UTTERANCE_CLASS: () => UTTERANCE_CLASS,
+    appendFact: () => appendFact,
+    appendFacts: () => appendFacts,
+    appendRule: () => appendRule,
+    appendUtterance: () => appendUtterance,
+    appendUtterances: () => appendUtterances,
+    closeSqliteMemoryStore: () => closeSqliteMemoryStore,
+    createInMemoryStore: () => createInMemoryStore,
+    createSqliteMemoryStore: () => createSqliteMemoryStore,
+    emptyMemory: () => emptyMemory,
+    factIdForTriple: () => factIdForTriple,
+    findContradictions: () => findContradictions,
+    findRuleByName: () => findRuleByName,
+    findRulesByName: () => findRulesByName,
+    loadMemory: () => loadMemory,
+    normFactTerm: () => normFactTerm,
+    openMemoryBackend: () => openMemoryBackend,
+    provenanceTagToSource: () => provenanceTagToSource,
+    readFactRows: () => readFactRows,
+    readRuleRows: () => readRuleRows,
+    removeFacts: () => removeFacts,
+    resolveMemoryGraphFile: () => resolveMemoryGraphFile,
+    resolveRelationChase: () => resolveRelationChase,
+    resolveRelationChaseReverse: () => resolveRelationChaseReverse,
+    snapshotMemory: () => snapshotMemory
+  });
+  function emptyMemory() {
+    return {
+      generated_at: "",
+      memory: true,
+      prefixes: {
+        owl: "http://www.w3.org/2002/07/owl#",
+        rdf: "http://www.w3.org/1999/02/22-rdf-syntax-ns#",
+        rdfs: "http://www.w3.org/2000/01/rdf-schema#",
+        mgx: "urn:tmct:mgx#"
+      },
+      vocabulary: MEMORY_VOCABULARY.map((v) => ({ ...v })),
+      classes: [],
+      objectProperties: [],
+      individuals: [],
+      proseIndex: {}
+    };
+  }
+  function resolveMemoryGraphFile(dir, version = null) {
+    if (isMemoryHandle(dir) || isSqliteHandle(dir)) {
+      throw new Error("resolveMemoryGraphFile: dir is a memory/sqlite handle, not a file path (Backend A only)");
+    }
+    if (version === null) return join(dir, MEMORY_GRAPH_REL);
+    return join(dir, MEMORY_DIR_REL, `graph.v${version}.json`);
+  }
+  function isMemoryHandle(dir) {
+    return !!dir && typeof dir === "object" && dir.backend === BACKEND_MEMORY;
+  }
+  function isSqliteHandle(dir) {
+    return !!dir && typeof dir === "object" && dir.backend === BACKEND_SQLITE;
+  }
+  function isMemoryOrSqliteHandle(dir) {
+    return isMemoryHandle(dir) || isSqliteHandle(dir);
+  }
+  function createInMemoryStore() {
+    return { backend: BACKEND_MEMORY, payload: emptyMemory() };
+  }
+  async function createSqliteMemoryStore(dbPath) {
+    const { DatabaseSync: DatabaseSync12 } = await Promise.resolve().then(() => (init_node_sqlite(), node_sqlite_exports));
+    const db = new DatabaseSync12(dbPath);
+    db.exec("PRAGMA journal_mode = WAL");
+    db.exec("PRAGMA synchronous = NORMAL");
+    db.exec(SQLITE_DDL);
+    return { backend: BACKEND_SQLITE, db, dbPath };
+  }
+  function closeSqliteMemoryStore(handle) {
+    if (isSqliteHandle(handle)) handle.db.close();
+  }
+  async function openMemoryBackend(repoRoot, backendChoice) {
+    if (backendChoice === BACKEND_MEMORY) {
+      return { dir: createInMemoryStore(), close: async () => {
+      } };
+    }
+    if (backendChoice === BACKEND_SQLITE) {
+      const dbPath = join(repoRoot, ".tmct", "memory", "graph.sqlite");
+      await mkdir3(dirname(dbPath), { recursive: true });
+      const handle = await createSqliteMemoryStore(dbPath);
+      return { dir: handle, close: async () => closeSqliteMemoryStore(handle) };
+    }
+    return { dir: repoRoot, close: async () => {
+    } };
+  }
+  function readSqlitePayload(handle) {
+    if (!handle.cachedPayload) handle.cachedPayload = buildSqlitePayloadFromRows(handle);
+    return cloneJson(handle.cachedPayload);
+  }
+  function buildSqlitePayloadFromRows(handle) {
+    const db = handle.db;
+    const empty = emptyMemory();
+    const getMeta = (k, fallback) => {
+      const row = db.prepare("SELECT v FROM meta WHERE k = ?").get(k);
+      return row ? JSON.parse(row.v) : fallback;
+    };
+    const individuals = db.prepare("SELECT json FROM individuals ORDER BY ord").all().map((r) => JSON.parse(r.json));
+    const edgesForProp = db.prepare(
+      "SELECT subject, object, subject_label, object_label, extra FROM edges WHERE prop = ? ORDER BY rowid"
+    );
+    const objectProperties = db.prepare("SELECT prop, predicate, count FROM relations ORDER BY ord").all().map((r) => ({
+      predicate: r.predicate,
+      prop: r.prop,
+      count: r.count,
+      examples: edgesForProp.all(r.prop).map((e) => {
+        const edge = { subject: e.subject, object: e.object, subjectLabel: e.subject_label, objectLabel: e.object_label };
+        if (e.extra) Object.assign(edge, JSON.parse(e.extra));
+        return edge;
+      })
+    }));
+    return {
+      generated_at: getMeta("generated_at", empty.generated_at),
+      memory: getMeta("memory", empty.memory),
+      prefixes: getMeta("prefixes", empty.prefixes),
+      vocabulary: getMeta("vocabulary", empty.vocabulary),
+      classes: getMeta("classes", empty.classes),
+      objectProperties,
+      individuals,
+      proseIndex: getMeta("proseIndex", empty.proseIndex)
+    };
+  }
+  function cacheUpsertIndividual(cache, ind) {
+    const clone = cloneJson(ind);
+    const i = cache.individuals.findIndex((x) => x?.id === ind.id);
+    if (i >= 0) cache.individuals[i] = clone;
+    else cache.individuals.push(clone);
+  }
+  function cacheDropIndividualsExcept(cache, seenIds) {
+    cache.individuals = cache.individuals.filter((i) => seenIds.has(i?.id));
+  }
+  function cacheGroupFor(cache, prop) {
+    let g = cache.objectProperties.find((x) => x?.prop === prop);
+    if (!g) {
+      g = { predicate: null, prop, count: 0, examples: [] };
+      cache.objectProperties.push(g);
+    }
+    return g;
+  }
+  function cacheUpsertEdge(group, edge, extraKeys) {
+    const key = `${edge.subject}\0${edge.object}`;
+    group.examples = group.examples.filter((e) => `${e.subject}\0${e.object}` !== key);
+    const cached3 = {
+      subject: edge.subject,
+      object: edge.object,
+      subjectLabel: edge.subjectLabel ?? null,
+      objectLabel: edge.objectLabel ?? null
+    };
+    if (extraKeys.length) Object.assign(cached3, cloneJson(Object.fromEntries(extraKeys.map((k) => [k, edge[k]]))));
+    group.examples.push(cached3);
+  }
+  function cacheDropEdgesExcept(group, newKeys) {
+    group.examples = group.examples.filter((e) => newKeys.has(`${e.subject}\0${e.object}`));
+  }
+  function cacheDropGroupsExcept(cache, seenProps) {
+    cache.objectProperties = cache.objectProperties.filter((g) => seenProps.has(g?.prop));
+  }
+  function persistSqlitePayload(handle, payload) {
+    const db = handle.db;
+    const empty = emptyMemory();
+    const cache = handle.cachedPayload || null;
+    db.exec("BEGIN IMMEDIATE");
+    try {
+      const setMeta = db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)");
+      setMeta.run("generated_at", JSON.stringify(payload.generated_at ?? empty.generated_at));
+      setMeta.run("memory", JSON.stringify(payload.memory ?? empty.memory));
+      setMeta.run("prefixes", JSON.stringify(payload.prefixes ?? empty.prefixes));
+      setMeta.run("vocabulary", JSON.stringify(payload.vocabulary ?? empty.vocabulary));
+      setMeta.run("classes", JSON.stringify(payload.classes ?? empty.classes));
+      setMeta.run("proseIndex", JSON.stringify(payload.proseIndex ?? empty.proseIndex));
+      if (cache) {
+        cache.generated_at = cloneJson(payload.generated_at ?? empty.generated_at);
+        cache.memory = cloneJson(payload.memory ?? empty.memory);
+        cache.prefixes = cloneJson(payload.prefixes ?? empty.prefixes);
+        cache.vocabulary = cloneJson(payload.vocabulary ?? empty.vocabulary);
+        cache.classes = cloneJson(payload.classes ?? empty.classes);
+        cache.proseIndex = cloneJson(payload.proseIndex ?? empty.proseIndex);
+      }
+      const getInd = db.prepare("SELECT ord, json FROM individuals WHERE id = ?");
+      const maxOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM individuals").get().m;
+      let nextOrd = maxOrd + 1;
+      const upsertInd = db.prepare("INSERT OR REPLACE INTO individuals(id, ord, class, label, json) VALUES (?, ?, ?, ?, ?)");
+      const seenIds = /* @__PURE__ */ new Set();
+      for (const ind of payload.individuals || []) {
+        seenIds.add(ind.id);
+        const json = JSON.stringify(ind);
+        const existing = getInd.get(ind.id);
+        if (existing && existing.json === json) continue;
+        const ord = existing ? existing.ord : nextOrd++;
+        upsertInd.run(ind.id, ord, ind.class ?? null, ind.label ?? null, json);
+        if (cache) cacheUpsertIndividual(cache, ind);
+      }
+      const deleteInd = db.prepare("DELETE FROM individuals WHERE id = ?");
+      for (const row of db.prepare("SELECT id FROM individuals").all()) {
+        if (!seenIds.has(row.id)) deleteInd.run(row.id);
+      }
+      if (cache) cacheDropIndividualsExcept(cache, seenIds);
+      const getRelOrd = db.prepare("SELECT ord FROM relations WHERE prop = ?");
+      const maxRelOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM relations").get().m;
+      let nextRelOrd = maxRelOrd + 1;
+      const upsertRel = db.prepare("INSERT OR REPLACE INTO relations(prop, ord, predicate, count) VALUES (?, ?, ?, ?)");
+      const edgesForProp = db.prepare("SELECT subject, object, subject_label, object_label, extra FROM edges WHERE prop = ?");
+      const upsertEdge2 = db.prepare("INSERT OR REPLACE INTO edges(prop, subject, object, subject_label, object_label, extra) VALUES (?, ?, ?, ?, ?, ?)");
+      const deleteEdge = db.prepare("DELETE FROM edges WHERE prop = ? AND subject = ? AND object = ?");
+      const seenProps = /* @__PURE__ */ new Set();
+      for (const group of payload.objectProperties || []) {
+        seenProps.add(group.prop);
+        const existingRows = edgesForProp.all(group.prop);
+        const existingByKey = new Map(existingRows.map((r) => [`${r.subject}\0${r.object}`, r]));
+        const newKeys = /* @__PURE__ */ new Set();
+        const cacheGroup = cache ? cacheGroupFor(cache, group.prop) : null;
+        for (const e of group.examples || []) {
+          const key = `${e.subject}\0${e.object}`;
+          newKeys.add(key);
+          const extraKeys = Object.keys(e).filter((k) => !STD_EDGE_KEYS.has(k));
+          const extra = extraKeys.length ? JSON.stringify(Object.fromEntries(extraKeys.map((k) => [k, e[k]]))) : null;
+          const existing = existingByKey.get(key);
+          const unchanged = existing && (existing.subject_label ?? null) === (e.subjectLabel ?? null) && (existing.object_label ?? null) === (e.objectLabel ?? null) && (existing.extra ?? null) === (extra ?? null);
+          if (unchanged) continue;
+          upsertEdge2.run(group.prop, e.subject, e.object, e.subjectLabel ?? null, e.objectLabel ?? null, extra);
+          if (cacheGroup) cacheUpsertEdge(cacheGroup, e, extraKeys);
+        }
+        for (const key of existingByKey.keys()) {
+          if (newKeys.has(key)) continue;
+          const [s, o] = key.split("\0");
+          deleteEdge.run(group.prop, s, o);
+        }
+        if (cacheGroup) cacheDropEdgesExcept(cacheGroup, newKeys);
+        const relCount = Number.isFinite(group.count) ? group.count : (group.examples || []).length;
+        const relOrd = getRelOrd.get(group.prop)?.ord ?? nextRelOrd++;
+        upsertRel.run(group.prop, relOrd, group.predicate ?? null, relCount);
+        if (cacheGroup) {
+          cacheGroup.predicate = group.predicate ?? null;
+          cacheGroup.count = relCount;
+        }
+      }
+      for (const row of db.prepare("SELECT prop FROM relations").all()) {
+        if (seenProps.has(row.prop)) continue;
+        db.prepare("DELETE FROM edges WHERE prop = ?").run(row.prop);
+        db.prepare("DELETE FROM relations WHERE prop = ?").run(row.prop);
+      }
+      if (cache) cacheDropGroupsExcept(cache, seenProps);
+      db.exec("COMMIT");
+    } catch (e) {
+      db.exec("ROLLBACK");
+      handle.cachedPayload = void 0;
+      throw e;
+    }
+  }
+  async function atomicWriteText(file, text) {
+    const tmp = `${file}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
+    await writeFile3(tmp, text);
+    await rename3(tmp, file);
+  }
+  async function atomicWriteJson(file, obj) {
+    await atomicWriteText(file, JSON.stringify(obj));
+  }
+  async function snapshotMemory(dir, { retentionVersions } = {}) {
+    if (isMemoryOrSqliteHandle(dir)) {
+      throw new Error("snapshotMemory only supports the flat-JSON backend (Backend A) \u2014 a memory/sqlite handle has no on-disk graph.json to snapshot");
+    }
+    const graphFile = resolveMemoryGraphFile(dir);
+    let graphText;
+    try {
+      graphText = await readFile3(graphFile, "utf8");
+    } catch (e) {
+      if (e?.code === "ENOENT") return { skipped: true, version: null, prunedVersion: null };
+      throw e;
+    }
+    const manifestFile = resolveManifestFile(dir);
+    let manifest;
+    try {
+      manifest = JSON.parse(await readFile3(manifestFile, "utf8"));
+    } catch (e) {
+      if (e?.code !== "ENOENT") throw e;
+      manifest = { version: 0, retentionVersions: retentionVersions ?? DEFAULT_RETENTION };
+    }
+    if (!Number.isInteger(manifest.version)) manifest.version = 0;
+    if (!Number.isInteger(manifest.retentionVersions)) manifest.retentionVersions = retentionVersions ?? DEFAULT_RETENTION;
+    const v = manifest.version;
+    const versionedFile = resolveMemoryGraphFile(dir, v);
+    await mkdir3(dirname(versionedFile), { recursive: true });
+    await atomicWriteText(versionedFile, graphText);
+    manifest.version = v + 1;
+    let prunedVersion = null;
+    const pruneTarget = v - manifest.retentionVersions;
+    if (pruneTarget >= 0) {
+      try {
+        await unlink3(resolveMemoryGraphFile(dir, pruneTarget));
+        prunedVersion = pruneTarget;
+      } catch (e) {
+        if (e?.code !== "ENOENT") throw e;
+      }
+    }
+    await atomicWriteJson(manifestFile, manifest);
+    return { skipped: false, version: v, prunedVersion };
+  }
+  async function loadMemory(dir) {
+    if (isMemoryHandle(dir)) return dir.payload;
+    if (isSqliteHandle(dir)) return readSqlitePayload(dir);
+    let text;
+    try {
+      text = await readFile3(memoryGraphFile(dir), "utf8");
+    } catch (e) {
+      if (e?.code === "ENOENT") return emptyMemory();
+      throw e;
+    }
+    return JSON.parse(text);
+  }
+  async function persistMemory(dir, payload) {
+    if (isMemoryHandle(dir)) {
+      dir.payload = payload;
+      return;
+    }
+    if (isSqliteHandle(dir)) {
+      persistSqlitePayload(dir, payload);
+      return;
+    }
+    await mkdir3(dirname(memoryGraphFile(dir)), { recursive: true });
+    await atomicWriteJson(memoryGraphFile(dir), payload);
+  }
+  function buildMemoryIndex(payload) {
+    const individualsById = /* @__PURE__ */ new Map();
+    const sourcesById = /* @__PURE__ */ new Map();
+    const statedByBySubject = /* @__PURE__ */ new Map();
+    for (const ind of payload.individuals || []) {
+      if (!ind?.id) continue;
+      individualsById.set(ind.id, ind);
+      if (ind.class === SOURCE_CLASS) sourcesById.set(ind.id, ind);
+    }
+    const statedGroup = (payload.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
+    for (const e of statedGroup?.examples || []) {
+      if (!e?.subject) continue;
+      const list = statedByBySubject.get(e.subject);
+      if (list) list.push(e.object);
+      else statedByBySubject.set(e.subject, [e.object]);
+    }
+    payload[MEMORY_INDEX] = { individualsById, sourcesById, statedByBySubject };
+    return payload[MEMORY_INDEX];
+  }
+  async function mutateMemory(dir, fn) {
+    const payload = await loadMemory(dir);
+    buildMemoryIndex(payload);
+    const out = await fn(payload) ?? payload;
+    migrateLegacyProvenance(out);
+    recomputeSourceReliability(out);
+    out.proseIndex = buildProseIndex(out.individuals);
+    await persistMemory(dir, out);
+    return out;
+  }
+  function firstWriteCreatedAt(prior, candidate) {
+    return prior?.attributes?.find((a) => a?.prop === CREATED_AT_PROP)?.value || candidate || nowIso();
+  }
+  function setAttr(ind, prop, key, value) {
+    ind.attributes = (ind.attributes || []).filter((a) => a?.prop !== prop);
+    ind.attributes.push({ prop, key, value });
+  }
+  function sourceIdFor(desc) {
+    switch (desc?.kind) {
+      case "operator":
+        return { id: desc.sessionId ? `${OPERATOR_SOURCE_ID}:${desc.sessionId}` : OPERATOR_SOURCE_ID, type: "operator" };
+      case "teach":
+        return { id: desc.sessionId ? `${TEACH_SOURCE_ID}:${desc.sessionId}` : TEACH_SOURCE_ID, type: "teach" };
+      case "provider":
+        return { id: `src:provider:${desc.name}`, type: "provider" };
+      case "corpus":
+        return { id: `src:corpus:${desc.name}`, type: "corpus" };
+      // One Source per source-file basename, not per extraction run.
+      case "extracted":
+        return { id: `src:extracted:${desc.name}`, type: "extracted" };
+      case "web":
+        return { id: `src:learned:web:${fnv1aHex(String(desc.url || ""))}`, type: "web", url: String(desc.url || "") };
+      case "entailed":
+        return { id: `src:entailed:${desc.rule}`, type: "entailed", rule: String(desc.rule || "") };
+      default:
+        return null;
+    }
+  }
+  function upsertSource(payload, desc, createdAtCandidate) {
+    const info = sourceIdFor(desc);
+    if (!info) return null;
+    const idx = memoryIndexOf(payload);
+    const prior = idx ? idx.individualsById.get(info.id) : payload.individuals.find((i) => i?.id === info.id);
+    const created = firstWriteCreatedAt(prior, desc?.createdAt || createdAtCandidate);
+    const ind = {
+      id: info.id,
+      label: sourceLabel(info.id),
+      class: SOURCE_CLASS,
+      derived_from: [],
+      mentions: [],
+      attributes: [
+        { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
+        { prop: "mgx:sourceType", key: "sourceType", value: info.type },
+        { prop: CREATED_AT_PROP, key: "createdAt", value: created },
+        ...info.url ? [{ prop: "mgx:sourceUrl", key: "sourceUrl", value: info.url }] : [],
+        ...info.rule ? [{ prop: "mgx:sourceRule", key: "sourceRule", value: info.rule }] : []
+      ]
+    };
+    const stored = upsertIndividual(payload, ind);
+    if (idx) idx.sourcesById.set(info.id, stored);
+    return info.id;
+  }
+  function sourcesByIdMap(payload) {
+    const idx = memoryIndexOf(payload);
+    const m = {};
+    if (idx) {
+      for (const [id, ind] of idx.sourcesById) m[id] = ind;
+      return m;
+    }
+    for (const i of payload.individuals) if (i?.class === SOURCE_CLASS) m[i.id] = i;
+    return m;
+  }
+  function statedByObjectsFor(payload, factId) {
+    const idx = memoryIndexOf(payload);
+    if (idx) return (idx.statedByBySubject.get(factId) || []).slice();
+    const g = payload.objectProperties.find((x) => x?.prop === STATED_BY_PROP);
+    return (g?.examples || []).filter((e) => e?.subject === factId).map((e) => e.object);
+  }
+  function recomputeFactTrust(payload, fact, nowMs = Date.now(), trustOpts = {}) {
+    const sourceIds = statedByObjectsFor(payload, fact.id);
+    const createdAt = (fact.attributes || []).find((a) => a?.prop === CREATED_AT_PROP)?.value || "";
+    const { score, inputs } = computeTrust({ sourceIds, createdAt }, sourcesByIdMap(payload), {
+      now: nowMs,
+      ...Array.isArray(trustOpts?.premiseTrusts) ? { premiseTrusts: trustOpts.premiseTrusts } : {},
+      ...typeof trustOpts?.ruleConfidence === "number" ? { ruleConfidence: trustOpts.ruleConfidence } : {}
+    });
+    setAttr(fact, TRUST_SCORE_PROP, "trustScore", String(score));
+    setAttr(fact, TRUST_INPUTS_PROP, "trustInputs", JSON.stringify(inputs));
+    setAttr(fact, UPDATED_AT_PROP, "updatedAt", new Date(nowMs).toISOString());
+  }
+  function syncFactSources(payload, fact, nowMs = Date.now(), trustOpts = {}) {
+    const prov = (fact.attributes || []).find((a) => a?.prop === "mgx:factProvenance")?.value || "";
+    const factCreated = (fact.attributes || []).find((a) => a?.prop === CREATED_AT_PROP)?.value || new Date(nowMs).toISOString();
+    for (const tag of prov.split(" | ").filter(Boolean)) {
+      const desc = provenanceTagToSource(tag);
+      if (!desc) continue;
+      const sid = upsertSource(payload, desc, factCreated);
+      if (!sid) continue;
+      upsertEdge(payload, { predicate: "statedBy", prop: STATED_BY_PROP }, {
+        subject: fact.id,
+        object: sid,
+        subjectLabel: fact.label,
+        objectLabel: sourceLabel(sid)
+      });
+    }
+    recomputeFactTrust(payload, fact, nowMs, trustOpts);
+  }
+  function migrateLegacyProvenance(payload) {
+    if (!Array.isArray(payload?.individuals) || !Array.isArray(payload?.objectProperties)) return;
+    const statedGroup = payload.objectProperties.find((g) => g?.prop === STATED_BY_PROP);
+    const haveEdge = new Set((statedGroup?.examples || []).map((e) => e.subject));
+    let changed = false;
+    const now = Date.now();
+    for (const ind of payload.individuals) {
+      if (ind?.class !== FACT_CLASS) continue;
+      if (haveEdge.has(ind.id)) continue;
+      const prov = (ind.attributes || []).find((a) => a?.prop === "mgx:factProvenance")?.value || "";
+      if (!prov) continue;
+      syncFactSources(payload, ind, now);
+      changed = true;
+    }
+    if (changed) recountClasses(payload);
+  }
+  function recomputeSourceReliability(payload) {
+    if (!Array.isArray(payload?.individuals) || !Array.isArray(payload?.objectProperties)) return;
+    const rows = readFactRows(payload);
+    const contradictedFactIds = /* @__PURE__ */ new Set();
+    for (const group of findContradictions(payload)) for (const r of group) contradictedFactIds.add(r.id);
+    const bySource = /* @__PURE__ */ new Map();
+    for (const row of rows) {
+      for (const sid of row.sourceIds) {
+        if (!isSessionScopedSourceId(sid)) continue;
+        const bucket = bySource.get(sid) || { factsAsserted: 0, factsContradicted: 0 };
+        bucket.factsAsserted += 1;
+        if (contradictedFactIds.has(row.id)) bucket.factsContradicted += 1;
+        bySource.set(sid, bucket);
+      }
+    }
+    if (!bySource.size) return;
+    const idx = memoryIndexOf(payload);
+    for (const [sid, counts] of bySource) {
+      const source = idx ? idx.individualsById.get(sid) : payload.individuals.find((i) => i?.id === sid);
+      if (!source) continue;
+      setAttr(source, SOURCE_RELIABILITY_PROP, "sourceReliability", String(sessionReliabilityFrom(counts)));
+      setAttr(source, UPDATED_AT_PROP, "updatedAt", (/* @__PURE__ */ new Date()).toISOString());
+    }
+    const statedGroup = payload.objectProperties.find((g) => g?.prop === STATED_BY_PROP);
+    const affected = /* @__PURE__ */ new Set();
+    for (const e of statedGroup?.examples || []) if (bySource.has(e?.object)) affected.add(e.subject);
+    for (const id of affected) {
+      const ind = idx ? idx.individualsById.get(id) : payload.individuals.find((i) => i?.id === id);
+      if (ind) recomputeFactTrust(payload, ind);
+    }
+  }
+  function upsertIndividual(payload, ind) {
+    const idx = memoryIndexOf(payload);
+    if (idx) {
+      const prior = idx.individualsById.get(ind.id);
+      if (prior) {
+        Object.assign(prior, ind);
+        return prior;
+      }
+      payload.individuals.push(ind);
+      idx.individualsById.set(ind.id, ind);
+      return ind;
+    }
+    const i = payload.individuals.findIndex((x) => x?.id === ind.id);
+    if (i >= 0) {
+      payload.individuals[i] = ind;
+      return ind;
+    }
+    payload.individuals.push(ind);
+    return ind;
+  }
+  function upsertEdge(payload, { predicate, prop }, edge) {
+    let group = payload.objectProperties.find((g) => g?.prop === prop);
+    if (!group) {
+      group = { predicate, prop, count: 0, examples: [] };
+      payload.objectProperties.push(group);
+    }
+    const idx = prop === STATED_BY_PROP ? memoryIndexOf(payload) : null;
+    if (idx) {
+      const existing = idx.statedByBySubject.get(edge.subject);
+      if (!existing || !existing.includes(edge.object)) {
+        group.examples.push({ ...edge, createdAt: edge.createdAt || nowIso() });
+        group.count = group.examples.length;
+        if (existing) existing.push(edge.object);
+        else idx.statedByBySubject.set(edge.subject, [edge.object]);
+        return;
+      }
+    }
+    const prior = (group.examples || []).find((e) => e?.subject === edge.subject && e?.object === edge.object);
+    const createdAt = prior?.createdAt || edge.createdAt || nowIso();
+    group.examples = (group.examples || []).filter(
+      (e) => !(e?.subject === edge.subject && e?.object === edge.object)
+    );
+    group.examples.push({ ...edge, createdAt });
+    group.count = group.examples.length;
+    if (idx) {
+      const list = idx.statedByBySubject.get(edge.subject) || [];
+      if (!list.includes(edge.object)) list.push(edge.object);
+      idx.statedByBySubject.set(edge.subject, list);
+    }
+  }
+  function recountClasses(payload) {
+    const names = [MEMORY_SESSION_CLASS, UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS, RULE_CLASS];
+    payload.classes = payload.classes.filter((c) => !names.includes(c?.name));
+    for (const name of names) {
+      const of = payload.individuals.filter((i) => i?.class === name);
+      if (of.length) payload.classes.push({ name, count: of.length, sample: of.slice(0, 3).map((i) => i.label) });
+    }
+  }
+  function ensureSession(payload, sessionId, started = "") {
+    const sid = `session:${sessionId}`;
+    if (payload.individuals.some((i) => i?.id === sid)) return sid;
+    payload.individuals.push({
+      id: sid,
+      label: String(sessionId).slice(0, 8),
+      class: MEMORY_SESSION_CLASS,
+      derived_from: [],
+      mentions: [],
+      attributes: [
+        { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
+        { prop: CREATED_AT_PROP, key: "createdAt", value: started || nowIso() },
+        ...started ? [{ prop: "mgx:sessionStarted", key: "started", value: started }] : []
+      ]
+    });
+    return sid;
+  }
+  function putUtterance(payload, { role, text, ts, sessionId, sessionStarted = "", parsed = null, replyTo = null, createdAt = "" }) {
+    if (!ROLES.has(role)) throw new Error(`utterance role must be "visitor" or "tmct", got ${JSON.stringify(role)}`);
+    if (!sessionId) throw new Error("utterance needs a sessionId");
+    const cleanTs = String(ts || "");
+    const cleanText = normText(text);
+    const id = `utt:${sessionId}#${cleanTs}#${role}`;
+    const label = labelOf(cleanText) || (role === "visitor" ? "a-visitor-said" : "a-tmct-said");
+    const tokens = proseTokensFor({ doc: cleanText });
+    const prior = payload.individuals.find((x) => x?.id === id);
+    const createdAtVal = firstWriteCreatedAt(prior, createdAt || cleanTs);
+    const ind = {
+      id,
+      label,
+      class: UTTERANCE_CLASS,
+      derived_from: [],
+      mentions: [],
+      attributes: [
+        { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
+        { prop: "mgx:utteranceRole", key: "role", value: role },
+        { prop: "mgx:utteranceText", key: "text", value: cleanText },
+        { prop: "mgx:utteranceTs", key: "ts", value: cleanTs },
+        { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
+        ...parsed != null ? [{ prop: "mgx:utteranceParsed", key: "parsed", value: JSON.stringify(parsed) }] : [],
+        ...tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : []
+      ]
+    };
+    upsertIndividual(payload, ind);
+    const sid = ensureSession(payload, sessionId, sessionStarted);
+    upsertEdge(payload, { predicate: "saidInSession", prop: SAID_IN_SESSION_PROP }, {
+      subject: id,
+      object: sid,
+      subjectLabel: label,
+      objectLabel: String(sessionId).slice(0, 8)
+    });
+    if (replyTo) {
+      const target = payload.individuals.find((i) => i?.id === replyTo);
+      if (target) {
+        upsertEdge(payload, { predicate: "inReplyTo", prop: IN_REPLY_TO_PROP }, {
+          subject: id,
+          object: replyTo,
+          subjectLabel: label,
+          objectLabel: target.label
+        });
+      }
+    }
+    if (cleanTs && cleanTs > String(payload.generated_at || "")) payload.generated_at = cleanTs;
+    return id;
+  }
+  async function appendUtterance(dir, utterance) {
+    let id;
+    await mutateMemory(dir, (payload) => {
+      id = putUtterance(payload, utterance);
+      recountClasses(payload);
+    });
+    return { id };
+  }
+  async function appendUtterances(dir, utterances) {
+    const ids = [];
+    if (!utterances?.length) return { ids };
+    await mutateMemory(dir, (payload) => {
+      for (const u of utterances) ids.push(putUtterance(payload, u));
+      recountClasses(payload);
+    });
+    return { ids };
+  }
+  async function appendFact(dir, { subject, predicate, object, provenance = "", createdAt = "", quantifier = "", premiseTrusts, ruleConfidence } = {}) {
+    const s = normFactTerm(subject);
+    const p = normText(predicate);
+    const o = normFactTerm(object);
+    if (!s || !p || !o) throw new Error("a fact needs subject, predicate and object");
+    const id = factIdFor(s, p, o);
+    const text = `${s} ${p} ${o}`;
+    const tokens = proseTokensFor({ doc: text });
+    const q = normText(quantifier);
+    await mutateMemory(dir, async (payload) => {
+      const prior = payload.individuals.find((x) => x?.id === id);
+      const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
+      const provs = [...new Set([...priorProv.split(" | "), normText(provenance)].filter(Boolean))];
+      const createdAtVal = firstWriteCreatedAt(prior, createdAt);
+      const priorQ = prior?.attributes?.find((a) => a?.prop === "mgx:factQuantifier")?.value || "";
+      const qVal = q || priorQ;
+      const candidate = {
+        id,
+        label: labelOf(text),
+        class: FACT_CLASS,
+        derived_from: [],
+        mentions: [],
+        attributes: [
+          { prop: "rdf:type", key: "type", value: "rdf:Statement" },
+          { prop: "rdf:subject", key: "subject", value: s },
+          { prop: "rdf:predicate", key: "predicate", value: p },
+          { prop: "rdf:object", key: "object", value: o },
+          { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
+          ...provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : [],
+          ...tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: tokens.join(" ") }] : [],
+          ...qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : []
+        ]
+      };
+      await assertIndividualValid(candidate);
+      upsertIndividual(payload, candidate);
+      syncFactSources(payload, payload.individuals.find((x) => x?.id === id), void 0, { premiseTrusts, ruleConfidence });
+      recountClasses(payload);
+    });
+    return { id };
+  }
+  async function appendFacts(dir, facts) {
+    const prepared = [];
+    let skipped = 0;
+    for (const f of facts || []) {
+      const s = normFactTerm(f?.subject);
+      const p = normText(f?.predicate);
+      const o = normFactTerm(f?.object);
+      if (!s || !p || !o) {
+        skipped += 1;
+        continue;
+      }
+      const text = `${s} ${p} ${o}`;
+      prepared.push({
+        id: factIdFor(s, p, o),
+        // NUL-delimited — byte-identical to appendFact's id
+        s,
+        p,
+        o,
+        text,
+        tokens: proseTokensFor({ doc: text }),
+        provenance: normText(f?.provenance),
+        createdAt: f?.createdAt || "",
+        quantifier: normText(f?.quantifier),
+        premiseTrusts: Array.isArray(f?.premiseTrusts) ? f.premiseTrusts : void 0,
+        ruleConfidence: typeof f?.ruleConfidence === "number" ? f.ruleConfidence : void 0,
+        justification: Array.isArray(f?.justification) ? f.justification.filter(Boolean) : void 0
+      });
+    }
+    const ids = [];
+    if (!prepared.length) return { ids, appended: 0, skipped };
+    await mutateMemory(dir, (payload) => {
+      const idx = memoryIndexOf(payload);
+      const byId = idx ? idx.individualsById : new Map(payload.individuals.map((i) => [i?.id, i]));
+      const touched = [];
+      const seen = /* @__PURE__ */ new Set();
+      const trustOptsById = /* @__PURE__ */ new Map();
+      for (const f of prepared) {
+        const prior = byId.get(f.id);
+        const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
+        const provs = [...new Set([...priorProv.split(" | "), f.provenance].filter(Boolean))];
+        const createdAtVal = firstWriteCreatedAt(prior, f.createdAt);
+        const priorQ = prior?.attributes?.find((a) => a?.prop === "mgx:factQuantifier")?.value || "";
+        const qVal = f.quantifier || priorQ;
+        const ind = {
+          id: f.id,
+          label: labelOf(f.text),
+          class: FACT_CLASS,
+          derived_from: [],
+          mentions: [],
+          attributes: [
+            { prop: "rdf:type", key: "type", value: "rdf:Statement" },
+            { prop: "rdf:subject", key: "subject", value: f.s },
+            { prop: "rdf:predicate", key: "predicate", value: f.p },
+            { prop: "rdf:object", key: "object", value: f.o },
+            { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
+            ...provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : [],
+            ...f.tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: f.tokens.join(" ") }] : [],
+            ...qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : [],
+            ...f.justification && f.justification.length ? [{ prop: "mgx:factJustification", key: "justification", value: f.justification.join(" ") }] : []
+          ]
+        };
+        const stored = upsertIndividual(payload, ind);
+        byId.set(f.id, stored);
+        ids.push(f.id);
+        if (!seen.has(f.id)) {
+          seen.add(f.id);
+          touched.push(f.id);
+        }
+        if (f.premiseTrusts !== void 0 || f.ruleConfidence !== void 0) {
+          trustOptsById.set(f.id, { premiseTrusts: f.premiseTrusts, ruleConfidence: f.ruleConfidence });
+        }
+      }
+      for (const id of touched) syncFactSources(payload, byId.get(id), void 0, trustOptsById.get(id));
+      recountClasses(payload);
+    });
+    return { ids, appended: ids.length, skipped };
+  }
+  async function appendRule(dir, { name, kind, slots, provenance = "", createdAt = "" } = {}) {
+    const spec = RULE_SLOT_SPEC[kind];
+    if (!spec) throw new Error(`a rule kind must be one of ${RULE_KINDS2.join(", ")}, got ${JSON.stringify(kind)}`);
+    const n = normFactTerm(name);
+    if (!n) throw new Error("a rule needs a name");
+    const slotValues = spec.map(([slotKey]) => normFactTerm(slots?.[slotKey]));
+    if (slotValues.some((v) => !v)) {
+      throw new Error(`a ${kind} rule needs ${spec.map(([slotKey]) => slotKey).join(" + ")}`);
+    }
+    const id = ruleIdFor(kind, n, slotValues);
+    const label = labelOf(`${n} = ${kind}(${slotValues.join(", ")})`);
+    await mutateMemory(dir, async (payload) => {
+      const prior = payload.individuals.find((x) => x?.id === id);
+      const priorProv = prior?.attributes?.find((a) => a?.prop === "mgx:factProvenance")?.value || "";
+      const provs = [...new Set([...priorProv.split(" | "), normText(provenance)].filter(Boolean))];
+      const createdAtVal = firstWriteCreatedAt(prior, createdAt);
+      const candidate = {
+        id,
+        label,
+        class: RULE_CLASS,
+        derived_from: [],
+        mentions: [],
+        attributes: [
+          { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
+          { prop: RULE_NAME_PROP, key: "ruleName", value: n },
+          { prop: RULE_KIND_PROP, key: "ruleKind", value: kind },
+          ...spec.map(([slotKey, prop], i) => ({ prop, key: slotKey, value: slotValues[i] })),
+          { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
+          ...provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []
+        ]
+      };
+      await assertIndividualValid(candidate);
+      upsertIndividual(payload, candidate);
+      syncFactSources(payload, payload.individuals.find((x) => x?.id === id));
+      recountClasses(payload);
+    });
+    return { id };
+  }
+  function findRuleByName(memory, name) {
+    const n = normFactTerm(name);
+    return (memory?.individuals || []).find(
+      (i) => i?.class === RULE_CLASS && (i.attributes || []).find((a) => a?.prop === RULE_NAME_PROP)?.value === n
+    );
+  }
+  function findRulesByName(memory, name) {
+    const n = normFactTerm(name);
+    const kindOf = (i) => (i.attributes || []).find((a) => a?.prop === RULE_KIND_PROP)?.value || "";
+    return (memory?.individuals || []).filter((i) => i?.class === RULE_CLASS && (i.attributes || []).find((a) => a?.prop === RULE_NAME_PROP)?.value === n).sort((a, b) => kindOf(a).localeCompare(kindOf(b)) || String(a.id).localeCompare(String(b.id)));
+  }
+  function readRuleRows(memory) {
+    const rows = [];
+    for (const ind of memory?.individuals || []) {
+      if (ind?.class !== RULE_CLASS) continue;
+      const attr = (prop) => (ind.attributes || []).find((a) => a?.prop === prop)?.value;
+      const kind = attr(RULE_KIND_PROP);
+      const spec = RULE_SLOT_SPEC[kind];
+      if (!spec) continue;
+      const slots = {};
+      for (const [slotKey, prop] of spec) slots[slotKey] = attr(prop) ?? "";
+      rows.push({
+        id: ind.id,
+        name: attr(RULE_NAME_PROP) || "",
+        kind,
+        slots,
+        provenance: attr("mgx:factProvenance") || ""
+      });
+    }
+    rows.sort((a, b) => a.name.localeCompare(b.name) || a.kind.localeCompare(b.kind) || String(a.id).localeCompare(String(b.id)));
+    return rows;
+  }
+  async function resolveRelationChase(memory, name, subjectTerm, objectTerm, helpers) {
+    const { relationFactsFor, renderFactLine: renderFactLine2, factPhrase: factPhrase2, factTermVariants: factTermVariants2, byTrust, rows, HAS_PROPERTY_PREDICATE: HAS_PROPERTY_PREDICATE2, findActionPath: findActionPath2 } = helpers;
+    const target = String(name || "").trim().toLowerCase();
+    const sv = factTermVariants2(normFactTerm, subjectTerm);
+    const ov = factTermVariants2(normFactTerm, objectTerm);
+    const pairHits = relationFactsFor(target).filter((e) => sv.has(e.fact.subject) && ov.has(e.fact.object));
+    if (pairHits.length) {
+      const hit2 = pairHits.slice().sort((a, b) => byTrust(a.fact, b.fact))[0];
+      return { citation: [renderFactLine2(hit2.fact), ...hit2.aliasFacts.map(
+        (af) => `${factPhrase2(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`
+      )] };
+    }
+    const rule = findRuleByName(memory, target);
+    const ruleKind = rule?.attributes?.find((a) => a.prop === RULE_KIND_PROP)?.value;
+    if (rule && ruleKind === RULE_KIND_COMPOSE2) {
+      const base1 = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
+      const base2 = rule.attributes.find((a) => a.prop === "mgx:ruleBase2")?.value;
+      const startEntity = normFactTerm(subjectTerm);
+      const targetEntity = normFactTerm(objectTerm);
+      if (!base1 || !base2 || !startEntity || !targetEntity) return null;
+      const applyActions = (state) => {
+        if (state.hopsTaken >= 2) return [];
+        const relName = state.hopsTaken === 0 ? base1 : base2;
+        return relationFactsFor(relName).filter((e) => e.fact.subject === state.entity).map((e) => ({ action: e, nextState: { entity: e.fact.object, hopsTaken: state.hopsTaken + 1 } }));
+      };
+      const isGoal = (state) => state.hopsTaken === 2 && state.entity === targetEntity;
+      const stateKey = (state) => `${state.entity}#${state.hopsTaken}`;
+      const found = findActionPath2({ entity: startEntity, hopsTaken: 0 }, isGoal, applyActions, { maxDepth: 2, stateKey });
+      if (!found) return null;
+      const seenAlias = /* @__PURE__ */ new Set();
+      const parts = [];
+      for (const e of found.actions) {
+        parts.push(renderFactLine2(e.fact));
+        for (const af of e.aliasFacts) {
+          const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
+          if (seenAlias.has(key)) continue;
+          seenAlias.add(key);
+          parts.push(`${factPhrase2(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
+        }
+      }
+      return { citation: parts };
+    }
+    if (rule && ruleKind === RULE_KIND_FILTER) {
+      const base = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
+      const property = rule.attributes.find((a) => a.prop === "mgx:ruleFilterProperty")?.value;
+      if (!base || !property) return null;
+      const baseHit = await resolveRelationChase(memory, base, subjectTerm, objectTerm, helpers);
+      if (!baseHit) return null;
+      const subjectEntity = normFactTerm(subjectTerm);
+      const propertyNorm = normFactTerm(property);
+      const propHit = rows.find(
+        (f) => f.predicate === HAS_PROPERTY_PREDICATE2 && f.subject === subjectEntity && normFactTerm(f.object) === propertyNorm
+      );
+      if (!propHit) return null;
+      return { citation: [...baseHit.citation, renderFactLine2(propHit)] };
+    }
+    return null;
+  }
+  async function resolveRelationChaseReverse(memory, name, objectTerm, helpers) {
+    const { relationFactsFor, renderFactLine: renderFactLine2, factPhrase: factPhrase2, factTermVariants: factTermVariants2, byTrust, rows, HAS_PROPERTY_PREDICATE: HAS_PROPERTY_PREDICATE2, findReachableSet: findReachableSet2 } = helpers;
+    const target = String(name || "").trim().toLowerCase();
+    const ov = factTermVariants2(normFactTerm, objectTerm);
+    const directHits = relationFactsFor(target).filter((e) => ov.has(e.fact.object));
+    if (directHits.length) {
+      const bySubject = /* @__PURE__ */ new Map();
+      for (const e of directHits) {
+        if (!bySubject.has(e.fact.subject)) bySubject.set(e.fact.subject, []);
+        bySubject.get(e.fact.subject).push(e);
+      }
+      return [...bySubject.entries()].map(([subj, hits]) => {
+        const hit2 = hits.slice().sort((a, b) => byTrust(a.fact, b.fact))[0];
+        return {
+          subject: subj,
+          citation: [renderFactLine2(hit2.fact), ...hit2.aliasFacts.map(
+            (af) => `${factPhrase2(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`
+          )]
+        };
+      });
+    }
+    const rule = findRuleByName(memory, target);
+    const ruleKind = rule?.attributes?.find((a) => a.prop === RULE_KIND_PROP)?.value;
+    if (rule && ruleKind === RULE_KIND_COMPOSE2) {
+      const base1 = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
+      const base2 = rule.attributes.find((a) => a.prop === "mgx:ruleBase2")?.value;
+      const targetEntity = normFactTerm(objectTerm);
+      if (!base1 || !base2 || !targetEntity) return [];
+      const applyActionsRev = (state) => {
+        if (state.hopsTaken >= 2) return [];
+        const relName = state.hopsTaken === 0 ? base2 : base1;
+        return relationFactsFor(relName).filter((e) => e.fact.object === state.entity).map((e) => ({ action: e, nextState: { entity: e.fact.subject, hopsTaken: state.hopsTaken + 1 } }));
+      };
+      const stateKeyRev = (state) => `${state.entity}#${state.hopsTaken}`;
+      const reached = findReachableSet2(
+        { entity: targetEntity, hopsTaken: 0 },
+        applyActionsRev,
+        { maxDepth: 2, stateKey: stateKeyRev }
+      );
+      return reached.filter((r) => r.node.hopsTaken === 2).map(({ node, path }) => {
+        const seenAlias = /* @__PURE__ */ new Set();
+        const parts = [];
+        for (const e of path.actions.slice().reverse()) {
+          parts.push(renderFactLine2(e.fact));
+          for (const af of e.aliasFacts) {
+            const key = af.id || `${af.subject}|${af.predicate}|${af.object}`;
+            if (seenAlias.has(key)) continue;
+            seenAlias.add(key);
+            parts.push(`${factPhrase2(af)}${af.provenance ? ` (source: ${af.provenance})` : ""}`);
+          }
+        }
+        return { subject: node.entity, citation: parts };
+      });
+    }
+    if (rule && ruleKind === RULE_KIND_FILTER) {
+      const base = rule.attributes.find((a) => a.prop === "mgx:ruleBase1")?.value;
+      const property = rule.attributes.find((a) => a.prop === "mgx:ruleFilterProperty")?.value;
+      if (!base || !property) return [];
+      const baseHits = await resolveRelationChaseReverse(memory, base, objectTerm, helpers);
+      const propertyNorm = normFactTerm(property);
+      const out = [];
+      for (const bh of baseHits) {
+        const subjectEntity = normFactTerm(bh.subject);
+        const propHit = rows.find(
+          (f) => f.predicate === HAS_PROPERTY_PREDICATE2 && f.subject === subjectEntity && normFactTerm(f.object) === propertyNorm
+        );
+        if (propHit) out.push({ subject: bh.subject, citation: [...bh.citation, renderFactLine2(propHit)] });
+      }
+      return out;
+    }
+    return [];
+  }
+  function readFactRows(memory) {
+    const individuals = memory?.individuals || [];
+    const sourcesById = new Map(individuals.filter((i) => i?.class === SOURCE_CLASS).map((i) => [i.id, i]));
+    const statedGroup = (memory?.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
+    const byFact = /* @__PURE__ */ new Map();
+    for (const e of statedGroup?.examples || []) {
+      if (!byFact.has(e.subject)) byFact.set(e.subject, []);
+      byFact.get(e.subject).push(e.object);
+    }
+    const rows = [];
+    for (const ind of individuals) {
+      if (ind?.class !== FACT_CLASS) continue;
+      const get = (k) => (ind.attributes || []).find((a) => a?.key === k)?.value || "";
+      const sourceIds = byFact.get(ind.id) || [];
+      const sourceTypes = sourceIds.map((id) => (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value).filter(Boolean);
+      const justificationRaw = get("justification");
+      rows.push({
+        id: ind.id,
+        subject: get("subject"),
+        predicate: get("predicate"),
+        object: get("object"),
+        provenance: get("provenance"),
+        // legacy compat string, verbatim
+        quantifier: get("quantifier"),
+        // "" unless a plural class-membership teach set one
+        sourceIds,
+        sourceTypes,
+        trust: Number((ind.attributes || []).find((a) => a?.prop === TRUST_SCORE_PROP)?.value) || 0,
+        // [] unless a rule persisted its premise fact ids (justification-tracking,
+        // scm-sco only today; see syllogise.mjs).
+        justification: justificationRaw ? justificationRaw.split(" ").filter(Boolean) : []
+      });
+    }
+    return rows;
+  }
+  async function removeFacts(dir, ids) {
+    const idSet = new Set((ids || []).filter(Boolean));
+    const removed = [];
+    if (!idSet.size) return { removed };
+    await mutateMemory(dir, (payload) => {
+      payload.individuals = (payload.individuals || []).filter((ind) => {
+        if (ind?.class === FACT_CLASS && idSet.has(ind.id)) {
+          removed.push(ind.id);
+          return false;
+        }
+        return true;
+      });
+      if (!removed.length) return;
+      const removedSet = new Set(removed);
+      for (const group of payload.objectProperties || []) {
+        const before = group.examples || [];
+        group.examples = before.filter((e) => !removedSet.has(e?.subject) && !removedSet.has(e?.object));
+        group.count = group.examples.length;
+      }
+      recountClasses(payload);
+    });
+    return { removed };
+  }
+  function findContradictions(memory, { floor = CONTRADICTION_TRUST_FLOOR } = {}) {
+    const rows = readFactRows(memory).filter((r) => r.trust >= floor);
+    const byKey = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      if (MULTI_VALUED_PREDICATES.has(r.predicate)) continue;
+      const key = `${r.subject} ${r.predicate}`;
+      if (!byKey.has(key)) byKey.set(key, []);
+      byKey.get(key).push(r);
+    }
+    const out = [];
+    for (const group of byKey.values()) {
+      if (new Set(group.map((r) => r.object)).size > 1) {
+        out.push(group.slice().sort((a, b) => b.trust - a.trust || a.object.localeCompare(b.object)));
+      }
+    }
+    return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
+  }
+  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE, MULTI_VALUED_PREDICATES;
+  var init_core = __esm({
+    "src/memory/core.mjs"() {
+      init_promises();
+      init_node_path();
+      init_prose_tokens();
+      init_hash();
+      init_hash();
+      init_trust();
+      init_trust();
+      init_shacl();
+      MEMORY_DIR_REL = join(".tmct", "memory");
+      MEMORY_GRAPH_REL = join(MEMORY_DIR_REL, "graph.json");
+      UTTERANCE_CLASS = "Utterance";
+      FACT_CLASS = "Fact";
+      MEMORY_SESSION_CLASS = "Session";
+      SOURCE_CLASS = "Source";
+      RULE_CLASS = "Rule";
+      SAID_IN_SESSION_PROP = "mgx:saidInSession";
+      IN_REPLY_TO_PROP = "mgx:inReplyTo";
+      DERIVED_FROM_PROP = "mgx:derivedFrom";
+      STATED_BY_PROP = "mgx:statedBy";
+      CANONICALISED_FROM_PROP = "mgx:canonicalisedFrom";
+      SOURCE_RELIABILITY_PROP = "mgx:sourceReliability";
+      OPERATOR_SOURCE_ID = "src:operator-chat";
+      TEACH_SOURCE_ID = "src:teach-chat";
+      ROLES = /* @__PURE__ */ new Set(["visitor", "tmct"]);
+      LABEL_CAP = 48;
+      MEMORY_VOCABULARY = [
+        { prop: "rdf:type", note: "rdf-ish typing attribute: owl:NamedIndividual (utterances/sessions) or rdf:Statement (reified facts)" },
+        { prop: "mgx:utteranceRole", note: "who said it: visitor (an a-visitor-said item) or tmct (the response alongside it)" },
+        { prop: "mgx:utteranceText", note: "the utterance's normalized text (capped)" },
+        { prop: "mgx:utteranceTs", note: "when it was said, ISO-8601 (the chat turn timestamp)" },
+        { prop: "mgx:utteranceParsed", note: "optional JSON of the parse the interpretation pipeline produced for this request" },
+        { prop: SAID_IN_SESSION_PROP, predicate: "saidInSession", note: "Utterance \u2192 Session it was said in; runtime observation, owned (no SEON term)" },
+        { prop: IN_REPLY_TO_PROP, predicate: "inReplyTo", note: "tmct Utterance \u2192 the visitor Utterance it answers (the Q/A pairing)" },
+        { prop: "rdf:subject", note: "reified fact: the triple's subject term" },
+        { prop: "rdf:predicate", note: "reified fact: the triple's predicate term" },
+        { prop: "rdf:object", note: "reified fact: the triple's object term" },
+        { prop: "mgx:factProvenance", note: "LEGACY COMPAT SHIM: the ' | '-joined provenance tag string a fact came from; the source-of-truth is now the mgx:statedBy edges derived from it" },
+        { prop: "mgx:factQuantifier", note: "OPTIONAL: the quantifier word a plural class-membership teach used ('every'/'some'/'a few'), for literal recall by 'how many Xs are Ys' \u2014 never real cardinality counting" },
+        { prop: "mgx:ruleName", note: "a taught Rule's own name (e.g. 'grandparent') \u2014 the query-dispatcher's lookup key, PLAN_TAUGHT_RELATIONS.md \xA72/\xA73" },
+        { prop: "mgx:ruleKind", note: "a taught Rule's SHAPE tag \u2014 the closed vocabulary compose2 | filter | recursive (structural, like 'Fact'/'Rule' themselves, never a domain word)" },
+        { prop: "mgx:ruleBase1", note: "compose2: the first hop's base relation name; filter: the base rule/relation being filtered (same 'base relation' role in both kinds, so the name is shared)" },
+        { prop: "mgx:ruleBase2", note: "compose2 only: the second hop's base relation name" },
+        { prop: "mgx:ruleFilterProperty", note: "filter only: the property literal candidates are filtered by (an mgx:hasProperty-shaped Fact lookup)" },
+        { prop: "mgx:ruleBaseCase", note: "recursive only: the base-case relation name (hop zero)" },
+        { prop: "mgx:ruleRecStep", note: "recursive only: the self-referential recursive-step relation name" },
+        { prop: CREATED_AT_PROP, note: "when an individual was FIRST written, ISO-8601 (first-write-wins on upsert); the audit 'when', the recency input to trust, the novelty signal" },
+        { prop: UPDATED_AT_PROP, note: "when an individual's OWN attributes were last mutated in place (upsertSession, recomputeFactTrust, recomputeSourceReliability) \u2014 most individuals never carry this and instead derive 'updated' from codegraph.mjs's derivedUpdatedAt (max createdAt over their edges)" },
+        { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
+        { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source \u2014 replaces the factProvenance union)" },
+        { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
+        { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | corpusWeak | extracted | web | entailed (the trust-prior key)" },
+        { prop: "mgx:sourceUrl", note: "a web Source's URL" },
+        { prop: "mgx:sourceRule", note: "an entailed Source's rule id" },
+        { prop: "mgx:sourceReliability", note: "actor-level (session-scoped) trust nudge in [0.5,1.5], neutral 1.0 when absent \u2014 materialised by recomputeSourceReliability from a session's asserted-vs-contradicted track record (memory/trust.mjs's sessionReliabilityFrom); folds into computeTrust's per-source prior" },
+        { prop: TRUST_SCORE_PROP, note: "materialised trust cache in [0,1] \u2014 pure function of a fact's Sources + createdAt (memory/trust.mjs); invalidated when a statedBy edge is added" },
+        { prop: TRUST_INPUTS_PROP, note: "JSON of the inputs the trust score was computed from (source-type multiset, corroboration count, createdAt, recency) \u2014 makes the score auditable" },
+        { prop: "mgx:hasProseTokens", note: "prose tokens (prose.mjs tokenizer) backing the payload's proseIndex" },
+        { prop: "mgx:sessionStarted", note: "session anchor: when the session started, ISO-8601" }
+      ];
+      memoryGraphFile = (dir) => resolveMemoryGraphFile(dir);
+      BACKEND_MEMORY = "memory";
+      BACKEND_SQLITE = "sqlite";
+      SQLITE_DDL = `
+CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS individuals (id TEXT PRIMARY KEY, ord INTEGER NOT NULL, class TEXT, label TEXT, json TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS relations (prop TEXT PRIMARY KEY, ord INTEGER NOT NULL, predicate TEXT, count INTEGER);
+CREATE TABLE IF NOT EXISTS edges (prop TEXT NOT NULL, subject TEXT NOT NULL, object TEXT NOT NULL, subject_label TEXT, object_label TEXT, extra TEXT, PRIMARY KEY (prop, subject, object));
+CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
+`;
+      STD_EDGE_KEYS = /* @__PURE__ */ new Set(["subject", "object", "subjectLabel", "objectLabel"]);
+      cloneJson = (v) => v === void 0 ? v : structuredClone(v);
+      MEMORY_MANIFEST_REL = join(MEMORY_DIR_REL, "manifest.json");
+      DEFAULT_RETENTION = 5;
+      resolveManifestFile = (dir) => join(dir, MEMORY_MANIFEST_REL);
+      MEMORY_INDEX = /* @__PURE__ */ Symbol("mutateMemory lookup index");
+      memoryIndexOf = (payload) => payload?.[MEMORY_INDEX] || null;
+      labelOf = (text) => text.length > LABEL_CAP ? text.slice(0, LABEL_CAP - 1) + "\u2026" : text;
+      nowIso = () => (/* @__PURE__ */ new Date()).toISOString();
+      sourceLabel = (id) => String(id).replace(/^src:/, "");
+      isSessionScopedSourceId = (id) => typeof id === "string" && (id.startsWith(`${OPERATOR_SOURCE_ID}:`) || id.startsWith(`${TEACH_SOURCE_ID}:`));
+      RULE_KIND_COMPOSE2 = "compose2";
+      RULE_KIND_FILTER = "filter";
+      RULE_KIND_RECURSIVE = "recursive";
+      RULE_KIND_ACTION_SIGNATURE = "action-signature";
+      RULE_KIND_ACTION_PRECOND = "action-precond";
+      RULE_KIND_ACTION_EFFECT = "action-effect";
+      RULE_KIND_ACTION_CONSTRAINT = "action-constraint";
+      RULE_KINDS2 = Object.freeze([
+        RULE_KIND_COMPOSE2,
+        RULE_KIND_FILTER,
+        RULE_KIND_RECURSIVE,
+        RULE_KIND_ACTION_SIGNATURE,
+        RULE_KIND_ACTION_PRECOND,
+        RULE_KIND_ACTION_EFFECT,
+        RULE_KIND_ACTION_CONSTRAINT
+      ]);
+      RULE_NAME_PROP = "mgx:ruleName";
+      RULE_KIND_PROP = "mgx:ruleKind";
+      RULE_SLOT_SPEC = {
+        [RULE_KIND_COMPOSE2]: [["base1", "mgx:ruleBase1"], ["base2", "mgx:ruleBase2"]],
+        [RULE_KIND_FILTER]: [["base", "mgx:ruleBase1"], ["property", "mgx:ruleFilterProperty"]],
+        [RULE_KIND_RECURSIVE]: [["baseCase", "mgx:ruleBaseCase"], ["recStep", "mgx:ruleRecStep"]],
+        [RULE_KIND_ACTION_SIGNATURE]: [
+          ["subjectClass", "mgx:ruleActionSubjectClass"],
+          ["targetClass", "mgx:ruleActionTargetClass"]
+        ],
+        [RULE_KIND_ACTION_PRECOND]: [
+          ["shape", "mgx:ruleActionPrecondShape"],
+          ["predicate", "mgx:ruleActionPrecondPredicate"],
+          ["role", "mgx:ruleActionPrecondRole"],
+          ["scope", "mgx:ruleActionPrecondScope"]
+        ],
+        [RULE_KIND_ACTION_EFFECT]: [
+          ["predicate", "mgx:ruleActionEffectPredicate"],
+          ["subjectRole", "mgx:ruleActionEffectSubject"],
+          ["objectRole", "mgx:ruleActionEffectObject"]
+        ],
+        // "the <left> may not be with the <right> without the <guard>" — each slot
+        // names a class whose sole member src/domain.mjs resolves at compile time.
+        [RULE_KIND_ACTION_CONSTRAINT]: [
+          ["left", "mgx:ruleActionConstraintLeft"],
+          ["right", "mgx:ruleActionConstraintRight"],
+          ["guard", "mgx:ruleActionConstraintGuard"]
+        ]
+      };
+      ruleIdFor = (kind, name, slotValues) => `rule:${fnv1aHex([kind, name, ...slotValues].join("\0"))}`;
+      CONTRADICTION_TRUST_FLOOR = 0.5;
+      HAS_A_PREDICATE = "mgx:hasA";
+      CAPABLE_OF_PREDICATE = "mgx:capableOf";
+      MULTI_VALUED_PREDICATES = /* @__PURE__ */ new Set([HAS_A_PREDICATE, CAPABLE_OF_PREDICATE]);
     }
   });
 
@@ -7239,6 +7242,14 @@ ${lines.join("\n")}`;
     retractSubClassOf: () => retractSubClassOf,
     syllogise: () => syllogise
   });
+  function requireStore(store, needed, caller) {
+    for (const name of needed) {
+      if (typeof store?.[name] !== "function") {
+        throw new TypeError(`${caller} needs a store option carrying { ${needed.join(", ")} } (memory/core.mjs's read/write functions) \u2014 missing ${name}`);
+      }
+    }
+    return store;
+  }
   function entailedTrustFrom(premiseTrusts, ruleConfidence = 1) {
     const nums = (Array.isArray(premiseTrusts) ? premiseTrusts : []).filter((t) => typeof t === "number");
     if (!nums.length) return null;
@@ -7621,9 +7632,10 @@ ${lines.join("\n")}`;
     }
     return derived;
   }
-  async function syllogise(repoDir, { depth = 32, budget = 50, focus = null } = {}) {
-    const memory = await loadMemory(repoDir);
-    const rows = readFactRows(memory);
+  async function syllogise(repoDir, { depth = 32, budget = 50, focus = null, store } = {}) {
+    const { loadMemory: loadMemory2, readFactRows: readFactRows2, appendFacts: appendFacts2 } = requireStore(store, ["loadMemory", "readFactRows", "appendFacts"], "syllogise");
+    const memory = await loadMemory2(repoDir);
+    const rows = readFactRows2(memory);
     const subClassEdges = rows.filter((r) => isSubClassOf(r.predicate)).map((r) => [r.subject, r.object]);
     const typeEdges = rows.filter((r) => isType(r.predicate)).map((r) => [r.subject, r.object]);
     const disjointEdges = rows.filter((r) => isDisjoint(r.predicate)).map((r) => [r.subject, r.object]);
@@ -7765,7 +7777,7 @@ ${lines.join("\n")}`;
         };
       })
     ];
-    const { ids } = await appendFacts(repoDir, toWrite);
+    const { ids } = await appendFacts2(repoDir, toWrite);
     const written = [];
     let i = 0;
     for (const d of scmDerived) {
@@ -7859,12 +7871,13 @@ ${lines.join("\n")}`;
       return true;
     };
   }
-  async function retractSubClassOf(repoDir, subject, object, { budget = 50, depth = 32 } = {}) {
+  async function retractSubClassOf(repoDir, subject, object, { budget = 50, depth = 32, store } = {}) {
+    const { loadMemory: loadMemory2, readFactRows: readFactRows2, removeFacts: removeFacts2 } = requireStore(store, ["loadMemory", "readFactRows", "removeFacts"], "retractSubClassOf");
     const s = normFactTerm(subject);
     const o = normFactTerm(object);
     const targetId = factIdForTriple(s, SUBCLASS_PREDICATE, o);
-    const memory = await loadMemory(repoDir);
-    const rows = readFactRows(memory);
+    const memory = await loadMemory2(repoDir);
+    const rows = readFactRows2(memory);
     const byId = new Map(rows.map((r) => [r.id, r]));
     if (!byId.has(targetId)) return { retracted: [], count: 0, budget, depth, truncated: false, found: false };
     const entailedRows = rows.filter((r) => r.justification.length && isPurelyEntailed(r.provenance));
@@ -7900,7 +7913,7 @@ ${lines.join("\n")}`;
     if (!truncated && round2 >= depth) {
       truncated = entailedRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
     }
-    const { removed: actuallyRemoved } = await removeFacts(repoDir, order);
+    const { removed: actuallyRemoved } = await removeFacts2(repoDir, order);
     return { retracted: actuallyRemoved, count: actuallyRemoved.length, budget, depth, truncated, found: true };
   }
   function findIsaChain(subj, targets, typeEdges, subClassEdges, { maxHops = 6 } = {}) {
@@ -7938,7 +7951,7 @@ ${lines.join("\n")}`;
   var SUBCLASS_PREDICATE, SYLLOGISE_RULE, ENTAILED_PROVENANCE, TYPE_PREDICATE, CAX_SCO_RULE, ENTAILED_TYPE_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, ENTAILED_DISJOINT_PROVENANCE, CAX_DW_RULE_CONFIDENCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE, CLS_SVF1_RULE, ENTAILED_SVF1_PROVENANCE, CLS_SVF1_RULE_CONFIDENCE, SEP, isSubClassOf, isType, isDisjoint, isOnProperty, isSomeValuesFrom, isOnClass, RESERVED_PREDICATES, HAS_PROPERTY_KEY, CARDINALITY_KIND_OF, ON_CLASS_PREDICATE, SCM_SVF_RULE, ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE, SCM_CARD_RULE, CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE, CAX_MAXC0_RULE_CONFIDENCE;
   var init_syllogise = __esm({
     "src/syllogise.mjs"() {
-      init_core();
+      init_hash();
       SUBCLASS_PREDICATE = "rdfs:subClassOf";
       SYLLOGISE_RULE = "subClassOf";
       ENTAILED_PROVENANCE = `entailed:${SYLLOGISE_RULE}`;

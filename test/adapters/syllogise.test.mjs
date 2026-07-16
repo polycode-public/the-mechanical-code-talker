@@ -9,10 +9,10 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendFact, loadMemory, readFactRows } from "../../src/memory/core.mjs";
+import { appendFact, appendFacts, loadMemory, readFactRows, removeFacts } from "../../src/memory/core.mjs";
 import {
   deriveSubClassClosure, deriveTypePropagation, deriveDisjointViolations,
-  deriveSomeValuesFromApplication, findConsistencyViolations, findIsaChain, syllogise,
+  deriveSomeValuesFromApplication, findConsistencyViolations, findIsaChain, syllogise as syllogiseSeam,
   ENTAILED_PROVENANCE, SUBCLASS_PREDICATE, ENTAILED_TYPE_PROVENANCE, TYPE_PREDICATE,
   ENTAILED_DISJOINT_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, CAX_DW_RULE_CONFIDENCE,
   ENTAILED_SVF1_PROVENANCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE,
@@ -21,10 +21,17 @@ import {
   proveCardinalityAtLeast, proveMaxCardinalityZeroDenial,
   ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE, SCM_SVF_RULE_CONFIDENCE,
   CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE_CONFIDENCE, entailedTrustFrom,
-  retractSubClassOf,
+  retractSubClassOf as retractSubClassOfSeam,
 } from "../../src/syllogise.mjs";
-import { assertSentence } from "../../src/grammar/assert.mjs";
+import { assertSentence as assertSentenceSeam } from "../../src/grammar/assert.mjs";
 import { freshConceptNetRepo } from "../helpers/seeded-fixture.mjs";
+
+// The persisting seams take the store's read/write functions injected; every
+// call in this file wires the real memory/core.mjs implementations once here.
+const STORE = { loadMemory, readFactRows, appendFacts, removeFacts };
+const syllogise = (dir, opts = {}) => syllogiseSeam(dir, { store: STORE, ...opts });
+const retractSubClassOf = (dir, subj, obj, opts = {}) => retractSubClassOfSeam(dir, subj, obj, { store: STORE, ...opts });
+const assertSentence = (dir, sentence, opts = {}) => assertSentenceSeam(dir, sentence, { appendFact, ...opts });
 
 const mkRepo = () => mkdtemp(join(tmpdir(), "tmct-syllog-"));
 const subClassRows = (rows) => rows.filter((r) => r.predicate === SUBCLASS_PREDICATE);

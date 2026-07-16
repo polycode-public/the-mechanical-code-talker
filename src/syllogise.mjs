@@ -24,7 +24,20 @@
 // batch pass: cardinality monotonicity (`proveCardinalityAtLeast`) and
 // max-cardinality-0 as encoded negation (`proveMaxCardinalityZeroDenial`).
 
-import { loadMemory, appendFacts, readFactRows, normFactTerm, factIdForTriple, removeFacts } from "./memory/core.mjs";
+import { normFactTerm, factIdForTriple } from "./hash.mjs";
+
+/** The two persisting entry points (syllogise, retractSubClassOf) take the
+ *  memory store's read/write functions through a required `store` option —
+ *  this module never imports the store. A missing function is a loud
+ *  construction error, never a silent no-op pass. */
+function requireStore(store, needed, caller) {
+  for (const name of needed) {
+    if (typeof store?.[name] !== "function") {
+      throw new TypeError(`${caller} needs a store option carrying { ${needed.join(", ")} } (memory/core.mjs's read/write functions) — missing ${name}`);
+    }
+  }
+  return store;
+}
 
 /** scm-sco: the subClassOf-transitivity rule, and the provenance tag its
  *  conclusions carry. */
@@ -654,12 +667,15 @@ export function findConsistencyViolations(typeEdges, subClassEdges, disjointEdge
  * opts: `depth` (max fixpoint rounds, default 32), `budget` (max new
  * derivations this pass, shared across all five rules, default 50), `focus`
  * (Set|array of class terms scoping derivations to what touches it — omit
- * for a whole-graph pass).
+ * for a whole-graph pass), `store` (REQUIRED — the memory store's
+ * { loadMemory, readFactRows, appendFacts } read/write functions, injected so
+ * this inference module never imports the store itself).
  *
  * Returns { derived: [{ id, subject, object, via, rule }], count, budget,
  * depth, truncated }.
  */
-export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null } = {}) {
+export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null, store } = {}) {
+  const { loadMemory, readFactRows, appendFacts } = requireStore(store, ["loadMemory", "readFactRows", "appendFacts"], "syllogise");
   const memory = await loadMemory(repoDir);
   const rows = readFactRows(memory);
   const subClassEdges = rows.filter((r) => isSubClassOf(r.predicate)).map((r) => [r.subject, r.object]);
@@ -978,7 +994,8 @@ function buildSurvivorDerivabilityCheck(rows) {
  * Returns { retracted, count, budget, depth, truncated, found } — `found` is
  * false when `subject ⊑ object` was never a stored fact.
  */
-export async function retractSubClassOf(repoDir, subject, object, { budget = 50, depth = 32 } = {}) {
+export async function retractSubClassOf(repoDir, subject, object, { budget = 50, depth = 32, store } = {}) {
+  const { loadMemory, readFactRows, removeFacts } = requireStore(store, ["loadMemory", "readFactRows", "removeFacts"], "retractSubClassOf");
   const s = normFactTerm(subject);
   const o = normFactTerm(object);
   const targetId = factIdForTriple(s, SUBCLASS_PREDICATE, o);

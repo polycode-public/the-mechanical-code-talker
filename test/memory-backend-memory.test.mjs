@@ -21,6 +21,7 @@ import {
   emptyMemory, createInMemoryStore, loadMemory,
   appendUtterance, appendUtterances, appendFact, appendFacts, appendRule,
   findRuleByName, readFactRows, RULE_KIND_COMPOSE2,
+  resolveMemoryGraphFile, snapshotMemory,
 } from "../src/memory/core.mjs";
 
 const SESSION = "01890000-0000-7000-8000-00000000dead";
@@ -159,4 +160,10 @@ test("Backend B: genuinely zero disk I/O — a scratch dir Backend B never recei
   } finally {
     await rm(scratch, { recursive: true, force: true });
   }
+});
+
+test("the flat-file-only seams refuse an in-memory handle loudly: no graph.json path to resolve, nothing on disk to snapshot", async () => {
+  const handle = createInMemoryStore();
+  assert.throws(() => resolveMemoryGraphFile(handle), /Backend A only/);
+  await assert.rejects(() => snapshotMemory(handle), /flat-JSON backend/);
 });

@@ -20,6 +20,7 @@ import {
   appendUtterance, appendUtterances, appendFact, appendFacts, appendRule,
   findRuleByName, readFactRows, RULE_KIND_COMPOSE2, RULE_KIND_FILTER,
   createSqliteMemoryStore, closeSqliteMemoryStore,
+  resolveMemoryGraphFile, snapshotMemory,
 } from "../src/memory/core.mjs";
 
 const SESSION = "01890000-0000-7000-8000-00000000beef";
@@ -278,6 +279,17 @@ test("Backend C round trip: loadMemory -> mutate (appendFact, twice) -> loadMemo
     const classCount = (m, name) => m.classes.find((c) => c.name === name)?.count || 0;
     assert.equal(classCount(fresh, FACT_CLASS), classCount(afterSecond, FACT_CLASS));
     assert.equal(classCount(fresh, SOURCE_CLASS), classCount(afterSecond, SOURCE_CLASS));
+  } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the flat-file-only seams refuse a sqlite handle loudly: no graph.json path to resolve, nothing on disk to snapshot", async () => {
+  const { dir, handle } = await sqliteHandle();
+  try {
+    assert.throws(() => resolveMemoryGraphFile(handle), /Backend A only/);
+    await assert.rejects(() => snapshotMemory(handle), /flat-JSON backend/);
   } finally {
     closeSqliteMemoryStore(handle);
     await rm(dir, { recursive: true, force: true });

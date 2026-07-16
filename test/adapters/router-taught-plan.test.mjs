@@ -17,7 +17,7 @@ import { isCapability } from "../../src/router/registry.mjs";
 import { actionFamilies, capabilityFromActionRules } from "../../src/router/taught.mjs";
 import { runTurn, capabilityPlanDeps } from "../../src/chat.mjs";
 import {
-  appendRule, loadMemory,
+  appendRule, loadMemory, readRuleRows,
   RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT,
 } from "../../src/memory/core.mjs";
 import { clearCache } from "../../src/source.mjs";
@@ -153,7 +153,7 @@ test("an action-constraint row bridges into the capability record as a precondit
       slots: { left: "alpha", right: "beta", guard: "escort" },
     });
     const memory = await loadMemory(dir);
-    const families = actionFamilies(memory);
+    const families = actionFamilies(readRuleRows(memory));
     assert.equal(families.size, 1);
     const cap = capabilityFromActionRules("haul onto", families.get("haul onto"));
     assert.deepEqual(cap.preconditions, [

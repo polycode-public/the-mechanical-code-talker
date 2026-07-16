@@ -295,7 +295,7 @@ export async function buildCapabilityPlanCtx({
       const memory = await loadMemory(memoryDir);
       return { factRows: readFactRows(memory), ruleRows: readRuleRows(memory) };
     };
-    ctx.disposers = registerTaughtActions(await loadMemory(memoryDir));
+    ctx.disposers = registerTaughtActions(readRuleRows(await loadMemory(memoryDir)));
   }
   return ctx;
 }

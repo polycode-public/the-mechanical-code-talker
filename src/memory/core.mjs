@@ -8,8 +8,21 @@
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { proseTokensFor, buildProseIndex } from "./prose-tokens.mjs";
-import { fnv1aHex } from "../hash.mjs";
-import { computeTrust, sessionReliabilityFrom, TRUST_SCORE_PROP, TRUST_INPUTS_PROP } from "./trust.mjs";
+import { fnv1aHex, normText, normFactTerm, factIdFor, factIdForTriple } from "../hash.mjs";
+
+// Fact identity (normalization + id derivation) lives in hash.mjs — the one
+// content-address contract — and is re-exported here so store consumers keep
+// a single import site for read/write plus identity.
+export { normFactTerm, factIdForTriple } from "../hash.mjs";
+import {
+  computeTrust, sessionReliabilityFrom, TRUST_SCORE_PROP, TRUST_INPUTS_PROP,
+  CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource,
+} from "./trust.mjs";
+
+// The createdAt/updatedAt vocabulary and the provenance-tag Source parser live
+// with the trust layer (they are its inputs); re-exported here so store
+// consumers keep one import site.
+export { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "./trust.mjs";
 import { assertIndividualValid } from "./shacl.mjs";
 
 export const MEMORY_DIR_REL = join(".tmct", "memory");
@@ -32,11 +45,6 @@ export const IN_REPLY_TO_PROP = "mgx:inReplyTo";
 export const DERIVED_FROM_PROP = "mgx:derivedFrom";        // umbrella: Fact → Source|Fact
 export const STATED_BY_PROP = "mgx:statedBy";              // a Source directly asserts a Fact
 export const CANONICALISED_FROM_PROP = "mgx:canonicalisedFrom"; // a canonical Fact ← its raw form
-export const CREATED_AT_PROP = "mgx:createdAt";           // first-write-wins ISO-8601 on every individual
-// For call sites that mutate an individual's own attributes without touching
-// an edge (upsertSession, recomputeFactTrust, recomputeSourceReliability),
-// where codegraph.mjs's derived-updatedAt rule alone can't see the change.
-export const UPDATED_AT_PROP = "mgx:updatedAt";
 export const SOURCE_RELIABILITY_PROP = "mgx:sourceReliability"; // actor-level (session-scoped) trust nudge on a Source, [0.5,1.5]
 
 // Bare (session-less) singleton Source ids — fallback for a provenance tag
@@ -47,7 +55,6 @@ export const TEACH_SOURCE_ID = "src:teach-chat";
 
 const ROLES = new Set(["visitor", "tmct"]);
 const LABEL_CAP = 48;    // utterance/fact labels stay skimmable in renders
-const TEXT_CAP = 2000;   // an utterance's stored text (a whole answer fits; a pasted book doesn't)
 
 /** The memory graph's vocabulary — documented in-payload exactly like
  *  graph-build.mjs documents the code graph's. */
@@ -579,7 +586,6 @@ async function mutateMemory(dir, fn) {
   return out;
 }
 
-const normText = (t) => String(t ?? "").replace(/\s+/g, " ").trim().slice(0, TEXT_CAP);
 const labelOf = (text) => (text.length > LABEL_CAP ? text.slice(0, LABEL_CAP - 1) + "…" : text);
 const nowIso = () => new Date().toISOString();
 
@@ -641,48 +647,6 @@ function upsertSource(payload, desc, createdAtCandidate) {
   const stored = upsertIndividual(payload, ind);
   if (idx) idx.sourcesById.set(info.id, stored);
   return info.id;
-}
-
-/** Parse the "chat" shape both provenanceTag and teachProvenanceTag emit —
- *  `<source>[:<sessionId>][@<ts>]` — into { createdAt, sessionId? }. */
-function parseChatTagRest(rest) {
-  const at = rest.indexOf("@");
-  const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
-  const createdAt = at >= 0 ? rest.slice(at + 1) : "";
-  const colon = beforeAt.indexOf(":");
-  const sessionId = colon >= 0 ? beforeAt.slice(colon + 1) : "";
-  return { createdAt, ...(sessionId ? { sessionId } : {}) };
-}
-
-/**
- * Parse one legacy provenance TAG into a Source descriptor over the closed
- * kind set:
- *   corpus:conceptnet /r/IsA   -> { kind:"corpus",   name:"conceptnet" }
- *   corpus-weak:conceptnet /r/RelatedTo -> { kind:"corpusWeak", name:"conceptnet" }
- *   ace:chat:<session>@<ts>    -> { kind:"operator",  createdAt:<ts>, sessionId:<session> }
- *   teach:chat:<session>@<ts>  -> { kind:"teach",     createdAt:<ts>, sessionId:<session> }
- *   web:<url> | url:<url>      -> { kind:"web",       url:<url> }
- *   extracted:<file-basename>  -> { kind:"extracted", name:<file-basename> }
- *   entailed:<rule>            -> { kind:"entailed",  rule:<rule> }
- * chat:/session: refs map to the operator; an unknown tag -> null (no Source).
- */
-export function provenanceTagToSource(tag) {
-  const t = String(tag || "").trim();
-  if (!t) return null;
-  const head = t.split(/\s+/)[0]; // drop trailing " /r/IsA" etc.
-  if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
-  if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
-  if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
-  if (head.startsWith("teach:")) {
-    // the chat teach lane's natural frames — chat.mjs's teachProvenanceTag
-    return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
-  }
-  if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
-  if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
-  if (head.startsWith("extracted:")) return { kind: "extracted", name: head.slice("extracted:".length) || "unknown" };
-  if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };
-  if (head.startsWith("chat:") || head.startsWith("session:") || head.startsWith("operator")) return { kind: "operator" };
-  return null;
 }
 
 /** Map a payload's Source individuals into the { id: Source } shape computeTrust
@@ -985,33 +949,6 @@ export async function appendUtterances(dir, utterances) {
   return { ids };
 }
 
-/** Normalize a fact TERM (subject/object) so every writer converges on one
- *  spelling: ConceptNet's /c/en/foo_bar, tmct:Foo_bar, and bare "Foo bar" all
- *  become "foo bar". Also strips a leading "the"/"a"/"an" (idempotent — safe
- *  for storage too). The predicate is never normalized this way — its casing
- *  is meaningful controlled vocabulary. */
-export function normFactTerm(t) {
-  let s = normText(t);
-  s = s.replace(/^\/c\/[a-z]{2,3}\//i, "");
-  s = s.replace(/^[a-z][\w.-]*:/i, "");
-  s = s.replace(/_/g, " ").replace(/\s+/g, " ").trim();
-  s = s.replace(/^(?:the|an?)\s+/i, "");
-  return s.toLowerCase();
-}
-
-// A Fact is content-addressed by its NUL-delimited (s, p, o) — NUL never
-// occurs in a normalized term/predicate, so it's collision-proof unlike a
-// space. appendFact hashes the same `${s}\0${p}\0${o}` inline; keep both in sync.
-const factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
-
-/** Content-address a fact's id from (subject, predicate, object) without
- *  writing it — same contract as factIdFor. Lets a caller (e.g.
- *  syllogise.mjs's retraction machinery) name a not-yet-written fact's id
- *  deterministically, without an extra read. Pure, no I/O. */
-export function factIdForTriple(subject, predicate, object) {
-  return factIdFor(normFactTerm(subject), normText(predicate), normFactTerm(object));
-}
-
 /** Append one grammar-derived OWL triple, RDF-reified as a `Fact` individual.
  *  Same (s,p,o) -> same id -> upsert, never a duplicate. `premiseTrusts`/
  *  `ruleConfidence` optionally engage trust.mjs's entailed hook. Validated
@@ -1022,7 +959,7 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
   const p = normText(predicate);
   const o = normFactTerm(object);
   if (!s || !p || !o) throw new Error("a fact needs subject, predicate and object");
-  const id = `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
+  const id = factIdFor(s, p, o);
   const text = `${s} ${p} ${o}`;
   const tokens = proseTokensFor({ doc: text });
   const q = normText(quantifier);

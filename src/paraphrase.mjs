@@ -12,7 +12,7 @@
 // term.
 
 import { deriveSubClassClosure } from "./syllogise.mjs";
-import { normFactTerm } from "./memory/core.mjs";
+import { normFactTerm } from "./hash.mjs";
 import { fnv1aHex } from "./hash.mjs";
 
 // Every template reads "SUBJECT ⊑ OBJECT" left to right — no passive/reordered

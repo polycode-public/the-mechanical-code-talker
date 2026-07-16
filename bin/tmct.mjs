@@ -1074,8 +1074,12 @@ async function main() {
     };
     const { resolveRuntimeConfig } = await import("../src/cli-args.mjs");
     const { syllogise } = await import("../src/syllogise.mjs");
+    const { loadMemory, readFactRows, appendFacts } = await import("../src/memory/core.mjs");
     const { repo } = await resolveRuntimeConfig({ argv: rest });
-    const res = await syllogise(repo, { depth: numFlag("--depth", 32), budget: numFlag("--budget", 50) });
+    const res = await syllogise(repo, {
+      depth: numFlag("--depth", 32), budget: numFlag("--budget", 50),
+      store: { loadMemory, readFactRows, appendFacts },
+    });
     process.stdout.write(
       `tmct syllogise — derived ${res.count} entailed fact(s) (subClassOf closure, depth ${res.depth}, budget ${res.budget})`
       + (res.truncated ? " — budget reached, more available" : "") + "\n",

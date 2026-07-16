@@ -3093,7 +3093,10 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     const retractSubject = retractMatch[1].trim();
     const retractObject = retractMatch[2].trim();
     const { retractSubClassOf } = await import("./syllogise.mjs");
-    const result = await retractSubClassOf(memoryDir, retractSubject, retractObject);
+    const { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts } = await import("./memory/core.mjs");
+    const result = await retractSubClassOf(memoryDir, retractSubject, retractObject, {
+      store: { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts },
+    });
     if (result.found) {
       const extra = result.count - 1; // beyond the target fact itself
       return {
@@ -9417,8 +9420,8 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     let families = new Map();
     if (memoryDir) {
       try {
-        const { loadMemory } = await import("./memory/core.mjs");
-        families = actionFamilies(await loadMemory(memoryDir));
+        const { loadMemory, readRuleRows } = await import("./memory/core.mjs");
+        families = actionFamilies(readRuleRows(await loadMemory(memoryDir)));
       } catch { /* an unreadable store lists like an empty one */ }
     }
     if (!families.size) {
@@ -9595,6 +9598,7 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
     const res = await assertSentence(memoryDir, line, {
       lexicon: lex,
       provenance: { source: "chat", sessionId, ts },
+      appendFact,
     });
     if (!res || !res.ids?.length) return null;
     // A plain universal "every X is a Y" ALSO records the "every" quantifier

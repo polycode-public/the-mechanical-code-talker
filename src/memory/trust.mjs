@@ -8,6 +8,54 @@
 export const TRUST_SCORE_PROP = "mgx:trustScore";
 export const TRUST_INPUTS_PROP = "mgx:trustInputs";
 
+export const CREATED_AT_PROP = "mgx:createdAt";           // first-write-wins ISO-8601 on every individual
+// For call sites that mutate an individual's own attributes without touching
+// an edge (upsertSession, recomputeFactTrust, recomputeSourceReliability),
+// where codegraph.mjs's derived-updatedAt rule alone can't see the change.
+export const UPDATED_AT_PROP = "mgx:updatedAt";
+
+/** Parse the "chat" shape both provenanceTag and teachProvenanceTag emit —
+ *  `<source>[:<sessionId>][@<ts>]` — into { createdAt, sessionId? }. */
+function parseChatTagRest(rest) {
+  const at = rest.indexOf("@");
+  const beforeAt = at >= 0 ? rest.slice(0, at) : rest;
+  const createdAt = at >= 0 ? rest.slice(at + 1) : "";
+  const colon = beforeAt.indexOf(":");
+  const sessionId = colon >= 0 ? beforeAt.slice(colon + 1) : "";
+  return { createdAt, ...(sessionId ? { sessionId } : {}) };
+}
+
+/**
+ * Parse one legacy provenance TAG into a Source descriptor over the closed
+ * kind set (the kinds SOURCE_PRIOR scores):
+ *   corpus:conceptnet /r/IsA   -> { kind:"corpus",   name:"conceptnet" }
+ *   corpus-weak:conceptnet /r/RelatedTo -> { kind:"corpusWeak", name:"conceptnet" }
+ *   ace:chat:<session>@<ts>    -> { kind:"operator",  createdAt:<ts>, sessionId:<session> }
+ *   teach:chat:<session>@<ts>  -> { kind:"teach",     createdAt:<ts>, sessionId:<session> }
+ *   web:<url> | url:<url>      -> { kind:"web",       url:<url> }
+ *   extracted:<file-basename>  -> { kind:"extracted", name:<file-basename> }
+ *   entailed:<rule>            -> { kind:"entailed",  rule:<rule> }
+ * chat:/session: refs map to the operator; an unknown tag -> null (no Source).
+ */
+export function provenanceTagToSource(tag) {
+  const t = String(tag || "").trim();
+  if (!t) return null;
+  const head = t.split(/\s+/)[0]; // drop trailing " /r/IsA" etc.
+  if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
+  if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
+  if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
+  if (head.startsWith("teach:")) {
+    // the chat teach lane's natural frames — chat.mjs's teachProvenanceTag
+    return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
+  }
+  if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
+  if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
+  if (head.startsWith("extracted:")) return { kind: "extracted", name: head.slice("extracted:".length) || "unknown" };
+  if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };
+  if (head.startsWith("chat:") || head.startsWith("session:") || head.startsWith("operator")) return { kind: "operator" };
+  return null;
+}
+
 /** Source-type priors — computed from the Source's type only, never hand-set
  *  on a Fact directly. */
 export const SOURCE_PRIOR = Object.freeze({

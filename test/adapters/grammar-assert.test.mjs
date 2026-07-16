@@ -7,9 +7,13 @@ import assert from "node:assert/strict";
 import { access, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { assertSentence, provenanceTag } from "../../src/grammar/assert.mjs";
+import { assertSentence as assertSentenceSeam, provenanceTag } from "../../src/grammar/assert.mjs";
 import { loadLexicon } from "../../src/grammar/lexicon.mjs";
-import { FACT_CLASS, MEMORY_DIR_REL, loadMemory, normFactTerm } from "../../src/memory/core.mjs";
+import { FACT_CLASS, MEMORY_DIR_REL, appendFact, loadMemory, normFactTerm } from "../../src/memory/core.mjs";
+
+// assertSentence takes the store's writer injected; every call in this file
+// wires the real memory/core.mjs appendFact once here.
+const assertSentence = (dir, sentence, opts = {}) => assertSentenceSeam(dir, sentence, { appendFact, ...opts });
 import { parseEntities } from "../../src/codegraph.mjs";
 
 const SESSION = "01890000-0000-7000-8000-00000000abcd";

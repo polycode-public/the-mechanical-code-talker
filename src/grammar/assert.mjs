@@ -1,6 +1,7 @@
 // grammar/assert.mjs — the grammar→memory bridge: parseAce a sentence and land
-// every emitted triple in tmct's OWN memory graph via memory/core.mjs's
-// appendFact.
+// every emitted triple in tmct's OWN memory graph via an INJECTED appendFact
+// (memory/core.mjs's, in the live wiring — the grammar never imports the
+// store).
 //
 // appendFact normalizes each triple's subject/object through normFactTerm
 // (tmct:Legacy-module → "legacy-module"; the predicate keeps its vocabulary
@@ -10,7 +11,6 @@
 // ("ace:chat:<sessionId>@<ts>"); core.mjs unions tags "|"-joined when several
 // writers assert the same fact.
 
-import { appendFact } from "../memory/core.mjs";
 import { parseAce } from "./ace.mjs";
 import { loadLexicon } from "./lexicon.mjs";
 
@@ -21,11 +21,15 @@ export function provenanceTag({ source = "chat", sessionId = "", ts = "" } = {})
 }
 
 /** Parse `sentence` against the ACE-OWL sub-fragment and append every emitted
- *  triple to the memory graph under `dir`. Returns the parse result extended
- *  with `ids` (one fact id per triple, same order) and the provenance tag —
- *  or null (grammar miss, nothing written), or the residue parse (unknown
- *  words: triples empty, ids empty, nothing written). */
-export async function assertSentence(dir, sentence, { lexicon, provenance } = {}) {
+ *  triple to the memory graph under `dir`, via the REQUIRED injected
+ *  `appendFact` (memory/core.mjs's, in the live wiring). Returns the parse
+ *  result extended with `ids` (one fact id per triple, same order) and the
+ *  provenance tag — or null (grammar miss, nothing written), or the residue
+ *  parse (unknown words: triples empty, ids empty, nothing written). */
+export async function assertSentence(dir, sentence, { lexicon, provenance, appendFact } = {}) {
+  if (typeof appendFact !== "function") {
+    throw new TypeError("assertSentence needs an appendFact option (memory/core.mjs's writer) — the grammar never imports the store");
+  }
   const parse = parseAce(sentence, lexicon ?? loadLexicon());
   if (!parse) return null;
   const tag = provenanceTag(provenance);

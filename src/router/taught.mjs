@@ -7,15 +7,16 @@
 // resolver also never selects them on its own, because it backward-chains over
 // `knows` add-effects and these records carry world-triple effects instead.
 
-import { readRuleRows } from "../memory/core.mjs";
 import { capabilityByName, registerCapability } from "./registry.mjs";
 
 const ACTION_KINDS = new Set(["action-signature", "action-precond", "action-effect", "action-constraint"]);
 
-/** Group a memory payload's action-family rule rows by rule name. */
-export function actionFamilies(memory) {
+/** Group already-read rule rows (memory/core.mjs's readRuleRows output — the
+ *  caller reads the store; this bridge never does) into action families by
+ *  rule name. */
+export function actionFamilies(ruleRows) {
   const families = new Map();
-  for (const row of readRuleRows(memory)) {
+  for (const row of ruleRows || []) {
     if (!ACTION_KINDS.has(row.kind)) continue;
     if (!families.has(row.name)) families.set(row.name, []);
     families.get(row.name).push(row);
@@ -71,12 +72,12 @@ export function capabilityFromActionRules(name, family) {
   };
 }
 
-/** Register every taught action family in `memory`, idempotently (a name that
- *  is already registered is skipped). Returns the new registrations'
- *  unregister disposers. */
-export function registerTaughtActions(memory) {
+/** Register every taught action family found in the given rule rows,
+ *  idempotently (a name that is already registered is skipped). Returns the
+ *  new registrations' unregister disposers. */
+export function registerTaughtActions(ruleRows) {
   const disposers = [];
-  for (const [name, family] of actionFamilies(memory)) {
+  for (const [name, family] of actionFamilies(ruleRows)) {
     if (capabilityByName(`taught:${name}`)) continue;
     disposers.push(registerCapability(capabilityFromActionRules(name, family)));
   }

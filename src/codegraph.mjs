@@ -1,6 +1,6 @@
 import { lookupByProseTokens, proseLayerHits, splitIdentifierWords } from "./prose.mjs";
 import { cosine } from "./embed.mjs";
-import { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "./memory/core.mjs";
+import { CREATED_AT_PROP, UPDATED_AT_PROP, provenanceTagToSource } from "./memory/trust.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the
 // deterministic indexer writes to <repo>/.tmct/graph.json (shape produced by
@@ -1293,7 +1293,7 @@ function bucketCounts(values) {
 /** The normalized provenance-prefix label for a Fact's FIRST recorded
  *  provenance tag (a Fact may carry a " | "-joined union of several; the
  *  legend buckets on the primary/first-recorded one, not a multiset) —
- *  reuses memory/core.mjs's own provenanceTagToSource parser (the SAME
+ *  reuses memory/trust.mjs's own provenanceTagToSource parser (the SAME
  *  collapse-the-session-id/timestamp-suffix, keep-the-corpus/source-name
  *  logic the trust layer already relies on) rather than re-deriving it.
  *  Null when the Fact carries no provenance tag at all (a legacy/malformed
