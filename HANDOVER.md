@@ -146,23 +146,13 @@ fan-out set.
   canonical. No cleft reaches the taught-fact lane. Measured across 14 probes in
   `playtests/PLAYTEST_LOG_020.md`.
 
-### 3. Memory and predicate unification (`src/adapters/memory/*`, `src/domain/memory/*`)
+### 3. Memory and dispatch (`src/adapters/memory/*`, `src/domain/memory/*`)
 
-- **3 import-layer violations remain allowlisted.** `test/estate/layer-allowlist.mjs` is a
-  shrink-only ratchet: the checker fails on any edge not listed and on any listed edge that
-  no longer occurs. Each fix deletes its line; never add one. What is left:
-
-  - **`services/{chat,index}.mjs -> tools/server.mjs` (2 lines)** — services reaching up for
-    dispatch. The tool layer is one module per tool behind a thin `server.mjs` entry, so the
-    seam a fix would follow is narrow. Worth asking first whether `tools` sitting above
-    `services` is the right ranking, given chat is a service that wants to dispatch tools.
-  - **`wink-model.mjs calls require()` (1 line)** — examined and kept, with the alternatives
-    measured. `loadWinkModel()` is synchronous and sits under `parseQueryFull`, an exported
-    sync domain API, so making it async ripples through `domain/`, `services/`, `tools/` and
-    `bin/`. Top-level await is rejected outright by the ledger bundle's `iife` format, and
-    `await import("wink-nlp")` drags wink into that bundle: 4,013,990 bytes against the
-    bundle's own 477,206. `createRequire` is what keeps it out. Renaming the local so the
-    checker's regex stops matching would be dodging, not fixing.
+- **`services/{chat,index}.mjs -> tools/server.mjs`**, the last two allowlisted import-layer
+  violations that are still work rather than a decision. Services reach up for dispatch. The
+  tool layer is one module per tool behind a thin `server.mjs` entry, so the seam is narrow —
+  but the first question is whether `tools` belongs above `services` at all, given chat is a
+  service whose job includes dispatching tools.
 
 ### 4. Visualisation code (plan-viz)
 
