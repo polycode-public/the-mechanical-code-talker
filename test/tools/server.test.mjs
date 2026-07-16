@@ -8,8 +8,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dispatchTool, TOOLS } from "../../src/tools/server.mjs";
+import { HANDLERS } from "../../src/tools/handlers/index.mjs";
 import { renderToolsCatalog } from "../../src/tools/catalog.mjs";
-import { TOOL_DEFINITIONS, HOT_TOOLS, COLD_TOOLS } from "../../src/tools/definitions.mjs";
+import { TOOL_DEFINITIONS, HOT_TOOLS, COLD_TOOLS, TOOL_NAMES } from "../../src/tools/definitions.mjs";
 import { ToolError } from "../../src/adapters/config.mjs";
 
 const fixture = JSON.parse(
@@ -374,6 +375,13 @@ test("the cold-tool catalog lists every cold tool with its exact CLI invocation"
 test("the catalog names the hot tools without giving them a cold entry", () => {
   const cat = renderToolsCatalog("/abs/bin/cli.mjs");
   for (const { name } of HOT_TOOLS) assert.ok(cat.includes(`\`${name}\``), `missing ${name}`);
+});
+
+test("the handler registry holds exactly one handler per declared tool", () => {
+  assert.deepEqual(Object.keys(HANDLERS).sort(), [...TOOL_NAMES].sort());
+  for (const [name, handle] of Object.entries(HANDLERS)) {
+    assert.equal(typeof handle, "function", `${name} should map to a handler function`);
+  }
 });
 
 test("every tool the definitions declare is dispatchable, and nothing else is", async () => {
