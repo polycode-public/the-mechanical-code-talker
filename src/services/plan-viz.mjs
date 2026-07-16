@@ -71,12 +71,31 @@ function rankBySize(sizeOrder, members) {
   return { ranks, sized };
 }
 
+/** Every label the plan itself names — across its states and its actions. The
+ *  board's undeclared anchors are drawn from this rather than from the whole
+ *  domain, which is the entire memory. */
+function namesInPlan(plan) {
+  const named = new Set();
+  for (const rows of plan?.states || []) {
+    for (const r of rows || []) {
+      if (r?.subject != null) named.add(r.subject);
+      if (r?.object != null) named.add(r.object);
+    }
+  }
+  for (const a of plan?.actions || []) {
+    if (a?.subject != null) named.add(a.subject);
+    if (a?.target != null) named.add(a.target);
+  }
+  return named;
+}
+
 /**
  * Pure geometry for the blocks archetype.
  *
  * plan:      { states: [[{subject, predicate, object}], …], domain: { classMembers } }
  * rendersAs: { className: "block" | "slot" } — classes absent from the map
- *            fall back to labeled circles.
+ *            fall back to labeled circles, and contribute only the members the
+ *            plan names (see the loop below: the domain is the whole memory).
  * sizeOrder: [[smallerLabel, largerLabel], …]
  *
  * Returns { board, ranks, anchors, snapshots: [{ items, stacks }] } —
@@ -85,6 +104,7 @@ function rankBySize(sizeOrder, members) {
 export function computeBlocksLayout({ plan, rendersAs = {}, sizeOrder = [] }) {
   const classMembers = plan?.domain?.classMembers || {};
   const classes = Object.keys(classMembers).sort();
+  const named = namesInPlan(plan);
   const blockSet = new Set();
   const anchorDefs = [];
   const classHue = {};
@@ -97,7 +117,18 @@ export function computeBlocksLayout({ plan, rendersAs = {}, sizeOrder = [] }) {
       for (const m of members) blockSet.add(m);
     } else {
       const kind = archetype === "slot" ? "slot" : "circle";
-      for (const m of members) anchorDefs.push({ id: m, kind });
+      // A DECLARED class is the board's own furniture: every member is drawn,
+      // empty or not (an unused peg is still a peg). An UNDECLARED class only
+      // falls back to circles, and the domain it comes from is the whole
+      // memory, not just this puzzle — one that has been taught a vocabulary
+      // carries hundreds of individuals that have nothing to do with the game.
+      // Drawing those puts every noun the memory knows on the board, which
+      // squeezes the real anchors into a few pixels at the left edge. So an
+      // undeclared class contributes only what the plan actually names.
+      for (const m of members) {
+        if (!archetype && !named.has(m)) continue;
+        anchorDefs.push({ id: m, kind });
+      }
     }
   }
   anchorDefs.sort((a, b) => (a.kind === b.kind ? (a.id < b.id ? -1 : 1) : a.kind === "slot" ? -1 : 1));

@@ -217,3 +217,71 @@ test("renderPlanHtml: omits the goal line honestly when stepGoals are absent", (
   const plan = embeddedJson(html, "PLAN");
   assert.equal(plan.stepGoals, null);
 });
+
+// ---- the domain a plan carries is the whole memory, not just this puzzle. A
+// memory that has been taught a vocabulary holds hundreds of individuals in
+// classes the board never declared; drawing them all put every known noun on
+// the board and squeezed the real pegs into the first few pixels. ----
+
+const TAUGHT_VOCABULARY = ["adult", "airport", "ant", "artist", "baby", "bear", "bicycle", "bread"];
+const withVocabulary = {
+  ...layoutArgs,
+  plan: {
+    ...PLAN_FIXTURE,
+    domain: {
+      ...PLAN_FIXTURE.domain,
+      classMembers: { ...PLAN_FIXTURE.domain.classMembers, thing: TAUGHT_VOCABULARY },
+    },
+  },
+};
+
+test("computeBlocksLayout: an undeclared class the plan never names puts nothing on the board", () => {
+  const layout = computeBlocksLayout(withVocabulary);
+  assert.deepEqual(layout.anchors.map((a) => a.id), ["peg-a", "peg-b", "peg-c"]);
+  for (const word of TAUGHT_VOCABULARY) {
+    assert.ok(!layout.anchors.some((a) => a.id === word), `${word} was drawn on the board`);
+  }
+});
+
+test("computeBlocksLayout: a taught vocabulary leaves the pegs spread across the board, not crushed at the edge", () => {
+  const clean = computeBlocksLayout(layoutArgs);
+  const withWords = computeBlocksLayout(withVocabulary);
+  assert.deepEqual(withWords.anchors, clean.anchors);
+  // the failure this guards read peg-a@2, peg-b@5, peg-c@9 on a 640px board.
+  const xs = withWords.anchors.map((a) => a.x);
+  assert.ok(xs[0] > 50, `leftmost peg crushed against the edge at x=${xs[0]}`);
+  assert.ok(xs[2] > withWords.board.w / 2, `rightmost peg not in the right half at x=${xs[2]}`);
+});
+
+test("computeBlocksLayout: a taught vocabulary never pushes a disk off the left edge", () => {
+  const layout = computeBlocksLayout(withVocabulary);
+  for (const [i, snap] of layout.snapshots.entries()) {
+    for (const item of snap.items.filter((it) => it.kind === "block")) {
+      assert.ok(item.x >= 0, `step ${i}: ${item.id} starts off-board at x=${item.x}`);
+      assert.ok(item.x + item.w <= layout.board.w, `step ${i}: ${item.id} overruns the board`);
+    }
+  }
+});
+
+test("computeBlocksLayout: an undeclared class IS drawn for the members the plan names", () => {
+  // the fallback-to-circles path still has a job: an anchor the plan actually
+  // rests something on is part of the board even when its class went undeclared.
+  const layout = computeBlocksLayout({ ...withVocabulary, rendersAs: { disk: "block" } });
+  assert.deepEqual(layout.anchors.map((a) => a.id), ["peg-a", "peg-b", "peg-c"]);
+  assert.ok(layout.anchors.every((a) => a.kind === "circle"));
+});
+
+test("computeBlocksLayout: a declared class keeps every member, named by the plan or not", () => {
+  // an unused peg is still a peg — declaring it is the board's own furniture.
+  const spare = {
+    ...layoutArgs,
+    plan: {
+      ...PLAN_FIXTURE,
+      domain: {
+        ...PLAN_FIXTURE.domain,
+        classMembers: { ...PLAN_FIXTURE.domain.classMembers, peg: ["peg-a", "peg-b", "peg-c", "peg-d"] },
+      },
+    },
+  };
+  assert.deepEqual(computeBlocksLayout(spare).anchors.map((a) => a.id), ["peg-a", "peg-b", "peg-c", "peg-d"]);
+});
