@@ -754,8 +754,11 @@ existed); `corpus/seon/README.md:53`; `chatbench/GRADED.md` (:71, :135, :140, :2
   rewrite would reclaim ~6.5% of the repo at the cost of changing every commit hash on a branch with
   a live remote and CI that publishes to npm. Untracking stops the growth and costs nothing.
 - **`.idea/` — 6 files.** Shared team config or personal cruft?
-- **`STRATEGY_ADVISOR.log`** — tracked, and `.gitignore` un-ignores it explicitly against a `*.log`
-  rule, so that is deliberate. Still wanted?
+- **`STRATEGY_ADVISOR.log`** — **done: gitignored and untracked.** It is scratch written by the
+  advisor skill, not a record, and its `!STRATEGY_ADVISOR.log` un-ignore was defeating the `*.log`
+  rule for no one's benefit. Entries older than a day are now pruned by the advisor as it runs;
+  `SKILL_AGENT_STRATEGY_ADVISOR.md` carries the rule and the log's own header repeats it for
+  whoever opens the file.
 
 **Local only (Rule 9 — propose, don't delete).** `.tmct/` 45MB, `chatbench/results` 46MB,
 `agentbench/results` 1MB, `infbench/results` 1.7MB, `.DS_Store` files, stray
@@ -816,5 +819,6 @@ rather than being a row here; it is 43% of `scripts/` and contains three hand-ro
 4. **`generate-answer-variants.mjs`** — delete, or keep as a maintainer REPL? A drift guard has
    nothing to compare against while its target stays hand-curated (§4.7).
 5. **`.idea/`** — shared config or personal cruft?
-6. **`STRATEGY_ADVISOR.log`** — the un-ignore is deliberate; still wanted?
+6. ~~**`STRATEGY_ADVISOR.log`**~~ — answered: gitignored, untracked, and the advisor now prunes
+   entries older than a day as it runs.
 7. **Batch 14 as a separate plan?** Recommendation: yes.

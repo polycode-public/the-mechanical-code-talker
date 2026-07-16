@@ -44,7 +44,6 @@ test/fixtures/entities-repo/.tmct/sessions/
 *.log
 npm-debug.log*
 .env
-!STRATEGY_ADVISOR.log
 
 # a `tmct init` run in this dev repo writes tmct.toml — not tracked here
 tmct.toml

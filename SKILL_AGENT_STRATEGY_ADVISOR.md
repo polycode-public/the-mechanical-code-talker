@@ -156,9 +156,40 @@ RETURN (goes to the main loop, which relays to the operator):
 - RE-ARM? yes / adjust (say what) / pause.
 Keep under ~300 words. Specificity over coverage.
 
+THE LOG IS GITIGNORED AND MACHINE-LOCAL. A fresh checkout has no STRATEGY_ADVISOR.log, so if it
+is missing, create it with exactly this header before you write anything else — the header is the
+only place a human or agent who opens the file learns the pruning rule:
+  cat > STRATEGY_ADVISOR.log <<'HEADER'
+  Written by the strategy advisor, one block per tick. See SKILL_AGENT_STRATEGY_ADVISOR.md.
+  Machine-local scratch: this file is gitignored and nothing outside your machine reads it.
+
+  ENTRIES OLDER THAN 1 DAY ARE REMOVED. The advisor prunes them at the start of each run. If you
+  are a human or an agent reading this file, prune them too — the rule holds whoever is looking.
+
+  An advisor tick is about a session happening right now: which agent has stalled, which batch is
+  drifting, whether a pending synthesis survives a second look. A day later the batch has shipped
+  or been abandoned, and the entry describes a repo that no longer exists. It then reads as a live
+  finding to the next session, which is worse than no entry at all.
+
+  Nothing else backs this file up, so anything worth keeping past a day has to be written somewhere
+  that is: an open item goes to HANDOVER.md, a design to the relevant PLAN_*.md, a measurement to a
+  BENCHMARK_* write-up. Mine it across first, then delete it here.
+
+  No current entries.
+  HEADER
+
+PRUNE FIRST: every run, before anything else, delete each block whose [timestamp] is more than 1
+day old — whatever its STATUS, including OPEN. Your ticks are about a session happening now; a day
+later the batch shipped or died and the entry describes a repo that is gone, but still reads as
+live to whoever finds it. If a stale block names something that still matters, mine it into the
+doc that owns it (HANDOVER.md for an open item, a PLAN_*.md for a design) and say so in your
+return — then delete it here regardless. Nothing backs this file up, so mine it across BEFORE you
+delete it. Keep the header. Prune even on a "no new advice" run, and drop the "No current
+entries." line as soon as you append a real block.
+
 PERSIST: IF (and only if) you have actionable advice, APPEND one self-contained block to
-<REPO>/STRATEGY_ADVISOR.log (append-only; NEVER edit/reorder prior entries; NEVER run git).
-Skip the log entirely on a "no new advice" run. Use:
+<REPO>/STRATEGY_ADVISOR.log (never reorder or rewrite a block you are keeping; NEVER run git).
+Skip appending on a "no new advice" run — but still prune. Use:
   printf '\n═══════════════════════════════════════\n[%s] source=strategy-advisor(sonnet5,deep) · topic=<short>\nOBSERVATION: ...\nRECOMMENDED ACTION: ...\nSTATUS: OPEN\n' "$(date -u +'%Y-%m-%d %H:%MZ')" >> STRATEGY_ADVISOR.log
 
 INBOX CHANNEL: to get context from another session on this machine, or to leave a note for the
