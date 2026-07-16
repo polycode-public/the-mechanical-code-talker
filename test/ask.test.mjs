@@ -251,7 +251,7 @@ test("resolveObject: a term that resolves at an earlier tier never falls through
 // fall through to tier 4's prose-index fallback and land on an unrelated Commit
 // individual whose free-text MESSAGE merely happens to contain the same word. Driven
 // against the real, committed examples/mini-webapp graph (the same fixture the
-// chatflow-tier* playtest-freeze passes use) rather than this file's own synthetic
+// games corpus lane's playtest-freeze rows use) rather than this file's own synthetic
 // buildGraph() fixture, because the bug is specifically about a module named
 // "logger.mjs" (an agent-noun basename) vs. the query word "logging" (its gerund
 // form) — buildGraph()'s own "src/logging.mjs" fixture module is already an EXACT
@@ -1278,8 +1278,8 @@ test("ask(): grain-aware resolution — \"calls\" now up-refines a resolved Clas
 });
 
 test("ask(): grain-aware resolution — \"calls\" does NOT up-refine a Class that HAS recorded members (e.g. Logger, Widget): its own empty callsSymbol scan stays decisive", () => {
-  // Mirrors the real mini-webapp/tier2 pinned regressions (chatflow-tier5's
-  // "logger" tests, chatflow-tier2's Button test): a fully-modeled class (real
+  // Mirrors the games corpus lane's pinned mini-webapp "logger" and Button
+  // regressions: a fully-modeled class (real
   // `contains` members recorded) reads as a genuine unit whose own empty
   // symbol-grain result IS the honest answer — up-refining it would surface a
   // module-level caller that never actually called the class's own code.

@@ -7,10 +7,12 @@ import { lanePredicates, readLaneRows, validateRow } from "../corpus/run-lane.mj
 
 const CORPUS_DIR = path.resolve(fileURLToPath(import.meta.url), "..", "..", "corpus");
 
+// Lanes are every .jsonl under test/corpus/, one directory level deep at most
+// (sharded lane families live in a subdirectory, e.g. games/openers.jsonl).
 const laneNames = fs
-  .readdirSync(CORPUS_DIR)
-  .filter((name) => name.endsWith(".jsonl"))
-  .map((name) => name.slice(0, -".jsonl".length))
+  .readdirSync(CORPUS_DIR, { withFileTypes: true, recursive: true })
+  .filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
+  .map((entry) => path.relative(CORPUS_DIR, path.join(entry.parentPath, entry.name)).slice(0, -".jsonl".length))
   .sort();
 
 test("every row of every corpus lane conforms to the row schema", async () => {

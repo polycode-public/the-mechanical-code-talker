@@ -8,10 +8,11 @@ import { fileURLToPath } from "node:url";
 
 const CORPUS_DIR = path.resolve(fileURLToPath(import.meta.url), "..", "..", "test", "corpus");
 
+// Sharded lane families live one directory down (e.g. games/openers.jsonl).
 const lanes = fs
-  .readdirSync(CORPUS_DIR)
-  .filter((name) => name.endsWith(".jsonl"))
-  .map((name) => name.slice(0, -".jsonl".length))
+  .readdirSync(CORPUS_DIR, { withFileTypes: true, recursive: true })
+  .filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
+  .map((entry) => path.relative(CORPUS_DIR, path.join(entry.parentPath, entry.name)).slice(0, -".jsonl".length))
   .sort();
 
 if (lanes.length === 0) {
