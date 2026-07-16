@@ -12,11 +12,17 @@ PLAN_HANOI/PLAN_VIZ_LEDGER session). See `~/.claude/inboxes/tmct.md` and
 ## Version state (2026-07-16)
 
 v1.12.1 in the working tree; v1.12.0 pushed to main, which CI publishes. Delivered since
-1.11.5: the `archive/PLAN_OPEN_BACKLOG.md` workstreams A–F, playtests 015–018, and
+1.11.5: the `archive/PLAN_OPEN_BACKLOG.md` workstreams A–F, playtests 015–019, and
 `archive/PLAN_LAYERS_AND_TEST_ESTATE.md` — src/ re-homed into five layers with a
 downward-only import rule, the test estate rebuilt around six keyed corpus lanes with an
 e2e tier and a README example harness, and the CI quality pipeline (dependency cooldown,
 licence and PII checks, pack gate, post-deploy smoke).
+
+Tested status: `playtests/PLAYTEST_LOG_019.md` replayed every probe session from logs
+001–017 against the re-layered tree. **17/17 pass, zero regressions** — the refactor drifted
+nothing a user can see, including the cross-process paths most exposed to the injected store
+seam (teach, `syllogise` CLI, read back). Both of 018's open findings reproduce identically
+and stay open below: ask-turn misparse receipts, and goals accumulating instead of folding.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code per
@@ -115,11 +121,11 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
   correct fact answers on ask turns ("rests"→"tests", "bigger"→"calls", "defines"): the
   playtest-015 `fuzzyVerb` drop covers teach and goal turns only. One coherent edge: extend
   the drop to fact-reader-answered ask turns. Found by the 018 uber retest
-  (`playtests/PLAYTEST_LOG_018.md`).
+  (`playtests/PLAYTEST_LOG_018.md`), reproduced unchanged by 019.
 
 - **Identical goals accumulate instead of folding.** The same goal restated in another
   voicing appends "(N goals held)" duplicates; fold a deep-equal incoming goal spec and say
-  so. Found by the 018 uber retest.
+  so. Found by the 018 uber retest, reproduced unchanged by 019.
 
 - **Topic-shift ellipsis.** "what is a dog" → "what about cats" has no reader; the elliptical
   follow-up falls to the wall. Named in `playtests/PLAYTEST_LOG_002.md` and 005.
