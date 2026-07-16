@@ -4348,7 +4348,7 @@ export async function helpText() {
 
 /** The conservative relevance floor a folded-session block must clear (the
  *  retrieveBlocks idf×(1+rank) score) before an honest ask-miss is answered from
- *  memory. Calibrated in the small-corpus regime (test/wiring-recall.test.mjs):
+ *  memory. Calibrated in the small-corpus regime (test/tools/wiring-recall.test.mjs):
  *  a genuine re-ask scores ~4, a frame-word coincidence ~1. */
 export const RECALL_MIN_SCORE = 2.0;
 
@@ -7617,7 +7617,7 @@ function relationDefinitions() {
  *  — NOT grammar.mjs's structural T5 template, which keeps its article MANDATORY
  *  on purpose (a bare "what is <anything>" would also swallow "what is the
  *  meaning of this codebase", an existing, deliberately honest grammar-miss
- *  regression — test/ask.test.mjs pins it null; see T5's own docblock). That
+ *  regression — test/tools/ask.test.mjs pins it null; see T5's own docblock). That
  *  collision risk is a STRUCTURAL-PARSE concern (T5's tail becomes the literal
  *  graph-query object); it doesn't apply here: this regex only extracts a
  *  SUBJECT STRING to look up against the memory Facts store / curated lexicon —

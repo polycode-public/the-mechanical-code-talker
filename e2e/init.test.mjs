@@ -388,7 +388,7 @@ test("bin/tmct.mjs: `tmct init --with-persona code` writes the persona, `--with-
 // ---- memory-backend CLI seam (PLAN_SEED.md §6): `tmct init --memory-backend
 // <default|memory|sqlite>` writes tmct.toml's `[memory] backend`, chat.mjs's
 // createSession reads it back at CLI-flag > env > tmct.toml > default
-// precedence (test/chat-memory-backend.test.mjs covers that resolution;
+// precedence (test/adapters/chat-memory-backend.test.mjs covers that resolution;
 // these tests cover the WRITE side: renderTomlConfig + the read-back path). --
 
 test("renderTomlConfig: config.memory.backend set — emits an explicit [memory] section", () => {

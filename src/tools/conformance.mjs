@@ -146,7 +146,7 @@ export function runConformance(name, makeProvider) {
   });
 
   // 2f: the source-capable branch — dead code until a provider actually sets sourceAccess:true
-  // (test/repository-interface.test.mjs's third runConformance call, against a source-capable
+  // (test/adapters/repository-interface.test.mjs's third runConformance call, against a source-capable
   // fixture provider, is what makes this execute at all).
   test(`[${name}] source-capable: snippet/context return real body text for a resolvable spanned symbol`, async () => {
     const svc = makeProvider();

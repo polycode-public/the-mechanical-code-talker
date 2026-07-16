@@ -47,7 +47,7 @@ export const DRIVERS = Object.freeze({ stub: stubDriver, shim: shimDriver, resol
 // A HARD wall-clock backstop on ONE driver call (coordinator reinforcement 1):
 // the planner's POP/HTN loop has its own MAX_STEPS budget, but a bug that never
 // grounds a sub-goal could still hang the single `await driver(...)` — and
-// runAgentbench is called from test/agentbench.test.mjs, so a wedge would hang
+// runAgentbench is called from test/bench/agentbench.test.mjs, so a wedge would hang
 // the whole ~848-test suite with no failure. This bound turns an overrun into a
 // deterministic FAIL on `terminates:true` instead. The timeout only ever fires
 // on a real hang (a bug); in normal operation it never triggers, so recorded

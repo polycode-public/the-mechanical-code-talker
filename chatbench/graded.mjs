@@ -127,7 +127,7 @@ export const GRADED_MATRIX = [
 
 /** Grades whose reliably-passing cells are PROMOTED: their fixed 5-item
  *  promoted subsets run as always-run deterministic unit tests
- *  (test/chatbench-graded.test.mjs) and are FIXED in every sample (never
+ *  (test/bench/chatbench-graded.test.mjs) and are FIXED in every sample (never
  *  sampled out). Promoting a future grade = appending its band name here. */
 export const PROMOTED_GRADES = ["A1", "A2"];
 

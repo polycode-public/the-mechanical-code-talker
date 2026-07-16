@@ -90,7 +90,7 @@ from the same ConceptNet dump by (a) widening the tech domain with the
 `EXTRA_SEEDS` list in `filter-dump.mjs` (~230 tech terms — languages,
 frameworks, data structures, cloud/infra, protocols, tools, ML) and (b) raising
 `MAX_BYTES` in `filter-dump.mjs` from 1.4 MB to 4.5 MB with the matching test
-budget assertion (`test/corpus-conceptnet.test.mjs`) raised from 1.5 MB to
+budget assertion (`test/adapters/corpus-conceptnet.test.mjs`) raised from 1.5 MB to
 5 MB. The widened seed set matched **45,633 unique en→en assertions** (all under
 budget, so no tier-trimming was needed this pass), and the quality filter
 trimmed them to the committed **44,947 clean facts**. Regenerate with:

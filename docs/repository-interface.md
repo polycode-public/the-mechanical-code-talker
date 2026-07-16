@@ -7,7 +7,7 @@ for the why; this file is the normative prose peer of the machine-readable
 `docs/repository-interface.schema.json` (both are generated from / checked against
 `src/adapters/repository-interface.mjs`, the single source of truth).
 
-> **Conformance = passing the contract test suite** (`test/repository-interface.test.mjs`), not
+> **Conformance = passing the contract test suite** (`test/adapters/repository-interface.test.mjs`), not
 > matching this prose. The suite is the compatibility kit; run it against your implementation to
 > claim conformance. tmct's own reference providers (`src/adapters/providers/fixture.mjs`,
 > `src/adapters/providers/bootstrap.mjs`) pass it in `npm test`.

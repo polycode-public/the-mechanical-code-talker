@@ -8,7 +8,7 @@
 //     touches no filesystem state at all.
 //   - mode "session": the FULL runChat() with injected input/output streams in
 //     a fresh temp dir per case (the scripted-session pattern in
-//     test/chat.test.mjs) — session side-effects (sidecar, graph fold-in,
+//     test/tools/chat.test.mjs) — session side-effects (sidecar, graph fold-in,
 //     memory) happen INSIDE the temp dir, which is removed afterwards. A case
 //     may span several sessions (turn.session = 1, 2, …) to measure recall.
 //
@@ -140,7 +140,7 @@ export const EMPTY_CONTEXT =
 
 /** Parse cases.jsonl text into { cases, errors }. Errors are lint findings
  *  (schema violations, duplicate ids, bad tags/expect keys) — the same checks
- *  test/chatbench.test.mjs enforces over the committed file. */
+ *  test/bench/chatbench.test.mjs enforces over the committed file. */
 export function parseCases(text) {
   const cases = [];
   const errors = [];
@@ -524,7 +524,7 @@ export async function createRunnerDeps(stamp) {
 
   // The runner's fixture pipeline mirrors a REAL graph writer's: raw payload ->
   // ingestSchemaDocs() -> the artifact (a real graph.json always carries the
-  // schema-doc individuals — test/ask.test.mjs's buildGraph plays the same
+  // schema-doc individuals — test/tools/ask.test.mjs's buildGraph plays the same
   // trick). The ingested payload is materialized ONCE to a throwaway file so
   // the dispatchTool path (which re-reads config.graphFile per ask) sees the
   // same graph the pre-parsed `graph` object holds; runTurn never writes to it.
