@@ -27,65 +27,36 @@ download, not reachable from data in hand).
 
 ### 1. Chat parse and ask lanes (`src/services/chat.mjs`, `src/domain/ask.mjs`)
 
-- **Misparse-receipt leakage on ask turns.** Fuzzy/stale Goal+Canonical receipts print under
-  correct fact answers on ask turns ("rests"→"tests", "bigger"→"calls", "defines"): the
-  existing `fuzzyVerb` drop covers teach and goal turns only. One coherent edge: extend
-  the drop to fact-reader-answered ask turns.
+- **The scope tail of a qualifier check is never read.** "is Task.title public in Task"
+  answers `Yes — Task.title is public` from the term alone; so does "is Task.title public in
+  SomeOtherClass". `parseQualifierCheck` now declines when a NAMED agent follows a qualifier
+  that has a relation counterpart, but `public` has none, so the `in <scope>` tail stays
+  unread. Validate it or decline — answering from the term while the tail says otherwise is
+  the same defect the by-tail fix closed.
 
-- **Identical goals accumulate instead of folding.** The same goal restated in another
-  voicing appends "(N goals held)" duplicates; fold a deep-equal incoming goal spec and say
-  so.
+- **A coordinated agent resolves to its first operand.** "is A called by B and C" answers
+  `Yes` about B and drops C silently; the active twin "does A and B call C" does the same.
+  `resolveObjectCore`'s path/slash-stem heuristic deliberately resolves past trailing junk,
+  so the fix reaches every shape and lane and would break that documented intent.
+  Coordination is a parse tier that does not exist — no split-on-"and" heuristic.
 
-- **Six frozen wrong answers.** The agent-debt rows pin answers that are still wrong, waiting
-  for a fix to flip them: the yes/no `callsSymbol` union, a pronoun-echoing empty, a
-  temporal-adverb misread, and a bare passive read as active. Both root causes are live
-  (`KIND_UNIONS` unions `uses` only; `parseKeywordSpot` falls through to `forward`).
+- **The verb repair tier has no precision gate.** 7,821 real English words (with inflections)
+  sit within the edit budget of a graph verb: `rest`→`test`, `during`→`using`,
+  `bigger`→`trigger`, `ball`→`call`. A repair that shares a lemma is a reading and answers; a
+  repair onto a different verb now declines by name, so nothing false is asserted — but a
+  real verb typo (`impotr`) lands on the miss wall with it. The gate that restores it is a
+  generated collision set, which needs inflections: `rests` is not in `/usr/share/dict/words`.
 
-- **Three product bugs the migration surfaced, each pinned by a row.** An ask-level honest
-  empty ("list modules in nope") falls through to the teach lane and stores a garbage fact.
-  The describe wrappers disagree: "describe X" describes, "describe about X" misses, "please
-  describe X" gives an orientation card, "please describe about X" describes. `/tests
-  <function>` answers at module level.
-
-- **Closed-set gate coverage (a pattern, not one bug).** Several dead-ends share one shape: the machinery that would answer
-  correctly exists, but a narrower closed-set gate in front of it rejects a valid input variant.
-  Two instances still live: `looksCodeish` (`src/services/chat.mjs`) flags any CamelCase compound as
-  code-ish and blocks the bare-meta-fact fallback that knows how to answer "what is X"; and
-  `CONTEXT_WORDS` (`src/services/chat.mjs`, four singular pronouns) has no plural/ordinal members, and
-  object-position "that" never consults focus the way subject-position "it" does. A third
-  instance (COUNT_NOUNS not consulting `EDGE_NOUN_TO_METRIC`) has since been fixed via
-  `answerEdgeCount`, confirming the fix pattern: audit one gate, decide which members/table
-  lookups are safe to add, pin the existing exclusions with regressions. Worth one shared design
-  pass over the gates rather than a doc per instance.
-
-- **The agentful passive answers the opposite of its active twin.** "is store.mjs tested by
-  logger.mjs" says Yes where "does logger.mjs test store.mjs" correctly says No — the same
-  fact, both confident. Nothing consumes the by-agent phrase: `tests`/`defines` drop it and
-  fall to the unqualified `qualCheck` ("is X tested", true for any agent), while
-  `calls`/`imports` glue the two operands and resolve to the first. The agentless passive
-  ("what is X called by", "what is defined by X") is faithful on all five predicates, so the
-  voice itself is understood. Measured across 16 probes.
-
-- **A contracted comparative mis-teaches.** "disk-2's bigger than disk-1" stores
-  `disk-2's mgx:big than disk-1` at trust 0.97 and reads back "remembered: disk-2's bigs than
-  disk-1": the `'s` is taken as a genitive, so the subject keeps it and `bigger` is lemmatised
-  into a predicate. The only probe that writes garbage to disk. Other contractions
-  ("what's a dog", "who's calling X", "can't", "doesn't") are faithful to their uncontracted
-  forms.
-
-- **Negated polar questions never answer.** "doesn't X call Y" and "does X not call Y" both
-  route to `forwardComplement`, which discards Y and never answers the yes/no.
-
-- **The code-index wall fires on stores with no code**, advising "try who touched <a module
-  that actually has commits>" where no index exists.
-
-- **Contracted misses are less useful than their plain twins.** "it's bigger than X" never
-  reaches the pronoun check that "it is bigger than X" hits; "what's on peg-a" prints the tool
-  introduction where "what is on peg-a" names the term it couldn't find. Both honest in each
-  pair — one is just less use.
-
-- **Where-lane goal-line cosmetic.** "where is disk-1 now" answers correctly but the Goal line
-  echoes the object as "disk-1 now".
+- **Closed-set gate coverage (a pattern, not one bug).** The machinery that would answer
+  exists; a narrower gate in front of it rejects a valid variant. `looksCodeish`
+  (`src/services/chat.mjs`) flags any CamelCase compound as code-ish — lane 2b has an
+  exemption, so "what is a TaskHandler" answers, but the bare name at lane 2c does not reach
+  `metaFallbackEntityAnswer`. There are FIVE overlapping pronoun sets: `DESCRIBE_PRONOUN_RE`
+  and `STACCATO_PRONOUN_RE` carry the plurals, `CONTEXT_WORDS` and `IS_ADJECTIVE_PRONOUN_RE`
+  do not, and the isa lane suppresses its "I don't know 'it'" miss without ever resolving the
+  subject against focus. Ordinals ("the first one") have no member in any set. The fix
+  pattern is `answerEdgeCount`'s: audit one gate, decide which members are safe to add, pin
+  the existing exclusions with regressions.
 
 ### 2. Reader coverage — inputs with no lane at all
 
