@@ -24,6 +24,13 @@ nothing a user can see, including the cross-process paths most exposed to the in
 seam (teach, `syllogise` CLI, read back). Both of 018's open findings reproduce identically
 and stay open below: ask-turn misparse receipts, and goals accumulating instead of folding.
 
+`playtests/PLAYTEST_LOG_020.md` then took the three paraphrase rungs that had never been
+probed: **42 probes — 21 correct, 16 honest misses, 5 wrong answers**. The wrong answers are
+open items in group 1 below. Clefts came back clean (14 probes, nothing false asserted); the
+agentful passive and one contracted comparative did not. Six of the 21 passes are correct only
+by luck — the same code path answers wrongly when the false pair is tried, which is what
+re-asking with an agent that doesn't hold exposed.
+
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code per
 `archive/TOO_HARD_AUDIT.md` (bulk ConceptNet download, not reachable from data in hand).
@@ -69,6 +76,33 @@ so however they are split, concurrent dispatches would be editing the same two f
   lookups are safe to add, pin the existing exclusions with regressions. Worth one shared design
   pass over the gates rather than a doc per instance.
 
+- **The agentful passive answers the opposite of its active twin.** "is store.mjs tested by
+  logger.mjs" says Yes where "does logger.mjs test store.mjs" correctly says No — the same
+  fact, both confident. Nothing consumes the by-agent phrase: `tests`/`defines` drop it and
+  fall to the unqualified `qualCheck` ("is X tested", true for any agent), while
+  `calls`/`imports` glue the two operands and resolve to the first. The agentless passive
+  ("what is X called by", "what is defined by X") is faithful on all five predicates, so the
+  voice itself is understood. Measured across 16 probes in `playtests/PLAYTEST_LOG_020.md`.
+
+- **A contracted comparative mis-teaches.** "disk-2's bigger than disk-1" stores
+  `disk-2's mgx:big than disk-1` at trust 0.97 and reads back "remembered: disk-2's bigs than
+  disk-1": the `'s` is taken as a genitive, so the subject keeps it and `bigger` is lemmatised
+  into a predicate. The only probe in 020 that writes garbage to disk. Other contractions
+  ("what's a dog", "who's calling X", "can't", "doesn't") are faithful to their uncontracted
+  forms.
+
+- **Negated polar questions never answer.** "doesn't X call Y" and "does X not call Y" both
+  route to `forwardComplement`, which discards Y and never answers the yes/no. Named in
+  `playtests/PLAYTEST_LOG_020.md`.
+
+- **The code-index wall fires on stores with no code**, advising "try who touched <a module
+  that actually has commits>" where no index exists. Named in `playtests/PLAYTEST_LOG_020.md`.
+
+- **Contracted misses are less useful than their plain twins.** "it's bigger than X" never
+  reaches the pronoun check that "it is bigger than X" hits; "what's on peg-a" prints the tool
+  introduction where "what is on peg-a" names the term it couldn't find. Both honest in each
+  pair — one is just less use. Named in `playtests/PLAYTEST_LOG_020.md`.
+
 - **Where-lane goal-line cosmetic.** "where is disk-1 now" answers correctly but the Goal line
   echoes the object as "disk-1 now". Named in `playtests/PLAYTEST_LOG_015.md`.
 
@@ -106,57 +140,56 @@ fan-out set.
   no `/syllogise` command and the honest deep-chain miss doesn't mention the recovery. Named
   in `playtests/PLAYTEST_LOG_007.md`.
 
+- **The reverse cleft rung has no reader.** "what is it that calls Y" misses — the leftover
+  "it that" becomes the subject. The forward clefts work and assert nothing false: "is it X
+  that calls Y" discriminates a false agent, "what X calls is Y" parses to the plain
+  canonical. No cleft reaches the taught-fact lane. Measured across 14 probes in
+  `playtests/PLAYTEST_LOG_020.md`.
+
 ### 3. Memory and predicate unification (`src/adapters/memory/*`, `src/domain/memory/*`)
 
-- **Taught↔corpus predicate unification.** A taught "fire causes smoke" mints `mgx:cause`
-  while the corpus fact is `mgx:causes`; the two never unify at read time. Named in
-  `playtests/PLAYTEST_LOG_004.md`.
-
-- **26 import-layer violations remain allowlisted.** `test/estate/layer-allowlist.mjs` is a
+- **19 import-layer violations remain allowlisted.** `test/estate/layer-allowlist.mjs` is a
   shrink-only ratchet: the checker fails on any edge not listed and on any listed edge that
-  no longer occurs. Four clusters remain, each a real piece of design work: `completions/*`
-  reaches down into `memory/{core,blocks}` and up into `services/finish`; `memory/fold.mjs`
-  imports `node:fs/promises`, `node:path` and `services/sessions.mjs` (the last domain module
-  doing its own I/O); the store imports `domain/{hash,trust,shacl}` and `graph-build.mjs`
-  imports `domain/prose.mjs` (adapters reaching up for pure helpers with no legal shared
-  home); and `services/{chat,index}.mjs` import `tools/server.mjs` (services reaching up for
-  dispatch). Each fix deletes its line.
+  no longer occurs. Each fix deletes its line; never add one. What is left:
 
-### 4. Tool layer (`src/tools/`)
+  - **`completions/*` (9 lines)** reaches down into `memory/{core,blocks}` and up into
+    `services/finish`. The store handles are already half-injected — `generateCompletion`
+    receives `memory` and `graphService` from its caller and then loads the store again
+    itself. The pure helpers it imports (`tokenizeBlock`, `normFactTerm`, `degreeOf`,
+    `OVERLAP_MIN`) are the same shared-home problem as the store's own reaches below.
+  - **The store reaching up for pure helpers (3 lines)**: `core.mjs -> domain/hash.mjs`,
+    `core.mjs` and `blocks.mjs -> domain/memory/trust.mjs`. Both were examined and left
+    rather than forced. `hash.mjs` has three domain importers, so moving it down trades 1
+    violation for 3. `trust.mjs`'s scoring half (`computeTrust`, `SOURCE_PRIOR`,
+    `sessionReliabilityFrom`) has no domain consumer at all, but splitting it shaves one
+    line and leaves a domain module named `trust.mjs` that no longer computes trust beside
+    a second `trust.mjs` in adapters. The shape of a real fix: `adapters` (rank 0) may
+    import nothing, and `domain` (rank 1) may import nothing outside itself, so a pure
+    helper both layers need has nowhere legal to live. Give `codegraph.mjs`'s three
+    provenance imports (`CREATED_AT_PROP`, `UPDATED_AT_PROP`, `provenanceTagToSource`) a
+    home the store can also reach and the trust lines go together.
+  - **`services/{chat,index}.mjs -> tools/server.mjs` (2 lines)** — services reaching up for
+    dispatch. The tool layer is now one module per tool behind a thin `server.mjs` entry,
+    so the seam a fix would follow is narrower than it was.
+  - **`providers/{bootstrap,fixture,graph-service}.mjs -> domain/codegraph.mjs` (3 lines)**,
+    **`domain/codegraph.mjs -> adapters/embed.mjs` (1)**, and **`wink-model.mjs calls
+    require()` (1)**.
 
-- **The tool layer is one module, not one module per tool.** `src/tools/server.mjs` still
-  holds the whole dispatch switch. Splitting it per tool is restructuring, deliberately not
-  done during the moves. `src/tools/definitions.mjs` now holds every tool's schema, doc text
-  and examples, so the split has a seam to follow.
-
-- **`renderToolsCatalog` has no product caller.** `src/tools/catalog.mjs` renders a tools
-  catalog that nothing writes and nobody reads — it lives through its test alone. Wire it up
-  or delete it with its test.
-
-- **The `cli` route ignores `--repo` and `--graph`.** It takes `repo_path` inside the JSON
-  payload; passed the flags instead, it answers from the cwd's empty graph and exits 0. An
-  honest error or flag support would do.
-
-### 5. Surfaces, build and bundle
-
-- **`src/surfaces/` is flat.** The design names `surfaces/{tui,web,http}`; the move kept the
-  four modules side by side. Sub-bucketing is restructuring, same reason.
+### 4. Surfaces, build and bundle
 
 - **The browser bundle still stubs 27 node builtins.** The design's end state is the bundle
   selecting the in-memory backend instead of stubbing builtins. The measured reachable set is
   down from 35 and the fact engine no longer touches the filesystem, but `services/chat.mjs`
   re-exports the session layer and the fact engine reaches `corpus/conceptnet.mjs` (readline)
   and `memory/core.mjs` (fs), so those stubs stay link-live. Cutting them means breaking those
-  two reaches.
-
-- **`build:ask-bundle` rewrites the committed bundle while other e2e files read it.** Small
-  window, never observed failing. The fix is the output-directory treatment
-  `build-demo-site.mjs` already has.
+  two reaches. The entry is now `src/surfaces/web/memory-ask-browser-entry.mjs`, and the
+  `memory/core.mjs` reach is the same one `completions/*` makes in group 3 — one store seam
+  closes both.
 
 - **Version bumps now touch `public/index.html`.** The page carries a version stamp and a test
   enforces that it matches `package.json`.
 
-### 6. Visualisation code (`src/domain/codegraph.mjs`, plan-viz)
+### 5. Visualisation code (`src/domain/codegraph.mjs`, plan-viz)
 
 - **codegraph.mjs post-viz-removal prune.** `buildVizNodesAndEdges`, `deriveFactTermGraph`,
   `pickLegendDimension`, `edgeKindsFor`, `mostRecentIndividual`, `MEMORY_SPIRAL_EXPAND_KINDS`,
@@ -167,21 +200,6 @@ fan-out set.
   snapshots differ by one moved piece is broken by river-crossing's two-piece ferry moves —
   validate or extend the animation for multi-effect steps (risk named in `archive/PLAN_HANOI.md`'s
   addendum).
-
-### 7. Test estate hygiene
-
-- **Corpus rows carry migration provenance.** Many `note` fields read "was
-  chatflow-tier2.test.mjs: …", naming files that no longer exist. They earned their place
-  during the coverage-gated purge, when a reviewer needed both sides in one diff. That review
-  is over, so they are now the doc-reference rot the hygiene rule targets. Strip them, or
-  rewrite each as the behaviour the row pins.
-
-- **Contractions on the paraphrase ladder.** Untested rung; for the next edge-hunt dispatch.
-
-- **Cleft rungs on the paraphrase ladder.** Untested rung; for the next edge-hunt dispatch.
-
-- **Passive↔active beyond UsedFor and the rule signature.** Untested axis; for the next
-  edge-hunt dispatch.
 
 ## Discipline (unchanged)
 
