@@ -31,8 +31,8 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 ## Open items
 
 Grouped by the area of code and tests each item changes. Groups with disjoint file ownership
-run in parallel; `src/services/chat.mjs` and `src/domain/ask.mjs` are edited by one dispatch at
-a time, so groups 1 and 2 serialise against each other however they are split.
+run in parallel. Groups 1 and 2 both land on `src/services/chat.mjs` and `src/domain/ask.mjs`,
+so however they are split, concurrent dispatches would be editing the same two files.
 
 ### 1. Chat parse and ask lanes (`src/services/chat.mjs`, `src/domain/ask.mjs`)
 
@@ -198,9 +198,7 @@ the operator (CI publishes on version bump on `main`); versioning/commit/push ca
 operator's explicit prompt instructions (see `CLAUDE.md`'s first section).
 
 Repo-local identity (`antony@polycode.co.uk` / `Antony at Polycode`). `npm test` green at every
-commit. Coordinator plus background sub-agents, disjoint file-ownership where possible, serialized
-on shared files — this repo's heaviest-touched files (`src/services/chat.mjs`, `src/domain/ask.mjs`) get edited by
-one dispatch at a time, never in parallel, to avoid collisions.
+commit.
 
 Three hard-won lessons, carried forward:
 
