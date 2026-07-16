@@ -31,7 +31,9 @@ function darken(hex, fraction) {
 }
 
 /** Topological rank over [smaller, larger] pairs, label tiebreak; members
- *  absent from every pair are appended in label order. */
+ *  absent from every pair are appended in label order. `sized` names the members
+ *  a pair actually ordered — the appended rest carry a rank so they can be drawn,
+ *  which says nothing about their size. */
 function rankBySize(sizeOrder, members) {
   const pairs = Array.isArray(sizeOrder) ? sizeOrder : [];
   const inPairs = new Set();
@@ -62,10 +64,11 @@ function rankBySize(sizeOrder, members) {
     }
     ready.sort();
   }
+  const sized = new Set(Object.keys(ranks));
   for (const m of [...members].sort()) {
     if (!(m in ranks)) ranks[m] = next++;
   }
-  return ranks;
+  return { ranks, sized };
 }
 
 /**
@@ -106,7 +109,7 @@ export function computeBlocksLayout({ plan, rendersAs = {}, sizeOrder = [] }) {
   const anchorX = new Map(anchors.map((a) => [a.id, a.x]));
 
   const blocks = [...blockSet].sort();
-  const ranks = rankBySize(sizeOrder, blocks);
+  const { ranks, sized } = rankBySize(sizeOrder, blocks);
   const maxRank = blocks.reduce((m, b) => Math.max(m, ranks[b] ?? 0), 0);
   const blockClassOf = (label) =>
     classes.find((cls) => rendersAs[cls] === "block" && (classMembers[cls] || []).includes(label));
@@ -158,16 +161,24 @@ export function computeBlocksLayout({ plan, rendersAs = {}, sizeOrder = [] }) {
     return { items, stacks };
   });
 
-  return { board: { w: BOARD_W, h: BOARD_H }, ranks, anchors, snapshots };
+  return { board: { w: BOARD_W, h: BOARD_H }, ranks, sized, anchors, snapshots };
 }
 
 /** Phase brackets from the largest block's single move: everything before it
  *  frees the piece, the move itself is the pivot, the rest rebuilds. */
-function phasesFor(actions, ranks) {
-  const ranked = Object.keys(ranks);
-  if (!ranked.length || !actions.length) return [];
-  const pivot = ranked.reduce((a, b) => (ranks[a] >= ranks[b] ? a : b));
-  const k = actions.findIndex((a) => a.subject === pivot);
+function phasesFor(actions, ranks, sized) {
+  // free-it / move-it / rebuild-on-it describes ONE shape: a puzzle whose biggest
+  // piece is declared biggest and travels once, everything before clearing its way
+  // and everything after stacking back on top. Hanoi is that shape. A puzzle that
+  // declares no sizes has no biggest piece to pivot on — rankBySize ranks its
+  // pieces by label so they can be drawn, and reading a pivot out of that ordering
+  // names an arbitrary piece. Say nothing rather than something arbitrary.
+  const ordered = [...(sized || [])];
+  if (!ordered.length || !actions.length) return [];
+  const pivot = ordered.reduce((a, b) => (ranks[a] >= ranks[b] ? a : b));
+  const moves = actions.filter((a) => a.subject === pivot);
+  if (moves.length !== 1) return []; // travels more than once — not this shape
+  const k = actions.indexOf(moves[0]);
   if (k <= 0 || k >= actions.length - 1) return [];
   return [
     { label: `free ${pivot}`, from: 0, to: k },
@@ -204,7 +215,7 @@ export function renderPlanHtml({ plan, rendersAs = {}, sizeOrder = [], title } =
     anchors: layout.anchors,
     board: layout.board,
     facts: factsPerStep,
-    phases: phasesFor(actions, layout.ranks),
+    phases: phasesFor(actions, layout.ranks, layout.sized),
   });
   const pageTitle = title || `tmct plan — ${actions.length} move${actions.length === 1 ? "" : "s"}`;
 

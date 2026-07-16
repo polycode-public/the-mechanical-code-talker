@@ -5,10 +5,6 @@
 // deleting its line here in the same change; never add a line.
 
 export const ALLOWED_VIOLATIONS = [
-  // Services reaching up for tool dispatch. Still open work.
-  "src/services/chat.mjs -> src/tools/server.mjs",
-  "src/services/index.mjs -> src/tools/server.mjs",
-
   // Not open work — this one is answered, and the answer is that createRequire stays.
   // loadWinkModel() is synchronous under parseQueryFull(), an exported sync domain API, so an
   // async loader ripples through domain/, services/, tools/ and bin/. Top-level await would

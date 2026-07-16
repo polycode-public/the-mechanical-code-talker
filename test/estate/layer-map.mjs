@@ -9,7 +9,12 @@
 // for a hash or a trust score points inward, which is the direction of the rule.
 // A core module reaching back out to an adapter is what the checker exists to
 // catch: inject the adapter instead.
-export const LAYER_RANK = { domain: 0, adapters: 1, services: 2, tools: 3, surfaces: 4 };
+//
+// tools sits under services because that is the way the dependency actually runs:
+// a tool answers one graph question over domain and adapters and needs no service,
+// while chat is a service whose job includes dispatching tools. surfaces sit on top
+// and may reach anything below.
+export const LAYER_RANK = { domain: 0, adapters: 1, tools: 2, services: 3, surfaces: 4 };
 
 /** Layer for a src/-relative path, or null when nothing claims it. */
 export function layerOf(relPath) {

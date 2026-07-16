@@ -181,6 +181,27 @@ test("renderPlanHtml: embeds the plan, goal strings, facts, and phase brackets",
   assert.ok(html.includes("board@step"));
 });
 
+test("a puzzle that declares no sizes gets no phase brackets, rather than an arbitrary pivot", () => {
+  const plan = embeddedJson(renderPlanHtml(CROSSING_ARGS), "PLAN");
+  assert.deepEqual(plan.phases, [], "free-it/move-it/rebuild-on-it needs a declared biggest piece");
+});
+
+test("phase brackets need the pivot to travel exactly once", () => {
+  // Same declared sizes as hanoi, but the biggest piece crosses twice: the shape the
+  // brackets describe does not hold, so there is nothing honest to bracket.
+  const twice = {
+    ...layoutArgs,
+    plan: {
+      ...PLAN_FIXTURE,
+      actions: [...PLAN_FIXTURE.actions, {
+        name: "move onto", subject: "disk-3", target: "peg-b", label: "move disk-3 onto peg-b",
+      }],
+      states: [...STATES, STATES.at(-1)],
+    },
+  };
+  assert.deepEqual(embeddedJson(renderPlanHtml(twice), "PLAN").phases, []);
+});
+
 test("renderPlanHtml: self-contained, reduced-motion respected, both theme schemes present", () => {
   const html = renderPlanHtml(layoutArgs);
   assert.ok(!/(?:src|href)=["']https?:/.test(html), "no external resource loads");

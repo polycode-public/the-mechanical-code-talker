@@ -37,10 +37,6 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 
 ## Open items
 
-Grouped by the area of code and tests each item changes. Groups with disjoint file ownership
-run in parallel. Groups 1 and 2 both land on `src/services/chat.mjs` and `src/domain/ask.mjs`,
-so however they are split, concurrent dispatches would be editing the same two files.
-
 ### 1. Chat parse and ask lanes (`src/services/chat.mjs`, `src/domain/ask.mjs`)
 
 - **Misparse-receipt leakage on ask turns.** Fuzzy/stale Goal+Canonical receipts print under
@@ -146,20 +142,6 @@ fan-out set.
   canonical. No cleft reaches the taught-fact lane. Measured across 14 probes in
   `playtests/PLAYTEST_LOG_020.md`.
 
-### 3. Memory and dispatch (`src/adapters/memory/*`, `src/domain/memory/*`)
-
-- **`services/{chat,index}.mjs -> tools/server.mjs`**, the last two allowlisted import-layer
-  violations that are still work rather than a decision. Services reach up for dispatch. The
-  tool layer is one module per tool behind a thin `server.mjs` entry, so the seam is narrow —
-  but the first question is whether `tools` belongs above `services` at all, given chat is a
-  service whose job includes dispatching tools.
-
-### 4. Visualisation code (plan-viz)
-
-- **The plan page labels every puzzle's steps with Hanoi's phases.** `phasesFor` calls river's
-  crossings "free wolf-1 / the pivot / rebuild on wolf-1" — a largest-disk-pivot heuristic that
-  means nothing for a crossing puzzle. What a phase IS for river is the open question, not how
-  to word it. Found while fixing the river layout.
 
 ## Discipline (unchanged)
 
