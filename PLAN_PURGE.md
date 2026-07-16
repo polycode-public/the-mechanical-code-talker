@@ -462,6 +462,18 @@ If it does not, that is a real latent gap and we port it over before deleting.
 surface" — in which case add it to the `exports` map and say so in the header. Unexported and
 uncalled is what produced this finding.
 
+**Delivered, and the blocking check found a live hole, not a latent one.** This plan said nothing
+registers `readOnly: false` today. Wrong: `taught.mjs:38` does, so `resolver.mjs`'s comment claiming
+"every registered capability is read-only" was already false. Nothing reaches those records through
+`resolveOne` — backward-chaining only matches `knows` topics and builtins win the topic table — so
+no dispatch was actually unguarded, but the invariant the code rested on was not true. The gate went
+into one helper covering **both** of `resolveOne`'s dispatch sites: the per-candidate loop and the
+single grounded call at `:286`, which had the same hole and no guardrail equivalent.
+
+**And `dispatchable` gates nothing.** `registry.mjs:221` computes it; the only readers are a test
+assertion and prose. It is derived data that no code branches on, which is why `guardrail.mjs:25`
+was the sole runtime `readOnly` check. The field stayed and its docstring stopped overclaiming.
+
 ### 6.2 `embed.mjs` — delete, and `vector.mjs` goes with it
 
 **Decided: delete.** `PLAN_EMBEDDINGS.md` records the research and the way back.
@@ -519,14 +531,26 @@ modules with one each.
 **live** (dynamic import at `chat.mjs:10355`), as are `runTui`, `proseLemma`, `importDefinitionFile`,
 `readMemoryAskBundle`, `buildContextBundle`, `degreeMetric`. So `ace.mjs` is 10/13, not 10/10.
 
-Two caveats before deleting:
+**Delivered: 54 dropped, not 58. Four of this list were wrong, and the difference is the
+lesson.** A static scan cannot see a dynamic import, and three of the four survivors prove it:
 
-- **`registerWinkModel` (`wink-model.mjs:21`)** — its header says it exists so a browser/bundler
-  entry can hand in an already-imported model. Check the bundle build before deleting.
-- **`gitToplevel` (`chat.mjs:66`)** is dead, but `chat-session.mjs:43` exports its **own live** copy
-  and `cli-args.mjs:19,29` documents a **third deliberate copy**. `chat-session.mjs:12` claims it
-  re-exports chat.mjs's version — **that comment is false**. Three implementations of one function.
-  Deleting `chat.mjs:66` is safe and starts untangling it.
+- **`degreeMetric` is LIVE** and nearly shipped as a break. `chat.mjs:616` takes it via
+  `({ degreeMetric } = await import(...))` — a bare-assignment destructure the scan missed, and
+  `chat.mjs:583` says "exported for exactly this". A test caught it. **Rule 1 is not paperwork.**
+- **`registerWinkModel` is LIVE** — `public/tmct-browser.mjs:19` imports it. `loadWinkModel` beside
+  it really was dead and went.
+- **`uniqSort` is not a declaration** — `results.mjs:231` is a re-export, and `drive.mjs` imports
+  three of its four names through that facade. Removing one member breaks it for nothing.
+- **`gitToplevel`: this plan had it backwards.** `chat.mjs:66` is a re-export, not a definition, and
+  `chat-session.mjs:12`'s comment describing it as one was **true**. There are not three
+  implementations; there is a documented facade. Only the unused name left it, and `cli-args.mjs`
+  now points at `chat-session.mjs`, where the function lives.
+
+**`bootstrapGraph` / `FIXTURE_ENTITIES` dropped after all.** The `exports` map is closed at six
+subpaths and `./providers/*` is not among them, so a third party importing them gets
+`ERR_PACKAGE_PATH_NOT_EXPORTED`. They ship as readable reference *source*, not as importable API.
+Not importable and not imported is dead. Adding `./providers/*` to `exports` would make them live
+again — that is a product decision, not a purge one.
 
 ---
 
