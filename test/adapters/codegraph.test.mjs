@@ -1314,10 +1314,9 @@ test("spiralExpand walks the MEMORY graph (kinds=MEMORY_SPIRAL_EXPAND_KINDS, idN
     const m = await loadMemory(dir);
     const sourceInd = m.individuals.find((i) => i.class === "Source");
     assert.ok(sourceInd, "fixture sanity: a Source individual was derived from the fact's provenance");
-    // Simulate memory/fold.mjs's addCanonicalisedFromEdges (Fact → Utterance) — out of this
-    // agent's assigned files (src/domain/memory/fold.mjs), so injected directly here in the exact shape
-    // that function produces, rather than driving the whole session-fold pipeline just to prove
-    // spiralExpand's OWN traversal mechanics work over the real edge inventory.
+    // The Fact → Utterance edges a fold produces, injected in that exact shape rather
+    // than driving the whole session-fold pipeline just to prove spiralExpand's OWN
+    // traversal mechanics work over the real edge inventory.
     m.objectProperties.push({
       predicate: "canonicalisedFrom", prop: "mgx:canonicalisedFrom", count: 1,
       examples: [{ subject: factId, object: uttId, subjectLabel: "sky mgx:hasProperty blue", objectLabel: "what colour is the sky?" }],
