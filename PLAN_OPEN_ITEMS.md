@@ -1,0 +1,699 @@
+# PLAN_OPEN_ITEMS.md — close the 2.0.3 backlog
+
+**Status: BUILD ORDER.** Every item below has a verbatim reproducer and a named fix site. This is
+the single plan doc for the open items `HANDOVER.md` carries after the 2.0.3 benchmark cycle. Work
+it top to bottom; the order is by evidence strength and blast radius, not by area.
+
+Pinned at `e2fb214`, package 2.1.0. Sources: `BENCHMARK_{AGENT,CEFR_ENGLISH,CONVERSATION,INFERENCE}_2.0.3.md`,
+`CAPABILITIES_2.0.3.md`, `playtests/PLAYTEST_LOG_002.md`, `HANDOVER.md`.
+
+Another session is doing code hygiene in parallel. Expect line numbers here to move; every fix site
+is named by symbol as well as line, and the symbol is the durable half.
+
+---
+
+## 0. The organising finding
+
+The 2.0.3 cycle measured four axes and found one theme. It is worth stating before the item list,
+because it decides the order.
+
+**tmct's honesty machinery is in good order. The risk has moved upstream of it.** An adversarial
+sceptic spent 55 probes trying to force a role or polarity inversion and could not: active/passive,
+forward/reverse, negation and the converse trap all compiled correctly. Hallucination is 0% across
+168 agent rows; fabrication is 0% across 299 inference rows.
+
+Every confident-wrong answer this cycle found is **input discarded before the parser runs**. Six of
+them, found independently by four persona frames, two benchmarks and the audit's own plan review:
+
+| # | Dropped | Input | Answer |
+|---|---|---|---|
+| 1 | a sentence boundary | the README's Hanoi board on its own line | `3 moves (shortest)`, illegal on move 1 |
+| 2 | a quantifier | `some men are fathers` → `is john a father` | `yes`, **with a proof** |
+| 3 | a clause | `what would break if I change store.mjs` | three people |
+| 4 | a modifier | `what imports the deprecated legacy model.mjs` | what imports `model.mjs` |
+| 5 | an article | `tell me about a dog` | "the graph is empty" |
+| 6 | a qualifier | `how many facts about horses are there` | `664 facts.` — the total |
+
+The honesty machinery never engages on these, because by the time it could, the evidence that this
+was a different sentence is gone. **Phase 1 is these six.** Two of them are proof-shaped — a
+numbered "shortest" plan that is illegal, and a real proof certifying a false premise — and a
+proof is the strongest claim this product makes.
+
+**A design rule for every fix in Phase 1:** when a token cannot be placed, the turn must not
+silently drop it. It either refuses, or names what it ignored. "I read that as X" is already the
+product's own idiom (`what would break if I change X` announces its misreading before answering
+wrongly). The pattern exists; it is the *decision* to answer anyway that is wrong.
+
+---
+
+## Phase 1 — the dropped-input family
+
+### 1.1 A teach-only line is not sentence-split
+
+**Reproducer** (README's own Hanoi board, typed across two lines):
+
+```txt
+tmct> disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a.
+noted — remembered: disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a
+tmct> the goal is that every disk rests on peg-c.
+tmct> solve it
+plan found — 3 moves (shortest):
+  1. move disk-3 onto peg-c        # ILLEGAL — disk-2 rests on disk-3
+  2. move disk-2 onto disk-3
+  3. move disk-1 onto disk-2       # goal never reached
+```
+
+The same three sentences **with the goal on the same line** split correctly and solve in 7.
+
+**Diagnosis.** The whole line became one fact whose object is the rest of the line:
+`disk-1 mgx:rest-on "disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a"`. Verify with
+`node bin/tmct.mjs memory --repo "$S" --verbose`. The planner then plans faultlessly over a board
+that does not exist. The tell is the bullets: the working form prints three `•`, the broken one
+prints one un-bulleted blob.
+
+**Fix site.** `src/services/sentences.mjs`'s `splitSentences` exists and is used — the canonical
+form reaches it. Find why the teach-only path does not: the split appears to be gated on the line
+also carrying a goal/solve sentence. Route every multi-sentence teach line through the same split,
+then teach each sentence independently.
+
+**Guard, and this is the important half.** A fact whose object contains a sentence terminator
+followed by a space and a word is not a fact. Reject it at the write boundary
+(`src/adapters/memory/shacl.mjs` is the declarative ingest gate and is the right home) rather than
+relying on the splitter never missing again. That converts a silent corruption into a refusal.
+
+**Pins.** A corpus row in `planning.jsonl` keyed `planning.teach.multi-sentence-line`: teach the
+board on its own line, then the goal, then `solve it`, and assert 7 moves. Plus a
+`test/adapters/memory-shacl.test.mjs` case that the write boundary rejects an object containing
+`". "`.
+
+### 1.2 An existential is stored as a universal, then proved
+
+**Reproducer:**
+
+```txt
+tmct> some men are fathers
+noted — remembered: men is a kind of father
+tmct> john is a men
+tmct> is john a father
+yes — john is a kind of men (…); men is a kind of father (…); so john is a father
+```
+
+**Diagnosis.** The teach frame strips the leading quantifier without distinguishing ∃ from ∀, so an
+I-proposition lands as `rdfs:subClassOf`. The reasoner then does its job correctly on a false
+premise and emits a proof. The property form (`some men are wise`) and the singular (`some man is a
+father`) are both refused correctly — **only the plural class form leaks**, which is why this
+survived.
+
+**Fix site.** The teach frames in `src/domain/interpret/normalize.mjs`. `every|all|each` are
+universals and may strip. `some|a few|several|most|many` are not, and must not reach a `subClassOf`
+teach.
+
+**Decision required before coding.** tmct has no existential representation today. Two options,
+and this plan does not choose:
+
+- **Refuse** — "I can't store 'some X are Y' — I store universals. Say 'every man is a father' if
+  that's what you mean." Small, honest, ships now. Consistent with how the property form already
+  behaves.
+- **Represent** — an existential fact kind that answers `is john a father` with an honest
+  "I can't confirm that" rather than a proof. Larger; needs an OWL shape
+  (`owl:someValuesFrom` is adjacent) and touches `syllogise.mjs`'s rule set.
+
+Take the refusal now and record the representation as a horizon. A wrong proof is the bug; the
+missing capability is not.
+
+**Pins.** `inference.jsonl` rows keyed `inference.teach-guard.existential`: `some men are fathers`
+refuses; `every man is a father` still teaches; `is john a father` after the refusal is an honest
+miss, not a proof. A negative row is mandatory here — this key exists to assert an absence.
+
+### 1.3 `what would break if I change X` answers with people
+
+**Reproducer:**
+
+```txt
+tmct> what would break if I change src/core/store.mjs
+read as "what would change src/core/store.mjs" — a1b2c3d4e5f6 (Grace Hopper) and
+c3d4e5f6a1b2 (Alan Kay) and 1b2c3d4e5f60 (Barbara Liskov).
+Canonical: touches "src/core/store.mjs" — reverse(touches, "src/core/store.mjs")
+```
+
+**Diagnosis.** "break if I" is stripped; the residue matches the `touches` history pattern; blast
+radius becomes git blame. The sibling `what breaks if I change X` rewrites to the malformed
+`"what change src/lib/http.mjs"`, which shows this is naive token deletion rather than a re-parse.
+It **announces** the misreading and answers confidently anyway.
+
+**Fix site.** The frame that produces `read as "…"` — grep `read as` in `src/services/chat.mjs`.
+Two independent bugs here:
+
+1. `break/breaks if I change X` should route to the impact closure, which `/impact` and
+   `tmct_impact` already compute. This is a routing fix, not a new capability.
+2. **The `read as` idiom is being used to excuse a guess.** Announcing a rewrite is only honest if
+   the rewrite is faithful. Where the residue is malformed (`what change X`), the frame must
+   decline instead of announcing and answering.
+
+**Pins.** `grammar.jsonl` rows keyed `grammar.routing.impact-paraphrase`: all of
+`what would break if I change X`, `what breaks if I change X`, `what depends on X` answer with the
+impact closure and never with a commit author. A negative row: the answer must not match a sha.
+
+### 1.4 Unknown modifiers are dropped, so it answers about a different entity
+
+**Reproducer:**
+
+```txt
+tmct> what imports the deprecated legacy model.mjs
+src/core/store.mjs and src/core/validate.mjs and src/handlers/tasks.mjs and src/handlers/users.mjs.
+Canonical: imports "deprecated legacy model.mjs" — reverse(imports, "deprecated legacy model.mjs")
+```
+
+Identical to `what imports model.mjs`. The `Canonical:` line prints the garbage term back, having
+already resolved past it.
+
+**Diagnosis.** Resolution matches on a token subset. When the leftover tokens narrow to exactly one
+candidate, the unmatched tokens are dropped silently; when they narrow to several, ambiguity is
+correctly reported (`what imports mjs` lists five and asks). **The guard exists and only fires on
+multi-candidate collisions, not on unknown-token residue.** `what imports zebra.mjs` misses
+honestly, so the bug needs a real name to latch onto — the realistic trigger is a user saying "the
+old model.mjs" while believing two exist.
+
+**Fix site.** `resolveObject` in `src/domain/ask.mjs` (`:2387`, tiers at `:2114`). Extend the
+existing ambiguity guard to unmatched-token residue: if tokens were discarded to reach a single
+candidate, either decline or say "I'll read that as `src/core/model.mjs`" — and the latter only if
+the residue is pure noise by a curated list, never by default.
+
+**Pins.** `grammar.jsonl` keyed `grammar.resolve.unknown-residue`, with the negative row carrying
+the weight: `what imports the deprecated legacy model.mjs` must not return `model.mjs`'s importer
+list unannounced.
+
+### 1.5 `tell me about a dog` reports that it knows nothing
+
+**Reproducer:**
+
+```txt
+tmct> tell me about a dog
+the graph at <repo>/.tmct/graph.json is empty — no entities to answer from yet…
+tmct> tell me about dog
+"dog" is not a code-map entity — answering from memory/corpus facts.
+is a: animal
+```
+
+One article apart. **This is a Tier 0 dead-end** (`SKILL_BENCHMARK_CONVERSATION.md` §2.1), so the
+conversation ladder does not ratchet until it is fixed.
+
+**Diagnosis.** The `a`-article path routes to the code-graph entity lookup, finds the graph empty,
+and reports emptiness as a fact about the world — never consulting the corpus the very next turn
+reaches.
+
+**Fix site.** The `tell me about` frame in `src/services/chat.mjs`. Strip the article before
+routing, so both forms take the same path. Then the deeper question: **an empty code graph is not
+an empty world.** A vocabulary session should never answer a vocabulary question with a code-graph
+emptiness report. Audit every site that emits "the graph … is empty" and gate it on the question
+actually being structural.
+
+**Pins.** `templates.jsonl` keyed `template.orientation.vocab-not-graph`: `tell me about a dog` and
+`tell me about dog` return the same corpus facts in a seeded, graph-less session. Related fixes
+under the same key: `what about cats` and `what are dogs` must not answer with code-graph hints
+(items 3.4, 3.5).
+
+### 1.6 `how many facts about horses are there` returns the unrestricted total
+
+**Reproducer:** in a fresh seeded store, `how many facts do you know` → `664 facts.` and
+`how many facts about horses are there` → `664 facts.`
+
+**Diagnosis.** `answerMemoryCount` (`src/services/chat.mjs:692-701`) matches
+`/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/` with **no tail check**, so the
+restriction is dropped and the total returned. The smallest diff of the six.
+
+**Fix site.** Same function. Either honour the restriction (count facts whose subject/object
+resolves to `horse`) or refuse when a tail is present and unhandled. `PLAN_CLASS_QUERY.md`'s
+Phase 2 designs the honouring version; the refusal is the one-line stop-gap and should land first.
+
+**Pins.** `templates.jsonl` keyed `template.count.restricted`, with a negative row: a restricted
+count must never equal the unrestricted total unless it genuinely does.
+
+---
+
+## Phase 2 — the fronted-agent passive
+
+The other confident-wrong, and the only measured **regression**.
+
+**Reproducer:**
+
+```txt
+tmct> by which modules is app/lib/b.mjs imported
+app/lib/a.mjs.
+Canonical: what "app/lib/b.mjs" itself imports — forward(imports, entityType=Module, "app/lib/b.mjs")
+expected: app/functions/d/handler.mjs
+```
+
+**Evidence.** Tier-1 (deterministic, not judge noise) went 109/109 → 107/109 vs
+`archive/BENCHMARK_CEFR_ENGLISH_1.8.0.md`, on `g-b2-passive-8` and `g-b2-passive-10`. Bisected to
+**`98df45a` fix(ask): the passive keeps its agent, and a negated polar answers**.
+
+**Diagnosis.** That commit replaced a "first meaningful token after `by` is a wh-word → the agent is
+questioned → `reverse`" test with a "patient before `by`, agent after `by`" partition, choosing the
+shape from how many roles are named. The partition assumes the agent is **postposed**
+(`X is imported by Y`). The failing form **fronts** it (`by which modules is X imported`): "by" is
+the first word, nothing precedes it, so the *patient* sits after it, is read as the agent, and
+"agent alone → forward" fires.
+
+`98df45a`'s own message predicted the opposite — *"The two passive readings that worked did so by
+accident: one operand in a one-slot bag. They now hold by construction."* Those are the two that now
+fail. Read the commit before touching the file; it fixed six real defects and must not be reverted
+wholesale.
+
+**Fix site.** `src/domain/interpret/strategies/keywords.mjs`, the passive branch. The partition
+needs to notice that a sentence opening with "by" fronts its agent, and that the patient then
+follows. Keep the postposed path exactly as it is — four corpus rows pin it.
+
+**Why the estate missed it.** All four `grammar.passive.*` rows pin the postposed form. **No row
+pins the fronted-agent form**, so the suite stayed green through a confident inverse for the whole
+1.8.x–2.0.x line. Row 71 of `CAPABILITIES_2.0.3.md` is `partial` for this reason.
+
+**Pins.** `grammar.jsonl` keyed `grammar.passive.fronted-agent`: `by which modules is X imported`,
+`by what is X imported`, `by whom was X touched`. Assert the canonical is `reverse(...)`, not just
+the answer text — the `Canonical:` line is what makes this visible.
+
+**Expected movement.** `reversible-passive` 1.600 → ~1.900; tier-1 back to 109/109.
+
+---
+
+## Phase 3 — honest-miss and parse gaps
+
+None of these lies. They miss, or answer confusingly. Lower priority than Phases 1-2 by that fact
+alone.
+
+### 3.1 A negative assertion is executed as a retraction
+
+```txt
+tmct> john is a man
+tmct> john is not a man
+noted — forgotten: "john is a kind of man" is no longer stored.
+tmct> is john a man
+I can't confirm that — I don't know "john" at all yet.
+```
+
+A claim destroys information instead of recording a disagreement, and the answer then denies ever
+knowing john. On an unknown subject (`zeus is not mortal`) the frame is a silent no-op reported as a
+question about an empty graph.
+
+**This contradicts a shipped decision.** `0f8fb61 feat(memory): a negative is a source disagreeing,
+not a contradiction` made capability negatives store (`penguin cannot fly` →
+`penguin mgxneg:capableOf fly`). Subclass negatives retract. Same word "not", two behaviours.
+`src/domain/memory/capability.mjs` is the shipped pattern to follow; `archive/PLAN_DEFEASIBLE_NEGATION.md`
+is its design.
+
+**Fix.** Extend the negative-fact family to `rdfs:subClassOf`, so `john is not a man` stores a
+sourced negative and `is john a man` answers `no — you told me…`. Keep an explicit retraction verb
+(`forget that john is a man`) for the retract intent. **Do not leave a bare negative mapping to
+retract** — that is the surprise.
+
+**Pins.** `inference.jsonl` keyed `inference.negative-teach.subclass`, mirroring
+`inference.capability.negative-teach`'s shape.
+
+### 3.2 Quantifiers parse when teaching but not when asking
+
+`every man is mortal` stores; `is every man mortal` → "I don't know anything about 'every man' yet";
+`is a man mortal` → yes. Same for `are all men mortal`, `is any man mortal`. The teach frames strip
+the quantifier; the ask frames glue it onto the subject as a bogus entity name.
+
+Sibling: `are men mortal` → "I don't know anything about 'men' yet", and the suggestion text is
+itself ungrammatical ("remember that men is mortal") — the ask path skips the lemmatizer the teach
+path uses, then echoes the raw plural into a template.
+
+**Fix site.** `src/domain/interpret/normalize.mjs`. Give the ask frames the same quantifier strip
+and the same lemmatizer the teach frames already use. This is symmetry, not new capability.
+
+**Pins.** `grammar.jsonl` keyed `grammar.quantifier.ask-symmetry` — teach with a quantifier, ask
+with each of `every|all|any`, assert all agree with the bare form.
+
+### 3.3 An unparsed turn wipes the anaphora referent
+
+```txt
+tmct> what is a dog        → answers
+tmct> go back to dogs      → couldn't parse
+tmct> can it bark          → not sure what "it" refers to yet
+```
+
+Binding otherwise works well and even **rebinds correctly across a topic switch** (`dog` → `cat` →
+`can it meow` → yes). The referent is set from the last successfully parsed turn, and a miss clears
+it rather than leaving it alone. A casual user's misses come in clusters, so one stray turn strands
+every pronoun after it.
+
+**Fix.** Leave the prior binding intact across a miss. Cheapest high-value fix in the backlog —
+it makes anaphora that already works survive contact with a real conversation.
+
+**Pins.** `games/drilldowns.jsonl` keyed `games.drilldown.anaphora-survives-a-miss`.
+
+### 3.4-3.9 The remainder, one line each
+
+Each carries its reproducer; group them into one commit per fix site.
+
+| # | Reproducer | Diagnosis | Site |
+|---|---|---|---|
+| 3.4 | `what about cats` → "Try: which modules import \<name\>" | miss hint hard-wired to the code-graph frame in a vocabulary session | the miss-hint builder; same root as 1.5 |
+| 3.5 | `what are dogs` → ~6 lines of compositional syntax | the hint doesn't scale to the question's register | same |
+| 3.6 | `what else` / `why` → the identity blurb | `tell me more` has an expansion rule; its synonyms fall through | the expand frame |
+| 3.7 | `do all men die` → code-graph parse error | no `do/does <subject> <verb>` frame | `normalize.mjs` |
+| 3.8 | `i was wondering what a dog is` → couldn't parse | politeness stripper handles the modal form, not this frame | `PHRASING_FRAMES` |
+| 3.9 | `src/core/store.mjs` (bare path) → couldn't parse; bare `Store` orients fine | bare-entity orientation is wired for Class/Function, not Module | `metaFallbackEntityAnswer` |
+
+### 3.10 Planner surface gaps
+
+| # | Reproducer | Diagnosis |
+|---|---|---|
+| 3.10a | after `next`, `what rests on disk-2` → the pre-plan board, contradicting the same turn's `board@step1` | `next` advances planner state (`what moves are legal now` sees it); only the fact read-back path serves the stale board. `README.md:352` claims `next` writes board states to memory |
+| 3.10b | `get all the disks onto peg-c` / `solve the towers of hanoi` → swallowed as facts, then `no goal set yet` | the goal frame is narrower than natural phrasing (`i want every disk on peg-c` works) |
+| 3.10c | `what is the next move` / `how many moves` / `why that move` → code-graph replies | plan follow-ups unrouted, though the plan output invites them |
+| 3.10d | `is disk-1 clear?` at step 0 → "I don't have a fact saying disk-1 is clear" | clearness is derivable from the board and isn't derived. `hanoi-3.txt` advertises this phrasing |
+| 3.10e | `hanoi-3.txt`'s own 4-disk recipe → `no plan found within 300 moves` | `smaller than` isn't transitive, so its two facts never establish disk-1/disk-2 vs disk-4. Either make the relation transitive or fix the shipped file's instructions — the file promises 15 moves |
+
+### 3.11 Two surfaces disagree: `/untested` (7) vs `show me the untested modules` (9)
+
+The NL compositional route lacks the source-module filter the tool applies, so `test/tasks.test.mjs`
+and `test/store.test.mjs` count themselves as untested. **No row pins either count**, on either
+side. The README's own plan example uses the surface that is right.
+
+**Fix.** Apply the same filter in the compositional route. **Pin both surfaces in the same corpus
+row** so they can never drift apart again — that is the actual lesson.
+
+### 3.12 Named capability gaps — not defects
+
+Record, do not "fix":
+
+- **Disjointness is stored and never consulted.** `no man is a stone` stores
+  `man owl:disjointWith stone`; `is john a stone` answers "I can't confirm that" rather than "no".
+  The `cax-dw` rule exists (`src/domain/syllogise.mjs:57`). Wiring it to the ask path is a real
+  capability, sized separately.
+- **A set complement over corpus classes has no bounded universe.** `which animals cannot fly` is an
+  honest miss: `parseNegation` needs a concrete enumerable kind and "animals" is not a graph entity
+  type (`playtests/PLAYTEST_LOG_002.md`). Needs a bounded universe for corpus classes, not a surface
+  form.
+
+---
+
+## Phase 4 — the instruments
+
+The 2.0.3 cycle's sharpest structural finding: **everything green is only as good as what pins it.**
+`node scripts/corpus-matrix.mjs --gaps` names **12 thin keys and 44 key groups with no negative
+row**. That list is the map of where the next silent regression lands.
+
+### 4.1 Pin the unpinned surfaces
+
+Independent of any fix above, because each of these drifted silently:
+
+- the fronted-agent passive (Phase 2) — the regression that proves the point;
+- `/untested` vs its NL form (3.11) — both sides, one row;
+- `7f90b03`'s coordination-refusal fix (`is A called by B and C` declines instead of answering about
+  B alone) — shipped with **no test**, so `CAPABILITIES_2.0.3.md` row 75 is `claimed-only`;
+- cochange phrasing variants — **zero corpus keys mention cochange**;
+- `agentbench/envelope.json` — nothing drives its generator or guards the artifact, which is why its
+  version stamp has read `1.4.1` through three audits. Add it to
+  `test/estate/generated-artifacts.test.mjs`, which already guards three siblings and pointedly not
+  this one.
+
+### 4.2 CHATBENCH is blind to 14 of 23 construction shapes
+
+The default `graded-pool.jsonl` covers 9 shapes / 12 of 36 cells. Never tested: conditional,
+coordination-compositional, discourse-deixis, ellipsis, garden-path, presupposition,
+quantifier-counting, relative-embedded, subordination, and five combination cells.
+`graded-pool-max.jsonl` holds all 36. The per-cell floor (`MIN_PER_CELL = 5`,
+`chatbench/graded.mjs:136`) makes the lightest full-coverage run 315 cases.
+
+**A blind spot is where the next `98df45a` lands unnoticed — and this one already did.**
+
+**Also add the cell table to the next report.** The 2.0.3 report published per-grade and
+per-construction marginals and never crossed them. The cross table is the view that locates the
+problem, and it says something the marginals hide:
+
+```
+grade | construction          |  n | mean  | tier-1
+  A1  | naming-vocabulary     | 10 | 1.475 |  10/10   <- the real floor
+  A1  | svo-query             | 17 | 1.794 |  17/17
+  A2  | assert-recall         |  9 | 1.944 |    9/9
+  A2  | naming-vocabulary     | 10 | 1.875 |  10/10
+  B1  | discourse-reference   |  5 | 1.900 |    5/5
+  B1  | negation              |  5 | 2.000 |    5/5
+  B1  | noise+svo-query       |  5 | 1.933 |    5/5
+  B1  | pronoun-binding       | 10 | 1.850 |  10/10
+  B1  | svo-query             |  8 | 1.813 |    8/8
+  B2  | reversible-passive    | 10 | 1.600 |   8/10   <- the only tier-1 failure
+  C1  | temporal              | 10 | 1.917 |  10/10
+  C2  | pronoun-binding       | 10 | 1.750 |  10/10
+```
+
+**`A1 naming-vocabulary` at 1.475 is the true floor, not B2's 1.600.** The marginal (1.675) splits
+the A1 and A2 cells and hides both. Four A1 naming cases score 1/2, un-diagnosed — that is the
+`naming-vocabulary` recommendation, and it should point at **A1 specifically**.
+
+The table also shows the "ladder" is barely one: four grades rest on a single construction each, so
+"B2 regressed" and "reversible-passive regressed" are the same sentence. `pronoun-binding` appears
+at B1 (1.850) and C2 (1.750) — the same construction, two grades, 0.1 apart.
+
+### 4.3 CEFR sampling
+
+2.0.3 ran N=1 by operator choice, so **no per-case judge score in it is noise-averaged**. Return to
+the go-to N=2. `ambiguity` at 1.625 is the worst tag but n=4 at N=1 — the least trustworthy number
+in the report. **Re-measure before spending a cycle on it.**
+
+### 4.4 INFBENCH has stopped discriminating
+
+219/219 chat, 80/80 kernel, 0 verdict changes across 299 rows vs `archive/BENCHMARK_INFERENCE_1.7.0.md`.
+The ladder now measures the generator's reach, not the prover's. Three things follow:
+
+- **50 of the 219 greens (23%) grade against a declared ceiling** — their expected answer is the
+  honest floor. `b2ChainLenK` (30 at INF-B2, `infbench/generate-cases.mjs:419`) expects "cannot be
+  proven" for chains the kernel already derives, pending chat-layer proof materialization.
+  `c2Inconsistent` (20 at INF-C2, `:647`) expects the engine to answer from contradictory memory
+  without noticing. Flipping either ceiling requires building the capability behind it first.
+- **No existential probe.** The ladder is green through C2 and does not see item 1.2 — a proof
+  certifying a false premise. Add one; it is the cheapest new band content available.
+- **`npm run infbench` silently rewrites the committed `infbench/cases.jsonl`**, and the rewrite is
+  not a no-op: the generator draws vocabulary from the lexicon
+  (`infbench/generate-cases.mjs:96`), so adding a word re-draws all 219 cases at the same
+  `DEFAULT_SEED`. `inf-a1-lookup-subClassOf-001` is "every cuticle is a pusher" as committed and
+  "every uneasiness is a museum" as regenerated. **Decide: derivable artifact or pinned snapshot?**
+  Then either guard it in `test/estate/generated-artifacts.test.mjs` or freeze it and stop
+  regenerating.
+
+### 4.5 AGENTBENCH's case set no longer tests the ladder
+
+All 11 C2 cases are green on the goal driver; every rung gates PASS. There is no rung to build past,
+so the next AGENT cycle's work is deepening the corpus, not the engine.
+
+One item stays open: **the resolver floor stopped planning `ab-c2-what-to-test`** (`completed: true`
+→ `false`, C2 plan-completion 36% → 27%). Probably correct — the plan now comes from the goal
+reasoner, which the floor arm lacks — but unconfirmed. Decide whether the floor's expectation moves
+or the resolver lost a plan it should still build.
+
+### 4.6 Re-sweep CONVERSATION, and add a sixth persona
+
+Once Phase 1 lands, re-run the persona sweep with the same five frames and **add a sixth: the
+returning user with a stale mental model** ("the old X", "didn't you say Y"). That frame is where
+item 1.4's realistic trigger lives, and no 2.0.3 frame covered it.
+
+The ladder stays at **Tier 0 until 1.5 is fixed**.
+
+---
+
+## Phase 5 — documents that are wrong
+
+Cheap, and they mislead the next session. `CAPABILITIES_2.0.3.md` §4.3 is the evidence for each.
+
+| Doc | Correction |
+|---|---|
+| `PLAN_GRAPH_SCAN.md` | Its banner says "RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code." **All three phases shipped** (`6ee6610`, `426e9dc`), and Phase 3's exit criterion is beaten: `init:xl` ~8m25s → 16.6s, `init:xxl` unfinished-past-70min → 38.5s. Rewrite the banner; keep the open note that the original query-side question (what made "what is a horse" take 13 minutes) is nowhere recorded as resolved |
+| `PLAN_AGENTS.md` | §3 claims six open frozen-wrong rows; **four are real**. `98df45a` flipped `games/yesno-call-check-reads-callssymbol-edge` and `games/bare-passive-reads-the-patient`, both renamed to record the new behaviour. Its §3 root-cause diagnosis is half-stale with them: `KIND_UNIONS` (`ask.mjs:75`) still omits the edge it names, but the yes/no row passes regardless. §1's ground-truth table needs **no** correction — it was ahead of the benchmarks, not behind |
+| `PLAN_CODE.md` | §5 argues tmct carries no browser-adjacent dependency. `package.json:74` has playwright 1.61.1 for the browser e2e tier. The dependency-weight tradeoff it stages as the big ask at sign-off is already paid. What is still a first is the untrusted-code-execution surface (§8) — re-make the argument on that |
+| `PLAN_REPO_INDEX.md` | Same playwright premise in Parts 3/7, which specifically weakens the "move `PLAN_CODE.md` to seonix" argument. Also: "17 named services" is **16**; `ask.mjs` is 3,869 lines (doc says 4,694); Part 4's README refs no longer hold the cited text; Part 1 describes `src/viz.mjs`, which no longer exists |
+| `PLAN_CHILD_CORPUS.md` | Baseline miscounted: "1 kind of bird (`owl`), zero capabilities on it" — `human.jsonl` seeds `owl` **and** `swift`, and `owl` carries `CapableOf hunt_at_night`. The argument survives; the acceptance test does not, and the plan designates those numbers as its own step-5 re-measure target |
+| `PLAN_NLU_BENCHMARKS.md` | Estate figures stale: "723 rows" → **784 / 11 lanes / 368 keys**; "the grammar lane's 224 rows" → **233**. Its spike table is self-declared unreproducible; leave it, but say so where the deltas are quoted |
+| `README.md` | `:352` claims `next` writes each board state into memory as facts — true of planner state, false of the fact read-back (3.10a). Fix the doc or the code, not neither |
+| `src/domain/ask.mjs:17` | A comment cites `temporal.mjs`'s "time-scrubbing Chronograph surface". **No such module has ever existed in git history.** Delete the reference |
+| `src/adapters/memory/core.mjs:83` | A comment still points at `derivedUpdatedAt`, dropped at `56b4365` |
+
+**Citation rot generally.** Roughly half of `CAPABILITIES_2.0.3.md`'s rows cite a line that no
+longer points at its symbol; a dozen cite files that no longer exist. Six plans carry
+pre-layer-refactor line numbers. **Do not bulk-fix this** — it is churn, another session is doing
+hygiene, and the verdicts survived the rot. Fix a citation when you touch its row for another
+reason.
+
+---
+
+## Phase 6 — a smoke tier and a fast tier
+
+New work, requested alongside the backlog. Two new directories whose only job is **maximum coverage
+per second**. They may duplicate assertions that exist elsewhere; that is the point, not a smell.
+
+### The measured facts this design rests on
+
+Timings on this machine (16 logical / **8 physical** cores), clean, single samples:
+
+| suite | tests | wall | **ms/test** |
+|---|--:|--:|--:|
+| `test/tools/ask.test.mjs` | 130 | 424ms | **3.3** |
+| `test/adapters/paraphrase.test.mjs` | 10 | 219ms | 22 |
+| `test/corpus/grammar.test.mjs` | 234 | 5,408ms | 23 |
+| `test/corpus/templates.test.mjs` | 106 | 7,953ms | 75 |
+| `test/corpus/planning.test.mjs` | 47 | 16,011ms | 341 |
+| `test/corpus/inference.test.mjs` | 169 | 38,641ms | **229** |
+| `test/corpus/bench-smoke.test.mjs` | 5 | 1,869ms | 374 |
+
+Fixed costs are small: `node --test` on one trivial file is **180ms**; importing `ask.mjs` and
+parsing a query is **110ms**. So a 1s budget is real — roughly **800ms of work** after overhead.
+
+The density spread is the design: `ask.test.mjs` buys 130 assertions for 424ms because it calls
+`ask()` in-process against a fixture graph. The corpus lanes cost 20-340ms/test because each row
+drives a real session. **Smoke and fast are built from the first kind.**
+
+### `test/smoke/` — a 1s budget
+
+**Rule: in-process only.** No binary spawn, no `mktemp` repo, no corpus-lane replay, no generated
+artifact, no network. One assertion per capability family, chosen so any of them failing means the
+build is broken rather than subtly wrong.
+
+Target: **≤1s wall, ~40-60 assertions**, one file (`test/smoke/smoke.test.mjs`) so there is no
+per-file process overhead to pay twice.
+
+Cover, one assertion each — all reachable through `ask()`/`parseQuery()` and a `memory` backend
+session:
+
+- a forward query, a reverse query, and that they disagree (the direction invariant);
+- the negation set complement;
+- teach → recall in one session;
+- a two-hop proof (`john is a man` / `every man is mortal` / `is john mortal`);
+- an honest miss on an unknown symbol, and the miss wall (`miss: true`);
+- an empty-graph answer that says it is empty;
+- the `Canonical:` line is present and names the shape;
+- the six Phase-1 reproducers, once each, as they land.
+
+### `test/fast/` — a 10s budget
+
+**Rule: everything smoke does, plus one row per lane family and the cheap contract tests.** Still no
+binary spawn (`e2e/` owns that), no README harness (12.5s alone), no generated-artifact guards (the
+collision table is 12s by itself).
+
+Target: **≤10s wall.** Composition, against the measured numbers:
+
+- `test/smoke/*` (≤1s);
+- the tool-layer contract: `test/tools/ask.test.mjs` (424ms) and `test/tools/server.test.mjs` —
+  `dispatchTool` is the strongest evidence tier the audit recognises and it is nearly free;
+- `test/estate/import-layers.test.mjs` (236ms) — the layering ratchet;
+- one representative row per corpus lane family, copied into `test/fast/lanes.test.mjs` rather than
+  running the lanes — at ~23ms/row (grammar's rate) eleven rows cost ~250ms, where running the real
+  lanes costs 70s;
+- every regression pin from this cycle (Phases 1-3) as it lands — these are the assertions most
+  likely to rot.
+
+Budget the remainder deliberately: leave headroom under 10s so the tier does not silently grow past
+its own name. **A tier that breaks its budget is a bug in the tier.** Add a test that asserts it:
+`test/fast/budget.test.mjs` measures its own suite's wall and fails over 10s (smoke over 1s). That
+is the only guard that keeps this honest.
+
+### `package.json`
+
+```json
+"test:smoke": "node --test test/smoke/*.test.mjs",
+"test:fast":  "node --test --test-concurrency=8 test/smoke/*.test.mjs test/fast/*.test.mjs",
+"test":       "node --test --test-concurrency=8 \"test/**/*.test.mjs\""
+```
+
+`test` keeps its glob and its meaning. The `--test-concurrency=8` is the concurrency finding below.
+
+### The concurrency finding
+
+`npm test` runs at `node --test`'s default, which is `availableParallelism()` = **16** on this
+machine — 16 worker processes on **8 physical cores**, each loading the wink model. Measured on
+`test/adapters/*.test.mjs` (108 files):
+
+| file concurrency | wall |
+|--:|--:|
+| 16 (default) | 21,811ms |
+| **8** | **21,728ms** |
+| 4 | 22,679ms |
+| 2 | 33,811ms |
+
+**Everything above ~4 buys nothing, and 8 is marginally better than 16.** Pin it to 8: same wall,
+half the processes, half the memory, and a machine that stays usable while the suite runs. This is
+the direct answer to "were we way past the point of a useful return" — yes, by 2×, and the return
+was zero.
+
+**But the bigger waste is the opposite of oversubscription.** Wall time per directory:
+
+| dir | files | wall |
+|---|--:|--:|
+| **corpus** | 5 (+6 under `games/`) | **76,569ms** |
+| adapters | 108 | 21,778ms |
+| estate | 10 | 16,563ms |
+| readme | 1 | 12,503ms |
+| tools | 16 | 3,804ms |
+| bench | 3 | 687ms |
+
+The corpus family carries most of the runtime in the fewest files, so during the longest phase most
+workers are idle — and **the suite's floor is its slowest single file**, `inference.test.mjs` at
+38.6s, because one file cannot split. No concurrency setting fixes that.
+
+**The lever, and it is optional:** `inference.test.mjs` drives 169 rows from one lane. Sharding that
+lane across files (or letting `run-lane.mjs` take a shard index) would drop the floor toward the
+next-slowest file. Sized separately; the smoke/fast tiers make it much less urgent, because nobody
+should be waiting on the full suite mid-task any more.
+
+**A correction worth recording.** The full-suite figures quoted in the 2.0.3 reports — 235s, 249s —
+were measured **while five persona sub-agents were probing**. Clean, the per-directory walls sum to
+about 132s. The reports' *pass counts* stand; their durations do not, and no report claims a
+duration as a result.
+
+### `CLAUDE.md`
+
+The "Test the blast radius" section already draws the line at the remote boundary. Weave the two
+tiers into it as the rungs below that line:
+
+- **After any edit: `npm run test:smoke`** (1s). The reflex. No excuse not to.
+- **Before a worktree/checkpoint commit, and for any sub-agent: `npm run test:fast`** (10s), plus
+  the blast radius of what you touched.
+- **Blast radius**: the file and its importers, its keyed corpus rows, the estate guard for any
+  generated artifact.
+- **`npm test` in full**: a commit to `main`, or to a branch with a remote.
+
+Keep the existing traps paragraph — a radius you cannot see is still the one real reason to run
+everything, and generated artifacts are still wider than the diff.
+
+---
+
+## Sequencing
+
+1. **Phase 6's smoke and fast tiers first.** Everything after this is a code change, and the tiers
+   are what make those changes cheap to check. They are also independent of every other item.
+2. **Phase 2, the fronted-agent passive.** Bisected, mechanism understood, the only regression, and
+   it comes with a row that stops it recurring.
+3. **Phase 1, the dropped-input family**, in the order given. 1.1 and 1.2 first — they are the two
+   proof-shaped ones.
+4. **Phase 4.1**, pinning the unpinned surfaces. Do this while the reasons are fresh.
+5. **Phase 3**, the honest-miss gaps, grouped by fix site.
+6. **Phase 5**, the document corrections. Cheap; fold into whichever commit touches the doc.
+7. **Phase 4.2-4.6**, the instrument work, then re-measure all four axes and re-sweep.
+
+## Verification
+
+- Every fix ships with the corpus row or test named in its item. **No row, not done** — that is the
+  lesson Phase 2 exists to teach.
+- Name each test for the behaviour it checks, never for this plan, an item number, or a benchmark.
+  `CLAUDE.md`'s comment and test-name hygiene rule applies to everything here.
+- Re-run the axis a fix targets, not the whole cycle: CEFR for Phases 1-2, CONVERSATION's sweep
+  after Phase 1 lands, INFBENCH only if `syllogise.mjs` or the generator moved.
+- The CEFR re-run returns to **N=2** and reports the **cell table**, not the marginals.
+- `npm test` green before any commit that reaches `main` or a remote; `test:fast` before a
+  checkpoint; `test:smoke` after every edit.
+- Delete each item from `HANDOVER.md` as it closes. `HANDOVER.md` holds open items only — a closed
+  item is removed, not annotated.
+
+## Already closed since 2.0.3, do not re-do
+
+- **`what talks to the payment module?`** — the README headline that did not parse. Closed by
+  `c720a16`: `talks to`/`talk to` route onto `uses`, the example is now
+  `what does app.mjs talk to?` against `examples/mini-webapp`, and the block carries real expected
+  output instead of `…` elisions, so the harness actually asserts it.
+- **The forward union listed a target once per edge kind** — found while fixing the above. `uses`
+  scans imports+calls+callsSymbol, so `what does app.mjs use` named router.mjs and logger.mjs twice
+  each while the reverse traversal collapsed the same pair. Deduped unconditionally in the same
+  commit.
+- **Modal negation in set complements** (`playtests/PLAYTEST_LOG_002.md`) and the **canonical
+  restatement** of a complement — both shipped at 2.0.1.
