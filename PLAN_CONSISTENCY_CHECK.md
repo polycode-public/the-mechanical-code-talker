@@ -169,6 +169,36 @@ an MCP server almost certainly wants B per session with an optional A/C mounted 
 underneath for the durable corpus. That layering does not exist yet — the store is one
 backend at a time — and it is the open question this doc does not answer.
 
+### Which forces the transport
+
+An in-memory store only helps if it survives between calls, and that rules out stdio. A
+stdio MCP server is process-per-client: `teach(...)` builds a store, the process ends, and
+the next `consistencyCheck(...)` starts empty — so every check would return `unknown` to
+everything, which is the failure this whole design is built to avoid. Feed and check must
+reach the *same live handle*.
+
+So: **HTTP, with a resident process holding the handle.** `tmct serve` already is one — the
+Anthropic Messages API-compatible endpoint, `src/surfaces/http/server-http.mjs`. The store
+becomes a singleton in that process, keyed by session, and the transport is what keeps it
+alive between the feed and the check.
+
+That has consequences worth stating before anyone builds it:
+
+- **Session identity becomes load-bearing.** Two callers sharing one process must not share
+  one store, or caller A's fed context silently answers caller B's check — the corroboration
+  failure, but across tenants. The handle is per-session; the key has to come from the
+  transport.
+- **Lifetime becomes a decision.** A resident store with no eviction is a leak; one that
+  evicts mid-exchange returns `unknown` to a claim it was just fed. Neither is acceptable by
+  accident, so the policy has to be explicit.
+- **A durable corpus underneath still wants A or C**, read-only, shared across sessions —
+  the seeded vocabulary is the same for everyone and re-feeding it per session is waste. That
+  is the layering named above, and the singleton is where it would live.
+- **The read/write split gets sharper, not looser.** One resident writable store per session,
+  one shared read-only corpus, and `consistencyCheck` touching neither. If the check can
+  write to a store that outlives the call, the laundering failure comes back with a longer
+  half-life.
+
 ## The coverage problem, stated plainly
 
 tmct's grammar models a narrow slice. Most of an LLM response is not expressible as triples.
