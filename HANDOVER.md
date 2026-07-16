@@ -5,35 +5,23 @@ Living handover. Any session resumes from here. **Plan of record: `ROADMAP.md`**
 file holds ONLY what to do next — no completed-work narrative (that lives in `ROADMAP.md`), per
 this project's own standing discipline.
 
-Session handles (inboxes): `tmct` (the edge-hunt/playtest session) and `tmct-hanoi` (the
-PLAN_HANOI/PLAN_VIZ_LEDGER session). See `~/.claude/inboxes/tmct.md` and
+Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
 ## Version state (2026-07-16)
 
 v1.12.1 in the working tree; v1.12.0 pushed to main, which CI publishes. Delivered since
-1.11.5: the `archive/PLAN_OPEN_BACKLOG.md` workstreams A–F, playtests 015–019, and
-`archive/PLAN_LAYERS_AND_TEST_ESTATE.md` — src/ re-homed into five layers with a
-downward-only import rule, the test estate rebuilt around six keyed corpus lanes with an
-e2e tier and a README example harness, and the CI quality pipeline (dependency cooldown,
-licence and PII checks, pack gate, post-deploy smoke).
+1.11.5: src/ re-homed into five layers with a downward-only import rule, the test estate
+rebuilt around six keyed corpus lanes with an e2e tier and a README example harness, and
+the CI quality pipeline (dependency cooldown, licence and PII checks, pack gate,
+post-deploy smoke).
 
-Tested status: `playtests/PLAYTEST_LOG_019.md` replayed every probe session from logs
-001–017 against the re-layered tree. **17/17 pass, zero regressions** — the refactor drifted
-nothing a user can see, including the cross-process paths most exposed to the injected store
-seam (teach, `syllogise` CLI, read back). Both of 018's open findings reproduce identically
-and stay open below: ask-turn misparse receipts, and goals accumulating instead of folding.
-
-`playtests/PLAYTEST_LOG_020.md` then took the three paraphrase rungs that had never been
-probed: **42 probes — 21 correct, 16 honest misses, 5 wrong answers**. The wrong answers are
-open items in group 1 below. Clefts came back clean (14 probes, nothing false asserted); the
-agentful passive and one contracted comparative did not. Six of the 21 passes are correct only
-by luck — the same code path answers wrongly when the false pair is tried, which is what
-re-asking with an agent that doesn't hold exposed.
+The playtest record starts again from `playtests/PLAYTEST_LOG_001.md`. The open items below
+carry their own reproducers, so they stand without it.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
-(16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code per
-`archive/TOO_HARD_AUDIT.md` (bulk ConceptNet download, not reachable from data in hand).
+(16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
+download, not reachable from data in hand).
 
 ## Open items
 
@@ -41,13 +29,12 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 
 - **Misparse-receipt leakage on ask turns.** Fuzzy/stale Goal+Canonical receipts print under
   correct fact answers on ask turns ("rests"→"tests", "bigger"→"calls", "defines"): the
-  playtest-015 `fuzzyVerb` drop covers teach and goal turns only. One coherent edge: extend
-  the drop to fact-reader-answered ask turns. Found by the 018 uber retest
-  (`playtests/PLAYTEST_LOG_018.md`), reproduced unchanged by 019.
+  existing `fuzzyVerb` drop covers teach and goal turns only. One coherent edge: extend
+  the drop to fact-reader-answered ask turns.
 
 - **Identical goals accumulate instead of folding.** The same goal restated in another
   voicing appends "(N goals held)" duplicates; fold a deep-equal incoming goal spec and say
-  so. Found by the 018 uber retest, reproduced unchanged by 019.
+  so.
 
 - **Six frozen wrong answers.** The agent-debt rows pin answers that are still wrong, waiting
   for a fix to flip them: the yes/no `callsSymbol` union, a pronoun-echoing empty, a
@@ -60,8 +47,7 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
   describe X" gives an orientation card, "please describe about X" describes. `/tests
   <function>` answers at module level.
 
-- **Closed-set gate coverage (a pattern, not one bug — mined from the strategy advisor's
-  2026-07-12 sweep).** Several dead-ends share one shape: the machinery that would answer
+- **Closed-set gate coverage (a pattern, not one bug).** Several dead-ends share one shape: the machinery that would answer
   correctly exists, but a narrower closed-set gate in front of it rejects a valid input variant.
   Two instances still live: `looksCodeish` (`src/services/chat.mjs`) flags any CamelCase compound as
   code-ish and blocks the bare-meta-fact fallback that knows how to answer "what is X"; and
@@ -78,29 +64,28 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
   fall to the unqualified `qualCheck` ("is X tested", true for any agent), while
   `calls`/`imports` glue the two operands and resolve to the first. The agentless passive
   ("what is X called by", "what is defined by X") is faithful on all five predicates, so the
-  voice itself is understood. Measured across 16 probes in `playtests/PLAYTEST_LOG_020.md`.
+  voice itself is understood. Measured across 16 probes.
 
 - **A contracted comparative mis-teaches.** "disk-2's bigger than disk-1" stores
   `disk-2's mgx:big than disk-1` at trust 0.97 and reads back "remembered: disk-2's bigs than
   disk-1": the `'s` is taken as a genitive, so the subject keeps it and `bigger` is lemmatised
-  into a predicate. The only probe in 020 that writes garbage to disk. Other contractions
+  into a predicate. The only probe that writes garbage to disk. Other contractions
   ("what's a dog", "who's calling X", "can't", "doesn't") are faithful to their uncontracted
   forms.
 
 - **Negated polar questions never answer.** "doesn't X call Y" and "does X not call Y" both
-  route to `forwardComplement`, which discards Y and never answers the yes/no. Named in
-  `playtests/PLAYTEST_LOG_020.md`.
+  route to `forwardComplement`, which discards Y and never answers the yes/no.
 
 - **The code-index wall fires on stores with no code**, advising "try who touched <a module
-  that actually has commits>" where no index exists. Named in `playtests/PLAYTEST_LOG_020.md`.
+  that actually has commits>" where no index exists.
 
 - **Contracted misses are less useful than their plain twins.** "it's bigger than X" never
   reaches the pronoun check that "it is bigger than X" hits; "what's on peg-a" prints the tool
   introduction where "what is on peg-a" names the term it couldn't find. Both honest in each
-  pair — one is just less use. Named in `playtests/PLAYTEST_LOG_020.md`.
+  pair — one is just less use.
 
 - **Where-lane goal-line cosmetic.** "where is disk-1 now" answers correctly but the Goal line
-  echoes the object as "disk-1 now". Named in `playtests/PLAYTEST_LOG_015.md`.
+  echoes the object as "disk-1 now".
 
 ### 2. Reader coverage — inputs with no lane at all
 
@@ -109,38 +94,33 @@ fan-out set.
 
 - **Capability read-back over taught Rule rows.** "can you move a disk onto a peg?" is still a
   graph-question miss even when that exact signature was taught — a closed ask-lane reader over
-  action-signature rules. Named in `playtests/PLAYTEST_LOG_016.md`.
+  action-signature rules.
 
 - **Verbless want-goal.** "i want every disk on peg-b" (no infinitive verb) still gets the
   teach lane's pronoun decline; recognizing it means inferring the location verb — a
-  desire-frame family of its own. Named in `playtests/PLAYTEST_LOG_017.md`. The verbed forms
+  desire-frame family of its own. The verbed forms
   ("i want every disk to rest on peg-b") work.
 
 - **Topic-shift ellipsis.** "what is a dog" → "what about cats" has no reader; the elliptical
-  follow-up falls to the wall. Named in `playtests/PLAYTEST_LOG_002.md` and 005.
+  follow-up falls to the wall.
 
 - **Anaphora depth.** The vocabulary antecedent decays after one turn, and a cold pronoun
-  ("can it bark" with no prior turn) falls to the generic wall. Named in
-  `playtests/PLAYTEST_LOG_005.md`.
+  ("can it bark" with no prior turn) falls to the generic wall.
 
 - **Negative capability as data.** "a penguin cannot fly" declines honestly (no
-  fact-vocabulary predicate for it) and "what cannot fly" has no reverse listing. Named in
-  `playtests/PLAYTEST_LOG_003.md`.
+  fact-vocabulary predicate for it) and "what cannot fly" has no reverse listing.
 
 - **Prepositional-fact leftovers.** Determiner-led multi-word subjects ("the small disk rests
   on the middle disk") decline; bare-copula "what is on peg-a" misses; "does disk-1 rest on
-  peg-b" falls to the generic wall instead of a specific miss. Named in
-  `playtests/PLAYTEST_LOG_008.md`.
+  peg-b" falls to the generic wall instead of a specific miss.
 
 - **In-chat recovery for deep chains.** 3+-hop derivations need the `syllogise` CLI; chat has
-  no `/syllogise` command and the honest deep-chain miss doesn't mention the recovery. Named
-  in `playtests/PLAYTEST_LOG_007.md`.
+  no `/syllogise` command and the honest deep-chain miss doesn't mention the recovery.
 
 - **The reverse cleft rung has no reader.** "what is it that calls Y" misses — the leftover
   "it that" becomes the subject. The forward clefts work and assert nothing false: "is it X
   that calls Y" discriminates a false agent, "what X calls is Y" parses to the plain
-  canonical. No cleft reaches the taught-fact lane. Measured across 14 probes in
-  `playtests/PLAYTEST_LOG_020.md`.
+  canonical. No cleft reaches the taught-fact lane. Measured across 14 probes.
 
 
 ## Discipline (unchanged)
