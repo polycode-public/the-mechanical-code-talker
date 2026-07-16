@@ -22,11 +22,11 @@ import {
   computeAgreement, renderAgreementTable, gradeReliability, ladderGate,
   gradedRollup, isProductiveRow, isTemplateLane, bandScore, templateLaneLint,
   timingBucket, timingRollup, renderTimings,
-} from "../chatbench/graded.mjs";
+} from "../../chatbench/graded.mjs";
 import {
   parseCases, summarizeTier1, runTurnsCase, runSessionCase, createRunnerDeps,
   runGradedDraw,
-} from "../chatbench/run.mjs";
+} from "../../chatbench/run.mjs";
 
 // The per-run sample size a cell draws: its CELL_SAMPLE override (census cells,
 // grown for dual-draw reliability) else the MIN_PER_CELL floor.
@@ -39,7 +39,7 @@ const cellSample = (cell) => CELL_SAMPLE[cellKey(cell)] ?? MIN_PER_CELL;
 // the stratified-sampling algorithm's behavior against a real ~10x-run-size
 // pool) — those invariants apply to the untouched full pool, preserved at
 // graded-pool-max.jsonl, not the go-to default.
-const POOL_FILE = fileURLToPath(new URL("../chatbench/graded-pool-max.jsonl", import.meta.url));
+const POOL_FILE = fileURLToPath(new URL("../../chatbench/graded-pool-max.jsonl", import.meta.url));
 
 const poolText = await readFile(POOL_FILE, "utf8");
 const { cases: pool, errors: poolErrors } = parseCases(poolText);
@@ -285,7 +285,7 @@ test("gradedRollup: per-grade cells with single vs combo separated (the weak-alo
   assert.equal(comboCell.construction, "pronoun-binding+negation");
 });
 
-// ---- dual banding + template-lane (archive/PLAN_FORMULAIC_COMPETENCE.md) ----
+// ---- dual banding + template-lane ----
 
 // a row with an explicit via + tags for band accounting.
 const brow = (id, grade, construction, { pass = true, via = "composed", tags = ["graded"] } = {}) => ({

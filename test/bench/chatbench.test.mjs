@@ -13,21 +13,21 @@ import {
   TAGS, EXPECT_KEYS, JUDGE_DIMENSIONS, FIXTURE_CONTEXT,
   parseCases, evaluateExpect, summarizeTier1, runTurnsCase, runSessionCase,
   compareProducts,
-} from "../chatbench/run.mjs";
+} from "../../chatbench/run.mjs";
 import {
   JUDGE_MODEL, PROMPT_VERSION, DIMENSIONS,
   renderTranscript, buildPrompt, validateScores, parseJudgeOutput, maskScores,
   judgeSample, sampleMean, isHardFail, computeSummary, pool,
-} from "../chatbench/judge.mjs";
+} from "../../chatbench/judge.mjs";
 import {
   renderReport, renderTranscripts, orderDiscriminating,
-} from "../chatbench/report.mjs";
-import { runChat } from "../src/services/chat.mjs";
-import { parseSessionJsonl, parseSessionLog, turnKey } from "../src/services/sessions.mjs";
+} from "../../chatbench/report.mjs";
+import { runChat } from "../../src/services/chat.mjs";
+import { parseSessionJsonl, parseSessionLog, turnKey } from "../../src/services/sessions.mjs";
 
-const POOL_FILE = fileURLToPath(new URL("../chatbench/graded-pool.jsonl", import.meta.url));
-const PROMPT_FILE = fileURLToPath(new URL("../chatbench/judge-prompt-v1.txt", import.meta.url));
-const SCHEMA_FILE = fileURLToPath(new URL("../chatbench/rubric.schema.json", import.meta.url));
+const POOL_FILE = fileURLToPath(new URL("../../chatbench/graded-pool.jsonl", import.meta.url));
+const PROMPT_FILE = fileURLToPath(new URL("../../chatbench/judge-prompt-v1.txt", import.meta.url));
+const SCHEMA_FILE = fileURLToPath(new URL("../../chatbench/rubric.schema.json", import.meta.url));
 
 // ---- frozen v1 core lint (case-set v3, 2026-07-10: folded into graded-
 // pool.jsonl as fully-graded cells rather than a separate ungraded file —

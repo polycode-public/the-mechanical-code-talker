@@ -1,9 +1,9 @@
 // agentbench + router-registry tests — the Stage-0 capability substrate and the
-// AGENTBENCH harness (Phase 11, PLAN_CAPABILITY_ROUTER.md). Like chatbench's
+// AGENTBENCH harness. Like chatbench's
 // tests these cover the HARNESS + the substrate deterministically; there is no
 //
 // Three groups:
-//   1. registry shape — the STRIPS/PDDL capability model (Deliverable 1);
+//   1. registry shape — the STRIPS/PDDL capability model;
 //   2. grading logic — the zero-hallucination gate, metric pair, ladder;
 //   3. CONFORMANCE — the "verified against the dispatchTool switch" note made
 //      EXECUTABLE: every registry arg-key is actually read by dispatchTool, and
@@ -20,22 +20,22 @@ import {
   capabilities, capabilityByName, isCapability, parametersOf,
   preconditionsOf, effectsOf, argKeysOf, requiredArgsOf,
   EXCLUDED_FROM_REGISTRY,
-} from "../src/domain/router/registry.mjs";
+} from "../../src/domain/router/registry.mjs";
 import {
   RUNGS, COMPLETION_FLOOR, parseCases, hallucinationsIn, isCallWellFormed,
   callMatches, callsMatch, gradeCase, rollup, ladderGate, sameSet,
-} from "../agentbench/grade.mjs";
-import { stubDriver } from "../agentbench/driver-stub.mjs";
-import { shimDriver } from "../agentbench/driver-shim.mjs";
-import { resolverDriver } from "../agentbench/driver-resolver.mjs";
-import { runAgentbench, createRunCtx, BENCH_VERSION, loadFixtureLabels } from "../agentbench/run.mjs";
+} from "../../agentbench/grade.mjs";
+import { stubDriver } from "../../agentbench/driver-stub.mjs";
+import { shimDriver } from "../../agentbench/driver-shim.mjs";
+import { resolverDriver } from "../../agentbench/driver-resolver.mjs";
+import { runAgentbench, createRunCtx, BENCH_VERSION, loadFixtureLabels } from "../../agentbench/run.mjs";
 import {
   resultSetOf, untestedModules, impactLabels, testsForLabels, membersLabels, callersLabels,
   intersect, fallbackIfEmpty, guardIfEmpty, memberIndividuals, membersReaching,
-} from "../agentbench/results.mjs";
-import { COMMANDS } from "../src/services/chat.mjs";
+} from "../../agentbench/results.mjs";
+import { COMMANDS } from "../../src/services/chat.mjs";
 
-const CASES_FILE = fileURLToPath(new URL("../agentbench/cases.jsonl", import.meta.url));
+const CASES_FILE = fileURLToPath(new URL("../../agentbench/cases.jsonl", import.meta.url));
 
 // ONE shared run context for the whole file (0.8.2 speed insurance): every
 // consumer here is READ-ONLY over the materialized fixture graph, so the
