@@ -531,7 +531,8 @@ provenance record. Most of its flags choose what gets seeded and where config is
 
 ```output:help:init
   tmct init [--repo <abs>]     initialize a repo for tmct (default: cwd): .tmct/,
-       [--force]               tmct.toml, tier-1 corpus seed, provenance record
+       [--force]               tmct.toml, .tmct/TOOLS.md (the cold-tool catalog),
+                               tier-1 corpus seed, provenance record
        [--corpus <id|path>]    also seed a corpus — a tier-2 manifest id (aws|python|java|
                                general) or a jsonl file path — opt-in, offline, $0
        [--ontology <name|path>]  activate+seed an ontology bundle (a recognized name or a path)
@@ -642,15 +643,19 @@ kill $SERVE_PID
 
 ```output:help:cli
   tmct cli <tool> '{…}'        invoke a graph tool directly (carry-over, de-emphasized)
+       [--repo <abs>]          the repo to answer from; the payload's "repo_path" says
+       [--graph <path>]        the same thing. --graph names the graph file outright
+       [--config <path>]       (repeatable), --config an alternate tmct.toml
   tmct cli digest '{…}'        architecture map + per-module context bundles
 ```
 
 Two precedence chains apply across every command above, in this order:
 
 ```output:help:precedence
-Shared graph-path precedence (chat/serve; see src/services/cli-args.mjs): --graph flag(s) >
+Shared graph-path precedence (chat/serve/cli; see src/services/cli-args.mjs): --graph flag(s) >
 TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files > --repo-derived
-<repo>/.tmct/graph.json > git-root/cwd default.
+<repo>/.tmct/graph.json > git-root/cwd default. On the `cli` route, a payload's
+"repo_path" fills the --repo tier when the flag is absent.
 
 Memory-backend precedence (chat; see src/services/chat.mjs createSession): --memory-backend
 flag > TMCT_MEMORY_BACKEND env > tmct.toml [memory] backend > "default" (the flat
