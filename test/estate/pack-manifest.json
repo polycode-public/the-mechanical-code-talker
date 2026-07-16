@@ -104,6 +104,7 @@
   "src/domain/interpret/strategies/grammar.mjs",
   "src/domain/interpret/strategies/keywords.mjs",
   "src/domain/interpret/strategies/noise-strip.mjs",
+  "src/domain/markdown-links.mjs",
   "src/domain/memory/bias.mjs",
   "src/domain/memory/capability.mjs",
   "src/domain/memory/fold.mjs",
