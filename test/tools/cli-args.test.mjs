@@ -7,8 +7,8 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, join } from "node:path";
-import { strFlag, repeatedFlag, boolFlag, enumFlag, resolveRuntimeConfig } from "../src/services/cli-args.mjs";
-import { DEFAULT_GRAPH_REL } from "../src/adapters/config.mjs";
+import { strFlag, repeatedFlag, boolFlag, enumFlag, resolveRuntimeConfig } from "../../src/services/cli-args.mjs";
+import { DEFAULT_GRAPH_REL } from "../../src/adapters/config.mjs";
 
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-cliargs-"));
 const noGitRoot = () => null; // tests run outside a git-root assumption, injected explicitly

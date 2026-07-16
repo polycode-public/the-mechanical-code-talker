@@ -5,7 +5,7 @@
 
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { asBareCommand } from "../src/services/chat.mjs";
+import { asBareCommand } from "../../src/services/chat.mjs";
 
 test("bare zero-arg system commands route to their slash form", () => {
   assert.equal(asBareCommand("stats"), "/stats");
@@ -37,7 +37,7 @@ test("non-commands, slash lines, and blanks are left alone", () => {
   assert.equal(asBareCommand("   "), null);
 });
 
-// ---- "find" routing precedence (PLAN_PREDICATE_QUERIES.md) — the old /find
+// ---- "find" routing precedence — the old /find
 // (tmct_search, a plain lexical search) and the ask engine's newer
 // predicate-find grammar ("find [me] a/the <term> <entityType>") both claim a
 // bare "find …" line; asBareCommand must pick one deterministically by SHAPE

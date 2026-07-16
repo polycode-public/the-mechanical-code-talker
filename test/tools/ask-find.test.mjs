@@ -11,10 +11,10 @@
 // class importing the Gateway module (the §6 generalization: find-with-predicate).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildEntities } from "../src/adapters/graph-build.mjs";
-import { parseEntities } from "../src/domain/codegraph.mjs";
-import { ingestSchemaDocs } from "../src/tools/schema-docs.mjs";
-import { parseQuery, ask } from "../src/domain/ask.mjs";
+import { buildEntities } from "../../src/adapters/graph-build.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
+import { parseQuery, ask } from "../../src/domain/ask.mjs";
 
 const MODULES = [
   { path: "src/gateway.mjs", dotted: "src.gateway", imports: [], calls: [],

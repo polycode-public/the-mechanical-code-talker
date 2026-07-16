@@ -1,4 +1,4 @@
-// ask.mjs tests — the mechanical NL query engine (PLAN_MECHANICAL_CHAT.md P0).
+// ask.mjs tests — the mechanical NL query engine.
 // buildEntities()/parseEntities() build a REAL graph (same shape a real index
 // produces) from a small fixture; ask.mjs's four stages are then exercised both
 // in isolation (parseQuery/resolveObject/traverse/render) and end-to-end (ask()).
@@ -6,15 +6,15 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { buildEntities } from "../src/adapters/graph-build.mjs";
-import { parseEntities } from "../src/domain/codegraph.mjs";
-import { ingestSchemaDocs } from "../src/tools/schema-docs.mjs";
-import { parseQuery, resolveObject, traverse, render, ask, rephraseHint, normalizeQuery } from "../src/domain/ask.mjs";
+import { buildEntities } from "../../src/adapters/graph-build.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
+import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
+import { parseQuery, resolveObject, traverse, render, ask, rephraseHint, normalizeQuery } from "../../src/domain/ask.mjs";
 
 // Mirrors the operator's own worked example, with an INTERNAL coupling target instead of
-// an external package (log4j-style external imports do not surface as graph edges today —
-// see PLAN_MECHANICAL_CHAT.md §10; graph-build.mjs only resolves imports that match an internal
-// module's `dotted` name via its registry).
+// an external package (log4j-style external imports do not surface as graph edges today:
+// graph-build.mjs only resolves imports that match an internal module's `dotted` name via
+// its registry).
 const MODULES = [
   { path: "src/logging.mjs", dotted: "src.logging", imports: [], calls: [],
     defines: [{ name: "Logger", kind: "class", lineno: 1, decorators: [] }] },
@@ -36,7 +36,7 @@ const MODULES = [
       { name: "Widget.render", kind: "method", lineno: 2, decorators: [] }] },
   { path: "app/widget_test.mjs", dotted: "app.widget_test", imports: ["app.widget"], calls: [],
     defines: [] },
-  // §prose-fallback fixture (PLAN_PROSE_INDEX.md): a symbol whose PURPOSE ("invoice") is
+  // §prose-fallback fixture: a symbol whose PURPOSE ("invoice") is
   // only expressed in its doc comment and its decomposed identifier words, never as its
   // own literal name/label — the exact case resolveObject's tier-4 fallback exists for.
   { path: "src/billing.mjs", dotted: "src.billing", imports: [], calls: [],
@@ -44,7 +44,7 @@ const MODULES = [
       doc: "Computes the invoice subtotal before tax." }] },
   { path: "src/checkout.mjs", dotted: "src.checkout", imports: ["src.billing"], calls: [],
     defines: [{ name: "checkout", kind: "function", lineno: 1, decorators: [], calls: ["calculateTotalPrice"] }] },
-  // §transitive-modifier fixture (PLAN_MECHANICAL_CHAT.md P1): a genuine 2-hop import
+  // §transitive-modifier fixture: a genuine 2-hop import
   // chain — entrypoint.mjs -> myFile.mjs -> src/logging.mjs — distinguishing "which
   // modules import logging" (direct: myFile.mjs, src/someOtherFile.mjs only) from
   // "which modules transitively import logging" (also reaches app/entrypoint.mjs,
@@ -207,7 +207,7 @@ test("resolveObject: a leaked verb/noise word around a REAL slashed path still r
   assert.equal(resolveObject(graph, "app/base.mjs but untested", { expectedClass: "Module" }).match?.label, "app/base.mjs");
 });
 
-// ---- resolveObject tier 4: prose-index fallback (PLAN_PROSE_INDEX.md §6) ----
+// ---- resolveObject tier 4: prose-index fallback ----
 
 test("resolveObject: tier 4 prose-index fallback resolves a term that ONLY matches via a doc-comment word, never the symbol's own literal name", () => {
   const graph = buildGraph();
@@ -256,7 +256,7 @@ test("resolveObject: a term that resolves at an earlier tier never falls through
 // "logger.mjs" (an agent-noun basename) vs. the query word "logging" (its gerund
 // form) — buildGraph()'s own "src/logging.mjs" fixture module is already an EXACT
 // substring match for "logging" and can't reproduce this dead-end. ----
-const MINI_WEBAPP_GRAPH = fileURLToPath(new URL("../examples/mini-webapp/.tmct/graph.json", import.meta.url));
+const MINI_WEBAPP_GRAPH = fileURLToPath(new URL("../../examples/mini-webapp/.tmct/graph.json", import.meta.url));
 const miniWebappGraph = parseEntities(JSON.parse(readFileSync(MINI_WEBAPP_GRAPH, "utf8")));
 
 test("resolveObject: 'logging' resolves to the real src/lib/logger.mjs module (tier 3, derivational basename bridge), never the unrelated Commit whose message mentions the word", () => {
@@ -318,7 +318,7 @@ test("render: reverse-shape zero hits never double-pluralizes the kind (\"callss
   const cases = [
     ["calls", "calls"], ["imports", "imports"], ["touches", "touches"],
     ["defines", "defines"], ["contains", "contains"], ["tests", "tests"],
-    // "reexports" -> "export" (Bug B3, HANDOVER follow-up #2): verbFor()'s override
+    // "reexports" -> "export": verbFor()'s override
     // table is shared with the forward-miss template's fix below, so the reverse
     // shape's honest miss reads "directly export x" too — a minor grammar trade
     // (vs. the grammatically-exact but internal-vocabulary-leaking "reexports")
@@ -409,12 +409,12 @@ test("ask(): inherits verb family — which classes inherit from Base", () => {
   assert.match(content, /Widget/);
 });
 
-// Seonix Batch 2 Fix 2 — the reverse "is X a superclass of Y" phrasing (fixture:
+// The reverse "is X a superclass of Y" phrasing (fixture:
 // Widget extends Base, so Widget is the subclass and Base the superclass). Both
 // phrasings of the SAME true relationship must produce the SAME Yes content — the
 // reverse phrasing's subject/object are swapped at parse time (grammar.mjs T1 /
 // keywords.mjs), not silently answered backwards.
-test("ask(): \"is Base a superclass of Widget\" and \"is Widget a subclass of Base\" agree (Batch 2 Fix 2 — reverse inherits)", () => {
+test("ask(): \"is Base a superclass of Widget\" and \"is Widget a subclass of Base\" agree — the reverse phrasing inherits the same answer", () => {
   const graph = buildGraph();
   const reverse = ask(graph, "is Base a superclass of Widget");
   const forward = ask(graph, "is Widget a subclass of Base");
@@ -424,7 +424,7 @@ test("ask(): \"is Base a superclass of Widget\" and \"is Widget a subclass of Ba
   assert.equal(reverse.content, forward.content);
 });
 
-test("ask(): \"is Widget a superclass of Base\" honestly says No — the reverse phrasing is not silently flipped to a wrong Yes (Batch 2 Fix 2)", () => {
+test("ask(): \"is Widget a superclass of Base\" honestly says No — the reverse phrasing is not silently flipped to a wrong Yes", () => {
   const graph = buildGraph();
   const { content, tmct_ask } = ask(graph, "is Widget a superclass of Base");
   assert.equal(tmct_ask.miss, true);
@@ -456,7 +456,7 @@ test("ask(): ask-shape yes/no", () => {
   assert.match(no.content, /^No/);
 });
 
-// ---- §transitive modifier (PLAN_MECHANICAL_CHAT.md P1) — wired onto impactClosure
+// ---- §transitive modifier — wired onto impactClosure
 // (codegraph.mjs) for reverse-shape imports/calls, module-level only. Everything else
 // parsing to a non-"direct" modifier gets an honest "not supported yet" response —
 // the modifierIsWired() safety net, never a silent fallback to direct-only behavior. ----
@@ -543,10 +543,10 @@ test("parseQuery: \"what is a Commit\" parses to the meta shape via the mandator
   assert.equal(p.object, "Commit");
 });
 
-// Seonix Batch 2 Fix 1: the article is now OPTIONAL, but only for terms in the closed
+// The article is OPTIONAL, but only for terms in the closed
 // ENTITY_TO_TYPE vocabulary — "what is Commit" (no article) now parses identically to
 // "what is a Commit" since "commit" is one of ENTITY_TO_TYPE's keys.
-test("parseQuery: bare \"what is Commit\" (no article) parses identically to \"what is a Commit\" — closed-vocabulary bare form (Batch 2 Fix 1)", () => {
+test("parseQuery: bare \"what is Commit\" (no article) parses identically to \"what is a Commit\" — closed-vocabulary bare form", () => {
   const p = parseQuery("what is Commit");
   assert.equal(p.shape, "meta");
   assert.equal(p.object, "Commit");
@@ -556,20 +556,20 @@ test("parseQuery: the existing honest-miss regression (\"what is the meaning of 
   assert.equal(parseQuery("what is the meaning of this codebase"), null);
 });
 
-// Batch 2 Fix 1 re-assertion: the bare-form closed-vocabulary restriction must still
+// The bare-form closed-vocabulary restriction must still
 // reject a bare term that ISN'T in ENTITY_TO_TYPE, same as before the article was
 // loosened — both of the pinned honest-miss regressions below must keep failing null.
-test("parseQuery: bare \"what is the meaning of this codebase\" still returns null after Batch 2 Fix 1 (not an ENTITY_TO_TYPE term)", () => {
+test("parseQuery: bare \"what is the meaning of this codebase\" still returns null — \"meaning\" is not an ENTITY_TO_TYPE term", () => {
   assert.equal(parseQuery("what is the meaning of this codebase"), null);
 });
 
-test("parseQuery: bare \"what is exposed\" still returns null after Batch 2 Fix 1 (\"exposed\" isn't an ENTITY_TO_TYPE term)", () => {
+test("parseQuery: bare \"what is exposed\" still returns null — \"exposed\" isn't an ENTITY_TO_TYPE term", () => {
   assert.equal(parseQuery("what is exposed", { nlp: null }), null);
 });
 
-// Seonix Batch 2 Fix 3: a curated trailing scope clause is stripped from the captured
+// A curated trailing scope clause is stripped from the captured
 // object before it's used as a lookup term, so a scoping tail never corrupts it.
-test("parseQuery: \"what is a Module in this graph\" resolves the same object as \"what is a Module\" (Batch 2 Fix 3, trailing scope filler stripped)", () => {
+test("parseQuery: \"what is a Module in this graph\" resolves the same object as \"what is a Module\" — trailing scope filler is stripped", () => {
   const withFiller = parseQuery("what is a Module in this graph");
   const withoutFiller = parseQuery("what is a Module");
   assert.equal(withFiller.shape, "meta");
@@ -957,7 +957,7 @@ test("ask(): exports family — \"what does myFile export\" reads the reExports 
   assert.match(hit.content, /startup/);
   const blank = ask(graph, "what does src/unrelated.mjs export");
   assert.equal(blank.tmct_ask.miss, true);
-  // Bug B3 (HANDOVER follow-up #2): the raw internal kind identifier "reexports"
+  // The raw internal kind identifier "reexports"
   // must never leak into the rendered prose — verbFor()'s override table maps it
   // to the human word "export", matching every other kind's natural phrasing.
   assert.match(blank.content, /has no export edges/);
@@ -1125,7 +1125,7 @@ test("parseQuery: the COMMIT frames require a sha tail — \"what is in walk.mjs
   assert.notEqual(p.kind, "touches");
 });
 
-// ---- §grain-aware entity resolution (Bug C+D, HANDOVER follow-up #2): a
+// ---- §grain-aware entity resolution: a
 // grain-collision fixture — a Module "x/foo.mjs" and a same-stem Class "Foo" — a
 // deliberately hand-built graph (not the shared MODULES fixture above), so the
 // collision is exact and isolated from every other test's terms. ----
@@ -1195,7 +1195,7 @@ test("ask(): grain-aware resolution — \"which modules import foo\" resolves th
   assert.match(tmct_ask.traversal, /object = x\/foo\.mjs/);
 });
 
-test("ask(): grain-aware resolution — \"imports\" now up-refines a resolved wrong-grain Class to its containing module too (HANDOVER 2026-07-12, extends Bug D past tests/cochange)", () => {
+test("ask(): grain-aware resolution — \"imports\" now up-refines a resolved wrong-grain Class to its containing module too, not just for tests/cochange", () => {
   const graph = buildGrainCollisionGraph();
   // "Bar" resolves (tier 1, exact) to the Class, but no Module anywhere has any
   // trace of "bar" in its label, so the retry scoped to Module genuinely fails —
@@ -1220,7 +1220,7 @@ test("ask(): grain-aware resolution — tests/cochange up-refine a resolved fine
   assert.match(tmct_ask.traversal, /refined from createTask to its containing module/);
 });
 
-test("ask(): grain-aware resolution — \"touches\" up-refines a resolved Class to its containing module (\"who touched Bar\", HANDOVER 2026-07-12)", () => {
+test("ask(): grain-aware resolution — \"touches\" up-refines a resolved Class to its containing module (\"who touched Bar\")", () => {
   const graph = buildGrainCollisionGraph();
   // Bar has no recorded touchesSymbol edge of its own (the extractor never got
   // symbol-precise for it), so the touchesSymbol pre-check comes up empty and
@@ -1240,14 +1240,14 @@ test("ask(): grain-aware resolution — \"who calls Bar\" stays an honest empty 
   // (no edges of that kind exist to infer an object class from), so the
   // wantClass-driven up-refine block never runs and gObjMatch stays Bar. Content
   // is the same plain empty either way; this just confirms the up-refine
-  // extension (2026-07-12 follow-up, HANDOVER "who calls Router") doesn't
+  // extension ("who calls Router") doesn't
   // fabricate a refinement when there's no calls data to refine against.
   const { content, tmct_ask } = ask(graph, "who calls Bar");
   assert.match(content, /No modules found/);
   assert.doesNotMatch(tmct_ask.traversal || "", /refined from Bar to its containing module/);
 });
 
-test("ask(): grain-aware resolution — \"calls\" now up-refines a resolved Class with no recorded members to its containing module, same as \"touches\"/\"imports\"/\"tests\" (2026-07-12 follow-up, HANDOVER \"who calls Router\" real bug)", () => {
+test("ask(): grain-aware resolution — \"calls\" now up-refines a resolved Class with no recorded members to its containing module, same as \"touches\"/\"imports\"/\"tests\" (\"who calls Router\")", () => {
   // Router (mini-webapp's real trigger): a Class the extractor only ever saw a
   // bare declaration for (no `contains` members recorded), whose only recorded
   // caller is a module-coarse "calls" edge into its containing module — the
@@ -1322,7 +1322,7 @@ test("ask(): grain-aware resolution — a term that resolves to NOTHING at all (
   assert.equal(tmct_ask.matches.length, 0);
 });
 
-test("ask(): forward-shape grain check (PLAN_CONVERSATION.md Finding 3) — \"what modules does the questboard app have\" declines honestly instead of answering with function names", () => {
+test("ask(): forward-shape grain check — \"what modules does the questboard app have\" declines honestly instead of answering with function names", () => {
   // Driven against the real, committed examples/mini-webapp graph (miniWebappGraph,
   // declared above): its `defines` predicate never produces a Module-classed
   // target (only Class/Attribute/Method/Function across every real edge), so

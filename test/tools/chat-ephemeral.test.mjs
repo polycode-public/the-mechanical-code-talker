@@ -13,10 +13,10 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createSession } from "../src/services/chat.mjs";
-import { clearCache } from "../src/adapters/source.mjs";
+import { createSession } from "../../src/services/chat.mjs";
+import { clearCache } from "../../src/adapters/source.mjs";
 
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 
 test("ephemeral: a multi-turn session leaves the target graph byte-identical and drops nothing", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-ephem-"));

@@ -11,12 +11,12 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { parseEntities } from "../src/domain/codegraph.mjs";
-import { ask } from "../src/domain/ask.mjs";
-import { dispatchTool } from "../src/tools/server.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
+import { ask } from "../../src/domain/ask.mjs";
+import { dispatchTool } from "../../src/tools/server.mjs";
 
 const fixture = JSON.parse(
-  readFileSync(fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url)), "utf8"),
+  readFileSync(fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url)), "utf8"),
 );
 const graph = parseEntities(fixture);
 const config = { graphFile: "/stub/.tmct/graph.json" };

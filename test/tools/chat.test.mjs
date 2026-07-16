@@ -2,7 +2,7 @@
 // against the entities fixture, and a binary smoke of `tmct chat`. The turn
 // function is exercised through the SAME dispatchTool path the CLI uses, with
 // config.graphFile pointed straight at the committed fixture (the same trick
-// cli-smoke.test.mjs's repoWithFixtureGraph plays via .tmct/).
+// e2e/cli-smoke.test.mjs's repoWithFixtureGraph plays via .tmct/).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
@@ -15,16 +15,16 @@ import {
   uuidv7, runTurn, runChat, helpText, COMMANDS, SESSION_LOG_DIR, PROMPT,
   answerCount, renderStats, isConversational,
   renderVerbose, WALL_MISS_RE,
-} from "../src/services/chat.mjs";
-import { dispatchTool } from "../src/tools/server.mjs";
-import { parseEntities } from "../src/domain/codegraph.mjs";
-import * as source from "../src/adapters/source.mjs";
-import { CANONICAL_LINE_RE } from "./helpers/session.mjs";
+} from "../../src/services/chat.mjs";
+import { dispatchTool } from "../../src/tools/server.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
+import * as source from "../../src/adapters/source.mjs";
+import { CANONICAL_LINE_RE } from "../helpers/session.mjs";
 
 // bin/tmct.mjs: a spawned child has non-TTY stdio, so `chat` takes the --plain
-// readline path — the exact same contract the deleted bin/cli.mjs served.
-const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+// readline path.
+const BIN = fileURLToPath(new URL("../../bin/tmct.mjs", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
 
 /** The parsed fixture graph — what runChat loads once and threads into every turn. */
@@ -259,8 +259,7 @@ test("answerCount: an unknown kind lists what it CAN count, and a non-count line
 });
 
 // ---- answerEdgeCount: bare "how many X" for EDGE-NOMINALIZED nouns
-// (tests/importers/callers/…, HANDOVER "bare 'how many X' fails for
-// edge-nominalized nouns", 2026-07-12 fix). COUNT_NOUNS only maps a noun to a
+// (tests/importers/callers/…). COUNT_NOUNS only maps a noun to a
 // graph INDIVIDUAL CLASS; these nouns instead name an EDGE KIND
 // (ask-vocab.mjs's EDGE_NOUN_TO_METRIC, the same table the superlative lane
 // "which module has the most tests" already reads) — answerEdgeCount routes

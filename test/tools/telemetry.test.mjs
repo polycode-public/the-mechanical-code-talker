@@ -6,11 +6,11 @@ import assert from "node:assert/strict";
 import { copyFile, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { telemetryEnabled, invocationId, redact, createTelemetry } from "../src/services/telemetry.mjs";
-import { createGraphService } from "../src/adapters/providers/graph-service.mjs";
-import { fixtureGraph } from "../src/adapters/providers/fixture.mjs";
-import { createSession } from "../src/services/chat.mjs";
-import { dispatchTool } from "../src/tools/server.mjs";
+import { telemetryEnabled, invocationId, redact, createTelemetry } from "../../src/services/telemetry.mjs";
+import { createGraphService } from "../../src/adapters/providers/graph-service.mjs";
+import { fixtureGraph } from "../../src/adapters/providers/fixture.mjs";
+import { createSession } from "../../src/services/chat.mjs";
+import { dispatchTool } from "../../src/tools/server.mjs";
 import { fileURLToPath } from "node:url";
 
 test("telemetryEnabled: OFF by default; env TMCT_TELEMETRY=1/0 wins both directions over toml", () => {
@@ -138,7 +138,7 @@ test("createGraphService({ tel }) wraps every service to time + record it once a
 // the concrete, verifiable thing this test proves — chat.mjs's EXISTING session-level
 // telemetry sink is genuinely reused end-to-end (one file, one id), never re-minted.
 // =============================================================================
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 
 test("chat session with TMCT_TELEMETRY=1: exactly ONE telemetry file across several turns (never re-minted)", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-telemetry-chat-"));
@@ -174,7 +174,7 @@ test("chat session with TMCT_TELEMETRY=1: exactly ONE telemetry file across seve
 
 test("dispatchTool/buildContextBundle: passing { tel } never changes output (byte-identical to omitting it)", async () => {
   const fixture = JSON.parse(
-    await readFile(fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url)), "utf8"),
+    await readFile(fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url)), "utf8"),
   );
   const config = { graphFile: "/stub/.tmct/graph.json" };
   const source = { fetchEntities: async () => fixture };

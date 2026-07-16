@@ -7,11 +7,11 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { CLASS_DOCS, PREDICATE_DOCS, ingestSchemaDocs } from "../src/tools/schema-docs.mjs";
-import { buildEntities } from "../src/adapters/graph-build.mjs";
+import { CLASS_DOCS, PREDICATE_DOCS, ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
+import { buildEntities } from "../../src/adapters/graph-build.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const EXTRACT_SRC = join(here, "..", "src", "adapters", "graph-build.mjs");
+const EXTRACT_SRC = join(here, "..", "..", "src", "adapters", "graph-build.mjs");
 
 test("drift guard: every `class: \"X\"` individual literal in graph-build.mjs has a CLASS_DOCS entry", async () => {
   const src = await readFile(EXTRACT_SRC, "utf8");

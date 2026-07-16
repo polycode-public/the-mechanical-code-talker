@@ -1,4 +1,4 @@
-// W2 seam tests — retrieveBlocks → the miss path (ROADMAP Phase 4).
+// Recall seam tests — retrieveBlocks feeding the honest-miss path.
 //
 //   - a relevant folded block ANSWERS an honest ask-miss: recalled Q/A framed +
 //     cited (session short-id + uuidv7-decoded date), engine miss hint kept below,
@@ -15,13 +15,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Readable, PassThrough } from "node:stream";
-import { runTurn, runChat, RECALL_MIN_SCORE } from "../src/services/chat.mjs";
-import { saveBlock } from "../src/adapters/memory/blocks.mjs";
-import { clearCache } from "../src/adapters/source.mjs";
-import { parseEntities } from "../src/domain/codegraph.mjs";
-import * as source from "../src/adapters/source.mjs";
+import { runTurn, runChat, RECALL_MIN_SCORE } from "../../src/services/chat.mjs";
+import { saveBlock } from "../../src/adapters/memory/blocks.mjs";
+import { clearCache } from "../../src/adapters/source.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
+import * as source from "../../src/adapters/source.mjs";
 
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 
 // A fixed uuidv7-shaped block id (fold.mjs sets block id = session id). Its
 // leading 48 bits decode to a real date the recall frame must cite.
@@ -46,7 +46,7 @@ function sink() {
   return { out, text: () => text };
 }
 
-test("W2: a relevant recalled block answers the miss — framed, cited, hint kept below", async () => {
+test("recall: a relevant recalled block answers the miss — framed, cited, hint kept below", async () => {
   const dir = await repoWithBlock();
   try {
     const config = { graphFile: join(dir, ".tmct", "graph.json") }; // no artifact → empty graph → miss
@@ -66,7 +66,7 @@ test("W2: a relevant recalled block answers the miss — framed, cited, hint kep
   }
 });
 
-test("W2: an irrelevant memory leaves the honest miss byte-unchanged", async () => {
+test("recall: an irrelevant memory leaves the honest miss byte-unchanged", async () => {
   const dir = await repoWithBlock();
   try {
     const config = { graphFile: join(dir, ".tmct", "graph.json") };
@@ -84,7 +84,7 @@ test("W2: an irrelevant memory leaves the honest miss byte-unchanged", async () 
   }
 });
 
-test("W2: a bare runTurn (no memoryDir) never consults memory", async () => {
+test("recall: a bare runTurn (no memoryDir) never consults memory", async () => {
   const dir = await repoWithBlock();
   try {
     const config = { graphFile: join(dir, ".tmct", "graph.json") };
@@ -98,7 +98,7 @@ test("W2: a bare runTurn (no memoryDir) never consults memory", async () => {
   }
 });
 
-test("W2: the explicit recall forms work after a real session folds (end-to-end)", async () => {
+test("recall: the explicit recall forms work after a real session folds (end-to-end)", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-w2-e2e-"));
   try {
     await mkdir(join(dir, ".tmct"), { recursive: true });
@@ -127,7 +127,7 @@ test("W2: the explicit recall forms work after a real session folds (end-to-end)
   }
 });
 
-test("W2: the explicit form with nothing folded is an honest recall-miss", async () => {
+test("recall: the explicit form with nothing folded is an honest recall-miss", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-w2-empty-"));
   try {
     const config = { graphFile: join(dir, ".tmct", "graph.json") };
@@ -141,7 +141,7 @@ test("W2: the explicit form with nothing folded is an honest recall-miss", async
   }
 });
 
-test("W2: the relevance floor is exported and conservative", () => {
+test("recall: the relevance floor is exported and conservative", () => {
   assert.ok(RECALL_MIN_SCORE >= 1.5, "a frame-word coincidence (~1.0) must stay below the floor");
 });
 

@@ -11,13 +11,13 @@ import { PassThrough, Readable } from "node:stream";
 import {
   SESSIONS_DIR_REL, SESSION_CLASS, ASKS_ABOUT_PROP,
   upsertSession, appendSessionToGraph, parseSessionJsonl, readSessionRecords, foldInSessions,
-} from "../src/services/sessions.mjs";
-import { CLASS_DOCS, PREDICATE_DOCS } from "../src/tools/schema-docs.mjs";
-import { runChat } from "../src/services/chat.mjs";
-import { MEMORY_GRAPH_REL } from "../src/adapters/memory/core.mjs";
+} from "../../src/services/sessions.mjs";
+import { CLASS_DOCS, PREDICATE_DOCS } from "../../src/tools/schema-docs.mjs";
+import { runChat } from "../../src/services/chat.mjs";
+import { MEMORY_GRAPH_REL } from "../../src/adapters/memory/core.mjs";
 
-const SRC_SESSIONS = fileURLToPath(new URL("../src/services/sessions.mjs", import.meta.url));
-const FIXTURE = fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url));
+const SRC_SESSIONS = fileURLToPath(new URL("../../src/services/sessions.mjs", import.meta.url));
+const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 
 /** A minimal fresh entities payload (the buildEntities shape) for pure upsert tests. */
 function freshEntities() {
@@ -93,7 +93,7 @@ test("upsertSession: per-turn re-append REPLACES the prior copy — one individu
   assert.equal(e.classes.find((c) => c.name === SESSION_CLASS).count, 1);
 });
 
-test("upsertSession: updatedAt advances turn-over-turn while createdAt stays pinned (PLAN_VIZ.md §2)", async () => {
+test("upsertSession: updatedAt advances turn-over-turn while createdAt stays pinned", async () => {
   const e = freshEntities();
   upsertSession(e, RECORD);
   const sessAfterFirst = e.individuals.find((i) => i.class === SESSION_CLASS);
