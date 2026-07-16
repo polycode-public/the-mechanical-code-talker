@@ -130,7 +130,7 @@ Retest result
 
 Pass. Every negated form returns the same ten-module complement; the positive
 control still returns the two importers; the gerund form ("modules not
-importing store.mjs") is unchanged. `npm test` 2439 pass / 0 fail, and
+importing store.mjs") is unchanged. `npm test` 2445 pass / 0 fail, and
 `printf 'hi\n/exit\n' | node bin/tmct.mjs` greets and exits 0.
 
 Retest session log
@@ -141,24 +141,121 @@ tmct> which modules do not import store.mjs
 src/core/model.mjs, src/core/store.mjs, src/core/validate.mjs, src/lib/logger.mjs,
 src/lib/http.mjs, src/handlers/base.mjs, src/server/router.mjs, src/server/app.mjs,
 test/tasks.test.mjs and test/store.test.mjs.
-Canonical: a compositional query (boolean) — composite(boolean)
+Canonical: modules that do not import "store.mjs" — composite(boolean)
 
 tmct> which modules cannot import store.mjs
 src/core/model.mjs, src/core/store.mjs, src/core/validate.mjs, src/lib/logger.mjs,
 src/lib/http.mjs, src/handlers/base.mjs, src/server/router.mjs, src/server/app.mjs,
 test/tasks.test.mjs and test/store.test.mjs.
-Canonical: a compositional query (boolean) — composite(boolean)
+Canonical: modules that do not import "store.mjs" — composite(boolean)
 
 tmct> which modules can't import store.mjs
 src/core/model.mjs, src/core/store.mjs, src/core/validate.mjs, src/lib/logger.mjs,
 src/lib/http.mjs, src/handlers/base.mjs, src/server/router.mjs, src/server/app.mjs,
 test/tasks.test.mjs and test/store.test.mjs.
-Canonical: a compositional query (boolean) — composite(boolean)
+Canonical: modules that do not import "store.mjs" — composite(boolean)
 
 tmct> which modules import store.mjs
 src/handlers/tasks.mjs and src/handlers/users.mjs.
 Canonical: modules that imports "store.mjs" — reverse(imports, entityType=Module, "store.mjs")
 ```
+
+
+test: the Canonical line for a set complement
+=============================================
+
+Found while diagnosing the edge above, and folded in: the `Canonical:` line is
+what should have made the inversion obvious, and it couldn't.
+
+Expectations
+------------
+
+When the following prompts were entered:
+```log
+tmct> which modules do not import store.mjs
+tmct> which modules import store.mjs
+```
+
+Expected: the line restates each request in tmct's own grammar, so the two read
+differently.
+
+Actual: the negated query restated as `a compositional query (boolean)` — the
+node type, not the question. Its positive twin restated as
+`modules that imports "store.mjs"`. Every complement, whatever it asks, printed
+the same eight words.
+
+Result
+------
+
+Fail. The machine half (`composite(boolean)`) is right and stays. The English
+half named the AST's node type instead of the question, so it carried nothing a
+reader could check an answer against — and a complement was indistinguishable
+from any other compositional query, including from its own positive twin. That
+is the same blind spot the inverted answer above hid in.
+
+Fix
+---
+
+`src/domain/ask.mjs` — `canonicalOf` glosses the set-complement AST
+(`allOfClass` DIFFERENCE the positive set) in the grammar the positive
+canonical already uses, covering the concrete-object, qualifier and
+existential complements. Any other boolean shape keeps the coarse fallback
+rather than risking a wrong restatement, and the `machine` half is untouched.
+
+The gloss needs an infinitive ("modules that do not IMPORT x"), where the
+relation token would read "do not imports". `src/domain/ask-vocab.mjs` gains a
+hand-curated `bare` form per relation, beside the `verbs` list it belongs with:
+stripping an "s" is a morphology rule, and it gets "touches" and
+"co-change with" wrong.
+
+Regression tests: `test/tools/ask.test.mjs`, the `canonical:` group — including
+that a complement never reads the same as its positive twin, that the base verb
+is used rather than the inflected token, and that a non-complement boolean
+keeps the coarse text.
+
+Retest
+------
+
+```log
+tmct> which modules do not import store.mjs
+tmct> which modules cannot import store.mjs
+tmct> which classes do not inherit from Base
+tmct> which modules are not tested
+tmct> which modules do not import anything
+tmct> which modules import store.mjs
+```
+
+Retest result
+-------------
+
+Pass.
+
+Retest session log
+------------------
+
+```txt
+tmct> which modules do not import store.mjs
+Canonical: modules that do not import "store.mjs" — composite(boolean)
+
+tmct> which modules cannot import store.mjs
+Canonical: modules that do not import "store.mjs" — composite(boolean)
+
+tmct> which classes do not inherit from Base
+Canonical: classes that do not inherit from "Base" — composite(boolean)
+
+tmct> which modules are not tested
+Canonical: modules that are not tested — composite(boolean)
+
+tmct> which modules do not import anything
+Canonical: modules that do not import anything — composite(boolean)
+
+tmct> which modules import store.mjs
+Canonical: modules that imports "store.mjs" — reverse(imports, entityType=Module, "store.mjs")
+```
+
+Had this line read as it does now, the inverted answer above would have been a
+one-glance catch: the question restates as the complement, the answer named the
+importers.
 
 
 Noted alongside: the vocabulary side has no enumerable kind

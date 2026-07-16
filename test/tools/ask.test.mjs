@@ -1362,3 +1362,53 @@ test("ask(): bare \"what is zzznotreal\" (no article, unknown term) gets the spe
   assert.match(content, /"zzznotreal" isn't a term in this graph's own vocabulary/);
   assert.doesNotMatch(content, /couldn't parse this as a graph question/);
 });
+
+// ---- the canonical restatement of a set-complement query. The line exists so
+// a reader can see which question was actually answered; a complement that
+// restates as "a compositional query (boolean)" tells them nothing, and can't
+// be told apart from its own positive twin — which is exactly how a dropped
+// negation stays invisible. ----
+
+test("canonical: a set complement restates in tmct's grammar, and reads differently from its positive twin", () => {
+  const negated = ask(miniWebappGraph, "which modules do not import store.mjs");
+  const positive = ask(miniWebappGraph, "which modules import store.mjs");
+  assert.equal(negated.tmct_ask.canonical.english, 'modules that do not import "store.mjs"');
+  assert.equal(positive.tmct_ask.canonical.english, 'modules that imports "store.mjs"');
+  assert.notEqual(negated.tmct_ask.canonical.english, positive.tmct_ask.canonical.english);
+});
+
+test("canonical: the modal negations restate as the same complement the tensed auxiliary does", () => {
+  const baseline = ask(miniWebappGraph, "which modules do not import store.mjs").tmct_ask.canonical.english;
+  for (const q of [
+    "which modules cannot import store.mjs",
+    "which modules can't import store.mjs",
+    "which modules can not import store.mjs",
+    "which modules won't import store.mjs",
+  ]) {
+    assert.equal(ask(miniWebappGraph, q).tmct_ask.canonical.english, baseline, q);
+  }
+});
+
+test("canonical: a complement names the relation's base verb, never the inflected token", () => {
+  const inherits = ask(miniWebappGraph, "which classes do not inherit from Base");
+  assert.equal(inherits.tmct_ask.canonical.english, 'classes that do not inherit from "Base"');
+  assert.doesNotMatch(inherits.tmct_ask.canonical.english, /do not inherits/);
+});
+
+test("canonical: the qualifier and existential complements restate too", () => {
+  assert.equal(ask(miniWebappGraph, "which modules are not tested").tmct_ask.canonical.english, "modules that are not tested");
+  assert.equal(
+    ask(miniWebappGraph, "which modules do not import anything").tmct_ask.canonical.english,
+    "modules that do not import anything",
+  );
+});
+
+test("canonical: a boolean that isn't a plain complement keeps the coarse restatement rather than a wrong one", () => {
+  const { tmct_ask: { canonical } } = ask(miniWebappGraph, "which modules do not import store.mjs and are not tested");
+  assert.equal(canonical.machine, "composite(boolean)");
+  assert.equal(canonical.english, "a compositional query (boolean)");
+});
+
+test("canonical: the machine notation is unchanged by the English gloss", () => {
+  assert.equal(ask(miniWebappGraph, "which modules cannot import store.mjs").tmct_ask.canonical.machine, "composite(boolean)");
+});

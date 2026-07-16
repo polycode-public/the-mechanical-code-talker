@@ -18,6 +18,7 @@
 
 import { relationKind, impactClosure, moduleCountOf, normPath, HISTORY_CAP } from "./codegraph.mjs";
 import {
+  RELATIONS,
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   CONTEXT_PRONOUNS, META_MEANING_VERBS,
   WHERE_MARKERS, MENTION_MARKERS,
@@ -2987,11 +2988,46 @@ function describeParse(p) {
   return `${ent}${p.kind} "${obj}"`;
 }
 
+/** The base verb form for a relation ("imports" -> "import"), for the frames
+ *  that need an infinitive. Unknown kinds fall back to the token itself rather
+ *  than being coerced into a guessed base form. */
+function bareVerbFor(kind) {
+  return RELATIONS[kind]?.bare || kind;
+}
+
+/** English gloss of a SET-COMPLEMENT AST — the shape parseNegation compiles
+ *  "which X do not <verb> Y" into (allOfClass DIFFERENCE the positive set).
+ *  Restates the question in the same grammar the positive canonical uses
+ *  ('modules that imports "store.mjs"'), so the negated and positive readings
+ *  of one question are told apart by reading the line, which is the whole point
+ *  of printing it. Returns null for any other boolean shape rather than
+ *  glossing it wrongly. */
+function complementGloss(parsed) {
+  // Exactly two atoms: a third would be silently dropped from the gloss,
+  // restating a narrower question than the one that was asked.
+  if (!Array.isArray(parsed.atoms) || parsed.atoms.length !== 2) return null;
+  const [seed, diff] = parsed.atoms;
+  if (seed.op !== "seed" || seed.ast?.node !== "allOfClass" || diff.op !== "difference") return null;
+  const noun = nounFor(parsed.entityType, 2);
+  if (diff.kind === "qual") return `${noun} that are not ${diff.filters.join(" and not ")}`;
+  if (diff.kind !== "set" || !diff.ast) return null;
+  if (diff.ast.node === "existsEdge") return `${noun} that do not ${bareVerbFor(diff.ast.kind)} anything`;
+  // The positive leg parseNegation differenced off the class: a single clause
+  // ("which modules do not import store.mjs") is the shape this gloss reads.
+  // Anything deeper is a nested composite and gets no gloss rather than a
+  // confidently wrong one.
+  const leaf = diff.ast.node === "clause" ? diff.ast.clause : diff.ast;
+  if (!leaf || leaf.node || !leaf.kind) return null;
+  const obj = leaf.object ?? leaf.subject;
+  if (obj == null) return null;
+  return `${noun} that do not ${bareVerbFor(leaf.kind)} ${JSON.stringify(String(obj))}`;
+}
+
 /** The canonical restatement of what a query was understood to mean: an
  *  English gloss (`english`) and a compact `shape(kind, args...)` notation
  *  (`machine`), both read off `parsed`'s already-compiled fields. A
- *  compositional AST gets a coarse fallback — per-node-type canonicalization
- *  isn't implemented yet. */
+ *  compositional AST with no gloss of its own falls back to naming its node
+ *  type — coarse, but never a wrong restatement. */
 function canonicalOf(parsed) {
   if (!parsed) return null;
   if (parsed.ambiguousParse) {
@@ -3001,7 +3037,11 @@ function canonicalOf(parsed) {
     };
   }
   if (parsed.node) {
-    return { english: `a compositional query (${parsed.node})`, machine: `composite(${parsed.node})` };
+    const gloss = parsed.node === "boolean" ? complementGloss(parsed) : null;
+    return {
+      english: gloss || `a compositional query (${parsed.node})`,
+      machine: `composite(${parsed.node})`,
+    };
   }
   const q = (s) => JSON.stringify(String(s ?? ""));
   const args = [];

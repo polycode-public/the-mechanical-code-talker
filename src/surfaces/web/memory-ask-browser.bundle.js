@@ -101,6 +101,7 @@
       ];
       RELATIONS = {
         imports: {
+          bare: "import",
           comment: "Module -> Module: subject's import graph references object (usesComplexType).",
           verbs: [
             // formal/neutral ("uses code from" stays here: its phrasing is
@@ -140,6 +141,7 @@
         // query-side union, not a stored predicate: ask.mjs traverses "uses" as
         // imports + calls + callsSymbol together (KIND_UNIONS).
         uses: {
+          bare: "use",
           comment: "query-side union: imports (Module->Module) + calls (Module->Module) + callsSymbol (fn->fn).",
           verbs: [
             "uses",
@@ -151,6 +153,7 @@
           ]
         },
         calls: {
+          bare: "call",
           comment: "Function/Method -> Function/Class (symbol-grain) or Module -> Module (coarse): subject invokes object.",
           verbs: [
             // formal
@@ -177,6 +180,7 @@
           ]
         },
         defines: {
+          bare: "define",
           comment: "Module -> top-level Function/Class/Method/Attribute: subject declares object.",
           verbs: [
             "defines",
@@ -192,6 +196,7 @@
           ]
         },
         contains: {
+          bare: "contain",
           comment: "Class -> Method/Attribute: subject's membership includes object.",
           verbs: [
             "contains",
@@ -211,6 +216,7 @@
           ]
         },
         tests: {
+          bare: "test",
           comment: "Module -> Module: subject is a test module importing/covering object.",
           verbs: [
             "tests",
@@ -230,6 +236,7 @@
           ]
         },
         inherits: {
+          bare: "inherit from",
           comment: "Class -> Class: subject's declared base resolves to object (subclassOf).",
           verbs: [
             "inherits from",
@@ -261,6 +268,7 @@
           ]
         },
         touches: {
+          bare: "touch",
           comment: "Commit -> Module (coarse) or Commit -> symbol (fine, touchesSymbol): a commit's changed-line-range intersects object.",
           verbs: [
             "touched",
@@ -300,6 +308,7 @@
           ]
         },
         cochange: {
+          bare: "co-change with",
           comment: "Module -> Module: subject and object are frequently committed together (changeCoupledWith).",
           verbs: [
             "changed with",
@@ -324,6 +333,7 @@
           ]
         },
         reexports: {
+          bare: "re-export",
           comment: "Module -> exported symbol: subject's public API surface (__all__/export list).",
           verbs: [
             "exports",
@@ -5647,6 +5657,23 @@ ${shown.join("\n")}${tail}`;
     const ent = p.entityType ? nounFor(p.entityType, 2) + " that " : "";
     return `${ent}${p.kind} "${obj}"`;
   }
+  function bareVerbFor(kind) {
+    return RELATIONS[kind]?.bare || kind;
+  }
+  function complementGloss(parsed) {
+    if (!Array.isArray(parsed.atoms) || parsed.atoms.length !== 2) return null;
+    const [seed, diff] = parsed.atoms;
+    if (seed.op !== "seed" || seed.ast?.node !== "allOfClass" || diff.op !== "difference") return null;
+    const noun = nounFor(parsed.entityType, 2);
+    if (diff.kind === "qual") return `${noun} that are not ${diff.filters.join(" and not ")}`;
+    if (diff.kind !== "set" || !diff.ast) return null;
+    if (diff.ast.node === "existsEdge") return `${noun} that do not ${bareVerbFor(diff.ast.kind)} anything`;
+    const leaf = diff.ast.node === "clause" ? diff.ast.clause : diff.ast;
+    if (!leaf || leaf.node || !leaf.kind) return null;
+    const obj = leaf.object ?? leaf.subject;
+    if (obj == null) return null;
+    return `${noun} that do not ${bareVerbFor(leaf.kind)} ${JSON.stringify(String(obj))}`;
+  }
   function canonicalOf(parsed) {
     if (!parsed) return null;
     if (parsed.ambiguousParse) {
@@ -5656,7 +5683,11 @@ ${shown.join("\n")}${tail}`;
       };
     }
     if (parsed.node) {
-      return { english: `a compositional query (${parsed.node})`, machine: `composite(${parsed.node})` };
+      const gloss = parsed.node === "boolean" ? complementGloss(parsed) : null;
+      return {
+        english: gloss || `a compositional query (${parsed.node})`,
+        machine: `composite(${parsed.node})`
+      };
     }
     const q = (s) => JSON.stringify(String(s ?? ""));
     const args = [];

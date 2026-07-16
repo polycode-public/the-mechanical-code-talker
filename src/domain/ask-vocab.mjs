@@ -2,9 +2,15 @@
 // hint, and renderer noun forms derive from. No NLP library or lemmatiser:
 // plain phrase lists feeding the same fixed-precedence regex grammar.
 
-/** relation token -> { comment, verbs[] }. Each `verbs` list spans formal,
+/** relation token -> { bare, comment, verbs[] }. Each `verbs` list spans formal,
  *  neutral, and casual phrasings of the same relation; a misparse costs
- *  nothing beyond an honest object-miss (resolveObject never guesses). */
+ *  nothing beyond an honest object-miss (resolveObject never guesses).
+ *
+ *  `bare` is the relation's base verb form, for frames that need an infinitive
+ *  rather than the inflected relation token ("modules that do not IMPORT x",
+ *  where the token would read "do not imports"). Hand-curated per relation, the
+ *  same closed-vocabulary discipline as `verbs`: deriving it by stripping an
+ *  "s" is a morphology rule that gets "touches" and "co-change with" wrong. */
 // Reverse `inherits` phrasings ("is X a superclass of Y") name the same
 // relation as the forward verbs above but with subject/object swapped, so
 // they're kept in INHERITS_REVERSE_VERB_LIST too: strategies that build "ask"
@@ -24,6 +30,7 @@ const INHERITS_REVERSE_VERB_LIST = [
 
 export const RELATIONS = {
   imports: {
+    bare: "import",
     comment: "Module -> Module: subject's import graph references object (usesComplexType).",
     verbs: [
       // formal/neutral ("uses code from" stays here: its phrasing is
@@ -41,6 +48,7 @@ export const RELATIONS = {
   // query-side union, not a stored predicate: ask.mjs traverses "uses" as
   // imports + calls + callsSymbol together (KIND_UNIONS).
   uses: {
+    bare: "use",
     comment: "query-side union: imports (Module->Module) + calls (Module->Module) + callsSymbol (fn->fn).",
     verbs: [
       "uses", "use", "makes use of", "make use of",
@@ -49,6 +57,7 @@ export const RELATIONS = {
     ],
   },
   calls: {
+    bare: "call",
     comment: "Function/Method -> Function/Class (symbol-grain) or Module -> Module (coarse): subject invokes object.",
     verbs: [
       // formal
@@ -62,6 +71,7 @@ export const RELATIONS = {
     ],
   },
   defines: {
+    bare: "define",
     comment: "Module -> top-level Function/Class/Method/Attribute: subject declares object.",
     verbs: [
       "defines", "define", "declares", "declare",
@@ -71,6 +81,7 @@ export const RELATIONS = {
     ],
   },
   contains: {
+    bare: "contain",
     comment: "Class -> Method/Attribute: subject's membership includes object.",
     verbs: [
       "contains", "contain", "lives in", "live in", "is defined in", "are defined in",
@@ -80,6 +91,7 @@ export const RELATIONS = {
     ],
   },
   tests: {
+    bare: "test",
     comment: "Module -> Module: subject is a test module importing/covering object.",
     verbs: [
       "tests", "test", "covers", "cover", "verifies", "verify", "exercises", "exercise",
@@ -89,6 +101,7 @@ export const RELATIONS = {
     ],
   },
   inherits: {
+    bare: "inherit from",
     comment: "Class -> Class: subject's declared base resolves to object (subclassOf).",
     verbs: [
       "inherits from", "inherit from",
@@ -104,6 +117,7 @@ export const RELATIONS = {
     ],
   },
   touches: {
+    bare: "touch",
     comment: "Commit -> Module (coarse) or Commit -> symbol (fine, touchesSymbol): a commit's changed-line-range intersects object.",
     verbs: [
       "touched", "touches", "changed", "change", "modified", "modifies",
@@ -125,6 +139,7 @@ export const RELATIONS = {
     ],
   },
   cochange: {
+    bare: "co-change with",
     comment: "Module -> Module: subject and object are frequently committed together (changeCoupledWith).",
     verbs: [
       "changed with", "co-changes with", "co-change with", "changes alongside",
@@ -137,6 +152,7 @@ export const RELATIONS = {
     ],
   },
   reexports: {
+    bare: "re-export",
     comment: "Module -> exported symbol: subject's public API surface (__all__/export list).",
     verbs: [
       "exports", "export", "re-exports", "re-export", "passes through", "pass through",
