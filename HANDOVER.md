@@ -27,6 +27,24 @@ line names its reproducer and points at the write-up that found it.
   comes from the goal reasoner, which the floor arm lacks), but unconfirmed. Decide whether the
   floor's expectation moves or the resolver lost a plan it should still build. See
   `BENCHMARK_AGENT_2.0.3.md`.
+- **INFBENCH has stopped discriminating** — `npm run infbench`: 219/219 chat, 80/80 kernel, every
+  band PASS, and 0 verdict changes across all 299 rows vs `BENCHMARK_INFERENCE_1.7.0.md`. The
+  ladder now measures the generator's reach, not the prover's. Deciding what a deeper band should
+  assert is the open question. See `BENCHMARK_INFERENCE_2.0.3.md`.
+- **50 of INFBENCH's 219 greens are floors, not proofs** — they grade against a declared ceiling,
+  so two bands read as capable when they are not. `b2ChainLenK` (30 at INF-B2,
+  `infbench/generate-cases.mjs:419`) expects "cannot be proven" for chains the kernel already
+  derives, pending chat-layer proof materialization. `c2Inconsistent` (20 at INF-C2, `:647`)
+  expects the engine to answer from contradictory memory without noticing, pending a consistency
+  checker — which is what `PLAN_CONSISTENCY_CHECK.md` designs. See `BENCHMARK_INFERENCE_2.0.3.md`.
+- **`npm run infbench` silently rewrites the committed `infbench/cases.jsonl`, and the rewrite is
+  not a no-op** — the generator draws case vocabulary from the lexicon
+  (`infbench/generate-cases.mjs:96`), so adding a word re-draws all 219 cases at the same
+  `DEFAULT_SEED`. `inf-a1-lookup-subClassOf-001` is "every cuticle is a pusher" as committed and
+  "every uneasiness is a museum" as regenerated. The committed file cannot be reproduced by today's
+  generator, and no estate test guards it the way
+  `test/estate/generated-artifacts.test.mjs` guards the other generated artifacts. Decide whether
+  the case set is a derivable artifact or a pinned snapshot. See `BENCHMARK_INFERENCE_2.0.3.md`.
 
 Two designs are waiting on a decision rather than a session: `PLAN_CONSISTENCY_CHECK.md` (tmct as
 a consistency service for an LLM tool loop) and `PLAN_CHILD_CORPUS.md` (a wider default seed, so
