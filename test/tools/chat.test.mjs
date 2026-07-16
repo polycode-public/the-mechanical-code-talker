@@ -481,7 +481,7 @@ test("runTurn: a dispatched turn updates `last`; a conversational turn preserves
   assert.equal(count.last.answer, "3 classes.");
 });
 
-test("runTurn: discourse anaphora — 'which of those are tested' filters the previous answer set (CHATBENCH_006 L2)", async () => {
+test("runTurn: discourse anaphora — 'which of those are tested' filters the previous answer set", async () => {
   const g = await graph();
   const list = await runTurn("which modules import a.mjs", { config: CONFIG, graph: g });
   assert.equal(list.record.miss, false);
@@ -494,7 +494,7 @@ test("runTurn: discourse anaphora — 'which of those are tested' filters the pr
   assert.equal(bare.record.miss, true);
 });
 
-test("runTurn: discourse+count — 'how many of those' / 'count them' count the previous set, not a bad-kind error (CHATBENCH_006 L1)", async () => {
+test("runTurn: discourse+count — 'how many of those' / 'count them' count the previous set, not a bad-kind error", async () => {
   const g = await graph();
   const list = await runTurn("which modules import a.mjs", { config: CONFIG, graph: g });
   const nMatch = list.answer.match(/app\/lib/g) || [];
@@ -508,7 +508,7 @@ test("runTurn: discourse+count — 'how many of those' / 'count them' count the 
   assert.equal(plain.answer, "3 classes.");
 });
 
-test("runTurn: 'what about X' re-asks the prior question shape with X swapped in (CHATBENCH_006 L2)", async () => {
+test("runTurn: 'what about X' re-asks the prior question shape with X swapped in", async () => {
   const g = await graph();
   const first = await runTurn("what does app/lib/e.mjs import", { config: CONFIG, graph: g });
   const direct = await runTurn("what does app/lib/c.mjs import", { config: CONFIG, graph: g });

@@ -137,7 +137,7 @@ test("summarizeTier1: baselineFail turns never fail the case; all-green baseline
   assert.deepEqual(improved.improvedBaselineTurns, [1]);
 });
 
-test("summarizeTier1: improvedIn ENFORCES a fixed baselineFail turn — a later regression is a real tier-1 failure (cycle-2 marker discipline)", () => {
+test("summarizeTier1: improvedIn ENFORCES a fixed baselineFail turn — a later regression is a real tier-1 failure", () => {
   const fixedStillGood = { checks: [{ key: "answerMatch", pass: true }], baselineFail: true, improvedIn: "002" };
   const fixedRegressed = { checks: [{ key: "answerMatch", pass: false, expected: "x", actual: "y" }], baselineFail: true, improvedIn: "002" };
 

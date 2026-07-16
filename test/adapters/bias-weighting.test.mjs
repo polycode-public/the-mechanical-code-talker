@@ -133,7 +133,7 @@ test("end-to-end: flipping the bias flips the render order — bias only REORDER
   }
 });
 
-test("end-to-end regression: NO [bias] configured — output order is completely unchanged from today's behaviour", async () => {
+test("end-to-end: with NO [bias] configured, omitting biasByBundle and passing {} produce the same output order", async () => {
   const dir = await tmp();
   try {
     clearCache();

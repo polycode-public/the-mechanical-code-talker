@@ -42,7 +42,7 @@ test("compare: two same-kind Classes (TaskController vs UserController) — real
   }
 });
 
-test("compare: 'diff' as a casual synonym for 'different'/'difference' (BENCHMARK_CONVERSATION_1.8.14.md item 8), including the no-apostrophe 'whats' contraction", async () => {
+test("compare: 'diff' as a casual synonym for 'different'/'difference', including the no-apostrophe 'whats' contraction", async () => {
   const rs = await drive([
     "how is TaskController diff from UserController",
     "whats the diff between TaskController and UserController",

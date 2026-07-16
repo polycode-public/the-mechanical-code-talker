@@ -82,7 +82,7 @@ test("cleanSessionText: drops slash-commands, conversational + unflagged filler,
   assert.equal(cleanSessionText({ turns: [{ ts: T(1), query: "hello there!!" }, { ts: T(2), query: "/help", command: "help" }] }), "");
 });
 
-test("cleanSessionText (0.8.2 hygiene): wall answers and recall replays never fold, even when NOT flagged miss", () => {
+test("cleanSessionText: wall answers and recall replays never fold, even when NOT flagged miss", () => {
   // An old-build poisoned store: via:"recall" turns recorded miss:false whose
   // answers carry the recall preamble + the grammar wall below it, and a wall
   // answer that slipped through unflagged. Re-folding must drop BOTH.

@@ -74,7 +74,7 @@ test("toFacts: mapped relations become appendFact-shaped triples; none-rows skip
   assert.equal(termText("not-a-concept"), null);
 });
 
-test("toFacts: /r/RelatedTo now emits (re-examined 2026-07-12, TOO_HARD_AUDIT.md) routed through the corpus-weak: provenance prefix, not the plain corpus: prefix other relations use", async () => {
+test("toFacts: /r/RelatedTo emits a fact routed through the corpus-weak: provenance prefix, not the plain corpus: prefix other relations use", async () => {
   const map = await loadMap();
   const facts = toFacts([
     { start: "/c/en/software", rel: "/r/RelatedTo", end: "/c/en/computer", weight: 1 },
@@ -101,7 +101,7 @@ test("toFacts: /r/Synonym, /r/Antonym, /r/SimilarTo emit real facts at full corp
   ]);
 });
 
-test("toFacts: /r/SymbolOf now emits (re-examined 2026-07-12, TOO_HARD_AUDIT.md — same stale shape as RelatedTo) at full corpus trust", async () => {
+test("toFacts: /r/SymbolOf emits a fact at full corpus trust", async () => {
   const map = await loadMap();
   const facts = toFacts([
     { start: "/c/en/dove", rel: "/r/SymbolOf", end: "/c/en/peace", weight: 1 },

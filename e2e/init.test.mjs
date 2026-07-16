@@ -534,7 +534,7 @@ test("initRepo({ memoryBackend: 'memory', seed: true }): seed is honestly skippe
   }
 });
 
-test("bin/tmct.mjs REGRESSION: `tmct init --memory-backend sqlite` then a flagless `tmct chat` answers from the seeded corpus, not an empty session — the exact repro that caught the split-brain bug", async () => {
+test("bin/tmct.mjs: `tmct init --memory-backend sqlite` then a flagless `tmct chat` answers from the seeded corpus, not an empty session", async () => {
   const { spawnSync } = await import("node:child_process");
   const { fileURLToPath } = await import("node:url");
   const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));

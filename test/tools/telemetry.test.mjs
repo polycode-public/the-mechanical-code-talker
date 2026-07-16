@@ -27,7 +27,7 @@ test("invocationId: honours TMCT_INVOCATION_ID; otherwise mints a fresh id each 
   assert.notEqual(a, b, "no stamped id → a fresh uuid each time");
 });
 
-test("redact(): drops text/content/snippet/body at any depth (body: 2f/Item 3 — source-capable bodies must never leak)", () => {
+test("redact(): drops text/content/snippet/body at any depth, so source-capable bodies never leak", () => {
   const out = redact({
     text: "raw source A",
     content: "raw source B",
