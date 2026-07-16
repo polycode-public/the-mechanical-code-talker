@@ -253,7 +253,7 @@ to compare against at all. Before finishing, check specifically for:
 - **`npm test` green, checked in the foreground.** This is a docs-only artifact, but confirm the suite
   is unaffected before closing out — run it yourself and read the real pass count, don't infer it from
   a benchmark report's own test line.
-- **Follow `SKILL_AGENT_PLAIN_PROSE.md`** for the write-up itself — this is a human-facing doc like any
+- **Follow `SKILL_PLAIN_PROSE.md`** for the write-up itself — this is a human-facing doc like any
   other in this repo.
 
 ---

@@ -1,4 +1,4 @@
-# SKILL_AGENT_PLAIN_PROSE.md — write plain, human prose; keep the proof out of the shop window
+# SKILL_PLAIN_PROSE.md — write plain, human prose; keep the proof out of the shop window
 
 The stock LLM writing voice reads as generic and machine-made, and on a project whose whole pitch is
 "no LLM, deterministic, grounded or an honest miss," that voice undercuts trust in the claims. This
