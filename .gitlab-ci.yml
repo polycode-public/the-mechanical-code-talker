@@ -42,7 +42,7 @@ pii:lint:
   stage: verify
   needs: []
   script:
-    - node scripts/pii-lint.mjs
+    - npm run check:pii
 
 # Every relative markdown link must resolve to a real repo file — see
 # scripts/check-links.mjs. Dependency-free, so no npm ci.
@@ -50,7 +50,7 @@ links:check:
   stage: verify
   needs: []
   script:
-    - node scripts/check-links.mjs
+    - npm run check:links
 
 secret_detection:
   stage: verify
@@ -112,8 +112,8 @@ pack:contents:
   stage: test
   script:
     - npm ci
-    - npx --no-install publint
-    - npm pack --dry-run --json | node scripts/check-pack-manifest.mjs
+    - npm run check:publint
+    - npm pack --dry-run --json | npm run --silent check:pack
 
 # Production dependency tree must stay inside the licence allowlist (MIT, ISC,
 # BSD, Apache-2.0, MPL-2.0 and the public-domain-equivalents) — see
@@ -122,7 +122,7 @@ license:deps:
   stage: test
   script:
     - npm ci
-    - node scripts/check-licences.mjs
+    - npm run check:licences
 
 # The e2e tier: real-binary spawns, build smoke, and the browser journeys
 # (e2e/*.test.mjs). Its own pipeline column, so the tier's pass/fail is visible
@@ -247,4 +247,4 @@ smoke:post-deploy:
     - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
   retry: 2
   script:
-    - node scripts/post-deploy-smoke.mjs
+    - npm run smoke:deploy
