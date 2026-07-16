@@ -10,11 +10,15 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-16)
 
-v1.12.1 in the working tree; v1.12.0 pushed to main, which CI publishes. Delivered since
+v1.12.2 in the working tree; v1.12.1 pushed to main, which CI publishes. Delivered since
 1.11.5: src/ re-homed into five layers with a downward-only import rule, the test estate
 rebuilt around six keyed corpus lanes with an e2e tier and a README example harness, and
 the CI quality pipeline (dependency cooldown, licence and PII checks, pack gate,
 post-deploy smoke).
+
+Every lane that answered a question it was not asked is closed. The import-layer
+allowlist holds one entry, a decision rather than work. What is left is a single group:
+inputs with no reader at all, where the product misses and says so.
 
 The playtest record starts again from `playtests/PLAYTEST_LOG_001.md`. The open items below
 carry their own reproducers, so they stand without it.
@@ -25,40 +29,7 @@ download, not reachable from data in hand).
 
 ## Open items
 
-### 1. Chat parse and ask lanes (`src/services/chat.mjs`, `src/domain/ask.mjs`)
-
-- **The scope tail of a qualifier check is never read.** "is Task.title public in Task"
-  answers `Yes — Task.title is public` from the term alone; so does "is Task.title public in
-  SomeOtherClass". `parseQualifierCheck` now declines when a NAMED agent follows a qualifier
-  that has a relation counterpart, but `public` has none, so the `in <scope>` tail stays
-  unread. Validate it or decline — answering from the term while the tail says otherwise is
-  the same defect the by-tail fix closed.
-
-- **A coordinated agent resolves to its first operand.** "is A called by B and C" answers
-  `Yes` about B and drops C silently; the active twin "does A and B call C" does the same.
-  `resolveObjectCore`'s path/slash-stem heuristic deliberately resolves past trailing junk,
-  so the fix reaches every shape and lane and would break that documented intent.
-  Coordination is a parse tier that does not exist — no split-on-"and" heuristic.
-
-- **The verb repair tier has no precision gate.** 7,821 real English words (with inflections)
-  sit within the edit budget of a graph verb: `rest`→`test`, `during`→`using`,
-  `bigger`→`trigger`, `ball`→`call`. A repair that shares a lemma is a reading and answers; a
-  repair onto a different verb now declines by name, so nothing false is asserted — but a
-  real verb typo (`impotr`) lands on the miss wall with it. The gate that restores it is a
-  generated collision set, which needs inflections: `rests` is not in `/usr/share/dict/words`.
-
-- **Closed-set gate coverage (a pattern, not one bug).** The machinery that would answer
-  exists; a narrower gate in front of it rejects a valid variant. `looksCodeish`
-  (`src/services/chat.mjs`) flags any CamelCase compound as code-ish — lane 2b has an
-  exemption, so "what is a TaskHandler" answers, but the bare name at lane 2c does not reach
-  `metaFallbackEntityAnswer`. There are FIVE overlapping pronoun sets: `DESCRIBE_PRONOUN_RE`
-  and `STACCATO_PRONOUN_RE` carry the plurals, `CONTEXT_WORDS` and `IS_ADJECTIVE_PRONOUN_RE`
-  do not, and the isa lane suppresses its "I don't know 'it'" miss without ever resolving the
-  subject against focus. Ordinals ("the first one") have no member in any set. The fix
-  pattern is `answerEdgeCount`'s: audit one gate, decide which members are safe to add, pin
-  the existing exclusions with regressions.
-
-### 2. Reader coverage — inputs with no lane at all
+### 1. Reader coverage — inputs with no lane at all
 
 Each needs a new reader rather than a fix to an existing one, so this group is the natural
 fan-out set.
