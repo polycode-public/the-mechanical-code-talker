@@ -2036,6 +2036,17 @@ const GOAL_TEACH_RE = new RegExp(
 // so the normalization is disclosed.
 const GOAL_TEACH_INFINITIVE_RE = new RegExp(
   `^(?:the\\s+goal\\s+is\\s+for|i\\s+want)\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+to\\s+([a-z]+)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`, "i");
+// The verbless voicing of the same goal ("i want every disk on peg-b"): the
+// verb the other two voicings spell out is simply absent. Captures 1, 2, 4 and
+// 5 of the frames above, minus the verb — planLaneAnswer reads that off the
+// taught locative facts, and declines when they don't name exactly one.
+const GOAL_TEACH_VERBLESS_RE = new RegExp(
+  `^(?:the\\s+goal\\s+is\\s+for|i\\s+want)\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`, "i");
+// The question mirror of the two action-signature teach frames ("can you move a
+// disk onto a peg?"). Both taught voicings mint ONE rule name (verb lemma +
+// preposition), so this one reader answers either.
+const ACTION_SIGNATURE_ASK_RE = new RegExp(
+  `^(?:can|could)\\s+you\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[?.!]*$`, "i");
 const PLAN_SOLVE_RE = /^(?:solve\s+it|plan\s+the\s+moves|how\s+do\s+i\s+get(?:\s+from\s+here)?\s+to\s+the\s+goal)[?.!\s]*$/i;
 const LEGAL_MOVES_RE = /^what\s+moves\s+are\s+legal(?:\s+now)?[?.!\s]*$/i;
 const PLAN_NEXT_RE = /^(?:next|next\s+move|go\s+on|continue)[.!?\s]*$/i;
@@ -2530,6 +2541,28 @@ const GENERAL_VERB_TEACH_RE = new RegExp(`^([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC
  *  back to the is/are-specific frames above/below (their own territory) or an
  *  honest miss — never a guessed split. */
 const GENERAL_VERB_DETERMINER_RE = /^(?:every|each|all|some|a|an|the|your|my|our|their|his|her|its)$/i;
+/** The determiner-led sentence shape that can be read without guessing a verb
+ *  position: "the small disk rests on the middle disk". The single-token
+ *  subject bound above stands. Rather than lift it, this frame supplies the
+ *  verb-position knowledge it lacks: a closed PREP_SRC preposition must sit
+ *  immediately after the verb slot, which pins the verb by construction and so
+ *  lets the subject take a second token safely.
+ *
+ *  The pin does real work. Widen the subject without it (strip the determiner,
+ *  allow a greedy 2-token subject) and sentences that work today garble
+ *  silently. "margo eats ribs daily" binds subject="margo eats", verb="ribs".
+ *  "the small red disk rests on the middle disk" binds subject="small red",
+ *  verb="disk", storing a nonsense mgx:disk fact. No verb-slot gate catches
+ *  that one, because "disk" is not a closed-class word. With the preposition
+ *  pinned, both decline instead.
+ *
+ *  Costs the 3-token subject ("the small red disk …"), which declines. Nothing
+ *  in that sentence says which of its three leading words is the subject's
+ *  head, so a decline is the honest read. */
+const GENERAL_VERB_DETERMINER_TEACH_RE = new RegExp(
+  `^(?:the\\s+|an?\\s+)([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+([a-z]+)\\s+(${PREP_SRC})\\s+(.+?)[.!?]*$`,
+  "i",
+);
 /** Verbs owned by an earlier, more specific recognizer in this lane — is/are
  *  (class-membership/property, above) and owns/maintains (ownership, above).
  *  generalVerbTeach declines outright on these so it can never race a more
@@ -2657,7 +2690,21 @@ async function generalVerbTeach(payload) {
   if (GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(p)) return null; // another frame's territory — stand down
   const m = p.match(GENERAL_VERB_TEACH_RE);
   if (!m) return null;
-  const [, subjectRaw, verbRaw, objectRaw] = m;
+  let [, subjectRaw, verbRaw, objectRaw] = m;
+  // A determiner in the subject slot means the single-token subject bound has
+  // bound the article and misread the real subject's second word as the verb
+  // ("the small disk rests on…" gives subject="the", verb="small"). Re-read it
+  // with the preposition pinning the verb; a sentence that frame can't pin
+  // declines here exactly as it always has.
+  if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw)) {
+    const det = p.match(GENERAL_VERB_DETERMINER_TEACH_RE);
+    if (!det) return null; // not a bare-name subject, and no preposition to pin the verb
+    subjectRaw = det[1];
+    verbRaw = det[2];
+    // hand the preposition back to the shared fold below, so the minted
+    // predicate comes from the one place that mints it
+    objectRaw = `${det[3]} ${det[4]}`;
+  }
   const verb = verbRaw.toLowerCase();
   if (GENERAL_VERB_EXCLUDE_RE.test(verb)) return null; // owned by a more specific frame above
   if (GENERAL_VERB_NOT_A_VERB_RE.test(verb)) return null; // a closed-class word can never be the real verb
@@ -2666,10 +2713,12 @@ async function generalVerbTeach(payload) {
   // predicate, so an honest decline is the only correct move.
   if (verb === "cannot") return null;
   if (GENERAL_VERB_IMPERATIVE_SUBJECT_RE.test(subjectRaw)) return null; // an imperative's verb, not a subject
-  if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw)) return null; // not a bare-name subject
   const subject = subjectRaw.trim();
   const folded = foldPrepositionIntoPredicate(await generalVerbPredicate(verb), objectRaw);
-  const object = folded.object.replace(/^an?\s+/i, "").trim();
+  // "the" strips alongside "a"/"an": the read-back side already strips a
+  // leading determiner off the queried term, so leaving it on here stores an
+  // object no question can match.
+  const object = folded.object.replace(/^(?:an?|the)\s+/i, "").trim();
   if (!subject || !object) return null; // no well-formed triple — honest decline (point 6)
   return { subject, predicate: folded.predicate, object };
 }
@@ -3712,7 +3761,13 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // (wink's honest fallback for any unrecognized token, not a real signal),
     // which would otherwise mis-store it as a fact instead of leaving it for
     // the structural grammar's own typo-tolerant retry to answer for real.
-    const subjectWord = raw.match(/^([\w'-]+)/)?.[1];
+    // A determiner-led sentence opens with the article, which never POS-tags as
+    // a noun, so the first word is the wrong word to gate on. When the
+    // pinned-preposition frame can identify a real subject, POS-check the head
+    // of THAT subject — the same word generalVerbTeach will store — and leave
+    // every other sentence reading its first word exactly as before.
+    const detLed = raw.match(GENERAL_VERB_DETERMINER_TEACH_RE);
+    const subjectWord = detLed ? detLed[1].split(/\s+/).pop() : raw.match(/^([\w'-]+)/)?.[1];
     if (subjectWord && (await subjectIsNounOrPropn(subjectWord))) {
       // A PLURAL explicit-capability surface ("wrens can hum") whose
       // SINGULAR is a grounded term stores under the singular first — the
@@ -4425,6 +4480,7 @@ export async function helpText() {
     ["/focus <symbol>", "set the current focus (reused by 'it'/'this' and no-arg entity commands)"],
     ["/plan <request>", "the capability router: plan+execute a compound or maintenance-goal request (\"of the modules impacted by X, which are untested\", \"what most needs a test\")"],
     ["/capabilities", "what /plan can plan over: the built-in graph tools plus your taught actions"],
+    ["/syllogise <term>", "work out and remember what follows from the facts about a term (needed for chains longer than 2 hops)"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
@@ -4997,6 +5053,14 @@ const RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([
 const ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
 const ISA_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
 
+/** How far the isa ladder's miss text probes for a chain it can name a
+ *  recovery for. Purely a REPORTING reach: the live chases answer within their
+ *  own hop bounds and this never widens them, it only tells the miss whether
+ *  "/syllogise <term>" would find anything. findIsaChain's own default, since
+ *  the probe wants the search's natural reach rather than a second opinion
+ *  about how deep is worth walking. */
+const DEEP_CHAIN_PROBE_HOPS = 6;
+
 /** "why is TaskController a handler" / "explain how you know TaskController is
  *  a handler" — the syllogise-verified proof render (the isaAsk block below,
  *  which cites the graph inherits-bridge / taught-fact chase / entailed
@@ -5087,6 +5151,16 @@ const WHERE_IS_FACT_RE = /^where(?:'s|\s+is|\s+are)\s+(.+?)(?:\s+now)?\s*[?.!]*$
  *  (mgx:rest-on, mgx:stand-on, mgx:sit-in, …) — what makes a taught fact a
  *  LOCATION answer rather than any arbitrary relation. */
 const LOCATIVE_FACT_PREDICATE_RE = /^mgx:[a-z]+-(?:on|in|at|inside|under|below|above|near|beside|behind|by)$/;
+/** "what is on peg-a" / "what's on peg-a" — the reverse-by-OBJECT mirror of
+ *  WHERE_IS_FACT_RE, over the same taught locative facts. The bare copula
+ *  carries no verb to mint a predicate from, so the PREPOSITION is the anchor:
+ *  it's captured here and matched against the folded predicate's own tail, so
+ *  "what is on peg-a" can only ever answer with a fact that really says "on"
+ *  (a "-under" row is a different claim, never this question's answer).
+ *  Consumed by factAnswer's (a-pre5) reader, which diverts only on a real
+ *  stored hit — "what is on the roadmap" finds no such fact and falls through
+ *  to the ordinary BARE_WHATIS_RE handling untouched. */
+const WHAT_IS_PREP_FACT_RE = new RegExp(`^what(?:'s|\\s+is|\\s+are)\\s+(${PREP_SRC})\\s+(.+?)\\s*[?.!]*$`, "i");
 
 // CAN_ASK_RE's remaining paraphrase-ladder siblings, all over the same
 // mgx:capableOf facts:
@@ -5403,6 +5477,31 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const variants = factTermVariants(normFactTerm, whereQ[1]);
     const hits = (await factRows(memoryDir, cache))
       .filter((f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && variants.has(f.subject));
+    if (hits.length) {
+      const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+      const lines = ranked.map(renderFactLine);
+      const shown = lines.slice(0, FACT_ANSWER_CAP);
+      const rest = lines.slice(FACT_ANSWER_CAP);
+      const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+      return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+    }
+  }
+
+  // (a-pre5) "what is on peg-a" over the SAME taught locative facts as
+  // (a-pre4), asked by OBJECT instead of by subject. The general-verb reverse
+  // reader ("what rests on peg-a") can't take this shape: it needs a surface
+  // verb to mint a predicate from, and the bare copula has none. So the
+  // captured preposition anchors the lookup instead — see
+  // WHAT_IS_PREP_FACT_RE. Hit-gated the same way every reader in this cascade
+  // is: it returns only when a locative row with that exact preposition and
+  // object exists, so a plain vocabulary question keeps its own answer.
+  const whatIsPrepQ = q.match(WHAT_IS_PREP_FACT_RE);
+  if (whatIsPrepQ) {
+    const prep = whatIsPrepQ[1].toLowerCase();
+    const variants = factTermVariants(normFactTerm, whatIsPrepQ[2].replace(/^(?:an?|the)\s+/i, "").trim());
+    const hits = (await factRows(memoryDir, cache)).filter(
+      (f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && f.predicate.endsWith(`-${prep}`) && variants.has(f.object),
+    );
     if (hits.length) {
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
       const lines = ranked.map(renderFactLine);
@@ -6968,10 +7067,26 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const knownSubjectIsa = isa.filter((f) => directSubjVariants.has(f.subject)).sort(byTrust);
     const subjectWord = isaSubject.trim();
     const kindWord = stripTrailingDiscourseTag(isaAsk[2]).trim();
+    // A REPORTING probe, never an answer: re-run the same rooted search at
+    // findIsaChain's own default reach to learn whether a chain exists that
+    // the live chases above simply don't walk. The answer stays a miss either
+    // way — this only decides which recovery the miss can honestly name.
+    //
+    // Naming /syllogise unconditionally would be a lie whenever no such chain
+    // exists, and telling someone to teach a fact that already follows from
+    // what they taught is the mirror lie. The probe reads the SAME taught
+    // edge lists the chases use, and /syllogise closes over a superset of
+    // them, so a chain found here is one it can really materialize.
+    const deeperChainExists = [...subjCandidates].some(
+      (subj) => findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassEdges, { maxHops: DEEP_CHAIN_PROBE_HOPS }),
+    );
     if (knownSubjectIsa.length) {
       const shown = knownSubjectIsa.slice(0, 3).map(renderFactLine).join("; ");
+      const recovery = deeperChainExists
+        ? `The facts to settle it are here, but the chain is longer than I follow while answering. Run "/syllogise ${subjectWord}", then ask me again.`
+        : `If it's true, teach me: "${subjectWord} is a kind of ${kindWord}".`;
       return {
-        text: `I can't confirm that — nothing I remember says ${subjectWord} is a ${kindWord}. I do know: ${shown}. If it's true, teach me: "${subjectWord} is a kind of ${kindWord}".`,
+        text: `I can't confirm that — nothing I remember says ${subjectWord} is a ${kindWord}. I do know: ${shown}. ${recovery}`,
         replace: true,
         miss: true, // still a MISS in the turn record — honest wording, not an answer
       };
@@ -7359,6 +7474,20 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
           .filter((f) => f.predicate === predicate && subjVariants.has(f.subject) && objVariants.has(f.object))
           .sort(byTrust)[0];
         if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true, generalVerbQuery: true };
+        // A KNOWN subject under the SAME relation, no row matching this
+        // object: an honest, specific miss citing what the subject IS
+        // remembered to relate to, instead of the generic structural wall.
+        // Still never a guessed "no" — the text declines to confirm and says
+        // what it does know, and `miss: true` keeps it out of recall.
+        const sameRelation = rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject));
+        if (sameRelation.length) {
+          const shown = sameRelation.slice(0, 3).map(renderFactLine).join("; ");
+          return {
+            text: `I can't confirm that — nothing I remember says ${factPhrase({ subject, predicate, object })}. I do know: ${shown}.`,
+            replace: true,
+            miss: true,
+          };
+        }
         return null; // no remembered fact — the honest miss stands (never a guessed "no")
       }
     }
@@ -7630,6 +7759,28 @@ function discourseRewrite(query, last) {
   // that happens to contain "it"/"this"/"that" as a substring (whole-word
   // boundaries only).
   if (PRONOUN_IN_QUERY_RE.test(prevQ)) return prevQ.replace(PRONOUN_IN_QUERY_RE, () => newSubj);
+  // TOPIC SHIFT after a plain vocabulary question: "what is a dog" -> "what
+  // about cats" means "what is a cat". Such a prior query has neither a
+  // NAME_TOKEN nor a pronoun for the two rules above to swap, so both decline
+  // and the turn used to reach the wall.
+  //
+  // The gate is the PRIOR turn's own shape (BARE_WHATIS_RE — a plain "what
+  // is/are X"), never a looser reading of the new term. Widening NAME_TOKEN_RE
+  // to cover ordinary words would look like the same fix and is not: it would
+  // let "what about cats" rewrite "which modules import Widget" by swapping
+  // "modules", answering a question nobody asked.
+  //
+  // vagueTouchTermOf owns the "what about X" surface already, so the term
+  // comes from there rather than a second parse — it strips the article that
+  // WHAT_ABOUT_RE's own capture keeps ("what about a cat" -> "cat", not "a
+  // cat"). It reads the "what about"/"tell me about"/"explain" surfaces only,
+  // so the staccato swap ("and Widget") declines here and keeps the behaviour
+  // it has today. singularizeSurface matches the stored singular; facts are
+  // stored one way and "cats" would find nothing.
+  if (BARE_WHATIS_RE.test(prevQ)) {
+    const term = vagueTouchTermOf(query);
+    if (term) return `what is a ${singularizeSurface(term)}`;
+  }
   return null;
 }
 
@@ -7683,6 +7834,35 @@ const EXISTENTIAL_ANYTHING_RE = /^is\s+there\s+(?:anything|something|anyone|anyb
 function existentialAnythingRewrite(query) {
   const m = EXISTENTIAL_ANYTHING_RE.exec(String(query || "").trim());
   return m ? `what ${m[1].trim()}` : null;
+}
+
+/** REVERSE CLEFT "what/who is it that <verb-phrase>" -> "what/who <verb-phrase>",
+ *  the closed sibling of EXISTENTIAL_ANYTHING_RE just above and the same trade:
+ *  a textual rewrite onto the ALREADY-CORRECT "what <verb> X" shape, no new
+ *  capability.
+ *
+ *  The "it that" here is pure scaffolding. A reverse cleft names no contrasted
+ *  element — "what is it that calls loadStore" asks exactly what "what calls
+ *  loadStore" asks, so dropping the frame loses nothing. Without the rewrite
+ *  parseKeywordSpot finds the verb, splits the text around it, and the leftover
+ *  "it that" survives the STOPWORDS filter (which carries "what"/"is" but not
+ *  "it"/"that") to become the subject — so the turn asks about an entity named
+ *  "it that" and misses.
+ *
+ *  The FORWARD cleft "is it X that calls Y" is deliberately left alone. It DOES
+ *  name a contrasted element ("it is X, not something else"), it already answers
+ *  correctly, and it discriminates: "is it createTask that calls saveStore" ->
+ *  yes, "is it loadStore that calls saveStore" -> no. Flattening that shape
+ *  would throw the contrast away for nothing.
+ *
+ *  The "that <verb-phrase>" tail is mandatory, exactly as it is for
+ *  EXISTENTIAL_ANYTHING_RE. A bare "what is it" has no tail and keeps its own
+ *  path, and "what time is it" never opens with "what is it" at all, so the
+ *  personal-assistant decline is untouched. */
+const REVERSE_CLEFT_RE = /^(what|who)\s+(?:is|was)\s+it\s+that\s+(.+?)\s*\??$/i;
+function reverseCleftRewrite(query) {
+  const m = REVERSE_CLEFT_RE.exec(String(query || "").trim());
+  return m ? `${m[1].toLowerCase()} ${m[2].trim()}` : null;
 }
 
 // ---- curated SEON definitions (corpus/seon/definitions.jsonl) ----
@@ -8322,6 +8502,26 @@ function actionLabel(name, subject, target) {
   return `${verb} ${subject} ${prep} ${target}`;
 }
 
+/** Which verb does a verbless locative goal ("every disk on peg-b") mean? The
+ *  sentence never says, and a preposition doesn't imply one — "on" reads as
+ *  rest-on, stand-on, sit-on or lie-on with equal warrant, so any prep→verb
+ *  table here would be invention. The taught facts answer instead: every
+ *  locative fact (LOCATIVE_FACT_PREDICATE_RE's closed predicate tail) about a
+ *  member of the goal's class whose preposition is the one typed contributes
+ *  its verb. Returns the candidates, sorted. Exactly one is an answer; none or
+ *  several is the caller's decline. */
+function goalVerbsFromTaughtFacts(factRows, domain, { universal, term, prep }) {
+  const subjects = new Set(universal ? domain?.classMembers?.[term] || [] : [term]);
+  const verbs = new Set();
+  for (const row of factRows || []) {
+    if (!LOCATIVE_FACT_PREDICATE_RE.test(row.predicate)) continue;
+    if (!subjects.has(row.subject)) continue;
+    const [factVerb, factPrep] = row.predicate.slice("mgx:".length).split("-");
+    if (factPrep === prep) verbs.add(factVerb);
+  }
+  return [...verbs].sort();
+}
+
 /** Do two goal specs state the same goal? Every field is already normalized
  *  (normFactTerm on the terms, a lemma + a lowercased preposition on the
  *  predicate), so equality on the four scalars is the whole comparison. */
@@ -8335,8 +8535,76 @@ const sameGoalSpec = (a, b) =>
 async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", }) {
   const q = String(query).trim();
 
+  // "can you move a disk onto a peg?" — read the taught action signatures back.
+  // Answered HERE rather than beside the other capability readers because
+  // CAN_ASK_RE would otherwise claim the query first, bind the verb to "peg",
+  // find no mgx:capableOf row and miss.
+  const capabilityAsk = q.match(ACTION_SIGNATURE_ASK_RE);
+  if (capabilityAsk) {
+    const { loadMemory, readRuleRows } = await import("../adapters/memory/core.mjs");
+    const { actionFamilies, capabilityFromActionRules } = await import("../domain/router/taught.mjs");
+    // The same lemma authority the teach lane mints the rule name through, so
+    // either taught voicing is found by either asked voicing.
+    const familyName = `${await verbLemma(capabilityAsk[1])} ${capabilityAsk[3].toLowerCase()}`;
+    const subjectClass = capabilityAsk[2].toLowerCase();
+    const targetClass = capabilityAsk[4].toLowerCase();
+    const asked = actionLabel(familyName, `a ${subjectClass}`, `a ${targetClass}`);
+    let family = null;
+    try {
+      family = actionFamilies(readRuleRows(await loadMemory(memoryDir))).get(familyName) || null;
+    } catch { /* an unreadable store reads back like an empty one */ }
+    if (!family) {
+      return {
+        text: `no — nothing you taught me says you can ${asked}. Teach it with "you can ${asked}."`,
+        via: "plan", deduced: "check whether a taught action rule covers an action",
+        note: `CAPABILITY frame — no "${familyName}" action rule in the store, honest decline`,
+      };
+    }
+    const classesFor = (slot) =>
+      capabilityFromActionRules(familyName, family).parameters.find((p) => p.name === slot)?.classes.filter(Boolean) || [];
+    const subjectClasses = classesFor("subject");
+    const targetClasses = classesFor("target");
+    const signature = `subject: ${subjectClasses.join("|") || "?"}, target: ${targetClasses.join("|") || "?"}`;
+    if (!subjectClasses.includes(subjectClass) || !targetClasses.includes(targetClass)) {
+      return {
+        text: `no — the "${familyName}" rule you taught me covers ${signature}, and nothing you taught me says you can ${asked}.`,
+        via: "plan", deduced: "check whether a taught action rule covers an action",
+        note: `CAPABILITY frame — the "${familyName}" family is taught but covers ${signature}, honest decline`,
+      };
+    }
+    return {
+      text: `yes — you can ${asked}. You taught me the "${familyName}" rule (${signature}).`,
+      via: "plan", deduced: "check whether a taught action rule covers an action",
+      note: `CAPABILITY frame — the taught "${familyName}" family covers ${signature}`,
+    };
+  }
+
   const thatGoal = q.match(GOAL_TEACH_RE);
-  const goalMatch = thatGoal || q.match(GOAL_TEACH_INFINITIVE_RE);
+  let goalMatch = thatGoal || q.match(GOAL_TEACH_INFINITIVE_RE);
+  // The verbless voicing carries every capture but the verb, so it folds into
+  // the frame below once the store names the verb — same spec, same
+  // confirmation, same fold as its verbed twin.
+  const verblessGoal = goalMatch ? null : q.match(GOAL_TEACH_VERBLESS_RE);
+  if (verblessGoal) {
+    const { normFactTerm } = await import("../adapters/memory/core.mjs");
+    const { factRows, domain } = await loadPlanContext(memoryDir);
+    const prep = verblessGoal[3].toLowerCase();
+    const quantified = `${verblessGoal[1] ? `${verblessGoal[1].toLowerCase()} ` : ""}${verblessGoal[2].toLowerCase()}`;
+    const stated = `${quantified} ${prep} ${verblessGoal[4].toLowerCase()}`;
+    const verbs = goalVerbsFromTaughtFacts(factRows, domain, {
+      universal: !!verblessGoal[1], term: normFactTerm(verblessGoal[2]), prep,
+    });
+    if (verbs.length !== 1) {
+      return {
+        text: verbs.length
+          ? `"${stated}" leaves the verb out, and what you taught me leaves it open — ${verbs.map((v) => `"${v} ${prep}"`).join(" and ")} both fit. Say which one, e.g. "i want ${quantified} to ${verbs[0]} ${prep} ${verblessGoal[4].toLowerCase()}".`
+          : `"${stated}" leaves the verb out, and nothing you taught me says what ${quantified} does ${prep} anything. Name the verb, e.g. "the goal is that every disk rests on peg-c".`,
+        via: "plan", deduced: "record the goal state for a later plan",
+        note: `GOAL frame — the verbless voicing's "${prep}" matched ${verbs.length} taught locative verbs, honest decline`,
+      };
+    }
+    goalMatch = [verblessGoal[0], verblessGoal[1], verblessGoal[2], verbs[0], verblessGoal[3], verblessGoal[4]];
+  }
   if (goalMatch) {
     const { normFactTerm } = await import("../adapters/memory/core.mjs");
     const verb = await verbLemma(goalMatch[3]);
@@ -9016,6 +9284,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const fallback = metaFallbackEntityAnswer(graph, String(query).trim());
     if (fallback) bareMetaHit = { text: fallback.text, replace: true };
   }
+  const coldPronounDecline = focus?.label ? null : coldPronounDeclineText(query);
   if (bareMetaHit) {
     answer = bareMetaHit.replace ? bareMetaHit.text : `${answer}\n${bareMetaHit.text}`;
     // Same discipline as lane (3): a fact-lane return flagged `miss` is an
@@ -9042,6 +9311,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     via = "teach-miss"; handled = true;
     note(trace, "lane: (2) BARE TEACH NUDGE — a bare name-verb-name declarative stays wrapper-required; suggested the remember-that form");
     note(trace, "goal: teach/remember a new fact (wrapper required for the bare form)");
+  } else if (isConversationalCandidate && coldPronounDecline) {
+    // A subject-position pronoun with no antecedent anywhere: no vocabulary
+    // subject bound upstream, and no code focus for it to mean either. The
+    // orientation card would introduce the tool; naming the pronoun says what
+    // actually went wrong. Still a miss in the record — honest wording, not an
+    // answer.
+    answer = coldPronounDecline;
+    via = "template"; handled = true;
+    note(trace, "lane: (2) COLD PRONOUN — a subject pronoun with no antecedent bound and no focus standing; named the pronoun instead of the orientation card");
+    note(trace, "goal: resolve a pronoun to a subject (nothing named yet)");
   } else if (isConversationalCandidate) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
@@ -9532,6 +9811,7 @@ const GOAL_BY_COMMAND = {
   exports: GOAL_BY_KIND.reexports,
   arch: "understand the overall architecture (package/module boundaries)",
   capabilities: "see what /plan can plan over — built-in query tools and taught actions",
+  syllogise: "materialize the entailed facts that follow from what's remembered about one term",
 };
 
 /** A slash-command → the mapped tool (or the /help, /focus, /narrate, unknown
@@ -9624,6 +9904,57 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
       }
     }
     return mk(lines.join("\n"));
+  }
+
+  // /syllogise <term> — forward-chain what's remembered about <term> into
+  // entailed facts and WRITE them to the store, so a chain too long for the
+  // live isa ladder to walk becomes a single stored step it can read.
+  //
+  // This is the one chat surface that writes derived facts. Every live chase
+  // in this file is read-only on purpose, and that stays true: a slash command
+  // is an explicit request, not the hot path an ordinary question runs down.
+  // Nothing here is a guess — each written fact carries `entailed:*`
+  // provenance, a justification citing its premises, and a trust discounted
+  // below the premises it rode.
+  //
+  // The term is an ARGUMENT rather than the session focus, and the two are
+  // different things wearing the same name: this focus is a set of class
+  // TERM strings, while chat's `focus` is a {id,label} code-graph entity, so
+  // passing the standing focus here would be a category error. Omitting it
+  // is worse than useless — a whole-store pass on a real store spends the
+  // budget on facts nobody asked about and can be truncated before it reaches
+  // the term you cared about. /plan is the precedent: a command that takes an
+  // argument and honestly refuses without one.
+  if (name === "syllogise") {
+    note(trace, "goal: materialize the entailed facts that follow from what's remembered about one term");
+    if (!memoryDir) return mk("no memory store here — /syllogise works inside a repo session.", { miss: true });
+    if (!argText) {
+      return mk('/syllogise needs a term, e.g. `/syllogise poodle` — it closes over what I remember about that term.', { miss: true });
+    }
+    try {
+      const { syllogise } = await import("../domain/syllogise.mjs");
+      const { loadMemory, readFactRows, appendFacts, normFactTerm } = await import("../adapters/memory/core.mjs");
+      const res = await syllogise(memoryDir, {
+        focus: [...factTermVariants(normFactTerm, argText)],
+        store: { loadMemory, readFactRows, appendFacts },
+      });
+      note(trace, `result: derived ${res.count} entailed fact(s) (depth ${res.depth}, budget ${res.budget})`);
+      if (!res.count) {
+        return mk(`nothing new follows from what I remember about "${argText}" — no entailed facts derived (depth ${res.depth}, budget ${res.budget}).`, { miss: true });
+      }
+      const lines = [`derived ${res.count} entailed fact(s) from what I remember about "${argText}":`];
+      for (const d of res.derived) lines.push(`  ${d.subject} ${d.rule} ${d.object} (via ${d.via})`);
+      // A truncated pass that still can't answer the question is worse than no
+      // offer at all, so the budget wall is stated rather than left implied by
+      // a count that happens to equal it.
+      if (res.truncated) {
+        lines.push(`budget of ${res.budget} reached — more may follow; run \`tmct syllogise --budget <n>\` for a wider pass.`);
+      }
+      lines.push("These are derived, not taught — /memory shows each one's provenance and premises.");
+      return mk(lines.join("\n"));
+    } catch (e) {
+      return mk(String(e?.message || e), { miss: true }); // a broken store reads as its own clean error
+    }
   }
 
   // /plan <request> — the capability router (src/domain/router/*): plan+execute a
@@ -9950,8 +10281,33 @@ function rewriteUsesAsBaseFrame(text) {
  *  dummy pronoun ("what time is it") and the bare "what is it" never rewrite. */
 const VOCAB_PRONOUN_LEAD_SUBJECTS = Object.freeze([...CONTEXT_WORDS].filter((w) => w !== "here").concat("they"));
 const VOCAB_PRONOUN_LEAD_RE = new RegExp(
-  `^((?:is|are|can|could|does|do)\\s+|what\\s+(?:is|are)\\s+)(?:${VOCAB_PRONOUN_LEAD_SUBJECTS.join("|")})\\b(\\s+\\S.*)?$`, "i",
+  `^((?:is|are|can|could|does|do)\\s+|what\\s+(?:is|are)\\s+)(${VOCAB_PRONOUN_LEAD_SUBJECTS.join("|")})\\b(\\s+\\S.*)?$`, "i",
 );
+
+/** The decline for a subject-position pronoun with nothing to bind it to —
+ *  "can it bark" as the very first thing said, before anything named a dog.
+ *  Returns the text, or null when the shape isn't a cold pronoun.
+ *
+ *  The vocabulary binding above already declines this correctly (no `last`
+ *  subject, so no substitution), and the fact readers then decline too, since
+ *  no row has "it" as its subject. What was left was the generic orientation
+ *  card, which introduces the tool and answers a question nobody asked. Name
+ *  the pronoun instead: the sentence was fine, it just arrived with nothing
+ *  behind it.
+ *
+ *  The example is the "<name>" placeholder nudgeAnswer's own no-focus pronoun
+ *  branch uses, not a real term. A concrete "what is a dog" would claim a
+ *  vocabulary an unseeded session doesn't have, and a seeding/teaching hint
+ *  belongs to the shapes that are ABOUT teaching — this shape is a question
+ *  whose subject went missing, and inviting a teach here reads as an offer to
+ *  store a fact about the pronoun itself. */
+function coldPronounDeclineText(query) {
+  const m = String(query || "").trim().match(VOCAB_PRONOUN_LEAD_RE);
+  // The bare "what is it" carries no predicate to answer, so it keeps the
+  // orientation card the same way the binding above leaves it alone.
+  if (!m || (/^what/i.test(m[1]) && !m[3])) return null;
+  return `not sure what "${m[2].toLowerCase()}" refers to yet — name the subject directly, e.g. "what is a <name>".`;
+}
 
 /** The subject of the LAST turn's first fact line, for vocabulary pronoun
  *  binding ("what is a dog" → "can it bark"). Fact answers render rigidly —
@@ -9993,6 +10349,14 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // doesn't match one of the four discontiguous shapes.
   const baseFrameRewrite = rewriteUsesAsBaseFrame(preRewriteLine);
   const frameLine = baseFrameRewrite || preRewriteLine;
+  // The reverse cleft's "it" is scaffolding, so it has to go before the
+  // vocabulary pronoun binding below reads that same "it" as a referring
+  // pronoun and binds the last turn's subject to it ("what is it that calls
+  // loadStore" -> "what is dog that calls loadStore" after "what is a dog").
+  // The pronoun lead's own guard only spares the BARE "what is it", so this
+  // shape has to stop existing before that match runs at all.
+  const cleftRewrite = reverseCleftRewrite(frameLine);
+  const cleftLine = cleftRewrite || frameLine;
   // VOCABULARY pronoun antecedent — "what is a dog" then "can it bark". The
   // code-graph focus mechanism only ever binds {id,label} GRAPH entities, so
   // in a vocabulary conversation "it" resolved to nothing and the question
@@ -10001,13 +10365,13 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // ONLY when no code focus is standing (a graph session's own pronoun
   // resolution is untouched), the turn looks like a fact question, and the
   // LAST answer's own first fact line names a subject to bind to.
-  const pronounLead = frameLine.match(VOCAB_PRONOUN_LEAD_RE);
+  const pronounLead = cleftLine.match(VOCAB_PRONOUN_LEAD_RE);
   const vocabAntecedent = (!focus?.id && memoryDir && pronounLead
-    && !(/^what/i.test(pronounLead[1]) && !pronounLead[2]))
+    && !(/^what/i.test(pronounLead[1]) && !pronounLead[3]))
     ? vocabAntecedentFrom(last) : null;
   const workingLine = vocabAntecedent
-    ? `${pronounLead[1]}${vocabAntecedent}${pronounLead[2] || ""}`
-    : frameLine;
+    ? `${pronounLead[1]}${vocabAntecedent}${pronounLead[3] || ""}`
+    : cleftLine;
   const templates = await chatTemplates(); // failure-tolerated: null degrades, never throws
   const trace = narrate ? [] : null;
   // vocabHint: createSession computes this ONCE per session; a direct
@@ -10090,7 +10454,8 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     const sentences = splitSentences(workingLine);
     if (sentences.length > 1) {
       const lastSentence = sentences[sentences.length - 1];
-      if (PLAN_SOLVE_RE.test(lastSentence) || GOAL_TEACH_RE.test(lastSentence) || GOAL_TEACH_INFINITIVE_RE.test(lastSentence) || LEGAL_MOVES_RE.test(lastSentence)) {
+      if (PLAN_SOLVE_RE.test(lastSentence) || GOAL_TEACH_RE.test(lastSentence) || GOAL_TEACH_INFINITIVE_RE.test(lastSentence)
+        || GOAL_TEACH_VERBLESS_RE.test(lastSentence) || LEGAL_MOVES_RE.test(lastSentence)) {
         let f = focus; let l = last; let ps = planHolder.state;
         const receipts = [];
         let finalRec = null;

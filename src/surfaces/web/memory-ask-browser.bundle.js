@@ -11273,6 +11273,14 @@ ${JSON.stringify(envelope, null, 2)}`;
     `^(?:the\\s+goal\\s+is\\s+for|i\\s+want)\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+to\\s+([a-z]+)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`,
     "i"
   );
+  var GOAL_TEACH_VERBLESS_RE = new RegExp(
+    `^(?:the\\s+goal\\s+is\\s+for|i\\s+want)\\s+(?:(every|each|all)\\s+)?([\\w-]+)\\s+(${PREP_SRC})\\s+([\\w-]+)[.!?]*$`,
+    "i"
+  );
+  var ACTION_SIGNATURE_ASK_RE = new RegExp(
+    `^(?:can|could)\\s+you\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[?.!]*$`,
+    "i"
+  );
   function singularizeSurface(word) {
     const w = String(word || "").trim();
     if (/[a-z]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
@@ -11282,6 +11290,10 @@ ${JSON.stringify(envelope, null, 2)}`;
   }
   var TEACH_ADVERB_SKIP_SRC = "(?:(?:usually|often|sometimes|rarely|never|always|typically|generally|occasionally|frequently|normally|regularly|commonly|mostly|currently|still|also|really|actually)\\s+)?";
   var GENERAL_VERB_TEACH_RE = new RegExp(`^([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[.!?]*$`, "i");
+  var GENERAL_VERB_DETERMINER_TEACH_RE = new RegExp(
+    `^(?:the\\s+|an?\\s+)([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+([a-z]+)\\s+(${PREP_SRC})\\s+(.+?)[.!?]*$`,
+    "i"
+  );
   var GENERAL_VERB_EXCLUDE_RE = /^(?:is|are|am|owns|maintains)$/i;
   var GENERAL_VERB_ANYWHERE_EXCLUDE_RE = /\b(?:is|are|am|owns|maintains)\b/i;
   var GENERAL_VERB_NOT_A_VERB_RE = new RegExp(
@@ -11540,6 +11552,7 @@ ${JSON.stringify(envelope, null, 2)}`;
   var RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
   var ISA_ASK_RE = /^(?:is|are)\s+(?:an?\s+)?(.+?)\s+(?:a\s+kind\s+of|a\s+type\s+of|an?)\s+(.+?)[?.!\s]*$/i;
   var ISA_PREDICATES2 = /* @__PURE__ */ new Set(["rdfs:subClassOf", "rdf:type"]);
+  var DEEP_CHAIN_PROBE_HOPS = 6;
   var WHY_ISA_LEAD_RE = /^why\s+(?=(?:is|are)\b)/i;
   var EXPLAIN_HOW_YOU_KNOW_RE = /^explain\s+how\s+you\s+know\s+(?:that\s+)?(.+?)\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
   function matchWhyIsa(q) {
@@ -11563,6 +11576,7 @@ ${JSON.stringify(envelope, null, 2)}`;
   var WHAT_USED_FOR_RE = /^what\s+(?:(?:can\s+be|is)\s+used\s+for|is\s+for)\s+(.+?)[?.!\s]*$/i;
   var WHERE_IS_FACT_RE = /^where(?:'s|\s+is|\s+are)\s+(.+?)(?:\s+now)?\s*[?.!]*$/i;
   var LOCATIVE_FACT_PREDICATE_RE = /^mgx:[a-z]+-(?:on|in|at|inside|under|below|above|near|beside|behind|by)$/;
+  var WHAT_IS_PREP_FACT_RE = new RegExp(`^what(?:'s|\\s+is|\\s+are)\\s+(${PREP_SRC})\\s+(.+?)\\s*[?.!]*$`, "i");
   var DO_VERB_ASK_RE = /^(?:do|does)\s+(all\s+|every\s+)?(?:an?\s+|the\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z-]+)[?.!\s]*$/i;
   var WHAT_CAN_VERB_RE = /^what\s+can\s+(?!be\s)(.+?)[?.!\s]*$/i;
   var WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(.+?)[?.!\s]*$/i;
@@ -11744,6 +11758,23 @@ ${JSON.stringify(envelope, null, 2)}`;
     if (whereQ) {
       const variants = factTermVariants(normFactTerm2, whereQ[1]);
       const hits = (await factRows(memoryDir, cache2)).filter((f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && variants.has(f.subject));
+      if (hits.length) {
+        const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+        const lines = ranked.map(renderFactLine);
+        const shown = lines.slice(0, FACT_ANSWER_CAP);
+        const rest = lines.slice(FACT_ANSWER_CAP);
+        const extra = rest.length ? `
+\u2026and ${rest.length} more \u2014 say 'more' to see them.` : "";
+        return { text: shown.join("\n") + extra, replace: true, ...rest.length ? { pending: { items: rest, noun: "facts" } } : {} };
+      }
+    }
+    const whatIsPrepQ = q.match(WHAT_IS_PREP_FACT_RE);
+    if (whatIsPrepQ) {
+      const prep = whatIsPrepQ[1].toLowerCase();
+      const variants = factTermVariants(normFactTerm2, whatIsPrepQ[2].replace(/^(?:an?|the)\s+/i, "").trim());
+      const hits = (await factRows(memoryDir, cache2)).filter(
+        (f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && f.predicate.endsWith(`-${prep}`) && variants.has(f.object)
+      );
       if (hits.length) {
         const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
         const lines = ranked.map(renderFactLine);
@@ -12483,10 +12514,14 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
       const knownSubjectIsa = isa.filter((f) => directSubjVariants.has(f.subject)).sort(byTrust);
       const subjectWord = isaSubject.trim();
       const kindWord = stripTrailingDiscourseTag(isaAsk[2]).trim();
+      const deeperChainExists = [...subjCandidates].some(
+        (subj) => findIsaChain2(subj, objVariants, chainTypeEdges, chainSubClassEdges, { maxHops: DEEP_CHAIN_PROBE_HOPS })
+      );
       if (knownSubjectIsa.length) {
         const shown = knownSubjectIsa.slice(0, 3).map(renderFactLine).join("; ");
+        const recovery = deeperChainExists ? `The facts to settle it are here, but the chain is longer than I follow while answering. Run "/syllogise ${subjectWord}", then ask me again.` : `If it's true, teach me: "${subjectWord} is a kind of ${kindWord}".`;
         return {
-          text: `I can't confirm that \u2014 nothing I remember says ${subjectWord} is a ${kindWord}. I do know: ${shown}. If it's true, teach me: "${subjectWord} is a kind of ${kindWord}".`,
+          text: `I can't confirm that \u2014 nothing I remember says ${subjectWord} is a ${kindWord}. I do know: ${shown}. ${recovery}`,
           replace: true,
           miss: true
           // still a MISS in the turn record — honest wording, not an answer
@@ -12688,6 +12723,15 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
           const objVariants = factTermVariants(normFactTerm2, object);
           const hit2 = rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject) && objVariants.has(f.object)).sort(byTrust)[0];
           if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true, generalVerbQuery: true };
+          const sameRelation = rows.filter((f) => f.predicate === predicate && subjVariants.has(f.subject));
+          if (sameRelation.length) {
+            const shown = sameRelation.slice(0, 3).map(renderFactLine).join("; ");
+            return {
+              text: `I can't confirm that \u2014 nothing I remember says ${factPhrase({ subject, predicate, object })}. I do know: ${shown}.`,
+              replace: true,
+              miss: true
+            };
+          }
           return null;
         }
       }
@@ -12774,7 +12818,8 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
     history: GOAL_BY_KIND.touches,
     exports: GOAL_BY_KIND.reexports,
     arch: "understand the overall architecture (package/module boundaries)",
-    capabilities: "see what /plan can plan over \u2014 built-in query tools and taught actions"
+    capabilities: "see what /plan can plan over \u2014 built-in query tools and taught actions",
+    syllogise: "materialize the entailed facts that follow from what's remembered about one term"
   };
   var BASE_QUALIFIER_SRC = "as\\s+(?:its|the|an?)?\\s*(?:base\\s+class|parent\\s+class|base|parent)";
   var USES_AS_BASE_WH_ASK_RE = new RegExp(
@@ -12795,7 +12840,7 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
   );
   var VOCAB_PRONOUN_LEAD_SUBJECTS = Object.freeze([...CONTEXT_WORDS].filter((w) => w !== "here").concat("they"));
   var VOCAB_PRONOUN_LEAD_RE = new RegExp(
-    `^((?:is|are|can|could|does|do)\\s+|what\\s+(?:is|are)\\s+)(?:${VOCAB_PRONOUN_LEAD_SUBJECTS.join("|")})\\b(\\s+\\S.*)?$`,
+    `^((?:is|are|can|could|does|do)\\s+|what\\s+(?:is|are)\\s+)(${VOCAB_PRONOUN_LEAD_SUBJECTS.join("|")})\\b(\\s+\\S.*)?$`,
     "i"
   );
   var SEED_MARKER_REL = join(".tmct", "memory", "corpus-seed.json");
