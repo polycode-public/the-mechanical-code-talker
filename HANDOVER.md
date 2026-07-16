@@ -29,13 +29,14 @@ download, not reachable from data in hand).
 
 ## Open items
 
-### 1. Reader coverage — inputs with no lane at all
+None. Every item that answered a question it was not asked is fixed; every input that had no
+reader has one; and the last capability tmct refused on purpose — a negative fact — now
+stores, because a negative from a named source is a disagreement, not a contradiction.
 
-- **Negative capability as data.** "a penguin cannot fly" declines, and "what cannot fly" has
-  no reverse listing. Being built now: sourced negatives (`mgxneg:` in the predicate, so the
-  positive and negative keep separate fact ids and separate `mgx:statedBy` edges), capability
-  inheritance across `subClassOf`, and one resolver ordering direct over inherited before
-  trust is consulted. See `PLAN_DEFEASIBLE_NEGATION.md`.
+What is next is not a list of defects. `PLAN_CONSISTENCY_CHECK.md` (tmct as a consistency
+service for an LLM tool loop) and `PLAN_CHILD_CORPUS.md` (a wider default seed, so the base
+rate counts more than one bird) are both designs waiting on a decision, not work waiting on
+a session.
 
 ## Discipline (unchanged)
 
