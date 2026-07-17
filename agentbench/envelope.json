@@ -1,12 +1,12 @@
 {
   "schemaVersion": 1,
   "generatedFrom": {
-    "agentbenchVersion": "2.4.1",
+    "agentbenchVersion": "2.4.2",
     "drivers": [
       "goal-0.8.1",
       "resolver-0.8.0"
     ],
-    "stamp": "2.4.1",
+    "stamp": "2.4.2",
     "caseCount": 56
   },
   "ladder": {
