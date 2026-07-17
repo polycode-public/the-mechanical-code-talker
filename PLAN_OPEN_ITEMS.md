@@ -190,22 +190,11 @@ doc named the neighbourhood, not the cause.**
 
 ## Known-open defects found this cycle, not in the original plan
 
-- **`splitSentences` mis-splits a module path.** wink splits `src/core/store.mjs` into
-  `"src/core/store."` + `"mjs …"`. `chat.mjs`'s teach path now requires a real boundary
-  (`[.!?]\s+\w`) before trusting it, but **every other caller still has the defect** —
-  `extract-facts.mjs` and `import-file.mjs` among them.
 - **A multi-sentence teach line renders its last fact without a bullet** in a SEEDED session (two
   `•` then an unbulleted third). The pin runs unseeded so it does not catch this. Cosmetic.
 - **`read as` still excuses a guess for inputs other than the impact paraphrase** —
   `ask.mjs:3921`'s relaxation tier. 1.3 routed its own phrasings away from it; the general problem
   stands.
-- **3 CHATBENCH cells are graded but absent from `GRADED_MATRIX`** (`A2:assert-recall`,
-  `B1:svo-query`, `B1:noise+svo-query`). Coverage is **9 of 36 declared**, not 12.
-- **`README.md:942-943`** calls the Repository Interface "versioned (1.0.0)"; it is **1.1.0**.
-- **`chatbench/run.mjs:34`** cites "the frozen v1 48" in a `cases.jsonl` deleted at `eaf33f0`.
-- **`PLAN_NLU_BENCHMARKS.md:292`** uses "The honest frame is" — a standing style HARD NO.
-- **`infbench` had no unit tests at all** until `7b74431`. The instrument meant to catch silent
-  regressions was itself unpinned.
 
 ## Resume here
 
