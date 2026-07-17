@@ -10350,6 +10350,55 @@ function renderAmbiguousAssert(line, ambiguous, normFactTerm) {
  *  committing to the first. Returns null for the overwhelming majority of
  *  sentences, so every single-reading sentence renders byte-identically to
  *  the unchanged parseAce path below. */
+/** Does this line actually carry a sentence boundary — a terminator, then
+ *  whitespace, then the next sentence's first word? wink's own splitter breaks
+ *  "src/core/store.mjs" into "src/core/store." + "mjs …", so a line naming a
+ *  file splits into sentences that were never there. Requiring the whitespace
+ *  keeps a dotted identifier whole, and nothing that holds no boundary is ever
+ *  handed to the splitter's judgement. */
+const carriesASentenceBoundary = (line) => /[.!?]\s+\w/.test(String(line));
+
+/** Does this sentence match the general-verb teach frame on its own terms —
+ *  reusing generalVerbTeach's OWN closed guards, so the split gate and the lane
+ *  it feeds can never disagree about which sentences that lane accepts. */
+function matchesGeneralVerbTeachFrame(sentence) {
+  if (GENERAL_VERB_ANYWHERE_EXCLUDE_RE.test(sentence)) return false;
+  const m = sentence.match(GENERAL_VERB_TEACH_RE);
+  if (!m) return false;
+  const [, subject, verb] = m;
+  return !GENERAL_VERB_EXCLUDE_RE.test(verb)
+    && !GENERAL_VERB_NOT_A_VERB_RE.test(verb)
+    && !GENERAL_VERB_DETERMINER_RE.test(subject)
+    && !GENERAL_VERB_IMPERATIVE_SUBJECT_RE.test(subject);
+}
+
+/** Does this sentence stand alone as a teach — a clean ACE triple, a taxonomy
+ *  declaration, or the general-verb frame? A question never counts. */
+function sentenceTeachesAlone(sentence, parseAce, lex) {
+  const s = String(sentence).trim();
+  if (!s || s.includes("?")) return false;
+  const parse = parseAce(s, lex);
+  if (parse && parse.triples?.length && !parse.residue?.length) return true;
+  return DECLARATIVE_KIND_OF_RE.test(s) || matchesGeneralVerbTeachFrame(s);
+}
+
+/** Does every sentence of a multi-sentence line teach on its own? Then the line
+ *  is a teach line, and each sentence belongs in its own turn: handed over
+ *  glued, the first sentence's teach frame captures all the others as its
+ *  object ("disk-1 rests on disk-2. disk-2 rests on disk-3." stores an object of
+ *  "on disk-2. disk-2 rests on disk-3"). Any parse failure answers false and
+ *  leaves the unsplit line to the ordinary lanes. */
+async function everySentenceTeaches(sentences, lexicon) {
+  try {
+    const { parseAce } = await import("../domain/grammar/ace.mjs");
+    let lex = lexicon;
+    if (!lex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); lex = loadLexicon(); }
+    return sentences.every((sentence) => sentenceTeachesAlone(sentence, parseAce, lex));
+  } catch {
+    return false;
+  }
+}
+
 async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, cache = null }) {
   try {
     const { parseAce, parseAceAmbiguous } = await import("../domain/grammar/ace.mjs");
@@ -10711,16 +10760,21 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     return withLast(morePage(workingLine, ctx), "continue viewing a previous long listing");
   }
 
-  // Multi-sentence PLAN pre-split — one message carrying state sentences plus
-  // a goal/trigger ("disk-1 rests on disk-2. … the goal is that …. solve it.")
-  // runs each sentence as its own nested turn, threading focus/last/planState
-  // through, and answers with the final turn's result behind brief receipts.
-  if (!_noSplit && memoryDir) {
+  // Multi-sentence pre-split — one message carrying several sentences
+  // ("disk-1 rests on disk-2. … the goal is that …. solve it.") runs each
+  // sentence as its own nested turn, threading focus/last/planState through,
+  // and answers with the final turn's result behind brief receipts. Fires
+  // when the line ends in a plan trigger, or when every sentence is a
+  // self-contained teach: either way each sentence has a lane of its own, so
+  // none of them reaches the parser glued to its neighbours.
+  if (!_noSplit && memoryDir && carriesASentenceBoundary(workingLine)) {
     const sentences = splitSentences(workingLine);
     if (sentences.length > 1) {
       const lastSentence = sentences[sentences.length - 1];
-      if (PLAN_SOLVE_RE.test(lastSentence) || GOAL_TEACH_RE.test(lastSentence) || GOAL_TEACH_INFINITIVE_RE.test(lastSentence)
-        || GOAL_TEACH_VERBLESS_RE.test(lastSentence) || LEGAL_MOVES_RE.test(lastSentence)) {
+      const endsInPlanTrigger = PLAN_SOLVE_RE.test(lastSentence) || GOAL_TEACH_RE.test(lastSentence)
+        || GOAL_TEACH_INFINITIVE_RE.test(lastSentence) || GOAL_TEACH_VERBLESS_RE.test(lastSentence)
+        || LEGAL_MOVES_RE.test(lastSentence);
+      if (endsInPlanTrigger || await everySentenceTeaches(sentences, lexicon)) {
         let f = focus; let l = last; let ps = planHolder.state;
         const receipts = [];
         let finalRec = null;

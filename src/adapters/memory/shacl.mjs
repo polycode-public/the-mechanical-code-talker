@@ -31,6 +31,12 @@ const RULE_SLOT_PROPS = {
   ],
 };
 
+// A term that runs past a sentence terminator into the next sentence
+// ("disk-2. disk-2 rests on disk-3") is a whole un-split line captured as one
+// term, not a term. Requires the word character after the terminator, so an
+// abbreviation or a version ("v1.2", "core.mjs") stays a legal term.
+const SPANS_A_SENTENCE_BOUNDARY_RE = /[.!?]\s+\w/;
+
 function attrValue(ind, prop) {
   const a = (ind?.attributes || []).find((x) => x?.prop === prop);
   return a ? String(a.value ?? "") : undefined;
@@ -53,6 +59,12 @@ function checkIndividual(ind, violations) {
 function checkFact(ind, violations) {
   for (const prop of ["rdf:subject", "rdf:predicate", "rdf:object"]) {
     if (!nonEmpty(attrValue(ind, prop))) violations.push(`a Fact needs a non-empty ${prop}`);
+  }
+  for (const prop of ["rdf:subject", "rdf:object"]) {
+    const term = attrValue(ind, prop);
+    if (term !== undefined && SPANS_A_SENTENCE_BOUNDARY_RE.test(term)) {
+      violations.push(`a Fact's ${prop} must be a single term, not text spanning a sentence boundary (got ${JSON.stringify(term)})`);
+    }
   }
   const prov = attrValue(ind, "mgx:factProvenance");
   if (prov !== undefined && !nonEmpty(prov)) violations.push("mgx:factProvenance, when present, must be non-empty");

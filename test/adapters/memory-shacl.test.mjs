@@ -187,6 +187,54 @@ test("appendFact: a well-formed fact (including one with NO provenance) writes f
   }
 });
 
+test("FactShape: a term spanning a sentence boundary is rejected, while a dotted term stays a legal term", () => {
+  const spanningObject = validateIndividual({
+    id: "fact:1", class: "Fact",
+    attributes: [
+      { prop: "rdf:subject", value: "disk-1" },
+      { prop: "rdf:predicate", value: "mgx:rest-on" },
+      { prop: "rdf:object", value: "on disk-2. disk-2 rests on disk-3" },
+    ],
+  });
+  assert.equal(spanningObject.ok, false);
+  assert.match(spanningObject.violations.join(" "), /rdf:object must be a single term/);
+
+  const spanningSubject = validateIndividual({
+    id: "fact:2", class: "Fact",
+    attributes: [
+      { prop: "rdf:subject", value: "disk-1 rests on disk-2. disk-2" },
+      { prop: "rdf:predicate", value: "mgx:rest-on" },
+      { prop: "rdf:object", value: "disk-3" },
+    ],
+  });
+  assert.equal(spanningSubject.ok, false);
+  assert.match(spanningSubject.violations.join(" "), /rdf:subject must be a single term/);
+
+  const dotted = validateIndividual({
+    id: "fact:3", class: "Fact",
+    attributes: [
+      { prop: "rdf:subject", value: "core.mjs" },
+      { prop: "rdf:predicate", value: "tmct:imports" },
+      { prop: "rdf:object", value: "walk.mjs" },
+    ],
+  });
+  assert.equal(dotted.ok, true, "a filename's dot is not a sentence boundary");
+});
+
+test("appendFact: a fact whose object spans a sentence boundary never reaches disk", async () => {
+  const dir = await tmpRepo();
+  try {
+    await assert.rejects(
+      appendFact(dir, { subject: "disk-1", predicate: "mgx:rest-on", object: "on disk-2. disk-2 rests on disk-3" }),
+      /must be a single term/,
+    );
+    const m = await loadMemory(dir);
+    assert.equal(m.individuals.filter((i) => i.class === "Fact").length, 0, "nothing was written");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("appendFact: the existing structural floor (empty subject/predicate/object) still throws exactly as before — unrelated to the SHACL gate", async () => {
   const dir = await tmpRepo();
   try {
