@@ -100,7 +100,7 @@ export function buildCorpusEntry(id, tierLabel, byClump) {
   // spliced in here (scripts/apply-persona-tiers.mjs). ${id === "human-large" ? "Large's own facts walk real multi-hop hypernym chains (up to 4 hops, e.g. \"surgeon ⊑ doctor ⊑ … ⊑ person\") wherever WordNet's real structure supports it, not a flat one-hop-per-word cap." : "Medium stays flat, one hop per word, same style as Small."}
   "${id}": {
     kind: "domain",
-    description: "The ${tierLabel} tier of the default human-world persona (PLAN_SEED.md): incremental facts beyond ${id === "human-medium" ? "Small" : "Medium"} only — activated alongside \\"human\\" via --persona-size ${id === "human-medium" ? "medium" : "large"}, never active by default.",
+    description: "The ${tierLabel} tier of the default human-world persona: incremental facts beyond ${id === "human-medium" ? "Small" : "Medium"} only — activated alongside \\"human\\" via --persona-size ${id === "human-medium" ? "medium" : "large"}, never active by default.",
     lexicon: {
       nouns: [
 ${nounsSrc}

@@ -61,7 +61,7 @@
     {
       "id": "human",
       "kind": "domain",
-      "description": "The default human-world persona (PLAN_SEED.md): everyday people, places, objects, nature, time/events, body/food and mind vocabulary, hand-curated from Open English WordNet (CC-BY-4.0) and bridged to Schema.org's (Apache-2.0) top-level classes — replaces the code-domain SEON+ConceptNet default.",
+      "description": "The default human-world persona: everyday people, places, objects, nature, time/events, body/food and mind vocabulary, hand-curated from Open English WordNet (CC-BY-4.0) and bridged to Schema.org's (Apache-2.0) top-level classes — replaces the code-domain SEON+ConceptNet default.",
       "source": {
         "kind": "curated",
         "tool": "corpus/tier2/generate.mjs"
@@ -75,7 +75,7 @@
     {
       "id": "human-medium",
       "kind": "domain",
-      "description": "The Medium tier of the default human-world persona (PLAN_SEED.md): incremental facts beyond Small only — activated alongside \"human\" via --persona-size medium, never active by default.",
+      "description": "The Medium tier of the default human-world persona: incremental facts beyond Small only — activated alongside \"human\" via --persona-size medium, never active by default.",
       "source": {
         "kind": "curated",
         "tool": "corpus/tier2/generate.mjs"
@@ -89,7 +89,7 @@
     {
       "id": "human-large",
       "kind": "domain",
-      "description": "The Large tier of the default human-world persona (PLAN_SEED.md): incremental facts beyond Medium only — activated alongside \"human\" via --persona-size large, never active by default.",
+      "description": "The Large tier of the default human-world persona: incremental facts beyond Medium only — activated alongside \"human\" via --persona-size large, never active by default.",
       "source": {
         "kind": "curated",
         "tool": "corpus/tier2/generate.mjs"

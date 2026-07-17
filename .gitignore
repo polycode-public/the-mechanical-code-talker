@@ -57,7 +57,7 @@ tmct.toml
 # WORKSHEET (candidates for hand-review), regenerated on demand from the two
 # locally-cloned reference repos, never the final committed content itself
 # (that's corpus/tier2/human.jsonl + src/grammar/lexicon-core.json, hand-picked
-# FROM this worksheet — see PLAN_SEED.md §5).
+# FROM this worksheet).
 scripts/persona-worksheet.json
 scripts/persona-examples-candidates.json
 

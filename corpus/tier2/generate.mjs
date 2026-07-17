@@ -241,7 +241,7 @@ export const CORPUSES = {
     ],
   },
 
-  // PLAN_SEED.md — the default "human-world" persona (the operator's own
+  // The default "human-world" persona (the operator's own
   // framing: SEON+ConceptNet's code-domain bias was never the only sensible
   // default; this is the general-knowledge seed set that REPLACES it as the
   // default active bundle, per src/services/extensions.mjs's builtinExtensions()).
@@ -252,20 +252,20 @@ export const CORPUSES = {
   // IsA/HasA/UsedFor/CapableOf/etc. facts; Schema.org's vocabulary
   // (Apache-2.0) supplies `human-base`'s top-level category classes and
   // `human-bridge`'s showcase connection between the two independently-built
-  // taxonomies (PLAN_SEED.md §8) — both hand-authored in homage to their
+  // taxonomies — both hand-authored in homage to their
   // source's real class shape, never copied verbatim (SEON's own
-  // LICENSE-NOTICE discipline). 9 clumps, Small tier (PLAN_SEED.md §3):
+  // LICENSE-NOTICE discipline). 9 clumps, Small tier:
   // human-base (scaffolding, always first), 7 content clumps, human-bridge
   // (the cross-ontology showcase). "Breadth over depth" throughout, per the
   // operator's explicit instruction — flat one-hop IsA facts, no gender/
   // kinship taxonomy, no formal role hierarchy.
   human: {
     kind: "domain",
-    description: "The default human-world persona (PLAN_SEED.md): everyday people, places, objects, nature, time/events, body/food and mind vocabulary, hand-curated from Open English WordNet (CC-BY-4.0) and bridged to Schema.org's (Apache-2.0) top-level classes — replaces the code-domain SEON+ConceptNet default.",
+    description: "The default human-world persona: everyday people, places, objects, nature, time/events, body/food and mind vocabulary, hand-curated from Open English WordNet (CC-BY-4.0) and bridged to Schema.org's (Apache-2.0) top-level classes — replaces the code-domain SEON+ConceptNet default.",
     // Every noun/verb/adjective this corpus's facts depend on, so a live
     // sentence built from the SAME curated vocabulary ("a man has a hat") can
     // actually parse — src/domain/grammar/lexicon-core.json carries the real
-    // entries (PLAN_SEED.md §4's "two vocabulary surfaces", gated
+    // entries (a second vocabulary surface, gated
     // independently); this list is the --verify drift-guard's source of
     // truth (below), not a second copy of the lexicon file itself.
     lexicon: {
@@ -351,9 +351,9 @@ export const CORPUSES = {
       // ---- human-base (scaffolding, ~18 facts) — the top-level category
       // classes, `rdfs:subClassOf` children of a "schema thing" concept
       // representing Schema.org's real `:Thing` root (hand-authored in
-      // homage to schema.org/Thing's shape — PLAN_SEED.md §5 — never a
+      // homage to schema.org/Thing's shape, never a
       // verbatim copy of Schema.org's own class definitions/comments).
-      // Always active regardless of tier (PLAN_SEED.md §3).
+      // Always active regardless of tier.
       ["schema_person", "/r/IsA", "schema_thing"],
       ["schema_place", "/r/IsA", "schema_thing"],
       ["schema_object", "/r/IsA", "schema_thing"],
@@ -681,8 +681,8 @@ export const CORPUSES = {
       ["smile", "/r/CapableOf", "show_happiness"], ["smile", "/r/PartOf", "a_face"],
       ["silence", "/r/HasProperty", "quiet"], ["silence", "/r/CapableOf", "calm_the_mind"],
 
-      // ---- human-bridge (~10 facts) — the cross-ontology showcase
-      // (PLAN_SEED.md §8): a WordNet-side root/common term paired with its
+      // ---- human-bridge (~10 facts) — the cross-ontology showcase:
+      // a WordNet-side root/common term paired with its
       // Schema.org-inspired counterpart from human-base, above. scm-sco
       // (src/domain/syllogise.mjs, unmodified) proves a chain spanning both
       // sources once a WordNet-side ⊑-chain reaches one of these —
@@ -700,20 +700,20 @@ export const CORPUSES = {
     ],
   },
   // Medium tier — INCREMENTAL facts beyond Small (corpus/tier2/human.jsonl) only
-  // (PLAN_SEED.md §3's tier-selection design: Small/Medium/Large are SIZES of
+  // (Small/Medium/Large are SIZES of
   // one bundle, not separate corpus ids — this file holds only what Medium
   // ADDS beyond the previous tier). Built by scripts/build-persona-tiers.mjs
   // from the same two locally-cloned WordNet source files as Small
   // (~/projects/globalwordnet/english-wordnet/src/yaml/), automatically
   // curated: candidate words ranked by WordNet sense-count (a commonness
-  // proxy, PLAN_SEED.md §12), restricted to each word's own TOP senses (not
+  // proxy), restricted to each word's own TOP senses (not
   // some rare/slang meaning that happens to live in this domain), obscure/
   // archaic/offensive/pharmaceutical content excluded via a definition-text
   // blocklist plus an explicit word denylist, reviewed by hand before being
   // spliced in here (scripts/apply-persona-tiers.mjs). Medium stays flat, one hop per word, same style as Small.
   "human-medium": {
     kind: "domain",
-    description: "The Medium tier of the default human-world persona (PLAN_SEED.md): incremental facts beyond Small only — activated alongside \"human\" via --persona-size medium, never active by default.",
+    description: "The Medium tier of the default human-world persona: incremental facts beyond Small only — activated alongside \"human\" via --persona-size medium, never active by default.",
     lexicon: {
       nouns: [
         // human-core (+186 words: people, family, common roles)
@@ -1800,20 +1800,20 @@ export const CORPUSES = {
   },
 
   // Large tier — INCREMENTAL facts beyond Medium (corpus/tier2/human-medium.jsonl) only
-  // (PLAN_SEED.md §3's tier-selection design: Small/Medium/Large are SIZES of
+  // (Small/Medium/Large are SIZES of
   // one bundle, not separate corpus ids — this file holds only what Large
   // ADDS beyond the previous tier). Built by scripts/build-persona-tiers.mjs
   // from the same two locally-cloned WordNet source files as Small
   // (~/projects/globalwordnet/english-wordnet/src/yaml/), automatically
   // curated: candidate words ranked by WordNet sense-count (a commonness
-  // proxy, PLAN_SEED.md §12), restricted to each word's own TOP senses (not
+  // proxy), restricted to each word's own TOP senses (not
   // some rare/slang meaning that happens to live in this domain), obscure/
   // archaic/offensive/pharmaceutical content excluded via a definition-text
   // blocklist plus an explicit word denylist, reviewed by hand before being
-  // spliced in here (scripts/apply-persona-tiers.mjs). Large's own facts walk real multi-hop hypernym chains (up to 4 hops, PLAN_SEED.md §3's own "surgeon ⊑ doctor ⊑ … ⊑ person" example) wherever WordNet's real structure supports it, not a flat one-hop-per-word cap.
+  // spliced in here (scripts/apply-persona-tiers.mjs). Large's own facts walk real multi-hop hypernym chains (up to 4 hops, e.g. "surgeon ⊑ doctor ⊑ … ⊑ person") wherever WordNet's real structure supports it, not a flat one-hop-per-word cap.
   "human-large": {
     kind: "domain",
-    description: "The Large tier of the default human-world persona (PLAN_SEED.md): incremental facts beyond Medium only — activated alongside \"human\" via --persona-size large, never active by default.",
+    description: "The Large tier of the default human-world persona: incremental facts beyond Medium only — activated alongside \"human\" via --persona-size large, never active by default.",
     lexicon: {
       nouns: [
         // human-core (+1469 words: people, family, common roles)
@@ -14881,8 +14881,8 @@ export async function fetchCorpus(url, expectedSha) {
 
 /**
  * Alignment drift-guard for a corpus entry that declares an optional
- * `lexicon` sub-key (today: only `human` — PLAN_SEED.md §4's "two vocabulary
- * surfaces" seam): the corpus fact set and the ACE parser's closed-set
+ * `lexicon` sub-key (today: only `human` — the two-vocabulary-surfaces
+ * seam): the corpus fact set and the ACE parser's closed-set
  * vocabulary (src/domain/grammar/lexicon-core.json) are two SEPARATE files, gated
  * independently, so nothing stops them drifting apart over time. Two
  * directions, both real (mirroring conceptnet-map.toml's own "slice relation
