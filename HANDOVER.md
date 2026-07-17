@@ -37,15 +37,23 @@ Nothing is pushed; the operator gates that.
 carries the phase table, the operator decisions already taken, the traps this cycle hit, and the
 list of this plan's own citations that proved false. Read that before quoting any fix site.
 
-Phases 1–7 and 10 are closed. This session landed the §7 vocabulary fallout (the four inference
-citations, the SEON renames, `cap:`/`taught:`, the OSA rename, the storage-vocab renames, the
-honest-miss citation) and the 64-bit `factIdFor` migration, with the full suite green. What remains:
+Phases 1–7 and 10 are closed, and this round closed the last of the phase-table backlog: the two
+parser defects (the multi-sentence teach bullet and the silent count-restrictor total), Phase 7's
+two leftover rows (the `runChat` block and the `repository-interface.md` prose, both now pinned),
+and `PLAN_NORMATIVE.md` §7.5 (the PROV Source split) and §7.6 (the SKOS derived-view). What remains:
 
-- **Phase 7's two leftover rows** (in `docs/public-examples.md`): three `dom`-tier `index.html` rows
-  (`runChat` the one worth pinning) and `docs/repository-interface.md`'s prose contract numbers.
-- **`PLAN_NORMATIVE.md` §7.5 / §7.6.** The PROV Source split (a read-side reclassification off the
-  `sourceType` stored on every Source individual) and SKOS concept identity (needs concept identity
-  for the corpus's bare-string terms before `skos:related` applies).
+- **N1 — universal quantifier over a module set.** `do all modules import X` fails on a duplicated
+  ambiguous parse; wire it to the set-complement machinery `which modules do not import X` already
+  has. Found by the 2.0.3 benchmark re-audit (`BENCHMARK_CONVERSATION` item 17), not previously
+  tracked. See `PLAN_OPEN_ITEMS.md`.
+- **N2 / N3 — two stale-doc corrections** the benchmark re-audit surfaced, not yet folded into
+  Phase 5: `PLAN_PARAPHRASE_VERIFICATION.md` frames an already-chat-wired slice as future (and no
+  corpus row pins that surface), and `PLAN_SYLLOGIST_EL_DL.md` still lists the shipped-and-archived
+  defeasible tier as an undesigned future tier.
+- **Phase 4's re-measurements** (sequencing item 11, not yet run): CEFR back to N=2, the INFBENCH
+  existential probe, the 6th CONVERSATION persona, the 315-case CHATBENCH pool, and the
+  resolver-floor `ab-c2-what-to-test` decision. The phase table's "Phase 4 DONE" marks the pinning
+  commits, not these measurements.
 
 ## Discipline
 
