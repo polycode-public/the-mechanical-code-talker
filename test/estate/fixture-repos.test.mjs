@@ -5,7 +5,7 @@
 // buildEntities()+ingestSchemaDocs() actually produce today.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
@@ -48,6 +48,37 @@ test("every derived entities fixture repo's graph.json matches a fresh derivatio
     derive(payload);
     const committed = JSON.parse(readFileSync(path.join(REPOS_DIR, name, "graph.json"), "utf8"));
     assert.deepEqual(committed, JSON.parse(JSON.stringify(payload)), `fixture repo "${name}" drifted from its entities.fixture.json derivation`);
+  }
+});
+
+// The generatorless fixtures (test/fixtures/entities-repo, large-scale, and the
+// examples/* graphs) commit a graph.json with no module spec to regenerate from,
+// so the drift guards above cannot reach them. `seon:subKind` was renamed to
+// `mgx:subKind` (SEON has no subKind property) in the live generators; this
+// catches any committed graph that still carries the retired token.
+const RETIRED_SCHEMA_TOKENS = ["seon:subKind"];
+function collectGraphJson(dir, out) {
+  for (const entry of readdirSync(dir)) {
+    if (entry === "node_modules") continue;
+    const full = path.join(dir, entry);
+    if (statSync(full).isDirectory()) collectGraphJson(full, out);
+    else if (entry === "graph.json") out.push(full);
+  }
+  return out;
+}
+
+test("no committed fixture graph.json carries a retired schema token", () => {
+  const roots = [
+    path.join(REPOS_DIR, ".."),
+    path.join(REPOS_DIR, "..", "..", "..", "examples"),
+  ];
+  const graphs = [];
+  for (const root of roots) if (existsSync(root)) collectGraphJson(root, graphs);
+  for (const file of graphs) {
+    const text = readFileSync(file, "utf8");
+    for (const token of RETIRED_SCHEMA_TOKENS) {
+      assert.ok(!text.includes(token), `${file} still carries retired schema token "${token}"`);
+    }
   }
 });
 
