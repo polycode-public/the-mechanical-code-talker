@@ -3182,15 +3182,16 @@ ${shown.join("\n")}${tail}`;
       if (objText) return stamp({ shape: "whoLast", entityType: null, modifier: "direct", kind: "touches", object: objText });
     }
     const byIdx = lcWords.indexOf("by");
-    const hasPassiveAux = lcWords.slice(0, verbHit.start).some((w) => PASSIVE_AUX.has(w));
+    const passiveAuxIdx = lcWords.slice(0, verbHit.start).findIndex((w) => PASSIVE_AUX.has(w));
+    const hasPassiveAux = passiveAuxIdx >= 0;
+    const agentIsFronted = hasPassiveAux && passiveAuxIdx > byIdx;
     if (byIdx >= 0 && !consumed.has(byIdx) && hasPassiveAux) {
       const roleText = (from, to) => words.slice(from, to).filter((_, j) => {
         const i = from + j;
         const w = lcWords[i];
         return !consumed.has(i) && !STOPWORDS2.has(w) && w !== "by" && !PASSIVE_AUX.has(w) && !WH_WORDS.has(w) && !PLACEHOLDER_SET.has(w);
       }).join(" ").trim();
-      const patient = roleText(0, byIdx);
-      const agent = roleText(byIdx + 1, words.length);
+      const [patient, agent] = agentIsFronted ? [roleText(passiveAuxIdx + 1, words.length), roleText(byIdx + 1, passiveAuxIdx)] : [roleText(0, byIdx), roleText(byIdx + 1, words.length)];
       if (patient && agent) return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject: agent, object: patient });
       if (agent) return stamp({ shape: "forward", entityType, modifier, kind, object: agent });
       if (patient) return stamp({ shape: "reverse", entityType, modifier, kind, object: patient });

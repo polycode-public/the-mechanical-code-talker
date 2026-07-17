@@ -177,14 +177,23 @@ export function parseKeywordSpot(text, nlp = null) {
     if (objText) return stamp({ shape: "whoLast", entityType: null, modifier: "direct", kind: "touches", object: objText });
   }
 
-  // Reversible passive ("PATIENT is VERBed BY AGENT"): a passive auxiliary plus a
-  // standalone agent-marking "by" (not already swallowed into a multi-word verb
-  // phrase) splits the sentence into a patient before "by" and an agent after it.
-  // How many of the two the sentence actually names picks the shape: both named
-  // is the yes/no ask, agent alone reads forward from the agent, patient alone
-  // reads reverse over the patient.
+  // Reversible passive: a passive auxiliary plus a standalone agent-marking "by"
+  // (not already swallowed into a multi-word verb phrase) splits the sentence
+  // into a patient role and an agent role. How many of the two the sentence
+  // actually names picks the shape: both named is the yes/no ask, agent alone
+  // reads forward from the agent, patient alone reads reverse over the patient.
+  //
+  // The auxiliary's side of "by" says which role sits where. "X is imported BY
+  // Y" postposes the agent, so the aux comes first and the patient leads. "BY
+  // which modules is X imported" fronts it, so "by" comes first and the roles
+  // are mirrored: the agent runs from "by" up to the auxiliary, and the patient
+  // follows. Reading a fronted sentence on the postposed partition finds nothing
+  // before "by", takes the patient for the agent, and answers the reverse of the
+  // question asked.
   const byIdx = lcWords.indexOf("by");
-  const hasPassiveAux = lcWords.slice(0, verbHit.start).some((w) => PASSIVE_AUX.has(w));
+  const passiveAuxIdx = lcWords.slice(0, verbHit.start).findIndex((w) => PASSIVE_AUX.has(w));
+  const hasPassiveAux = passiveAuxIdx >= 0;
+  const agentIsFronted = hasPassiveAux && passiveAuxIdx > byIdx;
   if (byIdx >= 0 && !consumed.has(byIdx) && hasPassiveAux) {
     const roleText = (from, to) => words
       .slice(from, to)
@@ -196,8 +205,9 @@ export function parseKeywordSpot(text, nlp = null) {
       })
       .join(" ")
       .trim();
-    const patient = roleText(0, byIdx);
-    const agent = roleText(byIdx + 1, words.length);
+    const [patient, agent] = agentIsFronted
+      ? [roleText(passiveAuxIdx + 1, words.length), roleText(byIdx + 1, passiveAuxIdx)]
+      : [roleText(0, byIdx), roleText(byIdx + 1, words.length)];
     if (patient && agent) return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject: agent, object: patient });
     if (agent) return stamp({ shape: "forward", entityType, modifier, kind, object: agent });
     if (patient) return stamp({ shape: "reverse", entityType, modifier, kind, object: patient });
