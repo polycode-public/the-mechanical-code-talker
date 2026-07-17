@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { LAYER_RANK, layerOf } from "./layer-map.mjs";
 import { ALLOWED_VIOLATIONS } from "./layer-allowlist.mjs";
+import { relativeSpecifiers } from "../../src/domain/relative-specifiers.mjs";
 
 const SRC = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..", "src");
 
@@ -46,12 +47,14 @@ for (const file of walkModules(SRC)) {
 
   if (REQUIRE_RE.test(text)) violations.push(`src/${rel} calls require()`);
 
+  // A domain module must import nothing non-relative — not a builtin, not a
+  // package. The relative edges are checked separately, below.
   for (const spec of importSpecifiers(text)) {
-    const isRelative = spec.startsWith("./") || spec.startsWith("../");
-    if (!isRelative) {
-      if (layer === "domain") violations.push(`src/${rel} imports ${spec}`);
-      continue;
-    }
+    if (spec.startsWith("./") || spec.startsWith("../")) continue;
+    if (layer === "domain") violations.push(`src/${rel} imports ${spec}`);
+  }
+
+  for (const spec of relativeSpecifiers(text)) {
     const resolved = path.resolve(path.dirname(file), spec);
     if (!fs.existsSync(resolved)) {
       dangling.push(`src/${rel} -> ${spec}`);

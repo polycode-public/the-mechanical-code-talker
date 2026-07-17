@@ -19,13 +19,14 @@
 // from the source at build time. The copies keep src/'s directory layout under
 // public/engine/src/, because their own relative imports have to keep resolving.
 
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
-import { dirname, join, relative, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
 
 import { stampVersion } from "../src/domain/version-stamp.mjs";
+import { importClosure } from "../src/adapters/import-closure.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..");
@@ -37,31 +38,9 @@ const SRC = join(ROOT, "src");
 const SITE = process.env.TMCT_DEMO_SITE_OUT ? resolve(process.env.TMCT_DEMO_SITE_OUT) : join(ROOT, "public");
 const OUT = join(SITE, "engine", "src");
 
-// Relative specifiers only. Bare ones (wink-nlp) and node: builtins are the
-// import map's job, and the shims under public/engine-shims/ stand in for them.
-const RELATIVE_SPECIFIER = /(?:\bfrom\s*|\bimport\s*\(\s*|\bimport\s+)["'](\.[^"']*)["']/g;
-
 // The wink lemma/POS tier arrives through a computed specifier, so reading the
 // source cannot see it. Everything these two reach is walked like any other file.
 const DYNAMICALLY_LOADED = ["adapters/wink-model.mjs", "adapters/ask-nlp.mjs"];
-
-/** Every file under src/ that `entry`'s imports reach, as paths relative to src/. */
-function engineImportClosure(entry) {
-  const reached = new Set();
-  const visit = (file) => {
-    const rel = relative(SRC, file);
-    if (reached.has(rel) || !existsSync(file)) return;
-    reached.add(rel);
-    if (file.endsWith(".json")) return;
-    const source = readFileSync(file, "utf8");
-    for (const [, specifier] of source.matchAll(RELATIVE_SPECIFIER)) {
-      visit(resolve(dirname(file), specifier));
-    }
-  };
-  visit(join(SRC, entry));
-  for (const file of DYNAMICALLY_LOADED) visit(join(SRC, file));
-  return [...reached].sort();
-}
 
 // The footer's version number, rewritten from package.json on every build. The
 // page is tracked, so the committed copy carries whatever the last build wrote;
@@ -81,7 +60,7 @@ function stampPageVersion() {
 // dev machine that had run this. CI never saw it, because CI checks out clean.
 rmSync(OUT, { recursive: true, force: true });
 
-const engineFiles = engineImportClosure("domain/ask.mjs");
+const engineFiles = importClosure("domain/ask.mjs", { root: SRC, seeds: DYNAMICALLY_LOADED });
 for (const rel of engineFiles) {
   mkdirSync(dirname(join(OUT, rel)), { recursive: true });
   cpSync(join(SRC, rel), join(OUT, rel));
