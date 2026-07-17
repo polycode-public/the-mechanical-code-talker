@@ -187,6 +187,54 @@ const inventory = {
   sites: Object.fromEntries([...sites].map(([c, s]) => [c, s])),
 };
 
+/** The register check: every term that claims a verdict must still occur in the
+ *  tree. A row that outlives its code is a citation for something that is not
+ *  there, which is worse than no citation — it reads as current. */
+function checkRegister() {
+  const register = JSON.parse(readFileSync(join(ROOT, "docs/references/term-register.json"), "utf8"));
+  const haystack = ["src", "test", "docs", "scripts", "ontology"]
+    .flatMap((d) => [...walk(join(ROOT, d))])
+    .filter((f) => !/term-register\.json|PLAN_NORMATIVE|term-inventory/.test(f))
+    .map((f) => readFileSync(f, "utf8"))
+    .join("\n");
+
+  const orphans = [];
+  const byArea = new Map();
+  const byVerdict = new Map();
+  for (const row of register.terms) {
+    const probe = row.probe ?? row.term;
+    if (!haystack.includes(probe)) orphans.push(`${row.term} (probe ${JSON.stringify(probe)})`);
+    byArea.set(row.area, (byArea.get(row.area) ?? 0) + 1);
+    byVerdict.set(row.verdict, (byVerdict.get(row.verdict) ?? 0) + 1);
+    if (!row.cite) orphans.push(`${row.term} — no citation`);
+  }
+  return { register, orphans, byArea, byVerdict };
+}
+
+if (process.argv.includes("--register")) {
+  const { register, orphans, byArea, byVerdict } = checkRegister();
+  const out = [];
+  out.push(`# term register — ${register.terms.length} terms`);
+  out.push("");
+  out.push("| area | terms |");
+  out.push("|---|--:|");
+  for (const [a, n] of [...byArea].sort((x, y) => y[1] - x[1])) out.push(`| ${a} | ${n} |`);
+  out.push("");
+  out.push("| verdict | terms |");
+  out.push("|---|--:|");
+  for (const [v, n] of [...byVerdict].sort((x, y) => y[1] - x[1])) out.push(`| \`${v}\` | ${n} |`);
+  out.push("");
+  if (orphans.length) {
+    out.push("## Orphans — a registered term that no longer occurs, or carries no citation");
+    out.push("");
+    for (const o of orphans) out.push(`- ${o}`);
+  } else {
+    out.push("Every registered term still occurs in the tree and carries a citation.");
+  }
+  process.stdout.write(`${out.join("\n")}\n`);
+  process.exit(orphans.length ? 1 : 0);
+}
+
 if (process.argv.includes("--json")) {
   process.stdout.write(`${JSON.stringify(inventory, null, 2)}\n`);
 } else {

@@ -95,20 +95,20 @@ commit that reaches `main` or a remote.
 | **4** — the instruments | **DONE** (4.1-4.5) | `6ed8f41`, `cee3ebe`, `ee6ddf3`, `a46d92a`, `7b74431` |
 | **5** — wrong documents | **DONE** | `bf6732c` |
 | PLAN_DEPS batches 1-2, 4-7 | **DONE** | `c2ded65`, `f2d7e27`, `488aa84`, `5824c66`, `2ccee08` |
-| **3** — honest-miss gaps | **IN PROGRESS** — 3.1, 3.2, 3.3, 3.5, 3.6, 3.7 done; 3.4 didn't reproduce; **3.8-3.11 open** | `b1f14a0`, `7d4acc4`, `7ea0036`, + below |
-| **7** — public-surface audit | **OPEN** — nothing started | — |
+| **3** — honest-miss gaps | **IN PROGRESS** — 3.1, 3.2, 3.3, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10e, 3.11 done; 3.4 didn't reproduce; **3.10a-d open** | `b1f14a0`, `7d4acc4`, `7ea0036`, `92133b0`, `1d01eab`, `7caea95`, + below |
+| **7** — public-surface audit | **DONE** — table at `docs/public-examples.md`; 3 shipping defects deleted, 61 examples pinned. Two rows left open in the table itself: 3 `dom`-tier `index.html` rows, and `docs/repository-interface.md`'s prose numbers | `c49003d`, `01f4006`, `5c45354`, `93e5297` |
 | **8** — capability page | **OPEN** — nothing started | — |
 | **9** — prose pass | **OPEN** — nothing started | — |
-| **10** — `PLAN_NORMATIVE.md` | **LANDED** — plan written, standards read, ontology uplifted, 10 tests green. §10.1's casing defect **does not exist** (see the FALSE table). Four fixes remain in files Phase 10 does not own: `PLAN_NORMATIVE.md` §7 | — |
-| PLAN_DEPS Q1 (maintainer tier), Q3 (ReDoS) | **OPEN** — decided, not built | — |
+| **10** — `PLAN_NORMATIVE.md` | **LANDED** — plan written, standards read, ontology uplifted, 10 tests green, 45-term register machine-checked. §10.1's casing defect **does not exist** (see the FALSE table). **The review found a live data-loss bug: `factIdFor`'s 32-bit hash, 45% collision odds at `init:xl`** — `PLAN_NORMATIVE.md` §9.1/§7.7. Fixes remain in files Phase 10 does not own: §7.1-7.11 | — |
+| PLAN_DEPS Q1 (maintainer tier), Q3 (ReDoS) | **DONE** — Q3 bounds the `name` filter (>30s → 1ms); Q1 stops 16 maintainer files shipping and adopts `yaml` as a devDependency, which fixed silent WordNet data loss | `e32160e`, + below |
 
 ## Operator decisions taken this cycle — do not re-ask
 
 | Question | Decision |
 |---|---|
-| PLAN_DEPS Q1 — does the maintainer tier ship? | **Stop shipping it.** Unblocks `yaml` as a devDependency, deletes 220 LOC. NOT YET BUILT. |
+| PLAN_DEPS Q1 — does the maintainer tier ship? | **Stop shipping it.** Built: 16 files no longer ship, `yaml` is a devDependency, production tree unchanged at 41 packages. |
 | PLAN_DEPS Q2 — is the TUI worth 36/40 packages? | **Keep `ink`.** No work. |
-| PLAN_DEPS Q3 — `tmct_search`'s ReDoS | **Bound the input**, don't make it a literal. NOT YET BUILT. |
+| PLAN_DEPS Q3 — `tmct_search`'s ReDoS | **Bound the input**, don't make it a literal. Built at `e32160e`. |
 | §4.4 — `infbench/cases.jsonl` | **Derivable artifact.** Done — guarded at `cee3ebe`. |
 | §1.2 — existential | **Refuse**, don't represent. Done at `cd3943f`. |
 
@@ -138,6 +138,7 @@ history were not.** Verify before you quote.
 | 10.1 | `mgx:cause` vs `mgx:causes` is one of the casing pairs | **Both are lowercase — not a casing pair at all.** It is a verb lemma vs a curated corpus predicate, and `hash.mjs`'s `CANONICAL_FACT_PREDICATE` folds it on the write path ON PURPOSE, so both converge on one content-addressed fact id. `remember that fire causes smoke` stores `mgx:causes`; `mgx:cause` occurrences: 0 |
 | 10.2 | `prov:` has 3 uses | **2**, and the third was a JS object key (`prov: provBucketFor(...)` in `ledger-viz.mjs`), not a CURIE. Both real uses are the same UNVERIFIED note — the diagnosis was right and sharper than the count: `prov:` is used exactly twice, both times to say the check had not been done |
 | 10.2 | "does `mgx:statedBy` mean `prov:wasAttributedTo`?" and the in-code note "ext ref prov:wasDerivedFrom" | **`mgx:derivedFrom` means `prov:wasInfluencedBy`, not `wasDerivedFrom`** — it unions attribution with derivation, which PROV keeps apart. And `statedBy` cannot assert `wasAttributedTo`: that ranges over `prov:Agent`, while `tmct:Source` unions all three of PROV's disjoint top classes (`operator`=Agent, `corpus`/`web`=Entity, `entailed`=Activity) |
+| 10.2 | the inventory is "the `mgx:`/`mgxneg:` predicates and classes, `EDGE_KINDS`, `MISS_REASONS`, the `RELATIONS` keys… `INTERFACE_VERSION`'s service names" | **Too narrow, and the narrowness hid the worst bug in the repo.** A term does not have to be a triple. Scoping the review to CURIEs skips `factIdFor`'s 32-bit hash (silent data loss at documented corpus sizes), `fuzzy.mjs`'s misnamed OSA, `ledger`, and the unnamed reification. The register is 45 concept terms across 9 areas — see `PLAN_NORMATIVE.md` §9 |
 | 10.2 | SEON is "already used at 99 sites; check the alignment is real and complete" | **Real but partial: 19 of 24 SEON spellings are genuine terms, 5 are not.** `seon:subKind` is a **stored** undefined IRI (in `examples/*/.tmct/graph.json` today); `seon:Module`, `seon:ClassDefinition`, `seon:Attribute` don't exist either. `seon:history` tmct already caught and realigned. Verified against the live `code.owl`, not a summary |
 
 ## Traps this cycle hit, for the next session
@@ -186,15 +187,30 @@ history were not.** Verify before you quote.
 
 Sequence for the next session, in order:
 
-1. **Phase 3** — nothing started. 3.1 (negative assertion retracts) is the biggest: it contradicts
-   a shipped decision (`0f8fb61`). 3.9's fix site is `chat.mjs`, NOT `ask.mjs` — investigated and
-   recorded at the bottom of Phase 3 below.
-2. **Phase 7** — the public-surface audit. Before Phase 9.
-3. ~~**Phase 10**~~ — landed. `PLAN_NORMATIVE.md` §7 lists four fixes in files it does not own.
-4. **Phase 8** — the capability page. Phase 10's research is done and cite-ready:
-   `docs/references/schemas/`.
-5. **Phase 9** — the prose pass. Last.
-6. **PLAN_DEPS Q1 + Q3** — both decided, neither built.
+1. **Phase 3 — only 3.10a-d remain.** Everything else is done; 3.4 never reproduced.
+   - **3.10d** (`is disk-1 clear?`) is the one with a shipped promise behind it: `hanoi-3.txt`
+     advertises the phrasing and clearness is never derived from the board, though
+     `what moves are legal now?` and `what rests on disk-2?` both work.
+   - **3.10a is not what the table says.** `next` DOES write board state; the gap is that facts are
+     `@stepK`-stamped, so a read-back returns every step at once (Phase 7's audit found this).
+   - 3.10b (goal-frame phrasings) and 3.10c (plan follow-ups) are untouched.
+2. ~~**Phase 7**~~ — done. Two rows stay open inside `docs/public-examples.md` itself.
+3. ~~**Phase 10**~~ — the RDF/ontology half landed. **The operator then widened it: every term in
+   the repo traced to a published standard or paper (inference/deduction/predicate, classical
+   planning, grammar, NLP, unit vs integration testing, the storage model), plus a README
+   bibliography.** That pass is in flight; `PLAN_NORMATIVE.md` is the record. §7 lists four fixes in
+   files it does not own.
+4. **Phase 8** — the capability page. Phase 10's research is cite-ready: `docs/references/schemas/`.
+5. **Phase 9** — the prose pass. Last, and it must land after Phase 10's bibliography so the README
+   is written once.
+6. ~~**PLAN_DEPS Q1 + Q3**~~ — both built and verified.
+
+**Read this before the next round.** Phase 3's rate of false diagnosis was the story: the fix site
+named in the table was wrong on **five of eight** items, always the same way — the doc named the
+neighbourhood, not the cause. `normalize.mjs` was cited twice for code that is not in it. Three
+separate items (3.2, 3.5, 3.7) were **one** defect. Two items (3.10e, 3.11) were pinned to their own
+buggy output, which is why they survived. **Run the reproducer before believing the diagnosis, and
+check what the existing pin actually asserts before trusting that it passes for the right reason.**
 
 Version rolls per round, commit each, **do not push** — the operator gates that, and CI publishes on
 a version bump on `main`.
@@ -692,7 +708,48 @@ negative proving the path gate does not claim a class or an unknown path. The th
 | 3.10b | `get all the disks onto peg-c` / `solve the towers of hanoi` → swallowed as facts, then `no goal set yet` | the goal frame is narrower than natural phrasing (`i want every disk on peg-c` works) |
 | 3.10c | `what is the next move` / `how many moves` / `why that move` → code-graph replies | plan follow-ups unrouted, though the plan output invites them |
 | 3.10d | `is disk-1 clear?` at step 0 → "I don't have a fact saying disk-1 is clear" | clearness is derivable from the board and isn't derived. `hanoi-3.txt` advertises this phrasing |
-| 3.10e | `hanoi-3.txt`'s own 4-disk recipe → `no plan found within 300 moves` | `smaller than` isn't transitive, so its two facts never establish disk-1/disk-2 vs disk-4. Either make the relation transitive or fix the shipped file's instructions — the file promises 15 moves |
+| 3.10e | `hanoi-3.txt`'s own 4-disk recipe → `no plan found within 300 moves` | **DONE, and it was worse than reported: the 3-DISK recipe did not work either.** Two defects stacked, and transitivity was not one of them — see below |
+
+### 3.10e, in full — the shipped Hanoi recipe never worked at all
+
+Worth its own section, because the reported symptom was the smaller half and the diagnosis was
+wrong.
+
+**The reported 4-disk failure was real. The unreported 3-disk failure underneath it was the cause.**
+`hanoi-3.txt`'s own board line —
+
+```
+disk-1 is smaller than disk-2. disk-1 is smaller than disk-3.
+```
+
+— **stored nothing**. It answered "I couldn't store that — I don't recognize … `"disk-2."` …", with
+the period still glued on. So disk-1 had no smaller-than fact, could never legally move, and
+`solve it` found no plan **at 3 disks**, following the file exactly as written. The file the README
+points at was broken end to end, and **nothing drove it**: 1.1's own pin
+(`planning.teach.multi-sentence-line`) covers the rest-on line one row below it, which splits
+correctly. That is why 1.1 reads DONE.
+
+**Cause: 1.1's split gate is a lane list, and the comparative lane was missing from it.**
+`sentenceTeachesAlone` accepted an ACE parse, a taxonomy declaration, or the general-verb frame —
+not `COMPARATIVE_TEACH_RE`. So "every sentence teaches" said false, the line was never split, and
+the first frame swallowed the rest as its object. **Any teach lane added later and not added here
+re-opens this.** The set has to track the lane list.
+
+**Transitivity was never the problem.** With the split fixed, 3 disks solves in **7**. The 4-disk
+scale-up still failed with the file's own instruction ("disk-4 is a disk. disk-3 is smaller than
+disk-4"), which omits disk-1 and disk-2 vs disk-4 — and with all three pairs taught it solves in
+**15**, exactly what the file promises. So the fix is the file's instruction, not a rule change.
+The doc's "either make the relation transitive or fix the file" offered both; the file is the
+honest one, and it is now explicit about why every pair must be taught.
+
+**Verified, not assumed.** Phase 7's agent reported this recipe finding a 5-move solution; it does
+not — it finds none. The plan doc said the cause was transitivity; it is not. Both were checked by
+running the file.
+
+**Pins.** 2 rows: the comparative multi-sentence line under `planning.teach.multi-sentence-line`
+(the key 1.1 already owns), and **`planning.solve.hanoi` driving the shipped file verbatim** — its
+13 body lines as `setup.teach`, then the board, the goal, and `solve it`, asserting 7 moves. That
+row IS the file: it cannot ship broken again without going red.
 
 ### 3.11 Two surfaces disagree: `/untested` (7) vs `show me the untested modules` (9) — **DONE**
 
@@ -710,9 +767,35 @@ error. It is excluded on **both polarities**, by the same two tests the tool app
 edge subject, and the path shape via the shared `isTestPath`). Excluding on only the untested side
 would have fixed the count and left `which modules are tested` free to drift the other way.
 
-**Pins.** 2 rows keyed `template.command.untested`. The first drives `/untested` **and** three
-natural-language phrasings **in one row** — that is the actual lesson of this item, since neither
-side was pinned when they drifted. The second proves the exclusion holds on the tested side too.
+**There were TWO routes, and the corpus caught the second.** `which modules are untested` reads the
+qualifier; `which modules are **not** tested` compiles to a set COMPLEMENT and still answered 9.
+Making coverage three-valued is exactly what broke it: `evalBoolean`'s complement asked
+`!qualHolds(tested)`, and a test module now answers false to "tested", so it *survived* the
+complement. **The negation of a three-valued predicate is not a set complement.** The complement
+asks the OPPOSITE qualifier now, so an individual the question does not apply to drops out of both
+sides.
+
+**The first attempt was worse and is worth recording.** Folding "not tested" → "untested" in
+`normalize.mjs` fixed the count and destroyed the canonical: the restatement went from "modules that
+are not tested" to the generic "a compositional query (qualifier)", which
+`test/tools/ask.test.mjs`'s "the qualifier and existential complements restate too" pins on purpose.
+That trade — a right count for a worse receipt — is not one to make on a product whose canonical
+line is a headline feature. Fixing the complement keeps both.
+
+**A qualifier with no boolean polarity keeps the plain complement**, and that is the right reading
+for it: `not exported` really is everything not exported, and `which modules do not import X`
+rightly still includes the test modules — a test module genuinely is a non-importer.
+
+**"No row pins either count" was FALSE, and the truth is the better lesson.** Four `bodyEquals`
+assertions across two `games.drilldown.coverage*` rows pinned the NL side's **9-module list
+verbatim, test modules included**. The wrong answer was not unpinned — it was *held in place*. A pin
+written from observed output rather than from what the answer should be freezes the bug and reads
+ever after as proof of correctness. Both rows now pin 7 and say why.
+
+**Pins.** 2 new rows keyed `template.command.untested`. The first drives `/untested` **and** three
+natural-language phrasings **in one row** — that is the actual lesson of this item, since the two
+surfaces had no shared row to disagree in. The second proves the exclusion holds on the tested side
+too.
 
 ### 3.12 Named capability gaps — not defects
 

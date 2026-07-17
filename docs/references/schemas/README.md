@@ -22,6 +22,14 @@ published.
 | [`conceptnet-relations.md`](conceptnet-relations.md) | ConceptNet relations | slice pins 5.7.0; 5.8 is current | 5.8 released 2020-05-20 | 2026-07-04, re-checked 2026-07-17 |
 | [`iso-24617-2-dialogue-acts.md`](iso-24617-2-dialogue-acts.md) | ISO 24617-2 (SemAF) | **2**, current | 2020-12-02 | **draft + editors' paper only** |
 | [`owl2-vocabulary.md`](owl2-vocabulary.md) | OWL 2 / RDF / RDFS | — | — | UNVERIFIED-pending-web-check |
+| [`rdf-reification-and-rdf-star.md`](rdf-reification-and-rdf-star.md) | RDF 1.1 / RDF 1.2 / RDF-star | Rec 2014-02-25; **CR** 2026-04-07 | — | 2026-07-17 |
+| [`content-addressing-and-storage.md`](content-addressing-and-storage.md) | temporal, content addressing, logs, provenance | mixed — per entry | — | 2026-07-17 |
+
+**Two entries carry findings, not just terms.**
+`rdf-reification-and-rdf-star.md` settles that reification is **not** deprecated (the common claim
+is false) and that RDF-star's `<< >>` quoted triples are a superseded 2021 Community Group design.
+`content-addressing-and-storage.md` carries the fact-id collision measurement — a terminology
+question ("is `content-addressed` the right word?") that turned into a data-loss bug.
 
 **`iso-24617-2-dialogue-acts.md` is the one to be careful with.** The published text is paywalled
 and was not obtained. The entry rests on the 2019 DIS draft plus a peer-reviewed LREC paper by the

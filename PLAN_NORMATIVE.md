@@ -599,12 +599,337 @@ already on every Source individual on disk, so the split is derivable from what 
 makes it a read-side reclassification rather than a rewrite. That is a design worth doing
 deliberately, not folded into a vocabulary pass.
 
+### 7.7 `factIdFor`'s 32-bit hash — the one that is not a naming fix
+
+**`src/domain/hash.mjs:139`.** §9.1 has the proof: a real collision at 26,034 triples, and silent
+data loss when both facts are written. 45.4% collision probability at `init:xl`'s documented 72,075
+facts; 99.9% at `init:xxl`.
+
+Widen `factIdFor` to at least 64 bits. `sha256Bytes` already ships in the same file, already pinned
+byte-identical to `node:crypto` by a test — truncate it. This is not a crypto problem.
+
+**This one needs a real migration**, and it is the only item in this plan that does. The memory graph
+is not derivable (§5.4). But the migration is tractable: a Fact stores its own `(s, p, o)` in
+`rdf:subject`/`rdf:predicate`/`rdf:object`, so every id is recomputable from the payload — rewrite
+the ids and the `statedBy`/`derivedFrom` edges that point at them. A store written before the change
+keeps working if the reader falls back to the old id on a miss, the same legacy-key pattern §7.1
+uses.
+
+Do not do this quietly alongside something else. It changes every fact id on disk.
+
+### 7.8 `syllogise` — a public CLI verb, so not this plan's call
+
+**`src/domain/syllogise.mjs`, `src/domain/cli-verbs.mjs`, `npx tmct syllogise`.** §9.3. `scm-sco` is
+a genuine syllogism (Barbara); `cls-svf1` and the cardinality rules are not. The engine is a
+forward-chaining fixpoint, which its own header already says.
+
+Two defensible options, and the operator picks: keep `syllogise` as the product-facing verb and name
+the mechanism accurately in the code, or rename the verb. A rename touches a published CLI surface.
+
+### 7.9 Damerau-Levenshtein → Optimal String Alignment
+
+**`src/domain/interpret/fuzzy.mjs:19`** (the comment) and **`PLAN_DEPS.md` §3.5** (the prose).
+§9.4 has the proof: `editDistance("CA","ABC") = 3`, and true Damerau-Levenshtein gives 2.
+
+A comment and a doc sentence. No behaviour changes, and **`PLAN_DEPS` §3.5's decision is unaffected**
+— its argument is "it handles transpositions, the libraries don't", which is true of OSA too. Say
+"Optimal String Alignment (restricted Damerau-Levenshtein)" and cite Damerau 1964 and Levenshtein
+1966. Worth adding that OSA is not a metric, since that is the thing someone will trip over next.
+
+### 7.10 The storage vocabulary renames
+
+All doc and comment level, all cheap, none behavioural. §9.2:
+
+- **`ledger` → `append-only log`**, or drop the metaphor. `src/domain/cli-verbs.mjs`,
+  `src/services/ledger-viz.mjs`, `src/services/viz-theme.mjs`, the web surface. Note the twist: the
+  thing called a ledger is a *view*, and the store beneath it is not append-only either. If the name
+  is meant as a UI label for `tmct viz`, that is defensible — but then it should not appear in
+  storage prose.
+- **`content-addressed` → `content-derived (non-cryptographic 32-bit)`** until §7.7 lands. After
+  §7.7, "content-addressed" is earned.
+- **`mgx:updatedAt`'s prose** — call it an audit/last-modified stamp, not transaction time. The
+  ontology comment (this plan's file) already says the right thing.
+- **Name reification.** tmct does textbook RDF reification and the word appears nowhere. One
+  sentence in `src/adapters/memory/core.mjs`'s header pointing at
+  `docs/references/schemas/rdf-reification-and-rdf-star.md` closes it.
+- **`materialise` / `materialize`** — 24 and 28. Pick one.
+
+### 7.11 Cite the honest miss
+
+§9.8. "Honest miss" (285 uses) should keep its name and gain its citation: abstention / selective
+prediction, with Chow 1970's reject option as the root. One line in the README and one in
+`CLAUDE.md`'s ethos prose.
+
 ### 7.6 Concept identity for corpus terms — the SKOS alignment
 
 §4.5. Minting a `skos:Concept` per corpus term, with the strings as `skos:prefLabel` /
 `skos:altLabel`, would let `mgx:synonym` and `mgx:relatedTo` map onto SKOS. It needs concept
 identity that does not exist yet. `docs/references/schemas/skos.md` and ISO 25964 are the starting
 points, and ISO 704 / ISO 25964 have not been read at all.
+
+---
+
+## 9. The whole-repository term review
+
+§1-§8 reviewed the CURIEs. That was the wrong scope, and `PLAN_OPEN_ITEMS.md` §10 set it. A term
+does not have to be a triple to be a term: an identifier, a function name, a doc word and a test
+tier all name concepts, and those concepts have literatures.
+
+**A term needs a verdict when it names a concept from a discipline.** `src/` declares 1,802 distinct
+concept words across its identifiers; most of them (`idx`, `rows`, `tail`, `next`) name nothing a
+discipline has a word for, and reviewing them would be theatre. The register below is the terms that
+do.
+
+### 9.1 The finding: a terminology review found a live data-loss bug
+
+**`factIdFor` is a 32-bit hash, and tmct's own documented corpus sizes are past its birthday bound.**
+
+This is a terminology finding before it is a bug finding, and the route matters. tmct calls its fact
+ids **content-addressed**. Git and IPFS are the two examples every reader has, and both use
+cryptographic hashes — so the term silently imports collision resistance that `fnv1a32` does not
+have. Meanwhile `hash.mjs:137` says the NUL delimiter is "collision-proof unlike a space", which is
+true *of the delimiter* and sits two lines above the hash where the real collision lives. **The word
+was doing the reassuring, and nothing was doing the checking.**
+
+`src/domain/hash.mjs:139`:
+
+```js
+export const factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
+```
+
+`fnv1aHex` is FNV-1a **32-bit**, 8 hex characters. N = 2³². Against the fact counts `HANDOVER.md`
+publishes, measured on real hardware:
+
+| init tier | facts | P(at least one collision) |
+|---|--:|--:|
+| `init` (default) | 664 | 0.0% |
+| `init:large` | 37,797 | **15.3%** |
+| `init:xl` | 72,075 | **45.4%** |
+| `init:xxl` | 238,866 | **99.9%** |
+
+**Not a theoretical bound.** A real collision, found by brute force at **26,034 triples** — below
+`init:large`:
+
+```
+(thing23102, mgx:atLocation, value3156)  -> fact:495ee929
+(thing26033, mgx:causes,     value6087)  -> fact:495ee929
+```
+
+**And a collision is silent data loss.** Written to a real store, two distinct facts in, one out, no
+error:
+
+```
+facts written: 2
+facts stored : 1
+  fact:495ee929  ->  (thing26033, mgx:causes, value6087)
+```
+
+`hash.mjs:23` says "Same (s,p,o) → same id → upsert, never a dup". That direction holds. The
+converse — different (s,p,o) → different id — is what fails, and **the upsert path turns the failure
+into a merge instead of a crash**.
+
+RFC 9923 (Informational, February 2026) is unambiguous: "No assertion of suitability for
+cryptographic applications is made for the FNV hash algorithms", and FNV is "NOT RECOMMENDED for any
+application that requires that it be computationally infeasible" to find collisions.
+
+**The fix is already in the file.** `hash.mjs:45` ships `sha256Bytes`, pinned byte-identical to
+`node:crypto` by a test, added for the same synchronous / browser-safe / dependency-free reasons.
+Truncating it to 64 or 128 bits closes the gap with code that already exists and is already tested.
+At 64 bits, 100,000 facts give ≈ 2.7 × 10⁻¹⁰.
+
+**The blocker is a migration, not cryptography**, and the migration is tractable: a fact stores its
+own `(s, p, o)` in `rdf:subject`/`rdf:predicate`/`rdf:object`, so every id is recomputable from the
+payload. The rewrite is the ids plus the `statedBy`/`derivedFrom` edges pointing at them. This is
+the one place in this plan where the memory graph — which is **not** derivable (§5.4) — genuinely
+needs one.
+
+`src/domain/hash.mjs` is not this plan's file. **§7.7.**
+
+### 9.2 Storage — where the operator predicted the most drift, correctly
+
+| term | verdict | finding |
+|---|---|---|
+| `content-addressed` | **rename** → "content-derived (non-cryptographic 32-bit)" | §9.1. The term borrows Git/IPFS's implied collision resistance. |
+| **reification** | **extend** — and *name it* | tmct does textbook RDF reification (`tmct:Fact rdfs:subClassOf rdf:Statement`) and **the word appears 0 times in the repo**. It does the thing and never says the thing. |
+| `ledger` (81 uses) | **rename** → "append-only log", or drop the metaphor | The literature has no such term of art: it appears in none of LSM-tree, log-structured file systems, WAL/ARIES or Kafka. ISO 22739 (blockchain/DLT vocabulary) defines it as records "final, definitive and immutable". **tmct's ledger is neither.** It is `tmct viz` — an HTML *view* of the memory graph around a focus term. And the store underneath is not append-only either: `removeFacts` exists and upsert mutates in place. The word promises immutability twice and delivers a report. |
+| `mgx:createdAt` | `aligned`, partially | transaction-time **start**, and only the start. No end, so not an interval. |
+| `mgx:updatedAt` | **rename** → audit / last-modified stamp | **not transaction time.** Transaction time cannot be changed by definition; a mutable stamp destroys when the previous version stopped being current. tmct is **not bitemporal**, and the concrete test it fails is the transaction-timeslice query: "what did we believe last Tuesday". |
+| `mgx:utteranceTs` | `aligned` | valid time, as an instant — correct while the modelled fact is the utterance-event, which is what the ontology says. |
+| "provenance" | `aligned` | correct in the PROV-DM/PROV-O sense. **Not** how-provenance: tmct records which *rule* entailed a fact (`mgx:sourceRule`) but not which *antecedent facts* fed it. That gap is the whole distance to why-/how-provenance, and it is bridgeable — the fixed point already runs. |
+| `merkle` | correctly absent | tmct is not a Merkle tree and must not claim to be: no internal nodes, no root committing to the set, no inclusion proofs. |
+| `bitemporal`, `named graph`, `rdf-star`, `event sourcing` | absent | 0 uses each. §9.2.1. |
+
+Reference: `docs/references/schemas/content-addressing-and-storage.md`.
+
+#### 9.2.1 Reification is not deprecated — my own premise was wrong
+
+I went looking to confirm that RDF reification is deprecated in favour of RDF-star. **It is not.
+Not in RDF 1.1, not in RDF 1.2, not anywhere.** "Deprecated" never appears against it, and RDF 1.1
+Semantics *endorses* it for tmct's exact use case:
+
+> "This supports use cases where properties such as dates of composition or provenance information
+> are applied to the reified triple."
+
+What is true is narrower and more useful: **RDF 1.2 Schema §7 "Legacy vocabularies", §7.2
+"Old-style" Reification** holds `rdf:Statement` and friends, non-normative, and says the newer
+constructs are "generally recommended as preferable alternatives for new developments". That is
+soft-deprecation by editorial demotion, and it is the strongest anti-reification statement that
+exists.
+
+**The drift worth policing is the opposite of the one I expected.** RDF-star's `<< :s :p :o >>`
+quoted triples are a **2021 Community Group design the Working Group did not adopt**. RDF 1.2
+(Candidate Recommendation, 2026-04-07 — *not* a Recommendation) uses **triple terms** `<<( )>>`,
+object position only, plus `rdf:reifies` and reifiers. Citing `<< >>` in 2026 is citing a superseded
+design.
+
+**Verdict: keep reification, and say what it is.** The accurate sentence is "tmct uses the RDF 1.1
+reification vocabulary, which RDF 1.2 reclassifies as legacy and steers new systems away from". The
+migration horizon is cheap to describe: **a tmct Fact already *is* a reifier**, so `rdf:reifies` maps
+onto the model almost exactly. Nothing needs to happen until RDF 1.2 is a Recommendation.
+
+Reference: `docs/references/schemas/rdf-reification-and-rdf-star.md`.
+
+### 9.3 Logic and inference — in better shape than expected
+
+`src/domain/syllogise.mjs` **already uses the OWL 2 RL/RDF rule names and already cites them**:
+`scm-sco`, `cax-sco`, `cax-dw`, `cls-svf1`, `scm-svf1`, `cls-maxc1` — the real, numbered rule
+identifiers, with "OWL 2 RL Table 8" and "W3C OWL 2 RL Table 9" in the comments. It uses `⊨`
+correctly and flags where it steps outside the profile ("outside OWL 2 RL's own decidable profile"
+on the cardinality rule).
+
+**That is the alignment this whole phase argues for, already in place.** Verdict `aligned`. The gap
+is only that no reference entry pinned the spec's edition — now `OWL 2 Profiles (Second Edition),
+W3C Recommendation, 2012-12-11`. Note for citers: the document's section order is **EL §2, QL §3,
+RL §4** — not alphabetical.
+
+| term | verdict | note |
+|---|---|---|
+| `scm-sco` / `cax-sco` / `cax-dw` / `cls-svf1` / `scm-svf1` | `aligned` | OWL 2 RL/RDF rule ids, cited by table |
+| `entailment` (10) vs `inference` (385) | `aligned` | the ratio looked like drift and is not: `syllogise.mjs` reserves ⊨/"entails" for the specific claim and uses "inference" for the activity, which is correct |
+| `materialise` (24) / `materialize` (28) | **rename** → pick one | both spellings ship. House style, not terminology — but it is in the payload's own vocabulary notes |
+| `syllogise` | open | see below |
+| `justification`, `premise` | `map` | JTMS's vocabulary (Doyle 1979). tmct's `mgx:sourceRule` is a justification's *rule* without its *antecedents* — same gap as §9.2's how-provenance row, one bridge fixes both |
+
+**`syllogise` is the one genuinely open naming question.** `scm-sco` (a⊑b, b⊑c ⊨ a⊑c) really is a
+syllogism — it is Barbara. But `cls-svf1` and the cardinality rules are not: a syllogism is
+Aristotle's two-premise term-logic form, and tmct's engine is a general forward-chaining fixpoint
+over a Datalog-shaped rule set. The module's own header already calls it what it is —
+"forward-chains entailments" — so the honest options are to keep `syllogise` as the product-facing
+verb (it is a good word for what a visitor sees) and name the mechanism accurately in the code, or
+rename to `entail`/`materialise`. **This is a public CLI verb (`npx tmct syllogise`), so it is not
+this plan's call. §7.8.**
+
+### 9.4 IR and NLP — `fuzzy.mjs` does not implement Damerau-Levenshtein
+
+**It implements Optimal String Alignment.** `fuzzy.mjs:19` says "hand-rolled
+Damerau-Levenshtein". `PLAN_DEPS.md` §3.5 says "It is Damerau-Levenshtein."
+
+Proven by the discriminating case:
+
+```
+editDistance("CA", "ABC", 9) = 3
+```
+
+True Damerau-Levenshtein gives **2** (transpose `CA`→`AC`, insert `B`). OSA gives 3, because no
+substring may be edited twice. The implementation keeps only two previous rows (`prev2`), which is
+the OSA recurrence; true Damerau-Levenshtein needs a full last-seen-position table.
+
+- **Damerau** (1964), "A technique for computer detection and correction of spelling errors", *CACM*
+  7(3), pp. 171–176 — added transposition of two **adjacent** characters.
+- **Levenshtein** (1966), "Binary codes capable of correcting deletions, insertions, and reversals",
+  *Soviet Physics Doklady* 10(8), pp. 707–710 — insertion, deletion, substitution.
+- OSA is **not a metric** (it violates the triangle inequality). True Damerau-Levenshtein is.
+
+**`PLAN_DEPS` §3.5's decision survives intact, and that is the point.** Its load-bearing claim is
+"it handles transpositions; `leven` and `fastest-levenshtein` do not". True of OSA as well —
+`editDistance("ab","ba") = 1`. So *keep, emphatically* stays right. Only the name is wrong.
+Verdict: **rename** the term in the comment and in `PLAN_DEPS` §3.5. Neither is this plan's file.
+**§7.9.**
+
+Elsewhere NLP is clean:
+
+| term | verdict | note |
+|---|---|---|
+| `lemma` (311), `lemmatize` (4), `stemming` (0) | `aligned` | tmct lemmatizes and does not stem, and says so. Porter stemming is correctly absent |
+| `anaphora` (127) vs `coreference` (3) | `aligned` | tmct resolves a pronoun to a standing referent. That is anaphora resolution, not coreference clustering. The rarer word is the right one |
+| `copula`, `determiner`, `quantifier` | `aligned` | ACE's own lexicon categories (`ace-6.7.md`) |
+| `predicate` | **polysemy, worth a note** | logic/RDF sense (the middle of a triple) vs grammar sense (what is said about the subject). tmct means the RDF sense throughout, and also ships a grammar. Both senses are legitimate; the collision is real |
+| `grounding` (80) | **polysemy, worth a note** | tmct means *OWL grounding* (a type traces to the ontology). Planning means *instantiating an action schema with constants*. tmct does both things and uses the word for only one |
+
+### 9.5 Testing — a coherent taxonomy that is not the standard one, and is not written down
+
+tmct's tiers are `smoke`, `fast`, `adapters` (120 files), `tools`, `estate`, `corpus`, `bench`,
+`readme`, plus `e2e/`. That is **two taxonomies at once**: architectural layer (adapters, tools) and
+budget (smoke, fast). It is coherent. It is not the unit/integration/e2e pyramid — `integration
+test` appears **0 times**.
+
+That is defensible and arguably better than the pyramid, whose "unit" is famously underdefined.
+Fowler's own **solitary vs sociable** distinction (after Jay Fields) describes tmct's split more
+accurately than "unit vs integration" does. The finding is not that the taxonomy is wrong — it is
+that **the taxonomy is undocumented as a taxonomy**, so a newcomer maps it onto the pyramid and gets
+it wrong.
+
+| term | verdict | note |
+|---|---|---|
+| `mock` (47), `stub` (40), `spy` (20), `fake` (6), `dummy` (3) | `aligned` — **checked, no drift** | I expected loose "mock" and did not find it. The uses are prose asserting the opposite ("a real round trip through actual SQLite, not a mock") plus `mock` as a *domain word* in a toy ontology (`x∈mock, mock⊑fixture`). Meszaros's taxonomy is not abused |
+| `test double` | absent | the umbrella term is unused while all five members are used. Harmless |
+| `fixture` (874) | `aligned` | Meszaros's term |
+| `blast radius` (4) | **map** | ops/SRE jargon. The academic name is **Regression Test Selection** (Yoo & Harman, STVR 2012). `CLAUDE.md`'s rule is textbook RTS and never says so |
+| `lane` (657) | `extend` | a tmct coinage. No testing literature uses it. Heavily load-bearing, so a rename is expensive and the concept is real — keep it and define it |
+| **two meanings of "smoke"** | **already known** | `test:smoke` (a 1-second tier) and `smoke:deploy` (a probe against a deployed site). `CLAUDE.md` already flags the collision. The literature's "smoke test" (McConnell's daily build and smoke test) is closer to `smoke:deploy` |
+
+### 9.6 The register
+
+`scripts/term-inventory.mjs --register` checks the register in
+`docs/references/term-register.json` against the tree: every registered term must still occur, and
+each carries its area, verdict and citation. A term that stops occurring is an orphan; the citation
+travels with the term rather than living only in prose.
+
+### 9.7 Verdict counts
+
+**The register is the checked number.** `node scripts/term-inventory.mjs --register` — 45 terms,
+every one still occurring in the tree, every one carrying a citation:
+
+| area | terms | | verdict | terms |
+|---|--:|---|---|--:|
+| logic | 11 | | `aligned` | 26 |
+| ontology | 8 | | `map` | 7 |
+| storage | 7 | | `rename` | 6 |
+| nlp | 4 | | `extend` | 5 |
+| planning | 4 | | `open` | 1 |
+| testing | 4 | | | |
+| grammar | 3 | | | |
+| eval | 3 | | | |
+| ir | 1 | | | |
+
+§4's CURIE reconciliation is counted separately and not folded in here: its 34 `map`s are 25
+ConceptNet mirrors plus nine PROV-O alignments, which is one decision made 25 times and would drown
+the table above. The register carries the terms that each needed their own thinking.
+
+**`aligned` at 26 of 45 is the headline, and it is a good one.** Most of this vocabulary was already
+the discipline's word. The whole OWL 2 RL rule set, the NLP terms, Meszaros's test doubles, PDDL's
+precondition/effect — all correct before this review started.
+
+**Where the drift actually was**, in order: **storage** (the operator's prediction, confirmed —
+reification unnamed, `ledger` wrong twice, not bitemporal, and the 32-bit hash), then **eval**
+(§9.8), then **IR** (one misnamed algorithm), then **testing** (an unwritten taxonomy). **Logic was
+the cleanest area in the repo** and needed almost nothing.
+
+### 9.8 The honest miss has a published name
+
+`honest miss` appears **285 times**. It is tmct's central design claim — a timeout is a miss, never
+a guess — and it is a coinage.
+
+The literature calls it **abstention**, or **selective prediction** / **selective classification**;
+the decision-theoretic root is Chow's **reject option** (Chow, "On optimum recognition error and
+reject tradeoff", *IEEE Trans. Information Theory* 16(1), 1970). `abstention` appears **0 times** in
+the repo, `faithfulness` **0**.
+
+**Verdict: `extend`, and cite.** "Honest miss" is a better product word than "abstention" and should
+stay — it is what a visitor understands. But the design deserves its published name in the docs,
+because that name is what connects tmct to a literature that has measured this exact behaviour. The
+`MISS_REASONS` set stays `mgx:`'s: those are reasons a specific machine could not answer, and no
+standard enumerates them.
 
 ---
 

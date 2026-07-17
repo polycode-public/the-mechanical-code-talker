@@ -1016,6 +1016,72 @@ fallback, the code-extraction stack, and the MCP server were all removed. The
 naming, license, and memory model were reset to the vision above. See
 `ROADMAP.md` for the phase plan.
 
+## Standards and bibliography
+
+tmct's vocabulary is grounded in published standards where they exist, and says where they don't.
+Each alignment below is a triple in `ontology/tmct-core.ttl` and a test in
+`test/adapters/grammar-ontology.test.mjs`. `docs/references/` holds an entry per source: the
+edition, the retrieval date, the terms tmct uses, and what could not be verified.
+`PLAN_NORMATIVE.md` holds the reconciliation, one verdict per term.
+
+### The data model
+
+| source | edition | what tmct uses it for |
+|---|---|---|
+| [W3C OWL 2 Primer](https://www.w3.org/TR/owl2-primer/) · [Profiles](https://www.w3.org/TR/owl2-profiles/) | Recommendation, 2012-12-11 | The triple model. The grammar emits `rdfs:subClassOf`, `owl:Restriction`, `owl:someValuesFrom`, `owl:disjointWith` and cardinality axioms. The inference engine implements OWL 2 RL/RDF rules and uses their names: `scm-sco`, `cax-sco`, `cax-dw`, `cls-svf1`, `scm-svf1`. |
+| [RDF 1.1 Semantics](https://www.w3.org/TR/rdf11-mt/) | Recommendation, 2014-02-25 | Facts are reified statements. Appendix D.1 endorses reification for provenance, which is what tmct uses it for. [RDF 1.2](https://www.w3.org/TR/rdf12-concepts/) (Candidate Recommendation, 2026-04-07) reclassifies that vocabulary as legacy and points new systems at triple terms and `rdf:reifies`. tmct has not moved, and `docs/references/schemas/rdf-reification-and-rdf-star.md` says why. |
+| [W3C PROV-O](https://www.w3.org/TR/prov-o/) | Recommendation, 2013-04-30 | Provenance. A fact's source links sit under `prov:wasInfluencedBy`; a fact cleaned from a raw utterance is a `prov:wasDerivedFrom`; a session is a `prov:Activity` and the utterances in it are `prov:Entity`s it generated. |
+| [W3C SKOS](https://www.w3.org/TR/skos-reference/) | Recommendation, 2009-08-18 | Read, and mostly not used. `skos:related` needs `skos:Concept` at both ends, and tmct's corpus terms are bare strings. `docs/references/schemas/skos.md` records what a concept-identity pass would need. |
+| [SEON](http://se-on.org/) `code.owl` | 2012/02 | Code-graph vocabulary: `seon:hasSuperType`, `seon:containsCodeEntity`, `seon:declaresMethod`, `seon:invokesMethod` and 15 more. Where SEON has no term, tmct coins under its own `mgx:` prefix rather than borrowing SEON's. |
+
+### Language
+
+| source | edition | what tmct uses it for |
+|---|---|---|
+| [Attempto Controlled English](http://attempto.ifi.uzh.ch/site/docs/) | ACE 6.7, 2013 | The controlled-English fragment. tmct implements 9 of ACE's declarative sentence patterns. |
+| Kuhn, "A Survey and Classification of Controlled Natural Languages" | *Computational Linguistics* 40(1), 2014 | Where ACE sits among controlled languages. |
+| [ConceptNet](https://github.com/commonsense/conceptnet5/wiki/Relations) | slice pins 5.7.0 | The commonsense corpus. 25 relations are mirrored into `mgx:` and each cites its `/r/` origin. |
+| Damerau, *CACM* 7(3), 1964 · Levenshtein, *Soviet Physics Doklady* 10(8), 1966 | — | Fuzzy matching. `fuzzy.mjs` implements **Optimal String Alignment** — restricted Damerau-Levenshtein, which allows adjacent transposition but edits no substring twice. |
+
+### Reasoning and planning
+
+| source | edition | what tmct uses it for |
+|---|---|---|
+| Fikes & Nilsson, "STRIPS" | *Artificial Intelligence* 2(3–4), 1971 | The action model: operator, precondition, effect. |
+| McDermott et al., PDDL | Yale CVC TR-98-003, 1998 | The action-rule vocabulary. |
+| Doyle, "A Truth Maintenance System" | *Artificial Intelligence* 12(3), 1979 | Justification and premise. tmct records which rule entailed a fact; it does not yet record which facts fed the rule. |
+| Aristotle, *Prior Analytics* | — | `scm-sco` — all A are B, all B are C — is the syllogism Barbara. The rest of the engine is a forward-chaining fixpoint, and `PLAN_NORMATIVE.md` §9.3 is honest about the gap. |
+
+### Storage
+
+| source | edition | what tmct uses it for |
+|---|---|---|
+| Jensen et al., "A Consensus Glossary of Temporal Database Concepts" | *SIGMOD Record* 23(1), 1994 | The time vocabulary. `mgx:utteranceTs` is valid time; `mgx:createdAt` is a transaction-time start. tmct is **not** bitemporal: `mgx:updatedAt` is an audit stamp, so tmct cannot answer what it believed last Tuesday. |
+| RFC 9923, "The FNV Non-Cryptographic Hash Algorithm" | Informational, 2026 | Fact ids are content-derived with a **non-cryptographic 32-bit** hash. tmct is **not** a Merkle tree and offers no tamper-evidence. |
+| Green, Karvounarakis, Tannen, "Provenance Semirings" | PODS 2007 | The distinction tmct's docs keep: it records source annotation and PROV-style attribution, not how-provenance. |
+
+### Measuring it
+
+| source | edition | what tmct uses it for |
+|---|---|---|
+| Council of Europe, CEFR | Companion Volume | The language-difficulty scale the chat benchmark grades against. |
+| Chow, "On optimum recognition error and reject tradeoff" | *IEEE Trans. Information Theory* 16(1), 1970 | tmct calls it the **honest miss**: a question it cannot ground gets a refusal, never a guess. The literature calls this **abstention**, or selective prediction, and Chow's reject option is its root. |
+| Ji et al., "Survey of Hallucination in Natural Language Generation" | *ACM Computing Surveys* 55(12), 2023 | Groundedness, and what tmct is avoiding by having no model to hallucinate with. |
+
+### Where no standard fits
+
+- **Trust.** PROV records who said a thing, not whether to believe them, and no W3C Recommendation
+  covers trust. `mgx:trustScore` and its inputs are tmct's own. Candidate literature: Artz & Gil,
+  "A survey of trust in computer science and the Semantic Web", *Journal of Web Semantics* 5(2),
+  2007.
+- **Negation.** tmct negates with its own `mgxneg:` prefix, which applies to any predicate.
+  `owl:disjointWith` would over-claim, since "john is not a man" denies one membership rather than
+  a class axiom, and OWL 2's `negativePropertyAssertion` needs a reified shape the flat JSON store
+  has no room for.
+- **Dialogue acts.** tmct has no intent vocabulary. ISO 24617-2 (SemAF) is the standard for one, and
+  `docs/references/schemas/iso-24617-2-dialogue-acts.md` maps tmct's behaviour onto it so that if
+  one is built it uses the standard's names.
+
 ## Licensing
 
 **MPL-2.0.** Free for commercial use. If you modify the covered files and

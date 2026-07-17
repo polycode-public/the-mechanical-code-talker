@@ -10,7 +10,7 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-17)
 
-v2.4.1 in the working tree, unpushed. CI publishes on a version bump on main.
+v2.4.2 in the working tree, unpushed. CI publishes on a version bump on main.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
@@ -35,8 +35,22 @@ Phases 1, 2, 4, 5 and 6 closed at 2.4.1. What remains:
   `-s` fold cannot recover. Both folds now live in `factTermVariants`, and `lookupNoun` (the
   lexicon's own lemmatizer) does the work, so "bus" is safe. 3.6: bare `what else` takes its subject
   from the standing referent, and asked cold it names what it cannot resolve.
-  **Open: 3.8, 3.9, 3.10a-e, 3.11.** 3.9's fix site is `chat.mjs`, not `ask.mjs` — the investigation
-  is recorded in the plan.
+  **3.8, 3.9, 3.10e and 3.11 are done too.** 3.8: "i was wondering what a dog is" is one wrapper in
+  an existing family. 3.9: a module path orients however it is typed, claimed in `moduleOrientLane`
+  behind a path-shape gate — not in `ask.mjs`, where Module is absent by design.
+  **3.10e was worse than reported and is the one to read**: `data/games/hanoi-3.txt` never worked at
+  all, at 3 disks or 4. Its own board line taught two comparatives on one line, the split gate did
+  not know the comparative frame, so it stored NOTHING and disk-1 could never move. 1.1's pin covers
+  the rest-on line beside it, which is why 1.1 reads DONE. **The gate is a list of teach lanes: a
+  lane added without being added there re-opens this.** Transitivity was never involved. 3 disks now
+  solves in 7, 4 in 15, and `planning.solve.hanoi` drives the shipped file verbatim.
+  3.11: the two coverage surfaces agree on 7 — and "no row pins either count" was backwards. Four
+  `bodyEquals` assertions pinned the WRONG 9-module list, test modules included. The bug was not
+  unpinned, it was held in place.
+  **Open: 3.10a-d.** 3.10a is not what it says — `next` does write board state; the gap is that
+  facts are `@stepK`-stamped so a read-back returns every step at once (Phase 7's audit found this).
+  3.10d (`is disk-1 clear?`) is real: the shipped file advertises it and clearness is never derived
+  from the board, though `what moves are legal now?` and `what rests on disk-2?` both work.
 - **Phase 7 — every public example traces to a test.** Closed. Table at `docs/public-examples.md`,
   one row per example with the test that holds it and the tier. The site's examples now run:
   `e2e/pages-examples.test.mjs` replays the page's transcripts against the live CLI through the
@@ -49,7 +63,34 @@ Phases 1, 2, 4, 5 and 6 closed at 2.4.1. What remains:
   browser test asserts the page shows a string and nothing asserts the product agrees, `runChat`
   being the one worth pinning next; and `docs/repository-interface.md`'s prose carries the contract
   numbers with no test holding them (the schema beside it is pinned to the source const).
-- **Phase 10 fallout — four vocabulary fixes in files `PLAN_NORMATIVE.md` could not touch.** The
+- **Phase 10 is WIDER than `PLAN_OPEN_ITEMS.md` §10 scoped it, on the operator's instruction
+  (2026-07-17), and that pass is in flight.** §10 asked only for the RDF/CURIE vocabulary; the real
+  brief is **every term the repo names, anywhere**, each traced to a published standard or paper —
+  inference/deduction/predicate (Aristotle through description logic), classical AI planning
+  (STRIPS/PDDL/Graphplan), grammar, NLP, IR scoring (Levenshtein vs Damerau), unit vs integration
+  testing (Meszaros's taxonomy), and **the storage model, where the operator expects the most to be
+  found** (OWL covers the data model; the ledger, trust, sessions, reification-vs-RDF-star and
+  provenance around it are unnormalised). Plus a **README bibliography**: authoritative link, else a
+  local copy where the licence permits, else a summary doc marked placeholder. `PLAN_NORMATIVE.md`
+  is the record.
+- **`factIdFor` is a 32-bit hash and tmct's own corpus sizes are past its birthday bound.** Found by
+  the Phase 10 terminology review; `PLAN_NORMATIVE.md` §9.1 and §7.7 have the proof and the fix.
+  `src/domain/hash.mjs:139` content-addresses facts with FNV-1a **32-bit**. Against the fact counts
+  this file publishes: `init:large` 37,797 → **15.3%** chance of a collision, `init:xl` 72,075 →
+  **45.4%**, `init:xxl` 238,866 → **99.9%**. A real collision was brute-forced at **26,034 triples**,
+  and it is **silent data loss**: two distinct facts written, one stored, no error — the upsert path
+  turns a hash collision into a merge. `sha256Bytes` already ships in the same file, pinned
+  byte-identical to `node:crypto` by a test; truncate it to 64 bits. **Needs a real migration** (the
+  memory graph is not derivable), but a tractable one: a Fact stores its own (s,p,o), so every id is
+  recomputable from the payload. Do not fold this into another change — it rewrites every fact id.
+- **Phase 10 fallout — vocabulary fixes in files `PLAN_NORMATIVE.md` could not touch.** §7 has a
+  verdict for each, so none needs more research. `fuzzy.mjs` implements **Optimal String Alignment**,
+  not Damerau-Levenshtein (`editDistance("CA","ABC")=3`; true DL gives 2) — a comment and
+  `PLAN_DEPS.md` §3.5 both misname it, though §3.5's *decision* survives untouched. `ledger` (81
+  uses) is a view of the memory graph, not an append-only log, and the store underneath is not
+  append-only either. `syllogise` is a public CLI verb and only partly a syllogism — an operator
+  call. Full list at §7.1-7.11.
+- **Phase 10 fallout — four SEON/namespace fixes.** The
   plan is written and its ontology half has landed; `PLAN_NORMATIVE.md` §7 has the detail and a
   verdict for each, so none needs more research. In cost order: `seon:subKind` is a **stored
   undefined IRI** (`graph-build.mjs:146` writes it, and SEON has no such property) — rename to
@@ -64,11 +105,6 @@ Phases 1, 2, 4, 5 and 6 closed at 2.4.1. What remains:
 - **Phase 8 — the tested-capability page.** Nothing started. Generated, not hand-written. No bare
   numbers: every figure carries its units, version, date, method link and caveat.
 - **Phase 9 — the prose pass.** Nothing started, and last by design.
-- **PLAN_DEPS Q1 and Q3** — both decided by the operator, neither built. Q1: stop shipping the
-  13-module maintainer tier, which unblocks `yaml` as a devDependency and deletes 220 LOC of
-  hand-rolled YAML. Q3: bound `tmct_search`'s `name` input — it is a verified ReDoS today
-  (`(a+)+$` hangs the process past 20s on one 30-character label).
-
 ### Next-cycle recommendations the benchmarks made
 
 - **Re-measure CEFR at N=2 and report the cell table, not the marginals.** 2.0.3 ran N=1 by operator
