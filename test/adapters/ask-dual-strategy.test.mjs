@@ -115,7 +115,7 @@ test("merge: an out-of-grammar sentence neither strategy can parse is still an h
   assert.equal(parseQuery("what is the meaning of this codebase"), null);
 });
 
-// ---- "what is a kind of X" (2026-07-11 live bug): the anchored grammar's T5
+// ---- "what is a kind of X": the anchored grammar's T5
 // "meta-whatis" template ALSO matches this phrasing (reading "kind of animal" as a
 // literal term to define) and used to collide with keyword-spot's correct
 // "is a kind of" -> reverse/inherits reading to manufacture a spurious
@@ -212,7 +212,7 @@ test("keyword-spot only: \"which changes landed in commit ef74e44e25c8\" and the
   assert.equal(passive.object, "ef74e44e25c8");
 });
 
-// ---- two-level fuzzy (2026-07-02): the keyword-spot strategy's FUZZY tier —
+// ---- two-level fuzzy: the keyword-spot strategy's FUZZY tier —
 // adapter-free (nlp:null throughout), so everything here also holds in the
 // inlined viewer bundle. Exact curated matches always win; the fuzzy rewrite
 // fires only when NO exact verb phrase exists anywhere in the sentence, targets
@@ -247,7 +247,7 @@ test("fuzzy keyword: entity nouns are not fuzzy targets — an identifier 2 edit
   assert.equal(p.subject, "myfile");
 });
 
-// ---- query families (2026-07-02): where/when carry no relation verb (where) or a
+// ---- query families: where/when carry no relation verb (where) or a
 // question-word rerouting (when) — both must come out of the anchored template AND
 // the keyword-spot decomposition as the SAME parse, or the merge would surface a
 // spurious ambiguity on every location/temporal question. ----

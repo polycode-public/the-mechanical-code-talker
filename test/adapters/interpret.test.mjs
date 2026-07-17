@@ -555,8 +555,7 @@ test("noise-strip: the strategy never fires when the anchored grammar owns the t
 });
 
 // ============================================================================
-// ADVANCED_GRAMMAR track (a) (PLAN_ADVANCED_GRAMMAR.md §2a) — closed-frame
-// subordination + conditionals, wired inside normalizeQuery (interpret/
+// Closed-frame subordination + conditionals, wired inside normalizeQuery (interpret/
 // normalize.mjs) so both parse strategies see the rewritten text for free.
 // ============================================================================
 

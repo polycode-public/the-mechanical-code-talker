@@ -1,5 +1,5 @@
-// ask-compound-resolve.test.mjs — the compound-name resolution fix (2026-07-09,
-// operator's own worked example): "what is the payment system" should find
+// ask-compound-resolve.test.mjs — the compound-name resolution fix:
+// "what is the payment system" should find
 // PaymentSystem (PascalCase), payment-system (kebab-case), westfield-payment-system
 // (embedded in a longer compound path), and IPaymentSystemImpl.cs (embedded in an
 // interface-style file name) — a query whose words are naturally space-separated

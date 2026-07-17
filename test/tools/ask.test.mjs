@@ -20,8 +20,8 @@ const MODULES = [
     defines: [{ name: "Logger", kind: "class", lineno: 1, decorators: [] }] },
   { path: "myFile.mjs", dotted: "myFile", imports: ["src.logging"], calls: [],
     defines: [{ name: "startup", kind: "function", lineno: 3, decorators: [] }],
-    // §exports-family fixture (2026-07-02 query families): a real reExports edge
-    // (mod:myFile.mjs -> fn:myFile.mjs#startup) so "what does myFile export" answers.
+    // A real reExports edge (mod:myFile.mjs -> fn:myFile.mjs#startup) so
+    // "what does myFile export" answers.
     exports: ["startup"] },
   { path: "src/someOtherFile.mjs", dotted: "src.someOtherFile", imports: ["src.logging"], calls: [],
     defines: [{ name: "myFunc", kind: "function", lineno: 5, decorators: [] }] },
@@ -118,8 +118,8 @@ test("parseQuery: an out-of-grammar question returns null (honest grammar miss)"
 });
 
 test("parseQuery: plural/singular entity nouns and verb aliases both resolve to the same kind", () => {
-  // "use(s)" moved to the query-side union family (2026-07-02 query families):
-  // it now traverses imports+calls+callsSymbol together instead of imports alone.
+  // "use(s)" is a query-side union family: it traverses imports+calls+
+  // callsSymbol together, not imports alone.
   assert.equal(parseQuery("which modules use logging").kind, "uses");
   assert.equal(parseQuery("which modules depends on logging")?.kind ?? parseQuery("which modules depend on logging").kind, "imports");
 });
@@ -238,8 +238,7 @@ test("resolveObject: a term that resolves at an earlier tier never falls through
   assert.equal(matchedVia, undefined);
 });
 
-// ---- resolveObject: item 9 fix (2026-07-09 playtest-freeze dead-end) — a bare
-// term one gerund/agent-noun suffix-swap away from a real MODULE's own basename
+// ---- resolveObject: a bare term one gerund/agent-noun suffix-swap away from a real MODULE's own basename
 // ("logging" for src/lib/logger.mjs) must resolve to that module at tier 3, never
 // fall through to tier 4's prose-index fallback and land on an unrelated Commit
 // individual whose free-text MESSAGE merely happens to contain the same word. Driven
@@ -772,7 +771,7 @@ test("ask(): a sha matching no commit is an honest miss that says \"commit\", no
   assert.match(content, /no commit matching "commit ffffff123" found in the index\./);
 });
 
-// ---- §two-level fuzzy (2026-07-02): curated MISSPELLINGS/WRONG_WORDS corrections
+// ---- two-level fuzzy: curated MISSPELLINGS/WRONG_WORDS corrections
 // at normalize time + the bounded Damerau-Levenshtein tier 5 in resolveObject.
 // All of this is adapter-free plain JS (every test below passes nlp:null where a
 // parse is involved, proving none of it needs wink). ----
@@ -849,7 +848,7 @@ test("ask(): a fuzzy object resolution is ANNOUNCED — \"assuming you meant <la
   assert.match(content, /myFile\.mjs/);
 });
 
-// ---- §query families (2026-07-02): uses / where / mentions / exports / when,
+// ---- query families: uses / where / mentions / exports / when,
 // plus the dotted-symbol resolution fix. Parse assertions go through parseQuery
 // (both strategies merged: a non-ambiguous deepEqual proves they agree or the
 // firing one is correct); every family carries a real fixture hit AND an honest
@@ -1105,8 +1104,8 @@ function buildGrainCollisionGraph() {
     { id: "mod:x/foo.mjs", label: "x/foo.mjs", class: "Module", attributes: [] },
     { id: "mod:y/qux.mjs", label: "y/qux.mjs", class: "Module", attributes: [] },
     { id: "cls:Foo", label: "Foo", class: "Class", attributes: [] },
-    // Bar (2026-07-12, imports/touches up-refine extension): declared IN
-    // x/foo.mjs, same as createTask below — gives Bar a real containing
+    // Bar is declared IN x/foo.mjs, same as createTask below — that gives
+    // it a real containing
     // module so moduleIdOf can up-refine it, mirroring how createTask already
     // up-refines for tests/cochange.
     { id: "cls:Bar", label: "Bar", class: "Class", attributes: [] },

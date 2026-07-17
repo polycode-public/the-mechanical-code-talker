@@ -1,5 +1,4 @@
-// ask-memory-class-query.test.mjs — PLAN_BREADTH_FIRST_NLU.md (d) / ROADMAP.md
-// "What's next" (d): a real "list/count all X of class Y" query shape for
+// ask-memory-class-query.test.mjs — a real "list/count all X of class Y" query shape for
 // MEMORY-graph classes (Fact/Utterance/Session/Source/Rule, or any taught class),
 // reachable via ask.mjs alone — the gap live-testing during the viz chat panel's
 // build confirmed ("how many facts are there"/"list facts" missed against a real

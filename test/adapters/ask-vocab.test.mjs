@@ -79,7 +79,7 @@ for (const [query, expectedKind] of NEW_PHRASE_CASES) {
   });
 }
 
-// ---- MISSPELLINGS / WRONG_WORDS (two-level fuzzy, 2026-07-02): correction-table
+// ---- MISSPELLINGS / WRONG_WORDS (two-level fuzzy): correction-table
 // invariants — a key that IS vocabulary would rewrite legitimate queries, and a
 // value that ISN'T canonical would "correct" into a word the grammar cannot use. ----
 

@@ -29,10 +29,10 @@ const POOL_FILE = fileURLToPath(new URL("../../chatbench/graded-pool.jsonl", imp
 const PROMPT_FILE = fileURLToPath(new URL("../../chatbench/judge-prompt-v1.txt", import.meta.url));
 const SCHEMA_FILE = fileURLToPath(new URL("../../chatbench/rubric.schema.json", import.meta.url));
 
-// ---- frozen v1 core lint (case-set v3, 2026-07-10: folded into graded-
-// pool.jsonl as fully-graded cells rather than a separate ungraded file —
-// GRADED.md; identified here by id, since the pool's own ids are "g-*" and
-// the frozen-core ids never were) ----
+// ---- frozen v1 core lint. The core cases live in graded-pool.jsonl as
+// fully-graded cells rather than in a separate ungraded file, and are
+// identified here by id: the pool's own ids are "g-*" and the frozen-core
+// ids never were. ----
 
 const v1CoreCases = (cases) => cases.filter((c) => !c.id.startsWith("g-"));
 

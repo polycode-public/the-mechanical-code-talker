@@ -1,7 +1,6 @@
-// chat-completions-wiring.test.mjs — HANDOVER.md 2026-07-10 item 7: "wire
-// src/domain/completions/ into live chat dispatch". BENCHMARK_CONVERSATION_1.4.1.md round 3's own
-// architecturally-confirmed gap: "can you give me a detailed summary of how the task
-// system works" hit the plain grammar wall with NO inferred goal at all, even though
+// chat-completions-wiring.test.mjs — src/domain/completions/ is wired into live
+// chat dispatch. The gap it closes: "can you give me a detailed summary of how the
+// task system works" hit the plain grammar wall with NO inferred goal at all, even though
 // src/domain/completions/'s extractive multi-sentence pipeline (generateCompletion(),
 // src/domain/completions/complete.mjs) already existed and could answer it when called
 // directly — it was simply unreachable from any real chat turn. This suite proves the

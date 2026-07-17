@@ -1,8 +1,7 @@
-// PLAN_INFERENCE_TESTING.md's own §4 stage 2 exit criterion ("entailed trust is
-// premise-derived, not the bare 0.3 floor") closed for cax-dw/cls-svf1 via
-// syllogise()'s materializing batch pass (test/syllogise.test.mjs). This file
-// closes the SAME trust-hook gap for the three rules built later in that same
-// session — scm-svf1 (`deriveSomeValuesFromSubsumption`), cardinality
+// Entailed trust must be premise-derived, not the bare 0.3 floor. That holds
+// for cax-dw/cls-svf1 via syllogise()'s materializing batch pass
+// (test/syllogise.test.mjs). This file closes the SAME trust-hook gap for
+// three later rules — scm-svf1 (`deriveSomeValuesFromSubsumption`), cardinality
 // monotonicity (`proveCardinalityAtLeast`), and cax-maxc0
 // (`proveMaxCardinalityZeroDenial`) — none of which wired premiseTrusts/
 // ruleConfidence at all before this fix (confirmed by grep: only

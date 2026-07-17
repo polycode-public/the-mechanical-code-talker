@@ -1,5 +1,5 @@
 // interpret-constructions.test.mjs — construction-grammar template banks
-// (PLAN_ADVANCED_GRAMMAR.md track (d), interpret/strategies/constructions.mjs).
+// (interpret/strategies/constructions.mjs).
 // The bank loads data/templates/constructions/*.toml into an own-class
 // ("construction") pipeline strategy that continues grammar.mjs's T1-T10
 // anchored-template numbering (T11+) as committed DATA rather than more

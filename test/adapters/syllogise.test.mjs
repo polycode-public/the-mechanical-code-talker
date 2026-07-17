@@ -311,7 +311,7 @@ test("deriveSomeValuesFromApplication: hard budget caps derivations, determinist
   assert.deepEqual(d, again, "same inputs → same truncation (deterministic)");
 });
 
-// ---- buildCardinalityRestrictions: pattern-5 reconstruction (PLAN_INFERENCE_TESTING.md INF-C1) ----
+// ---- buildCardinalityRestrictions: pattern-5 reconstruction ----
 
 const CARD_ROWS = [
   { subject: "exactly-3-test", predicate: "rdf:type", object: "restriction" },
@@ -446,7 +446,7 @@ test("deriveSomeValuesFromSubsumption: hard budget caps derivations, determinist
   assert.deepEqual(d, again, "same inputs → same truncation (deterministic)");
 });
 
-// ---- proveCardinalityAtLeast: cardinality monotonicity (PLAN_INFERENCE_TESTING.md INF-C1, "confirmed OUTSIDE OWL 2 RL's own profile") ----
+// ---- proveCardinalityAtLeast: cardinality monotonicity (confirmed OUTSIDE OWL 2 RL's own profile) ----
 
 test("proveCardinalityAtLeast: exactly n ⊨ at least m, whenever m ≤ n", () => {
   const recs = buildCardinalityRestrictions(CARD_ROWS);
@@ -754,10 +754,10 @@ test("syllogise: cax-dw's entailed trust is PREMISE-DERIVED (min(premiseTrusts) 
 });
 
 // ---- cls-svf1: syllogise() materializes someValuesFrom restriction membership -
-// ---- (PLAN_INFERENCE_TESTING.md INF-B2's worked "chat.mjs imports parse.test.mjs" -
-// ---- example — deliberately stops at "x is a some-imports-test" restriction ----
-// ---- membership, NOT the further "x is a suite" intersection step, see this ----
-// ---- module's own header comment) -----------------------------------------------
+// ---- (the worked "chat.mjs imports parse.test.mjs" example — deliberately -------
+// ---- stops at "x is a some-imports-test" restriction membership, NOT the ----
+// ---- further "x is a suite" intersection step, see this module's own ----
+// ---- header comment) -----------------------------------------------
 
 test("syllogise: cls-svf1 materializes someValuesFrom restriction membership from THREE ACE-taught "
   + "sentences — 'every module that imports a test is a suite', 'chat.mjs imports parse.test.mjs', "
@@ -1012,7 +1012,7 @@ test("KILL CRITERION: on the default seed, a bounded pass flips a real subclass-
   }
 });
 
-// ---- findConsistencyViolations (PLAN_INFERENCE_TESTING.md INF-C2, stage 5) ----
+// ---- findConsistencyViolations ----
 
 test("findConsistencyViolations: a subject taught two directly-disjoint types is a clash", () => {
   const typeEdges = [["e90.mjs", "event"], ["e90.mjs", "server"]];
@@ -1080,8 +1080,8 @@ test("findConsistencyViolations: focus excludes subjects outside the focus set",
   assert.equal(clashes[0].subject, "e1");
 });
 
-// ---- retractSubClassOf: PLAN_SYLLOGIST.md §3's first real retraction slice —
-// JTMS-style dependency-directed removal for scm-sco, VERIFIED (not assumed)
+// ---- retractSubClassOf: JTMS-style dependency-directed removal for scm-sco,
+// VERIFIED (not assumed)
 // against the surviving graph each round, so a fact with a genuine second
 // derivation path or an independent direct teaching is never wrongly swept
 // up just because its stale, persisted justification broke. ----------------

@@ -37,10 +37,9 @@ test("RELATION_MAP: every emitted rel has a real (ace != \"none\") row in concep
   const map = await loadMap();
   for (const [wnRel, { rel }] of Object.entries(RELATION_MAP)) {
     assert.ok(map.has(rel), `${wnRel} -> ${rel}: no row in conceptnet-map.toml at all`);
-    // Phase 1 (2026-07-12) widened conceptnet-map.toml so Synonym/RelatedTo/
-    // SimilarTo emit real facts too, not just IsA/PartOf/MadeOf/Causes/
-    // HasProperty — every relation this converter maps to should now be a
-    // live, emitting row. This converter itself never touches
+    // conceptnet-map.toml is wide enough that Synonym/RelatedTo/SimilarTo
+    // emit real facts too, not just IsA/PartOf/MadeOf/Causes/HasProperty —
+    // every relation this converter maps to should be a live, emitting row. This converter itself never touches
     // conceptnet-map.toml (scope boundary) — it only relies on what's there.
     assert.notEqual(map.get(rel).ace, "none", `${wnRel} -> ${rel}: row exists but ace="none"`);
   }

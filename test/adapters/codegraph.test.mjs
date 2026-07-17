@@ -140,7 +140,7 @@ test("impactClosure attaches covering test modules; leaves/objects have none", (
   assert.deepEqual(impactClosure(graph, graph.byId.get("fn-alpha")), []);
 });
 
-// ── impactClosure folds in callsSymbol, coarsened to module level on read (2026-07-02) ──
+// ── impactClosure folds in callsSymbol, coarsened to module level on read ──
 // Module-coarse "calls" (mgx:callsCoarse, graph-build.mjs) only fires when the callee's module
 // is ALREADY in the caller's import list ("coarse, import-backed calls" — see graph-build.mjs's
 // own comment above its callEdges loop), so by construction every "calls" edge duplicates an
@@ -945,7 +945,7 @@ test("proseBoost: OFF (absent/false/no proseIndex) is byte-identical to the pre-
   assert.deepEqual(searchModulesRanked(graph, "fnAlpha", { proseBoost: true }), searchModulesRanked(graph, "fnAlpha"));
 });
 
-// ── Layered prose normalisation (proseLayers, 2026-07-02) — the prose index carries NORMALISED
+// ── Layered prose normalisation (proseLayers) — the prose index carries NORMALISED
 // layers (spell-corrected / canonical-schema-term / stem / lemma) under proseIndex["tmct:layers"],
 // keyed by the normalised token. A task-text word that only reaches a module through a normalised
 // form ("refund" → the module's lemma layer) scores nothing in the verbatim scorer; the opt-in
@@ -1126,8 +1126,8 @@ test("literalMention: the repo-relative PATH form fires too, and flanked (non-bo
   }
 });
 
-// B016 R1b promoted to the shipped default (2026-07-02, PLAN_B016.md §6.9): selectRankedModules is
-// the single source of truth for gap-extension, shared by cli.mjs's digest query-mode (which
+// Gap-extension is on by default in the shipped digest: selectRankedModules is
+// the single source of truth for it, shared by cli.mjs's digest query-mode (which
 // EXPLICITLY opts into DEFAULT_SCORE_GAP as ITS OWN policy default) and bench/run.mjs's
 // selectModules (which always threads its own explicit scoreGapK, defaulting to null). The
 // function itself must stay neutral — these tests are the byte-identical-when-off guarantee every

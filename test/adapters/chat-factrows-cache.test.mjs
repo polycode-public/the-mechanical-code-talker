@@ -1,5 +1,5 @@
-// PLAN_GRAPH_SCAN.md "Query side: memoize the per-turn reload" — Phase B
-// regression test. Before this fix, `factRows` (chat.mjs) called `loadMemory`
+// The query side memoizes its per-turn reload of the fact rows.
+// Before this fix, `factRows` (chat.mjs) called `loadMemory`
 // + `readFactRows` (memory/core.mjs) fresh, UNCACHED, on every single call —
 // and a single runTurn call can reach several independent factRows() readers
 // (factAnswer's own cascade, factReadBack, countFromFacts,
@@ -9,9 +9,8 @@
 // underlying loadMemory/readFactRows pass runs at most once per turn no
 // matter how many readers ask for the rows.
 //
-// This is a CALL-COUNT assertion (deterministic), not a wall-clock one — see
-// the exit criteria in the operator's task brief for why: timing assertions
-// are flaky under machine contention, call counts are not.
+// This is a CALL-COUNT assertion (deterministic), not a wall-clock one:
+// timing assertions are flaky under machine contention, call counts are not.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";

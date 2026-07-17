@@ -15,9 +15,9 @@ import { mergedLexiconExtra } from "../../src/services/extensions.mjs";
 
 test("loadLexicon: the committed core is a real starter vocabulary (size floors), cached when unextended", () => {
   const lex = loadLexicon();
-  // PLAN_SEED.md's human-persona lexicon growth happened in two steps: Small
-  // tier roughly doubled the core (180/63/33/15 software-only ->
-  // 464/92/58/22 software+human-world); the Medium/Large tiers (§3) then
+  // The human-persona lexicon grew in two steps: the Small tier roughly
+  // doubled the core (180/63/33/15 software-only ->
+  // 464/92/58/22 software+human-world); the Medium/Large tiers then
   // added thousands more NOUNS specifically (WordNet's own real hypernym/
   // meronym population, curated down per-clump — see
   // scripts/build-persona-tiers.mjs), leaving verbs/adjectives/proper names
