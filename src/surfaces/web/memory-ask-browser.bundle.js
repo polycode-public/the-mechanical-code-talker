@@ -895,6 +895,23 @@
     }
     return out;
   }
+  function proseTokensFor({ name, doc } = {}) {
+    const set = /* @__PURE__ */ new Set([...splitIdentifierWords(name), ...tokenizeProse(doc)]);
+    return [...set].sort();
+  }
+  function buildProseIndex(individuals) {
+    const index = /* @__PURE__ */ Object.create(null);
+    for (const ind of individuals) {
+      const tokAttr = (ind.attributes || []).find((a) => a.key === "prose_tokens");
+      if (!tokAttr?.value) continue;
+      for (const word of tokAttr.value.split(" ")) {
+        if (!index[word]) index[word] = [];
+        index[word].push(ind.id);
+      }
+    }
+    for (const word of Object.keys(index)) index[word].sort();
+    return index;
+  }
   function lookupByProseTokens(proseIndex, query, { limit = 10 } = {}) {
     const queryTokens = [.../* @__PURE__ */ new Set([...splitIdentifierWords(query), ...tokenizeProse(query)])];
     if (!queryTokens.length) return [];
@@ -4287,12 +4304,12 @@ ${shown.join("\n")}${tail}`;
     const hits = (graph?.individuals || []).filter((i) => META_FALLBACK_CLASSES.has(i.class) && String(i.label).toLowerCase() === termLc);
     if (hits.length !== 1) return null;
     const hit2 = hits[0];
-    const mid = moduleIdOf2(graph, hit2);
-    const modLabel = mid && graph.byId.get(mid)?.label || String((hit2.attributes || []).find((a) => a.key === "site")?.value || "").split(":")[0] || null;
+    const mid = hit2.class === "Module" ? null : moduleIdOf2(graph, hit2);
+    const modLabel = hit2.class === "Module" ? null : mid && graph.byId.get(mid)?.label || String((hit2.attributes || []).find((a) => a.key === "site")?.value || "").split(":")[0] || null;
     const noun = nounFor(hit2.class, 1);
     const article = noun === "attribute" ? "an" : "a";
     const definedIn = modLabel ? `, ${pickPhrase("defined-in", hit2.id, "defined in")} ${modLabel}` : "";
-    const followUp = hit2.class === "Class" ? ` or "which classes inherit from ${hit2.label}"` : "";
+    const followUp = hit2.class === "Class" ? ` or "which classes inherit from ${hit2.label}"` : hit2.class === "Module" ? ` or "what imports ${hit2.label}"` : "";
     return {
       text: `${hit2.label} is ${article} ${noun} in this codebase${definedIn} \u2014 try "describe ${hit2.label}"${followUp}.`,
       hit: hit2,
@@ -5127,6 +5144,31 @@ ${shown.join("\n")}${tail}`;
     }
     return proseResult || { match: null, candidates: [], tier: null, ambiguous: false };
   }
+  function unplacedTermWords(term, label) {
+    const labelJoined = joinedForm(label);
+    const labelComps = [...componentSet(label)];
+    const out = [];
+    for (const w of componentSet(term)) {
+      if (labelJoined.includes(w)) continue;
+      if (labelComps.some((c) => derivationalStem(c) === derivationalStem(w))) continue;
+      if (CONTENT_VOCAB.has(w) || NOISE_OR_SCAFFOLD.has(w)) continue;
+      out.push(w);
+    }
+    return out;
+  }
+  function declineOnUnplacedWords(result, term) {
+    if (!result?.match || result.ambiguous || result.tier !== 3 || result.matchedVia) return result;
+    const unplaced = unplacedTermWords(term, result.match.label);
+    if (!unplaced.length) return result;
+    return {
+      match: null,
+      candidates: [],
+      tier: null,
+      ambiguous: false,
+      unplacedWords: unplaced,
+      nearestLabel: result.match.label
+    };
+  }
   function resolveObject(graph, term, opts = {}) {
     const { expectedClass = null } = opts;
     if (!expectedClass) {
@@ -5137,14 +5179,15 @@ ${shown.join("\n")}${tail}`;
         const head = stripped.slice(0, grainMatch.index).trim();
         const grainClass = ENTITY_TO_TYPE[grainMatch[1].toLowerCase()];
         if (head && grainClass) {
-          const rGrain = resolveObjectCore(graph, head, { expectedClass: grainClass });
+          const rGrain = declineOnUnplacedWords(resolveObjectCore(graph, head, { expectedClass: grainClass }), head);
           if (rGrain?.match?.id && !rGrain.ambiguous) return rGrain;
         }
       }
       if (stripped && stripped !== raw) {
-        const rStripped = resolveObjectCore(graph, stripped, opts);
+        const rStripped = declineOnUnplacedWords(resolveObjectCore(graph, stripped, opts), stripped);
         if (rStripped?.match?.id && !rStripped.ambiguous) return rStripped;
       }
+      return declineOnUnplacedWords(resolveObjectCore(graph, term, opts), term);
     }
     return resolveObjectCore(graph, term, opts);
   }
@@ -5326,8 +5369,19 @@ ${shown.join("\n")}${tail}`;
         if (collision) objRes = { ...objRes, ambiguous: true, candidates: [collision, ...objRes.candidates || []] };
       }
     }
-    const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia } = objRes;
-    if (!objMatch) return { matches: [], objMatch: null, candidates, traversal: null, ambiguous: false, unresolvedPronoun };
+    const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia, unplacedWords, nearestLabel } = objRes;
+    if (!objMatch) {
+      return {
+        matches: [],
+        objMatch: null,
+        candidates,
+        traversal: null,
+        ambiguous: false,
+        unresolvedPronoun,
+        unplacedWords,
+        nearestLabel
+      };
+    }
     if (ambiguous) {
       const pool = uniqueById([objMatch, ...candidates || []]).slice(0, OVERFLOW_CAP);
       const branches = pool.map((c) => {
@@ -5762,6 +5816,17 @@ ${options2}
       const objText = String(parsed.object || "").trim();
       const fallback = parsed.entityType && PLURAL_FORMS[parsed.entityType] ? nounFor(parsed.entityType, 1) : "module";
       const what = /^(?:commit[:\s])?[0-9a-f]{7,40}$/i.test(objText) ? "commit" : !objText.includes("/") && /^[\w$]+(\.[\w$]+)+$/.test(objText) ? "symbol" : fallback;
+      if (result.unplacedWords?.length) {
+        const quoted = listJoin(result.unplacedWords.map((w) => `"${w}"`));
+        const was = result.unplacedWords.length === 1 ? "names" : "name";
+        const near = result.nearestLabel ? ` Did you mean ${result.nearestLabel}?` : "";
+        return {
+          content: `no ${what} matching "${parsed.object}" found in the index. ${quoted} ${was} nothing here, and reading past ${result.unplacedWords.length === 1 ? "it" : "them"} would answer a different question.${near}`,
+          miss: true,
+          ambiguous: false,
+          candidates: []
+        };
+      }
       return {
         content: `no ${what} matching "${parsed.object}" found in the index. ${touchesRephraseHint(graph)}`,
         miss: true,
@@ -5931,6 +5996,7 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
     return { content: clauses.join(" and ") + extra + ".", miss: false, ambiguous: false, matches: result.matches };
   }
   function fuzzyCascadeWord(w) {
+    if (w.length < 4) return null;
     const bound = fuzzyBound(w);
     let best = bound + 1;
     let hit2 = null;
@@ -6026,13 +6092,20 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
       const hit2 = attempt(tokens);
       if (hit2) return done(hit2);
     }
+    const termParse = parseQuery(tokens.join(" "), { nlp });
+    const termWords = /* @__PURE__ */ new Set();
+    if (termParse && !termParse.node && TERM_SHAPES.has(termParse.shape)) {
+      for (const part of [termParse.object, termParse.subject]) {
+        for (const w of splitWords(String(part || "").toLowerCase())) termWords.add(w);
+      }
+    }
     const survivors = [];
     const nowDropped = [];
     const corrected = [];
     for (const t of tokens) {
       const lc = t.toLowerCase();
       const plain = /^[a-z]+$/.test(lc);
-      if (!plain || CONTENT_VOCAB.has(lc) || STRUCTURAL_WORDS.has(lc) || resolvesLiteral(t)) {
+      if (!plain || termWords.has(lc) || CONTENT_VOCAB.has(lc) || STRUCTURAL_WORDS.has(lc) || resolvesLiteral(t)) {
         survivors.push(t);
         continue;
       }
@@ -6336,7 +6409,7 @@ ${lines.join("\n")}`;
       FIND_LINKERS = /* @__PURE__ */ new Set(["called", "named", "about", "like", "containing", "matching", "with"]);
       RECENT_COMMIT_LEAD = /* @__PURE__ */ new Set(["recent", "latest", "newest"]);
       qualCache = /* @__PURE__ */ new WeakMap();
-      META_FALLBACK_CLASSES = /* @__PURE__ */ new Set(["Class", "Function", "Method", "GlobalVariable", "Attribute"]);
+      META_FALLBACK_CLASSES = /* @__PURE__ */ new Set(["Class", "Function", "Method", "GlobalVariable", "Attribute", "Module"]);
       inheritsApplicableCache = /* @__PURE__ */ new WeakMap();
       FIND_TIER = { label: 3, chain: 2, attr: 1 };
       DEGREE_KINDS = ["imports", "calls", "callsSymbol", "inherits", "contains", "tests"];
@@ -7058,54 +7131,6 @@ ${bodyText}` : graphText, tier });
       attrOf = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)?.value ?? null;
       CONTEXT_BODY_MAX_LINES = 200;
       CONTEXT_INLINE_CALLEE_LOC = 120;
-    }
-  });
-
-  // src/adapters/prose-tokens.mjs
-  function splitIdentifierWords2(raw) {
-    if (!raw) return [];
-    let s = String(raw).replace(/\.[A-Za-z0-9]+$/, "");
-    s = s.replace(/[/\\]/g, " ").replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2").replace(/([A-Za-z])([0-9])/g, "$1 $2").replace(/([0-9])([A-Za-z])/g, "$1 $2").replace(/[_\-.]+/g, " ");
-    return s.split(/\s+/).map((w) => w.toLowerCase()).filter((w) => w.length > 1 && w.length <= MAX_TOKEN_LEN2);
-  }
-  function tokenizeProse2(text) {
-    if (!text) return [];
-    const out = [];
-    const seen = /* @__PURE__ */ new Set();
-    for (const raw of String(text).toLowerCase().split(/[^a-z0-9]+/)) {
-      if (raw.length < 2 || raw.length > MAX_TOKEN_LEN2 || STOPWORDS3.has(raw)) continue;
-      if (seen.has(raw)) continue;
-      seen.add(raw);
-      out.push(raw);
-      if (out.length >= MAX_TOKENS_PER_DOC2) break;
-    }
-    return out;
-  }
-  function proseTokensFor({ name, doc } = {}) {
-    const set = /* @__PURE__ */ new Set([...splitIdentifierWords2(name), ...tokenizeProse2(doc)]);
-    return [...set].sort();
-  }
-  function buildProseIndex(individuals) {
-    const index = /* @__PURE__ */ Object.create(null);
-    for (const ind of individuals) {
-      const tokAttr = (ind.attributes || []).find((a) => a.key === "prose_tokens");
-      if (!tokAttr?.value) continue;
-      for (const word of tokAttr.value.split(" ")) {
-        if (!index[word]) index[word] = [];
-        index[word].push(ind.id);
-      }
-    }
-    for (const word of Object.keys(index)) index[word].sort();
-    return index;
-  }
-  var STOPWORDS3, MAX_TOKEN_LEN2, MAX_TOKENS_PER_DOC2;
-  var init_prose_tokens = __esm({
-    "src/adapters/prose-tokens.mjs"() {
-      STOPWORDS3 = new Set(
-        "a an and or but the of to in on at for with from by as is are was were be been being it its this that these those i you he she they we me my your our do does did not no yes if then else than so such can will would should could may might about into over under out up down off again more most some any all what which who whom whose when where why how".split(/\s+/)
-      );
-      MAX_TOKEN_LEN2 = 40;
-      MAX_TOKENS_PER_DOC2 = 120;
     }
   });
 
@@ -8146,6 +8171,12 @@ ${bodyText}` : graphText, tier });
     for (const prop of ["rdf:subject", "rdf:predicate", "rdf:object"]) {
       if (!nonEmpty(attrValue(ind, prop))) violations.push(`a Fact needs a non-empty ${prop}`);
     }
+    for (const prop of ["rdf:subject", "rdf:object"]) {
+      const term = attrValue(ind, prop);
+      if (term !== void 0 && SPANS_A_SENTENCE_BOUNDARY_RE.test(term)) {
+        violations.push(`a Fact's ${prop} must be a single term, not text spanning a sentence boundary (got ${JSON.stringify(term)})`);
+      }
+    }
     const prov = attrValue(ind, "mgx:factProvenance");
     if (prov !== void 0 && !nonEmpty(prov)) violations.push("mgx:factProvenance, when present, must be non-empty");
   }
@@ -8175,7 +8206,7 @@ ${bodyText}` : graphText, tier });
       throw e;
     }
   }
-  var MEMORY_CLASSES, RULE_KINDS, RULE_SLOT_PROPS, nonEmpty;
+  var MEMORY_CLASSES, RULE_KINDS, RULE_SLOT_PROPS, SPANS_A_SENTENCE_BOUNDARY_RE, nonEmpty;
   var init_shacl = __esm({
     "src/adapters/memory/shacl.mjs"() {
       MEMORY_CLASSES = /* @__PURE__ */ new Set(["Utterance", "Fact", "Session", "Source", "Rule"]);
@@ -8210,6 +8241,7 @@ ${bodyText}` : graphText, tier });
           "mgx:ruleActionConstraintGuard"
         ]
       };
+      SPANS_A_SENTENCE_BOUNDARY_RE = /[.!?]\s+\w/;
       nonEmpty = (v) => typeof v === "string" && v.trim().length > 0;
     }
   });
@@ -9347,7 +9379,7 @@ ${bodyText}` : graphText, tier });
     "src/adapters/memory/core.mjs"() {
       init_promises();
       init_node_path();
-      init_prose_tokens();
+      init_prose();
       init_hash();
       init_hash();
       init_trust();

@@ -7,7 +7,7 @@
 
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { proseTokensFor, buildProseIndex } from "../prose-tokens.mjs";
+import { proseTokensFor, buildProseIndex } from "../../domain/prose.mjs";
 import { fnv1aHex, normText, normFactTerm, normFactPredicate, factIdFor, factIdForTriple } from "../../domain/hash.mjs";
 
 // Fact identity (normalization + id derivation) lives in hash.mjs — the one

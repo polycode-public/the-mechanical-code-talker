@@ -87,6 +87,39 @@ test("the committed real-word collision table is what its generator produces tod
   }
 });
 
+// The envelope is the only artifact here that stamps the package version into
+// its own body (generatedFrom.agentbenchVersion/stamp both come from
+// BENCH_VERSION, which agentbench/run.mjs reads out of package.json). So a
+// version bump alone drifts it, with no AGENTBENCH change at all — and it drifts
+// in the direction that matters, because the envelope exists for a downstream
+// calibration to check itself against and a stale stamp tells that consumer it
+// is reading a measurement of a release it is not.
+test("the committed agentbench envelope is what its generator produces today", () => {
+  const out = mkdtempSync(path.join(tmpdir(), "tmct-envelope-freshness-"));
+  try {
+    execFileSync("node", [
+      path.join(repoRoot, "agentbench", "generate-envelope.mjs"),
+      "--out", path.join(out, "envelope.json"),
+    ], { cwd: repoRoot, stdio: "pipe" });
+    assert.equal(
+      sha(readFileSync(path.join(out, "envelope.json"))),
+      sha(readFileSync(path.join(repoRoot, "agentbench", "envelope.json"))),
+      "agentbench/envelope.json has drifted from its generator — run `node agentbench/generate-envelope.mjs` "
+        + "and commit the result.\nIt reports the capability a gate-PASS run proves, stamped with the package "
+        + "version, so a stale commit hands a downstream calibration the wrong release's measurement.",
+    );
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
+test("the committed agentbench envelope stamps the version the package ships", () => {
+  const envelope = JSON.parse(readFileSync(path.join(repoRoot, "agentbench", "envelope.json"), "utf8"));
+  const { version } = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+  assert.equal(envelope.generatedFrom.agentbenchVersion, version);
+  assert.equal(envelope.generatedFrom.stamp, version);
+});
+
 test("the committed ACE surface variants are what their generator produces today", { skip: missingWordnet }, () => {
   const out = mkdtempSync(path.join(tmpdir(), "tmct-variants-freshness-"));
   try {

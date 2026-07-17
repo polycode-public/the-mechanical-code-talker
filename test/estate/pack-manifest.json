@@ -148,7 +148,6 @@
   "src/adapters/memory/shacl.mjs",
   "src/adapters/pii-scan.mjs",
   "src/adapters/prose-nlp.mjs",
-  "src/adapters/prose-tokens.mjs",
   "src/adapters/providers/bootstrap.mjs",
   "src/adapters/providers/fixture.mjs",
   "src/adapters/providers/graph-service.mjs",

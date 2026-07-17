@@ -6,7 +6,7 @@
 
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { splitIdentifierWords, tokenizeProse } from "../prose-tokens.mjs";
+import { splitIdentifierWords, tokenizeProse } from "../../domain/prose.mjs";
 import { SOURCE_PRIOR } from "../../domain/memory/trust.mjs";
 
 // A block inherits its Source's trust (operator 1.0, corpus 0.7); retrieval
