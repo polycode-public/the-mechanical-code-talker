@@ -125,6 +125,18 @@ export const GRADED_MATRIX = [
   { grade: "C2", construction: "garden-path", slug: "garden", size: 25 },
 ];
 
+/** Cells the go-to default pool (graded-pool.jsonl) grades but the designed
+ *  matrix deliberately does not declare. The frozen v1 core folded into that
+ *  pool carries a real grade + construction, but a handful of its cases land on
+ *  (grade, construction) pairs below the 25-item floor a designed matrix cell
+ *  must meet, so they ride along as graded cases without being matrix cells.
+ *  Coverage is scored against the matrix, so these are graded and uncounted by
+ *  design; naming them keeps that an explicit, enforced set rather than silent
+ *  drift (the lint binds the default pool's off-matrix cells to exactly this
+ *  list, and requires every case in them to be a frozen-v1 fold, never a
+ *  generated matrix case). */
+export const OFF_MATRIX_FOLD_CELLS = ["A2:assert-recall", "B1:noise+svo-query", "B1:svo-query"];
+
 /** Grades whose reliably-passing cells are PROMOTED: their fixed 5-item
  *  promoted subsets run as always-run deterministic unit tests
  *  (test/bench/chatbench-graded.test.mjs) and are FIXED in every sample (never

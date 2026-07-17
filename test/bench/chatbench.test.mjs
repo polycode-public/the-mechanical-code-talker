@@ -23,6 +23,7 @@ import {
   renderReport, renderTranscripts, orderDiscriminating,
   cellRollup, uncoveredCells, undeclaredCells,
 } from "../../chatbench/report.mjs";
+import { OFF_MATRIX_FOLD_CELLS } from "../../chatbench/graded.mjs";
 import { runChat } from "../../src/services/chat.mjs";
 import { parseSessionJsonl, parseSessionLog, turnKey } from "../../src/services/sessions.mjs";
 
@@ -42,6 +43,19 @@ test("frozen v1 core (in graded-pool.jsonl): parses clean — unique ids, known 
   assert.deepEqual(errors, [], "lint errors");
   const core = v1CoreCases(cases);
   assert.ok(core.length >= 36 && core.length <= 64, `case count in contract range (got ${core.length})`);
+});
+
+test("graded pool default: off-matrix graded cells are exactly the named frozen-v1 folds, never matrix drift", async () => {
+  const { cases } = parseCases(await readFile(POOL_FILE, "utf8"));
+  // Every graded cell in the default pool is either a declared GRADED_MATRIX
+  // cell or one of the named folds — no unnamed off-matrix cell (new drift), and
+  // no named fold silently gone. undeclaredCells returns a sorted cellKey list.
+  assert.deepEqual(undeclaredCells(cases), [...OFF_MATRIX_FOLD_CELLS].sort());
+  // and a matrix-generated case (id "g-*") must never populate an off-matrix
+  // cell — only the frozen v1 folds may sit outside the designed matrix.
+  const offMatrix = new Set(OFF_MATRIX_FOLD_CELLS);
+  const strays = cases.filter((c) => offMatrix.has(`${c.grade}:${c.construction}`) && c.id.startsWith("g-"));
+  assert.deepEqual(strays.map((c) => c.id), [], "generated cells never populate an off-matrix fold cell");
 });
 
 test("frozen v1 core (in graded-pool.jsonl): every coverage tag is populated; baselineFail weaknesses are documented", async () => {
