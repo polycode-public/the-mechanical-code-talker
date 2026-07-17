@@ -127,15 +127,19 @@ the only one — write down that you could not see it. And a shared, generated a
 it looks: touching the verb vocabulary regenerates the collision table, which redraws the ask
 bundle. Follow the generator, not the diff.
 
-## Always tee a long-running command to a file before filtering it
+## Always tee to a file before filtering — every pipe, not just the slow ones
 
-Never pipe a test run, a playtest sweep, or any long command straight into `tail`, `head`,
-`grep` or anything else. Always tee it first:
+Never pipe anything into `tail`, `head`, `grep` or any other filter without teeing it first:
 
     cmd 2>&1 | tee /tmp/some-file.log | tail -20      # or head, grep, whatever
 
 You still get the quick glance, and the full output stays on disk when the part you need turns
 out to sit somewhere else.
+
+**The trigger is the pipe, not the duration.** This rule used to be titled "long-running command",
+and that word is a loophole: a 1.8s `test:fast`, a four-turn CLI reproducer and a 0.4s unit file all
+read as "not long", so they got piped bare — and `head` does its damage in milliseconds. If you are
+filtering output at all, tee it.
 
 Two different things go wrong without the tee. `tail -N` throws away everything before the last
 N lines for good, so if the summary sits earlier it's gone and the whole command runs again.
@@ -143,6 +147,11 @@ N lines for good, so if the summary sits earlier it's gone and the whole command
 command itself is killed part-way through**. A 17-session playtest sweep piped into `head`
 died silently at session 7 and reported like a clean run — the truncation showed up only in
 the line count. `head` doesn't just discard output, it stops the work.
+
+**A piped CLI reproducer is the sharpest case, and the easiest to miss.**
+`printf '…' | node bin/tmct.mjs chat … | head -8` can SIGPIPE the session mid-transcript: the later
+turns never run, `/exit` never runs, and what you read looks like the whole conversation. A
+reproducer that dies early doesn't fail — it agrees with you.
 
 If a command's output is worth filtering, it's worth keeping.
 
