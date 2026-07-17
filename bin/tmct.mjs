@@ -28,100 +28,19 @@
 // shape and the green test suite. See README.md for what tmct is and
 // deliberately is NOT, and ROADMAP.md for where it is going.
 
+// The verb list itself is data (src/domain/cli-verbs.mjs) and both the Usage
+// block below and the unknown-invocation line read it, so a new verb is one
+// entry rather than two edits that drift. It is pure and imports nothing, so a
+// static import here costs `tmct --help` nothing.
+import { renderUsage, unknownInvocationMessage } from "../src/domain/cli-verbs.mjs";
+
 const HELP = `tmct — The Mechanical Code Talker
 
 A tolerant, offline, $0 chat that guides you toward precision queries about a
 software repository. No model calls; no codebase index of its own.
 
 Usage:
-  tmct                         interactive chat (the headline surface)
-  tmct chat [--repo <abs>]     chat over a specific repo's graph
-       [--graph <path>]        explicit graph file (repeatable — multiple graphs merge;
-                               see src/adapters/graph-merge.mjs); wins over --repo/TMCT_GRAPH_FILE/tmct.toml
-       [--config <path>]       an alternate tmct.toml location (a file or a directory)
-       [--ephemeral]           read the graph but write nothing back (demo/read-only)
-       [--prompt "<text>"]     one-shot: run the prompt's sentences as turns and print
-                               the final answer (teach state first, trigger last)
-       [--render blocks]       with --prompt: when the final turn produced a plan,
-                               write it as a self-contained animated page
-       [--output <path>]       the rendered page's path (default plan.html)
-       [--narrate]             start with narrate mode on — a verbose, developer-facing
-                               trace of decision points/matched pattern/results/goal per
-                               turn, appended under a "--- narrate ---" marker (also
-                               TMCT_NARRATE=1; toggle mid-session with /narrate on|off)
-       [--plain]               force the plain readline shell (the default when
-                               stdin/stdout is not a terminal)
-       [--memory-backend <default|memory|sqlite>]  storage backend for taught facts this
-                               session (CLI flag > TMCT_MEMORY_BACKEND env > tmct.toml's
-                               [memory] backend > "default", the flat .tmct/ JSON file)
-  tmct memory [--repo <abs>]   what tmct remembers: facts, utterances, sessions,
-       [--config <path>]       folded blocks (the /memory chat command, from the shell)
-       [--verbose]
-  tmct init [--repo <abs>]     initialize a repo for tmct (default: cwd): .tmct/,
-       [--force]               tmct.toml, .tmct/TOOLS.md (the cold-tool catalog),
-                               tier-1 corpus seed, provenance record
-       [--corpus <id|path>]    also seed a corpus — a tier-2 manifest id (aws|python|java|
-                               general) or a jsonl file path — opt-in, offline, $0
-       [--ontology <name|path>]  activate+seed an ontology bundle (a recognized name or a path)
-       [--lexicon <name|path>]   activate a lexicon bundle (recognized name or a path;
-                               merged read-time, never seeded — see mergedLexiconExtra)
-       [--graph <path>]        set graph_file/graph_files in tmct.toml (repeatable)
-       [--config <path>]       write to an alternate tmct.toml location
-       [--detect]              suggest a tier-2 corpus from the repo's manifests
-                               (pyproject.toml → python, pom.xml → java); never seeds unasked
-       [--with-persona <name>] write an explicit [extensions]/[bias] preset into tmct.toml
-                               ("code" — today's implicit default, made explicit)
-       [--persona-size <medium|large>]  grow the default "human" persona's fact count
-                               beyond Small (the default): "medium" activates
-                               human-medium.jsonl (~1,608 facts total), "large" also
-                               activates human-large.jsonl (~13,600 facts total,
-                               with genuine multi-hop hypernym chains) — additive
-                               size tiers of the SAME bundle, not separate personas
-       [--memory-backend <default|memory|sqlite>]  write tmct.toml's [memory] backend
-                               (same flag name as \`tmct chat\`) — a later \`tmct chat\`
-                               in this repo picks it up with no flag needed
-  tmct import [--repo <abs>]   activate+seed into an ALREADY-initialized repo (any
-       [--corpus <id|path>]    combination of these flags in one call). --graph is a
-       [--ontology <name|path>]  DIFFERENT operation from the others: it APPENDS to
-       [--lexicon <name|path>]   tmct.toml's graph_files array (multi-graph growth),
-       [--graph <path>]        never an extensions-bundle activation.
-       [--file <definition.txt>]  teach a plain-text definition file sentence by
-                               sentence (# lines are comments); any declined
-                               sentence exits non-zero with the sentence named
-       [--memory-backend <default|memory|sqlite>]  same knob as \`tmct init\`
-       [--config <path>]
-  tmct extend --validate <dir>  validate a third-party extension pack's declared
-       [--config <path>]      resources (corpus/lexicon/templates) before activating
-                               it in any repo's tmct.toml; exits non-zero on failure
-  tmct syllogise [--repo <abs>] speculative inference (offline maintenance job): forward-
-       [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
-       [--config <path>]      bounded, low-trust, retractable entailed facts (never on the chat path)
-  tmct viz [--repo <abs>]      write one self-contained HTML page: the memory graph as a
-       [--focus <term>]       readable ledger of fact-sentences around one focus term,
-       [--term <word>]        with segments, a two-hop minimap, and an in-page chat dock
-       [--limit <n>]          that answers from the embedded graph. Focuses on the newest
-       [--output <path>]      taught fact's subject by default (--focus <term> or
-       [--config <path>]      --term <word> override it); --output defaults to
-                               ledger.html in the cwd; --limit caps the embedded fact
-                               rows; --term resolves via the same normalization chat uses.
-  tmct serve [--repo <abs>]    run the Anthropic Messages API-compatible endpoint
-       [--host <h>] [--port <n>]  (POST /v1/messages) over the graph — a deterministic,
-       [--graph <path>]        no-LLM "model" a tool-loop client can call; $0 usage.
-       [--config <path>]       Defaults: host 127.0.0.1, port 8787. Ctrl+C to stop.
-  tmct plan "<request>"        the capability router: compose/execute read-only graph-
-       [--repo <abs>]          query tool calls for a compound or maintenance-goal
-       [--graph <path>]        request ("of the modules impacted by X, which are
-       [--config <path>]       untested", "what most needs a test") — a real STRIPS/
-       [--tools <a,b,...>]     PDDL planner (src/domain/router/*), never a guessed call.
-       [--json]                Prints the grounded step sequence + composed answer,
-                               or an honest "no plan found". --tools restricts the
-                               declared toolset; --json prints the full loop result.
-  tmct cli <tool> '{…}'        invoke a graph tool directly (carry-over, de-emphasized)
-       [--repo <abs>]          the repo to answer from; the payload's "repo_path" says
-       [--graph <path>]        the same thing. --graph names the graph file outright
-       [--config <path>]       (repeatable), --config an alternate tmct.toml
-  tmct cli digest '{…}'        architecture map + per-module context bundles
-  tmct --help                  show this help
+${renderUsage()}
 
 On a terminal, chat opens the full-screen TUI; piped input gets the plain shell.
 In chat: /help lists slash-commands; /exit leaves. Session log → <repo>/.tmct/session-<id>.log.
@@ -1336,8 +1255,7 @@ async function main() {
 
   // An unknown mode gets the instructive usage line and exit 2. (A bare invocation
   // never lands here — the argv splice above rewrote it to `chat`.)
-  process.stderr.write(`tmct: unknown invocation "${process.argv.slice(2).join(" ")}". ` +
-    "Use `chat`, `memory`, `init`, `import`, `extend --validate`, `syllogise`, `serve`, `plan`, `cli digest …`, or `cli <tool> …`.\n");
+  process.stderr.write(unknownInvocationMessage(process.argv.slice(2).join(" ")));
   process.exit(2);
 }
 
