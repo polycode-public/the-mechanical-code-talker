@@ -419,8 +419,10 @@ adopts it, so no track here assumes it.
 
 ## 5. The sandbox question — three options, compared per track (not force-fit to one answer)
 
-`package.json` today has **no** sandbox/vm/browser-adjacent dependency: `dependencies` are `ink`,
-`react`, `smol-toml`, `wink-eng-lite-web-model`, `wink-nlp`; `devDependencies` are `esbuild` (the
+`package.json` already carries Playwright: `playwright` 1.61.1, pinned exactly, in `devDependencies`,
+with `npm run e2e:browsers` installing Chromium for the browser e2e tier (`npm run test:e2e`). The
+product `dependencies` stay clean — `ink`, `react`, `smol-toml`, `wink-eng-lite-web-model`,
+`wink-nlp` — and the rest of `devDependencies` is `esbuild` (the
 ask-browser bundle builder, not a sandbox), `ink-testing-library`, and `publint`. `files` ships
 `bin/ src/ README.md ROADMAP.md LICENSE corpus/ data/`;
 `exports` resolves only to `src/*.mjs` files (a broader key surface now — `./plan`,
@@ -435,12 +437,11 @@ only, never touching `dependencies`/`files`/`exports`.
 |---|---|---|---|---|
 | (a) direct in-process call (`goalReason`/`applicableRules`) | none needed — the candidate is DATA, not code, run by the SAME trusted engine already shipped | n/a | **zero** — no new dependency at all | **Track 1** (and its `PHRASING_FRAMES` warm-up) — the right answer, and the Playwright question is moot here |
 | (b) Node `vm` module | process-shared, weak — known sandbox-escape / prototype-pollution / DoS surface for genuinely untrusted candidate code; a hung synchronous loop is only softly mitigated by `Script` timeouts | **no DOM at all** | zero (built-in) | would cover Track 3's pure-JS case *alone*, if Tracks 2/4 didn't exist |
-| (c) Playwright headless browser | real OS-process isolation (separate browser process per context, hard-killable) | **yes** — `page.evaluate` is simultaneously a JS execution context, `page.content()`/`page.$eval` a DOM, `getComputedStyle` a CSS engine | heavy — multi-hundred-MB browser binaries, a new devDependency surface, version pinning to keep replay deterministic | **Tracks 2, 3 and 4, uniformly** |
+| (c) Playwright headless browser | real OS-process isolation (separate browser process per context, hard-killable) | **yes** — `page.evaluate` is simultaneously a JS execution context, `page.content()`/`page.$eval` a DOM, `getComputedStyle` a CSS engine | **already paid** — pinned in `devDependencies` for the e2e tier, Chromium installed by `e2e:browsers` | **Tracks 2, 3 and 4, uniformly** |
 
 **Verdict, per track, stated plainly rather than force-fit to one answer.** For Track 1, the
 operator's sandbox idea does not apply — a candidate `GOAL_RULE` is data run by trusted code, so (a)
-is not merely cheaper than (b)/(c), it is the *correct* model (no untrusted code ever executes);
-adding Playwright for Track 1 alone would be pure unjustified dependency weight. Once Tracks 2-4 are
+is the *correct* model: no untrusted code ever executes. Once Tracks 2-4 are
 in scope, the comparison changes in Playwright's favor, and decisively so: `vm` cannot render
 HTML/CSS at all, so it is no longer a candidate for a unified sandbox once JS, JS-repair, and HTML/CSS
 are co-equal targets. With three languages and a repair track on the table, Playwright is the
@@ -450,10 +451,13 @@ Track 3's from-scratch candidates alike, `page.content()`/`page.$eval()` inspect
 structure, and `page.evaluate(() => getComputedStyle(el))` inspects its CSS, all inside the same
 OS-process-isolated sandbox rather than stitching together `vm` for JS and something else entirely
 for markup. That also means Track 3 should use Playwright too, even though `vm` would suffice for
-its pure arithmetic snippets alone — the honest reason to prefer Playwright there is uniformity of
-one sandbox technology across Tracks 2-4, not that `vm` is inadequate on its own. The
-dependency-weight tradeoff is real and should be named to the operator explicitly (§8), not absorbed
-silently.
+its pure arithmetic snippets alone — the reason to prefer Playwright there is uniformity of
+one sandbox technology across Tracks 2-4, not that `vm` is inadequate on its own.
+
+Picking (c) buys no new dependency. It reuses one the repo already installs and pins. What Tracks
+2-4 do introduce is a **use** the dependency has never been put to: today Playwright drives tmct's
+own pages under test, and nothing it runs is untrusted. Executing candidate code the search
+generated is a different surface, and that is the thing §8 asks the operator to sign off on.
 
 ---
 
@@ -537,10 +541,10 @@ new artifacts, not squeezed into agentbench's tool-call shape where they don't f
   because it passed the verification oracle; the oracle proves consistency with the given examples
   and the equivalence heuristics, not that a human has endorsed the artifact for the codebase's
   actual conventions.
-- **Dependency-weight honesty, restated per §5.** Playwright's browser binaries are a real,
-  multi-hundred-MB addition to the *dev* tree the moment Track 2, 3, or 4 starts — bigger than
-  anything currently in `devDependencies`. This must be a visible, named tradeoff at sign-off time,
-  not a quiet `npm install` line.
+- **A new use of an existing dependency, per §5.** Playwright is already pinned and already
+  installs Chromium for the e2e tier, so Tracks 2-4 add no dependency weight. They add a use: the
+  browser would run candidate code the search wrote, where today it only drives tmct's own pages.
+  That change of use is the named tradeoff at sign-off time (§8).
 
 ---
 
@@ -555,11 +559,11 @@ existing function in Track 2, from-scratch executable JS text in Track 3, markup
 and Tracks 2-4 additionally introduce the first genuinely untrusted-code-execution surface (however
 sandboxed) this repo has ever had; Track 2 specifically is the first track that would ever propose
 **modifying real, already-shipped source code**, which is a materially different risk class from
-generating a new, separate artifact. Track 1 alone is a comparatively small ask (no sandbox, no new
-dependency, output is inert JSON-shaped data run by existing trusted code). Tracks 2-4 are a
+generating a new, separate artifact. Track 1 alone is a comparatively small ask (no sandbox, output
+is inert JSON-shaped data run by existing trusted code). Tracks 2-4 are a
 materially bigger ask, and expanding the scope to three language targets plus a repair track makes
-this **more** true, not less: a new heavy devDependency, a real (if sandboxed) code-execution loop,
-a verification surface (§4.4) that is honestly fuzzier than anything else this repo measures
+this **more** true, not less: a real (if sandboxed) code-execution loop,
+a verification surface (§4.4) fuzzier than anything else this repo measures
 deterministically today, a search space (§7) that grows fastest exactly where the verification is
 fuzziest, and — for Track 2 specifically — candidates that would touch real shipped code, not just
 generate new declarative data. **This plan recommends staging (§6) and recommends the operator

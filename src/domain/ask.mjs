@@ -13,8 +13,7 @@
 // and any tie surfaces as ambiguity.
 //
 // ask.mjs's own `touches`/`cochange` verbs answer one-hop structural edges
-// (mgx:touchedByCommit / mgx:changeCoupledWith) — a different, simpler
-// question than temporal.mjs's time-scrubbing Chronograph surface.
+// (mgx:touchedByCommit / mgx:changeCoupledWith).
 
 import { relationKind, impactClosure, moduleCountOf, normPath, HISTORY_CAP } from "./codegraph.mjs";
 import {

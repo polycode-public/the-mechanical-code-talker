@@ -149,7 +149,7 @@ decision`, unchanged since refresh 1.
 | 48 | Completions Stage 0 (broad search + grouping) | implemented | `test/adapters/completions-stage0.test.mjs:90,109,131,161,183` | unchanged |
 | 49 | Completions Stage 2 (extractive ranking) | implemented | `test/adapters/completions-stage2.test.mjs` | unchanged |
 | 50 | Completions wired into a user-facing answer | implemented | `test/adapters/chat-completions-wiring.test.mjs:56,77,95,111` | line dead (`:6475` → `:8596`) |
-| 51 | Capability router, full 6-stage stack | implemented, reachable and now corpus-driven | 11 `planning.route.*` rows; `test/adapters/router-drive.test.mjs:41,53,63,78` | **strengthened**: 1.7.3's reachability gap now pinned by real-session rows. New module `src/domain/router/taught.mjs` |
+| 51 | Capability router — registry operator model + four stages (resolver → planner → taught-action plan → goal-reasoner) | implemented, reachable and now corpus-driven | 11 `planning.route.*` rows; `test/adapters/router-drive.test.mjs:41,53,63,78` | **strengthened**: 1.7.3's reachability gap now pinned by real-session rows. New module `src/domain/router/taught.mjs` |
 | 52 | `POST /v1/messages` HTTP shim | implemented | `e2e/server-http.test.mjs:49,92,106,122,133` — full tool_use→tool_result→end_turn loop | unchanged |
 | 53 | bedrock-meter $0-rung routing | implemented in the sibling repo, not here | `PLAN_AGENTS.md:87`; tmct's own side `:596` Phase 5 "Not started" | line dead |
 | 54 | GitHub Copilot BYOK protocol shim | claimed-only | `PLAN_AGENTS.md:596` Phase 5 | line dead |

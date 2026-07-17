@@ -98,8 +98,10 @@ substitute for the matcher. It matters in three places:
 
 The estate is now organised around a tested tool surface and a keyed corpus: `src/` is five layers
 with downward-only imports (`test/estate/import-layers.test.mjs`), `src/tools/` is the tool layer,
-and `test/corpus/` holds 723 rows across 11 JSONL lanes, each row keyed by the production or
-capability it pins and driven through the real session. `node scripts/corpus-matrix.mjs` prints the
+and `test/corpus/` holds ~790 rows across 11 JSONL lanes (793 measured 2026-07-17), each row keyed by
+the production or capability it pins and driven through the real session. The lanes grow most weeks,
+so treat any row count here as a snapshot — `wc -l test/corpus/*.jsonl test/corpus/games/*.jsonl` is
+the live one. `node scripts/corpus-matrix.mjs` prints the
 key × lane matrix; `--gaps` names the keys a single row pins and the keys with no negative row.
 That changes three things for this plan, and leaves the central problem untouched.
 
@@ -129,8 +131,8 @@ That changes three things for this plan, and leaves the central problem untouche
 - **The label vocabulary.** tmct still has no mapping to 150 or 64 intents. The lanes pin behaviour;
   they do not supply a label space, and no fixture carries a CLINC/HWU domain. This is the whole gap,
   and the reorganisation does not narrow it.
-- **Scale.** The estate is built for ~723 curated rows inside `npm test`; the grammar lane's 224 rows
-  take about 5.5 seconds. CLINC150's test set and HWU64's 25,716 utterances under 10-fold CV are
+- **Scale.** The estate is built for ~790 curated rows inside `npm test`; the grammar lane's 241 rows
+  take about 5.7 seconds. CLINC150's test set and HWU64's 25,716 utterances under 10-fold CV are
   orders of magnitude past that. The scored runs stay in `nlubench/` with their own runner and their
   own results tree. Only the diagnostic slice belongs in a lane.
 - **Training.** Rows assert; they do not train. The matcher below is still the layer tmct lacks.
@@ -295,7 +297,10 @@ not a planned lever anymore.
 
 Ordered by expected points-per-effort. Discipline is the chatbench contract's: **one lever
 per measured run**, results in the version-named write-up, so every movement is
-attributable. Deltas are against the spike bases (CLINC150 68.2%/89.7%, HWU64 0.792).
+attributable. Deltas are against the spike bases (CLINC150 68.2%/89.7%, HWU64 0.792) — and those
+bases came from a scratchpad spike whose scripts were never committed, so nothing in the repo can
+re-derive them. Step 2 rebuilds the spike inside `nlubench/`. Rebase every delta on that run's
+numbers when it lands; until then the bases are a pointer, not a baseline.
 
 - **L1 — pool evidence per intent (k-NN vote or class centroid), adopt as the harness
   default.** Measured: +5.5 raw points on CLINC150 over the plan's literal 1-NN baseline;

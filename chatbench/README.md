@@ -9,8 +9,8 @@ stays no-LLM; the judge lives only here.
 
 | file | role |
 | --- | --- |
-| `cases.jsonl` | the v1 case set — **append-only once the CHATBENCH arc starts**; never edit or delete a case mid-arc |
-| `graded-pool.jsonl` | the GRADED pool (case-set v2): 925 generated cases across 30 grade×construction cells, sampled per run — see `GRADED.md` |
+| `graded-pool.jsonl` | the go-to case set (case-set v3): **109 cases across 12 cells** — 10 per CEFR grade plus the 49 hand-authored capability cases the deleted `cases.jsonl` used to hold, each now carrying a real grade + construction. The default `--pool`; a run draws 5 per cell (60 of the 109) |
+| `graded-pool-max.jsonl` | the full CEFR pool: **1,075 cases across 36 cells**, sampled per run. The higher-confidence profile, reached with `--pool` — see `GRADED.md`, which describes this file |
 | `graded.mjs` | graded registries + pure logic: matrix, stratified/dual sampling, agreement, ladder, rollups |
 | `generate-graded.mjs` | deterministic pool generator (replays the engine to auto-author expectations) |
 | `GRADED.md` | the graded benchmark's design doc (matrix, band descriptors, sampling contract, promotion) |
@@ -43,10 +43,10 @@ node chatbench/report.mjs \
 
 Useful during development: `--only <id,id>` (both run and judge), `--samples 1`.
 
-## The graded layer (case-set v2 — full design in `GRADED.md`)
+## The graded layer (full design in `GRADED.md`, which describes `graded-pool-max.jsonl`)
 
-With `graded-pool.jsonl` present, `chatbench:run` ALSO runs a stratified
-sample of the graded pool — per grade×construction cell, `max(5, round(0.1 ×
+`chatbench:run` runs a stratified sample of the pool — per grade×construction
+cell, `max(5, round(0.1 ×
 pool))` cases — as a **dual draw** by default: two independent seeded samples
 (`product-a.jsonl` = v1 + draw A; `product-b.jsonl` = draw B), whose per-cell
 agreement (`agreement.json` + the printed table) is the instrument's own
@@ -54,6 +54,10 @@ reliability check. A DISAGREEING cell is UNDER-COVERED: grow its pool/sample
 and exclude it from cycle statistics until it agrees. Three **census cells**
 (B1 pronoun-binding, B1 temporal, C1 temporal — `CELL_SAMPLE`) are drawn in
 FULL every run so they always agree (cycle-4 pool growth; see `GRADED.md`).
+
+`GRADED_MATRIX` and its cell sizes describe the full pool. The default
+`graded-pool.jsonl` carries 12 of those 36 cells, so read any per-cell claim
+here against `graded-pool-max.jsonl`.
 
 Every run also writes **`timings.json`** (cycle-005): the total run wall-time
 plus, per CEFR band and for the v1 spine, the row count / total ms / mean ms per
@@ -102,12 +106,21 @@ pool file is regenerable but committed and append-only in the same sense as
 2026-07-05 (cycle 4) — deliberate pool revision: the three dual-draw
 UNDER-COVERED cells (B1 pronoun-binding, B1 temporal, C1 temporal) grown 25→50
 (new original phrasings, ground truth verbatim from the fixture) and made census
-cells, so **925 cases** across 30 cells. Regenerate with
+cells, so **925 cases** across 30 cells.
+2026-07-07 — grown to **1,075 cases** across 36 cells (five new C1 cells plus one
+new C2 cell), the shape `GRADED.md` documents.
+2026-07-10 (case-set v3) — split by size, not by content. That 1,075-case pool moved
+to `graded-pool-max.jsonl` untouched, and `graded-pool.jsonl` became the cheap go-to
+default: 10 cases per CEFR grade plus `cases.jsonl`'s 49 hand-authored capability
+cases, regraded into real cells, **109 cases** across 12 cells. `cases.jsonl` itself
+was deleted — its content lives in `graded-pool.jsonl` now. Nothing was dropped; the
+full pool is a `--pool` flag away.
+Regenerate with
 `node chatbench/generate-graded.mjs` after any engine change lands, since the
 generator replays every item through the live engine (the frontier marks track
 the current engine).
 
-## Case shape (`cases.jsonl`, one JSON object per line)
+## Case shape (`graded-pool.jsonl`, one JSON object per line)
 
 ```json
 { "id": "gq-imports-of-a", "tags": ["graph-query"], "mode": "turns",

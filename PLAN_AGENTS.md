@@ -81,8 +81,8 @@ other way round. Conclusions only:
 | `POST /v1/messages` HTTP shim (Anthropic-Messages-API-compatible) | **Shipped**, since 0.8.0 | `src/surfaces/http/server-http.mjs`, `bin/tmct.mjs serve` |
 | Repository Interface `INTERFACE_VERSION` 1.1.0 (16 services, closed `EDGE_KINDS`/`MISS_REASONS`) | **Shipped**, since 0.5.0; 1.0.0 → 1.1.0 at v1.4.0 (§2.2) | `src/adapters/repository-interface.mjs` (`SERVICES`, 16), `src/adapters/providers/graph-service.mjs`, `runConformance` in `src/tools/conformance.mjs` |
 | Tool layer: declared tool surface + `dispatchTool` | **Shipped** — 22 declared tools (`TOOL_DEFINITIONS`), 3 hot (`tmct_context`, `tmct_snippet`, `tmct_ask`) and 19 cold | `src/tools/definitions.mjs` (`HOT_TOOLS`/`COLD_TOOLS`), `dispatchTool` + `TOOLS` in `src/tools/server.mjs`, catalog rendered by `src/tools/catalog.mjs`; contract tests in `test/tools/`. The router's registry excludes the three hot tools, see `EXCLUDED_FROM_REGISTRY` |
-| Capability router (STRIPS/PDDL registry, resolver, planner, guardrail, goal-reasoner) | **Shipped**, all 6 stages, **and invokable** | `src/domain/router/*`, 15 capabilities in `registry.mjs` (`capabilities()`), measured on AGENTBENCH; `tmct plan`/chat's `/plan`/`./plan` library export — see §1.3 |
-| AGENTBENCH goal-reasoner (Stage 5, the C2 rung) | **Shipped and measured** | 56 cases: 100% plan / 100% result / 0% hallucination across every rung (fixed 2026-07-12 — no case held back) |
+| Capability router (STRIPS/PDDL registry, resolver, planner, taught actions, goal-reasoner) | **Shipped** and **invokable**. A request escalates through four stages over the registry's operator model: resolver → planner → taught-action plan → goal-reasoner | `src/domain/router/*` — `registry.mjs` (15 capabilities via `capabilities()`) is the operator model; `drive.mjs` is the shell that runs the four stages; `call-validator.mjs`/`set-algebra.mjs`/`results.mjs` are shared support. Measured on AGENTBENCH; `tmct plan`/chat's `/plan`/`./plan` library export — see §1.3 |
+| AGENTBENCH goal-reasoner (the C2 rung) | **Shipped and measured** | 56 cases: 100% plan / 100% result / 0% hallucination across every rung (fixed 2026-07-12 — no case held back) |
 | seonix code→graph, driven by tmct | **Shipped, in production**, seonix 0.8.0→0.10.6 | `seonix/src/tmct-provider.mjs` — 37 lines, `createGraphService` reused directly |
 | bedrock-meter cost-ordered router with a tmct rank-0 ($0) rung | **Shipped and tested** | `router.mjs`/`router-ladder.mjs`/`routing-target.mjs`, 11 passing tests |
 | marginalia's `seon-mcp` self-hosted code graph | Built, **not yet wired to tmct** | near-zero-gap integration, same pattern as seonix (§1.1 below) |
@@ -107,12 +107,12 @@ impact is what's being asked for and bind the right module. marginalia's `seon-m
 old ecosystem plan) is a near-1:1 vocabulary match with tmct's own `EDGE_KINDS` for the same
 reason — proven twice now, low-risk, staged first (§11).
 
-### 1.2 Foundational precedent: chat-taught relations are a working Stage 0/1 prototype
+### 1.2 Foundational precedent: chat-taught relations are a working registry/resolver prototype
 
 The chat-taught relations system just shipped (Rule storage in `src/adapters/memory/core.mjs`, the
 backward-chaining query dispatcher `resolveRelationChase`, the bounded successor-function search
-`findActionPath`) is structurally the same shape as the capability router's Stage 0 (capability
-ontology + registry) and Stage 1 (the resolver — unification + backward chaining over
+`findActionPath`) is structurally the same shape as the capability router's registry (the capability
+ontology) and resolver (unification + backward chaining over
 capabilities-as-facts), just scoped to family relations instead of tool capabilities. Declare a
 named thing with structure (base relation, a property filter, a recursive step ↔ preconditions,
 effects, decomposition), then chase a query against taught facts to find what satisfies it — the
@@ -122,7 +122,7 @@ nothing. Worth remembering when scoping Phase 2's slot-filling work (§5).
 
 ### 1.3 How another repo or agent calls the capability router
 
-The 6-stage router (§1's table) was real and tested since it shipped, but until now nothing outside
+The router (§1's table) was real and tested since it shipped, but until now nothing outside
 `agentbench/` or the test suite could actually call it — an audit finding, closed this cycle. Three
 invocation surfaces exist now, all wrapping the same `src/domain/router/drive.mjs`:
 
@@ -318,33 +318,32 @@ Near-term, mostly known-how, individually small. No item here requires research.
   temporal-over-relative composition) as blocking its later stages. The re-measure ran them as real
   multi-turn conversations, and its transcripts no longer live in prose or in a standalone suite.
   They are nine keyed rows in the corpus lanes, driven through the real session on every `npm test`.
-  Three pin behaviour that works:
+  Five pin behaviour that works:
 
   | Row | What it pins |
   |---|---|
   | `games/discourse-count-relation-filter` | "how many of those also import Y" counts the prior set |
   | `games/discourse-count-qualifier-filter` | "how many of those are tested" counts the prior set |
   | `games/single-turn-temporal-filter-dated-answers` | single-turn temporal filtering gives dated answers |
+  | `games/yesno-call-check-reads-callssymbol-edge` | "does it call X" binds the pronoun and the yes/no check reads the symbol-grain sibling |
+  | `games/bare-passive-reads-the-patient` | bare passive with no by-agent clause ("was X touched") reads X as the patient |
 
-  Six freeze an answer that is still wrong, so a fix has to flip the row deliberately:
+  The last two froze wrong answers until `98df45a` fixed the passive branch and the yes/no eval. Both
+  rows were renamed to record the behaviour they now pin.
+
+  Four freeze an answer that is still wrong, so a fix has to flip the row deliberately:
 
   | Row | The bug it freezes |
   |---|---|
-  | `games/yesno-call-check-misses-callssymbol-edge` | "does it call X" binds the pronoun, then the yes/no check false-negatives on a `callsSymbol`-only edge |
-  | `games/bare-passive-yesno-reads-active-subject` | bare passive with no by-agent clause ("was X touched") reads X as the active subject |
   | `games/bare-type-discourse-filter-unbuilt` | a bare entity-type follow-up ("which of them are functions") does not compile |
   | `games/cross-turn-temporal-composition-unbuilt` | "was that before X was touched" is not composed across turns |
   | `games/honest-empty-echoes-raw-pronoun` | the honest-empty template echoes the literal word "it" |
   | `games/temporal-adverb-read-as-object-term` | "was it touched recently" reads "recently" as the object term |
 
-  Two root causes stay pinned in the source. `src/domain/ask.mjs`'s `KIND_UNIONS` still defines a
-  union for `uses` only, never for bare `calls`. `src/domain/interpret/strategies/keywords.mjs`'s
-  `parseKeywordSpot` still falls through to `shape: "forward"` when text precedes the verb and
-  nothing follows it, so the passive reading never fires without a "by" clause. `PASSIVE_AUX` appears
-  in that file and is consulted on other branches, so reading the source suggests the path is
-  handled. Driving it says otherwise, which is why the rows are the evidence and the read is not.
+  `src/domain/ask.mjs`'s `KIND_UNIONS` still defines a union for `uses` only, never for bare `calls`.
+  No frozen row rests on that now, and the yes/no row passes without it.
 
-  The measurement is closed. Six fixes are open, each named by its row.
+  The measurement is closed. Four fixes are open, each named by its row.
 - ✅ **RI wrapper fixes from the seonix audit (§2.2) — shipped v1.4.0.** Ranked search, real
   `context()` bundling (`INTERFACE_VERSION` 1.1.0), depth-capped `impact()`, source-backed
   `snippet()`, response pagination on `search()`/`edges()`. Also closed a real path-traversal gap
@@ -488,9 +487,10 @@ in view for how these shims are shaped, even though tmct's existing shim speaks 
 directly rather than MCP.
 
 - **Claude Code** — already solved. The `/v1/messages` shim, tool dispatch, and capability router
-  have shipped since 0.8.0. This phase is hardening, not building: thicken the guardrail (capability
-  router Stage 4) to validate real Claude Code tool_use proposals against declared capabilities, not
-  just AGENTBENCH's synthetic cases.
+  have shipped since 0.8.0. This phase validates real Claude Code tool_use proposals against
+  declared capabilities, not just AGENTBENCH's synthetic cases. `call-validator.mjs`'s
+  `hallucinationsIn` is the check; what's missing is a seam that feeds it an externally-proposed
+  call. Today the router resolves every call itself, so nothing proposes one.
 - **Amazon Bedrock** — bedrock-meter's router already has a tested tmct routing target (the rank-0,
   $0 rung, envelope-gated). This phase closes two named gaps: no live integration test (only
   injected-dispatch unit tests — the wire format has never been proven compatible end-to-end between

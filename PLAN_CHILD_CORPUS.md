@@ -16,13 +16,19 @@ Measured, and it is the whole argument:
 - `CapableOf` edges in the slice: **231**. To `fly`: **zero**.
 - What they are instead: `browser -> search_internet`, `bike -> crash`, `annoying_person -> bug`.
 - Things that can fly in the ENTIRE shipped corpus: **one** — `bird`, from `tier2/human.jsonl`.
-- Kinds of bird seeded: **1** (`owl`), with zero capabilities on it.
+- Kinds of bird seeded: **2**. `owl` (`tier2/human.jsonl:430`) and `swift`
+  (`conceptnet/slice.jsonl:13328`). Neither is recorded as flying.
+- `swift` is only there because "Swift" is a programming language and matched the tech seed. The
+  slice carries `swift RelatedTo programming_language`, `compiled`, `multi_paradigm` alongside
+  `swift IsA bird`. The one extra bird in the corpus arrived by accident.
+- Capabilities on those birds: **one** — `owl CapableOf hunt_at_night` (`human.jsonl:431`). `swift`
+  has none.
 - `ostrich`: absent.
 
 So the defeasible-negation work (`archive/PLAN_DEFEASIBLE_NEGATION.md`) lands on a store that cannot
 demonstrate it. Its base-rate answer — *"of the 5 kinds of bird I know, 3 fly, 1 doesn't, and
-1 I have nothing on"* — is correct, obeys every rule, and reads *"of the 1 kind of bird I
-know, 0 fly, 0 don't, and 1 I have nothing on"* on a fresh install. The engine is not thin.
+1 I have nothing on"* — is correct, obeys every rule, and reads *"of the 2 kinds of bird I
+know, 0 fly, 0 don't, and 2 I have nothing on"* on a fresh install. The engine is not thin.
 The seed is.
 
 ## What cannot be bought, stated first
@@ -74,7 +80,7 @@ be applied to it — re-filtering a tech slice by a child seed yields the inters
 nearly empty. This requires the real ConceptNet dump, offline, and `init:xxxl` is already
 documented as unreachable "from data in hand" for exactly this reason.
 
-## The honest ceiling
+## What a wider seed does not fix on its own
 
 Even with a perfect child-concept seed, ConceptNet's `CapableOf` coverage is sparse
 everywhere — 231 edges across a 45k-row slice is not a tech-filter artifact alone. And
@@ -98,7 +104,10 @@ is what tmct is for.
 4. Decide whether `/r/Not*` joins `conceptnet-map.toml`'s closed set. This is where the
    negation work and the corpus work meet.
 5. Re-measure the numbers at the top of this doc. They are the acceptance test: kinds of bird,
-   capabilities among them, things that can fly.
+   capabilities among them, things that can fly. Measure them with a script, not by hand — the
+   hand-counted version of this list already drifted once (it read "1 kind of bird, zero
+   capabilities" while the corpus held two birds and one capability), and a baseline nobody can
+   re-run is not an acceptance test.
 
 ## Related
 

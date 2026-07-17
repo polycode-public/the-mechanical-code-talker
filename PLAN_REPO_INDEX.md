@@ -35,22 +35,22 @@ in tmct and already has zero real callers, and reconcile the docs that predate t
 
 Confirmed by direct read of this repo, not assumed:
 
-- **`src/domain/ask.mjs`** (4,694 lines) — a mechanical, zero-model-call natural-language query engine over
+- **`src/domain/ask.mjs`** (~4,000 lines; 3,967 measured 2026-07-17, and it moves most weeks) — a mechanical, zero-model-call natural-language query engine over
   an already-loaded graph. Its own header (`ask.mjs:1-15`) states it compiles free text into a graph
   traversal. It answers "which modules import X" / "what calls Y" style questions today, using an
   OWL/SEON-shaped predicate vocabulary (`src/domain/ask-vocab.mjs`'s `RELATIONS` table: `imports`, `calls`,
   `defines`, `contains`, `inherits`, `tests`, `touches`, each with real verb synonyms). It is browser-
   bundled: `scripts/build-ask-bundle.mjs` esbuild-bundles a narrow entry point
-  (`src/ask-browser-entry.mjs`) into `src/ask-browser.bundle.js`, which `src/viz.mjs` inlines into
-  `tmct viz`'s "Ask the graph" panel.
-- **`src/domain/codegraph.mjs`** (2,405 lines) — `parseEntities(payload)` (`codegraph.mjs:31-63`) takes an
+  (`src/ask-browser-entry.mjs`) into `src/ask-browser.bundle.js`, which `src/services/ledger-viz.mjs`
+  inlines into `tmct viz`'s in-page "Ask the graph" chat dock.
+- **`src/domain/codegraph.mjs`** (1,967 lines) — `parseEntities(payload)` takes an
   **already-built** JS object and reshapes it; its own doc comment calls it "pure (no-network, no-fs)
   query logic over the typed `entities` payload that the deterministic indexer writes to
   `<repo>/.tmct/graph.json`." `spiralExpand` is a pure in-memory graph walk. Neither touches a
   source file.
-- **`src/adapters/repository-interface.mjs`** (332 lines) — a versioned (`INTERFACE_VERSION = "1.1.0"`,
-  line 21) typed contract: 17 named services across six groups (resolution, traversal, source,
-  aggregate, temporal, search), a closed `MISS_REASONS` set (`UNRESOLVED_TERM`, `CAPABILITY_ABSENT`,
+- **`src/adapters/repository-interface.mjs`** (330 lines) — a versioned (`INTERFACE_VERSION = "1.1.0"`,
+  line 21) typed contract: 16 named services across six groups (resolution 6, traversal 2, source 2,
+  aggregate 3, temporal 1, search 2), a closed `MISS_REASONS` set (`UNRESOLVED_TERM`, `CAPABILITY_ABSENT`,
   `TRUNCATED_GRAPH`, `NO_SOURCE`, lines 36-41), and explicit OWL grounding — "every `Individual.class`
   is a `tmct:` class and every `Edge.predicate` a `tmct:` object property" (lines 6-8).
 - **`src/adapters/source.mjs`** — the provider seam. Its own header (lines 6-11) states plainly: "any graph
@@ -170,12 +170,12 @@ Read directly from `<sibling-checkout>/seonix` (a full sibling repo):
   Repository Interface work already executed the query/chat inversion the operator's framing calls
   "later re-integrate ../seonix to use the rich tmct library." That part is done. See Part 4 below
   for exactly what that work covered and what it leaves for this one.
-- **seonix already carries `@playwright/test` as a devDependency** (`seonix/package.json`). This
-  matters directly for the PLAN_CODE.md relocation below.
+- **seonix carries `@playwright/test` as a devDependency** (`seonix/package.json`). So does tmct
+  (`playwright` 1.61.1), so this no longer separates the two repos — see Part 3.
 
 ## Part 3 — `PLAN_CODE.md`, read in full
 
-`PLAN_CODE.md` (491 lines, this repo) is titled "program synthesis over tmct's closed DSLs (and,
+`PLAN_CODE.md` (this repo) is titled "program synthesis over tmct's closed DSLs (and,
 now, JS/HTML/CSS)." It is **not about code indexing** — it is a different capability entirely:
 synthesizing `GOAL_RULE`/`PHRASING_FRAMES` entries for tmct's own chat-routing DSL (Track 1), then
 three newer, unshipped tracks about writing and testing arbitrary program code in a sandbox (Tracks
@@ -189,12 +189,11 @@ three newer, unshipped tracks about writing and testing arbitrary program code i
 - **Track 2** (`PLAN_CODE.md:123`, mutation search / program repair, JS), **Track 3**
   (`PLAN_CODE.md:219`, small JS snippet synthesis from I/O examples), **Track 4**
   (`PLAN_CODE.md:269`, HTML/CSS fragment synthesis) — none implemented. `grep -rln
-  "mutation.*template|GenProg|APR|program.repair"` across every `.mjs` file returns zero hits, and
-  `playwright` appears nowhere in tmct's `package.json` or source. All three depend on a sandboxed
-  headless browser (`PLAN_CODE.md` §5, lines 334-368), explicitly named as a real, unresolved
-  dependency decision the operator has not signed off on: adopting Playwright means "a large new
-  devDependency (multi-hundred-MB browser binaries)" and tmct's "first untrusted-code-execution
-  surface" (§8, lines 475-479).
+  "mutation.*template|GenProg|APR|program.repair"` across every `.mjs` file returns zero hits. All
+  three depend on a sandboxed headless browser (`PLAN_CODE.md` §5). The dependency half of that ask
+  is already paid: tmct pins `playwright` 1.61.1 in `devDependencies` and installs Chromium via
+  `npm run e2e:browsers` for the browser e2e tier. What Tracks 2-4 still need operator sign-off on is
+  the use, not the install — tmct's first untrusted-code-execution surface (`PLAN_CODE.md` §8).
 - **`ROADMAP.md`'s own one-line summary is stale in a way worth naming here too** (`ROADMAP.md:54-
   55`): "small JS-function and HTML/CSS-fragment synthesis via a sandboxed headless browser (Track 1,
   program synthesis, already shipped)" reads as if the sandboxed JS/HTML/CSS work is what shipped.
@@ -203,14 +202,17 @@ three newer, unshipped tracks about writing and testing arbitrary program code i
   sweep, but it directly affects how PLAN_CODE.md's relocation should be described in ROADMAP.md
   once this plan executes.
 
-**Why this matters for "move PLAN_CODE.md into seonix":** Track 2-4's blocker — a sandbox dependency
-tmct doesn't want to carry — is not a blocker in seonix. seonix already ships `@playwright/test`,
-already has a benchmarking harness built for exactly this shape of correctness grading (SWE-bench
-Tier B, pytest Tier A), and already has an MCP tool surface to expose a working synthesis/repair tool
-to an LLM agent. Track 1, by contrast, has nothing to do with code indexing or synthesis-over-a-
-target-codebase — it is tmct's own chat-routing DSL, already shipped, already tested, and has no
-sandbox dependency to resolve. Moving the whole file and treating Track 1 as done-and-staying is more
-accurate than trying to split the document.
+**Why this matters for "move PLAN_CODE.md into seonix":** the dependency leg of this argument is
+gone. Both repos carry Playwright now, so "seonix already ships it and tmct doesn't" no longer sorts
+the tracks. What still argues for seonix is fit, not cost: seonix has a benchmarking harness built
+for exactly this shape of correctness grading (SWE-bench Tier B, pytest Tier A) and an MCP tool
+surface to expose a working synthesis/repair tool to an LLM agent, and Tracks 2-4 synthesize over a
+target codebase, which is seonix's subject. Track 1 is tmct's own chat-routing DSL, already shipped
+and tested, and runs no untrusted code. Moving the whole file and treating Track 1 as
+done-and-staying is more accurate than trying to split the document.
+
+The untrusted-code-execution question does not move with the file. It is a question about whichever
+repo runs the search, and seonix's Playwright is a test-driver today too.
 
 ## Part 4 — the reconciliation: every stale "not a code indexer" claim, named
 
@@ -220,16 +222,15 @@ directly, and every one becomes false the moment Phase 1 below ships a working p
 
 | # | Location | Exact text | Verdict once this plan ships |
 |---|----------|------------|-------------------------------|
-| 1 | `README.md:386` | "**It is not an indexer.** tmct keeps no codebase index of its own. It consumes a graph via a provider seam ... building that graph is a different tool's job." | Superseded. Reword to: tmct can build its own code graph via a ported indexer (name the languages), and still consumes a graph via the same provider seam for any other producer (seonix, CI, hand-written JSON). Both are true after this plan; the "different tool's job" clause is the part that goes. |
-| 2 | `README.md:513` | "tmct is not an indexer, so it consumes a graph through a typed contract any producer can implement." | Superseded. The typed contract stays exactly as-is (this plan adds a producer, not a new consumer path) — reword only the "not an indexer" clause. |
-| 3 | `docs/adapter-contract.md:3` | "tmct **consumes** a code graph; it never produces or mutates one." | Directly false after Phase 1. This is the document that most needs a rewrite: it should state that `graph-build.mjs`'s `buildEntities()` is now a real producer with a real caller (the ported parsers), and that the provider seam remains the path for any *other* producer. |
-| 4 | `src/adapters/source.mjs:9` | "no indexer is ever imported here. tmct only READS through this seam." | This one should probably stay true and be preserved as an architectural boundary: `source.mjs` is the read seam; a new `src/index/` (or similar) module tree is the write/producer side, and `source.mjs` itself is not where the parser lives. Reword the comment to say so explicitly rather than delete it, since the boundary itself (reader vs. producer as separate modules) is worth keeping. |
-| 5 | `bin/tmct.mjs:556` | `// with every other subcommand. No --graph: memory reads no code graph.` | Not stale — this is a true statement about the `memory` subcommand specifically, unaffected by this plan. No change needed. |
-| 6 | `bin/tmct.mjs:842` | `// accepts --config for symmetry (syllogise reads no code graph either).` | Same as above — true, subcommand-scoped, no change needed. |
-| 7 | `src/services/chat.mjs:557-558` | `"I can't count \"${noun}\" — no code graph is loaded yet, so there's nothing to count (point me at one with --repo, or run \"npm run example:mini\")."` | Stays accurate as a *live-session* message (a repo with no graph still has no graph loaded until indexed), but the CLI should eventually offer to index on the spot rather than only pointing at an external `--repo`. Reword once a `tmct index` command exists, to mention it as an option. |
-| 8 | `src/services/chat.mjs:1565-1566` | `"For code structure (imports, calls, definitions) point me at a repo with --repo <path> ... tmct reads graphs; it doesn't index code itself. /help for commands."` | Directly false after Phase 1-2 below ship. Reword the "doesn't index code itself" clause; keep the `--repo` pointer language, since consuming an externally-produced graph remains supported. |
-| 9 | `src/services/chat.mjs:8317` | `"(this repo has no code graph — for structure, point me at a .tmct/graph.json with --repo <path> or run npm run example:mini; tmct doesn't index code itself.)"` | This is the exact live message the operator saw this session. Directly false after this plan ships. Reword to mention `tmct index` (or equivalent) as the first-class option, with `--repo` pointing at an externally-produced graph kept as a fallback. |
-| 10 | `src/services/chat.mjs:9482,9489,9494` | Startup-banner variants of the same "tmct reads graphs, it doesn't index code" message. | Same verdict as #9 — reword together, they are the same message family. |
+| 1 | `README.md:942` | "tmct is not an indexer, so it consumes a graph through a typed contract any producer can implement." | Superseded. The typed contract stays exactly as-is (this plan adds a producer, not a new consumer path) — reword only the "not an indexer" clause. |
+| 2 | `docs/adapter-contract.md:3` | "tmct **consumes** a code graph; it never produces or mutates one." | Directly false after Phase 1. This is the document that most needs a rewrite: it should state that `graph-build.mjs`'s `buildEntities()` is now a real producer with a real caller (the ported parsers), and that the provider seam remains the path for any *other* producer. |
+| 3 | `src/adapters/source.mjs:9` | "no indexer is ever imported here. tmct only READS through this seam." | This one should probably stay true and be preserved as an architectural boundary: `source.mjs` is the read seam; a new `src/index/` (or similar) module tree is the write/producer side, and `source.mjs` itself is not where the parser lives. Reword the comment to say so explicitly rather than delete it, since the boundary itself (reader vs. producer as separate modules) is worth keeping. |
+| 4 | `bin/tmct.mjs:556` | `// with every other subcommand. No --graph: memory reads no code graph.` | Not stale — this is a true statement about the `memory` subcommand specifically, unaffected by this plan. No change needed. |
+| 5 | `bin/tmct.mjs:842` | `// accepts --config for symmetry (syllogise reads no code graph either).` | Same as above — true, subcommand-scoped, no change needed. |
+| 6 | `src/services/chat.mjs:557-558` | `"I can't count \"${noun}\" — no code graph is loaded yet, so there's nothing to count (point me at one with --repo, or run \"npm run example:mini\")."` | Stays accurate as a *live-session* message (a repo with no graph still has no graph loaded until indexed), but the CLI should eventually offer to index on the spot rather than only pointing at an external `--repo`. Reword once a `tmct index` command exists, to mention it as an option. |
+| 7 | `src/services/chat.mjs:1565-1566` | `"For code structure (imports, calls, definitions) point me at a repo with --repo <path> ... tmct reads graphs; it doesn't index code itself. /help for commands."` | Directly false after Phase 1-2 below ship. Reword the "doesn't index code itself" clause; keep the `--repo` pointer language, since consuming an externally-produced graph remains supported. |
+| 8 | `src/services/chat.mjs:8317` | `"(this repo has no code graph — for structure, point me at a .tmct/graph.json with --repo <path> or run npm run example:mini; tmct doesn't index code itself.)"` | This is the exact live message the operator saw this session. Directly false after this plan ships. Reword to mention `tmct index` (or equivalent) as the first-class option, with `--repo` pointing at an externally-produced graph kept as a fallback. |
+| 9 | `src/services/chat.mjs:9482,9489,9494` | Startup-banner variants of the same "tmct reads graphs, it doesn't index code" message. | Same verdict as #8 — reword together, they are the same message family. |
 
 None of these are reworded in this document — this is design only, and the operator's own scope
 boundary for this task excludes touching any file but this one. Phase 4 of the plan below is where
@@ -321,11 +322,11 @@ must stay in seonix. Nothing in this document changes that division.
    five pinned benchmark corpora. Whether seonix ever switches is seonix's own call, made once tmct's
    ported versions have real mileage.
 2. `PLAN_CODE.md` relocates to seonix in full (the operator's explicit instruction), with a stated
-   split on arrival: Track 1 (shipped, tmct's own chat-routing DSL, no sandbox dependency) is noted
+   split on arrival: Track 1 (shipped, tmct's own chat-routing DSL, runs no untrusted code) is noted
    as already-shipped-and-staying-in-tmct, not something seonix re-implements; Tracks 2-4 (unshipped,
-   sandboxed JS/HTML/CSS synthesis and mutation repair) become seonix's design problem, unblocked by
-   seonix's existing `@playwright/test` dependency, `bench/` harness, and MCP tool surface — all three
-   of which were the exact things blocking Tracks 2-4 inside tmct.
+   sandboxed JS/HTML/CSS synthesis and mutation repair) become seonix's design problem, where the
+   `bench/` harness and MCP tool surface already fit their shape. The Playwright dependency argues
+   for neither repo now — both carry it.
 3. `ROADMAP.md`'s stale PLAN_CODE.md summary (Part 3 above) gets corrected as part of this move, not
    before it — the summary should describe Track 1 as tmct-owned and shipped, and Tracks 2-4 as
    seonix's, once the file actually moves.

@@ -1,7 +1,12 @@
 # PLAN_GRAPH_SCAN.md — why `init:xl`/`init:xxl`-scale corpora seed and query slowly, and how to fix it
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code. No source
-file changes ride with this doc; it is design only.
+Status: SHIPPED. All three phases are live code. Phase 1's seed-side index and Phase 2's per-turn
+`factRows` memoisation landed in `src/adapters/memory/core.mjs` and `src/services/chat.mjs`. Phase 3
+re-measured at real scale and beat its exit criterion: `init:xl` seeds 72,075 facts in 16.6s (was
+~8m25s), and `init:xxl` seeds 238,866 in 38.5s (was still running past 70 minutes).
+
+One question stays open. Nothing records what made the original "what is a horse" query take 13
+minutes against the `init:xl` store. The three candidates below are still unresolved.
 
 ## Origin
 
@@ -235,8 +240,8 @@ here for `factAnswer` alone.
 **Phase 3 — real-scale verification.** With Phase 1 landed, re-run `npm run init:xl` (now fast enough
 to iterate on directly) and record the real new wall-clock seed time in `HANDOVER.md`. Re-run the
 original "what is a horse" query against that real store, with Phase 2 also landed, and profile it if
-it's still slow. This is the step that resolves the open question this document's own repro budget
-couldn't reach — confirming or ruling out the three candidates named above for the query-side gap.
+it's still slow. The seed re-measure landed (16.6s / 38.5s above). The query-side gap did not get
+pinned down, so the three candidates above stay open.
 
 ## Non-goals
 
@@ -245,9 +250,6 @@ couldn't reach — confirming or ruling out the three candidates named above for
   them. `PLAN_MUD.md`'s DynamoDB-backed `server:` backend is a separate track for a separate reason.
 - No change to `graph.json`'s on-disk shape. The proposed index is in-memory-only, scoped to one
   `mutateMemory` call, and never serialized.
-- No attempt to fully root-cause the exact 13-minute query figure within this document — the evidence
-  gathered here rules out simple total-fact-count scaling as the sole explanation but could not safely
-  reach the real 72,075-fact, multi-corpus scale to confirm what does explain it. Phase 3 above is the
-  named follow-up, not resolved here.
-- No implementation. This document proposes a design; `src/adapters/memory/core.mjs` and `src/services/chat.mjs` are
-  unchanged by it.
+- No attempt to fully root-cause the exact 13-minute query figure. The evidence gathered here rules
+  out simple total-fact-count scaling as the sole explanation but could not reach the real
+  72,075-fact, multi-corpus scale to confirm what does explain it. Still open.
