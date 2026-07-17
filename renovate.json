@@ -17,5 +17,17 @@
       "matchDepTypes": ["devDependencies"],
       "groupName": "dev dependencies"
     }
+  ],
+  "customManagers": [
+    {
+      "description": "dep:audit pins osv-scanner by release URL, which config:recommended's npm and gitlabci managers do not read — without this the pin ages silently.",
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.gitlab-ci\\.yml$/"],
+      "matchStrings": [
+        "https://github\\.com/google/osv-scanner/releases/download/(?<currentValue>v[0-9.]+)/osv-scanner_"
+      ],
+      "depNameTemplate": "google/osv-scanner",
+      "datasourceTemplate": "github-releases"
+    }
   ]
 }

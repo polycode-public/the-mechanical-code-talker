@@ -73,7 +73,7 @@ dep:audit:
     - npm run audit
     - npm outdated || true          # visibility only — never fails the job
     - curl -sSL -o /usr/local/bin/osv-scanner
-        https://github.com/google/osv-scanner/releases/download/v2.0.2/osv-scanner_linux_amd64
+        https://github.com/google/osv-scanner/releases/download/v2.4.0/osv-scanner_linux_amd64
     - chmod +x /usr/local/bin/osv-scanner
     # v2 syntax with v1 fallback, scoped to the single first-party manifest.
     - osv-scanner scan source -L package-lock.json
