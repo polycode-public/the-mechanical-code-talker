@@ -14,6 +14,7 @@
 
 import { isCapability } from "../src/domain/router/registry.mjs";
 import { hallucinationsIn } from "../src/domain/router/call-validator.mjs";
+import { parseJsonlRows } from "../benchlib/bench.mjs";
 
 // ---- the rungs (the agentic ladder — analogue of chatbench's CEFR GRADES) ----
 // A0 = single obvious tool, args on a plate. A1 = pick the right tool from a
@@ -42,17 +43,7 @@ const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArr
  *  fixture entity, so a stale literal fails loudly at parse time — the exact
  *  discipline the expected-call lint already applies to call names. */
 export function parseCases(text, { knownLabels = null } = {}) {
-  const cases = [];
-  const errors = [];
-  const seen = new Set();
-  const lines = String(text).split("\n").filter((l) => l.trim());
-  lines.forEach((line, i) => {
-    const at = `line ${i + 1}`;
-    let c;
-    try { c = JSON.parse(line); } catch (e) { errors.push(`${at}: invalid JSON — ${e.message}`); return; }
-    if (!c.id || typeof c.id !== "string") { errors.push(`${at}: missing id`); return; }
-    if (seen.has(c.id)) errors.push(`${at}: duplicate id ${c.id}`);
-    seen.add(c.id);
+  return parseJsonlRows(text, (c, cases, errors, at) => {
     if (!RUNGS.includes(c.rung)) errors.push(`${c.id}: rung must be one of ${RUNGS.join("|")}`);
     if (!c.request || typeof c.request !== "string") errors.push(`${c.id}: missing request`);
     if (!Array.isArray(c.tools) || !c.tools.length) {
@@ -101,7 +92,6 @@ export function parseCases(text, { knownLabels = null } = {}) {
     }
     cases.push(c);
   });
-  return { cases, errors };
 }
 
 // ---- the zero-hallucination gate (the AUTOMATIC-FAIL check) ------------------

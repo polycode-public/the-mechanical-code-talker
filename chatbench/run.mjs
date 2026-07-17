@@ -52,6 +52,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PassThrough, Readable } from "node:stream";
+import { parseJsonlRows } from "../benchlib/bench.mjs";
 import {
   GRADES, fnv1a, validateConstruction,
   stratifiedSample, dualDraws, computeAgreement, renderAgreementTable,
@@ -145,17 +146,7 @@ export const EMPTY_CONTEXT =
  *  (schema violations, duplicate ids, bad tags/expect keys) — the same checks
  *  test/bench/chatbench.test.mjs enforces over the committed file. */
 export function parseCases(text) {
-  const cases = [];
-  const errors = [];
-  const seen = new Set();
-  const lines = String(text).split("\n").filter((l) => l.trim());
-  lines.forEach((line, i) => {
-    const at = `line ${i + 1}`;
-    let c;
-    try { c = JSON.parse(line); } catch (e) { errors.push(`${at}: invalid JSON — ${e.message}`); return; }
-    if (!c.id || typeof c.id !== "string") { errors.push(`${at}: missing id`); return; }
-    if (seen.has(c.id)) errors.push(`${at}: duplicate id ${c.id}`);
-    seen.add(c.id);
+  return parseJsonlRows(text, (c, cases, errors, at) => {
     if (!Array.isArray(c.tags) || !c.tags.length) errors.push(`${c.id}: tags must be a non-empty array`);
     for (const tag of c.tags || []) if (!TAGS.includes(tag) && !EXTRA_TAGS.includes(tag)) errors.push(`${c.id}: unknown tag "${tag}"`);
     if (c.grade !== undefined || c.construction !== undefined) {
@@ -206,7 +197,6 @@ export function parseCases(text) {
     }
     cases.push(c);
   });
-  return { cases, errors };
 }
 
 // ---- tier-1 evaluation ----

@@ -45,6 +45,7 @@ import {
 import { parseAce } from "../src/domain/grammar/ace.mjs";
 import { loadLexicon } from "../src/domain/grammar/lexicon.mjs";
 import { normFactTerm } from "../src/adapters/memory/core.mjs";
+import { parseJsonlRows } from "../benchlib/bench.mjs";
 
 // ---- the bands (the classical-logic ladder — INF-A1 -> INF-C2) ----
 export const BANDS = Object.freeze(["INF-A1", "INF-A2", "INF-B1", "INF-B2", "INF-C1", "INF-C2"]);
@@ -64,17 +65,7 @@ export const COMPLETION_FLOOR = 0.5;
 const isPlainObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
 export function parseCases(text) {
-  const cases = [];
-  const errors = [];
-  const seen = new Set();
-  const lines = String(text).split("\n").filter((l) => l.trim());
-  lines.forEach((line, i) => {
-    const at = `line ${i + 1}`;
-    let c;
-    try { c = JSON.parse(line); } catch (e) { errors.push(`${at}: invalid JSON — ${e.message}`); return; }
-    if (!c.id || typeof c.id !== "string") { errors.push(`${at}: missing id`); return; }
-    if (seen.has(c.id)) errors.push(`${at}: duplicate id ${c.id}`);
-    seen.add(c.id);
+  return parseJsonlRows(text, (c, cases, errors, at) => {
     if (!BANDS.includes(c.band)) errors.push(`${c.id}: band must be one of ${BANDS.join("|")}`);
     if (!c.template || typeof c.template !== "string") errors.push(`${c.id}: missing template`);
     if (!c.variant || typeof c.variant !== "string") errors.push(`${c.id}: missing variant`);
@@ -98,7 +89,6 @@ export function parseCases(text) {
     }
     cases.push(c);
   });
-  return { cases, errors };
 }
 
 // ---- kernel arm: the pure closure/prover — subClassOf transitivity AND -----

@@ -19,3 +19,26 @@ export async function pool(items, limit, worker) {
   await Promise.all(Array.from({ length: Math.min(limit, items.length) || 1 }, lane));
   return results;
 }
+
+/** Parse JSONL case text into { cases, errors } with the prologue every bench
+ *  case file shares: keep non-blank lines, JSON.parse each, and require a
+ *  unique string `id` (a bad line becomes an error and is skipped). For each
+ *  surviving row `validateOne(row, cases, errors, at)` runs to lint the row's
+ *  own body and collect it — it owns the `cases.push`, so a body can decline a
+ *  row by returning before it. Returns { cases, errors }. */
+export function parseJsonlRows(text, validateOne) {
+  const cases = [];
+  const errors = [];
+  const seen = new Set();
+  const lines = String(text).split("\n").filter((l) => l.trim());
+  lines.forEach((line, i) => {
+    const at = `line ${i + 1}`;
+    let c;
+    try { c = JSON.parse(line); } catch (e) { errors.push(`${at}: invalid JSON — ${e.message}`); return; }
+    if (!c.id || typeof c.id !== "string") { errors.push(`${at}: missing id`); return; }
+    if (seen.has(c.id)) errors.push(`${at}: duplicate id ${c.id}`);
+    seen.add(c.id);
+    validateOne(c, cases, errors, at);
+  });
+  return { cases, errors };
+}
