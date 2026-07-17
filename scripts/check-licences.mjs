@@ -59,4 +59,4 @@ function main() {
   console.log("licence check: OK — every production dependency is inside the allowlist");
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) main();

@@ -79,7 +79,7 @@ export async function main(outPath = join(ROOT, "public", "demo-memory.json")) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
   const res = await main(process.argv[2]);
   console.log(`wrote ${res.outPath} (grandfather chain + ${res.facts} corpus facts + ${res.taughtGame} game sentences)`);
 }

@@ -83,4 +83,4 @@ function main() {
   console.log(`generate-real-word-collisions: ${collisions.length} collide with ${FUZZY_TARGET_WORDS.length} repair targets -> ${outFile}`);
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) main();
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) main();
