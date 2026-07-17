@@ -1,7 +1,7 @@
 # PLAN_SYLLOGIST.md — beyond the shipped ladder: making the Syllogist itself smarter
 
-> **STATUS: research/design notes — §3's own JTMS-shaped, VERIFY-backed slice (single justification
-> per scm-sco fact, dependency-directed removal, bounded) is now IMPLEMENTED and tested
+> **STATUS: research/design notes — §3's own ATMS-shaped, VERIFY-backed slice (single justification
+> per scm-sco fact, DRed retraction, bounded) is now IMPLEMENTED and tested
 > (`retractSubClassOf`, `src/domain/syllogise.mjs`; see §3 for scope). §1/§2/§4/§5 remain notes only —
 > and §1's beyond-RL survey now has a deeper sibling doc, `PLAN_SYLLOGIST_EL_DL.md`, which owns the
 > EL-classifier/DL-tableau tier; this file owns the incrementality/retraction horizon.
@@ -129,9 +129,11 @@ class `via` that produced it is computed and returned in the pass's report but n
 the fact itself, so there is no stored justification to walk at all today. `PLAN_INFERENCE_TESTING.md`
 §4 stage 2 already closed part of this: derivations now carry the premise trust figures needed for
 `min(premiseTrusts) × ruleConfidence` (this session's own trust-hook fix extended that to scm-svf1,
-cardinality monotonicity, and cax-maxc0 too — `PLAN_INFERENCE_TESTING.md` itself was pruned from
+cardinality monotonicity, and cax-maxc0 too (tmct's own name for the class-level generalization of
+the real W3C `cls-maxc1`, not a W3C rule id) — `PLAN_INFERENCE_TESTING.md` itself was pruned from
 `archive/` in the 2026-07-14 doc cleanup, so it now lives only in git history), which is a
-JTMS-shaped single justification per fact in spirit, though not yet a persisted, walkable one. A
+ATMS-shaped single justification per fact in spirit (de Kleer's monotonic ⟨consequent, antecedents,
+informant⟩, no outlist — not Doyle's JTMS), though not yet a persisted, walkable one. A
 further, NOT-currently-planned step toward the ATMS proper would track the small SET of alternate
 premise-sets per derived fact rather than just one — cheap for tmct specifically because the rule
 count is tiny (five rules today) so the number of alternate derivations per fact is expected to stay
@@ -147,15 +149,15 @@ unbuilt, and honestly speculative: nobody has published this exact narrow combin
 system, so there is no citation to verify here beyond the separately-real building blocks above —
 flagged as such rather than dressed up as prior art.
 
-**LANDED: the single-justification JTMS step — first for scm-sco, extended to all five rules
+**LANDED: the single-justification ATMS step — first for scm-sco, extended to all five rules
 2026-07-15 (see the addendum).** The paragraph above's
 first sentence — "today every entailed fact carries only a flat provenance TAG... never persisted
 onto the fact itself, so there is no stored justification to walk at all" — is no longer true for
 scm-sco: `syllogise()` now persists each scm-sco conclusion's two premise fact ids as
 `mgx:factJustification` (`memory/core.mjs` `factIdForTriple`/`appendFacts`' `justification` param),
-and `retractSubClassOf` (`src/domain/syllogise.mjs`) walks it — dependency-directed removal, bounded by
+and `retractSubClassOf` (`src/domain/syllogise.mjs`) walks it — DRed (delete-and-rederive), bounded by
 `budget`/`depth`, cascading through multi-hop chains. It does NOT stop at a bare justification walk
-(the naive JTMS failure mode this file itself names, citing de Kleer): each candidate is re-VERIFIED
+(DRed's naive over-deletion failure mode this file itself names above): each candidate is re-VERIFIED
 against the surviving graph (`buildAncestorCloser`, reused) before being removed, so a fact with a
 genuine second derivation path, or one later independently taught, survives. Still open,
 exactly as scoped above and NOT attempted: the true ATMS generalization (persisting every

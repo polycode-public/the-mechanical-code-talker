@@ -84,7 +84,7 @@ test("(b) appendFact derives Source individuals + statedBy edges — WITHOUT re-
     const bare = await appendFact(dir, { subject: "cache", predicate: "rdfs:subClassOf", object: "buffer" });
     // a content-addressed fact id (the (s,p,o) keying is owned elsewhere; here we
     // only pin that Source edges are ADDITIVE and never re-key it)
-    assert.match(bare.id, /^fact:[0-9a-f]{8}$/);
+    assert.match(bare.id, /^fact:[0-9a-f]{16}$/);
 
     // adding Source edges via provenance must NOT change the id
     const withProv = await appendFact(dir, { subject: "cache", predicate: "rdfs:subClassOf", object: "buffer", provenance: "corpus:conceptnet /r/IsA" });
@@ -130,11 +130,12 @@ test("(b) the ' | '-union becomes N statedBy edges (one per independent source);
 test("(b) lazy migration: a legacy store (factProvenance string, no edges) gains Sources + edges + trust on the next write, idempotently, string preserved", async () => {
   const dir = await tmpRepo();
   try {
-    // hand-build a pre-Source legacy store. The id is opaque (migration must
-    // NEVER recompute it — it only adds edges), so a fixed literal proves the
-    // non-re-keying guarantee independently of the (s,p,o) keying scheme.
+    // hand-build a pre-Source legacy store. The provenance migration must NEVER
+    // recompute the id — it only adds edges — so a fixed opaque literal (a
+    // current-width 16-hex id that is not the real hash of this (s,p,o)) proves
+    // the non-re-keying guarantee independently of the keying scheme.
     const legacy = emptyMemory();
-    const factId = "fact:aaaaaaaa";
+    const factId = "fact:aaaaaaaaaaaaaaaa";
     legacy.individuals.push({
       id: factId, label: "widget rdfs:subClassOf gadget", class: FACT_CLASS,
       derived_from: [], mentions: [],
@@ -160,7 +161,7 @@ test("(b) lazy migration: a legacy store (factProvenance string, no edges) gains
     const objs1 = statedEdges(m1).filter((e) => e.subject === factId).map((e) => e.object).sort();
     assert.deepEqual(objs1, ["src:corpus:conceptnet", "src:operator-chat:s0"].sort(), "both Sources linked");
     assert.ok(attr(f1, "mgx:trustScore"), "trust materialised on migration");
-    assert.equal(f1.id, "fact:aaaaaaaa", "fact id never re-keyed by migration");
+    assert.equal(f1.id, "fact:aaaaaaaaaaaaaaaa", "fact id never re-keyed by migration");
 
     // idempotent: another write does not duplicate edges/sources
     await appendUtterance(dir, { role: "visitor", text: "again", ts: "2026-07-05T00:01:00.000Z", sessionId: "0189cccc-0000-7000-8000-000000000000" });

@@ -538,10 +538,16 @@ Ordered by what they cost. Each has a verdict already; none needs more research.
 ### 7.1 `seon:subKind` → `mgx:subKind` — the one stored undefined IRI — LANDED
 
 Emit (`graph-build.mjs:146`) and its vocabulary note and schema doc now say `mgx:subKind`; the
-ontology declares it (owned, the mgx:touchedByCommit precedent). Example graphs and fixture repos
-re-indexed through the real generators. **Step 2 (a `seon:subkind` legacy read key in
-`codegraph.mjs`'s `PROP_KIND`) had no site: `subKind` is an ATTRIBUTE, never a relation, so it
-never entered `PROP_KIND` and old graphs render it generically by its own token with no alias.**
+ontology declares it (owned, the mgx:touchedByCommit precedent). **The fixture repos in
+`test/fixtures/repos/*` were re-indexed through the real generator** — `buildEntities` +
+`ingestSchemaDocs`, the same path `fixture-repos.test.mjs` drift-checks. **The two example graphs
+were NOT: `examples/mini-webapp` and `examples/polyglot` have no source tree and no in-repo
+indexer (tmct reads code graphs, it does not build them), so their `graph.json` was hand-edited at
+the leaf value — the token and its vocabulary note — which is the exact delta the generator would
+produce for a single-token rename. Those two files have no drift guard (see HANDOVER).** Step 2 (a
+`seon:subkind` legacy read key in `codegraph.mjs`'s `PROP_KIND`) had no site: `subKind` is an
+ATTRIBUTE, never a relation, so it never entered `PROP_KIND` and old graphs render it generically by
+its own token with no alias.
 
 **`src/adapters/graph-build.mjs:146`, `src/tools/schema-docs.mjs:157`, `src/domain/codegraph.mjs`.**
 
@@ -614,23 +620,30 @@ already on every Source individual on disk, so the split is derivable from what 
 makes it a read-side reclassification rather than a rewrite. That is a design worth doing
 deliberately, not folded into a vocabulary pass.
 
-### 7.7 `factIdFor`'s 32-bit hash — the one that is not a naming fix
+### 7.7 `factIdFor`'s 32-bit hash — the one that is not a naming fix — LANDED
 
-**`src/domain/hash.mjs:139`.** §9.1 has the proof: a real collision at 26,034 triples, and silent
-data loss when both facts are written. 45.4% collision probability at `init:xl`'s documented 72,075
+**`src/domain/hash.mjs`.** §9.1 has the proof: a real collision at 26,034 triples, and silent data
+loss when both facts are written. 45.4% collision probability at `init:xl`'s documented 72,075
 facts; 99.9% at `init:xxl`.
 
-Widen `factIdFor` to at least 64 bits. `sha256Bytes` already ships in the same file, already pinned
-byte-identical to `node:crypto` by a test — truncate it. This is not a crypto problem.
+`factIdFor` now derives the id from a 64-bit truncation of the `sha256Bytes` that already shipped in
+the file (`fact:` + 16 hex). At 100,000 facts that is ~2.7e-10 collision odds. `fnv1aHex` stays for
+the narrow, non-fact-id content addresses (paraphrase pool, per-URL web Source id, corpus dedupe);
+`legacyFactIdFor` preserves the old 32-bit id for recognising a pre-widening store.
 
-**This one needs a real migration**, and it is the only item in this plan that does. The memory graph
-is not derivable (§5.4). But the migration is tractable: a Fact stores its own `(s, p, o)` in
-`rdf:subject`/`rdf:predicate`/`rdf:object`, so every id is recomputable from the payload — rewrite
-the ids and the `statedBy`/`derivedFrom` edges that point at them. A store written before the change
-keeps working if the reader falls back to the old id on a miss, the same legacy-key pattern §7.1
-uses.
+The migration is in `adapters/memory/core.mjs`'s `migrateLegacyFactIds`, run on every `loadMemory`.
+A Fact stores its own `(s, p, o)` in `rdf:subject`/`rdf:predicate`/`rdf:object`, so the current id
+recomputes from the payload with no external key; the pass rewrites each pre-widening Fact id and
+everything pointing at it (statedBy/derivedFrom edge endpoints, `mgx:factJustification` premise ids,
+`derived_from` links). It is idempotent and cheap on an already-wide store — a Fact whose id is
+already 16 hex is skipped by shape, so no rehash. A pre-widening store keeps resolving its facts
+because load moves them onto the current id. There are no baked-in Fact ids to migrate on disk: the
+two example `.tmct/graph.json` carry the code-index schema (Class/Function/Method/Module/Commit),
+not Fact individuals.
 
-Do not do this quietly alongside something else. It changes every fact id on disk.
+Tests: `hash.test.mjs` pins the 16-hex width and that the brute-forced collision pair now separates;
+`memory-core.test.mjs` proves the pair stores as two facts and that a pre-widening store still
+resolves and upserts. The browser bundle was rebuilt so its `factIdFor` widened in lockstep.
 
 ### 7.8 `syllogise` — a public CLI verb, so not this plan's call
 
@@ -655,9 +668,24 @@ A comment and a doc sentence. No behaviour changes, and **`PLAN_DEPS` §3.5's de
 "Optimal String Alignment (restricted Damerau-Levenshtein)" and cite Damerau 1964 and Levenshtein
 1966. Worth adding that OSA is not a metric, since that is the thing someone will trip over next.
 
-### 7.10 The storage vocabulary renames
+### 7.10 The storage vocabulary renames — PARTLY LANDED
 
-All doc and comment level, all cheap, none behavioural. §9.2:
+All doc and comment level, all cheap, none behavioural. §9.2.
+
+- **`ledger` — LANDED.** Named a VIEW in `ledger-viz.mjs`'s header, kept as the `tmct viz` UI label
+  (a published surface), not append-only/immutable storage.
+- **`materialise` — LANDED** in the files this pass owns: British `-ise` in `syllogise.mjs`, the
+  live plan docs and the register. `chat.mjs` is Phase 3's and keeps `-ize`; historical benchmark
+  reports and one external quote are left as measurement/citation.
+- **`content-addressed` — DEFERRED to §7.7.** The fact-id agent's hash-widening is in-flight in the
+  working tree but not committed (`factIdFor` is still 32-bit FNV at HEAD). The word is left
+  untouched; `hash.mjs` is not this pass's file. Earned once the hash widens.
+- **`mgx:updatedAt` prose and reification naming — LANDED (on disk).** `core.mjs`'s `mgx:updatedAt`
+  note now says audit/last-modified, not transaction time, and its header names the RDF 1.1
+  reification vocabulary with the doc pointer. Both edits sit in `core.mjs`, which the fact-id agent
+  is editing in parallel for §7.7 (`migrateLegacyFactIds`); the two are on different lines and the
+  coordinator lands the combined result in one serialized pass. §9.2's "the word appears 0 times"
+  was true of the noun, not the concept — `core.mjs` already carried "reified".
 
 - **`ledger` → `append-only log`**, or drop the metaphor. `src/domain/cli-verbs.mjs`,
   `src/services/ledger-viz.mjs`, `src/services/viz-theme.mjs`, the web surface. Note the twist: the
@@ -673,16 +701,30 @@ All doc and comment level, all cheap, none behavioural. §9.2:
   `docs/references/schemas/rdf-reification-and-rdf-star.md` closes it.
 - **`materialise` / `materialize`** — 24 and 28. Pick one.
 
-### 7.11 Cite the honest miss
+### 7.11 Cite the honest miss — LANDED
 
-§9.8. "Honest miss" (285 uses) should keep its name and gain its citation: abstention / selective
-prediction, with Chow 1970's reject option as the root. One line in the README and one in
-`CLAUDE.md`'s ethos prose.
+§9.8. "Honest miss" keeps its name and gains its citation. **The README half was already done** —
+its Standards bibliography already carries Chow 1970 (abstention, for the goal) and Reiter 1978
+(open-world, for the mechanism), so the README is left untouched (also Phase 9's surface). Added the
+one-line citation to `CLAUDE.md`'s `## Project` ethos prose, naming both.
 
-### 7.12 Four wrong citations in the inference engine
+### 7.12 Four wrong citations in the inference engine — LANDED (non-chat.mjs)
 
 All verified against *OWL 2 Profiles (Second Edition)*, W3C Recommendation 2012-12-11. **Table
 numbering is identical in the first edition, so no edition excuses any of these.**
+
+**Landed on disk:** `cls-svf1` now cites Table 6 at `syllogise.mjs:64` and `:314` (the third site,
+`chat.mjs`, is Phase 3's and was fixed there). `syllogise.mjs:972`'s retraction docstring now names
+DRed (delete-and-rederive; Gupta, Mumick & Subrahmanian, SIGMOD 1993), not JTMS, and the same
+JTMS→ATMS/DRed correction was applied to `PLAN_SYLLOGIST.md`'s stragglers (its §101-112 already had
+it right). `PLAN_SYLLOGIST_EL_DL.md:11` now says five kernels are inside OWL 2 RL and two step
+outside it (cardinality monotonicity and `cax-maxc0`, which is tmct's class-level generalization of
+the real W3C `cls-maxc1`, not a W3C id); `:25` names OWL 2 DL's logic as SROIQ with SHOIQ a
+deliberate waypoint. `PLAN_SYLLOGIST.md` gained a one-line `cax-maxc0`-is-not-W3C clarification.
+**Checked and left as-is:** `infbench/` already grounds every `cax-maxc0` note in `cls-maxc1`;
+`grade.mjs` uses it only as an internal function label; `SCM_SVF_RULE`/`SCM_CARD_RULE` have
+descriptive values, not W3C-shaped ids; and `PLAN_SYLLOGIST.md`'s "no stored justification" line is
+already self-corrected by its own LANDED note.
 
 1. **`cls-svf1` is cited as "OWL 2 RL Table 8" three times. It is Table 6.** Table 8 is *The
    Semantics of Datatypes* — a different subject entirely. Sites: `src/domain/syllogise.mjs:64`,

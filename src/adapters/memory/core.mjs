@@ -4,6 +4,13 @@
 // appendFact), and Sessions are all typed twice — payload `class` and an
 // `rdf:type` attribute. Every append is crash-safe and idempotent (utterance
 // ids are deterministic, fact ids hash the triple).
+//
+// A Fact is textbook RDF reification: `rdf:type rdf:Statement` plus
+// rdf:subject/predicate/object, which carries the per-triple provenance and
+// polarity stamps a bare triple has no room for. This is the RDF 1.1
+// reification vocabulary, which RDF 1.2 reclassifies as legacy (steering new
+// systems toward triple terms) but does not deprecate. See
+// docs/references/schemas/rdf-reification-and-rdf-star.md.
 
 import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -80,7 +87,7 @@ const MEMORY_VOCABULARY = [
   { prop: "mgx:ruleBaseCase", note: "recursive only: the base-case relation name (hop zero)" },
   { prop: "mgx:ruleRecStep", note: "recursive only: the self-referential recursive-step relation name" },
   { prop: CREATED_AT_PROP, note: "when an individual was FIRST written, ISO-8601 (first-write-wins on upsert); the audit 'when', the recency input to trust, the novelty signal" },
-  { prop: UPDATED_AT_PROP, note: "when an individual's OWN attributes were last mutated in place (upsertSession, recomputeFactTrust, recomputeSourceReliability) — most individuals never carry it at all" },
+  { prop: UPDATED_AT_PROP, note: "an audit / last-modified stamp: when an individual's OWN attributes were last mutated in place (upsertSession, recomputeFactTrust, recomputeSourceReliability) — most individuals never carry it at all. NOT transaction time: a mutable stamp cannot record when the previous version stopped being current, so tmct is not bitemporal" },
   { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
   { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source — replaces the factProvenance union)" },
   { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
@@ -519,8 +526,8 @@ export async function snapshotMemory(dir, { retentionVersions } = {}) {
  *  append creates the file). The result is a raw entities payload;
  *  parseEntities() loads it. */
 export async function loadMemory(dir) {
-  if (isMemoryHandle(dir)) return dir.payload;
-  if (isSqliteHandle(dir)) return readSqlitePayload(dir);
+  if (isMemoryHandle(dir)) return migrateLegacyFactIds(dir.payload);
+  if (isSqliteHandle(dir)) return migrateLegacyFactIds(readSqlitePayload(dir));
   let text;
   try {
     text = await readFile(memoryGraphFile(dir), "utf8");
@@ -528,7 +535,50 @@ export async function loadMemory(dir) {
     if (e?.code === "ENOENT") return emptyMemory();
     throw e;
   }
-  return JSON.parse(text);
+  return migrateLegacyFactIds(JSON.parse(text));
+}
+
+// A Fact id written before factIdFor widened to 64 bits — `fact:` + exactly 8
+// hex. A current id is 16 hex, so this anchored test never matches one, and a
+// migrated store pays only string checks with no rehash on load.
+const LEGACY_FACT_ID_RE = /^fact:[0-9a-f]{8}$/;
+
+/** Bring a store written under the old 32-bit fact id up to the current
+ *  factIdFor id, in place, on load. Every Fact carries its own (s, p, o) in
+ *  rdf:subject/predicate/object, so the current id recomputes from the payload
+ *  with no external key. Rewrites the Fact ids and everything that points at
+ *  them by id: statedBy/derivedFrom (and every other) edge endpoint, a rule's
+ *  mgx:factJustification premise-id list, and derived_from links. Idempotent —
+ *  a Fact already on a wide id is skipped by LEGACY_FACT_ID_RE, so a
+ *  fully-migrated store makes no change and does no work beyond the shape test.
+ *  This is what lets a pre-widening store keep resolving its facts: a lookup by
+ *  the current id finds the Fact because load moved it onto that id. */
+function migrateLegacyFactIds(payload) {
+  if (!Array.isArray(payload?.individuals)) return payload;
+  const remap = new Map(); // old fact id -> current fact id
+  for (const ind of payload.individuals) {
+    if (ind?.class !== FACT_CLASS || !LEGACY_FACT_ID_RE.test(ind.id || "")) continue;
+    const get = (k) => (ind.attributes || []).find((a) => a?.key === k)?.value || "";
+    const currentId = factIdFor(get("subject"), get("predicate"), get("object"));
+    if (currentId === ind.id) continue;
+    remap.set(ind.id, currentId);
+    ind.id = currentId;
+  }
+  if (!remap.size) return payload;
+  const remapId = (id) => remap.get(id) || id;
+  for (const group of payload.objectProperties || []) {
+    for (const e of group.examples || []) {
+      if (!e) continue;
+      if (remap.has(e.subject)) e.subject = remap.get(e.subject);
+      if (remap.has(e.object)) e.object = remap.get(e.object);
+    }
+  }
+  for (const ind of payload.individuals) {
+    if (Array.isArray(ind?.derived_from) && ind.derived_from.length) ind.derived_from = ind.derived_from.map(remapId);
+    const just = (ind?.attributes || []).find((a) => a?.prop === "mgx:factJustification");
+    if (just?.value) just.value = just.value.split(" ").filter(Boolean).map(remapId).join(" ");
+  }
+  return payload;
 }
 
 /** Persist a mutated payload back to `dir`: an atomic file write (Backend A),

@@ -3,9 +3,9 @@
 // labelling, and the guarantee that parseEntities loads the store unchanged.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, readdir, readFile, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import {
   MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS,
   SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP,
@@ -13,6 +13,7 @@ import {
   appendRule, findRuleByName, readFactRows, normFactTerm,
   resolveRelationChase, resolveRelationChaseReverse,
 } from "../../src/adapters/memory/core.mjs";
+import { factIdForTriple, legacyFactIdFor } from "../../src/domain/hash.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
 import { lookupByProseTokens } from "../../src/domain/prose.mjs";
 import { findActionPath, findReachableSet } from "../../src/domain/planning.mjs";
@@ -149,7 +150,7 @@ test("appendFact: an RDF-reified triple with provenance; same (s,p,o) → same i
     const { id } = await appendFact(dir, triple);
     const again = await appendFact(dir, triple);
     assert.equal(again.id, id, "content-addressed fact id");
-    assert.match(id, /^fact:[0-9a-f]{8}$/);
+    assert.match(id, /^fact:[0-9a-f]{16}$/);
 
     const m = await loadMemory(dir);
     const facts = m.individuals.filter((i) => i.class === FACT_CLASS);
@@ -469,6 +470,69 @@ test("resolveRelationChase / resolveRelationChaseReverse: genuinely standalone �
     const memory = await loadMemory(dir);
     assert.ok(findRuleByName(memory, "grandparent"), "the same loaded memory the chase functions consume is independently queryable");
     assert.equal(normFactTerm("Grandparent"), "grandparent");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("two triples that collided under the old 32-bit id now store as two separate facts", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-collide-"));
+  try {
+    // Both hashed to fact:495ee929 under the old FNV-1a scheme — one would have
+    // silently overwritten the other on the upsert path.
+    const a = { subject: "thing23102", predicate: "mgx:atLocation", object: "value3156" };
+    const b = { subject: "thing26033", predicate: "mgx:causes", object: "value6087" };
+    assert.equal(legacyFactIdFor(a.subject, a.predicate, a.object), legacyFactIdFor(b.subject, b.predicate, b.object));
+
+    const { appended } = await appendFacts(dir, [a, b]);
+    assert.equal(appended, 2, "both facts written");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 2, "both facts stored — no silent merge");
+    assert.equal(new Set(rows.map((r) => r.id)).size, 2, "two distinct fact ids on disk");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a store written under the old 32-bit fact id keeps resolving after the widening", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-legacy-"));
+  try {
+    // A pre-widening store: the Fact and its statedBy edge are keyed by the old
+    // 32-bit id, computed from the real (s,p,o) the way an old writer would.
+    const [s, p, o] = ["widget", "rdfs:subClassOf", "gadget"];
+    const oldId = legacyFactIdFor(s, p, o);
+    const legacy = emptyMemory();
+    legacy.individuals.push({
+      id: oldId, label: "widget rdfs:subClassOf gadget", class: FACT_CLASS,
+      derived_from: [], mentions: [],
+      attributes: [
+        { prop: "rdf:type", key: "type", value: "rdf:Statement" },
+        { prop: "rdf:subject", key: "subject", value: s },
+        { prop: "rdf:predicate", key: "predicate", value: p },
+        { prop: "rdf:object", key: "object", value: o },
+      ],
+    });
+    legacy.objectProperties.push({
+      prop: "mgx:statedBy", predicate: "statedBy", count: 1,
+      examples: [{ subject: oldId, object: "src:corpus:conceptnet" }],
+    });
+    const file = join(dir, MEMORY_GRAPH_REL);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify(legacy));
+
+    // On load the Fact is migrated onto its current id, and the statedBy edge
+    // moved with it — a lookup by the current id finds both.
+    const currentId = factIdForTriple(s, p, o);
+    assert.notEqual(currentId, oldId, "the id genuinely widened");
+    const rows = readFactRows(await loadMemory(dir));
+    const row = rows.find((r) => r.id === currentId);
+    assert.ok(row, "the pre-widening fact resolves under its current id");
+    assert.deepEqual(row.sourceIds, ["src:corpus:conceptnet"], "its statedBy edge migrated with it");
+
+    // Re-teaching the same triple upserts onto the migrated fact — no duplicate.
+    await appendFact(dir, { subject: s, predicate: p, object: o, provenance: "teach:chat" });
+    const after = readFactRows(await loadMemory(dir)).filter((r) => r.subject === s && r.predicate === p && r.object === o);
+    assert.equal(after.length, 1, "the re-teach upserts the migrated fact, never a second copy");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

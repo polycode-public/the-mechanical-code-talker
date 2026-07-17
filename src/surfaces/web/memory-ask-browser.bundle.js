@@ -7293,6 +7293,62 @@ ${bodyText}` : graphText, tier });
   function fnv1aHex(str) {
     return fnv1a32(str).toString(16).padStart(8, "0");
   }
+  function sha256Bytes(str) {
+    const data = new TextEncoder().encode(String(str));
+    const bitLen = data.length * 8;
+    const padded = new Uint8Array((data.length + 8 >> 6) + 1 << 6);
+    padded.set(data);
+    padded[data.length] = 128;
+    const dv = new DataView(padded.buffer);
+    dv.setUint32(padded.length - 8, Math.floor(bitLen / 4294967296));
+    dv.setUint32(padded.length - 4, bitLen >>> 0);
+    const h = new Uint32Array([1779033703, 3144134277, 1013904242, 2773480762, 1359893119, 2600822924, 528734635, 1541459225]);
+    const w = new Uint32Array(64);
+    const rotr = (x, n) => x >>> n | x << 32 - n;
+    for (let off = 0; off < padded.length; off += 64) {
+      for (let i = 0; i < 16; i += 1) w[i] = dv.getUint32(off + i * 4);
+      for (let i = 16; i < 64; i += 1) {
+        const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ w[i - 15] >>> 3;
+        const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ w[i - 2] >>> 10;
+        w[i] = w[i - 16] + s0 + w[i - 7] + s1 >>> 0;
+      }
+      let [a, b, c, d, e, f, g, hh] = h;
+      for (let i = 0; i < 64; i += 1) {
+        const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+        const ch = e & f ^ ~e & g;
+        const t1 = hh + S1 + ch + SHA256_K[i] + w[i] >>> 0;
+        const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+        const maj = a & b ^ a & c ^ b & c;
+        const t2 = S0 + maj >>> 0;
+        hh = g;
+        g = f;
+        f = e;
+        e = d + t1 >>> 0;
+        d = c;
+        c = b;
+        b = a;
+        a = t1 + t2 >>> 0;
+      }
+      h[0] = h[0] + a >>> 0;
+      h[1] = h[1] + b >>> 0;
+      h[2] = h[2] + c >>> 0;
+      h[3] = h[3] + d >>> 0;
+      h[4] = h[4] + e >>> 0;
+      h[5] = h[5] + f >>> 0;
+      h[6] = h[6] + g >>> 0;
+      h[7] = h[7] + hh >>> 0;
+    }
+    const out = new Uint8Array(32);
+    const ov = new DataView(out.buffer);
+    for (let i = 0; i < 8; i += 1) ov.setUint32(i * 4, h[i]);
+    return out;
+  }
+  function sha256Hex(str, nBytes) {
+    const bytes = sha256Bytes(str);
+    let hex = "";
+    for (let i = 0; i < nBytes; i += 1) hex += bytes[i].toString(16).padStart(2, "0");
+    return hex;
+  }
   function normFactTerm(t) {
     let s = normText(t);
     s = s.replace(/^\/c\/[a-z]{2,3}\//i, "");
@@ -7386,7 +7442,7 @@ ${bodyText}` : graphText, tier });
         ["mgx:require", "mgx:hasPrerequisite"],
         ["mgx:involve", "mgx:hasSubevent"]
       ]);
-      factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
+      factIdFor = (s, p, o) => `fact:${sha256Hex(`${s}\0${p}\0${o}`, 8)}`;
     }
   });
 
@@ -7876,7 +7932,7 @@ ${bodyText}` : graphText, tier });
         object: d.object,
         provenance: ENTAILED_TYPE_PROVENANCE,
         // The ⊑ premise is cited as the DIRECT via⊑object edge even when the
-        // taught chain is multi-hop: scm-sco materializes that edge (this same
+        // taught chain is multi-hop: scm-sco materialises that edge (this same
         // pass or an earlier one), and retraction re-VERIFIES every candidate
         // anyway, so a citation left dangling by budget truncation is inert.
         justification: [
@@ -8800,8 +8856,8 @@ ${bodyText}` : graphText, tier });
     return { skipped: false, version: v, prunedVersion };
   }
   async function loadMemory(dir) {
-    if (isMemoryHandle(dir)) return dir.payload;
-    if (isSqliteHandle(dir)) return readSqlitePayload(dir);
+    if (isMemoryHandle(dir)) return migrateLegacyFactIds(dir.payload);
+    if (isSqliteHandle(dir)) return migrateLegacyFactIds(readSqlitePayload(dir));
     let text;
     try {
       text = await readFile2(memoryGraphFile(dir), "utf8");
@@ -8809,7 +8865,34 @@ ${bodyText}` : graphText, tier });
       if (e?.code === "ENOENT") return emptyMemory();
       throw e;
     }
-    return JSON.parse(text);
+    return migrateLegacyFactIds(JSON.parse(text));
+  }
+  function migrateLegacyFactIds(payload) {
+    if (!Array.isArray(payload?.individuals)) return payload;
+    const remap = /* @__PURE__ */ new Map();
+    for (const ind of payload.individuals) {
+      if (ind?.class !== FACT_CLASS || !LEGACY_FACT_ID_RE.test(ind.id || "")) continue;
+      const get = (k) => (ind.attributes || []).find((a) => a?.key === k)?.value || "";
+      const currentId = factIdFor(get("subject"), get("predicate"), get("object"));
+      if (currentId === ind.id) continue;
+      remap.set(ind.id, currentId);
+      ind.id = currentId;
+    }
+    if (!remap.size) return payload;
+    const remapId = (id) => remap.get(id) || id;
+    for (const group of payload.objectProperties || []) {
+      for (const e of group.examples || []) {
+        if (!e) continue;
+        if (remap.has(e.subject)) e.subject = remap.get(e.subject);
+        if (remap.has(e.object)) e.object = remap.get(e.object);
+      }
+    }
+    for (const ind of payload.individuals) {
+      if (Array.isArray(ind?.derived_from) && ind.derived_from.length) ind.derived_from = ind.derived_from.map(remapId);
+      const just = (ind?.attributes || []).find((a) => a?.prop === "mgx:factJustification");
+      if (just?.value) just.value = just.value.split(" ").filter(Boolean).map(remapId).join(" ");
+    }
+    return payload;
   }
   async function persistMemory(dir, payload) {
     if (isMemoryHandle(dir)) {
@@ -9528,7 +9611,7 @@ ${bodyText}` : graphText, tier });
     }
     return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
   }
-  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE2, MULTI_VALUED_PREDICATES;
+  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, LEGACY_FACT_ID_RE, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE2, MULTI_VALUED_PREDICATES;
   var init_core = __esm({
     "src/adapters/memory/core.mjs"() {
       init_promises();
@@ -9578,7 +9661,7 @@ ${bodyText}` : graphText, tier });
         { prop: "mgx:ruleBaseCase", note: "recursive only: the base-case relation name (hop zero)" },
         { prop: "mgx:ruleRecStep", note: "recursive only: the self-referential recursive-step relation name" },
         { prop: CREATED_AT_PROP, note: "when an individual was FIRST written, ISO-8601 (first-write-wins on upsert); the audit 'when', the recency input to trust, the novelty signal" },
-        { prop: UPDATED_AT_PROP, note: "when an individual's OWN attributes were last mutated in place (upsertSession, recomputeFactTrust, recomputeSourceReliability) \u2014 most individuals never carry it at all" },
+        { prop: UPDATED_AT_PROP, note: "an audit / last-modified stamp: when an individual's OWN attributes were last mutated in place (upsertSession, recomputeFactTrust, recomputeSourceReliability) \u2014 most individuals never carry it at all. NOT transaction time: a mutable stamp cannot record when the previous version stopped being current, so tmct is not bitemporal" },
         { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
         { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source \u2014 replaces the factProvenance union)" },
         { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
@@ -9607,6 +9690,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       MEMORY_MANIFEST_REL = join(MEMORY_DIR_REL, "manifest.json");
       DEFAULT_RETENTION = 5;
       resolveManifestFile = (dir) => join(dir, MEMORY_MANIFEST_REL);
+      LEGACY_FACT_ID_RE = /^fact:[0-9a-f]{8}$/;
       MEMORY_INDEX = /* @__PURE__ */ Symbol("mutateMemory lookup index");
       memoryIndexOf = (payload) => payload?.[MEMORY_INDEX] || null;
       labelOf = (text) => text.length > LABEL_CAP ? text.slice(0, LABEL_CAP - 1) + "\u2026" : text;
@@ -22147,6 +22231,18 @@ ${JSON.stringify(envelope, null, 2)}`;
   );
   var ACTION_SIGNATURE_ASK_RE = new RegExp(
     `^(?:can|could)\\s+you\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[?.!]*$`,
+    "i"
+  );
+  var GOAL_TEACH_IMPERATIVE_RE = new RegExp(
+    `^(?:get|put|place)\\s+(?:(every|each|all|both)\\s+)?(?:the\\s+)?([\\w-]+?)\\s+(${PREP_SRC})\\s+([\\w-]+)[?.!]*$`,
+    "i"
+  );
+  var BOARD_REVERSE_LOC_RE = new RegExp(
+    `^(?:what|who)\\s+([a-z']+)\\s+(${PREP_SRC})\\s+(.+?)[?.!\\s]*$`,
+    "i"
+  );
+  var BOARD_FORWARD_LOC_RE = new RegExp(
+    `^what\\s+(?:does|do|is)\\s+([\\w-]+)\\s+([a-z]+)(?:\\s+(${PREP_SRC}))?[?.!\\s]*$`,
     "i"
   );
   function singularizeSurface(word) {

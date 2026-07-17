@@ -1,13 +1,17 @@
-// hash.mjs — the single home for tmct's content-address contract: the FNV-1a
-// hash, the fact-term/predicate normalization, and the fact-id derivation.
+// hash.mjs — the single home for tmct's content-address contract: the hashes,
+// the fact-term/predicate normalization, and the fact-id derivation.
 //
-// FNV-1a 32-bit is deliberately home-grown: it must be synchronous, browser-safe,
-// dependency-free, and — critically — CROSS-VERSION STABLE, because fact ids are
-// content-addressed by it and a fact's id is its identity across the whole memory
-// graph. Every library candidate fails at least one of those; this eight-line
-// function fails none. Normalization lives beside it because it is PART of that
-// identity: the same (s, p, o) must normalize and hash to the same id from every
-// writer, so the whole contract has exactly one definition.
+// A fact's id is its identity across the whole memory graph, so its hash must be
+// synchronous, browser-safe, dependency-free, CROSS-VERSION STABLE, and wide
+// enough that two different facts do not land on one id. factIdFor derives the id
+// from a 64-bit truncation of SHA-256 (sha256Bytes below) for the width; 32-bit
+// FNV-1a is far too narrow for a graph of tens of thousands of facts. FNV-1a stays
+// home-grown for the narrower content addresses that do not need that width (the
+// paraphrase and answer-variant pools, per-URL web-Source ids, corpus dedupe).
+// Every library candidate fails at least one of the stability constraints; these
+// hand-rolled functions fail none. Normalization lives beside them because it is
+// PART of that identity: the same (s, p, o) must normalize and hash to the same id
+// from every writer, so the whole contract has exactly one definition.
 
 /** FNV-1a 32-bit. Returns the unsigned 32-bit integer (0 … 2^32−1). */
 export function fnv1a32(str) {
@@ -20,7 +24,8 @@ export function fnv1a32(str) {
 }
 
 /** FNV-1a 32-bit as a zero-padded 8-char hex string — the stable content-address
- *  used for fact ids (`fact:<hex>`). Same (s,p,o) → same id → upsert, never a dup. */
+ *  for the narrow, non-fact-id pools (paraphrase, per-URL web Source, corpus
+ *  dedupe). Fact ids use factIdFor's wider SHA-256 truncation, not this. */
 export function fnv1aHex(str) {
   return fnv1a32(str).toString(16).padStart(8, "0");
 }
@@ -82,6 +87,16 @@ export function sha256Bytes(str) {
   return out;
 }
 
+/** SHA-256 of a string truncated to `nBytes` leading bytes, as lowercase hex.
+ *  A fact id takes 8 bytes (64 bits): at 100,000 facts the chance of any two
+ *  colliding is ~2.7e-10, against ~100% for 32-bit FNV at the same size. */
+function sha256Hex(str, nBytes) {
+  const bytes = sha256Bytes(str);
+  let hex = "";
+  for (let i = 0; i < nBytes; i += 1) hex += bytes[i].toString(16).padStart(2, "0");
+  return hex;
+}
+
 const TEXT_CAP = 2000;   // an utterance's stored text (a whole answer fits; a pasted book doesn't)
 
 /** Whitespace-collapse + cap a stored text/predicate string. Every writer that
@@ -134,9 +149,17 @@ export function normFactPredicate(p) {
 }
 
 /** A Fact is content-addressed by its NUL-delimited (s, p, o) — NUL never
- *  occurs in a normalized term/predicate, so it's collision-proof unlike a
- *  space. Takes ALREADY-normalized parts; factIdForTriple normalizes first. */
-export const factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
+ *  occurs in a normalized term/predicate, so the delimiter never collides
+ *  unlike a space. The hash is a 64-bit SHA-256 truncation (16 hex chars),
+ *  wide enough that distinct triples do not share an id at real corpus sizes.
+ *  Takes ALREADY-normalized parts; factIdForTriple normalizes first. */
+export const factIdFor = (s, p, o) => `fact:${sha256Hex(`${s}\0${p}\0${o}`, 8)}`;
+
+/** The pre-widening 32-bit fact id (FNV-1a, 8 hex). A store written before
+ *  factIdFor widened keys its Facts and their statedBy/derivedFrom edges by
+ *  this; adapters/memory/core.mjs recognises the old shape and migrates each
+ *  Fact onto its current factIdFor id on load. */
+export const legacyFactIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
 
 /** Content-address a fact's id from (subject, predicate, object) without
  *  writing it — same contract as factIdFor. Lets a caller (e.g.

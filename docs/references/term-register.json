@@ -103,7 +103,7 @@
       "verdict": "extend",
       "probe": "rdf:Statement",
       "cite": "RDF 1.1 Semantics, W3C Rec 2014-02-25, App. D.1; RDF 1.2 Schema (WD 2026-03-28) §7.2 'Old-style' Reification",
-      "note": "tmct does textbook reification (rdf:Statement + rdf:subject/predicate/object). Naming it in core.mjs's header is deferred — core.mjs is being edited by the fact-id agent (§7.7). Not deprecated; RDF 1.2 reclassifies it as legacy (CR, not Rec).",
+      "note": "tmct does textbook reification (rdf:Statement + rdf:subject/predicate/object), now named in core.mjs's header with a pointer to the reference doc. Not deprecated; RDF 1.2 reclassifies it as legacy (CR, not Rec).",
       "verified": "2026-07-17 — primary source read"
     },
     {
@@ -135,7 +135,7 @@
       "area": "storage",
       "verdict": "rename",
       "cite": "Jensen et al., SIGMOD Record 23(1), 1994",
-      "note": "NOT transaction time - that cannot be changed by definition. An audit / last-modified stamp on a snapshot relation. The ontology comment already says so; the parallel core.mjs vocabulary-note fix is deferred (core.mjs is the fact-id agent's file, §7.7). The stored prop name is kept — a rename needs a migration this plan does not do.",
+      "note": "NOT transaction time - that cannot be changed by definition. An audit / last-modified stamp on a snapshot relation; the ontology comment and core.mjs's vocabulary note now both say so. The stored prop name is kept — a rename needs a migration this plan does not do.",
       "verified": "2026-07-17 — primary source read"
     },
     {

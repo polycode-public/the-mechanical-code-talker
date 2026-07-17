@@ -903,7 +903,7 @@ The ladder now measures the generator's reach, not the prover's. Three things fo
 
 - **50 of the 219 greens (23%) grade against a declared ceiling** — their expected answer is the
   honest floor. `b2ChainLenK` (30 at INF-B2, `infbench/generate-cases.mjs:419`) expects "cannot be
-  proven" for chains the kernel already derives, pending chat-layer proof materialisation.
+  proven" for chains the kernel already derives, pending chat-layer proof materialization.
   `c2Inconsistent` (20 at INF-C2, `:647`) expects the engine to answer from contradictory memory
   without noticing. Flipping either ceiling requires building the capability behind it first.
 - **No existential probe.** The ladder is green through C2 and does not see item 1.2 — a proof

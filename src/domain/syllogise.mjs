@@ -61,7 +61,7 @@ export const ENTAILED_DISJOINT_PROVENANCE = `entailed:${CAX_DW_RULE}`;
 export const CAX_DW_RULE_CONFIDENCE = 0.95;
 
 /** cls-svf1: x P y, y rdf:type C2, R owl:onProperty P, R owl:someValuesFrom
- *  C2 |= x rdf:type R (OWL 2 RL Table 8). `owl:onProperty`'s stored value and
+ *  C2 |= x rdf:type R (OWL 2 RL Table 6). `owl:onProperty`'s stored value and
  *  a taught property edge's predicate differ in casing (normFactTerm'd vs.
  *  raw vocabulary spelling), so the kernel below normalizes both before
  *  comparing. */
@@ -311,7 +311,7 @@ export function deriveDisjointViolations(typeEdges, subClassEdges, disjointEdges
 
 /**
  * PURE cls-svf1: x P y, y rdf:type C2, R owl:onProperty P, R
- * owl:someValuesFrom C2 |= x rdf:type R (OWL 2 RL Table 8). `propertyEdges`
+ * owl:someValuesFrom C2 |= x rdf:type R (OWL 2 RL Table 6). `propertyEdges`
  * is every taught/prior-entailed object-property assertion (raw predicate
  * spelling); `restrictionEdges` is each restriction node's (property, target)
  * declaration. `y`'s type is lifted through its full ⊑-ancestor closure, so
@@ -969,14 +969,17 @@ function buildSurvivorDerivabilityCheck(rows) {
 }
 
 /**
- * A scoped retraction slice: JTMS-style dependency-directed removal.
+ * A scoped retraction slice: DRed (delete-and-rederive; Gupta, Mumick &
+ * Subrahmanian, SIGMOD 1993), NOT JTMS. It recomputes the MATERIALISATION —
+ * where a JTMS would recompute belief labels — so a store that moves rows is
+ * DRed by construction.
  * Retracting `subject ⊑ object` removes the fact, then cascades to any
  * purely-entailed fact — across all five rules' conclusions — whose persisted
  * justification cites a removed id. Each candidate is VERIFIED (re-derivable
  * from the surviving facts, not just "cited a removed id") before it is
  * actually removed, since a fact can have a second, independent derivation
  * path (a⊑b⊑d AND a⊑c⊑d both license a⊑d) that a bare delete-by-justification
- * walk would wrongly discard. Repeats in rounds — a removed mid-chain link
+ * walk would wrongly discard. This over-delete-then-re-verify IS DRed's shape. Repeats in rounds — a removed mid-chain link
  * can ripple — bounded by `budget` (max facts examined+removed) and `depth`
  * (max cascade rounds).
  *

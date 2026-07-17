@@ -35,7 +35,7 @@ test("assertSentence: a subclass sentence lands as one Fact, normFactTerm-normal
     const r = await assertSentence(dir, "every module is a unit", { provenance: PROV });
     assert.equal(r.pattern, "subClassOf");
     assert.equal(r.ids.length, 1);
-    assert.match(r.ids[0], /^fact:[0-9a-f]{8}$/);
+    assert.match(r.ids[0], /^fact:[0-9a-f]{16}$/);
 
     const m = await loadMemory(dir);
     const facts = m.individuals.filter((i) => i.class === FACT_CLASS);

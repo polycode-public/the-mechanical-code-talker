@@ -8,11 +8,15 @@ stage is a costed option this document makes buildable, not a recommendation to 
 
 ## Where this sits
 
-`src/domain/syllogise.mjs` today ships seven deterministic kernels, all inside the OWL 2 RL
-fragment: subclass transitivity, type propagation, disjointness "provable no",
-someValuesFrom application and subsumption, cardinality lower bounds, and max-0 denial —
-under budget/focus/screen/trust guards, materialising off the hot path so a query-time
-miss becomes a lookup. `PLAN_SYLLOGIST.md` surveys the field (RL is Datalog-shaped and
+`src/domain/syllogise.mjs` today ships seven deterministic kernels. **Five are inside the OWL 2 RL
+fragment**: subclass transitivity, type propagation, disjointness "provable no", and someValuesFrom
+application and subsumption. **Two step just outside it**: cardinality lower bounds (monotonicity),
+which `syllogise.mjs:527` already flags as "outside OWL 2 RL's own decidable profile"; and max-0
+denial — tmct's `cax-maxc0`, which is NOT a W3C rule name but a universal generalization of the real
+W3C `cls-maxc1` (Table 6). `cls-maxc1` derives `false` for one individual; `cax-maxc0` derives a
+CLASS-level negative fact, a strictly stronger step RL does not license. All run under
+budget/focus/screen/trust guards, materialising off the hot path so a query-time miss becomes a
+lookup. `PLAN_SYLLOGIST.md` surveys the field (RL is Datalog-shaped and
 solved; DL satisfiability is tableau-shaped and solved; tmct's trust/provenance layer is
 the part the literature is silent on) and owns the incrementality/retraction horizon.
 
@@ -22,7 +26,8 @@ covers the two tiers where that stops being true:
 - **OWL 2 EL** — polynomial like RL, but a different *algorithm* (saturation-based TBox
   classification), not more forward-chaining rules. Buys reasoning about class
   expressions that were never declared as graph nodes.
-- **OWL 2 DL** (target: ALC first, growing toward SHOIQ) — a tableau prover. Buys
+- **OWL 2 DL** (whose description logic is **SROIQ**; this tier targets ALC first, growing toward
+  SHOIQ as a deliberate waypoint short of full SROIQ) — a tableau prover. Buys
   disjunction, complement, and case analysis. Worst-case complexity is NEXPTIME and
   beyond; budgets become part of the semantics, not a tuning knob.
 
