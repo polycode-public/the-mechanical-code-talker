@@ -2,8 +2,9 @@
 
 **Status: Phases 1–7 and 10 are DONE.** The §7 vocabulary fallout (inference citations, SEON renames,
 `cap:`/`taught:`, OSA, storage-vocab, the honest-miss citation) and the 64-bit `factIdFor` migration
-landed this session with the full suite green (2771/2771). **Only Phase 8 and Phase 9 remain**, both
-scoped to `README.md` + the home page (see the operator decision below). See "Execution status"
+landed this session with the full suite green (2771/2771). **Phase 8, Phase 9, and PLAN_DEPS batches
+8–12 + Q4 remain.** Phase 8/9 are scoped to `README.md` + the home page (see the operator decision
+below); the PLAN_DEPS batches are internal-library consolidation in `PLAN_DEPS.md` §6.5/§6.6. See "Execution status"
 immediately below before reading anything else — **this document's own fix sites and numbers proved
 unreliable, and the corrections are recorded there.**
 
@@ -97,7 +98,9 @@ commit that reaches `main` or a remote.
 | **1** — dropped-input family | **DONE** (1.1-1.6) | `936c7d9`, `cd3943f`, `f12f2d7`, `6abba6a`, `5f1c84f`, `cc32252`, `5890510`, `9ce18c0` |
 | **4** — the instruments | **DONE** (4.1-4.5) | `6ed8f41`, `cee3ebe`, `ee6ddf3`, `a46d92a`, `7b74431` |
 | **5** — wrong documents | **DONE** | `bf6732c` |
-| PLAN_DEPS batches 1-2, 4-7 | **DONE** | `c2ded65`, `f2d7e27`, `488aa84`, `5824c66`, `2ccee08` |
+| PLAN_DEPS batches 1-7 | **DONE** | `c2ded65`, `f2d7e27`, `488aa84`, `5824c66`, `2ccee08` |
+| PLAN_DEPS batches 8-12 | **OPEN** — internal-library consolidation (`PLAN_DEPS.md` §6.5/§6.6): a shared bench module (`pool`, `mulberry32`/`seededShuffle`, `parseJsonl`, `parseFlags`, `ladderGate`/`rollup`); `idfOver` → `text-stats.mjs`; `bfsLevels` → `planning.mjs`; `trackedFiles`/`corpusLanes`/`importClosure`; the `isMain` guard spellings (4 sites) | — |
+| PLAN_DEPS Q4 (has Renovate ever run?) | **OPEN** — operator-only GitLab check (pipeline schedule + `RENOVATE_TOKEN`); nothing in the repo can answer it | — |
 | **3** — honest-miss gaps | **DONE** — 3.1-3.3, 3.5-3.9, 3.10a-e, 3.11 done; 3.4 didn't reproduce. 3.10a-d closed: board reads (clearness, `what rests on X`, `where is X`) and plan follow-ups now serve the current plan/board state | `b1f14a0`, `7d4acc4`, `7ea0036`, `92133b0`, `1d01eab`, `7caea95`, `c23a2b6` |
 | **7** — public-surface audit | **DONE** — table at `docs/public-examples.md`; 3 shipping defects deleted, 61 examples pinned. Two rows left open in the table itself: 3 `dom`-tier `index.html` rows, and `docs/repository-interface.md`'s prose numbers | `c49003d`, `01f4006`, `5c45354`, `93e5297` |
 | **8** — capability claims | **OPEN** — on the two existing public surfaces (`README.md` + the home page), not a new page. Two questions block verification (a caveat conflict, the CONVERSATION axis) — see `CLAUDES_LAST_RESORT_IS_TO_HIDE_THINGS_HERE_IDEALLY_YOU_COMPLETE_A_TASK_OR_NOT_BUT_DO_NOT_DEFER.md` | `2cd570e` on disk |

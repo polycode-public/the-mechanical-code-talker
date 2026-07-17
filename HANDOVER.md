@@ -49,20 +49,6 @@ honest-miss citation) and the 64-bit `factIdFor` migration, with the full suite 
 - **`PLAN_NORMATIVE.md` §7.5 / §7.6.** The PROV Source split (a read-side reclassification off the
   `sourceType` stored on every Source individual) and SKOS concept identity (needs concept identity
   for the corpus's bare-string terms before `skos:related` applies).
-### Next-cycle recommendations the benchmarks made
-
-- **Re-measure CEFR at N=2 and report the cell table, not the marginals.** 2.0.3 ran N=1 by operator
-  choice, so no per-case judge score in it is noise-averaged. The cell table is now published by
-  `chatbench/report.mjs` (`a46d92a`); it shows `A1 naming-vocabulary` at **1.475** is the real floor,
-  which the 1.675 marginal hides by averaging the A1 and A2 cells. `ambiguity` at 1.625 is the worst
-  tag but n=4 at N=1 — the least trustworthy number in the report.
-- **Re-sweep CONVERSATION now the dropped-input family has landed, and add a sixth persona frame** —
-  the returning user with a stale mental model ("the old X", "didn't you say Y"). No 2.0.3 frame
-  covered it, and it is where the unknown-modifier bug's realistic trigger lives.
-- **Re-run CEFR for Phase 2's movement**: `reversible-passive` 1.600 → ~1.900 and tier-1 back to
-  109/109 is the expectation `7c05ffd` predicts and nothing has measured yet.
-- **AGENTBENCH's ladder has no rung left to build past** — all 11 C2 cases are green on the goal
-  driver, so the next AGENT cycle deepens the corpus, not the engine.
 
 Two designs wait on a decision rather than a session: `PLAN_CONSISTENCY_CHECK.md` and
 `PLAN_CHILD_CORPUS.md`.
