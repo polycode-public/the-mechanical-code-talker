@@ -18,6 +18,8 @@ import {
   renderCompare,
   renderImpact,
   renderSearch,
+  compileNameFilter,
+  scanNamePattern,
   searchModulesRanked,
   selectRankedModules,
   DEFAULT_SCORE_GAP,
@@ -284,6 +286,71 @@ test("renderSearch kind= switches to symbol search with name/decorator filters",
   assert.match(named, /1 class\(s\) match/);
   assert.match(named, /- Button/);
   assert.match(renderSearch(graph, "", { kind: "attribute", name: "zzz" }), /no attribute matches/);
+});
+
+test("scanNamePattern counts quantifiers and spots the two shapes that backtrack", () => {
+  assert.deepEqual(scanNamePattern("^get_"), { quantifiers: 0, quantifiedGroup: false, backreference: false });
+  assert.deepEqual(scanNamePattern("a*b+c?"), { quantifiers: 3, quantifiedGroup: false, backreference: false });
+  // a quantified group is the exponential shape, however the group is spelled
+  for (const p of ["(a+)+", "(?:a+)+", "(a|ab)*", "(a+){2,}", "(a+)*?"]) {
+    assert.equal(scanNamePattern(p).quantifiedGroup, true, `${p} quantifies a group`);
+  }
+  assert.equal(scanNamePattern("(a)\\1").backreference, true);
+  // a group that is not quantified is ordinary, and so is a lazy marker
+  assert.equal(scanNamePattern("^(get|set)_.*$").quantifiedGroup, false);
+  assert.deepEqual(scanNamePattern("a*?"), { quantifiers: 1, quantifiedGroup: false, backreference: false });
+  // escapes and class interiors are inert: neither ) nor * below is structural
+  assert.deepEqual(scanNamePattern("\\(a\\)\\*"), { quantifiers: 0, quantifiedGroup: false, backreference: false });
+  assert.deepEqual(scanNamePattern("[*+?]"), { quantifiers: 0, quantifiedGroup: false, backreference: false });
+  // {n,m} quantifies, a literal brace does not
+  assert.equal(scanNamePattern("a{2,3}").quantifiers, 1);
+  assert.equal(scanNamePattern("a{hello}").quantifiers, 0);
+});
+
+test("compileNameFilter keeps ordinary name patterns working, with their regex semantics", () => {
+  for (const p of ["^Butt", "zzz", "^get_", "handler$", "^(get|set)_.*_handler$", "foo|bar", "x{2,3}"]) {
+    assert.equal(compileNameFilter(p).error, undefined, `${p} is an ordinary pattern`);
+  }
+  const anchored = compileNameFilter("^get_");
+  assert.equal(anchored.test("get_thing"), true);
+  assert.equal(anchored.test("set_thing"), false);
+  assert.equal(compileNameFilter("BUTT").test("buttons"), true, "matching stays case-insensitive");
+  assert.match(compileNameFilter("(unclosed").error, /invalid name pattern/);
+});
+
+test("a pathological name pattern is refused rather than run", () => {
+  for (const p of ["(a+)+$", "(a*)*$", "([a-z]+)+$", "(a|a)*$", "(?:a+)+$", "(a+){2,}$"]) {
+    assert.match(compileNameFilter(p).error, /quantifies a group/, `${p} is refused`);
+  }
+  assert.match(compileNameFilter("(a)\\1+$").error, /back-reference/);
+  // no group in sight, yet every extra quantifier raises the cost polynomially
+  assert.match(compileNameFilter("a*a*a*a*a*$").error, /has 5 quantifiers/);
+  assert.match(compileNameFilter("a".repeat(129)).error, /is 129 characters/);
+  // the refusal reaches the caller as the tool's own error string
+  assert.match(renderSearch(graph, "", { kind: "class", name: "(a+)+$" }), /quantifies a group/);
+});
+
+test("a pathological name pattern cannot outrun its input bound", () => {
+  const label = "a".repeat(30) + "b";
+  const started = Date.now();
+  assert.match(renderSearch(graph, "", { kind: "class", name: "(a+)+$" }), /quantifies a group/);
+  assert.ok(Date.now() - started < 1000, "refusal is immediate, not a backtracking run");
+});
+
+test("the matching budget bounds a filter the pattern gate lets through", () => {
+  // a label that fails at its last character is the costliest input for this shape
+  const label = "a".repeat(63) + "b";
+  const many = { individuals: Array.from({ length: 400 }, (_, i) => ({ class: "Function", label, id: `f${i}` })), axioms: [] };
+  // a clock that jumps past the budget on the second label, so the test never waits for it
+  let calls = 0;
+  const filter = compileNameFilter("a*a*a*a*$", { now: () => (calls++ === 0 ? 0 : 10_000) });
+  assert.throws(() => { for (const ind of many.individuals) filter.test(ind.label); }, /exceeded its 250ms matching budget/);
+});
+
+test("a label longer than the match bound is truncated, not handed whole to the engine", () => {
+  const filter = compileNameFilter("^a+b$");
+  assert.equal(filter.test("a".repeat(10) + "b"), true, "a short label matches end to end");
+  assert.equal(filter.test("a".repeat(200) + "b"), false, "past the bound the tail is not matched against");
 });
 
 test("renderMembers lists a class's methods + attributes with sites/decorators", () => {

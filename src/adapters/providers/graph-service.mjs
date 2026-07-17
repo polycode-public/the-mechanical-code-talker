@@ -20,6 +20,7 @@ import {
   impactClosure,
   scoreSymbolsRanked,
   searchModulesRanked,
+  compileNameFilter,
   SEARCH_LIMIT,
   contextPlan,
   sizeBundle,
@@ -383,14 +384,20 @@ export function createGraphService(graph, { sourceAccess = false, repoRoot = nul
       const k = String(kind || "").trim().toLowerCase();
       const nm = String(name || "").trim();
       const dec = String(decorator || "").trim().toLowerCase();
-      let nameRe = null;
-      if (nm) {
-        try { nameRe = new RegExp(nm, "i"); } catch { nameRe = null; }
-      }
       let rankedInds; // Individual[], highest-ranked first
       if (k && k !== "module") {
+        let nameRe = null;
+        if (nm) {
+          const compiled = compileNameFilter(nm);
+          if (compiled.error) return miss(MISS_REASONS.UNRESOLVED_TERM, { term: nm, detail: compiled.error });
+          nameRe = compiled;
+        }
         const tokens = rawQuery.toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean);
-        rankedInds = scoreSymbolsRanked(graph, tokens, { kind: k, decFilter: dec, nameRe }).map((s) => s.ind);
+        try {
+          rankedInds = scoreSymbolsRanked(graph, tokens, { kind: k, decFilter: dec, nameRe }).map((s) => s.ind);
+        } catch (e) {
+          return miss(MISS_REASONS.UNRESOLVED_TERM, { term: nm, detail: String(e?.message || e) });
+        }
       } else {
         // label -> individual, scoped to this call: maps searchModulesRanked's path labels
         // back to real Individuals.

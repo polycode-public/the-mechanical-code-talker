@@ -986,18 +986,131 @@ export function selectRankedModules(ranked, { top_k = 2, scoreGapK = null } = {}
   return picked;
 }
 
+// ---- the `name` filter: caller text compiled to a regex, under a work bound ----
+
+/* A backtracking engine can be made to run for minutes on one short label, and
+   `name` arrives from a tool call, so the pattern is compiled under bounds
+   rather than trusted. Two independent shapes cost real time, and measurement
+   is the only way to tell them apart:
+
+     (a+)+$        vs 30 characters   — over 30s   (a quantified group backtracks
+                                                    exponentially in label length)
+     a*a*a*a*a*$   vs 128 characters  — 101s       (no group at all; every extra
+                                                    quantifier raises the degree
+                                                    of a polynomial in the same
+                                                    length)
+
+   So the pattern gate refuses a quantified group and a back-reference, which is
+   what exponential backtracking needs, and caps the quantifier count, which
+   bounds the polynomial's degree. Capping the tested label length bounds its
+   base. The budget then backstops the pair: a static gate is exactly the kind of
+   thing that can miss a case, and the budget bounds the damage when it does. */
+const NAME_PATTERN_MAX_LENGTH = 128;
+const NAME_PATTERN_MAX_QUANTIFIERS = 4;
+const NAME_MATCH_MAX_LABEL = 64;      // the longest label measured across real graphs is 27
+const NAME_MATCH_BUDGET_MS = 250;
+
+class NameFilterBudgetExceeded extends Error {}
+
+/** Classifies the backtracking hazards in `pattern`: how many quantifiers it
+ *  applies, whether any of them quantifies a group, and whether it back-refers.
+ *  Escapes and character-class interiors are inert, `(?` opens a group rather
+ *  than quantifying, and a `?` right after a quantifier only marks it lazy.
+ *  @returns {{quantifiers: number, quantifiedGroup: boolean, backreference: boolean}} */
+export function scanNamePattern(pattern) {
+  let quantifiers = 0;
+  let quantifiedGroup = false;
+  let backreference = false;
+  let inClass = false;
+  let prev = "";
+  let prevWasQuantifier = false;
+  const countQuantifier = () => {
+    quantifiers += 1;
+    if (prev === ")") quantifiedGroup = true;
+    prevWasQuantifier = true;
+  };
+  for (let i = 0; i < pattern.length; i++) {
+    const ch = pattern[i];
+    if (ch === "\\") {
+      const next = pattern[i + 1] || "";
+      if (!inClass && next >= "1" && next <= "9") backreference = true;
+      i += 1;
+      prev = "";
+      prevWasQuantifier = false;
+      continue;
+    }
+    if (inClass) {
+      if (ch === "]") { inClass = false; prev = "]"; prevWasQuantifier = false; }
+      continue;
+    }
+    if (ch === "[") { inClass = true; prev = "["; prevWasQuantifier = false; continue; }
+    if (ch === "?" && (prev === "(" || prevWasQuantifier)) { prev = "?"; prevWasQuantifier = false; continue; }
+    if (ch === "*" || ch === "+" || ch === "?") { countQuantifier(); prev = ch; continue; }
+    if (ch === "{") {
+      const close = pattern.indexOf("}", i);
+      const body = close === -1 ? "" : pattern.slice(i + 1, close);
+      if (close !== -1 && /^\d+(,\d*)?$/.test(body)) { countQuantifier(); i = close; prev = "}"; continue; }
+      prev = "{";
+      prevWasQuantifier = false;
+      continue;
+    }
+    prev = ch;
+    prevWasQuantifier = false;
+  }
+  return { quantifiers, quantifiedGroup, backreference };
+}
+
+/** Compiles the `name` filter into a label matcher whose total work is bounded.
+ *  `now` is injectable so a test can drive the budget without waiting on it.
+ *  @returns {{test: (label: string) => boolean}|{error: string}} */
+export function compileNameFilter(name, { now = Date.now } = {}) {
+  const pattern = String(name);
+  if (pattern.length > NAME_PATTERN_MAX_LENGTH) {
+    return { error: `name pattern is ${pattern.length} characters; the limit is ${NAME_PATTERN_MAX_LENGTH}.` };
+  }
+  const { quantifiers, quantifiedGroup, backreference } = scanNamePattern(pattern);
+  if (quantifiedGroup) {
+    return { error: `name pattern "${pattern}" quantifies a group, which can backtrack for minutes on one label. Quantify a character or a class instead.` };
+  }
+  if (backreference) {
+    return { error: `name pattern "${pattern}" uses a back-reference, which can backtrack for minutes on one label.` };
+  }
+  if (quantifiers > NAME_PATTERN_MAX_QUANTIFIERS) {
+    return { error: `name pattern "${pattern}" has ${quantifiers} quantifiers; the limit is ${NAME_PATTERN_MAX_QUANTIFIERS}.` };
+  }
+  let re;
+  try { re = new RegExp(pattern, "i"); } catch { return { error: `invalid name pattern: ${pattern}` }; }
+  let deadline = null;
+  return {
+    test(label) {
+      if (deadline === null) deadline = now() + NAME_MATCH_BUDGET_MS;
+      else if (now() > deadline) {
+        throw new NameFilterBudgetExceeded(`name pattern "${pattern}" exceeded its ${NAME_MATCH_BUDGET_MS}ms matching budget.`);
+      }
+      return re.test(String(label).slice(0, NAME_MATCH_MAX_LABEL));
+    },
+  };
+}
+
 export function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", decorator = "", name = "" } = {}) {
   const tokens = String(query || "").toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean);
   const wantKind = String(kind || "").trim().toLowerCase();
   const decFilter = String(decorator || "").trim().toLowerCase();
   let nameRe = null;
   if (name) {
-    try { nameRe = new RegExp(name, "i"); } catch { return `invalid name pattern: ${name}`; }
+    const compiled = compileNameFilter(name);
+    if (compiled.error) return compiled.error;
+    nameRe = compiled;
   }
   // kind= switches to symbol search (functions/classes/methods/attributes); the
   // default (no kind) keeps the module "where does this live" search unchanged.
   if (wantKind && wantKind !== "module") {
-    return searchSymbols(graph, tokens, { limit, kind: wantKind, decFilter, nameRe });
+    try {
+      return searchSymbols(graph, tokens, { limit, kind: wantKind, decFilter, nameRe });
+    } catch (e) {
+      if (e instanceof NameFilterBudgetExceeded) return e.message;
+      throw e;
+    }
   }
   if (!tokens.length && !nameRe && !decFilter) return "empty query";
   const scored = scoreModules(graph, tokens);
