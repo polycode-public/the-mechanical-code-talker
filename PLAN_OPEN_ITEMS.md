@@ -40,16 +40,50 @@ and idled. Hours of unattended run time were lost.
    to touch this file, so nothing wrote status anywhere. This section exists because that was
    caught, late, by the operator rather than by the process.
 
-**How the next session avoids both:**
+**How the next session avoids both — now a standing rule in `CLAUDE.md`** ("An approved plan is the
+authorisation — never stop to ask if you should continue", `18df2d0`). A conversation correction
+does not survive the session; `CLAUDE.md` is read by every session, which is why the rule lives
+there and not only here. In short:
 
 - **Do not ask for permission to continue an approved plan.** Report progress and keep going. The
   only stops are: a hard safety rule, a genuine blocker with no next action, or an explicit operator
-  instruction. "The suite went green" is none of those.
+  instruction. "The suite went green" is none of those — a green suite is a checkpoint, not a
+  decision point, and the pull to stop is strongest exactly when a chunk completes well.
 - **Update this file in the same commit as the fix.** Not at the end. If a phase closes, mark it
   here and delete its item from `HANDOVER.md` in that commit. A status doc written at the end is a
   status doc that never gets written.
 - **Sub-agents must be told to update their own item's status here**, and given the right to edit
   this file for their rows only.
+
+## The dispatch plan for the remaining phases — ready to run
+
+Worked out and not yet executed. File ownership is the boundary; the coordinator stays free.
+
+| Agent | Owns | Phase |
+|---|---|---|
+| **honest-miss** | `chat.mjs`, `domain/memory/*`, `normalize.mjs`, lanes `inference`/`grammar`/`planning`/`games/drilldowns` | 3 |
+| **public-surface** | `README.md`, `public/*`, `docs/`, `corpus/*/README.md`, `examples/`, `chatbench/README.md`, `test/readme/`, `e2e/`, `test/tools/` | 7 |
+| **normative** | `ontology/`, a new `PLAN_NORMATIVE.md`, the coined-term inventory | 10 |
+| **capability-page** | the generated page + its generator | 8 — after 10's research |
+| **prose** | `README.md`, `public/index.html` | 9 — last, and conflicts with public-surface, so serialize |
+
+3 and 7 can run concurrently — disjoint files. 10 can start with them (its first item, the
+two-casings IRI defect, touches `ontology/` and coined identifiers only). 8 waits on 10; 9 waits on
+7 and 8.
+
+**Every brief must carry these four**, each learned the hard way this cycle:
+
+1. `git commit --only <paths>` — the shared git index means a bare commit sweeps another agent's
+   staged files. Never `git add -A`.
+2. Rebuild the ask bundle in the **main tree** if you touch its closure, and include it in the
+   commit.
+3. "Pre-existing" needs a baseline commit in a worktree (`a840398` = 2.4.0) with a real
+   `cp -R node_modules`, not a stash.
+4. Update your own rows in this file and `HANDOVER.md` in the same commit as the fix.
+
+Do not run the full `npm test` in a sub-agent — `test:smoke` after each edit, `test:fast` before
+each commit, plus the named blast radius. The full suite is the coordinator's, once, before a
+commit that reaches `main` or a remote.
 
 ## Phase status
 
