@@ -224,14 +224,14 @@
 
   <h2>What an answer looks like</h2>
   <p>Real output from a terminal, against a fresh memory.</p>
-  <pre class="transcript"><code><span class="ask">tmct&gt; what is a dog</span>
+  <pre class="transcript" data-tmct-session="tmct chat --ephemeral"><code><span class="ask">tmct&gt; what is a dog</span>
 dog is a kind of animal (source: corpus:human /r/IsA)
 dog has tail (source: corpus:human /r/HasA)
 dog can bark (source: corpus:human /r/CapableOf)
 
 <span class="ask">tmct&gt; what is a quokka</span>
-<span class="miss">"quokka" isn't a term in this graph's own vocabulary (no matching class or predicate).
-I don't know "quokka" yet — teach me directly, e.g. "quokka is a &lt;thing&gt;".</span></code></pre>
+<span class="miss">…
+I don't know "quokka" yet — teach me directly, e.g. "quokka is a &lt;thing&gt;" or "remember quokka is a &lt;thing&gt;".</span></code></pre>
   <p>
     The second answer is the point. tmct would rather miss than guess. Scores and
     method for that claim live in the benchmark write-ups, linked from the
@@ -284,21 +284,16 @@ I don't know "quokka" yet — teach me directly, e.g. "quokka is a &lt;thing&gt;
   </div>
 
   <h2>Run the chat yourself</h2>
-  <pre><code>npm install -g @polycode-projects/the-mechanical-code-talker
-
-$ tmct
-tmct&gt; what talks to the payment module?
-…
-tmct&gt; what calls it?
-…
+  <pre><code>npm install -g @polycode-projects/the-mechanical-code-talker</code></pre>
+  <p>Point it at a repo's graph and ask about the code. This runs against
+  <code>examples/mini-webapp</code>, which ships in the repo:</p>
+  <pre data-tmct-session="tmct chat --repo examples/mini-webapp --ephemeral" data-tmct-cwd="repo"><code>tmct&gt; what talks to store.mjs?
+src/handlers/tasks.mjs and src/handlers/users.mjs.
 tmct&gt; which modules do not import logger?
 …
-tmct&gt; give me a detailed overview of how the payment module works
-…
-tmct&gt; /memory        # inspect what tmct remembers, with provenance
 tmct&gt; /exit</code></pre>
-  <p>Point it at a repo's graph with <code>tmct chat --repo /path/to/repo</code>, or start
-  with nothing. tmct bootstraps an empty memory and remembers what you tell it.</p>
+  <p>Or start with nothing. tmct bootstraps an empty memory and remembers what you
+  tell it. Use <code>tmct chat --repo /path/to/repo</code> to point it at your own.</p>
   <pre><code>tmct init         # scaffold .tmct/, tmct.toml, seed the default persona + provenance
 tmct viz          # write the ledger page above from your own memory
 tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code></pre>

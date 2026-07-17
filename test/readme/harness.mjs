@@ -94,6 +94,10 @@ export function runBashBlock(block) {
   return inTempDir(block, (cwd) => sh(block.body, { cwd }));
 }
 
+/** Where a block came from, for an assertion message that names the file the
+ *  reader must edit. Blocks default to the README; the site's pages set it. */
+const originOf = (block) => `${block.source ?? "README"} line ${block.startLine}`;
+
 function parseSession(block) {
   let command = block.attrs.cmd ?? null;
   const inputs = [];
@@ -103,7 +107,7 @@ function parseSession(block) {
     else if (line.startsWith("tmct> ")) inputs.push(line.slice(6));
     else if (line.trim() !== "") expected.push(line.replace(/\s+$/, ""));
   }
-  assert.ok(command, `session block at README line ${block.startLine} names no command`);
+  assert.ok(command, `session block at ${originOf(block)} names no command`);
   if (inputs.length > 0 && inputs.at(-1) !== "/exit") inputs.push("/exit");
   return { command, inputs, expected };
 }
@@ -126,7 +130,7 @@ export function runSessionBlock(block) {
   return inTempDir(block, (cwd) => {
     if (block.attrs.setup) sh(block.attrs.setup, { cwd });
     const stdout = sh(command, { cwd, input: inputs.map((line) => line + "\n").join("") });
-    assertLinesInOrder(expected, stdout, `session at README line ${block.startLine}`);
+    assertLinesInOrder(expected, stdout, `session at ${originOf(block)}`);
     return stdout;
   });
 }

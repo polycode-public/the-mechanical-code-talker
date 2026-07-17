@@ -100,8 +100,12 @@ parts are real provenance receipts. Every fact tmct stores records where it
 came from and when (more on that below).
 
 The test suite replays every runnable example in this README against the
-live product, this transcript included. If the chat behavior ever drifts
-from the output above, the suite fails and says so.
+live product, this transcript included. Every line shown must be a line the
+product prints, in the order shown, so if the chat behavior drifts from the
+output above, the suite fails and says so. Two blocks below are marked `skip=`
+and never run: one would touch the network, the other needs an LLM judge.
+`docs/public-examples.md` maps every example on every public surface to the
+test that holds it.
 
 Point it at a codebase's graph and the same engine answers structural questions.
 `examples/mini-webapp` ships in this repo, so this runs as written:
@@ -353,8 +357,12 @@ Goal (inferred): Plan a move sequence from the current state to the goal (7 move
 ```
 
 "next" executes one move at a time, writing each board state into memory as
-facts; the final step re-reads those facts and confirms the goal from them,
-never assuming success. The search is genuine and domain-general: the test
+facts stamped with the step that produced them ("disk-1@step1 rests on peg-c",
+sourced to the plan). The final step re-reads the store and confirms the goal
+from those written facts, never assuming success. The stamp is what makes each
+step a separate record, so a question about the piece itself ("where does disk-1
+rest?") reports every step at once rather than the final board. The search is
+domain-general: the test
 suite teaches Towers of Hanoi purely as sentences for 1 to 8 disks and
 asserts the plan is exactly 2^n − 1 moves every time, and a second game
 (`crates.txt`, stacking crates with different rules and a two-goal
@@ -940,7 +948,7 @@ node bin/tmct.mjs cli tmct_untested '{"repo_path":"examples/mini-webapp"}'
 ## The repository interface
 
 tmct is not an indexer, so it consumes a graph through a typed contract any
-producer can implement. That contract is first-class: a **versioned (1.0.0),
+producer can implement. That contract is first-class: a **versioned (1.1.0),
 OWL-grounded, machine-readable service definition** (`docs/repository-interface.md`
 plus a JSON schema) of every service, its arguments, result types, and error
 contract. The interface returns a miss as a normal value. It never throws to

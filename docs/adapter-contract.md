@@ -1,4 +1,4 @@
-# The graph-provider adapter contract (ROADMAP item 14)
+# The graph-provider adapter contract
 
 tmct **consumes** a code graph; it never produces or mutates one. This document
 is the complete touchpoint between tmct and any graph producer (seonix, a CI

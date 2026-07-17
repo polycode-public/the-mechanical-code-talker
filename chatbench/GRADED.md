@@ -12,7 +12,9 @@ Code home: `chatbench/graded.mjs` (registries + pure logic),
 `chatbench/generate-graded.mjs` (the pool generator),
 `chatbench/graded-pool.jsonl` (the committed pool),
 `test/bench/chatbench-graded.test.mjs` (lint + promoted always-run set).
-The v1 48 cases in `cases.jsonl` are untouched and always run.
+The v1 cases folded into `graded-pool.jsonl` at case-set v3 and `cases.jsonl`
+was deleted; each now carries a real grade and construction. `run.mjs` still
+replays a separate case file if `--cases` points at one.
 
 ## The licence rule
 
@@ -178,13 +180,13 @@ draw B adds no judged information for those cells.
 measurement executes twice — draw A (seed) and draw B (seed+1), sampled
 without replacement across the draws within each cell where the pool allows,
 so the two samples share no item. Products land in the same run dir as
-`product-a.jsonl` (v1 cases + draw A) and `product-b.jsonl` (draw B only; v1
-is not re-run), plus `agreement.json`.
+`product-a.jsonl` (draw A, plus any `--cases` file) and `product-b.jsonl`
+(draw B only; a `--cases` file is not re-run), plus `agreement.json`.
 
 **Timings (`timings.json`, cycle-005):** every run also writes a wall-clock
 timing rollup — the total **run wall-time** (a monotonic clock wrapped around the
-whole product replay, both draws) plus, per CEFR band A1..C2 and for the **v1
-spine** (the ungraded frozen `cases.jsonl` set), the row count, total ms and
+whole product replay, both draws) plus, per CEFR band A1..C2 and for the **spine**
+(whatever `--cases` file a run names, empty by default), the row count, total ms and
 **mean ms per row** of the deterministic per-row product replay time (each row's
 own `timingMs`). Buckets partition exactly — `spine.totalMs + Σ grades.totalMs ==
 all.totalMs`. These numbers are **wall-clock**: they vary run to run and are
@@ -224,7 +226,7 @@ is the standing prescription before trusting their cell means.
 ### The SKILL §1 amendment for graded cases
 
 Sampling changes the regression contract (this section amends
-`SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 for graded cases; v1 cases are untouched):
+`SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 for graded cases):
 
 1. **Promoted always-run grades are FIXED** — cells of `PROMOTED_GRADES`
    contribute their fixed promoted subset to every draw (never sampled out);

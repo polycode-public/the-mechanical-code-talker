@@ -20,6 +20,7 @@ CC-BY-SA like the ConceptNet slice.
 |------|-------|-------|
 | `concepts.jsonl`    | relation facts, byte-identical shape to `corpus/conceptnet/slice.jsonl` | 399 facts |
 | `definitions.jsonl` | `{ "term", "definition", "sense": "software" }`, one per line             | 288 definitions |
+| `relations.jsonl`   | `{ "relation", "definition", "sense": "software" }`, one per line — what each edge kind means, so "what does imports mean" answers without per-repo seeding | 9 relations |
 | `LICENSE-NOTICE`    | MPL-2.0 provenance for this directory | — |
 
 ### `concepts.jsonl` — same shape as the ConceptNet slice

@@ -984,6 +984,12 @@ everything, and generated artifacts are still wider than the diff.
 
 ## Phase 7 — the public surface: every example traces to a test
 
+**Landed.** The table is `docs/public-examples.md`, one row per example across the README, the
+home page, the two contract docs, the corpus READMEs, chatbench, `examples/`, and the generated
+tool catalog. `e2e/pages-examples.test.mjs` replays the home page's transcripts against the live
+CLI through the README's own harness, so a page transcript is held at the same tier a README
+fence is. What is still open is listed in `HANDOVER.md`.
+
 The `what talks to the payment module?` failure is the worked example for this whole phase, and it
 should be read before the item list. It sat in the README as the headline structural example. The
 README says the suite replays every runnable example. The harness **did** run it, and it **passed**.
