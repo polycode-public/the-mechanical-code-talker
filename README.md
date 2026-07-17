@@ -1067,7 +1067,7 @@ edition, the retrieval date, the terms tmct uses, and what could not be verified
 | source | edition | what tmct uses it for |
 |---|---|---|
 | Jensen et al., "A Consensus Glossary of Temporal Database Concepts" | *SIGMOD Record* 23(1), 1994 | The time vocabulary. `mgx:utteranceTs` is valid time; `mgx:createdAt` is a transaction-time start. tmct is **not** bitemporal: `mgx:updatedAt` is an audit stamp, so tmct cannot answer what it believed last Tuesday. |
-| RFC 9923, "The FNV Non-Cryptographic Hash Algorithm" | Informational, 2026 | Fact ids are content-derived with a **non-cryptographic 32-bit** hash. tmct is **not** a Merkle tree and offers no tamper-evidence. |
+| RFC 9923, "The FNV Non-Cryptographic Hash Algorithm" | Informational, 2026 | FNV hashes the narrow non-fact-id pools (paraphrase keys, per-URL source ids, corpus dedupe). Fact ids are content-addressed with a **64-bit truncation of SHA-256**, so a fact id is collision-resistant at tmct's corpus sizes; tmct is still **not** a Merkle tree and offers no tamper-evidence. |
 | Green, Karvounarakis, Tannen, "Provenance Semirings" | PODS 2007 | The distinction tmct's docs keep: it records source annotation and PROV-style attribution, not how-provenance. |
 
 ### Measuring it
