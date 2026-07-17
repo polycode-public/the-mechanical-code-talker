@@ -95,7 +95,7 @@ commit that reaches `main` or a remote.
 | **4** — the instruments | **DONE** (4.1-4.5) | `6ed8f41`, `cee3ebe`, `ee6ddf3`, `a46d92a`, `7b74431` |
 | **5** — wrong documents | **DONE** | `bf6732c` |
 | PLAN_DEPS batches 1-2, 4-7 | **DONE** | `c2ded65`, `f2d7e27`, `488aa84`, `5824c66`, `2ccee08` |
-| **3** — honest-miss gaps | **IN PROGRESS** — 3.1, 3.3 done; rest open | `b1f14a0`, 3.3 below |
+| **3** — honest-miss gaps | **IN PROGRESS** — 3.1, 3.3, 3.5 done; 3.4 didn't reproduce; rest open | `b1f14a0`, `7d4acc4`, + below |
 | **7** — public-surface audit | **OPEN** — nothing started | — |
 | **8** — capability page | **OPEN** — nothing started | — |
 | **9** — prose pass | **OPEN** — nothing started | — |
@@ -588,12 +588,27 @@ Each carries its reproducer; group them into one commit per fix site.
 
 | # | Reproducer | Diagnosis | Site |
 |---|---|---|---|
-| 3.4 | `what about cats` → "Try: which modules import \<name\>" | miss hint hard-wired to the code-graph frame in a vocabulary session | the miss-hint builder; same root as 1.5 |
-| 3.5 | `what are dogs` → ~6 lines of compositional syntax | the hint doesn't scale to the question's register | same |
+| 3.4 | `what about cats` → "Try: which modules import \<name\>" | **DOES NOT REPRODUCE at 2.4.2.** It answers with the cat facts and names no code-graph shape. Already pinned by `games/topic-shift-after-a-plain-vocabulary-question`. Closed as fixed, no code change | — |
+| 3.5 | `what are dogs` → ~6 lines of compositional syntax | **DONE**, and the diagnosis was wrong — see below | `chat.mjs`'s meta fall-through gate, NOT the miss-hint builder |
 | 3.6 | `what else` / `why` → the identity blurb | `tell me more` has an expansion rule; its synonyms fall through | the expand frame |
 | 3.7 | `do all men die` → code-graph parse error | no `do/does <subject> <verb>` frame | `normalize.mjs` |
 | 3.8 | `i was wondering what a dog is` → couldn't parse | politeness stripper handles the modal form, not this frame | `PHRASING_FRAMES` |
 | 3.9 | `src/core/store.mjs` (bare path) → couldn't parse; bare `Store` orients fine | bare-entity orientation is wired for Class/Function, not Module | **NOT `metaFallbackEntityAnswer` — see below** |
+
+**3.5's fix site, and why "the hint doesn't scale to the question's register" was the wrong
+diagnosis.** The register was never the problem: the answer was. **The plural was the whole
+difference** — `what are dog` already worked, `what is dogs` already failed, so the verb was
+irrelevant. The composite lane claims `what are dogs`, declines it (`{node:"miss"}`, "'dogs' isn't a
+listable kind"), and `chat.mjs`'s meta fall-through was gated on `!envelope?.parsed` — a gate that
+cannot tell a parse that OWNS the sentence from one that merely MISSED on it. So the vocabulary
+reader that answers the singular never ran. The gate now checks `envelope.parsed.node !== "miss"`.
+The over-capture the guard exists to stop (`what is a X kind of animal`) parses successfully, so it
+never reaches the branch and is unaffected. A better wall was not the fix; the fix was answering.
+
+**Observed on the way past, unexplained and out of 3.5's scope:** `what are dog` (ungrammatical,
+singular after "are") answers from the corpus through the CLI but returns the identity blurb through
+`driveSessionTurns`. The same input, two drivers, two answers. Worth knowing before trusting a
+harness result on a marginal form — it is Phase 7's theme one layer down.
 
 **3.9's fix site, investigated 2026-07-17 — the table above is wrong.** Adding `Module` to
 `META_FALLBACK_CLASSES` in `ask.mjs` was tried and **reverted**: it regresses

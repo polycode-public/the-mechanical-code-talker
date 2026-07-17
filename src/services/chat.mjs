@@ -5858,13 +5858,23 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   // bare catch-all: on the FIRST turn of a graph-less session, dispatchTool's
   // loadGraph() throws its own documented empty-graph ToolError (a pre-existing,
   // by-design bootstrap behavior — self-corrects from turn 2 on), which leaves
-  // `envelope` null for the rest of the turn, arming this `!envelope?.parsed`
-  // fallback. Without this guard it greedily swallows the WHOLE "kind of animal"
-  // tail as a literal meta-term to define (mirroring grammar.mjs T5's OWN
-  // ARTICLE_RELATION_CONTINUATIONS guard against the identical over-capture),
-  // returning early and never letting (b5) below — which already handles this
-  // exact shape via WHAT_INHERITS_RE, envelope or no envelope — get a chance.
-  if (!metaTerm && miss && !envelope?.parsed && !WHAT_INHERITS_RE.test(q)) {
+  // `envelope` null for the rest of the turn, arming this
+  // no-parse-to-defer-to fallback. Without this guard it greedily swallows the
+  // WHOLE "kind of animal" tail as a literal meta-term to define (mirroring
+  // grammar.mjs T5's OWN ARTICLE_RELATION_CONTINUATIONS guard against the
+  // identical over-capture), returning early and never letting (b5) below —
+  // which already handles this exact shape via WHAT_INHERITS_RE, envelope or
+  // no envelope — get a chance.
+  //
+  // A parse that MISSED is not a parse to defer to. "what are dogs" is claimed
+  // by the composite lane, which declines it ({node:"miss"}, "'dogs' isn't a
+  // listable kind") and by existing merely blocked the vocabulary reader that
+  // answers the singular. The plural is the whole difference: "what are dog"
+  // always worked. A SUCCESSFUL parse still wins here exactly as before — the
+  // over-capture this guard exists to stop parses fine, so it never reaches
+  // this branch.
+  const parsedOwnsIt = envelope?.parsed && envelope.parsed.node !== "miss";
+  if (!metaTerm && miss && !parsedOwnsIt && !WHAT_INHERITS_RE.test(q)) {
     const m = q.match(BARE_WHATIS_RE)
       || q.match(/^what\s+(?:does|do)\s+(.+?)\s+means?[?.!\s]*$/i);
     // Strip a curated trailing scope clause ("… in this
