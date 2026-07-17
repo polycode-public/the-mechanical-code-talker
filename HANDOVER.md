@@ -100,6 +100,18 @@ Phases 1, 2, 4, 5 and 6 closed at 2.4.1. What remains:
   byte-identical to `node:crypto` by a test; truncate it to 64 bits. **Needs a real migration** (the
   memory graph is not derivable), but a tractable one: a Fact stores its own (s,p,o), so every id is
   recomputable from the payload. Do not fold this into another change — it rewrites every fact id.
+- **Four wrong citations in the inference engine, all re-confirmed at HEAD.** `PLAN_NORMATIVE.md`
+  §7.12; verified against *OWL 2 Profiles (2nd ed.)*, W3C Rec 2012-12-11, whose table numbering is
+  identical to the 1st ed., so no edition excuses them. **`cls-svf1` is cited as "OWL 2 RL Table 8"
+  at 3 sites** (`syllogise.mjs:64`, `:314`, `chat.mjs:7406`) — it is **Table 6**; Table 8 is
+  *The Semantics of Datatypes*. **`cax-maxc0` is not a W3C rule name** — no such rule exists; the
+  real one is `cls-maxc1`. It is shaped like a W3C id and appears in `PLAN_SYLLOGIST.md` and
+  `infbench/`, where a reader takes it for one. **`PLAN_SYLLOGIST_EL_DL.md:11` says all seven
+  kernels are "inside the OWL 2 RL fragment"** — two are not, and `syllogise.mjs:527` already says
+  so; `cax-maxc0` derives a class-level negative where `cls-maxc1` derives `false` for one
+  individual, a strictly stronger step RL does not license. **`syllogise.mjs:972`'s "JTMS-style
+  dependency-directed removal" is DRed** (Gupta/Mumick/Subrahmanian, SIGMOD 1993), not JTMS: it
+  recomputes the materialization, not belief labels.
 - **Phase 10 fallout — vocabulary fixes in files `PLAN_NORMATIVE.md` could not touch.** §7 has a
   verdict for each, so none needs more research. `fuzzy.mjs` implements **Optimal String Alignment**,
   not Damerau-Levenshtein (`editDistance("CA","ABC")=3`; true DL gives 2) — a comment and
