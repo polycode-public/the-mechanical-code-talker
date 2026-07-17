@@ -5,7 +5,7 @@
 # seonix repo's publish:npm shape, minus the --workspace flag (tmct is a
 # single package, not a workspace).
 
-image: node:24
+image: node:24.18.0
 
 stages:
   - test
