@@ -11,127 +11,364 @@
     "probe:   the literal string to look for; defaults to the term itself"
   ],
   "terms": [
-    { "term": "scm-sco", "area": "logic", "verdict": "aligned",
+    {
+      "term": "scm-sco",
+      "area": "logic",
+      "verdict": "aligned",
       "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 9 (OWL 2 RL/RDF rules)",
-      "note": "subClassOf transitivity. Genuinely Aristotle's Barbara." },
-    { "term": "cax-sco", "area": "logic", "verdict": "aligned",
-      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 7" },
-    { "term": "cax-dw", "area": "logic", "verdict": "aligned",
+      "note": "subClassOf transitivity. Genuinely Aristotle's Barbara.",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "cax-sco",
+      "area": "logic",
+      "verdict": "aligned",
       "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 7",
-      "note": "the first rule that proves a 'no'." },
-    { "term": "cls-svf1", "area": "logic", "verdict": "aligned",
-      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 6" },
-    { "term": "scm-svf1", "area": "logic", "verdict": "aligned",
-      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 9" },
-    { "term": "entailment", "area": "logic", "verdict": "aligned",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "cax-dw",
+      "area": "logic",
+      "verdict": "aligned",
+      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 7",
+      "note": "the first rule that proves a 'no'.",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "cls-svf1",
+      "area": "logic",
+      "verdict": "aligned",
+      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 6",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "scm-svf1",
+      "area": "logic",
+      "verdict": "aligned",
+      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 9",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "entailment",
+      "area": "logic",
+      "verdict": "aligned",
       "cite": "RDF 1.1 Semantics, W3C Rec 2014-02-25",
-      "note": "reserved for the specific claim; 'inference' names the activity. Correct." },
-    { "term": "justification", "area": "logic", "verdict": "map",
+      "note": "reserved for the specific claim; 'inference' names the activity. Correct.",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "justification",
+      "area": "logic",
+      "verdict": "map",
       "cite": "Doyle, 'A Truth Maintenance System', Artificial Intelligence 12(3), 1979",
-      "note": "tmct records the rule (mgx:sourceRule) but not the antecedents. A JTMS justification carries both." },
-    { "term": "premise", "area": "logic", "verdict": "aligned",
-      "cite": "Doyle 1979; Aristotle, Prior Analytics" },
-    { "term": "syllogise", "area": "logic", "verdict": "open",
+      "note": "tmct records the rule (mgx:sourceRule) but not the antecedents. A JTMS justification carries both.",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "premise",
+      "area": "logic",
+      "verdict": "aligned",
+      "cite": "Doyle 1979; Aristotle, Prior Analytics",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "syllogise",
+      "area": "logic",
+      "verdict": "open",
       "cite": "Aristotle, Prior Analytics; OWL 2 Profiles §4.3",
-      "note": "scm-sco is a syllogism; cls-svf1 is not. The engine is a forward-chaining fixpoint. Public CLI verb - PLAN_NORMATIVE.md 7.8." },
-    { "term": "forward-chain", "area": "logic", "verdict": "aligned",
-      "cite": "Russell & Norvig, AIMA 4th ed., Pearson 2020, §9.3" },
-    { "term": "materialise", "area": "logic", "verdict": "rename",
+      "note": "scm-sco is a syllogism; cls-svf1 is not. The engine is a forward-chaining fixpoint. Public CLI verb - PLAN_NORMATIVE.md 7.8.",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "forward-chain",
+      "area": "logic",
+      "verdict": "aligned",
+      "cite": "Russell & Norvig, AIMA 4th ed., Pearson 2020, §9.3",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "materialise",
+      "area": "logic",
+      "verdict": "rename",
       "cite": "SPARQL 1.1 Entailment Regimes, W3C Rec 2013-03-21",
-      "note": "both spellings ship (materialise 24 / materialize 28). Pick one." },
-
-    { "term": "reification", "area": "storage", "verdict": "extend", "probe": "rdf:Statement",
+      "note": "both spellings ship (materialise 24 / materialize 28). Pick one.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "reification",
+      "area": "storage",
+      "verdict": "extend",
+      "probe": "rdf:Statement",
       "cite": "RDF 1.1 Semantics, W3C Rec 2014-02-25, App. D.1; RDF 1.2 Schema (WD 2026-03-28) §7.2 'Old-style' Reification",
-      "note": "tmct does textbook reification and the WORD appears 0 times. Not deprecated; demoted to legacy by RDF 1.2 (CR, not Rec)." },
-    { "term": "content-address", "area": "storage", "verdict": "rename",
+      "note": "tmct does textbook reification and the WORD appears 0 times. Not deprecated; demoted to legacy by RDF 1.2 (CR, not Rec).",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "content-address",
+      "area": "storage",
+      "verdict": "rename",
       "cite": "RFC 9923 (FNV, Informational, Feb 2026); Pro Git 2nd ed. §10.2",
-      "note": "borrows Git/IPFS's implied collision resistance. fnv1a32 is 32-bit. PLAN_NORMATIVE.md 9.1." },
-    { "term": "ledger", "area": "storage", "verdict": "rename",
+      "note": "borrows Git/IPFS's implied collision resistance. fnv1a32 is 32-bit. PLAN_NORMATIVE.md 9.1.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "ledger",
+      "area": "storage",
+      "verdict": "rename",
       "cite": "ISO 22739 (blockchain/DLT vocabulary), 2020/2024; Kreps, 'The Log', LinkedIn Eng., Dec 2013",
-      "note": "no term of art in the systems lineage. tmct's ledger is a viz, and the store is not append-only." },
-    { "term": "mgx:createdAt", "area": "storage", "verdict": "aligned",
+      "note": "no term of art in the systems lineage. tmct's ledger is a viz, and the store is not append-only.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "mgx:createdAt",
+      "area": "storage",
+      "verdict": "aligned",
       "cite": "Jensen et al., 'A Consensus Glossary of Temporal Database Concepts', SIGMOD Record 23(1), 1994",
-      "note": "transaction-time START only. No end, so not an interval." },
-    { "term": "mgx:updatedAt", "area": "storage", "verdict": "rename",
+      "note": "transaction-time START only. No end, so not an interval.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "mgx:updatedAt",
+      "area": "storage",
+      "verdict": "rename",
       "cite": "Jensen et al., SIGMOD Record 23(1), 1994",
-      "note": "NOT transaction time - that cannot be changed by definition. An audit stamp on a snapshot relation." },
-    { "term": "mgx:utteranceTs", "area": "storage", "verdict": "aligned",
+      "note": "NOT transaction time - that cannot be changed by definition. An audit stamp on a snapshot relation.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "mgx:utteranceTs",
+      "area": "storage",
+      "verdict": "aligned",
       "cite": "Jensen et al., SIGMOD Record 23(1), 1994",
-      "note": "valid time, as an instant." },
-    { "term": "provenance", "area": "storage", "verdict": "aligned",
+      "note": "valid time, as an instant.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "provenance",
+      "area": "storage",
+      "verdict": "aligned",
       "cite": "PROV-O, W3C Rec 2013-04-30",
-      "note": "correct in the PROV-DM sense. NOT how-provenance (Green et al., PODS 2007)." },
-
-    { "term": "prov:wasInfluencedBy", "area": "ontology", "verdict": "map", "probe": "wasInfluencedBy",
+      "note": "correct in the PROV-DM sense. NOT how-provenance (Green et al., PODS 2007).",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "prov:wasInfluencedBy",
+      "area": "ontology",
+      "verdict": "map",
+      "probe": "wasInfluencedBy",
       "cite": "PROV-O, W3C Rec 2013-04-30",
-      "note": "mgx:derivedFrom's true referent - it unions attribution with derivation." },
-    { "term": "prov:wasDerivedFrom", "area": "ontology", "verdict": "map", "probe": "wasDerivedFrom",
-      "cite": "PROV-O, W3C Rec 2013-04-30", "note": "mgx:canonicalisedFrom: both ends are prov:Entity." },
-    { "term": "prov:wasAttributedTo", "area": "ontology", "verdict": "map", "probe": "wasAttributedTo",
-      "cite": "PROV-O, W3C Rec 2013-04-30", "note": "seeAlso only: tmct:Source unions PROV's three top classes." },
-    { "term": "prov:wasGeneratedBy", "area": "ontology", "verdict": "map", "probe": "wasGeneratedBy",
-      "cite": "PROV-O, W3C Rec 2013-04-30", "note": "mgx:saidInSession: Entity -> Activity." },
-    { "term": "mgxneg:", "area": "ontology", "verdict": "extend", "probe": "mgxneg:",
+      "note": "mgx:derivedFrom's true referent - it unions attribution with derivation.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "prov:wasDerivedFrom",
+      "area": "ontology",
+      "verdict": "map",
+      "probe": "wasDerivedFrom",
+      "cite": "PROV-O, W3C Rec 2013-04-30",
+      "note": "mgx:canonicalisedFrom: both ends are prov:Entity.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "prov:wasAttributedTo",
+      "area": "ontology",
+      "verdict": "map",
+      "probe": "wasAttributedTo",
+      "cite": "PROV-O, W3C Rec 2013-04-30",
+      "note": "seeAlso only: tmct:Source unions PROV's three top classes.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "prov:wasGeneratedBy",
+      "area": "ontology",
+      "verdict": "map",
+      "probe": "wasGeneratedBy",
+      "cite": "PROV-O, W3C Rec 2013-04-30",
+      "note": "mgx:saidInSession: Entity -> Activity.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "mgxneg:",
+      "area": "ontology",
+      "verdict": "extend",
+      "probe": "mgxneg:",
       "cite": "no standard; cf. OWL 2 negativePropertyAssertion (OWL 2 Syntax, W3C Rec 2012-12-11)",
-      "note": "generative polarity prefix. owl:disjointWith would over-claim; negativePropertyAssertion needs a reified shape the flat store lacks." },
-    { "term": "seon:hasSuperType", "area": "ontology", "verdict": "aligned",
+      "note": "generative polarity prefix. owl:disjointWith would over-claim; negativePropertyAssertion needs a reified shape the flat store lacks.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "seon:hasSuperType",
+      "area": "ontology",
+      "verdict": "aligned",
       "cite": "SEON code.owl, se-on.org, 2012/02 (verified 2026-07-17)",
-      "note": "capital T. Its inverse hasSubtype is lowercase. SEON is inconsistent; match it exactly." },
-    { "term": "seon:subKind", "area": "ontology", "verdict": "rename",
+      "note": "capital T. Its inverse hasSubtype is lowercase. SEON is inconsistent; match it exactly.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "seon:subKind",
+      "area": "ontology",
+      "verdict": "rename",
       "cite": "SEON code.owl - NO SUCH TERM (verified 2026-07-17)",
-      "note": "a STORED undefined IRI. -> mgx:subKind. PLAN_NORMATIVE.md 7.1." },
-    { "term": "mgx:capableOf", "area": "ontology", "verdict": "map",
-      "cite": "ConceptNet /r/CapableOf (slice pins 5.7.0)" },
-
-    { "term": "lemma", "area": "nlp", "verdict": "aligned",
+      "note": "a STORED undefined IRI. -> mgx:subKind. PLAN_NORMATIVE.md 7.1.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "mgx:capableOf",
+      "area": "ontology",
+      "verdict": "map",
+      "cite": "ConceptNet /r/CapableOf (slice pins 5.7.0)",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "lemma",
+      "area": "nlp",
+      "verdict": "aligned",
       "cite": "Jurafsky & Martin, Speech and Language Processing, 3rd ed. draft",
-      "note": "tmct lemmatizes and does not stem, and says so. Porter stemming correctly absent." },
-    { "term": "anaphora", "area": "nlp", "verdict": "aligned",
+      "note": "tmct lemmatizes and does not stem, and says so. Porter stemming correctly absent.",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "anaphora",
+      "area": "nlp",
+      "verdict": "aligned",
       "cite": "Jurafsky & Martin, Speech and Language Processing, 3rd ed. draft",
-      "note": "resolving a pronoun to a standing referent is anaphora, not coreference clustering. The rarer word is the right one." },
-    { "term": "copula", "area": "grammar", "verdict": "aligned",
-      "cite": "ACE 6.7 Lexicon Specification, 2013-07-31" },
-    { "term": "determiner", "area": "grammar", "verdict": "aligned",
-      "cite": "ACE 6.7 Construction Rules, 2013-07-31" },
-    { "term": "quantifier", "area": "grammar", "verdict": "aligned",
-      "cite": "ACE 6.7 Construction Rules, 2013-07-31" },
-    { "term": "predicate", "area": "nlp", "verdict": "aligned",
+      "note": "resolving a pronoun to a standing referent is anaphora, not coreference clustering. The rarer word is the right one.",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "copula",
+      "area": "grammar",
+      "verdict": "aligned",
+      "cite": "ACE 6.7 Lexicon Specification, 2013-07-31",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "determiner",
+      "area": "grammar",
+      "verdict": "aligned",
+      "cite": "ACE 6.7 Construction Rules, 2013-07-31",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "quantifier",
+      "area": "grammar",
+      "verdict": "aligned",
+      "cite": "ACE 6.7 Construction Rules, 2013-07-31",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "predicate",
+      "area": "nlp",
+      "verdict": "aligned",
       "cite": "RDF 1.1 Concepts, W3C Rec 2014-02-25",
-      "note": "POLYSEMY: the RDF/logic sense (middle of a triple), not the grammar sense (what is said about the subject). tmct means RDF's and also ships a grammar." },
-    { "term": "grounding", "area": "nlp", "verdict": "aligned",
+      "note": "POLYSEMY: the RDF/logic sense (middle of a triple), not the grammar sense (what is said about the subject). tmct means RDF's and also ships a grammar.",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "grounding",
+      "area": "nlp",
+      "verdict": "aligned",
       "cite": "OWL 2 Profiles, W3C Rec 2012-12-11",
-      "note": "POLYSEMY: tmct means OWL grounding. Planning means instantiating an action schema. tmct does both things." },
-    { "term": "editDistance", "area": "ir", "verdict": "rename",
+      "note": "POLYSEMY: tmct means OWL grounding. Planning means instantiating an action schema. tmct does both things.",
+      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+    },
+    {
+      "term": "editDistance",
+      "area": "ir",
+      "verdict": "rename",
       "cite": "Damerau, CACM 7(3), 1964, pp. 171-176; Levenshtein, Soviet Physics Doklady 10(8), 1966, pp. 707-710",
-      "note": "implements OPTIMAL STRING ALIGNMENT, not Damerau-Levenshtein. editDistance('CA','ABC')=3; true DL gives 2. OSA is not a metric." },
-
-    { "term": "precondition", "area": "planning", "verdict": "aligned",
-      "cite": "Fikes & Nilsson, Artificial Intelligence 2(3-4), 1971, pp. 189-208; PDDL (McDermott et al., 1998)" },
-    { "term": "effect", "area": "planning", "verdict": "aligned",
-      "cite": "PDDL (McDermott et al., Yale CVC TR-98-003, 1998)" },
-    { "term": "operator", "area": "planning", "verdict": "aligned",
-      "cite": "Fikes & Nilsson, Artificial Intelligence 2(3-4), 1971" },
-    { "term": "closed-world", "area": "planning", "verdict": "aligned",
-      "cite": "Reiter, 'On Closed World Data Bases', 1978" },
-
-    { "term": "fixture", "area": "testing", "verdict": "aligned",
-      "cite": "Meszaros, xUnit Test Patterns, Addison-Wesley 2007" },
-    { "term": "blast radius", "area": "testing", "verdict": "map", "probe": "blast radius",
-      "cite": "Yoo & Harman, 'Regression testing minimization, selection and prioritization: a survey', STVR 22(2), 2012",
-      "note": "ops jargon. The academic name is Regression Test Selection. CLAUDE.md's rule is textbook RTS and never says so." },
-    { "term": "lane", "area": "testing", "verdict": "extend",
-      "cite": "no testing literature uses it",
-      "note": "a tmct coinage, heavily load-bearing (657 uses). Keep and define." },
-    { "term": "smoke", "area": "testing", "verdict": "extend", "probe": "test:smoke",
-      "cite": "McConnell, Rapid Development, Microsoft Press 1996 (daily build and smoke test)",
-      "note": "TWO meanings in this repo: test:smoke (a 1s tier) and smoke:deploy (a probe against a deployed site). CLAUDE.md flags it." },
-
-    { "term": "honest miss", "area": "eval", "verdict": "extend", "probe": "honest miss",
-      "cite": "Chow, 'On optimum recognition error and reject tradeoff', IEEE Trans. Inf. Theory 16(1), 1970",
-      "note": "tmct's central design claim, and a coinage. The literature calls it abstention / selective prediction. Keep the name, cite the concept." },
-    { "term": "groundedness", "area": "eval", "verdict": "aligned",
-      "cite": "Ji et al., 'Survey of Hallucination in Natural Language Generation', ACM CSUR 55(12), 2023" },
-    { "term": "CEFR", "area": "eval", "verdict": "aligned",
-      "cite": "Council of Europe, CEFR Companion Volume" }
+      "note": "implements OPTIMAL STRING ALIGNMENT, not Damerau-Levenshtein. editDistance('CA','ABC')=3; true DL gives 2. OSA is not a metric.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "precondition",
+      "area": "planning",
+      "verdict": "aligned",
+      "cite": "Fikes & Nilsson, Artificial Intelligence 2(3-4), 1971, pp. 189-208, DOI 10.1016/0004-3702(71)90010-5; PDDL 1.2, Yale CVC TR-98-003, Oct 1998",
+      "verified": "2026-07-17 — primary source read",
+      "note": "PDDL spells it :precondition (singular) and :parameters (plural). The 1971 paper never uses the phrase \"STRIPS assumption\"."
+    },
+    {
+      "term": "effect",
+      "area": "planning",
+      "verdict": "aligned",
+      "cite": "PDDL 1.2, McDermott et al., Yale CVC TR-98-003 / DCS TR-1165, Oct 1998. Current: PDDL 3.1, the IPC standard since 2011",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "operator",
+      "area": "planning",
+      "verdict": "aligned",
+      "cite": "Fikes & Nilsson, Artificial Intelligence 2(3-4), 1971, pp. 189-208",
+      "verified": "2026-07-17 — primary source read",
+      "note": "\"Operators are the basic elements from which a solution is built.\""
+    },
+    {
+      "term": "closed-world",
+      "area": "planning",
+      "verdict": "aligned",
+      "cite": "Reiter, \"On Closed World Data Bases\", in Gallaire & Minker (eds.), Logic and Data Bases, Plenum Press 1978, pp. 55-76, DOI 10.1007/978-1-4684-3384-5_3",
+      "verified": "2026-07-17 — primary source read",
+      "note": "pp. 55-76 per DBLP; a widely-copied 119-140 is wrong. tmct runs BOTH: the planner is closed-world, the chat layer open-world."
+    },
+    {
+      "term": "fixture",
+      "area": "testing",
+      "verdict": "aligned",
+      "cite": "Meszaros, xUnit Test Patterns, Addison-Wesley 2007, ISBN 978-0-13-149505-0, pp. 302/311/317",
+      "verified": "2026-07-17 — primary source read",
+      "note": "Meszaros flags the term as ambiguous across communities and settles on \"the preconditions of the test\". NB test harness is NOT his term - that is ISO/IEC/IEEE 24765:2017."
+    },
+    {
+      "term": "blast radius",
+      "area": "testing",
+      "verdict": "map",
+      "probe": "blast radius",
+      "cite": "Yoo & Harman, \"Regression testing minimization, selection and prioritization: a survey\", Software Testing, Verification and Reliability 22(2), 2012, pp. 67-120, DOI 10.1002/stvr.430",
+      "note": "ops metaphor. EVERY attested use (SRE, AWS, chaos engineering) is about production failure damage, never test selection - and it appears in 0 of the 2016 SRE book's 43 chapters. The literature's term is Regression Test Selection. CLAUDE.md's section title uses it for RTS.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "lane",
+      "area": "testing",
+      "verdict": "extend",
+      "cite": "not a testing term: absent from ISTQB (651 terms), SEVOCAB and Meszaros. cf. fastlane (Krause 2014), which never defines it; swimlane (BPMN/UML). Standard term: test suite, ISO/IEC/IEEE 29119-1:2022 s3.129",
+      "note": "a tmct coinage, heavily load-bearing (657 uses). 29119's note - grouping is typically based on when tests are executed - describes tmct's tiers exactly.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "smoke",
+      "area": "testing",
+      "verdict": "extend",
+      "probe": "test:smoke",
+      "cite": "McConnell, \"Daily Build and Smoke Test\", IEEE Software 13(4), July 1996, pp. 144,143, DOI 10.1109/MS.1996.10017; etymology: Jargon File (electronics, NOT plumbing)",
+      "note": "TWO meanings here: test:smoke (a 1s tier) and smoke:deploy. IEEE/ISO defines neither smoke nor sanity; ISTQB made sanity a SYNONYM of smoke then dropped it - the smoke/sanity distinction is folklore.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "honest miss",
+      "area": "eval",
+      "verdict": "extend",
+      "probe": "honest miss",
+      "cite": "MECHANISM: Reiter, \"On Closed World Data Bases\", Logic and Data Bases, Plenum 1978, pp. 55-76 (the open-world assumption). GOAL / prior art: Chow, IEEE Trans. Inf. Theory 16(1), 1970, pp. 41-46 (reject option); El-Yaniv & Wiener, JMLR 11, 2010 (selective classification); Wen et al., arXiv:2407.18418 (abstention)",
+      "note": "the abstention literature is THRESHOLD-based - it rejects when confidence < t. tmct has no confidence score: it abstains because no rule matched, which is outside the function's domain, not low confidence. Cite abstention for the goal, open-world/unknown for the mechanism.",
+      "verified": "2026-07-17 — primary source read"
+    },
+    {
+      "term": "groundedness",
+      "area": "eval",
+      "verdict": "aligned",
+      "cite": "Ji et al., \"Survey of Hallucination in Natural Language Generation\", ACM Computing Surveys 55(12), 2023, DOI 10.1145/3571730; Rashkin et al., \"Measuring Attribution in NLG Models\", Computational Linguistics 49(4), 2023, pp. 777-840, DOI 10.1162/coli_a_00486",
+      "verified": "2026-07-17 — primary source read",
+      "note": "\"groundedness\" as a named metric is TruLens's, not RAGAS's - RAGAS's equivalent is faithfulness."
+    },
+    {
+      "term": "CEFR",
+      "area": "eval",
+      "verdict": "aligned",
+      "cite": "Council of Europe (2020), Common European Framework of Reference for Languages - Companion volume, Council of Europe Publishing, ISBN 978-92-871-8621-8. The 2018 \"with New Descriptors\" edition is explicitly a preliminary version.",
+      "verified": "2026-07-17 — primary source read",
+      "note": "NOT Creative Commons - all rights reserved plus a permission regime; <500-word attributed excerpts are pre-cleared, whole tables are not. The A1-C2 LABELS are unprotectable. CEFR measures what a person can do, not sentence difficulty - grading prompts by band is an adaptation beyond its validated scope."
+    }
   ]
 }

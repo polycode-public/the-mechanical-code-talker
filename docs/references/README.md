@@ -31,6 +31,8 @@ verified primary sources, not memory.
 ```
 docs/references/
   README.md                       <- this index
+  term-register.json              <- every term with a verdict + citation (term-inventory.mjs --register)
+  testing-vocabulary.md           <- unit/integration/smoke/fixture/flaky, and what "blast radius" isn't
   api/                            <- link+excerpt stubs (restrictive-licence docs)
     README.md
   schemas/
@@ -40,13 +42,15 @@ docs/references/
     seon-code-ontology.md         <- SEON code.owl — the code vocabulary tmct borrows
     ace-6.7.md                    <- ACE 6.7 + the table of what tmct implements and diverges on
     iso-24617-2-dialogue-acts.md  <- ISO 24617-2:2020 — dialogue acts (draft-sourced, see the entry)
+    rdf-reification-and-rdf-star.md <- reification is NOT deprecated; RDF-star's << >> is superseded
+    content-addressing-and-storage.md <- temporal, content addressing, logs, provenance-beyond-PROV-O
     owl2-vocabulary.md            <- hand: the OWL 2 / RDF / RDFS terms tmct uses
     ace-owl-fragment.md           <- hand: tmct's ACE-inspired sub-fragment (~8 patterns)
     conceptnet-relations.md       <- hand: ConceptNet's fixed relation types
   papers/
     README.md                     <- ACE/APE + ELIZA/PARRY lineage candidates
   planning/
-    README.md                     <- classical planning & KR (the C1-ceiling correction)
+    README.md                     <- classical planning & KR: planning is not LLM-only
     PARTIAL_ORDER_PLANNING.md     <- least-commitment planning: causal links, threats
     NONLIN.md                     <- Tate 1976: the first HTN partial-order planner
     STRIPS_PDDL.md                <- the operator/effect model + its declaration language
@@ -88,9 +92,16 @@ The 40-plus-year body of **deterministic, no-LLM, goal-directed planning** —
 partial-order planning, HTN/NONLIN, STRIPS/PDDL, Steel & Ho — behind the
 capability-router RFC. Its load-bearing point: *open-ended planning is not an
 LLM-only capability*. Within a declared operator model, a planner does
-goal-directed multi-step decomposition deterministically, so the agentic
-ladder's C1 ceiling is **open-world**, not planning itself. Primary papers are
-link-only (publisher copyright / scanned reports).
+goal-directed multi-step decomposition deterministically, so what the agentic
+ladder's C1 rung runs into is **the open world**, not planning itself. That
+boundary is a research horizon with live literatures — Ghallab, Nau & Traverso's
+*Automated Planning and Acting* (CUP, 2016) on interleaved planning and
+execution, and IPC-26's first Epistemic Planning track (ICAPS 2026) with its own
+EPDDL language. Until a tier is designed against one of those, an unmodelled
+effect lands on the honest miss wall. `STRIPS_PDDL.md` also carries the
+open-world half of the story, which is where the planner and the chat layer's
+honest miss turn out to share one Reiter citation. Primary papers are link-only
+(publisher copyright / scanned reports).
 
 ## 6. Standards reconciliation — [`schemas/README.md`](schemas/README.md)
 
@@ -99,6 +110,21 @@ ConceptNet, ISO 24617-2 — each pinned to an edition and a date, each naming wh
 verified. `PLAN_NORMATIVE.md` holds the reconciliation: one verdict per coined term, and the
 `owl:equivalentProperty` / `rdfs:subPropertyOf` triples that pin the alignments in
 `ontology/tmct-core.ttl`.
+
+## 7. Testing vocabulary — [`testing-vocabulary.md`](testing-vocabulary.md)
+
+Who actually defines `unit`, `integration`, `smoke`, `fixture`, `flaky` and the test doubles, and
+where tmct's own words depart from them. Carries three findings: **ISTQB split "unit testing" from
+"component testing" on 2025-08-12** (most secondary sources still call them synonyms); the smoke
+test's etymology is **electronics, not plumbing**, and the smoke/sanity distinction is folklore no
+standards body supports; and **"blast radius" is an ops metaphor** for what the literature calls
+**Regression Test Selection** — every attested use is about production failure damage, and it appears
+in none of the 2016 SRE book's 43 chapters. `CLAUDE.md`'s section title uses it for test selection.
+**Consumer:** `CLAUDE.md`, `package.json`'s `test:*` scripts, `test/**`.
+
+Note the licence quirk that makes this entry possible: **SEVOCAB** (http://sevocab.computer.org/)
+publishes the ISO/IEC/IEEE definitions free, and grants permission to copy them provided the source
+is cited. The standards themselves are paywalled.
 
 ## Deepen-next index
 

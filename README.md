@@ -1050,6 +1050,7 @@ edition, the retrieval date, the terms tmct uses, and what could not be verified
 | Fikes & Nilsson, "STRIPS" | *Artificial Intelligence* 2(3–4), 1971 | The action model: operator, precondition, effect. |
 | McDermott et al., PDDL | Yale CVC TR-98-003, 1998 | The action-rule vocabulary. |
 | Doyle, "A Truth Maintenance System" | *Artificial Intelligence* 12(3), 1979 | Justification and premise. tmct records which rule entailed a fact; it does not yet record which facts fed the rule. |
+| Meszaros, *xUnit Test Patterns* | Addison-Wesley, 2007 | The test-double taxonomy — stub, spy, mock, fake, dummy — and the fixture patterns. `docs/references/testing-vocabulary.md` records where tmct's own tiers depart from the standard taxonomy, and that "blast radius" is an ops metaphor for what the literature calls Regression Test Selection. |
 | Aristotle, *Prior Analytics* | — | `scm-sco` — all A are B, all B are C — is the syllogism Barbara. The rest of the engine is a forward-chaining fixpoint, and `PLAN_NORMATIVE.md` §9.3 is honest about the gap. |
 
 ### Storage
@@ -1064,8 +1065,9 @@ edition, the retrieval date, the terms tmct uses, and what could not be verified
 
 | source | edition | what tmct uses it for |
 |---|---|---|
-| Council of Europe, CEFR | Companion Volume | The language-difficulty scale the chat benchmark grades against. |
-| Chow, "On optimum recognition error and reject tradeoff" | *IEEE Trans. Information Theory* 16(1), 1970 | tmct calls it the **honest miss**: a question it cannot ground gets a refusal, never a guess. The literature calls this **abstention**, or selective prediction, and Chow's reject option is its root. |
+| Council of Europe, CEFR — Companion volume | 2020, ISBN 978-92-871-8621-8 | The band labels A1–C2 the chat benchmark grades against. CEFR measures what a *person* can do communicatively; grading the difficulty of *prompts* by band is tmct's adaptation, not a CEFR-validated use. The band descriptions in `chatbench/GRADED.md` are tmct's own prose. |
+| Reiter, "On Closed World Data Bases" | *Logic and Data Bases*, Plenum, 1978, pp. 55–76 | Both halves of the honest miss. The planner's operator model is **closed-world**, which is what makes a plan checkable. The chat layer is **open-world**: it will not read "no matching rule" as "the answer is no". |
+| Chow, "On optimum recognition error and reject tradeoff" | *IEEE Trans. Information Theory* 16(1), 1970 | Prior art for the goal. The literature calls a refusal **abstention**, or selective prediction, and Chow's reject option is its root. Those methods threshold a confidence score; tmct has none, and abstains because nothing matched — which is why the row above names the mechanism. |
 | Ji et al., "Survey of Hallucination in Natural Language Generation" | *ACM Computing Surveys* 55(12), 2023 | Groundedness, and what tmct is avoiding by having no model to hallucinate with. |
 
 ### Where no standard fits

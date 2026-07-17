@@ -922,14 +922,37 @@ a guess — and it is a coinage.
 
 The literature calls it **abstention**, or **selective prediction** / **selective classification**;
 the decision-theoretic root is Chow's **reject option** (Chow, "On optimum recognition error and
-reject tradeoff", *IEEE Trans. Information Theory* 16(1), 1970). `abstention` appears **0 times** in
-the repo, `faithfulness` **0**.
+reject tradeoff", *IEEE Trans. Information Theory* 16(1), 1970, pp. 41–46). `abstention` appears
+**0 times** in the repo, `faithfulness` **0**.
 
-**Verdict: `extend`, and cite.** "Honest miss" is a better product word than "abstention" and should
-stay — it is what a visitor understands. But the design deserves its published name in the docs,
-because that name is what connects tmct to a literature that has measured this exact behaviour. The
-`MISS_REASONS` set stays `mgx:`'s: those are reasons a specific machine could not answer, and no
-standard enumerates them.
+**But the obvious citation is the wrong one, and the reason is worth the paragraph.** Every one of
+Chow, El-Yaniv & Wiener (*JMLR* 11, 2010), Geifman & El-Yaniv, Kamath et al. and the Wen et al.
+abstention survey (arXiv:2407.18418) is built on a **confidence score** — a probability, a softmax
+output, a calibrated scalar — with a threshold *t* below which the system rejects. "Reject when
+confidence < t" presupposes a confidence function.
+
+**tmct has no confidence score to threshold.** It abstains because *no rule matched*. That is not
+low confidence; it is **outside the function's domain**. A different mechanism, not a different
+implementation of the same one.
+
+The literature that names tmct's actual mechanism is Reiter's — **the open-world assumption**
+("On Closed World Data Bases", *Logic and Data Bases*, Plenum, 1978, pp. 55–76). An engine with no
+matching rule making an open-world move is refusing to conflate "I have no rule" with "the answer is
+no". That *is* "a miss is never a guess", stated formally. OWL is open-world for the same reason, and
+the OWL 2 Primer says so directly.
+
+**And this ties the two halves of the review together.** The same Reiter citation grounds tmct's
+planner (whose operator model is **closed-world**, which is what makes a plan checkable) and its chat
+layer (which is **open-world**). One distinction, doing opposite work on opposite sides of the
+product. `docs/references/planning/STRIPS_PDDL.md` now carries that pairing.
+
+**Verdict: `extend`, and cite both, for different jobs.** "Honest miss" stays — it is what a visitor
+understands, and better than "abstention" as a product word. **Cite abstention for the goal** (it is
+the prior art a 2026 reader recognises) and **open-world/unknown for the mechanism** (it is what is
+true of the system). Claiming kinship with confidence-threshold ML would be the overclaim.
+
+`MISS_REASONS` stays `mgx:`'s: those are reasons one machine could not answer, and no standard
+enumerates them.
 
 ---
 
