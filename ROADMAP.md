@@ -118,6 +118,7 @@ status in its opening lines — read it there, because a status quoted here woul
 | [PLAN_GUESS_NUMBER.md](PLAN_GUESS_NUMBER.md) | closed-loop planning over hidden state, via belief-interval bisection |
 | [PLAN_MUD.md](PLAN_MUD.md) | persistent, shared tmct worlds over a `server:` memory backend |
 | [PLAN_NLU_BENCHMARKS.md](PLAN_NLU_BENCHMARKS.md) | scoring tmct on the CLINC150 and HWU64 intent sets |
+| [PLAN_25_BACKLOG.md](PLAN_25_BACKLOG.md) | the 2.5.0-cycle build order: the routed CONVERSATION backlog, the CEFR/AGENT follow-ups, two parser tails, two verb/test decisions, and the SKOS consumer surface |
 | [PLAN_OPEN_ITEMS.md](archive/PLAN_OPEN_ITEMS.md) | delivered — the 2.0.3-cycle build order, archived |
 | [PLAN_PARAPHRASE_VERIFICATION.md](PLAN_PARAPHRASE_VERIFICATION.md) | checking a paraphrase against the graph before it prints |
 | [PLAN_PURGE.md](archive/PLAN_PURGE.md) | delivered — promoted the load-bearing code, deleted the dead weight, archived |
