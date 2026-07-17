@@ -10568,6 +10568,22 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
 // `pending`, so the remainder is naturally cleared — no stale continuation. ----
 const PAGE = 32;
 const MORE_RE = /^(?:more|show more|see more|the rest|next|continue|go on)\b[.!?]*$/i;
+
+/** "what would break if I change X" — the impact closure asked for in the
+ *  words people use, rather than as /impact. Sibling of normalize.mjs's
+ *  COUNTERFACTUAL_RE ("if X were deleted, what would break"), which states the
+ *  same counterfactual in the other clause order and compiles to the reverse
+ *  import closure; this shape names a CHANGE rather than a deletion, so it
+ *  answers with the impact closure /impact itself renders. The verbs are a
+ *  closed set on both sides — no general "any verb in a conditional" fit. */
+const IMPACT_PARAPHRASE_RE = new RegExp(
+  "^what\\s+(?:would|will|might|could|does|do)?\\s*"
+  + "(?:breaks?|fails?|is\\s+affected|are\\s+affected|gets?\\s+affected|be\\s+affected|is\\s+impacted|be\\s+impacted)"
+  + "\\s+if\\s+(?:i|we|you|one|someone)\\s+"
+  + "(?:changed?|modif(?:y|ied)|edits?|edited|touch(?:es|ed)?|updates?|updated|alters?|altered)"
+  + "\\s+(?:the\\s+)?(.+?)[?.!\\s]*$",
+  "i",
+);
 const joinList = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}` : (a[0] ?? ""));
 
 /** Render the next page of a held remainder (pending: {items:[str], noun}). Returns a
@@ -10814,6 +10830,22 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     note(trace, "goal: continue viewing a previous long listing (pagination)");
     note(trace, "lane: MORE_RE matched a held pending remainder from the previous turn's detail.pending");
     return withLast(morePage(workingLine, ctx), "continue viewing a previous long listing");
+  }
+
+  // "what would break if I change X" / "what breaks if I touch X" — the impact
+  // closure, in the words people actually ask for it in. With no frame of its
+  // own the line reached the grammar with "break"/"breaks if i" worn away as
+  // filler, and the residue ("break I") read as a subject for the history
+  // lane's `touches` — answering who last touched a file to a question about
+  // what a change to it would reach. /impact's own closure is the answer, and
+  // its wording ("Impact of changing X") already says the change is
+  // hypothetical.
+  const impactParaphrase = workingLine.match(IMPACT_PARAPHRASE_RE);
+  if (impactParaphrase) {
+    const impactDeduced = "understand what a change to this module would reach (impact closure)";
+    note(trace, `goal: ${impactDeduced}`);
+    note(trace, `lane: IMPACT_PARAPHRASE_RE matched -> /impact ${impactParaphrase[1].trim()}`);
+    return withLast(await runCommand(`/impact ${impactParaphrase[1].trim()}`, ctx), impactDeduced);
   }
 
   // Multi-sentence pre-split — one message carrying several sentences
