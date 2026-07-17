@@ -112,6 +112,7 @@ status in its opening lines — read it there, because a status quoted here woul
 | [PLAN_CLASS_QUERY.md](PLAN_CLASS_QUERY.md) | "list/count all X of class Y", reconciled against what already shipped |
 | [PLAN_CODE.md](PLAN_CODE.md) | program synthesis over tmct's closed DSLs, plus JS/HTML/CSS fragments and goal-directed program repair |
 | [PLAN_CONSISTENCY_CHECK.md](PLAN_CONSISTENCY_CHECK.md) | tmct as a consistency service for an LLM tool loop |
+| [PLAN_DIALOGUE_ACTS.md](PLAN_DIALOGUE_ACTS.md) | naming tmct's turn types to ISO 24617-2 dialogue acts, deterministically |
 | [PLAN_EMBEDDINGS.md](PLAN_EMBEDDINGS.md) | the semantic-similarity axis, and the way back to it |
 | [PLAN_GRAPH_SCAN.md](PLAN_GRAPH_SCAN.md) | seed and query cost at `init:xl`/`init:xxl` corpus scale |
 | [PLAN_GUESS_NUMBER.md](PLAN_GUESS_NUMBER.md) | closed-loop planning over hidden state, via belief-interval bisection |

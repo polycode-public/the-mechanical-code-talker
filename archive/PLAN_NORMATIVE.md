@@ -204,12 +204,12 @@ brief excerpt under the W3C Document License — the specs themselves are not co
 
 | standard | edition | date | entry | verified |
 |---|---|---|---|---|
-| **W3C PROV-O** | Recommendation | 2013-04-30 | [`prov-o.md`](docs/references/schemas/prov-o.md) | live spec, 2026-07-17 |
-| **W3C SKOS Reference** | Recommendation | 2009-08-18 | [`skos.md`](docs/references/schemas/skos.md) | live spec + namespace RDF, 2026-07-17 |
-| **SEON `code.owl`** | no `versionInfo`; IRI says `2012/02` | mirror last commit 2013-01-23 | [`seon-code-ontology.md`](docs/references/schemas/seon-code-ontology.md) | **the OWL file itself**, fetched 2026-07-17 |
-| **ACE** | 6.7 | docs 2013-07-31 | [`ace-6.7.md`](docs/references/schemas/ace-6.7.md) | construction + interpretation rules, 2026-07-17 |
-| **ConceptNet relations** | slice pins 5.7.0; 5.8 current | 5.8 released 2020-05-20 | [`conceptnet-relations.md`](docs/references/schemas/conceptnet-relations.md) | 2026-07-04, re-checked 2026-07-17 |
-| **ISO 24617-2 (SemAF)** | **2**, current | 2020-12-02 | [`iso-24617-2-dialogue-acts.md`](docs/references/schemas/iso-24617-2-dialogue-acts.md) | **draft + editors' paper only** |
+| **W3C PROV-O** | Recommendation | 2013-04-30 | [`prov-o.md`](../docs/references/schemas/prov-o.md) | live spec, 2026-07-17 |
+| **W3C SKOS Reference** | Recommendation | 2009-08-18 | [`skos.md`](../docs/references/schemas/skos.md) | live spec + namespace RDF, 2026-07-17 |
+| **SEON `code.owl`** | no `versionInfo`; IRI says `2012/02` | mirror last commit 2013-01-23 | [`seon-code-ontology.md`](../docs/references/schemas/seon-code-ontology.md) | **the OWL file itself**, fetched 2026-07-17 |
+| **ACE** | 6.7 | docs 2013-07-31 | [`ace-6.7.md`](../docs/references/schemas/ace-6.7.md) | construction + interpretation rules, 2026-07-17 |
+| **ConceptNet relations** | slice pins 5.7.0; 5.8 current | 5.8 released 2020-05-20 | [`conceptnet-relations.md`](../docs/references/schemas/conceptnet-relations.md) | 2026-07-04, re-checked 2026-07-17 |
+| **ISO 24617-2 (SemAF)** | **2**, current | 2020-12-02 | [`iso-24617-2-dialogue-acts.md`](../docs/references/schemas/iso-24617-2-dialogue-acts.md) | **draft + editors' paper only** |
 
 `docs/references/schemas/README.md` is the index and carries the rules for adding an entry.
 

@@ -70,11 +70,28 @@ proved false. What remains:
   `syllogise` as the product-facing verb and name the mechanism accurately in the code, or rename the
   verb — the latter touches a published CLI surface (`npx tmct syllogise`), so it is the operator's
   call, not a drive-by rename.
-- **Strengthen the ontology-vocabulary test** (`PLAN_NORMATIVE.md` §7.13). The §6 vocabulary test
-  checks what the ontology documents, not what a store writes, so `mgx:factJustification` — emitted
-  by production code but declared in no ontology file — fell through both gates. The stronger test
-  diffs the props a real store actually writes against the ontology; that needs a seeded store in the
-  test, which is the `test:fast` budget's business.
+- **Strengthen the ontology-vocabulary test** (`archive/PLAN_NORMATIVE.md` §7.13). The §6 vocabulary
+  test checks what the ontology documents, not what a store writes, so `mgx:factJustification` —
+  emitted by production code but declared in no ontology file — fell through both gates. The stronger
+  test diffs the props a real store actually writes against the ontology; that needs a seeded store in
+  the test, which is the `test:fast` budget's business.
+- **Build the SKOS consumer surface** (`archive/PLAN_NORMATIVE.md` §7.6). The `buildSkosConceptView`
+  projection — one `skos:Concept` per normalised corpus term, `mgx:synonym` folded to `skos:altLabel`,
+  `mgx:relatedTo` read as `skos:related` — is proven and pinned (9 tests) but lives inside its test
+  file and nothing reads it, so the capability audit marks row 155 `partial` (tested, unreachable). To
+  close it:
+  - **build** — promote `buildSkosConceptView` into an exported `src/` module (e.g.
+    `src/domain/skos-view.mjs`) and point the 9 tests at it; wire one consumer, cheapest being a chat
+    lane for `what is related to X` / `another word for X` / `synonyms of X` that reads the term's
+    `mgx:relatedTo`/`mgx:synonym` facts and answers, missing honestly when there are none; and add a
+    tool-layer entry (`tmct_related` via `dispatchTool`) — that tier is what actually moves row 155 to
+    `implemented`.
+  - **execute** — a `test/tools/` test driving the capability, plus grammar/templates corpus rows
+    pinning the phrasings with a negative row (an unknown term misses honestly).
+  - **document** — a one-line README example, mark §7.6 LANDED, move audit row 155 to `implemented`,
+    and optionally add + pin the `mgx:relatedTo rdfs:seeAlso skos:related` ontology annotation.
+  - Caveat: it only answers on a store that holds synonym/related facts (the ConceptNet import
+    mirrors `/r/RelatedTo`, `/r/Synonym` → `mgx:`, so `init:large`+ has them; bare `init` has few).
 
 ## Discipline
 
