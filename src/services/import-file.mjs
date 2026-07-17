@@ -15,7 +15,7 @@ import { basename, resolve } from "node:path";
 import { runTurn, uuidv7 } from "./chat.mjs";
 import { loadMemory, readFactRows, appendFact, openMemoryBackend } from "../adapters/memory/core.mjs";
 import { loadConfig } from "../adapters/config.mjs";
-import { splitSentences } from "./sentences.mjs";
+import { splitSentencesPreservingPaths } from "./sentences.mjs";
 
 /**
  * Teach every sentence of `filePath` into `repoRoot`'s memory store.
@@ -34,7 +34,7 @@ export async function importDefinitionFile(repoRoot, filePath, { env = process.e
   const lines = text.split("\n");
   const commentLines = lines.filter((l) => l.trim().startsWith("#"));
   const body = lines.filter((l) => !l.trim().startsWith("#")).join("\n");
-  const sentences = splitSentences(body).map((s) => s.trim()).filter(Boolean);
+  const sentences = splitSentencesPreservingPaths(body);
 
   const { loadTomlConfig } = await import("../adapters/toml-config.mjs");
   const raw = await loadTomlConfig(root).catch(() => null);

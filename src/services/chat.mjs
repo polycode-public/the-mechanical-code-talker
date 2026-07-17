@@ -33,7 +33,7 @@ import {
   resolveCapabilityPolarity,
 } from "../domain/memory/capability.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
-import { splitSentences } from "./sentences.mjs";
+import { splitSentences, carriesASentenceBoundary } from "./sentences.mjs";
 import {
   VERB_TO_KIND, WHERE_MARKERS, MENTION_MARKERS, ENTITY_TO_TYPE, PASSIVE_PARTICIPLE_TO_KIND,
   stripTrailingScopeFiller, stripTrailingDiscourseTag, EDGE_NOUN_TO_METRIC, RELATIONS, LIST_TRIGGERS,
@@ -10716,14 +10716,6 @@ function renderAmbiguousAssert(line, ambiguous, normFactTerm) {
  *  committing to the first. Returns null for the overwhelming majority of
  *  sentences, so every single-reading sentence renders byte-identically to
  *  the unchanged parseAce path below. */
-/** Does this line actually carry a sentence boundary — a terminator, then
- *  whitespace, then the next sentence's first word? wink's own splitter breaks
- *  "src/core/store.mjs" into "src/core/store." + "mjs …", so a line naming a
- *  file splits into sentences that were never there. Requiring the whitespace
- *  keeps a dotted identifier whole, and nothing that holds no boundary is ever
- *  handed to the splitter's judgement. */
-const carriesASentenceBoundary = (line) => /[.!?]\s+\w/.test(String(line));
-
 /** Does this sentence match the general-verb teach frame on its own terms —
  *  reusing generalVerbTeach's OWN closed guards, so the split gate and the lane
  *  it feeds can never disagree about which sentences that lane accepts. */

@@ -17,3 +17,29 @@ export function splitSentences(text) {
   const doc = nlp.readDoc(raw);
   return doc.sentences().out().map((s) => s.trim()).filter(Boolean);
 }
+
+/** Does this line actually carry a sentence boundary — a terminator, then
+ *  whitespace, then the next sentence's first word? wink's own splitter breaks
+ *  "src/core/store.mjs" into "src/core/store." + "mjs …", so a line naming a
+ *  file splits into sentences that were never there. Requiring the whitespace
+ *  keeps a dotted identifier whole, and nothing that holds no boundary is ever
+ *  handed to the splitter's judgement. */
+export const carriesASentenceBoundary = (line) => /[.!?]\s+\w/.test(String(line));
+
+/** Split multi-line text into sentences the way splitSentences does, but never
+ *  let wink shatter a line that has no real sentence boundary. A bare dotted
+ *  module path (`src/core/store.mjs`) would otherwise come back as
+ *  ["src/core/store.", "mjs"]. Each line is only handed to wink when it carries
+ *  a real boundary; otherwise the trimmed line stands as one sentence. */
+export function splitSentencesPreservingPaths(text) {
+  const out = [];
+  for (const line of String(text ?? "").split("\n")) {
+    if (carriesASentenceBoundary(line)) {
+      out.push(...splitSentences(line));
+    } else {
+      const trimmed = line.trim();
+      if (trimmed) out.push(trimmed);
+    }
+  }
+  return out;
+}

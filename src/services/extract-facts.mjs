@@ -46,7 +46,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
 import { runTurn, uuidv7 } from "./chat.mjs";
-import { splitSentences } from "./sentences.mjs";
+import { splitSentencesPreservingPaths } from "./sentences.mjs";
 import { loadMemory, readFactRows, appendFact } from "../adapters/memory/core.mjs";
 import { loadConfig } from "../adapters/config.mjs";
 import { touchedFactRows } from "../domain/memory/touched-facts.mjs";
@@ -99,7 +99,7 @@ export async function main(argv = process.argv.slice(2)) {
   const filePath = resolve(process.cwd(), file);
   const text = await readFile(filePath, "utf8");
   const sourceTag = basename(filePath);
-  const sentences = splitSentences(text);
+  const sentences = splitSentencesPreservingPaths(text);
 
   const ephemeral = !repo;
   const memoryDir = repo ? resolve(process.cwd(), repo) : await mkdtemp(join(tmpdir(), "tmct-extract-"));
