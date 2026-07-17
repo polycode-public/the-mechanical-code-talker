@@ -4,6 +4,7 @@
 // Each group's label is its top shared-IDF tokens (df/N over the hit set, not the corpus).
 
 import { makeContentTokens } from "../prose.mjs";
+import { idfOver } from "../text-stats.mjs";
 import { requireInjected } from "./injected.mjs";
 
 const LABEL_TOKEN_COUNT = 5;
@@ -76,12 +77,7 @@ export function groupHits(hits, { overlapMin, store } = {}) {
   }
 
   // IDF over THIS hit set (df/N), not the whole corpus.
-  const N = ids.length;
-  const df = new Map();
-  for (const id of ids) {
-    for (const t of new Set(tokensById[id])) df.set(t, (df.get(t) || 0) + 1);
-  }
-  const idf = (t) => Math.log(1 + N / (1 + (df.get(t) || 0)));
+  const { idf } = idfOver(tokensById);
 
   const groups = [];
   for (const memberIdx of componentIdx.values()) {

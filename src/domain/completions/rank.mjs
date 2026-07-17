@@ -5,6 +5,7 @@
 // splitBlockSentences() is a simple regex splitter.
 
 import { makeContentTokens } from "../prose.mjs";
+import { idfOver } from "../text-stats.mjs";
 import { requireInjected } from "./injected.mjs";
 
 // Sentence boundary: a run of [.!?] followed by whitespace and an uppercase letter or digit
@@ -72,13 +73,7 @@ export function rankSentences(group, { overlapMin, query = null, store } = {}) {
   const degrees = degreeOf(tokensById, { overlapMin: edgeThreshold });
 
   // IDF scoped to THIS group's sentence set (df/N), not the whole corpus.
-  const ids = Object.keys(tokensById);
-  const N = ids.length;
-  const df = new Map();
-  for (const id of ids) {
-    for (const t of new Set(tokensById[id])) df.set(t, (df.get(t) || 0) + 1);
-  }
-  const idf = (t) => Math.log(1 + N / (1 + (df.get(t) || 0)));
+  const { idf } = idfOver(tokensById);
 
   const queryTokens = query ? new Set(contentTokens(query)) : null;
 

@@ -1,6 +1,7 @@
 import { lookupByProseTokens, proseLayerHits, splitIdentifierWords } from "./prose.mjs";
 import { CREATED_AT_PROP, UPDATED_AT_PROP } from "./memory/trust.mjs";
 import { isTestPath } from "./module-paths.mjs";
+import { idfWeight } from "./text-stats.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the
 // deterministic indexer writes to <repo>/.tmct/graph.json (shape produced by
@@ -758,14 +759,20 @@ function scoreModules(graph, tokens, opts = {}) {
     modules.push({ ind, label, labelLc, defines, symSet, symComps, dotted });
   }
   const N = modules.length || 1;
-  // idf = log(1 + N/(1+df)): near-zero for ubiquitous tokens, large for rare ones
+  // idf = log(1 + N/(1+df)): near-zero for ubiquitous tokens, large for rare ones.
+  // Memoized so the literalMention pass below can price candidate tokens the query
+  // tokenizer never produced without recomputing document frequency for the rest.
   const idf = new Map();
-  for (const t of tokens) {
-    if (idf.has(t)) continue;
+  const documentFrequencyOf = (t) => {
     let df = 0;
     for (const m of modules) if (m.labelLc.includes(t) || m.symComps.has(t) || m.symSet.has(t)) df++;
-    idf.set(t, Math.log(1 + N / (1 + df)));
-  }
+    return df;
+  };
+  const idfOf = (t) => {
+    if (!idf.has(t)) idf.set(t, idfWeight(N, documentFrequencyOf(t)));
+    return idf.get(t);
+  };
+  for (const t of tokens) idfOf(t);
   const scored = [];
   for (const m of modules) {
     let exactScore = 0, pathScore = 0, matchCount = 0;
@@ -797,14 +804,6 @@ function scoreModules(graph, tokens, opts = {}) {
         if (!continues(rawLc[i - 1]) && !continues(rawLc[i + cand.length])) return true;
       }
       return false;
-    };
-    const idfOf = (t) => {
-      if (!idf.has(t)) {
-        let df = 0;
-        for (const m of modules) if (m.labelLc.includes(t) || m.symComps.has(t) || m.symSet.has(t)) df++;
-        idf.set(t, Math.log(1 + N / (1 + df)));
-      }
-      return idf.get(t);
     };
     const byModId = new Map(modules.map((m) => [m.ind.id, m]));
     let maxBase = 0;

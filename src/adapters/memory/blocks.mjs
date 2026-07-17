@@ -7,6 +7,7 @@
 import { mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { splitIdentifierWords, tokenizeProse } from "../../domain/prose.mjs";
+import { idfWeight } from "../../domain/text-stats.mjs";
 import { SOURCE_PRIOR } from "../../domain/memory/trust.mjs";
 
 // A block inherits its Source's trust (operator 1.0, corpus 0.7); retrieval
@@ -182,12 +183,12 @@ export async function retrieveBlocks(dir, query, k = 3) {
   if (!qTokens.length) return [];
 
   const sets = entries.map(([, b]) => new Set(b.tokens || []));
-  // idf per query token, computed once: log(1 + N/(1+df)) — the codegraph.mjs
-  // locate weighting (~0 for ubiquitous tokens, large for rare ones).
+  // idf per query token, computed once over the block set (~0 for ubiquitous
+  // tokens, large for rare ones) — the same weighting codegraph.mjs locate uses.
   const idf = new Map(qTokens.map((t) => {
     let df = 0;
     for (const s of sets) if (s.has(t)) df += 1;
-    return [t, Math.log(1 + N / (1 + df))];
+    return [t, idfWeight(N, df)];
   }));
   const scored = [];
   for (let i = 0; i < N; i += 1) {
