@@ -54,12 +54,14 @@
 import { capabilities, effectsOf, KINDS } from "../../src/domain/router/registry.mjs";
 import { backwardChain } from "../../src/domain/router/resolver.mjs";
 
-// The resolvable entity-kind names registry.mjs's KINDS declares (the ones
-// backed by a real graph class — "seon:..." — never the free-text/enum slots
-// Query/Kind/Package). Object.keys order is registry.mjs's own declaration
-// order, so this is deterministic without an explicit sort.
+// The resolvable entity-kind names registry.mjs's KINDS declares — the ones
+// backed by a real graph class (a seon: ontology class or an mgx: code-graph
+// class), never the free-text/enum slots Query/Kind/Package, whose kinds live
+// in the cap: vocabulary and resolve to no graph entity. Object.keys order is
+// registry.mjs's own declaration order, so this is deterministic without an
+// explicit sort.
 export const FOCUS_CLASSES = Object.freeze(
-  Object.keys(KINDS).filter((k) => String(KINDS[k]).startsWith("seon:")),
+  Object.keys(KINDS).filter((k) => !String(KINDS[k]).startsWith("cap:")),
 );
 
 // The closed 2-element powerset of {"scoped","global"} minus the empty set —
