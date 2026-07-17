@@ -281,8 +281,8 @@ enabled = true
   );
 });
 
-// PLAN_SEED.md's persona flip: `code` is no longer today's IMPLICIT default
-// made explicit — it's the OLD default, now something a repo must opt back
+// `code` is no longer the IMPLICIT default made explicit — it's the OLD
+// default, now something a repo must opt back
 // INTO (seon/conceptnet ship inactive; `human` is the new implicit default —
 // see the `human`/`empty` presets below).
 test("PERSONA_PRESETS.code: re-activates seon+conceptnet (now shipped inactive), explicit neutral bias", () => {
@@ -385,7 +385,7 @@ test("bin/tmct.mjs: `tmct init --with-persona code` writes the persona, `--with-
   }
 });
 
-// ---- memory-backend CLI seam (PLAN_SEED.md §6): `tmct init --memory-backend
+// ---- memory-backend CLI seam: `tmct init --memory-backend
 // <default|memory|sqlite>` writes tmct.toml's `[memory] backend`, chat.mjs's
 // createSession reads it back at CLI-flag > env > tmct.toml > default
 // precedence (test/adapters/chat-memory-backend.test.mjs covers that resolution;
@@ -637,8 +637,8 @@ test("bin/tmct.mjs REGRESSION: a later `tmct import --corpus <id>` (no --memory-
 // string rather than the underlying mechanism). The "memory" backend keeps
 // everything in-process (no disk churn between bundles); seeded CONTENT is
 // backend-independent, so the resulting fact count matches a real disk-backed
-// `npm run init:xl`/`init:xxl` run exactly. Real measured totals (2026-07-13,
-// via the actual npm scripts, `git log`-adjacent to this batch): init:xl =
+// `npm run init:xl`/`init:xxl` run exactly. Real totals, measured via the
+// actual npm scripts: init:xl =
 // 72,075 facts (~8m25s wall-clock, `human` + persona-size large's human-
 // medium/human-large + seon + conceptnet + aws/python/java + wordnet-xl);
 // init:xxl = same base with wordnet-full swapping in for wordnet-xl, plus
@@ -708,8 +708,6 @@ test("npm run init:xl's exact bundle set seeds within ±10% of the real measured
 // wordnet-full plus the full (small, ~7,260-fact) namenet bundle, so the real
 // corpus/map conversion pipeline is exercised end to end for both of
 // `init:xxl`'s NEW bundles over `init:xl`, without paying the full-scale cost.
-// HANDOVER.md's "Version state" carries the real, honestly-measured
-// `init:xxl` total once that follow-up run completes.
 test("npm run init:xxl's bundle set: every named bundle is a recognized, activatable BUILTIN_EXTENSIONS entry", async () => {
   const dir = await tmp();
   try {
@@ -743,8 +741,8 @@ test("npm run init:xxl's NEW bundles over init:xl (wordnet-full, namenet) really
     assert.ok(perBundle["wordnet-full"]?.appended > 0, "the capped wordnet-full slice seeded real facts");
     assert.ok(perBundle["wordnet-full"].appended <= 2000, "the limit was honoured");
     assert.ok(perBundle.namenet?.appended > 0, "namenet seeded real facts");
-    // namenet's real, full-scale total (2026-07-13, via `tmct import --corpus
-    // namenet` standalone): 7,260 facts — no dedup overlap expected against an
+    // namenet's real, full-scale total, measured via `tmct import --corpus
+    // namenet` standalone: 7,260 facts — no dedup overlap expected against an
     // otherwise-empty dir's wordnet-full slice.
     assert.ok(
       perBundle.namenet.appended >= 7260 * 0.9 && perBundle.namenet.appended <= 7260 * 1.1,
