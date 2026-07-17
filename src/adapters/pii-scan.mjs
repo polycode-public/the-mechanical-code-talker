@@ -2,12 +2,12 @@
 // file in the repo. Node builtins + git only — no bare specifier — because
 // scripts/pii-lint.mjs runs in CI without npm ci.
 
-import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { looksBinary, scanText } from "../domain/pii-rules.mjs";
+import { trackedFiles } from "./tracked-files.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..");
 
@@ -25,12 +25,6 @@ const SELF_PATHS = new Set([
 function loadAllowlist() {
   const raw = JSON.parse(readFileSync(ALLOWLIST_FILE, "utf8"));
   return raw.entries.map((e) => e.match);
-}
-
-function trackedFiles() {
-  return execFileSync("git", ["ls-files", "-z"], { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
-    .split("\0")
-    .filter(Boolean);
 }
 
 export function scanRepo() {

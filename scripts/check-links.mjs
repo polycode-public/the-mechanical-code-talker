@@ -9,26 +9,20 @@
 //
 //   node scripts/check-links.mjs
 
-import { execFileSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { relativeTargets } from "../src/domain/markdown-links.mjs";
+import { trackedFiles } from "../src/adapters/tracked-files.mjs";
 
 export { relativeTargets };
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
-function trackedMarkdownFiles() {
-  return execFileSync("git", ["ls-files", "-z", "*.md"], { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 64 * 1024 * 1024 })
-    .split("\0")
-    .filter(Boolean);
-}
-
 export function brokenLinks() {
   const broken = [];
-  for (const file of trackedMarkdownFiles()) {
+  for (const file of trackedFiles("*.md")) {
     const markdown = readFileSync(join(REPO_ROOT, file), "utf8");
     for (const { target, line } of relativeTargets(markdown)) {
       const resolved = join(REPO_ROOT, dirname(file), target);
