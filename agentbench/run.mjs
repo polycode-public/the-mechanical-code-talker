@@ -64,20 +64,8 @@ export const DRIVER_TIMEOUT_MS = 20000;
 // is identical to the sequential loop. Override with --concurrency.
 export const DEFAULT_CONCURRENCY = 8;
 
-/** Run `worker(item)` over items with bounded concurrency, preserving order
- *  (results[i] by index — copied from chatbench/judge.mjs's pool). */
-export async function pool(items, limit, worker) {
-  const results = new Array(items.length);
-  let next = 0;
-  const lane = async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await worker(items[i], i);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) || 1 }, lane));
-  return results;
-}
+import { pool } from "../benchlib/bench.mjs";
+export { pool };
 
 // Drivers whose rows are a FLOOR, not the router baseline — the runner prints a
 // caveat banner for each so the real engine is never measured against a

@@ -237,19 +237,8 @@ export function computeSummary(productRows, judgedRows, { stamp, samples } = {})
 
 // ---- the fan-out ----
 
-/** Run `worker(item)` over items with bounded concurrency, preserving order. */
-export async function pool(items, limit, worker) {
-  const results = new Array(items.length);
-  let next = 0;
-  const lane = async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await worker(items[i], i);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) || 1 }, lane));
-  return results;
-}
+import { pool } from "../benchlib/bench.mjs";
+export { pool };
 
 function parseJsonl(text) {
   return String(text).split("\n").filter((l) => l.trim()).map((l) => JSON.parse(l));

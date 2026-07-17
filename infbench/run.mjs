@@ -45,20 +45,8 @@ export const BENCH_VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"),
 // heavier per-item than agentbench's stateless dispatchTool — kept modest.
 export const DEFAULT_CONCURRENCY = 6;
 
-/** Run `worker(item)` over items with bounded concurrency, preserving order
- *  (results[i] by index — copied from agentbench/chatbench's pool()). */
-export async function pool(items, limit, worker) {
-  const results = new Array(items.length);
-  let next = 0;
-  const lane = async () => {
-    while (next < items.length) {
-      const i = next++;
-      results[i] = await worker(items[i], i);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(limit, items.length) || 1 }, lane));
-  return results;
-}
+import { pool } from "../benchlib/bench.mjs";
+export { pool };
 
 const VOLATILE_PROVENANCE = /ace:chat:[0-9a-f-]{36}@\d{4}-\d{2}-\d{2}T[0-9:.]+Z/gi;
 
