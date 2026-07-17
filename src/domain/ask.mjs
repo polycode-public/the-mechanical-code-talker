@@ -112,6 +112,16 @@ function verbFor(kind) {
   return REVERSE_MISS_VERB[kind] || kind;
 }
 
+// The base (plural-subject) verb form a universal-over-a-set answer reads with:
+// "all modules IMPORT X" / "…do not IMPORT X", not the stored 3rd-person
+// "imports". Keyed on the stored relation kind, curated alongside the vocabulary.
+const PLURAL_SUBJECT_VERB = {
+  imports: "import", calls: "call", callsSymbol: "call", inherits: "inherit from",
+  contains: "contain", tests: "test", touches: "touch", cochange: "cochange",
+  reexports: "export", uses: "use",
+};
+const pluralVerbFor = (kind) => PLURAL_SUBJECT_VERB[kind] || verbFor(kind);
+
 // Strips a leading relation verb from the tests-kind honest-empty object
 // ("do any tests touch f.mjs" -> object "touch f.mjs"), so the miss template
 // doesn't render "No tests cover touch f.mjs." Longest phrase first.
@@ -212,6 +222,7 @@ function parseComposite(text, nlp) {
   const lc = w.map((x) => x.toLowerCase());
   return parseExistence(w, lc)
     || parseQualifierCheck(w, lc)
+    || parseUniversal(w, lc, nlp)
     || parseNegation(text, nlp, 0)
     || parseNegatedAsk(w, lc)
     || parseForwardNegation(w, lc, nlp)
@@ -239,6 +250,42 @@ function complementAst(entityType, diffAtom) {
       { op: "seed", kind: "set", ast: { node: "allOfClass", entityType } },
       diffAtom,
     ],
+  };
+}
+
+// Universal over a set: "do all <kind> <verb> X" / "does every module import X"
+// holds iff the bounded complement (the <kind> that do NOT <verb> X) is empty;
+// a non-empty complement is a grounded "no" that names the counterexamples.
+// Reuses the very allOfClass-minus-positive complement parseNegation builds for
+// "which <kind> do not <verb> X", so the two shapes can never disagree on the
+// set they compute. The object is grounded at eval — an unknown one still misses
+// honestly rather than reading every member as a counterexample.
+const UNIVERSAL_DET = new Set(["all", "every", "each"]);
+function parseUniversal(w, lc, nlp) {
+  if (!["do", "does", "did"].includes(lc[0])) return null;   // needs the polar auxiliary
+  if (!UNIVERSAL_DET.has(lc[1])) return null;                // needs a universal determiner
+  const noun = entityNoun(lc[2]);
+  if (!noun || noun.placeholder || !noun.entityType) return null;  // needs a concrete kind noun
+  const entityType = noun.entityType;
+  if (entityType === "Change") {
+    return { node: "miss", reason: `"${lc[2]}" isn't an enumerable kind — a universal check needs a concrete kind (functions, classes, modules, …)` };
+  }
+  const entWord = lc[2];
+  const predWords = w.slice(3);
+  const predLc = lc.slice(3);
+  if (!predWords.length) return null;
+  const vh = findPhrase(predLc, VERB_TO_KIND);
+  if (!vh) return { node: "miss", reason: "a universal check needs a known relation verb (import, call, inherit from, test, …)" };
+  const objWords = predWords.filter((_, i) => (i < vh.start || i >= vh.end) && !STOPWORDS.has(predLc[i]) && predLc[i] !== "from");
+  const object = objWords.join(" ").trim();
+  if (!object) return null;                                  // "do all modules import" — no object to ground against
+  const positive = parseSetPhrase(`which ${entWord} ${predWords.join(" ")}`, nlp, 1);
+  if (!positive || positive.node === "miss") {
+    return { node: "miss", reason: (positive && positive.reason) || "the universal clause didn't parse" };
+  }
+  return {
+    node: "universal", entityType, kind: vh.kind, object,
+    complement: complementAst(entityType, { op: "difference", kind: "set", ast: positive }),
   };
 }
 
@@ -1826,12 +1873,32 @@ function evalQualCheck(graph, ast, opts) {
   return { compositeKind: "qualCheck", subject: r.match, qualifier, negated, holds, matches: [r.match] };
 }
 
+/** Universal-over-a-set: the object is grounded first (an unknown one is an
+ *  honest miss, never a blanket "no"), then the answer is read off the bounded
+ *  complement — empty means every member satisfies it, non-empty is the "no"
+ *  whose members are the counterexamples. */
+function evalUniversal(graph, ast, opts) {
+  const r = resolveObject(graph, ast.object);
+  if (!r || !r.match) {
+    return { compositeKind: "universal", universalMiss: "unresolved", object: ast.object, matches: [] };
+  }
+  const all = evalSet(graph, { node: "allOfClass", entityType: ast.entityType }, opts);
+  const counter = evalBoolean(graph, ast.complement, opts);
+  const holds = counter.length === 0;
+  return {
+    compositeKind: "universal", entityType: ast.entityType, kind: ast.kind,
+    object: r.match.label, holds, total: all.length, counter,
+    matches: holds ? all : counter,
+  };
+}
+
 /** Compile any compositional AST to a result object traverse() returns for the
  *  simple path — {matches, …} plus compositeKind/compositeMiss flags render() reads. */
 function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "miss") return { compositeMiss: true, reason: ast.reason || null, matches: [] };
   if (ast.node === "exists") return evalExists(graph, ast);
   if (ast.node === "qualCheck") return evalQualCheck(graph, ast, opts);
+  if (ast.node === "universal") return evalUniversal(graph, ast, opts);
   if (ast.node === "count") return { compositeKind: "count", count: evalSet(graph, ast.base, opts).length, entityType: ast.entityType, matches: [] };
   if (ast.node === "list") return { compositeKind: "list", matches: evalSet(graph, ast.base, opts), entityType: ast.entityType, scoped: ast.scoped };
   if (ast.node === "superlative") return evalSuperlative(graph, ast);
@@ -1930,6 +1997,21 @@ function renderComposite(parsed, result, graph) {
     return {
       content: `${result.holds ? "Yes" : "No"} — ${label} is ${result.holds ? truePhrase : falsePhrase}.`,
       miss: false, ambiguous: false, matches: result.matches,
+    };
+  }
+  if (result.compositeKind === "universal") {
+    if (result.universalMiss === "unresolved") {
+      return { content: `couldn't find "${result.object}" in the index to check.`, miss: true, ambiguous: false, matches: [] };
+    }
+    const kindPlural = nounFor(result.entityType, result.total);
+    const verb = pluralVerbFor(result.kind);
+    if (result.holds) {
+      return { content: `Yes — all ${result.total} ${kindPlural} ${verb} ${result.object}.`, miss: false, ambiguous: false, matches: result.matches };
+    }
+    const n = result.counter.length;
+    return {
+      content: `No — ${n} of ${result.total} ${kindPlural} do not ${verb} ${result.object}: ${compositeList(result.counter)}.`,
+      miss: false, ambiguous: false, matches: result.counter,
     };
   }
   if (result.compositeKind === "count") {

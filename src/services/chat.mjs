@@ -467,6 +467,9 @@ const COUNT_TAIL_FILLER = new Set([
   "exist", "exists", "existing", "present", "here", "now", "currently",
   "graph", "index", "codebase", "repo", "repository", "memory",
   "that", "this", "known", "recorded", "listed", "stored",
+  // trailing discourse particles — "…are there then", "…anyway" — never restrict a count
+  "then", "so", "uh", "um", "er", "eh", "well", "though", "anyway", "anyhow",
+  "again", "really", "actually", "maybe", "perhaps", "just", "simply", "rather", "please",
 ]);
 
 /** A count tail past the kind noun carries a real restrictor — one the header

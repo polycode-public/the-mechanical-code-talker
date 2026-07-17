@@ -3760,7 +3760,7 @@ ${shown.join("\n")}${tail}`;
   function parseComposite(text, nlp) {
     const w = splitWords(text);
     const lc = w.map((x) => x.toLowerCase());
-    return parseExistence(w, lc) || parseQualifierCheck(w, lc) || parseNegation(text, nlp, 0) || parseNegatedAsk(w, lc) || parseForwardNegation(w, lc, nlp) || parseTemporal(w, lc, nlp, 0) || parseCommitFilter(w, lc) || parseAnaphora(w, lc, nlp) || parseAggregate(w, lc, nlp) || parseSuperlative(w, lc, nlp) || parseFind(w, lc, nlp, 0) || parseList(w, lc, nlp, 0) || parseNested(w, lc, nlp, 0) || parsePluralAnaphoraObject(w, lc, nlp) || parseRelationalOrQualified(w, lc, nlp, 0);
+    return parseExistence(w, lc) || parseQualifierCheck(w, lc) || parseUniversal(w, lc, nlp) || parseNegation(text, nlp, 0) || parseNegatedAsk(w, lc) || parseForwardNegation(w, lc, nlp) || parseTemporal(w, lc, nlp, 0) || parseCommitFilter(w, lc) || parseAnaphora(w, lc, nlp) || parseAggregate(w, lc, nlp) || parseSuperlative(w, lc, nlp) || parseFind(w, lc, nlp, 0) || parseList(w, lc, nlp, 0) || parseNested(w, lc, nlp, 0) || parsePluralAnaphoraObject(w, lc, nlp) || parseRelationalOrQualified(w, lc, nlp, 0);
   }
   function complementAst(entityType, diffAtom) {
     return {
@@ -3770,6 +3770,36 @@ ${shown.join("\n")}${tail}`;
         { op: "seed", kind: "set", ast: { node: "allOfClass", entityType } },
         diffAtom
       ]
+    };
+  }
+  function parseUniversal(w, lc, nlp) {
+    if (!["do", "does", "did"].includes(lc[0])) return null;
+    if (!UNIVERSAL_DET.has(lc[1])) return null;
+    const noun = entityNoun(lc[2]);
+    if (!noun || noun.placeholder || !noun.entityType) return null;
+    const entityType = noun.entityType;
+    if (entityType === "Change") {
+      return { node: "miss", reason: `"${lc[2]}" isn't an enumerable kind \u2014 a universal check needs a concrete kind (functions, classes, modules, \u2026)` };
+    }
+    const entWord = lc[2];
+    const predWords = w.slice(3);
+    const predLc = lc.slice(3);
+    if (!predWords.length) return null;
+    const vh = findPhrase(predLc, VERB_TO_KIND);
+    if (!vh) return { node: "miss", reason: "a universal check needs a known relation verb (import, call, inherit from, test, \u2026)" };
+    const objWords = predWords.filter((_, i) => (i < vh.start || i >= vh.end) && !STOPWORDS2.has(predLc[i]) && predLc[i] !== "from");
+    const object = objWords.join(" ").trim();
+    if (!object) return null;
+    const positive = parseSetPhrase(`which ${entWord} ${predWords.join(" ")}`, nlp, 1);
+    if (!positive || positive.node === "miss") {
+      return { node: "miss", reason: positive && positive.reason || "the universal clause didn't parse" };
+    }
+    return {
+      node: "universal",
+      entityType,
+      kind: vh.kind,
+      object,
+      complement: complementAst(entityType, { op: "difference", kind: "set", ast: positive })
     };
   }
   function parseNegation(text, nlp, depth = 0) {
@@ -4948,10 +4978,30 @@ ${shown.join("\n")}${tail}`;
     const holds = negated ? !rawHolds : rawHolds;
     return { compositeKind: "qualCheck", subject: r.match, qualifier, negated, holds, matches: [r.match] };
   }
+  function evalUniversal(graph, ast, opts) {
+    const r = resolveObject(graph, ast.object);
+    if (!r || !r.match) {
+      return { compositeKind: "universal", universalMiss: "unresolved", object: ast.object, matches: [] };
+    }
+    const all = evalSet(graph, { node: "allOfClass", entityType: ast.entityType }, opts);
+    const counter = evalBoolean(graph, ast.complement, opts);
+    const holds = counter.length === 0;
+    return {
+      compositeKind: "universal",
+      entityType: ast.entityType,
+      kind: ast.kind,
+      object: r.match.label,
+      holds,
+      total: all.length,
+      counter,
+      matches: holds ? all : counter
+    };
+  }
   function evalComposite(graph, ast, opts = {}) {
     if (ast.node === "miss") return { compositeMiss: true, reason: ast.reason || null, matches: [] };
     if (ast.node === "exists") return evalExists(graph, ast);
     if (ast.node === "qualCheck") return evalQualCheck(graph, ast, opts);
+    if (ast.node === "universal") return evalUniversal(graph, ast, opts);
     if (ast.node === "count") return { compositeKind: "count", count: evalSet(graph, ast.base, opts).length, entityType: ast.entityType, matches: [] };
     if (ast.node === "list") return { compositeKind: "list", matches: evalSet(graph, ast.base, opts), entityType: ast.entityType, scoped: ast.scoped };
     if (ast.node === "superlative") return evalSuperlative(graph, ast);
@@ -5035,6 +5085,23 @@ ${shown.join("\n")}${tail}`;
         miss: false,
         ambiguous: false,
         matches: result.matches
+      };
+    }
+    if (result.compositeKind === "universal") {
+      if (result.universalMiss === "unresolved") {
+        return { content: `couldn't find "${result.object}" in the index to check.`, miss: true, ambiguous: false, matches: [] };
+      }
+      const kindPlural = nounFor(result.entityType, result.total);
+      const verb = pluralVerbFor(result.kind);
+      if (result.holds) {
+        return { content: `Yes \u2014 all ${result.total} ${kindPlural} ${verb} ${result.object}.`, miss: false, ambiguous: false, matches: result.matches };
+      }
+      const n = result.counter.length;
+      return {
+        content: `No \u2014 ${n} of ${result.total} ${kindPlural} do not ${verb} ${result.object}: ${compositeList(result.counter)}.`,
+        miss: false,
+        ambiguous: false,
+        matches: result.counter
       };
     }
     if (result.compositeKind === "count") {
@@ -6515,7 +6582,7 @@ ${lines.join("\n")}`;
       }
     };
   }
-  var askEdgesOfKindCache, SYMBOL_GRAIN_SIBLING, FINE_ENTITY_TYPES, FINE_CLASS_SIBLING, KIND_UNIONS, kindsFor, OVERFLOW_CAP, PLURAL_FORMS, REVERSE_MISS_VERB, LEADING_RELATION_VERB_RE, FROZEN_META_AMBIGUOUS_TERMS, MAX_COMPOSE_DEPTH, NEST_SENTINEL, PRED_LEAD_SKIP, FRAME_WORDS, COPULA_WORDS, entityNoun, isGerundVerb, FWD_NEG_FRAME, PLURAL_ANAPHORA_OBJECT, TEMPORAL_AUX, TEMPORAL_TAIL, TEMPORAL_TRAIL_FILLER, TEMPORAL_DET, COMMIT_FILTER_OPS, ANAPHORA_NAME_TOKEN_RE, AGG_TAIL_FILLER, LIST_SKIP, LIST_TRIGGERS_SORTED, LISTABLE_KINDS, SCOPE_PREPOSITIONS, FIND_LINKERS, RECENT_COMMIT_LEAD, qualCache, META_FALLBACK_CLASSES, inheritsApplicableCache, FIND_TIER, oppositeQualifierSpec, DEGREE_KINDS, COMMIT_FILTER_DATE_RE, compositeList, LEADING_ARTICLE_RE, TRAILING_GRAIN_WORD_RE, ENTRY_POINT_QUERY_RE, ENTRY_POINT_BASENAMES, TEST_FIXTURE_PATH_SEGMENTS, moduleStemOf, isTestFixturePath, TRANSITIVE_MAX_DEPTH, CONTENT_VOCAB, STRUCTURAL_WORDS, CASCADE_NOISE_SET, NOISE_OR_SCAFFOLD, TRIGGER_FUZZY_WORDS, CASCADE_FUZZY_TARGETS, LAST_COMMIT_PHRASE_RE, BARE_WHEN_COMMIT_RE, DYNAMIC_LIST_TRIGGER_RE, DYNAMIC_COUNT_TRIGGER_RE, DYNAMIC_TAIL_OK_RE, BARE_META_WHATIS_RE, WHATIS_FOR_FALLBACK_RE;
+  var askEdgesOfKindCache, SYMBOL_GRAIN_SIBLING, FINE_ENTITY_TYPES, FINE_CLASS_SIBLING, KIND_UNIONS, kindsFor, OVERFLOW_CAP, PLURAL_FORMS, REVERSE_MISS_VERB, PLURAL_SUBJECT_VERB, pluralVerbFor, LEADING_RELATION_VERB_RE, FROZEN_META_AMBIGUOUS_TERMS, MAX_COMPOSE_DEPTH, NEST_SENTINEL, PRED_LEAD_SKIP, FRAME_WORDS, COPULA_WORDS, entityNoun, isGerundVerb, UNIVERSAL_DET, FWD_NEG_FRAME, PLURAL_ANAPHORA_OBJECT, TEMPORAL_AUX, TEMPORAL_TAIL, TEMPORAL_TRAIL_FILLER, TEMPORAL_DET, COMMIT_FILTER_OPS, ANAPHORA_NAME_TOKEN_RE, AGG_TAIL_FILLER, LIST_SKIP, LIST_TRIGGERS_SORTED, LISTABLE_KINDS, SCOPE_PREPOSITIONS, FIND_LINKERS, RECENT_COMMIT_LEAD, qualCache, META_FALLBACK_CLASSES, inheritsApplicableCache, FIND_TIER, oppositeQualifierSpec, DEGREE_KINDS, COMMIT_FILTER_DATE_RE, compositeList, LEADING_ARTICLE_RE, TRAILING_GRAIN_WORD_RE, ENTRY_POINT_QUERY_RE, ENTRY_POINT_BASENAMES, TEST_FIXTURE_PATH_SEGMENTS, moduleStemOf, isTestFixturePath, TRANSITIVE_MAX_DEPTH, CONTENT_VOCAB, STRUCTURAL_WORDS, CASCADE_NOISE_SET, NOISE_OR_SCAFFOLD, TRIGGER_FUZZY_WORDS, CASCADE_FUZZY_TARGETS, LAST_COMMIT_PHRASE_RE, BARE_WHEN_COMMIT_RE, DYNAMIC_LIST_TRIGGER_RE, DYNAMIC_COUNT_TRIGGER_RE, DYNAMIC_TAIL_OK_RE, BARE_META_WHATIS_RE, WHATIS_FOR_FALLBACK_RE;
   var init_ask = __esm({
     "src/domain/ask.mjs"() {
       init_codegraph();
@@ -6553,6 +6620,19 @@ ${lines.join("\n")}`;
         Rule: ["rule", "rules"]
       };
       REVERSE_MISS_VERB = { cochange: "cochanges", reexports: "export" };
+      PLURAL_SUBJECT_VERB = {
+        imports: "import",
+        calls: "call",
+        callsSymbol: "call",
+        inherits: "inherit from",
+        contains: "contain",
+        tests: "test",
+        touches: "touch",
+        cochange: "cochange",
+        reexports: "export",
+        uses: "use"
+      };
+      pluralVerbFor = (kind) => PLURAL_SUBJECT_VERB[kind] || verbFor(kind);
       LEADING_RELATION_VERB_RE = new RegExp(
         `^(?:${Object.keys(VERB_TO_KIND).sort((a, b) => b.length - a.length).map((v) => v.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})(?:s|ing|ed)?\\s+`,
         "i"
@@ -6565,6 +6645,7 @@ ${lines.join("\n")}`;
       COPULA_WORDS = /* @__PURE__ */ new Set(["are", "is", "was", "were"]);
       entityNoun = (w) => ENTITY_TO_TYPE[w] ? { entityType: ENTITY_TO_TYPE[w], placeholder: false } : PLACEHOLDER_NOUNS.includes(w) ? { entityType: null, placeholder: true } : null;
       isGerundVerb = (w) => !!VERB_TO_KIND[w] && w.endsWith("ing");
+      UNIVERSAL_DET = /* @__PURE__ */ new Set(["all", "every", "each"]);
       FWD_NEG_FRAME = /* @__PURE__ */ new Set(["what", "which", "thing", "things", "one", "ones", "stuff"]);
       PLURAL_ANAPHORA_OBJECT = /* @__PURE__ */ new Set(["those", "them"]);
       TEMPORAL_AUX = /* @__PURE__ */ new Set(["did", "was", "were", "do", "does", "has", "have", "had"]);

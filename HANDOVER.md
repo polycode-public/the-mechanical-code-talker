@@ -16,7 +16,9 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-17)
 
-v2.4.2 in the working tree, unpushed. CI publishes on a version bump on main.
+v2.4.3 in the working tree. The 2.4.2 backlog is pushed to `origin/main`; the 2.4.3 round (the two
+parser defects, Phase 7 pins, §7.5/§7.6, N1) is committed locally and awaits its own push. CI
+publishes on a version bump on main.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
@@ -42,10 +44,6 @@ parser defects (the multi-sentence teach bullet and the silent count-restrictor 
 two leftover rows (the `runChat` block and the `repository-interface.md` prose, both now pinned),
 and `PLAN_NORMATIVE.md` §7.5 (the PROV Source split) and §7.6 (the SKOS derived-view). What remains:
 
-- **N1 — universal quantifier over a module set.** `do all modules import X` fails on a duplicated
-  ambiguous parse; wire it to the set-complement machinery `which modules do not import X` already
-  has. Found by the 2.0.3 benchmark re-audit (`BENCHMARK_CONVERSATION` item 17), not previously
-  tracked. See `PLAN_OPEN_ITEMS.md`.
 - **N2 / N3 — two stale-doc corrections** the benchmark re-audit surfaced, not yet folded into
   Phase 5: `PLAN_PARAPHRASE_VERIFICATION.md` frames an already-chat-wired slice as future (and no
   corpus row pins that surface), and `PLAN_SYLLOGIST_EL_DL.md` still lists the shipped-and-archived
