@@ -1,5 +1,11 @@
 # HANDOVER — current state & kickoff
 
+**Every item here is DONE or OPEN — there is no in-between, and nothing is deferred.** Work we decide
+not to do is deleted from scope, never negated in place or held as deferred. A chunk that is
+delivered but still has a real remainder stays OPEN, with the remainder recorded in
+`CLAUDES_LAST_RESORT_IS_TO_HIDE_THINGS_HERE_IDEALLY_YOU_COMPLETE_A_TASK_OR_NOT_BUT_DO_NOT_DEFER.md`.
+Prefer deleting a sentence to negating it.
+
 Living handover. Any session resumes from here. **Plan of record: `ROADMAP.md`** — read its
 "What tmct is" and "What's next" sections for the full feature-level picture. This file holds ONLY
 what to do next. Completed work is not narrated here; `git log`, the `BENCHMARK_*.md` reports and
@@ -35,34 +41,14 @@ Phases 1–7 and 10 are closed. This session landed the §7 vocabulary fallout (
 citations, the SEON renames, `cap:`/`taught:`, the OSA rename, the storage-vocab renames, the
 honest-miss citation) and the 64-bit `factIdFor` migration, with the full suite green. What remains:
 
-- **Phase 7's two leftover rows** (tracked in `docs/public-examples.md`): three `dom`-tier
-  `index.html` rows (install line, CLI verbs, the `runChat` library block — `runChat` the one worth
-  pinning) where a browser test asserts the page shows a string but nothing asserts the product
-  agrees; and `docs/repository-interface.md`'s prose contract numbers, unpinned (the schema beside
-  them is pinned to the source const).
-- **Phase 8 — tested-capability claims on the public surfaces.** Operator decision (2026-07-17):
-  NOT a new page — put the claims in the two existing public surfaces only, `README.md` and the
-  GitLab home page (`public/index.html`). Every claim carries its evidence in place: the score with
-  units, the version it was measured at (2.0.3), the date, a link to the method
-  (`SKILL_BENCHMARK_*.md`), and its caveat. The internal `CAPABILITIES_<version>.md` audit (run via
-  `SKILL_CAPABILITIES_AUDIT.md`) stays the source of truth; it is stale at 2.0.3 and wants a refresh.
-- **Phase 9 — the plain-prose pass** over the same two surfaces, to `SKILL_PLAIN_PROSE.md`, done
-  together with Phase 8. May rewrite prose freely; may not change an asserted fenced block's input
-  or output without re-running the README harness.
-- **Loose ends** (fold into the Phase 8/9 pass, or their own commit):
-  - `README.md:942-943` calls the Repository Interface "versioned (1.0.0)"; it is **1.1.0**.
-  - `test/fixtures/{entities-repo,large-scale}/.tmct/graph.json` still embed `seon:subKind` where the
-    generators emit `mgx:subKind`; inert, but Phase 8 reads schema tokens. No generator for these two
-    (like the example graphs) — hand-edit + check the `SchemaPredicate` description. Both pairs of
-    unguarded fixture graphs want a drift guard.
-  - `splitSentences` mis-splits a module path in `extract-facts.mjs` and `import-file.mjs`; the
-    `chat.mjs` teach path already guards it with a real-boundary check.
-  - 3 CHATBENCH cells are graded but absent from `GRADED_MATRIX` (`A2:assert-recall`, `B1:svo-query`,
-    `B1:noise+svo-query`) — coverage is 9 of 36 declared, not 12.
-- **Two vocabulary items still open** (`PLAN_NORMATIVE.md` §7.5/§7.6): the PROV Source split — a
-  read-side reclassification derivable from the `sourceType` already stored on every Source
-  individual — and SKOS concept identity, which needs concept identity for the corpus's bare-string
-  terms before `skos:related` applies.
+- **Phase 8 / Phase 9 — capability claims + plain-prose pass on `README.md` and the home page.**
+  OPEN. Two questions must be answered before the claims are verified; both are in
+  `CLAUDES_LAST_RESORT_IS_TO_HIDE_THINGS_HERE_IDEALLY_YOU_COMPLETE_A_TASK_OR_NOT_BUT_DO_NOT_DEFER.md`.
+- **Phase 7's two leftover rows** (in `docs/public-examples.md`): three `dom`-tier `index.html` rows
+  (`runChat` the one worth pinning) and `docs/repository-interface.md`'s prose contract numbers.
+- **`PLAN_NORMATIVE.md` §7.5 / §7.6.** The PROV Source split (a read-side reclassification off the
+  `sourceType` stored on every Source individual) and SKOS concept identity (needs concept identity
+  for the corpus's bare-string terms before `skos:related` applies).
 ### Next-cycle recommendations the benchmarks made
 
 - **Re-measure CEFR at N=2 and report the cell table, not the marginals.** 2.0.3 ran N=1 by operator
