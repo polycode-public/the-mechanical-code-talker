@@ -178,7 +178,7 @@ function assertExpectation(exp, turn, rowId, preds = predicates, allTurns = []) 
   }
 }
 
-async function runChatRow(row, preds = predicates) {
+export async function runChatRow(row, preds = predicates) {
   const setup = row.setup ?? {};
   const scratchDir = await mkdtemp(path.join(tmpdir(), "tmct-corpus-"));
   try {

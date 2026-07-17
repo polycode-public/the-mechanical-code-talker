@@ -32,24 +32,35 @@ Mid-task, survey the test estate and run only what your change can actually reac
 worktree does the same, and keeps doing it when it commits: a worktree commit is a checkpoint, not
 a release.
 
-Two moments earn the full `npm test`, and they are the same moment wearing two hats — the change
-is about to become someone else's problem:
+**Only one moment earns the full `npm test`: when the change is about to become someone else's
+problem.** That is a commit to `main`, or a commit to a branch that has a remote — anything that can
+reach CI or another person. The full suite's job is to protect the CI build and the next person, and
+nowhere else. A worktree commit, a checkpoint, a commit you won't push alone: none of them qualify.
 
-- **a commit to `main`**, and
-- **a commit to a branch that has a remote** — anything that can reach CI or another person.
+Everything before that moment is your own iteration loop, and the full suite is minutes of it, every
+time. The point of the rungs below is not to skip checking — it is to catch anything that could
+reasonably be expected to fail *now*, in seconds, so you don't round-trip through a red CI later.
 
-Everything before those is your own iteration loop, and the full suite is minutes of it, every
-time. Pick the files instead. `node --test test/tools/ask.test.mjs` costs seconds.
-`node --test "test/estate/*.test.mjs"` costs seconds. Running all of it to check a one-line edit
-is a habit, not a check.
+### The four rungs
 
-**Sub-agents are the strict case.** They are the most expensive place to run a full suite — several
-run at once, each paying the whole cost — and the least likely to need it, because they own a slice
-of the tree by construction. A sub-agent running `npm test` is usually spending minutes confirming
-something its own range cannot break. Say so in the dispatch brief: name the files that agent
-should run, and tell it to cite the coordinator's count rather than re-earn it.
+| rung | when | cost |
+|---|---|--:|
+| `npm run test:smoke` | after any edit. The reflex; no excuse not to | ~0.6s |
+| `npm run test:fast` | before a worktree/checkpoint commit, and for **any sub-agent** | ~1.8s |
+| the blast radius | alongside `test:fast`, for whatever you actually touched | seconds |
+| `npm test` | a commit to `main`, or to a branch with a remote | minutes |
 
-How to find the radius, in order:
+`test:smoke` is one test per capability family — direction, the miss wall, ambiguity, the canonical
+restatement, teach/recall/proof — chosen so a failure means the build is broken rather than subtly
+wrong. `test:fast` adds a sample row from every chat lane and the tool-layer contract, 172 tests in
+all. Both are named after their budgets and
+`test/estate/tier-budgets.test.mjs` holds them to it. **A tier that breaks its budget is a bug in
+the tier — cut its content, never raise the number.** (Those figures are the tier's own work;
+`npm run` adds ~0.7s of wrapper on top, so time `node --test …` directly if you're measuring.)
+
+### Finding the radius
+
+In order:
 
 - the file you edited, and whatever imports it;
 - its keyed corpus rows — `node scripts/corpus-matrix.mjs` prints the key × lane map;
@@ -57,6 +68,24 @@ How to find the radius, in order:
   table, the page version stamp) — these fail on drift, so a change that regenerates one is exactly
   where a targeted run pays;
 - whatever the change's own reason names.
+
+`node --test test/tools/ask.test.mjs` costs 0.4s for 125 assertions.
+`node --test "test/estate/*.test.mjs"` costs seconds. Running all of it to check a one-line edit is
+a habit, not a check.
+
+### Two names for "smoke"
+
+`smoke:deploy` already owns the word in this repo and means something else entirely — a probe
+against a **deployed site**, after a release. `test:smoke` is the 1-second tier in the `test:*`
+namespace and never touches the network. They don't collide mechanically; they do collide in a
+reader skimming `npm run`. Say which you mean.
+
+**Sub-agents are the strict case.** They are the most expensive place to run a full suite — several
+run at once, each paying the whole cost — and the least likely to need it, because they own a slice
+of the tree by construction. A sub-agent running `npm test` is usually spending minutes confirming
+something its own range cannot break. Say so in the dispatch brief: name the files that agent
+should run, and tell it to cite the coordinator's count rather than re-earn it. `test:fast` is the
+rung that replaces the full suite for them.
 
 Two traps this rule does not excuse. A radius you cannot see is a real reason to run the suite, and
 the only one — write down that you could not see it. And a shared, generated artifact is wider than
