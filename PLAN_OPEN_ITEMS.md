@@ -95,7 +95,7 @@ commit that reaches `main` or a remote.
 | **4** — the instruments | **DONE** (4.1-4.5) | `6ed8f41`, `cee3ebe`, `ee6ddf3`, `a46d92a`, `7b74431` |
 | **5** — wrong documents | **DONE** | `bf6732c` |
 | PLAN_DEPS batches 1-2, 4-7 | **DONE** | `c2ded65`, `f2d7e27`, `488aa84`, `5824c66`, `2ccee08` |
-| **3** — honest-miss gaps | **IN PROGRESS** — 3.1 done; 3.2-3.11 open | `b1f14a0` |
+| **3** — honest-miss gaps | **IN PROGRESS** — 3.1, 3.3 done; rest open | `b1f14a0`, 3.3 below |
 | **7** — public-surface audit | **OPEN** — nothing started | — |
 | **8** — capability page | **OPEN** — nothing started | — |
 | **9** — prose pass | **OPEN** — nothing started | — |
@@ -558,23 +558,29 @@ and the same lemmatizer the teach frames already use. This is symmetry, not new 
 **Pins.** `grammar.jsonl` keyed `grammar.quantifier.ask-symmetry` — teach with a quantifier, ask
 with each of `every|all|any`, assert all agree with the bare form.
 
-### 3.3 An unparsed turn wipes the anaphora referent
+### 3.3 An unparsed turn wipes the anaphora referent — **DONE**
 
-```txt
-tmct> what is a dog        → answers
-tmct> go back to dogs      → couldn't parse
-tmct> can it bark          → not sure what "it" refers to yet
-```
+The referent now survives a miss, and a cluster of them. Rebinding on a real topic switch is
+unaffected.
 
-Binding otherwise works well and even **rebinds correctly across a topic switch** (`dog` → `cat` →
-`can it meow` → yes). The referent is set from the last successfully parsed turn, and a miss clears
-it rather than leaving it alone. A casual user's misses come in clusters, so one stray turn strands
-every pronoun after it.
+**The mechanism was not the focus.** `focus` only ever binds `{id,label}` GRAPH entities and both
+its set-sites are gated on `graph &&`, so in a vocabulary session it is never set at all. The
+referent comes from `vocabAntecedentFrom` (`chat.mjs`), which parses the **previous answer's first
+fact line** out of `last.answer`. A miss overwrote `last` with a wall ("couldn't parse this as a
+graph question"), which matches no fact shape, so the referent died with it.
 
-**Fix.** Leave the prior binding intact across a miss. Cheapest high-value fix in the backlog —
-it makes anaphora that already works survive contact with a real conversation.
+**`last` serves two masters, and that is the trap.** The first attempt simply stopped a miss
+becoming `last`. That broke the repeat-shortening walls (`games.messy.wall-repeat`,
+`games.openers.*`), which compare consecutive answers through `last.answer` to tell a second offence
+from a first — a miss that declines to record itself makes every wall look new. The split now
+carries **`last.grounded`**: the last answer that actually answered, which the referent reads, while
+`last.answer` keeps recording everything.
 
-**Pins.** `games/drilldowns.jsonl` keyed `games.drilldown.anaphora-survives-a-miss`.
+**Landed:** `last.grounded` + `vocabAntecedentFrom` reading it (`chat.mjs`). **Pins:** 3 rows keyed
+`games.drilldown.anaphora-survives-a-miss` — one miss, a cluster of three, and a grounded topic
+switch that proves the referent did not simply freeze. `games/an-honest-miss-never-lends-its-subject-to-the-next-pronoun`
+was renamed and re-pointed: its "must not read 'it' as 'I'" guard still holds and still matters, but
+its `isMiss` expectation recorded the very behaviour this item removes.
 
 ### 3.4-3.9 The remainder, one line each
 

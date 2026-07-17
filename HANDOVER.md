@@ -24,11 +24,13 @@ list of this plan's own citations that proved false. Read that before quoting an
 
 Phases 1, 2, 4, 5 and 6 closed at 2.4.1. What remains:
 
-- **Phase 3 — the honest-miss and parse gaps.** 3.1 is **done**: a bare negative now records a
-  disagreement instead of retracting, and only `forget that X is a Y` deletes. The negative twin of
-  `rdfs:subClassOf` had to be coined (`mgxneg:subClassOf`) — the shipped prefix swap only covers
-  `mgx:` terms. 3.2-3.11 are open. 3.9's fix site is `chat.mjs`, not `ask.mjs` — the investigation
-  is recorded in the plan.
+- **Phase 3 — the honest-miss and parse gaps.** **3.1 and 3.3 are done.** 3.1: a bare negative now
+  records a disagreement instead of retracting, and only `forget that X is a Y` deletes — the
+  negative twin of `rdfs:subClassOf` had to be coined (`mgxneg:subClassOf`), since the shipped prefix
+  swap only covers `mgx:` terms. 3.3: a pronoun's referent now survives a miss, via `last.grounded`
+  — `last.answer` still records misses because the repeat-shortening walls compare through it.
+  3.2 and 3.4-3.11 are open. 3.9's fix site is `chat.mjs`, not `ask.mjs` — the investigation is
+  recorded in the plan.
 - **Phase 7 — every public example traces to a test.** Nothing started. The deliverable is a
   committed table; an example whose test column is empty is the finding. Prefer deleting the example.
 - **Phase 10 — write `PLAN_NORMATIVE.md` and work it.** Nothing started. Fix the two-casings IRI

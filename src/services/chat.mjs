@@ -10778,21 +10778,25 @@ function coldPronounDeclineText(query) {
   return `not sure what "${m[2].toLowerCase()}" refers to yet — name the subject directly, e.g. "what is a <name>".`;
 }
 
-/** The subject of the LAST turn's first fact line, for vocabulary pronoun
- *  binding ("what is a dog" → "can it bark"). Fact answers render rigidly —
- *  "<subject> <phrase> <object> (source: …)", optionally behind a "yes — "/
- *  "no — "/"you told me: " prefix — so a 1–2 word leading subject followed
- *  by a phrase-table verb is extractable without any NLP. Anything else
- *  (code answers, walls, conversational text) returns null and no
+/** The subject of the last GROUNDED turn's first fact line, for vocabulary
+ *  pronoun binding ("what is a dog" → "can it bark"). Fact answers render
+ *  rigidly — "<subject> <phrase> <object> (source: …)", optionally behind a
+ *  "yes — "/"no — "/"you told me: " prefix — so a 1–2 word leading subject
+ *  followed by a phrase-table verb is extractable without any NLP. Anything
+ *  else (code answers, walls, conversational text) returns null and no
  *  substitution happens.
+ *
+ *  It reads `grounded`, not `answer`, so an intervening miss leaves the
+ *  standing referent alone rather than stranding every pronoun behind it.
  *
  *  A pronoun never binds. An honest miss opens first-person ("I can't confirm
  *  that — …"), which fits the subject+verb shape exactly, so without the
- *  isTeachPronoun check the miss lends "I" to the next turn and "is it an
- *  animal" is looked up as "is I an animal". A pronoun is no more a fact
- *  subject here than in the teach frames TEACH_PRONOUNS already guards. */
+ *  isTeachPronoun check a miss reaching here would lend "I" to the next turn
+ *  and "is it an animal" would be looked up as "is I an animal". A pronoun is
+ *  no more a fact subject here than in the teach frames TEACH_PRONOUNS already
+ *  guards. */
 function vocabAntecedentFrom(last) {
-  const first = String(last?.answer || "").split("\n")[0]
+  const first = String(last?.grounded || "").split("\n")[0]
     .replace(/^(?:yes|no) — /i, "")
     .replace(/^you told me: /i, "");
   const m = first.match(/^([a-z][\w'-]*(?:\s+[a-z][\w'-]*)?)\s+(?:is|are|has|can|causes|wants|requires|involves|means|begins|ends)\b/i);
@@ -10870,7 +10874,21 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     // runAsk's own effectiveQuery (set only when discourseRewrite substituted
     // a new subject and produced a genuine non-miss answer) takes over as the
     // continuation base for the NEXT turn's own discourseRewrite.
-    const nextLast = { query: finished.effectiveQuery ?? line, answer: finished.answer, detail: finished.detail ?? null };
+    //
+    // `grounded` is the last answer that actually ANSWERED, carried forward
+    // across misses. It is what a pronoun's referent binds to
+    // (vocabAntecedentFrom): a reader's misses come in clusters, and reading
+    // the referent off a wall stranded every pronoun after one stray line.
+    //
+    // `answer` must keep recording the miss regardless — the repeat-shortening
+    // walls compare consecutive answers through it, so a miss that declined to
+    // record itself would make every wall look like a first offence.
+    const nextLast = {
+      query: finished.effectiveQuery ?? line,
+      answer: finished.answer,
+      detail: finished.detail ?? null,
+      grounded: finished.record?.miss ? (last?.grounded ?? null) : finished.answer,
+    };
     // Goal/canonical lines append onto the PRE-narration `finished` result
     // `nextLast` was captured from, so a narrated turn still gets both short
     // lines up top plus the full trace block after.
