@@ -67,6 +67,30 @@ test("machine shape enumerates exactly the implemented services, each grounded",
   assert.equal(REPOSITORY_INTERFACE.ontology, "urn:tmct:core");
 });
 
+test("prose peer: docs/repository-interface.md names every service, edge kind and miss reason, at the live version (no drift)", () => {
+  const doc = readFileSync(
+    fileURLToPath(new URL("../../docs/repository-interface.md", import.meta.url)),
+    "utf8",
+  );
+
+  const versionInProse = doc.match(/# The Repository Interface \(v([\d.]+)\)/);
+  assert.ok(versionInProse, "the heading carries a (vX.Y.Z) version");
+  assert.equal(versionInProse[1], INTERFACE_VERSION, "prose version tracks INTERFACE_VERSION");
+
+  const namedServices = SERVICES.filter((s) => doc.includes("`" + s + "(") || doc.includes("**`" + s + "("));
+  assert.deepEqual(namedServices, [...SERVICES], "every service in SERVICES is named in the prose");
+  assert.equal(namedServices.length, SERVICES.length, "the prose names exactly the SERVICES count");
+
+  const namedKinds = EDGE_KINDS.filter((k) => doc.includes("`" + k + "`"));
+  assert.deepEqual(namedKinds, [...EDGE_KINDS], "every kind in EDGE_KINDS is named in the prose");
+  assert.equal(namedKinds.length, EDGE_KINDS.length, "the prose names exactly the EDGE_KINDS count");
+
+  const reasons = Object.values(MISS_REASONS);
+  const namedReasons = reasons.filter((r) => doc.includes(r));
+  assert.deepEqual(namedReasons, reasons, "every reason in MISS_REASONS is named in the prose");
+  assert.equal(namedReasons.length, reasons.length, "the prose names exactly the MISS_REASONS count");
+});
+
 test("miss() rejects a reason outside the closed set", () => {
   assert.throws(() => miss("NOT_A_REASON"), TypeError);
   const m = miss(MISS_REASONS.NO_SOURCE, { detail: "x", term: "t" });

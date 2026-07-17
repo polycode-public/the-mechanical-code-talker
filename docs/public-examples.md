@@ -62,15 +62,16 @@ harness the README fences use.
 | `index.html:302` | `tmct init` / `viz` / `syllogise` | `CLI_VERBS` | `e2e/pages-home.test.mjs` | dom |
 | `demo-ui.mjs` `HISTORY` | the 5 scripted turns the demo box types out | `runTurn`, `ask` | `e2e/pages-demo-history.test.mjs` (each answer verbatim) | replay |
 | `demo-templates.mjs` `TEMPLATES` | 56 question/substitution pairs the box can pick | `ask` | `e2e/pages-demo-templates.test.mjs` (all 56 must answer) | replay |
-| `index.html:311` | `runChat` library block | `runChat` | `e2e/pages-home.test.mjs` | dom |
+| `index.html:311` | `runChat` library block | `runChat` | `test/tools/chat-library-block.test.mjs` (runs the block, asserts the answer) | tool |
 | ledger hero | the embedded `ledger.html` iframe | `renderLedger` | `e2e/pages-home.test.mjs`, `e2e/pages-index.test.mjs` | dom |
 | plan render | the embedded `plan.html` iframe | `renderPlanHtml` | `e2e/pages-home.test.mjs` (draws only the pieces hanoi-3 taught), `test/adapters/plan-viz.test.mjs` | dom |
 | version stamp | `<span id="pkg-version">` | `scripts/build-demo-site.mjs` | `e2e/pages-home.test.mjs`, `test/estate/page-version-stamp.test.mjs` | estate |
 
-The three `dom` rows are the open ones. `e2e/pages-home.test.mjs` asserts the
-page shows those strings; nothing asserts the product does what they say. The
-`runChat` block is the one worth pinning next — it is a copyable program, and
-`README.md:243` already replays the same call.
+The `runChat` block is pinned at the tool layer:
+`test/tools/chat-library-block.test.mjs` runs the same call in-process and
+asserts the taught fact comes back. The remaining `dom` rows (the install and
+`tmct` command strings) still only assert that the page shows the string;
+nothing asserts the product does what they say.
 
 `demo-ui.mjs` and `demo-templates.mjs` each used to carry a comment saying their
 answers had been verified against the real engine, one of them noting the check
@@ -91,13 +92,12 @@ passes just as happily when it names the whole memory.
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
 | `docs/repository-interface.schema.json` | the machine shape | `REPOSITORY_INTERFACE` | `test/adapters/repository-interface.test.mjs` | tool |
-| `docs/repository-interface.md` | 16 services, 11 edge kinds, 4 miss reasons, v1.1.0 | `SERVICES`, `EDGE_KINDS`, `MISS_REASONS`, `INTERFACE_VERSION` | none | — |
+| `docs/repository-interface.md` | 16 services, 11 edge kinds, 4 miss reasons, v1.1.0 | `SERVICES`, `EDGE_KINDS`, `MISS_REASONS`, `INTERFACE_VERSION` | `test/adapters/repository-interface.test.mjs` | tool |
 | `docs/adapter-contract.md` | the entities payload | `parseEntities`, `buildEntities` | `test/adapters/memory-adapter.test.mjs` | tool |
 
-`docs/repository-interface.md` names every service, edge kind and miss reason,
-and each was checked against the source for this table. No test holds it there.
-The schema next to it **is** pinned to the source const, so the prose is the part
-that can drift.
+`docs/repository-interface.md` names every service, edge kind and miss reason.
+`test/adapters/repository-interface.test.mjs` now pins the prose to the source
+const — every name, and the version — beside the schema it already held there.
 
 ## corpus/*/README.md
 
