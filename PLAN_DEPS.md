@@ -193,10 +193,10 @@ real clone, the hand-rolled reader disagreed with `yaml` on 38 of them, for two 
   out corrupted (`caesar''s_agaric`). 36 files.
 - A definition wrapping onto a continuation line that opens with `- ` (`…physically difficult / - if
   not impossible - for…`) was read as a new list item. That truncated the scalar, dropped the rest
-  of the record, and swallowed the synset after it. In `noun.artifact.yaml` alone the subset reader
-  returned **11,779 synsets where the library returns 11,986** — 207 gone, silently, into a
-  maintainer worksheet. Across the 45 synset files the library reads 107,526, which is exactly the
-  count this repo's own corpus generator documents.
+  of the record, and swallowed the synset after it. Across the 45 synset files the subset reader
+  returned **107,172 synsets where the library returns 107,526** — **354 gone**, silently, into a
+  maintainer worksheet, 207 of them in `noun.artifact.yaml` alone. The library's total is exactly
+  the count this repo's own corpus generator header documents.
 
 So this replaced 220 LOC with a correctness fix, not just with less code. The cost is speed: `yaml`
 parses the full dump in ~55s against the subset reader's ~2s, which these run-by-hand tools can pay.
