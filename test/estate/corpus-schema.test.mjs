@@ -1,19 +1,13 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { lanePredicates, readLaneRows, validateRow } from "../corpus/run-lane.mjs";
+import { corpusLanes } from "../../src/adapters/corpus-lanes.mjs";
 
 const CORPUS_DIR = path.resolve(fileURLToPath(import.meta.url), "..", "..", "corpus");
 
-// Lanes are every .jsonl under test/corpus/, one directory level deep at most
-// (sharded lane families live in a subdirectory, e.g. games/openers.jsonl).
-const laneNames = fs
-  .readdirSync(CORPUS_DIR, { withFileTypes: true, recursive: true })
-  .filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
-  .map((entry) => path.relative(CORPUS_DIR, path.join(entry.parentPath, entry.name)).slice(0, -".jsonl".length))
-  .sort();
+const laneNames = corpusLanes(CORPUS_DIR);
 
 test("every row of every corpus lane conforms to the row schema", async () => {
   const problems = [];

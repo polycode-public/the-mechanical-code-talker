@@ -18,17 +18,9 @@ import { fileURLToPath } from "node:url";
 import {
   tallyRows, thinGroups, groupsWithNoNegativeRow, lanesOfGroup, matrixRows, renderTable,
 } from "../src/domain/corpus-matrix.mjs";
+import { corpusLanes } from "../src/adapters/corpus-lanes.mjs";
 
 const CORPUS_DIR = path.resolve(fileURLToPath(import.meta.url), "..", "..", "test", "corpus");
-
-/** Sharded lane families live one directory down (e.g. games/openers.jsonl). */
-function corpusLanes() {
-  return fs
-    .readdirSync(CORPUS_DIR, { withFileTypes: true, recursive: true })
-    .filter((entry) => entry.isFile() && entry.name.endsWith(".jsonl"))
-    .map((entry) => path.relative(CORPUS_DIR, path.join(entry.parentPath, entry.name)).slice(0, -".jsonl".length))
-    .sort();
-}
 
 /** Every row across every lane. A line that will not parse names itself and
  *  stops the run — a half-read corpus would report holes that are really typos. */
@@ -61,7 +53,7 @@ function printGapsView(tally) {
 }
 
 function main() {
-  const lanes = corpusLanes();
+  const lanes = corpusLanes(CORPUS_DIR);
   if (lanes.length === 0) {
     console.log("no corpus lanes yet (no test/corpus/*.jsonl files)");
     return 0;
