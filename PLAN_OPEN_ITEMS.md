@@ -95,7 +95,7 @@ commit that reaches `main` or a remote.
 | **4** — the instruments | **DONE** (4.1-4.5) | `6ed8f41`, `cee3ebe`, `ee6ddf3`, `a46d92a`, `7b74431` |
 | **5** — wrong documents | **DONE** | `bf6732c` |
 | PLAN_DEPS batches 1-2, 4-7 | **DONE** | `c2ded65`, `f2d7e27`, `488aa84`, `5824c66`, `2ccee08` |
-| **3** — honest-miss gaps | **IN PROGRESS** — 3.1, 3.3, 3.5 done; 3.4 didn't reproduce; rest open | `b1f14a0`, `7d4acc4`, + below |
+| **3** — honest-miss gaps | **IN PROGRESS** — 3.1, 3.2, 3.3, 3.5, 3.6, 3.7 done; 3.4 didn't reproduce; **3.8-3.11 open** | `b1f14a0`, `7d4acc4`, `7ea0036`, + below |
 | **7** — public-surface audit | **OPEN** — nothing started | — |
 | **8** — capability page | **OPEN** — nothing started | — |
 | **9** — prose pass | **OPEN** — nothing started | — |
@@ -542,21 +542,52 @@ vocabulary is undeclared, so declaring one term now would be a partial job. Phas
 the gate above deliberately leaves it falling through, because nothing distinguishes it from the
 property-claim shape without a stored fact to anchor on.
 
-### 3.2 Quantifiers parse when teaching but not when asking
+### 3.2 Quantifiers parse when teaching but not when asking — **DONE**
 
-`every man is mortal` stores; `is every man mortal` → "I don't know anything about 'every man' yet";
-`is a man mortal` → yes. Same for `are all men mortal`, `is any man mortal`. The teach frames strip
-the quantifier; the ask frames glue it onto the subject as a bogus entity name.
+`is every man mortal`, `are all men mortal`, `is any man mortal`, `are men mortal` and `is a man
+mortal` now all agree with the bare form. The sibling is fixed by the same change.
 
-Sibling: `are men mortal` → "I don't know anything about 'men' yet", and the suggestion text is
-itself ungrammatical ("remember that men is mortal") — the ask path skips the lemmatizer the teach
-path uses, then echoes the raw plural into a template.
+**Fix site: `chat.mjs`'s `factTermVariants`, NOT `normalize.mjs`** — which has no quantifier
+handling at all, exactly as this doc's own corrections table already found for 1.2 ("normalize.mjs
+has no teach frames at all"). The same stale citation, twice.
 
-**Fix site.** `src/domain/interpret/normalize.mjs`. Give the ask frames the same quantifier strip
-and the same lemmatizer the teach frames already use. This is symmetry, not new capability.
+**Two folds, and the second is the one that was hiding.** `factTermVariants` builds the lookup
+candidates every ask reader shares, so both folds land in one place:
 
-**Pins.** `grammar.jsonl` keyed `grammar.quantifier.ask-symmetry` — teach with a quantifier, ask
-with each of `every|all|any`, assert all agree with the bare form.
+- **the quantifier** — the teach frames strip `every|each|all|any` before storing
+  (`UNKNOWN_SUBJECT_RE` carries the same set), so no fact is ever stored under a subject that begins
+  with one. That is what makes stripping it on the ask side a lookup fix and not a guess.
+- **the irregular plural** — `men` shares no suffix with `man`, so the naive `-s`/`-es` fold cannot
+  reach it. The lexicon already declares the map (`lex.nounPlurals`: men→man, people→person,
+  mice→mouse — 43 entries, irregulars only, because a regular plural is recoverable by the fold).
+  It is loaded once and read from `chat.mjs`.
+
+**This closed 3.7 as well** — `do men die` missed while `does a man die` answered, so "no `do/does`
+frame" was wrong too: the frame exists, and the plural was the whole difference. Three items
+(3.2, 3.5, 3.7) turned out to be one defect wearing three faces: **the ask path could not reach the
+spelling the teach path stores.**
+
+**The ungrammatical echo is fixed too, and the negative row is what found it.** The sibling's named
+string ("remember that men is mortal") had only MOVED, not gone: with `man` taught and `woman` not,
+`are women mortal` offered "remember that **women** is mortal". A miss template was echoing the
+reader's raw plural into a singular frame.
+
+The fix is `teachableSubjectOf`, and the point is that it guesses nothing: **`lookupNoun` IS the
+lemmatizer this item says the ask path skips**, and it is the whole plural detector. It folds
+women→woman and dogs→dog while leaving **bus→bus**, which no `-s` rule written by hand could do. A
+multi-word or unknown subject is echoed exactly as typed, which is why the two rows that
+deliberately pin the reader's own words (`games/structural-guard-vs-taught-property-facts`,
+`games/generic-head-word-never-cross-contaminates`) still pass untouched — "the logger" has a space
+in it.
+
+**Still open, small:** a QUANTIFIED plural ("are all dogs mortal") echoes "all dogs is mortal" —
+multi-word, so the fold leaves it alone. Re-attaching a quantifier to a folded lemma reads worse
+("all dog is mortal") than what it replaces, so it wants a real agreement rule rather than another
+strip.
+
+**Pins.** 3 rows keyed `grammar.quantifier.ask-symmetry`: the five ask forms agreeing, a quantified
+unknown subject still missing honestly (the strip widens a lookup, it never invents an answer), and
+the irregular plural reaching its singular.
 
 ### 3.3 An unparsed turn wipes the anaphora referent — **DONE**
 
@@ -590,8 +621,8 @@ Each carries its reproducer; group them into one commit per fix site.
 |---|---|---|---|
 | 3.4 | `what about cats` → "Try: which modules import \<name\>" | **DOES NOT REPRODUCE at 2.4.2.** It answers with the cat facts and names no code-graph shape. Already pinned by `games/topic-shift-after-a-plain-vocabulary-question`. Closed as fixed, no code change | — |
 | 3.5 | `what are dogs` → ~6 lines of compositional syntax | **DONE**, and the diagnosis was wrong — see below | `chat.mjs`'s meta fall-through gate, NOT the miss-hint builder |
-| 3.6 | `what else` / `why` → the identity blurb | `tell me more` has an expansion rule; its synonyms fall through | the expand frame |
-| 3.7 | `do all men die` → code-graph parse error | no `do/does <subject> <verb>` frame | `normalize.mjs` |
+| 3.6 | `what else` / `why` → the identity blurb | **DONE.** `why` was never broken — it is in the `WHY` expansion set and faithfully expanded the blurb `what else` had just produced. Bare `what else` matched no frame, so it fell to the conversational lane. It now takes its subject from the standing referent (the same last-grounded binding `can it bark` uses), and asked cold it names what it cannot resolve instead of introducing the tool | `whatElseAnswer`, `chat.mjs` |
+| 3.7 | `do all men die` → code-graph parse error | **DONE, and the diagnosis was wrong.** The `do/does` frame exists — `does a man die` and `do man die` both answer. The PLURAL was the difference. Closed by 3.2's irregular-plural fold | `factTermVariants`, `chat.mjs` |
 | 3.8 | `i was wondering what a dog is` → couldn't parse | politeness stripper handles the modal form, not this frame | `PHRASING_FRAMES` |
 | 3.9 | `src/core/store.mjs` (bare path) → couldn't parse; bare `Store` orients fine | bare-entity orientation is wired for Class/Function, not Module | **NOT `metaFallbackEntityAnswer` — see below** |
 

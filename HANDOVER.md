@@ -29,12 +29,21 @@ Phases 1, 2, 4, 5 and 6 closed at 2.4.1. What remains:
   negative twin of `rdfs:subClassOf` had to be coined (`mgxneg:subClassOf`), since the shipped prefix
   swap only covers `mgx:` terms. 3.3: a pronoun's referent now survives a miss, via `last.grounded`
   — `last.answer` still records misses because the repeat-shortening walls compare through it.
-  3.5 is done too: a plural vocabulary term (`what are dogs`) now answers like its singular — the
-  composite lane's *miss* was blocking the reader behind it. 3.4 no longer reproduces and is closed
-  with no code change. 3.2 and 3.6-3.11 are open. 3.9's fix site is `chat.mjs`, not `ask.mjs` — the
-  investigation is recorded in the plan.
-- **Phase 7 — every public example traces to a test.** Nothing started. The deliverable is a
-  committed table; an example whose test column is empty is the finding. Prefer deleting the example.
+  **3.2, 3.5, 3.6 and 3.7 are done as well**, and 3.4 no longer reproduces (closed, no code change).
+  3.2/3.5/3.7 turned out to be **one defect wearing three faces: the ask path could not reach the
+  spelling the teach path stores** — a quantifier glued to the subject, and an irregular plural the
+  `-s` fold cannot recover. Both folds now live in `factTermVariants`, and `lookupNoun` (the
+  lexicon's own lemmatizer) does the work, so "bus" is safe. 3.6: bare `what else` takes its subject
+  from the standing referent, and asked cold it names what it cannot resolve.
+  **Open: 3.8, 3.9, 3.10a-e, 3.11.** 3.9's fix site is `chat.mjs`, not `ask.mjs` — the investigation
+  is recorded in the plan.
+- **Phase 7 — every public example traces to a test.** Table landed at `docs/public-examples.md`.
+  The home page's transcripts now replay against the live CLI (`e2e/pages-examples.test.mjs`), so
+  its examples are held at the same tier the README's are. Open: three `dom`-tier rows on
+  `index.html` (install line, CLI verb list, the `runChat` library block) where a browser test
+  asserts the page shows the string and nothing asserts the product agrees; the `runChat` block is
+  the one worth pinning next. `docs/repository-interface.md`'s prose carries the contract numbers
+  with no test holding them (the schema beside it is pinned).
 - **Phase 10 — write `PLAN_NORMATIVE.md` and work it.** Nothing started. Fix the two-casings IRI
   defect first (`mgx:callscoarse` vs `mgx:callsCoarse`, and three more pairs) — an IRI is
   case-sensitive, so two casings are two terms, and that needs no standard to justify.

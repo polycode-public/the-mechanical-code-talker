@@ -44,6 +44,7 @@ import { setConstructionBanks } from "../domain/interpret/strategies/constructio
 import { nlpAdapter } from "../adapters/ask-nlp.mjs";
 import { readConstructionFiles } from "../adapters/corpus/construction-banks.mjs";
 import { fuzzyMatchInSet, fuzzyBound } from "../domain/interpret/fuzzy.mjs";
+import { loadLexicon, lookupNoun } from "../domain/grammar/lexicon.mjs";
 import { pickPhrase } from "../domain/answer-variants.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
@@ -5028,11 +5029,71 @@ async function factRows(memoryDir, cache = null) {
 
 /** Spelling variants a question term is matched under (normFactTerm + a naive
  *  singular): "caches"/"a cache"/"/c/en/cache" all reach the stored "cache". */
+/** The lexicon's declared plural → lemma map ("men"→"man", "people"→"person"),
+ *  loaded once. It carries ONLY the irregulars — a regular plural is recovered
+ *  by the -s/-es fold below, so declaring one would be redundant — which is
+ *  exactly the set that fold cannot reach. Failure-tolerated: a broken lexicon
+ *  degrades to the fold alone, never a crash. */
+let declaredNounPlurals = null;
+function irregularSingularOf(word) {
+  if (!declaredNounPlurals) {
+    try { declaredNounPlurals = loadLexicon().nounPlurals; } catch { declaredNounPlurals = new Map(); }
+  }
+  return declaredNounPlurals.get(word) ?? null;
+}
+
+/** A subject as it should be SPOKEN BACK in an offered teach sentence: the
+ *  lexicon's own lemma for a single known noun, else the reader's words
+ *  untouched.
+ *
+ *  Without it a plural subject was echoed raw into a singular frame —
+ *  "remember that women is mortal" — offering a sentence that is both
+ *  ungrammatical and not the shape the teach path stores. lookupNoun is the
+ *  lemmatizer the teach path already uses, and it is the whole plural detector:
+ *  it folds "women"→woman and "dogs"→dog while leaving "bus" alone, which no
+ *  -s rule written here could do. A multi-word or unknown subject is left
+ *  exactly as typed — "every zibble is mortal" already reads correctly, and
+ *  guessing at a phrase's head would be worse than echoing it. */
+function teachableSubjectOf(subject) {
+  const raw = String(subject || "").trim().toLowerCase();
+  if (!raw || /\s/.test(raw)) return raw;
+  try {
+    return lookupNoun(loadLexicon(), raw)?.lemma || raw;
+  } catch {
+    return raw;
+  }
+}
+
+/** A leading universal quantifier, which is scaffolding rather than part of a
+ *  name. The teach frames strip exactly these before storing (UNKNOWN_SUBJECT_RE
+ *  above carries the same set), so no fact is ever stored under a subject that
+ *  begins with one — which is what makes stripping it here a lookup fix and not
+ *  a guess. "a"/"an" are deliberately absent: the readers' own regexes already
+ *  take the article. */
+const QUANTIFIER_LEAD_RE = /^(?:every|each|all|any)\s+/i;
+
 function factTermVariants(normFactTerm, term) {
   const t = normFactTerm(term);
-  const v = new Set([t]);
-  if (t.endsWith("es")) v.add(t.slice(0, -2));
-  if (t.endsWith("s")) v.add(t.slice(0, -1));
+  const v = new Set();
+  // The ask frames glue a quantifier onto the subject and looked up "every
+  // man", a name nothing is stored under, while "is a man mortal" answered.
+  // Both spellings fold through the same plural rules below, so "are all men
+  // mortal" reaches "man" the same way "are men mortal" does.
+  const bases = new Set([t]);
+  const unquantified = t.replace(QUANTIFIER_LEAD_RE, "").trim();
+  if (unquantified && unquantified !== t) bases.add(unquantified);
+  for (const base of bases) {
+    v.add(base);
+    if (base.endsWith("es")) v.add(base.slice(0, -2));
+    if (base.endsWith("s")) v.add(base.slice(0, -1));
+    // An IRREGULAR plural is invisible to the fold above: "men" keeps every
+    // letter of "man" in a different order, so a reader asking "do men die"
+    // looked up a subject no fact is stored under while "does a man die"
+    // answered. The teach path stores the singular, so the ask path has to be
+    // able to reach it.
+    const irregular = irregularSingularOf(base);
+    if (irregular) v.add(normFactTerm(irregular));
+  }
   return v;
 }
 
@@ -6413,6 +6474,13 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
  *  vocabulary-term lookup for the literal term "in X". */
 const WHAT_ELSE_IS_RE = /^what\s+else\s+(?:is|are)\s+(?!in\b|inside\b)(?:an?\s+)?(.+?)[?.!\s]*$/i;
 const WHAT_ELSE_ABOUT_RE = /^what\s+else\s+(?:do\s+you\s+know\s+)?about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
+/** The same question with its subject left implicit — "what else", "anything
+ *  else", "what else do you know". A reader who has just been told about dogs
+ *  and asks "what else" means "what else about dogs"; the subject is carried by
+ *  the conversation, exactly as the pronoun in "can it bark" is. So the term
+ *  comes from the standing referent (vocabAntecedentFrom) and this shape is a
+ *  no-op when nothing is standing. */
+const WHAT_ELSE_BARE_RE = /^(?:(?:and|so|but|ok|okay|now|then)\s+)*(?:what\s+else(?:\s+do\s+you\s+know)?|anything\s+else(?:\s+you\s+know)?|got\s+anything\s+else)[?.!\s]*$/i;
 
 /** "what else is X" — surface remembered facts about X BEYOND the primary
  *  curated (corpus/seon) prose definition, which is itself never a Facts row
@@ -6436,9 +6504,18 @@ async function whatElseAnswer(memoryDir, query, last) {
   if (!memoryDir) return null;
   const q = String(query).trim();
   const m = q.match(WHAT_ELSE_IS_RE) || q.match(WHAT_ELSE_ABOUT_RE);
-  if (!m) return null;
-  const term = m[1].trim();
-  if (!term) return null;
+  // A bare "what else" takes its subject from the standing referent — the same
+  // last-grounded-answer binding "can it bark" uses.
+  const bare = !m && WHAT_ELSE_BARE_RE.test(q);
+  const term = (m ? m[1] : (bare ? vocabAntecedentFrom(last) : null) || "").trim();
+  // Asked cold, it names what it cannot resolve rather than introducing the
+  // tool — the same courtesy a cold pronoun already gets. An identity blurb
+  // answers a question nobody asked.
+  if (!term) {
+    return bare
+      ? { text: "Nothing to add yet — there's no subject standing. Ask me about something first, then \"what else\".", replace: true, miss: true }
+      : null;
+  }
   let normFactTerm;
   try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const variants = factTermVariants(normFactTerm, term);
@@ -6625,7 +6702,7 @@ const IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE = /^(?:you|i|they|he|she|we)\b/i;
  *  reaches TEACH_PROPERTY_RE via BARE_DECLARATIVE_RE's single-token-subject
  *  restriction and would fail here). */
 const unknownAdjectiveOffer = (subject, adjective) => ({
-  text: `I don't know anything about "${subject}" yet — teach me directly, e.g. "remember that ${subject.toLowerCase()} is ${adjective}".`,
+  text: `I don't know anything about "${subject}" yet — teach me directly, e.g. "remember that ${teachableSubjectOf(subject)} is ${adjective}".`,
   replace: true,
 });
 /** WHOLE-STORE recall: "what did i tell you [last time]",
@@ -7790,7 +7867,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       // originally-intended case here) still gets this receipt exactly as
       // before, since envelope.parsed is null for those adjectives.
       if (rows.some(subjectMatch) && !envelope?.parsed) {
-        return { text: `I don't have a fact saying ${subject.toLowerCase()} is ${adjective}.`, replace: true };
+        return { text: `I don't have a fact saying ${teachableSubjectOf(subject)} is ${adjective}.`, replace: true };
       }
       // Without this, "is the checkout flow
       // deprecated" as a genuinely FIRST-EVER question about a subject tmct
@@ -9444,7 +9521,9 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   if (memoryDir) {
     const whatElse = await whatElseAnswer(memoryDir, query, last);
     if (whatElse) {
-      answer = whatElse.text; via = "fact:what-else"; recordMiss = false; handled = true;
+      // A cold "what else" carries miss:true — it resolved no subject, so the
+      // turn is a miss in better words, exactly like the isa ladder's closers.
+      answer = whatElse.text; via = "fact:what-else"; recordMiss = whatElse.miss ?? false; handled = true;
       if (whatElse.pending) factPending = whatElse.pending;
       deduced = "surface additional remembered facts beyond the primary definition";
       note(trace, "lane: (0) WHAT ELSE — \"what else is/about X\" recognized off the raw query, before the relaxation cascade could quietly drop \"else\" and reduce it to a plain \"what is X\"");
