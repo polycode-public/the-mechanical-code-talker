@@ -33,7 +33,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PassThrough, Readable } from "node:stream";
 
-import { parseCases, gradeKernelRow, gradeChatRow, rollup, ladderGate, renderRollup } from "./grade.mjs";
+import { parseCases, gradeKernelRow, gradeChatRow, rollup, ladderGate, renderRollup, ceilingCapabilities } from "./grade.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
@@ -117,14 +117,16 @@ export async function runCase(caseDef) {
   if (kernel) {
     rows.push({
       caseId: caseDef.id, band: caseDef.band, template: caseDef.template, variant: caseDef.variant,
-      arm: "kernel", checkType: caseDef.checkType, expect: caseDef.expect, ...kernel,
+      arm: "kernel", checkType: caseDef.checkType, expect: caseDef.expect,
+      ...(caseDef.ceiling ? { ceiling: caseDef.ceiling } : {}), ...kernel,
     });
   }
   const outcome = await driveChat(caseDef);
   const chat = gradeChatRow(caseDef, outcome);
   rows.push({
     caseId: caseDef.id, band: caseDef.band, template: caseDef.template, variant: caseDef.variant,
-    arm: "chat", checkType: caseDef.checkType, expect: caseDef.expect, ...chat,
+    arm: "chat", checkType: caseDef.checkType, expect: caseDef.expect,
+    ...(caseDef.ceiling ? { ceiling: caseDef.ceiling } : {}), ...chat,
     answer: outcome.answer, miss: outcome.miss, ...(outcome.error ? { error: outcome.error } : {}),
   });
   return rows;
@@ -168,6 +170,15 @@ function printArm(label, arm) {
   console.log(renderRollup(arm.rolled, label));
   console.log(`  ladder: ${arm.ladder.order.join(" -> ")}${arm.ladder.gatedAt ? `  — gated at ${arm.ladder.gatedAt}` : "  — all bands pass the gate"}`);
   for (const r of arm.ladder.receipts) console.log(`    band ${r.band} skipped: ${r.reason}`);
+  const ceilings = ceilingCapabilities(arm.rows);
+  if (Object.keys(ceilings).length) {
+    console.log("  ceiling/pass = passes whose expected verdict is the engine's declared floor, not the classical answer.");
+    console.log("  Those rows measure the floor holding; the capability that would lift each one:");
+    for (const [band, capabilities] of Object.entries(ceilings)) {
+      const cell = arm.rolled.byBand[band];
+      console.log(`    ${band}: ${cell.ceilingGradedPassed} of ${cell.passed} passes — lifts with ${capabilities.join("; ")}`);
+    }
+  }
 }
 
 export async function main(argv = process.argv.slice(2)) {

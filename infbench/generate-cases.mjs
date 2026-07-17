@@ -132,6 +132,34 @@ function loadIsaDenylist() {
 const ISA_DENYLIST = loadIsaDenylist();
 const pairAllowed = (a, b) => a !== b && !ISA_DENYLIST.has([a, b].sort().join("|"));
 
+/** Every term the DEFAULT PERSONA seeds into a fresh session's memory. A bare
+ *  runChat over an empty dir (infbench/run.mjs's drive) loads this seed, so a
+ *  noun named here arrives already carrying facts — which is a different
+ *  question than the one a template meant to ask. Observed while authoring the
+ *  existential probe: "some noses are cloches" leaves nose⊑cloche unasserted and
+ *  the probe passes without ever reading the quantifier, purely because `nose`
+ *  ships with corpus facts. `cloche` and `milium` do not, and those fabricate.
+ *
+ *  Note this is a DIFFERENT corpus from the one ISA_DENYLIST scans: the denylist
+ *  reads conceptnet/seon, which a bare session never loads. */
+function loadPersonaSeedTerms() {
+  const terms = new Set();
+  let text;
+  try { text = readFileSync(join(ROOT, "corpus", "tier2", "human.jsonl"), "utf8"); } catch { return terms; }
+  for (const line of text.split("\n")) {
+    const t = line.trim();
+    if (!t) continue;
+    let d;
+    try { d = JSON.parse(t); } catch { continue; }
+    for (const field of [d.start, d.end]) {
+      const term = String(field || "").replace(/^\/c\/en\//, "");
+      if (term) terms.add(term);
+    }
+  }
+  return terms;
+}
+const PERSONA_SEED_TERMS = loadPersonaSeedTerms();
+
 /** Pick `n` corpus-clean, pairwise-mutually-allowed nouns from `pool` in
  *  shuffled order, advancing past any noun that would collide with an
  *  already-chosen one. Deterministic given `shuffled`/`startAt`. */
@@ -391,12 +419,103 @@ function b1Disjoint(rng) {
 }
 
 // ======================================================================
-// INF-B2 — b2ChainLenK (chain length 3/4/5) — GENERATED NOW, run against a
-// not-yet-implemented capability: PLAN_INFERENCE_TESTING.md §2.2/§2.4/§3 all
-// independently mandate expect stays the honest "unproven" ceiling for the
-// whole band (proof-chain materialization, §4 stage 2, is what's missing —
-// see the note field for why this differs from a bare true/false ground
-// truth judgement).
+// INF-B1 — b1Existential: "some N1s are N2s" does not license "every N1 is a
+// N2". ACE itself declines the existential (parseAce returns residue
+// ["some","are"] rather than a subClassOf triple), so a case here asks what the
+// chat layer does with a sentence its own grammar refused: an honest refusal,
+// or a universal invented from a premise that never stated one.
+//
+// Each pair ships its probe next to a CONTROL that differs by one word — "every"
+// for "some", same nouns, same query. The control is what stops the probe from
+// rewarding silence: an engine that refuses everything fails the control, and
+// only an engine that reads the quantifier passes both cells.
+//
+// Cycled across the pairs so one word's handling is never the whole probe:
+// these differ in strength but none of them is "every", and a lane that reads
+// any of them as a universal makes the same claim the premise didn't.
+//
+// Regular-plural, persona-clean nouns only, and both filters are load-bearing.
+// An irregular plural masks the trap: "some men are fathers" is refused today
+// because the assert lane never folds "men" to "man". A persona-seeded noun
+// masks it too, and less visibly — see PERSONA_SEED_TERMS.
+// ======================================================================
+const EXISTENTIAL_QUANTIFIERS = ["some", "a few", "several", "most", "many"];
+
+function b1Existential(rng) {
+  const cases = [];
+  const pool = REGULAR_PLURAL_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n));
+  const shuffled = seededShuffle(pool, rng);
+  let cursor = 0;
+  for (let i = 0; i < 10; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 2);
+    cursor = next;
+    const [n1, n2] = picked;
+    const quantifier = EXISTENTIAL_QUANTIFIERS[i % EXISTENTIAL_QUANTIFIERS.length];
+    const existential = `${quantifier} ${n1}s are ${n2}s`;
+    const universal = `every ${n1} is a ${n2}`;
+    const scoEntailed = [{ subject: n1, predicate: "rdfs:subClassOf", object: n2 }];
+
+    { // The class-level probe: the existential entails nothing about the class,
+      // so the honest floor is a refusal. `entailed` is empty on purpose — and
+      // the premise is never lint()ed, because ACE declining it IS the setup.
+      cases.push(mkCase({
+        band: "INF-B1", template: "b1Existential", variant: "class-probe",
+        arms: ["chat"], checkType: "isa",
+        premises: [existential], query: `is a ${n1} a ${n2}`,
+        expect: { verdict: "unproven", entailed: [] },
+        note: "An existential premise entails no subclass relation, so a confident 'yes' here is a universal the premise never stated. ACE declines the sentence itself, which makes any yes the work of a lane that dropped the quantifier rather than read it.",
+      }));
+    }
+    { // The same trap reached through an individual: even granted the
+      // membership, the existential still licenses nothing about this member.
+      const ind = mintIndividual();
+      const typePremise = `${ind} is a ${n1}`;
+      checkEntailed(`b1-exi-indiv-${i + 1}`, [typePremise], [{ subject: ind, predicate: "rdf:type", object: n1 }]);
+      cases.push(mkCase({
+        band: "INF-B1", template: "b1Existential", variant: "individual-probe",
+        arms: ["chat"], checkType: "isa",
+        premises: [existential, typePremise], query: `is ${ind} a ${n2}`,
+        expect: { verdict: "unproven", entailed: [{ subject: ind, predicate: "rdf:type", object: n1 }] },
+        note: "Membership of the subject class plus an existential still entails nothing about this individual — the some/every slip is the only route to a 'yes'.",
+      }));
+    }
+    { // Control: swap "some" for "every" and the SAME query becomes provable.
+      checkEntailed(`b1-exi-ctl-class-${i + 1}`, [universal], scoEntailed);
+      cases.push(mkCase({
+        band: "INF-B1", template: "b1Existential", variant: "class-control",
+        arms: ["kernel", "chat"], checkType: "isa",
+        premises: [universal], query: `is a ${n1} a ${n2}`,
+        expect: { verdict: "yes", entailed: scoEntailed },
+        note: "The class-probe's minimal pair: one word apart, and this one is genuinely provable. Fails for an engine that refuses everything, which is what makes the probe's pass mean something.",
+      }));
+    }
+    { // Control: the individual probe's minimal pair, proof chain and all.
+      const ind = mintIndividual();
+      const typePremise = `${ind} is a ${n1}`;
+      const entailed = [
+        { subject: n1, predicate: "rdfs:subClassOf", object: n2 },
+        { subject: ind, predicate: "rdf:type", object: n1 },
+        { subject: ind, predicate: "rdf:type", object: n2 },
+      ];
+      checkEntailed(`b1-exi-ctl-indiv-${i + 1}`, [universal, typePremise], entailed);
+      cases.push(mkCase({
+        band: "INF-B1", template: "b1Existential", variant: "individual-control",
+        arms: ["chat"], checkType: "isa",
+        premises: [universal, typePremise], query: `is ${ind} a ${n2}`,
+        expect: { verdict: "yes", entailed, proof: true },
+        note: "The individual-probe's minimal pair: cax-sco over a taught type and a taught subclass, which the chat layer proves today.",
+      }));
+    }
+  }
+  return cases;
+}
+
+// ======================================================================
+// INF-B2 — b2ChainLenK (chain length 3/4/5) — graded against a declared
+// ceiling: the chain is classically provable and the kernel already derives
+// it, so `expect` pins the chat layer's honest floor rather than the classical
+// answer. The `ceiling` field carries that decision to the report, which
+// counts these separately from the greens that measure a real capability.
 // ======================================================================
 function b2ChainLenK(rng) {
   const cases = [];
@@ -416,7 +535,8 @@ function b2ChainLenK(rng) {
         band: "INF-B2", template: "b2ChainLenK", variant: `chain-${k}`,
         arms: ["chat"], checkType: "isa",
         premises, query, expect: { verdict: "unproven", entailed, proof: true },
-        note: "ceiling by construction (PLAN_INFERENCE_TESTING.md §2.2/§3): the chained subject-object pair is classically PROVABLE (scm-sco transitivity), but INF-B2 grades the chat-layer's multi-hop + proof-chain-materialization capability (§4 stage 2), which does not exist yet — expect stays the honest 'cannot be proven' floor until it does. The KERNEL closure (src/domain/syllogise.mjs) already derives this correctly; this template deliberately runs CHAT-arm only so that correctness is never miscounted as fabrication against a declared-ceiling literal.",
+        ceiling: "chat-layer multi-hop proof-chain materialization",
+        note: "The chained subject-object pair is classically provable by scm-sco transitivity, and the kernel closure (src/domain/syllogise.mjs) already derives it. This template grades the CHAT layer's multi-hop proof-chain materialization, so expect pins the honest 'cannot be proven' floor rather than the classical answer, and a pass here says the mouth refused, not that the chain was proved. Chat-arm only, so the kernel's correctness is never miscounted as fabrication against the floor literal.",
       }));
     }
   }
@@ -621,7 +741,9 @@ function c1ScmSvfApply(rng) {
 
 // ======================================================================
 // INF-C2 — c2Inconsistent: contradictory triple, SAME b1Disjoint machinery.
-// GENERATED NOW, ceiling until §4 stage 5 (consistency checker).
+// Grades a live capability: the engine detects the clash, names the disjoint
+// pair that caused it and refuses to answer, so a pass is the real behaviour
+// and not a floor this template agreed not to test.
 // ======================================================================
 function c2Inconsistent(rng) {
   const cases = [];
@@ -644,7 +766,7 @@ function c2Inconsistent(rng) {
       band: "INF-C2", template: "c2Inconsistent", variant: "inconsistent",
       arms: ["chat"], checkType: "inconsistent",
       premises, query, expect: { verdict: "inconsistent", entailed, clash: [c1, c2] },
-      note: "known by construction (§5): the clash is the template's own declared disjoint pair, pinned at generation time — ceiling until §4 stage 5 (consistency checker); the engine today answers from the (contradictory) memory without noticing.",
+      note: "The clash is the template's own declared disjoint pair, pinned at generation time, so grading stays a comparison against a known literal rather than a re-derivation. A pass requires the engine to admit the contradiction rather than answer from the contradictory memory; it does that today, naming the disjoint pair and asking for a retraction.",
     }));
   }
   return cases;
@@ -653,6 +775,7 @@ function c2Inconsistent(rng) {
 // ---- id assignment (mirrors chatbench's `g-${grade}-${slug}-${i+1}`) ----
 const TEMPLATE_SLUG = {
   a1Lookup: "lookup", a2ChainLen2: "chain2", b1Disjoint: "disjoint",
+  b1Existential: "existential",
   b2ChainLenK: "chaink", b2Svf1: "svf1", b2Svf1Apply: "svf1apply",
   c1Cardinality: "card", c1ScmSvfApply: "scmsvf", c2Inconsistent: "inconsistent",
 };
@@ -676,6 +799,7 @@ export function generateCases({ seed = DEFAULT_SEED } = {}) {
     a1Lookup: a1Lookup(rng),
     a2ChainLen2: a2ChainLen2(rng),
     b1Disjoint: b1Disjoint(rng),
+    b1Existential: b1Existential(rng),
     b2ChainLenK: b2ChainLenK(rng),
     b2Svf1: b2Svf1(rng),
     b2Svf1Apply: b2Svf1Apply(rng),

@@ -93,6 +93,9 @@ export function parseCases(text) {
       errors.push(`${c.id}: expect.verdict must be one of ${VERDICTS.join("|")}`);
     }
     if (c.graph && !isPlainObject(c.graph)) errors.push(`${c.id}: graph must be an object (a raw entities payload fragment)`);
+    if (c.ceiling !== undefined && (typeof c.ceiling !== "string" || !c.ceiling.trim())) {
+      errors.push(`${c.id}: ceiling must be a non-empty string naming the capability that would lift it`);
+    }
     cases.push(c);
   });
   return { cases, errors };
@@ -318,17 +321,37 @@ export function gradeChatRow(caseDef, outcome) {
 
 // ---- per-band METRIC PAIR + ladder rollup (mirrors agentbench/grade.mjs) --
 
+// A case carrying `ceiling` expects the engine's honest floor, not the
+// classical answer, so its green says "we agreed not to test this yet" while
+// looking exactly like a green that says "we can do this". Counting the two
+// apart is the difference between a band score and a band score you can read:
+// a 100% band made entirely of ceiling-graded rows measures nothing about the
+// capability its name implies.
 function tallyOne(rows) {
   const total = rows.length;
   const passed = rows.filter((r) => r.pass).length;
   const completed = rows.filter((r) => r.completed).length;
   const fabricated = rows.filter((r) => r.fabricated).length;
+  const ceilingGraded = rows.filter((r) => r.ceiling).length;
+  const ceilingGradedPassed = rows.filter((r) => r.ceiling && r.pass).length;
   const completion = total ? completed / total : 0;
   const fabricationRate = total ? fabricated / total : 0;
   return {
     total, passed, completed, fabricated, completion, fabricationRate,
+    ceilingGraded, ceilingGradedPassed,
     gatePass: fabricationRate === 0 && completion >= COMPLETION_FLOOR,
   };
+}
+
+/** The distinct capabilities the ceiling-graded rows of one arm are waiting on,
+ *  per band — the legend behind the ceiling column. */
+export function ceilingCapabilities(rows) {
+  const byBand = {};
+  for (const row of rows) {
+    if (!row.ceiling) continue;
+    (byBand[row.band] ??= new Set()).add(row.ceiling);
+  }
+  return Object.fromEntries(Object.entries(byBand).map(([band, set]) => [band, [...set].sort()]));
 }
 
 /** Fold graded rows (one arm's — kernel or chat) into { byBand, overall }. */
@@ -362,12 +385,15 @@ export function ladderGate(rolled) {
   return { order: BANDS.filter((b) => rolled.byBand[b]), gatedAt, receipts };
 }
 
-/** Human-readable metric-pair table for one arm's rollup. */
+/** Human-readable metric-pair table for one arm's rollup. The ceiling column
+ *  reads "<ceiling-graded passes>/<passes>" — how much of the band's green is
+ *  the engine's declared floor rather than its capability. */
 export function renderRollup(rolled, label = "") {
   const row = (l, c) =>
     `${l.padEnd(9)} ${String(c.total).padStart(3)}  ${String(c.passed).padStart(4)}  ` +
-    `${(c.completion * 100).toFixed(0).padStart(10)}%  ${(c.fabricationRate * 100).toFixed(0).padStart(6)}%  ${c.gatePass ? "PASS" : "----"}`;
-  const lines = [`${label ? `${label} — ` : ""}band       n  pass  completion  fabric  gate`];
+    `${(c.completion * 100).toFixed(0).padStart(10)}%  ${(c.fabricationRate * 100).toFixed(0).padStart(6)}%  ${c.gatePass ? "PASS" : "----"}` +
+    `  ${`${c.ceilingGradedPassed}/${c.passed}`.padStart(11)}`;
+  const lines = [`${label ? `${label} — ` : ""}band       n  pass  completion  fabric  gate  ceiling/pass`];
   for (const band of BANDS) {
     const c = rolled.byBand[band];
     if (c) lines.push(row(band, c));
