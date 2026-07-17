@@ -94,7 +94,7 @@
       "area": "logic",
       "verdict": "rename",
       "cite": "SPARQL 1.1 Entailment Regimes, W3C Rec 2013-03-21",
-      "note": "both spellings ship (materialise 24 / materialize 28). Pick one.",
+      "note": "picked British -ise (house style: syllogise/canonicalise/normalise). Standardised in src/domain, docs and live plan docs; chat.mjs retains -ize (Phase 3's file to change).",
       "verified": "2026-07-17 — primary source read"
     },
     {
@@ -103,7 +103,7 @@
       "verdict": "extend",
       "probe": "rdf:Statement",
       "cite": "RDF 1.1 Semantics, W3C Rec 2014-02-25, App. D.1; RDF 1.2 Schema (WD 2026-03-28) §7.2 'Old-style' Reification",
-      "note": "tmct does textbook reification and the WORD appears 0 times. Not deprecated; demoted to legacy by RDF 1.2 (CR, not Rec).",
+      "note": "tmct does textbook reification (rdf:Statement + rdf:subject/predicate/object). Naming it in core.mjs's header is deferred — core.mjs is being edited by the fact-id agent (§7.7). Not deprecated; RDF 1.2 reclassifies it as legacy (CR, not Rec).",
       "verified": "2026-07-17 — primary source read"
     },
     {
@@ -111,7 +111,7 @@
       "area": "storage",
       "verdict": "rename",
       "cite": "RFC 9923 (FNV, Informational, Feb 2026); Pro Git 2nd ed. §10.2",
-      "note": "borrows Git/IPFS's implied collision resistance. fnv1a32 is 32-bit. PLAN_NORMATIVE.md 9.1.",
+      "note": "borrows Git/IPFS's implied collision resistance. fnv1a32 is 32-bit. PLAN_NORMATIVE.md 9.1. Left to §7.7 (the fact-id agent's hash widening); earned once the hash is wide.",
       "verified": "2026-07-17 — primary source read"
     },
     {
@@ -119,7 +119,7 @@
       "area": "storage",
       "verdict": "rename",
       "cite": "ISO 22739 (blockchain/DLT vocabulary), 2020/2024; Kreps, 'The Log', LinkedIn Eng., Dec 2013",
-      "note": "no term of art in the systems lineage. tmct's ledger is a viz, and the store is not append-only.",
+      "note": "no term of art in the systems lineage. tmct's ledger is a viz, and the store is not append-only. Kept as the `tmct viz` UI label (a published surface); ledger-viz.mjs's header now names it a VIEW, not append-only/immutable storage.",
       "verified": "2026-07-17 — primary source read"
     },
     {
@@ -135,7 +135,7 @@
       "area": "storage",
       "verdict": "rename",
       "cite": "Jensen et al., SIGMOD Record 23(1), 1994",
-      "note": "NOT transaction time - that cannot be changed by definition. An audit stamp on a snapshot relation.",
+      "note": "NOT transaction time - that cannot be changed by definition. An audit / last-modified stamp on a snapshot relation. The ontology comment already says so; the parallel core.mjs vocabulary-note fix is deferred (core.mjs is the fact-id agent's file, §7.7). The stored prop name is kept — a rename needs a migration this plan does not do.",
       "verified": "2026-07-17 — primary source read"
     },
     {

@@ -1,6 +1,11 @@
 // ledger-viz.mjs — `tmct viz`: the memory graph as a readable ledger of
 // fact-sentences around one focus term, with the in-page chat dock.
 //
+// "ledger" is a UI label for this VIEW, not a storage claim. The memory graph
+// underneath is mutable — upsert rewrites a fact in place and removeFacts
+// deletes — so this renders a report over the current graph, not an
+// append-only or immutable log (the ISO 22739 sense of the word does not hold).
+//
 // Three pure/impure-separated pieces:
 //   - computeLedgerData(repoDir, opts)      — I/O (loadMemory) + derivation
 //   - computeLedgerDataFromPayload(payload) — the pure derivation half

@@ -1,7 +1,7 @@
 // syllogise.mjs — tmct's speculative-inference engine, growing toward
 // tier-5 "the Syllogist". Offline, deterministic: forward-chains entailments
 // over the OWL-labelled memory graph so a future query-time MISS becomes a
-// lookup. `syllogise()` (the materializing pass) only runs as the explicit
+// lookup. `syllogise()` (the materialising pass) only runs as the explicit
 // `npx tmct syllogise` batch job; the pure kernels below may also be reused
 // for a small, bounded, read-only live check without writing anything.
 //
@@ -659,7 +659,7 @@ export function findConsistencyViolations(typeEdges, subClassEdges, disjointEdge
  * Run one bounded speculative pass over the memory graph under `repoDir`.
  * Forward-chains the five rules in order — scm-sco, cax-sco, cax-dw,
  * cls-svf1, scm-svf1 — each seeing the prior rules' conclusions from this
- * same pass, and materializes each new conclusion via `appendFacts` with its
+ * same pass, and materialises each new conclusion via `appendFacts` with its
  * `entailed:*` provenance. Trust rides the entailed hook
  * (`min(premiseTrusts) x ruleConfidence`) when premises are resolvable in the
  * pre-pass snapshot, else falls back to the bare entailed prior.
@@ -764,7 +764,7 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
       subject: d.subject, predicate: TYPE_PREDICATE, object: d.object,
       provenance: ENTAILED_TYPE_PROVENANCE,
       // The ⊑ premise is cited as the DIRECT via⊑object edge even when the
-      // taught chain is multi-hop: scm-sco materializes that edge (this same
+      // taught chain is multi-hop: scm-sco materialises that edge (this same
       // pass or an earlier one), and retraction re-VERIFIES every candidate
       // anyway, so a citation left dangling by budget truncation is inert.
       justification: [

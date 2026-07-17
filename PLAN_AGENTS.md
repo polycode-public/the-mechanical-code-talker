@@ -189,7 +189,7 @@ bounded, (c) genuinely harder — and feed §2.3 below.
   and redesigned the test corpus around the real math rather than a contrived fixture that happened
   to pass.
 - **Contradiction detection — checked explicitly, tmct is ahead here.** marginalia's `mg:contradicts`
-  is only ever LLM-proposed at ingest or materialized via symmetric closure — no algorithm actually
+  is only ever LLM-proposed at ingest or materialised via symmetric closure — no algorithm actually
   detects disagreement. tmct's `findContradictions` (`src/adapters/memory/core.mjs`) is fully automatic and
   deterministic: any two facts sharing (subject, predicate) with a different object, both above a
   trust floor, surface as an explicit unresolved pair on every `/memory` render. Not a finding to

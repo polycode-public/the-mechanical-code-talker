@@ -11,7 +11,7 @@ stage is a costed option this document makes buildable, not a recommendation to 
 `src/domain/syllogise.mjs` today ships seven deterministic kernels, all inside the OWL 2 RL
 fragment: subclass transitivity, type propagation, disjointness "provable no",
 someValuesFrom application and subsumption, cardinality lower bounds, and max-0 denial —
-under budget/focus/screen/trust guards, materializing off the hot path so a query-time
+under budget/focus/screen/trust guards, materialising off the hot path so a query-time
 miss becomes a lookup. `PLAN_SYLLOGIST.md` surveys the field (RL is Datalog-shaped and
 solved; DL satisfiability is tableau-shaped and solved; tmct's trust/provenance layer is
 the part the literature is silent on) and owns the incrementality/retraction horizon.
@@ -115,13 +115,13 @@ ELK-style: normalize the TBox to EL canonical forms (`C ⊑ D`, `C1 ⊓ C2 ⊑ D
 Polynomial; same operational shape as `syllogise()` (batch pass off the hot path,
 budget/focus caps, deterministic ordering, conclusions written under `entailed:el-*`
 provenance with `min(premiseTrusts) × ruleConfidence` trust, retractable by provenance).
-Output is materialized subsumptions/memberships, so the existing ask lanes consume them
+Output is materialised subsumptions/memberships, so the existing ask lanes consume them
 as ordinary lookups — no query-time changes at all.
 
 **Stage DL — a bounded tableau prover (`src/tableau.mjs`).**
 ALC first (⊓ ⊔ ¬ ∃ ∀), extending toward SHOIQ (transitive roles, role hierarchies,
 nominals, qualified cardinality) in separately-tested increments. Query-time only, not
-materialized in this plan's stages — a case-split conclusion depends on every branch of
+materialised in this plan's stages — a case-split conclusion depends on every branch of
 its proof, and batch provenance/retraction for that shape is an open design problem a
 later tier can take on with the JTMS groundwork as its starting point. Determinism:
 fixed expansion-rule priority, lexicographic branch ordering, no randomization. Every
@@ -177,7 +177,7 @@ stages.
 - FOL, arithmetic, temporal/event reasoning, defaults, probabilistic weighting — each a
   further tier past DL; the "where the edge shifts" section above names the candidate
   literatures for whichever gets designed next.
-- Incremental/RETE materialization and retraction algorithms (`PLAN_SYLLOGIST.md` owns
+- Incremental/RETE materialisation and retraction algorithms (`PLAN_SYLLOGIST.md` owns
   that horizon).
 - LLM involvement, including for proof rendering — proofs render through the same
   template machinery as every other answer, per the project's no-LLM product path.

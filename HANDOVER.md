@@ -90,6 +90,8 @@ Phases 1, 2, 3, 4, 5 and 6 are closed. What remains:
   comments (§7.1-7.3) have landed.
 - **Phase 8 — the tested-capability page.** Nothing started. Generated, not hand-written. No bare
   numbers: every figure carries its units, version, date, method link and caveat.
+  - `examples/{mini-webapp,polyglot}/.tmct/graph.json` have no generator and no drift guard — a
+    rename or hand-edit ships unchecked; needs a module spec + fixture-repos-style test.
 - **Phase 9 — the prose pass.** Nothing started, and last by design.
 ### Next-cycle recommendations the benchmarks made
 

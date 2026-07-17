@@ -201,7 +201,7 @@ premise shape: cax-sco the type premise plus the direct ⊑ edge; cax-dw the typ
 disjointWith premise (orientation-resolved, since the symmetric relation is stored one way) and the
 ⊑-lift when there is one; cls-svf1 the property edge, the filler's type, the restriction's two
 scaffolding rows and the ⊑-lift; scm-svf1 the two restrictions' four scaffolding rows plus the
-filler ⊑ premise. A multi-hop ⊑ premise is cited as its direct edge, which scm-sco materializes in
+filler ⊑ premise. A multi-hop ⊑ premise is cited as its direct edge, which scm-sco materialises in
 the same pass; a citation left dangling by budget truncation is inert, because retraction
 re-verifies every candidate rather than trusting the citation.
 
