@@ -151,6 +151,26 @@ test("the plan render loads its own replay of the solved game", async () => {
   }
 });
 
+test("the plan render draws the puzzle's own pieces and nothing else from memory", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    const frame = page.frameLocator(".plan-render iframe");
+    await frame.locator("body").waitFor({ state: "visible" });
+    const replay = await frame.locator("body").innerText();
+    // The board once drew every member of every class it had not declared as a
+    // block or a slot, which is the whole memory rather than the puzzle. A
+    // render that names a term the game never taught is that defect returning,
+    // and naming one piece is not enough to notice it.
+    const hanoiTerms = /^(disk-[1-3]|peg-[a-c])$/;
+    const drawn = [...replay.matchAll(/\b[a-z]+-[a-z0-9]+\b/g)].map(([term]) => term);
+    const strangers = [...new Set(drawn.filter((term) => !hanoiTerms.test(term)))];
+    assert.deepEqual(strangers, [], "the replay names only the pieces and places hanoi-3 taught");
+    assert.ok(drawn.length > 0, "the replay names the pieces at all");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the version the page documents is the version the package ships", async () => {
   const { context, page } = await openHomePage();
   try {

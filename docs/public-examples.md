@@ -64,7 +64,7 @@ harness the README fences use.
 | `demo-templates.mjs` `TEMPLATES` | 56 question/substitution pairs the box can pick | `ask` | `e2e/pages-demo-templates.test.mjs` (all 56 must answer) | replay |
 | `index.html:311` | `runChat` library block | `runChat` | `e2e/pages-home.test.mjs` | dom |
 | ledger hero | the embedded `ledger.html` iframe | `renderLedger` | `e2e/pages-home.test.mjs`, `e2e/pages-index.test.mjs` | dom |
-| plan render | the embedded `plan.html` iframe | `renderPlanHtml` | `e2e/pages-home.test.mjs` | dom |
+| plan render | the embedded `plan.html` iframe | `renderPlanHtml` | `e2e/pages-home.test.mjs` (draws only the pieces hanoi-3 taught), `test/adapters/plan-viz.test.mjs` | dom |
 | version stamp | `<span id="pkg-version">` | `scripts/build-demo-site.mjs` | `e2e/pages-home.test.mjs`, `test/estate/page-version-stamp.test.mjs` | estate |
 
 The three `dom` rows are the open ones. `e2e/pages-home.test.mjs` asserts the
@@ -78,6 +78,13 @@ was "not re-run here". One of the five scripted answers had drifted by the time
 it was checked for this table: the page quoted "defined in src/core/model.mjs"
 where the engine says "found in". A comment recording a past verification does
 not survive the next engine change; the two tests above do.
+
+`ledger.html` and `plan.html` are generated at build and gitignored, so the
+generator is the surface that can be pinned. `renderPlanHtml` and
+`computeBlocksLayout` carry ten tests between them. The rendered page now also
+has to draw only the pieces the game taught: the board once drew every member of
+every class it had not declared, and a check that the replay names `disk-1`
+passes just as happily when it names the whole memory.
 
 ## docs/
 

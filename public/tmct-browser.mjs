@@ -5,16 +5,15 @@
 // "wink-eng-lite-web-model" resolve to esm.sh CDN builds pinned to the exact versions
 // package.json depends on).
 //
-// Everything askBrowser() returns is genuinely computed by src/domain/ask.mjs's ask() running
-// in the visitor's own browser against public/demo-graph.json (a static copy of
+// askBrowser() computes its answer with src/domain/ask.mjs's ask(), running in the
+// visitor's own browser against public/demo-graph.json (a static copy of
 // examples/mini-webapp/.tmct/graph.json, schema-doc-enriched by scripts/build-demo-
-// graph.mjs) — nothing on this page is precomputed server-side or faked. GitLab Pages
-// has no backend at all, so there is no other way for this demo to work: a plain HTTP
-// client (curl, a scraper) fetching this page only ever sees the static HTML/JS source,
-// never a computed answer — only a real browser (or a headless-browser automation tool
-// actually running the JS, e.g. Playwright) can observe one, by reading it out of the
-// DOM or off `window.tmctAnswer` after this module resolves. That is a hard limitation
-// of a static site, not a bug.
+// graph.mjs). GitLab Pages has no backend, so the page precomputes nothing.
+//
+// This shapes how you test it. Fetching the page with curl returns the static
+// HTML/JS source and no answer. Reading an answer means running the JS, so a test
+// needs a real browser (e.g. Playwright) and takes it from the DOM or from
+// `window.tmctAnswer` once this module resolves.
 
 import { registerWinkModel } from "./engine/src/adapters/wink-model.mjs";
 import { ask } from "./engine/src/domain/ask.mjs";
