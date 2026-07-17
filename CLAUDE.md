@@ -186,10 +186,10 @@ Check for new drift before running a full repo-wide sweep; don't assume one is n
 ## Don't narrow scope on your own judgment
 
 When investigating one reported bug turns up a second, adjacent one, fold it into the current fix
-by default, even if it's on a different code path or looks technically separable. Don't mark it
-"out of scope, noted for a follow-up" on your own. Only defer something that's genuinely a
-separate, large body of work, and say so explicitly so the operator can object rather than making
-that call silently. Getting this wrong means real bugs sit unfixed while looking handled.
+by default, even if it's on a different code path or looks technically separable. Don't quietly
+hive it off as a separate task on your own. Only treat something as separate work when it's
+genuinely a separate, large body of work, and say so explicitly so the operator can object rather
+than making that call silently. Getting this wrong means real bugs sit unfixed while looking handled.
 
 ## Never write capability walls — state the horizon, not the wall
 
@@ -208,7 +208,7 @@ out for good, out of reach, beyond reach, impossible, unreachable, off the table
 closed door, dead end, hard wall, hard limit, ceiling (as design limit), frozen (as scope), set
 in stone, immutable (as scope), no path to, will never, can never, cannot ever, won't ever, not
 even in principle, fundamentally/inherently/structurally/architecturally impossible, "I wouldn't
-go there", "not a placeholder for something smarter", "not a deferred stretch".
+go there", "not a placeholder for something smarter".
 
 NOT covered by this rule, because they are different things: the project constitution (no LLM in
 the product path), safety/security decisions, behavioral invariants that protect honesty ("a

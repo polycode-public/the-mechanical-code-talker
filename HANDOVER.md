@@ -45,8 +45,7 @@ honest-miss citation) and the 64-bit `factIdFor` migration, with the full suite 
   GitLab home page (`public/index.html`). Every claim carries its evidence in place: the score with
   units, the version it was measured at (2.0.3), the date, a link to the method
   (`SKILL_BENCHMARK_*.md`), and its caveat. The internal `CAPABILITIES_<version>.md` audit (run via
-  `SKILL_CAPABILITIES_AUDIT.md`) stays the source of truth; it is stale at 2.0.3, and a refresh is a
-  separate cycle.
+  `SKILL_CAPABILITIES_AUDIT.md`) stays the source of truth; it is stale at 2.0.3 and wants a refresh.
 - **Phase 9 — the plain-prose pass** over the same two surfaces, to `SKILL_PLAIN_PROSE.md`, done
   together with Phase 8. May rewrite prose freely; may not change an asserted fenced block's input
   or output without re-running the README harness.
@@ -60,8 +59,10 @@ honest-miss citation) and the 64-bit `factIdFor` migration, with the full suite 
     `chat.mjs` teach path already guards it with a real-boundary check.
   - 3 CHATBENCH cells are graded but absent from `GRADED_MATRIX` (`A2:assert-recall`, `B1:svo-query`,
     `B1:noise+svo-query`) — coverage is 9 of 36 declared, not 12.
-- **Deferred by `PLAN_NORMATIVE.md` on purpose** (a later cycle, not this one): §7.5 the PROV Source
-  split (needs a stored-shape migration) and §7.6 SKOS concept identity (blocked on concept identity).
+- **Two vocabulary items still open** (`PLAN_NORMATIVE.md` §7.5/§7.6): the PROV Source split — a
+  read-side reclassification derivable from the `sourceType` already stored on every Source
+  individual — and SKOS concept identity, which needs concept identity for the corpus's bare-string
+  terms before `skos:related` applies.
 ### Next-cycle recommendations the benchmarks made
 
 - **Re-measure CEFR at N=2 and report the cell table, not the marginals.** 2.0.3 ran N=1 by operator

@@ -98,7 +98,7 @@ the correct yes-answer — the goal display reads the parse envelope, which
 still carries the old `defines` reading. Small, display-only, noted for a
 later iteration.
 
-Adjacent edge found while probing, deferred to playtest 002 (stated, not
+Adjacent edge found while probing, logged for playtest 002 (stated, not
 silent): "is a dog a cat" — the IsA yes/no ladder exhausts honestly, but the
 downstream miss text claims "couldn't parse this as a graph question" and
 suggests the exact shape the user typed. Different axis (honesty on miss), so

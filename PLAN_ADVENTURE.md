@@ -271,11 +271,11 @@ first (and, for this validation, only) NPC action. Exit criterion: the FULL work
 passes exactly as specified, including the independent graph-state check for the housekeeper's move
 whether or not the player was present to see it.
 
-**Phase 5 — Generalization spike (deferred, explicitly not this document's scope).** Once this and
-both prior planning docs have independently validated their own piece (open-loop execution, closed-
-loop replanning, world-mutation-with-autonomous-actors), revisit whether a single unifying "agent
-loop" abstraction is warranted — the same explicit deferral `PLAN_GUESS_NUMBER.md` Phase 4 already
-stages for its own convergence point.
+**Phase 5 — Generalization spike (explicitly not this document's scope).** Once this and
+both prior planning docs have each validated their own piece (open-loop execution, closed-
+loop replanning, world-mutation-with-autonomous-actors), whether a single unifying "agent
+loop" abstraction is warranted is an open question — `PLAN_GUESS_NUMBER.md` Phase 4 raises the same
+question for its own convergence point.
 
 ## Open risks / questions
 
@@ -294,7 +294,7 @@ stages for its own convergence point.
 - **NPC scheduling scale.** One NPC, one scripted turn-3 action, is enough to validate the mechanism
   but says nothing about how this would hold up with many NPCs each carrying many turn-gated Rules —
   named as an explicit non-goal for this document, consistent with Hanoi's own "search-space blow-up
-  beyond toy scale" deferral.
+  beyond toy scale" non-goal.
 - **Confirmation-before-executing.** Whether a move should require confirmation is an open question
   here too, and this document's answer leans the same direction the
   `teachFact` precedent suggests (act, then state plainly what happened) — but a MISTAKEN action here

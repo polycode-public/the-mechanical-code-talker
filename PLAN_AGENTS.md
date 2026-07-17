@@ -362,7 +362,7 @@ that isn't code at all.
 
 - ✅ **The default stays honest ambiguity over guessing — confirmed, unchanged.** §2.2 already
   confirmed this is the right posture — tmct's resolver refuses and lists candidates on a genuine
-  tie, and seonix's own conversational path defers to tmct's resolver for exactly this reason.
+  tie, and seonix's own conversational path delegates to tmct's resolver for exactly this reason.
 - ✅ **`tmct.toml` `[bias]` table — shipped v1.4.0.** `src/domain/memory/bias.mjs` (`biasForSourceId`,
   `biasForRow`, `rankByBiasThenTrust`), wired into `chat.mjs`'s fact-listing lanes (`factAnswer`,
   `factReadBack`'s listing branches, `describedFacts`, plus the count/quantifier-recall single-winner

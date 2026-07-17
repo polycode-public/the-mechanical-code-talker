@@ -806,7 +806,7 @@ ever clearing it, so every renamed file accumulates. Only the nested paths are i
 is unaffected because it checks out clean, which is exactly why this went unnoticed.
 
 **Fix the script, not the directory:** add `rmSync(OUT, {recursive: true, force: true})` before the
-copy loop. Deleting the directory today just defers it. The reorg already stranded one full copy of
+copy loop. Deleting the directory today does not solve it. The reorg already stranded one full copy of
 the old layout on every dev machine that has run `demo:build`.
 
 ---

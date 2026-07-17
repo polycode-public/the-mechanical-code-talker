@@ -64,7 +64,7 @@ The copy starts as `EXAMPLE_PLAYTEST_LOG.md` verbatim; make it a record, not a m
 - Keep the structure from the `test: …` heading down: **Expectations** (Given / When / Expected /
   Actual), **Result**, **Play test session log**, **Retest** / **Retest result** / **Retest
   session log**. One `test: <name>` section per edge found (usually one per iteration; if
-  probing turns up a second adjacent edge, fold it in — don't defer it silently).
+  probing turns up a second adjacent edge, fold it in — don't skip it silently).
 - Add a short **Fix** section between Result and Retest: which layer changed (§5's map), what
   the change was, and which test file carries the regression. No commit hashes, no "Gap N"
   labels — plain description.

@@ -306,9 +306,9 @@ Check 4 (`parseAce` reparse + triple deep-equality). Exit criterion: a possessiv
 (`"X's Y is Z"` rendering) can show its `"the Y of X is Z"` alternate, verified, alongside the
 original.
 
-**Phase 5 — Hierarchy-shift generation + `syllogise.mjs` Check 5 (only once a real generator for this
-shape exists).** Explicitly deferred until a generation technique that produces class-hierarchy-shift
-paraphrases is designed and scoped — not attempted in Phases 1-4. When it lands, wire Check 5's
+**Phase 5 — Hierarchy-shift generation + `syllogise.mjs` Check 5.** This needs a generation technique
+that produces class-hierarchy-shift paraphrases; no such technique is designed yet, so Phases 1-4 do
+not attempt it. When one lands, wire Check 5's
 `findIsaChain` splice exactly as specified in Part 4.
 
 Each phase keeps `npm test` green; nothing here touches the chat hot path until Phase 3, and even

@@ -617,8 +617,7 @@ one pass, and it is the natural companion to this one.
 
 This one **does** touch a stored shape and **does** need a migration story — `sourceType` is
 already on every Source individual on disk, so the split is derivable from what is stored, which
-makes it a read-side reclassification rather than a rewrite. That is a design worth doing
-deliberately, not folded into a vocabulary pass.
+makes it a read-side reclassification rather than a rewrite.
 
 ### 7.7 `factIdFor`'s 32-bit hash — the one that is not a naming fix — LANDED
 
@@ -677,9 +676,9 @@ All doc and comment level, all cheap, none behavioural. §9.2.
 - **`materialise` — LANDED** in the files this pass owns: British `-ise` in `syllogise.mjs`, the
   live plan docs and the register. `chat.mjs` is Phase 3's and keeps `-ize`; historical benchmark
   reports and one external quote are left as measurement/citation.
-- **`content-addressed` — DEFERRED to §7.7.** The fact-id agent's hash-widening is in-flight in the
-  working tree but not committed (`factIdFor` is still 32-bit FNV at HEAD). The word is left
-  untouched; `hash.mjs` is not this pass's file. Earned once the hash widens.
+- **`content-addressed` — LANDED (§7.7).** `factIdFor` now truncates SHA-256 to 64 bits, so the term
+  is accurate — a collision-resistant cryptographic digest — and the register verdict moved
+  rename→aligned.
 - **`mgx:updatedAt` prose and reification naming — LANDED (on disk).** `core.mjs`'s `mgx:updatedAt`
   note now says audit/last-modified, not transaction time, and its header names the RDF 1.1
   reification vocabulary with the doc pointer. Both edits sit in `core.mjs`, which the fact-id agent

@@ -20,7 +20,7 @@ exactly one lever, and it is large and it is the operator's to pull (§4). Goal 
 them a 50-line module copied on a premise the layer checker contradicts (§6).
 
 Two things fell out that are not dependency work and are reported anyway, because
-`CLAUDE.md` says a bug found next door gets folded in rather than deferred quietly:
+`CLAUDE.md` says a bug found next door gets folded in rather than passed over quietly:
 
 - **`tmct_search`'s `name` parameter was a ReDoS** — fixed. `name=(a+)+$` against one 30-character
   label ran past 30 seconds; the same payload now returns a refusal in 1ms. §3.9.
@@ -796,7 +796,7 @@ commit, per PLAN_PURGE Rule 7.
 | 10 | `bfsLevels` → `domain/planning.mjs` (§6.5) | 4 | **medium** | Four callers with different payloads. The riskiest of the internal-library batches. |
 | 11 | `trackedFiles` (§6.6f); `corpusLanes` (§6.6g); `relativeSpecifiers`/`importClosure` (§6.6n) | 4 | **medium** | Adapters-layer. §1.3 applies to `trackedFiles` — builtin-only. |
 | 12 | `isMain` guard: fix the 5 wrong spellings (§6.6p) | 4 | **low** | A correctness fix wearing a duplication costume. |
-| 13 | ~~**`tmct_search` ReDoS**~~ (§3.9) | — | **done** | A defect, not dependency work. Folded in rather than deferred. |
+| 13 | ~~**`tmct_search` ReDoS**~~ (§3.9) | — | **done** | A defect, not dependency work. Folded in, not passed over. |
 | 14 | ~~**Maintainer tier + `yaml`**~~ (§3.1) | 1 | **done** | The one library this plan adopts. It fixed silent data loss the subset reader was causing. |
 | 15 | **TUI decision** (§4) | 2 | **gated on Q2** | Do nothing until answered. |
 

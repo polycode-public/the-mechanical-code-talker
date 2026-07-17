@@ -139,7 +139,7 @@ become an automatic fallback on ask-lane misses.
 Teach frames and graph vocabulary for `unionOf` ("every X is a Y or a Z"), `complementOf`
 ("everything that is not X is Y"), `oneOf` ("the Xs are exactly A, B and C"), negative
 type assertions ("rex is not a cat" as an assertion, today only a retraction trigger —
-this is the "negative-capability data model" already on the deferred list), and
+this is the "negative-capability data model" already noted as not built), and
 `differentFrom`. Everything stores, reads back, and round-trips with zero inference —
 useful on its own (the graph can finally *hold* this knowledge) and prerequisite to both
 stages.

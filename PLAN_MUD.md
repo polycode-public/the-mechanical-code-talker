@@ -212,7 +212,7 @@ profile in `~/.aws/config`, exactly what `aws configure sso` already produces). 
    regardless of whether the active credentials came from Tier 1's guest identity or a Tier 2
    Identity-Center profile; only what the resulting IAM permissions actually allow differs.
 
-**Why Tier 3 is dropped, not deferred**: the repository is open source. Anyone wanting a genuinely
+**Why Tier 3 is dropped**: the repository is open source. Anyone wanting a genuinely
 private, specific-people-only shared world can already clone it and stand up their own AWS resources
 — which is exactly Tier 2's own model, just run by a different person for a different table. Tier 3's
 entire purpose (restrict a shared world to a named set of real people) is already fully served by

@@ -400,7 +400,7 @@ be stale about its own delivery than about its remaining scope. And two plans ar
 the tree has overtaken.
 
 #### `PLAN_ADVENTURE.md` — pinned at `6d6fff8`
-- **Done** — only the generic substrate it defers to: snapshot-per-step world state (`planning.execute.next`), taught action rule kinds (`core.mjs:1112-1118`), router registration (`src/domain/router/taught.mjs`).
+- **Done** — only the generic substrate it relies on: snapshot-per-step world state (`planning.execute.next`), taught action rule kinds (`core.mjs:1112-1118`), router registration (`src/domain/router/taught.mjs`).
 - **Doing** — none.
 - **Todo** — all four of its own gaps, re-checked open: no `parseImperative` (`lexicon-core.json:8548` still holds an empty `"imperative": {}` stub), no NPC scheduler, no Ashcombe Hall corpus, no `hasExit`/`currentlyIn`.
 
@@ -455,7 +455,7 @@ the tree has overtaken.
 #### `PLAN_PARAPHRASE_VERIFICATION.md` — pinned at `6d6fff8`
 - **Done** — the isa-family slice, and it reaches further than the plan says. `verifySubClassParaphrase`/`paraphraseVerifiedSubClass` (`src/domain/paraphrase.mjs:73,94`), pinned by `test/adapters/paraphrase.test.mjs` — including that swap detection is a closure-derived contradiction, not string inequality. **The slice is already live-wired into chat** (`chat.mjs:10411-10429`), which the plan frames as wholly future.
 - **Doing** — none beyond that slice.
-- **Todo** — Phases 1, 2, 4, and the correctly-deferred 5. `verifyParaphrase`: zero hits.
+- **Todo** — Phases 1, 2, 4, and Phase 5, correctly unbuilt (its generator does not exist). `verifyParaphrase`: zero hits.
 
 #### `PLAN_REPO_INDEX.md` — pinned at `6d6fff8`
 - **Done** — nothing of its own, correctly. Its baseline crux verifies: no parser (`acorn`/`@babel/parser`/`tree-sitter`/`typescript` all absent), and `buildEntities()` has zero non-test callers.

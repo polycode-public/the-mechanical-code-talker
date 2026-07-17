@@ -388,7 +388,7 @@ The far end of the why-spectrum, worked — "why did the American Civil War star
   `mgx:causes` is a corpus predicate with a display phrase (the predicate-phrase table in
   `src/services/chat.mjs`), taught
   cause facts store today (the taught `mgx:cause` vs corpus `mgx:causes` predicate
-  unification is a known deferred item that W1 would force closed).
+  unification is a known open item that W1 would force closed).
 - **Ask "why did the civil war start?" today:** at best a single-hop read-back of one
   taught edge; no multi-hop cause chase exists, and "why" only re-renders the previous
   answer. Effectively a miss.

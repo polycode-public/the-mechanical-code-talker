@@ -87,7 +87,7 @@ specifically/`, `doesNotMatch(/read as/)`). **Not yet fixed** — needs the same
 tests already updated for this (`test/chat-cefr-1.6.1-decision-log.test.mjs`): update the assertions
 to match the new, better behavior, don't revert the fix.
 
-## Routed backlog — deferred findings, not fixed this run
+## Routed backlog — findings not fixed this run
 
 - **ESL phrasing breaks recognition**: `"what is X, please explain"` (trailer folded into the term),
   `"please learn (this/also):"` prefix breaking teach recognition. → route to
@@ -108,4 +108,4 @@ Not run as a ladder pass — persona-sweep mode only, per the default single-run
 
 Re-run item 3 (bare-entity-name describe) as a fresh, isolated `SKILL_AGENT_FAST_LOOP.md` round, not
 a resumed agent. Fix the 2 stale test assertions from the ambiguity-render change. Then route the five
-deferred findings above through `SKILL_AGENT_FAST_LOOP.md` rounds before the next persona sweep.
+the findings above through `SKILL_AGENT_FAST_LOOP.md` rounds before the next persona sweep.

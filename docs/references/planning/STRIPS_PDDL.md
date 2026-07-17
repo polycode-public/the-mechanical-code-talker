@@ -81,7 +81,7 @@ operator**.
    **closed-world** by design. The chat layer's honest miss is **open-world**: it refuses to read "no
    matching rule" as "the answer is no" (§ "The open-world half" below).
 
-Reusing PDDL rather than inventing a format also means the router could, in principle, **defer to a
+Reusing PDDL rather than inventing a format also means the router could, in principle, **delegate to a
 mature external solver** (Fast Downward, an IPC planner) for the hard search, keeping tmct's job as
 the NL→domain compiler and the proof-chain renderer.
 
