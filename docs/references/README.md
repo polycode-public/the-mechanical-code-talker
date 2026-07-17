@@ -34,6 +34,12 @@ docs/references/
   api/                            <- link+excerpt stubs (restrictive-licence docs)
     README.md
   schemas/
+    README.md                     <- the standards index: edition, date, verified-state
+    prov-o.md                     <- W3C PROV-O (Rec 2013-04-30) — the provenance vocabulary
+    skos.md                       <- W3C SKOS Reference (Rec 2009-08-18) — concept schemes
+    seon-code-ontology.md         <- SEON code.owl — the code vocabulary tmct borrows
+    ace-6.7.md                    <- ACE 6.7 + the table of what tmct implements and diverges on
+    iso-24617-2-dialogue-acts.md  <- ISO 24617-2:2020 — dialogue acts (draft-sourced, see the entry)
     owl2-vocabulary.md            <- hand: the OWL 2 / RDF / RDFS terms tmct uses
     ace-owl-fragment.md           <- hand: tmct's ACE-inspired sub-fragment (~8 patterns)
     conceptnet-relations.md       <- hand: ConceptNet's fixed relation types
@@ -86,11 +92,23 @@ goal-directed multi-step decomposition deterministically, so the agentic
 ladder's C1 ceiling is **open-world**, not planning itself. Primary papers are
 link-only (publisher copyright / scanned reports).
 
+## 6. Standards reconciliation — [`schemas/README.md`](schemas/README.md)
+
+The published standards tmct's vocabulary is checked against — PROV-O, SKOS, SEON, ACE 6.7,
+ConceptNet, ISO 24617-2 — each pinned to an edition and a date, each naming what could not be
+verified. `PLAN_NORMATIVE.md` holds the reconciliation: one verdict per coined term, and the
+`owl:equivalentProperty` / `rdfs:subPropertyOf` triples that pin the alignments in
+`ontology/tmct-core.ttl`.
+
 ## Deepen-next index
 
-- Verify every UNVERIFIED-pending-web-check field in `schemas/` against the
-  live W3C / Attempto / ConceptNet sources and stamp retrieval dates.
-- Phase 2: add the ACE 6.7 construction/interpretation rules and the APE
-  OWL/SWRL output documentation as proper entries; source candidate PDFs for
-  `papers/`.
-- Phase 2: pin the exact ConceptNet version + dump the slice is filtered from.
+- `schemas/owl2-vocabulary.md` is still UNVERIFIED-pending-web-check. It is now the only
+  schema entry that is, and OWL 2 is the vocabulary tmct emits most.
+- Read SEON's `nl/2012/02/code-nl.owl` (its natural-language layer) and
+  `domain-spanning/2012/02/change-couplings.owl` (the published co-change vocabulary tmct coins
+  `mgx:changeCoupledWith` for). Both are named in `schemas/seon-code-ontology.md`'s deepen-next.
+- Obtain the published ISO 24617-2:2020 text. The current entry rests on a 2019 draft and the
+  editors' LREC paper, and says so.
+- Read ISO 704 and ISO 25964 (terminology work, thesaurus structure) — the lexicon and corpus are
+  terminology work, and neither standard has been opened.
+- Source candidate PDFs for `papers/`: the ACE/APE papers and the ELIZA/PARRY lineage.

@@ -694,14 +694,25 @@ negative proving the path gate does not claim a class or an unknown path. The th
 | 3.10d | `is disk-1 clear?` at step 0 → "I don't have a fact saying disk-1 is clear" | clearness is derivable from the board and isn't derived. `hanoi-3.txt` advertises this phrasing |
 | 3.10e | `hanoi-3.txt`'s own 4-disk recipe → `no plan found within 300 moves` | `smaller than` isn't transitive, so its two facts never establish disk-1/disk-2 vs disk-4. Either make the relation transitive or fix the shipped file's instructions — the file promises 15 moves |
 
-### 3.11 Two surfaces disagree: `/untested` (7) vs `show me the untested modules` (9)
+### 3.11 Two surfaces disagree: `/untested` (7) vs `show me the untested modules` (9) — **DONE**
 
-The NL compositional route lacks the source-module filter the tool applies, so `test/tasks.test.mjs`
-and `test/store.test.mjs` count themselves as untested. **No row pins either count**, on either
-side. The README's own plan example uses the surface that is right.
+Both surfaces now answer 7, with the same list. The diagnosis was exactly right.
 
-**Fix.** Apply the same filter in the compositional route. **Pin both surfaces in the same corpus
-row** so they can never drift apart again — that is the actual lesson.
+**Where it was, and where it was NOT.** `renderUntested` (`codegraph.mjs`) and `untestedModules`
+(`router/results.mjs`) already carry the same filter as each other — so the NL route was using
+neither. It goes through the compositional engine and the `tested` QUALIFIER, and `qualHolds`
+(`ask.mjs`) asked only "is this module in `testedModules`?". A test module is in nothing, so it
+answered "untested" about itself.
+
+**The fix states the category, not the symptom.** A test module is neither tested nor untested —
+coverage is a claim about SOURCE modules, so asking whether a test covers itself is a category
+error. It is excluded on **both polarities**, by the same two tests the tool applies (the `tests`
+edge subject, and the path shape via the shared `isTestPath`). Excluding on only the untested side
+would have fixed the count and left `which modules are tested` free to drift the other way.
+
+**Pins.** 2 rows keyed `template.command.untested`. The first drives `/untested` **and** three
+natural-language phrasings **in one row** — that is the actual lesson of this item, since neither
+side was pinned when they drifted. The second proves the exclusion holds on the tested side too.
 
 ### 3.12 Named capability gaps — not defects
 

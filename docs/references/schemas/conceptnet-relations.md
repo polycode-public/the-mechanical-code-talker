@@ -18,6 +18,21 @@ lands — this stub is the reference list it is checked against.
 - **Retrieval date:** 2026-07-04 — VERIFIED against the ConceptNet 5.7.0
   assertions dump (the committed slice's source): the 34-relation canonical
   list below matched the dump exactly (29 of them appear in the tech slice).
+- **Version pin (re-checked 2026-07-17):** the committed slice is **5.7.0**
+  (released 2019-04-30). The last data release is **5.8, 2020-05-20**; its
+  release notes cover language codes, Wiktionary and curation, and name no
+  relation additions, removals or renames. The relation wiki page was last
+  edited 2019-06-20, so it documents the 5.7-era set — which is the set below,
+  and is current for 5.8 too. Upgrading the slice to 5.8 needs no change to
+  this list or to `conceptnet-map.toml`'s rows.
+- **Do not build on the deprecated relations:** `/r/InstanceOf`, `/r/Entails`,
+  the `/r/dbpedia/*` family, and the negatives `/r/NotIsA`, `/r/NotDesires`,
+  `/r/NotUsedFor`, `/r/NotCapableOf`, `/r/NotHasProperty`. They appear in the
+  data but are slated for consolidation or removal. tmct expresses negation
+  with its own polarity prefix instead (`mgxneg:`, see
+  `src/domain/memory/capability.mjs`), which is a deliberate divergence:
+  ConceptNet's negatives are five one-off terms, tmct's prefix negates any
+  predicate.
 - **Consumer in repo:** `src/adapters/corpus/conceptnet.mjs` +
   `src/adapters/corpus/conceptnet-map.toml` (Phase 2).
 
