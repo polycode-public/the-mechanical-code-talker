@@ -53,10 +53,13 @@ reasonably be expected to fail *now*, in seconds, so you don't round-trip throug
 `test:smoke` is one test per capability family — direction, the miss wall, ambiguity, the canonical
 restatement, teach/recall/proof — chosen so a failure means the build is broken rather than subtly
 wrong. `test:fast` adds a sample row from every chat lane and the tool-layer contract, 172 tests in
-all. Both are named after their budgets and
-`test/estate/tier-budgets.test.mjs` holds them to it. **A tier that breaks its budget is a bug in
-the tier — cut its content, never raise the number.** (Those figures are the tier's own work;
-`npm run` adds ~0.7s of wrapper on top, so time `node --test …` directly if you're measuring.)
+all. Both are named after their budgets, and `npm run check:budgets` holds them to it. **A tier that
+breaks its budget is a bug in the tier — cut its content, never raise the number.**
+
+That budget check is a `check:*` and not a test, on purpose. It measures wall-clock, and `npm test`
+runs eight workers at once — so inside the suite it spends its whole measurement competing with the
+thing it is timing. It read 4,135ms against a 1,000ms budget that way, for a tier that takes ~700ms.
+Benchmarks don't run under load.
 
 ### Finding the radius
 

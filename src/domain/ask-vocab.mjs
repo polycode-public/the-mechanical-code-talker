@@ -593,6 +593,8 @@ export const CASCADE_NOISE = Object.freeze([
   "the", "a", "an", "some", "other", "about",
   "please", "pls", "plz", "kindly", "just", "simply", "maybe", "perhaps",
   "thanks", "thank", "ta", "cheers",
+  "too", "also", "well", "either",
+  "sorry", "oops", "actually", "mean", "meant", "rather",
   "hi", "hello", "hey", "yo", "hiya", "howdy", "ok", "okay",
   "matey", "mate", "buddy", "pal", "dude", "man", "bro", "bru", "fam",
   "friend", "sir", "maam", "folks", "guys", "everyone", "dear",
