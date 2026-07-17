@@ -1,7 +1,7 @@
 # Graded language-comprehension measures — the chatbench difficulty spectrum
 
 Sources for calibrating chatbench cases on a recognized too-easy → tough-but-solvable →
-too-hard spectrum, from child development to academic (ROADMAP Phase 3, case-set v2).
+too-hard spectrum, from child development to academic (case-set v2).
 All entries authored offline 2026-07-04 — retrieval dates/URLs UNVERIFIED-pending-web-check;
 none of these instruments' items may be committed (most are commercially licensed tests —
 we borrow their *structure*, never their content).

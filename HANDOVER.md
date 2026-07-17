@@ -92,7 +92,6 @@ proved false. What remains:
     and optionally add + pin the `mgx:relatedTo rdfs:seeAlso skos:related` ontology annotation.
   - Caveat: it only answers on a store that holds synonym/related facts (the ConceptNet import
     mirrors `/r/RelatedTo`, `/r/Synonym` → `mgx:`, so `init:large`+ has them; bare `init` has few).
-
 ## Discipline
 
 `CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split, the test

@@ -424,7 +424,7 @@ with `npm run e2e:browsers` installing Chromium for the browser e2e tier (`npm r
 product `dependencies` stay clean — `ink`, `react`, `smol-toml`, `wink-eng-lite-web-model`,
 `wink-nlp` — and the rest of `devDependencies` is `esbuild` (the
 ask-browser bundle builder, not a sandbox), `ink-testing-library`, and `publint`. `files` ships
-`bin/ src/ README.md ROADMAP.md LICENSE corpus/ data/`;
+`bin/ src/ README.md LICENSE corpus/ data/`;
 `exports` resolves only to `src/*.mjs` files (a broader key surface now — `./plan`,
 `./generateCompletion`, and friends — but every target is in-tree source) — `agentbench/`,
 `chatbench/`, `synthbench/` are **not** in `files`

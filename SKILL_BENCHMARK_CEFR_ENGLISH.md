@@ -26,8 +26,9 @@ chose and why.
 - **Do NOT use it** for a one-off smoke, a docs-only change, or to apply several levers at once.
   One cycle = one lever, so movement in the mean is attributable.
 - **Autonomous, interruptible.** There is no step-7 pause: the ranked menu that used to gate the
-  next cycle is now a *logged decision record*. The operator steers by interrupting, by editing
-  the ROADMAP phase priorities, or by naming a lever at invocation.
+  next cycle is now a *logged decision record*. The operator steers by interrupting, by
+  re-prioritising the open items (`HANDOVER.md`, the `PLAN_*.md` docs), or by naming a lever at
+  invocation.
 
 ## 1. The measurement contract (never weakened by this skill)
 
@@ -110,13 +111,35 @@ Every cycle MUST satisfy:
   cycle's PASS/FAIL statistics (unmeasured, not failed) and the prescription is to grow its pool
   or per-run sample. The overall agreement rate is the benchmark's own reliability score and is
   reported in every `BENCHMARK_CEFR_ENGLISH_<version>.md` beside the product mean.
+- **What the CEFR axis is (and is not).** CEFR here grades the difficulty of the CONSTRUCTION under
+  test, borrowing CEFR as a difficulty vocabulary — **it is not a claim that tmct reads or writes at
+  a CEFR level.** The grade bands measure construction difficulty, not a difficulty gradient tmct
+  experiences, which is why the ladder is not monotonic (A1 has sat below C1 across cycles) and why
+  the real signal lives on the **construction axis** — the grade × construction cell, where the
+  report finds the floor — not the per-grade marginal. The letters are a ruler for the item, not a
+  reading level for the product.
+- **The P-axis — a new construction FAMILY above the surface-parse matrix (`HORIZON_CELLS`).** Every
+  other construction in the pool is a single-utterance surface-parse difficulty (naming, passive,
+  quantifier-counting, garden-path). The P-axis adds two constructions whose challenge is not
+  "parse this surface" but "infer what was meant" and "compose across what was already answered":
+  **`pragmatic-implicature`** (indirect speech acts, negative-polarity asks, presupposition — Grice
+  1975, Searle; `PLAN_DIALOGUE_ACTS.md`) and **`cross-turn-composition`** (a query whose meaning is
+  complete only when several prior ANSWERS are composed — Grosz/Joshi/Weinstein centering, the axis
+  CONVERSATION measures qualitatively but CEFR never had). This is a NEW AXIS, **not** a super-C2
+  grade: the CEFR letters still only vocabulary-grade construction difficulty. The cases live in the
+  go-to `graded-pool.jsonl` on the `HORIZON_CELLS` (`chatbench/graded.mjs`: `C1:pragmatic-implicature`,
+  `C2:cross-turn-composition`) — graded as a named horizon, deliberately NOT sized into
+  `GRADED_MATRIX`, because the pragmatic/discourse routing they test does not exist in the product
+  yet: most sit at the honest-miss floor and the judge scores them as misses, exactly as INF-C2 sat
+  as a ceiling marker before its capability shipped. When that routing lands, whoever lands it
+  graduates the cells into a full sized matrix cell and freezes a corpus lane row citing it.
 
 ## 2. The loop (one cycle; repeats without pausing)
 
 **Step 1 — READ (pick the next lever).** Read, in order: the latest `BENCHMARK_CEFR_ENGLISH_<version>.md` (including
 its decision log — the previous cycle's ranked menu is this cycle's starting recommendation);
-`STRATEGY_ADVISOR.log` (the `OPEN` items the advisor flagged); and the **ROADMAP phase items**
-(the lever board — Phase 1–3 items are the levers). Pick **one lever** and write the prediction:
+`STRATEGY_ADVISOR.log` (the `OPEN` items the advisor flagged); and the **open items** in
+`HANDOVER.md` and the `PLAN_*.md` docs (the lever board). Pick **one lever** and write the prediction:
 which cases/tags it should move, and by how much.
 
 **Step 2 — APPLY the lever.** Implement it. Keep `npm test` green at each step; keep
@@ -182,8 +205,7 @@ BEFORE the next run overwrites them**, then write **one file**, `BENCHMARK_CEFR_
 
 **Mirror every issue the cycle leaves open** (a pass→fail regression, an advisor `OPEN` item that
 outlives the cycle, an UNDER-COVERED cell) **into `HANDOVER.md`** as a one-line open item pointing
-at this write-up — `HANDOVER.md` is the next-session pickup list; `ROADMAP.md` is not (it doesn't
-track tuning).
+at this write-up — `HANDOVER.md` is the next-session pickup list.
 
 **Step 7 — CONTINUE.** Apply the decision rule (§1). Re-rank the lever board from this cycle's
 evidence, record it (that's the step-6 decision log), pick the top lever, and go to step 1 of the
@@ -216,7 +238,7 @@ next cycle. No pause — the operator interrupts when they want the wheel.
 ## 5. One-paragraph TL;DR
 
 Run the chat tuning cycle **autonomously**: each cycle **reads** the last `BENCHMARK_CEFR_ENGLISH_<version>.md`
-decision log, `STRATEGY_ADVISOR.log`, and the ROADMAP lever board to pick ONE lever + a
+decision log, `STRATEGY_ADVISOR.log`, and the open-items lever board (`HANDOVER.md`, the `PLAN_*.md` docs) to pick ONE lever + a
 prediction; **applies** it (fanning independent workstreams to parallel subagents, serialized on
 shared files); **smokes** (`npm test` + `printf 'hi\n/exit\n' | node bin/tmct.mjs` in graph-less
 and fixture-graph dirs — a failed smoke voids the run); **runs** the chatbench (one deterministic

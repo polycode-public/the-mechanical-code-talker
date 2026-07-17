@@ -11,8 +11,8 @@ import {
 } from "../../infbench/grade.mjs";
 
 const caseLine = (fields) => JSON.stringify({
-  id: "inf-a1-lookup-subClassOf-001",
-  band: "INF-A1",
+  id: "inf-1-lookup-subClassOf-001",
+  band: "INF-1",
   template: "a1Lookup",
   variant: "subClassOf",
   arms: ["kernel", "chat"],
@@ -23,7 +23,7 @@ const caseLine = (fields) => JSON.stringify({
   ...fields,
 });
 
-const row = (fields) => ({ band: "INF-B2", pass: true, completed: true, fabricated: false, ...fields });
+const row = (fields) => ({ band: "INF-4", pass: true, completed: true, fabricated: false, ...fields });
 
 test("a case may declare the capability that would lift its ceiling", () => {
   const { cases, errors } = parseCases(caseLine({ ceiling: "chat-layer multi-hop proof-chain materialization" }));
@@ -52,14 +52,14 @@ test("a band reports how many of its passes are graded against a declared ceilin
     row({}),
     row({ pass: false, completed: false, ceiling: "proof-chain materialization" }),
   ]);
-  const cell = rolled.byBand["INF-B2"];
+  const cell = rolled.byBand["INF-4"];
   assert.equal(cell.passed, 3);
   assert.equal(cell.ceilingGraded, 3, "every row carrying a ceiling counts, passing or not");
   assert.equal(cell.ceilingGradedPassed, 2, "only the ceiling-graded rows that passed");
 });
 
 test("a band with no ceiling-graded rows reports none rather than omitting the count", () => {
-  const cell = rollup([row({}), row({})]).byBand["INF-B2"];
+  const cell = rollup([row({}), row({})]).byBand["INF-4"];
   assert.equal(cell.ceilingGraded, 0);
   assert.equal(cell.ceilingGradedPassed, 0);
 });
@@ -68,20 +68,20 @@ test("the capabilities behind a band's ceilings are listed once each, sorted", (
   const capabilities = ceilingCapabilities([
     row({ ceiling: "proof-chain materialization" }),
     row({ ceiling: "proof-chain materialization" }),
-    row({ band: "INF-C2", ceiling: "a consistency checker" }),
-    row({ band: "INF-A1" }),
+    row({ band: "INF-6", ceiling: "a consistency checker" }),
+    row({ band: "INF-1" }),
   ]);
   assert.deepEqual(capabilities, {
-    "INF-B2": ["proof-chain materialization"],
-    "INF-C2": ["a consistency checker"],
+    "INF-4": ["proof-chain materialization"],
+    "INF-6": ["a consistency checker"],
   });
-  assert.equal("INF-A1" in capabilities, false, "a band with no ceiling-graded row is absent, not empty");
+  assert.equal("INF-1" in capabilities, false, "a band with no ceiling-graded row is absent, not empty");
 });
 
 test("the rendered rollup carries the ceiling count beside the band's pass count", () => {
   const rendered = renderRollup(rollup([row({ ceiling: "proof-chain materialization" }), row({})]), "chat");
   assert.match(rendered, /ceiling\/pass/);
-  assert.match(rendered, /INF-B2.*\s1\/2/);
+  assert.match(rendered, /INF-4.*\s1\/2/);
 });
 
 test("a confident yes against an expected refusal is fabrication, not a plain miss", () => {

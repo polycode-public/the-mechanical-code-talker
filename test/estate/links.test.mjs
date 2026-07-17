@@ -14,12 +14,12 @@ test("no broken relative markdown links in tracked .md files", () => {
 
 test("relative targets are extracted from inline links, images and reference definitions", () => {
   const markdown = [
-    "see [the roadmap](ROADMAP.md#phases) and ![a chart](img/chart.png)",
+    "see [the guide](guide.md#phases) and ![a chart](img/chart.png)",
     "[spec]: ../docs/spec.md",
   ].join("\n");
   assert.deepEqual(
     relativeTargets(markdown).map((t) => t.target).sort(),
-    ["../docs/spec.md", "ROADMAP.md", "img/chart.png"],
+    ["../docs/spec.md", "guide.md", "img/chart.png"],
   );
 });
 

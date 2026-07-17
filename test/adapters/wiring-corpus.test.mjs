@@ -1,5 +1,5 @@
-// W5 seam tests — corpus on-demand, LOCAL tier only, behind TMCT_CORPUS_LOOKUP=1
-// (ROADMAP Phase 4). Default OFF: without the flag every miss is byte-unchanged.
+// W5 seam tests — corpus on-demand, LOCAL tier only, behind TMCT_CORPUS_LOOKUP=1.
+// Default OFF: without the flag every miss is byte-unchanged.
 // Flag ON: an unknown-term miss gains a grounded, licence-cited aside from the
 // committed ConceptNet slice; a term the corpus doesn't know stays an honest
 // miss (which is also the documented tier-3 network seam — NOT in this wave).

@@ -1,7 +1,7 @@
 // agentbench/run.mjs — the DETERMINISTIC AGENTBENCH runner (sibling of
 // chatbench/run.mjs). Replays every case in agentbench/cases.jsonl through a
-// PLUGGABLE "agent under test" and grades the tool loop on the A0→C2 agentic
-// rungs. No LLM, no network — grading is entirely deterministic (grade.mjs).
+// PLUGGABLE "agent under test" and grades the tool loop on the TOOL-0→TOOL-8
+// tool-use rungs. No LLM, no network — grading is entirely deterministic (grade.mjs).
 //
 // The agent-under-test is a SEAM: a function (request, tools, ctx) => loopResult
 // (see agentbench/driver-stub.mjs). Today the default is the STUB driver (its
@@ -15,7 +15,7 @@
 //
 // Usage:
 //   node agentbench/run.mjs [--stamp <label>] [--cases agentbench/cases.jsonl]
-//     [--out agentbench/results/raw/run-<stamp>] [--rung <A0|A1|…|C2>]
+//     [--out agentbench/results/raw/run-<stamp>] [--rung <TOOL-0|TOOL-1|…|TOOL-8>]
 //     [--ladder] [--only <id,id,…>] [--concurrency <n>]  (default 8 — the
 //     case fan-out; rows stay in case order, bytes identical to sequential)
 

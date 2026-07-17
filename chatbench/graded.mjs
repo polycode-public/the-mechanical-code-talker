@@ -37,6 +37,14 @@ export const CONSTRUCTIONS = [
   "discourse-deixis",
   "presupposition",
   "garden-path",
+  // PLAN_BENCHMARK_LADDERS.md Part 2 — the CEFR P-axis: a new CONSTRUCTION FAMILY
+  // above the single-utterance surface-parse matrix. Meaning not in the
+  // sentence's literal form (implicature) and meaning that spans turns
+  // (discourse composition). It is NOT a super-C2 grade — the CEFR letters still
+  // only vocabulary-grade construction difficulty; this is a new axis, layered on
+  // the existing grade × construction matrix. See HORIZON_CELLS below.
+  "pragmatic-implicature",
+  "cross-turn-composition",
 ];
 
 /** Combo cells may pair a construction with "noise" (a v1 surface dimension,
@@ -136,6 +144,19 @@ export const GRADED_MATRIX = [
  *  list, and requires every case in them to be a frozen-v1 fold, never a
  *  generated matrix case). */
 export const OFF_MATRIX_FOLD_CELLS = ["A2:assert-recall", "B1:noise+svo-query", "B1:svo-query"];
+
+/** The CEFR P-axis HORIZON cells (PLAN_BENCHMARK_LADDERS.md Part 2): a new
+ *  construction family graded in the go-to `graded-pool.jsonl` as a named
+ *  horizon, deliberately NOT sized into GRADED_MATRIX. The pragmatic/discourse
+ *  routing these cells test does not exist in the product yet, so they sit at the
+ *  honest-miss floor — the judge scores them as misses, exactly as INF-C2 sat as
+ *  a ceiling marker before its capability shipped. Sizing them into the
+ *  reliability matrix (25-item cells, dual-draw agreement) would assert a
+ *  coverage we cannot yet measure; instead they ride as a small, explicit horizon
+ *  set, and the go-to pool's off-matrix lint binds them here so they can't drift.
+ *  When pragmatic/discourse routing lands, whoever lands it graduates these into
+ *  a full sized matrix cell and freezes a corpus lane row citing it. */
+export const HORIZON_CELLS = ["C1:pragmatic-implicature", "C2:cross-turn-composition"];
 
 /** Grades whose reliably-passing cells are PROMOTED: their fixed 5-item
  *  promoted subsets run as always-run deterministic unit tests

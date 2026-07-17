@@ -1,9 +1,9 @@
 # corpus/ — committed corpus data
 
-The corpuses tmct ships so that an **empty** tmct still has a vocabulary
-(ROADMAP Phase 2). Everything here is plain, diffable data; the loaders live
+The corpuses tmct ships so that an **empty** tmct still has a vocabulary.
+Everything here is plain, diffable data; the loaders live
 in `src/adapters/corpus/`. Related committed data lives in `data/` (response templates
-+ the SE phrase book — items 4+7).
++ the SE phrase book).
 
 ## The tiering policy (tier-1 / tier-2 / tier-3)
 

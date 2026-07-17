@@ -232,7 +232,7 @@ This domain adds three things none of that code has:
 Whether the shipped planner's interfaces should eventually absorb the observation/belief-update
 step is a design question for after this domain works, not before.
 
-### Phased implementation sketch (mirrors ROADMAP.md's phase-writing style)
+### Phased implementation sketch
 
 **Phase 1 — Recognition + guesser-mode core.** Closed-set opening/continuation recognizers (§2);
 game state carried on the session's plan slot (§1); guesser-mode belief interval + bisection +

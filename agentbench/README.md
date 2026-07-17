@@ -2,7 +2,7 @@
 
 The **sibling of chatbench**, on a new axis. chatbench measures the *chat turn*
 (a request → the right grounded answer) on the CEFR ladder; AGENTBENCH measures
-the **tool loop** (a request → the right *tool call(s)*) on the **A0→C2 agentic
+the **tool loop** (a request → the right *tool call(s)*) on the **TOOL-0→TOOL-8 tool-use
 rungs**. Same versioned-naming + regression discipline (`BENCHMARK_AGENT_<version>.md`,
 `_00N` for re-runs), one decisive difference:
 
@@ -42,21 +42,25 @@ exact signature (`runAgentbench(cases, { driver })`).
 > real engine, built later, must not be compared against this mislabeled anchor:
 > the stub is a floor (what a dumb keyword matcher gets), not the router's score.
 
-## The rungs (levels — the analogue of chatbench's CEFR grades)
+## The rungs (the TOOL ladder — tool-use capability, this bench's own scale)
 
-| Rung | What it demands |
-| ---- | --------------- |
-| **A0** | one obvious tool, arguments on a plate |
-| **A1** | pick the right tool from a small declared set + bind one entity |
-| **A2** | negation / **honest refuse** when no declared tool fits or the entity does not resolve |
-| **B1** | a bounded multi-step recipe — thread one result into the next call |
-| **B2** | conditional / retry — monitor an outcome, re-plan |
-| **C1** | compose a plan for a novel goal (closed-world) |
-| **C2** | self-directed — deduce the goal, then plan (closed-world) |
+| Rung | Name | What it demands |
+| ---- | ---- | --------------- |
+| **TOOL-0** | Direct dispatch | one obvious tool, arguments on a plate |
+| **TOOL-1** | Tool selection | pick the right tool from a small declared set + bind one entity |
+| **TOOL-2** | Scope refusal | **honest refuse** when no declared tool fits or the entity does not resolve |
+| **TOOL-3** | Sequential composition | a bounded multi-step recipe — thread one result into the next call |
+| **TOOL-4** | Conditional dispatch | conditional / retry — monitor an outcome, re-plan |
+| **TOOL-5** | Goal planning | compose a plan for a novel goal (closed-world) |
+| **TOOL-6** | Goal deduction | self-directed — deduce the goal, then plan (closed-world) |
+| **TOOL-7** | Recovery & replanning | a step fails (empty/error) and the driver observes it and replans a fallback — `expect.recover` |
+| **TOOL-8** | Composition under ambiguity | enumerate the tied readings (`expect.candidateResults`) or refuse-with-a-nudge — never an arbitrary pick |
 
-Only **A0/A1/A2** are exercised by the seed set + the stub driver; the higher
-rungs are declared up front so the ladder and the regression frame exist before
-the engine that will climb them.
+The stub driver is exercised only on **TOOL-0/TOOL-1/TOOL-2**; the goal driver clears through
+**TOOL-6**. **TOOL-7/TOOL-8** name capabilities the current drivers do not have yet (a replanning
+branch in the planner; a tied-candidate composer in the goal reasoner) and gate at the honest floor
+until those ship — named horizons, declared up front so the ladder and the regression frame exist
+before the engine that will climb them.
 
 ## The grade (deterministic) + the metric PAIR
 
@@ -88,7 +92,7 @@ The honest **gate** is therefore **"0% hallucination AT ≥50% completion"**
 completion; a reckless driver fails it on hallucination. Only a driver that is
 both **safe and useful** clears it. `--ladder` runs rungs ascending and the
 first rung that fails the gate gates every rung above it (skipped with a
-receipt, e.g. `rung C1 skipped: gated by A2 completion 40% < 50%`), exactly like
+receipt, e.g. `rung TOOL-5 skipped: gated by TOOL-2 completion 40% < 50%`), exactly like
 chatbench's grade ladder.
 
 ## Closed-world / default-deny
@@ -112,7 +116,7 @@ subset of the dispatch case set — so arg-key drift fails at merge, not at runt
 
 | file | role |
 | ---- | ---- |
-| `cases.jsonl` | the seed case set (A0/A1/A2 over the graph-query toolset) — append-only once the AGENTBENCH arc starts |
+| `cases.jsonl` | the seed case set (TOOL-0/TOOL-1/TOOL-2 over the graph-query toolset) — append-only once the AGENTBENCH arc starts |
 | `grade.mjs` | the deterministic grading core: rungs, case lint, the zero-hallucination gate, the metric pair + ladder rollup (pure, no I/O) |
 | `driver-stub.mjs` | the default pluggable driver — the **stub-driver floor** |
 | `run.mjs` | the deterministic runner: replays cases through the driver, writes `results/raw/run-<stamp>/product.jsonl` |
@@ -123,7 +127,7 @@ subset of the dispatch case set — so arg-key drift fails at merge, not at runt
 ```sh
 node agentbench/run.mjs                       # stamp defaults to the version 0.8.0
 node agentbench/run.mjs --stamp 0.8.0 --ladder
-node agentbench/run.mjs --rung A1             # one rung only
+node agentbench/run.mjs --rung TOOL-1             # one rung only
 node agentbench/run.mjs --only ab-a0-describe-widget
 # (npm run agentbench:run -- --stamp 0.8.0  is the provisioned script)
 ```
@@ -133,20 +137,20 @@ node agentbench/run.mjs --only ab-a0-describe-widget
   NOT read from `package.json`). Two runs over the same tree + stamp produce
   byte-identical `product.jsonl`.
 - **`--stamp`** must be a filesystem-safe label; **`--out`** overrides the output
-  dir; **`--rung <A0|…|C2>`** and **`--only <id,…>`** narrow the selection;
+  dir; **`--rung <TOOL-0|…|TOOL-8>`** and **`--only <id,…>`** narrow the selection;
   **`--ladder`** gates ascending rungs.
 
 ## Case shape (`cases.jsonl`, one JSON object per line)
 
 ```json
-{ "id": "ab-a1-callers-fnalpha", "rung": "A1",
+{ "id": "ab-a1-callers-fnalpha", "rung": "TOOL-1",
   "request": "which functions call fnAlpha",
   "tools": ["tmct_describe", "tmct_callers", "tmct_callees"],
   "expect": { "calls": [{ "name": "tmct_callers", "input": { "symbol": "fnAlpha" } }],
               "terminates": true, "proof": true } }
 ```
 
-- **`rung`** — one of `A0 A1 A2 B1 B2 C1 C2`.
+- **`rung`** — one of `TOOL-0 TOOL-1 TOOL-2 TOOL-3 TOOL-4 TOOL-5 TOOL-6 TOOL-7 TOOL-8`.
 - **`request`** — the imperative handed to the driver.
 - **`tools`** — the DECLARED toolset (every name must be a registered capability).
 - **`expect.calls`** — the expected call sequence (name + pinned input as a lower
@@ -167,11 +171,11 @@ LLM), and no scores are claimed for them here:
 
 | band | anchor | rough expected reach on the declarable graph-query slice |
 | ---- | ------ | -------------------------------------------------------- |
-| tiny-local | a small local model (≈1–3B) | A0, shaky on A1 tool selection |
-| 8B-open | an 8B open-weights model | A0–A1, unreliable A2 refusal (over-eager to call) |
-| Nova-micro | Amazon Nova Micro | A1–A2 |
-| Nova-lite | Amazon Nova Lite | A2, some B1 |
-| Haiku | Claude Haiku | B1–B2 |
+| tiny-local | a small local model (≈1–3B) | TOOL-0, shaky on TOOL-1 tool selection |
+| 8B-open | an 8B open-weights model | TOOL-0–TOOL-1, unreliable TOOL-2 refusal (over-eager to call) |
+| Nova-micro | Amazon Nova Micro | TOOL-1–TOOL-2 |
+| Nova-lite | Amazon Nova Lite | TOOL-2, some TOOL-3 |
+| Haiku | Claude Haiku | TOOL-3–TOOL-4 |
 
 The point of the bench is to say, honestly and measurably, where a
 **tmct-backed** driver sits against these anchors on the slice it *declares* — and

@@ -84,8 +84,8 @@ reuses work from the last one — there is no persisted match-state across calls
 answer (compile the rule set into a discrimination network so a new fact only re-triggers the joins
 it could actually affect) is Forgy's RETE algorithm (Forgy, C.L., "Rete: A Fast Algorithm for the
 Many Pattern/Many Object Pattern Match Problem," *Artificial Intelligence* 19(1):17-37, 1982 —
-verified) and its Datalog-world descendant, semi-naive evaluation, is exactly what ROADMAP already
-names as tier-5's intended engine choice and what RDFox's production incremental engine actually
+verified) and its Datalog-world descendant, semi-naive evaluation, is exactly the engine choice
+intended for tier-5 and what RDFox's production incremental engine actually
 runs at scale (Motik et al. 2015, above). `syllogise.mjs`'s predicate-indexed edge-building (keying
 facts by predicate so a pass doesn't rescan irrelevant rows) is a real step in this direction but it
 is NOT yet an alpha/beta network — a genuinely incremental `syllogise()` (new fact in ⇒ only the

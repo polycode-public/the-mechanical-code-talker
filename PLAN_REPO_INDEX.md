@@ -194,13 +194,6 @@ three newer, unshipped tracks about writing and testing arbitrary program code i
   is already paid: tmct pins `playwright` 1.61.1 in `devDependencies` and installs Chromium via
   `npm run e2e:browsers` for the browser e2e tier. What Tracks 2-4 still need operator sign-off on is
   the use, not the install — tmct's first untrusted-code-execution surface (`PLAN_CODE.md` §8).
-- **`ROADMAP.md`'s own one-line summary is stale in a way worth naming here too** (`ROADMAP.md:54-
-  55`): "small JS-function and HTML/CSS-fragment synthesis via a sandboxed headless browser (Track 1,
-  program synthesis, already shipped)" reads as if the sandboxed JS/HTML/CSS work is what shipped.
-  In fact Track 1 (the part that shipped) needs no sandbox at all; the sandboxed work is Tracks 2-4,
-  unshipped. This is a real, independent stale claim, not part of Part 1's "not a code indexer"
-  sweep, but it directly affects how PLAN_CODE.md's relocation should be described in ROADMAP.md
-  once this plan executes.
 
 **Why this matters for "move PLAN_CODE.md into seonix":** the dependency leg of this argument is
 gone. Both repos carry Playwright now, so "seonix already ships it and tmct doesn't" no longer sorts
@@ -327,9 +320,6 @@ must stay in seonix. Nothing in this document changes that division.
    sandboxed JS/HTML/CSS synthesis and mutation repair) become seonix's design problem, where the
    `bench/` harness and MCP tool surface already fit their shape. The Playwright dependency argues
    for neither repo now — both carry it.
-3. `ROADMAP.md`'s stale PLAN_CODE.md summary (Part 3 above) gets corrected as part of this move, not
-   before it — the summary should describe Track 1 as tmct-owned and shipped, and Tracks 2-4 as
-   seonix's, once the file actually moves.
 
 ## Non-goals
 
@@ -387,7 +377,7 @@ self-produced graph.
 
 **Phase 6 — `PLAN_CODE.md` relocates, and Phase 2 of this plan (seonix-side) begins.** Move
 `PLAN_CODE.md` to seonix per Part 7, with the Track 1 / Tracks 2-4 split stated in the moved file's
-own status line. Correct `ROADMAP.md`'s stale summary (Part 3) in the same step. Sequencing Tracks
+own status line. Sequencing Tracks
 2-4's actual design work is seonix's own plan-doc process from here, not designed further in this
 document.
 

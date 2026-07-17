@@ -10519,8 +10519,8 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     return mk(`narrate mode ${next ? "on" : "off"}.`, { narrateNext: next });
   }
 
-  // /memory [verbose] — what tmct remembers, as text (the ROADMAP "Memory
-  // inspection" surface; the same renderer serves the `tmct memory` CLI).
+  // /memory [verbose] — what tmct remembers, as text (the same renderer
+  // serves the `tmct memory` CLI).
   if (name === "memory") {
     note(trace, "goal: inspect tmct's memory store (facts/utterances/sessions)");
     if (!memoryDir) return mk("no memory store here — /memory works inside a repo session.", { miss: true });

@@ -59,7 +59,7 @@ This skill has **three modes**, sharing the same discipline (§1):
   wall-clock is strictly additive across rounds — reserve it for when the operator specifically wants
   to WATCH a sprint happen turn by turn and values follow-up depth over speed, not as the default
   measurement pass.
-- **Full ladder mode** (§2) — open-ended, run by the main agent inline, ratcheting a Tier 0–6
+- **Full ladder mode** (§2) — open-ended, run by the main agent inline, ratcheting a FLOW-0…FLOW-6
   complexity ladder one tier at a time. Pick this to deliberately push into new complexity territory.
 
 > **Invoke it:** *"Follow `SKILL_BENCHMARK_CONVERSATION.md` and run the dialogue-flow loop"* runs
@@ -238,42 +238,77 @@ clean, first try, from any entry point.
 the current tier is reliably dead-end-free — the same ladder discipline the benchmark uses, applied
 to flow.
 
-### 2.1 The complexity ladder (ratchet only when the tier is clean)
+### 2.1 The FLOW ladder — a bounded, named flow-complexity ladder
 
-- **Tier 0 — before any graph: the bootstrap/identity surface.** No `--repo`, a bare `tmct chat` in
+The **FLOW ladder** (`FLOW-0…FLOW-6`) is CONVERSATION's own scale, drawn from conversational
+complexity — distinct from CHATBENCH's CEFR, INFBENCH's `INF-1…INF-8`, and AGENTBENCH's
+`TOOL-0…TOOL-8`. It is **bounded by construction**: there is no open `FLOW-7`. FLOW-6 (the messy
+real user) is the top, and new complexity that doesn't fit an existing tier grows that tier's
+content — it does not add a rung. The ladder is the ruler; being bounded is what lets it produce a
+position and a gate.
+
+- **FLOW-0 — Bootstrap: before any graph, the identity surface.** No `--repo`, a bare `tmct chat` in
   an empty dir. Greetings, identity ("who are you", "what are you", "are you an AI/ChatGPT"), help/
   orientation, and vocabulary questions from the seeded ontology (`what is a cache`) — all BEFORE the
-  user has pointed tmct at any code. This tier is a prerequisite to Tier 1, not a relaxation of it: a
+  user has pointed tmct at any code. This tier is a prerequisite to FLOW-1, not a relaxation of it: a
   dead-end here (0.9.12: greetings/identity leading with "no code graph loaded" instead of the seeded
   knowledge) is a worse first impression than any structural dead-end, because it's the very first
   thing a new user sees. Play it with BOTH a normally-seeded session and `TMCT_NO_SEED=1` — an example
   that only works in one of those states and is offered in both is a dead-end (see §0's new bullet).
-- **Tier 1 — single touch + one drill-down.** "what is a class" → follow one guided question →
+- **FLOW-1 — Single touch + one drill-down.** "what is a class" → follow one guided question →
   one natural follow-up. (Concept force + one relation.)
-- **Tier 2 — drill-down chains with anaphora.** concept → instance → "what calls it" → "what uses
+- **FLOW-2 — Drill-down chains with anaphora.** concept → instance → "what calls it" → "what uses
   that" → "where is it defined" — 4–8 turns, focus carried throughout.
-- **Tier 3 — cross-concept & relation touches.** "what about imports", "what calls are there",
+- **FLOW-3 — Cross-concept & relation touches.** "what about imports", "what calls are there",
   mixing nouns and relations; the relation concept force.
-- **Tier 4 — compositional & comparative.** "which functions call X and are untested", "which module
+- **FLOW-4 — Compositional & comparative.** "which functions call X and are untested", "which module
   has the most imports", "public methods of X", "which of those are tested".
-- **Tier 5 — teach + recall + reasoning in dialogue.** assert a fact mid-conversation, recall it
+- **FLOW-5 — Teach + recall + reasoning in dialogue.** assert a fact mid-conversation, recall it
   later, mix with graph truth; the honest "I don't know that yet" that offers to learn.
-- **Tier 6 — the messy real user.** typos, politeness frames, topic switches, "no wait", vague
+- **FLOW-6 — The messy real user.** typos, politeness frames, topic switches, "no wait", vague
   openers, "what can you tell me about this repo" — the conversation a stranger actually has.
 
-Each tier is only unlocked when the tier below flows dead-end-free across several fresh
-conversations. A tier that is a genuine ceiling (a capability tmct deliberately does not have) is
-marked as such — the bar there is an **honest, guiding** dead-non-end, not a wall. This ladder is a
-qualitative flow ladder, purpose-built for this loop — it is not the CEFR bands
-`SKILL_BENCHMARK_CEFR_ENGLISH.md` uses or the `INF-A1…C2` bands `SKILL_BENCHMARK_INFERENCE.md` uses.
-Don't relabel it.
+#### The ratchet criterion (mechanical, per tier)
+
+A FLOW tier **ratchets clean** — unlocking the tier above — when BOTH hold:
+
+1. **Fresh conversations flow.** At least three fresh conversations at this tier, from distinct
+   entry points, replay with zero dead-ends (§0/§1b's definition: every turn answers or gives a
+   guiding nudge).
+2. **Every routed dead-end at this tier is frozen and green.** Each dead-end the edge-search (the
+   persona sweep, §3.4) found at this tier and a later session fixed has a `test/chatflow-*.test.mjs`
+   regression **tagged to the tier**, and it passes on the current tree.
+
+Criterion 2 is what makes the ratchet mechanical rather than a vibe: a tier is clean because its
+accumulated regressions are green and a fresh pass finds nothing new, not because it "felt clean this
+run". This mirrors the other three ladders' gates — INFBENCH's grader receipt, AGENTBENCH's
+0%-hallucination-at-≥50% metric pair, CEFR's tier-1 deterministic row. FLOW's gate is
+"fresh-flow-clean AND frozen-regressions-green".
+
+FLOW tiers ratchet strictly **FLOW-0 → FLOW-6**. A tier that is not clean gates every tier above it,
+and the report says where the ladder sits and why — the same skipped-with-a-receipt discipline the
+other three use. A tier can name a capability tmct doesn't have yet: there the bar is not "answer"
+but "guide" — an honest miss that offers a nudge, a repair, or an offer to learn keeps the
+conversation alive and counts as flow; a bare wall does not. A capability genuinely missing is routed
+to a `PLAN_*.md` as a horizon, never marked a permanent ceiling.
+
+#### The persona sweep feeds the ladder
+
+The persona sweep (§3.4) is **not a second ladder — it is the unbounded edge-search that feeds this
+bounded one.** The loop: the sweep runs several genuinely different frames in parallel and finds new
+dead-ends → each is routed (§1 Step 4) to a `HANDOVER.md` open item or a `PLAN_*.md` → a later session
+fixes it and freezes a `test/chatflow-*.test.mjs` regression tagged to the FLOW tier the dead-end
+belongs to → that frozen regression becomes ladder content, exactly what criterion 2 counts when the
+tier next tries to ratchet. So the sweep is unbounded (it keeps finding new edges across new frames)
+and the FLOW ladder is bounded (it accumulates the fixed edges as gated content) — the same
+"bounded ladder plus an unbounded edge-search" shape all four benchmarks now share.
 
 ### 2.2 The surface-variation axis (orthogonal to the ladder)
 
 The ladder (§2.1) ratchets what CONCEPTS a conversation touches. This axis instead re-plays the SAME
 intent — a greeting, an identity question, a help/orientation ask — through different SURFACES of
 English, at whatever tier you're currently playtesting. It's a multiplier, not another rung: run it
-across Tier 0 and Tier 6 especially (both are "the messy real user" territory), and spot-check it
+across FLOW-0 and FLOW-6 especially (both are "the messy real user" territory), and spot-check it
 elsewhere.
 
 Vary each recognized closed-set intent across:
@@ -499,8 +534,10 @@ Report structure:
   per §3.4's own ranking rule); full ladder mode: one entry per tier played this run, entry
   points tried, dead-ends found; capped sprint mode: one entry per round (the same shape
   as §3.2's end-of-sprint report), what was tested, found, and where it was routed.
-- **Ladder position reached** — the Tier 0–6 position this run reaches or confirms clean (§2.1). This
-  stays the existing qualitative flow ladder — it is not CEFR and is never relabeled as such.
+- **Ladder position reached** — the FLOW-0…FLOW-6 position this run reaches or confirms clean, with
+  the ratchet receipt (§2.1): which tier is clean by "fresh-flow-clean AND frozen-regressions-green",
+  and where the ladder currently gates. The FLOW ladder is CONVERSATION's own scale, not CEFR,
+  `INF-1…INF-8`, or `TOOL-0…TOOL-8` — same bounded-ladder shape, unrelated axes.
 - **Routed backlog** — every dead-end found this run, one line each: verbatim input, Step 3's
   diagnosis, and where it was routed (a `HANDOVER.md` open item / a named `PLAN_*.md` / "named
   ceiling, no route"). This is the report's actionable output — the list a future session works from.
@@ -558,7 +595,7 @@ gap becomes a `HANDOVER.md` open item (whoever lands the fix verifies it live an
 mode** by default (§3.4: several genuinely different persona/frame sub-agents dispatched IN
 PARALLEL — fast, because it's parallel, and the only mode that reliably finds a dead-end outside
 whatever single frame a chained or ladder run happens to start in), or ask explicitly for **full
-ladder mode** (§2: ratchet the Tier 0–6 complexity ladder one tier at a time, open-ended, run inline)
+ladder mode** (§2: ratchet the FLOW-0…FLOW-6 complexity ladder one tier at a time, open-ended, run inline)
 or **capped sprint mode** (§3: a bounded, default-3-round CHAINED cadence, serial by construction —
 reserve it for when the operator wants to watch a sprint's follow-up depth in real time, not as the
 default single-run pass). Whichever mode, write up the run as `BENCHMARK_CONVERSATION_<version>.md`

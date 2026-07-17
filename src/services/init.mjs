@@ -85,7 +85,7 @@ export function renderTomlConfig(config = defaultConfig()) {
   const base = `# tmct.toml — the mechanical code talker, project configuration.
 # Written by \`tmct init\`. An ABSENT file means shipped defaults (this file
 # just makes them explicit and editable). Documented in the repository-interface
-# onboarding surface (ROADMAP Phase 8, "Distribution: tmct init").
+# onboarding surface.
 
 # Where the code-graph JSON artifact lives, relative to this file. The
 # TMCT_GRAPH_FILE environment variable overrides it at runtime.
@@ -99,7 +99,7 @@ ${Array.isArray(c.graphFiles) && c.graphFiles.length ? `
 graph_files = ${JSON.stringify(c.graphFiles)}
 ` : ""}
 [corpus]
-# Corpus-tiering policy (ROADMAP Phase 4). The $0-offline default is inviolable;
+# Corpus-tiering policy. The $0-offline default is inviolable;
 # higher tiers are ADDITIVE and never required to answer.
 #   "tier1" — committed slice only. Offline, $0. The default.
 #   "tier2" — also fetch growable corpora at seed time (network, once, cached).

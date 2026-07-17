@@ -319,10 +319,10 @@ test("goal driver e2e: the goal-reasoner moves C2 result-completion OFF the floo
   // the C2 meta-loop's keystone-argmax ranking, and parseSuperlative defaults
   // entityType from a metric that implies exactly one class (ask-vocab.mjs's
   // METRIC_IMPLIES_ENTITY: tests -> Module).
-  assert.ok(goal.rolled.byRung.C2.completion > base.rolled.byRung.C2.completion, "C2 plan-completion climbs under the goal-reasoner");
-  assert.ok(goal.rolled.byRung.C2.resultCompletion > base.rolled.byRung.C2.resultCompletion, "C2 result-completion climbs under the goal-reasoner");
-  assert.equal(goal.rolled.byRung.C2.resultCompletion, 1, "C2 result-completion is 100% — every case, including what-to-test, composes for real");
-  assert.ok(goal.rolled.byRung.C2.gatePass, "C2 passes the honest gate under the goal-reasoner");
+  assert.ok(goal.rolled.byRung["TOOL-6"].completion > base.rolled.byRung["TOOL-6"].completion, "C2 plan-completion climbs under the goal-reasoner");
+  assert.ok(goal.rolled.byRung["TOOL-6"].resultCompletion > base.rolled.byRung["TOOL-6"].resultCompletion, "C2 result-completion climbs under the goal-reasoner");
+  assert.equal(goal.rolled.byRung["TOOL-6"].resultCompletion, 1, "C2 result-completion is 100% — every case, including what-to-test, composes for real");
+  assert.ok(goal.rolled.byRung["TOOL-6"].gatePass, "C2 passes the honest gate under the goal-reasoner");
 
   const wtt = goal.rows.find((r) => r.caseId === "ab-c2-what-to-test");
   assert.ok(wtt.verdict.completed && wtt.verdict.resultCompleted, "what-to-test is now genuinely result-complete — real keystone-argmax ranking, not a faked pass");

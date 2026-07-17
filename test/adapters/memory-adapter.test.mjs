@@ -1,4 +1,4 @@
-// The provider adapter seam (ROADMAP item 14, docs/adapter-contract.md):
+// The provider adapter seam (docs/adapter-contract.md):
 // registerProvider() feeds the engine without any file, the default file
 // loader survives a provider round-trip, and the write-ownership boundary
 // holds — provider payloads are read-only input, memory goes to .tmct/memory/.

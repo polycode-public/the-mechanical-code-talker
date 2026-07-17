@@ -1,6 +1,6 @@
 # ontology/
 
-`tmct-core.ttl` is tmct's core OWL 2 ontology (ROADMAP Phase 2, item 3): the
+`tmct-core.ttl` is tmct's core OWL 2 ontology: the
 formal home of every label the runtime writes into its plain-JSON graphs. The
 product path never runs an OWL toolchain — the graphs are **OWL-labelled JSON**
 (`.tmct/`, see `docs/references/schemas/owl2-vocabulary.md`); this document is

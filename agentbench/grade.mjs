@@ -2,7 +2,8 @@
 //
 // AGENTBENCH is the SIBLING of chatbench, on a new axis: it grades the TOOL LOOP
 // (driving tool calls), not the chat turn. Same versioned-naming + regression
-// discipline; the levels are the A0→C2 AGENTIC RUNGS (not CEFR), and — the one
+// discipline; the levels are the TOOL-0→TOOL-8 tool-use RUNGS (a scale drawn from
+// this bench's own domain, not CEFR), and — the one
 // non-negotiable — a HALLUCINATED tool call is an AUTOMATIC FAIL. There is NO
 // LLM judge here: grading is entirely deterministic (compare produced calls to
 // expected + gate on the registry), which is the whole point (a deterministic
@@ -16,15 +17,28 @@ import { isCapability } from "../src/domain/router/registry.mjs";
 import { hallucinationsIn } from "../src/domain/router/call-validator.mjs";
 import { parseJsonlRows, rollupBy, ladderGateBy } from "../benchlib/bench.mjs";
 
-// ---- the rungs (the agentic ladder — analogue of chatbench's CEFR GRADES) ----
-// A0 = single obvious tool, args on a plate. A1 = pick the right tool from a
-// small declared set + bind one entity. A2 = negation / honest-refuse when the
-// tool isn't in set or the entity doesn't resolve. B1 = a bounded multi-step
-// recipe (thread one result into the next call). B2 = conditional / retry. C1 =
-// compose a plan for a novel goal (closed-world). C2 = self-directed (goal
-// deduction). Only A0/A1/A2 are exercised by the seed set + stub driver today;
-// the higher rungs are declared so the ladder + regression frame exist up front.
-export const RUNGS = Object.freeze(["A0", "A1", "A2", "B1", "B2", "C1", "C2"]);
+// ---- the rungs (the TOOL ladder — tool-use capability, this bench's own scale) ----
+// TOOL-0 Direct dispatch: one obvious tool, args on a plate.
+// TOOL-1 Tool selection: pick the right tool from a declared set, bind one entity.
+// TOOL-2 Scope refusal: refuse cleanly when no declared tool fits or the entity
+//        doesn't resolve (closed-world default-deny — carries the honest miss).
+// TOOL-3 Sequential composition: a bounded multi-step recipe, thread one result
+//        into the next call.
+// TOOL-4 Conditional dispatch: branch on a result; retry.
+// TOOL-5 Goal planning: compose a plan for a novel goal, closed-world.
+// TOOL-6 Goal deduction: self-directed — deduce the goal, then plan it.
+// TOOL-7 Recovery & replanning: a plan step fails (a tool returns empty/error)
+//        and the driver observes the failure and replans a fallback rather than
+//        terminating on the dead branch (expect.recover).
+// TOOL-8 Composition under ambiguity: the goal/entity is underspecified, so the
+//        driver enumerates the tied readings (expect.candidateResults, one
+//        dispatched read per tied candidate) or refuses-with-a-nudge — never an
+//        arbitrary pick, never a hallucinated call.
+// TOOL-0..TOOL-2 are exercised by the seed set + stub driver; the goal driver
+// clears through TOOL-6. TOOL-7/TOOL-8 name capabilities the current drivers do
+// not have yet (a replanning branch in the planner; a tied-candidate composer in
+// the goal reasoner) — they gate at the honest floor until those ship.
+export const RUNGS = Object.freeze(["TOOL-0", "TOOL-1", "TOOL-2", "TOOL-3", "TOOL-4", "TOOL-5", "TOOL-6", "TOOL-7", "TOOL-8"]);
 
 /** The honest-gate completion floor: the gate is "0% hallucination AT ≥N%
  *  completion". A refuse-everything driver scores 0% hallucination but ~0%
@@ -73,6 +87,42 @@ export function parseCases(text, { knownLabels = null } = {}) {
       }
     } else if (e.calls) {
       errors.push(`${c.id}: a refuse case must not also declare expect.calls`);
+    }
+    // expect.recover — the TOOL-7 marker: after the primary branch returns
+    // empty/error, a named FALLBACK call must fire (the driver replans rather
+    // than dying on the dead branch). Only on a non-refuse case (a recovery
+    // composes a real plan); names a declared `after` tool and a declared
+    // `fallback` tool; the case's expect.calls carries the full [primary, …,
+    // fallback] sequence the recovering plan produces.
+    if ("recover" in e) {
+      if (refuse) errors.push(`${c.id}: expect.recover is a plan marker; a refuse case must not declare it`);
+      else if (!isPlainObject(e.recover)) errors.push(`${c.id}: expect.recover must be an object naming { after, fallback }`);
+      else {
+        for (const slot of ["after", "fallback"]) {
+          const name = e.recover[slot];
+          if (typeof name !== "string" || !name) errors.push(`${c.id}: expect.recover.${slot} must name a tool`);
+          else if (!(c.tools || []).includes(name)) errors.push(`${c.id}: expect.recover.${slot} "${name}" is not in the case's declared tools`);
+        }
+        if (!Array.isArray(e.calls) || !e.calls.length) errors.push(`${c.id}: a recovery case needs expect.calls (the [primary, …, fallback] sequence)`);
+      }
+    }
+    // expect.candidateResults — the TOOL-8 marker: an ambiguous-refusal case
+    // carries one dispatched read per TIED candidate (the enumerate-don't-pick
+    // shape the skill blesses). Only on a refuse case; each candidate is itself a
+    // well-formed call against the declared set.
+    if ("candidateResults" in e) {
+      if (!refuse) errors.push(`${c.id}: expect.candidateResults only annotates a refuse case (the ambiguous enumerate-or-refuse shape)`);
+      else if (!Array.isArray(e.candidateResults) || !e.candidateResults.length) {
+        errors.push(`${c.id}: expect.candidateResults must be a non-empty array of dispatched reads`);
+      } else {
+        e.candidateResults.forEach((call, j) => {
+          const cat = `${c.id} candidate ${j + 1}`;
+          if (!isPlainObject(call) || typeof call.name !== "string") { errors.push(`${cat}: candidate needs a name`); return; }
+          if (!(c.tools || []).includes(call.name)) errors.push(`${cat}: "${call.name}" not in the case's declared tools`);
+          if ("input" in call && !isPlainObject(call.input)) errors.push(`${cat}: input must be an object`);
+          for (const problem of hallucinationsIn(call, c.tools || [])) errors.push(`${cat}: candidate call is ${problem.reason} (${problem.detail})`);
+        });
+      }
     }
     // expect.result — the STATIC composed-answer literal (0.8.1). A composition
     // case pins the TRUE end-to-end answer (e.g. the untested-∩-impact set) as a
@@ -163,12 +213,34 @@ export function gradeCase(caseDef, loopResult) {
   let completed = false;
   if (caseDef.expect.refuse === true) {
     const refusedCleanly = loopResult?.refused === true && calls.length === 0;
-    if (refusedCleanly) completed = true;
-    else reasons.push("expected an honest refusal; driver produced a call instead");
+    // TOOL-8: an ambiguous case must ALSO enumerate the tied candidates (one
+    // dispatched read each) — a bare refusal that drops the candidates, or an
+    // arbitrary pick, is not the enumerate-or-refuse behavior the rung tests.
+    let candidatesOk = true;
+    if (Array.isArray(caseDef.expect.candidateResults)) {
+      const produced = Array.isArray(loopResult?.candidateResults) ? loopResult.candidateResults : null;
+      candidatesOk = produced !== null && sameCandidates(produced, caseDef.expect.candidateResults);
+      if (!candidatesOk) {
+        reasons.push(produced === null
+          ? "expected an ambiguous refusal carrying candidateResults (one dispatched read per tied candidate); none produced"
+          : `produced candidate set ${describeCalls(produced)} != expected ${describeCalls(caseDef.expect.candidateResults)}`);
+      }
+    }
+    if (refusedCleanly && candidatesOk) completed = true;
+    else if (!refusedCleanly) reasons.push("expected an honest refusal; driver produced a call instead");
   } else {
     const expectedCalls = caseDef.expect.calls || [];
-    if (callsMatch(expectedCalls, calls)) completed = true;
-    else reasons.push(`produced calls do not match expected (${describeCalls(calls)} vs ${describeCalls(expectedCalls)})`);
+    const callsOk = callsMatch(expectedCalls, calls);
+    if (!callsOk) reasons.push(`produced calls do not match expected (${describeCalls(calls)} vs ${describeCalls(expectedCalls)})`);
+    // TOOL-7: a recovery case must SIGNAL the replan — the fallback fired
+    // because the driver observed the primary branch return empty/error, not
+    // as an unconditional second step. loopResult.recovered is that signal.
+    let recoverOk = true;
+    if (caseDef.expect.recover) {
+      recoverOk = loopResult?.recovered === true;
+      if (!recoverOk) reasons.push("expected a recovery (a fallback branch fired after the primary returned empty/error), but the driver did not signal one");
+    }
+    if (callsOk && recoverOk) completed = true;
   }
 
   // 5. proof chain when required — CONNECTEDNESS, not a flat ok-list. A proof is
@@ -231,6 +303,24 @@ export function sameSet(a, b) {
 }
 
 const describeSet = (xs) => (xs.length ? `{${[...xs].map(String).sort().join(", ")}}` : "∅");
+
+/** Canonical key for one dispatched read ({name, input}) — name plus its pinned
+ *  input slots, sorted, so two candidate sets compare order-insensitively. */
+const candidateKey = (c) => {
+  const input = c?.input ?? {};
+  const slots = Object.keys(input).sort().map((k) => `${k}=${String(input[k])}`);
+  return `${c?.name}(${slots.join(",")})`;
+};
+
+/** Set equality over two candidate-read arrays (the TOOL-8 tied-candidate
+ *  comparator): same {name,input} multiset, order-insensitive. */
+export function sameCandidates(a, b) {
+  const as = new Set((a || []).map(candidateKey));
+  const bs = new Set((b || []).map(candidateKey));
+  if (as.size !== bs.size) return false;
+  for (const x of as) if (!bs.has(x)) return false;
+  return true;
+}
 
 /** CONNECTEDNESS of a POP proof: when a proof carries `causal-link` steps
  *  (producer -> condition -> consumer), the chain must be GROUNDED — at least one

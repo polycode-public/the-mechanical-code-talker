@@ -23,7 +23,7 @@ import {
 } from "../../src/domain/router/registry.mjs";
 import {
   RUNGS, COMPLETION_FLOOR, parseCases, hallucinationsIn, isCallWellFormed,
-  callMatches, callsMatch, gradeCase, rollup, ladderGate, sameSet,
+  callMatches, callsMatch, gradeCase, rollup, ladderGate, sameSet, sameCandidates,
 } from "../../agentbench/grade.mjs";
 import { stubDriver } from "../../agentbench/driver-stub.mjs";
 import { shimDriver } from "../../agentbench/driver-shim.mjs";
@@ -141,7 +141,7 @@ test("callMatches / callsMatch: name + pinned-input, positional sequence", () =>
 });
 
 test("gradeCase: a matching single call passes with a valid proof chain", () => {
-  const caseDef = { rung: "A0", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], terminates: true, proof: true } };
+  const caseDef = { rung: "TOOL-0", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], terminates: true, proof: true } };
   const loop = { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], refused: false, terminated: true, proof: [{ ok: true }, { ok: true }] };
   const v = gradeCase(caseDef, loop);
   assert.ok(v.pass, v.reasons.join("; "));
@@ -150,7 +150,7 @@ test("gradeCase: a matching single call passes with a valid proof chain", () => 
 });
 
 test("gradeCase: a hallucinated call is an AUTOMATIC FAIL even if it 'answers'", () => {
-  const caseDef = { rung: "A1", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], terminates: true } };
+  const caseDef = { rung: "TOOL-1", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], terminates: true } };
   // the driver reached OUTSIDE the declared set — automatic fail
   const loop = { calls: [{ name: "tmct_callers", input: { symbol: "Widget" } }], refused: false, terminated: true };
   const v = gradeCase(caseDef, loop);
@@ -159,7 +159,7 @@ test("gradeCase: a hallucinated call is an AUTOMATIC FAIL even if it 'answers'",
 });
 
 test("gradeCase: refusing-when-unsure passes at the honest-miss level; a wrong call instead of refusing fails", () => {
-  const refuseCase = { rung: "A2", tools: ["tmct_describe"], expect: { refuse: true, terminates: true } };
+  const refuseCase = { rung: "TOOL-2", tools: ["tmct_describe"], expect: { refuse: true, terminates: true } };
   assert.ok(gradeCase(refuseCase, { calls: [], refused: true, terminated: true }).pass);
   // produced a call when it should have refused
   const bad = gradeCase(refuseCase, { calls: [{ name: "tmct_describe", input: { symbol: "zebra" } }], refused: false, terminated: true });
@@ -167,7 +167,7 @@ test("gradeCase: refusing-when-unsure passes at the honest-miss level; a wrong c
 });
 
 test("gradeCase: a required-but-missing proof chain fails a proof case", () => {
-  const caseDef = { rung: "A0", tools: ["tmct_untested"], expect: { calls: [{ name: "tmct_untested" }], terminates: true, proof: true } };
+  const caseDef = { rung: "TOOL-0", tools: ["tmct_untested"], expect: { calls: [{ name: "tmct_untested" }], terminates: true, proof: true } };
   const v = gradeCase(caseDef, { calls: [{ name: "tmct_untested" }], refused: false, terminated: true, proof: [] });
   assert.ok(!v.pass);
   assert.ok(v.reasons.some((r) => /proof/.test(r)));
@@ -175,8 +175,8 @@ test("gradeCase: a required-but-missing proof chain fails a proof case", () => {
 
 test("rollup: the METRIC PAIR + gate — a refuse-everything driver hits 0% halluc but FAILS on completion", () => {
   const cases = [
-    { rung: "A0", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], terminates: true } },
-    { rung: "A0", tools: ["tmct_untested"], expect: { calls: [{ name: "tmct_untested" }], terminates: true } },
+    { rung: "TOOL-0", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], terminates: true } },
+    { rung: "TOOL-0", tools: ["tmct_untested"], expect: { calls: [{ name: "tmct_untested" }], terminates: true } },
   ];
   // a degenerate driver that refuses EVERYTHING
   const rows = cases.map((c) => ({ rung: c.rung, verdict: gradeCase(c, { calls: [], refused: true, terminated: true }) }));
@@ -189,15 +189,88 @@ test("rollup: the METRIC PAIR + gate — a refuse-everything driver hits 0% hall
 test("ladderGate: the first un-gated rung gates every rung above it, with receipts", () => {
   const rolled = {
     byRung: {
-      A0: { total: 2, completion: 1, hallucinationRate: 0, gatePass: true },
-      A1: { total: 2, completion: 0.2, hallucinationRate: 0, gatePass: false },
-      A2: { total: 2, completion: 1, hallucinationRate: 0, gatePass: true },
+      "TOOL-0": { total: 2, completion: 1, hallucinationRate: 0, gatePass: true },
+      "TOOL-1": { total: 2, completion: 0.2, hallucinationRate: 0, gatePass: false },
+      "TOOL-2": { total: 2, completion: 1, hallucinationRate: 0, gatePass: true },
     },
     overall: {},
   };
   const g = ladderGate(rolled);
-  assert.match(g.gatedAt, /A1 completion/);
-  assert.deepEqual(g.receipts.map((r) => r.rung), ["A2"]);
+  assert.match(g.gatedAt, /TOOL-1 completion/);
+  assert.deepEqual(g.receipts.map((r) => r.rung), ["TOOL-2"]);
+});
+
+// ---- the TOOL-7 recovery + TOOL-8 tied-candidate grader extensions ----------
+
+test("gradeCase: a TOOL-7 recovery case passes only when the driver SIGNALS the replan", () => {
+  const caseDef = {
+    rung: "TOOL-7", tools: ["tmct_callers", "tmct_describe"],
+    expect: {
+      calls: [{ name: "tmct_callers", input: { symbol: "Button" } }, { name: "tmct_describe", input: { symbol: "Button" } }],
+      recover: { after: "tmct_callers", fallback: "tmct_describe" }, terminates: true,
+    },
+  };
+  const calls = [{ name: "tmct_callers", input: { symbol: "Button" } }, { name: "tmct_describe", input: { symbol: "Button" } }];
+  // the fallback fired AND the driver observed the empty primary (recovered:true)
+  const ok = gradeCase(caseDef, { calls, refused: false, terminated: true, recovered: true });
+  assert.ok(ok.pass && ok.completed, ok.reasons.join("; "));
+  // same calls but NO recovery signal — an unconditional second step, not a replan
+  const noSignal = gradeCase(caseDef, { calls, refused: false, terminated: true });
+  assert.ok(!noSignal.pass && !noSignal.completed);
+  assert.ok(noSignal.reasons.some((r) => /did not signal/.test(r)));
+});
+
+test("gradeCase: a TOOL-8 ambiguous case passes iff it refuses AND enumerates the tied candidates", () => {
+  const caseDef = {
+    rung: "TOOL-8", tools: ["tmct_impact"],
+    expect: {
+      refuse: true,
+      candidateResults: [
+        { name: "tmct_impact", input: { module: "app/lib/b.mjs" } },
+        { name: "tmct_impact", input: { module: "app/unit-tests/b.test.mjs" } },
+      ],
+      terminates: true,
+    },
+  };
+  const cands = [
+    { name: "tmct_impact", input: { module: "app/unit-tests/b.test.mjs" } },
+    { name: "tmct_impact", input: { module: "app/lib/b.mjs" } },
+  ]; // order-insensitive
+  const ok = gradeCase(caseDef, { calls: [], refused: true, terminated: true, candidateResults: cands });
+  assert.ok(ok.pass && ok.completed, ok.reasons.join("; "));
+  // a bare refusal that dropped the candidates is NOT the enumerate-or-refuse behavior
+  const bare = gradeCase(caseDef, { calls: [], refused: true, terminated: true });
+  assert.ok(!bare.pass && !bare.completed);
+  assert.ok(bare.reasons.some((r) => /candidateResults/.test(r)));
+  // an arbitrary single pick (a produced call) fails the refuse gate outright
+  const pick = gradeCase(caseDef, { calls: [{ name: "tmct_impact", input: { module: "app/lib/b.mjs" } }], refused: false, terminated: true });
+  assert.ok(!pick.pass);
+});
+
+test("sameCandidates: order/duplication-insensitive equality over dispatched reads", () => {
+  const a = [{ name: "tmct_impact", input: { module: "x" } }, { name: "tmct_impact", input: { module: "y" } }];
+  const b = [{ name: "tmct_impact", input: { module: "y" } }, { name: "tmct_impact", input: { module: "x" } }];
+  assert.ok(sameCandidates(a, b));
+  assert.ok(!sameCandidates(a, [{ name: "tmct_impact", input: { module: "x" } }]));
+  assert.ok(!sameCandidates(a, [{ name: "tmct_impact", input: { module: "x" } }, { name: "tmct_impact", input: { module: "z" } }]));
+});
+
+test("parseCases: lints expect.recover shape and expect.candidateResults shape", () => {
+  const bad = [
+    // recover on a refuse case (a marker for a plan, not a refusal)
+    JSON.stringify({ id: "e1", rung: "TOOL-7", request: "q", tools: ["tmct_describe"], expect: { refuse: true, recover: { after: "tmct_describe", fallback: "tmct_describe" }, terminates: true } }),
+    // recover.fallback names a tool not in the declared set
+    JSON.stringify({ id: "e2", rung: "TOOL-7", request: "q", tools: ["tmct_callers"], expect: { calls: [{ name: "tmct_callers", input: { symbol: "Widget" } }], recover: { after: "tmct_callers", fallback: "tmct_describe" }, terminates: true } }),
+    // candidateResults on a non-refuse case
+    JSON.stringify({ id: "e3", rung: "TOOL-8", request: "q", tools: ["tmct_impact"], expect: { calls: [{ name: "tmct_impact", input: { module: "app/lib/a.mjs" } }], candidateResults: [{ name: "tmct_impact", input: { module: "app/lib/a.mjs" } }], terminates: true } }),
+    // a candidate naming an undeclared tool
+    JSON.stringify({ id: "e4", rung: "TOOL-8", request: "q", tools: ["tmct_impact"], expect: { refuse: true, candidateResults: [{ name: "tmct_callers", input: { symbol: "x" } }], terminates: true } }),
+  ].join("\n");
+  const { errors } = parseCases(bad);
+  assert.ok(errors.some((e) => /e1.*refuse case must not declare it/.test(e)));
+  assert.ok(errors.some((e) => /e2.*recover\.fallback.*not in the case's declared tools/.test(e)));
+  assert.ok(errors.some((e) => /e3.*candidateResults only annotates a refuse case/.test(e)));
+  assert.ok(errors.some((e) => /e4.*not in the case's declared tools/.test(e)));
 });
 
 // ---- cases.jsonl lint -------------------------------------------------------
@@ -212,8 +285,8 @@ test("cases.jsonl: parses clean — unique ids, known rungs, declared tools, wel
 test("parseCases: rejects an undeclared tool, an unknown rung, and a hallucinated expected call", () => {
   const bad = [
     JSON.stringify({ id: "x1", rung: "Z9", request: "q", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_describe", input: { symbol: "W" } }], terminates: true } }),
-    JSON.stringify({ id: "x2", rung: "A0", request: "q", tools: ["not_a_tool"], expect: { refuse: true, terminates: true } }),
-    JSON.stringify({ id: "x3", rung: "A0", request: "q", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_callers", input: { symbol: "W" } }], terminates: true } }),
+    JSON.stringify({ id: "x2", rung: "TOOL-0", request: "q", tools: ["not_a_tool"], expect: { refuse: true, terminates: true } }),
+    JSON.stringify({ id: "x3", rung: "TOOL-0", request: "q", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_callers", input: { symbol: "W" } }], terminates: true } }),
   ].join("\n");
   const { errors } = parseCases(bad);
   assert.ok(errors.some((e) => /rung must be one of/.test(e)));
@@ -281,14 +354,15 @@ test("agentbench e2e: the stub driver runs the seed set to a labeled stub-floor 
     assert.equal(r.driver, "stub-floor", "every row is stamped the stub-driver floor, not a router baseline");
     assert.equal(r.version, BENCH_VERSION, "artifacts are stamped the bench version (tracks package.json)");
   }
-  // the stub is a KEYWORD matcher authored for the CONCRETE rungs (A0-A2); the
-  // abstract rungs (B1+ multi-step, and the Stage-5 C2 goal cases added since)
-  // are BEYOND its design by construction. So the "real floor" property (a
-  // NON-degenerate floor: it clears the gate rather than refuse-everything) is
-  // asserted on the rungs it targets, not the deliberately-harder full ladder —
-  // adding a C2 case the stub cannot goal-deduce must not read as a floor regression.
+  // the stub is a KEYWORD matcher authored for the CONCRETE rungs (TOOL-0..TOOL-2);
+  // the abstract rungs (TOOL-3+ multi-step, the goal cases, and the TOOL-7/TOOL-8
+  // recovery/ambiguity tiers) are BEYOND its design by construction. So the "real
+  // floor" property (a NON-degenerate floor: it clears the gate rather than
+  // refuse-everything) is asserted on the rungs it targets, not the
+  // deliberately-harder full ladder — adding a higher-rung case the stub cannot
+  // handle must not read as a floor regression.
   assert.equal(rolled.overall.hallucinationRate, 0, "the stub structurally cannot hallucinate (default-deny to declared set)");
-  for (const rung of ["A0", "A1", "A2"]) {
+  for (const rung of ["TOOL-0", "TOOL-1", "TOOL-2"]) {
     assert.ok(rolled.byRung[rung].completion >= COMPLETION_FLOOR, `stub completes its authored rung ${rung} (${(rolled.byRung[rung].completion * 100).toFixed(0)}%)`);
     assert.ok(rolled.byRung[rung].gatePass, `stub clears its gate on authored rung ${rung}`);
   }
@@ -397,9 +471,9 @@ test("sameSet: order/duplication-insensitive value equality (the result comparat
 
 test("parseCases: expect.result must be a static array of strings; a refuse case may not carry one", () => {
   const bad = [
-    JSON.stringify({ id: "r1", rung: "C1", request: "q", tools: ["tmct_untested"], expect: { calls: [{ name: "tmct_untested" }], result: "not-an-array", terminates: true } }),
-    JSON.stringify({ id: "r2", rung: "C1", request: "q", tools: ["tmct_untested"], expect: { calls: [{ name: "tmct_untested" }], result: [""], terminates: true } }),
-    JSON.stringify({ id: "r3", rung: "A2", request: "q", tools: ["tmct_describe"], expect: { refuse: true, result: ["x"], terminates: true } }),
+    JSON.stringify({ id: "r1", rung: "TOOL-5", request: "q", tools: ["tmct_untested"], expect: { calls: [{ name: "tmct_untested" }], result: "not-an-array", terminates: true } }),
+    JSON.stringify({ id: "r2", rung: "TOOL-5", request: "q", tools: ["tmct_untested"], expect: { calls: [{ name: "tmct_untested" }], result: [""], terminates: true } }),
+    JSON.stringify({ id: "r3", rung: "TOOL-2", request: "q", tools: ["tmct_describe"], expect: { refuse: true, result: ["x"], terminates: true } }),
   ].join("\n");
   const { errors } = parseCases(bad);
   assert.ok(errors.some((e) => /r1.*expect\.result must be an array/.test(e)));
@@ -410,7 +484,7 @@ test("parseCases: expect.result must be a static array of strings; a refuse case
 test("parseCases: the REFERENTIAL lint fails a STALE expect.result literal against the fixture", async () => {
   const knownLabels = await loadFixtureLabels();
   const stale = JSON.stringify({
-    id: "s1", rung: "C1", request: "q", tools: ["tmct_impact", "tmct_untested"],
+    id: "s1", rung: "TOOL-5", request: "q", tools: ["tmct_impact", "tmct_untested"],
     expect: { calls: [{ name: "tmct_impact", input: { module: "app/lib/a.mjs" } }, { name: "tmct_untested" }], result: ["app/lib/NONEXISTENT.mjs"], terminates: true },
   });
   const withFixture = parseCases(stale, { knownLabels });
@@ -431,7 +505,7 @@ test("cases.jsonl: every expect.result literal is referential against the fixtur
 });
 
 test("gradeCase: the RESULT axis — composed value-equals the literal PASSES; a wrong/absent fold FAILS plan-independently", () => {
-  const caseDef = { rung: "C1", tools: ["tmct_impact", "tmct_untested"], expect: { calls: [{ name: "tmct_impact", input: { module: "app/lib/a.mjs" } }, { name: "tmct_untested" }], result: ["app/lib/c.mjs", "scripts/g.mjs"], terminates: true } };
+  const caseDef = { rung: "TOOL-5", tools: ["tmct_impact", "tmct_untested"], expect: { calls: [{ name: "tmct_impact", input: { module: "app/lib/a.mjs" } }, { name: "tmct_untested" }], result: ["app/lib/c.mjs", "scripts/g.mjs"], terminates: true } };
   const calls = [{ name: "tmct_impact", input: { module: "app/lib/a.mjs" } }, { name: "tmct_untested", input: {} }];
   // plan-correct AND result-correct (composed set-equals the literal, order-insensitive)
   const good = gradeCase(caseDef, { calls, refused: false, terminated: true, composed: ["scripts/g.mjs", "app/lib/c.mjs"] });
@@ -447,7 +521,7 @@ test("gradeCase: the RESULT axis — composed value-equals the literal PASSES; a
 });
 
 test("gradeCase: a case WITHOUT expect.result mirrors plan completion on the result axis", () => {
-  const caseDef = { rung: "A0", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], terminates: true } };
+  const caseDef = { rung: "TOOL-0", tools: ["tmct_describe"], expect: { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], terminates: true } };
   const v = gradeCase(caseDef, { calls: [{ name: "tmct_describe", input: { symbol: "Widget" } }], refused: false, terminated: true });
   assert.equal(v.resultCompleted, v.completed);
   assert.ok(v.resultCompleted);

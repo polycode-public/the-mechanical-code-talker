@@ -57,11 +57,11 @@ function reasonsOf(rows) {
   return reasons;
 }
 
-/** The highest rung with an UNBROKEN gate-PASS chain from A0 (mirrors
+/** The highest rung with an UNBROKEN gate-PASS chain from TOOL-0 (mirrors
  *  ladderGate's "first ungated rung gates the rest" — recomputed directly off
  *  rolled.byRung so this stays a pure function of the rollup, not a string
- *  parse of ladder.gatedAt). Returns null if even A0 fails the gate (or A0 has
- *  no rows at all). */
+ *  parse of ladder.gatedAt). Returns null if even TOOL-0 fails the gate (or
+ *  TOOL-0 has no rows at all). */
 export function highestGatePassRung(rolled) {
   let reached = null;
   for (const rung of RUNGS) {
@@ -127,7 +127,7 @@ export function buildEnvelope({ rows, rolled, ladder, stamp, cases }) {
       byRung,
     },
     notes: [
-      "rungReached is the highest A0-C2 rung with an unbroken gate-PASS chain from A0 (0% hallucination AT >=50% completion, agentbench/grade.mjs COMPLETION_FLOOR) — see agentbench/grade.mjs ladderGate()/highestGatePassRung().",
+      "rungReached is the highest TOOL-0..TOOL-8 rung with an unbroken gate-PASS chain from TOOL-0 (0% hallucination AT >=50% completion, agentbench/grade.mjs COMPLETION_FLOOR) — see agentbench/grade.mjs ladderGate()/highestGatePassRung().",
       "toolsOk is false iff any produced call across the run named an undeclared or unknown-registry tool (the 'declared tools only, refuse otherwise' invariant). structuredOk is false iff any produced call had an unknown or missing argument against its declared schema. Both derive from src/domain/router/call-validator.mjs's hallucination taxonomy, not a hand-set guess.",
       "maxContextTokens is not measured by AGENTBENCH today; it is intentionally left null rather than copying a downstream calibration's hand-set figure (that copy is exactly the drift this envelope exists to prevent).",
       "Regenerate with `node agentbench/generate-envelope.mjs` after any AGENTBENCH-affecting change; the output is deterministic (no Date.now) so a clean re-run over an unchanged tree is byte-identical.",

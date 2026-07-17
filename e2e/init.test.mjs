@@ -1,4 +1,4 @@
-// init tests — `tmct init` (ROADMAP Phase 8, "Distribution: tmct init").
+// init tests — `tmct init`.
 //
 // initRepo takes a BARE directory to a working tmct install: it scaffolds
 // `.tmct/`, writes a documented `tmct.toml`, seeds the tier-1 committed corpus
@@ -255,14 +255,14 @@ test("no persona (the plain zero-flag path): renderTomlConfig output is BYTE-IDE
     `# tmct.toml — the mechanical code talker, project configuration.
 # Written by \`tmct init\`. An ABSENT file means shipped defaults (this file
 # just makes them explicit and editable). Documented in the repository-interface
-# onboarding surface (ROADMAP Phase 8, "Distribution: tmct init").
+# onboarding surface.
 
 # Where the code-graph JSON artifact lives, relative to this file. The
 # TMCT_GRAPH_FILE environment variable overrides it at runtime.
 graph_file = ".tmct/graph.json"
 
 [corpus]
-# Corpus-tiering policy (ROADMAP Phase 4). The $0-offline default is inviolable;
+# Corpus-tiering policy. The $0-offline default is inviolable;
 # higher tiers are ADDITIVE and never required to answer.
 #   "tier1" — committed slice only. Offline, $0. The default.
 #   "tier2" — also fetch growable corpora at seed time (network, once, cached).

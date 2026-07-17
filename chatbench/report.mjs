@@ -211,7 +211,7 @@ ${discriminating.map((r) => `### ${r.caseId} (${r.tags.join(", ")})\n\n${transcr
 
 The re-ranked next-cycle menu; the pick is named. One line of justification each.
 
-| rank | lever (ROADMAP item) | expected movement (cases/tags) | justification |
+| rank | lever | expected movement (cases/tags) | justification |
 | ---: | --- | --- | --- |
 | 1 | _<fill — THE PICK>_ | _<fill>_ | _<fill>_ |
 | 2 | _<fill>_ | _<fill>_ | _<fill>_ |

@@ -1,6 +1,6 @@
 // infbench/generate-cases.mjs — the deterministic INFBENCH case generator
 // (PLAN_INFERENCE_TESTING.md §2.2), mirroring chatbench/generate-graded.mjs's
-// mechanism for a structurally simpler fixture: INF-A1..C2's premises/queries
+// mechanism for a structurally simpler fixture: INF-1..INF-8's premises/queries
 // are STRUCTURAL (a chain of length k, a disjoint pair, a cardinality n), so
 // `expect` is a PURE FUNCTION of each template's own parameters — never a
 // replay of the engine (the zero-fabrication anti-circularity discipline,
@@ -202,7 +202,7 @@ function checkEntailed(caseTag, premises, entailed) {
 function mkCase(fields) { return { ...fields }; }
 
 // ======================================================================
-// INF-A1 — a1Lookup: 1 noun × {subClassOf, typeAssertion, possessive}
+// INF-1 — a1Lookup: 1 noun × {subClassOf, typeAssertion, possessive}
 // ======================================================================
 function a1Lookup(rng) {
   const cases = [];
@@ -210,7 +210,7 @@ function a1Lookup(rng) {
   let cursor = 0;
 
   // subClassOf: "every N1 is a N2" -> "is a N1 a N2" (direct lookup, zero
-  // inference — Rules needed: none, per §1's INF-A1 row).
+  // inference — Rules needed: none, per §1's INF-1 row).
   for (let i = 0; i < 10; i += 1) {
     const { picked, next } = pickClean(shuffled, cursor, 2);
     cursor = next;
@@ -220,7 +220,7 @@ function a1Lookup(rng) {
     const entailed = [{ subject: n1, predicate: "rdfs:subClassOf", object: n2 }];
     checkEntailed(`a1-scoa-${i + 1}`, premises, entailed);
     cases.push(mkCase({
-      band: "INF-A1", template: "a1Lookup", variant: "subClassOf",
+      band: "INF-1", template: "a1Lookup", variant: "subClassOf",
       arms: ["kernel", "chat"], checkType: "isa",
       premises, query, expect: { verdict: "yes", entailed },
     }));
@@ -237,7 +237,7 @@ function a1Lookup(rng) {
     const entailed = [{ subject: ind, predicate: "rdf:type", object: n }];
     checkEntailed(`a1-type-${i + 1}`, premises, entailed);
     cases.push(mkCase({
-      band: "INF-A1", template: "a1Lookup", variant: "typeAssertion",
+      band: "INF-1", template: "a1Lookup", variant: "typeAssertion",
       arms: ["chat"], checkType: "isa",
       premises, query, expect: { verdict: "yes", entailed },
     }));
@@ -258,7 +258,7 @@ function a1Lookup(rng) {
     const entailed = [{ subject: owner, predicate: `tmct:${prop}`, object: owned }];
     checkEntailed(`a1-poss-${i + 1}`, premises, entailed);
     cases.push(mkCase({
-      band: "INF-A1", template: "a1Lookup", variant: "possessive",
+      band: "INF-1", template: "a1Lookup", variant: "possessive",
       arms: ["chat"], checkType: "recall",
       premises, query, expect: { mentions: [owned], entailed },
     }));
@@ -268,7 +268,7 @@ function a1Lookup(rng) {
 }
 
 // ======================================================================
-// INF-A2 — a2ChainLen2: 2-hop noun chain × {taught-only, graph-bridge}
+// INF-2 — a2ChainLen2: 2-hop noun chain × {taught-only, graph-bridge}
 // ======================================================================
 function a2ChainLen2(rng) {
   const cases = [];
@@ -292,7 +292,7 @@ function a2ChainLen2(rng) {
     ];
     checkEntailed(`a2-chain-${i + 1}`, premises, entailed);
     cases.push(mkCase({
-      band: "INF-A2", template: "a2ChainLen2", variant: "taught-only",
+      band: "INF-2", template: "a2ChainLen2", variant: "taught-only",
       arms: ["kernel", "chat"], checkType: "isa",
       premises, query, expect: { verdict: "yes", entailed },
     }));
@@ -324,7 +324,7 @@ function a2ChainLen2(rng) {
       }],
     };
     cases.push(mkCase({
-      band: "INF-A2", template: "a2ChainLen2", variant: "graph-bridge",
+      band: "INF-2", template: "a2ChainLen2", variant: "graph-bridge",
       arms: ["chat"], checkType: "isa",
       premises, query, graph, expect: { verdict: "yes", entailed },
     }));
@@ -334,7 +334,7 @@ function a2ChainLen2(rng) {
 }
 
 // ======================================================================
-// INF-B1 — b1Disjoint: 1 disjoint pair × {direct, 1-hop lifted, control}
+// INF-3 — b1Disjoint: 1 disjoint pair × {direct, 1-hop lifted, control}
 // ======================================================================
 function b1Disjoint(rng) {
   const cases = [];
@@ -359,7 +359,7 @@ function b1Disjoint(rng) {
       ];
       checkEntailed(`${base}-direct`, premises, entailed);
       cases.push(mkCase({
-        band: "INF-B1", template: "b1Disjoint", variant: "direct-member",
+        band: "INF-3", template: "b1Disjoint", variant: "direct-member",
         arms: ["chat"], checkType: "isa",
         premises, query, expect: { verdict: "no", entailed, proof: true },
       }));
@@ -376,7 +376,7 @@ function b1Disjoint(rng) {
       ];
       checkEntailed(`${base}-lifted`, premises, entailed);
       cases.push(mkCase({
-        band: "INF-B1", template: "b1Disjoint", variant: "lifted-member",
+        band: "INF-3", template: "b1Disjoint", variant: "lifted-member",
         arms: ["chat"], checkType: "isa",
         premises, query, expect: { verdict: "no", entailed, proof: true },
       }));
@@ -392,7 +392,7 @@ function b1Disjoint(rng) {
       ];
       checkEntailed(`${base}-control`, premises, entailed);
       cases.push(mkCase({
-        band: "INF-B1", template: "b1Disjoint", variant: "control",
+        band: "INF-3", template: "b1Disjoint", variant: "control",
         arms: ["chat"], checkType: "isa",
         premises, query, expect: { verdict: "unproven", entailed },
       }));
@@ -403,7 +403,7 @@ function b1Disjoint(rng) {
 }
 
 // ======================================================================
-// INF-B1 — b1Existential: "some N1s are N2s" does not license "every N1 is a
+// INF-3 — b1Existential: "some N1s are N2s" does not license "every N1 is a
 // N2". ACE itself declines the existential (parseAce returns residue
 // ["some","are"] rather than a subClassOf triple), so a case here asks what the
 // chat layer does with a sentence its own grammar refused: an honest refusal,
@@ -443,7 +443,7 @@ function b1Existential(rng) {
       // so the honest floor is a refusal. `entailed` is empty on purpose — and
       // the premise is never lint()ed, because ACE declining it IS the setup.
       cases.push(mkCase({
-        band: "INF-B1", template: "b1Existential", variant: "class-probe",
+        band: "INF-3", template: "b1Existential", variant: "class-probe",
         arms: ["chat"], checkType: "isa",
         premises: [existential], query: `is a ${n1} a ${n2}`,
         expect: { verdict: "unproven", entailed: [] },
@@ -456,7 +456,7 @@ function b1Existential(rng) {
       const typePremise = `${ind} is a ${n1}`;
       checkEntailed(`b1-exi-indiv-${i + 1}`, [typePremise], [{ subject: ind, predicate: "rdf:type", object: n1 }]);
       cases.push(mkCase({
-        band: "INF-B1", template: "b1Existential", variant: "individual-probe",
+        band: "INF-3", template: "b1Existential", variant: "individual-probe",
         arms: ["chat"], checkType: "isa",
         premises: [existential, typePremise], query: `is ${ind} a ${n2}`,
         expect: { verdict: "unproven", entailed: [{ subject: ind, predicate: "rdf:type", object: n1 }] },
@@ -466,7 +466,7 @@ function b1Existential(rng) {
     { // Control: swap "some" for "every" and the SAME query becomes provable.
       checkEntailed(`b1-exi-ctl-class-${i + 1}`, [universal], scoEntailed);
       cases.push(mkCase({
-        band: "INF-B1", template: "b1Existential", variant: "class-control",
+        band: "INF-3", template: "b1Existential", variant: "class-control",
         arms: ["kernel", "chat"], checkType: "isa",
         premises: [universal], query: `is a ${n1} a ${n2}`,
         expect: { verdict: "yes", entailed: scoEntailed },
@@ -483,7 +483,7 @@ function b1Existential(rng) {
       ];
       checkEntailed(`b1-exi-ctl-indiv-${i + 1}`, [universal, typePremise], entailed);
       cases.push(mkCase({
-        band: "INF-B1", template: "b1Existential", variant: "individual-control",
+        band: "INF-3", template: "b1Existential", variant: "individual-control",
         arms: ["chat"], checkType: "isa",
         premises: [universal, typePremise], query: `is ${ind} a ${n2}`,
         expect: { verdict: "yes", entailed, proof: true },
@@ -495,7 +495,7 @@ function b1Existential(rng) {
 }
 
 // ======================================================================
-// INF-B2 — b2ChainLenK (chain length 3/4/5) — graded against a declared
+// INF-4 — b2ChainLenK (chain length 3/4/5) — graded against a declared
 // ceiling: the chain is classically provable and the kernel already derives
 // it, so `expect` pins the chat layer's honest floor rather than the classical
 // answer. The `ceiling` field carries that decision to the report, which
@@ -516,7 +516,7 @@ function b2ChainLenK(rng) {
       entailed.push({ subject: picked[0], predicate: "rdfs:subClassOf", object: picked[k] });
       checkEntailed(`b2-chain${k}-${i + 1}`, premises, entailed);
       cases.push(mkCase({
-        band: "INF-B2", template: "b2ChainLenK", variant: `chain-${k}`,
+        band: "INF-4", template: "b2ChainLenK", variant: `chain-${k}`,
         arms: ["chat"], checkType: "isa",
         premises, query, expect: { verdict: "unproven", entailed, proof: true },
         ceiling: "chat-layer multi-hop proof-chain materialization",
@@ -527,7 +527,7 @@ function b2ChainLenK(rng) {
   return cases;
 }
 
-// ---- INF-B2 — b2Svf1: someValuesFrom triple. Genuinely unproven even for a
+// ---- INF-4 — b2Svf1: someValuesFrom triple. Genuinely unproven even for a
 // complete cax-sco/cls-svf1 engine: (N1 ⊓ ∃verb.N2) ⊑ N3 does NOT entail the
 // plain N1 ⊑ N3 — an honest "cannot be proven" that also doubles as the
 // pattern-4 someValuesFrom expressibility witness (§1). ----
@@ -545,7 +545,7 @@ function b2Svf1(rng) {
     const query = `is a ${n1} a ${n3}`;
     checkEntailed(`b2-svf1-${i + 1}`, premises, []);
     cases.push(mkCase({
-      band: "INF-B2", template: "b2Svf1", variant: "svf1",
+      band: "INF-4", template: "b2Svf1", variant: "svf1",
       arms: ["chat"], checkType: "isa",
       premises, query, expect: { verdict: "unproven", entailed: [] },
       note: "genuinely unproven for ANY engine (not merely today's): a someValuesFrom restriction does not license the plain subclass query — an honest floor, doubling as cls-svf1's expressibility witness (§1).",
@@ -554,7 +554,7 @@ function b2Svf1(rng) {
   return cases;
 }
 
-// ---- INF-B2 — b2Svf1Apply: a genuinely POSITIVE instance-level cls-svf1
+// ---- INF-4 — b2Svf1Apply: a genuinely POSITIVE instance-level cls-svf1
 // application, added per a strategy-advisor feasibility pass (2026-07-10):
 // b2ChainLenK's 30 cases are pure scm-sco chain-transitivity ceilings whose
 // blocker is proof-chain materialization (§4 stage 2), not cls-svf1; b2Svf1's
@@ -600,7 +600,7 @@ function b2Svf1Apply(rng) {
     ];
     checkEntailed(`b2-svf1apply-${i + 1}`, premises, entailed);
     cases.push(mkCase({
-      band: "INF-B2", template: "b2Svf1Apply", variant: "positive",
+      band: "INF-4", template: "b2Svf1Apply", variant: "positive",
       arms: ["kernel"], checkType: "isa",
       premises, query, expect: { verdict: "yes", entailed, proof: true },
       note: "cls-svf1's actual positive conclusion (PLAN_INFERENCE_TESTING.md §4 stage 4): the restriction CLASS itself, not the further owl:intersectionOf step to N3 — a deliberately narrower, honestly-scoped claim than the original worked example's 'is chat.mjs a suite'. kernel-arm only: the query names a synthetic restriction node term, which chat.mjs was never taught to answer",
@@ -610,7 +610,7 @@ function b2Svf1Apply(rng) {
 }
 
 // ======================================================================
-// INF-C1 — c1Cardinality: (exactly n, queried min m≤n) / (max 0, existence).
+// INF-5 — c1Cardinality: (exactly n, queried min m≤n) / (max 0, existence).
 // FIXED IN PLACE (this build, PLAN_INFERENCE_TESTING.md §4 stage 4): both
 // variants now carry the TRUE classical verdict, proven by
 // proveCardinalityAtLeast/proveMaxCardinalityZeroDenial (src/domain/syllogise.mjs) —
@@ -644,7 +644,7 @@ function c1Cardinality(rng) {
     ];
     checkEntailed(`c1-exact-${i + 1}`, premises, entailed);
     cases.push(mkCase({
-      band: "INF-C1", template: "c1Cardinality", variant: "exactly-min",
+      band: "INF-5", template: "c1Cardinality", variant: "exactly-min",
       arms: ["kernel", "chat"], checkType: "isa",
       premises, query, expect: { verdict: "yes", entailed, proof: true },
       note: "cardinality monotonicity (exactly n ⊢ min m≤n): proveCardinalityAtLeast (src/domain/syllogise.mjs) proves it directly from the restriction's own declared n against the queried m — sound whenever m≤n, which this template's own m=1+(i%n) construction always satisfies.",
@@ -664,7 +664,7 @@ function c1Cardinality(rng) {
     ];
     checkEntailed(`c1-max0-${i + 1}`, premises, entailed);
     cases.push(mkCase({
-      band: "INF-C1", template: "c1Cardinality", variant: "max0",
+      band: "INF-5", template: "c1Cardinality", variant: "max0",
       arms: ["kernel", "chat"], checkType: "isa",
       premises, query, expect: { verdict: "no", entailed, proof: true },
       note: "cax-maxc0 (§5's found capability, now consumed): 'has at most 0' is an honest encoded negation (owl:maxCardinality 0) — proveMaxCardinalityZeroDenial (src/domain/syllogise.mjs) proves the class-level 'no' via a one-step universal generalization from cls-maxc1's ABox contradiction rule.",
@@ -673,7 +673,7 @@ function c1Cardinality(rng) {
   return cases;
 }
 
-// ---- INF-C1 — c1ScmSvfApply: scm-svf1 (someValuesFrom restriction
+// ---- INF-5 — c1ScmSvfApply: scm-svf1 (someValuesFrom restriction
 // SUBSUMPTION, W3C OWL 2 RL Table 9 — see src/domain/syllogise.mjs's own header
 // comment for why scm-svf2, the property-subsumption sibling rule, is out of
 // scope: tmct's ACE grammar has no way to teach property subsumption at all).
@@ -714,7 +714,7 @@ function c1ScmSvfApply(rng) {
     ];
     checkEntailed(`c1-scmsvf-${i + 1}`, premises, entailed);
     cases.push(mkCase({
-      band: "INF-C1", template: "c1ScmSvfApply", variant: "positive",
+      band: "INF-5", template: "c1ScmSvfApply", variant: "positive",
       arms: ["kernel", "chat"], checkType: "isa",
       premises, query, expect: { verdict: "yes", entailed, proof: true },
       note: "scm-svf1 (W3C OWL 2 RL Table 9): two independently taught someValuesFrom restrictions sharing the same property, whose filler classes are ⊑-related, entail the restriction-to-restriction subsumption itself (src/domain/syllogise.mjs's deriveSomeValuesFromSubsumption) — not the further owl:intersectionOf step, mirroring b2Svf1Apply's own deliberately narrower scope.",
@@ -724,7 +724,7 @@ function c1ScmSvfApply(rng) {
 }
 
 // ======================================================================
-// INF-C2 — c2Inconsistent: contradictory triple, SAME b1Disjoint machinery.
+// INF-6 — c2Inconsistent: contradictory triple, SAME b1Disjoint machinery.
 // Grades a live capability: the engine detects the clash, names the disjoint
 // pair that caused it and refuses to answer, so a pass is the real behaviour
 // and not a floor this template agreed not to test.
@@ -747,10 +747,167 @@ function c2Inconsistent(rng) {
     ];
     checkEntailed(`c2-${i + 1}`, premises, entailed);
     cases.push(mkCase({
-      band: "INF-C2", template: "c2Inconsistent", variant: "inconsistent",
+      band: "INF-6", template: "c2Inconsistent", variant: "inconsistent",
       arms: ["chat"], checkType: "inconsistent",
       premises, query, expect: { verdict: "inconsistent", entailed, clash: [c1, c2] },
       note: "The clash is the template's own declared disjoint pair, pinned at generation time, so grading stays a comparison against a known literal rather than a re-derivation. A pass requires the engine to admit the contradiction rather than answer from the contradictory memory; it does that today, naming the disjoint pair and asking for a retraction.",
+    }));
+  }
+  return cases;
+}
+
+// ======================================================================
+// INF-7 — Constructed restriction (OWL 2 EL). Classify THROUGH class
+// expressions that were never declared as graph nodes — nested existentials
+// and existential chains — which needs EL saturation, a different algorithm
+// from forward-chaining. ACE has no bare-existential teach frame ("every heart
+// has a valve" is declined, exactly as "some Ns are Ns" is in b1Existential),
+// so — like that template — the premise is NOT lint()ed: the grammar declining
+// the sentence IS the setup, and any confident "yes" is a fabrication the probe
+// exists to catch. Ceiling markers until PLAN_SYLLOGIST_EL_DL.md Stage EL ships;
+// the honest floor today is a miss (unproven). Corpus/persona-clean nouns only,
+// so a "yes" can only come from EL saturation, never a seeded fact.
+// ======================================================================
+const EL_CEILING = "OWL 2 EL saturation (Stage EL, PLAN_SYLLOGIST_EL_DL.md): classify through class expressions the graph never declared as nodes";
+
+function elConstructedRestriction(rng) {
+  const cases = [];
+  const shuffled = seededShuffle(CLASS_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n)), rng);
+  let cursor = 0;
+  for (let i = 0; i < 8; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 3);
+    cursor = next;
+    const [n1, n2, n3] = picked;
+    // n1 ⊑ ∃has.n2, n2 ⊑ n3 ⊢ n1 ⊑ ∃has.n3 (E1). The first premise is the
+    // undeclared restriction EL constructs; ACE declines it, so it is unlinted.
+    const premises = [`every ${n1} has a ${n2}`, `every ${n2} is a ${n3}`];
+    const query = `does a ${n1} have a ${n3}`;
+    cases.push(mkCase({
+      band: "INF-7", template: "elConstructedRestriction", variant: "nested-existential",
+      arms: ["chat"], checkType: "isa",
+      premises, query, expect: { verdict: "unproven", entailed: [] },
+      ceiling: EL_CEILING,
+      note: "E1 (PLAN_SYLLOGIST_EL_DL.md): a nested existential the graph never declared as a node. ACE has no bare-existential teach frame, so 'every N has a N' is declined and the premise is unlinted (as in b1Existential) — the honest floor today is a miss, and only real EL saturation, never a seeded fact, could turn it into a yes.",
+    }));
+  }
+  return cases;
+}
+
+function elExistentialChain(rng) {
+  const cases = [];
+  const shuffled = seededShuffle(CLASS_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n)), rng);
+  let cursor = 0;
+  for (let i = 0; i < 6; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 3);
+    cursor = next;
+    const [n1, n2, n3] = picked;
+    // n1 ⊑ ∃has.n2, n2 ⊑ ∃has.n3, has transitive ⊢ n1 has an n3 somewhere (E2).
+    const premises = [`every ${n1} has a ${n2}`, `every ${n2} has a ${n3}`];
+    const query = `does a ${n1} contain a ${n3}`;
+    cases.push(mkCase({
+      band: "INF-7", template: "elExistentialChain", variant: "existential-chain",
+      arms: ["chat"], checkType: "isa",
+      premises, query, expect: { verdict: "unproven", entailed: [] },
+      ceiling: EL_CEILING,
+      note: "E2 (PLAN_SYLLOGIST_EL_DL.md): composing two existentials through undeclared intermediate class expressions. Unlinted (ACE declines the bare existential); honest miss floor until Stage EL composes the chain.",
+    }));
+  }
+  return cases;
+}
+
+// ======================================================================
+// INF-8 — Reasoning by cases (OWL 2 DL) and disjointness-sound proof. Case
+// analysis — disjunction elimination, complement classes — needs a tableau
+// with branching (⊔, ¬), the first tmct conclusions that require reasoning by
+// cases. ACE declines "or", "not" and complement frames (they are retraction
+// triggers / unparsed, exactly as PLAN_SYLLOGIST_EL_DL.md E3/E4 note), so those
+// premises are unlinted ceiling markers until Stage DL. The disjointness-proof-
+// soundness case is different: its premises ALL parse, it is graded live, and it
+// flips from ceiling to pass the day the CONVERSATION-routed proof-path fix lands.
+// ======================================================================
+const DL_DISJUNCTION_CEILING = "OWL 2 DL reasoning by cases (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 unionOf/negative-assertion representation";
+const DL_COMPLEMENT_CEILING = "OWL 2 DL complement classes (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 complementOf representation";
+const DL_SOUNDNESS_CEILING = "disjointness-sound subclass proof: consult owl:disjointWith on the resolved chain before certifying a conclusion (the CONVERSATION-routed proof-path fix)";
+
+function dlDisjunction(rng) {
+  const cases = [];
+  const shuffled = seededShuffle(CLASS_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n)), rng);
+  let cursor = 0;
+  for (let i = 0; i < 6; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 3);
+    cursor = next;
+    const [n1, n2, n3] = picked;
+    const ind = mintIndividual();
+    // every n1 is a n2 or a n3; ind is a n1; ind is not a n2 ⊢ ind is a n3 (E3).
+    // "or" and "not" are both declined by ACE, so the disjunction can't even be
+    // stated today — unlinted, honest miss floor.
+    const premises = [`every ${n1} is a ${n2} or a ${n3}`, `${ind} is a ${n1}`, `${ind} is not a ${n2}`];
+    const query = `is ${ind} a ${n3}`;
+    cases.push(mkCase({
+      band: "INF-8", template: "dlDisjunction", variant: "disjunction-elimination",
+      arms: ["chat"], checkType: "isa",
+      premises, query, expect: { verdict: "unproven", entailed: [] },
+      ceiling: DL_DISJUNCTION_CEILING,
+      note: "E3 (PLAN_SYLLOGIST_EL_DL.md): disjunction elimination — the first conclusion needing reasoning by cases. ACE declines both 'or' (no unionOf frame) and 'not' (a retraction trigger, not a negative assertion), so the knowledge can't be stated today, let alone used: an honest miss, unlinted.",
+    }));
+  }
+  return cases;
+}
+
+function dlComplement(rng) {
+  const cases = [];
+  const shuffled = seededShuffle(CLASS_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n)), rng);
+  let cursor = 0;
+  for (let i = 0; i < 6; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 2);
+    cursor = next;
+    const [n1, n2] = picked;
+    const ind = mintIndividual();
+    // everything not-n1 is n2; ind is not n1 ⊢ ind is n2 (E4). complementOf is
+    // unrepresentable in the graph vocabulary today — unlinted miss floor.
+    const premises = [`everything that is not a ${n1} is a ${n2}`, `${ind} is not a ${n1}`];
+    const query = `is ${ind} a ${n2}`;
+    cases.push(mkCase({
+      band: "INF-8", template: "dlComplement", variant: "complement",
+      arms: ["chat"], checkType: "isa",
+      premises, query, expect: { verdict: "unproven", entailed: [] },
+      ceiling: DL_COMPLEMENT_CEILING,
+      note: "E4 (PLAN_SYLLOGIST_EL_DL.md): complement classes. complementOf does not exist in the graph vocabulary, so 'everything that is not X is Y' is unrepresentable — an honest miss, unlinted, until Stage DL.",
+    }));
+  }
+  return cases;
+}
+
+// The disjointness-proof-soundness discriminator (BENCHMARK_CONVERSATION_<v>.md,
+// routed item 1): ind:c1, c1 ⊑ c2, c1 ⊥ c2. Asked "is ind a c2", a sound engine
+// must NOT answer "yes with a subclass proof" — the memory is inconsistent, so
+// the honest verdict is the clash, not a certified conclusion. ALL premises
+// parse, so this one IS linted and graded live: it flips from ceiling to pass the
+// day the proof path consults owl:disjointWith before certifying. checkType
+// "inconsistent" (like c2Inconsistent): pass = the engine admits the clash.
+function dlDisjointProofSoundness(rng) {
+  const cases = [];
+  const shuffled = seededShuffle(CLASS_NOUNS, rng);
+  let cursor = 0;
+  for (let i = 0; i < 8; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 2);
+    cursor = next;
+    const [c1, c2] = picked;
+    const ind = mintIndividual();
+    const premises = [`${ind} is a ${c1}`, `every ${c1} is a ${c2}`, `no ${c1} is a ${c2}`];
+    const query = `is ${ind} a ${c2}`;
+    const entailed = [
+      { subject: ind, predicate: "rdf:type", object: c1 },
+      { subject: c1, predicate: "rdfs:subClassOf", object: c2 },
+      { subject: c1, predicate: "owl:disjointWith", object: c2 },
+    ];
+    checkEntailed(`inf8-soundness-${i + 1}`, premises, entailed);
+    cases.push(mkCase({
+      band: "INF-8", template: "dlDisjointProofSoundness", variant: "disjoint-clash",
+      arms: ["chat"], checkType: "inconsistent",
+      premises, query, expect: { verdict: "inconsistent", entailed, clash: [c1, c2] },
+      ceiling: DL_SOUNDNESS_CEILING,
+      note: "The CONVERSATION-routed soundness pin: the subclass chain c1 ⊑ c2 would 'prove' ind is a c2, but c1 ⊥ c2 makes the memory inconsistent — the honest answer is the clash, never 'yes with a proof'. All premises parse, so this is graded live: a ceiling today (the proof path does not consult owl:disjointWith before certifying), a pass the day that fix lands.",
     }));
   }
   return cases;
@@ -762,6 +919,8 @@ const TEMPLATE_SLUG = {
   b1Existential: "existential",
   b2ChainLenK: "chaink", b2Svf1: "svf1", b2Svf1Apply: "svf1apply",
   c1Cardinality: "card", c1ScmSvfApply: "scmsvf", c2Inconsistent: "inconsistent",
+  elConstructedRestriction: "elrestrict", elExistentialChain: "elchain",
+  dlDisjunction: "dldisj", dlComplement: "dlcompl", dlDisjointProofSoundness: "dlsound",
 };
 function assignIds(cases) {
   const counters = new Map();
@@ -790,6 +949,11 @@ export function generateCases({ seed = DEFAULT_SEED } = {}) {
     c1Cardinality: c1Cardinality(rng),
     c1ScmSvfApply: c1ScmSvfApply(rng),
     c2Inconsistent: c2Inconsistent(rng),
+    elConstructedRestriction: elConstructedRestriction(rng),
+    elExistentialChain: elExistentialChain(rng),
+    dlDisjunction: dlDisjunction(rng),
+    dlComplement: dlComplement(rng),
+    dlDisjointProofSoundness: dlDisjointProofSoundness(rng),
   };
   const all = Object.values(groups).flat();
   assignIds(all);

@@ -15,7 +15,7 @@ The base rules in section 1 are the Plain English Campaign's, who have promoted 
 fought gobbledygook since 1979 (plainenglish.co.uk). Section 2 adds the LLM-voice tells to cut on top
 of them.
 
-> **Use it whenever you draft or edit human-facing text** in this repo: `README.md`, `ROADMAP.md`,
+> **Use it whenever you draft or edit human-facing text** in this repo: `README.md`,
 > `public/index.html` (the GitLab Pages homepage, also the landing surface), the `PLAN_*.md` design
 > docs, the `BENCHMARK_CEFR_ENGLISH_<version>.md` / `BENCHMARK_INFERENCE_<version>.md` / `BENCHMARK_AGENT_<version>.md` /
 > `BENCHMARK_CONVERSATION_<version>.md` write-ups, the `SKILL_*.md` docs, any other `*.md`, code comments,

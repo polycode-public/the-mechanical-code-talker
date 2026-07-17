@@ -1,7 +1,7 @@
 # PLAN_PARAPHRASE_VERIFICATION.md — verifying a paraphrase against the graph before showing it
 
 Status: RESEARCH / DESIGN — the general verifier this document designs is not yet implemented.
-One narrow slice of the same ROADMAP goal already shipped separately and predates this doc:
+One narrow slice of the same declared goal already shipped separately and predates this doc:
 `src/domain/paraphrase.mjs` (`verifySubClassParaphrase` / `paraphraseVerifiedSubClass`, isa-family
 only, closure-backed, with `test/paraphrase.test.mjs`), and it reaches the user: the teach
 confirmation appends the verified paraphrase as a suffix on "noted — remembered … facts"
@@ -11,8 +11,9 @@ technique)` below remains unbuilt and does not reuse that slice yet.
 
 ## Origin
 
-`ROADMAP.md`'s "Ambition" section states three declared, not-yet-achieved goals. The third, quoted
-verbatim (`ROADMAP.md:26-30`):
+This document implements a declared goal — a verified paraphrase shown alongside the literal answer,
+never instead of it — one of three not-yet-achieved ambitions recorded in the retired ROADMAP and
+surviving in git history only. It read:
 
 > **Paraphrase alongside the original, verified, never instead of it.** A surface-realization variant
 > sits next to the literal grounded answer, never replacing it, and its accuracy is checked, not
@@ -21,13 +22,13 @@ verbatim (`ROADMAP.md:26-30`):
 > contradict the other sentence-by-sentence.
 
 This document is the design for the paraphrase-verified-via-`syllogise.mjs` piece of that goal,
-which is genuinely open and not yet started. That one paragraph in `ROADMAP.md` is the entire existing
+which is genuinely open and not yet started. That one paragraph was the entire existing
 design — nothing deeper exists anywhere in the repo. The rest of this document works out how it
 actually has to run.
 
 ## Summary of the finding
 
-The `ROADMAP.md` framing — "verified... by running... `src/domain/syllogise.mjs`... they must entail the
+The declared goal's framing — "verified... by running... `src/domain/syllogise.mjs`... they must entail the
 same conclusions" — describes `syllogise.mjs` as a general consistency checker over two arbitrary
 sentences. It is not. `syllogise.mjs`'s entailment machinery forward-chains over the stored fact
 graph's `rdfs:subClassOf`/`rdf:type` edges; it has no notion of "sentence" at all. For the paraphrase
@@ -240,13 +241,13 @@ wrong tool — `creature` is not `animal`'s synonym, it's its taught superclass.
 (`[candidateObject, originalObject]` or the reverse), and call
 `findIsaChain(candidateObject, [originalObject], typeEdges, subClassEdges, { maxHops: N })`. A chain
 found means the candidate's claim is a taught generalization/specialization of the original — an
-entailment relationship, checked with the actual entailment engine, exactly matching `ROADMAP.md`'s
+entailment relationship, checked with the actual entailment engine, exactly matching the goal's
 "entail the same conclusions" language for this one sub-case. No chain means reject: an unrelated or
 untaught class swap is not a safe paraphrase. This check is scoped as **not required for Phase 1**
 (no generator produces this shape yet) but designed now so a future hierarchy-aware generator has a
 concrete, already-specified verification path rather than needing this document rewritten.
 
-**On "neither may contradict the other sentence-by-sentence"** (`ROADMAP.md`'s other clause): for a
+**On "neither may contradict the other sentence-by-sentence"** (the goal's other clause): for a
 single-fact answer (the only shape in scope here — see Non-goals), a paraphrase is one sentence
 against one sentence, so this reduces to Checks 2-4 directly. Multi-sentence answers (a listed set of
 facts, `whatElseAnswer` and similar) would need each paraphrased sentence checked against its own
@@ -323,7 +324,7 @@ to "no paraphrase shown," never to a broken answer).
 - **No LLM anywhere in this generation or verification path.** Every technique here is closed-set
   mechanical substitution (WordNet synset membership, tmct's own lexicon, `parseAce`'s fixed grammar)
   or a bounded graph-edge chase (`syllogise.mjs`'s pure kernels). This is a permanent charter
-  constraint (`ROADMAP.md`, `CLAUDE.md`'s "LLMs are allowed ONLY in the offline eval harness"), not a
+  constraint (`CLAUDE.md`'s "LLMs are allowed ONLY in the offline eval harness"), not a
   scoping choice specific to this document.
 - **Not a general paraphrase generator.** This produces exactly the shapes Part 2/4 describe
   (single-slot synonym swap, possessive reordering, and — Phase 5 only — a taught hierarchy shift).

@@ -26,7 +26,7 @@
 // tmct began as a whole-package lift of an earlier chat surface (see README
 // provenance): internal module filenames and symbols were kept to preserve the
 // shape and the green test suite. See README.md for what tmct is and
-// deliberately is NOT, and ROADMAP.md for where it is going.
+// deliberately is NOT, and the PLAN_*.md docs for where it is going.
 
 // The verb list itself is data (src/domain/cli-verbs.mjs) and both the Usage
 // block below and the unknown-invocation line read it, so a new verb is one

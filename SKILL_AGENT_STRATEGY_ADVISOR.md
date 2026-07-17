@@ -69,7 +69,7 @@ tail, the repo, and the brief.
   recent actions, not the whole file (it can be MBs).
 - **Other agents' outputs** live under the session's `tasks/<agentId>.output`.
 - **A distilled state file** the main agent keeps current (e.g. the latest `BENCHMARK_CEFR_ENGLISH_<version>.md`
-  with its decision log, or `ROADMAP.md` phase status). Cheapest and most reliable signal; point
+  with its decision log). Cheapest and most reliable signal; point
   the advisor here first.
 - **The repo itself**: worktree, git history, chatbench telemetry, raw judge outputs
   (`chatbench/results/raw-<NNN>/`). The deep process expects the advisor to read code and data,

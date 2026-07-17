@@ -1,6 +1,6 @@
-// interpret.test.mjs — the multi-strategy interpretation pipeline (ROADMAP item 8:
-// interpret/pipeline.mjs + interpret/merge.mjs) and the normalization pre-pass
-// record (item 10). The LEGACY behaviors (two-strategy agree/disagree over real
+// interpret.test.mjs — the multi-strategy interpretation pipeline
+// (interpret/pipeline.mjs + interpret/merge.mjs) and the normalization pre-pass
+// record. The LEGACY behaviors (two-strategy agree/disagree over real
 // queries) stay pinned by ask.test.mjs/ask-dual-strategy.test.mjs; these tests
 // prove the pipeline's own contract: N-strategy registration, same-class dedupe,
 // distinct-class "if you mean X then …" surround, and crash isolation (a throwing

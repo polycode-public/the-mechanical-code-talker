@@ -24,7 +24,7 @@ verified primary sources, not memory.
   here. W3C specifications are quoted under the W3C Document License (brief
   excerpts with attribution; the specs themselves are not committed).
 - **Corpus data** (e.g. ConceptNet, CC-BY-SA 4.0) keeps its own licence and
-  notice, separate from the repo's MPL-2.0 — see `ROADMAP.md` Phase 2.
+  notice, separate from the repo's MPL-2.0.
 
 ## Contents
 

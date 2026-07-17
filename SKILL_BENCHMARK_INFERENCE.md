@@ -1,19 +1,43 @@
 # SKILL_BENCHMARK_INFERENCE.md — the INFBENCH measure-then-build cycle (regenerate, run, gate, write up)
 
-The repeatable loop that drives the 6-band classical-logic ladder (INF-A1…INF-C2) forward one
-engine capability at a time: regenerate cases, run the bench, read the rung table, decide
+The repeatable loop that drives the 8-band logic-fragment expressivity ladder (INF-1…INF-8) forward
+one engine capability at a time: regenerate cases, run the bench, read the rung table, decide
 ship-or-build, write the cycle up, and if building, implement the next engine capability by hand,
 regression-test, and re-measure.
-**As of 2026-07-11, every originally staged engine capability is shipped and the ladder gates
-nowhere** — this loop still applies verbatim to any FUTURE band/rule this ladder grows to cover;
-for the one genuinely open research question behind growing the reasoning engine further (not a
-new band, the engine's own retraction/incrementality limits), see `PLAN_SYLLOGIST.md`.
+**INF-1…INF-6 (all the OWL 2 RL work plus the two steps just outside it) are shipped and gate
+nowhere; INF-7 (OWL 2 EL) and INF-8 (OWL 2 DL) are ceiling markers** the ladder now names as
+horizons, with `PLAN_SYLLOGIST_EL_DL.md` as the build path — the loop applies verbatim to advancing
+them. For the one genuinely open research question behind growing the reasoning engine further (the
+engine's own retraction/incrementality limits), see `PLAN_SYLLOGIST.md`.
 
-**`INF-A1…INF-C2` is its own scale, not CHATBENCH's CEFR.** The band labels look like CEFR grades
-(A1, A2, B1, B2, C1, C2) but measure a different axis: INFBENCH grades classical-logic inference
-capability (fabrication vs completion on a rule ladder), while `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s CEFR
-bands grade linguistic complexity in conversation. Don't compare an `INF-B1` result against a
-CEFR B1 result — they are unrelated measurements that happen to share a naming convention.
+**`INF-1…INF-8` is its own scale, drawn from logic-fragment expressivity — not CHATBENCH's CEFR.**
+The bands are named by the fragment / description-logic expressivity they test (the W3C OWL 2
+profiles RL/EL, the ALC→SHOIQ→SROIQ progression, `PLAN_SYLLOGIST_EL_DL.md`):
+
+| band | name | fragment / what it tests |
+|---|---|---|
+| INF-1 | Assertion | atomic ABox/TBox lookup, no rule fires (`a1Lookup`) |
+| INF-2 | Taxonomy | subclass transitivity, RL `scm-sco` (`a2ChainLen2`) |
+| INF-3 | Contradiction & quantifier | disjointness "provable no" (`cax-dw`) + existential-not-universal (`b1Disjoint`, `b1Existential`) |
+| INF-4 | Restriction | someValuesFrom application + long chains (`cls-svf`/`scm-svf`) |
+| INF-5 | Cardinality | cardinality lower bounds, first step outside RL (`c1Cardinality`, `c1ScmSvfApply`) |
+| INF-6 | Consistency | disjointness-clash detection across stored memory (`c2Inconsistent`) |
+| INF-7 | Constructed restriction (OWL 2 EL) | classify through undeclared class expressions — nested existentials, existential chains — needs EL saturation (`elConstructedRestriction`, `elExistentialChain`) |
+| INF-8 | Reasoning by cases (OWL 2 DL) | disjunction elimination, complement classes — needs a branching tableau — plus the disjointness-proof-soundness discriminator (`dlDisjunction`, `dlComplement`, `dlDisjointProofSoundness`) |
+
+INFBENCH grades classical-logic inference capability (fabrication vs completion on this fragment
+ladder), while `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s CEFR bands grade linguistic complexity in
+conversation and AGENTBENCH's `TOOL-0…TOOL-8` grades tool-use. Don't compare an `INF-3` result
+against a CEFR B1 or a `TOOL-3` — unrelated measurements.
+
+INF-7 and INF-8 sit at the honest-miss floor until `PLAN_SYLLOGIST_EL_DL.md` Stage EL / Stage DL
+land: their premises are English shapes ACE deliberately declines (the bare existential, "or",
+"not", complement frames), so they are unlinted probes exactly as `b1Existential` is — any confident
+answer would be a fabrication, and the floor is a miss. The one exception is INF-8's
+`dlDisjointProofSoundness` case: all its premises parse and it is graded live, a **near-term
+discriminator** that flips from ceiling to pass the day the CONVERSATION-routed proof-path fix (a
+subclass proof must consult `owl:disjointWith` before certifying) lands — the concrete
+cross-benchmark link where a defect the persona sweep found becomes a pinned INFBENCH case.
 
 This shape is closer to **`SKILL_BENCHMARK_CEFR_ENGLISH.md`'s** measure→apply-one-lever→re-measure loop than
 to a delegated chat-round sprint (`SKILL_BENCHMARK_CONVERSATION.md`'s capped sprint mode), and this doc
@@ -56,7 +80,7 @@ completion/fabrication against the latest `BENCHMARK_INFERENCE_<version>.md` on 
 band's numbers move, and if so, is the move explained (a real engine change, spot-verified) or
 unexplained (a regression to chase down before writing anything up)?
 
-**Step 4 — DECIDE (apply the ladder gate, §2 below).** Walk the bands INF-A1→INF-C2 in order.
+**Step 4 — DECIDE (apply the ladder gate, §2 below).** Walk the bands INF-1→INF-8 in order.
 Apply the honest gate to each: **0% fabrication at ≥50% completion (`COMPLETION_FLOOR`) = PASS**.
 The FIRST band that fails this gate gates every band above it — report those higher bands as
 **skipped-with-a-receipt**, not silently omitted, even when their raw numbers look fine (a
@@ -89,13 +113,13 @@ console-only cycle leaves a drifted band recorded nowhere. Snapshot the raw outp
 
 **Mirror every issue the cycle leaves open** (an open regression, an unexplained drift) **into
 `HANDOVER.md`** as a one-line open item pointing at this write-up — `HANDOVER.md` is the
-next-session pickup list; `ROADMAP.md` is not (it doesn't track tuning).
+next-session pickup list.
 
 ---
 
 ## 2. The ladder-gating rule (exact — do not soften)
 
-Bands run **INF-A1 → INF-A2 → INF-B1 → INF-B2 → INF-C1 → INF-C2**, strictly in that order. Per
+Bands run **INF-1 → INF-2 → INF-3 → INF-4 → INF-5 → INF-6 → INF-7 → INF-8**, strictly in that order. Per
 band: PASS requires **completion ≥ 50% at 0% fabrication**; fabrication = any answered
 verdict/entailment not pinned by the case's own literal at generation time. **The first band that
 fails this gate gates every band above it** — this is chatbench's Meta-2 rule
@@ -123,8 +147,8 @@ still-current.**
 
 1. **Implement the engine work by hand.** This is real Node.js rule-engine code. Case GENERATION
    is mechanized (Step 1 above) but the rule engine itself is not, and never will be by this loop —
-   writing a sound inference rule is program synthesis, a door this repo has deliberately left shut
-   (ROADMAP Item 11), not a templating problem.
+   writing a sound inference rule is program synthesis, a door this repo has deliberately left shut,
+   not a templating problem.
 2. **Regression-test.** `npm test` green — the same discipline every other skill in this repo
    holds every loop to, no exceptions for engine work.
 3. **Re-run the cycle (§1, Steps 1–4)** against the new engine code.
@@ -151,7 +175,7 @@ still-current.**
   the loop working correctly. Do not "fix" it by loosening the grader, relaxing the gate, or
   quietly re-labeling an `unproven` case as passing.
 - **Never judge a band while a lower one's gate is failing.** This is the Meta-2 rule this plan
-  explicitly borrows from chatbench (ROADMAP-referenced) — report higher bands as
+  explicitly borrows from chatbench — report higher bands as
   skipped-with-a-receipt, and resist the temptation to read anything into their raw numbers until
   the actual gating band clears.
 - **`infbench/cases.jsonl` is a build artifact, never hand-edited.** If a case looks wrong, fix the
@@ -174,7 +198,7 @@ Run `node infbench/generate-cases.mjs --seed <n>` (or `npm run infbench` if pres
 assumed) to deterministically regenerate `infbench/cases.jsonl`, then `node infbench/run.mjs` to
 replay it through the kernel+chat drive points and grade it deterministically — no judge, no LLM,
 anywhere in this loop. Read the printed per-band rung table and apply the ladder gate strictly in
-order INF-A1→INF-C2: 0% fabrication
+order INF-1→INF-8: 0% fabrication
 at ≥50% completion passes a band, the first band that fails gates every band above it
 skipped-with-a-receipt, and a clean 0% on a not-yet-built capability is a ceiling marker, not a
 failure — never force a fake pass. Write EVERY cycle up as `BENCHMARK_INFERENCE_<version>.md`

@@ -6,14 +6,32 @@ pick the next capability, implement it, regression-test, and re-measure. AGENTBE
 `agentbench/`'s harness (`agentbench/README.md` documents the mechanics in full); this skill is the
 loop a session actually RUNS every time it wants to advance the ladder.
 
-**`A0…C2` is its own scale, not CEFR or `INF-A1…C2`.** The rung labels look like CHATBENCH's CEFR
-bands and INFBENCH's `INF-A1…C2` bands, but they measure a third, distinct axis: AGENTBENCH grades
-**agentic capability** — can the router pick and sequence the right tool call(s) for a request,
-without hallucinating a call, and without exceeding what it can honestly do. CHATBENCH's CEFR grades
-linguistic complexity in conversation; INFBENCH's `INF-A1…C2` grades classical-logic inference. All
-three ladders share the letter-number shape because it reads well as a ladder, not because the
-rungs correspond. Don't compare an AGENTBENCH `C1` result against a CEFR C1 or an `INF-C1` result —
-this is a documentation-only disambiguation; nothing in `agentbench/` is renamed by it.
+**The TOOL ladder (`TOOL-0…TOOL-8`) is its own scale, drawn from this bench's own domain.**
+AGENTBENCH grades **tool-use capability** — can the router pick and sequence the right tool call(s)
+for a request, without hallucinating a call, and without exceeding what it can honestly do. The
+rungs are named for that meaning, not borrowed from CEFR (CHATBENCH grades linguistic complexity in
+conversation) or from INFBENCH's `INF-1…INF-8` logic-fragment bands. This is a real capability
+progression, matching the shape external tool-use benchmarks grade on (the Berkeley
+Function-Calling Leaderboard's simple→multiple→parallel→relevance categories; API-Bank's
+call→retrieve-then-call→plan levels, Li et al. 2023; τ-bench's tool-agent-user setting, Yao et al.
+2024; survey Qin et al. 2023):
+
+| rung | name | what it tests |
+|---|---|---|
+| TOOL-0 | Direct dispatch | one obvious tool, arguments on a plate |
+| TOOL-1 | Tool selection | pick the right tool from a declared set, bind one entity |
+| TOOL-2 | Scope refusal | refuse cleanly when no declared tool fits / the entity doesn't resolve (BFCL relevance-detection; carries the honest miss into the router) |
+| TOOL-3 | Sequential composition | a bounded multi-step recipe: thread one result into the next call |
+| TOOL-4 | Conditional dispatch | branch on a result; retry |
+| TOOL-5 | Goal planning | compose a plan for a novel goal, closed-world |
+| TOOL-6 | Goal deduction | self-directed: deduce the goal, then plan it |
+| TOOL-7 | Recovery & replanning | a plan step fails (a tool returns empty/error) and the driver observes the failure and replans a fallback rather than dying on the dead branch — `expect.recover` (grounding: ReAct/Reflexion, τ-bench recovery) |
+| TOOL-8 | Composition under ambiguity | the goal/entity is underspecified: enumerate the tied readings (`expect.candidateResults`, one dispatched read per tied candidate) or refuse-with-a-nudge — never an arbitrary pick, never a hallucinated call |
+
+TOOL-0..TOOL-6 are on record clean under the goal driver; TOOL-7/TOOL-8 name capabilities the
+current drivers do not have yet (a replanning branch in the planner; a tied-candidate composer in
+the goal reasoner) and gate at the honest floor until those ship — named horizons, not walls. Don't
+compare a TOOL rung against a CEFR grade or an `INF-*` band: same ladder shape, unrelated axes.
 
 > **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_AGENT.md` and run an AGENTBENCH
 > cycle"* (optionally: a driver to measure, a rung to target, a version stamp).
@@ -56,11 +74,11 @@ Every cycle MUST satisfy:
     the right call shape)?
   - **hallucination rate** — fraction of cases with any out-of-set/unbindable call.
 - **The rung-gate rule (the AGENTBENCH analogue of CHATBENCH's decision rule and INFBENCH's
-  ladder-gating rule).** Rungs run **A0 → A1 → A2 → B1 → B2 → C1 → C2**, strictly in that order. A
+  ladder-gating rule).** Rungs run **TOOL-0 → TOOL-1 → … → TOOL-8**, strictly in that order. A
   rung PASSES iff **0% hallucination at ≥50% plan-completion** (`COMPLETION_FLOOR = 0.5`,
   `agentbench/grade.mjs`). The FIRST rung that fails this gate gates every rung above it — report
-  those higher rungs as **skipped-with-a-receipt** (e.g. `rung C1 skipped: gated by A2 completion
-  40% < 50%`), the same Meta-2 discipline `SKILL_BENCHMARK_INFERENCE.md` §2 borrows for INFBENCH and
+  those higher rungs as **skipped-with-a-receipt** (e.g. `rung TOOL-8 skipped: gated by TOOL-7
+  completion 0% < 50%`), the same Meta-2 discipline `SKILL_BENCHMARK_INFERENCE.md` §2 borrows for INFBENCH and
   `SKILL_BENCHMARK_CONVERSATION.md`'s ladder honors for flow tiers: don't pay to judge a ceiling while
   the floor leaks. `--ladder` runs the rungs ascending and applies this automatically.
 - **Refusal is a legitimate pass.** For an `expect.refuse` case, a clean refusal (no call, when no
@@ -79,7 +97,7 @@ Every cycle MUST satisfy:
 ## 2. The loop (one cycle; repeats until the ladder tops out or the operator stops)
 
 **Step 1 — READ.** Read the latest `BENCHMARK_AGENT_<version>.md` (its "one honest red kept" section, if
-any, and its decision on frontiers), `ROADMAP.md`'s agent-axis items, and the current
+any, and its decision on frontiers), the agent-axis open items in `HANDOVER.md`, and the current
 `agentbench/cases.jsonl` rung counts. Decide which driver to measure (`--driver stub|resolver|goal`,
 per `agentbench/README.md`'s pluggable-driver seam) and whether this cycle is a pure measurement or
 targets a specific gated rung to push past.
@@ -108,7 +126,7 @@ if this cycle re-measures a driver already on record — did any previously-clea
 and if so, is that move explained (a real behavior change, spot-verified) or unexplained (a
 regression to chase down before writing anything up)?
 
-**Step 4 — DECIDE (apply the rung gate, §1).** Walk A0→C2 in order. The first ungated PASS is real
+**Step 4 — DECIDE (apply the rung gate, §1).** Walk TOOL-0→TOOL-8 in order. The first ungated PASS is real
 progress; the first gate failure names exactly where the ladder currently tops out, honestly, with a
 receipt for everything above it.
 
@@ -131,8 +149,7 @@ that plans/executes correctly but doesn't compose the expected result, named as 
 patched around); the discipline checklist (zero hallucination held, byte-identity verified, no
 overfit/leakage, boundary refusals still sharp, determinism); and a decision line. **Mirror every
 issue the cycle leaves open** (the kept honest red, an unexplained rung move) **into `HANDOVER.md`**
-as a one-line open item pointing at this write-up — `HANDOVER.md` is the next-session pickup list;
-`ROADMAP.md` is not (it doesn't track tuning).
+as a one-line open item pointing at this write-up — `HANDOVER.md` is the next-session pickup list.
 
 **Step 7 — CONTINUE.** If the operator wants the ladder pushed further, go to Step 1 of the next
 cycle with the next gated rung as the target. There is no autonomous no-pause loop here the way
@@ -186,9 +203,9 @@ deterministic — no judge, no LLM anywhere in this loop) and read the per-rung 
 ≥50% plan-completion** passes a rung (`A0→C2`, strictly in order), the first rung that fails gates
 every rung above it skipped-with-a-receipt, and a clean refusal on an `expect.refuse` case is a PASS,
 not a fallback — optionally carrying `candidateResults` (one real dispatched answer per tied
-candidate) when the term was ambiguous, still a refusal, still a PASS. `A0…C2` is a third distinct
-scale from CHATBENCH's CEFR and INFBENCH's `INF-A1…C2` —
-same letter-number shape, unrelated axes, never compared across benches. If every rung lands where
+candidate) when the term was ambiguous, still a refusal, still a PASS. `TOOL-0…TOOL-8` is a distinct
+scale from CHATBENCH's CEFR and INFBENCH's `INF-1…INF-8` — drawn from tool-use, unrelated axes,
+never compared across benches. If every rung lands where
 expected, ship the re-measurement as-is; if you want to push the ladder further, implement the next
 router/planner capability that unlocks the gating rung, keep `npm test` green, and re-run to confirm
 the gate passes before moving on. Fan cycle work that decomposes into independent workstreams (a new

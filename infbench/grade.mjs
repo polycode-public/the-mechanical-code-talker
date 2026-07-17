@@ -1,8 +1,10 @@
 // infbench/grade.mjs — the DETERMINISTIC grading core for INFBENCH (sibling of
 // agentbench/grade.mjs, PLAN_INFERENCE_TESTING.md §2.1/§3).
 //
-// INFBENCH grades classical-logic competence on a 6-band ladder (INF-A1..C2,
-// PLAN_INFERENCE_TESTING.md §1) with AGENTBENCH's ruler: no LLM judge, no
+// INFBENCH grades classical-logic competence on a logic-fragment expressivity
+// ladder (INF-1..INF-8, named by fragment — assertion, taxonomy, contradiction &
+// quantifier, restriction, cardinality, consistency, then OWL 2 EL constructed
+// restrictions and OWL 2 DL reasoning-by-cases) with AGENTBENCH's ruler: no LLM judge, no
 // re-derivation — every case's `expect` is a STATIC literal pinned at
 // generation time (infbench/generate-cases.mjs), so grading is a pure
 // COMPARISON, never a replay of the engine testing itself.
@@ -47,8 +49,15 @@ import { loadLexicon } from "../src/domain/grammar/lexicon.mjs";
 import { normFactTerm } from "../src/adapters/memory/core.mjs";
 import { parseJsonlRows, rollupBy, ladderGateBy } from "../benchlib/bench.mjs";
 
-// ---- the bands (the classical-logic ladder — INF-A1 -> INF-C2) ----
-export const BANDS = Object.freeze(["INF-A1", "INF-A2", "INF-B1", "INF-B2", "INF-C1", "INF-C2"]);
+// ---- the bands (the logic-fragment expressivity ladder — INF-1 -> INF-8) ----
+// INF-1 Assertion, INF-2 Taxonomy, INF-3 Contradiction & quantifier, INF-4
+// Restriction, INF-5 Cardinality, INF-6 Consistency (all shipped, OWL 2 RL +
+// two steps just outside); INF-7 Constructed restriction (OWL 2 EL saturation)
+// and INF-8 Reasoning by cases (OWL 2 DL disjunction/complement/nominals) name
+// the two stages PLAN_SYLLOGIST_EL_DL.md designs — ceiling markers until Stage
+// EL / Stage DL land, save for INF-8's disjointness-proof-soundness case, a
+// near-term live discriminator that flips the moment the proof-path fix ships.
+export const BANDS = Object.freeze(["INF-1", "INF-2", "INF-3", "INF-4", "INF-5", "INF-6", "INF-7", "INF-8"]);
 export const ARMS = Object.freeze(["kernel", "chat"]);
 export const CHECK_TYPES = Object.freeze(["isa", "recall", "inconsistent"]);
 export const VERDICTS = Object.freeze(["yes", "no", "unproven", "inconsistent"]);
@@ -351,10 +360,10 @@ export function rollup(rows) {
 }
 
 /** Ladder gating (mirrors agentbench/grade.mjs's ladderGate): bands run
- *  INF-A1 -> INF-C2; the FIRST band failing the honest gate (0% fabrication
+ *  INF-1 -> INF-8; the FIRST band failing the honest gate (0% fabrication
  *  at >= COMPLETION_FLOOR completion) gates every band above it, reported
  *  skipped-with-a-receipt. A 0%-completion band is a CEILING MARKER, not a
- *  failure (PLAN_INFERENCE_TESTING.md §3, ROADMAP L256). */
+ *  failure (PLAN_INFERENCE_TESTING.md §3). */
 export function ladderGate(rolled) {
   return ladderGateBy(rolled.byBand, {
     tiers: BANDS,

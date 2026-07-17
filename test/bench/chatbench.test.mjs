@@ -23,7 +23,7 @@ import {
   renderReport, renderTranscripts, orderDiscriminating,
   cellRollup, uncoveredCells, undeclaredCells,
 } from "../../chatbench/report.mjs";
-import { OFF_MATRIX_FOLD_CELLS } from "../../chatbench/graded.mjs";
+import { OFF_MATRIX_FOLD_CELLS, HORIZON_CELLS } from "../../chatbench/graded.mjs";
 import { runChat } from "../../src/services/chat.mjs";
 import { parseSessionJsonl, parseSessionLog, turnKey } from "../../src/services/sessions.mjs";
 
@@ -45,17 +45,36 @@ test("frozen v1 core (in graded-pool.jsonl): parses clean — unique ids, known 
   assert.ok(core.length >= 36 && core.length <= 64, `case count in contract range (got ${core.length})`);
 });
 
-test("graded pool default: off-matrix graded cells are exactly the named frozen-v1 folds, never matrix drift", async () => {
+test("graded pool default: off-matrix graded cells are exactly the named frozen-v1 folds + P-axis horizon cells, never matrix drift", async () => {
   const { cases } = parseCases(await readFile(POOL_FILE, "utf8"));
-  // Every graded cell in the default pool is either a declared GRADED_MATRIX
-  // cell or one of the named folds — no unnamed off-matrix cell (new drift), and
-  // no named fold silently gone. undeclaredCells returns a sorted cellKey list.
-  assert.deepEqual(undeclaredCells(cases), [...OFF_MATRIX_FOLD_CELLS].sort());
-  // and a matrix-generated case (id "g-*") must never populate an off-matrix
-  // cell — only the frozen v1 folds may sit outside the designed matrix.
+  // Every graded cell in the default pool that GRADED_MATRIX does not declare is
+  // either one of the named frozen-v1 folds or one of the named P-axis HORIZON
+  // cells (the pragmatics/discourse family, graded but deliberately un-sized) —
+  // no unnamed off-matrix cell (new drift), and no named cell silently gone.
+  assert.deepEqual(undeclaredCells(cases), [...OFF_MATRIX_FOLD_CELLS, ...HORIZON_CELLS].sort());
+  // and a matrix-generated case (id "g-*") must never populate a FROZEN-FOLD
+  // cell — only the frozen v1 folds may sit there. The horizon cells are the one
+  // intentional exception: they ARE authored as g-* graded cases.
   const offMatrix = new Set(OFF_MATRIX_FOLD_CELLS);
   const strays = cases.filter((c) => offMatrix.has(`${c.grade}:${c.construction}`) && c.id.startsWith("g-"));
   assert.deepEqual(strays.map((c) => c.id), [], "generated cells never populate an off-matrix fold cell");
+});
+
+test("graded pool default: the CEFR P-axis horizon cells are populated with well-formed pragmatics/discourse cases", async () => {
+  const { cases } = parseCases(await readFile(POOL_FILE, "utf8"));
+  for (const key of HORIZON_CELLS) {
+    const [grade, construction] = [key.slice(0, key.indexOf(":")), key.slice(key.indexOf(":") + 1)];
+    const inCell = cases.filter((c) => c.grade === grade && c.construction === construction);
+    assert.ok(inCell.length >= 2, `${key}: the horizon cell carries at least two cases (got ${inCell.length})`);
+    for (const c of inCell) {
+      assert.ok(c.id.startsWith("g-"), `${c.id}: a graded P-axis case`);
+      assert.ok(c.turns.length >= 1 && c.turns.every((t) => typeof t.say === "string"), `${c.id}: well-formed turns`);
+      assert.ok(Array.isArray(c.judge?.dimensions) && c.judge.context, `${c.id}: carries judge dimensions + context`);
+    }
+  }
+  // the discourse-composition cell is genuinely multi-turn (its whole point)
+  const disc = cases.filter((c) => c.construction === "cross-turn-composition");
+  assert.ok(disc.length && disc.every((c) => c.turns.length >= 2), "cross-turn-composition cases span multiple turns");
 });
 
 test("frozen v1 core (in graded-pool.jsonl): every coverage tag is populated; baselineFail weaknesses are documented", async () => {

@@ -6,12 +6,11 @@ state" below for the precise reconciliation before any design content.
 
 ## Origin
 
-`PLAN_BREADTH_FIRST_NLU.md`'s own "Status (2026-07-12)" section, quoted verbatim:
+`PLAN_BREADTH_FIRST_NLU.md`'s own "Status (2026-07-12)" section, quoted:
 
 > Two items are genuinely open, not yet started: (c) the paraphrase-verified-via-`syllogise.mjs`
 > piece of "Ambition"; (d) a real "list/count all X of class Y" query shape for memory-graph classes
-> via `ask.mjs` alone (§5b's documented gap). (c) and (d) are tracked live in `ROADMAP.md`'s "What's
-> next".
+> via `ask.mjs` alone (§5b's documented gap).
 
 That is the entire existing documentation of item (d) — one line, no deeper design. §5b of the same
 document is about the embedded "Ask the graph" viz chat panel, a separately-landed feature; its own
@@ -21,10 +20,9 @@ text never elaborates the gap either.
 
 **Item (d) already shipped**, in commit `dec95e8` ("feat: land `PLAN_BREADTH_FIRST_NLU.md`'s two
 open items — dynamic memory-class list/count (d) and verified paraphrase (c)"), dated 2026-07-12
-13:41 BST — an ancestor of the current `HEAD` (`9104433`, 2026-07-13). `ROADMAP.md`'s own current
-"What's next" section (checked directly) no longer lists (c)/(d) as open at all — only
-`PLAN_BREADTH_FIRST_NLU.md`'s "Status" section is stale here, not `ROADMAP.md`. This document does
-not edit either file (out of scope per the task boundary), but the reconciliation needs stating
+13:41 BST — an ancestor of the current `HEAD` (`9104433`, 2026-07-13).
+`PLAN_BREADTH_FIRST_NLU.md`'s "Status" section is stale here. This document does
+not edit that file (out of scope per the task boundary), but the reconciliation needs stating
 plainly before any design proceeds: the task's framing of item (d) as "genuinely open, not started"
 does not match the current repository.
 

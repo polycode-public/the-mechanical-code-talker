@@ -330,7 +330,7 @@ test("agentbench e2e: the resolver driver holds 0% hallucination on EVERY case (
 test("agentbench e2e: the resolver driver CLIMBS — A0..C1 clear the gate, well above the shim-transport floor", async () => {
   const { cases } = parseCases(await readFile(CASES_FILE, "utf8"));
   const { rolled } = await runAgentbench(cases, { driver: resolverDriver, stamp: "0.8.0", ctx: SHARED.ctx });
-  for (const rung of ["A0", "A1", "A2", "B1", "B2", "C1"]) {
+  for (const rung of ["TOOL-0", "TOOL-1", "TOOL-2", "TOOL-3", "TOOL-4", "TOOL-5"]) {
     assert.ok(rolled.byRung[rung].gatePass, `${rung} clears the honest gate (0% halluc AT >=${COMPLETION_FLOOR * 100}% completion)`);
   }
   // the router is USEFUL, not just safe: it clears every rung it TARGETS (A0-C1)
@@ -339,7 +339,7 @@ test("agentbench e2e: the resolver driver CLIMBS — A0..C1 clear the gate, well
   // resolver and refused — the resolver escalates them, so usefulness is
   // measured over A0-C1; the goal driver is what climbs C2 (see
   // test/adapters/goal-reasoner.test.mjs).
-  const climbed = ["A0", "A1", "A2", "B1", "B2", "C1"];
+  const climbed = ["TOOL-0", "TOOL-1", "TOOL-2", "TOOL-3", "TOOL-4", "TOOL-5"];
   const total = climbed.reduce((s, r) => s + rolled.byRung[r].total, 0);
   const completed = climbed.reduce((s, r) => s + rolled.byRung[r].completed, 0);
   assert.ok(completed / total >= 0.9, `A0..C1 completion climbs (got ${((completed / total) * 100).toFixed(0)}%)`);

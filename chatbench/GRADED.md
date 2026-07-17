@@ -1,6 +1,6 @@
 # GRADED.md — the graded benchmark (chatbench case-set v2)
 
-Operator-specified 2026-07-04 (ROADMAP Phase 3, "The graded benchmark"): a
+Operator-specified 2026-07-04: a
 scaled ladder fitted to **human language standards**, not AI-benchmark
 mechanics — bAbI was explicitly rejected (it tests expected-AI mechanics and
 overfits the same way self-authored cases do; see

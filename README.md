@@ -994,7 +994,7 @@ bench-smoke lane replays:
 ```bash cwd=repo
 node chatbench/run.mjs --stamp smoke --only g-a1-naming-1 --out /tmp/chatbench-smoke
 node infbench/generate-cases.mjs --out /tmp/infbench-cases.jsonl
-node infbench/run.mjs --cases /tmp/infbench-cases.jsonl --only inf-a1-lookup-subClassOf-001 --stamp smoke --out /tmp/infbench-smoke
+node infbench/run.mjs --cases /tmp/infbench-cases.jsonl --only inf-1-lookup-subClassOf-001 --stamp smoke --out /tmp/infbench-smoke
 node agentbench/run.mjs --stamp smoke --driver stub --only ab-a0-describe-widget --out /tmp/agentbench-smoke
 ```
 
