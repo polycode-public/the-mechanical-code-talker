@@ -1,6 +1,8 @@
 // chatbench/run.mjs — the deterministic chatbench product runner (tier 1).
 //
-// Replays every case in chatbench/cases.jsonl through the REAL product:
+// Replays every case through the REAL product. Cases come from the graded pool
+// (chatbench/graded-pool.jsonl) plus an optional always-run set a caller points
+// --cases at; the file is loaded one of two ways:
 //   - mode "turns": the pure runTurn() with the committed fixture graph loaded
 //     ONCE and passed per turn, threading focus/last from turn N into N+1
 //     exactly as runChat's loop does. runTurn performs no writes, and the
@@ -30,9 +32,11 @@
 // vs --compare <prior product.jsonl> (a previously-passing case now failing),
 // or on runner errors; 0 otherwise.
 //
-// GRADED layer (case-set v2, chatbench/GRADED.md): a separate POOL of graded
-// cases (chatbench/graded-pool.jsonl; cases.jsonl keeps the frozen v1 48) is
-// sampled per run — stratified per grade×construction cell, seeded, with a
+// GRADED layer (case-set v2, chatbench/GRADED.md): a POOL of graded cases
+// (chatbench/graded-pool.jsonl) is sampled per run. The frozen v1 core was
+// folded into it as fully-graded cells at case-set v3 (eaf33f0), so there is
+// no separate ungraded always-run tier unless a caller supplies one via
+// --cases — stratified per grade×construction cell, seeded, with a
 // DUAL DRAW by default (two independent samples whose per-cell agreement is
 // the instrument's own reliability check). --ladder gates grades ascending;
 // --grade runs one band. With no pool file present, behavior is exactly v1.

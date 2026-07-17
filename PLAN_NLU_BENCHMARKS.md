@@ -5,7 +5,7 @@ Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is l
 ## Goal
 
 Adapt tmct so it can be scored by two pre-existing, third-party NLU scoring systems, then
-extract the successes and failures honestly:
+extract the successes and failures:
 
 1. **CLINC150** (Larson et al., EMNLP 2019, `github.com/clinc/oos-eval`) — 150 in-scope
    intents across 10 everyday domains plus a 1,000-query out-of-scope (OOS) test set.
@@ -284,7 +284,7 @@ not a planned lever anymore.
   **micro-F1 0.792**, centroid unigram 0.791, char 15-NN 0.791 — all three arms converge
   on ~0.79, so surface matching plateaus there and char n-grams buy nothing without an
   OOS axis. That is ~7 points behind Rasa's published 0.863 and ~6.5 behind LUIS's
-  last-place 0.855. The honest frame is value-per-footprint, not victory; post-lever
+  last-place 0.855. Read this as value-per-footprint, not as a ranking; post-lever
   estimate ~0.81–0.83 (ethos-clean), embedding arm maybe 0.83–0.85. The harness must
   rescore with the upstream toolkit's own metric before any number is cited. Entity F1
   still estimate-only at 0.35–0.60; beating Watson's published 0.488 is plausible and
