@@ -4489,11 +4489,10 @@ ${shown.join("\n")}${tail}`;
       }
       case "tested": {
         const mid = moduleIdOf2(graph, ind);
-        if (!mid) return false;
         const sets = qualSets(graph);
-        const mind = graph.byId?.get?.(mid);
-        if (sets.testModules.has(mid) || mind && isTestPath(String(mind.label).toLowerCase())) return false;
-        return sets.testedModules.has(mid) === spec.value;
+        const mind = mid ? graph.byId?.get?.(mid) : null;
+        if (mid && (sets.testModules.has(mid) || mind && isTestPath(String(mind.label).toLowerCase()))) return false;
+        return (!!mid && sets.testedModules.has(mid)) === spec.value;
       }
       default:
         return false;
