@@ -91,6 +91,27 @@ networks; Artz & Gil, "A survey of trust in computer science and the Semantic We
 Semantics* 5(2), 2007); the W3C Provenance Incubator Group's trust use cases. No W3C
 Recommendation covers it, so tmct's terms stay `mgx:` and say why.
 
+## The Source split — one flat class over three disjoint top classes
+
+`tmct:Source` carries an `mgx:sourceType` whose values fall into all three PROV top classes:
+`operator`, `teach` and `provider` are actors (`prov:Agent`); `corpus`, `corpusWeak`, `web` and
+`extracted` are documents (`prov:Entity`); `entailed` is the trace of a rule firing
+(`prov:Activity`). Those three classes are pairwise disjoint, so no single `prov:` parent is true of
+`tmct:Source` as a whole.
+
+The ontology recovers the split with three read-side subclasses — `tmct:AgentSource`,
+`tmct:DocumentSource`, `tmct:ActivitySource` — each defined (`owl:equivalentClass`) as `tmct:Source`
+restricted to its `mgx:sourceType` values and asserted under one PROV top class. This is derivation,
+not migration: the classifying value is already stored on every Source. `core.mjs`'s
+`provSourceClassFor(sourceType)` is the code-side reader.
+
+The split is what lets attribution align properly. `mgx:statedBy` keeps `rdfs:seeAlso
+prov:wasAttributedTo` at the property level — its range is all three kinds, so `subPropertyOf` would
+over-claim the Agent range for documents and activities. The real alignment lives at the subclass
+level: a `statedBy` edge whose object is a `tmct:AgentSource` lands on a `prov:Agent` and IS
+`prov:wasAttributedTo`; to a `tmct:DocumentSource` it is nearer `prov:hadPrimarySource`, and to a
+`tmct:ActivitySource`, `prov:wasGeneratedBy`.
+
 ## The qualification pattern
 
 An unqualified binary relation can be restated through an intermediate Influence instance, which

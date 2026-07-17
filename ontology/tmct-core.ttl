@@ -99,7 +99,62 @@ tmct:Session a owl:Class ;
 
 tmct:Source a owl:Class ;
   rdfs:label "Source" ;
-  rdfs:comment "A first-class provenance individual (rdf:type owl:NamedIndividual) a Fact is derived from, over a closed kind set with deterministic ids: src:operator-chat, src:provider:<name>, src:corpus:<name>, src:learned:web:<urlhash>, src:entailed:<rule>. Carries mgx:sourceType (the trust-prior key), mgx:createdAt, and kind specifics (mgx:sourceUrl / mgx:sourceRule). DELIBERATELY not subclassed to a prov: class: mgx:sourceType ranges over kinds that fall into all three of PROV's disjoint top classes — operator and teach are prov:Agent, corpus and web are prov:Entity, entailed is the trace of a prov:Activity. One flat class is a simplification tmct chose, and naming any single prov: parent here would assert something false of the other kinds. Splitting it by sourceType is the alignment, and it is a stored-shape change, not a labelling one." .
+  rdfs:comment "A first-class provenance individual (rdf:type owl:NamedIndividual) a Fact is derived from, over a closed kind set with deterministic ids: src:operator-chat, src:provider:<name>, src:corpus:<name>, src:learned:web:<urlhash>, src:entailed:<rule>. Carries mgx:sourceType (the trust-prior key), mgx:createdAt, and kind specifics (mgx:sourceUrl / mgx:sourceRule). Not itself subclassed to a prov: class: mgx:sourceType ranges over kinds that fall into all three of PROV's disjoint top classes — operator/teach/provider are prov:Agent, corpus/corpusWeak/web/extracted are prov:Entity, entailed is the trace of a prov:Activity. Naming any single prov: parent on THIS class would assert something false of the other kinds. The split lives in the three read-side subclasses below (tmct:AgentSource / tmct:DocumentSource / tmct:ActivitySource), each under one prov: top class and each keyed to a set of mgx:sourceType values. The classification is DERIVABLE from the sourceType already stored on every Source, so it needs no migration — core.mjs's provSourceClassFor is the read-side classifier." .
+
+# --- The Source split (read-side PROV subclasses) ----------------------------
+# tmct:Source is one flat class whose mgx:sourceType key ranges over kinds in
+# all three of PROV's disjoint top classes. These three subclasses recover the
+# split without touching stored shape: a loaded Source is classified by its
+# mgx:sourceType — the same string already on disk — into exactly one. Each is
+# defined (owl:equivalentClass) as tmct:Source restricted to its sourceType
+# values, and asserted under one prov: top class. This is what lets mgx:statedBy
+# carry a real prov:wasAttributedTo for the agent case, where the property-level
+# triple can only seeAlso (statedBy still ranges over all three kinds).
+
+tmct:AgentSource a owl:Class ;
+  rdfs:label "AgentSource" ;
+  rdfs:subClassOf tmct:Source ;
+  rdfs:subClassOf prov:Agent ;
+  owl:equivalentClass [
+    a owl:Class ;
+    owl:intersectionOf (
+      tmct:Source
+      [ a owl:Restriction ;
+        owl:onProperty mgx:sourceType ;
+        owl:someValuesFrom [ a rdfs:Datatype ; owl:oneOf ( "operator" "teach" "provider" ) ] ]
+    )
+  ] ;
+  rdfs:comment "A Source that ASSERTS a Fact as an actor: mgx:sourceType operator | teach | provider. A prov:Agent — operator and teach are people at the chat, provider is an answer-providing service (a prov:SoftwareAgent). Because this is a prov:Agent, an mgx:statedBy edge whose object is one of these IS prov:wasAttributedTo, the alignment the property-level triple cannot assert." .
+
+tmct:DocumentSource a owl:Class ;
+  rdfs:label "DocumentSource" ;
+  rdfs:subClassOf tmct:Source ;
+  rdfs:subClassOf prov:Entity ;
+  owl:equivalentClass [
+    a owl:Class ;
+    owl:intersectionOf (
+      tmct:Source
+      [ a owl:Restriction ;
+        owl:onProperty mgx:sourceType ;
+        owl:someValuesFrom [ a rdfs:Datatype ; owl:oneOf ( "corpus" "corpusWeak" "web" "extracted" ) ] ]
+    )
+  ] ;
+  rdfs:comment "A Source that IS a fixed document a Fact was read from: mgx:sourceType corpus | corpusWeak | web | extracted. A prov:Entity. An mgx:statedBy edge to one of these is nearer prov:hadPrimarySource than attribution — a document is cited, not credited as an agent." .
+
+tmct:ActivitySource a owl:Class ;
+  rdfs:label "ActivitySource" ;
+  rdfs:subClassOf tmct:Source ;
+  rdfs:subClassOf prov:Activity ;
+  owl:equivalentClass [
+    a owl:Class ;
+    owl:intersectionOf (
+      tmct:Source
+      [ a owl:Restriction ;
+        owl:onProperty mgx:sourceType ;
+        owl:someValuesFrom [ a rdfs:Datatype ; owl:oneOf ( "entailed" ) ] ]
+    )
+  ] ;
+  rdfs:comment "A Source that IS the trace of a rule firing: mgx:sourceType entailed. A prov:Activity. An mgx:statedBy edge to one of these reads as prov:wasGeneratedBy — the Fact was produced by the inference run named in mgx:sourceRule." .
 
 mgx:saidInSession a owl:ObjectProperty ;
   rdfs:label "saidInSession" ;
@@ -218,7 +273,7 @@ mgx:statedBy a owl:ObjectProperty ;
   rdfs:domain tmct:Fact ;
   rdfs:range tmct:Source ;
   rdfs:seeAlso prov:wasAttributedTo ;
-  rdfs:comment "The workhorse: a Source directly ASSERTS this Fact. The old mgx:factProvenance ' | '-union becomes N statedBy edges, one per independent Source — the corroboration signal a ranker can read. seeAlso rather than subPropertyOf prov:wasAttributedTo: that property ranges over prov:Agent, and tmct:Source unions PROV's three disjoint top classes (an operator is an Agent, a corpus or web page is an Entity, an entailment is an Activity). The equivalence holds for actor-typed sources only, and this file cannot say 'only' without splitting tmct:Source." .
+  rdfs:comment "The workhorse: a Source directly ASSERTS this Fact. The old mgx:factProvenance ' | '-union becomes N statedBy edges, one per independent Source — the corroboration signal a ranker can read. The property-level triple stays seeAlso, not subPropertyOf prov:wasAttributedTo: statedBy ranges over tmct:Source, which unions PROV's three disjoint top classes (operator/teach/provider Agent, corpus/corpusWeak/web/extracted Entity, entailed Activity), so subPropertyOf would over-claim the Agent range for the document and activity kinds. The real alignment now lives at the SUBCLASS level: a statedBy edge whose object is a tmct:AgentSource lands on a prov:Agent and IS prov:wasAttributedTo; to a tmct:DocumentSource it is nearer prov:hadPrimarySource, and to a tmct:ActivitySource, prov:wasGeneratedBy." .
 
 mgx:canonicalisedFrom a owl:ObjectProperty ;
   rdfs:label "canonicalisedFrom" ;

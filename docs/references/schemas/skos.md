@@ -128,6 +128,56 @@ The spec's rationale: "it is hard to draw an absolute distinction between intern
 concept scheme and mapping links between concept schemes." Nothing rejects a `skos:exactMatch`
 inside one scheme; the mapping properties are a convenience for readers, not a constraint.
 
+## Concept identity for corpus terms — the derived-view build
+
+The corpus stores its term relations (`mgx:relatedTo`, `mgx:synonym`, `mgx:antonym`,
+`mgx:similarTo`) as reified facts whose subject and object are **bare, normalised strings**.
+`normFactTerm` (`src/domain/hash.mjs`) strips a leading CURIE prefix at write time, so `tmct:module`
+is stored and read back as `"module"`; `readFactRows` returns those bare strings verbatim. Because
+S19/S20 fix the domain and range of `skos:related` (and every `skos:semanticRelation` sub-property)
+to `skos:Concept`, the relations cannot map onto SKOS while the terms are plain strings with no
+concept identity.
+
+**The identity is mintable at read time, with no stored-shape change.** Two facts about the SKOS
+data model make an additive layer well-formed:
+
+- **The label properties carry no domain.** `skos:prefLabel`/`altLabel`/`hiddenLabel` are
+  `owl:AnnotationProperty` (S10), sub-properties of `rdfs:label` (S11), with no declared domain —
+  "Anything may carry a `skos:prefLabel`, not only a `skos:Concept`" (see Labels, above). Labelling a
+  minted concept is legal SKOS.
+- **A minted concept IS a `skos:Concept` by construction.** If the layer declares each derived IRI a
+  `skos:Concept`, S19/S20 are satisfied for `skos:related` between two of them — the strings never
+  have to become concepts because the layer mints concepts, not strings.
+
+`normFactTerm` is the key that makes this deterministic. It is idempotent (re-normalising its own
+output is a no-op) and prefix-insensitive, so `tmct:module`, `The Module` and `module` all key the
+same concept IRI `concept:module`. The derived layer therefore never migrates or writes anything: it
+reads the fact rows the store already returns and computes a stable view.
+
+**The shape of the view** (built and pinned by `test/adapters/skos-concept-identity.test.mjs`):
+
+- One `skos:Concept` per normalised term, IRI `concept:<term-with-spaces-as-underscores>`.
+- `mgx:synonym` is **not** a relation between two concepts. SKOS models synonymy as several
+  `skos:altLabel`s on **one** concept (S13/S14: the label properties are pairwise disjoint, one
+  `prefLabel` per language). So the layer union-finds synonym-linked terms into one concept; the
+  lexicographically smallest term becomes `skos:prefLabel` (deterministic, order-independent) and the
+  rest become `skos:altLabel`.
+- `mgx:relatedTo` and `mgx:similarTo` read as `skos:related` (symmetric, associative) between the two
+  concept IRIs, deduped, self-loops dropped when a synonym merge has already collapsed both terms
+  into one concept.
+- `mgx:antonym` is **left unmapped**. SKOS has no opposition relation; reading an antonym as
+  `skos:related` would assert the association the corpus denies. It stays `mgx:` and reads as a bare
+  string — the honest miss.
+
+The stored facts are untouched: the terms remain `mgx:` bare strings, and the SKOS reading is a
+computed projection over them. Promoting the pinned function into an exported `src/` module (it
+currently lives in the test that pins it) is the one mechanical step left; the feasibility, the
+mapping and the SKOS conformance are settled here.
+
+`skos:exactMatch` (§4.4's choice for cross-term equivalence) and this concept-identity view compose:
+once terms have concept IRIs, "these two terms mean the same across schemes" can be said with
+`skos:exactMatch` between concepts rather than only with `rdfs:seeAlso` between strings.
+
 ## Deepen-next
 
 - SKOS-XL (a companion Recommendation of the same date) reifies labels as first-class resources.

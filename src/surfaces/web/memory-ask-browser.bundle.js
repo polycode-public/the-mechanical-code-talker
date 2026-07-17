@@ -8636,6 +8636,7 @@ ${bodyText}` : graphText, tier });
     normFactPredicate: () => normFactPredicate,
     normFactTerm: () => normFactTerm,
     openMemoryBackend: () => openMemoryBackend,
+    provSourceClassFor: () => provSourceClassFor,
     provenanceTagToSource: () => provenanceTagToSource,
     readFactRows: () => readFactRows,
     readRuleRows: () => readRuleRows,
@@ -9025,6 +9026,9 @@ ${bodyText}` : graphText, tier });
       default:
         return null;
     }
+  }
+  function provSourceClassFor(sourceType) {
+    return PROV_CLASS_BY_SOURCE_TYPE[sourceType] || null;
   }
   function upsertSource(payload, desc, createdAtCandidate) {
     const info = sourceIdFor(desc);
@@ -9674,7 +9678,7 @@ ${bodyText}` : graphText, tier });
     }
     return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
   }
-  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, LEGACY_FACT_ID_RE, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE2, MULTI_VALUED_PREDICATES;
+  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, LEGACY_FACT_ID_RE, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, PROV_CLASS_BY_SOURCE_TYPE, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE2, MULTI_VALUED_PREDICATES;
   var init_core = __esm({
     "src/adapters/memory/core.mjs"() {
       init_promises();
@@ -9759,6 +9763,16 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       labelOf = (text) => text.length > LABEL_CAP ? text.slice(0, LABEL_CAP - 1) + "\u2026" : text;
       nowIso = () => (/* @__PURE__ */ new Date()).toISOString();
       sourceLabel = (id) => String(id).replace(/^src:/, "");
+      PROV_CLASS_BY_SOURCE_TYPE = Object.freeze({
+        operator: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+        teach: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+        provider: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+        corpus: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+        corpusWeak: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+        web: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+        extracted: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+        entailed: { subClass: "tmct:ActivitySource", prov: "prov:Activity" }
+      });
       isSessionScopedSourceId = (id) => typeof id === "string" && (id.startsWith(`${OPERATOR_SOURCE_ID}:`) || id.startsWith(`${TEACH_SOURCE_ID}:`));
       RULE_KIND_COMPOSE2 = "compose2";
       RULE_KIND_FILTER = "filter";

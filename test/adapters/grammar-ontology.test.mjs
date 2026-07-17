@@ -10,8 +10,9 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import {
   SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP,
-  UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, emptyMemory,
+  UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, emptyMemory, provSourceClassFor,
 } from "../../src/adapters/memory/core.mjs";
+import { SOURCE_PRIOR } from "../../src/domain/memory/trust.mjs";
 import { loadLexicon, predicateOf } from "../../src/domain/grammar/lexicon.mjs";
 import { NEG_PREDICATE_PREFIX, NEG_SUBCLASS_PREDICATE } from "../../src/domain/memory/capability.mjs";
 import { relationKind } from "../../src/domain/codegraph.mjs";
@@ -215,6 +216,46 @@ test("the provenance family aligns to PROV-O: the umbrella is influence, and onl
   assert.ok(clause(SAID_IN_SESSION_PROP, "rdfs:subPropertyOf", "prov:wasGeneratedBy"), "saidInSession under prov:wasGeneratedBy");
   assert.ok(clause("mgx:sessionStarted", "rdfs:subPropertyOf", "prov:startedAtTime"), "sessionStarted under prov:startedAtTime");
   assert.ok(text.includes("tmct:Session a owl:Class ;\n  rdfs:label \"Session\" ;\n  rdfs:subClassOf prov:Activity"), "a Session is a prov:Activity");
+});
+
+test("the Source split maps every stored sourceType to one PROV top class, in the ontology and in code", async () => {
+  const text = await readFile(TTL_FILE, "utf8");
+  // each read-side subclass is declared under tmct:Source and one prov: top class
+  const subclassParent = {
+    "tmct:AgentSource": "prov:Agent",
+    "tmct:DocumentSource": "prov:Entity",
+    "tmct:ActivitySource": "prov:Activity",
+  };
+  for (const [sub, prov] of Object.entries(subclassParent)) {
+    const s = sub.replace(/:/g, "\\:");
+    assert.ok(new RegExp(`^${s} a owl:Class`, "m").test(text), `${sub} declared`);
+    assert.ok(new RegExp(`${s} a owl:Class[^.]*?rdfs:subClassOf tmct:Source`, "s").test(text), `${sub} under tmct:Source`);
+    assert.ok(
+      new RegExp(`${s} a owl:Class[^.]*?rdfs:subClassOf ${prov.replace(/:/g, "\\:")}\\b`, "s").test(text),
+      `${sub} under ${prov}`,
+    );
+  }
+
+  // the classifier agrees with the ontology and is TOTAL over the store's
+  // sourceType vocabulary — SOURCE_PRIOR is the closed set every Source draws
+  // from, so a new type added without a PROV class fails here
+  const expected = {
+    operator: "tmct:AgentSource", teach: "tmct:AgentSource", provider: "tmct:AgentSource",
+    corpus: "tmct:DocumentSource", corpusWeak: "tmct:DocumentSource", web: "tmct:DocumentSource",
+    extracted: "tmct:DocumentSource", entailed: "tmct:ActivitySource",
+  };
+  for (const sourceType of Object.keys(SOURCE_PRIOR)) {
+    const got = provSourceClassFor(sourceType);
+    assert.ok(got, `sourceType ${sourceType} is classified`);
+    assert.equal(got.subClass, expected[sourceType], `${sourceType} -> ${expected[sourceType]}`);
+    assert.equal(got.prov, subclassParent[got.subClass], `${sourceType} -> ${subclassParent[got.subClass]}`);
+    // the ontology enumerates this sourceType under its subclass's owl:oneOf
+    assert.ok(
+      new RegExp(`${got.subClass.replace(/:/g, "\\:")} a owl:Class[^.]*?owl:oneOf\\s*\\([^)]*"${sourceType}"[^)]*\\)`, "s").test(text),
+      `${sourceType} enumerated under ${got.subClass}`,
+    );
+  }
+  assert.equal(provSourceClassFor("nonsense"), null, "an unknown sourceType is not force-fit");
 });
 
 test("a prop token classifies by the ontology's camelCase spelling, whatever casing the artifact spells it in", () => {

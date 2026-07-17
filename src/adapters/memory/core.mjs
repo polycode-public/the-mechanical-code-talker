@@ -677,6 +677,29 @@ function sourceIdFor(desc) {
 
 const sourceLabel = (id) => String(id).replace(/^src:/, "");
 
+// The read-side of the Source split ontology/tmct-core.ttl declares. tmct:Source
+// is one flat class over a sourceType key whose values fall into all three of
+// PROV's disjoint top classes; this maps each stored sourceType to its read-side
+// subclass and PROV top class. Nothing on disk changes — sourceType is already
+// stored on every Source — so this is derivation, not migration.
+const PROV_CLASS_BY_SOURCE_TYPE = Object.freeze({
+  operator: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+  teach: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+  provider: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
+  corpus: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  corpusWeak: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  web: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  extracted: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  entailed: { subClass: "tmct:ActivitySource", prov: "prov:Activity" },
+});
+
+/** The read-side PROV subclass and top class a Source's mgx:sourceType maps to,
+ *  or null for an unrecognised type (never force-fit). Mirrors the Source-split
+ *  subclasses of tmct:Source in ontology/tmct-core.ttl. */
+export function provSourceClassFor(sourceType) {
+  return PROV_CLASS_BY_SOURCE_TYPE[sourceType] || null;
+}
+
 /** Upsert a Source individual (deterministic id → idempotent, edges never
  *  dangle). createdAt is first-write-wins; a recovered @<ts> (desc.createdAt)
  *  seeds it when present. Returns the Source id, or null for an unknown kind. */

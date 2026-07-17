@@ -297,10 +297,10 @@ top classes**, keyed by `mgx:sourceType`:
 | `entailed` | a rule firing | `prov:Activity` |
 
 Asserting `mgx:statedBy rdfs:subPropertyOf prov:wasAttributedTo` would entail that every corpus pack
-is an Agent. So the ontology points at the term and states the restriction in prose instead. The
-real alignment is to split `tmct:Source` by `sourceType`, and that changes a stored shape rather
-than a label — which puts it outside this plan's bias. It is written up in §7 as the next step, not
-declared out of reach.
+is an Agent. So the property-level triple stays `seeAlso`, and the real alignment rides read-side
+subclasses of `tmct:Source` — one per PROV top class, keyed by `sourceType`. That split is now built
+(§7.5): `sourceType` is already stored on every Source, so it is derived, not a stored-shape rewrite,
+and a `statedBy` edge to a `tmct:AgentSource` now carries `prov:wasAttributedTo` properly.
 
 `mgx:createdAt` has the same shape of problem, one size smaller: it means `prov:generatedAtTime`
 exactly, but it is carried by Sessions too, which are Activities, where the PROV term is
@@ -606,18 +606,32 @@ sitting in `docs/references/planning/STRIPS_PDDL.md`. `cap:Precondition` and `ca
 PDDL's `:precondition` and `:effect` under other names. Declaring the namespace and citing PDDL is
 one pass, and it is the natural companion to this one.
 
-### 7.5 The Source split — the real PROV alignment
+### 7.5 The Source split — the real PROV alignment — LANDED
 
-**`src/adapters/memory/core.mjs`, and every reader of `mgx:sourceType`.**
+**`ontology/tmct-core.ttl`, `src/adapters/memory/core.mjs`.**
 
-§4.1's `seeAlso`-not-`subPropertyOf` compromise exists because `tmct:Source` unions `prov:Agent`,
-`prov:Entity` and `prov:Activity`. Splitting it by `sourceType` would let `mgx:statedBy` assert
-`prov:wasAttributedTo` properly for actor sources, `prov:hadPrimarySource` for documents, and
-`prov:wasGeneratedBy` for entailments.
+§4.1's `seeAlso`-not-`subPropertyOf` compromise existed because `tmct:Source` unions `prov:Agent`,
+`prov:Entity` and `prov:Activity`. The ontology now declares three read-side subclasses of
+`tmct:Source`, each defined (`owl:equivalentClass`) as `tmct:Source` restricted to a set of
+`mgx:sourceType` values via an `owl:oneOf` datatype enumeration, and asserted under one PROV top
+class:
 
-This one **does** touch a stored shape and **does** need a migration story — `sourceType` is
-already on every Source individual on disk, so the split is derivable from what is stored, which
-makes it a read-side reclassification rather than a rewrite.
+- `tmct:AgentSource ⊑ prov:Agent` — `operator | teach | provider`
+- `tmct:DocumentSource ⊑ prov:Entity` — `corpus | corpusWeak | web | extracted`
+- `tmct:ActivitySource ⊑ prov:Activity` — `entailed`
+
+**No migration.** The classifying `mgx:sourceType` is already on every Source on disk, so the split
+is derived, not rewritten. `core.mjs`'s `provSourceClassFor(sourceType)` is the read-side classifier
+(sourceType → `{ subClass, prov }`), total over `trust.mjs`'s `SOURCE_PRIOR` closed set and `null`
+for anything else.
+
+**`mgx:statedBy` stays `seeAlso` at the property level** — its range is all three source kinds, so
+`subPropertyOf prov:wasAttributedTo` would over-claim the Agent range for documents and activities.
+The real alignment now rides the subclasses: a `statedBy` edge whose object is a `tmct:AgentSource`
+lands on a `prov:Agent` and IS `prov:wasAttributedTo`; to a `tmct:DocumentSource` it is nearer
+`prov:hadPrimarySource`, and to a `tmct:ActivitySource`, `prov:wasGeneratedBy`. The three
+subclass→PROV triples, the `sourceType`→subclass enumeration, and the classifier are pinned in
+`grammar-ontology.test.mjs`.
 
 ### 7.7 `factIdFor`'s 32-bit hash — the one that is not a naming fix — LANDED
 
@@ -756,12 +770,31 @@ The ontology side is fixed (this plan's file). The test is stronger if it diffs 
 store actually writes** against the ontology, the way §1 settled the casing question. That needs a
 seeded store in the test, which is the `test:fast` budget's business and not this plan's call.
 
-### 7.6 Concept identity for corpus terms — the SKOS alignment
+### 7.6 Concept identity for corpus terms — the SKOS alignment (built as a derived view)
 
-§4.5. Minting a `skos:Concept` per corpus term, with the strings as `skos:prefLabel` /
-`skos:altLabel`, would let `mgx:synonym` and `mgx:relatedTo` map onto SKOS. It needs concept
-identity that does not exist yet. `docs/references/schemas/skos.md` and ISO 25964 are the starting
-points, and ISO 704 / ISO 25964 have not been read at all.
+§4.5 read the blocker correctly: `skos:related` needs `skos:Concept` at both ends (S19/S20) and
+the corpus stores bare strings. The additive fix is to mint the concept identity at READ time,
+keyed by the normalised term, without touching how any fact stores its terms and without an
+on-disk migration. Two SKOS facts make it well-formed: `skos:prefLabel`/`altLabel` carry no
+domain (S10/S11), so labelling a minted concept is legal; and a minted IRI declared a
+`skos:Concept` satisfies S19/S20 for `skos:related` between two of them. `normFactTerm` is the
+key — idempotent and prefix-insensitive, so `tmct:module` and `module` name one concept.
+
+`buildSkosConceptView(rows)` over `readFactRows` output mints one `skos:Concept` per term, folds
+`mgx:synonym` into one concept's `skos:altLabel`s (SKOS models synonymy as labels on one concept,
+not a relation — S13/S14), and reads `mgx:relatedTo`/`mgx:similarTo` as `skos:related`.
+`mgx:antonym` stays unmapped — SKOS has no opposition relation, and reading it as `skos:related`
+would assert the association the corpus denies. The stored facts are untouched; the SKOS reading
+is a pure projection. `docs/references/schemas/skos.md` carries the design, and
+`test/adapters/skos-concept-identity.test.mjs` pins it (9 assertions) against a real in-process
+store.
+
+The concept-identity question §4.5 raised — "it needs concept identity that does not exist yet" —
+is answered: the identity is derivable, not stored, so no migration is owed and the terms keep
+reading like tmct. What is left is a consumer: the projection ships when a surface reads it (a
+"what relates to X" / "another word for X" reader is the natural first one), and the pinned
+reference build is ready for that lift. ISO 25964 and ISO 704 remain unread and would sharpen the
+synonym / near-synonym distinction whenever that reader is designed.
 
 ---
 
