@@ -144,8 +144,8 @@
     "extract:facts": "node bin/tmct.mjs extract"
   },
   "devDependencies": {
-    "esbuild": "^0.28.1",
-    "ink-testing-library": "^4.0.0",
+    "esbuild": "0.28.1",
+    "ink-testing-library": "4.0.0",
     "playwright": "1.61.1",
     "publint": "0.3.21",
     "yaml": "2.9.0"
