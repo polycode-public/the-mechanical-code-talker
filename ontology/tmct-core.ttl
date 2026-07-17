@@ -141,6 +141,12 @@ mgx:factQuantifier a owl:DatatypeProperty ;
   rdfs:range xsd:string ;
   rdfs:comment "OPTIONAL: the quantifier word a plural class-membership teach used ('every'/'some'/'a few'), for literal recall by 'how many Xs are Ys'. Never real cardinality counting — the counted forms are owl:minCardinality / owl:maxCardinality / owl:cardinality (pattern 5)." .
 
+mgx:factJustification a owl:DatatypeProperty ;
+  rdfs:domain tmct:Fact ;
+  rdfs:range xsd:string ;
+  rdfs:seeAlso prov:wasDerivedFrom ;
+  rdfs:comment "The space-joined premise Fact ids an entailed Fact was derived from (syllogise.mjs's forward-chaining pass; last-write-wins). With mgx:sourceRule on the entailed Source, the pair is an ATMS justification in de Kleer's sense — antecedents + consequent + informant, where the rule id is the informant (de Kleer 1986 §4.2). NOT a JTMS justification: Doyle's SL-justification carries an inlist AND an outlist, and it is the outlist that makes a justification an assumption and gives the system non-monotonicity. This property has no outlist, so every justification it records is a monotonic Horn-style deduction. What de Kleer calls a label — what a datum ultimately depends on — tmct does not compute." .
+
 # --- Taught rules (the query-dispatcher's lookup keys) -----------------------
 # The rule kinds are a CLOSED structural vocabulary (compose2 | filter |
 # recursive, plus the action-* family), tagged like 'Fact' and 'Rule'

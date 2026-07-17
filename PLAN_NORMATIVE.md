@@ -420,7 +420,7 @@ The SKOS reading was not wasted: it settled `rdfs:seeAlso` over `skos:exactMatch
 | action rule kinds (`action-signature`/`action-precond`/`action-effect`) | **open** | the shape is STRIPS's and PDDL's exactly (`docs/references/planning/STRIPS_PDDL.md`), and the names are not. The `cap:` vocabulary is where that alignment lands. §7. |
 | the `cap:` namespace (11 terms) | **open** | undeclared anywhere. `registry.mjs`'s capability/precondition/effect vocabulary. Not this plan's file. §7. |
 | `taught:` (4 terms) | **open** | `taught:world-effect`, `taught:world-precond`, `taught:world-constraint`, `taught:world-effect-replaced`. Undeclared. §7. |
-| JTMS/ATMS | `extend`, for now | `mgx:sourceRule` on an entailed Source is a JTMS justification in shape. The full JTMS vocabulary (in/out labels, support, nogoods) has no tmct counterpart because tmct does not retract on belief change. `PLAN_SYLLOGIST.md` already names the literature. |
+| JTMS/ATMS | **`map` — and this row was wrong** | See §9.9. tmct's justification is **ATMS**, not JTMS, and tmct **does** retract on belief change. |
 | ISO 24617-2 dialogue acts | **unbuilt** | tmct has no intent vocabulary (`CAPABILITIES_2.0.3.md` row 139, `absent`). The mapping is drafted in `iso-24617-2-dialogue-acts.md` so that if one is built, it is built to the standard's names rather than coined ad hoc. The honest-miss reply is the interesting row: it is a claim about tmct's own processing, which is `/autoFeedback/`, not a `/task/` answer. |
 
 ---
@@ -660,6 +660,42 @@ All doc and comment level, all cheap, none behavioural. §9.2:
 prediction, with Chow 1970's reject option as the root. One line in the README and one in
 `CLAUDE.md`'s ethos prose.
 
+### 7.12 Four wrong citations in the inference engine
+
+All verified against *OWL 2 Profiles (Second Edition)*, W3C Recommendation 2012-12-11. **Table
+numbering is identical in the first edition, so no edition excuses any of these.**
+
+1. **`cls-svf1` is cited as "OWL 2 RL Table 8" three times. It is Table 6.** Table 8 is *The
+   Semantics of Datatypes* — a different subject entirely. Sites: `src/domain/syllogise.mjs:64`,
+   `src/domain/syllogise.mjs:314`, `src/services/chat.mjs:7406`. The `scm-svf1`/Table 9 citations
+   are all correct.
+2. **`cax-maxc0` is not a W3C rule name.** No such rule exists in any table. The real one is
+   **`cls-maxc1`** (Table 6). `syllogise.mjs:555-559`'s comment already grounds this honestly — but
+   the id is shaped exactly like a W3C name and appears in `PLAN_SYLLOGIST.md`, `infbench/` and
+   tests, where a reader takes it for one. Same for `SCM_SVF_RULE` / `SCM_CARD_RULE`.
+3. **`PLAN_SYLLOGIST_EL_DL.md:11` says all seven kernels are "inside the OWL 2 RL fragment". Two are
+   not, and the code says so.** `syllogise.mjs:527` already says cardinality monotonicity is
+   "outside OWL 2 RL's own decidable profile". And `cax-maxc0` is a *universal generalization* of
+   `cls-maxc1` — but `cls-maxc1` derives `false` **for one individual**, where tmct derives a
+   **class-level negative fact**. That is a strictly stronger step OWL 2 RL does not license.
+4. **`syllogise.mjs:972`'s "JTMS-style dependency-directed removal" is DRed**, not JTMS. §9.9.
+
+Minor: `PLAN_SYLLOGIST_EL_DL.md:25` heads a tier "**OWL 2 DL** (target: ALC first, growing toward
+**SHOIQ**)". OWL 2 DL's logic is **SROIQ**; SHOIQ is weaker and different (SHOIN(D) is OWL 1 DL).
+The SHOIQ *target* is sound and deliberately argued — it is the "OWL 2 DL" label over it that is
+imprecise. And `PLAN_SYLLOGIST.md`'s "there is no stored justification to walk at all today" is
+stale: `syllogise.mjs:758+` persists one.
+
+### 7.13 The vocabulary test should read what a store writes, not what it documents
+
+§9.10. `mgx:factJustification` was emitted by production code and declared in no ontology file, and
+my §6 test passed at 28 of 28 because the prop is absent from `MEMORY_VOCABULARY` — so it fell
+through both gates at once.
+
+The ontology side is fixed (this plan's file). The test is stronger if it diffs the props a **real
+store actually writes** against the ontology, the way §1 settled the casing question. That needs a
+seeded store in the test, which is the `test:fast` budget's business and not this plan's call.
+
 ### 7.6 Concept identity for corpus terms — the SKOS alignment
 
 §4.5. Minting a `skos:Concept` per corpus term, with the strings as `skos:prefLabel` /
@@ -810,14 +846,49 @@ RL §4** — not alphabetical.
 | `syllogise` | open | see below |
 | `justification`, `premise` | `map` | JTMS's vocabulary (Doyle 1979). tmct's `mgx:sourceRule` is a justification's *rule* without its *antecedents* — same gap as §9.2's how-provenance row, one bridge fixes both |
 
-**`syllogise` is the one genuinely open naming question.** `scm-sco` (a⊑b, b⊑c ⊨ a⊑c) really is a
-syllogism — it is Barbara. But `cls-svf1` and the cardinality rules are not: a syllogism is
-Aristotle's two-premise term-logic form, and tmct's engine is a general forward-chaining fixpoint
-over a Datalog-shaped rule set. The module's own header already calls it what it is —
-"forward-chains entailments" — so the honest options are to keep `syllogise` as the product-facing
-verb (it is a good word for what a visitor sees) and name the mechanism accurately in the code, or
-rename to `entail`/`materialise`. **This is a public CLI verb (`npx tmct syllogise`), so it is not
-this plan's call. §7.8.**
+**`syllogise`: keep the verb, and do not let it become the technical vocabulary.**
+
+The objection anyone will raise — "a syllogism means two premises and three terms" — turns out to be
+**the later tradition's definition, not Aristotle's**. *Prior Analytics* I.1, 24b18–20: "A syllogism
+is discourse in which, certain things being stated, something other than what is stated follows of
+necessity from their being so." No three terms, no two premises, no figures; the premises are plural
+and unrestricted. Robin Smith — who is both the Hackett translator and the SEP author — translates
+*sullogismos* as **"deduction"** precisely because "in modern usage, 'syllogism' means an argument of
+a very specific form". The **Stoics** used the word for a purely propositional system in which
+**modus ponens is a *sullogismos***, which settles that the word was never Aristotle-form-specific.
+Forward chaining is closer to Stoic *sullogismoi* than to Aristotle's figures.
+
+Three of tmct's five rules are literally term-logical — `scm-sco` **is** Barbara, `cax-sco` **is** the
+Socrates syllogism, `cax-dw` is Celarent-shaped. Two are provably not: `cls-svf1` and `scm-svf1`
+carry a binary relation in the antecedent, which is exactly what term logic cannot reach.
+
+What weighs the other way is narrower than the objection, and real: **the noun's breadth does not
+transfer to the verb.** Every dictionary reachable defines "syllogise" narrowly. And **the field
+never uses the word** — `syllogis*` occurs **0 times** in all 16 chapters of the *Description Logic
+Handbook* (1.24M characters), against subsumption 370 and classification 57. The literatures are
+"interestingly isolated", and one peer-reviewed paper says so outright (Çine, UBMK 2018).
+
+**But the repo never claims Aristotle** — grepped, and there is no Aristotelian claim anywhere in
+docs, tests or source. `README.md` already glosses the verb accurately on first use. Nothing
+overclaims today, and a CLI subcommand does not carry a scholarly claim's precision burden.
+
+**Verdict: keep `syllogise`, and gloss it. The fix is three sentences, not a rename.**
+
+The division of labour is **already right** and that is the thing to notice: the module header says
+"forward-chains", the plans say "Datalog-shaped", `PLAN_SYLLOGIST.md` cites Forgy and RETE. tmct
+already uses the field's words wherever it describes the mechanism, and reserves `syllogise` for the
+command. **The only gap is that the word is never explained**, so a reader who knows the narrow
+definition sees a stretch and has nothing to read that says otherwise.
+
+So: say in the README (done — §8's draft) and in the module header that the word is used in the
+older broad sense of *sullogismos*, that `scm-sco` and `cax-sco` are Barbara and the Socrates
+syllogism, and that the operation's own names are forward chaining and materialisation. That turns a
+loose word into an informed one and makes the objection unlandable, without touching a shipped CLI
+subcommand.
+
+A rename stays available and gets cheaper the further `PLAN_SYLLOGIST_EL_DL.md` grows the rule set
+past term logic — but it is not needed to be correct today. The module header is not this plan's
+file. **§7.8.**
 
 ### 9.4 IR and NLP — `fuzzy.mjs` does not implement Damerau-Levenshtein
 
@@ -953,6 +1024,79 @@ true of the system). Claiming kinship with confidence-threshold ML would be the 
 
 `MISS_REASONS` stays `mgx:`'s: those are reasons one machine could not answer, and no standard
 enumerates them.
+
+### 9.9 The justification is ATMS, not JTMS — and this section corrects itself
+
+**§4.6's JTMS row was wrong on both of its claims, and I wrote it.** It went in from memory, in the
+one review whose whole point is that memory is not a source. Recording it rather than quietly
+editing it, because the shape of the error is the thing worth keeping.
+
+**Claim 1: "tmct does not retract on belief change." False.** `syllogise.mjs` exports
+`retractSubClassOf`, and line 972's own comment reads "a scoped retraction slice: **JTMS-style
+dependency-directed removal**". The code contradicts the doc, and the code was there first.
+
+**Claim 2: "`mgx:sourceRule` is a JTMS justification in shape." Wrong on the term and the field.**
+
+tmct stores two things: `justification` (an array of premise fact ids, written as
+`mgx:factJustification`) and `sourceRule` (the rule id, on the entailed Source). `mgx:sourceRule`
+alone is not the justification — it is one field of it.
+
+**Doyle's JTMS justification is `(SL ⟨inlist⟩ ⟨outlist⟩)`, and the outlist is the whole point.**
+Empty inlist + empty outlist is a premise; nonempty inlist + empty outlist is a normal deduction,
+which Doyle calls "a monotonic argument"; **a nonempty outlist is what makes a justification an
+assumption**, and assumptions are what give a JTMS non-monotonicity. **tmct has no outlist, ever.**
+So it can never form an assumption — and without assumptions, nogoods (sets of assumptions) and
+dependency-directed backtracking (locating assumptions in a contradiction's support) have nothing to
+range over.
+
+**What tmct actually stores is de Kleer's ATMS justification**: ⟨consequent, antecedents,
+**informant**⟩, which de Kleer describes as propositional Horn clauses, **monotonic by
+construction**. The fields land exactly: premise ids are the antecedents, the fact is the consequent,
+and `sourceRule` is the **informant** — which de Kleer glosses as "the problem solver's description
+of the justification", which is precisely what a rule name is.
+
+And de Kleer names tmct's actual gap, in a sentence that fits better than anything I wrote:
+
+> "a justification describes how the datum is derived from immediately preceding antecedents, a
+> label environment describes how the datum ultimately depends on assumptions."
+
+**tmct stores justifications and computes no labels.** That is the honest gap — not the invented one
+about retraction.
+
+**The retraction is DRed, not JTMS label propagation.** `retractSubClassOf` over-deletes candidates
+citing a removed id, then re-verifies against survivors and keeps anything with a second independent
+derivation. That is delete-and-rederive (Gupta, Mumick & Subrahmanian, "Maintaining Views
+Incrementally", SIGMOD 1993, pp. 157–166). The distinction: **a JTMS recomputes belief *labels*;
+DRed recomputes the *materialization*.** tmct moves rows in a store, so it is DRed. Its own comment
+saying "JTMS-style" is the same reach in the code that §4.6 made in the doc.
+
+**Verdicts:** `mgx:factJustification` + `mgx:sourceRule` → **`map`**, to an ATMS justification, with
+`rdfs:seeAlso prov:wasDerivedFrom` (the PROV reading is the better *product* framing: a provenance
+record). Now declared — see below. The retraction comment's "JTMS-style" → **`rename`** to DRed, in
+a file this plan does not own (§7.12).
+
+**Five senses of "justification" are in play** and share only the word: Doyle's SL-pair; de Kleer's
+Horn triple; default logic's consistency condition (the βᵢ — and **Reiter's 1980 paper never uses
+the word "justification"** at all, so citing him for it is wrong); OWL's *minimal* entailment-relative
+axiom subset, computed on demand; and PROV's `wasDerivedFrom`. tmct's is the second, reads best as
+the fifth, and is not the first.
+
+### 9.10 The test had a blind spot, and this is how it showed
+
+**`mgx:factJustification` is written by production code (`core.mjs:1068`) and was declared in neither
+ontology file.** My §6 test — "every `mgx:` property the store's own vocabulary documents has a
+definition in the ontology" — **passed anyway**, at 28 of 28.
+
+It passed because the prop is not in `MEMORY_VOCABULARY`. The test checks what the payload
+*documents*, so a prop that is emitted but undocumented falls through **both** gates at once: absent
+from the vocabulary block, and therefore never checked against the ontology.
+
+The sharpest form of it: **the deprecated `mgx:factProvenance` shim was declared; the live
+`mgx:factJustification` was not.**
+
+Now declared. The stronger test reads what a store actually *writes* rather than what it documents,
+which is the same move §1 used to settle the casing question — a real store beats a reading of the
+source. **§7.13.**
 
 ---
 

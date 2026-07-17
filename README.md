@@ -1051,7 +1051,7 @@ edition, the retrieval date, the terms tmct uses, and what could not be verified
 | McDermott et al., PDDL | Yale CVC TR-98-003, 1998 | The action-rule vocabulary. |
 | Doyle, "A Truth Maintenance System" | *Artificial Intelligence* 12(3), 1979 | Justification and premise. tmct records which rule entailed a fact; it does not yet record which facts fed the rule. |
 | Meszaros, *xUnit Test Patterns* | Addison-Wesley, 2007 | The test-double taxonomy — stub, spy, mock, fake, dummy — and the fixture patterns. `docs/references/testing-vocabulary.md` records where tmct's own tiers depart from the standard taxonomy, and that "blast radius" is an ops metaphor for what the literature calls Regression Test Selection. |
-| Aristotle, *Prior Analytics* | — | `scm-sco` — all A are B, all B are C — is the syllogism Barbara. The rest of the engine is a forward-chaining fixpoint, and `PLAN_NORMATIVE.md` §9.3 is honest about the gap. |
+| Aristotle, *Prior Analytics* I.1 (24b18–20) · Bobzien, "Ancient Logic", *SEP* | — | **Why the command is called `syllogise`.** The word is used in the older, broader sense of *sullogismos* — Aristotle's own definition is "discourse in which, certain things being stated, something other than what is stated follows of necessity", with no mention of three terms or two premises, and the Stoics used the same word for a system in which modus ponens is a *sullogismos*. Two of tmct's rules are the narrow thing exactly: `scm-sco` is **Barbara**, `cax-sco` is the **Socrates syllogism**. The others reach past term logic. The operation's own names are **forward chaining** and **materialisation**, and the code uses those. |
 
 ### Storage
 

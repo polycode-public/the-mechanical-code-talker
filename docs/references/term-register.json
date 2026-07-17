@@ -15,69 +15,72 @@
       "term": "scm-sco",
       "area": "logic",
       "verdict": "aligned",
-      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 9 (OWL 2 RL/RDF rules)",
-      "note": "subClassOf transitivity. Genuinely Aristotle's Barbara.",
-      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, s4.3 Table 9 (The Semantics of Schema Vocabulary)",
+      "note": "subClassOf transitivity. Written out, this is Barbara exactly. Table numbering is identical in the 1st edition.",
+      "verified": "2026-07-17 — primary source read"
     },
     {
       "term": "cax-sco",
       "area": "logic",
       "verdict": "aligned",
-      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 7",
-      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, s4.3 Table 7 (The Semantics of Class Axioms)",
+      "verified": "2026-07-17 — primary source read",
+      "note": "an instance of a class is an instance of its superclass - the Socrates syllogism."
     },
     {
       "term": "cax-dw",
       "area": "logic",
       "verdict": "aligned",
-      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 7",
-      "note": "the first rule that proves a 'no'.",
-      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, s4.3 Table 7",
+      "note": "derives `false` (a contradiction), NOT a negative fact. Celarent-shaped.",
+      "verified": "2026-07-17 — primary source read"
     },
     {
       "term": "cls-svf1",
       "area": "logic",
       "verdict": "aligned",
-      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 6",
-      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, s4.3 Table 6 (The Semantics of Classes)",
+      "verified": "2026-07-17 — primary source read",
+      "note": "NB the repo cites this as Table 8 in three places - Table 8 is The Semantics of Datatypes. Not term-logical: its antecedent carries a binary relation."
     },
     {
       "term": "scm-svf1",
       "area": "logic",
       "verdict": "aligned",
-      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, §4.3 Table 9",
-      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+      "cite": "OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11, s4.3 Table 9",
+      "verified": "2026-07-17 — primary source read"
     },
     {
       "term": "entailment",
       "area": "logic",
       "verdict": "aligned",
-      "cite": "RDF 1.1 Semantics, W3C Rec 2014-02-25",
-      "note": "reserved for the specific claim; 'inference' names the activity. Correct.",
-      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+      "cite": "Tarski, \"Uber den Begriff der logischen Folgerung\", Actes du Congres International de Philosophie Scientifique, fasc. VII, Hermann 1936, pp. 1-11; RDF 1.1 Semantics, W3C Rec 2014-02-25",
+      "note": "Tarski defined consequence SEMANTICALLY, with no reference to derivation - which is what makes soundness and completeness statable. Reserved here for the specific claim; \"inference\" names the activity. Correct.",
+      "verified": "2026-07-17 — primary source read"
     },
     {
       "term": "justification",
       "area": "logic",
       "verdict": "map",
-      "cite": "Doyle, 'A Truth Maintenance System', Artificial Intelligence 12(3), 1979",
-      "note": "tmct records the rule (mgx:sourceRule) but not the antecedents. A JTMS justification carries both.",
-      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+      "cite": "de Kleer, \"An Assumption-based TMS\", Artificial Intelligence 28(2), 1986, pp. 127-162, DOI 10.1016/0004-3702(86)90080-9, s4.2 p. 143. NOT Doyle: \"A Truth Maintenance System\", AI 12(3), 1979, pp. 231-272",
+      "note": "tmct's (mgx:factJustification premise ids + mgx:sourceRule) is an ATMS justification - antecedents, consequent, informant - which de Kleer describes as Horn clauses, monotonic by construction. A JTMS justification is (SL inlist outlist) and the OUTLIST is what makes it an assumption; tmct has none, ever. de Kleer names the real gap: tmct stores justifications and computes no labels. NB Reiter 1980 never uses the word \"justification\" at all.",
+      "verified": "2026-07-17 — primary source read"
     },
     {
       "term": "premise",
       "area": "logic",
       "verdict": "aligned",
-      "cite": "Doyle 1979; Aristotle, Prior Analytics",
-      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+      "cite": "Aristotle, Prior Analytics I.1, 24b18-20; Doyle, AI 12(3), 1979",
+      "verified": "2026-07-17 — primary source read",
+      "note": "Aristotle's own definition names no fixed number of premises - the three-terms/two-premises form is the later tradition's, not his."
     },
     {
       "term": "syllogise",
       "area": "logic",
-      "verdict": "open",
-      "cite": "Aristotle, Prior Analytics; OWL 2 Profiles §4.3",
-      "note": "scm-sco is a syllogism; cls-svf1 is not. The engine is a forward-chaining fixpoint. Public CLI verb - PLAN_NORMATIVE.md 7.8.",
-      "verified": "UNVERIFIED-pending-web-check — cited from knowledge, not read this session"
+      "verdict": "extend",
+      "cite": "Aristotle, Prior Analytics I.1, 24b18-20 (Jenkinson); Bobzien, \"Ancient Logic\", SEP (slug logic-ancient); LSJ 9th ed. s.v. syllogismos; OWL 2 Profiles (2nd ed.), W3C Rec 2012-12-11 s4.3",
+      "note": "KEEP, and gloss it. The \"two premises, three terms\" objection is the later tradition's definition, not Aristotle's - I.1 mentions neither, and the Stoics used sullogismos for a system where modus ponens is one. scm-sco IS Barbara; cax-sco IS the Socrates syllogism; cls-svf1/scm-svf1 are not term-logical. syllogis* occurs 0 times in all 16 chapters of the DL Handbook. tmct already uses the field's words for the mechanism - the only gap is that the word is never explained.",
+      "verified": "2026-07-17 — primary source read"
     },
     {
       "term": "forward-chain",
@@ -369,6 +372,14 @@
       "cite": "Council of Europe (2020), Common European Framework of Reference for Languages - Companion volume, Council of Europe Publishing, ISBN 978-92-871-8621-8. The 2018 \"with New Descriptors\" edition is explicitly a preliminary version.",
       "verified": "2026-07-17 — primary source read",
       "note": "NOT Creative Commons - all rights reserved plus a permission regime; <500-word attributed excerpts are pre-cleared, whole tables are not. The A1-C2 LABELS are unprotectable. CEFR measures what a person can do, not sentence difficulty - grading prompts by band is an adaptation beyond its validated scope."
+    },
+    {
+      "term": "mgx:factJustification",
+      "area": "logic",
+      "verdict": "map",
+      "cite": "de Kleer, Artificial Intelligence 28(2), 1986, pp. 127-162, s4.2 p. 143 (ATMS justification: antecedents + consequent + informant); PROV-O, W3C Rec 2013-04-30 (wasDerivedFrom)",
+      "note": "space-joined premise Fact ids. Emitted by core.mjs:1068 and was declared in NO ontology file - it is absent from MEMORY_VOCABULARY, so the documented-vocabulary test could not see it. The deprecated factProvenance shim WAS declared; this live prop was not. Now declared and pinned.",
+      "verified": "2026-07-17 — primary source read"
     }
   ]
 }
