@@ -1,10 +1,11 @@
-// scripts/extract-facts-from-text.mjs — turn a plain text file into facts by
-// reusing the SAME deterministic recognizer the interactive chat's "teach"
-// lane already has (runTurn, src/services/chat.mjs) — no new NLU, no LLM, no guessing.
+// `tmct extract` — turn a plain text file into facts by reusing the SAME
+// deterministic recognizer the interactive chat's "teach" lane already has
+// (runTurn, src/services/chat.mjs) — no new NLU, no LLM, no guessing.
 //
-// Usage:
-//   node scripts/extract-facts-from-text.mjs <text-file> [--repo <path>] [--out <file.jsonl>]
-//   npm run extract:facts -- <text-file> [--repo <path>] [--out <file.jsonl>]
+//   tmct extract <text-file> [--repo <path>] [--out <file.jsonl>]
+//
+// The text file is named positionally, or with --file, the way `tmct import`
+// names one.
 //
 // How it works: the file is split into sentences with wink-nlp's own
 // sentence-boundary detection (src/adapters/wink-model.mjs — the same leaf loader
@@ -36,53 +37,48 @@
 // the reasoning: same closed-set recognizer as `teach`, but an unvetted
 // source document, so it sits just above `web`).
 //
-// Never claims full coverage: the summary this script prints always states
-// how many sentences were found, how many were recognized, and how many were
-// honestly skipped.
+// Never claims full coverage: the summary this prints always states how many
+// sentences were found, how many were recognized, and how many were honestly
+// skipped.
 
 import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
-import { runTurn, uuidv7 } from "../src/services/chat.mjs";
-import { loadMemory, readFactRows, appendFact } from "../src/adapters/memory/core.mjs";
-import { loadConfig } from "../src/adapters/config.mjs";
-import { splitSentences } from "../src/services/sentences.mjs";
+import { runTurn, uuidv7 } from "./chat.mjs";
+import { splitSentences } from "./sentences.mjs";
+import { loadMemory, readFactRows, appendFact } from "../adapters/memory/core.mjs";
+import { loadConfig } from "../adapters/config.mjs";
+import { touchedFactRows } from "../domain/memory/touched-facts.mjs";
 
-export { splitSentences };
+export const USAGE = "usage: tmct extract <text-file>|--file <text-file> [--repo <path>] [--out <file.jsonl>]";
 
-function parseArgs(argv) {
+export function parseArgs(argv) {
   const args = { file: null, repo: null, out: null };
   const rest = [];
   for (let i = 0; i < argv.length; i += 1) {
     const a = argv[i];
     if (a === "--repo") args.repo = argv[i += 1];
     else if (a === "--out") args.out = argv[i += 1];
+    else if (a === "--file") args.file = argv[i += 1];
     else rest.push(a);
   }
-  args.file = rest[0] || null;
+  args.file = args.file || rest[0] || null;
   return args;
 }
 
 /**
  * Run one already-split sentence through runTurn against `memoryDir`, and
- * report the Fact rows THIS turn actually touched (created, or re-asserted
- * with a new provenance entry) — diffed by (id → provenance string) before
- * vs. after, since not every via:"assert" write is a Fact (the rule-teach
- * shapes — compose2/filter/recursive — store a Rule instead; those simply
- * produce no touched rows here and are correctly not reported as facts).
- * Returns { recognized, rows } — `recognized` true iff runTurn's own record
- * called this a stored assertion, `rows` the Fact rows it touched (possibly
- * empty for a Rule-only write).
+ * report the Fact rows THIS turn actually touched. Returns { recognized, rows }
+ * — `recognized` true iff runTurn's own record called this a stored assertion,
+ * `rows` the Fact rows it touched (possibly empty for a Rule-only write).
  */
 async function runSentence(sentence, { config, memoryDir }) {
   const before = readFactRows(await loadMemory(memoryDir));
-  const beforeById = new Map(before.map((r) => [r.id, r.provenance]));
   const { record } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7() });
   if (record?.via !== "assert" || record?.miss) return { recognized: false, rows: [] };
   const after = readFactRows(await loadMemory(memoryDir));
-  const rows = after.filter((r) => beforeById.get(r.id) !== r.provenance);
-  return { recognized: true, rows };
+  return { recognized: true, rows: touchedFactRows(before, after) };
 }
 
 /**
@@ -95,7 +91,7 @@ async function runSentence(sentence, { config, memoryDir }) {
 export async function main(argv = process.argv.slice(2)) {
   const { file, repo, out } = parseArgs(argv);
   if (!file) {
-    console.error("usage: node scripts/extract-facts-from-text.mjs <text-file> [--repo <path>] [--out <file.jsonl>]");
+    console.error(USAGE);
     process.exitCode = 1;
     return { sentences: 0, recognized: 0, extracted: [] };
   }
@@ -122,8 +118,8 @@ export async function main(argv = process.argv.slice(2)) {
         // Additive: layers the audit tag onto the SAME (subject, predicate,
         // object) the recognizer just stored — appendFact unions provenance
         // by id, so this never duplicates or overwrites the recognizer's own
-        // ace:chat:/teach:chat: entry, and re-running this script over the
-        // same file/fact is idempotent (the union simply dedupes the tag).
+        // ace:chat:/teach:chat: entry, and re-running this over the same
+        // file/fact is idempotent (the union simply dedupes the tag).
         await appendFact(memoryDir, {
           subject: row.subject, predicate: row.predicate, object: row.object,
           provenance: tag, quantifier: row.quantifier || "",
@@ -156,14 +152,4 @@ export async function main(argv = process.argv.slice(2)) {
   } finally {
     if (ephemeral) await rm(memoryDir, { recursive: true, force: true });
   }
-}
-
-// CLI entry guard (the isMain idiom every other scripts/*.mjs uses): a test
-// importing splitSentences/main directly must never trigger a real CLI run.
-const isMain = process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
-if (isMain) {
-  main().catch((err) => {
-    console.error(err?.stack || String(err));
-    process.exitCode = 1;
-  });
 }

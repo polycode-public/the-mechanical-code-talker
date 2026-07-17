@@ -1,6 +1,6 @@
-// scripts/extract-facts-from-text.mjs tests — sentence splitting, the honest
-// recognized/skipped split, the --repo write path, and the default
-// stdout/--out JSONL path (kept separate, per the tool's own design: --repo
+// `tmct extract` (src/services/extract-facts.mjs) tests — sentence splitting,
+// the honest recognized/skipped split, the --repo write path, and the default
+// stdout/--out JSONL path (kept separate, per the verb's own design: --repo
 // mutates a real tmct memory; the default path never mutates anything real).
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -8,7 +8,8 @@ import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { splitSentences, main } from "../../scripts/extract-facts-from-text.mjs";
+import { main } from "../../src/services/extract-facts.mjs";
+import { splitSentences } from "../../src/services/sentences.mjs";
 import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 
 const FIXTURE_TEXT = [

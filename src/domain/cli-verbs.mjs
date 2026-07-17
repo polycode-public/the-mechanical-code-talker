@@ -81,6 +81,17 @@ export const CLI_VERBS = [
     ],
   },
   {
+    mode: "extract",
+    errorLabel: "extract",
+    usage: "tmct extract <text-file>",
+    prose: ["read a plain text file's sentences through the chat's own"],
+    flags: [
+      { flag: "[--file <text-file>]", prose: ["teach recognizer and keep the facts it grounds; every", "other sentence is skipped and counted, never paraphrased"] },
+      { flag: "[--repo <abs>]", prose: ["write the facts into that repo's own tmct memory; without", "it nothing on disk is mutated and the facts print as JSONL"] },
+      { flag: "[--out <file.jsonl>]", prose: ["write that JSONL to a file instead of stdout"] },
+    ],
+  },
+  {
     mode: "extend",
     errorLabel: "extend --validate",
     usage: "tmct extend --validate <dir>",

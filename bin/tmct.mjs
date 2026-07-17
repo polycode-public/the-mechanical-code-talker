@@ -1036,6 +1036,15 @@ async function main() {
     return;
   }
 
+  if (mode === "extract") {
+    // `tmct extract` — run a text file's sentences through the chat's own teach
+    // recognizer and keep what it grounds. Lazily imported: it pulls the whole
+    // chat stack, which `tmct --help` and chat startup must not pay for.
+    const { main: extractFacts } = await import("../src/services/extract-facts.mjs");
+    await extractFacts(process.argv.slice(3));
+    return;
+  }
+
   if (mode === "viz") {
     // `tmct viz` — the ledger explorer: one self-contained HTML page rendering
     // the memory graph as readable fact-sentences around a focus term, with

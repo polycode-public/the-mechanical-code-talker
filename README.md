@@ -417,14 +417,15 @@ nudges you to ground one side first. Quantified teaching stores the
 quantifier ("some functions are risky" … "how many functions are risky" →
 "A few."), and "how many facts are there" counts the store back.
 
-Teaching doesn't have to be typed, either. `npm run extract:facts` (from a
-clone) runs a plain text file through the same recognizer the chat's teach
-lane uses. Sentences the recognizer grounds become fact rows; everything
-else is skipped and counted, never paraphrased:
+Teaching doesn't have to be typed, either. `tmct extract` runs a plain text
+file through the same recognizer the chat's teach lane uses. Sentences the
+recognizer grounds become fact rows; everything else is skipped and counted,
+never paraphrased. Add `--repo <abs>` to write them into that repo's own
+memory; without it nothing on disk is mutated and the facts print as JSONL:
 
 ```bash cwd=repo
 printf 'We deployed redis last week. a cache is a kind of store. Why was it slow?\n' > /tmp/notes.txt
-node scripts/extract-facts-from-text.mjs /tmp/notes.txt
+node bin/tmct.mjs extract /tmp/notes.txt
 ```
 
 ```output
@@ -537,13 +538,13 @@ provenance record. Most of its flags choose what gets seeded and where config is
        [--corpus <id|path>]    also seed a corpus — a tier-2 manifest id (aws|python|java|
                                general) or a jsonl file path — opt-in, offline, $0
        [--ontology <name|path>]  activate+seed an ontology bundle (a recognized name or a path)
-       [--lexicon <name|path>]   activate a lexicon bundle (recognized name or a path;
+       [--lexicon <name|path>]  activate a lexicon bundle (recognized name or a path;
                                merged read-time, never seeded — see mergedLexiconExtra)
        [--graph <path>]        set graph_file/graph_files in tmct.toml (repeatable)
        [--config <path>]       write to an alternate tmct.toml location
        [--detect]              suggest a tier-2 corpus from the repo's manifests
                                (pyproject.toml → python, pom.xml → java); never seeds unasked
-       [--with-persona <name>] write an explicit [extensions]/[bias] preset into tmct.toml
+       [--with-persona <name>]  write an explicit [extensions]/[bias] preset into tmct.toml
                                ("code" — today's implicit default, made explicit)
        [--persona-size <medium|large>]  grow the default "human" persona's fact count
                                beyond Small (the default): "medium" activates
@@ -564,7 +565,7 @@ already set up. Its `--graph` flag works differently from the others: it appends
   tmct import [--repo <abs>]   activate+seed into an ALREADY-initialized repo (any
        [--corpus <id|path>]    combination of these flags in one call). --graph is a
        [--ontology <name|path>]  DIFFERENT operation from the others: it APPENDS to
-       [--lexicon <name|path>]   tmct.toml's graph_files array (multi-graph growth),
+       [--lexicon <name|path>]  tmct.toml's graph_files array (multi-graph growth),
        [--graph <path>]        never an extensions-bundle activation.
        [--file <definition.txt>]  teach a plain-text definition file sentence by
                                sentence (# lines are comments); any declined
@@ -573,12 +574,24 @@ already set up. Its `--graph` flag works differently from the others: it appends
        [--config <path>]
 ```
 
+`tmct extract` is the document route into memory described under "Teach it"
+above — the same teach recognizer, reading a file instead of your typing:
+
+```output:help:extract
+  tmct extract <text-file>     read a plain text file's sentences through the chat's own
+       [--file <text-file>]    teach recognizer and keep the facts it grounds; every
+                               other sentence is skipped and counted, never paraphrased
+       [--repo <abs>]          write the facts into that repo's own tmct memory; without
+                               it nothing on disk is mutated and the facts print as JSONL
+       [--out <file.jsonl>]    write that JSONL to a file instead of stdout
+```
+
 `tmct extend --validate` checks a third-party extension pack's declared resources
 before you switch any repo's `tmct.toml` over to it:
 
 ```output:help:extend
   tmct extend --validate <dir>  validate a third-party extension pack's declared
-       [--config <path>]      resources (corpus/lexicon/templates) before activating
+       [--config <path>]       resources (corpus/lexicon/templates) before activating
                                it in any repo's tmct.toml; exits non-zero on failure
 ```
 
@@ -586,9 +599,9 @@ before you switch any repo's `tmct.toml` over to it:
 inference" above:
 
 ```output:help:syllogise
-  tmct syllogise [--repo <abs>] speculative inference (offline maintenance job): forward-
+  tmct syllogise [--repo <abs>]  speculative inference (offline maintenance job): forward-
        [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
-       [--config <path>]      bounded, low-trust, retractable entailed facts (never on the chat path)
+       [--config <path>]       bounded, low-trust, retractable entailed facts (never on the chat path)
 ```
 
 `tmct viz` renders the memory graph as the ledger explorer — a single,
@@ -596,11 +609,11 @@ self-contained HTML file you can open in a browser:
 
 ```output:help:viz
   tmct viz [--repo <abs>]      write one self-contained HTML page: the memory graph as a
-       [--focus <term>]       readable ledger of fact-sentences around one focus term,
-       [--term <word>]        with segments, a two-hop minimap, and an in-page chat dock
-       [--limit <n>]          that answers from the embedded graph. Focuses on the newest
-       [--output <path>]      taught fact's subject by default (--focus <term> or
-       [--config <path>]      --term <word> override it); --output defaults to
+       [--focus <term>]        readable ledger of fact-sentences around one focus term,
+       [--term <word>]         with segments, a two-hop minimap, and an in-page chat dock
+       [--limit <n>]           that answers from the embedded graph. Focuses on the newest
+       [--output <path>]       taught fact's subject by default (--focus <term> or
+       [--config <path>]       --term <word> override it); --output defaults to
                                ledger.html in the cwd; --limit caps the embedded fact
                                rows; --term resolves via the same normalization chat uses.
 ```
