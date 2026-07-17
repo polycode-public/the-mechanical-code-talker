@@ -29,19 +29,38 @@ import { findIsaChain, SUBCLASS_PREDICATE, TYPE_PREDICATE } from "../syllogise.m
 export const NEG_PREDICATE_PREFIX = "mgxneg:";
 const POSITIVE_PREDICATE_PREFIX = "mgx:";
 
-/** Swap an mgx: predicate onto its negative twin. Applied AFTER the preposition
+/** The negative twin of rdfs:subClassOf ("john is not a man"). The polarity
+ *  prefix is tmct's; the term it negates is RDFS's, so this pair cannot be
+ *  minted by the prefix swap below and is stated instead.
+ *
+ *  Why a coined mgxneg: term and not owl:disjointWith: disjointness is a
+ *  class-class axiom ("no man is a stone"), and the ask ladder already reads it
+ *  that way. "john is not a man" denies ONE membership and says nothing about
+ *  any other john, so storing it as disjointness would over-claim. */
+export const NEG_SUBCLASS_PREDICATE = "mgxneg:subClassOf";
+const EXPLICIT_NEGATIVE_TWINS = new Map([[SUBCLASS_PREDICATE, NEG_SUBCLASS_PREDICATE]]);
+const EXPLICIT_POSITIVE_TWINS = new Map([...EXPLICIT_NEGATIVE_TWINS].map(([pos, neg]) => [neg, pos]));
+
+/** Swap a predicate onto its negative twin. Applied AFTER the preposition
  *  fold, so mgx:rest-on becomes mgxneg:rest-on and the object keeps nothing
- *  meaning-bearing inside it. */
+ *  meaning-bearing inside it. A predicate with no negative twin returns
+ *  unchanged. */
 export function negatedPredicate(predicate) {
   const p = String(predicate || "");
+  const stated = EXPLICIT_NEGATIVE_TWINS.get(p);
+  if (stated) return stated;
   if (!p.startsWith(POSITIVE_PREDICATE_PREFIX)) return p;
   return NEG_PREDICATE_PREFIX + p.slice(POSITIVE_PREDICATE_PREFIX.length);
 }
 
 /** The inverse: mgxneg:capableOf -> mgx:capableOf, or null for any predicate
- *  that isn't negative at all. */
+ *  that isn't negative at all. The stated twins invert by lookup — a prefix
+ *  swap would read mgxneg:subClassOf back as "mgx:subClassOf", a term that
+ *  exists nowhere. */
 export function positivePredicate(predicate) {
   const p = String(predicate || "");
+  const stated = EXPLICIT_POSITIVE_TWINS.get(p);
+  if (stated) return stated;
   if (!p.startsWith(NEG_PREDICATE_PREFIX)) return null;
   return POSITIVE_PREDICATE_PREFIX + p.slice(NEG_PREDICATE_PREFIX.length);
 }

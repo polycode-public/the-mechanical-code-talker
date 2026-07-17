@@ -95,7 +95,7 @@ commit that reaches `main` or a remote.
 | **4** — the instruments | **DONE** (4.1-4.5) | `6ed8f41`, `cee3ebe`, `ee6ddf3`, `a46d92a`, `7b74431` |
 | **5** — wrong documents | **DONE** | `bf6732c` |
 | PLAN_DEPS batches 1-2, 4-7 | **DONE** | `c2ded65`, `f2d7e27`, `488aa84`, `5824c66`, `2ccee08` |
-| **3** — honest-miss gaps | **OPEN** — nothing started | — |
+| **3** — honest-miss gaps | **IN PROGRESS** — 3.1 done; 3.2-3.11 open | `8501cb9` |
 | **7** — public-surface audit | **OPEN** — nothing started | — |
 | **8** — capability page | **OPEN** — nothing started | — |
 | **9** — prose pass | **OPEN** — nothing started | — |
@@ -506,33 +506,41 @@ the answer text — the `Canonical:` line is what makes this visible.
 None of these lies. They miss, or answer confusingly. Lower priority than Phases 1-2 by that fact
 alone.
 
-### 3.1 A negative assertion is executed as a retraction
+### 3.1 A negative assertion is executed as a retraction — **DONE**
 
-```txt
-tmct> john is a man
-tmct> john is not a man
-noted — forgotten: "john is a kind of man" is no longer stored.
-tmct> is john a man
-I can't confirm that — I don't know "john" at all yet.
-```
+A bare negative now stores a sourced negative beside the positive and reports the disagreement;
+only `forget that X is a Y` retracts. Verified: the reproducer above no longer destroys the fact.
 
-A claim destroys information instead of recording a disagreement, and the answer then denies ever
-knowing john. On an unknown subject (`zeus is not mortal`) the frame is a silent no-op reported as a
-question about an empty graph.
+**Two corrections to this item's own brief, both found by reading the code:**
 
-**This contradicts a shipped decision.** `0f8fb61 feat(memory): a negative is a source disagreeing,
-not a contradiction` made capability negatives store (`penguin cannot fly` →
-`penguin mgxneg:capableOf fly`). Subclass negatives retract. Same word "not", two behaviours.
-`src/domain/memory/capability.mjs` is the shipped pattern to follow; `archive/PLAN_DEFEASIBLE_NEGATION.md`
-is its design.
+- **The shipped pattern does not extend by reuse.** `negatedPredicate` (`memory/capability.mjs:35`)
+  is a prefix swap that returns any non-`mgx:` predicate **unchanged**, and `SUBCLASS_PREDICATE` is
+  `rdfs:subClassOf`. So the negative twin had to be **coined and stated**, not derived:
+  `NEG_SUBCLASS_PREDICATE = "mgxneg:subClassOf"`, with an explicit twin map on both sides
+  (`positivePredicate` would otherwise read it back as `mgx:subClassOf`, a term that exists nowhere).
+- **It answers "both", not "no".** This item asked for `no — you told me…`. Both facts sit at hop 0
+  with equal trust, so the shipped design's own answer (capability.mjs's `"both"` verdict: name the
+  sources and pick NOTHING) applies. Preferring the newer would rank recency above what the user
+  said, and recency reads as a correction exactly as often as it is a second speaker. `no —` remains
+  reachable and is pinned: retract the positive and the negative stands alone.
 
-**Fix.** Extend the negative-fact family to `rdfs:subClassOf`, so `john is not a man` stores a
-sourced negative and `is john a man` answers `no — you told me…`. Keep an explicit retraction verb
-(`forget that john is a man`) for the retract intent. **Do not leave a bare negative mapping to
-retract** — that is the surprise.
+**The gate that keeps the property decline intact.** `RETRACT_NOT_A_RE`'s shape also matches a
+negated *property* claim ("the logger is not deprecated"), so the negative only stores where a
+stored `subject⊑object` exists to disagree with. Without a positive, the sentence falls through
+exactly as before. `inference-retraction-negated-property-claim-keeps-its-decline` proves it.
 
-**Pins.** `inference.jsonl` keyed `inference.negative-teach.subclass`, mirroring
-`inference.capability.negative-teach`'s shape.
+**Landed:** `NEG_SUBCLASS_PREDICATE` + stated twin map (`memory/capability.mjs`); the negation/
+retraction split, `isaPolarityReply` shared by both is-a readers, and `indefiniteArticleFor`
+(`chat.mjs`). **Pins:** 3 rows keyed `inference.negative-teach.subclass`, 2 unit tests on the
+stated twin. 581 corpus rows green.
+
+**Found on the way past, for Phase 10:** the `mgxneg:` prefix is declared **nowhere** in
+`ontology/tmct-core.ttl` — not even the shipped `mgxneg:capableOf`. The whole negative-polarity
+vocabulary is undeclared, so declaring one term now would be a partial job. Phase 10 owns it.
+
+**Still open from this item:** `zeus is not mortal` (an unknown subject) remains a silent no-op —
+the gate above deliberately leaves it falling through, because nothing distinguishes it from the
+property-claim shape without a stored fact to anchor on.
 
 ### 3.2 Quantifiers parse when teaching but not when asking
 

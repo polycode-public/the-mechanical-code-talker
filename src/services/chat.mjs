@@ -28,8 +28,9 @@ import { loadTemplates, render as renderTemplate } from "../adapters/corpus/temp
 import { rankByBiasThenTrust } from "../domain/memory/bias.mjs";
 import { HAS_A_PREDICATE, loadMemory as loadMemoryStore, normFactPredicate, normFactTerm as normFactTermStatic, readFactRows as readStoredFactRows, readRuleRows as readStoredRuleRows } from "../adapters/memory/core.mjs";
 import {
-  CAPABILITY_REPORT_CAP, NEG_CAPABLE_OF_PREDICATE, capabilityBaseRate, capabilityExtension,
-  isNegatedPredicate, negatedPredicate, positivePredicate, resolveCapabilityPolarity,
+  CAPABILITY_REPORT_CAP, NEG_CAPABLE_OF_PREDICATE, NEG_SUBCLASS_PREDICATE, capabilityBaseRate,
+  capabilityExtension, isNegatedPredicate, negatedPredicate, positivePredicate,
+  resolveCapabilityPolarity,
 } from "../domain/memory/capability.mjs";
 import { finish, beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentences } from "./sentences.mjs";
@@ -3152,21 +3153,21 @@ const TEACH_PRONOUN_RE = new RegExp(`^(?:every\\s+|each\\s+|all\\s+|some\\s+|a f
  *  when a teach frame offers one. */
 const isTeachPronoun = (s) => TEACH_PRONOUNS.includes(String(s || "").trim().toLowerCase());
 
-/** RETRACTION / NEGATION of an already-taught subClassOf fact: "X is not a Y"
- *  (tolerating the same "kind/type of" infix every other teach shape in this
- *  lane already tolerates — the "is/are" variant, plus the "isn't"/"aren't"
- *  contractions). Deliberately narrow — the SAFEST, most unambiguous negation
- *  phrasing only, matching a scoped 2-token subject (mirrors
- *  UNKNOWN_SUBJECT_RE's own subject width), never a general negation grammar.
- *  See the RETRACTION block's own comment in teachLane (below) for why a
- *  regex match here is only a TRIGGER, never itself proof a fact existed to
- *  retract — retractSubClassOf (src/domain/syllogise.mjs) is the actual authority. */
+/** NEGATION of a subClassOf fact: "X is not a Y" (tolerating the same
+ *  "kind/type of" infix every other teach shape in this lane already tolerates
+ *  — the "is/are" variant, plus the "isn't"/"aren't" contractions).
+ *  Deliberately narrow — the SAFEST, most unambiguous negation phrasing only,
+ *  matching a scoped 2-token subject (mirrors UNKNOWN_SUBJECT_RE's own subject
+ *  width), never a general negation grammar. A match is only a TRIGGER: the
+ *  shape also fits a negated PROPERTY claim ("the logger is not deprecated"),
+ *  so the stored subject⊑object fact is what decides whether there is a
+ *  disagreement to record. */
 const RETRACT_NOT_A_RE = /^(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:(?:is|are)\s+not|isn't|aren't)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)$/i;
-/** "forget (that) X is a Y" — the second closed retraction phrasing. Never
- *  wrapped by TEACH_RE ("forget" isn't one of its
- *  recognized lead verbs — remember/note/keep in mind/…), so this is matched
- *  against the RAW (unwrapped) sentence, unlike RETRACT_NOT_A_RE above which
- *  is tried against the remember-wrapped surface too. */
+/** "forget (that) X is a Y" — the ONLY phrasing that retracts. Never wrapped
+ *  by TEACH_RE ("forget" isn't one of its recognized lead verbs —
+ *  remember/note/keep in mind/…), so this is matched against the RAW
+ *  (unwrapped) sentence, unlike RETRACT_NOT_A_RE above which is tried against
+ *  the remember-wrapped surface too. */
 const RETRACT_FORGET_RE = /^forget\s+(?:that\s+)?(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)$/i;
 
 async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null }) {
@@ -3347,31 +3348,13 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     };
   }
 
-  // RETRACTION — "X is not a Y" / "forget that X is a Y": wires the
-  // data-layer retraction primitive (retractSubClassOf, src/domain/syllogise.mjs) up
-  // to chat-level phrasing. Tried here, right after the pronoun guard, so a
-  // pronoun subject ("it is not an animal") still falls to that
-  // guard's own decline first (TEACH_PRONOUN_RE matches ANY verb after the
-  // pronoun, including "is not"), never reaching this block.
-  //
-  // TRIGGER, never itself the authority: RETRACT_NOT_A_RE/RETRACT_FORGET_RE
-  // only recognize the SHAPE of a negation/retraction sentence — they say
-  // nothing about whether subject⊑object was ever actually taught.
-  // retractSubClassOf is asked for real and is the only thing that decides:
-  //   - found:true  → a real stored (or entailed) fact existed and was
-  //     retracted (with its dependency-directed cascade) — confirmed here.
-  //   - found:false → subject⊑object was never a stored fact. This is left
-  //     to FALL THROUGH to the rest of teachLane's ordinary cascade below,
-  //     deliberately NOT answered with a bespoke "nothing to forget" message
-  //     — RETRACT_NOT_A_RE's shape also incidentally matches a NEGATED
-  //     PROPERTY claim ("the logger is not deprecated" — never subClassOf-
-  //     shaped at all, a pinned "genuine ceiling" case elsewhere in this
-  //     codebase, test/chatflow-tier5.test.mjs, that must keep its own
-  //     "I couldn't store that —" decline verbatim), so a bare "nothing
-  //     found" here must never claim a specific, possibly-wrong reason —
-  //     falling through preserves whatever honest response that OTHER shape
-  //     already gets, byte-identical, while still fully closing the real gap
-  //     (an already-taught fact's retraction, which now always succeeds).
+  // NEGATION ("X is not a Y") and RETRACTION ("forget that X is a Y"). Two
+  // sentences, two intents, and the split is the point: a negative is a source
+  // DISAGREEING, never an instruction to destroy. Each branch documents itself
+  // below; both are tried here, right after the pronoun guard, so a pronoun
+  // subject ("it is not an animal") still falls to that guard's own decline
+  // first (TEACH_PRONOUN_RE matches ANY verb after the pronoun, including
+  // "is not"), never reaching this block.
   const retractSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
   const retractSrcMidQuestion = memoryDir && !QUESTION_LEAD_RE.test(retractSrc)
     ? await hasMidSentenceInterrogative(retractSrc) : false;
@@ -3384,22 +3367,76 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (retractMatch) {
     const retractSubject = retractMatch[1].trim();
     const retractObject = retractMatch[2].trim();
-    const { retractSubClassOf } = await import("../domain/syllogise.mjs");
-    const { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts } = await import("../adapters/memory/core.mjs");
-    const result = await retractSubClassOf(memoryDir, retractSubject, retractObject, {
-      store: { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts },
-    });
-    if (result.found) {
-      const extra = result.count - 1; // beyond the target fact itself
-      return {
-        text: `noted — forgotten: "${retractSubject} is a kind of ${retractObject}" is no longer stored`
-          + (extra > 0 ? ` (${extra} entailed fact${extra === 1 ? "" : "s"} that depended on it went too)` : "")
-          + (result.truncated ? " — this cascade may not be complete (a lot depended on it); ask again if something still looks stale" : "")
-          + ".",
-        via: "retract", miss: false,
-      };
+
+    // A BARE NEGATIVE IS A CLAIM, NOT AN INSTRUCTION TO DELETE. "john is not a
+    // man" disagrees with a stored fact; it does not ask for it to be
+    // destroyed, and destroying it loses the very disagreement the user came
+    // to record. Both polarities are stored under their own predicate
+    // (memory/capability.mjs: a fact id hashes (subject, predicate, object), so
+    // sharing one predicate would merge them and union their statedBy edges),
+    // and the ask ladder reports the disagreement rather than picking a side.
+    // Only the explicit "forget that X is a Y" verb retracts — see below.
+    //
+    // GATED ON THE POSITIVE EXISTING, and that gate is load-bearing:
+    // RETRACT_NOT_A_RE's shape also incidentally matches a negated PROPERTY
+    // claim ("the logger is not deprecated"), which is never subClassOf-shaped
+    // at all and keeps its own decline verbatim. With no stored subject⊑object
+    // to disagree with, there is nothing here to record, so the sentence falls
+    // through to the ordinary cascade exactly as it always has.
+    if (retractNotMatch) {
+      const { SUBCLASS_PREDICATE } = await import("../domain/syllogise.mjs");
+      const { loadMemory: loadMemForNeg, normFactTerm: normTermForNeg, readFactRows: readRowsForNeg } = await import("../adapters/memory/core.mjs");
+      const negSubject = normTermForNeg(retractSubject);
+      const negObject = normTermForNeg(retractObject);
+      const priorRows = readRowsForNeg(await loadMemForNeg(memoryDir));
+      const positive = priorRows.find((r) => r.subject === negSubject && r.predicate === SUBCLASS_PREDICATE && r.object === negObject);
+      if (positive) {
+        const stored = await teachFact(memoryDir, sessionId, {
+          subject: retractSubject, predicate: NEG_SUBCLASS_PREDICATE, object: retractObject,
+        });
+        if (stored) {
+          return {
+            ...stored,
+            text: `${stored.text} — you told me earlier that ${negSubject} is a kind of ${negObject}, so both are now stored `
+              + `and I'll report the disagreement rather than pick one. `
+              + `To drop the earlier fact instead, say "forget that ${negSubject} is ${indefiniteArticleFor(negObject)} ${negObject}".`,
+          };
+        }
+      }
+      // nothing stored to disagree with — fall through (see the gate above).
     }
-    // found:false — fall through to the rest of the cascade (see docblock above).
+
+    // RETRACTION — "forget that X is a Y": wires the data-layer retraction
+    // primitive (retractSubClassOf, src/domain/syllogise.mjs) up to chat-level
+    // phrasing.
+    //
+    // TRIGGER, never itself the authority: RETRACT_FORGET_RE only recognizes
+    // the SHAPE of a retraction sentence — it says nothing about whether
+    // subject⊑object was ever actually taught. retractSubClassOf is asked for
+    // real and is the only thing that decides:
+    //   - found:true  → a real stored (or entailed) fact existed and was
+    //     retracted (with its dependency-directed cascade) — confirmed here.
+    //   - found:false → subject⊑object was never a stored fact, and this falls
+    //     through to the rest of teachLane's ordinary cascade below rather than
+    //     claiming a specific, possibly-wrong reason.
+    if (retractForgetMatch) {
+      const { retractSubClassOf } = await import("../domain/syllogise.mjs");
+      const { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts } = await import("../adapters/memory/core.mjs");
+      const result = await retractSubClassOf(memoryDir, retractSubject, retractObject, {
+        store: { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts },
+      });
+      if (result.found) {
+        const extra = result.count - 1; // beyond the target fact itself
+        return {
+          text: `noted — forgotten: "${retractSubject} is a kind of ${retractObject}" is no longer stored`
+            + (extra > 0 ? ` (${extra} entailed fact${extra === 1 ? "" : "s"} that depended on it went too)` : "")
+            + (result.truncated ? " — this cascade may not be complete (a lot depended on it); ask again if something still looks stale" : "")
+            + ".",
+          via: "retract", miss: false,
+        };
+      }
+      // found:false — fall through to the rest of the cascade (see docblock above).
+    }
   }
 
   // OWNERSHIP — "<Name> owns/maintains <X>", bare or remember-wrapped. The bare
@@ -4722,6 +4759,7 @@ async function recallFromBlocks(memoryDir, query, graph) {
  *  predicate renders verbatim rather than being guessed around. */
 const FACT_PREDICATE_PHRASES = {
   "rdfs:subClassOf": "is a kind of",
+  "mgxneg:subClassOf": "is not a kind of",
   "rdf:type": "is a",
   "owl:disjointWith": "is not a",
   "mgx:partOf": "is part of",
@@ -4889,6 +4927,40 @@ function renderFactLine(f) {
   // to its source, never "i learned: …" (a first-person claim over corpus data).
   if (f.provenance.includes("corpus:")) return `${factPhrase(f)}${cite}`;
   return `i learned: ${factPhrase(f)}${cite}`;
+}
+
+/** "a"/"an" for a term, through the SAME grammar-rules.toml "article" rule and
+ *  finish.mjs's beginsWithVowelSound every other agreement site in this file
+ *  uses — never a hardcoded "a", which is ungrammatical for a vowel-initial
+ *  term ("forget that task is a animal"). */
+function indefiniteArticleFor(term) {
+  const articleRule = grammarRules().find((r) => r.kind === "article");
+  return articleRule && beginsWithVowelSound(String(term || ""), articleRule) ? "an" : "a";
+}
+
+/** The verdict on an is-a question, given the best stored fact of each
+ *  polarity. Null when neither is stored, so a caller's own honest miss stands
+ *  — an absent positive is never a "no".
+ *
+ *  BOTH POLARITIES STORED names both sources and picks NOTHING, which is the
+ *  "both" verdict memory/capability.mjs already defines for the capability
+ *  family. Preferring either one would rank a tie-break the reader can't see
+ *  above what they actually said; recency in particular looks like a
+ *  correction and is just as often a second speaker.
+ *
+ *  Shared by the two is-a readers (the memory-facts lane and the full ladder),
+ *  so a disagreement reads identically whichever one answers. */
+function isaPolarityReply(hit, negHit) {
+  if (hit && negHit) {
+    return {
+      text: `you've told me both, and I won't pick between them — ${renderFactLine(hit)}; ${renderFactLine(negHit)}. `
+        + `To settle it, say "forget that ${hit.subject} is ${indefiniteArticleFor(hit.object)} ${hit.object}".`,
+      replace: true,
+    };
+  }
+  if (negHit) return { text: `no — ${renderFactLine(negHit)}`, replace: true };
+  if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+  return null;
 }
 
 /** PROOF-CHAIN RECEIPT — "renderable as a chain of thought in words": render
@@ -5928,11 +6000,15 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   if (isa) {
     const subj = factTermVariants(normFactTerm, isa[1]);
     const obj = factTermVariants(normFactTerm, isa[2]);
-    const hit = (await memoryFacts(memoryDir)).find(
-      (f) => ISA_PREDICATES.has(f.predicate) && subj.has(f.subject) && obj.has(f.object),
+    const isaRows = await memoryFacts(memoryDir);
+    const onTerms = (f) => subj.has(f.subject) && obj.has(f.object);
+    // A remembered NEGATIVE is read on the same terms as the positive — it
+    // carries its own predicate and so never reaches ISA_PREDICATES.
+    const reply = isaPolarityReply(
+      isaRows.find((f) => ISA_PREDICATES.has(f.predicate) && onTerms(f)),
+      isaRows.find((f) => f.predicate === NEG_SUBCLASS_PREDICATE && onTerms(f)),
     );
-    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
-    return null; // no remembered fact — the honest miss stands (never a guessed "no")
+    return reply; // no remembered fact — null, so the honest miss stands (never a guessed "no")
   }
 
   // (b2) "can a dog bark" — the polarity of a capability, resolved through the
@@ -7059,7 +7135,14 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const hit = isa
       .filter((f) => subjCandidates.has(f.subject) && objVariants.has(f.object))
       .sort(byTrust)[0];
-    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    // A STORED NEGATIVE ("john is not a man") is a source disagreeing, so it is
+    // read on the same terms as the positive rather than losing to it by
+    // default. It carries its own predicate and so never reaches `isa`.
+    const negHit = rows
+      .filter((f) => f.predicate === NEG_SUBCLASS_PREDICATE && subjCandidates.has(f.subject) && objVariants.has(f.object))
+      .sort(byTrust)[0];
+    const polarityReply = isaPolarityReply(hit, negHit);
+    if (polarityReply) return polarityReply;
     // CLASS↔INSTANCE BRIDGE: when X resolves to a graph entity, its
     // inherits chain's superclass LABELS are subject candidates too — a taught
     // "controller ⊑ handler" composes with a graph "TaskController inherits

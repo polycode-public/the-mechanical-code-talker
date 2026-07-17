@@ -6,8 +6,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  CAPABILITY_REPORT_CAP, NEG_CAPABLE_OF_PREDICATE, capabilityBaseRate, capabilityExtension,
-  isNegatedPredicate, negatedPredicate, positivePredicate, resolveCapabilityPolarity,
+  CAPABILITY_REPORT_CAP, NEG_CAPABLE_OF_PREDICATE, NEG_SUBCLASS_PREDICATE, capabilityBaseRate,
+  capabilityExtension, isNegatedPredicate, negatedPredicate, positivePredicate,
+  resolveCapabilityPolarity,
 } from "../../src/domain/memory/capability.mjs";
 
 const can = (subject, object, extra = {}) => ({ subject, predicate: "mgx:capableOf", object, provenance: "teach:chat:s1", trust: 0.95, ...extra });
@@ -21,6 +22,20 @@ test("polarity lives in the predicate, under its own prefix", () => {
   assert.equal(positivePredicate("mgx:capableOf"), null);
   assert.ok(isNegatedPredicate("mgxneg:eat"));
   assert.ok(!isNegatedPredicate("mgx:eat"));
+});
+
+test("a predicate outside the mgx: namespace negates through its stated twin", () => {
+  // rdfs:subClassOf's negative cannot be minted by prefix swap — the positive
+  // is RDFS's term, only the polarity is tmct's — so the pair is stated, and
+  // the inverse must not read it back as the non-existent "mgx:subClassOf".
+  assert.equal(negatedPredicate("rdfs:subClassOf"), NEG_SUBCLASS_PREDICATE);
+  assert.equal(positivePredicate(NEG_SUBCLASS_PREDICATE), "rdfs:subClassOf");
+  assert.ok(isNegatedPredicate(NEG_SUBCLASS_PREDICATE));
+});
+
+test("a predicate with no negative twin at all returns unchanged", () => {
+  assert.equal(negatedPredicate("rdf:type"), "rdf:type");
+  assert.equal(positivePredicate("rdf:type"), null);
 });
 
 test("a folded prepositional predicate keeps its preposition through the swap", () => {
