@@ -1080,6 +1080,101 @@
     }
   });
 
+  // src/domain/text-stats.mjs
+  function idfWeight(N, df) {
+    return Math.log(1 + N / (1 + df));
+  }
+  var init_text_stats = __esm({
+    "src/domain/text-stats.mjs"() {
+    }
+  });
+
+  // src/domain/planning.mjs
+  var planning_exports = {};
+  __export(planning_exports, {
+    bfsLevels: () => bfsLevels,
+    findActionPath: () => findActionPath,
+    findReachableSet: () => findReachableSet
+  });
+  function defaultStateKey(state) {
+    if (state && typeof state === "object") return JSON.stringify(state);
+    return String(state);
+  }
+  function seedFrontier(startState, applyActions) {
+    const frontier = [];
+    for (const { action, nextState } of applyActions(startState) || []) {
+      frontier.push({ state: nextState, actions: [action], states: [startState, nextState] });
+    }
+    return frontier;
+  }
+  function findActionPath(startState, isGoal, applyActions, { maxDepth = 50, stateKey = defaultStateKey } = {}) {
+    if (isGoal(startState)) return { actions: [], states: [startState] };
+    let frontier = seedFrontier(startState, applyActions);
+    const seen = /* @__PURE__ */ new Set([stateKey(startState)]);
+    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
+      for (const entry of frontier) if (isGoal(entry.state)) return { actions: entry.actions, states: entry.states };
+      if (depth === maxDepth) break;
+      const next = [];
+      for (const entry of frontier) {
+        const key = stateKey(entry.state);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        for (const { action, nextState } of applyActions(entry.state) || []) {
+          const nk = stateKey(nextState);
+          if (seen.has(nk)) continue;
+          next.push({ state: nextState, actions: [...entry.actions, action], states: [...entry.states, nextState] });
+        }
+      }
+      frontier = next;
+    }
+    return null;
+  }
+  function findReachableSet(startState, applyActions, { maxDepth = 50, stateKey = defaultStateKey } = {}) {
+    let frontier = seedFrontier(startState, applyActions);
+    const seen = /* @__PURE__ */ new Set([stateKey(startState)]);
+    const results = [];
+    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
+      const next = [];
+      for (const entry of frontier) {
+        const key = stateKey(entry.state);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        results.push({ node: entry.state, path: { actions: entry.actions, states: entry.states } });
+        if (depth === maxDepth) continue;
+        for (const { action, nextState } of applyActions(entry.state) || []) {
+          const nk = stateKey(nextState);
+          if (seen.has(nk)) continue;
+          next.push({ state: nextState, actions: [...entry.actions, action], states: [...entry.states, nextState] });
+        }
+      }
+      frontier = next;
+    }
+    return results;
+  }
+  function* bfsLevels(start, successorsOf, { maxDepth = 8, keyOf = (x) => x } = {}) {
+    const visited = /* @__PURE__ */ new Set([start]);
+    let frontier = [start];
+    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
+      const level = [];
+      const nextFrontier = [];
+      for (const id of frontier) {
+        for (const item of successorsOf(id) || []) {
+          const key = keyOf(item);
+          if (visited.has(key)) continue;
+          visited.add(key);
+          level.push(item);
+          nextFrontier.push(key);
+        }
+      }
+      frontier = nextFrontier;
+      yield level;
+    }
+  }
+  var init_planning = __esm({
+    "src/domain/planning.mjs"() {
+    }
+  });
+
   // src/domain/codegraph.mjs
   function parseEntities(payload) {
     const individuals = Array.isArray(payload?.individuals) ? payload.individuals : [];
@@ -1260,24 +1355,10 @@
       }
     }
     const levels = [];
-    const visited = /* @__PURE__ */ new Set([ind.id]);
-    let frontier = [ind.id];
-    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
-      const next = [];
-      const level = [];
-      for (const id of frontier) {
-        for (const dep of dependents.get(id) || []) {
-          if (visited.has(dep.id)) continue;
-          visited.add(dep.id);
-          level.push({ ...dep, tests: coveredBy.get(dep.id) || [] });
-          next.push(dep.id);
-        }
-      }
-      if (level.length) {
-        level.sort((a, b) => String(a.label).localeCompare(String(b.label)));
-        levels.push(level);
-      }
-      frontier = next;
+    for (const level of bfsLevels(ind.id, (id) => dependents.get(id) || [], { maxDepth, keyOf: (dep) => dep.id })) {
+      if (!level.length) continue;
+      const withTests = level.map((dep) => ({ ...dep, tests: coveredBy.get(dep.id) || [] })).sort((a, b) => String(a.label).localeCompare(String(b.label)));
+      levels.push(withTests);
     }
     return levels;
   }
@@ -1513,12 +1594,16 @@
     }
     const N = modules.length || 1;
     const idf = /* @__PURE__ */ new Map();
-    for (const t of tokens) {
-      if (idf.has(t)) continue;
+    const documentFrequencyOf = (t) => {
       let df = 0;
       for (const m of modules) if (m.labelLc.includes(t) || m.symComps.has(t) || m.symSet.has(t)) df++;
-      idf.set(t, Math.log(1 + N / (1 + df)));
-    }
+      return df;
+    };
+    const idfOf = (t) => {
+      if (!idf.has(t)) idf.set(t, idfWeight(N, documentFrequencyOf(t)));
+      return idf.get(t);
+    };
+    for (const t of tokens) idfOf(t);
     const scored = [];
     for (const m of modules) {
       let exactScore = 0, pathScore = 0, matchCount = 0;
@@ -1558,14 +1643,6 @@
           if (!continues(rawLc[i - 1]) && !continues(rawLc[i + cand.length])) return true;
         }
         return false;
-      };
-      const idfOf = (t) => {
-        if (!idf.has(t)) {
-          let df = 0;
-          for (const m of modules) if (m.labelLc.includes(t) || m.symComps.has(t) || m.symSet.has(t)) df++;
-          idf.set(t, Math.log(1 + N / (1 + df)));
-        }
-        return idf.get(t);
       };
       const byModId = new Map(modules.map((m) => [m.ind.id, m]));
       let maxBase = 0;
@@ -1931,25 +2008,10 @@
     }
     const lines = [`${ind.label} \u2014 ${classHeading(ind.class)} (id: ${ind.id})`];
     lines.push(bases.length ? `extends: ${capJoin(bases, SUBCLASS_CAP)}` : "extends: (no internal/recorded base classes)");
-    const visited = /* @__PURE__ */ new Set([ind.id]);
     const levels = [];
-    let frontier = [ind.id];
-    for (let depth = 1; depth <= 8 && frontier.length; depth += 1) {
-      const next = [];
-      const level = [];
-      for (const id of frontier) {
-        for (const c of childrenOf.get(id) || []) {
-          if (visited.has(c.id)) continue;
-          visited.add(c.id);
-          level.push(c.label);
-          next.push(c.id);
-        }
-      }
-      if (level.length) {
-        level.sort((a, b) => String(a).localeCompare(String(b)));
-        levels.push(level);
-      }
-      frontier = next;
+    for (const level of bfsLevels(ind.id, (id) => childrenOf.get(id) || [], { maxDepth: 8, keyOf: (c) => c.id })) {
+      if (!level.length) continue;
+      levels.push(level.map((c) => c.label).sort((a, b) => String(a).localeCompare(String(b))));
     }
     const total = levels.reduce((n, l) => n + l.length, 0);
     if (!total) {
@@ -2488,6 +2550,8 @@ ${shown.join("\n")}${tail}`;
       init_prose();
       init_trust();
       init_module_paths();
+      init_text_stats();
+      init_planning();
       PROP_KIND = {
         // v2.0 faithful tokens (SEON-faithful realign)
         "mgx:importsnamespace": "imports",
@@ -20871,72 +20935,6 @@ ${codeblock}`, options);
   var init_prose_nlp = __esm({
     "src/adapters/prose-nlp.mjs"() {
       init_wink_model();
-    }
-  });
-
-  // src/domain/planning.mjs
-  var planning_exports = {};
-  __export(planning_exports, {
-    findActionPath: () => findActionPath,
-    findReachableSet: () => findReachableSet
-  });
-  function defaultStateKey(state) {
-    if (state && typeof state === "object") return JSON.stringify(state);
-    return String(state);
-  }
-  function seedFrontier(startState, applyActions) {
-    const frontier = [];
-    for (const { action, nextState } of applyActions(startState) || []) {
-      frontier.push({ state: nextState, actions: [action], states: [startState, nextState] });
-    }
-    return frontier;
-  }
-  function findActionPath(startState, isGoal, applyActions, { maxDepth = 50, stateKey = defaultStateKey } = {}) {
-    if (isGoal(startState)) return { actions: [], states: [startState] };
-    let frontier = seedFrontier(startState, applyActions);
-    const seen = /* @__PURE__ */ new Set([stateKey(startState)]);
-    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
-      for (const entry of frontier) if (isGoal(entry.state)) return { actions: entry.actions, states: entry.states };
-      if (depth === maxDepth) break;
-      const next = [];
-      for (const entry of frontier) {
-        const key = stateKey(entry.state);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        for (const { action, nextState } of applyActions(entry.state) || []) {
-          const nk = stateKey(nextState);
-          if (seen.has(nk)) continue;
-          next.push({ state: nextState, actions: [...entry.actions, action], states: [...entry.states, nextState] });
-        }
-      }
-      frontier = next;
-    }
-    return null;
-  }
-  function findReachableSet(startState, applyActions, { maxDepth = 50, stateKey = defaultStateKey } = {}) {
-    let frontier = seedFrontier(startState, applyActions);
-    const seen = /* @__PURE__ */ new Set([stateKey(startState)]);
-    const results = [];
-    for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
-      const next = [];
-      for (const entry of frontier) {
-        const key = stateKey(entry.state);
-        if (seen.has(key)) continue;
-        seen.add(key);
-        results.push({ node: entry.state, path: { actions: entry.actions, states: entry.states } });
-        if (depth === maxDepth) continue;
-        for (const { action, nextState } of applyActions(entry.state) || []) {
-          const nk = stateKey(nextState);
-          if (seen.has(nk)) continue;
-          next.push({ state: nextState, actions: [...entry.actions, action], states: [...entry.states, nextState] });
-        }
-      }
-      frontier = next;
-    }
-    return results;
-  }
-  var init_planning = __esm({
-    "src/domain/planning.mjs"() {
     }
   });
 
