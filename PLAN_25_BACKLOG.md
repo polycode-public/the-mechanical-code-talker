@@ -147,16 +147,23 @@ in src/handlers/tasks.mjs there is function createTask().
 
 Two surfaces contradict each other about the same function.
 
-**Verified fix site.** The impact closure (`tmct_impact`, `src/tools/handlers/tmct-impact.mjs`, the
-transitive reverse closure over imports/calls edges) does not follow the same function inbound-call
-edge that `what calls saveStore` resolves. `what calls X` reaches the `callsSymbol`/function-level
-inbound edge; the impact closure walks module- and function-level `imports`/`calls` but misses the
-function inbound-call edge for a symbol like `saveStore`. The two must agree.
+**Verified fix site — and the report's diagnosis is imprecise.** The handler
+`src/tools/handlers/tmct-impact.mjs` is a three-line wrapper; the closure lives in `impactClosure`
+(`src/domain/codegraph.mjs:344`) and the render in `renderImpact` (`:389`). `impactClosure` already
+folds in the `callsSymbol` reverse (`codegraph.mjs:358`) — so the edge is not missing. The real gap
+is a **grain mismatch**: the `callsSymbol` branch coarsens *both* ends to module level and keys each
+dependent under the caller's/callee's **module id** (`moduleIdOfId`), but an impact query resolves
+`saveStore` to a **symbol id** (`fn:src/core/store.mjs#saveStore`) and the BFS seeds from that symbol
+id, so `dependents.get(symbolId)` is empty. Reproduced in-process over `examples/mini-webapp`: the
+edge `createTask → saveStore` (callsSymbol) exists, yet `renderImpact` returns "no dependents found".
 
-**Build.** In `tmct_impact`, extend the reverse closure to include the same function inbound-call
-edge `what calls X` uses (the `callsSymbol` reverse), so a function with callers is never reported as
-having no dependents. Verify the fix against the reproducer: after it, `what would break if I change
-saveStore` must name `createTask`.
+**Build.** In `impactClosure`, close the grain mismatch: when the seed `ind` is a symbol, either seed
+the BFS from its module id, or additionally key the `callsSymbol` dependent under the callee's symbol
+id so a symbol-resolved subject matches. Because the branch coarsens to module level, the recovered
+dependent is the caller's **module** (`src/handlers/tasks.mjs`), not the function `createTask`;
+reporting the function too would need the closure to keep symbol grain, a larger change — do it only
+if it stays small, else name it. Verify against the reproducer: after the fix, `what would break if I
+change saveStore` must name `src/handlers/tasks.mjs`, never "no dependents found".
 
 ### 2.4 Impact paraphrases fall to the touches misparser or the grammar wall (F12)
 
@@ -181,8 +188,9 @@ fallback. This is one recogniser shared with 2.1 and 2.2 — build it once as th
 
 **Tests / pins for §2.** These are all tool-reachable (`tmct_impact` serves the closure), so pin at
 the tool layer where possible:
-- `test/tools/` driving `tmct_impact` for `saveStore`: it names `createTask` (2.3), with a negative
-  asserting the answer is not "no dependents found".
+- `test/tools/` driving `tmct_impact` for `saveStore`: it names the caller's module
+  `src/handlers/tasks.mjs` (2.3; `createTask` too only if the closure is taught symbol grain), with a
+  negative asserting the answer is not "no dependents found".
 - `grammar.jsonl` keyed `grammar.routing.impact-intent`: `blast radius of X`, `impact of X`, and each
   2.4 paraphrase route to the impact closure; a negative row that `blast radius of X` is **not**
   remembered (memory unchanged after the turn) and that `impact of X` never answers as `import of X`.
@@ -197,8 +205,14 @@ closure. Move `CAPABILITIES_2.5.0.md`'s impact row to reflect the widened surfac
 
 ## 3. Members-of and result-type parse gaps (F5, F6, F7) — a code question answers a misleading "none"
 
-Three confident-wrong findings that share `ask.mjs`'s `parseQuery` as their fix site: a real code
-question compiles to the wrong AST and answers "none", which reads as "it has none".
+Three confident-wrong findings that share the query-compilation path as their fix site: a real code
+question compiles to the wrong AST and answers "none", which reads as "it has none". `parseQuery`
+(`ask.mjs:160`) is a two-line wrapper over `parseQueryFull` (`ask.mjs:167`), which runs the strategy
+pipeline (`runStrategiesSync`, `src/domain/interpret/pipeline.mjs:48`; `mergeStrategyResults`,
+`src/domain/interpret/merge.mjs:53`) over the keyword/grammar strategies
+(`src/domain/interpret/strategies/`). The shape each finding names is compiled there against the
+closed vocabulary in `src/domain/ask-vocab.mjs`, then executed and rendered in `ask.mjs`. Cite the
+strategy or the answer branch, not the wrapper.
 
 ### 3.1 `what functions are in X` reads `contains`, not `defines` (F5)
 
@@ -211,15 +225,19 @@ tmct> what functions does store.mjs define
 loadStore and saveStore.
 ```
 
-**Verified fix site.** `parseQuery` (`ask.mjs:136`) compiles `functions are in X` / `X contain` /
-`methods of X` to `forward(contains, X)` (narrate: `shape=forward kind=contains object="store.mjs"`).
+**Verified fix site.** The keyword strategy compiles `functions are in X` / `X contain` / `methods
+of X` to `forward(contains, X)` off the `contains` verb set and the `methods`/`members` entries in
+`src/domain/ask-vocab.mjs` (`ask-vocab.mjs:86-90`, `:547-548`) — reproduced in-process:
+`parseQuery("what functions are in store.mjs")` → `{shape:forward, kind:contains, object:"store.mjs"}`.
 The index carries the members on `defines` scoped to Function/Method, not on `contains`.
-`SKILL_CAPABILITIES_AUDIT.md` §1 names this equivalence.
+`SKILL_CAPABILITIES_AUDIT.md` §1 names this equivalence, and `ask-vocab.mjs` already declares
+`MEMBERSHIP_KINDS = ["contains", "defines"]` (`ask-vocab.mjs:582`) for exactly this both-tried case.
 
-**Build.** In `parseQuery`, map the members-of-X shapes (`what functions are in X`, `what does X
-contain`, `methods of X`) to `forward(defines, entityType=Function/Method, X)`. The safest form is a
-fall-through: when a `contains` traversal finds no edges, consult `defines` scoped to the named grain
-before reporting "none", so the two never disagree.
+**Build.** The cleanest form is a fall-through at the answer branch, not a parse rewrite: the forward
+no-match branch (`ask.mjs:3540-3546`, `${objMatch.label} has no ${verbFor(parsed.kind)} edges in the
+index.`) is where the misleading "none" is rendered. Before reporting it, when a `contains` traversal
+finds no edges, consult `defines` scoped to the named grain (reuse `MEMBERSHIP_KINDS`), so the two
+never disagree.
 
 ### 3.2 `what uses the Store class` narrows the result type by "class" (F6)
 
@@ -230,14 +248,16 @@ tmct> what uses the Store class
 No classes found whose module directly uses Store.
 ```
 
-**Verified fix site.** `parseQuery` reads "class" as the **result-type** filter
-(`reverse(uses, entityType=Class, "Store")`, per narrate) — so it looks for classes that use Store,
-when "class" describes the **subject** Store, not the answer type.
+**Verified fix site.** The strategy that assigns `entityType` reads "class" as the **result-type**
+filter — reproduced: `parseQuery("what uses the Store class")` → `{shape:reverse, entityType:"Class",
+kind:"uses", object:"Store"}`. So it looks for classes that use Store, when "class" describes the
+**subject** Store, not the answer type. The `entityType` assignment lives in the keyword/grammar
+strategy (`src/domain/interpret/strategies/`), not in the `parseQuery` wrapper.
 
-**Build.** In `parseQuery`, when a type word (`the Store class`, `the X function`) trails or leads a
-named entity, treat it as describing the subject's grain, not the result filter. The result type
-stays open (modules/functions that use Store), and the type word only disambiguates which "Store" is
-meant.
+**Build.** In the strategy that sets `entityType`, when a type word (`the Store class`, `the X
+function`) trails or leads a named entity, treat it as describing the subject's grain, not the result
+filter. The result type stays open (modules/functions that use Store), and the type word only
+disambiguates which "Store" is meant.
 
 ### 3.3 `which modules have no tests` parses "no tests" as a literal object (F7)
 
@@ -248,13 +268,15 @@ tmct> which modules have no tests
 No modules found whose module directly defines no tests.
 ```
 
-**Verified fix site.** `parseQuery` compiles this to `reverse(defines, entityType=Module, "no
-tests")` and even fuzzy-resolves "no tests" to a commit via the prose tier (narrate: `resolved object
-"no tests" -> 0a1b2c3d4e5f (commit:…)`). The negation is read as a literal object.
+**Verified fix site.** The strategy compiles this to `reverse(defines, entityType=Module, "no
+tests")` — reproduced: `parseQuery("which modules have no tests")` → `{shape:reverse,
+entityType:"Module", kind:"defines", object:"no tests"}` — and resolution then fuzzy-resolves "no
+tests" to a commit via the prose tier. The negation is read as a literal object.
 
 **Build.** Recognise `which modules have no tests` / `modules with no tests` / `untested modules` as
-the coverage query `/untested` serves (`renderUntested`), routing to it before the generic
-`defines`-object parse. This is a routing fix to an existing capability.
+the coverage query the `tmct_untested` tool serves (handler `src/tools/handlers/tmct-untested.mjs`),
+routing to it ahead of the generic `defines`-object strategy. This is a routing fix to an existing
+capability.
 
 **Tests / pins for §3.** These reach the ask tool, so pin at the tool layer:
 - `test/tools/` (or `test/adapters/ask*.test.mjs`) over the `mini-webapp` fixture: `what functions
@@ -529,8 +551,11 @@ though it imports `a.mjs` directly. The output is byte-identical to 2.0.3; a sin
 draw flipped it across the hard-fail line, so this is stable behaviour surfaced by N=1 noise, not a
 cycle regression. It is still a real overstatement in the label.
 
-**Verified fix site.** The `/impact` renderer in `src/tools/handlers/tmct-impact.mjs` (the depth-level
-label for each dependent). At depth ≥ 2 the "imports it" phrasing overstates directness.
+**Verified fix site.** Not the handler (a three-line wrapper) — the per-dependent label is built in
+`renderImpact` (`src/domain/codegraph.mjs:411`, the `- ${dep.label} (${dep.via} it)` line, where
+`dep.via` is the edge predicate from the dependent to its own parent in the closure). At depth ≥ 2
+`dep.via` describes the hop to the intermediary, so "imports it" reads as importing the changed
+module directly, which it does not.
 
 **Build.** Past depth 1, phrase the reach as "reaches it via …" (naming the intermediary, or at least
 not claiming direct import). Keep the depth-1 label as is. Low urgency.
