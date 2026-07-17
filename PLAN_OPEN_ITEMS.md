@@ -1,6 +1,6 @@
 # PLAN_OPEN_ITEMS.md — close the 2.0.3 backlog
 
-**Status: IN PROGRESS at 2.4.1.** Phases 1, 2, 4, 5 and 6 are DONE. Phases 3, 7, 8, 9 and 10 are
+**Status: IN PROGRESS at 2.4.1.** Phases 1, 2, 3, 4, 5 and 6 are DONE. Phases 7, 8, 9 and 10 are
 OPEN. See "Execution status" immediately below before reading anything else — **this document's own
 fix sites and numbers proved unreliable, and the corrections are recorded there.**
 
@@ -95,7 +95,7 @@ commit that reaches `main` or a remote.
 | **4** — the instruments | **DONE** (4.1-4.5) | `6ed8f41`, `cee3ebe`, `ee6ddf3`, `a46d92a`, `7b74431` |
 | **5** — wrong documents | **DONE** | `bf6732c` |
 | PLAN_DEPS batches 1-2, 4-7 | **DONE** | `c2ded65`, `f2d7e27`, `488aa84`, `5824c66`, `2ccee08` |
-| **3** — honest-miss gaps | **IN PROGRESS** — 3.1, 3.2, 3.3, 3.5, 3.6, 3.7, 3.8, 3.9, 3.10e, 3.11 done; 3.4 didn't reproduce; **3.10a-d open** | `b1f14a0`, `7d4acc4`, `7ea0036`, `92133b0`, `1d01eab`, `7caea95`, + below |
+| **3** — honest-miss gaps | **DONE** — 3.1-3.3, 3.5-3.9, 3.10a-e, 3.11 done; 3.4 didn't reproduce. 3.10a-d closed: board reads (clearness, `what rests on X`, `where is X`) and plan follow-ups now serve the current plan/board state | `b1f14a0`, `7d4acc4`, `7ea0036`, `92133b0`, `1d01eab`, `7caea95`, `c23a2b6` |
 | **7** — public-surface audit | **DONE** — table at `docs/public-examples.md`; 3 shipping defects deleted, 61 examples pinned. Two rows left open in the table itself: 3 `dom`-tier `index.html` rows, and `docs/repository-interface.md`'s prose numbers | `c49003d`, `01f4006`, `5c45354`, `93e5297` |
 | **8** — capability page | **OPEN** — nothing started | — |
 | **9** — prose pass | **OPEN** — nothing started | — |
@@ -205,13 +205,10 @@ doc named the neighbourhood, not the cause.**
 
 Sequence for the next session, in order:
 
-1. **Phase 3 — only 3.10a-d remain.** Everything else is done; 3.4 never reproduced.
-   - **3.10d** (`is disk-1 clear?`) is the one with a shipped promise behind it: `hanoi-3.txt`
-     advertises the phrasing and clearness is never derived from the board, though
-     `what moves are legal now?` and `what rests on disk-2?` both work.
-   - **3.10a is not what the table says.** `next` DOES write board state; the gap is that facts are
-     `@stepK`-stamped, so a read-back returns every step at once (Phase 7's audit found this).
-   - 3.10b (goal-frame phrasings) and 3.10c (plan follow-ups) are untouched.
+1. ~~**Phase 3**~~ — done. 3.10a-d closed at `c23a2b6`: board reads (clearness, `what rests on X`,
+   `where is X`) and plan follow-ups (`what is the next move`, `how many moves`, `why that move`) now
+   serve the current plan/board state, and an imperative goal (`get all the disks onto peg-c`)
+   registers and solves.
 2. ~~**Phase 7**~~ — done. Two rows stay open inside `docs/public-examples.md` itself.
 3. ~~**Phase 10**~~ — **done, in both scopes.** The RDF/ontology half landed first; the operator then
    widened it to every term in the repo traced to a published standard or paper, plus a README
@@ -906,7 +903,7 @@ The ladder now measures the generator's reach, not the prover's. Three things fo
 
 - **50 of the 219 greens (23%) grade against a declared ceiling** — their expected answer is the
   honest floor. `b2ChainLenK` (30 at INF-B2, `infbench/generate-cases.mjs:419`) expects "cannot be
-  proven" for chains the kernel already derives, pending chat-layer proof materialization.
+  proven" for chains the kernel already derives, pending chat-layer proof materialisation.
   `c2Inconsistent` (20 at INF-C2, `:647`) expects the engine to answer from contradictory memory
   without noticing. Flipping either ceiling requires building the capability behind it first.
 - **No existential probe.** The ladder is green through C2 and does not see item 1.2 — a proof

@@ -39,35 +39,8 @@ three times (the 2.0.3 report durations, the 4,135ms budget reading, and this).
 carries the phase table, the operator decisions already taken, the traps this cycle hit, and the
 list of this plan's own citations that proved false. Read that before quoting any fix site.
 
-Phases 1, 2, 4, 5 and 6 closed at 2.4.1. What remains:
+Phases 1, 2, 3, 4, 5 and 6 are closed. What remains:
 
-- **Phase 3 — the honest-miss and parse gaps.** **3.1 and 3.3 are done.** 3.1: a bare negative now
-  records a disagreement instead of retracting, and only `forget that X is a Y` deletes — the
-  negative twin of `rdfs:subClassOf` had to be coined (`mgxneg:subClassOf`), since the shipped prefix
-  swap only covers `mgx:` terms. 3.3: a pronoun's referent now survives a miss, via `last.grounded`
-  — `last.answer` still records misses because the repeat-shortening walls compare through it.
-  **3.2, 3.5, 3.6 and 3.7 are done as well**, and 3.4 no longer reproduces (closed, no code change).
-  3.2/3.5/3.7 turned out to be **one defect wearing three faces: the ask path could not reach the
-  spelling the teach path stores** — a quantifier glued to the subject, and an irregular plural the
-  `-s` fold cannot recover. Both folds now live in `factTermVariants`, and `lookupNoun` (the
-  lexicon's own lemmatizer) does the work, so "bus" is safe. 3.6: bare `what else` takes its subject
-  from the standing referent, and asked cold it names what it cannot resolve.
-  **3.8, 3.9, 3.10e and 3.11 are done too.** 3.8: "i was wondering what a dog is" is one wrapper in
-  an existing family. 3.9: a module path orients however it is typed, claimed in `moduleOrientLane`
-  behind a path-shape gate — not in `ask.mjs`, where Module is absent by design.
-  **3.10e was worse than reported and is the one to read**: `data/games/hanoi-3.txt` never worked at
-  all, at 3 disks or 4. Its own board line taught two comparatives on one line, the split gate did
-  not know the comparative frame, so it stored NOTHING and disk-1 could never move. 1.1's pin covers
-  the rest-on line beside it, which is why 1.1 reads DONE. **The gate is a list of teach lanes: a
-  lane added without being added there re-opens this.** Transitivity was never involved. 3 disks now
-  solves in 7, 4 in 15, and `planning.solve.hanoi` drives the shipped file verbatim.
-  3.11: the two coverage surfaces agree on 7 — and "no row pins either count" was backwards. Four
-  `bodyEquals` assertions pinned the WRONG 9-module list, test modules included. The bug was not
-  unpinned, it was held in place.
-  **Open: 3.10a-d.** 3.10a is not what it says — `next` does write board state; the gap is that
-  facts are `@stepK`-stamped so a read-back returns every step at once (Phase 7's audit found this).
-  3.10d (`is disk-1 clear?`) is real: the shipped file advertises it and clearness is never derived
-  from the board, though `what moves are legal now?` and `what rests on disk-2?` both work.
 - **Phase 7 — every public example traces to a test.** Closed. Table at `docs/public-examples.md`,
   one row per example with the test that holds it and the tier. The site's examples now run:
   `e2e/pages-examples.test.mjs` replays the page's transcripts against the live CLI through the
@@ -90,16 +63,6 @@ Phases 1, 2, 4, 5 and 6 closed at 2.4.1. What remains:
   provenance around it are unnormalised). Plus a **README bibliography**: authoritative link, else a
   local copy where the licence permits, else a summary doc marked placeholder. `PLAN_NORMATIVE.md`
   is the record.
-- **`factIdFor` is a 32-bit hash and tmct's own corpus sizes are past its birthday bound.** Found by
-  the Phase 10 terminology review; `PLAN_NORMATIVE.md` §9.1 and §7.7 have the proof and the fix.
-  `src/domain/hash.mjs:139` content-addresses facts with FNV-1a **32-bit**. Against the fact counts
-  this file publishes: `init:large` 37,797 → **15.3%** chance of a collision, `init:xl` 72,075 →
-  **45.4%**, `init:xxl` 238,866 → **99.9%**. A real collision was brute-forced at **26,034 triples**,
-  and it is **silent data loss**: two distinct facts written, one stored, no error — the upsert path
-  turns a hash collision into a merge. `sha256Bytes` already ships in the same file, pinned
-  byte-identical to `node:crypto` by a test; truncate it to 64 bits. **Needs a real migration** (the
-  memory graph is not derivable), but a tractable one: a Fact stores its own (s,p,o), so every id is
-  recomputable from the payload. Do not fold this into another change — it rewrites every fact id.
 - **Four wrong citations in the inference engine, all re-confirmed at HEAD.** `PLAN_NORMATIVE.md`
   §7.12; verified against *OWL 2 Profiles (2nd ed.)*, W3C Rec 2012-12-11, whose table numbering is
   identical to the 1st ed., so no edition excuses them. **`cls-svf1` is cited as "OWL 2 RL Table 8"
