@@ -52,10 +52,16 @@ record). What remains:
 - **CEFR two follow-ups:** `be-honest-empty` still expects the pre-rewording bootstrap-empty text (a
   frozen-expectation drift — the answer is an honest miss the judge scores 2/2), and `gq-impact-a`'s
   `/impact` depth-2 label (`(imports it)` for a transitive dependent) wants a small rephrase.
-- **Phase 4's remaining re-measurements** (sequencing item 11): CEFR back to **N=2**, the 315-case
-  CHATBENCH pool, and the resolver-floor `ab-c2-what-to-test` decision (held stable at 27% at 2.5.0 —
-  confirmed not transient). The INFBENCH existential probe and the 6th CONVERSATION persona both
-  landed this round.
+- **The resolver-floor `ab-c2-what-to-test` decision** (`BENCHMARK_AGENT_2.5.0.md`, and Phase 4.5 of
+  `PLAN_OPEN_ITEMS.md`). On the AGENTBENCH resolver-floor driver arm, the C2 case
+  `ab-c2-what-to-test` stopped producing a completed plan (`completed: true → false`), dropping the
+  resolver's C2 plan-completion from 36% to 27%; the 2.5.0 re-run confirmed it holds at 27%, so it is
+  a stable state, not a transient. The open question is which of two readings is right: either the
+  floor's expectation should move down — the plan legitimately now comes from the goal reasoner,
+  which the floor arm lacks by construction — or the resolver genuinely lost a plan it should still
+  build. The goal driver still composes the case (56/56 clears C2), so only the floor arm is
+  affected. Resolve it by either lowering the floor arm's expected result for this case or restoring
+  the resolver's plan; do not leave the two arms silently disagreeing.
 
 ## Discipline
 
