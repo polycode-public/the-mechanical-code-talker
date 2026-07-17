@@ -12,7 +12,7 @@ import { ask } from "../ask.mjs";
 import { requireInjected } from "./injected.mjs";
 
 /** renderDescribe() renders one line per fact with no terminal punctuation of its own;
- *  rank.mjs's splitSentences() treats each line as its own candidate sentence, and
+ *  rank.mjs's splitBlockSentences() treats each line as its own candidate sentence, and
  *  complete.mjs joins kept sentences with a single space, so two adjacent lines without
  *  a period between them would otherwise read as one run-on clause. */
 function withTerminalPunctuation(text) {

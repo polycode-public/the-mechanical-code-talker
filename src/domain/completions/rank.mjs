@@ -2,7 +2,7 @@
 // within a group.mjs group. Reuses memory/blocks.mjs's rankBlocks() (PageRank) and degreeOf()
 // (hub dampening) verbatim at sentence granularity, combined with group-scoped IDF the same
 // way retrieveBlocks() fuses relevance/centrality/hub-dampening into one score.
-// splitSentences() is a simple regex splitter.
+// splitBlockSentences() is a simple regex splitter.
 
 import { makeContentTokens } from "../prose.mjs";
 import { requireInjected } from "./injected.mjs";
@@ -17,7 +17,7 @@ const SENTENCE_SPLIT_RE = /(?<=[.!?])\s+(?=[A-Z0-9])/;
  * @param {string} text
  * @returns {string[]}
  */
-export function splitSentences(text) {
+export function splitBlockSentences(text) {
   const out = [];
   for (const rawLine of String(text || "").split("\n")) {
     const line = rawLine.trim();
@@ -58,7 +58,7 @@ export function rankSentences(group, { overlapMin, query = null, store } = {}) {
   // One entry per sentence, with a stable id for PageRank/degree/IDF keying.
   const sentences = [];
   for (const m of members) {
-    const parts = splitSentences(m?.text || "");
+    const parts = splitBlockSentences(m?.text || "");
     parts.forEach((sentence, i) => {
       sentences.push({ id: `${m.id}#${i}`, sentence, sourceBlockId: m.id });
     });

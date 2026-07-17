@@ -7,7 +7,7 @@
 // Entities are a group's content tokens narrowed to graph-known terms (normFactTerm-matched
 // against loaded facts) — sharing an English word alone never licenses a relation.
 
-import { splitSentences } from "./rank.mjs";
+import { splitBlockSentences } from "./rank.mjs";
 import { makeContentTokens } from "../prose.mjs";
 import { findActionPath, findReachableSet } from "../planning.mjs";
 import { requireInjected } from "./injected.mjs";
@@ -45,13 +45,13 @@ function groupContentTokenSet(group, { contentTokens }) {
   return set;
 }
 
-/** Every sentence across a group's members, pre-split (rank.mjs's own splitSentences — reused
+/** Every sentence across a group's members, pre-split (rank.mjs's own splitBlockSentences — reused
  *  verbatim, no re-implementation), each carrying its own content-token set and negation flag
  *  — the exact per-sentence facts the contradicts test needs. */
 function sentencesOf(group, { contentTokens }) {
   const out = [];
   for (const m of group?.members || []) {
-    for (const sentence of splitSentences(m?.text || "")) {
+    for (const sentence of splitBlockSentences(m?.text || "")) {
       out.push({ sentence, tokens: new Set(contentTokens(sentence)), negated: sentenceIsNegated(sentence) });
     }
   }

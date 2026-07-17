@@ -31,7 +31,7 @@
 // thresholds above are calibrated against, so that is what these fixtures rank through.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { rankSentences, splitSentences } from "../../src/domain/completions/rank.mjs";
+import { rankSentences, splitBlockSentences } from "../../src/domain/completions/rank.mjs";
 import { COMPLETIONS_STORE } from "../../src/services/completions.mjs";
 
 // Fixture A: three "Store" blocks, each pairing a dense, cross-block-shared-vocabulary
@@ -135,16 +135,16 @@ test("rankSentences(): [] / no members -> [] (no crash on empty input)", () => {
   assert.deepEqual(rankSentences(null, { store: COMPLETIONS_STORE }), []);
 });
 
-test("splitSentences(): splits on sentence-ending punctuation, trims, drops empties, preserves order", () => {
+test("splitBlockSentences(): splits on sentence-ending punctuation, trims, drops empties, preserves order", () => {
   assert.deepEqual(
-    splitSentences("Store persists records. It validates before saving! Does it cache too?"),
+    splitBlockSentences("Store persists records. It validates before saving! Does it cache too?"),
     ["Store persists records.", "It validates before saving!", "Does it cache too?"],
   );
 });
 
-test("splitSentences(): a Q/A-shaped block (newline-separated) splits per line, not merged", () => {
+test("splitBlockSentences(): a Q/A-shaped block (newline-separated) splits per line, not merged", () => {
   assert.deepEqual(
-    splitSentences("Q: what does the Store class do?\nA: Store holds Task and User records and persists them via loadStore and saveStore."),
+    splitBlockSentences("Q: what does the Store class do?\nA: Store holds Task and User records and persists them via loadStore and saveStore."),
     [
       "Q: what does the Store class do?",
       "A: Store holds Task and User records and persists them via loadStore and saveStore.",
@@ -152,8 +152,8 @@ test("splitSentences(): a Q/A-shaped block (newline-separated) splits per line, 
   );
 });
 
-test("splitSentences(): blank text / whitespace-only -> []", () => {
-  assert.deepEqual(splitSentences(""), []);
-  assert.deepEqual(splitSentences("   \n  \n"), []);
-  assert.deepEqual(splitSentences(null), []);
+test("splitBlockSentences(): blank text / whitespace-only -> []", () => {
+  assert.deepEqual(splitBlockSentences(""), []);
+  assert.deepEqual(splitBlockSentences("   \n  \n"), []);
+  assert.deepEqual(splitBlockSentences(null), []);
 });
