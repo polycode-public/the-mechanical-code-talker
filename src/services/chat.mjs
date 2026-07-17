@@ -1786,8 +1786,8 @@ const OWNS_PASSIVE_TEACH_RE = /^(.+?)\s+(?:is|are|was|were)\s+owned\s+by\s+([A-Z
  *  a NAMED relationship between two entities ("ahab is the father of john"),
  *  grouped here with the other relational/possessive teach shapes above
  *  (ownership) since it's tried on the SAME ownSrc in teachLane, right after
- *  OWNS_PASSIVE_TEACH_RE and before SOME_A_FEW_RE — unconditionally ahead of
- *  generalVerbTeach's own call site. The literal "the" + bare role-noun +
+ *  OWNS_PASSIVE_TEACH_RE — unconditionally ahead of generalVerbTeach's own
+ *  call site. The literal "the" + bare role-noun +
  *  "of" anchor is deliberate: a future composition-rule teach shape ("a
  *  <rule> is a <relation> of a <relation>") uses an INDEFINITE "a"/"an" in
  *  the same slot instead, so the two shapes structurally can never collide —
@@ -2115,11 +2115,6 @@ function singularizeSurface(word) {
   return w;
 }
 
-/** "some Xs are Ys" / "a few Xs are Ys" — the plural class-membership
- *  quantifier shape. Captures the quantifier word itself (group 1) alongside
- *  the plural subject/object (groups 2/3); singularized before storage/lookup. */
-const SOME_A_FEW_RE = /^(some|a few)\s+([\w-]+)\s+are\s+([\w-]+)$/i;
-
 /** "(every|each|all|a|an )?X is/are (a|an )?Y" — the shape the unknown-subject
  *  fallback recognizes (group 2 = X, group 4 = Y); group 1 (when present)
  *  names the determiner, so the caller can tell a genuine "every" universal
@@ -2295,9 +2290,7 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
   if (classify(subjectRaw, lex)) return null;
   const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
   // Singularize the SUBJECT before storage, but ONLY on a genuinely PLURAL
-  // phrasing ("all men ARE mortal", verb "are") — mirrors SOME_A_FEW_RE's own
-  // singularizeSurface() call (above), which is safe unconditionally there
-  // only because that shape's own regex requires "are" by construction. This
+  // phrasing ("all men ARE mortal", verb "are"). This
   // shape (UNKNOWN_SUBJECT_RE) also matches singular "is" sentences ("redis
   // is a cache"), where singularizing must NEVER run — "redis" naively folds
   // to "redi" under the same naive -s-strip. So "all men are mortal" stores
@@ -2418,7 +2411,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon },
   // unknownSubjectFallback itself already declines for it (its own
   // classify(subjectRaw) check reads "men" as the known noun "man") and hands
   // off to this mirror fallback instead. A naive suffix-strip
-  // (singularizeSurface — SOME_A_FEW_RE's own tool, reused as the fallback for
+  // (singularizeSurface, the fallback for
   // a genuinely novel REGULAR plural not in the lexicon, e.g. "zorps") can't
   // undo an IRREGULAR plural like "men" -> "man" — only the lexicon's own
   // noun table (lookupNoun, already resolved by isGroundedTerm/classify to
@@ -3023,6 +3016,42 @@ function teachSuggestion(payload) {
   return `every ${subject} is ${article} ${object}`;
 }
 
+/** "some/a few/several/most/many Xs are Ys" — a claim about SOME members of a
+ *  class. Every teach frame in this lane stores a universal: a subClassOf says
+ *  each member of the subject class counts as the object, which is what makes
+ *  it a premise the syllogiser can chain through. Stored that way, "some men
+ *  are fathers" reads back as a proof that any given man is a father, citing
+ *  the sentence as its warrant.
+ *
+ *  No existential shape exists in this store yet — owl:someValuesFrom is the
+ *  adjacent OWL construct, and reaching it means a rule of its own in
+ *  syllogise.mjs plus a fact shape that carries the restriction. Until one is
+ *  designed, these sentences refuse and name the universal that would work.
+ *  "every"/"each"/"all" ARE universals and teach unchanged. */
+const EXISTENTIAL_CLASS_TEACH_RE = /^(some|a few|several|most|many)\s+([\w-]+)\s+(?:is|are)\s+(?:an?\s+)?([\w-]+)[.!]*$/i;
+
+/** The lexicon's own lemma for a plural, falling back to the naive suffix
+ *  strip — the only source that undoes an irregular plural ("men" -> "man",
+ *  which no suffix rule can reach). */
+const singularOf = (word, lex, lookupNoun) => lookupNoun(lex, word)?.lemma || singularizeSurface(word);
+
+async function existentialTeachRefusal(payload, lexicon) {
+  const sentence = String(payload || "").trim();
+  const m = sentence.match(EXISTENTIAL_CLASS_TEACH_RE);
+  if (!m) return null;
+  const [, quantifier, subject, object] = m;
+  const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
+  const lex = lexicon || loadLexicon();
+  const singularSubject = singularOf(subject, lex, lookupNoun);
+  const universal = teachSuggestion(`${singularSubject} is ${singularOf(object, lex, lookupNoun)}`);
+  return {
+    text: `I can't store "${sentence.replace(/[.!]+$/, "")}" — "${quantifier.toLowerCase()}" claims only some of them, `
+      + "and I store universals, so that isn't a shape I can store yet."
+      + (universal ? ` If you mean it of every ${singularSubject}, say "${universal}".` : ""),
+    via: "teach-miss", miss: true,
+  };
+}
+
 /** The honest decline for a bare habitual teach ("penguins swim") whose
  *  subject is grounded nowhere — neither the static lexicon nor a prior
  *  taught fact. Mirrors ungroundedPairHint's "name the gap, hand over a
@@ -3107,6 +3136,15 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const rawInput = applyPreambleFrames(String(query).trim());
   const m = rawInput.match(TEACH_RE);
   const wrappedInput = m ? m[1].trim() : null;
+  // Refuse an existential BEFORE any frame below can read it as a universal:
+  // every one of them stores "some men are fathers" as a premise meaning every
+  // man, whether it keeps the quantifier as an attribute the reasoner doesn't
+  // consult (the subclass frame) or bakes the word into the subject itself
+  // ("most men is a kind of fathers", the unknown-subject frame).
+  if (memoryDir && !QUESTION_LEAD_RE.test(wrappedInput ?? rawInput)) {
+    const refusal = await existentialTeachRefusal(wrappedInput ?? rawInput, lexicon);
+    if (refusal) return refusal;
+  }
   // "your X is a/an Y" — a plain casual synonym for "a/an X is a
   // Y": no special second-person semantics, so rewrite it to the ordinary
   // indefinite-article determiner UP FRONT, before any downstream regex/ACE
@@ -3727,59 +3765,6 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       subject: rendersAs[1], predicate: "mgx:rendersAs", object: rendersAs[2],
     });
     if (stored) return stored;
-  }
-
-  // "some Xs are Ys" / "a few Xs are Ys" — the plural class-
-  // membership quantifier shape. ACE has no quantifier-phrase pattern at all
-  // (parseAce never even attempts a fit), so this is ALWAYS a direct write,
-  // never routed through assertTurn below. Wrapper-optional, like the
-  // "every X is a Y" baseline — a plural "some/a few" claim reads as an
-  // ordinary declarative teach the same way "every" always has. The OBJECT
-  // still has to be a known lexicon noun (the same "subject gets the free
-  // pass, object doesn't" discipline as unknownSubjectFallback below) — an
-  // unknown object falls through to the generic honest-miss cascade at the
-  // bottom of this function, same as every other unstorable teach.
-  const someSrc = wrapped ?? raw.replace(/[.!?]+\s*$/, "");
-  // Additive alongside the existing anchored QUESTION_LEAD_RE check — same
-  // discipline as ownSrcMidQuestion above (hasMidSentenceInterrogative's own
-  // docblock, near QUESTION_LEAD_RE, has the full reasoning).
-  const someSrcMidQuestion = memoryDir && !QUESTION_LEAD_RE.test(someSrc) ? await hasMidSentenceInterrogative(someSrc) : false;
-  const someMatch = memoryDir && !QUESTION_LEAD_RE.test(someSrc) && !someSrcMidQuestion ? someSrc.match(SOME_A_FEW_RE) : null;
-  if (someMatch) {
-    const quantifier = someMatch[1].toLowerCase();
-    const subject = singularizeSurface(someMatch[2]);
-    const object = singularizeSurface(someMatch[3]);
-    const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
-    const lex = lexicon || loadLexicon();
-    if (lookupNoun(lex, object)) {
-      const stored = await teachFact(memoryDir, sessionId, {
-        subject, predicate: SUBCLASS_PREDICATE, object, quantifier,
-      });
-      if (stored) return stored;
-    } else {
-      // "remember that some functions are risky" — Y ("risky") is not a
-      // lexicon NOUN, so the subclass path just above correctly declines it
-      // (SOME_A_FEW_RE is subclass-only). Without this guard, the sentence
-      // would fall through to unknownSubjectFallback/TEACH_PROPERTY_RE below,
-      // which DO tolerate a multi-word subject with NO vocabulary check on
-      // the complement at all — silently mis-teaching the LITERAL 2-word
-      // string "some functions" as if it were one proper-noun subject
-      // ("noted — remembered: some functions is risky", the quantifier word
-      // baked wrongly into the subject and a subject/verb agreement error to
-      // boot), a fact "how many functions are risky" could never sensibly
-      // read back either (HOW_MANY_ARE_RE's own reader only ever looks for
-      // the SUBCLASS_PREDICATE shape this path would have stored, not this
-      // one). A quantified PROPERTY claim isn't a supported shape yet (only
-      // a quantified SUBCLASS claim is) — decline honestly here instead of
-      // silently mis-teaching, rather than let a later, less-specific frame
-      // guess a wrong split.
-      return {
-        text: `I can only remember a quantified fact as "${quantifier} ${someMatch[2]} are <a kind of thing>" (like "${quantifier} bugs are issues") — `
-          + `a quantified claim about a PROPERTY ("${quantifier} ${someMatch[2]} are ${object}") isn't a shape I can store yet. `
-          + `I can remember "${someMatch[2]} are ${object}" for one specific ${subject}, though — try naming it directly.`,
-        via: "teach-miss", miss: true,
-      };
-    }
   }
 
   // GENERAL VERB-TO-PREDICATE TEACH — "remember <Subject> <verb>
@@ -5128,8 +5113,8 @@ function matchGenitiveWhoAsk(q) {
  *  reachable from the named start entity through a taught `recursive` Rule,
  *  not a single yes/no. `m[1]` = the rule's PLURAL name ("descendants",
  *  singularized via singularizeSurface before the findRuleByName lookup —
- *  the same naive plural fold SOME_A_FEW_RE's own teach-side surface already
- *  uses elsewhere in this file), `m[2]` = the start entity ("ahab"). Dispatch
+ *  the same naive plural fold the teach-side surfaces use elsewhere in this
+ *  file), `m[2]` = the start entity ("ahab"). Dispatch
  *  lives in factReadBack's own (a0.5) block, below — findRuleByName +
  *  findReachableSet (src/domain/planning.mjs), never a yes/no answer. */
 const RECURSIVE_LIST_ASK_RE = /^list\s+(?:the\s+|all\s+)?([a-z][\w-]*)\s+of\s+([\w'-]+(?:\s+[A-Z][\w'-]*)?)[?.!\s]*$/i;
