@@ -95,7 +95,7 @@ commit that reaches `main` or a remote.
 | **4** — the instruments | **DONE** (4.1-4.5) | `6ed8f41`, `cee3ebe`, `ee6ddf3`, `a46d92a`, `7b74431` |
 | **5** — wrong documents | **DONE** | `bf6732c` |
 | PLAN_DEPS batches 1-2, 4-7 | **DONE** | `c2ded65`, `f2d7e27`, `488aa84`, `5824c66`, `2ccee08` |
-| **3** — honest-miss gaps | **IN PROGRESS** — 3.1 done; 3.2-3.11 open | `8501cb9` |
+| **3** — honest-miss gaps | **IN PROGRESS** — 3.1 done; 3.2-3.11 open | `b1f14a0` |
 | **7** — public-surface audit | **OPEN** — nothing started | — |
 | **8** — capability page | **OPEN** — nothing started | — |
 | **9** — prose pass | **OPEN** — nothing started | — |
