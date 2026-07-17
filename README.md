@@ -360,8 +360,9 @@ Goal (inferred): Plan a move sequence from the current state to the goal (7 move
 facts stamped with the step that produced them ("disk-1@step1 rests on peg-c",
 sourced to the plan). The final step re-reads the store and confirms the goal
 from those written facts, never assuming success. The stamp is what makes each
-step a separate record, so a question about the piece itself ("where does disk-1
-rest?") reports every step at once rather than the final board. The search is
+step a separate record; a question about the piece itself ("where does disk-1
+rest?", "is disk-1 clear?") reads the current board — the latest step's facts,
+not every step at once. The search is
 domain-general: the test
 suite teaches Towers of Hanoi purely as sentences for 1 to 8 disks and
 asserts the plan is exactly 2^n − 1 moves every time, and a second game

@@ -2097,9 +2097,32 @@ const GOAL_TEACH_VERBLESS_RE = new RegExp(
 // preposition), so this one reader answers either.
 const ACTION_SIGNATURE_ASK_RE = new RegExp(
   `^(?:can|could)\\s+you\\s+([a-z]+)\\s+an?\\s+([a-z][\\w-]*)\\s+(${PREP_SRC})\\s+an?\\s+([a-z][\\w-]*)[?.!]*$`, "i");
-const PLAN_SOLVE_RE = /^(?:solve\s+it|plan\s+the\s+moves|how\s+do\s+i\s+get(?:\s+from\s+here)?\s+to\s+the\s+goal)[?.!\s]*$/i;
+const PLAN_SOLVE_RE = /^(?:solve\s+it|solve\s+(?:the\s+)?(?:towers?\s+of\s+hanoi|hanoi|puzzle|game|river\s+crossing|this)|plan\s+the\s+moves|how\s+do\s+i\s+get(?:\s+from\s+here)?\s+to\s+the\s+goal)[?.!\s]*$/i;
 const LEGAL_MOVES_RE = /^what\s+moves\s+are\s+legal(?:\s+now)?[?.!\s]*$/i;
 const PLAN_NEXT_RE = /^(?:next|next\s+move|go\s+on|continue)[.!?\s]*$/i;
+// The imperative voicing of a universal goal ("get all the disks onto peg-c"):
+// like the verbless frame it names no board verb, so planLaneAnswer reads that
+// off the taught locative facts. Captures a quantifier, a (possibly plural)
+// class term, the preposition and the target — the caller singularizes the
+// term and normalizes "onto"→"on" before the same verbless resolution runs.
+const GOAL_TEACH_IMPERATIVE_RE = new RegExp(
+  `^(?:get|put|place)\\s+(?:(every|each|all|both)\\s+)?(?:the\\s+)?([\\w-]+?)\\s+(${PREP_SRC})\\s+([\\w-]+)[?.!]*$`, "i");
+// Plan follow-up questions, answered off the ACTIVE plan state (never invented
+// when no plan stands). "next move"/"continue" EXECUTE (PLAN_NEXT_RE above); these
+// three only REPORT.
+const PLAN_WHAT_NEXT_RE = /^(?:what(?:'s|\s+is)?|whats)\s+the\s+next\s+move[?.!\s]*$/i;
+const PLAN_MOVE_COUNT_RE = /^how\s+many\s+moves(?:\s+(?:are\s+(?:there|left)|remain(?:ing)?|left|to\s+go|in\s+the\s+plan|total))?[?.!\s]*$/i;
+const PLAN_WHY_MOVE_RE = /^why\s+(?:that|this|the\s+next|the)\s+move[?.!\s]*$/i;
+// Board-state read-backs, answered off the CURRENT board (the latest @stepK
+// snapshot, or the taught board before any step) so a read never contradicts
+// the plan's own board@stepK line. Clearness is derived, never stored: a piece
+// is clear iff nothing rests on it on the current board.
+const IS_CLEAR_RE = /^(?:is|are)\s+([\w-]+)\s+clear[?.!\s]*$/i;
+const BOARD_REVERSE_LOC_RE = new RegExp(
+  `^(?:what|who)\\s+([a-z']+)\\s+(${PREP_SRC})\\s+(.+?)[?.!\\s]*$`, "i");
+const BOARD_FORWARD_LOC_RE = new RegExp(
+  `^what\\s+(?:does|do|is)\\s+([\\w-]+)\\s+([a-z]+)(?:\\s+(${PREP_SRC}))?[?.!\\s]*$`, "i");
+const BOARD_WHERE_RE = /^(?:where\s+is|where's)\s+([\w-]+)(?:\s+now)?[?.!\s]*$/i;
 
 /** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
  *  subject and a single bare complement word. Never matches the "is a <noun>"
@@ -7403,7 +7426,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // missed — check whether X, having taught-P'd something of a taught type
     // (lifted through that type's FULL ⊑-ancestor closure), satisfies a
     // TAUGHT someValuesFrom restriction declared over that SAME (property,
-    // type) pair — the restriction CLASS itself entailed (OWL 2 RL Table 8's
+    // type) pair — the restriction CLASS itself entailed (OWL 2 RL Table 6's
     // cls-svf1), via syllogise.mjs's deriveSomeValuesFromApplication, LIVE and
     // READ-ONLY (same discipline as the cax-dw chase just above: nothing is
     // written; syllogise()'s materializing batch pass is the persisting
@@ -9088,7 +9111,18 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
   // The verbless voicing carries every capture but the verb, so it folds into
   // the frame below once the store names the verb — same spec, same
   // confirmation, same fold as its verbed twin.
-  const verblessGoal = goalMatch ? null : q.match(GOAL_TEACH_VERBLESS_RE);
+  let verblessGoal = goalMatch ? null : q.match(GOAL_TEACH_VERBLESS_RE);
+  // The imperative voicing ("get all the disks onto peg-c") folds into the same
+  // verbless resolution: singularize the class term ("disks"→"disk"), read the
+  // universal off the quantifier, and normalize the motion preposition to the
+  // static one a location fact is stored under ("onto"→"on").
+  if (!goalMatch && !verblessGoal) {
+    const imperative = q.match(GOAL_TEACH_IMPERATIVE_RE);
+    if (imperative) {
+      const prep = { onto: "on", into: "in", upon: "on" }[imperative[3].toLowerCase()] ?? imperative[3].toLowerCase();
+      verblessGoal = [imperative[0], imperative[1] ? "every" : "", singularizeSurface(imperative[2]), prep, imperative[4]];
+    }
+  }
   if (verblessGoal) {
     const { normFactTerm } = await import("../adapters/memory/core.mjs");
     const { factRows, domain } = await loadPlanContext(memoryDir);
@@ -9310,6 +9344,90 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
       : `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}\n\nBUT the goal does NOT hold against the written facts — the plan or the state drifted; re-teach the state and solve again.`,
     deduced: holds ? `goal reached — ${ps.goalText} (${k} of ${k} steps)` : "plan finished but the goal check failed",
   };
+}
+
+/** Plan follow-up questions ("what is the next move", "how many moves", "why
+ *  that move") answered off the ACTIVE plan, and board-state questions ("is X
+ *  clear", "what rests on X", "where is X") answered off the CURRENT board (the
+ *  latest @stepK snapshot, or the taught board before any step). Returns
+ *  { text, deduced, note } or null — null when the query is neither shape, or
+ *  when no plan/board stands to answer from, so an honest miss stands cold.
+ *  This keeps a read from contradicting the plan's own board@stepK line: after
+ *  "next" moves a piece, "what rests on X" reflects the snapshot, not the stale
+ *  pre-plan facts. Clearness is derived, never stored — a piece is clear iff
+ *  nothing rests on it on the current board. */
+async function planFollowUpAnswer(query, { memoryDir, planHolder }) {
+  const q = String(query).trim();
+  const ps = planHolder?.state;
+  const activePlan = ps && Array.isArray(ps.actions) && ps.actions.length;
+
+  if (PLAN_WHAT_NEXT_RE.test(q)) {
+    if (!activePlan) return null;
+    if (ps.done || ps.cursor >= ps.actions.length) {
+      return { text: `the plan is complete — all ${ps.actions.length} moves are made.`, deduced: "name the next planned move (plan complete)", note: "PLAN FOLLOW-UP — next move: plan already complete" };
+    }
+    return { text: `the next move is move ${ps.cursor + 1} of ${ps.actions.length}: ${ps.actions[ps.cursor].label}. Say "next" to make it.`, deduced: "name the next planned move", note: "PLAN FOLLOW-UP — next move read from the active plan" };
+  }
+  if (PLAN_MOVE_COUNT_RE.test(q)) {
+    if (!activePlan) return null;
+    const total = ps.actions.length;
+    const remaining = Math.max(0, total - ps.cursor);
+    return { text: remaining === total ? `${total} move${total === 1 ? "" : "s"} in the plan.` : `${total} move${total === 1 ? "" : "s"} in the plan, ${remaining} still to make.`, deduced: "count the moves in the active plan", note: "PLAN FOLLOW-UP — move count from the active plan" };
+  }
+  if (PLAN_WHY_MOVE_RE.test(q)) {
+    if (!activePlan) return null;
+    const idx = ps.cursor < ps.actions.length ? ps.cursor : ps.actions.length - 1;
+    const line = ps.stepGoals?.[idx] ?? `${ps.actions[idx].label} (step ${idx + 1} of ${ps.actions.length})`;
+    return { text: `${line} — it is this step's move on the shortest path.`, deduced: "explain the next planned move", note: "PLAN FOLLOW-UP — why-move from the active plan's step goals" };
+  }
+
+  const clear = q.match(IS_CLEAR_RE);
+  const rev = clear ? null : q.match(BOARD_REVERSE_LOC_RE);
+  const fwd = clear || rev ? null : q.match(BOARD_FORWARD_LOC_RE);
+  const where = clear || rev || fwd ? null : q.match(BOARD_WHERE_RE);
+  if (!clear && !rev && !fwd && !where) return null;
+  if (!memoryDir) return null;
+
+  let ctx;
+  try { ctx = await loadPlanContext(memoryDir); } catch { return null; }
+  const { domain, state } = ctx;
+  if (!domain.actions.length || !state.length) return null; // no board — the honest miss stands
+  const { normFactTerm } = await import("../adapters/memory/core.mjs");
+  const individuals = new Set(Object.values(domain.classMembers || {}).flat());
+
+  if (clear) {
+    const x = normFactTerm(clear[1]);
+    if (!individuals.has(x)) return null;
+    const on = state.filter((r) => r.object === x);
+    return on.length
+      ? { text: `no — ${x} is not clear: ${on.map(factPhrase).join("; ")}.`, deduced: "check whether a board piece is clear", note: "BOARD — clearness derived from the current board (a piece rests on it)" }
+      : { text: `yes — ${x} is clear: nothing rests on it on the current board.`, deduced: "check whether a board piece is clear", note: "BOARD — clearness derived from the current board (nothing rests on it)" };
+  }
+  if (where || fwd) {
+    const x = normFactTerm((where ?? fwd)[1]);
+    if (!individuals.has(x)) return null;
+    const rows = state.filter((r) => r.subject === x);
+    if (!rows.length) return where
+      ? { text: `nothing on the current board says where ${x} is.`, deduced: "read the current board (where a piece is)", note: "BOARD — forward locative, no row for the piece" }
+      : null; // a verb-specific forward miss falls to the ordinary reader
+    return { text: rows.map(factPhrase).join("; "), deduced: "read the current board (where a piece is)", note: "BOARD — forward locative from the current board" };
+  }
+  // reverse: "what rests on X" / "what is on X"
+  const verb = rev[1].toLowerCase();
+  const prep = rev[2].toLowerCase();
+  const x = normFactTerm(rev[3].replace(/^(?:an?|the)\s+/i, "").trim());
+  if (!individuals.has(x)) return null;
+  const copula = /^(?:is|are|'s)$/.test(verb);
+  let predicate = null;
+  if (!copula) {
+    predicate = await generalVerbPredicate(verb);
+    if (/^mgx:[a-z]+$/.test(predicate)) predicate = `${predicate}-${prep}`;
+  }
+  const hits = state.filter((r) => r.object === x && (copula || r.predicate === predicate));
+  const emptyPhrase = predicate ? predicatePhrase(predicate) : "is on";
+  return hits.length
+    ? { text: hits.map(factPhrase).join("; "), deduced: "read the current board (what rests on a piece)", note: "BOARD — reverse locative from the current board" }
+    : { text: `nothing ${emptyPhrase} ${x} on the current board.`, deduced: "read the current board (what rests on a piece)", note: "BOARD — reverse locative, nothing on the current board" };
 }
 
 async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null }) {
@@ -11041,6 +11159,23 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     const rec = withLast(plainTurn(workingLine, step.text, { via: "plan", focus }), step.deduced);
     rec.planState = planHolder.state;
     return rec;
+  }
+
+  // PLAN FOLLOW-UP + BOARD — "what is the next move", "how many moves", "why
+  // that move" read the active plan; "is X clear", "what rests on X",
+  // "where is X" read the CURRENT board. Placed before answerCount (which owns
+  // "how many …") and the ask engine, so a plan/board answer never loses to a
+  // code-graph miss. Returns null with no plan/board standing, so nothing
+  // changes for a cold session — an honest miss still stands.
+  if (memoryDir) {
+    const follow = await planFollowUpAnswer(workingLine, { memoryDir, planHolder });
+    if (follow) {
+      note(trace, `goal: ${follow.deduced}`);
+      note(trace, `lane: ${follow.note}`);
+      const rec = withLast(plainTurn(workingLine, follow.text, { via: "plan", focus }), follow.deduced);
+      rec.planState = planHolder.state;
+      return rec;
+    }
   }
 
   // "more" — page the remainder of a previous long listing, if one is held. Gated on
