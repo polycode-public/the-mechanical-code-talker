@@ -490,6 +490,10 @@ found, not by this skill directly.
 Report structure:
 - **Headline** — which mode ran (persona sweep, full ladder, or capped sprint), the persona count or
   tier reached or the round count, and the number of dead-ends found.
+- **Timing** — the start and end of the benchmarking session (the persona probing or ladder run) and
+  the start and end of the analysis (writing this report), as separate wall-clock intervals with the
+  date. In persona-sweep mode the session start is the first persona dispatched and its end is the
+  last persona to report.
 - **Per-persona, per-round, or per-tier breakdown** — persona-sweep mode: one entry per persona
   (its frame, what it found, ranked by how many other personas independently hit the same dead-end
   per §3.4's own ranking rule); full ladder mode: one entry per tier played this run, entry

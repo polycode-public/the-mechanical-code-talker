@@ -40,6 +40,10 @@ Every cycle MUST satisfy:
   …, `run-0.7.0_001/`. So the artifact name always says which shipped version it scores, and the
   `_00N` suffix orders re-runs of that version. (The historical `CEFR_ENGLISH_001…006` cycle-numbered
   artifacts stay as-is; version-matched naming applies from 0.7.0 onward.)
+- **Record the timing.** The write-up carries four wall-clock stamps: the start and end of the
+  **benchmarking session** (the product run plus the judge fan-out) and the start and end of the
+  **analysis** (reading the scores and writing the report). State the date and both intervals — a
+  reader comparing two versions needs the measurement time and the write-up time as separate figures.
 - **One combined file per run — no separate `_TRANSCRIPTS.md`.** `BENCHMARK_CEFR_ENGLISH_<version>.md` now
   carries the transcript evidence itself, as an "Evidence / transcripts" section near the end
   (discriminating examples first — the cases where arms/cycles differ, so the behaviour change is

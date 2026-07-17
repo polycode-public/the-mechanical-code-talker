@@ -79,6 +79,8 @@ console-only cycle leaves a drifted band recorded nowhere. Snapshot the raw outp
 `BENCHMARK_INFERENCE_<version>.md` (same artifact-naming convention `SKILL_BENCHMARK_CEFR_ENGLISH.md`
 §1 uses: named after the `package.json` version measured, same-version re-runs append `_00N`):
 - a headline naming the honest delta versus the last cycle;
+- the run's timing — the start and end of the benchmarking session (regenerate + run) and the
+  start and end of the analysis (writing this report), as separate wall-clock intervals with the date;
 - the per-band rung table (completion/fabrication) with gate receipts, including
   skipped-with-a-receipt lines for gated bands and named ceiling markers;
 - what's new this cycle, one item per engine or generator change;

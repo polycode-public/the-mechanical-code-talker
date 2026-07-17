@@ -29,6 +29,10 @@ Every cycle MUST satisfy:
   `agentbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a second
   driver, a re-verify) appends `_00N`: `BENCHMARK_AGENT_0.8.2_001.md`, `_002`, … — the same convention
   `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 and `SKILL_BENCHMARK_INFERENCE.md` §1 already use.
+- **Record the timing.** The write-up carries four wall-clock stamps: the start and end of the
+  **benchmarking session** (the run itself) and the start and end of the **analysis** (reading the
+  results and writing the report). State the date and both intervals — a reader comparing two
+  versions needs the measurement time and the write-up time as separate figures.
 - **Fixed, versioned case set:** `agentbench/cases.jsonl` — one JSON object per line
   (`id`, `rung`, `request`, `tools`, `expect`). Append-only once the AGENTBENCH arc starts: new
   cases may be added between cycles (record the addition in the write-up), existing cases are never

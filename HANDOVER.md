@@ -44,10 +44,29 @@ parser defects (the multi-sentence teach bullet and the silent count-restrictor 
 two leftover rows (the `runChat` block and the `repository-interface.md` prose, both now pinned),
 and `PLAN_NORMATIVE.md` §7.5 (the PROV Source split) and §7.6 (the SKOS derived-view). What remains:
 
-- **Phase 4's re-measurements** (sequencing item 11, not yet run): CEFR back to N=2, the INFBENCH
-  existential probe, the 6th CONVERSATION persona, the 315-case CHATBENCH pool, and the
-  resolver-floor `ab-c2-what-to-test` decision. The phase table's "Phase 4 DONE" marks the pinning
-  commits, not these measurements.
+- **The 2.5.0 benchmark round's routed backlog.** All four axes re-ran at 2.5.0 (`BENCHMARK_{AGENT,
+  INFERENCE,CEFR_ENGLISH,CONVERSATION}_2.5.0.md`). Every 2.0.3 confident-wrong is confirmed fixed;
+  the CONVERSATION persona sweep (6 frames, ~410 probes) then found 11 new confident-wrong — full
+  routed backlog in that report, worst first:
+  - a taught subclass chain proves a conclusion the store holds `owl:disjointWith`
+    (`rex is a dog`/`every dog is a cat`/`no dog is a cat`/`is rex a cat` → "yes, with a proof"). The
+    direct disjointness query is correct, so the gap is the multi-hop prover not validating its
+    conclusion against the stored disjointness.
+  - `blast radius of X` is parsed as a teach and written to memory — a read-only question that
+    mutates state.
+  - the `i wanna know about X` first-person desire family misroutes to the teach frame — a new
+    Tier-0 confident-wrong, so the flow ladder does **not** ratchet past Tier 0.
+  - the multi-candidate half of the item-1.4 stale-modifier family still enumerates answers for
+    modules the user never named.
+  - plus a cluster of paraphrase-routing honest-misses (impact phrasings, the README board-read
+    `where does disk-1 rest?`, expansion follow-ups).
+- **CEFR two follow-ups:** `be-honest-empty` still expects the pre-rewording bootstrap-empty text (a
+  frozen-expectation drift — the answer is an honest miss the judge scores 2/2), and `gq-impact-a`'s
+  `/impact` depth-2 label (`(imports it)` for a transitive dependent) wants a small rephrase.
+- **Phase 4's remaining re-measurements** (sequencing item 11): CEFR back to **N=2**, the 315-case
+  CHATBENCH pool, and the resolver-floor `ab-c2-what-to-test` decision (held stable at 27% at 2.5.0 —
+  confirmed not transient). The INFBENCH existential probe and the 6th CONVERSATION persona both
+  landed this round.
 
 ## Discipline
 
