@@ -65,8 +65,7 @@ export function resolveYamlDir(argv = process.argv.slice(2), env = process.env) 
 // governs which side of the WordNet edge becomes ConceptNet's `start` vs
 // `end` — WordNet's meronymy relations point WHOLE -> part (the synset that
 // OWNS a `mero_part`/`mero_member` list is the whole; its listed target is
-// the part/member — confirmed via scripts/wordnet.py's own
-// inverse_synset_rels table: mero_part's inverse is holo_part, so "A mero_part
+// the part/member — mero_part's inverse is holo_part, so "A mero_part
 // B" reads "B is a part-meronym of A", i.e. A HAS PART B), which is the
 // OPPOSITE of ConceptNet's own /r/PartOf convention (start=part, end=whole —
 // confirmed against a real corpus/conceptnet/slice.jsonl row: "action PartOf
