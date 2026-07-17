@@ -141,6 +141,24 @@ history were not.** Verify before you quote.
 | 10.2 | the inventory is "the `mgx:`/`mgxneg:` predicates and classes, `EDGE_KINDS`, `MISS_REASONS`, the `RELATIONS` keys… `INTERFACE_VERSION`'s service names" | **Too narrow, and the narrowness hid the worst bug in the repo.** A term does not have to be a triple. Scoping the review to CURIEs skips `factIdFor`'s 32-bit hash (silent data loss at documented corpus sizes), `fuzzy.mjs`'s misnamed OSA, `ledger`, and the unnamed reification. The register is 45 concept terms across 9 areas — see `PLAN_NORMATIVE.md` §9 |
 | 10.2 | SEON is "already used at 99 sites; check the alignment is real and complete" | **Real but partial: 19 of 24 SEON spellings are genuine terms, 5 are not.** `seon:subKind` is a **stored** undefined IRI (in `examples/*/.tmct/graph.json` today); `seon:Module`, `seon:ClassDefinition`, `seon:Attribute` don't exist either. `seon:history` tmct already caught and realigned. Verified against the live `code.owl`, not a summary |
 
+**Phase 3's own row set — the fix site was wrong on five of eight items, always the same way: the
+doc named the neighbourhood, not the cause.**
+
+| §  | This doc says | Actually |
+|---|---|---|
+| 3.1 | `memory/capability.mjs` is "the shipped pattern to follow" | It does not extend by reuse. `negatedPredicate` is a prefix swap over `mgx:` terms and returns `rdfs:subClassOf` **unchanged**, so the negative twin had to be COINED and stated on both sides. The item also asked for "no —"; both facts sit at hop 0 with equal trust, so the shipped design's own **"both"** verdict applies |
+| 3.2 | fix site is `src/domain/interpret/normalize.mjs` | **It has no quantifier handling at all** — the same stale citation this table already records for 1.2 ("normalize.mjs has no teach frames"). It is `chat.mjs`'s `factTermVariants` |
+| 3.2 | the sibling's ungrammatical suggestion ("remember that men is mortal") is a lemmatizer gap | Right, and the lemmatizer already exists: `lookupNoun` folds women→woman and dogs→dog while leaving **bus→bus**. No hand-written `-s` rule could |
+| 3.3 | the referent is the focus, and a miss clears it | **Focus is never set in a vocabulary session** — both its set-sites are gated on a code graph. The referent is parsed out of the previous ANSWER's text (`vocabAntecedentFrom`). And `last` serves two masters: keeping misses out of it broke the repeat-shortening walls |
+| 3.4 | `what about cats` answers with a code-graph hint | **Does not reproduce at 2.4.2.** Closed with no code change; a drilldown row already pinned it |
+| 3.5 | "the hint doesn't scale to the question's register" | The register was never the problem. **The plural was the whole difference** — `what are dog` already worked, `what is dogs` already failed. A parse that MISSED was blocking the reader behind it |
+| 3.7 | "no `do/does <subject> <verb>` frame" | **The frame exists** — `does a man die` and `do man die` both answer. Same plural defect as 3.5 |
+| 3.2 / 3.5 / 3.7 | three items, three diagnoses | **One defect wearing three faces: the ask path could not reach the spelling the teach path stores.** Both folds land in one function |
+| 3.9 | "NOT `metaFallbackEntityAnswer` — see below" | **Correct, and the only fix site in Phase 3 the doc got right.** Its investigation held on every point |
+| 3.10e | `smaller than` isn't transitive, so the 4-disk recipe finds no plan | **Transitivity was never involved, and the 3-DISK recipe was broken too** — the shipped file never worked at all. Its board line taught two comparatives on one line and stored NOTHING. 1.1's pin covers the line beside it, which is why 1.1 reads DONE |
+| 3.11 | "**No row pins either count**, on either side" | **Backwards, and this is the better lesson.** Four `bodyEquals` assertions pinned the WRONG 9-module list verbatim. The bug was not unpinned — it was **held in place**. A pin written from observed output freezes the defect and then reads as proof of correctness |
+| 3.12 | "Disjointness is stored and never consulted" | **Check before acting.** The is-a ladder runs a live `cax-dw` chase and a direct disjointness check (`chat.mjs`, the LIVE cax-dw PROOF CHASE block). Whatever is missing, it is narrower than "never consulted" |
+
 ## Traps this cycle hit, for the next session
 
 - **The ask bundle is generated from `ask.mjs`'s 24-file import closure**, which reaches

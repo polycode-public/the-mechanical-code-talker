@@ -16,6 +16,23 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
 download, not reachable from data in hand).
 
+### Two things this cycle did NOT verify — do these before the push
+
+Both are cheap, and both need a QUIET machine. Four agents ran concurrently all cycle, so every
+timing taken today is worthless — that is the self-inflicted-load error this repo has now made
+three times (the 2.0.3 report durations, the 4,135ms budget reading, and this).
+
+1. **`npm run check:budgets` reported `test:smoke` OVER its 1s budget** (3,947ms under load;
+   ~1.5s standalone, which would still be over). **Measure it alone.** If it is genuinely over,
+   `CLAUDE.md` is explicit that the tier is the bug — cut its content, never raise the number. One
+   suspect is new: `chat.mjs` gained a static `import { loadLexicon, lookupNoun }` this cycle
+   (the 3.2/3.7 fold), and a static lexicon load is exactly the shape of thing that lands as
+   start-up cost in a 1-second tier.
+2. **The full `npm test` has NOT been run this cycle.** By design — it runs once, before the work
+   reaches CI or another person, and nothing has been pushed. But that means **no one has seen the
+   whole suite green over these 18 commits.** Run it on a quiet machine before pushing. Expect it to
+   be the moment any cross-lane interaction between the four agents' changes shows up.
+
 ## Open items
 
 `PLAN_OPEN_ITEMS.md` is the build order and holds the detail — its "Execution status" section
