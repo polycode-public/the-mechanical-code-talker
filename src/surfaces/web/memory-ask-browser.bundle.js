@@ -4412,10 +4412,15 @@ ${shown.join("\n")}${tail}`;
       const ind = graph.byId.get(e.object);
       if (ind) exported.add(String(ind.label).toLowerCase());
     }
-    const testedModules = new Set(edgesOfKind2(graph, "tests").map((e) => e.object));
+    const testedModules = /* @__PURE__ */ new Set();
+    const testModules = /* @__PURE__ */ new Set();
+    for (const e of edgesOfKind2(graph, "tests")) {
+      testedModules.add(e.object);
+      testModules.add(e.subject);
+    }
     const moduleOfSymbol = /* @__PURE__ */ new Map();
     for (const e of edgesOfKind2(graph, "defines")) moduleOfSymbol.set(e.object, e.subject);
-    c = { exported, testedModules, moduleOfSymbol };
+    c = { exported, testedModules, testModules, moduleOfSymbol };
     qualCache.set(graph, c);
     return c;
   }
@@ -4484,7 +4489,11 @@ ${shown.join("\n")}${tail}`;
       }
       case "tested": {
         const mid = moduleIdOf2(graph, ind);
-        return (!!mid && qualSets(graph).testedModules.has(mid)) === spec.value;
+        if (!mid) return false;
+        const sets = qualSets(graph);
+        const mind = graph.byId?.get?.(mid);
+        if (sets.testModules.has(mid) || mind && isTestPath(String(mind.label).toLowerCase())) return false;
+        return sets.testedModules.has(mid) === spec.value;
       }
       default:
         return false;
@@ -4671,7 +4680,11 @@ ${shown.join("\n")}${tail}`;
       }
       if (atom.kind === "qual") {
         const holds = (ind) => atom.filters.every((f) => qualHolds(graph, ind, QUALIFIERS[f]));
-        acc = atom.op === "difference" ? acc.filter((i) => !holds(i)) : acc.filter((i) => holds(i));
+        const complementHolds = (ind) => atom.filters.every((f) => {
+          const opposite = oppositeQualifierSpec(QUALIFIERS[f]);
+          return opposite ? qualHolds(graph, ind, opposite) : !qualHolds(graph, ind, QUALIFIERS[f]);
+        });
+        acc = atom.op === "difference" ? acc.filter(complementHolds) : acc.filter(holds);
         continue;
       }
       const oids = new Set(evalSet(graph, atom.ast, opts).map((i) => i.id));
@@ -6439,10 +6452,11 @@ ${lines.join("\n")}`;
       }
     };
   }
-  var askEdgesOfKindCache, SYMBOL_GRAIN_SIBLING, FINE_ENTITY_TYPES, FINE_CLASS_SIBLING, KIND_UNIONS, kindsFor, OVERFLOW_CAP, PLURAL_FORMS, REVERSE_MISS_VERB, LEADING_RELATION_VERB_RE, FROZEN_META_AMBIGUOUS_TERMS, MAX_COMPOSE_DEPTH, NEST_SENTINEL, PRED_LEAD_SKIP, FRAME_WORDS, COPULA_WORDS, entityNoun, isGerundVerb, FWD_NEG_FRAME, PLURAL_ANAPHORA_OBJECT, TEMPORAL_AUX, TEMPORAL_TAIL, TEMPORAL_TRAIL_FILLER, TEMPORAL_DET, COMMIT_FILTER_OPS, ANAPHORA_NAME_TOKEN_RE, AGG_TAIL_FILLER, LIST_SKIP, LIST_TRIGGERS_SORTED, LISTABLE_KINDS, SCOPE_PREPOSITIONS, FIND_LINKERS, RECENT_COMMIT_LEAD, qualCache, META_FALLBACK_CLASSES, inheritsApplicableCache, FIND_TIER, DEGREE_KINDS, COMMIT_FILTER_DATE_RE, compositeList, LEADING_ARTICLE_RE, TRAILING_GRAIN_WORD_RE, ENTRY_POINT_QUERY_RE, ENTRY_POINT_BASENAMES, TEST_FIXTURE_PATH_SEGMENTS, moduleStemOf, isTestFixturePath, TRANSITIVE_MAX_DEPTH, CONTENT_VOCAB, STRUCTURAL_WORDS, CASCADE_NOISE_SET, NOISE_OR_SCAFFOLD, TRIGGER_FUZZY_WORDS, CASCADE_FUZZY_TARGETS, LAST_COMMIT_PHRASE_RE, BARE_WHEN_COMMIT_RE, DYNAMIC_LIST_TRIGGER_RE, DYNAMIC_COUNT_TRIGGER_RE, DYNAMIC_TAIL_OK_RE, BARE_META_WHATIS_RE, WHATIS_FOR_FALLBACK_RE;
+  var askEdgesOfKindCache, SYMBOL_GRAIN_SIBLING, FINE_ENTITY_TYPES, FINE_CLASS_SIBLING, KIND_UNIONS, kindsFor, OVERFLOW_CAP, PLURAL_FORMS, REVERSE_MISS_VERB, LEADING_RELATION_VERB_RE, FROZEN_META_AMBIGUOUS_TERMS, MAX_COMPOSE_DEPTH, NEST_SENTINEL, PRED_LEAD_SKIP, FRAME_WORDS, COPULA_WORDS, entityNoun, isGerundVerb, FWD_NEG_FRAME, PLURAL_ANAPHORA_OBJECT, TEMPORAL_AUX, TEMPORAL_TAIL, TEMPORAL_TRAIL_FILLER, TEMPORAL_DET, COMMIT_FILTER_OPS, ANAPHORA_NAME_TOKEN_RE, AGG_TAIL_FILLER, LIST_SKIP, LIST_TRIGGERS_SORTED, LISTABLE_KINDS, SCOPE_PREPOSITIONS, FIND_LINKERS, RECENT_COMMIT_LEAD, qualCache, META_FALLBACK_CLASSES, inheritsApplicableCache, FIND_TIER, oppositeQualifierSpec, DEGREE_KINDS, COMMIT_FILTER_DATE_RE, compositeList, LEADING_ARTICLE_RE, TRAILING_GRAIN_WORD_RE, ENTRY_POINT_QUERY_RE, ENTRY_POINT_BASENAMES, TEST_FIXTURE_PATH_SEGMENTS, moduleStemOf, isTestFixturePath, TRANSITIVE_MAX_DEPTH, CONTENT_VOCAB, STRUCTURAL_WORDS, CASCADE_NOISE_SET, NOISE_OR_SCAFFOLD, TRIGGER_FUZZY_WORDS, CASCADE_FUZZY_TARGETS, LAST_COMMIT_PHRASE_RE, BARE_WHEN_COMMIT_RE, DYNAMIC_LIST_TRIGGER_RE, DYNAMIC_COUNT_TRIGGER_RE, DYNAMIC_TAIL_OK_RE, BARE_META_WHATIS_RE, WHATIS_FOR_FALLBACK_RE;
   var init_ask = __esm({
     "src/domain/ask.mjs"() {
       init_codegraph();
+      init_module_paths();
       init_ask_vocab();
       init_normalize();
       init_fuzzy();
@@ -6542,6 +6556,7 @@ ${lines.join("\n")}`;
       META_FALLBACK_CLASSES = /* @__PURE__ */ new Set(["Class", "Function", "Method", "GlobalVariable", "Attribute"]);
       inheritsApplicableCache = /* @__PURE__ */ new WeakMap();
       FIND_TIER = { label: 3, chain: 2, attr: 1 };
+      oppositeQualifierSpec = (spec) => spec && typeof spec.value === "boolean" ? { ...spec, value: !spec.value } : null;
       DEGREE_KINDS = ["imports", "calls", "callsSymbol", "inherits", "contains", "tests"];
       COMMIT_FILTER_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
       compositeList = (matches) => listJoin(matches.slice(0, OVERFLOW_CAP).map((m) => ["Function", "Method"].includes(m.class) ? `${m.label}()` : m.label)) + (matches.length > OVERFLOW_CAP ? `, \u2026and ${matches.length - OVERFLOW_CAP} more` : "");

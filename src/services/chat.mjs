@@ -10621,13 +10621,23 @@ function matchesGeneralVerbTeachFrame(sentence) {
 }
 
 /** Does this sentence stand alone as a teach — a clean ACE triple, a taxonomy
- *  declaration, or the general-verb frame? A question never counts. */
+ *  declaration, the comparative frame, or the general-verb frame? A question
+ *  never counts.
+ *
+ *  Each entry names a teach lane that accepts the sentence ALONE, so the set
+ *  here has to track that lane list or a line of real teach sentences goes to
+ *  the parser glued together. The comparative was missing, and the cost was on
+ *  a shipped surface: data/games/hanoi-3.txt's own board line
+ *  ("disk-1 is smaller than disk-2. disk-1 is smaller than disk-3.") stored
+ *  NOTHING, so disk-1 could never move and the recipe's promised solution did
+ *  not exist. The sibling lines on either side of it split correctly, which is
+ *  what made it invisible. */
 function sentenceTeachesAlone(sentence, parseAce, lex) {
   const s = String(sentence).trim();
   if (!s || s.includes("?")) return false;
   const parse = parseAce(s, lex);
   if (parse && parse.triples?.length && !parse.residue?.length) return true;
-  return DECLARATIVE_KIND_OF_RE.test(s) || matchesGeneralVerbTeachFrame(s);
+  return DECLARATIVE_KIND_OF_RE.test(s) || COMPARATIVE_TEACH_RE.test(s) || matchesGeneralVerbTeachFrame(s);
 }
 
 /** Does every sentence of a multi-sentence line teach on its own? Then the line

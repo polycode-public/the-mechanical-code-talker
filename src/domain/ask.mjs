@@ -16,6 +16,7 @@
 // (mgx:touchedByCommit / mgx:changeCoupledWith).
 
 import { relationKind, impactClosure, moduleCountOf, normPath, HISTORY_CAP } from "./codegraph.mjs";
+import { isTestPath } from "./module-paths.mjs";
 import {
   RELATIONS,
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
@@ -1189,10 +1190,16 @@ function qualSets(graph) {
     const ind = graph.byId.get(e.object);
     if (ind) exported.add(String(ind.label).toLowerCase());
   }
-  const testedModules = new Set(edgesOfKind(graph, "tests").map((e) => e.object));
+  const testedModules = new Set();
+  // The TEST modules themselves — the subjects of the same edges. A coverage
+  // qualifier is a claim about SOURCE modules, so these are neither tested nor
+  // untested and are excluded from both (see qualHolds). renderUntested and
+  // untestedModules have always excluded them; this route did not.
+  const testModules = new Set();
+  for (const e of edgesOfKind(graph, "tests")) { testedModules.add(e.object); testModules.add(e.subject); }
   const moduleOfSymbol = new Map();
   for (const e of edgesOfKind(graph, "defines")) moduleOfSymbol.set(e.object, e.subject);
-  c = { exported, testedModules, moduleOfSymbol };
+  c = { exported, testedModules, testModules, moduleOfSymbol };
   qualCache.set(graph, c);
   return c;
 }
@@ -1304,7 +1311,19 @@ function qualHolds(graph, ind, spec) {
     }
     case "tested": {
       const mid = moduleIdOf(graph, ind);
-      return (!!mid && qualSets(graph).testedModules.has(mid)) === spec.value;
+      if (!mid) return false;
+      const sets = qualSets(graph);
+      // A TEST module is neither tested nor untested. Coverage is a claim about
+      // SOURCE modules, so asking whether a test covers itself is a category
+      // error, and answering it made "show me the untested modules" list
+      // test/tasks.test.mjs and test/store.test.mjs as gaps — 9 where
+      // /untested said 7, over the same graph, in the same session. Excluded on
+      // BOTH polarities, and by the same two tests the tool applies: the edge
+      // subject (a module that tests something) and the path shape (a
+      // test-named module that happens to test nothing).
+      const mind = graph.byId?.get?.(mid);
+      if (sets.testModules.has(mid) || (mind && isTestPath(String(mind.label).toLowerCase()))) return false;
+      return sets.testedModules.has(mid) === spec.value;
     }
     default: return false;
   }
@@ -1538,13 +1557,32 @@ function evalSet(graph, ast, opts) {
 /** Fold a boolean AST left-to-right into a result set. A qualifier atom acts as a
  *  set filter on the accumulator (intersection keeps satisfiers, difference removes
  *  them); a set atom contributes its own id-set for the op. */
+/** The opposite of a qualifier, for a complement — or null where it has none.
+ *
+ *  A qualifier carrying a BOOLEAN value is three-valued in practice: tested,
+ *  untested, or not a subject of the question at all. A test module is neither
+ *  tested nor untested, so "modules that are not tested" is NOT the set
+ *  complement of "tested modules" — complementing would hand back every
+ *  individual the question does not apply to. Asking the OPPOSITE qualifier
+ *  drops those from both sides, and makes this route agree with the
+ *  QUALIFIERS-keyed one ("untested modules") that already reads it that way.
+ *
+ *  Qualifiers with no boolean polarity (visibility, exported, attr) have no
+ *  opposite to ask and keep the plain complement, which is the right reading
+ *  for them: "not exported" really is everything that is not exported. */
+const oppositeQualifierSpec = (spec) => (spec && typeof spec.value === "boolean" ? { ...spec, value: !spec.value } : null);
+
 function evalBoolean(graph, ast, opts) {
   let acc = [];
   for (const atom of ast.atoms) {
     if (atom.op === "seed") { acc = evalSet(graph, atom.ast, opts); continue; }
     if (atom.kind === "qual") {
       const holds = (ind) => atom.filters.every((f) => qualHolds(graph, ind, QUALIFIERS[f]));
-      acc = atom.op === "difference" ? acc.filter((i) => !holds(i)) : acc.filter((i) => holds(i));
+      const complementHolds = (ind) => atom.filters.every((f) => {
+        const opposite = oppositeQualifierSpec(QUALIFIERS[f]);
+        return opposite ? qualHolds(graph, ind, opposite) : !qualHolds(graph, ind, QUALIFIERS[f]);
+      });
+      acc = atom.op === "difference" ? acc.filter(complementHolds) : acc.filter(holds);
       continue;
     }
     const oids = new Set(evalSet(graph, atom.ast, opts).map((i) => i.id));

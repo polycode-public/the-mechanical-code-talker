@@ -5,8 +5,14 @@
 #   the goal is that every disk rests on peg-c. solve it.
 #
 # Variations, each stretching a different direction:
-#   scale      — first teach: "disk-4 is a disk. disk-3 is smaller than disk-4."
-#                start all four on peg-a, same goal. 15 moves (2^4 - 1).
+#   scale      — first teach: "disk-4 is a disk."
+#                then: "disk-1 is smaller than disk-4. disk-2 is smaller than disk-4.
+#                disk-3 is smaller than disk-4."
+#                then: "disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on
+#                disk-4. disk-4 rests on peg-a." — same goal. 15 moves (2^4 - 1).
+#                Every smaller-than pair is taught: the relation is stored as given and
+#                is not chased transitively, so disk-3 < disk-4 alone leaves disk-1 and
+#                disk-2 with no legal move onto disk-4 and no plan exists.
 #   any start  — disk-1 rests on peg-b. disk-2 rests on peg-c. disk-3 rests on peg-a.
 #                the goal is that every disk rests on peg-c. solve it.
 #   other goal — same start, "the goal is that every disk rests on peg-b. solve it."
