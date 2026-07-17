@@ -1,5 +1,37 @@
 # CLAUDE.md — project guidance for Claude Code sessions
 
+## An approved plan is the authorisation — never stop to ask if you should continue
+
+If the operator approved a plan, or the prompt says "complete X", **work it to the end and do not
+ask permission to keep going**. Report progress as you land it and carry straight on to the next
+item. The operator has left; a question in an empty room is just an idle session.
+
+**A green test suite is a checkpoint, not a decision point.** Neither is a landed phase, a clean
+commit, or a tidy summary. Those are the middle of the work, and they feel like the end because
+they feel finished — that is the trap. The pull is strongest exactly when a chunk completes well.
+
+Only three things stop the work:
+
+- a hard safety rule,
+- a genuine blocker with no next action left anywhere in the plan, or
+- the operator saying stop.
+
+"Shall I continue?", "Want me to carry on with the rest?", "Stop here for review?" — if the plan
+already answers it, the question is not caution, it is the session ending itself for no reason. Ask
+only what the plan genuinely does not decide, and ask it *before* the work, not as a way to pause
+in the middle.
+
+**Why this is here:** on 2026-07-17 a session with an approved ten-phase plan landed five phases,
+went green, and stopped to ask whether to do the other five. Nothing blocked it. The operator was
+away, and hours of unattended run time were lost to a question that had already been answered
+twice — once by the prompt and once by the approved plan.
+
+**The companion rule: write status as you go, not at the end.** That same session was told to record
+progress in the source docs and did it only when challenged, hours later. If a phase closes, mark
+it in its plan doc and delete its line from `HANDOVER.md` **in the same commit as the fix**. Status
+written at the end is status never written. Sub-agents get the same instruction, and the right to
+edit their own rows.
+
 ## Explicit versioning/commit/push instructions are not up for debate
 
 If the operator's prompt states when to bump the version, commit, or push (e.g. "roll
