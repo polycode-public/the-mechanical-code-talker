@@ -63,7 +63,6 @@
     "!src/domain/schemaorg/turtle.mjs",
     "!src/domain/version-stamp.mjs",
     "README.md",
-    "ROADMAP.md",
     "LICENSE",
     "corpus/",
     "!corpus/wordnet/generate.mjs",

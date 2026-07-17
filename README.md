@@ -193,7 +193,7 @@ under a guard that proves the protected spans came through byte-for-byte.
 
 A frozen regression suite plays out full multi-turn dialogues built from these
 phrasings, from a single question up to a messy, typo-ridden real user.
-Tier-by-tier detail is in `HANDOVER.md` and `ROADMAP.md`.
+Tier-by-tier detail is in `HANDOVER.md`.
 
 ## How it guides you
 
@@ -1023,8 +1023,8 @@ cross-version-stable fact-id contract has exactly one definition.
 tmct began as a whole-package lift of the seonix chat surface (v0.1.0, then
 published as `@polycode-projects/mct`), and was then reshaped. The LLM
 fallback, the code-extraction stack, and the MCP server were all removed. The
-naming, license, and memory model were reset to the vision above. See
-`ROADMAP.md` for the phase plan.
+naming, license, and memory model were reset to the vision above. See the
+`PLAN_*.md` design docs for what's planned next.
 
 ## Standards and bibliography
 

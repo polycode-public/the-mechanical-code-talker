@@ -1,7 +1,6 @@
 [
   "LICENSE",
   "README.md",
-  "ROADMAP.md",
   "bin/tmct.mjs",
   "corpus/LICENSES.json",
   "corpus/README.md",

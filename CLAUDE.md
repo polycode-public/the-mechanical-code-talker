@@ -245,5 +245,6 @@ bibliography carries both.
 
 - `npm test` — node --test suite; must stay green.
 - CLI smoke: `printf 'hi\n/exit\n' | node bin/tmct.mjs` must greet and exit 0.
-- See `ROADMAP.md` (phases), `SKILL_BENCHMARK_CEFR_ENGLISH.md` (autonomous chat tuning loop),
+- See `HANDOVER.md` (open items) and the `PLAN_*.md` design docs,
+  `SKILL_BENCHMARK_CEFR_ENGLISH.md` (autonomous chat tuning loop),
   `SKILL_AGENT_STRATEGY_ADVISOR.md` (background advisor recipe).
