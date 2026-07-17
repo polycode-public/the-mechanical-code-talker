@@ -25,16 +25,16 @@ const primedQuestion = params.get("q");
 // The first two turns are flat single-question lookups; the last three are one
 // continuous exchange showing tmct carry a pronoun ("it") across turns — ask about
 // Task, then ask "what calls it?" and "where is it defined?" without repeating the
-// name. Verified turn by turn with src/domain/ask.mjs's real ask(graph, query, {contextId,
-// prev}), threading contextId/prev exactly as src/services/chat.mjs's runAsk does: `prev` is
-// each turn's full match-id set, and the focus (contextId) only moves when the
-// question names a new entity outright — a pronoun object resolves against the
-// standing focus instead of replacing it, so "it" keeps meaning Task through the
-// "what calls it?" aside about its callers. All five turns come back non-miss.
+// name.
+//
+// e2e/pages-demo-history.test.mjs replays these five turns through the real
+// engine against public/demo-graph.json and asserts each answer verbatim, so an
+// engine change that reworded one fails the suite rather than shipping a page
+// that quotes an answer the product no longer gives.
 const HISTORY = [
   { q: "which modules import src/core/store.mjs?", a: "src/handlers/tasks.mjs and src/handlers/users.mjs." },
   { q: "which module has the most imports?", a: "src/handlers/tasks.mjs — the most imports (5)." },
-  { q: "what is a Task?", a: "Task is a class in this codebase, defined in src/core/model.mjs — try \"describe Task\" or \"which classes inherit from Task\"." },
+  { q: "what is a Task?", a: "Task is a class in this codebase, found in src/core/model.mjs — try \"describe Task\" or \"which classes inherit from Task\"." },
   { q: "what calls it?", a: "in src/core/store.mjs there is function saveStore() and there is function validateTask() in src/core/validate.mjs." },
   { q: "where is it defined?", a: "Task is defined in src/core/model.mjs at lines 9-15." },
 ];

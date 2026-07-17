@@ -1,13 +1,12 @@
 // demo-templates.mjs — the 10 question templates the live chat demo picks from.
 //
-// Every (template, substitution) pair listed here was verified NON-MISS against the
-// real engine (src/domain/ask.mjs's ask(), the exact function this page also calls) over
-// public/demo-graph.json, run Node-side with the same registerWinkModel wiring the
-// browser page uses (see the repo's verification run in the implementation report —
-// not re-run here to keep this file data-only). Substitution sets are deliberately
-// PRUNED to only the entries that resolve (e.g. "which modules import X" excludes the
-// 3 modules nothing imports; "what calls X" excludes functions with no tracked
-// caller) — a template only ever fires with a substitution proven to answer.
+// The demo fires a template with a random substitution, so every pair the sets can
+// produce is an answer a reader might see. Substitution sets are PRUNED to the
+// entries that resolve (e.g. "which modules import X" excludes the 3 modules nothing
+// imports; "what calls X" excludes functions with no tracked caller), and
+// e2e/pages-demo-templates.test.mjs asks every pair against public/demo-graph.json
+// through the same ask() the page calls, so a pair that starts missing fails the
+// suite instead of showing a reader a miss the demo picked for them.
 export const TEMPLATES = [
   {
     id: "which-imports",

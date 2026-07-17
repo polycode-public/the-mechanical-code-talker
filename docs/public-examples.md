@@ -60,6 +60,8 @@ harness the README fences use.
 | `index.html:290` | `what talks to store.mjs?` / `which modules do not import logger?` | `runTurn` → `reverse(uses)`, `composite(boolean)` | `e2e/pages-examples.test.mjs` | replay |
 | `index.html:287` | `npm install -g @polycode-projects/…` | — | `e2e/pages-home.test.mjs` | dom |
 | `index.html:302` | `tmct init` / `viz` / `syllogise` | `CLI_VERBS` | `e2e/pages-home.test.mjs` | dom |
+| `demo-ui.mjs` `HISTORY` | the 5 scripted turns the demo box types out | `runTurn`, `ask` | `e2e/pages-demo-history.test.mjs` (each answer verbatim) | replay |
+| `demo-templates.mjs` `TEMPLATES` | 56 question/substitution pairs the box can pick | `ask` | `e2e/pages-demo-templates.test.mjs` (all 56 must answer) | replay |
 | `index.html:311` | `runChat` library block | `runChat` | `e2e/pages-home.test.mjs` | dom |
 | ledger hero | the embedded `ledger.html` iframe | `renderLedger` | `e2e/pages-home.test.mjs`, `e2e/pages-index.test.mjs` | dom |
 | plan render | the embedded `plan.html` iframe | `renderPlanHtml` | `e2e/pages-home.test.mjs` | dom |
@@ -69,6 +71,13 @@ The three `dom` rows are the open ones. `e2e/pages-home.test.mjs` asserts the
 page shows those strings; nothing asserts the product does what they say. The
 `runChat` block is the one worth pinning next — it is a copyable program, and
 `README.md:243` already replays the same call.
+
+`demo-ui.mjs` and `demo-templates.mjs` each used to carry a comment saying their
+answers had been verified against the real engine, one of them noting the check
+was "not re-run here". One of the five scripted answers had drifted by the time
+it was checked for this table: the page quoted "defined in src/core/model.mjs"
+where the engine says "found in". A comment recording a past verification does
+not survive the next engine change; the two tests above do.
 
 ## docs/
 
