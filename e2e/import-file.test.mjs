@@ -25,8 +25,8 @@ test("init scaffolds .tmct/imports and import --file teaches every hanoi-3 sente
     const imp = runCli(dir, "import", "--file", ".tmct/imports/games/hanoi-3.txt");
     assert.equal(imp.status, 0, imp.stderr + imp.stdout);
     // 19 teachable sentences after sentence-splitting the compound lines;
-    // the 17 comment lines are skipped, never declined.
-    assert.match(imp.stdout, /19 sentence\(s\), 17 comment line\(s\) skipped/);
+    // the 23 comment lines are skipped, never declined.
+    assert.match(imp.stdout, /19 sentence\(s\), 23 comment line\(s\) skipped/);
     assert.match(imp.stdout, /19 taught, 0 declined/);
     assert.match(imp.stdout, /taught — you can move a disk onto a peg\./);
     assert.doesNotMatch(imp.stdout, /DECLINED/);
