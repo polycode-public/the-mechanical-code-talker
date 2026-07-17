@@ -256,10 +256,14 @@ Keep. 10 tests cover same, ahead and behind.
 
 Four independent reasons, any one sufficient:
 
-1. **It is Damerau-Levenshtein. The libraries are not.** `leven` and `fastest-levenshtein` compute
-   plain Levenshtein with no transposition. `fuzzy.mjs` handles transpositions
-   (`prev2[j - 2] + cost`). Swapping in either changes every fuzzy verdict in the product, and the
-   fuzzy tier is what decides whether a typo gets repaired or the sentence lands on the miss wall.
+1. **It is Optimal String Alignment (a restricted Damerau-Levenshtein). The libraries are not even
+   that.** `leven` and `fastest-levenshtein` compute plain Levenshtein with no transposition.
+   `fuzzy.mjs` handles adjacent transpositions (`prev2[j - 2] + cost`) — the OSA recurrence, which
+   forbids editing a substring twice, so `editDistance("CA","ABC")=3` where true Damerau-Levenshtein
+   gives 2 (OSA is not a metric — it can break the triangle inequality; Damerau 1964, Levenshtein
+   1966). The decision is unchanged: OSA handles transpositions and the libraries do not. Swapping in
+   either changes every fuzzy verdict in the product, and the fuzzy tier is what decides whether a
+   typo gets repaired or the sentence lands on the miss wall.
 2. **It is bounded, and the bound is the point.** `editDistance(a, b, max)` returns `max + 1` as
    soon as the row minimum provably exceeds `max`. The libraries compute the full distance. The
    early exit is what makes `fuzzyMatchInSet`'s tie-refusal cheap enough to run over every

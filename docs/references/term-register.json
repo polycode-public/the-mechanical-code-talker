@@ -278,9 +278,9 @@
     {
       "term": "editDistance",
       "area": "ir",
-      "verdict": "rename",
+      "verdict": "aligned",
       "cite": "Damerau, CACM 7(3), 1964, pp. 171-176; Levenshtein, Soviet Physics Doklady 10(8), 1966, pp. 707-710",
-      "note": "implements OPTIMAL STRING ALIGNMENT, not Damerau-Levenshtein. editDistance('CA','ABC')=3; true DL gives 2. OSA is not a metric.",
+      "note": "implements OPTIMAL STRING ALIGNMENT (restricted Damerau-Levenshtein), now named as such in fuzzy.mjs and PLAN_DEPS §3.5. editDistance('CA','ABC')=3; true DL gives 2. OSA is not a metric.",
       "verified": "2026-07-17 — primary source read"
     },
     {

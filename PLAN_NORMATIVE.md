@@ -641,7 +641,11 @@ forward-chaining fixpoint, which its own header already says.
 Two defensible options, and the operator picks: keep `syllogise` as the product-facing verb and name
 the mechanism accurately in the code, or rename the verb. A rename touches a published CLI surface.
 
-### 7.9 Damerau-Levenshtein → Optimal String Alignment
+### 7.9 Damerau-Levenshtein → Optimal String Alignment — LANDED
+
+Both the `fuzzy.mjs` comment and `PLAN_DEPS.md` §3.5 now name it Optimal String Alignment
+(restricted Damerau-Levenshtein), with Damerau 1964 / Levenshtein 1966 cited and the not-a-metric
+note. §3.5's decision is untouched — OSA handles transpositions and the libraries do not.
 
 **`src/domain/interpret/fuzzy.mjs:19`** (the comment) and **`PLAN_DEPS.md` §3.5** (the prose).
 §9.4 has the proof: `editDistance("CA","ABC") = 3`, and true Damerau-Levenshtein gives 2.

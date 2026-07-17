@@ -15,8 +15,13 @@ import collisionData from "../real-word-collisions.json" with { type: "json" };
 const NEVER_CANONICALIZE = ["used"];
 import { STOPWORDS } from "./normalize.mjs";
 
-// ---- bounded edit distance — hand-rolled Damerau-Levenshtein, bounded with an
-// early row-minimum exit ----
+// ---- bounded edit distance — Optimal String Alignment (a restricted
+// Damerau-Levenshtein: it allows adjacent transpositions but forbids editing any
+// substring twice, so editDistance("CA","ABC")=3 where true Damerau-Levenshtein
+// gives 2). The two-previous-rows recurrence (prev2) is OSA's; true DL needs a
+// full last-seen-position table. OSA is NOT a metric — it can violate the
+// triangle inequality. Bounded with an early row-minimum exit.
+// Damerau 1964 (CACM 7(3)); Levenshtein 1966 (Soviet Physics Doklady 10(8)). ----
 
 /** Distance between a and b, or max+1 as soon as it provably exceeds `max`. */
 export function editDistance(a, b, max) {
