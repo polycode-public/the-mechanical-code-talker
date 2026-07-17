@@ -213,11 +213,16 @@ Sequence for the next session, in order:
      `@stepK`-stamped, so a read-back returns every step at once (Phase 7's audit found this).
    - 3.10b (goal-frame phrasings) and 3.10c (plan follow-ups) are untouched.
 2. ~~**Phase 7**~~ — done. Two rows stay open inside `docs/public-examples.md` itself.
-3. ~~**Phase 10**~~ — the RDF/ontology half landed. **The operator then widened it: every term in
-   the repo traced to a published standard or paper (inference/deduction/predicate, classical
-   planning, grammar, NLP, unit vs integration testing, the storage model), plus a README
-   bibliography.** That pass is in flight; `PLAN_NORMATIVE.md` is the record. §7 lists four fixes in
-   files it does not own.
+3. ~~**Phase 10**~~ — **done, in both scopes.** The RDF/ontology half landed first; the operator then
+   widened it to every term in the repo traced to a published standard or paper, plus a README
+   bibliography. `PLAN_NORMATIVE.md` (~1,300 lines) is the record: 46 register terms, 40 verified
+   against a primary source and **6 marked UNVERIFIED** rather than implying a check that did not
+   happen. Verdicts — CURIEs: 21 aligned, 34 map, 26 extend, 4 rename, 2 drop; register: 26 aligned,
+   8 map, 6 extend, 6 rename.
+   **The drift ranking answers the operator's prediction: storage first (confirmed), then eval, IR,
+   testing. Logic was the cleanest area and still held four wrong citations** — handed off at §7.12.
+   §7 lists the fixes in files Phase 10 did not own; **§7.7 (the 32-bit fact id) is the only one
+   needing a real migration** and must not be folded into another change.
 4. **Phase 8** — the capability page. Phase 10's research is cite-ready: `docs/references/schemas/`.
 5. **Phase 9** — the prose pass. Last, and it must land after Phase 10's bibliography so the README
    is written once.

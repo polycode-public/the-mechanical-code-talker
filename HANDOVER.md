@@ -81,7 +81,7 @@ Phases 1, 2, 4, 5 and 6 closed at 2.4.1. What remains:
   being the one worth pinning next; and `docs/repository-interface.md`'s prose carries the contract
   numbers with no test holding them (the schema beside it is pinned to the source const).
 - **Phase 10 is WIDER than `PLAN_OPEN_ITEMS.md` §10 scoped it, on the operator's instruction
-  (2026-07-17), and that pass is in flight.** §10 asked only for the RDF/CURIE vocabulary; the real
+  (2026-07-17), and that pass is DONE.** §10 asked only for the RDF/CURIE vocabulary; the real
   brief is **every term the repo names, anywhere**, each traced to a published standard or paper —
   inference/deduction/predicate (Aristotle through description logic), classical AI planning
   (STRIPS/PDDL/Graphplan), grammar, NLP, IR scoring (Levenshtein vs Damerau), unit vs integration
