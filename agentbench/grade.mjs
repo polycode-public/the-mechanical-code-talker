@@ -14,7 +14,7 @@
 
 import { isCapability } from "../src/domain/router/registry.mjs";
 import { hallucinationsIn } from "../src/domain/router/call-validator.mjs";
-import { parseJsonlRows } from "../benchlib/bench.mjs";
+import { parseJsonlRows, rollupBy, ladderGateBy } from "../benchlib/bench.mjs";
 
 // ---- the rungs (the agentic ladder — analogue of chatbench's CEFR GRADES) ----
 // A0 = single obvious tool, args on a plate. A1 = pick the right tool from a
@@ -264,12 +264,8 @@ const describeCalls = (calls) =>
  *  refuse-everything driver hits 0% hallucination but fails on completion.
  *  Returns { byRung: {A0:{...}}, overall:{...} }. */
 export function rollup(rows) {
-  const byRung = {};
-  for (const rung of RUNGS) {
-    const of = rows.filter((r) => r.rung === rung);
-    if (of.length) byRung[rung] = tallyOne(of);
-  }
-  return { byRung, overall: tallyOne(rows) };
+  const { byTier, overall } = rollupBy(rows, RUNGS, (r) => r.rung, tallyOne);
+  return { byRung: byTier, overall };
 }
 
 function tallyOne(rows) {
@@ -298,19 +294,13 @@ function tallyOne(rows) {
  *  above it, which is reported as skipped-with-a-receipt. Returns
  *  { order, gatedAt, receipts:[{rung, reason}] } over a completed rollup. */
 export function ladderGate(rolled) {
-  const receipts = [];
-  let gatedAt = null;
-  for (const rung of RUNGS) {
-    const cell = rolled.byRung[rung];
-    if (!cell) continue;
-    if (gatedAt) { receipts.push({ rung, reason: `gated by ${gatedAt}` }); continue; }
-    if (!cell.gatePass) {
-      gatedAt = cell.hallucinationRate > 0
-        ? `${rung} hallucination ${(cell.hallucinationRate * 100).toFixed(0)}%`
-        : `${rung} completion ${(cell.completion * 100).toFixed(0)}% < ${(COMPLETION_FLOOR * 100).toFixed(0)}%`;
-    }
-  }
-  return { order: RUNGS.filter((r) => rolled.byRung[r]), gatedAt, receipts };
+  return ladderGateBy(rolled.byRung, {
+    tiers: RUNGS,
+    tierKey: "rung",
+    rateOf: (c) => c.hallucinationRate,
+    rateLabel: "hallucination",
+    floor: COMPLETION_FLOOR,
+  });
 }
 
 /** Human-readable metric-pair table for the console. Shows BOTH completion axes:

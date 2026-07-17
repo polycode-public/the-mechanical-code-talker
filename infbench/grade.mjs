@@ -45,7 +45,7 @@ import {
 import { parseAce } from "../src/domain/grammar/ace.mjs";
 import { loadLexicon } from "../src/domain/grammar/lexicon.mjs";
 import { normFactTerm } from "../src/adapters/memory/core.mjs";
-import { parseJsonlRows } from "../benchlib/bench.mjs";
+import { parseJsonlRows, rollupBy, ladderGateBy } from "../benchlib/bench.mjs";
 
 // ---- the bands (the classical-logic ladder — INF-A1 -> INF-C2) ----
 export const BANDS = Object.freeze(["INF-A1", "INF-A2", "INF-B1", "INF-B2", "INF-C1", "INF-C2"]);
@@ -346,12 +346,8 @@ export function ceilingCapabilities(rows) {
 
 /** Fold graded rows (one arm's — kernel or chat) into { byBand, overall }. */
 export function rollup(rows) {
-  const byBand = {};
-  for (const band of BANDS) {
-    const of = rows.filter((r) => r.band === band);
-    if (of.length) byBand[band] = tallyOne(of);
-  }
-  return { byBand, overall: tallyOne(rows) };
+  const { byTier, overall } = rollupBy(rows, BANDS, (r) => r.band, tallyOne);
+  return { byBand: byTier, overall };
 }
 
 /** Ladder gating (mirrors agentbench/grade.mjs's ladderGate): bands run
@@ -360,19 +356,13 @@ export function rollup(rows) {
  *  skipped-with-a-receipt. A 0%-completion band is a CEILING MARKER, not a
  *  failure (PLAN_INFERENCE_TESTING.md §3, ROADMAP L256). */
 export function ladderGate(rolled) {
-  const receipts = [];
-  let gatedAt = null;
-  for (const band of BANDS) {
-    const cell = rolled.byBand[band];
-    if (!cell) continue;
-    if (gatedAt) { receipts.push({ band, reason: `gated by ${gatedAt}` }); continue; }
-    if (!cell.gatePass) {
-      gatedAt = cell.fabricationRate > 0
-        ? `${band} fabrication ${(cell.fabricationRate * 100).toFixed(0)}%`
-        : `${band} completion ${(cell.completion * 100).toFixed(0)}% < ${(COMPLETION_FLOOR * 100).toFixed(0)}%`;
-    }
-  }
-  return { order: BANDS.filter((b) => rolled.byBand[b]), gatedAt, receipts };
+  return ladderGateBy(rolled.byBand, {
+    tiers: BANDS,
+    tierKey: "band",
+    rateOf: (c) => c.fabricationRate,
+    rateLabel: "fabrication",
+    floor: COMPLETION_FLOOR,
+  });
 }
 
 /** Human-readable metric-pair table for one arm's rollup. The ceiling column

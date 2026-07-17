@@ -42,3 +42,36 @@ export function parseJsonlRows(text, validateOne) {
   });
   return { cases, errors };
 }
+
+/** Fold graded rows into { byTier, overall } over an ordered tier list.
+ *  `tierOf(row)` reads a row's tier; `tally(rows)` computes one cell (each
+ *  bench brings its own metric set). Only tiers with at least one row appear. */
+export function rollupBy(rows, tiers, tierOf, tally) {
+  const byTier = {};
+  for (const tier of tiers) {
+    const of = rows.filter((r) => tierOf(r) === tier);
+    if (of.length) byTier[tier] = tally(of);
+  }
+  return { byTier, overall: tally(rows) };
+}
+
+/** Ladder gating: tiers run low→high; the FIRST tier that fails its honest gate
+ *  (0% of the named fail-rate at >= `floor` completion) gates every tier above
+ *  it, reported skipped-with-a-receipt. `cells` is the per-tier tally map,
+ *  `tierKey` names the receipt field, `rateOf(cell)` reads the fail-rate and
+ *  `rateLabel` names it in the reason. Returns { order, gatedAt, receipts }. */
+export function ladderGateBy(cells, { tiers, tierKey, rateOf, rateLabel, floor }) {
+  const receipts = [];
+  let gatedAt = null;
+  for (const tier of tiers) {
+    const cell = cells[tier];
+    if (!cell) continue;
+    if (gatedAt) { receipts.push({ [tierKey]: tier, reason: `gated by ${gatedAt}` }); continue; }
+    if (!cell.gatePass) {
+      gatedAt = rateOf(cell) > 0
+        ? `${tier} ${rateLabel} ${(rateOf(cell) * 100).toFixed(0)}%`
+        : `${tier} completion ${(cell.completion * 100).toFixed(0)}% < ${(floor * 100).toFixed(0)}%`;
+    }
+  }
+  return { order: tiers.filter((t) => cells[t]), gatedAt, receipts };
+}
