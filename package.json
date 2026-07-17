@@ -1,6 +1,6 @@
 {
   "name": "@polycode-projects/the-mechanical-code-talker",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "private": false,
   "type": "module",
   "description": "The Mechanical Code Talker (tmct) — a tolerant, offline, $0 chat surface that guides you toward precision queries about a software repository. ELIZA/PARRY-style but domain-obsessed with code. No model calls; no codebase index of its own.",
@@ -133,6 +133,7 @@
     "audit": "npm audit --audit-level=high",
     "audit:fix": "npm audit fix",
     "demo:build": "node scripts/build-demo-site.mjs",
+    "roll": "node scripts/roll.mjs",
     "build:ask-bundle": "node scripts/build-ask-bundle.mjs",
     "build:demo-graph": "node scripts/build-demo-graph.mjs",
     "build:demo-memory": "node scripts/build-demo-memory.mjs",
