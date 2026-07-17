@@ -1311,19 +1311,19 @@ function qualHolds(graph, ind, spec) {
     }
     case "tested": {
       const mid = moduleIdOf(graph, ind);
-      if (!mid) return false;
       const sets = qualSets(graph);
       // A TEST module is neither tested nor untested. Coverage is a claim about
       // SOURCE modules, so asking whether a test covers itself is a category
-      // error, and answering it made "show me the untested modules" list
-      // test/tasks.test.mjs and test/store.test.mjs as gaps — 9 where
-      // /untested said 7, over the same graph, in the same session. Excluded on
-      // BOTH polarities, and by the same two tests the tool applies: the edge
-      // subject (a module that tests something) and the path shape (a
-      // test-named module that happens to test nothing).
-      const mind = graph.byId?.get?.(mid);
-      if (sets.testModules.has(mid) || (mind && isTestPath(String(mind.label).toLowerCase()))) return false;
-      return sets.testedModules.has(mid) === spec.value;
+      // error that made "show me the untested modules" list the test modules as
+      // their own gaps. Excluded on BOTH polarities, by the same two tests the
+      // tool applies: the edge subject (a module that tests something) and the
+      // path shape (a test-named module that happens to test nothing).
+      const mind = mid ? graph.byId?.get?.(mid) : null;
+      if (mid && (sets.testModules.has(mid) || (mind && isTestPath(String(mind.label).toLowerCase())))) return false;
+      // An entity whose defining module can't be resolved (a class with no
+      // defines edge) is not a test module — it reads as "not tested", so it
+      // stays in the untested set instead of dropping out of both polarities.
+      return (!!mid && sets.testedModules.has(mid)) === spec.value;
     }
     default: return false;
   }
