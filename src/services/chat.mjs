@@ -684,6 +684,29 @@ const MEMORY_COUNT_NOUNS = {
 };
 const MEMORY_CLASS_LABELS = { Fact: ["fact", "facts"], Utterance: ["utterance", "utterances"] };
 
+/** Everything a count question can trail after its counted noun and still mean
+ *  the plain total: "how many facts do you know", "how many facts are there",
+ *  "how many facts in total". A closed table — anything outside it restricts
+ *  the count to something, and this lane says so rather than answering as if
+ *  it were not there. */
+const MEMORY_COUNT_FILLER_TAIL_RE =
+  /^(?:(?:do|d')\s+(?:you|u)\s+(?:know|have|remember)|are\s+there|(?:in\s+)?(?:total|all)|altogether)?[?.!\s]*$/i;
+
+/** "how many facts about horses (are there)" — the one restriction this lane
+ *  reads: facts naming a term on either side of the triple. */
+const MEMORY_COUNT_ABOUT_TAIL_RE =
+  /^about\s+(?:the\s+|an?\s+)?([a-z][\w-]*)\s*(?:are\s+there|do\s+(?:you|u)\s+know)?[?.!\s]*$/i;
+
+/** Count the stored Facts naming `term` as subject or object — the restriction
+ *  "how many facts about horses" asks for. */
+async function memoryFactsAboutCount(memoryDir, term) {
+  const { loadMemory, readFactRows, normFactTerm } = await import("../adapters/memory/core.mjs");
+  const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
+  const wanted = normFactTerm(singularOf(term, loadLexicon(), lookupNoun));
+  const rows = readFactRows(await loadMemory(memoryDir));
+  return rows.filter((r) => normFactTerm(r.subject) === wanted || normFactTerm(r.object) === wanted).length;
+}
+
 /** Recognise a memory-store count question and answer it by loading the memory
  *  graph, or null (→ answerCount / the ask engine own it). Handles "how many facts",
  *  "how many utterances", and the bare "how many do you know" (→ facts). Lazy +
@@ -693,20 +716,41 @@ async function answerMemoryCount(memoryDir, query) {
   if (!memoryDir) return null;
   const q = String(query).toLowerCase();
   let cls = null;
+  let tail = "";
   // the bare "how many do you know" (no explicit noun) defaults to remembered facts
   if (/\bhow many(?:\s+(?:things?|facts?))?\s+(?:do|d'?)\s+(?:you|u)\s+know\b/.test(q)) cls = "Fact";
   if (!cls) {
-    const m = q.match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b/);
-    if (m) cls = MEMORY_COUNT_NOUNS[m[1]] || null;
+    const m = q.match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b(.*)$/);
+    if (m) {
+      cls = MEMORY_COUNT_NOUNS[m[1]] || null;
+      tail = m[2].trim();
+    }
   }
   if (!cls) return null;
+  const [sing, plur] = MEMORY_CLASS_LABELS[cls];
+  const said = (n) => `${n} ${n === 1 ? sing : plur}.`;
+  // A restriction this lane can read: count only the facts naming that term.
+  const about = cls === "Fact" ? tail.match(MEMORY_COUNT_ABOUT_TAIL_RE) : null;
+  if (about) {
+    try {
+      return `${said(await memoryFactsAboutCount(memoryDir, about[1]))} (about "${about[1]}")`;
+    } catch {
+      return null;
+    }
+  }
+  // A tail that restricts the question to something this lane cannot read. The
+  // total is not the answer to it — it is the answer to a shorter question
+  // nobody asked — so name what went unread instead of counting past it.
+  if (tail && !MEMORY_COUNT_FILLER_TAIL_RE.test(tail)) {
+    return `I can count the ${plur} I hold, but not the "${tail}" part of that question — `
+      + `so I won't answer with the plain total, which would be a count of something you didn't ask for. `
+      + `Ask "how many ${plur} do you know" for the total, or "how many ${plur} about <term>" to narrow it.`;
+  }
   let loadMemory;
   try { ({ loadMemory } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   let mem;
   try { mem = await loadMemory(memoryDir); } catch { return null; }
-  const n = (mem.individuals || []).filter((i) => (i.class || "") === cls).length;
-  const [sing, plur] = MEMORY_CLASS_LABELS[cls];
-  return `${n} ${n === 1 ? sing : plur}.`;
+  return said((mem.individuals || []).filter((i) => (i.class || "") === cls).length);
 }
 
 /** `/stats`: a one-screen overview of the graph — class counts, relationship
