@@ -16,22 +16,13 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-17)
 
-v2.5.0 in the working tree. Everything through 2.4.3 (the two parser defects, Phase 7 pins,
-§7.5/§7.6, N1, and the N2/N3 doc corrections) is pushed to `origin/main`. 2.5.0 is the version the
-current benchmark round measures. CI publishes on a version bump on main.
+v2.5.0 in the working tree; everything through 2.4.3 is pushed to `origin/main`. 2.5.0 is the
+version the current benchmark round measures, committed locally and unpushed. CI publishes on a
+version bump on main.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
 download, not reachable from data in hand).
-
-### Verified green at HEAD, on a quiet machine
-
-The full `npm test` is **2771/2771** — it surfaced 11 cross-lane regressions from the concurrent
-agents' changes (a `seon:` prefix proxy in the CEGIS enumerator broken by the §7.2 rename, and the
-three-valued `tested` qualifier over-reaching to classes with no resolvable module); all were fixed
-at root and re-run green. `npm run check:budgets` passes standalone (`test:smoke` 689ms/1000ms,
-`test:fast` 1482ms/10000ms) — the earlier "over budget" reading was the self-inflicted-load error.
-Nothing is pushed; the operator gates that.
 
 ## Open items
 
@@ -39,10 +30,8 @@ Nothing is pushed; the operator gates that.
 carries the phase table, the operator decisions already taken, the traps this cycle hit, and the
 list of this plan's own citations that proved false. Read that before quoting any fix site.
 
-Phases 1–7 and 10 are closed, and this round closed the last of the phase-table backlog: the two
-parser defects (the multi-sentence teach bullet and the silent count-restrictor total), Phase 7's
-two leftover rows (the `runChat` block and the `repository-interface.md` prose, both now pinned),
-and `PLAN_NORMATIVE.md` §7.5 (the PROV Source split) and §7.6 (the SKOS derived-view). What remains:
+The `PLAN_OPEN_ITEMS.md` phase-table backlog is fully closed (`git log` and the plan doc hold the
+record). What remains:
 
 - **The 2.5.0 benchmark round's routed backlog.** All four axes re-ran at 2.5.0 (`BENCHMARK_{AGENT,
   INFERENCE,CEFR_ENGLISH,CONVERSATION}_2.5.0.md`). Every 2.0.3 confident-wrong is confirmed fixed;
