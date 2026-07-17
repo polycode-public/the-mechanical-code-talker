@@ -100,12 +100,15 @@ commit that reaches `main` or a remote.
 | **5** — wrong documents | **DONE** | `bf6732c` |
 | PLAN_DEPS batches 1-7 | **DONE** | `c2ded65`, `f2d7e27`, `488aa84`, `5824c66`, `2ccee08` |
 | PLAN_DEPS batches 8-12 | **OPEN** — internal-library consolidation (`PLAN_DEPS.md` §6.5/§6.6): a shared bench module (`pool`, `mulberry32`/`seededShuffle`, `parseJsonl`, `parseFlags`, `ladderGate`/`rollup`); `idfOver` → `text-stats.mjs`; `bfsLevels` → `planning.mjs`; `trackedFiles`/`corpusLanes`/`importClosure`; the `isMain` guard spellings (4 sites) | — |
-| PLAN_DEPS Q4 (has Renovate ever run?) | **OPEN** — operator-only GitLab check (pipeline schedule + `RENOVATE_TOKEN`); nothing in the repo can answer it | — |
 | **3** — honest-miss gaps | **DONE** — 3.1-3.3, 3.5-3.9, 3.10a-e, 3.11 done; 3.4 didn't reproduce. 3.10a-d closed: board reads (clearness, `what rests on X`, `where is X`) and plan follow-ups now serve the current plan/board state | `b1f14a0`, `7d4acc4`, `7ea0036`, `92133b0`, `1d01eab`, `7caea95`, `c23a2b6` |
-| **7** — public-surface audit | **DONE** — table at `docs/public-examples.md`; 3 shipping defects deleted, 61 examples pinned. Two rows left open in the table itself: 3 `dom`-tier `index.html` rows, and `docs/repository-interface.md`'s prose numbers | `c49003d`, `01f4006`, `5c45354`, `93e5297` |
+| **7** — public-surface audit | **DONE** — table at `docs/public-examples.md`; 3 shipping defects deleted, 61 examples pinned | `c49003d`, `01f4006`, `5c45354`, `93e5297` |
+| Phase 7 leftover rows | **OPEN** — 3 `dom`-tier `index.html` assertions (a browser test asserts the page shows a string; nothing asserts the product agrees — `runChat` the one worth pinning) + `docs/repository-interface.md`'s unpinned prose contract numbers | — |
 | **8** — capability claims | **OPEN** — on the two existing public surfaces (`README.md` + the home page), not a new page. Two questions block verification (a caveat conflict, the CONVERSATION axis) — see `CLAUDES_LAST_RESORT_IS_TO_HIDE_THINGS_HERE_IDEALLY_YOU_COMPLETE_A_TASK_OR_NOT_BUT_DO_NOT_DEFER.md` | `2cd570e` on disk |
 | **9** — prose pass | **OPEN** — done together with Phase 8; same two open questions | `2cd570e` on disk |
-| **10** — `PLAN_NORMATIVE.md` | **DONE** — plan written, standards read, ontology uplifted, register machine-checked. §7 fallout all landed: the four inference citations, the SEON renames, `cap:`/`taught:`, the OSA rename, the storage-vocab renames, the honest-miss citation, and the **`factIdFor` 32→64-bit migration** (the live data-loss bug §9.1 found — a real collision at 26k triples, now content-derived from a truncated SHA-256). §7.5 (PROV Source split) and §7.6 (SKOS concept identity) remain open | `factIdFor` at `88842f3`; SEON `37a71cd`; cap/taught `ba8709a`; OSA `93acf19`; storage-vocab `66cfc9e` |
+| **10** — `PLAN_NORMATIVE.md` | **DONE** — plan written, standards read, ontology uplifted, register machine-checked. §7 fallout all landed: the four inference citations, the SEON renames, `cap:`/`taught:`, the OSA rename, the storage-vocab renames, the honest-miss citation, and the **`factIdFor` 32→64-bit migration** (the live data-loss bug §9.1 found — a real collision at 26k triples, now content-derived from a truncated SHA-256) | `factIdFor` at `88842f3`; SEON `37a71cd`; cap/taught `ba8709a`; OSA `93acf19`; storage-vocab `66cfc9e` |
+| `PLAN_NORMATIVE.md` §7.5 / §7.6 | **OPEN** — the PROV Source split (a read-side reclassification off the stored `sourceType`) and SKOS concept identity (needs concept identity for the corpus's bare-string terms) | — |
+| Multi-sentence teach line drops its last bullet | **OPEN** — cosmetic; in a seeded session, two `•` then an unbulleted third; the pin runs unseeded and does not catch it | — |
+| `read as` excuses a guess beyond the impact paraphrase | **OPEN** — `ask.mjs:3921`'s relaxation tier; 1.3 routed its own phrasings away, the general problem stands | — |
 | PLAN_DEPS Q1 (maintainer tier), Q3 (ReDoS) | **DONE** — Q3 bounds the `name` filter (>30s → 1ms); Q1 stops 16 maintainer files shipping and adopts `yaml` as a devDependency, which fixed silent WordNet data loss | `e32160e`, + below |
 
 ## Operator decisions taken this cycle — do not re-ask
@@ -187,14 +190,6 @@ doc named the neighbourhood, not the cause.**
   refusing `does Project inherit from Record too?` and `sorry, i mean where is...` because `too` and
   `sorry` were in no vocabulary list. Fixed at `9ce18c0`. Any new guard needs a row proving ordinary
   conversation still lands.
-
-## Known-open defects found this cycle, not in the original plan
-
-- **A multi-sentence teach line renders its last fact without a bullet** in a SEEDED session (two
-  `•` then an unbulleted third). The pin runs unseeded so it does not catch this. Cosmetic.
-- **`read as` still excuses a guess for inputs other than the impact paraphrase** —
-  `ask.mjs:3921`'s relaxation tier. 1.3 routed its own phrasings away from it; the general problem
-  stands.
 
 ## Resume here
 
