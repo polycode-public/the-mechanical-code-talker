@@ -105,9 +105,12 @@ Checked by grepping the full import closure.
   history:isCommittedIn)" and emits `mgx:touchedByCommit` instead. The `seon:history` key that
   remains in `codegraph.mjs`'s `PROP_KIND` is a read-side key for pre-realign artifacts, filed
   under "legacy tokens". Nothing writes it.
-- **`seon:Module`, `seon:ClassDefinition`, `seon:Attribute`, `seon:subKind` do not exist.** These
-  are live in tmct. See `PLAN_NORMATIVE.md` §4.3 for the verdicts and §7 for the ones that need a
-  file this cycle's plan does not own.
+- **`seon:Module`, `seon:ClassDefinition`, `seon:Attribute`, `seon:subKind` do not exist in SEON,
+  and tmct no longer emits any of them.** `seon:subKind` → `mgx:subKind` (owned — its type flavour
+  has no SEON term); the router's `seon:Module` → `mgx:Module` (SEON's nearest are Namespace and
+  main:File, neither a JS module) and `seon:ClassDefinition` → `seon:ClassType` (SEON's real class
+  for a class definition); `seon:Attribute` was realigned earlier. See `PLAN_NORMATIVE.md` §4.3,
+  §7.1 and §7.2 for the verdicts.
 
 ## A latent bug in SEON itself
 

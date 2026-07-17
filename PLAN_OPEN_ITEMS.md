@@ -139,7 +139,7 @@ history were not.** Verify before you quote.
 | 10.2 | `prov:` has 3 uses | **2**, and the third was a JS object key (`prov: provBucketFor(...)` in `ledger-viz.mjs`), not a CURIE. Both real uses are the same UNVERIFIED note — the diagnosis was right and sharper than the count: `prov:` is used exactly twice, both times to say the check had not been done |
 | 10.2 | "does `mgx:statedBy` mean `prov:wasAttributedTo`?" and the in-code note "ext ref prov:wasDerivedFrom" | **`mgx:derivedFrom` means `prov:wasInfluencedBy`, not `wasDerivedFrom`** — it unions attribution with derivation, which PROV keeps apart. And `statedBy` cannot assert `wasAttributedTo`: that ranges over `prov:Agent`, while `tmct:Source` unions all three of PROV's disjoint top classes (`operator`=Agent, `corpus`/`web`=Entity, `entailed`=Activity) |
 | 10.2 | the inventory is "the `mgx:`/`mgxneg:` predicates and classes, `EDGE_KINDS`, `MISS_REASONS`, the `RELATIONS` keys… `INTERFACE_VERSION`'s service names" | **Too narrow, and the narrowness hid the worst bug in the repo.** A term does not have to be a triple. Scoping the review to CURIEs skips `factIdFor`'s 32-bit hash (silent data loss at documented corpus sizes), `fuzzy.mjs`'s misnamed OSA, `ledger`, and the unnamed reification. The register is 45 concept terms across 9 areas — see `PLAN_NORMATIVE.md` §9 |
-| 10.2 | SEON is "already used at 99 sites; check the alignment is real and complete" | **Real but partial: 19 of 24 SEON spellings are genuine terms, 5 are not.** `seon:subKind` is a **stored** undefined IRI (in `examples/*/.tmct/graph.json` today); `seon:Module`, `seon:ClassDefinition`, `seon:Attribute` don't exist either. `seon:history` tmct already caught and realigned. Verified against the live `code.owl`, not a summary |
+| 10.2 | SEON is "already used at 99 sites; check the alignment is real and complete" | **Real but partial: 19 of 24 SEON spellings are genuine terms, 5 were not — all 5 now realigned.** `seon:subKind` (a stored undefined IRI in `examples/*/.tmct/graph.json`) → `mgx:subKind`; `seon:Module` → `mgx:Module`, `seon:ClassDefinition` → `seon:ClassType`, `seon:Attribute` and `seon:history` were already realigned. Verified against the live `code.owl`, not a summary |
 
 **Phase 3's own row set — the fix site was wrong on five of eight items, always the same way: the
 doc named the neighbourhood, not the cause.**
@@ -217,8 +217,8 @@ Sequence for the next session, in order:
    widened it to every term in the repo traced to a published standard or paper, plus a README
    bibliography. `PLAN_NORMATIVE.md` (~1,300 lines) is the record: 46 register terms, 40 verified
    against a primary source and **6 marked UNVERIFIED** rather than implying a check that did not
-   happen. Verdicts — CURIEs: 21 aligned, 34 map, 26 extend, 4 rename, 2 drop; register: 26 aligned,
-   8 map, 6 extend, 6 rename.
+   happen. Verdicts — CURIEs: 21 aligned, 34 map, 26 extend, 4 rename, 2 drop; register: 27 aligned,
+   8 map, 6 extend, 5 rename (subKind moved rename→aligned once §7.1 landed).
    **The drift ranking answers the operator's prediction: storage first (confirmed), then eval, IR,
    testing. Logic was the cleanest area and still held four wrong citations** — handed off at §7.12.
    §7 lists the fixes in files Phase 10 did not own; **§7.7 (the 32-bit fact id) is the only one

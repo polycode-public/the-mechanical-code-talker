@@ -535,7 +535,13 @@ coordinator's, once, at the end.
 
 Ordered by what they cost. Each has a verdict already; none needs more research.
 
-### 7.1 `seon:subKind` → `mgx:subKind` — the one stored undefined IRI
+### 7.1 `seon:subKind` → `mgx:subKind` — the one stored undefined IRI — LANDED
+
+Emit (`graph-build.mjs:146`) and its vocabulary note and schema doc now say `mgx:subKind`; the
+ontology declares it (owned, the mgx:touchedByCommit precedent). Example graphs and fixture repos
+re-indexed through the real generators. **Step 2 (a `seon:subkind` legacy read key in
+`codegraph.mjs`'s `PROP_KIND`) had no site: `subKind` is an ATTRIBUTE, never a relation, so it
+never entered `PROP_KIND` and old graphs render it generically by its own token with no alias.**
 
 **`src/adapters/graph-build.mjs:146`, `src/tools/schema-docs.mjs:157`, `src/domain/codegraph.mjs`.**
 
@@ -553,7 +559,7 @@ The fix follows the `seon:history` realign exactly:
 
 **No migration needed.** A code graph is derivable; the indexer rebuilds it. §5.4.
 
-### 7.2 `seon:Module` and `seon:ClassDefinition` — router type tags
+### 7.2 `seon:Module` and `seon:ClassDefinition` — router type tags — LANDED
 
 **`src/domain/router/registry.mjs:31-32`.**
 
@@ -564,11 +570,14 @@ and means exactly what the tag means. `seon:Module` has no SEON equivalent (SEON
 Cheapest of the four: these are internal type tags for capability-parameter validation. They reach
 no store.
 
-### 7.3 The stale comments — `drop`
+### 7.3 The stale comments — `drop` — LANDED
 
-- `src/adapters/graph-build.mjs:18` lists `mgx:subclassOf` as an emitted edge. The file emits
+Both now name `seon:hasSuperType`, what the code actually emits.
+
+- `src/adapters/graph-build.mjs:18` listed `mgx:subclassOf` as an emitted edge. The file emits
   `seon:hasSuperType`.
-- `src/domain/codegraph.mjs:1140`'s docstring says `inherits` is `mgx:subclassOf`. Same correction.
+- `src/domain/codegraph.mjs:1253`'s docstring said `inherits` is `mgx:subclassOf`. Same correction.
+  (The plan cited `:1140`; the line had shifted to `:1253` at HEAD.)
 
 ### 7.4 The `cap:` and `taught:` namespaces are undeclared
 

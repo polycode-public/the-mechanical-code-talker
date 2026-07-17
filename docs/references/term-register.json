@@ -208,11 +208,11 @@
       "verified": "2026-07-17 — primary source read"
     },
     {
-      "term": "seon:subKind",
+      "term": "mgx:subKind",
       "area": "ontology",
-      "verdict": "rename",
-      "cite": "SEON code.owl - NO SUCH TERM (verified 2026-07-17)",
-      "note": "a STORED undefined IRI. -> mgx:subKind. PLAN_NORMATIVE.md 7.1.",
+      "verdict": "aligned",
+      "cite": "SEON code.owl has NO subKind term (verified 2026-07-17); tmct owns it under mgx:, declared in ontology/tmct-core.ttl",
+      "note": "was a stored undefined IRI seon:subKind; renamed to the owned mgx: namespace (the same reason mgx:touchedByCommit is owned, not seon:history). Type flavour of a Class define: interface/enum/struct/record.",
       "verified": "2026-07-17 — primary source read"
     },
     {

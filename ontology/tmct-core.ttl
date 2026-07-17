@@ -381,6 +381,15 @@ tmct:branch a owl:Class ; rdfs:label "branch" .
 tmct:developer a owl:Class ; rdfs:label "developer" .
 tmct:project a owl:Class ; rdfs:label "project" .
 
+# The one code-graph attribute tmct owns rather than borrows from SEON: the
+# flavour of a Class define (interface/enum/struct/record) when it is not a
+# plain class. buildEntities emits it on Class individuals; kind stays "class".
+mgx:subKind a owl:DatatypeProperty ;
+  rdfs:label "subKind" ;
+  rdfs:domain tmct:class ;
+  rdfs:range xsd:string ;
+  rdfs:comment "The flavour of a type declaration when it is not a plain class: interface, enum, struct or record. A tmct extension — SEON's code.owl has no subKind property, so this rides the mgx: namespace rather than seon: (the same reason mgx:touchedByCommit is owned, not seon:history). VERIFIED 2026-07-17 against code.owl." .
+
 # ---------------------------------------------------------------------------
 # 4. Core verb properties — the tmct:<3sg> predicates lexicon verbs emit
 #    (grammar/lexicon.mjs predicateOf), rdfs:seeAlso-aligned to the code

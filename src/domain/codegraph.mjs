@@ -1250,7 +1250,7 @@ export function renderSignature(graph, ind) {
 }
 
 /** Forward bases + the transitive reverse inheritance closure (who extends this) —
- *  replaces grepping `class X(Base)` across the tree. Uses `inherits` (mgx:subclassOf). */
+ *  replaces grepping `class X(Base)` across the tree. Uses `inherits` (seon:hasSuperType). */
 export function renderSubclasses(graph, ind) {
   const inherits = edgesOfKind(graph, "inherits");
   const bases = inherits.filter((e) => e.subject === ind.id).map((e) => e.objectLabel || e.object);

@@ -119,18 +119,12 @@ Phases 1, 2, 4, 5 and 6 closed at 2.4.1. What remains:
   uses) is a view of the memory graph, not an append-only log, and the store underneath is not
   append-only either. `syllogise` is a public CLI verb and only partly a syllogism — an operator
   call. Full list at §7.1-7.11.
-- **Phase 10 fallout — four SEON/namespace fixes.** The
-  plan is written and its ontology half has landed; `PLAN_NORMATIVE.md` §7 has the detail and a
-  verdict for each, so none needs more research. In cost order: `seon:subKind` is a **stored
-  undefined IRI** (`graph-build.mjs:146` writes it, and SEON has no such property) — rename to
-  `mgx:subKind`, keep a legacy read key, re-index; no migration, a code graph is derivable.
-  `seon:Module`/`seon:ClassDefinition` (`router/registry.mjs:31-32`) are not SEON terms either.
-  The `cap:` (11 terms) and `taught:` (4) namespaces are declared nowhere, and `cap:`'s
-  precondition/effect vocabulary is PDDL's under other names. Two stale comments name
-  `mgx:subclassOf`, which nothing emits.
-  **The two-casings defect this phase was told to fix first does not exist** — all 13 lowercase
-  spellings are lookup keys in one table that lowercases before reading, nothing writes them, and
-  `mgx:cause`/`mgx:causes` is a deliberate lemma fold. `PLAN_NORMATIVE.md` §1 has the proof.
+- **Phase 10 fallout — declare the `cap:` and `taught:` namespaces (`PLAN_NORMATIVE.md` §7.4).**
+  `cap:` (11 terms) and `taught:` (4) are declared in no ontology file, and `cap:`'s
+  precondition/effect vocabulary is PDDL's under other names. Declare the namespace and the
+  generative convention (the `mgxneg:` precedent, §5.2), cite PDDL; lands in `tmct-core.ttl`. The
+  `seon:subKind`/`seon:Module`/`seon:ClassDefinition` renames and the two stale `mgx:subclassOf`
+  comments (§7.1-7.3) have landed.
 - **Phase 8 — the tested-capability page.** Nothing started. Generated, not hand-written. No bare
   numbers: every figure carries its units, version, date, method link and caveat.
 - **Phase 9 — the prose pass.** Nothing started, and last by design.

@@ -28,8 +28,8 @@ export const VOCAB = Object.freeze({
 // name a graph entity the resolver must prove RESOLVES before the call fires.
 export const KINDS = Object.freeze({
   Symbol: "seon:CodeEntity", // any code symbol: function/method/class/module/attribute
-  Module: "seon:Module",
-  Class: "seon:ClassDefinition",
+  Module: "mgx:Module", // SEON has no JS-module class (its nearest are Namespace/main:File); owned
+  Class: "seon:ClassType", // SEON's real class for a class definition
   Query: "cap:FreeText", // lexical search string — no resolution precondition
   Kind: "cap:KindFilter", // enum: function|class|method|… (search filter)
   Package: "cap:PackageName", // optional architecture-scope filter

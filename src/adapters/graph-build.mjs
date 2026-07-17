@@ -15,7 +15,7 @@
 //   mgx:touchesSymbol       Commit -> CodeEntity (commit changed-line-range x symbol span)
 //   mgx:callsSymbol         Function/Method -> Function/Class (symbol-granular, unambiguous)
 //   seon:containsCodeEntity Class  -> Method/Attribute (class membership)
-//   mgx:subclassOf          Class  -> Class    (inheritance)
+//   seon:hasSuperType       Class  -> Class    (inheritance)
 
 import { attachProseTokens, buildProseIndex } from "../domain/prose.mjs";
 import { isTestPath } from "../domain/module-paths.mjs";
@@ -143,7 +143,7 @@ export function buildEntities(modules, commits, { generatedAt = "", symbolHistor
         if (d.raises?.length) attrs.push({ prop: "seon:throwsException", key: "raises", value: list(d.raises) });
         if (d.catches?.length) attrs.push({ prop: "seon:catchesException", key: "catches", value: list(d.catches) });
         if (d.self_fields?.length) attrs.push({ prop: "seon:accessesField", key: "self_fields", value: list(d.self_fields) });
-        if (d.subkind) attrs.push({ prop: "seon:subKind", key: "subkind", value: String(d.subkind) });
+        if (d.subkind) attrs.push({ prop: "mgx:subKind", key: "subkind", value: String(d.subkind) });
         if (d.is_static) attrs.push({ prop: "seon:isStatic", key: "isStatic", value: "true" });
         if (d.is_abstract) attrs.push({ prop: "seon:isAbstract", key: "isAbstract", value: "true" });
         if (d.is_constant) attrs.push({ prop: "seon:isConstant", key: "isConstant", value: "true" });
@@ -390,7 +390,7 @@ export function buildEntities(modules, commits, { generatedAt = "", symbolHistor
       { prop: "seon:isStatic", note: "@staticmethod/@classmethod" },
       { prop: "seon:isAbstract", note: "@abstractmethod/@abstractproperty" },
       { prop: "seon:isConstant", note: "ALL_CAPS module global" },
-      { prop: "seon:subKind", note: "type flavour on a Class define when not a plain class (interface/enum/struct/record); kind stays class" },
+      { prop: "mgx:subKind", note: "type flavour on a Class define when not a plain class (interface/enum/struct/record); kind stays class; owned — SEON has no subKind property" },
       { prop: "seon:hasAccessModifier", note: "visibility from leading underscore (private/protected); public omitted" },
       { prop: "seon:hasDoc", note: "first docstring line (capped) — one-line purpose without the body" },
     ],

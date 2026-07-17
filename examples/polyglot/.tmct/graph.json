@@ -111,8 +111,8 @@
       "note": "ALL_CAPS module global"
     },
     {
-      "prop": "seon:subKind",
-      "note": "type flavour on a Class define when not a plain class (interface/enum/struct/record); kind stays class"
+      "prop": "mgx:subKind",
+      "note": "type flavour on a Class define when not a plain class (interface/enum/struct/record); kind stays class; owned — SEON has no subKind property"
     },
     {
       "prop": "seon:hasAccessModifier",
@@ -909,7 +909,7 @@
           "value": "Shop/PaymentService.cs:1-7"
         },
         {
-          "prop": "seon:subKind",
+          "prop": "mgx:subKind",
           "key": "subkind",
           "value": "interface"
         },

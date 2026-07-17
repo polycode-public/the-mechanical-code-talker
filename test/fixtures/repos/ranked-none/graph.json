@@ -114,8 +114,8 @@
    "note": "ALL_CAPS module global"
   },
   {
-   "prop": "seon:subKind",
-   "note": "type flavour on a Class define when not a plain class (interface/enum/struct/record); kind stays class"
+   "prop": "mgx:subKind",
+   "note": "type flavour on a Class define when not a plain class (interface/enum/struct/record); kind stays class; owned — SEON has no subKind property"
   },
   {
    "prop": "seon:hasAccessModifier",
@@ -1047,7 +1047,7 @@
    ]
   },
   {
-   "id": "schema:predicate:seon:subKind",
+   "id": "schema:predicate:mgx:subKind",
    "label": "attribute",
    "class": "SchemaPredicate",
    "derived_from": [],
@@ -1056,12 +1056,12 @@
     {
      "prop": "mgx:schemaDoc",
      "key": "doc",
-     "value": "The flavour of a Class define when it is not a plain class: interface, enum, struct or record. The graph keeps kind=class for every type declaration; this attribute carries the distinction."
+     "value": "The flavour of a Class define when it is not a plain class: interface, enum, struct or record. The graph keeps kind=class for every type declaration; this attribute carries the distinction. A tmct extension — SEON has no subKind property."
     },
     {
      "prop": "mgx:schemaToken",
      "key": "token",
-     "value": "seon:subKind"
+     "value": "mgx:subKind"
     }
    ]
   },

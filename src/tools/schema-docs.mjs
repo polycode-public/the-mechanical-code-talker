@@ -154,10 +154,10 @@ export const PREDICATE_DOCS = Object.freeze([
   { prop: "seon:isConstant", kind: "attribute", description:
     "An ALL_CAPS module-level GlobalVariable — a naming-convention signal, not enforced " +
     "immutability." },
-  { prop: "seon:subKind", kind: "attribute", description:
+  { prop: "mgx:subKind", kind: "attribute", description:
     "The flavour of a Class define when it is not a plain class: interface, enum, struct " +
     "or record. The graph keeps kind=class for every type declaration; this attribute " +
-    "carries the distinction." },
+    "carries the distinction. A tmct extension — SEON has no subKind property." },
   { prop: "seon:hasAccessModifier", kind: "attribute", description:
     "Visibility inferred from a leading underscore (private/protected); a public member " +
     "carries no value for this attribute." },
