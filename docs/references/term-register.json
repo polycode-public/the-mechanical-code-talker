@@ -109,9 +109,9 @@
     {
       "term": "content-address",
       "area": "storage",
-      "verdict": "rename",
-      "cite": "RFC 9923 (FNV, Informational, Feb 2026); Pro Git 2nd ed. §10.2",
-      "note": "borrows Git/IPFS's implied collision resistance. fnv1a32 is 32-bit. PLAN_NORMATIVE.md 9.1. Left to §7.7 (the fact-id agent's hash widening); earned once the hash is wide.",
+      "verdict": "aligned",
+      "cite": "Pro Git 2nd ed. §10.2 (content-addressed storage); NIST FIPS 180-4 (SHA-256)",
+      "note": "factIdFor truncates SHA-256 to 64 bits, so content-addressing is earned in the git/IPFS sense — a collision-resistant cryptographic digest, not the old fnv1a32. FNV survives only for the narrow non-fact-id pools (paraphrase, per-URL Source id, corpus dedupe).",
       "verified": "2026-07-17 — primary source read"
     },
     {

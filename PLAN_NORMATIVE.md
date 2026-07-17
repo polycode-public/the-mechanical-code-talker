@@ -846,7 +846,7 @@ needs one.
 
 | term | verdict | finding |
 |---|---|---|
-| `content-addressed` | **rename** → "content-derived (non-cryptographic 32-bit)" | §9.1. The term borrows Git/IPFS's implied collision resistance. |
+| `content-addressed` | **resolved** (was rename) | §9.1. factIdFor now truncates SHA-256 to 64 bits, so the Git/IPFS sense — a collision-resistant cryptographic digest — is earned. |
 | **reification** | **extend** — and *name it* | tmct does textbook RDF reification (`tmct:Fact rdfs:subClassOf rdf:Statement`) and **the word appears 0 times in the repo**. It does the thing and never says the thing. |
 | `ledger` (81 uses) | **rename** → "append-only log", or drop the metaphor | The literature has no such term of art: it appears in none of LSM-tree, log-structured file systems, WAL/ARIES or Kafka. ISO 22739 (blockchain/DLT vocabulary) defines it as records "final, definitive and immutable". **tmct's ledger is neither.** It is `tmct viz` — an HTML *view* of the memory graph around a focus term. And the store underneath is not append-only either: `removeFacts` exists and upsert mutates in place. The word promises immutability twice and delivers a report. |
 | `mgx:createdAt` | `aligned`, partially | transaction-time **start**, and only the start. No end, so not an interval. |
