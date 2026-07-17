@@ -50,9 +50,6 @@ honest-miss citation) and the 64-bit `factIdFor` migration, with the full suite 
   last bullet in a seeded session (cosmetic), and `read as` over-relaxes beyond the impact
   paraphrase (`ask.mjs:3921`).
 
-Two designs wait on a decision rather than a session: `PLAN_CONSISTENCY_CHECK.md` and
-`PLAN_CHILD_CORPUS.md`.
-
 ## Discipline
 
 `CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split, the test
