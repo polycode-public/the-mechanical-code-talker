@@ -1062,6 +1062,14 @@
     }
   });
 
+  // src/domain/module-paths.mjs
+  var isTestPath;
+  var init_module_paths = __esm({
+    "src/domain/module-paths.mjs"() {
+      isTestPath = (p) => /(^|\/)tests?\//.test(p) || /(^|\/)test_[^/]*\.py$/.test(p) || /\.tests(\.|$)/.test(p);
+    }
+  });
+
   // src/domain/codegraph.mjs
   function parseEntities(payload) {
     const individuals = Array.isArray(payload?.individuals) ? payload.individuals : [];
@@ -1522,8 +1530,8 @@
       for (let i = 0; i < Math.min(compWeights.length, SYM_MATCH_CAP); i++) symScore += compWeights[i] * SYM_W;
       let score = exactScore + pathScore + symScore;
       if (!score) continue;
-      if (demoteNonProd && (isTestLabel(m.labelLc) || isNonProdLabel(m.labelLc))) score *= NONPROD_DEMOTE;
-      else if (isTestLabel(m.labelLc)) score *= 0.4;
+      if (demoteNonProd && (isTestPath(m.labelLc) || isNonProdLabel(m.labelLc))) score *= NONPROD_DEMOTE;
+      else if (isTestPath(m.labelLc)) score *= 0.4;
       const matching = m.defines.filter((d) => {
         const dl = d.toLowerCase();
         const cs = identComponents(d);
@@ -1884,7 +1892,7 @@ ${TESTS_GRAIN_NOTE}`;
       testModules.add(e.subject);
     }
     const untested = graph.individuals.filter(
-      (i) => (i.class || "") === "Module" && !testModules.has(i.id) && !isTestLabel(String(i.label).toLowerCase()) && !covered.has(i.id)
+      (i) => (i.class || "") === "Module" && !testModules.has(i.id) && !isTestPath(String(i.label).toLowerCase()) && !covered.has(i.id)
     ).map((i) => i.label).sort();
     if (!untested.length) return "every source module has at least one covering test module.";
     return `${untested.length} source module(s) with no covering test module:
@@ -2365,11 +2373,12 @@ ${shown.join("\n")}${tail}`;
   ${list.join("\n  ")}` + (edges.length > EXPORTS_CAP ? `
   \u2026+${edges.length - EXPORTS_CAP} more` : "");
   }
-  var PROP_KIND, isProvRef, DESCRIBE_EDGE_CAP, PROV_CAP, IMPACT_DEPTHS_LISTED, IMPACT_PER_DEPTH, IMPACT_TESTS_PER_DEP, SEARCH_LIMIT, SEARCH_SYMBOLS_SHOWN, PATH_W, SYM_W, EXACT_W, SYM_MATCH_CAP, PROX_FRAC, PROX_CAP_FRAC, isTestLabel, NONPROD_DEMOTE, isNonProdLabel, CALL_PROX_FRAC, CALL_PROX_CAP_FRAC, IMPL_PROX_FRAC, IMPL_PROX_CAP_FRAC, isCsModuleLabel, looksLikeCsInterface, PROSE_PROX_FRAC, PROSE_PROX_CAP_FRAC, PROSE_LOOKUP_LIMIT, PROSE_LAYER_FRAC, PROSE_LAYER_CAP_FRAC, PROSE_LAYER_DISCOUNT, LIT_W, LIT_MIN_COMPONENTS, LIT_COMP_CAP, LIT_FRAC, LIT_CAP_FRAC, BEAM_MARGIN_FRAC, BEAM_PROX_FRAC, BEAM_PROX_CAP_FRAC, BEAM_OVERFLOW_CAP, BEAM_PLIES, BEAM_EDGE_GROUPS, SPIRAL_DEPTH_DEFAULT, SPIRAL_NODE_LIMIT_DEFAULT, SPIRAL_Q_DEFAULT, SPIRAL_EXPAND_KINDS, SPIRAL_EMIT_FRAC, SPIRAL_HOP_DECAY, SPIRAL_PROX_FRAC, SPIRAL_PROX_CAP_FRAC, edgesOfKindCache, MEMBERS_CAP, SUBCLASS_CAP, CALL_CAP, attrVal, ARCH_PKG_CAP, ARCH_HUB_CAP, COVERAGE_CAP, TESTS_GRAIN_NOTE, HISTORY_CAP, CALL_SYMBOL_CLASSES, CALL_HINT_CAP, SYMBOL_CLASSES, CONTEXT_SIBLING_CAP, CLASS_MEMBER_CAP, COCHANGE_MID_CAP, CONTEXT_TESTS_CAP, TINY_MAX_LOC, TINY_MAX_ARITY, LARGE_CLASS_MEMBERS, INLINE_CALLEE_CAP, splitDecs, tokenize, countParams, modeOf, COCHANGE_CAP, EXPORTS_CAP;
+  var PROP_KIND, isProvRef, DESCRIBE_EDGE_CAP, PROV_CAP, IMPACT_DEPTHS_LISTED, IMPACT_PER_DEPTH, IMPACT_TESTS_PER_DEP, SEARCH_LIMIT, SEARCH_SYMBOLS_SHOWN, PATH_W, SYM_W, EXACT_W, SYM_MATCH_CAP, PROX_FRAC, PROX_CAP_FRAC, NONPROD_DEMOTE, isNonProdLabel, CALL_PROX_FRAC, CALL_PROX_CAP_FRAC, IMPL_PROX_FRAC, IMPL_PROX_CAP_FRAC, isCsModuleLabel, looksLikeCsInterface, PROSE_PROX_FRAC, PROSE_PROX_CAP_FRAC, PROSE_LOOKUP_LIMIT, PROSE_LAYER_FRAC, PROSE_LAYER_CAP_FRAC, PROSE_LAYER_DISCOUNT, LIT_W, LIT_MIN_COMPONENTS, LIT_COMP_CAP, LIT_FRAC, LIT_CAP_FRAC, BEAM_MARGIN_FRAC, BEAM_PROX_FRAC, BEAM_PROX_CAP_FRAC, BEAM_OVERFLOW_CAP, BEAM_PLIES, BEAM_EDGE_GROUPS, SPIRAL_DEPTH_DEFAULT, SPIRAL_NODE_LIMIT_DEFAULT, SPIRAL_Q_DEFAULT, SPIRAL_EXPAND_KINDS, SPIRAL_EMIT_FRAC, SPIRAL_HOP_DECAY, SPIRAL_PROX_FRAC, SPIRAL_PROX_CAP_FRAC, edgesOfKindCache, MEMBERS_CAP, SUBCLASS_CAP, CALL_CAP, attrVal, ARCH_PKG_CAP, ARCH_HUB_CAP, COVERAGE_CAP, TESTS_GRAIN_NOTE, HISTORY_CAP, CALL_SYMBOL_CLASSES, CALL_HINT_CAP, SYMBOL_CLASSES, CONTEXT_SIBLING_CAP, CLASS_MEMBER_CAP, COCHANGE_MID_CAP, CONTEXT_TESTS_CAP, TINY_MAX_LOC, TINY_MAX_ARITY, LARGE_CLASS_MEMBERS, INLINE_CALLEE_CAP, splitDecs, tokenize, countParams, modeOf, COCHANGE_CAP, EXPORTS_CAP;
   var init_codegraph = __esm({
     "src/domain/codegraph.mjs"() {
       init_prose();
       init_trust();
+      init_module_paths();
       PROP_KIND = {
         // v2.0 faithful tokens (SEON-faithful realign)
         "mgx:importsnamespace": "imports",
@@ -2414,7 +2423,6 @@ ${shown.join("\n")}${tail}`;
       SYM_MATCH_CAP = 4;
       PROX_FRAC = 0.2;
       PROX_CAP_FRAC = 0.35;
-      isTestLabel = (s) => /(^|\/)tests?\//.test(s) || /(^|\/)test_[^/]*\.py$/.test(s) || /\.tests(\.|$)/.test(s);
       NONPROD_DEMOTE = 0.15;
       isNonProdLabel = (s) => /(^|\/)(examples?|fixtures?|samples?|demos?|benchmarks?|test-[^/]+)(\/|$)/.test(s);
       CALL_PROX_FRAC = 0.2;
@@ -4304,12 +4312,12 @@ ${shown.join("\n")}${tail}`;
     const hits = (graph?.individuals || []).filter((i) => META_FALLBACK_CLASSES.has(i.class) && String(i.label).toLowerCase() === termLc);
     if (hits.length !== 1) return null;
     const hit2 = hits[0];
-    const mid = hit2.class === "Module" ? null : moduleIdOf2(graph, hit2);
-    const modLabel = hit2.class === "Module" ? null : mid && graph.byId.get(mid)?.label || String((hit2.attributes || []).find((a) => a.key === "site")?.value || "").split(":")[0] || null;
+    const mid = moduleIdOf2(graph, hit2);
+    const modLabel = mid && graph.byId.get(mid)?.label || String((hit2.attributes || []).find((a) => a.key === "site")?.value || "").split(":")[0] || null;
     const noun = nounFor(hit2.class, 1);
     const article = noun === "attribute" ? "an" : "a";
     const definedIn = modLabel ? `, ${pickPhrase("defined-in", hit2.id, "defined in")} ${modLabel}` : "";
-    const followUp = hit2.class === "Class" ? ` or "which classes inherit from ${hit2.label}"` : hit2.class === "Module" ? ` or "what imports ${hit2.label}"` : "";
+    const followUp = hit2.class === "Class" ? ` or "which classes inherit from ${hit2.label}"` : "";
     return {
       text: `${hit2.label} is ${article} ${noun} in this codebase${definedIn} \u2014 try "describe ${hit2.label}"${followUp}.`,
       hit: hit2,
@@ -5144,31 +5152,6 @@ ${shown.join("\n")}${tail}`;
     }
     return proseResult || { match: null, candidates: [], tier: null, ambiguous: false };
   }
-  function unplacedTermWords(term, label) {
-    const labelJoined = joinedForm(label);
-    const labelComps = [...componentSet(label)];
-    const out = [];
-    for (const w of componentSet(term)) {
-      if (labelJoined.includes(w)) continue;
-      if (labelComps.some((c) => derivationalStem(c) === derivationalStem(w))) continue;
-      if (CONTENT_VOCAB.has(w) || NOISE_OR_SCAFFOLD.has(w)) continue;
-      out.push(w);
-    }
-    return out;
-  }
-  function declineOnUnplacedWords(result, term) {
-    if (!result?.match || result.ambiguous || result.tier !== 3 || result.matchedVia) return result;
-    const unplaced = unplacedTermWords(term, result.match.label);
-    if (!unplaced.length) return result;
-    return {
-      match: null,
-      candidates: [],
-      tier: null,
-      ambiguous: false,
-      unplacedWords: unplaced,
-      nearestLabel: result.match.label
-    };
-  }
   function resolveObject(graph, term, opts = {}) {
     const { expectedClass = null } = opts;
     if (!expectedClass) {
@@ -5179,15 +5162,14 @@ ${shown.join("\n")}${tail}`;
         const head = stripped.slice(0, grainMatch.index).trim();
         const grainClass = ENTITY_TO_TYPE[grainMatch[1].toLowerCase()];
         if (head && grainClass) {
-          const rGrain = declineOnUnplacedWords(resolveObjectCore(graph, head, { expectedClass: grainClass }), head);
+          const rGrain = resolveObjectCore(graph, head, { expectedClass: grainClass });
           if (rGrain?.match?.id && !rGrain.ambiguous) return rGrain;
         }
       }
       if (stripped && stripped !== raw) {
-        const rStripped = declineOnUnplacedWords(resolveObjectCore(graph, stripped, opts), stripped);
+        const rStripped = resolveObjectCore(graph, stripped, opts);
         if (rStripped?.match?.id && !rStripped.ambiguous) return rStripped;
       }
-      return declineOnUnplacedWords(resolveObjectCore(graph, term, opts), term);
     }
     return resolveObjectCore(graph, term, opts);
   }
@@ -5369,19 +5351,8 @@ ${shown.join("\n")}${tail}`;
         if (collision) objRes = { ...objRes, ambiguous: true, candidates: [collision, ...objRes.candidates || []] };
       }
     }
-    const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia, unplacedWords, nearestLabel } = objRes;
-    if (!objMatch) {
-      return {
-        matches: [],
-        objMatch: null,
-        candidates,
-        traversal: null,
-        ambiguous: false,
-        unresolvedPronoun,
-        unplacedWords,
-        nearestLabel
-      };
-    }
+    const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia } = objRes;
+    if (!objMatch) return { matches: [], objMatch: null, candidates, traversal: null, ambiguous: false, unresolvedPronoun };
     if (ambiguous) {
       const pool = uniqueById([objMatch, ...candidates || []]).slice(0, OVERFLOW_CAP);
       const branches = pool.map((c) => {
@@ -5816,17 +5787,6 @@ ${options2}
       const objText = String(parsed.object || "").trim();
       const fallback = parsed.entityType && PLURAL_FORMS[parsed.entityType] ? nounFor(parsed.entityType, 1) : "module";
       const what = /^(?:commit[:\s])?[0-9a-f]{7,40}$/i.test(objText) ? "commit" : !objText.includes("/") && /^[\w$]+(\.[\w$]+)+$/.test(objText) ? "symbol" : fallback;
-      if (result.unplacedWords?.length) {
-        const quoted = listJoin(result.unplacedWords.map((w) => `"${w}"`));
-        const was = result.unplacedWords.length === 1 ? "names" : "name";
-        const near = result.nearestLabel ? ` Did you mean ${result.nearestLabel}?` : "";
-        return {
-          content: `no ${what} matching "${parsed.object}" found in the index. ${quoted} ${was} nothing here, and reading past ${result.unplacedWords.length === 1 ? "it" : "them"} would answer a different question.${near}`,
-          miss: true,
-          ambiguous: false,
-          candidates: []
-        };
-      }
       return {
         content: `no ${what} matching "${parsed.object}" found in the index. ${touchesRephraseHint(graph)}`,
         miss: true,
@@ -5996,7 +5956,6 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
     return { content: clauses.join(" and ") + extra + ".", miss: false, ambiguous: false, matches: result.matches };
   }
   function fuzzyCascadeWord(w) {
-    if (w.length < 4) return null;
     const bound = fuzzyBound(w);
     let best = bound + 1;
     let hit2 = null;
@@ -6092,20 +6051,13 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
       const hit2 = attempt(tokens);
       if (hit2) return done(hit2);
     }
-    const termParse = parseQuery(tokens.join(" "), { nlp });
-    const termWords = /* @__PURE__ */ new Set();
-    if (termParse && !termParse.node && TERM_SHAPES.has(termParse.shape)) {
-      for (const part of [termParse.object, termParse.subject]) {
-        for (const w of splitWords(String(part || "").toLowerCase())) termWords.add(w);
-      }
-    }
     const survivors = [];
     const nowDropped = [];
     const corrected = [];
     for (const t of tokens) {
       const lc = t.toLowerCase();
       const plain = /^[a-z]+$/.test(lc);
-      if (!plain || termWords.has(lc) || CONTENT_VOCAB.has(lc) || STRUCTURAL_WORDS.has(lc) || resolvesLiteral(t)) {
+      if (!plain || CONTENT_VOCAB.has(lc) || STRUCTURAL_WORDS.has(lc) || resolvesLiteral(t)) {
         survivors.push(t);
         continue;
       }
@@ -6409,7 +6361,7 @@ ${lines.join("\n")}`;
       FIND_LINKERS = /* @__PURE__ */ new Set(["called", "named", "about", "like", "containing", "matching", "with"]);
       RECENT_COMMIT_LEAD = /* @__PURE__ */ new Set(["recent", "latest", "newest"]);
       qualCache = /* @__PURE__ */ new WeakMap();
-      META_FALLBACK_CLASSES = /* @__PURE__ */ new Set(["Class", "Function", "Method", "GlobalVariable", "Attribute", "Module"]);
+      META_FALLBACK_CLASSES = /* @__PURE__ */ new Set(["Class", "Function", "Method", "GlobalVariable", "Attribute"]);
       inheritsApplicableCache = /* @__PURE__ */ new WeakMap();
       FIND_TIER = { label: 3, chain: 2, attr: 1 };
       DEGREE_KINDS = ["imports", "calls", "callsSymbol", "inherits", "contains", "tests"];
@@ -8171,12 +8123,6 @@ ${bodyText}` : graphText, tier });
     for (const prop of ["rdf:subject", "rdf:predicate", "rdf:object"]) {
       if (!nonEmpty(attrValue(ind, prop))) violations.push(`a Fact needs a non-empty ${prop}`);
     }
-    for (const prop of ["rdf:subject", "rdf:object"]) {
-      const term = attrValue(ind, prop);
-      if (term !== void 0 && SPANS_A_SENTENCE_BOUNDARY_RE.test(term)) {
-        violations.push(`a Fact's ${prop} must be a single term, not text spanning a sentence boundary (got ${JSON.stringify(term)})`);
-      }
-    }
     const prov = attrValue(ind, "mgx:factProvenance");
     if (prov !== void 0 && !nonEmpty(prov)) violations.push("mgx:factProvenance, when present, must be non-empty");
   }
@@ -8206,7 +8152,7 @@ ${bodyText}` : graphText, tier });
       throw e;
     }
   }
-  var MEMORY_CLASSES, RULE_KINDS, RULE_SLOT_PROPS, SPANS_A_SENTENCE_BOUNDARY_RE, nonEmpty;
+  var MEMORY_CLASSES, RULE_KINDS, RULE_SLOT_PROPS, nonEmpty;
   var init_shacl = __esm({
     "src/adapters/memory/shacl.mjs"() {
       MEMORY_CLASSES = /* @__PURE__ */ new Set(["Utterance", "Fact", "Session", "Source", "Rule"]);
@@ -8241,7 +8187,6 @@ ${bodyText}` : graphText, tier });
           "mgx:ruleActionConstraintGuard"
         ]
       };
-      SPANS_A_SENTENCE_BOUNDARY_RE = /[.!?]\s+\w/;
       nonEmpty = (v) => typeof v === "string" && v.trim().length > 0;
     }
   });
@@ -9604,36 +9549,36 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // node_modules/smol-toml/dist/date.js
+  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/date.js
   var init_date = __esm({
-    "node_modules/smol-toml/dist/date.js"() {
+    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/date.js"() {
     }
   });
 
-  // node_modules/smol-toml/dist/error.js
+  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/error.js
   var init_error = __esm({
-    "node_modules/smol-toml/dist/error.js"() {
+    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/error.js"() {
     }
   });
 
-  // node_modules/smol-toml/dist/primitive.js
+  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/primitive.js
   var init_primitive = __esm({
-    "node_modules/smol-toml/dist/primitive.js"() {
+    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/primitive.js"() {
       init_date();
       init_error();
     }
   });
 
-  // node_modules/smol-toml/dist/util.js
+  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/util.js
   var init_util = __esm({
-    "node_modules/smol-toml/dist/util.js"() {
+    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/util.js"() {
       init_error();
     }
   });
 
-  // node_modules/smol-toml/dist/extract.js
+  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/extract.js
   var init_extract = __esm({
-    "node_modules/smol-toml/dist/extract.js"() {
+    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/extract.js"() {
       init_primitive();
       init_struct();
       init_util();
@@ -9641,9 +9586,9 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // node_modules/smol-toml/dist/struct.js
+  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/struct.js
   var init_struct = __esm({
-    "node_modules/smol-toml/dist/struct.js"() {
+    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/struct.js"() {
       init_primitive();
       init_extract();
       init_util();
@@ -9651,9 +9596,9 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // node_modules/smol-toml/dist/parse.js
+  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/parse.js
   var init_parse = __esm({
-    "node_modules/smol-toml/dist/parse.js"() {
+    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/parse.js"() {
       init_struct();
       init_extract();
       init_util();
@@ -9661,15 +9606,15 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // node_modules/smol-toml/dist/stringify.js
+  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/stringify.js
   var init_stringify = __esm({
-    "node_modules/smol-toml/dist/stringify.js"() {
+    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/stringify.js"() {
     }
   });
 
-  // node_modules/smol-toml/dist/index.js
+  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/index.js
   var init_dist = __esm({
-    "node_modules/smol-toml/dist/index.js"() {
+    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/index.js"() {
       init_parse();
       init_stringify();
       init_date();

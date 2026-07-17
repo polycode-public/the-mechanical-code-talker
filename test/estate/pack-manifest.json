@@ -199,6 +199,7 @@
   "src/domain/memory/session-turns.mjs",
   "src/domain/memory/touched-facts.mjs",
   "src/domain/memory/trust.mjs",
+  "src/domain/module-paths.mjs",
   "src/domain/pack-manifest.mjs",
   "src/domain/paraphrase.mjs",
   "src/domain/persona/codegen.mjs",

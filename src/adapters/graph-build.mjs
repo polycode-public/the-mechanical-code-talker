@@ -18,9 +18,7 @@
 //   mgx:subclassOf          Class  -> Class    (inheritance)
 
 import { attachProseTokens, buildProseIndex } from "../domain/prose.mjs";
-
-const isTestPath = (p) =>
-  p.startsWith("tests/") || /(^|\/)tests?\//.test(p) || /(^|\/)test_[^/]*\.py$/.test(p) || /\.tests(\.|$)/.test(p);
+import { isTestPath } from "../domain/module-paths.mjs";
 
 const lastIdent = (name) => {
   const m = String(name).match(/([A-Za-z_][A-Za-z0-9_]*)\s*$/);

@@ -28,10 +28,7 @@
 
 import { impactClosure, edgesOfKind, siteOf } from "../codegraph.mjs";
 import { uniqSort } from "./set-algebra.mjs";
-
-// A test-path label, mirroring codegraph.mjs's private isTestLabel (untested view).
-const isTestLabel = (s) =>
-  /(^|\/)tests?\//.test(s) || /(^|\/)test_[^/]*\.py$/.test(s) || /\.tests(\.|$)/.test(s);
+import { isTestPath } from "../module-paths.mjs";
 
 /** The module id an individual belongs to — a Module is itself; a fine symbol maps
  *  through its site span (`mod:<path>`), else an `fn:<path>#name` id. Mirrors the
@@ -56,7 +53,7 @@ export function untestedModules(graph) {
     graph.individuals
       .filter((i) => (i.class || "") === "Module"
         && !testModules.has(i.id)
-        && !isTestLabel(String(i.label).toLowerCase())
+        && !isTestPath(String(i.label).toLowerCase())
         && !covered.has(i.id))
       .map((i) => i.label),
   );

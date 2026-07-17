@@ -1291,15 +1291,15 @@ test("ask(): grain-aware resolution — a term that resolves to NOTHING at all (
   assert.equal(tmct_ask.matches.length, 0);
 });
 
-test("ask(): forward-shape grain check — \"what modules does the questboard app have\" declines honestly instead of answering with function names", () => {
+test("ask(): forward-shape grain check — \"what modules does app.mjs have\" declines honestly instead of answering with function names", () => {
   // Driven against the real, committed examples/mini-webapp graph (miniWebappGraph,
   // declared above): its `defines` predicate never produces a Module-classed
   // target (only Class/Attribute/Method/Function across every real edge), so
   // asking for "modules" via `defines` ("have"/"has" is bucketed onto `defines`,
-  // see ask-vocab.mjs) can never be honestly answered by that relation — before
-  // this fix, the forward branch ignored entityType entirely and answered with
-  // the two real Function targets (createApp, start) as if they were modules.
-  const { content, tmct_ask } = ask(miniWebappGraph, "what modules does the questboard app have");
+  // see ask-vocab.mjs) can never be honestly answered by that relation — the
+  // forward branch has to read entityType rather than answering with the two
+  // real Function targets (createApp, start) as if they were modules.
+  const { content, tmct_ask } = ask(miniWebappGraph, "what modules does app.mjs have");
   assert.equal(tmct_ask.miss, true);
   assert.equal(tmct_ask.parsed.entityType, "Module");
   assert.equal(tmct_ask.parsed.kind, "defines");

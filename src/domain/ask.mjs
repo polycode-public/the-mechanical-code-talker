@@ -1212,7 +1212,12 @@ function moduleIdOf(graph, ind) {
  *  classes, so "what is a Record" answers even though Record isn't a graph
  *  vocabulary term. Uniqueness is global across all these classes together —
  *  a name colliding across two classes stays an honest miss. Returns null on
- *  anything less than a unique exact hit. */
+ *  anything less than a unique exact hit.
+ *
+ *  Module is absent by design, not by omission: chat.mjs's module-overview
+ *  lane already orients a module in far more detail (defines/imports/coverage
+ *  counts) and gates itself on this lookup missing, so claiming modules here
+ *  would replace that answer with a thinner one. */
 const META_FALLBACK_CLASSES = new Set(["Class", "Function", "Method", "GlobalVariable", "Attribute"]);
 export function metaFallbackEntityAnswer(graph, term) {
   const termLc = String(term || "").trim().toLowerCase();
@@ -2378,11 +2383,57 @@ const LEADING_ARTICLE_RE = /^(?:the|a|an)\s+/i;
  *  the module against a same-stem Class/Method. Reuses ENTITY_TO_TYPE. */
 const TRAILING_GRAIN_WORD_RE = new RegExp(`\\s+(${Object.keys(ENTITY_TO_TYPE).join("|")})$`, "i");
 
+/** Words of `term` that neither the resolved label nor the closed grammar
+ *  vocabulary can account for. A word is placed when the label's own letters
+ *  carry it (so "payment system" is placed by PaymentSystem, and a component
+ *  match is placed by construction), when a derivational bridge reaches one of
+ *  the label's components ("logging" for "logger"), or when it is a word the
+ *  grammar or the curated noise list already gives a job to (a leaked relation
+ *  verb in "cover app/lib/b.mjs" is the parser's residue, not the user's).
+ *  Everything else is a word this index has no reading for at all. */
+function unplacedTermWords(term, label) {
+  const labelJoined = joinedForm(label);
+  const labelComps = [...componentSet(label)];
+  const out = [];
+  for (const w of componentSet(term)) {
+    if (labelJoined.includes(w)) continue;
+    if (labelComps.some((c) => derivationalStem(c) === derivationalStem(w))) continue;
+    if (CONTENT_VOCAB.has(w) || NOISE_OR_SCAFFOLD.has(w)) continue;
+    out.push(w);
+  }
+  return out;
+}
+
+/** Tier 3 scores candidates by how much of the term overlaps each label, so a
+ *  term can narrow to exactly one candidate on a SUBSET of its own words and
+ *  the leftovers go unread: "the deprecated legacy model.mjs" outscores every
+ *  other module on "model"/"mjs" alone and answers about model.mjs, a
+ *  different thing from what was asked for. A same-tier tie is already an
+ *  honest ambiguity; a term carrying words the index has no reading for is the
+ *  same failure with one candidate instead of five, so it declines the same
+ *  way, naming the words it could not place and the near-match it would
+ *  otherwise have silently answered about.
+ *
+ *  Tier 3 only: the prose and fuzzy tiers resolve BY not matching the label
+ *  (doc-comment words, a typo'd spelling), and announce themselves in the
+ *  answer where tier 3 says nothing. */
+function declineOnUnplacedWords(result, term) {
+  if (!result?.match || result.ambiguous || result.tier !== 3 || result.matchedVia) return result;
+  const unplaced = unplacedTermWords(term, result.match.label);
+  if (!unplaced.length) return result;
+  return {
+    match: null, candidates: [], tier: null, ambiguous: false,
+    unplacedWords: unplaced, nearestLabel: result.match.label,
+  };
+}
+
 /** resolveObject: a grain-aware disambiguation pre-pass wrapping
  *  resolveObjectCore, only when the caller hasn't pinned an expectedClass.
  *  Tries a trailing grain word (narrows the pool, retries the head noun),
  *  then a plain leading-article strip. Either retry is used only on an
- *  unambiguous hit; any miss/tie falls through unchanged to the original term. */
+ *  unambiguous hit; any miss/tie falls through unchanged to the original term.
+ *  Whatever tier answers, a term with unreadable words left over declines
+ *  instead of resolving past them. */
 export function resolveObject(graph, term, opts = {}) {
   const { expectedClass = null } = opts;
   if (!expectedClass) {
@@ -2393,14 +2444,15 @@ export function resolveObject(graph, term, opts = {}) {
       const head = stripped.slice(0, grainMatch.index).trim();
       const grainClass = ENTITY_TO_TYPE[grainMatch[1].toLowerCase()];
       if (head && grainClass) {
-        const rGrain = resolveObjectCore(graph, head, { expectedClass: grainClass });
+        const rGrain = declineOnUnplacedWords(resolveObjectCore(graph, head, { expectedClass: grainClass }), head);
         if (rGrain?.match?.id && !rGrain.ambiguous) return rGrain;
       }
     }
     if (stripped && stripped !== raw) {
-      const rStripped = resolveObjectCore(graph, stripped, opts);
+      const rStripped = declineOnUnplacedWords(resolveObjectCore(graph, stripped, opts), stripped);
       if (rStripped?.match?.id && !rStripped.ambiguous) return rStripped;
     }
+    return declineOnUnplacedWords(resolveObjectCore(graph, term, opts), term);
   }
   return resolveObjectCore(graph, term, opts);
 }
@@ -2665,8 +2717,13 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
       if (collision) objRes = { ...objRes, ambiguous: true, candidates: [collision, ...(objRes.candidates || [])] };
     }
   }
-  const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia } = objRes;
-  if (!objMatch) return { matches: [], objMatch: null, candidates, traversal: null, ambiguous: false, unresolvedPronoun };
+  const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia, unplacedWords, nearestLabel } = objRes;
+  if (!objMatch) {
+    return {
+      matches: [], objMatch: null, candidates, traversal: null, ambiguous: false, unresolvedPronoun,
+      unplacedWords, nearestLabel,
+    };
+  }
   // BREADTH-FIRST ENTITY-TIE RESOLUTION: mirrors the
   // parsed.ambiguousParse branch above — every tied candidate is independently
   // traversed and rendered for real (via the pinnedObjMatch short-circuit just
@@ -3216,6 +3273,19 @@ function renderCore(parsed, result, graph) {
     const fallback = parsed.entityType && PLURAL_FORMS[parsed.entityType] ? nounFor(parsed.entityType, 1) : "module";
     const what = /^(?:commit[:\s])?[0-9a-f]{7,40}$/i.test(objText) ? "commit"
       : (!objText.includes("/") && /^[\w$]+(\.[\w$]+)+$/.test(objText) ? "symbol" : fallback);
+    // Words the term carried that nothing in the index reads (resolveObject's
+    // unplaced-word decline) are named here with the near match they would
+    // otherwise have been quietly dropped in favour of: the reader gets to
+    // decide whether the near match was the question.
+    if (result.unplacedWords?.length) {
+      const quoted = listJoin(result.unplacedWords.map((w) => `"${w}"`));
+      const was = result.unplacedWords.length === 1 ? "names" : "name";
+      const near = result.nearestLabel ? ` Did you mean ${result.nearestLabel}?` : "";
+      return {
+        content: `no ${what} matching "${parsed.object}" found in the index. ${quoted} ${was} nothing here, and reading past ${result.unplacedWords.length === 1 ? "it" : "them"} would answer a different question.${near}`,
+        miss: true, ambiguous: false, candidates: [],
+      };
+    }
     return {
       content: `no ${what} matching "${parsed.object}" found in the index. ${touchesRephraseHint(graph)}`,
       miss: true, ambiguous: false, candidates: [],
@@ -3447,8 +3517,13 @@ const CASCADE_FUZZY_TARGETS = [...new Set([
 ])].filter((wd) => /^[a-z]+$/.test(wd) && wd.length >= 4 && !STOPWORDS.has(wd));
 
 /** Unique within-bound fuzzy correction of `w` toward CASCADE_FUZZY_TARGETS,
- *  or null — a distance tie between two distinct targets is refused. */
+ *  or null — a distance tie between two distinct targets is refused. The
+ *  4-char floor holds on the word being corrected as well as on the targets:
+ *  a 1-edit budget on three letters reaches real vocabulary from words that
+ *  were never a typo of it ("old" -> "hold"), and the correction is announced
+ *  as though the asker had typed it. */
 function fuzzyCascadeWord(w) {
+  if (w.length < 4) return null;
   const bound = fuzzyBound(w);
   let best = bound + 1; let hit = null; let tied = false;
   for (const target of CASCADE_FUZZY_TARGETS) {
@@ -3588,6 +3663,23 @@ function relaxParse(graph, query, { nlp = undefined, contextId = null, prev = nu
   }
 
   // Layer 2 — DROP-UNMATCHED (plain-lowercase unknowns beside the real terms)
+  //
+  // Words INSIDE the term survive this layer's DROP (its fuzzy-correct still
+  // repairs them — a typo is a word the asker meant, and the receipt shows the
+  // spelling it was read as). "what imports the deprecated legacy model.mjs"
+  // names a thing the asker believes exists; drop "deprecated" and "legacy"
+  // and the survivors answer about model.mjs, a different thing, under a
+  // receipt that reads as though the question was merely tidied. Layer 1's
+  // curated noise list earns that receipt because every word it removes is
+  // packaging. This layer drops whatever it doesn't recognize, so inside the
+  // term it holds off and lets the original miss stand, unknown words and all.
+  const termParse = parseQuery(tokens.join(" "), { nlp });
+  const termWords = new Set();
+  if (termParse && !termParse.node && TERM_SHAPES.has(termParse.shape)) {
+    for (const part of [termParse.object, termParse.subject]) {
+      for (const w of splitWords(String(part || "").toLowerCase())) termWords.add(w);
+    }
+  }
   const survivors = [];
   const nowDropped = [];
   const corrected = [];
@@ -3603,6 +3695,7 @@ function relaxParse(graph, query, { nlp = undefined, contextId = null, prev = nu
     // restored rather than discarded.
     const fix = fuzzyCascadeWord(lc);
     if (fix && fix !== lc) { survivors.push(fix); corrected.push(`${t}→${fix}`); continue; }
+    if (termWords.has(lc)) { survivors.push(t); continue; }
     nowDropped.push(t);
   }
   if ((corrected.length || nowDropped.length) && survivors.length) {

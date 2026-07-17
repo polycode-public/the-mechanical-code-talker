@@ -1,5 +1,6 @@
 import { lookupByProseTokens, proseLayerHits, splitIdentifierWords } from "./prose.mjs";
 import { CREATED_AT_PROP, UPDATED_AT_PROP } from "./memory/trust.mjs";
+import { isTestPath } from "./module-paths.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the
 // deterministic indexer writes to <repo>/.tmct/graph.json (shape produced by
@@ -470,7 +471,6 @@ const EXACT_W = 5;         // token == a whole defined symbol name
 const SYM_MATCH_CAP = 4;   // only the top-K highest-IDF symbol-component hits count
 const PROX_FRAC = 0.2;     // import-adjacency bonus = this × the strongest matched neighbour
 const PROX_CAP_FRAC = 0.35; // capped at this × the module's own score
-const isTestLabel = (s) => /(^|\/)tests?\//.test(s) || /(^|\/)test_[^/]*\.py$/.test(s) || /\.tests(\.|$)/.test(s);
 // opt-in via demoteNonProd: demote (not exclude) example/fixture/sample/demo/test-*
 // paths, which share vocabulary with production modules and would otherwise shadow them
 const NONPROD_DEMOTE = 0.15;
@@ -782,8 +782,8 @@ function scoreModules(graph, tokens, opts = {}) {
     for (let i = 0; i < Math.min(compWeights.length, SYM_MATCH_CAP); i++) symScore += compWeights[i] * SYM_W;
     let score = exactScore + pathScore + symScore;
     if (!score) continue;
-    if (demoteNonProd && (isTestLabel(m.labelLc) || isNonProdLabel(m.labelLc))) score *= NONPROD_DEMOTE;
-    else if (isTestLabel(m.labelLc)) score *= 0.4; // source first; tests still discoverable
+    if (demoteNonProd && (isTestPath(m.labelLc) || isNonProdLabel(m.labelLc))) score *= NONPROD_DEMOTE;
+    else if (isTestPath(m.labelLc)) score *= 0.4; // source first; tests still discoverable
     const matching = m.defines.filter((d) => { const dl = d.toLowerCase(); const cs = identComponents(d); return tokens.some((t) => dl === t || cs.has(t)); });
     const density = m.defines.length ? matchCount / m.defines.length : 0;
     scored.push({ ind: m.ind, score, defineCount: m.defines.length, matching, density });
@@ -1252,7 +1252,7 @@ export function renderUntested(graph) {
       (i) =>
         (i.class || "") === "Module" &&
         !testModules.has(i.id) &&
-        !isTestLabel(String(i.label).toLowerCase()) &&
+        !isTestPath(String(i.label).toLowerCase()) &&
         !covered.has(i.id),
     )
     .map((i) => i.label)
