@@ -44,10 +44,6 @@ parser defects (the multi-sentence teach bullet and the silent count-restrictor 
 two leftover rows (the `runChat` block and the `repository-interface.md` prose, both now pinned),
 and `PLAN_NORMATIVE.md` §7.5 (the PROV Source split) and §7.6 (the SKOS derived-view). What remains:
 
-- **N2 / N3 — two stale-doc corrections** the benchmark re-audit surfaced, not yet folded into
-  Phase 5: `PLAN_PARAPHRASE_VERIFICATION.md` frames an already-chat-wired slice as future (and no
-  corpus row pins that surface), and `PLAN_SYLLOGIST_EL_DL.md` still lists the shipped-and-archived
-  defeasible tier as an undesigned future tier.
 - **Phase 4's re-measurements** (sequencing item 11, not yet run): CEFR back to N=2, the INFBENCH
   existential probe, the 6th CONVERSATION persona, the 315-case CHATBENCH pool, and the
   resolver-floor `ab-c2-what-to-test` decision. The phase table's "Phase 4 DONE" marks the pinning

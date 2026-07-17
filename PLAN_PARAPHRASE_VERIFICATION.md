@@ -2,9 +2,12 @@
 
 Status: RESEARCH / DESIGN — the general verifier this document designs is not yet implemented.
 One narrow slice of the same ROADMAP goal already shipped separately and predates this doc:
-`src/domain/paraphrase.mjs` (`verifySubClassParaphrase`, isa-family only, closure-backed, with
-`test/paraphrase.test.mjs`). The multi-technique `verifyParaphrase(originalFactRow,
-candidateText, technique)` below remains unbuilt and does not reuse that slice yet.
+`src/domain/paraphrase.mjs` (`verifySubClassParaphrase` / `paraphraseVerifiedSubClass`, isa-family
+only, closure-backed, with `test/paraphrase.test.mjs`), and it reaches the user: the teach
+confirmation appends the verified paraphrase as a suffix on "noted — remembered … facts"
+(`paraphraseSuffix` in `src/services/chat.mjs`), so a paraphrase is only ever shown when the
+closure entails it. The multi-technique `verifyParaphrase(originalFactRow, candidateText,
+technique)` below remains unbuilt and does not reuse that slice yet.
 
 ## Origin
 

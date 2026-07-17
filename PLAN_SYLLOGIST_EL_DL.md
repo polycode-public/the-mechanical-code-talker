@@ -101,10 +101,15 @@ timeout is a miss, never a guess. Post-delivery, the edge sits at:
   candidate literatures (reification, event calculus); lands on the miss wall until
   designed.
 - **Defaults and exceptions.** *"birds fly; penguins are birds; penguins don't fly"* —
-  non-monotonic. DL makes this a reportable *contradiction* (an improvement over silent
-  coexistence) without resolving it by preferring the specific rule; defeasible
-  reasoning is its own tier (default logic, answer-set programming are the candidate
-  literatures, none yet settled into an obvious deterministic fit).
+  non-monotonic. Two halves, and only one is unbuilt. Storing the negative and keeping
+  it beside the positive shipped: `archive/PLAN_DEFEASIBLE_NEGATION.md` (DELIVERED)
+  source-indexes each claim, so a taught "penguins don't fly" is stored, not declined, and
+  a same-subject positive and negative from different sources read as consistent
+  disagreement rather than a contradiction. What is still a tier of its own is the
+  *reasoning* — resolving the conflict within one source by preferring the more specific
+  rule (default logic, answer-set programming are the candidate literatures, none yet
+  settled into an obvious deterministic fit). Until that lands, a single-source
+  positive+negative is surfaced, not silently coalesced.
 - **Budget-exhausted proofs.** Any query whose tableau exceeds its step budget returns
   "can't prove or disprove within budget" — surfaced as an honest miss with a distinct
   marker so chatbench can count them separately from parse misses.
