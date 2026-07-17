@@ -11,6 +11,7 @@
 
 const PREFIXES = Object.freeze({
   cap: "urn:tmct:cap#", // the capability/operator vocabulary (this module)
+  taught: "urn:tmct:taught#", // taught-action operators + their world-state predicates (taught.mjs)
   mgx: "urn:tmct:mgx#", // tmct's code-graph predicates (imports/calls/tests/…)
   seon: "http://se-on.org/ontologies/seon.owl#", // software-evolution ontology classes
 });

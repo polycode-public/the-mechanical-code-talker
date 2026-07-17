@@ -26,6 +26,14 @@
 #         second prefix emptyMemory() declares. GENERATIVE, not enumerable:
 #         mgxneg:X is the negative twin of mgx:X for any X, minted on demand
 #         by capability.mjs's negatedPredicate. See section 1b.
+#   cap:  urn:tmct:cap# — the capability/operator vocabulary (router/registry.mjs).
+#         Each tmct tool is a STRIPS/PDDL operator declared as DATA. GENERATIVE:
+#         a cap:<name> Capability is minted per tool. Internal — reaches no
+#         store. See section 1c.
+#   taught: urn:tmct:taught# — taught-action operators and their world-state
+#         predicates (router/taught.mjs), layered on cap:. GENERATIVE:
+#         taught:<name> per taught game action. Internal — reaches no store.
+#         See section 1c.
 #   seon: SEON, the Software Evolution ONtologies (se-on.org, FAMIX-
 #         derived) — the reference vocabulary the code graph's seon:*
 #         prop tokens (seon:hasSuperType, seon:containsCodeEntity, …)
@@ -55,6 +63,8 @@
 @prefix tmct: <urn:tmct:core#> .
 @prefix mgx:  <urn:tmct:mgx#> .
 @prefix mgxneg: <urn:tmct:mgxneg#> .
+@prefix cap:  <urn:tmct:cap#> .
+@prefix taught: <urn:tmct:taught#> .
 @prefix seon: <http://se-on.org/ontologies/domain-specific/2012/02/code.owl#> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
@@ -153,8 +163,8 @@ mgx:factJustification a owl:DatatypeProperty ;
 # themselves and never a domain word. The action-rule shape
 # (signature/precondition/effect) is STRIPS's and PDDL's — see
 # docs/references/planning/STRIPS_PDDL.md — but tmct does not use PDDL's own
-# names for them, and the router's cap: vocabulary is where that alignment
-# would land. See PLAN_NORMATIVE.md.
+# names for them. The router's cap:/taught: vocabulary carries that alignment;
+# it is declared in section 1c.
 
 mgx:ruleName a owl:DatatypeProperty ;
   rdfs:range xsd:string ;
@@ -289,6 +299,70 @@ mgxneg:capableOf a owl:ObjectProperty ;
 mgxneg:subClassOf a owl:ObjectProperty ;
   rdfs:label "subClassOf (negated)" ;
   rdfs:comment "The negative twin of rdfs:subClassOf: 'john is not a man'. ASYMMETRIC, and the reason this namespace needs a stated member at all: the polarity prefix is tmct's and the term negated is RDFS's, so the prefix swap cannot mint it and capability.mjs states it in EXPLICIT_NEGATIVE_TWINS. Reading it back by prefix swap would give 'mgx:subClassOf', which exists nowhere." .
+
+# ---------------------------------------------------------------------------
+# 1c. The capability/operator vocabulary (urn:tmct:cap#, urn:tmct:taught#).
+#
+#     router/registry.mjs models every tmct tool as a classical planning
+#     operator declared as DATA: a Capability with typed Parameters, a
+#     Precondition list and an Effect list (add/delete). resolver.mjs
+#     backward-chains from a goal to a capability whose add-list achieves it.
+#     router/taught.mjs bridges a taught game action into the SAME shape, so
+#     one planner covers built-in tools and taught actions alike.
+#
+#     This IS the STRIPS operator model (Fikes & Nilsson, "STRIPS: A New
+#     Approach to the Application of Theorem Proving to Problem Solving",
+#     Artificial Intelligence 2, 1971) and PDDL's action model (McDermott et
+#     al., "PDDL — The Planning Domain Definition Language", 1998).
+#     cap:Precondition and cap:Effect are PDDL's :precondition and :effect
+#     under tmct's own names. See docs/references/planning/STRIPS_PDDL.md.
+#
+#     Both namespaces are GENERATIVE and internal — they reach no store, so
+#     unlike mgx:/mgxneg: no graph payload declares them. cap:<name> is minted
+#     per registered tool and taught:<name> per taught action; enumerating them
+#     here would be wrong the first tool or game added. What this section
+#     declares is the CONVENTION and the closed structural vocabulary each
+#     builds operators from.
+# ---------------------------------------------------------------------------
+
+cap:Capability a owl:Class ;
+  rdfs:label "Capability" ;
+  rdfs:comment "A tool/operator: a named action with typed Parameters, Preconditions and Effects. A STRIPS/PDDL operator declared as data. cap:<name> individuals are minted per registered tool." .
+
+cap:Parameter a owl:Class ;
+  rdfs:label "Parameter" ;
+  rdfs:comment "A typed operator slot. Its KIND is one of the closed set below (a graph-entity type the resolver must bind, or a free-text/enum slot with no resolution)." .
+
+cap:Precondition a owl:Class ;
+  rdfs:label "Precondition" ;
+  rdfs:comment "A condition that must hold before the operator fires. PDDL's :precondition under tmct's name. The predicate tag is one of the closed set below." .
+
+cap:Effect a owl:Class ;
+  rdfs:label "Effect" ;
+  rdfs:comment "A change the operator makes to the world/agent state (add-list / delete-list). PDDL's :effect under tmct's name." .
+
+# Parameter KINDs — the free-text/enum slot types that carry no resolution
+# precondition (graph-entity kinds are the code-graph classes above: Module,
+# Class, seon:CodeEntity).
+cap:FreeText a owl:Class ; rdfs:label "FreeText" ; rdfs:comment "A lexical search-string slot — no graph resolution." .
+cap:KindFilter a owl:Class ; rdfs:label "KindFilter" ; rdfs:comment "An enum slot: function|class|method|… search filter." .
+cap:PackageName a owl:Class ; rdfs:label "PackageName" ; rdfs:comment "An optional architecture-scope filter slot." .
+
+# Precondition predicate tags (the closed vocabulary a Precondition uses) and
+# the Effect predicate. Declared as annotation properties: they tag a shape
+# rather than assert an OWL relation over individuals.
+cap:graph-loaded a owl:AnnotationProperty ; rdfs:label "graph-loaded" ; rdfs:comment "Precondition: a graph artifact is present and parseable." .
+cap:resolves a owl:AnnotationProperty ; rdfs:label "resolves" ; rdfs:comment "Precondition { param, as }: the named slot binds to a graph entity of kind `as`." .
+cap:any-present a owl:AnnotationProperty ; rdfs:label "any-present" ; rdfs:comment "Precondition { params }: at least one of the named slots is provided (search-style disjunction)." .
+cap:knows a owl:AnnotationProperty ; rdfs:label "knows" ; rdfs:comment "Add-effect: after the call the agent knows `topic` about the bound `of` slot." .
+
+# taught: — a taught action reuses cap:'s Capability/Parameter/Precondition/
+# Effect types and adds its own world-state predicate tags. GENERATIVE:
+# taught:<name> is the operator per taught game action.
+taught:world-precond a owl:AnnotationProperty ; rdfs:label "world-precond" ; rdfs:comment "A taught action's precondition over world state (from an action-precond Rule)." .
+taught:world-constraint a owl:AnnotationProperty ; rdfs:label "world-constraint" ; rdfs:comment "A taught action's constraint over world state (from an action-constraint Rule)." .
+taught:world-effect a owl:AnnotationProperty ; rdfs:label "world-effect" ; rdfs:comment "A taught action's add-effect on world state (from an action-effect Rule)." .
+taught:world-effect-replaced a owl:AnnotationProperty ; rdfs:label "world-effect-replaced" ; rdfs:comment "A taught action's delete/replace-effect: the prior world fact this effect supersedes." .
 
 # ---------------------------------------------------------------------------
 # 2. Grammar-emitted kinds (src/grammar/ace.mjs) — how the 8 ACE-OWL patterns

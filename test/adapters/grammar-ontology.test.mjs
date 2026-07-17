@@ -117,7 +117,7 @@ function checkTurtle(text) {
 test("tmct-core.ttl is well-formed Turtle (minimal check): balanced constructs, all used prefixes declared, terminated statements", async () => {
   const text = await readFile(TTL_FILE, "utf8");
   const { prefixes, terminators } = checkTurtle(text);
-  assert.deepEqual([...prefixes].sort(), ["cn", "mgx", "mgxneg", "owl", "prov", "rdf", "rdfs", "seon", "skos", "tmct", "xsd"]);
+  assert.deepEqual([...prefixes].sort(), ["cap", "cn", "mgx", "mgxneg", "owl", "prov", "rdf", "rdfs", "seon", "skos", "taught", "tmct", "xsd"]);
   assert.ok(terminators >= 50, `a real ontology, not a stub: ${terminators} statements`);
 });
 

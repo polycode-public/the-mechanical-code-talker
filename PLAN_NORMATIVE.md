@@ -417,9 +417,9 @@ The SKOS reading was not wasted: it settled `rdfs:seeAlso` over `skos:exactMatch
 | `EDGE_KINDS` (11), `RELATIONS` (10) | `aligned` | not coined terms at all — each is already keyed to a `tmct:` property by `EDGE_KIND_TO_TMCT`, and the props are SEON's or `mgx:`'s. The kind names are internal identifiers. |
 | `SERVICES` (16) | `extend` | the Repository Interface's operation names. An interface's operations are not an ontology's terms, and no standard names them. |
 | rule kinds (`compose2`/`filter`/`recursive`) | `extend` | structural tags, enforced closed by `shacl.mjs`. Now declared. |
-| action rule kinds (`action-signature`/`action-precond`/`action-effect`) | **open** | the shape is STRIPS's and PDDL's exactly (`docs/references/planning/STRIPS_PDDL.md`), and the names are not. The `cap:` vocabulary is where that alignment lands. §7. |
-| the `cap:` namespace (11 terms) | **open** | undeclared anywhere. `registry.mjs`'s capability/precondition/effect vocabulary. Not this plan's file. §7. |
-| `taught:` (4 terms) | **open** | `taught:world-effect`, `taught:world-precond`, `taught:world-constraint`, `taught:world-effect-replaced`. Undeclared. §7. |
+| action rule kinds (`action-signature`/`action-precond`/`action-effect`) | `extend` | the shape is STRIPS's and PDDL's exactly (`docs/references/planning/STRIPS_PDDL.md`), and the names are not. Now grounded via `cap:`/`taught:`, §7.4. |
+| the `cap:` namespace (11 terms) | `extend` — now declared | `registry.mjs`'s capability/precondition/effect vocabulary. Declared in `tmct-core.ttl` §1c as a generative convention, cite STRIPS/PDDL. §7.4. |
+| `taught:` (4 terms) | `extend` — now declared | `taught:world-effect`, `taught:world-precond`, `taught:world-constraint`, `taught:world-effect-replaced`. Declared in `tmct-core.ttl` §1c, layered on `cap:`. §7.4. |
 | JTMS/ATMS | **`map` — and this row was wrong** | See §9.9. tmct's justification is **ATMS**, not JTMS, and tmct **does** retract on belief change. |
 | ISO 24617-2 dialogue acts | **unbuilt** | tmct has no intent vocabulary (`CAPABILITIES_2.0.3.md` row 139, `absent`). The mapping is drafted in `iso-24617-2-dialogue-acts.md` so that if one is built, it is built to the standard's names rather than coined ad hoc. The honest-miss reply is the interesting row: it is a claim about tmct's own processing, which is `/autoFeedback/`, not a `/task/` answer. |
 
@@ -579,7 +579,13 @@ Both now name `seon:hasSuperType`, what the code actually emits.
 - `src/domain/codegraph.mjs:1253`'s docstring said `inherits` is `mgx:subclassOf`. Same correction.
   (The plan cited `:1140`; the line had shifted to `:1253` at HEAD.)
 
-### 7.4 The `cap:` and `taught:` namespaces are undeclared
+### 7.4 The `cap:` and `taught:` namespaces are undeclared — LANDED
+
+`tmct-core.ttl` §1c declares both namespaces and the convention (the `mgxneg:` precedent): the
+Capability/Parameter/Precondition/Effect model as STRIPS/PDDL operators, `cap:Precondition` /
+`cap:Effect` cited as PDDL's `:precondition` / `:effect`. Both are generative and internal — they
+reach no store — so, unlike `mgx:`, no payload declares them. `registry.mjs` gained the `taught:`
+IRI so the code carries a single source of truth for it.
 
 **`src/domain/router/registry.mjs`, `src/domain/router/taught.mjs`.**
 
