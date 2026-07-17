@@ -21,6 +21,7 @@ import {
 } from "../../chatbench/judge.mjs";
 import {
   renderReport, renderTranscripts, orderDiscriminating,
+  cellRollup, uncoveredCells, undeclaredCells,
 } from "../../chatbench/report.mjs";
 import { runChat } from "../../src/services/chat.mjs";
 import { parseSessionJsonl, parseSessionLog, turnKey } from "../../src/services/sessions.mjs";
@@ -461,6 +462,61 @@ test("renderReport: headline, judge pin, per-tag table, hard fails, lever board 
   assert.match(md, /RANKED LEVER BOARD/);
   assert.match(md, /## Top discriminating transcripts/);
   assert.match(md, /vs CEFR_ENGLISH_001/, "names the previous cycle for the decision rule");
+});
+
+// A weak cell hiding inside two healthy marginals is the shape the cross table
+// exists to expose, so the stub reproduces it: naming-vocabulary is weak at A1
+// and strong at A2, and neither marginal shows either cell.
+const CELL_SUMMARY = {
+  ...STUB_SUMMARY,
+  perCase: [
+    { caseId: "g1", tags: ["graded"], mean: 1.4, hardFail: false },
+    { caseId: "g2", tags: ["graded"], mean: 1.9, hardFail: false },
+    { caseId: "g3", tags: ["graded"], mean: 1.8, hardFail: false },
+  ],
+};
+const CELL_ROWS = [
+  { caseId: "g1", tags: ["graded"], grade: "A1", construction: "naming-vocabulary", mode: "turns", transcript: [], tier1: { pass: true, failing: [] } },
+  { caseId: "g2", tags: ["graded"], grade: "A2", construction: "naming-vocabulary", mode: "turns", transcript: [], tier1: { pass: true, failing: [] } },
+  { caseId: "g3", tags: ["graded"], grade: "B1", construction: "svo-query", mode: "turns", transcript: [], tier1: { pass: false, failing: [] } },
+];
+
+test("cellRollup: crosses grade with construction, worst cell first", () => {
+  const cells = cellRollup(CELL_SUMMARY, CELL_ROWS);
+  assert.deepEqual(cells.map((c) => `${c.grade}:${c.construction}`), ["A1:naming-vocabulary", "B1:svo-query", "A2:naming-vocabulary"]);
+  assert.equal(cells[0].mean, 1.4, "the floor cell leads, below both of its own marginals");
+  assert.equal(cells[0].tier1Pass, 1);
+  assert.equal(cells[0].tier1Total, 1);
+});
+
+test("cellRollup: a row belonging to no cell is left out of the cross table", () => {
+  assert.deepEqual(cellRollup(STUB_SUMMARY, STUB_ROWS), [], "ungraded lanes carry no grade/construction");
+});
+
+test("cellRollup: a cell with no judged sample reports no mean rather than a zero", () => {
+  const cells = cellRollup({ perCase: [] }, CELL_ROWS);
+  assert.equal(cells.every((c) => c.mean === null), true);
+});
+
+test("uncoveredCells: names the declared cells a run never sampled", () => {
+  const uncovered = uncoveredCells(CELL_ROWS).map((c) => `${c.grade}:${c.construction}`);
+  assert.equal(uncovered.includes("A1:naming-vocabulary"), false, "a sampled cell is covered");
+  assert.equal(uncovered.includes("C2:garden-path"), true, "a declared cell nobody ran is reported, not omitted");
+});
+
+test("undeclaredCells: names cells that are graded but absent from the matrix", () => {
+  assert.deepEqual(undeclaredCells(CELL_ROWS), ["B1:svo-query"]);
+  assert.deepEqual(undeclaredCells([CELL_ROWS[0]]), [], "a declared cell is not flagged");
+});
+
+test("renderReport: leads with the cell table, names the floor cell and the coverage gap", () => {
+  const md = renderReport(CELL_SUMMARY, CELL_ROWS, 2);
+  assert.match(md, /\*\*Floor cell: A1 naming-vocabulary at 1\.400\.\*\*/);
+  assert.match(md, /\| A1 \| naming-vocabulary \| 1 \| 1\.400 \| 1\/1 \|/);
+  assert.match(md, /## Coverage: 2 of 36 declared cells measured/);
+  assert.match(md, /- C2 garden-path/, "an unmeasured cell is listed by name");
+  assert.match(md, /graded but are not declared in GRADED_MATRIX\*\*: B1:svo-query/);
+  assert.ok(md.indexOf("Per-cell breakdown") < md.indexOf("Per-tag breakdown"), "the cross table precedes the marginals it corrects");
 });
 
 test("renderTranscripts / orderDiscriminating: discriminating transcripts first", () => {
