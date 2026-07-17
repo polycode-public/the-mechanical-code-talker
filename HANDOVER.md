@@ -16,9 +16,9 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-17)
 
-v2.4.3 in the working tree. The 2.4.2 backlog is pushed to `origin/main`; the 2.4.3 round (the two
-parser defects, Phase 7 pins, §7.5/§7.6, N1) is committed locally and awaits its own push. CI
-publishes on a version bump on main.
+v2.5.0 in the working tree. Everything through 2.4.3 (the two parser defects, Phase 7 pins,
+§7.5/§7.6, N1, and the N2/N3 doc corrections) is pushed to `origin/main`. 2.5.0 is the version the
+current benchmark round measures. CI publishes on a version bump on main.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
