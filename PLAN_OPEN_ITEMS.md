@@ -99,7 +99,7 @@ commit that reaches `main` or a remote.
 | **7** — public-surface audit | **OPEN** — nothing started | — |
 | **8** — capability page | **OPEN** — nothing started | — |
 | **9** — prose pass | **OPEN** — nothing started | — |
-| **10** — `PLAN_NORMATIVE.md` | **OPEN** — nothing started | — |
+| **10** — `PLAN_NORMATIVE.md` | **LANDED** — plan written, standards read, ontology uplifted, 10 tests green. §10.1's casing defect **does not exist** (see the FALSE table). Four fixes remain in files Phase 10 does not own: `PLAN_NORMATIVE.md` §7 | — |
 | PLAN_DEPS Q1 (maintainer tier), Q3 (ReDoS) | **OPEN** — decided, not built | — |
 
 ## Operator decisions taken this cycle — do not re-ask
@@ -185,8 +185,9 @@ Sequence for the next session, in order:
    a shipped decision (`0f8fb61`). 3.9's fix site is `chat.mjs`, NOT `ask.mjs` — investigated and
    recorded at the bottom of Phase 3 below.
 2. **Phase 7** — the public-surface audit. Before Phase 9.
-3. **Phase 10** — `PLAN_NORMATIVE.md`. Fix the two-casings IRI defect first; it needs no standard.
-4. **Phase 8** — the capability page. After 10's research.
+3. ~~**Phase 10**~~ — landed. `PLAN_NORMATIVE.md` §7 lists four fixes in files it does not own.
+4. **Phase 8** — the capability page. Phase 10's research is done and cite-ready:
+   `docs/references/schemas/`.
 5. **Phase 9** — the prose pass. Last.
 6. **PLAN_DEPS Q1 + Q3** — both decided, neither built.
 
@@ -537,6 +538,9 @@ stated twin. 581 corpus rows green.
 **Found on the way past, for Phase 10:** the `mgxneg:` prefix is declared **nowhere** in
 `ontology/tmct-core.ttl` — not even the shipped `mgxneg:capableOf`. The whole negative-polarity
 vocabulary is undeclared, so declaring one term now would be a partial job. Phase 10 owns it.
+**Fixed.** The ontology declares the namespace and the polarity *convention* rather than a term
+list: `mgxneg:` is generative (`negatedPredicate` swaps the prefix on any `mgx:X`), so hand-written
+twins would be wrong the first time a relation is added. `PLAN_NORMATIVE.md` §5.2.
 
 **Still open from this item:** `zeus is not mortal` (an unknown subject) remains a silent no-op —
 the gate above deliberately leaves it falling through, because nothing distinguishes it from the
@@ -624,7 +628,7 @@ Each carries its reproducer; group them into one commit per fix site.
 | 3.6 | `what else` / `why` → the identity blurb | **DONE.** `why` was never broken — it is in the `WHY` expansion set and faithfully expanded the blurb `what else` had just produced. Bare `what else` matched no frame, so it fell to the conversational lane. It now takes its subject from the standing referent (the same last-grounded binding `can it bark` uses), and asked cold it names what it cannot resolve instead of introducing the tool | `whatElseAnswer`, `chat.mjs` |
 | 3.7 | `do all men die` → code-graph parse error | **DONE, and the diagnosis was wrong.** The `do/does` frame exists — `does a man die` and `do man die` both answer. The PLURAL was the difference. Closed by 3.2's irregular-plural fold | `factTermVariants`, `chat.mjs` |
 | 3.8 | `i was wondering what a dog is` → couldn't parse | **DONE**, and this diagnosis was RIGHT — the only one in Phase 3 that was. The modal form was handled and this frame was not. It is one wrapper in an existing family, beside `WANT_KNOW_WRAPPER_RE` ("i'd like to know X"), with the same interrogative-remainder gate, so "i was wondering about the weather" is still left alone. **NOT `PHRASING_FRAMES`** — that family routes members-of-class and where-defined shapes; the wrappers are their own set above it. `what a dog is`, `could you tell me…` and `can you tell me…` all already worked: the wrapper was the whole defect | the wrapper set in `normalize.mjs` |
-| 3.9 | `src/core/store.mjs` (bare path) → couldn't parse; bare `Store` orients fine | bare-entity orientation is wired for Class/Function, not Module | **NOT `metaFallbackEntityAnswer` — see below** |
+| 3.9 | `src/core/store.mjs` (bare path) → couldn't parse; bare `Store` orients fine | **DONE.** Both phrasings now reach the same module-grain overview `what does X do` already gave. The investigation below was right on every point | `moduleOrientLane`, `chat.mjs` |
 
 **3.5's fix site, and why "the hint doesn't scale to the question's register" was the wrong
 diagnosis.** The register was never the problem: the answer was. **The plural was the whole
@@ -660,6 +664,20 @@ The real gate is two lanes in `chat.mjs`, both actionable:
 
 `what does src/core/store.mjs do` already works. The fix is letting the other two phrasings reach
 the same lane. `grammar.bare-entity` is still a thin key (one row) and this is what would thicken it.
+
+**Landed.** Both phrasings are claimed inside `moduleOrientLane`, which is where the rich answer
+already lives — not in `ask.mjs`, exactly as this investigation warned. `metaLane` runs on any miss
+and calls the lane, so both forms already reached it; only the recognisers were missing.
+
+The gate is a **path shape** (`MODULE_PATH_RE`: a slash, or a source-file extension). That is what
+makes widening safe — no vocabulary term can match it, so `what is a dog` is untouched, and
+`what is Store` keeps its class orientation because "Store" is not path-shaped. The lane's
+exact-unique `resolveEntity` remains the authority; the shape only decides what is worth asking it
+about. Verified: an unknown path (`what is src/core/nope.mjs`) still misses rather than inventing an
+overview.
+
+**Pins.** 2 rows keyed `grammar.bare-entity.module-path` — the three phrasings agreeing, and the
+negative proving the path gate does not claim a class or an unknown path. The thin key is thicker.
 
 ### 3.10 Planner surface gaps
 

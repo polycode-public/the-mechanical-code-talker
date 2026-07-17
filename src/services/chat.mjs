@@ -4166,6 +4166,18 @@ const MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB
 // tolerance for the bare "whats" contraction spelling, just below.
 const MODULE_PURPOSE_RE = /^what(?:'s|s|\s+is)\s+(.+?)\s+(?:for|about)\??$/i;
 
+/** A module PATH as a reader types it — "src/core/store.mjs", "app/lib/b.mjs",
+ *  or a bare "store.mjs". Requires a slash or a source-file extension, which is
+ *  what makes the two identity phrasings below safe to claim: no vocabulary
+ *  term can match this shape, so "what is a dog" is untouched. The lane's
+ *  exact-unique resolveEntity gate is still the authority — this only decides
+ *  what is worth ASKING it about. */
+const MODULE_PATH_RE = /^(?:[\w.@~-]+\/)+[\w.@~-]+$|^[\w.@~-]+\.(?:mjs|cjs|js|jsx|ts|tsx|py|java|rb|go|rs|php|cs|kt|swift)$/i;
+/** "what is src/core/store.mjs" — the identity phrasing of the same question
+ *  "what does X do" already answers. Kept distinct from MODULE_PURPOSE_RE
+ *  ("what is X for"), whose trailing "for"/"about" is what anchors it. */
+const MODULE_IDENTITY_RE = /^what(?:'s|s|\s+is)\s+(.+?)$/i;
+
 /** A leading politeness/formal-ESL wrapper this lane's own anchored regexes
  *  otherwise miss entirely: "please explain what does X do"
  *  starts with neither "what"/"whats" (MODULE_ORIENT_RE/MODULE_PURPOSE_RE's own
@@ -4208,8 +4220,16 @@ async function moduleOrientLane(query, { graph }) {
   // regex only adds the "explain [to me]" wrapper on top).
   q = stripFillerWords(applyPreambleFrames(correctMisspellings(q))).replace(MODULE_ORIENT_POLITENESS_RE, "");
   const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE);
-  if (!m) return null;
-  const term = m[1].trim();
+  // "what does src/core/store.mjs do" already reached the overview; the bare
+  // path and "what is <path>" did not, so the same module answered one
+  // phrasing and walled two. Both are claimed here rather than in ask.mjs,
+  // whose Module fallback is absent BY DESIGN — adding it there replaces this
+  // rich, module-grain overview with a thin one. Gated on the term looking
+  // like a path, so this widens the lane by exactly the shape that was
+  // missing and can never claim a vocabulary question.
+  const identity = m ? null : (q.match(MODULE_IDENTITY_RE)?.[1]?.trim() ?? q);
+  const term = m ? m[1].trim() : (identity && MODULE_PATH_RE.test(identity) ? identity : null);
+  if (!term) return null;
   if (/^(?:it|this|that|they|them)$/i.test(term)) return null;
   const ent = await resolveEntity(graph, term);
   if (!ent) return null;
