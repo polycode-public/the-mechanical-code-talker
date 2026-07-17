@@ -87,17 +87,17 @@ export function buildCorpusEntry(id, tierLabel, byClump) {
 
   return `
   // ${tierLabel} tier — INCREMENTAL facts beyond ${id === "human-medium" ? "Small (corpus/tier2/human.jsonl)" : "Medium (corpus/tier2/human-medium.jsonl)"} only
-  // (PLAN_SEED.md §3's tier-selection design: Small/Medium/Large are SIZES of
-  // one bundle, not separate corpus ids — this file holds only what ${tierLabel}
-  // ADDS beyond the previous tier). Built by scripts/build-persona-tiers.mjs
+  // (Small/Medium/Large are SIZES of one bundle, not separate corpus ids — this
+  // file holds only what ${tierLabel} ADDS beyond the previous tier). Built by
+  // scripts/build-persona-tiers.mjs
   // from the same two locally-cloned WordNet source files as Small
   // (~/projects/globalwordnet/english-wordnet/src/yaml/), automatically
   // curated: candidate words ranked by WordNet sense-count (a commonness
-  // proxy, PLAN_SEED.md §12), restricted to each word's own TOP senses (not
+  // proxy), restricted to each word's own TOP senses (not
   // some rare/slang meaning that happens to live in this domain), obscure/
   // archaic/offensive/pharmaceutical content excluded via a definition-text
   // blocklist plus an explicit word denylist, reviewed by hand before being
-  // spliced in here (scripts/apply-persona-tiers.mjs). ${id === "human-large" ? "Large's own facts walk real multi-hop hypernym chains (up to 4 hops, PLAN_SEED.md §3's own \"surgeon ⊑ doctor ⊑ … ⊑ person\" example) wherever WordNet's real structure supports it, not a flat one-hop-per-word cap." : "Medium stays flat, one hop per word, same style as Small."}
+  // spliced in here (scripts/apply-persona-tiers.mjs). ${id === "human-large" ? "Large's own facts walk real multi-hop hypernym chains (up to 4 hops, e.g. \"surgeon ⊑ doctor ⊑ … ⊑ person\") wherever WordNet's real structure supports it, not a flat one-hop-per-word cap." : "Medium stays flat, one hop per word, same style as Small."}
   "${id}": {
     kind: "domain",
     description: "The ${tierLabel} tier of the default human-world persona (PLAN_SEED.md): incremental facts beyond ${id === "human-medium" ? "Small" : "Medium"} only — activated alongside \\"human\\" via --persona-size ${id === "human-medium" ? "medium" : "large"}, never active by default.",
