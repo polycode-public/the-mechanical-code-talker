@@ -103,8 +103,9 @@ test("runTurn: a structural query over a MISSING graph is an honest miss (bootst
   const { answer, record } = await runTurn("which modules import a.mjs", {
     config: { graphFile: "/nonexistent/.tmct/graph.json" },
   });
-  assert.match(answer, /the graph at .* is empty/);
-  assert.match(answer, /folds the conversation/);
+  assert.match(answer, /I can't answer that as a code question — no code graph is loaded in this session/);
+  assert.match(answer, /tmct init/, "names the recovery");
+  assert.doesNotMatch(answer, /the graph at .* is empty/, "the loader's internal error is never the answer");
   assert.doesNotMatch(answer, /\n\s+at /, "message only — never a stack trace");
   assert.equal(record.miss, true);
 });

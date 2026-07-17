@@ -8471,8 +8471,28 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
     // updates too — mirrors the focus updates the ordinary ask() path does.
     const ent = await resolveEntity(graph, term);
     return { text, ent };
-  } catch {
+  } catch (e) {
+    // tmct_describe answers a concept from memory/corpus facts whenever the
+    // code map holds nothing for it — but dispatchTool loads the graph BEFORE
+    // the handler runs, so on an empty one the handler never gets to reach its
+    // own fall-through. Reach it here instead: "tell me about a dog" is a
+    // question about a dog, and the code graph's emptiness is no answer to it.
+    if (e?.emptyGraph) return describeFromMemoryFacts(term, config);
     return null; // unresolvable term — decline, the ordinary wall stands unchanged
+  }
+}
+
+/** tmct_describe's OWN memory/corpus fall-through (tools/memory-fallthrough.mjs),
+ *  called directly for a session whose code graph is empty. Same rows, same
+ *  renderer, same provenance the handler itself would have cited. */
+async function describeFromMemoryFacts(term, config) {
+  if (!config) return null;
+  try {
+    const { memoryFactRows, renderMemoryDefinition } = await import("../tools/memory-fallthrough.mjs");
+    const text = renderMemoryDefinition(await memoryFactRows(config), term);
+    return text ? { text, ent: null } : null;
+  } catch {
+    return null;
   }
 }
 
@@ -9136,12 +9156,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   } catch (e) {
     const thrown = String(e?.message || e);
     // A graph-less session's ask dispatch fails reading the never-configured
-    // graph artifact — an internal error string, not an answer. Swap in an
-    // honest wall; the teach/fact lanes below still get their turn and
-    // replace it whenever they can store or answer instead. A missing config
-    // gets the same wall: with no config at all, no dispatch could ever have
-    // loaded a graph, whatever the internal error spelled.
-    answer = !graph && (!config || /^cannot read graph artifact\b/.test(thrown))
+    // graph artifact, or loads one holding nothing (e.emptyGraph — the first
+    // turn of a fresh session, before the conversation has folded anything in).
+    // Either way it's an internal error string, not an answer. Swap in an
+    // honest wall; the teach/fact/vocabulary lanes below still get their turn
+    // and replace it whenever they can store or answer instead. A missing
+    // config gets the same wall: with no config at all, no dispatch could ever
+    // have loaded a graph, whatever the internal error spelled.
+    //
+    // The session hands this lane a KNOWN-EMPTY graph object rather than null
+    // on that first turn, so the test is noCodeGraph, not `!graph`: an empty
+    // graph is as unusable as an absent one, and reporting its emptiness to
+    // someone asking about a dog answers a question they never asked.
+    answer = (!graph || noCodeGraph(graph)) && (!config || e?.emptyGraph || /^cannot read graph artifact\b/.test(thrown))
       ? "I can't answer that as a code question — no code graph is loaded in this session. "
         + "I can still remember and answer taught facts (try \"every disk is a game piece\"), "
         + "or run `tmct init` in a repo to index one."

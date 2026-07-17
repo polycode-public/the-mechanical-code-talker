@@ -56,8 +56,8 @@ test("recall: a relevant recalled block answers the miss — framed, cited, hint
     assert.ok(answer.includes(BLOCK_DAY), "the date is the uuidv7-decoded day");
     assert.match(answer, /Q: which modules import a\.mjs/);
     assert.match(answer, /A: app\/lib\/b\.mjs and app\/lib\/c\.mjs/);
-    assert.match(answer, /is empty — no entities to answer from/,
-      "the engine's own honest miss (the empty-bootstrap hint here) is kept below");
+    assert.match(answer, /no code graph is loaded in this session/,
+      "the engine's own honest miss (the empty-bootstrap wall here) is kept below");
     assert.equal(record.via, "recall");
     assert.equal(record.miss, false, "memory answered it — no longer recorded as a blank");
   } finally {
