@@ -41,11 +41,16 @@ Phases 1–7 and 10 are closed. This session landed the §7 vocabulary fallout (
 citations, the SEON renames, `cap:`/`taught:`, the OSA rename, the storage-vocab renames, the
 honest-miss citation) and the 64-bit `factIdFor` migration, with the full suite green. What remains:
 
+- **PLAN_DEPS batches 8-12** — the internal-library consolidation. All source is committed and the
+  pack manifest + ask bundle are done; the full-suite gate is running and closes this when green.
 - **Phase 7's two leftover rows** (in `docs/public-examples.md`): three `dom`-tier `index.html` rows
   (`runChat` the one worth pinning) and `docs/repository-interface.md`'s prose contract numbers.
 - **`PLAN_NORMATIVE.md` §7.5 / §7.6.** The PROV Source split (a read-side reclassification off the
   `sourceType` stored on every Source individual) and SKOS concept identity (needs concept identity
   for the corpus's bare-string terms before `skos:related` applies).
+- **Two small defects** (`PLAN_OPEN_ITEMS.md` phase status): a multi-sentence teach line drops its
+  last bullet in a seeded session (cosmetic), and `read as` over-relaxes beyond the impact
+  paraphrase (`ask.mjs:3921`).
 
 Two designs wait on a decision rather than a session: `PLAN_CONSISTENCY_CHECK.md` and
 `PLAN_CHILD_CORPUS.md`.
