@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/extract-persona-sources.mjs — maintainer-only curation-worksheet
-// generator for the "human-world" default persona (PLAN_SEED.md). Mirrors
+// generator for the "human-world" default persona. Mirrors
 // corpus/tier2/generate.mjs's own "not part of the product path" discipline:
 // offline, $0, never imported by anything under src/ or bin/, never run by
 // `npm test`.
@@ -10,7 +10,7 @@
 //   - Open English WordNet   (TMCT_WORDNET_SRC,   default ~/projects/globalwordnet/english-wordnet)
 //   - Schema.org vocabulary  (TMCT_SCHEMAORG_SRC, default ~/projects/schemaorg/schemaorg)
 // and writes ONE curation worksheet (JSON) surfacing CANDIDATES for the 9
-// persona clumps (PLAN_SEED.md §3) — never the final committed files. A human
+// persona clumps — never the final committed files. A human
 // (or an agent acting as one) reviews the worksheet and hand-picks the actual
 // facts/lexicon words/example sentences that land in corpus/tier2/human.jsonl
 // and src/domain/grammar/lexicon-core.json, exactly the same "curate down from a big
@@ -75,7 +75,7 @@ const CLUMPS = {
     files: ["noun.person.yaml", "noun.group.yaml"],
     // A curated CANDIDATE common-word list per clump — deliberately hand-picked
     // to be everyday words, not a mechanical dump of the ~10,400-synset pool
-    // (PLAN_SEED.md §3's own point: WordNet's noun.person file alone includes
+    // (WordNet's noun.person file alone includes
     // senses like "imaginary being"/"hypothetical creature" that must be
     // skipped in favour of "man", "woman", "doctor", "teacher", …).
     words: [
@@ -161,7 +161,7 @@ const SCHEMA_ALLOWLIST = ["Thing", "Person", "Place", "Event", "Organization", "
 // each, and by this point the words are fixed and committed, so there is no
 // more reason to keep the per-clump file split) and pulls each word's real
 // WordNet inline `example:` sentence, where one exists (real coverage varies
-// ~1-8% by category, PLAN_SEED.md §9 — most words won't have one, that's
+// ~1-8% by category — most words won't have one, that's
 // expected). Writes a candidate list — NOT the final committed file — for a
 // human to hand-pick corpus/tier2/human-examples.jsonl from (same "curate
 // down from a big source" discipline as everything else here).

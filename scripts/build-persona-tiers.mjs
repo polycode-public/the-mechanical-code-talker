@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // scripts/build-persona-tiers.mjs — maintainer-only generator for the
-// Medium/Large persona tiers (PLAN_SEED.md §3). Mirrors
+// Medium/Large persona tiers. Mirrors
 // scripts/extract-persona-sources.mjs's own discipline: offline, $0, never
 // imported by anything under src/ or bin/, never run by `npm test`. Its
 // OUTPUT is a curation worksheet (JSON), not the final committed files — a
@@ -12,18 +12,18 @@
 //   1. Load every noun.*.yaml synset into one global id->record map, and
 //      every entries-<letter>.yaml word->senses index (both offline, $0,
 //      ~1.5s total — see the two loops below).
-//   2. Per clump (PLAN_SEED.md §3's source-file mapping), collect candidate
+//   2. Per clump, collect candidate
 //      HEADWORDS from the clump's own source file(s): single-word (no
 //      underscore — multi-word compounds are never added as lexicon nouns,
 //      matching the "hash_table"-as-concept-filler precedent already used
 //      by every other tier2 corpus), definition not flagged by the
 //      obscurity blocklist (archaic/offensive/hypothetical/mythical/…,
-//      PLAN_SEED.md §3's own "imaginary being"/"hypothetical creature"
-//      example), not already declared in lexicon-core.json.
+//      e.g. "imaginary being"/"hypothetical creature"), not already
+//      declared in lexicon-core.json.
 //   3. Rank candidates by WordNet sense-count (a word's total number of
-//      senses across every part of speech) as a commonness proxy — PLAN_SEED
-//      §12's own suggested alternative to an external frequency list, needs
-//      no extra download. Select top-N per clump until the incremental fact
+//      senses across every part of speech) as a commonness proxy — it stands
+//      in for an external frequency list and needs no extra download.
+//      Select top-N per clump until the incremental fact
 //      target (Medium: tier target minus Small's real count; Large: tier
 //      target minus Medium's) is reached.
 //   4. Medium: one flat hop per word (word IsA hypernym-term), matching
@@ -33,9 +33,9 @@
 //      invented, always the real WordNet pointer.
 //   5. Large: walks the REAL hypernym chain up to 4 hops (stopping early at
 //      a STOP_SET root already established by human-base/Small — e.g.
-//      "person", "animal", "artifact"), reproducing PLAN_SEED.md §3's own
-//      worked example ("surgeon ⊑ doctor ⊑ medical_professional ⊑
-//      professional ⊑ person") for whichever words' real WordNet depth
+//      "person", "animal", "artifact"), producing chains like "surgeon ⊑
+//      doctor ⊑ medical_professional ⊑ professional ⊑ person"
+//      for whichever words' real WordNet depth
 //      happens to support it — not a fixed quota, a natural consequence of
 //      walking real pointers. Same meronym secondary-fact pass as Medium.
 //
@@ -58,9 +58,9 @@ const OUT = (() => {
   return i !== -1 && process.argv[i + 1] ? process.argv[i + 1] : join("scripts", "persona-tiers-worksheet.json");
 })();
 
-// ---- Real, measured incremental targets (PLAN_SEED.md §3's table; Small's
-// real per-clump counts measured directly from corpus/tier2/generate.mjs's
-// CORPUSES.human.facts, not the doc's own rounded "~N facts" comments). ----
+// ---- Real, measured incremental targets. Small's real per-clump counts are
+// measured directly from corpus/tier2/generate.mjs's CORPUSES.human.facts,
+// never from a rounded "~N facts" figure. ----
 const SMALL_REAL = {
   "human-core": 147, "human-places": 80, "human-objects": 103,
   "human-nature": 98, "human-time-events": 58, "human-body-food": 80, "human-mind": 70,
@@ -146,8 +146,7 @@ async function main() {
   // human-places' extra pool: noun.artifact synsets under a "building-like"
   // root (structure/building/dwelling/housing/edifice) — noun.location.yaml
   // alone (875 synsets, mostly abstract regions/boundaries) is too thin for
-  // Large's 1200-fact target on its own (PLAN_SEED.md §3's own source note:
-  // "noun.location + artifact-buildings share"). human-objects draws from
+  // Large's 1200-fact target on its own. human-objects draws from
   // the REMAINDER of noun.artifact (everything NOT under that root) so the
   // two clumps don't compete for the same synsets.
   const artifactParsed = byFile.get("noun.artifact.yaml");

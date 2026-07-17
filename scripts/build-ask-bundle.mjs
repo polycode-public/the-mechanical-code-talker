@@ -1,5 +1,5 @@
 // build-ask-bundle.mjs — bundle tmct's memory-graph answer engine for the
-// ledger page's in-browser chat dock (PLAN_VIZ_LEDGER.md).
+// ledger page's in-browser chat dock.
 //
 // Builds ONE IIFE bundle:
 //   - src/surfaces/web/memory-ask-browser-entry.mjs -> src/surfaces/web/memory-ask-browser.bundle.js —

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scripts/generate-template-variants.mjs — PLAN_BREADTH_FIRST_NLU.md §6a's
+// scripts/generate-template-variants.mjs — the template-variant
 // generation script. Maintainer-only tooling: never imported by src/ or
 // bin/, never run by `npm test`. Offline, $0 — no network, no LLM, no
 // invented text. Writes corpus/generated/ace-surface-variants.jsonl.
@@ -35,7 +35,7 @@
 //      verifies it re-parses to the same triple shape.
 //
 // Never does: passive voice (no ACE pattern supports it — see ace.mjs's
-// pattern table, PLAN_BREADTH_FIRST_NLU.md §6a's own scoping), NomLex
+// pattern table), NomLex
 //
 //   node scripts/generate-template-variants.mjs [--out <path>] [--limit <n>]
 

@@ -1,5 +1,5 @@
 // scripts/lib/wordnet-synonyms.mjs — safe, mechanical WordNet-driven synonym
-// lookups for PLAN_TEMPLATE_COVERAGE.md's generation script
+// lookups for the template-variant generation script
 // (scripts/generate-template-variants.mjs). Maintainer-only tooling: never
 // imported by src/ or bin/, never run by `npm test`.
 //
@@ -7,9 +7,9 @@
 // (`~/projects/globalwordnet/english-wordnet`, override via
 // TMCT_WORDNET_SRC) and answers exactly one question, safely: "what other
 // words are declared in WordNet's SAME synset as this word, for this part of
-// speech" — the ONLY substitution PLAN_BREADTH_FIRST_NLU.md §6a sanctions
-// ("synonym-substituted within a synset, using members, never crossing
-// synsets"). Reuses the WordNet reader in
+// speech" — the ONLY substitution sanctioned here (synonym-substituted
+// within a synset, using its members, never crossing synsets). Reuses the
+// WordNet reader in
 // src/adapters/wordnet-source.mjs rather than re-deriving it or adding a YAML
 // dependency — same "not a general YAML parser, offline, maintainer-only"
 // discipline.
@@ -39,7 +39,7 @@ async function allSynsets() {
  *  `word -> [{pos, synsetId, members, example}]` — one entry per POS the word
  *  actually has a declared sense for (a word can be both a noun and a verb).
  *  `example` is the synset's own first WordNet example sentence, if any
- *  (0-2 per synset per PLAN_BREADTH_FIRST_NLU.md §6a) — carried through
+ *  (0-2 per synset) — carried through
  *  purely as optional extra provenance for the caller, not otherwise used
  *  here. Words absent from WordNet's entries index are simply absent from
  *  the returned map. */

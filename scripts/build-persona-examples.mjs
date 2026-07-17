@@ -1,8 +1,7 @@
 #!/usr/bin/env node
 // scripts/build-persona-examples.mjs — maintainer-only curation-worksheet
 // generator for the Medium/Large tiers of the example-sentence corpus
-// (PLAN_SEED.md §9, the "tenth deliverable"). Mirrors
-// scripts/build-persona-tiers.mjs's own discipline: offline, $0, never
+// Mirrors scripts/build-persona-tiers.mjs's own discipline: offline, $0, never
 // imported by anything under src/ or bin/, never run by `npm test`. Output
 // is a curation WORKSHEET, not the final committed file — reviewed by hand
 // before being written into corpus/tier2/human-examples-medium.jsonl /
@@ -16,10 +15,9 @@
 //   2. SemCor (~/projects/globalwordnet/semcor/) — real Brown Corpus text,
 //      re-tagged to modern OEWN senses — for LARGE tier only, supplementing
 //      categories where WordNet's own inline coverage is thin (human-nature
-//      especially, PLAN_SEED.md §9: noun.animal's inline rate is <1%).
+//      especially: noun.animal's inline rate is <1%).
 //      Filtered for simple grammar (short sentences, no semicolons) and
-//      drawn from the plainer genres (press_reportage, humor) per §9's own
-//      genre guidance.
+//      drawn from the plainer genres (press_reportage, humor).
 //
 //   node scripts/build-persona-examples.mjs --tier medium [--out <path>]
 //   node scripts/build-persona-examples.mjs --tier large  [--out <path>]
@@ -168,7 +166,7 @@ async function main() {
 
   if (TIER === "large") {
     // SemCor supplement for thin-inline-coverage categories — human-nature
-    // ESPECIALLY (PLAN_SEED.md §9: noun.animal's own inline rate is <1%).
+    // ESPECIALLY (noun.animal's own inline rate is <1%).
     // The flat CORPUSES lexicon list doesn't tag words by clump, so the
     // per-clump breakdown comes from build-persona-tiers.mjs's own worksheet
     // (scripts/persona-tiers-worksheet.json by default — re-run that script

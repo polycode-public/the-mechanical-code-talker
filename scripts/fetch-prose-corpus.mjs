@@ -34,8 +34,7 @@
 //
 // Two Wikipedia sets, fetched differently, because measurement said so:
 //   - CHILD (simple.wikipedia.org, LEAD SECTIONS): everyday English about the
-//     concepts tmct's persona corpus actually models. Simple English is written
-//     at roughly the level PLAN_CHILD_CORPUS.md describes, and its lead sections
+//     concepts tmct's persona corpus actually models. Its lead sections
 //     are dense definitional prose ("Penguins are seabirds in the family
 //     Spheniscidae") — the shape the ACE grammar is built to parse. Highest
 //     rescue-candidate density of any source measured, ~3x the technical prose.
@@ -66,8 +65,8 @@ export const SQLITE_PAGES = [
 // files tmct's persona clumps are built from (scripts/build-persona-tiers.mjs's
 // CLUMP_FILES): animal, plant, substance, food, body, person, group, location,
 // artifact, possession, time, event, quantity, communication, cognition,
-// feeling. Bird/Penguin/Ostrich/Eagle are deliberate — PLAN_CHILD_CORPUS.md's
-// worked example is that the shipped corpus knows exactly one kind of bird.
+// feeling. Bird/Penguin/Ostrich/Eagle are deliberate — the shipped corpus
+// otherwise knows exactly one kind of bird.
 export const WIKIPEDIA_CHILD_TITLES = [
   "Bird", "Penguin", "Ostrich", "Owl", "Eagle", "Dog", "Cat", "Horse", "Fish",
   "Insect", "Mammal", "Bee", "Butterfly",

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// scripts/template-coverage.mjs — PLAN_BREADTH_FIRST_NLU.md §6b's coverage
+// scripts/template-coverage.mjs — the grammar coverage
 // harness. Maintainer-only tooling: never imported by src/ or bin/, never run
 // by `npm test`. Offline, $0 — no network, no LLM.
 //
