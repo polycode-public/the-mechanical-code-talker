@@ -20,7 +20,10 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { GRADED_MATRIX, cellKey } from "./graded.mjs";
+
 const fmt = (v) => (v === null || v === undefined ? "–" : String(v));
+const fmt3 = (v) => (v === null || v === undefined ? "–" : v.toFixed(3));
 const pad3 = (n) => String(n).padStart(3, "0");
 
 /** Sort key for "discriminating first": lower sorts earlier. */
@@ -55,6 +58,67 @@ function tagTable(summary) {
   return lines.join("\n");
 }
 
+/** Fold the run's rows into one entry per grade×construction cell, worst mean
+ *  first. A marginal cannot answer "where is the floor": averaging a
+ *  construction across its grades, or a grade across its constructions, mixes a
+ *  weak cell with a strong one and reports the midpoint, so the weak cell is
+ *  visible in neither table. Crossing them is what makes it addressable — the
+ *  cell is the unit a lever actually moves. */
+export function cellRollup(summary, rows) {
+  const byId = new Map((summary.perCase || []).map((c) => [c.caseId, c]));
+  const cells = new Map();
+  for (const row of rows) {
+    if (!row.grade || !row.construction) continue; // ungraded lanes have no cell
+    const key = cellKey(row);
+    const cell = cells.get(key) ?? { grade: row.grade, construction: row.construction, n: 0, means: [], tier1Pass: 0, tier1Total: 0 };
+    cell.n += 1;
+    const mean = byId.get(row.caseId)?.mean;
+    if (mean !== null && mean !== undefined) cell.means.push(mean);
+    if (row.tier1) {
+      cell.tier1Total += 1;
+      if (row.tier1.pass) cell.tier1Pass += 1;
+    }
+    cells.set(key, cell);
+  }
+  return [...cells.values()]
+    .map((c) => ({ ...c, mean: c.means.length ? c.means.reduce((a, b) => a + b, 0) / c.means.length : null }))
+    .sort((a, b) => (a.mean ?? Infinity) - (b.mean ?? Infinity)
+      || a.grade.localeCompare(b.grade) || a.construction.localeCompare(b.construction));
+}
+
+function cellTable(cells) {
+  const lines = [
+    "| grade | construction | n | mean (0–2) | tier-1 |",
+    "| --- | --- | ---: | ---: | ---: |",
+  ];
+  for (const c of cells) {
+    lines.push(`| ${c.grade} | ${c.construction} | ${c.n} | ${fmt3(c.mean)} | ${c.tier1Pass}/${c.tier1Total} |`);
+  }
+  return lines.join("\n");
+}
+
+const measuredCellKeys = (rows) => new Set(rows.filter((r) => r.grade && r.construction).map((r) => cellKey(r)));
+
+/** The declared cells this run never sampled. An unmeasured cell scores nothing
+ *  and so appears nowhere in the results — the one shape of blind spot a report
+ *  full of green cannot show you. Naming them is what keeps "everything passes"
+ *  from reading as "everything was tried". */
+export function uncoveredCells(rows) {
+  const measured = measuredCellKeys(rows);
+  return GRADED_MATRIX.filter((c) => !measured.has(cellKey(c)));
+}
+
+/** Cells this run measured that GRADED_MATRIX does not declare. The matrix is
+ *  what "36 cells" counts and what coverage is scored against, so a pool row
+ *  outside it is graded but uncounted — it inflates the apparent cell total
+ *  while the coverage denominator ignores it. Either the matrix is missing a row
+ *  or the pool has one it should not; both are drift, and both are invisible
+ *  until the two are compared. */
+export function undeclaredCells(rows) {
+  const declared = new Set(GRADED_MATRIX.map((c) => cellKey(c)));
+  return [...measuredCellKeys(rows)].filter((k) => !declared.has(k)).sort();
+}
+
 function transcriptBlock(row) {
   const lines = [];
   let session = null;
@@ -78,6 +142,10 @@ export function renderReport(summary, rows, n) {
   const hardFails = (summary.perCase || []).filter((c) => c.hardFail);
   const baselineCount = rows.filter((r) => r.tier1?.baselineFailTurns?.length).length;
   const discriminating = orderDiscriminating(summary, rows).slice(0, 5);
+  const cells = cellRollup(summary, rows);
+  const uncovered = uncoveredCells(rows);
+  const undeclared = undeclaredCells(rows);
+  const floor = cells.find((c) => c.mean !== null);
 
   return `# CEFR_ENGLISH_${pad3(n)} — chat tuning cycle ${n}
 
@@ -97,6 +165,26 @@ _<fill: the ONE lever applied, with the commit(s)>_
 | prediction (step 1) | predicted movement | actual movement | verdict |
 | --- | --- | --- | --- |
 | _<fill>_ | _<fill>_ | _<fill>_ | _<fill>_ |
+
+## Per-cell breakdown (grade × construction), worst first
+
+${floor ? `**Floor cell: ${floor.grade} ${floor.construction} at ${fmt3(floor.mean)}.**` : "_No judged cell in this run._"}
+
+${cellTable(cells)}
+
+Read this table before the marginals below. A grade mean and a construction mean
+each average a cell away: a construction that is weak at one grade and strong at
+another reports the midpoint in both, so the weak cell shows up in neither. The
+cell is what a lever moves, so it is what a prediction should name.
+
+## Coverage: ${GRADED_MATRIX.length - uncovered.length} of ${GRADED_MATRIX.length} declared cells measured
+
+${uncovered.length
+  ? `${uncovered.length} declared cell(s) this run never sampled. They score nothing and appear in no table above, so nothing here is evidence about them either way:\n\n${uncovered.map((c) => `- ${c.grade} ${c.construction}`).join("\n")}\n\nRun the full matrix (\`chatbench/graded-pool-max.jsonl\`) to measure them.`
+  : "Every declared cell was sampled."}
+${undeclared.length
+  ? `\n**${undeclared.length} cell(s) were graded but are not declared in GRADED_MATRIX**: ${undeclared.join(", ")}. Coverage is scored against the matrix, so these are graded and uncounted — either the matrix is missing a row or the pool carries one it should not.\n`
+  : ""}
 
 ## Per-tag breakdown
 
