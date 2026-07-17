@@ -26,12 +26,10 @@ download, not reachable from data in hand).
 
 ## Open items
 
-`PLAN_OPEN_ITEMS.md` is the build order and holds the detail — its "Execution status" section
-carries the phase table, the operator decisions already taken, the traps this cycle hit, and the
-list of this plan's own citations that proved false. Read that before quoting any fix site.
-
-The `PLAN_OPEN_ITEMS.md` phase-table backlog is fully closed (`git log` and the plan doc hold the
-record). What remains:
+The 2.0.3-cycle backlog is fully delivered; its build-order doc and the purge plan are archived at
+`archive/PLAN_OPEN_ITEMS.md` and `archive/PLAN_PURGE.md` — read them for the phase-by-phase detail,
+the operator decisions already taken, the traps the cycle hit, and its own record of citations that
+proved false. What remains:
 
 - **The 2.5.0 benchmark round's routed backlog.** All four axes re-ran at 2.5.0 (`BENCHMARK_{AGENT,
   INFERENCE,CEFR_ENGLISH,CONVERSATION}_2.5.0.md`). Every 2.0.3 confident-wrong is confirmed fixed;
@@ -53,7 +51,7 @@ record). What remains:
   frozen-expectation drift — the answer is an honest miss the judge scores 2/2), and `gq-impact-a`'s
   `/impact` depth-2 label (`(imports it)` for a transitive dependent) wants a small rephrase.
 - **The resolver-floor `ab-c2-what-to-test` decision** (`BENCHMARK_AGENT_2.5.0.md`, and Phase 4.5 of
-  `PLAN_OPEN_ITEMS.md`). On the AGENTBENCH resolver-floor driver arm, the C2 case
+  `archive/PLAN_OPEN_ITEMS.md`). On the AGENTBENCH resolver-floor driver arm, the C2 case
   `ab-c2-what-to-test` stopped producing a completed plan (`completed: true → false`), dropping the
   resolver's C2 plan-completion from 36% to 27%; the 2.5.0 re-run confirmed it holds at 27%, so it is
   a stable state, not a transient. The open question is which of two readings is right: either the
@@ -62,6 +60,21 @@ record). What remains:
   build. The goal driver still composes the case (56/56 clears C2), so only the floor arm is
   affected. Resolve it by either lowering the floor arm's expected result for this case or restoring
   the resolver's plan; do not leave the two arms silently disagreeing.
+- **Two small parser tails** (from the archived `PLAN_OPEN_ITEMS.md`, §3.1/§3.2): `zeus is not mortal`
+  — a negative about an unknown subject is a silent no-op, because nothing distinguishes it from a
+  property-claim shape without a stored fact to anchor on; and a quantified plural (`are all dogs
+  mortal`) echoes the ungrammatical `all dogs is mortal`, because re-attaching a quantifier to a
+  folded lemma reads worse than what it replaces — it wants a real agreement rule, not another strip.
+- **`syllogise` — an operator decision** (`PLAN_NORMATIVE.md` §7.8). The engine is a forward-chaining
+  fixpoint (its own header says so) and only some of its rules are genuine syllogisms. Either keep
+  `syllogise` as the product-facing verb and name the mechanism accurately in the code, or rename the
+  verb — the latter touches a published CLI surface (`npx tmct syllogise`), so it is the operator's
+  call, not a drive-by rename.
+- **Strengthen the ontology-vocabulary test** (`PLAN_NORMATIVE.md` §7.13). The §6 vocabulary test
+  checks what the ontology documents, not what a store writes, so `mgx:factJustification` — emitted
+  by production code but declared in no ontology file — fell through both gates. The stronger test
+  diffs the props a real store actually writes against the ontology; that needs a seeded store in the
+  test, which is the `test:fast` budget's business.
 
 ## Discipline
 

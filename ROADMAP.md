@@ -117,9 +117,9 @@ status in its opening lines — read it there, because a status quoted here woul
 | [PLAN_GUESS_NUMBER.md](PLAN_GUESS_NUMBER.md) | closed-loop planning over hidden state, via belief-interval bisection |
 | [PLAN_MUD.md](PLAN_MUD.md) | persistent, shared tmct worlds over a `server:` memory backend |
 | [PLAN_NLU_BENCHMARKS.md](PLAN_NLU_BENCHMARKS.md) | scoring tmct on the CLINC150 and HWU64 intent sets |
-| [PLAN_OPEN_ITEMS.md](PLAN_OPEN_ITEMS.md) | the build order closing the backlog `HANDOVER.md` carries |
+| [PLAN_OPEN_ITEMS.md](archive/PLAN_OPEN_ITEMS.md) | delivered — the 2.0.3-cycle build order, archived |
 | [PLAN_PARAPHRASE_VERIFICATION.md](PLAN_PARAPHRASE_VERIFICATION.md) | checking a paraphrase against the graph before it prints |
-| [PLAN_PURGE.md](PLAN_PURGE.md) | promote the load-bearing code, delete the dead weight |
+| [PLAN_PURGE.md](archive/PLAN_PURGE.md) | delivered — promoted the load-bearing code, deleted the dead weight, archived |
 | [PLAN_REPO_INDEX.md](PLAN_REPO_INDEX.md) | tmct grows its own code parsers, ported from seonix |
 | [PLAN_SYLLOGIST.md](PLAN_SYLLOGIST.md) | the reasoning engine's incrementality and retraction horizon |
 | [PLAN_SYLLOGIST_EL_DL.md](PLAN_SYLLOGIST_EL_DL.md) | beyond OWL 2 RL: an EL classifier, then a DL tableau prover |
