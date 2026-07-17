@@ -41,9 +41,6 @@ Phases 1–7 and 10 are closed. This session landed the §7 vocabulary fallout (
 citations, the SEON renames, `cap:`/`taught:`, the OSA rename, the storage-vocab renames, the
 honest-miss citation) and the 64-bit `factIdFor` migration, with the full suite green. What remains:
 
-- **Phase 8 / Phase 9 — capability claims + plain-prose pass on `README.md` and the home page.**
-  OPEN. Two questions must be answered before the claims are verified; both are in
-  `CLAUDES_LAST_RESORT_IS_TO_HIDE_THINGS_HERE_IDEALLY_YOU_COMPLETE_A_TASK_OR_NOT_BUT_DO_NOT_DEFER.md`.
 - **Phase 7's two leftover rows** (in `docs/public-examples.md`): three `dom`-tier `index.html` rows
   (`runChat` the one worth pinning) and `docs/repository-interface.md`'s prose contract numbers.
 - **`PLAN_NORMATIVE.md` §7.5 / §7.6.** The PROV Source split (a read-side reclassification off the
