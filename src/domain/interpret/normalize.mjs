@@ -154,6 +154,13 @@ const KNOW_WRAPPER_RE = /^do\s+you\s+know\s+(.+?)\??$/i;
 /** "i'd like to know <Q>" / "i want to know <Q>" -> "<Q>", same
  *  interrogative-remainder gate as KNOW_WRAPPER_RE. */
 const WANT_KNOW_WRAPPER_RE = /^i(?:'d|\s+would)?\s+(?:like|want|need)\s+to\s+know\s+(.+?)\??$/i;
+/** "i was wondering <Q>" / "i wondered <Q>" / "i'm curious <Q>" -> "<Q>", the
+ *  same wrapper family and the same interrogative-remainder gate. The modal
+ *  form ("could you tell me what a dog is") was already unwrapped; this one
+ *  states the wish rather than asking, which is how it fell through every
+ *  frame. The optional "if"/"whether"/"about" tail carries the same clause
+ *  MODAL_WRAPPER_RE's own remainder does. */
+const WONDERING_WRAPPER_RE = /^i(?:\s+was|\s+am|'m)?\s+(?:just\s+)?(?:wonder(?:ing|ed)|curious)(?:\s+(?:if|whether|about))?\s+(.+?)\??$/i;
 /** EMBEDDED-QUESTION DE-INVERSION: the wrappers above unwrap "could you
  *  tell me what a dog is" down to the embedded clause "what a dog is",
  *  which keeps declarative word order — nothing downstream parses it. Fold
@@ -213,6 +220,8 @@ export function applyPreambleFrames(text) {
     m = q.match(KNOW_WRAPPER_RE);
     if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
     m = q.match(WANT_KNOW_WRAPPER_RE);
+    if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+    m = q.match(WONDERING_WRAPPER_RE);
     if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
     m = q.match(EMBEDDED_WHATIS_RE);
     if (m) q = `what ${m[2].toLowerCase()} ${m[1].trim()}`;
