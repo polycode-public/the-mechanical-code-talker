@@ -31,7 +31,7 @@ import { parseSchemaClasses } from "../src/domain/schemaorg/turtle.mjs";
 import { isRealSentence } from "../src/domain/persona/examples.mjs";
 import {
   WORDNET_YAML_DIR, loadSynsets, loadEntriesFor, loadAllNounSynsets,
-} from "../src/adapters/wordnet-source.mjs";
+} from "./lib/wordnet-source.mjs";
 
 const SCHEMAORG_SRC = process.env.TMCT_SCHEMAORG_SRC || join(homedir(), "projects", "schemaorg", "schemaorg");
 const SCHEMA_TTL = join(SCHEMAORG_SRC, "data", "schema.ttl");

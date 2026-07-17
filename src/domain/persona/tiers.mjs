@@ -4,7 +4,7 @@
 //
 // Pure throughout — these read in-memory maps a caller loaded from disk, so
 // they are testable with no WordNet clone present. The loading lives in
-// src/adapters/wordnet-source.mjs, the fact targets and the run itself in
+// scripts/lib/wordnet-source.mjs, the fact targets and the run itself in
 // scripts/build-persona-tiers.mjs.
 
 // human-base's own category roots, plus every hypernym TARGET term Small's

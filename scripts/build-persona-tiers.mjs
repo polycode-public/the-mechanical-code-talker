@@ -47,8 +47,7 @@ import { readFile, readdir, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseYaml } from "../src/domain/wordnet/yaml.mjs";
-import { WORDNET_YAML_DIR as YAML_DIR } from "../src/adapters/wordnet-source.mjs";
+import { readWordnetYaml, WORDNET_YAML_DIR as YAML_DIR } from "./lib/wordnet-source.mjs";
 import {
   collectCandidates, buildClump, stripDenylisted, makeAncestorRootCheck, declaredWords,
 } from "../src/domain/persona/tiers.mjs";
@@ -89,8 +88,7 @@ async function loadAllNounSynsets() {
   const map = new Map();
   const byFile = new Map();
   for (const f of files) {
-    const text = await readFile(join(YAML_DIR, f), "utf8");
-    const parsed = parseYaml(text);
+    const parsed = await readWordnetYaml(join(YAML_DIR, f));
     byFile.set(f, parsed);
     for (const [id, rec] of Object.entries(parsed)) map.set(id, rec);
   }
@@ -101,8 +99,7 @@ async function loadAllEntries() {
   const files = (await readdir(YAML_DIR)).filter((f) => f.startsWith("entries-"));
   const map = new Map();
   for (const f of files) {
-    const text = await readFile(join(YAML_DIR, f), "utf8");
-    const parsed = parseYaml(text);
+    const parsed = await readWordnetYaml(join(YAML_DIR, f));
     for (const [word, byPos] of Object.entries(parsed)) {
       const senses = {};
       let total = 0;

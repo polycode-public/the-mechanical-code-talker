@@ -9,10 +9,8 @@
 // words are declared in WordNet's SAME synset as this word, for this part of
 // speech" — the ONLY substitution sanctioned here (synonym-substituted
 // within a synset, using its members, never crossing synsets). Reuses the
-// WordNet reader in
-// src/adapters/wordnet-source.mjs rather than re-deriving it or adding a YAML
-// dependency — same "not a general YAML parser, offline, maintainer-only"
-// discipline.
+// WordNet reader in scripts/lib/wordnet-source.mjs rather than re-deriving it —
+// same offline, maintainer-only discipline.
 //
 // Sense choice: WordNet's own sense-1-is-most-frequent convention (the same
 // choice extract-persona-sources.mjs's candidateFor already makes for the
@@ -22,7 +20,7 @@
 import { readdir } from "node:fs/promises";
 import {
   WORDNET_SRC, WORDNET_YAML_DIR as YAML_DIR, loadSynsets, loadEntriesFor,
-} from "../../src/adapters/wordnet-source.mjs";
+} from "./wordnet-source.mjs";
 
 const POS_MAP = Object.freeze({ noun: "n", verb: "v", adjective: "a" });
 

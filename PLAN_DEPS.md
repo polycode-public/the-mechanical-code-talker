@@ -1,6 +1,7 @@
 # PLAN_DEPS.md — the smallest useful dependency set
 
-**Status (2026-07-17): DESIGN ONLY. Not started. Nothing in this doc has been executed.**
+**Status: batches 1-2 and 4-7 are landed. Q1 and Q3 are landed (§3.1, §3.9). Q2 is answered:
+keep `ink`. Q4 is the operator's one-minute check and is still open.**
 
 Four goals, from the operator:
 
@@ -13,17 +14,16 @@ Four goals, from the operator:
 
 **The short answer.** Goal 3 is already done: every dependency sits at its latest published
 version except one, and that one is held back on purpose by `renovate.json`'s cooldown (§5). Goal 1
-turns up 23 candidates and recommends adopting **zero** into the product path, for reasons that are
-mostly structural rather than aesthetic (§3). Goal 2 has exactly one lever, and it is large and it
-is the operator's to pull (§4). Goal 4 is where the real work is: **17 duplicated kernels**, one of
+turns up 23 candidates and adopts **zero** into the product path and one (`yaml`) as a
+devDependency, for reasons that are mostly structural rather than aesthetic (§3). Goal 2 has
+exactly one lever, and it is large and it is the operator's to pull (§4). Goal 4 is where the real work is: **17 duplicated kernels**, one of
 them a 50-line module copied on a premise the layer checker contradicts (§6).
 
 Two things fell out that are not dependency work and are reported anyway, because
 `CLAUDE.md` says a bug found next door gets folded in rather than deferred quietly:
 
-- **`tmct_search`'s `name` parameter is a ReDoS.** It compiles caller-supplied text with
-  `new RegExp` and runs it over every label. Verified by running it: `name=(a+)+$` against one
-  30-character label hangs the process past 20 seconds. §3.9.
+- **`tmct_search`'s `name` parameter was a ReDoS** — fixed. `name=(a+)+$` against one 30-character
+  label ran past 30 seconds; the same payload now returns a refusal in 1ms. §3.9.
 - **`src/adapters/prose-tokens.mjs` duplicates `src/domain/prose.mjs` byte-for-byte**, and its
   header explains this with "Adapters may not import the domain layer." That is false, the layer
   test permits it, and the very file that imports the copy imports domain on the next line. §6.1.
@@ -55,14 +55,18 @@ misreading.
 
 ### 1.2 Everything under `src/` ships to npm
 
-`package.json`'s `files` array carries `src/`, and `test/estate/pack-manifest.json` lists 144
-`src/` entries. **A library imported by any `src/` module is a production dependency for every
-consumer of the package.** This is the single most decisive fact in §3, because it means a library
-adopted to serve a CI check or a maintainer worksheet gets installed by everyone who installs tmct.
+`package.json`'s `files` array carries `src/`. **A library imported by any shipped `src/` module is
+a production dependency for every consumer of the package.** This is the single most decisive fact
+in §3, because it means a library adopted to serve a CI check or a maintainer worksheet gets
+installed by everyone who installs tmct.
 
-Measured: **13 modules, 874 LOC, are maintainer/estate tooling reachable from no public entry
-point, and all 13 ship.** Traced from the six `exports` subpaths plus `bin/tmct.mjs`, following
-static, dynamic and `export …  from` edges:
+**Resolved by Q1: none of this tier ships any more.** The count below was right — all 13 were
+reachable from no public entry point — and the reverse closure added three the trace did not name:
+`src/adapters/pii-scan.mjs` imports `pii-rules.mjs`, and `corpus/{wordnet,namenet}/generate.mjs`
+both read the WordNet dump. 16 files in all, and the packed list went 278 → 262.
+
+Traced from the six `exports` subpaths plus `bin/tmct.mjs`, following static, dynamic and
+`export …  from` edges:
 
 ```
 src/domain/wordnet/yaml.mjs      src/domain/pii-rules.mjs        src/domain/inflect.mjs
@@ -72,8 +76,10 @@ src/domain/publish-gate.mjs      src/domain/markdown-links.mjs   src/domain/vers
 src/adapters/wordnet-source.mjs
 ```
 
-This is the residue of PLAN_PURGE's promotion policy meeting the `files` array. The promotion was
-right (the logic got tests it never had); the packaging never got asked. §7 Q1 asks it.
+This was the residue of PLAN_PURGE's promotion policy meeting the `files` array. The promotion was
+right (the logic got tests it never had); the packaging never got asked. §7 Q1 asked it, and the
+answer was to stop shipping the tier — the two YAML readers by moving out of `src/`, the rest by
+name in `files`.
 
 ### 1.3 Three CI jobs run without `npm ci`
 
@@ -134,8 +140,8 @@ Maintenance notes worth carrying into the verdicts:
 
 ## 3. Goal 1 — custom code a library could replace
 
-**23 candidates examined. 0 recommended for the product path. 1 conditional on an operator
-decision (§3.1). 1 real defect found, which a library is one of three ways to fix (§3.9).**
+**23 candidates examined. 0 adopted into the product path. 1 adopted as a devDependency (§3.1).
+1 real defect found and fixed without a library (§3.9).**
 
 That is not a defence of hand-rolled code. It is what §1.1 and §1.2 produce: the code is in
 `domain/` because the layer rule put it there, and adopting a library means either moving the code
@@ -143,8 +149,8 @@ out or shipping the library to every user for a job only maintainers run.
 
 | # | module | LOC | candidate | verdict |
 |---|---|---|---|---|
-| 3.1 | `domain/wordnet/yaml.mjs` | 133 | `yaml` | **conditional adopt** — see §7 Q1 |
-| 3.1 | `domain/semcor/parse.mjs` | 87 | `yaml` | **conditional adopt** — same decision |
+| 3.1 | `domain/wordnet/yaml.mjs` | 133 | `yaml` | **adopted** — moved out of `src/`, deleted |
+| 3.1 | `domain/semcor/parse.mjs` | 87 | `yaml` | **adopted** — same move |
 | 3.2 | `domain/schemaorg/turtle.mjs` | 25 | `n3` | keep |
 | 3.3 | `domain/licences.mjs` | 68 | `spdx-expression-parse` | keep |
 | 3.4 | `domain/publish-gate.mjs` | 41 | `semver` | keep |
@@ -152,7 +158,7 @@ out or shipping the library to every user for a job only maintainers run.
 | 3.6 | `domain/inflect.mjs` | 67 | `pluralize` | keep |
 | 3.7 | `domain/markdown-links.mjs` | 55 | `marked`, `mdast-util-from-markdown` | keep |
 | 3.8 | `domain/version-stamp.mjs` | 36 | an HTML parser | keep |
-| 3.9 | `domain/codegraph.mjs` | 1,967 | `heap-js`, `graphology`, `natural`, `picomatch`, `re2` | keep; **one real defect** |
+| 3.9 | `domain/codegraph.mjs` | 1,967 | `heap-js`, `graphology`, `natural`, `picomatch`, `re2` | keep; **one real defect, now fixed** |
 | 3.10 | `adapters/graph-build.mjs` | 428 | `n3`, `enhanced-resolve` | keep |
 | 3.11 | `domain/hash.mjs` | 147 | `node:crypto` | keep — the model case |
 | 3.12 | `domain/grammar/ace.mjs` | 480 | none exists | keep — a horizon, §3.12 |
@@ -176,12 +182,26 @@ Three things stop it today, and all three are structural:
    `scripts/build-persona-tiers.mjs`, `scripts/extract-persona-sources.mjs`,
    `scripts/build-persona-examples.mjs`. Verified — no product path reaches either.
 
-**The move that makes it work.** If the maintainer tier stops shipping (§7 Q1), both files land in
-a non-shipped `adapters/`-rank home, `yaml` becomes a **devDependency**, production cost is zero,
-and 220 LOC plus a parity of bug histories goes away. That is a good trade. It is also a
-packaging decision about a $0 offline product, so it is the operator's, not ours.
+**Landed.** Both readers moved out of `src/` to `scripts/lib/`, which is not shipped and not under
+the layer rule, so `yaml` went in as a **devDependency** at zero production cost — 41 packages
+before, 41 after, and no shipped file imports it.
 
-Until then: keep. 18 tests pin `wordnet/yaml.mjs`, 7 pin `semcor/parse.mjs`, and the subset works.
+**The subset did not work, and only the real dump could show it.** Run against all 73 files of a
+real clone, the hand-rolled reader disagreed with `yaml` on 38 of them, for two reasons:
+
+- It never unescaped YAML's `''` → `'`, so every lemma and definition carrying an apostrophe came
+  out corrupted (`caesar''s_agaric`). 36 files.
+- A definition wrapping onto a continuation line that opens with `- ` (`…physically difficult / - if
+  not impossible - for…`) was read as a new list item. That truncated the scalar, dropped the rest
+  of the record, and swallowed the synset after it. In `noun.artifact.yaml` alone the subset reader
+  returned **11,779 synsets where the library returns 11,986** — 207 gone, silently, into a
+  maintainer worksheet. Across the 45 synset files the library reads 107,526, which is exactly the
+  count this repo's own corpus generator documents.
+
+So this replaced 220 LOC with a correctness fix, not just with less code. The cost is speed: `yaml`
+parses the full dump in ~55s against the subset reader's ~2s, which these run-by-hand tools can pay.
+Both documented edge cases (a quoted scalar holding `": "`, and multi-word keys) are pinned against
+the library, along with the two bugs above.
 
 ### 3.2 `schemaorg/turtle.mjs` — keep
 
@@ -292,22 +312,26 @@ over arbitrary HTML; this page and this element are ours and we generate both. 1
 
 Nothing here justifies a library, and one thing here is a bug.
 
-**The defect: `tmct_search`'s `name` parameter is a ReDoS.** `codegraph.mjs:995` compiles
-caller-supplied text with `new RegExp(name, "i")` and `:1510` runs it against every individual's
-label. The `try/catch` around it handles syntax errors and nothing else. `name` is an agent-facing
-tool parameter (`src/tools/definitions.mjs:164`, "Restrict to definitions whose name matches").
+**The defect: `tmct_search`'s `name` parameter was a ReDoS** — fixed by bounding the input, per Q3.
+`codegraph.mjs` compiled caller-supplied text with `new RegExp(name, "i")` and ran it against every
+individual's label; the `try/catch` around it handled syntax errors and nothing else. `name` is an
+agent-facing tool parameter. `name=(a+)+$` against a single 30-character label ran past 30 seconds
+at full CPU; it now returns a refusal in 1ms.
 
-**Verified by running it**, not by reading it: `name=(a+)+$` against a single 30-character label
-hangs past a 20-second timeout. Three ways out, in the order we would argue for them:
+**The trace missed a second sink.** `adapters/providers/graph-service.mjs` compiled the same
+parameter again for the same scorer, and on an invalid pattern it set `nameRe = null`, quietly
+running the search unfiltered. Both sinks now share one bounded compiler.
 
-1. **Treat `name` as a literal substring**, which is what the sibling `decorator` filter already
-   does (`:1511` uses `.includes()`). Consistent with the tool's own description, no new dep, and it
-   is a contract change worth stating out loud.
-2. **Bound the input** — cap pattern length and label length, or escape the metacharacters.
-3. `re2`. It is a native binary, which fights `.npmrc`'s `ignore-scripts=true` hardening, and it
-   would have to live in `adapters/`. We do not recommend it.
+**Two shapes cost time, and only measurement separates them.** A quantified group backtracks
+exponentially in the label length, which is the textbook case. But `a*a*a*a*a*$` has no group at all
+and still took 101 seconds against 128 characters, because each extra quantifier raises the degree
+of a polynomial. Detecting nested quantifiers alone would have left that wide open. So the gate
+refuses a quantified group and a back-reference, caps the quantifier count, and caps the tested
+label length; a matching budget backstops the lot, on the reasoning that a hand-written static gate
+is exactly the kind of thing that can miss a case.
 
-This is a behaviour decision on a shipped tool, so §7 Q3 asks it rather than assuming.
+`re2` stays declined: it is a native binary, which fights `.npmrc`'s `ignore-scripts=true`
+hardening, and it would have to live in `adapters/`.
 
 **The library candidates, all declined:**
 
@@ -727,23 +751,20 @@ promotions did hold** — the modules it created are single-homed and imported, 
 
 Four. Each is a call we should not make alone.
 
-**Q1 — Should the maintainer tier stop shipping?** 13 modules, 874 LOC, reach no public entry point
-and ship to every consumer (§1.2). Excluding them from `files` (or moving them to a non-shipped,
-adapters-rank home) would let `yaml` in as a **devDependency** and delete 220 LOC of hand-rolled
-YAML with a documented bug history (§3.1), at zero production cost. It would also make `semver` and
-`spdx-expression-parse` re-arguable on the same terms, though §3.3 and §3.4 decline them on merit
-regardless. The counter-argument is real: it creates a two-tier `src/`, and PLAN_PURGE's policy is
-that promoted code is first-class. **This is the highest-value question in the doc and everything in
-§3 that says "conditional" waits on it.**
+**Q1 — Should the maintainer tier stop shipping? Answered: yes, and landed.** The two YAML readers
+moved to `scripts/lib/` (outside `src/`, so outside the layer rule); the other maintainer modules
+are excluded from `files` where they sit. `yaml` is a devDependency, production stays at 41
+packages, and the packed list went 278 → 262. §3.1 has the correctness dividend, which was the part
+nobody predicted. `semver` and `spdx-expression-parse` are re-arguable on these terms now, and §3.3
+and §3.4 still decline them on merit.
 
 **Q2 — Is the full-screen TUI worth 36 of 40 production packages?** (§4). `--plain` already ships
 and is already the non-TTY default. Three positions in §4.3; we recommend none of them. "Smallest
 useful set" needs the operator to say where *useful* sits.
 
-**Q3 — `tmct_search`'s `name`: literal or regex?** (§3.9). It is a ReDoS today, verified. Making it
-a literal substring matches the sibling `decorator` filter and the tool's own description, and costs
-nothing — but it is a contract change on a shipped tool. Bounding the input instead keeps regex
-support. Either is fine; the choice is yours.
+**Q3 — `tmct_search`'s `name`: literal or regex? Answered: regex, bounded. Landed** (§3.9). Ordinary
+filters keep their semantics; a pathological pattern is refused with a message naming what to write
+instead.
 
 **Q4 — Has Renovate ever run?** (§5.3). No Renovate-authored commit exists, and the production deps
 still carry `^` ranges against `rangeStrategy: "pin"`. The job needs a pipeline schedule and
@@ -755,7 +776,7 @@ goal 3 is solved or merely specified.
 ## 8. Order of work
 
 Sequenced by risk, cheapest and safest first. `npm test` green at every commit; one category per
-commit, per PLAN_PURGE Rule 7. Nothing here is started.
+commit, per PLAN_PURGE Rule 7.
 
 | # | batch | goal | risk | note |
 |---|---|---|---|---|
@@ -771,8 +792,8 @@ commit, per PLAN_PURGE Rule 7. Nothing here is started.
 | 10 | `bfsLevels` → `domain/planning.mjs` (§6.5) | 4 | **medium** | Four callers with different payloads. The riskiest of the internal-library batches. |
 | 11 | `trackedFiles` (§6.6f); `corpusLanes` (§6.6g); `relativeSpecifiers`/`importClosure` (§6.6n) | 4 | **medium** | Adapters-layer. §1.3 applies to `trackedFiles` — builtin-only. |
 | 12 | `isMain` guard: fix the 5 wrong spellings (§6.6p) | 4 | **low** | A correctness fix wearing a duplication costume. |
-| 13 | **`tmct_search` ReDoS** (§3.9) | — | **gated on Q3** | A defect, not dependency work. Fold in per CLAUDE.md rather than deferring. |
-| 14 | **Maintainer tier + `yaml`** (§3.1) | 1 | **gated on Q1** | The only library adoption this plan proposes, and only if Q1 says yes. |
+| 13 | ~~**`tmct_search` ReDoS**~~ (§3.9) | — | **done** | A defect, not dependency work. Folded in rather than deferred. |
+| 14 | ~~**Maintainer tier + `yaml`**~~ (§3.1) | 1 | **done** | The one library this plan adopts. It fixed silent data loss the subset reader was causing. |
 | 15 | **TUI decision** (§4) | 2 | **gated on Q2** | Do nothing until answered. |
 
 Batches 1-2 and 4-7 are the plan's core: they need no decision, carry little risk, and deliver goal

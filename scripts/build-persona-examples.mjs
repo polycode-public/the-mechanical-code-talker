@@ -27,12 +27,10 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { candidateFor } from "./extract-persona-sources.mjs";
-import { WORDNET_YAML_DIR, loadAllNounSynsets, loadEntriesFor } from "../src/adapters/wordnet-source.mjs";
+import { WORDNET_YAML_DIR, loadAllNounSynsets, loadEntriesFor } from "./lib/wordnet-source.mjs";
 import { BLOCKLIST_RE, WORD_DENYLIST } from "../src/domain/persona/tiers.mjs";
 import { isRealSentence, normalizeExample } from "../src/domain/persona/examples.mjs";
-import {
-  splitRecords, extractArray, extractText, isSimpleSentence, NOUN_POS,
-} from "../src/domain/semcor/parse.mjs";
+import { readSemcorRecords, isSimpleSentence, NOUN_POS } from "./lib/semcor-source.mjs";
 
 const SEMCOR_SRC = process.env.TMCT_SEMCOR_SRC || join(homedir(), "projects", "globalwordnet", "semcor");
 const SEMCOR_DATA_DIR = join(SEMCOR_SRC, "data");
@@ -101,10 +99,7 @@ async function semcorExamplesFor(targetWords, maxPerWord = 2, genres = PREFERRED
     const files = (await readdir(dir)).filter((f) => f.endsWith(".yaml"));
     for (const f of files) {
       const text = await readFile(join(dir, f), "utf8");
-      const blocks = splitRecords(text);
-      for (const block of blocks) {
-        const lemmas = extractArray(block, "lemmas");
-        const pos = extractArray(block, "pos");
+      for (const { lemmas, pos, text: sentence } of readSemcorRecords(text)) {
         if (!lemmas || !pos) continue;
         let matchWord = null;
         for (let idx = 0; idx < lemmas.length; idx += 1) {
@@ -114,7 +109,6 @@ async function semcorExamplesFor(targetWords, maxPerWord = 2, genres = PREFERRED
         if (!matchWord) continue;
         const already = found.get(matchWord) || [];
         if (already.length >= maxPerWord) continue;
-        const sentence = extractText(block);
         if (!sentence || !isSimpleSentence(sentence, lemmas.length)) continue;
         already.push({ term: matchWord, sentence, source: `semcor:${genre}/${f}` });
         found.set(matchWord, already);

@@ -2,15 +2,15 @@
 // indexes it. The clone is never vendored, never committed, never part of the
 // npm package: point TMCT_WORDNET_SRC at it, or keep it at the default path.
 //
-// This is the disk half of the WordNet reader. The parsing half is pure and
-// lives in src/domain/wordnet/yaml.mjs, so it is testable with no clone
-// present; everything here needs the real files.
+// This is a maintainer tool and sits outside src/ because it is not part of the
+// product and does not ship. That is also what lets it read the dump with a
+// real YAML parser instead of a subset reader written to avoid the dependency.
 
 import { readFile, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { parseYaml } from "../domain/wordnet/yaml.mjs";
+import YAML from "yaml";
 
 export const WORDNET_SRC = process.env.TMCT_WORDNET_SRC || join(homedir(), "projects", "globalwordnet", "english-wordnet");
 export const WORDNET_YAML_DIR = join(WORDNET_SRC, "src", "yaml");
@@ -22,14 +22,20 @@ export function hasWordnetSource(yamlDir = WORDNET_YAML_DIR) {
   return existsSync(yamlDir);
 }
 
+/** One dump file, parsed. The dump is ordinary YAML, so the parser is the whole
+ *  reader. */
+export async function readWordnetYaml(path) {
+  return YAML.parse(await readFile(path, "utf8"));
+}
+
 /** Load one or more noun.<x>/verb.<x>.yaml files into a flat synset-id -> record map. */
 export async function loadSynsets(files, yamlDir = WORDNET_YAML_DIR) {
   const map = new Map();
   for (const f of files) {
     const path = join(yamlDir, f);
     if (!existsSync(path)) continue;
-    const parsed = parseYaml(await readFile(path, "utf8"));
-    for (const [id, rec] of Object.entries(parsed)) map.set(id, rec);
+    const parsed = await readWordnetYaml(path);
+    for (const [id, rec] of Object.entries(parsed || {})) map.set(id, rec);
   }
   return map;
 }
@@ -48,8 +54,8 @@ export async function loadEntriesFor(words, yamlDir = WORDNET_YAML_DIR) {
   for (const letter of letters) {
     const path = join(yamlDir, `entries-${letter}.yaml`);
     if (!existsSync(path)) continue;
-    const parsed = parseYaml(await readFile(path, "utf8"));
-    for (const [word, byPos] of Object.entries(parsed)) {
+    const parsed = await readWordnetYaml(path);
+    for (const [word, byPos] of Object.entries(parsed || {})) {
       if (!words.has(word)) continue;
       const senses = {};
       for (const [pos, rec] of Object.entries(byPos || {})) {

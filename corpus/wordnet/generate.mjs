@@ -29,12 +29,11 @@
 //   2. walk every synset's structural relations + its own `members` list,
 //      emitting one row per edge (see RELATION_MAP / synonymPairs below).
 //
-// The hand-rolled `parseYaml` this file reuses (imported, not duplicated) is
-// src/domain/wordnet/yaml.mjs's tiny YAML-subset reader — already proven
-// against this exact OEWN dump shape by the persona-tier tooling. Reusing it
-// (rather than adding a general YAML dependency, or re-deriving a second
-// hand-rolled parser) keeps this converter self-consistent with the rest of
-// the tooling that already reads this same source.
+// The dump reader this file uses (imported, not duplicated) is
+// scripts/lib/wordnet-source.mjs, the same one the persona-tier tooling reads
+// this source with. Like that tooling, this converter is a maintainer tool: it
+// needs a local WordNet clone, so it is not part of the published package —
+// only the corpus/wordnet/*.jsonl it generates is.
 //
 // Licence: Open English WordNet content is CC-BY-4.0 (Princeton WordNet +
 // Open English Wordnet team) — see LICENSE-NOTICE in this directory. The
@@ -46,7 +45,7 @@ import { homedir } from "node:os";
 import { createHash } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { parseYaml } from "../../src/domain/wordnet/yaml.mjs";
+import { readWordnetYaml } from "../../scripts/lib/wordnet-source.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const WORDNET_OUT_DIR = HERE;
@@ -137,9 +136,8 @@ export async function loadAllSynsets(yamlDir) {
   }
   const bySynset = new Map();
   for (const f of files) {
-    const text = await readFile(join(yamlDir, f), "utf8");
-    const parsed = parseYaml(text);
-    for (const [id, rec] of Object.entries(parsed)) bySynset.set(id, rec);
+    const parsed = await readWordnetYaml(join(yamlDir, f));
+    for (const [id, rec] of Object.entries(parsed || {})) bySynset.set(id, rec);
   }
   return { bySynset, files };
 }
