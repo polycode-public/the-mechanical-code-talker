@@ -108,6 +108,7 @@ status in its opening lines — read it there, because a status quoted here woul
 | --- | --- |
 | [PLAN_ADVENTURE.md](PLAN_ADVENTURE.md) | a text adventure as an architectural stretch: imperative command grammar, NPC turn scheduler, room-look digest |
 | [PLAN_AGENTS.md](PLAN_AGENTS.md) | the governing plan for the multi-repo arc (marginalia, seonix, a pluggable LLM rung), with its own phase sequencing |
+| [PLAN_BENCHMARK_LADDERS.md](PLAN_BENCHMARK_LADDERS.md) | ladder reform: domain taxonomies for AGENT/INFERENCE, a bounded CONVERSATION ladder, and two new dimensional-uplift tiers per benchmark |
 | [PLAN_CHILD_CORPUS.md](PLAN_CHILD_CORPUS.md) | a wider default seed corpus, chosen by age of acquisition |
 | [PLAN_CLASS_QUERY.md](PLAN_CLASS_QUERY.md) | "list/count all X of class Y", reconciled against what already shipped |
 | [PLAN_CODE.md](PLAN_CODE.md) | program synthesis over tmct's closed DSLs, plus JS/HTML/CSS fragments and goal-directed program repair |
