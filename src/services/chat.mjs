@@ -455,6 +455,34 @@ const IMPLICIT_ANAPHORA_COUNT_RE = /^(?:(?:and|so|then|also)\s+)?how many (?:are
  *  "defines" vs "contains" by the resolved subject's own class. */
 const AMBIGUOUS_HAVE_VERBS = new Set(["have", "has", "holds", "hold"]);
 
+/** Words that can trail a bare count without restricting it: the copula/expletive
+ *  of "are there", the "in total"/"in the graph" locatives, and the "do you know"
+ *  politeness. Anything left after these is stripped is a real restrictor the
+ *  header count cannot evaluate. Mirrors ask.mjs's AGG_TAIL_FILLER plus the
+ *  interrogative scaffolding that only appears on the chat surface. */
+const COUNT_TAIL_FILLER = new Set([
+  "are", "is", "were", "was", "there", "of",
+  "in", "total", "altogether", "overall",
+  "the", "a", "an", "do", "does", "did", "you", "we", "us", "me", "know",
+  "exist", "exists", "existing", "present", "here", "now", "currently",
+  "graph", "index", "codebase", "repo", "repository", "memory",
+  "that", "this", "known", "recorded", "listed", "stored",
+]);
+
+/** A count tail past the kind noun carries a real restrictor — one the header
+ *  count cannot evaluate — iff a content word survives the filler strip and the
+ *  tail is not the have-family kept on the bare-count path (AMBIGUOUS_HAVE_VERBS).
+ *  A topical tail ("about tasks", "with tasks", "related to tasks") names nothing
+ *  RESTRICTOR_VERB_RE recognises, so without this it was silently discarded to the
+ *  unqualified total; now it declines to the ask engine's honest miss instead. */
+function countTailIsUnhandledRestrictor(tail) {
+  const words = String(tail).toLowerCase().replace(/[^a-z\s]+/g, " ").split(/\s+/).filter(Boolean);
+  const content = words.filter((w) => !COUNT_TAIL_FILLER.has(w));
+  if (!content.length) return false;
+  if (content.some((w) => AMBIGUOUS_HAVE_VERBS.has(w))) return false;
+  return true;
+}
+
 /** A "how many <kind> …" tail carries a genuine RESTRICTOR clause — not filler — iff
  *  it names a real relation verb (active, from VERB_TO_KIND, or passive-participle,
  *  from PASSIVE_PARTICIPLE_TO_KIND — both ask-vocab.mjs's closed vocabulary, the
@@ -503,7 +531,11 @@ export function answerCount(graph, query) {
   if (!m) return null;
   const noun = m[1].toLowerCase();
   const cls = COUNT_NOUNS[noun];
-  if (cls && RESTRICTOR_VERB_RE.test(String(query).slice(m.index + m[0].length))) return null;
+  if (cls) {
+    const tail = String(query).slice(m.index + m[0].length);
+    if (RESTRICTOR_VERB_RE.test(tail)) return null;
+    if (countTailIsUnhandledRestrictor(tail)) return null;
+  }
   if (!cls) {
     const kinds = countableKinds(graph);
     // When no code graph is loaded, countableKinds(graph) is genuinely
@@ -11224,8 +11256,22 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
           finalRec = r;
           receipts.push(String(r.answer ?? "").split("\n")[0]);
         }
-        const receiptLines = receipts.slice(0, -1).map((t) => `• ${t}`).join("\n");
-        const combined = { ...finalRec, answer: receiptLines ? `${receiptLines}\n\n${finalRec.answer}` : finalRec.answer };
+        // When a plan trigger closes the line, the final sentence is the payload
+        // (the plan) and the earlier teaches are brief bulleted receipts. When
+        // every sentence teaches, the final one is a teach too, so it earns a
+        // bullet like its siblings — otherwise it renders unbulleted and trails
+        // a stray "Goal (inferred)" line the bulleted ones already dropped. Its
+        // goal-line tail (everything after the receipt's first line) is kept once.
+        let answer;
+        if (endsInPlanTrigger) {
+          const receiptLines = receipts.slice(0, -1).map((t) => `• ${t}`).join("\n");
+          answer = receiptLines ? `${receiptLines}\n\n${finalRec.answer}` : finalRec.answer;
+        } else {
+          const bullets = receipts.map((t) => `• ${t}`).join("\n");
+          const goalTail = String(finalRec.answer ?? "").split("\n").slice(1).join("\n").trim();
+          answer = goalTail ? `${bullets}\n\n${goalTail}` : bullets;
+        }
+        const combined = { ...finalRec, answer };
         combined.planState = ps;
         combined.focus = f;
         combined.last = l;

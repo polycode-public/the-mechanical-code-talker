@@ -46,9 +46,6 @@ honest-miss citation) and the 64-bit `factIdFor` migration, with the full suite 
 - **`PLAN_NORMATIVE.md` §7.5 / §7.6.** The PROV Source split (a read-side reclassification off the
   `sourceType` stored on every Source individual) and SKOS concept identity (needs concept identity
   for the corpus's bare-string terms before `skos:related` applies).
-- **Two small defects** (`PLAN_OPEN_ITEMS.md` phase status): a multi-sentence teach line drops its
-  last bullet in a seeded session (cosmetic), and `read as` over-relaxes beyond the impact
-  paraphrase (`ask.mjs:3921`).
 
 ## Discipline
 
