@@ -28,6 +28,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { GRADED_MATRIX, cellKey, fnv1a, mulberry32, seededShuffle } from "./graded.mjs";
 import { FIXTURE, DEFAULT_POOL, createRunnerDeps, parseCases, runTurnsCase, runSessionCase } from "./run.mjs";
+import { parseFlags } from "../benchlib/bench.mjs";
 
 // ---- fixture ground truth (computed from the RAW committed fixture, never from the engine) ----
 
@@ -2163,14 +2164,13 @@ export async function generatePool({ seed, out }) {
 }
 
 function parseArgs(argv) {
-  const args = { seed: 20260704, out: DEFAULT_POOL };
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a === "--seed") args.seed = Number(argv[++i]);
-    else if (a === "--out") args.out = argv[++i];
-    else throw new Error(`unknown argument ${a}`);
-  }
-  return args;
+  return parseFlags(argv, {
+    defaults: { seed: 20260704, out: DEFAULT_POOL },
+    flags: {
+      "--seed": { key: "seed", value: Number },
+      "--out": { key: "out" },
+    },
+  });
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

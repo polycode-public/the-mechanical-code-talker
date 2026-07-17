@@ -52,7 +52,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PassThrough, Readable } from "node:stream";
-import { parseJsonlRows } from "../benchlib/bench.mjs";
+import { parseJsonlRows, parseFlags } from "../benchlib/bench.mjs";
 import {
   GRADES, fnv1a, validateConstruction,
   stratifiedSample, dualDraws, computeAgreement, renderAgreementTable,
@@ -485,24 +485,23 @@ export function parseJsonl(text) {
 }
 
 function parseArgs(argv) {
-  const args = { cases: DEFAULT_CASES, sample: 0.1 };
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a === "--stamp") args.stamp = argv[++i];
-    else if (a === "--cases") args.cases = argv[++i];
-    else if (a === "--out") args.out = argv[++i];
-    else if (a === "--compare") args.compare = argv[++i];
-    else if (a === "--only") args.only = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
-    else if (a === "--pool") args.pool = argv[++i];
-    else if (a === "--sample") args.sample = Number(argv[++i]);
-    else if (a === "--seed") args.seed = Number(argv[++i]);
-    else if (a === "--dual") args.dual = true;
-    else if (a === "--single") args.dual = false;
-    else if (a === "--grade") args.grade = argv[++i].toUpperCase();
-    else if (a === "--ladder") args.ladder = true;
-    else throw new Error(`unknown argument ${a}`);
-  }
-  return args;
+  return parseFlags(argv, {
+    defaults: { cases: DEFAULT_CASES, sample: 0.1 },
+    flags: {
+      "--stamp": { key: "stamp" },
+      "--cases": { key: "cases" },
+      "--out": { key: "out" },
+      "--compare": { key: "compare" },
+      "--only": { key: "only", value: (v) => v.split(",").map((s) => s.trim()).filter(Boolean) },
+      "--pool": { key: "pool" },
+      "--sample": { key: "sample", value: Number },
+      "--seed": { key: "seed", value: Number },
+      "--dual": { key: "dual", flag: true },
+      "--single": { key: "dual", flag: false },
+      "--grade": { key: "grade", value: (v) => v.toUpperCase() },
+      "--ladder": { key: "ladder", flag: true },
+    },
+  });
 }
 
 /** Assemble the real-product deps every case replay needs (the same modules

@@ -64,7 +64,7 @@ export const DRIVER_TIMEOUT_MS = 20000;
 // is identical to the sequential loop. Override with --concurrency.
 export const DEFAULT_CONCURRENCY = 8;
 
-import { pool } from "../benchlib/bench.mjs";
+import { pool, parseFlags } from "../benchlib/bench.mjs";
 export { pool };
 
 // Drivers whose rows are a FLOOR, not the router baseline — the runner prints a
@@ -213,20 +213,19 @@ export async function runAgentbench(cases, { driver = stubDriver, stamp = BENCH_
 }
 
 function parseArgs(argv) {
-  const args = { cases: DEFAULT_CASES, stamp: BENCH_VERSION, driver: "stub", concurrency: DEFAULT_CONCURRENCY };
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a === "--stamp") args.stamp = argv[++i];
-    else if (a === "--cases") args.cases = argv[++i];
-    else if (a === "--out") args.out = argv[++i];
-    else if (a === "--rung") args.rung = argv[++i].toUpperCase();
-    else if (a === "--ladder") args.ladder = true;
-    else if (a === "--driver") args.driver = argv[++i];
-    else if (a === "--concurrency") args.concurrency = Number(argv[++i]);
-    else if (a === "--only") args.only = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
-    else throw new Error(`unknown argument ${a}`);
-  }
-  return args;
+  return parseFlags(argv, {
+    defaults: { cases: DEFAULT_CASES, stamp: BENCH_VERSION, driver: "stub", concurrency: DEFAULT_CONCURRENCY },
+    flags: {
+      "--stamp": { key: "stamp" },
+      "--cases": { key: "cases" },
+      "--out": { key: "out" },
+      "--rung": { key: "rung", value: (v) => v.toUpperCase() },
+      "--ladder": { key: "ladder", flag: true },
+      "--driver": { key: "driver" },
+      "--concurrency": { key: "concurrency", value: Number },
+      "--only": { key: "only", value: (v) => v.split(",").map((s) => s.trim()).filter(Boolean) },
+    },
+  });
 }
 
 export async function main(argv = process.argv.slice(2)) {

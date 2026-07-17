@@ -30,6 +30,7 @@ import { fileURLToPath } from "node:url";
 import { RUNGS, parseCases, rollup, ladderGate } from "./grade.mjs";
 import { goalDriver } from "./driver-goal.mjs";
 import { runAgentbench, BENCH_VERSION, DEFAULT_CASES, DEFAULT_CONCURRENCY, loadFixtureLabels } from "./run.mjs";
+import { parseFlags } from "../benchlib/bench.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
@@ -135,16 +136,15 @@ export function buildEnvelope({ rows, rolled, ladder, stamp, cases }) {
 }
 
 function parseArgs(argv) {
-  const args = { out: DEFAULT_OUT, cases: DEFAULT_CASES, stamp: BENCH_VERSION, concurrency: DEFAULT_CONCURRENCY };
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a === "--out") args.out = resolve(argv[++i]);
-    else if (a === "--cases") args.cases = argv[++i];
-    else if (a === "--stamp") args.stamp = argv[++i];
-    else if (a === "--concurrency") args.concurrency = Number(argv[++i]);
-    else throw new Error(`unknown argument ${a}`);
-  }
-  return args;
+  return parseFlags(argv, {
+    defaults: { out: DEFAULT_OUT, cases: DEFAULT_CASES, stamp: BENCH_VERSION, concurrency: DEFAULT_CONCURRENCY },
+    flags: {
+      "--out": { key: "out", value: resolve },
+      "--cases": { key: "cases" },
+      "--stamp": { key: "stamp" },
+      "--concurrency": { key: "concurrency", value: Number },
+    },
+  });
 }
 
 export async function main(argv = process.argv.slice(2)) {

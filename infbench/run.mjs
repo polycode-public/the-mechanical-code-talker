@@ -45,7 +45,7 @@ export const BENCH_VERSION = JSON.parse(readFileSync(join(ROOT, "package.json"),
 // heavier per-item than agentbench's stateless dispatchTool — kept modest.
 export const DEFAULT_CONCURRENCY = 6;
 
-import { pool } from "../benchlib/bench.mjs";
+import { pool, parseFlags } from "../benchlib/bench.mjs";
 export { pool };
 
 const VOLATILE_PROVENANCE = /ace:chat:[0-9a-f-]{36}@\d{4}-\d{2}-\d{2}T[0-9:.]+Z/gi;
@@ -139,18 +139,17 @@ export async function runInfbench(cases, { concurrency = DEFAULT_CONCURRENCY } =
 }
 
 function parseArgs(argv) {
-  const args = { cases: DEFAULT_CASES, stamp: BENCH_VERSION, concurrency: DEFAULT_CONCURRENCY };
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a === "--stamp") args.stamp = argv[++i];
-    else if (a === "--cases") args.cases = argv[++i];
-    else if (a === "--out") args.out = argv[++i];
-    else if (a === "--concurrency") args.concurrency = Number(argv[++i]);
-    else if (a === "--only") args.only = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
-    else if (a === "--replay") args.replay = true;
-    else throw new Error(`unknown argument ${a}`);
-  }
-  return args;
+  return parseFlags(argv, {
+    defaults: { cases: DEFAULT_CASES, stamp: BENCH_VERSION, concurrency: DEFAULT_CONCURRENCY },
+    flags: {
+      "--stamp": { key: "stamp" },
+      "--cases": { key: "cases" },
+      "--out": { key: "out" },
+      "--concurrency": { key: "concurrency", value: Number },
+      "--only": { key: "only", value: (v) => v.split(",").map((s) => s.trim()).filter(Boolean) },
+      "--replay": { key: "replay", flag: true },
+    },
+  });
 }
 
 function printArm(label, arm) {

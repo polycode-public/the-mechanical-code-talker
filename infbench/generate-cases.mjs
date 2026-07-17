@@ -52,6 +52,7 @@ export const DEFAULT_OUT = join(HERE, "cases.jsonl");
 // ---- deterministic PRNG (mulberry32, Fisher-Yates), from the shared domain
 // primitive so the seed reproduces the same draw wherever it runs. ----
 import { mulberry32, seededShuffle } from "../src/domain/seeded-random.mjs";
+import { parseFlags } from "../benchlib/bench.mjs";
 export { mulberry32, seededShuffle };
 
 // ---- fixture: the committed lexicon's class-noun vocabulary ----
@@ -796,14 +797,13 @@ export function generateCases({ seed = DEFAULT_SEED } = {}) {
 }
 
 function parseArgs(argv) {
-  const args = { seed: DEFAULT_SEED, out: DEFAULT_OUT };
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a === "--seed") args.seed = Number(argv[++i]);
-    else if (a === "--out") args.out = argv[++i];
-    else throw new Error(`unknown argument ${a}`);
-  }
-  return args;
+  return parseFlags(argv, {
+    defaults: { seed: DEFAULT_SEED, out: DEFAULT_OUT },
+    flags: {
+      "--seed": { key: "seed", value: Number },
+      "--out": { key: "out" },
+    },
+  });
 }
 
 export async function main(argv = process.argv.slice(2)) {

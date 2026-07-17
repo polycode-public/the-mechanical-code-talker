@@ -75,3 +75,22 @@ export function ladderGateBy(cells, { tiers, tierKey, rateOf, rateLabel, floor }
   }
   return { order: tiers.filter((t) => cells[t]), gatedAt, receipts };
 }
+
+/** Scan argv against a positional flag spec `{ defaults, flags }`. Each
+ *  flags[name] is either { key, flag: <boolean> } (set that boolean, consume no
+ *  value) or { key, value?: (raw) => any } (consume the next argv token and
+ *  transform it — identity when `value` is absent). An unknown token throws.
+ *  Returns a fresh object: a copy of `defaults`, then each flag applied in argv
+ *  order. This is the benches' consume-and-throw contract, deliberately NOT
+ *  services/cli-args.mjs's presence/last-wins one. */
+export function parseFlags(argv, { defaults = {}, flags = {} }) {
+  const args = { ...defaults };
+  for (let i = 0; i < argv.length; i += 1) {
+    const a = argv[i];
+    const spec = flags[a];
+    if (!spec) throw new Error(`unknown argument ${a}`);
+    if ("flag" in spec) args[spec.key] = spec.flag;
+    else args[spec.key] = (spec.value ?? ((v) => v))(argv[++i]);
+  }
+  return args;
+}

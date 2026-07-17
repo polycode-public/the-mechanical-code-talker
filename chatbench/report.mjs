@@ -21,6 +21,7 @@ import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { GRADED_MATRIX, cellKey } from "./graded.mjs";
+import { parseFlags } from "../benchlib/bench.mjs";
 
 const fmt = (v) => (v === null || v === undefined ? "–" : String(v));
 const fmt3 = (v) => (v === null || v === undefined ? "–" : v.toFixed(3));
@@ -251,16 +252,15 @@ function parseJsonl(text) {
 }
 
 function parseArgs(argv) {
-  const args = { outdir: process.cwd() };
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a === "--summary") args.summary = argv[++i];
-    else if (a === "--product") args.product = argv[++i];
-    else if (a === "--n") args.n = Number(argv[++i]);
-    else if (a === "--outdir") args.outdir = argv[++i];
-    else throw new Error(`unknown argument ${a}`);
-  }
-  return args;
+  return parseFlags(argv, {
+    defaults: { outdir: process.cwd() },
+    flags: {
+      "--summary": { key: "summary" },
+      "--product": { key: "product" },
+      "--n": { key: "n", value: Number },
+      "--outdir": { key: "outdir" },
+    },
+  });
 }
 
 export async function main(argv = process.argv.slice(2)) {

@@ -237,7 +237,7 @@ export function computeSummary(productRows, judgedRows, { stamp, samples } = {})
 
 // ---- the fan-out ----
 
-import { pool } from "../benchlib/bench.mjs";
+import { pool, parseFlags } from "../benchlib/bench.mjs";
 export { pool };
 
 function parseJsonl(text) {
@@ -245,18 +245,17 @@ function parseJsonl(text) {
 }
 
 function parseArgs(argv) {
-  const args = { samples: 3, concurrency: 12, dryRun: false };
-  for (let i = 0; i < argv.length; i += 1) {
-    const a = argv[i];
-    if (a === "--product") args.product = argv[++i];
-    else if (a === "--samples") args.samples = Number(argv[++i]);
-    else if (a === "--concurrency") args.concurrency = Number(argv[++i]);
-    else if (a === "--out") args.out = argv[++i];
-    else if (a === "--dry-run") args.dryRun = true;
-    else if (a === "--only") args.only = argv[++i].split(",").map((s) => s.trim()).filter(Boolean);
-    else throw new Error(`unknown argument ${a}`);
-  }
-  return args;
+  return parseFlags(argv, {
+    defaults: { samples: 3, concurrency: 12, dryRun: false },
+    flags: {
+      "--product": { key: "product" },
+      "--samples": { key: "samples", value: Number },
+      "--concurrency": { key: "concurrency", value: Number },
+      "--out": { key: "out" },
+      "--dry-run": { key: "dryRun", flag: true },
+      "--only": { key: "only", value: (v) => v.split(",").map((s) => s.trim()).filter(Boolean) },
+    },
+  });
 }
 
 export async function main(argv = process.argv.slice(2)) {
