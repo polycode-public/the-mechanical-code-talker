@@ -5152,6 +5152,31 @@ ${shown.join("\n")}${tail}`;
     }
     return proseResult || { match: null, candidates: [], tier: null, ambiguous: false };
   }
+  function unplacedTermWords(term, label) {
+    const labelJoined = joinedForm(label);
+    const labelComps = [...componentSet(label)];
+    const out = [];
+    for (const w of componentSet(term)) {
+      if (labelJoined.includes(w)) continue;
+      if (labelComps.some((c) => derivationalStem(c) === derivationalStem(w))) continue;
+      if (CONTENT_VOCAB.has(w) || NOISE_OR_SCAFFOLD.has(w)) continue;
+      out.push(w);
+    }
+    return out;
+  }
+  function declineOnUnplacedWords(result, term) {
+    if (!result?.match || result.ambiguous || result.tier !== 3 || result.matchedVia) return result;
+    const unplaced = unplacedTermWords(term, result.match.label);
+    if (!unplaced.length) return result;
+    return {
+      match: null,
+      candidates: [],
+      tier: null,
+      ambiguous: false,
+      unplacedWords: unplaced,
+      nearestLabel: result.match.label
+    };
+  }
   function resolveObject(graph, term, opts = {}) {
     const { expectedClass = null } = opts;
     if (!expectedClass) {
@@ -5162,14 +5187,15 @@ ${shown.join("\n")}${tail}`;
         const head = stripped.slice(0, grainMatch.index).trim();
         const grainClass = ENTITY_TO_TYPE[grainMatch[1].toLowerCase()];
         if (head && grainClass) {
-          const rGrain = resolveObjectCore(graph, head, { expectedClass: grainClass });
+          const rGrain = declineOnUnplacedWords(resolveObjectCore(graph, head, { expectedClass: grainClass }), head);
           if (rGrain?.match?.id && !rGrain.ambiguous) return rGrain;
         }
       }
       if (stripped && stripped !== raw) {
-        const rStripped = resolveObjectCore(graph, stripped, opts);
+        const rStripped = declineOnUnplacedWords(resolveObjectCore(graph, stripped, opts), stripped);
         if (rStripped?.match?.id && !rStripped.ambiguous) return rStripped;
       }
+      return declineOnUnplacedWords(resolveObjectCore(graph, term, opts), term);
     }
     return resolveObjectCore(graph, term, opts);
   }
@@ -5351,8 +5377,19 @@ ${shown.join("\n")}${tail}`;
         if (collision) objRes = { ...objRes, ambiguous: true, candidates: [collision, ...objRes.candidates || []] };
       }
     }
-    const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia } = objRes;
-    if (!objMatch) return { matches: [], objMatch: null, candidates, traversal: null, ambiguous: false, unresolvedPronoun };
+    const { match: objMatch, candidates, ambiguous, unresolvedPronoun, matchedVia, unplacedWords, nearestLabel } = objRes;
+    if (!objMatch) {
+      return {
+        matches: [],
+        objMatch: null,
+        candidates,
+        traversal: null,
+        ambiguous: false,
+        unresolvedPronoun,
+        unplacedWords,
+        nearestLabel
+      };
+    }
     if (ambiguous) {
       const pool = uniqueById([objMatch, ...candidates || []]).slice(0, OVERFLOW_CAP);
       const branches = pool.map((c) => {
@@ -5787,6 +5824,17 @@ ${options2}
       const objText = String(parsed.object || "").trim();
       const fallback = parsed.entityType && PLURAL_FORMS[parsed.entityType] ? nounFor(parsed.entityType, 1) : "module";
       const what = /^(?:commit[:\s])?[0-9a-f]{7,40}$/i.test(objText) ? "commit" : !objText.includes("/") && /^[\w$]+(\.[\w$]+)+$/.test(objText) ? "symbol" : fallback;
+      if (result.unplacedWords?.length) {
+        const quoted = listJoin(result.unplacedWords.map((w) => `"${w}"`));
+        const was = result.unplacedWords.length === 1 ? "names" : "name";
+        const near = result.nearestLabel ? ` Did you mean ${result.nearestLabel}?` : "";
+        return {
+          content: `no ${what} matching "${parsed.object}" found in the index. ${quoted} ${was} nothing here, and reading past ${result.unplacedWords.length === 1 ? "it" : "them"} would answer a different question.${near}`,
+          miss: true,
+          ambiguous: false,
+          candidates: []
+        };
+      }
       return {
         content: `no ${what} matching "${parsed.object}" found in the index. ${touchesRephraseHint(graph)}`,
         miss: true,
@@ -5956,6 +6004,7 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
     return { content: clauses.join(" and ") + extra + ".", miss: false, ambiguous: false, matches: result.matches };
   }
   function fuzzyCascadeWord(w) {
+    if (w.length < 4) return null;
     const bound = fuzzyBound(w);
     let best = bound + 1;
     let hit2 = null;
@@ -6051,6 +6100,13 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
       const hit2 = attempt(tokens);
       if (hit2) return done(hit2);
     }
+    const termParse = parseQuery(tokens.join(" "), { nlp });
+    const termWords = /* @__PURE__ */ new Set();
+    if (termParse && !termParse.node && TERM_SHAPES.has(termParse.shape)) {
+      for (const part of [termParse.object, termParse.subject]) {
+        for (const w of splitWords(String(part || "").toLowerCase())) termWords.add(w);
+      }
+    }
     const survivors = [];
     const nowDropped = [];
     const corrected = [];
@@ -6065,6 +6121,10 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
       if (fix && fix !== lc) {
         survivors.push(fix);
         corrected.push(`${t}\u2192${fix}`);
+        continue;
+      }
+      if (termWords.has(lc)) {
+        survivors.push(t);
         continue;
       }
       nowDropped.push(t);
@@ -8123,6 +8183,12 @@ ${bodyText}` : graphText, tier });
     for (const prop of ["rdf:subject", "rdf:predicate", "rdf:object"]) {
       if (!nonEmpty(attrValue(ind, prop))) violations.push(`a Fact needs a non-empty ${prop}`);
     }
+    for (const prop of ["rdf:subject", "rdf:object"]) {
+      const term = attrValue(ind, prop);
+      if (term !== void 0 && SPANS_A_SENTENCE_BOUNDARY_RE.test(term)) {
+        violations.push(`a Fact's ${prop} must be a single term, not text spanning a sentence boundary (got ${JSON.stringify(term)})`);
+      }
+    }
     const prov = attrValue(ind, "mgx:factProvenance");
     if (prov !== void 0 && !nonEmpty(prov)) violations.push("mgx:factProvenance, when present, must be non-empty");
   }
@@ -8152,7 +8218,7 @@ ${bodyText}` : graphText, tier });
       throw e;
     }
   }
-  var MEMORY_CLASSES, RULE_KINDS, RULE_SLOT_PROPS, nonEmpty;
+  var MEMORY_CLASSES, RULE_KINDS, RULE_SLOT_PROPS, SPANS_A_SENTENCE_BOUNDARY_RE, nonEmpty;
   var init_shacl = __esm({
     "src/adapters/memory/shacl.mjs"() {
       MEMORY_CLASSES = /* @__PURE__ */ new Set(["Utterance", "Fact", "Session", "Source", "Rule"]);
@@ -8187,6 +8253,7 @@ ${bodyText}` : graphText, tier });
           "mgx:ruleActionConstraintGuard"
         ]
       };
+      SPANS_A_SENTENCE_BOUNDARY_RE = /[.!?]\s+\w/;
       nonEmpty = (v) => typeof v === "string" && v.trim().length > 0;
     }
   });
@@ -9369,7 +9436,7 @@ ${bodyText}` : graphText, tier });
         { prop: "mgx:ruleBaseCase", note: "recursive only: the base-case relation name (hop zero)" },
         { prop: "mgx:ruleRecStep", note: "recursive only: the self-referential recursive-step relation name" },
         { prop: CREATED_AT_PROP, note: "when an individual was FIRST written, ISO-8601 (first-write-wins on upsert); the audit 'when', the recency input to trust, the novelty signal" },
-        { prop: UPDATED_AT_PROP, note: "when an individual's OWN attributes were last mutated in place (upsertSession, recomputeFactTrust, recomputeSourceReliability) \u2014 most individuals never carry this and instead derive 'updated' from codegraph.mjs's derivedUpdatedAt (max createdAt over their edges)" },
+        { prop: UPDATED_AT_PROP, note: "when an individual's OWN attributes were last mutated in place (upsertSession, recomputeFactTrust, recomputeSourceReliability) \u2014 most individuals never carry it at all" },
         { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
         { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source \u2014 replaces the factProvenance union)" },
         { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
@@ -9549,36 +9616,36 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/date.js
+  // node_modules/smol-toml/dist/date.js
   var init_date = __esm({
-    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/date.js"() {
+    "node_modules/smol-toml/dist/date.js"() {
     }
   });
 
-  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/error.js
+  // node_modules/smol-toml/dist/error.js
   var init_error = __esm({
-    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/error.js"() {
+    "node_modules/smol-toml/dist/error.js"() {
     }
   });
 
-  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/primitive.js
+  // node_modules/smol-toml/dist/primitive.js
   var init_primitive = __esm({
-    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/primitive.js"() {
+    "node_modules/smol-toml/dist/primitive.js"() {
       init_date();
       init_error();
     }
   });
 
-  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/util.js
+  // node_modules/smol-toml/dist/util.js
   var init_util = __esm({
-    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/util.js"() {
+    "node_modules/smol-toml/dist/util.js"() {
       init_error();
     }
   });
 
-  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/extract.js
+  // node_modules/smol-toml/dist/extract.js
   var init_extract = __esm({
-    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/extract.js"() {
+    "node_modules/smol-toml/dist/extract.js"() {
       init_primitive();
       init_struct();
       init_util();
@@ -9586,9 +9653,9 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/struct.js
+  // node_modules/smol-toml/dist/struct.js
   var init_struct = __esm({
-    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/struct.js"() {
+    "node_modules/smol-toml/dist/struct.js"() {
       init_primitive();
       init_extract();
       init_util();
@@ -9596,9 +9663,9 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/parse.js
+  // node_modules/smol-toml/dist/parse.js
   var init_parse = __esm({
-    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/parse.js"() {
+    "node_modules/smol-toml/dist/parse.js"() {
       init_struct();
       init_extract();
       init_util();
@@ -9606,15 +9673,15 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/stringify.js
+  // node_modules/smol-toml/dist/stringify.js
   var init_stringify = __esm({
-    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/stringify.js"() {
+    "node_modules/smol-toml/dist/stringify.js"() {
     }
   });
 
-  // ../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/index.js
+  // node_modules/smol-toml/dist/index.js
   var init_dist = __esm({
-    "../../../Users/antony/projects/polycode-projects/the-mechanical-code-talker/node_modules/smol-toml/dist/index.js"() {
+    "node_modules/smol-toml/dist/index.js"() {
       init_parse();
       init_stringify();
       init_date();
