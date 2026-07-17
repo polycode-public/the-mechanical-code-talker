@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // Compare the file list `npm pack --dry-run --json` would publish against the
 // committed expected manifest (test/estate/pack-manifest.json, sorted paths).
-// No stray file ships, no expected file goes missing.
+// No stray file ships, no expected file goes missing. The comparison itself is
+// src/domain/pack-manifest.mjs; the pipe is the shell's job, so this reads the
+// pack JSON off stdin.
 //
 //   npm pack --dry-run --json | node scripts/check-pack-manifest.mjs
 //
@@ -12,27 +14,12 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { packedPaths, comparePackManifest } from "../src/domain/pack-manifest.mjs";
+
+export { packedPaths, comparePackManifest };
+
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const MANIFEST_FILE = path.join(REPO_ROOT, "test", "estate", "pack-manifest.json");
-
-/** Extract the sorted file-path list from `npm pack --dry-run --json` output. */
-export function packedPaths(packJsonText) {
-  const parsed = JSON.parse(packJsonText);
-  const entry = Array.isArray(parsed) ? parsed[0] : parsed;
-  if (!entry || !Array.isArray(entry.files)) throw new Error("unexpected npm pack --json shape: no files array");
-  return entry.files.map((f) => f.path).sort();
-}
-
-/** Compare actual against expected. Returns { missing, unexpected } — both
- *  empty when the package contents match the committed manifest. */
-export function comparePackManifest(actualPaths, expectedPaths) {
-  const actual = new Set(actualPaths);
-  const expected = new Set(expectedPaths);
-  return {
-    missing: [...expected].filter((p) => !actual.has(p)).sort(),
-    unexpected: [...actual].filter((p) => !expected.has(p)).sort(),
-  };
-}
 
 async function main() {
   const stdin = fs.readFileSync(0, "utf8");
