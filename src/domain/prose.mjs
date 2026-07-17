@@ -4,8 +4,6 @@
 // `prose_tokens` attribute (self-describing) and inverted into
 // `entities.proseIndex` (word -> ids) for O(1) lookup.
 
-// Exported so src/domain/completions/group.mjs can filter splitIdentifierWords'
-// output (which doesn't apply this list itself) down to real content words.
 export const STOPWORDS = new Set(
   ("a an and or but the of to in on at for with from by as is are was were be been being " +
     "it its this that these those i you he she they we me my your our do does did not no " +
@@ -55,6 +53,16 @@ export function tokenizeProse(text) {
 export function proseTokensFor({ name, doc } = {}) {
   const set = new Set([...splitIdentifierWords(name), ...tokenizeProse(doc)]);
   return [...set].sort();
+}
+
+/** A real content word: plain alphanumerics, no stopword. Tokenizers that re-admit
+ *  stopwords (splitIdentifierWords, tokenizeBlock) narrow their output through this —
+ *  unfiltered, shared stopwords alone would relate or cluster almost any two texts. */
+export const isContentToken = (t) => /^[a-z0-9]+$/.test(t) && !STOPWORDS.has(t);
+
+/** Wrap a block tokenizer so it yields only content tokens. */
+export function makeContentTokens(tokenizeBlock) {
+  return (text) => tokenizeBlock(text).filter(isContentToken);
 }
 
 /** Attach a `prose_tokens` attribute to every individual, from its (decomposed)

@@ -3,20 +3,10 @@
 // memory/blocks.mjs's buildNeighbours()/OVERLAP_MIN). Block granularity, no sub-block spans.
 // Each group's label is its top shared-IDF tokens (df/N over the hit set, not the corpus).
 
-import { STOPWORDS } from "../prose.mjs";
+import { makeContentTokens } from "../prose.mjs";
 import { requireInjected } from "./injected.mjs";
 
 const LABEL_TOKEN_COUNT = 5;
-
-// tokenizeBlock's raw output re-admits stopwords, which would collapse almost any two
-// sentences into one giant component under unweighted overlap clustering; filter them here.
-const isContentToken = (t) => /^[a-z0-9]+$/.test(t) && !STOPWORDS.has(t);
-
-/** tokenizeBlock(text), narrowed to real content tokens (see isContentToken above) — the
- *  token set this module actually clusters and labels on. */
-function makeContentTokens(tokenizeBlock) {
-  return (text) => tokenizeBlock(text).filter(isContentToken);
-}
 
 /** Plain union-find (path halving, union-by-index) — small N here (a single broad search's
  *  hit count). */

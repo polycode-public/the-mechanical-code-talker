@@ -8,18 +8,9 @@
 // against loaded facts) — sharing an English word alone never licenses a relation.
 
 import { splitSentences } from "./rank.mjs";
-import { STOPWORDS } from "../prose.mjs";
+import { makeContentTokens } from "../prose.mjs";
 import { findActionPath, findReachableSet } from "../planning.mjs";
 import { requireInjected } from "./injected.mjs";
-
-// Same content-token filter group.mjs/rank.mjs apply to their own adjacency/ranking; not
-// exported from either, so replicated here rather than reached across files.
-const isContentToken = (t) => /^[a-z0-9]+$/.test(t) && !STOPWORDS.has(t);
-
-/** tokenizeBlock(text), narrowed to real content tokens — see isContentToken above. */
-function makeContentTokens(tokenizeBlock) {
-  return (text) => tokenizeBlock(text).filter(isContentToken);
-}
 
 // Local copy of chat.mjs's private HAS_PROPERTY_PREDICATE constant — not exported, so callers
 // supply their own copy in the `helpers` bag resolveRelationChase expects.

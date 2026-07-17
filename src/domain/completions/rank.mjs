@@ -4,16 +4,8 @@
 // way retrieveBlocks() fuses relevance/centrality/hub-dampening into one score.
 // splitSentences() is a simple regex splitter.
 
-import { STOPWORDS } from "../prose.mjs";
+import { makeContentTokens } from "../prose.mjs";
 import { requireInjected } from "./injected.mjs";
-
-// Same content-token filter group.mjs applies (not exported, so replicated here).
-const isContentToken = (t) => /^[a-z0-9]+$/.test(t) && !STOPWORDS.has(t);
-
-/** tokenizeBlock(text), narrowed to real content tokens — see isContentToken above. */
-function makeContentTokens(tokenizeBlock) {
-  return (text) => tokenizeBlock(text).filter(isContentToken);
-}
 
 // Sentence boundary: a run of [.!?] followed by whitespace and an uppercase letter or digit
 // (no abbreviation dictionary).
