@@ -87,6 +87,33 @@ test("the committed real-word collision table is what its generator produces tod
   }
 });
 
+// The INFBENCH ladder is drawn from the lexicon at a fixed seed, so it is a
+// function of the lexicon, not a hand-written corpus: add one word and all 219
+// cases redraw at the same seed. `npm run infbench` regenerates before it runs,
+// which means a drifted commit is never what the bench actually measured — the
+// numbers in a write-up would describe cases nobody can read back. A redraw is
+// legitimate; this makes it announce itself instead of arriving as a surprise
+// diff underneath a benchmark result.
+test("the committed infbench cases are what their generator produces today", () => {
+  const out = mkdtempSync(path.join(tmpdir(), "tmct-infbench-cases-freshness-"));
+  try {
+    execFileSync("node", [
+      path.join(repoRoot, "infbench", "generate-cases.mjs"),
+      "--out", path.join(out, "cases.jsonl"),
+    ], { cwd: repoRoot, stdio: "pipe" });
+    assert.equal(
+      sha(readFileSync(path.join(out, "cases.jsonl"))),
+      sha(readFileSync(path.join(repoRoot, "infbench", "cases.jsonl"))),
+      "infbench/cases.jsonl has drifted from its generator — run `node infbench/generate-cases.mjs` and "
+        + "commit the result.\nThe ladder is drawn from src/domain/grammar/lexicon-core.json at DEFAULT_SEED, "
+        + "so a lexicon change redraws every case. `npm run infbench` regenerates before it runs, so a stale "
+        + "commit is not the case set the last run graded.",
+    );
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
 // The envelope is the only artifact here that stamps the package version into
 // its own body (generatedFrom.agentbenchVersion/stamp both come from
 // BENCH_VERSION, which agentbench/run.mjs reads out of package.json). So a
