@@ -49,27 +49,10 @@ const ROOT = dirname(HERE);
 export const DEFAULT_SEED = 20260707; // today's date (PLAN_INFERENCE_TESTING.md §2.2's "default recorded in the generator")
 export const DEFAULT_OUT = join(HERE, "cases.jsonl");
 
-// ---- deterministic PRNG (mulberry32, Fisher-Yates) — mirrors
-// chatbench/graded.mjs's mechanism; a local copy so infbench stays a
-// self-contained sibling of agentbench, never importing chatbench internals. ----
-export function mulberry32(seed) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-export function seededShuffle(arr, rng) {
-  const out = [...arr];
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(rng() * (i + 1));
-    [out[i], out[j]] = [out[j], out[i]];
-  }
-  return out;
-}
+// ---- deterministic PRNG (mulberry32, Fisher-Yates), from the shared domain
+// primitive so the seed reproduces the same draw wherever it runs. ----
+import { mulberry32, seededShuffle } from "../src/domain/seeded-random.mjs";
+export { mulberry32, seededShuffle };
 
 // ---- fixture: the committed lexicon's class-noun vocabulary ----
 // PLAN_OSS_ACE_PARSER.md's ace-owl extraction briefly moved lexicon-core.json
