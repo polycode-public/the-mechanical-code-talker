@@ -2,6 +2,7 @@ import { lookupByProseTokens, proseLayerHits, splitIdentifierWords } from "./pro
 import { CREATED_AT_PROP, UPDATED_AT_PROP } from "./memory/trust.mjs";
 import { isTestPath } from "./module-paths.mjs";
 import { idfWeight } from "./text-stats.mjs";
+import { bfsLevels } from "./planning.mjs";
 
 // Pure (no-network, no-fs) query logic over the typed `entities` payload that the
 // deterministic indexer writes to <repo>/.tmct/graph.json (shape produced by
@@ -371,24 +372,12 @@ export function impactClosure(graph, ind, { maxDepth = 8 } = {}) {
   }
 
   const levels = []; // [[{id, label, via, tests[]}], …] indexed by depth-1
-  const visited = new Set([ind.id]);
-  let frontier = [ind.id];
-  for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
-    const next = [];
-    const level = [];
-    for (const id of frontier) {
-      for (const dep of dependents.get(id) || []) {
-        if (visited.has(dep.id)) continue;
-        visited.add(dep.id);
-        level.push({ ...dep, tests: coveredBy.get(dep.id) || [] });
-        next.push(dep.id);
-      }
-    }
-    if (level.length) {
-      level.sort((a, b) => String(a.label).localeCompare(String(b.label)));
-      levels.push(level);
-    }
-    frontier = next;
+  for (const level of bfsLevels(ind.id, (id) => dependents.get(id) || [], { maxDepth, keyOf: (dep) => dep.id })) {
+    if (!level.length) continue;
+    const withTests = level
+      .map((dep) => ({ ...dep, tests: coveredBy.get(dep.id) || [] }))
+      .sort((a, b) => String(a.label).localeCompare(String(b.label)));
+    levels.push(withTests);
   }
   return levels;
 }
@@ -1260,25 +1249,10 @@ export function renderSubclasses(graph, ind) {
   }
   const lines = [`${ind.label} — ${classHeading(ind.class)} (id: ${ind.id})`];
   lines.push(bases.length ? `extends: ${capJoin(bases, SUBCLASS_CAP)}` : "extends: (no internal/recorded base classes)");
-  const visited = new Set([ind.id]);
   const levels = [];
-  let frontier = [ind.id];
-  for (let depth = 1; depth <= 8 && frontier.length; depth += 1) {
-    const next = [];
-    const level = [];
-    for (const id of frontier) {
-      for (const c of childrenOf.get(id) || []) {
-        if (visited.has(c.id)) continue;
-        visited.add(c.id);
-        level.push(c.label);
-        next.push(c.id);
-      }
-    }
-    if (level.length) {
-      level.sort((a, b) => String(a).localeCompare(String(b)));
-      levels.push(level);
-    }
-    frontier = next;
+  for (const level of bfsLevels(ind.id, (id) => childrenOf.get(id) || [], { maxDepth: 8, keyOf: (c) => c.id })) {
+    if (!level.length) continue;
+    levels.push(level.map((c) => c.label).sort((a, b) => String(a).localeCompare(String(b))));
   }
   const total = levels.reduce((n, l) => n + l.length, 0);
   if (!total) {

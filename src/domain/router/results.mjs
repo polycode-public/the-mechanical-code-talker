@@ -27,6 +27,7 @@
 // dispatchTool render* functions edge-for-edge.
 
 import { impactClosure, edgesOfKind, siteOf } from "../codegraph.mjs";
+import { bfsLevels } from "../planning.mjs";
 import { uniqSort } from "./set-algebra.mjs";
 import { isTestPath } from "../module-paths.mjs";
 
@@ -162,19 +163,8 @@ function subclassesLabels(graph, ind) {
     childrenOf.get(e.object).push({ id: e.subject, label: e.subjectLabel || e.subject });
   }
   const labels = [];
-  const visited = new Set([ind.id]);
-  let frontier = [ind.id];
-  for (let depth = 1; depth <= 8 && frontier.length; depth += 1) {
-    const next = [];
-    for (const id of frontier) {
-      for (const c of childrenOf.get(id) || []) {
-        if (visited.has(c.id)) continue;
-        visited.add(c.id);
-        labels.push(c.label);
-        next.push(c.id);
-      }
-    }
-    frontier = next;
+  for (const level of bfsLevels(ind.id, (id) => childrenOf.get(id) || [], { maxDepth: 8, keyOf: (c) => c.id })) {
+    for (const c of level) labels.push(c.label);
   }
   return uniqSort(labels);
 }

@@ -83,3 +83,40 @@ export function findReachableSet(startState, applyActions, { maxDepth = 50, stat
   }
   return results;
 }
+
+/**
+ * Bounded, cycle-safe breadth-first walk that yields one array of newly-visited
+ * successor items per depth level (depths 1..maxDepth), starting from `start`
+ * which is pre-marked visited and never yielded. `successorsOf(id)` returns the
+ * successor items of a node id; `keyOf(item)` is the identity used to dedup and
+ * to seed the next frontier (default: the item itself is its own key).
+ *
+ * Each yielded level is in discovery order; a caller that needs a stable order
+ * sorts it. Empty levels are yielded too (the walk stops once a frontier is
+ * empty), so a caller collecting per-depth batches should skip empty ones.
+ *
+ * @template T
+ * @param {*} start
+ * @param {(id: *) => Iterable<T>} successorsOf
+ * @param {{ maxDepth?: number, keyOf?: (item: T) => * }} [opts]
+ * @returns {Generator<T[]>}
+ */
+export function* bfsLevels(start, successorsOf, { maxDepth = 8, keyOf = (x) => x } = {}) {
+  const visited = new Set([start]);
+  let frontier = [start];
+  for (let depth = 1; depth <= maxDepth && frontier.length; depth += 1) {
+    const level = [];
+    const nextFrontier = [];
+    for (const id of frontier) {
+      for (const item of successorsOf(id) || []) {
+        const key = keyOf(item);
+        if (visited.has(key)) continue;
+        visited.add(key);
+        level.push(item);
+        nextFrontier.push(key);
+      }
+    }
+    frontier = nextFrontier;
+    yield level;
+  }
+}
