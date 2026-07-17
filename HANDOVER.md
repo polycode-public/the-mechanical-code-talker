@@ -16,22 +16,14 @@ Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `ini
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
 download, not reachable from data in hand).
 
-### Two things this cycle did NOT verify — do these before the push
+### Verified green at HEAD, on a quiet machine
 
-Both are cheap, and both need a QUIET machine. Four agents ran concurrently all cycle, so every
-timing taken today is worthless — that is the self-inflicted-load error this repo has now made
-three times (the 2.0.3 report durations, the 4,135ms budget reading, and this).
-
-1. **`npm run check:budgets` reported `test:smoke` OVER its 1s budget** (3,947ms under load;
-   ~1.5s standalone, which would still be over). **Measure it alone.** If it is genuinely over,
-   `CLAUDE.md` is explicit that the tier is the bug — cut its content, never raise the number. One
-   suspect is new: `chat.mjs` gained a static `import { loadLexicon, lookupNoun }` this cycle
-   (the 3.2/3.7 fold), and a static lexicon load is exactly the shape of thing that lands as
-   start-up cost in a 1-second tier.
-2. **The full `npm test` has NOT been run this cycle.** By design — it runs once, before the work
-   reaches CI or another person, and nothing has been pushed. But that means **no one has seen the
-   whole suite green over these 18 commits.** Run it on a quiet machine before pushing. Expect it to
-   be the moment any cross-lane interaction between the four agents' changes shows up.
+The full `npm test` is **2771/2771** — it surfaced 11 cross-lane regressions from the concurrent
+agents' changes (a `seon:` prefix proxy in the CEGIS enumerator broken by the §7.2 rename, and the
+three-valued `tested` qualifier over-reaching to classes with no resolvable module); all were fixed
+at root and re-run green. `npm run check:budgets` passes standalone (`test:smoke` 689ms/1000ms,
+`test:fast` 1482ms/10000ms) — the earlier "over budget" reading was the self-inflicted-load error.
+Nothing is pushed; the operator gates that.
 
 ## Open items
 
@@ -39,60 +31,37 @@ three times (the 2.0.3 report durations, the 4,135ms budget reading, and this).
 carries the phase table, the operator decisions already taken, the traps this cycle hit, and the
 list of this plan's own citations that proved false. Read that before quoting any fix site.
 
-Phases 1, 2, 3, 4, 5 and 6 are closed. What remains:
+Phases 1–7 and 10 are closed. This session landed the §7 vocabulary fallout (the four inference
+citations, the SEON renames, `cap:`/`taught:`, the OSA rename, the storage-vocab renames, the
+honest-miss citation) and the 64-bit `factIdFor` migration, with the full suite green. What remains:
 
-- **Phase 7 — every public example traces to a test.** Closed. Table at `docs/public-examples.md`,
-  one row per example with the test that holds it and the tier. The site's examples now run:
-  `e2e/pages-examples.test.mjs` replays the page's transcripts against the live CLI through the
-  README's harness, `pages-demo-history` pins the demo box's 5 scripted answers, and
-  `pages-demo-templates` asks all 56 pairs the box can pick. Three defects were shipping: the
-  payment-module block (3 of 4 questions miss or fail to parse), the "what an answer looks like"
-  transcript (a splice of two sessions that never happened together), and a drifted demo answer
-  ("defined in" where the engine says "found in"). Still open, both listed in the table: three
-  `dom`-tier rows on `index.html` (install line, CLI verbs, the `runChat` library block) where a
-  browser test asserts the page shows a string and nothing asserts the product agrees, `runChat`
-  being the one worth pinning next; and `docs/repository-interface.md`'s prose carries the contract
-  numbers with no test holding them (the schema beside it is pinned to the source const).
-- **Phase 10 is WIDER than `PLAN_OPEN_ITEMS.md` §10 scoped it, on the operator's instruction
-  (2026-07-17), and that pass is DONE.** §10 asked only for the RDF/CURIE vocabulary; the real
-  brief is **every term the repo names, anywhere**, each traced to a published standard or paper —
-  inference/deduction/predicate (Aristotle through description logic), classical AI planning
-  (STRIPS/PDDL/Graphplan), grammar, NLP, IR scoring (Levenshtein vs Damerau), unit vs integration
-  testing (Meszaros's taxonomy), and **the storage model, where the operator expects the most to be
-  found** (OWL covers the data model; the ledger, trust, sessions, reification-vs-RDF-star and
-  provenance around it are unnormalised). Plus a **README bibliography**: authoritative link, else a
-  local copy where the licence permits, else a summary doc marked placeholder. `PLAN_NORMATIVE.md`
-  is the record.
-- **Four wrong citations in the inference engine, all re-confirmed at HEAD.** `PLAN_NORMATIVE.md`
-  §7.12; verified against *OWL 2 Profiles (2nd ed.)*, W3C Rec 2012-12-11, whose table numbering is
-  identical to the 1st ed., so no edition excuses them. **`cls-svf1` is cited as "OWL 2 RL Table 8"
-  at 3 sites** (`syllogise.mjs:64`, `:314`, `chat.mjs:7406`) — it is **Table 6**; Table 8 is
-  *The Semantics of Datatypes*. **`cax-maxc0` is not a W3C rule name** — no such rule exists; the
-  real one is `cls-maxc1`. It is shaped like a W3C id and appears in `PLAN_SYLLOGIST.md` and
-  `infbench/`, where a reader takes it for one. **`PLAN_SYLLOGIST_EL_DL.md:11` says all seven
-  kernels are "inside the OWL 2 RL fragment"** — two are not, and `syllogise.mjs:527` already says
-  so; `cax-maxc0` derives a class-level negative where `cls-maxc1` derives `false` for one
-  individual, a strictly stronger step RL does not license. **`syllogise.mjs:972`'s "JTMS-style
-  dependency-directed removal" is DRed** (Gupta/Mumick/Subrahmanian, SIGMOD 1993), not JTMS: it
-  recomputes the materialization, not belief labels.
-- **Phase 10 fallout — vocabulary fixes in files `PLAN_NORMATIVE.md` could not touch.** §7 has a
-  verdict for each, so none needs more research. `fuzzy.mjs` implements **Optimal String Alignment**,
-  not Damerau-Levenshtein (`editDistance("CA","ABC")=3`; true DL gives 2) — a comment and
-  `PLAN_DEPS.md` §3.5 both misname it, though §3.5's *decision* survives untouched. `ledger` (81
-  uses) is a view of the memory graph, not an append-only log, and the store underneath is not
-  append-only either. `syllogise` is a public CLI verb and only partly a syllogism — an operator
-  call. Full list at §7.1-7.11.
-- **Phase 10 fallout — declare the `cap:` and `taught:` namespaces (`PLAN_NORMATIVE.md` §7.4).**
-  `cap:` (11 terms) and `taught:` (4) are declared in no ontology file, and `cap:`'s
-  precondition/effect vocabulary is PDDL's under other names. Declare the namespace and the
-  generative convention (the `mgxneg:` precedent, §5.2), cite PDDL; lands in `tmct-core.ttl`. The
-  `seon:subKind`/`seon:Module`/`seon:ClassDefinition` renames and the two stale `mgx:subclassOf`
-  comments (§7.1-7.3) have landed.
-- **Phase 8 — the tested-capability page.** Nothing started. Generated, not hand-written. No bare
-  numbers: every figure carries its units, version, date, method link and caveat.
-  - `examples/{mini-webapp,polyglot}/.tmct/graph.json` have no generator and no drift guard — a
-    rename or hand-edit ships unchecked; needs a module spec + fixture-repos-style test.
-- **Phase 9 — the prose pass.** Nothing started, and last by design.
+- **Phase 7's two leftover rows** (tracked in `docs/public-examples.md`): three `dom`-tier
+  `index.html` rows (install line, CLI verbs, the `runChat` library block — `runChat` the one worth
+  pinning) where a browser test asserts the page shows a string but nothing asserts the product
+  agrees; and `docs/repository-interface.md`'s prose contract numbers, unpinned (the schema beside
+  them is pinned to the source const).
+- **Phase 8 — tested-capability claims on the public surfaces.** Operator decision (2026-07-17):
+  NOT a new page — put the claims in the two existing public surfaces only, `README.md` and the
+  GitLab home page (`public/index.html`). Every claim carries its evidence in place: the score with
+  units, the version it was measured at (2.0.3), the date, a link to the method
+  (`SKILL_BENCHMARK_*.md`), and its caveat. The internal `CAPABILITIES_<version>.md` audit (run via
+  `SKILL_CAPABILITIES_AUDIT.md`) stays the source of truth; it is stale at 2.0.3, and a refresh is a
+  separate cycle.
+- **Phase 9 — the plain-prose pass** over the same two surfaces, to `SKILL_PLAIN_PROSE.md`, done
+  together with Phase 8. May rewrite prose freely; may not change an asserted fenced block's input
+  or output without re-running the README harness.
+- **Loose ends** (fold into the Phase 8/9 pass, or their own commit):
+  - `README.md:942-943` calls the Repository Interface "versioned (1.0.0)"; it is **1.1.0**.
+  - `test/fixtures/{entities-repo,large-scale}/.tmct/graph.json` still embed `seon:subKind` where the
+    generators emit `mgx:subKind`; inert, but Phase 8 reads schema tokens. No generator for these two
+    (like the example graphs) — hand-edit + check the `SchemaPredicate` description. Both pairs of
+    unguarded fixture graphs want a drift guard.
+  - `splitSentences` mis-splits a module path in `extract-facts.mjs` and `import-file.mjs`; the
+    `chat.mjs` teach path already guards it with a real-boundary check.
+  - 3 CHATBENCH cells are graded but absent from `GRADED_MATRIX` (`A2:assert-recall`, `B1:svo-query`,
+    `B1:noise+svo-query`) — coverage is 9 of 36 declared, not 12.
+- **Deferred by `PLAN_NORMATIVE.md` on purpose** (a later cycle, not this one): §7.5 the PROV Source
+  split (needs a stored-shape migration) and §7.6 SKOS concept identity (blocked on concept identity).
 ### Next-cycle recommendations the benchmarks made
 
 - **Re-measure CEFR at N=2 and report the cell table, not the marginals.** 2.0.3 ran N=1 by operator

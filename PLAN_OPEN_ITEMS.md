@@ -1,8 +1,11 @@
 # PLAN_OPEN_ITEMS.md — close the 2.0.3 backlog
 
-**Status: IN PROGRESS at 2.4.1.** Phases 1, 2, 3, 4, 5 and 6 are DONE. Phases 7, 8, 9 and 10 are
-OPEN. See "Execution status" immediately below before reading anything else — **this document's own
-fix sites and numbers proved unreliable, and the corrections are recorded there.**
+**Status: Phases 1–7 and 10 are DONE.** The §7 vocabulary fallout (inference citations, SEON renames,
+`cap:`/`taught:`, OSA, storage-vocab, the honest-miss citation) and the 64-bit `factIdFor` migration
+landed this session with the full suite green (2771/2771). **Only Phase 8 and Phase 9 remain**, both
+scoped to `README.md` + the home page (see the operator decision below). See "Execution status"
+immediately below before reading anything else — **this document's own fix sites and numbers proved
+unreliable, and the corrections are recorded there.**
 
 Every item below has a verbatim reproducer and a named fix site. This is the single plan doc for the
 open items `HANDOVER.md` carries after the 2.0.3 benchmark cycle. Work it top to bottom; the order
@@ -97,9 +100,9 @@ commit that reaches `main` or a remote.
 | PLAN_DEPS batches 1-2, 4-7 | **DONE** | `c2ded65`, `f2d7e27`, `488aa84`, `5824c66`, `2ccee08` |
 | **3** — honest-miss gaps | **DONE** — 3.1-3.3, 3.5-3.9, 3.10a-e, 3.11 done; 3.4 didn't reproduce. 3.10a-d closed: board reads (clearness, `what rests on X`, `where is X`) and plan follow-ups now serve the current plan/board state | `b1f14a0`, `7d4acc4`, `7ea0036`, `92133b0`, `1d01eab`, `7caea95`, `c23a2b6` |
 | **7** — public-surface audit | **DONE** — table at `docs/public-examples.md`; 3 shipping defects deleted, 61 examples pinned. Two rows left open in the table itself: 3 `dom`-tier `index.html` rows, and `docs/repository-interface.md`'s prose numbers | `c49003d`, `01f4006`, `5c45354`, `93e5297` |
-| **8** — capability page | **OPEN** — nothing started | — |
+| **8** — capability claims | **OPEN** — operator scoped it (2026-07-17) to the two existing public surfaces (`README.md` + the home page), NOT a new generated page. Do together with Phase 9 | — |
 | **9** — prose pass | **OPEN** — nothing started | — |
-| **10** — `PLAN_NORMATIVE.md` | **LANDED** — plan written, standards read, ontology uplifted, 10 tests green, 45-term register machine-checked. §10.1's casing defect **does not exist** (see the FALSE table). **The review found a live data-loss bug: `factIdFor`'s 32-bit hash, 45% collision odds at `init:xl`** — `PLAN_NORMATIVE.md` §9.1/§7.7. Fixes remain in files Phase 10 does not own: §7.1-7.11 | — |
+| **10** — `PLAN_NORMATIVE.md` | **DONE** — plan written, standards read, ontology uplifted, register machine-checked. §7 fallout all landed: the four inference citations, the SEON renames, `cap:`/`taught:`, the OSA rename, the storage-vocab renames, the honest-miss citation, and the **`factIdFor` 32→64-bit migration** (the live data-loss bug §9.1 found — a real collision at 26k triples, now content-derived from a truncated SHA-256). §7.5 (PROV Source split) and §7.6 (SKOS) deferred by design | `factIdFor` at `88842f3`; SEON `37a71cd`; cap/taught `ba8709a`; OSA `93acf19`; storage-vocab `66cfc9e` |
 | PLAN_DEPS Q1 (maintainer tier), Q3 (ReDoS) | **DONE** — Q3 bounds the `name` filter (>30s → 1ms); Q1 stops 16 maintainer files shipping and adopts `yaml` as a devDependency, which fixed silent WordNet data loss | `e32160e`, + below |
 
 ## Operator decisions taken this cycle — do not re-ask
