@@ -37,16 +37,30 @@ Phases 1, 2, 4, 5 and 6 closed at 2.4.1. What remains:
   from the standing referent, and asked cold it names what it cannot resolve.
   **Open: 3.8, 3.9, 3.10a-e, 3.11.** 3.9's fix site is `chat.mjs`, not `ask.mjs` — the investigation
   is recorded in the plan.
-- **Phase 7 — every public example traces to a test.** Table landed at `docs/public-examples.md`.
-  The home page's transcripts now replay against the live CLI (`e2e/pages-examples.test.mjs`), so
-  its examples are held at the same tier the README's are. Open: three `dom`-tier rows on
-  `index.html` (install line, CLI verb list, the `runChat` library block) where a browser test
-  asserts the page shows the string and nothing asserts the product agrees; the `runChat` block is
-  the one worth pinning next. `docs/repository-interface.md`'s prose carries the contract numbers
-  with no test holding them (the schema beside it is pinned).
-- **Phase 10 — write `PLAN_NORMATIVE.md` and work it.** Nothing started. Fix the two-casings IRI
-  defect first (`mgx:callscoarse` vs `mgx:callsCoarse`, and three more pairs) — an IRI is
-  case-sensitive, so two casings are two terms, and that needs no standard to justify.
+- **Phase 7 — every public example traces to a test.** Closed. Table at `docs/public-examples.md`,
+  one row per example with the test that holds it and the tier. The site's examples now run:
+  `e2e/pages-examples.test.mjs` replays the page's transcripts against the live CLI through the
+  README's harness, `pages-demo-history` pins the demo box's 5 scripted answers, and
+  `pages-demo-templates` asks all 56 pairs the box can pick. Three defects were shipping: the
+  payment-module block (3 of 4 questions miss or fail to parse), the "what an answer looks like"
+  transcript (a splice of two sessions that never happened together), and a drifted demo answer
+  ("defined in" where the engine says "found in"). Still open, both listed in the table: three
+  `dom`-tier rows on `index.html` (install line, CLI verbs, the `runChat` library block) where a
+  browser test asserts the page shows a string and nothing asserts the product agrees, `runChat`
+  being the one worth pinning next; and `docs/repository-interface.md`'s prose carries the contract
+  numbers with no test holding them (the schema beside it is pinned to the source const).
+- **Phase 10 fallout — four vocabulary fixes in files `PLAN_NORMATIVE.md` could not touch.** The
+  plan is written and its ontology half has landed; `PLAN_NORMATIVE.md` §7 has the detail and a
+  verdict for each, so none needs more research. In cost order: `seon:subKind` is a **stored
+  undefined IRI** (`graph-build.mjs:146` writes it, and SEON has no such property) — rename to
+  `mgx:subKind`, keep a legacy read key, re-index; no migration, a code graph is derivable.
+  `seon:Module`/`seon:ClassDefinition` (`router/registry.mjs:31-32`) are not SEON terms either.
+  The `cap:` (11 terms) and `taught:` (4) namespaces are declared nowhere, and `cap:`'s
+  precondition/effect vocabulary is PDDL's under other names. Two stale comments name
+  `mgx:subclassOf`, which nothing emits.
+  **The two-casings defect this phase was told to fix first does not exist** — all 13 lowercase
+  spellings are lookup keys in one table that lowercases before reading, nothing writes them, and
+  `mgx:cause`/`mgx:causes` is a deliberate lemma fold. `PLAN_NORMATIVE.md` §1 has the proof.
 - **Phase 8 — the tested-capability page.** Nothing started. Generated, not hand-written. No bare
   numbers: every figure carries its units, version, date, method link and caveat.
 - **Phase 9 — the prose pass.** Nothing started, and last by design.

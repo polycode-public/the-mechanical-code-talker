@@ -134,6 +134,11 @@ history were not.** Verify before you quote.
 | 6 | smoke can be in-process only, no mktemp repo | **It cannot.** Teaching needs a grounded store and `createSession` is the only path that builds one. Smoke pays for one session (273ms of its ~700ms) |
 | PLAN_DEPS §6.1 | four symbols duplicated; keep `attachProseTokens`/`buildProseIndex` | **Six.** Both "keep" symbols were byte-identical to domain twins. Whole module deleted |
 | PLAN_DEPS §6.6c | `isTestPath`/`isTestLabel` have "already drifted" | **They have not.** `startsWith("tests/")` is strictly subsumed by `/(^\|\/)tests?\//` — 584 paths brute-forced, 0 disagreements. And there were THREE copies, not two |
+| 10.1 | the same term exists in two casings, and it "is a bug, not a naming preference" | **Not a bug, and there are 13 groups, not 4.** Every lowercase spelling lives at ONE site — `codegraph.mjs`'s `PROP_KIND`, whose header says "Lower-cased keys" and whose reader lowercases before lookup. A fresh store + teach session writes `mgx:canonicalisedFrom`, `mgx:statedBy`, `mgx:saidInSession`; lowercase variants: **0**. Nothing to migrate |
+| 10.1 | `mgx:cause` vs `mgx:causes` is one of the casing pairs | **Both are lowercase — not a casing pair at all.** It is a verb lemma vs a curated corpus predicate, and `hash.mjs`'s `CANONICAL_FACT_PREDICATE` folds it on the write path ON PURPOSE, so both converge on one content-addressed fact id. `remember that fire causes smoke` stores `mgx:causes`; `mgx:cause` occurrences: 0 |
+| 10.2 | `prov:` has 3 uses | **2**, and the third was a JS object key (`prov: provBucketFor(...)` in `ledger-viz.mjs`), not a CURIE. Both real uses are the same UNVERIFIED note — the diagnosis was right and sharper than the count: `prov:` is used exactly twice, both times to say the check had not been done |
+| 10.2 | "does `mgx:statedBy` mean `prov:wasAttributedTo`?" and the in-code note "ext ref prov:wasDerivedFrom" | **`mgx:derivedFrom` means `prov:wasInfluencedBy`, not `wasDerivedFrom`** — it unions attribution with derivation, which PROV keeps apart. And `statedBy` cannot assert `wasAttributedTo`: that ranges over `prov:Agent`, while `tmct:Source` unions all three of PROV's disjoint top classes (`operator`=Agent, `corpus`/`web`=Entity, `entailed`=Activity) |
+| 10.2 | SEON is "already used at 99 sites; check the alignment is real and complete" | **Real but partial: 19 of 24 SEON spellings are genuine terms, 5 are not.** `seon:subKind` is a **stored** undefined IRI (in `examples/*/.tmct/graph.json` today); `seon:Module`, `seon:ClassDefinition`, `seon:Attribute` don't exist either. `seon:history` tmct already caught and realigned. Verified against the live `code.owl`, not a summary |
 
 ## Traps this cycle hit, for the next session
 
@@ -1007,6 +1012,19 @@ home page, the two contract docs, the corpus READMEs, chatbench, `examples/`, an
 tool catalog. `e2e/pages-examples.test.mjs` replays the home page's transcripts against the live
 CLI through the README's own harness, so a page transcript is held at the same tier a README
 fence is. What is still open is listed in `HANDOVER.md`.
+
+Two of this section's own citations were wrong, and the pattern is worth carrying:
+
+- §7.2 sends the reader to `README.md` for `what talks to the payment module?`. It was not there.
+  `c720a16` had already fixed the README; the example lives on `public/index.html`, which had no
+  harness at all. The census found **no** zero-assertion session block left in the README.
+- §7.4 says the rendered `plan.html` "has no test at all". `e2e/pages-home.test.mjs` had one. It
+  asserted the replay names `disk-1`, which the `564abce` defect passes, so the claim was wrong
+  about the test and right about the coverage.
+
+The contract numbers in §7.2 (`SERVICES` 16, `EDGE_KINDS` 11, `MISS_REASONS` 4, `INTERFACE_VERSION`
+1.1.0) all checked out against `src/adapters/repository-interface.mjs`, and
+`docs/repository-interface.md` names every one of them.
 
 The `what talks to the payment module?` failure is the worked example for this whole phase, and it
 should be read before the item list. It sat in the README as the headline structural example. The
