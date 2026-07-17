@@ -9526,6 +9526,57 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
+  // src/tools/memory-fallthrough.mjs
+  async function memoryFactRows(config) {
+    try {
+      return readFactRows(await loadMemory(dirname(dirname(config.graphFile))));
+    } catch {
+      return [];
+    }
+  }
+  function memoryProvenance(rows) {
+    const provs = [...new Set(rows.map((r) => r.provenance).filter(Boolean))];
+    if (!provs.length) return "provenance: memory/corpus facts";
+    const shown = provs.slice(0, 2).join("; ");
+    return `provenance: ${shown}${provs.length > 2 ? `, +${provs.length - 2} more source(s)` : ""}`;
+  }
+  function renderMemorySubclasses(rows, term) {
+    const t = normFactTerm(term);
+    const hits = rows.filter((r) => ISA_PREDICATES.has(r.predicate) && r.object === t);
+    if (!hits.length) return null;
+    const labels = [...new Set(hits.map((r) => r.subject))].sort();
+    const shown = labels.slice(0, MEMORY_LIST_CAP);
+    const tail = labels.length > MEMORY_LIST_CAP ? `
+  \u2026+${labels.length - MEMORY_LIST_CAP} more` : "";
+    return `"${term}" is not a code-map entity \u2014 answering from memory/corpus facts. ${labels.length} known subclass(es):
+  ${shown.join("\n  ")}${tail}
+(${memoryProvenance(hits)})`;
+  }
+  function renderMemoryDefinition(rows, term) {
+    const t = normFactTerm(term);
+    const isa = rows.filter((r) => ISA_PREDICATES.has(r.predicate) && (r.subject === t || r.object === t));
+    if (!isa.length) return null;
+    const supers = [...new Set(isa.filter((r) => r.subject === t).map((r) => r.object))];
+    const subs = [...new Set(isa.filter((r) => r.object === t).map((r) => r.subject))].sort();
+    const lines = [`"${term}" is not a code-map entity \u2014 answering from memory/corpus facts.`];
+    if (supers.length) lines.push(`is a: ${supers.slice(0, MEMORY_LIST_CAP).join(", ")}`);
+    if (subs.length) {
+      const tail = subs.length > MEMORY_LIST_CAP ? `, +${subs.length - MEMORY_LIST_CAP} more` : "";
+      lines.push(`known subclasses (${subs.length}): ${subs.slice(0, MEMORY_LIST_CAP).join(", ")}${tail}`);
+    }
+    lines.push(`(${memoryProvenance(isa)})`);
+    return lines.join("\n");
+  }
+  var ISA_PREDICATES, MEMORY_LIST_CAP;
+  var init_memory_fallthrough = __esm({
+    "src/tools/memory-fallthrough.mjs"() {
+      init_node_path();
+      init_core();
+      ISA_PREDICATES = /* @__PURE__ */ new Set(["rdfs:subClassOf", "rdf:type"]);
+      MEMORY_LIST_CAP = 40;
+    }
+  });
+
   // adapter-stub-ask-nlp.mjs:../adapters/ask-nlp.mjs
   var nlpAdapter;
   var init_ask_nlp = __esm({
@@ -10522,9 +10573,11 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     const payload = await source.fetchEntities(config);
     const graph = parseEntities(payload);
     if (!graph.individuals.length) {
-      throw new ToolError(
+      const e = new ToolError(
         `the graph at ${config.graphFile} is empty \u2014 no entities to answer from yet (this repo starts with no graph; the chat session folds the conversation into one).`
       );
+      e.emptyGraph = true;
+      throw e;
     }
     return graph;
   }
@@ -10702,54 +10755,7 @@ You now have the snippet, the sibling style, the registration anchor and the tes
 
   // src/tools/handlers/tmct-describe.mjs
   init_codegraph();
-
-  // src/tools/memory-fallthrough.mjs
-  init_node_path();
-  init_core();
-  var ISA_PREDICATES = /* @__PURE__ */ new Set(["rdfs:subClassOf", "rdf:type"]);
-  var MEMORY_LIST_CAP = 40;
-  async function memoryFactRows(config) {
-    try {
-      return readFactRows(await loadMemory(dirname(dirname(config.graphFile))));
-    } catch {
-      return [];
-    }
-  }
-  function memoryProvenance(rows) {
-    const provs = [...new Set(rows.map((r) => r.provenance).filter(Boolean))];
-    if (!provs.length) return "provenance: memory/corpus facts";
-    const shown = provs.slice(0, 2).join("; ");
-    return `provenance: ${shown}${provs.length > 2 ? `, +${provs.length - 2} more source(s)` : ""}`;
-  }
-  function renderMemorySubclasses(rows, term) {
-    const t = normFactTerm(term);
-    const hits = rows.filter((r) => ISA_PREDICATES.has(r.predicate) && r.object === t);
-    if (!hits.length) return null;
-    const labels = [...new Set(hits.map((r) => r.subject))].sort();
-    const shown = labels.slice(0, MEMORY_LIST_CAP);
-    const tail = labels.length > MEMORY_LIST_CAP ? `
-  \u2026+${labels.length - MEMORY_LIST_CAP} more` : "";
-    return `"${term}" is not a code-map entity \u2014 answering from memory/corpus facts. ${labels.length} known subclass(es):
-  ${shown.join("\n  ")}${tail}
-(${memoryProvenance(hits)})`;
-  }
-  function renderMemoryDefinition(rows, term) {
-    const t = normFactTerm(term);
-    const isa = rows.filter((r) => ISA_PREDICATES.has(r.predicate) && (r.subject === t || r.object === t));
-    if (!isa.length) return null;
-    const supers = [...new Set(isa.filter((r) => r.subject === t).map((r) => r.object))];
-    const subs = [...new Set(isa.filter((r) => r.object === t).map((r) => r.subject))].sort();
-    const lines = [`"${term}" is not a code-map entity \u2014 answering from memory/corpus facts.`];
-    if (supers.length) lines.push(`is a: ${supers.slice(0, MEMORY_LIST_CAP).join(", ")}`);
-    if (subs.length) {
-      const tail = subs.length > MEMORY_LIST_CAP ? `, +${subs.length - MEMORY_LIST_CAP} more` : "";
-      lines.push(`known subclasses (${subs.length}): ${subs.slice(0, MEMORY_LIST_CAP).join(", ")}${tail}`);
-    }
-    lines.push(`(${memoryProvenance(isa)})`);
-    return lines.join("\n");
-  }
-
-  // src/tools/handlers/tmct-describe.mjs
+  init_memory_fallthrough();
   async function tmct_describe(args, { graph, svc, config }) {
     const symbol = requiredArg(args, "symbol");
     const { match, candidates } = resolveSymbol(svc.graph, symbol);
@@ -10814,6 +10820,7 @@ ${hint}` : ""}${cand}`;
   // src/tools/handlers/tmct-search.mjs
   init_config();
   init_codegraph();
+  init_memory_fallthrough();
   async function tmct_search(args, { graph, config }) {
     const query = String(args?.query || "").trim();
     const kind = String(args?.kind || "").trim();
@@ -10832,6 +10839,7 @@ ${hint}` : ""}${cand}`;
 
   // src/tools/handlers/tmct-members.mjs
   init_codegraph();
+  init_memory_fallthrough();
   async function tmct_members(args, { graph, svc, config }) {
     const symbol = requiredArg(args, "class");
     const { match } = resolveSymbol(svc.graph, symbol);
@@ -10843,6 +10851,7 @@ ${hint}` : ""}${cand}`;
 
   // src/tools/handlers/tmct-subclasses.mjs
   init_codegraph();
+  init_memory_fallthrough();
   async function tmct_subclasses(args, { graph, svc, config }) {
     const symbol = requiredArg(args, "class");
     const { match } = resolveSymbol(svc.graph, symbol);
@@ -13043,6 +13052,10 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
     capabilities: "see what /plan can plan over \u2014 built-in query tools and taught actions",
     syllogise: "materialize the entailed facts that follow from what's remembered about one term"
   };
+  var IMPACT_PARAPHRASE_RE = new RegExp(
+    "^what\\s+(?:would|will|might|could|does|do)?\\s*(?:breaks?|fails?|is\\s+affected|are\\s+affected|gets?\\s+affected|be\\s+affected|is\\s+impacted|be\\s+impacted)\\s+if\\s+(?:i|we|you|one|someone)\\s+(?:changed?|modif(?:y|ied)|edits?|edited|touch(?:es|ed)?|updates?|updated|alters?|altered)\\s+(?:the\\s+)?(.+?)[?.!\\s]*$",
+    "i"
+  );
   var BASE_QUALIFIER_SRC = "as\\s+(?:its|the|an?)?\\s*(?:base\\s+class|parent\\s+class|base|parent)";
   var USES_AS_BASE_WH_ASK_RE = new RegExp(
     `^(.+?)\\s+uses?\\s+(?:which\\s+[\\w'-]+|what)\\s+${BASE_QUALIFIER_SRC}\\s*\\??$`,
