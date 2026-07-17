@@ -409,7 +409,7 @@ ${hasMemChat ? `<script>\n${bundleStr}\n</script>` : ""}
   const DAY = 86400000;
   const facetCounts = ${facetCounts.toString()};
   const el = (id) => document.getElementById(id);
-  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  const esc = ${escapeHtml.toString()};
   const FAMS = ["is-a", "has", "can", "used-for", "rests-on", "role", "other"];
   const FAM_LABEL = { "is-a": "is a kind of", has: "has", can: "can", "used-for": "used for", "rests-on": "rests on", role: "role / property", other: "other" };
   const PROVS = [["taught", "you taught"], ["corpus", "corpus"], ["entail", "entailed"]];
