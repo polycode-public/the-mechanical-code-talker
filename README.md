@@ -2,9 +2,8 @@
 
 `@polycode-projects/the-mechanical-code-talker`
 
-A pure-JS, **no-LLM**, offline, **$0** chatbot in the ELIZA/PARRY lineage:
-pattern-driven, best-efforts, and focused on software as its subject matter.
-It makes no model calls.
+A pure-JS, **no-LLM**, offline, **$0** chatbot in the ELIZA/PARRY lineage.
+It is pattern-driven and focused on software, and it makes no model calls.
 
 tmct turns natural language directly into a graph database. On first run it
 seeds an everyday **human-world persona**: people, places, objects, nature,
@@ -164,7 +163,7 @@ Text that doesn't fit the grammar still gets the tolerant strategies. Nothing
 is rejected for being loose, fuzzy, or misspelled.
 
 On top of that base, tmct reads the shapes people actually use, and each one
-resolves to a real graph traversal or declines honestly:
+resolves to a real graph traversal or declines cleanly:
 
 - everyday question forms: "what is Commit", "what's model.mjs for",
   "recent commits" as real dated history;
@@ -964,6 +963,18 @@ service. The LLM agent stays outside tmct, as the no-LLM ethos requires.
 
 ## Measuring it
 
+What the 2.0.3 cycle measured, on 2026-07-16. Each figure links to its method
+and carries, in the same row, the caveat that changes what it means. The full
+tables, judge scores, and transcripts are in the linked write-ups.
+
+| What it does | Result (2.0.3) | Read the number with this | Method |
+|---|---|---|---|
+| Multi-hop entailment | 219/219 chat cases and 80/80 kernel cases, 0% fabrication, all six bands pass | 50 of the 219 greens (23%) are graded against a declared floor, not the classical answer. INF-C2's 20/20 grades that the engine answers contradictory memory without fabricating, never that it detects the clash. | `BENCHMARK_INFERENCE_2.0.3.md` |
+| Tool-call planning | 56/56 cases, 100% plan-completion, 100% result-completion, 0% hallucination, every rung A0→C2 | Goal driver. All 11 C2 cases pass, so the ladder now has more headroom than the case set exercises. | `BENCHMARK_AGENT_2.0.3.md` |
+| Groundedness | Every answer carries a source, and an empty graph reports itself empty (`bootstrap-empty` 2.000/2). Judge-scored groundedness 1.857/2 over 98 cases. | The 1.857 is judged (`claude-haiku-4-5-20251001`, `judge-prompt-v1`) at N=1 over 9 of 23 construction shapes, so read it as indicative. The judge runs in the offline eval harness, never in the product. | `BENCHMARK_CEFR_ENGLISH_2.0.3.md` |
+| Abstention (the honest miss) | 0% fabrication across 299 inference rows and 0% hallucination across 168 agent rows | Structural, not a tuned threshold. tmct abstains because nothing matched, so the rows test a property of a no-model design rather than a score. | `BENCHMARK_INFERENCE_2.0.3.md`, `BENCHMARK_AGENT_2.0.3.md` |
+| Determinism | Byte-identical on rerun, 0 verdict changes across 299 inference rows against the prior cycle, a 109-case replay in 877ms at $0 per turn | A property of the no-model pipeline. | `BENCHMARK_INFERENCE_2.0.3.md`, `CAPABILITIES_2.0.3.md` |
+
 Three offline benchmark rigs live in a clone (they are not in the npm
 package). Each replays a committed case set through the real product and
 writes graded rows you can diff between runs:
@@ -992,9 +1003,6 @@ one place an LLM is allowed, never the product:
 ```bash skip=offline-eval-only
 npm run chatbench:judge -- --product /tmp/chatbench-smoke/product.jsonl
 ```
-
-The headline numbers and their conditions live in the `BENCHMARK_*.md`
-write-ups.
 
 ## Security and supply chain
 
