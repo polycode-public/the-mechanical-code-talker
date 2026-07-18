@@ -437,6 +437,12 @@ function parseNested(w, lc, nlp, depth) {
     if (!noun) continue;                            // marker not preceded by a noun
     const head = w.slice(0, r - 1);                 // outer clause words, minus the placeholder noun
     if (!head.length) continue;                     // noun is the leading subject → subject-relative, not this shape
+    // A head made ENTIRELY of qualifier adjectives ("tested modules importing
+    // X") is an adjective stack over the subject, not an outer clause —
+    // "tested" doubles as a relation verb, so parseSimpleClause would read it
+    // as reverse(tests) over the inner set and answer the test module itself.
+    // parseRelationalOrQualified owns the adjective reading.
+    if (head.every((x) => QUALIFIERS[x.toLowerCase()])) continue;
     const outer = parseSimpleClause([...head, NEST_SENTINEL].join(" "), nlp);
     if (!outer || (outer.shape !== "reverse" && outer.shape !== "forward")) continue;
     if (outer.modifier && outer.modifier !== "direct") continue; // no transitive-over-set closure primitive
