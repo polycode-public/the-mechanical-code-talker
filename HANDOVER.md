@@ -16,9 +16,10 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-18)
 
-v2.7.5 in the working tree: the adventure dead-end routing fixes, the spider-and-fly game
-(`PLAN_SPIDER_FLY.md`, fully built), and the TOOL-7/TOOL-8 router uplift have all landed since
-2.7.0, ahead of the adventure-focused edge-hunt rounds now starting.
+v2.7.11 in the working tree: the adventure dead-end routing fixes, the spider-and-fly game
+(`PLAN_SPIDER_FLY.md`, fully built), the TOOL-7/TOOL-8 router uplift, and a 5-round
+adventure-focused playtest edge hunt (`playtests/PLAYTEST_LOG_003.md` through `_007.md`) have
+all landed since 2.7.0, pipelines confirmed green at every round.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
@@ -34,12 +35,6 @@ alongside (pool 964 passing / 111 frontier), and the small remainders (world tru
 asides through the world fold, the plural-object fold, the impact summary). `archive/` holds the
 delivered plan docs; each records what its delivery deliberately did not include. What remains:
 
-- Adventure edge-hunt round 5 of 5 (`playtests/PLAYTEST_LOG_007.md`): a typo on a recognised
-  SYNONYM word (bare, like "pikc", or a multi-word idiom's own lead word, like "hav a look at")
-  fell through to a generic conversational miss instead of the same bounded fuzzy repair a typo
-  on a bare closed verb already gets — the fuzzy tier's candidate set held only canonical verb
-  targets, never synonym surface words. Fix in progress this round (rounds 1-4 already shipped);
-  this closes the 5-round adventure-focused playtest edge hunt.
 - Adventure horizons (`archive/PLAN_ADVENTURE.md`): open/unlock/close ship signature-only
   families — the shipped precond/effect rule shapes can't express exit-adjacency, lock state,
   hidden contents, instrument preconditions or boolean effects, so those ride world facts checked
