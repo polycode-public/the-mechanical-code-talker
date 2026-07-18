@@ -493,6 +493,11 @@ const PHRASING_FRAMES = Object.freeze([
   { re: /^what\s+does\s+(.+?)\s+changes?\s+together\s+with\??$/i, to: (m) => `what co-changes with ${m[1]}` },
   { re: /^what\s+changes?\s+together\s+with\s+(.+?)\??$/i, to: (m) => `what co-changes with ${m[1]}` },
 
+  // COMMIT-COUNT PASSIVE ("how many commits are recorded for X") → the touch
+  // phrasing the count restrictor already compiles. "recorded" is no relation
+  // verb, so the passive otherwise dies in the restrictor parse.
+  { re: /^how\s+many\s+commits\s+(?:are|were)\s+(?:recorded|logged)\s+(?:for|against)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `how many commits touched ${m[1]}` },
+
   // AUTHORSHIP → "who touched X" (tmct's touch edge IS the authorship signal).
   // A commit sha object is excluded — that dumps the commit's touch-set, not its author.
   { re: /^who\s+(?:wrote|authored)\s+(?:the\s+)?(?!(?:commit\s+)?[0-9a-f]{7,40}\??$)(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
