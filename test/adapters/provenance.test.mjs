@@ -101,6 +101,20 @@ test("(b) appendFact derives Source individuals + statedBy edges — WITHOUT re-
   }
 });
 
+test("(b) a corpusWeak-tagged fact mints its Source too (sourceIdFor had no corpusWeak case)", async () => {
+  const dir = await tmpRepo();
+  try {
+    const f = await appendFact(dir, { subject: "sofa", predicate: "cn:RelatedTo", object: "chair", provenance: "corpus-weak:conceptnet /r/RelatedTo" });
+    const m = await loadMemory(dir);
+    const src = sourcesOf(m).find((s) => s.id === "src:corpus-weak:conceptnet");
+    assert.ok(src, "the corpusWeak Source individual exists (previously silently dropped)");
+    assert.equal(attr(src, "mgx:sourceType"), "corpusWeak");
+    assert.deepEqual(statedEdges(m).map((e) => [e.subject, e.object]), [[f.id, "src:corpus-weak:conceptnet"]]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("(b) the ' | '-union becomes N statedBy edges (one per independent source); the compat string stays byte-identical", async () => {
   const dir = await tmpRepo();
   try {

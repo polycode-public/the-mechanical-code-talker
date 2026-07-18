@@ -712,6 +712,7 @@ function sourceIdFor(desc) {
     case "teach": return { id: desc.sessionId ? `${TEACH_SOURCE_ID}:${desc.sessionId}` : TEACH_SOURCE_ID, type: "teach" };
     case "provider": return { id: `src:provider:${desc.name}`, type: "provider" };
     case "corpus": return { id: `src:corpus:${desc.name}`, type: "corpus" };
+    case "corpusWeak": return { id: `src:corpus-weak:${desc.name}`, type: "corpusWeak" };
     // One Source per pack article (the @revid stays in the article segment),
     // so two facts from the same article corroborate nothing extra.
     case "reference": return { id: `src:reference:${desc.pack}:${desc.article}`, type: "reference" };
