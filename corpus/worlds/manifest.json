@@ -2,9 +2,9 @@
   "version": 1,
   "generated": "by scripts/build-worlds-pack.mjs from corpus/worlds/src/",
   "counts": {
-    "worlds": 1,
-    "facts": 51,
-    "rules": 12
+    "worlds": 2,
+    "facts": 527,
+    "rules": 14
   },
   "budgets": {
     "sourceBytesPerWorld": 131072,
@@ -16,18 +16,28 @@
       "file": "src/ashcombe-hall.jsonl",
       "bytes": 7481,
       "sha256": "776634e8f7db704f2895ad1557cdcb79c28e14fe8fd4202ef1d0db9b4358ca91"
+    },
+    {
+      "file": "src/spider-fly.jsonl",
+      "bytes": 51706,
+      "sha256": "b641936dec8fb3526dcab766268c25942c0e82ff9025bb853dad5f971bf8c029"
     }
   ],
   "files": [
     {
       "file": "index.json.gz",
-      "bytes": 46,
-      "sha256": "5c380eaf9cc68c0420edd5a8df9803208070cceb3e717c4e87288d612f6a51a0"
+      "bytes": 63,
+      "sha256": "507cce433933fcd95c19e6616985006d247f8cb448b3b8a6c9136c9c859e0c08"
     },
     {
       "file": "shards/ashcombe-hall.jsonl.gz",
       "bytes": 864,
       "sha256": "468ba9ae859fc63094f5030648f07885e1e0785fb4e18e309cc4e6729c878ebf"
+    },
+    {
+      "file": "shards/spider-fly.jsonl.gz",
+      "bytes": 2829,
+      "sha256": "dd9f1ac66b26da2cea350fdeab17e1fe0f27d583823356e3bc189c131e3adb86"
     }
   ]
 }
