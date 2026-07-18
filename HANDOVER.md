@@ -32,7 +32,9 @@ and `PLAN_SYLLOGIST.md` (§2/§3) are being delivered by a coordinator run with 
 sub-agent tracks. Each line flips STARTED → BUILT → VERIFIED here and in its plan doc, in the
 same commit as the work it describes:
 
-- T1 `PLAN_25_BACKLOG` §§1–7, §9 — chat/ask/interpret/codegraph fixes + pins — STARTED
+- T1 `PLAN_25_BACKLOG` §§1–7, §9 — chat/ask/interpret/codegraph fixes + pins — BUILT + VERIFIED
+  (every section's keyed rows landed; the folded superlative-inversion fix rode §3; §13's chat
+  lane deferred to wave 2 by design)
 - T1w2 `PLAN_GUESS_NUMBER` phases 1–3; `PLAN_LEARN_ON_MISS` chat hook; `PLAN_DIALOGUE_ACTS`
   envelope wiring — QUEUED (after T1)
 - T2 `PLAN_SYLLOGIST` §3 ATMS environment sets + §2 semi-naive delta + §4 slice — BUILT +

@@ -1353,6 +1353,7 @@
           if (!subjModId || !objModId) continue;
           const subjLabel = graph.byId.get(subjModId)?.label || subjModId;
           addDependent(objModId, subjModId, subjLabel, g.predicate);
+          if (subjModId !== objModId) addDependent(e.object, subjModId, subjLabel, g.predicate);
         }
       } else if (kind === "tests") {
         for (const e of g.edges) {
@@ -2882,8 +2883,8 @@ ${shown.join("\n")}${tail}`;
       EXPLAIN_WRAPPER_RE = /^explain\s+(?:to\s+me\s+|please\s+)*(.+?)\??$/i;
       TELL_ME_WRAPPER_RE = /^tell\s+me\s+(.+?)\??$/i;
       KNOW_WRAPPER_RE = /^do\s+you\s+know\s+(.+?)\??$/i;
-      WANT_KNOW_WRAPPER_RE = /^i(?:'d|\s+would)?\s+(?:like|want|need)\s+to\s+know\s+(.+?)\??$/i;
-      WONDERING_WRAPPER_RE = /^i(?:\s+was|\s+am|'m)?\s+(?:just\s+)?(?:wonder(?:ing|ed)|curious)(?:\s+(?:if|whether|about))?\s+(.+?)\??$/i;
+      WANT_KNOW_WRAPPER_RE = /^i(?:'d|\s+would)?\s+(?:(?:like|want|need)\s+to|wanna)\s+know\s+(.+?)\??$/i;
+      WONDERING_WRAPPER_RE = /^i(?:\s+was|\s+am|'m)?\s+(?:just\s+)?(?:wonder(?:ing|ed)?|curious)(?:\s+(?:if|whether|about))?\s+(.+?)\??$/i;
       EMBEDDED_WHATIS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2})\s+(is|are)\??$/i;
       EMBEDDED_MEANS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2})\s+means\??$/i;
       SHOW_GIVE_ME_RE = /^(?:show|give)\s+me\s+(?:the\s+)?(.+?)\??$/i;
@@ -2999,6 +3000,17 @@ ${shown.join("\n")}${tail}`;
         { re: /^(?:is|are)\s+(?!.*\bnot\b)(.+?)\s+tested\??$/i, to: (m) => `what tests ${m[1]}` },
         // NEEDS-TESTS → the untested-module survey.
         { re: /^what\s+needs\s+(?:to\s+be\s+)?(?:a\s+)?(?:tested|tests?|testing|coverage|covering)\??$/i, to: () => "untested modules" },
+        // NO-TESTS → the same untested survey, attributive form. "no tests" would
+        // otherwise read as a literal object term ("…defines no tests") and the
+        // resulting empty answers as "it has none" to a coverage question.
+        {
+          re: /^(?:which|what|list|show(?:\s+me)?|find)?\s*(?:the\s+|all\s+)?([a-z][a-z-]*?)\s+(?:(?:that|which)\s+)?(?:have|has|having|with)\s+no\s+tests?\??$/i,
+          to: (m) => `untested ${m[1].toLowerCase()}`
+        },
+        {
+          re: /^(?:which|what|list|show(?:\s+me)?|find)?\s*(?:the\s+|all\s+)?([a-z][a-z-]*?)\s+without\s+(?:any\s+)?tests?\??$/i,
+          to: (m) => `untested ${m[1].toLowerCase()}`
+        },
         // DOES-X-VERB-ANYTHING-ELSE → "what does X <verb>" (drops the placeholder
         // "anything/something else" object, which otherwise made the two parse
         // strategies disagree on the span). Anchored to VERB_TO_KIND so it can't
@@ -3417,7 +3429,10 @@ ${shown.join("\n")}${tail}`;
       if (INHERITS_REVERSE_VERBS.includes(verbPhrase)) [subject, object] = [object, subject];
       return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject, object });
     }
-    if (afterText) return stamp({ shape: "reverse", entityType, modifier, kind, object: afterText });
+    if (afterText) {
+      const resultType = entityHit && entityHit.start >= verbHit.end ? null : entityType;
+      return stamp({ shape: "reverse", entityType: resultType, modifier, kind, object: afterText });
+    }
     if (kind === "inherits" && !beforeText && entityHit && entityHit.start === verbHit.end) {
       const entityText = canonWords.slice(entityHit.start, entityHit.end).join(" ");
       if (entityText) return stamp({ shape: "reverse", entityType: null, modifier, kind, object: entityText });
@@ -3862,7 +3877,9 @@ ${shown.join("\n")}${tail}`;
     return classes;
   }
   function kindObjectClass(graph, kind) {
-    const classes = classesForKinds(graph, kindsFor(kind));
+    const kinds = kindsFor(kind);
+    const coarse = kinds.filter((k) => !SYMBOL_GRAIN_KINDS.has(k));
+    const classes = classesForKinds(graph, coarse.length ? coarse : kinds);
     return classes.size === 1 ? [...classes][0] : null;
   }
   function parseSetPhrase(text, nlp, depth) {
@@ -4240,7 +4257,9 @@ ${shown.join("\n")}${tail}`;
       if (!entityType) return { node: "miss", reason: "a superlative needs an entity kind (module, class, function, \u2026)" };
     }
     if (!metric) return { node: "miss", reason: "name what to rank by (imports, callers, methods, tests, or connections)" };
-    return { node: "superlative", entityType, metric, metricNoun, extreme: ext };
+    const NEED_LACK_WORDS = ["needs", "need", "needing", "lacks", "lack", "lacking", "misses", "missing"];
+    const extreme = lc.some((x) => NEED_LACK_WORDS.includes(x)) ? ext === "most" ? "fewest" : "most" : ext;
+    return { node: "superlative", entityType, metric, metricNoun, extreme };
   }
   function parseFind(w, lc, nlp, depth) {
     if (lc[0] !== "find") return null;
@@ -5433,7 +5452,20 @@ ${shown.join("\n")}${tail}`;
     return out;
   }
   function declineOnUnplacedWords(result, term) {
-    if (!result?.match || result.ambiguous || result.tier !== 3 || result.matchedVia) return result;
+    if (!result?.match || result.tier !== 3 || result.matchedVia) return result;
+    if (result.ambiguous) {
+      const pool = [result.match, ...result.candidates || []];
+      const shared = pool.map((m) => new Set(unplacedTermWords(term, m.label))).reduce((acc, s) => acc.filter((w) => s.has(w)), unplacedTermWords(term, pool[0].label));
+      if (!shared.length) return result;
+      return {
+        match: null,
+        candidates: [],
+        tier: null,
+        ambiguous: false,
+        unplacedWords: shared,
+        nearestLabel: listJoin(pool.slice(0, 4).map((m) => m.label))
+      };
+    }
     const unplaced = unplacedTermWords(term, result.match.label);
     if (!unplaced.length) return result;
     return {
@@ -5781,7 +5813,7 @@ ${shown.join("\n")}${tail}`;
         traversal: `reverse dependency closure over imports+calls edges from ${objMatch.label} (impactClosure, maxDepth=${TRANSITIVE_MAX_DEPTH})`
       };
     }
-    const symbolKind = SYMBOL_GRAIN_SIBLING[kind];
+    const symbolKind = SYMBOL_GRAIN_SIBLING[kind] || kindsFor(kind).find((k) => SYMBOL_GRAIN_KINDS.has(k)) || null;
     const objIsFineSymbol = !!(objMatch.class && FINE_ENTITY_TYPES.has(objMatch.class));
     if (symbolKind && (FINE_ENTITY_TYPES.has(entityType) || objIsFineSymbol)) {
       const edges2 = edgesOfKind2(graph, symbolKind).filter((e) => e.object === objMatch.id);
@@ -5796,7 +5828,7 @@ ${shown.join("\n")}${tail}`;
           widenNote = `, widened to ${siblingClass} subjects (no ${entityType} recorded)`;
         }
       }
-      const upRefineEligible = (kind === "touches" || kind === "calls") && objMatch.class === "Class" && !edgesOfKind2(graph, "contains").some((e) => e.subject === objMatch.id);
+      const upRefineEligible = (kind === "touches" || kind === "calls" || kind === "uses") && objMatch.class === "Class" && !edgesOfKind2(graph, "contains").some((e) => e.subject === objMatch.id);
       const upRefineModule = upRefineEligible ? graph.byId.get(moduleIdOf2(graph, objMatch) || "") : null;
       if (matches2.length || !(upRefineEligible && upRefineModule)) {
         return { matches: matches2, objMatch, candidates, traversal: `${symbolKind} edges where object = ${objMatch.label}${widenNote}`, ambiguous, matchedVia };
@@ -6231,6 +6263,14 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
     }
     if (!result.matches.length) {
       if (parsed.shape === "forward") {
+        if (MEMBERSHIP_KINDS.includes(parsed.kind) && graph && result.objMatch) {
+          for (const alt of MEMBERSHIP_KINDS) {
+            if (alt === parsed.kind) continue;
+            const altParsed = { ...parsed, kind: alt };
+            const altResult = traverse(graph, altParsed, { pinnedObjMatch: result.objMatch });
+            if (altResult?.matches?.length && !altResult.ambiguous) return renderCore(altParsed, altResult, graph);
+          }
+        }
         return {
           content: `${result.objMatch.label} has no ${verbFor(parsed.kind)} edges in the index.`,
           miss: true,
@@ -6272,7 +6312,7 @@ ${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.co
     return { content: clauses.join(" and ") + extra + ".", miss: false, ambiguous: false, matches: result.matches };
   }
   function fuzzyCascadeWord(w) {
-    if (w.length < 4) return null;
+    if (w.length < 4 || CASCADE_FUZZY_REAL_WORDS.has(w)) return null;
     const bound = fuzzyBound(w);
     let best = bound + 1;
     let hit2 = null;
@@ -6589,7 +6629,7 @@ ${lines.join("\n")}`;
       }
     };
   }
-  var askEdgesOfKindCache, SYMBOL_GRAIN_SIBLING, FINE_ENTITY_TYPES, FINE_CLASS_SIBLING, KIND_UNIONS, kindsFor, OVERFLOW_CAP, PLURAL_FORMS, REVERSE_MISS_VERB, PLURAL_SUBJECT_VERB, pluralVerbFor, LEADING_RELATION_VERB_RE, FROZEN_META_AMBIGUOUS_TERMS, MAX_COMPOSE_DEPTH, NEST_SENTINEL, PRED_LEAD_SKIP, FRAME_WORDS, COPULA_WORDS, entityNoun, isGerundVerb, UNIVERSAL_DET, FWD_NEG_FRAME, PLURAL_ANAPHORA_OBJECT, TEMPORAL_AUX, TEMPORAL_TAIL, TEMPORAL_TRAIL_FILLER, TEMPORAL_DET, COMMIT_FILTER_OPS, ANAPHORA_NAME_TOKEN_RE, AGG_TAIL_FILLER, LIST_SKIP, LIST_TRIGGERS_SORTED, LISTABLE_KINDS, SCOPE_PREPOSITIONS, FIND_LINKERS, RECENT_COMMIT_LEAD, qualCache, META_FALLBACK_CLASSES, inheritsApplicableCache, FIND_TIER, oppositeQualifierSpec, DEGREE_KINDS, COMMIT_FILTER_DATE_RE, compositeList, LEADING_ARTICLE_RE, TRAILING_GRAIN_WORD_RE, ENTRY_POINT_QUERY_RE, ENTRY_POINT_BASENAMES, TEST_FIXTURE_PATH_SEGMENTS, moduleStemOf, isTestFixturePath, TRANSITIVE_MAX_DEPTH, CONTENT_VOCAB, STRUCTURAL_WORDS, CASCADE_NOISE_SET, NOISE_OR_SCAFFOLD, TRIGGER_FUZZY_WORDS, CASCADE_FUZZY_TARGETS, LAST_COMMIT_PHRASE_RE, BARE_WHEN_COMMIT_RE, DYNAMIC_LIST_TRIGGER_RE, DYNAMIC_COUNT_TRIGGER_RE, DYNAMIC_TAIL_OK_RE, BARE_META_WHATIS_RE, WHATIS_FOR_FALLBACK_RE;
+  var askEdgesOfKindCache, SYMBOL_GRAIN_SIBLING, FINE_ENTITY_TYPES, FINE_CLASS_SIBLING, KIND_UNIONS, kindsFor, SYMBOL_GRAIN_KINDS, OVERFLOW_CAP, PLURAL_FORMS, REVERSE_MISS_VERB, PLURAL_SUBJECT_VERB, pluralVerbFor, LEADING_RELATION_VERB_RE, FROZEN_META_AMBIGUOUS_TERMS, MAX_COMPOSE_DEPTH, NEST_SENTINEL, PRED_LEAD_SKIP, FRAME_WORDS, COPULA_WORDS, entityNoun, isGerundVerb, UNIVERSAL_DET, FWD_NEG_FRAME, PLURAL_ANAPHORA_OBJECT, TEMPORAL_AUX, TEMPORAL_TAIL, TEMPORAL_TRAIL_FILLER, TEMPORAL_DET, COMMIT_FILTER_OPS, ANAPHORA_NAME_TOKEN_RE, AGG_TAIL_FILLER, LIST_SKIP, LIST_TRIGGERS_SORTED, LISTABLE_KINDS, SCOPE_PREPOSITIONS, FIND_LINKERS, RECENT_COMMIT_LEAD, qualCache, META_FALLBACK_CLASSES, inheritsApplicableCache, FIND_TIER, oppositeQualifierSpec, DEGREE_KINDS, COMMIT_FILTER_DATE_RE, compositeList, LEADING_ARTICLE_RE, TRAILING_GRAIN_WORD_RE, ENTRY_POINT_QUERY_RE, ENTRY_POINT_BASENAMES, TEST_FIXTURE_PATH_SEGMENTS, moduleStemOf, isTestFixturePath, TRANSITIVE_MAX_DEPTH, CONTENT_VOCAB, STRUCTURAL_WORDS, CASCADE_NOISE_SET, NOISE_OR_SCAFFOLD, TRIGGER_FUZZY_WORDS, CASCADE_FUZZY_TARGETS, CASCADE_FUZZY_REAL_WORDS, LAST_COMMIT_PHRASE_RE, BARE_WHEN_COMMIT_RE, DYNAMIC_LIST_TRIGGER_RE, DYNAMIC_COUNT_TRIGGER_RE, DYNAMIC_TAIL_OK_RE, BARE_META_WHATIS_RE, WHATIS_FOR_FALLBACK_RE;
   var init_ask = __esm({
     "src/domain/ask.mjs"() {
       init_codegraph();
@@ -6610,6 +6650,7 @@ ${lines.join("\n")}`;
       FINE_CLASS_SIBLING = { Function: "Method", Method: "Function" };
       KIND_UNIONS = { uses: ["imports", "calls", "callsSymbol"] };
       kindsFor = (kind) => KIND_UNIONS[kind] || [kind];
+      SYMBOL_GRAIN_KINDS = new Set(Object.values(SYMBOL_GRAIN_SIBLING));
       OVERFLOW_CAP = 12;
       PLURAL_FORMS = {
         Function: ["function", "functions"],
@@ -6759,6 +6800,7 @@ ${lines.join("\n")}`;
         ...Object.keys(ENTITY_TO_TYPE),
         ...TRIGGER_FUZZY_WORDS
       ])].filter((wd) => /^[a-z]+$/.test(wd) && wd.length >= 4 && !STOPWORDS2.has(wd));
+      CASCADE_FUZZY_REAL_WORDS = /* @__PURE__ */ new Set(["impact", "impacts", "impacted"]);
       LAST_COMMIT_PHRASE_RE = /\b(?:the\s+)?(?:last|latest|most\s+recent)\s+commit\b/i;
       BARE_WHEN_COMMIT_RE = /^when\s+(?:was|were|is|did|does|do)\s+commit\s+[0-9a-fA-F:]+$/i;
       DYNAMIC_LIST_TRIGGER_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][a-z'-]*)\s*(.*)$/i;
@@ -22968,7 +23010,15 @@ ${JSON.stringify(envelope, null, 2)}`;
     "i"
   );
   var GOAL_TEACH_IMPERATIVE_RE = new RegExp(
-    `^(?:get|put|place)\\s+(?:(every|each|all|both)\\s+)?(?:the\\s+)?([\\w-]+?)\\s+(${PREP_SRC})\\s+([\\w-]+)[?.!]*$`,
+    `^(?:get|put|place|stack)\\s+(?:(every|each|all|both)\\s+)?(?:the\\s+)?([\\w-]+?)\\s+(${PREP_SRC})\\s+([\\w-]+)[?.!]*$`,
+    "i"
+  );
+  var GOAL_TEACH_NP_RE = new RegExp(
+    `^the\\s+goal\\s+is\\s+(?:(every|each|all|both)\\s+)?(?:the\\s+)?([\\w-]+?)\\s+(${PREP_SRC})\\s+([\\w-]+)[?.!]*$`,
+    "i"
+  );
+  var GOAL_CONJUNCT_RE = new RegExp(
+    `^(?:(every|each|all)\\s+)?([\\w-]+)\\s+([a-z]+s)\\s+(${PREP_SRC})\\s+([\\w-]+)$`,
     "i"
   );
   var BOARD_REVERSE_LOC_RE = new RegExp(
@@ -23175,6 +23225,13 @@ ${JSON.stringify(envelope, null, 2)}`;
     if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
     return null;
   }
+  function isaInconsistencyRefusal(posFact, disjointFact) {
+    const cite = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${f.provenance})` : ""}`;
+    return {
+      text: `you've told me both ${cite(posFact)} and ${cite(disjointFact)} \u2014 together those contradict, and I won't derive an answer from an inconsistency. To settle it, say "forget that ${posFact.subject} is ${indefiniteArticleFor(posFact.object)} ${posFact.object}".`,
+      replace: true
+    };
+  }
   function renderIsaChain(premises) {
     const step = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${f.provenance})` : ""}`;
     const first = premises[0];
@@ -23229,6 +23286,12 @@ ${JSON.stringify(envelope, null, 2)}`;
     } catch {
       return raw;
     }
+  }
+  function suggestibleSubjectPhrase(subject) {
+    const m = String(subject || "").trim().match(/^(?:all|every|each|both|most|some)\s+([\w-]+)$/i);
+    if (!m) return teachableSubjectOf(subject);
+    const singular = teachableSubjectOf(singularizeSurface(m[1]));
+    return `${indefiniteArticleFor(singular)} ${singular}`;
   }
   var QUANTIFIER_LEAD_RE = /^(?:every|each|all|any)\s+/i;
   function factTermVariants(normFactTerm2, term) {
@@ -23709,8 +23772,13 @@ ${shown.map(renderFactLine).join("\n")}`,
     if (isa) {
       const subj = factTermVariants(normFactTerm2, isa[1]);
       const obj = factTermVariants(normFactTerm2, isa[2]);
-      const isaRows = await memoryFacts(memoryDir);
+      const isaRows = await factRows(memoryDir, cache2);
       const onTerms = (f) => subj.has(f.subject) && obj.has(f.object);
+      const { DISJOINT_PREDICATE: DISJOINT_PREDICATE2 } = await Promise.resolve().then(() => (init_syllogise(), syllogise_exports));
+      const touchesAskedTerm = (f) => subj.has(f.subject) || subj.has(f.object) || obj.has(f.subject) || obj.has(f.object);
+      if (isaRows.some((f) => f.predicate === DISJOINT_PREDICATE2 && isOperatorTaught(f) && touchesAskedTerm(f))) {
+        return null;
+      }
       const reply = isaPolarityReply(
         isaRows.find((f) => ISA_PREDICATES2.has(f.predicate) && onTerms(f)),
         isaRows.find((f) => f.predicate === NEG_SUBCLASS_PREDICATE && onTerms(f))
@@ -23738,10 +23806,20 @@ ${shown.map(renderFactLine).join("\n")}`,
     if (doesHave) {
       const subj = factTermVariants(normFactTerm2, doesHave[1]);
       const obj = factTermVariants(normFactTerm2, doesHave[2]);
-      const hit2 = (await memoryFacts(memoryDir)).find(
-        (f) => f.predicate === "mgx:hasA" && subj.has(f.subject) && obj.has(f.object)
+      const HAS_PREDICATES = /* @__PURE__ */ new Set(["mgx:hasA", "tmct:has"]);
+      const facts = await memoryFacts(memoryDir);
+      const hasHit = (subjectSet) => facts.find(
+        (f) => HAS_PREDICATES.has(f.predicate) && subjectSet.has(f.subject) && obj.has(f.object)
       );
+      const hit2 = hasHit(subj);
       if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
+      const isaStep = facts.find((f) => ISA_PREDICATES2.has(f.predicate) && subj.has(f.subject));
+      if (isaStep) {
+        const lifted = hasHit(factTermVariants(normFactTerm2, isaStep.object));
+        if (lifted) {
+          return { text: `yes \u2014 ${renderFactLine(isaStep)}; ${renderFactLine(lifted)}`, replace: true };
+        }
+      }
       return null;
     }
     const doAsk = positiveQuestionSurface(q).match(DO_VERB_ASK_RE);
@@ -23770,6 +23848,14 @@ ${shown.map(renderFactLine).join("\n")}`,
         }
         const base = capabilityBaseRateReply(doAsk[2], doAsk[3], facts);
         if (base) return base;
+        if (!/\s/.test(doAsk[2].trim()) && !facts.some((f) => subj.has(f.subject) || subj.has(f.object))) {
+          const noun = singularizeSurface(teachableSubjectOf(doAsk[2]));
+          return {
+            text: `I can't confirm that \u2014 I don't know anything about "${doAsk[2]}" yet. Teach me "a ${noun} can ${doAsk[3]}" (or "a ${noun} cannot ${doAsk[3]}") and I'll remember it.`,
+            replace: true,
+            miss: true
+          };
+        }
       }
     }
     const canDo = q.match(WHAT_CAN_DO_RE);
@@ -24192,11 +24278,55 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
       const objVariants = factTermVariants(normFactTerm2, stripTrailingDiscourseTag(isaAsk[2]));
       const isaSubject = focusLabel && IS_ADJECTIVE_PRONOUN_RE.test(isaAsk[1].trim()) ? focusLabel : isaAsk[1];
       const subjCandidates = new Set(factTermVariants(normFactTerm2, isaSubject));
+      if ([...subjCandidates].some((s) => objVariants.has(s))) {
+        const kindEcho = stripTrailingDiscourseTag(isaAsk[2]).trim();
+        return {
+          text: `yes \u2014 ${indefiniteArticleFor(kindEcho)} ${kindEcho} is ${indefiniteArticleFor(kindEcho)} ${kindEcho}, trivially: every kind is a kind of itself.`,
+          replace: true
+        };
+      }
       const noun = await entityClassNoun(graph, isaSubject);
       if (noun) for (const v of factTermVariants(normFactTerm2, noun)) subjCandidates.add(v);
+      const {
+        findIsaChain: findIsaChain2,
+        deriveDisjointViolations: deriveDisjointViolations2,
+        SUBCLASS_PREDICATE: SC_PREDICATE,
+        TYPE_PREDICATE: RDF_TYPE_PREDICATE,
+        DISJOINT_PREDICATE: DISJOINT_PREDICATE2
+      } = await Promise.resolve().then(() => (init_syllogise(), syllogise_exports));
+      const isTaught = isOperatorTaught;
+      const chainSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE && isTaught(f));
+      const chainTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE && isTaught(f));
+      const chainSubClassEdges = chainSubClassRows.map((f) => [f.subject, f.object]);
+      const chainTypeEdges = chainTypeRows.map((f) => [f.subject, f.object]);
+      const mixedSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE);
+      const mixedTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE);
+      const mixedTypeEdges = mixedTypeRows.map((f) => [f.subject, f.object]);
+      const mixedSubClassEdges = mixedSubClassRows.map((f) => [f.subject, f.object]);
+      const disjointRows = rows.filter((f) => f.predicate === DISJOINT_PREDICATE2 && isTaught(f));
+      const disjointEdges = disjointRows.map((f) => [f.subject, f.object]);
+      const disjointGateViolations = disjointRows.length ? deriveDisjointViolations2(
+        mixedTypeEdges.concat(mixedSubClassEdges),
+        mixedSubClassEdges,
+        disjointEdges,
+        { budget: 20, focus: /* @__PURE__ */ new Set([...subjCandidates, ...objVariants]) }
+      ) : [];
+      const disjointRefusalFor = (subj) => {
+        const v = disjointGateViolations.find((vv) => vv.subject === subj && objVariants.has(vv.object));
+        if (!v) return null;
+        const posFact = isa.filter((f) => objVariants.has(f.object) && (f.subject === v.viaClass || f.subject === v.subject)).sort(byTrust)[0];
+        const disjointFact = disjointRows.find((f) => f.subject === v.viaClass && f.object === v.object || f.subject === v.object && f.object === v.viaClass);
+        if (!posFact || !disjointFact) return null;
+        return isaInconsistencyRefusal(posFact, disjointFact);
+      };
       const hit2 = isa.filter((f) => subjCandidates.has(f.subject) && objVariants.has(f.object)).sort(byTrust)[0];
       const negHit = rows.filter((f) => f.predicate === NEG_SUBCLASS_PREDICATE && subjCandidates.has(f.subject) && objVariants.has(f.object)).sort(byTrust)[0];
-      const polarityReply = isaPolarityReply(hit2, negHit);
+      const directDisjoint = disjointRows.find((f) => subjCandidates.has(f.subject) && objVariants.has(f.object) || subjCandidates.has(f.object) && objVariants.has(f.subject));
+      if (hit2 && !negHit) {
+        const chainRefusal = disjointRefusalFor(hit2.subject);
+        if (chainRefusal) return chainRefusal;
+      }
+      const polarityReply = isaPolarityReply(hit2, negHit || directDisjoint);
       if (polarityReply) return polarityReply;
       const ent = await resolveEntity(graph, isaSubject);
       if (ent) {
@@ -24214,34 +24344,26 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
           };
         }
       }
-      const { findIsaChain: findIsaChain2, SUBCLASS_PREDICATE: SC_PREDICATE, TYPE_PREDICATE: RDF_TYPE_PREDICATE } = await Promise.resolve().then(() => (init_syllogise(), syllogise_exports));
-      const isTaught = isOperatorTaught;
-      const chainSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE && isTaught(f));
-      const chainTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE && isTaught(f));
-      const chainSubClassEdges = chainSubClassRows.map((f) => [f.subject, f.object]);
-      const chainTypeEdges = chainTypeRows.map((f) => [f.subject, f.object]);
       const factForStep = (step) => (step.predicate === SC_PREDICATE ? chainSubClassRows : chainTypeRows).find((f) => f.subject === step.subject && f.object === step.object);
       for (const subj of subjCandidates) {
         const chain = findIsaChain2(subj, objVariants, chainTypeEdges, chainSubClassEdges, { maxHops: 2 });
         if (!chain) continue;
+        const chainRefusal = disjointRefusalFor(subj);
+        if (chainRefusal) return chainRefusal;
         const premises = chain.map(factForStep);
         if (premises.every(Boolean)) return { text: `yes \u2014 ${renderIsaChain(premises)}`, replace: true };
       }
-      const mixedSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE);
-      const mixedTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE);
       const mixedFactForStep = (step) => (step.predicate === SC_PREDICATE ? mixedSubClassRows : mixedTypeRows).find((f) => f.subject === step.subject && f.object === step.object);
-      const mixedTypeEdges = mixedTypeRows.map((f) => [f.subject, f.object]);
-      const mixedSubClassEdges = mixedSubClassRows.map((f) => [f.subject, f.object]);
       for (const subj of subjCandidates) {
         const chain = findIsaChain2(subj, objVariants, mixedTypeEdges, mixedSubClassEdges, { maxHops: 2 });
         if (!chain) continue;
+        const chainRefusal = disjointRefusalFor(subj);
+        if (chainRefusal) return chainRefusal;
         const premises = chain.map(mixedFactForStep);
         if (premises.every(Boolean) && premises.some(isTaught)) {
           return { text: `yes \u2014 ${renderIsaChain(premises)}`, replace: true };
         }
       }
-      const { deriveDisjointViolations: deriveDisjointViolations2, DISJOINT_PREDICATE: DISJOINT_PREDICATE2 } = await Promise.resolve().then(() => (init_syllogise(), syllogise_exports));
-      const disjointRows = rows.filter((f) => f.predicate === DISJOINT_PREDICATE2 && isTaught(f));
       const negSubjectMatch = isaSubject.match(/^(.*\S)\s+not$/i);
       const negSubject = negSubjectMatch && [
         negSubjectMatch[0],
@@ -24263,14 +24385,16 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
         };
       }
       if (disjointRows.length) {
-        const directDisjoint = disjointRows.find((f) => subjCandidates.has(f.subject) && objVariants.has(f.object) || subjCandidates.has(f.object) && objVariants.has(f.subject));
-        if (directDisjoint) return { text: `no \u2014 ${renderFactLine(directDisjoint)}`, replace: true };
-        const disjointEdges = disjointRows.map((f) => [f.subject, f.object]);
-        const violations = deriveDisjointViolations2(chainTypeEdges, chainSubClassEdges, disjointEdges, { budget: 10 });
+        const violations = deriveDisjointViolations2(
+          chainTypeEdges.concat(chainSubClassEdges),
+          chainSubClassEdges,
+          disjointEdges,
+          { budget: 10 }
+        );
         for (const subj of subjCandidates) {
           const v = violations.find((vv) => vv.subject === subj && objVariants.has(vv.object));
           if (!v) continue;
-          const typeFact = chainTypeRows.find((f) => f.subject === v.subject && f.object === v.viaType);
+          const typeFact = chainTypeRows.concat(chainSubClassRows).find((f) => f.subject === v.subject && f.object === v.viaType);
           const disjointFact = disjointRows.find((f) => f.subject === v.viaClass && f.object === v.object || f.subject === v.object && f.object === v.viaClass);
           const parts = [typeFact, disjointFact].filter(Boolean).map(renderFactLine);
           return { text: `no \u2014 ${parts.length ? parts.join("; ") : `${v.viaClass} and ${v.object} are disjoint.`}`, replace: true };
@@ -24365,6 +24489,14 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
           replace: true,
           miss: true
           // still a MISS in the turn record — honest wording, not an answer
+        };
+      }
+      const converseHit = isa.filter((f) => subjCandidates.has(f.object) && objVariants.has(f.subject)).sort(byTrust)[0];
+      if (converseHit) {
+        return {
+          text: `I can't confirm that \u2014 what I know runs the other way: ${renderFactLine(converseHit)}. A kind doesn't reverse. If it's true, teach me: "every ${subjectWord} is a ${kindWord}".`,
+          replace: true,
+          miss: true
         };
       }
       if (!ent && !noun && !isPronoun(subjectWord) && !rows.some((f) => subjCandidates.has(f.subject) || subjCandidates.has(f.object))) {
@@ -24544,7 +24676,7 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
           }
         }
         if (rows.some(subjectMatch) && !envelope?.parsed) {
-          return { text: `I don't have a fact saying ${teachableSubjectOf(subject)} is ${adjective}.`, replace: true };
+          return { text: `I don't have a fact saying ${suggestibleSubjectPhrase(subject)} is ${adjective}.`, replace: true };
         }
         if (!envelope?.parsed) return unknownAdjectiveOffer(subject, adjective);
       }
@@ -24666,8 +24798,25 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
     capabilities: "see what /plan can plan over \u2014 built-in query tools and taught actions",
     syllogise: "materialize the entailed facts that follow from what's remembered about one term"
   };
+  var IMPACT_CHANGE_VERBS = "(?:changed?|modif(?:y|ied)|edits?|edited|touch(?:es|ed)?|updates?|updated|alters?|altered|deletes?|deleted|removes?|removed|drops?|dropped)";
   var IMPACT_PARAPHRASE_RE = new RegExp(
-    "^what\\s+(?:would|will|might|could|does|do)?\\s*(?:breaks?|fails?|is\\s+affected|are\\s+affected|gets?\\s+affected|be\\s+affected|is\\s+impacted|be\\s+impacted)\\s+if\\s+(?:i|we|you|one|someone)\\s+(?:changed?|modif(?:y|ied)|edits?|edited|touch(?:es|ed)?|updates?|updated|alters?|altered)\\s+(?:the\\s+)?(.+?)[?.!\\s]*$",
+    `^what\\s+(?:would|will|might|could|does|do)?\\s*(?:breaks?|fails?|happens?|stops?\\s+working|is\\s+affected|are\\s+affected|gets?\\s+affected|be\\s+affected|is\\s+impacted|be\\s+impacted)\\s+if\\s+(?:i|we|you|one|someone)\\s+${IMPACT_CHANGE_VERBS}\\s+(?:the\\s+)?(.+?)[?.!\\s]*$`,
+    "i"
+  );
+  var IMPACT_REVERSED_RE = new RegExp(
+    `^if\\s+(?:i|we|you|one|someone)\\s+${IMPACT_CHANGE_VERBS}\\s+(?:the\\s+)?(.+?),?\\s+what\\s+(?:would\\s+|will\\s+|might\\s+|could\\s+|does\\s+|do\\s+)?(?:breaks?|fails?|happens?|stops?\\s+working|is\\s+affected|are\\s+affected|gets?\\s+affected|be\\s+affected|would\\s+break|will\\s+break)[?.!\\s]*$`,
+    "i"
+  );
+  var IMPACT_AFFECTED_BY_RE = new RegExp(
+    "^what\\s+(?:is|are|gets?|would\\s+be|will\\s+be)\\s+(?:affected|impacted|broken)\\s+(?:by|when|if)\\s+(?:i\\s+|we\\s+|you\\s+)?(?:chang(?:e|es|ing)|edit(?:s|ing)?|modif(?:y|ies|ying)|touch(?:es|ing)?|updat(?:e|es|ing)|delet(?:e|es|ing)|remov(?:e|es|ing)|a\\s+change\\s+to)\\s+(?:the\\s+)?(.+?)[?.!\\s]*$",
+    "i"
+  );
+  var IMPACT_SAFE_CHANGE_RE = new RegExp(
+    "^(?:(?:can|could)\\s+(?:i|we|you|one|someone)\\s+safely|is\\s+it\\s+safe\\s+to)\\s+(?:change|edit|modify|touch|update|alter|delete|remove|drop)\\s+(?:the\\s+)?(.+?)[?.!\\s]*$",
+    "i"
+  );
+  var IMPACT_NOUN_RE = new RegExp(
+    "^(?:what(?:'s|\\s+is)\\s+the\\s+)?(?:blast\\s+radius|impact)\\s+(?:of|for)\\s+(?:chang(?:ing|es)\\s+|editing\\s+|modifying\\s+|touching\\s+|updating\\s+|deleting\\s+|removing\\s+)?(?:the\\s+)?(.+?)[?.!\\s]*$",
     "i"
   );
   var BASE_QUALIFIER_SRC = "as\\s+(?:its|the|an?)?\\s*(?:base\\s+class|parent\\s+class|base|parent)";
