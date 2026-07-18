@@ -2,6 +2,32 @@
 
 Status: RESEARCH/DESIGN — not yet implemented. Nothing in this document is live code.
 
+## Build status (2026-07-18, paused mid-build on operator instruction)
+
+The design (this document) is committed on `main`. Code build started the same session, staged per
+§12's steps, then paused deliberately — not a blocker, the operator said stop.
+
+- **Committed on `main`**: this document only (`339f617`).
+- **In progress, uncommitted, in a stopped-but-not-removed worktree** — step 1 (world + grid
+  substrate) of §12, roughly a third done:
+  - `worktree-agent-a60844992f9b69653` at
+    `.claude/worktrees/agent-a60844992f9b69653` (branched from `6e1d3b1`, predates this doc's own
+    commit on `main` — reconcile by rebase/cherry-pick when resuming, not a straight merge).
+  - Done there: `src/domain/spider-fly-world.mjs` (pure grid geometry, the seed taxonomy, the
+    static fact/rule/meta row generators — §3/§4/§7), `scripts/gen-spider-fly-world.mjs` (writes
+    `corpus/worlds/src/spider-fly.jsonl`, 479 rows), and a completed `npm run gen:worlds-pack` run
+    (`corpus/worlds/shards/spider-fly.jsonl.gz` at 2,829 bytes gzipped, well under the 32KB budget;
+    `corpus/worlds/index.json.gz`/`manifest.json` updated to carry it alongside `ashcombe-hall`).
+  - Not yet started there: the actual turn engine (`src/services/spider-fly.mjs` — pathfinding,
+    visibility/belief, the fly's evasion scoring, the ecology pass) and its tests. The agent was
+    about to start that file when stopped.
+- **Not started**: §12 steps 4-8 (chat integration, rendering, pages, the guess-number retrofit).
+
+**To resume**: dispatch a fresh worktree-isolated agent continuing from
+`worktree-agent-a60844992f9b69653`'s work (check it's still there with `git worktree list` first,
+per this project's own standing lesson in `CLAUDE.md` about stale worktrees), or start step 1 over —
+it's small enough that redoing it is cheap if the branch has aged out.
+
 **Revised 2026-07-18, same session.** A second research pass checked three things this document
 originally left open, and the operator settled three more:
 
