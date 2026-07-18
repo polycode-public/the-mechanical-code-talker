@@ -104,10 +104,10 @@ export const CLI_VERBS = [
     mode: "syllogise",
     errorLabel: "syllogise",
     usage: "tmct syllogise [--repo <abs>]",
-    prose: ["speculative inference (offline maintenance job): forward-"],
+    prose: ["speculative inference (offline maintenance job): a deterministic"],
     flags: [
-      { flag: "[--depth <n>] [--budget <n>]", prose: ["chain the memory's rdfs:subClassOf closure, materialising"] },
-      { flag: "[--config <path>]", prose: ["bounded, low-trust, retractable entailed facts (never on the chat path)"] },
+      { flag: "[--depth <n>] [--budget <n>]", prose: ["forward-chaining materialisation over OWL 2 RL rule kernels"] },
+      { flag: "[--config <path>]", prose: ["(the classical syllogism among them), writing bounded, low-trust,", "retractable entailed facts (never on the chat path)"] },
     ],
   },
   {

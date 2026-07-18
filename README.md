@@ -462,9 +462,11 @@ provenance** rather than silently picking a winner.
 ### Speculative inference (a maintenance job, not a chat cost)
 
 `tmct syllogise [--depth n] [--budget n]` is an offline, bounded, deterministic
-batch that forward-chains the memory's `rdfs:subClassOf` closure into new
-**entailed** facts. They are low-trust and retractable, never outranking a
-stated fact, and this never runs on the chat's hot path.
+batch: a forward-chaining materialisation over the memory's OWL 2 RL rule
+kernels (the classical syllogism is one of them, and the verb keeps Aristotle's
+broader sense; see the bibliography) that writes new **entailed** facts. They
+are low-trust and retractable, never outranking a stated fact, and this never
+runs on the chat's hot path.
 
 ## Install & use
 
@@ -607,9 +609,10 @@ before you switch any repo's `tmct.toml` over to it:
 inference" above:
 
 ```output:help:syllogise
-  tmct syllogise [--repo <abs>]  speculative inference (offline maintenance job): forward-
-       [--depth <n>] [--budget <n>]  chain the memory's rdfs:subClassOf closure, materialising
-       [--config <path>]       bounded, low-trust, retractable entailed facts (never on the chat path)
+  tmct syllogise [--repo <abs>]  speculative inference (offline maintenance job): a deterministic
+       [--depth <n>] [--budget <n>]  forward-chaining materialisation over OWL 2 RL rule kernels
+       [--config <path>]       (the classical syllogism among them), writing bounded, low-trust,
+                               retractable entailed facts (never on the chat path)
 ```
 
 `tmct viz` renders the memory graph as the ledger explorer — a single,

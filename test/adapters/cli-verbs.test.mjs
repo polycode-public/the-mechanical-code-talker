@@ -48,6 +48,13 @@ test("the unknown-invocation line quotes what was typed and reads as one sentenc
   assert.match(message, /, or `cli digest …`\.\n$/);
 });
 
+test("the syllogise help names the mechanism, not just the verb: a forward-chaining materialisation over OWL 2 RL rules", () => {
+  const usage = renderUsage();
+  assert.match(usage, /forward-chaining materialisation/, "the mechanism's own name");
+  assert.match(usage, /OWL 2 RL/, "the rule family it materialises over");
+  assert.match(usage, /syllogism/, "the classical case is placed inside the broader mechanism");
+});
+
 test("usage renders two columns: the verb at column 2, its prose at column 31", () => {
   const lines = renderUsage().split("\n");
   assert.equal(lines[0], "  tmct".padEnd(31) + "interactive chat (the headline surface)");

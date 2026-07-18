@@ -692,6 +692,11 @@ extreme. Fix site: `ask.mjs` `parseSuperlative`; a chat-lane grammar change with
 
 ## 11. Decision — `syllogise`, a published CLI verb
 
+**Status: DELIVERED (recommended path).** The verb keeps its name; the CLI help and the README's
+speculative-inference section now name the mechanism (a deterministic forward-chaining
+materialisation over OWL 2 RL rule kernels, the classical syllogism among them), pinned in
+`test/adapters/cli-verbs.test.mjs`.
+
 `syllogise` is a forward-chaining fixpoint (its own header says so, `syllogise.mjs:1-4`), and only
 some of its rules are genuine syllogisms (`scm-sco` is Barbara; `cls-svf1` and the cardinality rules
 are not). It is also a published CLI surface (`npx tmct syllogise`, wired at `cli-verbs.mjs:104`), so
