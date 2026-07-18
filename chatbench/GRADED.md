@@ -316,7 +316,11 @@ source sites/line spans, params/returns/raises/decorators/self-fields, per-modul
 provenance commit ids, and the Session/Utterance/Fact memory vocabulary the recall
 path speaks). "Holds exactly these facts" stays true of the fuller enumeration.
 This is a **harness correction to judge INPUT, not a product change** (the lineage
-of cycle-2's H1a/H1b). Every judged row is stamped with `judge.contextVersion`
-(`FIXTURE_CONTEXT_VERSION`, currently `fixture-context-v2`) so a cross-cycle
-comparison can state which context grain scored it — and cycle 4 is a groundedness
-**re-baseline**: v1-context means are not comparable to v2-context means.
+of cycle-2's H1a/H1b). The 2.6.0 cycle deepened it once more: `fixture-context-v3`
+enumerates the schema-doc GLOSSES verbatim (from `src/tools/schema-docs.mjs`, the
+same source the graph ingests), because a truthful schema answer to "what does
+tests mean" was zeroed as invention for want of the gloss text. Every judged row
+is stamped with `judge.contextVersion` (`FIXTURE_CONTEXT_VERSION`, currently
+`fixture-context-v3`) so a cross-cycle comparison can state which context grain
+scored it — and each grain bump is a groundedness **re-baseline** on the affected
+cases: v1 means are not comparable to v2, nor v2 to v3 on the naming cells.

@@ -59,6 +59,7 @@ import {
   gradeReliability, gradedRollup, renderRollup, templateLaneLint,
   timingRollup, renderTimings,
 } from "./graded.mjs";
+import { CLASS_DOCS, PREDICATE_DOCS } from "../src/tools/schema-docs.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
@@ -126,15 +127,27 @@ export const FIXTURE_CONTEXT = [
   "- cochange (change-coupled) edges: app/lib/a.mjs <-> app/lib/b.mjs (weight 3) and app/lib/a.mjs <-> app/lib/c.mjs (weight 2).",
   "- Commits: abc1234 (id commit-abc; author Ada Lovelace; date 2026-06-28T12:00:00+00:00; message \"Render the widget with full mode\") is the only commit ENTITY, touching app/lib/a.mjs (touches, module grain) and Widget.render (touchesSymbol, symbol grain). Additionally, per-module PROVENANCE (derived_from) records commit ids: app/lib/a.mjs derives from git:abc1234 AND git:def5678, app/lib/b.mjs from git:abc1234 — so saying app/lib/a.mjs was \"touched by 2 commit(s)\" or citing git:abc1234, git:def5678 in its provenance is TRUTHFUL; def5678 simply has no commit entity of its own to describe.",
   "- Nothing else exists: no zebra.mjs, no nonExistentFn, no commit references beyond abc1234 and def5678.",
-  "- Like every real tmct graph artifact, it also documents its OWN vocabulary (schema classes like Module/Class/Function/Method/Attribute/Commit/GlobalVariable and predicates like imports/calls/tests/defines/touches/contains/inherits/cochange/reexports), so questions about what a term means are answerable from the graph.",
+  // The schema-doc glosses, enumerated VERBATIM from the same source the graph
+  // ingests (src/tools/schema-docs.mjs) — a truthful "what does <term> mean"
+  // answer quotes exactly this text, so the judge must be able to see it.
+  "- Like every real tmct graph artifact, it also documents its OWN vocabulary as first-class schema individuals. An answer to \"what does <term> mean\" that quotes one of the glosses below is TRUTHFUL, grounded schema documentation (not invention):",
+  ...CLASS_DOCS.map((c) => `  - class ${c.name}: ${c.description}`),
+  ...PREDICATE_DOCS.map((p) => (p.kind === "attribute"
+    ? `  - attribute ${p.prop}: ${p.description}`
+    : `  - predicate ${p.kind} (${p.prop}): ${p.description}`)),
   "- MEMORY & SESSION vocabulary (the recall path speaks this; a session-mode answer that cites it is TRUTHFUL, not invented): each chat session is folded into the graph as a first-class `Session` individual whose id is a uuidv7 (a hex id beginning `019f…`), timestamped with an ISO date; each recorded turn is an `Utterance`; each asserted rule (\"every module is a component\") becomes a reified `Fact` individual carrying an rdfs:subClassOf-style relation (e.g. `function rdfs:subClassOf component`) with its own provenance. A recall answer (\"noted — remembered 1 fact: …\", \"you asked before …\") renders these remembered Session/Utterance/Fact frames — so citing a session id, a prior date, or a stored fact is grounded in the memory graph even though it is not a code entity above.",
 ].join("\n");
 
 /** Stamped onto every judged row's judge object (like PROMPT_VERSION pins the
  *  prompt) so a cross-cycle comparison can state which context grain scored it.
  *  Bump when FIXTURE_CONTEXT / EMPTY_CONTEXT change grain (v1 = cycle-1/2 module
- *  grain; v2 = cycle-4 META-1 full symbol + memory-vocabulary enumeration). */
-export const FIXTURE_CONTEXT_VERSION = "fixture-context-v2";
+ *  grain; v2 = cycle-4 META-1 full symbol + memory-vocabulary enumeration;
+ *  v3 = the schema-doc glosses enumerated verbatim — the same META-1-class
+ *  judge-input correction one grain deeper: a truthful schema answer to
+ *  "what does tests mean" was zeroed for want of the gloss text). Like every
+ *  context-grain bump, v3 re-baselines groundedness on the affected naming
+ *  cases: v2-context means are not comparable to v3-context means there. */
+export const FIXTURE_CONTEXT_VERSION = "fixture-context-v3";
 
 export const EMPTY_CONTEXT =
   "The graph under discussion is EMPTY (a fresh repo with no index): zero entities, zero edges. " +
