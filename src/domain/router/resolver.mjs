@@ -56,8 +56,10 @@ export const UNMAPPED_KINDS = Object.freeze({
 
 // ---- capabilities the NL surface cannot reach today (named, not accidental) ---
 // A declared capability with no NL/command/frame path is a routing gap and must be tagged
-// here with the reason. Every capability is currently reachable, so this is empty.
-export const NOT_NL_REACHABLE = Object.freeze({});
+// here with the reason.
+export const NOT_NL_REACHABLE = Object.freeze({
+  tmct_related: "the SKOS synonym/related surface is served by the chat lane's own recogniser over the memory graph; a router frame for it needs memory-term binding, which resolveObject (code-graph-only) does not prove yet",
+});
 
 // ---- imperative intent FRAMES (fills what the relational grammar and command register
 // both miss). regex -> { topic, arg | noArg }. Ordered: first match wins.

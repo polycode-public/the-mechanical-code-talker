@@ -165,9 +165,11 @@ test("resolver: imperative frames fill what the grammar + command register miss 
 
 // ---- widened imperative reach + tmct_calls reachability -----------------------
 
-test("imperative reach: tmct_calls is NL-reachable via a dedicated edge-dump frame (NOT_NL_REACHABLE emptied)", async () => {
-  // the old routing gap is closed: no orphan tag remains, and the cap is reached.
-  assert.deepEqual(NOT_NL_REACHABLE, {}, "no capability is tagged unreachable any more");
+test("imperative reach: tmct_calls is NL-reachable via a dedicated edge-dump frame; only the memory-graph SKOS view stays tagged", async () => {
+  // every code-graph capability is reachable; the one standing tag is
+  // tmct_related, whose binding lives in the memory graph the resolver's
+  // code-graph binding oracle does not read.
+  assert.deepEqual(Object.keys(NOT_NL_REACHABLE), ["tmct_related"], "tmct_related is the only tagged capability");
   assert.ok(reachableCapabilityNames().has("tmct_calls"), "tmct_calls is reachable via a frame");
   assert.equal(backwardChain("calls").name, "tmct_calls", "the 'calls' topic backward-chains to tmct_calls");
 

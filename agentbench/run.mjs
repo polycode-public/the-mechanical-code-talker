@@ -94,9 +94,32 @@ export async function loadFixtureLabels() {
   return new Set(graph.individuals.map((i) => String(i.label)));
 }
 
+/** The conversational-memory fixture the run context seeds beside the code
+ *  graph: a synonym pair plus a relatedTo edge, the facts tmct_related (the
+ *  SKOS view) reads. Terms are deliberately non-code words so no code-graph
+ *  case can collide with them. */
+const memoryFact = (id, subject, predicate, object) => ({
+  id, class: "Fact",
+  attributes: [
+    { prop: "rdf:subject", key: "subject", value: subject },
+    { prop: "rdf:predicate", key: "predicate", value: predicate },
+    { prop: "rdf:object", key: "object", value: object },
+    { prop: "mgx:factProvenance", key: "provenance", value: "corpus:bench-fixture" },
+  ],
+});
+export const MEMORY_FIXTURE = Object.freeze({
+  individuals: [
+    memoryFact("fact:bench-1", "couch", "mgx:synonym", "sofa"),
+    memoryFact("fact:bench-2", "sofa", "mgx:relatedTo", "cushion"),
+  ],
+  objectProperties: [],
+});
+
 /** Build the run context the driver receives. Materializes the ingested fixture
  *  to a throwaway .tmct/graph.json (mirroring chatbench's createRunnerDeps and a
- *  real graph writer's pipeline) so the REAL dispatchTool can resolve entities.
+ *  real graph writer's pipeline) so the REAL dispatchTool can resolve entities,
+ *  plus a seeded .tmct/memory/graph.json (MEMORY_FIXTURE) so the memory-graph
+ *  capability (tmct_related) can ground a positive case.
  *  Returns { ctx, cleanup } — the caller MUST await cleanup(). */
 export async function createRunCtx() {
   const { dispatchTool } = await import(join(ROOT, "src", "tools", "server.mjs"));
@@ -107,9 +130,10 @@ export async function createRunCtx() {
   const ingested = ingestSchemaDocs(JSON.parse(await readFile(FIXTURE, "utf8")));
   const graphJson = JSON.stringify(ingested);
   const dir = await mkdtemp(join(tmpdir(), "tmct-agentbench-"));
-  await mkdir(join(dir, ".tmct"), { recursive: true });
+  await mkdir(join(dir, ".tmct", "memory"), { recursive: true });
   const graphFile = join(dir, ".tmct", "graph.json");
   await writeFile(graphFile, graphJson);
+  await writeFile(join(dir, ".tmct", "memory", "graph.json"), JSON.stringify(MEMORY_FIXTURE));
   const config = { graphFile };
 
   // The parsed graph, loaded ONCE, so the resolver/planner can BIND entities

@@ -41,6 +41,7 @@ export const PRECOND = Object.freeze({
   graphLoaded: "cap:graph-loaded", // a graph artifact is present + parseable
   resolves: "cap:resolves", // { param, as } — the slot binds to an entity of kind `as`
   anyPresent: "cap:any-present", // { params } — at least one of these slots is provided
+  memoryFacts: "cap:memory-facts", // the conversational-memory store holds relation facts for the term
 });
 
 // ---- capability builder (returns PLAIN FROZEN data) -------------------------
@@ -57,6 +58,11 @@ const resolves = (paramName, as) =>
 /** any-present(params) — search-style disjunction (query OR kind must be given). */
 const anyPresent = (params) =>
   Object.freeze({ type: VOCAB.Precondition, pred: PRECOND.anyPresent, params: Object.freeze([...params]) });
+/** memory-facts — the memory graph holds mgx:synonym / mgx:relatedTo / mgx:similarTo
+ *  facts for the term. The memory-graph sibling of graph-loaded: the SKOS view
+ *  answers from the conversational-memory store and misses honestly without it,
+ *  with or without a code-map graph. */
+const memoryFacts = () => Object.freeze({ type: VOCAB.Precondition, pred: PRECOND.memoryFacts });
 
 /** Add-effect: after the call the agent knows `topic` about `?of`. */
 const knows = (topic, ofParam = null) =>
@@ -80,7 +86,8 @@ function capability({ name, label, question, params = [], preconditions = [], ad
 // Arg keys verified against src/tools/server.mjs `dispatchTool`'s switch: describe/callers/
 // callees/tests/history/… take `symbol`; impact/exports take `module`; members/
 // subclasses take `class`; search takes `query` (+ optional kind/name/decorator);
-// architecture takes an optional `package`; untested takes nothing.
+// architecture takes an optional `package`; untested takes nothing; related
+// takes `term` (a memory-graph concept term).
 
 const CAPABILITIES = Object.freeze([
   capability({
@@ -177,6 +184,12 @@ const CAPABILITIES = Object.freeze([
     params: [param("package", KINDS.Package, { required: false })],
     preconditions: [graphLoaded()],
     add: [knows("architecture", "package")],
+  }),
+  capability({
+    name: "tmct_related", label: "related", question: "a term's synonyms and related concepts (the SKOS view over the conversational-memory graph)",
+    params: [param("term", KINDS.Query, { note: "a concept term, matched against memory relation facts rather than resolved in the code graph" })],
+    preconditions: [memoryFacts()],
+    add: [knows("related", "term")],
   }),
 ]);
 

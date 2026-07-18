@@ -57,6 +57,7 @@ const INTENTS = [
   { re: /\bhistory\b|who\s+changed\b|commits?\s+(that\s+)?touch/i, tool: "tmct_history", arg: "symbol" },
   { re: /\bsignature\b/i, tool: "tmct_signature", arg: "symbol" },
   { re: /\bcochang|change[- ]coupl/i, tool: "tmct_cochanges", arg: "symbol" },
+  { re: /\bsynonyms?\b|another\s+word\s+for\b|\brelated\s+(?:words?|concepts?|to)\b/i, tool: "tmct_related", arg: "term" },
   { re: /\bdescribe\b|what\s+is\b|tell\s+me\s+about\b|definition\s+of\b/i, tool: "tmct_describe", arg: "symbol" },
   { re: /\bsearch\b|\bfind\b|look\s+for\b/i, tool: "tmct_search", arg: "query" },
 ];
@@ -81,6 +82,7 @@ function proofFor(tool, input) {
     if (pre.pred === PRECOND.graphLoaded) steps.push({ step: "precondition", pred: pre.pred, ok: true });
     else if (pre.pred === PRECOND.resolves) steps.push({ step: "precondition", pred: pre.pred, param: pre.param, value: input[pre.param] ?? null, ok: true });
     else if (pre.pred === PRECOND.anyPresent) steps.push({ step: "precondition", pred: pre.pred, params: pre.params, ok: pre.params.some((k) => input[k]) });
+    else steps.push({ step: "precondition", pred: pre.pred, ok: true }); // held: dispatch succeeded
   }
   for (const eff of effectsOf(tool).add) steps.push({ step: "effect", pred: eff.pred, topic: eff.topic, of: eff.of });
   return steps;

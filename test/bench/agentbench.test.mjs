@@ -69,11 +69,18 @@ test("registry: every capability is read-only — empty delete-list, add-list is
   }
 });
 
-test("registry: every capability carries a graph-loaded precondition (the safety gate)", () => {
+test("registry: every capability carries its store's safety-gate precondition — graph-loaded for code-graph queries, memory-facts for the memory-graph view", () => {
   for (const c of capabilities()) {
     const preds = c.preconditions.map((p) => p.pred);
-    assert.ok(preds.includes(PRECOND.graphLoaded), `${c.name} requires graph-loaded`);
+    assert.ok(
+      preds.includes(PRECOND.graphLoaded) || preds.includes(PRECOND.memoryFacts),
+      `${c.name} requires graph-loaded or memory-facts`,
+    );
   }
+  // the memory-graph view answers with or without a code-map graph, so it
+  // carries memory-facts INSTEAD of graph-loaded, never both.
+  const related = preconditionsOf("tmct_related").map((p) => p.pred);
+  assert.deepEqual(related, [PRECOND.memoryFacts]);
 });
 
 test("registry: accessors resolve — byName / preconditionsOf / effectsOf / parametersOf", () => {
