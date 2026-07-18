@@ -115,6 +115,21 @@ default: 10 cases per CEFR grade plus `cases.jsonl`'s 49 hand-authored capabilit
 cases, regraded into real cells, **109 cases** across 12 cells. `cases.jsonl` itself
 was deleted — its content lives in `graded-pool.jsonl` now. Nothing was dropped; the
 full pool is a `--pool` flag away.
+2026-07-17 (ladder reform) — the two CEFR P-axis horizon cells appended (3
+`pragmatic-implicature` + 2 `cross-turn-composition` cases), **114 cases**.
+2026-07-18 (2.6.0 arc boundary) — 14 hand-authored capability cases appended,
+recorded in `BENCHMARK_CEFR_ENGLISH_2.6.0.md`: `be-honest-empty-v2` (supersedes
+`be-honest-empty`'s frozen wording expectation — the old case stays, per the
+append-only rule; from here the v2 row is the live expectation and the v1 row's
+tier-1 failure is a historical artifact), seven regression pins for the 2.5.0
+persona sweep's confident-wrongs (`hm-disjoint-chain-veto`,
+`gq-impact-blast-radius`, `gq-impact-paraphrases`, `am-stale-modifier-multi`,
+`conv-vocab-openers`, `conv-board-read`, `conv-goal-stack-solve`,
+`conv-goal-conjunction`), and five for the 2.6.0 capabilities
+(`conv-guess-guesser`, `conv-guess-thinker`, `hm-guess-contradiction`,
+`hm-pack-and-word-relations`, `gq-needs-test-inversion`). **128 cases.**
+Session-mode cases may carry a case-level `env` (e.g. `TMCT_GAME_SECRET` pins
+the thinker-seat secret so the replay is deterministic).
 Regenerate with
 `node chatbench/generate-graded.mjs` after any engine change lands, since the
 generator replays every item through the live engine (the frontier marks track
