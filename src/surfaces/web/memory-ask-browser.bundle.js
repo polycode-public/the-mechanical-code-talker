@@ -7606,6 +7606,7 @@ ${bodyText}` : graphText, tier });
     CAX_MAXC0_RULE_CONFIDENCE: () => CAX_MAXC0_RULE_CONFIDENCE,
     CLS_SVF1_RULE: () => CLS_SVF1_RULE,
     CLS_SVF1_RULE_CONFIDENCE: () => CLS_SVF1_RULE_CONFIDENCE,
+    DEFAULT_MAX_ENVIRONMENTS: () => DEFAULT_MAX_ENVIRONMENTS,
     DISJOINT_PREDICATE: () => DISJOINT_PREDICATE,
     ENTAILED_DISJOINT_PROVENANCE: () => ENTAILED_DISJOINT_PROVENANCE,
     ENTAILED_PROVENANCE: () => ENTAILED_PROVENANCE,
@@ -7619,10 +7620,12 @@ ${bodyText}` : graphText, tier });
     SUBCLASS_PREDICATE: () => SUBCLASS_PREDICATE,
     TYPE_PREDICATE: () => TYPE_PREDICATE,
     buildCardinalityRestrictions: () => buildCardinalityRestrictions,
+    buildRelevanceFrontier: () => buildRelevanceFrontier,
     deriveDisjointViolations: () => deriveDisjointViolations,
     deriveSomeValuesFromApplication: () => deriveSomeValuesFromApplication,
     deriveSomeValuesFromSubsumption: () => deriveSomeValuesFromSubsumption,
     deriveSubClassClosure: () => deriveSubClassClosure,
+    deriveSubClassClosureDelta: () => deriveSubClassClosureDelta,
     deriveTypePropagation: () => deriveTypePropagation,
     entailedTrustFrom: () => entailedTrustFrom,
     findConsistencyViolations: () => findConsistencyViolations,
@@ -7700,6 +7703,65 @@ ${bodyText}` : graphText, tier });
     }
     return derived;
   }
+  function deriveSubClassClosureDelta(allEdges, deltaEdges, { depth = 32, budget = 50, focus = null } = {}) {
+    const present = /* @__PURE__ */ new Set();
+    const succ = /* @__PURE__ */ new Map();
+    const pred = /* @__PURE__ */ new Map();
+    for (const [a, b] of allEdges || []) {
+      if (!a || !b || a === b) continue;
+      present.add(`${a}${SEP}${b}`);
+      if (!succ.has(a)) succ.set(a, /* @__PURE__ */ new Set());
+      succ.get(a).add(b);
+      if (!pred.has(b)) pred.set(b, /* @__PURE__ */ new Set());
+      pred.get(b).add(a);
+    }
+    let delta = [];
+    const seenDelta = /* @__PURE__ */ new Set();
+    for (const [a, b] of deltaEdges || []) {
+      if (!a || !b || a === b) continue;
+      const key = `${a}${SEP}${b}`;
+      if (seenDelta.has(key)) continue;
+      seenDelta.add(key);
+      delta.push([a, b]);
+    }
+    const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
+    const inFocus = (a, b, c) => !focusSet || focusSet.has(a) || focusSet.has(b) || focusSet.has(c);
+    const derived = [];
+    const derivedKeys = /* @__PURE__ */ new Set();
+    for (let round2 = 0; round2 < depth && delta.length; round2 += 1) {
+      const additions = [];
+      const consider = (a, b, c) => {
+        if (a === c) return;
+        const key = `${a}${SEP}${c}`;
+        if (present.has(key) || derivedKeys.has(key)) return;
+        if (!inFocus(a, b, c)) return;
+        additions.push([a, b, c, key]);
+      };
+      for (const [a, b] of delta) {
+        for (const c of succ.get(b) || []) consider(a, b, c);
+        for (const z of pred.get(a) || []) consider(z, a, b);
+      }
+      if (!additions.length) break;
+      additions.sort((x, y) => x[0].localeCompare(y[0]) || x[2].localeCompare(y[2]) || x[1].localeCompare(y[1]));
+      let progressed = false;
+      const nextDelta = [];
+      for (const [a, b, c, key] of additions) {
+        if (derivedKeys.has(key)) continue;
+        if (derived.length >= budget) break;
+        derivedKeys.add(key);
+        derived.push({ subject: a, object: c, via: b });
+        if (!succ.has(a)) succ.set(a, /* @__PURE__ */ new Set());
+        succ.get(a).add(c);
+        if (!pred.has(c)) pred.set(c, /* @__PURE__ */ new Set());
+        pred.get(c).add(a);
+        nextDelta.push([a, c]);
+        progressed = true;
+      }
+      if (derived.length >= budget || !progressed) break;
+      delta = nextDelta;
+    }
+    return derived;
+  }
   function buildAncestorCloser(subClassEdges) {
     const succ = /* @__PURE__ */ new Map();
     for (const [a, b] of subClassEdges || []) {
@@ -7722,11 +7784,41 @@ ${bodyText}` : graphText, tier });
       return seen;
     };
   }
-  function deriveTypePropagation(typeEdges, subClassEdges, { budget = 50, focus = null } = {}) {
+  function buildDescendantCloser(subClassEdges) {
+    return buildAncestorCloser((subClassEdges || []).map(([a, b]) => [b, a]));
+  }
+  function buildRelevanceFrontier(rows, seedTerms) {
+    const subClassEdges = [];
+    const typeEdges = [];
+    const onPropertyOf = /* @__PURE__ */ new Map();
+    const someValuesFromOf = /* @__PURE__ */ new Map();
+    for (const r of rows || []) {
+      if (!r || !r.subject || !r.predicate || !r.object) continue;
+      if (isSubClassOf(r.predicate)) subClassEdges.push([r.subject, r.object]);
+      else if (isType(r.predicate)) typeEdges.push([r.subject, r.object]);
+      else if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
+      else if (isSomeValuesFrom(r.predicate)) someValuesFromOf.set(r.subject, r.object);
+    }
+    const descendantsOf2 = buildDescendantCloser(subClassEdges);
+    const affectedClasses = /* @__PURE__ */ new Set();
+    for (const t of seedTerms || []) {
+      const n = normFactTerm(t);
+      if (!n) continue;
+      affectedClasses.add(n);
+      for (const d of descendantsOf2(n)) affectedClasses.add(d);
+    }
+    const frontier = new Set(affectedClasses);
+    for (const [x, c] of typeEdges) if (affectedClasses.has(c)) frontier.add(x);
+    for (const [restriction, target] of someValuesFromOf) {
+      if (onPropertyOf.has(restriction) && affectedClasses.has(target)) frontier.add(restriction);
+    }
+    return frontier;
+  }
+  function deriveTypePropagation(typeEdges, subClassEdges, { budget = 50, focus = null, presentTypeEdges = typeEdges } = {}) {
     const ancestorsOf2 = buildAncestorCloser(subClassEdges);
     const present = /* @__PURE__ */ new Set();
     const seenTypeEdge = /* @__PURE__ */ new Set();
-    for (const [x, c] of typeEdges || []) if (x && c) present.add(`${x}${SEP}${c}`);
+    for (const [x, c] of presentTypeEdges || []) if (x && c) present.add(`${x}${SEP}${c}`);
     const focusSet = focus instanceof Set ? focus.size ? focus : null : normalizeFocus(focus);
     const inFocus = (x, c, d) => !focusSet || focusSet.has(x) || focusSet.has(c) || focusSet.has(d);
     const candidates = [];
@@ -8022,8 +8114,17 @@ ${bodyText}` : graphText, tier });
     }
     return derived;
   }
-  async function syllogise(repoDir, { depth = 32, budget = 50, focus = null, store } = {}) {
+  async function syllogise(repoDir, {
+    depth = 32,
+    budget = 50,
+    focus = null,
+    expandFocus = false,
+    maxEnvironments = DEFAULT_MAX_ENVIRONMENTS,
+    full = false,
+    store
+  } = {}) {
     const { loadMemory: loadMemory2, readFactRows: readFactRows2, appendFacts: appendFacts2 } = requireStore(store, ["loadMemory", "readFactRows", "appendFacts"], "syllogise");
+    const stateFnsPresent = typeof store?.loadSyllogiseState === "function" && typeof store?.saveSyllogiseState === "function";
     const memory = await loadMemory2(repoDir);
     const rows = readFactRows2(memory);
     const subClassEdges = rows.filter((r) => isSubClassOf(r.predicate)).map((r) => [r.subject, r.object]);
@@ -8043,22 +8144,64 @@ ${bodyText}` : graphText, tier });
       const target = someValuesFromOf.get(restriction);
       if (target) restrictionEdges.push({ restriction, property, target });
     }
-    const normalizedFocus = normalizeFocus(focus);
+    const callerFocus = normalizeFocus(focus);
+    const normalizedFocus = expandFocus && callerFocus ? buildRelevanceFrontier(rows, [...callerFocus]) : callerFocus;
+    const state = normalizedFocus === null && stateFnsPresent ? await store.loadSyllogiseState(repoDir) : null;
+    const currentIdSet = new Set(rows.map((r) => r.id));
+    const removedSinceLast = Array.isArray(state?.factIds) ? state.factIds.filter((id) => !currentIdSet.has(id)) : [];
+    const mode = state && Array.isArray(state.factIds) && !removedSinceLast.length && !full ? "delta" : "full";
+    const watermark = mode === "delta" ? new Set(state.factIds) : null;
+    const deltaRows = mode === "delta" ? rows.filter((r) => !watermark.has(r.id)) : rows;
+    const deltaSize = deltaRows.length;
     const trustByTriple = /* @__PURE__ */ new Map();
     for (const r of rows) trustByTriple.set(`${r.subject}${SEP}${r.predicate}${SEP}${r.object}`, r.trust);
     const premiseTrust = (s, p, o) => trustByTriple.get(`${s}${SEP}${p}${SEP}${o}`);
     const hasTriple = (s, p, o) => trustByTriple.has(`${s}${SEP}${p}${SEP}${o}`);
     const numericOnly = (arr) => arr.filter((t) => typeof t === "number");
-    const scmDerived = deriveSubClassClosure(subClassEdges, { depth, budget, focus: normalizedFocus });
+    const deltaEmpty = mode === "delta" && !deltaRows.length;
+    const deltaSubEdges = mode === "delta" ? deltaRows.filter((r) => isSubClassOf(r.predicate)).map((r) => [r.subject, r.object]) : [];
+    const scmDerived = mode === "delta" ? deltaSubEdges.length ? deriveSubClassClosureDelta(subClassEdges, deltaSubEdges, { depth, budget, focus: normalizedFocus }) : [] : deriveSubClassClosure(subClassEdges, { depth, budget, focus: normalizedFocus });
     const enlargedSubClassEdges = subClassEdges.concat(scmDerived.map((d) => [d.subject, d.object]));
+    let kernelFocus = normalizedFocus;
+    let frontier = null;
+    if (mode === "delta" && !deltaEmpty) {
+      const frontierRows = rows.concat(scmDerived.map((d) => ({ subject: d.subject, predicate: SUBCLASS_PREDICATE, object: d.object })));
+      const seeds = [];
+      for (const r of deltaRows) seeds.push(r.subject, r.object);
+      frontier = buildRelevanceFrontier(frontierRows, seeds);
+      kernelFocus = frontier;
+    }
+    const inFrontier = (t) => !frontier || frontier.has(t);
+    const caxTypeEdges = frontier ? typeEdges.filter(([x, c]) => inFrontier(x) || inFrontier(c)) : typeEdges;
+    const deltaDwEndpoints = /* @__PURE__ */ new Set();
+    if (frontier) {
+      for (const r of deltaRows) {
+        if (isDisjoint(r.predicate)) {
+          deltaDwEndpoints.add(r.subject);
+          deltaDwEndpoints.add(r.object);
+        }
+      }
+    }
+    const dwAncestorsOf = frontier && deltaDwEndpoints.size ? buildAncestorCloser(enlargedSubClassEdges) : null;
+    const dwTypeEdges = frontier ? typeEdges.filter(([x, c]) => inFrontier(x) || inFrontier(c) || dwAncestorsOf && [...dwAncestorsOf(c)].some((a) => deltaDwEndpoints.has(a))) : typeEdges;
+    const deltaRestrictionProperties = /* @__PURE__ */ new Set();
+    if (frontier) {
+      for (const r of deltaRows) {
+        if (isOnProperty(r.predicate) || isSomeValuesFrom(r.predicate)) {
+          const property = onPropertyOf.get(r.subject);
+          if (property) deltaRestrictionProperties.add(normFactTerm(property));
+        }
+      }
+    }
+    const svf1PropertyEdges = frontier ? propertyEdges.filter(([x, p, y]) => inFrontier(x) || inFrontier(y) || deltaRestrictionProperties.has(normFactTerm(p))) : propertyEdges;
     const remainingBudget = Math.max(0, budget - scmDerived.length);
-    const caxDerived = remainingBudget > 0 ? deriveTypePropagation(typeEdges, enlargedSubClassEdges, { budget: remainingBudget, focus: normalizedFocus }) : [];
+    const caxDerived = remainingBudget > 0 && !deltaEmpty ? deriveTypePropagation(caxTypeEdges, enlargedSubClassEdges, { budget: remainingBudget, focus: kernelFocus, presentTypeEdges: typeEdges }) : [];
     const remainingBudgetDw = Math.max(0, budget - scmDerived.length - caxDerived.length);
-    const dwDerived = remainingBudgetDw > 0 ? deriveDisjointViolations(typeEdges, enlargedSubClassEdges, disjointEdges, { budget: remainingBudgetDw, focus: normalizedFocus }) : [];
+    const dwDerived = remainingBudgetDw > 0 && !deltaEmpty ? deriveDisjointViolations(dwTypeEdges, enlargedSubClassEdges, disjointEdges, { budget: remainingBudgetDw, focus: kernelFocus }) : [];
     const remainingBudgetSvf1 = Math.max(0, budget - scmDerived.length - caxDerived.length - dwDerived.length);
-    const svf1Derived = remainingBudgetSvf1 > 0 && restrictionEdges.length ? deriveSomeValuesFromApplication(propertyEdges, typeEdges, enlargedSubClassEdges, restrictionEdges, { budget: remainingBudgetSvf1, focus: normalizedFocus }) : [];
+    const svf1Derived = remainingBudgetSvf1 > 0 && restrictionEdges.length && !deltaEmpty ? deriveSomeValuesFromApplication(svf1PropertyEdges, typeEdges, enlargedSubClassEdges, restrictionEdges, { budget: remainingBudgetSvf1, focus: kernelFocus }) : [];
     const remainingBudgetScmSvf = Math.max(0, budget - scmDerived.length - caxDerived.length - dwDerived.length - svf1Derived.length);
-    const scmSvfDerived = remainingBudgetScmSvf > 0 && restrictionEdges.length > 1 ? deriveSomeValuesFromSubsumption(restrictionEdges, enlargedSubClassEdges, { budget: remainingBudgetScmSvf, focus: normalizedFocus }) : [];
+    const scmSvfDerived = remainingBudgetScmSvf > 0 && restrictionEdges.length > 1 && !deltaEmpty ? deriveSomeValuesFromSubsumption(restrictionEdges, enlargedSubClassEdges, { budget: remainingBudgetScmSvf, focus: kernelFocus }) : [];
     const restrictionByRid = new Map(restrictionEdges.map((r) => [r.restriction, r]));
     const toWrite = [
       ...scmDerived.map((d) => ({
@@ -8066,16 +8209,18 @@ ${bodyText}` : graphText, tier });
         predicate: SUBCLASS_PREDICATE,
         object: d.object,
         provenance: ENTAILED_PROVENANCE,
-        // Persisted justification: the premise fact ids this conclusion rode
-        // (a⊑b, b⊑c) — content-addressed ids work even when a premise is
-        // itself an entailment this same pass just derived. Read back by
+        // Persisted justification: one environment per independent derivation,
+        // each an ordered premise fact-id list — this first one is the premise
+        // set the conclusion rode (a⊑b, b⊑c); the alternate-discovery step
+        // below may append more. Content-addressed ids work even when a premise
+        // is itself an entailment this same pass just derived. Read back by
         // retractSubClassOf (below) to find every entailment a retracted
         // premise could have supported. All five rules persist one, each
         // citing its own premise shape.
-        justification: [
+        justification: [[
           factIdForTriple(d.subject, SUBCLASS_PREDICATE, d.via),
           factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object)
-        ]
+        ]]
       })),
       ...caxDerived.map((d) => ({
         subject: d.subject,
@@ -8086,10 +8231,10 @@ ${bodyText}` : graphText, tier });
         // taught chain is multi-hop: scm-sco materialises that edge (this same
         // pass or an earlier one), and retraction re-VERIFIES every candidate
         // anyway, so a citation left dangling by budget truncation is inert.
-        justification: [
+        justification: [[
           factIdForTriple(d.subject, TYPE_PREDICATE, d.via),
           factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object)
-        ]
+        ]]
       })),
       ...dwDerived.map((d) => {
         const dwStoredForward = hasTriple(d.viaClass, DISJOINT_PREDICATE, d.object);
@@ -8106,11 +8251,11 @@ ${bodyText}` : graphText, tier });
           predicate: DISJOINT_PREDICATE,
           object: d.object,
           provenance: ENTAILED_DISJOINT_PROVENANCE,
-          justification: [
+          justification: [[
             factIdForTriple(d.subject, TYPE_PREDICATE, d.viaType),
             factIdForTriple(dwS, DISJOINT_PREDICATE, dwO),
             ...d.viaClass !== d.viaType ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaClass)] : []
-          ],
+          ]],
           ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: CAX_DW_RULE_CONFIDENCE } : {}
         };
       }),
@@ -8129,13 +8274,13 @@ ${bodyText}` : graphText, tier });
           predicate: TYPE_PREDICATE,
           object: d.object,
           provenance: ENTAILED_SVF1_PROVENANCE,
-          justification: [
+          justification: [[
             factIdForTriple(d.subject, d.viaProperty, d.viaValue),
             factIdForTriple(d.viaValue, TYPE_PREDICATE, d.viaType),
             factIdForTriple(d.object, ON_PROPERTY_PREDICATE, d.viaPropertyKey),
             factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaTarget),
             ...d.viaType !== d.viaTarget ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaTarget)] : []
-          ],
+          ]],
           // same sub-1 discount as cax-dw, same reason (see CAX_DW_RULE_CONFIDENCE).
           ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: CLS_SVF1_RULE_CONFIDENCE } : {}
         };
@@ -8155,18 +8300,70 @@ ${bodyText}` : graphText, tier });
           predicate: SUBCLASS_PREDICATE,
           object: d.object,
           provenance: ENTAILED_SCM_SVF_PROVENANCE,
-          justification: [
+          justification: [[
             ...r1 ? [factIdForTriple(d.subject, ON_PROPERTY_PREDICATE, r1.property)] : [],
             factIdForTriple(d.subject, SOME_VALUES_FROM_PREDICATE, d.viaY1),
             ...r2 ? [factIdForTriple(d.object, ON_PROPERTY_PREDICATE, r2.property)] : [],
             factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaY2),
             factIdForTriple(d.viaY1, SUBCLASS_PREDICATE, d.viaY2)
-          ],
+          ]],
           // same sub-1 discount as cax-dw/cls-svf1, same reason (see CAX_DW_RULE_CONFIDENCE).
           ...premiseTrusts.length ? { premiseTrusts, ruleConfidence: SCM_SVF_RULE_CONFIDENCE } : {}
         };
       })
     ];
+    const conclusionCandidates = toWrite.map((w) => ({
+      id: factIdForTriple(w.subject, w.predicate, w.object),
+      subject: w.subject,
+      predicate: w.predicate,
+      object: w.object,
+      environments: w.justification,
+      write: w
+    }));
+    const enumerateSupport = buildSupportEnumerator(rows.concat(conclusionCandidates.map((c) => ({
+      id: c.id,
+      subject: c.subject,
+      predicate: c.predicate,
+      object: c.object
+    }))));
+    const rowById = new Map(rows.map((r) => [r.id, r]));
+    const ownedPredicate = (p) => isSubClassOf(p) || isType(p) || isDisjoint(p);
+    const storedCandidateInScope = (r) => mode !== "delta" || frontier !== null && (frontier.has(r.subject) || frontier.has(r.object));
+    const storedCandidates = rows.filter((r) => ownedPredicate(r.predicate) && isPurelyEntailed(r.provenance) && environmentsOf(r).length < maxEnvironments && storedCandidateInScope(r)).map((r) => ({
+      id: r.id,
+      subject: r.subject,
+      predicate: r.predicate,
+      object: r.object,
+      environments: environmentsOf(r),
+      provenance: r.provenance
+    }));
+    const alternateCandidates = [...conclusionCandidates, ...storedCandidates].sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
+    let environmentsAdded = 0;
+    let alternatesTruncated = false;
+    let examined = 0;
+    for (const cand of alternateCandidates) {
+      if (examined >= budget) {
+        alternatesTruncated = true;
+        break;
+      }
+      examined += 1;
+      const discovered = enumerateSupport(cand, { maxEnvironments: maxEnvironments + 1 });
+      const { kept, truncated: mergeTruncated } = capMergeEnvironments(cand.environments, discovered, maxEnvironments);
+      if (mergeTruncated) alternatesTruncated = true;
+      if (kept.length <= cand.environments.length) continue;
+      environmentsAdded += kept.length - cand.environments.length;
+      if (cand.write) {
+        cand.write.justification = kept;
+        continue;
+      }
+      toWrite.push({
+        subject: cand.subject,
+        predicate: cand.predicate,
+        object: cand.object,
+        justification: kept,
+        ...bestEnvironmentTrustOpts(cand.provenance, kept, (pid) => rowById.get(pid)?.trust) || {}
+      });
+    }
     const { ids } = await appendFacts2(repoDir, toWrite);
     const written = [];
     let i = 0;
@@ -8190,7 +8387,27 @@ ${bodyText}` : graphText, tier });
       written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaY1, rule: SCM_SVF_RULE });
       i += 1;
     }
-    return { derived: written, count: written.length, budget, depth, truncated: written.length >= budget };
+    const truncated = written.length >= budget;
+    if (normalizedFocus === null && stateFnsPresent && !truncated) {
+      const factIds = new Set(currentIdSet);
+      for (const id of ids) factIds.add(id);
+      await store.saveSyllogiseState(repoDir, {
+        version: 1,
+        factIds: [...factIds].sort(),
+        completedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+    }
+    return {
+      derived: written,
+      count: written.length,
+      budget,
+      depth,
+      truncated,
+      mode,
+      deltaSize,
+      environmentsAdded,
+      alternatesTruncated
+    };
   }
   function isPurelyEntailed(provenance) {
     const tags = String(provenance || "").split(" | ").filter(Boolean);
@@ -8261,8 +8478,185 @@ ${bodyText}` : graphText, tier });
       return true;
     };
   }
-  async function retractSubClassOf(repoDir, subject, object, { budget = 50, depth = 32, store } = {}) {
+  function buildSupportEnumerator(rows) {
+    const storedIds = /* @__PURE__ */ new Set();
+    const subClassEdges = [];
+    const succ = /* @__PURE__ */ new Map();
+    const typesOf = /* @__PURE__ */ new Map();
+    const disjointForward = /* @__PURE__ */ new Set();
+    const disjointOf = /* @__PURE__ */ new Map();
+    const onPropertyOf = /* @__PURE__ */ new Map();
+    const someValuesFromOf = /* @__PURE__ */ new Map();
+    const propertyEdgesOf = /* @__PURE__ */ new Map();
+    for (const r of rows) {
+      if (!r || !r.subject || !r.predicate || !r.object) continue;
+      if (r.id) storedIds.add(r.id);
+      const pLower = String(r.predicate || "").trim().toLowerCase();
+      if (isSubClassOf(r.predicate)) {
+        subClassEdges.push([r.subject, r.object]);
+        if (!succ.has(r.subject)) succ.set(r.subject, /* @__PURE__ */ new Set());
+        succ.get(r.subject).add(r.object);
+      } else if (isType(r.predicate)) {
+        if (!typesOf.has(r.subject)) typesOf.set(r.subject, /* @__PURE__ */ new Set());
+        typesOf.get(r.subject).add(r.object);
+      } else if (isDisjoint(r.predicate)) {
+        disjointForward.add(`${r.subject}${SEP}${r.object}`);
+        if (!disjointOf.has(r.subject)) disjointOf.set(r.subject, /* @__PURE__ */ new Set());
+        disjointOf.get(r.subject).add(r.object);
+        if (!disjointOf.has(r.object)) disjointOf.set(r.object, /* @__PURE__ */ new Set());
+        disjointOf.get(r.object).add(r.subject);
+      } else if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
+      else if (isSomeValuesFrom(r.predicate)) someValuesFromOf.set(r.subject, r.object);
+      else if (!RESERVED_PREDICATES.has(pLower)) {
+        if (!propertyEdgesOf.has(r.subject)) propertyEdgesOf.set(r.subject, []);
+        propertyEdgesOf.get(r.subject).push([r.predicate, r.object]);
+      }
+    }
+    const ancestorsOf2 = buildAncestorCloser(subClassEdges);
+    const succOf = (a) => succ.get(a) || /* @__PURE__ */ new Set();
+    const restrictionOf = (node) => {
+      const property = onPropertyOf.get(node);
+      const target = someValuesFromOf.get(node);
+      return property && target ? { property, propertyKey: normFactTerm(property), target } : null;
+    };
+    return (row, { maxEnvironments = DEFAULT_MAX_ENVIRONMENTS } = {}) => {
+      const out = [];
+      const seen = /* @__PURE__ */ new Set();
+      const admit = (env) => {
+        if (out.length >= maxEnvironments) return;
+        if (row.id && env.includes(row.id)) return;
+        if (!env.every((id) => storedIds.has(id))) return;
+        const key = [...env].sort().join(" ");
+        if (seen.has(key)) return;
+        seen.add(key);
+        out.push(env);
+      };
+      if (isSubClassOf(row.predicate)) {
+        for (const m of [...succOf(row.subject)].sort()) {
+          if (out.length >= maxEnvironments) break;
+          if (m === row.subject || m === row.object) continue;
+          if (!succOf(m).has(row.object)) continue;
+          admit([
+            factIdForTriple(row.subject, SUBCLASS_PREDICATE, m),
+            factIdForTriple(m, SUBCLASS_PREDICATE, row.object)
+          ]);
+        }
+        if (out.length < maxEnvironments) {
+          const r1 = restrictionOf(row.subject);
+          const r2 = restrictionOf(row.object);
+          if (r1 && r2 && r1.propertyKey === r2.propertyKey && r1.target !== r2.target && succOf(r1.target).has(r2.target)) {
+            admit([
+              factIdForTriple(row.subject, ON_PROPERTY_PREDICATE, r1.property),
+              factIdForTriple(row.subject, SOME_VALUES_FROM_PREDICATE, r1.target),
+              factIdForTriple(row.object, ON_PROPERTY_PREDICATE, r2.property),
+              factIdForTriple(row.object, SOME_VALUES_FROM_PREDICATE, r2.target),
+              factIdForTriple(r1.target, SUBCLASS_PREDICATE, r2.target)
+            ]);
+          }
+        }
+        return out;
+      }
+      if (isType(row.predicate)) {
+        for (const c of [...typesOf.get(row.subject) || []].sort()) {
+          if (out.length >= maxEnvironments) break;
+          if (c === row.object) continue;
+          if (!succOf(c).has(row.object)) continue;
+          admit([
+            factIdForTriple(row.subject, TYPE_PREDICATE, c),
+            factIdForTriple(c, SUBCLASS_PREDICATE, row.object)
+          ]);
+        }
+        const rec = restrictionOf(row.object);
+        if (rec) {
+          const edges = [...propertyEdgesOf.get(row.subject) || []].filter(([p]) => normFactTerm(p) === rec.propertyKey).sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+          for (const [p, y] of edges) {
+            if (out.length >= maxEnvironments) break;
+            for (const c of [...typesOf.get(y) || []].sort()) {
+              if (out.length >= maxEnvironments) break;
+              if (c !== rec.target && !succOf(c).has(rec.target)) continue;
+              admit([
+                factIdForTriple(row.subject, p, y),
+                factIdForTriple(y, TYPE_PREDICATE, c),
+                factIdForTriple(row.object, ON_PROPERTY_PREDICATE, rec.propertyKey),
+                factIdForTriple(row.object, SOME_VALUES_FROM_PREDICATE, rec.target),
+                ...c !== rec.target ? [factIdForTriple(c, SUBCLASS_PREDICATE, rec.target)] : []
+              ]);
+            }
+          }
+        }
+        return out;
+      }
+      if (isDisjoint(row.predicate)) {
+        const pairs = [];
+        for (const c of typesOf.get(row.subject) || []) {
+          for (const d of [c, ...ancestorsOf2(c)]) {
+            if ((disjointOf.get(d) || /* @__PURE__ */ new Set()).has(row.object)) pairs.push([c, d]);
+          }
+        }
+        pairs.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+        for (const [c, d] of pairs) {
+          if (out.length >= maxEnvironments) break;
+          const dwStoredForward = disjointForward.has(`${d}${SEP}${row.object}`);
+          const [dwS, dwO] = dwStoredForward ? [d, row.object] : [row.object, d];
+          admit([
+            factIdForTriple(row.subject, TYPE_PREDICATE, c),
+            factIdForTriple(dwS, DISJOINT_PREDICATE, dwO),
+            ...d !== c ? [factIdForTriple(c, SUBCLASS_PREDICATE, d)] : []
+          ]);
+        }
+        return out;
+      }
+      return out;
+    };
+  }
+  function capMergeEnvironments(storedEnvs, discoveredEnvs, cap) {
+    const kept = [];
+    const seen = /* @__PURE__ */ new Set();
+    let truncated = false;
+    for (const env of [...storedEnvs || [], ...discoveredEnvs || []]) {
+      if (!Array.isArray(env) || !env.length) continue;
+      const key = [...env].sort().join(" ");
+      if (seen.has(key)) continue;
+      if (kept.length >= cap) {
+        truncated = true;
+        continue;
+      }
+      seen.add(key);
+      kept.push(env);
+    }
+    return { kept, truncated };
+  }
+  function bestEnvironmentTrustOpts(provenance, environments, trustOfId) {
+    let ruleConfidence;
+    for (const tag of String(provenance || "").split(" | ")) {
+      const rc = ENTAILED_RULE_CONFIDENCE_BY_TAG.get(tag);
+      if (rc !== void 0) {
+        ruleConfidence = rc;
+        break;
+      }
+    }
+    if (ruleConfidence === void 0) return null;
+    let best = null;
+    let bestMin = -1;
+    for (const env of environments || []) {
+      const trusts = env.map((id) => trustOfId(id)).filter((t) => typeof t === "number");
+      if (trusts.length !== env.length) continue;
+      const weakest = Math.min(...trusts);
+      if (weakest > bestMin) {
+        bestMin = weakest;
+        best = trusts;
+      }
+    }
+    return best ? { premiseTrusts: best, ruleConfidence } : null;
+  }
+  async function retractSubClassOf(repoDir, subject, object, {
+    budget = 50,
+    depth = 32,
+    maxEnvironments = DEFAULT_MAX_ENVIRONMENTS,
+    store
+  } = {}) {
     const { loadMemory: loadMemory2, readFactRows: readFactRows2, removeFacts: removeFacts2 } = requireStore(store, ["loadMemory", "readFactRows", "removeFacts"], "retractSubClassOf");
+    const appendFactsFn = typeof store?.appendFacts === "function" ? store.appendFacts : null;
     const s = normFactTerm(subject);
     const o = normFactTerm(object);
     const targetId = factIdForTriple(s, SUBCLASS_PREDICATE, o);
@@ -8270,28 +8664,58 @@ ${bodyText}` : graphText, tier });
     const rows = readFactRows2(memory);
     const byId = new Map(rows.map((r) => [r.id, r]));
     if (!byId.has(targetId)) return { retracted: [], count: 0, budget, depth, truncated: false, found: false };
-    const entailedRows = rows.filter((r) => r.justification.length && isPurelyEntailed(r.provenance));
+    const entailedRows = rows.filter((r) => environmentsOf(r).length && isPurelyEntailed(r.provenance));
+    const citedBy = /* @__PURE__ */ new Map();
+    for (const r of entailedRows) {
+      for (const env of environmentsOf(r)) {
+        for (const premiseId of env) {
+          if (!citedBy.has(premiseId)) citedBy.set(premiseId, /* @__PURE__ */ new Set());
+          citedBy.get(premiseId).add(r.id);
+        }
+      }
+    }
     const removed = /* @__PURE__ */ new Set([targetId]);
     const order = [targetId];
+    const reground = /* @__PURE__ */ new Map();
     let truncated = false;
     let round2 = 0;
+    let newlyRemoved = [targetId];
     for (; round2 < depth; round2 += 1) {
-      const candidates = entailedRows.filter((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j))).sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
+      const candidateIds = /* @__PURE__ */ new Set();
+      for (const id of newlyRemoved) {
+        for (const cited of citedBy.get(id) || []) {
+          if (!removed.has(cited)) candidateIds.add(cited);
+        }
+      }
+      const candidates = [...candidateIds].map((id) => byId.get(id)).sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
       if (!candidates.length) break;
-      const candidateIds = new Set(candidates.map((c) => c.id));
-      const stillDerivable = buildSurvivorDerivabilityCheck(
-        rows.filter((r) => !removed.has(r.id) && !candidateIds.has(r.id))
-      );
+      const survivors = rows.filter((r) => !removed.has(r.id) && !candidateIds.has(r.id));
+      const survivorIds = new Set(survivors.map((r) => r.id));
+      const enumerateSupport = buildSupportEnumerator(survivors);
+      const stillDerivable = buildSurvivorDerivabilityCheck(survivors);
       let progressed = false;
       let hitBudget = false;
+      newlyRemoved = [];
       for (const c of candidates) {
         if (removed.size >= budget) {
           hitBudget = true;
           break;
         }
+        const environments = environmentsOf(c);
+        const intact = environments.filter((env) => env.every((id) => survivorIds.has(id)));
+        if (intact.length) {
+          if (intact.length !== environments.length) reground.set(c.id, intact);
+          continue;
+        }
+        const fresh = enumerateSupport(c, { maxEnvironments });
+        if (fresh.length) {
+          reground.set(c.id, fresh);
+          continue;
+        }
         if (stillDerivable(c)) continue;
         removed.add(c.id);
         order.push(c.id);
+        newlyRemoved.push(c.id);
         progressed = true;
       }
       if (hitBudget) {
@@ -8304,6 +8728,20 @@ ${bodyText}` : graphText, tier });
       truncated = entailedRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
     }
     const { removed: actuallyRemoved } = await removeFacts2(repoDir, order);
+    if (appendFactsFn) {
+      const regroundWrites = [...reground.entries()].filter(([id]) => !removed.has(id)).sort((a, b) => a[0].localeCompare(b[0])).map(([id, environments]) => {
+        const row = byId.get(id);
+        return {
+          subject: row.subject,
+          predicate: row.predicate,
+          object: row.object,
+          // provenance omitted — appendFacts' first-write-wins keeps the union
+          justification: environments,
+          ...bestEnvironmentTrustOpts(row.provenance, environments, (pid) => byId.get(pid)?.trust) || {}
+        };
+      });
+      if (regroundWrites.length) await appendFactsFn(repoDir, regroundWrites);
+    }
     return { retracted: actuallyRemoved, count: actuallyRemoved.length, budget, depth, truncated, found: true };
   }
   function findIsaChain(subj, targets, typeEdges, subClassEdges, { maxHops = 6 } = {}) {
@@ -8338,7 +8776,7 @@ ${bodyText}` : graphText, tier });
     }
     return null;
   }
-  var SUBCLASS_PREDICATE, SYLLOGISE_RULE, ENTAILED_PROVENANCE, TYPE_PREDICATE, CAX_SCO_RULE, ENTAILED_TYPE_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, ENTAILED_DISJOINT_PROVENANCE, CAX_DW_RULE_CONFIDENCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE, CLS_SVF1_RULE, ENTAILED_SVF1_PROVENANCE, CLS_SVF1_RULE_CONFIDENCE, SEP, isSubClassOf, isType, isDisjoint, isOnProperty, isSomeValuesFrom, isOnClass, RESERVED_PREDICATES, HAS_PROPERTY_KEY, CARDINALITY_KIND_OF, SCM_SVF_RULE, ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE, CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE_CONFIDENCE;
+  var SUBCLASS_PREDICATE, SYLLOGISE_RULE, ENTAILED_PROVENANCE, TYPE_PREDICATE, CAX_SCO_RULE, ENTAILED_TYPE_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, ENTAILED_DISJOINT_PROVENANCE, CAX_DW_RULE_CONFIDENCE, ON_PROPERTY_PREDICATE, SOME_VALUES_FROM_PREDICATE, CLS_SVF1_RULE, ENTAILED_SVF1_PROVENANCE, CLS_SVF1_RULE_CONFIDENCE, DEFAULT_MAX_ENVIRONMENTS, SEP, isSubClassOf, isType, isDisjoint, isOnProperty, isSomeValuesFrom, isOnClass, RESERVED_PREDICATES, HAS_PROPERTY_KEY, CARDINALITY_KIND_OF, SCM_SVF_RULE, ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE, CARDINALITY_RULE_CONFIDENCE, CAX_MAXC0_RULE_CONFIDENCE, environmentsOf, ENTAILED_RULE_CONFIDENCE_BY_TAG;
   var init_syllogise = __esm({
     "src/domain/syllogise.mjs"() {
       init_hash();
@@ -8357,6 +8795,7 @@ ${bodyText}` : graphText, tier });
       CLS_SVF1_RULE = "someValuesFrom";
       ENTAILED_SVF1_PROVENANCE = `entailed:${CLS_SVF1_RULE}`;
       CLS_SVF1_RULE_CONFIDENCE = 0.95;
+      DEFAULT_MAX_ENVIRONMENTS = 4;
       SEP = "\u241F";
       isSubClassOf = (p) => String(p || "").trim().toLowerCase() === "rdfs:subclassof";
       isType = (p) => String(p || "").trim().toLowerCase() === "rdf:type";
@@ -8379,6 +8818,12 @@ ${bodyText}` : graphText, tier });
       SCM_SVF_RULE_CONFIDENCE = 0.95;
       CARDINALITY_RULE_CONFIDENCE = 0.95;
       CAX_MAXC0_RULE_CONFIDENCE = 0.95;
+      environmentsOf = (row) => row.environments || (Array.isArray(row.justification) && row.justification.length ? [row.justification] : []);
+      ENTAILED_RULE_CONFIDENCE_BY_TAG = /* @__PURE__ */ new Map([
+        [ENTAILED_DISJOINT_PROVENANCE, CAX_DW_RULE_CONFIDENCE],
+        [ENTAILED_SVF1_PROVENANCE, CLS_SVF1_RULE_CONFIDENCE],
+        [ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE]
+      ]);
     }
   });
 
@@ -8705,6 +9150,7 @@ ${bodyText}` : graphText, tier });
     SOURCE_CLASS: () => SOURCE_CLASS,
     SOURCE_RELIABILITY_PROP: () => SOURCE_RELIABILITY_PROP,
     STATED_BY_PROP: () => STATED_BY_PROP,
+    SYLLOGISE_STATE_REL: () => SYLLOGISE_STATE_REL,
     UPDATED_AT_PROP: () => UPDATED_AT_PROP,
     UTTERANCE_CLASS: () => UTTERANCE_CLASS,
     appendFact: () => appendFact,
@@ -8721,6 +9167,7 @@ ${bodyText}` : graphText, tier });
     findRuleByName: () => findRuleByName,
     findRulesByName: () => findRulesByName,
     loadMemory: () => loadMemory,
+    loadSyllogiseState: () => loadSyllogiseState,
     normFactPredicate: () => normFactPredicate,
     normFactTerm: () => normFactTerm,
     openMemoryBackend: () => openMemoryBackend,
@@ -8732,6 +9179,7 @@ ${bodyText}` : graphText, tier });
     resolveMemoryGraphFile: () => resolveMemoryGraphFile,
     resolveRelationChase: () => resolveRelationChase,
     resolveRelationChaseReverse: () => resolveRelationChaseReverse,
+    saveSyllogiseState: () => saveSyllogiseState,
     snapshotMemory: () => snapshotMemory
   });
   function emptyMemory() {
@@ -9042,7 +9490,9 @@ ${bodyText}` : graphText, tier });
     for (const ind of payload.individuals) {
       if (Array.isArray(ind?.derived_from) && ind.derived_from.length) ind.derived_from = ind.derived_from.map(remapId);
       const just = (ind?.attributes || []).find((a) => a?.prop === "mgx:factJustification");
-      if (just?.value) just.value = just.value.split(" ").filter(Boolean).map(remapId).join(" ");
+      if (just?.value) {
+        just.value = just.value.split(" | ").map((env) => env.split(" ").filter(Boolean).map(remapId).join(" ")).filter(Boolean).join(" | ");
+      }
     }
     return payload;
   }
@@ -9057,6 +9507,32 @@ ${bodyText}` : graphText, tier });
     }
     await mkdir2(dirname(memoryGraphFile(dir)), { recursive: true });
     await atomicWriteJson(memoryGraphFile(dir), payload);
+  }
+  async function loadSyllogiseState(dir) {
+    if (isMemoryHandle(dir)) return dir.syllogiseState ? structuredClone(dir.syllogiseState) : null;
+    if (isSqliteHandle(dir)) {
+      const row = dir.db.prepare("SELECT v FROM meta WHERE k = ?").get(SQLITE_SYLLOGISE_STATE_KEY);
+      return row?.v ? JSON.parse(row.v) : null;
+    }
+    try {
+      return JSON.parse(await readFile2(join(dir, SYLLOGISE_STATE_REL), "utf8"));
+    } catch (e) {
+      if (e?.code === "ENOENT") return null;
+      throw e;
+    }
+  }
+  async function saveSyllogiseState(dir, state) {
+    if (isMemoryHandle(dir)) {
+      dir.syllogiseState = structuredClone(state);
+      return;
+    }
+    if (isSqliteHandle(dir)) {
+      dir.db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)").run(SQLITE_SYLLOGISE_STATE_KEY, JSON.stringify(state));
+      return;
+    }
+    const file = join(dir, SYLLOGISE_STATE_REL);
+    await mkdir2(dirname(file), { recursive: true });
+    await atomicWriteJson(file, state);
   }
   function buildMemoryIndex(payload) {
     const individualsById = /* @__PURE__ */ new Map();
@@ -9418,6 +9894,21 @@ ${bodyText}` : graphText, tier });
     });
     return { id };
   }
+  function normalizeJustificationEnvironments(justification) {
+    if (!Array.isArray(justification)) return void 0;
+    const rawEnvs = justification.some(Array.isArray) ? justification.filter(Array.isArray) : [justification];
+    const envs = [];
+    const seen = /* @__PURE__ */ new Set();
+    for (const raw of rawEnvs) {
+      const env = raw.filter((id) => typeof id === "string" && id);
+      if (!env.length) continue;
+      const key = [...env].sort().join(" ");
+      if (seen.has(key)) continue;
+      seen.add(key);
+      envs.push(env);
+    }
+    return envs.length ? envs : void 0;
+  }
   async function appendFacts(dir, facts) {
     const prepared = [];
     let skipped = 0;
@@ -9443,7 +9934,7 @@ ${bodyText}` : graphText, tier });
         quantifier: normText(f?.quantifier),
         premiseTrusts: Array.isArray(f?.premiseTrusts) ? f.premiseTrusts : void 0,
         ruleConfidence: typeof f?.ruleConfidence === "number" ? f.ruleConfidence : void 0,
-        justification: Array.isArray(f?.justification) ? f.justification.filter(Boolean) : void 0
+        environments: normalizeJustificationEnvironments(f?.justification)
       });
     }
     const ids = [];
@@ -9476,7 +9967,7 @@ ${bodyText}` : graphText, tier });
             ...provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : [],
             ...f.tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: f.tokens.join(" ") }] : [],
             ...qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : [],
-            ...f.justification && f.justification.length ? [{ prop: "mgx:factJustification", key: "justification", value: f.justification.join(" ") }] : []
+            ...f.environments ? [{ prop: "mgx:factJustification", key: "justification", value: f.environments.map((e) => e.join(" ")).join(" | ") }] : []
           ]
         };
         const stored = upsertIndividual(payload, ind);
@@ -9711,6 +10202,22 @@ ${bodyText}` : graphText, tier });
       const sourceIds = byFact.get(ind.id) || [];
       const sourceTypes = sourceIds.map((id) => (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value).filter(Boolean);
       const justificationRaw = get("justification");
+      const environments = [];
+      if (justificationRaw) {
+        for (const chunk of justificationRaw.split(" | ")) {
+          const env = chunk.split(" ").filter(Boolean);
+          if (env.length) environments.push(env);
+        }
+      }
+      const justification = [];
+      const seenPremise = /* @__PURE__ */ new Set();
+      for (const env of environments) {
+        for (const id of env) {
+          if (seenPremise.has(id)) continue;
+          seenPremise.add(id);
+          justification.push(id);
+        }
+      }
       rows.push({
         id: ind.id,
         subject: get("subject"),
@@ -9723,9 +10230,11 @@ ${bodyText}` : graphText, tier });
         sourceIds,
         sourceTypes,
         trust: Number((ind.attributes || []).find((a) => a?.prop === TRUST_SCORE_PROP)?.value) || 0,
-        // [] unless a rule persisted its premise fact ids (justification-tracking,
-        // scm-sco only today; see syllogise.mjs).
-        justification: justificationRaw ? justificationRaw.split(" ").filter(Boolean) : []
+        // `environments`: every persisted premise set (empty unless entailed);
+        // `justification`: their deduped union in first-occurrence order, for
+        // readers that only need "which premises does this fact cite at all".
+        environments,
+        justification
       });
     }
     return rows;
@@ -9770,7 +10279,7 @@ ${bodyText}` : graphText, tier });
     }
     return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
   }
-  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, LEGACY_FACT_ID_RE, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, PROV_CLASS_BY_SOURCE_TYPE, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE2, MULTI_VALUED_PREDICATES;
+  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, LEGACY_FACT_ID_RE, SYLLOGISE_STATE_REL, SQLITE_SYLLOGISE_STATE_KEY, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, PROV_CLASS_BY_SOURCE_TYPE, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE2, MULTI_VALUED_PREDICATES;
   var init_core = __esm({
     "src/adapters/memory/core.mjs"() {
       init_promises();
@@ -9812,6 +10321,7 @@ ${bodyText}` : graphText, tier });
         { prop: "rdf:object", note: "reified fact: the triple's object term" },
         { prop: "mgx:factProvenance", note: "LEGACY COMPAT SHIM: the ' | '-joined provenance tag string a fact came from; the source-of-truth is now the mgx:statedBy edges derived from it" },
         { prop: "mgx:factQuantifier", note: "OPTIONAL: the quantifier word a plural class-membership teach used ('every'/'some'/'a few'), for literal recall by 'how many Xs are Ys' \u2014 never real cardinality counting" },
+        { prop: "mgx:factJustification", note: "an entailed Fact's supporting premise fact ids: ' | '-separated environments, one space-separated premise-id list per independent derivation, capped by syllogise's maxEnvironments knob; a value with no ' | ' is a single environment" },
         { prop: "mgx:ruleName", note: "a taught Rule's own name (e.g. 'grandparent') \u2014 the query-dispatcher's lookup key, PLAN_TAUGHT_RELATIONS.md \xA72/\xA73" },
         { prop: "mgx:ruleKind", note: "a taught Rule's SHAPE tag \u2014 the closed vocabulary compose2 | filter | recursive (structural, like 'Fact'/'Rule' themselves, never a domain word)" },
         { prop: "mgx:ruleBase1", note: "compose2: the first hop's base relation name; filter: the base rule/relation being filtered (same 'base relation' role in both kinds, so the name is shared)" },
@@ -9850,6 +10360,8 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
       DEFAULT_RETENTION = 5;
       resolveManifestFile = (dir) => join(dir, MEMORY_MANIFEST_REL);
       LEGACY_FACT_ID_RE = /^fact:[0-9a-f]{8}$/;
+      SYLLOGISE_STATE_REL = join(MEMORY_DIR_REL, "syllogise-state.json");
+      SQLITE_SYLLOGISE_STATE_KEY = "syllogiseState";
       MEMORY_INDEX = /* @__PURE__ */ Symbol("mutateMemory lookup index");
       memoryIndexOf = (payload) => payload?.[MEMORY_INDEX] || null;
       labelOf = (text) => text.length > LABEL_CAP ? text.slice(0, LABEL_CAP - 1) + "\u2026" : text;

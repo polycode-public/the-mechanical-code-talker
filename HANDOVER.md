@@ -35,7 +35,9 @@ same commit as the work it describes:
 - T1 `PLAN_25_BACKLOG` §§1–7, §9 — chat/ask/interpret/codegraph fixes + pins — STARTED
 - T1w2 `PLAN_GUESS_NUMBER` phases 1–3; `PLAN_LEARN_ON_MISS` chat hook; `PLAN_DIALOGUE_ACTS`
   envelope wiring — QUEUED (after T1)
-- T2 `PLAN_SYLLOGIST` §3 ATMS environment sets + §2 semi-naive delta + §4 slice — STARTED
+- T2 `PLAN_SYLLOGIST` §3 ATMS environment sets + §2 semi-naive delta + §4 slice — BUILT +
+  VERIFIED (124 syllogise tests incl. the stale-justification regression; delta ≡ full
+  differential per rule; corpus row `inference.retract.stale-justification`)
 - T3 `PLAN_LEARN_ON_MISS` reference provenance, pack pipeline, loader + provider seam — BUILT +
   VERIFIED (shipped pack committed: 3,887 articles from the 20260701 simplewiki dump, estate
   guards active; the on-miss chat hook rides T1 wave 2)
