@@ -8,7 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
-import { foldWorldState, runNpcPass, worldDigestRows } from "../../src/services/adventure.mjs";
+import { foldWorldState, runNpcPass, roomAffordances, worldDigestRows } from "../../src/services/adventure.mjs";
 import { driveSessionTurns } from "../helpers/session.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
@@ -120,6 +120,62 @@ test("the digest view folds placements, phrases the predicates, and keeps hidden
   assert.ok(sentences.includes("Player is an adventurer"), "typing rows keep vowel-aware articles");
   assert.ok(!sentences.some((s) => /hidden/.test(s)), "hidden placements stay out of the view");
   assert.ok(!sentences.some((s) => /unlocks-with|acts-on-turn/.test(s)), "puzzle wiring stays out of the view");
+});
+
+test("roomAffordances branches each visible object onto exactly the verb that would accept it", () => {
+  const rows = [
+    { subject: "study", predicate: "rdf:type", object: "room" },
+    { subject: "study", predicate: "mgx:has-exit-north", object: "library" },
+    { subject: "study", predicate: "mgx:has-exit-down", object: "cellar" },
+    { subject: "cabinet", predicate: "mgx:stands-locked-in", object: "study" },
+    { subject: "cabinet", predicate: "mgx:is-container", object: "true" },
+    { subject: "portrait", predicate: "mgx:fixed-in", object: "study" },
+    { subject: "portrait", predicate: "mgx:is-container", object: "true" },
+    { subject: "desk", predicate: "mgx:fixed-in", object: "study" },
+    { subject: "lamp", predicate: "mgx:located-in", object: "study" },
+    { subject: "housekeeper", predicate: "mgx:currently-in", object: "study" },
+    { subject: "housekeeper", predicate: "rdf:type", object: "person" },
+    { subject: "player", predicate: "mgx:currently-in", object: "study" },
+  ];
+  const state = foldWorldState(rows);
+  // Objects branch in ALPHABETICAL subject order (cabinet, desk, housekeeper,
+  // lamp, portrait — player is skipped), not narrative order.
+  assert.deepEqual(roomAffordances(rows, state, "study"), [
+    "go north", "go down",
+    "unlock cabinet",       // stands-locked-in + container
+    "examine desk",         // fixed-in, not a container
+    "talk to housekeeper",
+    "take lamp",            // located-in, portable
+    "open portrait",        // fixed-in + container, not yet open
+  ]);
+});
+
+test("roomAffordances never offers an action a container's own state would refuse", () => {
+  const rows = [
+    { subject: "drawing-room", predicate: "rdf:type", object: "room" },
+    { subject: "portrait", predicate: "mgx:fixed-in", object: "drawing-room" },
+    { subject: "portrait", predicate: "mgx:is-container", object: "true" },
+    { subject: "portrait@turn3", predicate: "mgx:is-open", object: "true" },
+  ];
+  const state = foldWorldState(rows);
+  assert.deepEqual(
+    roomAffordances(rows, state, "drawing-room"), [],
+    "an already-open fixed-in container offers neither 'open' (it would decline 'already open') nor any other verb",
+  );
+});
+
+test("roomAffordances structurally excludes anything with no real placement fact — background corpus colour is never offered as a prop", () => {
+  const rows = [
+    { subject: "garden", predicate: "rdf:type", object: "room" },
+    { subject: "garden", predicate: "mgx:hasA", object: "flower" },
+    { subject: "vegetable", predicate: "mgx:atLocation", object: "garden" },
+    { subject: "player", predicate: "mgx:currently-in", object: "garden" },
+  ];
+  const state = foldWorldState(rows);
+  assert.deepEqual(
+    roomAffordances(rows, state, "garden"), [],
+    "flower/vegetable have no placement fact at all, so they can never be enumerated — not filtered out, structurally absent",
+  );
 });
 
 test("a stopped world resumes in a later session exactly where the written snapshots left it", async () => {

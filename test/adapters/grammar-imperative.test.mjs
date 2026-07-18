@@ -25,10 +25,11 @@ test("a bare transitive command resolves its object through the lexicon-noun gat
   assert.deepEqual(parse("close the cabinet"), { pattern: "imperative", verb: "close", object: "cabinet", residue: [] });
 });
 
-test("look stands alone (optionally 'around') and anything longer is not this pattern", () => {
+test("look stands alone (optionally 'around'); 'look at X' is the examine synonym, not this pattern", () => {
   assert.deepEqual(parse("look"), { pattern: "imperative", verb: "look", residue: [] });
   assert.deepEqual(parse("look around"), { pattern: "imperative", verb: "look", residue: [] });
-  assert.equal(parse("look at the portrait"), null);
+  assert.deepEqual(parse("look at the portrait"), { pattern: "imperative", verb: "examine", object: "portrait", residue: [] });
+  assert.equal(parse("look the portrait"), null, "bare 'look OBJECT' with no 'at' is still not a pattern");
 });
 
 test("unlock carries its instrument through 'with', and works bare when the instrument is omitted", () => {
@@ -53,9 +54,42 @@ test("an undeclared word in a structurally valid command rides out as residue, n
   assert.equal(miss.object, undefined, "a residue miss binds no slots");
 });
 
-test("a sentence led by anything outside the closed verb set is a hard null", () => {
-  assert.equal(parse("walk north"), null);
-  assert.equal(parse("examine the cabinet"), null);
+test("a sentence led by anything outside the closed verb set (or its synonyms/typo repairs) is a hard null", () => {
+  assert.equal(parse("walk north"), null, "'walk' reads as real English, not a typo of 'talk' — never silently reinterpreted");
   assert.equal(parse("the butler opens the cabinet"), null, "a subjectful declarative is not an imperative");
   assert.equal(parse(""), null);
+});
+
+test("examine and talk each take a single bare object, no direction or instrument", () => {
+  assert.deepEqual(parse("examine the cabinet"), { pattern: "imperative", verb: "examine", object: "cabinet", residue: [] });
+  assert.deepEqual(parse("talk butler"), { pattern: "imperative", verb: "talk", object: "butler", residue: [] });
+  assert.equal(parse("examine"), null, "examine with no object is not the pattern");
+  assert.equal(parse("talk"), null, "talk with no object is not the pattern");
+});
+
+test("VERB_SYNONYMS normalizes an alternate phrasing onto its canonical verb, silently (no 'corrected' field)", () => {
+  assert.deepEqual(parse("pick up the lamp"), { pattern: "imperative", verb: "take", object: "lamp", residue: [] });
+  assert.deepEqual(parse("pick the lamp"), { pattern: "imperative", verb: "take", object: "lamp", residue: [] });
+  assert.deepEqual(parse("grab the lamp"), { pattern: "imperative", verb: "take", object: "lamp", residue: [] });
+  assert.deepEqual(parse("put down the lamp"), { pattern: "imperative", verb: "drop", object: "lamp", residue: [] });
+  assert.deepEqual(parse("leave the lamp"), { pattern: "imperative", verb: "drop", object: "lamp", residue: [] });
+  assert.deepEqual(parse("talk to the butler"), { pattern: "imperative", verb: "talk", object: "butler", residue: [] });
+  assert.deepEqual(parse("speak with the butler"), { pattern: "imperative", verb: "talk", object: "butler", residue: [] });
+  assert.deepEqual(parse("look at the portrait"), { pattern: "imperative", verb: "examine", object: "portrait", residue: [] });
+  assert.deepEqual(parse("inspect the portrait"), { pattern: "imperative", verb: "examine", object: "portrait", residue: [] });
+  assert.deepEqual(parse("shut the cabinet"), { pattern: "imperative", verb: "close", object: "cabinet", residue: [] });
+  assert.equal(parse("pick up the lamp").corrected, undefined, "a recognised synonym is not reported as a correction");
+});
+
+test("a bounded fuzzy pre-pass repairs a typo'd verb or direction and names the repair on the command", () => {
+  assert.deepEqual(parse("got south"), {
+    pattern: "imperative", verb: "go", direction: "south", residue: [], corrected: [{ from: "got", to: "go" }],
+  });
+  assert.deepEqual(parse("go easte"), {
+    pattern: "imperative", verb: "go", direction: "east", residue: [], corrected: [{ from: "easte", to: "east" }],
+  });
+  assert.deepEqual(parse("lookl"), {
+    pattern: "imperative", verb: "look", residue: [], corrected: [{ from: "lookl", to: "look" }],
+  });
+  assert.equal(parse("go sideways"), null, "a direction two edits away is still an honest miss, not a guess");
 });
