@@ -16,7 +16,7 @@ stays no-LLM; the judge lives only here.
 | `GRADED.md` | the graded benchmark's design doc (matrix, band descriptors, sampling contract, promotion) |
 | `run.mjs` | deterministic runner: replays cases, evaluates tier-1 expectations, writes `product.jsonl` (or `product-a/b.jsonl` + `agreement.json` on dual graded runs) + `timings.json` (wall-clock run time + per-CEFR-grade / v1-spine replay timing) |
 | `judge.mjs` | judge fan-out: N samples/case against the pinned model+prompt, writes `judged.jsonl` + `summary.json` |
-| `judge-prompt-v1.txt` | the versioned judge prompt (bump the file name to version it; record the pin in every write-up) |
+| `judge-prompt-v2.txt` | the versioned judge prompt (bump the file name to version it; record the pin in every write-up; superseded versions stay committed) |
 | `rubric.schema.json` | the structured-output schema the judge must satisfy |
 | `report.mjs` | renders a `CEFR_ENGLISH_0NN.md` skeleton plus a `CEFR_ENGLISH_0NN_TRANSCRIPTS.md` appendix. Both the cycle-numbered name and the two-file split are superseded: `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 names a run's write-up `BENCHMARK_CEFR_ENGLISH_<version>.md` and folds the transcripts into it. The tool is due an update, so rename and merge its output by hand until then |
 | `results/` | run output; `results/raw/` is transient (gitignored) — **snapshot to `results/raw-<NNN>/` before the next run** per the SKILL |
@@ -201,7 +201,11 @@ masquerade as a lever. The only un-ingested graph in the bench is the
 ## Judge pins + invocation (probe-verified 2026-07-04)
 
 - **Model:** `claude-haiku-4-5-20251001` (always the full dated id, never an alias).
-- **Prompt:** `judge-prompt-v1` (this directory; version bumps = new file + new pin).
+- **Prompt:** `judge-prompt-v2` (this directory; version bumps = new file + new
+  pin; superseded versions stay committed). v2 names the sanctioned capability
+  surface — games, goal planning, reference-pack citations, seeded vocabulary —
+  so a correct game or cited answer never reads as a charter violation; scores
+  across the v1/v2 boundary are not comparable on the affected cases.
 - **Samples:** N=3 per case by default; each sample retried once sequentially
   on failure, then **VOIDED** (`void: true` + reason) — a refusal or format
   failure is never scored as a fail (SKILL §1).

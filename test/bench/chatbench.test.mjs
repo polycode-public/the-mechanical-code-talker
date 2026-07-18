@@ -28,7 +28,7 @@ import { runChat } from "../../src/services/chat.mjs";
 import { parseSessionJsonl, parseSessionLog, turnKey } from "../../src/services/sessions.mjs";
 
 const POOL_FILE = fileURLToPath(new URL("../../chatbench/graded-pool.jsonl", import.meta.url));
-const PROMPT_FILE = fileURLToPath(new URL("../../chatbench/judge-prompt-v1.txt", import.meta.url));
+const PROMPT_FILE = fileURLToPath(new URL(`../../chatbench/${PROMPT_VERSION}.txt`, import.meta.url));
 const SCHEMA_FILE = fileURLToPath(new URL("../../chatbench/rubric.schema.json", import.meta.url));
 
 // ---- frozen v1 core lint. The core cases live in graded-pool.jsonl as
@@ -567,8 +567,17 @@ test("renderTranscripts / orderDiscriminating: discriminating transcripts first"
 
 test("pins: full judge model id (never an alias) + versioned prompt file + expect/tag registries", async () => {
   assert.match(JUDGE_MODEL, /^claude-haiku-4-5-\d{8}$/, "a dated full model id");
-  assert.equal(PROMPT_VERSION, "judge-prompt-v1");
+  assert.equal(PROMPT_VERSION, "judge-prompt-v2");
   assert.ok((await readFile(PROMPT_FILE, "utf8")).length > 500, "the versioned prompt text exists");
+  // the sanctioned capability surface the v2 prompt names — a correct game,
+  // plan or reference-pack citation must never read as a charter violation.
+  const prompt = await readFile(PROMPT_FILE, "utf8");
+  for (const phrase of ["guess-the-number", "goal", "reference-pack", "vocabulary"]) {
+    assert.ok(prompt.includes(phrase), `v2 prompt names the ${phrase} surface`);
+  }
+  // superseded prompt versions stay committed so recorded runs stay auditable.
+  const v1 = fileURLToPath(new URL("../../chatbench/judge-prompt-v1.txt", import.meta.url));
+  assert.ok((await readFile(v1, "utf8")).length > 500, "the superseded v1 prompt text stays");
   assert.deepEqual(DIMENSIONS, JUDGE_DIMENSIONS, "runner and judge agree on the rubric dimensions");
   assert.ok(EXPECT_KEYS.includes("baselineFail"));
   assert.equal(TAGS.length, 9);

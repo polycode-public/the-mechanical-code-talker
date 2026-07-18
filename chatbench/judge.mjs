@@ -6,7 +6,12 @@
 // case (default 3 — the judge is the noisy part, so it is the thing repeated).
 //
 //   judge model:    claude-haiku-4-5-20251001   (the FULL pinned id, never an alias)
-//   prompt version: judge-prompt-v1             (chatbench/judge-prompt-v1.txt)
+//   prompt version: judge-prompt-v2             (chatbench/judge-prompt-v2.txt —
+//                   names the sanctioned capability surface: games, planning,
+//                   reference-pack citations, seeded vocabulary. v1's file stays
+//                   committed; every judged row pins the version it was scored
+//                   with, and scores across a prompt boundary are not comparable
+//                   on the affected cases)
 //   invocation:     claude -p <prompt> --model <id> --output-format json
 //                     --json-schema '<contents of chatbench/rubric.schema.json>'
 //                   (the flag takes the schema INLINE — passing a file path is
@@ -43,7 +48,7 @@ const execFileP = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 export const JUDGE_MODEL = "claude-haiku-4-5-20251001"; // pinned FULL model id — never an alias
-export const PROMPT_VERSION = "judge-prompt-v1";
+export const PROMPT_VERSION = "judge-prompt-v2";
 export const PROMPT_FILE = join(HERE, `${PROMPT_VERSION}.txt`);
 export const SCHEMA_FILE = join(HERE, "rubric.schema.json");
 export const DIMENSIONS = ["groundedness", "correctness", "honesty", "rephrase"];
