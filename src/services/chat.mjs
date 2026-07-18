@@ -11287,6 +11287,219 @@ function morePage(query, { last, focus }) {
   return turn;
 }
 
+// ---- guess-the-number: a closed-loop game over hidden state ----
+// Two modes on one mechanism. In GUESSER mode the human holds a secret and
+// tmct searches: a belief interval {lo, hi} narrowed by bisection, one
+// observation ("higher"/"lower"/"correct") folded in per turn. In THINKER
+// mode tmct commits a secret up front and each turn is a stateless
+// comparison against it. The game payload rides the session's plan slot as
+// a tagged sub-object ({ game: {...} }), so a plan frame and a game never
+// share the slot — each declines to start while the other is active.
+
+/** "between A and B" / "up to N" anywhere in an opening line. Loose token
+ *  captures (\S+) so a non-numeric bound is SEEN and declined rather than
+ *  silently defaulted. */
+const GAME_BOUNDS_CLAUSE_RE = /\b(?:between\s+(\S+)\s+and\s+(\S+)|up\s+to\s+(\S+))\b/i;
+const GAME_BOUND_MAX = 1_000_000_000;
+
+/** The bounds an opening line states — { lo, hi } (default 1–100), or
+ *  { problem } naming why the stated range is unplayable. */
+function parseGameBounds(text) {
+  const m = String(text).match(GAME_BOUNDS_CLAUSE_RE);
+  if (!m) return { lo: 1, hi: 100 };
+  const tokens = (m[3] !== undefined ? ["1", m[3]] : [m[1], m[2]])
+    .map((t) => String(t).replace(/[,.?!]+$/, ""));
+  if (!tokens.every((t) => /^-?\d+$/.test(t))) {
+    return { problem: 'I can only play with whole-number bounds — say "between 1 and 100".' };
+  }
+  const lo = Number(tokens[0]);
+  const hi = Number(tokens[1]);
+  if (Math.abs(lo) > GAME_BOUND_MAX || Math.abs(hi) > GAME_BOUND_MAX) {
+    return { problem: `that range is too big for a fair game — keep both bounds within ${GAME_BOUND_MAX.toLocaleString("en-US")}.` };
+  }
+  if (hi < lo) return { problem: `no number is between ${lo} and ${hi} — that range is empty. Put the smaller bound first.` };
+  if (hi === lo) return { problem: `between ${lo} and ${hi} leaves exactly one number, so there is nothing to guess. Pick a wider range.` };
+  return { lo, hi };
+}
+
+// Opening moves, both modes, as closed-set leads + a tail that may only carry
+// the bounds clause and the closing invitation words — any other tail is a
+// real sentence and falls through to the ordinary lanes.
+const GUESSER_OPEN_LEAD_RE = /^(?:i\s*(?:'m|am)\s+thinking\s+of\s+a\s+number|guess\s+my\s+number|guess\s+the\s+number\s+i\s*(?:'m|am)\s+thinking\s+of)\b(.*)$/i;
+const THINKER_OPEN_LEAD_RE = /^(?:think\s+of\s+a\s+number|guess\s+a\s+number\s+(?:between\s+\S+\s+and\s+\S+\s+|up\s+to\s+\S+\s+)?and\s+i\s*(?:'ll|\s+will)\s+tell\s+you\s+(?:if\s+it\s*(?:'s|\s+is)\s+)?higher\s+or\s+lower)\b(.*)$/i;
+const GUESSER_OPEN_TAIL_RE = /^[\s,.!?—-]*(?:and\s+)?(?:you\s+)?(?:can\s+|have\s+to\s+|try\s+to\s+)?(?:guess(?:\s+it|\s+what\s+it\s+is)?)?[\s,.!?—-]*$/i;
+const THINKER_OPEN_TAIL_RE = /^[\s,.!?—-]*(?:and\s+)?(?:i\s*(?:'ll|\s+will)\s+(?:try\s+to\s+)?guess(?:\s+it)?|i\s+guess)?[\s,.!?—-]*$/i;
+
+/** An opening move — { mode, bounds } — or null. */
+function matchGameOpening(line) {
+  const l = String(line).trim();
+  const guesser = l.match(GUESSER_OPEN_LEAD_RE);
+  if (guesser && GUESSER_OPEN_TAIL_RE.test(guesser[1].replace(GAME_BOUNDS_CLAUSE_RE, " "))) {
+    return { mode: "guesser", bounds: parseGameBounds(l) };
+  }
+  const thinker = l.match(THINKER_OPEN_LEAD_RE);
+  if (thinker && THINKER_OPEN_TAIL_RE.test(thinker[1].replace(GAME_BOUNDS_CLAUSE_RE, " "))) {
+    return { mode: "thinker", bounds: parseGameBounds(l) };
+  }
+  return null;
+}
+
+// Continuation replies, gated STRICTLY on an active game (the same discipline
+// MORE_RE applies to a held pending remainder): with no game standing none of
+// these are ever consulted, and mid-game any line that matches none of them
+// is an ordinary aside — answered by the normal lanes, game untouched.
+const GAME_STOP_RE = /^(?:ok[,\s]+)?(?:i\s+give\s+up|give\s+up|i\s+quit(?:\s+the\s+game)?|stop\s+(?:the\s+game|playing)|end\s+the\s+game)[.!?\s]*$/i;
+const GAME_REVEAL_RE = /^(?:just\s+tell\s+me|(?:just\s+)?tell\s+me\s+the\s+(?:number|answer)|what(?:'s|\s+is)\s+(?:the|your)\s+(?:secret\s+)?number|reveal\s+(?:it|the\s+number)|show\s+me\s+the\s+number)[.!?\s]*$/i;
+const GAME_OBS_HIGHER_RE = /^(?:no[,\s]+)?(?:higher|too\s+low|too\s+small|bigger|greater|go\s+higher|it(?:'s|\s+is)\s+higher)[.!?\s]*$/i;
+const GAME_OBS_LOWER_RE = /^(?:no[,\s]+)?(?:lower|too\s+high|too\s+big|smaller|less|go\s+lower|it(?:'s|\s+is)\s+lower)[.!?\s]*$/i;
+const GAME_OBS_CORRECT_RE = /^(?:yes|yep|yeah|correct|you\s+got\s+it|you\s+guessed\s+it|that(?:'s|\s+is)\s+it|that(?:'s|\s+is)\s+right|got\s+it|spot\s+on)[.!?\s]*$/i;
+const GAME_GUESS_RE = /^(?:is\s+it\s+)?(-?\d{1,12})\s*\??[.!?\s]*$/;
+const GAME_FALSE_CORRECT_RE = /^(?:but\s+)?you\s+(?:already\s+)?said\s+(?:it\s+was\s+)?(?:correct|right)\b/i;
+
+/** A natural-language plan frame — the shapes planLaneAnswer owns. Mid-game
+ *  these get the one-at-a-time decline instead of clobbering the slot. */
+function isPlanFrameLine(line) {
+  return GOAL_TEACH_RE.test(line) || GOAL_TEACH_INFINITIVE_RE.test(line)
+    || GOAL_TEACH_VERBLESS_RE.test(line) || GOAL_TEACH_NP_RE.test(line)
+    || GOAL_TEACH_IMPERATIVE_RE.test(line) || GOAL_TEACH_CONJUNCTION_RE.test(line)
+    || PLAN_SOLVE_RE.test(line) || LEGAL_MOVES_RE.test(line);
+}
+
+/** The per-turn goal line, table-driven off the live game state. */
+function gameGoal(game) {
+  if (game.mode === "guesser") return `narrow down your number — currently between ${game.lo} and ${game.hi}`;
+  if (!game.lastHint) return "let you find my secret number I've committed to";
+  return `let you find my secret number — said "${game.lastHint}" so it's ${game.lastHint === "higher" ? "above" : "below"} your last guess`;
+}
+
+/** One guesser-mode observation folded into the belief interval, or a
+ *  thinker-mode guess compared against the secret. Mutates planHolder.state
+ *  (the same slot the plan lane owns) and returns { text, goal?, lane, note },
+ *  or null when the line is not a game reply. */
+function gameContinuationAnswer(line, game, planHolder) {
+  const endGame = () => { planHolder.state = null; };
+  if (game.mode === "guesser") {
+    if (GAME_STOP_RE.test(line)) {
+      endGame();
+      return { text: 'OK, stopping — I never found it. Say "guess my number" any time to play again.', lane: "game-inform", note: "GAME — the game ended on request; the belief interval is discarded" };
+    }
+    if (GAME_OBS_CORRECT_RE.test(line)) {
+      const { guess, guesses } = game;
+      endGame();
+      return { text: `Got it — your number is ${guess}, found in ${guesses} guess${guesses === 1 ? "" : "es"}. Want to play again?`, lane: "game-answer", note: "GAME — the guess was confirmed; game over, won" };
+    }
+    const higher = GAME_OBS_HIGHER_RE.test(line);
+    const lower = !higher && GAME_OBS_LOWER_RE.test(line);
+    if (!higher && !lower) return null;
+    const prior = game.guess;
+    const next = { ...game };
+    if (higher) { next.lo = prior + 1; next.loSetBy = { guess: prior }; }
+    else { next.hi = prior - 1; next.hiSetBy = { guess: prior }; }
+    if (next.lo > next.hi) {
+      // The interval is EMPTY: no number satisfies every observation given,
+      // so name the two observations that cannot both hold and stop guessing
+      // — never a fabricated next guess over a premise known to be false.
+      endGame();
+      const earlier = higher
+        ? (game.hiSetBy ? `lower than ${game.hiSetBy.guess}` : `it's between ${game.lo0} and ${game.hi0}`)
+        : (game.loSetBy ? `higher than ${game.loSetBy.guess}` : `it's between ${game.lo0} and ${game.hi0}`);
+      const now = `${higher ? "higher" : "lower"} than ${prior}`;
+      return {
+        text: `That's not possible — you said ${earlier}, and now ${now}, but no number can be both. One of those answers must be wrong. Say "guess my number" to restart.`,
+        lane: "game-answer",
+        note: "GAME — the observations emptied the belief interval; refused to keep guessing under a false premise",
+      };
+    }
+    next.guess = Math.floor((next.lo + next.hi) / 2);
+    next.guesses = game.guesses + 1;
+    planHolder.state = { game: next };
+    return {
+      text: `My guess: ${next.guess}. Say higher, lower, or correct.`,
+      goal: gameGoal(next),
+      lane: "game-inform",
+      note: `GAME — folded "${higher ? "higher" : "lower"}" into the interval and bisected it again`,
+    };
+  }
+  // Thinker mode: tmct holds the ground truth, so every reply is a plain
+  // comparison — and the hint record is authoritative against false claims.
+  if (GAME_STOP_RE.test(line) || GAME_REVEAL_RE.test(line)) {
+    const { secret } = game;
+    endGame();
+    return { text: `The number was ${secret}. Want to play again?`, lane: "game-answer", note: "GAME — revealed the secret on request; game over" };
+  }
+  if (GAME_FALSE_CORRECT_RE.test(line)) {
+    const record = game.lastHint
+      ? `my last hint was "${game.lastHint}", after your guess of ${game.lastGuess}`
+      : "you haven't guessed yet";
+    return { text: `I haven't said "correct" yet — ${record}. Keep guessing.`, goal: gameGoal(game), lane: "game-answer", note: "GAME — rebutted a false \"you said correct\" from the game's own hint record" };
+  }
+  const m = String(line).trim().match(GAME_GUESS_RE);
+  if (!m) return null;
+  const guess = Number.parseInt(m[1], 10);
+  if (guess < game.lo0 || guess > game.hi0) {
+    return { text: `${guess} is outside the ${game.lo0} to ${game.hi0} range we agreed — try a number in range.`, goal: gameGoal(game), lane: "game-answer", note: "GAME — an out-of-range guess; declined rather than comparing outside the agreed bounds" };
+  }
+  const next = { ...game, guesses: game.guesses + 1, lastGuess: guess };
+  if (guess === game.secret) {
+    endGame();
+    return { text: `Correct — you got it in ${next.guesses} guess${next.guesses === 1 ? "" : "es"}! The number was ${guess}. Want to play again?`, lane: "game-answer", note: "GAME — the guess matched the secret; game over, won" };
+  }
+  next.lastHint = guess < game.secret ? "higher" : "lower";
+  planHolder.state = { game: next };
+  return { text: `${next.lastHint} — guess again.`, goal: gameGoal(next), lane: "game-answer", note: `GAME — compared the guess against the committed secret: ${next.lastHint}` };
+}
+
+/** The whole game lane for one turn: continuations first (active game only),
+ *  then opening moves, with the one-at-a-time declines both ways across the
+ *  shared plan slot. Null when the turn is not the game's to answer. */
+function guessNumberTurn(line, { planHolder, env }) {
+  const state = planHolder?.state ?? null;
+  const game = state?.game ?? null;
+  const opening = matchGameOpening(line);
+  if (game) {
+    const continuation = gameContinuationAnswer(line, game, planHolder);
+    if (continuation) return continuation;
+    if (opening) {
+      return { text: `we're already playing — I'm ${game.mode === "guesser" ? "guessing your number" : "holding a secret number"}. Say "I give up" to end this game first.`, lane: "game-inform", note: "GAME — an opening arrived mid-game; declined, the running game stands" };
+    }
+    if (isPlanFrameLine(line)) {
+      return { text: 'a guess-the-number game is active — say "I give up" to end it, then set your goal.', lane: "game-inform", note: "GAME — a plan frame arrived mid-game; the slot holds one thing at a time" };
+    }
+    return null;
+  }
+  if (!opening) return null;
+  const planActive = state && !state.done
+    && ((Array.isArray(state.goals) && state.goals.length) || (Array.isArray(state.actions) && state.actions.length));
+  if (planActive) {
+    return { text: "a plan is in progress — finish it or start a fresh goal before we play guess-the-number.", lane: "game-inform", note: "GAME — an opening arrived while a plan frame is active; the slot holds one thing at a time" };
+  }
+  if (opening.bounds.problem) {
+    return { text: opening.bounds.problem, lane: "game-inform", note: "GAME — the opening stated an unplayable range; declined honestly" };
+  }
+  const { lo, hi } = opening.bounds;
+  if (opening.mode === "guesser") {
+    const guess = Math.floor((lo + hi) / 2);
+    planHolder.state = { game: { mode: "guesser", lo0: lo, hi0: hi, lo, hi, guess, guesses: 1, loSetBy: null, hiSetBy: null } };
+    return {
+      text: `OK — you're thinking of a number between ${lo} and ${hi}; I'll guess it. My guess: ${guess}. Say higher, lower, or correct.`,
+      goal: `narrow down your number — currently between ${lo} and ${hi}`,
+      lane: "game-inform",
+      note: "GAME — guesser mode opened; the belief interval starts at the agreed bounds and the first guess is its midpoint",
+    };
+  }
+  const envSecret = Number.parseInt(String(env?.TMCT_GAME_SECRET ?? ""), 10);
+  const secret = Number.isSafeInteger(envSecret) && envSecret >= lo && envSecret <= hi
+    ? envSecret
+    : lo + Math.floor(Math.random() * (hi - lo + 1));
+  planHolder.state = { game: { mode: "thinker", lo0: lo, hi0: hi, secret, guesses: 0, lastHint: null, lastGuess: null } };
+  return {
+    text: `Done — I've thought of a number between ${lo} and ${hi}. Guess it, and I'll say higher, lower, or correct.`,
+    goal: "let you find my secret number I've committed to",
+    lane: "game-inform",
+    note: "GAME — thinker mode opened; the secret is committed for the whole game",
+  };
+}
+
 // "I want you to search for Widget" / "I'd like you to search for Widget" —
 // a closed-set indirect-request wrapper, checked VERY early. Without this it
 // is mis-swallowed by GENERAL_VERB_TEACH_RE as a bare teach triple (subject
@@ -11540,6 +11753,26 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // of falling through to the generic orientation.
   const bareCmd = asBareCommand(workingLine);
   if (bareCmd) return withLast(await runCommand(bareCmd, ctx), "use a specific tool/command directly");
+
+  // GUESS-THE-NUMBER — opening moves, and (with a game standing) the
+  // closed-set continuation replies. Checked before the conversational layer
+  // because the guesser-mode observations ("yes", "got it") share words with
+  // the acknowledgement sets, and before assertTurn/runAsk because an opening
+  // line would otherwise read as a declarative to remember. A mid-game line
+  // matching no game shape returns null here and the game stands untouched.
+  {
+    const gameTurn = guessNumberTurn(workingLine, { planHolder, env });
+    if (gameTurn) {
+      note(trace, `lane: ${gameTurn.note}`);
+      if (gameTurn.goal) note(trace, `goal: ${gameTurn.goal}`);
+      const result = plainTurn(workingLine, gameTurn.text, { via: "game", focus });
+      if (gameTurn.goal) result.goal = gameTurn.goal;
+      result.lane = gameTurn.lane;
+      const rec = withLast(result, gameTurn.goal ?? "play the guessing game");
+      rec.planState = planHolder.state;
+      return rec;
+    }
+  }
 
   // Conversational layer next (greetings, thanks, help, bye, why/say-more) — these
   // resolve no entity and carry their own preserved `last`. Bypasses withLast (a

@@ -19,6 +19,7 @@ const LANES = [
   "templates",
   "games/compositional",
   "games/drilldowns",
+  "games/guess-number",
   "games/messy-user",
   "games/openers",
   "games/relation-touches",

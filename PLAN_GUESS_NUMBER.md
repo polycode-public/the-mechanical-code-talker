@@ -1,7 +1,13 @@
 # PLAN_GUESS_NUMBER.md — closed-loop (feedback-driven) planning for tmct, validated against "I am thinking of a number"
 
-Status: IN DELIVERY (2026-07-18 run) — the phased sketch below is being implemented. At the run's
-start no guesser, thinker, or bisection code existed in `src/`. Since this doc was written, the general planner shipped underneath it: `findActionPath` and
+Status: BUILT (2026-07-18 run) — all three phases below are live in `src/services/chat.mjs`
+(`guessNumberTurn` and the game recognizer/continuation tables): both modes, the belief-interval
+bisection with the empty-interval refusal naming the contradicting pair, the thinker-mode
+comparison with out-of-bounds decline / reveal-on-request / false-"correct" rebuttal, the
+game-vs-plan one-at-a-time rule on the shared session slot, and the live-state goal line through
+the existing `withGoalLine` renderer. Pinned by `test/corpus/games/guess-number.jsonl` (11 rows,
+registered in the fast tier's lane sample). Since this doc was written, the general planner
+shipped underneath it: `findActionPath` and
 `findReachableSet` in `src/domain/planning.mjs`, the goal reasoner in `src/domain/router/goal-reasoner.mjs`,
 taught action families (the four `RULE_KIND_ACTION_*` kinds in `src/adapters/memory/core.mjs`), the `/plan`
 chat command and `tmct plan` CLI mode, and the `planState` session slot in `src/services/chat.mjs`. Hanoi

@@ -139,6 +139,10 @@ export function validateRow(row, predicateNames = Object.keys(predicates)) {
         flag(`setup.memoryBackend: must be one of ${MEMORY_BACKENDS.join("|")}`);
       }
       if (s.seed !== undefined && typeof s.seed !== "boolean") flag("setup.seed: must be a boolean");
+      if (s.env !== undefined && (typeof s.env !== "object" || s.env === null || Array.isArray(s.env)
+        || !Object.values(s.env).every((v) => typeof v === "string"))) {
+        flag("setup.env: must be an object of string values");
+      }
     }
   }
   return problems;
@@ -184,7 +188,7 @@ export async function runChatRow(row, preds = predicates) {
   try {
     const sessionOpts = {
       repoPath: setup.fixture ? fixturePath(setup.fixture) : scratchDir,
-      env: setup.seed ? {} : { TMCT_NO_SEED: "1" },
+      env: { ...(setup.seed ? {} : { TMCT_NO_SEED: "1" }), ...(setup.env ?? {}) },
       ...(setup.fixture ? { ephemeral: true } : {}),
       ...(setup.memoryBackend ? { memoryBackend: setup.memoryBackend } : {}),
     };
