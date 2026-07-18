@@ -922,7 +922,7 @@ The remaining tools are **cold**: still served, but not billed to an agent every
 | --- | --- | --- |
 | `tmct_describe` | Locate one symbol and list its typed edges (both directions) with provenance. | `symbol` (required) |
 | `tmct_signature` | One symbol's API surface (params, returns, raises/catches, flags, decorators, doc) without the body. | `symbol` (required) |
-| `tmct_impact` | Transitive reverse closure over imports/calls — what breaks if a module changes, by depth, with tests. | `module` (required) |
+| `tmct_impact` | Transitive reverse closure over imports/calls — what breaks if a module or symbol changes, by depth, with tests. | `module` (required) |
 | `tmct_search` | Free-text/ranked lookup over the code-map to find the right module or symbol. | `query`, `kind`, `decorator`, `name` |
 | `tmct_members` | A class's methods + attributes (file:line, decorators) in one slice. | `class` (required) |
 | `tmct_subclasses` | A class's base classes plus the transitive set of classes that extend it. | `class` (required) |

@@ -146,8 +146,8 @@ export const TOOL_DEFINITIONS = Object.freeze([
   {
     name: "tmct_impact",
     tier: "cold",
-    summary: "Transitive reverse closure over imports/calls — what breaks if a module changes, by depth, with tests.",
-    inputSchema: moduleArg("The module whose dependents you want."),
+    summary: "Transitive reverse closure over imports/calls — what breaks if a module or symbol changes, by depth, with tests.",
+    inputSchema: moduleArg("The module (or a symbol it defines) whose dependents you want."),
     example: { module: "django/utils/text.py" },
   },
   {
