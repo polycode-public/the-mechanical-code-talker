@@ -350,6 +350,8 @@
   "src/services/plan-viz.mjs",
   "src/services/sentences.mjs",
   "src/services/sessions.mjs",
+  "src/services/spider-fly-turn.mjs",
+  "src/services/spider-fly.mjs",
   "src/services/telemetry.mjs",
   "src/services/viz-theme.mjs",
   "src/surfaces/http/server-http.mjs",

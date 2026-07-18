@@ -53,6 +53,7 @@ import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { adventureTurn } from "./adventure.mjs";
+import { spiderFlyTurn } from "./spider-fly-turn.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
 // adapter (the browser bundle's ask-nlp stub carries no factory, so this is a
@@ -12246,6 +12247,9 @@ function guessNumberTurn(line, { planHolder, env }) {
   if (state?.adventure) {
     return { text: 'we\'re mid-adventure — say "stop playing" to end it before a number game.', lane: "game-inform", note: "GAME — an opening arrived mid-adventure; the slot holds one thing at a time" };
   }
+  if (state?.spiderFly) {
+    return { text: 'the spider-and-fly game is running — say "stop watching" to end it before a number game.', lane: "game-inform", note: "GAME — an opening arrived mid-spider-fly-game; the slot holds one thing at a time" };
+  }
   const planActive = state && !state.done
     && ((Array.isArray(state.goals) && state.goals.length) || (Array.isArray(state.actions) && state.actions.length));
   if (planActive) {
@@ -12616,6 +12620,27 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       if (advTurn.goal) result.goal = advTurn.goal;
       result.lane = advTurn.lane;
       const rec = withLast(result, advTurn.goal ?? "play the adventure");
+      rec.planState = planHolder.state;
+      return rec;
+    }
+  }
+
+  // SPIDER-AND-FLY — the opener ("watch the spider and the fly"), the stop
+  // command, the addressed spatial teach-frame, the bare tick command, and
+  // (once a game is live) the game's own turns. Ordered AFTER the adventure
+  // lane for the same reason the adventure lane follows guess-the-number: an
+  // opening line would otherwise read as a declarative or an orientation ask.
+  {
+    const sfTurn = await spiderFlyTurn(workingLine, {
+      planHolder, memoryDir, env, cache: factRowsCache, isPlanFrameLine,
+    });
+    if (sfTurn) {
+      note(trace, `lane: ${sfTurn.note}`);
+      if (sfTurn.goal) note(trace, `goal: ${sfTurn.goal}`);
+      const result = plainTurn(workingLine, sfTurn.text, { via: "game", miss: !!sfTurn.miss, focus });
+      if (sfTurn.goal) result.goal = sfTurn.goal;
+      result.lane = sfTurn.lane;
+      const rec = withLast(result, sfTurn.goal ?? "watch the spider-and-fly game");
       rec.planState = planHolder.state;
       return rec;
     }

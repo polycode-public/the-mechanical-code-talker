@@ -1,25 +1,27 @@
 # PLAN_SPIDER_FLY.md — a spider and a fly, planning against each other on a partly-hidden grid, rendered through an ontology→sprite mapping
 
-Status: RESEARCH/DESIGN — not yet implemented. Nothing in this document is live code.
+Status: PARTIALLY BUILT — §12 steps 1-5 (world/grid substrate, the headless turn engine, chat
+integration) are live code. Rendering, pages and the guess-number Play retrofit (steps 6-8) remain
+design only.
 
-## Build status (2026-07-18, paused mid-build on operator instruction)
+## Build status (2026-07-18)
 
-The design (this document) and §12 step 1 (world + grid substrate) are committed on `main`. The
-build paused there deliberately — not a blocker, the operator said stop.
+- **Committed on `main`**: this document; `src/domain/spider-fly-world.mjs` (grid geometry, seed
+  taxonomy, static row generators — §3/§4/§7); `scripts/gen-spider-fly-world.mjs` and the worlds
+  pack shard; `src/services/spider-fly.mjs` (the headless turn engine — fold, pathfinding,
+  visibility/belief, greedy evasion, the egg/hatch/spawn/starve ecology pass — §12 steps 2-3 and 5;
+  tested in `test/services/spider-fly.test.mjs`); `src/services/spider-fly-turn.mjs` (the fourth
+  chat lane — §12 step 4, §6): the opener/stop/tick/address recognizers, the §6.1 spatial
+  teach-frame, and `spiderFlyTurn`, wired into `runTurn` immediately after the adventure block, with
+  the matching `spiderFly` coexistence arm added to `guessNumberTurn` and `adventureTurn`; covered by
+  `test/corpus/games/spider-fly.jsonl` and sampled in the fast tier's lane list.
+- **Not yet started**: the sprite registry/resolver, the canvas/SVG renderer and silk-thread plan
+  drawing, the POV overlay (§12 step 6); the full-screen/home-page pages and browser bundle (step
+  7); the guess-number Play retrofit (step 8).
 
-- **Committed on `main`**: this document; `src/domain/spider-fly-world.mjs` (pure grid geometry,
-  the seed taxonomy, the static fact/rule/meta row generators — §3/§4/§7);
-  `scripts/gen-spider-fly-world.mjs` (writes `corpus/worlds/src/spider-fly.jsonl`, 479 rows); a
-  completed `npm run gen:worlds-pack` run (`corpus/worlds/shards/spider-fly.jsonl.gz` at 2,829
-  bytes gzipped, well under the 32KB budget; `corpus/worlds/index.json.gz`/`manifest.json` updated
-  to carry it alongside `ashcombe-hall`); `test/estate/pack-manifest.json` regenerated to match.
-- **Not yet started**: the actual turn engine (pathfinding, visibility/belief, the fly's evasion
-  scoring, the ecology pass — §12 steps 2-3 and 5) and its tests, and everything after it (chat
-  integration, rendering, pages, the guess-number retrofit — §12 steps 4, 6-8).
-
-**To resume**: pick up at §12 step 2 (single-agent pathfinding) directly on `main` — step 1's
-module (`src/domain/spider-fly-world.mjs`) already exports the grid geometry a pathfinding closure
-needs (`cellId`, `parseCellId`, `DIRECTION_DELTA`, `visibleCells`).
+**To resume**: pick up at §12 step 6 (rendering) — the chat lane's own `runSpiderFlyTick` calls
+already surface everything a renderer needs (`agents`, `ecology`) with no interface changes
+required.
 
 **Revised 2026-07-18, same session.** A second research pass checked three things this document
 originally left open, and the operator settled three more:

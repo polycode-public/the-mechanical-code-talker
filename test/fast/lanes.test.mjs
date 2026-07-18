@@ -25,6 +25,7 @@ const LANES = [
   "games/messy-user",
   "games/openers",
   "games/relation-touches",
+  "games/spider-fly",
   "games/teach-recall",
 ];
 
