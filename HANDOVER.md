@@ -36,7 +36,9 @@ same commit as the work it describes:
 - T1w2 `PLAN_GUESS_NUMBER` phases 1–3; `PLAN_LEARN_ON_MISS` chat hook; `PLAN_DIALOGUE_ACTS`
   envelope wiring — QUEUED (after T1)
 - T2 `PLAN_SYLLOGIST` §3 ATMS environment sets + §2 semi-naive delta + §4 slice — STARTED
-- T3 `PLAN_LEARN_ON_MISS` reference provenance, pack pipeline, loader + provider seam — STARTED
+- T3 `PLAN_LEARN_ON_MISS` reference provenance, pack pipeline, loader + provider seam — BUILT +
+  VERIFIED (shipped pack committed: 3,887 articles from the 20260701 simplewiki dump, estate
+  guards active; the on-miss chat hook rides T1 wave 2)
 - T4 home-page browser chat surface + seed payload + demo rail (syllogist demo first;
   guess-number and learn-on-miss demos follow their features) — STARTED
 - T5 `PLAN_25_BACKLOG` §10 — restore the resolver's `ab-c2-what-to-test` plan — STARTED

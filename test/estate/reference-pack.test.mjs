@@ -82,9 +82,18 @@ test("sentencesUpTo keeps whole sentences under the cap; isaOf needs the pattern
   assert.equal(sentencesUpTo(text, 10), "A meadow i", "a first sentence over the cap is hard-cut at it");
   const lexicon = loadLexicon();
   assert.equal(isaOf("An otter is an animal that swims.", lexicon), "animal");
-  assert.equal(isaOf("Falcons are birds of prey.", lexicon), null, "'birds' is plural — the pattern wants a/an");
   assert.equal(isaOf("A zorbulon is a blorf with fur.", lexicon), null, "an unresolvable head noun is no isa");
   assert.equal(isaOf("it is a bird.", lexicon), null, "must start like a sentence");
+  assert.equal(
+    isaOf("Otters are animals that live near water. They are a part of a larger family.", lexicon),
+    "animal",
+    "the copula must sit in the first sentence — a later sentence never supplies the category",
+  );
+  assert.equal(isaOf("A beagle is a small kind of dog.", lexicon), "dog", "an of-chain resolves to its final noun");
+  assert.equal(isaOf("A harbor is a place where ships shelter.", lexicon), "place", "a relative clause ends the phrase");
+  assert.equal(isaOf("An otter is a member of the weasel family.", lexicon), null, "a generic classifier head is no isa");
+  assert.equal(isaOf("The sun is light and warm.", lexicon), null, "a bare predicate head must be an inflected plural");
+  assert.equal(isaOf("Falcons are birds of prey.", lexicon), null, "the of-chain head 'prey' is not a folded plural");
 });
 
 // ---- the pipeline end-to-end over the dump fixture --------------------------

@@ -195,16 +195,53 @@ export function sentencesUpTo(text, cap) {
   return out || String(text ?? "").slice(0, cap);
 }
 
-const ISA_RE = /^[A-Z].{0,80}? (?:is|are) (?:a|an) ([a-z][a-z -]{1,40}?)[,.\s]/;
+const ISA_RE = /^[A-Z][^.!?]{0,80}? (?:is|are) (?:(a|an|the) )?([a-z][a-z -]{1,60})/;
 
-/** The isa lemma of a lead's first sentence, or null: the pattern must match
- *  and the phrase's head noun must be a lexicon entry. */
+// Words that end the noun phrase: a relative clause or a trailing modifier
+// carries detail, not the category ("a place where ships shelter" → place).
+const ISA_CLAUSE_CUT = new Set([
+  "that", "which", "where", "who", "whose", "whom", "when", "used", "found",
+  "made", "with", "in", "on", "for", "from", "by", "to", "and", "or",
+]);
+// Classifier heads carry no category of their own ("a member of the cat
+// family" names family membership, not what the thing is) — no isa beats a
+// generic one, because a stored subClassOf must stay meaningful.
+const ISA_GENERIC_HEADS = new Set([
+  "type", "kind", "sort", "form", "class", "variety", "group", "part",
+  "piece", "member", "way", "term", "name", "word", "thing", "example",
+  "family", "genus", "species", "unit", "series", "set", "list", "number",
+  "amount",
+]);
+const ISA_ARTICLES = new Set(["a", "an", "the"]);
+
+/** The isa lemma of a lead's first sentence, or null. The copula must sit in
+ *  the first sentence; an of-chain resolves to its final noun ("a kind of
+ *  dog" → dog); a bare-plural predicate counts only when the head is an
+ *  inflected plural the lexicon folds ("are animals that…" → animal, but
+ *  "is light" stays null); a generic classifier head is no isa at all. */
 export function isaOf(plain, lexicon) {
   const m = String(plain ?? "").match(ISA_RE);
   if (!m) return null;
-  const head = m[1].trim().split(/[ -]/).pop();
-  const entry = lookupNoun(lexicon, head);
-  return entry ? normFactTerm(entry.lemma) : null;
+  const bare = !m[1];
+  const window = [];
+  for (const word of m[2].trim().split(/\s+/)) {
+    if (ISA_CLAUSE_CUT.has(word)) break;
+    window.push(word);
+    if (window.length >= 6) break;
+  }
+  const lastOf = window.lastIndexOf("of");
+  let headWords = lastOf >= 0 ? window.slice(lastOf + 1) : window;
+  while (headWords.length && ISA_ARTICLES.has(headWords[0])) headWords = headWords.slice(1);
+  if (!headWords.length) return null;
+  const headToken = headWords[headWords.length - 1].split("-").pop();
+  if (!headToken || ISA_GENERIC_HEADS.has(headToken)) return null;
+  const entry = lookupNoun(lexicon, headToken);
+  if (!entry) return null;
+  const lemma = normFactTerm(entry.lemma);
+  // A bare predicate ("is light") is only trusted when the head is an
+  // inflected plural the lexicon folded back to its lemma.
+  if (bare && (!/s$/.test(headToken) || normFactTerm(headToken) === lemma)) return null;
+  return lemma;
 }
 
 function articleUrlFor(title) {

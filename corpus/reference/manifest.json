@@ -1,0 +1,367 @@
+{
+  "version": 1,
+  "generated": "by scripts/fetch-reference-pack.mjs",
+  "dump": {
+    "url": "https://dumps.wikimedia.org/simplewiki/20260701/simplewiki-20260701-pages-articles-multistream.xml.bz2",
+    "mirrorUrl": "https://archive.org/download/simplewiki-20260701/simplewiki-20260701-pages-articles-multistream.xml.bz2",
+    "date": "20260701",
+    "sha256": "864c983dfa603f1bac45801ee5cb38e6ac535a658d78f6fa418407bcf14c40f5"
+  },
+  "built": "2026-07-18",
+  "counts": {
+    "articles": 3887,
+    "aliases": 337,
+    "shards": 64
+  },
+  "budgets": {
+    "textBytes": {
+      "used": 2591481,
+      "max": 10485760
+    },
+    "shardsGzBytes": {
+      "used": 1223112,
+      "max": 3670016
+    },
+    "indexGzBytes": {
+      "used": 55502,
+      "max": 614400
+    }
+  },
+  "files": [
+    {
+      "file": "index.json.gz",
+      "bytes": 55502,
+      "sha256": "3d66d7e464228950ab630dcc97a032b662aefaaaac79cdce1bb44232b4797d99"
+    },
+    {
+      "file": "LICENSE-NOTICE",
+      "bytes": 1597,
+      "sha256": "56b7d512dac04d65926020853bd880ca260b6f6b9173739de47456c0a2dfdb54"
+    },
+    {
+      "file": "README.md",
+      "bytes": 1001,
+      "sha256": "e2d62e2ed91b7769e578338fd82a7ceee49e896c1f7885f1587e2af461f46a48"
+    },
+    {
+      "file": "shards/ref-00.jsonl.gz",
+      "bytes": 17728,
+      "sha256": "424b91143053c5bc9832b26f964bddb980d2ecd1775042620590d8fa088a969b"
+    },
+    {
+      "file": "shards/ref-01.jsonl.gz",
+      "bytes": 15198,
+      "sha256": "4c128fef0628969abc8707cfdd578d31416869f0636b3766a4d7c8ceeb25f100"
+    },
+    {
+      "file": "shards/ref-02.jsonl.gz",
+      "bytes": 20910,
+      "sha256": "3665c7d37d8fcb4ac976ee57e866e17c93183b5e2b99e88c0c712269ae5dabe7"
+    },
+    {
+      "file": "shards/ref-03.jsonl.gz",
+      "bytes": 17671,
+      "sha256": "f3b9e426d7a4017d08f32f7ed1246930c9acfba57e31ce85ec28f2382b8d8888"
+    },
+    {
+      "file": "shards/ref-04.jsonl.gz",
+      "bytes": 21028,
+      "sha256": "21ba6ba287f620acadede71050b6e2580653d659ced952d7c3ac5c30aa251311"
+    },
+    {
+      "file": "shards/ref-05.jsonl.gz",
+      "bytes": 19760,
+      "sha256": "dbd20fb85a17ce6f9f86d175fefb769d9f92cc2107e0ed5fdfbbe9b647697b67"
+    },
+    {
+      "file": "shards/ref-06.jsonl.gz",
+      "bytes": 19729,
+      "sha256": "28b8ef15a39f6788cd9e06f47b7bbd490b7c5ed6480850b528bec94e1305dca0"
+    },
+    {
+      "file": "shards/ref-07.jsonl.gz",
+      "bytes": 15624,
+      "sha256": "180b711f0acbf660aeca813173c9ecc3814d9c0ff752856856924eef7abfd786"
+    },
+    {
+      "file": "shards/ref-08.jsonl.gz",
+      "bytes": 21618,
+      "sha256": "73a407fe231e2f57c60115142bbd7ae4068ce2fd825651bb23cfd33393c8bd59"
+    },
+    {
+      "file": "shards/ref-09.jsonl.gz",
+      "bytes": 22319,
+      "sha256": "72049455ed2e7680e5b5ea5abf757e5b2efb16975dfd20339f7f803071e7ca49"
+    },
+    {
+      "file": "shards/ref-0a.jsonl.gz",
+      "bytes": 18437,
+      "sha256": "e2bb141e560ccc7200e3d5c0a336ee529b19d9672aef3b5838df23dd92731126"
+    },
+    {
+      "file": "shards/ref-0b.jsonl.gz",
+      "bytes": 15514,
+      "sha256": "d6348898f176eb3ae964ce3bffcab98d8f886d27af651744c9d07a975a7c8f97"
+    },
+    {
+      "file": "shards/ref-0c.jsonl.gz",
+      "bytes": 15464,
+      "sha256": "06c0baf1a5bf500ea16938fb30964dac0d21d08df7eac502a2fa3ffa7c0964b1"
+    },
+    {
+      "file": "shards/ref-0d.jsonl.gz",
+      "bytes": 20835,
+      "sha256": "1c1f9260beea6f5157ebc129a7cb7ddbedc0a1c2235b14b6ee28f9a6a97a2608"
+    },
+    {
+      "file": "shards/ref-0e.jsonl.gz",
+      "bytes": 17876,
+      "sha256": "a29f862c3b2e6156600133aca1f2029b71b9c38b3a4d3f599026e004762396cb"
+    },
+    {
+      "file": "shards/ref-0f.jsonl.gz",
+      "bytes": 23315,
+      "sha256": "a6e920884152fcb1ba80a0c2064ada692a2ba03423db30fe8937aa67decf71c7"
+    },
+    {
+      "file": "shards/ref-10.jsonl.gz",
+      "bytes": 17970,
+      "sha256": "148e6cc326783b71614cd040eff57c3d22608574c09f50f43630ad15a1160136"
+    },
+    {
+      "file": "shards/ref-11.jsonl.gz",
+      "bytes": 17576,
+      "sha256": "7abe3b5bce2b18939aabcd385e2a042a8aa6f6f65c279a9929306ed0c6f7f7c9"
+    },
+    {
+      "file": "shards/ref-12.jsonl.gz",
+      "bytes": 20857,
+      "sha256": "cf67856433419c75cde98d6e5bd408f91572268e5eb160d5e80dbc91e5194892"
+    },
+    {
+      "file": "shards/ref-13.jsonl.gz",
+      "bytes": 15395,
+      "sha256": "a966ba51d0985ae0e715baa68ee988e86e486a3853d30ad5f7e87aca4432be45"
+    },
+    {
+      "file": "shards/ref-14.jsonl.gz",
+      "bytes": 19745,
+      "sha256": "482de4f46504e8cf880a479395c74b9b4be95c57786691b78f76266c5f3e00c9"
+    },
+    {
+      "file": "shards/ref-15.jsonl.gz",
+      "bytes": 21963,
+      "sha256": "efcc1121c49195f32b25e1ac7ac5f2cc7e43e75ec2a8fbd363c340b2f20609a3"
+    },
+    {
+      "file": "shards/ref-16.jsonl.gz",
+      "bytes": 17241,
+      "sha256": "6197d0f11094596e09f373767d9c8532a3ee1be791404435e357132ee49c131b"
+    },
+    {
+      "file": "shards/ref-17.jsonl.gz",
+      "bytes": 19967,
+      "sha256": "31e92b1b7e996101e708f3b5e8ab67b19387c45b2047af43280dc541895087a7"
+    },
+    {
+      "file": "shards/ref-18.jsonl.gz",
+      "bytes": 15752,
+      "sha256": "f206f4da0b643c8ec9a8caed486ec95f0ea89fa5a0071a2160cc97ccb871b591"
+    },
+    {
+      "file": "shards/ref-19.jsonl.gz",
+      "bytes": 23263,
+      "sha256": "fa29da57464a21e5b5d707a8511608aaf94abae1c6824524c09e45375fe8124e"
+    },
+    {
+      "file": "shards/ref-1a.jsonl.gz",
+      "bytes": 17411,
+      "sha256": "a6bc4f20003f6ddedcfc29278e4260c474f31f99b73487634adb374570b60d77"
+    },
+    {
+      "file": "shards/ref-1b.jsonl.gz",
+      "bytes": 16398,
+      "sha256": "49f8abe45f3eae69a4b493244ddc6c2f46d533af19c95f451da16b545bbebe5f"
+    },
+    {
+      "file": "shards/ref-1c.jsonl.gz",
+      "bytes": 17751,
+      "sha256": "657d9976acfe103ee587ec4570009e8c5ceac8ed5b54a3665c3091f3844d41b6"
+    },
+    {
+      "file": "shards/ref-1d.jsonl.gz",
+      "bytes": 21898,
+      "sha256": "c06f8b571ab0f8a2a13b5e5c3d56b7ba67e346a7abcd6e6bdd22cb8ebbd139e8"
+    },
+    {
+      "file": "shards/ref-1e.jsonl.gz",
+      "bytes": 14573,
+      "sha256": "a87c49f088e195aee116cfdc69c86bcb623d3c5f8c5793ef15fe99db9537f0f8"
+    },
+    {
+      "file": "shards/ref-1f.jsonl.gz",
+      "bytes": 20740,
+      "sha256": "3a322a0d90726f62062bc7353dee4b80d2e57cc8456a048d30e6722d3c9fab85"
+    },
+    {
+      "file": "shards/ref-20.jsonl.gz",
+      "bytes": 22853,
+      "sha256": "14dd3ca030887198a8c77bb16d9776bd12511b6f06e77548f9a0900c91b0958d"
+    },
+    {
+      "file": "shards/ref-21.jsonl.gz",
+      "bytes": 20271,
+      "sha256": "59297d6c756d77e2b3c3556f71a7459a9efff9b762ae69e4c12b1e0c666b873d"
+    },
+    {
+      "file": "shards/ref-22.jsonl.gz",
+      "bytes": 25220,
+      "sha256": "d9cadbbb8a441e93ef18dd5338c9f97f98c59f99ba78edbb7e63959bbe179edf"
+    },
+    {
+      "file": "shards/ref-23.jsonl.gz",
+      "bytes": 13763,
+      "sha256": "0d26e3d0c28a0979b361807a629fff00d86a44ac723b141f26f10e61477125dd"
+    },
+    {
+      "file": "shards/ref-24.jsonl.gz",
+      "bytes": 16471,
+      "sha256": "4b17ecf08e42fdff809ddacd9f9fa16df87a40ead1d7309433632ce3d71b03cf"
+    },
+    {
+      "file": "shards/ref-25.jsonl.gz",
+      "bytes": 20313,
+      "sha256": "79dd4e81d5e3db5406649beb951c8c8599a3187ef32c5a691ed77ed4d99dc20f"
+    },
+    {
+      "file": "shards/ref-26.jsonl.gz",
+      "bytes": 23351,
+      "sha256": "1bab2a157ef56cf7304b7dc3a8fe5f41e380de9bd76fd756558ea000b649877e"
+    },
+    {
+      "file": "shards/ref-27.jsonl.gz",
+      "bytes": 14092,
+      "sha256": "60697546628606f62fe9d89a2afba48c0042d08b59563e108a217bc6fdc6c738"
+    },
+    {
+      "file": "shards/ref-28.jsonl.gz",
+      "bytes": 18367,
+      "sha256": "e6adad70b742dc00c5cff91f07db38a091f7803119662410e67851e91fa49277"
+    },
+    {
+      "file": "shards/ref-29.jsonl.gz",
+      "bytes": 19381,
+      "sha256": "73a859a35820f4b0852a48965dceeff7097b0fa742e21fe6b62f38f8e8e564d2"
+    },
+    {
+      "file": "shards/ref-2a.jsonl.gz",
+      "bytes": 22450,
+      "sha256": "fc3185082c638017174b7df9cae6bca8731246d504740dec72d3ef64db37b08b"
+    },
+    {
+      "file": "shards/ref-2b.jsonl.gz",
+      "bytes": 15819,
+      "sha256": "1df5989b338527361d62f198c80f1fa6e1154562de9ae3783761c4ff725fb7e0"
+    },
+    {
+      "file": "shards/ref-2c.jsonl.gz",
+      "bytes": 18064,
+      "sha256": "24d57b6fb2e8e1fdfeed18d6c5b92a24312188b3dac01523aea57b72244bdbc6"
+    },
+    {
+      "file": "shards/ref-2d.jsonl.gz",
+      "bytes": 15430,
+      "sha256": "deaf67d7015b527abd108e1bdf5c3a15b161608fa77c8ae083a3f32663a1f881"
+    },
+    {
+      "file": "shards/ref-2e.jsonl.gz",
+      "bytes": 23366,
+      "sha256": "3eaef9239d93b606e9a8924f10a59ddd115bff13577b1703baf3e820fc826fcd"
+    },
+    {
+      "file": "shards/ref-2f.jsonl.gz",
+      "bytes": 20057,
+      "sha256": "6f99715a253120d5acf43bb60c98d9c5927c37e6cdbe3cfb83d378faf20a6eb6"
+    },
+    {
+      "file": "shards/ref-30.jsonl.gz",
+      "bytes": 17575,
+      "sha256": "0d0286b250d98cd1adcf670a09bce4920371aec229ec858b8ba7f3f79ff1dd92"
+    },
+    {
+      "file": "shards/ref-31.jsonl.gz",
+      "bytes": 20108,
+      "sha256": "d6ce0bc412c2d878cae25b0a5068ef4459f641caecb832a155ac69363fcf0ff3"
+    },
+    {
+      "file": "shards/ref-32.jsonl.gz",
+      "bytes": 19619,
+      "sha256": "cdf3d2e10fa93767913657a2ea3e5368eb3151daaa087c5cd4da1d030b075184"
+    },
+    {
+      "file": "shards/ref-33.jsonl.gz",
+      "bytes": 16450,
+      "sha256": "224f5899f9b8aa57111b0803740e7780d872dbd19d7fea9a544b16d4ac6f01df"
+    },
+    {
+      "file": "shards/ref-34.jsonl.gz",
+      "bytes": 23199,
+      "sha256": "156ad275936a2ed0df152badd06a1c00a65964614370a14a3c24b709019bb9bc"
+    },
+    {
+      "file": "shards/ref-35.jsonl.gz",
+      "bytes": 20470,
+      "sha256": "875ff38c0592daf671a967046b9a18e2cfbc5b40214cd458e99e602f4bc527a7"
+    },
+    {
+      "file": "shards/ref-36.jsonl.gz",
+      "bytes": 17798,
+      "sha256": "b0133b41e7b7a2084d793d9ef481d54efc475554af13a24d0cc0fed6b1cc486e"
+    },
+    {
+      "file": "shards/ref-37.jsonl.gz",
+      "bytes": 20105,
+      "sha256": "42ade53d919276e42d3f66fd4cadd9227070abae80c6445a05991ba558a32c46"
+    },
+    {
+      "file": "shards/ref-38.jsonl.gz",
+      "bytes": 20813,
+      "sha256": "8711266ec7e34842b005d07d4c6ff2020f1cb49b49c2fbdcd58ff79c1e0927f1"
+    },
+    {
+      "file": "shards/ref-39.jsonl.gz",
+      "bytes": 25824,
+      "sha256": "b25bb5ab48d79505786d4e356e535c35fa25324c06c17f90e05622da7981cb20"
+    },
+    {
+      "file": "shards/ref-3a.jsonl.gz",
+      "bytes": 17580,
+      "sha256": "abcd91a272e2d15a2fd4a79deeb3d7886cc43a0114122c991767dd0da5a18b4b"
+    },
+    {
+      "file": "shards/ref-3b.jsonl.gz",
+      "bytes": 15631,
+      "sha256": "622e75e98e9c7988e0f8e01f15c6561a2ca9f5064dc921c467d16e906545e91a"
+    },
+    {
+      "file": "shards/ref-3c.jsonl.gz",
+      "bytes": 24999,
+      "sha256": "51affbb6e7b6ed8c2360376258450f9bdac98d8a19f19d6799a6cbca30f792e6"
+    },
+    {
+      "file": "shards/ref-3d.jsonl.gz",
+      "bytes": 14962,
+      "sha256": "1f00845cb054498eae6ad35480b01da9cc82f2d0e7c8e7de50d0c3ab30c7b934"
+    },
+    {
+      "file": "shards/ref-3e.jsonl.gz",
+      "bytes": 20078,
+      "sha256": "86e637fc29b5480831e52636d4cafebac19262f3c1062253d063241b18e54dd0"
+    },
+    {
+      "file": "shards/ref-3f.jsonl.gz",
+      "bytes": 17107,
+      "sha256": "4f942fdde72bfcab926ee68e325c00e4397442cd0b2429c94cdf169558bbeadc"
+    }
+  ]
+}
