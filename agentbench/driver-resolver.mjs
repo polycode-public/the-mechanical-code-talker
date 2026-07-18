@@ -137,14 +137,16 @@ export async function resolverDriver(request, tools, ctx) {
     return composed === null ? loop : { ...loop, composed };
   }
 
-  // SINGLE-SHOT -> the resolver. No fold: a single grounded call IS its own
-  // answer (result-graded cases here are those whose TRUE answer needs a
-  // multi-step fold the single shot does not emit — they stay result-unmet,
-  // which is the honest plan-vs-result gap the split exists to show).
+  // SINGLE-SHOT -> the resolver. No fold to compute: a single grounded call IS
+  // its own answer, so its composed answer is the call's own STRUCTURED result
+  // set, read back through ctx.dispatch (read-only, deterministic, inside the
+  // timeout guard — the same re-dispatch composeResult does for folds). A case
+  // that pins expect.result on a single-shot plan grades against exactly this.
   const r = await resolveOne(request, tools, ctx, { execute: true });
   if (r.refused) {
     return { calls: [], refused: true, terminated: true, proof: [], driver: DRIVER, why: r.reason };
   }
+  const res = await ctx.dispatch(r.selected.name, r.selected.input || {});
   return {
     calls: [r.selected],
     refused: false,
@@ -153,5 +155,6 @@ export async function resolverDriver(request, tools, ctx) {
     driver: DRIVER,
     why: r.why,
     observed: r.observed,
+    ...(res.ok && Array.isArray(res.result) ? { composed: res.result } : {}),
   };
 }

@@ -118,8 +118,8 @@ test("parseCases: lints bad cases — duplicate id, bad tag, bad expect key, foc
 const OUTCOME = {
   answer: "app/lib/b.mjs and app/lib/c.mjs.",
   miss: false,
-  resolvedIds: ["mod-a"],
-  answeredIds: ["mod-b", "mod-c"],
+  resolvedIds: ["mod:app/lib/a.mjs"],
+  answeredIds: ["mod:app/lib/b.mjs", "mod:app/lib/c.mjs"],
   focusLabel: "app/lib/a.mjs",
   end: false,
 };
@@ -129,8 +129,8 @@ test("evaluateExpect: each check kind passes and fails on the right evidence", (
     miss: false,
     answerMatch: ["app/lib/b\\.mjs", "c\\.mjs"],
     answerNotMatch: ["zebra"],
-    answeredIdsInclude: ["mod-b"],
-    resolvedIdsInclude: ["mod-a"],
+    answeredIdsInclude: ["mod:app/lib/b.mjs"],
+    resolvedIdsInclude: ["mod:app/lib/a.mjs"],
     focusLabel: "app/lib/a.mjs",
     end: false,
   }, OUTCOME);

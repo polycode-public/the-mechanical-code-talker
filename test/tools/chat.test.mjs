@@ -187,14 +187,14 @@ test("runTurn: /help lists the commands (from COMMANDS) and the ask question sha
 
 test("runTurn: an entity command sets the focus and records its resolved id", async () => {
   const { record, focus } = await runTurn("/describe app/lib/a.mjs", { config: CONFIG, graph: await graph() });
-  assert.deepEqual(focus, { id: "mod-a", label: "app/lib/a.mjs" });
+  assert.deepEqual(focus, { id: "mod:app/lib/a.mjs", label: "app/lib/a.mjs" });
   assert.equal(record.command, "describe");
-  assert.deepEqual(record.resolvedIds, ["mod-a"], "the command turn records the entity it resolved");
+  assert.deepEqual(record.resolvedIds, ["mod:app/lib/a.mjs"], "the command turn records the entity it resolved");
 });
 
 test("runTurn: a bare 'it' resolves to the focus (threaded to ask as contextId)", async () => {
   const g = await graph();
-  const focus = { id: "mod-a", label: "app/lib/a.mjs" };
+  const focus = { id: "mod:app/lib/a.mjs", label: "app/lib/a.mjs" };
   const withFocus = await runTurn("which modules import it", { config: CONFIG, graph: g, focus });
   assert.match(withFocus.answer, /app\/lib\/b\.mjs/, "'it' resolved to the focus module");
   // canonicalOf reads parsed.object as typed ("it"), never contextId-resolved — so the
@@ -210,11 +210,11 @@ test("runTurn: a bare 'it' resolves to the focus (threaded to ask as contextId)"
 
 test("runTurn: a no-arg entity command reuses the focus", async () => {
   const g = await graph();
-  const focus = { id: "mod-a", label: "app/lib/a.mjs" };
+  const focus = { id: "mod:app/lib/a.mjs", label: "app/lib/a.mjs" };
   const { answer, record } = await runTurn("/impact", { config: CONFIG, graph: g, focus });
   const direct = await dispatchTool("tmct_impact", { module: "app/lib/a.mjs" }, { config: CONFIG });
   assert.equal(answer, `${direct}\n\nGoal (inferred): Understand what a change to this module would reach (impact closure).`);
-  assert.deepEqual(record.resolvedIds, ["mod-a"]);
+  assert.deepEqual(record.resolvedIds, ["mod:app/lib/a.mjs"]);
   // no arg AND no focus → a helpful "needs a …" line, not a crash
   const bare = await runTurn("/impact", { config: CONFIG, graph: g, focus: null });
   assert.match(bare.answer, /\/impact needs a module/);
@@ -236,7 +236,7 @@ test("runTurn: /focus sets the focus explicitly; no-arg /focus reports it", asyn
 test("runTurn: a bare-ask hit sets the focus so the next 'it' has something to bind to", async () => {
   const g = await graph();
   const { focus } = await runTurn("what does app/lib/a.mjs import", { config: CONFIG, graph: g });
-  assert.equal(focus?.id, "mod-a", "the ask object term became the focus");
+  assert.equal(focus?.id, "mod:app/lib/a.mjs", "the ask object term became the focus");
 });
 
 // ---- aggregate / count queries (answered off the graph header) ----
@@ -265,9 +265,9 @@ test("answerCount: an unknown kind lists what it CAN count, and a non-count line
 // (ask-vocab.mjs's EDGE_NOUN_TO_METRIC, the same table the superlative lane
 // "which module has the most tests" already reads) — answerEdgeCount routes
 // them through the SAME per-entity degree computation (ask.mjs's exported
-// degreeMetric) rather than the header-count path. Fixture edges: mod-b,
-// mod-c, mod-e all import mod-a (3 importers); mod-g calls mod-a (1 caller);
-// test-b tests mod-b and mod-d (1 test covers each); cls-button inherits
+// degreeMetric) rather than the header-count path. Fixture edges: b.mjs,
+// c.mjs, e.mjs all import a.mjs (3 importers); scripts/g.mjs calls a.mjs (1
+// caller); b.test.mjs tests b.mjs and d/handler.mjs (1 test covers each); cls-button inherits
 // cls-widget (1 subclass); cls-widget contains m-render + a-name (2 members).
 
 test("runTurn: 'how many tests cover X' answers via the edge-metric path, not 'I can't count'", async () => {
@@ -341,7 +341,7 @@ test("answerCount Bug C: an unknown kind with a graph carrying NO countable indi
 
 test("runTurn: a count question is answered before ask, recorded as a non-miss turn, focus untouched", async () => {
   const g = await graph();
-  const focus = { id: "mod-a", label: "app/lib/a.mjs" };
+  const focus = { id: "mod:app/lib/a.mjs", label: "app/lib/a.mjs" };
   const { answer, record, focus: after } = await runTurn("how many classes are there", { config: CONFIG, graph: g, focus });
   assert.equal(answer, "3 classes.");
   assert.equal(record.miss, false);
@@ -637,8 +637,8 @@ test("runChat: structured sidecar + read-time graph append — the session becom
     assert.equal(hit.type, "turn");
     assert.equal(hit.query, "which modules import a.mjs");
     assert.equal(hit.miss, false);
-    assert.ok(hit.answeredIds.includes("mod-b"), `answer cites the graph's entity ids: ${hit.answeredIds}`);
-    assert.deepEqual(hit.resolvedIds, ["mod-a"], "the engine's resolveObject hit for the object term");
+    assert.ok(hit.answeredIds.includes("mod:app/lib/b.mjs"), `answer cites the graph's entity ids: ${hit.answeredIds}`);
+    assert.deepEqual(hit.resolvedIds, ["mod:app/lib/a.mjs"], "the engine's resolveObject hit for the object term");
     assert.equal(miss.miss, true);
     assert.deepEqual([miss.resolvedIds, miss.answeredIds], [[], []], "empty arrays on a miss");
     assert.equal(lines[3].type, "end");
@@ -651,8 +651,8 @@ test("runChat: structured sidecar + read-time graph append — the session becom
     assert.equal(sess.attributes.find((a) => a.key === "turns").value, "2");
     assert.match(sess.attributes.find((a) => a.key === "queries").value, /which modules import a\.mjs \| tell me a joke/);
     const group = g.objectProperties.find((x) => x.prop === "mgx:asksAbout");
-    assert.ok(group.examples.some((x) => x.subject === sess.id && x.object === "mod-a"));
-    assert.ok(group.examples.some((x) => x.subject === sess.id && x.object === "mod-b"));
+    assert.ok(group.examples.some((x) => x.subject === sess.id && x.object === "mod:app/lib/a.mjs"));
+    assert.ok(group.examples.some((x) => x.subject === sess.id && x.object === "mod:app/lib/b.mjs"));
     // and the source-derived content is untouched (Module count, other edge groups)
     assert.equal(g.classes.find((c) => c.name === "Module").count, 8);
   } finally {
@@ -672,7 +672,7 @@ test("runChat: a slash-command turn is recorded — sidecar carries the command,
     const impact = lines.find((l) => l.type === "turn" && l.command === "impact");
     assert.ok(impact, "the /impact turn is in the sidecar with its command name");
     assert.equal(impact.query, "/impact app/lib/a.mjs");
-    assert.deepEqual(impact.resolvedIds, ["mod-a"], "the command turn resolved its subject id");
+    assert.deepEqual(impact.resolvedIds, ["mod:app/lib/a.mjs"], "the command turn resolved its subject id");
     const help = lines.find((l) => l.type === "turn" && l.command === "help");
     assert.ok(help, "the /help turn is recorded too");
     assert.deepEqual(help.resolvedIds, [], "a no-entity command records no asksAbout id");
@@ -684,7 +684,7 @@ test("runChat: a slash-command turn is recorded — sidecar carries the command,
     assert.ok(sess, "Session individual appended");
     assert.match(sess.attributes.find((a) => a.key === "queries").value, /\/impact app\/lib\/a\.mjs \| \/help/);
     const group = gjson.objectProperties.find((x) => x.prop === "mgx:asksAbout");
-    assert.ok(group.examples.some((x) => x.subject === sess.id && x.object === "mod-a"), "slash-command asksAbout edge landed");
+    assert.ok(group.examples.some((x) => x.subject === sess.id && x.object === "mod:app/lib/a.mjs"), "slash-command asksAbout edge landed");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

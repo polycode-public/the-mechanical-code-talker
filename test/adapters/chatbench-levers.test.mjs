@@ -161,12 +161,12 @@ test("Lever 1 (g-b1-pron-25): 'it' keeps binding to the focus module, never jump
     // traversal receipt left the honest-empty prose, so the binding is read off
     // the turn's detail, where it still flows for why/verbose.)
     assert.match(calls.last.detail.traversal, /object = app\/lib\/e\.mjs/, "turn 2 'it' = the module");
-    assert.equal(calls.focus.id, "mod-e", "focus is NOT displaced to a Commit after turn 2");
+    assert.equal(calls.focus.id, "mod:app/lib/e.mjs", "focus is NOT displaced to a Commit after turn 2");
     // … turn 3 is the fix: "it" still binds to the module, not Commit.
     assert.doesNotMatch(imports.answer, /object = Commit/, "turn 3 'it' never binds to Commit");
     assert.match(imports.answer, /app\/lib\/f\.mjs/, "turn 3 resolves the real importer of e.mjs");
     assert.equal(imports.record.miss, false, "turn 3 is a real answer, not the wrong honest-empty");
-    assert.equal(imports.focus.id, "mod-e", "the code-entity focus is held across the pronoun turns");
+    assert.equal(imports.focus.id, "mod:app/lib/e.mjs", "the code-entity focus is held across the pronoun turns");
   } finally {
     await cleanup();
   }
@@ -375,7 +375,7 @@ test("Lever 3C(a): 'which modules changed together with X' now parses as cochang
 });
 
 test("Lever 3C(a): 'which modules changed together with X' also answers from the OBJECT side of the stored pair", () => {
-  // app/lib/c.mjs is the OBJECT of the stored edge (mod-a -> mod-c); this
+  // app/lib/c.mjs is the OBJECT of the stored edge (a.mjs -> c.mjs); this
   // direction worked even before the symmetric-lookup fix once the kind itself
   // parsed correctly — kept as a regression guard on the non-flipped path.
   const r = ask(graph, "which modules changed together with app/lib/c.mjs");

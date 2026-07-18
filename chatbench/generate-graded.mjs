@@ -29,6 +29,7 @@ import { fileURLToPath } from "node:url";
 import { GRADED_MATRIX, cellKey, fnv1a, mulberry32, seededShuffle } from "./graded.mjs";
 import { FIXTURE, DEFAULT_POOL, createRunnerDeps, parseCases, runTurnsCase, runSessionCase } from "./run.mjs";
 import { parseFlags } from "../benchlib/bench.mjs";
+import { isTestPath } from "../src/domain/module-paths.mjs";
 
 // ---- fixture ground truth (computed from the RAW committed fixture, never from the engine) ----
 
@@ -53,8 +54,17 @@ export function buildTruth(raw) {
     const s = site(indId);
     return s ? testedModules.has(id(s)) : false;
   };
+  // A test module is neither tested nor untested — it is outside the coverage
+  // domain, exactly as the product's untested view treats it (renderUntested
+  // excludes test-edge subjects and test-named paths). "Untested" ground truth
+  // must apply the same exclusion or it counts a test file as needing a test.
+  const testModules = new Set((edges.tests ?? []).map((e) => e.s));
+  const isUntested = (indId) =>
+    !isTested(indId)
+    && !testModules.has(indId)
+    && !isTestPath(String(byId.get(indId)?.label ?? indId).toLowerCase());
   return {
-    byId, byLabel, edges, out, inc, label, id, ofClass, site, isTested,
+    byId, byLabel, edges, out, inc, label, id, ofClass, site, isTested, isUntested,
     modules: ofClass("Module"),
     classes: ofClass("Class"),
     importersOf: (lbl) => inc("imports", id(lbl)).map(label),
@@ -258,7 +268,7 @@ function a2Svo(t) {
   for (const say of ["what did commit abc1234 touch", "what did abc1234 touch"]) {
     items.push(turnsItem(
       "Ground truth: commit abc1234 touched the module app/lib/a.mjs and (at symbol grain) the method Widget.render.",
-      { say, expect: { miss: false, answeredIdsInclude: ["mod-a", "m-render"], answerMatch: ["app/lib/a\\.mjs", "Widget\\.render"] } },
+      { say, expect: { miss: false, answeredIdsInclude: ["mod:app/lib/a.mjs", "m-render"], answerMatch: ["app/lib/a\\.mjs", "Widget\\.render"] } },
     ));
   }
   return items;
@@ -282,7 +292,7 @@ function a2Count(t) {
   }
   items.push(turnsItem(
     "Ground truth: app/lib/a.mjs is the most connected module (3 importers + 1 caller, the highest total degree).",
-    { say: "the most connected module", expect: { miss: false, answeredIdsInclude: ["mod-a"], answerMatch: ["app/lib/a\\.mjs", "the most connected"] } },
+    { say: "the most connected module", expect: { miss: false, answeredIdsInclude: ["mod:app/lib/a.mjs"], answerMatch: ["app/lib/a\\.mjs", "the most connected"] } },
   ));
   for (const c of ["Widget", "Base", "Button"]) {
     const n = c === "Widget" ? 1 : 0;
@@ -368,10 +378,10 @@ function a2Pronoun(t) {
 function a2Negation(t) {
   const items = [];
   const untested = {
-    classes: t.classes.map((i) => t.label(i)).filter((c) => !t.isTested(t.id(c))),
-    modules: t.modules.map((i) => t.label(i)).filter((m) => !t.isTested(t.id(m))),
-    functions: ["fnAlpha"].filter((f) => !t.isTested(t.id(f))),
-    methods: ["Widget.render"].filter((m) => !t.isTested(t.id(m))),
+    classes: t.classes.map((i) => t.label(i)).filter((c) => t.isUntested(t.id(c))),
+    modules: t.modules.map((i) => t.label(i)).filter((m) => t.isUntested(t.id(m))),
+    functions: ["fnAlpha"].filter((f) => t.isUntested(t.id(f))),
+    methods: ["Widget.render"].filter((m) => t.isUntested(t.id(m))),
   };
   for (const kind of Object.keys(untested)) {
     for (const stem of [`untested ${kind}`, `uncovered ${kind}`]) {
@@ -382,13 +392,13 @@ function a2Negation(t) {
     }));
   }
   for (const m of ["app/lib/a.mjs", "app/lib/b.mjs", "app/lib/f.mjs", "app/lib/e.mjs"]) {
-    const truth = t.importersOf(m).filter((x) => !t.isTested(t.id(x)));
+    const truth = t.importersOf(m).filter((x) => t.isUntested(t.id(x)));
     for (const stem of [`modules importing ${m} but not tested`, `modules importing ${m} but untested`]) {
       items.push(turnsItem(ctxSet(stem, truth), { say: stem, expect: expectSet(t, truth) }));
     }
   }
   for (const c of ["Base", "Widget"]) {
-    const truth = t.subclassesOf(c).filter((x) => !t.isTested(t.id(x)));
+    const truth = t.subclassesOf(c).filter((x) => t.isUntested(t.id(x)));
     for (const stem of [`classes inheriting from ${c} but not tested`, `classes inheriting from ${c} but untested`]) {
       items.push(turnsItem(ctxSet(stem, truth), { say: stem, expect: expectSet(t, truth) }));
     }
@@ -517,7 +527,7 @@ function b1Negation(t) {
       say: `which classes don't inherit from ${c}`, expect: expectSet(t, truth),
     }));
   }
-  const notTestedCounts = { classes: ["class", "classes", 2], modules: ["module", "modules", 6], functions: ["function", "functions", 1], methods: ["method", "methods", 0] };
+  const notTestedCounts = { classes: ["class", "classes", 2], modules: ["module", "modules", 5], functions: ["function", "functions", 1], methods: ["method", "methods", 0] };
   for (const [kind, [sing, plur, n]] of Object.entries(notTestedCounts)) {
     items.push(turnsItem(
       `Ground truth: exactly ${n} ${n === 1 ? sing : plur} lack test coverage.`,
@@ -637,7 +647,7 @@ function b1Temporal(t) {
   }
   items.push(turnsItem(commitCtx, {
     say: "what did commit abc1234 touch",
-    expect: { miss: false, answeredIdsInclude: ["mod-a", "m-render"], answerMatch: ["app/lib/a\\.mjs", "Widget\\.render"] },
+    expect: { miss: false, answeredIdsInclude: ["mod:app/lib/a.mjs", "m-render"], answerMatch: ["app/lib/a\\.mjs", "Widget\\.render"] },
   }));
   for (const m of ["app/lib/a.mjs", "app/lib/b.mjs", "app/lib/c.mjs"]) {
     const truth = t.cochangeOf(m);
@@ -694,7 +704,7 @@ function b1Discourse(t) {
     { say: "which classes inherit from Base", set: () => t.subclassesOf("Base") },
     { say: "list the modules", set: () => t.modules.map((i) => t.label(i)) },
     { say: "list the classes", set: () => t.classes.map((i) => t.label(i)) },
-    { say: "untested classes", set: () => t.classes.map((i) => t.label(i)).filter((c) => !t.isTested(t.id(c))) },
+    { say: "untested classes", set: () => t.classes.map((i) => t.label(i)).filter((c) => t.isUntested(t.id(c))) },
     { say: "what uses app/lib/a.mjs", set: () => [...new Set([...t.importersOf("app/lib/a.mjs"), ...t.callersOf("app/lib/a.mjs")])] },
   ];
   for (const a of listAnchors) {
@@ -792,7 +802,7 @@ function b1DiscCount(t) {
     { say: "which modules import app/lib/a.mjs", set: () => t.importersOf("app/lib/a.mjs") },
     { say: "list the modules", set: () => t.modules.map((i) => t.label(i)) },
     { say: "which classes inherit from Base", set: () => t.subclassesOf("Base") },
-    { say: "untested classes", set: () => t.classes.map((i) => t.label(i)).filter((c) => !t.isTested(t.id(c))) },
+    { say: "untested classes", set: () => t.classes.map((i) => t.label(i)).filter((c) => t.isUntested(t.id(c))) },
     { say: "list the classes", set: () => t.classes.map((i) => t.label(i)) },
     { say: "what does app/lib/e.mjs import", set: () => t.importsOf("app/lib/e.mjs") },
     { say: "which modules import app/lib/b.mjs", set: () => t.importersOf("app/lib/b.mjs") },
@@ -832,7 +842,7 @@ function b1DiscCount(t) {
     ));
   }
   for (const a of anchors.slice(0, 4)) {
-    const n = a.set().filter((x) => !t.isTested(t.id(x))).length;
+    const n = a.set().filter((x) => t.isUntested(t.id(x))).length;
     items.push(turnsItem(
       `Turn 2 counts the UNTESTED members of turn 1's answer set. Ground truth: ${n}.`,
       { say: a.say, expect: {} },
@@ -1013,7 +1023,7 @@ function b2Coordination(t) {
     }));
   }
   for (const x of P) {
-    const truth = t.importersOf(x).filter((m) => !t.isTested(t.id(m)));
+    const truth = t.importersOf(x).filter((m) => t.isUntested(t.id(m)));
     items.push(turnsItem(ctxSet(`modules importing ${x} but not tested`, truth), {
       say: `modules importing ${x} but not tested`, expect: expectSet(t, truth),
     }));
@@ -1180,7 +1190,7 @@ function b2CountTemp(t) {
   }
   items.push(turnsItem(
     "Ground truth: app/lib/a.mjs is the only module a commit touched, so it changed most recently.",
-    { say: "which module changed most recently", expect: { miss: false, answeredIdsInclude: ["mod-a"], answerMatch: ["app/lib/a\\.mjs"] } },
+    { say: "which module changed most recently", expect: { miss: false, answeredIdsInclude: ["mod:app/lib/a.mjs"], answerMatch: ["app/lib/a\\.mjs"] } },
   ));
   items.push(turnsItem(
     "Ground truth: commit abc1234 touched exactly 1 symbol (Widget.render).",
@@ -1196,7 +1206,7 @@ function b2CountTemp(t) {
   }
   items.push(turnsItem(
     "Ground truth: exactly 1 module changed on 2026-06-28 (app/lib/a.mjs).",
-    { say: "which modules changed on 2026-06-28", expect: { miss: false, answeredIdsInclude: ["mod-a"], answerMatch: ["app/lib/a\\.mjs"] } },
+    { say: "which modules changed on 2026-06-28", expect: { miss: false, answeredIdsInclude: ["mod:app/lib/a.mjs"], answerMatch: ["app/lib/a\\.mjs"] } },
   ));
   return items;
 }
@@ -1412,7 +1422,7 @@ function c1Coordination(t) {
   for (let i = 0; i < P.length; i += 1) for (let j = i + 1; j < P.length; j += 1) pairs.push([P[i], P[j]]);
   for (const [x, y] of pairs) {
     const U = uni(x, y);
-    const notTested = (s) => s.filter((m) => !t.isTested(t.id(m)));
+    const notTested = (s) => s.filter((m) => t.isUntested(t.id(m)));
     const r1 = notTested(U);
     const r2 = [...new Set([...t.importersOf(x), ...notTested(t.importersOf(y))])].sort();
     if (JSON.stringify([...r1].sort()) !== JSON.stringify(r2)) continue; // precedence-agnostic items only (fair to either reading)
@@ -1421,7 +1431,7 @@ function c1Coordination(t) {
     }));
   }
   for (const c of ["Base", "Widget", "Button"]) {
-    const truth = t.subclassesOf(c).filter((x) => !t.isTested(t.id(x)));
+    const truth = t.subclassesOf(c).filter((x) => t.isUntested(t.id(x)));
     items.push(turnsItem(ctxSet(`untested classes inheriting from ${c}`, truth), {
       say: `untested classes inheriting from ${c}`, expect: expectSet(t, truth),
     }));
@@ -1433,7 +1443,7 @@ function c1Coordination(t) {
     }));
   }
   for (const x of ["app/lib/a.mjs", "app/lib/b.mjs", "app/lib/f.mjs", "app/lib/e.mjs"]) {
-    const truth = t.importersOf(x).filter((m) => !t.isTested(t.id(m)));
+    const truth = t.importersOf(x).filter((m) => t.isUntested(t.id(m)));
     items.push(turnsItem(ctxSet(`untested modules importing ${x}`, truth), {
       say: `untested modules importing ${x}`, expect: expectSet(t, truth),
     }));
@@ -1504,7 +1514,7 @@ function c1NegRel(t) {
   const items = [];
   for (const sym of ["fnAlpha", "Widget", "register"]) {
     const mod = t.definerOf(sym)[0];
-    const truth = t.importersOf(mod).filter((m) => !t.isTested(t.id(m)));
+    const truth = t.importersOf(mod).filter((m) => t.isUntested(t.id(m)));
     items.push(turnsItem(
       `The module that defines ${sym} is ${mod}; the tested importer(s) must be EXCLUDED. ${ctxSet(`modules importing the module that defines ${sym} but not tested`, truth)}`,
       { say: `modules importing the module that defines ${sym} but not tested`, expect: expectSet(t, truth) },
@@ -1520,7 +1530,7 @@ function c1NegRel(t) {
   }
   for (const m of t.modules.map((i) => t.label(i))) {
     const two = [...new Set(t.importersOf(m).flatMap((u) => t.importersOf(u)))];
-    const truth = two.filter((x) => !t.isTested(t.id(x)));
+    const truth = two.filter((x) => t.isUntested(t.id(x)));
     items.push(turnsItem(
       `Two-hop importers of ${m}: {${two.join(", ") || "none"}}; tested ones excluded. ${ctxSet(`modules importing something that imports ${m} but not tested`, truth)}`,
       { say: `modules importing something that imports ${m} but not tested`, expect: expectSet(t, truth) },
@@ -1528,7 +1538,7 @@ function c1NegRel(t) {
   }
   for (const sym of ["fnAlpha", "Widget", "register"]) {
     const mod = t.definerOf(sym)[0];
-    const truth = t.importersOf(mod).filter((m) => !t.isTested(t.id(m)));
+    const truth = t.importersOf(mod).filter((m) => t.isUntested(t.id(m)));
     items.push(turnsItem(
       `The module that defines ${sym} is ${mod}. ${ctxSet(`untested modules that import the module that defines ${sym}`, truth)}`,
       { say: `untested modules that import the module that defines ${sym}`, expect: expectSet(t, truth) },
@@ -1632,7 +1642,7 @@ function c2Relative(t) {
     "Chain: Widget inherits from Base; Widget is defined in app/lib/b.mjs; app/functions/d/handler.mjs imports it.");
   add("which modules import the module that defines the class that inherits from Widget", [],
     "Chain: Button inherits from Widget; Button is defined in app/lib/c.mjs; app/functions/d/handler.mjs imports app/lib/c.mjs — so the answer is app/functions/d/handler.mjs.",
-    { miss: false, answeredIdsInclude: ["mod-d"], answerMatch: ["app/functions/d/handler\\.mjs"] });
+    { miss: false, answeredIdsInclude: ["mod:app/functions/d/handler.mjs"], answerMatch: ["app/functions/d/handler\\.mjs"] });
   add("what imports the module that defines the method that calls fnAlpha", ["app/functions/d/handler.mjs"],
     "Chain: the method that calls fnAlpha is Widget.render, defined (sited) in app/lib/b.mjs; app/functions/d/handler.mjs imports it.");
   add("where is the function that app/functions/d/handler.mjs re-exports defined", null,
@@ -1825,8 +1835,8 @@ function c1Ellipsis(t) {
       ));
     }
   });
-  const untestedModules = t.modules.map((i) => t.label(i)).filter((m) => !t.isTested(t.id(m)));
-  const untestedClasses = t.classes.map((i) => t.label(i)).filter((c) => !t.isTested(t.id(c)));
+  const untestedModules = t.modules.map((i) => t.label(i)).filter((m) => t.isUntested(t.id(m)));
+  const untestedClasses = t.classes.map((i) => t.label(i)).filter((c) => t.isUntested(t.id(c)));
   items.push(turnsItem(
     `Ellipsis (kind substitution): turn 2's "same for classes" re-instantiates turn 1's coverage survey for the CLASS kind, not the module kind. ${ctxSet("untested classes", untestedClasses)}`,
     { say: "untested modules", expect: {} },
@@ -1859,7 +1869,7 @@ function c1DiscourseDeixis(t) {
     { say: "which modules import app/lib/e.mjs", set: () => t.importersOf("app/lib/e.mjs") },
     { say: "list the modules", set: () => t.modules.map((i) => t.label(i)) },
     { say: "list the classes", set: () => t.classes.map((i) => t.label(i)) },
-    { say: "untested classes", set: () => t.classes.map((i) => t.label(i)).filter((c) => !t.isTested(t.id(c))) },
+    { say: "untested classes", set: () => t.classes.map((i) => t.label(i)).filter((c) => t.isUntested(t.id(c))) },
     { say: "what uses app/lib/a.mjs", set: () => [...new Set([...t.importersOf("app/lib/a.mjs"), ...t.callersOf("app/lib/a.mjs")])] },
     { say: "which modules cochange with app/lib/a.mjs", set: () => t.cochangeOf("app/lib/a.mjs") },
     { say: "what does app/lib/e.mjs import", set: () => t.importsOf("app/lib/e.mjs") },

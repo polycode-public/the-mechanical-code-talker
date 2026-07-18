@@ -15,13 +15,13 @@
       "prop": "mgx:importsNamespace",
       "count": 7,
       "examples": [
-        { "subject": "mod-b", "object": "mod-a", "subjectLabel": "app/lib/b.mjs", "objectLabel": "app/lib/a.mjs" },
-        { "subject": "mod-c", "object": "mod-a", "subjectLabel": "app/lib/c.mjs", "objectLabel": "app/lib/a.mjs" },
-        { "subject": "mod-d", "object": "mod-b", "subjectLabel": "app/functions/d/handler.mjs", "objectLabel": "app/lib/b.mjs" },
-        { "subject": "mod-d", "object": "mod-c", "subjectLabel": "app/functions/d/handler.mjs", "objectLabel": "app/lib/c.mjs" },
-        { "subject": "mod-e", "object": "mod-a", "subjectLabel": "app/lib/e.mjs", "objectLabel": "app/lib/a.mjs" },
-        { "subject": "mod-e", "object": "mod-f", "subjectLabel": "app/lib/e.mjs", "objectLabel": "app/lib/f.mjs" },
-        { "subject": "mod-f", "object": "mod-e", "subjectLabel": "app/lib/f.mjs", "objectLabel": "app/lib/e.mjs" }
+        { "subject": "mod:app/lib/b.mjs", "object": "mod:app/lib/a.mjs", "subjectLabel": "app/lib/b.mjs", "objectLabel": "app/lib/a.mjs" },
+        { "subject": "mod:app/lib/c.mjs", "object": "mod:app/lib/a.mjs", "subjectLabel": "app/lib/c.mjs", "objectLabel": "app/lib/a.mjs" },
+        { "subject": "mod:app/functions/d/handler.mjs", "object": "mod:app/lib/b.mjs", "subjectLabel": "app/functions/d/handler.mjs", "objectLabel": "app/lib/b.mjs" },
+        { "subject": "mod:app/functions/d/handler.mjs", "object": "mod:app/lib/c.mjs", "subjectLabel": "app/functions/d/handler.mjs", "objectLabel": "app/lib/c.mjs" },
+        { "subject": "mod:app/lib/e.mjs", "object": "mod:app/lib/a.mjs", "subjectLabel": "app/lib/e.mjs", "objectLabel": "app/lib/a.mjs" },
+        { "subject": "mod:app/lib/e.mjs", "object": "mod:app/lib/f.mjs", "subjectLabel": "app/lib/e.mjs", "objectLabel": "app/lib/f.mjs" },
+        { "subject": "mod:app/lib/f.mjs", "object": "mod:app/lib/e.mjs", "subjectLabel": "app/lib/f.mjs", "objectLabel": "app/lib/e.mjs" }
       ]
     },
     {
@@ -29,7 +29,7 @@
       "prop": "mgx:callsCoarse",
       "count": 1,
       "examples": [
-        { "subject": "mod-g", "object": "mod-a", "subjectLabel": "scripts/g.mjs", "objectLabel": "app/lib/a.mjs" }
+        { "subject": "mod:scripts/g.mjs", "object": "mod:app/lib/a.mjs", "subjectLabel": "scripts/g.mjs", "objectLabel": "app/lib/a.mjs" }
       ]
     },
     {
@@ -45,8 +45,8 @@
       "prop": "mgx:testsCoverage",
       "count": 2,
       "examples": [
-        { "subject": "test-b", "object": "mod-b", "subjectLabel": "app/unit-tests/b.test.mjs", "objectLabel": "app/lib/b.mjs" },
-        { "subject": "test-b", "object": "mod-d", "subjectLabel": "app/unit-tests/b.test.mjs", "objectLabel": "app/functions/d/handler.mjs" }
+        { "subject": "mod:app/unit-tests/b.test.mjs", "object": "mod:app/lib/b.mjs", "subjectLabel": "app/unit-tests/b.test.mjs", "objectLabel": "app/lib/b.mjs" },
+        { "subject": "mod:app/unit-tests/b.test.mjs", "object": "mod:app/functions/d/handler.mjs", "subjectLabel": "app/unit-tests/b.test.mjs", "objectLabel": "app/functions/d/handler.mjs" }
       ]
     },
     {
@@ -54,9 +54,9 @@
       "prop": "seon:declaresMethod",
       "count": 3,
       "examples": [
-        { "subject": "mod-a", "object": "fn-alpha", "subjectLabel": "app/lib/a.mjs", "objectLabel": "fnAlpha" },
-        { "subject": "mod-b", "object": "cls-widget", "subjectLabel": "app/lib/b.mjs", "objectLabel": "Widget" },
-        { "subject": "mod-b", "object": "g-register", "subjectLabel": "app/lib/b.mjs", "objectLabel": "register" }
+        { "subject": "mod:app/lib/a.mjs", "object": "fn-alpha", "subjectLabel": "app/lib/a.mjs", "objectLabel": "fnAlpha" },
+        { "subject": "mod:app/lib/b.mjs", "object": "cls-widget", "subjectLabel": "app/lib/b.mjs", "objectLabel": "Widget" },
+        { "subject": "mod:app/lib/b.mjs", "object": "g-register", "subjectLabel": "app/lib/b.mjs", "objectLabel": "register" }
       ]
     },
     {
@@ -64,7 +64,7 @@
       "prop": "mgx:touchedByCommit",
       "count": 1,
       "examples": [
-        { "subject": "commit-abc", "object": "mod-a", "subjectLabel": "abc1234", "objectLabel": "app/lib/a.mjs" }
+        { "subject": "commit-abc", "object": "mod:app/lib/a.mjs", "subjectLabel": "abc1234", "objectLabel": "app/lib/a.mjs" }
       ]
     },
     {
@@ -98,8 +98,8 @@
       "prop": "mgx:changeCoupledWith",
       "count": 2,
       "examples": [
-        { "subject": "mod-a", "object": "mod-b", "subjectLabel": "app/lib/a.mjs", "objectLabel": "app/lib/b.mjs", "weight": 3 },
-        { "subject": "mod-a", "object": "mod-c", "subjectLabel": "app/lib/a.mjs", "objectLabel": "app/lib/c.mjs", "weight": 2 }
+        { "subject": "mod:app/lib/a.mjs", "object": "mod:app/lib/b.mjs", "subjectLabel": "app/lib/a.mjs", "objectLabel": "app/lib/b.mjs", "weight": 3 },
+        { "subject": "mod:app/lib/a.mjs", "object": "mod:app/lib/c.mjs", "subjectLabel": "app/lib/a.mjs", "objectLabel": "app/lib/c.mjs", "weight": 2 }
       ]
     },
     {
@@ -107,19 +107,19 @@
       "prop": "mgx:reExports",
       "count": 1,
       "examples": [
-        { "subject": "mod-d", "object": "fn-alpha", "subjectLabel": "app/functions/d/handler.mjs", "objectLabel": "fnAlpha" }
+        { "subject": "mod:app/functions/d/handler.mjs", "object": "fn-alpha", "subjectLabel": "app/functions/d/handler.mjs", "objectLabel": "fnAlpha" }
       ]
     }
   ],
   "individuals": [
-    { "id": "mod-a", "label": "app/lib/a.mjs", "class": "Module", "derived_from": ["git:abc1234", "git:def5678"], "mentions": [], "attributes": [{ "prop": "mgx:dotted", "key": "dotted", "value": "app.lib.a" }] },
-    { "id": "mod-b", "label": "app/lib/b.mjs", "class": "Module", "derived_from": ["git:abc1234"], "mentions": [] },
-    { "id": "mod-c", "label": "app/lib/c.mjs", "class": "Module", "derived_from": [], "mentions": [] },
-    { "id": "mod-d", "label": "app/functions/d/handler.mjs", "class": "Module", "derived_from": [], "mentions": [] },
-    { "id": "mod-e", "label": "app/lib/e.mjs", "class": "Module", "derived_from": [], "mentions": [] },
-    { "id": "mod-f", "label": "app/lib/f.mjs", "class": "Module", "derived_from": [], "mentions": [] },
-    { "id": "mod-g", "label": "scripts/g.mjs", "class": "Module", "derived_from": [], "mentions": [] },
-    { "id": "test-b", "label": "app/unit-tests/b.test.mjs", "class": "Module", "derived_from": [], "mentions": [] },
+    { "id": "mod:app/lib/a.mjs", "label": "app/lib/a.mjs", "class": "Module", "derived_from": ["git:abc1234", "git:def5678"], "mentions": [], "attributes": [{ "prop": "mgx:dotted", "key": "dotted", "value": "app.lib.a" }] },
+    { "id": "mod:app/lib/b.mjs", "label": "app/lib/b.mjs", "class": "Module", "derived_from": ["git:abc1234"], "mentions": [] },
+    { "id": "mod:app/lib/c.mjs", "label": "app/lib/c.mjs", "class": "Module", "derived_from": [], "mentions": [] },
+    { "id": "mod:app/functions/d/handler.mjs", "label": "app/functions/d/handler.mjs", "class": "Module", "derived_from": [], "mentions": [] },
+    { "id": "mod:app/lib/e.mjs", "label": "app/lib/e.mjs", "class": "Module", "derived_from": [], "mentions": [] },
+    { "id": "mod:app/lib/f.mjs", "label": "app/lib/f.mjs", "class": "Module", "derived_from": [], "mentions": [] },
+    { "id": "mod:scripts/g.mjs", "label": "scripts/g.mjs", "class": "Module", "derived_from": [], "mentions": [] },
+    { "id": "mod:app/unit-tests/b.test.mjs", "label": "app/unit-tests/b.test.mjs", "class": "Module", "derived_from": [], "mentions": [] },
     { "id": "fn-alpha", "label": "fnAlpha", "class": "Function", "derived_from": [], "mentions": [], "attributes": [{ "prop": "seon:startsAt", "key": "site", "value": "app/lib/a.mjs:12" }] },
     { "id": "cls-base", "label": "Base", "class": "Class", "derived_from": [], "mentions": [], "attributes": [{ "prop": "seon:startsAt", "key": "site", "value": "app/lib/a.mjs:1-3" }] },
     { "id": "cls-widget", "label": "Widget", "class": "Class", "derived_from": [], "mentions": [], "attributes": [{ "prop": "seon:startsAt", "key": "site", "value": "app/lib/b.mjs:1-30" }] },

@@ -56,7 +56,7 @@ const graph = parseEntities(fixture);
 
 test("parseEntities indexes individuals by id and keeps relation groups", () => {
   assert.equal(graph.individuals.length, 16);
-  assert.equal(graph.byId.get("mod-a").label, "app/lib/a.mjs");
+  assert.equal(graph.byId.get("mod:app/lib/a.mjs").label, "app/lib/a.mjs");
   assert.deepEqual(graph.relations.map((g) => g.predicate), ["imports", "calls", "callsSymbol", "tests", "defines", "touches", "touchesSymbol", "contains", "inherits", "cochange", "reexports"]);
   assert.equal(graph.generatedAt, "2026-06-28T00:00:00.000Z");
   assert.deepEqual(graph.truncated, []); // local graph: counts match examples
@@ -107,13 +107,13 @@ test("relationKind classifies the memory graph's real predicates (saidInSession/
 });
 
 test("resolveSymbol ranking: exact / path / basename / substring", () => {
-  assert.equal(resolveSymbol(graph, "app/lib/a.mjs").match.id, "mod-a");
-  assert.equal(resolveSymbol(graph, "mod-c").match.id, "mod-c");
-  assert.equal(resolveSymbol(graph, "./App/Lib/A.mjs").match.id, "mod-a");
-  assert.equal(resolveSymbol(graph, "handler.mjs").match.id, "mod-d");
+  assert.equal(resolveSymbol(graph, "app/lib/a.mjs").match.id, "mod:app/lib/a.mjs");
+  assert.equal(resolveSymbol(graph, "mod:app/lib/c.mjs").match.id, "mod:app/lib/c.mjs");
+  assert.equal(resolveSymbol(graph, "./App/Lib/A.mjs").match.id, "mod:app/lib/a.mjs");
+  assert.equal(resolveSymbol(graph, "handler.mjs").match.id, "mod:app/functions/d/handler.mjs");
   assert.equal(resolveSymbol(graph, "fnAlpha").match.id, "fn-alpha");
   assert.equal(resolveSymbol(graph, "abc1234").match.id, "commit-abc");
-  assert.equal(resolveSymbol(graph, "a.mjs").match.id, "mod-a");
+  assert.equal(resolveSymbol(graph, "a.mjs").match.id, "mod:app/lib/a.mjs");
 });
 
 test("resolveSymbol: misses invent nothing; ties break on attestation", () => {
@@ -121,33 +121,37 @@ test("resolveSymbol: misses invent nothing; ties break on attestation", () => {
   assert.equal(miss.match, null);
   assert.deepEqual(miss.candidates, []);
   const r = resolveSymbol(graph, "mjs"); // substring of every module label
-  assert.equal(r.match.id, "mod-a"); // 2 commit refs → best-attested
-  assert.equal(r.candidates[0].id, "mod-b"); // 1 commit ref → next
+  assert.equal(r.match.id, "mod:app/lib/a.mjs"); // 2 commit refs → best-attested
+  assert.equal(r.candidates[0].id, "mod:app/lib/b.mjs"); // 1 commit ref → next
 });
 
 test("impactClosure: reverse closure, diamond collapsed, cycle terminated", () => {
-  const levels = impactClosure(graph, graph.byId.get("mod-a"));
-  assert.deepEqual(levels[0].map((d) => d.id).sort(), ["mod-b", "mod-c", "mod-e", "mod-g"]);
-  assert.deepEqual(levels[1].map((d) => d.id).sort(), ["mod-d", "mod-f"]);
+  const levels = impactClosure(graph, graph.byId.get("mod:app/lib/a.mjs"));
+  assert.deepEqual(levels[0].map((d) => d.id).sort(), ["mod:app/lib/b.mjs", "mod:app/lib/c.mjs", "mod:app/lib/e.mjs", "mod:scripts/g.mjs"]);
+  assert.deepEqual(levels[1].map((d) => d.id).sort(), ["mod:app/functions/d/handler.mjs", "mod:app/lib/f.mjs"]);
   assert.equal(levels.length, 2);
 });
 
 test("impactClosure attaches covering test modules; a true leaf has none", () => {
-  const levels = impactClosure(graph, graph.byId.get("mod-a"));
+  const levels = impactClosure(graph, graph.byId.get("mod:app/lib/a.mjs"));
   const byId = new Map(levels.flat().map((d) => [d.id, d]));
-  assert.deepEqual(byId.get("mod-b").tests, ["app/unit-tests/b.test.mjs"]);
-  assert.deepEqual(byId.get("mod-c").tests, []);
-  assert.deepEqual(byId.get("mod-d").tests, ["app/unit-tests/b.test.mjs"]);
-  assert.deepEqual(impactClosure(graph, graph.byId.get("mod-g")), []);
+  assert.deepEqual(byId.get("mod:app/lib/b.mjs").tests, ["app/unit-tests/b.test.mjs"]);
+  assert.deepEqual(byId.get("mod:app/lib/c.mjs").tests, []);
+  assert.deepEqual(byId.get("mod:app/functions/d/handler.mjs").tests, ["app/unit-tests/b.test.mjs"]);
+  assert.deepEqual(impactClosure(graph, graph.byId.get("mod:scripts/g.mjs")), []);
 });
 
-test("impactClosure: a symbol seed reaches its cross-module caller's module via callsSymbol", () => {
+test("impactClosure: a symbol seed reaches its cross-module caller's module via callsSymbol, then walks on into module-coarse dependents", () => {
   // Widget.render (in b.mjs) calls fnAlpha (in a.mjs) — a symbol-resolved
   // impact query must surface the caller's module, not read back empty while
-  // the call-graph surface names the caller over the same edge.
+  // the call-graph surface names the caller over the same edge. The caller's
+  // module carries the real module label (its individual id is the same
+  // site-derived mod:<path> key), so the walk continues into that module's
+  // own importers instead of stopping at an unresolvable raw key.
   const levels = impactClosure(graph, graph.byId.get("fn-alpha"));
-  assert.equal(levels.length, 1);
-  assert.deepEqual(levels[0].map((d) => d.via), ["callsSymbol"]);
+  assert.equal(levels.length, 2);
+  assert.deepEqual(levels[0].map((d) => [d.label, d.via]), [["app/lib/b.mjs", "callsSymbol"]]);
+  assert.deepEqual(levels[1].map((d) => d.label), ["app/functions/d/handler.mjs"]);
 });
 
 // ── impactClosure folds in callsSymbol, coarsened to module level on read ──
@@ -156,7 +160,7 @@ test("impactClosure: a symbol seed reaches its cross-module caller's module via 
 // own comment above its callEdges loop), so by construction every "calls" edge duplicates an
 // "imports" edge between the same pair — it can never independently extend this closure's
 // reach. The main fixture's own single callsSymbol edge (m-render → fn-alpha, i.e.
-// mod-b → mod-a) happens to sit on a pair that ALSO already has an imports edge, so it can't
+// b.mjs → a.mjs) happens to sit on a pair that ALSO already has an imports edge, so it can't
 // demonstrate genuinely new coverage either — hence this separate, minimal fixture: two
 // modules connected ONLY by a callsSymbol edge, no imports/calls edge between them at all.
 const callsSymbolOnlyPayload = {
@@ -228,8 +232,8 @@ test("impactClosure: two symbols calling each other in the SAME module never pro
 });
 
 test("renderDescribe: edges both directions, commit attestation + provenance", () => {
-  const text = renderDescribe(graph, graph.byId.get("mod-a"));
-  assert.match(text, /app\/lib\/a\.mjs — Module \(id: mod-a\)/);
+  const text = renderDescribe(graph, graph.byId.get("mod:app/lib/a.mjs"));
+  assert.match(text, /app\/lib\/a\.mjs — Module \(id: mod:app\/lib\/a\.mjs\)/);
   assert.match(text, /attestation: touched by 2 commit\(s\)/);
   assert.match(text, /attribute: dotted = app\.lib\.a/);
   assert.match(text, /defines \[seon:declaresMethod\] \(1\) → fnAlpha/);
@@ -250,7 +254,7 @@ test("renderDescribe/renderCalls: a multi-word class enum renders as words; sing
   assert.doesNotMatch(described, /GlobalVariable/);
   assert.match(renderCalls(g, g.byId.get("gv-max")), /^MAX_RETRIES — Global Variable: no in-repo calls recorded/);
   // The Module heading is untouched (tier-6 pins this exact shape).
-  assert.match(renderDescribe(graph, graph.byId.get("mod-a")), /^app\/lib\/a\.mjs — Module \(id: mod-a\)/);
+  assert.match(renderDescribe(graph, graph.byId.get("mod:app/lib/a.mjs")), /^app\/lib\/a\.mjs — Module \(id: mod:app\/lib\/a\.mjs\)/);
 });
 
 test("renderCompare: two same-kind Classes — shared + differing edges, attribute diff", () => {
@@ -265,33 +269,33 @@ test("renderCompare: two same-kind Classes — shared + differing edges, attribu
 });
 
 test("renderCompare: two same-kind Modules — imports/tests/cochange asymmetry", () => {
-  const text = renderCompare(graph, graph.byId.get("mod-a"), graph.byId.get("mod-b"));
+  const text = renderCompare(graph, graph.byId.get("mod:app/lib/a.mjs"), graph.byId.get("mod:app/lib/b.mjs"));
   assert.match(text, /^Comparing app\/lib\/a\.mjs and app\/lib\/b\.mjs \(both Module\):/);
   assert.match(text, /<- tests \[mgx:testsCoverage\]: app\/lib\/a\.mjs \(0\) -> none; app\/lib\/b\.mjs \(1\) -> app\/unit-tests\/b\.test\.mjs/);
   assert.match(text, /cochange \[mgx:changeCoupledWith\]: app\/lib\/a\.mjs \(2\) -> app\/lib\/b\.mjs, app\/lib\/c\.mjs; app\/lib\/b\.mjs \(0\) -> none/);
 });
 
 test("renderCompare: refuses mismatched kinds and the same individual, honestly (null)", () => {
-  assert.equal(renderCompare(graph, graph.byId.get("cls-widget"), graph.byId.get("mod-a")), null);
+  assert.equal(renderCompare(graph, graph.byId.get("cls-widget"), graph.byId.get("mod:app/lib/a.mjs")), null);
   assert.equal(renderCompare(graph, graph.byId.get("cls-widget"), graph.byId.get("cls-widget")), null);
 });
 
 test("renderImpact: depth groups, totals, no false truncation warning", () => {
-  const text = renderImpact(graph, graph.byId.get("mod-a"));
+  const text = renderImpact(graph, graph.byId.get("mod:app/lib/a.mjs"));
   assert.match(text, /depth 1 \(4 direct dependents\):/);
   assert.match(text, /depth 2 \(2\):/);
   assert.match(text, /app\/lib\/b\.mjs \(imports it\) — tests: app\/unit-tests\/b\.test\.mjs/);
   assert.match(text, /scripts\/g\.mjs \(calls it\) — tests: none recorded/);
   assert.match(text, /total: 6 dependent\(s\) across 2 depth level\(s\)/);
   assert.doesNotMatch(text, /closure may be missing edges/);
-  assert.match(renderImpact(graph, graph.byId.get("mod-g")), /no dependents found/);
+  assert.match(renderImpact(graph, graph.byId.get("mod:scripts/g.mjs")), /no dependents found/);
 });
 
 test("renderImpact warns when a structural relation is truncated", () => {
   const clipped = JSON.parse(JSON.stringify(fixture));
   clipped.objectProperties[0].count = 40;
   const g2 = parseEntities(clipped);
-  const text = renderImpact(g2, g2.byId.get("mod-a"));
+  const text = renderImpact(g2, g2.byId.get("mod:app/lib/a.mjs"));
   assert.match(text, /closure may be missing edges/);
   assert.match(text, /imports: 7\/40/);
 });
@@ -412,11 +416,11 @@ test("renderArchitecture maps packages + hub modules; package prefix scopes it",
 });
 
 test("renderTestsFor / renderUntested read the test-coverage relation", () => {
-  assert.match(renderTestsFor(graph, graph.byId.get("mod-b")), /covered by 1 test module\(s\)/);
-  assert.match(renderTestsFor(graph, graph.byId.get("mod-b")), /app\/unit-tests\/b\.test\.mjs/);
-  assert.match(renderTestsFor(graph, graph.byId.get("mod-a")), /no covering tests recorded/);
+  assert.match(renderTestsFor(graph, graph.byId.get("mod:app/lib/b.mjs")), /covered by 1 test module\(s\)/);
+  assert.match(renderTestsFor(graph, graph.byId.get("mod:app/lib/b.mjs")), /app\/unit-tests\/b\.test\.mjs/);
+  assert.match(renderTestsFor(graph, graph.byId.get("mod:app/lib/a.mjs")), /no covering tests recorded/);
   // a module answers about itself, with no hop to name and no grain to qualify
-  assert.doesNotMatch(renderTestsFor(graph, graph.byId.get("mod-b")), /module-grain/);
+  assert.doesNotMatch(renderTestsFor(graph, graph.byId.get("mod:app/lib/b.mjs")), /module-grain/);
   const untested = renderUntested(graph);
   assert.match(untested, /source module\(s\) with no covering test module/);
   assert.match(untested, /app\/lib\/a\.mjs/);
@@ -424,8 +428,8 @@ test("renderTestsFor / renderUntested read the test-coverage relation", () => {
 });
 
 test("renderTestsFor asked about a symbol names the symbol, the module it hopped to, and the grain", () => {
-  // this fixture's Modules carry short ids, so a symbol's site-derived module
-  // id resolves to no individual — the site path is what the answer must name
+  // the symbol's site-derived module id resolves to the module individual,
+  // whose label is what the answer names
   assert.equal(
     renderTestsFor(graph, graph.byId.get("fn-alpha")),
     "fnAlpha is defined in app/lib/a.mjs, which has no covering tests recorded (no test module imports it).\n"
@@ -435,10 +439,10 @@ test("renderTestsFor asked about a symbol names the symbol, the module it hopped
   const sited = parseEntities({
     individuals: [
       { id: "mod:app/lib/b.mjs", class: "Module", label: "app/lib/b.mjs" },
-      { id: "test-b", class: "Module", label: "app/unit-tests/b.test.mjs" },
+      { id: "mod:app/unit-tests/b.test.mjs", class: "Module", label: "app/unit-tests/b.test.mjs" },
       { id: "cls-widget", class: "Class", label: "Widget", attributes: [{ prop: "seon:startsAt", key: "site", value: "app/lib/b.mjs:1-30" }] },
     ],
-    objectProperties: [{ predicate: "tests", prop: "mgx:testsCoverage", examples: [{ subject: "test-b", object: "mod:app/lib/b.mjs", subjectLabel: "app/unit-tests/b.test.mjs" }] }],
+    objectProperties: [{ predicate: "tests", prop: "mgx:testsCoverage", examples: [{ subject: "mod:app/unit-tests/b.test.mjs", object: "mod:app/lib/b.mjs", subjectLabel: "app/unit-tests/b.test.mjs" }] }],
   });
   const covered = renderTestsFor(sited, sited.byId.get("cls-widget"));
   assert.equal(
@@ -457,13 +461,13 @@ test("renderTestsFor asked about a symbol names the symbol, the module it hopped
 });
 
 test("contextPlan bundles siblings + registration globals + tests for a module", () => {
-  const plan = contextPlan(graph, graph.byId.get("mod-b"));
+  const plan = contextPlan(graph, graph.byId.get("mod:app/lib/b.mjs"));
   assert.equal(plan.moduleLabel, "app/lib/b.mjs");
   assert.deepEqual(plan.siblings.map((s) => s.label), ["Widget"]); // Function/Class only
   assert.equal(plan.siblings[0].class, "Class");
   assert.deepEqual(plan.globals.map((g) => [g.label, g.value]), [["register", "Library()"]]);
   assert.deepEqual(plan.tests, ["app/unit-tests/b.test.mjs"]);
-  assert.deepEqual(plan.cochange.map((c) => [c.label, c.weight]), [["app/lib/a.mjs", 3]]); // mod-b co-changes with mod-a ×3
+  assert.deepEqual(plan.cochange.map((c) => [c.label, c.weight]), [["app/lib/a.mjs", 3]]); // b.mjs co-changes with a.mjs ×3
   assert.ok(plan.insertion >= 1); // an insertion line was computed from sibling sites
   assert.equal(plan.anchor, null); // a Module has no anchor snippet
 });
@@ -537,30 +541,30 @@ test("renderSignature: compact API surface (params/returns/raises/self-fields/fl
 });
 
 test("renderExports lists a module's public API resolved to origin", () => {
-  const text = renderExports(graph, graph.byId.get("mod-d"));
+  const text = renderExports(graph, graph.byId.get("mod:app/functions/d/handler.mjs"));
   // language-neutral wording (cycle W2P): the reexports edge covers JS/TS `export` as well
   // as Python `__all__`, so the header no longer claims a Python-only "via __all__".
   assert.match(text, /public API \(1 export\(s\)\)/);
   assert.match(text, /fnAlpha ← app\/lib\/a\.mjs/); // re-export resolves to the defining module
-  assert.match(renderExports(graph, graph.byId.get("mod-b")), /no public exports recorded/);
+  assert.match(renderExports(graph, graph.byId.get("mod:app/lib/b.mjs")), /no public exports recorded/);
 });
 
 test("renderCochanges lists co-changed modules by weight", () => {
-  const text = renderCochanges(graph, graph.byId.get("mod-a"));
+  const text = renderCochanges(graph, graph.byId.get("mod:app/lib/a.mjs"));
   assert.match(text, /usually changes together with 2 module\(s\)/);
   assert.match(text, /app\/lib\/b\.mjs \(×3\)/);
   assert.match(text, /app\/lib\/c\.mjs \(×2\)/);
-  assert.match(renderCochanges(graph, graph.byId.get("scripts/g.mjs") || graph.byId.get("mod-g")), /no change-coupling recorded/);
+  assert.match(renderCochanges(graph, graph.byId.get("scripts/g.mjs") || graph.byId.get("mod:scripts/g.mjs")), /no change-coupling recorded/);
 });
 
 test("renderHistory / renderCallers / renderCallees read history + call edges", () => {
-  assert.match(renderHistory(graph, graph.byId.get("mod-a")), /touched by 1 recent commit\(s\): abc1234/);
-  assert.match(renderHistory(graph, graph.byId.get("mod-c")), /no commit history recorded/);
-  assert.match(renderCallers(graph, graph.byId.get("mod-a")), /called by 1 module\(s\)/);
-  assert.match(renderCallers(graph, graph.byId.get("mod-a")), /scripts\/g\.mjs/);
-  assert.match(renderCallees(graph, graph.byId.get("mod-g")), /calls into 1 module\(s\)/);
-  assert.match(renderCallees(graph, graph.byId.get("mod-g")), /app\/lib\/a\.mjs/);
-  assert.match(renderCallers(graph, graph.byId.get("mod-f")), /no recorded callers/);
+  assert.match(renderHistory(graph, graph.byId.get("mod:app/lib/a.mjs")), /touched by 1 recent commit\(s\): abc1234/);
+  assert.match(renderHistory(graph, graph.byId.get("mod:app/lib/c.mjs")), /no commit history recorded/);
+  assert.match(renderCallers(graph, graph.byId.get("mod:app/lib/a.mjs")), /called by 1 module\(s\)/);
+  assert.match(renderCallers(graph, graph.byId.get("mod:app/lib/a.mjs")), /scripts\/g\.mjs/);
+  assert.match(renderCallees(graph, graph.byId.get("mod:scripts/g.mjs")), /calls into 1 module\(s\)/);
+  assert.match(renderCallees(graph, graph.byId.get("mod:scripts/g.mjs")), /app\/lib\/a\.mjs/);
+  assert.match(renderCallers(graph, graph.byId.get("mod:app/lib/f.mjs")), /no recorded callers/);
 });
 
 // ---- fine-grained callsSymbol / touchesSymbol (inline graphs; the shared fixture lacks
@@ -834,7 +838,7 @@ test("bundleMask: TINY trims; FULL/LARGE turn everything on (LARGE inlines calle
 });
 
 test("contextPlan exposes the contiguous insertion region + trimmed MID tails", () => {
-  const plan = contextPlan(graph, graph.byId.get("mod-b"));
+  const plan = contextPlan(graph, graph.byId.get("mod:app/lib/b.mjs"));
   assert.ok(plan.insertionRegion && plan.insertionRegion.start >= 1);
   // #13: caps tightened — cochange ≤4, tests ≤6
   assert.ok(plan.cochange.length <= 4);
@@ -842,7 +846,7 @@ test("contextPlan exposes the contiguous insertion region + trimmed MID tails", 
 });
 
 test("renderContextMore renders only the omitted sections (siblings/tests/cochange/...)", () => {
-  const plan = contextPlan(graph, graph.byId.get("mod-b"));
+  const plan = contextPlan(graph, graph.byId.get("mod:app/lib/b.mjs"));
   const text = renderContextMore(plan);
   assert.match(text, /Additional context for app\/lib\/b\.mjs/);
   assert.match(text, /sibling symbols/);

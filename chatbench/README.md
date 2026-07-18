@@ -128,6 +128,19 @@ persona sweep's confident-wrongs (`hm-disjoint-chain-veto`,
 `conv-goal-conjunction`), and five for the 2.6.0 capabilities
 (`conv-guess-guesser`, `conv-guess-thinker`, `hm-guess-contradiction`,
 `hm-pack-and-word-relations`, `gq-needs-test-inversion`). **128 cases.**
+2026-07-18 (module-id alignment) — deliberate pool revision.
+`test/fixtures/entities.fixture.json` now ids its modules `mod:<path>` (the
+graph builder's own convention), so `graded-pool-max.jsonl` was regenerated
+(seed 20260704) and the go-to pool's id pins were updated in place. The
+regeneration also re-baselined drift accumulated since the max pool's last
+generation: 38 frontier turns now pass and lost their marks, and 16 items that
+were green at the last generation now miss and carry frontier marks with their
+observed answers (trailing-"then" noise phrasings, but-not import
+coordination, "tested modules importing X", the commit-count restrictor,
+`/describe register` vocabulary, and because-clause subordination). The
+generator's untested ground truth now excludes test modules from the coverage
+domain, matching the product's untested view. Still 1,075 cases across 36
+cells; the go-to pool stays 128.
 Session-mode cases may carry a case-level `env` (e.g. `TMCT_GAME_SECRET` pins
 the thinker-seat secret so the replay is deterministic).
 Regenerate with
@@ -141,7 +154,7 @@ the current engine).
 { "id": "gq-imports-of-a", "tags": ["graph-query"], "mode": "turns",
   "turns": [{ "say": "which modules import a.mjs",
               "expect": { "miss": false,
-                          "answeredIdsInclude": ["mod-b"],
+                          "answeredIdsInclude": ["mod:app/lib/b.mjs"],
                           "answerMatch": ["app/lib/b\\.mjs"] } }],
   "judge": { "dimensions": ["groundedness", "correctness"], "context": "…" } }
 ```

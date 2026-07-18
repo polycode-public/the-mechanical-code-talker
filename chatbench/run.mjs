@@ -115,7 +115,7 @@ const GRAPHS = ["fixture", "empty"];
  *  v2-context means; only unchanged-answer deltas and correctness/honesty carry over). */
 export const FIXTURE_CONTEXT = [
   "The graph under discussion (a small fixture codebase) holds exactly these facts. Each entity carries a stable id and, where the fixture records it, a source site, signature and provenance — the product may TRUTHFULLY render any of this detail:",
-  "- Modules (8), by id → label: mod-a → app/lib/a.mjs, mod-b → app/lib/b.mjs, mod-c → app/lib/c.mjs, mod-d → app/functions/d/handler.mjs, mod-e → app/lib/e.mjs, mod-f → app/lib/f.mjs, mod-g → scripts/g.mjs, test-b → app/unit-tests/b.test.mjs. app/lib/a.mjs also carries the dotted name \"app.lib.a\".",
+  "- Modules (8), each with id mod:<path>: app/lib/a.mjs, app/lib/b.mjs, app/lib/c.mjs, app/functions/d/handler.mjs, app/lib/e.mjs, app/lib/f.mjs, scripts/g.mjs, app/unit-tests/b.test.mjs (so e.g. app/lib/a.mjs has id mod:app/lib/a.mjs). app/lib/a.mjs also carries the dotted name \"app.lib.a\".",
   "- Classes (3): Base (id cls-base, site app/lib/a.mjs:1-3); Widget (id cls-widget, site app/lib/b.mjs:1-30) extends Base; Button (id cls-button, site app/lib/c.mjs:1-10) extends Widget.",
   "- Method Widget.render (id m-render, site app/lib/b.mjs:5-9): decorator `property`; parameters `self, mode='full'`; returns `str`; raises `ValueError`; accesses self fields `name, size`; doc \"Render the widget.\". Widget contains render and the attribute name.",
   "- Attribute Widget.name (id a-name, site app/lib/b.mjs:2). Global variable `register` (id g-register, site app/lib/b.mjs:1, value `Library()`) is defined in app/lib/b.mjs.",
