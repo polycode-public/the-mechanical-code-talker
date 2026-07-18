@@ -29,6 +29,11 @@ missing capability in `syllogise.mjs`. Details in §1.
 
 ## 1. The disjointness-vs-subclass proof — a proof certifies a stored contradiction
 
+**DELIVERED** — cax-dw gate hoisted ahead of every yes-return in the is-a ladder (plus the quick
+is-a reader standing aside when a taught disjointness touches the asked terms); §7's F20 landed
+with it (subclass edges double as type edges in the provable-no chase); 5 keyed rows in
+`inference.jsonl` under `inference.disjoint.*`.
+
 **Worst find of the sweep, and the only proof-shaped one.** A proof is tmct's strongest honesty
 claim, and here it certifies a flat inconsistency (`dog ⊑ cat ∧ dog ⊓ cat = ⊥`).
 

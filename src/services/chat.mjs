@@ -5042,6 +5042,21 @@ function isaPolarityReply(hit, negHit) {
   return null;
 }
 
+/** The verdict when a would-be "yes" (a stored fact or a proof chain) crosses
+ *  a stored disjointness on the same resolved chain: name both stored facts
+ *  and refuse to conclude. A proof is the strongest honesty claim this file
+ *  makes, and certifying one side of a stored contradiction would launder the
+ *  inconsistency as a derivation — so neither side wins, same discipline as
+ *  isaPolarityReply's both-sides verdict. */
+function isaInconsistencyRefusal(posFact, disjointFact) {
+  const cite = (f) => `${factPhrase(f)}${f.provenance ? ` (source: ${f.provenance})` : ""}`;
+  return {
+    text: `you've told me both ${cite(posFact)} and ${cite(disjointFact)} — together those contradict, and I won't derive an answer from an inconsistency. `
+      + `To settle it, say "forget that ${posFact.subject} is ${indefiniteArticleFor(posFact.object)} ${posFact.object}".`,
+    replace: true,
+  };
+}
+
 /** PROOF-CHAIN RECEIPT — "renderable as a chain of thought in words": render
  *  an ordered list of
  *  premise Fact rows as one continuous argument — "cache is a kind of store;
@@ -6149,8 +6164,19 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   if (isa) {
     const subj = factTermVariants(normFactTerm, isa[1]);
     const obj = factTermVariants(normFactTerm, isa[2]);
-    const isaRows = await memoryFacts(memoryDir);
+    const isaRows = await factRows(memoryDir, cache);
     const onTerms = (f) => subj.has(f.subject) && obj.has(f.object);
+    // A TAUGHT disjointness touching either asked term can flip or veto the
+    // verdict — it is the negative side of the polarity when it links the
+    // asked terms directly, and a positive whose ⊑-chain crosses one is a
+    // stored contradiction, not a yes. That reasoning (and its refusal) lives
+    // in the full is-a ladder, so this quick reader stands aside for it
+    // rather than answering a yes it hasn't checked.
+    const { DISJOINT_PREDICATE } = await import("../domain/syllogise.mjs");
+    const touchesAskedTerm = (f) => subj.has(f.subject) || subj.has(f.object) || obj.has(f.subject) || obj.has(f.object);
+    if (isaRows.some((f) => f.predicate === DISJOINT_PREDICATE && isOperatorTaught(f) && touchesAskedTerm(f))) {
+      return null;
+    }
     // A remembered NEGATIVE is read on the same terms as the positive — it
     // carries its own predicate and so never reaches ISA_PREDICATES.
     const reply = isaPolarityReply(
@@ -7297,16 +7323,64 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const subjCandidates = new Set(factTermVariants(normFactTerm, isaSubject));
     const noun = await entityClassNoun(graph, isaSubject);
     if (noun) for (const v of factTermVariants(normFactTerm, noun)) subjCandidates.add(v);
+    const {
+      findIsaChain, deriveDisjointViolations,
+      SUBCLASS_PREDICATE: SC_PREDICATE, TYPE_PREDICATE: RDF_TYPE_PREDICATE, DISJOINT_PREDICATE,
+    } = await import("../domain/syllogise.mjs");
+    const isTaught = isOperatorTaught;
+    const chainSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE && isTaught(f));
+    const chainTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE && isTaught(f));
+    const chainSubClassEdges = chainSubClassRows.map((f) => [f.subject, f.object]);
+    const chainTypeEdges = chainTypeRows.map((f) => [f.subject, f.object]);
+    const mixedSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE);
+    const mixedTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE);
+    const mixedTypeEdges = mixedTypeRows.map((f) => [f.subject, f.object]);
+    const mixedSubClassEdges = mixedSubClassRows.map((f) => [f.subject, f.object]);
+    const disjointRows = rows.filter((f) => f.predicate === DISJOINT_PREDICATE && isTaught(f));
+    const disjointEdges = disjointRows.map((f) => [f.subject, f.object]);
+    // CAX-DW GATE, COMPUTED BEFORE ANY "YES" MAY RETURN: every taught
+    // disjointness is lifted through the full ⊑-closure (subclass edges double
+    // as type edges here, because an instance teach like "rex is a dog" stores
+    // rdfs:subClassOf) and held against the asked conclusion. A "yes" whose
+    // resolved chain crosses one of these would certify a stored
+    // contradiction, so the gate runs ahead of the direct-fact verdict and
+    // both proof chases below — never after them, where it can only lose.
+    const disjointGateViolations = disjointRows.length
+      ? deriveDisjointViolations(
+        mixedTypeEdges.concat(mixedSubClassEdges), mixedSubClassEdges, disjointEdges,
+        { budget: 20, focus: new Set([...subjCandidates, ...objVariants]) },
+      )
+      : [];
+    const disjointRefusalFor = (subj) => {
+      const v = disjointGateViolations.find((vv) => vv.subject === subj && objVariants.has(vv.object));
+      if (!v) return null;
+      const posFact = isa
+        .filter((f) => objVariants.has(f.object) && (f.subject === v.viaClass || f.subject === v.subject))
+        .sort(byTrust)[0];
+      const disjointFact = disjointRows.find((f) => (f.subject === v.viaClass && f.object === v.object)
+        || (f.subject === v.object && f.object === v.viaClass));
+      if (!posFact || !disjointFact) return null;
+      return isaInconsistencyRefusal(posFact, disjointFact);
+    };
     const hit = isa
       .filter((f) => subjCandidates.has(f.subject) && objVariants.has(f.object))
       .sort(byTrust)[0];
     // A STORED NEGATIVE ("john is not a man") is a source disagreeing, so it is
     // read on the same terms as the positive rather than losing to it by
-    // default. It carries its own predicate and so never reaches `isa`.
+    // default. It carries its own predicate and so never reaches `isa`. A
+    // taught disjointness directly between the asked terms is the same
+    // disagreement in owl:disjointWith spelling, so it reads as the negative
+    // side on the same terms — ahead of every yes-chase, not after them.
     const negHit = rows
       .filter((f) => f.predicate === NEG_SUBCLASS_PREDICATE && subjCandidates.has(f.subject) && objVariants.has(f.object))
       .sort(byTrust)[0];
-    const polarityReply = isaPolarityReply(hit, negHit);
+    const directDisjoint = disjointRows.find((f) => (subjCandidates.has(f.subject) && objVariants.has(f.object))
+      || (subjCandidates.has(f.object) && objVariants.has(f.subject)));
+    if (hit && !negHit) {
+      const chainRefusal = disjointRefusalFor(hit.subject);
+      if (chainRefusal) return chainRefusal;
+    }
+    const polarityReply = isaPolarityReply(hit, negHit || directDisjoint);
     if (polarityReply) return polarityReply;
     // CLASS↔INSTANCE BRIDGE: when X resolves to a graph entity, its
     // inherits chain's superclass LABELS are subject candidates too — a taught
@@ -7348,17 +7422,13 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     //     technically-true-per-ConceptNet "yes" that has nothing to do with
     //     what the OPERATOR taught; only operator/teach/entailed-sourced isa
     //     facts are chased, matching "TAUGHT" in the gap's own name.
-    const { findIsaChain, SUBCLASS_PREDICATE: SC_PREDICATE, TYPE_PREDICATE: RDF_TYPE_PREDICATE } = await import("../domain/syllogise.mjs");
-    const isTaught = isOperatorTaught;
-    const chainSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE && isTaught(f));
-    const chainTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE && isTaught(f));
-    const chainSubClassEdges = chainSubClassRows.map((f) => [f.subject, f.object]);
-    const chainTypeEdges = chainTypeRows.map((f) => [f.subject, f.object]);
     const factForStep = (step) => (step.predicate === SC_PREDICATE ? chainSubClassRows : chainTypeRows)
       .find((f) => f.subject === step.subject && f.object === step.object);
     for (const subj of subjCandidates) {
       const chain = findIsaChain(subj, objVariants, chainTypeEdges, chainSubClassEdges, { maxHops: 2 });
       if (!chain) continue;
+      const chainRefusal = disjointRefusalFor(subj);
+      if (chainRefusal) return chainRefusal;
       const premises = chain.map(factForStep);
       if (premises.every(Boolean)) return { text: `yes — ${renderIsaChain(premises)}`, replace: true };
     }
@@ -7373,15 +7443,13 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // every premise is cited with its own source, corpus ones included. The
     // shared taught-only rows above stay untouched: the disjoint and
     // someValuesFrom chases keep their original, narrower discipline.
-    const mixedSubClassRows = isa.filter((f) => f.predicate === SC_PREDICATE);
-    const mixedTypeRows = isa.filter((f) => f.predicate === RDF_TYPE_PREDICATE);
     const mixedFactForStep = (step) => (step.predicate === SC_PREDICATE ? mixedSubClassRows : mixedTypeRows)
       .find((f) => f.subject === step.subject && f.object === step.object);
-    const mixedTypeEdges = mixedTypeRows.map((f) => [f.subject, f.object]);
-    const mixedSubClassEdges = mixedSubClassRows.map((f) => [f.subject, f.object]);
     for (const subj of subjCandidates) {
       const chain = findIsaChain(subj, objVariants, mixedTypeEdges, mixedSubClassEdges, { maxHops: 2 });
       if (!chain) continue;
+      const chainRefusal = disjointRefusalFor(subj);
+      if (chainRefusal) return chainRefusal;
       const premises = chain.map(mixedFactForStep);
       if (premises.every(Boolean) && premises.some(isTaught)) {
         return { text: `yes — ${renderIsaChain(premises)}`, replace: true };
@@ -7397,8 +7465,6 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // answer "no" from absence-of-membership rather than decline; anything
     // this chase can't connect through a stated disjointness falls through
     // to the honest miss below, never a guessed "no".
-    const { deriveDisjointViolations, DISJOINT_PREDICATE } = await import("../domain/syllogise.mjs");
-    const disjointRows = rows.filter((f) => f.predicate === DISJOINT_PREDICATE && isTaught(f));
     // NEGATED membership — "is a dog not a cat". ISA_ASK_RE captures the
     // subject as "dog not" (the "not" glues onto the subject because the
     // article anchors the kind), so without this the negated question walks
@@ -7437,20 +7503,16 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       };
     }
     if (disjointRows.length) {
-      // A DIRECT taught disjointness between the asked subject and kind is a
-      // provable "no" on its own — deriveDisjointViolations only ever fires
-      // through a taught rdf:type premise, so without this check "no dog is
-      // a cat" followed by "is a dog a cat" fell through to the can't-confirm
-      // closer instead of the honest no.
-      const directDisjoint = disjointRows.find((f) => (subjCandidates.has(f.subject) && objVariants.has(f.object))
-        || (subjCandidates.has(f.object) && objVariants.has(f.subject)));
-      if (directDisjoint) return { text: `no — ${renderFactLine(directDisjoint)}`, replace: true };
-      const disjointEdges = disjointRows.map((f) => [f.subject, f.object]);
-      const violations = deriveDisjointViolations(chainTypeEdges, chainSubClassEdges, disjointEdges, { budget: 10 });
+      // Taught subclass edges double as type edges here, because an instance
+      // teach ("felix is a cat") stores rdfs:subClassOf — without the fold the
+      // instance form of the provable "no" never fired.
+      const violations = deriveDisjointViolations(
+        chainTypeEdges.concat(chainSubClassEdges), chainSubClassEdges, disjointEdges, { budget: 10 },
+      );
       for (const subj of subjCandidates) {
         const v = violations.find((vv) => vv.subject === subj && objVariants.has(vv.object));
         if (!v) continue;
-        const typeFact = chainTypeRows.find((f) => f.subject === v.subject && f.object === v.viaType);
+        const typeFact = chainTypeRows.concat(chainSubClassRows).find((f) => f.subject === v.subject && f.object === v.viaType);
         const disjointFact = disjointRows.find((f) => (f.subject === v.viaClass && f.object === v.object)
           || (f.subject === v.object && f.object === v.viaClass));
         const parts = [typeFact, disjointFact].filter(Boolean).map(renderFactLine);
