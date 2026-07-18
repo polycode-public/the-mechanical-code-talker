@@ -466,12 +466,20 @@ export const PLACEHOLDER_NOUNS = Object.freeze([
 
 /** Boolean connectives over same-subject clauses -> a set operation on result ids.
  *  "and" = intersection, "or" = union, "but not"/"and not"/"without"/"except" =
- *  difference. Multi-word keys are matched longest-first by ask.mjs so "but not"
- *  wins over a bare "not". Left-associative in ask.mjs's fold. */
+ *  difference. The do-support negations ("but do not import Y", the expanded
+ *  form every "don't" reaches after the contraction pass) are difference too —
+ *  the auxiliary is part of the connective, never of the branch. A bare "but"
+ *  is contrastive coordination, which still intersects ("inheriting from X but
+ *  untested" = both at once). Multi-word keys are matched longest-first by
+ *  ask.mjs so "but do not" wins over "but not" wins over a bare "but".
+ *  Left-associative in ask.mjs's fold. */
 export const BOOLEAN_CONNECTIVES = Object.freeze({
+  "but do not": "difference", "but does not": "difference",
+  "and do not": "difference", "and does not": "difference",
   "but not": "difference", "and not": "difference", "except": "difference",
   "without": "difference",
   "and": "intersection", "plus": "intersection",
+  "but": "intersection",
   "or": "union",
 });
 
