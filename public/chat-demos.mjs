@@ -5,15 +5,16 @@
 
 /** Everyday terms the demo reference pack ships articles for. Each must
  *  resolve in the full pack — build-demo-pack fails loudly on one that
- *  doesn't. "quokka" leads because the page's own transcript shows it as the
- *  honest miss the pack lookup answers. */
+ *  doesn't. "otter" leads as the demo's lookup term; the page transcript's
+ *  "quokka" stays an honest miss on purpose (not a lexicon noun, so the pack
+ *  can never carry it — the two together show both sides of the fallback). */
 export const REFERENCE_PACK_TERMS = [
-  "quokka", "lantern", "kettle", "anchor", "compass", "saddle", "canoe",
-  "lighthouse", "windmill", "waterfall", "glacier", "volcano", "desert",
-  "island", "meadow", "river", "mountain", "ocean", "rainbow", "thunder",
+  "otter", "falcon", "badger", "beaver", "anchor", "compass", "saddle",
+  "canoe", "harp", "flute", "marble", "barn", "canal", "ferry", "swan",
+  "island", "meadow", "river", "mountain", "ocean", "torch", "oasis",
   "snow", "honey", "bread", "cheese", "butter", "candle", "mirror", "ladder",
-  "hammer", "needle", "basket", "blanket", "bicycle", "kite", "drum", "bell",
-  "clock", "umbrella", "whale", "penguin",
+  "hammer", "needle", "basket", "blanket", "bicycle", "moss", "drum", "bell",
+  "clock", "umbrella", "whale", "reef",
 ];
 
 /** The scripted demos the rail offers. Strings only — every turn is typed

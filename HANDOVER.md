@@ -39,8 +39,10 @@ same commit as the work it describes:
 - T3 `PLAN_LEARN_ON_MISS` reference provenance, pack pipeline, loader + provider seam — BUILT +
   VERIFIED (shipped pack committed: 3,887 articles from the 20260701 simplewiki dump, estate
   guards active; the on-miss chat hook rides T1 wave 2)
-- T4 home-page browser chat surface + seed payload + demo rail (syllogist demo first;
-  guess-number and learn-on-miss demos follow their features) — STARTED
+- T4 home-page browser chat surface + seed payload + demo rail — BUILT + VERIFIED (full runTurn
+  in the browser, 1.3 MB bundle, 1,263-fact deterministic seed, syllogist demo live, 6/6 page
+  journeys; guess-number and learn-on-miss demo chips sit `ready: false` until their features
+  land via T1 wave 2)
 - T5 `PLAN_25_BACKLOG` §10 — INVESTIGATED, evidence committed to §10: no resolver plan ever
   existed to restore (the 36% measured a deliberately relaxed one-call bar). The recommended
   per-arm `floorExpect` declared-refusal seam AWAITS THE OPERATOR; nothing changed until then.

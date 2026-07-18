@@ -36,8 +36,14 @@ export async function main(outPath = join(ROOT, "public", "chat-seed.json"), { l
 
   const handle = createInMemoryStore();
   const { entries } = await resolveExtensions(ROOT);
-  entries.set("seon", { ...entries.get("seon"), active: true });
-  entries.set("conceptnet", { ...entries.get("conceptnet"), active: true, limit });
+  // Pin the band set: the resolver folds in whatever the local repo has
+  // activated (a .tmct/ from an unrelated chat session), and a deploy asset
+  // must not vary with the builder's machine.
+  const SEED_BANDS = new Set(["human", "seon", "conceptnet"]);
+  for (const [name, entry] of entries) {
+    entries.set(name, { ...entry, active: SEED_BANDS.has(name) });
+  }
+  entries.set("conceptnet", { ...entries.get("conceptnet"), limit });
   const seeded = await seedActiveCorpusEntries(handle, entries);
   const failed = Object.entries(seeded.perBundle).filter(([, r]) => r.error);
   if (failed.length) {

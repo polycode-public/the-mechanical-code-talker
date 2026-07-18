@@ -304,6 +304,7 @@
   "src/services/viz-theme.mjs",
   "src/surfaces/http/server-http.mjs",
   "src/surfaces/tui/app.mjs",
+  "src/surfaces/web/chat-browser-entry.mjs",
   "src/surfaces/web/memory-ask-browser-entry.mjs",
   "src/surfaces/web/memory-ask-browser.bundle.js",
   "src/tools/catalog.mjs",
