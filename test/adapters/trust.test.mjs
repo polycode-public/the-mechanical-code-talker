@@ -237,6 +237,46 @@ test("a reference-tagged fact materialises a per-article DocumentSource with sou
   }
 });
 
+// ---- child pack: a lazy learn-on-miss ConceptNet fact as a Source ---------
+
+test("a child-pack provenance tag parses to the corpus tier — same 0.7 Source as the bulk conceptnet import", () => {
+  assert.deepEqual(provenanceTagToSource("child:conceptnet:penguin"),
+    { kind: "corpus", name: "conceptnet" });
+  // the per-term tail never changes the Source identity: two different misses
+  // resolve to the one shared ConceptNet corpus Source
+  assert.deepEqual(provenanceTagToSource("child:conceptnet:owl"),
+    { kind: "corpus", name: "conceptnet" });
+  // a multiword term keeps its spaces in the tag but not in the Source name
+  assert.deepEqual(provenanceTagToSource("child:conceptnet:polar bear"),
+    { kind: "corpus", name: "conceptnet" });
+  // near-miss spellings are no Source at all
+  assert.equal(provenanceTagToSource("children:conceptnet:penguin"), null);
+});
+
+test("a child-tagged fact scores the 0.7 corpus prior and materialises the shared conceptnet corpus Source", async () => {
+  const sources = { c: src("c", "corpus") };
+  assert.equal(computeTrust({ sourceIds: ["c"], createdAt: FRESH }, sources, { now: NOW }).score, SOURCE_PRIOR.corpus);
+  const dir = await mkdtemp(join(tmpdir(), "tmct-child-trust-"));
+  try {
+    await appendFact(dir, {
+      subject: "penguin", predicate: "rdfs:subClassOf", object: "bird",
+      provenance: "child:conceptnet:penguin", createdAt: FRESH,
+    });
+    const m = await loadMemory(dir);
+    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === "src:corpus:conceptnet");
+    assert.ok(source, "a child fact materialises the shared conceptnet corpus Source");
+    assert.equal(source.attributes.find((a) => a.prop === "mgx:sourceType")?.value, "corpus");
+    const fact = m.individuals.find((i) => i.class === "Fact");
+    // the corpus tier, above corpusWeak — the exact value tracks recency from
+    // createdAt, so the assertion is the tier band, not a frozen number
+    const score = Number(fact.attributes.find((a) => a.prop === "mgx:trustScore")?.value);
+    assert.ok(score > SOURCE_PRIOR.corpusWeak && score <= SOURCE_PRIOR.corpus, `${score} sits at the corpus tier`);
+    assert.deepEqual(JSON.parse(fact.attributes.find((a) => a.prop === "mgx:trustInputs")?.value).sourceTypes, ["corpus"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("entailed hook: min(premise trusts) × rule-confidence when premises are supplied; bare prior otherwise", () => {
   const sources = { e: src("e", "entailed") };
   // no premises → the bare entailed prior (0.3)

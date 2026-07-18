@@ -30,6 +30,11 @@ function parseChatTagRest(rest) {
  * kind set (the kinds SOURCE_PRIOR scores):
  *   corpus:conceptnet /r/IsA   -> { kind:"corpus",   name:"conceptnet" }
  *   corpus-weak:conceptnet /r/RelatedTo -> { kind:"corpusWeak", name:"conceptnet" }
+ *   child:conceptnet:<term>    -> { kind:"corpus",   name:"conceptnet" }
+ *     (the lazy child triples pack is curated ConceptNet — same corpus tier,
+ *      same 0.7 prior, same shared Source as the bulk conceptnet import; the
+ *      <term> segment records which miss pulled the fact in and is not part of
+ *      the Source identity)
  *   ace:chat:<session>@<ts>    -> { kind:"operator",  createdAt:<ts>, sessionId:<session> }
  *   teach:chat:<session>@<ts>  -> { kind:"teach",     createdAt:<ts>, sessionId:<session> }
  *   web:<url> | url:<url>      -> { kind:"web",       url:<url> }
@@ -54,6 +59,9 @@ export function provenanceTagToSource(tag) {
   const head = t.split(/\s+/)[0]; // drop trailing " /r/IsA" etc.
   if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
   if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
+  // child:<pack>:<term> — the lazy child triples pack, scored at the corpus tier
+  // under the pack's shared Source; the per-term tail is dropped from the id.
+  if (head.startsWith("child:")) return { kind: "corpus", name: head.slice("child:".length).split(":")[0] || "unknown" };
   if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
   if (head.startsWith("teach:")) {
     // the chat teach lane's natural frames — chat.mjs's teachProvenanceTag
