@@ -12602,7 +12602,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     if (advTurn) {
       note(trace, `lane: ${advTurn.note}`);
       if (advTurn.goal) note(trace, `goal: ${advTurn.goal}`);
-      const result = plainTurn(workingLine, advTurn.text, { via: "game", focus });
+      const result = plainTurn(workingLine, advTurn.text, { via: "game", miss: !!advTurn.miss, focus });
       if (advTurn.goal) result.goal = advTurn.goal;
       result.lane = advTurn.lane;
       const rec = withLast(result, advTurn.goal ?? "play the adventure");

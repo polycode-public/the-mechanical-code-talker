@@ -13,7 +13,7 @@ import { parseImperative } from "../domain/grammar/ace.mjs";
 import { createCompletionsGraphAdapter } from "../domain/completions/graph-adapter.mjs";
 import { actionFamilies } from "../domain/router/taught.mjs";
 import { getWorldsPackProvider } from "../adapters/corpus/worlds-pack.mjs";
-import { appendFacts, appendRule, loadMemory, readFactRows, readRuleRows } from "../adapters/memory/core.mjs";
+import { appendFacts, appendRule, loadMemory, normFactTerm, readFactRows, readRuleRows } from "../adapters/memory/core.mjs";
 import { COMPLETIONS_STORE, generateCompletion } from "./completions.mjs";
 
 // ---- recognizers: the closed opening/stop set --------------------------------
@@ -579,6 +579,53 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
   );
 }
 
+// A mid-game "where is X" aside. Optional trailing "now": the question means
+// the same with or without it, and the fold IS the now.
+const WORLD_WHERE_RE = /^where(?:'s|\s+is|\s+are)\s+(?:the\s+|a\s+|an\s+)?(.+?)(?:\s+now)?[?.!\s]*$/i;
+
+/** A locative aside about a placed world thing, answered from the SAME @turnN
+ *  fold every other world reader uses — never the raw base rows, whose
+ *  superseded placements would answer where things stood at load time. Null
+ *  when the asked thing has no placement in the world, so an ordinary
+ *  locative question (a code symbol, a taught board piece) keeps its lane. A
+ *  hidden thing is declined without naming its hiding place. */
+async function worldWhereAnswer(line, { memoryDir }) {
+  const m = String(line).match(WORLD_WHERE_RE);
+  if (!m) return null;
+  const thing = normFactTerm(m[1]);
+  let rows;
+  try { rows = readFactRows(await loadMemory(memoryDir)); } catch { return null; }
+  const state = foldWorldState(rows);
+  const place = state.placements.get(thing);
+  if (!place) return null;
+  if (place.predicate === "mgx:hidden-in") {
+    return answer(
+      `nothing you've seen says where the ${thing} is.`,
+      `ADVENTURE — where-aside: ${thing} is hidden; declined without naming the hiding place`,
+      { miss: true, goal: `locate the ${thing}` },
+    );
+  }
+  if (thing === "player") {
+    return answer(
+      `you are in the ${place.object}.`,
+      "ADVENTURE — where-aside: the player's own room, from the current world fold",
+      { goal: "check where you are" },
+    );
+  }
+  if (place.object === "player") {
+    return answer(
+      `you are carrying the ${thing}.`,
+      `ADVENTURE — where-aside: ${thing} is carried, from the current world fold`,
+      { goal: `locate the ${thing}` },
+    );
+  }
+  return answer(
+    `the ${thing} is in the ${place.object}.`,
+    `ADVENTURE — where-aside: ${thing}'s current placement from the world fold (as of turn ${place.turn})`,
+    { goal: `locate the ${thing}` },
+  );
+}
+
 async function inventoryAnswer({ memoryDir, graph }) {
   const memory = await loadMemory(memoryDir);
   const rows = readFactRows(memory);
@@ -665,5 +712,7 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
   if (INVENTORY_RE.test(line)) return inventoryAnswer({ memoryDir, graph });
   const cmd = parseImperative(line, lexicon ?? undefined);
   if (cmd) return runWorldCommand(cmd, { world: adventure.world, memoryDir, env, graph, cache });
+  const whereAside = await worldWhereAnswer(line, { memoryDir });
+  if (whereAside) return whereAside;
   return null; // a mid-game aside — the ordinary lanes answer, world untouched
 }
