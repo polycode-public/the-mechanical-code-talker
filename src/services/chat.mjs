@@ -3499,7 +3499,22 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
           };
         }
       }
-      // nothing stored to disagree with — fall through (see the gate above).
+      // Nothing stored to disagree with. The gate above is right to refuse
+      // storing a bare negative with no positive behind it — but a subject
+      // the store has never heard of fell PAST every teach lane onto the
+      // code-question bootstrap message, which reads as a different product.
+      // Decline by name instead, saying what would make the claim usable. A
+      // KNOWN subject still falls through — the property/relation frames
+      // downstream own those sentences.
+      if (!priorRows.some((r) => r.subject === negSubject || r.object === negSubject)) {
+        return {
+          text: `I don't have anything about "${negSubject}" to attach "not ${negObject}" to — a bare negative with no positive to disagree with isn't stored. `
+            + `Teach me "${negSubject} is ${indefiniteArticleFor(negObject)} ${negObject}" first if that's the disagreement you mean, `
+            + `or "no ${negSubject} is a ${negObject}" to store the exclusion outright.`,
+          via: "teach-miss", miss: true,
+        };
+      }
+      // a known subject with no stored positive — fall through (see the gate above).
     }
 
     // RETRACTION — "forget that X is a Y": wires the data-layer retraction
@@ -5227,6 +5242,17 @@ function teachableSubjectOf(subject) {
   } catch {
     return raw;
   }
+}
+
+/** The teach-shaped restatement of a QUANTIFIED-PLURAL subject: "all dogs"
+ *  folds to "a dog", so an offered sentence stays grammatical and teachable —
+ *  echoing the quantifier into a singular frame produced "all dogs is
+ *  mortal". Any other subject keeps teachableSubjectOf's own reading. */
+function suggestibleSubjectPhrase(subject) {
+  const m = String(subject || "").trim().match(/^(?:all|every|each|both|most|some)\s+([\w-]+)$/i);
+  if (!m) return teachableSubjectOf(subject);
+  const singular = teachableSubjectOf(singularizeSurface(m[1]));
+  return `${indefiniteArticleFor(singular)} ${singular}`;
 }
 
 /** A leading universal quantifier, which is scaffolding rather than part of a
@@ -8136,7 +8162,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       // originally-intended case here) still gets this receipt exactly as
       // before, since envelope.parsed is null for those adjectives.
       if (rows.some(subjectMatch) && !envelope?.parsed) {
-        return { text: `I don't have a fact saying ${teachableSubjectOf(subject)} is ${adjective}.`, replace: true };
+        return { text: `I don't have a fact saying ${suggestibleSubjectPhrase(subject)} is ${adjective}.`, replace: true };
       }
       // Without this, "is the checkout flow
       // deprecated" as a genuinely FIRST-EVER question about a subject tmct

@@ -614,6 +614,11 @@ not claiming direct import). Keep the depth-1 label as is. Low urgency.
 
 ## 9. Two parser tails
 
+**DELIVERED** — the unknown-subject bare negative declines naming the subject and both
+recoveries (nothing stored; a known subject still falls through to its own frames); the
+quantified-plural miss folds to a teachable singular ("a dog is mortal", never "all dogs is").
+Keyed rows `inference.negative.unknown-subject` and `grammar.quantifier.plural-agreement`.
+
 Both from `archive/PLAN_OPEN_ITEMS.md` §3.1/§3.2, both re-verified in-process.
 
 ### 9.1 `zeus is not mortal` — an unknown-subject negative is a silent no-op
