@@ -16,7 +16,7 @@ const BIN = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..", "bin"
 /** Every verb bin/tmct.mjs actually branches on, read off its dispatcher. */
 function modesTheDispatcherHandles() {
   const source = readFileSync(BIN, "utf8");
-  return [...new Set([...source.matchAll(/\bmode === "([^"]+)"/g)].map((m) => m[1]))].sort();
+  return [...new Set([...source.matchAll(/(?<![.\w])mode === "([^"]+)"/g)].map((m) => m[1]))].sort();
 }
 
 test("every verb the dispatcher handles is described in the help", () => {
