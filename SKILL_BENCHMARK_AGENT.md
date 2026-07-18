@@ -28,10 +28,10 @@ call→retrieve-then-call→plan levels, Li et al. 2023; τ-bench's tool-agent-u
 | TOOL-7 | Recovery & replanning | a plan step fails (a tool returns empty/error) and the driver observes the failure and replans a fallback rather than dying on the dead branch — `expect.recover` (grounding: ReAct/Reflexion, τ-bench recovery) |
 | TOOL-8 | Composition under ambiguity | the goal/entity is underspecified: enumerate the tied readings (`expect.candidateResults`, one dispatched read per tied candidate) or refuse-with-a-nudge — never an arbitrary pick, never a hallucinated call |
 
-TOOL-0..TOOL-6 are on record clean under the goal driver; TOOL-7/TOOL-8 name capabilities the
-current drivers do not have yet (a replanning branch in the planner; a tied-candidate composer in
-the goal reasoner) and gate at the honest floor until those ship — named horizons, not walls. Don't
-compare a TOOL rung against a CEFR grade or an `INF-*` band: same ladder shape, unrelated axes.
+TOOL-0..TOOL-8 are on record clean under the goal driver (`agentbench/envelope.json`'s
+`rungReached: TOOL-8`) — the replanning branch lives in the planner's own method table, the
+tied-candidate composer at the resolver's binding seam. Don't compare a TOOL rung against a CEFR
+grade or an `INF-*` band: same ladder shape, unrelated axes.
 
 > **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_AGENT.md` and run an AGENTBENCH
 > cycle"* (optionally: a driver to measure, a rung to target, a version stamp).

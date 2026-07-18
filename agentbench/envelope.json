@@ -21,8 +21,8 @@
       "TOOL-7",
       "TOOL-8"
     ],
-    "rungReached": "TOOL-6",
-    "gatedAt": "TOOL-7 completion 0% < 50%"
+    "rungReached": "TOOL-8",
+    "gatedAt": null
   },
   "capability": {
     "maxContextTokens": null,
@@ -32,8 +32,8 @@
   },
   "metrics": {
     "overall": {
-      "planCompletion": 0.9253731343283582,
-      "resultCompletion": 0.9253731343283582,
+      "planCompletion": 0.9850746268656716,
+      "resultCompletion": 0.9850746268656716,
       "hallucinationRate": 0,
       "gatePass": true
     },
@@ -89,15 +89,15 @@
       },
       "TOOL-7": {
         "n": 3,
-        "planCompletion": 0,
-        "resultCompletion": 0,
+        "planCompletion": 1,
+        "resultCompletion": 1,
         "hallucinationRate": 0,
-        "gatePass": false
+        "gatePass": true
       },
       "TOOL-8": {
         "n": 3,
-        "planCompletion": 0.6666666666666666,
-        "resultCompletion": 0.6666666666666666,
+        "planCompletion": 1,
+        "resultCompletion": 1,
         "hallucinationRate": 0,
         "gatePass": true
       }

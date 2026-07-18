@@ -33,8 +33,6 @@ alongside (pool 964 passing / 111 frontier), and the small remainders (world tru
 asides through the world fold, the plural-object fold, the impact summary). `archive/` holds the
 delivered plan docs; each records what its delivery deliberately did not include. What remains:
 
-- `PLAN_TOOL_LADDER_UPLIFT.md` owns the TOOL-7 observe-and-replan branch and the TOOL-8
-  tied-candidate composer (design work; the bench cases exist and fail honestly).
 - The resolver has no NL path into the memory graph (`tmct_related` is registered but tagged
   `NOT_NL_REACHABLE`) — the routing horizon its agentbench case note records.
 - Adventure horizons (`archive/PLAN_ADVENTURE.md`): open/unlock/close ship signature-only

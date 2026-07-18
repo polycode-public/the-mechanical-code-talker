@@ -35,9 +35,10 @@ import { parseJsonlRows, rollupBy, ladderGateBy } from "../benchlib/bench.mjs";
 //        dispatched read per tied candidate) or refuses-with-a-nudge — never an
 //        arbitrary pick, never a hallucinated call.
 // TOOL-0..TOOL-2 are exercised by the seed set + stub driver; the goal driver
-// clears through TOOL-6. TOOL-7/TOOL-8 name capabilities the current drivers do
-// not have yet (a replanning branch in the planner; a tied-candidate composer in
-// the goal reasoner) — they gate at the honest floor until those ship.
+// clears the whole ladder, TOOL-0 through TOOL-8 (see agentbench/envelope.json's
+// rungReached). TOOL-7's replanning branch lives in the planner's own method
+// table; TOOL-8's tied-candidate composer lives at the resolver's binding seam
+// (src/domain/router/{planner,resolver}.mjs).
 export const RUNGS = Object.freeze(["TOOL-0", "TOOL-1", "TOOL-2", "TOOL-3", "TOOL-4", "TOOL-5", "TOOL-6", "TOOL-7", "TOOL-8"]);
 
 /** The honest-gate completion floor: the gate is "0% hallucination AT ≥N%

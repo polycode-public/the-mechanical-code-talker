@@ -34,7 +34,12 @@ export const DRIVER = "goal-0.8.1";
 export async function goalDriver(request, tools, ctx) {
   // 1. C1 — the resolver/planner. If it grounds the request, that answer stands.
   const c1 = await resolverDriver(request, tools, ctx);
-  if (!c1.refused) return c1;
+  // A C1 refusal already carrying candidateResults (the tied-candidate
+  // composer's enumerate-or-refuse answer) is TERMINAL too — escalating it
+  // would trade a complete "both tied readings, dispatched" answer for
+  // whatever the goal-reasoner makes of the same refusal (typically a plainer
+  // refuse with no candidates at all).
+  if (!c1.refused || c1.candidateResults) return c1;
 
   // 2. C1 refused — escalate to the C2 goal-reasoner (deduce goals -> meta-loop).
   //    A genuine goal-deduction composes an answer; an uncovered novel goal is an

@@ -6,18 +6,27 @@
 // build a { dispatch, resolve, graph } context against the repo's actual code
 // graph, then run a request through resolver -> planner -> goal-reasoner.
 //
-// Single-shot -> the resolver. A compound "... then ..."/"if ..."/"of the ...,
-// which are ..." request -> the planner, HTN-decomposed into an ordered call
-// sequence with a POP causal-link proof chain, then folded into ONE composed
-// answer via the same set-algebra the HTN method names (relative-filter ->
-// intersect; conditional -> fallback/guard). A refused WORLD goal ("make every
-// disk rest on peg-c") is tried against the taught capability records next
-// (runTaughtPlan — selected by backward chaining, grounded by pure simulation,
-// never dispatched). A request none of those ground escalates to the
-// closed-world goal-reasoner — a maintenance-invariant deduction
-// (coverage-gap / cochange-risk), never a keyword guess. Anything no stage
-// grounds is an honest refuse, the same "grounded or an honest miss" contract
-// as every other tmct answer path.
+// Single-shot -> the resolver. A single-shot bound argument that TIES between
+// two same-tier candidates (a source module and its own test module, the
+// graph's own `tests` edge — never a raw score tie alone) never picks one
+// arbitrarily: the resolver dispatches a read per tied candidate and refuses
+// with `candidateResults` carrying both, the enumerate-or-refuse discipline
+// the chat surface's own ambiguous-entity refusal already uses. A compound
+// "... then ..."/"if ..."/"of the ..., which are ..." request -> the planner,
+// HTN-decomposed into an ordered call sequence with a POP causal-link proof
+// chain, then folded into ONE composed answer via the same set-algebra the HTN
+// method names (relative-filter -> intersect; conditional -> fallback/guard).
+// A "<primary>, and if <it came up empty>, <fallback> instead" request
+// decomposes to the RECOVER method instead: the primary dispatches, its own
+// structured result is OBSERVED, and the fallback dispatches only when that
+// observation is empty (`recovered:true`) — never both, and never neither. A
+// refused WORLD goal ("make every disk rest on peg-c") is tried against the
+// taught capability records next (runTaughtPlan — selected by backward
+// chaining, grounded by pure simulation, never dispatched). A request none of
+// those ground escalates to the closed-world goal-reasoner — a maintenance-
+// invariant deduction (coverage-gap / cochange-risk), never a keyword guess.
+// Anything no stage grounds is an honest refuse, the same "grounded or an
+// honest miss" contract as every other tmct answer path.
 
 import { resolveOne, backwardChainWorld } from "./resolver.mjs";
 import { plan, isMultiStep, decompose, MAX_STEPS } from "./planner.mjs";
@@ -136,7 +145,12 @@ export async function runResolverPlan(request, tools, ctx) {
 
   const r = await resolveOne(request, tools, ctx, { execute: true });
   if (r.refused) {
-    return { calls: [], refused: true, terminated: true, proof: [], driver: ROUTER_DRIVER, why: r.reason };
+    return {
+      calls: [], refused: true, terminated: true, proof: [], driver: ROUTER_DRIVER, why: r.reason,
+      // the tied-candidate composer's answer: one dispatched read per tied
+      // candidate, riding the refusal rather than an arbitrary pick.
+      ...(r.candidateCalls ? { candidateResults: r.candidateCalls } : {}),
+    };
   }
   return {
     calls: [r.selected], refused: false, terminated: true, proof: r.proof,
@@ -232,10 +246,17 @@ export async function runTaughtPlan(request, tools, ctx) {
  *  agentbench's driver-resolver.mjs + driver-goal.mjs composition, with no
  *  agentbench/ dependency (agentbench/ is dev-only, never shipped). Returns a
  *  loopResult:
- *  `{ calls, refused, terminated, proof, why, driver, composed?, observed? }`. */
+ *  `{ calls, refused, terminated, proof, why, driver, composed?, observed?, candidateResults? }`.
+ *
+ *  A C1 refusal that already carries `candidateResults` (the tied-candidate
+ *  composer's enumerate-or-refuse answer) is TERMINAL — it stands as-is rather
+ *  than escalating further, the same way a grounded C1 answer stands. Escalating
+ *  it would silently trade a complete "both tied readings, dispatched" answer
+ *  for whatever the taught/goal lanes make of the same refusal (typically a
+ *  plainer refuse with no candidates at all). */
 export async function runCapabilityPlan(request, tools, ctx) {
   const c1 = await runResolverPlan(request, tools, ctx);
-  if (!c1.refused) return c1;
+  if (!c1.refused || c1.candidateResults) return c1;
   const taught = await runTaughtPlan(request, tools, ctx);
   if (taught) return taught.refused ? { ...taught, c1Why: c1.why } : taught;
   const c2 = await goalReason(request, tools, ctx, { driver: GOAL_DRIVER });

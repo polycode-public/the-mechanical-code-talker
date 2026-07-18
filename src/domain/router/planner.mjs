@@ -12,6 +12,13 @@ export const MAX_STEPS = 8;
 
 const PRONOUN_RE = /\b(?:it|its|them|those|these|that|their)\b/i;
 
+// The RECOVER method's check clause must itself name an EMPTY outcome (none/
+// nothing/no/not any/empty) — a closed, curated cue list, not a general "any if
+// clause is a guard" reading. This is what keeps METHOD 1b narrow: "X, and if Y,
+// Z instead" without an emptiness cue in Y falls through to plain sequencing
+// unchanged, exactly as it did before this method existed.
+const RECOVER_EMPTY_CUE_RE = /\bnone\b|\bnothing\b|\bno\b|\bnot\s+any\b|\bempty\b/i;
+
 /** HTN decomposition — turn a request into an ORDERED list of leaf sub-goals.
  *  Returns { method, segments:[{ text, role, thread }] }:
  *    - role "check"  — a conditional antecedent (a test whose call still emits)
@@ -30,6 +37,25 @@ export function decompose(request) {
       segments: [
         { text: cond[1].trim(), role: "check", thread: PRONOUN_RE.test(cond[1]) },
         { text: cond[2].trim(), role: "action", thread: PRONOUN_RE.test(cond[2]) },
+      ],
+    };
+  }
+
+  // METHOD 1b — the RECOVER recipe: "<primary>, and if <the primary came up
+  // empty>, <fallback> [instead]". Unlike METHOD 1 (which always dispatches
+  // both sides and folds the answer), the check clause here names no separate
+  // call at all — it is read as an emptiness GUARD on the primary's own
+  // result, observed at execution rather than dispatched. Requires an
+  // emptiness cue in the check clause, so an ordinary "X, and if Y, Z instead"
+  // whose Y doesn't name an empty outcome keeps falling through to plain
+  // sequencing (METHOD 4), unchanged from before this method existed.
+  const recover = raw.match(/^(.+?),\s*(?:and\s+)?if\s+(.+?),\s*(.+?)(?:\s+instead)?$/i);
+  if (recover && RECOVER_EMPTY_CUE_RE.test(recover[2])) {
+    return {
+      method: "recover",
+      segments: [
+        { text: recover[1].trim(), role: "action", thread: false },
+        { text: recover[3].trim(), role: "action", thread: PRONOUN_RE.test(recover[3]) },
       ],
     };
   }
@@ -101,11 +127,15 @@ function rewriteCheck(text, lastEntity) {
 const refuse = (why, driver) => ({ calls: [], refused: true, terminated: true, proof: [], driver, why });
 
 /** Plan + execute a multi-step request. Returns a loopResult
- *    { calls, refused, terminated, proof, why, driver, observed }
+ *    { calls, refused, terminated, proof, why, driver, observed, recovered? }
  *  with a POP causal-link proof chain. Each step is monitored; a failed sub-goal stops the
- *  plan honestly. Bounded by MAX_STEPS.
+ *  plan honestly. Bounded by MAX_STEPS. A `recover` method OBSERVES its primary step's
+ *  own structured result before deciding the fallback: `recovered:true` marks a plan
+ *  whose fallback fired because the primary came up empty; a non-empty primary stops the
+ *  plan after just that one call (the fallback is never dispatched) and carries no
+ *  `recovered` key at all.
  *
- *  ctx: { dispatch(name,input)->{ok,text,resolved?}, resolve(term)->resolveObject } */
+ *  ctx: { dispatch(name,input)->{ok,text,resolved?,result?}, resolve(term)->resolveObject } */
 export async function plan(request, declaredNames, ctx, { driver = "resolver-0.8.0" } = {}) {
   const { method, segments } = decompose(request);
   if (segments.length > MAX_STEPS) {
@@ -117,6 +147,7 @@ export async function plan(request, declaredNames, ctx, { driver = "resolver-0.8
   const why = [`HTN method: ${method} — ${segments.length} sub-goal(s)`];
   let lastEntity = null; // the most-recent bound entity label (for anaphora threading)
   let steps = 0;
+  let recovered = false;
 
   for (let i = 0; i < segments.length; i += 1) {
     if (steps >= MAX_STEPS) return refuse("step budget exhausted mid-plan — escalate", driver);
@@ -127,7 +158,10 @@ export async function plan(request, declaredNames, ctx, { driver = "resolver-0.8
 
     const r = await resolveOne(text, declaredNames, ctx, { execute: true });
     if (r.refused) {
-      return refuse(`sub-goal ${i + 1} ("${text}") did not resolve: ${r.reason}`, driver);
+      return {
+        ...refuse(`sub-goal ${i + 1} ("${text}") did not resolve: ${r.reason}`, driver),
+        ...(r.candidateCalls ? { candidateResults: r.candidateCalls } : {}),
+      };
     }
 
     calls.push(r.selected);
@@ -140,6 +174,21 @@ export async function plan(request, declaredNames, ctx, { driver = "resolver-0.8
 
     if (r.resolved?.label) lastEntity = r.resolved.label;
     why.push(...(r.why || []).map((w) => `[${i + 1}] ${w}`));
+
+    // RECOVER's guard: OBSERVE the primary's own structured result (a fresh,
+    // read-only re-dispatch — the same idiom composeResult uses to fold a
+    // threaded plan) before deciding the fallback. A non-empty primary already
+    // answered the request, so the loop stops here — the fallback is never
+    // dispatched, closing the bug this method exists to fix (the primary used
+    // to double-emit because the guard was never actually observed). An empty
+    // primary marks the plan `recovered` and lets the fallback segment run.
+    if (method === "recover" && i === 0) {
+      const res = await ctx.dispatch(r.selected.name, r.selected.input || {});
+      const primaryEmpty = res.ok && Array.isArray(res.result) && res.result.length === 0;
+      why.push(`[guard] observed ${r.selected.name} => ${primaryEmpty ? "empty — recovering with the fallback" : "non-empty — the primary already answers this; no fallback dispatched"}`);
+      if (!primaryEmpty) break;
+      recovered = true;
+    }
   }
 
   return {
@@ -149,6 +198,7 @@ export async function plan(request, declaredNames, ctx, { driver = "resolver-0.8
     proof,
     driver,
     why,
+    ...(recovered ? { recovered: true } : {}),
     observed: `plan(${method}): ${calls.map((c) => c.name).join(" -> ")}`,
   };
 }
