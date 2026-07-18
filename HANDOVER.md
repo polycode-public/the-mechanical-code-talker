@@ -47,9 +47,9 @@ same commit as the work it describes:
   in the browser, 1.3 MB bundle, 1,263-fact deterministic seed, syllogist demo live, 6/6 page
   journeys; guess-number and learn-on-miss demo chips sit `ready: false` until their features
   land via T1 wave 2)
-- T5 `PLAN_25_BACKLOG` §10 — INVESTIGATED, evidence committed to §10: no resolver plan ever
-  existed to restore (the 36% measured a deliberately relaxed one-call bar). The recommended
-  per-arm `floorExpect` declared-refusal seam AWAITS THE OPERATOR; nothing changed until then.
+- T5 `PLAN_25_BACKLOG` §10 — DELIVERED: no resolver plan ever existed to restore (the 36%
+  measured a deliberately relaxed one-call bar); the operator approved the per-arm `floorExpect`
+  declared-refusal seam, applied and pinned.
 - T6 `PLAN_25_BACKLOG` §11 gloss, §12 ontology store-diff test, §13 SKOS surface +
   `tmct_related`; `PLAN_DIALOGUE_ACTS` closed vocabulary — BUILT + VERIFIED (the §13 chat lane
   and the dialogue-act envelope wiring ride T1 wave 2)

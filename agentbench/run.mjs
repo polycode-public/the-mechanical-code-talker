@@ -25,7 +25,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseCases, gradeCase, rollup, ladderGate, renderRollup, RUNGS } from "./grade.mjs";
+import { parseCases, gradeCase, effectiveCaseFor, rollup, ladderGate, renderRollup, RUNGS } from "./grade.mjs";
 import { stubDriver } from "./driver-stub.mjs";
 import { shimDriver } from "./driver-shim.mjs";
 import { resolverDriver } from "./driver-resolver.mjs";
@@ -168,7 +168,8 @@ export async function runCase(caseDef, driver, ctx, stamp) {
   } finally {
     clearTimeout(timer);
   }
-  const verdict = gradeCase(caseDef, loopResult);
+  const effective = effectiveCaseFor(caseDef, loopResult?.driver);
+  const verdict = gradeCase(effective, loopResult);
   return {
     caseId: caseDef.id,
     rung: caseDef.rung,
@@ -178,6 +179,7 @@ export async function runCase(caseDef, driver, ctx, stamp) {
     stamp,
     version: BENCH_VERSION,
     expect: caseDef.expect,
+    ...(effective !== caseDef ? { floorExpectApplied: true } : {}),
     produced: {
       calls: loopResult?.calls ?? [],
       refused: Boolean(loopResult?.refused),

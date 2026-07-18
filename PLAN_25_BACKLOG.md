@@ -681,9 +681,12 @@ answer does not contain "dogs is".
 
 ## 10. Decision — the resolver-floor `ab-c2-what-to-test` (AGENTBENCH)
 
-**Status: investigated — restoration attempted per the operator's direction, and the archaeology
-shows there is no resolver plan to restore. The 36% never measured a composed plan. Evidence below.
-The expectation change is recommended, not applied — the operator decides.**
+**Status: DELIVERED. Restoration was attempted per the operator's direction, and the archaeology
+shows there is no resolver plan to restore — the 36% never measured a composed plan (evidence
+below). The operator then approved the per-arm expectation seam, now applied: the case declares
+`floorExpect: {refuse: true}`, `effectiveCaseFor` (`agentbench/grade.mjs`) grades resolver-floor
+rows against it (the row records `floorExpectApplied`), and the goal arm keeps the six-call
+expectation. Pinned in `test/bench/agentbench.test.mjs` on both the row and the seam.**
 
 **What moved, in which commit, and why.** One commit moved this case: `e68994f` (1.8.1, the
 TOO_HARD_AUDIT M2 fix). Before it, the case's expectation was relaxed to one call (`expect.calls =

@@ -140,8 +140,27 @@ export function parseCases(text, { knownLabels = null } = {}) {
         });
       }
     }
+    // floorExpect — a per-arm override: the resolver-floor arm is graded against
+    // this instead of the shared expect. Supports exactly { refuse: true }: a
+    // case whose plan needs the goal reasoner declares that the plannerless arm
+    // correctly refuses, so the two arms stop disagreeing silently.
+    if ("floorExpect" in c) {
+      const keys = isPlainObject(c.floorExpect) ? Object.keys(c.floorExpect) : null;
+      if (!keys || keys.length !== 1 || c.floorExpect.refuse !== true) {
+        errors.push(`${c.id}: floorExpect supports only { refuse: true } — the floor arm either shares the expectation or declares the refusal`);
+      }
+    }
     cases.push(c);
   });
+}
+
+/** The case an arm is actually graded against: a declared `floorExpect`
+ *  replaces the shared expectation on the resolver-floor driver only. The
+ *  effective expectation inherits `terminates` — a declared refusal must still
+ *  terminate. Every other arm (goal, stub, shim) grades the shared expect. */
+export function effectiveCaseFor(caseDef, driverName) {
+  if (!caseDef.floorExpect || typeof driverName !== "string" || !driverName.startsWith("resolver-")) return caseDef;
+  return { ...caseDef, expect: { terminates: caseDef.expect.terminates, ...caseDef.floorExpect } };
 }
 
 // ---- the zero-hallucination gate (the AUTOMATIC-FAIL check) ------------------

@@ -23,7 +23,7 @@ import {
 } from "../../src/domain/router/registry.mjs";
 import {
   RUNGS, COMPLETION_FLOOR, parseCases, hallucinationsIn, isCallWellFormed,
-  callMatches, callsMatch, gradeCase, rollup, ladderGate, sameSet, sameCandidates,
+  callMatches, callsMatch, gradeCase, effectiveCaseFor, rollup, ladderGate, sameSet, sameCandidates,
 } from "../../agentbench/grade.mjs";
 import { stubDriver } from "../../agentbench/driver-stub.mjs";
 import { shimDriver } from "../../agentbench/driver-shim.mjs";
@@ -164,6 +164,32 @@ test("gradeCase: refusing-when-unsure passes at the honest-miss level; a wrong c
   // produced a call when it should have refused
   const bad = gradeCase(refuseCase, { calls: [{ name: "tmct_describe", input: { symbol: "zebra" } }], refused: false, terminated: true });
   assert.ok(!bad.pass);
+});
+
+test("effectiveCaseFor: a declared floorExpect replaces the expectation on the resolver arm only", () => {
+  const caseDef = {
+    id: "x", rung: "TOOL-6", tools: ["tmct_untested"],
+    expect: { calls: [{ name: "tmct_untested" }], terminates: true },
+    floorExpect: { refuse: true },
+  };
+  const floor = effectiveCaseFor(caseDef, "resolver-0.8.0");
+  assert.notEqual(floor, caseDef);
+  assert.deepEqual(floor.expect, { terminates: true, refuse: true }, "the override inherits terminates");
+  for (const arm of ["goal-0.8.1", "stub-floor", "shim-transport", "timeout", undefined]) {
+    assert.equal(effectiveCaseFor(caseDef, arm), caseDef, `${arm ?? "no driver"} grades the shared expectation`);
+  }
+  const plain = { id: "y", expect: { refuse: true, terminates: true } };
+  assert.equal(effectiveCaseFor(plain, "resolver-0.8.0"), plain, "no floorExpect, no override");
+});
+
+test("parseCases: floorExpect accepts only the declared-refusal shape", () => {
+  const base = '{"id":"z","rung":"TOOL-6","request":"r","tools":["tmct_untested"],"expect":{"calls":[{"name":"tmct_untested"}],"terminates":true},"floorExpect":';
+  const ok = parseCases(`${base}{"refuse":true}}`);
+  assert.deepEqual(ok.errors, []);
+  for (const badShape of ['{"refuse":false}', '{"refuse":true,"calls":[]}', "[]", "true"]) {
+    const bad = parseCases(`${base}${badShape}}`);
+    assert.ok(bad.errors.some((e) => e.includes("floorExpect supports only")), `rejected: ${badShape}`);
+  }
 });
 
 test("gradeCase: a required-but-missing proof chain fails a proof case", () => {
@@ -561,12 +587,15 @@ test("agentbench e2e: the resolver EXECUTES + COMPOSES — result-completion tra
   const twin = rows.find((r) => r.caseId === "ab-c1-button-methods-calling");
   assert.ok(twin.verdict.completed && twin.verdict.resultCompleted, "the recipe generalizes to Button and composes an honest ∅");
   assert.deepEqual(twin.produced.composed, []);
-  // ab-c2-what-to-test now honestly REFUSES under the C1 resolver alone (no plan,
-  // no result) — it needs the C2 goal-reasoner's keystone ranking, which
-  // goal-reasoner.test.mjs confirms it now gets in full via the escalating
-  // goalDriver. C1 no longer claims a case it can only half-answer.
+  // ab-c2-what-to-test honestly REFUSES under the C1 resolver alone — it needs
+  // the C2 goal-reasoner's keystone ranking, which goal-reasoner.test.mjs
+  // confirms the escalating goalDriver produces in full. The case declares
+  // floorExpect, so on this arm the refusal grades as the correct outcome
+  // (declared, not a bare miss) while the goal arm keeps the six-call bar.
   const wtt = rows.find((r) => r.caseId === "ab-c2-what-to-test");
-  assert.ok(!wtt.verdict.completed && !wtt.verdict.resultCompleted && wtt.produced.calls.length === 0, "C1 alone honestly refuses rather than half-answering with an unranked list");
+  assert.ok(wtt.produced.refused && wtt.produced.calls.length === 0, "C1 alone honestly refuses rather than half-answering with an unranked list");
+  assert.ok(wtt.floorExpectApplied === true, "the floor override is recorded on the row");
+  assert.ok(wtt.verdict.completed, "the declared refusal grades as this arm's correct outcome");
 });
 
 test("member-filter: memberIndividuals is the GRAIN FIX (full individuals, dotted labels) and membersReaching folds bounded reach", () => {
