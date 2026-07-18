@@ -11489,8 +11489,8 @@ function parseGameBounds(text) {
 // Opening moves, both modes, as closed-set leads + a tail that may only carry
 // the bounds clause and the closing invitation words — any other tail is a
 // real sentence and falls through to the ordinary lanes.
-const GUESSER_OPEN_LEAD_RE = /^(?:i\s*(?:'m|am)\s+thinking\s+of\s+a\s+number|guess\s+my\s+number|guess\s+the\s+number\s+i\s*(?:'m|am)\s+thinking\s+of)\b(.*)$/i;
-const THINKER_OPEN_LEAD_RE = /^(?:think\s+of\s+a\s+number|guess\s+a\s+number\s+(?:between\s+\S+\s+and\s+\S+\s+|up\s+to\s+\S+\s+)?and\s+i\s*(?:'ll|\s+will)\s+tell\s+you\s+(?:if\s+it\s*(?:'s|\s+is)\s+)?higher\s+or\s+lower)\b(.*)$/i;
+const GUESSER_OPEN_LEAD_RE = /^(?:i\s*(?:'m|am)\s+thinking\s+of\s+a\s+number|guess\s+my\s+number|guess\s+the\s+number\s+i\s*(?:'m|am)\s+thinking\s+of|guess\s+a\s+number\s+(?:between\s+\S+\s+and\s+\S+\s+|up\s+to\s+\S+\s+)?and\s+i\s*(?:'ll|\s+will)\s+tell\s+you\s+(?:if\s+it\s*(?:'s|\s+is)\s+)?higher\s+or\s+lower)\b(.*)$/i;
+const THINKER_OPEN_LEAD_RE = /^(?:think\s+of\s+a\s+number)\b(.*)$/i;
 const GUESSER_OPEN_TAIL_RE = /^[\s,.!?—-]*(?:and\s+)?(?:you\s+)?(?:can\s+|have\s+to\s+|try\s+to\s+)?(?:guess(?:\s+it|\s+what\s+it\s+is)?)?[\s,.!?—-]*$/i;
 const THINKER_OPEN_TAIL_RE = /^[\s,.!?—-]*(?:and\s+)?(?:i\s*(?:'ll|\s+will)\s+(?:try\s+to\s+)?guess(?:\s+it)?|i\s+guess)?[\s,.!?—-]*$/i;
 

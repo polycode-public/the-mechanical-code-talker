@@ -108,10 +108,12 @@ consistent with `tmct-prefers-templates-over-general-rules`.
 "I'm thinking of a number between 1 and 100" must not be misparsed as a declarative ACE sentence to
 teach, and BEFORE `runAsk` for the same reason a bare command word is checked first):
 - Guesser-mode trigger (human holds the secret, tmct guesses): "I'm thinking of a number [between
-  1 and 100][, you guess]", "guess my number", "guess the number I'm thinking of".
+  1 and 100][, you guess]", "guess my number", "guess the number I'm thinking of", and "guess a
+  number and I'll tell you higher or lower" — the speaker offering the hints holds the secret, so
+  the invitation hands tmct the guessing seat. (An earlier draft filed that last phrase under
+  thinker mode; the build corrected it, with the pin in `games/guess-number.jsonl`.)
 - Thinker-mode trigger (tmct holds the secret, human guesses): "think of a number [between 1 and
-  100]", "guess a number and I'll tell you higher or lower" — the same thinker-mode ask phrased
-  around the human's action instead of tmct's.
+  100]".
 - Both forms accept an explicit bound ("between 1 and 100", "up to 50") with a sane default (100)
   when omitted, mirroring how other bounded-count lanes default rather than refuse.
 

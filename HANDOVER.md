@@ -36,7 +36,8 @@ same commit as the work it describes:
   (every section's keyed rows landed; the folded superlative-inversion fix rode §3; §13's chat
   lane deferred to wave 2 by design)
 - T1w2 `PLAN_GUESS_NUMBER` phases 1–3; `PLAN_LEARN_ON_MISS` chat hook; `PLAN_DIALOGUE_ACTS`
-  envelope wiring — QUEUED (after T1)
+  envelope wiring; `PLAN_25_BACKLOG` §13 chat lane — BUILT + VERIFIED (the hint-offer opening
+  was re-filed to guesser mode at integration, pinned; both home-page demo chips are live)
 - T2 `PLAN_SYLLOGIST` §3 ATMS environment sets + §2 semi-naive delta + §4 slice — BUILT +
   VERIFIED (124 syllogise tests incl. the stale-justification regression; delta ≡ full
   differential per rule; corpus row `inference.retract.stale-justification`)
@@ -54,7 +55,13 @@ same commit as the work it describes:
   `tmct_related`; `PLAN_DIALOGUE_ACTS` closed vocabulary — BUILT + VERIFIED (the §13 chat lane
   and the dialogue-act envelope wiring ride T1 wave 2)
 - 3×3 behavior matrix (what-is-a-dog / guess-number / learn-on-miss × TUI-file / web-memory /
-  lib-sqlite) — QUEUED (lands with its features)
+  lib-sqlite) — BUILT + VERIFIED (`e2e/tui-chat-file.test.mjs`, `e2e/lib-chat-sqlite.test.mjs`,
+  `e2e/web-chat-memory.test.mjs` + memory/sqlite corpus backend rows)
+- OPEN (found in the run, needs a design decision): the general-verb teach glues a preposition
+  into the object — "cat relates to milk" stores `cat mgx:relate "to milk"`. Mapping the closed
+  "relates to"/"is related to" pair onto `mgx:relatedTo` would fix the garble and give the SKOS
+  lane a natural teach phrasing; it changes teach-path predicate minting, so it is a decision,
+  not a drive-by.
 - `PLAN_25_BACKLOG` §8.1 CHATBENCH expectation revision at the arc boundary; then the endgame:
   HANDOVER problems pass → minor roll → 4 benchmarks on the new ladder rungs → capabilities
   audit → archive delivered plan docs — QUEUED

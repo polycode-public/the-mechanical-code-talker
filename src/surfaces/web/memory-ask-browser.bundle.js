@@ -21376,6 +21376,189 @@ ${codeblock}`, options);
     }
   });
 
+  // src/domain/concept.mjs
+  var CONCEPT_CLASS, CLASS_NOUN, FOLLOWUP_SHAPES, RELATION_TERM, RELATION_KINDS, RELATION_RENDER, RELATION_FOLLOWUP_SHAPES;
+  var init_concept = __esm({
+    "src/domain/concept.mjs"() {
+      init_ask();
+      init_codegraph();
+      CONCEPT_CLASS = Object.freeze({
+        class: "Class",
+        module: "Module",
+        function: "Function",
+        method: "Method",
+        attribute: "Attribute",
+        variable: "GlobalVariable",
+        constant: "GlobalVariable",
+        commit: "Commit"
+      });
+      CLASS_NOUN = Object.freeze({
+        Class: ["class", "classes"],
+        Module: ["module", "modules"],
+        Function: ["function", "functions"],
+        Method: ["method", "methods"],
+        Attribute: ["attribute", "attributes"],
+        GlobalVariable: ["variable", "variables"],
+        Commit: ["commit", "commits"]
+      });
+      FOLLOWUP_SHAPES = Object.freeze({
+        Class: [
+          (x) => `which classes inherit from ${x}`,
+          (x) => `what does ${x} contain`,
+          (x) => `where is ${x} defined`
+        ],
+        Module: [
+          (x) => `what does ${x} import`,
+          (x) => `which modules import ${x}`,
+          (x) => `where is ${x} defined`
+        ],
+        Function: [
+          (x) => `what calls ${x}`,
+          (x) => `what does ${x} call`,
+          (x) => `where is ${x} defined`
+        ],
+        Method: [
+          (x) => `which class contains ${x}`,
+          (x) => `what calls ${x}`,
+          (x) => `where is ${x} defined`
+        ],
+        Attribute: [
+          (x) => `which class contains ${x}`,
+          (x) => `where is ${x} defined`
+        ],
+        GlobalVariable: [
+          (x) => `where is ${x} defined`,
+          (x) => `where is ${x} mentioned`
+        ],
+        Commit: [
+          (x) => `what did commit ${x} touch`,
+          (x) => `when did ${x} change`
+        ]
+      });
+      RELATION_TERM = Object.freeze({
+        import: "imports",
+        imports: "imports",
+        importing: "imports",
+        imported: "imports",
+        call: "calls",
+        calls: "calls",
+        calling: "calls",
+        called: "calls",
+        invoke: "calls",
+        invokes: "calls",
+        invoking: "calls",
+        contain: "contains",
+        contains: "contains",
+        containing: "contains",
+        containment: "contains",
+        member: "contains",
+        members: "contains",
+        inherit: "inherits",
+        inherits: "inherits",
+        inheriting: "inherits",
+        inheritance: "inherits",
+        extend: "inherits",
+        extends: "inherits",
+        extending: "inherits",
+        subclass: "inherits",
+        subclasses: "inherits",
+        subclassing: "inherits",
+        test: "tests",
+        tests: "tests",
+        testing: "tests",
+        tested: "tests",
+        coverage: "tests",
+        define: "defines",
+        defines: "defines",
+        defining: "defines",
+        defined: "defines",
+        definition: "defines",
+        definitions: "defines",
+        declaration: "defines",
+        touch: "touches",
+        touches: "touches",
+        touching: "touches",
+        touched: "touches",
+        cochange: "cochange",
+        "co-change": "cochange",
+        "change-coupling": "cochange",
+        coupled: "cochange",
+        // "export"/"exports" is also a curated seon lexicon noun, but that meta reading
+        // only owns "what does export mean" — no conflict with this vague-touch table.
+        export: "reexports",
+        exports: "reexports",
+        exporting: "reexports",
+        exported: "reexports",
+        reexport: "reexports",
+        reexports: "reexports",
+        reexporting: "reexports",
+        "re-export": "reexports",
+        "re-exports": "reexports",
+        "re-exporting": "reexports"
+      });
+      RELATION_KINDS = Object.freeze({
+        imports: ["imports"],
+        calls: ["calls", "callsSymbol"],
+        contains: ["contains"],
+        inherits: ["inherits"],
+        tests: ["tests"],
+        defines: ["defines"],
+        touches: ["touches", "touchesSymbol"],
+        cochange: ["cochange"],
+        reexports: ["reexports"]
+      });
+      RELATION_RENDER = Object.freeze({
+        imports: { verb: "imports", edgeNoun: "import" },
+        calls: { verb: "calls", edgeNoun: "call" },
+        contains: { verb: "contains", edgeNoun: "containment" },
+        inherits: { verb: "inherits from", edgeNoun: "inheritance" },
+        tests: { verb: "tests", edgeNoun: "test" },
+        defines: { verb: "defines", edgeNoun: "definition" },
+        touches: { verb: "touches", edgeNoun: "touch" },
+        cochange: { verb: "changes together with", edgeNoun: "change-coupling" },
+        reexports: { verb: "re-exports", edgeNoun: "re-export" }
+      });
+      RELATION_FOLLOWUP_SHAPES = Object.freeze({
+        imports: [
+          { side: "obj", make: (x) => `which modules import ${x}` },
+          { side: "subj", make: (x) => `what does ${x} import` }
+        ],
+        calls: [
+          { side: "obj", make: (x) => `what calls ${x}` },
+          { side: "subj", make: (x) => `what does ${x} call` }
+        ],
+        contains: [
+          { side: "subj", make: (x) => `what does ${x} contain` },
+          { side: "obj", make: (x) => `which class contains ${x}` }
+        ],
+        inherits: [
+          { side: "obj", make: (x) => `which classes inherit from ${x}` },
+          { side: "subj", make: (x) => `where is ${x} defined` }
+        ],
+        tests: [
+          { side: "obj", make: (x) => `what tests ${x}` },
+          { side: "obj", make: (x) => `where is ${x} defined` }
+        ],
+        defines: [
+          { side: "obj", make: (x) => `where is ${x} defined` },
+          { side: "subj", make: (x) => `what does ${x} contain` }
+        ],
+        touches: [
+          { side: "obj", make: (x) => `when did ${x} change` },
+          { side: "subj", make: (x) => `what did commit ${x} touch` }
+        ],
+        cochange: [
+          { side: "obj", make: (x) => `where is ${x} defined` },
+          { side: "subj", make: (x) => `which modules import ${x}` }
+        ],
+        reexports: [
+          { side: "subj", make: (x) => `what does ${x} export` },
+          { side: "obj", make: (x) => `where is ${x} defined` }
+        ]
+      });
+    }
+  });
+
   // src/adapters/toml-config.mjs
   var init_toml_config = __esm({
     "src/adapters/toml-config.mjs"() {
@@ -21432,7 +21615,7 @@ ${codeblock}`, options);
   });
 
   // src/adapters/corpus/conceptnet.mjs
-  var import_meta4, PKG_ROOT2, SLICE_FILE, MAP_FILE, SEON_CONCEPTS_FILE, SEON_DEFINITIONS_FILE, TIER2_DIR, TIER2_MANIFEST_FILE, WORDNET_DIR, WORDNET_MANIFEST_FILE;
+  var import_meta5, PKG_ROOT3, SLICE_FILE, MAP_FILE, SEON_CONCEPTS_FILE, SEON_DEFINITIONS_FILE, TIER2_DIR, TIER2_MANIFEST_FILE, WORDNET_DIR, WORDNET_MANIFEST_FILE;
   var init_conceptnet = __esm({
     "src/adapters/corpus/conceptnet.mjs"() {
       init_node_fs();
@@ -21442,15 +21625,15 @@ ${codeblock}`, options);
       init_node_path();
       init_dist();
       init_core();
-      import_meta4 = {};
-      PKG_ROOT2 = join(dirname(fileURLToPath2(import_meta4.url)), "..", "..", "..");
-      SLICE_FILE = join(PKG_ROOT2, "corpus", "conceptnet", "slice.jsonl");
-      MAP_FILE = join(PKG_ROOT2, "src", "adapters", "corpus", "conceptnet-map.toml");
-      SEON_CONCEPTS_FILE = join(PKG_ROOT2, "corpus", "seon", "concepts.jsonl");
-      SEON_DEFINITIONS_FILE = join(PKG_ROOT2, "corpus", "seon", "definitions.jsonl");
-      TIER2_DIR = join(PKG_ROOT2, "corpus", "tier2");
+      import_meta5 = {};
+      PKG_ROOT3 = join(dirname(fileURLToPath2(import_meta5.url)), "..", "..", "..");
+      SLICE_FILE = join(PKG_ROOT3, "corpus", "conceptnet", "slice.jsonl");
+      MAP_FILE = join(PKG_ROOT3, "src", "adapters", "corpus", "conceptnet-map.toml");
+      SEON_CONCEPTS_FILE = join(PKG_ROOT3, "corpus", "seon", "concepts.jsonl");
+      SEON_DEFINITIONS_FILE = join(PKG_ROOT3, "corpus", "seon", "definitions.jsonl");
+      TIER2_DIR = join(PKG_ROOT3, "corpus", "tier2");
       TIER2_MANIFEST_FILE = join(TIER2_DIR, "manifest.json");
-      WORDNET_DIR = join(PKG_ROOT2, "corpus", "wordnet");
+      WORDNET_DIR = join(PKG_ROOT3, "corpus", "wordnet");
       WORDNET_MANIFEST_FILE = join(WORDNET_DIR, "manifest.json");
     }
   });
@@ -21544,7 +21727,7 @@ ${codeblock}`, options);
       }
     };
   }
-  var import_meta5, NAMENET_DIR, EXTENSION_KINDS, CONCEPTNET_PREFER, BUILTIN_EXTENSIONS;
+  var import_meta6, NAMENET_DIR, EXTENSION_KINDS, CONCEPTNET_PREFER, BUILTIN_EXTENSIONS;
   var init_extensions = __esm({
     "src/services/extensions.mjs"() {
       init_node_path();
@@ -21552,8 +21735,8 @@ ${codeblock}`, options);
       init_node_url();
       init_toml_config();
       init_conceptnet();
-      import_meta5 = {};
-      NAMENET_DIR = join(dirname(fileURLToPath2(import_meta5.url)), "..", "..", "corpus", "namenet");
+      import_meta6 = {};
+      NAMENET_DIR = join(dirname(fileURLToPath2(import_meta6.url)), "..", "..", "corpus", "namenet");
       EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
       CONCEPTNET_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
       BUILTIN_EXTENSIONS = Object.freeze(builtinExtensions());
@@ -22632,6 +22815,134 @@ ${JSON.stringify(envelope, null, 2)}`;
   init_ask_nlp();
   init_fuzzy();
   init_lexicon();
+
+  // src/domain/reference-pack.mjs
+  init_hash();
+  init_lexicon();
+  init_concept();
+
+  // src/adapters/corpus/reference-pack.mjs
+  init_node_fs();
+  init_node_url();
+  init_node_path();
+  var import_meta4 = {};
+  var PKG_ROOT2 = join(dirname(fileURLToPath2(import_meta4.url)), "..", "..", "..");
+
+  // src/domain/dialogue-acts.mjs
+  var DIALOGUE_ACT_DIMENSIONS = Object.freeze([
+    "task",
+    "autoFeedback",
+    "alloFeedback",
+    "turnManagement",
+    "timeManagement",
+    "discourseStructuring",
+    "ownCommunicationManagement",
+    "partnerCommunicationManagement",
+    "socialObligationsManagement",
+    "contactManagement"
+  ]);
+  var DIALOGUE_ACTS = Object.freeze({
+    propositionalQuestion: Object.freeze({
+      dimension: "task",
+      gloss: "a yes/no question about whether a proposition holds ('does X import Y?')"
+    }),
+    checkQuestion: Object.freeze({
+      dimension: "task",
+      gloss: "a yes/no question whose asker already expects the answer yes ('..., right?')"
+    }),
+    setQuestion: Object.freeze({
+      dimension: "task",
+      gloss: "a wh-question asking for the members of a set ('what does X import?')"
+    }),
+    choiceQuestion: Object.freeze({
+      dimension: "task",
+      gloss: "a question asking which of the listed alternatives holds ('is X a module or a class?')"
+    }),
+    inform: Object.freeze({
+      dimension: "task",
+      gloss: "a declarative telling the addressee something (a teach turn; also tmct explaining its own function)"
+    }),
+    answer: Object.freeze({
+      dimension: "task",
+      gloss: "an inform that discharges a question just asked (an answer grounded in the graph)"
+    }),
+    confirm: Object.freeze({
+      dimension: "task",
+      gloss: "an answer 'yes' to a check question"
+    }),
+    disconfirm: Object.freeze({
+      dimension: "task",
+      gloss: "an answer 'no' to a check question"
+    }),
+    agreement: Object.freeze({
+      dimension: "task",
+      gloss: "an inform stating that the speaker holds what the addressee just stated to be true"
+    }),
+    disagreement: Object.freeze({
+      dimension: "task",
+      gloss: "an inform stating that the speaker holds what the addressee just stated to be false"
+    }),
+    correction: Object.freeze({
+      dimension: "task",
+      gloss: "a disagreement that also supplies the replacement ('no, I meant Y')"
+    }),
+    request: Object.freeze({
+      dimension: "task",
+      gloss: "asks the addressee to perform an action ('solve it' \u2014 a goal turn)"
+    }),
+    instruct: Object.freeze({
+      dimension: "task",
+      gloss: "a request the addressee is expected to carry out without negotiation (a bare imperative)"
+    }),
+    suggestion: Object.freeze({
+      dimension: "task",
+      gloss: "puts an action forward as advisable without claiming authority over the addressee"
+    }),
+    offer: Object.freeze({
+      dimension: "task",
+      gloss: "commits the speaker to an action, conditional on the addressee wanting it"
+    }),
+    autoPositive: Object.freeze({
+      dimension: "autoFeedback",
+      gloss: "the sender reports its own processing of the previous turn succeeded (an acknowledgement)"
+    }),
+    autoNegative: Object.freeze({
+      dimension: "autoFeedback",
+      gloss: "the sender reports its own processing of the previous turn failed \u2014 tmct's honest miss"
+    }),
+    initialGreeting: Object.freeze({
+      dimension: "socialObligationsManagement",
+      gloss: "opens an exchange of greetings ('hi')"
+    }),
+    returnGreeting: Object.freeze({
+      dimension: "socialObligationsManagement",
+      gloss: "answers a greeting with a greeting"
+    }),
+    thanking: Object.freeze({
+      dimension: "socialObligationsManagement",
+      gloss: "expresses gratitude for something the addressee did"
+    }),
+    apology: Object.freeze({
+      dimension: "socialObligationsManagement",
+      gloss: "expresses regret for something the speaker did"
+    })
+  });
+  var LANE_DIALOGUE_ACTS = Object.freeze({
+    teach: "inform",
+    "ask-set": "setQuestion",
+    "ask-propositional": "propositionalQuestion",
+    goal: "request",
+    imperative: "instruct",
+    "honest-miss": "autoNegative",
+    greeting: "initialGreeting",
+    thanks: "thanking",
+    help: "inform",
+    // The guessing game's turns are task-dimension: a reply that discharges
+    // the other side's move (a hint, a win, a rebuttal) is an answer; tmct
+    // stating its own move (an opening, its next guess) is an inform.
+    "game-answer": "answer",
+    "game-inform": "inform"
+  });
 
   // src/services/chat-session.mjs
   init_node_path();
