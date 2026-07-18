@@ -733,6 +733,11 @@ the CLI route tests, and pin both the new verb and the alias.
 
 ## 12. Strengthen the ontology-vocabulary test (§7.13)
 
+**Status: DELIVERED.** `test/adapters/grammar-ontology.test.mjs` now seeds a real store (stated +
+entailed writes), reads back every prop its Fact individuals carry, and asserts each is documented
+in the payload vocabulary or defined in the ontology; a companion test proves the check reports an
+undeclared prop.
+
 `mgx:factJustification` is emitted by production code (`core.mjs:1141`) and was declared in no
 ontology file, yet the §6 vocabulary test passed — because it checks what the ontology **documents**
 (`emptyMemory().vocabulary`, i.e. `MEMORY_VOCABULARY`, `core.mjs:69`), and `factJustification` is

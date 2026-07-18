@@ -11,6 +11,7 @@ import { dirname, join } from "node:path";
 import {
   SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP,
   UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, emptyMemory, provSourceClassFor,
+  createInMemoryStore, appendFacts, loadMemory,
 } from "../../src/adapters/memory/core.mjs";
 import { SOURCE_PRIOR } from "../../src/domain/memory/trust.mjs";
 import { loadLexicon, predicateOf } from "../../src/domain/grammar/lexicon.mjs";
@@ -191,6 +192,47 @@ test("a fact attribute the writer emits is grounded, even when the payload vocab
       `${prop} is emitted onto a Fact, so the ontology must define it`,
     );
   }
+});
+
+/** A prop is grounded when the payload vocabulary documents it or the ontology
+ *  defines it as a property. Fed with what a real store actually wrote, so the
+ *  checked set can never go stale the way a hand-kept prop list can. */
+function propGrounded(ttlText, documented, prop) {
+  if (documented.has(prop)) return true;
+  return new RegExp(`^${prop.replace(/:/g, "\\:")} a owl:(Object|Datatype|Annotation)Property`, "m").test(ttlText);
+}
+
+test("every prop a stored Fact carries is grounded — the checked set is read back from a real store, never a literal list", async () => {
+  const text = await readFile(TTL_FILE, "utf8");
+  const dir = createInMemoryStore();
+  const { ids: premiseIds } = await appendFacts(dir, [
+    { subject: "dog", predicate: "rdfs:subClassOf", object: "mammal", provenance: "ace:teach", quantifier: "every" },
+    { subject: "mammal", predicate: "rdfs:subClassOf", object: "animal", provenance: "ace:teach" },
+  ]);
+  await appendFacts(dir, [{
+    subject: "dog", predicate: "rdfs:subClassOf", object: "animal",
+    provenance: "entailed:subClassOf", justification: premiseIds,
+    premiseTrusts: [0.9, 0.9], ruleConfidence: 0.9,
+  }]);
+  const memory = await loadMemory(dir);
+  const emitted = new Set();
+  for (const ind of memory.individuals) {
+    if (ind?.class !== FACT_CLASS) continue;
+    for (const a of ind.attributes || []) if (a?.prop) emitted.add(a.prop);
+  }
+  // the seed must actually exercise the optional fact props, or the diff proves nothing
+  for (const optional of ["mgx:factQuantifier", "mgx:factJustification", "mgx:factProvenance"]) {
+    assert.ok(emitted.has(optional), `the seeded store emits ${optional}`);
+  }
+  const documented = new Set(emptyMemory().vocabulary.map((v) => v.prop));
+  const ungrounded = [...emitted].filter((p) => !propGrounded(text, documented, p)).sort();
+  assert.deepEqual(ungrounded, [], "a prop the store writes that neither the payload vocabulary documents nor the ontology defines");
+});
+
+test("the store-derived grounding check is not a rubber stamp: a prop declared nowhere is reported ungrounded", async () => {
+  const text = await readFile(TTL_FILE, "utf8");
+  const documented = new Set(emptyMemory().vocabulary.map((v) => v.prop));
+  assert.equal(propGrounded(text, documented, "mgx:factConfabulation"), false);
 });
 
 test("the provenance family aligns to PROV-O: the umbrella is influence, and only the entity-to-entity link is derivation", async () => {
