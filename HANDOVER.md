@@ -34,11 +34,12 @@ alongside (pool 964 passing / 111 frontier), and the small remainders (world tru
 asides through the world fold, the plural-object fold, the impact summary). `archive/` holds the
 delivered plan docs; each records what its delivery deliberately did not include. What remains:
 
-- Adventure edge-hunt round 4 of 5 (`playtests/PLAYTEST_LOG_006.md`): "play spider fly" gets
-  claimed by the ADVENTURE lane's generic opener (spider-fly is genuinely listed in the shared
-  worlds pack) instead of the spider-fly lane's own opener, then breaks on "look" — the adventure
-  lane has no way to tell "a world shaped for me" from "a world sharing my pack for a different
-  game entirely." Fix in progress this round (rounds 1-3 already shipped).
+- Adventure edge-hunt round 5 of 5 (`playtests/PLAYTEST_LOG_007.md`): a typo on a recognised
+  SYNONYM word (bare, like "pikc", or a multi-word idiom's own lead word, like "hav a look at")
+  fell through to a generic conversational miss instead of the same bounded fuzzy repair a typo
+  on a bare closed verb already gets — the fuzzy tier's candidate set held only canonical verb
+  targets, never synonym surface words. Fix in progress this round (rounds 1-4 already shipped);
+  this closes the 5-round adventure-focused playtest edge hunt.
 - Adventure horizons (`archive/PLAN_ADVENTURE.md`): open/unlock/close ship signature-only
   families — the shipped precond/effect rule shapes can't express exit-adjacency, lock state,
   hidden contents, instrument preconditions or boolean effects, so those ride world facts checked
