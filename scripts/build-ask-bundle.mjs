@@ -35,7 +35,7 @@
 // do.
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
-import { stubNodeBuiltins, makeOptionalAdapterStubs, buildBundle } from "./lib/browser-bundle.mjs";
+import { stubNodeBuiltins, stubNodeZlib, makeOptionalAdapterStubs, buildBundle } from "./lib/browser-bundle.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, "..", "src");
@@ -68,5 +68,5 @@ await buildBundle({
   entryFile: "surfaces/web/memory-ask-browser-entry.mjs",
   outFile: "surfaces/web/memory-ask-browser.bundle.js",
   outDir,
-  plugins: [makeOptionalAdapterStubs(OPTIONAL_ADAPTER_STUBS), stubNodeBuiltins],
+  plugins: [stubNodeZlib, makeOptionalAdapterStubs(OPTIONAL_ADAPTER_STUBS), stubNodeBuiltins],
 });

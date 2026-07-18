@@ -24,26 +24,10 @@
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { stat } from "node:fs/promises";
-import { stubNodeBuiltins, makeOptionalAdapterStubs, buildBundle } from "./lib/browser-bundle.mjs";
+import { stubNodeBuiltins, stubNodeZlib, makeOptionalAdapterStubs, buildBundle } from "./lib/browser-bundle.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..");
-
-// node:zlib carries gunzipSync for the reference pack's fs loader, whose own
-// try/catch treats a throw as an absent pack — the browser path registers a
-// fetch provider instead, so the thrower is the intended degradation. Kept
-// out of the SHARED node-builtin stub: that stub's export list is part of the
-// committed ask bundle's bytes, and the ask bundle never links zlib.
-const stubNodeZlib = {
-  name: "stub-node-zlib",
-  setup(b) {
-    b.onResolve({ filter: /^node:zlib$/ }, (args) => ({ path: args.path, namespace: "node-zlib-stub" }));
-    b.onLoad({ filter: /.*/, namespace: "node-zlib-stub" }, () => ({
-      contents: "export const gunzipSync = () => { throw new Error('gunzipSync unavailable in the browser chat bundle'); };\nexport default {};\n",
-      loader: "js",
-    }));
-  },
-};
 
 const OPTIONAL_ADAPTER_STUBS = {
   "strategies/constructions.mjs": "export const constructionsStrategy = undefined;\nexport const setConstructionBanks = () => {};\n",

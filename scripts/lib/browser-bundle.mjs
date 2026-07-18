@@ -67,6 +67,23 @@ export const stubNodeBuiltins = {
   },
 };
 
+// node:zlib carries gunzipSync for the reference pack's fs loader, whose own
+// try/catch treats a throw as an absent pack — the browser path registers a
+// fetch provider instead, so the thrower is the intended degradation. Both
+// bundles link it now that chat.mjs's learn-on-miss hooks import the pack
+// adapter directly. A separate plugin (not a stubNodeBuiltins export) so the
+// zlib resolve never falls through to the generic node stub's export list.
+export const stubNodeZlib = {
+  name: "stub-node-zlib",
+  setup(b) {
+    b.onResolve({ filter: /^node:zlib$/ }, (args) => ({ path: args.path, namespace: "node-zlib-stub" }));
+    b.onLoad({ filter: /.*/, namespace: "node-zlib-stub" }, () => ({
+      contents: "export const gunzipSync = () => { throw new Error('gunzipSync unavailable in a browser bundle'); };\nexport default {};\n",
+      loader: "js",
+    }));
+  },
+};
+
 /** Build a stub plugin for optional-adapter modules a bundle strips (see each
  *  real import site's "inlined viewer bundle" comment). `stubMap` keys are
  *  matched as a SUFFIX of the import specifier as each importer writes it, so
