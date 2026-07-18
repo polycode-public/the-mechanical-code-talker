@@ -1554,7 +1554,13 @@ function conversationalTurn(line, ctx) {
     }
   }
   {
-    const thanksHit = closedOrCollapsed(q, THANKS, THANKS_COLLAPSED) || (OK_ACK.has(q) ? q : null);
+    // "ok cool thanks" — an ack RUN in front of a bare thanks word: the ack
+    // preamble peel (the same closed frames every other surface uses) leaves
+    // the thanks word standing, so the stacked form lands where its parts do
+    // instead of on the orientation blurb.
+    const ackPeeled = applyPreambleFrames(q);
+    const thanksHit = closedOrCollapsed(q, THANKS, THANKS_COLLAPSED) || (OK_ACK.has(q) ? q : null)
+      || (ackPeeled !== q && (THANKS.has(ackPeeled) || OK_ACK.has(ackPeeled)) ? ackPeeled : null);
     if (thanksHit) {
       note(ctx.trace, "goal: casual/social — acknowledgement, no graph intent");
       note(ctx.trace, `lane: conversational — thanks/acknowledgement (${OK_ACK.has(q) ? "OK_ACK" : "THANKS"} closed set${thanksHit === q ? "" : ", elongation-collapsed"})`);
@@ -8701,8 +8707,12 @@ function discourseRewrite(query, last) {
     // question — a code drill-down chain keeps the code-ish NAME_TOKEN rule
     // below unchanged.
     const articled = cand.match(/^(?:an?|the)\s+([a-z][\w-]*)$/i);
+    // A what-else EXPANSION turn is still a vocabulary turn — the swap has to
+    // survive it, or "tell me about a dog" / "what else can dogs do" / "and a
+    // cat" strands the third turn on the blurb.
     const prevWasVocab = last?.query
-      && (BARE_WHATIS_RE.test(String(last.query)) || vagueTouchTermOf(String(last.query)));
+      && (BARE_WHATIS_RE.test(String(last.query)) || vagueTouchTermOf(String(last.query))
+        || /^(?:what|anything)\s+else\b/i.test(String(last.query).trim()));
     if (articled && prevWasVocab) return `what is a ${singularizeSurface(articled[1])}`;
     if (!NAME_TOKEN_RE.test(cand)) return null;
     newSubj = cand;
@@ -10244,10 +10254,13 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // on that first turn, so the test is noCodeGraph, not `!graph`: an empty
     // graph is as unusable as an absent one, and reporting its emptiness to
     // someone asking about a dog answers a question they never asked.
+    // The exit named is the one this session can actually take: a SEEDED
+    // vocabulary session points at a vocabulary shape (code-question
+    // examples are the wrong audience here), an unseeded one at the seed/
+    // teach pair — vocabHint already carries exactly that split.
     answer = (!graph || noCodeGraph(graph)) && (!config || e?.emptyGraph || /^cannot read graph artifact\b/.test(thrown))
-      ? "I can't answer that as a code question — no code graph is loaded in this session. "
-        + "I can still remember and answer taught facts (try \"every disk is a game piece\"), "
-        + "or run `tmct init` in a repo to index one."
+      ? `I can't answer that as a code question — no code graph is loaded in this session. ${vocabHint
+        || "I can still remember and answer taught facts (try \"every bug is an issue\"), or run `tmct init` in a repo to index one."}`
       : thrown;
     note(trace, `intermediate: the ask engine threw — ${thrown}`);
   }
@@ -10574,6 +10587,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const gateQuery = normalizeQuery(String(query));
   const bareWhatisShape = BARE_WHATIS_RE.test(gateQuery);
   const isAdjectiveShape = IS_ADJECTIVE_YESNO_RE.test(gateQuery);
+  // A BARE NOUN on its own ("dog", "teh dog" after the typo repair) is the
+  // shortest vocabulary opener there is — it answers exactly as "what is a
+  // dog" does, gated on a REAL fact hit like every divert in this family, so
+  // chatter with no facts behind it still falls to the ordinary card. Read
+  // off the raw line (typos repaired), NOT the filler-stripped gateQuery: a
+  // request with filler around a noun ("jokes please") is a different speech
+  // act than a bare noun, and stripping must not manufacture one.
+  const bareNounMatch = correctMisspellings(String(query).trim()).replace(/[?.!]+\s*$/, "").trim()
+    .match(/^(?:the\s+|a\s+|an\s+)?([a-z][a-z-]*)$/i);
+  const bareNounShape = !!bareNounMatch;
   // `isBareCamelCaseMetaQuestion` ORs in alongside isConversationalCandidate
   // for THIS lane only — a bare "what is TaskController" (CamelCase compound,
   // no article) is otherwise excluded solely because isConversational()'s
@@ -10596,10 +10619,17 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const capabilityAskShape = CAN_ASK_RE.test(gateQuery) || WHAT_CAN_DO_RE.test(gateQuery)
     || DO_VERB_ASK_RE.test(gateQuery) || WHICH_KIND_CAN_RE.test(gateQuery) || WHAT_CAN_VERB_RE.test(gateQuery);
   let bareMetaHit = null;
-  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape || capabilityAskShape)) {
+  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape || capabilityAskShape || bareNounShape)) {
     if (memoryDir) {
-      bareMetaHit = (await factAnswer(memoryDir, gateQuery, envelope, miss, biasByBundle, cache, newFocus?.label))
-        ?? (await factReadBack(memoryDir, gateQuery, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
+      // The bare noun asks its own "what is a X" — the readers never see the
+      // single word, so the vocabulary route is the constructed question's.
+      const bareNoun = bareNounShape ? singularizeSurface(bareNounMatch[1].toLowerCase()) : null;
+      const factQuery = bareNounShape && !bareWhatisShape
+        ? `what is ${indefiniteArticleFor(bareNoun)} ${bareNoun}`
+        : gateQuery;
+      bareMetaHit = (await factAnswer(memoryDir, factQuery, envelope, miss, biasByBundle, cache, newFocus?.label))
+        ?? (await factReadBack(memoryDir, factQuery, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
+      if (bareNounShape && !bareWhatisShape && bareMetaHit?.miss) bareMetaHit = null;
       // An honest-miss return never diverts the gate — EXCEPT the capability
       // family's can't-confirm, which names the subject's real capabilities
       // and a round-trip teach hint: strictly more useful than the
@@ -10610,14 +10640,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // hit" treatment — curatedDefinitionAnswer otherwise only ever runs once
       // the article makes T5's structural parse succeed.
       if (!bareMetaHit) {
-        const def = await curatedDefinitionAnswer(gateQuery, envelope, { memoryDir, lexicon });
+        const def = await curatedDefinitionAnswer(factQuery, envelope, { memoryDir, lexicon });
         if (def) bareMetaHit = { text: def.text, replace: true };
       }
       // The reference pack's bare-form fallback, beside the curated one and
       // under the IDENTICAL clean-miss gate the articled hook (4h) applies —
       // "what is otter" reaches the pack exactly as "what is an otter" does.
       if (!bareMetaHit) {
-        const refTerm = metaTermOf(gateQuery, envelope);
+        const refTerm = metaTermOf(factQuery, envelope);
         const ref = refTerm ? await referencePackMissAnswer(refTerm, { graph, memoryDir, lexicon, env, cache }) : null;
         if (ref) bareMetaHit = { text: ref.text, replace: true, reference: ref };
       }
@@ -10703,6 +10733,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     via = "template"; handled = true;
     note(trace, "lane: (2) COLD PRONOUN — a subject pronoun with no antecedent bound and no focus standing; named the pronoun instead of the orientation card");
     note(trace, "goal: resolve a pronoun to a subject (nothing named yet)");
+  } else if (isConversationalCandidate && planHolder?.state?.game) {
+    // MID-GAME: a short line that parsed as nothing ("you said lower", "is it
+    // warm in here") stays INSIDE the game frame with a nudge naming the
+    // state — the identity card answers a question nobody asked, and it used
+    // to front exactly these turns. Real asides ("what is a dog") still
+    // route out above; only the would-be blurb is replaced.
+    const game = planHolder.state.game;
+    answer = game.mode === "guesser"
+      ? `we're mid-game — I'm guessing your number (currently between ${game.lo} and ${game.hi}; my guess: ${game.guess}). Say higher, lower, or correct — or "I give up" to stop.`
+      : `we're mid-game — you're guessing my number between ${game.lo0} and ${game.hi0}${game.lastHint ? ` (my last hint: ${game.lastHint} than your ${game.lastGuess})` : ""}. Guess a number — or "I give up" to stop.`;
+    via = "game"; handled = true;
+    dialogueLaneOverride = "game-inform";
+    note(trace, "lane: (2) MID-GAME NUDGE — an unparsed short turn stayed inside the live game frame instead of the identity card");
+    note(trace, "goal: keep the running guess-the-number game on track");
   } else if (isConversationalCandidate) {
     // A conversational miss (a greeting, "what can you do", a very short non-code
     // line) gets the friendly orientation (module-aware: empty → --repo/tmct init).
@@ -11047,7 +11091,13 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // miss re-offers the tailored hint instead of droning.
   if (miss && recordMiss && via === "composed" && WALL_MISS_RE.test(answer)) {
     const repeat = last?.answer && WALL_MISS_RE.test(String(last.answer));
-    answer = repeat ? WALL_REPEAT_ONELINER : shortMissHint(query);
+    // A GRAPH-LESS session's wall must not hand a vocabulary question a list
+    // of import/calls shapes — that guidance is aimed at an audience that
+    // isn't in the room. Offer what THIS session can answer instead.
+    answer = repeat ? WALL_REPEAT_ONELINER
+      : (noCodeGraph(graph) && vocabHint
+        ? `I couldn't read that as a question I can answer. ${vocabHint} Type /help for all query shapes.`
+        : shortMissHint(query));
     via = "miss";
     note(trace, `lane: (5) SHORT TAILORED MISS — every lane above declined; ${repeat ? "REPEAT collapsed to one-liner (wall kindness)" : "the full grammar wall was shortened + tailored to the query's keywords"}`);
   }
@@ -11817,6 +11867,12 @@ const GUESSER_OPEN_LEAD_RE = /^(?:i\s*(?:'m|am)\s+thinking\s+of\s+a\s+number|gue
 const THINKER_OPEN_LEAD_RE = /^(?:think\s+of\s+a\s+number)\b(.*)$/i;
 const GUESSER_OPEN_TAIL_RE = /^[\s,.!?—-]*(?:and\s+)?(?:you\s+)?(?:can\s+|have\s+to\s+|try\s+to\s+)?(?:guess(?:\s+it|\s+what\s+it\s+is)?)?[\s,.!?—-]*$/i;
 const THINKER_OPEN_TAIL_RE = /^[\s,.!?—-]*(?:and\s+)?(?:i\s*(?:'ll|\s+will)\s+(?:try\s+to\s+)?guess(?:\s+it)?|i\s+guess)?[\s,.!?—-]*$/i;
+// The INVITATION family — "let's play guess the number", "wanna play a
+// guessing game?": an invitation names the game without saying who holds the
+// secret, and the canonical guess-the-number reading is that the inviter
+// GUESSES — so it opens thinker mode (tmct commits the secret).
+const INVITATION_OPEN_LEAD_RE = /^(?:let'?s\s+play|wanna\s+play|want\s+to\s+play|can\s+we\s+play|shall\s+we\s+play|do\s+you\s+want\s+to\s+play|will\s+you\s+play|play)\s+(?:a\s+)?(?:game\s+of\s+)?(?:guess[- ]the[- ]number|number[- ]guessing(?:\s+game)?|guessing\s+game)\b(.*)$/i;
+const INVITATION_OPEN_TAIL_RE = /^[\s,.!?—-]*(?:with\s+me|together)?[\s,.!?—-]*$/i;
 
 /** An opening move — { mode, bounds } — or null. */
 function matchGameOpening(line) {
@@ -11827,6 +11883,10 @@ function matchGameOpening(line) {
   }
   const thinker = l.match(THINKER_OPEN_LEAD_RE);
   if (thinker && THINKER_OPEN_TAIL_RE.test(thinker[1].replace(GAME_BOUNDS_CLAUSE_RE, " "))) {
+    return { mode: "thinker", bounds: parseGameBounds(l) };
+  }
+  const invite = l.match(INVITATION_OPEN_LEAD_RE);
+  if (invite && INVITATION_OPEN_TAIL_RE.test(invite[1].replace(GAME_BOUNDS_CLAUSE_RE, " "))) {
     return { mode: "thinker", bounds: parseGameBounds(l) };
   }
   return null;

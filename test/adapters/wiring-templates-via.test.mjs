@@ -38,7 +38,7 @@ const FROZEN = {
   "conversational-greeting":
     "Hi. Ask me about this codebase — imports, calls, definitions, history — or /help.",
   "conversational-greeting-hello-there":
-    'Hello there. (A hollow voice says, "fool.") Ask me about this codebase, or /help.',
+    "Hello there. Ask me about this codebase, or /help.",
   "conversational-greeting-good-morning": "Good morning. Ask me about this codebase, or /help.",
   "conversational-greeting-good-afternoon": "Good afternoon. Ask me about this codebase, or /help.",
   "conversational-greeting-good-evening": "Good evening. Ask me about this codebase, or /help.",

@@ -54,7 +54,7 @@
 {"id":"nudge-commands","class":"nudge","register":"friendly","template":"If prose fails you, the slash commands always work — try {command}."}
 {"id":"nudge-narrower","class":"nudge","register":"friendly","template":"That matched {count} things — too many to be useful. Narrow it with a module or class name."}
 {"id":"conversational-greeting","class":"conversational","register":"friendly","template":"Hi. Ask me about this codebase — imports, calls, definitions, history — or /help."}
-{"id":"conversational-greeting-hello-there","class":"conversational","register":"friendly","template":"Hello there. (A hollow voice says, \"fool.\") Ask me about this codebase, or /help."}
+{"id":"conversational-greeting-hello-there","class":"conversational","register":"friendly","template":"Hello there. Ask me about this codebase, or /help."}
 {"id":"conversational-greeting-good-morning","class":"conversational","register":"friendly","template":"Good morning. Ask me about this codebase, or /help."}
 {"id":"conversational-greeting-good-afternoon","class":"conversational","register":"friendly","template":"Good afternoon. Ask me about this codebase, or /help."}
 {"id":"conversational-greeting-good-evening","class":"conversational","register":"friendly","template":"Good evening. Ask me about this codebase, or /help."}
