@@ -490,7 +490,12 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     const digest = await worldDigest(object, { memoryDir, memory, rows, state, graph });
     const body = digest ?? `nothing more about the ${object} is written down yet.`;
     const containerNote = !person && isContainer(rows, object) ? ` ${containerStatusPhrase(object, { state })}` : "";
-    const text = person ? `the ${object} doesn't have much to say, but you know: ${body}` : `${body}${containerNote}`;
+    // Framing follows the VERB the player typed, not the object's type: talking
+    // to a lamp still reads as an attempted conversation (nothing replies, but
+    // you learn what's known), and examining a person still reads as a plain
+    // inspection, never the "doesn't have much to say" framing that belongs to
+    // a failed talk attempt.
+    const text = cmd.verb === "talk" ? `the ${object} doesn't have much to say, but you know: ${body}` : `${body}${containerNote}`;
     return answer(
       text,
       noteFor(`${cmd.verb} — an extractive completions digest over the current world facts mentioning "${object}"`),
