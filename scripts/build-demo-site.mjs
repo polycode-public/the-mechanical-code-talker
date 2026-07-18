@@ -89,6 +89,13 @@ console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no 
 // The home page's embedded chat: the full-engine browser bundle plus its
 // starter-memory seed, both generated (never committed) so the page always
 // serves what src/ builds today.
+//
+// public/chat-ui.mjs imports the shared ticker helper as a plain sibling ES
+// module (viz-ticker.mjs's own header names this exact usage), so a literal,
+// unmodified copy travels alongside it here — the same posture as
+// public/engine/src/'s copy of the domain sources above, just one file.
+cpSync(join(SRC, "services", "viz-ticker.mjs"), join(SITE, "viz-ticker.mjs"));
+console.log(`copied viz-ticker.mjs into ${SITE}`);
 const { main: buildChatBundle } = await import(join(here, "build-chat-bundle.mjs"));
 const { outPath: chatBundlePath, size: chatBundleBytes } = await buildChatBundle(SITE);
 console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)`);

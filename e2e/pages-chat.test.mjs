@@ -15,6 +15,7 @@ import { serveDirectory } from "./helpers/static-server.mjs";
 
 const READY_TIMEOUT_MS = 30_000;
 const ANSWER_TIMEOUT_MS = 20_000;
+const PAUSE_SETTLE_MS = 800; // long enough for another turn to land if the ticker were still running
 
 let siteDir;
 let server;
@@ -139,6 +140,47 @@ test("the guess-number demo plays a full game to the win line, within the bisect
     const win = finalAnswer.match(/Got it — your number is 68, found in (\d+) guess/);
     assert.ok(win, `the win line names the pinned secret: ${finalAnswer}`);
     assert.ok(Number(win[1]) <= 7, `a 1–100 bisection needs at most 7 guesses, took ${win[1]}`);
+  } finally {
+    await context.close();
+  }
+});
+
+test("pausing the guess-number demo stops it mid-sequence; a step click advances exactly one turn; resuming still reaches the win", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    const answers = page.locator("#tmct-chat .chat-log > div.chat-answer");
+    const playBtn = page.locator('#tmct-chat .chat-demo-controls button[data-ticker="play"]');
+    const stepBtn = page.locator('#tmct-chat .chat-demo-controls button[data-ticker="step"]');
+
+    // Fire-and-forget: unlike the test above, this must not await the demo's
+    // own run to completion, or there would be nothing left mid-sequence to pause.
+    await page.evaluate(() => { window.tmctRunDemo("guess-number"); });
+    await page.waitForFunction(
+      () => document.querySelectorAll("#tmct-chat .chat-log > div.chat-answer").length >= 1,
+      null,
+      { timeout: ANSWER_TIMEOUT_MS },
+    );
+
+    await playBtn.click(); // the play/pause toggle — pauses the running auto-play
+    const countAtPause = await answers.count();
+    await page.waitForTimeout(PAUSE_SETTLE_MS);
+    assert.equal(await answers.count(), countAtPause, "no further turn lands while paused");
+    assert.equal(await page.locator("#tmct-chat").getAttribute("data-demo-state"), "running", "still mid-demo, not done, while paused");
+
+    await stepBtn.click();
+    await page.waitForFunction(
+      (n) => document.querySelectorAll("#tmct-chat .chat-log > div.chat-answer").length > n,
+      countAtPause,
+      { timeout: ANSWER_TIMEOUT_MS },
+    );
+    assert.equal(await answers.count(), countAtPause + 1, "one step click advances exactly one turn");
+    assert.equal(await page.locator("#tmct-chat").getAttribute("data-demo-state"), "running", "still not done after a single step");
+
+    await playBtn.click(); // resume auto-play to the end
+    await page.waitForSelector('#tmct-chat[data-demo-state="done"]', { timeout: ANSWER_TIMEOUT_MS });
+    const finalAnswer = await answers.last().innerText();
+    const win = finalAnswer.match(/Got it — your number is 68, found in (\d+) guess/);
+    assert.ok(win, `resuming after a pause and a manual step still reaches the pinned win: ${finalAnswer}`);
   } finally {
     await context.close();
   }

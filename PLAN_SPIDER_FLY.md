@@ -1,8 +1,7 @@
 # PLAN_SPIDER_FLY.md — a spider and a fly, planning against each other on a partly-hidden grid, rendered through an ontology→sprite mapping
 
-Status: PARTIALLY BUILT — §12 steps 1-7 (world/grid substrate, the headless turn engine, chat
-integration, rendering, and the pages) are live code. Only the guess-number Play retrofit (step 8)
-remains design only.
+Status: BUILT — §12 steps 1-8 (world/grid substrate, the headless turn engine, chat integration,
+rendering, the pages, and the guess-number Play retrofit) are all live code.
 
 ## Build status (2026-07-18)
 
@@ -27,13 +26,14 @@ remains design only.
   step that builds the bundle and writes `public/spider-fly.html`; the `.spider-fly-hero` embed on
   `public/index.html`. Tests: `test/adapters/sprite-map.test.mjs`, `test/adapters/viz-ticker.test.mjs`,
   `test/adapters/spider-fly-viz.test.mjs`.
-- **Not yet started**: the guess-number Play retrofit (step 8) — apply `viz-ticker.mjs`'s
-  `createTicker` to `public/chat-ui.mjs`'s demo rail.
-
-**To resume**: pick up at §12 step 8 — `src/services/viz-ticker.mjs`'s `createTicker` is the shared
-primitive to consume; its own header comment documents the contract (`onTick`/`onRender`/`onReset`/
-`hasNext`) precisely so the retrofit doesn't have to re-derive it from plan-viz.mjs's inlined
-version.
+- **Also committed on `main`**: the guess-number Play retrofit (step 8) — `public/chat-ui.mjs`'s
+  demo rail now runs every `DEMOS` entry (`syllogist`, `guess-number`, `learn-on-miss`) through
+  `viz-ticker.mjs`'s `createTicker`: a play/pause toggle, a step button and a reset button, shown
+  once a demo starts. `typeInto`'s existing `prefers-reduced-motion` handling is reused unchanged;
+  the same flag also zeroes the ticker's between-turn pacing. `scripts/build-demo-site.mjs` copies
+  `viz-ticker.mjs` alongside `chat-ui.mjs` as a plain sibling ES module — the same posture as the
+  engine sources under `public/engine/src/`. Tests: `e2e/pages-chat.test.mjs`'s guess-number
+  coverage now also drives pause, step and resume.
 
 **Revised 2026-07-18, same session.** A second research pass checked three things this document
 originally left open, and the operator settled three more:
