@@ -21,13 +21,12 @@ import { createInMemoryStore, normFactTerm } from "../../adapters/memory/core.mj
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
-
-/** Reference-pack provider seam. The shipped adapter module
- *  (src/adapters/corpus/reference-pack.mjs) is not part of this build yet;
- *  until it is, registering a provider is accepted and ignored, so page code
- *  written against the seam keeps working unchanged when the adapter lands
- *  (swap this placeholder for a re-export). */
-function registerReferencePackProvider() {}
+// The reference-pack provider seam: the page registers a fetch-backed
+// provider over public/reference-pack/ so the engine's pack lookups work
+// where the gzipped fs layout cannot (the module's own fs loader degrades to
+// null in the browser — build-chat-bundle stubs node:zlib as a thrower its
+// try/catch absorbs).
+import { registerReferencePackProvider } from "../../adapters/corpus/reference-pack.mjs";
 
 /**
  * A browser chat session over the real turn engine.

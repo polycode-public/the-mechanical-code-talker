@@ -29,6 +29,22 @@ import { stubNodeBuiltins, makeOptionalAdapterStubs, buildBundle } from "./lib/b
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..");
 
+// node:zlib carries gunzipSync for the reference pack's fs loader, whose own
+// try/catch treats a throw as an absent pack — the browser path registers a
+// fetch provider instead, so the thrower is the intended degradation. Kept
+// out of the SHARED node-builtin stub: that stub's export list is part of the
+// committed ask bundle's bytes, and the ask bundle never links zlib.
+const stubNodeZlib = {
+  name: "stub-node-zlib",
+  setup(b) {
+    b.onResolve({ filter: /^node:zlib$/ }, (args) => ({ path: args.path, namespace: "node-zlib-stub" }));
+    b.onLoad({ filter: /.*/, namespace: "node-zlib-stub" }, () => ({
+      contents: "export const gunzipSync = () => { throw new Error('gunzipSync unavailable in the browser chat bundle'); };\nexport default {};\n",
+      loader: "js",
+    }));
+  },
+};
+
 const OPTIONAL_ADAPTER_STUBS = {
   "strategies/constructions.mjs": "export const constructionsStrategy = undefined;\nexport const setConstructionBanks = () => {};\n",
   // the fs+TOML side of the construction banks — never read in the browser
@@ -46,7 +62,7 @@ export async function main(outDir = process.env.TMCT_CHAT_BUNDLE_OUT ? resolve(p
     entryFile: "surfaces/web/chat-browser-entry.mjs",
     outFile: "chat-browser.bundle.js",
     outDir,
-    plugins: [makeOptionalAdapterStubs(OPTIONAL_ADAPTER_STUBS), stubNodeBuiltins],
+    plugins: [stubNodeZlib, makeOptionalAdapterStubs(OPTIONAL_ADAPTER_STUBS), stubNodeBuiltins],
   });
   const { size } = await stat(outPath);
   return { outPath, size };
