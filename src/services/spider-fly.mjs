@@ -403,13 +403,13 @@ export async function startSpiderFlyGame(memoryDir, { flyCount = 1 } = {}) {
   return { started: true, facts };
 }
 
-function goalLineFor(subject, believed, moved, kind) {
+function goalLineFor(subject, believed, arrived, kind) {
   if (!believed) return kind === "spider" ? "no fly in sight — holding position in the web." : "no spider in sight — holding position.";
   const seenAt = cellId(believed.cell.x, believed.cell.y);
   if (kind === "spider") {
-    return moved
-      ? `chasing ${believed.subject}, last seen at ${seenAt}.`
-      : `co-located with ${believed.subject} in the web.`;
+    return arrived
+      ? `co-located with ${believed.subject} in the web.`
+      : `chasing ${believed.subject}, last seen at ${seenAt}.`;
   }
   return `evading — last saw ${believed.subject} at ${seenAt}.`;
 }
@@ -458,8 +458,15 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
     }
     postMovePlacements.set(spiderId, nextCell);
     movementWrites.push({ subject: `${spiderId}@turn${k}`, predicate: "mgx:currently-in", object: cellId(nextCell.x, nextCell.y) });
-    const moved = nextCell.x !== spiderCell.x || nextCell.y !== spiderCell.y;
-    agents[spiderId] = { cell: cellId(nextCell.x, nextCell.y), goal: goalLineFor(spiderId, target, moved, "spider"), plan };
+    // "Arrived" is the real eat precondition (co-located with the believed
+    // target, inside the web) — NOT merely "didn't move this turn", which a
+    // greedy-approach spider also does whenever it's already at its closest
+    // reachable cell but still a step away (Chebyshev-adjacent isn't
+    // co-located; has-exit-* edges have no diagonal hop). Using "didn't move"
+    // as the proxy previously mislabeled that stuck-but-not-there case as
+    // "co-located ... in the web" even when nowhere near the web.
+    const arrived = !!target && nextCell.x === target.cell.x && nextCell.y === target.cell.y && isInWebBlock(nextCell.x, nextCell.y);
+    agents[spiderId] = { cell: cellId(nextCell.x, nextCell.y), goal: goalLineFor(spiderId, target, arrived, "spider"), plan };
   }
 
   for (const flyId of flies) {

@@ -143,3 +143,25 @@ try {
 } finally {
   rmSync(planDir, { recursive: true, force: true });
 }
+
+// The spider-and-fly hero: the world pack (built already, from
+// scripts/gen-spider-fly-world.mjs; confirmed current below, never rebuilt
+// here) plus this game's own dedicated browser bundle (the full turn engine,
+// same posture as the chat bundle above — generated fresh per build, never
+// committed), then the self-contained page itself. Unlike ledger.html, the
+// page embeds almost no build-time data — the whole game is live client-side
+// state — so there is no payload to load here, only the sibling bundle.
+{
+  const { worldsPackDir } = await import(join(ROOT, "src", "adapters", "corpus", "worlds-pack.mjs"));
+  const shardPath = join(worldsPackDir(), "shards", "spider-fly.jsonl.gz");
+  if (!existsSync(shardPath)) {
+    console.log(`spider-fly world pack shard not found at ${shardPath} — run \`npm run gen:worlds-pack\` first; the hero's session bootstraps its own board client-side regardless, so this is a heads-up, not a build failure`);
+  }
+  const { main: buildSpiderFlyBundle } = await import(join(here, "build-spider-fly-bundle.mjs"));
+  const { outPath: spiderFlyBundlePath, size: spiderFlyBundleBytes } = await buildSpiderFlyBundle(SITE);
+  console.log(`wrote ${spiderFlyBundlePath} (${(spiderFlyBundleBytes / 1024).toFixed(0)} KB)`);
+  const { renderSpiderFlyHtml } = await import(join(ROOT, "src", "services", "spider-fly-viz.mjs"));
+  const spiderFlyPath = join(SITE, "spider-fly.html");
+  await writeF(spiderFlyPath, renderSpiderFlyHtml({}));
+  console.log(`wrote ${spiderFlyPath}`);
+}
