@@ -34,6 +34,9 @@ alongside (pool 964 passing / 111 frontier), and the small remainders (world tru
 asides through the world fold, the plural-object fold, the impact summary). `archive/` holds the
 delivered plan docs; each records what its delivery deliberately did not include. What remains:
 
+- Adventure edge-hunt round 3 (`playtests/PLAYTEST_LOG_003.md`): `examine <object>` declines "I
+  don't see a ... here" once the object is carried — its precondition reuses `visibleRoomOf`
+  (room-visibility), which returns null for anything the player holds. Fix in progress this round.
 - Adventure horizons (`archive/PLAN_ADVENTURE.md`): open/unlock/close ship signature-only
   families — the shipped precond/effect rule shapes can't express exit-adjacency, lock state,
   hidden contents, instrument preconditions or boolean effects, so those ride world facts checked
