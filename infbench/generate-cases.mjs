@@ -42,6 +42,7 @@ import { parseAce } from "../src/domain/grammar/ace.mjs";
 import { loadLexicon, thirdPerson } from "../src/domain/grammar/lexicon.mjs";
 import { normFactTerm } from "../src/adapters/memory/core.mjs";
 import { fnv1a32 as fnv1a } from "../src/domain/hash.mjs";
+import { nlpAdapter } from "../src/adapters/ask-nlp.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
@@ -1140,11 +1141,21 @@ function b1DisjointVeto(rng) {
 // ACE, so the kernel never sees these premises), and the teach premises are
 // unlinted for the same reason. Regular-plural nouns only: the teach lane's
 // subject fold singularizes naively, and an s-final noun would store a
-// clipped subject.
+// clipped subject. And the pool is gated on the SAME wink-nlp POS check the
+// teach lane's own subject gate applies (a single-token NOUN/PROPN tag): a
+// noun lemma that doubles as a verb ("overbid" tags VERB) makes the teach
+// decline, and the case would then grade whether the teach was accepted
+// rather than whether possession is inherited — found live when the first
+// 2.6.0 pass drew one. Load-bearing, exactly as the persona filter is.
 // ======================================================================
 function b2PropertyInheritance(rng) {
   const cases = [];
-  const pool = REGULAR_PLURAL_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n));
+  const tagger = nlpAdapter();
+  if (!tagger) {
+    throw new Error("infbench/generate-cases.mjs: b2PropertyInheritance needs the wink-nlp POS adapter — the quantified-has teach gates its subject on it, so without it the template cannot pick teachable nouns");
+  }
+  const tagsAsNoun = (n) => { const [t] = tagger.posTags([n]); return t === "NOUN" || t === "PROPN"; };
+  const pool = REGULAR_PLURAL_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n) && tagsAsNoun(n));
   const shuffled = seededShuffle(pool, rng);
   let cursor = 0;
   for (let i = 0; i < 5; i += 1) {
