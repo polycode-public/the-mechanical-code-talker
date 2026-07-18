@@ -27,12 +27,18 @@ lands — this stub is the reference list it is checked against.
   this list or to `conceptnet-map.toml`'s rows.
 - **Do not build on the deprecated relations:** `/r/InstanceOf`, `/r/Entails`,
   the `/r/dbpedia/*` family, and the negatives `/r/NotIsA`, `/r/NotDesires`,
-  `/r/NotUsedFor`, `/r/NotCapableOf`, `/r/NotHasProperty`. They appear in the
-  data but are slated for consolidation or removal. tmct expresses negation
-  with its own polarity prefix instead (`mgxneg:`, see
-  `src/domain/memory/capability.mjs`), which is a deliberate divergence:
-  ConceptNet's negatives are five one-off terms, tmct's prefix negates any
-  predicate.
+  `/r/NotUsedFor`, `/r/NotHasProperty`. They appear in the data but are slated
+  for consolidation or removal. tmct expresses negation with its own polarity
+  prefix instead (`mgxneg:`, see `src/domain/memory/capability.mjs`), which is a
+  deliberate divergence: ConceptNet's negatives are one-off terms, tmct's prefix
+  negates any predicate.
+- **One admitted exception:** `/r/NotCapableOf` IS mapped, onto tmct's own
+  `mgxneg:capableOf` (`conceptnet-map.toml`), because it is the corpus source
+  the defeasible-negation reader needs — the data behind "a penguin cannot fly"
+  when ConceptNet carries it. It rides tmct's polarity prefix, so the divergence
+  above still holds; only this single negative reaches a shipped slice (the
+  child corpus, `corpus/child/`). Every other `/r/Not*` stays unmapped and hits
+  the loader's hard error.
 - **Consumer in repo:** `src/adapters/corpus/conceptnet.mjs` +
   `src/adapters/corpus/conceptnet-map.toml` (Phase 2).
 
