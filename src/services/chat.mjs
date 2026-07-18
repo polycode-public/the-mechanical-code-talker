@@ -12458,6 +12458,12 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       if (finished.record) finished.record.query = line;
       if (Array.isArray(finished.logLines) && finished.logLines.length > 1) finished.logLines[1] = `> ${line}`;
     }
+    // The VERBATIM user line rides every turn record as `input`, beside
+    // whatever `query` the dispatch path recorded — the session history must
+    // be able to quote the user exactly, and bench session-mode matching
+    // needs the pre-rewrite turn. Additive: `query` keeps its existing
+    // fidelity rules unchanged.
+    if (finished.record && finished.record.type === "turn") finished.record.input = line;
     // runAsk's own effectiveQuery (set only when discourseRewrite substituted
     // a new subject and produced a genuine non-miss answer) takes over as the
     // continuation base for the NEXT turn's own discourseRewrite.
@@ -12514,7 +12520,10 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // conversational turn is never finish()'d / never becomes a new `last`), so the
   // narrate block is applied directly here instead.
   const convo = vocabAntecedent ? null : conversationalTurn(workingLine, ctx);
-  if (convo) return withNarration(convo, trace, "casual/social — no graph intent");
+  if (convo) {
+    if (convo.record && convo.record.type === "turn") convo.record.input = line; // verbatim, same as withLast
+    return withNarration(convo, trace, "casual/social — no graph intent");
+  }
 
   // PLAN NEXT — "next"/"continue" with an ACTIVE plan executes the plan's
   // next move as a snapshot write. Checked BEFORE the MORE_RE pager because

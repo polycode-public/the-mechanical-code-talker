@@ -400,9 +400,9 @@ test("runTurn: greetings / thanks / help each return their template, none pollut
   const g = await graph();
   const hey = await runTurn("hey", { config: CONFIG, graph: g });
   assert.match(hey.answer, /^Hi\./);
-  const zork = await runTurn("hello there", { config: CONFIG, graph: g });
-  assert.match(zork.answer, /Hello there\./);
-  assert.match(zork.answer, /hollow voice/i, "the Zork nod for 'hello there'");
+  const mirrored = await runTurn("hello there", { config: CONFIG, graph: g });
+  assert.match(mirrored.answer, /Hello there\./);
+  assert.doesNotMatch(mirrored.answer, /hollow voice|fool/i, "a plain greeting carries no aside that reads as an insult");
   const ta = await runTurn("thanks", { config: CONFIG, graph: g });
   assert.match(ta.answer, /Any time/);
   const cheers = await runTurn("cheers", { config: CONFIG, graph: g });
@@ -415,7 +415,7 @@ test("runTurn: greetings / thanks / help each return their template, none pollut
   const who = await runTurn("who are you", { config: CONFIG, graph: g });
   assert.match(who.answer, /I'm tmct/, "who-are-you gets a self-description");
   assert.doesNotMatch(who.answer, /I answer questions about THIS codebase/, "identity is distinct from capability orientation");
-  for (const r of [hey, zork, ta, cheers, help, who]) {
+  for (const r of [hey, mirrored, ta, cheers, help, who]) {
     assert.equal(r.record.conversational, true, `${r.record.query} recorded conversational`);
     assert.deepEqual(r.record.resolvedIds, [], "no asksAbout id for a conversational turn");
     assert.deepEqual(r.record.answeredIds, [], "no answered ids either");

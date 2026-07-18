@@ -103,7 +103,9 @@ export function upsertSession(entities, record) {
 
   const started = record.started || "";
   const ended = record.ended || turns.at(-1)?.ts || started;
-  const queries = turns.map((t) => String(t?.query || "")).filter(Boolean);
+  // The session's recorded questions quote the user VERBATIM (`input`) when
+  // the turn carried a rewrite; `query` is the fallback for older sidecars.
+  const queries = turns.map((t) => String(t?.input || t?.query || "")).filter(Boolean);
   const label = sessionLabel(record.id);
   entities.individuals.push({
     id: sid, label, class: SESSION_CLASS,
@@ -206,6 +208,9 @@ async function recordSessionMemory(graphFile, record, repoDirOverride = null) {
   const utterances = [];
   for (const t of record.turns || []) {
     const query = String(t?.query || "");
+    // The visitor utterance quotes the user VERBATIM; `query` (possibly a
+    // rewrite) stays the transcript-matching key below, unchanged.
+    const spoken = String(t?.input || t?.query || "");
     const ts = String(t?.ts || "");
     if (!query || !ts) continue;
     // the structured parse the turn produced — stored on the visitor utterance
@@ -216,7 +221,7 @@ async function recordSessionMemory(graphFile, record, repoDirOverride = null) {
     if (t.miss) parsed.miss = true;
     if (t.via) parsed.via = t.via; // answer provenance (W1) — carried into memory
     utterances.push({
-      role: "visitor", text: query, ts, sessionId: record.id, sessionStarted: record.started || "",
+      role: "visitor", text: spoken, ts, sessionId: record.id, sessionStarted: record.started || "",
       ...(Object.keys(parsed).length ? { parsed } : {}),
     });
     const answer = answers.get(turnKey(ts, query));
@@ -258,6 +263,9 @@ export function parseSessionJsonl(text) {
     else if (rec?.type === "turn") {
       turns.push({
         ts: String(rec.ts || ""), query: String(rec.query || ""),
+        // the VERBATIM user line, recorded beside any rewritten query — the
+        // recall surfaces quote this form, never the rewrite.
+        ...(rec.input ? { input: String(rec.input) } : {}),
         resolvedIds: arr(rec.resolvedIds), answeredIds: arr(rec.answeredIds), miss: !!rec.miss,
         // preserved for the memory fold (memory/fold.mjs): slash-command turns and
         // conversational filler are recorded but never folded into the corpus.

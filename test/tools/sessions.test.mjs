@@ -152,6 +152,22 @@ test("parseSessionJsonl: header + turns + end; torn trailing line skipped; heade
   assert.equal(parseSessionJsonl("not json\n"), null);
 });
 
+test("parseSessionJsonl: a rewritten turn's verbatim `input` survives beside the query, and the session's recorded questions quote it", () => {
+  const text = [
+    JSON.stringify({ type: "session", id: RECORD.id, started: RECORD.started, repo: "/r", tmctVersion: "0.2.1" }),
+    JSON.stringify({ type: "turn", ts: "2026-07-02T10:03:00.000Z", query: "tell me about a horse", input: "i wanna know about a horse", resolvedIds: [], answeredIds: [], miss: false }),
+    JSON.stringify({ type: "end", ts: RECORD.ended }),
+  ].join("\n");
+  const rec = parseSessionJsonl(text);
+  assert.equal(rec.turns[0].query, "tell me about a horse");
+  assert.equal(rec.turns[0].input, "i wanna know about a horse");
+  const entities = { classes: [], vocabulary: [], objectProperties: [], individuals: [] };
+  upsertSession(entities, rec);
+  const session = entities.individuals.find((i) => i.class === "Session");
+  const queries = session.attributes.find((a) => a.key === "queries")?.value;
+  assert.equal(queries, "i wanna know about a horse");
+});
+
 // ---- read-time graph append (atomic) ----
 
 test("appendSessionToGraph: fresh-read + atomic write; second append updates in place; no temp litter", async () => {
