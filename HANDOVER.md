@@ -16,8 +16,9 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-18)
 
-v2.7.0 published (the adventure + child-corpus minor); 2.7.1 in the working tree carrying the
-integration wave, ahead of the edge-hunt rounds.
+v2.7.5 in the working tree: the adventure dead-end routing fixes, the spider-and-fly game
+(`PLAN_SPIDER_FLY.md`, fully built), and the TOOL-7/TOOL-8 router uplift have all landed since
+2.7.0, ahead of the adventure-focused edge-hunt rounds now starting.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
@@ -44,8 +45,6 @@ delivered plan docs; each records what its delivery deliberately did not include
   relation set — the other `/r/Not*` relations still hit the loader's hard error, a deliberate
   one-at-a-time decision the next negativity slice revisits; the specific exception (the penguin)
   still comes from a taught fact by design.
-- `core.mjs`'s `sourceIdFor` has no `corpusWeak` case, so corpusWeak-tagged facts score 0 —
-  adding it would make that tier usable for a future noisier pack slice.
 
 ## Discipline
 
