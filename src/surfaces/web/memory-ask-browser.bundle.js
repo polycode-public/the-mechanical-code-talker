@@ -10580,6 +10580,94 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
+  // src/domain/skos-view.mjs
+  function buildSkosConceptView(rows, { conceptBase = "concept:", relationMap = DEFAULT_RELATION_MAP } = {}) {
+    const synonymPreds = new Set(relationMap.synonym || []);
+    const relatedPreds = new Set(relationMap.related || []);
+    const parent = /* @__PURE__ */ new Map();
+    const ensure = (t) => {
+      if (!parent.has(t)) parent.set(t, t);
+    };
+    const find = (x) => {
+      let r = x;
+      while (parent.get(r) !== r) r = parent.get(r);
+      while (parent.get(x) !== r) {
+        const next = parent.get(x);
+        parent.set(x, r);
+        x = next;
+      }
+      return r;
+    };
+    const union = (a, b) => {
+      const ra = find(a), rb = find(b);
+      if (ra === rb) return;
+      if (ra < rb) parent.set(rb, ra);
+      else parent.set(ra, rb);
+    };
+    const relatedRaw = [];
+    for (const r of rows) {
+      const p = r.predicate;
+      if (!synonymPreds.has(p) && !relatedPreds.has(p)) continue;
+      const s = normFactTerm(r.subject), o = normFactTerm(r.object);
+      if (!s || !o) continue;
+      ensure(s);
+      ensure(o);
+      if (synonymPreds.has(p)) union(s, o);
+      else relatedRaw.push({ s, o });
+    }
+    const iriFor = (rep) => conceptBase + rep.replace(/ /g, "_");
+    const componentTerms = /* @__PURE__ */ new Map();
+    for (const t of parent.keys()) {
+      const rep = find(t);
+      if (!componentTerms.has(rep)) componentTerms.set(rep, /* @__PURE__ */ new Set());
+      componentTerms.get(rep).add(t);
+    }
+    const concepts = [];
+    for (const [rep, terms] of componentTerms) {
+      const sorted = [...terms].sort();
+      concepts.push({ id: iriFor(rep), prefLabel: rep, altLabels: sorted.filter((t) => t !== rep) });
+    }
+    concepts.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    const seen = /* @__PURE__ */ new Set();
+    const related = [];
+    for (const { s, o } of relatedRaw) {
+      const cs = iriFor(find(s)), co = iriFor(find(o));
+      if (cs === co) continue;
+      const key = cs < co ? `${cs}\0${co}` : `${co}\0${cs}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      related.push({ subject: cs, object: co });
+    }
+    related.sort((a, b) => `${a.subject}${a.object}` < `${b.subject}${b.object}` ? -1 : 1);
+    const conceptIdForTerm = (term) => {
+      const t = normFactTerm(term);
+      return parent.has(t) ? iriFor(find(t)) : null;
+    };
+    return { concepts, related, conceptIdForTerm, namespace: SKOS_NS };
+  }
+  function relatedForTerm(rows, term, options = {}) {
+    const view = buildSkosConceptView(rows, options);
+    const conceptId = view.conceptIdForTerm(term);
+    if (!conceptId) return null;
+    const byId = new Map(view.concepts.map((c) => [c.id, c]));
+    const concept = byId.get(conceptId);
+    const queried = normFactTerm(term);
+    const synonyms = [concept.prefLabel, ...concept.altLabels].filter((label) => label !== queried);
+    const related = view.related.filter((r) => r.subject === conceptId || r.object === conceptId).map((r) => byId.get(r.subject === conceptId ? r.object : r.subject)).filter(Boolean);
+    return { conceptId, prefLabel: concept.prefLabel, altLabels: concept.altLabels, synonyms, related };
+  }
+  var SKOS_NS, DEFAULT_RELATION_MAP;
+  var init_skos_view = __esm({
+    "src/domain/skos-view.mjs"() {
+      init_hash();
+      SKOS_NS = "http://www.w3.org/2004/02/skos/core#";
+      DEFAULT_RELATION_MAP = {
+        synonym: ["mgx:synonym"],
+        related: ["mgx:relatedTo", "mgx:similarTo"]
+      };
+    }
+  });
+
   // adapter-stub-ask-nlp.mjs:../adapters/ask-nlp.mjs
   var nlpAdapter;
   var init_ask_nlp = __esm({
@@ -10670,10 +10758,10 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // node_modules/smol-toml/dist/date.js
+  // ../../../node_modules/smol-toml/dist/date.js
   var DATE_TIME_RE, TomlDate;
   var init_date = __esm({
-    "node_modules/smol-toml/dist/date.js"() {
+    "../../../node_modules/smol-toml/dist/date.js"() {
       DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2})?[T ]?(?:(\d{2}):\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|[-+]\d{2}:\d{2})?$/i;
       TomlDate = class _TomlDate extends Date {
         #hasDate = false;
@@ -10767,7 +10855,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // node_modules/smol-toml/dist/error.js
+  // ../../../node_modules/smol-toml/dist/error.js
   function getLineColFromPtr(string, ptr) {
     let lines = string.slice(0, ptr).split(/\r\n|\n|\r/g);
     return [lines.length, lines.pop().length + 1];
@@ -10793,7 +10881,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   }
   var TomlError;
   var init_error = __esm({
-    "node_modules/smol-toml/dist/error.js"() {
+    "../../../node_modules/smol-toml/dist/error.js"() {
       TomlError = class extends Error {
         line;
         column;
@@ -10812,7 +10900,7 @@ ${codeblock}`, options);
     }
   });
 
-  // node_modules/smol-toml/dist/primitive.js
+  // ../../../node_modules/smol-toml/dist/primitive.js
   function parseString(str, ptr) {
     let c = str[ptr++];
     let first = c;
@@ -10969,7 +11057,7 @@ ${codeblock}`, options);
   }
   var INT_REGEX, FLOAT_REGEX, LEADING_ZERO;
   var init_primitive = __esm({
-    "node_modules/smol-toml/dist/primitive.js"() {
+    "../../../node_modules/smol-toml/dist/primitive.js"() {
       init_date();
       init_error();
       INT_REGEX = /^((0x[0-9a-fA-F](_?[0-9a-fA-F])*)|(([+-]|0[ob])?\d(_?\d)*))$/;
@@ -10978,7 +11066,7 @@ ${codeblock}`, options);
     }
   });
 
-  // node_modules/smol-toml/dist/util.js
+  // ../../../node_modules/smol-toml/dist/util.js
   function indexOfNewline(str, start = 0, end = str.length) {
     let idx = str.indexOf("\n", start);
     if (str[idx - 1] === "\r")
@@ -11033,12 +11121,12 @@ ${codeblock}`, options);
     });
   }
   var init_util = __esm({
-    "node_modules/smol-toml/dist/util.js"() {
+    "../../../node_modules/smol-toml/dist/util.js"() {
       init_error();
     }
   });
 
-  // node_modules/smol-toml/dist/extract.js
+  // ../../../node_modules/smol-toml/dist/extract.js
   function sliceAndTrimEndOf(str, startPtr, endPtr) {
     let value = str.slice(startPtr, endPtr);
     let commentIdx = value.indexOf("#");
@@ -11105,7 +11193,7 @@ ${codeblock}`, options);
     ];
   }
   var init_extract = __esm({
-    "node_modules/smol-toml/dist/extract.js"() {
+    "../../../node_modules/smol-toml/dist/extract.js"() {
       init_primitive();
       init_struct();
       init_util();
@@ -11113,7 +11201,7 @@ ${codeblock}`, options);
     }
   });
 
-  // node_modules/smol-toml/dist/struct.js
+  // ../../../node_modules/smol-toml/dist/struct.js
   function parseKey(str, ptr, end = "=") {
     let dot = ptr - 1;
     let parsed = [];
@@ -11255,7 +11343,7 @@ ${codeblock}`, options);
   }
   var KEY_PART_RE;
   var init_struct = __esm({
-    "node_modules/smol-toml/dist/struct.js"() {
+    "../../../node_modules/smol-toml/dist/struct.js"() {
       init_primitive();
       init_extract();
       init_util();
@@ -11264,7 +11352,7 @@ ${codeblock}`, options);
     }
   });
 
-  // node_modules/smol-toml/dist/parse.js
+  // ../../../node_modules/smol-toml/dist/parse.js
   function peekTable(key, table, meta, type) {
     let t = table;
     let m = meta;
@@ -11389,7 +11477,7 @@ ${codeblock}`, options);
     return res;
   }
   var init_parse = __esm({
-    "node_modules/smol-toml/dist/parse.js"() {
+    "../../../node_modules/smol-toml/dist/parse.js"() {
       init_struct();
       init_extract();
       init_util();
@@ -11397,15 +11485,15 @@ ${codeblock}`, options);
     }
   });
 
-  // node_modules/smol-toml/dist/stringify.js
+  // ../../../node_modules/smol-toml/dist/stringify.js
   var init_stringify = __esm({
-    "node_modules/smol-toml/dist/stringify.js"() {
+    "../../../node_modules/smol-toml/dist/stringify.js"() {
     }
   });
 
-  // node_modules/smol-toml/dist/index.js
+  // ../../../node_modules/smol-toml/dist/index.js
   var init_dist = __esm({
-    "node_modules/smol-toml/dist/index.js"() {
+    "../../../node_modules/smol-toml/dist/index.js"() {
       init_parse();
       init_stringify();
       init_date();
@@ -22968,91 +23056,7 @@ ${hint}` : ""}${cand}`;
 
   // src/tools/handlers/tmct-related.mjs
   init_config();
-
-  // src/domain/skos-view.mjs
-  init_hash();
-  var SKOS_NS = "http://www.w3.org/2004/02/skos/core#";
-  var DEFAULT_RELATION_MAP = {
-    synonym: ["mgx:synonym"],
-    related: ["mgx:relatedTo", "mgx:similarTo"]
-  };
-  function buildSkosConceptView(rows, { conceptBase = "concept:", relationMap = DEFAULT_RELATION_MAP } = {}) {
-    const synonymPreds = new Set(relationMap.synonym || []);
-    const relatedPreds = new Set(relationMap.related || []);
-    const parent = /* @__PURE__ */ new Map();
-    const ensure = (t) => {
-      if (!parent.has(t)) parent.set(t, t);
-    };
-    const find = (x) => {
-      let r = x;
-      while (parent.get(r) !== r) r = parent.get(r);
-      while (parent.get(x) !== r) {
-        const next = parent.get(x);
-        parent.set(x, r);
-        x = next;
-      }
-      return r;
-    };
-    const union = (a, b) => {
-      const ra = find(a), rb = find(b);
-      if (ra === rb) return;
-      if (ra < rb) parent.set(rb, ra);
-      else parent.set(ra, rb);
-    };
-    const relatedRaw = [];
-    for (const r of rows) {
-      const p = r.predicate;
-      if (!synonymPreds.has(p) && !relatedPreds.has(p)) continue;
-      const s = normFactTerm(r.subject), o = normFactTerm(r.object);
-      if (!s || !o) continue;
-      ensure(s);
-      ensure(o);
-      if (synonymPreds.has(p)) union(s, o);
-      else relatedRaw.push({ s, o });
-    }
-    const iriFor = (rep) => conceptBase + rep.replace(/ /g, "_");
-    const componentTerms = /* @__PURE__ */ new Map();
-    for (const t of parent.keys()) {
-      const rep = find(t);
-      if (!componentTerms.has(rep)) componentTerms.set(rep, /* @__PURE__ */ new Set());
-      componentTerms.get(rep).add(t);
-    }
-    const concepts = [];
-    for (const [rep, terms] of componentTerms) {
-      const sorted = [...terms].sort();
-      concepts.push({ id: iriFor(rep), prefLabel: rep, altLabels: sorted.filter((t) => t !== rep) });
-    }
-    concepts.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
-    const seen = /* @__PURE__ */ new Set();
-    const related = [];
-    for (const { s, o } of relatedRaw) {
-      const cs = iriFor(find(s)), co = iriFor(find(o));
-      if (cs === co) continue;
-      const key = cs < co ? `${cs}\0${co}` : `${co}\0${cs}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      related.push({ subject: cs, object: co });
-    }
-    related.sort((a, b) => `${a.subject}${a.object}` < `${b.subject}${b.object}` ? -1 : 1);
-    const conceptIdForTerm = (term) => {
-      const t = normFactTerm(term);
-      return parent.has(t) ? iriFor(find(t)) : null;
-    };
-    return { concepts, related, conceptIdForTerm, namespace: SKOS_NS };
-  }
-  function relatedForTerm(rows, term, options = {}) {
-    const view = buildSkosConceptView(rows, options);
-    const conceptId = view.conceptIdForTerm(term);
-    if (!conceptId) return null;
-    const byId = new Map(view.concepts.map((c) => [c.id, c]));
-    const concept = byId.get(conceptId);
-    const queried = normFactTerm(term);
-    const synonyms = [concept.prefLabel, ...concept.altLabels].filter((label) => label !== queried);
-    const related = view.related.filter((r) => r.subject === conceptId || r.object === conceptId).map((r) => byId.get(r.subject === conceptId ? r.object : r.subject)).filter(Boolean);
-    return { conceptId, prefLabel: concept.prefLabel, altLabels: concept.altLabels, synonyms, related };
-  }
-
-  // src/tools/handlers/tmct-related.mjs
+  init_skos_view();
   init_memory_fallthrough();
   async function tmct_related(args, { config }) {
     const term = requiredArg(args, "term");
@@ -23395,6 +23399,9 @@ ${JSON.stringify(envelope, null, 2)}`;
     "game-answer": "answer",
     "game-inform": "inform"
   });
+
+  // src/services/chat.mjs
+  init_skos_view();
 
   // src/domain/worlds-pack.mjs
   var WORLD_NAME_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;

@@ -16,6 +16,7 @@
 
 import { parseQuery } from "../ask.mjs";
 import { SUPERLATIVE_EXTREMES } from "../ask-vocab.mjs";
+import { buildSkosConceptView } from "../skos-view.mjs";
 import {
   capabilities, capabilityByName, preconditionsOf, effectsOf, PRECOND,
 } from "./registry.mjs";
@@ -56,10 +57,9 @@ export const UNMAPPED_KINDS = Object.freeze({
 
 // ---- capabilities the NL surface cannot reach today (named, not accidental) ---
 // A declared capability with no NL/command/frame path is a routing gap and must be tagged
-// here with the reason.
-export const NOT_NL_REACHABLE = Object.freeze({
-  tmct_related: "the SKOS synonym/related surface is served by the chat lane's own recogniser over the memory graph; a router frame for it needs memory-term binding, which resolveObject (code-graph-only) does not prove yet",
-});
+// here with the reason. Empty today: the synonym/related FRAME below reaches tmct_related
+// via resolveMemoryTerm, the memory-graph sibling of resolveObject's code-graph binding.
+export const NOT_NL_REACHABLE = Object.freeze({});
 
 // ---- imperative intent FRAMES (fills what the relational grammar and command register
 // both miss). regex -> { topic, arg | noArg }. Ordered: first match wins.
@@ -81,6 +81,12 @@ export const FRAMES = Object.freeze([
   { re: /\bmembers?\b|\bmethods?\s+of\b|\battributes?\s+of\b/i, topic: "members", arg: "class" },
   { re: /\bhistory\b|who\s+changed\b|commits?\s+(?:that\s+)?touch/i, topic: "history", arg: "symbol" },
   { re: /\bsignature\b/i, topic: "signature", arg: "symbol" },
+  // tmct_related: the SKOS synonym/related-concept surface over the memory graph
+  // — "another word for X" / "a synonym for X" / "synonyms of X" / "what's
+  // related to X". `arg: "term"` is the one memory-graph-bound slot in this
+  // table (see resolveMemoryTerm below); every other frame's arg binds against
+  // the code graph via ctx.resolve.
+  { re: /\bsynonyms?\b|\banother\s+word\s+for\b|\brelated\s+(?:words?|concepts?|to)\b/i, topic: "related", arg: "term" },
   { re: /\bdescribe\b|\bexplain\b|what\s+is\b|tell\s+me\s+about\b|definition\s+of\b/i, topic: "description", arg: "symbol" },
   { re: /\bsearch\b|\bfind\b|look\s+for\b/i, topic: "matches", arg: "query" },
 ]);
@@ -122,6 +128,7 @@ const STOP = new Set([
   "module", "modules", "class", "classes", "function", "functions", "symbol", "symbols",
   "untested", "blast", "radius", "change", "changes", "changing", "reach", "reaches", "affect", "affects",
   "explain", "edge", "edges", "graph", "outgoing", "site", "sites", "invoke", "invokes", "run", "runs", "execute", "executes",
+  "word", "words", "another", "synonym", "synonyms", "related", "relate", "relates", "like", "concept", "concepts",
 ]);
 
 /** Pull one entity token from a request (imperative-frame slot-filling). Prefer a
@@ -178,7 +185,14 @@ export function mapFrame(request) {
     if (!cap) continue;
     if (f.noArg) return { name: cap.name, noArg: true, topic: f.topic, source: "frame", why: [`imperative frame => goal (knows ${f.topic})`, `backward-chain => ${cap.name}`] };
     const term = f.arg === "query" ? searchQuery(request) : extractEntity(request);
-    return { name: cap.name, arg: f.arg, term, topic: f.topic, source: "frame", why: [`imperative frame => goal (knows ${f.topic} ?${f.arg})`, `backward-chain => ${cap.name}`] };
+    // memoryTerm: this slot binds against the memory graph's SKOS concept view
+    // (resolveMemoryTerm below), not the code graph resolveObject resolves
+    // every other frame's arg against — "term" is the one param kind this is
+    // true for (tmct_related's own memory-facts-gated param).
+    return {
+      name: cap.name, arg: f.arg, term, topic: f.topic, source: "frame", memoryTerm: f.arg === "term",
+      why: [`imperative frame => goal (knows ${f.topic} ?${f.arg})`, `backward-chain => ${cap.name}`],
+    };
   }
   return null;
 }
@@ -198,16 +212,37 @@ export function commandCapability(request, declaredNames, selectTool) {
   return { name: sel.name, input, source: "command", why: [`command register: "${String(request).trim().split(/\s+/)[0]}" => ${sel.name}`] };
 }
 
+/** Resolve a term against the memory graph's SKOS concept view
+ *  (skos-view.mjs's buildSkosConceptView) — the memory-graph sibling of
+ *  resolveObject, for a param whose precondition is memory-facts rather than
+ *  a code-graph `resolves`. Same `{ match, ambiguous }` shape resolveObject
+ *  returns, so resolveOne's generic binding step treats both the same way:
+ *  `match.label` is the RAW queried term (not the concept's canonicalised
+ *  prefLabel), because tmct_related's own lookup (relatedForTerm) re-derives
+ *  the concept from whatever term it's given — the bound call should carry
+ *  what the user actually asked about. No code-graph fallback: a term the
+ *  store holds no synonym/related facts for is an honest miss, never a guess.
+ *  `rows` is a loadMemory+readFactRows payload — the same trust-bearing rows
+ *  skosRelatedAnswer (chat.mjs) and tmct_related (the tool handler) read. */
+export function resolveMemoryTerm(rows, term) {
+  const t = String(term || "").trim();
+  if (!t) return { match: null };
+  const view = buildSkosConceptView(rows);
+  if (!view.conceptIdForTerm(t)) return { match: null };
+  return { match: { label: t, class: "skos:Concept" }, ambiguous: false, tier: "memory-concept" };
+}
+
 // ---- the full single-call resolver (async — binds + grounds) -----------------
 
 /** Build the glass-box proof chain for a grounded single call: its preconditions then the
- *  epistemic add-effect. Dispatch has succeeded, so `resolves` steps are ok. */
+ *  epistemic add-effect. Dispatch has succeeded, so `resolves`/`memoryFacts` steps are ok. */
 function proofFor(name, input) {
   const steps = [];
   for (const pre of preconditionsOf(name)) {
     if (pre.pred === PRECOND.graphLoaded) steps.push({ step: "precondition", pred: pre.pred, ok: true });
     else if (pre.pred === PRECOND.resolves) steps.push({ step: "precondition", pred: pre.pred, param: pre.param, value: input[pre.param] ?? null, ok: true });
     else if (pre.pred === PRECOND.anyPresent) steps.push({ step: "precondition", pred: pre.pred, params: pre.params, ok: pre.params.some((k) => input[k]) });
+    else if (pre.pred === PRECOND.memoryFacts) steps.push({ step: "precondition", pred: pre.pred, ok: true });
   }
   for (const eff of effectsOf(name).add) steps.push({ step: "effect", pred: eff.pred, topic: eff.topic, of: eff.of });
   return steps;
@@ -272,14 +307,21 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
   if (!declared.has(pick.name)) return REFUSE(`selected ${pick.name} but it is not in the declared toolset`);
 
   // A command pick already carries a bound input; an NL/frame pick carries a raw term
-  // we bind via resolveObject.
+  // we bind via resolveObject (code graph) or, for a memoryTerm slot, resolveMemoryTerm
+  // (the memory graph's SKOS concept view) — the two binding oracles never mix on one pick.
   let input = pick.input ? { ...pick.input } : {};
   let resolved = null;
   if (!pick.input && !pick.noArg) {
     const term = String(pick.term || "").trim();
     if (!term) return REFUSE(`the ${pick.topic} intent named no entity to bind`);
-    const r = ctx.resolve ? ctx.resolve(term) : { match: { label: term }, ambiguous: false };
-    if (!r || !r.match) return REFUSE(`"${term}" does not resolve to any graph entity (honest miss)`);
+    const r = pick.memoryTerm
+      ? (ctx.resolveMemoryTerm ? await ctx.resolveMemoryTerm(term) : { match: null })
+      : (ctx.resolve ? ctx.resolve(term) : { match: { label: term }, ambiguous: false });
+    if (!r || !r.match) {
+      return REFUSE(pick.memoryTerm
+        ? `"${term}" has no synonym/related facts in the memory graph (honest miss)`
+        : `"${term}" does not resolve to any graph entity (honest miss)`);
+    }
     if (r.ambiguous) {
       const pool = [r.match, ...(r.candidates || [])].slice(0, 4);
       const candidateResults = await dispatchEachCandidate(pool, pick.name, pick.arg, ctx, execute);
@@ -287,7 +329,9 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
     }
     resolved = r.match;
     input = { [pick.arg]: r.match.label };
-    why = [...why, `resolveObject: "${term}" => ${r.match.label} (${r.match.class || "?"}, tier ${r.tier})`];
+    why = [...why, pick.memoryTerm
+      ? `resolveMemoryTerm: "${term}" mints a memory-graph SKOS concept (tier ${r.tier})`
+      : `resolveObject: "${term}" => ${r.match.label} (${r.match.class || "?"}, tier ${r.tier})`];
   }
 
   const call = { name: pick.name, input };
