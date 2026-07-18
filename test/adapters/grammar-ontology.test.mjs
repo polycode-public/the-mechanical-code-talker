@@ -17,6 +17,7 @@ import { SOURCE_PRIOR } from "../../src/domain/memory/trust.mjs";
 import { loadLexicon, predicateOf } from "../../src/domain/grammar/lexicon.mjs";
 import { NEG_PREDICATE_PREFIX, NEG_SUBCLASS_PREDICATE } from "../../src/domain/memory/capability.mjs";
 import { relationKind } from "../../src/domain/codegraph.mjs";
+import { DIALOGUE_ACTS, DIALOGUE_ACT_DIMENSIONS } from "../../src/domain/dialogue-acts.mjs";
 
 const TTL_FILE = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "ontology", "tmct-core.ttl");
 
@@ -119,7 +120,7 @@ function checkTurtle(text) {
 test("tmct-core.ttl is well-formed Turtle (minimal check): balanced constructs, all used prefixes declared, terminated statements", async () => {
   const text = await readFile(TTL_FILE, "utf8");
   const { prefixes, terminators } = checkTurtle(text);
-  assert.deepEqual([...prefixes].sort(), ["cap", "cn", "mgx", "mgxneg", "owl", "prov", "rdf", "rdfs", "seon", "skos", "taught", "tmct", "xsd"]);
+  assert.deepEqual([...prefixes].sort(), ["cap", "cn", "dact", "mgx", "mgxneg", "owl", "prov", "rdf", "rdfs", "seon", "skos", "taught", "tmct", "xsd"]);
   assert.ok(terminators >= 50, `a real ontology, not a stub: ${terminators} statements`);
 });
 
@@ -348,6 +349,23 @@ test("every corpus relation mirrored from ConceptNet cites the relation it mirro
       new RegExp(`^${predicate.replace(/:/g, "\\:")} a owl:[^.]*?rdfs:seeAlso cn:${rel.replace("/r/", "")}\\s*[;.]`, "ms").test(text),
       `${predicate} cites its origin ${rel}`,
     );
+  }
+});
+
+test("the dialogue-act vocabulary and its ontology declaration are one closed set, two ways, dimensions included", async () => {
+  const text = await readFile(TTL_FILE, "utf8");
+  const declared = new Map(
+    [...text.matchAll(/^dact:(\w+) a dact:CommunicativeFunction\b[^.]*?dact:dimension "([^"]+)"/gms)]
+      .map((m) => [m[1], m[2]]),
+  );
+  assert.deepEqual(
+    [...declared.keys()].sort(), Object.keys(DIALOGUE_ACTS).sort(),
+    "every table entry is declared and every declared act is in the table",
+  );
+  const dimensions = new Set(DIALOGUE_ACT_DIMENSIONS);
+  for (const [act, { dimension }] of Object.entries(DIALOGUE_ACTS)) {
+    assert.equal(declared.get(act), dimension, `${act} is declared in its table dimension`);
+    assert.ok(dimensions.has(declared.get(act)), `${act}'s declared dimension is a real data category`);
   }
 });
 

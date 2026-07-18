@@ -7,8 +7,11 @@ It supersedes ISO 24617-2:2012 (Edition 1).
 **Licence:** the standard is paywalled and is **not** committed here, quoted from, or reproduced.
 The material below comes from two openly-licensed sources that describe it.
 **Retrieval date:** 2026-07-17.
-**Consumer in repo:** none yet — this is a naming decision taken before anything is built. See
-`PLAN_NORMATIVE.md` §4.5.
+**Consumer in repo:** `src/domain/dialogue-acts.mjs` — the closed `DIALOGUE_ACTS` table and the
+lane→act lookup — declared as `dact:` terms in `ontology/tmct-core.ttl` §1d and pinned two-ways by
+`test/adapters/grammar-ontology.test.mjs`. The per-turn attachment in chat is
+`PLAN_DIALOGUE_ACTS.md` step 3. The naming decision predates the build; see `PLAN_NORMATIVE.md`
+§4.5.
 
 ## Sources actually read
 
@@ -33,8 +36,9 @@ excluded. A claim in tmct that rests on the exact published wording needs the pu
 ## Why tmct reads this
 
 The conversational lanes classify what a visitor is doing — asking, teaching, greeting, correcting.
-tmct has **no intent vocabulary at all** (`CAPABILITIES_2.0.3.md` row 139, `absent`). So this is
-the rare case where a standard can be adopted before the code exists, instead of reconciled after.
+When this entry was written tmct had **no intent vocabulary at all** (`CAPABILITIES_2.0.3.md` row
+139, `absent`), so this is the rare case where a standard was adopted before the code existed,
+instead of reconciled after. The adopted subset is listed at the end of this entry.
 
 ## The ten dimensions
 
@@ -101,10 +105,11 @@ right", the answer is `Confirm` — not `Inform`, `Agreement` or `Answer`.
 **Responsive functions** carry a functional-dependence relation to an antecedent: Answer, Confirm,
 Disconfirm, Correction, Agreement, Disagreement, and the nine Accept/Decline/Address functions.
 
-## What tmct would map onto this
+## What tmct maps onto this
 
-Nothing yet. The lanes are the obvious consumers, and the mapping is worth writing down before an
-intent vocabulary gets coined ad hoc:
+The mapping below is now data: `src/domain/dialogue-acts.mjs` carries it as the closed
+`DIALOGUE_ACTS` table plus a lane→act lookup, written down before an intent vocabulary could get
+coined ad hoc:
 
 | tmct behaviour | ISO 24617-2 function | dimension |
 |---|---|---|
@@ -112,14 +117,28 @@ intent vocabulary gets coined ad hoc:
 | "does X import Y?" | `Propositional Question` | `/task/` |
 | "remember that fire causes smoke" | `Inform` | `/task/` |
 | an answer from the graph | `Answer` | `/task/` |
-| the honest-miss reply | `Disconfirm`, or feedback-dimension negative auto-feedback | `/task/` or `/autoFeedback/` |
+| the honest-miss reply | negative auto-feedback (`autoNegative`) | `/autoFeedback/` |
 | "hi" / "thanks" | `Initial Greeting` / `Thanking` | `/socialObligationsManagement/` |
 | "no, I meant Y" | `Correction` | `/task/` |
 
-The honest-miss row is the interesting one. tmct's miss is a claim about tmct's **own processing**
-("I could not resolve that term"), which is what `/autoFeedback/` is for — not a `/task/` answer at
-all. If an intent vocabulary is ever built, that distinction is already load-bearing in the product
-and the standard already has a name for it.
+The honest-miss row is the interesting one, and the vocabulary settles it as `autoNegative`.
+tmct's miss is a claim about tmct's **own processing** ("I could not resolve that term"), which is
+what `/autoFeedback/` is for — not a `/task/` answer at all. That distinction is load-bearing in
+the product, the standard already had a name for it, and the tests hold the pairing.
+
+## Implemented subset
+
+The vocabulary carries 21 functions. In `/task/` (general-purpose, annotated in the task
+dimension): `propositionalQuestion`, `checkQuestion`, `setQuestion`, `choiceQuestion`, `inform`,
+`answer`, `confirm`, `disconfirm`, `agreement`, `disagreement`, `correction`, `request`,
+`instruct`, `suggestion`, `offer`. In `/autoFeedback/`: `autoPositive`, `autoNegative`. In
+`/socialObligationsManagement/`: `initialGreeting`, `returnGreeting`, `thanking`, `apology`.
+
+The remaining horizon — functions no lane yet produces, which join the table when one does:
+`testQuestion`; the commissives (`promise`, and the address/accept/decline families for requests,
+suggestions and offers — mind the cross-wiring trap above); and the dimension-specific functions
+of `/alloFeedback/`, `/turnManagement/`, `/timeManagement/`, `/discourseStructuring/`,
+`/ownCommunicationManagement/`, `/partnerCommunicationManagement/` and `/contactManagement/`.
 
 `MISS_REASONS` is a closed 4-term set (`UNRESOLVED_TERM`, `CAPABILITY_ABSENT`, `TRUNCATED_GRAPH`,
 `NO_SOURCE`). Those are reasons, not dialogue acts, and the standard does not carry them. They stay

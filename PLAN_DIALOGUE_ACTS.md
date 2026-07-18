@@ -1,9 +1,14 @@
 # PLAN_DIALOGUE_ACTS.md — name tmct's turn types to ISO 24617-2, deterministically
 
-Status: IN DELIVERY (2026-07-18 run) — the mapping is drafted; the build is under way. This plan carries the ISO 24617-2
+Status: IN DELIVERY (2026-07-18 run) — steps 1–2 BUILT: the closed vocabulary and lane lookup
+live in `src/domain/dialogue-acts.mjs` (`DIALOGUE_ACTS`, `LANE_DIALOGUE_ACTS`,
+`dialogueActForLane`), declared as `dact:` terms in `ontology/tmct-core.ttl` §1d, unit-tested
+(`test/adapters/dialogue-acts.test.mjs`) and two-way-pinned against the ontology
+(`test/adapters/grammar-ontology.test.mjs`). Steps 3–5 are open: the chat surface attaches the
+label per turn, surfaces it, and moves audit row 139. This plan carries the ISO 24617-2
 dialogue-act work out of the archived normative review (`archive/PLAN_NORMATIVE.md` §4.6). The
-reference mapping lives at [`iso-24617-2-dialogue-acts.md`](docs/references/schemas/iso-24617-2-dialogue-acts.md);
-the capability audit marks intent classification `absent` (row 139).
+reference mapping and the implemented subset live at
+[`iso-24617-2-dialogue-acts.md`](docs/references/schemas/iso-24617-2-dialogue-acts.md).
 
 ## What this is
 
@@ -29,7 +34,11 @@ processing), not a `task` answer.** A naive intent taxonomy flattens the two; IS
 apart, and so must this. A timeout is a miss, never a guess, and a miss is feedback, never a failed
 answer.
 
-## Step 1 — fix the subset (design, before code)
+## Step 1 — fix the subset (design, before code) — BUILT
+
+Built as `DIALOGUE_ACTS` + `LANE_DIALOGUE_ACTS` in `src/domain/dialogue-acts.mjs`. One refinement
+on the draft table below: the miss maps to the FUNCTION `autoNegative` (the draft named only the
+dimension), keeping function and dimension distinct the way the standard does.
 
 The full standard is nine dimensions and dozens of functions; tmct will implement the subset its
 lanes already cover and name the rest a horizon. The first deliverable is the mapping table:
@@ -47,7 +56,10 @@ confirmed against the reference doc:
 Getting this table right — especially the question sub-types and the miss-as-feedback line — is the
 real work. The rest is wiring.
 
-## Step 2 — build the closed vocabulary
+## Step 2 — build the closed vocabulary — BUILT
+
+Built: `ontology/tmct-core.ttl` §1d declares the `dact:` set, and
+`test/adapters/grammar-ontology.test.mjs` pins table and declaration to each other, both ways.
 
 Declare a closed dialogue-act vocabulary named to ISO 24617-2's function names — a `dact:`-style
 CURIE set (or a `DIALOGUE_ACTS` table) — in `ontology/tmct-core.ttl`, alongside the other

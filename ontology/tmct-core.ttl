@@ -34,6 +34,12 @@
 #         predicates (router/taught.mjs), layered on cap:. GENERATIVE:
 #         taught:<name> per taught game action. Internal — reaches no store.
 #         See section 1c.
+#   dact: urn:tmct:dact# — the dialogue-act vocabulary (src/domain/
+#         dialogue-acts.mjs). The names are ISO 24617-2:2020's own camelCase
+#         communicative-function data categories; the namespace is tmct's,
+#         because the published standard is paywalled and defines no
+#         dereferenceable term IRIs to borrow. See section 1d and
+#         docs/references/schemas/iso-24617-2-dialogue-acts.md.
 #   seon: SEON, the Software Evolution ONtologies (se-on.org, FAMIX-
 #         derived) — the reference vocabulary the code graph's seon:*
 #         prop tokens (seon:hasSuperType, seon:containsCodeEntity, …)
@@ -65,6 +71,7 @@
 @prefix mgxneg: <urn:tmct:mgxneg#> .
 @prefix cap:  <urn:tmct:cap#> .
 @prefix taught: <urn:tmct:taught#> .
+@prefix dact: <urn:tmct:dact#> .
 @prefix seon: <http://se-on.org/ontologies/domain-specific/2012/02/code.owl#> .
 @prefix prov: <http://www.w3.org/ns/prov#> .
 @prefix skos: <http://www.w3.org/2004/02/skos/core#> .
@@ -418,6 +425,135 @@ taught:world-precond a owl:AnnotationProperty ; rdfs:label "world-precond" ; rdf
 taught:world-constraint a owl:AnnotationProperty ; rdfs:label "world-constraint" ; rdfs:comment "A taught action's constraint over world state (from an action-constraint Rule)." .
 taught:world-effect a owl:AnnotationProperty ; rdfs:label "world-effect" ; rdfs:comment "A taught action's add-effect on world state (from an action-effect Rule)." .
 taught:world-effect-replaced a owl:AnnotationProperty ; rdfs:label "world-effect-replaced" ; rdfs:comment "A taught action's delete/replace-effect: the prior world fact this effect supersedes." .
+
+# ---------------------------------------------------------------------------
+# 1d. Dialogue acts (urn:tmct:dact#) — ISO 24617-2 communicative functions.
+#
+#     src/domain/dialogue-acts.mjs names tmct's turn types to ISO 24617-2:2020
+#     (SemAF Part 2, dialogue acts): the router already sorts every turn into a
+#     lane, and the label is a fixed lookup over that decision — a table, never
+#     a classifier. The dact: names below are the standard's own camelCase
+#     data-category names; each carries its dimension as a plain string over
+#     the standard's ten data categories. The set is CLOSED and mirrored
+#     two-ways against the module's DIALOGUE_ACTS table by test.
+#
+#     The honesty-preserving line: tmct's miss is dact:autoNegative in the
+#     autoFeedback dimension — the sender reporting on its OWN processing of
+#     the turn — never a task answer.
+# ---------------------------------------------------------------------------
+
+dact:CommunicativeFunction a owl:Class ;
+  rdfs:label "CommunicativeFunction" ;
+  rdfs:comment "An ISO 24617-2 communicative function: what an utterance does in the dialogue (question, inform, request, feedback, greeting). Individuals below are the subset tmct's lanes produce; the standard's remaining functions join as lanes produce them." .
+
+dact:dimension a owl:AnnotationProperty ;
+  rdfs:label "dimension" ;
+  rdfs:comment "The ISO 24617-2 dimension a function is annotated in, over the ten camelCase data categories: task, autoFeedback, alloFeedback, turnManagement, timeManagement, discourseStructuring, ownCommunicationManagement, partnerCommunicationManagement, socialObligationsManagement, contactManagement." .
+
+dact:propositionalQuestion a dact:CommunicativeFunction ;
+  rdfs:label "propositionalQuestion" ;
+  dact:dimension "task" ;
+  rdfs:comment "A yes/no question about whether a proposition holds ('does X import Y?')." .
+
+dact:checkQuestion a dact:CommunicativeFunction ;
+  rdfs:label "checkQuestion" ;
+  dact:dimension "task" ;
+  rdfs:comment "A yes/no question whose asker already expects the answer yes ('..., right?')." .
+
+dact:setQuestion a dact:CommunicativeFunction ;
+  rdfs:label "setQuestion" ;
+  dact:dimension "task" ;
+  rdfs:comment "A wh-question asking for the members of a set ('what does X import?')." .
+
+dact:choiceQuestion a dact:CommunicativeFunction ;
+  rdfs:label "choiceQuestion" ;
+  dact:dimension "task" ;
+  rdfs:comment "A question asking which of the listed alternatives holds ('is X a module or a class?')." .
+
+dact:inform a dact:CommunicativeFunction ;
+  rdfs:label "inform" ;
+  dact:dimension "task" ;
+  rdfs:comment "A declarative telling the addressee something (a teach turn; also tmct explaining its own function)." .
+
+dact:answer a dact:CommunicativeFunction ;
+  rdfs:label "answer" ;
+  dact:dimension "task" ;
+  rdfs:comment "An inform that discharges a question just asked (an answer grounded in the graph)." .
+
+dact:confirm a dact:CommunicativeFunction ;
+  rdfs:label "confirm" ;
+  dact:dimension "task" ;
+  rdfs:comment "An answer 'yes' to a check question." .
+
+dact:disconfirm a dact:CommunicativeFunction ;
+  rdfs:label "disconfirm" ;
+  dact:dimension "task" ;
+  rdfs:comment "An answer 'no' to a check question." .
+
+dact:agreement a dact:CommunicativeFunction ;
+  rdfs:label "agreement" ;
+  dact:dimension "task" ;
+  rdfs:comment "An inform stating that the speaker holds what the addressee just stated to be true." .
+
+dact:disagreement a dact:CommunicativeFunction ;
+  rdfs:label "disagreement" ;
+  dact:dimension "task" ;
+  rdfs:comment "An inform stating that the speaker holds what the addressee just stated to be false." .
+
+dact:correction a dact:CommunicativeFunction ;
+  rdfs:label "correction" ;
+  dact:dimension "task" ;
+  rdfs:comment "A disagreement that also supplies the replacement ('no, I meant Y')." .
+
+dact:request a dact:CommunicativeFunction ;
+  rdfs:label "request" ;
+  dact:dimension "task" ;
+  rdfs:comment "Asks the addressee to perform an action ('solve it' — a goal turn)." .
+
+dact:instruct a dact:CommunicativeFunction ;
+  rdfs:label "instruct" ;
+  dact:dimension "task" ;
+  rdfs:comment "A request the addressee is expected to carry out without negotiation (a bare imperative)." .
+
+dact:suggestion a dact:CommunicativeFunction ;
+  rdfs:label "suggestion" ;
+  dact:dimension "task" ;
+  rdfs:comment "Puts an action forward as advisable without claiming authority over the addressee." .
+
+dact:offer a dact:CommunicativeFunction ;
+  rdfs:label "offer" ;
+  dact:dimension "task" ;
+  rdfs:comment "Commits the speaker to an action, conditional on the addressee wanting it." .
+
+dact:autoPositive a dact:CommunicativeFunction ;
+  rdfs:label "autoPositive" ;
+  dact:dimension "autoFeedback" ;
+  rdfs:comment "The sender reports its own processing of the previous turn succeeded (an acknowledgement)." .
+
+dact:autoNegative a dact:CommunicativeFunction ;
+  rdfs:label "autoNegative" ;
+  dact:dimension "autoFeedback" ;
+  rdfs:comment "The sender reports its own processing of the previous turn failed — tmct's honest miss." .
+
+dact:initialGreeting a dact:CommunicativeFunction ;
+  rdfs:label "initialGreeting" ;
+  dact:dimension "socialObligationsManagement" ;
+  rdfs:comment "Opens an exchange of greetings ('hi')." .
+
+dact:returnGreeting a dact:CommunicativeFunction ;
+  rdfs:label "returnGreeting" ;
+  dact:dimension "socialObligationsManagement" ;
+  rdfs:comment "Answers a greeting with a greeting." .
+
+dact:thanking a dact:CommunicativeFunction ;
+  rdfs:label "thanking" ;
+  dact:dimension "socialObligationsManagement" ;
+  rdfs:comment "Expresses gratitude for something the addressee did." .
+
+dact:apology a dact:CommunicativeFunction ;
+  rdfs:label "apology" ;
+  dact:dimension "socialObligationsManagement" ;
+  rdfs:comment "Expresses regret for something the speaker did." .
 
 # ---------------------------------------------------------------------------
 # 2. Grammar-emitted kinds (src/grammar/ace.mjs) — how the 8 ACE-OWL patterns

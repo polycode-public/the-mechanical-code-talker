@@ -240,6 +240,7 @@
   "src/domain/completions/rank.mjs",
   "src/domain/completions/search.mjs",
   "src/domain/concept.mjs",
+  "src/domain/dialogue-acts.mjs",
   "src/domain/domain.mjs",
   "src/domain/grammar/ace.mjs",
   "src/domain/grammar/assert.mjs",
