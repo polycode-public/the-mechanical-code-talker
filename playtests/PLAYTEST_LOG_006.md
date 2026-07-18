@@ -96,6 +96,14 @@ Regression: `test/services/adventure.test.mjs` gains a case asserting a
 player-less world declines and falls through; `games/adventure` gains
 `adv-non-player-world-falls-through`.
 
+A second, adjacent gap surfaced while retesting: the exact phrase "play
+spider fly" (no probe of "play spider AND fly") doesn't match
+`SPIDER_FLY_OPEN_RE` either — it requires "and" between spider/fly, or
+nothing after "spider" at all. Dropping "and" is a natural, plausible thing
+to type. Loosened `src/services/spider-fly-turn.mjs`'s opener regex
+alongside the main fix rather than leave it as a second, separately-filed
+gap from the same probing session.
+
 Retest
 ======
 
@@ -108,6 +116,16 @@ Retest session log
 -------------------
 
 ```txt
+tmct> play spider and fly
+a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move — watch, or address one by name in chat.
+
+Goal (inferred): Watch the spider and fly, or address one (e.g. "@spider the fly is east").
+
 tmct> play spider fly
-[the spider-fly lane's own opener response — the actual game starts]
+a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move — watch, or address one by name in chat.
+
+Goal (inferred): Watch the spider and fly, or address one (e.g. "@spider the fly is east").
 ```
+
+Both phrasings now correctly start the spider-fly game itself, instead of
+the adventure lane's broken partial load.

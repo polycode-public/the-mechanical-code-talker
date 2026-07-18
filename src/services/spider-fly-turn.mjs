@@ -26,12 +26,14 @@ import { appendFacts, appendRule, loadMemory, readFactRows } from "../adapters/m
 // ---- recognizers: the closed opening/stop/tick/address set -------------------
 
 // The opener names the game without requiring a specific phrasing order —
-// "watch the spider and the fly" / "play spider and fly" / "start the
-// spider game" all match. Closed vocabulary only (watch/play/start/begin,
-// spider, fly, game) — no general "start X" grammar, matching this
-// project's standing preference and adventure.mjs's own opener style.
+// "watch the spider and the fly" / "play spider and fly" / "play spider fly"
+// (the "and" is optional — playtests/PLAYTEST_LOG_006.md found it's a
+// natural drop) / "start the spider game" all match. Closed vocabulary only
+// (watch/play/start/begin, spider, fly, game) — no general "start X"
+// grammar, matching this project's standing preference and adventure.mjs's
+// own opener style.
 const SPIDER_FLY_OPEN_RE =
-  /^(?:let'?s\s+)?(?:watch|play|start|begin)\s+(?:the\s+)?spider(?:\s+and\s+(?:the\s+)?fly)?(?:\s+game)?[.!?\s]*$/i;
+  /^(?:let'?s\s+)?(?:watch|play|start|begin)\s+(?:the\s+)?spider(?:\s+(?:and\s+)?(?:the\s+)?fly)?(?:\s+game)?[.!?\s]*$/i;
 // "stop watching" is this game's own stop word (there's nothing to "play" in
 // the sense of typing moves — you watch, or address an agent), kept
 // alongside "stop playing" so either reads naturally depending on how the

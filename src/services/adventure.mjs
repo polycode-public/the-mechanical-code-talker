@@ -91,6 +91,15 @@ async function openAdventure(opening, { planHolder, memoryDir, sessionId, env, c
       note: "ADVENTURE — opening declined: the world's shard failed to load",
     };
   }
+  // A world sharing this pack but shaped for a different game entirely (e.g.
+  // spider-fly, which has no player-controlled entity at all — its board is
+  // reusable static content, and player/spider/fly individuals are minted
+  // fresh by that game's own opener, never shipped in the pack) has no
+  // starting player placement. Decline cleanly rather than load a broken
+  // adventure session — the same "not necessarily an adventure ask at all"
+  // fallthrough an unrecognized name already gets, so whichever lane DOES
+  // own this name gets a chance to claim it instead.
+  if (!payload.facts.some((f) => f.subject === "player")) return null;
 
   const tag = worldProvenanceTag(world);
   await appendFacts(memoryDir, payload.facts.map((f) => ({
