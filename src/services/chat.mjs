@@ -9931,6 +9931,19 @@ async function planFollowUpAnswer(query, { memoryDir, planHolder }) {
     : { text: `nothing ${emptyPhrase} ${x} on the current board.`, deduced: "read the current board (what rests on a piece)", note: "BOARD — reverse locative, nothing on the current board" };
 }
 
+/** "what was X called/named before" and its siblings — a name-HISTORY ask.
+ *  The index records current names only, so the whole family declines by
+ *  name (mirrors the guarded "renamed X" adjective — the verb slipped). */
+const RENAME_HISTORY_RE = /^what\s+(?:was|were)\s+(.+?)\s+(?:called|named|known\s+as)\s+(?:before|previously|originally|earlier|at\s+first)[?.!\s]*$|^what\s+did\s+(.+?)\s+use(?:d)?\s+to\s+be\s+(?:called|named)[?.!\s]*$/i;
+
+/** "what do the handlers import" — a COLLECTIVE plural subject naming a
+ *  module GROUP (a directory/path component), not a single module. The
+ *  resolver's best-match tiers read "handlers" as one module and answer for
+ *  it alone, silently — a wrong set with no disclosure. The closed verb set
+ *  mirrors the forward relations; a plural that names a graph KIND
+ *  (modules/classes/…) stays with the engine's own kind-level reading. */
+const COLLECTIVE_FORWARD_RE = /^what\s+(?:do|does)\s+the\s+([a-z][\w-]*s)\s+(import|call|use|export|touch|test|define|contain)s?[?.!\s]*$/i;
+
 async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA: a follow-up like "which of those are tested" / "count
@@ -9955,6 +9968,55 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     askQuery = String(askQuery).trim()
       .replace(/^(?:and|so|then|also)\s+/i, "")
       .replace(/how many\s+/i, "how many of those ");
+  }
+  // RENAME HISTORY — "what was X called before" and its siblings. The index
+  // records current names only, and without this gate "called" fuzzes onto
+  // the calls relation ("before" simply drops), so the reply read as fluent
+  // confirmation of a rename that never happened. Checked BEFORE the ask
+  // engine because the misread ANSWERS — a miss-gated lane never gets a turn.
+  {
+    const rename = String(query).trim().match(RENAME_HISTORY_RE);
+    if (rename) {
+      const term = (rename[1] ?? rename[2]).trim().replace(/^the\s+/i, "");
+      const ent = graph ? await resolveEntity(graph, term) : null;
+      const named = ent ? `${ent.label} is its only recorded name` : `"${term}" has no recorded prior name`;
+      note(trace, "goal: recover a name history the index does not record (honest decline)");
+      note(trace, "lane: RENAME_HISTORY_RE — the index carries no rename data, so the calls-relation misread is refused by name");
+      return plainTurn(query, `I can't say what ${ent ? ent.label : `"${term}"`} was called before — this index records current names only, no rename history. ${named}${ent ? ` here; "who touched ${ent.label}" lists its recorded commits` : ""}.`, {
+        via: "miss", miss: true, focus,
+      });
+    }
+  }
+  // COLLECTIVE PLURAL SUBJECT — see COLLECTIVE_FORWARD_RE. Members are the
+  // modules whose path carries the plural as a component; two or more make it
+  // a group question, answered as the disclosed union over every member. One
+  // or zero members leaves the ordinary resolver reading untouched.
+  {
+    const collective = graph ? String(query).trim().match(COLLECTIVE_FORWARD_RE) : null;
+    const stem = collective ? collective[1].toLowerCase() : null;
+    if (collective && !ENTITY_TO_TYPE[stem] && !ENTITY_TO_TYPE[singularizeSurface(stem)]) {
+      const memberRe = new RegExp(`(^|/)${escapeRegex(stem)}(/|\\.|$)`, "i");
+      const members = graph.individuals.filter((i) => i.class === "Module" && memberRe.test(String(i.label)));
+      if (members.length > 1) {
+        const verb = collective[2].toLowerCase();
+        const { ask } = await import("../domain/ask.mjs");
+        const union = new Map();
+        for (const member of members) {
+          const r = ask(graph, `what does ${member.label} ${verb}`);
+          for (const hit of r?.tmct_ask?.matches ?? []) if (hit?.id) union.set(hit.id, hit.label ?? hit.id);
+        }
+        const memberList = joinList(members.map((mm) => mm.label).sort());
+        const labels = [...union.values()].sort();
+        const text = labels.length
+          ? `the ${stem} here are ${memberList} — together they ${verb}: ${joinList(labels)}.`
+          : `the ${stem} here are ${memberList} — none of them has ${verb} edges in the index.`;
+        note(trace, `goal: read a forward relation over a module GROUP (${members.length} members), unioned with the set disclosed`);
+        note(trace, `lane: COLLECTIVE_FORWARD_RE — "${stem}" resolved to ${members.length} modules; answered the union, never a silent single best-match`);
+        const turn = plainTurn(query, text, { via: "composed", miss: !labels.length, focus });
+        turn.detail = { traversal: `${verb} edges unioned over ${memberList}`, matches: [...union.keys()].map((id) => graph.byId?.get?.(id)).filter(Boolean) };
+        return turn;
+      }
+    }
   }
   // W2: the explicit recall forms are answered from memory's folded blocks, never
   // the graph. Gated on memoryDir — a bare runTurn (no session shell) stays pure.

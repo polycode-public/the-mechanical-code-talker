@@ -2979,7 +2979,10 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
     if (entityType && entityType !== "Change") {
       const wantClasses = classesForKinds(graph, fwdKinds);
       const siblingClass = FINE_CLASS_SIBLING[entityType];
-      if (!wantClasses.has(entityType) && !(siblingClass && wantClasses.has(siblingClass))) {
+      // An edge-less kind (wantClasses empty) is not a grain mismatch — there
+      // is nothing to name after "only …", and the render leaked a literal
+      // "undefined" there. Fall through to the plain empty-edges answer.
+      if (wantClasses.size && !wantClasses.has(entityType) && !(siblingClass && wantClasses.has(siblingClass))) {
         return {
           matches: [], objMatch, candidates, ambiguous, matchedVia,
           forwardGrainMiss: true, wantClasses: [...wantClasses],
