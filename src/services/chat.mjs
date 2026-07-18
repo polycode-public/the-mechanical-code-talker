@@ -2796,6 +2796,16 @@ const GENERAL_VERB_DETERMINER_TEACH_RE = new RegExp(
  *  stored, and cited, as "len"). */
 const QUANTIFIED_HAS_TEACH_RE = /^(every|each|all)\s+([\w'-]+)\s+(?:has|have)\s+(.+?)[.!?]*$/i;
 const quantifiedHasSubject = (m) => (/^all$/i.test(m[1]) ? singularizeSurface(m[2]) : m[2]);
+/** The OBJECT side of the same fold: "all dogs have tails" states one tail
+ *  per dog, so the plural sentence form's object stores as its singular
+ *  ("tail" — the spelling the have-questions and the seeded corpus's own hasA
+ *  facts read back). Only the "all" form folds, the same gate the subject
+ *  uses: "every"/"each" take singular grammar, so their object's number is
+ *  the speaker's own ("every dog has fur"). The last word folds so a
+ *  modified object ("all dogs have long tails") keeps its modifier. */
+const quantifiedHasObject = (m) => (/^all$/i.test(m[1])
+  ? m[3].replace(/[\w'-]+$/, (w) => singularizeSurface(w))
+  : m[3]);
 /** Verbs owned by an earlier, more specific recognizer in this lane — is/are
  *  (class-membership/property, above) and owns/maintains (ownership, above).
  *  generalVerbTeach declines outright on these so it can never race a more
@@ -2944,7 +2954,7 @@ async function generalVerbTeach(payload) {
     if (quantHas) {
       subjectRaw = quantifiedHasSubject(quantHas);
       verbRaw = "has";
-      objectRaw = quantHas[3];
+      objectRaw = quantifiedHasObject(quantHas);
     } else {
       const det = p.match(GENERAL_VERB_DETERMINER_TEACH_RE);
       if (!det) return null; // not a bare-name subject, and no preposition to pin the verb
