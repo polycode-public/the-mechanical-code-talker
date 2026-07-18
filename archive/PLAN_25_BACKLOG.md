@@ -1,6 +1,6 @@
 # PLAN_25_BACKLOG.md — close the 2.5.0 open items
 
-**Status: in delivery (2026-07-18 run). This is the build order for the seven items `HANDOVER.md`
+**Status: DELIVERED (2026-07-18 run; measured by the four BENCHMARK_*_2.6.0.md reports). This is the build order for the seven items `HANDOVER.md`
 carries after the 2.5.0 benchmark round.** Work it top to bottom: the order is by evidence strength and blast radius,
 not by area. Every fix ships with its pin — no row, not done. Evidence lands at the tool layer
 (`test/tools/`) wherever a tool serves the shape (`SKILL_CAPABILITIES_AUDIT.md` §1); a chat-only

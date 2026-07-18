@@ -1,6 +1,6 @@
 # PLAN_LEARN_ON_MISS.md — answer a clean miss from a shipped knowledge pack, not just a refusal
 
-Status: BUILT (2026-07-18 run) — offline, $0, deterministic, no LLM, no runtime network. The
+Status: DELIVERED (2026-07-18 run; measured at 2.6.0) — offline, $0, deterministic, no LLM, no runtime network. The
 chat hooks are live in `src/services/chat.mjs`: the articled miss hook (lane 4h) and the
 bare-form fallback share one gate (`referencePackMissAnswer` — definition-shaped term, lexicon
 noun, no graph entity, no remembered fact, only then the provider), answer with

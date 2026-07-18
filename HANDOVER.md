@@ -16,8 +16,8 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-18)
 
-v2.5.4 published (CI publishes on a version bump on main); 2.5.5 in the working tree ahead of
-the minor roll for the benchmark round.
+v2.6.0 in the working tree, measured by the four `BENCHMARK_*_2.6.0.md` reports and
+`CAPABILITIES_2.6.0.md`, about to push (CI publishes on a version bump on main).
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
@@ -25,20 +25,69 @@ download, not reachable from data in hand).
 
 ## Open items
 
-The five-plan run of 2026-07-18 (`PLAN_25_BACKLOG`, `PLAN_DIALOGUE_ACTS`, `PLAN_GUESS_NUMBER`,
-`PLAN_LEARN_ON_MISS`, `PLAN_SYLLOGIST` §2/§3/§4) is delivered and pushed — each plan doc records
-its own per-section status, and `git log` holds the build record. What remains:
+The five-plan run of 2026-07-18 is delivered, benchmarked at 2.6.0 on all four axes, and audited
+(143/172 capability rows implemented, none moved down). Full detail: the four
+`BENCHMARK_*_2.6.0.md` reports and `CAPABILITIES_2.6.0.md`; the delivered plan docs live in
+`archive/`. Every open line below names its source.
 
-- **Teach-path predicate minting for prepositional verbs** (found in the run, operator decision):
-  the general-verb teach glues a preposition into the object — "cat relates to milk" stores
-  `cat mgx:relate "to milk"`. Mapping the closed "relates to" / "is related to" pair onto
-  `mgx:relatedTo` would fix the garble and give the SKOS lane a natural teach phrasing; it
-  changes teach-path predicate minting, so it needs the operator's word before it lands.
-- **The endgame, in flight:** `PLAN_25_BACKLOG` §8.1's CHATBENCH expectation revision (the
-  `be-honest-empty` superseding case) lands at this arc boundary; then all four benchmarks re-run
-  at the new minor on the reformed ladders (TOOL-0…8, INF-1…8, FLOW-0…6, CEFR incl. P1/P2) with
-  new cases covering everything this run fixed and added; then the capabilities audit
-  (`SKILL_CAPABILITIES_AUDIT.md`); then each completed plan doc archives.
+**The write boundary — the FLOW-0 gate and the round's worst cluster** (CONVERSATION rows 1–8):
+
+- A negative universal with no stored positive mints a subject-literal `"no dog"` fact, so a
+  2-hop chain proves yes one turn after the "no" (row 1, proof-shaped, worst). Ground the
+  negation on the resolved class pair or decline by name.
+- Interrogative shapes reach the teach lane and write: `dog have tail?` stores at trust 1.00
+  (row 2); `I'm new here, what should I read first` stores a garbled fact (row 3); a typo'd
+  interrogative gets a teach suggestion (row 8). A trailing `?` or question-clause must gate the
+  write boundary outright.
+- `what was X called before` fuzzes "called" to the calls relation and confirms a rename that
+  never happened (row 4); a collective plural (`what do the handlers import`) silently
+  best-matches one module (row 5); a mid-plan board teach is accepted then ignored by `next`
+  (row 6); an `undefined` leaks into the exports none-renderer (row 7).
+
+**Soft and regression rows** (CONVERSATION 9–17): assumed-position notes only cover goal-named
+pieces (9); the needs-a-test superlative lacks `/untested`'s test-module filter (10, also CEFR's
+`gq-needs-test-inversion`); adverbial negation in a passive yes/no is dropped (11); the describe
+lane is the last without the stale-modifier residue guard (12); decision-recall phrasing misses
+the session-recall surface (13); bare `dog` and post-expansion `and a cat` regressed to the
+identity blurb (14–15 — refreeze pins when fixed); plan-navigation gestures (`undo`, `forget the
+goal`, done-plan `next`) and goal revision (`actually the goal is…`) are unrouted (16–17).
+
+**Honest-miss clusters** (CONVERSATION 18–29): game-invitation openers (`let's play guess the
+number`) and non-numeric mid-game nudges (18); graph-less miss guidance offers code shapes to
+vocabulary questions (19); SKOS recogniser misses like/what's wrappers (20); the negative-polarity
+opener (`I don't suppose…`) is the one unpeeled wrapper — also CEFR's P1 edge (21); converse
+nudge is taught-fact-only, not code-graph (22); did-you-mean ranking admits non-symbol kinds
+(23); the app-overview phrasing never fires the completions rescue (24); property inheritance is
+1-hop (25, also INFERENCE row 3 with its 5 ceiling rows); two sentence-split edges on the shipped
+hanoi recipe lines (26); the adventure easter egg fires on `hello there` in a first session (27);
+the session sidecar records rewritten queries, misquoting the user and blinding bench session
+mode — record verbatim input beside the rewrite (28); four minor items noted in row 29.
+
+**INFERENCE rows 1–2:** the quantified-has teach silently declines verb-tagged subjects ("every
+overbid has a gouger" — let the quantifier lead override the single-token POS gate or decline
+loudly), and clips s-final singular subjects ("lens" cited as "len").
+
+**AGENT rows 1–6:** the resolver's silent tier-3 pick on an ambiguous entity should return
+`candidateResults` instead (1, TOOL-8's live edge); the conditional-fallback phrasing plans both
+branches with a duplicated primary — the observe-and-replan branch TOOL-7 names (2–3); the bench
+fixture's `mod-a`-style module ids block symbol-seeded result literals — align them with
+`mod:<path>` (4); `tmct_related` sits in neither the router registry nor
+`EXCLUDED_FROM_REGISTRY` — register it (params: term) or document the exclusion (5); the registry
+declares `tmct_impact`'s param Module-kinded while a Function seed now binds (6).
+
+**CEFR levers for the next cycle:** `FIXTURE_CONTEXT` lacks schema-doc glosses (a truthful schema
+answer grounds at 0.000); `judge-prompt-v2` should name the game/planner/reference-pack surface
+(a correct game draws honesty 0); stamp the 15 now-passing baselineFail turns `improvedIn`; 10
+construction shapes still lack go-to-pool cases.
+
+**Standing decisions:**
+
+- **Teach-path predicate minting for prepositional verbs** (operator decision): "cat relates to
+  milk" stores `cat mgx:relate "to milk"`. Mapping the closed "relates to" / "is related to" pair
+  onto `mgx:relatedTo` fixes the garble and gives the SKOS lane a teach phrasing; it changes
+  predicate minting, so it needs the operator's word.
+- `archive/PLAN_BENCHMARK_LADDERS.md`'s banner still reads "DESIGN — not yet implemented" though
+  the reform is implemented and measured (audit §4.3) — a one-line truth-up.
 
 ## Discipline
 

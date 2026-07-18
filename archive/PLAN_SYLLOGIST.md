@@ -1,6 +1,6 @@
 # PLAN_SYLLOGIST.md — beyond the shipped ladder: making the Syllogist itself smarter
 
-> **STATUS (2026-07-18 delivery run): §2 and §3 are IMPLEMENTED — §2 as semi-naive delta
+> **STATUS: DELIVERED (2026-07-18 run; measured at 2.6.0). §2 and §3 are IMPLEMENTED — §2 as semi-naive delta
 > evaluation (watermark + relevance frontier, see §2), §3 including the bounded environment sets
 > (multiple premise sets per entailed fact, `mgx:factJustification`'s ' | '-separated environments,
 > the `maxEnvironments` knob, set-membership retraction with survivor re-grounding —

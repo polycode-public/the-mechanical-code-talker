@@ -1,6 +1,6 @@
 # PLAN_GUESS_NUMBER.md — closed-loop (feedback-driven) planning for tmct, validated against "I am thinking of a number"
 
-Status: BUILT (2026-07-18 run) — all three phases below are live in `src/services/chat.mjs`
+Status: DELIVERED (2026-07-18 run; measured at 2.6.0) — all three phases below are live in `src/services/chat.mjs`
 (`guessNumberTurn` and the game recognizer/continuation tables): both modes, the belief-interval
 bisection with the empty-interval refusal naming the contradicting pair, the thinker-mode
 comparison with out-of-bounds decline / reveal-on-request / false-"correct" rebuttal, the

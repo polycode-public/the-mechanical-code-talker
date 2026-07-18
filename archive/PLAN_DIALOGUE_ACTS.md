@@ -1,6 +1,6 @@
 # PLAN_DIALOGUE_ACTS.md — name tmct's turn types to ISO 24617-2, deterministically
 
-Status: BUILT (2026-07-18 run) — steps 1–2: the closed vocabulary and lane lookup live in
+Status: DELIVERED (2026-07-18 run; measured at 2.6.0) — steps 1–2: the closed vocabulary and lane lookup live in
 `src/domain/dialogue-acts.mjs` (`DIALOGUE_ACTS`, `LANE_DIALOGUE_ACTS`, `dialogueActForLane`),
 declared as `dact:` terms in `ontology/tmct-core.ttl` §1d, unit-tested
 (`test/adapters/dialogue-acts.test.mjs`) and two-way-pinned against the ontology
@@ -12,7 +12,7 @@ names the chat attachment; audit row 139 moves at the next audit re-measure, not
 plan. This plan carries the ISO 24617-2
 dialogue-act work out of the archived normative review (`archive/PLAN_NORMATIVE.md` §4.6). The
 reference mapping and the implemented subset live at
-[`iso-24617-2-dialogue-acts.md`](docs/references/schemas/iso-24617-2-dialogue-acts.md).
+[`iso-24617-2-dialogue-acts.md`](../docs/references/schemas/iso-24617-2-dialogue-acts.md).
 
 ## What this is
 
@@ -84,14 +84,14 @@ envelope and, optionally, a `/dialogue-act` (or `/why`) command and a tool-layer
 
 ## Step 5 — document — BUILT (reference doc; audit row 139 moves at the next audit)
 
-Mark the implemented functions in [`iso-24617-2-dialogue-acts.md`](docs/references/schemas/iso-24617-2-dialogue-acts.md);
+Mark the implemented functions in [`iso-24617-2-dialogue-acts.md`](../docs/references/schemas/iso-24617-2-dialogue-acts.md);
 move capability-audit row 139 from `absent` to `partial` (or `implemented`) for the covered subset,
 citing the tests; add a README standards line ("dialogue acts named per ISO 24617-2"); and name the
 uncovered functions as the remaining horizon — no wall, just the functions no lane yet produces.
 
 ## Where it connects
 
-[`PLAN_NLU_BENCHMARKS.md`](PLAN_NLU_BENCHMARKS.md) scores tmct on the CLINC150 / HWU64 intent sets.
+[`PLAN_NLU_BENCHMARKS.md`](../PLAN_NLU_BENCHMARKS.md) scores tmct on the CLINC150 / HWU64 intent sets.
 The dialogue-act vocabulary this plan builds is the label those benchmarks would score against, so
 the two are worth designing together: the vocabulary decides what "intent" means for tmct, and the
 benchmark measures how well the deterministic labeller assigns it.
