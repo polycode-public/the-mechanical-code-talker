@@ -245,6 +245,17 @@
     border-radius: 8px; background: var(--card);
   }
 
+  /* ---- spider-and-fly hero ---------------------------------------------------------- */
+  .spider-fly-hero { margin: 1.4rem 0 0.4rem; }
+  .spider-fly-hero .hero-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
+  }
+  .spider-fly-hero iframe {
+    width: 100%; height: 460px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--card);
+  }
+
   /* ---- transcript ------------------------------------------------------------------ */
   .transcript .ask { color: var(--accent); }
   .transcript .miss { color: var(--muted); }
@@ -326,6 +337,23 @@ I don't know "quokka" yet — teach me directly, e.g. "quokka is a &lt;thing&gt;
       <a href="./plan.html">open full-screen &rarr;</a>
     </div>
     <iframe src="./plan.html" title="tmct plan render — an animated replay of the solved hanoi-3 game"></iframe>
+  </div>
+
+  <h2>Two agents, planning against each other</h2>
+  <p>
+    A spider waits in its web; a fly drifts onto the board and loses strength the longer
+    it stays. Neither is played by you — each one plans its own next move over the same
+    graph, seeing only part of the board, and you can only tell one of them something by
+    typing to it. The spider's live plan is drawn as a thread, because a plan here already
+    is one.
+  </p>
+
+  <div class="spider-fly-hero">
+    <div class="hero-row">
+      <span class="demo-label">The spider and the fly, planning live against each other</span>
+      <a href="./spider-fly.html">open full-screen &rarr;</a>
+    </div>
+    <iframe src="./spider-fly.html?preview=1" title="tmct spider and fly — two agents planning against each other on a partly-hidden grid"></iframe>
   </div>
 
   <p>

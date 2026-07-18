@@ -1,8 +1,8 @@
 # PLAN_SPIDER_FLY.md — a spider and a fly, planning against each other on a partly-hidden grid, rendered through an ontology→sprite mapping
 
-Status: PARTIALLY BUILT — §12 steps 1-5 (world/grid substrate, the headless turn engine, chat
-integration) are live code. Rendering, pages and the guess-number Play retrofit (steps 6-8) remain
-design only.
+Status: PARTIALLY BUILT — §12 steps 1-7 (world/grid substrate, the headless turn engine, chat
+integration, rendering, and the pages) are live code. Only the guess-number Play retrofit (step 8)
+remains design only.
 
 ## Build status (2026-07-18)
 
@@ -15,13 +15,25 @@ design only.
   teach-frame, and `spiderFlyTurn`, wired into `runTurn` immediately after the adventure block, with
   the matching `spiderFly` coexistence arm added to `guessNumberTurn` and `adventureTurn`; covered by
   `test/corpus/games/spider-fly.jsonl` and sampled in the fast tier's lane list.
-- **Not yet started**: the sprite registry/resolver, the canvas/SVG renderer and silk-thread plan
-  drawing, the POV overlay (§12 step 6); the full-screen/home-page pages and browser bundle (step
-  7); the guess-number Play retrofit (step 8).
+- **Also committed on `main`**: `src/domain/sprite-map.mjs` (the ontology-to-sprite resolver and
+  registry — §7, §12 step 6); `src/services/viz-ticker.mjs` (the shared play/pause/step/reset
+  primitive extracted from plan-viz.mjs's own inlined pattern — §11 — ready for the step 8 retrofit
+  to consume); `src/services/spider-fly-viz.mjs` (the self-contained full-screen page — §8/§9/§11:
+  the grid, the silk-thread plan drawing, the HUD, the chat dock, the POV click overlay, the
+  `?preview=1` runtime mode the home-page hero embeds); `src/surfaces/web/
+  spider-fly-browser-entry.mjs` + `scripts/build-spider-fly-bundle.mjs` (the dedicated browser
+  bundle exposing `createSpiderFlySession` — a raw `tick()` for the page's ticker, the full
+  `runTurn` for the chat dock, both over one in-memory store); the `scripts/build-demo-site.mjs`
+  step that builds the bundle and writes `public/spider-fly.html`; the `.spider-fly-hero` embed on
+  `public/index.html`. Tests: `test/adapters/sprite-map.test.mjs`, `test/adapters/viz-ticker.test.mjs`,
+  `test/adapters/spider-fly-viz.test.mjs`.
+- **Not yet started**: the guess-number Play retrofit (step 8) — apply `viz-ticker.mjs`'s
+  `createTicker` to `public/chat-ui.mjs`'s demo rail.
 
-**To resume**: pick up at §12 step 6 (rendering) — the chat lane's own `runSpiderFlyTick` calls
-already surface everything a renderer needs (`agents`, `ecology`) with no interface changes
-required.
+**To resume**: pick up at §12 step 8 — `src/services/viz-ticker.mjs`'s `createTicker` is the shared
+primitive to consume; its own header comment documents the contract (`onTick`/`onRender`/`onReset`/
+`hasNext`) precisely so the retrofit doesn't have to re-derive it from plan-viz.mjs's inlined
+version.
 
 **Revised 2026-07-18, same session.** A second research pass checked three things this document
 originally left open, and the operator settled three more:
