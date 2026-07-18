@@ -134,6 +134,7 @@
     "demo:build": "node scripts/build-demo-site.mjs",
     "roll": "node scripts/roll.mjs",
     "build:ask-bundle": "node scripts/build-ask-bundle.mjs",
+    "build:chat-bundle": "node scripts/build-chat-bundle.mjs",
     "build:demo-graph": "node scripts/build-demo-graph.mjs",
     "build:demo-memory": "node scripts/build-demo-memory.mjs",
     "gen:tool-docs": "node scripts/generate-tool-docs.mjs",
