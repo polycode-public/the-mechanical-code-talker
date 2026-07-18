@@ -132,7 +132,7 @@ const THANKS_PREAMBLE_RE = /^(?:thanks|thank\s+you|many\s+thanks|thx|ty|cheers)(
 const ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|aight|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good|no worries|no problem)[\s,]+)+(.+)$/i;
 /** Self-orientation lead-in with a delimiter — "just poking around, <Q>",
  *  "first time using this, <Q>". */
-const BROWSING_PREAMBLE_RE = /^(?:just\s+(?:poking\s+around|looking\s+around|browsing|exploring|checking\s+(?:this|it)\s+out)|first\s+time\s+(?:trying\s+this\s+out|using\s+this|here))\s*[,.—–-]\s*(.+)$/i;
+const BROWSING_PREAMBLE_RE = /^(?:just\s+(?:poking\s+around|looking\s+around|browsing|exploring|checking\s+(?:this|it)\s+out)|first\s+time\s+(?:trying\s+this\s+out|using\s+this|here)|i'?m\s+new\s+(?:here|around\s+here|to\s+(?:this|all\s+this)(?:\s+(?:repo|codebase|project|app|tool|thing))?))\s*[,.—–-]\s*(.+)$/i;
 /** Repeated leading hedge adverb before a polite request verb ("maybe
  *  possibly tell me <Q>"). No delimiter required, unlike ACK_PREAMBLE_RE. */
 const HEDGE_ADVERB_PREAMBLE_RE = /^(?:(?:maybe|possibly|perhaps)\s+)+(.+)$/i;

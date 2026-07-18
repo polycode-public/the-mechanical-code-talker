@@ -17,7 +17,11 @@ export function answerNoLineMatches(result, pattern) {
   return !answerLineMatches(result, pattern);
 }
 
-/** The whole answer does NOT match the pattern. */
+/** The whole answer does NOT match the pattern — or, for an array, matches
+ *  NONE of them (a coerced array used to collapse into one comma-joined
+ *  regex that could never match, a vacuously-passing negative). */
 export function answerLacks(result, pattern) {
-  return !new RegExp(String(pattern)).test(String(result?.answer ?? ""));
+  const patterns = Array.isArray(pattern) ? pattern : [pattern];
+  const text = String(result?.answer ?? "");
+  return patterns.every((p) => !new RegExp(String(p)).test(text));
 }

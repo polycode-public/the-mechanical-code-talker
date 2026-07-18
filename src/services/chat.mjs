@@ -1839,6 +1839,11 @@ async function hasMidSentenceInterrogative(text) {
     if (MID_SENTENCE_WH_RE.test(words[i].replace(/^[.,!?;:'"]+|[.,!?;:'"]+$/g, ""))) whIdx.push(i);
   }
   if (!whIdx.length) return false;
+  // A wh-word opening a NEW CLAUSE ("I'm new here, what should I read
+  // first") is an interrogative clause, full stop — no POS evidence needed:
+  // the clause boundary (the preceding word's trailing comma/semicolon) is
+  // itself the signal, and it holds with or without the wink adapter.
+  if (whIdx.some((i) => /[,;:]["')]*$/.test(words[i - 1]))) return true;
   try {
     const { nlpAdapter } = await import("../adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
@@ -2145,6 +2150,7 @@ async function repairSharesLemma(from, to) {
  *    the two-word object; single-word objects stay with the ACE path. */
 async function bareTaxonomyTeach(line, { memoryDir, sessionId }) {
   if (!memoryDir || QUESTION_LEAD_RE.test(line)) return null;
+  if (/\?\s*$/.test(String(line).trim())) return null; // a question never writes
   const inst = line.match(INSTANCE_TYPE_TEACH_RE);
   if (inst) {
     return teachFact(memoryDir, sessionId, {
@@ -3288,7 +3294,13 @@ function habitualGroundingHintText(line, habitual) {
  *  grammatical category error regardless of the verb — keeping the guard
  *  ahead of every teach recognizer (copula AND general-verb alike) the same
  *  way it already stood ahead of teachSuggestion/unknownSubjectFallback. */
-const TEACH_PRONOUNS = Object.freeze(["you", "i", "it", "they", "he", "she", "we"]);
+// The contracted forms ("i'm new here …") join the bare pronouns: a leading
+// pronoun+copula contraction is exactly as invalid a fact subject, and it
+// slipped past this guard into the general-verb mint as a one-token "i'm".
+const TEACH_PRONOUNS = Object.freeze([
+  "you're", "i'm", "it's", "they're", "he's", "she's", "we're",
+  "you", "i", "it", "they", "he", "she", "we",
+]);
 const TEACH_PRONOUN_RE = new RegExp(`^(?:every\\s+|each\\s+|all\\s+|some\\s+|a few\\s+|a\\s+|an\\s+)?(${TEACH_PRONOUNS.join("|")})\\s+\\S+`, "i");
 /** The same closed set, read as a whole-word membership test: a pronoun is no
  *  more a legal fact subject when a reader LIFTS one out of a prior answer than
@@ -3312,6 +3324,46 @@ const RETRACT_NOT_A_RE = /^(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:(?:is|are)
  *  the remember-wrapped surface too. */
 const RETRACT_FORGET_RE = /^forget\s+(?:that\s+)?(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)$/i;
 
+/** NEGATIVE UNIVERSAL — "no X is a Y" / "no Xs are Ys": a class-level
+ *  exclusion, stored as `X owl:disjointWith Y` on the RESOLVED class pair.
+ *  The ACE grammar already mints exactly this triple when both words sit in
+ *  its closed lexicon; this frame is the SAME mint for the words outside it,
+ *  so the sentence never falls through to the unknown-subject fallback, which
+ *  would warehouse it under the subject-literal "no X" — a spelling no
+ *  reader (the cax-dw veto included) ever consults, leaving a later chain
+ *  proof free to certify the very thing the user excluded. Single-token
+ *  sides only (the disjointness readers resolve class TERMS, not phrases);
+ *  a plural surface folds to the singular the ⊑ facts use. */
+const NEGATIVE_UNIVERSAL_TEACH_RE = /^no\s+([\w-]+)\s+(is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)[.!]*$/i;
+
+/** The mint (or the reflexive refusal) for a NEGATIVE_UNIVERSAL_TEACH_RE
+ *  match, shared by teachLane and the ACE-path reflexive gate: null when the
+ *  sentence isn't this shape. */
+async function negativeUniversalTeach(sentence, { memoryDir, sessionId }) {
+  const m = String(sentence || "").trim().match(NEGATIVE_UNIVERSAL_TEACH_RE);
+  if (!m || !memoryDir) return null;
+  const plural = m[2].toLowerCase() === "are";
+  const subject = plural ? singularizeSurface(m[1]) : m[1];
+  const object = plural ? singularizeSurface(m[3]) : m[3];
+  if (subject.toLowerCase() === object.toLowerCase()) {
+    return {
+      text: `I can't store "no ${subject} is a ${object}" — every ${subject} is a ${subject} by definition, so that exclusion contradicts itself. Nothing was stored.`,
+      via: "teach-miss", miss: true,
+    };
+  }
+  const { DISJOINT_PREDICATE } = await import("../domain/syllogise.mjs");
+  const stored = await teachFact(memoryDir, sessionId, {
+    subject, predicate: DISJOINT_PREDICATE, object,
+  });
+  if (!stored) {
+    return {
+      text: `I couldn't store the exclusion "no ${subject} is a ${object}" — say it with single-word class names ("no dog is a mammal") and I'll remember it as a disjointness.`,
+      via: "teach-miss", miss: true,
+    };
+  }
+  return stored;
+}
+
 async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null }) {
   // A closed discourse-marker preamble ahead of a teach sentence ("howdy
   // pardner, remember that TaskController is fragile") would otherwise
@@ -3321,6 +3373,17 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // topic-switch/hedge — match ordinary teach phrasing), so this is purely
   // additive.
   const rawInput = applyPreambleFrames(String(query).trim());
+  // A trailing "?" is an unambiguous "this is a question" marker, and a
+  // question must never reach the write boundary — the ESL missing-"does"
+  // yes/no ("dog have tail?") is a bare declarative to every shape gate in
+  // this lane, and it STORED, at teach trust, until this gate existed. The
+  // whole lane stands down; the ask cascade owns question marks.
+  if (/\?\s*$/.test(rawInput)) return null;
+  // A typo'd interrogative ("wat is a hrose") reads as a declarative to every
+  // anchored QUESTION_LEAD_RE gate below — run the SAME closed misspelling
+  // repair ask.mjs's typo tolerance applies BEFORE classifying, so the
+  // question goes back to the question side instead of a teach suggestion.
+  if (QUESTION_LEAD_RE.test(correctMisspellings(rawInput))) return null;
   const m = rawInput.match(TEACH_RE);
   const wrappedInput = m ? m[1].trim() : null;
   // Refuse an existential BEFORE any frame below can read it as a universal:
@@ -3593,6 +3656,19 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         };
       }
       // found:false — fall through to the rest of the cascade (see docblock above).
+    }
+  }
+
+  // NEGATIVE UNIVERSAL — "no X is a Y": the class-pair disjointness mint (or
+  // the reflexive refusal). Tried on both surfaces, ahead of every frame that
+  // could otherwise read "no X" as a subject literal — see
+  // NEGATIVE_UNIVERSAL_TEACH_RE's own docblock.
+  {
+    const negUniversalSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
+    if (memoryDir && !QUESTION_LEAD_RE.test(negUniversalSrc)
+      && !(await hasMidSentenceInterrogative(negUniversalSrc))) {
+      const negUniversal = await negativeUniversalTeach(negUniversalSrc, { memoryDir, sessionId });
+      if (negUniversal) return negUniversal;
     }
   }
 
@@ -4430,9 +4506,18 @@ async function moduleOrientLane(query, { graph }) {
 }
 
 async function metaLane(query, { graph, memoryDir, last = null, templates = null, vocabHint = null, focus = null }) {
+  // Preamble-peeled twin of `q`: a self-intro/greeting lead ("I'm new here,
+  // what should I read first") wraps exactly the orientation questions this
+  // lane owns, and the anchored META_ORIENT_RE can't see past it. Peeling
+  // with the SAME closed frames every other surface uses is purely additive.
+  const peeled = applyPreambleFrames(String(query).trim()).toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ").trim();
   const q = String(query).trim().toLowerCase().replace(/[?.!]+$/, "").replace(/\s+/g, " ");
   if (WHAT_KNOW_RE.test(q) || q === "what have you learned" || q === "what have you learnt") {
     return { text: await memorySummary(memoryDir, graph), via: "meta" };
+  }
+  if (peeled !== q && META_ORIENT_RE.test(peeled)) {
+    const text = orientationText(graph, templates, vocabHint);
+    return { text: last?.answer === text ? META_ORIENT_REPEAT_ONELINER : text, via: "meta" };
   }
   if (META_ORIENT_RE.test(q)) {
     // This META_ORIENT_RE branch is a SEPARATE route to the same class of
@@ -11233,6 +11318,10 @@ async function everySentenceTeaches(sentences, lexicon) {
 }
 
 async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, cache = null }) {
+  // A trailing "?" marks a question, and a question never writes — the ACE
+  // fragment happily parses "dog have tail?" as the declarative it is not,
+  // which stored a Fact at teach trust over a FLOW-0 vocabulary question.
+  if (/\?\s*$/.test(String(line).trim())) return null;
   try {
     const { parseAce, parseAceAmbiguous } = await import("../domain/grammar/ace.mjs");
     // A session handle carries its own loaded lexicon (createSession loads it once);
@@ -11259,6 +11348,18 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
     if (!parse || !parse.triples?.length || parse.residue?.length) return null;
     const { assertSentence } = await import("../domain/grammar/assert.mjs");
     const { normFactTerm, appendFact } = await import("../adapters/memory/core.mjs");
+    // A REFLEXIVE disjointness ("no dog is a dog") is a self-contradiction,
+    // not a fact — the same refusal the teach lane's negative-universal frame
+    // gives the out-of-lexicon spelling, so the two surfaces can't disagree.
+    const reflexiveDisjoint = parse.triples.find(
+      (t) => t.predicate === "owl:disjointWith" && normFactTerm(t.subject) === normFactTerm(t.object),
+    );
+    if (reflexiveDisjoint) {
+      const term = normFactTerm(reflexiveDisjoint.subject);
+      return plainTurn(line,
+        `I can't store "no ${term} is a ${term}" — every ${term} is a ${term} by definition, so that exclusion contradicts itself. Nothing was stored.`,
+        { command: "assert", via: "teach-miss", miss: true, focus });
+    }
     const ts = new Date().toISOString();
     const res = await assertSentence(memoryDir, line, {
       lexicon: lex,
@@ -11707,6 +11808,21 @@ function rewriteVocabOpener(line) {
   return null;
 }
 
+/** The ESL missing-"does" yes/no — "dog have tail?": subject + bare
+ *  have/has + object, question mark REQUIRED (the "?" is the whole signal;
+ *  without it the line is a declarative and belongs to the teach path).
+ *  Rewritten to the do-support form the possession readers already answer, so
+ *  the question is ANSWERED as the yes/no it is rather than merely refused at
+ *  the write boundary. Single/two-token sides, mirroring the teach shapes'
+ *  own subject width; articles tolerated on the object. */
+const ESL_MISSING_DOES_RE = /^([\w-]+(?:\s+[\w-]+)?)\s+(?:has|have)\s+(?:an?\s+|the\s+)?([\w-]+(?:\s+[\w-]+)?)\s*\?+$/i;
+function rewriteEslMissingDoes(line) {
+  const m = String(line || "").trim().match(ESL_MISSING_DOES_RE);
+  if (!m) return null;
+  if (QUESTION_LEAD_RE.test(m[1])) return null; // already do-supported ("does dog have tail?")
+  return `does ${m[1].trim()} have ${m[2].trim()}`;
+}
+
 /** A DISCONTIGUOUS verb frame, "SUBJECT uses OBJECT as its/a base(class)" —
  *  "uses" is split from its own qualifier ("as its base") around the object,
  *  so no contiguous phrase-table entry could ever register it, and "uses"
@@ -11845,7 +11961,12 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // The pronoun lead's own guard only spares the BARE "what is it", so this
   // shape has to stop existing before that match runs at all.
   const cleftRewrite = reverseCleftRewrite(frameLine);
-  const cleftLine = cleftRewrite || frameLine;
+  // The ESL missing-"does" yes/no ("dog have tail?") — rewritten to the
+  // do-support form here, once, before any dispatch lane sees it, so the
+  // question is answered by the possession readers instead of walling (the
+  // write boundary's own "?" gates already refuse to store it).
+  const eslRewrite = rewriteEslMissingDoes(cleftRewrite || frameLine);
+  const cleftLine = eslRewrite || cleftRewrite || frameLine;
   // VOCABULARY pronoun antecedent — "what is a dog" then "can it bark". The
   // code-graph focus mechanism only ever binds {id,label} GRAPH entities, so
   // in a vocabulary conversation "it" resolved to nothing and the question
@@ -11883,7 +12004,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     // indirect-request wrapper stripped and/or the discontiguous-frame
     // rewrite applied) — restore the ORIGINAL raw `line` into record.query
     // and the logged transcript echo here, once, centrally.
-    if (indirectMatch || baseFrameRewrite || vocabAntecedent) {
+    if (indirectMatch || baseFrameRewrite || vocabAntecedent || eslRewrite) {
       if (finished.record) finished.record.query = line;
       if (Array.isArray(finished.logLines) && finished.logLines.length > 1) finished.logLines[1] = `> ${line}`;
     }
