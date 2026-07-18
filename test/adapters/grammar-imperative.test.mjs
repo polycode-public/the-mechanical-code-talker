@@ -107,3 +107,20 @@ test("a bounded fuzzy pre-pass repairs a typo'd verb or direction and names the 
   });
   assert.equal(parse("go sideways"), null, "a direction two edits away is still an honest miss, not a guess");
 });
+
+test("the fuzzy pre-pass also repairs a typo on a VERB_SYNONYMS word, including a multi-word idiom's own lead word", () => {
+  // playtests/PLAYTEST_LOG_007.md: a typo'd synonym previously had nothing to
+  // fuzzy-match against (the candidate pool held only canonical verb targets,
+  // never the synonym surface words themselves), so it fell all the way
+  // through to a generic conversational miss instead of an honest per-room
+  // decline.
+  assert.deepEqual(parse("pikc the lamp"), {
+    pattern: "imperative", verb: "take", object: "lamp", residue: [], corrected: [{ from: "pikc", to: "pick" }],
+  });
+  assert.deepEqual(parse("hav a look at the desk"), {
+    pattern: "imperative", verb: "examine", object: "desk", residue: [], corrected: [{ from: "hav", to: "have" }],
+  });
+  assert.deepEqual(parse("chekc out the desk"), {
+    pattern: "imperative", verb: "examine", object: "desk", residue: [], corrected: [{ from: "chekc", to: "check" }],
+  });
+});

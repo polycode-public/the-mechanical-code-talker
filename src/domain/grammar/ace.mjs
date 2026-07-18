@@ -502,7 +502,15 @@ const VERB_SYNONYMS = new Map([
 // consumed whole before any shorter prefix inside it gets a chance to match.
 const VERB_SYNONYM_MAX_PREFIX = Math.max(...[...VERB_SYNONYMS.keys()].map((k) => k.split(" ").length));
 
-const VERB_FUZZY_CANDIDATES = [...new Set([...IMPERATIVE_VERBS, ...VERB_SYNONYMS.values()])];
+// Every leading SURFACE word the exact tiers below recognise as the start of
+// a command: a bare IMPERATIVE_VERBS word, or the first token of any
+// VERB_SYNONYMS key (single- or multi-word alike — "pick", "have", "chat" are
+// each only ever a key's own first word, never a key on their own, so they'd
+// otherwise have nothing to fuzzy-repair a typo onto). Corrects the SURFACE
+// word, not the canonical verb, so the existing exact-match tiers below (in
+// particular the multi-word prefix loop) still resolve the rest of the phrase
+// after repair — "hav a look at" -> "have a look at" -> examine, not just "look".
+const VERB_SURFACE_WORDS = [...new Set([...IMPERATIVE_VERBS, ...[...VERB_SYNONYMS.keys()].map((k) => k.split(" ")[0])])];
 const IMPERATIVE_FUZZY_BOUND = 1; // this project's existing distance-1 tolerance elsewhere (interpret/fuzzy.mjs)
 
 // A small, hand-checked exemption (same idiom as this file's own
@@ -513,29 +521,46 @@ const IMPERATIVE_FUZZY_BOUND = 1; // this project's existing distance-1 toleranc
 // Checked against this repo's own WordNet corpus, not guessed.
 const NEVER_FUZZY_VERB = new Set(["walk", "wake", "make"]);
 
-/** Resolve the leading verb token(s) to a canonical, recognised verb: the
- *  2-token VERB_SYNONYMS prefix FIRST (so "talk to"/"look at" resolve as
- *  themselves rather than as the bare exact verbs "talk"/"look" they'd
- *  otherwise short-circuit on, leaving their "to"/"at" stranded in the object
- *  phrase), then an exact IMPERATIVE_VERBS match, then the 1-token
- *  VERB_SYNONYMS form, then a bounded fuzzy typo repair against the same
- *  vocabulary. `consumed` is how many leading tokens the match ate (1, or 2
- *  for a two-word synonym phrase); `corrected` is non-null only for the
- *  fuzzy tier. Null when nothing at all recognises the leading token(s). */
-function resolveImperativeVerb(toks) {
+/** The three deterministic (non-fuzzy) tiers: a 2+-token VERB_SYNONYMS prefix
+ *  FIRST (so "talk to"/"look at" resolve as themselves rather than as the
+ *  bare exact verbs "talk"/"look" they'd otherwise short-circuit on, leaving
+ *  their "to"/"at" stranded in the object phrase), then an exact
+ *  IMPERATIVE_VERBS match, then the 1-token VERB_SYNONYMS form. `consumed` is
+ *  how many leading tokens the match ate. Null when none of the three match. */
+function exactImperativeVerb(toks) {
   const first = toks[0].toLowerCase();
   const lower = toks.map((t) => t.toLowerCase());
   for (let n = Math.min(VERB_SYNONYM_MAX_PREFIX, toks.length); n >= 2; n -= 1) {
     const hit = VERB_SYNONYMS.get(lower.slice(0, n).join(" "));
-    if (hit) return { verb: hit, consumed: n, corrected: null };
+    if (hit) return { verb: hit, consumed: n };
   }
-  if (IMPERATIVE_VERBS.has(first)) return { verb: first, consumed: 1, corrected: null };
+  if (IMPERATIVE_VERBS.has(first)) return { verb: first, consumed: 1 };
   const oneHit = VERB_SYNONYMS.get(first);
-  if (oneHit) return { verb: oneHit, consumed: 1, corrected: null };
-  if (NEVER_FUZZY_VERB.has(first)) return null;
-  const fuzzyHit = fuzzyMatchInSet(first, VERB_FUZZY_CANDIDATES, IMPERATIVE_FUZZY_BOUND);
-  if (fuzzyHit) return { verb: fuzzyHit, consumed: 1, corrected: { from: first, to: fuzzyHit } };
+  if (oneHit) return { verb: oneHit, consumed: 1 };
   return null;
+}
+
+/** Resolve the leading verb token(s) to a canonical, recognised verb: the
+ *  three exact tiers above, failing that a bounded fuzzy TYPO repair
+ *  (distance <= 1, via the existing interpret/fuzzy.mjs matcher) of the
+ *  leading token against every recognised surface word, single- or
+ *  multi-word idiom alike, then the exact tiers retried against the
+ *  corrected token — so a typo'd idiom lead word ("hav a look at") is
+ *  repaired to its real word first ("have a look at") and still resolves the
+ *  whole idiom, not just a bare-verb guess. Only the fuzzy tier is a
+ *  correction of an ERROR rather than a recognised alternate wording, so only
+ *  it is reported back on the command (`corrected`) for the caller to name in
+ *  its response — a synonym executes silently, a typo fix does not. */
+function resolveImperativeVerb(toks) {
+  const exact = exactImperativeVerb(toks);
+  if (exact) return { ...exact, corrected: null };
+  const first = toks[0].toLowerCase();
+  if (NEVER_FUZZY_VERB.has(first)) return null;
+  const fixedFirst = fuzzyMatchInSet(first, VERB_SURFACE_WORDS, IMPERATIVE_FUZZY_BOUND);
+  if (!fixedFirst) return null;
+  const retried = exactImperativeVerb([fixedFirst, ...toks.slice(1)]);
+  if (!retried) return null;
+  return { ...retried, corrected: { from: first, to: fixedFirst } };
 }
 
 /** Resolve one imperative object phrase to its bare lexicon term. */
