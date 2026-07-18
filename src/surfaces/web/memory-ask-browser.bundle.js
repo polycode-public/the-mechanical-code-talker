@@ -21619,10 +21619,11 @@ ${codeblock}`, options);
   });
 
   // src/domain/grammar/ace.mjs
-  var PATTERN_SUB_CLASS_OF, PATTERN_TYPE_ASSERTION, PATTERN_RELATION, PATTERN_SOME_VALUES_FROM, PATTERN_CARDINALITY, PATTERN_DISJOINT_WITH, PATTERN_POSSESSIVE, PATTERN_ADJECTIVE, PATTERN_CAPABILITY, PATTERNS;
+  var PATTERN_SUB_CLASS_OF, PATTERN_TYPE_ASSERTION, PATTERN_RELATION, PATTERN_SOME_VALUES_FROM, PATTERN_CARDINALITY, PATTERN_DISJOINT_WITH, PATTERN_POSSESSIVE, PATTERN_ADJECTIVE, PATTERN_CAPABILITY, PATTERNS, IMPERATIVE_VERBS, VERB_SYNONYMS, VERB_FUZZY_CANDIDATES;
   var init_ace2 = __esm({
     "src/domain/grammar/ace.mjs"() {
       init_lexicon();
+      init_fuzzy();
       PATTERN_SUB_CLASS_OF = "subClassOf";
       PATTERN_TYPE_ASSERTION = "typeAssertion";
       PATTERN_RELATION = "relation";
@@ -21643,6 +21644,25 @@ ${codeblock}`, options);
         PATTERN_ADJECTIVE,
         PATTERN_CAPABILITY
       ]);
+      IMPERATIVE_VERBS = /* @__PURE__ */ new Set(["go", "take", "drop", "open", "unlock", "close", "give", "look", "talk", "examine"]);
+      VERB_SYNONYMS = /* @__PURE__ */ new Map([
+        ["pick up", "take"],
+        ["pick", "take"],
+        ["grab", "take"],
+        ["put down", "drop"],
+        ["set down", "drop"],
+        ["leave", "drop"],
+        ["talk to", "talk"],
+        ["speak to", "talk"],
+        ["speak with", "talk"],
+        ["talk", "talk"],
+        ["speak", "talk"],
+        ["look at", "examine"],
+        ["examine", "examine"],
+        ["inspect", "examine"],
+        ["shut", "close"]
+      ]);
+      VERB_FUZZY_CANDIDATES = [.../* @__PURE__ */ new Set([...IMPERATIVE_VERBS, ...VERB_SYNONYMS.values()])];
     }
   });
 
