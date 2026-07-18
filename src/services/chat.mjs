@@ -2784,8 +2784,12 @@ const GENERAL_VERB_DETERMINER_TEACH_RE = new RegExp(
 /** The quantified possession teach ("every dog has fur", "all dogs have
  *  tails") — the closed has/have verb pins the split the way the preposition
  *  pins GENERAL_VERB_DETERMINER_TEACH_RE's, so a universal quantifier can
- *  lead without any verb-position guessing. */
-const QUANTIFIED_HAS_TEACH_RE = /^(?:every|each|all)\s+([\w'-]+)\s+(?:has|have)\s+(.+?)[.!?]*$/i;
+ *  lead without any verb-position guessing. The quantifier is captured:
+ *  "every"/"each" take a grammatically SINGULAR noun, so only "all" folds
+ *  the plural — the naive fold clipped an s-final singular ("every lens" was
+ *  stored, and cited, as "len"). */
+const QUANTIFIED_HAS_TEACH_RE = /^(every|each|all)\s+([\w'-]+)\s+(?:has|have)\s+(.+?)[.!?]*$/i;
+const quantifiedHasSubject = (m) => (/^all$/i.test(m[1]) ? singularizeSurface(m[2]) : m[2]);
 /** Verbs owned by an earlier, more specific recognizer in this lane — is/are
  *  (class-membership/property, above) and owns/maintains (ownership, above).
  *  generalVerbTeach declines outright on these so it can never race a more
@@ -2932,9 +2936,9 @@ async function generalVerbTeach(payload) {
   if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw)) {
     const quantHas = p.match(QUANTIFIED_HAS_TEACH_RE);
     if (quantHas) {
-      subjectRaw = singularizeSurface(quantHas[1]);
+      subjectRaw = quantifiedHasSubject(quantHas);
       verbRaw = "has";
-      objectRaw = quantHas[2];
+      objectRaw = quantHas[3];
     } else {
       const det = p.match(GENERAL_VERB_DETERMINER_TEACH_RE);
       if (!det) return null; // not a bare-name subject, and no preposition to pin the verb
@@ -3341,6 +3345,12 @@ const BOARD_TEACH_LOCATIVE_RE = new RegExp(`^([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_S
  *  RETRACT_FORGET_RE: a plain minted mgx:<verb>-<prep> fact has no entailment
  *  cascade, so removing the one row IS the retraction. */
 const RETRACT_FORGET_LOCATIVE_RE = new RegExp(`^forget\\s+(?:that\\s+)?([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
+
+/** The closed related-to pair — "X relates to Y" / "X is related to Y" —
+ *  minted onto mgx:relatedTo (the SKOS view's skos:related source), so the
+ *  synonym/related lane has a teach phrasing. Single-token subject, 1–2
+ *  token object, articles tolerated on both. */
+const RELATED_TO_TEACH_RE = /^(?:a\s+|an\s+|the\s+)?([\w-]+)\s+(?:relates\s+to|is\s+related\s+to)\s+(?:a\s+|an\s+|the\s+)?([\w-]+(?:\s+[\w-]+)?)$/i;
 
 /** NEGATIVE UNIVERSAL — "no X is a Y" / "no Xs are Ys": a class-level
  *  exclusion, stored as `X owl:disjointWith Y` on the RESOLVED class pair.
@@ -3778,6 +3788,19 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     if (stored) return stored;
   }
 
+  // RELATED-TO — the closed pair "X relates to Y" / "X is related to Y"
+  // maps onto mgx:relatedTo, the SAME predicate the SKOS view reads as
+  // skos:related — giving the synonym/related lane its natural teach
+  // phrasing. Without this the general-verb mint stored a preposition-glued
+  // object ("cat mgx:relate 'to milk'") no reader could ever match.
+  const relatedTo = ownSrc.match(RELATED_TO_TEACH_RE);
+  if (relatedTo && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion) {
+    const stored = await teachFact(memoryDir, sessionId, {
+      subject: relatedTo[1], predicate: "mgx:relatedTo", object: relatedTo[2],
+    });
+    if (stored) return stored;
+  }
+
   // RELATIONAL FACT — "<Name> is the <role> of <Name>". Grouped with the
   // other relational/possessive teach shapes just above (both ownership
   // forms), tried on the SAME ownSrc, unconditionally
@@ -4193,8 +4216,12 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     const detLed = raw.match(GENERAL_VERB_DETERMINER_TEACH_RE);
     const quantHasLed = detLed ? null : raw.match(QUANTIFIED_HAS_TEACH_RE);
     const subjectWord = detLed ? detLed[1].split(/\s+/).pop()
-      : (quantHasLed ? singularizeSurface(quantHasLed[1]) : raw.match(/^([\w'-]+)/)?.[1]);
-    if (subjectWord && (await subjectIsNounOrPropn(subjectWord))) {
+      : (quantHasLed ? quantifiedHasSubject(quantHasLed) : raw.match(/^([\w'-]+)/)?.[1]);
+    // The quantifier lead ("every … has …") is itself a strong declarative
+    // signal, so it overrides the single-token POS gate: a noun that doubles
+    // as a verb ("every overbid has a gouger" — wink tags "overbid" VERB)
+    // used to be a SILENT no-op and a later miss.
+    if (subjectWord && (quantHasLed || (await subjectIsNounOrPropn(subjectWord)))) {
       // A PLURAL explicit-capability surface ("wrens can hum") whose
       // SINGULAR is a grounded term stores under the singular first — the
       // spelling the grounding fact and every query-side variant fold use —
@@ -11800,7 +11827,7 @@ function morePage(query, { last, focus }) {
 // the generic parse, which reads these phrasings as something else entirely.
 // A term that mints no concept — unknown, or with no synonym/related facts —
 // misses honestly, naming the term, never a guessed neighbour.
-const SKOS_SYNONYM_RE = /^(?:another\s+word\s+for|other\s+words\s+for|synonyms?\s+(?:of|for)|what\s+is\s+a\s+synonym\s+(?:of|for))\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
+const SKOS_SYNONYM_RE = /^(?:(?:what\s+is|whats)\s+another\s+word\s+for|(?:got\s+|are\s+there\s+)?any\s+(?:other\s+)?words?\s+like|(?:other\s+)?words\s+like|another\s+word\s+for|other\s+words\s+for|synonyms?\s+(?:of|for)|what\s+is\s+a\s+synonym\s+(?:of|for))\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
 const SKOS_RELATED_RE = /^(?:what\s+is\s+related\s+to|what\s+relates\s+to|what\s+words\s+are\s+related\s+to)\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
 
 /** The SKOS-view answer for a synonym/related question, or null when the
@@ -12106,6 +12133,26 @@ function rewriteEslMissingDoes(line) {
   return `does ${m[1].trim()} have ${m[2].trim()}`;
 }
 
+/** The NEGATIVE-POLARITY opener — "I don't suppose X imports anything": a
+ *  politeness implicature meaning the question underneath. The one wrapper
+ *  the desire/wrapper stripper family didn't peel; unpeeled it reads as a
+ *  first-person declarative and lands on the pronoun-subject lecture. The
+ *  anything-form folds straight to the open question; an interrogative-led
+ *  remainder unwraps to itself; anything else stays untouched (never a
+ *  guessed reading). */
+const NEG_POLARITY_OPENER_RE = /^i\s+(?:do\s+not|don'?t)\s+suppose\s+(?:that\s+)?(.+?)[?.!\s]*$/i;
+function rewriteNegativePolarityOpener(line) {
+  const m = String(line || "").trim().match(NEG_POLARITY_OPENER_RE);
+  if (!m) return null;
+  const rest = m[1].trim();
+  const anyForm = rest.match(/^(.+?)\s+([a-z]+)s\s+(?:anything|something)(?:\s+else)?$/i);
+  if (anyForm && VERB_TO_KIND[`${anyForm[2].toLowerCase()}s`]) {
+    return `what does ${anyForm[1].trim()} ${anyForm[2].toLowerCase()}`;
+  }
+  if (QUESTION_LEAD_RE.test(rest)) return rest;
+  return null;
+}
+
 /** A DISCONTIGUOUS verb frame, "SUBJECT uses OBJECT as its/a base(class)" —
  *  "uses" is split from its own qualifier ("as its base") around the object,
  *  so no contiguous phrase-table entry could ever register it, and "uses"
@@ -12248,7 +12295,8 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // do-support form here, once, before any dispatch lane sees it, so the
   // question is answered by the possession readers instead of walling (the
   // write boundary's own "?" gates already refuse to store it).
-  const eslRewrite = rewriteEslMissingDoes(cleftRewrite || frameLine);
+  const eslRewrite = rewriteEslMissingDoes(cleftRewrite || frameLine)
+    || rewriteNegativePolarityOpener(cleftRewrite || frameLine);
   const cleftLine = eslRewrite || cleftRewrite || frameLine;
   // VOCABULARY pronoun antecedent — "what is a dog" then "can it bark". The
   // code-graph focus mechanism only ever binds {id,label} GRAPH entities, so
