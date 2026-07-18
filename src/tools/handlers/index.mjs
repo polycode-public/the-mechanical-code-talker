@@ -14,6 +14,7 @@ import { tmct_impact } from "./tmct-impact.mjs";
 import { tmct_search } from "./tmct-search.mjs";
 import { tmct_members } from "./tmct-members.mjs";
 import { tmct_subclasses } from "./tmct-subclasses.mjs";
+import { tmct_related } from "./tmct-related.mjs";
 import { tmct_architecture } from "./tmct-architecture.mjs";
 import { tmct_exports } from "./tmct-exports.mjs";
 import { tmct_untested } from "./tmct-untested.mjs";
@@ -38,6 +39,7 @@ export const HANDLERS = Object.freeze({
   tmct_search,
   tmct_members,
   tmct_subclasses,
+  tmct_related,
   tmct_architecture,
   tmct_exports,
   tmct_untested,

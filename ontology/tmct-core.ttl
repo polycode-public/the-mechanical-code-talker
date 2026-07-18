@@ -724,7 +724,8 @@ mgx:receivesAction a owl:ObjectProperty ;
 mgx:relatedTo a owl:ObjectProperty ;
   rdfs:label "relatedTo" ;
   rdfs:seeAlso cn:RelatedTo ;
-  rdfs:comment "Corpus relation, mirrored from ConceptNet /r/RelatedTo: \"{start} is related to {end}\"." .
+  rdfs:seeAlso skos:related ;
+  rdfs:comment "Corpus relation, mirrored from ConceptNet /r/RelatedTo: \"{start} is related to {end}\". Read as skos:related by the derived concept view (src/domain/skos-view.mjs), which mints the skos:Concept identity the bare stored strings lack; seeAlso, not subPropertyOf, because the property's stored domain/range are plain strings, not skos:Concept." .
 
 mgx:similarTo a owl:ObjectProperty ;
   rdfs:label "similarTo" ;

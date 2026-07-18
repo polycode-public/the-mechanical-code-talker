@@ -351,6 +351,14 @@ test("every corpus relation mirrored from ConceptNet cites the relation it mirro
   }
 });
 
+test("the corpus-to-SKOS bridge is annotated: mgx:relatedTo points at skos:related", async () => {
+  const text = await readFile(TTL_FILE, "utf8");
+  assert.ok(
+    /^mgx:relatedTo a owl:[^.]*?rdfs:seeAlso skos:related\s*[;.]/ms.test(text),
+    "mgx:relatedTo cites skos:related (the derived concept view reads it as that relation)",
+  );
+});
+
 test("the ontology grounds the grammar: every emitted kind appears, and lexicon predicates/classes are declared", async () => {
   const text = await readFile(TTL_FILE, "utf8");
   for (const kind of ["rdfs:subClassOf", "rdf:type", "owl:ObjectProperty", "owl:DatatypeProperty", "owl:someValuesFrom", "owl:minCardinality", "owl:maxCardinality", "owl:cardinality", "owl:disjointWith", "owl:hasValue", "owl:intersectionOf", "owl:onProperty", "owl:onClass", "owl:Restriction"]) {

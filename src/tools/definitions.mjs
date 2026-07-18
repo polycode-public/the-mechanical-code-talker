@@ -181,6 +181,19 @@ export const TOOL_DEFINITIONS = Object.freeze([
     example: { class: "Field" },
   },
   {
+    name: "tmct_related",
+    tier: "cold",
+    summary: "A term's synonyms (skos:altLabel) and related concepts (skos:related), from the memory graph's relation facts.",
+    inputSchema: {
+      type: "object",
+      required: ["term"],
+      properties: {
+        term: { type: "string", description: "The term whose synonyms / related concepts you want." },
+      },
+    },
+    example: { term: "sofa" },
+  },
+  {
     name: "tmct_architecture",
     tier: "cold",
     summary: "Package/module map + the most-imported hub modules (optionally scoped to a package).",

@@ -766,6 +766,13 @@ and pass on the current tree (where the three emitted props are now declared in 
 
 ## 13. Build the SKOS consumer surface (§7.6)
 
+**Status: module + tool DELIVERED; the chat lane rides the chat track.** `buildSkosConceptView`
+now lives in `src/domain/skos-view.mjs` (with a `relatedForTerm` neighbourhood helper) and the 9
+proof assertions import it; `tmct_related` is defined, registered and served by `dispatchTool`,
+with positive and honest-miss tests in `test/tools/tmct-related.test.mjs`; `mgx:relatedTo` now
+cites `skos:related` in the ontology, pinned. The `what is related to X` chat lane and its corpus
+rows land with the chat.mjs work.
+
 `buildSkosConceptView` mints one `skos:Concept` per normalised corpus term, folds `mgx:synonym` to
 `skos:altLabel`, and reads `mgx:relatedTo`/`mgx:similarTo` as `skos:related`. It is proven and pinned
 (9 assertions) but lives **inside** `test/adapters/skos-concept-identity.test.mjs:32` and nothing in
