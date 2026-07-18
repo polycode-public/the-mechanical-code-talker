@@ -35,8 +35,6 @@ delivered plan docs; each records what its delivery deliberately did not include
 
 - `PLAN_TOOL_LADDER_UPLIFT.md` owns the TOOL-7 observe-and-replan branch and the TOOL-8
   tied-candidate composer (design work; the bench cases exist and fail honestly).
-- The resolver has no NL path into the memory graph (`tmct_related` is registered but tagged
-  `NOT_NL_REACHABLE`) — the routing horizon its agentbench case note records.
 - Adventure horizons (`archive/PLAN_ADVENTURE.md`): open/unlock/close ship signature-only
   families — the shipped precond/effect rule shapes can't express exit-adjacency, lock state,
   hidden contents, instrument preconditions or boolean effects, so those ride world facts checked

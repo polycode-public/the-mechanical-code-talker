@@ -165,11 +165,10 @@ test("resolver: imperative frames fill what the grammar + command register miss 
 
 // ---- widened imperative reach + tmct_calls reachability -----------------------
 
-test("imperative reach: tmct_calls is NL-reachable via a dedicated edge-dump frame; only the memory-graph SKOS view stays tagged", async () => {
-  // every code-graph capability is reachable; the one standing tag is
-  // tmct_related, whose binding lives in the memory graph the resolver's
-  // code-graph binding oracle does not read.
-  assert.deepEqual(Object.keys(NOT_NL_REACHABLE), ["tmct_related"], "tmct_related is the only tagged capability");
+test("imperative reach: tmct_calls is NL-reachable via a dedicated edge-dump frame; NOT_NL_REACHABLE is empty", async () => {
+  // every registered capability is reachable now — tmct_related closed the
+  // last gap via the synonym/related frame + resolveMemoryTerm (below).
+  assert.deepEqual(Object.keys(NOT_NL_REACHABLE), [], "no capability is tagged not-NL-reachable");
   assert.ok(reachableCapabilityNames().has("tmct_calls"), "tmct_calls is reachable via a frame");
   assert.equal(backwardChain("calls").name, "tmct_calls", "the 'calls' topic backward-chains to tmct_calls");
 
@@ -185,6 +184,26 @@ test("imperative reach: tmct_calls is NL-reachable via a dedicated edge-dump fra
   // the relational 'what does X call' STILL routes to callees (no collision).
   const callees = await resolveOne("what does Widget.render call", ["tmct_calls", "tmct_callees"], ctx);
   assert.equal(callees.selected.name, "tmct_callees");
+});
+
+test("resolver: the synonym/related frame reaches tmct_related via resolveMemoryTerm (the memory-graph binding oracle), across held-out phrasings", async () => {
+  assert.ok(reachableCapabilityNames().has("tmct_related"), "tmct_related is reachable via the synonym/related frame");
+  const ctx = SHARED.ctx; // seeds MEMORY_FIXTURE: couch synonym sofa, sofa relatedTo cushion
+  for (const q of ["another word for sofa", "a synonym for sofa", "synonyms of sofa", "what's related to sofa"]) {
+    const r = await resolveOne(q, ["tmct_related"], ctx);
+    assert.ok(!r.refused, `${q}: ${r.reason}`);
+    assert.equal(r.selected.name, "tmct_related", q);
+    assert.deepEqual(r.selected.input, { term: "sofa" }, q);
+    assert.ok(r.proof.some((s) => s.pred === "cap:memory-facts" && s.ok), `${q}: proof carries the memory-facts precondition`);
+  }
+});
+
+test("resolver: a term the memory graph holds no synonym/related facts for stays an honest refuse, never a guess", async () => {
+  const ctx = SHARED.ctx;
+  const r = await resolveOne("another word for zzznotaterm", ["tmct_related"], ctx);
+  assert.equal(r.refused, true);
+  assert.deepEqual(r.selected, null);
+  assert.match(r.reason, /no synonym\/related facts/);
 });
 
 test("imperative reach: a bare imperative the grammar+command register both miss ('explain X') binds via the description frame", async () => {

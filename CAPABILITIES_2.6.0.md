@@ -410,8 +410,6 @@ commitment; each checked against the tree as not-yet-shipped.
   (`BENCHMARK_INFERENCE_2.6.0.md`).
 - **A deeper property-inheritance lift** — flips the 5 `grandparent` ceiling rows.
 - **The EL and DL stages** (`PLAN_SYLLOGIST_EL_DL.md`) — flip the 26 INF-7/INF-8 horizon rows.
-- **Register `tmct_related` or list it in `EXCLUDED_FROM_REGISTRY`**, add a memory-fixture seam to
-  the agentbench context, then author the positive SKOS rung case (backlog 5; row 155's caveat).
 - **The quantified-has teach's two edges** — a verb-tagged subject declines silently; an s-final
   subject clips to "len" in citations (`BENCHMARK_INFERENCE_2.6.0.md` backlog 1-2).
 - **Teach-path predicate minting for prepositional verbs** ("cat relates to milk" stores

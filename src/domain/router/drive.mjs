@@ -19,7 +19,7 @@
 // grounds is an honest refuse, the same "grounded or an honest miss" contract
 // as every other tmct answer path.
 
-import { resolveOne, backwardChainWorld } from "./resolver.mjs";
+import { resolveOne, backwardChainWorld, resolveMemoryTerm } from "./resolver.mjs";
 import { plan, isMultiStep, decompose, MAX_STEPS } from "./planner.mjs";
 import { goalReason } from "./goal-reasoner.mjs";
 import { capabilities } from "./registry.mjs";
@@ -266,7 +266,11 @@ export async function runCapabilityPlan(request, tools, ctx) {
  *  an already-registered name is skipped) and runTaughtPlan simulates over the
  *  same store, re-reading it per request via ctx.readTaughtStore. The new
  *  registrations' unregister disposers ride the ctx as `ctx.disposers`; the
- *  caller runs them when the ctx is done. */
+ *  caller runs them when the ctx is done. The same `memoryDir` also opens
+ *  `ctx.resolveMemoryTerm` — resolveOne's binding oracle for a memoryTerm slot
+ *  (tmct_related's `term`), re-reading the store's fact rows per request
+ *  through resolveMemoryTerm (resolver.mjs), the memory-graph sibling of
+ *  `resolve` above. */
 export async function buildCapabilityPlanCtx({
   config, source, tel = null, graph = null, memoryDir = null,
   dispatchTool, isToolError = () => false, selectTool = null,
@@ -294,6 +298,7 @@ export async function buildCapabilityPlanCtx({
       const memory = await loadMemory(memoryDir);
       return { factRows: readFactRows(memory), ruleRows: readRuleRows(memory) };
     };
+    ctx.resolveMemoryTerm = async (term) => resolveMemoryTerm(readFactRows(await loadMemory(memoryDir)), term);
     ctx.disposers = registerTaughtActions(readRuleRows(await loadMemory(memoryDir)));
   }
   return ctx;

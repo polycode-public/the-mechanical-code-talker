@@ -31,10 +31,12 @@ import { shimDriver } from "./driver-shim.mjs";
 import { resolverDriver } from "./driver-resolver.mjs";
 import { goalDriver } from "./driver-goal.mjs";
 import { capabilityByName } from "../src/domain/router/registry.mjs";
+import { resolveMemoryTerm } from "../src/domain/router/resolver.mjs";
 import { resolveObject } from "../src/domain/ask.mjs";
 import { parseEntities } from "../src/domain/codegraph.mjs";
 import { resultSetOf } from "./results.mjs";
 import { ingestSchemaDocs } from "../src/tools/schema-docs.mjs";
+import { loadMemory, readFactRows } from "../src/adapters/memory/core.mjs";
 
 // The pluggable drivers, selectable with --driver. `stub` is the STUB-DRIVER
 // FLOOR (default); `shim` is the SHIM-TRANSPORT interface floor (server-http.mjs
@@ -119,7 +121,8 @@ export const MEMORY_FIXTURE = Object.freeze({
  *  to a throwaway .tmct/graph.json (mirroring chatbench's createRunnerDeps and a
  *  real graph writer's pipeline) so the REAL dispatchTool can resolve entities,
  *  plus a seeded .tmct/memory/graph.json (MEMORY_FIXTURE) so the memory-graph
- *  capability (tmct_related) can ground a positive case.
+ *  capability (tmct_related) can ground a positive case — routed by the
+ *  resolver/goal drivers too, via ctx.resolveMemoryTerm, not only the stub floor.
  *  Returns { ctx, cleanup } — the caller MUST await cleanup(). */
 export async function createRunCtx() {
   const { dispatchTool } = await import(join(ROOT, "src", "tools", "server.mjs"));
@@ -169,7 +172,14 @@ export async function createRunCtx() {
     }
   };
 
-  const ctx = { dispatch, resolve, graph, capabilityByName, config, selectTool };
+  // resolveMemoryTerm(): the driver's MEMORY-graph binding oracle, the sibling
+  // of resolve() above — reads the seeded MEMORY_FIXTURE (via the same
+  // dirname(dirname(graphFile)) derivation memoryFactRows/tmct_related use) so
+  // a memoryTerm frame pick (tmct_related's `term`) can ground.
+  const resolveMemoryTermCtx = async (term) =>
+    resolveMemoryTerm(readFactRows(await loadMemory(dirname(dirname(config.graphFile)))), term);
+
+  const ctx = { dispatch, resolve, resolveMemoryTerm: resolveMemoryTermCtx, graph, capabilityByName, config, selectTool };
   return { ctx, cleanup: () => rm(dir, { recursive: true, force: true }) };
 }
 
