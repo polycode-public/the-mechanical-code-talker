@@ -1,6 +1,8 @@
 # PLAN_ADVENTURE_ROUTING.md — route Ashcombe Hall's dead ends to a useful action
 
-Status: RESEARCH/DESIGN — not yet implemented. Nothing in this document is live code.
+Status: DELIVERED — all 5 build-plan phases landed in `src/domain/grammar/ace.mjs` and
+`src/services/adventure.mjs`, with regression coverage in `test/adapters/grammar-imperative.test.mjs`,
+`test/services/adventure.test.mjs` and the `games/adventure` corpus lane. Candidate for `archive/`.
 
 ## Origin
 
