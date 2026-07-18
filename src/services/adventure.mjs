@@ -474,7 +474,12 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
 
   if (cmd.verb === "examine" || cmd.verb === "talk") {
     const object = cmd.object;
-    if (visibleRoomOf(object, { rows, state }) !== here) {
+    // A carried object has no room to be "visible in" (visibleRoomOf returns
+    // null for anything held by the player) — examine still applies to it,
+    // the same way "what am I carrying" already reads inventory contents.
+    // talk has no carried exception: NPCs are never portable.
+    const carried = cmd.verb === "examine" && carriedByPlayer(state, object);
+    if (!carried && visibleRoomOf(object, { rows, state }) !== here) {
       return answer(
         `I don't see a ${object} here.`,
         noteFor(`${cmd.verb} — ${object} isn't visible in the ${here}; declined, hidden things stay hidden`),
