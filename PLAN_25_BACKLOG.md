@@ -446,6 +446,11 @@ candidates, so the guard narrows nothing legitimate.
 
 ## 6. The board-read misroute and the goal-frame gaps (F10, F27-F29)
 
+**DELIVERED** — board reads gain `where does <piece> <verb>` and `where is every <class>` (F10);
+the goal frame gains the bare-NP, `stack …` imperative and conjunction voicings, with conjuncts
+compiling one atom each (F27); an unpositioned goal piece is flagged with the plan (F28); an
+untaught goal term declines by name before any search (F29). 4 keyed rows in `planning.jsonl`.
+
 ### 6.1 `where does disk-1 rest?` routes to the code locator (F10)
 
 **Reproducer** (a planning board is loaded):

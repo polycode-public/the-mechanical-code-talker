@@ -2151,7 +2151,17 @@ const PLAN_NEXT_RE = /^(?:next|next\s+move|go\s+on|continue)[.!?\s]*$/i;
 // class term, the preposition and the target — the caller singularizes the
 // term and normalizes "onto"→"on" before the same verbless resolution runs.
 const GOAL_TEACH_IMPERATIVE_RE = new RegExp(
-  `^(?:get|put|place)\\s+(?:(every|each|all|both)\\s+)?(?:the\\s+)?([\\w-]+?)\\s+(${PREP_SRC})\\s+([\\w-]+)[?.!]*$`, "i");
+  `^(?:get|put|place|stack)\\s+(?:(every|each|all|both)\\s+)?(?:the\\s+)?([\\w-]+?)\\s+(${PREP_SRC})\\s+([\\w-]+)[?.!]*$`, "i");
+// The bare-NP voicing of the same goal ("the goal is all disks on peg-c") —
+// no "that", no "for", no verb. Folds into the verbless resolution exactly
+// like the imperative above (same captures, same singularize/prep fold).
+const GOAL_TEACH_NP_RE = new RegExp(
+  `^the\\s+goal\\s+is\\s+(?:(every|each|all|both)\\s+)?(?:the\\s+)?([\\w-]+?)\\s+(${PREP_SRC})\\s+([\\w-]+)[?.!]*$`, "i");
+// A conjunction of goal atoms ("the goal is that disk-1 rests on peg-b and
+// disk-3 rests on peg-c") — each conjunct compiles to its own goal spec.
+const GOAL_TEACH_CONJUNCTION_RE = /^the\s+goal\s+is\s+that\s+(.+?)[.!?]*$/i;
+const GOAL_CONJUNCT_RE = new RegExp(
+  `^(?:(every|each|all)\\s+)?([\\w-]+)\\s+([a-z]+s)\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
 // Plan follow-up questions, answered off the ACTIVE plan state (never invented
 // when no plan stands). "next move"/"continue" EXECUTE (PLAN_NEXT_RE above); these
 // three only REPORT.
@@ -2168,6 +2178,11 @@ const BOARD_REVERSE_LOC_RE = new RegExp(
 const BOARD_FORWARD_LOC_RE = new RegExp(
   `^what\\s+(?:does|do|is)\\s+([\\w-]+)\\s+([a-z]+)(?:\\s+(${PREP_SRC}))?[?.!\\s]*$`, "i");
 const BOARD_WHERE_RE = /^(?:where\s+is|where's)\s+([\w-]+)(?:\s+now)?[?.!\s]*$/i;
+// "where does disk-1 rest?" — the verbed spelling of the same board read;
+// without it the phrasing fell through to the code definition-locator.
+const BOARD_WHERE_DOES_RE = /^where\s+does\s+([\w-]+)\s+([a-z]+)(?:\s+now)?[?.!\s]*$/i;
+// "where is every disk" — the same read over every member of a taught class.
+const BOARD_WHERE_EVERY_RE = /^where\s+(?:is|are)\s+(?:every|each|all(?:\s+the)?)\s+([\w-]+?)[?.!\s]*$/i;
 
 /** "<X> is <adjective>" — the property teach payload (wrapper-REQUIRED): a lazy
  *  subject and a single bare complement word. Never matches the "is a <noun>"
@@ -9266,15 +9281,28 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
   // the frame below once the store names the verb — same spec, same
   // confirmation, same fold as its verbed twin.
   let verblessGoal = goalMatch ? null : q.match(GOAL_TEACH_VERBLESS_RE);
-  // The imperative voicing ("get all the disks onto peg-c") folds into the same
-  // verbless resolution: singularize the class term ("disks"→"disk"), read the
+  // A conjunction of goal atoms ("the goal is that disk-1 rests on peg-b and
+  // disk-3 rests on peg-c") — every conjunct must compile, else the single-goal
+  // frames (and their honest declines) keep their turn.
+  let conjunctMatches = null;
+  if (!goalMatch && !verblessGoal) {
+    const conj = q.match(GOAL_TEACH_CONJUNCTION_RE);
+    if (conj && /\s+and\s+/i.test(conj[1])) {
+      const parts = conj[1].split(/\s+and\s+/i).map((p) => p.trim());
+      const matched = parts.map((p) => p.match(GOAL_CONJUNCT_RE));
+      if (parts.length > 1 && matched.every(Boolean)) conjunctMatches = matched;
+    }
+  }
+  // The imperative voicing ("get all the disks onto peg-c") and the bare-NP
+  // voicing ("the goal is all disks on peg-c") fold into the same verbless
+  // resolution: singularize the class term ("disks"→"disk"), read the
   // universal off the quantifier, and normalize the motion preposition to the
   // static one a location fact is stored under ("onto"→"on").
-  if (!goalMatch && !verblessGoal) {
-    const imperative = q.match(GOAL_TEACH_IMPERATIVE_RE);
-    if (imperative) {
-      const prep = { onto: "on", into: "in", upon: "on" }[imperative[3].toLowerCase()] ?? imperative[3].toLowerCase();
-      verblessGoal = [imperative[0], imperative[1] ? "every" : "", singularizeSurface(imperative[2]), prep, imperative[4]];
+  if (!goalMatch && !verblessGoal && !conjunctMatches) {
+    const bare = q.match(GOAL_TEACH_NP_RE) || q.match(GOAL_TEACH_IMPERATIVE_RE);
+    if (bare) {
+      const prep = { onto: "on", into: "in", upon: "on" }[bare[3].toLowerCase()] ?? bare[3].toLowerCase();
+      verblessGoal = [bare[0], bare[1] ? "every" : "", singularizeSurface(bare[2]), prep, bare[4]];
     }
   }
   if (verblessGoal) {
@@ -9297,29 +9325,35 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
     }
     goalMatch = [verblessGoal[0], verblessGoal[1], verblessGoal[2], verbs[0], verblessGoal[3], verblessGoal[4]];
   }
-  if (goalMatch) {
+  if (goalMatch || conjunctMatches) {
     const { normFactTerm } = await import("../adapters/memory/core.mjs");
-    const verb = await verbLemma(goalMatch[3]);
-    if (!verb) {
-      return {
-        text: `I can't reduce "${goalMatch[3]}" to a verb for that goal — try the plain form (e.g. "rests").`,
-        via: "plan", deduced: "record the goal state for a later plan", note: "GOAL frame — verb lemma unavailable, honest decline",
-      };
+    const items = conjunctMatches ?? [goalMatch];
+    const specs = [];
+    const tails = [];
+    for (const m of items) {
+      const verb = await verbLemma(m[3]);
+      if (!verb) {
+        return {
+          text: `I can't reduce "${m[3]}" to a verb for that goal — try the plain form (e.g. "rests").`,
+          via: "plan", deduced: "record the goal state for a later plan", note: "GOAL frame — verb lemma unavailable, honest decline",
+        };
+      }
+      specs.push({
+        universal: !!m[1],
+        term: normFactTerm(m[2]),
+        predicate: `${verb}-${m[4].toLowerCase()}`,
+        object: normFactTerm(m[5]),
+      });
+      // A conjunct restates itself; the that-form keeps its own words; the
+      // infinitive/verbless voicings restate as the that-form, so the goal
+      // check's own "done — …" line and the confirmation read identically.
+      tails.push(conjunctMatches
+        ? `${m[1] ? `${m[1].toLowerCase()} ` : ""}${m[2].toLowerCase()} ${m[3].toLowerCase()} ${m[4].toLowerCase()} ${m[5].toLowerCase()}`
+        : (thatGoal
+          ? q.replace(/^the\s+goal\s+is\s+that\s+/i, "").replace(/[.!?]+$/, "")
+          : `${m[1] ? `${m[1].toLowerCase()} ` : ""}${m[2].toLowerCase()} ${verb}s ${m[4].toLowerCase()} ${m[5].toLowerCase()}`));
     }
-    const spec = {
-      universal: !!goalMatch[1],
-      term: normFactTerm(goalMatch[2]),
-      predicate: `${verb}-${goalMatch[4].toLowerCase()}`,
-      object: normFactTerm(goalMatch[5]),
-    };
-    const tail = thatGoal
-      ? q.replace(/^the\s+goal\s+is\s+that\s+/i, "").replace(/[.!?]+$/, "")
-      // The infinitive voicing restates as the that-form, so the goal check's
-      // own "done — …" line and the confirmation read identically either way.
-      : `${goalMatch[1] ? `${goalMatch[1].toLowerCase()} ` : ""}${goalMatch[2].toLowerCase()} ${verb}s ${goalMatch[4].toLowerCase()} ${goalMatch[5].toLowerCase()}`;
     const prev = planHolder.state && Array.isArray(planHolder.state.goals) && !planHolder.state.done ? planHolder.state : null;
-    const heldGoals = prev?.goals ?? [];
-    const heldTexts = prev?.goalTexts ?? [];
     // Restating a goal you already set is one goal, not two. The spec is four
     // normalized scalars, so the same goal in either voicing ("the goal is
     // that …" / "the goal is to …") compiles to the identical object and a
@@ -9330,19 +9364,26 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
     // goals and goalTexts move in LOCKSTEP — "solve it" joins goalTexts by
     // index to describe the specs it compiled, so dropping one without the
     // other misaligns the plan's own account of what it is solving for.
-    const alreadyHeld = heldGoals.some((g) => sameGoalSpec(g, spec));
+    let heldGoals = prev?.goals ?? [];
+    let heldTexts = prev?.goalTexts ?? [];
+    let added = 0;
+    for (let i = 0; i < specs.length; i += 1) {
+      if (heldGoals.some((g) => sameGoalSpec(g, specs[i]))) continue;
+      heldGoals = [...heldGoals, specs[i]];
+      heldTexts = [...heldTexts, tails[i]];
+      added += 1;
+    }
     planHolder.state = {
-      goals: alreadyHeld ? heldGoals : [...heldGoals, spec],
-      goalTexts: alreadyHeld ? heldTexts : [...heldTexts, tail],
+      goals: heldGoals, goalTexts: heldTexts,
       actions: null, states: null, stepGoals: null, cursor: 0, done: false,
     };
-    const n = planHolder.state.goals.length;
+    const n = heldGoals.length;
     return {
-      text: `${alreadyHeld ? "already noted" : "noted"} — the goal is that ${tail}.${n > 1 ? ` (${n} goals held)` : ""} Say "solve it" when the state is taught.`,
+      text: `${added ? "noted" : "already noted"} — the goal is that ${tails.join(" and ")}.${n > 1 ? ` (${n} goals held)` : ""} Say "solve it" when the state is taught.`,
       via: "plan", deduced: "record the goal state for a later plan",
-      note: alreadyHeld
-        ? "GOAL frame — the same goal spec was already held, so it folded onto the existing one"
-        : "GOAL frame — goal spec accumulated on the session plan slot",
+      note: added
+        ? `GOAL frame — ${added === 1 ? "goal spec" : `${added} goal specs`} accumulated on the session plan slot`
+        : "GOAL frame — the same goal spec was already held, so it folded onto the existing one",
     };
   }
 
@@ -9401,6 +9442,24 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
   }
   const goals = planHolder.state.goals;
   const goalText = planHolder.state.goalTexts.join("; ");
+  // A goal naming a term the board and the taught classes have never heard of
+  // ("peg-z") can never be reached — decline by name BEFORE the search, so an
+  // unknown token is a named miss rather than a full-depth search burn.
+  const knownTerms = new Set([
+    ...Object.keys(domain.classMembers || {}),
+    ...Object.values(domain.classMembers || {}).flat(),
+    ...state.flatMap((r) => [r.subject, r.object]),
+  ]);
+  const unknownGoalTerms = [...new Set(goals.flatMap((g) => [g.term, g.object]))]
+    .filter((t) => t && !knownTerms.has(t));
+  if (unknownGoalTerms.length) {
+    const quoted = unknownGoalTerms.map((t) => `"${t}"`).join(" and ");
+    return {
+      text: `I can't plan toward that goal — ${quoted} name${unknownGoalTerms.length === 1 ? "s" : ""} nothing the board or the taught classes know. Teach ${unknownGoalTerms.length === 1 ? "it" : "them"} first (e.g. "${unknownGoalTerms[0]} is a peg").`,
+      via: "plan", deduced: "plan a move sequence (unknown goal term)",
+      note: "plan lane — honest decline: the goal names an untaught term, search never started",
+    };
+  }
   let isGoal;
   try {
     isGoal = compileGoal(goals, domain);
@@ -9446,12 +9505,20 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
   };
   const ruleNames = [...new Set(domain.actions.map((a) => a.name))].join('", "');
   const moveLines = actions.map((a, i) => `  ${i + 1}. ${a.label}`);
+  // A piece the goal reaches for with no taught position is an ASSUMPTION the
+  // plan silently makes (it reads the board as taught, without that piece) —
+  // said out loud with the plan rather than left implicit.
+  const goalPieces = [...new Set(goals.flatMap((g) => (g.universal ? (domain.classMembers?.[g.term] || []) : [g.term])))];
+  const unplacedPieces = goalPieces.filter((p) => !state.some((r) => r.subject === p));
+  const assumptionNote = unplacedPieces.length
+    ? `\n\nnote — ${unplacedPieces.join(" and ")} ha${unplacedPieces.length === 1 ? "s" : "ve"} no taught position, so this plan reads the board without ${unplacedPieces.length === 1 ? "it" : "them"}. Teach the missing position(s) and solve again if that's wrong.`
+    : "";
   const text = n === 0
-    ? `the goal already holds — nothing to do.`
+    ? `the goal already holds — nothing to do.${assumptionNote}`
     : `plan found — ${n} move${n === 1 ? "" : "s"} (shortest):\n${moveLines.join("\n")}\n\n` +
       `because — you taught me the "${ruleNames}" rule${domain.actions.length === 1 ? "" : "s"}` +
       `${ordering.length ? ` and ${ordering.length} ordering fact${ordering.length === 1 ? "" : "s"}` : ""}. ` +
-      `Say "next" to make move 1, or ask "what moves are legal now".`;
+      `Say "next" to make move 1, or ask "what moves are legal now".${assumptionNote}`;
   return {
     text, via: "plan",
     deduced: `plan a move sequence from the current state to the goal (${n} move${n === 1 ? "" : "s"})`,
@@ -9538,8 +9605,10 @@ async function planFollowUpAnswer(query, { memoryDir, planHolder }) {
   const clear = q.match(IS_CLEAR_RE);
   const rev = clear ? null : q.match(BOARD_REVERSE_LOC_RE);
   const fwd = clear || rev ? null : q.match(BOARD_FORWARD_LOC_RE);
-  const where = clear || rev || fwd ? null : q.match(BOARD_WHERE_RE);
-  if (!clear && !rev && !fwd && !where) return null;
+  const whereEvery = clear || rev || fwd ? null : q.match(BOARD_WHERE_EVERY_RE);
+  const where = clear || rev || fwd || whereEvery ? null
+    : (q.match(BOARD_WHERE_RE) || q.match(BOARD_WHERE_DOES_RE));
+  if (!clear && !rev && !fwd && !where && !whereEvery) return null;
   if (!memoryDir) return null;
 
   let ctx;
@@ -9556,6 +9625,20 @@ async function planFollowUpAnswer(query, { memoryDir, planHolder }) {
     return on.length
       ? { text: `no — ${x} is not clear: ${on.map(factPhrase).join("; ")}.`, deduced: "check whether a board piece is clear", note: "BOARD — clearness derived from the current board (a piece rests on it)" }
       : { text: `yes — ${x} is clear: nothing rests on it on the current board.`, deduced: "check whether a board piece is clear", note: "BOARD — clearness derived from the current board (nothing rests on it)" };
+  }
+  if (whereEvery) {
+    const cls = normFactTerm(singularizeSurface(whereEvery[1]));
+    const members = domain.classMembers?.[cls] || [];
+    if (!members.length) return null; // not a taught class — the ordinary readers decide
+    const lines = members.map((mbr) => {
+      const rows = state.filter((r) => r.subject === mbr);
+      return rows.length ? rows.map(factPhrase).join("; ") : `nothing on the current board says where ${mbr} is`;
+    });
+    return {
+      text: lines.join("\n"),
+      deduced: "read the current board (where every member of a class is)",
+      note: "BOARD — forward locative for every member of the taught class",
+    };
   }
   if (where || fwd) {
     const x = normFactTerm((where ?? fwd)[1]);
