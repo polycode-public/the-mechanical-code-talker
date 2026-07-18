@@ -975,6 +975,12 @@
   function provenanceTagToSource(tag) {
     const t = String(tag || "").trim();
     if (!t) return null;
+    if (t.startsWith("reference:")) {
+      const rest = t.slice("reference:".length);
+      const colon = rest.indexOf(":");
+      if (colon < 0) return { kind: "reference", pack: rest || "unknown", article: "" };
+      return { kind: "reference", pack: rest.slice(0, colon) || "unknown", article: rest.slice(colon + 1) };
+    }
     const head = t.split(/\s+/)[0];
     if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
     if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
@@ -1056,6 +1062,7 @@
         teach: 0.95,
         provider: 0.9,
         corpus: 0.7,
+        reference: 0.6,
         corpusWeak: 0.55,
         web: 0.4,
         extracted: 0.45,
@@ -9097,6 +9104,10 @@ ${bodyText}` : graphText, tier });
         return { id: `src:provider:${desc.name}`, type: "provider" };
       case "corpus":
         return { id: `src:corpus:${desc.name}`, type: "corpus" };
+      // One Source per pack article (the @revid stays in the article segment),
+      // so two facts from the same article corroborate nothing extra.
+      case "reference":
+        return { id: `src:reference:${desc.pack}:${desc.article}`, type: "reference" };
       // One Source per source-file basename, not per extraction run.
       case "extracted":
         return { id: `src:extracted:${desc.name}`, type: "extracted" };
@@ -9813,7 +9824,7 @@ ${bodyText}` : graphText, tier });
         { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
         { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source \u2014 replaces the factProvenance union)" },
         { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
-        { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | corpusWeak | extracted | web | entailed (the trust-prior key)" },
+        { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | corpusWeak | reference | extracted | web | entailed (the trust-prior key)" },
         { prop: "mgx:sourceUrl", note: "a web Source's URL" },
         { prop: "mgx:sourceRule", note: "an entailed Source's rule id" },
         { prop: "mgx:sourceReliability", note: "actor-level (session-scoped) trust nudge in [0.5,1.5], neutral 1.0 when absent \u2014 materialised by recomputeSourceReliability from a session's asserted-vs-contradicted track record (memory/trust.mjs's sessionReliabilityFrom); folds into computeTrust's per-source prior" },
@@ -9850,6 +9861,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
         provider: { subClass: "tmct:AgentSource", prov: "prov:Agent" },
         corpus: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
         corpusWeak: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+        reference: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
         web: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
         extracted: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
         entailed: { subClass: "tmct:ActivitySource", prov: "prov:Activity" }
@@ -21188,6 +21200,19 @@ ${codeblock}`, options);
       example: { class: "Field" }
     },
     {
+      name: "tmct_related",
+      tier: "cold",
+      summary: "A term's synonyms (skos:altLabel) and related concepts (skos:related), from the memory graph's relation facts.",
+      inputSchema: {
+        type: "object",
+        required: ["term"],
+        properties: {
+          term: { type: "string", description: "The term whose synonyms / related concepts you want." }
+        }
+      },
+      example: { term: "sofa" }
+    },
+    {
       name: "tmct_architecture",
       tier: "cold",
       summary: "Package/module map + the most-imported hub modules (optionally scoped to a package).",
@@ -21770,6 +21795,110 @@ ${hint}` : ""}${cand}`;
     resolveOrThrow(svc, symbol, "class");
   }
 
+  // src/tools/handlers/tmct-related.mjs
+  init_config();
+
+  // src/domain/skos-view.mjs
+  init_hash();
+  var SKOS_NS = "http://www.w3.org/2004/02/skos/core#";
+  var DEFAULT_RELATION_MAP = {
+    synonym: ["mgx:synonym"],
+    related: ["mgx:relatedTo", "mgx:similarTo"]
+  };
+  function buildSkosConceptView(rows, { conceptBase = "concept:", relationMap = DEFAULT_RELATION_MAP } = {}) {
+    const synonymPreds = new Set(relationMap.synonym || []);
+    const relatedPreds = new Set(relationMap.related || []);
+    const parent = /* @__PURE__ */ new Map();
+    const ensure = (t) => {
+      if (!parent.has(t)) parent.set(t, t);
+    };
+    const find = (x) => {
+      let r = x;
+      while (parent.get(r) !== r) r = parent.get(r);
+      while (parent.get(x) !== r) {
+        const next = parent.get(x);
+        parent.set(x, r);
+        x = next;
+      }
+      return r;
+    };
+    const union = (a, b) => {
+      const ra = find(a), rb = find(b);
+      if (ra === rb) return;
+      if (ra < rb) parent.set(rb, ra);
+      else parent.set(ra, rb);
+    };
+    const relatedRaw = [];
+    for (const r of rows) {
+      const p = r.predicate;
+      if (!synonymPreds.has(p) && !relatedPreds.has(p)) continue;
+      const s = normFactTerm(r.subject), o = normFactTerm(r.object);
+      if (!s || !o) continue;
+      ensure(s);
+      ensure(o);
+      if (synonymPreds.has(p)) union(s, o);
+      else relatedRaw.push({ s, o });
+    }
+    const iriFor = (rep) => conceptBase + rep.replace(/ /g, "_");
+    const componentTerms = /* @__PURE__ */ new Map();
+    for (const t of parent.keys()) {
+      const rep = find(t);
+      if (!componentTerms.has(rep)) componentTerms.set(rep, /* @__PURE__ */ new Set());
+      componentTerms.get(rep).add(t);
+    }
+    const concepts = [];
+    for (const [rep, terms] of componentTerms) {
+      const sorted = [...terms].sort();
+      concepts.push({ id: iriFor(rep), prefLabel: rep, altLabels: sorted.filter((t) => t !== rep) });
+    }
+    concepts.sort((a, b) => a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+    const seen = /* @__PURE__ */ new Set();
+    const related = [];
+    for (const { s, o } of relatedRaw) {
+      const cs = iriFor(find(s)), co = iriFor(find(o));
+      if (cs === co) continue;
+      const key = cs < co ? `${cs}\0${co}` : `${co}\0${cs}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      related.push({ subject: cs, object: co });
+    }
+    related.sort((a, b) => `${a.subject}${a.object}` < `${b.subject}${b.object}` ? -1 : 1);
+    const conceptIdForTerm = (term) => {
+      const t = normFactTerm(term);
+      return parent.has(t) ? iriFor(find(t)) : null;
+    };
+    return { concepts, related, conceptIdForTerm, namespace: SKOS_NS };
+  }
+  function relatedForTerm(rows, term, options = {}) {
+    const view = buildSkosConceptView(rows, options);
+    const conceptId = view.conceptIdForTerm(term);
+    if (!conceptId) return null;
+    const byId = new Map(view.concepts.map((c) => [c.id, c]));
+    const concept = byId.get(conceptId);
+    const queried = normFactTerm(term);
+    const synonyms = [concept.prefLabel, ...concept.altLabels].filter((label) => label !== queried);
+    const related = view.related.filter((r) => r.subject === conceptId || r.object === conceptId).map((r) => byId.get(r.subject === conceptId ? r.object : r.subject)).filter(Boolean);
+    return { conceptId, prefLabel: concept.prefLabel, altLabels: concept.altLabels, synonyms, related };
+  }
+
+  // src/tools/handlers/tmct-related.mjs
+  init_memory_fallthrough();
+  async function tmct_related(args, { config }) {
+    const term = requiredArg(args, "term");
+    const hit2 = relatedForTerm(await memoryFactRows(config), term);
+    if (!hit2) {
+      throw new ToolError(
+        `no synonym or related facts for "${term}" in the memory graph. This view answers where the store holds mgx:synonym / mgx:relatedTo facts (a corpus import seeds them).`
+      );
+    }
+    const lines = [`${hit2.prefLabel} [${hit2.conceptId}]`];
+    if (hit2.synonyms.length) lines.push(`synonyms (skos:altLabel): ${hit2.synonyms.join(", ")}`);
+    if (hit2.related.length) lines.push(`related (skos:related): ${hit2.related.map((c) => c.prefLabel).join(", ")}`);
+    lines.push("(from the memory graph's mgx:synonym / mgx:relatedTo / mgx:similarTo facts)");
+    return lines.join("\n");
+  }
+  tmct_related.ownsGraphLoad = true;
+
   // src/tools/handlers/tmct-architecture.mjs
   init_codegraph();
   function tmct_architecture(args, { graph }) {
@@ -21847,6 +21976,7 @@ ${JSON.stringify(envelope, null, 2)}`;
     tmct_search,
     tmct_members,
     tmct_subclasses,
+    tmct_related,
     tmct_architecture,
     tmct_exports,
     tmct_untested,
