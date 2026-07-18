@@ -945,9 +945,9 @@
       const layer = layers[name];
       if (!layer || typeof layer !== "object") continue;
       const posting = layer[t];
-      const list = Array.isArray(posting) ? posting : Array.isArray(posting?.ids) ? posting.ids : null;
-      if (!list?.length) continue;
-      for (const id of list) ids.add(id);
+      const list2 = Array.isArray(posting) ? posting : Array.isArray(posting?.ids) ? posting.ids : null;
+      if (!list2?.length) continue;
+      for (const id of list2) ids.add(id);
       via.add(name);
     }
     return ids.size ? { ids: [...ids].sort(), via: [...via].sort().join("+") } : empty;
@@ -984,6 +984,7 @@
     const head = t.split(/\s+/)[0];
     if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
     if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
+    if (head.startsWith("child:")) return { kind: "corpus", name: head.slice("child:".length).split(":")[0] || "unknown" };
     if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
     if (head.startsWith("teach:")) {
       return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
@@ -1331,8 +1332,8 @@
     return lines.join("\n");
   }
   function truncationNote(graph) {
-    const list = graph.truncated.map((t) => `${t.predicate} (${t.shown}/${t.count})`).join(", ");
-    return `note: partial edge lists for: ${list}. Counts are complete; the lists are not.`;
+    const list2 = graph.truncated.map((t) => `${t.predicate} (${t.shown}/${t.count})`).join(", ");
+    return `note: partial edge lists for: ${list2}. Counts are complete; the lists are not.`;
   }
   function impactClosure(graph, ind, { maxDepth = 8 } = {}) {
     const dependents = /* @__PURE__ */ new Map();
@@ -2532,9 +2533,9 @@ ${shown.join("\n")}${tail}`;
     const modLabel = graph.byId.get(modId)?.label || modId;
     const hits = cochangeNeighbours(graph, modId);
     if (!hits.length) return `${modLabel}: no change-coupling recorded (rarely co-committed, or outside the git-log window).`;
-    const list = hits.slice(0, COCHANGE_CAP).map((h) => `${h.label} (\xD7${h.weight})`);
+    const list2 = hits.slice(0, COCHANGE_CAP).map((h) => `${h.label} (\xD7${h.weight})`);
     return `${modLabel} \u2014 usually changes together with ${hits.length} module(s) (edit these too):
-  ${list.join("\n  ")}` + (hits.length > COCHANGE_CAP ? `
+  ${list2.join("\n  ")}` + (hits.length > COCHANGE_CAP ? `
   \u2026+${hits.length - COCHANGE_CAP} more` : "");
   }
   function renderExports(graph, ind) {
@@ -2543,14 +2544,14 @@ ${shown.join("\n")}${tail}`;
     const modLabel = graph.byId.get(modId)?.label || modId;
     const edges = edgesOfKind(graph, "reexports").filter((e) => e.subject === modId);
     if (!edges.length) return `${modLabel}: no public exports recorded (no export list / __all__ found, or none resolved).`;
-    const list = edges.slice(0, EXPORTS_CAP).map((e) => {
+    const list2 = edges.slice(0, EXPORTS_CAP).map((e) => {
       const origin = graph.byId.get(e.object);
       const where = origin ? siteOf(origin) : null;
       const from = where ? ` \u2190 ${where.path}` : "";
       return `${e.objectLabel || e.object}${from}`;
     });
     return `${modLabel} \u2014 public API (${edges.length} export(s)):
-  ${list.join("\n  ")}` + (edges.length > EXPORTS_CAP ? `
+  ${list2.join("\n  ")}` + (edges.length > EXPORTS_CAP ? `
   \u2026+${edges.length - EXPORTS_CAP} more` : "");
   }
   var PROP_KIND, isProvRef, DESCRIBE_EDGE_CAP, PROV_CAP, IMPACT_DEPTHS_LISTED, IMPACT_PER_DEPTH, IMPACT_TESTS_PER_DEP, SEARCH_LIMIT, SEARCH_SYMBOLS_SHOWN, PATH_W, SYM_W, EXACT_W, SYM_MATCH_CAP, PROX_FRAC, PROX_CAP_FRAC, NONPROD_DEMOTE, isNonProdLabel, CALL_PROX_FRAC, CALL_PROX_CAP_FRAC, IMPL_PROX_FRAC, IMPL_PROX_CAP_FRAC, isCsModuleLabel, looksLikeCsInterface, PROSE_PROX_FRAC, PROSE_PROX_CAP_FRAC, PROSE_LOOKUP_LIMIT, PROSE_LAYER_FRAC, PROSE_LAYER_CAP_FRAC, PROSE_LAYER_DISCOUNT, LIT_W, LIT_MIN_COMPONENTS, LIT_COMP_CAP, LIT_FRAC, LIT_CAP_FRAC, BEAM_MARGIN_FRAC, BEAM_PROX_FRAC, BEAM_PROX_CAP_FRAC, BEAM_OVERFLOW_CAP, BEAM_PLIES, BEAM_EDGE_GROUPS, SPIRAL_DEPTH_DEFAULT, SPIRAL_NODE_LIMIT_DEFAULT, SPIRAL_Q_DEFAULT, SPIRAL_EXPAND_KINDS, SPIRAL_EMIT_FRAC, SPIRAL_HOP_DECAY, SPIRAL_PROX_FRAC, SPIRAL_PROX_CAP_FRAC, NAME_PATTERN_MAX_LENGTH, NAME_PATTERN_MAX_QUANTIFIERS, NAME_MATCH_MAX_LABEL, NAME_MATCH_BUDGET_MS, NameFilterBudgetExceeded, edgesOfKindCache, MEMBERS_CAP, SUBCLASS_CAP, CALL_CAP, attrVal, ARCH_PKG_CAP, ARCH_HUB_CAP, COVERAGE_CAP, TESTS_GRAIN_NOTE, HISTORY_CAP, CALL_SYMBOL_CLASSES, CALL_HINT_CAP, SYMBOL_CLASSES, CONTEXT_SIBLING_CAP, CLASS_MEMBER_CAP, COCHANGE_MID_CAP, CONTEXT_TESTS_CAP, TINY_MAX_LOC, TINY_MAX_ARITY, LARGE_CLASS_MEMBERS, INLINE_CALLEE_CAP, splitDecs, tokenize, countParams, modeOf, COCHANGE_CAP, EXPORTS_CAP;
@@ -4855,7 +4856,7 @@ ${shown.join("\n")}${tail}`;
         items = items.filter((ind) => ok.has(ind.id));
       }
     }
-    const sameClass = (list) => list.length && list.every((x) => x.class === list[0].class) ? list[0].class : null;
+    const sameClass = (list2) => list2.length && list2.every((x) => x.class === list2[0].class) ? list2[0].class : null;
     const common = items.length ? sameClass(items) : sameClass(baseItems);
     if (ast.mode === "count") return { compositeKind: "count", count: items.length, entityType: common, matches: [] };
     return { compositeKind: "set", matches: items, entityType: common };
@@ -6341,8 +6342,8 @@ ${branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.content}`
       byModule.get(mod).push(symbolLabelOf(m));
     }
     const clauses = [...byModule.entries()].map(([mod, syms], i) => {
-      const list = listJoin(syms);
-      return i === 0 ? `in ${mod} there is ${list}` : `there is ${list} in ${mod}`;
+      const list2 = listJoin(syms);
+      return i === 0 ? `in ${mod} there is ${list2}` : `there is ${list2} in ${mod}`;
     });
     const extra = result.matches.length > OVERFLOW_CAP ? ` \u2026and ${result.matches.length - OVERFLOW_CAP} more` : "";
     return { content: clauses.join(" and ") + extra + ".", miss: false, ambiguous: false, matches: result.matches };
@@ -9624,8 +9625,8 @@ ${bodyText}` : graphText, tier });
     const statedGroup = (payload.objectProperties || []).find((g) => g?.prop === STATED_BY_PROP);
     for (const e of statedGroup?.examples || []) {
       if (!e?.subject) continue;
-      const list = statedByBySubject.get(e.subject);
-      if (list) list.push(e.object);
+      const list2 = statedByBySubject.get(e.subject);
+      if (list2) list2.push(e.object);
       else statedByBySubject.set(e.subject, [e.object]);
     }
     payload[MEMORY_INDEX] = { individualsById, sourcesById, statedByBySubject };
@@ -9837,9 +9838,9 @@ ${bodyText}` : graphText, tier });
     group.examples.push({ ...edge, createdAt });
     group.count = group.examples.length;
     if (idx) {
-      const list = idx.statedByBySubject.get(edge.subject) || [];
-      if (!list.includes(edge.object)) list.push(edge.object);
-      idx.statedByBySubject.set(edge.subject, list);
+      const list2 = idx.statedByBySubject.get(edge.subject) || [];
+      if (!list2.includes(edge.object)) list2.push(edge.object);
+      idx.statedByBySubject.set(edge.subject, list2);
     }
   }
   function recountClasses(payload) {
@@ -11796,6 +11797,9 @@ ${codeblock}`, options);
           judge: {},
           priest: {},
           servant: {},
+          butler: {},
+          housekeeper: {},
+          gardener: {},
           employee: {},
           boss: {},
           husband: {},
@@ -11850,6 +11854,9 @@ ${codeblock}`, options);
           dress: {},
           clothing: {},
           chair: {},
+          desk: {},
+          lamp: {},
+          portrait: {},
           bed: {},
           door: {},
           window: {},
@@ -21595,6 +21602,361 @@ ${codeblock}`, options);
     }
   });
 
+  // src/domain/grammar/ace.mjs
+  var PATTERN_SUB_CLASS_OF, PATTERN_TYPE_ASSERTION, PATTERN_RELATION, PATTERN_SOME_VALUES_FROM, PATTERN_CARDINALITY, PATTERN_DISJOINT_WITH, PATTERN_POSSESSIVE, PATTERN_ADJECTIVE, PATTERN_CAPABILITY, PATTERNS;
+  var init_ace2 = __esm({
+    "src/domain/grammar/ace.mjs"() {
+      init_lexicon();
+      PATTERN_SUB_CLASS_OF = "subClassOf";
+      PATTERN_TYPE_ASSERTION = "typeAssertion";
+      PATTERN_RELATION = "relation";
+      PATTERN_SOME_VALUES_FROM = "someValuesFrom";
+      PATTERN_CARDINALITY = "cardinality";
+      PATTERN_DISJOINT_WITH = "disjointWith";
+      PATTERN_POSSESSIVE = "possessive";
+      PATTERN_ADJECTIVE = "adjective";
+      PATTERN_CAPABILITY = "capability";
+      PATTERNS = Object.freeze([
+        PATTERN_SUB_CLASS_OF,
+        PATTERN_TYPE_ASSERTION,
+        PATTERN_RELATION,
+        PATTERN_SOME_VALUES_FROM,
+        PATTERN_CARDINALITY,
+        PATTERN_DISJOINT_WITH,
+        PATTERN_POSSESSIVE,
+        PATTERN_ADJECTIVE,
+        PATTERN_CAPABILITY
+      ]);
+    }
+  });
+
+  // src/domain/completions/injected.mjs
+  var init_injected = __esm({
+    "src/domain/completions/injected.mjs"() {
+    }
+  });
+
+  // src/domain/completions/graph-adapter.mjs
+  var init_graph_adapter = __esm({
+    "src/domain/completions/graph-adapter.mjs"() {
+      init_codegraph();
+      init_ask();
+      init_injected();
+    }
+  });
+
+  // src/domain/router/registry.mjs
+  function capability({ name, label, question, params = [], preconditions = [], add = [], del = [] }) {
+    return Object.freeze({
+      type: VOCAB.Capability,
+      name,
+      // the dispatchTool tool name — directly callable
+      label,
+      // human label (the slash-command verb)
+      question,
+      // one-line "what question does this answer"
+      readOnly: true,
+      // dispatching this capability performs no writes
+      parameters: Object.freeze(params),
+      preconditions: Object.freeze(preconditions),
+      effects: Object.freeze({ add: Object.freeze(add), del: Object.freeze(del) })
+    });
+  }
+  var PREFIXES, VOCAB, KINDS, PRECOND, param, graphLoaded, resolves, anyPresent, memoryFacts, knows, CAPABILITIES, buildIndex, list, byName, EXCLUDED_FROM_REGISTRY, REGISTRY;
+  var init_registry = __esm({
+    "src/domain/router/registry.mjs"() {
+      PREFIXES = Object.freeze({
+        cap: "urn:tmct:cap#",
+        // the capability/operator vocabulary (this module)
+        taught: "urn:tmct:taught#",
+        // taught-action operators + their world-state predicates (taught.mjs)
+        mgx: "urn:tmct:mgx#",
+        // tmct's code-graph predicates (imports/calls/tests/…)
+        seon: "http://se-on.org/ontologies/seon.owl#"
+        // software-evolution ontology classes
+      });
+      VOCAB = Object.freeze({
+        Capability: "cap:Capability",
+        // rdf:type of a declared tool/operator
+        Parameter: "cap:Parameter",
+        Precondition: "cap:Precondition",
+        Effect: "cap:Effect"
+      });
+      KINDS = Object.freeze({
+        Symbol: "seon:CodeEntity",
+        // any code symbol: function/method/class/module/attribute
+        Module: "mgx:Module",
+        // SEON has no JS-module class (its nearest are Namespace/main:File); owned
+        Class: "seon:ClassType",
+        // SEON's real class for a class definition
+        Query: "cap:FreeText",
+        // lexical search string — no resolution precondition
+        Kind: "cap:KindFilter",
+        // enum: function|class|method|… (search filter)
+        Package: "cap:PackageName"
+        // optional architecture-scope filter
+      });
+      PRECOND = Object.freeze({
+        graphLoaded: "cap:graph-loaded",
+        // a graph artifact is present + parseable
+        resolves: "cap:resolves",
+        // { param, as } — the slot binds to an entity of kind `as`
+        anyPresent: "cap:any-present",
+        // { params } — at least one of these slots is provided
+        memoryFacts: "cap:memory-facts"
+        // the conversational-memory store holds relation facts for the term
+      });
+      param = (name, kind, { arg = name, required = true, note = "" } = {}) => Object.freeze({ type: VOCAB.Parameter, name, kind, arg, required, note });
+      graphLoaded = () => Object.freeze({ type: VOCAB.Precondition, pred: PRECOND.graphLoaded });
+      resolves = (paramName, as) => Object.freeze({ type: VOCAB.Precondition, pred: PRECOND.resolves, param: paramName, as });
+      anyPresent = (params) => Object.freeze({ type: VOCAB.Precondition, pred: PRECOND.anyPresent, params: Object.freeze([...params]) });
+      memoryFacts = () => Object.freeze({ type: VOCAB.Precondition, pred: PRECOND.memoryFacts });
+      knows = (topic, ofParam = null) => Object.freeze({ type: VOCAB.Effect, pred: "cap:knows", topic, of: ofParam ? `?${ofParam}` : null });
+      CAPABILITIES = Object.freeze([
+        capability({
+          name: "tmct_search",
+          label: "search",
+          question: "lexical search across the graph",
+          params: [
+            param("query", KINDS.Query, { required: false, note: "required unless a kind filter is given" }),
+            param("kind", KINDS.Kind, { required: false }),
+            param("name", KINDS.Query, { required: false }),
+            param("decorator", KINDS.Query, { required: false })
+          ],
+          preconditions: [graphLoaded(), anyPresent(["query", "kind"])],
+          add: [knows("matches", "query")]
+        }),
+        capability({
+          name: "tmct_describe",
+          label: "describe",
+          question: "a symbol's definition, kind and relations",
+          params: [param("symbol", KINDS.Symbol)],
+          preconditions: [graphLoaded(), resolves("symbol", KINDS.Symbol)],
+          add: [knows("description", "symbol")]
+        }),
+        capability({
+          name: "tmct_signature",
+          label: "signature",
+          question: "a symbol's signature only",
+          params: [param("symbol", KINDS.Symbol)],
+          preconditions: [graphLoaded(), resolves("symbol", KINDS.Symbol)],
+          add: [knows("signature", "symbol")]
+        }),
+        capability({
+          name: "tmct_impact",
+          label: "impact",
+          question: "what a change to this module or symbol reaches (impact closure)",
+          params: [param("module", KINDS.Symbol, { note: "a Module, or any sited symbol \u2014 a fine-grained seed walks callsSymbol dependents and coarsens them to module grain" })],
+          preconditions: [graphLoaded(), resolves("module", KINDS.Symbol)],
+          add: [knows("impact", "module")]
+        }),
+        capability({
+          name: "tmct_members",
+          label: "members",
+          question: "the methods/attributes of a class",
+          params: [param("class", KINDS.Class, { arg: "class" })],
+          preconditions: [graphLoaded(), resolves("class", KINDS.Class)],
+          add: [knows("members", "class")]
+        }),
+        capability({
+          name: "tmct_subclasses",
+          label: "subclasses",
+          question: "the subclasses of a class",
+          params: [param("class", KINDS.Class, { arg: "class" })],
+          preconditions: [graphLoaded(), resolves("class", KINDS.Class)],
+          add: [knows("subclasses", "class")]
+        }),
+        capability({
+          name: "tmct_exports",
+          label: "exports",
+          question: "a module's public exports",
+          params: [param("module", KINDS.Module)],
+          preconditions: [graphLoaded(), resolves("module", KINDS.Module)],
+          add: [knows("exports", "module")]
+        }),
+        capability({
+          name: "tmct_callers",
+          label: "callers",
+          question: "functions that call this symbol",
+          params: [param("symbol", KINDS.Symbol)],
+          preconditions: [graphLoaded(), resolves("symbol", KINDS.Symbol)],
+          add: [knows("callers", "symbol")]
+        }),
+        capability({
+          name: "tmct_callees",
+          label: "callees",
+          question: "functions this symbol calls",
+          params: [param("symbol", KINDS.Symbol)],
+          preconditions: [graphLoaded(), resolves("symbol", KINDS.Symbol)],
+          add: [knows("callees", "symbol")]
+        }),
+        capability({
+          name: "tmct_calls",
+          label: "calls",
+          question: "the call edges out of this symbol/module",
+          params: [param("symbol", KINDS.Symbol)],
+          preconditions: [graphLoaded(), resolves("symbol", KINDS.Symbol)],
+          add: [knows("calls", "symbol")]
+        }),
+        capability({
+          name: "tmct_tests_for",
+          label: "tests",
+          question: "the tests covering this symbol",
+          params: [param("symbol", KINDS.Symbol)],
+          preconditions: [graphLoaded(), resolves("symbol", KINDS.Symbol)],
+          add: [knows("tests", "symbol")]
+        }),
+        capability({
+          name: "tmct_untested",
+          label: "untested",
+          question: "symbols with no covering test",
+          params: [],
+          preconditions: [graphLoaded()],
+          add: [knows("untested", null)]
+        }),
+        capability({
+          name: "tmct_history",
+          label: "history",
+          question: "the commit history of this symbol",
+          params: [param("symbol", KINDS.Symbol)],
+          preconditions: [graphLoaded(), resolves("symbol", KINDS.Symbol)],
+          add: [knows("history", "symbol")]
+        }),
+        capability({
+          name: "tmct_cochanges",
+          label: "cochanges",
+          question: "symbols that change together with this one",
+          params: [param("symbol", KINDS.Symbol)],
+          preconditions: [graphLoaded(), resolves("symbol", KINDS.Symbol)],
+          add: [knows("cochanges", "symbol")]
+        }),
+        capability({
+          name: "tmct_architecture",
+          label: "arch",
+          question: "the architecture overview (optional package filter)",
+          params: [param("package", KINDS.Package, { required: false })],
+          preconditions: [graphLoaded()],
+          add: [knows("architecture", "package")]
+        }),
+        capability({
+          name: "tmct_related",
+          label: "related",
+          question: "a term's synonyms and related concepts (the SKOS view over the conversational-memory graph)",
+          params: [param("term", KINDS.Query, { note: "a concept term, matched against memory relation facts rather than resolved in the code graph" })],
+          preconditions: [memoryFacts()],
+          add: [knows("related", "term")]
+        })
+      ]);
+      buildIndex = (caps) => Object.freeze(
+        caps.reduce((m, c) => {
+          m[c.name] = c;
+          return m;
+        }, /* @__PURE__ */ Object.create(null))
+      );
+      list = CAPABILITIES;
+      byName = buildIndex(list);
+      EXCLUDED_FROM_REGISTRY = Object.freeze({
+        tmct_context: "unbounded edit-context bundle (multi-file); needs a size/budget precondition",
+        tmct_context_more: "unbounded context continuation; same as tmct_context",
+        tmct_snippet: "raw source-file read (reads the filesystem); needs a file-read + span precondition"
+      });
+      REGISTRY = Object.freeze({
+        prefixes: PREFIXES,
+        vocab: VOCAB,
+        kinds: KINDS,
+        precond: PRECOND,
+        get capabilities() {
+          return list;
+        }
+      });
+    }
+  });
+
+  // src/domain/router/taught.mjs
+  var init_taught = __esm({
+    "src/domain/router/taught.mjs"() {
+      init_registry();
+    }
+  });
+
+  // src/adapters/memory/blocks.mjs
+  var BLOCKS_DIR_REL;
+  var init_blocks = __esm({
+    "src/adapters/memory/blocks.mjs"() {
+      init_promises();
+      init_node_path();
+      init_prose();
+      init_text_stats();
+      init_trust();
+      BLOCKS_DIR_REL = join(".tmct", "memory", "blocks");
+    }
+  });
+
+  // src/domain/completions/search.mjs
+  var init_search = __esm({
+    "src/domain/completions/search.mjs"() {
+      init_injected();
+    }
+  });
+
+  // src/domain/completions/group.mjs
+  var init_group = __esm({
+    "src/domain/completions/group.mjs"() {
+      init_prose();
+      init_text_stats();
+      init_injected();
+    }
+  });
+
+  // src/domain/completions/rank.mjs
+  var init_rank = __esm({
+    "src/domain/completions/rank.mjs"() {
+      init_prose();
+      init_text_stats();
+      init_injected();
+    }
+  });
+
+  // src/domain/completions/infer.mjs
+  var init_infer = __esm({
+    "src/domain/completions/infer.mjs"() {
+      init_rank();
+      init_prose();
+      init_planning();
+      init_injected();
+    }
+  });
+
+  // src/domain/completions/prune.mjs
+  var init_prune = __esm({
+    "src/domain/completions/prune.mjs"() {
+    }
+  });
+
+  // src/domain/completions/complete.mjs
+  var init_complete = __esm({
+    "src/domain/completions/complete.mjs"() {
+      init_search();
+      init_group();
+      init_rank();
+      init_infer();
+      init_prune();
+      init_injected();
+    }
+  });
+
+  // src/services/completions.mjs
+  var init_completions = __esm({
+    "src/services/completions.mjs"() {
+      init_blocks();
+      init_core();
+      init_graph_service();
+      init_finish();
+      init_complete();
+      init_graph_adapter();
+    }
+  });
+
   // src/adapters/toml-config.mjs
   var init_toml_config = __esm({
     "src/adapters/toml-config.mjs"() {
@@ -21651,7 +22013,7 @@ ${codeblock}`, options);
   });
 
   // src/adapters/corpus/conceptnet.mjs
-  var import_meta5, PKG_ROOT3, SLICE_FILE, MAP_FILE, SEON_CONCEPTS_FILE, SEON_DEFINITIONS_FILE, TIER2_DIR, TIER2_MANIFEST_FILE, WORDNET_DIR, WORDNET_MANIFEST_FILE;
+  var import_meta6, PKG_ROOT4, SLICE_FILE, MAP_FILE, SEON_CONCEPTS_FILE, SEON_DEFINITIONS_FILE, TIER2_DIR, TIER2_MANIFEST_FILE, WORDNET_DIR, WORDNET_MANIFEST_FILE;
   var init_conceptnet = __esm({
     "src/adapters/corpus/conceptnet.mjs"() {
       init_node_fs();
@@ -21661,15 +22023,15 @@ ${codeblock}`, options);
       init_node_path();
       init_dist();
       init_core();
-      import_meta5 = {};
-      PKG_ROOT3 = join(dirname(fileURLToPath2(import_meta5.url)), "..", "..", "..");
-      SLICE_FILE = join(PKG_ROOT3, "corpus", "conceptnet", "slice.jsonl");
-      MAP_FILE = join(PKG_ROOT3, "src", "adapters", "corpus", "conceptnet-map.toml");
-      SEON_CONCEPTS_FILE = join(PKG_ROOT3, "corpus", "seon", "concepts.jsonl");
-      SEON_DEFINITIONS_FILE = join(PKG_ROOT3, "corpus", "seon", "definitions.jsonl");
-      TIER2_DIR = join(PKG_ROOT3, "corpus", "tier2");
+      import_meta6 = {};
+      PKG_ROOT4 = join(dirname(fileURLToPath2(import_meta6.url)), "..", "..", "..");
+      SLICE_FILE = join(PKG_ROOT4, "corpus", "conceptnet", "slice.jsonl");
+      MAP_FILE = join(PKG_ROOT4, "src", "adapters", "corpus", "conceptnet-map.toml");
+      SEON_CONCEPTS_FILE = join(PKG_ROOT4, "corpus", "seon", "concepts.jsonl");
+      SEON_DEFINITIONS_FILE = join(PKG_ROOT4, "corpus", "seon", "definitions.jsonl");
+      TIER2_DIR = join(PKG_ROOT4, "corpus", "tier2");
       TIER2_MANIFEST_FILE = join(TIER2_DIR, "manifest.json");
-      WORDNET_DIR = join(PKG_ROOT3, "corpus", "wordnet");
+      WORDNET_DIR = join(PKG_ROOT4, "corpus", "wordnet");
       WORDNET_MANIFEST_FILE = join(WORDNET_DIR, "manifest.json");
     }
   });
@@ -21763,7 +22125,7 @@ ${codeblock}`, options);
       }
     };
   }
-  var import_meta6, NAMENET_DIR, EXTENSION_KINDS, CONCEPTNET_PREFER, BUILTIN_EXTENSIONS;
+  var import_meta7, NAMENET_DIR, EXTENSION_KINDS, CONCEPTNET_PREFER, BUILTIN_EXTENSIONS;
   var init_extensions = __esm({
     "src/services/extensions.mjs"() {
       init_node_path();
@@ -21771,8 +22133,8 @@ ${codeblock}`, options);
       init_node_url();
       init_toml_config();
       init_conceptnet();
-      import_meta6 = {};
-      NAMENET_DIR = join(dirname(fileURLToPath2(import_meta6.url)), "..", "..", "corpus", "namenet");
+      import_meta7 = {};
+      NAMENET_DIR = join(dirname(fileURLToPath2(import_meta7.url)), "..", "..", "corpus", "namenet");
       EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
       CONCEPTNET_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
       BUILTIN_EXTENSIONS = Object.freeze(builtinExtensions());
@@ -22110,12 +22472,12 @@ ${codeblock}`, options);
     return s;
   }
   function mergeEntityPayloads(entries) {
-    const list = (Array.isArray(entries) ? entries : []).map((e, i) => ({
+    const list2 = (Array.isArray(entries) ? entries : []).map((e, i) => ({
       file: e?.file,
       payload: e?.payload || {},
       name: e?.name != null && String(e.name).length ? String(e.name) : String(i)
     }));
-    const idSets = list.map(({ payload }) => idsOf(payload));
+    const idSets = list2.map(({ payload }) => idsOf(payload));
     const seenInCount = /* @__PURE__ */ new Map();
     for (const s of idSets) for (const id of s) seenInCount.set(id, (seenInCount.get(id) || 0) + 1);
     const colliding = new Set([...seenInCount.entries()].filter(([, n]) => n > 1).map(([id]) => id));
@@ -22128,8 +22490,8 @@ ${codeblock}`, options);
       proseIndex: {}
     };
     let latestGeneratedAt = "";
-    let everyPayloadIsBootstrap = list.length > 0;
-    for (const { payload, name } of list) {
+    let everyPayloadIsBootstrap = list2.length > 0;
+    for (const { payload, name } of list2) {
       everyPayloadIsBootstrap = everyPayloadIsBootstrap && Boolean(payload.bootstrap);
       if (typeof payload.generated_at === "string" && payload.generated_at > latestGeneratedAt) {
         latestGeneratedAt = payload.generated_at;
@@ -22832,8 +23194,8 @@ ${JSON.stringify(envelope, null, 2)}`;
     return Math.max(...ids.map((id) => biasForSourceId(id, biasByBundle)));
   }
   function rankByBiasThenTrust(rows, biasByBundle = {}) {
-    const list = Array.isArray(rows) ? rows : [];
-    return list.map((row, index) => ({ row, index, bias: biasForRow(row, biasByBundle) })).sort((a, b) => b.bias - a.bias || (b.row?.trust ?? 0) - (a.row?.trust ?? 0) || a.index - b.index).map((x) => x.row);
+    const list2 = Array.isArray(rows) ? rows : [];
+    return list2.map((row, index) => ({ row, index, bias: biasForRow(row, biasByBundle) })).sort((a, b) => b.bias - a.bias || (b.row?.trust ?? 0) - (a.row?.trust ?? 0) || a.index - b.index).map((x) => x.row);
   }
 
   // src/services/chat.mjs
@@ -22859,6 +23221,13 @@ ${JSON.stringify(envelope, null, 2)}`;
 
   // src/adapters/corpus/reference-pack.mjs
   init_node_fs();
+
+  // node-zlib-stub:node:zlib
+  var gunzipSync = () => {
+    throw new Error("gunzipSync unavailable in a browser bundle");
+  };
+
+  // src/adapters/corpus/reference-pack.mjs
   init_node_url();
   init_node_path();
   var import_meta4 = {};
@@ -22979,6 +23348,119 @@ ${JSON.stringify(envelope, null, 2)}`;
     "game-answer": "answer",
     "game-inform": "inform"
   });
+
+  // src/domain/worlds-pack.mjs
+  var WORLD_NAME_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/;
+  var WORLD_RULE_KINDS = Object.freeze([
+    "action-signature",
+    "action-precond",
+    "action-effect",
+    "action-constraint"
+  ]);
+  var RULE_KIND_SET = new Set(WORLD_RULE_KINDS);
+  var isNonEmptyString = (v) => typeof v === "string" && v.trim() !== "";
+  function isWorldName(name) {
+    return typeof name === "string" && WORLD_NAME_RE.test(name);
+  }
+  function isWorldsIndexEntry(e) {
+    return !!e && typeof e === "object" && isNonEmptyString(e.s);
+  }
+  function isWorldFactRow(row) {
+    return !!row && typeof row === "object" && row.kind === "fact" && isWorldName(row.world) && isNonEmptyString(row.subject) && isNonEmptyString(row.predicate) && isNonEmptyString(row.object);
+  }
+  function isWorldRuleRow(row) {
+    if (!row || typeof row !== "object" || row.kind !== "rule") return false;
+    if (!isWorldName(row.world) || !isNonEmptyString(row.name)) return false;
+    if (!RULE_KIND_SET.has(row.ruleKind)) return false;
+    if (!row.slots || typeof row.slots !== "object" || Array.isArray(row.slots)) return false;
+    const values = Object.values(row.slots);
+    return values.length > 0 && values.every(isNonEmptyString);
+  }
+  function isWorldMetaRow(row) {
+    return !!row && typeof row === "object" && row.kind === "meta" && isWorldName(row.world) && isNonEmptyString(row.opening);
+  }
+  function isWorldRow(row) {
+    return isWorldFactRow(row) || isWorldRuleRow(row) || isWorldMetaRow(row);
+  }
+
+  // src/services/adventure.mjs
+  init_ace2();
+  init_graph_adapter();
+  init_taught();
+
+  // src/adapters/corpus/worlds-pack.mjs
+  init_node_fs();
+  init_node_url();
+  init_node_path();
+  var import_meta5 = {};
+  var PKG_ROOT3 = join(dirname(fileURLToPath2(import_meta5.url)), "..", "..", "..");
+  function worldsPackDir(env = process.env) {
+    return env?.TMCT_WORLDS_PACK_DIR || join(PKG_ROOT3, "corpus", "worlds");
+  }
+  var indexCacheByDir = /* @__PURE__ */ new Map();
+  var worldCacheByKey = /* @__PURE__ */ new Map();
+  function readGunzipped(file) {
+    try {
+      return gunzipSync(readFileSync6(file));
+    } catch {
+      return null;
+    }
+  }
+  function loadWorldsIndex(dir) {
+    if (indexCacheByDir.has(dir)) return indexCacheByDir.get(dir);
+    let index = null;
+    const body = readGunzipped(join(dir, "index.json.gz"));
+    if (body) {
+      try {
+        const parsed = JSON.parse(body.toString("utf8"));
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) index = parsed;
+      } catch {
+      }
+    }
+    indexCacheByDir.set(dir, index);
+    return index;
+  }
+  function loadWorld(dir, worldName) {
+    const index = loadWorldsIndex(dir);
+    if (!index) return null;
+    const entry = index[String(worldName ?? "")];
+    if (!isWorldsIndexEntry(entry)) return null;
+    const key = `${dir}\0${worldName}`;
+    if (worldCacheByKey.has(key)) return worldCacheByKey.get(key);
+    let payload = null;
+    const body = readGunzipped(join(dir, "shards", `${entry.s}.jsonl.gz`));
+    if (body) {
+      const facts = [];
+      const rules = [];
+      let meta = null;
+      for (const line of body.toString("utf8").split("\n")) {
+        if (!line.trim()) continue;
+        try {
+          const row = JSON.parse(line);
+          if (!isWorldRow(row) || row.world !== worldName) continue;
+          if (isWorldFactRow(row)) facts.push(row);
+          else if (isWorldRuleRow(row)) rules.push(row);
+          else if (isWorldMetaRow(row) && !meta) meta = row;
+        } catch {
+        }
+      }
+      if (facts.length || rules.length || meta) payload = { name: worldName, facts, rules, meta };
+    }
+    worldCacheByKey.set(key, payload);
+    return payload;
+  }
+  var fsProviderFor = (dirOf) => ({
+    list: async () => {
+      const index = loadWorldsIndex(dirOf());
+      return index ? Object.keys(index).sort() : null;
+    },
+    load: async (worldName) => loadWorld(dirOf(), worldName)
+  });
+  var fsProvider = fsProviderFor(() => worldsPackDir());
+
+  // src/services/adventure.mjs
+  init_core();
+  init_completions();
 
   // src/services/chat-session.mjs
   init_node_path();
@@ -23603,7 +24085,7 @@ ${JSON.stringify(envelope, null, 2)}`;
     const last = premises[premises.length - 1];
     return `${premises.map(step).join("; ")}; so ${first.subject} is a ${last.object}`;
   }
-  async function memoryFacts(memoryDir) {
+  async function memoryFacts2(memoryDir) {
     try {
       const { loadMemory: loadMemory2 } = await Promise.resolve().then(() => (init_core(), core_exports));
       const m = await loadMemory2(memoryDir);
@@ -24088,7 +24570,7 @@ ${shown.map(renderFactLine).join("\n")}`,
     if (compAsk) {
       const compWord = compAsk[2].toLowerCase().replace(/\s+/g, "-");
       const compPredicate = `mgx:${compWord}-than`;
-      const facts = await memoryFacts(memoryDir);
+      const facts = await memoryFacts2(memoryDir);
       const compTerm = (raw) => {
         const t = raw.replace(/^(?:an?|the)\s+/i, "").trim();
         return focusLabel && IS_ADJECTIVE_PRONOUN_RE.test(t) ? focusLabel : t;
@@ -24110,7 +24592,7 @@ ${shown.map(renderFactLine).join("\n")}`,
     for (const { predicate, phrase, re } of FORWARD_YESNO_MARKERS) {
       const m = q.match(re);
       if (!m) continue;
-      const facts = await memoryFacts(memoryDir);
+      const facts = await memoryFacts2(memoryDir);
       const subj = factTermVariants(normFactTerm2, m[1]);
       const obj = factTermVariants(normFactTerm2, m[2]);
       const hit2 = facts.find((f) => f.predicate === predicate && subj.has(f.subject) && obj.has(f.object));
@@ -24172,7 +24654,7 @@ ${shown.map(renderFactLine).join("\n")}`,
       const subj = factTermVariants(normFactTerm2, doesHave[1]);
       const obj = factTermVariants(normFactTerm2, doesHave[2]);
       const HAS_PREDICATES = /* @__PURE__ */ new Set(["mgx:hasA", "tmct:has"]);
-      const facts = await memoryFacts(memoryDir);
+      const facts = await memoryFacts2(memoryDir);
       const hasHit = (subjectSet) => facts.find(
         (f) => HAS_PREDICATES.has(f.predicate) && subjectSet.has(f.subject) && obj.has(f.object)
       );
