@@ -44,11 +44,18 @@ test("drift guard: every relation in the slice has a mapping row; the table is t
   }
   // the table covers the whole canonical closed set (34 relations), so a
   // future regeneration cannot surface an unmapped canonical relation
-  assert.equal(map.size, 34);
   for (const rel of CANONICAL_RELS) assert.ok(map.has(rel), `${rel} mapped`);
+  // plus exactly one deliberate extra: /r/NotCapableOf, the single ConceptNet
+  // negative tmct admits (mapped to its own polarity, mgxneg:capableOf, for the
+  // child corpus). Nothing else beyond the canonical 34.
+  assert.equal(map.size, 35);
+  assert.ok(map.has("/r/NotCapableOf"), "the one admitted negative is mapped");
+  assert.equal(map.get("/r/NotCapableOf").predicate, "mgxneg:capableOf");
+  const extras = [...map.keys()].filter((rel) => !CANONICAL_RELS.has(rel));
+  assert.deepEqual(extras, ["/r/NotCapableOf"], "only /r/NotCapableOf sits outside the canonical set");
   for (const [rel, row] of map) {
     assert.ok(row.surface.includes("{start}") && row.surface.includes("{end}"), `${rel} surface template is slotted`);
-    if (row.ace !== "none") assert.match(row.predicate, /^(rdfs|owl|mgx):/, `${rel} emits a namespaced predicate`);
+    if (row.ace !== "none") assert.match(row.predicate, /^(rdfs|owl|mgx|mgxneg):/, `${rel} emits a namespaced predicate`);
   }
   // toFacts consumes the whole slice without throwing — the executable form of the guard
   assert.ok(toFacts(assertions, map).length > 0);

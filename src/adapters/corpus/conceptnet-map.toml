@@ -182,6 +182,13 @@ ace = "disjointWith"
 predicate = "owl:disjointWith"
 note = "mutual exclusion; ACE pattern 6 ('no N1 is a N2')"
 
+[[relation]]
+rel = "/r/NotCapableOf"
+surface = "a {start} cannot {end}"
+ace = "ObjectProperty"
+predicate = "mgxneg:capableOf"
+note = "typical INcapability — the one ConceptNet negative tmct admits (added for the child corpus). ConceptNet's /r/Not* family is deprecated upstream (docs/references/schemas/conceptnet-relations.md), but NotCapableOf is the one negative the defeasible-negation reader needs data for: it is the corpus source of 'a penguin cannot fly'. It maps onto tmct's OWN polarity, mgxneg:capableOf (src/domain/memory/capability.mjs) — polarity lives in the predicate, so ace stays ObjectProperty and the positive/negative twins hash to distinct facts. This is a DELIBERATE addition to the closed set; the loader's unmapped-relation hard error stays intact for every OTHER /r/Not* term, which never reach a shipped slice. Not part of CANONICAL_RELS (fetch-slice.mjs's tech filter never admits it); the child build admits it explicitly."
+
 # --- unmappable relations: no clean OWL-axiom fit; kept for other consumers ---
 
 [[relation]]
