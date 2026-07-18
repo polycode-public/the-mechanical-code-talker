@@ -1,17 +1,21 @@
 # PLAN_CHILD_CORPUS.md — a wider default corpus, selected by age of acquisition
 
-Status: BUILT as a lazy triples pack (`corpus/child/`), pending the chat miss-cascade wiring.
-The operator's framing was "all the concepts known to an 8 year old child in the top 10% of the
-Dutch education system". That sentence names a real want and an unbuyable dataset; this doc
-separates the two.
+Status: DELIVERED — the lazy triples pack (`corpus/child/`) ships AND the chat miss-cascade
+consumes it. The operator's framing was "all the concepts known to an 8 year old child in the
+top 10% of the Dutch education system". That sentence names a real want and an unbuyable
+dataset; this doc separates the two.
 
 Delivered (2.7.0 wave): the child slice ships as a lazy learn-on-miss TRIPLES pack through the
 pack mechanism — keyword-indexed shards keyed on `normFactTerm`, one shard loaded per clean
 miss — NOT a bulk init import. Build `npm run gen:child-corpus`; loader + provider seam in
 `src/adapters/corpus/child-pack.mjs` (`registerChildPackProvider`, env `TMCT_CHILD_PACK_DIR`);
 pure contract in `src/domain/child-pack.mjs`; trust half in `src/domain/memory/trust.mjs`
-(`child:conceptnet:<term>` → corpus tier, 0.7). The chat miss-cascade that consumes the provider
-is a follow-up wave — the read contract is in `corpus/child/README.md`. Acceptance numbers are
+(`child:conceptnet:<term>` → corpus tier, 0.7). The chat miss-cascade wiring is live:
+`src/services/chat.mjs`'s clean-miss gate consults the child pack FIRST (triples before the
+reference pack's prose), appends the term's triples under `child:conceptnet:<lemma>` provenance
+and re-answers the question from the store; both packs missing leaves the honest miss
+byte-identical (read contract: `corpus/child/README.md`; pins: `test/corpus/reference.jsonl`'s
+`reference.child.*` keys + `test/adapters/chat-child-lane.test.mjs`). Acceptance numbers are
 measured by `npm run measure:child-corpus` and stamped into that README.
 
 ## Why

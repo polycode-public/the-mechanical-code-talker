@@ -24,7 +24,10 @@ async function freshRepo() {
   return mkdtemp(join(tmpdir(), "tmct-ref-lane-"));
 }
 
-const fixtureEnv = { TMCT_REFERENCE_PACK_DIR: FIXTURE_PACK };
+// The child pack is pinned absent: these tests exercise the REFERENCE hook in
+// isolation, and a fixture term the shipped child pack also carries (falcon)
+// would otherwise be answered from triples before the article ever speaks.
+const fixtureEnv = { TMCT_REFERENCE_PACK_DIR: FIXTURE_PACK, TMCT_CHILD_PACK_DIR: "/nonexistent-child-pack" };
 
 async function turn(line, { memoryDir, env = fixtureEnv, last = null } = {}) {
   return runTurn(line, { config: null, memoryDir, env, last });
@@ -181,7 +184,7 @@ test("an absent pack leaves the turn byte-identical to a pack that misses the te
     // for a lexicon noun the pack cannot answer, one because the dir does not
     // exist, one because the term has no article. Identical bytes prove the
     // fallback path never leaks a trace of the failed lookup.
-    const absent = await turn("what is a harvest", { memoryDir: dirA, env: { TMCT_REFERENCE_PACK_DIR: "/nonexistent-reference-pack" } });
+    const absent = await turn("what is a harvest", { memoryDir: dirA, env: { TMCT_REFERENCE_PACK_DIR: "/nonexistent-reference-pack", TMCT_CHILD_PACK_DIR: "/nonexistent-child-pack" } });
     const missing = await turn("what is a harvest", { memoryDir: dirB, env: fixtureEnv });
     assert.equal(absent.answer, missing.answer, "the answer is byte-identical either way");
     assert.equal(absent.record.miss, true);

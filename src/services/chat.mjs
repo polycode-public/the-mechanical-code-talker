@@ -48,6 +48,8 @@ import { loadLexicon, lookupNoun } from "../domain/grammar/lexicon.mjs";
 import { pickPhrase } from "../domain/answer-variants.mjs";
 import { REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, referenceProvenanceTag } from "../domain/reference-pack.mjs";
 import { getReferencePackProvider } from "../adapters/corpus/reference-pack.mjs";
+import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
+import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { adventureTurn } from "./adventure.mjs";
@@ -9045,14 +9047,15 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
   return { text: `${def} (source: corpus/seon)`, term };
 }
 
-// ---- learn-on-miss: the shipped reference pack behind the cleanest miss ----
+// ---- learn-on-miss: the shipped child + reference packs behind the cleanest miss ----
 
-/** The learn-on-miss gate, shared by the articled miss hook and the bare-form
- *  fallback so the two can never disagree. Fires only on the CLEANEST miss: a
- *  definition-shaped term the lexicon knows, resolving to no graph entity and
- *  no remembered fact — then, and only then, the pack provider is consulted.
- *  Null means the turn proceeds byte-identically to a pack-less run. */
-async function referencePackMissAnswer(term, { graph, memoryDir, lexicon, env, cache }) {
+/** The learn-on-miss gate, shared by the child-pack hook, the articled
+ *  reference hook and the bare-form fallback so the three can never disagree.
+ *  Passes only on the CLEANEST miss: a definition-shaped term the lexicon
+ *  knows, resolving to no graph entity and no remembered fact — then, and
+ *  only then, may a pack provider be consulted. Null means the turn proceeds
+ *  byte-identically to a pack-less run. */
+async function cleanMissPackKey(term, { graph, memoryDir, lexicon, cache }) {
   if (!term || !memoryDir) return null;
   let key = null;
   try { key = cleanMissReferenceTerm(term, lexicon ?? undefined); } catch { key = null; }
@@ -9064,10 +9067,41 @@ async function referencePackMissAnswer(term, { graph, memoryDir, lexicon, env, c
   variants.add(key);
   const rows = await factRows(memoryDir, cache);
   if (rows.some((f) => variants.has(f.subject) || variants.has(f.object))) return null;
+  return key;
+}
+
+/** The reference-pack lookup for an already-gated key: the article, or null
+ *  (absent pack, missing term, any read failure — all byte-identical). */
+async function referencePackAnswerForKey(key, env) {
   let article = null;
   try { article = await getReferencePackProvider(env).lookup(key); } catch { article = null; }
   if (!article) return null;
   return { key, article, text: renderReferenceAnswer(key, article) };
+}
+
+/** The gate + the reference lookup in one call, for a caller that has a term
+ *  rather than a gated key. */
+async function referencePackMissAnswer(term, { graph, memoryDir, lexicon, env, cache }) {
+  const key = await cleanMissPackKey(term, { graph, memoryDir, lexicon, cache });
+  return key ? referencePackAnswerForKey(key, env) : null;
+}
+
+/** The child-pack half of learn-on-miss, for an already-gated key: look the
+ *  key up in the shipped child triples pack and append every fact under child
+ *  provenance, so the SAME question can be re-asked from the store. Null on a
+ *  pack miss or any failure — the turn then proceeds byte-identically. */
+async function childPackFactsForKey(key, { memoryDir, env, cache }) {
+  let row = null;
+  try { row = await getChildPackProvider(env).lookup(key); } catch { row = null; }
+  if (!row?.facts?.length) return null;
+  try {
+    const { appendFacts } = await import("../adapters/memory/core.mjs");
+    await appendFacts(memoryDir, row.facts.map(({ subject, predicate, object }) => ({
+      subject, predicate, object, provenance: childProvenanceTag(key),
+    })));
+  } catch { return null; }
+  if (cache) cache.rows = null;
+  return { key, count: row.facts.length };
 }
 
 /** Store the article's first-sentence isa as a subClassOf fact carrying
@@ -10789,13 +10823,23 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         const def = await curatedDefinitionAnswer(factQuery, envelope, { memoryDir, lexicon });
         if (def) bareMetaHit = { text: def.text, replace: true };
       }
-      // The reference pack's bare-form fallback, beside the curated one and
-      // under the IDENTICAL clean-miss gate the articled hook (4h) applies —
-      // "what is otter" reaches the pack exactly as "what is an otter" does.
+      // The learn-on-miss packs' bare-form fallback, beside the curated one
+      // and under the IDENTICAL clean-miss gate the articled hook (4h)
+      // applies — "what is otter" reaches the packs exactly as "what is an
+      // otter" does, child triples first, article prose second.
       if (!bareMetaHit) {
         const refTerm = metaTermOf(factQuery, envelope);
-        const ref = refTerm ? await referencePackMissAnswer(refTerm, { graph, memoryDir, lexicon, env, cache }) : null;
-        if (ref) bareMetaHit = { text: ref.text, replace: true, reference: ref };
+        const key = refTerm ? await cleanMissPackKey(refTerm, { graph, memoryDir, lexicon, cache }) : null;
+        const learned = key ? await childPackFactsForKey(key, { memoryDir, env, cache }) : null;
+        if (learned) {
+          const fact = (await factAnswer(memoryDir, factQuery, envelope, miss, biasByBundle, cache, newFocus?.label))
+            ?? (await factReadBack(memoryDir, factQuery, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
+          if (fact && !fact.miss) bareMetaHit = { text: fact.text, replace: true, child: learned };
+        }
+        if (!bareMetaHit && key) {
+          const ref = await referencePackAnswerForKey(key, env);
+          if (ref) bareMetaHit = { text: ref.text, replace: true, reference: ref };
+        }
       }
     }
     // A bare "what is X" naming a REAL code-graph entity (not a taught fact,
@@ -10851,8 +10895,13 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (!bareMetaHit.miss) { via = "fact"; recordMiss = false; }
     handled = true;
     if (bareMetaHit.pending) factPending = bareMetaHit.pending;
-    note(trace, "lane: (2b) BARE META FACT — \"what is X\" (no article) / \"is X <adjective>\" resolved to a remembered fact before the conversational catch-all could claim it");
-    note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
+    if (bareMetaHit.child) {
+      note(trace, "lane: (2b) CHILD PACK — a bare \"what is X\" clean miss pulled the term's triples from the shipped child pack into memory, and the question was re-answered from the store");
+      note(trace, `source: child pack ${CHILD_PACK_NAME} — ${bareMetaHit.child.count} fact(s) appended as ${childProvenanceTag(bareMetaHit.child.key)}, answer served from .tmct/memory Facts`);
+    } else {
+      note(trace, "lane: (2b) BARE META FACT — \"what is X\" (no article) / \"is X <adjective>\" resolved to a remembered fact before the conversational catch-all could claim it");
+      note(trace, "source: .tmct/memory Facts (see /memory for provenance per line)");
+    }
   } else if (isConversationalCandidate && habitualGroundingHint) {
     // A bare habitual teach ("penguins swim") naming a subject grounded
     // nowhere: an honest, actionable grounding hint beats the orientation
@@ -11212,22 +11261,40 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, `lane: (4g) FUZZY-VERB DECLINE — "${from}" only became a verb through the edit-distance repair tier ("${to}"), and the two words are different verbs, so the repaired sentence's graph answer is dropped rather than shown as an answer to what was typed`);
     }
   }
-  // (4h) REFERENCE PACK — the cleanest miss consults the shipped reference
-  // pack: a definition-shaped term the lexicon knows, no graph entity, no
-  // remembered fact. A hit answers with the article's summary, always cited;
-  // a null from any gate leaves the turn byte-identical. After the answer
-  // composes, the article's first-sentence isa is stored as a subClassOf fact
-  // with reference provenance, so the NEXT ask answers from memory.
+  // (4h) LEARN-ON-MISS PACKS — the cleanest miss consults the shipped packs:
+  // a definition-shaped term the lexicon knows, no graph entity, no
+  // remembered fact. The CHILD triples pack goes first (facts before prose):
+  // a hit appends the term's triples under child provenance and the SAME
+  // question is re-asked from the store, so the answer is an ordinary cited
+  // fact answer. Only when the store still cannot answer does the reference
+  // pack's article speak, cited as before. Both packs missing leaves the
+  // honest miss byte-identical.
   if (miss && recordMiss && via === "composed" && memoryDir) {
     const refTerm = metaTermOf(query, envelope);
-    const ref = refTerm ? await referencePackMissAnswer(refTerm, { graph, memoryDir, lexicon, env, cache }) : null;
-    if (ref) {
-      answer = ref.text;
-      via = "reference";
-      recordMiss = false;
-      note(trace, "lane: (4h) REFERENCE PACK — a clean miss on a lexicon term answered from the shipped reference pack, cited");
-      note(trace, `source: reference pack ${REFERENCE_PACK_NAME} — article "${ref.article.title}" (revid ${ref.article.revid})`);
-      await appendReferenceIsaFact(memoryDir, ref.key, ref.article, cache);
+    const key = refTerm ? await cleanMissPackKey(refTerm, { graph, memoryDir, lexicon, cache }) : null;
+    const learned = key ? await childPackFactsForKey(key, { memoryDir, env, cache }) : null;
+    if (learned) {
+      const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle, cache, newFocus?.label))
+        ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
+      if (fact && !fact.miss) {
+        answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
+        via = "fact";
+        recordMiss = false;
+        if (fact.pending) factPending = fact.pending;
+        note(trace, "lane: (4h) CHILD PACK — a clean miss on a lexicon term pulled the term's triples from the shipped child pack into memory, and the question was re-answered from the store");
+        note(trace, `source: child pack ${CHILD_PACK_NAME} — ${learned.count} fact(s) appended as ${childProvenanceTag(key)}, answer served from .tmct/memory Facts`);
+      }
+    }
+    if (miss && recordMiss && via === "composed" && key) {
+      const ref = await referencePackAnswerForKey(key, env);
+      if (ref) {
+        answer = ref.text;
+        via = "reference";
+        recordMiss = false;
+        note(trace, "lane: (4h) REFERENCE PACK — a clean miss on a lexicon term answered from the shipped reference pack, cited");
+        note(trace, `source: reference pack ${REFERENCE_PACK_NAME} — article "${ref.article.title}" (revid ${ref.article.revid})`);
+        await appendReferenceIsaFact(memoryDir, ref.key, ref.article, cache);
+      }
     }
   }
   // (5) #1 SHORT TAILORED MISS — replace ONLY the engine's full grammar cheat-sheet
