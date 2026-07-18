@@ -8,9 +8,13 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { appendFact, appendFacts, loadMemory, readFactRows, removeFacts } from "../../src/adapters/memory/core.mjs";
 import {
-  deriveSubClassClosure, deriveTypePropagation, deriveDisjointViolations,
+  appendFact, appendFacts, loadMemory, readFactRows, removeFacts,
+  loadSyllogiseState, saveSyllogiseState,
+} from "../../src/adapters/memory/core.mjs";
+import {
+  deriveSubClassClosure, deriveSubClassClosureDelta, buildRelevanceFrontier,
+  deriveTypePropagation, deriveDisjointViolations,
   deriveSomeValuesFromApplication, findConsistencyViolations, findIsaChain, syllogise as syllogiseSeam,
   ENTAILED_PROVENANCE, SUBCLASS_PREDICATE, ENTAILED_TYPE_PROVENANCE, TYPE_PREDICATE,
   ENTAILED_DISJOINT_PROVENANCE, DISJOINT_PREDICATE, CAX_DW_RULE, CAX_DW_RULE_CONFIDENCE,
@@ -1592,4 +1596,310 @@ test("retractSubClassOf: without appendFacts on the store, removal is still corr
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+// ---- semi-naive delta evaluation: the watermark, the frontier, and the ------
+// ---- delta ≡ full guarantee -------------------------------------------------
+
+// The delta-capable store: STORE plus the watermark seam. Kept separate so
+// every earlier test in this file stays on the state-less full path.
+const STATE_STORE = { ...STORE, loadSyllogiseState, saveSyllogiseState };
+const syllogiseDelta = (dir, opts = {}) => syllogiseSeam(dir, { store: STATE_STORE, ...opts });
+
+const factRowKey = (r) => `${r.subject} | ${r.predicate} | ${r.object}`;
+const comparableRows = async (dir) => readFactRows(await loadMemory(dir))
+  .map((r) => ({ key: factRowKey(r), provenance: r.provenance, environments: r.environments }))
+  .sort((a, b) => a.key.localeCompare(b.key));
+
+test("syllogise delta: an unchanged store after a complete pass is a delta of nothing — mode delta, deltaSize 0, count 0", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    const first = await syllogiseDelta(dir);
+    assert.equal(first.mode, "full", "no watermark yet — the first pass is full");
+    assert.ok(await loadSyllogiseState(dir), "the complete pass recorded a watermark");
+
+    const second = await syllogiseDelta(dir);
+    assert.equal(second.mode, "delta");
+    assert.equal(second.deltaSize, 0);
+    assert.equal(second.count, 0);
+    assert.equal(second.environmentsAdded, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise delta: a newly-taught alternate premise set accretes onto a stored entailment in DELTA mode too", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await syllogiseDelta(dir);
+
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "d", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    const res = await syllogiseDelta(dir);
+    assert.equal(res.mode, "delta");
+    assert.equal(res.deltaSize, 2, "exactly the two newly-taught rows");
+    assert.equal(res.environmentsAdded, 1, "the new route accretes onto the stored a⊑c");
+    const derived = readFactRows(await loadMemory(dir)).find((r) => r.subject === "a" && r.object === "c");
+    assert.deepEqual(derived.environments, [
+      [envId("a", SUBCLASS_PREDICATE, "b"), envId("b", SUBCLASS_PREDICATE, "c")],
+      [envId("a", SUBCLASS_PREDICATE, "d"), envId("d", SUBCLASS_PREDICATE, "c")],
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+/** Differential harness: two identical repos take the same base facts and a
+ *  complete pass; both then take the same delta facts; one runs the default
+ *  (delta) pass, the twin a forced-full control. The stores must end
+ *  identical in (s,p,o), provenance and environments. `teach` steps are
+ *  either appendFact descriptors or { sentence } rows for assertSentence. */
+async function assertDeltaEqualsFull(baseFacts, deltaFacts) {
+  const dirDelta = await mkRepo();
+  const dirFull = await mkRepo();
+  try {
+    const apply = async (dir, step) => {
+      if (step.sentence) await assertSentence(dir, step.sentence, { provenance: { source: "chat" } });
+      else await appendFact(dir, step);
+    };
+    for (const step of baseFacts) { await apply(dirDelta, step); await apply(dirFull, step); }
+    await syllogiseDelta(dirDelta);
+    await syllogiseDelta(dirFull);
+    for (const step of deltaFacts) { await apply(dirDelta, step); await apply(dirFull, step); }
+    const resDelta = await syllogiseDelta(dirDelta);
+    const resFull = await syllogiseDelta(dirFull, { full: true });
+    assert.equal(resDelta.mode, "delta", "the default second pass really ran delta evaluation");
+    assert.equal(resFull.mode, "full", "the control really ran full evaluation");
+    assert.deepEqual(await comparableRows(dirDelta), await comparableRows(dirFull),
+      "delta and full evaluation end in identical stores — facts, provenance and environments");
+    return { resDelta, resFull };
+  } finally {
+    await rm(dirDelta, { recursive: true, force: true });
+    await rm(dirFull, { recursive: true, force: true });
+  }
+}
+
+test("syllogise delta ≡ full: a mid-chain ⊑ edge joins two stored chain halves (scm-sco)", async () => {
+  const { resDelta } = await assertDeltaEqualsFull([
+    { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" },
+    { subject: "c", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" },
+  ], [
+    { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" },
+  ]);
+  assert.equal(resDelta.count, 3, "the delta pass really derived the joined closure: a⊑c, b⊑d, a⊑d");
+});
+
+test("syllogise delta ≡ full: a new type edge AND a new ⊑ edge above an old type (cax-sco)", async () => {
+  await assertDeltaEqualsFull([
+    { subject: "x1", predicate: TYPE_PREDICATE, object: "cat", provenance: "ace:chat:s1" },
+    { subject: "cat", predicate: SUBCLASS_PREDICATE, object: "feline", provenance: "ace:chat:s1" },
+  ], [
+    { subject: "x2", predicate: TYPE_PREDICATE, object: "cat", provenance: "ace:chat:s1" },
+    { subject: "feline", predicate: SUBCLASS_PREDICATE, object: "animal", provenance: "ace:chat:s1" },
+  ]);
+});
+
+test("syllogise delta ≡ full: a new disjointWith edge above an old type chain (cax-dw)", async () => {
+  await assertDeltaEqualsFull([
+    { subject: "e01.mjs", predicate: TYPE_PREDICATE, object: "mock", provenance: "ace:chat:s1" },
+    { subject: "mock", predicate: SUBCLASS_PREDICATE, object: "fixture", provenance: "ace:chat:s1" },
+  ], [
+    { subject: "fixture", predicate: DISJOINT_PREDICATE, object: "test", provenance: "ace:chat:s1" },
+  ]);
+});
+
+test("syllogise delta ≡ full: a new property edge AND a new restriction over old edges (cls-svf1)", async () => {
+  await assertDeltaEqualsFull([
+    { subject: "e01.mjs", predicate: "tmct:imports", object: "t1.mjs", provenance: "ace:chat:s1" },
+    { subject: "t1.mjs", predicate: TYPE_PREDICATE, object: "test", provenance: "ace:chat:s1" },
+  ], [
+    { sentence: "every module that imports a test is a suite" },
+    { subject: "e02.mjs", predicate: "tmct:imports", object: "t2.mjs", provenance: "ace:chat:s1" },
+    { subject: "t2.mjs", predicate: TYPE_PREDICATE, object: "test", provenance: "ace:chat:s1" },
+  ]);
+});
+
+test("syllogise delta ≡ full: a new filler ⊑ edge connects two old restrictions (scm-svf1)", async () => {
+  await assertDeltaEqualsFull([
+    { sentence: "every module that imports a method is a formatter" },
+    { sentence: "every module that imports a fixture is a suite" },
+  ], [
+    { subject: "method", predicate: SUBCLASS_PREDICATE, object: "fixture", provenance: "ace:chat:s1" },
+  ]);
+});
+
+test("syllogise delta: a retraction invalidates the watermark — the next pass is full and rebuilds it", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await syllogiseDelta(dir);
+    assert.ok(await loadSyllogiseState(dir));
+
+    await retractSubClassOf(dir, "a", "b");
+    const afterRetract = await syllogiseDelta(dir);
+    assert.equal(afterRetract.mode, "full", "removed ids break the id-set diff — no delta on a shrunk store");
+
+    const next = await syllogiseDelta(dir);
+    assert.equal(next.mode, "delta", "the completing full pass rebuilt the watermark");
+    assert.equal(next.deltaSize, 0);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise delta: a truncated pass never advances the watermark, and the next default pass converges "
+  + "with an untruncated control", async () => {
+  const dir = await mkRepo();
+  const control = await mkRepo();
+  try {
+    for (const d of [dir, control]) {
+      await appendFact(d, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+      await appendFact(d, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+      await appendFact(d, { subject: "c", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+      await appendFact(d, { subject: "d", predicate: SUBCLASS_PREDICATE, object: "e", provenance: "corpus:x" });
+    }
+    const truncatedPass = await syllogiseDelta(dir, { budget: 2 });
+    assert.equal(truncatedPass.truncated, true);
+    assert.equal(await loadSyllogiseState(dir), null, "a truncated pass records no watermark");
+
+    const finishing = await syllogiseDelta(dir);
+    assert.equal(finishing.mode, "full", "with no watermark the next default pass is full");
+    await syllogiseDelta(control);
+    // Environment ORDER is stored-first by contract, so two different pass
+    // histories may order the same environment set differently — converge on
+    // the canonical set, not the order.
+    const canonical = (rows) => rows.map((r) => ({
+      ...r, environments: r.environments.map((e) => [...e].sort().join(" ")).sort(),
+    }));
+    assert.deepEqual(canonical(await comparableRows(dir)), canonical(await comparableRows(control)),
+      "truncate-then-finish converges with the single untruncated control pass");
+    assert.ok(await loadSyllogiseState(dir), "the finishing pass advanced the watermark");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+    await rm(control, { recursive: true, force: true });
+  }
+});
+
+test("syllogise delta: a focused pass never advances the watermark", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    const focused = await syllogiseDelta(dir, { focus: ["a"] });
+    assert.equal(focused.mode, "full", "a focused pass never reads the watermark");
+    assert.equal(await loadSyllogiseState(dir), null, "and never writes one");
+
+    await syllogiseDelta(dir);
+    const watermark = await loadSyllogiseState(dir);
+    assert.ok(watermark);
+    await appendFact(dir, { subject: "c", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await syllogiseDelta(dir, { focus: ["c"] });
+    assert.deepEqual((await loadSyllogiseState(dir)).factIds, watermark.factIds,
+      "a later focused pass leaves the standing watermark untouched");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise delta: identical op sequences end in identical fact sets and identical watermark state", async () => {
+  const run = async (dir) => {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await syllogiseDelta(dir);
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "d", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await syllogiseDelta(dir);
+    await retractSubClassOf(dir, "a", "b");
+    await syllogiseDelta(dir);
+  };
+  const dir1 = await mkRepo();
+  const dir2 = await mkRepo();
+  try {
+    await run(dir1);
+    await run(dir2);
+    assert.deepEqual(await comparableRows(dir1), await comparableRows(dir2));
+    const [s1, s2] = [await loadSyllogiseState(dir1), await loadSyllogiseState(dir2)];
+    assert.deepEqual(s1.factIds, s2.factIds, "the watermark id sets agree");
+    assert.equal(s1.version, s2.version);
+  } finally {
+    await rm(dir1, { recursive: true, force: true });
+    await rm(dir2, { recursive: true, force: true });
+  }
+});
+
+// ---- deriveSubClassClosureDelta: the pure semi-naive kernel ----
+
+test("deriveSubClassClosureDelta: over a closed base plus a delta, output equals the full kernel's novel output", () => {
+  // base closed: a⊑b plus c⊑d⊑e with c⊑e materialised; delta joins the halves
+  const base = [["a", "b"], ["c", "d"], ["d", "e"], ["c", "e"]];
+  const delta = [["b", "c"]];
+  const all = [...base, ...delta];
+  const fullOut = deriveSubClassClosure(all);
+  const deltaOut = deriveSubClassClosureDelta(all, delta);
+  assert.deepEqual(deltaOut, fullOut, "same conclusions, same via pivots, same order");
+  assert.ok(fullOut.length >= 5, `the joined chain really closed (${fullOut.length})`);
+});
+
+test("deriveSubClassClosureDelta: an empty delta derives nothing, whatever the base holds", () => {
+  assert.deepEqual(deriveSubClassClosureDelta([["a", "b"], ["b", "c"]], []), []);
+  assert.deepEqual(deriveSubClassClosureDelta([], []), []);
+});
+
+test("deriveSubClassClosureDelta: hard budget caps derivations, deterministically", () => {
+  const base = [["b", "c"], ["b", "d"], ["b", "e"], ["c", "f"]];
+  const delta = [["a", "b"]];
+  const all = [...base, ...delta];
+  const d1 = deriveSubClassClosureDelta(all, delta, { budget: 2 });
+  assert.equal(d1.length, 2);
+  assert.deepEqual(d1, deriveSubClassClosureDelta(all, delta, { budget: 2 }), "same inputs → same truncation");
+});
+
+test("deriveSubClassClosureDelta: tautology, dedup and focus screens match the full kernel's", () => {
+  // tautology: the delta closes a cycle — a⊑a is never emitted
+  assert.deepEqual(deriveSubClassClosureDelta([["a", "b"], ["b", "a"]], [["b", "a"]]), []);
+  // dedup: the joined conclusion is already stored
+  assert.deepEqual(deriveSubClassClosureDelta([["a", "b"], ["b", "c"], ["a", "c"]], [["b", "c"]]), []);
+  // focus: an unrelated focus screens the conclusion out; a touching one admits it
+  const all = [["a", "b"], ["b", "c"]];
+  assert.deepEqual(deriveSubClassClosureDelta(all, [["b", "c"]], { focus: new Set(["z"]) }), []);
+  assert.deepEqual(
+    deriveSubClassClosureDelta(all, [["b", "c"]], { focus: new Set(["a"]) }),
+    [{ subject: "a", object: "c", via: "b" }],
+  );
+});
+
+// ---- buildRelevanceFrontier: forward relevance from a change's seed terms ----
+
+test("buildRelevanceFrontier: seeds expand to ⊑-descendants, their typed instances, and restrictions over affected fillers", () => {
+  const rows = [
+    { subject: "poodle", predicate: SUBCLASS_PREDICATE, object: "dog" },
+    { subject: "dog", predicate: SUBCLASS_PREDICATE, object: "animal" },
+    { subject: "rex", predicate: TYPE_PREDICATE, object: "dog" },
+    { subject: "unrelated.mjs", predicate: TYPE_PREDICATE, object: "widget" },
+    { subject: "some-owns-dog", predicate: ON_PROPERTY_PREDICATE, object: "owns" },
+    { subject: "some-owns-dog", predicate: SOME_VALUES_FROM_PREDICATE, object: "dog" },
+    { subject: "half-declared", predicate: SOME_VALUES_FROM_PREDICATE, object: "dog" }, // no onProperty — not a declared restriction
+  ];
+  const f = buildRelevanceFrontier(rows, ["dog"]);
+  assert.deepEqual([...f].sort(), ["dog", "poodle", "rex", "some-owns-dog"],
+    "the seed, its descendant, its instance and the restriction over it — nothing else");
+  assert.ok(!f.has("animal"), "an ANCESTOR of the seed is not pulled in by the descendant walk");
+});
+
+test("buildRelevanceFrontier: no rows at all leaves exactly the normalized seeds", () => {
+  const f = buildRelevanceFrontier([], ["Dog", "the cat"]);
+  assert.deepEqual([...f].sort(), ["cat", "dog"]);
+});
+
+test("buildRelevanceFrontier: deterministic — same rows and seeds, same set, same iteration order", () => {
+  const rows = [
+    { subject: "poodle", predicate: SUBCLASS_PREDICATE, object: "dog" },
+    { subject: "rex", predicate: TYPE_PREDICATE, object: "poodle" },
+  ];
+  assert.deepEqual([...buildRelevanceFrontier(rows, ["dog"])], [...buildRelevanceFrontier(rows, ["dog"])]);
 });

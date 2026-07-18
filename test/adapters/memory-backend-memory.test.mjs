@@ -167,3 +167,17 @@ test("the flat-file-only seams refuse an in-memory handle loudly: no graph.json 
   assert.throws(() => resolveMemoryGraphFile(handle), /Backend A only/);
   await assert.rejects(() => snapshotMemory(handle), /flat-JSON backend/);
 });
+
+test("syllogise state round-trips on a memory handle, cloned both ways and absent by default", async () => {
+  const { loadSyllogiseState, saveSyllogiseState } = await import("../../src/adapters/memory/core.mjs");
+  const handle = createInMemoryStore();
+  assert.equal(await loadSyllogiseState(handle), null, "a fresh handle carries no watermark");
+  const state = { version: 1, factIds: ["fact:aaaaaaaaaaaaaaaa"], completedAt: TS1 };
+  await saveSyllogiseState(handle, state);
+  state.factIds.push("fact:bbbbbbbbbbbbbbbb"); // caller mutation must not reach the stored copy
+  const loaded = await loadSyllogiseState(handle);
+  assert.deepEqual(loaded, { version: 1, factIds: ["fact:aaaaaaaaaaaaaaaa"], completedAt: TS1 });
+  loaded.factIds.push("fact:cccccccccccccccc"); // nor must mutating a loaded copy
+  assert.deepEqual((await loadSyllogiseState(handle)).factIds, ["fact:aaaaaaaaaaaaaaaa"]);
+  assert.equal(await loadSyllogiseState(createInMemoryStore()), null, "handles never share state");
+});

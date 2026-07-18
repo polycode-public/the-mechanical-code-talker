@@ -295,3 +295,20 @@ test("the flat-file-only seams refuse a sqlite handle loudly: no graph.json path
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("syllogise state round-trips through the sqlite meta table and survives a payload persist", async () => {
+  const { loadSyllogiseState, saveSyllogiseState } = await import("../../src/adapters/memory/core.mjs");
+  const { dir, handle } = await sqliteHandle();
+  try {
+    assert.equal(await loadSyllogiseState(handle), null, "a fresh database carries no watermark");
+    const state = { version: 1, factIds: ["fact:aaaaaaaaaaaaaaaa", "fact:bbbbbbbbbbbbbbbb"], completedAt: TS1 };
+    await saveSyllogiseState(handle, state);
+    assert.deepEqual(await loadSyllogiseState(handle), state);
+    // a later ordinary write must not clobber the watermark's meta row
+    await appendFact(handle, { subject: "cache", predicate: "rdfs:subClassOf", object: "store", provenance: "corpus:x" });
+    assert.deepEqual(await loadSyllogiseState(handle), state);
+  } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});

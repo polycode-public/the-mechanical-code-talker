@@ -1,10 +1,11 @@
 # PLAN_SYLLOGIST.md — beyond the shipped ladder: making the Syllogist itself smarter
 
-> **STATUS (2026-07-18 delivery run): §3 is IMPLEMENTED including the bounded environment sets
+> **STATUS (2026-07-18 delivery run): §2 and §3 are IMPLEMENTED — §2 as semi-naive delta
+> evaluation (watermark + relevance frontier, see §2), §3 including the bounded environment sets
 > (multiple premise sets per entailed fact, `mgx:factJustification`'s ' | '-separated environments,
 > the `maxEnvironments` knob, set-membership retraction with survivor re-grounding —
 > `syllogise`/`retractSubClassOf`, `src/domain/syllogise.mjs`; see §3 and the addendum).
-> §1/§2/§4/§5 remain notes only —
+> §1/§4/§5 remain notes only —
 > and §1's beyond-RL survey now has a deeper sibling doc, `PLAN_SYLLOGIST_EL_DL.md`, which owns the
 > EL-classifier/DL-tableau tier; this file owns the incrementality/retraction horizon.
 > **2026-07-12: both chat-layer findings routed here from `archive/BENCHMARK_CONVERSATION_1.8.14.md` are now
@@ -78,21 +79,32 @@ literature does not address at all — it is silent on trust tiers because DL se
 governance layer is this repo's own invention (already shipped), not a gap in the literature to
 fill.
 
-## 2. Incrementality (RETE / semi-naive evaluation) is also solved — `syllogise.mjs` just hasn't adopted it yet
+## 2. Incrementality (RETE / semi-naive evaluation) — IMPLEMENTED as semi-naive delta evaluation
 
-`deriveSubClassClosure` (`src/domain/syllogise.mjs`) re-scans the full `succ` adjacency snapshot every
-pass; the budget/focus/screen guards bound HOW MUCH work a pass does but not whether the pass
-reuses work from the last one — there is no persisted match-state across calls. The classical
-answer (compile the rule set into a discrimination network so a new fact only re-triggers the joins
-it could actually affect) is Forgy's RETE algorithm (Forgy, C.L., "Rete: A Fast Algorithm for the
-Many Pattern/Many Object Pattern Match Problem," *Artificial Intelligence* 19(1):17-37, 1982 —
-verified) and its Datalog-world descendant, semi-naive evaluation, is exactly the engine choice
-intended for tier-5 and what RDFox's production incremental engine actually
-runs at scale (Motik et al. 2015, above). `syllogise.mjs`'s predicate-indexed edge-building (keying
-facts by predicate so a pass doesn't rescan irrelevant rows) is a real step in this direction but it
-is NOT yet an alpha/beta network — a genuinely incremental `syllogise()` (new fact in ⇒ only the
-newly-enabled derivations computed, not a re-scan bounded by budget) is a known, citable technique
-to port, not an open question.
+The classical answer (compile the rule set into a discrimination network so a new fact only
+re-triggers the joins it could actually affect) is Forgy's RETE algorithm (Forgy, C.L., "Rete: A
+Fast Algorithm for the Many Pattern/Many Object Pattern Match Problem," *Artificial Intelligence*
+19(1):17-37, 1982 — verified) and its Datalog-world descendant, semi-naive evaluation, which is
+what RDFox's production incremental engine runs at scale (Motik et al. 2015, above).
+
+`syllogise()` now runs the semi-naive form. The persisted match-state is a WATERMARK — the fact-id
+set at the end of the last complete pass (`loadSyllogiseState`/`saveSyllogiseState`, a
+backend-dispatched sidecar: `.tmct/memory/syllogise-state.json` on the flat-JSON backend, a handle
+field in-memory, a meta row in sqlite). A default unfocused pass whose watermark still matches the
+store (id-set diff — a retraction, snapshot restore or hand-edit breaks it and honestly forces
+full) evaluates only the delta: scm-sco joins the since-watermark ⊑ rows against the full relation
+(`deriveSubClassClosureDelta`, a textbook semi-naive closure with the full kernel's exact
+contract), and the four later kernels are scoped by a RELEVANCE FRONTIER (`buildRelevanceFrontier`:
+delta terms + their ⊑-descendants + instances typed in those classes + restrictions over those
+fillers) as focus plus per-kernel input pre-filters. Conclusions are provably identical to a full
+pass (the dedup screens make the frontier's over-approximation harmless; differential tests, one
+per rule, pin it). The watermark advances only after an unfocused pass ending at a natural
+fixpoint; `--full` forces full evaluation. The honest caveat: the pass still pays the full store
+snapshot read — what became delta-proportional is candidate generation and the joins, not the
+load. One named gap: a delta-mode cls-svf1 ALTERNATE environment enabled solely by a new filler
+type outside the frontier waits for the next full pass (retraction stays correct through its
+enumerate/boolean fallbacks). Chat's `/syllogise <term>` keeps its explicit-focus full path and
+does not touch the watermark.
 
 ## 3. Retraction-aware consistency under a hard budget and trust tiers — the one genuinely open piece
 

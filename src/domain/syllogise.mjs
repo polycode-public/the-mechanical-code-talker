@@ -172,6 +172,79 @@ export function deriveSubClassClosure(edges, { depth = 32, budget = 50, focus = 
 }
 
 /**
+ * PURE semi-naive subClassOf closure: the delta twin of
+ * `deriveSubClassClosure`, same contract exactly (only-new `{ subject,
+ * object, via }` conclusions, tautology/dedup/focus screens, the same
+ * per-round candidate sort, identical `budget`/`depth` semantics). Instead of
+ * re-joining the whole relation each round, round one joins only
+ * `deltaEdges` against the full relation (Δ∘R and R∘Δ — Δ∘Δ falls out of Δ∘R
+ * because `allEdges` contains the delta rows too), and each later round joins
+ * only what the previous round committed. When the non-delta part of
+ * `allEdges` is already closed (a prior pass ran to fixpoint), the output
+ * equals the full kernel's novel output, order included.
+ */
+export function deriveSubClassClosureDelta(allEdges, deltaEdges, { depth = 32, budget = 50, focus = null } = {}) {
+  const present = new Set();      // "a\0b" for every edge already known
+  const succ = new Map();         // a -> Set(b): the live successor relation
+  const pred = new Map();         // b -> Set(a): its inverse, for the R∘Δ join
+  for (const [a, b] of allEdges || []) {
+    if (!a || !b || a === b) continue;
+    present.add(`${a}${SEP}${b}`);
+    if (!succ.has(a)) succ.set(a, new Set());
+    succ.get(a).add(b);
+    if (!pred.has(b)) pred.set(b, new Set());
+    pred.get(b).add(a);
+  }
+  let delta = [];
+  const seenDelta = new Set();
+  for (const [a, b] of deltaEdges || []) {
+    if (!a || !b || a === b) continue;
+    const key = `${a}${SEP}${b}`;
+    if (seenDelta.has(key)) continue;
+    seenDelta.add(key);
+    delta.push([a, b]);
+  }
+  const focusSet = focus instanceof Set ? (focus.size ? focus : null) : normalizeFocus(focus);
+  const inFocus = (a, b, c) => !focusSet || focusSet.has(a) || focusSet.has(b) || focusSet.has(c);
+
+  const derived = [];
+  const derivedKeys = new Set();
+  for (let round = 0; round < depth && delta.length; round += 1) {
+    const additions = [];
+    const consider = (a, b, c) => {
+      if (a === c) return;                                    // tautology screen (reflexive)
+      const key = `${a}${SEP}${c}`;
+      if (present.has(key) || derivedKeys.has(key)) return;   // dedup / novelty screen
+      if (!inFocus(a, b, c)) return;                          // focus-connection screen
+      additions.push([a, b, c, key]);
+    };
+    for (const [a, b] of delta) {
+      for (const c of succ.get(b) || []) consider(a, b, c);   // Δ∘R
+      for (const z of pred.get(a) || []) consider(z, a, b);   // R∘Δ
+    }
+    if (!additions.length) break; // fixpoint reached
+    additions.sort((x, y) => x[0].localeCompare(y[0]) || x[2].localeCompare(y[2]) || x[1].localeCompare(y[1]));
+    let progressed = false;
+    const nextDelta = [];
+    for (const [a, b, c, key] of additions) {
+      if (derivedKeys.has(key)) continue; // an earlier addition this round covered it
+      if (derived.length >= budget) break;
+      derivedKeys.add(key);
+      derived.push({ subject: a, object: c, via: b });
+      if (!succ.has(a)) succ.set(a, new Set());
+      succ.get(a).add(c);
+      if (!pred.has(c)) pred.set(c, new Set());
+      pred.get(c).add(a);
+      nextDelta.push([a, c]);
+      progressed = true;
+    }
+    if (derived.length >= budget || !progressed) break; // budget hit or nothing committed
+    delta = nextDelta;
+  }
+  return derived;
+}
+
+/**
  * Shared closure machinery: given `subClassEdges` ([[a,b], …], already-
  * normalized), returns a memoized `ancestorsOf(c)` that walks the FULL
  * ⊑-ancestor set of `c` (every superclass reachable, transitively — NOT
@@ -205,6 +278,52 @@ function buildAncestorCloser(subClassEdges) {
   };
 }
 
+/** `buildAncestorCloser` with the edges reversed: a memoized
+ *  `descendantsOf(c)` walking every SUBclass reachable below `c`. */
+function buildDescendantCloser(subClassEdges) {
+  return buildAncestorCloser((subClassEdges || []).map(([a, b]) => [b, a]));
+}
+
+/**
+ * PURE relevance frontier: the set of terms a change touching `seedTerms`
+ * can actually affect, over the fact `rows` given. Seeds (normalized) plus
+ * the ⊑-descendant closure of each seed (a new edge above a class affects
+ * everything below it), plus every instance carrying a stored type in that
+ * affected-class set, plus every declared someValuesFrom restriction node
+ * whose target filler class sits in it. Over-approximation is harmless — the
+ * kernels' own dedup screens drop anything already known — while a term the
+ * frontier misses simply waits for the next full pass. The same structure
+ * serves forward relevance (a delta pass's focus) that `retractSubClassOf`'s
+ * citedBy index serves backward.
+ */
+export function buildRelevanceFrontier(rows, seedTerms) {
+  const subClassEdges = [];
+  const typeEdges = [];
+  const onPropertyOf = new Map();      // restriction -> owl:onProperty's object
+  const someValuesFromOf = new Map();  // restriction -> owl:someValuesFrom's object
+  for (const r of rows || []) {
+    if (!r || !r.subject || !r.predicate || !r.object) continue;
+    if (isSubClassOf(r.predicate)) subClassEdges.push([r.subject, r.object]);
+    else if (isType(r.predicate)) typeEdges.push([r.subject, r.object]);
+    else if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
+    else if (isSomeValuesFrom(r.predicate)) someValuesFromOf.set(r.subject, r.object);
+  }
+  const descendantsOf = buildDescendantCloser(subClassEdges);
+  const affectedClasses = new Set();
+  for (const t of seedTerms || []) {
+    const n = normFactTerm(t);
+    if (!n) continue;
+    affectedClasses.add(n);
+    for (const d of descendantsOf(n)) affectedClasses.add(d);
+  }
+  const frontier = new Set(affectedClasses);
+  for (const [x, c] of typeEdges) if (affectedClasses.has(c)) frontier.add(x);
+  for (const [restriction, target] of someValuesFromOf) {
+    if (onPropertyOf.has(restriction) && affectedClasses.has(target)) frontier.add(restriction);
+  }
+  return frontier;
+}
+
 /**
  * PURE cax-sco: rdf:type propagation across a subClassOf chain — (x rdf:type
  * C), (C ⊑ … ⊑ D) ⊨ (x rdf:type D). `subClassEdges` is a fixed input (unlike
@@ -212,13 +331,18 @@ function buildAncestorCloser(subClassEdges) {
  * class (`buildAncestorCloser`) covers the whole chain — no fixpoint rounds
  * needed. Returns ONLY new `{ subject, object, via }` conclusions, bounded by
  * `budget`, focus-filtered, tautology- and dedup-screened, deterministic order.
+ *
+ * `presentTypeEdges` (defaults to `typeEdges`) feeds ONLY the novelty screen:
+ * a delta caller that pre-filters `typeEdges` to the relevant slice passes the
+ * FULL list here, so an already-stored conclusion outside the slice is still
+ * recognized as known rather than re-derived.
  */
-export function deriveTypePropagation(typeEdges, subClassEdges, { budget = 50, focus = null } = {}) {
+export function deriveTypePropagation(typeEdges, subClassEdges, { budget = 50, focus = null, presentTypeEdges = typeEdges } = {}) {
   const ancestorsOf = buildAncestorCloser(subClassEdges);
 
   const present = new Set(); // "x\0C" for every rdf:type edge already known
   const seenTypeEdge = new Set(); // dedup repeated (x,C) input rows
-  for (const [x, c] of typeEdges || []) if (x && c) present.add(`${x}${SEP}${c}`);
+  for (const [x, c] of presentTypeEdges || []) if (x && c) present.add(`${x}${SEP}${c}`);
   const focusSet = focus instanceof Set ? (focus.size ? focus : null) : normalizeFocus(focus);
   const inFocus = (x, c, d) => !focusSet || focusSet.has(x) || focusSet.has(c) || focusSet.has(d);
 
@@ -675,21 +799,36 @@ export function findConsistencyViolations(typeEdges, subClassEdges, disjointEdge
  * the `maxEnvironments` cap, so a fact's justification accretes every
  * independent derivation route retraction can later check by set membership.
  *
+ * SEMI-NAIVE DELTA MODE: when the store carries a watermark from the last
+ * complete pass (the optional `loadSyllogiseState`/`saveSyllogiseState` store
+ * members), no caller focus is given, no fact was removed since, and `full`
+ * was not forced, the pass runs delta evaluation — scm-sco joins only the
+ * since-watermark rows (`deriveSubClassClosureDelta`), and the four later
+ * kernels are scoped by a relevance frontier built from the delta
+ * (`buildRelevanceFrontier`) plus per-kernel input pre-filters. Conclusions
+ * are identical to a full pass (the dedup screens make over-approximation
+ * harmless); what shrinks is candidate generation and the joins — the pass
+ * still pays the store snapshot read. The watermark advances ONLY after an
+ * unfocused pass that ends at a natural fixpoint.
+ *
  * opts: `depth` (max fixpoint rounds, default 32), `budget` (max new
  * derivations this pass, shared across all five rules, default 50), `focus`
  * (Set|array of class terms scoping derivations to what touches it — omit
  * for a whole-graph pass), `maxEnvironments` (per-fact environment cap,
- * default DEFAULT_MAX_ENVIRONMENTS), `store` (REQUIRED — the memory store's
+ * default DEFAULT_MAX_ENVIRONMENTS), `full` (force full evaluation even with
+ * a valid watermark), `store` (REQUIRED — the memory store's
  * { loadMemory, readFactRows, appendFacts } read/write functions, injected so
- * this inference module never imports the store itself).
+ * this inference module never imports the store itself; optional
+ * loadSyllogiseState/saveSyllogiseState enable delta mode).
  *
  * Returns { derived: [{ id, subject, object, via, rule }], count, budget,
- * depth, truncated, environmentsAdded, alternatesTruncated }.
+ * depth, truncated, mode, deltaSize, environmentsAdded, alternatesTruncated }.
  */
 export async function syllogise(repoDir, {
-  depth = 32, budget = 50, focus = null, maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, store,
+  depth = 32, budget = 50, focus = null, maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, full = false, store,
 } = {}) {
   const { loadMemory, readFactRows, appendFacts } = requireStore(store, ["loadMemory", "readFactRows", "appendFacts"], "syllogise");
+  const stateFnsPresent = typeof store?.loadSyllogiseState === "function" && typeof store?.saveSyllogiseState === "function";
   const memory = await loadMemory(repoDir);
   const rows = readFactRows(memory);
   const subClassEdges = rows.filter((r) => isSubClassOf(r.predicate)).map((r) => [r.subject, r.object]);
@@ -715,6 +854,17 @@ export async function syllogise(repoDir, {
   }
   const normalizedFocus = normalizeFocus(focus);
 
+  // Mode: delta only with a valid watermark (state present, nothing removed
+  // since — an id-set diff catches retractions, snapshots and hand-edits),
+  // no caller focus, and no forced full. Anything else is a full pass.
+  const state = normalizedFocus === null && stateFnsPresent ? await store.loadSyllogiseState(repoDir) : null;
+  const currentIdSet = new Set(rows.map((r) => r.id));
+  const removedSinceLast = Array.isArray(state?.factIds) ? state.factIds.filter((id) => !currentIdSet.has(id)) : [];
+  const mode = state && Array.isArray(state.factIds) && !removedSinceLast.length && !full ? "delta" : "full";
+  const watermark = mode === "delta" ? new Set(state.factIds) : null;
+  const deltaRows = mode === "delta" ? rows.filter((r) => !watermark.has(r.id)) : rows;
+  const deltaSize = deltaRows.length;
+
   // Pre-pass trust snapshot for the entailed hook's premiseTrusts lookup,
   // wired for cax-dw/cls-svf1/scm-svf1 only: with ruleConfidence defaulting
   // to 1, min(premiseTrusts) x 1 can EQUAL a stated premise's trust (e.g. two
@@ -727,33 +877,93 @@ export async function syllogise(repoDir, {
   const hasTriple = (s, p, o) => trustByTriple.has(`${s}${SEP}${p}${SEP}${o}`);
   const numericOnly = (arr) => arr.filter((t) => typeof t === "number");
 
-  const scmDerived = deriveSubClassClosure(subClassEdges, { depth, budget, focus: normalizedFocus });
+  // An empty delta derives nothing by construction — and an empty frontier
+  // must never be handed to the kernels as focus, because an empty focus Set
+  // means "whole graph" to normalizeFocus. Skipping the kernels outright is
+  // both the honest and the cheap reading.
+  const deltaEmpty = mode === "delta" && !deltaRows.length;
+  const deltaSubEdges = mode === "delta"
+    ? deltaRows.filter((r) => isSubClassOf(r.predicate)).map((r) => [r.subject, r.object])
+    : [];
+  const scmDerived = mode === "delta"
+    ? (deltaSubEdges.length ? deriveSubClassClosureDelta(subClassEdges, deltaSubEdges, { depth, budget, focus: normalizedFocus }) : [])
+    : deriveSubClassClosure(subClassEdges, { depth, budget, focus: normalizedFocus });
   // cax-sco sees the ENLARGED subClassOf edge set (stated ∪ this pass's own
   // scm-sco conclusions) so both rules complete in one `tmct syllogise` call.
   const enlargedSubClassEdges = subClassEdges.concat(scmDerived.map((d) => [d.subject, d.object]));
+
+  // Delta mode scopes the four later kernels by the relevance frontier: built
+  // AFTER scm-sco over the enlarged edge set, seeded by every term of every
+  // delta row, then applied as their focus plus per-kernel input pre-filters.
+  let kernelFocus = normalizedFocus;
+  let frontier = null;
+  if (mode === "delta" && !deltaEmpty) {
+    const frontierRows = rows.concat(scmDerived.map((d) => ({ subject: d.subject, predicate: SUBCLASS_PREDICATE, object: d.object })));
+    const seeds = [];
+    for (const r of deltaRows) seeds.push(r.subject, r.object);
+    frontier = buildRelevanceFrontier(frontierRows, seeds);
+    kernelFocus = frontier;
+  }
+  const inFrontier = (t) => !frontier || frontier.has(t);
+  // cax-sco's inputs narrow to the frontier's type edges, but its NOVELTY set
+  // must still see every stored type edge (presentTypeEdges) — otherwise the
+  // filtered call re-derives stored conclusions and idempotency breaks.
+  const caxTypeEdges = frontier ? typeEdges.filter(([x, c]) => inFrontier(x) || inFrontier(c)) : typeEdges;
+  // cax-dw additionally keeps any type whose ⊑-ancestry reaches an endpoint
+  // of a delta disjointWith row — a new disjointness above an old type is
+  // invisible to the frontier's descendant walk.
+  const deltaDwEndpoints = new Set();
+  if (frontier) {
+    for (const r of deltaRows) {
+      if (isDisjoint(r.predicate)) { deltaDwEndpoints.add(r.subject); deltaDwEndpoints.add(r.object); }
+    }
+  }
+  const dwAncestorsOf = frontier && deltaDwEndpoints.size ? buildAncestorCloser(enlargedSubClassEdges) : null;
+  const dwTypeEdges = frontier
+    ? typeEdges.filter(([x, c]) => inFrontier(x) || inFrontier(c)
+      || (dwAncestorsOf && [...dwAncestorsOf(c)].some((a) => deltaDwEndpoints.has(a))))
+    : typeEdges;
+  // cls-svf1's property edges narrow to the frontier — plus every edge over a
+  // property whose restriction declaration is itself in the delta, so a new
+  // restriction reaches old edges; its type edges stay FULL (they feed the
+  // novelty screen and the filler-type join).
+  const deltaRestrictionProperties = new Set();
+  if (frontier) {
+    for (const r of deltaRows) {
+      if (isOnProperty(r.predicate) || isSomeValuesFrom(r.predicate)) {
+        const property = onPropertyOf.get(r.subject);
+        if (property) deltaRestrictionProperties.add(normFactTerm(property));
+      }
+    }
+  }
+  const svf1PropertyEdges = frontier
+    ? propertyEdges.filter(([x, p, y]) => inFrontier(x) || inFrontier(y) || deltaRestrictionProperties.has(normFactTerm(p)))
+    : propertyEdges;
+
   const remainingBudget = Math.max(0, budget - scmDerived.length);
-  const caxDerived = remainingBudget > 0
-    ? deriveTypePropagation(typeEdges, enlargedSubClassEdges, { budget: remainingBudget, focus: normalizedFocus })
+  const caxDerived = remainingBudget > 0 && !deltaEmpty
+    ? deriveTypePropagation(caxTypeEdges, enlargedSubClassEdges, { budget: remainingBudget, focus: kernelFocus, presentTypeEdges: typeEdges })
     : [];
   // cax-dw sees the SAME enlarged subClassOf set (so its own ⊑-lift reaches a
   // chain scm-sco just grew this pass) — it doesn't need the enlarged TYPE
   // edge set too, since it walks each direct type's own ⊑-ancestor closure.
   const remainingBudgetDw = Math.max(0, budget - scmDerived.length - caxDerived.length);
-  const dwDerived = remainingBudgetDw > 0
-    ? deriveDisjointViolations(typeEdges, enlargedSubClassEdges, disjointEdges, { budget: remainingBudgetDw, focus: normalizedFocus })
+  const dwDerived = remainingBudgetDw > 0 && !deltaEmpty
+    ? deriveDisjointViolations(dwTypeEdges, enlargedSubClassEdges, disjointEdges, { budget: remainingBudgetDw, focus: kernelFocus })
     : [];
   // cls-svf1 sees the SAME enlarged subClassOf set (its own ⊑-lift) but NOT
   // the enlarged type edge set, so a same-pass cax-sco conclusion on `y`
   // can't be consumed before a human can audit it.
   const remainingBudgetSvf1 = Math.max(0, budget - scmDerived.length - caxDerived.length - dwDerived.length);
-  const svf1Derived = remainingBudgetSvf1 > 0 && restrictionEdges.length
-    ? deriveSomeValuesFromApplication(propertyEdges, typeEdges, enlargedSubClassEdges, restrictionEdges, { budget: remainingBudgetSvf1, focus: normalizedFocus })
+  const svf1Derived = remainingBudgetSvf1 > 0 && restrictionEdges.length && !deltaEmpty
+    ? deriveSomeValuesFromApplication(svf1PropertyEdges, typeEdges, enlargedSubClassEdges, restrictionEdges, { budget: remainingBudgetSvf1, focus: kernelFocus })
     : [];
   // scm-svf1 reuses the SAME restrictionEdges built for cls-svf1 above —
-  // needs at least two restrictions over one property to compare.
+  // needs at least two restrictions over one property to compare. In delta
+  // mode the frontier scopes it as focus only, no input pre-filter.
   const remainingBudgetScmSvf = Math.max(0, budget - scmDerived.length - caxDerived.length - dwDerived.length - svf1Derived.length);
-  const scmSvfDerived = remainingBudgetScmSvf > 0 && restrictionEdges.length > 1
-    ? deriveSomeValuesFromSubsumption(restrictionEdges, enlargedSubClassEdges, { budget: remainingBudgetScmSvf, focus: normalizedFocus })
+  const scmSvfDerived = remainingBudgetScmSvf > 0 && restrictionEdges.length > 1 && !deltaEmpty
+    ? deriveSomeValuesFromSubsumption(restrictionEdges, enlargedSubClassEdges, { budget: remainingBudgetScmSvf, focus: kernelFocus })
     : [];
   const restrictionByRid = new Map(restrictionEdges.map((r) => [r.restriction, r]));
 
@@ -879,9 +1089,15 @@ export async function syllogise(repoDir, {
   }))));
   const rowById = new Map(rows.map((r) => [r.id, r]));
   const ownedPredicate = (p) => isSubClassOf(p) || isType(p) || isDisjoint(p);
+  // Delta mode examines only stored facts the frontier touches; an alternate
+  // enabled solely by a change outside it (e.g. a new filler type for
+  // cls-svf1) waits for the next full pass — retraction stays correct either
+  // way through its enumerate/boolean fallbacks.
+  const storedCandidateInScope = (r) => mode !== "delta"
+    || (frontier !== null && (frontier.has(r.subject) || frontier.has(r.object)));
   const storedCandidates = rows
     .filter((r) => ownedPredicate(r.predicate) && isPurelyEntailed(r.provenance)
-      && environmentsOf(r).length < maxEnvironments)
+      && environmentsOf(r).length < maxEnvironments && storedCandidateInScope(r))
     .map((r) => ({
       id: r.id, subject: r.subject, predicate: r.predicate, object: r.object,
       environments: environmentsOf(r), provenance: r.provenance,
@@ -936,10 +1152,23 @@ export async function syllogise(repoDir, {
     written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaY1, rule: SCM_SVF_RULE });
     i += 1;
   }
+  const truncated = written.length >= budget;
+
+  // The watermark advances ONLY after an unfocused pass whose derivations
+  // ended at a natural fixpoint — a truncated or focused pass has not seen
+  // everything, so its id set must not masquerade as a completed frontier.
+  // alternatesTruncated does not block: alternates change justifications,
+  // never which conclusions exist.
+  if (normalizedFocus === null && stateFnsPresent && !truncated) {
+    const factIds = new Set(currentIdSet);
+    for (const id of ids) factIds.add(id);
+    await store.saveSyllogiseState(repoDir, {
+      version: 1, factIds: [...factIds].sort(), completedAt: new Date().toISOString(),
+    });
+  }
   return {
-    derived: written, count: written.length, budget, depth,
-    truncated: written.length >= budget,
-    environmentsAdded, alternatesTruncated,
+    derived: written, count: written.length, budget, depth, truncated,
+    mode, deltaSize, environmentsAdded, alternatesTruncated,
   };
 }
 

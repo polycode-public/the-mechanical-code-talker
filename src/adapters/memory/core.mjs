@@ -599,6 +599,43 @@ async function persistMemory(dir, payload) {
   await atomicWriteJson(memoryGraphFile(dir), payload);
 }
 
+// ---- Syllogise watermark state: a small backend-dispatched sidecar ---------
+// { version, factIds, completedAt } — the fact ids at the end of the last
+// COMPLETE syllogise pass. syllogise() diffs it against the live store to
+// pick delta or full evaluation; a missing/removed-id state means full.
+
+export const SYLLOGISE_STATE_REL = join(MEMORY_DIR_REL, "syllogise-state.json");
+const SQLITE_SYLLOGISE_STATE_KEY = "syllogiseState";
+
+/** Load the syllogise watermark for a repo dir OR a Backend B/C handle.
+ *  Null when no complete pass has recorded one. */
+export async function loadSyllogiseState(dir) {
+  if (isMemoryHandle(dir)) return dir.syllogiseState ? structuredClone(dir.syllogiseState) : null;
+  if (isSqliteHandle(dir)) {
+    const row = dir.db.prepare("SELECT v FROM meta WHERE k = ?").get(SQLITE_SYLLOGISE_STATE_KEY);
+    return row?.v ? JSON.parse(row.v) : null;
+  }
+  try {
+    return JSON.parse(await readFile(join(dir, SYLLOGISE_STATE_REL), "utf8"));
+  } catch (e) {
+    if (e?.code === "ENOENT") return null;
+    throw e;
+  }
+}
+
+/** Persist the syllogise watermark — atomic file write (Backend A), a cloned
+ *  handle field (Backend B), or a meta-table row (Backend C). */
+export async function saveSyllogiseState(dir, state) {
+  if (isMemoryHandle(dir)) { dir.syllogiseState = structuredClone(state); return; }
+  if (isSqliteHandle(dir)) {
+    dir.db.prepare("INSERT OR REPLACE INTO meta(k, v) VALUES (?, ?)").run(SQLITE_SYLLOGISE_STATE_KEY, JSON.stringify(state));
+    return;
+  }
+  const file = join(dir, SYLLOGISE_STATE_REL);
+  await mkdir(dirname(file), { recursive: true });
+  await atomicWriteJson(file, state);
+}
+
 /** Fresh read -> mutate -> atomic write. Serialized per call; every public
  *  append goes through here, including the lazy legacy-provenance migration
  *  and actor-level Source reliability recompute. `fn` may be async (the

@@ -1023,15 +1023,17 @@ async function main() {
     };
     const { resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
     const { syllogise, DEFAULT_MAX_ENVIRONMENTS } = await import("../src/domain/syllogise.mjs");
-    const { loadMemory, readFactRows, appendFacts } = await import("../src/adapters/memory/core.mjs");
+    const { loadMemory, readFactRows, appendFacts, loadSyllogiseState, saveSyllogiseState } = await import("../src/adapters/memory/core.mjs");
     const { repo } = await resolveRuntimeConfig({ argv: rest });
     const res = await syllogise(repo, {
       depth: numFlag("--depth", 32), budget: numFlag("--budget", 50),
       maxEnvironments: numFlag("--max-environments", DEFAULT_MAX_ENVIRONMENTS),
-      store: { loadMemory, readFactRows, appendFacts },
+      full: rest.includes("--full"),
+      store: { loadMemory, readFactRows, appendFacts, loadSyllogiseState, saveSyllogiseState },
     });
     process.stdout.write(
-      `tmct syllogise — derived ${res.count} entailed fact(s) (subClassOf closure, depth ${res.depth}, budget ${res.budget})`
+      `tmct syllogise — derived ${res.count} entailed fact(s) (mode ${res.mode}${res.mode === "delta" ? `, Δ${res.deltaSize}` : ""}, depth ${res.depth}, budget ${res.budget})`
+      + (res.environmentsAdded > 0 ? `, ${res.environmentsAdded} alternate environment(s) recorded` : "")
       + (res.truncated ? " — budget reached, more available" : "") + "\n",
     );
     return;
