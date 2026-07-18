@@ -149,6 +149,16 @@ yet, so its first frontier case carries the documented miss): `g-b2-rel-1`,
 `g-b1-pron-neg-1`, `g-b1-disc-count-1`, `g-b2-count-temp-1`,
 `g-b2-noise-pron-1`, `g-c1-neg-rel-1`. Every tested construction shape now has
 at least one judged case. **138 cases.**
+2026-07-18 (the re-baselined 16 close) — `graded-pool-max.jsonl` regenerated
+(seed 20260704) after the engine fixes for the module-id alignment's 16
+re-baselined regressions: trailing-"then"/wrapped-count noise, but-not import
+coordination, "tested modules importing X", the commit-count restrictor
+passive, `/describe register`'s heading (the generator's expectation now
+mirrors the renderer's class heading — the one generator-truth change), the
+Widget-untested qualifier, and because/even-though subordination. All 16 flip
+back from frontier, 11 sibling frontier rows in the same families flip with
+them, none flip the other way: 964 passing, 111 frontier. Still 1,075 cases
+across 36 cells; the go-to pool stays 138.
 Session-mode cases may carry a case-level `env` (e.g. `TMCT_GAME_SECRET` pins
 the thinker-seat secret so the replay is deterministic).
 Regenerate with

@@ -153,13 +153,18 @@ function a1Naming(t) {
   return items;
 }
 
+/** The class enum as /describe's heading renders it: a multi-word enum reads
+ *  as words ("GlobalVariable" -> "Global Variable"), a single word verbatim —
+ *  mirrors codegraph.mjs's classHeading. */
+const classHeading = (cls) => cls.replace(/([a-z])([A-Z])/g, "$1 $2");
+
 function a2Naming(t) {
   const items = [];
   const entities = [...t.modules, ...t.classes, "fn-alpha", "m-render", "a-name", "g-register", "commit-abc"].map((i) => t.byId.get(i));
   for (const e of entities) {
     items.push(turnsItem(
       `${e.label} is a ${e.class} in the graph; /describe must render its entity card.`,
-      { say: `/describe ${e.label}`, expect: { miss: false, answerMatch: [`${esc(e.label)} — ${e.class}`] } },
+      { say: `/describe ${e.label}`, expect: { miss: false, answerMatch: [`${esc(e.label)} — ${classHeading(e.class)}`] } },
     ));
   }
   for (const lbl of ["Widget", "fnAlpha", "Base", "register", "abc1234"]) {
