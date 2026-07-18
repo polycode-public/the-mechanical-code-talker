@@ -498,6 +498,18 @@ const PHRASING_FRAMES = Object.freeze([
   // NEEDS-TESTS → the untested-module survey.
   { re: /^what\s+needs\s+(?:to\s+be\s+)?(?:a\s+)?(?:tested|tests?|testing|coverage|covering)\??$/i, to: () => "untested modules" },
 
+  // NO-TESTS → the same untested survey, attributive form. "no tests" would
+  // otherwise read as a literal object term ("…defines no tests") and the
+  // resulting empty answers as "it has none" to a coverage question.
+  {
+    re: /^(?:which|what|list|show(?:\s+me)?|find)?\s*(?:the\s+|all\s+)?([a-z][a-z-]*?)\s+(?:(?:that|which)\s+)?(?:have|has|having|with)\s+no\s+tests?\??$/i,
+    to: (m) => `untested ${m[1].toLowerCase()}`,
+  },
+  {
+    re: /^(?:which|what|list|show(?:\s+me)?|find)?\s*(?:the\s+|all\s+)?([a-z][a-z-]*?)\s+without\s+(?:any\s+)?tests?\??$/i,
+    to: (m) => `untested ${m[1].toLowerCase()}`,
+  },
+
   // DOES-X-VERB-ANYTHING-ELSE → "what does X <verb>" (drops the placeholder
   // "anything/something else" object, which otherwise made the two parse
   // strategies disagree on the span). Anchored to VERB_TO_KIND so it can't

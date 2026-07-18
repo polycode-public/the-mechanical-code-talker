@@ -91,6 +91,12 @@ routes taught facts); assert the same negative there so the tool layer carries i
 
 ## 2. The impact surface — one phrasing works, its natural neighbours mutate memory, collapse to `import`, or contradict the call graph
 
+**DELIVERED** — one impact-intent gate (`matchImpactIntent`, five closed REs) ahead of the teach
+classifier and the relaxation cascade; "impact" guarded from the cascade's fuzzy corrector;
+`impactClosure` keys callsSymbol dependents under the callee's symbol id too, so a symbol seed
+reaches its caller's module. Pinned in `grammar.jsonl` (`grammar.routing.impact-intent`,
+`grammar.fuzzy.no-impact-import-collapse`) and `test/tools/callgraph.test.mjs` (tmct_impact).
+
 The impact closure is correct; it is reachable by essentially one template (`what would break if I
 change X`, matched by `IMPACT_PARAPHRASE_RE`, `chat.mjs:10919-10926`, dispatched at `:11225`).
 Everything adjacent to it fails, four different ways. Group these four findings — they share the
@@ -209,6 +215,13 @@ closure. Move `CAPABILITIES_2.5.0.md`'s impact row to reflect the widened surfac
 ---
 
 ## 3. Members-of and result-type parse gaps (F5, F6, F7) — a code question answers a misleading "none"
+
+**DELIVERED** — membership both-tried fall-through at the forward no-match branch (3.1); a type
+word beside the object no longer filters the result, and the `uses` union up-refines a
+member-less Class to its module like `calls` does (3.2); "no tests" phrasings rewrite to the
+untested survey via phrasing frames (3.3). Plus the folded superlative fix: a need/lack verb
+inverts the ranking ("what most needs a test" = fewest). Pinned in `grammar.jsonl` and
+`test/tools/ask.test.mjs`.
 
 Three confident-wrong findings that share the query-compilation path as their fix site: a real code
 question compiles to the wrong AST and answers "none", which reads as "it has none". `parseQuery`
@@ -380,6 +393,12 @@ what lets the ladder move past Tier 0.
 ---
 
 ## 5. The stale-modifier multi-candidate half (F11) — the soft confident-wrong
+
+**DELIVERED** — `declineOnUnplacedWords` now covers the ambiguous tier-3 case: words unplaced in
+EVERY candidate decline by name instead of enumerating; a word placed by any candidate keeps the
+honest ambiguity (control pinned). §7's F25/F26 landed with it (the module-orient lane carries
+the same guard). Pinned in `grammar.jsonl` (`grammar.resolve.unknown-residue-*`) and
+`test/tools/ask.test.mjs`.
 
 **Reproducer** (code session):
 

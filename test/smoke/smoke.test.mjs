@@ -64,8 +64,10 @@ test("an unknown symbol lands on the miss wall instead of resolving to something
 });
 
 test("a term that narrows to several candidates asks which, rather than picking one", () => {
-  // the ".mjs" grain matches every module in the fixture, so nothing distinguishes them
-  const { tmct_ask } = ask(graph, "what imports qzxwv-no-such-module.mjs");
+  // "src" places in three module labels alike, so the tie is a real ambiguity
+  // between readings (a term carrying words NO candidate accounts for declines
+  // instead — that residue guard has its own pins)
+  const { tmct_ask } = ask(graph, "what imports src");
   assert.equal(tmct_ask.ambiguous, true);
   assert.equal(tmct_ask.matches.length, 0);
 });

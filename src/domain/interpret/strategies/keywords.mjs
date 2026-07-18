@@ -222,7 +222,16 @@ export function parseKeywordSpot(text, nlp = null) {
     if (INHERITS_REVERSE_VERBS.includes(verbPhrase)) [subject, object] = [object, subject];
     return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject, object });
   }
-  if (afterText) return stamp({ shape: "reverse", entityType, modifier, kind, object: afterText });
+  if (afterText) {
+    // A type word riding beside the named object ("what uses the Store
+    // CLASS") describes the OBJECT's grain — it says which "Store" is meant,
+    // not what class of thing may answer. Reading it as the result filter
+    // turned "what uses the Store class" into "which classes use Store" and
+    // answered "no classes" over a module-level graph. Only a type word on
+    // the wh-side of the verb ("which CLASSES use Store") filters the result.
+    const resultType = entityHit && entityHit.start >= verbHit.end ? null : entityType;
+    return stamp({ shape: "reverse", entityType: resultType, modifier, kind, object: afterText });
+  }
   // "what is a kind of class": when the object is itself an entity-type noun, the
   // entity match swallows the whole post-verb span as a grain qualifier, leaving
   // afterText empty — re-read that span as the object instead.

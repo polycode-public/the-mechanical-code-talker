@@ -362,6 +362,12 @@ export function impactClosure(graph, ind, { maxDepth = 8 } = {}) {
         if (!subjModId || !objModId) continue;
         const subjLabel = graph.byId.get(subjModId)?.label || subjModId;
         addDependent(objModId, subjModId, subjLabel, g.predicate);
+        // Keyed under the callee's SYMBOL id too: an impact query resolving a
+        // function name seeds the BFS from the symbol, and the module-coarse
+        // key above is invisible from there — the caller's module was a real
+        // dependent that read back as "no dependents found". Same-module
+        // calls stay skipped, mirroring the self-skip on the coarse key.
+        if (subjModId !== objModId) addDependent(e.object, subjModId, subjLabel, g.predicate);
       }
     } else if (kind === "tests") {
       for (const e of g.edges) {

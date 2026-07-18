@@ -65,3 +65,13 @@ test("honest-empty stays honest at the tool layer: /callers on an uncalled symbo
   const out = await call("tmct_callers", { symbol: "Widget.render" });
   assert.match(out, /Widget\.render: no recorded callers/, "honest, no invented caller");
 });
+
+test("/impact on a symbol reaches its cross-module caller instead of 'no dependents found'", async () => {
+  // The impact closure seeds from the resolved SYMBOL id, but callsSymbol
+  // dependents were keyed only under the callee's module — so a function with
+  // a real cross-module caller read back as having no dependents, flatly
+  // contradicting what "what calls fnAlpha" reports over the same edges.
+  const out = await call("tmct_impact", { module: "fnAlpha" });
+  assert.match(out, /app\/lib\/b\.mjs/, "the caller's module is a dependent");
+  assert.doesNotMatch(out, /no dependents found/, "the two surfaces agree about the same function");
+});

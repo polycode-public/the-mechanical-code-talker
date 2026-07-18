@@ -132,14 +132,22 @@ test("impactClosure: reverse closure, diamond collapsed, cycle terminated", () =
   assert.equal(levels.length, 2);
 });
 
-test("impactClosure attaches covering test modules; leaves/objects have none", () => {
+test("impactClosure attaches covering test modules; a true leaf has none", () => {
   const levels = impactClosure(graph, graph.byId.get("mod-a"));
   const byId = new Map(levels.flat().map((d) => [d.id, d]));
   assert.deepEqual(byId.get("mod-b").tests, ["app/unit-tests/b.test.mjs"]);
   assert.deepEqual(byId.get("mod-c").tests, []);
   assert.deepEqual(byId.get("mod-d").tests, ["app/unit-tests/b.test.mjs"]);
   assert.deepEqual(impactClosure(graph, graph.byId.get("mod-g")), []);
-  assert.deepEqual(impactClosure(graph, graph.byId.get("fn-alpha")), []);
+});
+
+test("impactClosure: a symbol seed reaches its cross-module caller's module via callsSymbol", () => {
+  // Widget.render (in b.mjs) calls fnAlpha (in a.mjs) — a symbol-resolved
+  // impact query must surface the caller's module, not read back empty while
+  // the call-graph surface names the caller over the same edge.
+  const levels = impactClosure(graph, graph.byId.get("fn-alpha"));
+  assert.equal(levels.length, 1);
+  assert.deepEqual(levels[0].map((d) => d.via), ["callsSymbol"]);
 });
 
 // ── impactClosure folds in callsSymbol, coarsened to module level on read ──

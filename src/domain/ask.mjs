@@ -74,6 +74,7 @@ const FINE_CLASS_SIBLING = { Function: "Method", Method: "Function" };
 // + calls together).
 const KIND_UNIONS = { uses: ["imports", "calls", "callsSymbol"] };
 const kindsFor = (kind) => KIND_UNIONS[kind] || [kind];
+const SYMBOL_GRAIN_KINDS = new Set(Object.values(SYMBOL_GRAIN_SIBLING));
 
 const OVERFLOW_CAP = 12;
 
@@ -377,9 +378,17 @@ function classesForKinds(graph, kinds) {
 /** The single OBJECT class a forward relation kind points at across the loaded graph
  *  (imports → Module), or null when its objects span more than one class (an ambiguous
  *  grain the complement's universe can't be pinned to). Used by the forwardComplement
- *  evaluator to bound the universe it differences the positive forward set out of. */
+ *  evaluator to bound the universe it differences the positive forward set out of.
+ *
+ *  A union kind's symbol-grain member (callsSymbol) points at symbols by design —
+ *  the fine view, served by its own reverse branch. The union's canonical object
+ *  grain is defined by its coarse members, so the vote excludes the symbol-grain
+ *  siblings; without this "uses" collapses to null and a Class-resolved object
+ *  never up-refines to its containing module. */
 function kindObjectClass(graph, kind) {
-  const classes = classesForKinds(graph, kindsFor(kind));
+  const kinds = kindsFor(kind);
+  const coarse = kinds.filter((k) => !SYMBOL_GRAIN_KINDS.has(k));
+  const classes = classesForKinds(graph, coarse.length ? coarse : kinds);
   return classes.size === 1 ? [...classes][0] : null;
 }
 
@@ -886,7 +895,14 @@ function parseSuperlative(w, lc, nlp) {
     if (!entityType) return { node: "miss", reason: "a superlative needs an entity kind (module, class, function, …)" };
   }
   if (!metric) return { node: "miss", reason: "name what to rank by (imports, callers, methods, tests, or connections)" };
-  return { node: "superlative", entityType, metric, metricNoun, extreme: ext };
+  // A need/lack verb measures the ABSENCE of the metric, so it inverts the
+  // ranking direction: "what most needs a test" asks for the FEWEST tests,
+  // and answering the most-tested module is the exact inverse of the question.
+  const NEED_LACK_WORDS = ["needs", "need", "needing", "lacks", "lack", "lacking", "misses", "missing"];
+  const extreme = lc.some((x) => NEED_LACK_WORDS.includes(x))
+    ? (ext === "most" ? "fewest" : "most")
+    : ext;
+  return { node: "superlative", entityType, metric, metricNoun, extreme };
 }
 
 // Predicate-find: "find me the payment class" (trailing-type) or "find the
@@ -2536,9 +2552,27 @@ function unplacedTermWords(term, label) {
  *
  *  Tier 3 only: the prose and fuzzy tiers resolve BY not matching the label
  *  (doc-comment words, a typo'd spelling), and announce themselves in the
- *  answer where tier 3 says nothing. */
+ *  answer where tier 3 says nothing.
+ *
+ *  The AMBIGUOUS case is the same failure with several candidates instead of
+ *  one: a tie spread over candidates that ALL leave the same words unread is
+ *  not a real ambiguity between readings of the question — it is the question
+ *  not matching, several ways at once, and enumerating every candidate would
+ *  answer each of them to a question none of them is. A word placed by ANY
+ *  candidate keeps the honest ambiguity (that candidate may be the one meant). */
 function declineOnUnplacedWords(result, term) {
-  if (!result?.match || result.ambiguous || result.tier !== 3 || result.matchedVia) return result;
+  if (!result?.match || result.tier !== 3 || result.matchedVia) return result;
+  if (result.ambiguous) {
+    const pool = [result.match, ...(result.candidates || [])];
+    const shared = pool
+      .map((m) => new Set(unplacedTermWords(term, m.label)))
+      .reduce((acc, s) => acc.filter((w) => s.has(w)), unplacedTermWords(term, pool[0].label));
+    if (!shared.length) return result;
+    return {
+      match: null, candidates: [], tier: null, ambiguous: false,
+      unplacedWords: shared, nearestLabel: listJoin(pool.slice(0, 4).map((m) => m.label)),
+    };
+  }
   const unplaced = unplacedTermWords(term, result.match.label);
   if (!unplaced.length) return result;
   return {
@@ -2998,8 +3032,11 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
   // symbol-grain sibling reads off the sibling when a fine subject grain was
   // asked for, or when the resolved object is itself a fine symbol — the
   // module-coarse edge can never point at a function/method, so a bare "what
-  // calls fnAlpha" would otherwise return a false empty.
-  const symbolKind = SYMBOL_GRAIN_SIBLING[kind];
+  // calls fnAlpha" would otherwise return a false empty. A union kind's own
+  // symbol-grain member ("uses" carries callsSymbol) plays the same sibling
+  // role here, so "what uses <symbol>" walks the same grain ladder as "what
+  // calls <symbol>" instead of skipping it.
+  const symbolKind = SYMBOL_GRAIN_SIBLING[kind] || kindsFor(kind).find((k) => SYMBOL_GRAIN_KINDS.has(k)) || null;
   const objIsFineSymbol = !!(objMatch.class && FINE_ENTITY_TYPES.has(objMatch.class));
   if (symbolKind && (FINE_ENTITY_TYPES.has(entityType) || objIsFineSymbol)) {
     const edges = edgesOfKind(graph, symbolKind).filter((e) => e.object === objMatch.id);
@@ -3022,7 +3059,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
     // rather than a confident-looking-but-wrong "nothing touched/calls it".
     // Not widened to Function/Method — symbol-level counting precision there
     // is a separate, deliberate guarantee this must not erode.
-    const upRefineEligible = (kind === "touches" || kind === "calls") && objMatch.class === "Class"
+    const upRefineEligible = (kind === "touches" || kind === "calls" || kind === "uses") && objMatch.class === "Class"
       && !edgesOfKind(graph, "contains").some((e) => e.subject === objMatch.id);
     const upRefineModule = upRefineEligible ? graph.byId.get(moduleIdOf(graph, objMatch) || "") : null;
     if (matches.length || !(upRefineEligible && upRefineModule)) {
@@ -3538,6 +3575,20 @@ function renderCore(parsed, result, graph) {
     // Forward: parsed.object is the given subject, not a search target, so it
     // gets its own subject-first phrasing rather than reverse's template.
     if (parsed.shape === "forward") {
+      // The index stores membership on either contains (Class -> member) or
+      // defines (Module -> symbol), and MEMBERSHIP_KINDS declares the two
+      // equivalent for a members-of question — so before reporting "no
+      // contains edges" for a subject whose members live on defines, the
+      // sibling kind is consulted over the SAME resolved subject. Adopted
+      // only on a real match; anything else keeps the honest empty.
+      if (MEMBERSHIP_KINDS.includes(parsed.kind) && graph && result.objMatch) {
+        for (const alt of MEMBERSHIP_KINDS) {
+          if (alt === parsed.kind) continue;
+          const altParsed = { ...parsed, kind: alt };
+          const altResult = traverse(graph, altParsed, { pinnedObjMatch: result.objMatch });
+          if (altResult?.matches?.length && !altResult.ambiguous) return renderCore(altParsed, altResult, graph);
+        }
+      }
       return {
         content: `${result.objMatch.label} has no ${verbFor(parsed.kind)} edges in the index.`,
         miss: true, ambiguous: false,
@@ -3636,6 +3687,12 @@ const CASCADE_FUZZY_TARGETS = [...new Set([
   ...TRIGGER_FUZZY_WORDS,
 ])].filter((wd) => /^[a-z]+$/.test(wd) && wd.length >= 4 && !STOPWORDS.has(wd));
 
+/** Real words that carry their own intent and are never a typo of the closed
+ *  vocabulary: the corrector must not rewrite them at all. "impact" sits two
+ *  edits from "import", and rewriting it answers the reverse question in the
+ *  asker's own words — an unrecognised impact phrasing must decline instead. */
+const CASCADE_FUZZY_REAL_WORDS = new Set(["impact", "impacts", "impacted"]);
+
 /** Unique within-bound fuzzy correction of `w` toward CASCADE_FUZZY_TARGETS,
  *  or null — a distance tie between two distinct targets is refused. The
  *  4-char floor holds on the word being corrected as well as on the targets:
@@ -3643,7 +3700,7 @@ const CASCADE_FUZZY_TARGETS = [...new Set([
  *  were never a typo of it ("old" -> "hold"), and the correction is announced
  *  as though the asker had typed it. */
 function fuzzyCascadeWord(w) {
-  if (w.length < 4) return null;
+  if (w.length < 4 || CASCADE_FUZZY_REAL_WORDS.has(w)) return null;
   const bound = fuzzyBound(w);
   let best = bound + 1; let hit = null; let tied = false;
   for (const target of CASCADE_FUZZY_TARGETS) {

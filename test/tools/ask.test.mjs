@@ -866,7 +866,9 @@ test("ask(): uses — \"what uses calculateTotalPrice\" reaches the symbol-grain
   const { content, tmct_ask } = ask(graph, "what uses calculateTotalPrice");
   assert.equal(tmct_ask.miss, false);
   assert.match(content, /checkout/);
-  assert.match(tmct_ask.traversal, /imports\+calls\+callsSymbol/);
+  // the receipt names the leg that actually answered: only callsSymbol can
+  // point at a symbol, so the union narrows to it for a symbol-grain object
+  assert.match(tmct_ask.traversal, /callsSymbol edges where object = calculateTotalPrice/);
 });
 
 test("ask(): uses — \"which modules use src/billing.mjs\" answers with the importing module (module grain of the union)", () => {
@@ -1425,4 +1427,68 @@ test("ask(): the forward and reverse union agree about a pair reached by two edg
   const rev = ask(miniWebappGraph, "what uses router.mjs");
   assert.equal(fwd.content.split("src/server/router.mjs").length - 1, 1);
   assert.equal(rev.content.split("src/server/app.mjs").length - 1, 1);
+});
+
+// ---- membership both-tried: the index stores members on contains (Class ->
+// member) or defines (Module -> symbol), and a members-of question must not
+// answer "none" off the one the asker happened not to name. ----
+
+test("ask(): 'what functions are in store.mjs' answers the defines members, never 'no contains edges'", () => {
+  const { content, tmct_ask } = ask(miniWebappGraph, "what functions are in store.mjs");
+  assert.equal(tmct_ask.miss, false);
+  assert.match(content, /loadStore/);
+  assert.match(content, /saveStore/);
+  assert.doesNotMatch(content, /has no contains edges/);
+});
+
+// ---- a type word beside the named object describes the OBJECT's grain, not
+// the result filter: "the Store class" says which Store is meant. ----
+
+test("ask(): 'what uses the Store class' names the users of Store, not 'no classes'", () => {
+  const { content, tmct_ask } = ask(miniWebappGraph, "what uses the Store class");
+  assert.equal(tmct_ask.miss, false);
+  assert.match(content, /src\/handlers\/tasks\.mjs/);
+  assert.match(content, /src\/handlers\/users\.mjs/);
+  assert.doesNotMatch(content, /No classes found/);
+});
+
+// ---- "no tests" is a coverage question, not a literal object term. ----
+
+test("ask(): 'which modules have no tests' answers the untested survey, not defines-'no tests'", () => {
+  const asked = ask(miniWebappGraph, "which modules have no tests");
+  const attributive = ask(miniWebappGraph, "untested modules");
+  assert.equal(asked.tmct_ask.miss, false);
+  assert.equal(asked.content, attributive.content);
+  assert.doesNotMatch(asked.content, /defines no tests/);
+});
+
+// ---- the residue guard's multi-candidate half: words no candidate accounts
+// for decline by name instead of enumerating every near match. ----
+
+test("ask(): stale modifiers over several tier-3 candidates decline naming the words", () => {
+  const { content, tmct_ask } = ask(miniWebappGraph, "what imports the deprecated legacy cache.mjs");
+  assert.equal(tmct_ask.miss, true);
+  assert.match(content, /"deprecated"/);
+  assert.match(content, /"legacy"/);
+  assert.doesNotMatch(content, /matches more than one module ambiguously/);
+});
+
+test("ask(): a genuine ambiguity with every word placed still enumerates its candidates", () => {
+  const { content, tmct_ask } = ask(miniWebappGraph, "what imports src");
+  assert.equal(tmct_ask.ambiguous, true);
+  assert.match(content, /matches more than one module ambiguously/);
+});
+
+// ---- a need/lack verb inverts a superlative: it measures the absence. ----
+
+test("ask(): 'what most needs a test' ranks by the FEWEST tests and never names the most-tested", () => {
+  const { content } = ask(miniWebappGraph, "what most needs a test");
+  assert.match(content, /fewest/);
+  assert.doesNotMatch(content, /src\/core\/model\.mjs/);
+});
+
+test("ask(): 'which module has the most tests' keeps its descending rank", () => {
+  const { content } = ask(miniWebappGraph, "which module has the most tests");
+  assert.match(content, /src\/core\/model\.mjs/);
+  assert.match(content, /the most tests \(2\)/);
 });

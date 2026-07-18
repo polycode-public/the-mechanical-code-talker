@@ -4285,15 +4285,48 @@ async function moduleOrientLane(query, { graph }) {
   // rich, module-grain overview with a thin one. Gated on the term looking
   // like a path, so this widens the lane by exactly the shape that was
   // missing and can never claim a vocabulary question.
-  const identity = m ? null : (q.match(MODULE_IDENTITY_RE)?.[1]?.trim() ?? q);
-  const term = m ? m[1].trim() : (identity && MODULE_PATH_RE.test(identity) ? identity : null);
-  if (!term) return null;
-  if (/^(?:it|this|that|they|them)$/i.test(term)) return null;
-  const ent = await resolveEntity(graph, term);
-  if (!ent) return null;
-  const ind = graph.byId?.get?.(ent.id);
-  if (!ind) return null;
-  return { text: moduleOverviewText(graph, ind), via: "meta" };
+  const identityMatch = m ? null : (q.match(MODULE_IDENTITY_RE)?.[1]?.trim() ?? null);
+  const phrase = m ? m[1].trim() : (identityMatch ?? q);
+  if (!phrase) return null;
+  if (/^(?:it|this|that|they|them)$/i.test(phrase)) return null;
+  const bare = phrase.replace(/^(?:the|a|an)\s+/i, "").trim();
+  const phraseWords = bare.split(/\s+/);
+  const pathTail = phraseWords[phraseWords.length - 1];
+  // Only an ANCHORED phrasing (the orient/purpose match, or the "what is X"
+  // identity match) may read a modifier-plus-path-tail phrase — the bare-q
+  // fallback stays gated to a lone path shape, or any sentence that happens
+  // to end in a module path would be claimed here.
+  const tailLooksLikePath = !!(m || identityMatch) && phraseWords.length > 1 && MODULE_PATH_RE.test(pathTail);
+  // The identity phrasing ("what is <term>") only ever claims a path-shaped
+  // term — bare, or with modifier words ahead of a path-shaped tail; the
+  // orient/purpose phrasings carry their own anchors.
+  if (!m && !MODULE_PATH_RE.test(bare) && !tailLooksLikePath) return null;
+  const ent = await resolveEntity(graph, m ? phrase : bare);
+  if (ent) {
+    const ind = graph.byId?.get?.(ent.id);
+    if (!ind) return null;
+    return { text: moduleOverviewText(graph, ind), via: "meta" };
+  }
+  // The stale-modifier residue guard the ask engine's resolver applies,
+  // carried into this lane: modifier words the graph has no reading for never
+  // resolve past silently ("the OLD store.mjs" is not store.mjs — the
+  // modifier may be the question). Decline by name, pointing at the near
+  // match, instead of falling to the bare wall.
+  if (tailLooksLikePath) {
+    const tailEnt = await resolveEntity(graph, pathTail);
+    if (tailEnt) {
+      const residue = phraseWords.slice(0, -1);
+      const quoted = residue.map((w) => `"${w}"`).join(" and ");
+      const names = residue.length === 1 ? "names" : "name";
+      const past = residue.length === 1 ? "it" : "them";
+      return {
+        text: `no module matching "${bare}" found in the index. ${quoted} ${names} nothing here, and reading past ${past} would answer a different question. Did you mean ${tailEnt.label}?`,
+        via: "meta",
+        miss: true,
+      };
+    }
+  }
+  return null;
 }
 
 async function metaLane(query, { graph, memoryDir, last = null, templates = null, vocabHint = null, focus = null }) {
@@ -9772,7 +9805,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   if (miss) {
     const meta = await metaLane(query, { graph, memoryDir, last, templates, vocabHint, focus });
     if (meta) {
-      answer = meta.text; via = meta.via; recordMiss = false; handled = true;
+      // A lane may answer with a better-worded decline (the module-orient
+      // residue guard) — still a miss in the turn record, like the isa
+      // ladder's own closers.
+      answer = meta.text; via = meta.via; recordMiss = meta.miss ?? false; handled = true;
       note(trace, `lane: (1) META/SELF — bare self/session question recognized, answered via="${meta.via}"`);
     }
   }
@@ -10978,21 +11014,63 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
 const PAGE = 32;
 const MORE_RE = /^(?:more|show more|see more|the rest|next|continue|go on)\b[.!?]*$/i;
 
-/** "what would break if I change X" — the impact closure asked for in the
- *  words people use, rather than as /impact. Sibling of normalize.mjs's
- *  COUNTERFACTUAL_RE ("if X were deleted, what would break"), which states the
- *  same counterfactual in the other clause order and compiles to the reverse
- *  import closure; this shape names a CHANGE rather than a deletion, so it
- *  answers with the impact closure /impact itself renders. The verbs are a
- *  closed set on both sides — no general "any verb in a conditional" fit. */
+/** The impact-intent gate — "what would break if I change X" and its natural
+ *  neighbours, routed to the same /impact closure. Sibling of normalize.mjs's
+ *  COUNTERFACTUAL_RE ("if X were deleted, what would break"), which compiles
+ *  to the reverse import closure; these shapes name a CHANGE rather than a
+ *  deletion, so they answer with the impact closure /impact itself renders.
+ *  The verbs are a closed set on both sides — no general "any verb in a
+ *  conditional" fit. The gate runs ahead of the teach classifier and the
+ *  relaxation cascade, because an interrogative must never reach the write
+ *  boundary ("blast radius of X" was remembered as a fact) and "impact" must
+ *  never be fuzzy-read as "import" (the inverse question). */
+const IMPACT_CHANGE_VERBS = "(?:changed?|modif(?:y|ied)|edits?|edited|touch(?:es|ed)?|updates?|updated|alters?|altered|deletes?|deleted|removes?|removed|drops?|dropped)";
 const IMPACT_PARAPHRASE_RE = new RegExp(
   "^what\\s+(?:would|will|might|could|does|do)?\\s*"
-  + "(?:breaks?|fails?|is\\s+affected|are\\s+affected|gets?\\s+affected|be\\s+affected|is\\s+impacted|be\\s+impacted)"
-  + "\\s+if\\s+(?:i|we|you|one|someone)\\s+"
-  + "(?:changed?|modif(?:y|ied)|edits?|edited|touch(?:es|ed)?|updates?|updated|alters?|altered)"
+  + "(?:breaks?|fails?|happens?|stops?\\s+working|is\\s+affected|are\\s+affected|gets?\\s+affected|be\\s+affected|is\\s+impacted|be\\s+impacted)"
+  + `\\s+if\\s+(?:i|we|you|one|someone)\\s+${IMPACT_CHANGE_VERBS}`
   + "\\s+(?:the\\s+)?(.+?)[?.!\\s]*$",
   "i",
 );
+// The same counterfactual with the clauses reversed — "if I change X what breaks".
+const IMPACT_REVERSED_RE = new RegExp(
+  `^if\\s+(?:i|we|you|one|someone)\\s+${IMPACT_CHANGE_VERBS}`
+  + "\\s+(?:the\\s+)?(.+?),?\\s+what\\s+(?:would\\s+|will\\s+|might\\s+|could\\s+|does\\s+|do\\s+)?"
+  + "(?:breaks?|fails?|happens?|stops?\\s+working|is\\s+affected|are\\s+affected|gets?\\s+affected|be\\s+affected|would\\s+break|will\\s+break)"
+  + "[?.!\\s]*$",
+  "i",
+);
+// The agentless passive — "what is affected by changing X".
+const IMPACT_AFFECTED_BY_RE = new RegExp(
+  "^what\\s+(?:is|are|gets?|would\\s+be|will\\s+be)\\s+(?:affected|impacted|broken)\\s+"
+  + "(?:by|when|if)\\s+(?:i\\s+|we\\s+|you\\s+)?"
+  + "(?:chang(?:e|es|ing)|edit(?:s|ing)?|modif(?:y|ies|ying)|touch(?:es|ing)?|updat(?:e|es|ing)|delet(?:e|es|ing)|remov(?:e|es|ing)|a\\s+change\\s+to)\\s+"
+  + "(?:the\\s+)?(.+?)[?.!\\s]*$",
+  "i",
+);
+// "can I safely delete X" — a change-safety question IS the impact question.
+const IMPACT_SAFE_CHANGE_RE = new RegExp(
+  "^(?:(?:can|could)\\s+(?:i|we|you|one|someone)\\s+safely|is\\s+it\\s+safe\\s+to)\\s+"
+  + "(?:change|edit|modify|touch|update|alter|delete|remove|drop)\\s+"
+  + "(?:the\\s+)?(.+?)[?.!\\s]*$",
+  "i",
+);
+// The NP form — "blast radius of X", "impact of changing X".
+const IMPACT_NOUN_RE = new RegExp(
+  "^(?:what(?:'s|\\s+is)\\s+the\\s+)?(?:blast\\s+radius|impact)\\s+(?:of|for)\\s+"
+  + "(?:chang(?:ing|es)\\s+|editing\\s+|modifying\\s+|touching\\s+|updating\\s+|deleting\\s+|removing\\s+)?"
+  + "(?:the\\s+)?(.+?)[?.!\\s]*$",
+  "i",
+);
+const IMPACT_INTENT_RES = [IMPACT_PARAPHRASE_RE, IMPACT_REVERSED_RE, IMPACT_AFFECTED_BY_RE, IMPACT_SAFE_CHANGE_RE, IMPACT_NOUN_RE];
+/** The impact intent in any of its clause orders -> the subject term, or null. */
+function matchImpactIntent(line) {
+  for (const re of IMPACT_INTENT_RES) {
+    const m = line.match(re);
+    if (m) return m[1].trim();
+  }
+  return null;
+}
 const joinList = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}` : (a[0] ?? ""));
 
 /** Render the next page of a held remainder (pending: {items:[str], noun}). Returns a
@@ -11276,20 +11354,21 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     return withLast(morePage(workingLine, ctx), "continue viewing a previous long listing");
   }
 
-  // "what would break if I change X" / "what breaks if I touch X" — the impact
+  // "what would break if I change X" / "if I change X what breaks" / "blast
+  // radius of X" / "impact of X" / "can I safely delete X" — the impact
   // closure, in the words people actually ask for it in. With no frame of its
-  // own the line reached the grammar with "break"/"breaks if i" worn away as
-  // filler, and the residue ("break I") read as a subject for the history
-  // lane's `touches` — answering who last touched a file to a question about
-  // what a change to it would reach. /impact's own closure is the answer, and
-  // its wording ("Impact of changing X") already says the change is
-  // hypothetical.
-  const impactParaphrase = workingLine.match(IMPACT_PARAPHRASE_RE);
-  if (impactParaphrase) {
+  // own each of these reached a wrong lane: the forward form's residue
+  // ("break I") read as a subject for the history lane's `touches`, the NP
+  // form fell to the teach lane (a read-only question mutating memory) or to
+  // the fuzzy corrector ("impact" read as "import", the inverse question).
+  // /impact's own closure is the answer, and its wording ("Impact of changing
+  // X") already says the change is hypothetical.
+  const impactSubject = matchImpactIntent(workingLine);
+  if (impactSubject) {
     const impactDeduced = "understand what a change to this module would reach (impact closure)";
     note(trace, `goal: ${impactDeduced}`);
-    note(trace, `lane: IMPACT_PARAPHRASE_RE matched -> /impact ${impactParaphrase[1].trim()}`);
-    return withLast(await runCommand(`/impact ${impactParaphrase[1].trim()}`, ctx), impactDeduced);
+    note(trace, `lane: impact intent matched -> /impact ${impactSubject}`);
+    return withLast(await runCommand(`/impact ${impactSubject}`, ctx), impactDeduced);
   }
 
   // Multi-sentence pre-split — one message carrying several sentences
