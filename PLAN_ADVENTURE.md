@@ -1,9 +1,10 @@
 # PLAN_ADVENTURE.md — a text-adventure game as a fourth architectural stretch, validated against a country-house mystery
 
-Status: RESEARCH / DESIGN. Two of the four gaps this document originally designed have since
-shipped generically; this document now scopes the pieces still unbuilt (the imperative command
-grammar, the NPC turn scheduler, the Ashcombe Hall corpus, and the room-look digest) on top of
-that shipped substrate.
+Status: SHIPPED (2.7.0 wave). All four phases landed — the worlds pack and Ashcombe Hall world,
+the imperative command pattern, the world interpreter with the room-look digest, and the NPC
+scheduler — with the worked example passing exactly as specified (see the per-phase notes in the
+staged build plan below, including the operator's Phase 1 revision to a lazy worlds pack). Phase
+5's generalization question stays open.
 
 **What shipped since this document was written.**
 
@@ -304,10 +305,22 @@ cabinet's lock"). Pinned by the `games/adventure` lane's command rows and
 `test/services/adventure.test.mjs`'s fold/digest/resume tests. Confirmation-before-executing
 resolved as the teachFact precedent suggested: act, then state plainly what happened.
 
-**Phase 4 — The NPC scheduler.** Gap 4's turn-counted pass, the housekeeper's turn-3 Rule as the
-first (and, for this validation, only) NPC action. Exit criterion: the FULL worked example above
-passes exactly as specified, including the independent graph-state check for the housekeeper's move
-whether or not the player was present to see it.
+**Phase 4 — The NPC scheduler.** DONE (2.7.0 wave). `runNpcPass` in `src/services/adventure.mjs`:
+one bounded pass per state-changing player command, synchronous in the same turn, after the
+player's own effect; NPCs (`mgx:is-npc`) walk in fixed sorted order; an NPC whose
+`mgx:acts-on-turn` fact matches the new turn number fires its taught "go" family toward its
+`mgx:acts-toward` target, gated by the same exit-fact precondition the player's go obeys and by
+the family's own signature; capped at one fired action per NPC per turn; the effect writes as the
+same `@turnN` snapshot whether or not the player is present, with an observability line ("the
+housekeeper walks in.") only when the player shares the room. The turn counter is derived, never
+stored: the largest `@turnN` suffix in the written facts, advanced only by successful
+state-changing commands — a look, an aside or a declined action advances nothing. Exit criterion
+met exactly: the FULL worked example passes as the `adv-worked-example-full` corpus row (every
+intermediate answer, both hidden-key negatives, the fixed-in-place decline, the housekeeper named
+by the returning look), and `test/services/adventure.test.mjs`'s worked-example test confirms
+every step's graph row independently via `readFactRows` — `housekeeper@turn3 mgx:currently-in
+library` written while the player was two rooms away, the declined take writing nothing, nine
+state-changing commands leaving exactly nine turns of snapshots.
 
 **Phase 5 — Generalization spike (explicitly not this document's scope).** Once this and
 both prior planning docs have each validated their own piece (open-loop execution, closed-

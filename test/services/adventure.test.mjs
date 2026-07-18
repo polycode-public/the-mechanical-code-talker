@@ -8,7 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
-import { foldWorldState, worldDigestRows } from "../../src/services/adventure.mjs";
+import { foldWorldState, runNpcPass, worldDigestRows } from "../../src/services/adventure.mjs";
 import { driveSessionTurns } from "../helpers/session.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
@@ -136,6 +136,77 @@ test("a stopped world resumes in a later session exactly where the written snaps
     );
     assert.match(String(second[0].answer), /back in the adventure — you are in the library/);
     assert.match(String(second[1].answer), /[Pp]layer carries the lamp/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the NPC pass is turn-gated, sorted, exit-checked and capped at one move per NPC", () => {
+  const rows = [
+    { subject: "housekeeper", predicate: "mgx:is-npc", object: "true" },
+    { subject: "housekeeper", predicate: "rdf:type", object: "person" },
+    { subject: "housekeeper", predicate: "mgx:currently-in", object: "kitchen" },
+    { subject: "housekeeper", predicate: "mgx:acts-on-turn", object: "3" },
+    { subject: "housekeeper", predicate: "mgx:acts-toward", object: "library" },
+    { subject: "gardener", predicate: "mgx:is-npc", object: "true" },
+    { subject: "gardener", predicate: "rdf:type", object: "person" },
+    { subject: "gardener", predicate: "mgx:currently-in", object: "cellar" },
+    { subject: "gardener", predicate: "mgx:acts-on-turn", object: "3" },
+    { subject: "gardener", predicate: "mgx:acts-toward", object: "library" },
+    { subject: "kitchen", predicate: "mgx:has-exit-west", object: "library" },
+    { subject: "library", predicate: "rdf:type", object: "room" },
+  ];
+  const families = new Map([["go", [
+    { kind: "action-signature", slots: { subjectClass: "person", targetClass: "room" } },
+    { kind: "action-effect", slots: { predicate: "currently-in", subjectRole: "subject", objectRole: "target" } },
+  ]]]);
+  const state = foldWorldState(rows);
+  const off = runNpcPass({ rows, state, k: 2, families, playerRoomAfter: "kitchen" });
+  assert.deepEqual(off, { writes: [], lines: [] }, "no NPC acts off its scheduled turn");
+  const on = runNpcPass({ rows, state, k: 3, families, playerRoomAfter: "library" });
+  assert.deepEqual(on.writes, [
+    { subject: "housekeeper@turn3", predicate: "mgx:currently-in", object: "library" },
+  ], "the housekeeper moves; the gardener's cellar has no exit to the library, so it stays");
+  assert.deepEqual(on.lines, ["the housekeeper walks in."]);
+  const unseen = runNpcPass({ rows, state, k: 3, families, playerRoomAfter: "garden" });
+  assert.equal(unseen.writes.length, 1, "the move is written whether or not the player is present");
+  assert.deepEqual(unseen.lines, [], "nothing is announced to a player who isn't there");
+});
+
+test("the worked example writes every intermediate graph state, and the housekeeper's turn-3 move stands in readFactRows", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-adventure-worked-"));
+  try {
+    const turns = await driveSessionTurns(
+      { repoPath: dir, env: { TMCT_NO_SEED: "1" } },
+      [
+        "play ashcombe hall", "look", "go north", "go north", "look",
+        "take the portrait", "open the portrait", "take the key", "go south",
+        "look", "go south", "unlock the cabinet with the key", "open the cabinet",
+        "take the letter",
+      ],
+    );
+    assert.match(String(turns[13].answer), /you take the letter/, "the win condition lands");
+    const rows = readFactRows(await loadMemory(dir));
+    const has = (subject, predicate, object) =>
+      rows.some((r) => r.subject === subject && r.predicate === predicate && r.object === object);
+    // The turn ledger: state-changing commands only (the failed take and the
+    // looks advance nothing), each step's effect written as that turn's rows.
+    assert.ok(has("player@turn1", "mgx:currently-in", "library"));
+    assert.ok(has("player@turn2", "mgx:currently-in", "drawing-room"));
+    assert.ok(has("portrait@turn3", "mgx:is-open", "true"));
+    assert.ok(has("key@turn3", "mgx:located-in", "portrait"), "opening the portrait frees the hidden key");
+    assert.ok(has("housekeeper@turn3", "mgx:currently-in", "library"),
+      "the housekeeper's scheduled move is in the written graph whether or not the player saw it");
+    assert.ok(has("key@turn4", "mgx:located-in", "player"));
+    assert.ok(has("player@turn5", "mgx:currently-in", "library"));
+    assert.ok(has("player@turn6", "mgx:currently-in", "study"));
+    assert.ok(has("cabinet@turn7", "mgx:fixed-in", "study"), "unlocking releases the lock; the cabinet stays fixed");
+    assert.ok(has("cabinet@turn8", "mgx:is-open", "true"));
+    assert.ok(has("letter@turn8", "mgx:located-in", "cabinet"));
+    assert.ok(has("letter@turn9", "mgx:located-in", "player"), "the win condition's own graph row");
+    assert.ok(!rows.some((r) => r.subject.startsWith("portrait@") && r.predicate === "mgx:located-in"),
+      "the declined take-the-portrait wrote nothing");
+    assert.ok(!rows.some((r) => /@turn(1[0-9]|[1-9][0-9])/.test(r.subject)), "nine state-changing commands, nine turns, nothing more");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

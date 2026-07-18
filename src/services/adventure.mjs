@@ -222,6 +222,47 @@ function familyEffectPredicate(family) {
   return p.includes(":") ? p : `mgx:${p}`;
 }
 
+// ---- the NPC scheduler -------------------------------------------------------
+//
+// One bounded pass per state-changing player command, run synchronously in
+// the same turn, immediately after the player's own effect: every individual
+// tagged mgx:is-npc is walked in fixed sorted order, and an NPC whose
+// mgx:acts-on-turn fact matches the new turn number fires its taught "go"
+// family toward its mgx:acts-toward target — capped at one fired action per
+// NPC per turn, never a cascade, no randomness anywhere. The precondition is
+// the same one the player's own go obeys (an exit fact linking the rooms)
+// plus the family's signature covering the NPC, and the effect writes as the
+// same @turnN snapshot whether or not the player is there to see it. This is
+// scripted-by-data autonomy: the schedule, the target, the cast and the
+// family all arrive as world rows, never code.
+
+export function runNpcPass({ rows, state, k, families, playerRoomAfter }) {
+  const writes = [];
+  const lines = [];
+  const goFamily = families.get("go") || [];
+  const signatures = goFamily.filter((r) => r.kind === "action-signature");
+  const effectPredicate = familyEffectPredicate(goFamily) ?? "mgx:currently-in";
+  const npcs = [...new Set((rows || [])
+    .filter((r) => r.predicate === "mgx:is-npc" && r.object === "true")
+    .map((r) => r.subject))].sort();
+  for (const npc of npcs) {
+    if (!factObjects(rows, npc, "mgx:acts-on-turn").includes(String(k))) continue;
+    const target = factObjects(rows, npc, "mgx:acts-toward")[0];
+    if (!target) continue;
+    const from = state.placements.get(npc)?.object;
+    if (!from || from === target) continue;
+    const covered = signatures.some((s) =>
+      isTyped(rows, npc, s.slots.subjectClass) && isTyped(rows, target, s.slots.targetClass));
+    if (!covered) continue;
+    const linked = [...(state.exits.get(from)?.values() ?? [])].includes(target);
+    if (!linked) continue;
+    writes.push({ subject: `${npc}@turn${k}`, predicate: effectPredicate, object: target });
+    if (playerRoomAfter === target) lines.push(`the ${npc} walks in.`);
+    else if (playerRoomAfter === from) lines.push(`the ${npc} leaves.`);
+  }
+  return { writes, lines };
+}
+
 async function writeWorldTurn(memoryDir, world, k, facts, cache) {
   await appendFacts(memoryDir, facts.map((f) => ({
     ...f, provenance: `${worldProvenanceTag(world)}:turn${k}`,
@@ -365,9 +406,16 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     );
   }
   const k = state.turnCount + 1;
-  const commit = async (facts, text, detail, goal) => {
-    await writeWorldTurn(memoryDir, world, k, facts, cache);
-    return answer(text, noteFor(`${detail}; turn ${k} snapshots written through appendFacts`), { goal });
+  const commit = async (facts, text, detail, goal, playerRoomAfter = here) => {
+    // The NPC pass rides every SUCCESSFUL state-changing command, in the same
+    // turn, after the player's own effect. Its schedule preconditions read
+    // the pre-command placements (an NPC's turn-gated move never depends on
+    // what the player just wrote); the observability lines read the player's
+    // post-command room, so walking into a room as an NPC arrives is seen.
+    const npcPass = runNpcPass({ rows, state, k, families, playerRoomAfter });
+    await writeWorldTurn(memoryDir, world, k, [...facts, ...npcPass.writes], cache);
+    const text2 = npcPass.lines.length ? `${text} ${npcPass.lines.join(" ")}` : text;
+    return answer(text2, noteFor(`${detail}; turn ${k} snapshots written through appendFacts${npcPass.writes.length ? `; NPC pass fired ${npcPass.writes.length} scheduled move(s)` : ""}`), { goal });
   };
   const object = cmd.object;
   const place = object ? state.placements.get(object) ?? null : null;
@@ -386,6 +434,7 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
       `you go ${cmd.direction}. Now in the ${target}.`,
       `go — the taught "go" family fired; player moves ${here} -> ${target}`,
       `move through the world (now in the ${target})`,
+      target,
     );
   }
 
