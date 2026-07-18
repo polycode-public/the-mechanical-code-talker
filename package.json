@@ -135,6 +135,7 @@
     "roll": "node scripts/roll.mjs",
     "build:ask-bundle": "node scripts/build-ask-bundle.mjs",
     "build:demo-graph": "node scripts/build-demo-graph.mjs",
+    "build:demo-pack": "node scripts/build-demo-pack.mjs",
     "build:demo-memory": "node scripts/build-demo-memory.mjs",
     "gen:tool-docs": "node scripts/generate-tool-docs.mjs",
     "gen:collisions": "node scripts/generate-real-word-collisions.mjs",
