@@ -13,6 +13,7 @@
 // window.tmctChatSession (the live session), window.tmctRunDemo(id).
 
 import { DEMOS } from "./chat-demos.mjs";
+import { createTicker } from "./viz-ticker.mjs";
 
 const PROMPT = "tmct> "; // matches src/services/chat.mjs's real PROMPT constant
 
@@ -181,32 +182,78 @@ inputEl.addEventListener("keydown", (ev) => {
 
 // ---- scripted demos ----------------------------------------------------------------
 
-async function runDemo(id) {
-  const demo = DEMOS.find((d) => d.id === id);
-  if (!demo || !demo.ready || busy || !window.tmctChat) return false;
-  busy = true;
-  root.dataset.demoState = "running";
-  setControls(false);
-  logEl.replaceChildren();
-  addLine(`demo:${demo.id} — ${demo.title} — a fresh session; every answer is computed now`, "chat-dim");
-  const session = newSession();
-  window.tmctChatSession = session;
-  try {
-    for (const line of demo.turns) {
-      const typed = addPromptLine();
-      // eslint-disable-next-line no-await-in-loop
-      await typeInto(typed, line, 24);
-      // eslint-disable-next-line no-await-in-loop
-      const { answer, record } = await session.turn(line);
-      addLine(answer, record?.miss ? "chat-miss" : "chat-answer");
-    }
+const demoControlsEl = root.querySelector(".chat-demo-controls");
+const demoResetBtn = demoControlsEl.querySelector('[data-ticker="reset"]');
+const demoPlayBtn = demoControlsEl.querySelector('[data-ticker="play"]');
+const demoStepBtn = demoControlsEl.querySelector('[data-ticker="step"]');
+
+let activeTicker = null;
+
+/** Wires createTicker (viz-ticker.mjs) to one DEMOS entry. `hasNext` is the
+ *  fixed-length form the ticker's own header documents — a scripted replay
+ *  has a known turn count, unlike spider-fly-viz.mjs's open-ended session —
+ *  so `step` here is this closure's own count, never the ticker's. */
+function buildDemoTicker(demo) {
+  let step = 0;
+  let session = null;
+
+  function start() {
+    step = 0;
+    logEl.replaceChildren();
+    addLine(`demo:${demo.id} — ${demo.title} — a fresh session; every answer is computed now`, "chat-dim");
+    session = newSession();
+    window.tmctChatSession = session;
+    root.dataset.demoState = "running";
+    demoControlsEl.hidden = false;
+    busy = true;
+    setControls(false);
+  }
+
+  function finishIfDone() {
+    if (step < demo.turns.length) return;
     addLine("the session is yours now — keep asking about what it just learned", "chat-dim");
-  } finally {
     root.dataset.demoState = "done";
     busy = false;
     setControls(true);
-    logEl.scrollTop = logEl.scrollHeight;
   }
+
+  function renderButtons(state) {
+    const done = step >= demo.turns.length;
+    demoPlayBtn.textContent = state.playing ? "⏸ pause" : "▶ play";
+    demoPlayBtn.setAttribute("aria-label", state.playing ? "Pause the demo" : "Play the demo");
+    demoPlayBtn.disabled = state.animating || done;
+    demoStepBtn.disabled = state.animating || state.playing || done;
+    demoResetBtn.disabled = state.animating;
+  }
+
+  start();
+  const ticker = createTicker({
+    onTick: async () => {
+      const typed = addPromptLine();
+      await typeInto(typed, demo.turns[step], 24);
+      const { answer, record } = await session.turn(demo.turns[step]);
+      addLine(answer, record?.miss ? "chat-miss" : "chat-answer");
+      step += 1;
+      finishIfDone();
+    },
+    onRender: renderButtons,
+    onReset: start,
+    hasNext: () => step < demo.turns.length,
+    waitMs: reduceMotion ? 0 : 300,
+  });
+  renderButtons({ playing: false, animating: false });
+  return ticker;
+}
+
+demoPlayBtn.addEventListener("click", () => activeTicker && activeTicker.play());
+demoStepBtn.addEventListener("click", () => activeTicker && activeTicker.stepOnce());
+demoResetBtn.addEventListener("click", () => activeTicker && activeTicker.reset());
+
+async function runDemo(id) {
+  const demo = DEMOS.find((d) => d.id === id);
+  if (!demo || !demo.ready || busy || !window.tmctChat) return false;
+  activeTicker = buildDemoTicker(demo);
+  await activeTicker.play();
   return true;
 }
 window.tmctRunDemo = runDemo;

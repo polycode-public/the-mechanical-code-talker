@@ -217,6 +217,19 @@
     border-style: dashed;
     cursor: default;
   }
+  #tmct-chat .chat-demo-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.6rem; }
+  #tmct-chat .chat-demo-controls button {
+    font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace;
+    color: var(--code-fg);
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.25em 0.7em;
+    cursor: pointer;
+  }
+  #tmct-chat .chat-demo-controls button:hover:not(:disabled) { border-color: var(--accent); }
+  #tmct-chat .chat-demo-controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #tmct-chat .chat-demo-controls button:disabled { opacity: 0.4; cursor: default; }
   #tmct-chat .chat-status {
     font-size: 0.78rem;
     color: var(--muted);
@@ -291,6 +304,11 @@
       </div>
     </div>
     <div class="chat-demo-rail" role="group" aria-label="Scripted demos"></div>
+    <div class="chat-demo-controls" role="group" aria-label="Demo playback controls" hidden>
+      <button type="button" data-ticker="reset" aria-label="Reset the demo">⏮ reset</button>
+      <button type="button" data-ticker="play" aria-label="Play the demo">▶ play</button>
+      <button type="button" data-ticker="step" aria-label="Step the demo forward one turn">step ▶</button>
+    </div>
     <div class="chat-status">loading the engine…</div>
   </div>
 
