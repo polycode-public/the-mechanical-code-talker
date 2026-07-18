@@ -48,6 +48,7 @@ import { loadLexicon, lookupNoun } from "../domain/grammar/lexicon.mjs";
 import { pickPhrase } from "../domain/answer-variants.mjs";
 import { REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, referenceProvenanceTag } from "../domain/reference-pack.mjs";
 import { getReferencePackProvider } from "../adapters/corpus/reference-pack.mjs";
+import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
 // adapter (the browser bundle's ask-nlp stub carries no factory, so this is a
@@ -149,6 +150,47 @@ function deduceGoalFromParsed(parsed) {
   if (shape === "ask") return (kind && GOAL_BY_KIND[kind]) || "check a specific subject/object relationship";
   if ((shape === "reverse" || shape === "forward") && kind) return GOAL_BY_KIND[kind] || `understand a "${kind}" relationship`;
   return "understand a graph relationship";
+}
+
+// ---- dialogue acts (ISO 24617-2): a lookup over the lane decision ----
+// A turn result may carry a `lane` string naming the router lane that
+// answered it; withLast (and conversationalTurn's own mk) resolve it through
+// dialogueActForLane and stamp `record.dialogueAct` — a fixed lookup over a
+// decision already made, never a classifier. The honest miss is the row that
+// must never drift: autoNegative in the autoFeedback dimension, tmct
+// reporting its OWN processing failed, not a task answer.
+
+/** Stamp the record with the lane's dialogue act (a no-op for an unmapped or
+ *  absent lane) and put the label in the narrate trace. */
+function attachDialogueAct(result, trace) {
+  const act = dialogueActForLane(result?.lane);
+  if (act && result?.record) {
+    result.record.dialogueAct = act;
+    note(trace, `dialogue act: ${act.act} (${act.dimension} dimension, ISO 24617-2)`);
+  }
+  return result;
+}
+
+const PROPOSITIONAL_NODES = new Set(["boolean", "qualifier"]);
+const PROPOSITIONAL_LEAD_RE = /^(?:is|are|am|was|were|does|do|did|can|could|will|would|shall|should|has|have|had|must)\b/i;
+const SET_QUESTION_LEAD_RE = /^(?:what|which|who|whose|where|when|why|how|tell|show|list|define|describe|find|count|name)\b/i;
+
+/** The dialogue-act lane for a runAsk turn. A recorded miss is ALWAYS the
+ *  honest-miss lane, whatever the query shape — feedback about tmct's own
+ *  processing. An answered turn is labelled by its question shape (yes/no
+ *  vs set), from the parsed AST when one stood, else the lead word. Null
+ *  when the turn is neither — the record simply carries no act. */
+function askDialogueLane(parsed, query, recordMiss) {
+  if (recordMiss) return "honest-miss";
+  if (parsed) {
+    if (parsed.node) return PROPOSITIONAL_NODES.has(parsed.node) ? "ask-propositional" : "ask-set";
+    if (parsed.shape === "ask") return "ask-propositional";
+    if (parsed.shape) return "ask-set";
+  }
+  const q = String(query).trim();
+  if (PROPOSITIONAL_LEAD_RE.test(q)) return "ask-propositional";
+  if (SET_QUESTION_LEAD_RE.test(q)) return "ask-set";
+  return null;
 }
 
 /** Split the collected trace into buckets by its own leading category tag, so
@@ -1446,16 +1488,17 @@ function conversationalTurn(line, ctx) {
   const raw = String(line);
   const q = raw.toLowerCase().replace(/[.!?]+$/, "").replace(/\s+/g, " ").trim();
   const t = (id, slots = {}) => tRender(ctx.templates, id, slots) ?? TEMPLATES_UNAVAILABLE;
-  const mk = (answer, { end = false, miss = false, via = "template" } = {}) => {
+  const mk = (answer, { end = false, miss = false, via = "template", lane = null } = {}) => {
     const ts = new Date().toISOString();
-    return {
+    return attachDialogueAct({
       answer,
       logLines: [ts, `> ${raw}`, answer, ""],
       record: { type: "turn", ts, query: raw, conversational: true, via, resolvedIds: [], answeredIds: [], miss },
       focus: ctx.focus,
       last: ctx.last, // a conversational turn never overwrites the last real answer
+      lane,
       ...(end ? { end: true } : {}),
-    };
+    }, ctx.trace);
   };
   if (foldedBye(q)) {
     note(ctx.trace, "goal: casual/social — ending the session (no graph intent)");
@@ -1477,7 +1520,7 @@ function conversationalTurn(line, ctx) {
     if (signal === "thanks") {
       note(ctx.trace, "goal: casual/social — acknowledgement, no graph intent");
       note(ctx.trace, "lane: conversational — thanks (multi-clause phrase-shape match)");
-      return mk(t(T_THANKS));
+      return mk(t(T_THANKS), { lane: "thanks" });
     }
   }
   if (WHY.has(q)) {
@@ -1506,7 +1549,7 @@ function conversationalTurn(line, ctx) {
       // morning, hello there) keep their wording; only the default greeting swaps.
       const id = (!T_GREETING_BY_PHRASE[greetHit] && noCodeGraph(ctx.graph)) ? T_GREETING_EMPTY : (T_GREETING_BY_PHRASE[greetHit] || T_GREETING);
       note(ctx.trace, `pattern: template "${id}" (data/templates/responses.jsonl)`);
-      return mk(t(id, { vocabHint: ctx.vocabHint }));
+      return mk(t(id, { vocabHint: ctx.vocabHint }), { lane: "greeting" });
     }
   }
   {
@@ -1515,23 +1558,23 @@ function conversationalTurn(line, ctx) {
       note(ctx.trace, "goal: casual/social — acknowledgement, no graph intent");
       note(ctx.trace, `lane: conversational — thanks/acknowledgement (${OK_ACK.has(q) ? "OK_ACK" : "THANKS"} closed set${thanksHit === q ? "" : ", elongation-collapsed"})`);
       note(ctx.trace, `pattern: template "${T_THANKS}" (data/templates/responses.jsonl)`);
-      return mk(t(T_THANKS));
+      return mk(t(T_THANKS), { lane: "thanks" });
     }
   }
   if (aiIdentityMatch(raw)) {
     note(ctx.trace, "goal: identity — is tmct an AI/LLM (a very likely first question)");
     note(ctx.trace, "lane: conversational — identity/AI (AI_IDENTITY_PHRASES closed set)");
-    return mk(t(T_IDENTITY_NOT_LLM));
+    return mk(t(T_IDENTITY_NOT_LLM), { lane: "help" });
   }
   if (FEELINGS_PHRASES.some((re) => re.test(raw))) {
     note(ctx.trace, "goal: identity — does tmct have feelings/consciousness (small-talk persona finding)");
     note(ctx.trace, "lane: conversational — identity/feelings (FEELINGS_PHRASES closed set)");
-    return mk(t(T_IDENTITY_NO_FEELINGS));
+    return mk(t(T_IDENTITY_NO_FEELINGS), { lane: "help" });
   }
   if (IDENTITY_PHRASES.some((re) => re.test(raw))) {
     note(ctx.trace, "goal: identity — who/what tmct is, not a capability listing");
     note(ctx.trace, "lane: conversational — identity (IDENTITY_PHRASES closed set)");
-    return mk(t(T_IDENTITY_SELF));
+    return mk(t(T_IDENTITY_SELF), { lane: "help" });
   }
   // CAPABILITY_PHRASES' vague-opener entries are self-contained closed
   // regexes, but a preamble ahead of one ("right, can you walk me through
@@ -1543,7 +1586,7 @@ function conversationalTurn(line, ctx) {
     || CAPABILITY_PHRASES.some((re) => re.test(applyPreambleFrames(raw))) || ORIENT_OPENERS.has(q)) {
     note(ctx.trace, "goal: get oriented — what can tmct answer, how do I start");
     note(ctx.trace, "lane: conversational — help/orientation (CAPABILITY_PHRASES/ORIENT_OPENERS / bare help / ?)");
-    return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint));
+    return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint), { lane: "help" });
   }
   // Fuzzy-typo fallback (A4): every exact/collapsed closed-set lookup above missed —
   // try a bounded edit-distance match against the flattened conversational phrase
@@ -1556,11 +1599,11 @@ function conversationalTurn(line, ctx) {
       note(ctx.trace, `goal: casual/social or orientation — fuzzy-typo match "${raw}" → "${fuzzyHit}"`);
       note(ctx.trace, `lane: conversational — fuzzy typo tolerance (${bucket})`);
       if (bucket === "bye") return mk(t(T_FAREWELL), { end: true });
-      if (bucket === "thanks") return mk(t(T_THANKS));
-      if (bucket === "identity") return mk(t(T_IDENTITY_SELF));
-      if (bucket === "capability") return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint));
+      if (bucket === "thanks") return mk(t(T_THANKS), { lane: "thanks" });
+      if (bucket === "identity") return mk(t(T_IDENTITY_SELF), { lane: "help" });
+      if (bucket === "capability") return mk(orientationAnswer(ctx.templates, ctx.graph, ctx.vocabHint), { lane: "help" });
       const id = (!T_GREETING_BY_PHRASE[fuzzyHit] && noCodeGraph(ctx.graph)) ? T_GREETING_EMPTY : (T_GREETING_BY_PHRASE[fuzzyHit] || T_GREETING);
-      return mk(t(id, { vocabHint: ctx.vocabHint }));
+      return mk(t(id, { vocabHint: ctx.vocabHint }), { lane: "greeting" });
     }
   }
   return null;
@@ -9515,7 +9558,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
     const n = heldGoals.length;
     return {
       text: `${added ? "noted" : "already noted"} — the goal is that ${tails.join(" and ")}.${n > 1 ? ` (${n} goals held)` : ""} Say "solve it" when the state is taught.`,
-      via: "plan", deduced: "record the goal state for a later plan",
+      via: "plan", lane: "goal", deduced: "record the goal state for a later plan",
       note: added
         ? `GOAL frame — ${added === 1 ? "goal spec" : `${added} goal specs`} accumulated on the session plan slot`
         : "GOAL frame — the same goal spec was already held, so it folded onto the existing one",
@@ -9655,7 +9698,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
       `${ordering.length ? ` and ${ordering.length} ordering fact${ordering.length === 1 ? "" : "s"}` : ""}. ` +
       `Say "next" to make move 1, or ask "what moves are legal now".${assumptionNote}`;
   return {
-    text, via: "plan",
+    text, via: "plan", lane: "imperative",
     deduced: `plan a move sequence from the current state to the goal (${n} move${n === 1 ? "" : "s"})`,
     note: "plan lane — compileDomain + findActionPath over the taught rules; plan held on the session slot",
     plan,
@@ -10024,6 +10067,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // facts/recall (a fact EXTENDS a non-miss schema hit too — NOT miss-gated),
   // (4) TEACH lane (would-miss), (5) the short tailored miss (would-miss).
   let handled = false;
+  // The dialogue-act lane, when a lane below knows better than the final
+  // question-shape lookup (a plan frame is a request/instruct, a stored
+  // teach is an inform, whatever the surface punctuation looked like).
+  let dialogueLaneOverride = null;
   // (0) "what else is X" — recognized off the RAW query text, before every
   // other lane below (all of which read `envelope`, already relaxed/reparsed
   // by ask()'s noise-strip cascade, which silently drops "else"). via is set
@@ -10063,6 +10110,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const planLane = await planLaneAnswer(query, { memoryDir, planHolder, sessionId });
     if (planLane) {
       answer = planLane.text; via = planLane.via; recordMiss = false; handled = true;
+      if (planLane.lane) dialogueLaneOverride = planLane.lane;
       if (planLane.plan) planResult = planLane.plan;
       if (planLane.deduced) {
         deduced = planLane.deduced;
@@ -10520,6 +10568,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache });
     if (taught) {
       answer = taught.text; via = taught.via; recordMiss = taught.miss;
+      if (!taught.miss) dialogueLaneOverride = "teach";
       note(trace, `lane: (4) TEACH — TEACH_RE/OWNS_TEACH_RE/BARE_DECLARATIVE_RE matched, ${taught.miss ? "but the payload could not be stored" : "reified into .tmct/memory"}`);
       // `deduced` was computed straight off envelope.parsed alone, but the
       // structural grammar has no business parsing a teach-shaped sentence at
@@ -10812,7 +10861,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // `goal`: the SAME deduced string the debug trace's own "goal:" line
   // carries. Only runAsk ever sets this field, so the always-on goal line is
   // scoped to real ask-engine turns by construction.
-  return { answer, logLines, record, focus: newFocus, detail, effectiveQuery, goal: deduced, ...(planResult ? { plan: planResult } : {}) };
+  // `lane`: the dialogue-act lane — a lane's own override, else the
+  // question-shape lookup — resolved to an ISO act by runTurn's withLast.
+  const lane = dialogueLaneOverride ?? askDialogueLane(envelope?.parsed, query, recordMiss);
+  return { answer, logLines, record, focus: newFocus, detail, effectiveQuery, goal: deduced, lane, ...(planResult ? { plan: planResult } : {}) };
 }
 
 /** A non-ask, non-dispatch chat turn (count answer, /stats) — the same
@@ -11793,7 +11845,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // what the shell prints. The narrate block is applied AFTER `last` is
   // captured from the PRE-narration finished result.
   const withLast = (result, fallbackGoal = "unclear — no goal signal for this turn type") => {
-    const finished = finish(result, { graph });
+    const finished = attachDialogueAct(finish(result, { graph }), trace);
     // Every dispatch path below built its own record off `workingLine` (the
     // indirect-request wrapper stripped and/or the discontiguous-frame
     // rewrite applied) — restore the ORIGINAL raw `line` into record.query
@@ -11870,7 +11922,9 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     const step = await executePlanStep(planHolder, { memoryDir, sessionId });
     note(trace, `goal: ${step.deduced}`);
     note(trace, "lane: PLAN NEXT — executed the active plan's next move as an @stepK snapshot write");
-    const rec = withLast(plainTurn(workingLine, step.text, { via: "plan", focus }), step.deduced);
+    const stepTurn = plainTurn(workingLine, step.text, { via: "plan", focus });
+    stepTurn.lane = "imperative";
+    const rec = withLast(stepTurn, step.deduced);
     rec.planState = planHolder.state;
     return rec;
   }
@@ -11981,6 +12035,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     if (asserted) {
       note(trace, "goal: teach/remember a new fact (declarative ACE sentence)");
       note(trace, "lane: assertTurn — grammar/ace.mjs parseAce matched a full triple with no residue");
+      asserted.lane = "teach";
       return withLast(asserted, "teach/remember a new fact");
     }
     // Bare declarative taxonomy (hyphenated-instance membership, article-led
@@ -11990,7 +12045,9 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     if (taxonomy) {
       note(trace, "goal: teach/remember a new fact (bare declarative taxonomy)");
       note(trace, "lane: bareTaxonomyTeach — hyphenated-instance or article-led kind-of declarative, stored before the ask engine could parse it as a question");
-      return withLast(plainTurn(workingLine, taxonomy.text, { via: taxonomy.via, miss: taxonomy.miss, focus }), "teach/remember a new fact");
+      const taxonomyTurn = plainTurn(workingLine, taxonomy.text, { via: taxonomy.via, miss: taxonomy.miss, focus });
+      if (!taxonomy.miss) taxonomyTurn.lane = "teach";
+      return withLast(taxonomyTurn, "teach/remember a new fact");
     }
   }
   // MEMORY-STORE counts first ("how many facts / utterances do you know") — the

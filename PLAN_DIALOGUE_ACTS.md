@@ -1,11 +1,15 @@
 # PLAN_DIALOGUE_ACTS.md — name tmct's turn types to ISO 24617-2, deterministically
 
-Status: IN DELIVERY (2026-07-18 run) — steps 1–2 BUILT: the closed vocabulary and lane lookup
-live in `src/domain/dialogue-acts.mjs` (`DIALOGUE_ACTS`, `LANE_DIALOGUE_ACTS`,
-`dialogueActForLane`), declared as `dact:` terms in `ontology/tmct-core.ttl` §1d, unit-tested
+Status: BUILT (2026-07-18 run) — steps 1–2: the closed vocabulary and lane lookup live in
+`src/domain/dialogue-acts.mjs` (`DIALOGUE_ACTS`, `LANE_DIALOGUE_ACTS`, `dialogueActForLane`),
+declared as `dact:` terms in `ontology/tmct-core.ttl` §1d, unit-tested
 (`test/adapters/dialogue-acts.test.mjs`) and two-way-pinned against the ontology
-(`test/adapters/grammar-ontology.test.mjs`). Steps 3–5 are open: the chat surface attaches the
-label per turn, surfaces it, and moves audit row 139. This plan carries the ISO 24617-2
+(`test/adapters/grammar-ontology.test.mjs`). Steps 3–4: `src/services/chat.mjs` stamps
+`record.dialogueAct` per turn from the routed lane (teach/ask/plan/game/conversational lanes,
+the honest miss as autoNegative) and prints the label in the `/narrate` trace, pinned by
+`test/adapters/chat-dialogue-act-labels.test.mjs`. Step 5: the reference doc's consumer note
+names the chat attachment; audit row 139 moves at the next audit re-measure, not from this
+plan. This plan carries the ISO 24617-2
 dialogue-act work out of the archived normative review (`archive/PLAN_NORMATIVE.md` §4.6). The
 reference mapping and the implemented subset live at
 [`iso-24617-2-dialogue-acts.md`](docs/references/schemas/iso-24617-2-dialogue-acts.md).
@@ -65,20 +69,20 @@ Declare a closed dialogue-act vocabulary named to ISO 24617-2's function names �
 CURIE set (or a `DIALOGUE_ACTS` table) — in `ontology/tmct-core.ttl`, alongside the other
 vocabularies, so the alignment is machine-checkable the way the PROV and SEON alignments are.
 
-## Step 3 — attach the label
+## Step 3 — attach the label — BUILT
 
 Set a `dialogueAct` field on each turn's chat envelope from a deterministic map over the router's
 lane / parse result. No new classifier: a lookup over a decision already made. Surface it in the
 envelope and, optionally, a `/dialogue-act` (or `/why`) command and a tool-layer field.
 
-## Step 4 — pin it (evidence, per `SKILL_CAPABILITIES_AUDIT.md` §1)
+## Step 4 — pin it (evidence, per `SKILL_CAPABILITIES_AUDIT.md` §1) — BUILT
 
 - corpus / unit tests asserting each turn type carries the right ISO-named act — a teach → `inform`,
   an ask → `setQuestion`, and the honest miss → `autoFeedback` (the honesty-preserving distinction);
 - a `grammar-ontology`-style test that the vocabulary is declared and aligns to the standard — an
   alignment claim in the ontology needs a test.
 
-## Step 5 — document
+## Step 5 — document — BUILT (reference doc; audit row 139 moves at the next audit)
 
 Mark the implemented functions in [`iso-24617-2-dialogue-acts.md`](docs/references/schemas/iso-24617-2-dialogue-acts.md);
 move capability-audit row 139 from `absent` to `partial` (or `implemented`) for the covered subset,

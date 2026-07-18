@@ -142,6 +142,11 @@ export const LANE_DIALOGUE_ACTS = Object.freeze({
   greeting: "initialGreeting",
   thanks: "thanking",
   help: "inform",
+  // The guessing game's turns are task-dimension: a reply that discharges
+  // the other side's move (a hint, a win, a rebuttal) is an answer; tmct
+  // stating its own move (an opening, its next guess) is an inform.
+  "game-answer": "answer",
+  "game-inform": "inform",
 });
 
 /** The dialogue act a router lane resolves to, with its dimension — or null

@@ -9,9 +9,12 @@ The material below comes from two openly-licensed sources that describe it.
 **Retrieval date:** 2026-07-17.
 **Consumer in repo:** `src/domain/dialogue-acts.mjs` — the closed `DIALOGUE_ACTS` table and the
 lane→act lookup — declared as `dact:` terms in `ontology/tmct-core.ttl` §1d and pinned two-ways by
-`test/adapters/grammar-ontology.test.mjs`. The per-turn attachment in chat is
-`PLAN_DIALOGUE_ACTS.md` step 3. The naming decision predates the build; see `PLAN_NORMATIVE.md`
-§4.5.
+`test/adapters/grammar-ontology.test.mjs`. The chat surface attaches the label per turn:
+`src/services/chat.mjs` stamps `record.dialogueAct` from the routed lane and prints it in the
+`/narrate` trace, pinned by `test/adapters/chat-dialogue-act-labels.test.mjs` (teach→inform,
+setQuestion/propositionalQuestion by shape, the honest miss→autoNegative in autoFeedback,
+greeting→initialGreeting, game turns task-dimension). The naming decision predates the build; see
+`PLAN_NORMATIVE.md` §4.5.
 
 ## Sources actually read
 
