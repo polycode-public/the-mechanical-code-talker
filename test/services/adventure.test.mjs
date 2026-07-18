@@ -8,6 +8,8 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
+import { foldWorldState, worldDigestRows } from "../../src/services/adventure.mjs";
+import { driveSessionTurns } from "../helpers/session.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
 import { compileDomain, movesFromRules, stateFromFacts } from "../../src/domain/domain.mjs";
@@ -73,6 +75,67 @@ test("movesFromRules enumerates the loaded world's grounded moves from its own w
       goMove.nextState.some((r) => r.subject === "player" && r.predicate === "mgx:currently-in" && r.object === "library"),
       "the go effect writes the player's new room into the successor state",
     );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the world-state fold takes the newest @turnN snapshot per subject and derives the turn counter", () => {
+  const rows = [
+    { subject: "player", predicate: "mgx:currently-in", object: "study" },
+    { subject: "player@turn1", predicate: "mgx:currently-in", object: "library" },
+    { subject: "player@turn2", predicate: "mgx:currently-in", object: "kitchen" },
+    { subject: "cabinet", predicate: "mgx:stands-locked-in", object: "study" },
+    { subject: "cabinet@turn3", predicate: "mgx:fixed-in", object: "study" },
+    { subject: "portrait@turn2", predicate: "mgx:is-open", object: "true" },
+    { subject: "study", predicate: "mgx:has-exit-north", object: "library" },
+  ];
+  const state = foldWorldState(rows);
+  assert.equal(state.turnCount, 3);
+  assert.deepEqual(state.placements.get("player"), { predicate: "mgx:currently-in", object: "kitchen", turn: 2 });
+  assert.deepEqual(state.placements.get("cabinet"), { predicate: "mgx:fixed-in", object: "study", turn: 3 });
+  assert.equal(state.openness.get("portrait").open, true);
+  assert.equal(state.exits.get("study").get("north"), "library");
+});
+
+test("the digest view folds placements, phrases the predicates, and keeps hidden contents and puzzle wiring out", () => {
+  const rows = [
+    { subject: "cabinet", predicate: "mgx:stands-locked-in", object: "study" },
+    { subject: "key", predicate: "mgx:hidden-in", object: "portrait" },
+    { subject: "cabinet", predicate: "mgx:unlocks-with", object: "key" },
+    { subject: "housekeeper", predicate: "mgx:acts-on-turn", object: "3" },
+    { subject: "lamp", predicate: "mgx:located-in", object: "study" },
+    { subject: "lamp@turn2", predicate: "mgx:located-in", object: "player" },
+    { subject: "letter@turn3", predicate: "mgx:located-in", object: "housekeeper" },
+    { subject: "housekeeper", predicate: "rdf:type", object: "person" },
+    { subject: "study", predicate: "mgx:has-exit-north", object: "library" },
+    { subject: "player", predicate: "rdf:type", object: "adventurer" },
+  ];
+  const view = worldDigestRows(rows, foldWorldState(rows));
+  const sentences = view.map((r) => `${r.subject} ${r.predicate} ${r.object}`);
+  assert.ok(sentences.includes("Cabinet stands locked in the study"));
+  assert.ok(sentences.includes("Player carries the lamp"), "a carried object reads as carries, not located-in player");
+  assert.ok(sentences.includes("Housekeeper carries the letter"), "an NPC holding an object reads as carries too");
+  assert.ok(sentences.includes("Study has an exit north to the library"));
+  assert.ok(sentences.includes("Player is an adventurer"), "typing rows keep vowel-aware articles");
+  assert.ok(!sentences.some((s) => /hidden/.test(s)), "hidden placements stay out of the view");
+  assert.ok(!sentences.some((s) => /unlocks-with|acts-on-turn/.test(s)), "puzzle wiring stays out of the view");
+});
+
+test("a stopped world resumes in a later session exactly where the written snapshots left it", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-adventure-resume-"));
+  try {
+    const first = await driveSessionTurns(
+      { repoPath: dir, env: { TMCT_NO_SEED: "1" } },
+      ["play ashcombe hall", "take the lamp", "go north", "stop playing"],
+    );
+    assert.match(String(first[2].answer), /[Nn]ow in the library/);
+    const second = await driveSessionTurns(
+      { repoPath: dir, env: { TMCT_NO_SEED: "1" } },
+      ["play ashcombe hall", "what am i carrying"],
+    );
+    assert.match(String(second[0].answer), /back in the adventure — you are in the library/);
+    assert.match(String(second[1].answer), /[Pp]layer carries the lamp/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

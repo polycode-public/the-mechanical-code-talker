@@ -285,13 +285,24 @@ predicate, declining by name. No settled rule-shape design exists yet for dataty
 edge-existence preconds; when one is designed, these families pick it up and the fact-side checks
 retire.
 
-**Phase 3 — Player-state wiring + the digest.** Wire parsed imperatives to fire their taught action
-family and write player/world snapshot facts (the shipped Gap 2 convention), plus the
-`generateCompletion`-driven "look"/"inventory" digest — chat-wired but with NO NPC autonomy yet
-(single-player, fully player-driven). Exit criterion: the worked example's command sequence runs
-correctly end to end MINUS the housekeeper's turn-3 move, with every precondition failure honestly
-declined (the "take the portrait" step in particular — a real negative case, not just the happy
-path).
+**Phase 3 — Player-state wiring + the digest.** DONE (2.7.0 wave). The world interpreter lives in
+`src/services/adventure.mjs`: a parsed imperative resolves its verb against the taught action
+families (a verb with no family declines by name), checks the closed-vocabulary precondition FACTS
+(exits, lock state, hidden contents, the unlock instrument, carrying), and writes its family's
+effect as `@turnN` snapshot facts through ordinary `appendFacts` — never a mutation, never a
+special player store. The player is the ordinary individual `player`; `mgx:currently-in` /
+`mgx:located-in` snapshots carry position and possession, and every reader folds base rows +
+newest snapshot identically (`foldWorldState`). "look" and "what am I carrying" are
+`generateCompletion` calls over the current room / the player, through
+`createCompletionsGraphAdapter` with two pieces of query shaping (recorded below under Open
+risks): the adapter reads the FOLDED fact view with phrase predicates, and block retrieval is
+switched off so a later session's look never echoes its own earlier transcript. The worked
+example's sequence minus the housekeeper runs end to end with every precondition failure a named
+decline ("the portrait is fixed in place — it can't be taken"; "there's no exit east from the
+study"; "the cabinet is locked"; "you're not carrying the key"; "the lamp doesn't fit the
+cabinet's lock"). Pinned by the `games/adventure` lane's command rows and
+`test/services/adventure.test.mjs`'s fold/digest/resume tests. Confirmation-before-executing
+resolved as the teachFact precedent suggested: act, then state plainly what happened.
 
 **Phase 4 — The NPC scheduler.** Gap 4's turn-counted pass, the housekeeper's turn-3 Rule as the
 first (and, for this validation, only) NPC action. Exit criterion: the FULL worked example above
@@ -315,9 +326,18 @@ question for its own convergence point.
   ones. A full playthrough of Ashcombe Hall's worked example is ~12 turns — trivial — but a much
   longer game would revisit a real retraction primitive, and only if volume becomes a real problem,
   not preemptively.
-- **The completions top-K risk named above** (pruneCompletion possibly dropping a correctness-critical
-  fact from a room digest) needs a real check against the worked example in Phase 3, not an assumption
-  either way.
+- **The completions top-K risk named above** — CHECKED in Phase 3 against the real worked example.
+  The risk is real: at the default 3-sentences-per-group cutoff the study's digest keeps 3 of its 9
+  fact sentences (the locked-cabinet fact happened to rank first and survive, but the exits
+  dropped — survival by rank order is not a guarantee). Fixed by query shaping, not a renderer:
+  the look call passes `maxSentencesPerGroup: 12` (a documented pipeline option; Ashcombe rooms
+  carry well under 12 facts), hands the adapter the same @turnN-folded fact view every other
+  reader uses (so a superseded placement can't contradict the current one), and shapes retrieval
+  to the graph source only (folded session blocks quote earlier transcripts of the same rooms,
+  which a second session's look would otherwise echo). Two related shaping notes: hidden
+  placements (`mgx:hidden-in`) and puzzle wiring (`mgx:unlocks-with`, the NPC schedule) stay out
+  of the digest view — hidden means hidden — and the substring gate in the adapter's own `.ask()`
+  already keeps a fact that names only a container (not the room) out of that room's digest.
 - **NPC scheduling scale.** One NPC, one scripted turn-3 action, is enough to validate the mechanism
   but says nothing about how this would hold up with many NPCs each carrying many turn-gated Rules —
   named as an explicit non-goal for this document, consistent with Hanoi's own "search-space blow-up
