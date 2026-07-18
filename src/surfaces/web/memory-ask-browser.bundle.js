@@ -673,12 +673,17 @@
         "symbols"
       ]);
       BOOLEAN_CONNECTIVES = Object.freeze({
+        "but do not": "difference",
+        "but does not": "difference",
+        "and do not": "difference",
+        "and does not": "difference",
         "but not": "difference",
         "and not": "difference",
         "except": "difference",
         "without": "difference",
         "and": "intersection",
         "plus": "intersection",
+        "but": "intersection",
         "or": "union"
       });
       QUALIFIERS = Object.freeze({
@@ -985,6 +990,7 @@
     if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
     if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
     if (head.startsWith("child:")) return { kind: "corpus", name: head.slice("child:".length).split(":")[0] || "unknown" };
+    if (head.startsWith("world:")) return { kind: "corpus", name: head.slice("world:".length).split(":")[0] || "unknown" };
     if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
     if (head.startsWith("teach:")) {
       return { kind: "teach", ...parseChatTagRest(head.slice("teach:".length)) };
@@ -2752,9 +2758,12 @@ ${shown.join("\n")}${tail}`;
   function applySubordinationFrames(text) {
     let q = String(text || "");
     for (let pass = 0; pass < 3; pass++) {
-      const m = q.match(SUBORDINATION_FRAMES_RE);
-      if (!m) break;
-      q = m[1].trim();
+      const before = q;
+      let m = q.match(SUBORDINATION_FRAMES_RE);
+      if (m) q = m[1].trim();
+      m = q.match(TRAILING_SUBORDINATION_RE);
+      if (m) q = m[1].trim();
+      if (q === before) break;
     }
     return q;
   }
@@ -2799,6 +2808,7 @@ ${shown.join("\n")}${tail}`;
     q = applySubordinationFrames(q);
     q = applyConditionalFrames(q);
     q = stripFillerWords(q);
+    q = stripTrailingDiscourseTag(q);
     q = q.replace(/\?{2,}\s*$/, "?");
     return q.replace(/\s+/g, " ").trim();
   }
@@ -2824,7 +2834,7 @@ ${shown.join("\n")}${tail}`;
     if (!predicate) return null;
     return { entWord, predicate };
   }
-  var tableRe, CONTRACTION_RE, correctionRe, MISSPELLING_RE, WRONG_WORD_RE, W_SLASH_RE, FOR_DIGIT_THANKS_RE, FOR_DIGIT_EXAMPLE_RE, KIND_NOUN_ANAPHORA_RE, VERB_ALTERNATION, FILLER_RE, RELATION_VERB_RE, INTERROGATIVE_LEAD_RE, LISTING_TAIL_KINDS, BARE_KIND_RE, isListingRemainder, GREETING_PREAMBLE_RE, THANKS_PREAMBLE_RE, ACK_PREAMBLE_RE, BROWSING_PREAMBLE_RE, HEDGE_ADVERB_PREAMBLE_RE, TROUBLE_ASIDE_RE, MODAL_WRAPPER_RE, EXPLAIN_WRAPPER_RE, TELL_ME_WRAPPER_RE, KNOW_WRAPPER_RE, WANT_KNOW_WRAPPER_RE, WONDERING_WRAPPER_RE, EMBEDDED_WHATIS_RE, EMBEDDED_MEANS_RE, SHOW_GIVE_ME_RE, LEADING_CONNECTIVE_RE, QUESTION_AUX_LEAD_RE, TOPIC_SWITCH_PREAMBLE_RE, SUBORDINATION_FRAMES_RE, SELF_CORRECTION_RE, CONDITIONAL_VERB_GERUND, CONDITIONAL_KIND_PLURAL, CONDITIONAL_QUALIFIER_SRC, CONDITIONAL_QUALIFIER_RE, COUNTERFACTUAL_RE, WHERE_TRAILING_TEMPORAL_RE, PHRASING_FRAMES, NEGATION_SET_RE, STOPWORDS2, splitWords, wordsOf;
+  var tableRe, CONTRACTION_RE, correctionRe, MISSPELLING_RE, WRONG_WORD_RE, W_SLASH_RE, FOR_DIGIT_THANKS_RE, FOR_DIGIT_EXAMPLE_RE, KIND_NOUN_ANAPHORA_RE, VERB_ALTERNATION, FILLER_RE, RELATION_VERB_RE, INTERROGATIVE_LEAD_RE, LISTING_TAIL_KINDS, BARE_KIND_RE, isListingRemainder, GREETING_PREAMBLE_RE, THANKS_PREAMBLE_RE, ACK_PREAMBLE_RE, BROWSING_PREAMBLE_RE, HEDGE_ADVERB_PREAMBLE_RE, TROUBLE_ASIDE_RE, MODAL_WRAPPER_RE, EXPLAIN_WRAPPER_RE, TELL_ME_WRAPPER_RE, KNOW_WRAPPER_RE, WANT_KNOW_WRAPPER_RE, WONDERING_WRAPPER_RE, EMBEDDED_WHATIS_RE, EMBEDDED_MEANS_RE, SHOW_GIVE_ME_RE, LEADING_CONNECTIVE_RE, QUESTION_AUX_LEAD_RE, TOPIC_SWITCH_PREAMBLE_RE, SUBORDINATION_FRAMES_RE, TRAILING_SUBORDINATION_RE, SELF_CORRECTION_RE, CONDITIONAL_VERB_GERUND, CONDITIONAL_KIND_PLURAL, CONDITIONAL_QUALIFIER_SRC, CONDITIONAL_QUALIFIER_RE, COUNTERFACTUAL_RE, WHERE_TRAILING_TEMPORAL_RE, PHRASING_FRAMES, NEGATION_SET_RE, STOPWORDS2, splitWords, wordsOf;
   var init_normalize = __esm({
     "src/domain/interpret/normalize.mjs"() {
       init_ask_vocab();
@@ -2893,7 +2903,8 @@ ${shown.join("\n")}${tail}`;
       LEADING_CONNECTIVE_RE = /^(?:and|also|so|then|now|but)\s+(.+)$/i;
       QUESTION_AUX_LEAD_RE = /^(?:does|do|did|is|are|was|were|has|have|had|can|could|will|would|should)\b/i;
       TOPIC_SWITCH_PREAMBLE_RE = /^(?:(?:actually|no\s+wait|wait|hold\s+on|never\s+mind|scratch\s+that|on\s+second\s+thought|i\s+mean(?:t)?)[\s,.]+)+(.+)$/i;
-      SUBORDINATION_FRAMES_RE = /^(?:since|although|though|while|because|whereas|given\s+that|now\s+that)\s+.+?,\s*(.+)$/i;
+      SUBORDINATION_FRAMES_RE = /^(?:since|although|(?:even\s+)?though|while|because|whereas|given\s+that|now\s+that)\s+.+?,\s*(.+)$/i;
+      TRAILING_SUBORDINATION_RE = /^(.+?),\s*(?:since|although|(?:even\s+)?though|while|because|whereas|given\s+that|now\s+that)\s+.+$/i;
       SELF_CORRECTION_RE = /^.+?(?:\s*(?:--|—|-)\s*)?\b(?:sorry|i\s+mean)\b\s*(?:--|—|-|,|:)\s*(.+)$/i;
       CONDITIONAL_VERB_GERUND = Object.freeze({
         imports: "importing",
@@ -2992,6 +3003,10 @@ ${shown.join("\n")}${tail}`;
         // CO-CHANGE → "what co-changes with X" (the plainest phrasing a developer types).
         { re: /^what\s+does\s+(.+?)\s+changes?\s+together\s+with\??$/i, to: (m) => `what co-changes with ${m[1]}` },
         { re: /^what\s+changes?\s+together\s+with\s+(.+?)\??$/i, to: (m) => `what co-changes with ${m[1]}` },
+        // COMMIT-COUNT PASSIVE ("how many commits are recorded for X") → the touch
+        // phrasing the count restrictor already compiles. "recorded" is no relation
+        // verb, so the passive otherwise dies in the restrictor parse.
+        { re: /^how\s+many\s+commits\s+(?:are|were)\s+(?:recorded|logged)\s+(?:for|against)\s+(?:the\s+)?(.+?)\??$/i, to: (m) => `how many commits touched ${m[1]}` },
         // AUTHORSHIP → "who touched X" (tmct's touch edge IS the authorship signal).
         // A commit sha object is excluded — that dumps the commit's touch-set, not its author.
         { re: /^who\s+(?:wrote|authored)\s+(?:the\s+)?(?!(?:commit\s+)?[0-9a-f]{7,40}\??$)(.+?)\??$/i, to: (m) => `who touched ${m[1]}` },
@@ -3908,6 +3923,7 @@ ${shown.join("\n")}${tail}`;
       if (!noun) continue;
       const head = w.slice(0, r - 1);
       if (!head.length) continue;
+      if (head.every((x) => QUALIFIERS[x.toLowerCase()])) continue;
       const outer = parseSimpleClause([...head, NEST_SENTINEL].join(" "), nlp);
       if (!outer || outer.shape !== "reverse" && outer.shape !== "forward") continue;
       if (outer.modifier && outer.modifier !== "direct") continue;
@@ -22013,7 +22029,7 @@ ${codeblock}`, options);
   });
 
   // src/adapters/corpus/conceptnet.mjs
-  var import_meta6, PKG_ROOT4, SLICE_FILE, MAP_FILE, SEON_CONCEPTS_FILE, SEON_DEFINITIONS_FILE, TIER2_DIR, TIER2_MANIFEST_FILE, WORDNET_DIR, WORDNET_MANIFEST_FILE;
+  var import_meta7, PKG_ROOT5, SLICE_FILE, MAP_FILE, SEON_CONCEPTS_FILE, SEON_DEFINITIONS_FILE, TIER2_DIR, TIER2_MANIFEST_FILE, WORDNET_DIR, WORDNET_MANIFEST_FILE;
   var init_conceptnet = __esm({
     "src/adapters/corpus/conceptnet.mjs"() {
       init_node_fs();
@@ -22023,15 +22039,15 @@ ${codeblock}`, options);
       init_node_path();
       init_dist();
       init_core();
-      import_meta6 = {};
-      PKG_ROOT4 = join(dirname(fileURLToPath2(import_meta6.url)), "..", "..", "..");
-      SLICE_FILE = join(PKG_ROOT4, "corpus", "conceptnet", "slice.jsonl");
-      MAP_FILE = join(PKG_ROOT4, "src", "adapters", "corpus", "conceptnet-map.toml");
-      SEON_CONCEPTS_FILE = join(PKG_ROOT4, "corpus", "seon", "concepts.jsonl");
-      SEON_DEFINITIONS_FILE = join(PKG_ROOT4, "corpus", "seon", "definitions.jsonl");
-      TIER2_DIR = join(PKG_ROOT4, "corpus", "tier2");
+      import_meta7 = {};
+      PKG_ROOT5 = join(dirname(fileURLToPath2(import_meta7.url)), "..", "..", "..");
+      SLICE_FILE = join(PKG_ROOT5, "corpus", "conceptnet", "slice.jsonl");
+      MAP_FILE = join(PKG_ROOT5, "src", "adapters", "corpus", "conceptnet-map.toml");
+      SEON_CONCEPTS_FILE = join(PKG_ROOT5, "corpus", "seon", "concepts.jsonl");
+      SEON_DEFINITIONS_FILE = join(PKG_ROOT5, "corpus", "seon", "definitions.jsonl");
+      TIER2_DIR = join(PKG_ROOT5, "corpus", "tier2");
       TIER2_MANIFEST_FILE = join(TIER2_DIR, "manifest.json");
-      WORDNET_DIR = join(PKG_ROOT4, "corpus", "wordnet");
+      WORDNET_DIR = join(PKG_ROOT5, "corpus", "wordnet");
       WORDNET_MANIFEST_FILE = join(WORDNET_DIR, "manifest.json");
     }
   });
@@ -22125,7 +22141,7 @@ ${codeblock}`, options);
       }
     };
   }
-  var import_meta7, NAMENET_DIR, EXTENSION_KINDS, CONCEPTNET_PREFER, BUILTIN_EXTENSIONS;
+  var import_meta8, NAMENET_DIR, EXTENSION_KINDS, CONCEPTNET_PREFER, BUILTIN_EXTENSIONS;
   var init_extensions = __esm({
     "src/services/extensions.mjs"() {
       init_node_path();
@@ -22133,8 +22149,8 @@ ${codeblock}`, options);
       init_node_url();
       init_toml_config();
       init_conceptnet();
-      import_meta7 = {};
-      NAMENET_DIR = join(dirname(fileURLToPath2(import_meta7.url)), "..", "..", "corpus", "namenet");
+      import_meta8 = {};
+      NAMENET_DIR = join(dirname(fileURLToPath2(import_meta8.url)), "..", "..", "corpus", "namenet");
       EXTENSION_KINDS = Object.freeze(["corpus", "lexicon", "templates", "pack", "ontology"]);
       CONCEPTNET_PREFER = ["rdfs:subClassOf", "rdf:type", "mgx:usedFor", "mgx:partOf", "mgx:capableOf"];
       BUILTIN_EXTENSIONS = Object.freeze(builtinExtensions());
@@ -22300,8 +22316,8 @@ ${codeblock}`, options);
     {
       name: "tmct_impact",
       tier: "cold",
-      summary: "Transitive reverse closure over imports/calls \u2014 what breaks if a module changes, by depth, with tests.",
-      inputSchema: moduleArg("The module whose dependents you want."),
+      summary: "Transitive reverse closure over imports/calls \u2014 what breaks if a module or symbol changes, by depth, with tests.",
+      inputSchema: moduleArg("The module (or a symbol it defines) whose dependents you want."),
       example: { module: "django/utils/text.py" }
     },
     {
@@ -23233,6 +23249,17 @@ ${JSON.stringify(envelope, null, 2)}`;
   var import_meta4 = {};
   var PKG_ROOT2 = join(dirname(fileURLToPath2(import_meta4.url)), "..", "..", "..");
 
+  // src/domain/child-pack.mjs
+  init_hash();
+
+  // src/adapters/corpus/child-pack.mjs
+  init_node_fs();
+  init_node_url();
+  init_node_path();
+  init_hash();
+  var import_meta5 = {};
+  var PKG_ROOT3 = join(dirname(fileURLToPath2(import_meta5.url)), "..", "..", "..");
+
   // src/domain/dialogue-acts.mjs
   var DIALOGUE_ACT_DIMENSIONS = Object.freeze([
     "task",
@@ -23392,10 +23419,10 @@ ${JSON.stringify(envelope, null, 2)}`;
   init_node_fs();
   init_node_url();
   init_node_path();
-  var import_meta5 = {};
-  var PKG_ROOT3 = join(dirname(fileURLToPath2(import_meta5.url)), "..", "..", "..");
+  var import_meta6 = {};
+  var PKG_ROOT4 = join(dirname(fileURLToPath2(import_meta6.url)), "..", "..", "..");
   function worldsPackDir(env = process.env) {
-    return env?.TMCT_WORLDS_PACK_DIR || join(PKG_ROOT3, "corpus", "worlds");
+    return env?.TMCT_WORLDS_PACK_DIR || join(PKG_ROOT4, "corpus", "worlds");
   }
   var indexCacheByDir = /* @__PURE__ */ new Map();
   var worldCacheByKey = /* @__PURE__ */ new Map();
