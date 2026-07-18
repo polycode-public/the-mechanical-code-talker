@@ -814,7 +814,11 @@ export function findConsistencyViolations(typeEdges, subClassEdges, disjointEdge
  * opts: `depth` (max fixpoint rounds, default 32), `budget` (max new
  * derivations this pass, shared across all five rules, default 50), `focus`
  * (Set|array of class terms scoping derivations to what touches it — omit
- * for a whole-graph pass), `maxEnvironments` (per-fact environment cap,
+ * for a whole-graph pass), `expandFocus` (default false: when true, a caller
+ * focus expands through `buildRelevanceFrontier` before the kernels run, so
+ * a derivation among the focus terms' descendants and instances is in scope
+ * even when none of its own three terms was named), `maxEnvironments`
+ * (per-fact environment cap,
  * default DEFAULT_MAX_ENVIRONMENTS), `full` (force full evaluation even with
  * a valid watermark), `store` (REQUIRED — the memory store's
  * { loadMemory, readFactRows, appendFacts } read/write functions, injected so
@@ -825,7 +829,8 @@ export function findConsistencyViolations(typeEdges, subClassEdges, disjointEdge
  * depth, truncated, mode, deltaSize, environmentsAdded, alternatesTruncated }.
  */
 export async function syllogise(repoDir, {
-  depth = 32, budget = 50, focus = null, maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, full = false, store,
+  depth = 32, budget = 50, focus = null, expandFocus = false,
+  maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, full = false, store,
 } = {}) {
   const { loadMemory, readFactRows, appendFacts } = requireStore(store, ["loadMemory", "readFactRows", "appendFacts"], "syllogise");
   const stateFnsPresent = typeof store?.loadSyllogiseState === "function" && typeof store?.saveSyllogiseState === "function";
@@ -852,7 +857,14 @@ export async function syllogise(repoDir, {
     const target = someValuesFromOf.get(restriction);
     if (target) restrictionEdges.push({ restriction, property, target });
   }
-  const normalizedFocus = normalizeFocus(focus);
+  const callerFocus = normalizeFocus(focus);
+  // An expanded focus is the same relevance walk a delta pass runs, seeded by
+  // the caller's terms instead of a change set — still a focus (never reads
+  // or advances the watermark), just one that reaches the descendants,
+  // instances and restrictions the named terms actually govern.
+  const normalizedFocus = expandFocus && callerFocus
+    ? buildRelevanceFrontier(rows, [...callerFocus])
+    : callerFocus;
 
   // Mode: delta only with a valid watermark (state present, nothing removed
   // since — an id-set diff catches retractions, snapshots and hand-edits),

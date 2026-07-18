@@ -4,8 +4,9 @@
 > evaluation (watermark + relevance frontier, see §2), §3 including the bounded environment sets
 > (multiple premise sets per entailed fact, `mgx:factJustification`'s ' | '-separated environments,
 > the `maxEnvironments` knob, set-membership retraction with survivor re-grounding —
-> `syllogise`/`retractSubClassOf`, `src/domain/syllogise.mjs`; see §3 and the addendum).
-> §1/§4/§5 remain notes only —
+> `syllogise`/`retractSubClassOf`, `src/domain/syllogise.mjs`; see §3 and the addendum). §4's
+> forward/backward relevance slice is delivered (see §4 for the named remainder). §1/§5 remain
+> notes only —
 > and §1's beyond-RL survey now has a deeper sibling doc, `PLAN_SYLLOGIST_EL_DL.md`, which owns the
 > EL-classifier/DL-tableau tier; this file owns the incrementality/retraction horizon.
 > **2026-07-12: both chat-layer findings routed here from `archive/BENCHMARK_CONVERSATION_1.8.14.md` are now
@@ -184,21 +185,25 @@ premise-discounted rules so trust re-derives from what actually still supports t
 `test/adapters/syllogise.test.mjs` (environment persistence, cap determinism, set-membership
 survival, re-ground trust) and the `inference.retract.stale-justification` corpus row.
 
-## 4. Relevance under budget is the same open question wearing a different hat
+## 4. Relevance under budget — the two-directions-one-structure prediction, partly delivered
 
 `PLAN_INFERENCE_TESTING.md` used to carry two separate-looking bullets that are really one and the
 same problem, restated: "the frame problem stays named" (which axioms to chain from a large base
-under a hard budget — budget/focus truncation means a truthful "unproven" may really be "unproven
-within budget," and the answer shape must say which) and "retraction is a real gap" (§3, above).
-Both are asking the identical question from opposite directions: **given a bounded amount of work
-per call, which facts matter right now** — forward, "which axioms should this pass chase" or
-backward, "which derived facts does this one retracted premise actually touch." A retraction
-mechanism that tracks per-fact justification sets (§3's sketch) would answer BOTH questions with the
-same data structure: forward relevance becomes "which facts are reachable from the justifications
-already indexed near the focus set," and retraction becomes "which facts cite the retracted premise
-in their justification." That is the real reason this file treats them as one open question rather
-than two separate stubs — solving the retraction problem well is very likely to also solve the
-relevance problem, because they are the same graph walk run in opposite directions.
+under a hard budget) and "retraction is a real gap" (§3, above). Both ask the identical question
+from opposite directions: **given a bounded amount of work per call, which facts matter right
+now** — forward, "which axioms should this pass chase," or backward, "which derived facts does
+this one retracted premise actually touch."
+
+The prediction that one data structure answers both held up, and a slice of it is now shipped in
+`src/domain/syllogise.mjs`: forward relevance is `buildRelevanceFrontier` (exported — the delta
+pass's kernel scope, §2, and the walk behind `syllogise()`'s `expandFocus` option, which lets a
+caller focus reach the named terms' descendants, instances and restrictions instead of only
+derivations that mention a named term); backward relevance is retraction's `citedBy` index
+(premise id → the entailed facts whose environments cite it — each round examines only what the
+newest removals touch, §3's addendum). What remains, named: the citedBy index is rebuilt per
+retraction call rather than persisted alongside the watermark; chat's live proof-chase does not
+yet consume the frontier to pick its axioms; and chat's `/syllogise <term>` still runs the plain
+focus rather than flipping to `expandFocus`.
 
 ## 5. Progol/ILP — learning new rules, a separate and much smaller spike
 

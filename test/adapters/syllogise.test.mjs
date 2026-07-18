@@ -1903,3 +1903,45 @@ test("buildRelevanceFrontier: deterministic — same rows and seeds, same set, s
   ];
   assert.deepEqual([...buildRelevanceFrontier(rows, ["dog"])], [...buildRelevanceFrontier(rows, ["dog"])]);
 });
+
+// ---- expandFocus: a caller focus run through the relevance frontier ----
+
+test("syllogise expandFocus: a focus term's descendants and their instances come into scope — off by default", async () => {
+  const seedFacts = async (dir) => {
+    await appendFact(dir, { subject: "dog", predicate: SUBCLASS_PREDICATE, object: "animal", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "poodle", predicate: SUBCLASS_PREDICATE, object: "dog", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "rex", predicate: TYPE_PREDICATE, object: "poodle", provenance: "ace:chat:s1" });
+  };
+  const plainDir = await mkRepo();
+  const expandedDir = await mkRepo();
+  try {
+    await seedFacts(plainDir);
+    await seedFacts(expandedDir);
+    // rex:dog's three terms (rex, poodle, dog) all sit BELOW the focus term,
+    // so a plain focus screens the derivation out; the frontier reaches it.
+    await syllogise(plainDir, { focus: ["animal"] });
+    assert.ok(!hasType(readFactRows(await loadMemory(plainDir)), "rex", "dog"),
+      "default off: the plain focused pass behaves exactly as before");
+    await syllogise(expandedDir, { focus: ["animal"], expandFocus: true });
+    const rows = readFactRows(await loadMemory(expandedDir));
+    assert.ok(hasType(rows, "rex", "dog"), "the expanded focus admits the all-descendant-term derivation");
+    assert.ok(hasType(rows, "rex", "animal") && hasEdge(rows, "poodle", "animal"),
+      "everything the plain focus already reached still derives");
+  } finally {
+    await rm(plainDir, { recursive: true, force: true });
+    await rm(expandedDir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise expandFocus: an expanded focus is still a focus — it never advances the watermark", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "poodle", predicate: SUBCLASS_PREDICATE, object: "dog", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "dog", predicate: SUBCLASS_PREDICATE, object: "animal", provenance: "ace:chat:s1" });
+    const res = await syllogiseDelta(dir, { focus: ["animal"], expandFocus: true });
+    assert.equal(res.mode, "full");
+    assert.equal(await loadSyllogiseState(dir), null);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
