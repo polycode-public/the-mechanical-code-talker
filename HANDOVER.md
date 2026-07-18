@@ -16,8 +16,8 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-18)
 
-v2.5.2 pushed to `origin/main`; tree clean at the start of the five-plan delivery run. CI
-publishes on a version bump on main.
+v2.5.4 published (CI publishes on a version bump on main); 2.5.5 in the working tree ahead of
+the minor roll for the benchmark round.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
@@ -25,113 +25,21 @@ download, not reachable from data in hand).
 
 ## Open items
 
-### In delivery — the five-plan run (started 2026-07-18)
+The five-plan run of 2026-07-18 (`PLAN_25_BACKLOG`, `PLAN_DIALOGUE_ACTS`, `PLAN_GUESS_NUMBER`,
+`PLAN_LEARN_ON_MISS`, `PLAN_SYLLOGIST` §2/§3/§4) is delivered and pushed — each plan doc records
+its own per-section status, and `git log` holds the build record. What remains:
 
-`PLAN_25_BACKLOG.md`, `PLAN_DIALOGUE_ACTS.md`, `PLAN_GUESS_NUMBER.md`, `PLAN_LEARN_ON_MISS.md`
-and `PLAN_SYLLOGIST.md` (§2/§3) are being delivered by a coordinator run with background
-sub-agent tracks. Each line flips STARTED → BUILT → VERIFIED here and in its plan doc, in the
-same commit as the work it describes:
+- **Teach-path predicate minting for prepositional verbs** (found in the run, operator decision):
+  the general-verb teach glues a preposition into the object — "cat relates to milk" stores
+  `cat mgx:relate "to milk"`. Mapping the closed "relates to" / "is related to" pair onto
+  `mgx:relatedTo` would fix the garble and give the SKOS lane a natural teach phrasing; it
+  changes teach-path predicate minting, so it needs the operator's word before it lands.
+- **The endgame, in flight:** `PLAN_25_BACKLOG` §8.1's CHATBENCH expectation revision (the
+  `be-honest-empty` superseding case) lands at this arc boundary; then all four benchmarks re-run
+  at the new minor on the reformed ladders (TOOL-0…8, INF-1…8, FLOW-0…6, CEFR incl. P1/P2) with
+  new cases covering everything this run fixed and added; then the capabilities audit
+  (`SKILL_CAPABILITIES_AUDIT.md`); then each completed plan doc archives.
 
-- T1 `PLAN_25_BACKLOG` §§1–7, §9 — chat/ask/interpret/codegraph fixes + pins — BUILT + VERIFIED
-  (every section's keyed rows landed; the folded superlative-inversion fix rode §3; §13's chat
-  lane deferred to wave 2 by design)
-- T1w2 `PLAN_GUESS_NUMBER` phases 1–3; `PLAN_LEARN_ON_MISS` chat hook; `PLAN_DIALOGUE_ACTS`
-  envelope wiring; `PLAN_25_BACKLOG` §13 chat lane — BUILT + VERIFIED (the hint-offer opening
-  was re-filed to guesser mode at integration, pinned; both home-page demo chips are live)
-- T2 `PLAN_SYLLOGIST` §3 ATMS environment sets + §2 semi-naive delta + §4 slice — BUILT +
-  VERIFIED (124 syllogise tests incl. the stale-justification regression; delta ≡ full
-  differential per rule; corpus row `inference.retract.stale-justification`)
-- T3 `PLAN_LEARN_ON_MISS` reference provenance, pack pipeline, loader + provider seam — BUILT +
-  VERIFIED (shipped pack committed: 3,887 articles from the 20260701 simplewiki dump, estate
-  guards active; the on-miss chat hook rides T1 wave 2)
-- T4 home-page browser chat surface + seed payload + demo rail — BUILT + VERIFIED (full runTurn
-  in the browser, 1.3 MB bundle, 1,263-fact deterministic seed, syllogist demo live, 6/6 page
-  journeys; guess-number and learn-on-miss demo chips sit `ready: false` until their features
-  land via T1 wave 2)
-- T5 `PLAN_25_BACKLOG` §10 — DELIVERED: no resolver plan ever existed to restore (the 36%
-  measured a deliberately relaxed one-call bar); the operator approved the per-arm `floorExpect`
-  declared-refusal seam, applied and pinned.
-- T6 `PLAN_25_BACKLOG` §11 gloss, §12 ontology store-diff test, §13 SKOS surface +
-  `tmct_related`; `PLAN_DIALOGUE_ACTS` closed vocabulary — BUILT + VERIFIED (the §13 chat lane
-  and the dialogue-act envelope wiring ride T1 wave 2)
-- 3×3 behavior matrix (what-is-a-dog / guess-number / learn-on-miss × TUI-file / web-memory /
-  lib-sqlite) — BUILT + VERIFIED (`e2e/tui-chat-file.test.mjs`, `e2e/lib-chat-sqlite.test.mjs`,
-  `e2e/web-chat-memory.test.mjs` + memory/sqlite corpus backend rows)
-- OPEN (found in the run, needs a design decision): the general-verb teach glues a preposition
-  into the object — "cat relates to milk" stores `cat mgx:relate "to milk"`. Mapping the closed
-  "relates to"/"is related to" pair onto `mgx:relatedTo` would fix the garble and give the SKOS
-  lane a natural teach phrasing; it changes teach-path predicate minting, so it is a decision,
-  not a drive-by.
-- `PLAN_25_BACKLOG` §8.1 CHATBENCH expectation revision at the arc boundary; then the endgame:
-  HANDOVER problems pass → minor roll → 4 benchmarks on the new ladder rungs → capabilities
-  audit → archive delivered plan docs — QUEUED
-
-The 2.0.3-cycle backlog is fully delivered; its build-order doc and the purge plan are archived at
-`archive/PLAN_OPEN_ITEMS.md` and `archive/PLAN_PURGE.md` — read them for the phase-by-phase detail,
-the operator decisions already taken, the traps the cycle hit, and its own record of citations that
-proved false. What remains:
-
-- **The 2.5.0 benchmark round's routed backlog.** All four axes re-ran at 2.5.0 (`BENCHMARK_{AGENT,
-  INFERENCE,CEFR_ENGLISH,CONVERSATION}_2.5.0.md`). Every 2.0.3 confident-wrong is confirmed fixed;
-  the CONVERSATION persona sweep (6 frames, ~410 probes) then found 11 new confident-wrong — full
-  routed backlog in that report, worst first:
-  - a taught subclass chain proves a conclusion the store holds `owl:disjointWith`
-    (`rex is a dog`/`every dog is a cat`/`no dog is a cat`/`is rex a cat` → "yes, with a proof"). The
-    direct disjointness query is correct, so the gap is the multi-hop prover not validating its
-    conclusion against the stored disjointness.
-  - `blast radius of X` is parsed as a teach and written to memory — a read-only question that
-    mutates state.
-  - the `i wanna know about X` first-person desire family misroutes to the teach frame — a new
-    Tier-0 confident-wrong, so the flow ladder does **not** ratchet past Tier 0.
-  - the multi-candidate half of the item-1.4 stale-modifier family still enumerates answers for
-    modules the user never named.
-  - plus a cluster of paraphrase-routing honest-misses (impact phrasings, the README board-read
-    `where does disk-1 rest?`, expansion follow-ups).
-- **CEFR two follow-ups:** `be-honest-empty` still expects the pre-rewording bootstrap-empty text (a
-  frozen-expectation drift — the answer is an honest miss the judge scores 2/2), and `gq-impact-a`'s
-  `/impact` depth-2 label (`(imports it)` for a transitive dependent) wants a small rephrase.
-- **The resolver-floor `ab-c2-what-to-test` decision** (`BENCHMARK_AGENT_2.5.0.md`, and Phase 4.5 of
-  `archive/PLAN_OPEN_ITEMS.md`). On the AGENTBENCH resolver-floor driver arm, the C2 case
-  `ab-c2-what-to-test` stopped producing a completed plan (`completed: true → false`), dropping the
-  resolver's C2 plan-completion from 36% to 27%; the 2.5.0 re-run confirmed it holds at 27%, so it is
-  a stable state, not a transient. The open question is which of two readings is right: either the
-  floor's expectation should move down — the plan legitimately now comes from the goal reasoner,
-  which the floor arm lacks by construction — or the resolver genuinely lost a plan it should still
-  build. The goal driver still composes the case (56/56 clears C2), so only the floor arm is
-  affected. Resolve it by either lowering the floor arm's expected result for this case or restoring
-  the resolver's plan; do not leave the two arms silently disagreeing.
-- **Two small parser tails** (from the archived `PLAN_OPEN_ITEMS.md`, §3.1/§3.2): `zeus is not mortal`
-  — a negative about an unknown subject is a silent no-op, because nothing distinguishes it from a
-  property-claim shape without a stored fact to anchor on; and a quantified plural (`are all dogs
-  mortal`) echoes the ungrammatical `all dogs is mortal`, because re-attaching a quantifier to a
-  folded lemma reads worse than what it replaces — it wants a real agreement rule, not another strip.
-- **`syllogise` — an operator decision** (`PLAN_NORMATIVE.md` §7.8). The engine is a forward-chaining
-  fixpoint (its own header says so) and only some of its rules are genuine syllogisms. Either keep
-  `syllogise` as the product-facing verb and name the mechanism accurately in the code, or rename the
-  verb — the latter touches a published CLI surface (`npx tmct syllogise`), so it is the operator's
-  call, not a drive-by rename.
-- **Strengthen the ontology-vocabulary test** (`archive/PLAN_NORMATIVE.md` §7.13). The §6 vocabulary
-  test checks what the ontology documents, not what a store writes, so `mgx:factJustification` —
-  emitted by production code but declared in no ontology file — fell through both gates. The stronger
-  test diffs the props a real store actually writes against the ontology; that needs a seeded store in
-  the test, which is the `test:fast` budget's business.
-- **Build the SKOS consumer surface** (`archive/PLAN_NORMATIVE.md` §7.6). The `buildSkosConceptView`
-  projection — one `skos:Concept` per normalised corpus term, `mgx:synonym` folded to `skos:altLabel`,
-  `mgx:relatedTo` read as `skos:related` — is proven and pinned (9 tests) but lives inside its test
-  file and nothing reads it, so the capability audit marks row 155 `partial` (tested, unreachable). To
-  close it:
-  - **build** — promote `buildSkosConceptView` into an exported `src/` module (e.g.
-    `src/domain/skos-view.mjs`) and point the 9 tests at it; wire one consumer, cheapest being a chat
-    lane for `what is related to X` / `another word for X` / `synonyms of X` that reads the term's
-    `mgx:relatedTo`/`mgx:synonym` facts and answers, missing honestly when there are none; and add a
-    tool-layer entry (`tmct_related` via `dispatchTool`) — that tier is what actually moves row 155 to
-    `implemented`.
-  - **execute** — a `test/tools/` test driving the capability, plus grammar/templates corpus rows
-    pinning the phrasings with a negative row (an unknown term misses honestly).
-  - **document** — a one-line README example, mark §7.6 LANDED, move audit row 155 to `implemented`,
-    and optionally add + pin the `mgx:relatedTo rdfs:seeAlso skos:related` ontology annotation.
-  - Caveat: it only answers on a store that holds synonym/related facts (the ConceptNet import
-    mirrors `/r/RelatedTo`, `/r/Synonym` → `mgx:`, so `init:large`+ has them; bare `init` has few).
 ## Discipline
 
 `CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split, the test

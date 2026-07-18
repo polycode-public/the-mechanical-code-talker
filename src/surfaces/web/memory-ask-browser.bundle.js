@@ -1388,7 +1388,8 @@
       lines.push(i === 0 ? `depth 1 (${level.length} direct dependents):` : `depth ${i + 1} (${level.length}):`);
       for (const dep of level.slice(0, IMPACT_PER_DEPTH)) {
         const tests = dep.tests.length ? `tests: ${capJoin(dep.tests, IMPACT_TESTS_PER_DEP)}` : "tests: none recorded";
-        lines.push(`  - ${dep.label} (${dep.via} it) \u2014 ${tests}`);
+        const receipt = i === 0 ? `${dep.via} it` : "reaches it through an intermediary";
+        lines.push(`  - ${dep.label} (${receipt}) \u2014 ${tests}`);
       }
       if (level.length > IMPACT_PER_DEPTH) lines.push(`  \u2026+${level.length - IMPACT_PER_DEPTH} more at depth ${i + 1}`);
     });

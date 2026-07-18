@@ -583,6 +583,10 @@ superseding case to `chatbench/` at the arc boundary. No `src/` change in the re
 
 ### 8.2 `gq-impact-a` — `(imports it)` on a depth-2 transitive dependent
 
+**DELIVERED** (endgame problems pass) — `renderImpact` keeps the depth-1 verb receipt and renders
+every deeper dependent as "(reaches it through an intermediary)"; pinned beside the other
+renderImpact tests in `test/adapters/codegraph.test.mjs`.
+
 **Reproducer:**
 
 ```txt

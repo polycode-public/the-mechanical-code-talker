@@ -413,7 +413,11 @@ export function renderImpact(graph, ind, { maxDepth = 8 } = {}) {
       const tests = dep.tests.length
         ? `tests: ${capJoin(dep.tests, IMPACT_TESTS_PER_DEP)}`
         : "tests: none recorded";
-      lines.push(`  - ${dep.label} (${dep.via} it) — ${tests}`);
+      // Past depth 1 the via verb describes the hop to the dependent's own
+      // parent, not an edge to the changed module — saying "imports it" there
+      // would claim a direct edge that does not exist.
+      const receipt = i === 0 ? `${dep.via} it` : "reaches it through an intermediary";
+      lines.push(`  - ${dep.label} (${receipt}) — ${tests}`);
     }
     if (level.length > IMPACT_PER_DEPTH) lines.push(`  …+${level.length - IMPACT_PER_DEPTH} more at depth ${i + 1}`);
   });

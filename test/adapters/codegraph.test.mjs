@@ -189,6 +189,27 @@ test("renderImpact: a callsSymbol-only dependent renders with an honest (callsSy
   assert.match(text, /total: 1 dependent\(s\)/);
 });
 
+test("renderImpact: a transitive dependent never claims the direct edge — depth 1 keeps its verb, depth 2 names the intermediary reach", () => {
+  const chainPayload = {
+    individuals: [
+      { id: "mod:app/x.mjs", class: "Module", label: "app/x.mjs" },
+      { id: "mod:app/y.mjs", class: "Module", label: "app/y.mjs" },
+      { id: "mod:app/z.mjs", class: "Module", label: "app/z.mjs" },
+    ],
+    objectProperties: [
+      { predicate: "imports", prop: "mgx:imports", examples: [
+        { subject: "mod:app/y.mjs", object: "mod:app/x.mjs", subjectLabel: "app/y.mjs", objectLabel: "app/x.mjs" },
+        { subject: "mod:app/z.mjs", object: "mod:app/y.mjs", subjectLabel: "app/z.mjs", objectLabel: "app/y.mjs" },
+      ] },
+    ],
+  };
+  const g = parseEntities(chainPayload);
+  const text = renderImpact(g, g.byId.get("mod:app/x.mjs"));
+  assert.match(text, /app\/y\.mjs \(imports it\)/);
+  assert.match(text, /app\/z\.mjs \(reaches it through an intermediary\)/);
+  assert.ok(!/app\/z\.mjs \(imports it\)/.test(text), "a depth-2 dependent never reads as a direct importer");
+});
+
 test("impactClosure: two symbols calling each other in the SAME module never produce a self-referencing dependent", () => {
   const selfLoopPayload = {
     individuals: [
