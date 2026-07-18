@@ -822,12 +822,13 @@ function elExistentialChain(rng) {
 // cases. ACE declines "or", "not" and complement frames (they are retraction
 // triggers / unparsed, exactly as PLAN_SYLLOGIST_EL_DL.md E3/E4 note), so those
 // premises are unlinted ceiling markers until Stage DL. The disjointness-proof-
-// soundness case is different: its premises ALL parse, it is graded live, and it
-// flips from ceiling to pass the day the CONVERSATION-routed proof-path fix lands.
+// soundness case is different: its premises ALL parse and it grades a LIVE
+// capability — the is-a ladder consults every stored owl:disjointWith ahead of
+// certifying a yes, so a subclass chain crossing a stored disjointness refuses
+// by naming both facts instead of laundering the contradiction as a proof.
 // ======================================================================
 const DL_DISJUNCTION_CEILING = "OWL 2 DL reasoning by cases (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 unionOf/negative-assertion representation";
 const DL_COMPLEMENT_CEILING = "OWL 2 DL complement classes (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 complementOf representation";
-const DL_SOUNDNESS_CEILING = "disjointness-sound subclass proof: consult owl:disjointWith on the resolved chain before certifying a conclusion (the CONVERSATION-routed proof-path fix)";
 
 function dlDisjunction(rng) {
   const cases = [];
@@ -878,13 +879,14 @@ function dlComplement(rng) {
   return cases;
 }
 
-// The disjointness-proof-soundness discriminator (BENCHMARK_CONVERSATION_<v>.md,
-// routed item 1): ind:c1, c1 ⊑ c2, c1 ⊥ c2. Asked "is ind a c2", a sound engine
-// must NOT answer "yes with a subclass proof" — the memory is inconsistent, so
-// the honest verdict is the clash, not a certified conclusion. ALL premises
-// parse, so this one IS linted and graded live: it flips from ceiling to pass the
-// day the proof path consults owl:disjointWith before certifying. checkType
-// "inconsistent" (like c2Inconsistent): pass = the engine admits the clash.
+// The disjointness-proof-soundness discriminator: ind:c1, c1 ⊑ c2, c1 ⊥ c2.
+// Asked "is ind a c2", a sound engine must NOT answer "yes with a subclass
+// proof" — the memory is inconsistent, so the honest verdict is the clash, not
+// a certified conclusion. ALL premises parse, so this one IS linted and graded
+// live, and it grades a real capability: the cax-dw gate runs ahead of the
+// direct-fact verdict and both proof chases, so the would-be chain proof
+// refuses by naming both stored facts. checkType "inconsistent" (like
+// c2Inconsistent): pass = the engine admits the clash.
 function dlDisjointProofSoundness(rng) {
   const cases = [];
   const shuffled = seededShuffle(CLASS_NOUNS, rng);
@@ -906,9 +908,300 @@ function dlDisjointProofSoundness(rng) {
       band: "INF-8", template: "dlDisjointProofSoundness", variant: "disjoint-clash",
       arms: ["chat"], checkType: "inconsistent",
       premises, query, expect: { verdict: "inconsistent", entailed, clash: [c1, c2] },
-      ceiling: DL_SOUNDNESS_CEILING,
-      note: "The CONVERSATION-routed soundness pin: the subclass chain c1 ⊑ c2 would 'prove' ind is a c2, but c1 ⊥ c2 makes the memory inconsistent — the honest answer is the clash, never 'yes with a proof'. All premises parse, so this is graded live: a ceiling today (the proof path does not consult owl:disjointWith before certifying), a pass the day that fix lands.",
+      note: "The soundness pin: the subclass chain c1 ⊑ c2 would 'prove' ind is a c2, but c1 ⊥ c2 makes the memory inconsistent — the honest answer is the clash, never 'yes with a proof'. Graded live against a real capability: the is-a ladder computes the disjoint-violation gate ahead of the direct-fact verdict and both proof chases, and refuses by naming both stored facts.",
     }));
+  }
+  return cases;
+}
+
+// ======================================================================
+// INF-1 — a1UniversalConditional: "if something is a N1 then it is a N2" IS
+// the universal subclass teach in a conditional coat — the chat layer rewrites
+// it to the "every N1 is a N2" surface before any dispatch lane sees it, so
+// the follow-up lookup answers from the taught fact. The premise is a
+// chat-lane rewrite, not an ACE sentence, so it is NOT lint()ed (as in
+// b1Existential) and `entailed` stays empty: what this template grades is the
+// teach surface itself reaching the store, witnessed by the direct query.
+// Chat-arm only: the kernel parses premises through ACE, which declines the
+// conditional coat, so the kernel has nothing to derive from here.
+// ======================================================================
+function a1UniversalConditional(rng) {
+  const cases = [];
+  const pool = CLASS_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n));
+  const shuffled = seededShuffle(pool, rng);
+  let cursor = 0;
+  for (let i = 0; i < 10; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 2);
+    cursor = next;
+    const [n1, n2] = picked;
+    cases.push(mkCase({
+      band: "INF-1", template: "a1UniversalConditional", variant: "conditional-teach",
+      arms: ["chat"], checkType: "isa",
+      premises: [`if something is a ${n1} then it is a ${n2}`], query: `is a ${n1} a ${n2}`,
+      expect: { verdict: "yes", entailed: [] },
+      note: "The universal conditional is the subclass teach in a conditional coat: the chat layer rewrites it to 'every N1 is a N2' and stores the taught fact, so the direct lookup answers yes with the taught citation. Unlinted (the conditional surface is a chat rewrite, not ACE grammar).",
+    }));
+  }
+  return cases;
+}
+
+// ======================================================================
+// INF-2 — a2Reflexive: "is a N a N" holds by definition — ⊑ is reflexive
+// (OWL 2 RL's scm-cls family), whatever the term. Two cells: a taught term
+// and a term the session was never taught, because reflexivity owes nothing
+// to the store. Chat-arm only: the kernel's transitive closure derives no
+// reflexive pairs, deliberately — its domain is chains, and asking it here
+// would grade a rule it does not claim.
+// ======================================================================
+function a2Reflexive(rng) {
+  const cases = [];
+  const pool = CLASS_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n));
+  const shuffled = seededShuffle(pool, rng);
+  let cursor = 0;
+  for (let i = 0; i < 5; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 3);
+    cursor = next;
+    const [n1, n2, n3] = picked;
+    const premises = [`every ${n1} is a ${n2}`];
+    const scoEntailed = [{ subject: n1, predicate: "rdfs:subClassOf", object: n2 }];
+    checkEntailed(`a2-reflex-${i + 1}`, premises, scoEntailed);
+    cases.push(mkCase({
+      band: "INF-2", template: "a2Reflexive", variant: "taught-term",
+      arms: ["chat"], checkType: "isa",
+      premises, query: `is a ${n1} a ${n1}`,
+      expect: { verdict: "yes", entailed: scoEntailed },
+      note: "Reflexive self-subsumption over a term the session was taught about: N1 ⊑ N1 holds trivially, and the answer says so rather than falling to the can't-confirm closer.",
+    }));
+    cases.push(mkCase({
+      band: "INF-2", template: "a2Reflexive", variant: "untaught-term",
+      arms: ["chat"], checkType: "isa",
+      premises, query: `is a ${n3} a ${n3}`,
+      expect: { verdict: "yes", entailed: [] },
+      note: "Reflexive self-subsumption owes nothing to the store: N3 was never taught, and N3 ⊑ N3 still holds by definition. `entailed` is empty because the conclusion's term occurs in no premise.",
+    }));
+  }
+  return cases;
+}
+
+// ======================================================================
+// INF-2 — a2Converse: "every N1 is a N2" asked backwards ("is a N2 a N1").
+// The honest verdict is a refusal — some N2s may well be N1s; the store just
+// doesn't say — and the chat layer refuses while naming the direction it DOES
+// know (the converse nudge). A directional discriminator: an engine that
+// drops the direction of ⊑ answers yes here, which is exactly the fabrication
+// the gate flags. Both arms: the kernel's closure is directional too.
+// ======================================================================
+function a2Converse(rng) {
+  const cases = [];
+  const pool = CLASS_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n));
+  const shuffled = seededShuffle(pool, rng);
+  let cursor = 0;
+  for (let i = 0; i < 10; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 2);
+    cursor = next;
+    const [n1, n2] = picked;
+    const premises = [`every ${n1} is a ${n2}`];
+    const scoEntailed = [{ subject: n1, predicate: "rdfs:subClassOf", object: n2 }];
+    checkEntailed(`a2-conv-${i + 1}`, premises, scoEntailed);
+    cases.push(mkCase({
+      band: "INF-2", template: "a2Converse", variant: "converse",
+      arms: ["kernel", "chat"], checkType: "isa",
+      premises, query: `is a ${n2} a ${n1}`,
+      expect: { verdict: "unproven", entailed: scoEntailed },
+      note: "⊑ does not reverse: the taught fact runs N1 → N2 and the query asks N2 → N1, so a yes here is a direction the premise never stated. The chat refusal names the stored direction and nudges toward the teach that would settle it.",
+    }));
+  }
+  return cases;
+}
+
+// ======================================================================
+// INF-2 — a2EntailedRetraction: an entailed fact backed by TWO independent
+// taught routes, materialized by /syllogise, then retracted one route at a
+// time. Both routes are 3 hops, deliberately past the live chase's maxHops:2,
+// so after the first forget the ONLY yes left is the re-grounded entailed
+// fact — survivor re-grounding is what the yes witnesses, and after the
+// second forget the entailed fact must fall with its last justification (the
+// stale-justification probe: a lingering citation would answer a confident
+// yes, which the fabrication gate flags). Chat-arm only, and the premises are
+// chat-lane turns (kind-of teaches, a slash command, forget phrasings), so
+// none of them are lint()ed and `entailed` stays empty. Consonant-initial
+// nouns only, so the hardcoded "a" article reads correctly in every teach and
+// forget surface.
+// ======================================================================
+function a2EntailedRetraction(rng) {
+  const cases = [];
+  const pool = REGULAR_PLURAL_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n) && !/^[aeiou]/.test(n));
+  const shuffled = seededShuffle(pool, rng);
+  let cursor = 0;
+  for (let i = 0; i < 6; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 6);
+    cursor = next;
+    const [n0, r1a, r1b, r2a, r2b, top] = picked;
+    const teach = [
+      `a ${n0} is a kind of ${r1a}`, `a ${r1a} is a kind of ${r1b}`, `a ${r1b} is a kind of ${top}`,
+      `a ${n0} is a kind of ${r2a}`, `a ${r2a} is a kind of ${r2b}`, `a ${r2b} is a kind of ${top}`,
+    ];
+    const query = `is a ${n0} a ${top}`;
+    const survivorOrFall = (extraForgets, verdict, variant, note) => mkCase({
+      band: "INF-2", template: "a2EntailedRetraction", variant,
+      arms: ["chat"], checkType: "isa",
+      premises: [...teach, `/syllogise ${n0}`, `forget that a ${n0} is a kind of ${r1a}`, ...extraForgets],
+      query, expect: { verdict, entailed: [] },
+      note,
+    });
+    cases.push(survivorOrFall([], "yes", "survivor-regrounds",
+      "Two independent 3-hop routes justify the same entailed fact; forgetting one route's first edge must leave the fact standing on the survivor's re-grounded environment. The routes are longer than the live chase walks, so the yes can only come from the materialized entailed fact — no cascade, no stale citation."));
+    cases.push(survivorOrFall([`forget that a ${n0} is a kind of ${r2a}`], "unproven", "stale-justification-falls",
+      "With the second route's first edge forgotten too, the entailed fact has no surviving justification and must fall with it. A confident yes here is the stale-justification symptom — an entailed fact answering from a citation whose premises are gone — and the fabrication gate flags it."));
+  }
+  return cases;
+}
+
+// ======================================================================
+// INF-3 — b1DisjointVeto: the CLASS-level faces of the stored-disjointness
+// veto, alongside b1Disjoint's individual-level cells. A stored
+// owl:disjointWith now vetoes every is-a yes: asked directly it answers the
+// provable no, asked through the symmetric orientation it still answers no
+// (disjointness has no direction), and lifted through a taught subclass edge
+// it composes the no from both stored facts. The control keeps the veto
+// honest: a disjointness between OTHER terms licenses nothing about this
+// pair, so the honest floor is a refusal, never a guessed no. Chat-arm only:
+// the kernel has no disjointness rule, by construction.
+// ======================================================================
+function b1DisjointVeto(rng) {
+  const cases = [];
+  const pool = CLASS_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n));
+  const shuffled = seededShuffle(pool, rng);
+  let cursor = 0;
+  for (let i = 0; i < 6; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 4);
+    cursor = next;
+    const [c1, c2, c3, c4] = picked;
+    const disjoint = `no ${c1} is a ${c2}`;
+    const disjointEntailed = [{ subject: c1, predicate: "owl:disjointWith", object: c2 }];
+    checkEntailed(`b1-veto-${i + 1}`, [disjoint], disjointEntailed);
+    cases.push(mkCase({
+      band: "INF-3", template: "b1DisjointVeto", variant: "class-direct",
+      arms: ["chat"], checkType: "isa",
+      premises: [disjoint], query: `is a ${c1} a ${c2}`,
+      expect: { verdict: "no", entailed: disjointEntailed, proof: true },
+      note: "The taught disjointness between the asked terms reads as the negative polarity side directly: a provable class-level no citing the stored fact, ahead of every yes-chase.",
+    }));
+    cases.push(mkCase({
+      band: "INF-3", template: "b1DisjointVeto", variant: "class-converse",
+      arms: ["chat"], checkType: "isa",
+      premises: [disjoint], query: `is a ${c2} a ${c1}`,
+      expect: { verdict: "no", entailed: disjointEntailed, proof: true },
+      note: "owl:disjointWith is symmetric — taught as (C1, C2) and asked as (C2, C1), the same stored fact answers the same provable no.",
+    }));
+    {
+      const premises = [`every ${c3} is a ${c1}`, disjoint];
+      const entailed = [
+        { subject: c3, predicate: "rdfs:subClassOf", object: c1 },
+        ...disjointEntailed,
+      ];
+      checkEntailed(`b1-veto-lift-${i + 1}`, premises, entailed);
+      cases.push(mkCase({
+        band: "INF-3", template: "b1DisjointVeto", variant: "class-inherited",
+        arms: ["chat"], checkType: "isa",
+        premises, query: `is a ${c3} a ${c2}`,
+        expect: { verdict: "no", entailed, proof: true },
+        note: "The class-level lift: C3 ⊑ C1 and C1 ⊥ C2 compose to a provable no for C3 vs C2, citing both stored facts — taught subclass edges double as type edges in the provable-no chase.",
+      }));
+    }
+    {
+      const premises = [disjoint, `every ${c3} is a ${c4}`];
+      const entailed = [
+        ...disjointEntailed,
+        { subject: c3, predicate: "rdfs:subClassOf", object: c4 },
+      ];
+      checkEntailed(`b1-veto-ctl-${i + 1}`, premises, entailed);
+      cases.push(mkCase({
+        band: "INF-3", template: "b1DisjointVeto", variant: "class-control",
+        arms: ["chat"], checkType: "isa",
+        premises, query: `is a ${c1} a ${c4}`,
+        expect: { verdict: "unproven", entailed },
+        note: "The veto's minimal guard: a stored disjointness between other terms licenses nothing about this pair, so the honest floor is a refusal — an engine that over-fires the no fails here.",
+      }));
+    }
+  }
+  return cases;
+}
+
+// ======================================================================
+// INF-4 — b2PropertyInheritance: a class-level possession teach ("every N1
+// has a N2" — the quantified-has chat lane, storing mgx:hasA) read back
+// directly and inherited by a member through ONE taught ⊑ hop, citing both
+// premises. The grandparent cell pins today's reach honestly: the lookup
+// lifts exactly one hop, so a 2-hop inheritance is classically sound but
+// expects the honest floor — a ceiling-graded row naming the lift that would
+// move it. The control keeps the yes honest: membership of an unrelated class
+// licenses nothing. Chat-arm only (the possession teach is a chat lane, not
+// ACE, so the kernel never sees these premises), and the teach premises are
+// unlinted for the same reason. Regular-plural nouns only: the teach lane's
+// subject fold singularizes naively, and an s-final noun would store a
+// clipped subject.
+// ======================================================================
+function b2PropertyInheritance(rng) {
+  const cases = [];
+  const pool = REGULAR_PLURAL_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n));
+  const shuffled = seededShuffle(pool, rng);
+  let cursor = 0;
+  for (let i = 0; i < 5; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 4);
+    cursor = next;
+    const [n1, n2, n1g, n3] = picked;
+    const teach = `every ${n1} has a ${n2}`;
+    cases.push(mkCase({
+      band: "INF-4", template: "b2PropertyInheritance", variant: "class-direct",
+      arms: ["chat"], checkType: "isa",
+      premises: [teach], query: `does a ${n1} have a ${n2}`,
+      expect: { verdict: "yes", entailed: [] },
+      note: "The quantified-has teach read straight back: the stored class-level possession fact answers the direct existence question with its own citation.",
+    }));
+    {
+      const ind = mintIndividual();
+      const typePremise = `${ind} is a ${n1}`;
+      const typeEntailed = [{ subject: ind, predicate: "rdf:type", object: n1 }];
+      checkEntailed(`b2-prop-member-${i + 1}`, [typePremise], typeEntailed);
+      cases.push(mkCase({
+        band: "INF-4", template: "b2PropertyInheritance", variant: "member",
+        arms: ["chat"], checkType: "isa",
+        premises: [teach, typePremise], query: `does ${ind} have a ${n2}`,
+        expect: { verdict: "yes", entailed: typeEntailed, proof: true },
+        note: "Property inheritance through one taught ⊑ hop: the member inherits the class-level possession, and the answer cites both premises — the membership and the class fact.",
+      }));
+    }
+    {
+      const ind = mintIndividual();
+      const premises = [`every ${n1g} has a ${n2}`, `every ${n1} is a ${n1g}`, `${ind} is a ${n1}`];
+      const entailed = [
+        { subject: n1, predicate: "rdfs:subClassOf", object: n1g },
+        { subject: ind, predicate: "rdf:type", object: n1 },
+      ];
+      checkEntailed(`b2-prop-grand-${i + 1}`, [premises[1], premises[2]], entailed);
+      cases.push(mkCase({
+        band: "INF-4", template: "b2PropertyInheritance", variant: "grandparent",
+        arms: ["chat"], checkType: "isa",
+        premises, query: `does ${ind} have a ${n2}`,
+        expect: { verdict: "unproven", entailed },
+        ceiling: "chat-layer property-inheritance lift past one taught ⊑ hop",
+        note: "Classically sound — the member's class sits one ⊑ hop below the class carrying the possession — but the lookup lifts exactly one hop today, so expect pins the honest floor. The capability that lifts this row is a deeper (or closure-backed) property-inheritance walk.",
+      }));
+    }
+    {
+      const ind = mintIndividual();
+      const typePremise = `${ind} is a ${n3}`;
+      const typeEntailed = [{ subject: ind, predicate: "rdf:type", object: n3 }];
+      checkEntailed(`b2-prop-ctl-${i + 1}`, [typePremise], typeEntailed);
+      cases.push(mkCase({
+        band: "INF-4", template: "b2PropertyInheritance", variant: "control",
+        arms: ["chat"], checkType: "isa",
+        premises: [teach, typePremise], query: `does ${ind} have a ${n2}`,
+        expect: { verdict: "unproven", entailed: typeEntailed },
+        note: "The member cell's minimal guard: membership of an unrelated class licenses nothing about the possession, so the honest floor is a refusal — a yes here inherits a property from a class the individual was never placed in.",
+      }));
+    }
   }
   return cases;
 }
@@ -921,6 +1214,8 @@ const TEMPLATE_SLUG = {
   c1Cardinality: "card", c1ScmSvfApply: "scmsvf", c2Inconsistent: "inconsistent",
   elConstructedRestriction: "elrestrict", elExistentialChain: "elchain",
   dlDisjunction: "dldisj", dlComplement: "dlcompl", dlDisjointProofSoundness: "dlsound",
+  a1UniversalConditional: "conditional", a2Reflexive: "reflexive", a2Converse: "converse",
+  a2EntailedRetraction: "retract", b1DisjointVeto: "disjveto", b2PropertyInheritance: "prophas",
 };
 function assignIds(cases) {
   const counters = new Map();
@@ -954,6 +1249,15 @@ export function generateCases({ seed = DEFAULT_SEED } = {}) {
     dlDisjunction: dlDisjunction(rng),
     dlComplement: dlComplement(rng),
     dlDisjointProofSoundness: dlDisjointProofSoundness(rng),
+    // The templates below are appended AFTER every earlier template on
+    // purpose: all templates draw from one shared rng stream, so appending is
+    // what keeps every earlier template's rows byte-stable across versions.
+    a1UniversalConditional: a1UniversalConditional(rng),
+    a2Reflexive: a2Reflexive(rng),
+    a2Converse: a2Converse(rng),
+    a2EntailedRetraction: a2EntailedRetraction(rng),
+    b1DisjointVeto: b1DisjointVeto(rng),
+    b2PropertyInheritance: b2PropertyInheritance(rng),
   };
   const all = Object.values(groups).flat();
   assignIds(all);

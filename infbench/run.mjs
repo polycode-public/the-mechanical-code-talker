@@ -14,7 +14,8 @@
 // No LLM, no network — grading is entirely deterministic (infbench/grade.mjs).
 //
 // Determinism: chat.mjs's own session/provenance strings embed a fresh uuidv7
-// + wall-clock ISO timestamp per turn (ace:chat:<uuid>@<ts>); the SAME scrub
+// + wall-clock ISO timestamp per turn (ace:chat:<uuid>@<ts> for the ACE assert
+// lane, teach:chat:<uuid>@<ts> for the natural teach frames); the SAME scrub
 // chatbench/run.mjs applies (VOLATILE_PROVENANCE) folds them to a stable
 // placeholder before a row is recorded, so two runs over the same cases
 // produce byte-identical product rows. `--replay` runs the whole pipeline
@@ -48,7 +49,7 @@ export const DEFAULT_CONCURRENCY = 6;
 import { pool, parseFlags } from "../benchlib/bench.mjs";
 export { pool };
 
-const VOLATILE_PROVENANCE = /ace:chat:[0-9a-f-]{36}@\d{4}-\d{2}-\d{2}T[0-9:.]+Z/gi;
+const VOLATILE_PROVENANCE = /(ace|teach):chat:[0-9a-f-]{36}@\d{4}-\d{2}-\d{2}T[0-9:.]+Z/gi;
 
 function sink() {
   const out = new PassThrough();
@@ -90,7 +91,7 @@ export async function driveChat(caseDef) {
       return { answer: "", miss: null, error: `query turn not recorded (got ${turns.length} turn(s))` };
     }
     const raw = answers.get(turnKey(record.ts, record.query)) ?? "";
-    const answer = raw.replaceAll(dir, "<repo>").replace(VOLATILE_PROVENANCE, "ace:chat:<session>@<ts>");
+    const answer = raw.replaceAll(dir, "<repo>").replace(VOLATILE_PROVENANCE, "$1:chat:<session>@<ts>");
     return { answer, miss: record.miss };
   } finally {
     await rm(dir, { recursive: true, force: true });

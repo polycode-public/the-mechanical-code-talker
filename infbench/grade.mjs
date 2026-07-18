@@ -55,8 +55,9 @@ import { parseJsonlRows, rollupBy, ladderGateBy } from "../benchlib/bench.mjs";
 // two steps just outside); INF-7 Constructed restriction (OWL 2 EL saturation)
 // and INF-8 Reasoning by cases (OWL 2 DL disjunction/complement/nominals) name
 // the two stages PLAN_SYLLOGIST_EL_DL.md designs — ceiling markers until Stage
-// EL / Stage DL land, save for INF-8's disjointness-proof-soundness case, a
-// near-term live discriminator that flips the moment the proof-path fix ships.
+// EL / Stage DL land, save for INF-8's disjointness-proof-soundness case,
+// which grades live: the is-a ladder consults every stored owl:disjointWith
+// ahead of certifying a yes, so the clash refusal is a real capability.
 export const BANDS = Object.freeze(["INF-1", "INF-2", "INF-3", "INF-4", "INF-5", "INF-6", "INF-7", "INF-8"]);
 export const ARMS = Object.freeze(["kernel", "chat"]);
 export const CHECK_TYPES = Object.freeze(["isa", "recall", "inconsistent"]);
