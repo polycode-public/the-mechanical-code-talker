@@ -1399,7 +1399,7 @@
     });
     if (truncatedStructural.length) {
       lines.push(
-        "warning: partial edge lists (" + truncatedStructural.map((t) => `${t.predicate}: ${t.shown}/${t.count}`).join(", ") + ") \u2014 this closure may be missing edges. Cross-check critical results with tmct_search."
+        "warning: partial edge lists (" + truncatedStructural.map((t) => `${t.predicate}: ${t.shown}/${t.count}`).join(", ") + ") \u2014 this closure may be missing edges. Cross-check critical results with a lexical search (/find <term>)."
       );
     }
     return lines.join("\n");
@@ -2877,7 +2877,7 @@ ${shown.join("\n")}${tail}`;
       GREETING_PREAMBLE_RE = /^(?:hi|hiya|hello|hey|yo|howdy|g'?day|yeah\s+nah|good\s+(?:morning|afternoon|evening|day)|greetings|salutations)(?:\s+(?:there|pardner|folks|friend|mate))?\s*[,.—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
       THANKS_PREAMBLE_RE = /^(?:thanks|thank\s+you|many\s+thanks|thx|ty|cheers)(?:\s+(?:so\s+much|a\s+lot|very\s+much|a\s+bunch))?\s*[,—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
       ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|aight|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good|no worries|no problem)[\s,]+)+(.+)$/i;
-      BROWSING_PREAMBLE_RE = /^(?:just\s+(?:poking\s+around|looking\s+around|browsing|exploring|checking\s+(?:this|it)\s+out)|first\s+time\s+(?:trying\s+this\s+out|using\s+this|here))\s*[,.—–-]\s*(.+)$/i;
+      BROWSING_PREAMBLE_RE = /^(?:just\s+(?:poking\s+around|looking\s+around|browsing|exploring|checking\s+(?:this|it)\s+out)|first\s+time\s+(?:trying\s+this\s+out|using\s+this|here)|i'?m\s+new\s+(?:here|around\s+here|to\s+(?:this|all\s+this)(?:\s+(?:repo|codebase|project|app|tool|thing))?))\s*[,.—–-]\s*(.+)$/i;
       HEDGE_ADVERB_PREAMBLE_RE = /^(?:(?:maybe|possibly|perhaps)\s+)+(.+)$/i;
       TROUBLE_ASIDE_RE = /,?\s*if\s+(?:it'?s|it\s+is|that'?s|that\s+is)\s+not\s+too\s+much\s+(?:trouble|bother|hassle)\s*,?\s*/i;
       MODAL_WRAPPER_RE = /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(.+?)(?:[,\s]+please)?\??$/i;
@@ -3783,7 +3783,7 @@ ${shown.join("\n")}${tail}`;
   function parseComposite(text, nlp) {
     const w = splitWords(text);
     const lc = w.map((x) => x.toLowerCase());
-    return parseExistence(w, lc) || parseQualifierCheck(w, lc) || parseUniversal(w, lc, nlp) || parseNegation(text, nlp, 0) || parseNegatedAsk(w, lc) || parseForwardNegation(w, lc, nlp) || parseTemporal(w, lc, nlp, 0) || parseCommitFilter(w, lc) || parseAnaphora(w, lc, nlp) || parseAggregate(w, lc, nlp) || parseSuperlative(w, lc, nlp) || parseFind(w, lc, nlp, 0) || parseList(w, lc, nlp, 0) || parseNested(w, lc, nlp, 0) || parsePluralAnaphoraObject(w, lc, nlp) || parseRelationalOrQualified(w, lc, nlp, 0);
+    return parseExistence(w, lc) || parseQualifierCheck(w, lc) || parseUniversal(w, lc, nlp) || parseNegation(text, nlp, 0) || parseNegatedAsk(w, lc, nlp) || parseForwardNegation(w, lc, nlp) || parseTemporal(w, lc, nlp, 0) || parseCommitFilter(w, lc) || parseAnaphora(w, lc, nlp) || parseAggregate(w, lc, nlp) || parseSuperlative(w, lc, nlp) || parseFind(w, lc, nlp, 0) || parseList(w, lc, nlp, 0) || parseNested(w, lc, nlp, 0) || parsePluralAnaphoraObject(w, lc, nlp) || parseRelationalOrQualified(w, lc, nlp, 0);
   }
   function complementAst(entityType, diffAtom) {
     return {
@@ -4110,11 +4110,11 @@ ${shown.join("\n")}${tail}`;
     if (!term) return { node: "miss", reason: `"is/are <qualifier>" needs a named thing to check first` };
     return { node: "qualCheck", term, qualifier: lc[qualIdx], negated, scope: tail?.scope || null };
   }
-  function parseNegatedAsk(w, lc) {
-    if (lc[0] !== "do" && lc[0] !== "does" && lc[0] !== "did") return null;
+  function parseNegatedAsk(w, lc, nlp) {
+    if (!["do", "does", "did", "is", "are", "was", "were"].includes(lc[0])) return null;
     const notIdx = lc.indexOf("not", 1);
     if (notIdx < 0) return null;
-    const positive = parseAnchored(w.filter((_, i) => i !== notIdx).join(" "));
+    const positive = parseSimpleClause(w.filter((_, i) => i !== notIdx).join(" "), nlp);
     if (!positive || positive.shape !== "ask") return null;
     return { ...positive, negated: true };
   }
@@ -4917,7 +4917,11 @@ ${shown.join("\n")}${tail}`;
     return { compositeKind: "temporal", matches: commits, entityType: ast.entityType, innerCount: inner.length };
   }
   function evalSuperlative(graph, ast) {
-    const pool = graph.individuals.filter((i) => i.class === ast.entityType);
+    let pool = graph.individuals.filter((i) => i.class === ast.entityType);
+    if (ast.metric?.kind === "tests" && ast.entityType === "Module") {
+      const testSubjects = new Set(edgesOfKind2(graph, "tests").map((e) => e.subject));
+      pool = pool.filter((i) => !testSubjects.has(i.id) && !isTestPath(String(i.label).toLowerCase()));
+    }
     const scored = pool.map((ind) => ({ ind, score: degreeMetric(graph, ind, ast.metric) })).sort((a, z) => ast.extreme === "most" ? z.score - a.score : a.score - z.score);
     if (!scored.length) return { compositeKind: "superlative", entityType: ast.entityType, matches: [] };
     const best = scored[0].score;
@@ -5498,7 +5502,7 @@ ${shown.join("\n")}${tail}`;
       }
       return declineOnUnplacedWords(resolveObjectCore(graph, term, opts), term);
     }
-    return resolveObjectCore(graph, term, opts);
+    return declineOnUnplacedWords(resolveObjectCore(graph, term, opts), term);
   }
   function resolveTermOrContext(graph, term, contextId) {
     if (CONTEXT_PRONOUNS.includes(String(term || "").trim().toLowerCase())) {
@@ -5771,7 +5775,7 @@ ${shown.join("\n")}${tail}`;
       if (entityType && entityType !== "Change") {
         const wantClasses = classesForKinds(graph, fwdKinds);
         const siblingClass = FINE_CLASS_SIBLING[entityType];
-        if (!wantClasses.has(entityType) && !(siblingClass && wantClasses.has(siblingClass))) {
+        if (wantClasses.size && !wantClasses.has(entityType) && !(siblingClass && wantClasses.has(siblingClass))) {
           return {
             matches: [],
             objMatch,
@@ -6144,13 +6148,44 @@ ${options2}
       };
     }
     if (result.ambiguous) {
-      const pool = [result.objMatch, ...result.candidates || []].filter(Boolean);
+      let pool = [result.objMatch, ...result.candidates || []].filter(Boolean);
+      let branches = result.branches;
+      if (parsed.kind && parsed.kind !== "touches" && !pool.every((i) => i.class === "Commit")) {
+        const grainOk = (i) => !["Commit", "Session", "Source", "Utterance"].includes(i?.class);
+        const kept = pool.filter(grainOk);
+        if (kept.length) {
+          pool = kept;
+          if (branches?.length) branches = branches.filter((b) => grainOk(b.candidate));
+        }
+      }
+      if (graph && !/[/.]/.test(String(parsed.object || ""))) {
+        const tLc = String(parsed.object || "").toLowerCase();
+        const termWords = new Set(splitIdentifierWords(String(parsed.object || "")).filter((w) => w.length >= 3));
+        const already = new Set(pool.map((i) => i.id));
+        let nearest = null;
+        let bestShared = 0;
+        let bestD = Infinity;
+        if (termWords.size) {
+          for (const i of graph.individuals) {
+            if (!["Function", "Method", "Class", "GlobalVariable", "Attribute"].includes(i.class) || already.has(i.id)) continue;
+            const shared = splitIdentifierWords(String(i.label)).filter((w) => termWords.has(w)).length;
+            if (!shared || shared < bestShared) continue;
+            const d = editDistance(String(i.label).toLowerCase(), tLc, 8);
+            if (shared > bestShared || d < bestD) {
+              nearest = i;
+              bestShared = shared;
+              bestD = d;
+            }
+          }
+        }
+        if (nearest) pool = [...pool, nearest];
+      }
       const noun = pool.length && pool.every((i) => i.class === "Commit") ? "commit" : "module";
       const shown = pool.slice(0, OVERFLOW_CAP).map((i) => i.label);
       const extra2 = pool.length > OVERFLOW_CAP ? `, \u2026and ${pool.length - OVERFLOW_CAP} more` : "";
       const lead = `"${parsed.object}" matches more than one ${noun} ambiguously \u2014 did you mean ${listJoin(shown)}${extra2}? Try one of those. If you're not sure, narrow it to one name.`;
-      const content = result.branches && result.branches.length ? `${lead}
-${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.content}`).join("\n")}` : lead;
+      const content = branches && branches.length ? `${lead}
+${branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.content}`).join("\n")}` : lead;
       return {
         content,
         miss: false,
@@ -23094,7 +23129,7 @@ ${JSON.stringify(envelope, null, 2)}`;
     signature: { tool: "tmct_signature", arg: "symbol", help: "a symbol's signature only" },
     members: { tool: "tmct_members", arg: "class", help: "the methods/attributes of a class" },
     subclasses: { tool: "tmct_subclasses", arg: "class", help: "the subclasses of a class" },
-    impact: { tool: "tmct_impact", arg: "module", help: "what a change to this module reaches (impact closure)" },
+    impact: { tool: "tmct_impact", arg: "module", help: "what a change to this module or symbol reaches (impact closure)" },
     callers: { tool: "tmct_callers", arg: "symbol", help: "functions that call this symbol" },
     callees: { tool: "tmct_callees", arg: "symbol", help: "functions this symbol calls" },
     tests: { tool: "tmct_tests_for", arg: "symbol", help: "the tests covering this symbol" },
@@ -23391,8 +23426,25 @@ ${JSON.stringify(envelope, null, 2)}`;
     }
     return { predicate, object: String(objectRaw || "").trim() };
   }
-  var TEACH_PRONOUNS = Object.freeze(["you", "i", "it", "they", "he", "she", "we"]);
+  var TEACH_PRONOUNS = Object.freeze([
+    "you're",
+    "i'm",
+    "it's",
+    "they're",
+    "he's",
+    "she's",
+    "we're",
+    "you",
+    "i",
+    "it",
+    "they",
+    "he",
+    "she",
+    "we"
+  ]);
   var TEACH_PRONOUN_RE = new RegExp(`^(?:every\\s+|each\\s+|all\\s+|some\\s+|a few\\s+|a\\s+|an\\s+)?(${TEACH_PRONOUNS.join("|")})\\s+\\S+`, "i");
+  var BOARD_TEACH_LOCATIVE_RE = new RegExp(`^([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
+  var RETRACT_FORGET_LOCATIVE_RE = new RegExp(`^forget\\s+(?:that\\s+)?([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
   var TRAILING_ADVERB_RE = "(?:\\s+(?:exactly|really|actually|anyway))?";
   var MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)\\s+do${TRAILING_ADVERB_RE}\\??$`, "i");
   var MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB_RE}\\??$`, "i");
@@ -23520,6 +23572,7 @@ ${JSON.stringify(envelope, null, 2)}`;
     if (f.provenance.includes("ace:chat") || f.provenance.includes("teach:chat")) return `you told me: ${factPhrase(f)}${cite}`;
     if (f.provenance.includes("corpus-weak:")) return `possibly: ${factPhrase(f)}${cite}`;
     if (f.provenance.includes("corpus:")) return `${factPhrase(f)}${cite}`;
+    if (f.provenance.includes("reference:")) return `${factPhrase(f)}${cite}`;
     return `i learned: ${factPhrase(f)}${cite}`;
   }
   function indefiniteArticleFor(term) {
@@ -24125,12 +24178,19 @@ ${shown.map(renderFactLine).join("\n")}`,
       );
       const hit2 = hasHit(subj);
       if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
-      const isaStep = facts.find((f) => ISA_PREDICATES2.has(f.predicate) && subj.has(f.subject));
-      if (isaStep) {
-        const lifted = hasHit(factTermVariants(normFactTerm2, isaStep.object));
+      let liftFrontier = subj;
+      const liftChain = [];
+      const liftSeen = /* @__PURE__ */ new Set();
+      for (let hop = 0; hop < 4; hop += 1) {
+        const step = facts.find((f) => ISA_PREDICATES2.has(f.predicate) && liftFrontier.has(f.subject) && !liftSeen.has(f.object));
+        if (!step) break;
+        liftSeen.add(step.object);
+        liftChain.push(step);
+        const lifted = hasHit(factTermVariants(normFactTerm2, step.object));
         if (lifted) {
-          return { text: `yes \u2014 ${renderFactLine(isaStep)}; ${renderFactLine(lifted)}`, replace: true };
+          return { text: `yes \u2014 ${[...liftChain.map(renderFactLine), renderFactLine(lifted)].join("; ")}`, replace: true };
         }
+        liftFrontier = factTermVariants(normFactTerm2, step.object);
       }
       return null;
     }
@@ -24390,6 +24450,14 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
           const directObjVariants = factTermVariants(normFactTerm2, stripTrailingDiscourseTag(directIsaAsk[2]));
           const directSup = inheritsChain(graph, ent.id).find((sup) => [...factTermVariants(normFactTerm2, sup.label)].some((v) => directObjVariants.has(v)));
           if (directSup) return { text: `yes \u2014 the code graph says ${ent.label} inherits ${directSup.label}.`, replace: true };
+          const objEnt = await resolveEntity(graph, stripTrailingDiscourseTag(directIsaAsk[2]));
+          if (objEnt && inheritsChain(graph, objEnt.id).some((sup) => sup.id === ent.id)) {
+            return {
+              text: `I can't confirm that \u2014 the code graph's stored direction runs the other way: ${objEnt.label} inherits ${ent.label}. An inheritance doesn't reverse.`,
+              replace: true,
+              miss: true
+            };
+          }
         }
       }
     }
