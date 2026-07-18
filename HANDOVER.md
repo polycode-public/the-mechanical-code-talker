@@ -16,8 +16,8 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-18)
 
-v2.6.0 published, measured by the four `BENCHMARK_*_2.6.0.md` reports and `CAPABILITIES_2.6.0.md`;
-2.6.1 in the working tree carrying the post-round backlog delivery.
+v2.7.0 published (the adventure + child-corpus minor); 2.7.1 in the working tree carrying the
+integration wave, ahead of the edge-hunt rounds.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
@@ -25,35 +25,23 @@ download, not reachable from data in hand).
 
 ## Open items
 
-The five-plan run of 2026-07-18 is delivered, benchmarked at 2.6.0 on all four axes, and audited
-(143/172 capability rows implemented, none moved down). Full detail: the four
-`BENCHMARK_*_2.6.0.md` reports and `CAPABILITIES_2.6.0.md`; the delivered plan docs live in
-`archive/`. Every open line below names its source.
+The 2.7.0 wave is delivered: the adventure (Ashcombe Hall as a lazy worlds pack, imperative
+grammar, NPC scheduler, the worked example passing) and the child triples pack (93k facts wired
+into the clean-miss cascade ahead of the reference article), plus the 16 re-baselined pool
+regressions fixed and flipped back. `archive/` holds the delivered plan docs. What remains:
 
-The 2.6.0 CONVERSATION/INFERENCE backlog (rows 1–29, INFERENCE 1–2) and the minting decision are
-delivered; the corpus lanes pin them. What remains:
-
-- `all dogs have tails` stores the plural OBJECT as typed ("tails") — the subject fold is fixed;
-  the object-side variant fold is a separate pre-existing edge.
-- `src/tools/definitions.mjs` still phrases `tmct_impact`'s summary module-only (tool-docs
-  estate ties to it).
-
-**AGENT rows 1–3** are owned by `PLAN_TOOL_LADDER_UPLIFT.md` (the TOOL-7 observe-and-replan
-branch and the TOOL-8 tied-candidate composer — design, not recogniser work). Rows 4–6 are
-delivered (fixture ids aligned, `tmct_related` registered with the `cap:memory-facts`
-precondition + a stub-floor positive case, `tmct_impact` widened to Symbol). Two remainders from
-that delivery: the resolver has no NL path into the memory graph (`tmct_related` tagged
-`NOT_NL_REACHABLE` — the routing horizon its case note records), and `src/tools/definitions.mjs`
-still phrases `tmct_impact`'s summary module-only (tool-docs estate ties to it).
-
-**CEFR levers: delivered** (glosses in `fixture-context-v3`, `judge-prompt-v2` staged for the
-next round's judge, the 15 `improvedIn` stamps, the 10 construction-pool cases). **New from that
-delivery: 16 re-baselined max-pool regressions** — regenerating the graded pool (after fixing two
-generator-truth bugs) revealed 16 previously-green items that now miss: trailing-"then" noise
-phrasings, but-not import coordination, "tested modules importing X" answering the test module,
-the commit-count restrictor, `/describe register`, "classes inheriting from Widget but untested",
-and because-clause subordination. Recorded as frontier rows with observed answers in the pool's
-README addition record; chat-track candidates.
+- **The plural-object fold** in the quantified-has teach ("all dogs have tails" stores the object
+  as typed "tails") — in flight, last item of the integration wave.
+- `PLAN_TOOL_LADDER_UPLIFT.md` owns the TOOL-7 observe-and-replan branch and the TOOL-8
+  tied-candidate composer (design work; the bench cases exist and fail honestly).
+- The resolver has no NL path into the memory graph (`tmct_related` is registered but tagged
+  `NOT_NL_REACHABLE`) — the routing horizon its agentbench case note records.
+- Adventure horizons, named in `archive/PLAN_ADVENTURE.md`: open/unlock/close ride world facts as
+  signature-only families until a rule shape exists for datatype effects and edge-existence
+  preconditions; whether one agent-loop abstraction should unify the three planning validations
+  stays the Phase-5 question.
+- `core.mjs`'s `sourceIdFor` has no `corpusWeak` case, so corpusWeak-tagged facts score 0 —
+  adding it would make that tier usable for a future noisier pack slice.
 
 ## Discipline
 
