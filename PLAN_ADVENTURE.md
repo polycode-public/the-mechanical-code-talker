@@ -266,11 +266,24 @@ the same four action kinds the frames store, nothing more. The six nouns landed 
 `lexicon-core.json`. Pinned by `test/adapters/worlds-pack.test.mjs` (loader over
 `test/fixtures/worlds-pack/`) and the `games/adventure` corpus lane's opener rows.
 
-**Phase 2 — The imperative grammar pattern.** The new ACE pattern (Gap 1), unit-tested purely
-(parse → structured command; no chat wiring, no player-state writes yet). Action storage already
-shipped, so this phase also teaches each Ashcombe action through the existing teach frames and
-confirms `movesFromRules` enumerates it. Exit criterion: all starter verbs parse correctly, and
-every Ashcombe action family round-trips through the shipped teach/lookup path unchanged.
+**Phase 2 — The imperative grammar pattern.** DONE (2.7.0 wave). `parseImperative` in
+`src/domain/grammar/ace.mjs`: the closed verb set (`go`/`take`/`drop`/`open`/`unlock`/`close`/
+`give`/`look`), a structured non-triple return (`{verb, object?, indirectObject?, instrument?,
+direction?}`), the same lexicon-noun gate and residue contract as the nine triple patterns, a
+separate export (never folded into `parseAce` — every triple pattern requires a subject). Unit
+tests: `test/adapters/grammar-imperative.test.mjs`. The action families arrive pre-instated from
+the worlds pack (Phase 1's revision) and round-trip through the shipped lookup path unchanged:
+`actionFamilies`/`capabilityFromActionRules` collect all seven, and `movesFromRules` enumerates
+the grounded moves over the world's own written facts (`test/services/adventure.test.mjs`). One
+concrete gap in the shipped rule vocabulary, surfaced exactly as this phase predicted: the shipped
+precond shapes (`no-incoming`, `comparator`) and the individual-valued effect shape can't express
+Ashcombe's exit-adjacency, lock-state, hidden-contents or instrument preconditions, nor the
+boolean open/close effects — so `open`/`unlock`/`close` ship signature-only families, those
+preconditions ride as ordinary world FACTS (`mgx:has-exit-*`, `mgx:stands-locked-in`,
+`mgx:hidden-in`, `mgx:unlocks-with`), and Phase 3's interpreter checks them generically per
+predicate, declining by name. No settled rule-shape design exists yet for datatype effects or
+edge-existence preconds; when one is designed, these families pick it up and the fact-side checks
+retire.
 
 **Phase 3 — Player-state wiring + the digest.** Wire parsed imperatives to fire their taught action
 family and write player/world snapshot facts (the shipped Gap 2 convention), plus the

@@ -457,6 +457,83 @@ export function parseAce(sentence, lexicon = loadLexicon()) {
   return parseRelation(lexicon, toks, lower);
 }
 
+// ---- the imperative command pattern -----------------------------------------
+// A subjectless action command ("go north", "take the key", "unlock the
+// cabinet with the key"). Unlike the nine assertion/question patterns above,
+// this one produces no OWL triple — an imperative has no truth value to
+// assert, it has an ACTION NAME to resolve against the taught action
+// families — so parseImperative returns a structured command instead
+// (precedent: parseCardinality's own non-triple `n`). It is a separate
+// export, never folded into parseAce: every triple pattern requires an
+// explicit subject noun phrase, and parseAce's callers expect triples.
+//
+// The verb set is CLOSED (an unlisted verb is a hard null, never a guess),
+// and object phrases resolve through the same lexicon-noun gate as every
+// other pattern: a structural fit over an undeclared word rides out as
+// `residue` so the caller can name it; a declared word in an unusable shape
+// is a hard null.
+
+const IMPERATIVE_VERBS = new Set(["go", "take", "drop", "open", "unlock", "close", "give", "look"]);
+const IMPERATIVE_DIRECTIONS = new Set(["north", "south", "east", "west", "up", "down"]);
+
+/** Resolve one imperative object phrase to its bare lexicon term. */
+function imperativeNP(lexicon, tokens) {
+  const np = resolveNP(lexicon, tokens);
+  if (np.term == null) return { term: null, unknown: np.unknown };
+  return { term: local(lexicon, np.term), unknown: [] };
+}
+
+/**
+ * Parse one imperative command against the closed verb set. Returns
+ * `{ pattern: "imperative", verb, residue, object?, indirectObject?,
+ * instrument?, direction? }`, a residue-carrying miss for a structural fit
+ * over undeclared words (`residue` non-empty, no slots), or null when the
+ * sentence is not an imperative of this fragment at all.
+ */
+export function parseImperative(sentence, lexicon = loadLexicon()) {
+  const toks = tokenize(sentence);
+  if (!toks.length) return null;
+  const verb = toks[0].toLowerCase();
+  if (!IMPERATIVE_VERBS.has(verb)) return null;
+  const rest = toks.slice(1);
+  const lower = rest.map((t) => t.toLowerCase());
+  const command = (fields) => ({ pattern: "imperative", verb, residue: [], ...fields });
+  const miss = (unknown) => (unknown.length ? { pattern: "imperative", verb, residue: unknown } : null);
+
+  if (verb === "look") {
+    if (!rest.length || (rest.length === 1 && lower[0] === "around")) return command({});
+    return null;
+  }
+  if (verb === "go") {
+    if (rest.length === 1 && IMPERATIVE_DIRECTIONS.has(lower[0])) return command({ direction: lower[0] });
+    return null;
+  }
+  if (verb === "give") {
+    const toIdx = lower.indexOf("to");
+    if (toIdx < 1 || toIdx === rest.length - 1) return null;
+    const object = imperativeNP(lexicon, rest.slice(0, toIdx));
+    const indirect = imperativeNP(lexicon, rest.slice(toIdx + 1));
+    if (object.term == null || indirect.term == null) return miss([...object.unknown, ...indirect.unknown]);
+    return command({ object: object.term, indirectObject: indirect.term });
+  }
+  if (verb === "unlock") {
+    const withIdx = lower.indexOf("with");
+    if (withIdx !== -1) {
+      if (withIdx < 1 || withIdx === rest.length - 1) return null;
+      const object = imperativeNP(lexicon, rest.slice(0, withIdx));
+      const instrument = imperativeNP(lexicon, rest.slice(withIdx + 1));
+      if (object.term == null || instrument.term == null) return miss([...object.unknown, ...instrument.unknown]);
+      return command({ object: object.term, instrument: instrument.term });
+    }
+    // fall through to the plain-object arm: "unlock the cabinet" is a valid
+    // command whose missing instrument is the CALLER's precondition to name.
+  }
+  if (!rest.length) return null;
+  const object = imperativeNP(lexicon, rest);
+  if (object.term == null) return miss(object.unknown);
+  return command({ object: object.term });
+}
+
 /** Pattern 9 — "N can VERB" → mgx:capableOf. The modal is not a relation
  *  verb: without this, parseRelation reads "can" through lookupVerb and
  *  asserts a generic object property ("dog cans swim") that no capability
