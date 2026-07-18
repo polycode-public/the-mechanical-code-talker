@@ -1,6 +1,10 @@
 # PLAN_LEARN_ON_MISS.md — answer a clean miss from a shipped knowledge pack, not just a refusal
 
-Status: DESIGN — offline, $0, deterministic, no LLM, no network, no research risk. On the cleanest
+Status: IN DELIVERY (2026-07-18 run) — offline, $0, deterministic, no LLM, no runtime network.
+Decisions taken for the build: pack source = Simple English Wikipedia (pinned dump, build-time
+fetch + deterministic clean); pack home = in-repo `corpus/reference/` shipped in this package
+(not a companion package); a small deterministic subset is emitted under `public/` so the
+home-page embedded chat demos the capability. On the cleanest
 class of miss, keyword-search a large pre-cleaned knowledge pack shipped with the package, lazy-load
 the one matching article, and answer from it with its own provenance — otherwise fall straight back
 to the honest miss. The provenance/trust half is mostly built. This plan carries the idea out of the

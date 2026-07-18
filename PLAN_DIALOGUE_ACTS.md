@@ -1,6 +1,6 @@
 # PLAN_DIALOGUE_ACTS.md — name tmct's turn types to ISO 24617-2, deterministically
 
-Status: DESIGN — the mapping is drafted, nothing is built. This plan carries the ISO 24617-2
+Status: IN DELIVERY (2026-07-18 run) — the mapping is drafted; the build is under way. This plan carries the ISO 24617-2
 dialogue-act work out of the archived normative review (`archive/PLAN_NORMATIVE.md` §4.6). The
 reference mapping lives at [`iso-24617-2-dialogue-acts.md`](docs/references/schemas/iso-24617-2-dialogue-acts.md);
 the capability audit marks intent classification `absent` (row 139).

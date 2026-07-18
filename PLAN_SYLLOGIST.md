@@ -1,5 +1,7 @@
 # PLAN_SYLLOGIST.md — beyond the shipped ladder: making the Syllogist itself smarter
 
+> **STATUS 2026-07-18: §2 (semi-naive incrementality) and §3's ATMS generalization (bounded
+> environment sets) are IN DELIVERY this run.** Earlier status follows.
 > **STATUS: research/design notes — §3's own ATMS-shaped, VERIFY-backed slice (single justification
 > per scm-sco fact, DRed retraction, bounded) is now IMPLEMENTED and tested
 > (`retractSubClassOf`, `src/domain/syllogise.mjs`; see §3 for scope). §1/§2/§4/§5 remain notes only —
