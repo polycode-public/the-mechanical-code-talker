@@ -799,6 +799,13 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
         note: "ADVENTURE — an opening arrived mid-number-game; the slot holds one thing at a time",
       };
     }
+    if (slot?.spiderFly) {
+      return {
+        text: 'the spider-and-fly game is running — say "stop watching" to end it, then start the adventure.',
+        lane: "game-inform",
+        note: "ADVENTURE — an opening arrived mid-spider-fly-game; the slot holds one thing at a time",
+      };
+    }
     const planActive = slot && !slot.done
       && ((Array.isArray(slot.goals) && slot.goals.length) || (Array.isArray(slot.actions) && slot.actions.length));
     if (planActive) {
