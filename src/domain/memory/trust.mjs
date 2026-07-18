@@ -33,6 +33,9 @@ function parseChatTagRest(rest) {
  *   ace:chat:<session>@<ts>    -> { kind:"operator",  createdAt:<ts>, sessionId:<session> }
  *   teach:chat:<session>@<ts>  -> { kind:"teach",     createdAt:<ts>, sessionId:<session> }
  *   web:<url> | url:<url>      -> { kind:"web",       url:<url> }
+ *   reference:<pack>:<article>[@revid] -> { kind:"reference", pack, article }
+ *     (split on the first two colons only; the article keeps any @revid and
+ *      any spaces — "reference:simplewiki:Polar bear@912" stays one article)
  *   extracted:<file-basename>  -> { kind:"extracted", name:<file-basename> }
  *   entailed:<rule>            -> { kind:"entailed",  rule:<rule> }
  * chat:/session: refs map to the operator; an unknown tag -> null (no Source).
@@ -40,6 +43,14 @@ function parseChatTagRest(rest) {
 export function provenanceTagToSource(tag) {
   const t = String(tag || "").trim();
   if (!t) return null;
+  if (t.startsWith("reference:")) {
+    // parsed from the FULL tag, not the whitespace-split head: an article
+    // title may contain spaces ("Polar bear@912").
+    const rest = t.slice("reference:".length);
+    const colon = rest.indexOf(":");
+    if (colon < 0) return { kind: "reference", pack: rest || "unknown", article: "" };
+    return { kind: "reference", pack: rest.slice(0, colon) || "unknown", article: rest.slice(colon + 1) };
+  }
   const head = t.split(/\s+/)[0]; // drop trailing " /r/IsA" etc.
   if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
   if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
@@ -63,6 +74,7 @@ export const SOURCE_PRIOR = Object.freeze({
   teach: 0.95,
   provider: 0.9,
   corpus: 0.7,
+  reference: 0.6,
   corpusWeak: 0.55,
   web: 0.4,
   extracted: 0.45,

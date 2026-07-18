@@ -14,17 +14,39 @@ reports and `CAPABILITIES_*.md` hold that record.
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
-## Version state (2026-07-17)
+## Version state (2026-07-18)
 
-v2.5.0 in the working tree; everything through 2.4.3 is pushed to `origin/main`. 2.5.0 is the
-version the current benchmark round measures, committed locally and unpushed. CI publishes on a
-version bump on main.
+v2.5.2 pushed to `origin/main`; tree clean at the start of the five-plan delivery run. CI
+publishes on a version bump on main.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
 download, not reachable from data in hand).
 
 ## Open items
+
+### In delivery — the five-plan run (started 2026-07-18)
+
+`PLAN_25_BACKLOG.md`, `PLAN_DIALOGUE_ACTS.md`, `PLAN_GUESS_NUMBER.md`, `PLAN_LEARN_ON_MISS.md`
+and `PLAN_SYLLOGIST.md` (§2/§3) are being delivered by a coordinator run with background
+sub-agent tracks. Each line flips STARTED → BUILT → VERIFIED here and in its plan doc, in the
+same commit as the work it describes:
+
+- T1 `PLAN_25_BACKLOG` §§1–7, §9 — chat/ask/interpret/codegraph fixes + pins — STARTED
+- T1w2 `PLAN_GUESS_NUMBER` phases 1–3; `PLAN_LEARN_ON_MISS` chat hook; `PLAN_DIALOGUE_ACTS`
+  envelope wiring — QUEUED (after T1)
+- T2 `PLAN_SYLLOGIST` §3 ATMS environment sets + §2 semi-naive delta + §4 slice — STARTED
+- T3 `PLAN_LEARN_ON_MISS` reference provenance, pack pipeline, loader + provider seam — STARTED
+- T4 home-page browser chat surface + seed payload + demo rail (syllogist demo first;
+  guess-number and learn-on-miss demos follow their features) — STARTED
+- T5 `PLAN_25_BACKLOG` §10 — restore the resolver's `ab-c2-what-to-test` plan — STARTED
+- T6 `PLAN_25_BACKLOG` §11 gloss, §12 ontology store-diff test, §13 SKOS surface +
+  `tmct_related`; `PLAN_DIALOGUE_ACTS` closed vocabulary — STARTED
+- 3×3 behavior matrix (what-is-a-dog / guess-number / learn-on-miss × TUI-file / web-memory /
+  lib-sqlite) — QUEUED (lands with its features)
+- `PLAN_25_BACKLOG` §8.1 CHATBENCH expectation revision at the arc boundary; then the endgame:
+  HANDOVER problems pass → minor roll → 4 benchmarks on the new ladder rungs → capabilities
+  audit → archive delivered plan docs — QUEUED
 
 The 2.0.3-cycle backlog is fully delivered; its build-order doc and the purge plan are archived at
 `archive/PLAN_OPEN_ITEMS.md` and `archive/PLAN_PURGE.md` — read them for the phase-by-phase detail,

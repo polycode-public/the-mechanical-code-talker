@@ -115,6 +115,13 @@
       "notice": "corpus/prose/wikipedia/LICENSE-NOTICE"
     },
     {
+      "path": "corpus/reference/",
+      "upstream": "Simple English Wikipedia pages-articles dump (dumps.wikimedia.org/simplewiki), cleaned article leads keyed on lexicon terms; the pinned dump URL, date and sha256 are recorded in corpus/reference/manifest.json once built",
+      "license": "CC-BY-SA-4.0",
+      "shareAlike": true,
+      "notice": "corpus/reference/LICENSE-NOTICE"
+    },
+    {
       "path": "corpus/generated/ace-surface-variants.jsonl",
       "upstream": "mechanically generated from Open English WordNet / SemCor example sentences (CC-BY-4.0) and corpus/prose/, which includes CC-BY-SA-4.0 Wikipedia text",
       "license": "CC-BY-SA-4.0",

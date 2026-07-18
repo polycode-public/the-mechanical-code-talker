@@ -137,10 +137,12 @@
     "build:chat-bundle": "node scripts/build-chat-bundle.mjs",
     "build:chat-seed": "node scripts/build-chat-seed.mjs",
     "build:demo-graph": "node scripts/build-demo-graph.mjs",
+    "build:demo-pack": "node scripts/build-demo-pack.mjs",
     "build:demo-memory": "node scripts/build-demo-memory.mjs",
     "gen:tool-docs": "node scripts/generate-tool-docs.mjs",
     "gen:collisions": "node scripts/generate-real-word-collisions.mjs",
     "gen:prose-corpus": "node scripts/fetch-prose-corpus.mjs",
+    "gen:reference-pack": "node scripts/fetch-reference-pack.mjs",
     "gen:variants": "node scripts/generate-template-variants.mjs",
     "extract": "node bin/tmct.mjs extract",
     "extract:facts": "node bin/tmct.mjs extract"

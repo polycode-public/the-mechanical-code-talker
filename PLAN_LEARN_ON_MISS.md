@@ -1,6 +1,10 @@
 # PLAN_LEARN_ON_MISS.md — answer a clean miss from a shipped knowledge pack, not just a refusal
 
-Status: DESIGN — offline, $0, deterministic, no LLM, no network, no research risk. On the cleanest
+Status: IN DELIVERY (2026-07-18 run) — offline, $0, deterministic, no LLM, no runtime network.
+Decisions taken for the build: pack source = Simple English Wikipedia (pinned dump, build-time
+fetch + deterministic clean); pack home = in-repo `corpus/reference/` shipped in this package
+(not a companion package); a small deterministic subset is emitted under `public/` so the
+home-page embedded chat demos the capability. On the cleanest
 class of miss, keyword-search a large pre-cleaned knowledge pack shipped with the package, lazy-load
 the one matching article, and answer from it with its own provenance — otherwise fall straight back
 to the honest miss. The provenance/trust half is mostly built. This plan carries the idea out of the
@@ -120,9 +124,21 @@ loader + the read-out tmct already has.
 
 1. **Provenance/trust first** (cheap, mostly built): add a `reference` provenance tag naming the pack
    + article, and the read-side rule that keeps a reference fact below operator/taught; pin it.
-   Shippable on its own.
+   Shippable on its own. — BUILT: `reference:<pack>:<article>[@revid]` parses in
+   `src/domain/memory/trust.mjs` (prior 0.6, between corpus and corpusWeak), materialises a
+   per-article `tmct:DocumentSource` in `src/adapters/memory/core.mjs`, pinned by
+   `test/adapters/trust.test.mjs`.
 2. **Clean-miss detection** (a read over the existing miss classification), gated to a no-op lookup.
-   Pinned by the detection tests. Ships nothing user-visible yet.
+   Pinned by the detection tests. Ships nothing user-visible yet. — PURE HALF BUILT:
+   `cleanMissReferenceTerm` (`src/domain/reference-pack.mjs`) keys a lexicon noun on its lemma and
+   refuses relation touches and unknown words; the chat-side wiring (parse-succeeded, graph and
+   memory genuinely empty) is the chat hook, not yet landed.
 3. **The pack + index + lazy loader + on-miss lookup**, answering through the completions read-out
    first. Build-time cleaning of the chosen source into the shipped format. This is the deliverable —
-   the default, offline, cited answer where there used to be a refusal.
+   the default, offline, cited answer where there used to be a refusal. — SCRIPTED, AWAITING THE
+   REAL PACK: the lazy loader and provider seam ship (`src/adapters/corpus/reference-pack.mjs`,
+   pinned over `test/fixtures/reference-pack/`), and `npm run gen:reference-pack`
+   (`scripts/fetch-reference-pack.mjs`) builds `corpus/reference/` from a pinned Simple English
+   Wikipedia dump — the parse/clean/select/emit phases are pinned over a dump fixture in
+   `test/estate/reference-pack.test.mjs`, whose committed-pack guards activate once the pack is
+   built and committed. The on-miss chat hook is not yet landed.

@@ -1,7 +1,7 @@
 # PLAN_25_BACKLOG.md — close the 2.5.0 open items
 
-**Status: not started. This is the build order for the seven items `HANDOVER.md` carries after the
-2.5.0 benchmark round.** Work it top to bottom: the order is by evidence strength and blast radius,
+**Status: in delivery (2026-07-18 run). This is the build order for the seven items `HANDOVER.md`
+carries after the 2.5.0 benchmark round.** Work it top to bottom: the order is by evidence strength and blast radius,
 not by area. Every fix ships with its pin — no row, not done. Evidence lands at the tool layer
 (`test/tools/`) wherever a tool serves the shape (`SKILL_CAPABILITIES_AUDIT.md` §1); a chat-only
 shape gets a keyed corpus row.
@@ -631,36 +631,62 @@ answer does not contain "dogs is".
 
 ## 10. Decision — the resolver-floor `ab-c2-what-to-test` (AGENTBENCH)
 
-On the AGENTBENCH resolver-floor arm, `ab-c2-what-to-test` stopped producing a completed plan
-somewhere in the 1.8.x-2.0.x line (C2 plan-completion 36% → 27%), and the 2.5.0 re-run confirms it
-holds at 27% — a stable state, not a transient. The goal driver still composes the case (56/56 clears
-C2). Only the floor arm is affected. `BENCHMARK_AGENT_2.5.0.md` calls it "the floor doing its job,
-not reds".
+**Status: investigated — restoration attempted per the operator's direction, and the archaeology
+shows there is no resolver plan to restore. The 36% never measured a composed plan. Evidence below.
+The expectation change is recommended, not applied — the operator decides.**
 
-**The two readings:**
+**What moved, in which commit, and why.** One commit moved this case: `e68994f` (1.8.1, the
+TOO_HARD_AUDIT M2 fix). Before it, the case's expectation was relaxed to one call (`expect.calls =
+[tmct_untested]`), and its own note said so: "RELAXED for PLAN grading to untested (the determinable
+step) … PASSES plan, FAILS result — the goal-reasoner ranking is Stage 5, unbuilt." The resolver's
+flat `untested` frame matched "needs a test" and emitted that single unranked call. That is the
+whole 36%: a one-call bar, passed by a one-call answer, result-incomplete in every cycle (1.4.1,
+1.5.7, 1.7.0). `e68994f` then changed both sides at once. It raised the expectation to the six-call
+GDA trace (untested, then impact per violating module, keystone argmax), and it gated the frame on a
+superlative cue (`skipIfSuperlative`, `resolver.mjs`) so the phrasing escalates to the C2 goal
+reasoner instead of getting a half-answer. It pinned both outcomes: the floor refusal in
+`test/bench/agentbench.test.mjs`, the goal-side composition in `test/adapters/goal-reasoner.test.mjs`.
+Every later commit on `resolver.mjs` is refactors and comment purges. Nothing regressed. The
+36% → 27% drop is the bar moving up past a half-answer, first seen at 2.0.3 and stable since.
 
-- **The floor's expectation should move down.** The resolver floor arm has no planner and no goal
-  reasoner by construction (`driver resolver-0.8.0 only`). `ab-c2-what-to-test` is a multi-step
-  composed proof; its plan legitimately comes from the goal reasoner the floor arm lacks. So a floor
-  arm that does not complete it is correct, and the expectation should record that as a declared
-  gate/refusal, not a bare miss.
-- **The resolver genuinely lost a plan it should still build.** If the resolver once completed this
-  case at 36% and the drop was a regression in the resolver itself (not a case that always needed the
-  goal reasoner), the right move is to restore the resolver's plan, not lower the bar.
+**Re-verified at 2.5.2.** Resolver arm, C2: 3/11 (27%/27%, 0% hallucination). The three passes are
+exactly the three `expect.refuse` cases; all eight misses are goal-rule composed proofs. This case
+refuses with "no command, NL parse, or imperative frame selects a capability", the same as its
+held-out twin `ab-c2-goal-keystone`, which expects the identical six-call trace. Goal arm, C2:
+11/11 (100%/100%).
 
-**Recommendation: move the floor arm's expectation down — declare the refusal, do not restore a
-plan.** The evidence points to the first reading: the case is a multi-step composed proof, the goal
-driver clears it 56/56, and the other seven C2 floor misses are the same class of composed proof the
-floor arm has no planner to build. Giving the resolver floor a plan for this case would mean giving
-it planning it is defined not to have, which would stop the floor arm discriminating C2 at all.
-Making it a declared refusal keeps the two arms honestly disagreeing on record rather than silently.
+**Why the resolver cannot compose this plan from its own materials today.** The expected plan ranks
+the untested set by impact. The request supplies, through every declared vocabulary the router and
+`ask.mjs` share: the superlative cue ("most"), the metric noun ("test", the tests edge), and the
+entity class (Module, via `METRIC_IMPLIES_ENTITY`). It nowhere supplies impact. The link from "needs
+a test" to "rank by blast radius" exists in one place: the declared goal model's coverage-invariant
+rule (`goal-reasoner.mjs`, priorityTopic `impact`). The member-filter drive is not a precedent —
+there, both segments and the fold are read off the request's own syntax. Wiring untested → impact →
+argmax into the resolver would copy that goal rule into the floor arm, the machinery the arm's
+definition excludes, and keyed to this phrasing it would flip this case while the twin still
+refused: phrasing overfit on a case tagged `overfitProne`, and the floor's C2 discrimination gone. A
+resolver-side tier for norm-driven ranking would redefine the arm, so it is the operator's to
+order, not a repair.
 
-**What to change once decided (the recommended path).** In the AGENTBENCH resolver-floor expected
-results, change `ab-c2-what-to-test`'s expected outcome from a completed plan to a declared refusal
-(`completed: false` as an expected gate, with the reason "no planner on the floor arm"), so the arm's
-27% reads as the floor gating correctly rather than a red. Pin the expectation so the two arms cannot
-silently drift back into disagreement. No `src/` change on this path — the resolver behaviour is
-correct; only the benchmark's expectation is stale.
+**The cheap counterfactual, run and measured.** Un-gating the frame (drop `skipIfSuperlative`) was
+tried in the worktree and reverted. The floor still fails the case (one call against six,
+`completed: false` either way), and the goal arm regresses 11/11 → 10/11 (91%/91%), because the
+goal driver runs C1 first and the un-gated frame claims the phrasing with the half-answer. Those are
+the exact pre-M2 numbers. Restoring the old one-call expectation fails in reverse: `expect` lives in
+`cases.jsonl` and is shared by every arm, so the goal driver's six-call trace would then fail it.
+
+**Recommended (not applied).** Record the case on the floor arm as a declared refusal, the same
+expected-outcome class as `ab-c2-goal-escalate-method` (`expect.refuse`). Because `expect` is shared
+across arms, this needs a small per-arm seam — say a case-level `floorExpect: { refuse: true }` that
+`grade.mjs` applies to floor-driver rows only — leaving the goal arm's six-call expectation intact.
+Both present behaviours are already pinned, so the arms cannot drift silently while the decision
+waits.
+
+**Adjacent finding (chat lane, not this bench — needs an owner).** The chat surface answers this
+exact phrasing inverted: "what most needs a test in this codebase" parses to superlative(metric
+tests, extreme most) and, on the bench fixture, answers "app/lib/b.mjs and app/functions/d/handler.mjs
+— the most test (1) (2-way tie)" — the MOST-tested modules. A need/lack verb does not flip the
+extreme. Fix site: `ask.mjs` `parseSuperlative`; a chat-lane grammar change with its own corpus pins.
 
 ---
 
@@ -788,7 +814,8 @@ Optionally add and pin the `mgx:relatedTo rdfs:seeAlso skos:related` ontology an
 4. **§6** — the board-read and goal-frame gaps. Chat-only, planner-adjacent.
 5. **§7** — the honest-miss clusters. Lowest of the CONVERSATION backlog by class (misses, not lies).
 6. **§8, §9** — the CEFR follow-ups and the two parser tails. Small, well-scoped.
-7. **§10, §11** — the two decisions. No build until the operator picks; recommendations given.
+7. **§10, §11** — the two decisions. §10 is investigated: no resolver plan to restore, evidence in
+   the section, expectation change back with the operator. §11 waits on the operator's pick.
 8. **§12, §13** — the ontology-vocabulary test and the SKOS consumer surface. Self-contained; §13
    closes audit row 155.
 
