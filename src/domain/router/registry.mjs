@@ -114,9 +114,9 @@ const CAPABILITIES = Object.freeze([
     add: [knows("signature", "symbol")],
   }),
   capability({
-    name: "tmct_impact", label: "impact", question: "what a change to this module reaches (impact closure)",
-    params: [param("module", KINDS.Module)],
-    preconditions: [graphLoaded(), resolves("module", KINDS.Module)],
+    name: "tmct_impact", label: "impact", question: "what a change to this module or symbol reaches (impact closure)",
+    params: [param("module", KINDS.Symbol, { note: "a Module, or any sited symbol — a fine-grained seed walks callsSymbol dependents and coarsens them to module grain" })],
+    preconditions: [graphLoaded(), resolves("module", KINDS.Symbol)],
     add: [knows("impact", "module")],
   }),
   capability({

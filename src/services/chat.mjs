@@ -312,7 +312,7 @@ export const COMMANDS = {
   signature:  { tool: "tmct_signature",    arg: "symbol",  help: "a symbol's signature only" },
   members:    { tool: "tmct_members",      arg: "class",   help: "the methods/attributes of a class" },
   subclasses: { tool: "tmct_subclasses",   arg: "class",   help: "the subclasses of a class" },
-  impact:     { tool: "tmct_impact",       arg: "module",  help: "what a change to this module reaches (impact closure)" },
+  impact:     { tool: "tmct_impact",       arg: "module",  help: "what a change to this module or symbol reaches (impact closure)" },
   callers:    { tool: "tmct_callers",      arg: "symbol",  help: "functions that call this symbol" },
   callees:    { tool: "tmct_callees",      arg: "symbol",  help: "functions this symbol calls" },
   tests:      { tool: "tmct_tests_for",    arg: "symbol",  help: "the tests covering this symbol" },
