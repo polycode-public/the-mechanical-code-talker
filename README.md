@@ -285,8 +285,8 @@ steps:
        - src/handlers/tasks.mjs (imports it) — tests: test/tasks.test.mjs
        - src/server/router.mjs (imports it) — tests: none recorded
      depth 2 (2):
-       - src/handlers/users.mjs (imports it) — tests: none recorded
-       - src/server/app.mjs (imports it) — tests: none recorded
+       - src/handlers/users.mjs (reaches it through an intermediary) — tests: none recorded
+       - src/server/app.mjs (reaches it through an intermediary) — tests: none recorded
   2. tmct_untested {}
      7 source module(s) with no covering test module:
        src/core/validate.mjs
