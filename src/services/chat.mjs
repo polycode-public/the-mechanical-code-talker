@@ -820,7 +820,17 @@ export function renderStats(graph) {
  *  which meant "who are you" always got the "here's what I can query" blurb and
  *  never a self-description — split so each gets the answer it actually asked for. */
 const CAPABILITY_PHRASES = [
-  /^(?:so,?\s+)?what can (?:you|u)(?:\s+(?:actually|really))? do\??$/i, /^(?:so,?\s+)?what do you(?:\s+(?:actually|really))? do\??$/i,
+  // The "so"/"uh"/"well" lead and the "for me"/"then" tail are pure discourse
+  // filler on the same question — tolerated so the casual forms land on the
+  // same orientation answer instead of the parse wall.
+  /^(?:(?:so|uh|um|erm|well|ok|okay),?\s+)*what can (?:you|u)(?:\s+(?:actually|really))? do(?:\s+for\s+(?:me|us))?(?:\s+(?:then|now|today|here))?\??$/i,
+  /^(?:(?:so|uh|um|erm|well|ok|okay),?\s+)*what do you(?:\s+(?:actually|really))? do(?:\s+for\s+(?:me|us))?(?:\s+(?:then|now|today|here))?\??$/i,
+  // "what have you got" / "what do you have" — the overview question in its
+  // casual spelling; without a frame, "got" parsed as a defines object.
+  /^what (?:have|do) (?:you|u) (?:got|have)(?:\s+for\s+me)?(?:\s+(?:here|then|today))?\??$/i,
+  // "tell me about this repo" — the orientation request by name; the
+  // vocabulary touch lane must not read "this repo" as a concept term.
+  /^tell me(?:\s+(?:something|more|a\s+little|a\s+bit))?\s+about (?:this|the|your)\s+(?:app|codebase|repo|repository|project|code)\??$/i,
   // "what can you actually help with" — the natural pivot from small talk
   // into a capability question; not covered by the "do" pair above since
   // neither accepts "help (me)? with" as a synonym tail for "do".
@@ -6610,7 +6620,11 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
  *  pipeline even gets a look) would wrongly swallow that idiom as a
  *  vocabulary-term lookup for the literal term "in X". */
 const WHAT_ELSE_IS_RE = /^what\s+else\s+(?:is|are)\s+(?!in\b|inside\b)(?:an?\s+)?(.+?)[?.!\s]*$/i;
-const WHAT_ELSE_ABOUT_RE = /^what\s+else\s+(?:do\s+you\s+know\s+)?about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
+const WHAT_ELSE_ABOUT_RE = /^(?:what|anything)\s+else\s+(?:do\s+you\s+know\s+)?about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
+/** "what else can dogs do" — the capability spelling of the same beyond-the-
+ *  primary-answer question; the subject's remaining facts (capabilities
+ *  included) are the expansion it asks for. */
+const WHAT_ELSE_CAN_DO_RE = /^what\s+else\s+can\s+(?:an?\s+|the\s+)?(.+?)\s+do[?.!\s]*$/i;
 /** The same question with its subject left implicit — "what else", "anything
  *  else", "what else do you know". A reader who has just been told about dogs
  *  and asks "what else" means "what else about dogs"; the subject is carried by
@@ -6640,7 +6654,7 @@ const WHAT_ELSE_BARE_RE = /^(?:(?:and|so|but|ok|okay|now|then)\s+)*(?:what\s+els
 async function whatElseAnswer(memoryDir, query, last) {
   if (!memoryDir) return null;
   const q = String(query).trim();
-  const m = q.match(WHAT_ELSE_IS_RE) || q.match(WHAT_ELSE_ABOUT_RE);
+  const m = q.match(WHAT_ELSE_IS_RE) || q.match(WHAT_ELSE_ABOUT_RE) || q.match(WHAT_ELSE_CAN_DO_RE);
   // A bare "what else" takes its subject from the standing referent — the same
   // last-grounded-answer binding "can it bark" uses.
   const bare = !m && WHAT_ELSE_BARE_RE.test(q);
@@ -8377,7 +8391,17 @@ function discourseRewrite(query, last) {
   } else {
     const sm = String(query).match(STACCATO_SWAP_RE);
     const cand = sm?.[1]?.trim();
-    if (!cand || !NAME_TOKEN_RE.test(cand)) return null;
+    if (!cand) return null;
+    // VOCABULARY STACCATO: "tell me about a dog" -> "and a cat". The article
+    // plus a plain word is the gate on the NEW term (a bare "and stuff" never
+    // matches), and the PRIOR turn must itself have been a vocabulary
+    // question — a code drill-down chain keeps the code-ish NAME_TOKEN rule
+    // below unchanged.
+    const articled = cand.match(/^(?:an?|the)\s+([a-z][\w-]*)$/i);
+    const prevWasVocab = last?.query
+      && (BARE_WHATIS_RE.test(String(last.query)) || vagueTouchTermOf(String(last.query)));
+    if (articled && prevWasVocab) return `what is a ${singularizeSurface(articled[1])}`;
+    if (!NAME_TOKEN_RE.test(cand)) return null;
     newSubj = cand;
   }
   if (!last?.query) return null;
@@ -8693,7 +8717,7 @@ function vagueTouchTermOf(query) {
   q = q.replace(VAGUE_TOUCH_TEL_RE, "tell");
   q = q.replace(VAGUE_TOUCH_ABUT_RE, "about");
   q = applyPreambleFrames(q);
-  const m = q.match(/^(?:kindly\s+)?tell me about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i)
+  const m = q.match(/^(?:kindly\s+)?tell me (?:(?:something|a\s+little|a\s+bit|more)\s+)?about\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i)
     || q.match(/^(?:(?:and|so|but|ok|okay|now|then|kindly)\s+)*what about\s+(?:an?\s+|the\s+)?(.+?)(?:\s+then|\s+though)?[?.!\s]*$/i)
     // "explain X" — a bare "explain <term>" is at least as natural a vague touch as "tell
     // me about X", but had no recognized shape at all: normalize.mjs's own
@@ -8782,7 +8806,7 @@ function relationTermOf(query, envelope) {
  *  "tell me" branch and a single external \s+ would double-count the
  *  separator when "about" fires. */
 const DESCRIBE_WRAPPER_RE =
-  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:tell\s+me\s+(?:more\s+)?(?:about\s+)?|describe\s+|what(?:'s|\s+is)?\s+about\s+)(.+?)(?:\s+for\s+me)?(?:\s+please)?\s*\??$/i;
+  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:tell\s+me\s+(?:(?:more|something|a\s+little|a\s+bit)\s+)?(?:about\s+)?|describe\s+|what(?:'s|\s+is)?\s+about\s+)(.+?)(?:\s+for\s+me)?(?:\s+please)?\s*\??$/i;
 
 /** Bare focus pronouns this lane resolves against the STANDING focus —
  *  "describe that" / "tell me about it" after a prior turn set the focus.
@@ -11096,6 +11120,31 @@ function morePage(query, { last, focus }) {
 // throughout this file, and centralizing it risks double-processing.
 const INDIRECT_REQUEST_RE = /^(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)\s*(.+)$/i;
 
+// First-person desire openers for a vocabulary question — "i wanna know about
+// a horse", "you tell me about dog", "let me know about a dog" — and the
+// known-kinds enumeration ("what animals do you know", "list the animals you
+// know"). Each rewrites to the canonical question its lane already answers
+// ("tell me about X" / "what is a X"), BEFORE any dispatch lane sees the
+// text: the leading "i" otherwise reads as a teach subject, so a read-only
+// question asserted an intent it doesn't have. Closed set, rewrite-only —
+// same discipline as INDIRECT_REQUEST_RE above.
+const DESIRE_ABOUT_RE = /^i\s+(?:wanna|want\s+to|wanted\s+to|(?:'d\s+|would\s+)?like\s+to|need\s+to)\s+(?:know|learn|hear)\s+(?:(?:more|something)\s+)?about\s+(.+?)[?.!\s]*$/i;
+const TELL_ABOUT_VARIANT_RE = /^(?:you\s+tell\s+me|let\s+me\s+know|fill\s+me\s+in)\s+(?:(?:more|something)\s+)?about\s+(.+?)[?.!\s]*$/i;
+// "facts"/"things"/"stuff" ask for the whole-store recall, not a kind's
+// members — those keep their own lane.
+const KNOWN_KINDS_RE = /^(?:(?:so|uh|um|well|ok|okay),?\s+)*(?:what|which)\s+(?!else\b|all\b|facts?\b|things?\b|stuff\b)([a-z][\w-]*)\s+do\s+(?:you|u)\s+know(?:\s+(?:about|of|so\s+far))?[?.!\s]*$/i;
+const LIST_KNOWN_KINDS_RE = /^list\s+(?:the\s+|all\s+(?:the\s+)?)?(?!facts?\b|things?\b|stuff\b)([a-z][\w-]*)\s+(?:that\s+)?(?:you|u)\s+know(?:\s+(?:about|of))?[?.!\s]*$/i;
+function rewriteVocabOpener(line) {
+  let m = line.match(DESIRE_ABOUT_RE) || line.match(TELL_ABOUT_VARIANT_RE);
+  if (m) return `tell me about ${m[1].trim()}`;
+  m = line.match(KNOWN_KINDS_RE) || line.match(LIST_KNOWN_KINDS_RE);
+  if (m) {
+    const noun = teachableSubjectOf(m[1]);
+    return `what is ${indefiniteArticleFor(noun)} ${noun}`;
+  }
+  return null;
+}
+
 /** A DISCONTIGUOUS verb frame, "SUBJECT uses OBJECT as its/a base(class)" —
  *  "uses" is split from its own qualifier ("as its base") around the object,
  *  so no contiguous phrase-table entry could ever register it, and "uses"
@@ -11220,7 +11269,8 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // the ORIGINAL `line` survives untouched for record.query/logLines fidelity
   // — restored centrally inside withLast (below), once, for every dispatch path.
   const indirectMatch = line.match(INDIRECT_REQUEST_RE);
-  const preRewriteLine = indirectMatch ? indirectMatch[1].trim() : line;
+  const indirectLine = indirectMatch ? indirectMatch[1].trim() : line;
+  const preRewriteLine = rewriteVocabOpener(indirectLine) || indirectLine;
   // rewriteUsesAsBaseFrame's discontiguous-frame rewrite: applied here, once,
   // before ANY dispatch lane sees the text. Null (no-op) for every turn that
   // doesn't match one of the four discontiguous shapes.

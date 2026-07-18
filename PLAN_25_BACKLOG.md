@@ -311,6 +311,15 @@ members-of and usage move when it re-measures.
 
 ## 4. The Tier-0 vocabulary lane — a casual opener misroutes to teach, and holds the ladder at Tier 0
 
+**DELIVERED** — desire openers rewrite to "tell me about X" at the head of runTurn (before any
+lane, so nothing is reified); "what have you got"/"tell me about this repo" join the orientation
+phrases; filler-tolerant capability + tell-me-about; what-else gains the capability and
+anything-else forms plus the staccato "and a cat" subject swap; "what X do you know"/"list the X
+you know" enumerate known kinds; bare "i wonder"/"i wanna know" join the wrapper family in
+`normalize.mjs`. Pinned with `template.vocab.*` rows and a `grammar.phrasing.politeness-wrapper`
+row. (Fix site note: the desire-opener strip lives in `chat.mjs`'s pre-rewrite rather than
+`normalize.mjs`, because the teach classifier reads the raw working line.)
+
 `i wanna know about X` is the most natural way a newcomer opens a vocabulary question, and it asserts
 a false intent. It is what pins the conversation ladder at Tier 0 (`BENCHMARK_CONVERSATION_2.5.0.md`
 §"Ladder position"). Its phrasing siblings (F13-F18) share the same lane.
