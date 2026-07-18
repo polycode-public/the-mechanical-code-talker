@@ -16,8 +16,8 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-18)
 
-v2.6.0 in the working tree, measured by the four `BENCHMARK_*_2.6.0.md` reports and
-`CAPABILITIES_2.6.0.md`, about to push (CI publishes on a version bump on main).
+v2.6.0 published, measured by the four `BENCHMARK_*_2.6.0.md` reports and `CAPABILITIES_2.6.0.md`;
+2.6.1 in the working tree carrying the post-round backlog delivery.
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
@@ -67,18 +67,22 @@ mode — record verbatim input beside the rewrite (28); four minor items noted i
 overbid has a gouger" — let the quantifier lead override the single-token POS gate or decline
 loudly), and clips s-final singular subjects ("lens" cited as "len").
 
-**AGENT rows 1–6:** the resolver's silent tier-3 pick on an ambiguous entity should return
-`candidateResults` instead (1, TOOL-8's live edge); the conditional-fallback phrasing plans both
-branches with a duplicated primary — the observe-and-replan branch TOOL-7 names (2–3); the bench
-fixture's `mod-a`-style module ids block symbol-seeded result literals — align them with
-`mod:<path>` (4); `tmct_related` sits in neither the router registry nor
-`EXCLUDED_FROM_REGISTRY` — register it (params: term) or document the exclusion (5); the registry
-declares `tmct_impact`'s param Module-kinded while a Function seed now binds (6).
+**AGENT rows 1–3** are owned by `PLAN_TOOL_LADDER_UPLIFT.md` (the TOOL-7 observe-and-replan
+branch and the TOOL-8 tied-candidate composer — design, not recogniser work). Rows 4–6 are
+delivered (fixture ids aligned, `tmct_related` registered with the `cap:memory-facts`
+precondition + a stub-floor positive case, `tmct_impact` widened to Symbol). Two remainders from
+that delivery: the resolver has no NL path into the memory graph (`tmct_related` tagged
+`NOT_NL_REACHABLE` — the routing horizon its case note records), and `src/tools/definitions.mjs`
+still phrases `tmct_impact`'s summary module-only (tool-docs estate ties to it).
 
-**CEFR levers for the next cycle:** `FIXTURE_CONTEXT` lacks schema-doc glosses (a truthful schema
-answer grounds at 0.000); `judge-prompt-v2` should name the game/planner/reference-pack surface
-(a correct game draws honesty 0); stamp the 15 now-passing baselineFail turns `improvedIn`; 10
-construction shapes still lack go-to-pool cases.
+**CEFR levers: delivered** (glosses in `fixture-context-v3`, `judge-prompt-v2` staged for the
+next round's judge, the 15 `improvedIn` stamps, the 10 construction-pool cases). **New from that
+delivery: 16 re-baselined max-pool regressions** — regenerating the graded pool (after fixing two
+generator-truth bugs) revealed 16 previously-green items that now miss: trailing-"then" noise
+phrasings, but-not import coordination, "tested modules importing X" answering the test module,
+the commit-count restrictor, `/describe register`, "classes inheriting from Widget but untested",
+and because-clause subordination. Recorded as frontier rows with observed answers in the pool's
+README addition record; chat-track candidates.
 
 **Standing decisions:**
 
@@ -86,8 +90,6 @@ construction shapes still lack go-to-pool cases.
   milk" stores `cat mgx:relate "to milk"`. Mapping the closed "relates to" / "is related to" pair
   onto `mgx:relatedTo` fixes the garble and gives the SKOS lane a teach phrasing; it changes
   predicate minting, so it needs the operator's word.
-- `archive/PLAN_BENCHMARK_LADDERS.md`'s banner still reads "DESIGN — not yet implemented" though
-  the reform is implemented and measured (audit §4.3) — a one-line truth-up.
 
 ## Discipline
 
