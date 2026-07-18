@@ -155,6 +155,19 @@ reproducer that dies early doesn't fail — it agrees with you.
 
 If a command's output is worth filtering, it's worth keeping.
 
+**The summary-grep is where this rule actually dies.** Sessions keep the tee on the "big" runs
+and then drop it for `| grep -E "^ℹ (pass|fail)"` count checks, because "I only need two lines."
+Those two lines are exactly the case where the tee earns its keep: when the counts show a fail,
+the why was in the output you threw away, and the whole run repeats to get it back. A test run's
+counts NEVER travel without the log (2026-07-18: a 2-minute suite was piped bare into a counts
+grep minutes after its sibling had already needed re-running for this exact reason).
+
+**And a command you have already seen run long goes to the background, full stop.** If a command
+(or its sibling in the same file) has once hit the foreground timeout or run past ~30s, the
+re-run is `run_in_background`, not foreground — "I only want the counts this time" is how a
+2-minute test file ends up blocking the coordinator chat that exists to stay free. Waiting on a
+background task uses the task-wait mechanism, never a foreground sleep loop.
+
 ## Name it, don't comment it
 
 Prefer a self-documenting name over a comment that compensates for a vague one. Good:

@@ -234,9 +234,13 @@ test("SYNONYM_DENYLIST blocks a confirmed in-domain false pair ('interpreter'~'c
       subject: "compiler", predicate: "rdfs:subClassOf", object: "tool",
       provenance: "ace:chat:t-deny@2026-07-07T00:00:00.000Z",
     });
-    // The reference pack is pointed away: this test guards the synonym path,
-    // and a pack article for "interpreter" would legitimately answer the turn.
-    const env = { TMCT_REFERENCE_PACK_DIR: join(dir, "no-pack-here") };
+    // Both shipped packs are pointed away: this test guards the synonym path,
+    // and a pack article or triple set for "interpreter" would legitimately
+    // answer the turn.
+    const env = {
+      TMCT_REFERENCE_PACK_DIR: join(dir, "no-pack-here"),
+      TMCT_CHILD_PACK_DIR: join(dir, "no-pack-here"),
+    };
     const r = await runTurn("what is an interpreter", { config: CONFIG, memoryDir: dir, env });
     assert.equal(r.record.miss, true);
     assert.doesNotMatch(r.answer, /known synonym/);

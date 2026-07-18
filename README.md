@@ -369,6 +369,51 @@ asserts the plan is exactly 2^n − 1 moves every time, and a second game
 conjunction) solves with zero interpreter changes. `--render blocks` writes
 the plan as a self-contained animated page (see "Two more surfaces" above).
 
+## Play a game with it
+
+Two games run inside an ordinary chat session, no setup.
+
+**Guess the number.** Say `I'm thinking of a number between 1 and 100` and
+tmct guesses by narrowing an interval — answer `higher`, `lower`, or
+`correct`. It finds any number in at most 7 guesses, and if your answers
+contradict each other it names the contradicting pair and stops rather than
+guessing on. Say `think of a number` to swap seats: tmct commits to a secret
+and answers your guesses honestly, reveals on request, and corrects you from
+its own record if you claim it already said `correct`. The behaviour is
+pinned by `test/corpus/games/guess-number.jsonl`, and the home page's demo
+rail plays the guesser side live in your browser.
+
+**A text adventure.** Say `start the adventure` (or `play ashcombe hall`)
+and tmct loads a small country-house mystery from a lazily-fetched worlds
+pack (`corpus/worlds/`) into the session's ordinary memory graph — rooms,
+objects and people become graph facts, and the verbs (`go`, `take`, `open`,
+`unlock`, `look`…) are taught action rules, not hard-wired code. Every move
+writes per-turn snapshot facts, `look` is an extractive digest of the graph,
+a blocked action declines by name, and one of the household moves on its own
+schedule whether you are there to see it or not. The full worked mystery is
+pinned step by step in `test/corpus/games/adventure.jsonl`.
+
+## Learning on a miss
+
+A question tmct cannot ground is still an honest miss — but on the cleanest
+kind of miss (a recognised word, a clean parse, simply no facts anywhere) it
+now consults two shipped, lazily-loaded packs before giving up:
+
+- `corpus/child/` — 93k everyday-world triples filtered from ConceptNet by a
+  child-concept seed. Asked `what is a kettle` cold, tmct loads the term's
+  triples into memory (provenance `child:conceptnet:kettle`, ranked below
+  anything you teach) and answers from them; the next ask answers from
+  memory directly.
+- `corpus/reference/` — 3,887 Simple English Wikipedia summaries. When the
+  triples cannot answer, a matching article answers as a cited read-out
+  (`source: reference article "Otter"…, CC BY-SA 4.0`).
+
+Facts first, prose second; if neither pack carries the term, the turn is the
+same honest miss it always was, byte for byte. An unknown word, a parse
+failure, or an ambiguous reading never consults a pack at all. The gate and
+both fallbacks are pinned by `test/corpus/reference.jsonl` and the
+chat-lane tests beside it, and the home page demos the article path live.
+
 ## How it remembers
 
 tmct's memory has two layers, both fed by every parsed request and response and
