@@ -3,11 +3,15 @@
 // corroboration, the bounded recency nudge, and the entailed hook.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   computeTrust, recencyNudge, SOURCE_PRIOR, RECENCY_FLOOR,
   SOURCE_RELIABILITY_MIN, SOURCE_RELIABILITY_MAX, SOURCE_RELIABILITY_NEUTRAL,
-  sessionReliabilityFrom,
+  sessionReliabilityFrom, provenanceTagToSource,
 } from "../../src/domain/memory/trust.mjs";
+import { appendFact, loadMemory, provSourceClassFor, SOURCE_CLASS } from "../../src/adapters/memory/core.mjs";
 
 // A fixture Source individual of a given type, as it lives in a memory payload.
 const src = (id, type) => ({ id, class: "Source", attributes: [{ prop: "mgx:sourceType", key: "sourceType", value: type }] });
@@ -179,6 +183,58 @@ test("sessionReliabilityFrom: deterministic and pure — same inputs, same outpu
   const a = sessionReliabilityFrom({ factsAsserted: 7, factsContradicted: 2 });
   const b = sessionReliabilityFrom({ factsAsserted: 7, factsContradicted: 2 });
   assert.equal(a, b);
+});
+
+// ---- reference: a shipped-pack article as a Source ------------------------
+
+test("a lone reference source scores its 0.6 prior × recency, ranked between corpus and corpusWeak", () => {
+  const sources = { ref: src("ref", "reference") };
+  assert.equal(SOURCE_PRIOR.reference, 0.6);
+  assert.ok(SOURCE_PRIOR.corpus > SOURCE_PRIOR.reference && SOURCE_PRIOR.reference > SOURCE_PRIOR.corpusWeak);
+  assert.equal(computeTrust({ sourceIds: ["ref"], createdAt: FRESH }, sources, { now: NOW }).score, SOURCE_PRIOR.reference);
+  const oneHalfLife = new Date(NOW - 30 * 24 * 3600 * 1000).toISOString();
+  const decayed = computeTrust({ sourceIds: ["ref"], createdAt: oneHalfLife }, sources, { now: NOW }).score;
+  assert.equal(decayed, round(SOURCE_PRIOR.reference * recencyNudge(oneHalfLife, NOW)));
+});
+
+test("a reference-sourced fact never outranks a teach- or operator-sourced fact on the same triple", () => {
+  const sources = { ref: src("ref", "reference"), t: src("t", "teach"), op: src("op", "operator") };
+  const ancient = new Date(NOW - 3650 * 24 * 3600 * 1000).toISOString();
+  const freshReference = computeTrust({ sourceIds: ["ref"], createdAt: FRESH }, sources, { now: NOW }).score;
+  const ancientTeach = computeTrust({ sourceIds: ["t"], createdAt: ancient }, sources, { now: NOW }).score;
+  const ancientOperator = computeTrust({ sourceIds: ["op"], createdAt: ancient }, sources, { now: NOW }).score;
+  assert.ok(ancientTeach > freshReference, `${ancientTeach} > ${freshReference}: even a decade-old teach fact beats a fresh pack article`);
+  assert.ok(ancientOperator > freshReference, `${ancientOperator} > ${freshReference}: the operator always beats the pack`);
+});
+
+test("a reference provenance tag round-trips: pack and article split on the first two colons, @revid and spaces kept", () => {
+  assert.deepEqual(provenanceTagToSource("reference:simplewiki:Otter@9184482"),
+    { kind: "reference", pack: "simplewiki", article: "Otter@9184482" });
+  assert.deepEqual(provenanceTagToSource("reference:simplewiki:Polar bear@9184482"),
+    { kind: "reference", pack: "simplewiki", article: "Polar bear@9184482" });
+  // unknown-tag behaviour unchanged: a near-miss spelling is no Source at all
+  assert.equal(provenanceTagToSource("refference:simplewiki:Otter"), null);
+  assert.equal(provenanceTagToSource("reference-pack:simplewiki:Otter"), null);
+  // and the corpus head-split contract is untouched
+  assert.deepEqual(provenanceTagToSource("corpus:conceptnet /r/IsA"), { kind: "corpus", name: "conceptnet" });
+});
+
+test("a reference-tagged fact materialises a per-article DocumentSource with sourceType reference", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ref-trust-"));
+  try {
+    await appendFact(dir, {
+      subject: "otter", predicate: "rdfs:subClassOf", object: "mammal",
+      provenance: "reference:simplewiki:Otter@9184482", createdAt: FRESH,
+    });
+    const m = await loadMemory(dir);
+    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === "src:reference:simplewiki:Otter@9184482");
+    assert.ok(source, "one Source per pack article, id keyed pack:article@revid");
+    const typeAttr = source.attributes.find((a) => a.prop === "mgx:sourceType");
+    assert.equal(typeAttr?.value, "reference");
+    assert.deepEqual(provSourceClassFor("reference"), { subClass: "tmct:DocumentSource", prov: "prov:Entity" });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });
 
 test("entailed hook: min(premise trusts) × rule-confidence when premises are supplied; bare prior otherwise", () => {

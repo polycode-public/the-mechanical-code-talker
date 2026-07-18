@@ -124,7 +124,10 @@ loader + the read-out tmct already has.
 
 1. **Provenance/trust first** (cheap, mostly built): add a `reference` provenance tag naming the pack
    + article, and the read-side rule that keeps a reference fact below operator/taught; pin it.
-   Shippable on its own.
+   Shippable on its own. — BUILT: `reference:<pack>:<article>[@revid]` parses in
+   `src/domain/memory/trust.mjs` (prior 0.6, between corpus and corpusWeak), materialises a
+   per-article `tmct:DocumentSource` in `src/adapters/memory/core.mjs`, pinned by
+   `test/adapters/trust.test.mjs`.
 2. **Clean-miss detection** (a read over the existing miss classification), gated to a no-op lookup.
    Pinned by the detection tests. Ships nothing user-visible yet.
 3. **The pack + index + lazy loader + on-miss lookup**, answering through the completions read-out
