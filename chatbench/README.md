@@ -141,6 +141,14 @@ coordination, "tested modules importing X", the commit-count restrictor,
 generator's untested ground truth now excludes test modules from the coverage
 domain, matching the product's untested view. Still 1,075 cases across 36
 cells; the go-to pool stays 128.
+2026-07-18 (construction coverage) — 10 cases appended to the go-to pool, one
+per construction shape that had no judged-set coverage, copied verbatim from
+the max pool (each cell's first green case; discourse-deixis has no green case
+yet, so its first frontier case carries the documented miss): `g-b2-rel-1`,
+`g-c1-subord-1`, `g-c1-deixis-1`, `g-c1-presup-1`, `g-c2-garden-1`,
+`g-b1-pron-neg-1`, `g-b1-disc-count-1`, `g-b2-count-temp-1`,
+`g-b2-noise-pron-1`, `g-c1-neg-rel-1`. Every tested construction shape now has
+at least one judged case. **138 cases.**
 Session-mode cases may carry a case-level `env` (e.g. `TMCT_GAME_SECRET` pins
 the thinker-seat secret so the replay is deterministic).
 Regenerate with
