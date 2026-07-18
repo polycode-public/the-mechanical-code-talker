@@ -1,0 +1,36 @@
+LICENSE NOTICE — corpus/reference/
+==================================
+
+The article shards and index in this directory are cleaned extracts of Simple
+English Wikipedia articles. They are licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International License (CC BY-SA 4.0), NOT under
+this repository's MPL-2.0.
+
+  https://creativecommons.org/licenses/by-sa/4.0/deed.en
+
+Attribution
+-----------
+
+This text is from Simple English Wikipedia, written by Wikipedia contributors
+and available under CC BY-SA 4.0. A Wikipedia article has no single author:
+the authoritative author list IS its revision history, and per Wikipedia's own
+reuse guidance linking to the article satisfies attribution. Every article row
+carries its source URL and the exact revision id it was cut from, and every
+answer tmct renders from this pack cites both.
+
+Source and reproduction
+-----------------------
+
+Built by scripts/fetch-reference-pack.mjs (`npm run gen:reference-pack`) from
+the pinned pages-articles dump recorded in manifest.json (URL, mirror URL,
+date and sha256). Wikipedia is a living text; this pack is a FROZEN snapshot
+of that dump, and the manifest's checksums identify the exact bytes shipped.
+
+Share-alike — READ THIS BEFORE REUSING
+--------------------------------------
+
+CC BY-SA 4.0's share-alike condition is viral. If you redistribute these
+files, modified or not, you must do so under CC BY-SA 4.0 with this
+attribution. The extraction code (scripts/fetch-reference-pack.mjs) is tmct
+code under this repository's MPL-2.0; only the data files in this directory
+carry CC BY-SA 4.0.

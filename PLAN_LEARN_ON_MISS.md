@@ -135,4 +135,10 @@ loader + the read-out tmct already has.
    memory genuinely empty) is the chat hook, not yet landed.
 3. **The pack + index + lazy loader + on-miss lookup**, answering through the completions read-out
    first. Build-time cleaning of the chosen source into the shipped format. This is the deliverable —
-   the default, offline, cited answer where there used to be a refusal.
+   the default, offline, cited answer where there used to be a refusal. — SCRIPTED, AWAITING THE
+   REAL PACK: the lazy loader and provider seam ship (`src/adapters/corpus/reference-pack.mjs`,
+   pinned over `test/fixtures/reference-pack/`), and `npm run gen:reference-pack`
+   (`scripts/fetch-reference-pack.mjs`) builds `corpus/reference/` from a pinned Simple English
+   Wikipedia dump — the parse/clean/select/emit phases are pinned over a dump fixture in
+   `test/estate/reference-pack.test.mjs`, whose committed-pack guards activate once the pack is
+   built and committed. The on-miss chat hook is not yet landed.
