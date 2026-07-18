@@ -251,18 +251,29 @@ export function applyPreambleFrames(text) {
   return q;
 }
 
-/** Strippable leading framing clause: "since/although/though/while/because/
- *  whereas/given that/now that <clause>, <Q>" -> "<Q>". Comma-anchored and
- *  non-empty-remainder-required, same discipline as GREETING_PREAMBLE_RE. */
+/** Strippable leading framing clause: "since/[even] though/although/while/
+ *  because/[even] if/whereas/given that/now that <clause>, <Q>" -> "<Q>".
+ *  Comma-anchored and non-empty-remainder-required, same discipline as
+ *  GREETING_PREAMBLE_RE. */
 const SUBORDINATION_FRAMES_RE =
-  /^(?:since|although|though|while|because|whereas|given\s+that|now\s+that)\s+.+?,\s*(.+)$/i;
+  /^(?:since|although|(?:even\s+)?though|while|because|whereas|given\s+that|now\s+that)\s+.+?,\s*(.+)$/i;
+
+/** The same framing clause TRAILING the question ("<Q>, because the sprint
+ *  just kicked off") — comma-anchored on the same subordinator set, so the
+ *  clause never reads as part of the object term. A bare "while"/"since"
+ *  mid-question without the comma is untouched (those can be content). */
+const TRAILING_SUBORDINATION_RE =
+  /^(.+?),\s*(?:since|although|(?:even\s+)?though|while|because|whereas|given\s+that|now\s+that)\s+.+$/i;
 
 export function applySubordinationFrames(text) {
   let q = String(text || "");
   for (let pass = 0; pass < 3; pass++) {
-    const m = q.match(SUBORDINATION_FRAMES_RE);
-    if (!m) break;
-    q = m[1].trim();
+    const before = q;
+    let m = q.match(SUBORDINATION_FRAMES_RE);
+    if (m) q = m[1].trim();
+    m = q.match(TRAILING_SUBORDINATION_RE);
+    if (m) q = m[1].trim();
+    if (q === before) break;
   }
   return q;
 }
