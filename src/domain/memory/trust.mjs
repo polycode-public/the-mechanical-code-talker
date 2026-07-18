@@ -35,6 +35,11 @@ function parseChatTagRest(rest) {
  *      same 0.7 prior, same shared Source as the bulk conceptnet import; the
  *      <term> segment records which miss pulled the fact in and is not part of
  *      the Source identity)
+ *   world:<name>[:turnN]       -> { kind:"corpus",   name:<name> }
+ *     (a loaded world's facts are first-party authored shipped content — the
+ *      same tier the hand-written tier2 corpus already scores at; the :turnN
+ *      segment a snapshot write carries records when, not who, and is not
+ *      part of the Source identity)
  *   ace:chat:<session>@<ts>    -> { kind:"operator",  createdAt:<ts>, sessionId:<session> }
  *   teach:chat:<session>@<ts>  -> { kind:"teach",     createdAt:<ts>, sessionId:<session> }
  *   web:<url> | url:<url>      -> { kind:"web",       url:<url> }
@@ -62,6 +67,10 @@ export function provenanceTagToSource(tag) {
   // child:<pack>:<term> — the lazy child triples pack, scored at the corpus tier
   // under the pack's shared Source; the per-term tail is dropped from the id.
   if (head.startsWith("child:")) return { kind: "corpus", name: head.slice("child:".length).split(":")[0] || "unknown" };
+  // world:<name>[:turnN] — a loaded world's facts and snapshots, first-party
+  // authored shipped content scored at the corpus tier; the per-turn tail is
+  // dropped from the id so every write of one world corroborates one Source.
+  if (head.startsWith("world:")) return { kind: "corpus", name: head.slice("world:".length).split(":")[0] || "unknown" };
   if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
   if (head.startsWith("teach:")) {
     // the chat teach lane's natural frames — chat.mjs's teachProvenanceTag

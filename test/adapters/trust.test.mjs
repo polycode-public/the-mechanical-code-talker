@@ -277,6 +277,37 @@ test("a child-tagged fact scores the 0.7 corpus prior and materialises the share
   }
 });
 
+// ---- worlds pack: a loaded world's facts and snapshots as a Source --------
+
+test("a world provenance tag parses to the shipped-content corpus tier — first-party authored facts share the 0.7 prior the hand-written tier2 corpus carries", () => {
+  assert.deepEqual(provenanceTagToSource("world:ashcombe-hall"),
+    { kind: "corpus", name: "ashcombe-hall" });
+  // a snapshot write's :turnN tail records when, not who — one Source per world
+  assert.deepEqual(provenanceTagToSource("world:ashcombe-hall:turn3"),
+    { kind: "corpus", name: "ashcombe-hall" });
+  // near-miss spellings are no Source at all
+  assert.equal(provenanceTagToSource("worlds:ashcombe-hall"), null);
+});
+
+test("a world-tagged fact scores the corpus prior and materialises one Source per world", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-world-trust-"));
+  try {
+    await appendFact(dir, {
+      subject: "housekeeper", predicate: "mgx:currently-in", object: "kitchen",
+      provenance: "world:ashcombe-hall", createdAt: FRESH,
+    });
+    const m = await loadMemory(dir);
+    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === "src:corpus:ashcombe-hall");
+    assert.ok(source, "a world fact materialises the world's own corpus Source");
+    assert.equal(source.attributes.find((a) => a.prop === "mgx:sourceType")?.value, "corpus");
+    const fact = m.individuals.find((i) => i.class === "Fact");
+    const score = Number(fact.attributes.find((a) => a.prop === "mgx:trustScore")?.value);
+    assert.ok(score > SOURCE_PRIOR.corpusWeak && score <= SOURCE_PRIOR.corpus, `${score} sits at the corpus tier`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("entailed hook: min(premise trusts) × rule-confidence when premises are supplied; bare prior otherwise", () => {
   const sources = { e: src("e", "entailed") };
   // no premises → the bare entailed prior (0.3)
