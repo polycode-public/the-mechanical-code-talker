@@ -7,7 +7,7 @@
       "resolver-0.8.0"
     ],
     "stamp": "2.6.0",
-    "caseCount": 62
+    "caseCount": 66
   },
   "ladder": {
     "rungs": [
@@ -32,8 +32,8 @@
   },
   "metrics": {
     "overall": {
-      "planCompletion": 0.9354838709677419,
-      "resultCompletion": 0.9354838709677419,
+      "planCompletion": 0.9393939393939394,
+      "resultCompletion": 0.9393939393939394,
       "hallucinationRate": 0,
       "gatePass": true
     },
@@ -46,14 +46,14 @@
         "gatePass": true
       },
       "TOOL-1": {
-        "n": 12,
+        "n": 14,
         "planCompletion": 1,
         "resultCompletion": 1,
         "hallucinationRate": 0,
         "gatePass": true
       },
       "TOOL-2": {
-        "n": 4,
+        "n": 6,
         "planCompletion": 1,
         "resultCompletion": 1,
         "hallucinationRate": 0,
