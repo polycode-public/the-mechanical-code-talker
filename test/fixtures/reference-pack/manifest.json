@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "fixture": "hand-written articles; not built from a dump",
+  "dump": {
+    "url": "",
+    "mirrorUrl": "",
+    "date": "",
+    "sha256": ""
+  },
+  "built": "2026-07-18",
+  "counts": {
+    "articles": 5,
+    "aliases": 1,
+    "shards": 6,
+    "unindexedRows": 1
+  },
+  "budgets": {
+    "uncompressedTextBytesMax": 10485760,
+    "shardGzBytesMax": 3670016,
+    "indexGzBytesMax": 614400
+  },
+  "files": [
+    {
+      "file": "index.json.gz",
+      "bytes": 147,
+      "sha256": "9ab5617742777621a166fca4acc63c968f048ecca3a70c7dafb1d72178ef0ff3"
+    },
+    {
+      "file": "LICENSE-NOTICE",
+      "bytes": 419,
+      "sha256": "4dbdc70d9378f6e8b169d4f2390119a9836d3cb1b4b37d35e234c9162cc59da0"
+    },
+    {
+      "file": "shards/ref-01.jsonl.gz",
+      "bytes": 263,
+      "sha256": "c340a9c6b43a6c62d851511382d2911346e5be9f3c801d7a9b7531b95aad0103"
+    },
+    {
+      "file": "shards/ref-02.jsonl.gz",
+      "bytes": 248,
+      "sha256": "328fb6c67555aa80ce6d3e7a1615fe33ff2624c91503ec683a2c78ef0306257b"
+    },
+    {
+      "file": "shards/ref-04.jsonl.gz",
+      "bytes": 242,
+      "sha256": "54be8b96bfbd7b22f5a9fc6dd01d4ea1a48b3bbc2bf37be30f6d613dcf6c65f9"
+    },
+    {
+      "file": "shards/ref-10.jsonl.gz",
+      "bytes": 248,
+      "sha256": "8ca17af9978871db500f04cf17246b6d10c925a6d2d4ad87bcdc8b73922a3310"
+    },
+    {
+      "file": "shards/ref-15.jsonl.gz",
+      "bytes": 184,
+      "sha256": "dc2a363a11f3b22ca6426ab44fa6ad4e369b33486ee99e86a97978f29339ce34"
+    },
+    {
+      "file": "shards/ref-25.jsonl.gz",
+      "bytes": 284,
+      "sha256": "d4666c59c0923a1d937bc1ffd15ea23e79ba5af264b54f3980a72188a60aae75"
+    }
+  ]
+}

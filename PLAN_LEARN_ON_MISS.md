@@ -129,7 +129,10 @@ loader + the read-out tmct already has.
    per-article `tmct:DocumentSource` in `src/adapters/memory/core.mjs`, pinned by
    `test/adapters/trust.test.mjs`.
 2. **Clean-miss detection** (a read over the existing miss classification), gated to a no-op lookup.
-   Pinned by the detection tests. Ships nothing user-visible yet.
+   Pinned by the detection tests. Ships nothing user-visible yet. — PURE HALF BUILT:
+   `cleanMissReferenceTerm` (`src/domain/reference-pack.mjs`) keys a lexicon noun on its lemma and
+   refuses relation touches and unknown words; the chat-side wiring (parse-succeeded, graph and
+   memory genuinely empty) is the chat hook, not yet landed.
 3. **The pack + index + lazy loader + on-miss lookup**, answering through the completions read-out
    first. Build-time cleaning of the chosen source into the shipped format. This is the deliverable —
    the default, offline, cited answer where there used to be a refusal.

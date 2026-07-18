@@ -1,0 +1,8 @@
+LICENSE NOTICE — test/fixtures/reference-pack/
+===============================================
+
+Hand-written test fixture in the exact layout of corpus/reference/. The
+article text here is first-party tmct test data under this repository's
+MPL-2.0 — it is written in the STYLE of Simple English Wikipedia but is not
+Wikipedia content. The real pack's articles are CC BY-SA 4.0; see
+corpus/reference/LICENSE-NOTICE.
