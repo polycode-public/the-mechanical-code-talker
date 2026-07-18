@@ -1,10 +1,10 @@
 # PLAN_SYLLOGIST.md — beyond the shipped ladder: making the Syllogist itself smarter
 
-> **STATUS 2026-07-18: §2 (semi-naive incrementality) and §3's ATMS generalization (bounded
-> environment sets) are IN DELIVERY this run.** Earlier status follows.
-> **STATUS: research/design notes — §3's own ATMS-shaped, VERIFY-backed slice (single justification
-> per scm-sco fact, DRed retraction, bounded) is now IMPLEMENTED and tested
-> (`retractSubClassOf`, `src/domain/syllogise.mjs`; see §3 for scope). §1/§2/§4/§5 remain notes only —
+> **STATUS (2026-07-18 delivery run): §3 is IMPLEMENTED including the bounded environment sets
+> (multiple premise sets per entailed fact, `mgx:factJustification`'s ' | '-separated environments,
+> the `maxEnvironments` knob, set-membership retraction with survivor re-grounding —
+> `syllogise`/`retractSubClassOf`, `src/domain/syllogise.mjs`; see §3 and the addendum).
+> §1/§2/§4/§5 remain notes only —
 > and §1's beyond-RL survey now has a deeper sibling doc, `PLAN_SYLLOGIST_EL_DL.md`, which owns the
 > EL-classifier/DL-tableau tier; this file owns the incrementality/retraction horizon.
 > **2026-07-12: both chat-layer findings routed here from `archive/BENCHMARK_CONVERSATION_1.8.14.md` are now
@@ -136,7 +136,7 @@ the real W3C `cls-maxc1`, not a W3C rule id) — `PLAN_INFERENCE_TESTING.md` its
 `archive/` in the 2026-07-14 doc cleanup, so it now lives only in git history), which is a
 ATMS-shaped single justification per fact in spirit (de Kleer's monotonic ⟨consequent, antecedents,
 informant⟩, no outlist — not Doyle's JTMS), though not yet a persisted, walkable one. A
-further, NOT-currently-planned step toward the ATMS proper would track the small SET of alternate
+further step toward the ATMS proper (since landed — see below) tracks the small SET of alternate
 premise-sets per derived fact rather than just one — cheap for tmct specifically because the rule
 count is tiny (five rules today) so the number of alternate derivations per fact is expected to stay
 small, unlike the general case ATMS was built for. Retraction would then become a set-membership
@@ -151,25 +151,26 @@ unbuilt, and honestly speculative: nobody has published this exact narrow combin
 system, so there is no citation to verify here beyond the separately-real building blocks above —
 flagged as such rather than dressed up as prior art.
 
-**LANDED: the single-justification ATMS step — first for scm-sco, extended to all five rules
-2026-07-15 (see the addendum).** The paragraph above's
-first sentence — "today every entailed fact carries only a flat provenance TAG... never persisted
-onto the fact itself, so there is no stored justification to walk at all" — is no longer true for
-scm-sco: `syllogise()` now persists each scm-sco conclusion's two premise fact ids as
-`mgx:factJustification` (`memory/core.mjs` `factIdForTriple`/`appendFacts`' `justification` param),
-and `retractSubClassOf` (`src/domain/syllogise.mjs`) walks it — DRed (delete-and-rederive), bounded by
-`budget`/`depth`, cascading through multi-hop chains. It does NOT stop at a bare justification walk
-(DRed's naive over-deletion failure mode this file itself names above): each candidate is re-VERIFIED
-against the surviving graph (`buildAncestorCloser`, reused) before being removed, so a fact with a
-genuine second derivation path, or one later independently taught, survives. Still open,
-exactly as scoped above and NOT attempted: the true ATMS generalization (persisting every
-alternate justification SET per fact, not just one — this slice's VERIFY step gets the same answer
-for scm-sco's small rule set by re-deriving locally instead, which is cheap here but does not
-generalize to a rule set where that local re-derivation itself gets expensive). Justification
-tracking for the other four rules (cax-sco/cax-dw/cls-svf1/scm-svf1) landed 2026-07-15 — see the
-addendum at the end of this file. Tests for both the retracting and the surviving
-(independently derivable) cases live in `test/adapters/syllogise.test.mjs`'s `retractSubClassOf`
-block.
+**LANDED: the bounded ATMS proper — environment SETS per fact, all five rules.** The sketch above
+is now the shipped mechanism. Every entailed fact persists its full set of independent premise-id
+environments as `mgx:factJustification` (' | '-separated lists; a legacy single-list value parses
+as one environment, so old stores upgrade on read with no rewrite). The set is capped by the
+fourth budget knob the sketch asked for — `maxEnvironments`, default 4, `--max-environments` on
+the CLI verb — kept deterministic: currently-stored environments first, newly discovered ones in
+canonical enumeration order, deduped by canonical key, truncated at the cap. `syllogise()` grows
+the sets: after the five kernels, an alternate-discovery step (spending its own copy of the budget
+number, never the derivation budget) enumerates additional premise environments for the pass's
+conclusions and for stored purely-entailed facts still under the cap. `retractSubClassOf` consumes
+them exactly as §3 predicted — retraction is now a set-membership check first: a candidate whose
+stored environment survives untouched is kept without any re-derivation, a candidate with no
+intact environment gets a fresh enumeration from the survivors, and only then does the boolean
+closure-walk re-VERIFY (the previous slice's mechanism) act as the final authority, so a
+derivable fact still never falls to a stale citation. A survivor whose environments changed is
+re-grounded — its pruned or fresh environments written back through the store's optional
+`appendFacts` seam, with the best surviving environment's premise trusts re-stated for the three
+premise-discounted rules so trust re-derives from what actually still supports the fact. Tests:
+`test/adapters/syllogise.test.mjs` (environment persistence, cap determinism, set-membership
+survival, re-ground trust) and the `inference.retract.stale-justification` corpus row.
 
 ## 4. Relevance under budget is the same open question wearing a different hat
 
@@ -220,10 +221,9 @@ membership/subsumption. Tests: one per rule in `test/adapters/syllogise.test.mjs
 retracting half and a surviving (independently derivable) half; the pre-existing scm-sco retraction
 tests run unchanged.
 
-Still on the horizon, unchanged from §3: the ATMS generalization (tracking every alternate
-justification set per fact, de Kleer 1986). One concrete symptom this slice inherits from single
-justifications: a survivor keeps its now-stale justification, so a later retraction of its OTHER
-supporting path will not re-examine it, and the fact lingers until a fresh `syllogise` pass or an
-ATMS-shaped re-grounding step is designed. Until such a tier exists, retraction stays a bounded
-local check, and a lingering fact remains low-trust and retractable by provenance like every other
-entailment.
+The ATMS generalization this addendum used to leave on the horizon has since landed (see §3): a
+fact now tracks its SET of alternate premise environments (de Kleer 1986, bounded by the
+`maxEnvironments` knob), and the stale-justification symptom named here is closed — a survivor is
+re-grounded onto its surviving or freshly enumerated environments, so a later retraction of its
+other supporting path finds and removes it. Retraction stays a bounded local check; the boolean
+re-derivability walk remains the final authority beneath the set-membership fast path.

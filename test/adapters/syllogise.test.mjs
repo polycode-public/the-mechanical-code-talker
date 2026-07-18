@@ -23,6 +23,7 @@ import {
   retractSubClassOf as retractSubClassOfSeam,
 } from "../../src/domain/syllogise.mjs";
 import { assertSentence as assertSentenceSeam } from "../../src/domain/grammar/assert.mjs";
+import { factIdForTriple } from "../../src/domain/hash.mjs";
 import { freshConceptNetRepo } from "../helpers/seeded-fixture.mjs";
 
 // The persisting seams take the store's read/write functions injected; every
@@ -1350,6 +1351,244 @@ test("retractSubClassOf: retracting the filler ⊑ premise retracts the restrict
     await retractSubClassOf(dir, "method", "fixture");
     const afterSecond = readFactRows(await loadMemory(dir));
     assert.ok(hasEdge(afterSecond, "some-imports-method", "some-imports-fixture"), "the subsumption SURVIVES — the fillers stay ⊑-connected through test");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// ---- environment sets: a fact with several independent derivations persists
+// every premise set (bounded by maxEnvironments), retraction keeps it by set
+// membership while ANY environment survives, and a survivor's justification
+// is re-grounded so the NEXT retraction still sees it. ----------------------
+
+const envId = (s, p, o) => factIdForTriple(s, p, o);
+
+test("syllogise: a conclusion reachable through two premise sets persists BOTH environments, deterministically, "
+  + "and a second pass adds nothing", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "d", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+
+    const res = await syllogise(dir);
+    assert.equal(res.count, 1, "one conclusion (a⊑c), however many routes reach it");
+    assert.equal(res.environmentsAdded, 1, "the second route was recorded as an alternate environment");
+
+    const rows = readFactRows(await loadMemory(dir));
+    const derived = subClassRows(rows).find((r) => r.subject === "a" && r.object === "c");
+    assert.deepEqual(derived.environments, [
+      [envId("a", SUBCLASS_PREDICATE, "b"), envId("b", SUBCLASS_PREDICATE, "c")],
+      [envId("a", SUBCLASS_PREDICATE, "d"), envId("d", SUBCLASS_PREDICATE, "c")],
+    ], "both premise sets stored, derivation route first, alternates in enumeration order");
+    assert.deepEqual(derived.justification, [
+      envId("a", SUBCLASS_PREDICATE, "b"), envId("b", SUBCLASS_PREDICATE, "c"),
+      envId("a", SUBCLASS_PREDICATE, "d"), envId("d", SUBCLASS_PREDICATE, "c"),
+    ], "the flat justification stays the deduped union across environments");
+
+    const again = await syllogise(dir);
+    assert.equal(again.count, 0);
+    assert.equal(again.environmentsAdded, 0, "everything already recorded — nothing accretes on a re-run");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("syllogise: maxEnvironments caps the environment set deterministically — five routes, cap 2, "
+  + "identical stores end byte-identical", async () => {
+  const build = async (dir) => {
+    for (const m of ["m1", "m2", "m3", "m4", "m5"]) {
+      await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: m, provenance: "corpus:x" });
+      await appendFact(dir, { subject: m, predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    }
+    return syllogise(dir, { maxEnvironments: 2 });
+  };
+  const dir1 = await mkRepo();
+  const dir2 = await mkRepo();
+  try {
+    const res1 = await build(dir1);
+    const res2 = await build(dir2);
+    assert.equal(res1.alternatesTruncated, true, "three of five routes fell to the cap, and that is reported");
+    const envsOf = async (dir) => readFactRows(await loadMemory(dir))
+      .find((r) => r.subject === "a" && r.predicate === SUBCLASS_PREDICATE && r.object === "c").environments;
+    const envs1 = await envsOf(dir1);
+    const envs2 = await envsOf(dir2);
+    assert.equal(envs1.length, 2, "the cap holds");
+    assert.deepEqual(envs1, envs2, "same inputs → same kept environments, same order");
+    assert.deepEqual(envs1, [
+      [envId("a", SUBCLASS_PREDICATE, "m1"), envId("m1", SUBCLASS_PREDICATE, "c")],
+      [envId("a", SUBCLASS_PREDICATE, "m2"), envId("m2", SUBCLASS_PREDICATE, "c")],
+    ], "kept in canonical enumeration order: derivation route, then the first alternates");
+    assert.deepEqual(res1.derived.map((d) => [d.subject, d.object]), res2.derived.map((d) => [d.subject, d.object]));
+  } finally {
+    await rm(dir1, { recursive: true, force: true });
+    await rm(dir2, { recursive: true, force: true });
+  }
+});
+
+test("syllogise: a later pass records a newly-taught alternate premise set on an already-entailed fact", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await syllogise(dir);
+    assert.equal(
+      readFactRows(await loadMemory(dir)).find((r) => r.subject === "a" && r.object === "c").environments.length,
+      1, "one route taught, one environment stored",
+    );
+
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "d", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    const res = await syllogise(dir);
+    assert.equal(res.environmentsAdded, 1, "the newly-taught route accretes onto the stored fact");
+    const derived = readFactRows(await loadMemory(dir)).find((r) => r.subject === "a" && r.object === "c");
+    assert.deepEqual(derived.environments, [
+      [envId("a", SUBCLASS_PREDICATE, "b"), envId("b", SUBCLASS_PREDICATE, "c")],
+      [envId("a", SUBCLASS_PREDICATE, "d"), envId("d", SUBCLASS_PREDICATE, "c")],
+    ]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: a two-environment fact survives losing one route by set membership, and the "
+  + "surviving environment becomes its whole justification (the broken one is pruned)", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "c", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await syllogise(dir);
+    assert.equal(
+      readFactRows(await loadMemory(dir)).find((r) => r.subject === "a" && r.object === "d").environments.length,
+      2, "both routes recorded before any retraction",
+    );
+
+    const res = await retractSubClassOf(dir, "a", "b");
+    assert.equal(res.retracted.length, 1, "only the target went — the entailed fact kept a surviving environment");
+    const survivor = readFactRows(await loadMemory(dir)).find((r) => r.subject === "a" && r.object === "d");
+    assert.ok(survivor, "a⊑d survives");
+    assert.deepEqual(survivor.environments, [
+      [envId("a", SUBCLASS_PREDICATE, "c"), envId("c", SUBCLASS_PREDICATE, "d")],
+    ], "the broken environment was pruned away, the surviving one persisted");
+    assert.deepEqual(survivor.justification, [envId("a", SUBCLASS_PREDICATE, "c"), envId("c", SUBCLASS_PREDICATE, "d")]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: after surviving one retraction, retracting the OTHER route removes the fact — "
+  + "the re-grounded justification keeps the survivor visible to the next cascade", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "c", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await syllogise(dir);
+
+    await retractSubClassOf(dir, "a", "b");
+    assert.ok(hasEdge(readFactRows(await loadMemory(dir)), "a", "d"), "a⊑d survives the first retraction");
+
+    const res = await retractSubClassOf(dir, "a", "c");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(!hasEdge(rows, "a", "c"), "the second route's premise is gone");
+    assert.ok(!hasEdge(rows, "a", "d"), "a⊑d falls with its LAST surviving route — it does not linger on a stale citation");
+    assert.equal(res.retracted.length, 2, "the target and the now-unsupported entailment");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: a multi-environment fact falls when ONE cascade breaks every environment it has", async () => {
+  const dir = await mkRepo();
+  try {
+    // both routes to x⊑d pass through the single taught edge x⊑y
+    await appendFact(dir, { subject: "x", predicate: SUBCLASS_PREDICATE, object: "y", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "y", predicate: SUBCLASS_PREDICATE, object: "a", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "y", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await syllogise(dir);
+    const before = readFactRows(await loadMemory(dir));
+    const target = subClassRows(before).find((r) => r.subject === "x" && r.object === "d");
+    assert.ok(target.environments.length >= 2, "x⊑d carries several environments before the retraction");
+
+    await retractSubClassOf(dir, "x", "y");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(subClassRows(rows).filter((r) => r.subject === "x").length, 0,
+      "every x-rooted fact falls — no environment survives a cascade that severs the only taught stem");
+    assert.ok(hasEdge(rows, "y", "a") && hasEdge(rows, "a", "d") && hasEdge(rows, "y", "d"),
+      "the y-rooted chain, including its own entailments, is untouched");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: retracting a corpus-premised environment never disturbs a taught-only one, and the "
+  + "survivor's trust re-derives from the surviving taught premises", async () => {
+  const dir = await mkRepo();
+  try {
+    // env 1 (corpus, lifted): e05.mjs:cache, cache⊑volatile (corpus), volatile dw persistent (corpus)
+    // env 2 (taught, direct):  e05.mjs:mirror, mirror dw persistent
+    await appendFact(dir, { subject: "e05.mjs", predicate: TYPE_PREDICATE, object: "cache", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "cache", predicate: SUBCLASS_PREDICATE, object: "volatile", provenance: "corpus:conceptnet /r/IsA" });
+    await appendFact(dir, { subject: "volatile", predicate: DISJOINT_PREDICATE, object: "persistent", provenance: "corpus:conceptnet /r/IsA" });
+    await appendFact(dir, { subject: "e05.mjs", predicate: TYPE_PREDICATE, object: "mirror", provenance: "ace:chat:s1" });
+    await appendFact(dir, { subject: "mirror", predicate: DISJOINT_PREDICATE, object: "persistent", provenance: "ace:chat:s1" });
+    await syllogise(dir);
+
+    const before = readFactRows(await loadMemory(dir));
+    const violation = disjointRows(before).find((r) => r.subject === "e05.mjs" && r.object === "persistent");
+    // three environments: the taught-direct mirror route (the derivation
+    // route), the corpus ⊑-lift through cache, and the propagated
+    // e05.mjs:volatile type this same pass materialised.
+    assert.deepEqual(violation.environments, [
+      [envId("e05.mjs", TYPE_PREDICATE, "mirror"), envId("mirror", DISJOINT_PREDICATE, "persistent")],
+      [envId("e05.mjs", TYPE_PREDICATE, "cache"), envId("volatile", DISJOINT_PREDICATE, "persistent"), envId("cache", SUBCLASS_PREDICATE, "volatile")],
+      [envId("e05.mjs", TYPE_PREDICATE, "volatile"), envId("volatile", DISJOINT_PREDICATE, "persistent")],
+    ], "every derivation route is recorded, including one through a same-pass propagated type");
+    const taughtTypeTrust = before.find((r) => r.predicate === TYPE_PREDICATE && r.subject === "e05.mjs" && r.object === "mirror").trust;
+    const taughtDwTrust = before.find((r) => r.predicate === DISJOINT_PREDICATE && r.subject === "mirror" && r.object === "persistent").trust;
+
+    await retractSubClassOf(dir, "cache", "volatile");
+    const rows = readFactRows(await loadMemory(dir));
+    const survivor = disjointRows(rows).find((r) => r.subject === "e05.mjs" && r.object === "persistent");
+    assert.ok(survivor, "the violation survives on its taught-only environment");
+    assert.deepEqual(survivor.environments, [[
+      envId("e05.mjs", TYPE_PREDICATE, "mirror"),
+      envId("mirror", DISJOINT_PREDICATE, "persistent"),
+    ]], "only the taught environment remains");
+    assert.ok(hasType(rows, "e05.mjs", "mirror") && hasDisjoint(rows, "mirror", "persistent"),
+      "the taught premises themselves are untouched");
+    assert.equal(
+      survivor.trust,
+      round6(Math.min(taughtTypeTrust, taughtDwTrust) * CAX_DW_RULE_CONFIDENCE),
+      "trust re-derives from the surviving taught premises through the entailed hook",
+    );
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("retractSubClassOf: without appendFacts on the store, removal is still correct — the survivor just "
+  + "keeps its stale environments", async () => {
+  const dir = await mkRepo();
+  try {
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "b", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "b", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "a", predicate: SUBCLASS_PREDICATE, object: "c", provenance: "corpus:x" });
+    await appendFact(dir, { subject: "c", predicate: SUBCLASS_PREDICATE, object: "d", provenance: "corpus:x" });
+    await syllogise(dir);
+
+    const { appendFacts: _omitted, ...withoutAppend } = STORE;
+    const res = await retractSubClassOfSeam(dir, "a", "b", { store: withoutAppend });
+    assert.equal(res.retracted.length, 1, "removal is unchanged");
+    const survivor = readFactRows(await loadMemory(dir)).find((r) => r.subject === "a" && r.object === "d");
+    assert.ok(survivor, "a⊑d still survives via its second environment");
+    assert.equal(survivor.environments.length, 2, "no re-ground happened — the broken environment stays, stale but inert");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

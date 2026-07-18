@@ -183,9 +183,9 @@ test("the negative-polarity namespace is grounded, and the asymmetric twin is st
 
 test("a fact attribute the writer emits is grounded, even when the payload vocabulary never documents it", async () => {
   const text = await readFile(TTL_FILE, "utf8");
-  // appendFacts writes mgx:factJustification onto an entailed Fact, and it is
-  // absent from MEMORY_VOCABULARY — so the documented-vocabulary check above
-  // cannot see it. An emitted prop needs a home whether or not it is documented.
+  // These are written onto Facts by appendFact/appendFacts. Whether or not a
+  // prop also appears in the payload's documented vocabulary (the check
+  // above), an emitted prop needs a home in the ontology.
   const emitted = ["mgx:factJustification", "mgx:factQuantifier", "mgx:factProvenance"];
   for (const prop of emitted) {
     assert.ok(

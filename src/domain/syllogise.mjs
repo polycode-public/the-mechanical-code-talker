@@ -72,6 +72,11 @@ export const ENTAILED_SVF1_PROVENANCE = `entailed:${CLS_SVF1_RULE}`;
 /** Same sub-1 discount as CAX_DW_RULE_CONFIDENCE, same reason. */
 export const CLS_SVF1_RULE_CONFIDENCE = 0.95;
 
+/** The environment-set cap: how many independent premise sets one entailed
+ *  fact may carry as ' | '-separated mgx:factJustification environments — the
+ *  bounded-ATMS knob alongside depth/budget/focus. */
+export const DEFAULT_MAX_ENVIRONMENTS = 4;
+
 const SEP = "␟"; // an in-key separator no fact term can contain
 const isSubClassOf = (p) => String(p || "").trim().toLowerCase() === "rdfs:subclassof";
 const isType = (p) => String(p || "").trim().toLowerCase() === "rdf:type";
@@ -664,17 +669,26 @@ export function findConsistencyViolations(typeEdges, subClassEdges, disjointEdge
  * (`min(premiseTrusts) x ruleConfidence`) when premises are resolvable in the
  * pre-pass snapshot, else falls back to the bare entailed prior.
  *
+ * After the kernels, an ALTERNATE-DISCOVERY step (bounded by the same budget
+ * number, spent separately) enumerates additional premise environments for
+ * this pass's conclusions and for stored purely-entailed facts still under
+ * the `maxEnvironments` cap, so a fact's justification accretes every
+ * independent derivation route retraction can later check by set membership.
+ *
  * opts: `depth` (max fixpoint rounds, default 32), `budget` (max new
  * derivations this pass, shared across all five rules, default 50), `focus`
  * (Set|array of class terms scoping derivations to what touches it — omit
- * for a whole-graph pass), `store` (REQUIRED — the memory store's
+ * for a whole-graph pass), `maxEnvironments` (per-fact environment cap,
+ * default DEFAULT_MAX_ENVIRONMENTS), `store` (REQUIRED — the memory store's
  * { loadMemory, readFactRows, appendFacts } read/write functions, injected so
  * this inference module never imports the store itself).
  *
  * Returns { derived: [{ id, subject, object, via, rule }], count, budget,
- * depth, truncated }.
+ * depth, truncated, environmentsAdded, alternatesTruncated }.
  */
-export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null, store } = {}) {
+export async function syllogise(repoDir, {
+  depth = 32, budget = 50, focus = null, maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, store,
+} = {}) {
   const { loadMemory, readFactRows, appendFacts } = requireStore(store, ["loadMemory", "readFactRows", "appendFacts"], "syllogise");
   const memory = await loadMemory(repoDir);
   const rows = readFactRows(memory);
@@ -749,16 +763,18 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
     ...scmDerived.map((d) => ({
       subject: d.subject, predicate: SUBCLASS_PREDICATE, object: d.object,
       provenance: ENTAILED_PROVENANCE,
-      // Persisted justification: the premise fact ids this conclusion rode
-      // (a⊑b, b⊑c) — content-addressed ids work even when a premise is
-      // itself an entailment this same pass just derived. Read back by
+      // Persisted justification: one environment per independent derivation,
+      // each an ordered premise fact-id list — this first one is the premise
+      // set the conclusion rode (a⊑b, b⊑c); the alternate-discovery step
+      // below may append more. Content-addressed ids work even when a premise
+      // is itself an entailment this same pass just derived. Read back by
       // retractSubClassOf (below) to find every entailment a retracted
       // premise could have supported. All five rules persist one, each
       // citing its own premise shape.
-      justification: [
+      justification: [[
         factIdForTriple(d.subject, SUBCLASS_PREDICATE, d.via),
         factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object),
-      ],
+      ]],
     })),
     ...caxDerived.map((d) => ({
       subject: d.subject, predicate: TYPE_PREDICATE, object: d.object,
@@ -767,10 +783,10 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
       // taught chain is multi-hop: scm-sco materialises that edge (this same
       // pass or an earlier one), and retraction re-VERIFIES every candidate
       // anyway, so a citation left dangling by budget truncation is inert.
-      justification: [
+      justification: [[
         factIdForTriple(d.subject, TYPE_PREDICATE, d.via),
         factIdForTriple(d.via, SUBCLASS_PREDICATE, d.object),
-      ],
+      ]],
     })),
     ...dwDerived.map((d) => {
       // disjointWith is symmetric, taught as ONE direction — the premise row
@@ -788,11 +804,11 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
       return {
         subject: d.subject, predicate: DISJOINT_PREDICATE, object: d.object,
         provenance: ENTAILED_DISJOINT_PROVENANCE,
-        justification: [
+        justification: [[
           factIdForTriple(d.subject, TYPE_PREDICATE, d.viaType),
           factIdForTriple(dwS, DISJOINT_PREDICATE, dwO),
           ...(d.viaClass !== d.viaType ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaClass)] : []),
-        ],
+        ]],
         ...(premiseTrusts.length ? { premiseTrusts, ruleConfidence: CAX_DW_RULE_CONFIDENCE } : {}),
       };
     }),
@@ -809,13 +825,13 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
       return {
         subject: d.subject, predicate: TYPE_PREDICATE, object: d.object,
         provenance: ENTAILED_SVF1_PROVENANCE,
-        justification: [
+        justification: [[
           factIdForTriple(d.subject, d.viaProperty, d.viaValue),
           factIdForTriple(d.viaValue, TYPE_PREDICATE, d.viaType),
           factIdForTriple(d.object, ON_PROPERTY_PREDICATE, d.viaPropertyKey),
           factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaTarget),
           ...(d.viaType !== d.viaTarget ? [factIdForTriple(d.viaType, SUBCLASS_PREDICATE, d.viaTarget)] : []),
-        ],
+        ]],
         // same sub-1 discount as cax-dw, same reason (see CAX_DW_RULE_CONFIDENCE).
         ...(premiseTrusts.length ? { premiseTrusts, ruleConfidence: CLS_SVF1_RULE_CONFIDENCE } : {}),
       };
@@ -833,18 +849,70 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
       return {
         subject: d.subject, predicate: SUBCLASS_PREDICATE, object: d.object,
         provenance: ENTAILED_SCM_SVF_PROVENANCE,
-        justification: [
+        justification: [[
           ...(r1 ? [factIdForTriple(d.subject, ON_PROPERTY_PREDICATE, r1.property)] : []),
           factIdForTriple(d.subject, SOME_VALUES_FROM_PREDICATE, d.viaY1),
           ...(r2 ? [factIdForTriple(d.object, ON_PROPERTY_PREDICATE, r2.property)] : []),
           factIdForTriple(d.object, SOME_VALUES_FROM_PREDICATE, d.viaY2),
           factIdForTriple(d.viaY1, SUBCLASS_PREDICATE, d.viaY2),
-        ],
+        ]],
         // same sub-1 discount as cax-dw/cls-svf1, same reason (see CAX_DW_RULE_CONFIDENCE).
         ...(premiseTrusts.length ? { premiseTrusts, ruleConfidence: SCM_SVF_RULE_CONFIDENCE } : {}),
       };
     }),
   ];
+
+  // ---- alternate-environment discovery ----
+  // Enumerate additional premise environments for this pass's conclusions and
+  // for stored purely-entailed facts still under the cap, so retraction can
+  // later keep a multiply-derived fact by set membership instead of a
+  // re-derivation. The examination spends its own copy of the budget number —
+  // it never competes with the derivation budget above.
+  const conclusionCandidates = toWrite.map((w) => ({
+    id: factIdForTriple(w.subject, w.predicate, w.object),
+    subject: w.subject, predicate: w.predicate, object: w.object,
+    environments: w.justification,
+    write: w,
+  }));
+  const enumerateSupport = buildSupportEnumerator(rows.concat(conclusionCandidates.map((c) => ({
+    id: c.id, subject: c.subject, predicate: c.predicate, object: c.object,
+  }))));
+  const rowById = new Map(rows.map((r) => [r.id, r]));
+  const ownedPredicate = (p) => isSubClassOf(p) || isType(p) || isDisjoint(p);
+  const storedCandidates = rows
+    .filter((r) => ownedPredicate(r.predicate) && isPurelyEntailed(r.provenance)
+      && environmentsOf(r).length < maxEnvironments)
+    .map((r) => ({
+      id: r.id, subject: r.subject, predicate: r.predicate, object: r.object,
+      environments: environmentsOf(r), provenance: r.provenance,
+    }));
+  const alternateCandidates = [...conclusionCandidates, ...storedCandidates]
+    .sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
+  let environmentsAdded = 0;
+  let alternatesTruncated = false;
+  let examined = 0;
+  for (const cand of alternateCandidates) {
+    if (examined >= budget) { alternatesTruncated = true; break; }
+    examined += 1;
+    // Enumerate one PAST the cap so a distinct environment falling to the cap
+    // is visible to the merge below and honestly reported as truncation.
+    const discovered = enumerateSupport(cand, { maxEnvironments: maxEnvironments + 1 });
+    const { kept, truncated: mergeTruncated } = capMergeEnvironments(cand.environments, discovered, maxEnvironments);
+    if (mergeTruncated) alternatesTruncated = true;
+    if (kept.length <= cand.environments.length) continue; // nothing new to record
+    environmentsAdded += kept.length - cand.environments.length;
+    if (cand.write) { cand.write.justification = kept; continue; }
+    // A stored fact gains its newly discovered environments via a minimal
+    // upsert row: provenance omitted (first-write-wins keeps the union), and
+    // the three premise-discounted rules re-state their best environment's
+    // trusts so the entailed hook stays engaged through the trust recompute.
+    toWrite.push({
+      subject: cand.subject, predicate: cand.predicate, object: cand.object,
+      justification: kept,
+      ...(bestEnvironmentTrustOpts(cand.provenance, kept, (pid) => rowById.get(pid)?.trust) || {}),
+    });
+  }
+
   const { ids } = await appendFacts(repoDir, toWrite);
   const written = [];
   let i = 0;
@@ -868,7 +936,11 @@ export async function syllogise(repoDir, { depth = 32, budget = 50, focus = null
     written.push({ id: ids[i], subject: d.subject, object: d.object, via: d.viaY1, rule: SCM_SVF_RULE });
     i += 1;
   }
-  return { derived: written, count: written.length, budget, depth, truncated: written.length >= budget };
+  return {
+    derived: written, count: written.length, budget, depth,
+    truncated: written.length >= budget,
+    environmentsAdded, alternatesTruncated,
+  };
 }
 
 /** True when EVERY provenance tag on a fact's (possibly " | "-joined) union is
@@ -968,6 +1040,219 @@ function buildSurvivorDerivabilityCheck(rows) {
   };
 }
 
+/** A row's persisted environments, upgrading a store whose readFactRows
+ *  predates the environment field: a bare justification list reads as one
+ *  environment. */
+const environmentsOf = (row) => row.environments
+  || (Array.isArray(row.justification) && row.justification.length ? [row.justification] : []);
+
+/** Builds the environment ENUMERATOR: given ONLY the fact rows in `rows`,
+ *  returns `(row, { maxEnvironments }) => string[][]` — every premise-id set
+ *  (up to the cap) that independently derives the row's (s,p,o) conclusion
+ *  under the rule families that own its predicate, in a fixed deterministic
+ *  order, each environment citing ids in the same order the write path
+ *  cites them. An environment counts only when EVERY cited id resolves to a
+ *  row in `rows` and none is the row's own id — stricter than
+ *  buildSurvivorDerivabilityCheck's closure walk (a multi-hop ⊑ premise with
+ *  no materialised direct edge enumerates nothing), which is why that boolean
+ *  check stays the final authority in retraction. Pure, no I/O. */
+function buildSupportEnumerator(rows) {
+  const storedIds = new Set();
+  const subClassEdges = [];
+  const succ = new Map();             // a -> Set(direct stored superclass)
+  const typesOf = new Map();          // x -> Set(direct stored types)
+  const disjointForward = new Set();  // "a␟b" per stored disjointWith row, as-stored orientation
+  const disjointOf = new Map();       // term -> Set(partners), symmetric
+  const onPropertyOf = new Map();     // restriction -> owl:onProperty's object
+  const someValuesFromOf = new Map(); // restriction -> owl:someValuesFrom's object
+  const propertyEdgesOf = new Map();  // x -> [[rawPredicate, y], …]
+  for (const r of rows) {
+    if (!r || !r.subject || !r.predicate || !r.object) continue;
+    if (r.id) storedIds.add(r.id);
+    const pLower = String(r.predicate || "").trim().toLowerCase();
+    if (isSubClassOf(r.predicate)) {
+      subClassEdges.push([r.subject, r.object]);
+      if (!succ.has(r.subject)) succ.set(r.subject, new Set());
+      succ.get(r.subject).add(r.object);
+    } else if (isType(r.predicate)) {
+      if (!typesOf.has(r.subject)) typesOf.set(r.subject, new Set());
+      typesOf.get(r.subject).add(r.object);
+    } else if (isDisjoint(r.predicate)) {
+      disjointForward.add(`${r.subject}${SEP}${r.object}`);
+      if (!disjointOf.has(r.subject)) disjointOf.set(r.subject, new Set());
+      disjointOf.get(r.subject).add(r.object);
+      if (!disjointOf.has(r.object)) disjointOf.set(r.object, new Set());
+      disjointOf.get(r.object).add(r.subject);
+    } else if (isOnProperty(r.predicate)) onPropertyOf.set(r.subject, r.object);
+    else if (isSomeValuesFrom(r.predicate)) someValuesFromOf.set(r.subject, r.object);
+    else if (!RESERVED_PREDICATES.has(pLower)) {
+      if (!propertyEdgesOf.has(r.subject)) propertyEdgesOf.set(r.subject, []);
+      propertyEdgesOf.get(r.subject).push([r.predicate, r.object]);
+    }
+  }
+  const ancestorsOf = buildAncestorCloser(subClassEdges);
+  const succOf = (a) => succ.get(a) || new Set();
+  const restrictionOf = (node) => {
+    const property = onPropertyOf.get(node);
+    const target = someValuesFromOf.get(node);
+    return property && target ? { property, propertyKey: normFactTerm(property), target } : null;
+  };
+
+  return (row, { maxEnvironments = DEFAULT_MAX_ENVIRONMENTS } = {}) => {
+    const out = [];
+    const seen = new Set();
+    const admit = (env) => {
+      if (out.length >= maxEnvironments) return;
+      if (row.id && env.includes(row.id)) return; // self-support is no support
+      if (!env.every((id) => storedIds.has(id))) return; // a dangling citation makes the whole set inert
+      const key = [...env].sort().join(" ");
+      if (seen.has(key)) return;
+      seen.add(key);
+      out.push(env);
+    };
+
+    if (isSubClassOf(row.predicate)) {
+      // scm-sco: each pivot m with stored direct s⊑m and m⊑o edges.
+      for (const m of [...succOf(row.subject)].sort()) {
+        if (out.length >= maxEnvironments) break;
+        if (m === row.subject || m === row.object) continue;
+        if (!succOf(m).has(row.object)) continue;
+        admit([
+          factIdForTriple(row.subject, SUBCLASS_PREDICATE, m),
+          factIdForTriple(m, SUBCLASS_PREDICATE, row.object),
+        ]);
+      }
+      // scm-svf1: both ends declared restrictions over the SAME property with
+      // a stored direct filler ⊑.
+      if (out.length < maxEnvironments) {
+        const r1 = restrictionOf(row.subject);
+        const r2 = restrictionOf(row.object);
+        if (r1 && r2 && r1.propertyKey === r2.propertyKey && r1.target !== r2.target
+          && succOf(r1.target).has(r2.target)) {
+          admit([
+            factIdForTriple(row.subject, ON_PROPERTY_PREDICATE, r1.property),
+            factIdForTriple(row.subject, SOME_VALUES_FROM_PREDICATE, r1.target),
+            factIdForTriple(row.object, ON_PROPERTY_PREDICATE, r2.property),
+            factIdForTriple(row.object, SOME_VALUES_FROM_PREDICATE, r2.target),
+            factIdForTriple(r1.target, SUBCLASS_PREDICATE, r2.target),
+          ]);
+        }
+      }
+      return out;
+    }
+    if (isType(row.predicate)) {
+      // cax-sco: each stored type c with a stored direct c⊑D edge.
+      for (const c of [...(typesOf.get(row.subject) || [])].sort()) {
+        if (out.length >= maxEnvironments) break;
+        if (c === row.object) continue;
+        if (!succOf(c).has(row.object)) continue;
+        admit([
+          factIdForTriple(row.subject, TYPE_PREDICATE, c),
+          factIdForTriple(c, SUBCLASS_PREDICATE, row.object),
+        ]);
+      }
+      // cls-svf1: D a declared restriction, each stored property edge over its
+      // property whose value's type hits the target directly or by one stored
+      // direct ⊑ edge.
+      const rec = restrictionOf(row.object);
+      if (rec) {
+        const edges = [...(propertyEdgesOf.get(row.subject) || [])]
+          .filter(([p]) => normFactTerm(p) === rec.propertyKey)
+          .sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+        for (const [p, y] of edges) {
+          if (out.length >= maxEnvironments) break;
+          for (const c of [...(typesOf.get(y) || [])].sort()) {
+            if (out.length >= maxEnvironments) break;
+            if (c !== rec.target && !succOf(c).has(rec.target)) continue;
+            admit([
+              factIdForTriple(row.subject, p, y),
+              factIdForTriple(y, TYPE_PREDICATE, c),
+              factIdForTriple(row.object, ON_PROPERTY_PREDICATE, rec.propertyKey),
+              factIdForTriple(row.object, SOME_VALUES_FROM_PREDICATE, rec.target),
+              ...(c !== rec.target ? [factIdForTriple(c, SUBCLASS_PREDICATE, rec.target)] : []),
+            ]);
+          }
+        }
+      }
+      return out;
+    }
+    if (isDisjoint(row.predicate)) {
+      // cax-dw: each stored type c and lift class d whose stored disjoint row
+      // reaches the conclusion's object (orientation as stored).
+      const pairs = [];
+      for (const c of typesOf.get(row.subject) || []) {
+        for (const d of [c, ...ancestorsOf(c)]) {
+          if ((disjointOf.get(d) || new Set()).has(row.object)) pairs.push([c, d]);
+        }
+      }
+      pairs.sort((a, b) => a[0].localeCompare(b[0]) || a[1].localeCompare(b[1]));
+      for (const [c, d] of pairs) {
+        if (out.length >= maxEnvironments) break;
+        const dwStoredForward = disjointForward.has(`${d}${SEP}${row.object}`);
+        const [dwS, dwO] = dwStoredForward ? [d, row.object] : [row.object, d];
+        admit([
+          factIdForTriple(row.subject, TYPE_PREDICATE, c),
+          factIdForTriple(dwS, DISJOINT_PREDICATE, dwO),
+          ...(d !== c ? [factIdForTriple(c, SUBCLASS_PREDICATE, d)] : []),
+        ]);
+      }
+      return out;
+    }
+    return out; // a predicate no rule family owns enumerates nothing
+  };
+}
+
+/** Merge already-stored environments with newly discovered ones under the
+ *  cap: stored first (their order preserved), then discoveries in enumeration
+ *  order, deduped by canonical key, truncated at `cap`. Returns
+ *  { kept, truncated } — truncated true when a distinct environment was
+ *  dropped for the cap. */
+function capMergeEnvironments(storedEnvs, discoveredEnvs, cap) {
+  const kept = [];
+  const seen = new Set();
+  let truncated = false;
+  for (const env of [...(storedEnvs || []), ...(discoveredEnvs || [])]) {
+    if (!Array.isArray(env) || !env.length) continue;
+    const key = [...env].sort().join(" ");
+    if (seen.has(key)) continue;
+    if (kept.length >= cap) { truncated = true; continue; }
+    seen.add(key);
+    kept.push(env);
+  }
+  return { kept, truncated };
+}
+
+const ENTAILED_RULE_CONFIDENCE_BY_TAG = new Map([
+  [ENTAILED_DISJOINT_PROVENANCE, CAX_DW_RULE_CONFIDENCE],
+  [ENTAILED_SVF1_PROVENANCE, CLS_SVF1_RULE_CONFIDENCE],
+  [ENTAILED_SCM_SVF_PROVENANCE, SCM_SVF_RULE_CONFIDENCE],
+]);
+
+/** The entailed-hook opts for re-stating a conclusion of one of the three
+ *  premise-discounted rules: the BEST environment's premise trusts (max over
+ *  environments of min(premise trusts); tie → the earlier environment) plus
+ *  the rule's confidence — without this, recomputeFactTrust would silently
+ *  reset a discounted conclusion to the bare entailed prior. Null for
+ *  scm-sco/cax-sco conclusions (which ride the bare prior by design) and when
+ *  no environment's premises all resolve to a numeric trust. */
+function bestEnvironmentTrustOpts(provenance, environments, trustOfId) {
+  let ruleConfidence;
+  for (const tag of String(provenance || "").split(" | ")) {
+    const rc = ENTAILED_RULE_CONFIDENCE_BY_TAG.get(tag);
+    if (rc !== undefined) { ruleConfidence = rc; break; }
+  }
+  if (ruleConfidence === undefined) return null;
+  let best = null;
+  let bestMin = -1;
+  for (const env of environments || []) {
+    const trusts = env.map((id) => trustOfId(id)).filter((t) => typeof t === "number");
+    if (trusts.length !== env.length) continue; // a premise with no resolvable trust can't price the environment
+    const weakest = Math.min(...trusts);
+    if (weakest > bestMin) { bestMin = weakest; best = trusts; }
+  }
+  return best ? { premiseTrusts: best, ruleConfidence } : null;
+}
+
 /**
  * A scoped retraction slice: DRed (delete-and-rederive; Gupta, Mumick &
  * Subrahmanian, SIGMOD 1993), NOT JTMS. It recomputes the MATERIALISATION —
@@ -989,16 +1274,26 @@ function buildSurvivorDerivabilityCheck(rows) {
  * justifications into every rule's conclusions (transitive ⊑, propagated
  * types, disjointness violations, restriction membership and subsumption).
  *
- * A survivor keeps its stale, still-single justification as-is; a later
- * retraction of its OTHER supporting path therefore won't re-examine it.
- * Re-grounding survivors — or tracking every alternate justification set —
- * is the ATMS horizon, not this bounded slice.
+ * Each candidate is checked in three steps, cheapest first: (1) FAST PATH —
+ * any stored environment untouched by the cascade and fully backed by
+ * surviving rows keeps the fact by set membership alone; (2) ENUMERATE — a
+ * fresh premise environment found among the survivors re-grounds it; (3) the
+ * BOOLEAN BACKSTOP — the closure-walking derivability check, which sees
+ * multi-hop support the enumerator's stored-direct-edge discipline cannot
+ * cite, stays the final authority. A survivor whose environments changed is
+ * RE-GROUNDED after the removal (its pruned or fresh environments written
+ * back) when the store carries `appendFacts` — an OPTIONAL seam member:
+ * without it removal is still correct, the survivor's environments just stay
+ * stale until the next syllogise pass.
  *
  * Returns { retracted, count, budget, depth, truncated, found } — `found` is
  * false when `subject ⊑ object` was never a stored fact.
  */
-export async function retractSubClassOf(repoDir, subject, object, { budget = 50, depth = 32, store } = {}) {
+export async function retractSubClassOf(repoDir, subject, object, {
+  budget = 50, depth = 32, maxEnvironments = DEFAULT_MAX_ENVIRONMENTS, store,
+} = {}) {
   const { loadMemory, readFactRows, removeFacts } = requireStore(store, ["loadMemory", "readFactRows", "removeFacts"], "retractSubClassOf");
+  const appendFactsFn = typeof store?.appendFacts === "function" ? store.appendFacts : null;
   const s = normFactTerm(subject);
   const o = normFactTerm(object);
   const targetId = factIdForTriple(s, SUBCLASS_PREDICATE, o);
@@ -1009,50 +1304,105 @@ export async function retractSubClassOf(repoDir, subject, object, { budget = 50,
 
   // Only a purely-entailed fact ever carries a walkable justification —
   // a fact later independently taught is never a cascade candidate at all.
-  const entailedRows = rows.filter((r) => r.justification.length && isPurelyEntailed(r.provenance));
+  const entailedRows = rows.filter((r) => environmentsOf(r).length && isPurelyEntailed(r.provenance));
+  // premise id -> the entailed fact ids whose environments cite it. Built
+  // ONCE; each round's candidate set reads it for the facts the newest
+  // removals could actually touch — backward relevance from the same
+  // structure a forward pass reads forward.
+  const citedBy = new Map();
+  for (const r of entailedRows) {
+    for (const env of environmentsOf(r)) {
+      for (const premiseId of env) {
+        if (!citedBy.has(premiseId)) citedBy.set(premiseId, new Set());
+        citedBy.get(premiseId).add(r.id);
+      }
+    }
+  }
 
   const removed = new Set([targetId]);
   const order = [targetId]; // deterministic report order: target first, then removal order
+  const reground = new Map(); // survivor fact id -> the environments to persist for it
   let truncated = false;
   let round = 0;
+  let newlyRemoved = [targetId];
   for (; round < depth; round += 1) {
-    const candidates = entailedRows
-      .filter((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)))
+    const candidateIds = new Set();
+    for (const id of newlyRemoved) {
+      for (const cited of citedBy.get(id) || []) {
+        if (!removed.has(cited)) candidateIds.add(cited);
+      }
+    }
+    const candidates = [...candidateIds].map((id) => byId.get(id))
       .sort((a, b) => a.subject.localeCompare(b.subject) || a.predicate.localeCompare(b.predicate) || a.object.localeCompare(b.object));
-    if (!candidates.length) break; // fixpoint — nothing left to (re-)check
+    if (!candidates.length) break; // fixpoint — nothing cites what just fell
 
-    // The surviving fact set for THIS round's verify walk excludes every
-    // candidate's own row too, not just `removed` — otherwise a candidate
-    // could trivially "reach itself" through its own not-yet-deleted edge, or
-    // lean on a sibling candidate standing on the same broken premise.
-    const candidateIds = new Set(candidates.map((c) => c.id));
-    const stillDerivable = buildSurvivorDerivabilityCheck(
-      rows.filter((r) => !removed.has(r.id) && !candidateIds.has(r.id)),
-    );
+    // The surviving fact set for THIS round excludes every candidate's own
+    // row too, not just `removed` — otherwise a candidate could trivially
+    // "reach itself" through its own not-yet-deleted edge, or lean on a
+    // sibling candidate standing on the same broken premise.
+    const survivors = rows.filter((r) => !removed.has(r.id) && !candidateIds.has(r.id));
+    const survivorIds = new Set(survivors.map((r) => r.id));
+    const enumerateSupport = buildSupportEnumerator(survivors);
+    const stillDerivable = buildSurvivorDerivabilityCheck(survivors);
 
     let progressed = false;
     let hitBudget = false;
+    newlyRemoved = [];
     for (const c of candidates) {
       if (removed.size >= budget) { hitBudget = true; break; }
-      // does the conclusion still hold WITHOUT the retracted premise, via ANY
-      // surviving derivation (not just the one this fact was originally
-      // derived through)? A survivor keeps its (now possibly re-groundable,
-      // still TRUE) fact and is never re-examined again this call.
-      if (stillDerivable(c)) continue; // a second, independent derivation still supports it — keep
+      // FAST PATH: an environment whose every premise still stands keeps the
+      // fact — pure set membership, no re-derivation. When some environments
+      // broke, queue the pruned set so the next retraction still sees the
+      // survivor (the stale-justification fix).
+      const environments = environmentsOf(c);
+      const intact = environments.filter((env) => env.every((id) => survivorIds.has(id)));
+      if (intact.length) {
+        if (intact.length !== environments.length) reground.set(c.id, intact);
+        continue;
+      }
+      // ENUMERATE: a fresh premise environment among the survivors re-grounds
+      // the fact under new citations.
+      const fresh = enumerateSupport(c, { maxEnvironments });
+      if (fresh.length) {
+        reground.set(c.id, fresh);
+        continue;
+      }
+      // BOOLEAN BACKSTOP: the closure walk is the final authority — it sees
+      // multi-hop support with no materialised direct edge to cite, so a
+      // still-derivable fact is never removed on a stale citation alone (its
+      // environments stay as they were).
+      if (stillDerivable(c)) continue;
       removed.add(c.id);
       order.push(c.id);
+      newlyRemoved.push(c.id);
       progressed = true;
     }
     if (hitBudget) { truncated = true; break; }
-    if (!progressed) break; // every candidate this round survived verification — fixpoint
+    if (!progressed) break; // every candidate this round survived — fixpoint
   }
   if (!truncated && round >= depth) {
-    // depth exhausted, not a natural fixpoint — honestly flag it if a
-    // pending candidate would still have been checked next round.
+    // depth exhausted, not a natural fixpoint — honestly flag it if a pending
+    // candidate (any surviving fact whose environment union still cites a
+    // removed id) would have been checked next round.
     truncated = entailedRows.some((r) => !removed.has(r.id) && r.justification.some((j) => removed.has(j)));
   }
 
   const { removed: actuallyRemoved } = await removeFacts(repoDir, order);
+  if (appendFactsFn) {
+    const regroundWrites = [...reground.entries()]
+      .filter(([id]) => !removed.has(id))
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([id, environments]) => {
+        const row = byId.get(id);
+        return {
+          subject: row.subject, predicate: row.predicate, object: row.object,
+          // provenance omitted — appendFacts' first-write-wins keeps the union
+          justification: environments,
+          ...(bestEnvironmentTrustOpts(row.provenance, environments, (pid) => byId.get(pid)?.trust) || {}),
+        };
+      });
+    if (regroundWrites.length) await appendFactsFn(repoDir, regroundWrites);
+  }
   return { retracted: actuallyRemoved, count: actuallyRemoved.length, budget, depth, truncated, found: true };
 }
 

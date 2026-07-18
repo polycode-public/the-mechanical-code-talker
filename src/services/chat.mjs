@@ -3480,9 +3480,9 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     //     claiming a specific, possibly-wrong reason.
     if (retractForgetMatch) {
       const { retractSubClassOf } = await import("../domain/syllogise.mjs");
-      const { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts } = await import("../adapters/memory/core.mjs");
+      const { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts, appendFacts: appendFactsForRetract } = await import("../adapters/memory/core.mjs");
       const result = await retractSubClassOf(memoryDir, retractSubject, retractObject, {
-        store: { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts },
+        store: { loadMemory: loadMemForRetract, readFactRows: readRowsForRetract, removeFacts, appendFacts: appendFactsForRetract },
       });
       if (result.found) {
         const extra = result.count - 1; // beyond the target fact itself

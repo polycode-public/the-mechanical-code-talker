@@ -537,3 +537,90 @@ test("a store written under the old 32-bit fact id keeps resolving after the wid
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- justification environments: the ' | '-separated multi-derivation shape ----
+
+test("appendFacts round-trips several justification environments, deduped, order preserved", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-envs-"));
+  try {
+    await appendFacts(dir, [{
+      subject: "a", predicate: "rdfs:subClassOf", object: "c",
+      provenance: "entailed:subClassOf",
+      justification: [
+        ["fact:1111111111111111", "fact:2222222222222222"],
+        ["fact:3333333333333333"],
+        ["fact:2222222222222222", "fact:1111111111111111"], // canonical dup of the first — dropped
+      ],
+    }]);
+    const row = readFactRows(await loadMemory(dir)).find((r) => r.subject === "a" && r.object === "c");
+    assert.deepEqual(row.environments, [
+      ["fact:1111111111111111", "fact:2222222222222222"],
+      ["fact:3333333333333333"],
+    ], "each independent premise set survives as its own environment; a same-set re-cite is one environment");
+    assert.deepEqual(row.justification, [
+      "fact:1111111111111111", "fact:2222222222222222", "fact:3333333333333333",
+    ], "the flat justification reads as the deduped union in first-occurrence order");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a legacy flat justification list writes and reads as exactly one environment", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-envs-legacy-"));
+  try {
+    await appendFacts(dir, [{
+      subject: "a", predicate: "rdfs:subClassOf", object: "c",
+      provenance: "entailed:subClassOf",
+      justification: ["fact:1111111111111111", "fact:2222222222222222"], // the pre-environment writer shape
+    }]);
+    const row = readFactRows(await loadMemory(dir)).find((r) => r.subject === "a" && r.object === "c");
+    assert.deepEqual(row.environments, [["fact:1111111111111111", "fact:2222222222222222"]]);
+    assert.deepEqual(row.justification, ["fact:1111111111111111", "fact:2222222222222222"]);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the legacy fact-id migration remaps premise ids inside EVERY environment, keeping the ' | ' shape", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mem-envs-migrate-"));
+  try {
+    const [s1, p1, o1] = ["widget", "rdfs:subClassOf", "gadget"];
+    const oldPremiseId = legacyFactIdFor(s1, p1, o1);
+    const stableId = "fact:aaaaaaaaaaaaaaaa"; // already-wide id in the same value — must pass through untouched
+    const legacy = emptyMemory();
+    legacy.individuals.push({
+      id: oldPremiseId, label: `${s1} ${p1} ${o1}`, class: FACT_CLASS,
+      derived_from: [], mentions: [],
+      attributes: [
+        { prop: "rdf:type", key: "type", value: "rdf:Statement" },
+        { prop: "rdf:subject", key: "subject", value: s1 },
+        { prop: "rdf:predicate", key: "predicate", value: p1 },
+        { prop: "rdf:object", key: "object", value: o1 },
+      ],
+    });
+    legacy.individuals.push({
+      id: "fact:bbbbbbbbbbbbbbbb", label: "widget rdfs:subClassOf machine", class: FACT_CLASS,
+      derived_from: [], mentions: [],
+      attributes: [
+        { prop: "rdf:type", key: "type", value: "rdf:Statement" },
+        { prop: "rdf:subject", key: "subject", value: "widget" },
+        { prop: "rdf:predicate", key: "predicate", value: "rdfs:subClassOf" },
+        { prop: "rdf:object", key: "object", value: "machine" },
+        { prop: "mgx:factProvenance", key: "provenance", value: "entailed:subClassOf" },
+        { prop: "mgx:factJustification", key: "justification", value: `${oldPremiseId} ${stableId} | ${stableId} ${oldPremiseId}` },
+      ],
+    });
+    const file = join(dir, MEMORY_GRAPH_REL);
+    await mkdir(dirname(file), { recursive: true });
+    await writeFile(file, JSON.stringify(legacy));
+
+    const currentPremiseId = factIdForTriple(s1, p1, o1);
+    const row = readFactRows(await loadMemory(dir)).find((r) => r.id === "fact:bbbbbbbbbbbbbbbb");
+    assert.deepEqual(row.environments, [
+      [currentPremiseId, stableId],
+      [stableId, currentPremiseId],
+    ], "the migrated premise id lands in both environments, in place, and the wide id is untouched");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

@@ -79,6 +79,7 @@ const MEMORY_VOCABULARY = [
   { prop: "rdf:object", note: "reified fact: the triple's object term" },
   { prop: "mgx:factProvenance", note: "LEGACY COMPAT SHIM: the ' | '-joined provenance tag string a fact came from; the source-of-truth is now the mgx:statedBy edges derived from it" },
   { prop: "mgx:factQuantifier", note: "OPTIONAL: the quantifier word a plural class-membership teach used ('every'/'some'/'a few'), for literal recall by 'how many Xs are Ys' — never real cardinality counting" },
+  { prop: "mgx:factJustification", note: "an entailed Fact's supporting premise fact ids: ' | '-separated environments, one space-separated premise-id list per independent derivation, capped by syllogise's maxEnvironments knob; a value with no ' | ' is a single environment" },
   { prop: "mgx:ruleName", note: "a taught Rule's own name (e.g. 'grandparent') — the query-dispatcher's lookup key, PLAN_TAUGHT_RELATIONS.md §2/§3" },
   { prop: "mgx:ruleKind", note: "a taught Rule's SHAPE tag — the closed vocabulary compose2 | filter | recursive (structural, like 'Fact'/'Rule' themselves, never a domain word)" },
   { prop: "mgx:ruleBase1", note: "compose2: the first hop's base relation name; filter: the base rule/relation being filtered (same 'base relation' role in both kinds, so the name is shared)" },
@@ -576,7 +577,14 @@ function migrateLegacyFactIds(payload) {
   for (const ind of payload.individuals) {
     if (Array.isArray(ind?.derived_from) && ind.derived_from.length) ind.derived_from = ind.derived_from.map(remapId);
     const just = (ind?.attributes || []).find((a) => a?.prop === "mgx:factJustification");
-    if (just?.value) just.value = just.value.split(" ").filter(Boolean).map(remapId).join(" ");
+    if (just?.value) {
+      // Environment-aware: the value is ' | '-separated premise-id lists, one
+      // per independent derivation — remap the ids inside each, keep the shape.
+      just.value = just.value.split(" | ")
+        .map((env) => env.split(" ").filter(Boolean).map(remapId).join(" "))
+        .filter(Boolean)
+        .join(" | ");
+    }
   }
   return payload;
 }
@@ -1078,13 +1086,38 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
   return { id };
 }
 
+/** Normalize appendFacts' `justification` input — either a flat premise-id
+ *  list (one derivation) or a list of premise-id lists (one per independent
+ *  derivation) — into the string[][] environment shape: empty/non-string ids
+ *  dropped, environments deduped by canonical key (sorted-id join) with
+ *  within-environment citation order preserved. Undefined when nothing
+ *  storable remains. */
+function normalizeJustificationEnvironments(justification) {
+  if (!Array.isArray(justification)) return undefined;
+  const rawEnvs = justification.some(Array.isArray)
+    ? justification.filter(Array.isArray)
+    : [justification];
+  const envs = [];
+  const seen = new Set();
+  for (const raw of rawEnvs) {
+    const env = raw.filter((id) => typeof id === "string" && id);
+    if (!env.length) continue;
+    const key = [...env].sort().join(" ");
+    if (seen.has(key)) continue;
+    seen.add(key);
+    envs.push(env);
+  }
+  return envs.length ? envs : undefined;
+}
+
 /** Batch append of grammar/corpus-derived triples — ONE read-modify-write for
  *  a whole seed, collapsing looping appendFact's O(N²) I/O to a single
  *  mutate (same resulting ids/provenance/trust). Malformed facts are skipped,
  *  not thrown. Optional per-fact `premiseTrusts`/`ruleConfidence` (batched
- *  entailed-hook passthrough) and `justification` (premise fact ids, stored
- *  as mgx:factJustification, last-write-wins). Returns
- *  { ids, appended, skipped }. */
+ *  entailed-hook passthrough) and `justification` (premise fact ids — a flat
+ *  list, or a list of lists for multiple independent derivations — stored as
+ *  mgx:factJustification's ' | '-separated environments, last-write-wins).
+ *  Returns { ids, appended, skipped }. */
 export async function appendFacts(dir, facts) {
   const prepared = [];
   let skipped = 0;
@@ -1103,7 +1136,7 @@ export async function appendFacts(dir, facts) {
       quantifier: normText(f?.quantifier),
       premiseTrusts: Array.isArray(f?.premiseTrusts) ? f.premiseTrusts : undefined,
       ruleConfidence: typeof f?.ruleConfidence === "number" ? f.ruleConfidence : undefined,
-      justification: Array.isArray(f?.justification) ? f.justification.filter(Boolean) : undefined,
+      environments: normalizeJustificationEnvironments(f?.justification),
     });
   }
   const ids = [];
@@ -1142,7 +1175,7 @@ export async function appendFacts(dir, facts) {
           ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
           ...(f.tokens.length ? [{ prop: "mgx:hasProseTokens", key: "prose_tokens", value: f.tokens.join(" ") }] : []),
           ...(qVal ? [{ prop: "mgx:factQuantifier", key: "quantifier", value: qVal }] : []),
-          ...(f.justification && f.justification.length ? [{ prop: "mgx:factJustification", key: "justification", value: f.justification.join(" ") }] : []),
+          ...(f.environments ? [{ prop: "mgx:factJustification", key: "justification", value: f.environments.map((e) => e.join(" ")).join(" | ") }] : []),
         ],
       };
       // Upsert via the shared helper — O(1) via the index (Object.assign in
@@ -1549,6 +1582,24 @@ export function readFactRows(memory) {
       .map((id) => (sourcesById.get(id)?.attributes || []).find((a) => a?.prop === "mgx:sourceType")?.value)
       .filter(Boolean);
     const justificationRaw = get("justification");
+    // ' | '-separated environments, one premise-id list per independent
+    // derivation; a legacy value with no ' | ' parses as one environment.
+    const environments = [];
+    if (justificationRaw) {
+      for (const chunk of justificationRaw.split(" | ")) {
+        const env = chunk.split(" ").filter(Boolean);
+        if (env.length) environments.push(env);
+      }
+    }
+    const justification = [];
+    const seenPremise = new Set();
+    for (const env of environments) {
+      for (const id of env) {
+        if (seenPremise.has(id)) continue;
+        seenPremise.add(id);
+        justification.push(id);
+      }
+    }
     rows.push({
       id: ind.id,
       subject: get("subject"), predicate: get("predicate"), object: get("object"),
@@ -1556,9 +1607,11 @@ export function readFactRows(memory) {
       quantifier: get("quantifier"), // "" unless a plural class-membership teach set one
       sourceIds, sourceTypes,
       trust: Number((ind.attributes || []).find((a) => a?.prop === TRUST_SCORE_PROP)?.value) || 0,
-      // [] unless a rule persisted its premise fact ids (justification-tracking,
-      // scm-sco only today; see syllogise.mjs).
-      justification: justificationRaw ? justificationRaw.split(" ").filter(Boolean) : [],
+      // `environments`: every persisted premise set (empty unless entailed);
+      // `justification`: their deduped union in first-occurrence order, for
+      // readers that only need "which premises does this fact cite at all".
+      environments,
+      justification,
     });
   }
   return rows;

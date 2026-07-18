@@ -1022,11 +1022,12 @@ async function main() {
       return Number.isFinite(v) ? v : dflt;
     };
     const { resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
-    const { syllogise } = await import("../src/domain/syllogise.mjs");
+    const { syllogise, DEFAULT_MAX_ENVIRONMENTS } = await import("../src/domain/syllogise.mjs");
     const { loadMemory, readFactRows, appendFacts } = await import("../src/adapters/memory/core.mjs");
     const { repo } = await resolveRuntimeConfig({ argv: rest });
     const res = await syllogise(repo, {
       depth: numFlag("--depth", 32), budget: numFlag("--budget", 50),
+      maxEnvironments: numFlag("--max-environments", DEFAULT_MAX_ENVIRONMENTS),
       store: { loadMemory, readFactRows, appendFacts },
     });
     process.stdout.write(
