@@ -1,7 +1,6 @@
 # PLAN_BENCHMARK_LADDERS.md — a domain-appropriate ladder for each of the four benchmarks
 
-Status: DESIGN — not yet implemented. Nothing here changes a generator, a case set, a
-grader, or a report; this document specifies those changes for a later session to make.
+Status: DELIVERED — implemented and measured at 2.6.0 (the four `BENCHMARK_*_2.6.0.md` reports; `CAPABILITIES_2.6.0.md` audit §4.3). The body below is the design as written.
 
 ## Why this exists
 
