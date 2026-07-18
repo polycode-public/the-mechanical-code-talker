@@ -2718,6 +2718,11 @@ const GENERAL_VERB_DETERMINER_TEACH_RE = new RegExp(
   `^(?:the\\s+|an?\\s+)([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+([a-z]+)\\s+(${PREP_SRC})\\s+(.+?)[.!?]*$`,
   "i",
 );
+/** The quantified possession teach ("every dog has fur", "all dogs have
+ *  tails") — the closed has/have verb pins the split the way the preposition
+ *  pins GENERAL_VERB_DETERMINER_TEACH_RE's, so a universal quantifier can
+ *  lead without any verb-position guessing. */
+const QUANTIFIED_HAS_TEACH_RE = /^(?:every|each|all)\s+([\w'-]+)\s+(?:has|have)\s+(.+?)[.!?]*$/i;
 /** Verbs owned by an earlier, more specific recognizer in this lane — is/are
  *  (class-membership/property, above) and owns/maintains (ownership, above).
  *  generalVerbTeach declines outright on these so it can never race a more
@@ -2862,13 +2867,20 @@ async function generalVerbTeach(payload) {
   // with the preposition pinning the verb; a sentence that frame can't pin
   // declines here exactly as it always has.
   if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw)) {
-    const det = p.match(GENERAL_VERB_DETERMINER_TEACH_RE);
-    if (!det) return null; // not a bare-name subject, and no preposition to pin the verb
-    subjectRaw = det[1];
-    verbRaw = det[2];
-    // hand the preposition back to the shared fold below, so the minted
-    // predicate comes from the one place that mints it
-    objectRaw = `${det[3]} ${det[4]}`;
+    const quantHas = p.match(QUANTIFIED_HAS_TEACH_RE);
+    if (quantHas) {
+      subjectRaw = singularizeSurface(quantHas[1]);
+      verbRaw = "has";
+      objectRaw = quantHas[2];
+    } else {
+      const det = p.match(GENERAL_VERB_DETERMINER_TEACH_RE);
+      if (!det) return null; // not a bare-name subject, and no preposition to pin the verb
+      subjectRaw = det[1];
+      verbRaw = det[2];
+      // hand the preposition back to the shared fold below, so the minted
+      // predicate comes from the one place that mints it
+      objectRaw = `${det[3]} ${det[4]}`;
+    }
   }
   const verb = verbRaw.toLowerCase();
   if (GENERAL_VERB_EXCLUDE_RE.test(verb)) return null; // owned by a more specific frame above
@@ -3972,7 +3984,9 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // of THAT subject — the same word generalVerbTeach will store — and leave
     // every other sentence reading its first word exactly as before.
     const detLed = raw.match(GENERAL_VERB_DETERMINER_TEACH_RE);
-    const subjectWord = detLed ? detLed[1].split(/\s+/).pop() : raw.match(/^([\w'-]+)/)?.[1];
+    const quantHasLed = detLed ? null : raw.match(QUANTIFIED_HAS_TEACH_RE);
+    const subjectWord = detLed ? detLed[1].split(/\s+/).pop()
+      : (quantHasLed ? singularizeSurface(quantHasLed[1]) : raw.match(/^([\w'-]+)/)?.[1]);
     if (subjectWord && (await subjectIsNounOrPropn(subjectWord))) {
       // A PLURAL explicit-capability surface ("wrens can hum") whose
       // SINGULAR is a grounded term stores under the singular first — the
@@ -6277,19 +6291,32 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     return capabilityBaseRateReply(can[1], can[2], facts);
   }
 
-  // (b2b) "does a dog have a tail" — yes iff a remembered mgx:hasA fact says
-  // so: the forward yes/no mirror of WHAT_HAS_RE below, with the same
+  // (b2b) "does a dog have a tail" — yes iff a remembered possession fact
+  // says so: the forward yes/no mirror of WHAT_HAS_RE below, with the same
   // single-hit lookup and "never a guessed no" discipline as CAN_ASK_RE
   // above. Only diverts on a REAL hit, so a code-shaped "does app.mjs have
-  // tests" (no hasA fact) keeps whatever miss text already stands.
+  // tests" (no possession fact) keeps whatever miss text already stands.
+  // Both possession spellings are read (the corpus mints mgx:hasA, the teach
+  // lane tmct:has), and the lookup lifts one taught ⊑-hop so "does rex have
+  // fur" answers through "rex is a kind of dog; dog has fur", citing both.
   const doesHave = q.match(DOES_HAVE_ASK_RE);
   if (doesHave) {
     const subj = factTermVariants(normFactTerm, doesHave[1]);
     const obj = factTermVariants(normFactTerm, doesHave[2]);
-    const hit = (await memoryFacts(memoryDir)).find(
-      (f) => f.predicate === "mgx:hasA" && subj.has(f.subject) && obj.has(f.object),
+    const HAS_PREDICATES = new Set(["mgx:hasA", "tmct:has"]);
+    const facts = await memoryFacts(memoryDir);
+    const hasHit = (subjectSet) => facts.find(
+      (f) => HAS_PREDICATES.has(f.predicate) && subjectSet.has(f.subject) && obj.has(f.object),
     );
+    const hit = hasHit(subj);
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    const isaStep = facts.find((f) => ISA_PREDICATES.has(f.predicate) && subj.has(f.subject));
+    if (isaStep) {
+      const lifted = hasHit(factTermVariants(normFactTerm, isaStep.object));
+      if (lifted) {
+        return { text: `yes — ${renderFactLine(isaStep)}; ${renderFactLine(lifted)}`, replace: true };
+      }
+    }
     return null;
   }
 
@@ -6328,6 +6355,22 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       }
       const base = capabilityBaseRateReply(doAsk[2], doAsk[3], facts);
       if (base) return base;
+      // A subject NO fact row mentions on either side has nothing to answer
+      // from at all — without this the turn fell through to the
+      // conversational catch-all, which answered a question about penguins
+      // with the identity blurb. Decline by name, with the round-trip teach
+      // hint, and stay a miss. SINGLE-WORD subjects only: a multi-word
+      // capture here is this loose shape misbinding a subject+verb ("does
+      // margo eat ribs" reads [margo eat][ribs]), and a later reader owns
+      // that sentence — the same keep-its-turn rule as the fall-through above.
+      if (!/\s/.test(doAsk[2].trim()) && !facts.some((f) => subj.has(f.subject) || subj.has(f.object))) {
+        const noun = singularizeSurface(teachableSubjectOf(doAsk[2]));
+        return {
+          text: `I can't confirm that — I don't know anything about "${doAsk[2]}" yet. Teach me "a ${noun} can ${doAsk[3]}" (or "a ${noun} cannot ${doAsk[3]}") and I'll remember it.`,
+          replace: true,
+          miss: true,
+        };
+      }
     }
   }
 
@@ -7383,6 +7426,16 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     const isaSubject = focusLabel && IS_ADJECTIVE_PRONOUN_RE.test(isaAsk[1].trim())
       ? focusLabel : isaAsk[1];
     const subjCandidates = new Set(factTermVariants(normFactTerm, isaSubject));
+    // REFLEXIVE subsumption — "is a dog a dog" holds by definition (⊑ is
+    // reflexive, whatever the term); without this it fell to the can't-confirm
+    // closer, which then offered to be taught "dog is a kind of dog".
+    if ([...subjCandidates].some((s) => objVariants.has(s))) {
+      const kindEcho = stripTrailingDiscourseTag(isaAsk[2]).trim();
+      return {
+        text: `yes — ${indefiniteArticleFor(kindEcho)} ${kindEcho} is ${indefiniteArticleFor(kindEcho)} ${kindEcho}, trivially: every kind is a kind of itself.`,
+        replace: true,
+      };
+    }
     const noun = await entityClassNoun(graph, isaSubject);
     if (noun) for (const v of factTermVariants(normFactTerm, noun)) subjCandidates.add(v);
     const {
@@ -7739,6 +7792,20 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         text: `I can't confirm that — nothing I remember says ${subjectWord} is a ${kindWord}. I do know: ${shown}. ${recovery}`,
         replace: true,
         miss: true, // still a MISS in the turn record — honest wording, not an answer
+      };
+    }
+    // A stored CONVERSE ("every dog is a mammal" asked as "is a mammal a
+    // dog") deserves better than the bare wall: name the direction that IS
+    // known and why it doesn't answer. Still a miss, never a guessed "no" —
+    // some mammals may well be dogs; the store just doesn't say.
+    const converseHit = isa
+      .filter((f) => subjCandidates.has(f.object) && objVariants.has(f.subject))
+      .sort(byTrust)[0];
+    if (converseHit) {
+      return {
+        text: `I can't confirm that — what I know runs the other way: ${renderFactLine(converseHit)}. A kind doesn't reverse. If it's true, teach me: "every ${subjectWord} is a ${kindWord}".`,
+        replace: true,
+        miss: true,
       };
     }
     // Subject with NO isa facts: only divert when it's mentioned NOWHERE at
@@ -11217,9 +11284,18 @@ const TELL_ABOUT_VARIANT_RE = /^(?:you\s+tell\s+me|let\s+me\s+know|fill\s+me\s+i
 // members — those keep their own lane.
 const KNOWN_KINDS_RE = /^(?:(?:so|uh|um|well|ok|okay),?\s+)*(?:what|which)\s+(?!else\b|all\b|facts?\b|things?\b|stuff\b)([a-z][\w-]*)\s+do\s+(?:you|u)\s+know(?:\s+(?:about|of|so\s+far))?[?.!\s]*$/i;
 const LIST_KNOWN_KINDS_RE = /^list\s+(?:the\s+|all\s+(?:the\s+)?)?(?!facts?\b|things?\b|stuff\b)([a-z][\w-]*)\s+(?:that\s+)?(?:you|u)\s+know(?:\s+(?:about|of))?[?.!\s]*$/i;
+// "if something is a dog then it is a pet" — the universal conditional IS the
+// universal subclass teach in a conditional coat, so it rewrites to the
+// "every X is a Y" surface the teach path already stores (with its quantifier
+// and its own confirmation). Closed to the indefinite-pronoun subject: a
+// conditional over a NAMED subject or an arbitrary property is a rule, not a
+// subclass fact, and stays outside this frame.
+const UNIVERSAL_CONDITIONAL_RE = /^if\s+(?:something|somebody|someone|anything)\s+is\s+an?\s+([\w-]+)\s*,?\s*(?:then\s+)?(?:it|they)\s+(?:is|are)\s+an?\s+([\w-]+)[.!?\s]*$/i;
 function rewriteVocabOpener(line) {
   let m = line.match(DESIRE_ABOUT_RE) || line.match(TELL_ABOUT_VARIANT_RE);
   if (m) return `tell me about ${m[1].trim()}`;
+  m = line.match(UNIVERSAL_CONDITIONAL_RE);
+  if (m) return `every ${m[1]} is ${indefiniteArticleFor(m[2])} ${m[2]}`;
   m = line.match(KNOWN_KINDS_RE) || line.match(LIST_KNOWN_KINDS_RE);
   if (m) {
     const noun = teachableSubjectOf(m[1]);

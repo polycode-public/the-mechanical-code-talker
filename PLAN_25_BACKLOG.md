@@ -513,6 +513,13 @@ token burns the search instead of declining by name.
 
 ## 7. The logician and casual honest-miss clusters (F19-F26)
 
+**DELIVERED** — F19 reflexive subsumption answers trivially; F20 landed with §1; F21 fit a single
+frame (the universal conditional rewrites to "every X is a Y" — no rule engine needed), plus the
+quantified possession teach ("every dog has fur") it exposed; F22 names the stored converse
+instead of the wall; F23 the does-X-have-Y reader covers both possession predicates with a taught
+⊑-lift; F24 an ungrounded single-word capability subject declines by name, never the identity
+blurb; F25/F26 landed with §5. Keyed rows under `inference.*` and `template.capability.*`.
+
 None of these lies — they miss, or answer confusingly. Lower priority than the confident-wrong above
 by that fact. Group by the reasoning or lane they touch; each ships with a keyed corpus row (a miss
 is pinned as a miss, so a later "fix" that turns it into a guess goes red).
