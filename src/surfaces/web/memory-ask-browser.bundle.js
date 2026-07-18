@@ -23509,6 +23509,35 @@ ${JSON.stringify(envelope, null, 2)}`;
   init_core();
   init_completions();
 
+  // src/domain/spider-fly-world.mjs
+  var WEB_HOME = Object.freeze({ x: 2, y: 2 });
+  var DIRECTION_DELTA = Object.freeze({
+    north: Object.freeze({ dx: 0, dy: -1 }),
+    south: Object.freeze({ dx: 0, dy: 1 }),
+    east: Object.freeze({ dx: 1, dy: 0 }),
+    west: Object.freeze({ dx: -1, dy: 0 })
+  });
+  var SEED_TAXONOMY = Object.freeze([
+    Object.freeze(["poodle", "dog"]),
+    Object.freeze(["sheepdog", "dog"]),
+    Object.freeze(["dog", "animal"]),
+    Object.freeze(["spider", "arachnid"]),
+    Object.freeze(["arachnid", "animal"]),
+    Object.freeze(["fly", "insect"]),
+    Object.freeze(["insect", "animal"])
+  ]);
+
+  // src/services/spider-fly.mjs
+  init_planning();
+  init_core();
+
+  // src/services/spider-fly-turn.mjs
+  init_core();
+  var SPIDER_FLY_TOLD_RE = new RegExp(
+    "^@(spider|fly)(?:-(\\d+))?[,:]?\\s+the\\s+(spider|fly)(?:-(\\d+))?\\s+is\\s+(?:(north|south|east|west)|at\\s+(cell-\\d+-\\d+))[.!?\\s]*$",
+    "i"
+  );
+
   // src/services/chat-session.mjs
   init_node_path();
   init_node_fs();
