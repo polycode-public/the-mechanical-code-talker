@@ -1,10 +1,34 @@
 # PLAN_TOOL_LADDER_UPLIFT.md — the TOOL-7 replan branch and the TOOL-8 tied-candidate composer
 
-Status: DESIGN — not started. Carries the two AGENT-ladder rungs the 2.6.0 round measured at
-their floors because the machinery behind them does not exist yet (`BENCHMARK_AGENT_2.6.0.md`,
-backlog rows 1–3). Everything recogniser-shaped from that round was delivered in the post-2.6.0
-wave; these two are the remainder, split out because each needs a design pass over the driver
-loop, not a guard.
+Status: DELIVERED. Both rungs are live code; all 67 `agentbench/cases.jsonl` rows pass under both
+the pure C1 resolver driver and the full goal driver, `agentbench/envelope.json` now reads
+`rungReached: TOOL-8` with every rung gate-PASS. Candidate for `archive/`.
+
+- **TOOL-8 (tied-candidate composer)**: `src/domain/router/resolver.mjs`'s `resolveOne` — a new
+  `testModuleTie()` check recognizes a source module and its own test module as a genuine tie via
+  the graph's own `tests` edge (never a raw tier-3 score tie: "b.mjs" scores far above
+  "b.test.mjs" on string similarity alone). A tie reuses the resolver's existing ambiguous-refusal
+  path (`dispatchEachCandidate`) unchanged, and additionally returns `candidateCalls` — the
+  `{name,input}` call shape `agentbench/grade.mjs`'s `candidateResults` check expects, distinct
+  from the pre-existing `{candidate,result}` `candidateResults` shape kept for its own callers.
+  `src/domain/router/drive.mjs`/`agentbench/driver-resolver.mjs` surface it as the loopResult's own
+  `candidateResults`; `runCapabilityPlan`/`goalDriver` treat a refusal carrying it as terminal
+  (never escalated to the taught/goal-reasoner lanes, which would otherwise silently drop the
+  enumerated answer for a plainer refuse).
+- **TOOL-7 (observe-and-replan branch)**: built in the planner's own method table
+  (`src/domain/router/planner.mjs`), not the goal-reasoner — these requests are direct conditional
+  read queries (the planner's existing domain), never a novel world-goal the goal-reasoner deduces.
+  `decompose()` gained a `recover` method ("`<primary>`, and if `<empty-cue>`, `<fallback>`
+  instead", gated on the check clause naming an emptiness cue so an ordinary "X, and if Y, Z
+  instead" without one keeps falling through to plain sequencing). `plan()` dispatches the primary,
+  re-dispatches it once to OBSERVE its own structured result (the same re-dispatch idiom
+  `composeResult` already uses to fold a threaded plan), and only then decides: a non-empty primary
+  stops the loop after one call (no `recovered` key), an empty one dispatches the fallback and
+  marks `recovered: true`. The old bug (the primary emitted twice, guard never observed) is gone by
+  construction — the primary is emitted exactly once, as the observation step.
+- Tests: `test/adapters/router-drive.test.mjs` (both rungs' recovery/tied-composer + guard-fails/
+  clear-match control cases), `test/adapters/router-resolver.test.mjs` (the `recover` method's
+  decompose shape and its emptiness-cue gate).
 
 ## What the round measured
 

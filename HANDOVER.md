@@ -33,8 +33,6 @@ alongside (pool 964 passing / 111 frontier), and the small remainders (world tru
 asides through the world fold, the plural-object fold, the impact summary). `archive/` holds the
 delivered plan docs; each records what its delivery deliberately did not include. What remains:
 
-- `PLAN_TOOL_LADDER_UPLIFT.md` owns the TOOL-7 observe-and-replan branch and the TOOL-8
-  tied-candidate composer (design work; the bench cases exist and fail honestly).
 - Adventure horizons (`archive/PLAN_ADVENTURE.md`): open/unlock/close ship signature-only
   families — the shipped precond/effect rule shapes can't express exit-adjacency, lock state,
   hidden contents, instrument preconditions or boolean effects, so those ride world facts checked

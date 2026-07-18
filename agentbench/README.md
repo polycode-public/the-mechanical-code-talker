@@ -56,11 +56,11 @@ exact signature (`runAgentbench(cases, { driver })`).
 | **TOOL-7** | Recovery & replanning | a step fails (empty/error) and the driver observes it and replans a fallback — `expect.recover` |
 | **TOOL-8** | Composition under ambiguity | enumerate the tied readings (`expect.candidateResults`) or refuse-with-a-nudge — never an arbitrary pick |
 
-The stub driver is exercised only on **TOOL-0/TOOL-1/TOOL-2**; the goal driver clears through
-**TOOL-6**. **TOOL-7/TOOL-8** name capabilities the current drivers do not have yet (a replanning
-branch in the planner; a tied-candidate composer in the goal reasoner) and gate at the honest floor
-until those ship — named horizons, declared up front so the ladder and the regression frame exist
-before the engine that will climb them.
+The stub driver is exercised only on **TOOL-0/TOOL-1/TOOL-2**; the goal driver clears the whole
+ladder, **TOOL-0 through TOOL-8** (`agentbench/envelope.json`'s `rungReached`). TOOL-7's replanning
+branch lives in the planner's own method table (`src/domain/router/planner.mjs`'s `recover`
+method); TOOL-8's tied-candidate composer lives at the resolver's binding seam
+(`src/domain/router/resolver.mjs`'s `resolveOne`) — see `PLAN_TOOL_LADDER_UPLIFT.md` for both.
 
 ## The grade (deterministic) + the metric PAIR
 

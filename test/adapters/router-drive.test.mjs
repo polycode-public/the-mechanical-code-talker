@@ -82,3 +82,64 @@ test("runCapabilityPlan: a request over the budget is refused, not silently trun
   const result = await runCapabilityPlan(nineSteps, tools, ctx);
   assert.equal(result.refused, true);
 });
+
+// ---- TOOL-7: the observe-and-replan branch --------------------------------
+
+test("runCapabilityPlan: a RECOVER request dispatches the fallback once the primary is OBSERVED empty, signaling recovered:true", async () => {
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: { graphFile: join(REPO, ".tmct", "graph.json") } });
+  const tools = declaredCapabilityNames();
+
+  // Button has no recorded callers — the primary comes up empty, so the fallback
+  // (describe it) actually fires, and the plan signals the replan rather than
+  // treating an unconditional second step as a "recovery".
+  const result = await runCapabilityPlan("list the callers of Button, and if there are none, describe it instead", tools, ctx);
+  assert.equal(result.refused, false);
+  assert.equal(result.recovered, true);
+  assert.deepEqual(result.calls, [
+    { name: "tmct_callers", input: { symbol: "Button" } },
+    { name: "tmct_describe", input: { symbol: "Button" } },
+  ]);
+});
+
+test("runCapabilityPlan: a RECOVER request whose primary is NOT empty stops after one call — the fallback is never dispatched", async () => {
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: { graphFile: join(REPO, ".tmct", "graph.json") } });
+  const tools = declaredCapabilityNames();
+
+  // fnAlpha DOES have a recorded caller (Widget.render calls it) — the guard
+  // holds, so the plan stops at the primary alone: the bug this rung exists to
+  // fix was the primary getting emitted twice with the fallback tacked on
+  // unconditionally, never actually observing the guard.
+  const result = await runCapabilityPlan("list the callers of fnAlpha, and if there are none, describe it instead", tools, ctx);
+  assert.equal(result.refused, false);
+  assert.deepEqual(result.calls, [{ name: "tmct_callers", input: { symbol: "fnAlpha" } }]);
+  assert.ok(!result.recovered, "the guard did not hold — no recovery to signal");
+});
+
+// ---- TOOL-8: the tied-candidate composer ----------------------------------
+
+test("runCapabilityPlan: a bare term tied between a module and its own test module enumerates BOTH reads, never an arbitrary pick", async () => {
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: { graphFile: join(REPO, ".tmct", "graph.json") } });
+  const tools = declaredCapabilityNames();
+
+  const result = await runCapabilityPlan("what depends on b", tools, ctx);
+  assert.equal(result.refused, true);
+  assert.equal(result.calls.length, 0, "an honest refusal, never an arbitrary pick");
+  assert.ok(Array.isArray(result.candidateResults), "carries one dispatched read per tied candidate");
+  const names = result.candidateResults.map((c) => `${c.name}(${c.input.module})`).sort();
+  assert.deepEqual(names, [
+    "tmct_impact(app/lib/b.mjs)",
+    "tmct_impact(app/unit-tests/b.test.mjs)",
+  ]);
+});
+
+test("runCapabilityPlan: a term with a clear best match keeps today's single-call plan — the composer does not fire on a non-tie", async () => {
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config: { graphFile: join(REPO, ".tmct", "graph.json") } });
+  const tools = declaredCapabilityNames();
+
+  // app/lib/c.mjs carries no test-module sibling in the fixture — a clear best
+  // match, so the plan dispatches its one obvious call and never enumerates.
+  const result = await runCapabilityPlan("what depends on c", tools, ctx);
+  assert.equal(result.refused, false);
+  assert.deepEqual(result.calls, [{ name: "tmct_impact", input: { module: "app/lib/c.mjs" } }]);
+  assert.equal(result.candidateResults, undefined);
+});

@@ -336,6 +336,20 @@ test("planner: extractEntity picks the strong identifier token for frame slot-fi
   assert.equal(extractEntity("Widget subclasses"), "Widget");
 });
 
+test("planner: decompose recognizes the RECOVER method only when the check clause names an empty outcome", () => {
+  const button = decompose("list the callers of Button, and if there are none, describe it instead");
+  assert.equal(button.method, "recover");
+  assert.deepEqual(button.segments, [
+    { text: "list the callers of Button", role: "action", thread: false },
+    { text: "describe it", role: "action", thread: true },
+  ]);
+  assert.equal(decompose("show what covers app/lib/c.mjs, and if nothing does, show its impact instead").method, "recover");
+  assert.equal(decompose("list what fnAlpha calls, and if it calls nothing, list what calls it instead").method, "recover");
+  // no emptiness cue in the check clause -> falls through to plain sequencing,
+  // unchanged from before the recover method existed.
+  assert.equal(decompose("show the members of Widget, and if Widget is a class, describe it instead").method, "sequence");
+});
+
 // ---- 5. e2e AGENTBENCH — the router baseline climbs the shim floor at 0% halluc
 
 test("agentbench e2e: the resolver driver holds 0% hallucination on EVERY case (the non-negotiable), stamped resolver-0.8.0", async () => {

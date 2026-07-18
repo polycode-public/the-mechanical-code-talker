@@ -144,7 +144,12 @@ export async function resolverDriver(request, tools, ctx) {
   // that pins expect.result on a single-shot plan grades against exactly this.
   const r = await resolveOne(request, tools, ctx, { execute: true });
   if (r.refused) {
-    return { calls: [], refused: true, terminated: true, proof: [], driver: DRIVER, why: r.reason };
+    return {
+      calls: [], refused: true, terminated: true, proof: [], driver: DRIVER, why: r.reason,
+      // the tied-candidate composer's answer: one dispatched read per tied
+      // candidate, riding the refusal rather than an arbitrary pick.
+      ...(r.candidateCalls ? { candidateResults: r.candidateCalls } : {}),
+    };
   }
   const res = await ctx.dispatch(r.selected.name, r.selected.input || {});
   return {

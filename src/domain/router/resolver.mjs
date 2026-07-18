@@ -17,6 +17,7 @@
 import { parseQuery } from "../ask.mjs";
 import { SUPERLATIVE_EXTREMES } from "../ask-vocab.mjs";
 import { buildSkosConceptView } from "../skos-view.mjs";
+import { edgesOfKind } from "../codegraph.mjs";
 import {
   capabilities, capabilityByName, preconditionsOf, effectsOf, PRECOND,
 } from "./registry.mjs";
@@ -273,11 +274,29 @@ async function dispatchEachCandidate(pool, capName, arg, ctx, execute) {
   return results;
 }
 
+/** A tie the raw tier-3 SCORE never flags: a bare basename that binds to a source
+ *  module also names its own test module, because the graph's own `tests` edge
+ *  connects the two directly (not a filename guess — a real edge dispatchTool
+ *  already reads). resolveObject's scoring ranks the source module far ahead on
+ *  string similarity ("b" is an exact stem match; "b.test" is not), so this is
+ *  never `ambiguous:true` on its own, yet "b" genuinely names either reading. Two
+ *  individuals with no such edge are near-miss neighbours, not a genuine tie. */
+function testModuleTie(graph, matchInd, candidateInd) {
+  if (!graph || !matchInd || !candidateInd) return false;
+  return edgesOfKind(graph, "tests").some((e) =>
+    (e.subject === matchInd.id && e.object === candidateInd.id)
+    || (e.subject === candidateInd.id && e.object === matchInd.id));
+}
+
 /** Select a capability for a request and BIND its arguments — the full resolver.
  *  Order: command register -> NL parse -> imperative frame. Delegates entity binding to
  *  ctx.resolve and, unless `execute:false`, grounds it via ctx.dispatch. Returns
  *    { selected:{name,input}, proof, why, resolved, observed? }  — a grounded call
- *    { selected:null, refused:true, reason, candidateResults? }  — an honest refusal
+ *    { selected:null, refused:true, reason, candidateResults?, candidateCalls? } — an
+ *      honest refusal. candidateResults carries the FULL dispatched {candidate,result}
+ *      pair per tied reading; candidateCalls is its {name,input} call-only twin, the
+ *      shape a caller composes into a loopResult's own top-level `candidateResults`
+ *      (the tied-candidate composer's enumerate-or-refuse answer).
  *  Never emits an ungrounded / ambiguous / undeclared call. */
 export async function resolveOne(request, declaredNames, ctx, { execute = true } = {}) {
   const declared = new Set(declaredNames);
@@ -322,10 +341,21 @@ export async function resolveOne(request, declaredNames, ctx, { execute = true }
         ? `"${term}" has no synonym/related facts in the memory graph (honest miss)`
         : `"${term}" does not resolve to any graph entity (honest miss)`);
     }
-    if (r.ambiguous) {
-      const pool = [r.match, ...(r.candidates || [])].slice(0, 4);
+    // A tied read: either resolveObject's own score-tie (r.ambiguous), or a same-tier
+    // candidate the graph's own `tests` edge ties to the match (a source module and
+    // its test module — a grain neither side's raw score alone reveals as tied).
+    // resolveMemoryTerm's SKOS concept view has no code-graph tests-edge notion, so the
+    // sibling tie-check only applies on the code-graph resolution path.
+    const sibling = (!pick.memoryTerm && !r.ambiguous)
+      ? (r.candidates || []).find((c) => testModuleTie(ctx.graph, r.match, c))
+      : null;
+    if (r.ambiguous || sibling) {
+      const pool = r.ambiguous ? [r.match, ...(r.candidates || [])].slice(0, 4) : [r.match, sibling];
       const candidateResults = await dispatchEachCandidate(pool, pick.name, pick.arg, ctx, execute);
-      return REFUSE(`"${term}" is ambiguous (${pool.map((m) => m.label).join(", ")}) — narrow it`, candidateResults ? { candidateResults } : undefined);
+      const extra = candidateResults
+        ? { candidateResults, candidateCalls: pool.map((c) => ({ name: pick.name, input: { [pick.arg]: c.label } })) }
+        : undefined;
+      return REFUSE(`"${term}" is ambiguous (${pool.map((m) => m.label).join(", ")}) — narrow it`, extra);
     }
     resolved = r.match;
     input = { [pick.arg]: r.match.label };
