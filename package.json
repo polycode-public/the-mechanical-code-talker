@@ -143,6 +143,8 @@
     "gen:collisions": "node scripts/generate-real-word-collisions.mjs",
     "gen:prose-corpus": "node scripts/fetch-prose-corpus.mjs",
     "gen:reference-pack": "node scripts/fetch-reference-pack.mjs",
+    "gen:child-corpus": "node scripts/fetch-child-corpus.mjs",
+    "measure:child-corpus": "node scripts/measure-child-corpus.mjs",
     "gen:variants": "node scripts/generate-template-variants.mjs",
     "extract": "node bin/tmct.mjs extract",
     "extract:facts": "node bin/tmct.mjs extract"

@@ -1,0 +1,43 @@
+LICENSE NOTICE — corpus/child/
+==============================
+
+The shard and index files in this directory are a filtered, relation-mapped
+excerpt of ConceptNet 5.7.0, and are licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International License (CC-BY-SA 4.0), NOT under this
+repository's MPL-2.0 — exactly like corpus/conceptnet/slice.jsonl.
+
+  https://creativecommons.org/licenses/by-sa/4.0/
+
+Attribution
+-----------
+
+This work includes data from ConceptNet 5, compiled by the Commonsense
+Computing Initiative and freely available under CC-BY-SA 4.0 from
+https://conceptnet.io. The included data was created by contributors to
+Commonsense Computing projects, contributors to Wikimedia projects, Games with
+a Purpose, Princeton University's WordNet, DBPedia, OpenCyc, and Umbel.
+
+Source and reproduction
+-----------------------
+
+Built by scripts/fetch-child-corpus.mjs from the pinned ConceptNet 5.7.0
+assertions dump recorded in manifest.json (URL, mirror and sha256). The filter
+(child-concept seed match + canonical relations + /r/NotCapableOf + quality
+pass + size budget) is described in that script and is reproducible: same dump
+in, same bytes out.
+
+The child SEED that selects these rows
+(corpus/conceptnet/child-seed.mjs) is a maintainer-owned, hand-authored word
+list under this repository's MPL-2.0. It copies no external word list — see its
+header for the licence decision that ruled out the published age-of-acquisition
+lists. A seed only SELECTS which ConceptNet edges ship; the edges themselves are
+ConceptNet's, so this directory carries ConceptNet's CC-BY-SA 4.0.
+
+Share-alike — READ THIS BEFORE REUSING
+--------------------------------------
+
+CC-BY-SA 4.0's share-alike condition is viral. If you redistribute these files
+(modified or not), you must do so under CC-BY-SA 4.0 with this attribution. The
+build code (scripts/fetch-child-corpus.mjs) and the seed
+(corpus/conceptnet/child-seed.mjs) are tmct code under this repository's
+MPL-2.0; only the data files in this directory carry CC-BY-SA 4.0.

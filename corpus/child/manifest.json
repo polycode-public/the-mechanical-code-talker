@@ -1,0 +1,313 @@
+{
+  "version": 1,
+  "generated": "by scripts/fetch-child-corpus.mjs",
+  "seed": {
+    "file": "corpus/conceptnet/child-seed.mjs",
+    "terms": 702,
+    "aoaTargetYears": 8,
+    "license": "MPL-2.0 (maintainer-owned; copies no external word list)"
+  },
+  "dump": {
+    "url": "https://s3.amazonaws.com/conceptnet/downloads/2019/edges/conceptnet-assertions-5.7.0.csv.gz",
+    "mirror": "https://github.com/commonsense/conceptnet5/wiki/Downloads",
+    "date": "2019-07-03",
+    "version": "5.7.0",
+    "sha256": "accd65fe94038584295574ddc26e1500c1919c8c4532bf771811cafd0948af7e"
+  },
+  "built": "2026-07-18",
+  "pack": "conceptnet",
+  "shardCount": 32,
+  "counts": {
+    "terms": 47267,
+    "facts": 93161,
+    "shards": 32
+  },
+  "budgets": {
+    "facts": {
+      "used": 93161,
+      "max": 120000
+    },
+    "shardsGzBytes": {
+      "used": 1104132,
+      "max": 3145728
+    },
+    "indexGzBytes": {
+      "used": 466600,
+      "max": 716800
+    }
+  },
+  "acceptance": {
+    "totalFacts": 69620,
+    "kindsOfBird": {
+      "count": 1881,
+      "sample": [
+        "abbott's booby",
+        "abyssinian woodpecker",
+        "acadian flycatcher",
+        "accipiter",
+        "acorn woodpecker",
+        "acridotheres",
+        "acrocephalus",
+        "actitis",
+        "adélie penguin",
+        "african black duck",
+        "african cuckoo hawk",
+        "african finfoot",
+        "african fish eagle",
+        "african marsh harrier",
+        "african penguin",
+        "african pygmy goose",
+        "african sacred ibis",
+        "african skimmer",
+        "aix",
+        "akiapola au"
+      ]
+    },
+    "capabilitiesOnBirds": {
+      "count": 71,
+      "sample": [
+        "bird can attempt to fly",
+        "chicken can become food",
+        "bird can build nest",
+        "bird can call with chirps",
+        "bird can chirp",
+        "bird can eat grasshopper",
+        "bird can experience flight",
+        "bird can eye fish",
+        "bird can fall from sky",
+        "bird can fly",
+        "bird can fly high",
+        "bird can head south",
+        "bird can kill fish",
+        "bird can land on beach",
+        "bird can land on branch",
+        "bird can land on tree",
+        "bird can learn to fly",
+        "bird can listen to insect",
+        "bird can person's pet",
+        "bird can pet"
+      ]
+    },
+    "thingsThatCanFly": {
+      "count": 39,
+      "sample": [
+        "animals",
+        "ants",
+        "bat",
+        "bats",
+        "bats and birds",
+        "bee",
+        "beetles",
+        "bird",
+        "butterfly",
+        "doves",
+        "dragon",
+        "dragonfly",
+        "flies",
+        "frisbee",
+        "geese",
+        "gnat",
+        "goose",
+        "helicoptors",
+        "hoatzins",
+        "insects"
+      ]
+    },
+    "thingsThatCannotFly": {
+      "count": 2,
+      "sample": [
+        "bunnies",
+        "pigs"
+      ]
+    },
+    "birdsThatFly": {
+      "count": 3,
+      "sample": [
+        "goose",
+        "kite",
+        "tweety"
+      ]
+    },
+    "birdsThatCannotFly": {
+      "count": 0,
+      "sample": []
+    }
+  },
+  "files": [
+    {
+      "file": "index.json.gz",
+      "bytes": 466600,
+      "sha256": "8c5940d2f888841a89a6d891c034a357d9f568175610d7ba723d82c0b3789375"
+    },
+    {
+      "file": "LICENSE-NOTICE",
+      "bytes": 2042,
+      "sha256": "2b77524ec21f42521702f428eb227b03872d442facaf5436073b411b0ac8ade6"
+    },
+    {
+      "file": "README.md",
+      "bytes": 4728,
+      "sha256": "4bc27cc68ece52930fee4fc18fd65966ebdc1fe9e39d9c5497a579e9a7de7ebb"
+    },
+    {
+      "file": "shards/child-00.jsonl.gz",
+      "bytes": 32103,
+      "sha256": "9ccb587b8bcbaf4cd250620b7455b347ad48632c9a74a58576ad53bea7661cba"
+    },
+    {
+      "file": "shards/child-01.jsonl.gz",
+      "bytes": 33579,
+      "sha256": "72cc98f950493cd74c108275fc4fd2375673d4bb518ef5dc18a792e2e0dc4314"
+    },
+    {
+      "file": "shards/child-02.jsonl.gz",
+      "bytes": 39506,
+      "sha256": "66509505127314f56ba97d91bf8eb16f8041e79372967686fe4bd12f7836fa12"
+    },
+    {
+      "file": "shards/child-03.jsonl.gz",
+      "bytes": 31952,
+      "sha256": "718cf034eea6eedd8dfa28308b88707b783188096740493cfe9dcc2fc099715c"
+    },
+    {
+      "file": "shards/child-04.jsonl.gz",
+      "bytes": 33426,
+      "sha256": "789c98cac46582609bd0f8fe10714992b6142845ceef7595d1344817b3828a22"
+    },
+    {
+      "file": "shards/child-05.jsonl.gz",
+      "bytes": 35162,
+      "sha256": "76145b77126d0ad589de1024036d56e363a205ae1d214407f377328adbb78e38"
+    },
+    {
+      "file": "shards/child-06.jsonl.gz",
+      "bytes": 36407,
+      "sha256": "2eef507004137e8ce92d56e043e8c5e4065c9a03ae00022422ee36fbd3cfcbba"
+    },
+    {
+      "file": "shards/child-07.jsonl.gz",
+      "bytes": 33893,
+      "sha256": "9a889f73e18a800725333df87702642d658a442e5b957dfb40eb7c70127ae5cc"
+    },
+    {
+      "file": "shards/child-08.jsonl.gz",
+      "bytes": 34136,
+      "sha256": "d8bb02bcc35d0303178f296ca47251fe0133227553b806ebda459377fdd57fcd"
+    },
+    {
+      "file": "shards/child-09.jsonl.gz",
+      "bytes": 35965,
+      "sha256": "7d86341fedf002c8838bccd766e425b0a67f502d031fd53d4e07f1c6f12aa19f"
+    },
+    {
+      "file": "shards/child-0a.jsonl.gz",
+      "bytes": 34735,
+      "sha256": "206a813208895488b15f4b57ae142472b23eedc98337c1960bc002247ab1ec19"
+    },
+    {
+      "file": "shards/child-0b.jsonl.gz",
+      "bytes": 32343,
+      "sha256": "13e94bddc1c1dfadb3d15f3cf437f8bc6fdee4aba34e146f855b592dfc3cb29e"
+    },
+    {
+      "file": "shards/child-0c.jsonl.gz",
+      "bytes": 32843,
+      "sha256": "5004d2abe2a52616bad4b7b55989f3d4feea8c6bb156154be700d6d5102fc1a4"
+    },
+    {
+      "file": "shards/child-0d.jsonl.gz",
+      "bytes": 33100,
+      "sha256": "fb16a8d7812e93f5d7b54792ae376f424c03cb67bb38205e9a352fd3761f862e"
+    },
+    {
+      "file": "shards/child-0e.jsonl.gz",
+      "bytes": 37434,
+      "sha256": "34ed35347c1e05d662791f547dc487a1ea106a144c6722105249113ae17144e0"
+    },
+    {
+      "file": "shards/child-0f.jsonl.gz",
+      "bytes": 33042,
+      "sha256": "128fe45227c40a020b017d62ed267bbbc537308903a637bed7e3a730c77167a5"
+    },
+    {
+      "file": "shards/child-10.jsonl.gz",
+      "bytes": 36325,
+      "sha256": "f464aa705b6f805e939d8b755e1b7459dfa1567d227d42fbb45966cca77911b2"
+    },
+    {
+      "file": "shards/child-11.jsonl.gz",
+      "bytes": 37037,
+      "sha256": "9d42260cd01eb000bfd05f3589162e02b473a8e0d67153164f6309a64161af1c"
+    },
+    {
+      "file": "shards/child-12.jsonl.gz",
+      "bytes": 34979,
+      "sha256": "007e234d9ef074bbf2ca01e974b78cf92275c395709d8ceca4f9143610db8a35"
+    },
+    {
+      "file": "shards/child-13.jsonl.gz",
+      "bytes": 35807,
+      "sha256": "61157570ac6a5744c12852f8f918315efc388c099ca931f4ddd51ed7a968fd15"
+    },
+    {
+      "file": "shards/child-14.jsonl.gz",
+      "bytes": 34486,
+      "sha256": "c06be6bfc64cfeb385b2e6654813b3bafc885242ff67157ef36f3cb319603fdf"
+    },
+    {
+      "file": "shards/child-15.jsonl.gz",
+      "bytes": 35086,
+      "sha256": "684f17882e97c9a00008d7601ebce936e9acadea655ae79a84ade493db071da1"
+    },
+    {
+      "file": "shards/child-16.jsonl.gz",
+      "bytes": 36486,
+      "sha256": "a730cd4e15f0dd221a0b1de8a4f7d675dfb51aa330d4f5bd5d31362eb3261e04"
+    },
+    {
+      "file": "shards/child-17.jsonl.gz",
+      "bytes": 35087,
+      "sha256": "f3aede1ef18acc53e96791eb05511ce7cd1e9fadc78901913026350c26ddb40a"
+    },
+    {
+      "file": "shards/child-18.jsonl.gz",
+      "bytes": 33768,
+      "sha256": "ba858cd656f5e27c5a6afaf47d1932eb12a568abe24ab88103eea043051320ac"
+    },
+    {
+      "file": "shards/child-19.jsonl.gz",
+      "bytes": 35857,
+      "sha256": "30ab1d0dfb61decd5d43e7f30e5a7d35e4360d3fa4b8de2e2792d213fe0fa040"
+    },
+    {
+      "file": "shards/child-1a.jsonl.gz",
+      "bytes": 32457,
+      "sha256": "835831e995b3457de2420e6980b4d32dd8dedeefeccfa9ad8437b709d7615260"
+    },
+    {
+      "file": "shards/child-1b.jsonl.gz",
+      "bytes": 33232,
+      "sha256": "cc703f2de00ce184271d75c54c199df6d0de5628386458001c97b1e440b2ff35"
+    },
+    {
+      "file": "shards/child-1c.jsonl.gz",
+      "bytes": 34490,
+      "sha256": "92ed3c10f60d74c5273734c3dd200977be3902c2afb2d53932e41419585ae1fa"
+    },
+    {
+      "file": "shards/child-1d.jsonl.gz",
+      "bytes": 32293,
+      "sha256": "a02fd0b0c3167fd8ce2209338ca90700e48a133c0d7b169d7c5c87bdd85778ee"
+    },
+    {
+      "file": "shards/child-1e.jsonl.gz",
+      "bytes": 32991,
+      "sha256": "bd631352a9abdc46fc4a2d79c0134bbbd235b4dc6cc5a6af598b21aaec1d7e55"
+    },
+    {
+      "file": "shards/child-1f.jsonl.gz",
+      "bytes": 34125,
+      "sha256": "23e47bef6b0c9e7671155b59a117e5c94701ea38665a602af024fbf1f443143d"
+    }
+  ]
+}
