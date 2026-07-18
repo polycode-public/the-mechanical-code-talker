@@ -183,7 +183,7 @@ export function foldWorldState(factRows) {
 // path; nothing is ever mutated in place.
 
 const INVENTORY_RE =
-  /^(?:inventory|inv|what\s+am\s+i\s+carrying|what\s+do\s+i\s+have|what(?:'s|\s+is)\s+in\s+my\s+(?:bag|pockets?|hands?))[?.!\s]*$/i;
+  /^(?:inventory|inv|what\s+am\s+i\s+carrying|what\s+do\s+i\s+have|what\s+do\s+i\s+carry|what(?:'s|\s+is)\s+in\s+my\s+(?:bag|pockets?|hands?))[?.!\s]*$/i;
 
 const factObjects = (rows, subject, predicate) =>
   (rows || []).filter((r) => r.subject === subject && r.predicate === predicate).map((r) => r.object);
@@ -210,6 +210,48 @@ const carriedByPlayer = (state, thing) => {
   const place = state.placements.get(thing);
   return !!place && place.predicate === "mgx:located-in" && place.object === "player";
 };
+
+/** The room's real affordances — every exit, and every visible object's
+ *  applicable verb — read from the EXACT SAME data take/open/talk/examine
+ *  already check (visibleRoomOf, isContainer, isTyped, the placement
+ *  predicate), so this list can never promise an action one of those verbs
+ *  would then refuse. A locked container offers "unlock", never "open" (that
+ *  would only decline); an already-open one offers neither, since there is
+ *  nothing left for either verb to do. Pure. */
+export function roomAffordances(rows, state, here) {
+  const actions = [];
+  for (const direction of state.exits.get(here)?.keys() ?? []) {
+    actions.push(`go ${direction}`);
+  }
+  for (const subject of [...state.placements.keys()].sort()) {
+    if (subject === "player") continue;
+    if (visibleRoomOf(subject, { rows, state }) !== here) continue;
+    const place = state.placements.get(subject);
+    const container = isContainer(rows, subject);
+    if (container && place.predicate === "mgx:stands-locked-in") {
+      actions.push(`unlock ${subject}`);
+      continue;
+    }
+    if (container && place.predicate === "mgx:fixed-in") {
+      if (!state.openness.get(subject)?.open) actions.push(`open ${subject}`);
+      continue;
+    }
+    if (!container && place.predicate === "mgx:fixed-in") {
+      actions.push(`examine ${subject}`);
+      continue;
+    }
+    if (isTyped(rows, subject, "person")) {
+      actions.push(`talk to ${subject}`);
+      continue;
+    }
+    if (place.predicate === "mgx:located-in") {
+      actions.push(`take ${subject}`);
+    }
+  }
+  return actions;
+}
+
+const affordanceSuffix = (actions) => (actions.length ? ` You can: ${actions.join(", ")}.` : "");
 
 /** The effect predicate a family writes (its action-effect row's slot, with
  *  the mgx: prefix rule readers re-attach). Null when the family carries no
@@ -291,6 +333,20 @@ const VIEW_EXCLUDED_PREDICATES = new Set([
 const sentenceCase = (term) => String(term).charAt(0).toUpperCase() + String(term).slice(1);
 const typePhrase = (object) => (/^[aeiou]/.test(object) ? "is an" : "is a");
 
+// The default human persona's always-active background corpus
+// (corpus/tier2/human.jsonl) deliberately overlaps Ashcombe's own room and
+// object names ("garden has a flower"), so the digest's broad search surfaces
+// these alongside the world's own facts. They stay in the prose (they're
+// real, sourced facts) but must read as prose, not as an untranslated triple
+// ("Garden mgx:hasA flower") that looks exactly like a bug report — the same
+// curated wording chat.mjs's own FACT_PREDICATE_PHRASES already uses for
+// these three ConceptNet-sourced predicates.
+const BACKGROUND_FACT_PHRASES = {
+  "mgx:hasA": "has",
+  "mgx:usedFor": "is used for",
+  "mgx:atLocation": "is found in",
+};
+
 /** The digest's fact view: current placements (folded), exits, typing and
  *  every other surviving fact, with phrase predicates and sentence-cased
  *  subjects so the pipeline's sentence splitter sees real sentences. Pure. */
@@ -329,6 +385,7 @@ export function worldDigestRows(rows, state) {
     if (exit) { push(row.subject, `has an exit ${exit[1]} to the`, row.object); continue; }
     if (row.predicate === "rdf:type") { push(row.subject, typePhrase(row.object), row.object); continue; }
     if (row.predicate === "mgx:works-in") { push(row.subject, "works in the", row.object); continue; }
+    if (BACKGROUND_FACT_PHRASES[row.predicate]) { push(row.subject, BACKGROUND_FACT_PHRASES[row.predicate], row.object); continue; }
     push(row.subject, row.predicate, row.object);
   }
   return out;
@@ -365,6 +422,24 @@ const answer = (text, note, { goal, miss = false } = {}) => ({
   text, note, lane: "game-answer", miss, ...(goal ? { goal } : {}),
 });
 
+/** A container's open/locked status, stated plainly, and (only once already
+ *  open) its visible contents — the one thing examine/talk's reused
+ *  worldDigest call never states on its own, since mgx:is-open is a
+ *  VIEW_EXCLUDED_PREDICATE. Never reads mgx:hidden-in facts: an unopened
+ *  container's hidden contents stay exactly as hidden as `open` leaves them. */
+function containerStatusPhrase(object, { state }) {
+  const place = state.placements.get(object);
+  if (place?.predicate === "mgx:stands-locked-in") return `the ${object} is locked.`;
+  if (!state.openness.get(object)?.open) return `the ${object} is closed.`;
+  const contents = [...state.placements]
+    .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === object)
+    .map(([thing]) => thing)
+    .sort();
+  return contents.length
+    ? `the ${object} is open — inside: the ${contents.join(", the ")}.`
+    : `the ${object} is open. It's empty.`;
+}
+
 async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
   const memory = await loadMemory(memoryDir);
   const rows = readFactRows(memory);
@@ -389,10 +464,32 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
 
   if (cmd.verb === "look") {
     const digest = await worldDigest(here, { memoryDir, memory, rows, state, graph });
+    const actions = roomAffordances(rows, state, here);
     return answer(
-      digest ?? `you are in the ${here}. Nothing more about it is written down yet.`,
-      noteFor(`look — an extractive completions digest over the current world facts mentioning "${here}"`),
+      `${digest ?? `you are in the ${here}. Nothing more about it is written down yet.`}${affordanceSuffix(actions)}`,
+      noteFor(`look — an extractive completions digest over the current world facts mentioning "${here}"; appended the room's roomAffordances action list`),
       { goal: `look around the ${here}` },
+    );
+  }
+
+  if (cmd.verb === "examine" || cmd.verb === "talk") {
+    const object = cmd.object;
+    if (visibleRoomOf(object, { rows, state }) !== here) {
+      return answer(
+        `I don't see a ${object} here.`,
+        noteFor(`${cmd.verb} — ${object} isn't visible in the ${here}; declined, hidden things stay hidden`),
+        { miss: true },
+      );
+    }
+    const person = isTyped(rows, object, "person");
+    const digest = await worldDigest(object, { memoryDir, memory, rows, state, graph });
+    const body = digest ?? `nothing more about the ${object} is written down yet.`;
+    const containerNote = !person && isContainer(rows, object) ? ` ${containerStatusPhrase(object, { state })}` : "";
+    const text = person ? `the ${object} doesn't have much to say, but you know: ${body}` : `${body}${containerNote}`;
+    return answer(
+      text,
+      noteFor(`${cmd.verb} — an extractive completions digest over the current world facts mentioning "${object}"`),
+      { goal: cmd.verb === "talk" ? `talk to the ${object}` : `take a closer look at the ${object}` },
     );
   }
 
@@ -415,7 +512,20 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     const npcPass = runNpcPass({ rows, state, k, families, playerRoomAfter });
     await writeWorldTurn(memoryDir, world, k, [...facts, ...npcPass.writes], cache);
     const text2 = npcPass.lines.length ? `${text} ${npcPass.lines.join(" ")}` : text;
-    return answer(text2, noteFor(`${detail}; turn ${k} snapshots written through appendFacts${npcPass.writes.length ? `; NPC pass fired ${npcPass.writes.length} scheduled move(s)` : ""}`), { goal });
+    // Auto-relook: every state-changing command ends in the same shape a
+    // manual "look" produces, read from the FRESH post-write state, so the
+    // player is never left to retype "look" to see what just changed.
+    const freshMemory = await loadMemory(memoryDir);
+    const freshRows = readFactRows(freshMemory);
+    const freshState = foldWorldState(freshRows);
+    const relookDigest = await worldDigest(playerRoomAfter, { memoryDir, memory: freshMemory, rows: freshRows, state: freshState, graph });
+    const actions = roomAffordances(freshRows, freshState, playerRoomAfter);
+    const relook = `you are in the ${playerRoomAfter}. ${relookDigest ?? "Nothing more about it is written down yet."}${affordanceSuffix(actions)}`;
+    return answer(
+      `${text2} ${relook}`,
+      noteFor(`${detail}; turn ${k} snapshots written through appendFacts${npcPass.writes.length ? `; NPC pass fired ${npcPass.writes.length} scheduled move(s)` : ""}; auto-relook appended for the ${playerRoomAfter}`),
+      { goal },
+    );
   };
   const object = cmd.object;
   const place = object ? state.placements.get(object) ?? null : null;
@@ -649,6 +759,21 @@ async function inventoryAnswer({ memoryDir, graph }) {
   );
 }
 
+/** Reconstruct the corrected command's surface form ("go east", "take
+ *  lamp") for the "(reading that as ...)" note — from the parsed command's
+ *  own resolved fields, not the raw input, so it always names what actually
+ *  ran. */
+function renderedImperativeCommand(cmd) {
+  const parts = [cmd.verb];
+  if (cmd.direction) parts.push(cmd.direction);
+  else if (cmd.object) {
+    parts.push(cmd.object);
+    if (cmd.indirectObject) parts.push("to", cmd.indirectObject);
+    if (cmd.instrument) parts.push("with", cmd.instrument);
+  }
+  return parts.join(" ");
+}
+
 // ---- the lane ----------------------------------------------------------------
 
 /**
@@ -711,7 +836,19 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
   }
   if (INVENTORY_RE.test(line)) return inventoryAnswer({ memoryDir, graph });
   const cmd = parseImperative(line, lexicon ?? undefined);
-  if (cmd) return runWorldCommand(cmd, { world: adventure.world, memoryDir, env, graph, cache });
+  if (cmd) {
+    const result = await runWorldCommand(cmd, { world: adventure.world, memoryDir, env, graph, cache });
+    if (!cmd.corrected?.length) return result;
+    // A fuzzy-repaired verb or direction still executes normally, but the
+    // response says what it read the line as, so a genuine miss is never
+    // confused with a silent auto-correct (the same discipline VERB_SYNONYMS
+    // doesn't need, since a recognised synonym is a wording, not a typo).
+    return {
+      ...result,
+      text: `(reading that as "${renderedImperativeCommand(cmd)}") ${result.text}`,
+      note: `${result.note}; corrected ${cmd.corrected.map((c) => `"${c.from}" -> "${c.to}"`).join(", ")} before executing`,
+    };
+  }
   const whereAside = await worldWhereAnswer(line, { memoryDir });
   if (whereAside) return whereAside;
   return null; // a mid-game aside — the ordinary lanes answer, world untouched

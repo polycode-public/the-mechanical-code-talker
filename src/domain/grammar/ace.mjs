@@ -30,6 +30,7 @@ import {
   loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName,
   predicateOf, numberOf, classify,
 } from "./lexicon.mjs";
+import { fuzzyMatchInSet } from "../interpret/fuzzy.mjs";
 
 // "a"/"an" are the only ACE determiners that are grammatically SINGULAR-ONLY —
 // "the" and a bare/no determiner are number-neutral (see resolveNP's
@@ -472,9 +473,64 @@ export function parseAce(sentence, lexicon = loadLexicon()) {
 // other pattern: a structural fit over an undeclared word rides out as
 // `residue` so the caller can name it; a declared word in an unusable shape
 // is a hard null.
+//
+// The leading verb token(s) resolve through three tiers, each a ZERO
+// behaviour change over the one before it for anything that already worked:
+// an exact IMPERATIVE_VERBS match; failing that, VERB_SYNONYMS (a PHRASING a
+// player already means literally — "pick up"/"grab" for "take"), greedy on a
+// 2-token prefix before falling back to 1 token; failing that, a bounded
+// fuzzy TYPO repair (distance <= 1, via the existing interpret/fuzzy.mjs
+// matcher) against the same verb vocabulary. Only the fuzzy tier is a
+// correction of an ERROR rather than a recognised alternate wording, so only
+// it is reported back on the command (`corrected`) for the caller to name in
+// its response — a synonym executes silently, a typo fix does not.
 
-const IMPERATIVE_VERBS = new Set(["go", "take", "drop", "open", "unlock", "close", "give", "look"]);
+const IMPERATIVE_VERBS = new Set(["go", "take", "drop", "open", "unlock", "close", "give", "look", "talk", "examine"]);
 const IMPERATIVE_DIRECTIONS = new Set(["north", "south", "east", "west", "up", "down"]);
+
+const VERB_SYNONYMS = new Map([
+  ["pick up", "take"], ["pick", "take"], ["grab", "take"],
+  ["put down", "drop"], ["set down", "drop"], ["leave", "drop"],
+  ["talk to", "talk"], ["speak to", "talk"], ["speak with", "talk"], ["talk", "talk"], ["speak", "talk"],
+  ["look at", "examine"], ["examine", "examine"], ["inspect", "examine"],
+  ["shut", "close"],
+]);
+
+const VERB_FUZZY_CANDIDATES = [...new Set([...IMPERATIVE_VERBS, ...VERB_SYNONYMS.values()])];
+const IMPERATIVE_FUZZY_BOUND = 1; // this project's existing distance-1 tolerance elsewhere (interpret/fuzzy.mjs)
+
+// A small, hand-checked exemption (same idiom as this file's own
+// NEVER_CANONICALIZE): common English words one edit from a closed verb, that
+// mean something else entirely and would otherwise get silently reinterpreted
+// and EXECUTED as that verb ("wake"/"make" -> "take" would actually take an
+// object; "walk" -> "talk" is the same shape and breaks a real command).
+// Checked against this repo's own WordNet corpus, not guessed.
+const NEVER_FUZZY_VERB = new Set(["walk", "wake", "make"]);
+
+/** Resolve the leading verb token(s) to a canonical, recognised verb: the
+ *  2-token VERB_SYNONYMS prefix FIRST (so "talk to"/"look at" resolve as
+ *  themselves rather than as the bare exact verbs "talk"/"look" they'd
+ *  otherwise short-circuit on, leaving their "to"/"at" stranded in the object
+ *  phrase), then an exact IMPERATIVE_VERBS match, then the 1-token
+ *  VERB_SYNONYMS form, then a bounded fuzzy typo repair against the same
+ *  vocabulary. `consumed` is how many leading tokens the match ate (1, or 2
+ *  for a two-word synonym phrase); `corrected` is non-null only for the
+ *  fuzzy tier. Null when nothing at all recognises the leading token(s). */
+function resolveImperativeVerb(toks) {
+  const first = toks[0].toLowerCase();
+  if (toks.length > 1) {
+    const twoWord = `${first} ${toks[1].toLowerCase()}`;
+    const twoHit = VERB_SYNONYMS.get(twoWord);
+    if (twoHit) return { verb: twoHit, consumed: 2, corrected: null };
+  }
+  if (IMPERATIVE_VERBS.has(first)) return { verb: first, consumed: 1, corrected: null };
+  const oneHit = VERB_SYNONYMS.get(first);
+  if (oneHit) return { verb: oneHit, consumed: 1, corrected: null };
+  if (NEVER_FUZZY_VERB.has(first)) return null;
+  const fuzzyHit = fuzzyMatchInSet(first, VERB_FUZZY_CANDIDATES, IMPERATIVE_FUZZY_BOUND);
+  if (fuzzyHit) return { verb: fuzzyHit, consumed: 1, corrected: { from: first, to: fuzzyHit } };
+  return null;
+}
 
 /** Resolve one imperative object phrase to its bare lexicon term. */
 function imperativeNP(lexicon, tokens) {
@@ -484,28 +540,53 @@ function imperativeNP(lexicon, tokens) {
 }
 
 /**
- * Parse one imperative command against the closed verb set. Returns
- * `{ pattern: "imperative", verb, residue, object?, indirectObject?,
- * instrument?, direction? }`, a residue-carrying miss for a structural fit
- * over undeclared words (`residue` non-empty, no slots), or null when the
- * sentence is not an imperative of this fragment at all.
+ * Parse one imperative command against the closed verb set (plus its
+ * tolerated synonyms and typo repairs). Returns `{ pattern: "imperative",
+ * verb, residue, corrected?, object?, indirectObject?, instrument?,
+ * direction? }`, a residue-carrying miss for a structural fit over
+ * undeclared words (`residue` non-empty, no slots), or null when the
+ * sentence is not an imperative of this fragment at all. `corrected`, when
+ * present, is the list of `{ from, to }` typo repairs the fuzzy tier made —
+ * the caller's cue to say what it read the line as, so a genuine miss is
+ * never confused with a silent auto-correct.
  */
 export function parseImperative(sentence, lexicon = loadLexicon()) {
   const toks = tokenize(sentence);
   if (!toks.length) return null;
-  const verb = toks[0].toLowerCase();
-  if (!IMPERATIVE_VERBS.has(verb)) return null;
-  const rest = toks.slice(1);
+  const resolved = resolveImperativeVerb(toks);
+  if (!resolved) return null;
+  const verb = resolved.verb;
+  const rest = toks.slice(resolved.consumed);
   const lower = rest.map((t) => t.toLowerCase());
-  const command = (fields) => ({ pattern: "imperative", verb, residue: [], ...fields });
-  const miss = (unknown) => (unknown.length ? { pattern: "imperative", verb, residue: unknown } : null);
+  const corrected = resolved.corrected ? [resolved.corrected] : [];
+  const command = (fields) => ({
+    pattern: "imperative", verb, residue: [],
+    ...(corrected.length ? { corrected } : {}),
+    ...fields,
+  });
+  const miss = (unknown) => (unknown.length
+    ? { pattern: "imperative", verb, residue: unknown, ...(corrected.length ? { corrected } : {}) }
+    : null);
 
   if (verb === "look") {
     if (!rest.length || (rest.length === 1 && lower[0] === "around")) return command({});
     return null;
   }
+  if (verb === "examine" || verb === "talk") {
+    if (!rest.length) return null;
+    const object = imperativeNP(lexicon, rest);
+    if (object.term == null) return miss(object.unknown);
+    return command({ object: object.term });
+  }
   if (verb === "go") {
-    if (rest.length === 1 && IMPERATIVE_DIRECTIONS.has(lower[0])) return command({ direction: lower[0] });
+    if (rest.length === 1) {
+      if (IMPERATIVE_DIRECTIONS.has(lower[0])) return command({ direction: lower[0] });
+      const fuzzyDir = fuzzyMatchInSet(lower[0], [...IMPERATIVE_DIRECTIONS], IMPERATIVE_FUZZY_BOUND);
+      if (fuzzyDir) {
+        corrected.push({ from: lower[0], to: fuzzyDir });
+        return command({ direction: fuzzyDir });
+      }
+    }
     return null;
   }
   if (verb === "give") {
