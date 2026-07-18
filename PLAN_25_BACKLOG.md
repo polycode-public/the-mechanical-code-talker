@@ -819,12 +819,15 @@ and pass on the current tree (where the three emitted props are now declared in 
 
 ## 13. Build the SKOS consumer surface (§7.6)
 
-**Status: module + tool DELIVERED; the chat lane rides the chat track.** `buildSkosConceptView`
-now lives in `src/domain/skos-view.mjs` (with a `relatedForTerm` neighbourhood helper) and the 9
-proof assertions import it; `tmct_related` is defined, registered and served by `dispatchTool`,
-with positive and honest-miss tests in `test/tools/tmct-related.test.mjs`; `mgx:relatedTo` now
-cites `skos:related` in the ontology, pinned. The `what is related to X` chat lane and its corpus
-rows land with the chat.mjs work.
+**Status: DELIVERED, all three tiers.** `buildSkosConceptView` lives in `src/domain/skos-view.mjs`
+(with a `relatedForTerm` neighbourhood helper) and the 9 proof assertions import it; `tmct_related`
+is defined, registered and served by `dispatchTool`, with positive and honest-miss tests in
+`test/tools/tmct-related.test.mjs`; `mgx:relatedTo` cites `skos:related` in the ontology, pinned.
+The chat lane is live in `src/services/chat.mjs` (`skosRelatedAnswer`, routed ahead of the generic
+parse): `another word for X` / `synonyms of X` / `what is related to X` answer the synonym group +
+related concepts, and an unknown or relationless term misses honestly by name. Pinned by
+`grammar.jsonl` (`grammar.skos.*` — the load-bearing never-a-guessed-neighbour negatives) and
+`templates.jsonl` (`template.skos.phrasings` — the phrasings answer identically).
 
 `buildSkosConceptView` mints one `skos:Concept` per normalised corpus term, folds `mgx:synonym` to
 `skos:altLabel`, and reads `mgx:relatedTo`/`mgx:similarTo` as `skos:related`. It is proven and pinned

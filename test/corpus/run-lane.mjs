@@ -143,6 +143,13 @@ export function validateRow(row, predicateNames = Object.keys(predicates)) {
         || !Object.values(s.env).every((v) => typeof v === "string"))) {
         flag("setup.env: must be an object of string values");
       }
+      if (s.facts !== undefined) {
+        if (!Array.isArray(s.facts) || !s.facts.every((f) => f && typeof f === "object"
+          && isNonEmptyString(f.subject) && isNonEmptyString(f.predicate) && isNonEmptyString(f.object))) {
+          flag("setup.facts: must be an array of {subject, predicate, object[, provenance]} objects");
+        }
+        if (s.fixture !== undefined) flag("setup.facts: not usable with a fixture — an ephemeral fixture session gets a fresh memory dir the preload cannot reach");
+      }
     }
   }
   return problems;
@@ -197,6 +204,13 @@ export async function runChatRow(row, preds = predicates) {
       const configPath = path.join(scratchDir, "tmct.toml");
       await writeFile(configPath, toml);
       sessionOpts.configPath = configPath;
+    }
+    // Pre-write memory facts the chat surface has no teach phrasing for
+    // (corpus-import predicates like mgx:relatedTo) straight into the scratch
+    // repo's store, before the session opens over it.
+    if (setup.facts?.length) {
+      const { appendFacts } = await import("../../src/adapters/memory/core.mjs");
+      await appendFacts(sessionOpts.repoPath, setup.facts);
     }
     const teach = setup.teach ?? [];
     const turns = await driveSessionTurns(sessionOpts, [...teach, ...row.turns]);

@@ -49,6 +49,7 @@ import { pickPhrase } from "../domain/answer-variants.mjs";
 import { REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, referenceProvenanceTag } from "../domain/reference-pack.mjs";
 import { getReferencePackProvider } from "../adapters/corpus/reference-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
+import { relatedForTerm } from "../domain/skos-view.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
 // adapter (the browser bundle's ask-nlp stub carries no factory, so this is a
@@ -11418,6 +11419,38 @@ function morePage(query, { last, focus }) {
   return turn;
 }
 
+// ---- the SKOS view: synonym/related-word questions over the store ----
+// "another word for X" / "synonyms of X" / "what is related to X" read the
+// store's mgx:synonym / mgx:relatedTo / mgx:similarTo facts through
+// buildSkosConceptView's minted concepts (relatedForTerm). Routed ahead of
+// the generic parse, which reads these phrasings as something else entirely.
+// A term that mints no concept — unknown, or with no synonym/related facts —
+// misses honestly, naming the term, never a guessed neighbour.
+const SKOS_SYNONYM_RE = /^(?:another\s+word\s+for|other\s+words\s+for|synonyms?\s+(?:of|for)|what\s+is\s+a\s+synonym\s+(?:of|for))\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
+const SKOS_RELATED_RE = /^(?:what\s+is\s+related\s+to|what\s+relates\s+to|what\s+words\s+are\s+related\s+to)\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
+
+/** The SKOS-view answer for a synonym/related question, or null when the
+ *  line is not one. A matched line always answers — a hit lists the group's
+ *  other labels and the related concepts; anything else is the honest miss. */
+async function skosRelatedAnswer(memoryDir, query, cache) {
+  if (!memoryDir) return null;
+  const q = expandContractions(String(query).trim());
+  const syn = q.match(SKOS_SYNONYM_RE);
+  const rel = syn ? null : q.match(SKOS_RELATED_RE);
+  if (!syn && !rel) return null;
+  const term = (syn ?? rel)[1].trim();
+  let hood = null;
+  try { hood = relatedForTerm(await factRows(memoryDir, cache), term); } catch { hood = null; }
+  const parts = [];
+  if (hood?.synonyms?.length) parts.push(`another word for ${term}: ${joinList(hood.synonyms)}`);
+  const relatedLabels = (hood?.related ?? []).map((c) => c.prefLabel);
+  if (relatedLabels.length) parts.push(`related: ${joinList(relatedLabels)}`);
+  if (!parts.length) {
+    return { term, miss: true, text: `I don't know any synonyms or related words for "${term}" yet.` };
+  }
+  return { term, miss: false, text: `${parts.join("; ")} (source: remembered synonym/related facts, read as SKOS)` };
+}
+
 // ---- guess-the-number: a closed-loop game over hidden state ----
 // Two modes on one mechanism. In GUESSER mode the human holds a secret and
 // tmct searches: a belief interval {lo, hi} narrowed by bisection, one
@@ -12048,6 +12081,23 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       const taxonomyTurn = plainTurn(workingLine, taxonomy.text, { via: taxonomy.via, miss: taxonomy.miss, focus });
       if (!taxonomy.miss) taxonomyTurn.lane = "teach";
       return withLast(taxonomyTurn, "teach/remember a new fact");
+    }
+  }
+  // Synonym/related-word questions read the store through the SKOS view.
+  // Routed before the ask engine: the generic parse reads "another word for
+  // X" as a bare object search and "what is related to X" through
+  // BARE_WHATIS_RE, both wrong lanes for this question.
+  if (memoryDir) {
+    const skos = await skosRelatedAnswer(memoryDir, workingLine, factRowsCache);
+    if (skos) {
+      const goal = `surface the remembered synonym/related-word neighbourhood of "${skos.term}"`;
+      note(trace, `goal: ${goal}`);
+      note(trace, `lane: SKOS VIEW — a synonym/related question ${skos.miss ? "matched but the store holds no such facts (honest miss)" : "answered from the store's relation facts"}`);
+      if (!skos.miss) note(trace, "source: .tmct/memory Facts (mgx:synonym/mgx:relatedTo/mgx:similarTo, read as skos:altLabel/skos:related)");
+      const skosTurn = plainTurn(workingLine, skos.text, { via: skos.miss ? "miss" : "fact", miss: skos.miss, focus });
+      if (!skos.miss) skosTurn.goal = goal;
+      skosTurn.lane = skos.miss ? "honest-miss" : "ask-set";
+      return withLast(skosTurn, goal);
     }
   }
   // MEMORY-STORE counts first ("how many facts / utterances do you know") — the
