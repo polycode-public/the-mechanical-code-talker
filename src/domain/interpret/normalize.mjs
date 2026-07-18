@@ -8,7 +8,7 @@
 import {
   CONTRACTIONS, MISSPELLINGS, WRONG_WORDS, G_DROP, FILLER_WORDS,
   NEGATION_FRAMES, COMMIT_CONTENT_FRAMES, VERB_TO_KIND, ENTITY_TO_TYPE,
-  TRAILING_SCOPE_FILLER, TRAILING_TEMPORAL_ADVERBS,
+  TRAILING_SCOPE_FILLER, TRAILING_TEMPORAL_ADVERBS, stripTrailingDiscourseTag,
 } from "../ask-vocab.mjs";
 
 export function escapeRegex(s) {
@@ -390,6 +390,14 @@ export function normalizeQuery(text) {
   q = applySubordinationFrames(q);
   q = applyConditionalFrames(q);
   q = stripFillerWords(q);
+  // A trailing bare discourse tag ("which modules import a.mjs THEN") is
+  // conversational glue, not part of the object term — the same curated call
+  // ask-vocab's stripTrailingDiscourseTag already makes for the meta-whatis
+  // object. Stripped here, in the shared pre-pass and AFTER the filler strip
+  // (the noise wrappers that leave the tag behind sit at the other end), so
+  // both parse strategies see one string and the residue guard never has to
+  // refuse over a word that carried no content.
+  q = stripTrailingDiscourseTag(q);
   // emphatic trailing punctuation (item 10): a run of terminal "?" collapses to
   // one — the anchored templates consume exactly one optional trailing "?", so
   // "…walk.mjs??" otherwise leaks a stray "?" into the captured object term (the

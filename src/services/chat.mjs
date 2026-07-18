@@ -10526,9 +10526,12 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // actually stores it, the ORIGINAL ask-engine answer is restored unchanged
   // (see "COLLISION RESTORE" below).
   const trimmedQuery = String(query).trim();
-  const relaxedTeachCollision = !!(envelope?.relaxed?.dropped?.length) && !askMiss && memoryDir
+  // Boolean() and not a bare && chain: with no memoryDir the chain would
+  // short-circuit to null, and `miss` below (askMiss || THIS) would record a
+  // null miss flag on every relaxation-rescued turn of a memory-less session.
+  const relaxedTeachCollision = Boolean(!!(envelope?.relaxed?.dropped?.length) && !askMiss && memoryDir
     && !QUESTION_LEAD_RE.test(trimmedQuery) && !/\?\s*$/.test(trimmedQuery)
-    && DECLARATIVE_KIND_OF_RE.test(trimmedQuery);
+    && DECLARATIVE_KIND_OF_RE.test(trimmedQuery));
   const preCollisionAnswer = relaxedTeachCollision ? answer : null;
   const miss = askMiss || relaxedTeachCollision;
   // Answer provenance (W1): "composed" is the ask engine's productive band; the
