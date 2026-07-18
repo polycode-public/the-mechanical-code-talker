@@ -70,6 +70,8 @@ public/demo-graph.json
 public/demo-memory.json
 public/ledger.html
 public/plan.html
+public/chat-browser.bundle.js
+public/chat-seed.json
 public/reference-pack/
 
 # Chromium for the browser e2e tier. CI puts it here (PLAYWRIGHT_BROWSERS_PATH)

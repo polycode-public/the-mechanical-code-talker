@@ -16,7 +16,7 @@ export const repoRoot = path.resolve(fileURLToPath(import.meta.url), "..", "..",
 // The git-tracked half of public/. The build generates the rest (engine/,
 // demo-graph.json, demo-memory.json, ledger.html, plan.html) into the same
 // directory.
-const TRACKED_SITE_FILES = ["index.html", "demo-ui.mjs", "demo-templates.mjs", "tmct-browser.mjs", "engine-shims"];
+const TRACKED_SITE_FILES = ["index.html", "demo-ui.mjs", "demo-templates.mjs", "tmct-browser.mjs", "engine-shims", "chat-ui.mjs", "chat-demos.mjs"];
 
 /**
  * Build the site into a fresh temp directory and return its path.
