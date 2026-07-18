@@ -245,12 +245,26 @@ throughout.
 *(Mirrors `PLAN_GUESS_NUMBER.md`'s own phase-writing convention: numbered,
 independently testable, `npm test` green throughout.)*
 
-**Phase 1 — World corpus + missing lexicon.** Add `butler`/`housekeeper`/`gardener`/`lamp`/`portrait`/
-`desk` to `lexicon-core.json`; add Ashcombe Hall's rooms/exits/objects/roles as `corpus/tier2/
-adventure.jsonl` (new tier-2 bundle, inactive by default, activated the same way `human-medium`/
-`human-large` already are — `PLAN_SEED.md`'s own precedent). Exit criterion: `tmct init --with-persona
-adventure` (or equivalent) seeds a graph where every room/object/role from the worked example is a
-real individual, confirmed by direct query, zero grammar/scheduler code touched yet.
+**Phase 1 — World corpus + missing lexicon.** DONE (2.7.0 wave), with one operator revision: the
+world ships as a lazy WORLDS PACK through the learn-on-miss pack mechanism, not the tier-2 bundle
+this paragraph originally proposed. `corpus/worlds/` mirrors `corpus/reference/`'s shape at world
+grain (`manifest.json`, `index.json.gz` mapping world name → shard, one gzipped JSONL shard per
+world), built by `scripts/build-worlds-pack.mjs` (`npm run gen:worlds-pack`) from the hand-authored
+source `corpus/worlds/src/ashcombe-hall.jsonl` — original content, budget-asserted,
+byte-deterministic, MPL-2.0 (`corpus/LICENSES.json`). The loader + provider seam
+(`src/adapters/corpus/worlds-pack.mjs`, pure half in `src/domain/worlds-pack.mjs`) mirrors
+`reference-pack.mjs` exactly: `registerWorldsPackProvider`/`getWorldsPackProvider`, lazy fs
+default, `TMCT_WORLDS_PACK_DIR` override. Loading is an explicit opening turn ("play ashcombe
+hall" / "start the adventure" — a closed recognizer in `src/services/adventure.mjs`, wired ahead of
+assertTurn like the guess-number opener): the world's fact rows append into the SESSION's memory
+store under `world:ashcombe-hall` provenance, its action families instate as pre-built Rule rows,
+and the opening room is announced. An absent pack declines naming the pack. The world's action
+families ship as pre-built Rule rows rather than replayed teach sentences: Ashcombe's
+preconditions (exit adjacency, lock state, hidden contents, the unlock instrument) have no live
+teach-frame shape yet, so sentence replay could only have carried the signatures — the rows carry
+the same four action kinds the frames store, nothing more. The six nouns landed in
+`lexicon-core.json`. Pinned by `test/adapters/worlds-pack.test.mjs` (loader over
+`test/fixtures/worlds-pack/`) and the `games/adventure` corpus lane's opener rows.
 
 **Phase 2 — The imperative grammar pattern.** The new ACE pattern (Gap 1), unit-tested purely
 (parse → structured command; no chat wiring, no player-state writes yet). Action storage already

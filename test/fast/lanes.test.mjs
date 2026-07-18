@@ -18,6 +18,7 @@ const LANES = [
   "planning",
   "reference",
   "templates",
+  "games/adventure",
   "games/compositional",
   "games/drilldowns",
   "games/guess-number",

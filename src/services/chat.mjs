@@ -50,6 +50,7 @@ import { REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, ref
 import { getReferencePackProvider } from "../adapters/corpus/reference-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
+import { adventureTurn } from "./adventure.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
 // adapter (the browser bundle's ask-nlp stub carries no factory, so this is a
@@ -12162,6 +12163,9 @@ function guessNumberTurn(line, { planHolder, env }) {
     return null;
   }
   if (!opening) return null;
+  if (state?.adventure) {
+    return { text: 'we\'re mid-adventure — say "stop playing" to end it before a number game.', lane: "game-inform", note: "GAME — an opening arrived mid-adventure; the slot holds one thing at a time" };
+  }
   const planActive = state && !state.done
     && ((Array.isArray(state.goals) && state.goals.length) || (Array.isArray(state.actions) && state.actions.length));
   if (planActive) {
@@ -12510,6 +12514,28 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       if (gameTurn.goal) result.goal = gameTurn.goal;
       result.lane = gameTurn.lane;
       const rec = withLast(result, gameTurn.goal ?? "play the guessing game");
+      rec.planState = planHolder.state;
+      return rec;
+    }
+  }
+
+  // THE ADVENTURE — world-loading openers ("play ashcombe hall", "start the
+  // adventure"), the stop command, and (once a world is live) the game's own
+  // turns. Ordered AFTER the guess-number lane so that lane keeps every
+  // guessing-game opener it already owns, and before the conversational
+  // layer for the same reason the game lane is: an opening line would
+  // otherwise read as a declarative or an orientation ask.
+  {
+    const advTurn = await adventureTurn(workingLine, {
+      planHolder, memoryDir, sessionId, env, lexicon, graph, cache: factRowsCache, isPlanFrameLine,
+    });
+    if (advTurn) {
+      note(trace, `lane: ${advTurn.note}`);
+      if (advTurn.goal) note(trace, `goal: ${advTurn.goal}`);
+      const result = plainTurn(workingLine, advTurn.text, { via: "game", focus });
+      if (advTurn.goal) result.goal = advTurn.goal;
+      result.lane = advTurn.lane;
+      const rec = withLast(result, advTurn.goal ?? "play the adventure");
       rec.planState = planHolder.state;
       return rec;
     }

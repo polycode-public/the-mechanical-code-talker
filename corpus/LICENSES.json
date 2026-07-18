@@ -129,6 +129,13 @@
       "notice": "corpus/child/LICENSE-NOTICE"
     },
     {
+      "path": "corpus/worlds/",
+      "upstream": "first-party (hand-authored game worlds for the adventure lane; original content, no text copied from any book, game or other IP)",
+      "license": "MPL-2.0",
+      "shareAlike": false,
+      "notice": "LICENSE"
+    },
+    {
       "path": "corpus/generated/ace-surface-variants.jsonl",
       "upstream": "mechanically generated from Open English WordNet / SemCor example sentences (CC-BY-4.0) and corpus/prose/, which includes CC-BY-SA-4.0 Wikipedia text",
       "license": "CC-BY-SA-4.0",

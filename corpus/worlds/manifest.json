@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "generated": "by scripts/build-worlds-pack.mjs from corpus/worlds/src/",
+  "counts": {
+    "worlds": 1,
+    "facts": 51,
+    "rules": 12
+  },
+  "budgets": {
+    "sourceBytesPerWorld": 131072,
+    "shardGzBytes": 32768,
+    "indexGzBytes": 4096
+  },
+  "sources": [
+    {
+      "file": "src/ashcombe-hall.jsonl",
+      "bytes": 7481,
+      "sha256": "776634e8f7db704f2895ad1557cdcb79c28e14fe8fd4202ef1d0db9b4358ca91"
+    }
+  ],
+  "files": [
+    {
+      "file": "index.json.gz",
+      "bytes": 46,
+      "sha256": "5c380eaf9cc68c0420edd5a8df9803208070cceb3e717c4e87288d612f6a51a0"
+    },
+    {
+      "file": "shards/ashcombe-hall.jsonl.gz",
+      "bytes": 864,
+      "sha256": "468ba9ae859fc63094f5030648f07885e1e0785fb4e18e309cc4e6729c878ebf"
+    }
+  ]
+}
