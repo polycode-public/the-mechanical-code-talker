@@ -285,7 +285,8 @@ test("the Source split maps every stored sourceType to one PROV top class, in th
   const expected = {
     operator: "tmct:AgentSource", teach: "tmct:AgentSource", provider: "tmct:AgentSource",
     corpus: "tmct:DocumentSource", corpusWeak: "tmct:DocumentSource", web: "tmct:DocumentSource",
-    extracted: "tmct:DocumentSource", entailed: "tmct:ActivitySource",
+    extracted: "tmct:DocumentSource", reference: "tmct:DocumentSource",
+    entailed: "tmct:ActivitySource",
   };
   for (const sourceType of Object.keys(SOURCE_PRIOR)) {
     const got = provSourceClassFor(sourceType);

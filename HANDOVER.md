@@ -41,9 +41,12 @@ same commit as the work it describes:
   guards active; the on-miss chat hook rides T1 wave 2)
 - T4 home-page browser chat surface + seed payload + demo rail (syllogist demo first;
   guess-number and learn-on-miss demos follow their features) — STARTED
-- T5 `PLAN_25_BACKLOG` §10 — restore the resolver's `ab-c2-what-to-test` plan — STARTED
+- T5 `PLAN_25_BACKLOG` §10 — INVESTIGATED, evidence committed to §10: no resolver plan ever
+  existed to restore (the 36% measured a deliberately relaxed one-call bar). The recommended
+  per-arm `floorExpect` declared-refusal seam AWAITS THE OPERATOR; nothing changed until then.
 - T6 `PLAN_25_BACKLOG` §11 gloss, §12 ontology store-diff test, §13 SKOS surface +
-  `tmct_related`; `PLAN_DIALOGUE_ACTS` closed vocabulary — STARTED
+  `tmct_related`; `PLAN_DIALOGUE_ACTS` closed vocabulary — BUILT + VERIFIED (the §13 chat lane
+  and the dialogue-act envelope wiring ride T1 wave 2)
 - 3×3 behavior matrix (what-is-a-dog / guess-number / learn-on-miss × TUI-file / web-memory /
   lib-sqlite) — QUEUED (lands with its features)
 - `PLAN_25_BACKLOG` §8.1 CHATBENCH expectation revision at the arc boundary; then the endgame:
