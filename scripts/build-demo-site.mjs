@@ -86,6 +86,16 @@ const ledgerPath = join(SITE, "ledger.html");
 await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle }));
 console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
 
+// The home page's embedded chat: the full-engine browser bundle plus its
+// starter-memory seed, both generated (never committed) so the page always
+// serves what src/ builds today.
+const { main: buildChatBundle } = await import(join(here, "build-chat-bundle.mjs"));
+const { outPath: chatBundlePath, size: chatBundleBytes } = await buildChatBundle(SITE);
+console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)`);
+const { main: buildChatSeed } = await import(join(here, "build-chat-seed.mjs"));
+const seed = await buildChatSeed(join(SITE, "chat-seed.json"));
+console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).toFixed(0)} KB)`);
+
 // The plan render: solve the hanoi-3 game through the real planner and keep the
 // animated replay. This shells out to the binary a reader would run, so the page
 // shows the artefact they get rather than one built a private way.
