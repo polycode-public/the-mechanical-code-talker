@@ -25,21 +25,29 @@ download, not reachable from data in hand).
 
 ## Open items
 
-The 2.7.0 wave is delivered: the adventure (Ashcombe Hall as a lazy worlds pack, imperative
-grammar, NPC scheduler, the worked example passing) and the child triples pack (93k facts wired
-into the clean-miss cascade ahead of the reference article), plus the 16 re-baselined pool
-regressions fixed and flipped back. `archive/` holds the delivered plan docs. What remains:
+The 2.7.0 wave is fully delivered and integrated: the adventure (Ashcombe Hall as a lazy worlds
+pack, imperative grammar, NPC scheduler, the worked example passing), the child triples pack
+(93k facts wired into the clean-miss cascade ahead of the reference article, triples first and
+prose second), the 16 re-baselined pool regressions fixed with 11 sibling rows flipping green
+alongside (pool 964 passing / 111 frontier), and the small remainders (world trust tier, locative
+asides through the world fold, the plural-object fold, the impact summary). `archive/` holds the
+delivered plan docs; each records what its delivery deliberately did not include. What remains:
 
-- **The plural-object fold** in the quantified-has teach ("all dogs have tails" stores the object
-  as typed "tails") — in flight, last item of the integration wave.
 - `PLAN_TOOL_LADDER_UPLIFT.md` owns the TOOL-7 observe-and-replan branch and the TOOL-8
   tied-candidate composer (design work; the bench cases exist and fail honestly).
 - The resolver has no NL path into the memory graph (`tmct_related` is registered but tagged
   `NOT_NL_REACHABLE`) — the routing horizon its agentbench case note records.
-- Adventure horizons, named in `archive/PLAN_ADVENTURE.md`: open/unlock/close ride world facts as
-  signature-only families until a rule shape exists for datatype effects and edge-existence
-  preconditions; whether one agent-loop abstraction should unify the three planning validations
-  stays the Phase-5 question.
+- Adventure horizons (`archive/PLAN_ADVENTURE.md`): open/unlock/close ship signature-only
+  families — the shipped precond/effect rule shapes can't express exit-adjacency, lock state,
+  hidden contents, instrument preconditions or boolean effects, so those ride world facts checked
+  generically until a rule shape is designed for datatype effects and edge-existence
+  preconditions; a named "play X" opener with the pack absent falls through to ordinary lanes
+  (only the generic opener carries the missing-pack decline); the Phase-5 question (one agent-loop
+  abstraction over the three planning validations) stays open by that doc's own scoping.
+- Child-corpus scope (`archive/PLAN_CHILD_CORPUS.md`): only `/r/NotCapableOf` joined the closed
+  relation set — the other `/r/Not*` relations still hit the loader's hard error, a deliberate
+  one-at-a-time decision the next negativity slice revisits; the specific exception (the penguin)
+  still comes from a taught fact by design.
 - `core.mjs`'s `sourceIdFor` has no `corpusWeak` case, so corpusWeak-tagged facts score 0 —
   adding it would make that tier usable for a future noisier pack slice.
 
