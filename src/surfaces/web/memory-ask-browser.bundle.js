@@ -21709,7 +21709,7 @@ ${codeblock}`, options);
   });
 
   // src/domain/grammar/ace.mjs
-  var PATTERN_SUB_CLASS_OF, PATTERN_TYPE_ASSERTION, PATTERN_RELATION, PATTERN_SOME_VALUES_FROM, PATTERN_CARDINALITY, PATTERN_DISJOINT_WITH, PATTERN_POSSESSIVE, PATTERN_ADJECTIVE, PATTERN_CAPABILITY, PATTERNS, IMPERATIVE_VERBS, VERB_SYNONYMS, VERB_FUZZY_CANDIDATES;
+  var PATTERN_SUB_CLASS_OF, PATTERN_TYPE_ASSERTION, PATTERN_RELATION, PATTERN_SOME_VALUES_FROM, PATTERN_CARDINALITY, PATTERN_DISJOINT_WITH, PATTERN_POSSESSIVE, PATTERN_ADJECTIVE, PATTERN_CAPABILITY, PATTERNS, IMPERATIVE_VERBS, VERB_SYNONYMS, VERB_SYNONYM_MAX_PREFIX, VERB_FUZZY_CANDIDATES;
   var init_ace2 = __esm({
     "src/domain/grammar/ace.mjs"() {
       init_lexicon();
@@ -21747,11 +21747,17 @@ ${codeblock}`, options);
         ["speak with", "talk"],
         ["talk", "talk"],
         ["speak", "talk"],
+        ["chat with", "talk"],
+        ["converse with", "talk"],
         ["look at", "examine"],
         ["examine", "examine"],
         ["inspect", "examine"],
+        ["have a look at", "examine"],
+        ["take a look at", "examine"],
+        ["check out", "examine"],
         ["shut", "close"]
       ]);
+      VERB_SYNONYM_MAX_PREFIX = Math.max(...[...VERB_SYNONYMS.keys()].map((k) => k.split(" ").length));
       VERB_FUZZY_CANDIDATES = [.../* @__PURE__ */ new Set([...IMPERATIVE_VERBS, ...VERB_SYNONYMS.values()])];
     }
   });

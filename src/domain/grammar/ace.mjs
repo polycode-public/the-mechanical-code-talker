@@ -492,9 +492,15 @@ const VERB_SYNONYMS = new Map([
   ["pick up", "take"], ["pick", "take"], ["grab", "take"],
   ["put down", "drop"], ["set down", "drop"], ["leave", "drop"],
   ["talk to", "talk"], ["speak to", "talk"], ["speak with", "talk"], ["talk", "talk"], ["speak", "talk"],
+  ["chat with", "talk"], ["converse with", "talk"],
   ["look at", "examine"], ["examine", "examine"], ["inspect", "examine"],
+  ["have a look at", "examine"], ["take a look at", "examine"], ["check out", "examine"],
   ["shut", "close"],
 ]);
+// The longest entry's token count — resolveImperativeVerb tries prefixes
+// longest-first down to 2, so a multi-word idiom ("have a look at") is
+// consumed whole before any shorter prefix inside it gets a chance to match.
+const VERB_SYNONYM_MAX_PREFIX = Math.max(...[...VERB_SYNONYMS.keys()].map((k) => k.split(" ").length));
 
 const VERB_FUZZY_CANDIDATES = [...new Set([...IMPERATIVE_VERBS, ...VERB_SYNONYMS.values()])];
 const IMPERATIVE_FUZZY_BOUND = 1; // this project's existing distance-1 tolerance elsewhere (interpret/fuzzy.mjs)
@@ -518,10 +524,10 @@ const NEVER_FUZZY_VERB = new Set(["walk", "wake", "make"]);
  *  fuzzy tier. Null when nothing at all recognises the leading token(s). */
 function resolveImperativeVerb(toks) {
   const first = toks[0].toLowerCase();
-  if (toks.length > 1) {
-    const twoWord = `${first} ${toks[1].toLowerCase()}`;
-    const twoHit = VERB_SYNONYMS.get(twoWord);
-    if (twoHit) return { verb: twoHit, consumed: 2, corrected: null };
+  const lower = toks.map((t) => t.toLowerCase());
+  for (let n = Math.min(VERB_SYNONYM_MAX_PREFIX, toks.length); n >= 2; n -= 1) {
+    const hit = VERB_SYNONYMS.get(lower.slice(0, n).join(" "));
+    if (hit) return { verb: hit, consumed: n, corrected: null };
   }
   if (IMPERATIVE_VERBS.has(first)) return { verb: first, consumed: 1, corrected: null };
   const oneHit = VERB_SYNONYMS.get(first);

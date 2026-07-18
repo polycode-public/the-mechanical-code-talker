@@ -81,6 +81,20 @@ test("VERB_SYNONYMS normalizes an alternate phrasing onto its canonical verb, si
   assert.equal(parse("pick up the lamp").corrected, undefined, "a recognised synonym is not reported as a correction");
 });
 
+test("VERB_SYNONYMS reaches a 3-4-token idiom, not just a 2-token prefix", () => {
+  // playtests/PLAYTEST_LOG_004.md: these previously fell through the imperative
+  // parser entirely (returning null) and got picked up by the ordinary ask
+  // pipeline's keyword matching instead — a confident wrong code-graph answer,
+  // not an honest miss.
+  assert.deepEqual(parse("chat with the butler"), { pattern: "imperative", verb: "talk", object: "butler", residue: [] });
+  assert.deepEqual(parse("converse with the butler"), { pattern: "imperative", verb: "talk", object: "butler", residue: [] });
+  assert.deepEqual(parse("have a look at the desk"), { pattern: "imperative", verb: "examine", object: "desk", residue: [] });
+  assert.deepEqual(parse("take a look at the desk"), { pattern: "imperative", verb: "examine", object: "desk", residue: [] });
+  assert.deepEqual(parse("check out the desk"), { pattern: "imperative", verb: "examine", object: "desk", residue: [] });
+  // the longest match wins: "look at" alone must still resolve as it always did.
+  assert.deepEqual(parse("look at the desk"), { pattern: "imperative", verb: "examine", object: "desk", residue: [] });
+});
+
 test("a bounded fuzzy pre-pass repairs a typo'd verb or direction and names the repair on the command", () => {
   assert.deepEqual(parse("got south"), {
     pattern: "imperative", verb: "go", direction: "south", residue: [], corrected: [{ from: "got", to: "go" }],
