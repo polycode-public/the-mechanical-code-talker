@@ -225,7 +225,7 @@ function parseComposite(text, nlp) {
     || parseQualifierCheck(w, lc)
     || parseUniversal(w, lc, nlp)
     || parseNegation(text, nlp, 0)
-    || parseNegatedAsk(w, lc)
+    || parseNegatedAsk(w, lc, nlp)
     || parseForwardNegation(w, lc, nlp)
     || parseTemporal(w, lc, nlp, 0)
     || parseCommitFilter(w, lc)
@@ -718,11 +718,18 @@ function parseQualifierCheck(w, lc) {
  *  the same sentence at positive polarity ("not" is no stopword) and the merge
  *  would call the two readings an ambiguity. Declining to a composite production
  *  is what keeps the sentence out of that merge. */
-function parseNegatedAsk(w, lc) {
-  if (lc[0] !== "do" && lc[0] !== "does" && lc[0] !== "did") return null;
+function parseNegatedAsk(w, lc, nlp) {
+  // The copular leads carry the PASSIVE twin ("is X not imported by Y") —
+  // without them the strategies read the sentence at positive polarity (the
+  // "not" drops as noise) and the bare "Yes" answers the un-negated question.
+  // parseQualifierCheck ran first, so "is X not deprecated" keeps its lane.
+  // The positive re-parse runs the SAME simple-clause pair the composer's
+  // fragments use — the passive lives in the keyword strategy, which the
+  // anchored grammar alone never reaches.
+  if (!["do", "does", "did", "is", "are", "was", "were"].includes(lc[0])) return null;
   const notIdx = lc.indexOf("not", 1);
   if (notIdx < 0) return null;
-  const positive = parseAnchored(w.filter((_, i) => i !== notIdx).join(" "));
+  const positive = parseSimpleClause(w.filter((_, i) => i !== notIdx).join(" "), nlp);
   if (!positive || positive.shape !== "ask") return null;
   return { ...positive, negated: true };
 }
@@ -1784,7 +1791,15 @@ function evalTemporal(graph, ast, opts) {
 }
 
 function evalSuperlative(graph, ast) {
-  const pool = graph.individuals.filter((i) => i.class === ast.entityType);
+  let pool = graph.individuals.filter((i) => i.class === ast.entityType);
+  // A tests-metric ranking over Modules surveys COVERAGE, and a test module
+  // is never a coverage target — the same exclusion renderUntested (the
+  // /untested surface) applies, so the two surveys can't disagree about the
+  // same set ("what most needs a test" used to name b.test.mjs).
+  if (ast.metric?.kind === "tests" && ast.entityType === "Module") {
+    const testSubjects = new Set(edgesOfKind(graph, "tests").map((e) => e.subject));
+    pool = pool.filter((i) => !testSubjects.has(i.id) && !isTestPath(String(i.label).toLowerCase()));
+  }
   const scored = pool.map((ind) => ({ ind, score: degreeMetric(graph, ind, ast.metric) }))
     .sort((a, z) => (ast.extreme === "most" ? z.score - a.score : a.score - z.score));
   if (!scored.length) return { compositeKind: "superlative", entityType: ast.entityType, matches: [] };
@@ -2608,7 +2623,10 @@ export function resolveObject(graph, term, opts = {}) {
     }
     return declineOnUnplacedWords(resolveObjectCore(graph, term, opts), term);
   }
-  return resolveObjectCore(graph, term, opts);
+  // The pinned-class branch honors the same contract — a term carrying words
+  // the index has no reading for declines instead of resolving past them
+  // ("the old Task" pinned to Class must not silently swallow "old").
+  return declineOnUnplacedWords(resolveObjectCore(graph, term, opts), term);
 }
 
 /** Resolve a term that may be a context pronoun ("this"/"it"/"that"/"here") —

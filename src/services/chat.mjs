@@ -5320,6 +5320,9 @@ function renderFactLine(f) {
   // SOLID corpus facts are background DATA — present the relation plainly, cited
   // to its source, never "i learned: …" (a first-person claim over corpus data).
   if (f.provenance.includes("corpus:")) return `${factPhrase(f)}${cite}`;
+  // Reference-pack facts are the same class of cited data — the "i learned:"
+  // frame read as a definition-less non-answer on the re-ask.
+  if (f.provenance.includes("reference:")) return `${factPhrase(f)}${cite}`;
   return `i learned: ${factPhrase(f)}${cite}`;
 }
 
@@ -9253,6 +9256,24 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
       // — resolveSymbol (codegraph.mjs) has no component/overlap tier at all,
       // so a leading "the"/"a"/"an" is pure noise here, safe to strip.
       term = term.replace(/^(?:the|a|an)\s+/i, "");
+      // The stale-modifier residue guard, carried into this lane — the last
+      // of the 1.4 family without it: "describe the old Task class" must not
+      // return the Task card with "old" silently swallowed. The resolver's
+      // own unplaced-words verdict decides; a term it reads fully proceeds.
+      if (graph && /\s/.test(term)) {
+        try {
+          const { resolveObject } = await import("../domain/ask.mjs");
+          const guarded = resolveObject(graph, term);
+          if (guarded?.unplacedWords?.length) {
+            const words = guarded.unplacedWords;
+            const quoted = words.map((w) => `"${w}"`).join(" and ");
+            return {
+              text: `nothing matching "${term}" is in the index. ${quoted} name${words.length === 1 ? "s" : ""} nothing here, and reading past ${words.length === 1 ? "it" : "them"} would answer a different question.${guarded.nearestLabel ? ` Did you mean ${guarded.nearestLabel}?` : ""}`,
+              miss: true,
+            };
+          }
+        } catch { /* resolver unavailable — the ordinary dispatch decides */ }
+      }
     }
   }
   try {
@@ -10142,6 +10163,17 @@ const RENAME_HISTORY_RE = /^what\s+(?:was|were)\s+(.+?)\s+(?:called|named|known\
  *  (modules/classes/…) stays with the engine's own kind-level reading. */
 const COLLECTIVE_FORWARD_RE = /^what\s+(?:do|does)\s+the\s+([a-z][\w-]*s)\s+(import|call|use|export|touch|test|define|contain)s?[?.!\s]*$/i;
 
+/** Decision-recall — "remind me what we decided about X", "what did we agree
+ *  on about X": a question about the CONVERSATION's record, so it belongs to
+ *  the session-recall surface, never the definition locator ("decided" used
+ *  to be read-as-rewritten into "defined"). */
+const DECISION_RECALL_RE = /^(?:remind\s+me\s+)?what\s+(?:did\s+)?(?:we|i|you)\s+(?:decided?|agreed?(?:\s+on)?|settled?(?:\s+on)?|concluded?)\s+(?:about|on|regarding|for)\s+(?:the\s+)?(.+?)[?.!\s]*$/i;
+
+/** "where did X move to" — a move-HISTORY ask, sibling of RENAME_HISTORY_RE:
+ *  the index records current locations only, so the premise is named rather
+ *  than silently accepted alongside the current location. */
+const MOVE_HISTORY_RE = /^where\s+did\s+(.+?)\s+(?:move|get\s+moved|go)(?:\s+to)?[?.!\s]*$/i;
+
 async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA: a follow-up like "which of those are tested" / "count
@@ -10214,6 +10246,47 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         turn.detail = { traversal: `${verb} edges unioned over ${memberList}`, matches: [...union.keys()].map((id) => graph.byId?.get?.(id)).filter(Boolean) };
         return turn;
       }
+    }
+  }
+  // MOVE HISTORY — "where did X move to": the index records current
+  // locations, not moves, so the premise is denied by name and the current
+  // location answers beside it (stating the location alone read as silently
+  // confirming a move nobody recorded).
+  {
+    const moved = graph ? String(query).trim().match(MOVE_HISTORY_RE) : null;
+    if (moved) {
+      const term = moved[1].trim().replace(/^the\s+/i, "");
+      const ent = await resolveEntity(graph, term);
+      if (ent) {
+        let located = "";
+        try {
+          const { ask } = await import("../domain/ask.mjs");
+          const r = ask(graph, `where is ${ent.label} defined`);
+          if (r?.content && !r?.tmct_ask?.miss) located = ` Right now, ${r.content}`;
+        } catch { /* the premise note stands alone */ }
+        note(trace, "goal: recover a move history the index does not record (premise denied, current location cited)");
+        note(trace, "lane: MOVE_HISTORY_RE — no move data exists; the current location answers with the premise named");
+        return plainTurn(query, `this index records current locations only, so I can't confirm ${ent.label} moved anywhere.${located}`, {
+          via: "composed", miss: false, focus,
+        });
+      }
+    }
+  }
+  // DECISION RECALL — "remind me what we decided about X" reaches the
+  // session-recall surface (the folded transcript blocks); with nothing
+  // relevant folded it misses honestly by name. Never the definition locator
+  // ("decided" is not "defined").
+  {
+    const decision = memoryDir ? String(query).trim().match(DECISION_RECALL_RE) : null;
+    if (decision) {
+      const term = decision[1].trim();
+      const recalled = await recallFromBlocks(memoryDir, `what did we decide about ${term}`, graph);
+      note(trace, "goal: recall a decision from the conversation record (session-recall surface)");
+      note(trace, `lane: DECISION_RECALL_RE — routed to the folded-session recall surface, ${recalled ? "a relevant block answered" : "nothing relevant folded (honest miss)"}`);
+      return plainTurn(query, recalled
+        ?? `I don't have a recorded decision about "${term}" — I keep facts and session transcripts, and nothing folded mentions deciding on it. "what did i ask before" lists the last session's questions.`, {
+        via: recalled ? "recall" : "miss", miss: !recalled, focus,
+      });
     }
   }
   // W2: the explicit recall forms are answered from memory's folded blocks, never
@@ -11015,7 +11088,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   if (miss && recordMiss && via === "composed") {
     const described = await describeWrapperAnswer(query, { config, source, focus: newFocus, graph, tel });
     if (described) {
-      answer = described.text; via = "describe"; recordMiss = false;
+      answer = described.text; via = described.miss ? "miss" : "describe"; recordMiss = !!described.miss;
       note(trace, "lane: (4d) DESCRIBE-WRAPPER RESCUE — a polite wrapper around \"describe/tell me about <symbol>\" resolved via /describe, tried last after every other lane declined");
       note(trace, "goal: get a symbol's definition/kind/relations (phrased conversationally)");
       // Carry the resolved entity forward as the new focus, same class-gated

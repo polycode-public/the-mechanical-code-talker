@@ -429,7 +429,7 @@ export function renderImpact(graph, ind, { maxDepth = 8 } = {}) {
     lines.push(
       "warning: partial edge lists (" +
         truncatedStructural.map((t) => `${t.predicate}: ${t.shown}/${t.count}`).join(", ") +
-        ") — this closure may be missing edges. Cross-check critical results with tmct_search.",
+        ") — this closure may be missing edges. Cross-check critical results with a lexical search (/find <term>).",
     );
   }
   return lines.join("\n");
