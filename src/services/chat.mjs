@@ -1818,7 +1818,10 @@ const QUESTION_LEAD_RE = /^(?:what|who|which|where|when|why|how|is|are|do|does|d
  *  not a storage decision). Used by runAsk's relaxedTeachCollision guard (below)
  *  to recognize when a query the ask engine "answered" via relaxation was
  *  actually a teach-shaped sentence, not a real question. */
-const DECLARATIVE_KIND_OF_RE = /^(?:every\s+|each\s+|all\s+|a\s+|an\s+)?[\w-]+(?:\s+[\w-]+)?\s+(?:is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?[\w-]+[.!]*$/i;
+// The object takes 1–2 tokens: the shipped hanoi recipe's own "a disk is a
+// kind of game piece" is exactly this shape, and a single-token object left
+// its sentence-pair line unsplittable (the split gate reads this regex).
+const DECLARATIVE_KIND_OF_RE = /^(?:every\s+|each\s+|all\s+|a\s+|an\s+)?[\w-]+(?:\s+[\w-]+)?\s+(?:is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?[\w-]+(?:\s+[\w-]+)?[.!]*$/i;
 /** A bare wh-word token, tested one word at a time against `hasMidSentenceInterrogative`'s
  *  own tokenization below — never re-anchored, so it matches at ANY word position. */
 const MID_SENTENCE_WH_RE = /^(?:which|who|what|where|when|why|how)$/i;
@@ -6567,12 +6570,24 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     );
     const hit = hasHit(subj);
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
-    const isaStep = facts.find((f) => ISA_PREDICATES.has(f.predicate) && subj.has(f.subject));
-    if (isaStep) {
-      const lifted = hasHit(factTermVariants(normFactTerm, isaStep.object));
+    // The ⊑-lift walks a BOUNDED chain (not one hop): "every canine has fur"
+    // + "every dog is a canine" + "rex is a dog" answers "does rex have fur"
+    // citing all three premises. One chain, first parent per level (the
+    // 1-hop behavior generalized), cycle-safe, and the bound keeps a deep
+    // taught taxonomy from turning a yes/no into a graph scan.
+    let liftFrontier = subj;
+    const liftChain = [];
+    const liftSeen = new Set();
+    for (let hop = 0; hop < 4; hop += 1) {
+      const step = facts.find((f) => ISA_PREDICATES.has(f.predicate) && liftFrontier.has(f.subject) && !liftSeen.has(f.object));
+      if (!step) break;
+      liftSeen.add(step.object);
+      liftChain.push(step);
+      const lifted = hasHit(factTermVariants(normFactTerm, step.object));
       if (lifted) {
-        return { text: `yes — ${renderFactLine(isaStep)}; ${renderFactLine(lifted)}`, replace: true };
+        return { text: `yes — ${[...liftChain.map(renderFactLine), renderFactLine(lifted)].join("; ")}`, replace: true };
       }
+      liftFrontier = factTermVariants(normFactTerm, step.object);
     }
     return null;
   }
@@ -7269,6 +7284,17 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         const directSup = inheritsChain(graph, ent.id)
           .find((sup) => [...factTermVariants(normFactTerm, sup.label)].some((v) => directObjVariants.has(v)));
         if (directSup) return { text: `yes — the code graph says ${ent.label} inherits ${directSup.label}.`, replace: true };
+        // CONVERSE NUDGE, code-graph half: the taught-fact lane already names
+        // a stored converse instead of the bare wall; the graph's inherits
+        // relation deserves the same. Still a miss — the converse holding
+        // says nothing about the asked direction, and a "no" would guess.
+        const objEnt = await resolveEntity(graph, stripTrailingDiscourseTag(directIsaAsk[2]));
+        if (objEnt && inheritsChain(graph, objEnt.id).some((sup) => sup.id === ent.id)) {
+          return {
+            text: `I can't confirm that — the code graph's stored direction runs the other way: ${objEnt.label} inherits ${ent.label}. An inheritance doesn't reverse.`,
+            replace: true, miss: true,
+          };
+        }
       }
     }
   }
@@ -9229,6 +9255,11 @@ async function describeGrainRescue(graph, term) {
 }
 
 async function describeWrapperAnswer(query, { config, source, focus, graph, tel = null }) {
+  // The detailed-summary/overview phrasings belong to the completions rescue
+  // (4e, tried right after this lane) — applyPreambleFrames' show/give-me
+  // bridge would otherwise rewrite them into a describe this lane claims
+  // with a worse answer.
+  if (DETAILED_HOW_WORKS_RE.test(String(query || "").trim()) || DETAILED_OVERVIEW_RE.test(String(query || "").trim())) return null;
   // This lane is the LAST-RESORT rescue (4d), tried after every earlier lane
   // declines. applyPreambleFrames + correctMisspellings run first, the same
   // general-purpose normalization every other lane in this file applies,
@@ -9424,6 +9455,20 @@ async function completionsRescueAnswer(query, { memoryDir, graph }) {
   if (!term) return null;
   term = term.replace(/^(?:the|a|an)\s+/i, "").trim();
   if (!term) return null;
+  // The APP-DEICTIC subject ("how this app works") names the whole program,
+  // not a searchable symbol — the pipeline's best-match collapsed it to a
+  // bare module name. Ground the overview on the ranked ENTRY-POINT module
+  // instead: named as the way in, with its full module-grain overview.
+  if (graph && /^(?:this|the)?\s*(?:app|application|codebase|project|repo|repository|system|program)$/i.test(term)) {
+    try {
+      const { ask } = await import("../domain/ask.mjs");
+      const entry = ask(graph, "where is the entry point")?.tmct_ask?.matches?.[0];
+      const ind = entry?.id ? graph.byId?.get?.(entry.id) : null;
+      if (ind) {
+        return { text: `the app enters at ${ind.label} — here is that module in detail:\n\n${moduleOverviewText(graph, ind)}` };
+      }
+    } catch { /* no entry point rankable — the ordinary pipeline below decides */ }
+  }
   try {
     const { generateCompletion } = await import("./completions.mjs");
     // createCompletionsGraphAdapter wraps the SAME graph object this turn
@@ -11670,7 +11715,8 @@ function sentenceTeachesAlone(sentence, parseAce, lex) {
   if (!s || s.includes("?")) return false;
   const parse = parseAce(s, lex);
   if (parse && parse.triples?.length && !parse.residue?.length) return true;
-  return DECLARATIVE_KIND_OF_RE.test(s) || COMPARATIVE_TEACH_RE.test(s) || matchesGeneralVerbTeachFrame(s);
+  return DECLARATIVE_KIND_OF_RE.test(s) || COMPARATIVE_TEACH_RE.test(s)
+    || RENDERS_AS_TEACH_RE.test(s) || matchesGeneralVerbTeachFrame(s);
 }
 
 /** Does every sentence of a multi-sentence line teach on its own? Then the line

@@ -3472,13 +3472,48 @@ function renderCore(parsed, result, graph) {
   if (result.ambiguous) {
     // Name the actual candidates in the prose, not just the structured field
     // — "narrow the term" isn't actionable if the reader can't see the options.
-    const pool = [result.objMatch, ...(result.candidates || [])].filter(Boolean);
+    let pool = [result.objMatch, ...(result.candidates || [])].filter(Boolean);
+    let branches = result.branches;
+    // A relation question's object slot is a code entity, so a Commit/Session
+    // candidate (a prose-tier hit on a commit MESSAGE) is grain noise in the
+    // did-you-mean — dropped, along with its branch, unless the question is
+    // itself about touches/history where a commit genuinely fits.
+    if (parsed.kind && parsed.kind !== "touches" && !pool.every((i) => i.class === "Commit")) {
+      const grainOk = (i) => !["Commit", "Session", "Source", "Utterance"].includes(i?.class);
+      const kept = pool.filter(grainOk);
+      if (kept.length) {
+        pool = kept;
+        if (branches?.length) branches = branches.filter((b) => grainOk(b.candidate));
+      }
+    }
+    // The nearest REAL neighbour joins the list: a misremembered symbol
+    // ("saveTask") shares an identifier word with the real one ("saveStore"),
+    // which no containment/prose tier ever surfaces. Ranked by shared
+    // camelCase-split words (≥3 chars), edit distance breaking ties.
+    if (graph && !/[/.]/.test(String(parsed.object || ""))) {
+      const tLc = String(parsed.object || "").toLowerCase();
+      const termWords = new Set(splitIdentifierWords(String(parsed.object || "")).filter((w) => w.length >= 3));
+      const already = new Set(pool.map((i) => i.id));
+      let nearest = null;
+      let bestShared = 0;
+      let bestD = Infinity;
+      if (termWords.size) {
+        for (const i of graph.individuals) {
+          if (!["Function", "Method", "Class", "GlobalVariable", "Attribute"].includes(i.class) || already.has(i.id)) continue;
+          const shared = splitIdentifierWords(String(i.label)).filter((w) => termWords.has(w)).length;
+          if (!shared || shared < bestShared) continue;
+          const d = editDistance(String(i.label).toLowerCase(), tLc, 8);
+          if (shared > bestShared || d < bestD) { nearest = i; bestShared = shared; bestD = d; }
+        }
+      }
+      if (nearest) pool = [...pool, nearest];
+    }
     const noun = pool.length && pool.every((i) => i.class === "Commit") ? "commit" : "module";
     const shown = pool.slice(0, OVERFLOW_CAP).map((i) => i.label);
     const extra = pool.length > OVERFLOW_CAP ? `, …and ${pool.length - OVERFLOW_CAP} more` : "";
     const lead = `"${parsed.object}" matches more than one ${noun} ambiguously — did you mean ${listJoin(shown)}${extra}? Try one of those. If you're not sure, narrow it to one name.`;
-    const content = (result.branches && result.branches.length)
-      ? `${lead}\n${result.branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.content}`).join("\n")}`
+    const content = (branches && branches.length)
+      ? `${lead}\n${branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.content}`).join("\n")}`
       : lead;
     return {
       content, miss: false, ambiguous: true, candidates: pool.map((i) => i.label),

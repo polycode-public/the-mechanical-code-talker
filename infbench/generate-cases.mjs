@@ -1133,10 +1133,9 @@ function b1DisjointVeto(rng) {
 // INF-4 — b2PropertyInheritance: a class-level possession teach ("every N1
 // has a N2" — the quantified-has chat lane, storing mgx:hasA) read back
 // directly and inherited by a member through ONE taught ⊑ hop, citing both
-// premises. The grandparent cell pins today's reach honestly: the lookup
-// lifts exactly one hop, so a 2-hop inheritance is classically sound but
-// expects the honest floor — a ceiling-graded row naming the lift that would
-// move it. The control keeps the yes honest: membership of an unrelated class
+// premises. The grandparent cell drives the lift through TWO taught ⊑ hops —
+// the does-have reader walks a bounded chain, so the row grades live with
+// every premise cited. The control keeps the yes honest: membership of an unrelated class
 // licenses nothing. Chat-arm only (the possession teach is a chat lane, not
 // ACE, so the kernel never sees these premises), and the teach premises are
 // unlinted for the same reason. Regular-plural nouns only: the teach lane's
@@ -1195,9 +1194,8 @@ function b2PropertyInheritance(rng) {
         band: "INF-4", template: "b2PropertyInheritance", variant: "grandparent",
         arms: ["chat"], checkType: "isa",
         premises, query: `does ${ind} have a ${n2}`,
-        expect: { verdict: "unproven", entailed },
-        ceiling: "chat-layer property-inheritance lift past one taught ⊑ hop",
-        note: "Classically sound — the member's class sits one ⊑ hop below the class carrying the possession — but the lookup lifts exactly one hop today, so expect pins the honest floor. The capability that lifts this row is a deeper (or closure-backed) property-inheritance walk.",
+        expect: { verdict: "yes", entailed, proof: true },
+        note: "Property inheritance through TWO taught ⊑ hops: the does-have reader's bounded chain walk lifts past one hop, so the member inherits the grandparent class's possession with every premise cited.",
       }));
     }
     {
