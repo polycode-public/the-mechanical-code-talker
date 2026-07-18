@@ -2,6 +2,7 @@
 // the turn itself (turn.plan), so plan-validity checks read structured fields
 // instead of re-parsing the rendered answer.
 export { answerLineMatches, answerNoLineMatches, answerLacks } from "./predicates-inference.mjs";
+export { notMiss, isMiss } from "./predicates-games.mjs";
 
 /** turn.plan matches the given spec; only the keys the spec provides are
  *  checked. Supported keys: actions/states/stepGoals (lengths), goalText,

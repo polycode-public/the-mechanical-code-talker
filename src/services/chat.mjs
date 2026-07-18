@@ -2197,6 +2197,11 @@ const ACTION_SIGNATURE_ASK_RE = new RegExp(
 const PLAN_SOLVE_RE = /^(?:solve\s+it|solve\s+(?:the\s+)?(?:towers?\s+of\s+hanoi|hanoi|puzzle|game|river\s+crossing|this)|plan\s+the\s+moves|how\s+do\s+i\s+get(?:\s+from\s+here)?\s+to\s+the\s+goal)[?.!\s]*$/i;
 const LEGAL_MOVES_RE = /^what\s+moves\s+are\s+legal(?:\s+now)?[?.!\s]*$/i;
 const PLAN_NEXT_RE = /^(?:next|next\s+move|go\s+on|continue)[.!?\s]*$/i;
+// Plan-navigation gestures beyond "next": the unwind ask (not supported —
+// answered honestly, never the blurb) and the goal drop (a real action on the
+// session's plan slot; taught board facts are never touched by it).
+const PLAN_UNDO_RE = /^(?:undo(?:\s+(?:that|it|the\s+last\s+move))?|go\s+back(?:\s+(?:one|a)\s+move)?|take\s+(?:that|it)\s+back|revert(?:\s+(?:that|it|the\s+last\s+move))?)[.!?\s]*$/i;
+const PLAN_FORGET_GOAL_RE = /^(?:forget|drop|clear|abandon|cancel|scrap)\s+(?:the\s+|that\s+|my\s+)?(?:goal|plan)[.!?\s]*$/i;
 // The imperative voicing of a universal goal ("get all the disks onto peg-c"):
 // like the verbless frame it names no board verb, so planLaneAnswer reads that
 // off the taught locative facts. Captures a quantifier, a (possibly plural)
@@ -3323,6 +3328,13 @@ const RETRACT_NOT_A_RE = /^(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:(?:is|are)
  *  (unwrapped) sentence, unlike RETRACT_NOT_A_RE above which is tried against
  *  the remember-wrapped surface too. */
 const RETRACT_FORGET_RE = /^forget\s+(?:that\s+)?(?:a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(?:is|are)\s+(?:an?\s+)?(?:(?:kind|type)\s+of\s+)?([\w-]+)$/i;
+/** The locative teach shape ("disk-1 rests on peg-b") — the board-fact
+ *  surface, shared by the mid-plan write guard and the locative forget. */
+const BOARD_TEACH_LOCATIVE_RE = new RegExp(`^([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
+/** "forget that disk-1 rests on peg-b" — the locative twin of
+ *  RETRACT_FORGET_RE: a plain minted mgx:<verb>-<prep> fact has no entailment
+ *  cascade, so removing the one row IS the retraction. */
+const RETRACT_FORGET_LOCATIVE_RE = new RegExp(`^forget\\s+(?:that\\s+)?([\\w-]+)\\s+([a-z]+)s\\s+(${PREP_SRC})\\s+([\\w-]+)$`, "i");
 
 /** NEGATIVE UNIVERSAL — "no X is a Y" / "no Xs are Ys": a class-level
  *  exclusion, stored as `X owl:disjointWith Y` on the RESOLVED class pair.
@@ -3364,7 +3376,7 @@ async function negativeUniversalTeach(sentence, { memoryDir, sessionId }) {
   return stored;
 }
 
-async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null }) {
+async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null }) {
   // A closed discourse-marker preamble ahead of a teach sentence ("howdy
   // pardner, remember that TaskController is fragile") would otherwise
   // corrupt TEACH_RE's own match, so strip it first. applyPreambleFrames is
@@ -3469,7 +3481,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (memoryDir && !QUESTION_LEAD_RE.test(conjSrc) && /\s+and\s+/i.test(conjSrc)
     && !(await hasMidSentenceInterrogative(conjSrc))) {
     const rewrap = (half) => (wrapped != null ? `remember that ${half}` : half);
-    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache });
+    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache, planHolder });
     const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
     const shared = conjSrc.match(/^(.+?)\s+and\s+((?:is|are|has|have|can)\b.+)$/i);
     const sharedSubject = shared ? shared[1].match(/^(.+?)\s+(?:is|are|has|have|can)\b/i)?.[1]?.trim() : null;
@@ -3566,6 +3578,32 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   const retractNotMatch = memoryDir && !QUESTION_LEAD_RE.test(retractSrc) && !retractSrcMidQuestion
     ? retractSrc.match(RETRACT_NOT_A_RE) : null;
   const forgetSrc = raw.replace(/[.!?]+\s*$/, "");
+  // The locative forget rides beside the subclass one, on the same raw
+  // surface: find the one stored row and remove it — no cascade exists for a
+  // plain minted mgx:<verb>-<prep> fact. A no-match falls through unchanged.
+  const forgetLocative = memoryDir && !QUESTION_LEAD_RE.test(forgetSrc)
+    ? forgetSrc.match(RETRACT_FORGET_LOCATIVE_RE) : null;
+  if (forgetLocative) {
+    try {
+      const { loadMemory: loadMemForLoc, readFactRows: readRowsForLoc, removeFacts: removeFactsForLoc, normFactTerm: normTermForLoc } = await import("../adapters/memory/core.mjs");
+      const locPredicate = foldPrepositionIntoPredicate(
+        await generalVerbPredicate(forgetLocative[2].toLowerCase()),
+        `${forgetLocative[3].toLowerCase()} ${forgetLocative[4]}`,
+      ).predicate;
+      const locSubject = normTermForLoc(forgetLocative[1]);
+      const locObject = normTermForLoc(forgetLocative[4]);
+      const row = readRowsForLoc(await loadMemForLoc(memoryDir))
+        .find((r) => r.subject === locSubject && r.predicate === locPredicate && r.object === locObject);
+      if (row?.id) {
+        await removeFactsForLoc(memoryDir, [row.id]);
+        return {
+          text: `noted — forgotten: "${locSubject} ${predicatePhrase(locPredicate)} ${locObject}" is no longer stored.`,
+          via: "retract", miss: false,
+        };
+      }
+      // nothing stored under that triple — fall through to the ordinary cascade
+    } catch { /* store unavailable — fall through */ }
+  }
   const retractForgetMatch = !retractNotMatch && memoryDir && !QUESTION_LEAD_RE.test(forgetSrc)
     ? forgetSrc.match(RETRACT_FORGET_RE) : null;
   const retractMatch = retractNotMatch || retractForgetMatch;
@@ -3656,6 +3694,32 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         };
       }
       // found:false — fall through to the rest of the cascade (see docblock above).
+    }
+  }
+
+  // MID-PLAN BOARD TEACH — a locative fact about a piece the LIVE plan's
+  // moves touch is declined naming the plan, never accepted-then-ignored:
+  // the plan's board rides @step snapshots, so a base-fact write here would
+  // be confirmed ("noted — remembered") and then contradicted by the very
+  // next "next". Scoped to the locative teach shape over the plan's own
+  // pieces; every other teach (new vocabulary, new pieces, rules) is
+  // untouched, and with no live plan nothing changes at all.
+  {
+    const livePlan = planHolder?.state && !planHolder.state.done
+      && Array.isArray(planHolder.state.actions) && planHolder.state.actions.length
+      ? planHolder.state : null;
+    const boardSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
+    const board = livePlan ? boardSrc.match(BOARD_TEACH_LOCATIVE_RE) : null;
+    if (board && memoryDir && !QUESTION_LEAD_RE.test(boardSrc)) {
+      const { normFactTerm } = await import("../adapters/memory/core.mjs");
+      const planPieces = new Set(livePlan.actions.flatMap((a) => [normFactTerm(a.subject), normFactTerm(a.target)]));
+      if (planPieces.has(normFactTerm(board[1])) || planPieces.has(normFactTerm(board[4]))) {
+        const at = livePlan.cursor > 0 ? `step ${livePlan.cursor} of ${livePlan.actions.length}` : `0 of ${livePlan.actions.length} moves made`;
+        return {
+          text: `a plan is live (${at}, toward: ${livePlan.goalText ?? livePlan.goalTexts?.join("; ") ?? "the held goal"}) — I won't change the board mid-plan: the plan's moves write board@step snapshots, and "${board[0]}" would sit under them, silently contradicted by the next move. Say "forget the goal" first, re-teach the board, then "solve it" to replan.`,
+          via: "teach-miss", miss: true,
+        };
+      }
     }
   }
 
@@ -9493,7 +9557,18 @@ const sameGoalSpec = (a, b) =>
  *  { text, via, deduced, note, plan? } or null when the query is none of the
  *  three shapes. Mutates planHolder.state (the session's plan slot). */
 async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", }) {
-  const q = String(query).trim();
+  let q = String(query).trim();
+  // GOAL REVISION — "actually the goal is …", "instead, the goal is …", "the
+  // goal is now …": a revision marker ahead of (or inside) a goal frame means
+  // REPLACE the held goal, not accumulate beside it — restating used to pile
+  // up an unsatisfiable conjunction that burned the full search.
+  let goalRevision = false;
+  {
+    const lead = q.match(/^(?:actually|instead|no|wait|scratch\s+that|on\s+second\s+thought)[,\s]+(.+)$/i);
+    if (lead && /\bgoal\b/i.test(lead[1])) { q = lead[1].trim(); goalRevision = true; }
+    const now = q.match(/^the\s+(?:new\s+goal\s+is|goal\s+is\s+now)\s+(.+)$/i);
+    if (now) { q = `the goal is ${now[1].trim()}`; goalRevision = true; }
+  }
 
   // "can you move a disk onto a peg?" — read the taught action signatures back.
   // Answered HERE rather than beside the other capability readers because
@@ -9617,7 +9692,8 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
           ? q.replace(/^the\s+goal\s+is\s+that\s+/i, "").replace(/[.!?]+$/, "")
           : `${m[1] ? `${m[1].toLowerCase()} ` : ""}${m[2].toLowerCase()} ${verb}s ${m[4].toLowerCase()} ${m[5].toLowerCase()}`));
     }
-    const prev = planHolder.state && Array.isArray(planHolder.state.goals) && !planHolder.state.done ? planHolder.state : null;
+    const prev = !goalRevision && planHolder.state && Array.isArray(planHolder.state.goals) && !planHolder.state.done ? planHolder.state : null;
+    const replaced = goalRevision && planHolder.state?.goalTexts?.length ? planHolder.state.goalTexts.join("; ") : null;
     // Restating a goal you already set is one goal, not two. The spec is four
     // normalized scalars, so the same goal in either voicing ("the goal is
     // that …" / "the goal is to …") compiles to the identical object and a
@@ -9642,11 +9718,12 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
       actions: null, states: null, stepGoals: null, cursor: 0, done: false,
     };
     const n = heldGoals.length;
+    const replacedClause = replaced ? ` (replacing the earlier goal: ${replaced})` : "";
     return {
-      text: `${added ? "noted" : "already noted"} — the goal is that ${tails.join(" and ")}.${n > 1 ? ` (${n} goals held)` : ""} Say "solve it" when the state is taught.`,
+      text: `${added ? "noted" : "already noted"} — the goal is that ${tails.join(" and ")}${replacedClause}.${n > 1 ? ` (${n} goals held)` : ""} Say "solve it" when the state is taught.`,
       via: "plan", lane: "goal", deduced: "record the goal state for a later plan",
       note: added
-        ? `GOAL frame — ${added === 1 ? "goal spec" : `${added} goal specs`} accumulated on the session plan slot`
+        ? `GOAL frame — ${added === 1 ? "goal spec" : `${added} goal specs`} ${replaced ? "REPLACED the held goal (revision marker)" : "accumulated on the session plan slot"}`
         : "GOAL frame — the same goal spec was already held, so it folded onto the existing one",
     };
   }
@@ -9724,6 +9801,49 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
       note: "plan lane — honest decline: the goal names an untaught term, search never started",
     };
   }
+  // An UNSATISFIABLE conjunction — two held goals put the same subject (or
+  // the same universal class) in two different places under one predicate —
+  // is named BEFORE the search, so it never burns the full move budget just
+  // to report "no plan found".
+  {
+    const texts = planHolder.state.goalTexts || [];
+    for (let i = 0; i < goals.length; i += 1) {
+      for (let j = i + 1; j < goals.length; j += 1) {
+        const a = goals[i];
+        const b = goals[j];
+        if (a.universal === b.universal && a.term === b.term && a.predicate === b.predicate && a.object !== b.object) {
+          return {
+            text: `those goals can't both hold — "${texts[i] ?? `${a.term} … ${a.object}`}" and "${texts[j] ?? `${b.term} … ${b.object}`}" put the same thing in two places, so no plan exists and I won't search for one. Say "forget the goal", then state the goal you mean.`,
+            via: "plan", deduced: "plan a move sequence (unsatisfiable goal conjunction)",
+            note: "plan lane — honest decline: conflicting goal atoms named before the search",
+          };
+        }
+      }
+    }
+  }
+  // A CONTRADICTORY taught board — one piece placed in two places by the base
+  // facts — makes every "shortest" claim depend on which placement you
+  // resolve, so it is flagged before planning rather than silently read.
+  {
+    const placements = new Map();
+    for (const r of state) {
+      const key = `${r.subject} ${r.predicate}`;
+      if (!placements.has(key)) placements.set(key, new Set());
+      placements.get(key).add(r.object);
+    }
+    const clashes = [...placements.entries()].filter(([, objs]) => objs.size > 1);
+    if (clashes.length) {
+      const shown = clashes.map(([key, objs]) => {
+        const [subj, pred] = key.split(" ");
+        return [...objs].map((o) => `${subj} ${predicatePhrase(pred)} ${o}`).join(" AND ");
+      }).join("; ");
+      return {
+        text: `the taught board contradicts itself — ${shown}. A shortest plan depends on which placement is real, so I won't pick one. Say "forget that <the wrong placement>" (e.g. "forget that ${clashes[0][0].split(" ")[0]} ${predicatePhrase(clashes[0][0].split(" ")[1])} ${[...clashes[0][1]][1]}"), then "solve it" again.`,
+        via: "plan", deduced: "plan a move sequence (contradictory board)",
+        note: "plan lane — honest decline: contradictory placements flagged before planning",
+      };
+    }
+  }
   let isGoal;
   try {
     isGoal = compileGoal(goals, domain);
@@ -9769,11 +9889,20 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
   };
   const ruleNames = [...new Set(domain.actions.map((a) => a.name))].join('", "');
   const moveLines = actions.map((a, i) => `  ${i + 1}. ${a.label}`);
-  // A piece the goal reaches for with no taught position is an ASSUMPTION the
-  // plan silently makes (it reads the board as taught, without that piece) —
-  // said out loud with the plan rather than left implicit.
+  // A piece with no taught position is an ASSUMPTION the plan silently makes
+  // (it reads the board as taught, without that piece) — said out loud with
+  // the plan rather than left implicit. Covers every piece a plan STEP
+  // touches, not just the goal-named ones ("move disk-1 onto disk-3" with
+  // disk-3 never placed is the same silent gap-fill). Scoped to pieces whose
+  // CLASS has at least one positioned member, so a peg — whose class never
+  // takes a position — is not "unplaced".
   const goalPieces = [...new Set(goals.flatMap((g) => (g.universal ? (domain.classMembers?.[g.term] || []) : [g.term])))];
-  const unplacedPieces = goalPieces.filter((p) => !state.some((r) => r.subject === p));
+  const touchedPieces = [...new Set(actions.flatMap((a) => [a.subject, a.target]))];
+  const classOfPiece = (p) => Object.keys(domain.classMembers || {}).find((cls) => (domain.classMembers[cls] || []).includes(p));
+  const positionedClasses = new Set(state.map((r) => classOfPiece(r.subject)).filter(Boolean));
+  const unplacedPieces = [...new Set([...goalPieces, ...touchedPieces])]
+    .filter((p) => !state.some((r) => r.subject === p))
+    .filter((p) => positionedClasses.has(classOfPiece(p)));
   const assumptionNote = unplacedPieces.length
     ? `\n\nnote — ${unplacedPieces.join(" and ")} ha${unplacedPieces.length === 1 ? "s" : "ve"} no taught position, so this plan reads the board without ${unplacedPieces.length === 1 ? "it" : "them"}. Teach the missing position(s) and solve again if that's wrong.`
     : "";
@@ -9841,10 +9970,42 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
  *  "next" moves a piece, "what rests on X" reflects the snapshot, not the stale
  *  pre-plan facts. Clearness is derived, never stored — a piece is clear iff
  *  nothing rests on it on the current board. */
-async function planFollowUpAnswer(query, { memoryDir, planHolder }) {
+async function planFollowUpAnswer(query, { memoryDir, planHolder, pendingPager = false }) {
   const q = String(query).trim();
   const ps = planHolder?.state;
   const activePlan = ps && Array.isArray(ps.actions) && ps.actions.length;
+
+  // PLAN-NAVIGATION GESTURES — routed, honest replies while a plan (or a
+  // held goal) stands, so the orientation blurb never fronts a mid-plan
+  // turn. With nothing standing these return null and a cold "undo" keeps
+  // its ordinary path.
+  if (PLAN_UNDO_RE.test(q)) {
+    if (!activePlan) return null;
+    const k = ps.cursor;
+    const board = k > 0 ? `the board stands at board@step${k}` : "no move has been made yet";
+    return {
+      text: `there's no undo — each move wrote a board@step snapshot and I don't unwind them. ${board}. Say "solve it" to replan from the current board, or "forget the goal" to drop the plan.`,
+      deduced: "unwind a plan move (not supported — honest decline)",
+      note: "PLAN FOLLOW-UP — undo/go-back gesture named the snapshot model instead of the blurb",
+    };
+  }
+  if (PLAN_FORGET_GOAL_RE.test(q)) {
+    if (!ps || !(ps.goals?.length || activePlan)) return null;
+    const held = ps.goalTexts?.length ? ` (${ps.goalTexts.join("; ")})` : "";
+    planHolder.state = null;
+    return {
+      text: `forgotten — the goal${held} and its plan are dropped. The taught board facts stay; set a new goal with "the goal is that …".`,
+      deduced: "drop the held goal and plan",
+      note: "PLAN FOLLOW-UP — forget-the-goal cleared the session plan slot",
+    };
+  }
+  if (PLAN_NEXT_RE.test(q) && ps?.done && Array.isArray(ps.actions) && ps.actions.length && !pendingPager) {
+    return {
+      text: `the plan is complete — all ${ps.actions.length} moves are made and the goal was checked against the written board. Teach a new goal ("the goal is that …") to plan again.`,
+      deduced: "continue a plan that is already complete (honest decline)",
+      note: "PLAN FOLLOW-UP — next-after-done answered from the finished plan instead of the blurb",
+    };
+  }
 
   if (PLAN_WHAT_NEXT_RE.test(q)) {
     if (!activePlan) return null;
@@ -10713,7 +10874,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
   // memory, or say what CAN be remembered (LOUD), never the wall / a silent drop.
   if (miss && recordMiss && via === "composed") {
-    const taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache });
+    const taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache, planHolder });
     if (taught) {
       answer = taught.text; via = taught.via; recordMiss = taught.miss;
       if (!taught.miss) dialogueLaneOverride = "teach";
@@ -12152,7 +12313,10 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // code-graph miss. Returns null with no plan/board standing, so nothing
   // changes for a cold session — an honest miss still stands.
   if (memoryDir) {
-    const follow = await planFollowUpAnswer(workingLine, { memoryDir, planHolder });
+    const follow = await planFollowUpAnswer(workingLine, {
+      memoryDir, planHolder,
+      pendingPager: !!(Array.isArray(last?.detail?.pending?.items) && last.detail.pending.items.length),
+    });
     if (follow) {
       note(trace, `goal: ${follow.deduced}`);
       note(trace, `lane: ${follow.note}`);
