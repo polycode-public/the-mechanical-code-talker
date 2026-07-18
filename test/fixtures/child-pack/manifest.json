@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "fixture": "hand-written triples; not built from a dump",
+  "pack": "conceptnet",
+  "counts": {
+    "terms": 5,
+    "facts": 12,
+    "shards": 6,
+    "unindexedRows": 1
+  },
+  "files": [
+    {
+      "file": "index.json.gz",
+      "bytes": 126,
+      "sha256": "32c77fe91ce5a57a37e33efdaae7ea2e68bb0f2fe9741b209a7fc842d6be465b"
+    },
+    {
+      "file": "LICENSE-NOTICE",
+      "bytes": 221,
+      "sha256": "90ec10727e9574a80bd79c729ece07670fa95799d0dd20dc91ca0df1ac5d2025"
+    },
+    {
+      "file": "shards/child-07.jsonl.gz",
+      "bytes": 125,
+      "sha256": "0940ba304a0caf2f823eec3bcd9efcf36a94526499d9fd30ca2e9486143183c4"
+    },
+    {
+      "file": "shards/child-08.jsonl.gz",
+      "bytes": 126,
+      "sha256": "05bc8b968c4980c3a97a310952d2477ee314539240ddd3bf905d8d182bf0d30f"
+    },
+    {
+      "file": "shards/child-0e.jsonl.gz",
+      "bytes": 143,
+      "sha256": "c72be95f7ea70c493489e6ecfa85ecc07120882b2d3b8e46e59c7222cee9e793"
+    },
+    {
+      "file": "shards/child-15.jsonl.gz",
+      "bytes": 105,
+      "sha256": "119f6391f1002e51d7197228b1e2363e83eca0a93a8dd6cdc626b08b8a3d36e5"
+    },
+    {
+      "file": "shards/child-17.jsonl.gz",
+      "bytes": 150,
+      "sha256": "37e09935305bae13fa2bbb8e4cb8910f3bf463f62164a47acc4297cde81885dc"
+    },
+    {
+      "file": "shards/child-1d.jsonl.gz",
+      "bytes": 109,
+      "sha256": "9004e6d99e3ae938cab96e008228fcc69659bd57e8c186ad7e3c4c43c8f25fac"
+    }
+  ]
+}

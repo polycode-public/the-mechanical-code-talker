@@ -1,8 +1,18 @@
 # PLAN_CHILD_CORPUS.md — a wider default corpus, selected by age of acquisition
 
-Status: DESIGN — not started. The operator's framing was "all the concepts known to an 8 year
-old child in the top 10% of the Dutch education system". That sentence names a real want and
-an unbuyable dataset; this doc separates the two.
+Status: BUILT as a lazy triples pack (`corpus/child/`), pending the chat miss-cascade wiring.
+The operator's framing was "all the concepts known to an 8 year old child in the top 10% of the
+Dutch education system". That sentence names a real want and an unbuyable dataset; this doc
+separates the two.
+
+Delivered (2.7.0 wave): the child slice ships as a lazy learn-on-miss TRIPLES pack through the
+pack mechanism — keyword-indexed shards keyed on `normFactTerm`, one shard loaded per clean
+miss — NOT a bulk init import. Build `npm run gen:child-corpus`; loader + provider seam in
+`src/adapters/corpus/child-pack.mjs` (`registerChildPackProvider`, env `TMCT_CHILD_PACK_DIR`);
+pure contract in `src/domain/child-pack.mjs`; trust half in `src/domain/memory/trust.mjs`
+(`child:conceptnet:<term>` → corpus tier, 0.7). The chat miss-cascade that consumes the provider
+is a follow-up wave — the read contract is in `corpus/child/README.md`. Acceptance numbers are
+measured by `npm run measure:child-corpus` and stamped into that README.
 
 ## Why
 
@@ -94,20 +104,26 @@ makes the positive default *findable* (`bird can fly` from data rather than one 
 row). It does not, on its own, produce the penguin. That still comes from a taught fact, which
 is what tmct is for.
 
-## Sequence
+## Sequence (delivered)
 
-1. Decide the licence question. CC-BY-SA scope + the AoA list's own terms.
-2. Pick the seed source and threshold; commit the list as a maintainer-owned file beside
-   `SEED_TERMS`, with the threshold as a named constant, not a magic number.
-3. Fetch the dump offline; re-run `filter-dump.mjs` with the new seed; re-run
-   `quality-filter.mjs` (expect it to matter more — crowd noise scales with generality).
-4. Decide whether `/r/Not*` joins `conceptnet-map.toml`'s closed set. This is where the
-   negation work and the corpus work meet.
-5. Re-measure the numbers at the top of this doc. They are the acceptance test: kinds of bird,
-   capabilities among them, things that can fly. Measure them with a script, not by hand — the
-   hand-counted version of this list already drifted once (it read "1 kind of bird, zero
-   capabilities" while the corpus held two birds and one capability), and a baseline nobody can
-   re-run is not an acceptance test.
+1. DONE — licence settled. The published age-of-acquisition lists were both ruled out for a
+   public MPL-2.0 package: Kuperman 2012's original terms could not be verified and the same
+   Ghent lab's sibling AoA norms are stated non-commercial/research-only; the Dale-Chall 3,000
+   is a 1995 copyrighted compilation with no verifiable distribution grant. So the seed is a
+   maintainer-owned, hand-authored child-concept list (MPL-2.0, copies no external list) — the
+   evidence and decision are in `corpus/conceptnet/child-seed.mjs`. The shipped triples are
+   ConceptNet-derived and carry CC-BY-SA-4.0 (`corpus/child/LICENSE-NOTICE`, `corpus/LICENSES.json`).
+2. DONE — `corpus/conceptnet/child-seed.mjs`: `CHILD_SEED_TERMS` beside `SEED_TERMS`, with
+   `CHILD_AOA_TARGET_YEARS` as the named "top-decile knob".
+3. DONE — `scripts/fetch-child-corpus.mjs` streams the cached full dump through
+   `filter-dump.mjs`'s reusable `scanAssertions` + `quality-filter.mjs`'s `cutReason`. The
+   quality pass did matter more (it cut 6,587 rows at child scope).
+4. DONE — `/r/NotCapableOf` joined `conceptnet-map.toml` as one deliberate mapping onto tmct's
+   own polarity (`mgxneg:capableOf`); every other `/r/Not*` still hits the loader's hard error.
+   It yielded 42 corpus negatives — the first data the defeasible-negation reader can stand on.
+5. DONE — measured by `scripts/measure-child-corpus.mjs` (the script IS the acceptance test).
+   On the built pack: 1,881 kinds of bird (baseline 2), 71 capabilities on birds, 39 things that
+   can fly. Numbers stamped into `corpus/child/README.md` and the manifest's `acceptance` block.
 
 ## Related
 

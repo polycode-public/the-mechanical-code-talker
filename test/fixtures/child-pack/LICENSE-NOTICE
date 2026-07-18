@@ -1,0 +1,5 @@
+LICENSE NOTICE — test fixture child pack
+========================================
+
+Hand-written mini-pack for test/adapters/child-pack.test.mjs. Not shipped, not
+ConceptNet-derived; mirrors corpus/child/'s layout only.
