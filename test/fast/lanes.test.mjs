@@ -16,6 +16,7 @@ const LANES = [
   "grammar",
   "inference",
   "planning",
+  "reference",
   "templates",
   "games/compositional",
   "games/drilldowns",

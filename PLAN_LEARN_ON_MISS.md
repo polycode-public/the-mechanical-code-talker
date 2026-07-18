@@ -1,6 +1,14 @@
 # PLAN_LEARN_ON_MISS.md — answer a clean miss from a shipped knowledge pack, not just a refusal
 
-Status: IN DELIVERY (2026-07-18 run) — offline, $0, deterministic, no LLM, no runtime network.
+Status: BUILT (2026-07-18 run) — offline, $0, deterministic, no LLM, no runtime network. The
+chat hooks are live in `src/services/chat.mjs`: the articled miss hook (lane 4h) and the
+bare-form fallback share one gate (`referencePackMissAnswer` — definition-shaped term, lexicon
+noun, no graph entity, no remembered fact, only then the provider), answer with
+`renderReferenceAnswer`'s cited frame, record no miss, and store the article's isa with
+reference provenance so the next ask answers from memory. Pinned by
+`test/adapters/chat-reference-lane.test.mjs` (spy-provider negatives, byte-identical fallback)
+and `test/corpus/reference.jsonl` (real-pack citation frame, teach-wins, memory/sqlite
+backend spread).
 Decisions taken for the build: pack source = Simple English Wikipedia (pinned dump, build-time
 fetch + deterministic clean); pack home = in-repo `corpus/reference/` shipped in this package
 (not a companion package); a small deterministic subset is emitted under `public/` so the
@@ -131,8 +139,8 @@ loader + the read-out tmct already has.
 2. **Clean-miss detection** (a read over the existing miss classification), gated to a no-op lookup.
    Pinned by the detection tests. Ships nothing user-visible yet. — PURE HALF BUILT:
    `cleanMissReferenceTerm` (`src/domain/reference-pack.mjs`) keys a lexicon noun on its lemma and
-   refuses relation touches and unknown words; the chat-side wiring (parse-succeeded, graph and
-   memory genuinely empty) is the chat hook, not yet landed.
+   refuses relation touches and unknown words; the chat-side wiring (graph and memory genuinely
+   empty on the term) is LANDED as `referencePackMissAnswer` in `src/services/chat.mjs`.
 3. **The pack + index + lazy loader + on-miss lookup**, answering through the completions read-out
    first. Build-time cleaning of the chosen source into the shipped format. This is the deliverable —
    the default, offline, cited answer where there used to be a refusal. — PACK BUILT AND COMMITTED:
@@ -143,5 +151,5 @@ loader + the read-out tmct already has.
    `test/fixtures/reference-pack/`); the parse/clean/select/emit phases and the committed pack are
    pinned by `test/estate/reference-pack.test.mjs`. The isa extraction is first-sentence-anchored,
    resolves of-chains to their final noun, and refuses generic classifier heads, so a stored
-   `subClassOf` stays meaningful (1,817 articles carry one). The on-miss chat hook is not yet
-   landed.
+   `subClassOf` stays meaningful (1,817 articles carry one). The on-miss chat hooks LANDED —
+   see the Status block above for what they do and where they are pinned.

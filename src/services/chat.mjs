@@ -46,6 +46,8 @@ import { readConstructionFiles } from "../adapters/corpus/construction-banks.mjs
 import { fuzzyMatchInSet, fuzzyBound } from "../domain/interpret/fuzzy.mjs";
 import { loadLexicon, lookupNoun } from "../domain/grammar/lexicon.mjs";
 import { pickPhrase } from "../domain/answer-variants.mjs";
+import { REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, referenceProvenanceTag } from "../domain/reference-pack.mjs";
+import { getReferencePackProvider } from "../adapters/corpus/reference-pack.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
 // adapter (the browser bundle's ask-nlp stub carries no factory, so this is a
@@ -8783,6 +8785,46 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
   return { text: `${def} (source: corpus/seon)`, term };
 }
 
+// ---- learn-on-miss: the shipped reference pack behind the cleanest miss ----
+
+/** The learn-on-miss gate, shared by the articled miss hook and the bare-form
+ *  fallback so the two can never disagree. Fires only on the CLEANEST miss: a
+ *  definition-shaped term the lexicon knows, resolving to no graph entity and
+ *  no remembered fact — then, and only then, the pack provider is consulted.
+ *  Null means the turn proceeds byte-identically to a pack-less run. */
+async function referencePackMissAnswer(term, { graph, memoryDir, lexicon, env, cache }) {
+  if (!term || !memoryDir) return null;
+  let key = null;
+  try { key = cleanMissReferenceTerm(term, lexicon ?? undefined); } catch { key = null; }
+  if (!key) return null;
+  if (await resolveEntity(graph, term)) return null;
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  const variants = factTermVariants(normFactTerm, term);
+  variants.add(key);
+  const rows = await factRows(memoryDir, cache);
+  if (rows.some((f) => variants.has(f.subject) || variants.has(f.object))) return null;
+  let article = null;
+  try { article = await getReferencePackProvider(env).lookup(key); } catch { article = null; }
+  if (!article) return null;
+  return { key, article, text: renderReferenceAnswer(key, article) };
+}
+
+/** Store the article's first-sentence isa as a subClassOf fact carrying
+ *  reference provenance — AFTER the cited answer composed, and failure-
+ *  tolerated: the answer stands whether or not the fact lands. */
+async function appendReferenceIsaFact(memoryDir, key, article, cache) {
+  if (!article?.isa) return;
+  try {
+    const { appendFact } = await import("../adapters/memory/core.mjs");
+    await appendFact(memoryDir, {
+      subject: key, predicate: "rdfs:subClassOf", object: article.isa,
+      provenance: referenceProvenanceTag(article),
+    });
+    if (cache) cache.rows = null;
+  } catch { /* tolerated — the cited answer is already composed */ }
+}
+
 /** The concept term a vague "what is a X" / "tell me about X" / "what does X mean" /
  *  "define X" asks about — metaTermOf's forms plus the "tell me about …" opener that
  *  the graph parser reads as a count. Null when the line isn't such a touch. The
@@ -10214,6 +10256,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         const def = await curatedDefinitionAnswer(gateQuery, envelope, { memoryDir, lexicon });
         if (def) bareMetaHit = { text: def.text, replace: true };
       }
+      // The reference pack's bare-form fallback, beside the curated one and
+      // under the IDENTICAL clean-miss gate the articled hook (4h) applies —
+      // "what is otter" reaches the pack exactly as "what is an otter" does.
+      if (!bareMetaHit) {
+        const refTerm = metaTermOf(gateQuery, envelope);
+        const ref = refTerm ? await referencePackMissAnswer(refTerm, { graph, memoryDir, lexicon, env, cache }) : null;
+        if (ref) bareMetaHit = { text: ref.text, replace: true, reference: ref };
+      }
     }
     // A bare "what is X" naming a REAL code-graph entity (not a taught fact,
     // not a curated corpus term) needs the SAME race fixed too.
@@ -10249,7 +10299,18 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (fallback) bareMetaHit = { text: fallback.text, replace: true };
   }
   const coldPronounDecline = focus?.label ? null : coldPronounDeclineText(query);
-  if (bareMetaHit) {
+  if (bareMetaHit?.reference) {
+    // The bare-form reference hit mirrors (4h): the cited answer replaces the
+    // miss, the turn is no longer recorded as one, and the article's isa is
+    // stored after the answer composes.
+    answer = bareMetaHit.text;
+    via = "reference";
+    recordMiss = false;
+    handled = true;
+    note(trace, "lane: (2b) REFERENCE PACK — a bare \"what is X\" clean miss answered from the shipped reference pack, cited");
+    note(trace, `source: reference pack ${REFERENCE_PACK_NAME} — article "${bareMetaHit.reference.article.title}" (revid ${bareMetaHit.reference.article.revid})`);
+    await appendReferenceIsaFact(memoryDir, bareMetaHit.reference.key, bareMetaHit.reference.article, cache);
+  } else if (bareMetaHit) {
     answer = bareMetaHit.replace ? bareMetaHit.text : `${answer}\n${bareMetaHit.text}`;
     // Same discipline as lane (3): a fact-lane return flagged `miss` is an
     // honest miss in better words — the turn record keeps miss=true and via
@@ -10601,6 +10662,24 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       canonical = null;
       deduced = null;
       note(trace, `lane: (4g) FUZZY-VERB DECLINE — "${from}" only became a verb through the edit-distance repair tier ("${to}"), and the two words are different verbs, so the repaired sentence's graph answer is dropped rather than shown as an answer to what was typed`);
+    }
+  }
+  // (4h) REFERENCE PACK — the cleanest miss consults the shipped reference
+  // pack: a definition-shaped term the lexicon knows, no graph entity, no
+  // remembered fact. A hit answers with the article's summary, always cited;
+  // a null from any gate leaves the turn byte-identical. After the answer
+  // composes, the article's first-sentence isa is stored as a subClassOf fact
+  // with reference provenance, so the NEXT ask answers from memory.
+  if (miss && recordMiss && via === "composed" && memoryDir) {
+    const refTerm = metaTermOf(query, envelope);
+    const ref = refTerm ? await referencePackMissAnswer(refTerm, { graph, memoryDir, lexicon, env, cache }) : null;
+    if (ref) {
+      answer = ref.text;
+      via = "reference";
+      recordMiss = false;
+      note(trace, "lane: (4h) REFERENCE PACK — a clean miss on a lexicon term answered from the shipped reference pack, cited");
+      note(trace, `source: reference pack ${REFERENCE_PACK_NAME} — article "${ref.article.title}" (revid ${ref.article.revid})`);
+      await appendReferenceIsaFact(memoryDir, ref.key, ref.article, cache);
     }
   }
   // (5) #1 SHORT TAILORED MISS — replace ONLY the engine's full grammar cheat-sheet

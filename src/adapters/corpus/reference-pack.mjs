@@ -101,7 +101,13 @@ export function registerReferencePackProvider(provider) {
   registeredProvider = provider && typeof provider.lookup === "function" ? provider : null;
 }
 
-/** The active provider — the registered one, else the lazy fs loader. */
-export function getReferencePackProvider() {
-  return registeredProvider ?? fsProvider;
+/** The active provider — the registered one, else the lazy fs loader. An
+ *  explicit `env` bag (a chat turn's own env, which may carry
+ *  TMCT_REFERENCE_PACK_DIR) makes the fs loader resolve the pack dir from
+ *  that bag instead of process.env; with no argument the behavior is
+ *  unchanged. */
+export function getReferencePackProvider(env) {
+  if (registeredProvider) return registeredProvider;
+  if (env === undefined) return fsProvider;
+  return { lookup: async (normTerm) => loadReferenceArticle(referencePackDir(env), normTerm) };
 }
