@@ -7,7 +7,10 @@
 // the ask() orchestration.
 
 // Chat surface (also reachable as the `./chat` subpath export).
-export { runChat, COMMANDS, answerCount, renderStats } from "./chat.mjs";
+// createSession is the library's session sink — the same focus/last/planState
+// threading and memory-backend seam every shell shares; runTurn is the pure
+// single-turn engine underneath it.
+export { runChat, createSession, runTurn, COMMANDS, answerCount, renderStats } from "./chat.mjs";
 
 // Grammar / NL-over-graph primitives.
 export { ask, resolveObject } from "../domain/ask.mjs";

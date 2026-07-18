@@ -113,6 +113,43 @@ test("a code-structure question hits the no-code-graph wall — the session's gr
   assert.match(answer, /no code graph is loaded in this session/);
 });
 
+test("the guessing game runs in the browser context: bisection guesses land and the win names the number", async () => {
+  const ctx = browserContext();
+  seededSession(ctx);
+  const opening = await turn(ctx, "I'm thinking of a number between 1 and 100");
+  assert.match(opening.answer, /My guess: 50\. Say higher, lower, or correct\./);
+  const second = await turn(ctx, "higher");
+  assert.match(second.answer, /My guess: 75\./);
+  const third = await turn(ctx, "lower");
+  assert.match(third.answer, /My guess: 62\./);
+  const fourth = await turn(ctx, "higher");
+  assert.match(fourth.answer, /My guess: 68\./);
+  const win = await turn(ctx, "correct");
+  assert.match(win.answer, /Got it — your number is 68, found in 4 guesses/);
+});
+
+test("learn-on-miss reaches a registered pack provider from inside the bundle and answers cited", async () => {
+  const ctx = browserContext();
+  seededSession(ctx);
+  ctx.__article = {
+    term: "otter", title: "Otter",
+    text: "Otters are water animals. They swim well.",
+    summary: "Otters are water animals.",
+    url: "https://simple.wikipedia.org/wiki/Otter", revid: 424242, isa: "animal",
+  };
+  vm.runInContext("tmctChat.registerReferencePackProvider({ lookup: async (t) => (t === 'otter' ? __article : null) })", ctx);
+  try {
+    const { answer, record } = await turn(ctx, "what is an otter");
+    assert.match(answer, /^otter — Otters are water animals\./);
+    assert.match(answer, /\(source: reference article "Otter", Simple English Wikipedia, CC BY-SA 4\.0 — https:\/\/simple\.wikipedia\.org\/wiki\/Otter\?oldid=424242\)/);
+    assert.equal(record?.miss, false, "the cited answer is not a miss");
+    const second = await turn(ctx, "what is an otter");
+    assert.match(second.answer, /otter is a kind of animal/, "the stored isa fact answers the second ask from memory");
+  } finally {
+    vm.runInContext("tmctChat.registerReferencePackProvider(null)", ctx);
+  }
+});
+
 test("an unseeded session still turns, and the false vocab hint offers the teach pointer instead of an unanswerable example", async () => {
   const ctx = browserContext();
   vm.runInContext("globalThis.__s = tmctChat.createChatSession({})", ctx);

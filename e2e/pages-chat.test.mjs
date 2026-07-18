@@ -114,15 +114,47 @@ test("the syllogist demo runs scripted turns through a live session and proves t
   }
 });
 
-test("the demo rail lists the coming demos as disabled and only runnable ones as enabled", async () => {
+test("the demo rail lists every shipped demo as enabled, and an unknown id is refused", async () => {
   const { context, page } = await openChatPage();
   try {
-    assert.equal(await page.locator('#tmct-chat .chat-demo-rail button[data-demo-id="syllogist"]').isDisabled(), false);
-    for (const id of ["guess-number", "learn-on-miss"]) {
-      assert.equal(await page.locator(`#tmct-chat .chat-demo-rail button[data-demo-id="${id}"]`).isDisabled(), true, `${id} stays disabled until its capability ships`);
+    for (const id of ["syllogist", "guess-number", "learn-on-miss"]) {
+      assert.equal(await page.locator(`#tmct-chat .chat-demo-rail button[data-demo-id="${id}"]`).isDisabled(), false, `${id} is runnable — its capability shipped`);
     }
-    const refused = await page.evaluate(() => window.tmctRunDemo("guess-number"));
-    assert.equal(refused, false, "the driver refuses a demo that isn't ready");
+    const refused = await page.evaluate(() => window.tmctRunDemo("no-such-demo"));
+    assert.equal(refused, false, "the driver refuses an id the rail does not carry");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the guess-number demo plays a full game to the win line, within the bisection bound", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    const started = await page.evaluate(() => window.tmctRunDemo("guess-number"));
+    assert.equal(started, true, "the demo driver accepted the run");
+    await page.waitForSelector('#tmct-chat[data-demo-state="done"]', { timeout: ANSWER_TIMEOUT_MS });
+
+    const answers = page.locator("#tmct-chat .chat-log > div.chat-answer");
+    const finalAnswer = await answers.last().innerText();
+    const win = finalAnswer.match(/Got it — your number is 68, found in (\d+) guess/);
+    assert.ok(win, `the win line names the pinned secret: ${finalAnswer}`);
+    assert.ok(Number(win[1]) <= 7, `a 1–100 bisection needs at most 7 guesses, took ${win[1]}`);
+  } finally {
+    await context.close();
+  }
+});
+
+test("the learn-on-miss demo answers from the page's own reference pack with the citation frame", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    const started = await page.evaluate(() => window.tmctRunDemo("learn-on-miss"));
+    assert.equal(started, true, "the demo driver accepted the run");
+    await page.waitForSelector('#tmct-chat[data-demo-state="done"]', { timeout: ANSWER_TIMEOUT_MS });
+
+    const answers = page.locator("#tmct-chat .chat-log > div.chat-answer");
+    const finalAnswer = await answers.last().innerText();
+    assert.match(finalAnswer, /\(source: reference article "Otter", Simple English Wikipedia, CC BY-SA 4\.0/, "the answer cites the article, licence and source");
+    assert.match(finalAnswer, /oldid=\d+/, "the citation pins the revision");
   } finally {
     await context.close();
   }

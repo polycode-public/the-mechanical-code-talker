@@ -33,7 +33,7 @@ export const DEMOS = [
     // 1–100: guesses run 50, 75, 62, 68.
     id: "guess-number",
     title: "Guess my number",
-    ready: false,
+    ready: true,
     turns: [
       "I'm thinking of a number between 1 and 100",
       "higher", "lower", "higher", "correct",
@@ -42,7 +42,7 @@ export const DEMOS = [
   {
     id: "learn-on-miss",
     title: "Watch it learn a word",
-    ready: false,
+    ready: true,
     turns: [`what is a ${REFERENCE_PACK_TERMS[0]}`],
   },
 ];

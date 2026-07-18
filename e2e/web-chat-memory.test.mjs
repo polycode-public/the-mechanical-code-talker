@@ -68,18 +68,20 @@ test("sessions never share a store: a fact taught in one is unknown to a fresh o
   assert.doesNotMatch(answer, /^yes — /, "the second session never inherits the first session's teaching");
 });
 
-test("guess-number: the engine plays the demo's guessing game", { skip: "guess-number lands in a later wave" }, async () => {
+test("guess-number: the engine plays the demo's guessing game", async () => {
   const session = seededSession();
   const demo = demoById("guess-number");
+  assert.ok(demo?.ready, "the guess-number demo is live");
   let final = null;
   for (const line of demo.turns) final = await session.turn(line);
-  assert.match(final.answer, /68/, "the pinned secret is found");
+  assert.match(final.answer, /Got it — your number is 68, found in 4 guesses/, "the pinned secret is found");
 });
 
-test("learn-on-miss: a pack term the memory misses is acquired from the reference pack", { skip: "learn-on-miss lands in a later wave" }, async () => {
+test("learn-on-miss: a pack term the memory misses is acquired from the reference pack", async () => {
   const session = seededSession();
   const demo = demoById("learn-on-miss");
+  assert.ok(demo?.ready, "the learn-on-miss demo is live");
   const { answer, record } = await session.turn(demo.turns[0]);
   assert.ok(!record?.miss, "the pack lookup grounds the term instead of missing");
-  assert.match(answer, /\(source: ref:/, "the answer cites the reference pack as its source");
+  assert.match(answer, /\(source: reference article "Otter", Simple English Wikipedia/, "the answer cites the reference article as its source");
 });
