@@ -10738,7 +10738,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       text = await dispatchTool("tmct_ask", { query: askQuery }, { config, source, tel });
     }
     const [content, envJson] = text.split(ASK_ENVELOPE_DELIM);
-    answer = content;
+    // ask.mjs is shared with the web GUI surface (src/surfaces/web), whose
+    // graph view really does have clickable nodes to select — its own
+    // "click a node first, or name it directly" wording is correct THERE,
+    // but this plain chat surface has no clickable anything, so the same
+    // literal instruction reads as nonsense here (a returning-user finding,
+    // hit on a failed focus resolution with nothing selected). Swapped for
+    // CLI-appropriate wording rather than threading a surface flag through
+    // ask.mjs's whole render layer — a plain string swap on the one shared
+    // clause, not a change to the engine's own (correct, for its surface)
+    // answer.
+    answer = content.replace(
+      /needs a selected node to refer to — click a node first, or name it directly\.$/,
+      "isn't resolved to anything yet — name the term directly, or ask a question that resolves one first.",
+    );
     if (envJson) { try { envelope = JSON.parse(envJson); } catch { envelope = null; } }
   } catch (e) {
     const thrown = String(e?.message || e);
