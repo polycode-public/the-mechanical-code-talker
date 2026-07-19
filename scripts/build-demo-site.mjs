@@ -28,6 +28,7 @@ import { execFileSync } from "node:child_process";
 import { stampVersion } from "../src/domain/version-stamp.mjs";
 import { importClosure } from "../src/adapters/import-closure.mjs";
 import { readSpriteTemplateFiles } from "../src/adapters/corpus/sprite-template-files.mjs";
+import { readSpriteLargeTemplateFiles } from "../src/adapters/corpus/sprite-large-template-files.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..");
@@ -135,15 +136,33 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
 // material shading, data/sprites-large/*.toml): excluded from the npm
 // package entirely (package.json's own "!data/sprites-large/"), so only
 // this build step's own generated public/sprites-pack/ carries it to the
-// deployed site. No page fetches it yet — the same "prove the mechanism,
-// no live consumer required yet" posture the icon tier's dog-with-colour
-// demo already established — this just confirms the pack itself builds.
+// deployed site. No page FETCHES this pack client-side yet — this step just
+// confirms the pack itself builds; sprites.html below reads the same large
+// tier a different way, straight off disk at build time, same as every
+// other viz page's build-time data.
 {
   const { buildDemoSpritesPack } = await import(join(here, "build-demo-sprites-pack.mjs"));
   const spritesPackOut = join(SITE, "sprites-pack");
   rmSync(spritesPackOut, { recursive: true, force: true });
   const { manifest, bytes } = buildDemoSpritesPack({ outDir: spritesPackOut });
   console.log(`wrote ${spritesPackOut} (${manifest.templates.length} templates, ${(bytes / 1024).toFixed(1)} KB)`);
+}
+
+// The sprite library catalog: every class either tier resolves a sprite for,
+// grouped for browsing, each swatch resolved through the real
+// resolveSpriteAsset/classAncestorChain (never hand-simulated) — see
+// sprite-catalog-viz.mjs's own header for the real ontology-fact sources
+// (the spider-fly world's SEED_TAXONOMY plus corpus/wordnet/wordnet-xl.jsonl)
+// this step loads once, in Node, the same posture the ledger/adventure/
+// spider-fly build steps above already take with their own build-time data.
+{
+  const spriteLargeTemplates = readSpriteLargeTemplateFiles();
+  const { loadSpriteOntologyFactRows, renderSpriteCatalogHtml } = await import(join(ROOT, "src", "services/sprite-catalog-viz.mjs"));
+  const ontologyFactRows = await loadSpriteOntologyFactRows();
+  const spritesPagePath = join(SITE, "sprites.html");
+  const spritesHtml = renderSpriteCatalogHtml({ iconTemplates: spriteTemplates, largeTemplates: spriteLargeTemplates, factRows: ontologyFactRows });
+  await writeF(spritesPagePath, spritesHtml);
+  console.log(`wrote ${spritesPagePath}`);
 }
 
 // The plan render: solve the hanoi-3 game through the real planner and keep the
