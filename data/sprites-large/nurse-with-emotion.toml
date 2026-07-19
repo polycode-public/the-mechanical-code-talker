@@ -1,0 +1,53 @@
+# nurse-with-emotion — the same capped body as nurse.toml (a rounded cap
+# with a small flat cross cut into it, the single medical cue), plus the
+# shared face-fragment mechanism (sprite-expressions.mjs): a required
+# [face] anchor and a {{FACE}} placeholder that resolves to whichever of
+# the 6 curated mgx:feels words (happy/sad/angry/scared/surprised/calm) the
+# instance's own fact names. No mgx:feels fact falls through to the plain
+# nurse.toml sprite, the same dog/dog-with-colour precedent. {{FACE}} sits
+# as the last child before </svg>, painting over the body beneath it.
+#
+# The cap sits ABOVE the head as its own separate geometry (the domed cap
+# path peaking near y=0.8, the cross marks at y=2-5.5) — not the face
+# anchor. [face] below is anchored on the SAME head circle nurse.toml's own
+# <circle> declares (cx=12 cy=8.6 r=3.1), so the resolved face paints onto
+# the head itself, clear of the cap.
+classes = ["nurse"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="nurse-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M8.2 4.4 C8.2 2.4 9.9 0.8 12 0.8 C14.1 0.8 15.8 2.4 15.8 4.4 L15.8 5.5 C15.8 5.9 15.4 6.2 15 6.2 L9 6.2 C8.6 6.2 8.2 5.9 8.2 5.5 Z" fill="url(#nurse-with-emotion-fill)"/>
+  <rect x="11.2" y="2" width="1.6" height="3.2" rx="0.3" fill="#ffffff" opacity="0.95"/>
+  <rect x="10.4" y="2.8" width="3.2" height="1.6" rx="0.3" fill="#ffffff" opacity="0.95"/>
+  <circle cx="12" cy="8.6" r="3.1" fill="url(#nurse-with-emotion-fill)"/>
+  <path d="M6 21 C6 15.5 8.7 13.1 12 13.1 C15.3 13.1 18 15.5 18 21 Z" fill="url(#nurse-with-emotion-fill)"/>
+  <ellipse cx="9.4" cy="3.4" rx="1.4" ry="0.5" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+# The head circle nurse.toml itself declares (cx=12 cy=8.6 r=3.1) — the cap
+# geometry above it is a separate prop, not the face anchor; anchoring here
+# keeps the face on the head, clear of the cap.
+[face]
+cx = 12
+cy = 8.6
+scale = 3.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

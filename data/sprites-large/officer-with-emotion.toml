@@ -1,0 +1,54 @@
+# officer-with-emotion — the same capped body as officer.toml (a
+# structured peaked cap, flat brim and band, the single authority cue),
+# plus the shared face-fragment mechanism (sprite-expressions.mjs): a
+# required [face] anchor and a {{FACE}} placeholder that resolves to
+# whichever of the 6 curated mgx:feels words
+# (happy/sad/angry/scared/surprised/calm) the instance's own fact names. No
+# mgx:feels fact falls through to the plain officer.toml sprite, the same
+# dog/dog-with-colour precedent. {{FACE}} sits as the last child before
+# </svg>, painting over the body beneath it.
+#
+# The peaked cap sits ABOVE the head as its own separate geometry (the
+# crown dome peaking near y=2.3, the brim ellipse and band rect at
+# y=5.4-6.6) — not the face anchor. [face] below is anchored on the SAME
+# head circle officer.toml's own <circle> declares (cx=12 cy=9.2 r=3.1),
+# so the resolved face paints onto the head itself, clear of the cap/brim.
+classes = ["officer"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="officer-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M7.6 6.2 C7.6 4 9.6 2.3 12 2.3 C14.4 2.3 16.4 4 16.4 6.2 L16.4 6.4 L7.6 6.4 Z" fill="url(#officer-with-emotion-fill)"/>
+  <ellipse cx="12.4" cy="6.6" rx="4.6" ry="0.8" fill="url(#officer-with-emotion-fill)"/>
+  <rect x="8.6" y="5.4" width="6.8" height="0.8" fill="currentColor" opacity="0.5"/>
+  <circle cx="12" cy="9.2" r="3.1" fill="url(#officer-with-emotion-fill)"/>
+  <path d="M6 21 C6 15.6 8.7 13.2 12 13.2 C15.3 13.2 18 15.6 18 21 Z" fill="url(#officer-with-emotion-fill)"/>
+  <ellipse cx="9" cy="4.2" rx="1.6" ry="0.5" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+# The head circle officer.toml itself declares (cx=12 cy=9.2 r=3.1) — the
+# cap/brim/band geometry above it is a separate prop, not the face anchor;
+# anchoring here keeps the face on the head, clear of the cap.
+[face]
+cx = 12
+cy = 9.2
+scale = 3.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

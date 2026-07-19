@@ -1,0 +1,54 @@
+# king-with-emotion — the same crowned body as king.toml (a wide trefoil
+# crown on a band above the head, the single royal cue), plus the shared
+# face-fragment mechanism (sprite-expressions.mjs): a required [face]
+# anchor and a {{FACE}} placeholder that resolves to whichever of the 6
+# curated mgx:feels words (happy/sad/angry/scared/surprised/calm) the
+# instance's own fact names. No mgx:feels fact falls through to the plain
+# king.toml sprite, the same dog/dog-with-colour precedent. {{FACE}} sits
+# as the last child before </svg>, painting over the body beneath it.
+#
+# The crown sits ABOVE the head as its own separate geometry (a trefoil
+# path peaking near y=2.4, a jewel dot at cy=4.1, a band rect at y=6.2-7.8)
+# — none of that is the face anchor. [face] below is anchored on the SAME
+# head circle the crown sits above (cx=12 cy=9.6 r=3.1, king.toml's own
+# <circle> element), so the resolved face fragment paints onto the head
+# itself and never collides with the crown geometry sitting above it.
+classes = ["king"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="king-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M7 6.6 L8 3 L10.2 5.2 L12 2.4 L13.8 5.2 L16 3 L17 6.6 Z" fill="url(#king-with-emotion-fill)"/>
+  <circle cx="12" cy="4.1" r="0.7" fill="currentColor" opacity="0.9"/>
+  <rect x="7" y="6.2" width="10" height="1.6" rx="0.4" fill="url(#king-with-emotion-fill)"/>
+  <circle cx="12" cy="9.6" r="3.1" fill="url(#king-with-emotion-fill)"/>
+  <path d="M6 21 C6 15.7 8.7 13.4 12 13.4 C15.3 13.4 18 15.7 18 21 Z" fill="url(#king-with-emotion-fill)"/>
+  <ellipse cx="8.8" cy="6.9" rx="1.6" ry="0.4" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+# The head circle king.toml itself declares (cx=12 cy=9.6 r=3.1) — the
+# crown/band/jewel geometry above it is a separate prop, not the face
+# anchor; anchoring here keeps the face on the head, clear of the crown.
+[face]
+cx = 12
+cy = 9.6
+scale = 3.1
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
