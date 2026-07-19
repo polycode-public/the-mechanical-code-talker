@@ -1,0 +1,22 @@
+# table-plain — the fallback for a taught table with no mgx:madeOf value:
+# the same tabletop-and-legs silhouette as table.toml, shaded from
+# currentColor instead of a material gradient, the same reasoning
+# ring-plain.toml gives for why a brand-new class needs its own fallback
+# rather than relying on a legacy registry entry that doesn't exist yet.
+classes = ["table"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="table-plain-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="7.4" width="18" height="2.4" rx="0.5" fill="url(#table-plain-fill)"/>
+  <path d="M3.4 8 L20.6 8" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
+  <rect x="4.6" y="9.8" width="1.8" height="10.6" rx="0.3" fill="url(#table-plain-fill)"/>
+  <rect x="17.6" y="9.8" width="1.8" height="10.6" rx="0.3" fill="url(#table-plain-fill)"/>
+  <rect x="4.6" y="9.8" width="14.8" height="1.2" fill="#000000" opacity="0.12"/>
+</svg>
+"""

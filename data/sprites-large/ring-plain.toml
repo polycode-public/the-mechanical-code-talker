@@ -1,0 +1,24 @@
+# ring-plain — the fallback for a taught ring with no mgx:madeOf value at
+# all: the same band-and-gem silhouette as ring.toml, shaded from
+# currentColor instead of a material gradient, since neither ring.toml's
+# own material table nor the flat legacy sprite registry has anything to
+# fill in when no fact is taught (this class is new to both), and falling
+# all the way through to the generic animal root would be worse than a
+# currentColor-shaded ring.
+classes = ["ring"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="ring-plain-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="14.5" r="6.2" fill="none" stroke="url(#ring-plain-fill)" stroke-width="2.4"/>
+  <path d="M12 4.2 L15.2 8.6 L12 11.4 L8.8 8.6 Z" fill="#d8f3f7"/>
+  <path d="M12 4.2 L15.2 8.6 L12 11.4 Z" fill="#aee0ea" opacity="0.7"/>
+  <path d="M10.6 6.2 L12 4.2 L12 8.2 Z" fill="#ffffff" opacity="0.7"/>
+  <path d="M7.4 12.4 A6.2 6.2 0 0 1 11.6 8.6" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-linecap="round" opacity="0.4"/>
+</svg>
+"""
