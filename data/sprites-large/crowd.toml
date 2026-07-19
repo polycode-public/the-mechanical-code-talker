@@ -1,0 +1,26 @@
+# crowd — three same-height figures, the front one full opacity and the
+# two flanking it faded and set slightly back, reading as an anonymous
+# many rather than named individuals (family.toml's own three stay fully
+# opaque for exactly the opposite reason).
+classes = ["crowd"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="crowd-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g opacity="0.6">
+    <circle cx="5.2" cy="9.6" r="2.5" fill="url(#crowd-fill)"/>
+    <path d="M1.4 22 C1.4 17.8 3 15.9 5.2 15.9 C7.4 15.9 9 17.8 9 22 Z" fill="url(#crowd-fill)"/>
+  </g>
+  <g opacity="0.6">
+    <circle cx="18.8" cy="9.6" r="2.5" fill="url(#crowd-fill)"/>
+    <path d="M15 22 C15 17.8 16.6 15.9 18.8 15.9 C21 15.9 22.6 17.8 22.6 22 Z" fill="url(#crowd-fill)"/>
+  </g>
+  <circle cx="12" cy="7.6" r="3" fill="url(#crowd-fill)"/>
+  <path d="M6.8 22 C6.8 17.1 9 14.9 12 14.9 C15 14.9 17.2 17.1 17.2 22 Z" fill="url(#crowd-fill)"/>
+</svg>
+"""

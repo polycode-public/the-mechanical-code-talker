@@ -1,0 +1,21 @@
+# judge — a robe, open at the front over the plain body, two flat dark
+# lapel panels meeting in a collar V at the neck: an outer-silhouette
+# change (per butler.toml's own reasoning for why an internal accent was
+# rejected), not an internal detail.
+classes = ["judge"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="judge-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="6.6" r="3.3" fill="url(#judge-fill)"/>
+  <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z" fill="url(#judge-fill)"/>
+  <path d="M7.4 13.4 C7 15.8 7.4 18.4 8.6 21 L10 20.5 C9 18.2 8.7 15.8 9 13.6 C8.5 13.5 7.9 13.4 7.4 13.4 Z" fill="currentColor" opacity="0.85"/>
+  <path d="M16.6 13.4 C17 15.8 16.6 18.4 15.4 21 L14 20.5 C15 18.2 15.3 15.8 15 13.6 C15.5 13.5 16.1 13.4 16.6 13.4 Z" fill="currentColor" opacity="0.85"/>
+  <path d="M9.6 13.2 L12 15.6 L14.4 13.2" fill="none" stroke="currentColor" stroke-width="0.8" opacity="0.6" stroke-linecap="round"/>
+</svg>
+"""

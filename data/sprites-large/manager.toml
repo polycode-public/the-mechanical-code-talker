@@ -1,0 +1,21 @@
+# manager — a clipboard held against the body, a small clip bump and
+# faint ruled lines, the single cue for someone tracking rather than
+# doing the work directly.
+classes = ["manager"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="manager-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="6.6" r="3.3" fill="url(#manager-fill)"/>
+  <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z" fill="url(#manager-fill)"/>
+  <rect x="14.6" y="13.6" width="4.6" height="6.4" rx="0.5" fill="url(#manager-fill)" opacity="0.95"/>
+  <rect x="16.2" y="13" width="1.4" height="1.1" rx="0.3" fill="currentColor" opacity="0.85"/>
+  <path d="M15.4 15.4 L18.4 15.4 M15.4 16.6 L18.4 16.6 M15.4 17.8 L17.4 17.8" stroke="currentColor" stroke-width="0.5" opacity="0.4"/>
+  <path d="M9.6 4.2 C10.3 3.6 11.1 3.4 12 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+</svg>
+"""

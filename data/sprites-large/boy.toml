@@ -1,0 +1,19 @@
+# boy — the same child-scale proportions as child.toml. girl.toml adds a
+# hair silhouette as its own further differentiator; this file stays the
+# plain child-scale baseline the same way man.toml stays the plain adult
+# baseline.
+classes = ["boy"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="boy-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="8.2" r="3.6" fill="url(#boy-fill)"/>
+  <path d="M7.4 21 C7.4 16.6 9.4 14.6 12 14.6 C14.6 14.6 16.6 16.6 16.6 21 Z" fill="url(#boy-fill)"/>
+  <path d="M9.8 5.6 C10.4 5.1 11.1 4.9 12 5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+</svg>
+"""
