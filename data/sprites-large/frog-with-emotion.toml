@@ -1,0 +1,46 @@
+# frog-with-emotion — copies dog-with-emotion.toml's shape exactly. frog.toml's
+# two eye bulges are the head (there is no separate head circle), so [face]
+# anchors between and below them, where the new small eyes nest inside the
+# existing cream eye-whites; its own fixed smile path is dropped since the
+# new expression's own mouth replaces it in the same spot.
+classes = ["frog"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="frog-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="15" rx="7.4" ry="5.4" fill="url(#frog-with-emotion-fill)"/>
+  <ellipse cx="6.6" cy="17.6" rx="3" ry="2" fill="url(#frog-with-emotion-fill)"/>
+  <ellipse cx="17.4" cy="17.6" rx="3" ry="2" fill="url(#frog-with-emotion-fill)"/>
+  <circle cx="8" cy="8.4" r="2.6" fill="url(#frog-with-emotion-fill)"/>
+  <circle cx="16" cy="8.4" r="2.6" fill="url(#frog-with-emotion-fill)"/>
+  <circle cx="8" cy="7.8" r="1.3" fill="#0d2a1a"/>
+  <circle cx="16" cy="7.8" r="1.3" fill="#0d2a1a"/>
+  <ellipse cx="9.4" cy="13.6" rx="2.4" ry="1.3" fill="#ffffff" opacity="0.3"/>
+  <ellipse cx="7.2" cy="7.4" rx="0.7" ry="0.5" fill="#ffffff" opacity="0.6"/>
+  {{FACE}}
+</svg>
+"""
+
+# No head circle exists (the two eye bulges are the head) — this anchors
+# between them, over the space where the dropped mouth curve used to sit.
+[face]
+cx = 12
+cy = 12
+scale = 5.5
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

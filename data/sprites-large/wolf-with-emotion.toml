@@ -1,0 +1,46 @@
+# wolf-with-emotion — copies dog-with-emotion.toml's shape exactly. wolf.toml
+# has no separate head circle (its head is one irregular path between the
+# two ears), so [face] below is the head path's own bounding box centre
+# instead of a literal r — the muzzle shadow stays (it sits low enough to
+# read as shading under the new mouth), but the small eye-shadow ellipse is
+# dropped, the same dog precedent, since it sits where the real eyes now go.
+classes = ["wolf"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="wolf-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12.6" cy="15.4" rx="6.6" ry="4.2" fill="url(#wolf-with-emotion-fill)"/>
+  <path d="M4.6 10.2 C4.6 7 6.8 5.2 9.6 5.2 C12.4 5.2 14 7.4 13.8 10.2 C13.6 12.4 12.2 13.4 9.4 13.4 C6.8 13.4 4.6 12.4 4.6 10.2 Z" fill="url(#wolf-with-emotion-fill)"/>
+  <path d="M5 6.6 L3.4 2.6 L7 4.8 Z" fill="url(#wolf-with-emotion-fill)"/>
+  <path d="M11.4 5.4 L11.8 1.6 L14.6 4.6 Z" fill="url(#wolf-with-emotion-fill)"/>
+  <path d="M5.6 10.4 C6 12.2 7.8 13 9.4 13 C7.8 12.2 6.6 11.2 6.4 9.4 Z" fill="#000000" opacity="0.18"/>
+  <path d="M17.4 13.2 C21 10.6 23.6 13 22 16.6 C21 18.2 19.6 18.4 18.8 17 C20.2 16.4 20.8 15.1 20.2 13.8 C19.2 13 18.3 12.9 17.4 13.2 Z" fill="url(#wolf-with-emotion-fill)"/>
+  <ellipse cx="10.2" cy="12.2" rx="2.4" ry="1.4" fill="#ffffff" opacity="0.26"/>
+  {{FACE}}
+</svg>
+"""
+
+# wolf.toml's head is a path (M4.6 10.2 ... Z spanning x 4.6-14, y 5.2-13.4),
+# not a circle — cx/cy is that path's own bounding-box centre, scale its
+# average half-extent.
+[face]
+cx = 9.3
+cy = 9.2
+scale = 4.2
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

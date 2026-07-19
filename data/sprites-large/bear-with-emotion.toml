@@ -1,0 +1,43 @@
+# bear-with-emotion — copies dog-with-emotion.toml's shape exactly: the same
+# silhouette as bear.toml, plus a required [face] anchor and a {{FACE}}
+# placeholder that resolves to whichever of the 6 curated mgx:feels words the
+# instance's own fact names. No existing eye/mouth markup to drop — bear.toml
+# carries only a muzzle shadow (kept, it sits below the new face's eye band).
+classes = ["bear"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="bear-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="15.4" rx="7.2" ry="5.6" fill="url(#bear-with-emotion-fill)"/>
+  <circle cx="12" cy="9" r="5" fill="url(#bear-with-emotion-fill)"/>
+  <circle cx="7" cy="5.4" r="2.1" fill="url(#bear-with-emotion-fill)"/>
+  <circle cx="17" cy="5.4" r="2.1" fill="url(#bear-with-emotion-fill)"/>
+  <ellipse cx="12" cy="10.4" rx="2.2" ry="1.7" fill="#000000" opacity="0.16"/>
+  <ellipse cx="9.2" cy="12.4" rx="3" ry="1.7" fill="#ffffff" opacity="0.28"/>
+  <ellipse cx="7.6" cy="4.8" rx="0.8" ry="0.6" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+# The same cx/cy/r bear.toml's own head circle declares.
+[face]
+cx = 12
+cy = 9
+scale = 5
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
