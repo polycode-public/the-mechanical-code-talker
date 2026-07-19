@@ -677,9 +677,20 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
   // later, as if it were still on the board. Drop it from `agents` (its own
   // goal is moot) and let the eating spider's line say what actually
   // happened instead of the now-false "co-located with fly-5 in the web".
+  // A spider can eat more than one fly in the same tick (several flies
+  // co-located with it on the same cell) — group by spider first, rather
+  // than overwriting the goal once per eaten fly, which silently credited
+  // only the LAST one and dropped every earlier fly from the summary line
+  // (the "Turn N — ..." event text already lists every eaten fly correctly;
+  // only this goal-line summary was collapsing them).
+  const eatenBySpider = new Map();
   for (const { fly, spider } of ecology.events.eaten) {
     delete agents[fly];
-    if (agents[spider]) agents[spider].goal = `just ate ${fly} in the web.`;
+    if (!eatenBySpider.has(spider)) eatenBySpider.set(spider, []);
+    eatenBySpider.get(spider).push(fly);
+  }
+  for (const [spider, flyIds] of eatenBySpider) {
+    if (agents[spider]) agents[spider].goal = `just ate ${flyIds.join(" and ")} in the web.`;
   }
   for (const flyId of ecology.events.starved) delete agents[flyId];
   const writes = [...movementWrites, ...ecology.writes];
