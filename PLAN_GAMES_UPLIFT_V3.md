@@ -614,6 +614,21 @@ in flight — relayed directly to the implementing agents, recorded here too:**
    time — fact totals by provenance tier, corpus bundle breakdown, session/ingestion history, chat-
    lane usage counts — never an invented number.
 
+   **Status: shipped** (merged to main, commit `27354e9` + merge, re-verified by the coordinator).
+   Six tiles between `<h1>` and the topbar (`facts.total`, `facts.by-tier` proportional bar,
+   `graph.avg-degree`, `data.quality` contradiction count with an alert-colored border when >0,
+   `corpus.bundles`, `predicate.top`), plus a real teach-order ingestion sparkline in the aside —
+   all from a new pure `computeLedgerStats(rows, terms, contradictions)` run on the full row set
+   before the existing row-cap logic, so totals stay truthful even when the ledger body itself
+   degrades to "recent + local" on a large graph. `session/ingestion history` and `chat-lane usage
+   counts` from this doc's own wishlist were checked against the real `demo-memory.json` payload
+   (only `Fact`/`Source`/`Rule` individuals exist — no `Session`/`Utterance` data is persisted) and
+   dropped as undeliverable without fabrication; the ingestion sparkline (teach order, not wall
+   clock — the demo memory is built in one script run with clock timestamps seconds apart) fills
+   that space honestly instead. Folded in a pre-existing, unrelated 375px overflow bug found during
+   verification (long combined provenance badges forcing a wide single-column grid) per this
+   project's "don't narrow scope" rule.
+
 ### C.5 Files touched
 
 New: `src/services/chat-viz.mjs` (or similarly named — `renderChatHtml`), `public/chat.html`,
