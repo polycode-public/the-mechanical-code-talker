@@ -1,0 +1,50 @@
+# mouse-with-emotion — copies dog-with-emotion.toml's shape exactly.
+# mouse.toml's two circles are both ears (per its own header comment,
+# "oversized ears"), not a head, so [face] below anchors near the existing
+# nose/whisker region on the body blob itself instead. The single black eye
+# dot is dropped, the same dog precedent, since it sits where the real eyes
+# now go; the nose stays, the same cat precedent (it sits below the new
+# face's own eye/mouth band).
+classes = ["mouse"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="mouse-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 20 C3 14 6 9.6 11.4 9.6 C16.4 9.6 19 13.4 18.2 17.6 C17.6 20.6 14.6 21.4 11 21.2 C7.8 21 4.6 21.6 4 20 Z" fill="url(#mouse-with-emotion-fill)"/>
+  <circle cx="5.6" cy="6.4" r="2.6" fill="url(#mouse-with-emotion-fill)"/>
+  <circle cx="11" cy="5.4" r="2.9" fill="url(#mouse-with-emotion-fill)"/>
+  <path d="M19 17 C22.6 17.6 22.8 14.4 21.2 12.8 C21.6 15 20.6 16.4 19 17 Z" fill="url(#mouse-with-emotion-fill)"/>
+  <ellipse cx="13.6" cy="12.4" rx="0.8" ry="0.6" fill="#c98c8c" opacity="0.7"/>
+  <g stroke="#000000" stroke-width="0.35" opacity="0.4">
+    <path d="M14.4 12 L18 11.2"/>
+    <path d="M14.4 12.6 L18 13"/>
+  </g>
+  <ellipse cx="8.6" cy="16.8" rx="3" ry="1.6" fill="#ffffff" opacity="0.28"/>
+  <ellipse cx="4.8" cy="5.4" rx="0.9" ry="0.7" fill="#ffffff" opacity="0.35"/>
+  {{FACE}}
+</svg>
+"""
+
+# No head circle exists (both circles are ears) — this anchors on the body
+# blob's own front bulge, near the existing nose/whiskers.
+[face]
+cx = 12.3
+cy = 11.3
+scale = 3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

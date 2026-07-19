@@ -1,0 +1,48 @@
+# owl-with-emotion — copies dog-with-emotion.toml's shape exactly. owl.toml's
+# two big cream/pupil eyes ARE the head design (there is no separate head
+# circle), so [face] below anchors on that head lobe's own bounding-box
+# centre; nothing is dropped — the new small eyes nest inside the existing
+# cream irises rather than replacing them, since a real owl's face is mostly
+# eyes to begin with.
+classes = ["owl"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="owl-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 3.4 L14.4 6.4 L9.6 6.4 Z" fill="url(#owl-with-emotion-fill)"/>
+  <path d="M6.4 8 C6.4 4.6 8.8 3 12 3 C15.2 3 17.6 4.6 17.6 8 C17.6 10.4 16.4 12 14.8 12.8 C17.4 14 19 16.6 19 19.4 C19 21.6 15.8 22.6 12 22.6 C8.2 22.6 5 21.6 5 19.4 C5 16.6 6.6 14 9.2 12.8 C7.6 12 6.4 10.4 6.4 8 Z" fill="url(#owl-with-emotion-fill)"/>
+  <circle cx="9" cy="8.2" r="2.6" fill="#f4ecd8"/>
+  <circle cx="15" cy="8.2" r="2.6" fill="#f4ecd8"/>
+  <circle cx="9" cy="8.2" r="1.3" fill="#0d1a12"/>
+  <circle cx="15" cy="8.2" r="1.3" fill="#0d1a12"/>
+  <path d="M11 10.2 L12 11.6 L13 10.2 Z" fill="#e8a23a"/>
+  <ellipse cx="10.6" cy="16.6" rx="3.6" ry="2.2" fill="#ffffff" opacity="0.22"/>
+  <circle cx="9.6" cy="7.4" r="0.6" fill="#ffffff" opacity="0.7"/>
+  {{FACE}}
+</svg>
+"""
+
+# owl.toml's head lobe (the path from M6.4 8 ... to C17.4 14, before the
+# body narrows) spans roughly x 6.4-17.6, y 3-12.8 — this is that lobe's own
+# bounding-box centre and half-extent, not a literal head circle.
+[face]
+cx = 12
+cy = 8
+scale = 5
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

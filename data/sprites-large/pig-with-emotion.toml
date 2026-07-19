@@ -1,0 +1,47 @@
+# pig-with-emotion — copies dog-with-emotion.toml's shape exactly. pig.toml
+# fuses body and head into one round ellipse with no separate head shape, so
+# [face] below anchors clear of the snout instead, close to the existing eye
+# dot's own position; that eye dot is dropped, the same dog precedent, since
+# it sits where the real eyes now go. The snout and its nostrils stay, the
+# same cat-nose precedent (they sit off to the side of the new face).
+classes = ["pig"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="pig-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="14.4" rx="8" ry="5.4" fill="url(#pig-with-emotion-fill)"/>
+  <path d="M6.4 9.4 L4 6.6 L7.6 6.8 Z" fill="url(#pig-with-emotion-fill)"/>
+  <path d="M14 8.8 L14.6 5.6 L17 8 Z" fill="url(#pig-with-emotion-fill)"/>
+  <ellipse cx="6.4" cy="14" rx="3" ry="2.4" fill="url(#pig-with-emotion-fill)"/>
+  <circle cx="5.4" cy="14" r="0.6" fill="#000000" opacity="0.4"/>
+  <circle cx="7.2" cy="14" r="0.6" fill="#000000" opacity="0.4"/>
+  <path d="M20 12.6 C22.6 11.6 22.4 14 20.6 14.4 C20.6 13.6 20.2 13 20 12.6 Z" fill="url(#pig-with-emotion-fill)"/>
+  <ellipse cx="14.6" cy="11.6" rx="3.4" ry="2" fill="#ffffff" opacity="0.28"/>
+  {{FACE}}
+</svg>
+"""
+
+# No head circle exists (the body ellipse doubles as the head) — this
+# anchors clear of the snout (which spans roughly x 3.4-9.4), near where
+# pig.toml's own eye dot sat.
+[face]
+cx = 12
+cy = 12
+scale = 4
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
