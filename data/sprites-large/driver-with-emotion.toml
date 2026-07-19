@@ -1,0 +1,43 @@
+# driver-with-emotion — same steering-wheel silhouette as driver.toml, plus
+# a required [face] anchor and a {{FACE}} placeholder that resolves to
+# whichever of the 6 curated mgx:feels words the instance's own fact names.
+# No mgx:feels fact falls through to the plain driver.toml sprite.
+classes = ["driver"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="driver-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="6.6" r="3.3" fill="url(#driver-with-emotion-fill)"/>
+  <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z" fill="url(#driver-with-emotion-fill)"/>
+  <circle cx="12" cy="17.6" r="3" fill="none" stroke="url(#driver-with-emotion-fill)" stroke-width="1.3"/>
+  <line x1="12" y1="14.6" x2="12" y2="17.6" stroke="url(#driver-with-emotion-fill)" stroke-width="1.1"/>
+  <line x1="9.4" y1="19.1" x2="12" y2="17.6" stroke="url(#driver-with-emotion-fill)" stroke-width="1.1"/>
+  <line x1="14.6" y1="19.1" x2="12" y2="17.6" stroke="url(#driver-with-emotion-fill)" stroke-width="1.1"/>
+  <circle cx="12" cy="17.6" r="0.7" fill="url(#driver-with-emotion-fill)"/>
+  <path d="M9.6 4.2 C10.3 3.6 11.1 3.4 12 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+# The same cx/cy/r driver.toml's own head circle declares.
+[face]
+cx = 12
+cy = 6.6
+scale = 3.3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
