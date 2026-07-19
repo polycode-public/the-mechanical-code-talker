@@ -847,6 +847,29 @@ enabled = false             # local-only counters; never phones home
 [memory]
 retention_versions = 5      # snapshot generations memory/core.mjs keeps on manifest bootstrap
 backend = "sqlite"          # default | memory | sqlite (see "Memory backends" above)
+
+# Game tuning knobs (src/domain/game-config.mjs). Every OTHER game parameter
+# (disk/peg counts, the goal, ...) lives in the game's own taught-English
+# world instead — these are the handful of genuine magic numbers that
+# aren't expressible that way.
+[games.spider-fly]
+spider_initial_mass = 15
+spider_mass_decrement_per_turn = 0.5   # lower = slower to starve
+fly_initial_mass = 10
+fly_mass_decrement_per_turn = 1
+vision_radius = 4                      # Chebyshev radius an agent can see other agents within
+egg_hatch_delay_turns = 3              # turns between a lay and its hatch
+fly_spawn_interval_turns = 3           # a new fly arrives every Nth turn
+eggs_eaten_threshold = 2               # flies eaten since the last egg before the next one lays
+web_duration_turns = 10                # turns a spider-built web stays active
+
+[games.guess-number]
+default_lo = 1           # the range's default lower bound, when the opening line states none
+default_hi = 100         # the range's default upper bound, when the opening line states none
+max_bound = 1000000000   # sanity cap on either bound, however the opening line states it
+
+[planning]
+max_depth = 300  # the "solve it" plan lane's search-depth cap (hanoi, river-crossing, any taught-rule domain)
 ```
 
 ### Try it on an example graph

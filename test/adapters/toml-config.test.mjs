@@ -51,3 +51,47 @@ test("normalizeConfig: an unrecognized [memory] backend value still passes throu
   const norm = await normalizeConfig({ memory: { backend: "bogus" } }, { configDir: "/x" });
   assert.equal(norm.memory.backend, "bogus");
 });
+
+// ---- [games.*] / [planning]: sparse raw pass-through, same discipline as
+// [extensions]/[bias] above — src/domain/game-config.mjs's resolveGameConfig
+// owns the snake_case -> camelCase mapping and the default fill, never this
+// module.
+
+test("normalizeConfig: no [games]/[planning] tables at all — both keys absent (sparse)", async () => {
+  const norm = await normalizeConfig({}, { configDir: "/x" });
+  assert.equal(norm.games, undefined);
+  assert.equal(norm.planning, undefined);
+});
+
+test("normalizeConfig: [games.spider-fly] rides through unmodified, snake_case keys untouched", async () => {
+  const raw = { games: { "spider-fly": { spider_mass_decrement_per_turn: 0.25, vision_radius: 6 } } };
+  const norm = await normalizeConfig(raw, { configDir: "/x" });
+  assert.deepEqual(norm.games, { "spider-fly": { spider_mass_decrement_per_turn: 0.25, vision_radius: 6 } });
+});
+
+test("normalizeConfig: [games.guess-number] rides through unmodified alongside [games.spider-fly]", async () => {
+  const raw = { games: { "spider-fly": { vision_radius: 6 }, "guess-number": { default_lo: 5, default_hi: 50 } } };
+  const norm = await normalizeConfig(raw, { configDir: "/x" });
+  assert.deepEqual(norm.games, { "spider-fly": { vision_radius: 6 }, "guess-number": { default_lo: 5, default_hi: 50 } });
+});
+
+test("normalizeConfig: [planning] max_depth rides through unmodified", async () => {
+  const norm = await normalizeConfig({ planning: { max_depth: 12 } }, { configDir: "/x" });
+  assert.deepEqual(norm.planning, { max_depth: 12 });
+});
+
+test("normalizeConfig: [games]/[planning] round-trip through a real tmct.toml on disk", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(
+      join(dir, "tmct.toml"),
+      "[games.spider-fly]\nspider_mass_decrement_per_turn = 0.25\n\n[planning]\nmax_depth = 12\n",
+    );
+    const raw = await loadTomlConfig(dir);
+    const norm = await normalizeConfig(raw, { configDir: dir });
+    assert.deepEqual(norm.games, { "spider-fly": { spider_mass_decrement_per_turn: 0.25 } });
+    assert.deepEqual(norm.planning, { max_depth: 12 });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

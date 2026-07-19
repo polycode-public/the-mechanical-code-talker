@@ -27,6 +27,7 @@ import { createTelemetry } from "./telemetry.mjs";
 import * as defaultSource from "../adapters/source.mjs";
 import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
 import { runTurn, hasSeededVocabulary, vocabExampleHint } from "./chat.mjs";
+import { resolveGameConfig } from "../domain/game-config.mjs";
 
 /** Where session logs live, relative to the target repo. `.tmct/` is the repo's
  *  one artifact directory (gitignored, machine-local) — flip this single constant
@@ -181,6 +182,13 @@ export async function createSession({
       ({ config, toml } = await resolveRuntimeConfig({ argv, cwd, env, gitRoot }));
     }
   }
+
+  // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
+  // bounds, the shared plan lane's search-depth cap), resolved once per
+  // session from this repo's tmct.toml — resolveGameConfig tolerates `toml`
+  // being null (no file, or one that failed to load above) by falling back
+  // to the shipped defaults for every key.
+  const gameConfig = resolveGameConfig(toml);
 
   // Ephemeral: keep config.graphFile pointing at the READ graph, but divert the
   // write base (repo → logs/memory/sessions) to a throwaway temp dir. The committed
@@ -338,7 +346,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, vocabHint, tel, biasByBundle, planState });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, vocabHint, tel, biasByBundle, planState, gameConfig });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
