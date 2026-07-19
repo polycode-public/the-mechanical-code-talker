@@ -232,10 +232,21 @@ in-flight rule-shape work on `adventure.mjs`):
      visible directly or revealed by an opened container): the goal is **fetch** — `findActionPath`
      over the exposed exit-graph from the current room to the objective's room; once co-located,
      `take`.
+   - Found, but its room still unknown (still hidden inside a closed or locked container): the goal
+     is **progress a known container** — every `mgx:is-container` subject whose OWN placement is
+     exposed (its room has been visited, even though its contents stay hidden) is a candidate. An
+     unlocked, still-closed one is opened outright (opening can only ever reveal more, never a wrong
+     guess); a locked one whose instrument (`mgx:unlocks-with`) is exposed and already carried is
+     unlocked; a locked one whose instrument's own room is known but not yet carried gets that
+     instrument fetched first (the same fetch logic, recursively, for the instrument instead of the
+     objective). This is what actually lets auto-play reach a letter sitting behind Ashcombe Hall's
+     locked cabinet — without it, "revealed by an opened container" above could never happen, since
+     nothing ever issued `open` or `unlock` at all.
    - Found, but already carried: **win** — auto-play reports done, no further move.
-3. Execute exactly the FIRST step of whatever plan step 2 produced (one `go <direction>`, or one
-   `take <object>`) through the ordinary `runWorldCommand` path — auto-play is a caller of the
-   existing command interpreter, not a second one.
+3. Execute exactly the FIRST step of whatever plan step 2 produced (one `go <direction>`, one
+   `take <object>`, one `open <container>`, or one `unlock <container> with <instrument>`) through
+   the ordinary `runWorldCommand` path — auto-play is a caller of the existing command interpreter,
+   not a second one.
 4. Return the same shape spider-fly's tick already returns (`{turn, goal, plan, done}}`-ish) so the
    viz page's ticker can show a goal line and step count the way spider-fly's page already does.
 

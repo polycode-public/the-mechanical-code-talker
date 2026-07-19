@@ -148,6 +148,14 @@ delivered plan docs; each records what its delivery deliberately did not include
   for the exact tick it ate, even though the store's own written fact was already correct. Fixed
   this round: `runEcologyPass` now exposes the true post-eat mass on its `events` object, and the
   existing eaten-pair loop reads it into `agents[spider].mass`. Shipped.
+- Adventure edge-hunt round 5 of the second hunt (`playtests/PLAYTEST_LOG_016.md`, closing the
+  adventure side of this hunt): a real-browser run of `adventure.html`'s Play button found
+  auto-play could never actually win Ashcombe Hall — the letter sits behind a locked cabinet needing
+  a key hidden in another container, and `runAdventureAutoplayTick` only ever issued `go`/`take`, so
+  a hidden object's room could never resolve and auto-play stalled having explored every room. Fixed
+  this round: a new "progress a known container" goal branch opens unlocked containers on sight,
+  unlocks a locked one when its instrument is carried, and detours to fetch a known-but-uncarried
+  instrument first. Confirmed winning both via a direct probe and a live-browser Play run. Shipped.
 
 ## Discipline
 
