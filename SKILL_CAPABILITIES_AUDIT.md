@@ -9,7 +9,7 @@ evidence for every row.
 > **Invoke it by telling a session:** *"Follow `SKILL_CAPABILITIES_AUDIT.md` and run a capabilities
 > audit"*.
 
-`CAPABILITIES_2.0.3.md` is the last generated audit and the structural reference for what the
+`CAPABILITIES_2.7.12.md` is the last generated audit and the structural reference for what the
 sections look like. Read it for shape. Never copy its verdicts forward.
 
 ---
@@ -115,15 +115,16 @@ Worked example, true as this is written:
 
 | Benchmark | Latest report | Figure comes from |
 | --- | --- | --- |
-| AGENT | `BENCHMARK_AGENT_2.0.3.md` | 2.0.3, current |
-| CEFR_ENGLISH | `BENCHMARK_CEFR_ENGLISH_2.0.3.md` | 2.0.3, current |
-| CONVERSATION | `BENCHMARK_CONVERSATION_2.0.3.md` | 2.0.3, current |
-| INFERENCE | `BENCHMARK_INFERENCE_2.0.3.md` | 2.0.3, current |
+| AGENT | `BENCHMARK_AGENT_2.7.12.md` | 2.7.12, current |
+| CEFR_ENGLISH | `BENCHMARK_CEFR_ENGLISH_2.7.12.md` | 2.7.12, current |
+| CONVERSATION | `BENCHMARK_CONVERSATION_2.7.11.md` | 2.7.11, carried forward |
+| INFERENCE | `BENCHMARK_INFERENCE_2.7.12.md` | 2.7.12, current |
 
-`max(2.0.3, 2.0.3, 2.0.3, 2.0.3)` is 2.0.3, so that audit is `CAPABILITIES_2.0.3.md`, even though
-`package.json` reads 2.1.0. That cycle measured all four axes before writing, so no row is carried
-forward — `CAPABILITIES_2.0.3.md`'s own opening says so. A cycle that measures fewer axes fills the
-"Figure comes from" column with the older version and the words "carried forward".
+`max(2.7.12, 2.7.12, 2.7.11, 2.7.12)` is 2.7.12, so that audit is `CAPABILITIES_2.7.12.md`, even
+though CONVERSATION's own report is one version behind — it was measured before that session's
+other work landed. That cycle names 2.7.11 in the same sentence as every CONVERSATION figure it
+cites, exactly the rule below: a cycle that measures fewer axes fills the "Figure comes from"
+column with the older version and the words "carried forward".
 
 **Every audit opens with that table, filled in for its own cycle.** A figure whose report is older
 than the audit's own number is carried forward, and the row says so. A carried-forward number

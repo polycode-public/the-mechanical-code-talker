@@ -1,6 +1,9 @@
 # PLAN_GAMES_UPLIFT_V2.md — spider-fly ecology v2 (wandering, webs, mass symmetry) and an adventure graphical presence with goal-inferring auto-play
 
-Status: DESIGNED, build in progress.
+Status: SHIPPED. Both Part A (spider-fly ecology v2) and Part B (the adventure graphical presence
+and goal-inferring auto-play) are live code, confirmed by direct reading of `src/services/
+spider-fly.mjs`/`src/services/adventure-viz.mjs`/`src/services/adventure-autoplay.mjs`, with real
+test and corpus-lane coverage for every mechanic this doc names.
 
 ## Origin
 

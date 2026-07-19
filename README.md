@@ -120,10 +120,11 @@ tmct> /exit
 
 **[Try it live in your browser →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/)**
 is a real, interactive chat demo running client-side. Your browser runs the
-actual query engine against a small example codebase, no server, no install.
-The page leads with the **memory ledger**: every fact as a readable sentence,
-drill by clicking the terms inside them, and an in-page chat whose answers
-focus the ledger.
+actual query engine, no server, no install. The page opens with a live chat
+you can talk to directly, then embeds the **memory ledger** (every fact as a
+readable sentence, drill by clicking the terms inside them), a Towers-of-Hanoi
+plan replayed move by move, and the two live games above — spider-fly and the
+text adventure — each with a link to open it full-screen.
 
 From a clone, two build scripts regenerate that demo so you can check it
 offline before it deploys. The example graph, the ledger page, and the
@@ -183,7 +184,7 @@ resolves to a real graph traversal or declines cleanly:
   (*because/although/while*), conditionals, and false-premise flags ("why
   does X still import Y" when it no longer does).
 
-The full catalog with measured coverage lives in `CAPABILITIES_2.0.3.md` and
+The full catalog with measured coverage lives in `CAPABILITIES_2.7.12.md` and
 the `BENCHMARK_*.md` reports.
 
 **Response finishing.** Before an answer prints, it is segmented into typed
@@ -371,7 +372,7 @@ the plan as a self-contained animated page (see "Two more surfaces" above).
 
 ## Play a game with it
 
-Two games run inside an ordinary chat session, no setup.
+Three games run inside an ordinary chat session, no setup.
 
 **Guess the number.** Say `I'm thinking of a number between 1 and 100` and
 tmct guesses by narrowing an interval — answer `higher`, `lower`, or
@@ -392,6 +393,19 @@ writes per-turn snapshot facts, `look` is an extractive digest of the graph,
 a blocked action declines by name, and one of the household moves on its own
 schedule whether you are there to see it or not. The full worked mystery is
 pinned step by step in `test/corpus/games/adventure.jsonl`.
+
+**Two agents, planning against each other.** Say `play spider and fly` (or
+`watch the spider and the fly`) and tmct runs both sides itself — neither is
+player-controlled. A spider hunts a fly across a 10×10 web; each side only
+believes what it can currently see (`vision_radius`, tunable), a fly wanders
+when nothing threatens it and evades when something does, a spider avoids
+other spiders, chases what it believes it sees, and builds a web when it
+holds position. Mass is real: both sides waste away each turn they don't
+eat, and a spider gains exactly the mass of what it catches. You can address
+either side directly (`@spider the fly is east`) to feed it a belief — true
+or false — and watch a wrong assertion mislead it for as long as the real
+target stays out of sight. `tmct.toml`'s `[games.spider-fly]` table tunes
+every rate; the full mechanic is pinned in `test/corpus/games/spider-fly.jsonl`.
 
 ## Learning on a miss
 
@@ -1035,18 +1049,18 @@ service. The LLM agent stays outside tmct, as the no-LLM ethos requires.
 
 ## Measuring it
 
-What the 2.0.3 cycle measured, on 2026-07-16. Each figure links to its method
-and carries, in the same row, the caveat that changes what it means. The full
-tables, judge scores, and transcripts are in the linked write-ups.
+What the 2.7.11/2.7.12 cycle measured, on 2026-07-19. Each figure links to its
+method and carries, in the same row, the caveat that changes what it means.
+The full tables, judge scores, and transcripts are in the linked write-ups.
 
-| What it does | Result (2.0.3) | Read the number with this | Method |
+| What it does | Result (2.7.12) | Read the number with this | Method |
 |---|---|---|---|
-| Multi-hop entailment | 219/219 chat cases and 80/80 kernel cases, 0% fabrication, all six bands pass | 50 of the 219 greens (23%) are graded against a declared floor, not the classical answer. INF-C2's 20/20 grades that the engine answers contradictory memory without fabricating, never that it detects the clash. | `BENCHMARK_INFERENCE_2.0.3.md` |
-| Tool-call planning | 56/56 cases, 100% plan-completion, 100% result-completion, 0% hallucination, every rung A0→C2 | Goal driver. All 11 C2 cases pass, so the ladder now has more headroom than the case set exercises. | `BENCHMARK_AGENT_2.0.3.md` |
-| Groundedness | Every answer carries a source, and an empty graph reports itself empty (`bootstrap-empty` 2.000/2). Judge-scored groundedness 1.857/2 over 98 cases. | The 1.857 is judged (`claude-haiku-4-5-20251001`, `judge-prompt-v1`) at N=1 over 9 of 23 construction shapes, so read it as indicative. The judge runs in the offline eval harness, never in the product. | `BENCHMARK_CEFR_ENGLISH_2.0.3.md` |
-| Abstention (the honest miss) | 0% fabrication across 299 inference rows and 0% hallucination across 168 agent rows | Structural, not a tuned threshold. tmct abstains because nothing matched, so the rows test a property of a no-model design rather than a score. | `BENCHMARK_INFERENCE_2.0.3.md`, `BENCHMARK_AGENT_2.0.3.md` |
-| Determinism | Byte-identical on rerun, 0 verdict changes across 299 inference rows against the prior cycle, a 109-case replay in 877ms at $0 per turn | A property of the no-model pipeline. | `BENCHMARK_INFERENCE_2.0.3.md`, `CAPABILITIES_2.0.3.md` |
-| Dialogue robustness (role and polarity) | An adversarial persona sweep could not force a single role or polarity inversion in 55 probes — active/passive, forward/reverse, negation and the converse trap all compiled to the correct canonical shape | The same five-frame sweep (~200 probes) surfaced 25 dialogue dead-ends, eight of them confidently wrong, all from words dropped before the parser rather than from the reasoning. | `BENCHMARK_CONVERSATION_2.0.3.md` |
+| Multi-hop entailment | 379/379 chat cases and 100/100 kernel cases, 0% fabrication, all bands pass | The case set is unchanged from 2.6.0 (same templates, same counts) — the one real move this cycle is INF-4's ceiling-graded count dropping 35→30, five cases that now pass as genuine capability instead of against the declared honest-miss floor. | `BENCHMARK_INFERENCE_2.7.12.md` |
+| Tool-call planning | 68/68 cases, 100% plan-completion, 100% result-completion, 0% hallucination, every rung A0→C2 | Goal driver. 2.6.0 gated at TOOL-7 (62/66, 94%) — this cycle's router uplift (a guarded RECOVER step, a tied-candidate composer) cleared it, a real capability move, not a ruler change. | `BENCHMARK_AGENT_2.7.12.md` |
+| Groundedness | Every answer carries a source, and an empty graph reports itself empty. Judge-scored mean 1.809/2 over 138 cases, 5 hard fails, 136/138 tier-1. | Judged (`claude-haiku-4-5-20251001`, `judge-prompt-v2`) at N=1. The judge prompt moved v1→v2 since 2.6.0, so this is a measurement, not a clean lever comparison against the prior cycle. The judge runs in the offline eval harness, never in the product. | `BENCHMARK_CEFR_ENGLISH_2.7.12.md` |
+| Abstention (the honest miss) | 0% fabrication across 479 inference rows (379 chat + 100 kernel) and 0% hallucination across 272 agent rows | Structural, not a tuned threshold. tmct abstains because nothing matched, so the rows test a property of a no-model design rather than a score. | `BENCHMARK_INFERENCE_2.7.12.md`, `BENCHMARK_AGENT_2.7.12.md` |
+| Determinism | Byte-identical on rerun — a 379-case `--replay` clean across 2 runs, no LLM, no network, $0 per turn | A property of the no-model pipeline. | `BENCHMARK_INFERENCE_2.7.12.md` |
+| Dialogue robustness (persona sweep) | A 6-persona sweep (textbook logician, casual newcomer, new developer, adversarial sceptic, returning user, planning user) fixed 25 of the prior cycle's 29 routed findings (21 clean, 4 with a residual noted); 4 remain broken, 2 in a shape distinct from the original complaint | Free exploration across all six personas surfaced roughly 60 fresh findings beyond the ratchet check — the single highest-signal pattern: tmct's own suggested repair text was itself frequently broken when followed verbatim (since fixed, see `HANDOVER.md`). | `BENCHMARK_CONVERSATION_2.7.11.md` |
 
 Three offline benchmark rigs live in a clone (they are not in the npm
 package). Each replays a committed case set through the real product and
