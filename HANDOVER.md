@@ -113,6 +113,12 @@ delivered plan docs; each records what its delivery deliberately did not include
   generic ask engine has no adjective→datatype-predicate mapping for `mgx:is-open`, a predicate this
   session's own rule-shape retrofit introduced. Fixed this round: a new `worldOpennessAnswer` aside,
   styled after the existing `worldWhereAnswer`, reads `state.openness` directly. Shipped.
+- Spider-fly edge-hunt round 1 of the second hunt (`playtests/PLAYTEST_LOG_009.md`, the game's first
+  ever dedicated playtest): an eaten fly's stale pre-death goal line ("trapped in an active web —
+  can't move") sat right beside the same turn's own "fly-X was eaten" event text, contradicting it,
+  because `tick.agents` is built during movement, before `runEcologyPass` resolves eating. Fixed this
+  round: the eaten/starved fly is dropped from `agents` and the eating spider's goal now says "just
+  ate X in the web" instead of the now-false "co-located with X". Shipped.
 
 ## Discipline
 
