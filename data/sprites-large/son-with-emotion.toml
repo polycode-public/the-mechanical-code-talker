@@ -1,0 +1,37 @@
+# son-with-emotion — same face-fragment mechanism as person-with-emotion.toml
+# (sprite-expressions.mjs); [face] anchored on son.toml's own (larger,
+# child-scale) head circle.
+classes = ["son"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="son-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="8.2" r="3.6" fill="url(#son-with-emotion-fill)"/>
+  <path d="M7.4 21 C7.4 16.6 9.4 14.6 12 14.6 C14.6 14.6 16.6 16.6 16.6 21 Z" fill="url(#son-with-emotion-fill)"/>
+  <path d="M9.8 5.6 C10.4 5.1 11.1 4.9 12 5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+# The same cx/cy/r son.toml's own head circle declares.
+[face]
+cx = 12
+cy = 8.2
+scale = 3.6
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

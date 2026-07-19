@@ -1,0 +1,40 @@
+# soldier-with-emotion — same face-fragment mechanism as
+# person-with-emotion.toml (sprite-expressions.mjs); [face] anchored on
+# soldier.toml's own head circle, below the helmet.
+classes = ["soldier"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="soldier-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M7 8.4 C7 5.1 9.2 2.6 12 2.6 C14.8 2.6 17 5.1 17 8.4 L17 8.7 L7 8.7 Z" fill="url(#soldier-with-emotion-fill)"/>
+  <path d="M6.4 8.4 L17.6 8.4 L17.6 9.4 L6.4 9.4 Z" fill="currentColor" opacity="0.5"/>
+  <circle cx="12" cy="9.8" r="2.9" fill="url(#soldier-with-emotion-fill)"/>
+  <path d="M6 21 C6 16 8.5 13.7 12 13.7 C15.5 13.7 18 16 18 21 Z" fill="url(#soldier-with-emotion-fill)"/>
+  <ellipse cx="9" cy="5.4" rx="1.5" ry="0.6" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+# The same cx/cy/r soldier.toml's own head circle declares (the helmet and
+# brim-shadow sit above it, at their own separate cy range).
+[face]
+cx = 12
+cy = 9.8
+scale = 2.9
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
