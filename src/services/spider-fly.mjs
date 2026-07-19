@@ -651,6 +651,18 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
   }
 
   const ecology = runEcologyPass({ state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider, turn: k });
+  // A fly eaten or starved THIS tick was already assigned a pre-ecology
+  // goal/position above (movement runs before the ecology pass resolves
+  // eating) — left as-is, the same response would both announce "fly-5 was
+  // eaten" and still list fly-5's stale "trapped, can't move" goal one clause
+  // later, as if it were still on the board. Drop it from `agents` (its own
+  // goal is moot) and let the eating spider's line say what actually
+  // happened instead of the now-false "co-located with fly-5 in the web".
+  for (const { fly, spider } of ecology.events.eaten) {
+    delete agents[fly];
+    if (agents[spider]) agents[spider].goal = `just ate ${fly} in the web.`;
+  }
+  for (const flyId of ecology.events.starved) delete agents[flyId];
   const writes = [...movementWrites, ...ecology.writes];
   const provenance = `${worldProvenanceTag(WORLD_NAME)}:turn${k}`;
   await appendFacts(memoryDir, writes.map((f) => ({ ...f, provenance })));
