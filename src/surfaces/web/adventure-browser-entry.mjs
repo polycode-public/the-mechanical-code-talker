@@ -13,30 +13,39 @@
 // rationale) — the bootstrap below then just appends it, exactly the shape
 // openAdventure() itself writes for a real chat session.
 //
-// This session exposes ONLY a raw autoplay tick and a read-only snapshot —
-// no chat dock. Every state-changing command adventure.mjs's own
-// runWorldCommand issues (go/take/open/...) already re-narrates itself
-// through the extractive completions digest on every turn (the
-// "auto-relook"), so this bundle carries the same wink-nlp/completions
-// dependency chain chat.mjs's own runTurn does; a second, lighter path was
-// not available to duck under it. Nothing here calls runTurn, though — the
-// one entry point exercised is adventureTurn itself, via
-// adventure-autoplay.mjs, which is the "auto-play is a caller of the
-// existing interpreter, never a second one" contract this whole feature
-// rests on.
+// This session exposes a raw autoplay tick, a read-only snapshot, AND
+// (mirroring createSpiderFlySession's own `turn(line)`) a full chat-dock
+// entry point: `turn(line)` runs the exact same runTurn the CLI and every
+// other viz page's chat dock run, over this session's own memoryDir/graph/
+// lexicon, threading `focus`/`last`/`planState` across calls the same way a
+// real chat session does. `planState` and `autoplayTick`'s own `planHolder`
+// share ONE mutable holder here, so a manual chat command and an auto-play
+// tick can never disagree about whether the adventure is still open, mid a
+// number game, etc. — whichever ran last leaves the holder as the other's
+// starting point. `planHolder.state` starts as adventureTurn's own opened-
+// world shape, so BOTH entry points treat every call as a live, already-open
+// world rather than a fresh opening line: ordinary in-game commands (look/
+// go/take/open/talk/examine/...) dispatch through adventure.mjs's own
+// adventureTurn exactly as autoplayTick's calls already do, and anything not
+// game-shaped falls through to the ordinary conversational layer, exactly
+// like a real CLI session.
+import { runTurn } from "../../services/chat.mjs";
 import {
   createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows,
 } from "../../adapters/memory/core.mjs";
-import { foldWorldState, worldDigestRows } from "../../services/adventure.mjs";
+import { parseEntities } from "../../domain/codegraph.mjs";
+import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
+import { foldWorldState, worldDigestRows, roomAffordances } from "../../services/adventure.mjs";
 import { runAdventureAutoplayTick } from "../../services/adventure-autoplay.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY } from "../../domain/sprite-map.mjs";
 
-/** A live in-memory adventure this page's ticker drives one auto-play tick
- *  at a time. Returns `{ memoryDir, autoplayTick, snapshot }`.
+/** A live in-memory adventure this page's ticker AND chat dock can both
+ *  drive. Returns `{ memoryDir, autoplayTick, turn, snapshot }`.
  *  `worldPayload.facts`/`.rules` seed the store exactly the way
  *  openAdventure() itself does for a real session; `planHolder.state` is set
- *  the same way, so adventureTurn treats every subsequent call as a live,
- *  already-open world rather than a fresh opening line. */
+ *  the same way, so adventureTurn treats every subsequent call — auto-play's
+ *  own or a visitor's typed one — as a live, already-open world rather than
+ *  a fresh opening line. */
 export async function createAdventureSession(worldPayload) {
   const memoryDir = createInMemoryStore();
   const tag = `world:${worldPayload.name}`;
@@ -54,6 +63,11 @@ export async function createAdventureSession(worldPayload) {
   const openingHere = foldWorldState(openingRows).placements.get("player")?.object ?? null;
   if (openingHere) exposedRoomIds = new Set([openingHere]);
 
+  const graph = parseEntities({ individuals: [], objectProperties: [] });
+  const lexicon = loadLexicon();
+  let focus = null;
+  let last = null;
+
   return {
     memoryDir,
 
@@ -69,8 +83,30 @@ export async function createAdventureSession(worldPayload) {
       return result;
     },
 
+    /** One dispatched chat turn — the SAME runTurn the CLI and every other
+     *  viz page's own chat dock run, over this session's own memoryDir. A
+     *  throwing runTurn must never kill the session — the page has no other
+     *  chance to show this turn's answer. */
+    async turn(line) {
+      let result;
+      try {
+        result = await runTurn(line, {
+          config: null, source: null, graph, focus, last, memoryDir, sessionId,
+          env: {}, lexicon, vocabHint: "", planState: planHolder.state,
+        });
+      } catch (e) {
+        const message = e instanceof Error ? e.message : String(e);
+        return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null, plan: null };
+      }
+      focus = result.focus;
+      last = result.last;
+      if ("planState" in result) planHolder.state = result.planState;
+      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null };
+    },
+
     /** A read-only fold of the current room — no engine advance — for the
-     *  page's own redraw after boot and after every tick. */
+     *  page's own redraw after boot, after every tick, and after every
+     *  manual chat turn. */
     async snapshot() {
       const rows = readFactRows(await loadMemory(memoryDir));
       const state = foldWorldState(rows);
@@ -81,8 +117,9 @@ export async function createAdventureSession(worldPayload) {
 }
 
 // Re-exported so the page's own rendering script (adventure-viz.mjs) never
-// has to duplicate sprite resolution or the digest reader — the same posture
+// has to duplicate sprite resolution, the digest reader, or the room
+// affordances the chat dock's own pills read from — the same posture
 // spider-fly-browser-entry.mjs's own globalThis.tmctSpiderFly re-export takes.
 globalThis.tmctAdventure = {
-  createAdventureSession, resolveSpriteForClass, SPRITE_REGISTRY, worldDigestRows,
+  createAdventureSession, resolveSpriteForClass, SPRITE_REGISTRY, worldDigestRows, roomAffordances,
 };

@@ -28,15 +28,29 @@
 // import without duplicating adventure.mjs's own closed vocabulary reading)
 // and `roomSceneObjects` (every subject actually visible in a room, mirrored
 // from adventure.mjs's private `visibleRoomOf` the same way
-// adventure-autoplay.mjs's own `roomOfSubject` already has to). `roomCaptionText`
-// is a third pure helper, exported for testing, but NOT spliced — it calls
-// `worldDigestRows` via a real ES import, since Node/test callers have one,
-// while the in-page script instead calls the browser bundle's own exposed
-// copy (mirroring how the inline script calls `tmctSpiderFly.*` rather than
-// re-importing spider-fly-world.mjs).
+// adventure-autoplay.mjs's own `roomOfSubject` already has to). Two further
+// pure helpers are exported for testing but NOT spliced, because each calls
+// an adventure.mjs export the in-page script instead reaches through the
+// browser bundle's own `tmctAdventure` global (mirroring how the inline
+// script calls `tmctSpiderFly.*` rather than re-importing
+// spider-fly-world.mjs): `roomCaptionText` (calls `worldDigestRows`; the
+// in-page `captionFor` mirrors it against `tmctAdventure.worldDigestRows`)
+// and `pillsForRoom` (the room's clickable command suggestions — a thin
+// wrapper over adventure.mjs's own exported `roomAffordances`, whose header
+// explains why its list can never promise an action one of take/open/talk/
+// examine would then refuse; the in-page `pillsFor` mirrors it against
+// `tmctAdventure.roomAffordances`).
+//
+// The chat dock (chatlog/chatform/chatq/pills, below) mirrors
+// spider-fly-viz.mjs's own side panel: every manual exchange (via
+// adventure-browser-entry.mjs's new `session.turn(line)`) and every
+// auto-play tick's own narration append to the SAME scrolling `#chatlog`, so
+// a visitor sees one continuous history rather than a line overwritten every
+// tick. `#caption`/`#goalLine` keep their existing job as the current-state
+// summary; the chat log is the persistent addition.
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
-import { worldDigestRows } from "./adventure.mjs";
+import { worldDigestRows, roomAffordances } from "./adventure.mjs";
 
 const DEFAULT_TITLE = "tmct — the adventure";
 const PREVIEW_MAX_TICKS = 30;
@@ -86,6 +100,19 @@ export function roomSceneObjects(rows, state, here) {
   return out;
 }
 
+/** The clickable command suggestions for the room the player is CURRENTLY
+ *  in — a thin, testable wrapper over adventure.mjs's own `roomAffordances`
+ *  (the exact same data take/open/talk/examine already check), so a pill can
+ *  never promise an action one of those verbs would then refuse. Each
+ *  returned string ("go north", "take lamp", "unlock cabinet", ...) is
+ *  already a complete, submittable command in this world's own imperative
+ *  grammar — the page inserts one into the chat input verbatim on click,
+ *  never reformats it. Pure; recomputed fresh on every redraw, so a pill for
+ *  a room the player has left, or an object already taken, never lingers. */
+export function pillsForRoom(rows, state, here) {
+  return roomAffordances(rows, state, here);
+}
+
 /** A short caption for `here`, built ONLY from the rows worldDigestRows
  *  itself already produces (the exact same view the chat reply's own digest
  *  reads) — every row already reads as a plain sentence
@@ -132,6 +159,8 @@ ${THEME_TOKENS_CSS}
   h1 { font-size: 1.4rem; margin: .3rem 0 .9rem; text-wrap: balance; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
   button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 1rem; align-items: start; }
+  @media (max-width: 760px) { .stage { grid-template-columns: 1fr; } }
   .room-frame { position: relative; min-height: 210px; background: var(--taught-soft); border: 1px solid var(--line); padding: 1rem; display: flex; flex-direction: column; gap: .8rem; justify-content: flex-end; }
   .sprite-row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: flex-end; }
   .sprite { width: 44px; height: 44px; }
@@ -143,6 +172,23 @@ ${THEME_TOKENS_CSS}
   .sprite[data-cls="room"] { color: var(--muted); }
   .sprite-label { font-family: ${MONO_STACK}; font-size: .62rem; text-align: center; color: var(--muted); margin-top: .15rem; }
   .caption { background: var(--card); border: 1px solid var(--line); padding: .6rem .75rem; font-size: .9rem; }
+  .side { display: flex; flex-direction: column; gap: .8rem; min-width: 0; }
+  .chat { background: var(--card); border: 1px solid var(--line); padding: .6rem .75rem; }
+  .chat h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .5rem; }
+  .chatlog { display: flex; flex-direction: column; gap: .4rem; max-height: 320px; overflow-y: auto; margin-bottom: .5rem; }
+  .chatlog .u { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
+  .chatlog .u::before { content: "tmct> "; color: var(--taught); }
+  .chatlog .a { font-size: .88rem; line-height: 1.4; white-space: pre-wrap; }
+  .chatlog .t { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); font-style: italic; }
+  .chatlog .t::before { content: "\\2022 "; }
+  .pills { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .5rem; }
+  .pills:empty { display: none; margin-bottom: 0; }
+  .pill { font-family: ${MONO_STACK}; font-size: .72rem; padding: .25rem .6rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; }
+  .pill:hover { border-color: var(--taught); }
+  .chatask { display: flex; align-items: center; gap: .5rem; border-top: 1px solid var(--line); padding-top: .5rem; }
+  .chatask .prompt { color: var(--taught); font-size: .78rem; font-family: ${MONO_STACK}; }
+  .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .32rem .55rem; min-width: 0; }
+  .chatask input:disabled { opacity: .5; }
   .controls-row { display: flex; align-items: center; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
   .controls-row button { font-family: ${MONO_STACK}; font-size: .78rem; padding: .3rem .7rem; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
   .controls-row button:hover:not(:disabled) { border-color: var(--taught); }
@@ -150,8 +196,9 @@ ${THEME_TOKENS_CSS}
   .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .goal-line { font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); margin-top: .5rem; }
   .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .3rem; }
-  body.preview .controls-row, body.preview .status { display: none; }
+  body.preview .side, body.preview .controls-row, body.preview .status { display: none; }
   body.preview main { padding: 0; max-width: none; }
+  body.preview .stage { display: block; }
   body.preview .eyebrow, body.preview h1 { display: none; }
 </style>
 </head>
@@ -159,8 +206,21 @@ ${THEME_TOKENS_CSS}
 <main>
   <div class="eyebrow">tmct &middot; the adventure</div>
   <h1>A room, drawn from exactly what the text already says is there</h1>
-  <div class="room-frame" id="roomFrame">
-    <div class="sprite-row" id="spriteRow"></div>
+  <div class="stage">
+    <div class="room-frame" id="roomFrame">
+      <div class="sprite-row" id="spriteRow"></div>
+    </div>
+    <aside class="side" aria-label="The adventure's log and chat">
+      <div class="chat">
+        <h2>what's happened, and what you can do</h2>
+        <div class="chatlog" id="chatlog" aria-live="polite"></div>
+        <div class="pills" id="pills"></div>
+        <form class="chatask" id="chatform">
+          <span class="prompt mono">tmct&gt;</span>
+          <input id="chatq" type="text" placeholder="go north" aria-label="Type a command, or ask a question" disabled>
+        </form>
+      </div>
+    </aside>
   </div>
   <div class="caption" id="caption"></div>
   <div class="goal-line" id="goalLine"></div>
@@ -192,6 +252,10 @@ const ADVENTURE = ${pageData};
   const resetBtn = el("resetBtn");
   const playBtn = el("playBtn");
   const stepBtn = el("stepBtn");
+  const chatlogEl = el("chatlog");
+  const pillsEl = el("pills");
+  const chatformEl = el("chatform");
+  const chatqEl = el("chatq");
 
   const params = new URLSearchParams(location.search);
   const preview = params.get("preview") === "1";
@@ -208,6 +272,37 @@ const ADVENTURE = ${pageData};
     return lines.length ? lines.join(" ") : "Nothing more about the " + here + " is written down yet.";
   }
 
+  // ---- chat/event log — every manual exchange AND every auto-play tick's
+  // own narration append here, in order, so it reads as one continuous
+  // history rather than a line overwritten every tick.
+  function addChatLine(cls, html) {
+    const d = document.createElement("div");
+    d.className = cls; d.innerHTML = html;
+    chatlogEl.appendChild(d); chatlogEl.scrollTop = chatlogEl.scrollHeight;
+  }
+
+  // ---- contextual pills — refreshed every redraw from the CURRENT room's
+  // own roomAffordances-derived list (mirroring pillsForRoom against
+  // tmctAdventure.roomAffordances, the same way captionFor above mirrors
+  // roomCaptionText against tmctAdventure.worldDigestRows), so a pill for a
+  // room the player has left, or an object already taken, never lingers.
+  // Clicking one inserts its exact command text into the input and focuses
+  // it; it never auto-submits, so free typing still works and a clicked
+  // suggestion can still be edited first.
+  function pillsFor(rows, state, here) {
+    return tmctAdventure.roomAffordances(rows, state, here);
+  }
+  function renderPills(rows, state, here) {
+    const actions = pillsFor(rows, state, here);
+    pillsEl.innerHTML = actions.map((a) => '<button type="button" class="pill">' + esc(a) + "</button>").join("");
+  }
+  pillsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".pill");
+    if (!btn || !chatqEl) return;
+    chatqEl.value = btn.textContent;
+    chatqEl.focus();
+  });
+
   function redraw(snap) {
     const objects = roomSceneObjects(snap.rows, snap.state, snap.here);
     const sprites = [{ subject: "you", spriteClass: "adventurer" }, ...objects];
@@ -218,7 +313,35 @@ const ADVENTURE = ${pageData};
     }).join("");
     captionEl.textContent = captionFor(snap.rows, snap.state, snap.here);
     turnLabelEl.textContent = "turn: " + snap.turn;
+    renderPills(snap.rows, snap.state, snap.here);
   }
+
+  // ---- serialize every engine-touching call: the ticker and the chat dock
+  // share one in-memory store, and an overlapping tick()/turn() pair could
+  // race against the same @turnN write.
+  let lock = Promise.resolve();
+  function withLock(fn) {
+    const run = lock.then(fn, fn);
+    lock = run.catch(() => {});
+    return run;
+  }
+
+  chatformEl.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const q = chatqEl.value.trim();
+    if (!q || !session) return;
+    chatqEl.value = "";
+    // A manual command lands mid-tick otherwise — pause first, and stay
+    // paused until the visitor presses play again.
+    ticker.pause();
+    addChatLine("u", esc(q));
+    withLock(async () => {
+      const result = await session.turn(q);
+      addChatLine("a", esc(result.answer).replace(/\\n/g, "<br>"));
+      const snap = await session.snapshot();
+      redraw(snap);
+    });
+  });
 
   async function boot() {
     session = await tmctAdventure.createAdventureSession(ADVENTURE.world);
@@ -226,26 +349,30 @@ const ADVENTURE = ${pageData};
     const snap = await session.snapshot();
     redraw(snap);
     goalLineEl.textContent = "";
+    chatlogEl.innerHTML = "";
     statusEl.textContent = ADVENTURE.world.opening || "";
+    addChatLine("t", esc(ADVENTURE.world.opening || "the adventure begins."));
+    chatqEl.disabled = false;
     resetBtn.disabled = false; playBtn.disabled = false; stepBtn.disabled = false;
   }
 
   const ticker = createTicker({
-    onTick: async () => {
+    onTick: () => withLock(async () => {
       const result = await session.autoplayTick();
       lastTicks += 1;
       const snap = await session.snapshot();
       redraw(snap);
       goalLineEl.textContent = result.goal || "";
+      addChatLine("t", esc(result.goal || ""));
       if (result.done || result.stalled) ticker.pause();
-    },
+    }),
     onRender: (state) => {
       playBtn.textContent = state.playing ? "\\u23f8 pause" : "\\u25b6 play";
       playBtn.disabled = state.animating;
       stepBtn.disabled = state.animating || state.playing;
       resetBtn.disabled = state.animating;
     },
-    onReset: () => boot(),
+    onReset: () => withLock(boot),
     hasNext: () => !preview || lastTicks < ADVENTURE.previewMaxTicks,
     waitMs: ADVENTURE.tickWaitMs,
   });
