@@ -7982,6 +7982,78 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     }
     const polarityReply = isaPolarityReply(hit, negHit || directDisjoint);
     if (polarityReply) return polarityReply;
+    // DISJOINTNESS ACROSS BOTH CHAINS: nothing above found a stored fact of
+    // either polarity, but "no" can still be PROVEN when the subject's own
+    // ⊑-chain and the query OBJECT's own ⊑-chain land on two disjoint
+    // classes — "is a cat a dog" after "every cat is a feline" / "every dog
+    // is a canine" / "no feline is a canine" is exactly this: cat⊑feline,
+    // dog⊑canine, and feline disjointWith canine together prove cat can
+    // never be a dog. disjointGateViolations (above) already lifts the
+    // SUBJECT side through its ⊑-ancestor closure, but its {subject, object}
+    // pairs name only the DIRECT disjoint partner class ("canine") — never a
+    // further descendant of it ("dog"). Lifting the query OBJECT through its
+    // own ⊑-ancestor closure (the same closure kernel, run the other way)
+    // and checking it against every violation's `object` field closes that
+    // gap, the same "walk both chains" discipline the subject side already
+    // had.
+    if (disjointRows.length) {
+      // A plain BFS over mixedSubClassEdges, not deriveSubClassClosure: that
+      // kernel returns only NEWLY-derived (indirect) edges, never a directly-
+      // stated one, so a single taught hop ("dog is a canine") would never
+      // surface through it alone — an ancestry closure needs every hop,
+      // direct or derived. Shared by the object's own ancestry (below) and
+      // the self-contradiction guard just after it.
+      const ancestryOf = (seed) => {
+        const closure = new Set(seed);
+        let frontier = new Set(seed);
+        for (let hop = 0; hop < 8 && frontier.size; hop += 1) {
+          const next = new Set();
+          for (const [a, b] of mixedSubClassEdges) {
+            if (frontier.has(a) && !closure.has(b)) next.add(b);
+          }
+          if (!next.size) break;
+          for (const t of next) closure.add(t);
+          frontier = next;
+        }
+        return closure;
+      };
+      const objectAncestry = ancestryOf(objVariants);
+      // SELF-CONTRADICTION GUARD: reject a violation whose own `viaClass` is
+      // ALSO a stated ancestor of its disjoint partner `object` ("no dog is a
+      // cat" taught alongside "every dog is a cat" — dog is both ⊑cat and
+      // disjointWith cat, a contradiction independent of anything being
+      // asked). Deriving a confident "no" from a self-contradictory premise
+      // pair would be the same overclaim isaInconsistencyRefusal exists to
+      // stop; the honest answer there is "these taught facts disagree",
+      // which the existing multi-hop chase + refusal below already gives —
+      // this guard just keeps THIS reader from preempting it with a "no" a
+      // clean, non-contradictory pair (the intended case) never needs.
+      const objViolation = disjointGateViolations.find((vv) => subjCandidates.has(vv.subject) && objectAncestry.has(vv.object)
+        && !ancestryOf([vv.viaClass]).has(vv.object) && !ancestryOf([vv.object]).has(vv.viaClass));
+      if (objViolation) {
+        const posFact = isa.filter((f) => subjCandidates.has(f.subject) && f.object === objViolation.viaClass).sort(byTrust)[0];
+        const disjointFact = disjointRows.find((f) => (f.subject === objViolation.viaClass && f.object === objViolation.object)
+          || (f.subject === objViolation.object && f.object === objViolation.viaClass));
+        // The object side only needs its own citation when the violation's
+        // object ISN'T already a literal query-object variant (i.e. a real
+        // lift happened, "dog" reached via "canine") — a direct match (no
+        // lift) needs no extra premise, the disjoint fact alone connects
+        // subject and object.
+        const objectNeedsLift = !objVariants.has(objViolation.object);
+        const objFact = objectNeedsLift
+          ? isa.filter((f) => objVariants.has(f.subject) && f.object === objViolation.object).sort(byTrust)[0]
+          : null;
+        if (posFact && disjointFact && (!objectNeedsLift || objFact)) {
+          const kindEcho = stripTrailingDiscourseTag(isaAsk[2]).trim();
+          const chain = [posFact, ...(objFact ? [objFact] : [])].map(renderFactLine).join("; ");
+          return {
+            text: `no — ${chain}; and ${factPhrase(disjointFact)}${disjointFact.provenance ? ` (source: ${disjointFact.provenance})` : ""} `
+              + `— so ${isaSubject} can never be ${indefiniteArticleFor(kindEcho)} ${kindEcho}.`,
+            replace: true,
+          };
+        }
+      }
+    }
     // CLASS↔INSTANCE BRIDGE: when X resolves to a graph entity, its
     // inherits chain's superclass LABELS are subject candidates too — a taught
     // "controller ⊑ handler" composes with a graph "TaskController inherits
