@@ -69,12 +69,38 @@ delivered plan docs; each records what its delivery deliberately did not include
     a subject with both a seeded and a taught parent class could walk the wrong branch and miss a
     real answer); and a directly-taught comparative contradiction ("disk-2 is smaller than disk-1"
     taught right after the reverse) is now disclosed in the ask-time answer, not just silently held.
-  - **Still open**: the remaining single-persona findings — filler-clause prefixes, the GUI wording
-    leak, the did-you-mean branch-preview mislabel, silent narrowing, plan-justification follow-ups,
-    optimality-as-count, session-sidecar verbatim rewrite, and the smaller wall gaps (item 5 of the
-    report). Full ranked list and routing in the report; each closed item above has a regression
-    test in `test/corpus/inference.jsonl`, `test/corpus/grammar.jsonl`, `test/corpus/planning.jsonl`
-    or `test/corpus/templates.jsonl`.
+  - **Closed** (item 5, the single-persona findings — fixed what was cheaply tractable): the web
+    GUI's "click a node first" wording no longer leaks into this plain chat surface on a failed
+    focus resolution (a plain string swap on ask()'s shared miss text, not a change to the GUI's own
+    correct answer); "is that really the minimum number of moves?"/"could there be a shorter plan
+    than that?" now confirm from the planner's own breadth-first-search guarantee instead of landing
+    in the unrelated code-entity counter; "why is that the shortest solution?" re-displays the same
+    "because — …" line the planner already prints unprompted at solve time (stored on the plan slot
+    now, not discarded after the first print); the did-you-mean branch-preview auto-expansion covers
+    every candidate (the nearest-neighbour candidate's own preview was silently missing) and each
+    preview's own text names its OWN candidate, never the original ambiguous term; and "whats 2+2"
+    gets an honest "I don't do arithmetic" decline instead of the non-sequitur identity blurb (a
+    digit-operator-digit signal that deliberately excludes "-", since this domain's own dates and
+    file/line ranges are digit-hyphen-digit too).
+  - **Still open, named explicitly (item 5 remainder — genuine horizons, not forced)**: filler-clause
+    prefix widening (the report identifies one root cause behind several surface symptoms — "ok so",
+    "oh nice. um what about", "one more random thing," — but widening the existing short-prefix
+    stripper to longer clause shapes without over-matching real content needs its own design pass);
+    silent narrowing without disclosure ("the router" resolving to the Router class over the
+    router.mjs module, a directory reference narrowing to one of several members) — needs a design
+    decision on how/where to surface the narrower reading, not just a string tweak; plan-justification
+    counterfactual and alternative-choice questions ("what if disk-1 started on peg-c instead?", "why
+    did you send crate-c to a pallet instead of stacking it on crate-b?") — these ask the planner to
+    explain a path it did NOT take, which the current BFS never computes at all (a genuinely separate,
+    larger feature than the "why is that the shortest" fix just landed); the session sidecar/log
+    still rewrites verbatim natural-language input to the canonical form matched (a recurrence of a
+    previously-known, still-open item); and the smaller wall gaps not yet investigated — "give me the
+    big picture on this codebase", "tell me about the router thing", "what is the entry point"/"where
+    do i start reading", "what is the purpose of the validate module", "whats the most important
+    file" (a superlative with no default ranking criterion), casual/longer farewells. Full ranked list
+    and routing in the report; every closed item above has a regression test in
+    `test/corpus/inference.jsonl`, `test/corpus/grammar.jsonl`, `test/corpus/planning.jsonl` or
+    `test/corpus/templates.jsonl`.
 
 ## Discipline
 
