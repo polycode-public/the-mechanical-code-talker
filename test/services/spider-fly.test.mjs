@@ -579,3 +579,23 @@ test("runSpiderFlyTick: eating transfers the fly's exact post-decrement mass, no
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("runSpiderFlyTick: the eating spider's own returned agents[].mass reflects the post-eat total this same tick, not the stale pre-eat movement-phase value", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-eatmass-returned-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
+      { subject: "spider-1", predicate: "mgx:mass", object: "5" },
+      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-2-2" },
+      { subject: "fly-1", predicate: "mgx:mass", object: "10" },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const tick = await runSpiderFlyTick(dir);
+    assert.deepEqual(tick.ecology.eaten, [{ fly: "fly-1", spider: "spider-1", cell: "cell-2-2" }]);
+    // spider-1: 5 - 1 (movement decrement) = 4, plus fly-1's post-decrement mass 10 - 1 = 9 -> 13.
+    assert.equal(tick.agents["spider-1"].mass, 13);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});

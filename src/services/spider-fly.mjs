@@ -368,7 +368,7 @@ function mostRecentEaterSpider(state, eatenDeltaBySpider) {
 export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider = new Map(), turn }) {
   const k = turn;
   const writes = [];
-  const events = { eaten: [], starved: [], laid: null, hatched: [], spawned: null };
+  const events = { eaten: [], starved: [], laid: null, hatched: [], spawned: null, massAfterEating: new Map() };
 
   const spiders = [...postMovePlacements.keys()].filter((id) => /^spider-\d+$/.test(id)).sort();
   const flies = [...postMovePlacements.keys()].filter((id) => /^fly-\d+$/.test(id)).sort();
@@ -399,6 +399,7 @@ export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, p
     const priorSpiderMass = postMoveMassBySpider.get(spiderId) ?? (state.mass.get(spiderId)?.value ?? SPIDER_INITIAL_MASS);
     const newSpiderMass = priorSpiderMass + (eatenMassBySpider.get(spiderId) ?? 0);
     writes.push({ subject: `${spiderId}@turn${k}`, predicate: "mgx:mass", object: String(newSpiderMass) });
+    events.massAfterEating.set(spiderId, newSpiderMass);
   }
 
   // 2. Starve — mass reached zero, and not already claimed by this turn's
@@ -690,7 +691,10 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
     eatenBySpider.get(spider).push(fly);
   }
   for (const [spider, flyIds] of eatenBySpider) {
-    if (agents[spider]) agents[spider].goal = `just ate ${flyIds.join(" and ")} in the web.`;
+    if (agents[spider]) {
+      agents[spider].goal = `just ate ${flyIds.join(" and ")} in the web.`;
+      agents[spider].mass = ecology.events.massAfterEating.get(spider) ?? agents[spider].mass;
+    }
   }
   for (const flyId of ecology.events.starved) delete agents[flyId];
   const writes = [...movementWrites, ...ecology.writes];
