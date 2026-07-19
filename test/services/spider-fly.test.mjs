@@ -5,11 +5,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   foldSpiderFlyState, gridApplyActions, spiderPathStateKey, planSpiderPath,
-  greedyFlyMove, greedySpiderApproach, believedCellOf, nearestBelievedTarget,
+  greedyFlyMove, randomFlyWander, greedySpiderApproach, greedySpiderAvoid,
+  believedCellOf, nearestBelievedTarget, hasActiveWebAt,
   runEcologyPass, startSpiderFlyGame, runSpiderFlyTick,
-  FLY_INITIAL_MASS,
+  FLY_INITIAL_MASS, SPIDER_INITIAL_MASS, SPIDER_MASS_DECREMENT_PER_TURN, WEB_DURATION_TURNS,
 } from "../../src/services/spider-fly.mjs";
-import { worldFactRows } from "../../src/domain/spider-fly-world.mjs";
+import { worldFactRows, cellId, perimeterCells } from "../../src/domain/spider-fly-world.mjs";
 import { appendFacts, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 
 // ---- the state fold -----------------------------------------------------------
@@ -75,7 +76,7 @@ test("planSpiderPath returns null with no believed target at all", () => {
 
 // ---- greedy one-ply scoring: the fly maximizes, the spider's fallback minimizes
 
-test("greedyFlyMove picks the reachable cell that maximizes distance from the believed spider, favoring staying put on a tie", () => {
+test("greedyFlyMove picks the reachable cell that maximizes distance from the believed spider, and wanders with no believed spider at all", () => {
   const rows = [
     { subject: "cell-5-5", predicate: "mgx:has-exit-west", object: "cell-4-5" },
     { subject: "cell-5-5", predicate: "mgx:has-exit-east", object: "cell-6-5" },
@@ -83,8 +84,42 @@ test("greedyFlyMove picks the reachable cell that maximizes distance from the be
   const applyActions = gridApplyActions(rows);
   // The spider sits west, so fleeing east opens the most distance.
   assert.deepEqual(greedyFlyMove({ x: 5, y: 5 }, { x: 4, y: 5 }, applyActions), { x: 6, y: 5 });
-  // No believed spider position at all: hold position.
-  assert.deepEqual(greedyFlyMove({ x: 5, y: 5 }, null, applyActions), { x: 5, y: 5 });
+  // No believed spider position at all: wander (randomFlyWander), not hold —
+  // still one of the reachable options, and reproducible from the same seed.
+  const wandered = greedyFlyMove({ x: 5, y: 5 }, null, applyActions, 7, "fly-1");
+  assert.ok(
+    [{ x: 5, y: 5 }, { x: 4, y: 5 }, { x: 6, y: 5 }].some((c) => c.x === wandered.x && c.y === wandered.y),
+    "the wander pick is always one of stay/west/east, the fly's actual one-ply reachable set",
+  );
+  assert.deepEqual(greedyFlyMove({ x: 5, y: 5 }, null, applyActions, 7, "fly-1"), wandered, "the same turn+fly seed reproduces the same wander pick");
+});
+
+// ---- wander: deterministic from the seed, varies across turn/fly ------------
+
+test("randomFlyWander is reproducible from the same turn+flyId seed, and varies across turns and flies", () => {
+  const rows = [
+    { subject: "cell-5-5", predicate: "mgx:has-exit-north", object: "cell-5-4" },
+    { subject: "cell-5-5", predicate: "mgx:has-exit-south", object: "cell-5-6" },
+    { subject: "cell-5-5", predicate: "mgx:has-exit-east", object: "cell-6-5" },
+    { subject: "cell-5-5", predicate: "mgx:has-exit-west", object: "cell-4-5" },
+  ];
+  const applyActions = gridApplyActions(rows);
+  const first = randomFlyWander({ x: 5, y: 5 }, applyActions, 3, "fly-1");
+  const again = randomFlyWander({ x: 5, y: 5 }, applyActions, 3, "fly-1");
+  assert.deepEqual(again, first, "the exact same turn+flyId context reproduces the exact same pick");
+
+  const options = [{ x: 5, y: 5 }, { x: 5, y: 4 }, { x: 5, y: 6 }, { x: 6, y: 5 }, { x: 4, y: 5 }];
+  const picksAcrossTurns = new Set();
+  for (let turn = 1; turn <= 12; turn += 1) {
+    const pick = randomFlyWander({ x: 5, y: 5 }, applyActions, turn, "fly-1");
+    assert.ok(options.some((c) => c.x === pick.x && c.y === pick.y), "every pick is a real reachable option");
+    picksAcrossTurns.add(cellId(pick.x, pick.y));
+  }
+  assert.ok(picksAcrossTurns.size > 1, "wander varies across turns rather than always landing on one cell");
+
+  const differentFly = randomFlyWander({ x: 5, y: 5 }, applyActions, 3, "fly-2");
+  const picksAcrossFlies = new Set([cellId(first.x, first.y), cellId(differentFly.x, differentFly.y)]);
+  assert.ok(picksAcrossFlies.size >= 1, "distinct fly ids are part of the seed context (may coincide by chance, never crash)");
 });
 
 test("greedySpiderApproach picks the reachable cell that minimizes distance to the believed fly", () => {
@@ -94,6 +129,28 @@ test("greedySpiderApproach picks the reachable cell that minimizes distance to t
   ];
   const applyActions = gridApplyActions(rows);
   assert.deepEqual(greedySpiderApproach({ x: 5, y: 5 }, { x: 4, y: 5 }, applyActions), { x: 4, y: 5 });
+});
+
+test("greedySpiderAvoid picks the reachable cell that maximizes distance from the other believed spider", () => {
+  const rows = [
+    { subject: "cell-5-5", predicate: "mgx:has-exit-west", object: "cell-4-5" },
+    { subject: "cell-5-5", predicate: "mgx:has-exit-east", object: "cell-6-5" },
+  ];
+  const applyActions = gridApplyActions(rows);
+  // The other spider sits west, so fleeing east opens the most distance.
+  assert.deepEqual(greedySpiderAvoid({ x: 5, y: 5 }, { x: 4, y: 5 }, applyActions), { x: 6, y: 5 });
+  assert.deepEqual(greedySpiderAvoid({ x: 5, y: 5 }, null, applyActions), { x: 5, y: 5 }, "no believed other spider: hold position");
+});
+
+// ---- the dynamic web: hasActiveWebAt, build/trap/expire ----------------------
+
+test("hasActiveWebAt is true inside the static home zone regardless of state, and true at a live dynamic web's cell until it expires", () => {
+  assert.equal(hasActiveWebAt(2, 2, undefined, 0), true, "the static web home is always active, even with no folded state at all");
+  const state = { webs: new Map([["web-1", { cell: cellId(7, 7), builtAtTurn: 5 }]]) };
+  assert.equal(hasActiveWebAt(7, 7, state, 5), true, "active the very turn it's built");
+  assert.equal(hasActiveWebAt(7, 7, state, 5 + WEB_DURATION_TURNS - 1), true, "still active one turn before its 10-turn span elapses");
+  assert.equal(hasActiveWebAt(7, 7, state, 5 + WEB_DURATION_TURNS), false, "expired exactly at builtAtTurn + WEB_DURATION_TURNS");
+  assert.equal(hasActiveWebAt(8, 8, state, 5), false, "a different cell is never webbed by another cell's dynamic web");
 });
 
 // ---- visibility and belief ------------------------------------------------------
@@ -161,6 +218,22 @@ test("runEcologyPass never eats a fly co-located with a spider outside the web b
   assert.deepEqual(writes, []);
 });
 
+test("runEcologyPass eats a fly co-located with a spider inside a live DYNAMIC web, outside the static zone", () => {
+  const state = foldSpiderFlyState([{ subject: "web-1@turn2", predicate: "mgx:currently-in", object: "cell-7-7" }, { subject: "web-1@turn2", predicate: "mgx:web-built-at-turn", object: "2" }]);
+  const postMovePlacements = new Map([["spider-1", { x: 7, y: 7 }], ["fly-1", { x: 7, y: 7 }]]);
+  const { events } = runEcologyPass({ state, postMovePlacements, postMoveMassByFly: new Map([["fly-1", 6]]), turn: 5 });
+  assert.deepEqual(events.eaten, [{ fly: "fly-1", spider: "spider-1", cell: "cell-7-7" }], "cell-7-7 sits outside the static home zone but has a live web (built turn 2, still active at turn 5)");
+});
+
+test("runEcologyPass's eat writes the eating spider's new mass as exactly its prior mass plus the fly's post-decrement remaining mass, no flat bonus", () => {
+  const state = foldSpiderFlyState([]);
+  const postMovePlacements = new Map([["spider-1", { x: 2, y: 2 }], ["fly-1", { x: 2, y: 2 }]]);
+  const postMoveMassByFly = new Map([["fly-1", 7]]); // the fly's mass AFTER this tick's own decrement
+  const postMoveMassBySpider = new Map([["spider-1", 12]]); // the spider's mass AFTER this tick's own decrement
+  const { writes } = runEcologyPass({ state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider, turn: 3 });
+  assert.ok(writes.some((w) => w.subject === "spider-1@turn3" && w.predicate === "mgx:mass" && w.object === "19"), "12 (post-decrement spider mass) + 7 (fly's exact post-decrement mass) = 19, not a flat bonus");
+});
+
 test("runEcologyPass starves a fly whose mass reached zero, and never both starves and eats the same fly the same turn", () => {
   const state = foldSpiderFlyState([]);
   const postMovePlacements = new Map([["spider-1", { x: 2, y: 2 }], ["fly-1", { x: 9, y: 9 }], ["fly-2", { x: 2, y: 2 }]]);
@@ -170,6 +243,26 @@ test("runEcologyPass starves a fly whose mass reached zero, and never both starv
   assert.deepEqual(events.starved, ["fly-1"], "fly-2 co-located in the web is claimed by the eat, not double-counted as a starve");
   assert.ok(writes.some((w) => w.subject === "fly-1@turn4" && w.predicate === "mgx:starved"));
   assert.ok(!writes.some((w) => w.subject === "fly-2@turn4" && w.predicate === "mgx:starved"));
+});
+
+test("runEcologyPass starves a spider whose mass reached zero, exactly like a fly — but a spider that ate this exact tick survives", () => {
+  const state = foldSpiderFlyState([]);
+  const postMovePlacements = new Map([["spider-1", { x: 9, y: 9 }], ["spider-2", { x: 2, y: 2 }], ["fly-1", { x: 2, y: 2 }]]);
+  const postMoveMassByFly = new Map([["fly-1", 4]]);
+  const postMoveMassBySpider = new Map([["spider-1", 0], ["spider-2", 0]]);
+  const { writes, events } = runEcologyPass({ state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider, turn: 7 });
+  assert.deepEqual(events.eaten, [{ fly: "fly-1", spider: "spider-2", cell: "cell-2-2" }]);
+  assert.deepEqual(events.starved, ["spider-1"], "spider-2 ate this tick and survives despite also reaching post-decrement mass 0");
+  assert.ok(writes.some((w) => w.subject === "spider-1@turn7" && w.predicate === "mgx:starved" && w.object === "true"));
+  assert.ok(!writes.some((w) => w.subject === "spider-2@turn7" && w.predicate === "mgx:starved"));
+});
+
+test("runEcologyPass never starves a spider absent from postMoveMassBySpider — callers that don't track spider mass see no behavior change", () => {
+  const state = foldSpiderFlyState([]);
+  const postMovePlacements = new Map([["spider-1", { x: 9, y: 9 }]]);
+  const { writes, events } = runEcologyPass({ state, postMovePlacements, postMoveMassByFly: new Map(), turn: 2 });
+  assert.deepEqual(events.starved, []);
+  assert.deepEqual(writes, []);
 });
 
 test("runEcologyPass lays an egg on the first eat at game start, then needs two more before the next", () => {
@@ -251,15 +344,21 @@ test("runEcologyPass hatches an egg exactly three turns after it was laid, into 
   assert.ok(onTime.writes.some((w) => w.subject === "egg-1@turn5" && w.predicate === "mgx:hatched-into" && w.object === "spider-2"));
 });
 
-test("runEcologyPass spawns a new fly on every third turn, at the first uncontested perimeter cell", () => {
+test("runEcologyPass spawns a new fly on every third turn, at a seeded pick among the uncontested perimeter cells", () => {
   const state = foldSpiderFlyState([]);
   const notThird = runEcologyPass({ state, postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }]]), postMoveMassByFly: new Map(), turn: 4 });
   assert.equal(notThird.events.spawned, null);
 
   const third = runEcologyPass({ state, postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }]]), postMoveMassByFly: new Map(), turn: 3 });
   assert.equal(third.events.spawned, "fly-1");
-  assert.ok(third.writes.some((w) => w.subject === "fly-1@turn3" && w.predicate === "mgx:currently-in" && w.object === "cell-1-1"));
+  const spawnWrite = third.writes.find((w) => w.subject === "fly-1@turn3" && w.predicate === "mgx:currently-in");
+  assert.ok(spawnWrite && perimeterCells().includes(spawnWrite.object), "the spawned fly lands on a real perimeter cell");
   assert.ok(third.writes.some((w) => w.subject === "fly-1@turn3" && w.predicate === "mgx:mass" && w.object === String(FLY_INITIAL_MASS)));
+
+  // Reproducible: the exact same starting facts + turn land on the exact same cell.
+  const thirdAgain = runEcologyPass({ state, postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }]]), postMoveMassByFly: new Map(), turn: 3 });
+  const spawnWriteAgain = thirdAgain.writes.find((w) => w.subject === "fly-1@turn3" && w.predicate === "mgx:currently-in");
+  assert.equal(spawnWriteAgain.object, spawnWrite.object, "the same starting facts + turn reproduce the exact same spawn cell");
 
   const skipsOccupiedPerimeterCell = runEcologyPass({
     state: foldSpiderFlyState([{ subject: "fly-9", predicate: "mgx:currently-in", object: "cell-9-9" }]),
@@ -268,7 +367,9 @@ test("runEcologyPass spawns a new fly on every third turn, at the first uncontes
     turn: 6,
   });
   assert.equal(skipsOccupiedPerimeterCell.events.spawned, "fly-10", "numbering skips past every fly id ever placed, live or dead");
-  assert.ok(skipsOccupiedPerimeterCell.writes.some((w) => w.subject === "fly-10@turn6" && w.object === "cell-2-1"), "cell-1-1 is occupied by the spider, so the next perimeter cell is chosen");
+  const skipWrite = skipsOccupiedPerimeterCell.writes.find((w) => w.subject === "fly-10@turn6" && w.predicate === "mgx:currently-in");
+  assert.ok(skipWrite, "the new fly still spawns");
+  assert.ok(skipWrite.object !== "cell-1-1" && skipWrite.object !== "cell-9-9", "never lands on an occupied cell");
 });
 
 // ---- the real fact-store pipeline: startSpiderFlyGame + runSpiderFlyTick -------
@@ -371,6 +472,109 @@ test("runSpiderFlyTick starves a fly whose mass reaches zero, written and readab
     const rows = readFactRows(await loadMemory(dir));
     assert.ok(rows.some((r) => r.subject === "fly-1@turn1" && r.predicate === "mgx:mass" && r.object === "0"));
     assert.ok(rows.some((r) => r.subject === "fly-1@turn1" && r.predicate === "mgx:starved" && r.object === "true"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runSpiderFlyTick: a spider avoids another spider believed visible, even with no fly anywhere on the board", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-avoid-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-5-5" },
+      { subject: "spider-2", predicate: "mgx:currently-in", object: "cell-5-6" },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const tick = await runSpiderFlyTick(dir);
+    assert.equal(tick.agents["spider-1"].cell, "cell-5-4", "moves away from spider-2 (north opens the most distance) rather than holding");
+    assert.equal(tick.agents["spider-2"].cell, "cell-5-7", "moves away from spider-1 symmetrically (south)");
+    assert.match(tick.agents["spider-1"].goal, /avoiding spider-2/);
+    assert.match(tick.agents["spider-2"].goal, /avoiding spider-1/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runSpiderFlyTick: a fly inside an active web cannot move, even with a spider in sight it would otherwise evade", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-webtrap-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-6-2" }, // Chebyshev 4 from fly-1 — believed visible
+      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-2-2" }, // the static web home — always active
+      { subject: "fly-1", predicate: "mgx:mass", object: String(FLY_INITIAL_MASS) },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const tick = await runSpiderFlyTick(dir);
+    assert.equal(tick.agents["fly-1"].cell, "cell-2-2", "webbed — stays put despite a visible spider it would otherwise flee");
+    assert.match(tick.agents["fly-1"].goal, /trapped in an active web/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runSpiderFlyTick: a spider with no fly in sight builds a web at its held cell, and never double-mints while it's still active", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-webbuild-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-6-6" },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const tick1 = await runSpiderFlyTick(dir); // turn 1: no fly anywhere — holds and builds
+    assert.equal(tick1.agents["spider-1"].cell, "cell-6-6");
+    assert.match(tick1.agents["spider-1"].goal, /building a web/);
+    assert.deepEqual(tick1.activeWebs.map((w) => w.cell), ["cell-6-6"]);
+    assert.equal(tick1.activeWebs[0].builtAtTurn, 1);
+
+    const tick2 = await runSpiderFlyTick(dir); // turn 2: still no fly — cell already webbed, no second mint
+    assert.equal(tick2.activeWebs.length, 1, "the same still-active web, not a second one at the same cell");
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(rows.some((r) => r.subject === "web-1@turn1" && r.predicate === "mgx:currently-in" && r.object === "cell-6-6"));
+    assert.ok(rows.some((r) => r.subject === "web-1@turn1" && r.predicate === "mgx:web-built-at-turn" && r.object === "1"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runSpiderFlyTick: a spider's mass decrements every tick and it starves at zero, exactly like a fly", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-spiderstarve-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-6-6" },
+      { subject: "spider-1", predicate: "mgx:mass", object: "1" },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const tick = await runSpiderFlyTick(dir);
+    assert.deepEqual(tick.ecology.starved, ["spider-1"]);
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(rows.some((r) => r.subject === "spider-1@turn1" && r.predicate === "mgx:mass" && r.object === "0"));
+    assert.ok(rows.some((r) => r.subject === "spider-1@turn1" && r.predicate === "mgx:starved" && r.object === "true"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runSpiderFlyTick: eating transfers the fly's exact post-decrement mass, not a flat bonus, through the real store", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-eatmass-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
+      { subject: "spider-1", predicate: "mgx:mass", object: "12" },
+      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-2-2" },
+      { subject: "fly-1", predicate: "mgx:mass", object: "8" },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const tick = await runSpiderFlyTick(dir);
+    assert.deepEqual(tick.ecology.eaten, [{ fly: "fly-1", spider: "spider-1", cell: "cell-2-2" }]);
+    // spider-1: 12 - 1 (this tick's own decrement) = 11, plus fly-1's post-decrement mass 8 - 1 = 7 -> 18.
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(rows.some((r) => r.subject === "spider-1@turn1" && r.predicate === "mgx:mass" && r.object === "18"));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

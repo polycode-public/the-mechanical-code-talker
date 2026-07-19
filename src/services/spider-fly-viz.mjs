@@ -33,6 +33,7 @@
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
 import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId } from "../domain/spider-fly-world.mjs";
+import { FLY_INITIAL_MASS, SPIDER_INITIAL_MASS } from "./spider-fly.mjs";
 
 const CELL_PX = 44;
 const BOARD_PX = CELL_PX * GRID_SIZE;
@@ -111,6 +112,8 @@ export function renderSpiderFlyHtml({ title = DEFAULT_TITLE } = {}) {
     cellPx: CELL_PX,
     previewMaxTurns: PREVIEW_MAX_TURNS,
     tickWaitMs: TICK_WAIT_MS,
+    maxFlyMass: FLY_INITIAL_MASS,
+    maxSpiderMass: SPIDER_INITIAL_MASS,
   });
 
   return `<!doctype html>
@@ -154,6 +157,9 @@ ${THEME_TOKENS_CSS}
   .hud-id { font-family: ${MONO_STACK}; font-size: .74rem; }
   .hud-id.spider { color: var(--taught); } .hud-id.fly { color: var(--fly); } .hud-id.egg { color: var(--muted); }
   .hud-goal { font-size: .85rem; }
+  .mass-track { height: 4px; margin-top: .3rem; background: var(--line); border-radius: 2px; overflow: hidden; }
+  .mass-fill { height: 100%; background: var(--taught); }
+  .mass-fill.fly { background: var(--fly); }
   .hud-empty { color: var(--muted); font-size: .85rem; }
   .chatlog { display: flex; flex-direction: column; gap: .4rem; max-height: 220px; overflow-y: auto; margin-bottom: .5rem; }
   .chatlog:empty { display: none; margin-bottom: 0; }
@@ -264,6 +270,7 @@ const SPIDERFLY = ${gridData};
   // ---- state shared across redraws --------------------------------------
   let session = null;
   let lastAgents = {};
+  let lastActiveWebs = [];
   let lastTurn = 0;
   const goalById = {};
   const spriteEls = {};
@@ -324,13 +331,21 @@ const SPIDERFLY = ${gridData};
     lastAgents = agents;
   }
 
+  function massBarHtml(cls, mass) {
+    const maxMass = cls === "spider" ? SPIDERFLY.maxSpiderMass : cls === "fly" ? SPIDERFLY.maxFlyMass : null;
+    if (typeof mass !== "number" || !maxMass) return "";
+    const pct = Math.max(0, Math.min(100, (mass / maxMass) * 100));
+    return '<div class="mass-track"><div class="mass-fill ' + esc(cls) + '" style="width:' + pct + '%"></div></div>';
+  }
+
   function renderHud() {
     const ids = Object.keys(lastAgents).sort();
     if (!ids.length) { hudEl.innerHTML = '<div class="hud-empty">no agents on the board.</div>'; return; }
     hudEl.innerHTML = ids.map((id) => {
       const cls = classOfAgentId(id);
       return '<div class="hud-row"><span class="hud-id ' + esc(cls) + '">' + esc(id) + '</span>'
-        + '<span class="hud-goal">' + esc(goalById[id] || "watching\\u2026") + "</span></div>";
+        + '<span class="hud-goal">' + esc(goalById[id] || "watching\\u2026") + "</span>"
+        + massBarHtml(cls, lastAgents[id].mass) + "</div>";
     }).join("");
   }
 
@@ -340,7 +355,7 @@ const SPIDERFLY = ${gridData};
     directionDelta: tmctSpiderFly.DIRECTION_DELTA,
   };
 
-  function drawBoard(agents) {
+  function drawBoard(agents, activeWebs) {
     const w = SPIDERFLY.boardPx, h = SPIDERFLY.boardPx;
     boardCtx.clearRect(0, 0, w, h);
     boardCtx.fillStyle = cssVar("--taught-soft") || "rgba(46,125,79,.12)";
@@ -348,6 +363,20 @@ const SPIDERFLY = ${gridData};
       const p = tmctSpiderFly.parseCellId(wc);
       boardCtx.fillRect((p.x - 1) * cellSize, (p.y - 1) * cellSize, cellSize, cellSize);
     }
+    // A spider-built dynamic web is a distinct color from the always-on
+    // static home zone above, plus a dashed outline — same concept
+    // (hasActiveWebAt), visually two different things on the board.
+    boardCtx.fillStyle = cssVar("--alert-soft") || "rgba(176,80,63,.12)";
+    boardCtx.strokeStyle = cssVar("--alert") || "#B0503F";
+    boardCtx.lineWidth = 1;
+    boardCtx.setLineDash([3, 2]);
+    for (const web of activeWebs || []) {
+      const p = tmctSpiderFly.parseCellId(web.cell);
+      if (!p) continue;
+      boardCtx.fillRect((p.x - 1) * cellSize, (p.y - 1) * cellSize, cellSize, cellSize);
+      boardCtx.strokeRect((p.x - 1) * cellSize + 0.5, (p.y - 1) * cellSize + 0.5, cellSize - 1, cellSize - 1);
+    }
+    boardCtx.setLineDash([]);
     boardCtx.strokeStyle = cssVar("--line") || "#DDD9D0";
     boardCtx.lineWidth = 1;
     for (let i = 0; i <= SPIDERFLY.gridSize; i += 1) {
@@ -406,12 +435,13 @@ const SPIDERFLY = ${gridData};
   });
   boardFrame.addEventListener("mouseleave", () => { threadTip.style.display = "none"; });
 
-  function redraw(agents, turn) {
+  function redraw(agents, turn, activeWebs) {
     applyAgents(agents);
     renderHud();
     lastTurn = turn;
+    lastActiveWebs = activeWebs || [];
     turnLabelEl.textContent = "turn: " + turn;
-    drawBoard(agents);
+    drawBoard(agents, lastActiveWebs);
     drawPov();
   }
 
@@ -431,7 +461,7 @@ const SPIDERFLY = ${gridData};
       const result = await session.turn(q);
       addChatLine("a", esc(result.answer).replace(/\\n/g, "<br>"));
       const snap = await session.snapshot();
-      redraw(snap.agents, snap.turn);
+      redraw(snap.agents, snap.turn, snap.activeWebs);
     });
   });
 
@@ -447,7 +477,7 @@ const SPIDERFLY = ${gridData};
 
   async function boot() {
     session = await tmctSpiderFly.createSpiderFlySession();
-    redraw(session.initial.agents, session.initial.turn);
+    redraw(session.initial.agents, session.initial.turn, session.initial.activeWebs);
     statusEl.textContent = session.opening;
     chatqEl.disabled = false;
     resetBtn.disabled = false; playBtn.disabled = false; stepBtn.disabled = false;
@@ -457,7 +487,7 @@ const SPIDERFLY = ${gridData};
   const ticker = createTicker({
     onTick: () => withLock(async () => {
       const result = await session.tick();
-      redraw(result.agents, result.turn);
+      redraw(result.agents, result.turn, result.activeWebs);
     }),
     onRender: (state) => {
       playBtn.textContent = state.playing ? "\\u23f8 pause" : "\\u25b6 play";
@@ -479,10 +509,10 @@ const SPIDERFLY = ${gridData};
 
   boot().then(() => { if (preview) ticker.play(); });
 
-  new MutationObserver(() => { drawBoard(lastAgents); drawPov(); })
+  new MutationObserver(() => { drawBoard(lastAgents, lastActiveWebs); drawPov(); })
     .observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
   if (window.matchMedia) {
-    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawBoard(lastAgents); drawPov(); });
+    window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { drawBoard(lastAgents, lastActiveWebs); drawPov(); });
   }
 })();
 </script>
