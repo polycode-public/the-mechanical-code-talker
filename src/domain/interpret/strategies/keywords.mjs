@@ -107,11 +107,24 @@ export function parseKeywordSpot(text, nlp = null) {
       fuzzyVerb = { from: lcWords[at], to: fuzzyWords[at] };
     }
   }
-  if (!verbHit && lcWords.includes("by")) {
+  if (!verbHit) {
     // A participle with no active verb entry still marks a passive when a passive
-    // auxiliary and an agent "by" are both present.
+    // auxiliary precedes it — with or without an agent "by" phrase. "is http.mjs
+    // used anywhere" carries no "by" at all (it's asking whether ANY agent uses
+    // it), so gating this on lcWords.includes("by") left it with no verbHit at
+    // all and no chance to reach the "Bare passive" branch below that already
+    // reads a no-agent participle correctly.
+    //
+    // "used" immediately followed by "for" is carved out even here: "what is a
+    // horse used for" / "what is it used for" is the protected usedFor-purpose
+    // idiom (fuzzy.mjs's own NEVER_CANONICALIZE keeps "used" out of the active
+    // verb table for the identical reason), answered by ask.mjs's dedicated
+    // "used for" reader, never the codegraph uses/imports/calls relation. The
+    // WITH-"by" case ("used by X") is unaffected — "for" only ever follows
+    // "used" directly in the purpose idiom, never in a "by"-agented passive.
     for (let i = 0; i < lcWords.length; i += 1) {
       const k = PASSIVE_PARTICIPLE_TO_KIND[lcWords[i]];
+      if (k && lcWords[i] === "used" && lcWords[i + 1] === "for") continue;
       if (k && lcWords.slice(0, i).some((w) => PASSIVE_AUX.has(w))) { verbHit = { kind: k, start: i, end: i + 1 }; break; }
     }
   }

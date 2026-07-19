@@ -884,6 +884,12 @@ const CAPABILITY_PHRASES = [
   // into a capability question; not covered by the "do" pair above since
   // neither accepts "help (me)? with" as a synonym tail for "do".
   /^(?:so,?\s+)?what can (?:you|u)(?:\s+(?:actually|really))? help(?:\s+me)?\s+with\??$/i,
+  // "can u help me with smth" — the SAME request, inverted word order
+  // ("can you help ME with X" rather than "what can you help with"), plus
+  // texting shorthand ("u", "smth"). A vague object (smth/something/this/
+  // that) never names a real term to look up, so it's the capability
+  // question, not a request about a specific thing.
+  /^can (?:you|u) help me with (?:smth|something|this|that)\??$/i,
   /^help( me)?\??$/i, /^\?+$/,
   /^how do (i|you) work\??$/i, /^how does (this|it) work\??$/i,
   // unix-habit openers typed inside the REPL out of muscle memory — argv-only
@@ -952,6 +958,56 @@ const AI_IDENTITY_PHRASES = [
   /^is this (chatgpt|gpt|claude|an? ai|an? llm)\??$/i,
   /^do you use ai\??$/i, /^what language model are you( using)?\??$/i,
   /^am i (talking|speaking|chatting) (to|with) a (real )?(person|human|bot|ai)\??$/i,
+  // "what model are you built on, GPT-4 or Claude?" — the SAME underlying
+  // question as "are you secretly GPT" above, just posed as an open pick
+  // between named models rather than a yes/no. The trailing model-name pair
+  // is optional (the closed lead alone is already unambiguous).
+  /^what model (?:are you|is this) (?:built|based|running) on(?:,?\s*(?:gpt-?\d(?:\.\d)?|chatgpt|claude|gemini|llama)(?:\s+or\s+(?:gpt-?\d(?:\.\d)?|chatgpt|claude|gemini|llama))?)?\??$/i,
+  // "do you use classical logic" — a mechanism question, not phrased as "are
+  // you an AI", but asking the identical underlying thing (rule-based/
+  // deterministic vs. a statistical model) T_IDENTITY_NOT_LLM already answers.
+  /^do you use classical logic\??$/i,
+  // "can u browse the internet" — tmct genuinely has no network access in the
+  // product path (no-LLM constitution, deterministic offline reasoning), so
+  // this is a real "no", not the generic capability listing.
+  /^can (?:you|u) (?:browse|access|use|go on|connect to) the internet\??$/i,
+];
+
+/** META-COMMAND/SESSION questions — a RETURNING USER checking whether a
+ *  remembered command or session behavior still holds ("is /focus still a
+ *  command", "did you keep anything from last session"). Without a
+ *  recognizer, a literal "/focus"/"/forget"/"/stats" token embedded in an
+ *  ordinary sentence reads as a bare word to whichever parser gets to it
+ *  first (the teach lane, or a code-import/definition lookup), producing
+ *  garbled nonsense instead of the plain, true answer — even though the
+ *  underlying capability (or its real equivalent) verifiably works when
+ *  invoked directly. Each entry answers the SPECIFIC thing asked, closed
+ *  and hand-written (never a guess): confirming what still works, or
+ *  naming the real equivalent for something that was never a command at
+ *  all ("/forget" isn't one; "forget that X is a Y" retracts a taught
+ *  fact instead). */
+const META_FOCUS_STILL_RE = /^can i still (?:do|use) \/?focus\b/i;
+const META_FOCUS_RENAMED_RE = /^is \/?focus (?:even )?still a command\b/i;
+const META_FORGET_RE = /^what about \/?forget\b/i;
+const META_STATS_STILL_RE = /^is there still a stats command\b/i;
+const META_COMPARE_STILL_RE = /^can (?:you|u) still do that thing where you compare two classes\b/i;
+const META_LAST_SESSION_RE = /^did you keep anything from (?:our |my )?last session\b/i;
+/** One answer per META_* recognizer above, in the same order, so the
+ *  dispatch site (conversationalTurn) stays a flat, readable table rather
+ *  than a chain of near-identical if-blocks. */
+const META_COMMAND_ANSWERS = [
+  [META_FOCUS_STILL_RE, "Yes — /focus still works, unrenamed: \"/focus <symbol>\" sets the current focus, "
+    + "reused by \"it\"/\"this\" and no-arg entity commands. /help lists every command."],
+  [META_FOCUS_RENAMED_RE, "Yes — /focus is still a real command, never renamed: \"/focus <symbol>\" sets the "
+    + "current focus. /help lists every command."],
+  [META_FORGET_RE, "There's no /forget command, but a taught fact IS undoable — say \"forget that <subject> is "
+    + "a <object>\" (the exact fact as taught) to retract it. /memory shows what's currently stored."],
+  [META_STATS_STILL_RE, "Yes — /stats still works: a one-screen overview of entity counts, relationship "
+    + "counts, and packages. /help lists every command."],
+  [META_COMPARE_STILL_RE, "Yes — say \"compare <X> and <Y>\" for two entities of the same kind. /help lists "
+    + "every command and question shape."],
+  [META_LAST_SESSION_RE, "Taught facts and folded session summaries persist between sessions (written to "
+    + ".tmct/ on disk) — it's never a clean slate. /memory shows what's currently remembered."],
 ];
 
 /** Split raw turn text into candidate single-sentence clauses on sentence-
@@ -1007,6 +1063,17 @@ const FEELINGS_PHRASES = [
   /^can you (?:tell|make)\s+(?:me\s+)?(?:a\s+)?jokes?\??$/i,
   /^do you (?:know|know anything|know much)\s+about\s+(?:movies?|sports?|music|tv|television)(?:\s+or\s+(?:movies?|sports?|music|tv|television))?\??$/i,
 ];
+/** "whats 2+2" — a bare arithmetic expression, not a code/vocabulary question
+ *  at all. With no closed-set match of its own, this fell into the SAME
+ *  "≤3 words, not code-ish" catch-all a genuine orientation opener
+ *  ("what's up", "so what is this") uses, giving the non-sequitur identity
+ *  blurb where an honest "I don't do arithmetic" decline belongs. Deliberately
+ *  excludes "-" from the operator set: this domain's OWN dates ("what
+ *  changed since 2026-01-01") and file/line ranges ("model.mjs:9-15") are
+ *  digit-hyphen-digit too, and a real ambiguity there must stay a real
+ *  structural answer, never this decline. "+"/"*"/"/" have no such
+ *  collision in tmct's own vocabulary. */
+const ARITHMETIC_RE = /\d+\s*[+*/]\s*\d+/;
 /** The structural verbs/nouns that mark a near-miss code question (→ keep the
  *  precise grammar hint, not the friendly nudge). */
 const STRUCT_WORDS = new Set([
@@ -1582,10 +1649,27 @@ function conversationalTurn(line, ctx) {
     note(ctx.trace, "lane: conversational — identity/feelings (FEELINGS_PHRASES closed set)");
     return mk(t(T_IDENTITY_NO_FEELINGS), { lane: "help" });
   }
+  if (ARITHMETIC_RE.test(raw)) {
+    note(ctx.trace, "goal: arithmetic — not a code/vocabulary question, an honest decline");
+    note(ctx.trace, "lane: conversational — arithmetic decline (ARITHMETIC_RE)");
+    return mk(
+      "I don't do arithmetic — I answer questions about a code graph or taught facts. "
+      + "Try \"what is a dog\" for vocabulary, or point me at a repo with --repo <path>.",
+      { lane: "help" },
+    );
+  }
   if (IDENTITY_PHRASES.some((re) => re.test(raw))) {
     note(ctx.trace, "goal: identity — who/what tmct is, not a capability listing");
     note(ctx.trace, "lane: conversational — identity (IDENTITY_PHRASES closed set)");
     return mk(t(T_IDENTITY_SELF), { lane: "help" });
+  }
+  {
+    const metaHit = META_COMMAND_ANSWERS.find(([re]) => re.test(raw));
+    if (metaHit) {
+      note(ctx.trace, "goal: meta — does a remembered command/session behavior still hold");
+      note(ctx.trace, "lane: conversational — meta-command/session (closed per-command answer set)");
+      return mk(metaHit[1], { lane: "help" });
+    }
   }
   // CAPABILITY_PHRASES' vague-opener entries are self-contained closed
   // regexes, but a preamble ahead of one ("right, can you walk me through
@@ -1801,7 +1885,14 @@ const WALL_MISS_ANYWHERE_RE = /couldn't parse this as a graph question\. Try:/;
 // assert/memory path; when it can't be stored, say what CAN be remembered
 // instead of the grammar wall or a silent data loss.
 const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi|learn)\b(?:\s+(?:this|that|also))?[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
-const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:a |an )?[\w-]+(?: too)?$/i;
+// A trailing sentence-final mark ([.!?]*) is tolerated at the very end: an
+// ordinary first turn typed as a full sentence ("every dog is a mammal.")
+// otherwise failed this shape test by one character whenever neither ACE nor
+// the wrapped path could take it first, so teachLane bailed out (payload
+// stayed null) before ever trying the unknown-subject/object mint fallbacks
+// below — the SAME sentence typed without the period worked. Mirrors
+// UNKNOWN_SUBJECT_RE's own identical tolerance, added for the same reason.
+const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:a |an )?[\w-]+(?: too)?[.!?]*$/i;
 /** "X is <comparative> than Y" — the comparative teach/ask surface. The
  *  comparative slot is closed by SHAPE (-er word, better/worse, or a
  *  more/less + adjective pair), never a hand-list of adjectives. */
@@ -2237,6 +2328,25 @@ const GOAL_CONJUNCT_RE = new RegExp(
 // three only REPORT.
 const PLAN_WHAT_NEXT_RE = /^(?:what(?:'s|\s+is)?|whats)\s+the\s+next\s+move[?.!\s]*$/i;
 const PLAN_MOVE_COUNT_RE = /^how\s+many\s+moves(?:\s+(?:are\s+(?:there|left)|remain(?:ing)?|left|to\s+go|in\s+the\s+plan|total))?[?.!\s]*$/i;
+// "is that really the minimum number of moves?" / "could there be a shorter
+// plan than that?" — a confirmation of the planner's own optimality claim,
+// not a request to count anything (without this it fell to the unrelated
+// code-entity counter — "moves" reads as a countable noun to that reader —
+// producing "I can't count 'moves'" even though the planner's own solve
+// output already printed "N moves (shortest)"). findActionPath (planning.mjs)
+// is a real breadth-first search: it expands the state space depth-by-depth
+// and returns the FIRST goal state it finds, so whenever a plan exists its
+// move count IS provably the minimum from the state it started from — never
+// a guess, an actual guarantee of the search algorithm used.
+const PLAN_OPTIMALITY_CONFIRM_RE = /^(?:is\s+(?:that|this)\s+(?:really|actually)?\s*the\s+(?:minimum|fewest|optimal|shortest)(?:\s+possible)?\s+(?:number\s+of\s+moves|amount\s+of\s+moves|moves)|(?:is|could)\s+there\s+be\s+a\s+shorter\s+(?:plan|way|route)(?:\s+than\s+that)?|can\s+(?:it|this|that)\s+be\s+done\s+in\s+fewer\s+moves)[?.!\s]*$/i;
+// "why is that the shortest solution?" — a direct follow-up asking for the
+// SAME reason the planner already printed, unprompted, right after "plan
+// found — N moves (shortest)". Re-displays the stored becauseText (below)
+// rather than an honest miss; a genuinely different justification question
+// ("why did you send X to Y instead of Z", "what if X started elsewhere")
+// asks for something this store doesn't compute at all (an alternative-path
+// or counterfactual explanation) and stays a miss.
+const PLAN_WHY_SHORTEST_RE = /^why\s+(?:is|was)\s+(?:that|this|it)\s+the\s+shortest\s+(?:solution|plan|path|way)[?.!\s]*$/i;
 const PLAN_WHY_MOVE_RE = /^why\s+(?:that|this|the\s+next|the)\s+move[?.!\s]*$/i;
 // Board-state read-backs, answered off the CURRENT board (the latest @stepK
 // snapshot, or the taught board before any step) so a read never contradicts
@@ -2305,12 +2415,20 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object, qua
  *  ONE canonical spelling to STORE rather than a lookup Set of candidates to
  *  match against). Deliberately tiny, no NLP — a stray false fold on an
  *  already-singular noun ending in "s" is a known, accepted limitation of this
- *  same naive scheme used elsewhere in this file (factTermVariants). */
+ *  same naive scheme used elsewhere in this file (factTermVariants).
+ *
+ *  "ss"/"ous" both stay excluded from the trailing-s strip: "ss" for the
+ *  existing reason (a doubled final consonant is never a plural marker), and
+ *  "ous" because no regular English noun plural ends that way at all — every
+ *  "-ous" word reaching this function is an ADJECTIVE ("venomous",
+ *  "dangerous", "curious"), and stripping its final letter as if it were a
+ *  plural "-s" produces a mangled non-word ("venomous" -> "venomou") rather
+ *  than a singular form of anything. */
 function singularizeSurface(word) {
   const w = String(word || "").trim();
   if (/[a-z]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
   if (/(ses|xes|zes|ches|shes)$/i.test(w)) return w.slice(0, -2);
-  if (/[a-z]s$/i.test(w) && !/ss$/i.test(w)) return w.slice(0, -1);
+  if (/[a-z]s$/i.test(w) && !/(?:ss|ous)$/i.test(w)) return w.slice(0, -1);
   return w;
 }
 
@@ -2335,8 +2453,25 @@ function singularizeSurface(word) {
  *  longer 2-word subject first, backtracking to 1 word only if the tail
  *  doesn't then start with is/are — the "is/are" anchor immediately after
  *  the subject removes the ambiguity a fully free-form multi-word subject
- *  would otherwise have. */
-const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(is|are)\s+(?:an?\s+)?([\w-]+)$/i;
+ *  would otherwise have.
+ *
+ *  "any" joins every/each/all as a recognized universal-quantifier
+ *  determiner: "any spider is an arachnid" is the same claim as "every
+ *  spider is an arachnid". Without it here, "any" fell into the SUBJECT
+ *  capture instead (a 2-word "any spider"), minting a bogus compound term
+ *  disconnected from the real "spider" concept any other sentence grounds.
+ *
+ *  A trailing sentence-final mark is tolerated (`[.!?]*` before the anchor):
+ *  without it, "every dog is a mammal." or "rex is a dog." — an ordinary
+ *  first turn typed as a full sentence — failed this match by one character
+ *  whenever the object (or subject) wasn't already a static-lexicon word, so
+ *  the mint fallback below never even got a chance to run and the sentence
+ *  fell all the way to the graph-less wall instead. The unpunctuated form
+ *  ("rex is a dog") already worked; the period-tolerant object/subject
+ *  captures themselves are unaffected (`[\w-]+` never included the period in
+ *  the first place), so this only widens WHICH sentences reach the match,
+ *  never what gets captured out of one that already did. */
+const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|any\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(is|are)\s+(?:an?\s+)?([\w-]+)[.!?]*$/i;
 
 /** ISA-family predicates (mirrors the private ISA_PREDICATES set defined near
  *  memoryFacts, below, at module scope — both are simple top-level consts
@@ -2538,8 +2673,8 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
  *  grounded via the fact just minted (not the static lexicon at all) and
  *  mints "container" the same way.
  *
- *  GATED ON A GENUINE UNIVERSAL QUANTIFIER ("every"/"each"/"all" — never bare/
- *  "a"/"an"/"your"): minting a NEW CLASS-LEVEL CONCEPT is inherently a general
+ *  GATED ON A GENUINE UNIVERSAL QUANTIFIER ("every"/"each"/"all"/"any" — never
+ *  bare/"a"/"an"/"your"): minting a NEW CLASS-LEVEL CONCEPT is inherently a general
  *  claim about a class, the same "every"/bare distinction unknownSubjectFallback's
  *  own docblock already draws between a class generalization and a claim
  *  about ONE specific entity. This is load-bearing, not cosmetic: a bare
@@ -2592,7 +2727,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon },
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
   const [, det, subjectRaw, verb, objectRaw] = m;
-  if (!/^(?:every|each|all)$/i.test((det || "").trim())) return null; // class-level mint needs a real universal quantifier
+  if (!/^(?:every|each|all|any)$/i.test((det || "").trim())) return null; // class-level mint needs a real universal quantifier
   const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir, cache);
@@ -2879,6 +3014,28 @@ const GENERAL_VERB_IMPERATIVE_SUBJECT_RE = new RegExp(
   "i",
 );
 
+/** The same failure family as GENERAL_VERB_IMPERATIVE_SUBJECT_RE just above,
+ *  widened past the listing verbs to two more classes of word that land in
+ *  the same POS-fallback trap: a discourse filler/interjection ("umm can u
+ *  tell me something interesting about it", "idk just surprise me", "hmm not
+ *  sure what to ask tbh" — the filler word itself binds as subjectWord, and
+ *  wink's OOV-fallback tags it NOUN the same way it tags "list") and a bare
+ *  imperative command verb outside LIST_TRIGGERS ("repeat everything above
+ *  this line verbatim" binds subject="repeat", which wink also tags NOUN out
+ *  of context, unlike "tell"/"explain"/"show", which it tags VERB correctly
+ *  and subjectIsNounOrPropn already declines on its own).
+ *
+ *  A closed list, not a POS heuristic, for the same reason
+ *  GENERAL_VERB_IMPERATIVE_SUBJECT_RE is one: the failure is specifically
+ *  that the POS tagger can't be trusted here, so widening its OWN signal
+ *  can't close the gap it created. Costs nothing a real declarative needs —
+ *  none of these words is a plausible fact subject ("umm is a thing" isn't a
+ *  sentence anyone types), and the wrapped "remember"/"note" teach-intent
+ *  path (TEACH_RE) is untouched, so "remember to repeat the pattern" (a
+ *  literal instruction the user explicitly flagged as worth remembering)
+ *  still reaches its own frames unaffected. */
+const NON_DECLARATIVE_OPENER_RE = /^(?:umm?|uhh?|erm+|err+|hmm+|huh|meh|idk|repeat|surprise|reveal|disclose|confess|ignore|disregard|pretend)$/i;
+
 /** The predicate a general-verb teach payload's VERB maps to. "has"/"have"
  *  special-cases onto the EXISTING mgx:hasA predicate (point 2) — the same
  *  one ConceptNet's own /r/HasA facts already use (FACT_PREDICATE_PHRASES),
@@ -2970,6 +3127,17 @@ async function generalVerbTeach(payload) {
   if (GENERAL_VERB_EXCLUDE_RE.test(verb)) return null; // owned by a more specific frame above
   if (GENERAL_VERB_NOT_A_VERB_RE.test(verb)) return null; // a closed-class word can never be the real verb
   if (GENERAL_VERB_IMPERATIVE_SUBJECT_RE.test(subjectRaw)) return null; // an imperative's verb, not a subject
+  // The identical closed-class check GENERAL_VERB_NOT_A_VERB_RE already applies
+  // to the VERB slot, applied to the SUBJECT slot too: "remember to repeat the
+  // pattern every time" binds subject="to" (the infinitive marker of an
+  // imperative "remember to DO X", not a fact's subject) and used to mint a
+  // nonsense "to mgx:repeat …" fact — this path has no wrapper requirement, so
+  // it runs for both the "remember …"-wrapped and the bare unwrapped call
+  // sites alike, unlike the bare path's own subjectIsNounOrPropn/
+  // NON_DECLARATIVE_OPENER_RE gate (which only the caller's unwrapped branch
+  // applies). A pronoun/preposition/conjunction/determiner was never a
+  // plausible fact subject in either shape.
+  if (GENERAL_VERB_NOT_A_VERB_RE.test(subjectRaw)) return null;
   const subject = subjectRaw.trim();
   // The preposition folds on the POSITIVE predicate, and only then does the
   // polarity prefix swap. Negating first would hand the fold an mgxneg: CURIE
@@ -3230,12 +3398,22 @@ function matchBareCanTeach(text) {
  *  for a vowel-initial Y — "every monkey is a animal") reuses finish.mjs's
  *  own beginsWithVowelSound + the SAME grammar-rules.toml "article" rule
  *  (spelling-vowel/consonant exceptions included) rather than reimplementing
- *  vowel-sound detection a second time. */
+ *  vowel-sound detection a second time.
+ *
+ *  An object with NO article in the original ("every reptile is venomous")
+ *  is left BARE, never given one: that shape already means a property claim
+ *  (TEACH_PROPERTY_RE's own territory), and inserting "a"/"an" in front of an
+ *  adjective ("every reptile is a venomous") both reads wrong and asks the
+ *  user to teach a class-membership fact that was never what they said. Only
+ *  a payload that ALREADY carried an article gets its article corrected —
+ *  the "every monkey is a animal" -> "an animal" case this function exists
+ *  for in the first place. */
 function teachSuggestion(payload) {
-  const m = String(payload).match(/^(?:every |each |all |a |an )?([\w-]+) (?:is|are) (?:a |an )?([\w-]+)$/i);
+  const m = String(payload).match(/^(?:every |each |all |a |an )?([\w-]+) (?:is|are) (a |an )?([\w-]+)$/i);
   if (!m) return null;
   const subject = m[1].toLowerCase();
-  const object = m[2].toLowerCase();
+  const object = m[3].toLowerCase();
+  if (!m[2]) return `every ${subject} is ${object}`;
   const articleRule = grammarRules().find((r) => r.kind === "article");
   const article = articleRule && beginsWithVowelSound(object, articleRule) ? "an" : "a";
   return `every ${subject} is ${article} ${object}`;
@@ -3268,7 +3446,35 @@ async function existentialTeachRefusal(payload, lexicon) {
   const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   const singularSubject = singularOf(subject, lex, lookupNoun);
-  const universal = teachSuggestion(`${singularSubject} is ${singularOf(object, lex, lookupNoun)}`);
+  // The object may name a class NOUN ("some men are fathers" -> membership)
+  // or a bare ADJECTIVE property ("some reptiles are venomous" -> a property
+  // claim, not membership in a class called "venomous"). Only a genuine noun
+  // fold — a real lexicon entry, or the naive plural-suffix strip actually
+  // changing the word — means the object IS functioning as a plural noun
+  // here; anything else (an adjective the lexicon doesn't carry as a noun,
+  // and that doesn't end in a real plural suffix either) gets the property
+  // shape instead — no article, no fold — so the suggestion reads "every
+  // reptile is venomous", not the ungrammatical/mangled "every reptile is a
+  // venomous"/"a venomou".
+  const objectNounEntry = lookupNoun(lex, object);
+  const objectFold = objectNounEntry ? objectNounEntry.lemma : singularizeSurface(object);
+  const objectIsClassNoun = !!objectNounEntry || objectFold.toLowerCase() !== object.toLowerCase();
+  let universal;
+  if (objectIsClassNoun) {
+    const articleRule = grammarRules().find((r) => r.kind === "article");
+    const article = articleRule && beginsWithVowelSound(objectFold, articleRule) ? "an" : "a";
+    // The bare "every X is a Y" class-membership shape stores directly
+    // (unknownSubjectFallback's own territory) — no wrapper needed for the
+    // suggestion to actually work when followed verbatim.
+    universal = `every ${singularSubject} is ${article} ${objectFold.toLowerCase()}`;
+  } else {
+    // The bare property shape ("every reptile is venomous") does NOT store
+    // on its own — TEACH_PROPERTY_RE only fires on a "remember/note …"-
+    // wrapped payload — so the suggestion carries the wrapper too, or
+    // following it verbatim would hit the exact same both-sides-unknown
+    // decline again.
+    universal = `remember that every ${singularSubject} is ${object.toLowerCase()}`;
+  }
   return {
     text: `I can't store "${sentence.replace(/[.!]+$/, "")}" — "${quantifier.toLowerCase()}" claims only some of them, `
       + "and I store universals, so that isn't a shape I can store yet."
@@ -3403,6 +3609,39 @@ async function negativeUniversalTeach(sentence, { memoryDir, sessionId }) {
   if (!stored) {
     return {
       text: `I couldn't store the exclusion "no ${subject} is a ${object}" — say it with single-word class names ("no dog is a mammal") and I'll remember it as a disjointness.`,
+      via: "teach-miss", miss: true,
+    };
+  }
+  return stored;
+}
+
+/** "no X can Y" — NEGATIVE_UNIVERSAL_TEACH_RE's sibling one relation over:
+ *  the same universal-exclusion shape, but for the "can"/capability relation
+ *  instead of is-a. "no goldfish can swim" (after "every fish can swim" /
+ *  "a goldfish is a fish") stores a class-level mgxneg:capableOf fact on
+ *  "goldfish" directly, which resolveCapabilityPolarity's existing "a direct
+ *  fact overrides an inherited general one" resolution already reads
+ *  correctly — the read side needed no change at all, only a write-side
+ *  recognizer for this phrasing, which fell to the plain grammar wall
+ *  before (neither BARE_CAN_TEACH_RE nor any other shape covers a LEADING
+ *  "no", only a leading every/all/a/an/bare). Single-word subject and verb
+ *  only, the same closed-shape discipline as its is-a sibling. */
+const NEGATIVE_UNIVERSAL_CAN_TEACH_RE = /^no\s+([\w-]+)\s+can\s+([a-z][\w-]*)[.!]*$/i;
+
+/** The mint for a NEGATIVE_UNIVERSAL_CAN_TEACH_RE match, mirroring
+ *  negativeUniversalTeach's own shape: null when the sentence isn't this
+ *  shape. */
+async function negativeUniversalCanTeach(sentence, { memoryDir, sessionId }) {
+  const m = String(sentence || "").trim().match(NEGATIVE_UNIVERSAL_CAN_TEACH_RE);
+  if (!m || !memoryDir) return null;
+  const subject = singularizeSurface(m[1]);
+  const verb = m[2].toLowerCase();
+  const stored = await teachFact(memoryDir, sessionId, {
+    subject, predicate: NEG_CAPABLE_OF_PREDICATE, object: verb,
+  });
+  if (!stored) {
+    return {
+      text: `I couldn't store the exclusion "no ${subject} can ${verb}" — say it with a single-word class name and verb ("no goldfish can swim") and I'll remember it as a negative capability.`,
       via: "teach-miss", miss: true,
     };
   }
@@ -3756,15 +3995,16 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     }
   }
 
-  // NEGATIVE UNIVERSAL — "no X is a Y": the class-pair disjointness mint (or
-  // the reflexive refusal). Tried on both surfaces, ahead of every frame that
-  // could otherwise read "no X" as a subject literal — see
-  // NEGATIVE_UNIVERSAL_TEACH_RE's own docblock.
+  // NEGATIVE UNIVERSAL — "no X is a Y" (the class-pair disjointness mint, or
+  // the reflexive refusal) or its "no X can Y" capability sibling. Tried on
+  // both surfaces, ahead of every frame that could otherwise read "no X" as
+  // a subject literal — see NEGATIVE_UNIVERSAL_TEACH_RE's own docblock.
   {
     const negUniversalSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
     if (memoryDir && !QUESTION_LEAD_RE.test(negUniversalSrc)
       && !(await hasMidSentenceInterrogative(negUniversalSrc))) {
-      const negUniversal = await negativeUniversalTeach(negUniversalSrc, { memoryDir, sessionId });
+      const negUniversal = await negativeUniversalTeach(negUniversalSrc, { memoryDir, sessionId })
+        || await negativeUniversalCanTeach(negUniversalSrc, { memoryDir, sessionId });
       if (negUniversal) return negUniversal;
     }
   }
@@ -4237,8 +4477,11 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // The quantifier lead ("every … has …") is itself a strong declarative
     // signal, so it overrides the single-token POS gate: a noun that doubles
     // as a verb ("every overbid has a gouger" — wink tags "overbid" VERB)
-    // used to be a SILENT no-op and a later miss.
-    if (subjectWord && (quantHasLed || (await subjectIsNounOrPropn(subjectWord)))) {
+    // used to be a SILENT no-op and a later miss. NON_DECLARATIVE_OPENER_RE
+    // runs even for a quantifier lead — "every umm has a thing" isn't a real
+    // quantified sentence, just filler that happens to fit the shape.
+    if (subjectWord && !NON_DECLARATIVE_OPENER_RE.test(subjectWord)
+      && (quantHasLed || (await subjectIsNounOrPropn(subjectWord)))) {
       // A PLURAL explicit-capability surface ("wrens can hum") whose
       // SINGULAR is a grounded term stores under the singular first — the
       // spelling the grounding fact and every query-side variant fold use —
@@ -6458,7 +6701,23 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const subj = factTermVariants(normFactTerm, subjTerm);
     const obj = factTermVariants(normFactTerm, objTerm);
     const hit = facts.find((f) => f.predicate === compPredicate && subj.has(f.subject) && obj.has(f.object));
-    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    if (hit) {
+      // A comparative is antisymmetric — "X smaller than Y" and "Y smaller
+      // than X" can't both hold — so a directly-taught reversal is a real
+      // contradiction, just one the /memory summary's own contradiction
+      // detector never catches (that one looks for a SHARED subject with
+      // two different objects; this is the mirror shape, two facts with
+      // subject and object SWAPPED). Recorded, never disclosed before: a
+      // flat "yes" gave no hint the opposite was also taught. Surfaced here
+      // rather than silently picking a side, the same "both stand, never
+      // resolved silently" discipline this file's own /memory contradiction
+      // block already follows.
+      const reversed = facts.find((f) => f.predicate === compPredicate && subj.has(f.object) && obj.has(f.subject));
+      const caveat = reversed
+        ? ` — though you also told me the opposite: ${renderFactLine(reversed)}. Both are stored; I won't silently pick one.`
+        : "";
+      return { text: `yes — ${renderFactLine(hit)}${caveat}`, replace: true };
+    }
     const known = facts.filter((f) => f.predicate === compPredicate && (subj.has(f.subject) || subj.has(f.object)));
     const shown = known.length ? ` I do know: ${known.slice(0, 3).map(renderFactLine).join("; ")}.` : "";
     return {
@@ -6586,22 +6845,40 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
     // The ⊑-lift walks a BOUNDED chain (not one hop): "every canine has fur"
     // + "every dog is a canine" + "rex is a dog" answers "does rex have fur"
-    // citing all three premises. One chain, first parent per level (the
-    // 1-hop behavior generalized), cycle-safe, and the bound keeps a deep
+    // citing all three premises. Cycle-safe, and the bound keeps a deep
     // taught taxonomy from turning a yes/no into a graph scan.
-    let liftFrontier = subj;
-    const liftChain = [];
+    //
+    // Explores EVERY isa-edge from the current frontier at each hop (a proper
+    // breadth-first search over the subclass DAG), not just the first one
+    // found: a seeded corpus fact ("dog rdfs:subClassOf animal") and a
+    // freshly-taught one ("dog rdfs:subClassOf canine") both name "dog" as
+    // subject, and taking only whichever came first in `facts` (the seeded
+    // one, loaded before any teaching) could walk the wrong branch to a dead
+    // end while the real, provable answer sat one hop down the OTHER parent.
+    // BFS tries every branch in shortest-chain order, so the first hit found
+    // is also the shortest true chain; `liftSeen` is shared across branches
+    // (an object that doesn't carry the fact via one path won't via another,
+    // since it's the same object either way), which keeps this cycle-safe
+    // without cutting off a genuinely parallel second parent.
+    let frontier = [{ terms: subj, chain: [] }];
     const liftSeen = new Set();
     for (let hop = 0; hop < 4; hop += 1) {
-      const step = facts.find((f) => ISA_PREDICATES.has(f.predicate) && liftFrontier.has(f.subject) && !liftSeen.has(f.object));
-      if (!step) break;
-      liftSeen.add(step.object);
-      liftChain.push(step);
-      const lifted = hasHit(factTermVariants(normFactTerm, step.object));
-      if (lifted) {
-        return { text: `yes — ${[...liftChain.map(renderFactLine), renderFactLine(lifted)].join("; ")}`, replace: true };
+      const nextFrontier = [];
+      for (const { terms, chain } of frontier) {
+        const steps = facts.filter((f) => ISA_PREDICATES.has(f.predicate) && terms.has(f.subject) && !liftSeen.has(f.object));
+        for (const step of steps) {
+          if (liftSeen.has(step.object)) continue;
+          liftSeen.add(step.object);
+          const nextChain = [...chain, step];
+          const lifted = hasHit(factTermVariants(normFactTerm, step.object));
+          if (lifted) {
+            return { text: `yes — ${[...nextChain.map(renderFactLine), renderFactLine(lifted)].join("; ")}`, replace: true };
+          }
+          nextFrontier.push({ terms: factTermVariants(normFactTerm, step.object), chain: nextChain });
+        }
       }
-      liftFrontier = factTermVariants(normFactTerm, step.object);
+      if (!nextFrontier.length) break;
+      frontier = nextFrontier;
     }
     return null;
   }
@@ -7794,6 +8071,78 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     }
     const polarityReply = isaPolarityReply(hit, negHit || directDisjoint);
     if (polarityReply) return polarityReply;
+    // DISJOINTNESS ACROSS BOTH CHAINS: nothing above found a stored fact of
+    // either polarity, but "no" can still be PROVEN when the subject's own
+    // ⊑-chain and the query OBJECT's own ⊑-chain land on two disjoint
+    // classes — "is a cat a dog" after "every cat is a feline" / "every dog
+    // is a canine" / "no feline is a canine" is exactly this: cat⊑feline,
+    // dog⊑canine, and feline disjointWith canine together prove cat can
+    // never be a dog. disjointGateViolations (above) already lifts the
+    // SUBJECT side through its ⊑-ancestor closure, but its {subject, object}
+    // pairs name only the DIRECT disjoint partner class ("canine") — never a
+    // further descendant of it ("dog"). Lifting the query OBJECT through its
+    // own ⊑-ancestor closure (the same closure kernel, run the other way)
+    // and checking it against every violation's `object` field closes that
+    // gap, the same "walk both chains" discipline the subject side already
+    // had.
+    if (disjointRows.length) {
+      // A plain BFS over mixedSubClassEdges, not deriveSubClassClosure: that
+      // kernel returns only NEWLY-derived (indirect) edges, never a directly-
+      // stated one, so a single taught hop ("dog is a canine") would never
+      // surface through it alone — an ancestry closure needs every hop,
+      // direct or derived. Shared by the object's own ancestry (below) and
+      // the self-contradiction guard just after it.
+      const ancestryOf = (seed) => {
+        const closure = new Set(seed);
+        let frontier = new Set(seed);
+        for (let hop = 0; hop < 8 && frontier.size; hop += 1) {
+          const next = new Set();
+          for (const [a, b] of mixedSubClassEdges) {
+            if (frontier.has(a) && !closure.has(b)) next.add(b);
+          }
+          if (!next.size) break;
+          for (const t of next) closure.add(t);
+          frontier = next;
+        }
+        return closure;
+      };
+      const objectAncestry = ancestryOf(objVariants);
+      // SELF-CONTRADICTION GUARD: reject a violation whose own `viaClass` is
+      // ALSO a stated ancestor of its disjoint partner `object` ("no dog is a
+      // cat" taught alongside "every dog is a cat" — dog is both ⊑cat and
+      // disjointWith cat, a contradiction independent of anything being
+      // asked). Deriving a confident "no" from a self-contradictory premise
+      // pair would be the same overclaim isaInconsistencyRefusal exists to
+      // stop; the honest answer there is "these taught facts disagree",
+      // which the existing multi-hop chase + refusal below already gives —
+      // this guard just keeps THIS reader from preempting it with a "no" a
+      // clean, non-contradictory pair (the intended case) never needs.
+      const objViolation = disjointGateViolations.find((vv) => subjCandidates.has(vv.subject) && objectAncestry.has(vv.object)
+        && !ancestryOf([vv.viaClass]).has(vv.object) && !ancestryOf([vv.object]).has(vv.viaClass));
+      if (objViolation) {
+        const posFact = isa.filter((f) => subjCandidates.has(f.subject) && f.object === objViolation.viaClass).sort(byTrust)[0];
+        const disjointFact = disjointRows.find((f) => (f.subject === objViolation.viaClass && f.object === objViolation.object)
+          || (f.subject === objViolation.object && f.object === objViolation.viaClass));
+        // The object side only needs its own citation when the violation's
+        // object ISN'T already a literal query-object variant (i.e. a real
+        // lift happened, "dog" reached via "canine") — a direct match (no
+        // lift) needs no extra premise, the disjoint fact alone connects
+        // subject and object.
+        const objectNeedsLift = !objVariants.has(objViolation.object);
+        const objFact = objectNeedsLift
+          ? isa.filter((f) => objVariants.has(f.subject) && f.object === objViolation.object).sort(byTrust)[0]
+          : null;
+        if (posFact && disjointFact && (!objectNeedsLift || objFact)) {
+          const kindEcho = stripTrailingDiscourseTag(isaAsk[2]).trim();
+          const chain = [posFact, ...(objFact ? [objFact] : [])].map(renderFactLine).join("; ");
+          return {
+            text: `no — ${chain}; and ${factPhrase(disjointFact)}${disjointFact.provenance ? ` (source: ${disjointFact.provenance})` : ""} `
+              + `— so ${isaSubject} can never be ${indefiniteArticleFor(kindEcho)} ${kindEcho}.`,
+            replace: true,
+          };
+        }
+      }
+    }
     // CLASS↔INSTANCE BRIDGE: when X resolves to a graph entity, its
     // inherits chain's superclass LABELS are subject candidates too — a taught
     // "controller ⊑ handler" composes with a graph "TaskController inherits
@@ -10033,10 +10382,15 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
     goal: { text: goalText, specs: goals },
     domain: { classMembers: domain.classMembers, ordering, renderHints },
   };
-  planHolder.state = {
-    ...planHolder.state, actions, states: found.states, stepGoals, cursor: 0, done: false, goalText,
-  };
   const ruleNames = [...new Set(domain.actions.map((a) => a.name))].join('", "');
+  // Stored on the plan slot (not just printed once) so a direct follow-up
+  // ("why is that the shortest solution?") can re-display the SAME reason
+  // instead of an honest miss — see PLAN_WHY_SHORTEST_RE's own call site.
+  const becauseText = `you taught me the "${ruleNames}" rule${domain.actions.length === 1 ? "" : "s"}`
+    + `${ordering.length ? ` and ${ordering.length} ordering fact${ordering.length === 1 ? "" : "s"}` : ""}.`;
+  planHolder.state = {
+    ...planHolder.state, actions, states: found.states, stepGoals, cursor: 0, done: false, goalText, becauseText,
+  };
   const moveLines = actions.map((a, i) => `  ${i + 1}. ${a.label}`);
   // A piece with no taught position is an ASSUMPTION the plan silently makes
   // (it reads the board as taught, without that piece) — said out loud with
@@ -10058,8 +10412,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
   const text = n === 0
     ? `the goal already holds — nothing to do.${assumptionNote}`
     : `plan found — ${n} move${n === 1 ? "" : "s"} (shortest):\n${moveLines.join("\n")}\n\n` +
-      `because — you taught me the "${ruleNames}" rule${domain.actions.length === 1 ? "" : "s"}` +
-      `${ordering.length ? ` and ${ordering.length} ordering fact${ordering.length === 1 ? "" : "s"}` : ""}. ` +
+      `because — ${becauseText} ` +
       `Say "next" to make move 1, or ask "what moves are legal now".${assumptionNote}`;
   return {
     text, via: "plan", lane: "imperative",
@@ -10168,6 +10521,23 @@ async function planFollowUpAnswer(query, { memoryDir, planHolder, pendingPager =
     const total = ps.actions.length;
     const remaining = Math.max(0, total - ps.cursor);
     return { text: remaining === total ? `${total} move${total === 1 ? "" : "s"} in the plan.` : `${total} move${total === 1 ? "" : "s"} in the plan, ${remaining} still to make.`, deduced: "count the moves in the active plan", note: "PLAN FOLLOW-UP — move count from the active plan" };
+  }
+  if (PLAN_OPTIMALITY_CONFIRM_RE.test(q)) {
+    if (!activePlan) return null;
+    const total = ps.actions.length;
+    return {
+      text: `yes — ${total} move${total === 1 ? "" : "s"} is the minimum: the plan search is a breadth-first search over every legal move from the current state, so it always finds the shortest path first. No shorter plan exists from where it started.`,
+      deduced: "confirm the plan's own optimality claim",
+      note: "PLAN FOLLOW-UP — optimality confirmed from the BFS search's own guarantee, not a guess",
+    };
+  }
+  if (PLAN_WHY_SHORTEST_RE.test(q)) {
+    if (!activePlan || !ps.becauseText) return null;
+    return {
+      text: `because — ${ps.becauseText}`,
+      deduced: "explain why the plan is the shortest (re-display the solve-time reason)",
+      note: "PLAN FOLLOW-UP — the because-line already printed at solve time, re-displayed on direct follow-up",
+    };
   }
   if (PLAN_WHY_MOVE_RE.test(q)) {
     if (!activePlan) return null;
@@ -10428,7 +10798,20 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       text = await dispatchTool("tmct_ask", { query: askQuery }, { config, source, tel });
     }
     const [content, envJson] = text.split(ASK_ENVELOPE_DELIM);
-    answer = content;
+    // ask.mjs is shared with the web GUI surface (src/surfaces/web), whose
+    // graph view really does have clickable nodes to select — its own
+    // "click a node first, or name it directly" wording is correct THERE,
+    // but this plain chat surface has no clickable anything, so the same
+    // literal instruction reads as nonsense here (a returning-user finding,
+    // hit on a failed focus resolution with nothing selected). Swapped for
+    // CLI-appropriate wording rather than threading a surface flag through
+    // ask.mjs's whole render layer — a plain string swap on the one shared
+    // clause, not a change to the engine's own (correct, for its surface)
+    // answer.
+    answer = content.replace(
+      /needs a selected node to refer to — click a node first, or name it directly\.$/,
+      "isn't resolved to anything yet — name the term directly, or ask a question that resolves one first.",
+    );
     if (envJson) { try { envelope = JSON.parse(envJson); } catch { envelope = null; } }
   } catch (e) {
     const thrown = String(e?.message || e);

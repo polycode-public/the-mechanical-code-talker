@@ -36,12 +36,71 @@ asides through the world fold, the plural-object fold, the impact summary). `arc
 delivered plan docs; each records what its delivery deliberately did not include. What remains:
 
 - CONVERSATION persona-sweep backlog (`BENCHMARK_CONVERSATION_2.7.11.md`): 29 fresh findings
-  across 6 personas, ranked in the report. Highest priority: the write-boundary bug 2.6.0 named its
-  worst finding recurs under fresh trigger phrases (casual/imperative turns silently taught as
-  facts) even though its original 2.6.0 triggers are fixed — the bare-declarative teach lane's
-  admission criteria look too wide in general, not just for the specific phrases tried so far.
-  Second: tmct's own suggested repair/example text is itself broken in 4 separate instances,
-  independently hit by 3 personas. Full ranked list and routing in the report.
+  across 6 personas, ranked in the report. In progress, worked in the report's priority order:
+  - **Closed**: the write-boundary recurrence (finding #1/#2) — the bare-declarative teach lane now
+    excludes discourse-filler openers ("umm"/"idk"/"hmm") and imperative-command leads ("repeat",
+    and the wrapped "remember to …" infinitive shape) via a closed NON_DECLARATIVE_OPENER_RE plus a
+    symmetric closed-class subject guard in generalVerbTeach, mirroring the existing verb-slot guard.
+  - **Closed**: all 5 instances of tmct's own suggested-repair text being broken (finding #1) —
+    the "is X used anywhere" routing gap (keyword-spot now resolves a bare passive with no "by"
+    agent, guarded so the protected "used for" idiom stays untouched); the "venomous" adjective
+    mangled through noun-singularization (singularizeSurface excludes "-ous" endings, and the
+    existential-teach suggestion picks the bare property shape over a forced article); "any" now
+    joins every/each/all as a recognized universal-quantifier synonym; and a trailing sentence-final
+    period no longer breaks bare teach sentences ("every dog is a mammal.", "rex is a dog." both
+    teach correctly now — BARE_DECLARATIVE_RE and UNKNOWN_SUBJECT_RE both get the same `[.!?]*`
+    tolerance TEACH_RE/EXISTENTIAL_CLASS_TEACH_RE already had). This was never word-specific to
+    "mammal": any bare teach sentence ending in punctuation, naming a word outside the ~180-word
+    static lexicon, hit the same gap.
+  - **Closed**: the meta-question misroute cluster (finding #3, 10 instances) — a returning user's
+    "does this remembered feature still work" questions (/focus, /forget, /stats, compare, session
+    persistence) now get the real, honest answer instead of a teach-parser misfire, via a new
+    META_COMMAND_ANSWERS table; three more mechanism/capability phrasings ("do you use classical
+    logic", "what model are you built on", "can u browse the internet") join AI_IDENTITY_PHRASES;
+    "can u help me with smth" joins CAPABILITY_PHRASES.
+  - **Closed**: all four reasoning-layer gaps — the disjointness veto now walks the query OBJECT's
+    own superclass chain too (was subject-only), with a self-contradiction guard so a genuinely
+    contradictory taught pair still gets the existing inconsistency refusal rather than a false
+    confident "no"; the negative-universal teach frame generalizes from "no X is Y" to "no X can Y"
+    (the read side already resolved it correctly — only the write-side recognizer was missing);
+    2-hop taught property inheritance now explores every ⊑-parent breadth-first instead of
+    committing to whichever the fact list happened to list first (this was silently breaking in
+    any ordinary SEEDED session, not just the unseeded one the pre-existing corpus test covered —
+    a subject with both a seeded and a taught parent class could walk the wrong branch and miss a
+    real answer); and a directly-taught comparative contradiction ("disk-2 is smaller than disk-1"
+    taught right after the reverse) is now disclosed in the ask-time answer, not just silently held.
+  - **Closed** (item 5, the single-persona findings — fixed what was cheaply tractable): the web
+    GUI's "click a node first" wording no longer leaks into this plain chat surface on a failed
+    focus resolution (a plain string swap on ask()'s shared miss text, not a change to the GUI's own
+    correct answer); "is that really the minimum number of moves?"/"could there be a shorter plan
+    than that?" now confirm from the planner's own breadth-first-search guarantee instead of landing
+    in the unrelated code-entity counter; "why is that the shortest solution?" re-displays the same
+    "because — …" line the planner already prints unprompted at solve time (stored on the plan slot
+    now, not discarded after the first print); the did-you-mean branch-preview auto-expansion covers
+    every candidate (the nearest-neighbour candidate's own preview was silently missing) and each
+    preview's own text names its OWN candidate, never the original ambiguous term; and "whats 2+2"
+    gets an honest "I don't do arithmetic" decline instead of the non-sequitur identity blurb (a
+    digit-operator-digit signal that deliberately excludes "-", since this domain's own dates and
+    file/line ranges are digit-hyphen-digit too).
+  - **Still open, named explicitly (item 5 remainder — genuine horizons, not forced)**: filler-clause
+    prefix widening (the report identifies one root cause behind several surface symptoms — "ok so",
+    "oh nice. um what about", "one more random thing," — but widening the existing short-prefix
+    stripper to longer clause shapes without over-matching real content needs its own design pass);
+    silent narrowing without disclosure ("the router" resolving to the Router class over the
+    router.mjs module, a directory reference narrowing to one of several members) — needs a design
+    decision on how/where to surface the narrower reading, not just a string tweak; plan-justification
+    counterfactual and alternative-choice questions ("what if disk-1 started on peg-c instead?", "why
+    did you send crate-c to a pallet instead of stacking it on crate-b?") — these ask the planner to
+    explain a path it did NOT take, which the current BFS never computes at all (a genuinely separate,
+    larger feature than the "why is that the shortest" fix just landed); the session sidecar/log
+    still rewrites verbatim natural-language input to the canonical form matched (a recurrence of a
+    previously-known, still-open item); and the smaller wall gaps not yet investigated — "give me the
+    big picture on this codebase", "tell me about the router thing", "what is the entry point"/"where
+    do i start reading", "what is the purpose of the validate module", "whats the most important
+    file" (a superlative with no default ranking criterion), casual/longer farewells. Full ranked list
+    and routing in the report; every closed item above has a regression test in
+    `test/corpus/inference.jsonl`, `test/corpus/grammar.jsonl`, `test/corpus/planning.jsonl` or
+    `test/corpus/templates.jsonl`.
 
 ## Discipline
 
