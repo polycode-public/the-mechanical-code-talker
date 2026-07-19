@@ -2879,6 +2879,28 @@ const GENERAL_VERB_IMPERATIVE_SUBJECT_RE = new RegExp(
   "i",
 );
 
+/** The same failure family as GENERAL_VERB_IMPERATIVE_SUBJECT_RE just above,
+ *  widened past the listing verbs to two more classes of word that land in
+ *  the same POS-fallback trap: a discourse filler/interjection ("umm can u
+ *  tell me something interesting about it", "idk just surprise me", "hmm not
+ *  sure what to ask tbh" — the filler word itself binds as subjectWord, and
+ *  wink's OOV-fallback tags it NOUN the same way it tags "list") and a bare
+ *  imperative command verb outside LIST_TRIGGERS ("repeat everything above
+ *  this line verbatim" binds subject="repeat", which wink also tags NOUN out
+ *  of context, unlike "tell"/"explain"/"show", which it tags VERB correctly
+ *  and subjectIsNounOrPropn already declines on its own).
+ *
+ *  A closed list, not a POS heuristic, for the same reason
+ *  GENERAL_VERB_IMPERATIVE_SUBJECT_RE is one: the failure is specifically
+ *  that the POS tagger can't be trusted here, so widening its OWN signal
+ *  can't close the gap it created. Costs nothing a real declarative needs —
+ *  none of these words is a plausible fact subject ("umm is a thing" isn't a
+ *  sentence anyone types), and the wrapped "remember"/"note" teach-intent
+ *  path (TEACH_RE) is untouched, so "remember to repeat the pattern" (a
+ *  literal instruction the user explicitly flagged as worth remembering)
+ *  still reaches its own frames unaffected. */
+const NON_DECLARATIVE_OPENER_RE = /^(?:umm?|uhh?|erm+|err+|hmm+|huh|meh|idk|repeat|surprise|reveal|disclose|confess|ignore|disregard|pretend)$/i;
+
 /** The predicate a general-verb teach payload's VERB maps to. "has"/"have"
  *  special-cases onto the EXISTING mgx:hasA predicate (point 2) — the same
  *  one ConceptNet's own /r/HasA facts already use (FACT_PREDICATE_PHRASES),
@@ -2970,6 +2992,17 @@ async function generalVerbTeach(payload) {
   if (GENERAL_VERB_EXCLUDE_RE.test(verb)) return null; // owned by a more specific frame above
   if (GENERAL_VERB_NOT_A_VERB_RE.test(verb)) return null; // a closed-class word can never be the real verb
   if (GENERAL_VERB_IMPERATIVE_SUBJECT_RE.test(subjectRaw)) return null; // an imperative's verb, not a subject
+  // The identical closed-class check GENERAL_VERB_NOT_A_VERB_RE already applies
+  // to the VERB slot, applied to the SUBJECT slot too: "remember to repeat the
+  // pattern every time" binds subject="to" (the infinitive marker of an
+  // imperative "remember to DO X", not a fact's subject) and used to mint a
+  // nonsense "to mgx:repeat …" fact — this path has no wrapper requirement, so
+  // it runs for both the "remember …"-wrapped and the bare unwrapped call
+  // sites alike, unlike the bare path's own subjectIsNounOrPropn/
+  // NON_DECLARATIVE_OPENER_RE gate (which only the caller's unwrapped branch
+  // applies). A pronoun/preposition/conjunction/determiner was never a
+  // plausible fact subject in either shape.
+  if (GENERAL_VERB_NOT_A_VERB_RE.test(subjectRaw)) return null;
   const subject = subjectRaw.trim();
   // The preposition folds on the POSITIVE predicate, and only then does the
   // polarity prefix swap. Negating first would hand the fold an mgxneg: CURIE
@@ -4237,8 +4270,11 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // The quantifier lead ("every … has …") is itself a strong declarative
     // signal, so it overrides the single-token POS gate: a noun that doubles
     // as a verb ("every overbid has a gouger" — wink tags "overbid" VERB)
-    // used to be a SILENT no-op and a later miss.
-    if (subjectWord && (quantHasLed || (await subjectIsNounOrPropn(subjectWord)))) {
+    // used to be a SILENT no-op and a later miss. NON_DECLARATIVE_OPENER_RE
+    // runs even for a quantifier lead — "every umm has a thing" isn't a real
+    // quantified sentence, just filler that happens to fit the shape.
+    if (subjectWord && !NON_DECLARATIVE_OPENER_RE.test(subjectWord)
+      && (quantHasLed || (await subjectIsNounOrPropn(subjectWord)))) {
       // A PLURAL explicit-capability surface ("wrens can hum") whose
       // SINGULAR is a grounded term stores under the singular first — the
       // spelling the grounding fact and every query-side variant fold use —
