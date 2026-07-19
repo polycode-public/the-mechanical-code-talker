@@ -1,0 +1,39 @@
+# woman-with-emotion — same face-fragment mechanism as
+# person-with-emotion.toml (sprite-expressions.mjs); [face] anchored on
+# woman.toml's own head circle.
+classes = ["woman"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="woman-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M15.6 5.4 C17 7 17.2 9.6 16 12.6" fill="none" stroke="url(#woman-with-emotion-fill)" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M8.4 5.4 C7 7 6.8 9.6 8 12.6" fill="none" stroke="url(#woman-with-emotion-fill)" stroke-width="1.8" stroke-linecap="round"/>
+  <circle cx="12" cy="6.6" r="3.3" fill="url(#woman-with-emotion-fill)"/>
+  <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z" fill="url(#woman-with-emotion-fill)"/>
+  <path d="M9.6 4.2 C10.3 3.6 11.1 3.4 12 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+# The same cx/cy/r woman.toml's own head circle declares.
+[face]
+cx = 12
+cy = 6.6
+scale = 3.3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

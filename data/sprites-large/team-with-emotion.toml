@@ -1,0 +1,48 @@
+# team-with-emotion — same face-fragment mechanism as person-with-emotion.toml
+# (sprite-expressions.mjs), but team.toml is a group composite: three
+# figures share one sprite, so there is no single class-declared head
+# circle to copy. Judgment call: [face] anchors on the centre figure's own
+# head circle (cx=12 cy=7.4 r=2.9) — it is drawn last (on top of the two
+# flanking figures), sits on the horizontal centreline, and is the tallest
+# of the three, reading as the frontmost figure. The two side figures stay
+# plain-faced; a three-way {{FACE}} split isn't what this mechanism does.
+classes = ["team"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="team-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <circle cx="5" cy="9" r="2.6" fill="url(#team-with-emotion-fill)"/>
+  <path d="M1.6 22 C1.6 17.7 3 15.6 5 15.6 C7 15.6 8.4 17.7 8.4 22 Z" fill="url(#team-with-emotion-fill)"/>
+  <path d="M2.4 17.6 L7.6 17.6" stroke="currentColor" stroke-width="0.6" opacity="0.5"/>
+  <circle cx="19" cy="9" r="2.6" fill="url(#team-with-emotion-fill)"/>
+  <path d="M15.6 22 C15.6 17.7 17 15.6 19 15.6 C21 15.6 22.4 17.7 22.4 22 Z" fill="url(#team-with-emotion-fill)"/>
+  <path d="M16.4 17.6 L21.6 17.6" stroke="currentColor" stroke-width="0.6" opacity="0.5"/>
+  <circle cx="12" cy="7.4" r="2.9" fill="url(#team-with-emotion-fill)"/>
+  <path d="M7.8 22 C7.8 17 9.6 14.8 12 14.8 C14.4 14.8 16.2 17 16.2 22 Z" fill="url(#team-with-emotion-fill)"/>
+  <path d="M9 16.6 L15 16.6" stroke="currentColor" stroke-width="0.6" opacity="0.5"/>
+  {{FACE}}
+</svg>
+"""
+
+# The centre figure's own head circle — see header comment for why.
+[face]
+cx = 12
+cy = 7.4
+scale = 2.9
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

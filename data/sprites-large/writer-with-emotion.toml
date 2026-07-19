@@ -1,0 +1,39 @@
+# writer-with-emotion — same face-fragment mechanism as
+# person-with-emotion.toml (sprite-expressions.mjs); [face] anchored on
+# writer.toml's own head circle.
+classes = ["writer"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="writer-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="6.6" r="3.3" fill="url(#writer-with-emotion-fill)"/>
+  <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z" fill="url(#writer-with-emotion-fill)"/>
+  <path d="M16.4 12.8 L19.6 16 L18.6 17 L15.4 13.8 Z" fill="url(#writer-with-emotion-fill)" opacity="0.95"/>
+  <path d="M18.6 17 L17.6 19.4 L16.6 18.4 Z" fill="currentColor" opacity="0.85"/>
+  <path d="M16 13.2 L16.9 14.1" stroke="#ffffff" stroke-width="0.4" opacity="0.5"/>
+  {{FACE}}
+</svg>
+"""
+
+# The same cx/cy/r writer.toml's own head circle declares.
+[face]
+cx = 12
+cy = 6.6
+scale = 3.3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
