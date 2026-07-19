@@ -1,0 +1,114 @@
+// plan-browser-entry.mjs — the esbuild entry for the "it plans, and shows
+// the work" page's live session (public/plan-browser.bundle.js, built by
+// scripts/build-plan-bundle.mjs), mirroring spider-fly-browser-entry.mjs's
+// and adventure-browser-entry.mjs's own session-factory shape.
+//
+// Unlike spider-fly's board or Ashcombe Hall's world, hanoi has no
+// structured fact/rule corpus to bootstrap from — its canonical definition
+// (data/games/hanoi-3.txt) IS taught English, one sentence per teach frame.
+// So this session seeds itself the same way `tmct import --file` teaches
+// that file (src/services/import-file.mjs): every sentence
+// hanoi-lesson.mjs's hanoiLessonSentences() generates runs as its own
+// `turn()`, over the exact same runTurn the CLI and every other viz page's
+// chat dock run — not raw appendFacts/appendRule, since there is no
+// structured fact list to append here, only taught English.
+//
+// createPlanSession({ diskCount, maxDepth }) teaches a fresh N-disk puzzle
+// and solves it once (mirroring the "disk-1 rests on disk-2. … the goal is
+// that every disk rests on peg-c. solve it." prompt scripts/build-demo-
+// site.mjs used to shell out to the CLI for), returning `{ plan, turn, ... }`
+// — `plan` is the freshly solved plan (or null on an honest miss, e.g. a
+// max-depth too low to find one), `turn(line, { maxDepth })` is the SAME
+// chat-dock entry point adventure/spider-fly expose, so a visitor's typed
+// fact and a visitor's typed "solve it" both dispatch through the real
+// engine. `maxDepth` is overridable PER CALL (not just at session creation)
+// so the page's own max-search-depth control can re-run "solve it" on the
+// CURRENT board without tearing down and re-teaching the whole puzzle.
+import { runTurn } from "../../services/chat.mjs";
+import { createInMemoryStore } from "../../adapters/memory/core.mjs";
+import { parseEntities } from "../../domain/codegraph.mjs";
+import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
+import { DEFAULT_GAME_CONFIG } from "../../domain/game-config.mjs";
+import { hanoiLessonSentences } from "../../domain/hanoi-lesson.mjs";
+import { computeBlocksLayout, planToPageData, renderInputsFromPlan } from "../../services/plan-viz.mjs";
+import { planToPddl } from "../../services/plan-pddl.mjs";
+// Re-exported so the page can register a CDN-loaded wink-nlp pair before the
+// first teach, the same seam chat-browser-entry.mjs exposes as
+// tmctChat.registerWinkModel — see wink-model.mjs's own header. The hanoi
+// lesson's own "moving a disk onto a target makes the disk rest on the
+// target" sentence needs a REAL lemmatiser (verbLemma reduces "moving" to
+// "move" to match the taught "move onto" action family) — without it, that
+// one sentence honestly declines ("the lemmatizer isn't available"), the
+// action rule never gets its effect, and every later locative fact for the
+// puzzle fails to teach in turn. spider-fly/adventure never register a wink
+// model because their own gameplay never asks a taught rule to reduce a
+// verb; the hanoi lesson is the first live session here that does.
+import { registerWinkModel } from "../../adapters/wink-model.mjs";
+
+/** A live in-memory towers-of-hanoi session this page's live controls AND
+ *  chat dock can both drive. Returns `{ memoryDir, sessionId, diskCount,
+ *  maxDepth, plan, turn }`. `plan` is the puzzle's freshly solved plan (the
+ *  same shape chat.mjs's planLaneAnswer returns, enriched with
+ *  `becauseText` — see `turn()` below), or null when `maxDepth` was too low
+ *  to find one (an honest miss, not an error: `turn()`'s own answer text
+ *  names it). */
+export async function createPlanSession({ diskCount = 3, maxDepth = DEFAULT_GAME_CONFIG.planning.maxDepth } = {}) {
+  const memoryDir = createInMemoryStore();
+  const graph = parseEntities({ individuals: [], objectProperties: [] });
+  const lexicon = loadLexicon();
+  const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
+  const planHolder = { state: null };
+  let focus = null;
+  let last = null;
+
+  /** One dispatched chat turn — the SAME runTurn the CLI and every other
+   *  viz page's own chat dock run, over this session's own memoryDir. A
+   *  throwing runTurn must never kill the session — the page has no other
+   *  chance to show this turn's answer. `maxDepth` overrides the session's
+   *  own default for just this one call (the page's own max-search-depth
+   *  control threads it on every call, including a plain typed "solve
+   *  it"), so raising or lowering it never requires re-teaching the board.
+   *  A returned `plan` carries `becauseText` folded in from the session's
+   *  own plan slot — the plan-lane contract's returned object never carries
+   *  it itself (only planHolder.state does), and the PDDL panel's own
+   *  "because —" line needs it. */
+  async function turn(line, { maxDepth: maxDepthOverride } = {}) {
+    const gameConfig = {
+      ...DEFAULT_GAME_CONFIG,
+      planning: { ...DEFAULT_GAME_CONFIG.planning, maxDepth: maxDepthOverride ?? maxDepth },
+    };
+    let result;
+    try {
+      result = await runTurn(line, {
+        config: null, source: null, graph, focus, last, memoryDir, sessionId,
+        env: {}, lexicon, vocabHint: "", planState: planHolder.state, gameConfig,
+      });
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null, plan: null };
+    }
+    focus = result.focus;
+    last = result.last;
+    if ("planState" in result) planHolder.state = result.planState;
+    const plan = result.plan
+      ? { ...result.plan, becauseText: planHolder.state?.becauseText ?? null }
+      : null;
+    return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan };
+  }
+
+  let plan = null;
+  for (const sentence of hanoiLessonSentences(diskCount)) {
+    const r = await turn(sentence);
+    if (r.plan) plan = r.plan;
+  }
+
+  return { memoryDir, sessionId, diskCount, maxDepth, plan, turn };
+}
+
+// Re-exported so the page's own rendering script (plan-viz.mjs's inlined
+// script) never has to duplicate board layout or PDDL/OWL-RDF formatting —
+// the same posture adventure-browser-entry.mjs/spider-fly-browser-entry.mjs
+// take re-exporting their own engines' pure helpers.
+globalThis.tmctPlan = {
+  createPlanSession, computeBlocksLayout, planToPageData, renderInputsFromPlan, planToPddl, registerWinkModel,
+};

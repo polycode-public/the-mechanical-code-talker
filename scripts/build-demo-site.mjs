@@ -5,7 +5,9 @@
 //   demo-graph.json   the example code graph (see build-demo-graph.mjs)
 //   demo-memory.json  the taught payload behind the ledger (see build-demo-memory.mjs)
 //   ledger.html       the memory ledger, with the ask bundle inlined
-//   plan.html         an animated replay of the solved hanoi-3 game
+//   plan.html         the solved hanoi-3 replay plus a live re-solve session
+//                     (disk-count/max-depth controls, a chat-assert dock, a
+//                     PDDL+OWL/RDF plan panel) over its own browser bundle
 //
 // It also stamps index.html's version from package.json, so the number the page
 // documents follows a version bump on its own.
@@ -19,8 +21,7 @@
 // from the source at build time. The copies keep src/'s directory layout under
 // public/engine/src/, because their own relative imports have to keep resolving.
 
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
@@ -175,32 +176,28 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
   console.log(`wrote ${spritesPagePath}`);
 }
 
-// The plan render: solve the hanoi-3 game through the real planner and keep the
-// animated replay. This shells out to the binary a reader would run, so the page
-// shows the artefact they get rather than one built a private way.
-const HANOI_PROMPT =
-  "disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a. " +
-  "the goal is that every disk rests on peg-c. solve it.";
-const planPath = join(SITE, "plan.html");
-const planDir = mkdtempSync(join(tmpdir(), "tmct-demo-plan-"));
-// stdin stays closed: chat reads it when it is open, and this run is scripted
-// entirely by --prompt. The timeout is generous because these spawns load the
-// wink model, and a build sharing a machine with a full test run has been seen
-// to take minutes for work that takes seconds idle.
-const runTmct = (args) =>
-  execFileSync(process.execPath, [join(ROOT, "bin", "tmct.mjs"), ...args], {
-    cwd: planDir,
-    encoding: "utf8",
-    stdio: ["ignore", "pipe", "pipe"],
-    timeout: 480_000,
-  });
-try {
-  runTmct(["init"]);
-  runTmct(["import", "--file", join(planDir, ".tmct", "imports", "games", "hanoi-3.txt")]);
-  const solved = runTmct(["chat", "--prompt", HANOI_PROMPT, "--render", "blocks", "--output", planPath]);
-  console.log(`wrote ${planPath} (${/\((.*?)\)\s*$/.exec(solved.trim())?.[1] ?? "rendered"})`);
-} finally {
-  rmSync(planDir, { recursive: true, force: true });
+// The plan hero: teach + solve the default hanoi-3 puzzle through the SAME
+// live session src/surfaces/web/plan-browser-entry.mjs exposes to the
+// browser — in-process now, not shelled out to the CLI, so this build step
+// and a visitor's own disk-count control run through the identical code
+// path (no separate "how the site builds it" vs "how a live re-solve works"
+// to keep in sync). Also builds this game's own dedicated browser bundle
+// (the full turn engine, same posture as the spider-fly/adventure bundles
+// above — generated fresh per build, never committed) so the deployed
+// page's live re-solve controls and chat-assert dock actually work.
+{
+  const { main: buildPlanBundle } = await import(join(here, "build-plan-bundle.mjs"));
+  const { outPath: planBundlePath, size: planBundleBytes } = await buildPlanBundle(SITE);
+  console.log(`wrote ${planBundlePath} (${(planBundleBytes / 1024).toFixed(0)} KB)`);
+
+  const { createPlanSession } = await import(join(ROOT, "src", "surfaces", "web", "plan-browser-entry.mjs"));
+  const { renderPlanHtml, renderInputsFromPlan } = await import(join(ROOT, "src", "services", "plan-viz.mjs"));
+  const { plan } = await createPlanSession({ diskCount: 3 });
+  if (!plan) throw new Error("the default hanoi-3 puzzle failed to solve — plan.html would have nothing to embed");
+  const { rendersAs, sizeOrder } = renderInputsFromPlan(plan);
+  const planPath = join(SITE, "plan.html");
+  await writeF(planPath, renderPlanHtml({ plan, rendersAs, sizeOrder, title: plan.goal?.text || "tmct plan" }));
+  console.log(`wrote ${planPath} (${plan.actions.length} moves, ${plan.states.length} snapshots)`);
 }
 
 // The spider-and-fly hero: the world pack (built already, from
