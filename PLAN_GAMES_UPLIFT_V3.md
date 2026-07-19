@@ -396,6 +396,23 @@ own "never go blank because one asset had a hiccup" posture already used elsewhe
 
 ### C.4 Five per-page redesigns (frontend-design skill, once per page)
 
+**Operator layout feedback on the CURRENT pre-redesign pages, given while these tracks were already
+in flight — relayed directly to the implementing agents, recorded here too:**
+- **Adventure**: the room-scene panel has too much unused space and should shrink to fit its real
+  content; the "look" room-description text (currently a strip pinned to the very bottom of the
+  whole page) should move up into the side column, between the action-history panel and the chat
+  input, not stay banished below everything else.
+- **Adventure**: the "rooms visited" map container currently grows/shrinks its height based on how
+  many rooms are visited and how the directional layout falls — this pushes the goal panel and the
+  bottom digest bar around inconsistently as the game progresses. Fix: a FIXED-size map container
+  (scale or scroll the graph to fit), for both the existing play-mode map and the new edit-mode
+  whole-map view.
+- **Spider-fly**: the "agents" HUD panel is pinned to the top of the side column but its height
+  grows with the live agent count, pushing the chat/pills panel down inconsistently — gets worse
+  once multi-hatch (A.2.3) can spawn several agents at once. Fix: a fixed-height, internally
+  scrolling agents panel. Also: a large unused horizontal gap sits between the board and the side
+  column — the column should use the available width, not leave it empty.
+
 1. **Talk to it (new `chat.html`)** — post-ChatGPT webchat: centered message column, bottom-fixed
    input, message bubbles. Signature element: a per-message provenance chip (taught/corpus/entailed
    — tmct's own distinguishing trait), not a generic bubble clone.
