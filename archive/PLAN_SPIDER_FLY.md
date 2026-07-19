@@ -1,7 +1,11 @@
 # PLAN_SPIDER_FLY.md — a spider and a fly, planning against each other on a partly-hidden grid, rendered through an ontology→sprite mapping
 
 Status: BUILT — §12 steps 1-8 (world/grid substrate, the headless turn engine, chat integration,
-rendering, the pages, and the guess-number Play retrofit) are all live code.
+rendering, the pages, and the guess-number Play retrofit) are all live code. §13's three open
+items stay open: the vision radius (`radius=4`) was reasoned but never measured against the real
+rendered page and drifts as both agents move; the four-lane `planState` pattern is flagged "watch,
+not solved"; the spatial teach-frame's full phrasing coverage was never edge-hunted the way the
+adventure grammar was.
 
 ## Build status (2026-07-18)
 

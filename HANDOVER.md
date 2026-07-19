@@ -17,7 +17,7 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 ## Version state (2026-07-18)
 
 v2.7.11 in the working tree: the adventure dead-end routing fixes, the spider-and-fly game
-(`PLAN_SPIDER_FLY.md`, fully built), the TOOL-7/TOOL-8 router uplift, and a 5-round
+(`archive/PLAN_SPIDER_FLY.md`, fully built), the TOOL-7/TOOL-8 router uplift, and a 5-round
 adventure-focused playtest edge hunt (`playtests/PLAYTEST_LOG_003.md` through `_007.md`) have
 all landed since 2.7.0, pipelines confirmed green at every round.
 
