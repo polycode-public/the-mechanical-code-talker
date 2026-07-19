@@ -1,0 +1,44 @@
+# girl-with-emotion — the same twin-tail hair and child-scale body as
+# girl.toml, plus the shared face-fragment mechanism
+# (sprite-expressions.mjs): a required [face] anchor and a {{FACE}}
+# placeholder that resolves to whichever of the 6 curated mgx:feels words
+# (happy/sad/angry/scared/surprised/calm) the instance's own fact names. No
+# mgx:feels fact falls through to the plain girl.toml sprite, the same
+# dog/dog-with-colour precedent. {{FACE}} sits as the last child before
+# </svg>, painting over the body beneath it.
+classes = ["girl"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="girl-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M16.2 6.8 C17.6 8.6 17.6 11.2 16.2 13.8" fill="none" stroke="url(#girl-with-emotion-fill)" stroke-width="1.8" stroke-linecap="round"/>
+  <path d="M7.8 6.8 C6.4 8.6 6.4 11.2 7.8 13.8" fill="none" stroke="url(#girl-with-emotion-fill)" stroke-width="1.8" stroke-linecap="round"/>
+  <circle cx="12" cy="8.2" r="3.6" fill="url(#girl-with-emotion-fill)"/>
+  <path d="M7.4 21 C7.4 16.6 9.4 14.6 12 14.6 C14.6 14.6 16.6 16.6 16.6 21 Z" fill="url(#girl-with-emotion-fill)"/>
+  <path d="M9.8 5.6 C10.4 5.1 11.1 4.9 12 5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+# The same cx/cy/r girl.toml's own head circle declares.
+[face]
+cx = 12
+cy = 8.2
+scale = 3.6
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
