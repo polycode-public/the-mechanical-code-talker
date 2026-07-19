@@ -1,6 +1,6 @@
 {
   "name": "@polycode-projects/the-mechanical-code-talker",
-  "version": "2.7.12",
+  "version": "2.7.13",
   "private": false,
   "type": "module",
   "description": "The Mechanical Code Talker (tmct) — a tolerant, offline, $0 chat surface that guides you toward precision queries about a software repository. ELIZA/PARRY-style but domain-obsessed with code. No model calls; no codebase index of its own.",
