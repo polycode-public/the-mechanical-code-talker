@@ -170,6 +170,11 @@ export function computeLedgerDataFromPayload(payload, { focus, term, rowLimit = 
     contradictions: { count: contradictions.length, firstFocusTerm: firstContra ? firstContra.s : null },
     biggestHub: terms.length ? { term: terms[0].term, degree: terms[0].degree } : null,
   };
+  // Dashboard-strip stats: always over the FULL rows/terms/contradictions —
+  // computed here, before the row-cap section below, so a huge graph's
+  // tile numbers stay the whole-graph truth even when the ledger view itself
+  // degrades to "recent + local".
+  const stats = computeLedgerStats(rows, terms, contradictions);
 
   // Row cap: the focus 2-hop neighborhood survives first (the minimap's own
   // radius, so facet counts and the map stay mutually correct), the rest by
@@ -190,7 +195,7 @@ export function computeLedgerDataFromPayload(payload, { focus, term, rowLimit = 
   }
   const meta = { shown: shownRows.length, total, truncated: shownRows.length < total };
 
-  return { rows: shownRows, terms, edges, focus: focusTerm, contradictions, worthALook, payload, meta };
+  return { rows: shownRows, terms, edges, focus: focusTerm, contradictions, worthALook, payload, meta, stats };
 }
 
 /** Load the memory graph under `repoDir` and derive the ledger data. Never
@@ -261,11 +266,207 @@ export function facetCounts(rows, focus, sel, now) {
   return counts;
 }
 
+// ---- dashboard-strip stats: real counts over the FULL fact-row set --------
+// (never the row-capped view — meta.total's own honesty contract) for the
+// telemetry-style tiles atop the existing 3-column layout.
+
+const BUNDLE_TOP_N = 6;
+const PREDICATE_TOP_N = 6;
+const SPARK_MAX_POINTS = 48;
+
+/** Corpus-bundle grouping key for one fact's `src` string: the first
+ *  pipe-segment, folded to its stable source-family prefix
+ *  ("teach:chat:<session>@<ts>" -> "teach:chat", "corpus:human /r/IsA" ->
+ *  "corpus:human", "import:hanoi-3.txt" stays whole — the filename IS the
+ *  bundle). A closed table with a verbatim fallback, same posture as
+ *  phraseFor: an unrecognized tag still reads as itself. */
+export function bundleKeyFor(src) {
+  const first = String(src || "").split(" | ")[0].trim();
+  if (!first) return "unrecorded";
+  if (first.startsWith("teach:chat")) return "teach:chat";
+  if (first.startsWith("ace:chat")) return "ace:chat";
+  if (first === "operator" || first.startsWith("operator:")) return "operator";
+  if (first.startsWith("entailed")) {
+    const rule = first.slice("entailed".length).replace(/^[:\s]+/, "").split(/[\s:]/)[0];
+    return rule ? `entailed:${rule}` : "entailed";
+  }
+  if (first.startsWith("corpus:")) {
+    const name = first.slice("corpus:".length).split(" ")[0];
+    return name ? `corpus:${name}` : "corpus";
+  }
+  return first; // import:<file>, provider/reference/web sourceTypes, etc — verbatim
+}
+
+/** Human label for a bundleKeyFor() key. */
+export function bundleLabelFor(key) {
+  const k = String(key || "");
+  if (k === "teach:chat") return "taught via chat";
+  if (k === "ace:chat") return "taught (parsed)";
+  if (k === "operator") return "operator-asserted";
+  if (k === "unrecorded") return "unrecorded";
+  if (k.startsWith("corpus:")) return `corpus: ${k.slice(7)}`;
+  if (k.startsWith("import:")) return `imported: ${k.slice(7)}`;
+  if (k.startsWith("entailed:")) return `entailed: ${k.slice(9)}`;
+  if (k === "entailed") return "entailed";
+  return k;
+}
+
+/** Dashboard-strip stats over `rows` (the FULL set — pass it before any
+ *  row-cap slicing) and `terms`/`contradictions` from the same derivation.
+ *  Every number is a straight count or ratio over real rows; nothing here is
+ *  estimated or placeholder. The ingestion sparkline plots cumulative fact
+ *  count in TEACH order (oldest first), not wall-clock time — a store built
+ *  in one script run has timestamps seconds apart, so order carries the
+ *  signal the clock can't. */
+export function computeLedgerStats(rows, terms, contradictions) {
+  const list = rows || [];
+  const byProv = { taught: 0, corpus: 0, entailed: 0 };
+  const byTier = { 1: 0, 2: 0, 3: 0 };
+  const bundleCounts = new Map();
+  const predicateCounts = new Map(); // predicate -> { phrase, count }
+  for (const r of list) {
+    byProv[r.prov] = (byProv[r.prov] || 0) + 1;
+    byTier[r.trustTier] = (byTier[r.trustTier] || 0) + 1;
+    const bk = bundleKeyFor(r.src);
+    bundleCounts.set(bk, (bundleCounts.get(bk) || 0) + 1);
+    const pc = predicateCounts.get(r.p) || { phrase: r.phrase, count: 0 };
+    pc.count += 1;
+    predicateCounts.set(r.p, pc);
+  }
+  const bundles = [...bundleCounts.entries()]
+    .map(([key, count]) => ({ key, label: bundleLabelFor(key), count }))
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
+    .slice(0, BUNDLE_TOP_N);
+  const predicates = [...predicateCounts.entries()]
+    .map(([predicate, v]) => ({ predicate, phrase: v.phrase, count: v.count }))
+    .sort((a, b) => b.count - a.count || a.predicate.localeCompare(b.predicate))
+    .slice(0, PREDICATE_TOP_N);
+
+  const totalDegree = (terms || []).reduce((sum, t) => sum + (t.degree || 0), 0);
+  const density = terms && terms.length ? totalDegree / terms.length : 0;
+
+  // Cumulative fact count in teach order, sampled to SPARK_MAX_POINTS for a
+  // large graph — every plotted value is a real cumulative count at a real
+  // index, never interpolated.
+  const ordered = list.filter((r) => r.createdAt).slice().reverse(); // rows sort newest-first
+  const n = ordered.length;
+  const sparkline = [];
+  if (n > 0) {
+    const stride = Math.max(1, Math.ceil(n / SPARK_MAX_POINTS));
+    for (let i = stride - 1; i < n; i += stride) sparkline.push(i + 1);
+    if (sparkline[sparkline.length - 1] !== n) sparkline.push(n);
+  }
+
+  return {
+    totalFacts: list.length,
+    totalTerms: (terms || []).length,
+    byProv, byTier, bundles, predicates, density,
+    contradictionCount: (contradictions || []).length,
+    firstLearned: n ? ordered[0].createdAt : null,
+    lastLearned: n ? ordered[n - 1].createdAt : null,
+    sparkline,
+  };
+}
+
+const pct = (n, total) => (total > 0 ? (n / total) * 100 : 0);
+
+/** The facts.by-tier tile: a proportional bar plus a counts legend, both over
+ *  the SAME three taught/corpus/entailed tokens the rest of the page already
+ *  colors provenance with. Server-rendered once; the tier split doesn't
+ *  change with the interactive segment filters below it. */
+function tierTileHtml(byProv, total) {
+  const segs = [["taught", byProv.taught || 0], ["corpus", byProv.corpus || 0], ["entail", byProv.entailed || 0]];
+  const bar = segs.map(([cls, n]) => `<span class="tseg t-${cls}" style="width:${pct(n, total).toFixed(2)}%"></span>`).join("");
+  const legend = segs.map(([cls, n]) => `<span class="tleg t-${cls}">${n} ${cls === "entail" ? "entailed" : cls}</span>`).join("");
+  return `<div class="tierbar" role="img" aria-label="${segs.map(([c, n]) => `${n} ${c === "entail" ? "entailed" : c}`).join(", ")} of ${total} facts">${bar}</div><div class="tierlegend">${legend}</div>`;
+}
+
+/** A small leaderboard bar list — bundles or predicates, each scaled to the
+ *  list's own max (not the grand total), like a top-N panel on a dashboard. */
+function microbarsHtml(items) {
+  const max = items.reduce((m, it) => Math.max(m, it.count), 0) || 1;
+  return items.map((it) =>
+    `<div class="bbar"><span class="bblabel">${escapeHtml(it.label)}</span><span class="bbtrack"><span class="bbfill" style="width:${pct(it.count, max).toFixed(1)}%"></span></span><span class="bbn">${it.count}</span></div>`,
+  ).join("");
+}
+
+/** The dashboard strip: fact/term totals, the tier bar, graph density, a data-
+ *  quality tile keyed off the SAME contradiction count worthALook surfaces,
+ *  and the corpus-bundle/predicate leaderboards. Every tile reads straight
+ *  off `stats` (computeLedgerStats) — no client-side recomputation. */
+function dashboardHtml(stats) {
+  const s = stats || {};
+  const total = s.totalFacts || 0;
+  if (!total) {
+    return `<section class="dash" aria-label="Ledger metrics"><div class="tile"><span class="tile-label">facts.total</span><span class="tile-value">0</span><span class="tile-sub">nothing taught yet</span></div></section>`;
+  }
+  const terms = s.totalTerms || 0;
+  const qualityCls = s.contradictionCount > 0 ? " tile-alert" : "";
+  const bundlesHtml = s.bundles?.length ? microbarsHtml(s.bundles) : `<span class="tile-sub">no sources recorded</span>`;
+  const predicatesHtml = s.predicates?.length
+    ? microbarsHtml(s.predicates.map((p) => ({ label: p.phrase || p.predicate, count: p.count })))
+    : `<span class="tile-sub">none yet</span>`;
+  return `<section class="dash" aria-label="Ledger metrics">
+    <div class="tile">
+      <span class="tile-label">facts.total</span>
+      <span class="tile-value">${total}</span>
+      <span class="tile-sub">${terms} term${terms === 1 ? "" : "s"} tracked</span>
+    </div>
+    <div class="tile tile-wide">
+      <span class="tile-label">facts.by-tier</span>
+      ${tierTileHtml(s.byProv || {}, total)}
+    </div>
+    <div class="tile">
+      <span class="tile-label">graph.avg-degree</span>
+      <span class="tile-value">${(s.density || 0).toFixed(1)}</span>
+      <span class="tile-sub">facts per term</span>
+    </div>
+    <div class="tile${qualityCls}">
+      <span class="tile-label">data.quality</span>
+      <span class="tile-value">${s.contradictionCount || 0}</span>
+      <span class="tile-sub">term${s.contradictionCount === 1 ? "" : "s"} with more than one answer</span>
+    </div>
+    <div class="tile tile-wide">
+      <span class="tile-label">corpus.bundles</span>
+      <div class="bundlebars">${bundlesHtml}</div>
+    </div>
+    <div class="tile tile-wide">
+      <span class="tile-label">predicate.top</span>
+      <div class="bundlebars">${predicatesHtml}</div>
+    </div>
+  </section>`;
+}
+
+/** The aside's ingestion sparkline: a real cumulative-count polyline over
+ *  `stats.sparkline` (see computeLedgerStats), server-rendered as inline SVG
+ *  so it needs no client JS and repaints for free on a theme switch via the
+ *  CSS custom properties its classes resolve against. */
+function sparklineSvg(stats) {
+  const pts = stats?.sparkline || [];
+  const W = 200, H = 44, PAD = 3;
+  if (!pts.length) return `<p class="mapnote">not enough dated facts yet</p>`;
+  if (pts.length === 1) {
+    return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="1 fact taught"><circle class="dot" cx="${W / 2}" cy="${H / 2}" r="2.5"></circle></svg>`;
+  }
+  const max = pts[pts.length - 1]; // cumulative and monotonic — last is the max
+  const stepX = (W - PAD * 2) / (pts.length - 1);
+  const y = (v) => H - PAD - (v / max) * (H - PAD * 2);
+  const coords = pts.map((v, i) => [PAD + i * stepX, y(v)]);
+  const line = coords.map(([x, yy], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${yy.toFixed(1)}`).join(" ");
+  const area = `${line} L${coords[coords.length - 1][0].toFixed(1)},${H} L${coords[0][0].toFixed(1)},${H} Z`;
+  const last = coords[coords.length - 1];
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" role="img" aria-label="${pts.length} sampled points, ${max} facts total">
+    <path class="fill" d="${area}"></path>
+    <path class="line" d="${line}"></path>
+    <circle class="dot" cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="2.5"></circle>
+  </svg>`;
+}
+
 /** One complete, self-contained document: the ledger, segment rail,
  *  worth-a-look panel, breadcrumb/search, two-hop minimap, and (when the
  *  memory-ask bundle is present) the ask-the-graph chat dock, all over the
  *  embedded LEDGER/PAYLOAD data. */
-export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, worthALook, payload, meta, memoryAskBundle } = {}) {
+export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, worthALook, payload, meta, memoryAskBundle, stats } = {}) {
   const ledgerJson = embedJson({ rows: rows || [], terms: terms || [], edges: edges || [], focus: focus || null, contradictions: contradictions || [], worthALook: worthALook || null, meta: meta || { shown: 0, total: 0, truncated: false } });
   const payloadJson = embedJson(payload || { individuals: [], objectProperties: [] });
   const shown = meta?.shown ?? (rows || []).length;
@@ -287,6 +488,11 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
         </form>
       </div>`
     : `<div class="chat chat-off"><p class="chatnote">chat unavailable — run <span class="mono">npm run build:ask-bundle</span> to enable the in-page ask engine.</p></div>`;
+  const sparkCaption = stats?.firstLearned && stats?.lastLearned
+    ? (stats.firstLearned.slice(0, 10) === stats.lastLearned.slice(0, 10)
+        ? `learned ${escapeHtml(stats.lastLearned.slice(0, 10))}`
+        : `first ${escapeHtml(stats.firstLearned.slice(0, 10))} &middot; last ${escapeHtml(stats.lastLearned.slice(0, 10))}`)
+    : "cumulative facts, teach order";
 
   return `<!doctype html>
 <html lang="en">
@@ -312,6 +518,30 @@ ${THEME_TOKENS_CSS}
   .search { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
   .search input { font-family: ${MONO_STACK}; font-size: .78rem; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .6rem; width: 170px; }
   .search .miss { font-size: .72rem; color: var(--alert); font-family: ${MONO_STACK}; }
+  .dash { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: .6rem; margin: 0 0 1.1rem; }
+  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .55rem .7rem .6rem; display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
+  .tile-wide { grid-column: span 2; }
+  .tile-alert { border-color: var(--alert); }
+  .tile-label { font-family: ${MONO_STACK}; font-size: .62rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
+  .tile-value { font-family: ${MONO_STACK}; font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .tile-alert .tile-value { color: var(--alert); }
+  .tile-sub { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
+  .tierbar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: var(--line); margin-top: .3rem; }
+  .tseg { height: 100%; }
+  .tseg.t-taught { background: var(--taught); } .tseg.t-corpus { background: var(--corpus); } .tseg.t-entail { background: var(--entail); }
+  .tierlegend { display: flex; flex-wrap: wrap; gap: .15rem .7rem; margin-top: .35rem; font-family: ${MONO_STACK}; font-size: .65rem; }
+  .tleg.t-taught { color: var(--taught); } .tleg.t-corpus { color: var(--corpus); } .tleg.t-entail { color: var(--entail); }
+  .bundlebars { display: flex; flex-direction: column; gap: .22rem; margin-top: .35rem; }
+  .bbar { display: grid; grid-template-columns: minmax(0,1fr) 3.4rem 1.6rem; align-items: center; gap: .4rem; font-family: ${MONO_STACK}; font-size: .68rem; }
+  .bblabel { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bbtrack { background: var(--line); border-radius: 99px; height: 5px; overflow: hidden; }
+  .bbfill { display: block; height: 100%; background: var(--ink); opacity: .55; border-radius: 99px; }
+  .bbn { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
+  .sparkwrap { margin-top: .5rem; }
+  .spark { display: block; width: 100%; height: 44px; }
+  .spark .fill { fill: var(--muted); opacity: .18; stroke: none; }
+  .spark .line { fill: none; stroke: var(--ink); stroke-width: 1.4; }
+  .spark .dot { fill: var(--ink); }
   .app { display: grid; grid-template-columns: 190px minmax(0,1fr) 230px; gap: 1.3rem; grid-template-areas: "rail ledger aside"; }
   .rail { grid-area: rail; } .ledger { grid-area: ledger; } .aside { grid-area: aside; }
   @media (max-width: 880px) { .app { grid-template-columns: 1fr; grid-template-areas: "ledger" "aside" "rail"; } .search { margin-left: 0; } }
@@ -341,7 +571,7 @@ ${THEME_TOKENS_CSS}
   .chip { font-family: ${MONO_STACK}; font-size: .76rem; padding: .05rem .45rem; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); }
   button.chip:hover { border-color: var(--ink); }
   .chip.here { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-  .prov { margin-left: auto; font-family: ${MONO_STACK}; font-size: .64rem; padding: .08rem .5rem; border-radius: 99px; white-space: nowrap; }
+  .prov { margin-left: auto; font-family: ${MONO_STACK}; font-size: .64rem; padding: .08rem .5rem; border-radius: 99px; max-width: 100%; overflow-wrap: anywhere; }
   .prov.p-taught { color: var(--taught); background: var(--taught-soft); }
   .prov.p-corpus { color: var(--corpus); background: var(--corpus-soft); }
   .prov.p-entail { color: var(--entail); background: var(--entail-soft); }
@@ -376,6 +606,7 @@ ${THEME_TOKENS_CSS}
 <main>
   <div class="eyebrow"><span>tmct &middot; memory ledger</span><span id="counts"></span></div>
   <h1>A graph you can read</h1>
+  ${dashboardHtml(stats)}
   <div class="topbar">
     <nav class="crumbs" id="crumbs" aria-label="Focus trail"></nav>
     <div class="search">
@@ -399,6 +630,11 @@ ${THEME_TOKENS_CSS}
       <div class="mapwrap">
         <canvas id="map" width="230" height="160" aria-label="Two-hop neighborhood minimap"></canvas>
         <p class="mapnote">dots = terms &middot; click to refocus &middot; dim = filtered out</p>
+      </div>
+      <h2>ingestion</h2>
+      <div class="mapwrap sparkwrap">
+        ${sparklineSvg(stats)}
+        <p class="mapnote">${sparkCaption}</p>
       </div>
     </aside>
   </div>
