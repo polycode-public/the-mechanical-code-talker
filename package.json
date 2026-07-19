@@ -67,7 +67,8 @@
     "corpus/",
     "!corpus/wordnet/generate.mjs",
     "!corpus/namenet/generate.mjs",
-    "data/"
+    "data/",
+    "!data/sprites-large/"
   ],
   "publishConfig": {
     "access": "public"
@@ -139,6 +140,7 @@
     "build:chat-seed": "node scripts/build-chat-seed.mjs",
     "build:demo-graph": "node scripts/build-demo-graph.mjs",
     "build:demo-pack": "node scripts/build-demo-pack.mjs",
+    "build:demo-sprites-pack": "node scripts/build-demo-sprites-pack.mjs",
     "build:demo-memory": "node scripts/build-demo-memory.mjs",
     "gen:tool-docs": "node scripts/generate-tool-docs.mjs",
     "gen:collisions": "node scripts/generate-real-word-collisions.mjs",
