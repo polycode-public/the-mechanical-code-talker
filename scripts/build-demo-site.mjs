@@ -218,7 +218,15 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
   console.log(`wrote ${spiderFlyBundlePath} (${(spiderFlyBundleBytes / 1024).toFixed(0)} KB)`);
   const { renderSpiderFlyHtml } = await import(join(ROOT, "src", "services", "spider-fly-viz.mjs"));
   const spiderFlyPath = join(SITE, "spider-fly.html");
-  await writeF(spiderFlyPath, renderSpiderFlyHtml({ spriteTemplates }));
+  // The large tier (data/sprites-large/*.toml), not the small icon tier
+  // every other embedder above reads: the icon tier carries no face/eye/
+  // mouth geometry at all, so it's the only tier `spider-with-emotion.toml`/
+  // `fly-with-emotion.toml` actually exist in — the live mgx:feels wiring
+  // above has nothing to resolve against without it. Read directly here
+  // (not shared with the sprites.html block's own spriteLargeTemplates)
+  // so this step stays self-contained regardless of build-step ordering.
+  const spiderFlySpriteTemplates = readSpriteLargeTemplateFiles();
+  await writeF(spiderFlyPath, renderSpiderFlyHtml({ spriteTemplates: spiderFlySpriteTemplates }));
   console.log(`wrote ${spiderFlyPath}`);
 }
 

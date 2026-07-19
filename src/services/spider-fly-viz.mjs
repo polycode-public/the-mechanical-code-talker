@@ -128,6 +128,54 @@ export function facingDegreesFor(plan, previousDegrees) {
   return previousDegrees ?? 0;
 }
 
+/** The instance-level `mgx:feels` emotion for one spider-fly agent this
+ *  tick — a PURE derivation from state spider-fly.mjs's own `runSpiderFlyTick`
+ *  already returns on the agent (`goal`/`mass`), never a new persisted fact,
+ *  the same derive-don't-duplicate posture `hasActiveWebAt` already holds for
+ *  web state (PLAN_GAMES_UPLIFT_V3.md §B.2.4). Operator-confirmed mapping: a
+ *  spider that just ate is happy; a spider carrying an uncaught fly or
+ *  mid-chase (chasing, or co-located and about to catch) is angry (predatory
+ *  focus); a spider avoiding another spider is scared; a spider holding
+ *  position or building a web is calm. A fly evading a believed-visible
+ *  spider is scared, and so is the sharper form of the same fear — just
+ *  caught, or already being carried; a fly with no threat visible (wandering,
+ *  or trapped with none in sight) is calm.
+ *
+ *  `agent.goal` is spider-fly.mjs's own fixed-template text (`goalLineFor`'s
+ *  literal phrasing) — the only reliable per-tick discriminator this
+ *  function's caller has, and every real goal string that engine can ever
+ *  produce is matched below by its own distinguishing prefix. A goal this
+ *  function doesn't recognize (a freshly hatched/spawned agent's "no goal
+ *  yet", or the transient "X is gone — re-evaluating" scrub once a named
+ *  agent dies) falls through to "calm" — the 6-word vocabulary's own
+ *  deliberate no-strong-emotion baseline (sprite-expressions.mjs's B.2.1
+ *  design), not a guess.
+ *
+ *  `maxMass` is accepted for parity with this page's own per-class mass-bar
+ *  denominators (`SPIDERFLY.maxSpiderMass`/`maxFlyMass`) but unused today —
+ *  no state in the operator's own confirmed table keys off a mass ratio,
+ *  only off the goal text above. Self-contained (no outer refs),
+ *  `.toString()`-splice safe. */
+export function emotionFor(agent, kind, maxMass) {
+  const goal = agent?.goal || "";
+  if (kind === "spider") {
+    if (goal.startsWith("just ate")) return "happy";
+    if (goal.startsWith("carrying") || goal.startsWith("chasing") || goal.startsWith("co-located with")) return "angry";
+    if (goal.startsWith("avoiding")) return "scared";
+    return "calm";
+  }
+  if (kind === "fly") {
+    if (
+      goal.startsWith("evading")
+      || goal.startsWith("being carried by")
+      || goal.startsWith("just caught by")
+      || goal.startsWith("trapped in an active web")
+    ) return "scared";
+    return "calm";
+  }
+  return "calm";
+}
+
 /**
  * The updated corpse set for one redraw (§A.2.5 — visual-only, entirely
  * client-side; the actual starve/eat removal already happened in the
@@ -161,10 +209,14 @@ export function nextCorpses(prevCorpses, prevAgents, agents, turn, lingerTurns =
  *  same `title`/`spriteTemplates` every time; every other piece of state
  *  this page shows is computed live in the browser once the sibling bundle
  *  loads. `spriteTemplates` is the build step's own read of
- *  data/sprites/*.toml (sprite-template-files.mjs), embedded as page data
- *  the same reason adventure-viz.mjs's own worldPayload is — the browser
- *  bundle stays fs-free. Defaults to `[]` (every agent falls back to the
- *  flat SPRITE_REGISTRY, unchanged from before this module existed).
+ *  data/sprites-large/*.toml (sprite-large-template-files.mjs) — the large
+ *  tier, not the small icon tier every other embedder reads, because it's
+ *  the only one `spider-with-emotion.toml`/`fly-with-emotion.toml` (the live
+ *  `mgx:feels` wiring below resolves against) actually exist in — embedded
+ *  as page data the same reason adventure-viz.mjs's own worldPayload is —
+ *  the browser bundle stays fs-free. Defaults to `[]` (every agent falls
+ *  back to the flat SPRITE_REGISTRY, unchanged from before this module
+ *  existed).
  *  `?preview=1` on the page's own URL switches it into the small, auto-
  *  playing, non-interactive mode the home page's hero iframe embeds (§11) —
  *  one file serves both the hero and the "open full-screen" link, matching
@@ -386,6 +438,7 @@ const SPIDERFLY = ${gridData};
   const classOfAgentId = ${classOfAgentId.toString()};
   const threadCellsForSpiderPlan = ${threadCellsForSpiderPlan.toString()};
   const facingDegreesFor = ${facingDegreesFor.toString()};
+  const emotionFor = ${emotionFor.toString()};
   const nextCorpses = ${nextCorpses.toString()};
   const esc = ${escapeHtml.toString()};
   const el = (id) => document.getElementById(id);
@@ -447,6 +500,7 @@ const SPIDERFLY = ${gridData};
   const goalById = {};
   const spriteEls = {};
   const facingByAgent = {};
+  const emotionByAgent = {};
   let corpses = {};
   const corpseEls = {};
   let selectedAddresseeId = null;
@@ -461,9 +515,30 @@ const SPIDERFLY = ${gridData};
   function removeStaleSprites(agents) {
     for (const id of Object.keys(spriteEls)) {
       if (!agents[id]) {
-        spriteEls[id].remove(); delete spriteEls[id]; delete goalById[id]; delete facingByAgent[id];
+        spriteEls[id].remove(); delete spriteEls[id]; delete goalById[id]; delete facingByAgent[id]; delete emotionByAgent[id];
       }
     }
+  }
+
+  // maxMassFor/propertyFactsForAgent (emotionFor's own caller-side glue): only
+  // spider/fly carry the mgx:feels parameter (data/sprites-large/*-with-
+  // emotion.toml exists for those two classes only) — every other class (egg,
+  // and any class this page has no template for at all) keeps propertyFacts
+  // empty, resolving through its plain template exactly as before this page
+  // wired emotion through. maxMassFor mirrors massBarHtml's own per-class
+  // denominator below so the HUD's mass bar and the sprite's own expression
+  // read the same "how full" scale.
+  function maxMassFor(cls) {
+    return cls === "spider" ? SPIDERFLY.maxSpiderMass : cls === "fly" ? SPIDERFLY.maxFlyMass : null;
+  }
+  function propertyFactsForAgent(agent, cls) {
+    if (cls !== "spider" && cls !== "fly") return [];
+    return [{ predicate: "mgx:feels", object: emotionFor(agent, cls, maxMassFor(cls)) }];
+  }
+  function resolveSpriteFace(cls, propertyFacts) {
+    return window.tmctSpiderFly
+      ? tmctSpiderFly.resolveSpriteAsset(cls, (session && session.taxonomyRows) || [], propertyFacts, SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
+      : "";
   }
 
   function togglePov(id) {
@@ -475,27 +550,25 @@ const SPIDERFLY = ${gridData};
     if (e.key === "Escape" && povAgentId) togglePov(povAgentId);
   });
 
-  function ensureSpriteEl(id, cls) {
+  function ensureSpriteEl(id, cls, agent) {
     let node = spriteEls[id];
     if (node) return node;
     node = document.createElement("div");
     node.className = "sprite";
     node.dataset.cls = cls;
     // Property-aware resolution (sprite-templates.mjs's resolveSpriteAsset):
-    // no agent here carries an mgx:hasProperty fact today, so propertyFacts
-    // stays empty and every agent resolves through its plain class template
-    // (or the flat SPRITE_REGISTRY, for a class with none) — the same output
-    // as before this module existed, just wired for the day an agent does
-    // carry one.
-    const sprite = window.tmctSpiderFly
-      ? tmctSpiderFly.resolveSpriteAsset(cls, (session && session.taxonomyRows) || [], [], SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
-      : "";
+    // a spider/fly's live mgx:feels emotion (emotionFor, above) resolves it
+    // through the matching data/sprites-large/*-with-emotion.toml template;
+    // every other class (egg) keeps propertyFacts empty and resolves through
+    // its plain class template (or the flat SPRITE_REGISTRY), unchanged.
+    const propertyFacts = propertyFactsForAgent(agent, cls);
+    emotionByAgent[id] = propertyFacts[0] ? propertyFacts[0].object : null;
     // The sprite SVG lives in its own inner wrapper so plan-driven facing
     // (a CSS rotate on THIS wrapper) never fights the outer .sprite node's
     // own translate(-50%,-50%) positioning transform.
     const face = document.createElement("div");
     face.className = "sprite-face";
-    face.innerHTML = sprite;
+    face.innerHTML = resolveSpriteFace(cls, propertyFacts);
     node.appendChild(face);
     if (!preview) {
       node.tabIndex = 0;
@@ -515,7 +588,7 @@ const SPIDERFLY = ${gridData};
     removeStaleSprites(agents);
     for (const [id, a] of Object.entries(agents)) {
       const cls = classOfAgentId(id);
-      const node = ensureSpriteEl(id, cls);
+      const node = ensureSpriteEl(id, cls, a);
       const parsed = tmctSpiderFly.parseCellId(a.cell);
       if (!parsed) continue;
       const pct = cellCenterPct(parsed.x, parsed.y);
@@ -528,7 +601,20 @@ const SPIDERFLY = ${gridData};
       // whole point of this page, not a glitch).
       facingByAgent[id] = facingDegreesFor(a.plan, facingByAgent[id]);
       const face = node.querySelector(".sprite-face");
-      if (face) face.style.transform = "rotate(" + facingByAgent[id] + "deg)";
+      if (face) {
+        face.style.transform = "rotate(" + facingByAgent[id] + "deg)";
+        // Emotion changes tick-to-tick (a fly's fear spikes the instant a
+        // spider comes into view, a spider's joy fires the instant it eats),
+        // so this must re-resolve every redraw, not just at sprite creation —
+        // but only actually replace the DOM when the emotion word itself
+        // changed since last render, never on every tick regardless.
+        const propertyFacts = propertyFactsForAgent(a, cls);
+        const emotion = propertyFacts[0] ? propertyFacts[0].object : null;
+        if (emotion !== emotionByAgent[id]) {
+          emotionByAgent[id] = emotion;
+          face.innerHTML = resolveSpriteFace(cls, propertyFacts);
+        }
+      }
       if (a.goal) goalById[id] = a.goal;
     }
     lastAgents = agents;
@@ -554,9 +640,12 @@ const SPIDERFLY = ${gridData};
         node.setAttribute("aria-hidden", "true");
         const face = document.createElement("div");
         face.className = "sprite-face";
-        face.innerHTML = window.tmctSpiderFly
-          ? tmctSpiderFly.resolveSpriteAsset(corpse.cls, (session && session.taxonomyRows) || [], [], SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
-          : "";
+        // A corpse's expression is frozen — never re-resolved on later
+        // redraws (there's no more agent state to derive one from), and
+        // never emotion-parameterized at all (a rotting carcass has none),
+        // just its class's own plain template under the grayscale/fade the
+        // .sprite.corpse CSS rule already applies.
+        face.innerHTML = resolveSpriteFace(corpse.cls, []);
         node.appendChild(face);
         spriteLayer.appendChild(node);
         corpseEls[id] = node;
