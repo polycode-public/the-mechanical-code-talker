@@ -132,6 +132,11 @@ delivered plan docs; each records what its delivery deliberately did not include
   as a raw, unphrased triple ("Letter mgx:is-objective true."). Fixed this round: added to the
   digest's existing `VIEW_EXCLUDED_PREDICATES` set; the underlying fact rows (and auto-play's own
   direct read of them) are unaffected. Shipped.
+- Spider-fly edge-hunt round 3 of the second hunt (`playtests/PLAYTEST_LOG_013.md`): a spider that
+  eats two flies co-located on the same cell in one tick only credited the LAST one in its own goal
+  line (the round-1 fix overwrote the goal once per eaten pair). The main event text was always
+  correct for both; only the goal-line summary collapsed them. Fixed this round: eaten pairs are
+  grouped by spider first, so the goal names every fly eaten that tick. Shipped.
 
 ## Discipline
 
