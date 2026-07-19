@@ -413,6 +413,10 @@ is built into `sprites-pack/` but, per that build script's own comment, "no page
 
 ### C.2 Home-page reorg
 
+**Status: shipped** — `public/index.html` reorganised, `e2e/pages-index.test.mjs`/
+`e2e/pages-home.test.mjs` rewritten for the new structure, `--fg`/`--accent`/`--border` renamed to
+viz-theme.mjs's own `--ink`/`--taught`/`--line`.
+
 Exact order, fully expanded: Talk to it → Two agents, planning against each other → Run the chat
 yourself → Ask it about a codebase → Use it as a library. Link cards (new "explore more" band): It
 plans and shows the work, A text adventure, The memory ledger (**judgment call, flagged for the

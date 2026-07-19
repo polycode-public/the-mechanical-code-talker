@@ -1,6 +1,10 @@
-// The deployed home page, in a real browser: it loads clean, it shows the hero,
-// it keeps the steps a reader needs to run tmct, and it survives a phone-sized
-// viewport. Nothing else drives index.html end to end.
+// The deployed home page, in a real browser: it loads clean, it shows the
+// fully-expanded sections, its explore band's four link cards each lead to a
+// real page, and it survives a phone-sized viewport. Nothing else drives
+// index.html end to end (the embedded chat itself is pages-chat.test.mjs's
+// job; the chat.html/plan.html/adventure.html/ledger.html/sprites.html pages'
+// own content is each page's own test file's job — this file only checks
+// index.html links to them and shows what it says it shows).
 //
 // Third-party hosts are blocked for every run. The page's live-demo box loads
 // wink-nlp from a CDN, and a test that reached for it would pass or fail on
@@ -31,10 +35,10 @@ after(async () => {
 });
 
 /**
- * Open the home page with third-party hosts blocked.
+ * Open a same-origin page with third-party hosts blocked.
  * Returns the page plus what it logged and what it failed to fetch.
  */
-async function openHomePage({ viewport } = {}) {
+async function openPage(path, { viewport } = {}) {
   const context = await browser.newContext(viewport ? { viewport } : {});
   const page = await context.newPage();
   const consoleErrors = [];
@@ -58,9 +62,11 @@ async function openHomePage({ viewport } = {}) {
   });
   page.on("pageerror", (err) => consoleErrors.push(String(err)));
 
-  await page.goto(`${server.origin}/index.html`, { waitUntil: "networkidle" });
+  await page.goto(`${server.origin}/${path}`, { waitUntil: "networkidle" });
   return { context, page, consoleErrors, failedRequests };
 }
+
+const openHomePage = (opts) => openPage("index.html", opts);
 
 test("the home page serves every asset it asks for and logs no error of its own", async () => {
   const { context, page, consoleErrors, failedRequests } = await openHomePage();
@@ -73,14 +79,27 @@ test("the home page serves every asset it asks for and logs no error of its own"
   }
 });
 
-test("the hero renders the ledger, and its iframe loads the ledger page itself", async () => {
+test("the chat hero boots the real embedded engine and its full-screen link points at chat.html", async () => {
   const { context, page } = await openHomePage();
   try {
-    await assert.doesNotReject(page.locator(".ledger-hero").waitFor({ state: "visible" }));
-    const frame = page.frameLocator(".ledger-hero iframe");
-    await frame.locator("#chatform").waitFor({ state: "visible" });
-    const facts = await frame.locator(".ledger .row").count();
-    assert.ok(facts > 0, "the embedded ledger renders real fact rows");
+    await page.locator(".chat-hero").waitFor({ state: "visible" });
+    await assert.doesNotReject(
+      page.waitForFunction(() => !document.querySelector("#tmct-chat .chat-input")?.disabled, null, { timeout: 20_000 }),
+      "the embedded chat becomes usable",
+    );
+    const href = await page.locator(".chat-hero a").getAttribute("href");
+    assert.equal(href, "./chat.html");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the spider-and-fly hero loads its own preview iframe", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    await assert.doesNotReject(page.locator(".spider-fly-hero").waitFor({ state: "visible" }));
+    const frame = page.frameLocator(".spider-fly-hero iframe");
+    await frame.locator("body").waitFor({ state: "visible" });
   } finally {
     await context.close();
   }
@@ -106,7 +125,7 @@ test("the live-demo box answers on its lower tiers when the wink CDN is unreacha
   }
 });
 
-test("the page keeps the steps to run the local chat and to use tmct as a library", async () => {
+test("the page keeps the steps to run the local chat and to use tmct as a library, and the ELIZA/PARRY lineage prose", async () => {
   const { context, page } = await openHomePage();
   try {
     const body = await page.locator("main").innerText();
@@ -115,57 +134,77 @@ test("the page keeps the steps to run the local chat and to use tmct as a librar
     assert.match(body, /tmct init/, "the scaffold step is on the page");
     assert.match(body, /import \{ runChat \} from "@polycode-projects\/the-mechanical-code-talker"/, "the library import is on the page");
     assert.match(body, /await runChat\(\{/, "the library call is on the page");
+    assert.match(body, /ELIZA\/PARRY lineage/, "the lineage prose survives the reorg");
+    assert.doesNotMatch(body, /What an answer looks like/, "the removed transcript section is gone");
   } finally {
     await context.close();
   }
 });
 
-test("the page shows a grounded answer and an honest miss before any of the methodology", async () => {
+test("the explore band's four link cards each lead to a real, working page", async () => {
   const { context, page } = await openHomePage();
   try {
-    const transcript = await page.locator(".transcript").innerText();
-    assert.match(transcript, /dog is a kind of animal \(source: corpus:human/, "the excerpt shows an answer with its source");
-    assert.match(transcript, /I don't know "quokka" yet/, "the excerpt shows a miss");
-
-    const body = await page.locator("main").innerText();
-    // A reader meets what tmct does before it explains how it does it.
-    assert.ok(
-      body.indexOf("dog is a kind of animal") < body.indexOf("ELIZA/PARRY lineage"),
-      "the transcript lands above the lineage prose",
-    );
+    await page.locator(".explore-grid").waitFor({ state: "visible" });
+    const cards = page.locator(".explore-card");
+    assert.equal(await cards.count(), 4, "exactly four link cards");
+    const hrefs = await cards.evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+    assert.deepEqual(hrefs, ["./plan.html", "./adventure.html", "./ledger.html", "./sprites.html"]);
   } finally {
     await context.close();
   }
 });
 
-test("the plan render loads its own replay of the solved game", async () => {
-  const { context, page } = await openHomePage();
+test("the plan link card leads to a real replay of the solved game", async () => {
+  const { context, page } = await openPage("plan.html");
   try {
-    await page.locator(".plan-render").waitFor({ state: "visible" });
-    const frame = page.frameLocator(".plan-render iframe");
-    await frame.locator("body").waitFor({ state: "visible" });
-    const replay = await frame.locator("body").innerText();
-    assert.match(replay, /disk-1/, "the replay names the pieces it moved");
+    await page.locator("#board").waitFor({ state: "visible" });
+    const body = await page.locator("body").innerText();
+    assert.match(body, /disk-1/, "the plan page names the pieces it moved");
   } finally {
     await context.close();
   }
 });
 
-test("the plan render draws the puzzle's own pieces and nothing else from memory", async () => {
+test("the adventure link card leads to a real room scene", async () => {
+  const { context, page } = await openPage("adventure.html");
+  try {
+    await page.locator("#roomFrame").waitFor({ state: "visible" });
+  } finally {
+    await context.close();
+  }
+});
+
+test("the ledger link card leads to a real taught fact store", async () => {
+  const { context, page } = await openPage("ledger.html");
+  try {
+    await page.locator("#chatform").waitFor({ state: "visible" });
+    const facts = await page.locator(".ledger .row").count();
+    assert.ok(facts > 0, "the ledger page renders real fact rows");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the sprites link card leads to a real sprite catalog", async () => {
+  const { context, page } = await openPage("sprites.html");
+  try {
+    const cards = await page.locator(".card").count();
+    assert.ok(cards > 0, "the sprite catalog renders real class cards");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the sprite-library card's own teaser shows real sprite icons and real ancestor-chain text, not a placeholder", async () => {
   const { context, page } = await openHomePage();
   try {
-    const frame = page.frameLocator(".plan-render iframe");
-    await frame.locator("body").waitFor({ state: "visible" });
-    const replay = await frame.locator("body").innerText();
-    // The board once drew every member of every class it had not declared as a
-    // block or a slot, which is the whole memory rather than the puzzle. A
-    // render that names a term the game never taught is that defect returning,
-    // and naming one piece is not enough to notice it.
-    const hanoiTerms = /^(disk-[1-3]|peg-[a-c])$/;
-    const drawn = [...replay.matchAll(/\b[a-z]+-[a-z0-9]+\b/g)].map(([term]) => term);
-    const strangers = [...new Set(drawn.filter((term) => !hanoiTerms.test(term)))];
-    assert.deepEqual(strangers, [], "the replay names only the pieces and places hanoi-3 taught");
-    assert.ok(drawn.length > 0, "the replay names the pieces at all");
+    const teaser = page.locator('.explore-card[href="./sprites.html"] .sprite-teaser');
+    await teaser.waitFor({ state: "visible" });
+    const svgCount = await teaser.locator("svg").count();
+    assert.ok(svgCount >= 3, `expected at least 3 real sprite icons, found ${svgCount}`);
+    const text = await teaser.innerText();
+    assert.match(text, /poodle/);
+    assert.match(text, /animal/);
   } finally {
     await context.close();
   }
@@ -196,7 +235,7 @@ test("the page fits a phone viewport without sideways scrolling", async () => {
       overflow.scrollWidth <= overflow.clientWidth + 1,
       `the page is ${overflow.scrollWidth}px wide in a ${overflow.clientWidth}px viewport`,
     );
-    await assert.doesNotReject(page.locator(".ledger-hero").waitFor({ state: "visible" }));
+    await assert.doesNotReject(page.locator(".explore-grid").waitFor({ state: "visible" }));
   } finally {
     await context.close();
   }
