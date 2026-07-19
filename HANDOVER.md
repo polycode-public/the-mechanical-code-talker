@@ -127,6 +127,11 @@ delivered plan docs; each records what its delivery deliberately did not include
   keep naming a subject that dies later in the SAME tick's ecology pass, e.g. a fly "evading — last
   saw spider-1" the very turn spider-1 starves. Fixed this round: every remaining agent's goal is
   scrubbed of any died-this-tick reference before the existing eaten-pair handling runs. Shipped.
+- Adventure edge-hunt round 3 of the second hunt (`playtests/PLAYTEST_LOG_012.md`): `mgx:is-objective`
+  — the new internal marker auto-play's goal inference reads — leaked into the plain "examine" digest
+  as a raw, unphrased triple ("Letter mgx:is-objective true."). Fixed this round: added to the
+  digest's existing `VIEW_EXCLUDED_PREDICATES` set; the underlying fact rows (and auto-play's own
+  direct read of them) are unaffected. Shipped.
 
 ## Discipline
 
