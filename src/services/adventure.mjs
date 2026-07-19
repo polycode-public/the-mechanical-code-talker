@@ -251,6 +251,20 @@ const carriedByPlayer = (state, thing) => {
   return !!place && place.predicate === "mgx:located-in" && place.object === "player";
 };
 
+/** True when `object` is never a real placed game entity (no entry in
+ *  state.placements at all — checked first, so a hidden or elsewhere-placed
+ *  object never counts, only a term with NO placement anywhere) but some
+ *  OTHER fact still names it — almost always the background human/ConceptNet
+ *  corpus overlapping a room's own vocabulary ("garden mgx:hasA flower"),
+ *  which worldDigestRows already renders into the room's own prose ("Garden
+ *  has flower"). Without this distinction, examine/take/talk's shared
+ *  presence decline ("I don't see a flower here") directly contradicts what
+ *  the room's own description just said, in the same conversation. */
+function backgroundOnlyMention(rows, state, object) {
+  if (state.placements.has(object)) return false;
+  return (rows || []).some((r) => r.subject === object || r.object === object);
+}
+
 /** The room's real affordances — every exit, and every visible object's
  *  applicable verb — read from the EXACT SAME data take/open/talk/examine
  *  already check (visibleRoomOf, isContainer, isTyped, the placement
@@ -552,7 +566,23 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     // existing rather than the true state (you're in it). Treat naming the
     // current room itself as always present.
     const isCurrentRoom = object === here;
-    if (!carried && !isCurrentRoom && visibleRoomOf(object, { rows, state }) !== here) {
+    const notHere = !carried && !isCurrentRoom && visibleRoomOf(object, { rows, state }) !== here;
+    // A background-only mention (e.g. "flower", surfaced only through the
+    // human corpus overlapping this room's own vocabulary — see
+    // backgroundOnlyMention's own docblock) is real, sourced knowledge, just
+    // never a placed prop. "talk" still declines (it's not a person), but
+    // honestly — never claiming the term doesn't exist when the room's own
+    // digest just said otherwise. "examine" instead falls through to the
+    // ordinary digest below, the same one "what is a flower" already answers
+    // from outside the game.
+    if (notHere && cmd.verb === "talk" && backgroundOnlyMention(rows, state, object)) {
+      return answer(
+        `the ${object} isn't someone you can talk to here — it's only mentioned in passing, not a real person in this scene.`,
+        noteFor(`talk — ${object} is a background-only mention, not a placed NPC; declined honestly`),
+        { miss: true },
+      );
+    }
+    if (notHere && !(cmd.verb === "examine" && backgroundOnlyMention(rows, state, object))) {
       return answer(
         `I don't see a ${object} here.`,
         noteFor(`${cmd.verb} — ${object} isn't visible in the ${here}; declined, hidden things stay hidden`),
@@ -650,6 +680,13 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
       return answer(`you can't take the ${object}.`, noteFor("take — the object is one of the cast; declined"), { miss: true });
     }
     if (visibleRoomOf(object, { rows, state }) !== here) {
+      if (backgroundOnlyMention(rows, state, object)) {
+        return answer(
+          `the ${object} isn't something you can take — it's only mentioned in passing here, not a real prop in this scene.`,
+          noteFor(`take — ${object} is a background-only mention, never a placed object; declined honestly`),
+          { miss: true },
+        );
+      }
       return answer(`I don't see a ${object} here.`, noteFor(`take — ${object} isn't visible in the ${here}; declined, hidden things stay hidden`), { miss: true });
     }
     return commit(
@@ -693,8 +730,13 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
   // precond/effect rows consulted through domain.mjs below; only the
   // hidden-contents reveal (a variable-arity effect over a discovered set)
   // stays hand-written JS, since no shipped rule shape covers that either.
-  const presentHere = place && place.predicate !== "mgx:hidden-in" && place.predicate !== "mgx:currently-in" && place.object === here;
-  if (!presentHere) {
+  // Presence reuses visibleRoomOf (the SAME check examine/talk/take already
+  // use), not a hand-rolled duplicate: an earlier version of this check
+  // excluded mgx:currently-in outright, so a genuinely-present NPC (placed
+  // that way, not fixed-in/stands-locked-in) fell into "I don't see a X
+  // here" instead of reaching the isContainer check just below, which would
+  // have honestly said "the X doesn't open."
+  if (visibleRoomOf(object, { rows, state }) !== here) {
     return answer(`I don't see a ${object} here.`, noteFor(`${cmd.verb} — ${object} isn't in the ${here}; declined`), { miss: true });
   }
   if (!isContainer(rows, object)) {

@@ -1559,6 +1559,16 @@ export function renderVerbose(last) {
 function conversationalTurn(line, ctx) {
   const raw = String(line);
   const q = raw.toLowerCase().replace(/[.!?]+$/, "").replace(/\s+/g, " ").trim();
+  // A live game (adventure/spider-fly/guess-the-number) already recognizes its
+  // OWN exact stop phrase ("stop playing", "I give up", ...) before this lane
+  // ever sees the line, so a bare word reaching here mid-game was never meant
+  // as a farewell — it's an in-game noun that fell through every game-shaped
+  // command check (e.g. "player", the adventure's own subject). The fuzzy-typo
+  // fallback below is a GUESS (bounded edit distance against "later" etc.),
+  // and a wrong guess ends the whole session — too costly a mistake to risk
+  // mid-game. The exact/closed-set farewell just above and below this guard
+  // stays live either way (a real "bye"/"exit" is unambiguous, never a guess).
+  const gameActive = Boolean(ctx.planHolder?.state?.adventure || ctx.planHolder?.state?.spiderFly || ctx.planHolder?.state?.game);
   const t = (id, slots = {}) => tRender(ctx.templates, id, slots) ?? TEMPLATES_UNAVAILABLE;
   const mk = (answer, { end = false, miss = false, via = "template", lane = null } = {}) => {
     const ts = new Date().toISOString();
@@ -1686,8 +1696,10 @@ function conversationalTurn(line, ctx) {
   // Fuzzy-typo fallback (A4): every exact/collapsed closed-set lookup above missed —
   // try a bounded edit-distance match against the flattened conversational phrase
   // pool ("helo", "thnx", "wat r u", "byee"), restricted to short non-code-ish
-  // input so a genuine near-miss structural question is never grabbed.
-  {
+  // input so a genuine near-miss structural question is never grabbed. Skipped
+  // entirely mid-game (see gameActive above) — never reached the CLI's own
+  // process-exit path from a guess before this fix existed.
+  if (!gameActive) {
     const fuzzyHit = fuzzyConversationalMatch(raw);
     if (fuzzyHit) {
       const bucket = classifyConversational(fuzzyHit);
