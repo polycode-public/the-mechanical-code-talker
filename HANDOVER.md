@@ -36,16 +36,11 @@ asides through the world fold, the plural-object fold, the impact summary). `arc
 delivered plan docs; each records what its delivery deliberately did not include. What remains:
 
 - Adventure horizons (`archive/PLAN_ADVENTURE.md`): open/unlock/close ship signature-only
-  families — the shipped precond/effect rule shapes can't express exit-adjacency, lock state,
-  hidden contents, instrument preconditions or boolean effects, so those ride world facts checked
-  generically until a rule shape is designed for datatype effects and edge-existence
-  preconditions; a named "play X" opener with the pack absent falls through to ordinary lanes
-  (only the generic opener carries the missing-pack decline); the Phase-5 question (one agent-loop
-  abstraction over the three planning validations) stays open by that doc's own scoping.
-- Child-corpus scope (`archive/PLAN_CHILD_CORPUS.md`): only `/r/NotCapableOf` joined the closed
-  relation set — the other `/r/Not*` relations still hit the loader's hard error, a deliberate
-  one-at-a-time decision the next negativity slice revisits; the specific exception (the penguin)
-  still comes from a taught fact by design.
+  families — the shipped precond/effect rule shapes can't express lock state or boolean open/close
+  effects, so those ride world facts checked generically until a rule shape is designed; a named
+  "play X" opener with the pack absent falls through to ordinary lanes (only the generic opener
+  carries the missing-pack decline). Fix in progress. (Phase 5's agent-loop question is closed —
+  see the doc's own Phase 5 section.)
 
 ## Discipline
 

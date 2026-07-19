@@ -4,7 +4,7 @@ Status: SHIPPED (2.7.0 wave). All four phases landed — the worlds pack and Ash
 the imperative command pattern, the world interpreter with the room-look digest, and the NPC
 scheduler — with the worked example passing exactly as specified (see the per-phase notes in the
 staged build plan below, including the operator's Phase 1 revision to a lazy worlds pack). Phase
-5's generalization question stays open.
+5's generalization question is closed (not warranted) — see Phase 5 below.
 
 **What shipped since this document was written.**
 
@@ -322,11 +322,27 @@ every step's graph row independently via `readFactRows` — `housekeeper@turn3 m
 library` written while the player was two rooms away, the declined take writing nothing, nine
 state-changing commands leaving exactly nine turns of snapshots.
 
-**Phase 5 — Generalization spike (explicitly not this document's scope).** Once this and
-both prior planning docs have each validated their own piece (open-loop execution, closed-
-loop replanning, world-mutation-with-autonomous-actors), whether a single unifying "agent
-loop" abstraction is warranted is an open question — `PLAN_GUESS_NUMBER.md` Phase 4 raises the same
-question for its own convergence point.
+**Phase 5 — Generalization spike.** CLOSED (2026-07-19): not warranted, on direct evidence rather
+than by default. A fourth validation shipped since this question was raised —
+`archive/PLAN_SPIDER_FLY.md` — and it is the strongest test case a unifying "agent loop" abstraction
+could face, since it needs open-loop search, belief-driven replanning AND autonomous world
+mutation in the SAME session at once. It shipped by direct composition: the spider's turn calls
+`findActionPath` (the same open-loop kernel Hanoi/river-crossing use, untouched), the fly's evasion
+is a fresh small function over `findReachableSet`, and the egg/hatch/spawn/starve ecology is a fresh
+per-tick pass in the same shape as `runNpcPass` — no shared "agent loop" wrapper anywhere, and no
+game-specific code was forced through one. Across all four systems (Hanoi/river's full up-front
+plan object, guess-the-number's belief interval with no plan object at all, the adventure's direct
+precondition-gated commands plus a turn-gated NPC trigger table, and spider-fly's composition of
+three of these at once) the state model each turn's control loop actually holds is different enough
+that a common interface would either flatten to a lowest-common-denominator wrapper adding a
+translation layer with nothing removed, or leak game-specific cases back out through it. What
+genuinely reused across all four is real and already happened at the right grain — `findActionPath`,
+`domain.mjs`'s `compileDomain`, and (extracted exactly when a second consumer needed it, not before)
+the play/pause/step ticker (`src/services/viz-ticker.mjs`) shared by the spider-fly page and the
+guess-number retrofit. Extracting shared PRIMITIVES on demonstrated reuse is the pattern that has
+worked four times running; a speculative shared ARCHITECTURE is not adopted. `PLAN_GUESS_NUMBER.md`
+carries no live Phase 4 of its own by the time it shipped — its own "Open risks / questions" section
+does not raise this question in the delivered doc, so there is nothing there left to close in kind.
 
 ## Open risks / questions
 

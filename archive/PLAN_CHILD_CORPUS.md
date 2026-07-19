@@ -128,6 +128,19 @@ is what tmct is for.
 5. DONE — measured by `scripts/measure-child-corpus.mjs` (the script IS the acceptance test).
    On the built pack: 1,881 kinds of bird (baseline 2), 71 capabilities on birds, 39 things that
    can fly. Numbers stamped into `corpus/child/README.md` and the manifest's `acceptance` block.
+6. DONE (2026-07-19) — the "one-at-a-time" widening question closed, not deferred. `CANONICAL_RELS`
+   (`corpus/conceptnet/fetch-slice.mjs`) never admitted any `/r/Not*` relation at all; the child
+   build's `CHILD_ADMITTED_RELS` (`scripts/fetch-child-corpus.mjs`) adds exactly one, `/r/NotCapableOf`,
+   by deliberate, individual choice — not a placeholder for "the rest, later". The other four
+   ConceptNet negatives (`/r/NotIsA`, `/r/NotDesires`, `/r/NotUsedFor`, `/r/NotHasProperty`) are
+   ConceptNet's own deprecated relations, "slated for consolidation or removal"
+   (`docs/references/schemas/conceptnet-relations.md`, verified against the 5.7.0 dump) — building
+   corpus coverage on relations the source is retiring is the wrong trade regardless of how much data
+   they'd add. And the product-capability side of this was never actually gated on ConceptNet's
+   relation set in the first place: tmct's own negation channel (`mgxneg:`, `src/domain/memory/
+   capability.mjs`) negates any predicate already, taught or corpus-sourced alike — `/r/NotCapableOf`
+   is one data SOURCE feeding that channel, not the channel's ceiling. Widening negativity coverage
+   further is a data-acquisition question (a bigger/different corpus), not a mapping-table gap.
 
 ## Related
 
