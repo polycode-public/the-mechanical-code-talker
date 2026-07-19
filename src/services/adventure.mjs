@@ -370,6 +370,11 @@ async function writeWorldTurn(memoryDir, world, k, facts, cache) {
 const VIEW_EXCLUDED_PREDICATES = new Set([
   "mgx:hidden-in", "mgx:is-open", "mgx:is-npc", "mgx:is-container",
   "mgx:unlocks-with", "mgx:acts-on-turn", "mgx:acts-toward",
+  // mgx:is-objective (PLAN_GAMES_UPLIFT_V2.md Part B) is an internal marker
+  // for auto-play's goal inference — the same information the opening
+  // narration already tells a human player in prose, never meant to surface
+  // as a raw, unphrased triple ("Letter mgx:is-objective true.") itself.
+  "mgx:is-objective",
 ]);
 
 const sentenceCase = (term) => String(term).charAt(0).toUpperCase() + String(term).slice(1);
