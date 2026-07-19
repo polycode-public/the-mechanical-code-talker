@@ -1801,7 +1801,14 @@ const WALL_MISS_ANYWHERE_RE = /couldn't parse this as a graph question\. Try:/;
 // assert/memory path; when it can't be stored, say what CAN be remembered
 // instead of the grammar wall or a silent data loss.
 const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi|learn)\b(?:\s+(?:this|that|also))?[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
-const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:a |an )?[\w-]+(?: too)?$/i;
+// A trailing sentence-final mark ([.!?]*) is tolerated at the very end: an
+// ordinary first turn typed as a full sentence ("every dog is a mammal.")
+// otherwise failed this shape test by one character whenever neither ACE nor
+// the wrapped path could take it first, so teachLane bailed out (payload
+// stayed null) before ever trying the unknown-subject/object mint fallbacks
+// below — the SAME sentence typed without the period worked. Mirrors
+// UNKNOWN_SUBJECT_RE's own identical tolerance, added for the same reason.
+const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:a |an )?[\w-]+(?: too)?[.!?]*$/i;
 /** "X is <comparative> than Y" — the comparative teach/ask surface. The
  *  comparative slot is closed by SHAPE (-er word, better/worse, or a
  *  more/less + adjective pair), never a hand-list of adjectives. */
@@ -2349,8 +2356,19 @@ function singularizeSurface(word) {
  *  determiner: "any spider is an arachnid" is the same claim as "every
  *  spider is an arachnid". Without it here, "any" fell into the SUBJECT
  *  capture instead (a 2-word "any spider"), minting a bogus compound term
- *  disconnected from the real "spider" concept any other sentence grounds. */
-const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|any\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(is|are)\s+(?:an?\s+)?([\w-]+)$/i;
+ *  disconnected from the real "spider" concept any other sentence grounds.
+ *
+ *  A trailing sentence-final mark is tolerated (`[.!?]*` before the anchor):
+ *  without it, "every dog is a mammal." or "rex is a dog." — an ordinary
+ *  first turn typed as a full sentence — failed this match by one character
+ *  whenever the object (or subject) wasn't already a static-lexicon word, so
+ *  the mint fallback below never even got a chance to run and the sentence
+ *  fell all the way to the graph-less wall instead. The unpunctuated form
+ *  ("rex is a dog") already worked; the period-tolerant object/subject
+ *  captures themselves are unaffected (`[\w-]+` never included the period in
+ *  the first place), so this only widens WHICH sentences reach the match,
+ *  never what gets captured out of one that already did. */
+const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|any\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(is|are)\s+(?:an?\s+)?([\w-]+)[.!?]*$/i;
 
 /** ISA-family predicates (mirrors the private ISA_PREDICATES set defined near
  *  memoryFacts, below, at module scope — both are simple top-level consts
