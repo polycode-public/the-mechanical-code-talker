@@ -388,6 +388,7 @@
   "src/services/spider-fly-turn.mjs",
   "src/services/spider-fly-viz.mjs",
   "src/services/spider-fly.mjs",
+  "src/services/sprite-catalog-viz.mjs",
   "src/services/telemetry.mjs",
   "src/services/viz-theme.mjs",
   "src/services/viz-ticker.mjs",
