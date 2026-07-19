@@ -1,0 +1,20 @@
+# worker — a smooth domed hard hat with a slight brim and a centre ridge,
+# the single construction-safety cue, kept smoother and rounder than
+# officer.toml's structured, straight-brimmed cap.
+classes = ["worker"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="worker-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M7.6 7.6 C7.6 4.9 9.5 2.8 12 2.8 C14.5 2.8 16.4 4.9 16.4 7.6 L16.4 7.9 L7.6 7.9 Z" fill="url(#worker-fill)"/>
+  <ellipse cx="12" cy="8" rx="5" ry="0.8" fill="url(#worker-fill)"/>
+  <circle cx="12" cy="9.4" r="3.1" fill="url(#worker-fill)"/>
+  <path d="M6 21 C6 15.6 8.7 13.2 12 13.2 C15.3 13.2 18 15.6 18 21 Z" fill="url(#worker-fill)"/>
+  <ellipse cx="9" cy="4.8" rx="1.6" ry="0.6" fill="#ffffff" opacity="0.32"/>
+</svg>
+"""

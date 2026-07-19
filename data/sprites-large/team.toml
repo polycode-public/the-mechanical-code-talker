@@ -1,0 +1,25 @@
+# team — three same-height, fully opaque figures each carrying the same
+# thin chest band, a shared marking rather than three separate props:
+# what makes them a coordinated team rather than crowd.toml's anonymous
+# many or family.toml's mixed-height household.
+classes = ["team"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="team-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <circle cx="5" cy="9" r="2.6" fill="url(#team-fill)"/>
+  <path d="M1.6 22 C1.6 17.7 3 15.6 5 15.6 C7 15.6 8.4 17.7 8.4 22 Z" fill="url(#team-fill)"/>
+  <path d="M2.4 17.6 L7.6 17.6" stroke="currentColor" stroke-width="0.6" opacity="0.5"/>
+  <circle cx="19" cy="9" r="2.6" fill="url(#team-fill)"/>
+  <path d="M15.6 22 C15.6 17.7 17 15.6 19 15.6 C21 15.6 22.4 17.7 22.4 22 Z" fill="url(#team-fill)"/>
+  <path d="M16.4 17.6 L21.6 17.6" stroke="currentColor" stroke-width="0.6" opacity="0.5"/>
+  <circle cx="12" cy="7.4" r="2.9" fill="url(#team-fill)"/>
+  <path d="M7.8 22 C7.8 17 9.6 14.8 12 14.8 C14.4 14.8 16.2 17 16.2 22 Z" fill="url(#team-fill)"/>
+  <path d="M9 16.6 L15 16.6" stroke="currentColor" stroke-width="0.6" opacity="0.5"/>
+</svg>
+"""

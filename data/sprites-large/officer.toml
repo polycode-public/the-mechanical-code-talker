@@ -1,0 +1,21 @@
+# officer — a structured peaked cap, flat brim and band, the single
+# authority cue, its straight brim and crown line kept distinct from the
+# soft round beret artist.toml uses.
+classes = ["officer"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="officer-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M7.6 6.2 C7.6 4 9.6 2.3 12 2.3 C14.4 2.3 16.4 4 16.4 6.2 L16.4 6.4 L7.6 6.4 Z" fill="url(#officer-fill)"/>
+  <ellipse cx="12.4" cy="6.6" rx="4.6" ry="0.8" fill="url(#officer-fill)"/>
+  <rect x="8.6" y="5.4" width="6.8" height="0.8" fill="currentColor" opacity="0.5"/>
+  <circle cx="12" cy="9.2" r="3.1" fill="url(#officer-fill)"/>
+  <path d="M6 21 C6 15.6 8.7 13.2 12 13.2 C15.3 13.2 18 15.6 18 21 Z" fill="url(#officer-fill)"/>
+  <ellipse cx="9" cy="4.2" rx="1.6" ry="0.5" fill="#ffffff" opacity="0.3"/>
+</svg>
+"""

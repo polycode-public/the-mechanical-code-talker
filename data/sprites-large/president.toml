@@ -1,0 +1,19 @@
+# president — a diagonal sash from shoulder to hip with a small rosette
+# at the end, the single ceremonial head-of-state cue.
+classes = ["president"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="president-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="6.6" r="3.3" fill="url(#president-fill)"/>
+  <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z" fill="url(#president-fill)"/>
+  <path d="M8.6 13.4 L15 20.2 L16.2 19 L10.2 12.6 Z" fill="currentColor" opacity="0.85"/>
+  <circle cx="15.6" cy="19.6" r="1.1" fill="currentColor" opacity="0.9"/>
+  <path d="M9.6 4.2 C10.3 3.6 11.1 3.4 12 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+</svg>
+"""

@@ -107,3 +107,53 @@ test("a missing directory reads as no templates at all, never throws", () => {
 test("SPRITE_LARGE_TEMPLATES_DIR points at data/sprites-large", () => {
   assert.match(SPRITE_LARGE_TEMPLATES_DIR, /data[\\/]sprites-large$/);
 });
+
+// ---- the 56 generic person-ROLE classes a fresh `npm run init` seeds ------
+
+const PERSON_ROLE_CLASSES = [
+  "adult", "artist", "audience", "baby", "boss", "boy", "brother", "champion", "child", "citizen",
+  "crowd", "customer", "daughter", "doctor", "driver", "employee", "engineer", "family", "farmer",
+  "father", "friend", "girl", "grandfather", "grandmother", "guest", "human", "husband", "judge",
+  "king", "lawyer", "leader", "man", "manager", "mother", "neighbor", "nurse", "officer", "parent",
+  "president", "priest", "queen", "resident", "servant", "sister", "soldier", "son", "stranger",
+  "student", "teacher", "team", "visitor", "volunteer", "wife", "woman", "worker", "writer",
+];
+
+test("every one of the 56 person-role classes loads as its own real template file", () => {
+  assert.equal(PERSON_ROLE_CLASSES.length, 56);
+  for (const className of PERSON_ROLE_CLASSES) {
+    const template = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes(className));
+    assert.ok(template, `${className}.toml not found among the loaded sprite-tier templates`);
+  }
+});
+
+test("a sample of the person-role classes each resolve to their own dedicated template, not the generic person fallback", () => {
+  const personSvg = resolveSpriteAsset("person", [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+  const sample = [
+    "doctor", "king", "queen", "nurse", "soldier", "farmer", "judge", "teacher", "writer",
+    "student", "worker", "boss", "grandfather", "grandmother", "artist", "baby", "adult",
+    "man", "woman", "child",
+  ];
+  for (const className of sample) {
+    const svg = resolveSpriteAsset(className, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.notEqual(svg, personSvg, `${className} must resolve to its own template, not the generic person fallback`);
+    assert.ok(svg.includes("<svg"));
+  }
+});
+
+test("the plain, no-invented-prop person-role classes are honest about it: each renders the same body as adult.toml", () => {
+  const adultSvg = resolveSpriteAsset("adult", [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+  const stripId = (svg, className) => svg.split(`${className}-fill`).join("ID");
+  for (const className of ["human", "resident", "stranger", "citizen", "guest", "visitor", "neighbor", "parent", "friend"]) {
+    const svg = resolveSpriteAsset(className, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.equal(stripId(svg, className), stripId(adultSvg, "adult"), `${className} should render the same plain body as adult.toml`);
+  }
+});
+
+test("the four group classes each render a cluster of person silhouettes, not a single figure", () => {
+  for (const className of ["family", "crowd", "audience", "team"]) {
+    const svg = resolveSpriteAsset(className, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    const heads = svg.match(/<circle/g) || [];
+    assert.ok(heads.length >= 3, `${className} should render at least 3 head circles (a group composite), got ${heads.length}`);
+  }
+});

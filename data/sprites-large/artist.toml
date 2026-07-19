@@ -1,0 +1,19 @@
+# artist — a tilted beret sitting on the head, with its own small stem
+# knob, the single outer-silhouette cue for the role.
+classes = ["artist"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="artist-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="11.3" cy="3.6" rx="4.3" ry="1.9" fill="url(#artist-fill)"/>
+  <circle cx="14.6" cy="2.4" r="0.6" fill="currentColor" opacity="0.85"/>
+  <circle cx="12" cy="7.2" r="3.2" fill="url(#artist-fill)"/>
+  <path d="M6 21 C6 15.6 8.7 13.1 12 13.1 C15.3 13.1 18 15.6 18 21 Z" fill="url(#artist-fill)"/>
+  <ellipse cx="9" cy="2.9" rx="1.7" ry="0.6" fill="#ffffff" opacity="0.32"/>
+</svg>
+"""

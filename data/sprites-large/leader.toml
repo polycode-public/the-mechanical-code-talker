@@ -1,0 +1,18 @@
+# leader — the body silhouette itself extends into a raised, pointing arm
+# rather than adding a held prop: an outer-silhouette gesture, the single
+# cue for someone directing others forward.
+classes = ["leader"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="leader-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="6.6" r="3.3" fill="url(#leader-fill)"/>
+  <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C13.6 12.8 15 13.5 16 14.8 L21 11.4 L21.8 12.7 L16.8 16.6 C17.5 18 18 19.6 18 21 Z" fill="url(#leader-fill)"/>
+  <path d="M9.6 4.2 C10.3 3.6 11.1 3.4 12 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+</svg>
+"""
