@@ -87,6 +87,43 @@ function exposedExitApplyActions(exposedState) {
 const unexposedExitsOf = (room, exposedState, exposed) =>
   [...(exposedState.exits.get(room)?.entries() ?? [])].filter(([, target]) => !exposed.has(target));
 
+const carriedByPlayer = (state, thing) => {
+  const place = state.placements.get(thing);
+  return !!place && place.predicate === "mgx:located-in" && place.object === "player";
+};
+
+/** Every mgx:is-container subject whose OWN placement is exposed (the room
+ *  holding it has been visited) — a container's presence and lock state are
+ *  visible on sight, even though its CONTENTS stay hidden until it's actually
+ *  opened. Sorted for deterministic tie-breaking across ticks. */
+function exposedContainers(exposedRows, exposedState) {
+  const ids = new Set(
+    exposedRows.filter((r) => r.predicate === "mgx:is-container" && r.object === "true").map((r) => r.subject),
+  );
+  return [...ids].filter((id) => roomOfSubject(id, exposedRows, exposedState) != null).sort();
+}
+
+/** One tick's worth of progress toward standing in `targetRoom` and then
+ *  issuing `finalCommand` once there — the same path-then-act shape the
+ *  objective fetch above already uses, generalized so opening/unlocking a
+ *  container and fetching the instrument that unlocks it can all reuse it
+ *  rather than re-deriving the same findActionPath call three times. Returns
+ *  null (never a stall) when no seen path exists yet, so the caller can fall
+ *  through to try the next candidate instead of reporting a false stall. */
+async function stepTowardThenAct({
+  here, targetRoom, finalCommand, goalWhenArrived, goalWhenEnRoute, runCommand, exposedState, exposed, turnCount,
+}) {
+  if (targetRoom === here) {
+    await runCommand(finalCommand);
+    return { turn: turnCount + 1, goal: goalWhenArrived, plan: null, done: false, stalled: false, exposedRoomIds: exposed };
+  }
+  const path = findActionPath(here, (room) => room === targetRoom, exposedExitApplyActions(exposedState));
+  if (!path || !path.actions.length) return null;
+  await runCommand(`go ${path.actions[0]}`);
+  exposed.add(path.states[1]);
+  return { turn: turnCount + 1, goal: goalWhenEnRoute, plan: path.actions, done: false, stalled: false, exposedRoomIds: exposed };
+}
+
 /**
  * One auto-play tick over a live, loaded adventure: fold the world, infer a
  * goal from the one generic objective marker under the exposure constraint,
@@ -125,9 +162,7 @@ export async function runAdventureAutoplayTick(memoryDir, opts = {}) {
   // the same unconditional "OR the subject is player" exposure the marker
   // fact itself gets (worldDigestRows shows carried items regardless of
   // room visibility too — carrying was never gated on being seen).
-  const carried = objectiveId
-    && state.placements.get(objectiveId)?.predicate === "mgx:located-in"
-    && state.placements.get(objectiveId)?.object === "player";
+  const carried = objectiveId && carriedByPlayer(state, objectiveId);
   if (objectiveId && carried) {
     return {
       turn: state.turnCount, goal: `carrying the ${objectiveId} — the adventure is won.`,
@@ -158,6 +193,65 @@ export async function runAdventureAutoplayTick(memoryDir, opts = {}) {
       turn: state.turnCount + 1, goal: `heading toward the ${objectiveRoom} for the ${objectiveId}.`,
       plan: path.actions, done: false, stalled: false, exposedRoomIds: exposed,
     };
+  }
+
+  // Progress a known container: the objective's own room is still unknown,
+  // which — since a hidden object's placement fact never resolves to a room
+  // while it stays hidden (roomOfSubject) — is exactly the state every world
+  // with ANY hidden contents starts in, even once its container has been
+  // walked right up to. A container's presence and lock state ARE exposed on
+  // sight, though (they're facts about the container itself, not about what's
+  // inside it), so this is the one place auto-play can act on something it
+  // has genuinely seen rather than just wander further:
+  //   - a container standing open already has nothing left to reveal — skip;
+  //   - a LOCKED container whose instrument is both named (mgx:unlocks-with)
+  //     and already carried: go unlock it;
+  //   - a LOCKED container whose instrument's own room is known (exposed) but
+  //     not yet carried: go fetch the instrument first;
+  //   - an UNLOCKED, still-closed container: opening it can only ever reveal
+  //     more (never a wrong guess), so go open it.
+  // Every branch reuses the exact path-then-act shape the objective fetch
+  // above already uses; falling through (no seen path, or nothing sound for
+  // any exposed container) drops to the plain room-exploration below, exactly
+  // as before this container-awareness existed.
+  if (objectiveId && !objectiveRoom) {
+    for (const containerId of exposedContainers(exposedRows, exposedState)) {
+      if (exposedState.openness.get(containerId)?.open) continue;
+      const containerRoom = roomOfSubject(containerId, exposedRows, exposedState);
+      if (!containerRoom) continue;
+      const locked = exposedState.placements.get(containerId)?.predicate === "mgx:stands-locked-in";
+      if (locked) {
+        const instrumentId = exposedRows.find((r) => r.subject === containerId && r.predicate === "mgx:unlocks-with")?.object ?? null;
+        if (!instrumentId) continue; // this world names no instrument for it — nothing sound to try
+        if (carriedByPlayer(state, instrumentId)) {
+          const step = await stepTowardThenAct({
+            here, targetRoom: containerRoom, finalCommand: `unlock ${containerId} with ${instrumentId}`,
+            goalWhenArrived: `in the ${here} — unlocking the ${containerId} with the ${instrumentId}.`,
+            goalWhenEnRoute: `heading toward the ${containerRoom} to unlock the ${containerId}.`,
+            runCommand, exposedState, exposed, turnCount: state.turnCount,
+          });
+          if (step) return step;
+          continue;
+        }
+        const instrumentRoom = roomOfSubject(instrumentId, exposedRows, exposedState);
+        if (!instrumentRoom) continue; // the instrument's own location isn't known yet — nothing sound here
+        const step = await stepTowardThenAct({
+          here, targetRoom: instrumentRoom, finalCommand: `take ${instrumentId}`,
+          goalWhenArrived: `in the ${instrumentRoom} — taking the ${instrumentId} to unlock the ${containerId} later.`,
+          goalWhenEnRoute: `heading toward the ${instrumentRoom} for the ${instrumentId}.`,
+          runCommand, exposedState, exposed, turnCount: state.turnCount,
+        });
+        if (step) return step;
+        continue;
+      }
+      const step = await stepTowardThenAct({
+        here, targetRoom: containerRoom, finalCommand: `open ${containerId}`,
+        goalWhenArrived: `in the ${here} — opening the ${containerId} to see what's inside.`,
+        goalWhenEnRoute: `heading toward the ${containerRoom} to open the ${containerId}.`,
+        runCommand, exposedState, exposed, turnCount: state.turnCount,
+      });
+      if (step) return step;
+    }
   }
 
   // Explore: the objective either doesn't exist in this world, or its room

@@ -12,9 +12,9 @@ import { exposedFacts, runAdventureAutoplayTick } from "../../src/services/adven
 // linked both ways, mirroring Ashcombe Hall's own go/take rule shapes so
 // adventureTurn's runWorldCommand can actually execute the moves this test
 // drives. Player starts in A; a portable objective sits directly in whichever
-// room a test names (never behind a container puzzle — that multi-step case
-// is explicitly out of scope for this increment, see PLAN_GAMES_UPLIFT_V2.md
-// Part B's own non-goals).
+// room a test names, unless a test builds its own container/lock/key
+// fixture below (§ container progress) to exercise the hidden-behind-a-
+// puzzle case instead.
 const GO_RULES = [
   { name: "go", ruleKind: "action-signature", slots: { subjectClass: "adventurer", targetClass: "room" } },
   { name: "go", ruleKind: "action-effect", slots: { predicate: "currently-in", subjectRole: "subject", objectRole: "target" } },
@@ -22,6 +22,15 @@ const GO_RULES = [
 const TAKE_RULES = [
   { name: "take", ruleKind: "action-signature", slots: { subjectClass: "portable", targetClass: "adventurer" } },
   { name: "take", ruleKind: "action-effect", slots: { predicate: "located-in", subjectRole: "subject", objectRole: "target" } },
+];
+const OPEN_RULES = [
+  { name: "open", ruleKind: "action-signature", slots: { subjectClass: "adventurer", targetClass: "furniture" } },
+  { name: "open", ruleKind: "action-precond", slots: { shape: "fact-value", predicate: "stands-locked-in", role: "target", scope: "any", negate: "true" } },
+  { name: "open", ruleKind: "action-precond", slots: { shape: "fact-value", predicate: "is-open", role: "target", scope: "any", value: "true", negate: "true" } },
+  { name: "open", ruleKind: "action-effect", slots: { predicate: "is-open", subjectRole: "target", value: "true" } },
+];
+const UNLOCK_RULES = [
+  { name: "unlock", ruleKind: "action-signature", slots: { subjectClass: "adventurer", targetClass: "furniture" } },
 ];
 
 async function seedLineWorld({ objectiveRoom = null, extraFacts = [] } = {}) {
@@ -220,4 +229,127 @@ test("a world with no player position at all reports an honest stall, never a fa
   const result = await runAdventureAutoplayTick(dir, { exposedRoomIds: new Set(), planHolder });
   assert.equal(result.stalled, true);
   assert.equal(result.done, false);
+});
+
+// ---- container progress: the objective hidden behind an open/unlock chain,
+// exactly Ashcombe Hall's own letter-in-a-locked-cabinet shape. -----------------
+
+async function seedRoomsWithRules(facts, ruleSets = [GO_RULES, TAKE_RULES, OPEN_RULES, UNLOCK_RULES]) {
+  const dir = createInMemoryStore();
+  await appendFacts(dir, facts.map((f) => ({ ...f, provenance: "test:container-world" })));
+  for (const rules of ruleSets) {
+    for (const rule of rules) {
+      await appendRule(dir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: "test:container-world" });
+    }
+  }
+  return dir;
+}
+
+test("container progress: an exposed, unlocked, unopened container is opened before plain exploration continues", async () => {
+  const dir = await seedRoomsWithRules([
+    { subject: "player", predicate: "rdf:type", object: "adventurer" },
+    { subject: "player", predicate: "mgx:currently-in", object: "a" },
+    { subject: "a", predicate: "rdf:type", object: "room" },
+    { subject: "b", predicate: "rdf:type", object: "room" },
+    { subject: "a", predicate: "mgx:has-exit-east", object: "b" },
+    { subject: "b", predicate: "mgx:has-exit-west", object: "a" },
+    { subject: "box", predicate: "rdf:type", object: "furniture" },
+    { subject: "box", predicate: "mgx:is-container", object: "true" },
+    { subject: "box", predicate: "mgx:fixed-in", object: "a" },
+    { subject: "prize", predicate: "rdf:type", object: "portable" },
+    { subject: "prize", predicate: "mgx:hidden-in", object: "box" },
+    { subject: "prize", predicate: "mgx:is-objective", object: "true" },
+  ]);
+  const planHolder = planHolderFor();
+  const result = await runAdventureAutoplayTick(dir, { exposedRoomIds: new Set(["a"]), planHolder });
+  assert.match(result.goal, /opening the box/, "opens the known container instead of wandering east");
+  const rows = readFactRows(await loadMemory(dir));
+  assert.ok(rows.some((r) => r.subject.startsWith("box@") && r.predicate === "mgx:is-open" && r.object === "true"));
+  assert.equal(foldWorldState(rows).placements.get("player")?.object, "a", "opening doesn't move the player");
+});
+
+test("container progress: a locked container whose instrument is already carried is unlocked, then opened, over two ticks", async () => {
+  const dir = await seedRoomsWithRules([
+    { subject: "player", predicate: "rdf:type", object: "adventurer" },
+    { subject: "player", predicate: "mgx:currently-in", object: "a" },
+    { subject: "a", predicate: "rdf:type", object: "room" },
+    { subject: "safe", predicate: "rdf:type", object: "furniture" },
+    { subject: "safe", predicate: "mgx:is-container", object: "true" },
+    { subject: "safe", predicate: "mgx:stands-locked-in", object: "a" },
+    { subject: "safe", predicate: "mgx:unlocks-with", object: "key" },
+    { subject: "key", predicate: "rdf:type", object: "portable" },
+    { subject: "key", predicate: "mgx:located-in", object: "player" },
+    { subject: "prize", predicate: "rdf:type", object: "portable" },
+    { subject: "prize", predicate: "mgx:hidden-in", object: "safe" },
+    { subject: "prize", predicate: "mgx:is-objective", object: "true" },
+  ]);
+  const planHolder = planHolderFor();
+  let result = await runAdventureAutoplayTick(dir, { exposedRoomIds: new Set(["a"]), planHolder });
+  assert.match(result.goal, /unlocking the safe with the key/);
+  result = await runAdventureAutoplayTick(dir, { exposedRoomIds: result.exposedRoomIds, planHolder });
+  assert.match(result.goal, /opening the safe/, "the lock is gone, so the very next tick opens it");
+  result = await runAdventureAutoplayTick(dir, { exposedRoomIds: result.exposedRoomIds, planHolder });
+  assert.match(result.goal, /taking the prize/, "revealed and co-located, so fetch takes over");
+  result = await runAdventureAutoplayTick(dir, { exposedRoomIds: result.exposedRoomIds, planHolder });
+  assert.equal(result.done, true);
+});
+
+test("container progress: a locked container's not-yet-carried instrument sits in a different already-exposed room — auto-play detours to fetch it first", async () => {
+  const dir = await seedRoomsWithRules([
+    { subject: "player", predicate: "rdf:type", object: "adventurer" },
+    { subject: "player", predicate: "mgx:currently-in", object: "a" },
+    { subject: "a", predicate: "rdf:type", object: "room" },
+    { subject: "b", predicate: "rdf:type", object: "room" },
+    { subject: "a", predicate: "mgx:has-exit-east", object: "b" },
+    { subject: "b", predicate: "mgx:has-exit-west", object: "a" },
+    { subject: "safe", predicate: "rdf:type", object: "furniture" },
+    { subject: "safe", predicate: "mgx:is-container", object: "true" },
+    { subject: "safe", predicate: "mgx:stands-locked-in", object: "a" },
+    { subject: "safe", predicate: "mgx:unlocks-with", object: "key" },
+    { subject: "key", predicate: "rdf:type", object: "portable" },
+    { subject: "key", predicate: "mgx:located-in", object: "b" },
+    { subject: "prize", predicate: "rdf:type", object: "portable" },
+    { subject: "prize", predicate: "mgx:hidden-in", object: "safe" },
+    { subject: "prize", predicate: "mgx:is-objective", object: "true" },
+  ]);
+  const planHolder = planHolderFor();
+  const result = await runAdventureAutoplayTick(dir, { exposedRoomIds: new Set(["a", "b"]), planHolder });
+  assert.match(result.goal, /heading toward the b for the key/, "goes for the known, uncarried key instead of trying the lock empty-handed");
+  const rows = readFactRows(await loadMemory(dir));
+  assert.equal(foldWorldState(rows).placements.get("player")?.object, "b");
+});
+
+test("container progress: the full open-fetch-unlock-open-take chain wins, exactly the shape a locked-cabinet-and-a-key world needs", async () => {
+  const dir = await seedRoomsWithRules([
+    { subject: "player", predicate: "rdf:type", object: "adventurer" },
+    { subject: "player", predicate: "mgx:currently-in", object: "a" },
+    { subject: "a", predicate: "rdf:type", object: "room" },
+    { subject: "b", predicate: "rdf:type", object: "room" },
+    { subject: "a", predicate: "mgx:has-exit-east", object: "b" },
+    { subject: "b", predicate: "mgx:has-exit-west", object: "a" },
+    { subject: "cabinet", predicate: "rdf:type", object: "furniture" },
+    { subject: "cabinet", predicate: "mgx:is-container", object: "true" },
+    { subject: "cabinet", predicate: "mgx:stands-locked-in", object: "a" },
+    { subject: "cabinet", predicate: "mgx:unlocks-with", object: "key" },
+    { subject: "portrait", predicate: "rdf:type", object: "furniture" },
+    { subject: "portrait", predicate: "mgx:is-container", object: "true" },
+    { subject: "portrait", predicate: "mgx:fixed-in", object: "b" },
+    { subject: "key", predicate: "rdf:type", object: "portable" },
+    { subject: "key", predicate: "mgx:hidden-in", object: "portrait" },
+    { subject: "letter", predicate: "rdf:type", object: "portable" },
+    { subject: "letter", predicate: "mgx:hidden-in", object: "cabinet" },
+    { subject: "letter", predicate: "mgx:is-objective", object: "true" },
+  ]);
+  const planHolder = planHolderFor();
+  let exposedRoomIds = new Set(["a"]);
+  let done = false;
+  let stalled = false;
+  for (let i = 0; i < 20 && !done && !stalled; i++) {
+    const result = await runAdventureAutoplayTick(dir, { exposedRoomIds, planHolder });
+    exposedRoomIds = result.exposedRoomIds;
+    done = result.done;
+    stalled = result.stalled;
+  }
+  assert.equal(stalled, false, "never gives up while a sound container/key chain still leads to the objective");
+  assert.equal(done, true, "reaches the letter through open portrait -> take key -> unlock cabinet -> open cabinet -> take letter");
 });
