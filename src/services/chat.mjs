@@ -884,6 +884,12 @@ const CAPABILITY_PHRASES = [
   // into a capability question; not covered by the "do" pair above since
   // neither accepts "help (me)? with" as a synonym tail for "do".
   /^(?:so,?\s+)?what can (?:you|u)(?:\s+(?:actually|really))? help(?:\s+me)?\s+with\??$/i,
+  // "can u help me with smth" — the SAME request, inverted word order
+  // ("can you help ME with X" rather than "what can you help with"), plus
+  // texting shorthand ("u", "smth"). A vague object (smth/something/this/
+  // that) never names a real term to look up, so it's the capability
+  // question, not a request about a specific thing.
+  /^can (?:you|u) help me with (?:smth|something|this|that)\??$/i,
   /^help( me)?\??$/i, /^\?+$/,
   /^how do (i|you) work\??$/i, /^how does (this|it) work\??$/i,
   // unix-habit openers typed inside the REPL out of muscle memory — argv-only
@@ -952,6 +958,56 @@ const AI_IDENTITY_PHRASES = [
   /^is this (chatgpt|gpt|claude|an? ai|an? llm)\??$/i,
   /^do you use ai\??$/i, /^what language model are you( using)?\??$/i,
   /^am i (talking|speaking|chatting) (to|with) a (real )?(person|human|bot|ai)\??$/i,
+  // "what model are you built on, GPT-4 or Claude?" — the SAME underlying
+  // question as "are you secretly GPT" above, just posed as an open pick
+  // between named models rather than a yes/no. The trailing model-name pair
+  // is optional (the closed lead alone is already unambiguous).
+  /^what model (?:are you|is this) (?:built|based|running) on(?:,?\s*(?:gpt-?\d(?:\.\d)?|chatgpt|claude|gemini|llama)(?:\s+or\s+(?:gpt-?\d(?:\.\d)?|chatgpt|claude|gemini|llama))?)?\??$/i,
+  // "do you use classical logic" — a mechanism question, not phrased as "are
+  // you an AI", but asking the identical underlying thing (rule-based/
+  // deterministic vs. a statistical model) T_IDENTITY_NOT_LLM already answers.
+  /^do you use classical logic\??$/i,
+  // "can u browse the internet" — tmct genuinely has no network access in the
+  // product path (no-LLM constitution, deterministic offline reasoning), so
+  // this is a real "no", not the generic capability listing.
+  /^can (?:you|u) (?:browse|access|use|go on|connect to) the internet\??$/i,
+];
+
+/** META-COMMAND/SESSION questions — a RETURNING USER checking whether a
+ *  remembered command or session behavior still holds ("is /focus still a
+ *  command", "did you keep anything from last session"). Without a
+ *  recognizer, a literal "/focus"/"/forget"/"/stats" token embedded in an
+ *  ordinary sentence reads as a bare word to whichever parser gets to it
+ *  first (the teach lane, or a code-import/definition lookup), producing
+ *  garbled nonsense instead of the plain, true answer — even though the
+ *  underlying capability (or its real equivalent) verifiably works when
+ *  invoked directly. Each entry answers the SPECIFIC thing asked, closed
+ *  and hand-written (never a guess): confirming what still works, or
+ *  naming the real equivalent for something that was never a command at
+ *  all ("/forget" isn't one; "forget that X is a Y" retracts a taught
+ *  fact instead). */
+const META_FOCUS_STILL_RE = /^can i still (?:do|use) \/?focus\b/i;
+const META_FOCUS_RENAMED_RE = /^is \/?focus (?:even )?still a command\b/i;
+const META_FORGET_RE = /^what about \/?forget\b/i;
+const META_STATS_STILL_RE = /^is there still a stats command\b/i;
+const META_COMPARE_STILL_RE = /^can (?:you|u) still do that thing where you compare two classes\b/i;
+const META_LAST_SESSION_RE = /^did you keep anything from (?:our |my )?last session\b/i;
+/** One answer per META_* recognizer above, in the same order, so the
+ *  dispatch site (conversationalTurn) stays a flat, readable table rather
+ *  than a chain of near-identical if-blocks. */
+const META_COMMAND_ANSWERS = [
+  [META_FOCUS_STILL_RE, "Yes — /focus still works, unrenamed: \"/focus <symbol>\" sets the current focus, "
+    + "reused by \"it\"/\"this\" and no-arg entity commands. /help lists every command."],
+  [META_FOCUS_RENAMED_RE, "Yes — /focus is still a real command, never renamed: \"/focus <symbol>\" sets the "
+    + "current focus. /help lists every command."],
+  [META_FORGET_RE, "There's no /forget command, but a taught fact IS undoable — say \"forget that <subject> is "
+    + "a <object>\" (the exact fact as taught) to retract it. /memory shows what's currently stored."],
+  [META_STATS_STILL_RE, "Yes — /stats still works: a one-screen overview of entity counts, relationship "
+    + "counts, and packages. /help lists every command."],
+  [META_COMPARE_STILL_RE, "Yes — say \"compare <X> and <Y>\" for two entities of the same kind. /help lists "
+    + "every command and question shape."],
+  [META_LAST_SESSION_RE, "Taught facts and folded session summaries persist between sessions (written to "
+    + ".tmct/ on disk) — it's never a clean slate. /memory shows what's currently remembered."],
 ];
 
 /** Split raw turn text into candidate single-sentence clauses on sentence-
@@ -1586,6 +1642,14 @@ function conversationalTurn(line, ctx) {
     note(ctx.trace, "goal: identity — who/what tmct is, not a capability listing");
     note(ctx.trace, "lane: conversational — identity (IDENTITY_PHRASES closed set)");
     return mk(t(T_IDENTITY_SELF), { lane: "help" });
+  }
+  {
+    const metaHit = META_COMMAND_ANSWERS.find(([re]) => re.test(raw));
+    if (metaHit) {
+      note(ctx.trace, "goal: meta — does a remembered command/session behavior still hold");
+      note(ctx.trace, "lane: conversational — meta-command/session (closed per-command answer set)");
+      return mk(metaHit[1], { lane: "help" });
+    }
   }
   // CAPABILITY_PHRASES' vague-opener entries are self-contained closed
   // regexes, but a preamble ahead of one ("right, can you walk me through
