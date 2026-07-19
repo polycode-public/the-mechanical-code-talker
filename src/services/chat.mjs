@@ -2319,6 +2319,14 @@ const PLAN_MOVE_COUNT_RE = /^how\s+many\s+moves(?:\s+(?:are\s+(?:there|left)|rem
 // move count IS provably the minimum from the state it started from — never
 // a guess, an actual guarantee of the search algorithm used.
 const PLAN_OPTIMALITY_CONFIRM_RE = /^(?:is\s+(?:that|this)\s+(?:really|actually)?\s*the\s+(?:minimum|fewest|optimal|shortest)(?:\s+possible)?\s+(?:number\s+of\s+moves|amount\s+of\s+moves|moves)|(?:is|could)\s+there\s+be\s+a\s+shorter\s+(?:plan|way|route)(?:\s+than\s+that)?|can\s+(?:it|this|that)\s+be\s+done\s+in\s+fewer\s+moves)[?.!\s]*$/i;
+// "why is that the shortest solution?" — a direct follow-up asking for the
+// SAME reason the planner already printed, unprompted, right after "plan
+// found — N moves (shortest)". Re-displays the stored becauseText (below)
+// rather than an honest miss; a genuinely different justification question
+// ("why did you send X to Y instead of Z", "what if X started elsewhere")
+// asks for something this store doesn't compute at all (an alternative-path
+// or counterfactual explanation) and stays a miss.
+const PLAN_WHY_SHORTEST_RE = /^why\s+(?:is|was)\s+(?:that|this|it)\s+the\s+shortest\s+(?:solution|plan|path|way)[?.!\s]*$/i;
 const PLAN_WHY_MOVE_RE = /^why\s+(?:that|this|the\s+next|the)\s+move[?.!\s]*$/i;
 // Board-state read-backs, answered off the CURRENT board (the latest @stepK
 // snapshot, or the taught board before any step) so a read never contradicts
@@ -10354,10 +10362,15 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
     goal: { text: goalText, specs: goals },
     domain: { classMembers: domain.classMembers, ordering, renderHints },
   };
-  planHolder.state = {
-    ...planHolder.state, actions, states: found.states, stepGoals, cursor: 0, done: false, goalText,
-  };
   const ruleNames = [...new Set(domain.actions.map((a) => a.name))].join('", "');
+  // Stored on the plan slot (not just printed once) so a direct follow-up
+  // ("why is that the shortest solution?") can re-display the SAME reason
+  // instead of an honest miss — see PLAN_WHY_SHORTEST_RE's own call site.
+  const becauseText = `you taught me the "${ruleNames}" rule${domain.actions.length === 1 ? "" : "s"}`
+    + `${ordering.length ? ` and ${ordering.length} ordering fact${ordering.length === 1 ? "" : "s"}` : ""}.`;
+  planHolder.state = {
+    ...planHolder.state, actions, states: found.states, stepGoals, cursor: 0, done: false, goalText, becauseText,
+  };
   const moveLines = actions.map((a, i) => `  ${i + 1}. ${a.label}`);
   // A piece with no taught position is an ASSUMPTION the plan silently makes
   // (it reads the board as taught, without that piece) — said out loud with
@@ -10379,8 +10392,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
   const text = n === 0
     ? `the goal already holds — nothing to do.${assumptionNote}`
     : `plan found — ${n} move${n === 1 ? "" : "s"} (shortest):\n${moveLines.join("\n")}\n\n` +
-      `because — you taught me the "${ruleNames}" rule${domain.actions.length === 1 ? "" : "s"}` +
-      `${ordering.length ? ` and ${ordering.length} ordering fact${ordering.length === 1 ? "" : "s"}` : ""}. ` +
+      `because — ${becauseText} ` +
       `Say "next" to make move 1, or ask "what moves are legal now".${assumptionNote}`;
   return {
     text, via: "plan", lane: "imperative",
@@ -10497,6 +10509,14 @@ async function planFollowUpAnswer(query, { memoryDir, planHolder, pendingPager =
       text: `yes — ${total} move${total === 1 ? "" : "s"} is the minimum: the plan search is a breadth-first search over every legal move from the current state, so it always finds the shortest path first. No shorter plan exists from where it started.`,
       deduced: "confirm the plan's own optimality claim",
       note: "PLAN FOLLOW-UP — optimality confirmed from the BFS search's own guarantee, not a guess",
+    };
+  }
+  if (PLAN_WHY_SHORTEST_RE.test(q)) {
+    if (!activePlan || !ps.becauseText) return null;
+    return {
+      text: `because — ${ps.becauseText}`,
+      deduced: "explain why the plan is the shortest (re-display the solve-time reason)",
+      note: "PLAN FOLLOW-UP — the because-line already printed at solve time, re-displayed on direct follow-up",
     };
   }
   if (PLAN_WHY_MOVE_RE.test(q)) {
