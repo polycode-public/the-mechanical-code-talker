@@ -35,12 +35,13 @@ alongside (pool 964 passing / 111 frontier), and the small remainders (world tru
 asides through the world fold, the plural-object fold, the impact summary). `archive/` holds the
 delivered plan docs; each records what its delivery deliberately did not include. What remains:
 
-- Adventure horizons (`archive/PLAN_ADVENTURE.md`): open/unlock/close ship signature-only
-  families — the shipped precond/effect rule shapes can't express lock state or boolean open/close
-  effects, so those ride world facts checked generically until a rule shape is designed; a named
-  "play X" opener with the pack absent falls through to ordinary lanes (only the generic opener
-  carries the missing-pack decline). Fix in progress. (Phase 5's agent-loop question is closed —
-  see the doc's own Phase 5 section.)
+- CONVERSATION persona-sweep backlog (`BENCHMARK_CONVERSATION_2.7.11.md`): 29 fresh findings
+  across 6 personas, ranked in the report. Highest priority: the write-boundary bug 2.6.0 named its
+  worst finding recurs under fresh trigger phrases (casual/imperative turns silently taught as
+  facts) even though its original 2.6.0 triggers are fixed — the bare-declarative teach lane's
+  admission criteria look too wide in general, not just for the specific phrases tried so far.
+  Second: tmct's own suggested repair/example text is itself broken in 4 separate instances,
+  independently hit by 3 personas. Full ranked list and routing in the report.
 
 ## Discipline
 
