@@ -10791,10 +10791,10 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // ../../../node_modules/smol-toml/dist/date.js
+  // node_modules/smol-toml/dist/date.js
   var DATE_TIME_RE, TomlDate;
   var init_date = __esm({
-    "../../../node_modules/smol-toml/dist/date.js"() {
+    "node_modules/smol-toml/dist/date.js"() {
       DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2})?[T ]?(?:(\d{2}):\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|[-+]\d{2}:\d{2})?$/i;
       TomlDate = class _TomlDate extends Date {
         #hasDate = false;
@@ -10888,7 +10888,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // ../../../node_modules/smol-toml/dist/error.js
+  // node_modules/smol-toml/dist/error.js
   function getLineColFromPtr(string, ptr) {
     let lines = string.slice(0, ptr).split(/\r\n|\n|\r/g);
     return [lines.length, lines.pop().length + 1];
@@ -10914,7 +10914,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   }
   var TomlError;
   var init_error = __esm({
-    "../../../node_modules/smol-toml/dist/error.js"() {
+    "node_modules/smol-toml/dist/error.js"() {
       TomlError = class extends Error {
         line;
         column;
@@ -10933,7 +10933,7 @@ ${codeblock}`, options);
     }
   });
 
-  // ../../../node_modules/smol-toml/dist/primitive.js
+  // node_modules/smol-toml/dist/primitive.js
   function parseString(str, ptr) {
     let c = str[ptr++];
     let first = c;
@@ -11090,7 +11090,7 @@ ${codeblock}`, options);
   }
   var INT_REGEX, FLOAT_REGEX, LEADING_ZERO;
   var init_primitive = __esm({
-    "../../../node_modules/smol-toml/dist/primitive.js"() {
+    "node_modules/smol-toml/dist/primitive.js"() {
       init_date();
       init_error();
       INT_REGEX = /^((0x[0-9a-fA-F](_?[0-9a-fA-F])*)|(([+-]|0[ob])?\d(_?\d)*))$/;
@@ -11099,7 +11099,7 @@ ${codeblock}`, options);
     }
   });
 
-  // ../../../node_modules/smol-toml/dist/util.js
+  // node_modules/smol-toml/dist/util.js
   function indexOfNewline(str, start = 0, end = str.length) {
     let idx = str.indexOf("\n", start);
     if (str[idx - 1] === "\r")
@@ -11154,12 +11154,12 @@ ${codeblock}`, options);
     });
   }
   var init_util = __esm({
-    "../../../node_modules/smol-toml/dist/util.js"() {
+    "node_modules/smol-toml/dist/util.js"() {
       init_error();
     }
   });
 
-  // ../../../node_modules/smol-toml/dist/extract.js
+  // node_modules/smol-toml/dist/extract.js
   function sliceAndTrimEndOf(str, startPtr, endPtr) {
     let value = str.slice(startPtr, endPtr);
     let commentIdx = value.indexOf("#");
@@ -11226,7 +11226,7 @@ ${codeblock}`, options);
     ];
   }
   var init_extract = __esm({
-    "../../../node_modules/smol-toml/dist/extract.js"() {
+    "node_modules/smol-toml/dist/extract.js"() {
       init_primitive();
       init_struct();
       init_util();
@@ -11234,7 +11234,7 @@ ${codeblock}`, options);
     }
   });
 
-  // ../../../node_modules/smol-toml/dist/struct.js
+  // node_modules/smol-toml/dist/struct.js
   function parseKey(str, ptr, end = "=") {
     let dot = ptr - 1;
     let parsed = [];
@@ -11376,7 +11376,7 @@ ${codeblock}`, options);
   }
   var KEY_PART_RE;
   var init_struct = __esm({
-    "../../../node_modules/smol-toml/dist/struct.js"() {
+    "node_modules/smol-toml/dist/struct.js"() {
       init_primitive();
       init_extract();
       init_util();
@@ -11385,7 +11385,7 @@ ${codeblock}`, options);
     }
   });
 
-  // ../../../node_modules/smol-toml/dist/parse.js
+  // node_modules/smol-toml/dist/parse.js
   function peekTable(key, table, meta, type) {
     let t = table;
     let m = meta;
@@ -11510,7 +11510,7 @@ ${codeblock}`, options);
     return res;
   }
   var init_parse = __esm({
-    "../../../node_modules/smol-toml/dist/parse.js"() {
+    "node_modules/smol-toml/dist/parse.js"() {
       init_struct();
       init_extract();
       init_util();
@@ -11518,15 +11518,15 @@ ${codeblock}`, options);
     }
   });
 
-  // ../../../node_modules/smol-toml/dist/stringify.js
+  // node_modules/smol-toml/dist/stringify.js
   var init_stringify = __esm({
-    "../../../node_modules/smol-toml/dist/stringify.js"() {
+    "node_modules/smol-toml/dist/stringify.js"() {
     }
   });
 
-  // ../../../node_modules/smol-toml/dist/index.js
+  // node_modules/smol-toml/dist/index.js
   var init_dist = __esm({
-    "../../../node_modules/smol-toml/dist/index.js"() {
+    "node_modules/smol-toml/dist/index.js"() {
       init_parse();
       init_stringify();
       init_date();
