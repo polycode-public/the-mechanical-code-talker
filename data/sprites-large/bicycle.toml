@@ -1,0 +1,45 @@
+# bicycle — the file the byte budget's own bicycle example points at: the
+# wheels earn spoke lines and rim highlight arcs, the frame a full
+# triangle-plus-fork rather than a schematic stand-in, all sharing one
+# taught mgx:madeOf gradient (a bike frame reads metal far more often
+# than plastic, but a plastic-bodied child's bike is real enough to
+# carry too). The seat post stays a dark overlay rather than a third
+# colour, the same convention cabinet/desk use for their own knobs.
+classes = ["bicycle"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="bicycle-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <circle cx="6" cy="17" r="4.4" fill="none" stroke="url(#bicycle-fill)" stroke-width="1.6"/>
+  <circle cx="18" cy="17" r="4.4" fill="none" stroke="url(#bicycle-fill)" stroke-width="1.6"/>
+  <g stroke="url(#bicycle-fill)" stroke-width="0.6" opacity="0.7">
+    <line x1="6" y1="17" x2="6" y2="12.6"/>
+    <line x1="6" y1="17" x2="9.8" y2="17"/>
+    <line x1="6" y1="17" x2="6" y2="21.4"/>
+    <line x1="6" y1="17" x2="2.2" y2="17"/>
+    <line x1="18" y1="17" x2="18" y2="12.6"/>
+    <line x1="18" y1="17" x2="21.8" y2="17"/>
+    <line x1="18" y1="17" x2="18" y2="21.4"/>
+    <line x1="18" y1="17" x2="14.2" y2="17"/>
+  </g>
+  <path d="M6 17 L10.6 8.6 H14.4 M10.6 8.6 L18 17 M10.6 8.6 L8.4 5.4" fill="none" stroke="url(#bicycle-fill)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M14.4 8.6 L14.4 5.6" fill="none" stroke="url(#bicycle-fill)" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M12.6 5.4 H16.2" stroke="url(#bicycle-fill)" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M7 5.4 H9.8" stroke="{{FILL_DARK}}" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M3.6 15 A4.4 4.4 0 0 1 6.6 12.8" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
+  <path d="M15.6 15 A4.4 4.4 0 0 1 18.6 12.8" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+metal = "metal"
+plastic = "plastic"

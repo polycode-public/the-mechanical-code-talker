@@ -1,0 +1,24 @@
+# breakfast — a food scene at the sprite tier: a fried egg and a slice of
+# toast on a plate, every colour fixed to what the food actually is
+# (yolk orange, toast brown) rather than drawn from a taught mgx:madeOf
+# material, the same fixed-colour call bread/cheese/coffee/dinner/drink
+# make for the same reason.
+classes = ["breakfast"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="breakfast-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#fdfaf1"/>
+      <stop offset="55%" stop-color="#e8dcbf"/>
+      <stop offset="100%" stop-color="#b7a47c"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="14" r="8.4" fill="url(#breakfast-fill)"/>
+  <circle cx="12" cy="14" r="8.4" fill="none" stroke="#b7a47c" stroke-width="0.8" opacity="0.5"/>
+  <path d="M8.4 13.4 C6.6 11.6 7.4 8.6 10 8.8 C10.6 6.8 13.6 6.8 14 8.8 C16.6 8.4 17.4 11.6 15.4 13.4 C16 15.4 13.8 16.8 12 15.6 C10.2 16.8 7.8 15.4 8.4 13.4 Z" fill="#fbe9c6"/>
+  <circle cx="11.8" cy="12.6" r="2" fill="#e8a33d"/>
+  <ellipse cx="10.8" cy="11.6" rx="0.6" ry="0.4" fill="#ffffff" opacity="0.6"/>
+  <rect x="5" y="17.4" width="5.4" height="3.6" rx="0.6" fill="#c98f56"/>
+  <path d="M5.6 18 L10.2 18" stroke="#8a5a2e" stroke-width="0.6" opacity="0.6"/>
+</svg>
+"""

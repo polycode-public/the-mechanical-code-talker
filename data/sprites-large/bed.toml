@@ -1,0 +1,32 @@
+# bed — a furniture piece at the sprite tier: the headboard and mattress
+# share one taught mgx:madeOf gradient (a bed frame is wood or metal, the
+# same two-treatment spread cabinet/desk already cover), the pillow kept
+# as a dark overlay rather than a separate colour.
+classes = ["bed"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="bed-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <rect x="3.5" y="6" width="3" height="14" rx="1" fill="url(#bed-fill)"/>
+  <rect x="3.5" y="12.4" width="17" height="5.4" rx="1" fill="url(#bed-fill)"/>
+  <rect x="4.6" y="13.4" width="6" height="3.4" rx="0.8" fill="#000000" opacity="0.14"/>
+  <path d="M4.2 6.8 L4.2 19.2" stroke="#ffffff" stroke-width="0.6" opacity="0.35"/>
+  <g stroke="{{FILL_DARK}}" stroke-width="1.4" stroke-linecap="round">
+    <line x1="5" y1="20" x2="5" y2="22"/>
+    <line x1="19" y1="18.6" x2="19" y2="22"/>
+  </g>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+wood = "wood"
+metal = "metal"

@@ -1,0 +1,20 @@
+# earth — the planet at the sprite tier: a fixed blue-green globe, not a
+# taught mgx:madeOf material, for the same reason body-of-water stays
+# fixed — the planet's own colour is its identity. A radial gradient
+# (lit from the upper left) plus two continent shapes and one highlight.
+classes = ["earth"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <radialGradient id="earth-fill" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#8fd0e0"/>
+      <stop offset="55%" stop-color="#3f8fc4"/>
+      <stop offset="100%" stop-color="#215a86"/>
+    </radialGradient>
+  </defs>
+  <circle cx="12" cy="12" r="9.2" fill="url(#earth-fill)"/>
+  <path d="M6.4 8.2 C8 7 10 7.6 9.6 9.2 C11.2 9 12.4 10.4 11.2 11.6 C13.2 11.2 14.6 13 13 14.4 C15 14.2 16 16.4 14 17.4 C15.6 18.2 15 20 13 19.8" fill="#5fae5a"/>
+  <path d="M14.4 6.4 C15.8 6 16.8 7.2 15.6 8.2 C17.4 8.4 17.6 10.4 15.8 10.6 C17 11.6 16.2 13.2 14.6 12.6" fill="#5fae5a" opacity="0.9"/>
+  <ellipse cx="9" cy="8" rx="3" ry="2.2" fill="#ffffff" opacity="0.3"/>
+</svg>
+"""

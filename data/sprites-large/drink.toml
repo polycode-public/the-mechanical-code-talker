@@ -1,0 +1,21 @@
+# drink — a glass at the sprite tier: a fixed amber-juice gradient rather
+# than a taught mgx:madeOf material (the glass tumbler itself stays a
+# plain white-opacity outline, the same overlay convention every sprite
+# here uses, never a new fixed hue).
+classes = ["drink"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="drink-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#ffd27a"/>
+      <stop offset="55%" stop-color="#f2a33d"/>
+      <stop offset="100%" stop-color="#c9761e"/>
+    </linearGradient>
+  </defs>
+  <path d="M6 6 H18 L16.4 20.4 C16.2 21.4 15.4 22 14.4 22 H9.6 C8.6 22 7.8 21.4 7.6 20.4 Z" fill="#ffffff" opacity="0.14"/>
+  <path d="M7 10.4 H17 L16.2 20.2 C16.1 20.8 15.6 21.2 15 21.2 H9 C8.4 21.2 7.9 20.8 7.8 20.2 Z" fill="url(#drink-fill)"/>
+  <path d="M7.6 7 L16.4 7" stroke="#ffffff" stroke-width="0.9" opacity="0.5"/>
+  <path d="M15 5 L17.4 2" stroke="#ffffff" stroke-width="1.6" stroke-linecap="round" opacity="0.6"/>
+  <ellipse cx="9.4" cy="12" rx="1.2" ry="1.8" fill="#ffffff" opacity="0.35"/>
+</svg>
+"""

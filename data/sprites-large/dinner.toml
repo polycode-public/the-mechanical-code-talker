@@ -1,0 +1,23 @@
+# dinner — a food scene at the sprite tier: a plate carrying a seared
+# main and a small cluster of peas, every colour fixed to what the food
+# actually is rather than drawn from a taught mgx:madeOf material, the
+# same call bread/breakfast/cheese/coffee/drink make.
+classes = ["dinner"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="dinner-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#fdfaf1"/>
+      <stop offset="55%" stop-color="#e8dcbf"/>
+      <stop offset="100%" stop-color="#b7a47c"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="13" r="8.6" fill="url(#dinner-fill)"/>
+  <circle cx="12" cy="13" r="8.6" fill="none" stroke="#b7a47c" stroke-width="0.8" opacity="0.5"/>
+  <ellipse cx="10.6" cy="14" rx="4.4" ry="3.2" fill="#a9714a"/>
+  <ellipse cx="10.6" cy="13" rx="4.4" ry="3" fill="#c78e5b"/>
+  <circle cx="15.6" cy="9.6" r="1.6" fill="#5a9450"/>
+  <circle cx="17.6" cy="11.6" r="1.4" fill="#6ba85c"/>
+  <circle cx="16.8" cy="8" r="1.2" fill="#5a9450"/>
+</svg>
+"""

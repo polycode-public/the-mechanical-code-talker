@@ -100,6 +100,50 @@ test("the icon tier and the sprite tier resolve the SAME class name independentl
   assert.ok(largeLamp.includes("<svg"));
 });
 
+test("a sample of the pack's own no-material classes each resolve to their own dedicated template with no facts at all, never a fallback", () => {
+  const samples = ["castle", "cat", "bear", "bread", "coffee", "church", "earth", "body of water", "drink"];
+  for (const className of samples) {
+    const svg = resolveSpriteAsset(className, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.ok(svg.includes("<svg"), `${className}: expected real svg markup`);
+    assert.ok(!svg.includes("{{FILL"), `${className}: no unresolved placeholder token may reach the rendered output`);
+    const gradientId = className.replace(/\s+/g, "-") + "-fill";
+    assert.ok(svg.includes(gradientId), `${className}: expected its own dedicated gradient id "${gradientId}", got a fallback template instead`);
+  }
+});
+
+test("a sample of the pack's own material-bearing classes each resolve their own dedicated template once a matching mgx:madeOf fact is taught", () => {
+  const samples = [
+    { className: "bicycle", value: "metal" },
+    { className: "chair", value: "wood" },
+    { className: "coin", value: "gold" },
+    { className: "coat", value: "woven material" },
+  ];
+  for (const { className, value } of samples) {
+    const facts = [{ subject: "the-instance", predicate: "mgx:madeOf", object: value }];
+    const svg = resolveSpriteAsset(className, [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.ok(svg.includes("<svg"), `${className}: expected real svg markup`);
+    assert.ok(!svg.includes("{{FILL"), `${className}: no unresolved placeholder token may reach the rendered output`);
+    const gradientId = className.replace(/\s+/g, "-") + "-fill";
+    assert.ok(svg.includes(gradientId), `${className}: expected its own dedicated gradient id "${gradientId}", got a fallback template instead`);
+  }
+});
+
+test("a material-bearing class among the new pack (bicycle) resolves a taught mgx:madeOf value into a real gradient fill, not the raw treatment name", () => {
+  const facts = [{ subject: "the-bike", predicate: "mgx:madeOf", object: "metal" }];
+  const svg = resolveSpriteAsset("bicycle", [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+  assert.ok(svg.includes(MATERIAL_PALETTE.metal.light));
+  assert.ok(svg.includes(MATERIAL_PALETTE.metal.base));
+  assert.ok(svg.includes(MATERIAL_PALETTE.metal.dark));
+  assert.ok(!svg.includes("{{FILL"));
+});
+
+test("a garment class among the new pack (coat) resolves the woven material treatment from its own by-name palette reference", () => {
+  const facts = [{ subject: "the-coat", predicate: "mgx:madeOf", object: "woven material" }];
+  const svg = resolveSpriteAsset("coat", [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+  assert.ok(svg.includes(MATERIAL_PALETTE["woven material"].base));
+  assert.ok(!svg.includes("{{FILL"));
+});
+
 test("a missing directory reads as no templates at all, never throws", () => {
   assert.deepEqual(readSpriteLargeTemplateFiles("/does/not/exist"), []);
 });
