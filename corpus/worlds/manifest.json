@@ -4,7 +4,7 @@
   "counts": {
     "worlds": 2,
     "facts": 527,
-    "rules": 14
+    "rules": 19
   },
   "budgets": {
     "sourceBytesPerWorld": 131072,
@@ -14,8 +14,8 @@
   "sources": [
     {
       "file": "src/ashcombe-hall.jsonl",
-      "bytes": 7481,
-      "sha256": "776634e8f7db704f2895ad1557cdcb79c28e14fe8fd4202ef1d0db9b4358ca91"
+      "bytes": 8352,
+      "sha256": "f141da008edb6abfe025ddf4753fc374ccf44bdf23e3a414741f33f7246a3c9a"
     },
     {
       "file": "src/spider-fly.jsonl",
@@ -31,8 +31,8 @@
     },
     {
       "file": "shards/ashcombe-hall.jsonl.gz",
-      "bytes": 864,
-      "sha256": "468ba9ae859fc63094f5030648f07885e1e0785fb4e18e309cc4e6729c878ebf"
+      "bytes": 948,
+      "sha256": "49bbdf7bd0008c916145e866cd174d334c97ec449bd8ec850d10985468653c25"
     },
     {
       "file": "shards/spider-fly.jsonl.gz",

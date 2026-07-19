@@ -52,7 +52,7 @@ import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
-import { adventureTurn } from "./adventure.mjs";
+import { adventureTurn, unclaimedAdventureOpening } from "./adventure.mjs";
 import { spiderFlyTurn } from "./spider-fly-turn.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
@@ -12641,6 +12641,24 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       if (sfTurn.goal) result.goal = sfTurn.goal;
       result.lane = sfTurn.lane;
       const rec = withLast(result, sfTurn.goal ?? "watch the spider-and-fly game");
+      rec.planState = planHolder.state;
+      return rec;
+    }
+  }
+
+  // A "play X" naming no world EITHER game lane above claimed — last resort,
+  // checked only once the adventure lane's own fallthrough and spider-fly's
+  // own opener have both passed on the line, so this never outguesses a
+  // sibling game's own recognized phrasing. Honest by name ("I don't know a
+  // world called…") rather than the generic non-answer an unclaimed opener
+  // fell into before.
+  {
+    const unclaimed = await unclaimedAdventureOpening(workingLine, { env });
+    if (unclaimed) {
+      note(trace, `lane: ${unclaimed.note}`);
+      const result = plainTurn(workingLine, unclaimed.text, { via: "game", miss: true, focus });
+      result.lane = unclaimed.lane;
+      const rec = withLast(result, "play the adventure");
       rec.planState = planHolder.state;
       return rec;
     }

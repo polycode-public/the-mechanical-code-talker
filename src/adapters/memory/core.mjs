@@ -1287,10 +1287,18 @@ const RULE_SLOT_SPEC = {
   [RULE_KIND_ACTION_PRECOND]: [
     ["shape", "mgx:ruleActionPrecondShape"], ["predicate", "mgx:ruleActionPrecondPredicate"],
     ["role", "mgx:ruleActionPrecondRole"], ["scope", "mgx:ruleActionPrecondScope"],
+    // value/negate: the "fact-value" shape's literal-match and negation
+    // slots. Optional (RULE_SLOT_OPTIONAL below) — no-incoming/comparator
+    // preconds never set them.
+    ["value", "mgx:ruleActionPrecondValue"], ["negate", "mgx:ruleActionPrecondNegate"],
   ],
   [RULE_KIND_ACTION_EFFECT]: [
     ["predicate", "mgx:ruleActionEffectPredicate"], ["subjectRole", "mgx:ruleActionEffectSubject"],
-    ["objectRole", "mgx:ruleActionEffectObject"],
+    // objectRole/value: exactly one of these two must be set (enforced
+    // below, not by this per-slot spec) — a role-bound effect (Hanoi's
+    // "rest-on") supplies objectRole, a literal datatype effect (Ashcombe's
+    // is-open = "true") supplies value instead.
+    ["objectRole", "mgx:ruleActionEffectObject"], ["value", "mgx:ruleActionEffectValue"],
   ],
   // "the <left> may not be with the <right> without the <guard>" — each slot
   // names a class whose sole member src/domain/domain.mjs resolves at compile time.
@@ -1300,25 +1308,47 @@ const RULE_SLOT_SPEC = {
   ],
 };
 
+// Slots a kind's RULE_SLOT_SPEC lists but does NOT require non-empty — the
+// literal-effect/fact-value extension's slots, added after the original
+// four-kind design. A pre-existing rule never sets them, so it reads back
+// with these keys simply absent (readRuleRows defaults an absent slot to
+// ""), the same "not supplied" signal domain.mjs's compileDomain gives an
+// explicit "" — see optionalTerm there.
+const RULE_SLOT_OPTIONAL = {
+  [RULE_KIND_ACTION_PRECOND]: new Set(["value", "negate"]),
+  [RULE_KIND_ACTION_EFFECT]: new Set(["objectRole", "value"]),
+};
+
 // Content-addressed over (kind, name, ...slots in RULE_SLOT_SPEC order),
 // mirroring factIdFor's NUL-delimited discipline: identical rules upsert,
 // different ones coexist. For 2-slot kinds the joined string is byte-identical
 // to the historical (kind, name, slot1, slot2) template, so pre-existing rule
-// ids never change (pinned by test/adapters/memory-rules-action.test.mjs).
+// ids never change (pinned by test/adapters/memory-rules-action.test.mjs);
+// action-precond/action-effect ids shifted when their optional slots joined
+// the spec above (their own round-trip test asserts dedup behavior, never a
+// specific hash, so this was never a promise for those two kinds).
 const ruleIdFor = (kind, name, slotValues) => `rule:${fnv1aHex([kind, name, ...slotValues].join("\0"))}`;
 
 /** Append one taught RULE — a sibling of appendFact storing a `Rule`
  *  individual, same upsert/provenance/trust/SHACL discipline (neither
  *  pipeline ever checks `individual.class`). `slots` is the matching
- *  per-kind object (RULE_SLOT_SPEC above). Returns { id }. */
+ *  per-kind object (RULE_SLOT_SPEC above); a slot named in RULE_SLOT_OPTIONAL
+ *  may be omitted. Returns { id }. */
 export async function appendRule(dir, { name, kind, slots, provenance = "", createdAt = "" } = {}) {
   const spec = RULE_SLOT_SPEC[kind];
   if (!spec) throw new Error(`a rule kind must be one of ${RULE_KINDS.join(", ")}, got ${JSON.stringify(kind)}`);
   const n = normFactTerm(name);
   if (!n) throw new Error("a rule needs a name");
+  const optional = RULE_SLOT_OPTIONAL[kind] || new Set();
   const slotValues = spec.map(([slotKey]) => normFactTerm(slots?.[slotKey]));
-  if (slotValues.some((v) => !v)) {
-    throw new Error(`a ${kind} rule needs ${spec.map(([slotKey]) => slotKey).join(" + ")}`);
+  const missing = spec.filter(([slotKey], i) => !optional.has(slotKey) && !slotValues[i]);
+  if (missing.length) {
+    throw new Error(`a ${kind} rule needs ${missing.map(([slotKey]) => slotKey).join(" + ")}`);
+  }
+  if (kind === RULE_KIND_ACTION_EFFECT) {
+    const objectRole = slotValues[spec.findIndex(([k]) => k === "objectRole")];
+    const value = slotValues[spec.findIndex(([k]) => k === "value")];
+    if (!objectRole && !value) throw new Error(`a ${kind} rule needs an objectRole or a value`);
   }
   const id = ruleIdFor(kind, n, slotValues);
   const label = labelOf(`${n} = ${kind}(${slotValues.join(", ")})`);
@@ -1336,7 +1366,13 @@ export async function appendRule(dir, { name, kind, slots, provenance = "", crea
         { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
         { prop: RULE_NAME_PROP, key: "ruleName", value: n },
         { prop: RULE_KIND_PROP, key: "ruleKind", value: kind },
-        ...spec.map(([slotKey, prop], i) => ({ prop, key: slotKey, value: slotValues[i] })),
+        // An optional slot left empty stores no attribute at all — the same
+        // "never supplied" shape a pre-extension Rule individual already has,
+        // rather than a wasted always-"" one.
+        ...spec
+          .map(([slotKey, prop], i) => ({ prop, key: slotKey, value: slotValues[i], skip: !slotValues[i] && optional.has(slotKey) }))
+          .filter((attr) => !attr.skip)
+          .map(({ skip, ...attr }) => attr),
         { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
         ...(provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []),
       ],

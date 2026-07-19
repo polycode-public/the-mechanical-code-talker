@@ -11,9 +11,13 @@ const RULE_KINDS = new Set([
   "action-signature", "action-precond", "action-effect", "action-constraint",
 ]);
 
-// Mirrors core.mjs's own (unexported) RULE_SLOT_SPEC exactly — the single
-// source of truth for the closed rule-kind shapes; kept in sync by hand
-// (both describe the same kinds' slots).
+// Mirrors the REQUIRED subset of core.mjs's own (unexported) RULE_SLOT_SPEC —
+// kept in sync by hand. Two kinds there also carry optional slots
+// (RULE_SLOT_OPTIONAL: action-precond's value/negate, action-effect's
+// objectRole/value) that deliberately do NOT appear here: this gate only
+// checks genuine malformation (the comment above), and "at least one of
+// objectRole/value" is a joint constraint core.mjs's own appendRule already
+// enforces at write time, not a per-slot presence check this shape can express.
 const RULE_SLOT_PROPS = {
   compose2: ["mgx:ruleBase1", "mgx:ruleBase2"],
   filter: ["mgx:ruleBase1", "mgx:ruleFilterProperty"],
@@ -23,9 +27,7 @@ const RULE_SLOT_PROPS = {
     "mgx:ruleActionPrecondShape", "mgx:ruleActionPrecondPredicate",
     "mgx:ruleActionPrecondRole", "mgx:ruleActionPrecondScope",
   ],
-  "action-effect": [
-    "mgx:ruleActionEffectPredicate", "mgx:ruleActionEffectSubject", "mgx:ruleActionEffectObject",
-  ],
+  "action-effect": ["mgx:ruleActionEffectPredicate", "mgx:ruleActionEffectSubject"],
   "action-constraint": [
     "mgx:ruleActionConstraintLeft", "mgx:ruleActionConstraintRight", "mgx:ruleActionConstraintGuard",
   ],

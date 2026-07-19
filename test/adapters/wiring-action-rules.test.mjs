@@ -43,11 +43,15 @@ test("action rules: the worked example's action sentences all teach, and the sto
     const family = readRuleRows(memory).filter((r) => r.name === "move onto");
     const bySlots = (a, b) => a.kind.localeCompare(b.kind) || JSON.stringify(a.slots).localeCompare(JSON.stringify(b.slots));
     const shape = family.map((r) => ({ kind: r.kind, slots: r.slots })).sort(bySlots);
+    // action-precond/action-effect slots also carry value/negate — the
+    // fact-value shape's optional fields, defaulted to "" (never taught by
+    // any of these six live sentences) the same way readRuleRows defaults
+    // any other unwritten slot.
     assert.deepEqual(shape, [
-      { kind: "action-effect", slots: { predicate: "rest-on", subjectRole: "subject", objectRole: "target" } },
-      { kind: "action-precond", slots: { shape: "no-incoming", predicate: "rest-on", role: "subject", scope: "any" } },
-      { kind: "action-precond", slots: { shape: "no-incoming", predicate: "rest-on", role: "target", scope: "any" } },
-      { kind: "action-precond", slots: { shape: "comparator", predicate: "smaller-than", role: "subject", scope: "disk" } },
+      { kind: "action-effect", slots: { predicate: "rest-on", subjectRole: "subject", objectRole: "target", value: "" } },
+      { kind: "action-precond", slots: { shape: "no-incoming", predicate: "rest-on", role: "subject", scope: "any", value: "", negate: "" } },
+      { kind: "action-precond", slots: { shape: "no-incoming", predicate: "rest-on", role: "target", scope: "any", value: "", negate: "" } },
+      { kind: "action-precond", slots: { shape: "comparator", predicate: "smaller-than", role: "subject", scope: "disk", value: "", negate: "" } },
       { kind: "action-signature", slots: { subjectClass: "disk", targetClass: "disk" } },
       { kind: "action-signature", slots: { subjectClass: "disk", targetClass: "peg" } },
     ].sort(bySlots),
