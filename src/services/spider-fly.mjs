@@ -368,7 +368,7 @@ function mostRecentEaterSpider(state, eatenDeltaBySpider) {
 export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider = new Map(), turn }) {
   const k = turn;
   const writes = [];
-  const events = { eaten: [], starved: [], laid: null, hatched: [], spawned: null, massAfterEating: new Map() };
+  const events = { eaten: [], starved: [], laid: null, hatched: [], spawned: null, spawnedCell: null, massAfterEating: new Map() };
 
   const spiders = [...postMovePlacements.keys()].filter((id) => /^spider-\d+$/.test(id)).sort();
   const flies = [...postMovePlacements.keys()].filter((id) => /^fly-\d+$/.test(id)).sort();
@@ -481,6 +481,7 @@ export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, p
       writes.push({ subject: `${newFlyId}@turn${k}`, predicate: "mgx:currently-in", object: cell });
       writes.push({ subject: `${newFlyId}@turn${k}`, predicate: "mgx:mass", object: String(FLY_INITIAL_MASS) });
       events.spawned = newFlyId;
+      events.spawnedCell = cell;
     }
   }
 
@@ -697,6 +698,18 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
     }
   }
   for (const flyId of ecology.events.starved) delete agents[flyId];
+  // A hatched spider or a spawned fly is minted by the ecology pass, which
+  // runs AFTER the movement loops above already built `agents` from the
+  // pre-tick roster — so without this, a brand-new individual is absent from
+  // this tick's own returned agents (and so invisible on the board/HUD) even
+  // though the very same tick's event text already announces it, only
+  // catching up the following tick once the fold picks it up naturally.
+  for (const h of ecology.events.hatched) {
+    agents[h.spider] = { cell: h.cell, goal: "just hatched — no goal yet.", plan: null, mass: SPIDER_INITIAL_MASS };
+  }
+  if (ecology.events.spawned && ecology.events.spawnedCell) {
+    agents[ecology.events.spawned] = { cell: ecology.events.spawnedCell, goal: "just arrived — no goal yet.", mass: FLY_INITIAL_MASS };
+  }
   const writes = [...movementWrites, ...ecology.writes];
   const provenance = `${worldProvenanceTag(WORLD_NAME)}:turn${k}`;
   await appendFacts(memoryDir, writes.map((f) => ({ ...f, provenance })));

@@ -456,6 +456,34 @@ test("runSpiderFlyTick drives lay, hatch and spawn through real @turnN writes, v
   }
 });
 
+test("runSpiderFlyTick: a hatched spider and a spawned fly are both present in the SAME tick's own returned agents, not one tick late", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-newborn-agents-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
+      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-9-9" },
+      { subject: "fly-2", predicate: "mgx:currently-in", object: "cell-9-1" },
+      { subject: "fly-1@turn1", predicate: "mgx:eaten-by", object: "spider-1" },
+      { subject: "fly-2@turn2", predicate: "mgx:eaten-by", object: "spider-1" },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const tick3 = await runSpiderFlyTick(dir); // turn 3: lays egg-1, and spawns (3 % 3 === 0)
+    assert.ok(tick3.ecology.spawned, "turn 3 is also a spawn turn");
+    assert.ok(tick3.agents[tick3.ecology.spawned], "the spawned fly is already in THIS tick's own agents, not only next tick's fold");
+    assert.equal(tick3.agents[tick3.ecology.spawned].cell, tick3.ecology.spawnedCell);
+
+    await runSpiderFlyTick(dir); // turn 4
+    await runSpiderFlyTick(dir); // turn 5
+    const tick6 = await runSpiderFlyTick(dir); // turn 6: egg-1 (laid turn 3) hatches
+    assert.deepEqual(tick6.ecology.hatched, [{ egg: "egg-1", spider: "spider-2", cell: "cell-2-2" }]);
+    assert.ok(tick6.agents["spider-2"], "the hatched spider is already in THIS tick's own agents, not only next tick's fold");
+    assert.equal(tick6.agents["spider-2"].cell, "cell-2-2");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("runSpiderFlyTick starves a fly whose mass reaches zero, written and readable through the real store", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-starve-"));
   try {
