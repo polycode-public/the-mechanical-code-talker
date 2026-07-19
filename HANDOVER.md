@@ -119,6 +119,14 @@ delivered plan docs; each records what its delivery deliberately did not include
   because `tick.agents` is built during movement, before `runEcologyPass` resolves eating. Fixed this
   round: the eaten/starved fly is dropped from `agents` and the eating spider's goal now says "just
   ate X in the web" instead of the now-false "co-located with X". Shipped.
+- Adventure edge-hunt round 2 of the second hunt (`playtests/PLAYTEST_LOG_010.md`): auto-play and
+  the graphical renderer, driven directly (neither has a chat-CLI surface by design), both confirmed
+  correct — no fix needed.
+- Spider-fly edge-hunt round 2 of the second hunt (`playtests/PLAYTEST_LOG_011.md`): the SAME class
+  of bug round 1 fixed, one level removed — a THIRD agent's goal (computed at movement time) can
+  keep naming a subject that dies later in the SAME tick's ecology pass, e.g. a fly "evading — last
+  saw spider-1" the very turn spider-1 starves. Fixed this round: every remaining agent's goal is
+  scrubbed of any died-this-tick reference before the existing eaten-pair handling runs. Shipped.
 
 ## Discipline
 
