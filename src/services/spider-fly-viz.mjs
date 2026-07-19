@@ -171,6 +171,11 @@ ${THEME_TOKENS_CSS}
   .chatask .prompt { color: var(--taught); font-size: .78rem; font-family: ${MONO_STACK}; }
   .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .32rem .55rem; min-width: 0; }
   .chatask input:disabled { opacity: .5; }
+  .chatpills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
+  .pill { font-family: ${MONO_STACK}; font-size: .68rem; padding: .2rem .6rem; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); color: var(--ink); white-space: nowrap; }
+  .pill:hover:not(:disabled) { border-color: var(--taught); }
+  .pill:disabled { opacity: .45; cursor: default; }
+  .pill[data-role="addr"].active { border-color: var(--taught); color: var(--taught); }
   .controls-row { display: flex; align-items: center; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
   .controls-row button { font-family: ${MONO_STACK}; font-size: .78rem; padding: .3rem .7rem; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
   .controls-row button:hover:not(:disabled) { border-color: var(--taught); }
@@ -206,6 +211,14 @@ ${THEME_TOKENS_CSS}
           <span class="prompt mono">tmct&gt;</span>
           <input id="chatq" type="text" placeholder="@spider the fly is east" aria-label="Address the spider or the fly" disabled>
         </form>
+        <div class="chatpills" id="chatpills" role="group" aria-label="quick phrases to fill the chat input">
+          <button type="button" class="pill" data-role="addr" data-addressee="spider" disabled>@spider</button>
+          <button type="button" class="pill" data-role="addr" data-addressee="fly" disabled>@fly</button>
+          <button type="button" class="pill" data-role="dir" data-direction="north" disabled>the fly is north</button>
+          <button type="button" class="pill" data-role="dir" data-direction="south" disabled>the fly is south</button>
+          <button type="button" class="pill" data-role="dir" data-direction="east" disabled>the fly is east</button>
+          <button type="button" class="pill" data-role="dir" data-direction="west" disabled>the fly is west</button>
+        </div>
       </div>
     </aside>
   </div>
@@ -238,6 +251,9 @@ const SPIDERFLY = ${gridData};
   const chatlogEl = el("chatlog");
   const chatformEl = el("chatform");
   const chatqEl = el("chatq");
+  const chatpillsEl = el("chatpills");
+  const addressPillEls = [...chatpillsEl.querySelectorAll('[data-role="addr"]')];
+  const directionPillEls = [...chatpillsEl.querySelectorAll('[data-role="dir"]')];
   const statusEl = el("status");
   const turnLabelEl = el("turnLabel");
   const resetBtn = el("resetBtn");
@@ -465,6 +481,42 @@ const SPIDERFLY = ${gridData};
     });
   });
 
+  // ---- chat pills: click-to-fill shortcuts over the SAME #chatq input, never
+  // a second path into the engine — a pill only ever sets/appends text and
+  // focuses the field, exactly what typing the same characters would do, so
+  // free typing keeps working unchanged and every resulting phrase is one the
+  // addressed teach-frame grammar (SPIDER_FLY_TOLD_RE in spider-fly-turn.mjs)
+  // genuinely accepts.
+  function addresseeKindOf(value) {
+    const m = /^@(spider|fly)(?:-\\d+)?\\b/i.exec(String(value).trim());
+    return m ? m[1].toLowerCase() : null;
+  }
+  function refreshPills() {
+    const explicitKind = addresseeKindOf(chatqEl.value);
+    const subject = (explicitKind || "spider") === "spider" ? "fly" : "spider";
+    for (const btn of directionPillEls) btn.textContent = "the " + subject + " is " + btn.dataset.direction;
+    for (const btn of addressPillEls) btn.classList.toggle("active", btn.dataset.addressee === explicitKind);
+  }
+  for (const btn of addressPillEls) {
+    btn.addEventListener("click", () => {
+      chatqEl.value = "@" + btn.dataset.addressee + " ";
+      refreshPills();
+      chatqEl.focus();
+    });
+  }
+  for (const btn of directionPillEls) {
+    btn.addEventListener("click", () => {
+      const kind = addresseeKindOf(chatqEl.value) || "spider";
+      let value = chatqEl.value;
+      if (!addresseeKindOf(value)) value = "@" + kind + " " + value.trimStart();
+      chatqEl.value = value.replace(/\\s+$/, "") + " " + btn.textContent;
+      refreshPills();
+      chatqEl.focus();
+    });
+  }
+  chatqEl.addEventListener("input", refreshPills);
+  refreshPills();
+
   // ---- serialize every engine-touching call: the ticker and the chat dock
   // share one in-memory store, and an overlapping tick()/turn() pair could
   // race against the same @turnN write.
@@ -481,6 +533,7 @@ const SPIDERFLY = ${gridData};
     statusEl.textContent = session.opening;
     chatqEl.disabled = false;
     resetBtn.disabled = false; playBtn.disabled = false; stepBtn.disabled = false;
+    for (const btn of [...addressPillEls, ...directionPillEls]) btn.disabled = false;
   }
 
   let loopScheduled = false;
