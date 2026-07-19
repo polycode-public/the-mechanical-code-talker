@@ -1,0 +1,30 @@
+# glove — Ashcombe Hall's own pair of gloves at the sprite tier: a
+# currentColor gradient rather than a taught mgx:madeOf one. This
+# pack's material system only has a safe no-fact fallback for a class
+# the legacy flat sprite registry already carries (see sprite-map.mjs's
+# own SPRITE_REGISTRY) — an UNtaught glove would otherwise resolve with
+# no match at its own term and fall through to the generic animal
+# sprite, so a currentColor gradient (the same treatment plain
+# creatures and plants use) is the one that always renders correctly,
+# taught or not.
+classes = ["glove"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="glove-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M7.6 20.4 V11.2 C7.6 9 9.2 7.4 11.2 7.4 C13.2 7.4 14.8 9 14.8 11.2 V20.4 Z" fill="url(#glove-fill)"/>
+  <path d="M7.8 12.4 C5.8 12.2 4.6 13.8 5 15.6 C5.4 17.2 6.8 17.8 8 17.2 Z" fill="url(#glove-fill)"/>
+  <rect x="6.8" y="18.8" width="9.2" height="3" rx="1.2" fill="url(#glove-fill)"/>
+  <g stroke="#000000" stroke-width="0.4" opacity="0.25">
+    <line x1="9.4" y1="8.4" x2="9.4" y2="11.6"/>
+    <line x1="11.2" y1="7.6" x2="11.2" y2="11.8"/>
+    <line x1="13" y1="8.4" x2="13" y2="11.6"/>
+  </g>
+  <path d="M8.4 9.4 C8 12.4 8.2 16 9 19.4" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.35" stroke-linecap="round"/>
+</svg>
+"""

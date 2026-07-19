@@ -1,0 +1,41 @@
+# lion — the menagerie's own big cat at the sprite tier: the dog/
+# animal body shape with a radiating spike mane rather than rounded
+# curls (a curl cluster reads as a poodle's own coat at this scale, a
+# sunburst of triangular tufts reads as a mane), the tier's usual
+# gradient/highlight, no material.
+classes = ["lion"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="lion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="13.4" cy="15.6" rx="6.4" ry="4.4" fill="url(#lion-fill)"/>
+  <g fill="url(#lion-fill)" opacity="0.9">
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(40 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(80 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(120 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(160 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(200 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(240 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(280 7.6 8)"/>
+    <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(320 7.6 8)"/>
+  </g>
+  <circle cx="7.6" cy="8" r="4.2" fill="url(#lion-fill)"/>
+  <path d="M5.2 5.4 L4.6 3.4 L6.6 4.8 Z" fill="url(#lion-fill)"/>
+  <path d="M10 5.4 L10.6 3.4 L8.6 4.8 Z" fill="url(#lion-fill)"/>
+  <ellipse cx="6.4" cy="7" rx="1" ry="1.3" fill="#000000" opacity="0.22"/>
+  <path d="M6.6 9.6 C7.2 10.2 8 10.2 8.6 9.6" stroke="#000000" stroke-width="0.5" opacity="0.4" fill="none" stroke-linecap="round"/>
+  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <line x1="9.4" y1="19.4" x2="9.4" y2="22"/>
+    <line x1="17.4" y1="19.4" x2="17.4" y2="22"/>
+  </g>
+  <path d="M19.4 13.6 C22.4 13 23.4 15.8 21 17 C20 16.4 19.2 15.2 19 13.9 Z" fill="url(#lion-fill)"/>
+  <ellipse cx="10" cy="12.8" rx="2.6" ry="1.4" fill="#ffffff" opacity="0.26"/>
+  <ellipse cx="6" cy="6.4" rx="1.1" ry="0.8" fill="#ffffff" opacity="0.3"/>
+</svg>
+"""

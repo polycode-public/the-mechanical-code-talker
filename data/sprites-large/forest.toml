@@ -1,0 +1,23 @@
+# forest — several overlapping fir trees at the sprite tier: more than
+# one tree distinguishes it from park's own single shade tree.
+classes = ["forest"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="forest-wash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.16"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="18.6" width="20" height="3" fill="url(#forest-wash)"/>
+  <path d="M5.4 20.4 L5.4 16.4" stroke="currentColor" stroke-width="1" opacity="0.6"/>
+  <path d="M4.4 16.6 L5.4 12 L6.4 16.6 Z" fill="url(#forest-wash)" stroke="currentColor" stroke-width="1"/>
+  <path d="M3.6 13.4 L5.4 8.8 L7.2 13.4 Z" fill="url(#forest-wash)" stroke="currentColor" stroke-width="1"/>
+  <path d="M14 20.6 L14 15.6" stroke="currentColor" stroke-width="1.1" opacity="0.6"/>
+  <path d="M12.4 17 L14 11.2 L15.6 17 Z" fill="url(#forest-wash)" stroke="currentColor" stroke-width="1.1"/>
+  <path d="M11.4 13 L14 6.6 L16.6 13 Z" fill="url(#forest-wash)" stroke="currentColor" stroke-width="1.1"/>
+  <path d="M19.6 20.4 L19.6 17" stroke="currentColor" stroke-width="0.9" opacity="0.6"/>
+  <path d="M18.4 17.2 L19.6 13.4 L20.8 17.2 Z" fill="url(#forest-wash)" stroke="currentColor" stroke-width="0.9"/>
+  <path d="M8.4 12 L5.4 8.8" stroke="#ffffff" stroke-width="0.4" opacity="0.3"/>
+</svg>
+"""

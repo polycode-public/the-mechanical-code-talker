@@ -1,0 +1,21 @@
+# gold — a raw nugget at the sprite tier: gold the material renders
+# permanently in the shared palette's own metal treatment, since the
+# object IS that colour rather than being made of a taught one — no
+# [parameters.material] table, unlike an object built FROM gold.
+classes = ["gold"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="gold-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#f0dfa0"/>
+      <stop offset="55%" stop-color="#c9a24b"/>
+      <stop offset="100%" stop-color="#8a6a1e"/>
+    </linearGradient>
+  </defs>
+  <path d="M8 6.4 C6 5.6 4 7.6 4.6 10.2 C3.6 12.6 4.8 15.6 7.4 17 C9.6 18.4 13.4 18.8 16.4 17 C19.2 15.4 20 12 18.6 9.4 C19.6 7.2 17.6 4.8 14.8 5.4 C12.8 3.8 9.6 4.6 8 6.4 Z" fill="url(#gold-fill)"/>
+  <path d="M8.6 8 C9.6 10.4 9.4 13.4 7.6 15.6" fill="none" stroke="#5a4212" stroke-width="0.6" opacity="0.4" stroke-linecap="round"/>
+  <path d="M13 6.6 C14.4 9 15.4 12.4 14.4 15.6" fill="none" stroke="#5a4212" stroke-width="0.6" opacity="0.35" stroke-linecap="round"/>
+  <ellipse cx="8.4" cy="8.6" rx="2.2" ry="1.5" fill="#ffffff" opacity="0.4"/>
+  <path d="M16.4 8.6 L17.2 9.8 L16.4 11 L15.6 9.8 Z" fill="#ffffff" opacity="0.55"/>
+</svg>
+"""

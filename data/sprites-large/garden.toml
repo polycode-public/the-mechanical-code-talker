@@ -1,0 +1,31 @@
+# garden — a cultivated bed of flowers behind a low border at the
+# sprite tier: rows of small blooms distinguish it from park's own
+# single shade tree.
+classes = ["garden"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="garden-wash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.16"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="15" width="20" height="6.6" fill="url(#garden-wash)"/>
+  <path d="M2 15 L4 12 L20 12 L22 15 Z" fill="none" stroke="currentColor" stroke-width="1.1" opacity="0.5"/>
+  <g stroke="currentColor" stroke-width="1" stroke-linecap="round">
+    <line x1="6.4" y1="13.6" x2="6.4" y2="17.2"/>
+    <line x1="11.4" y1="12.6" x2="11.4" y2="16.8"/>
+    <line x1="16.4" y1="13.6" x2="16.4" y2="17.2"/>
+  </g>
+  <g fill="currentColor">
+    <circle cx="6.4" cy="12.4" r="1.7"/>
+    <circle cx="11.4" cy="11.2" r="1.9"/>
+    <circle cx="16.4" cy="12.4" r="1.7"/>
+  </g>
+  <g fill="#ffffff" opacity="0.4">
+    <circle cx="5.8" cy="11.8" r="0.5"/>
+    <circle cx="10.8" cy="10.6" r="0.5"/>
+    <circle cx="15.8" cy="11.8" r="0.5"/>
+  </g>
+</svg>
+"""

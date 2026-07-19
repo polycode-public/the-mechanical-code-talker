@@ -1,0 +1,27 @@
+# mouse — the pantry's own small creature at the sprite tier: round
+# body, oversized ears and a long curved tail, the tier's usual
+# gradient/highlight, no material.
+classes = ["mouse"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="mouse-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 20 C3 14 6 9.6 11.4 9.6 C16.4 9.6 19 13.4 18.2 17.6 C17.6 20.6 14.6 21.4 11 21.2 C7.8 21 4.6 21.6 4 20 Z" fill="url(#mouse-fill)"/>
+  <circle cx="5.6" cy="6.4" r="2.6" fill="url(#mouse-fill)"/>
+  <circle cx="11" cy="5.4" r="2.9" fill="url(#mouse-fill)"/>
+  <path d="M19 17 C22.6 17.6 22.8 14.4 21.2 12.8 C21.6 15 20.6 16.4 19 17 Z" fill="url(#mouse-fill)"/>
+  <circle cx="10.4" cy="10.8" r="0.9" fill="#000000" opacity="0.6"/>
+  <ellipse cx="13.6" cy="12.4" rx="0.8" ry="0.6" fill="#c98c8c" opacity="0.7"/>
+  <g stroke="#000000" stroke-width="0.35" opacity="0.4">
+    <path d="M14.4 12 L18 11.2"/>
+    <path d="M14.4 12.6 L18 13"/>
+  </g>
+  <ellipse cx="8.6" cy="16.8" rx="3" ry="1.6" fill="#ffffff" opacity="0.28"/>
+  <ellipse cx="4.8" cy="5.4" rx="0.9" ry="0.7" fill="#ffffff" opacity="0.35"/>
+</svg>
+"""

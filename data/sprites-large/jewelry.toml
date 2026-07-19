@@ -1,0 +1,29 @@
+# jewelry — Ashcombe Hall's own ring at the sprite tier: a fixed warm
+# metal band rather than a taught mgx:madeOf one. This pack's material
+# system only has a safe no-fact fallback for a class the legacy flat
+# sprite registry already carries (see sprite-map.mjs's own
+# SPRITE_REGISTRY) — an UNtaught ring would otherwise resolve with no
+# match at its own term and fall through to the generic animal sprite,
+# so the band renders in the same fixed metal triple gold/money/metal
+# already use, since gold is jewelry's own single most common real
+# material anyway. The set stone stays its own fixed pale sparkle
+# regardless, since a gem's own colour comes from the stone, not the
+# metal it's set in.
+classes = ["jewelry"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="jewelry-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#f0dfa0"/>
+      <stop offset="55%" stop-color="#c9a24b"/>
+      <stop offset="100%" stop-color="#8a6a1e"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="16.6" rx="6.6" ry="5.2" fill="none" stroke="url(#jewelry-fill)" stroke-width="2.6"/>
+  <path d="M8.4 9.6 L12 4 L15.6 9.6 L12 12.4 Z" fill="#bfe2e7"/>
+  <path d="M8.4 9.6 L12 12.4 L15.6 9.6" fill="none" stroke="#7fb6c1" stroke-width="0.5" opacity="0.6"/>
+  <path d="M12 4 L12 12.4" stroke="#eaf6f7" stroke-width="0.5" opacity="0.7"/>
+  <path d="M9.4 8.8 L12 5.4" stroke="#ffffff" stroke-width="0.6" opacity="0.7" stroke-linecap="round"/>
+  <path d="M8 13.6 A6.6 5.2 0 0 1 12.6 11.6" fill="none" stroke="#ffffff" stroke-width="0.7" opacity="0.4" stroke-linecap="round"/>
+</svg>
+"""
