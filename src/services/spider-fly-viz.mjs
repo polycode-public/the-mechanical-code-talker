@@ -106,12 +106,6 @@ export function threadCellsForSpiderPlan(agents, geometry) {
   return null;
 }
 
-// direction -> rotation degrees, matching this page's sprite art convention
-// (both spider.toml and fly.toml draw the head/thorax at the TOP of the
-// viewBox, i.e. facing north by default) and spider-fly-world.mjs's own
-// DIRECTION_DELTA (north decreases y — up on screen).
-const FACING_DEGREES = Object.freeze({ north: 0, east: 90, south: 180, west: 270 });
-
 /** The sprite-facing rotation (degrees) for one agent this tick, driven by
  *  its CURRENT plan's first step (spider-fly.mjs's own `agents[id].plan`),
  *  never its actual next move — the two usually coincide, but re-planning
@@ -121,8 +115,14 @@ const FACING_DEGREES = Object.freeze({ north: 0, east: 90, south: 180, west: 270
  *  over. A held agent (`plan` empty/absent — no direction to face) keeps
  *  `previousDegrees` unchanged rather than snapping back to a default, so
  *  holding still never spins the sprite; a brand-new agent with no prior
- *  facing at all defaults to 0 (the art's own default north/up pose). */
+ *  facing at all defaults to 0 (the art's own default north/up pose).
+ *  Self-contained (no outer refs), `.toString()`-splice safe — the
+ *  direction -> degrees table lives INSIDE the function body on purpose:
+ *  spider.toml and fly.toml both draw the head/thorax at the TOP of the
+ *  viewBox (facing north by default), matching spider-fly-world.mjs's own
+ *  DIRECTION_DELTA (north decreases y — up on screen). */
 export function facingDegreesFor(plan, previousDegrees) {
+  const FACING_DEGREES = { north: 0, east: 90, south: 180, west: 270 };
   const direction = plan && plan[0];
   if (direction && FACING_DEGREES[direction] !== undefined) return FACING_DEGREES[direction];
   return previousDegrees ?? 0;
@@ -137,8 +137,13 @@ export function facingDegreesFor(plan, previousDegrees) {
  * and class; every corpse already older than `lingerTurns` past its own
  * death turn is dropped first, so the set never grows without bound.
  * Returns a plain `{ [id]: { cls, cell, diedAtTurn } }` map. Pure.
+ * `lingerTurns` defaults to a literal 4 (not the module-level
+ * CORPSE_LINGER_TURNS constant) so this function stays fully
+ * `.toString()`-splice safe — every real caller (both the inlined page and
+ * CORPSE_LINGER_TURNS's own callers elsewhere in this module) passes it
+ * explicitly anyway.
  */
-export function nextCorpses(prevCorpses, prevAgents, agents, turn, lingerTurns = CORPSE_LINGER_TURNS) {
+export function nextCorpses(prevCorpses, prevAgents, agents, turn, lingerTurns = 4) {
   const out = {};
   for (const [id, corpse] of Object.entries(prevCorpses || {})) {
     if (turn - corpse.diedAtTurn <= lingerTurns) out[id] = corpse;
