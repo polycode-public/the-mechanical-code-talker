@@ -166,8 +166,13 @@ test("a garment class among the new pack (coat) resolves the woven material trea
 test("a sample of the wider vocabulary pack resolves to its own dedicated template, not a shared fallback", () => {
   const sample = ["rabbit", "tree", "sun", "river", "shirt", "salt", "stone", "waterway", "school", "wolf"];
   for (const cls of sample) {
-    const own = templatesFor(cls);
-    assert.equal(own.length, 1, `${cls}: expected exactly one dedicated template, found ${own.length}`);
+    // a class this batch also gave a -with-emotion.toml sibling now has TWO
+    // templates by design (the plain one plus the emotion-parameterized
+    // one) — the plain, un-parameterized template is still the one that
+    // must resolve here, so exclude the emotion sibling rather than assume
+    // exactly one template exists for every class in this sample.
+    const own = templatesFor(cls).filter((t) => !t.parameters?.emotion);
+    assert.equal(own.length, 1, `${cls}: expected exactly one dedicated PLAIN template, found ${own.length}`);
     const svg = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
     assert.ok(svg.includes("<svg"), `${cls}: resolved svg must be a real <svg> string`);
     assert.equal(svg, own[0].svg, `${cls}: resolveSpriteAsset must return this class's own template, not a fallback`);
@@ -343,7 +348,11 @@ test("every one of the pack's own 35 classes resolves through its own dedicated 
 
 test("none of the pack's own 35 classes carries a [parameters.material] table, since none has a legacy SPRITE_REGISTRY fallback for the untaught case", () => {
   for (const cls of Object.keys(CLASS_OWN_GRADIENT_ID)) {
-    const t = REAL_LARGE_TEMPLATES.find((x) => x.classes.includes(cls));
+    // a class also given a -with-emotion.toml sibling carries a real
+    // [parameters.emotion] table on THAT file — find the plain template
+    // specifically, since it's the one this assertion is actually about.
+    const t = REAL_LARGE_TEMPLATES.find((x) => x.classes.includes(cls) && !x.parameters?.emotion);
+    assert.ok(t, `${cls}: no plain (non-emotion) template found`);
     assert.equal(t.parameters, undefined, `${cls}.toml should carry no material parameters`);
   }
 });

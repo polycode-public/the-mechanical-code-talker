@@ -30,10 +30,15 @@ svg = """
   </g>
   <path d="M19 13 C22 12.4 22.4 15.2 20 16 Z" fill="url(#tiger-with-emotion-fill)"/>
   <ellipse cx="9.6" cy="12.2" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.26"/>
+  <ellipse cx="7" cy="9" rx="3.3" ry="2.9" fill="#ffffff" opacity="0.22"/>
   {{FACE}}
 </svg>
 """
 
+# A light backing patch sits behind {{FACE}} (own opacity 0.22) so the fixed-
+# ink expression stays legible against this class's own darker gradient
+# stops — a Playwright render at real size found the un-backed face read as
+# low-contrast here, unlike lighter-bodied classes in the same batch.
 # The same cx/cy/r tiger.toml's own head circle declares.
 [face]
 cx = 7
