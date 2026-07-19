@@ -31,14 +31,16 @@
 // like a real CLI session.
 import { runTurn } from "../../services/chat.mjs";
 import {
-  createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows,
+  createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows, removeFacts,
 } from "../../adapters/memory/core.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { foldWorldState, worldDigestRows, roomAffordances } from "../../services/adventure.mjs";
 import { runAdventureAutoplayTick, exposedFacts } from "../../services/adventure-autoplay.mjs";
-import { resolveSpriteForClass, SPRITE_REGISTRY } from "../../domain/sprite-map.mjs";
+import { parseWorldEditorText, planWorldEditorSync } from "../../services/adventure-editor.mjs";
+import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
+import { relatedForTerm } from "../../domain/skos-view.mjs";
 
 /** A live in-memory adventure this page's ticker AND chat dock can both
  *  drive. Returns `{ memoryDir, autoplayTick, turn, snapshot }`.
@@ -137,6 +139,30 @@ export async function createAdventureSession(worldPayload) {
       const here = state.placements.get("player")?.object ?? null;
       return { rows, state, here, turn: state.turnCount, visitedRoomIds: [...visitedRoomIds] };
     },
+
+    /** The world editor's own store sync: parse `text` (adventure-editor.mjs's
+     *  own parseWorldEditorText), plan the implied writes (planWorldEditorSync),
+     *  and apply them — scoped to THIS world's own provenance tag only, never
+     *  the default persona's background corpus that shares the same live
+     *  memory store (an unscoped diff would read every unrelated background
+     *  fact as "not in this text" and try to retract it). Retractions
+     *  (removeFacts) only ever run when the WHOLE document parsed cleanly —
+     *  see adventure-editor.mjs's own header for why a typo must never be
+     *  read as "this fact is gone". Returns `{ unrecognized, added, removed }`. */
+    async applyEdit(text) {
+      const allRows = readFactRows(await loadMemory(memoryDir));
+      const worldRows = allRows.filter((r) => typeof r.provenance === "string" && r.provenance.indexOf(tag) === 0);
+      const state = foldWorldState(worldRows);
+      const { triples, unrecognized } = parseWorldEditorText(text, worldRows);
+      const { toAppend, toRemoveIds } = planWorldEditorSync(worldRows, state, triples);
+      if (toAppend.length) {
+        await appendFacts(memoryDir, toAppend.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: tag })));
+      }
+      const removedCount = unrecognized.length === 0 && toRemoveIds.length ? (await removeFacts(memoryDir, toRemoveIds)).removed.length : 0;
+      const here = foldWorldState(readFactRows(await loadMemory(memoryDir))).placements.get("player")?.object ?? null;
+      if (here) visitedRoomIds.add(here);
+      return { unrecognized, added: toAppend.length, removed: removedCount };
+    },
   };
 }
 
@@ -145,8 +171,13 @@ export async function createAdventureSession(worldPayload) {
 // affordances the chat dock's own pills read from, or (foldWorldState,
 // exposedFacts) the exposure-filtered fold the goal-status panel mirrors —
 // the same posture spider-fly-browser-entry.mjs's own
-// globalThis.tmctSpiderFly re-export takes.
+// globalThis.tmctSpiderFly re-export takes. `relatedForTerm`/
+// `classAncestorChain` back the edit mode's own cursor-suggestion pills
+// (adventure-viz.mjs's suggestionsForTerm mirrors this same pairing against
+// the global, the same reach-through-the-global pattern captionFor/pillsFor
+// already use for their own adventure.mjs calls).
 globalThis.tmctAdventure = {
   createAdventureSession, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
   worldDigestRows, roomAffordances, foldWorldState, exposedFacts,
+  relatedForTerm, classAncestorChain,
 };
