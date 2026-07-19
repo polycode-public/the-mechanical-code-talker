@@ -25,9 +25,12 @@ export const WEB_DURATION_TURNS = 10;
 // FLY_INITIAL_MASS/FLY_MASS_DECREMENT_PER_TURN): a spider starves like a fly
 // does, and gains exactly a fly's remaining mass on an eat. Heavier starting
 // mass than a single fly's worth on purpose — a spider that eats nothing for
-// a while has some runway before starving.
+// a while has some runway before starving. The decrement is half a fly's own
+// (spiders live longer between meals than flies do), and — like every other
+// tunable here — overridable per session via tmct.toml's [games.spider-fly]
+// (src/domain/game-config.mjs).
 export const SPIDER_INITIAL_MASS = 15;
-export const SPIDER_MASS_DECREMENT_PER_TURN = 1;
+export const SPIDER_MASS_DECREMENT_PER_TURN = 0.5;
 
 export const cellId = (x, y) => `cell-${x}-${y}`;
 

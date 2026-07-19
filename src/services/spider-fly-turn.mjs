@@ -22,6 +22,7 @@ import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame } from "./spid
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { getWorldsPackProvider } from "../adapters/corpus/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, readFactRows } from "../adapters/memory/core.mjs";
+import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 
 // ---- recognizers: the closed opening/stop/tick/address set -------------------
 
@@ -70,7 +71,7 @@ const WORLD_OPENING_FALLBACK =
 
 // ---- the opening turn: load the shipped board through the worlds pack -------
 
-async function openSpiderFlyGame({ planHolder, memoryDir, env, cache }) {
+async function openSpiderFlyGame({ planHolder, memoryDir, env, cache, gameConfig = DEFAULT_GAME_CONFIG }) {
   if (!memoryDir) {
     return {
       text: "the spider-and-fly game needs a session with a memory store to hold the board — start tmct inside a repo first.",
@@ -99,7 +100,7 @@ async function openSpiderFlyGame({ planHolder, memoryDir, env, cache }) {
   }
   if (cache) cache.rows = null; // the fact-rows cache predates these writes
 
-  const { started } = await startSpiderFlyGame(memoryDir, { flyCount: 1 });
+  const { started } = await startSpiderFlyGame(memoryDir, { flyCount: 1, config: gameConfig?.spiderFly });
   planHolder.state = { spiderFly: { turn: 0 } };
   const opener = started
     ? (payload.meta?.opening || WORLD_OPENING_FALLBACK)
@@ -212,8 +213,8 @@ function describeEcologyNote(eco) {
   return bits.length ? `; ${bits.join(", ")}` : "";
 }
 
-async function runTickAndRender({ planHolder, memoryDir, cache, toldFacts = [], addressedNote = null }) {
-  const tick = await runSpiderFlyTick(memoryDir, { toldFacts });
+async function runTickAndRender({ planHolder, memoryDir, cache, toldFacts = [], addressedNote = null, gameConfig = DEFAULT_GAME_CONFIG }) {
+  const tick = await runSpiderFlyTick(memoryDir, { toldFacts, config: gameConfig?.spiderFly });
   if (cache) cache.rows = null;
   planHolder.state = { spiderFly: { turn: tick.turn } };
   return {
@@ -232,7 +233,7 @@ async function runTickAndRender({ planHolder, memoryDir, cache, toldFacts = [], 
  *  current turn's told-facts"). This also matches how runSpiderFlyTick
  *  itself already works: it holds no standing plan or belief between calls,
  *  recomputing everything fresh from the folded fact rows every tick. */
-async function runToldFactTurn(match, { planHolder, memoryDir, cache }) {
+async function runToldFactTurn(match, { planHolder, memoryDir, cache, gameConfig = DEFAULT_GAME_CONFIG }) {
   const [, addrKindRaw, addrNum, subjKindRaw, subjNum, direction, cellLiteral] = match;
   const addrKind = addrKindRaw.toLowerCase();
   const subjKind = subjKindRaw.toLowerCase();
@@ -258,7 +259,7 @@ async function runToldFactTurn(match, { planHolder, memoryDir, cache }) {
   const targetCellId = cellId(targetCell.x, targetCell.y);
   const toldFacts = [{ subject: subjectId, toAgent: addresseeId, cell: targetCellId, turn: state.turnCount + 1 }];
   return runTickAndRender({
-    planHolder, memoryDir, cache, toldFacts,
+    planHolder, memoryDir, cache, toldFacts, gameConfig,
     addressedNote: `told the ${addresseeId} the ${subjectId} is at ${targetCellId}`,
   });
 }
@@ -275,7 +276,7 @@ async function runToldFactTurn(match, { planHolder, memoryDir, cache }) {
  * ordinary lanes unchanged, board untouched (§6.2 — no special-cased
  * spider-fly code path for plain questions).
  */
-export async function spiderFlyTurn(line, { planHolder, memoryDir, env, cache = null, isPlanFrameLine = () => false }) {
+export async function spiderFlyTurn(line, { planHolder, memoryDir, env, cache = null, isPlanFrameLine = () => false, gameConfig = DEFAULT_GAME_CONFIG }) {
   const slot = planHolder?.state ?? null;
   const spiderFly = slot?.spiderFly ?? null;
   const opening = SPIDER_FLY_OPEN_RE.test(line);
@@ -305,7 +306,7 @@ export async function spiderFlyTurn(line, { planHolder, memoryDir, env, cache = 
         note: "SPIDER-FLY — an opening arrived while a plan frame is active; the slot holds one thing at a time",
       };
     }
-    return openSpiderFlyGame({ planHolder, memoryDir, env, cache });
+    return openSpiderFlyGame({ planHolder, memoryDir, env, cache, gameConfig });
   }
 
   // A game is live.
@@ -343,11 +344,11 @@ export async function spiderFlyTurn(line, { planHolder, memoryDir, env, cache = 
         miss: true,
       };
     }
-    return runToldFactTurn(told, { planHolder, memoryDir, cache });
+    return runToldFactTurn(told, { planHolder, memoryDir, cache, gameConfig });
   }
 
   if (SPIDER_FLY_TICK_RE.test(line)) {
-    return runTickAndRender({ planHolder, memoryDir, cache, toldFacts: [] });
+    return runTickAndRender({ planHolder, memoryDir, cache, toldFacts: [], gameConfig });
   }
 
   return null; // an unaddressed aside — the ordinary lanes answer, board untouched

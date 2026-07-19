@@ -54,6 +54,7 @@ import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { adventureTurn, unclaimedAdventureOpening } from "./adventure.mjs";
 import { spiderFlyTurn } from "./spider-fly-turn.mjs";
+import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 
 // Composition: the chat surface supplies the domain parser's default lemma/POS
 // adapter (the browser bundle's ask-nlp stub carries no factory, so this is a
@@ -10066,7 +10067,7 @@ const sameGoalSpec = (a, b) =>
  *  taught action rules (PLAN_HANOI's chat surface). Returns
  *  { text, via, deduced, note, plan? } or null when the query is none of the
  *  three shapes. Mutates planHolder.state (the session's plan slot). */
-async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", }) {
+async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", gameConfig = DEFAULT_GAME_CONFIG }) {
   let q = String(query).trim();
   // GOAL REVISION — "actually the goal is …", "instead, the goal is …", "the
   // goal is now …": a revision marker ahead of (or inside) a goal frame means
@@ -10361,9 +10362,10 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
     return { text: `I can't compile that goal: ${err?.message ?? err}`, via: "plan", deduced: "plan a move sequence (uncompilable goal)", note: "plan lane — goal compile decline" };
   }
   const { findActionPath } = await import("../domain/planning.mjs");
+  const maxDepth = gameConfig?.planning?.maxDepth ?? DEFAULT_GAME_CONFIG.planning.maxDepth;
   let found;
   try {
-    found = findActionPath(state, isGoal, (s) => movesFromRules(s, domain), { maxDepth: 300, stateKey: stateKeyFor });
+    found = findActionPath(state, isGoal, (s) => movesFromRules(s, domain), { maxDepth, stateKey: stateKeyFor });
   } catch (err) {
     if (err instanceof PlanBudgetError) {
       return { text: `the search space is too large (${err.message}) — narrow the classes involved.`, via: "plan", deduced: "plan a move sequence (budget exceeded)", note: "plan lane — budget decline" };
@@ -10372,7 +10374,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", })
   }
   if (!found) {
     return {
-      text: `no plan found within 300 moves from the current state to: ${goalText}.`,
+      text: `no plan found within ${maxDepth} moves from the current state to: ${goalText}.`,
       via: "plan", deduced: "plan a move sequence (no path)", note: "plan lane — honest miss: findActionPath returned null",
     };
   }
@@ -10647,7 +10649,7 @@ const DECISION_RECALL_RE = /^(?:remind\s+me\s+)?what\s+(?:did\s+)?(?:we|i|you)\s
  *  than silently accepted alongside the current location. */
 const MOVE_HISTORY_RE = /^where\s+did\s+(.+?)\s+(?:move|get\s+moved|go)(?:\s+to)?[?.!\s]*$/i;
 
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, gameConfig = DEFAULT_GAME_CONFIG }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA: a follow-up like "which of those are tested" / "count
   // them" filters or counts the PREVIOUS answer's entity set, threaded as
@@ -11018,7 +11020,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // orientation card before this lane ever ran.
   let planResult = null;
   if (!handled && miss && memoryDir && planHolder) {
-    const planLane = await planLaneAnswer(query, { memoryDir, planHolder, sessionId });
+    const planLane = await planLaneAnswer(query, { memoryDir, planHolder, sessionId, gameConfig });
     if (planLane) {
       answer = planLane.text; via = planLane.via; recordMiss = false; handled = true;
       if (planLane.lane) dialogueLaneOverride = planLane.lane;
@@ -12461,22 +12463,23 @@ async function skosRelatedAnswer(memoryDir, query, cache) {
  *  captures (\S+) so a non-numeric bound is SEEN and declined rather than
  *  silently defaulted. */
 const GAME_BOUNDS_CLAUSE_RE = /\b(?:between\s+(\S+)\s+and\s+(\S+)|up\s+to\s+(\S+))\b/i;
-const GAME_BOUND_MAX = 1_000_000_000;
 
-/** The bounds an opening line states — { lo, hi } (default 1–100), or
- *  { problem } naming why the stated range is unplayable. */
-function parseGameBounds(text) {
+/** The bounds an opening line states — { lo, hi } (default `gameConfig`'s own
+ *  defaultLo/defaultHi), or { problem } naming why the stated range is
+ *  unplayable. `gameConfig` defaults to DEFAULT_GAME_CONFIG.guessNumber. */
+function parseGameBounds(text, gameConfig = DEFAULT_GAME_CONFIG.guessNumber) {
+  const { defaultLo, defaultHi, maxBound } = gameConfig;
   const m = String(text).match(GAME_BOUNDS_CLAUSE_RE);
-  if (!m) return { lo: 1, hi: 100 };
-  const tokens = (m[3] !== undefined ? ["1", m[3]] : [m[1], m[2]])
+  if (!m) return { lo: defaultLo, hi: defaultHi };
+  const tokens = (m[3] !== undefined ? [String(defaultLo), m[3]] : [m[1], m[2]])
     .map((t) => String(t).replace(/[,.?!]+$/, ""));
   if (!tokens.every((t) => /^-?\d+$/.test(t))) {
-    return { problem: 'I can only play with whole-number bounds — say "between 1 and 100".' };
+    return { problem: `I can only play with whole-number bounds — say "between ${defaultLo} and ${defaultHi}".` };
   }
   const lo = Number(tokens[0]);
   const hi = Number(tokens[1]);
-  if (Math.abs(lo) > GAME_BOUND_MAX || Math.abs(hi) > GAME_BOUND_MAX) {
-    return { problem: `that range is too big for a fair game — keep both bounds within ${GAME_BOUND_MAX.toLocaleString("en-US")}.` };
+  if (Math.abs(lo) > maxBound || Math.abs(hi) > maxBound) {
+    return { problem: `that range is too big for a fair game — keep both bounds within ${maxBound.toLocaleString("en-US")}.` };
   }
   if (hi < lo) return { problem: `no number is between ${lo} and ${hi} — that range is empty. Put the smaller bound first.` };
   if (hi === lo) return { problem: `between ${lo} and ${hi} leaves exactly one number, so there is nothing to guess. Pick a wider range.` };
@@ -12497,20 +12500,21 @@ const THINKER_OPEN_TAIL_RE = /^[\s,.!?—-]*(?:and\s+)?(?:i\s*(?:'ll|\s+will)\s+
 const INVITATION_OPEN_LEAD_RE = /^(?:let'?s\s+play|wanna\s+play|want\s+to\s+play|can\s+we\s+play|shall\s+we\s+play|do\s+you\s+want\s+to\s+play|will\s+you\s+play|play)\s+(?:a\s+)?(?:game\s+of\s+)?(?:guess[- ]the[- ]number|number[- ]guessing(?:\s+game)?|guessing\s+game)\b(.*)$/i;
 const INVITATION_OPEN_TAIL_RE = /^[\s,.!?—-]*(?:with\s+me|together)?[\s,.!?—-]*$/i;
 
-/** An opening move — { mode, bounds } — or null. */
-function matchGameOpening(line) {
+/** An opening move — { mode, bounds } — or null. `gameConfig` defaults to
+ *  DEFAULT_GAME_CONFIG.guessNumber and threads through to parseGameBounds. */
+function matchGameOpening(line, gameConfig = DEFAULT_GAME_CONFIG.guessNumber) {
   const l = String(line).trim();
   const guesser = l.match(GUESSER_OPEN_LEAD_RE);
   if (guesser && GUESSER_OPEN_TAIL_RE.test(guesser[1].replace(GAME_BOUNDS_CLAUSE_RE, " "))) {
-    return { mode: "guesser", bounds: parseGameBounds(l) };
+    return { mode: "guesser", bounds: parseGameBounds(l, gameConfig) };
   }
   const thinker = l.match(THINKER_OPEN_LEAD_RE);
   if (thinker && THINKER_OPEN_TAIL_RE.test(thinker[1].replace(GAME_BOUNDS_CLAUSE_RE, " "))) {
-    return { mode: "thinker", bounds: parseGameBounds(l) };
+    return { mode: "thinker", bounds: parseGameBounds(l, gameConfig) };
   }
   const invite = l.match(INVITATION_OPEN_LEAD_RE);
   if (invite && INVITATION_OPEN_TAIL_RE.test(invite[1].replace(GAME_BOUNDS_CLAUSE_RE, " "))) {
-    return { mode: "thinker", bounds: parseGameBounds(l) };
+    return { mode: "thinker", bounds: parseGameBounds(l, gameConfig) };
   }
   return null;
 }
@@ -12623,10 +12627,10 @@ function gameContinuationAnswer(line, game, planHolder) {
 /** The whole game lane for one turn: continuations first (active game only),
  *  then opening moves, with the one-at-a-time declines both ways across the
  *  shared plan slot. Null when the turn is not the game's to answer. */
-function guessNumberTurn(line, { planHolder, env }) {
+function guessNumberTurn(line, { planHolder, env, gameConfig = DEFAULT_GAME_CONFIG }) {
   const state = planHolder?.state ?? null;
   const game = state?.game ?? null;
-  const opening = matchGameOpening(line);
+  const opening = matchGameOpening(line, gameConfig?.guessNumber);
   if (game) {
     const continuation = gameContinuationAnswer(line, game, planHolder);
     if (continuation) return continuation;
@@ -12867,7 +12871,13 @@ function vocabAntecedentFrom(last) {
   return m[1];
 }
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, _noSplit = false } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, _noSplit = false } = {}) {
+  // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
+  // bounds, the shared plan lane's search-depth cap) — a caller's own
+  // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
+  // wins outright; direct/library callers that omit it get the shipped
+  // defaults, byte-identical to before this seam existed.
+  const resolvedGameConfig = gameConfig ?? DEFAULT_GAME_CONFIG;
   const line = String(input ?? "").trim();
   // ONE fresh, empty cache for this turn only — every factRows() reader
   // reached from this call shares it, so the first reader computes
@@ -12924,7 +12934,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // the PLAN NEXT block below write planHolder.state; every other path leaves
   // it untouched, and the caller re-threads whatever comes back.
   const planHolder = { state: planState };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, gameConfig: resolvedGameConfig };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
@@ -12985,7 +12995,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // line would otherwise read as a declarative to remember. A mid-game line
   // matching no game shape returns null here and the game stands untouched.
   {
-    const gameTurn = guessNumberTurn(workingLine, { planHolder, env });
+    const gameTurn = guessNumberTurn(workingLine, { planHolder, env, gameConfig: resolvedGameConfig });
     if (gameTurn) {
       note(trace, `lane: ${gameTurn.note}`);
       if (gameTurn.goal) note(trace, `goal: ${gameTurn.goal}`);
@@ -13027,7 +13037,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // opening line would otherwise read as a declarative or an orientation ask.
   {
     const sfTurn = await spiderFlyTurn(workingLine, {
-      planHolder, memoryDir, env, cache: factRowsCache, isPlanFrameLine,
+      planHolder, memoryDir, env, cache: factRowsCache, isPlanFrameLine, gameConfig: resolvedGameConfig,
     });
     if (sfTurn) {
       note(trace, `lane: ${sfTurn.note}`);

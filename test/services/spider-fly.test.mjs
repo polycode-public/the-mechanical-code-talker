@@ -12,6 +12,7 @@ import {
 } from "../../src/services/spider-fly.mjs";
 import { worldFactRows, cellId, perimeterCells } from "../../src/domain/spider-fly-world.mjs";
 import { appendFacts, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
 
 // ---- the state fold -----------------------------------------------------------
 
@@ -573,7 +574,7 @@ test("runSpiderFlyTick: a spider's mass decrements every tick and it starves at 
     await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
     await appendFacts(dir, [
       { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-6-6" },
-      { subject: "spider-1", predicate: "mgx:mass", object: "1" },
+      { subject: "spider-1", predicate: "mgx:mass", object: "0.5" },
     ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
 
     const tick = await runSpiderFlyTick(dir);
@@ -600,9 +601,9 @@ test("runSpiderFlyTick: eating transfers the fly's exact post-decrement mass, no
 
     const tick = await runSpiderFlyTick(dir);
     assert.deepEqual(tick.ecology.eaten, [{ fly: "fly-1", spider: "spider-1", cell: "cell-2-2" }]);
-    // spider-1: 12 - 1 (this tick's own decrement) = 11, plus fly-1's post-decrement mass 8 - 1 = 7 -> 18.
+    // spider-1: 12 - 0.5 (this tick's own decrement) = 11.5, plus fly-1's post-decrement mass 8 - 1 = 7 -> 18.5.
     const rows = readFactRows(await loadMemory(dir));
-    assert.ok(rows.some((r) => r.subject === "spider-1@turn1" && r.predicate === "mgx:mass" && r.object === "18"));
+    assert.ok(rows.some((r) => r.subject === "spider-1@turn1" && r.predicate === "mgx:mass" && r.object === "18.5"));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -621,8 +622,28 @@ test("runSpiderFlyTick: the eating spider's own returned agents[].mass reflects 
 
     const tick = await runSpiderFlyTick(dir);
     assert.deepEqual(tick.ecology.eaten, [{ fly: "fly-1", spider: "spider-1", cell: "cell-2-2" }]);
-    // spider-1: 5 - 1 (movement decrement) = 4, plus fly-1's post-decrement mass 10 - 1 = 9 -> 13.
-    assert.equal(tick.agents["spider-1"].mass, 13);
+    // spider-1: 5 - 0.5 (movement decrement) = 4.5, plus fly-1's post-decrement mass 10 - 1 = 9 -> 13.5.
+    assert.equal(tick.agents["spider-1"].mass, 13.5);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("startSpiderFlyGame and runSpiderFlyTick both honour a custom config override, end to end through the real store", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-config-override-"));
+  try {
+    const config = { ...DEFAULT_GAME_CONFIG.spiderFly, spiderInitialMass: 3, spiderMassDecrementPerTurn: 3 };
+    await startSpiderFlyGame(dir, { flyCount: 1, config });
+    const afterStart = readFactRows(await loadMemory(dir));
+    assert.ok(
+      afterStart.some((r) => r.subject === "spider-1" && r.predicate === "mgx:mass" && r.object === "3"),
+      "the custom spiderInitialMass reaches the freshly-started game's own written facts, not the shipped default of 15",
+    );
+
+    const tick = await runSpiderFlyTick(dir, { config });
+    assert.deepEqual(tick.ecology.starved, ["spider-1"], "a custom decrement of 3 against a custom starting mass of 3 starves the spider on its very first tick");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(rows.some((r) => r.subject === "spider-1@turn1" && r.predicate === "mgx:mass" && r.object === "0"));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -19,6 +19,7 @@ import { appendFacts, loadMemory, readFactRows } from "../adapters/memory/core.m
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { mulberry32 } from "../domain/seeded-random.mjs";
 import { fnv1a32 } from "../domain/hash.mjs";
+import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 
 // ---- tunable constants (starting values, not fixed — the vision radius and
 // mass economy all want checking against a real playable board) -------------
@@ -187,18 +188,20 @@ export function gridApplyActions(factRows) {
 export const spiderPathStateKey = (state) => cellId(state.x, state.y);
 
 /** Whether (x, y) is currently webbed — the static home zone (always active)
- *  OR a live spider-built web (mgx:web-built-at-turn + WEB_DURATION_TURNS >
+ *  OR a live spider-built web (mgx:web-built-at-turn + webDurationTurns >
  *  turn). The one predicate every eat precondition and the fly's movement
  *  gate consult, so the static zone and dynamic webs are ONE concept. `state`
  *  may be omitted (or carry no `webs` map) — the static-zone check alone
  *  still answers correctly, just blind to dynamic webs; every real caller
- *  threads the folded state through. */
-export function hasActiveWebAt(x, y, state, turn) {
+ *  threads the folded state through. `webDurationTurns` defaults to the
+ *  shipped WEB_DURATION_TURNS; a caller holding a resolved game config passes
+ *  its own webDurationTurns instead. */
+export function hasActiveWebAt(x, y, state, turn, webDurationTurns = WEB_DURATION_TURNS) {
   if (isInWebBlock(x, y)) return true;
   if (!state?.webs?.size) return false;
   const target = cellId(x, y);
   for (const { cell, builtAtTurn } of state.webs.values()) {
-    if (cell === target && builtAtTurn + WEB_DURATION_TURNS > turn) return true;
+    if (cell === target && builtAtTurn + webDurationTurns > turn) return true;
   }
   return false;
 }
@@ -210,11 +213,12 @@ export function hasActiveWebAt(x, y, state, turn) {
  *  only on the fixed target), so this returns null — an honest "no path to
  *  an eat" rather than a path toward a cell that would never satisfy the eat
  *  condition. Null also covers "no believed target at all." `state`/`turn`
- *  are optional, defaulting to "static web zone only" (see hasActiveWebAt). */
-export function planSpiderPath(spiderCell, believedFlyCell, applyActions, state, turn) {
+ *  are optional, defaulting to "static web zone only" (see hasActiveWebAt).
+ *  `webDurationTurns` forwards to hasActiveWebAt unchanged. */
+export function planSpiderPath(spiderCell, believedFlyCell, applyActions, state, turn, webDurationTurns = WEB_DURATION_TURNS) {
   if (!believedFlyCell) return null;
   const isGoal = (s) =>
-    s.x === believedFlyCell.x && s.y === believedFlyCell.y && hasActiveWebAt(s.x, s.y, state, turn);
+    s.x === believedFlyCell.x && s.y === believedFlyCell.y && hasActiveWebAt(s.x, s.y, state, turn, webDurationTurns);
   return findActionPath(spiderCell, isGoal, applyActions, { stateKey: spiderPathStateKey });
 }
 
@@ -362,10 +366,17 @@ function mostRecentEaterSpider(state, eatenDeltaBySpider) {
  * never starve-checked, so callers that don't track spider mass, e.g. older
  * tests, see no behavior change). `state` is the PRE-move fold (for history:
  * prior flies-eaten counts, prior eggs, prior eaten turns, live webs).
+ * `config` (default DEFAULT_GAME_CONFIG.spiderFly) supplies every tunable
+ * this pass reads: the initial masses a fallback/hatch/spawn mints, the
+ * eggs-eaten lay threshold, the hatch delay, the spawn interval, and the web
+ * duration the eat precondition checks against.
  * Returns `{ writes, events }` — writes to append alongside the turn's
  * movement facts, events for the tick's own return payload. Pure.
  */
-export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider = new Map(), turn }) {
+export function runEcologyPass({
+  state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider = new Map(), turn,
+  config = DEFAULT_GAME_CONFIG.spiderFly,
+}) {
   const k = turn;
   const writes = [];
   const events = { eaten: [], starved: [], laid: null, hatched: [], spawned: null, spawnedCell: null, massAfterEating: new Map() };
@@ -381,7 +392,7 @@ export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, p
   const eatenMassBySpider = new Map();
   for (const spiderId of spiders) {
     const sCell = postMovePlacements.get(spiderId);
-    if (!hasActiveWebAt(sCell.x, sCell.y, state, k)) continue;
+    if (!hasActiveWebAt(sCell.x, sCell.y, state, k, config.webDurationTurns)) continue;
     for (const flyId of flies) {
       if (claimedFlies.has(flyId)) continue;
       const fCell = postMovePlacements.get(flyId);
@@ -396,7 +407,7 @@ export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, p
   for (const [spiderId, delta] of eatenDeltaBySpider) {
     const newCount = (state.fliesEaten.get(spiderId)?.value ?? 0) + delta;
     writes.push({ subject: `${spiderId}@turn${k}`, predicate: "mgx:flies-eaten", object: String(newCount) });
-    const priorSpiderMass = postMoveMassBySpider.get(spiderId) ?? (state.mass.get(spiderId)?.value ?? SPIDER_INITIAL_MASS);
+    const priorSpiderMass = postMoveMassBySpider.get(spiderId) ?? (state.mass.get(spiderId)?.value ?? config.spiderInitialMass);
     const newSpiderMass = priorSpiderMass + (eatenMassBySpider.get(spiderId) ?? 0);
     writes.push({ subject: `${spiderId}@turn${k}`, predicate: "mgx:mass", object: String(newSpiderMass) });
     events.massAfterEating.set(spiderId, newSpiderMass);
@@ -427,7 +438,7 @@ export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, p
   const liveEggId = [...state.laidAtTurn.keys()].find((id) => !state.removed.has(id));
   if (!liveEggId) {
     const sinceTurn = mostRecentEggLaidTurn(state);
-    const threshold = sinceTurn === -1 ? 1 : EGGS_EATEN_THRESHOLD;
+    const threshold = sinceTurn === -1 ? 1 : config.eggsEatenThreshold;
     let eatsSince = events.eaten.length;
     for (const { turn: eatenTurn } of state.eatenBy.values()) if (eatenTurn > sinceTurn) eatsSince += 1;
     if (eatsSince >= threshold) {
@@ -442,18 +453,18 @@ export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, p
     }
   }
 
-  // 4. Hatch — any live egg laid exactly EGG_HATCH_DELAY_TURNS turns ago.
+  // 4. Hatch — any live egg laid exactly config.eggHatchDelayTurns turns ago.
   const liveEggIds = [...state.laidAtTurn.keys()].filter((id) => !state.removed.has(id)).sort();
   let nextSpiderNum = 1 + maxIdSuffix(state.placements.keys(), /^spider-(\d+)$/);
   for (const eggId of liveEggIds) {
     const laidTurn = state.laidAtTurn.get(eggId).value;
-    if (laidTurn + EGG_HATCH_DELAY_TURNS !== k) continue;
+    if (laidTurn + config.eggHatchDelayTurns !== k) continue;
     const eggCell = state.placements.get(eggId)?.cell;
     if (!eggCell) continue;
     const newSpiderId = `spider-${nextSpiderNum}`;
     nextSpiderNum += 1;
     writes.push({ subject: `${newSpiderId}@turn${k}`, predicate: "mgx:currently-in", object: eggCell });
-    writes.push({ subject: `${newSpiderId}@turn${k}`, predicate: "mgx:mass", object: String(SPIDER_INITIAL_MASS) });
+    writes.push({ subject: `${newSpiderId}@turn${k}`, predicate: "mgx:mass", object: String(config.spiderInitialMass) });
     writes.push({ subject: `${eggId}@turn${k}`, predicate: "mgx:hatched-into", object: newSpiderId });
     events.hatched.push({ egg: eggId, spider: newSpiderId, cell: eggCell });
   }
@@ -461,7 +472,7 @@ export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, p
   // 5. Spawn — every third turn, a new fly at a seeded pick among the
   // currently-uncontested perimeter cells (never Math.random — see
   // seededPick's own header comment).
-  if (k % FLY_SPAWN_INTERVAL_TURNS === 0) {
+  if (k % config.flySpawnIntervalTurns === 0) {
     const occupied = new Set();
     for (const spiderId of spiders) { const c = postMovePlacements.get(spiderId); occupied.add(cellId(c.x, c.y)); }
     for (const flyId of flies) {
@@ -479,7 +490,7 @@ export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, p
       const newFlyId = `fly-${1 + maxIdSuffix(state.placements.keys(), /^fly-(\d+)$/)}`;
       const cell = seededPick(uncontested, `${WORLD_NAME}:${k}:${newFlyId}:spawn`);
       writes.push({ subject: `${newFlyId}@turn${k}`, predicate: "mgx:currently-in", object: cell });
-      writes.push({ subject: `${newFlyId}@turn${k}`, predicate: "mgx:mass", object: String(FLY_INITIAL_MASS) });
+      writes.push({ subject: `${newFlyId}@turn${k}`, predicate: "mgx:mass", object: String(config.flyInitialMass) });
       events.spawned = newFlyId;
       events.spawnedCell = cell;
     }
@@ -494,15 +505,16 @@ export function runEcologyPass({ state, postMovePlacements, postMoveMassByFly, p
  *  board perimeter — a fresh session's own starting state, never part of
  *  the shipped (reusable, static) world pack itself. A no-op when spider-1
  *  already exists (idempotent — safe to call from a caller unsure whether
- *  the game has already started). */
-export async function startSpiderFlyGame(memoryDir, { flyCount = 1 } = {}) {
+ *  the game has already started). `config` (default
+ *  DEFAULT_GAME_CONFIG.spiderFly) supplies the starting masses. */
+export async function startSpiderFlyGame(memoryDir, { flyCount = 1, config = DEFAULT_GAME_CONFIG.spiderFly } = {}) {
   const state = foldSpiderFlyState(readFactRows(await loadMemory(memoryDir)));
   if (state.placements.has("spider-1")) return { started: false, facts: [] };
 
   const perimeter = perimeterCells();
   const facts = [
     { subject: "spider-1", predicate: "mgx:currently-in", object: cellId(WEB_HOME.x, WEB_HOME.y) },
-    { subject: "spider-1", predicate: "mgx:mass", object: String(SPIDER_INITIAL_MASS) },
+    { subject: "spider-1", predicate: "mgx:mass", object: String(config.spiderInitialMass) },
   ];
   const occupied = new Set([cellId(WEB_HOME.x, WEB_HOME.y)]);
   for (let i = 0; i < flyCount; i += 1) {
@@ -511,7 +523,7 @@ export async function startSpiderFlyGame(memoryDir, { flyCount = 1 } = {}) {
     const cell = seededPick(uncontested.length ? uncontested : perimeter, `${WORLD_NAME}:0:${flyId}:spawn`);
     occupied.add(cell);
     facts.push({ subject: flyId, predicate: "mgx:currently-in", object: cell });
-    facts.push({ subject: flyId, predicate: "mgx:mass", object: String(FLY_INITIAL_MASS) });
+    facts.push({ subject: flyId, predicate: "mgx:mass", object: String(config.flyInitialMass) });
   }
   await appendFacts(memoryDir, facts.map((f) => ({ ...f, provenance: worldProvenanceTag(WORLD_NAME) })));
   return { started: true, facts };
@@ -534,11 +546,13 @@ function goalLineFor(subject, believed, arrived, kind) {
  *  web(s) minted THIS tick before they've been written/read back), as a
  *  plain array of { id, cell, builtAtTurn, expiresAtTurn }. Excludes the
  *  always-on static home zone (that's WEB_HOME/WEB_RADIUS, drawn separately —
- *  this is only the spider-built kind), for a renderer to draw distinctly. */
-export function liveWebs(websMap, turn) {
+ *  this is only the spider-built kind), for a renderer to draw distinctly.
+ *  `webDurationTurns` defaults to the shipped WEB_DURATION_TURNS; a caller
+ *  holding a resolved game config passes its own webDurationTurns instead. */
+export function liveWebs(websMap, turn, webDurationTurns = WEB_DURATION_TURNS) {
   const out = [];
   for (const [id, { cell, builtAtTurn }] of websMap) {
-    if (builtAtTurn + WEB_DURATION_TURNS > turn) out.push({ id, cell, builtAtTurn, expiresAtTurn: builtAtTurn + WEB_DURATION_TURNS });
+    if (builtAtTurn + webDurationTurns > turn) out.push({ id, cell, builtAtTurn, expiresAtTurn: builtAtTurn + webDurationTurns });
   }
   return out;
 }
@@ -560,9 +574,15 @@ export function liveWebs(websMap, turn) {
  * eaten/starved/laid/hatched/spawned event summary; `activeWebs` is every
  * currently-live dynamic web (static home zone excluded — that's fixed grid
  * geometry, not runtime state), for a renderer to draw distinctly.
+ *
+ * `opts.config` (default DEFAULT_GAME_CONFIG.spiderFly) supplies every
+ * tunable this tick reads: the vision radius, both agents' starting/decrement
+ * masses, and the web duration, and is forwarded unchanged into
+ * runEcologyPass.
  */
 export async function runSpiderFlyTick(memoryDir, opts = {}) {
-  const { visionRadius = DEFAULT_VISION_RADIUS, toldFacts = [] } = opts;
+  const { toldFacts = [], config = DEFAULT_GAME_CONFIG.spiderFly } = opts;
+  const visionRadius = config.visionRadius;
   const rows = readFactRows(await loadMemory(memoryDir));
   const state = foldSpiderFlyState(rows);
   const k = state.turnCount + 1;
@@ -581,8 +601,8 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
 
   for (const spiderId of spiders) {
     const spiderCell = parseCellId(state.placements.get(spiderId).cell);
-    const priorMass = state.mass.get(spiderId)?.value ?? SPIDER_INITIAL_MASS;
-    const newMass = Math.max(0, priorMass - SPIDER_MASS_DECREMENT_PER_TURN);
+    const priorMass = state.mass.get(spiderId)?.value ?? config.spiderInitialMass;
+    const newMass = Math.max(0, priorMass - config.spiderMassDecrementPerTurn);
     postMoveMassBySpider.set(spiderId, newMass);
 
     // Priority 1: avoid any OTHER live spider believed visible.
@@ -599,7 +619,7 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
       const target = nearestBelievedTarget(spiderId, spiderCell, flies, state, { visionRadius, toldFacts });
       if (target) {
         nextCell = spiderCell;
-        const path = planSpiderPath(spiderCell, target.cell, applyActions, state, k);
+        const path = planSpiderPath(spiderCell, target.cell, applyActions, state, k, config.webDurationTurns);
         if (path) {
           if (path.actions.length) { nextCell = path.states[1]; plan = path.actions; }
         } else {
@@ -611,14 +631,14 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
         // already at its closest reachable cell but still a step away
         // (Chebyshev-adjacent isn't co-located; has-exit-* edges have no
         // diagonal hop).
-        const arrived = nextCell.x === target.cell.x && nextCell.y === target.cell.y && hasActiveWebAt(nextCell.x, nextCell.y, state, k);
+        const arrived = nextCell.x === target.cell.x && nextCell.y === target.cell.y && hasActiveWebAt(nextCell.x, nextCell.y, state, k, config.webDurationTurns);
         goal = goalLineFor(spiderId, target, arrived, "spider");
       } else {
         // Priority 3: hold position, and build/refresh a web there unless an
         // unexpired web already covers this exact cell.
         nextCell = spiderCell;
         const heldCellId = cellId(spiderCell.x, spiderCell.y);
-        if (!hasActiveWebAt(spiderCell.x, spiderCell.y, state, k)) {
+        if (!hasActiveWebAt(spiderCell.x, spiderCell.y, state, k, config.webDurationTurns)) {
           const webId = `web-${nextWebNum}`;
           nextWebNum += 1;
           tickWebs.set(webId, { cell: heldCellId, builtAtTurn: k });
@@ -640,19 +660,19 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
   for (const flyId of flies) {
     const flyCell = parseCellId(state.placements.get(flyId).cell);
     const believedSpider = nearestBelievedTarget(flyId, flyCell, spiders, state, { visionRadius, toldFacts });
-    const webbed = hasActiveWebAt(flyCell.x, flyCell.y, state, k);
+    const webbed = hasActiveWebAt(flyCell.x, flyCell.y, state, k, config.webDurationTurns);
     const nextCell = webbed ? flyCell : greedyFlyMove(flyCell, believedSpider?.cell ?? null, applyActions, k, flyId);
     postMovePlacements.set(flyId, nextCell);
     movementWrites.push({ subject: `${flyId}@turn${k}`, predicate: "mgx:currently-in", object: cellId(nextCell.x, nextCell.y) });
-    const priorMass = state.mass.get(flyId)?.value ?? FLY_INITIAL_MASS;
-    const newMass = Math.max(0, priorMass - FLY_MASS_DECREMENT_PER_TURN);
+    const priorMass = state.mass.get(flyId)?.value ?? config.flyInitialMass;
+    const newMass = Math.max(0, priorMass - config.flyMassDecrementPerTurn);
     postMoveMassByFly.set(flyId, newMass);
     movementWrites.push({ subject: `${flyId}@turn${k}`, predicate: "mgx:mass", object: String(newMass) });
     const goal = webbed ? "trapped in an active web — can't move." : goalLineFor(flyId, believedSpider, true, "fly");
     agents[flyId] = { cell: cellId(nextCell.x, nextCell.y), goal, mass: newMass };
   }
 
-  const ecology = runEcologyPass({ state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider, turn: k });
+  const ecology = runEcologyPass({ state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider, turn: k, config });
   // Every agent's goal was assigned during movement, before this same tick's
   // ecology pass resolves eating/starving — so a THIRD agent's goal can name
   // a subject that dies in this exact tick just as easily as the dying
@@ -705,14 +725,14 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
   // though the very same tick's event text already announces it, only
   // catching up the following tick once the fold picks it up naturally.
   for (const h of ecology.events.hatched) {
-    agents[h.spider] = { cell: h.cell, goal: "just hatched — no goal yet.", plan: null, mass: SPIDER_INITIAL_MASS };
+    agents[h.spider] = { cell: h.cell, goal: "just hatched — no goal yet.", plan: null, mass: config.spiderInitialMass };
   }
   if (ecology.events.spawned && ecology.events.spawnedCell) {
-    agents[ecology.events.spawned] = { cell: ecology.events.spawnedCell, goal: "just arrived — no goal yet.", mass: FLY_INITIAL_MASS };
+    agents[ecology.events.spawned] = { cell: ecology.events.spawnedCell, goal: "just arrived — no goal yet.", mass: config.flyInitialMass };
   }
   const writes = [...movementWrites, ...ecology.writes];
   const provenance = `${worldProvenanceTag(WORLD_NAME)}:turn${k}`;
   await appendFacts(memoryDir, writes.map((f) => ({ ...f, provenance })));
 
-  return { turn: k, writes, agents, ecology: ecology.events, activeWebs: liveWebs(tickWebs, k) };
+  return { turn: k, writes, agents, ecology: ecology.events, activeWebs: liveWebs(tickWebs, k, config.webDurationTurns) };
 }

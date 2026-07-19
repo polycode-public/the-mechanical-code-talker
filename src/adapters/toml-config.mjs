@@ -117,6 +117,14 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   if (src.extensions !== undefined) cfg.extensions = src.extensions;
   if (src.bias !== undefined) cfg.bias = src.bias;
 
+  // Game tuning knobs (src/domain/game-config.mjs): sparse PASS-THROUGH only,
+  // same discipline as [extensions]/[bias] above — the raw `[games.*]`/
+  // `[planning]` tables ride through unmodified (snake_case keys); mapping
+  // them onto the internal camelCase shape and filling in unset keys from
+  // the shipped defaults is resolveGameConfig's job, never this module's.
+  if (src.games !== undefined) cfg.games = src.games;
+  if (src.planning !== undefined) cfg.planning = src.planning;
+
   const idx = src.index || {};
   const index = {};
   if (idx.languages !== undefined) index.languages = idx.languages;
