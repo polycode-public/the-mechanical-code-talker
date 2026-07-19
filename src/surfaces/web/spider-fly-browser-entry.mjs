@@ -53,8 +53,10 @@ import {
   worldFactRows, WORLD_NAME, WORLD_OPENING, cellId, parseCellId, DIRECTION_DELTA, visibleCells,
 } from "../../domain/spider-fly-world.mjs";
 import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame, liveWebs, DEFAULT_VISION_RADIUS } from "../../services/spider-fly.mjs";
+import { pillsForSpiderFly, oneStepDirectionBetween } from "../../services/spider-fly-turn.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
+import { DEFAULT_GAME_CONFIG } from "../../domain/game-config.mjs";
 
 /** A live in-memory game the page's ticker and chat dock can both drive.
  *  Returns { memoryDir, sessionId, opening, initial, taxonomyRows, tick,
@@ -89,6 +91,14 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
   let focus = null;
   let last = null;
   let planState = { spiderFly: { turn: 0 } };
+  // The live, in-page-slider-adjustable knobs (mass-loss-rate/spawn-rate/
+  // vision-radius per class, and every other spiderFly tunable) — starts at
+  // the shipped defaults, mutated only through setConfig() below, and
+  // forwarded into every future tick()/turn() call. Never rewinds a value
+  // that was already written to a past turn's facts (e.g. a spider already
+  // above the OLD lay threshold isn't retroactively un-laid) — a config
+  // change only changes what happens FROM HERE ON, same as tmct.toml would.
+  let config = { ...DEFAULT_GAME_CONFIG.spiderFly };
 
   return {
     memoryDir,
@@ -100,7 +110,7 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
     /** Run one real engine turn directly. Returns spider-fly.mjs's own
      *  { turn, agents, ecology } shape unmodified. */
     async tick() {
-      const result = await runSpiderFlyTick(memoryDir);
+      const result = await runSpiderFlyTick(memoryDir, { config });
       planState = { spiderFly: { turn: result.turn } };
       return result;
     },
@@ -115,6 +125,7 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
         result = await runTurn(line, {
           config: null, source: null, graph, focus, last, memoryDir, sessionId,
           env: {}, lexicon, vocabHint: "", planState,
+          gameConfig: { ...DEFAULT_GAME_CONFIG, spiderFly: config },
         });
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -141,6 +152,23 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
       }
       return { turn: state.turnCount, agents, activeWebs: liveWebs(state.webs, state.turnCount) };
     },
+
+    /** The live spiderFly config this session's future tick()/turn() calls
+     *  will read — a plain copy, safe for a caller to inspect without
+     *  risking a shared-reference mutation. */
+    getConfig() {
+      return { ...config };
+    },
+
+    /** Merge `partial` (any subset of DEFAULT_GAME_CONFIG.spiderFly's own
+     *  keys, e.g. `{ spiderMassDecrementPerTurn: 0.2 }`) over the live
+     *  config — the in-page sliders' own write path. Every unset sibling
+     *  keeps its current value, mirroring resolveGameConfig's own
+     *  toml-merge shape so a slider and tmct.toml can never disagree about
+     *  what "partial" means. */
+    setConfig(partial) {
+      config = { ...config, ...partial };
+    },
   };
 }
 
@@ -149,7 +177,11 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
 // has to duplicate grid geometry or the vision-radius default: reconstructing
 // a spider's remaining silk-thread path from its returned direction list, and
 // computing the POV overlay's visible-cell mask, both need them.
+// pillsForSpiderFly/oneStepDirectionBetween are re-exported so the same page
+// can build its own dynamic deception-pill container without duplicating
+// spider-fly-turn.mjs's own pill logic.
 globalThis.tmctSpiderFly = {
   createSpiderFlySession, normFactTerm, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
   cellId, parseCellId, DIRECTION_DELTA, visibleCells, DEFAULT_VISION_RADIUS,
+  pillsForSpiderFly, oneStepDirectionBetween, DEFAULT_GAME_CONFIG,
 };
