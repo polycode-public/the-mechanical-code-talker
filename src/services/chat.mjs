@@ -1063,6 +1063,17 @@ const FEELINGS_PHRASES = [
   /^can you (?:tell|make)\s+(?:me\s+)?(?:a\s+)?jokes?\??$/i,
   /^do you (?:know|know anything|know much)\s+about\s+(?:movies?|sports?|music|tv|television)(?:\s+or\s+(?:movies?|sports?|music|tv|television))?\??$/i,
 ];
+/** "whats 2+2" — a bare arithmetic expression, not a code/vocabulary question
+ *  at all. With no closed-set match of its own, this fell into the SAME
+ *  "≤3 words, not code-ish" catch-all a genuine orientation opener
+ *  ("what's up", "so what is this") uses, giving the non-sequitur identity
+ *  blurb where an honest "I don't do arithmetic" decline belongs. Deliberately
+ *  excludes "-" from the operator set: this domain's OWN dates ("what
+ *  changed since 2026-01-01") and file/line ranges ("model.mjs:9-15") are
+ *  digit-hyphen-digit too, and a real ambiguity there must stay a real
+ *  structural answer, never this decline. "+"/"*"/"/" have no such
+ *  collision in tmct's own vocabulary. */
+const ARITHMETIC_RE = /\d+\s*[+*/]\s*\d+/;
 /** The structural verbs/nouns that mark a near-miss code question (→ keep the
  *  precise grammar hint, not the friendly nudge). */
 const STRUCT_WORDS = new Set([
@@ -1637,6 +1648,15 @@ function conversationalTurn(line, ctx) {
     note(ctx.trace, "goal: identity — does tmct have feelings/consciousness (small-talk persona finding)");
     note(ctx.trace, "lane: conversational — identity/feelings (FEELINGS_PHRASES closed set)");
     return mk(t(T_IDENTITY_NO_FEELINGS), { lane: "help" });
+  }
+  if (ARITHMETIC_RE.test(raw)) {
+    note(ctx.trace, "goal: arithmetic — not a code/vocabulary question, an honest decline");
+    note(ctx.trace, "lane: conversational — arithmetic decline (ARITHMETIC_RE)");
+    return mk(
+      "I don't do arithmetic — I answer questions about a code graph or taught facts. "
+      + "Try \"what is a dog\" for vocabulary, or point me at a repo with --repo <path>.",
+      { lane: "help" },
+    );
   }
   if (IDENTITY_PHRASES.some((re) => re.test(raw))) {
     note(ctx.trace, "goal: identity — who/what tmct is, not a capability listing");
