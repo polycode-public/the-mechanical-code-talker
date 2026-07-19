@@ -16,7 +16,7 @@
 // chat text.
 
 import {
-  DIRECTION_DELTA, WORLD_NAME, cellId, parseCellId, inBounds, chebyshevDistance,
+  DIRECTION_DELTA, WORLD_NAME, cellId, parseCellId, inBounds, chebyshevDistance, oneStepDirectionBetween,
 } from "../domain/spider-fly-world.mjs";
 import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame } from "./spider-fly.mjs";
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
@@ -170,6 +170,121 @@ function resolveTargetCell({ direction, cellLiteral, fromCell }) {
   return inBounds(nx, ny) ? { x: nx, y: ny } : null;
 }
 
+// oneStepDirectionBetween lives in spider-fly-world.mjs (the shared grid
+// geometry both this chat-turn layer and the engine need — see that
+// module's own header comment); re-exported here so a caller of this file
+// never has to reach into the domain layer just to build a deception pill's
+// direction wording by hand.
+export { oneStepDirectionBetween };
+
+// ---- deception pills, built on the addressed teach-frame above: dynamic,
+// per-tick chat-dock suggestions alongside (never replacing) the existing
+// static 6-button address/direction rail. No new grammar at all — every
+// pill's sentence is exactly the SAME SPIDER_FLY_TOLD_RE line above already
+// accepts, filled in with either the subject's real position or a
+// deliberately false one, so a human clicking one submits a plain
+// "@spider the fly is east"-shaped line indistinguishable from a hand-typed
+// claim, true or false alike. A pill's `truth` tag is for the human eye
+// only — it never rides along in the submitted text itself.
+
+const liveIdsOfKindFromAgents = (kind, agents) => {
+  const re = new RegExp(`^${kind}-\\d+$`);
+  return Object.keys(agents || {}).filter((id) => re.test(id)).sort();
+};
+
+/** "spider"/"fly" bare when exactly one individual of that kind is live
+ *  (nothing to disambiguate), else the individual's own numbered id — a
+ *  pill-set legibility choice, not a grammar restriction (the addressed
+ *  teach-frame's own bare form always resolves to "the first live
+ *  individual" regardless of count; this just stops offering a bare pill
+ *  once it would read as ambiguous to a human watching two-plus). */
+function agentPillLabel(kind, id, liveIdsOfKind) {
+  return liveIdsOfKind.length > 1 ? id : kind;
+}
+
+/** The point reflection of `cell` through the 10x10 board's center —
+ *  cell-<11-x>-<11-y> — the canonical false-claim cell: deterministic (no
+ *  seeded RNG needed, since pills are never persisted state), always
+ *  in-bounds (1..10 reflects onto 1..10), and never accidentally true (x =
+ *  11-x has no integer solution for an integer x in 1..10, so the reflected
+ *  cell can never coincide with the real one). */
+function reflectedCell(cell) {
+  return { x: 11 - cell.x, y: 11 - cell.y };
+}
+
+/**
+ * The spider-fly chat dock's dynamic pill set for one tick's live `agents`
+ * (runSpiderFlyTick's/foldSpiderFlyState's own `{ id: { cell } }` shape —
+ * only `.cell` is read): one address pill per live spider/fly (bare
+ * "@spider" while exactly one of that kind is alive, numbered "@spider-2"
+ * once more than one is), plus — for whichever individual is currently
+ * addressed (`explicitAddresseeId`, falling back to `opts.defaultKind`'s
+ * first live individual, "spider" by default) — one true-claim and one
+ * canonical false-claim pill per live individual of the OPPOSITE kind (you
+ * address a spider about a fly's position, or a fly about a spider's — the
+ * predator/prey belief channel the addressed teach-frame already carries).
+ * A true-claim pill reads the nearest compass direction when the
+ * candidate's real cell sits exactly one cardinal step from the addressee's
+ * own cell (oneStepDirectionBetween), else the exact cell (always
+ * expressible). A false-claim pill always reads the exact cell form,
+ * holding the candidate's point-reflected cell (reflectedCell) — never a
+ * direction, since a fabricated direction has no single canonical,
+ * deterministic form the way a fabricated cell does.
+ *
+ * Returns `{ addressPills, claimPills, addresseeId }` — `addressPills` is
+ * `[{ id, kind, label }]`; `claimPills` is `[{ subjectId, truth, text,
+ * sentence }]` (`sentence` is the complete, ready-to-submit chat line);
+ * both empty when nothing is live. `addresseeId` is whichever individual
+ * the claim pills were actually built for (or null), so a caller can track
+ * "currently addressing" across ticks without re-deriving it. Pure.
+ */
+export function pillsForSpiderFly(agents, explicitAddresseeId, opts = {}) {
+  const { defaultKind = "spider" } = opts;
+  const liveSpiders = liveIdsOfKindFromAgents("spider", agents);
+  const liveFlies = liveIdsOfKindFromAgents("fly", agents);
+
+  const addressPills = [
+    ...liveSpiders.map((id) => ({ id, kind: "spider", label: `@${agentPillLabel("spider", id, liveSpiders)}` })),
+    ...liveFlies.map((id) => ({ id, kind: "fly", label: `@${agentPillLabel("fly", id, liveFlies)}` })),
+  ];
+
+  const fallbackAddresseeId = (defaultKind === "fly" ? liveFlies[0] : liveSpiders[0]) ?? liveFlies[0] ?? liveSpiders[0] ?? null;
+  const addresseeId = (explicitAddresseeId && agents[explicitAddresseeId]) ? explicitAddresseeId : fallbackAddresseeId;
+  if (!addresseeId) return { addressPills, claimPills: [], addresseeId: null };
+
+  const addresseeKind = /^spider-\d+$/.test(addresseeId) ? "spider" : "fly";
+  const addresseeLabel = agentPillLabel(addresseeKind, addresseeId, addresseeKind === "spider" ? liveSpiders : liveFlies);
+  const addresseeCell = parseCellId(agents[addresseeId].cell);
+
+  const candidateKind = addresseeKind === "spider" ? "fly" : "spider";
+  const candidateIds = candidateKind === "spider" ? liveSpiders : liveFlies;
+
+  const claimPills = [];
+  for (const subjectId of candidateIds) {
+    const subjectLabel = agentPillLabel(candidateKind, subjectId, candidateIds);
+    const trueCell = parseCellId(agents[subjectId].cell);
+    const direction = oneStepDirectionBetween(addresseeCell, trueCell);
+    // A direction reads "is east"; the exact-cell fallback (used whenever
+    // there's no genuine one-step adjacency, and ALWAYS for the false claim
+    // below) reads "is at cell-x-y" — the two forms SPIDER_FLY_TOLD_RE
+    // itself accepts.
+    const trueValue = direction ? direction : `at ${cellId(trueCell.x, trueCell.y)}`;
+    const falseCell = reflectedCell(trueCell);
+    const falseValue = `at ${cellId(falseCell.x, falseCell.y)}`;
+    claimPills.push({
+      subjectId, truth: true,
+      text: `the ${subjectLabel} is ${trueValue}`,
+      sentence: `@${addresseeLabel} the ${subjectLabel} is ${trueValue}`,
+    });
+    claimPills.push({
+      subjectId, truth: false,
+      text: `the ${subjectLabel} is ${falseValue}`,
+      sentence: `@${addresseeLabel} the ${subjectLabel} is ${falseValue}`,
+    });
+  }
+  return { addressPills, claimPills, addresseeId };
+}
+
 // ---- rendering one tick's return value as plain chat text --------------------
 
 function renderTickText(tick, addressedNote) {
@@ -181,10 +296,11 @@ function renderTickText(tick, addressedNote) {
     : `Turn ${tick.turn} — no agents remain on the board.`);
   const eco = tick.ecology;
   const events = [];
+  for (const c of eco.caught) events.push(`${c.spider} caught ${c.fly} at ${c.cell}`);
   for (const e of eco.eaten) events.push(`${e.fly} was eaten by ${e.spider} at ${e.cell}`);
   for (const f of eco.starved) events.push(`${f} starved`);
   if (eco.laid) events.push(`${eco.laid} was laid`);
-  for (const h of eco.hatched) events.push(`${h.egg} hatched into ${h.spider} at ${h.cell}`);
+  for (const h of eco.hatched) events.push(`${h.egg} hatched into ${h.spiders.map((s) => s.spider).join(" and ")} at ${h.cell}`);
   if (eco.spawned) events.push(`${eco.spawned} arrived at the board edge`);
   if (events.length) parts.push(`${events.join("; ")}.`);
   return parts.join(" ");
@@ -205,10 +321,11 @@ function combinedGoalLine(agents) {
 
 function describeEcologyNote(eco) {
   const bits = [];
+  if (eco.caught.length) bits.push(`${eco.caught.length} caught`);
   if (eco.eaten.length) bits.push(`${eco.eaten.length} eaten`);
   if (eco.starved.length) bits.push(`${eco.starved.length} starved`);
   if (eco.laid) bits.push("1 laid");
-  if (eco.hatched.length) bits.push(`${eco.hatched.length} hatched`);
+  if (eco.hatched.length) bits.push(`${eco.hatched.reduce((n, h) => n + h.spiders.length, 0)} hatched`);
   if (eco.spawned) bits.push("1 spawned");
   return bits.length ? `; ${bits.join(", ")}` : "";
 }
