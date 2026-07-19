@@ -1,0 +1,34 @@
+# boat — a hull and mast at the sprite tier, the hull carrying the taught
+# mgx:madeOf gradient across the three plausible hull materials this
+# fallback-style spread already covers elsewhere (container/portable use
+# the same three). The sails stay white-opacity overlays rather than a
+# new fixed hue, the same convention every non-food sprite here follows —
+# each also carries a thin outline in the hull's own dark tone, since a
+# white fill alone vanished against a light card background and left
+# only the mast visible.
+classes = ["boat"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="boat-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <path d="M3 15 H21 L18 20 H6 Z" fill="url(#boat-fill)"/>
+  <path d="M4.4 15.6 L19.6 15.6" stroke="#ffffff" stroke-width="0.6" opacity="0.35"/>
+  <rect x="11.4" y="4" width="1.2" height="11.6" fill="{{FILL_DARK}}"/>
+  <path d="M12.6 5.4 C17 6.2 18.6 9.8 18.8 12.6 L12.6 12.6 Z" fill="#ffffff" opacity="0.55" stroke="{{FILL_DARK}}" stroke-width="0.4" stroke-opacity="0.5"/>
+  <path d="M11.4 6.6 C8.2 7.4 7 10.4 6.8 12.6 L11.4 12.6 Z" fill="#ffffff" opacity="0.4" stroke="{{FILL_DARK}}" stroke-width="0.4" stroke-opacity="0.4"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+wood = "wood"
+metal = "metal"
+plastic = "plastic"

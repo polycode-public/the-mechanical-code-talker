@@ -1,0 +1,30 @@
+# coin — a disk at the sprite tier carrying the taught mgx:madeOf
+# gradient (gold/metal, the same pairing lamp/key already use — a coin
+# genuinely reading gold when a coin fact ever teaches it); a dashed
+# milled-edge ring and an engraved mark stay dark-tone overlays rather
+# than a second colour.
+classes = ["coin"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="coin-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="12" r="9" fill="url(#coin-fill)"/>
+  <circle cx="12" cy="12" r="9" fill="none" stroke="{{FILL_DARK}}" stroke-width="0.6" opacity="0.5"/>
+  <circle cx="12" cy="12" r="6.4" fill="none" stroke="{{FILL_DARK}}" stroke-width="0.7" opacity="0.45" stroke-dasharray="1.4 1.2"/>
+  <path d="M9.6 15.4 V9 L12 12 L14.4 9 V15.4" fill="none" stroke="{{FILL_DARK}}" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
+  <path d="M6 8 A9 9 0 0 1 12.6 4.2" fill="none" stroke="#ffffff" stroke-width="0.9" opacity="0.4"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+gold = "metal"
+metal = "metal"

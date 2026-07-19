@@ -1,0 +1,21 @@
+# cheese — a food item at the sprite tier: a fixed warm yellow gradient
+# (cheese's own colour is what makes it read as cheese, no taught
+# mgx:madeOf material involved) plus three cut holes and a crust
+# highlight along the rind edge.
+classes = ["cheese"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="cheese-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#ffe9a0"/>
+      <stop offset="55%" stop-color="#f2c94c"/>
+      <stop offset="100%" stop-color="#c99a26"/>
+    </linearGradient>
+  </defs>
+  <path d="M3.5 18.5 L9 4.5 L20.5 10 L20.5 18.5 Z" fill="url(#cheese-fill)"/>
+  <circle cx="12" cy="14" r="1.3" fill="#c99a26" opacity="0.6"/>
+  <circle cx="16.2" cy="15.6" r="1" fill="#c99a26" opacity="0.6"/>
+  <circle cx="9.6" cy="10.6" r="0.9" fill="#c99a26" opacity="0.6"/>
+  <path d="M9.4 5.6 L18.2 10.2" stroke="#fff3c4" stroke-width="0.9" opacity="0.6" stroke-linecap="round"/>
+</svg>
+"""

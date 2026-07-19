@@ -1,0 +1,21 @@
+# body of water — filed as body-of-water.toml per this project's own
+# space-to-hyphen convention (the class name itself keeps the space). A
+# fixed blue gradient, not a taught mgx:madeOf material: water's own
+# colour is its identity, the same reason the lamp's flame stays fixed
+# regardless of theme. Two wave-crest highlights, no border frame — this
+# is a natural feature, not a room to draw a floor plan of.
+classes = ["body of water"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="body-of-water-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#bfe2e7"/>
+      <stop offset="55%" stop-color="#5fa3c9"/>
+      <stop offset="100%" stop-color="#2f6a94"/>
+    </linearGradient>
+  </defs>
+  <path d="M2 8 C4.6 6.4 6.8 6.4 9.4 8 C12 9.6 14.2 9.6 16.8 8 C19.4 6.4 21.6 6.4 22 8 L22 20 C21.6 21.6 19.4 21.6 16.8 20 C14.2 18.4 12 18.4 9.4 20 C6.8 21.6 4.6 21.6 2 20 Z" fill="url(#body-of-water-fill)"/>
+  <path d="M3 11.4 C5.4 10.2 7.4 10.2 9.8 11.4 C12.2 12.6 14.2 12.6 16.6 11.4 C19 10.2 21 10.2 21.4 11.4" fill="none" stroke="#eaf6f7" stroke-width="0.9" opacity="0.55"/>
+  <path d="M3 15.4 C5.4 14.2 7.4 14.2 9.8 15.4 C12.2 16.6 14.2 16.6 16.6 15.4 C19 14.2 21 14.2 21.4 15.4" fill="none" stroke="#eaf6f7" stroke-width="0.8" opacity="0.4"/>
+</svg>
+"""

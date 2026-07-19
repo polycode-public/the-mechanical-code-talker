@@ -1,0 +1,23 @@
+# butterfly — gradient-shaded like dog/animal, no material table: four
+# wing lobes around a slim body and two antennae, two highlight patches
+# tracing the upper wing pair.
+classes = ["butterfly"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="butterfly-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 6.4 C11 3.4 5 3 4.4 7.6 C3.8 12 9 12.8 12 9.6 Z" fill="url(#butterfly-fill)"/>
+  <path d="M12 6.4 C13 3.4 19 3 19.6 7.6 C20.2 12 15 12.8 12 9.6 Z" fill="url(#butterfly-fill)"/>
+  <path d="M12 9.6 C9.4 12.4 5.2 12.6 5 16.4 C4.8 19.6 9.4 19.4 12 15.4 Z" fill="url(#butterfly-fill)"/>
+  <path d="M12 9.6 C14.6 12.4 18.8 12.6 19 16.4 C19.2 19.6 14.6 19.4 12 15.4 Z" fill="url(#butterfly-fill)"/>
+  <rect x="11.2" y="6" width="1.6" height="13.4" rx="0.8" fill="currentColor"/>
+  <path d="M11.4 6.6 L9.4 3.4 M12.6 6.6 L14.6 3.4" stroke="currentColor" stroke-width="0.8" stroke-linecap="round"/>
+  <ellipse cx="7" cy="7" rx="1.6" ry="1.2" fill="#ffffff" opacity="0.3"/>
+  <ellipse cx="7.4" cy="15" rx="1.4" ry="1" fill="#ffffff" opacity="0.26"/>
+</svg>
+"""

@@ -1,0 +1,28 @@
+# clothing — a generic garment at the sprite tier (a t-shirt silhouette):
+# the fabric carries the taught mgx:madeOf gradient through the woven
+# material treatment, the same value container.toml already maps ("a
+# basket is made of woven material" is real corpus vocabulary, and a
+# garment reads exactly as plausibly). The centre seam stays a dark-tone
+# overlay rather than a second colour.
+classes = ["clothing"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="clothing-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <path d="M9 3.4 L3 6.6 L5.2 10.4 L7.4 9 L7.4 20.6 C7.4 21.4 8 22 8.8 22 H15.2 C16 22 16.6 21.4 16.6 20.6 L16.6 9 L18.8 10.4 L21 6.6 L15 3.4 C14.4 4.6 13.2 5.4 12 5.4 C10.8 5.4 9.6 4.6 9 3.4 Z" fill="url(#clothing-fill)"/>
+  <path d="M9.6 4.4 C10.2 5.4 11 6 12 6" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
+  <path d="M8.2 10 L8.2 20.6" stroke="{{FILL_DARK}}" stroke-width="0.5" opacity="0.4"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+"woven material" = "woven material"
