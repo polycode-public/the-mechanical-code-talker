@@ -271,10 +271,11 @@ test("the four group classes each render a cluster of person silhouettes, not a 
   }
 });
 
-// fish/flower/food/forest/frog/garden/glove/gold/grass/hat/home/horse/
-// hospital/hotel/house/insect/iron/jewelry/kitchen/library/lion/market/
-// meal/meat/metal/money/mountain/mouse/museum/ocean/office/owl/park/pig/
-// planet, mapped to the gradient/wash id each one's own file declares —
+// fish, flower, food, forest, frog, garden, glove, gold, grass, hat, home,
+// horse, hospital, hotel, house, insect, iron, jewelry, kitchen, library,
+// lion, market, meal, meat, metal, money, mountain, mouse, museum, ocean,
+// office, owl, park, pig, planet, mapped to the gradient/wash id each one's
+// own file declares —
 // every one of these 35 classes carries no [parameters.material] table,
 // unlike lamp/key/cabinet/desk/letter/container/portrait: those seven
 // can safely go material-parameterized because sprite-map.mjs's legacy
