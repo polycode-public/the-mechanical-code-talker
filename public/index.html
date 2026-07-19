@@ -27,42 +27,45 @@
 }
 </script>
 <style>
-  /* Token values mirror src/services/viz-theme.mjs (the source of truth shared with the
-     ledger and plan pages) — update there first, then here. */
+  /* Shared token names and hex values match src/services/viz-theme.mjs's
+     TOKENS.light/TOKENS.dark exactly — the source of truth shared with the
+     ledger/plan/chat/sprite pages. Update there first, then here.
+     --code-bg/--code-fg have no shared equivalent (this page's own terminal-block
+     colours, outside the trust-tier palette) and stay page-local. */
   :root {
     --bg: #F7F6F2;
-    --fg: #23272B;
+    --ink: #23272B;
     --muted: #6E7168;
-    --accent: #2E7D4F;
+    --taught: #2E7D4F;
     --card: #FFFFFF;
-    --border: #DDD9D0;
+    --line: #DDD9D0;
     --code-bg: #1B1F24;
     --code-fg: #D6DAD1;
   }
   @media (prefers-color-scheme: dark) {
     :root {
       --bg: #15181C;
-      --fg: #E7E5DF;
+      --ink: #E7E5DF;
       --muted: #9A9E95;
-      --accent: #5FBE8B;
+      --taught: #5FBE8B;
       --card: #1C2126;
-      --border: #2B3036;
+      --line: #2B3036;
       --code-bg: #101418;
       --code-fg: #CFD5CB;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #15181C; --fg: #E7E5DF; --muted: #9A9E95; --accent: #5FBE8B;
-    --card: #1C2126; --border: #2B3036; --code-bg: #101418; --code-fg: #CFD5CB;
+    --bg: #15181C; --ink: #E7E5DF; --muted: #9A9E95; --taught: #5FBE8B;
+    --card: #1C2126; --line: #2B3036; --code-bg: #101418; --code-fg: #CFD5CB;
   }
   :root[data-theme="light"] {
-    --bg: #F7F6F2; --fg: #23272B; --muted: #6E7168; --accent: #2E7D4F;
-    --card: #FFFFFF; --border: #DDD9D0; --code-bg: #1B1F24; --code-fg: #D6DAD1;
+    --bg: #F7F6F2; --ink: #23272B; --muted: #6E7168; --taught: #2E7D4F;
+    --card: #FFFFFF; --line: #DDD9D0; --code-bg: #1B1F24; --code-fg: #D6DAD1;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     background: var(--bg);
-    color: var(--fg);
+    color: var(--ink);
     font: 17px/1.6 Georgia, "Times New Roman", serif;
     padding: 3rem 1.25rem 4rem;
   }
@@ -76,12 +79,12 @@
   h2 {
     font-size: 1.25rem;
     margin: 2.4rem 0 0.7rem;
-    border-bottom: 1px solid var(--border);
+    border-bottom: 1px solid var(--line);
     padding-bottom: 0.3rem;
   }
   p { margin: 0.7rem 0; }
-  em { color: var(--accent); font-style: italic; }
-  a { color: var(--accent); }
+  em { color: var(--taught); font-style: italic; }
+  a { color: var(--taught); }
   .lede { font-size: 1.1rem; margin-top: 1.2rem; }
   pre {
     background: var(--code-bg);
@@ -95,7 +98,7 @@
   code {
     font: 0.88em "SF Mono", Menlo, Consolas, monospace;
     background: var(--card);
-    border: 1px solid var(--border);
+    border: 1px solid var(--line);
     border-radius: 3px;
     padding: 0.05em 0.3em;
   }
@@ -103,7 +106,7 @@
   footer {
     margin-top: 3rem;
     padding-top: 1rem;
-    border-top: 1px solid var(--border);
+    border-top: 1px solid var(--line);
     font-size: 0.9rem;
     color: var(--muted);
   }
@@ -131,7 +134,7 @@
   #tmct-demo .term-error { color: #d9704f; }
   #tmct-demo .term-answer { color: var(--code-fg); margin-bottom: 0.5em; }
   #tmct-demo .term-prompt-line { color: var(--code-fg); }
-  #tmct-demo .term-prompt { color: var(--accent); }
+  #tmct-demo .term-prompt { color: var(--taught); }
   #tmct-demo.compact .term-lines > div { margin: 0; }
   #tmct-demo .term-input-row {
     display: none;
@@ -163,7 +166,7 @@
   }
   .demo-cli pre {
     background: transparent;
-    border: 1px dashed var(--border);
+    border: 1px dashed var(--line);
     color: var(--muted);
     padding: 0.5rem 0.8rem;
     margin: 0.3rem 0 0;
@@ -171,6 +174,11 @@
   }
 
   /* ---- embedded chat (the full turn engine, live) ---------------------------------- */
+  .chat-hero { margin: 1.4rem 0 0.4rem; }
+  .chat-hero .hero-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
+  }
   #tmct-chat { margin: 1.4rem 0 0.6rem; }
   #tmct-chat .chat-frame {
     background: var(--code-bg);
@@ -182,7 +190,7 @@
   #tmct-chat .chat-log { min-height: 5.5em; max-height: 22em; overflow-y: auto; overscroll-behavior: contain; }
   #tmct-chat .chat-log > div { white-space: pre-wrap; word-break: break-word; }
   #tmct-chat .chat-user { margin-top: 0.4em; }
-  #tmct-chat .chat-prompt { color: var(--accent); }
+  #tmct-chat .chat-prompt { color: var(--taught); }
   #tmct-chat .chat-answer { color: var(--code-fg); margin-bottom: 0.35em; }
   #tmct-chat .chat-miss { color: var(--muted); margin-bottom: 0.35em; }
   #tmct-chat .chat-dim { color: var(--muted); }
@@ -199,19 +207,19 @@
   }
   #tmct-chat .chat-input::placeholder { color: var(--muted); }
   #tmct-chat .chat-input:disabled { opacity: 0.5; }
-  #tmct-chat .chat-input:focus-visible { box-shadow: 0 1px 0 0 var(--accent); }
+  #tmct-chat .chat-input:focus-visible { box-shadow: 0 1px 0 0 var(--taught); }
   #tmct-chat .chat-demo-rail { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
   #tmct-chat .chat-demo-rail button {
     font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace;
-    color: var(--accent);
+    color: var(--taught);
     background: transparent;
-    border: 1px solid var(--border);
+    border: 1px solid var(--line);
     border-radius: 999px;
     padding: 0.25em 0.9em;
     cursor: pointer;
   }
-  #tmct-chat .chat-demo-rail button:hover:not(:disabled) { border-color: var(--accent); }
-  #tmct-chat .chat-demo-rail button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #tmct-chat .chat-demo-rail button:hover:not(:disabled) { border-color: var(--taught); }
+  #tmct-chat .chat-demo-rail button:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
   #tmct-chat .chat-demo-rail button:disabled {
     color: var(--muted);
     border-style: dashed;
@@ -222,40 +230,18 @@
     font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace;
     color: var(--code-fg);
     background: var(--code-bg);
-    border: 1px solid var(--border);
+    border: 1px solid var(--line);
     border-radius: 6px;
     padding: 0.25em 0.7em;
     cursor: pointer;
   }
-  #tmct-chat .chat-demo-controls button:hover:not(:disabled) { border-color: var(--accent); }
-  #tmct-chat .chat-demo-controls button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #tmct-chat .chat-demo-controls button:hover:not(:disabled) { border-color: var(--taught); }
+  #tmct-chat .chat-demo-controls button:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
   #tmct-chat .chat-demo-controls button:disabled { opacity: 0.4; cursor: default; }
   #tmct-chat .chat-status {
     font-size: 0.78rem;
     color: var(--muted);
     margin-top: 0.5rem;
-  }
-
-  /* ---- ledger hero ----------------------------------------------------------------- */
-  .ledger-hero { margin: 1.4rem 0 0.4rem; }
-  .ledger-hero .hero-row {
-    display: flex; justify-content: space-between; align-items: baseline;
-    flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
-  }
-  .ledger-hero iframe {
-    width: 100%; height: 640px; border: 1px solid var(--border);
-    border-radius: 8px; background: var(--card);
-  }
-
-  /* ---- plan render ----------------------------------------------------------------- */
-  .plan-render { margin: 1.4rem 0 0.4rem; }
-  .plan-render .hero-row {
-    display: flex; justify-content: space-between; align-items: baseline;
-    flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
-  }
-  .plan-render iframe {
-    width: 100%; height: 420px; border: 1px solid var(--border);
-    border-radius: 8px; background: var(--card);
   }
 
   /* ---- spider-and-fly hero ---------------------------------------------------------- */
@@ -265,24 +251,35 @@
     flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
   }
   .spider-fly-hero iframe {
-    width: 100%; height: 460px; border: 1px solid var(--border);
+    width: 100%; height: 460px; border: 1px solid var(--line);
     border-radius: 8px; background: var(--card);
   }
 
-  /* ---- adventure hero ---------------------------------------------------------------- */
-  .adventure-hero { margin: 1.4rem 0 0.4rem; }
-  .adventure-hero .hero-row {
-    display: flex; justify-content: space-between; align-items: baseline;
-    flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
+  /* ---- explore band (link cards to plan/adventure/ledger/sprites) ------------------ */
+  .explore-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+    gap: 0.9rem; margin: 1.1rem 0 0.4rem;
   }
-  .adventure-hero iframe {
-    width: 100%; height: 360px; border: 1px solid var(--border);
-    border-radius: 8px; background: var(--card);
+  .explore-card {
+    display: flex; flex-direction: column; gap: 0.45rem;
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 1rem 1.1rem; text-decoration: none; color: inherit;
   }
+  .explore-card:hover, .explore-card:focus-visible { border-color: var(--taught); }
+  .explore-card h3 { font-size: 1rem; margin: 0; color: var(--ink); }
+  .explore-card p { margin: 0; font-size: 0.86rem; color: var(--muted); line-height: 1.5; }
+  .explore-card .go { align-self: flex-end; font-size: 0.8rem; color: var(--taught); }
 
-  /* ---- transcript ------------------------------------------------------------------ */
-  .transcript .ask { color: var(--accent); }
-  .transcript .miss { color: var(--muted); }
+  .sprite-teaser { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.15rem; }
+  .sprite-chip {
+    display: flex; align-items: center; gap: 0.4rem;
+    background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+    padding: 0.28rem 0.65rem 0.28rem 0.28rem;
+  }
+  .sprite-chip svg { width: 20px; height: 20px; color: var(--taught); flex: 0 0 auto; }
+  .sprite-chain { font: 10.5px/1.3 "SF Mono", Menlo, Consolas, monospace; color: var(--muted); white-space: nowrap; }
+  .sprite-chain .own { color: var(--ink); }
+  .sprite-chain .arrow { opacity: 0.55; padding: 0 0.15em; }
 </style>
 </head>
 <body>
@@ -304,68 +301,29 @@
     answer is computed live in your browser and names its source.
   </p>
 
-  <div id="tmct-chat" data-demo-state="idle">
-    <div class="chat-frame">
-      <div class="chat-log" role="log" aria-live="polite"></div>
-      <div class="chat-input-row">
-        <span class="chat-prompt">tmct&gt;&nbsp;</span>
-        <input class="chat-input" type="text" autocomplete="off" autocapitalize="off"
-               spellcheck="false" disabled aria-label="Ask tmct a question"
-               placeholder="loading the engine…">
+  <div class="chat-hero">
+    <div class="hero-row">
+      <span class="demo-label">The real chat engine, running in this page</span>
+      <a href="./chat.html">open full-screen &rarr;</a>
+    </div>
+    <div id="tmct-chat" data-demo-state="idle">
+      <div class="chat-frame">
+        <div class="chat-log" role="log" aria-live="polite"></div>
+        <div class="chat-input-row">
+          <span class="chat-prompt">tmct&gt;&nbsp;</span>
+          <input class="chat-input" type="text" autocomplete="off" autocapitalize="off"
+                 spellcheck="false" disabled aria-label="Ask tmct a question"
+                 placeholder="loading the engine…">
+        </div>
       </div>
+      <div class="chat-demo-rail" role="group" aria-label="Scripted demos"></div>
+      <div class="chat-demo-controls" role="group" aria-label="Demo playback controls" hidden>
+        <button type="button" data-ticker="reset" aria-label="Reset the demo">⏮ reset</button>
+        <button type="button" data-ticker="play" aria-label="Play the demo">▶ play</button>
+        <button type="button" data-ticker="step" aria-label="Step the demo forward one turn">step ▶</button>
+      </div>
+      <div class="chat-status">loading the engine…</div>
     </div>
-    <div class="chat-demo-rail" role="group" aria-label="Scripted demos"></div>
-    <div class="chat-demo-controls" role="group" aria-label="Demo playback controls" hidden>
-      <button type="button" data-ticker="reset" aria-label="Reset the demo">⏮ reset</button>
-      <button type="button" data-ticker="play" aria-label="Play the demo">▶ play</button>
-      <button type="button" data-ticker="step" aria-label="Step the demo forward one turn">step ▶</button>
-    </div>
-    <div class="chat-status">loading the engine…</div>
-  </div>
-
-  <p>
-    tmct's memory is sentences about things, so you can read it. Ask the graph below,
-    then click any term inside a fact to drill in.
-  </p>
-
-  <div class="ledger-hero">
-    <div class="hero-row">
-      <span class="demo-label">The memory ledger — the real engine and a real taught store, in your browser</span>
-      <a href="./ledger.html">open full-screen &rarr;</a>
-    </div>
-    <iframe src="./ledger.html" title="tmct memory ledger — explore the taught graph and ask it questions"></iframe>
-  </div>
-
-  <h2>What an answer looks like</h2>
-  <p>Real output from a terminal, against a fresh memory.</p>
-  <pre class="transcript" data-tmct-session="tmct chat --ephemeral"><code><span class="ask">tmct&gt; what is a dog</span>
-dog is a kind of animal (source: corpus:human /r/IsA)
-dog has tail (source: corpus:human /r/HasA)
-dog can bark (source: corpus:human /r/CapableOf)
-
-<span class="ask">tmct&gt; what is a quokka</span>
-<span class="miss">…
-I don't know "quokka" yet — teach me directly, e.g. "quokka is a &lt;thing&gt;" or "remember quokka is a &lt;thing&gt;".</span></code></pre>
-  <p>
-    The second answer is the point. tmct would rather miss than guess, and the
-    benchmarks bear that out. Fabrication was 0% across 299 inference cases, and
-    answers come back byte-identical on rerun. The method, and the caveats behind
-    those numbers, are in the
-    <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#measuring-it">benchmark summary</a>.
-  </p>
-
-  <h2>It plans, and shows the work</h2>
-  <p>
-    Teach it the rules of a game and ask it to solve one. The planner works over the
-    same graph, and <code>--render blocks</code> replays what it did, move by move.
-  </p>
-
-  <div class="plan-render">
-    <div class="hero-row">
-      <span class="demo-label">Towers of Hanoi, solved in 7 moves and replayed</span>
-      <a href="./plan.html">open full-screen &rarr;</a>
-    </div>
-    <iframe src="./plan.html" title="tmct plan render — an animated replay of the solved hanoi-3 game"></iframe>
   </div>
 
   <h2>Two agents, planning against each other</h2>
@@ -385,21 +343,20 @@ I don't know "quokka" yet — teach me directly, e.g. "quokka is a &lt;thing&gt;
     <iframe src="./spider-fly.html?preview=1" title="tmct spider and fly — two agents planning against each other on a partly-hidden grid"></iframe>
   </div>
 
-  <h2>A text adventure, with a room you can actually see</h2>
-  <p>
-    Ashcombe Hall is an ordinary text adventure underneath — rooms, exits, a locked cabinet, a
-    letter to find. This view draws exactly what the text already says is in the room, nothing
-    more, and an auto-player infers its own goal and explores toward it using only what it has
-    actually walked into.
-  </p>
-
-  <div class="adventure-hero">
-    <div class="hero-row">
-      <span class="demo-label">Ashcombe Hall, exploring on its own toward whatever it can infer as the goal</span>
-      <a href="./adventure.html">open full-screen &rarr;</a>
-    </div>
-    <iframe src="./adventure.html?preview=1" title="tmct adventure — a room drawn from exactly what the text already says is there"></iframe>
-  </div>
+  <h2>Run the chat yourself</h2>
+  <pre><code>npm install -g @polycode-projects/the-mechanical-code-talker</code></pre>
+  <p>Point it at a repo's graph and ask about the code. This runs against
+  <code>examples/mini-webapp</code>, which ships in the repo:</p>
+  <pre data-tmct-session="tmct chat --repo examples/mini-webapp --ephemeral" data-tmct-cwd="repo"><code>tmct&gt; what talks to store.mjs?
+src/handlers/tasks.mjs and src/handlers/users.mjs.
+tmct&gt; which modules do not import logger?
+…
+tmct&gt; /exit</code></pre>
+  <p>Or start with nothing. tmct bootstraps an empty memory and remembers what you
+  tell it. Use <code>tmct chat --repo /path/to/repo</code> to point it at your own.</p>
+  <pre><code>tmct init         # scaffold .tmct/, tmct.toml, seed the default persona + provenance
+tmct viz          # write the ledger page — see the link below
+tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code></pre>
 
   <p>
     A chatbot in the <em>ELIZA/PARRY lineage</em>, obsessed with software the way PARRY
@@ -432,21 +389,6 @@ I don't know "quokka" yet — teach me directly, e.g. "quokka is a &lt;thing&gt;
     </div>
   </div>
 
-  <h2>Run the chat yourself</h2>
-  <pre><code>npm install -g @polycode-projects/the-mechanical-code-talker</code></pre>
-  <p>Point it at a repo's graph and ask about the code. This runs against
-  <code>examples/mini-webapp</code>, which ships in the repo:</p>
-  <pre data-tmct-session="tmct chat --repo examples/mini-webapp --ephemeral" data-tmct-cwd="repo"><code>tmct&gt; what talks to store.mjs?
-src/handlers/tasks.mjs and src/handlers/users.mjs.
-tmct&gt; which modules do not import logger?
-…
-tmct&gt; /exit</code></pre>
-  <p>Or start with nothing. tmct bootstraps an empty memory and remembers what you
-  tell it. Use <code>tmct chat --repo /path/to/repo</code> to point it at your own.</p>
-  <pre><code>tmct init         # scaffold .tmct/, tmct.toml, seed the default persona + provenance
-tmct viz          # write the ledger page above from your own memory
-tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code></pre>
-
   <h2>Use it as a library</h2>
   <p>
     The chat surface is a function. Feed it lines, read the answers, and the same
@@ -467,12 +409,59 @@ await runChat({
   <p>Full feature list, the detailed-answer pipeline, and the rest of the library API in the
   <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a>.</p>
 
+  <h2>More to explore</h2>
+  <p>Four more pages, built from the same engine and the same taught memory.</p>
+
+  <div class="explore-grid">
+    <a class="explore-card" href="./plan.html">
+      <h3>It plans, and shows the work</h3>
+      <p>Teach it a game's rules, then ask it to solve one. The planner replays every
+      move it made, one by one.</p>
+      <span class="go">open &rarr;</span>
+    </a>
+    <a class="explore-card" href="./adventure.html">
+      <h3>A text adventure, with a room you can actually see</h3>
+      <p>Ashcombe Hall, drawn from exactly what the text says is there. An auto-player
+      explores it and infers its own goal.</p>
+      <span class="go">open &rarr;</span>
+    </a>
+    <a class="explore-card" href="./ledger.html">
+      <h3>The memory ledger</h3>
+      <p>Browse the taught graph. Click any term inside a fact to drill in.</p>
+      <span class="go">open &rarr;</span>
+    </a>
+    <a class="explore-card" href="./sprites.html">
+      <h3>Sprite library</h3>
+      <p>Every shape the sprite library can draw, mapped to the real ontology class it
+      belongs to.</p>
+      <div class="sprite-teaser">
+        <span class="sprite-chip">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="13" cy="15" rx="6.4" ry="4.6" fill="currentColor"/><ellipse cx="10.8" cy="13.2" rx="1.8" ry="1.3" fill="currentColor" opacity="0.28"/><circle cx="7" cy="8.5" r="4" fill="currentColor"/><g fill="currentColor"><circle cx="4" cy="6" r="1.6"/><circle cx="7" cy="4.2" r="1.7"/><circle cx="10" cy="6" r="1.6"/></g><rect x="18.5" y="14" width="2.2" height="6" rx="1.1" fill="currentColor"/><circle cx="19.6" cy="13" r="1.5" fill="currentColor"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="9" y1="19.5" x2="9" y2="22"/><line x1="17" y1="19.5" x2="17" y2="22"/></g></svg>
+          <span class="sprite-chain"><span class="own">poodle</span><span class="arrow">&rsaquo;</span>dog<span class="arrow">&rsaquo;</span>animal</span>
+        </span>
+        <span class="sprite-chip">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="13" cy="15" rx="6.4" ry="4.3" fill="currentColor"/><circle cx="7" cy="9" r="3.6" fill="currentColor"/><ellipse cx="6.1" cy="8" rx="1" ry="1.3" fill="currentColor" opacity="0.3"/><path d="M4.5 6.5 L2 3 L6 5 Z" fill="currentColor"/><path d="M19 13 C22 12 22.5 15 20 16 Z" fill="currentColor"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="9" y1="19" x2="9" y2="22"/><line x1="17" y1="19" x2="17" y2="22"/></g></svg>
+          <span class="sprite-chain"><span class="own">dog</span><span class="arrow">&rsaquo;</span>animal</span>
+        </span>
+        <span class="sprite-chip">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="16" rx="5.2" ry="4.8" fill="currentColor"/><ellipse cx="10.3" cy="14.3" rx="1.8" ry="1.4" fill="currentColor" opacity="0.3"/><circle cx="12" cy="9.6" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round"><path d="M9.4 8 L2.2 4.4"/><path d="M9 10.2 L1.4 9.4"/><path d="M9.2 12.6 L2 14.2"/><path d="M10 15.4 L3.4 19"/><path d="M14.6 8 L21.8 4.4"/><path d="M15 10.2 L22.6 9.4"/><path d="M14.8 12.6 L22 14.2"/><path d="M14 15.4 L20.6 19"/></g></svg>
+          <span class="sprite-chain"><span class="own">spider</span><span class="arrow">&rsaquo;</span>arachnid<span class="arrow">&rsaquo;</span>animal</span>
+        </span>
+        <span class="sprite-chip">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="currentColor"/><circle cx="12" cy="7" r="2.7" fill="currentColor"/><ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="currentColor" opacity="0.3"/><g fill="currentColor" opacity="0.55"><path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z"/><path d="M15 10 C21 6 22 4 21 2 C18 2 15 6 13.5 10 Z"/></g><g stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M9.6 17 L7.4 19.4"/><path d="M14.4 17 L16.6 19.4"/></g></svg>
+          <span class="sprite-chain"><span class="own">fly</span><span class="arrow">&rsaquo;</span>insect<span class="arrow">&rsaquo;</span>animal</span>
+        </span>
+      </div>
+      <span class="go">open &rarr;</span>
+    </a>
+  </div>
+
   <footer>
     <p>MPL-2.0 &middot;
       <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker">repository</a>
       &middot;
       <a href="https://www.npmjs.com/package/@polycode-projects/the-mechanical-code-talker">npm</a>
-      &middot; this page documents <span id="pkg-version">2.8.2</span>
+      &middot; this page documents <span id="pkg-version">2.8.3</span>
       &middot; &copy; Polycode Limited.</p>
   </footer>
 </main>
