@@ -28,6 +28,33 @@
 //     exact fact it requires, so it outranks the parameterized template
 //     when both would otherwise apply.
 //
+// A parameterized template's `[parameters.<name>]` table comes in two
+// shapes, picked by which of `placeholder`/`placeholders` it declares:
+//   - single-placeholder (the shape above): one `placeholder` token, and
+//     every `[parameters.<name>.values]` entry is a plain string substituted
+//     for it directly.
+//   - multi-placeholder (data/sprites-large/*.toml's gradient-shaded
+//     materials): a `placeholders` table instead, naming several tokens at
+//     once (e.g. `{ light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark =
+//     "{{FILL_DARK}}" }`), and every `[parameters.<name>.values]` entry is a
+//     table with the SAME sub-keys (e.g. `{ light = "#f0dfa0", base =
+//     "#c9a24b", dark = "#8a6a1e" }`), one substituted per token. A value
+//     missing even one of the declared sub-keys is never a partial match —
+//     the same never-guess posture as an unmapped value in the single shape.
+//     sprite-materials.mjs's `expandMaterialReferences` is what lets a
+//     sprite-large file write a short by-name reference (`gold = "metal"`)
+//     instead of hand-copying the triple — this module never has to know
+//     that indirection exists, it only ever sees the expanded table shape.
+//
+// An object with no taught material still gets a real gradient at the
+// sprite tier (data/sprites-large/*.toml's own non-material files), built
+// from currentColor via `color-mix(in srgb, currentColor N%, white/black)`
+// rather than `stop-opacity` — opacity blends toward whatever sits BEHIND
+// the shape, so its light/dark direction silently flips between a light
+// theme (currentColor dark-on-light) and a dark one (currentColor
+// light-on-dark); color-mix lightens/darkens currentColor itself, so the
+// same corner of the shape reads as the lit one on either theme.
+//
 // Specificity order, checked at EACH term of the class's ancestor chain
 // (nearest first, sprite-map.mjs's own classAncestorChain) before moving to
 // the next ancestor: an exact fully-specific variant whose [match] is
@@ -39,6 +66,7 @@
 // against `rootFallback`, falling back to spriteRegistry's own root entry
 // only if nothing there matches either.
 import { classAncestorChain } from "./sprite-map.mjs";
+import { namespaceSvgIds } from "./svg-instance-ids.mjs";
 
 /** Every template in `templates` whose `classes` list names `term`. */
 function templatesForClass(term, templates) {
@@ -50,6 +78,24 @@ function matchSatisfied(match, propertyFacts) {
   return (propertyFacts || []).some((f) => f.predicate === match.property && f.object === match.value);
 }
 
+/** Substitute one matched `[parameters.*.values]` entry into `svg`: a plain
+ *  string fills the parameter's single `placeholder` token; an object fills
+ *  every token `param.placeholders` names from the SAME sub-key — returning
+ *  null (never a partial gradient) if the object is missing even one of the
+ *  sub-keys the parameter declares. */
+function fillFromValue(svg, param, value) {
+  if (typeof value === "string" && param.placeholder) return svg.split(param.placeholder).join(value);
+  if (value && typeof value === "object" && param.placeholders) {
+    let out = svg;
+    for (const [sub, token] of Object.entries(param.placeholders)) {
+      if (!Object.prototype.hasOwnProperty.call(value, sub)) return null;
+      out = out.split(token).join(value[sub]);
+    }
+    return out;
+  }
+  return null;
+}
+
 /** Fill a parameterized template's `svg` from the first of its own
  *  `[parameters.*]` whose observed property value maps to a substitution —
  *  or null when no property fact names a mapped value (never a guess). */
@@ -59,7 +105,9 @@ function parameterizedFill(template, propertyFacts) {
     const hit = (propertyFacts || []).find(
       (f) => f.predicate === param.property && Object.prototype.hasOwnProperty.call(values, f.object),
     );
-    if (hit) return template.svg.split(param.placeholder).join(values[hit.object]);
+    if (!hit) continue;
+    const filled = fillFromValue(template.svg, param, values[hit.object]);
+    if (filled) return filled;
   }
   return null;
 }
@@ -82,17 +130,7 @@ function resolveAtTerm(term, propertyFacts, templates) {
   return plain ? plain.svg : null;
 }
 
-/**
- * Resolve `className` to sprite SVG markup, property-aware: the ancestor
- * chain (from `factRows`, sprite-map.mjs's own walk) is checked nearest-
- * first, and at each term the template set (`templates`, the parsed
- * data/sprites/*.toml set) is tried before falling back to `spriteRegistry`
- * for that same term — so a class with no template at all resolves exactly
- * as resolveSpriteForClass already does. `propertyFacts` is the instance's
- * own small `{predicate, object}` fact set (e.g. its mgx:hasProperty rows) —
- * read only, never required to be non-empty. Pure.
- */
-export function resolveSpriteAsset(className, factRows, propertyFacts, templates, spriteRegistry, { rootFallback = "animal" } = {}) {
+function resolveSpriteAssetRaw(className, factRows, propertyFacts, templates, spriteRegistry, rootFallback) {
   for (const term of classAncestorChain(className, factRows)) {
     const hit = resolveAtTerm(term, propertyFacts, templates);
     if (hit) return hit;
@@ -103,14 +141,40 @@ export function resolveSpriteAsset(className, factRows, propertyFacts, templates
   return spriteRegistry[rootFallback];
 }
 
+/**
+ * Resolve `className` to sprite SVG markup, property-aware: the ancestor
+ * chain (from `factRows`, sprite-map.mjs's own walk) is checked nearest-
+ * first, and at each term the template set (`templates`, the parsed
+ * data/sprites/*.toml set) is tried before falling back to `spriteRegistry`
+ * for that same term — so a class with no template at all resolves exactly
+ * as resolveSpriteForClass already does. `propertyFacts` is the instance's
+ * own small `{predicate, object}` fact set (e.g. its mgx:hasProperty rows) —
+ * read only, never required to be non-empty. Pure.
+ *
+ * `instanceKey`, when given, namespaces every gradient id the resolved svg
+ * declares (svg-instance-ids.mjs's own `namespaceSvgIds`) — pass the
+ * instance's own identity (e.g. its subject name) whenever more than one
+ * resolved sprite can appear in the same document at once, so two
+ * differently-valued instances of the SAME template (a gold lamp and a
+ * ceramic lamp both on screen) never share one `<linearGradient id>` and
+ * silently render each other's colours. Omit it for a single-instance
+ * caller (a template with no ids at all is untouched either way).
+ */
+export function resolveSpriteAsset(className, factRows, propertyFacts, templates, spriteRegistry, { rootFallback = "animal", instanceKey } = {}) {
+  const svg = resolveSpriteAssetRaw(className, factRows, propertyFacts, templates, spriteRegistry, rootFallback);
+  return instanceKey ? namespaceSvgIds(svg, instanceKey) : svg;
+}
+
 /** Every internal-consistency problem with one parsed template, as plain
  *  strings — empty when the template is well-formed. Used both by
  *  test/adapters/sprite-templates.test.mjs (against the real loaded
  *  data/sprites/ directory) and available to any future loader that wants to
  *  warn rather than silently drop a broken file. Checks: `classes` is a
  *  non-empty array, `svg` is a real `<svg` string, a `[parameters.*]` table
- *  names a `property` and a non-empty `values` map, and a `[match]` table
- *  names both `property` and `value`. */
+ *  names a `property` and exactly one of `placeholder`/`placeholders` (every
+ *  token named appears in `svg`), its `values` map is non-empty and every
+ *  entry matches the shape its own `placeholder`/`placeholders` choice
+ *  expects, and a `[match]` table names both `property` and `value`. */
 export function spriteTemplateProblems(template) {
   const problems = [];
   const t = template || {};
@@ -118,11 +182,38 @@ export function spriteTemplateProblems(template) {
   if (typeof t.svg !== "string" || !t.svg.trim().startsWith("<svg")) problems.push("svg is missing or not an <svg> string");
   for (const [name, param] of Object.entries(t.parameters || {})) {
     if (!param?.property) problems.push(`parameters.${name}.property is missing`);
-    if (!param?.placeholder) problems.push(`parameters.${name}.placeholder is missing`);
-    else if (typeof t.svg === "string" && !t.svg.includes(param.placeholder)) {
+    if (param?.placeholder && param?.placeholders) {
+      problems.push(`parameters.${name} sets both placeholder and placeholders — pick one`);
+    } else if (param?.placeholders) {
+      const tokens = Object.entries(param.placeholders);
+      if (tokens.length === 0) problems.push(`parameters.${name}.placeholders is empty`);
+      for (const [sub, token] of tokens) {
+        if (typeof t.svg === "string" && !t.svg.includes(token)) {
+          problems.push(`parameters.${name}.placeholders.${sub} ${JSON.stringify(token)} does not appear in svg`);
+        }
+      }
+    } else if (!param?.placeholder) {
+      problems.push(`parameters.${name}.placeholder is missing`);
+    } else if (typeof t.svg === "string" && !t.svg.includes(param.placeholder)) {
       problems.push(`parameters.${name}.placeholder ${JSON.stringify(param.placeholder)} does not appear in svg`);
     }
-    if (!param?.values || Object.keys(param.values).length === 0) problems.push(`parameters.${name}.values is empty`);
+    if (!param?.values || Object.keys(param.values).length === 0) {
+      problems.push(`parameters.${name}.values is empty`);
+    } else {
+      for (const [key, value] of Object.entries(param.values)) {
+        if (param.placeholders) {
+          if (!value || typeof value !== "object") {
+            problems.push(`parameters.${name}.values.${key} is not an expanded {${Object.keys(param.placeholders).join("/")}} object — an unresolved material reference?`);
+          } else {
+            for (const sub of Object.keys(param.placeholders)) {
+              if (!Object.prototype.hasOwnProperty.call(value, sub)) problems.push(`parameters.${name}.values.${key} is missing "${sub}"`);
+            }
+          }
+        } else if (typeof value !== "string") {
+          problems.push(`parameters.${name}.values.${key} must be a plain string for a single-placeholder parameter`);
+        }
+      }
+    }
   }
   if (t.match && (!t.match.property || t.match.value === undefined)) {
     problems.push("match is missing property or value");
