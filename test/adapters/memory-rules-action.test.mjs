@@ -83,11 +83,14 @@ test("each action kind round-trips through appendRule and readRuleRows", async (
     assert.equal(rows.length, 3);
     const byKind = Object.fromEntries(rows.map((r) => [r.kind, r]));
     assert.deepEqual(byKind[RULE_KIND_ACTION_SIGNATURE].slots, { subjectClass: "disk", targetClass: "peg" });
+    // value/negate (precond) and value (effect) are the fact-value shape's
+    // optional slots — readRuleRows defaults an unwritten one to "", the
+    // same "not supplied" signal an omitted key gives domain.mjs.
     assert.deepEqual(byKind[RULE_KIND_ACTION_PRECOND].slots, {
-      shape: "no-incoming", predicate: "rest-on", role: "subject", scope: "any",
+      shape: "no-incoming", predicate: "rest-on", role: "subject", scope: "any", value: "", negate: "",
     });
     assert.deepEqual(byKind[RULE_KIND_ACTION_EFFECT].slots, {
-      predicate: "rest-on", subjectRole: "subject", objectRole: "target",
+      predicate: "rest-on", subjectRole: "subject", objectRole: "target", value: "",
     });
     for (const r of rows) assert.match(r.provenance, /teach:test/);
   } finally {

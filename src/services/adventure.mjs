@@ -12,6 +12,7 @@ import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { parseImperative } from "../domain/grammar/ace.mjs";
 import { createCompletionsGraphAdapter } from "../domain/completions/graph-adapter.mjs";
 import { actionFamilies } from "../domain/router/taught.mjs";
+import { compileDomain, precondHolds, roleBinding } from "../domain/domain.mjs";
 import { getWorldsPackProvider } from "../adapters/corpus/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, normFactTerm, readFactRows, readRuleRows } from "../adapters/memory/core.mjs";
 import { COMPLETIONS_STORE, generateCompletion } from "./completions.mjs";
@@ -78,7 +79,12 @@ async function openAdventure(opening, { planHolder, memoryDir, sessionId, env, c
     world = names[0];
   } else if (!names.includes(world)) {
     // An unknown "play X" is not necessarily an adventure ask at all ("play
-    // chess") — fall through to the ordinary lanes rather than claim it.
+    // spider" is spider-fly's own opener, not a broken adventure request) —
+    // fall through so a sibling game's opener keeps first refusal.
+    // unclaimedAdventureOpening below is chat's LAST-RESORT check: once
+    // every "play X" lane (this one included) has had its turn and none
+    // claimed the line, THAT'S when an unrecognized name gets named and
+    // declined honestly, never silently.
     return null;
   }
 
@@ -122,6 +128,31 @@ async function openAdventure(opening, { planHolder, memoryDir, sessionId, env, c
     goal: `play the ${spokenNameOf(world)} adventure`,
     lane: "game-inform",
     note: `ADVENTURE — loaded the "${world}" world from the pack into this session's memory (facts + action families, provenance ${tag}) and announced the ${resumed ? "resumed" : "opening"} room`,
+  };
+}
+
+/** chat's LAST-RESORT check for a named opener no lane claimed — "play
+ *  atlantis" when the pack has worlds but none is called that. Called AFTER
+ *  every other "play X"-shaped lane (spider-fly's own opener among them) has
+ *  already had its chance, so this never steals a name a sibling game
+ *  recognizes as its own (openAdventure's own fallthrough above stays
+ *  silent for exactly that reason). Only once nothing else wanted the line
+ *  does it get named and declined, rather than answered with an unrelated
+ *  generic non-answer. Null when the line isn't a named opener at all, or
+ *  the pack has no worlds (openAdventure's own first pass already gave that
+ *  case its honest missingPackAnswer, before any lane got a turn), or the
+ *  name IS one of the pack's — never re-decides a real hit. */
+export async function unclaimedAdventureOpening(line, { env }) {
+  const opening = matchAdventureOpening(line);
+  if (!opening?.world) return null;
+  const provider = getWorldsPackProvider(env);
+  let names = null;
+  try { names = await provider.list(); } catch { names = null; }
+  if (!names || !names.length || names.includes(opening.world)) return null;
+  return {
+    text: `I don't know a world called "${spokenNameOf(opening.world)}" — the pack has: ${names.map(spokenNameOf).join(", ")}.`,
+    lane: "game-inform",
+    note: `ADVENTURE — last-resort opening decline: "${opening.world}" names no world in the pack (has: ${names.join(", ")}), and no other lane claimed the line either`,
   };
 }
 
@@ -264,8 +295,10 @@ const affordanceSuffix = (actions) => (actions.length ? ` You can: ${actions.joi
 
 /** The effect predicate a family writes (its action-effect row's slot, with
  *  the mgx: prefix rule readers re-attach). Null when the family carries no
- *  effect row — the open/unlock/close families, whose datatype state writes
- *  have no shipped effect shape yet and ride the container logic below. */
+ *  effect row — unlock's family stays signature-only (its instrument match
+ *  needs a third, externally-supplied binding no shipped rule shape covers)
+ *  and rides the hand-written logic below; go/take/drop/give/open/close all
+ *  carry real effect rows and never hit this null. */
 function familyEffectPredicate(family) {
   const effect = (family || []).find((r) => r.kind === "action-effect");
   if (!effect?.slots?.predicate) return null;
@@ -449,6 +482,24 @@ function containerStatusPhrase(object, { state }) {
     : `the ${object} is open. It's empty.`;
 }
 
+/** `object`'s own datatype facts (its placement predicate, its open/closed
+ *  flag), as the tiny {subject,predicate,object} row set a "fact-value"
+ *  precond needs — read from the already-folded CURRENT truth (state.
+ *  placements/state.openness), never raw @turnN rows, so a superseded
+ *  snapshot can never look current. domain.mjs's own stateFromFacts can't
+ *  serve this: it keys "current" off an @stepN suffix (this world writes
+ *  @turnN) and restricts rows to individuals typed into some action's
+ *  SUBJECT class, which "furniture" (the container's own class) never is —
+ *  a container's own facts about itself would silently vanish through it. */
+function containerDatatypeState(state, object) {
+  const rows = [];
+  const place = state.placements.get(object);
+  if (place) rows.push({ subject: object, predicate: place.predicate, object: place.object });
+  const openness = state.openness.get(object);
+  if (openness) rows.push({ subject: object, predicate: OPEN_PREDICATE, object: openness.open ? "true" : "false" });
+  return rows;
+}
+
 async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
   const memory = await loadMemory(memoryDir);
   const rows = readFactRows(memory);
@@ -512,7 +563,8 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     );
   }
 
-  const families = actionFamilies(readRuleRows(memory));
+  const ruleRows = readRuleRows(memory);
+  const families = actionFamilies(ruleRows);
   const family = families.get(cmd.verb);
   if (!family) {
     return answer(
@@ -619,9 +671,15 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     );
   }
 
-  // open / unlock / close — the container verbs. Their families are
-  // signature-only (no shipped rule shape for a datatype effect yet), so the
-  // state writes are the closed container vocabulary below.
+  // open / unlock / close — the container verbs. presence and container-ness
+  // stay hand-checked here (visibility gating, not a state precondition);
+  // unlock's instrument match stays fully hand-written below it too — it
+  // needs a third, externally-supplied binding beyond subject/target, which
+  // this retrofit does not attempt. open/close's lock-state and open/closed
+  // checks, and their mgx:is-open write, are now taught "fact-value"
+  // precond/effect rows consulted through domain.mjs below; only the
+  // hidden-contents reveal (a variable-arity effect over a discovered set)
+  // stays hand-written JS, since no shipped rule shape covers that either.
   const presentHere = place && place.predicate !== "mgx:hidden-in" && place.predicate !== "mgx:currently-in" && place.object === here;
   if (!presentHere) {
     return answer(`I don't see a ${object} here.`, noteFor(`${cmd.verb} — ${object} isn't in the ${here}; declined`), { miss: true });
@@ -629,40 +687,50 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
   if (!isContainer(rows, object)) {
     return answer(`the ${object} doesn't open.`, noteFor(`${cmd.verb} — no mgx:is-container fact on ${object}; declined by name`), { miss: true });
   }
-  const open = !!state.openness.get(object)?.open;
 
-  if (cmd.verb === "open") {
-    if (place.predicate === "mgx:stands-locked-in") {
-      return answer(`the ${object} is locked.`, noteFor(`open — ${object} stands locked; precondition declined by name`), { miss: true });
+  if (cmd.verb === "open" || cmd.verb === "close") {
+    const domain = compileDomain(rows, ruleRows);
+    const taughtAction = domain.actions.find((a) => a.name === cmd.verb);
+    const effect = taughtAction?.effects.find((e) => e.predicate === OPEN_PREDICATE);
+    if (!effect) {
+      return answer(
+        `this world doesn't teach how ${cmd.verb === "open" ? "opening" : "closing"} changes the ${object}.`,
+        noteFor(`${cmd.verb} — the taught "${cmd.verb}" family carries no ${OPEN_PREDICATE} effect; honest decline`),
+        { miss: true },
+      );
     }
-    if (open) {
-      return answer(`the ${object} is already open.`, noteFor("open — already open; declined"), { miss: true });
+    const factState = containerDatatypeState(state, object);
+    const failed = taughtAction.preconds.find((p) => !precondHolds(p, "player", object, factState, domain));
+    if (failed) {
+      const text = failed.predicate === "mgx:stands-locked-in"
+        ? `the ${object} is locked.`
+        : cmd.verb === "open" ? `the ${object} is already open.` : `the ${object} isn't open.`;
+      return answer(text, noteFor(`${cmd.verb} — the taught "${cmd.verb}" family's ${failed.predicate} precondition declined by name`), { miss: true });
     }
-    const revealed = [...state.placements]
-      .filter(([, p]) => p.predicate === "mgx:hidden-in" && p.object === object)
-      .map(([thing]) => thing)
-      .sort();
-    return commit(
-      [
-        { subject: `${object}@turn${k}`, predicate: "mgx:is-open", object: "true" },
-        ...revealed.map((thing) => ({ subject: `${thing}@turn${k}`, predicate: "mgx:located-in", object })),
-      ],
-      revealed.length
-        ? `you open the ${object} — inside: the ${revealed.join(", the ")}.`
-        : `you open the ${object}. It's empty.`,
-      `open — ${object} opens${revealed.length ? `, revealing ${revealed.join(", ")}` : ""}`,
-      `open the ${object}`,
-    );
-  }
+    const effSubject = roleBinding(effect.subjectRole, "player", object, domain);
+    const writeIsOpen = { subject: `${effSubject}@turn${k}`, predicate: effect.predicate, object: effect.value };
 
-  if (cmd.verb === "close") {
-    if (!open) {
-      return answer(`the ${object} isn't open.`, noteFor("close — not open; declined"), { miss: true });
+    if (cmd.verb === "open") {
+      const revealed = [...state.placements]
+        .filter(([, p]) => p.predicate === "mgx:hidden-in" && p.object === object)
+        .map(([thing]) => thing)
+        .sort();
+      return commit(
+        [
+          writeIsOpen,
+          ...revealed.map((thing) => ({ subject: `${thing}@turn${k}`, predicate: "mgx:located-in", object })),
+        ],
+        revealed.length
+          ? `you open the ${object} — inside: the ${revealed.join(", the ")}.`
+          : `you open the ${object}. It's empty.`,
+        `open — ${object} opens${revealed.length ? `, revealing ${revealed.join(", ")}` : ""} via the taught "open" family's effect`,
+        `open the ${object}`,
+      );
     }
     return commit(
-      [{ subject: `${object}@turn${k}`, predicate: "mgx:is-open", object: "false" }],
+      [writeIsOpen],
       `you close the ${object}.`,
-      `close — ${object} closes`,
+      `close — ${object} closes via the taught "close" family's effect`,
       `close the ${object}`,
     );
   }

@@ -19,6 +19,15 @@ const attachPrefix = (predicate) => {
   return p.includes(":") ? p : `mgx:${p}`;
 };
 
+/** A genuinely-supplied optional slot (a literal precond/effect value): `""`,
+ *  `null` and `undefined` all read as "not supplied", the same signal a
+ *  never-taught slot and a readRuleRows-defaulted `""` both give. */
+const optionalTerm = (value) => {
+  if (value == null) return undefined;
+  const t = normTerm(value);
+  return t === "" ? undefined : t;
+};
+
 const rowSort = (a, b) =>
   a.subject.localeCompare(b.subject) ||
   a.predicate.localeCompare(b.predicate) ||
@@ -55,17 +64,32 @@ export function compileDomain(factRows, ruleRows) {
         targetClass: normTerm(slots.targetClass),
       });
     } else if (rule.kind === "action-precond") {
+      // value/negate are optional: absent in every no-incoming/comparator row
+      // taught so far, so their key is omitted rather than written as "" —
+      // an omitted key keeps a pre-existing precond's JSON.stringify sort
+      // form (and its precondHolds behavior) byte-identical to before this
+      // shape existed. normFactTerm/readRuleRows read a genuinely absent
+      // slot back as "", the same signal an explicit "" would give.
+      const value = optionalTerm(slots.value);
+      const negate = String(slots.negate) === "true" ? true : undefined;
       family.preconds.push({
         shape: normTerm(slots.shape),
         predicate: attachPrefix(slots.predicate),
         role: normTerm(slots.role),
         scope: normTerm(slots.scope),
+        ...(value !== undefined ? { value } : {}),
+        ...(negate !== undefined ? { negate } : {}),
       });
     } else if (rule.kind === "action-effect") {
+      // value is the literal-effect alternative to objectRole (a datatype
+      // write, e.g. mgx:is-open = "true", rather than a role binding) — same
+      // omit-when-absent discipline as the precond fields above.
+      const value = optionalTerm(slots.value);
       family.effects.push({
         predicate: attachPrefix(slots.predicate),
         subjectRole: normTerm(slots.subjectRole),
         objectRole: normTerm(slots.objectRole),
+        ...(value !== undefined ? { value } : {}),
       });
     } else if (rule.kind === "action-constraint") {
       family.constraints.push({
@@ -111,7 +135,11 @@ export function compileDomain(factRows, ruleRows) {
   };
   for (const action of actions) {
     for (const effect of action.effects) {
-      for (const role of [effect.subjectRole, effect.objectRole]) {
+      // A literal-valued effect (effect.value set) has no objectRole to bind
+      // — the literal IS the object, so objectRole (unused, "" when the
+      // teaching row never set it) never enters the class-membership check.
+      const roles = effect.value !== undefined ? [effect.subjectRole] : [effect.subjectRole, effect.objectRole];
+      for (const role of roles) {
         if (role !== "subject" && role !== "target") requireSoleMember(role, `an effect role of "${action.name}"`);
       }
     }
@@ -187,7 +215,13 @@ export function stateKeyFor(state) {
 const precondApplies = (precond, target, domain) =>
   precond.scope === "any" || (domain.classMembers[precond.scope] || []).includes(target);
 
-function precondHolds(precond, subject, target, state, domain) {
+/** A precondition on a fact ABOUT the role term itself (roleTerm as subject),
+ *  as opposed to "no-incoming"'s fact pointing AT the role term (roleTerm as
+ *  object). Datatype/state checks — a lock, an open/closed flag — read this
+ *  way: "does (roleTerm, predicate, value) exist", with `value` an existence
+ *  wildcard when omitted and `negate` flipping the sense ("must NOT exist"
+ *  covers "must not be locked", "must not already be open"). */
+export function precondHolds(precond, subject, target, state, domain) {
   const roleTerm = precond.role === "target" ? target : subject;
   if (precond.shape === "no-incoming") {
     return !state.some((r) => r.predicate === precond.predicate && r.object === roleTerm);
@@ -198,13 +232,21 @@ function precondHolds(precond, subject, target, state, domain) {
     return domain.ordering.some((r) =>
       r.subject === left && r.predicate === precond.predicate && r.object === right);
   }
+  if (precond.shape === "fact-value") {
+    const exists = state.some((r) => r.subject === roleTerm && r.predicate === precond.predicate
+      && (precond.value == null || r.object === precond.value));
+    return precond.negate ? !exists : exists;
+  }
   return false;
 }
 
 /** Ground an effect/constraint role word: "subject"/"target" bind the
  *  grounding pair; any other word is class-bound and binds the class's sole
- *  member — its companion semantics (compileDomain guarantees exactly one). */
-const roleBinding = (role, subject, target, domain) => {
+ *  member — its companion semantics (compileDomain guarantees exactly one).
+ *  Exported so a caller consulting one grounded precond/effect directly,
+ *  rather than running a full movesFromRules search, can still resolve an
+ *  effect's subject/object the same way the planner does. */
+export const roleBinding = (role, subject, target, domain) => {
   if (role === "subject") return subject;
   if (role === "target") return target;
   return (domain.classMembers[role] || [])[0];
@@ -213,12 +255,15 @@ const roleBinding = (role, subject, target, domain) => {
 const positionIn = (rows, term, predicate) =>
   rows.find((r) => r.subject === term && r.predicate === predicate)?.object;
 
-function applyEffects(effects, subject, target, state, domain) {
+export function applyEffects(effects, subject, target, state, domain) {
   let rows = state;
   let changed = false;
   for (const effect of effects) {
     const effSubject = roleBinding(effect.subjectRole, subject, target, domain);
-    const effObject = roleBinding(effect.objectRole, subject, target, domain);
+    // A literal-valued effect (a taught datatype flag) writes its value
+    // directly; a role-valued effect resolves objectRole through the
+    // grounding pair / class-bound member instead.
+    const effObject = effect.value !== undefined ? effect.value : roleBinding(effect.objectRole, subject, target, domain);
     const already = rows.some((r) =>
       r.subject === effSubject && r.predicate === effect.predicate && r.object === effObject);
     if (already) continue;

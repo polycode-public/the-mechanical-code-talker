@@ -53,7 +53,7 @@ test("appendRule rejects an action-constraint with a missing slot", async () => 
         kind: RULE_KIND_ACTION_CONSTRAINT,
         slots: { left: "alpha", right: "beta" },
       }),
-      /needs left \+ right \+ guard/,
+      /needs guard/,
     );
   } finally {
     await rm(dir, { recursive: true, force: true });

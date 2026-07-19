@@ -257,12 +257,15 @@ test("appendRule: a well-formed rule of each kind writes fine", async () => {
   }
 });
 
-test("appendRule: the existing structural floor (missing slots for the declared kind) still throws exactly as before", async () => {
+test("appendRule: the existing structural floor (a missing required slot for the declared kind) still throws, naming exactly what's missing", async () => {
   const dir = await tmpRepo();
   try {
+    // base1 is supplied, base2 isn't — the message names the one slot
+    // actually missing (previously it always listed the kind's whole
+    // required set regardless of which slots were present).
     await assert.rejects(
       () => appendRule(dir, { name: "grandparent", kind: RULE_KIND_COMPOSE2, slots: { base1: "parent" } }),
-      /needs base1 \+ base2/,
+      /needs base2/,
     );
   } finally {
     await rm(dir, { recursive: true, force: true });

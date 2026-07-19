@@ -150,7 +150,7 @@ test("appendRule: rejects an unknown kind and missing slots, honestly (never min
     );
     await assert.rejects(
       () => appendRule(dir, { name: "x", kind: RULE_KIND_COMPOSE2, slots: { base1: "a" } }),
-      /needs base1 \+ base2/,
+      /needs base2/,
     );
     const m = await loadMemory(dir);
     assert.equal(m.individuals.filter((i) => i.class === RULE_CLASS).length, 0, "no partial writes");

@@ -60,5 +60,10 @@
 {"world":"ashcombe-hall","kind":"rule","name":"give","ruleKind":"action-signature","slots":{"subjectClass":"portable","targetClass":"person"}}
 {"world":"ashcombe-hall","kind":"rule","name":"give","ruleKind":"action-effect","slots":{"predicate":"located-in","subjectRole":"subject","objectRole":"target"}}
 {"world":"ashcombe-hall","kind":"rule","name":"open","ruleKind":"action-signature","slots":{"subjectClass":"adventurer","targetClass":"furniture"}}
+{"world":"ashcombe-hall","kind":"rule","name":"open","ruleKind":"action-precond","slots":{"shape":"fact-value","predicate":"stands-locked-in","role":"target","scope":"any","negate":"true"}}
+{"world":"ashcombe-hall","kind":"rule","name":"open","ruleKind":"action-precond","slots":{"shape":"fact-value","predicate":"is-open","role":"target","scope":"any","value":"true","negate":"true"}}
+{"world":"ashcombe-hall","kind":"rule","name":"open","ruleKind":"action-effect","slots":{"predicate":"is-open","subjectRole":"target","value":"true"}}
 {"world":"ashcombe-hall","kind":"rule","name":"unlock","ruleKind":"action-signature","slots":{"subjectClass":"adventurer","targetClass":"furniture"}}
 {"world":"ashcombe-hall","kind":"rule","name":"close","ruleKind":"action-signature","slots":{"subjectClass":"adventurer","targetClass":"furniture"}}
+{"world":"ashcombe-hall","kind":"rule","name":"close","ruleKind":"action-precond","slots":{"shape":"fact-value","predicate":"is-open","role":"target","scope":"any","value":"true"}}
+{"world":"ashcombe-hall","kind":"rule","name":"close","ruleKind":"action-effect","slots":{"predicate":"is-open","subjectRole":"target","value":"false"}}

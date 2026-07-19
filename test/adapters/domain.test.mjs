@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   compileDomain, stateFromFacts, stateKeyFor, movesFromRules, compileGoal, PlanBudgetError,
+  precondHolds, applyEffects, roleBinding,
 } from "../../src/domain/domain.mjs";
 import { findActionPath } from "../../src/domain/planning.mjs";
 import { runTurn } from "../../src/services/chat.mjs";
@@ -255,6 +256,111 @@ test("the interpreter source carries zero domain vocabulary", () => {
   const src = readFileSync(DOMAIN_SRC, "utf8");
   assert.doesNotMatch(src, /disk|peg|rest-on|hanoi/i);
   assert.doesNotMatch(src, /wolf|goat|cabbage|farmer|ferry|passenger|\briver\b|\bbank\b/i);
+});
+
+// ---- the "fact-value" precond shape and literal-valued effects --------------
+// A datatype/state check ("is this locked", "is this already open") and its
+// matching write can't be expressed by no-incoming (an edge INTO the role
+// term) or comparator (an ordering fact) — both read a fact ABOUT some OTHER
+// term. fact-value reads a fact ABOUT the role term itself, with an optional
+// literal `value` and an optional `negate`; its effect counterpart writes a
+// literal instead of resolving a role. Neutral vocabulary throughout (an
+// "operator" raising/lowering a "gate"), unrelated to any shipped game.
+
+test("precondHolds: fact-value checks existence, an optional literal value, and negation", () => {
+  const domain = { classMembers: {}, ordering: [] };
+  const state = [{ subject: "g1", predicate: "mgx:raised", object: "true" }];
+  const exists = { shape: "fact-value", predicate: "mgx:raised", role: "target" };
+  assert.equal(precondHolds(exists, "h1", "g1", state, domain), true, "existence-only holds when any matching fact is present");
+  assert.equal(precondHolds(exists, "h1", "g2", state, domain), false, "existence-only fails for a term with no matching fact");
+  assert.equal(precondHolds({ ...exists, negate: true }, "h1", "g1", state, domain), false, "negate inverts an existence-only check");
+  assert.equal(precondHolds({ ...exists, negate: true }, "h1", "g2", state, domain), true);
+
+  const matched = { shape: "fact-value", predicate: "mgx:raised", role: "target", value: "true" };
+  assert.equal(precondHolds(matched, "h1", "g1", state, domain), true, "a matching value holds");
+  assert.equal(precondHolds({ ...matched, value: "false" }, "h1", "g1", state, domain), false, "a mismatched value fails");
+  assert.equal(precondHolds({ ...matched, negate: true }, "h1", "g1", state, domain), false, "negate inverts a value match");
+  assert.equal(precondHolds({ ...matched, value: "false", negate: true }, "h1", "g1", state, domain), true);
+
+  const subjectRole = { shape: "fact-value", predicate: "mgx:raised", role: "subject" };
+  assert.equal(precondHolds(subjectRole, "g1", "h1", state, domain), true, "role:subject reads the grounding's subject as the role term");
+});
+
+test("applyEffects: a literal-valued effect writes its value directly, independent of objectRole", () => {
+  const domain = { classMembers: {} };
+  const literalEffect = [{ predicate: "mgx:raised", subjectRole: "target", value: "true" }];
+  const next = applyEffects(literalEffect, "h1", "g1", [], domain);
+  assert.deepEqual(next, [{ subject: "g1", predicate: "mgx:raised", object: "true" }]);
+  // Re-applying the identical literal is a no-op (the "already" dedup check
+  // reads effect.value the same way it reads a role-resolved effObject).
+  assert.equal(applyEffects(literalEffect, "h1", "g1", next, domain), null);
+  const flipped = applyEffects([{ predicate: "mgx:raised", subjectRole: "target", value: "false" }], "h1", "g1", next, domain);
+  assert.deepEqual(flipped, [{ subject: "g1", predicate: "mgx:raised", object: "false" }]);
+});
+
+test("roleBinding resolves subject/target for a literal effect's subjectRole the same way a role-valued one does", () => {
+  const domain = { classMembers: { escort: ["k1"] } };
+  assert.equal(roleBinding("target", "h1", "g1", domain), "g1");
+  assert.equal(roleBinding("subject", "h1", "g1", domain), "h1");
+  assert.equal(roleBinding("escort", "h1", "g1", domain), "k1", "a class-bound role still resolves through classMembers");
+});
+
+const GATE_RULES = [
+  { id: "gr1", name: "raise", kind: "action-signature", slots: { subjectClass: "operator", targetClass: "gate" } },
+  { id: "gr2", name: "raise", kind: "action-precond", slots: { shape: "fact-value", predicate: "held-fast", role: "target", scope: "any", negate: "true" } },
+  { id: "gr3", name: "raise", kind: "action-precond", slots: { shape: "fact-value", predicate: "raised", role: "target", scope: "any", value: "true", negate: "true" } },
+  { id: "gr4", name: "raise", kind: "action-effect", slots: { predicate: "raised", subjectRole: "target", value: "true" } },
+  { id: "gr5", name: "lower", kind: "action-signature", slots: { subjectClass: "operator", targetClass: "gate" } },
+  { id: "gr6", name: "lower", kind: "action-precond", slots: { shape: "fact-value", predicate: "raised", role: "target", scope: "any", value: "true" } },
+  { id: "gr7", name: "lower", kind: "action-effect", slots: { predicate: "raised", subjectRole: "target", value: "false" } },
+];
+const GATE_FACTS = [
+  { subject: "h1", predicate: "rdfs:subClassOf", object: "operator" },
+  { subject: "g1", predicate: "rdfs:subClassOf", object: "gate" },
+  { subject: "g1", predicate: "mgx:held-fast", object: "true" },
+];
+
+test("compileDomain: an effect/precond's value/negate key is present only when actually taught", () => {
+  const domain = compileDomain(GATE_FACTS, GATE_RULES);
+  const raise = domain.actions.find((a) => a.name === "raise");
+  const roleValuedEffect = compileDomain(FACTS, RULES).actions[0].effects[0];
+  assert.deepEqual(Object.keys(roleValuedEffect).sort(), ["objectRole", "predicate", "subjectRole"],
+    "an existing role-valued effect (no value ever taught) carries no value key at all");
+  assert.deepEqual(Object.keys(raise.effects[0]).sort(), ["objectRole", "predicate", "subjectRole", "value"],
+    "a literal effect's objectRole is still present (empty — never taught), same as any other unset required slot");
+  assert.equal(raise.effects[0].objectRole, "");
+  const noValuePrecond = compileDomain(FACTS, RULES).actions[0].preconds.find((p) => p.shape === "no-incoming");
+  assert.deepEqual(Object.keys(noValuePrecond).sort(), ["predicate", "role", "scope", "shape"],
+    "an existing no-incoming precond carries no value/negate keys");
+});
+
+test("compileDomain does not throw the class-membership check over a literal effect's unused objectRole", () => {
+  // Before the guard, a literal effect's absent objectRole ("") tripped
+  // requireSoleMember as if it named an ill-bound class.
+  assert.doesNotThrow(() => compileDomain(GATE_FACTS, GATE_RULES));
+});
+
+test("the gate world: locked declines raise, unlocking admits it, and lower requires raised first", () => {
+  // Hand-built state, not stateFromFacts: "held-fast" is a static world fact
+  // no action here ever writes, so it is never a dynamic predicate — exactly
+  // the shape a real lock check takes (a fact-value precond need not name a
+  // predicate any effect in the domain touches), and precisely why a caller
+  // consulting one grounded fact-value precond builds its own small state
+  // array instead of routing through stateFromFacts (whose dynamic-predicate
+  // filter exists for full-search planning, not this).
+  const domain = compileDomain(GATE_FACTS, GATE_RULES);
+  const held = [{ subject: "g1", predicate: "mgx:held-fast", object: "true" }];
+  assert.deepEqual(movesFromRules(held, domain), [], "held-fast blocks the only otherwise-legal move");
+
+  const freeMoves = movesFromRules([], domain);
+  assert.deepEqual(freeMoves.map((m) => m.action.label), ["raise h1 g1"]);
+  assert.ok(freeMoves[0].nextState.some((r) => r.subject === "g1" && r.predicate === "mgx:raised" && r.object === "true"));
+
+  const raised = freeMoves[0].nextState;
+  const raisedMoves = movesFromRules(raised, domain).map((m) => m.action.label);
+  assert.deepEqual(raisedMoves, ["lower h1 g1"], "raised again is illegal; lower is now legal");
+  const lowered = movesFromRules(raised, domain)[0].nextState;
+  assert.ok(lowered.some((r) => r.subject === "g1" && r.predicate === "mgx:raised" && r.object === "false"));
 });
 
 // ---- the oracle -------------------------------------------------------------
