@@ -600,7 +600,7 @@ export function matchNegationSet(text) {
 export const STOPWORDS = new Set([
   "what", "who", "which", "where", "when", "why", "how",
   "does", "do", "did", "is", "are", "was", "were", "the", "a", "an", "of", "to", "from", "at", "in", "on",
-  "there", "something", "anything", "nothing", "one", "any",
+  "there", "something", "anything", "nothing", "one", "any", "anywhere",
   "last", // temporal filler ("when was X last touched")
   "usually", "typically", "generally", "normally", "often", "commonly", "mostly", // frequency-adverb filler
   "should", "would", "could", "can", "will", "shall", "might", "must", // modal auxiliaries
