@@ -3071,6 +3071,7 @@ ${shown.join("\n")}${tail}`;
         "nothing",
         "one",
         "any",
+        "anywhere",
         "last",
         // temporal filler ("when was X last touched")
         "usually",
@@ -3370,9 +3371,10 @@ ${shown.join("\n")}${tail}`;
         fuzzyVerb = { from: lcWords[at], to: fuzzyWords[at] };
       }
     }
-    if (!verbHit && lcWords.includes("by")) {
+    if (!verbHit) {
       for (let i = 0; i < lcWords.length; i += 1) {
         const k = PASSIVE_PARTICIPLE_TO_KIND[lcWords[i]];
+        if (k && lcWords[i] === "used" && lcWords[i + 1] === "for") continue;
         if (k && lcWords.slice(0, i).some((w) => PASSIVE_AUX.has(w))) {
           verbHit = { kind: k, start: i, end: i + 1 };
           break;
@@ -6195,14 +6197,23 @@ ${options2}
             }
           }
         }
-        if (nearest) pool = [...pool, nearest];
+        if (nearest) {
+          pool = [...pool, nearest];
+          if (branches) {
+            const branchResult = traverse(graph, parsed, { pinnedObjMatch: nearest });
+            branches = [...branches, { candidate: nearest, result: branchResult, rendered: render(parsed, branchResult, graph) }];
+          }
+        }
       }
       const noun = pool.length && pool.every((i) => i.class === "Commit") ? "commit" : "module";
       const shown = pool.slice(0, OVERFLOW_CAP).map((i) => i.label);
       const extra2 = pool.length > OVERFLOW_CAP ? `, \u2026and ${pool.length - OVERFLOW_CAP} more` : "";
       const lead = `"${parsed.object}" matches more than one ${noun} ambiguously \u2014 did you mean ${listJoin(shown)}${extra2}? Try one of those. If you're not sure, narrow it to one name.`;
+      const term = String(parsed.object || "");
+      const termRe = term ? new RegExp(`\\b${escapeRegex(term)}\\b`, "gi") : null;
+      const branchText = (b) => termRe ? b.rendered.content.replace(termRe, b.candidate.label) : b.rendered.content;
       const content = branches && branches.length ? `${lead}
-${branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.content}`).join("\n")}` : lead;
+${branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${branchText(b)}`).join("\n")}` : lead;
       return {
         content,
         miss: false,
@@ -10780,10 +10791,10 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // node_modules/smol-toml/dist/date.js
+  // ../../../node_modules/smol-toml/dist/date.js
   var DATE_TIME_RE, TomlDate;
   var init_date = __esm({
-    "node_modules/smol-toml/dist/date.js"() {
+    "../../../node_modules/smol-toml/dist/date.js"() {
       DATE_TIME_RE = /^(\d{4}-\d{2}-\d{2})?[T ]?(?:(\d{2}):\d{2}(?::\d{2}(?:\.\d+)?)?)?(Z|[-+]\d{2}:\d{2})?$/i;
       TomlDate = class _TomlDate extends Date {
         #hasDate = false;
@@ -10877,7 +10888,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
     }
   });
 
-  // node_modules/smol-toml/dist/error.js
+  // ../../../node_modules/smol-toml/dist/error.js
   function getLineColFromPtr(string, ptr) {
     let lines = string.slice(0, ptr).split(/\r\n|\n|\r/g);
     return [lines.length, lines.pop().length + 1];
@@ -10903,7 +10914,7 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
   }
   var TomlError;
   var init_error = __esm({
-    "node_modules/smol-toml/dist/error.js"() {
+    "../../../node_modules/smol-toml/dist/error.js"() {
       TomlError = class extends Error {
         line;
         column;
@@ -10922,7 +10933,7 @@ ${codeblock}`, options);
     }
   });
 
-  // node_modules/smol-toml/dist/primitive.js
+  // ../../../node_modules/smol-toml/dist/primitive.js
   function parseString(str, ptr) {
     let c = str[ptr++];
     let first = c;
@@ -11079,7 +11090,7 @@ ${codeblock}`, options);
   }
   var INT_REGEX, FLOAT_REGEX, LEADING_ZERO;
   var init_primitive = __esm({
-    "node_modules/smol-toml/dist/primitive.js"() {
+    "../../../node_modules/smol-toml/dist/primitive.js"() {
       init_date();
       init_error();
       INT_REGEX = /^((0x[0-9a-fA-F](_?[0-9a-fA-F])*)|(([+-]|0[ob])?\d(_?\d)*))$/;
@@ -11088,7 +11099,7 @@ ${codeblock}`, options);
     }
   });
 
-  // node_modules/smol-toml/dist/util.js
+  // ../../../node_modules/smol-toml/dist/util.js
   function indexOfNewline(str, start = 0, end = str.length) {
     let idx = str.indexOf("\n", start);
     if (str[idx - 1] === "\r")
@@ -11143,12 +11154,12 @@ ${codeblock}`, options);
     });
   }
   var init_util = __esm({
-    "node_modules/smol-toml/dist/util.js"() {
+    "../../../node_modules/smol-toml/dist/util.js"() {
       init_error();
     }
   });
 
-  // node_modules/smol-toml/dist/extract.js
+  // ../../../node_modules/smol-toml/dist/extract.js
   function sliceAndTrimEndOf(str, startPtr, endPtr) {
     let value = str.slice(startPtr, endPtr);
     let commentIdx = value.indexOf("#");
@@ -11215,7 +11226,7 @@ ${codeblock}`, options);
     ];
   }
   var init_extract = __esm({
-    "node_modules/smol-toml/dist/extract.js"() {
+    "../../../node_modules/smol-toml/dist/extract.js"() {
       init_primitive();
       init_struct();
       init_util();
@@ -11223,7 +11234,7 @@ ${codeblock}`, options);
     }
   });
 
-  // node_modules/smol-toml/dist/struct.js
+  // ../../../node_modules/smol-toml/dist/struct.js
   function parseKey(str, ptr, end = "=") {
     let dot = ptr - 1;
     let parsed = [];
@@ -11365,7 +11376,7 @@ ${codeblock}`, options);
   }
   var KEY_PART_RE;
   var init_struct = __esm({
-    "node_modules/smol-toml/dist/struct.js"() {
+    "../../../node_modules/smol-toml/dist/struct.js"() {
       init_primitive();
       init_extract();
       init_util();
@@ -11374,7 +11385,7 @@ ${codeblock}`, options);
     }
   });
 
-  // node_modules/smol-toml/dist/parse.js
+  // ../../../node_modules/smol-toml/dist/parse.js
   function peekTable(key, table, meta, type) {
     let t = table;
     let m = meta;
@@ -11499,7 +11510,7 @@ ${codeblock}`, options);
     return res;
   }
   var init_parse = __esm({
-    "node_modules/smol-toml/dist/parse.js"() {
+    "../../../node_modules/smol-toml/dist/parse.js"() {
       init_struct();
       init_extract();
       init_util();
@@ -11507,15 +11518,15 @@ ${codeblock}`, options);
     }
   });
 
-  // node_modules/smol-toml/dist/stringify.js
+  // ../../../node_modules/smol-toml/dist/stringify.js
   var init_stringify = __esm({
-    "node_modules/smol-toml/dist/stringify.js"() {
+    "../../../node_modules/smol-toml/dist/stringify.js"() {
     }
   });
 
-  // node_modules/smol-toml/dist/index.js
+  // ../../../node_modules/smol-toml/dist/index.js
   var init_dist = __esm({
-    "node_modules/smol-toml/dist/index.js"() {
+    "../../../node_modules/smol-toml/dist/index.js"() {
       init_parse();
       init_stringify();
       init_date();
@@ -23983,7 +23994,7 @@ ${JSON.stringify(envelope, null, 2)}`;
     const w = String(word || "").trim();
     if (/[a-z]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
     if (/(ses|xes|zes|ches|shes)$/i.test(w)) return w.slice(0, -2);
-    if (/[a-z]s$/i.test(w) && !/ss$/i.test(w)) return w.slice(0, -1);
+    if (/[a-z]s$/i.test(w) && !/(?:ss|ous)$/i.test(w)) return w.slice(0, -1);
     return w;
   }
   var TEACH_ADVERB_SKIP_SRC = "(?:(?:usually|often|sometimes|rarely|always|typically|generally|occasionally|frequently|normally|regularly|commonly|mostly|currently|still|also|really|actually)\\s+)?";
@@ -24701,7 +24712,11 @@ ${shown.map(renderFactLine).join("\n")}`,
       const subj = factTermVariants(normFactTerm2, subjTerm);
       const obj = factTermVariants(normFactTerm2, objTerm);
       const hit2 = facts.find((f) => f.predicate === compPredicate && subj.has(f.subject) && obj.has(f.object));
-      if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
+      if (hit2) {
+        const reversed = facts.find((f) => f.predicate === compPredicate && subj.has(f.object) && obj.has(f.subject));
+        const caveat = reversed ? ` \u2014 though you also told me the opposite: ${renderFactLine(reversed)}. Both are stored; I won't silently pick one.` : "";
+        return { text: `yes \u2014 ${renderFactLine(hit2)}${caveat}`, replace: true };
+      }
       const known = facts.filter((f) => f.predicate === compPredicate && (subj.has(f.subject) || subj.has(f.object)));
       const shown = known.length ? ` I do know: ${known.slice(0, 3).map(renderFactLine).join("; ")}.` : "";
       return {
@@ -24781,19 +24796,25 @@ ${shown.map(renderFactLine).join("\n")}`,
       );
       const hit2 = hasHit(subj);
       if (hit2) return { text: `yes \u2014 ${renderFactLine(hit2)}`, replace: true };
-      let liftFrontier = subj;
-      const liftChain = [];
+      let frontier = [{ terms: subj, chain: [] }];
       const liftSeen = /* @__PURE__ */ new Set();
       for (let hop = 0; hop < 4; hop += 1) {
-        const step = facts.find((f) => ISA_PREDICATES2.has(f.predicate) && liftFrontier.has(f.subject) && !liftSeen.has(f.object));
-        if (!step) break;
-        liftSeen.add(step.object);
-        liftChain.push(step);
-        const lifted = hasHit(factTermVariants(normFactTerm2, step.object));
-        if (lifted) {
-          return { text: `yes \u2014 ${[...liftChain.map(renderFactLine), renderFactLine(lifted)].join("; ")}`, replace: true };
+        const nextFrontier = [];
+        for (const { terms, chain } of frontier) {
+          const steps = facts.filter((f) => ISA_PREDICATES2.has(f.predicate) && terms.has(f.subject) && !liftSeen.has(f.object));
+          for (const step of steps) {
+            if (liftSeen.has(step.object)) continue;
+            liftSeen.add(step.object);
+            const nextChain = [...chain, step];
+            const lifted = hasHit(factTermVariants(normFactTerm2, step.object));
+            if (lifted) {
+              return { text: `yes \u2014 ${[...nextChain.map(renderFactLine), renderFactLine(lifted)].join("; ")}`, replace: true };
+            }
+            nextFrontier.push({ terms: factTermVariants(normFactTerm2, step.object), chain: nextChain });
+          }
         }
-        liftFrontier = factTermVariants(normFactTerm2, step.object);
+        if (!nextFrontier.length) break;
+        frontier = nextFrontier;
       }
       return null;
     }
@@ -25311,6 +25332,38 @@ ${shown.join("\n")}${extra}`, replace: true, ...rest.length ? { pending: { items
       }
       const polarityReply = isaPolarityReply(hit2, negHit || directDisjoint);
       if (polarityReply) return polarityReply;
+      if (disjointRows.length) {
+        const ancestryOf = (seed) => {
+          const closure = new Set(seed);
+          let frontier = new Set(seed);
+          for (let hop = 0; hop < 8 && frontier.size; hop += 1) {
+            const next = /* @__PURE__ */ new Set();
+            for (const [a, b] of mixedSubClassEdges) {
+              if (frontier.has(a) && !closure.has(b)) next.add(b);
+            }
+            if (!next.size) break;
+            for (const t of next) closure.add(t);
+            frontier = next;
+          }
+          return closure;
+        };
+        const objectAncestry = ancestryOf(objVariants);
+        const objViolation = disjointGateViolations.find((vv) => subjCandidates.has(vv.subject) && objectAncestry.has(vv.object) && !ancestryOf([vv.viaClass]).has(vv.object) && !ancestryOf([vv.object]).has(vv.viaClass));
+        if (objViolation) {
+          const posFact = isa.filter((f) => subjCandidates.has(f.subject) && f.object === objViolation.viaClass).sort(byTrust)[0];
+          const disjointFact = disjointRows.find((f) => f.subject === objViolation.viaClass && f.object === objViolation.object || f.subject === objViolation.object && f.object === objViolation.viaClass);
+          const objectNeedsLift = !objVariants.has(objViolation.object);
+          const objFact = objectNeedsLift ? isa.filter((f) => objVariants.has(f.subject) && f.object === objViolation.object).sort(byTrust)[0] : null;
+          if (posFact && disjointFact && (!objectNeedsLift || objFact)) {
+            const kindEcho = stripTrailingDiscourseTag(isaAsk[2]).trim();
+            const chain = [posFact, ...objFact ? [objFact] : []].map(renderFactLine).join("; ");
+            return {
+              text: `no \u2014 ${chain}; and ${factPhrase(disjointFact)}${disjointFact.provenance ? ` (source: ${disjointFact.provenance})` : ""} \u2014 so ${isaSubject} can never be ${indefiniteArticleFor(kindEcho)} ${kindEcho}.`,
+              replace: true
+            };
+          }
+        }
+      }
       const ent = await resolveEntity(graph, isaSubject);
       if (ent) {
         const bridgeSubjects = /* @__PURE__ */ new Map();

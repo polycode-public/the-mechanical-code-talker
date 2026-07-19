@@ -28,7 +28,7 @@ import {
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
   stripTrailingScopeFiller,
 } from "./ask-vocab.mjs";
-import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf } from "./interpret/normalize.mjs";
+import { expandContractions, normalizeQuery, applyNegationFrames, applyPhrasingFrames, matchNegationSet, STOPWORDS, splitWords, wordsOf, escapeRegex } from "./interpret/normalize.mjs";
 import { editDistance, fuzzyBound } from "./interpret/fuzzy.mjs";
 import { parseAnchored } from "./interpret/strategies/grammar.mjs";
 import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mjs";
@@ -3512,14 +3512,38 @@ function renderCore(parsed, result, graph) {
           if (shared > bestShared || d < bestD) { nearest = i; bestShared = shared; bestD = d; }
         }
       }
-      if (nearest) pool = [...pool, nearest];
+      // The nearest neighbour joins `branches` too, traversed and rendered the
+      // SAME way every other candidate's branch already was (traverse()'s own
+      // ambiguous-pool loop, just above in this file) — without this, the
+      // "did you mean" LEAD line named it (via `pool`) but its numbered
+      // preview never appeared at all, silently short one candidate.
+      if (nearest) {
+        pool = [...pool, nearest];
+        if (branches) {
+          const branchResult = traverse(graph, parsed, { pinnedObjMatch: nearest });
+          branches = [...branches, { candidate: nearest, result: branchResult, rendered: render(parsed, branchResult, graph) }];
+        }
+      }
     }
     const noun = pool.length && pool.every((i) => i.class === "Commit") ? "commit" : "module";
     const shown = pool.slice(0, OVERFLOW_CAP).map((i) => i.label);
     const extra = pool.length > OVERFLOW_CAP ? `, …and ${pool.length - OVERFLOW_CAP} more` : "";
     const lead = `"${parsed.object}" matches more than one ${noun} ambiguously — did you mean ${listJoin(shown)}${extra}? Try one of those. If you're not sure, narrow it to one name.`;
+    // A branch's own rendered text can still name the ORIGINAL ambiguous term
+    // instead of the specific candidate it was pinned to — e.g. "what calls
+    // saveTask" resolving 3 ways, where the "Task.assignTo" branch's own
+    // no-results miss text reads "…calls saveTask" (a fallback wording that
+    // is CORRECT for an ordinary single resolution, echoing what the user
+    // actually typed for a pronoun or a shortened path — untouched here) but
+    // wrong under a heading that already says which ONE candidate this
+    // preview is about. Swapped only when the literal ambiguous term still
+    // appears as a whole word in that ONE branch's own text — every other
+    // branch, and every non-branch render, is untouched.
+    const term = String(parsed.object || "");
+    const termRe = term ? new RegExp(`\\b${escapeRegex(term)}\\b`, "gi") : null;
+    const branchText = (b) => (termRe ? b.rendered.content.replace(termRe, b.candidate.label) : b.rendered.content);
     const content = (branches && branches.length)
-      ? `${lead}\n${branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${b.rendered.content}`).join("\n")}`
+      ? `${lead}\n${branches.map((b, i) => `${i + 1}) ${b.candidate.label}: ${branchText(b)}`).join("\n")}`
       : lead;
     return {
       content, miss: false, ambiguous: true, candidates: pool.map((i) => i.label),
