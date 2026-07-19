@@ -90,6 +90,42 @@ test("renderSpiderFlyHtml: the chat dock markup is present, wired to session.tur
   assert.match(html, /session\.turn\(/, "the dock submits through the live chat turn engine");
 });
 
+test("renderSpiderFlyHtml: the chat dock offers addressee and direction pills with canned, grammar-accepted text", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /id="chatpills"/);
+  assert.match(html, /data-role="addr" data-addressee="spider"[^>]*>@spider</);
+  assert.match(html, /data-role="addr" data-addressee="fly"[^>]*>@fly</);
+  for (const direction of ["north", "south", "east", "west"]) {
+    const re = new RegExp(`data-role="dir" data-direction="${direction}"[^>]*>the fly is ${direction}<`);
+    assert.match(html, re, `a ${direction} completion pill is present, defaulting to the fly as the subject`);
+  }
+});
+
+test("renderSpiderFlyHtml: every chat pill starts disabled, the same posture as #chatq before the session boots", () => {
+  const html = renderSpiderFlyHtml();
+  const pillsBlock = html.match(/<div class="chatpills"[\s\S]*?<\/div>/)[0];
+  const buttons = [...pillsBlock.matchAll(/<button[^>]*>/g)].map(([b]) => b);
+  assert.equal(buttons.length, 6, "two addressee pills plus four direction pills");
+  assert.ok(buttons.every((b) => /\bdisabled\b/.test(b)), "every pill is disabled until the session boots, mirroring #chatq");
+});
+
+test("renderSpiderFlyHtml: clicking a pill never wires a form submit — only fill/focus behaviour on #chatq", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /addressPillEls/);
+  assert.match(html, /directionPillEls/);
+  assert.match(html, /chatqEl\.focus\(\)/);
+  // The pill-click handlers set/append chatqEl.value directly; none of them
+  // call chatformEl.requestSubmit or dispatch a submit event.
+  assert.ok(!/directionPillEls[\s\S]{0,400}requestSubmit/.test(html));
+});
+
+test("renderSpiderFlyHtml: the chat pills sit inside .side, so they are hidden by the same body.preview rule as the rest of the chat dock", () => {
+  const html = renderSpiderFlyHtml();
+  const sideBlock = html.match(/<aside class="side"[\s\S]*?<\/aside>/)[0];
+  assert.match(sideBlock, /id="chatpills"/, "the pills render inside the .side aside, not as a preview-mode exception");
+  assert.match(html, /body\.preview \.side,[^{]*\{ display: none; \}/, "the existing hiding rule still targets .side as a whole");
+});
+
 test("renderSpiderFlyHtml: the HUD panel and the POV overlay canvas are both present", () => {
   const html = renderSpiderFlyHtml();
   assert.match(html, /id="hud"/);
