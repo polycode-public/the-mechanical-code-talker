@@ -286,6 +286,18 @@ parsing, silently falling through to the plain template with no face at all) bef
 coordinator — full credit, this is exactly the "screenshot, find real problems, fix them" discipline
 this session expects.
 
+**PART B FULLY SHIPPED**: the 17-class animal batch (dog/cat already done as examples) landed too —
+76 total `-with-emotion.toml` files on `main` (3 examples + 56 person-role + 17 animal). The
+coordinator's own fresh screenshot review found wolf/tiger/horse read as close to illegible against
+their own darker gradients (horse's face scale was roughly half the batch median) and fixed all
+three directly (a light backing patch behind the face, the same technique these files already use
+for their other highlights; horse's scale bumped to match the batch) — the dispatched agent's own
+session had already ended by the time this was caught, so the coordinator applied and verified the
+fix itself rather than losing the round trip. Also fixed two more pre-existing "assumes one template
+per class" tests (same class of gap as the earlier `dog.parameters` fix), found by this same batch.
+spider/fly's emotion sprites are now real and shipped — Part A's `emotionFor` wiring (task tracked
+separately) is unblocked.
+
 ### B.3 Files touched
 
 New: `src/domain/sprite-expressions.mjs`, `test/domain/sprite-expressions.test.mjs`, ~75 new
