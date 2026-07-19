@@ -1,0 +1,22 @@
+# meat — a roasted drumstick at the sprite tier: the same warm
+# currentColor-anchored gradient as food/meal, on a meaty bulb tapering
+# to an exposed bone with a rounded knuckle cap, so the silhouette
+# reads as a leg of meat rather than a loaf or a plated mound, no
+# material.
+classes = ["meat"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="meat-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 55%, #fff2d8)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 75%, #4a2c14)"/>
+    </linearGradient>
+  </defs>
+  <path d="M9 3.6 C13.6 2 18.4 4.8 19.2 9.6 C20 14.4 16.6 18.4 12 18.4 C8.4 18.4 6 15.6 6.4 12.2 C6.7 9.6 7.6 5.4 9 3.6 Z" fill="url(#meat-fill)"/>
+  <path d="M7.6 16.8 L4 21" stroke="#f4ecd8" stroke-width="2.6" stroke-linecap="round"/>
+  <circle cx="4" cy="21" r="1.6" fill="#f4ecd8"/>
+  <path d="M9.4 6 C11.6 5 14.4 5.4 16.4 7.2" fill="none" stroke="#4a2c14" stroke-width="0.5" opacity="0.3"/>
+  <ellipse cx="10.4" cy="8.4" rx="2.8" ry="1.8" fill="#ffffff" opacity="0.3"/>
+</svg>
+"""

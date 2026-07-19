@@ -1,0 +1,23 @@
+# planet — a ringed sphere at the sprite tier: unlike the rest of this
+# pack's places, a planet is a literal 3D object to render rather than
+# a space to schematise, so it takes the tier's own directional
+# currentColor gradient (as a body would) instead of room.toml's flat
+# fixed wash — the shading conveys a sphere's own curvature, the way a
+# flat wash never needs to. The ring sits behind the sphere and simply
+# shows past its edges, rather than a hand-clipped front arc.
+classes = ["planet"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <radialGradient id="planet-fill" cx="35%" cy="32%" r="65%">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 55%, white)"/>
+      <stop offset="60%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 80%, black)"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="12" cy="13.4" rx="10.4" ry="3" fill="none" stroke="currentColor" stroke-width="1.1" opacity="0.55"/>
+  <circle cx="12" cy="12" r="6.6" fill="url(#planet-fill)"/>
+  <path d="M6.2 13.2 C8.6 14.2 15.4 14.2 17.8 13.2" stroke="#000000" stroke-width="0.5" opacity="0.2" fill="none"/>
+  <ellipse cx="9.4" cy="9" rx="2.6" ry="1.6" fill="#ffffff" opacity="0.32"/>
+</svg>
+"""

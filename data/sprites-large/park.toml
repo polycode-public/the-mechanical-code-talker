@@ -1,0 +1,24 @@
+# park — open lawn with a single tree and a bench at the sprite tier:
+# one tree distinguishes it from forest's own several.
+classes = ["park"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="park-wash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.16"/>
+    </linearGradient>
+  </defs>
+  <rect x="2" y="16.6" width="20" height="5" fill="url(#park-wash)"/>
+  <line x1="2" y1="16.6" x2="22" y2="16.6" stroke="currentColor" stroke-width="1" opacity="0.4"/>
+  <rect x="10.6" y="10.4" width="1.6" height="6.4" fill="currentColor" opacity="0.7"/>
+  <circle cx="11.4" cy="7.4" r="5" fill="url(#park-wash)" stroke="currentColor" stroke-width="1.2"/>
+  <path d="M9 5.6 A5 5 0 0 1 14.6 6.6" stroke="#ffffff" stroke-width="0.6" opacity="0.4" fill="none" stroke-linecap="round"/>
+  <g stroke="currentColor" stroke-width="1" stroke-linecap="round">
+    <line x1="17.4" y1="19.6" x2="20.6" y2="19.6"/>
+    <line x1="17.8" y1="19.6" x2="17.8" y2="21"/>
+    <line x1="20.2" y1="19.6" x2="20.2" y2="21"/>
+    <line x1="17.4" y1="18.6" x2="20.6" y2="18.6"/>
+  </g>
+</svg>
+"""

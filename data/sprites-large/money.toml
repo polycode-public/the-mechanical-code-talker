@@ -1,0 +1,21 @@
+# money — a stack of coins at the sprite tier: currency renders through
+# the same fixed warm metal triple gold and generic metal use, since a
+# coin's own colour comes from being minted metal, not from a taught
+# material fact.
+classes = ["money"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="money-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#f0dfa0"/>
+      <stop offset="55%" stop-color="#c9a24b"/>
+      <stop offset="100%" stop-color="#8a6a1e"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="17.4" rx="8" ry="2.6" fill="url(#money-fill)"/>
+  <ellipse cx="12" cy="14.2" rx="8" ry="2.6" fill="url(#money-fill)"/>
+  <ellipse cx="12" cy="11" rx="8" ry="2.6" fill="url(#money-fill)"/>
+  <ellipse cx="12" cy="11" rx="5.4" ry="1.6" fill="none" stroke="#8a6a1e" stroke-width="0.5" opacity="0.5"/>
+  <path d="M6 9.4 A8 2.6 0 0 1 12 8.4" fill="none" stroke="#ffffff" stroke-width="0.7" opacity="0.5" stroke-linecap="round"/>
+</svg>
+"""

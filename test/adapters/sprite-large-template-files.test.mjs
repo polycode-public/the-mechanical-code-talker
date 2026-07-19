@@ -225,3 +225,78 @@ test("the four group classes each render a cluster of person silhouettes, not a 
     assert.ok(heads.length >= 3, `${className} should render at least 3 head circles (a group composite), got ${heads.length}`);
   }
 });
+
+// fish/flower/food/forest/frog/garden/glove/gold/grass/hat/home/horse/
+// hospital/hotel/house/insect/iron/jewelry/kitchen/library/lion/market/
+// meal/meat/metal/money/mountain/mouse/museum/ocean/office/owl/park/pig/
+// planet, mapped to the gradient/wash id each one's own file declares —
+// every one of these 35 classes carries no [parameters.material] table,
+// unlike lamp/key/cabinet/desk/letter/container/portrait: those seven
+// can safely go material-parameterized because sprite-map.mjs's legacy
+// SPRITE_REGISTRY already carries a fallback icon for the untaught
+// case, and none of these 35 newer classes are registered there. A
+// class with only a parameterized template and no taught fact to fill
+// it resolves to nothing at its own term and falls through the whole
+// ancestor chain to the generic root animal sprite — so every file
+// here uses a fixed or currentColor-anchored gradient instead, the one
+// shape that always renders correctly whether or not a fact was ever taught.
+const CLASS_OWN_GRADIENT_ID = {
+  fish: "fish-fill",
+  flower: "flower-fill",
+  food: "food-fill",
+  forest: "forest-wash",
+  frog: "frog-fill",
+  garden: "garden-wash",
+  glove: "glove-fill",
+  gold: "gold-fill",
+  grass: "grass-fill",
+  hat: "hat-fill",
+  home: "home-wash",
+  horse: "horse-fill",
+  hospital: "hospital-wash",
+  hotel: "hotel-wash",
+  house: "house-wash",
+  insect: "insect-fill",
+  iron: "iron-fill",
+  jewelry: "jewelry-fill",
+  kitchen: "kitchen-wash",
+  library: "library-wash",
+  lion: "lion-fill",
+  market: "market-wash",
+  meal: "meal-fill",
+  meat: "meat-fill",
+  metal: "metal-fill",
+  money: "money-fill",
+  mountain: "mountain-wash",
+  mouse: "mouse-fill",
+  museum: "museum-wash",
+  ocean: "ocean-wash",
+  office: "office-wash",
+  owl: "owl-fill",
+  park: "park-wash",
+  pig: "pig-fill",
+  planet: "planet-fill",
+};
+
+test("every one of the pack's own 35 classes resolves to a template that names that exact class", () => {
+  for (const cls of Object.keys(CLASS_OWN_GRADIENT_ID)) {
+    const t = REAL_LARGE_TEMPLATES.find((x) => x.classes.includes(cls));
+    assert.ok(t, `data/sprites-large/${cls}.toml not found`);
+    assert.deepEqual(t.classes, [cls], `${cls}.toml should declare classes = ["${cls}"]`);
+  }
+});
+
+test("every one of the pack's own 35 classes resolves through its own dedicated gradient with zero taught facts, never the root animal fallback", () => {
+  for (const [cls, ownId] of Object.entries(CLASS_OWN_GRADIENT_ID)) {
+    const svg = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.ok(svg.includes(`id="${ownId}"`), `${cls} resolved without its own gradient id "${ownId}": ${svg}`);
+    assert.ok(!svg.includes("{{FILL"), `${cls} left an unresolved placeholder token`);
+  }
+});
+
+test("none of the pack's own 35 classes carries a [parameters.material] table, since none has a legacy SPRITE_REGISTRY fallback for the untaught case", () => {
+  for (const cls of Object.keys(CLASS_OWN_GRADIENT_ID)) {
+    const t = REAL_LARGE_TEMPLATES.find((x) => x.classes.includes(cls));
+    assert.equal(t.parameters, undefined, `${cls}.toml should carry no material parameters`);
+  }
+});

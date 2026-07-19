@@ -1,0 +1,20 @@
+# grass — a cluster of blades at the sprite tier: each blade its own
+# gradient sliver, no material (a blade's own colour is whatever
+# currentColor sets).
+classes = ["grass"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="grass-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 55%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 75%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 21 C4 14 6 9 8.4 5.4 C7.4 10.4 7.6 15.8 8.6 21 Z" fill="url(#grass-fill)"/>
+  <path d="M9 21 C10 15 10.4 9.4 12 3.4 C12.6 9.6 12.6 15.4 11.8 21 Z" fill="url(#grass-fill)"/>
+  <path d="M12.6 21 C13.6 16 15.4 11.2 18.2 7.4 C16.6 12.4 16 17 16.4 21 Z" fill="url(#grass-fill)"/>
+  <path d="M16.8 21 C17.6 17.2 19.2 14 21.4 11.6 C19.8 15 19 18 19.2 21 Z" fill="url(#grass-fill)"/>
+  <path d="M12 4.6 C12.2 8.4 12.2 12.4 11.8 16.4" stroke="#ffffff" stroke-width="0.5" opacity="0.4" fill="none" stroke-linecap="round"/>
+</svg>
+"""

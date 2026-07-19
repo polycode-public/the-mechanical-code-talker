@@ -1,0 +1,26 @@
+# insect — the generic bug at the sprite tier: a segmented gradient
+# body with thin flat legs and antennae, distinct from the spider's own
+# eight-legged silhouette, no material.
+classes = ["insect"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="insect-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12.4" cy="15.6" rx="4.4" ry="5.4" fill="url(#insect-fill)"/>
+  <ellipse cx="12" cy="9.4" rx="3" ry="3" fill="url(#insect-fill)"/>
+  <circle cx="12" cy="4.8" r="2.2" fill="url(#insect-fill)"/>
+  <path d="M11 3.2 L8.4 1" stroke="currentColor" stroke-width="0.7" opacity="0.6" stroke-linecap="round" fill="none"/>
+  <path d="M13 3.2 L15.6 1" stroke="currentColor" stroke-width="0.7" opacity="0.6" stroke-linecap="round" fill="none"/>
+  <path d="M9.6 15 L12.4 15.6 L9.6 16.2" fill="#000000" opacity="0.16"/>
+  <g stroke="currentColor" stroke-width="1" fill="none" stroke-linecap="round">
+    <path d="M9 11 L3.4 9"/><path d="M9.4 14 L3 14"/><path d="M9.8 17.4 L4 19.6"/>
+    <path d="M15 11 L20.6 9"/><path d="M14.6 14 L21 14"/><path d="M14.2 17.4 L20 19.6"/>
+  </g>
+  <ellipse cx="10.8" cy="13" rx="2" ry="2.6" fill="#ffffff" opacity="0.26"/>
+</svg>
+"""

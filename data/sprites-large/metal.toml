@@ -1,0 +1,30 @@
+# metal — a raw-material gear at the sprite tier: the generic-metal
+# class renders through the same warm metal triple gold uses (the
+# shared palette gives shiny-metal one treatment, not one per named
+# alloy) — a gear silhouette keeps it from reading as a second copy of
+# gold's own nugget.
+classes = ["metal"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="metal-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#f0dfa0"/>
+      <stop offset="55%" stop-color="#c9a24b"/>
+      <stop offset="100%" stop-color="#8a6a1e"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#metal-fill)">
+    <rect x="10.8" y="2.6" width="2.4" height="3.4" rx="0.5"/>
+    <rect x="10.8" y="2.6" width="2.4" height="3.4" rx="0.5" transform="rotate(45 12 12)"/>
+    <rect x="10.8" y="2.6" width="2.4" height="3.4" rx="0.5" transform="rotate(90 12 12)"/>
+    <rect x="10.8" y="2.6" width="2.4" height="3.4" rx="0.5" transform="rotate(135 12 12)"/>
+    <rect x="10.8" y="2.6" width="2.4" height="3.4" rx="0.5" transform="rotate(180 12 12)"/>
+    <rect x="10.8" y="2.6" width="2.4" height="3.4" rx="0.5" transform="rotate(225 12 12)"/>
+    <rect x="10.8" y="2.6" width="2.4" height="3.4" rx="0.5" transform="rotate(270 12 12)"/>
+    <rect x="10.8" y="2.6" width="2.4" height="3.4" rx="0.5" transform="rotate(315 12 12)"/>
+  </g>
+  <circle cx="12" cy="12" r="6.6" fill="url(#metal-fill)"/>
+  <circle cx="12" cy="12" r="3" fill="#000000" opacity="0.28"/>
+  <path d="M8 7.4 A6.6 6.6 0 0 1 15.4 6.6" fill="none" stroke="#ffffff" stroke-width="0.7" opacity="0.4" stroke-linecap="round"/>
+</svg>
+"""

@@ -1,0 +1,17 @@
+# ocean — a horizon of stacked waves at the sprite tier.
+classes = ["ocean"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="ocean-wash" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.2"/>
+    </linearGradient>
+  </defs>
+  <circle cx="17.6" cy="6" r="3.2" fill="url(#ocean-wash)" stroke="currentColor" stroke-width="1"/>
+  <rect x="2" y="12.4" width="20" height="9" fill="url(#ocean-wash)"/>
+  <path d="M2 12.4 C4.4 10.6 6.8 10.6 9.2 12.4 C11.6 14.2 14 14.2 16.4 12.4 C18.8 10.6 21.2 10.6 22 12" stroke="currentColor" stroke-width="1.2" fill="none" stroke-linecap="round"/>
+  <path d="M2 16.6 C4.4 14.8 6.8 14.8 9.2 16.6 C11.6 18.4 14 18.4 16.4 16.6 C18.8 14.8 21.2 14.8 22 16.2" stroke="currentColor" stroke-width="1" opacity="0.6" fill="none" stroke-linecap="round"/>
+  <path d="M15.8 4.4 A3.2 3.2 0 0 1 19.4 7" stroke="#ffffff" stroke-width="0.5" opacity="0.5" fill="none" stroke-linecap="round"/>
+</svg>
+"""
