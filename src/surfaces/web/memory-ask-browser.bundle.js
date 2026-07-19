@@ -9131,11 +9131,7 @@ ${bodyText}` : graphText, tier });
           "mgx:ruleActionPrecondRole",
           "mgx:ruleActionPrecondScope"
         ],
-        "action-effect": [
-          "mgx:ruleActionEffectPredicate",
-          "mgx:ruleActionEffectSubject",
-          "mgx:ruleActionEffectObject"
-        ],
+        "action-effect": ["mgx:ruleActionEffectPredicate", "mgx:ruleActionEffectSubject"],
         "action-constraint": [
           "mgx:ruleActionConstraintLeft",
           "mgx:ruleActionConstraintRight",
@@ -10088,9 +10084,16 @@ ${bodyText}` : graphText, tier });
     if (!spec) throw new Error(`a rule kind must be one of ${RULE_KINDS2.join(", ")}, got ${JSON.stringify(kind)}`);
     const n = normFactTerm(name);
     if (!n) throw new Error("a rule needs a name");
+    const optional = RULE_SLOT_OPTIONAL[kind] || /* @__PURE__ */ new Set();
     const slotValues = spec.map(([slotKey]) => normFactTerm(slots?.[slotKey]));
-    if (slotValues.some((v) => !v)) {
-      throw new Error(`a ${kind} rule needs ${spec.map(([slotKey]) => slotKey).join(" + ")}`);
+    const missing = spec.filter(([slotKey], i) => !optional.has(slotKey) && !slotValues[i]);
+    if (missing.length) {
+      throw new Error(`a ${kind} rule needs ${missing.map(([slotKey]) => slotKey).join(" + ")}`);
+    }
+    if (kind === RULE_KIND_ACTION_EFFECT) {
+      const objectRole = slotValues[spec.findIndex(([k]) => k === "objectRole")];
+      const value = slotValues[spec.findIndex(([k]) => k === "value")];
+      if (!objectRole && !value) throw new Error(`a ${kind} rule needs an objectRole or a value`);
     }
     const id = ruleIdFor(kind, n, slotValues);
     const label = labelOf(`${n} = ${kind}(${slotValues.join(", ")})`);
@@ -10109,7 +10112,10 @@ ${bodyText}` : graphText, tier });
           { prop: "rdf:type", key: "type", value: "owl:NamedIndividual" },
           { prop: RULE_NAME_PROP, key: "ruleName", value: n },
           { prop: RULE_KIND_PROP, key: "ruleKind", value: kind },
-          ...spec.map(([slotKey, prop], i) => ({ prop, key: slotKey, value: slotValues[i] })),
+          // An optional slot left empty stores no attribute at all — the same
+          // "never supplied" shape a pre-extension Rule individual already has,
+          // rather than a wasted always-"" one.
+          ...spec.map(([slotKey, prop], i) => ({ prop, key: slotKey, value: slotValues[i], skip: !slotValues[i] && optional.has(slotKey) })).filter((attr) => !attr.skip).map(({ skip, ...attr }) => attr),
           { prop: CREATED_AT_PROP, key: "createdAt", value: createdAtVal },
           ...provs.length ? [{ prop: "mgx:factProvenance", key: "provenance", value: provs.join(" | ") }] : []
         ]
@@ -10376,7 +10382,7 @@ ${bodyText}` : graphText, tier });
     }
     return out.sort((a, b) => `${a[0].subject} ${a[0].predicate}`.localeCompare(`${b[0].subject} ${b[0].predicate}`));
   }
-  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, LEGACY_FACT_ID_RE, SYLLOGISE_STATE_REL, SQLITE_SYLLOGISE_STATE_KEY, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, PROV_CLASS_BY_SOURCE_TYPE, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE2, MULTI_VALUED_PREDICATES;
+  var MEMORY_DIR_REL, MEMORY_GRAPH_REL, UTTERANCE_CLASS, FACT_CLASS, MEMORY_SESSION_CLASS, SOURCE_CLASS, RULE_CLASS, SAID_IN_SESSION_PROP, IN_REPLY_TO_PROP, DERIVED_FROM_PROP, STATED_BY_PROP, CANONICALISED_FROM_PROP, SOURCE_RELIABILITY_PROP, OPERATOR_SOURCE_ID, TEACH_SOURCE_ID, ROLES, LABEL_CAP, MEMORY_VOCABULARY, memoryGraphFile, BACKEND_MEMORY, BACKEND_SQLITE, SQLITE_DDL, STD_EDGE_KEYS, cloneJson, MEMORY_MANIFEST_REL, DEFAULT_RETENTION, resolveManifestFile, LEGACY_FACT_ID_RE, SYLLOGISE_STATE_REL, SQLITE_SYLLOGISE_STATE_KEY, MEMORY_INDEX, memoryIndexOf, labelOf, nowIso, sourceLabel, PROV_CLASS_BY_SOURCE_TYPE, isSessionScopedSourceId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER, RULE_KIND_RECURSIVE, RULE_KIND_ACTION_SIGNATURE, RULE_KIND_ACTION_PRECOND, RULE_KIND_ACTION_EFFECT, RULE_KIND_ACTION_CONSTRAINT, RULE_KINDS2, RULE_NAME_PROP, RULE_KIND_PROP, RULE_SLOT_SPEC, RULE_SLOT_OPTIONAL, ruleIdFor, CONTRADICTION_TRUST_FLOOR, HAS_A_PREDICATE, CAPABLE_OF_PREDICATE2, MULTI_VALUED_PREDICATES;
   var init_core = __esm({
     "src/adapters/memory/core.mjs"() {
       init_promises();
@@ -10506,12 +10512,22 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
           ["shape", "mgx:ruleActionPrecondShape"],
           ["predicate", "mgx:ruleActionPrecondPredicate"],
           ["role", "mgx:ruleActionPrecondRole"],
-          ["scope", "mgx:ruleActionPrecondScope"]
+          ["scope", "mgx:ruleActionPrecondScope"],
+          // value/negate: the "fact-value" shape's literal-match and negation
+          // slots. Optional (RULE_SLOT_OPTIONAL below) — no-incoming/comparator
+          // preconds never set them.
+          ["value", "mgx:ruleActionPrecondValue"],
+          ["negate", "mgx:ruleActionPrecondNegate"]
         ],
         [RULE_KIND_ACTION_EFFECT]: [
           ["predicate", "mgx:ruleActionEffectPredicate"],
           ["subjectRole", "mgx:ruleActionEffectSubject"],
-          ["objectRole", "mgx:ruleActionEffectObject"]
+          // objectRole/value: exactly one of these two must be set (enforced
+          // below, not by this per-slot spec) — a role-bound effect (Hanoi's
+          // "rest-on") supplies objectRole, a literal datatype effect (Ashcombe's
+          // is-open = "true") supplies value instead.
+          ["objectRole", "mgx:ruleActionEffectObject"],
+          ["value", "mgx:ruleActionEffectValue"]
         ],
         // "the <left> may not be with the <right> without the <guard>" — each slot
         // names a class whose sole member src/domain/domain.mjs resolves at compile time.
@@ -10520,6 +10536,10 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
           ["right", "mgx:ruleActionConstraintRight"],
           ["guard", "mgx:ruleActionConstraintGuard"]
         ]
+      };
+      RULE_SLOT_OPTIONAL = {
+        [RULE_KIND_ACTION_PRECOND]: /* @__PURE__ */ new Set(["value", "negate"]),
+        [RULE_KIND_ACTION_EFFECT]: /* @__PURE__ */ new Set(["objectRole", "value"])
       };
       ruleIdFor = (kind, name, slotValues) => `rule:${fnv1aHex([kind, name, ...slotValues].join("\0"))}`;
       CONTRADICTION_TRUST_FLOOR = 0.5;
@@ -22011,6 +22031,14 @@ ${codeblock}`, options);
     }
   });
 
+  // src/domain/domain.mjs
+  var SEP2;
+  var init_domain = __esm({
+    "src/domain/domain.mjs"() {
+      SEP2 = String.fromCharCode(0);
+    }
+  });
+
   // src/adapters/memory/blocks.mjs
   var BLOCKS_DIR_REL;
   var init_blocks = __esm({
@@ -23449,6 +23477,7 @@ ${JSON.stringify(envelope, null, 2)}`;
   init_ace2();
   init_graph_adapter();
   init_taught();
+  init_domain();
 
   // src/adapters/corpus/worlds-pack.mjs
   init_node_fs();
