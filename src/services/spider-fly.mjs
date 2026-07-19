@@ -651,6 +651,25 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
   }
 
   const ecology = runEcologyPass({ state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider, turn: k });
+  // Every agent's goal was assigned during movement, before this same tick's
+  // ecology pass resolves eating/starving — so a THIRD agent's goal can name
+  // a subject that dies in this exact tick just as easily as the dying
+  // subject's own goal can (a fly's "evading — last saw spider-1 ..." is
+  // just as stale as spider-1's own entry once spider-1 starves this tick).
+  // Scrub every remaining agent's goal of a died-this-tick reference BEFORE
+  // the specific eaten-pair handling below, so that handling's own nicer
+  // "just ate X" message (set second) always wins for the eating spider,
+  // whose pre-scrub goal also names its prey. `(?!\d)` keeps "fly-1" from
+  // false-matching inside "fly-10".
+  const diedThisTick = [...ecology.events.eaten.map((e) => e.fly), ...ecology.events.starved];
+  for (const id of Object.keys(agents)) {
+    for (const deadId of diedThisTick) {
+      if (new RegExp(`${deadId}(?!\\d)`).test(agents[id].goal)) {
+        agents[id].goal = `${deadId} is gone — re-evaluating.`;
+        break;
+      }
+    }
+  }
   // A fly eaten or starved THIS tick was already assigned a pre-ecology
   // goal/position above (movement runs before the ecology pass resolves
   // eating) — left as-is, the same response would both announce "fly-5 was
