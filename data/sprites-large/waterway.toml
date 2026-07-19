@@ -1,0 +1,18 @@
+# waterway — three stacked ripple strokes read as flowing water viewed
+# side-on, distinct from river.toml's own top-down winding band and
+# water.toml's single droplet.
+classes = ["waterway"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="waterway-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#bfe2e7"/>
+      <stop offset="100%" stop-color="#4c8fa8"/>
+    </linearGradient>
+  </defs>
+  <path d="M2 8.4 C4.4 6.4 6.8 6.4 9.2 8.4 C11.6 10.4 14 10.4 16.4 8.4 C18.8 6.4 21.2 6.4 22.6 8" fill="none" stroke="url(#waterway-fill)" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M1.4 14 C3.8 12 6.2 12 8.6 14 C11 16 13.4 16 15.8 14 C18.2 12 20.6 12 23 13.6" fill="none" stroke="url(#waterway-fill)" stroke-width="2.6" stroke-linecap="round"/>
+  <path d="M2 19.6 C4.4 17.6 6.8 17.6 9.2 19.6 C11.6 21.6 14 21.6 16.4 19.6 C18.8 17.6 21.2 17.6 22.6 19.2" fill="none" stroke="url(#waterway-fill)" stroke-width="3" stroke-linecap="round"/>
+  <path d="M2 8.4 C4.4 6.4 6.8 6.4 9.2 8.4" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
+</svg>
+"""

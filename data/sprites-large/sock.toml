@@ -1,0 +1,18 @@
+# sock — a bent tube silhouette with a fixed contrasting cuff stripe, the
+# stripe fixed the way a sports sock's own trim rarely matches its body
+# colour.
+classes = ["sock"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="sock-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M8.4 2.6 H15.2 V12.4 C15.2 13.6 15.8 14.4 16.8 15 L20.6 17.2 C21.6 17.8 21.6 19.2 20.6 19.8 C18.6 21 16 21.4 13.4 20.6 C10.4 19.6 8.4 17 8.4 13.8 Z" fill="url(#sock-fill)"/>
+  <rect x="8.4" y="2.6" width="6.8" height="2.6" fill="#e05a4f"/>
+  <path d="M9 5.6 L9 12" stroke="#ffffff" stroke-width="0.5" opacity="0.3"/>
+</svg>
+"""

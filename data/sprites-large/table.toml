@@ -1,0 +1,29 @@
+# table — a plain worktable at the sprite tier, gradient-shaded from its own
+# taught mgx:madeOf value: no drawers or knobs, so it reads as furniture
+# distinct from desk.toml's fitted writing desk even sharing the same wood/
+# metal treatments.
+classes = ["table"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="table-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="7.4" width="18" height="2.4" rx="0.5" fill="url(#table-fill)"/>
+  <path d="M3.4 8 L20.6 8" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
+  <rect x="4.6" y="9.8" width="1.8" height="10.6" rx="0.3" fill="url(#table-fill)"/>
+  <rect x="17.6" y="9.8" width="1.8" height="10.6" rx="0.3" fill="url(#table-fill)"/>
+  <rect x="4.6" y="9.8" width="14.8" height="1.2" fill="#000000" opacity="0.12"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+wood = "wood"
+metal = "metal"

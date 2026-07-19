@@ -1,0 +1,33 @@
+# sun — a soft glow behind a radiating ring of rays and a warm gradient
+# disc, the same glow technique lamp.toml uses for its own flame; fixed
+# warm colour throughout, since sunlight doesn't vary the way a taught
+# object's own material does.
+classes = ["sun"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <radialGradient id="sun-glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffd27a" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="#ffd27a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="sun-fill" cx="35%" cy="30%" r="70%">
+      <stop offset="0%" stop-color="#ffe9a8"/>
+      <stop offset="60%" stop-color="#f9b73f"/>
+      <stop offset="100%" stop-color="#e0872a"/>
+    </radialGradient>
+  </defs>
+  <circle cx="12" cy="12" r="10.6" fill="url(#sun-glow)"/>
+  <g stroke="#f4b73f" stroke-width="1.4" stroke-linecap="round">
+    <line x1="12" y1="1.4" x2="12" y2="3.8"/>
+    <line x1="12" y1="20.2" x2="12" y2="22.6"/>
+    <line x1="1.4" y1="12" x2="3.8" y2="12"/>
+    <line x1="20.2" y1="12" x2="22.6" y2="12"/>
+    <line x1="4.4" y1="4.4" x2="6.1" y2="6.1"/>
+    <line x1="17.9" y1="17.9" x2="19.6" y2="19.6"/>
+    <line x1="19.6" y1="4.4" x2="17.9" y2="6.1"/>
+    <line x1="6.1" y1="17.9" x2="4.4" y2="19.6"/>
+  </g>
+  <circle cx="12" cy="12" r="6.4" fill="url(#sun-fill)"/>
+  <ellipse cx="9.8" cy="9.4" rx="2" ry="1.4" fill="#ffffff" opacity="0.4"/>
+</svg>
+"""

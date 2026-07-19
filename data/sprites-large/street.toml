@@ -1,0 +1,28 @@
+# street — a road bordered by buildings on both sides, top-down, so it
+# reads distinct from road.toml's own driver's-eye perspective while
+# sharing the same dashed centre line.
+classes = ["street"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="street-fill" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#000000" stop-opacity="0.26"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.14"/>
+    </linearGradient>
+  </defs>
+  <rect x="8.4" y="2" width="7.2" height="20" fill="url(#street-fill)"/>
+  <rect x="8.4" y="2" width="7.2" height="20" fill="none" stroke="currentColor" stroke-width="1.2"/>
+  <g stroke="#ffffff" stroke-width="1" stroke-linecap="round" opacity="0.55">
+    <line x1="12" y1="3.6" x2="12" y2="6.2"/>
+    <line x1="12" y1="8.8" x2="12" y2="11.4"/>
+    <line x1="12" y1="14" x2="12" y2="16.6"/>
+    <line x1="12" y1="19.2" x2="12" y2="21.4"/>
+  </g>
+  <g fill="currentColor" opacity="0.85">
+    <rect x="2" y="5" width="4.4" height="8.6"/>
+    <rect x="2" y="14.6" width="4.4" height="6.6"/>
+    <rect x="17.6" y="3.4" width="4.4" height="9.6"/>
+    <rect x="17.6" y="14.2" width="4.4" height="7"/>
+  </g>
+</svg>
+"""

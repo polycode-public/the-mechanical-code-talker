@@ -1,0 +1,21 @@
+# salt — an angular mound with two jutting crystal chunks, gradient/
+# highlight only: salt's own whiteness is close enough to neutral that a
+# taught colour still reads plausibly through the gradient.
+classes = ["salt"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="salt-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 45%, white)"/>
+      <stop offset="55%" stop-color="color-mix(in srgb, currentColor 78%, white)"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 88%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 20 C4 15.4 7.6 12 12 12 C16.4 12 20 15.4 20 20 Z" fill="url(#salt-fill)"/>
+  <path d="M8.6 12.6 L10.4 9.6 L12.4 12.2 L11 15 Z" fill="url(#salt-fill)"/>
+  <path d="M13 11.6 L15.2 9 L16.6 12.4 L14.4 14.2 Z" fill="url(#salt-fill)"/>
+  <path d="M9 11 L10.4 9.6 L11.2 11.4" fill="none" stroke="#ffffff" stroke-width="0.4" opacity="0.5"/>
+  <path d="M13.6 11 L15.2 9 L15.8 11.2" fill="none" stroke="#ffffff" stroke-width="0.4" opacity="0.5"/>
+  <ellipse cx="8.6" cy="17" rx="1.8" ry="1" fill="#ffffff" opacity="0.35"/>
+</svg>
+"""

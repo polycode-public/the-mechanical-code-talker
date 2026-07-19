@@ -1,0 +1,20 @@
+# vegetable — a generic pepper-shaped vegetable: the body carries the
+# gradient so a taught instance's own colour still shows, the stem and leaf
+# stay a fixed green the way a fruit's own stem never changes colour with
+# the fruit.
+classes = ["vegetable"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="vegetable-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 7.4 C17 7.4 19 11.4 18.4 15.4 C17.8 19.4 15 21.4 12 21.4 C9 21.4 6.2 19.4 5.6 15.4 C5 11.4 7 7.4 12 7.4 Z" fill="url(#vegetable-fill)"/>
+  <path d="M11 4.4 C11.4 3 12.6 2.6 13.6 3.2 C13.2 4.4 12.2 4.8 11.6 5.8 C11 6.6 10.6 6.8 10 6.2 C10.2 5.4 10.5 4.9 11 4.4 Z" fill="#4a7a34"/>
+  <rect x="11.4" y="6" width="1.2" height="2.2" rx="0.4" fill="#3a6028"/>
+  <ellipse cx="9" cy="11.4" rx="2.2" ry="3" fill="#ffffff" opacity="0.28"/>
+</svg>
+"""

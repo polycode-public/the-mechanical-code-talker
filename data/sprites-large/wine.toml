@@ -1,0 +1,21 @@
+# wine — a stemmed glass outlined in the shared glass treatment's own dark
+# stop (borrowed as a fixed hex, not a material table — one glass shape
+# with no plausible alternative reading), the wine itself fixed burgundy
+# since its colour comes from the grape, not the glass.
+classes = ["wine"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="wine-fill" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#e8998f"/>
+      <stop offset="55%" stop-color="#9b2d3a"/>
+      <stop offset="100%" stop-color="#5c1520"/>
+    </linearGradient>
+  </defs>
+  <path d="M8.2 6.6 C8.4 9.4 9.8 10.8 12 10.8 C14.2 10.8 15.6 9.4 15.8 6.6 C14.6 7.6 13.4 8 12 8 C10.6 8 9.4 7.6 8.2 6.6 Z" fill="url(#wine-fill)"/>
+  <path d="M7 3.4 C7 8.6 8.8 11.6 12 11.6 C15.2 11.6 17 8.6 17 3.4" fill="none" stroke="#7fb6c1" stroke-width="1"/>
+  <line x1="12" y1="11.6" x2="12" y2="18.6" stroke="#7fb6c1" stroke-width="1"/>
+  <ellipse cx="12" cy="19.6" rx="3.6" ry="0.9" fill="none" stroke="#7fb6c1" stroke-width="1"/>
+  <path d="M8.6 4.4 C8.8 6.2 9.6 6.8 10.6 7.2" fill="none" stroke="#ffffff" stroke-width="0.4" opacity="0.4"/>
+</svg>
+"""

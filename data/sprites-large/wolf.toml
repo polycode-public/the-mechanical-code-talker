@@ -1,0 +1,23 @@
+# wolf — an angular head and upright pointed ears distinguish this from
+# dog.toml's own rounder silhouette, plus a raised bushy tail; gradient/
+# highlight only, the same creature treatment as dog and poodle.
+classes = ["wolf"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="wolf-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12.6" cy="15.4" rx="6.6" ry="4.2" fill="url(#wolf-fill)"/>
+  <path d="M4.6 10.2 C4.6 7 6.8 5.2 9.6 5.2 C12.4 5.2 14 7.4 13.8 10.2 C13.6 12.4 12.2 13.4 9.4 13.4 C6.8 13.4 4.6 12.4 4.6 10.2 Z" fill="url(#wolf-fill)"/>
+  <path d="M5 6.6 L3.4 2.6 L7 4.8 Z" fill="url(#wolf-fill)"/>
+  <path d="M11.4 5.4 L11.8 1.6 L14.6 4.6 Z" fill="url(#wolf-fill)"/>
+  <path d="M5.6 10.4 C6 12.2 7.8 13 9.4 13 C7.8 12.2 6.6 11.2 6.4 9.4 Z" fill="#000000" opacity="0.18"/>
+  <ellipse cx="6.6" cy="9" rx="1" ry="1.2" fill="#000000" opacity="0.24"/>
+  <path d="M20.4 13.6 C23 13 23.6 16.4 20.8 17.2 C22 15.6 21.6 14.2 20.4 13.6 Z" fill="url(#wolf-fill)"/>
+  <ellipse cx="10.2" cy="12.2" rx="2.4" ry="1.4" fill="#ffffff" opacity="0.26"/>
+</svg>
+"""

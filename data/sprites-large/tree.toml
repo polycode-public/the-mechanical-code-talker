@@ -1,0 +1,25 @@
+# tree — a four-lobe gradient canopy over a fixed brown trunk, the trunk
+# fixed for the same reason a lamp's flame stays fixed regardless of the
+# lamp's own material: bark colour doesn't vary with the rest of the
+# sprite's palette the way foliage does.
+classes = ["tree"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="tree-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 55%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <rect x="10.8" y="14" width="2.4" height="8" fill="#7a5230"/>
+  <path d="M11 21.6 H13.4" stroke="#5a3a1c" stroke-width="0.6"/>
+  <g fill="url(#tree-fill)">
+    <circle cx="8.4" cy="10" r="4.6"/>
+    <circle cx="15.6" cy="10" r="4.6"/>
+    <circle cx="12" cy="6.4" r="5"/>
+    <circle cx="12" cy="12.4" r="4.8"/>
+  </g>
+  <ellipse cx="9" cy="7.6" rx="2.6" ry="1.8" fill="#ffffff" opacity="0.28"/>
+</svg>
+"""
