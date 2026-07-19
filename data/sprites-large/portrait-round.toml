@@ -1,0 +1,37 @@
+# portrait-round — the base pack's one demonstrative SHAPE variant: an
+# oval frame around the same canvas/bust portrait.toml uses, selected via
+# [match] when the instance's own mgx:hasProperty says "round". This is a
+# genuinely non-implicit specialization (most portraits in this world are
+# the plain arched rectangle; "a round portrait" changes the silhouette,
+# the way the operator's own window/window-round example does) — unlike a
+# hypothetical circle-round.toml, where roundness would already be implied
+# by being a circle. Build a shape variant on THAT test, not by reflex:
+# most shape words on most objects in this pack add no information and
+# don't deserve a dedicated file.
+#
+# A [match] variant is a fully hand-authored fixed alternative (see
+# sprite-templates.mjs's own header) — it carries no [parameters.material]
+# of its own, since resolveAtTerm returns a matched variant's svg directly,
+# never through the parameterized-fill step. The frame is a fixed gilt
+# tone for that reason, not a taught one.
+classes = ["portrait"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="portrait-round-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#f0dfa0"/>
+      <stop offset="55%" stop-color="#c9a24b"/>
+      <stop offset="100%" stop-color="#8a6a1e"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="12" rx="9.4" ry="10.4" fill="url(#portrait-round-fill)"/>
+  <ellipse cx="12" cy="12" rx="7.6" ry="8.6" fill="#f4ecd8"/>
+  <circle cx="12" cy="9.6" r="2.3" fill="#8a6a52" opacity="0.85"/>
+  <path d="M8.2 17.6 C8.2 14.6 9.8 12.8 12 12.8 C14.2 12.8 15.8 14.6 15.8 17.6 Z" fill="#8a6a52" opacity="0.85"/>
+  <path d="M4.4 8 C5.6 5 8.2 3 12 2.6" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+</svg>
+"""
+
+[match]
+property = "mgx:hasProperty"
+value = "round"

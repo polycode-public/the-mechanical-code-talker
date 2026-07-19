@@ -1,0 +1,30 @@
+# portable — the generic fallback for any carryable object with no sprite
+# of its own: the drawstring-parcel silhouette, gradient-shaded from its
+# own taught mgx:madeOf value across the three non-food treatments a
+# generic small carryable is plausibly built from, with the drawstring
+# itself picked out in the treatment's own dark tone rather than a flat
+# accent, so it still reads as "tied shut" against any of the three.
+classes = ["portable"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="portable-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 6 C7.5 6 5 9.4 5 13.4 C5 17.7 8.1 20 12 20 C15.9 20 19 17.7 19 13.4 C19 9.4 16.5 6 12 6 Z" fill="url(#portable-fill)"/>
+  <path d="M9.4 6.4 C9.9 4.6 10.8 3.4 12 3.4 C13.2 3.4 14.1 4.6 14.6 6.4" fill="none" stroke="{{FILL_DARK}}" stroke-width="1.4" stroke-linecap="round"/>
+  <ellipse cx="9.6" cy="10.4" rx="2" ry="2.6" fill="#ffffff" opacity="0.3"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+wood = "wood"
+metal = "metal"
+plastic = "plastic"

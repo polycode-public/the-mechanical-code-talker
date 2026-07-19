@@ -151,6 +151,168 @@ test("spriteTemplateProblems flags a match table missing property or value", () 
   assert.ok(spriteTemplateProblems({ classes: ["dog"], svg: "<svg></svg>", match: { value: "black" } }).length > 0);
 });
 
+// ---- multi-placeholder parameters (the sprite tier's gradient shading) ----
+
+const GRADIENT_SVG =
+  "<svg><stop stop-color=\"{{FILL_LIGHT}}\"/><stop stop-color=\"{{FILL}}\"/><stop stop-color=\"{{FILL_DARK}}\"/></svg>";
+const GOLD_TRIPLE = { light: "#f0dfa0", base: "#c9a24b", dark: "#8a6a1e" };
+
+test("a multi-placeholder parameter fills every named token from the matching value's sub-keys", () => {
+  const templates = [{
+    classes: ["lamp"],
+    svg: GRADIENT_SVG,
+    parameters: {
+      material: {
+        property: "mgx:madeOf",
+        placeholders: { light: "{{FILL_LIGHT}}", base: "{{FILL}}", dark: "{{FILL_DARK}}" },
+        values: { gold: GOLD_TRIPLE },
+      },
+    },
+  }];
+  const madeOf = (subject, object) => ({ subject, predicate: "mgx:madeOf", object });
+  const svg = resolveSpriteAsset("lamp", [], [madeOf("lamp-1", "gold")], templates, PLAIN_REGISTRY);
+  assert.equal(svg, `<svg><stop stop-color="${GOLD_TRIPLE.light}"/><stop stop-color="${GOLD_TRIPLE.base}"/><stop stop-color="${GOLD_TRIPLE.dark}"/></svg>`);
+});
+
+test("a multi-placeholder value missing one of the declared sub-keys is never a partial match — falls through to the plain template", () => {
+  const templates = [
+    { classes: ["lamp"], svg: "<svg>lamp-plain</svg>" },
+    {
+      classes: ["lamp"],
+      svg: GRADIENT_SVG,
+      parameters: {
+        material: {
+          property: "mgx:madeOf",
+          placeholders: { light: "{{FILL_LIGHT}}", base: "{{FILL}}", dark: "{{FILL_DARK}}" },
+          values: { gold: { light: "#f0dfa0", base: "#c9a24b" } }, // no "dark"
+        },
+      },
+    },
+  ];
+  const facts = [{ subject: "lamp-1", predicate: "mgx:madeOf", object: "gold" }];
+  const svg = resolveSpriteAsset("lamp", [], facts, templates, PLAIN_REGISTRY);
+  assert.equal(svg, "<svg>lamp-plain</svg>", "an incomplete triple must never render a partially-filled gradient");
+});
+
+test("spriteTemplateProblems accepts a well-formed multi-placeholder parameter", () => {
+  assert.deepEqual(
+    spriteTemplateProblems({
+      classes: ["lamp"],
+      svg: GRADIENT_SVG,
+      parameters: {
+        material: {
+          property: "mgx:madeOf",
+          placeholders: { light: "{{FILL_LIGHT}}", base: "{{FILL}}", dark: "{{FILL_DARK}}" },
+          values: { gold: GOLD_TRIPLE },
+        },
+      },
+    }),
+    [],
+  );
+});
+
+test("spriteTemplateProblems flags a parameter that sets both placeholder and placeholders", () => {
+  const problems = spriteTemplateProblems({
+    classes: ["lamp"],
+    svg: GRADIENT_SVG,
+    parameters: {
+      material: {
+        property: "mgx:madeOf",
+        placeholder: "{{FILL}}",
+        placeholders: { light: "{{FILL_LIGHT}}", base: "{{FILL}}", dark: "{{FILL_DARK}}" },
+        values: { gold: GOLD_TRIPLE },
+      },
+    },
+  });
+  assert.ok(problems.some((p) => p.includes("sets both placeholder and placeholders")));
+});
+
+test("spriteTemplateProblems flags a placeholders token absent from its own svg", () => {
+  const problems = spriteTemplateProblems({
+    classes: ["lamp"],
+    svg: "<svg>{{FILL_LIGHT}}{{FILL}}</svg>",
+    parameters: {
+      material: {
+        property: "mgx:madeOf",
+        placeholders: { light: "{{FILL_LIGHT}}", base: "{{FILL}}", dark: "{{FILL_DARK}}" },
+        values: { gold: GOLD_TRIPLE },
+      },
+    },
+  });
+  assert.ok(problems.some((p) => p.includes("placeholders.dark") && p.includes("does not appear in svg")));
+});
+
+test("spriteTemplateProblems flags a values entry that is a plain string under a placeholders (plural) parameter — an unresolved material reference", () => {
+  const problems = spriteTemplateProblems({
+    classes: ["lamp"],
+    svg: GRADIENT_SVG,
+    parameters: {
+      material: {
+        property: "mgx:madeOf",
+        placeholders: { light: "{{FILL_LIGHT}}", base: "{{FILL}}", dark: "{{FILL_DARK}}" },
+        values: { gold: "metal" },
+      },
+    },
+  });
+  assert.ok(problems.some((p) => p.includes("unresolved material reference")));
+});
+
+test("spriteTemplateProblems flags a values entry missing a declared sub-key", () => {
+  const problems = spriteTemplateProblems({
+    classes: ["lamp"],
+    svg: GRADIENT_SVG,
+    parameters: {
+      material: {
+        property: "mgx:madeOf",
+        placeholders: { light: "{{FILL_LIGHT}}", base: "{{FILL}}", dark: "{{FILL_DARK}}" },
+        values: { gold: { light: "#f0dfa0", base: "#c9a24b" } },
+      },
+    },
+  });
+  assert.ok(problems.some((p) => p.includes('values.gold is missing "dark"')));
+});
+
+test("spriteTemplateProblems flags a single-placeholder parameter whose values entry is not a plain string", () => {
+  const problems = spriteTemplateProblems({
+    classes: ["dog"], svg: "<svg>{{FILL}}</svg>",
+    parameters: { colour: { property: "mgx:hasProperty", placeholder: "{{FILL}}", values: { black: { light: "#000" } } } },
+  });
+  assert.ok(problems.some((p) => p.includes("must be a plain string for a single-placeholder parameter")));
+});
+
+// ---- the icon tier and the sprite tier resolve independently ---------------
+// (never confused for each other even though both can carry templates for
+// the same class name, e.g. "lamp") — the two are selected by which
+// template SET the caller searches, not by class name collision.
+
+test("an icon-tier template set and a sprite-tier template set for the same class never collide", () => {
+  const iconTemplates = [{ classes: ["lamp"], svg: "<svg>icon-lamp</svg>" }];
+  const largeTemplates = [{ classes: ["lamp"], svg: "<svg>large-lamp</svg>" }];
+  assert.equal(resolveSpriteAsset("lamp", [], [], iconTemplates, PLAIN_REGISTRY), "<svg>icon-lamp</svg>");
+  assert.equal(resolveSpriteAsset("lamp", [], [], largeTemplates, PLAIN_REGISTRY), "<svg>large-lamp</svg>");
+});
+
+// ---- instanceKey: two differently-valued instances of the SAME template ---
+// on the same page never collide on a shared gradient id (svg-instance-ids.mjs).
+
+test("with no instanceKey, resolveSpriteAsset returns the svg exactly as before (byte-for-byte, id untouched)", () => {
+  const templates = [{ classes: ["lamp"], svg: '<svg><defs><linearGradient id="lamp-fill"/></defs></svg>' }];
+  assert.equal(resolveSpriteAsset("lamp", [], [], templates, PLAIN_REGISTRY), templates[0].svg);
+});
+
+test("instanceKey namespaces the resolved svg's own gradient id so two instances of the same template never collide", () => {
+  const templates = [{
+    classes: ["lamp"],
+    svg: '<svg><defs><linearGradient id="lamp-fill"><stop stop-color="{{FILL}}"/></linearGradient></defs><path fill="url(#lamp-fill)"/></svg>',
+    parameters: { material: { property: "mgx:madeOf", placeholder: "{{FILL}}", values: { gold: "#c9a24b", ceramic: "#e6e1d8" } } },
+  }];
+  const goldSvg = resolveSpriteAsset("lamp", [], [{ subject: "lamp-a", predicate: "mgx:madeOf", object: "gold" }], templates, PLAIN_REGISTRY, { instanceKey: "lamp-a" });
+  const ceramicSvg = resolveSpriteAsset("lamp", [], [{ subject: "lamp-b", predicate: "mgx:madeOf", object: "ceramic" }], templates, PLAIN_REGISTRY, { instanceKey: "lamp-b" });
+  assert.ok(goldSvg.includes('id="lamp-fill-lamp-a"') && goldSvg.includes("#c9a24b"));
+  assert.ok(ceramicSvg.includes('id="lamp-fill-lamp-b"') && ceramicSvg.includes("#e6e1d8"));
+  assert.notEqual(goldSvg, ceramicSvg);
+});
+
 // ---- against the REAL loaded data/sprites/ directory -----------------------
 
 const REAL_TEMPLATES = readSpriteTemplateFiles();

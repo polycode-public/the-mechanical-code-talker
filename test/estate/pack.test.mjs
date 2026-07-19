@@ -13,24 +13,32 @@ import { packedPaths, comparePackManifest, MANIFEST_FILE } from "../../scripts/c
 
 const REPO_ROOT = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
 
+// One real `npm pack --dry-run --json` call, shared by every test below that
+// needs the packed file list — the call itself costs ~2s idle (observed past
+// 120s when the whole suite runs at full parallelism), so nothing here pays
+// for a second one just to check a different slice of the same list.
+const packDryRunStdout = new Promise((resolve, reject) => {
+  execFile(
+    "npm",
+    ["pack", "--dry-run", "--json"],
+    { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 480_000 },
+    (error, out) => (error ? reject(error) : resolve(out)),
+  );
+});
+
 test("npm pack would ship exactly the committed manifest", async () => {
-  const stdout = await new Promise((resolve, reject) => {
-    execFile(
-      "npm",
-      ["pack", "--dry-run", "--json"],
-      // Generous timeout: `npm pack --dry-run` takes ~2s idle but has been
-      // observed past 120s when the whole suite runs at full parallelism.
-      { cwd: REPO_ROOT, encoding: "utf8", maxBuffer: 16 * 1024 * 1024, timeout: 480_000 },
-      (error, out) => (error ? reject(error) : resolve(out)),
-    );
-  });
   const expected = JSON.parse(readFileSync(MANIFEST_FILE, "utf8"));
-  const { missing, unexpected } = comparePackManifest(packedPaths(stdout), expected);
+  const { missing, unexpected } = comparePackManifest(packedPaths(await packDryRunStdout), expected);
   assert.deepEqual(
     { missing, unexpected },
     { missing: [], unexpected: [] },
     "pack contents drifted from test/estate/pack-manifest.json — if intentional, regenerate and commit the manifest",
   );
+});
+
+test("data/sprites-large/ (the sprite tier meant to be looked at closely) never ships in the npm package", async () => {
+  const shipped = packedPaths(await packDryRunStdout).filter((p) => p.startsWith("data/sprites-large/"));
+  assert.deepEqual(shipped, [], "data/sprites-large/ must stay excluded — only the deployed site's fetched pack carries this tier");
 });
 
 test("publint reports no problem with the package metadata", async () => {

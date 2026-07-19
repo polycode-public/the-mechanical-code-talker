@@ -1,0 +1,17 @@
+# egg — the spider-and-fly board's laid egg at the sprite tier: a single
+# gradient shell plus one broad soft highlight, standing in for the icon
+# tier's flat carved-highlight ellipse.
+classes = ["egg"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="egg-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 55%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 2 C7 2 4 10 4 15.5 C4 20 7.6 22 12 22 C16.4 22 20 20 20 15.5 C20 10 17 2 12 2 Z" fill="url(#egg-fill)"/>
+  <ellipse cx="9.4" cy="9" rx="1.9" ry="2.8" fill="#ffffff" opacity="0.4"/>
+</svg>
+"""

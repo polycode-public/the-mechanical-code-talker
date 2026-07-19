@@ -1,0 +1,26 @@
+# animal — the sprite-tier root fallback, deliberately still the plainest
+# shape in the set (per the icon tier's own convention: an unregistered
+# species should read as "some animal", never suggest one the taxonomy
+# never named) — just a gradient body and two soft highlight patches rather
+# than any material, since a fallback with no known species has no known
+# material either.
+classes = ["animal"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="animal-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="13" rx="7" ry="4.4" fill="url(#animal-fill)"/>
+  <circle cx="12" cy="7" r="3.4" fill="url(#animal-fill)"/>
+  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <line x1="7" y1="17" x2="7" y2="21"/>
+    <line x1="17" y1="17" x2="17" y2="21"/>
+  </g>
+  <ellipse cx="9.4" cy="10.8" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.3"/>
+  <ellipse cx="10.4" cy="5.8" rx="1.1" ry="0.8" fill="#ffffff" opacity="0.35"/>
+</svg>
+"""

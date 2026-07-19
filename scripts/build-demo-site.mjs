@@ -131,6 +131,21 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
   }
 }
 
+// The sprite tier meant to be looked at closely (400px, gradient/highlight
+// material shading, data/sprites-large/*.toml): excluded from the npm
+// package entirely (package.json's own "!data/sprites-large/"), so only
+// this build step's own generated public/sprites-pack/ carries it to the
+// deployed site. No page fetches it yet — the same "prove the mechanism,
+// no live consumer required yet" posture the icon tier's dog-with-colour
+// demo already established — this just confirms the pack itself builds.
+{
+  const { buildDemoSpritesPack } = await import(join(here, "build-demo-sprites-pack.mjs"));
+  const spritesPackOut = join(SITE, "sprites-pack");
+  rmSync(spritesPackOut, { recursive: true, force: true });
+  const { manifest, bytes } = buildDemoSpritesPack({ outDir: spritesPackOut });
+  console.log(`wrote ${spritesPackOut} (${manifest.templates.length} templates, ${(bytes / 1024).toFixed(1)} KB)`);
+}
+
 // The plan render: solve the hanoi-3 game through the real planner and keep the
 // animated replay. This shells out to the binary a reader would run, so the page
 // shows the artefact they get rather than one built a private way.

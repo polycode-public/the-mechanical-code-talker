@@ -1,0 +1,33 @@
+# desk — Ashcombe Hall's own study desk at the sprite tier: tabletop,
+# drawers and legs share one material gradient (a matching suite, the way
+# real furniture is built), the pull-knobs kept as dark overlays regardless
+# of carcass material (brass fittings read dark against either wood or
+# metal at this scale).
+classes = ["desk"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="desk-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="7" width="18" height="2.6" rx="0.6" fill="url(#desk-fill)"/>
+  <path d="M3.4 7.6 L20.6 7.6" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
+  <rect x="4.4" y="9.6" width="6.6" height="5.6" rx="0.6" fill="url(#desk-fill)"/>
+  <rect x="13" y="9.6" width="6.6" height="5.6" rx="0.6" fill="url(#desk-fill)"/>
+  <circle cx="9.6" cy="12.4" r="0.55" fill="#000000" opacity="0.4"/>
+  <circle cx="16.4" cy="12.4" r="0.55" fill="#000000" opacity="0.4"/>
+  <path d="M4.6 15.2 L3.8 20.5 L5.6 20.5 L6.2 15.2 Z" fill="url(#desk-fill)"/>
+  <path d="M17.8 15.2 L17.2 20.5 L19 20.5 L18.2 15.2 Z" fill="url(#desk-fill)"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+wood = "wood"
+metal = "metal"

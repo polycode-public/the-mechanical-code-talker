@@ -1,0 +1,29 @@
+# key — Ashcombe Hall's own key at the sprite tier: the same stroke-only
+# skeleton-key geometry, its strokes now painted with the material
+# gradient instead of a flat colour, plus a thin white specular arc
+# tracing the bow's own upper-left curve.
+classes = ["key"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="key-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <circle cx="7" cy="9" r="4.4" fill="none" stroke="url(#key-fill)" stroke-width="2.4"/>
+  <path d="M10.4 12 L19.5 21.1" stroke="url(#key-fill)" stroke-width="2.2" stroke-linecap="round"/>
+  <path d="M16.4 17.1 L18.6 14.9" stroke="url(#key-fill)" stroke-width="2" stroke-linecap="round"/>
+  <path d="M18.6 19.3 L20.6 17.3" stroke="url(#key-fill)" stroke-width="2" stroke-linecap="round"/>
+  <path d="M5.4 6.6 A4.4 4.4 0 0 1 8.6 5.1" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-linecap="round" opacity="0.45"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+gold = "metal"
+metal = "metal"

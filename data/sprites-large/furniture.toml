@@ -1,0 +1,29 @@
+# furniture — the generic fallback for any furniture piece with no sprite
+# of its own: the console-table silhouette, gradient-shaded from its own
+# taught mgx:madeOf value across the three non-food treatments a generic
+# furniture piece is plausibly built from.
+classes = ["furniture"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="furniture-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <rect x="3.5" y="6.5" width="17" height="3.2" rx="0.8" fill="url(#furniture-fill)"/>
+  <path d="M4 7.2 L19.6 7.2" stroke="#ffffff" stroke-width="0.7" opacity="0.4"/>
+  <path d="M5.6 9.7 L4.6 20 L6.7 20 L7.2 9.7 Z" fill="url(#furniture-fill)"/>
+  <path d="M18.4 9.7 L16.8 20 L18.9 20 L19.4 9.7 Z" fill="url(#furniture-fill)"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+wood = "wood"
+metal = "metal"
+plastic = "plastic"

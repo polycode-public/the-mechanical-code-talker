@@ -1,0 +1,28 @@
+# fly — the spider-and-fly board's other agent at the sprite tier: a
+# gradient body and head, translucent wings kept flat (a gradient on a
+# near-transparent shape reads muddy rather than glassy), one highlight on
+# the thorax.
+classes = ["fly"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="fly-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="url(#fly-fill)"/>
+  <circle cx="12" cy="7" r="2.7" fill="url(#fly-fill)"/>
+  <ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="#000000" opacity="0.22"/>
+  <g fill="currentColor" opacity="0.5">
+    <path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z"/>
+    <path d="M15 10 C21 6 22 4 21 2 C18 2 15 6 13.5 10 Z"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1" stroke-linecap="round">
+    <path d="M9.6 17 L7.4 19.4"/>
+    <path d="M14.4 17 L16.6 19.4"/>
+  </g>
+  <ellipse cx="10.8" cy="10.6" rx="1.6" ry="1" fill="#ffffff" opacity="0.3"/>
+</svg>
+"""

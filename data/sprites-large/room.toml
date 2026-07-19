@@ -1,0 +1,26 @@
+# room — a schematic floor plan at the sprite tier: a soft directional
+# wash standing in for the icon tier's flat tint (a room is a space to
+# draw, not an object to render literally, so the gradient stays a subtle
+# ambient wash rather than a strong material shade), plus one highlight
+# tracing the top-left wall as if lit from that corner. The wash itself is
+# a fixed white-to-black tint rather than currentColor-based (unlike every
+# other sprite in this tier): currentColor's own brightness varies with the
+# page's own theme, and a wash built from stop-OPACITY (not stop-color)
+# blends toward whatever sits behind it — mixing in currentColor as well
+# would make the wash's own light/dark direction flip between a light and
+# a dark theme, which a plain white/black tint never does.
+classes = ["room"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="room-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.14"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="18" height="18" rx="1" fill="url(#room-fill)"/>
+  <rect x="3" y="3" width="18" height="18" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  <path d="M9 21 L9 13 A3 3 0 0 1 15 13 L15 21" fill="none" stroke="currentColor" stroke-width="1.6"/>
+  <path d="M4 4 L11 4" stroke="#ffffff" stroke-width="1" opacity="0.4"/>
+</svg>
+"""
