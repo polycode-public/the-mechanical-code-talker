@@ -96,20 +96,31 @@ function fillFromValue(svg, param, value) {
   return null;
 }
 
-/** Fill a parameterized template's `svg` from the first of its own
- *  `[parameters.*]` whose observed property value maps to a substitution —
- *  or null when no property fact names a mapped value (never a guess). */
-function parameterizedFill(template, propertyFacts) {
+/** Fill a parameterized template's `svg` from EVERY one of its own
+ *  `[parameters.*]` whose observed property value maps to a substitution,
+ *  accumulating each successful fill onto the RUNNING svg string rather
+ *  than stopping at the first hit — so a template declaring both e.g.
+ *  `[parameters.material]` and `[parameters.emotion]` fills both dimensions
+ *  in one pass, one parameter's substitution never undoing another's.
+ *  Returns null when not even one parameter filled (never a guess, and
+ *  never a half-filled template with a leftover placeholder token) — the
+ *  caller (resolveAtTerm) falls through to a less specific template exactly
+ *  as it did before this function tried more than one dimension. */
+function parameterizedFillAll(template, propertyFacts) {
+  let svg = template.svg;
+  let filledCount = 0;
   for (const param of Object.values(template.parameters || {})) {
     const values = param?.values || {};
     const hit = (propertyFacts || []).find(
       (f) => f.predicate === param.property && Object.prototype.hasOwnProperty.call(values, f.object),
     );
     if (!hit) continue;
-    const filled = fillFromValue(template.svg, param, values[hit.object]);
-    if (filled) return filled;
+    const filled = fillFromValue(svg, param, values[hit.object]);
+    if (!filled) continue;
+    svg = filled;
+    filledCount += 1;
   }
-  return null;
+  return filledCount > 0 ? svg : null;
 }
 
 /** Resolve ONE class term (no ancestor walk here — the caller repeats this
@@ -123,7 +134,7 @@ function resolveAtTerm(term, propertyFacts, templates) {
   if (matched) return matched.svg;
   for (const t of candidates) {
     if (t.match || !t.parameters) continue;
-    const filled = parameterizedFill(t, propertyFacts);
+    const filled = parameterizedFillAll(t, propertyFacts);
     if (filled) return filled;
   }
   const plain = candidates.find((t) => !t.match && !t.parameters);
@@ -174,7 +185,12 @@ export function resolveSpriteAsset(className, factRows, propertyFacts, templates
  *  names a `property` and exactly one of `placeholder`/`placeholders` (every
  *  token named appears in `svg`), its `values` map is non-empty and every
  *  entry matches the shape its own `placeholder`/`placeholders` choice
- *  expects, and a `[match]` table names both `property` and `value`. */
+ *  expects, a `[match]` table names both `property` and `value`, and
+ *  `[face]`/`[parameters.emotion]` are always declared TOGETHER — a face
+ *  anchor with nothing to select it, or an emotion parameter with nowhere to
+ *  position its face fragment, is a real authoring mistake either way
+ *  (sprite-expressions.mjs's own header explains why the face fragment
+ *  needs the pairing). */
 export function spriteTemplateProblems(template) {
   const problems = [];
   const t = template || {};
@@ -217,6 +233,12 @@ export function spriteTemplateProblems(template) {
   }
   if (t.match && (!t.match.property || t.match.value === undefined)) {
     problems.push("match is missing property or value");
+  }
+  if (t.face && !t.parameters?.emotion) {
+    problems.push("face is declared without parameters.emotion — a face anchor with nothing to select it is dead data");
+  }
+  if (t.parameters?.emotion && !t.face) {
+    problems.push("parameters.emotion is declared without a face — an emotion parameter needs its own [face] anchor to position the fragment it fills");
   }
   return problems;
 }
