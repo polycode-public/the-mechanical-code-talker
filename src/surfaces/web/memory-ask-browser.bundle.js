@@ -23587,6 +23587,48 @@ ${JSON.stringify(envelope, null, 2)}`;
   init_core();
   init_hash();
 
+  // src/domain/game-config.mjs
+  var DEFAULT_GAME_CONFIG = Object.freeze({
+    spiderFly: Object.freeze({
+      spiderInitialMass: 15,
+      spiderMassDecrementPerTurn: 0.5,
+      flyInitialMass: 10,
+      flyMassDecrementPerTurn: 1,
+      visionRadius: 4,
+      eggHatchDelayTurns: 3,
+      flySpawnIntervalTurns: 3,
+      eggsEatenThreshold: 2,
+      webDurationTurns: 10
+    }),
+    guessNumber: Object.freeze({
+      defaultLo: 1,
+      defaultHi: 100,
+      maxBound: 1e9
+    }),
+    planning: Object.freeze({
+      maxDepth: 300
+    })
+  });
+  var SPIDER_FLY_KEY_MAP = Object.freeze({
+    spider_initial_mass: "spiderInitialMass",
+    spider_mass_decrement_per_turn: "spiderMassDecrementPerTurn",
+    fly_initial_mass: "flyInitialMass",
+    fly_mass_decrement_per_turn: "flyMassDecrementPerTurn",
+    vision_radius: "visionRadius",
+    egg_hatch_delay_turns: "eggHatchDelayTurns",
+    fly_spawn_interval_turns: "flySpawnIntervalTurns",
+    eggs_eaten_threshold: "eggsEatenThreshold",
+    web_duration_turns: "webDurationTurns"
+  });
+  var GUESS_NUMBER_KEY_MAP = Object.freeze({
+    default_lo: "defaultLo",
+    default_hi: "defaultHi",
+    max_bound: "maxBound"
+  });
+  var PLANNING_KEY_MAP = Object.freeze({
+    max_depth: "maxDepth"
+  });
+
   // src/services/spider-fly-turn.mjs
   init_core();
   var SPIDER_FLY_TOLD_RE = new RegExp(
