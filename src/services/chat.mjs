@@ -6756,22 +6756,40 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
     // The ⊑-lift walks a BOUNDED chain (not one hop): "every canine has fur"
     // + "every dog is a canine" + "rex is a dog" answers "does rex have fur"
-    // citing all three premises. One chain, first parent per level (the
-    // 1-hop behavior generalized), cycle-safe, and the bound keeps a deep
+    // citing all three premises. Cycle-safe, and the bound keeps a deep
     // taught taxonomy from turning a yes/no into a graph scan.
-    let liftFrontier = subj;
-    const liftChain = [];
+    //
+    // Explores EVERY isa-edge from the current frontier at each hop (a proper
+    // breadth-first search over the subclass DAG), not just the first one
+    // found: a seeded corpus fact ("dog rdfs:subClassOf animal") and a
+    // freshly-taught one ("dog rdfs:subClassOf canine") both name "dog" as
+    // subject, and taking only whichever came first in `facts` (the seeded
+    // one, loaded before any teaching) could walk the wrong branch to a dead
+    // end while the real, provable answer sat one hop down the OTHER parent.
+    // BFS tries every branch in shortest-chain order, so the first hit found
+    // is also the shortest true chain; `liftSeen` is shared across branches
+    // (an object that doesn't carry the fact via one path won't via another,
+    // since it's the same object either way), which keeps this cycle-safe
+    // without cutting off a genuinely parallel second parent.
+    let frontier = [{ terms: subj, chain: [] }];
     const liftSeen = new Set();
     for (let hop = 0; hop < 4; hop += 1) {
-      const step = facts.find((f) => ISA_PREDICATES.has(f.predicate) && liftFrontier.has(f.subject) && !liftSeen.has(f.object));
-      if (!step) break;
-      liftSeen.add(step.object);
-      liftChain.push(step);
-      const lifted = hasHit(factTermVariants(normFactTerm, step.object));
-      if (lifted) {
-        return { text: `yes — ${[...liftChain.map(renderFactLine), renderFactLine(lifted)].join("; ")}`, replace: true };
+      const nextFrontier = [];
+      for (const { terms, chain } of frontier) {
+        const steps = facts.filter((f) => ISA_PREDICATES.has(f.predicate) && terms.has(f.subject) && !liftSeen.has(f.object));
+        for (const step of steps) {
+          if (liftSeen.has(step.object)) continue;
+          liftSeen.add(step.object);
+          const nextChain = [...chain, step];
+          const lifted = hasHit(factTermVariants(normFactTerm, step.object));
+          if (lifted) {
+            return { text: `yes — ${[...nextChain.map(renderFactLine), renderFactLine(lifted)].join("; ")}`, replace: true };
+          }
+          nextFrontier.push({ terms: factTermVariants(normFactTerm, step.object), chain: nextChain });
+        }
       }
-      liftFrontier = factTermVariants(normFactTerm, step.object);
+      if (!nextFrontier.length) break;
+      frontier = nextFrontier;
     }
     return null;
   }
