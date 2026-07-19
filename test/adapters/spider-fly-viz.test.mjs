@@ -7,7 +7,7 @@
 // reduced-motion respected).
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderSpiderFlyHtml, classOfAgentId, threadCellsForSpiderPlan } from "../../src/services/spider-fly-viz.mjs";
+import { renderSpiderFlyHtml, classOfAgentId, threadCellsForSpiderPlan, facingDegreesFor, nextCorpses } from "../../src/services/spider-fly-viz.mjs";
 import { GRID_SIZE, cellId, parseCellId, DIRECTION_DELTA } from "../../src/domain/spider-fly-world.mjs";
 
 const GEOMETRY = { parseCellId, cellId, directionDelta: DIRECTION_DELTA };
@@ -210,4 +210,129 @@ test("renderSpiderFlyHtml: an active dynamic web is drawn distinctly from the st
   assert.match(html, /activeWebs/, "activeWebs threads through tick()/snapshot()/boot into drawBoard");
   assert.match(html, /--alert-soft/, "the dynamic web fill is a different token than the static zone's --taught-soft");
   assert.match(html, /setLineDash/, "a dashed outline further distinguishes a live dynamic web from the plain-filled static zone");
+});
+
+test("renderSpiderFlyHtml: the spider's mass bar scales against the egg-lay threshold, not its own flat starting mass — progress toward the new mass-gated lay mechanic is the meaningful cap now", () => {
+  const data = embeddedJson(renderSpiderFlyHtml(), "SPIDERFLY");
+  assert.equal(data.maxSpiderMass, 25, "DEFAULT_GAME_CONFIG.spiderFly.eggLayMassThreshold");
+});
+
+// ---- facingDegreesFor: plan-driven sprite orientation -------------------
+
+test("facingDegreesFor maps every compass direction to its rotation, and defaults to north/0 with no plan and no prior facing", () => {
+  assert.equal(facingDegreesFor(["north"], undefined), 0);
+  assert.equal(facingDegreesFor(["east"], undefined), 90);
+  assert.equal(facingDegreesFor(["south"], undefined), 180);
+  assert.equal(facingDegreesFor(["west"], undefined), 270);
+  assert.equal(facingDegreesFor(null, undefined), 0, "no plan and no prior facing at all — the art's own default north/up pose");
+  assert.equal(facingDegreesFor([], undefined), 0);
+});
+
+test("facingDegreesFor keeps the previous facing when the agent holds still this tick, never snapping back to a default", () => {
+  assert.equal(facingDegreesFor([], 270), 270, "an empty plan (holding) keeps whatever it was last facing");
+  assert.equal(facingDegreesFor(null, 90), 90);
+  assert.equal(facingDegreesFor(["east"], 270), 90, "a real plan step always overrides the previous facing");
+});
+
+// ---- nextCorpses: visual-only dying-agent bookkeeping --------------------
+
+test("nextCorpses adds a corpse for an agent present last tick but absent this tick, at its last-known cell and class", () => {
+  const prevAgents = { "fly-1": { cell: "cell-4-4" }, "spider-1": { cell: "cell-2-2" } };
+  const agents = { "spider-1": { cell: "cell-2-2" } }; // fly-1 died this tick
+  const corpses = nextCorpses({}, prevAgents, agents, 7);
+  assert.deepEqual(corpses, { "fly-1": { cls: "fly", cell: "cell-4-4", diedAtTurn: 7 } });
+});
+
+test("nextCorpses never adds an entry for an agent still present, and prunes a corpse once it's older than lingerTurns past its own death turn", () => {
+  const stillAlive = nextCorpses({}, { "fly-1": { cell: "cell-4-4" } }, { "fly-1": { cell: "cell-4-5" } }, 3);
+  assert.deepEqual(stillAlive, {}, "fly-1 is still in agents — not a corpse");
+
+  const priorCorpses = { "fly-1": { cls: "fly", cell: "cell-4-4", diedAtTurn: 5 } };
+  const stillLingering = nextCorpses(priorCorpses, {}, {}, 5 + 4, 4);
+  assert.deepEqual(stillLingering, priorCorpses, "exactly at the linger boundary — still drawn");
+
+  const rotted = nextCorpses(priorCorpses, {}, {}, 5 + 5, 4);
+  assert.deepEqual(rotted, {}, "one turn past the linger boundary — the carcass has rotted, no longer drawn");
+});
+
+test("nextCorpses carries an existing corpse forward unchanged (same death cell/turn) while a different agent freshly dies alongside it", () => {
+  const priorCorpses = { "fly-1": { cls: "fly", cell: "cell-4-4", diedAtTurn: 2 } };
+  const prevAgents = { "fly-1": { cell: "cell-4-4" }, "spider-2": { cell: "cell-9-9" } };
+  const corpses = nextCorpses(priorCorpses, prevAgents, {}, 3, 4);
+  assert.deepEqual(corpses, {
+    "fly-1": { cls: "fly", cell: "cell-4-4", diedAtTurn: 2 },
+    "spider-2": { cls: "spider", cell: "cell-9-9", diedAtTurn: 3 },
+  });
+});
+
+// ---- corpses, facing and the sprite-face wrapper, in the rendered page --
+
+test("renderSpiderFlyHtml: sprite facing rotates an inner .sprite-face wrapper, never the outer positioned .sprite node", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /face\.className = "sprite-face"/, "the sprite SVG is wrapped in its own rotatable node, built at runtime (sprites are created dynamically, never present in the static markup)");
+  assert.match(html, /facingDegreesFor/);
+  assert.match(html, /facingByAgent/);
+});
+
+test("renderSpiderFlyHtml: corpses are spliced in as a real, independently-tested helper and rendered into the same sprite layer, grayscaled", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /const nextCorpses = /);
+  assert.match(html, /renderCorpses/);
+  assert.match(html, /sprite corpse/);
+  assert.match(html, /\.sprite\.corpse\s*\{[^}]*grayscale/, "the corpse CSS rule grayscales the sprite");
+});
+
+// ---- the dynamic deception-pill rail ---------------------------------
+
+test("renderSpiderFlyHtml: a dynamic pill container sits alongside the existing static 6-button rail, driven by pillsForSpiderFly", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /id="dynamicPills"/);
+  assert.match(html, /pillsForSpiderFly/);
+  assert.match(html, /id="chatpills"/, "the original static rail is still present, not replaced");
+});
+
+test("renderSpiderFlyHtml: a dynamic claim pill fills #chatq from its own data-sentence on click, the same click-to-fill discipline as every other pill", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /data-sentence/);
+  assert.match(html, /dynamicPillsEl\.addEventListener\("click"/);
+  assert.ok(!/dynamicPillsEl[\s\S]{0,400}requestSubmit/.test(html), "a claim pill click never auto-submits the form");
+});
+
+// ---- live per-class tuning controls ------------------------------------
+
+test("renderSpiderFlyHtml: six live tuning sliders exist, one each for mass-loss-rate/spawn-rate/vision-radius per class, all starting disabled", () => {
+  const html = renderSpiderFlyHtml();
+  for (const id of ["ctlSpiderMass", "ctlSpiderSpawn", "ctlSpiderVision", "ctlFlyMass", "ctlFlySpawn", "ctlFlyVision"]) {
+    const re = new RegExp(`<input type="range" id="${id}"[^>]*disabled>`);
+    assert.match(html, re, `${id} is present and starts disabled, like every other live control before the session boots`);
+  }
+});
+
+test("renderSpiderFlyHtml: the tuning sliders write straight through session.setConfig, and persist across a reset instead of reverting to defaults", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /session\.setConfig/);
+  assert.match(html, /tuningInitialized/);
+});
+
+test("renderSpiderFlyHtml: the tuning panel is hidden in preview mode, alongside the side column and the play/pause/step controls", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /body\.preview \.side,[^{]*\.tuning \{ display: none; \}/);
+});
+
+// ---- the fixed-height, internally-scrolling agents panel ----------------
+
+test("renderSpiderFlyHtml: the agents panel has a fixed max-height with internal scroll, never growing the page as the roster spikes (a hatch can mint several spiders at once)", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /\.hud-list\s*\{[^}]*max-height[^}]*overflow-y:\s*auto/);
+  assert.match(html, /class="hud-list" id="hud"/);
+});
+
+// ---- per-agent plan and belief lines (§A.2.7) ----------------------------
+
+test("renderSpiderFlyHtml: each agent's HUD row renders its own last-created plan and current believed world state", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /hud-plan/);
+  assert.match(html, /hud-belief/);
+  assert.match(html, /planLineHtml/);
+  assert.match(html, /beliefLineHtml/);
 });

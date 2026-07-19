@@ -4,13 +4,13 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  foldSpiderFlyState, gridApplyActions, spiderPathStateKey, planSpiderPath,
+  foldSpiderFlyState, gridApplyActions, spiderPathStateKey, planSpiderPath, planSpiderPathToWeb,
   greedyFlyMove, randomFlyWander, greedySpiderApproach, greedySpiderAvoid,
   believedCellOf, nearestBelievedTarget, hasActiveWebAt,
   runEcologyPass, startSpiderFlyGame, runSpiderFlyTick,
   FLY_INITIAL_MASS, SPIDER_INITIAL_MASS, SPIDER_MASS_DECREMENT_PER_TURN, WEB_DURATION_TURNS,
 } from "../../src/services/spider-fly.mjs";
-import { worldFactRows, cellId, perimeterCells } from "../../src/domain/spider-fly-world.mjs";
+import { worldFactRows, cellId, perimeterCells, isInWebBlock, parseCellId } from "../../src/domain/spider-fly-world.mjs";
 import { appendFacts, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
 
@@ -63,16 +63,35 @@ test("planSpiderPath returns a real shortest path toward a stationary fly inside
   assert.deepEqual(path.states, [{ x: 5, y: 2 }, { x: 4, y: 2 }, { x: 3, y: 2 }]);
 });
 
-test("planSpiderPath returns null when the believed fly cell sits outside the web block", () => {
+test("planSpiderPath finds a path to a believed fly cell OUTSIDE the web block too — arrival now means mere co-location, catching a fly never needs a web", () => {
   const rows = [{ subject: "cell-5-2", predicate: "mgx:has-exit-west", object: "cell-4-2" }];
   const applyActions = gridApplyActions(rows);
   const path = planSpiderPath({ x: 5, y: 2 }, { x: 4, y: 2 }, applyActions);
-  assert.equal(path, null, "cell-4-2 is Chebyshev distance 2 from the web home — never a satisfiable goal");
+  assert.ok(path, "cell-4-2 is Chebyshev distance 2 from the web home, but that no longer matters — a catch is co-location alone");
+  assert.deepEqual(path.actions, ["west"]);
+  assert.deepEqual(path.states, [{ x: 5, y: 2 }, { x: 4, y: 2 }]);
 });
 
 test("planSpiderPath returns null with no believed target at all", () => {
   const applyActions = gridApplyActions([]);
   assert.equal(planSpiderPath({ x: 2, y: 2 }, null, applyActions), null);
+});
+
+test("planSpiderPathToWeb finds the shortest path to ANY active web cell, static or dynamic, with no specific target", () => {
+  const rows = [
+    { subject: "cell-4-2", predicate: "mgx:has-exit-west", object: "cell-3-2" },
+    { subject: "cell-3-2", predicate: "mgx:has-exit-east", object: "cell-4-2" },
+  ];
+  const applyActions = gridApplyActions(rows);
+  const path = planSpiderPathToWeb({ x: 4, y: 2 }, applyActions);
+  assert.ok(path, "cell-3-2 sits inside the static web block (Chebyshev distance 1 from the 2,2 home)");
+  assert.deepEqual(path.actions, ["west"]);
+});
+
+test("planSpiderPathToWeb returns null when no active web is reachable at all", () => {
+  const rows = [{ subject: "cell-9-9", predicate: "mgx:has-exit-north", object: "cell-9-8" }];
+  const applyActions = gridApplyActions(rows);
+  assert.equal(planSpiderPathToWeb({ x: 9, y: 9 }, applyActions), null);
 });
 
 // ---- greedy one-ply scoring: the fly maximizes, the spider's fallback minimizes
@@ -211,12 +230,40 @@ test("runEcologyPass eats a fly co-located with a spider in an in-web cell and b
   assert.ok(writes.some((w) => w.subject === "spider-1@turn3" && w.predicate === "mgx:flies-eaten" && w.object === "2"), "the prior count of 1 carries forward, plus this turn's one eat");
 });
 
-test("runEcologyPass never eats a fly co-located with a spider outside the web block", () => {
+test("runEcologyPass catches (never eats) a fly co-located with a spider outside the web block — a catch never needs a web, only the later eat does", () => {
   const state = foldSpiderFlyState([]);
   const postMovePlacements = new Map([["spider-1", { x: 6, y: 6 }], ["fly-1", { x: 6, y: 6 }]]);
   const { writes, events } = runEcologyPass({ state, postMovePlacements, postMoveMassByFly: new Map([["fly-1", 6]]), turn: 1 });
-  assert.deepEqual(events.eaten, []);
-  assert.deepEqual(writes, []);
+  assert.deepEqual(events.caught, [{ spider: "spider-1", fly: "fly-1", cell: "cell-6-6" }]);
+  assert.deepEqual(events.eaten, [], "not standing in a web — no eat, no mass transfer, no mgx:eaten-by");
+  assert.ok(writes.some((w) => w.subject === "spider-1@turn1" && w.predicate === "mgx:carrying" && w.object === "fly-1"));
+  assert.ok(!writes.some((w) => w.predicate === "mgx:eaten-by"));
+});
+
+test("runEcologyPass gates catching on 'not already carrying' — a spider already carrying a live fly never claims a second one co-located with it the same tick", () => {
+  const state = foldSpiderFlyState([{ subject: "spider-1", predicate: "mgx:carrying", object: "fly-1" }]);
+  const postMovePlacements = new Map([["spider-1", { x: 6, y: 6 }], ["fly-1", { x: 6, y: 6 }], ["fly-2", { x: 6, y: 6 }]]);
+  const { writes, events } = runEcologyPass({ state, postMovePlacements, postMoveMassByFly: new Map([["fly-1", 6], ["fly-2", 6]]), turn: 1 });
+  assert.deepEqual(events.caught, [], "spider-1 is already carrying fly-1 — fly-2 goes uncaught this tick despite sharing its cell");
+  assert.ok(writes.some((w) => w.subject === "spider-1@turn1" && w.predicate === "mgx:carrying" && w.object === "fly-1"), "the pre-existing carrying claim is re-asserted, unchanged");
+});
+
+test("runEcologyPass's carrying claim self-heals a fly whose captor is no longer live — a dead spider's stale claim never blocks a fresh catch", () => {
+  const state = foldSpiderFlyState([
+    { subject: "spider-1", predicate: "mgx:carrying", object: "fly-1" },
+    { subject: "spider-1", predicate: "mgx:starved", object: "true" },
+  ]);
+  const postMovePlacements = new Map([["spider-2", { x: 6, y: 6 }], ["fly-1", { x: 6, y: 6 }]]);
+  const { events } = runEcologyPass({ state, postMovePlacements, postMoveMassByFly: new Map([["fly-1", 6]]), turn: 1 });
+  assert.deepEqual(events.caught, [{ spider: "spider-2", fly: "fly-1", cell: "cell-6-6" }], "spider-1 is dead — fly-1 is free for spider-2 to catch, not stuck honoring a dead captor's claim");
+});
+
+test("runEcologyPass drops a carried fly's captor claim when the fly starves mid-transit, never leaving a spider claiming a dead fly", () => {
+  const state = foldSpiderFlyState([{ subject: "spider-1", predicate: "mgx:carrying", object: "fly-1" }]);
+  const postMovePlacements = new Map([["spider-1", { x: 6, y: 6 }], ["fly-1", { x: 6, y: 6 }]]);
+  const { writes, events } = runEcologyPass({ state, postMovePlacements, postMoveMassByFly: new Map([["fly-1", 0]]), turn: 1 });
+  assert.deepEqual(events.starved, ["fly-1"]);
+  assert.ok(writes.some((w) => w.subject === "spider-1@turn1" && w.predicate === "mgx:carrying" && w.object === "none"), "the captor's carrying fact resets to none the same tick its cargo starves");
 });
 
 test("runEcologyPass eats a fly co-located with a spider inside a live DYNAMIC web, outside the static zone", () => {
@@ -258,72 +305,93 @@ test("runEcologyPass starves a spider whose mass reached zero, exactly like a fl
   assert.ok(!writes.some((w) => w.subject === "spider-2@turn7" && w.predicate === "mgx:starved"));
 });
 
-test("runEcologyPass never starves a spider absent from postMoveMassBySpider — callers that don't track spider mass see no behavior change", () => {
+test("runEcologyPass never starves a spider absent from postMoveMassBySpider — callers that don't track spider mass see no behavior change, beyond the always-rewritten carrying fact", () => {
   const state = foldSpiderFlyState([]);
   const postMovePlacements = new Map([["spider-1", { x: 9, y: 9 }]]);
   const { writes, events } = runEcologyPass({ state, postMovePlacements, postMoveMassByFly: new Map(), turn: 2 });
   assert.deepEqual(events.starved, []);
-  assert.deepEqual(writes, []);
+  assert.deepEqual(
+    writes,
+    [{ subject: "spider-1@turn2", predicate: "mgx:carrying", object: "none" }],
+    "every live spider re-asserts its own carrying status every tick, even one this caller never mass-tracks",
+  );
 });
 
-test("runEcologyPass lays an egg on the first eat at game start, then needs two more before the next", () => {
-  const noEggYet = foldSpiderFlyState([]);
-  const firstEat = runEcologyPass({
-    state: noEggYet,
-    postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }], ["fly-1", { x: 2, y: 2 }]]),
-    postMoveMassByFly: new Map([["fly-1", 5]]),
+test("runEcologyPass lays an egg once a spider's mass reaches the lay threshold AND it is standing in an active web — resetting the spider to its own initial mass and minting the egg with the mass surplus", () => {
+  const state = foldSpiderFlyState([]);
+  const belowThreshold = runEcologyPass({
+    state,
+    postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }]]),
+    postMoveMassByFly: new Map(),
+    postMoveMassBySpider: new Map([["spider-1", 24]]),
     turn: 1,
   });
-  assert.equal(firstEat.events.laid, "egg-1", "the very first eat at game start lays the first egg");
-  assert.ok(firstEat.writes.some((w) => w.subject === "egg-1@turn1" && w.predicate === "mgx:currently-in" && w.object === "cell-2-2"));
-  assert.ok(firstEat.writes.some((w) => w.subject === "egg-1@turn1" && w.predicate === "mgx:laid-at-turn" && w.object === "1"));
+  assert.equal(belowThreshold.events.laid, null, "24 is one short of the 25 lay threshold");
 
-  // A live egg outstanding blocks a second lay even on a fresh eat.
+  const qualifies = runEcologyPass({
+    state,
+    postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }]]),
+    postMoveMassByFly: new Map(),
+    postMoveMassBySpider: new Map([["spider-1", 25]]),
+    turn: 1,
+  });
+  assert.equal(qualifies.events.laid, "egg-1");
+  assert.ok(qualifies.writes.some((w) => w.subject === "spider-1@turn1" && w.predicate === "mgx:mass" && w.object === "15"), "the laying spider resets to exactly its own initial mass");
+  assert.ok(qualifies.writes.some((w) => w.subject === "egg-1@turn1" && w.predicate === "mgx:currently-in" && w.object === "cell-2-2"));
+  assert.ok(qualifies.writes.some((w) => w.subject === "egg-1@turn1" && w.predicate === "mgx:laid-at-turn" && w.object === "1"));
+  assert.ok(qualifies.writes.some((w) => w.subject === "egg-1@turn1" && w.predicate === "mgx:mass" && w.object === "10"), "the 25 - 15 = 10 mass surplus becomes the egg's own starting mass");
+
+  const outsideWeb = runEcologyPass({
+    state,
+    postMovePlacements: new Map([["spider-1", { x: 6, y: 6 }]]),
+    postMoveMassByFly: new Map(),
+    postMoveMassBySpider: new Map([["spider-1", 30]]),
+    turn: 1,
+  });
+  assert.equal(outsideWeb.events.laid, null, "mass alone is not enough — the spider must be standing in an active web too");
+
+  // A live egg outstanding blocks a second lay even from an already-qualifying spider.
   const withLiveEgg = foldSpiderFlyState([
     { subject: "egg-1@turn1", predicate: "mgx:currently-in", object: "cell-2-2" },
     { subject: "egg-1@turn1", predicate: "mgx:laid-at-turn", object: "1" },
   ]);
   const blockedByLiveEgg = runEcologyPass({
     state: withLiveEgg,
-    postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }], ["fly-2", { x: 2, y: 2 }]]),
-    postMoveMassByFly: new Map([["fly-2", 5]]),
+    postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }]]),
+    postMoveMassByFly: new Map(),
+    postMoveMassBySpider: new Map([["spider-1", 30]]),
     turn: 2,
   });
-  assert.equal(blockedByLiveEgg.events.laid, null, "a live (unhatched) egg blocks laying a second one");
-
-  // Once egg-1 has hatched, a single further eat is not enough — it takes two.
-  const afterHatch = foldSpiderFlyState([
-    { subject: "egg-1@turn1", predicate: "mgx:currently-in", object: "cell-2-2" },
-    { subject: "egg-1@turn1", predicate: "mgx:laid-at-turn", object: "1" },
-    { subject: "egg-1@turn4", predicate: "mgx:hatched-into", object: "spider-2" },
-  ]);
-  const oneMoreEat = runEcologyPass({
-    state: afterHatch,
-    postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }], ["fly-3", { x: 2, y: 2 }]]),
-    postMoveMassByFly: new Map([["fly-3", 5]]),
-    turn: 5,
-  });
-  assert.equal(oneMoreEat.events.laid, null, "one eat since the last egg is not the required two");
-
-  const twoMoreEats = runEcologyPass({
-    state: foldSpiderFlyState([
-      { subject: "egg-1@turn1", predicate: "mgx:currently-in", object: "cell-2-2" },
-      { subject: "egg-1@turn1", predicate: "mgx:laid-at-turn", object: "1" },
-      { subject: "egg-1@turn4", predicate: "mgx:hatched-into", object: "spider-2" },
-      { subject: "fly-3@turn5", predicate: "mgx:eaten-by", object: "spider-1" },
-      { subject: "fly-3", predicate: "mgx:currently-in", object: "cell-9-9" },
-    ]),
-    postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }], ["fly-4", { x: 2, y: 2 }]]),
-    postMoveMassByFly: new Map([["fly-4", 5]]),
-    turn: 6,
-  });
-  assert.equal(twoMoreEats.events.laid, "egg-2", "the second eat since the last egg lays the next one, numbered past egg-1");
+  assert.equal(blockedByLiveEgg.events.laid, null, "a live (unhatched) egg blocks laying a second one regardless of mass");
 });
 
-test("runEcologyPass hatches an egg exactly three turns after it was laid, into a new spider at the egg's cell", () => {
+test("runEcologyPass's egg lay reacts the SAME tick a spider eats enough to cross the threshold, and caps at one egg even with two qualifying spiders", () => {
+  const state = foldSpiderFlyState([]);
+  const sameTickCross = runEcologyPass({
+    state,
+    postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }], ["fly-1", { x: 2, y: 2 }]]),
+    postMoveMassByFly: new Map([["fly-1", 6]]),
+    postMoveMassBySpider: new Map([["spider-1", 20]]),
+    turn: 1,
+  });
+  assert.deepEqual(sameTickCross.events.eaten, [{ fly: "fly-1", spider: "spider-1", cell: "cell-2-2" }]);
+  assert.equal(sameTickCross.events.laid, "egg-1", "20 (pre-eat) + 6 (the eaten fly's own mass) = 26, over the 25 threshold the same tick it ate");
+
+  const twoQualify = runEcologyPass({
+    state,
+    postMovePlacements: new Map([["spider-1", { x: 2, y: 2 }], ["spider-2", { x: 2, y: 3 }]]),
+    postMoveMassByFly: new Map(),
+    postMoveMassBySpider: new Map([["spider-1", 30], ["spider-2", 40]]),
+    turn: 1,
+  });
+  assert.equal(twoQualify.events.laid, "egg-1", "only one egg is laid even though both spiders qualify this tick");
+});
+
+test("runEcologyPass hatches an egg exactly config.eggHatchDelayTurns turns after it was laid, splitting its mass across config.eggHatchCount spiders at the egg's cell, remainder to the lowest-numbered one", () => {
   const notYet = foldSpiderFlyState([
     { subject: "egg-1", predicate: "mgx:currently-in", object: "cell-3-2" },
     { subject: "egg-1@turn2", predicate: "mgx:laid-at-turn", object: "2" },
+    { subject: "egg-1", predicate: "mgx:mass", object: "9" },
     { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
   ]);
   const early = runEcologyPass({
@@ -340,9 +408,34 @@ test("runEcologyPass hatches an egg exactly three turns after it was laid, into 
     postMoveMassByFly: new Map(),
     turn: 5,
   });
-  assert.deepEqual(onTime.events.hatched, [{ egg: "egg-1", spider: "spider-2", cell: "cell-3-2" }]);
+  assert.equal(onTime.events.hatched.length, 1);
+  const [hatch] = onTime.events.hatched;
+  assert.equal(hatch.egg, "egg-1");
+  assert.equal(hatch.cell, "cell-3-2");
+  assert.deepEqual(hatch.spiders, [{ spider: "spider-2", mass: 5 }, { spider: "spider-3", mass: 4 }], "9 mass split across 2 hatchlings — 5 and 4, remainder to the lowest-numbered");
   assert.ok(onTime.writes.some((w) => w.subject === "spider-2@turn5" && w.predicate === "mgx:currently-in" && w.object === "cell-3-2"));
-  assert.ok(onTime.writes.some((w) => w.subject === "egg-1@turn5" && w.predicate === "mgx:hatched-into" && w.object === "spider-2"));
+  assert.ok(onTime.writes.some((w) => w.subject === "spider-3@turn5" && w.predicate === "mgx:currently-in" && w.object === "cell-3-2"));
+  assert.ok(onTime.writes.some((w) => w.subject === "spider-2@turn5" && w.predicate === "mgx:mass" && w.object === "5"));
+  assert.ok(onTime.writes.some((w) => w.subject === "spider-3@turn5" && w.predicate === "mgx:mass" && w.object === "4"));
+  assert.ok(onTime.writes.some((w) => w.subject === "egg-1@turn5" && w.predicate === "mgx:hatched-into" && w.object === "spider-2"), "hatched-into names the first (lowest-numbered) hatchling");
+});
+
+test("runEcologyPass's hatch floors the COUNT (never the mass) for a too-small egg — fewer, still-viable hatchlings rather than emaciated ones", () => {
+  const tinyEgg = foldSpiderFlyState([
+    { subject: "egg-1", predicate: "mgx:currently-in", object: "cell-3-2" },
+    { subject: "egg-1@turn2", predicate: "mgx:laid-at-turn", object: "2" },
+    { subject: "egg-1", predicate: "mgx:mass", object: "4" },
+  ]);
+  const { events } = runEcologyPass({
+    state: tinyEgg,
+    postMovePlacements: new Map(),
+    postMoveMassByFly: new Map(),
+    turn: 5,
+  });
+  // floor(4 / minHatchlingMass 3) = 1, below the configured eggHatchCount of
+  // 2 — one still-viable hatchling, not two emaciated ones.
+  assert.equal(events.hatched.length, 1);
+  assert.deepEqual(events.hatched[0].spiders, [{ spider: "spider-1", mass: 4 }]);
 });
 
 test("runEcologyPass spawns a new fly on every third turn, at a seeded pick among the uncontested perimeter cells", () => {
@@ -426,60 +519,66 @@ test("runSpiderFlyTick drives lay, hatch and spawn through real @turnN writes, v
   const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-ecology-"));
   try {
     await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
-    // Two flies already eaten in the store's history (turns 1 and 2) — the
-    // lay condition ("no live egg, two eats since the last one, or the
-    // first at game start") is already satisfied before this tick runs.
+    // spider-1 already carries enough mass to cross the 25 lay threshold on
+    // its very first tick, sitting in the static home web the whole time —
+    // no fly anywhere on the board, so it just holds there.
     await appendFacts(dir, [
       { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
-      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-9-9" },
-      { subject: "fly-2", predicate: "mgx:currently-in", object: "cell-9-1" },
-      { subject: "fly-1@turn1", predicate: "mgx:eaten-by", object: "spider-1" },
-      { subject: "fly-2@turn2", predicate: "mgx:eaten-by", object: "spider-1" },
+      { subject: "spider-1", predicate: "mgx:mass", object: "25.5" },
     ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
 
-    const tick3 = await runSpiderFlyTick(dir); // turn 3: lays egg-1, and spawns (3 % 3 === 0)
-    assert.equal(tick3.turn, 3);
-    assert.equal(tick3.ecology.laid, "egg-1");
-    assert.ok(tick3.ecology.spawned, "turn 3 is also a spawn turn");
+    const tick1 = await runSpiderFlyTick(dir); // turn 1: 25.5 - 0.5 = 25, in the web — lays egg-1
+    assert.equal(tick1.turn, 1);
+    assert.equal(tick1.ecology.laid, "egg-1");
 
-    await runSpiderFlyTick(dir); // turn 4
-    await runSpiderFlyTick(dir); // turn 5
-    await runSpiderFlyTick(dir); // turn 6: egg-1 (laid turn 3) hatches
+    await runSpiderFlyTick(dir); // turn 2
+    const tick3 = await runSpiderFlyTick(dir); // turn 3: also a spawn turn (3 % 3 === 0)
+    assert.ok(tick3.ecology.spawned, "turn 3 is a spawn turn regardless of the egg's own timeline");
+    const tick4 = await runSpiderFlyTick(dir); // turn 4: egg-1 (laid turn 1) hatches
+
+    assert.equal(tick4.ecology.hatched.length, 1);
+    assert.equal(tick4.ecology.hatched[0].egg, "egg-1");
+    assert.equal(tick4.ecology.hatched[0].cell, "cell-2-2");
 
     const rows = readFactRows(await loadMemory(dir));
     const has = (subject, predicate, object) => rows.some((r) => r.subject === subject && r.predicate === predicate && r.object === object);
-    assert.ok(has("egg-1@turn3", "mgx:currently-in", "cell-2-2"), "the egg is laid at the eating spider's cell");
-    assert.ok(has("egg-1@turn3", "mgx:laid-at-turn", "3"));
-    assert.ok(has("spider-2@turn6", "mgx:currently-in", "cell-2-2"), "the hatch mints a new spider at the egg's cell, three turns after laying");
-    assert.ok(has("egg-1@turn6", "mgx:hatched-into", "spider-2"));
+    assert.ok(has("egg-1@turn1", "mgx:currently-in", "cell-2-2"), "the egg is laid at the laying spider's cell");
+    assert.ok(has("egg-1@turn1", "mgx:laid-at-turn", "1"));
+    assert.ok(has("spider-1@turn1", "mgx:mass", "15"), "the laying spider resets to exactly its own initial mass");
+    for (const { spider } of tick4.ecology.hatched[0].spiders) {
+      assert.ok(has(`${spider}@turn4`, "mgx:currently-in", "cell-2-2"), "each hatchling mints at the egg's cell, exactly config.eggHatchDelayTurns turns after laying");
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
-test("runSpiderFlyTick: a hatched spider and a spawned fly are both present in the SAME tick's own returned agents, not one tick late", async () => {
+test("runSpiderFlyTick: every hatchling and a spawned fly are all present in the SAME tick's own returned agents, not one tick late", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-newborn-agents-"));
   try {
     await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
     await appendFacts(dir, [
       { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
-      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-9-9" },
-      { subject: "fly-2", predicate: "mgx:currently-in", object: "cell-9-1" },
-      { subject: "fly-1@turn1", predicate: "mgx:eaten-by", object: "spider-1" },
-      { subject: "fly-2@turn2", predicate: "mgx:eaten-by", object: "spider-1" },
+      { subject: "spider-1", predicate: "mgx:mass", object: "25.5" },
     ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
 
-    const tick3 = await runSpiderFlyTick(dir); // turn 3: lays egg-1, and spawns (3 % 3 === 0)
-    assert.ok(tick3.ecology.spawned, "turn 3 is also a spawn turn");
+    const tick1 = await runSpiderFlyTick(dir); // turn 1: lays egg-1
+    assert.equal(tick1.ecology.laid, "egg-1");
+
+    await runSpiderFlyTick(dir); // turn 2
+    const tick3 = await runSpiderFlyTick(dir); // turn 3: also a spawn turn (3 % 3 === 0)
+    assert.ok(tick3.ecology.spawned, "turn 3 is a spawn turn");
     assert.ok(tick3.agents[tick3.ecology.spawned], "the spawned fly is already in THIS tick's own agents, not only next tick's fold");
     assert.equal(tick3.agents[tick3.ecology.spawned].cell, tick3.ecology.spawnedCell);
 
-    await runSpiderFlyTick(dir); // turn 4
-    await runSpiderFlyTick(dir); // turn 5
-    const tick6 = await runSpiderFlyTick(dir); // turn 6: egg-1 (laid turn 3) hatches
-    assert.deepEqual(tick6.ecology.hatched, [{ egg: "egg-1", spider: "spider-2", cell: "cell-2-2" }]);
-    assert.ok(tick6.agents["spider-2"], "the hatched spider is already in THIS tick's own agents, not only next tick's fold");
-    assert.equal(tick6.agents["spider-2"].cell, "cell-2-2");
+    const tick4 = await runSpiderFlyTick(dir); // turn 4: egg-1 (laid turn 1) hatches
+    assert.equal(tick4.ecology.hatched.length, 1);
+    assert.ok(tick4.ecology.hatched[0].spiders.length >= 1);
+    for (const { spider, mass } of tick4.ecology.hatched[0].spiders) {
+      assert.ok(tick4.agents[spider], "each hatchling is already in THIS tick's own agents, not only next tick's fold");
+      assert.equal(tick4.agents[spider].cell, "cell-2-2");
+      assert.equal(tick4.agents[spider].mass, mass);
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -624,6 +723,96 @@ test("runSpiderFlyTick: the eating spider's own returned agents[].mass reflects 
     assert.deepEqual(tick.ecology.eaten, [{ fly: "fly-1", spider: "spider-1", cell: "cell-2-2" }]);
     // spider-1: 5 - 0.5 (movement decrement) = 4.5, plus fly-1's post-decrement mass 10 - 1 = 9 -> 13.5.
     assert.equal(tick.agents["spider-1"].mass, 13.5);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runSpiderFlyTick: a spider can catch a fly far from any web, then carries it home and eats it once delivered — a full carry cycle through the real store", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-carry-cycle-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    // fly-1 starts pinned into the board's far corner — cornered, it cannot
+    // keep opening distance from a spider closing in from the same corner,
+    // so it eventually gets caught nowhere near the web.
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-9-9" },
+      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-10-10" },
+      { subject: "fly-1", predicate: "mgx:mass", object: "200" },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    let caughtOutsideWeb = false;
+    let sawCarryingGoal = false;
+    let eaten = false;
+    for (let i = 0; i < 60 && !eaten; i += 1) {
+      const tick = await runSpiderFlyTick(dir);
+      for (const c of tick.ecology.caught) {
+        const cell = parseCellId(c.cell);
+        if (!isInWebBlock(cell.x, cell.y)) caughtOutsideWeb = true;
+      }
+      if (tick.agents["fly-1"]?.goal?.includes("being carried")) sawCarryingGoal = true;
+      if (tick.ecology.eaten.some((e) => e.fly === "fly-1")) eaten = true;
+    }
+    assert.ok(caughtOutsideWeb, "the spider caught the fly somewhere outside the web block");
+    assert.ok(sawCarryingGoal, "the caught fly's own goal narrates being carried while inert");
+    assert.ok(eaten, "carrying it home eventually delivers it into an active web and it gets eaten");
+
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(rows.some((r) => r.subject.startsWith("fly-1@turn") && r.predicate === "mgx:eaten-by" && r.object === "spider-1"));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runSpiderFlyTick: a carried fly self-heals to independent movement the tick after its captor dies", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-selfheal-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-9-9" },
+      { subject: "spider-1", predicate: "mgx:mass", object: "0.5" }, // starves this very first tick
+      { subject: "spider-1", predicate: "mgx:carrying", object: "fly-1" },
+      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-9-9" },
+      { subject: "fly-1", predicate: "mgx:mass", object: "10" },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const tick1 = await runSpiderFlyTick(dir);
+    assert.deepEqual(tick1.ecology.starved, ["spider-1"]);
+    assert.ok(tick1.agents["fly-1"], "the fly rode along with its still-live-at-tick-start captor, but is still on the board itself");
+    // Its own pre-ecology "being carried by spider-1" goal is stale the
+    // instant spider-1 starves later in this SAME tick — the existing
+    // died-this-tick scrub (which already protects every other agent's own
+    // goal text from naming a subject that died this exact tick) catches
+    // this one too, same as it would "avoiding spider-1" or "chasing
+    // spider-1" for any other agent.
+    assert.equal(tick1.agents["fly-1"].goal, "spider-1 is gone — re-evaluating.");
+    assert.equal(tick1.agents["spider-1"], undefined, "the starved captor is gone from this tick's own agents");
+
+    const tick2 = await runSpiderFlyTick(dir);
+    assert.ok(tick2.agents["fly-1"], "the fly is still on the board");
+    assert.doesNotMatch(tick2.agents["fly-1"].goal, /being carried/, "the captor is gone — the fly moves independently again");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runSpiderFlyTick: every live agent's returned entry carries a plan array and a belief map, not just a chasing spider's", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-plan-belief-"));
+  try {
+    await appendFacts(dir, [...worldFactRows()].map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: "world:spider-fly" })));
+    await appendFacts(dir, [
+      { subject: "spider-1", predicate: "mgx:currently-in", object: "cell-2-2" },
+      { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-5-2" },
+      { subject: "fly-1", predicate: "mgx:mass", object: "10" },
+    ].map((f) => ({ ...f, provenance: "world:spider-fly" })));
+
+    const tick = await runSpiderFlyTick(dir);
+    for (const id of ["spider-1", "fly-1"]) {
+      assert.ok(Array.isArray(tick.agents[id].plan), `${id} carries a plan array`);
+      assert.equal(typeof tick.agents[id].belief, "object", `${id} carries a belief map`);
+    }
+    assert.equal(tick.agents["spider-1"].belief["fly-1"], "cell-5-2", "the spider's belief about fly-1 matches what it can actually see this turn");
+    assert.equal(tick.agents["fly-1"].belief["spider-1"], "cell-2-2", "the fly's belief about spider-1 matches what it can actually see this turn");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

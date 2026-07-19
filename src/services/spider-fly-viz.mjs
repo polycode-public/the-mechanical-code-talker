@@ -18,14 +18,16 @@
 // input. scripts/build-demo-site.mjs calls it directly and writes the result
 // to public/spider-fly.html, after building the sibling bundle.
 //
-// Three runtime pieces are spliced into the page's own inlined script via
+// Runtime pieces are spliced into the page's own inlined script via
 // `.toString()` — exactly ledger-viz.mjs's own `facetCounts`/
 // `resolveAnsweredTerm` pattern — because they are genuinely UI-only, with no
 // reason to live inside the engine bundle: `createTicker` (viz-ticker.mjs,
-// the shared play/pause/step/reset primitive), `classOfAgentId` and
-// `threadCellsForSpiderPlan` (below — the silk-thread reconstruction, kept as
-// real, independently-tested exports rather than raw inline-script text, the
-// same discipline ledger-viz.mjs holds its own spliced helpers to). Sprite
+// the shared play/pause/step/reset primitive), `classOfAgentId`,
+// `threadCellsForSpiderPlan` (the silk-thread reconstruction), `nextCorpses`
+// (the dying-agent bookkeeping behind the dusty-corner corpse pile) and
+// `facingDegreesFor` (plan-driven sprite orientation) — all kept as real,
+// independently-tested exports rather than raw inline-script text, the same
+// discipline ledger-viz.mjs holds its own spliced helpers to. Sprite
 // resolution, grid geometry and the chat turn engine all come from the
 // bundle's own real ES exports instead, since (unlike ledger-viz, which
 // reuses a FIXED shared bundle it can't extend for one page's own needs) this
@@ -33,13 +35,22 @@
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
 import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId } from "../domain/spider-fly-world.mjs";
-import { FLY_INITIAL_MASS, SPIDER_INITIAL_MASS } from "./spider-fly.mjs";
+import { FLY_INITIAL_MASS, EGG_LAY_MASS_THRESHOLD } from "./spider-fly.mjs";
+import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 
-const CELL_PX = 44;
+// A larger cell than this page's first cut (44px) — the board now fills
+// noticeably more of the stage's own width, closing most of the dead gap a
+// fixed-260px side column used to leave next to a small fixed-440px board.
+const CELL_PX = 54;
 const BOARD_PX = CELL_PX * GRID_SIZE;
 const DEFAULT_TITLE = "tmct — the spider and the fly";
 const PREVIEW_MAX_TURNS = 40;
 const TICK_WAIT_MS = 700;
+// How many turns a corpse lingers at the bottom of its own board column
+// before the carcass "rots" (stops being drawn at all) — a page-local
+// constant, not a game-config knob: purely cosmetic, never read by the
+// engine, so a visitor's carrying/hatch mechanics never depend on it.
+const CORPSE_LINGER_TURNS = 4;
 
 function webCellIds() {
   const out = [];
@@ -95,6 +106,57 @@ export function threadCellsForSpiderPlan(agents, geometry) {
   return null;
 }
 
+/** The sprite-facing rotation (degrees) for one agent this tick, driven by
+ *  its CURRENT plan's first step (spider-fly.mjs's own `agents[id].plan`),
+ *  never its actual next move — the two usually coincide, but re-planning
+ *  fresh every tick means they can visibly diverge as a plan gets clobbered
+ *  and replaced, which is the intended, honest demonstration of "plans get
+ *  clobbered under partial/unreliable knowledge," not a glitch to smooth
+ *  over. A held agent (`plan` empty/absent — no direction to face) keeps
+ *  `previousDegrees` unchanged rather than snapping back to a default, so
+ *  holding still never spins the sprite; a brand-new agent with no prior
+ *  facing at all defaults to 0 (the art's own default north/up pose).
+ *  Self-contained (no outer refs), `.toString()`-splice safe — the
+ *  direction -> degrees table lives INSIDE the function body on purpose:
+ *  spider.toml and fly.toml both draw the head/thorax at the TOP of the
+ *  viewBox (facing north by default), matching spider-fly-world.mjs's own
+ *  DIRECTION_DELTA (north decreases y — up on screen). */
+export function facingDegreesFor(plan, previousDegrees) {
+  const FACING_DEGREES = { north: 0, east: 90, south: 180, west: 270 };
+  const direction = plan && plan[0];
+  if (direction && FACING_DEGREES[direction] !== undefined) return FACING_DEGREES[direction];
+  return previousDegrees ?? 0;
+}
+
+/**
+ * The updated corpse set for one redraw (§A.2.5 — visual-only, entirely
+ * client-side; the actual starve/eat removal already happened in the
+ * engine). Every id present in `prevAgents` but absent from `agents` died
+ * THIS tick — eaten or starved are the only two ways an agent ever leaves
+ * the engine's own returned roster — and is added at its last-known cell
+ * and class; every corpse already older than `lingerTurns` past its own
+ * death turn is dropped first, so the set never grows without bound.
+ * Returns a plain `{ [id]: { cls, cell, diedAtTurn } }` map. Pure.
+ * `lingerTurns` defaults to a literal 4 (not the module-level
+ * CORPSE_LINGER_TURNS constant) so this function stays fully
+ * `.toString()`-splice safe — every real caller (both the inlined page and
+ * CORPSE_LINGER_TURNS's own callers elsewhere in this module) passes it
+ * explicitly anyway.
+ */
+export function nextCorpses(prevCorpses, prevAgents, agents, turn, lingerTurns = 4) {
+  const out = {};
+  for (const [id, corpse] of Object.entries(prevCorpses || {})) {
+    if (turn - corpse.diedAtTurn <= lingerTurns) out[id] = corpse;
+  }
+  for (const id of Object.keys(prevAgents || {})) {
+    if (agents[id] || out[id]) continue;
+    const cell = prevAgents[id]?.cell;
+    if (!cell) continue;
+    out[id] = { cls: classOfAgentId(id), cell, diedAtTurn: turn };
+  }
+  return out;
+}
+
 /** The self-contained spider-and-fly page. Pure — the same output for the
  *  same `title`/`spriteTemplates` every time; every other piece of state
  *  this page shows is computed live in the browser once the sibling bundle
@@ -117,8 +179,15 @@ export function renderSpiderFlyHtml({ title = DEFAULT_TITLE, spriteTemplates = [
     cellPx: CELL_PX,
     previewMaxTurns: PREVIEW_MAX_TURNS,
     tickWaitMs: TICK_WAIT_MS,
+    corpseLingerTurns: CORPSE_LINGER_TURNS,
     maxFlyMass: FLY_INITIAL_MASS,
-    maxSpiderMass: SPIDER_INITIAL_MASS,
+    // The spider's mass bar now scales against the EGG-LAY threshold, not
+    // its own starting mass — "how close to laying" is the meaningful cap
+    // to visualize under the new mass-gated lay mechanic (§A.2.2); the old
+    // denominator (a flat starting mass) said nothing about progress toward
+    // the spider's actual goal.
+    maxSpiderMass: EGG_LAY_MASS_THRESHOLD,
+    defaultConfig: DEFAULT_GAME_CONFIG.spiderFly,
     spriteTemplates,
   });
 
@@ -137,32 +206,58 @@ ${THEME_TOKENS_CSS}
   html { background: var(--bg); }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
-  main { max-width: 980px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
+  main { max-width: 1120px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   h1 { font-size: 1.4rem; margin: .3rem 0 .9rem; text-wrap: balance; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
   button:focus-visible, input:focus-visible, .sprite:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 1rem; align-items: start; }
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 1.2rem; align-items: start; }
   @media (max-width: 760px) { .stage { grid-template-columns: 1fr; } }
-  .board-frame { position: relative; width: ${BOARD_PX}px; max-width: 100%; aspect-ratio: 1 / 1; background: var(--card); border: 1px solid var(--line); }
+  /* A dusty window corner: a soft light glow near the top-left (WEB_HOME
+     already sits near that corner — spider-fly-world.mjs's own header
+     comment), and a faint diagonal weave standing in for dust/silk caught
+     in the light. Decoration only — the 10x10 game grid itself is drawn by
+     drawBoard() on the canvas beneath, unchanged. */
+  .board-frame {
+    position: relative; width: ${BOARD_PX}px; max-width: 100%; aspect-ratio: 1 / 1;
+    background:
+      radial-gradient(140% 140% at 6% 6%, rgba(255, 241, 199, .55), transparent 52%),
+      repeating-linear-gradient(115deg, rgba(120, 110, 90, .06) 0 1px, transparent 1px 30px),
+      var(--card);
+    border: 1px solid var(--line);
+    box-shadow: inset 0 0 0 6px var(--bg), inset 0 0 0 7px var(--line);
+  }
+  @media (prefers-color-scheme: dark) { .board-frame { background: radial-gradient(140% 140% at 6% 6%, rgba(130, 112, 60, .32), transparent 52%), repeating-linear-gradient(115deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 30px), var(--card); } }
+  :root[data-theme="dark"] .board-frame { background: radial-gradient(140% 140% at 6% 6%, rgba(130, 112, 60, .32), transparent 52%), repeating-linear-gradient(115deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 30px), var(--card); }
   .board-frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
   .sprite-layer { position: absolute; inset: 0; }
   .sprite { position: absolute; width: 7.6%; height: 7.6%; transform: translate(-50%, -50%); transition: left .25s ease, top .25s ease; }
-  @media (prefers-reduced-motion: reduce) { .sprite { transition: none; } }
-  .sprite svg { width: 100%; height: 100%; display: block; }
+  @media (prefers-reduced-motion: reduce) { .sprite, .sprite-face { transition: none !important; } }
+  .sprite-face { width: 100%; height: 100%; transition: transform .25s ease; }
+  .sprite-face svg { width: 100%; height: 100%; display: block; }
   .sprite[data-cls="spider"] { color: var(--taught); }
   .sprite[data-cls="fly"] { color: var(--fly); }
   .sprite[data-cls="egg"] { color: var(--muted); }
   .sprite.dimmed { opacity: .28; }
+  /* A corpse never faces anywhere in particular (the rot has no plan) and
+     never rotates — grayscale-and-fade at the bottom of its own column
+     until CORPSE_LINGER_TURNS passes and it stops being drawn at all. */
+  .sprite.corpse { filter: grayscale(1); opacity: .38; pointer-events: none; }
+  .sprite.corpse .sprite-face { transform: none !important; }
   .thread-tip { position: absolute; transform: translate(-50%, -130%); font-family: ${MONO_STACK}; font-size: .68rem; background: var(--ink); color: var(--bg); padding: .1rem .4rem; border-radius: 3px; pointer-events: none; white-space: nowrap; display: none; }
   .side { display: flex; flex-direction: column; gap: .8rem; min-width: 0; }
-  .hud, .chat { background: var(--card); border: 1px solid var(--line); padding: .6rem .75rem; }
-  .hud h2, .chat h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .5rem; }
-  .hud-row { display: flex; flex-direction: column; gap: .1rem; padding: .3rem 0; border-top: 1px solid var(--line); }
+  .hud, .chat, .tuning { background: var(--card); border: 1px solid var(--line); padding: .6rem .75rem; }
+  .hud h2, .chat h2, .tuning h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .5rem; }
+  /* Fixed-height, internally-scrolling — a hatch can mint several spiders
+     at once now, so the agent count (and a naive card list's own height)
+     can jump sharply; the panel must never grow the page underneath it. */
+  .hud-list { max-height: 420px; overflow-y: auto; }
+  .hud-row { display: flex; flex-direction: column; gap: .1rem; padding: .4rem 0; border-top: 1px solid var(--line); }
   .hud-row:first-of-type { border-top: none; }
   .hud-id { font-family: ${MONO_STACK}; font-size: .74rem; }
   .hud-id.spider { color: var(--taught); } .hud-id.fly { color: var(--fly); } .hud-id.egg { color: var(--muted); }
   .hud-goal { font-size: .85rem; }
+  .hud-plan, .hud-belief { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); margin-top: .2rem; line-height: 1.4; }
   .mass-track { height: 4px; margin-top: .3rem; background: var(--line); border-radius: 2px; overflow: hidden; }
   .mass-fill { height: 100%; background: var(--taught); }
   .mass-fill.fly { background: var(--fly); }
@@ -182,13 +277,33 @@ ${THEME_TOKENS_CSS}
   .pill:hover:not(:disabled) { border-color: var(--taught); }
   .pill:disabled { opacity: .45; cursor: default; }
   .pill[data-role="addr"].active { border-color: var(--taught); color: var(--taught); }
+  /* The dynamic deception-pill rail (§A.2.4): a true/false tag shown ONLY
+     here, via border style/color and a small human-facing glyph — the
+     submitted sentence itself (data-sentence, filled into #chatq on click)
+     never carries the tag, so a clicked pill is indistinguishable from a
+     hand-typed claim once it's in the input. */
+  .dynpills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--line); }
+  .dynpills:empty { display: none; padding-top: 0; border-top: none; }
+  .pill[data-role="dyn-addr"][data-active="1"] { border-color: var(--taught); color: var(--taught); }
+  .pill[data-role="dyn-claim"][data-truth="true"] { border-color: var(--taught-t2, var(--taught)); }
+  .pill[data-role="dyn-claim"][data-truth="true"]::before { content: "✓ "; opacity: .5; }
+  .pill[data-role="dyn-claim"][data-truth="false"] { border-style: dashed; border-color: var(--alert); }
+  .pill[data-role="dyn-claim"][data-truth="false"]::before { content: "✕ "; opacity: .6; }
+  .tuning-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }
+  .tuning-col h3 { font-size: .74rem; margin: 0 0 .4rem; font-weight: 600; }
+  .tuning-col.spider h3 { color: var(--taught); } .tuning-col.fly h3 { color: var(--fly); }
+  .tuning-col label { display: block; font-size: .68rem; color: var(--muted); margin-bottom: .6rem; }
+  .tuning-col .tuning-val { font-family: ${MONO_STACK}; color: var(--ink); float: right; }
+  .tuning-col input[type="range"] { display: block; width: 100%; margin-top: .2rem; accent-color: var(--taught); }
+  .tuning-col.fly input[type="range"] { accent-color: var(--fly); }
+  .tuning-col input:disabled { opacity: .45; }
   .controls-row { display: flex; align-items: center; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
   .controls-row button { font-family: ${MONO_STACK}; font-size: .78rem; padding: .3rem .7rem; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
   .controls-row button:hover:not(:disabled) { border-color: var(--taught); }
   .controls-row button:disabled { opacity: .4; cursor: default; }
   .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .5rem; }
-  body.preview .side, body.preview .controls-row, body.preview .status { display: none; }
+  body.preview .side, body.preview .controls-row, body.preview .status, body.preview .tuning { display: none; }
   body.preview main { padding: 0; max-width: none; }
   body.preview .stage { display: block; }
   body.preview .eyebrow, body.preview h1 { display: none; }
@@ -208,7 +323,7 @@ ${THEME_TOKENS_CSS}
     <aside class="side" aria-label="Agents and chat">
       <div class="hud">
         <h2>agents</h2>
-        <div id="hud"></div>
+        <div class="hud-list" id="hud"></div>
       </div>
       <div class="chat">
         <h2>tell the spider or the fly something</h2>
@@ -225,8 +340,32 @@ ${THEME_TOKENS_CSS}
           <button type="button" class="pill" data-role="dir" data-direction="east" disabled>the fly is east</button>
           <button type="button" class="pill" data-role="dir" data-direction="west" disabled>the fly is west</button>
         </div>
+        <div class="dynpills" id="dynamicPills" role="group" aria-label="address one individual and feed it a true or false position claim"></div>
       </div>
     </aside>
+  </div>
+  <div class="tuning" id="tuning">
+    <h2>live tuning &mdash; mass loss, spawn rate, vision, per class</h2>
+    <div class="tuning-grid">
+      <div class="tuning-col spider">
+        <h3>spider</h3>
+        <label>mass lost/turn <span class="tuning-val" id="tvSpiderMass"></span>
+          <input type="range" id="ctlSpiderMass" min="0.1" max="3" step="0.1" disabled></label>
+        <label>hatchlings per egg <span class="tuning-val" id="tvSpiderSpawn"></span>
+          <input type="range" id="ctlSpiderSpawn" min="1" max="5" step="1" disabled></label>
+        <label>vision radius <span class="tuning-val" id="tvSpiderVision"></span>
+          <input type="range" id="ctlSpiderVision" min="1" max="8" step="1" disabled></label>
+      </div>
+      <div class="tuning-col fly">
+        <h3>fly</h3>
+        <label>mass lost/turn <span class="tuning-val" id="tvFlyMass"></span>
+          <input type="range" id="ctlFlyMass" min="0.1" max="3" step="0.1" disabled></label>
+        <label>spawns every N turns <span class="tuning-val" id="tvFlySpawn"></span>
+          <input type="range" id="ctlFlySpawn" min="1" max="10" step="1" disabled></label>
+        <label>vision radius <span class="tuning-val" id="tvFlyVision"></span>
+          <input type="range" id="ctlFlyVision" min="1" max="8" step="1" disabled></label>
+      </div>
+    </div>
   </div>
   <div class="controls-row">
     <button id="resetBtn" type="button" disabled>reset</button>
@@ -246,6 +385,8 @@ const SPIDERFLY = ${gridData};
   const createTicker = ${createTicker.toString()};
   const classOfAgentId = ${classOfAgentId.toString()};
   const threadCellsForSpiderPlan = ${threadCellsForSpiderPlan.toString()};
+  const facingDegreesFor = ${facingDegreesFor.toString()};
+  const nextCorpses = ${nextCorpses.toString()};
   const esc = ${escapeHtml.toString()};
   const el = (id) => document.getElementById(id);
   const boardFrame = el("boardFrame");
@@ -260,11 +401,20 @@ const SPIDERFLY = ${gridData};
   const chatpillsEl = el("chatpills");
   const addressPillEls = [...chatpillsEl.querySelectorAll('[data-role="addr"]')];
   const directionPillEls = [...chatpillsEl.querySelectorAll('[data-role="dir"]')];
+  const dynamicPillsEl = el("dynamicPills");
   const statusEl = el("status");
   const turnLabelEl = el("turnLabel");
   const resetBtn = el("resetBtn");
   const playBtn = el("playBtn");
   const stepBtn = el("stepBtn");
+  const TUNING_CONTROLS = [
+    { input: "ctlSpiderMass", out: "tvSpiderMass", key: "spiderMassDecrementPerTurn" },
+    { input: "ctlSpiderSpawn", out: "tvSpiderSpawn", key: "eggHatchCount" },
+    { input: "ctlSpiderVision", out: "tvSpiderVision", key: "spiderVisionRadius" },
+    { input: "ctlFlyMass", out: "tvFlyMass", key: "flyMassDecrementPerTurn" },
+    { input: "ctlFlySpawn", out: "tvFlySpawn", key: "flySpawnIntervalTurns" },
+    { input: "ctlFlyVision", out: "tvFlyVision", key: "flyVisionRadius" },
+  ].map((c) => ({ ...c, inputEl: el(c.input), outEl: el(c.out) }));
 
   const params = new URLSearchParams(location.search);
   const preview = params.get("preview") === "1";
@@ -296,12 +446,23 @@ const SPIDERFLY = ${gridData};
   let lastTurn = 0;
   const goalById = {};
   const spriteEls = {};
+  const facingByAgent = {};
+  let corpses = {};
+  const corpseEls = {};
+  let selectedAddresseeId = null;
   let povAgentId = null;
   let threadHits = [];
+  // Populated once the live session boots (session.getConfig()) and kept in
+  // sync with whatever the tuning sliders below are currently set to — the
+  // POV overlay's own per-class vision radius reads this instead of a fixed
+  // constant, so dragging a slider changes what a toggled POV shows too.
+  let liveConfig = {};
 
   function removeStaleSprites(agents) {
     for (const id of Object.keys(spriteEls)) {
-      if (!agents[id]) { spriteEls[id].remove(); delete spriteEls[id]; delete goalById[id]; }
+      if (!agents[id]) {
+        spriteEls[id].remove(); delete spriteEls[id]; delete goalById[id]; delete facingByAgent[id];
+      }
     }
   }
 
@@ -329,7 +490,13 @@ const SPIDERFLY = ${gridData};
     const sprite = window.tmctSpiderFly
       ? tmctSpiderFly.resolveSpriteAsset(cls, (session && session.taxonomyRows) || [], [], SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
       : "";
-    node.innerHTML = sprite;
+    // The sprite SVG lives in its own inner wrapper so plan-driven facing
+    // (a CSS rotate on THIS wrapper) never fights the outer .sprite node's
+    // own translate(-50%,-50%) positioning transform.
+    const face = document.createElement("div");
+    face.className = "sprite-face";
+    face.innerHTML = sprite;
+    node.appendChild(face);
     if (!preview) {
       node.tabIndex = 0;
       node.setAttribute("role", "button");
@@ -354,9 +521,52 @@ const SPIDERFLY = ${gridData};
       const pct = cellCenterPct(parsed.x, parsed.y);
       node.style.left = pct.leftPct + "%";
       node.style.top = pct.topPct + "%";
+      // Facing is driven by the agent's own CURRENT plan's first step, not
+      // its actual next move — the two usually agree, but a fresh plan is
+      // computed every tick, so facing can visibly flip as a plan gets
+      // clobbered and replaced under partial/unreliable knowledge (the
+      // whole point of this page, not a glitch).
+      facingByAgent[id] = facingDegreesFor(a.plan, facingByAgent[id]);
+      const face = node.querySelector(".sprite-face");
+      if (face) face.style.transform = "rotate(" + facingByAgent[id] + "deg)";
       if (a.goal) goalById[id] = a.goal;
     }
     lastAgents = agents;
+  }
+
+  // ---- corpses (§A.2.5): visual-only — the actual starve/eat removal
+  // already happened in the engine before this redraw ever sees "agents".
+  // A corpse sinks to the bottom row of the SAME board column it died in
+  // ("drops to the bottom" — spider-fly-world.mjs's own x/y convention,
+  // y = GRID_SIZE is the bottom row) and fades out once CORPSE_LINGER_TURNS
+  // passes, drawn in the same sprite layer as every live sprite, just
+  // grayscaled and non-interactive (see the .sprite.corpse CSS rule).
+  function renderCorpses() {
+    for (const id of Object.keys(corpseEls)) {
+      if (!corpses[id]) { corpseEls[id].remove(); delete corpseEls[id]; }
+    }
+    for (const [id, corpse] of Object.entries(corpses)) {
+      let node = corpseEls[id];
+      if (!node) {
+        node = document.createElement("div");
+        node.className = "sprite corpse";
+        node.dataset.cls = corpse.cls;
+        node.setAttribute("aria-hidden", "true");
+        const face = document.createElement("div");
+        face.className = "sprite-face";
+        face.innerHTML = window.tmctSpiderFly
+          ? tmctSpiderFly.resolveSpriteAsset(corpse.cls, (session && session.taxonomyRows) || [], [], SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
+          : "";
+        node.appendChild(face);
+        spriteLayer.appendChild(node);
+        corpseEls[id] = node;
+      }
+      const deathCell = tmctSpiderFly.parseCellId(corpse.cell);
+      if (!deathCell) continue;
+      const pct = cellCenterPct(deathCell.x, SPIDERFLY.gridSize);
+      node.style.left = pct.leftPct + "%";
+      node.style.top = pct.topPct + "%";
+    }
   }
 
   function massBarHtml(cls, mass) {
@@ -366,14 +576,41 @@ const SPIDERFLY = ${gridData};
     return '<div class="mass-track"><div class="mass-fill ' + esc(cls) + '" style="width:' + pct + '%"></div></div>';
   }
 
+  // The last-created plan as a plain arrow chain ("west → west"), or
+  // "holding." when the agent's plan this tick is empty — mirrors exactly
+  // what drove this tick's sprite facing (facingDegreesFor reads the same
+  // plan[0]), so the HUD line and the sprite's own orientation never
+  // disagree about what the agent is "about to do".
+  function planLineHtml(plan) {
+    const text = plan && plan.length ? plan.map((d) => esc(d)).join(" \\u2192 ") : "holding";
+    return '<div class="hud-plan">plan: ' + text + ".</div>";
+  }
+
+  // The agent's own current world-knowledge-graph snapshot (§A.2.7) — every
+  // OTHER live individual it believes it knows the position of, or
+  // "unseen" when it has no belief at all. Deliberately never ground truth:
+  // this is what the agent would actually ACT on, which a false pill or a
+  // told fact can make visibly wrong compared to where that individual
+  // really is — the gap IS the demonstration.
+  function beliefLineHtml(belief) {
+    const entries = Object.entries(belief || {});
+    if (!entries.length) return "";
+    const text = entries.map(([id, cell]) => esc(id) + (cell ? " @ " + esc(cell) : " unseen")).join(" \\u00b7 ");
+    return '<div class="hud-belief">believes: ' + text + "</div>";
+  }
+
   function renderHud() {
     const ids = Object.keys(lastAgents).sort();
     if (!ids.length) { hudEl.innerHTML = '<div class="hud-empty">no agents on the board.</div>'; return; }
     hudEl.innerHTML = ids.map((id) => {
       const cls = classOfAgentId(id);
+      const a = lastAgents[id];
       return '<div class="hud-row"><span class="hud-id ' + esc(cls) + '">' + esc(id) + '</span>'
         + '<span class="hud-goal">' + esc(goalById[id] || "watching\\u2026") + "</span>"
-        + massBarHtml(cls, lastAgents[id].mass) + "</div>";
+        + massBarHtml(cls, a.mass)
+        + planLineHtml(a.plan)
+        + beliefLineHtml(a.belief)
+        + "</div>";
     }).join("");
   }
 
@@ -435,7 +672,14 @@ const SPIDERFLY = ${gridData};
     const agent = lastAgents[povAgentId];
     if (!agent) { povAgentId = null; return; }
     const p = tmctSpiderFly.parseCellId(agent.cell);
-    const visible = new Set(tmctSpiderFly.visibleCells(p.x, p.y, tmctSpiderFly.DEFAULT_VISION_RADIUS));
+    // The live, slider-adjustable per-class radius (falling back to the
+    // engine's own shipped default before the session has finished
+    // booting) — a POV toggle always reflects whatever vision range this
+    // class currently actually has, not a fixed constant.
+    const radius = classOfAgentId(povAgentId) === "spider"
+      ? (liveConfig.spiderVisionRadius ?? tmctSpiderFly.DEFAULT_VISION_RADIUS)
+      : (liveConfig.flyVisionRadius ?? tmctSpiderFly.DEFAULT_VISION_RADIUS);
+    const visible = new Set(tmctSpiderFly.visibleCells(p.x, p.y, radius));
     povCtx.fillStyle = "rgba(0,0,0,.55)";
     for (let gy = 1; gy <= SPIDERFLY.gridSize; gy += 1) {
       for (let gx = 1; gx <= SPIDERFLY.gridSize; gx += 1) {
@@ -464,8 +708,13 @@ const SPIDERFLY = ${gridData};
   boardFrame.addEventListener("mouseleave", () => { threadTip.style.display = "none"; });
 
   function redraw(agents, turn, activeWebs) {
+    // nextCorpses compares the OLD lastAgents against the NEW agents, so it
+    // must run before applyAgents overwrites lastAgents below.
+    corpses = nextCorpses(corpses, lastAgents, agents, turn, SPIDERFLY.corpseLingerTurns);
     applyAgents(agents);
+    renderCorpses();
     renderHud();
+    renderDynamicPills();
     lastTurn = turn;
     lastActiveWebs = activeWebs || [];
     turnLabelEl.textContent = "turn: " + turn;
@@ -529,6 +778,67 @@ const SPIDERFLY = ${gridData};
   chatqEl.addEventListener("input", refreshPills);
   refreshPills();
 
+  // ---- deception pills (§A.2.4): a SEPARATE dynamic rail, alongside (never
+  // replacing) the static one above. tmctSpiderFly.pillsForSpiderFly is the
+  // exact same pure function spider-fly-turn.mjs exports — this page never
+  // reimplements the true/false claim logic, only renders its output and
+  // fills #chatq on click, same click-to-fill discipline as every other
+  // pill on this page (never auto-submits).
+  function renderDynamicPills() {
+    if (!session || !Object.keys(lastAgents).length) { dynamicPillsEl.innerHTML = ""; return; }
+    const result = tmctSpiderFly.pillsForSpiderFly(lastAgents, selectedAddresseeId, {});
+    selectedAddresseeId = result.addresseeId;
+    const addrHtml = result.addressPills.map((p) =>
+      '<button type="button" class="pill" data-role="dyn-addr" data-id="' + esc(p.id) + '"'
+      + (p.id === selectedAddresseeId ? ' data-active="1"' : "") + ">" + esc(p.label) + "</button>"
+    ).join("");
+    const claimHtml = result.claimPills.map((p) =>
+      '<button type="button" class="pill" data-role="dyn-claim" data-truth="' + (p.truth ? "true" : "false")
+      + '" data-sentence="' + esc(p.sentence) + '">' + esc(p.text) + "</button>"
+    ).join("");
+    dynamicPillsEl.innerHTML = addrHtml + claimHtml;
+  }
+  dynamicPillsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".pill");
+    if (!btn) return;
+    if (btn.dataset.role === "dyn-addr") {
+      selectedAddresseeId = btn.dataset.id;
+      renderDynamicPills();
+      return;
+    }
+    if (btn.dataset.role === "dyn-claim") {
+      chatqEl.value = btn.dataset.sentence;
+      refreshPills();
+      chatqEl.focus();
+    }
+  });
+
+  // ---- live tuning (mass-loss-rate / spawn-rate / vision-radius, per
+  // class): each slider writes straight through session.setConfig, which
+  // every future tick()/turn() call reads — a change never rewinds a value
+  // already written to a past turn's facts, same posture as editing
+  // tmct.toml between sessions, just live and per-class.
+  function applyTuningValue(control, value) {
+    liveConfig[control.key] = value;
+    control.outEl.textContent = String(value);
+    control.inputEl.value = String(value);
+    if (session) session.setConfig({ [control.key]: value });
+  }
+  function initTuning(config) {
+    liveConfig = { ...config };
+    for (const control of TUNING_CONTROLS) {
+      applyTuningValue(control, liveConfig[control.key]);
+      control.inputEl.disabled = false;
+    }
+  }
+  for (const control of TUNING_CONTROLS) {
+    control.inputEl.addEventListener("input", () => {
+      const value = Number(control.inputEl.value);
+      applyTuningValue(control, value);
+      drawPov(); // a vision-radius change should reflect immediately in an open POV overlay
+    });
+  }
+
   // ---- serialize every engine-touching call: the ticker and the chat dock
   // share one in-memory store, and an overlapping tick()/turn() pair could
   // race against the same @turnN write.
@@ -539,8 +849,17 @@ const SPIDERFLY = ${gridData};
     return run;
   }
 
+  let tuningInitialized = false;
   async function boot() {
     session = await tmctSpiderFly.createSpiderFlySession();
+    // A reset mints a brand-new session (fresh board, fresh config) — the
+    // FIRST boot seeds the sliders from the engine's own shipped defaults;
+    // every boot after that re-applies whatever the visitor already had the
+    // sliders set to, so tuning survives a reset instead of silently
+    // reverting.
+    if (!tuningInitialized) { initTuning(session.getConfig()); tuningInitialized = true; }
+    else session.setConfig(liveConfig);
+    selectedAddresseeId = null;
     redraw(session.initial.agents, session.initial.turn, session.initial.activeWebs);
     statusEl.textContent = session.opening;
     chatqEl.disabled = false;

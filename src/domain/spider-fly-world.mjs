@@ -86,6 +86,22 @@ export const DIRECTION_DELTA = Object.freeze({
   west: Object.freeze({ dx: -1, dy: 0 }),
 });
 
+/** The single compass direction from `fromCell` to `toCell` when `toCell`
+ *  sits EXACTLY one cardinal step away (DIRECTION_DELTA) — null for the same
+ *  cell, a diagonal, or any multi-step gap, so a caller never overstates
+ *  "adjacent". The one shared primitive both the engine's own plan-driven
+ *  facing (spider-fly.mjs) and the chat dock's deception pills
+ *  (spider-fly-turn.mjs's pillsForSpiderFly) need — defined once here so
+ *  neither has to re-derive it, and so the engine layer never has to import
+ *  the chat-turn layer to get it (spider-fly-turn.mjs already imports
+ *  spider-fly.mjs; the reverse would cycle). */
+export function oneStepDirectionBetween(fromCell, toCell) {
+  for (const [direction, { dx, dy }] of Object.entries(DIRECTION_DELTA)) {
+    if (fromCell.x + dx === toCell.x && fromCell.y + dy === toCell.y) return direction;
+  }
+  return null;
+}
+
 /** The world's seed taxonomy (PLAN_SPIDER_FLY.md §7): enough for the
  *  ontology-to-sprite worked example (a poodle sprite, a sheepdog falling
  *  back to the generic dog sprite) to run on the default persona, no
