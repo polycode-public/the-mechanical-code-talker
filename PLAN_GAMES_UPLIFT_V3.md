@@ -182,12 +182,29 @@ block" test must be removed/rewritten — arrival now means mere co-location, no
 `test/services/spider-fly-turn.test.mjs`, `test/adapters/spider-fly-viz.test.mjs`,
 `test/corpus/games/spider-fly.jsonl`.
 
-### A.4 Interim progress checkpoint (mid-build, harvested from the implementing agent)
+### A.4 PART A FULLY SHIPPED (merged to main, independently re-verified by the coordinator)
 
-**Done**: A.2.2 (egg-lay gate) and A.2.3 (multi-hatch/mass-split), both in `runEcologyPass`.
-**In progress**: A.2.1 (carrying — fold/catch-eat split done, priority-0 movement wiring next) and
-A.2.7 (engine-side `plan[]`/`belief{}` threading in progress, viz panels/facing rotation not
-started). **Not started**: A.2.4 (pills), A.2.5 (corpses), A.2.6 (window re-skin). No commits yet.
+All of A.2.1-A.2.7 landed, plus the operator's live per-class tuning sliders (mass-loss-rate/
+spawn-rate/vision-radius × spider/fly, 6 controls total, persisting across resets) and the two
+rounds of operator layout feedback (fixed-height scrolling agents panel, wider board/side column).
+Coordinator re-ran the full stated blast radius directly (115/115), `test:fast` (183/183), and drove
+a real 40-turn Playwright session against the built page — confirmed live: true/false deception
+pills with a clear ✓/✗ visual distinction, the per-agent plan/belief HUD ("believes: fly-11 unseen ·
+fly-14 @ cell-7-1"), a fly correctly reading "trapped in an active web — can't move", grayscale
+corpses sunk to the bottom of their column, and the dusty-window-corner re-skin. Zero console errors
+across the whole run.
+
+Two real deviations from the plan doc's own text, both correct calls: `planSpiderPath`'s web
+requirement had to drop entirely (not just for the one test the plan doc named) — catching a fly
+never needs a web now, only the later eat does — which cascaded into one corpus row's expected cell
+changing since the spider now paths for real instead of falling back to greedy chase outside a web.
+A second invalidated test beyond the one flagged ("spider eats two flies same tick") was found and
+rewritten to assert the real one-catch-per-tick behavior, folded in per this project's own
+"don't narrow scope on your own judgment" rule rather than hived off. `events.hatched` changed shape
+(single spider → array) and cascaded through every consumer. A genuine splice-safety bug
+(`facingDegreesFor` closing over a module-level constant never spliced into the inlined page script)
+was found via the agent's own Playwright verification and fixed before it ever reached the
+coordinator.
 
 **Deviations/decisions beyond this doc's literal text, recorded so the plan stays accurate:**
 1. Vision radius is split per class as `spiderVisionRadius`/`flyVisionRadius` (both default 4,
@@ -468,6 +485,8 @@ in flight — relayed directly to the implementing agents, recorded here too:**
    dashboard chrome (chunky beveled panels, stat-readout HUD, a resource-bar-style turn counter)
    WRAPPING the dusty-window-corner scene from Part A — two layers of one page, not competing
    directions. The new plan/belief panels (A.2.7) are natural HUD real estate for this theme.
+   **Status: only the window scene + mechanics landed (Part A) — the surrounding UI chrome is
+   still plain, not yet themed.** A dedicated pass is tracked separately (task #53).
 3. **It plans, and shows the work (`plan.html`)** — keep the sciency visual language, add: live
    parameter controls (disk count / max search depth), a chat-assert surface to teach new facts
    into the running world, and a **PDDL-plus-OWL/RDF plan artifact panel** showing the last-created
