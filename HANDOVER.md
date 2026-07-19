@@ -36,12 +36,29 @@ asides through the world fold, the plural-object fold, the impact summary). `arc
 delivered plan docs; each records what its delivery deliberately did not include. What remains:
 
 - CONVERSATION persona-sweep backlog (`BENCHMARK_CONVERSATION_2.7.11.md`): 29 fresh findings
-  across 6 personas, ranked in the report. Highest priority: the write-boundary bug 2.6.0 named its
-  worst finding recurs under fresh trigger phrases (casual/imperative turns silently taught as
-  facts) even though its original 2.6.0 triggers are fixed — the bare-declarative teach lane's
-  admission criteria look too wide in general, not just for the specific phrases tried so far.
-  Second: tmct's own suggested repair/example text is itself broken in 4 separate instances,
-  independently hit by 3 personas. Full ranked list and routing in the report.
+  across 6 personas, ranked in the report. In progress, worked in the report's priority order:
+  - **Closed**: the write-boundary recurrence (finding #1/#2) — the bare-declarative teach lane now
+    excludes discourse-filler openers ("umm"/"idk"/"hmm") and imperative-command leads ("repeat",
+    and the wrapped "remember to …" infinitive shape) via a closed NON_DECLARATIVE_OPENER_RE plus a
+    symmetric closed-class subject guard in generalVerbTeach, mirroring the existing verb-slot guard.
+  - **Closed**: all 5 instances of tmct's own suggested-repair text being broken (finding #1) —
+    the "is X used anywhere" routing gap (keyword-spot now resolves a bare passive with no "by"
+    agent, guarded so the protected "used for" idiom stays untouched); the "venomous" adjective
+    mangled through noun-singularization (singularizeSurface excludes "-ous" endings, and the
+    existential-teach suggestion picks the bare property shape over a forced article); "any" now
+    joins every/each/all as a recognized universal-quantifier synonym; and a trailing sentence-final
+    period no longer breaks bare teach sentences ("every dog is a mammal.", "rex is a dog." both
+    teach correctly now — BARE_DECLARATIVE_RE and UNKNOWN_SUBJECT_RE both get the same `[.!?]*`
+    tolerance TEACH_RE/EXISTENTIAL_CLASS_TEACH_RE already had). This was never word-specific to
+    "mammal": any bare teach sentence ending in punctuation, naming a word outside the ~180-word
+    static lexicon, hit the same gap.
+  - **Still open**: meta-question misrouting (finding #3), the reasoning-layer gaps (disjointness
+    veto's object-side walk, negative-universal teach beyond is-a, 2-hop property inheritance,
+    contradiction disclosure at ask-time), and the remaining single-persona findings (filler-clause
+    prefixes, the GUI wording leak, the did-you-mean branch-preview mislabel, silent narrowing,
+    plan-justification follow-ups, optimality-as-count, and the smaller wall gaps). Full ranked
+    list and routing in the report; each closed item above has a regression test in
+    `test/corpus/inference.jsonl` and `test/corpus/grammar.jsonl`.
 
 ## Discipline
 
