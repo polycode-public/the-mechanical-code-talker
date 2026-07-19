@@ -107,3 +107,27 @@ test("a missing directory reads as no templates at all, never throws", () => {
 test("SPRITE_LARGE_TEMPLATES_DIR points at data/sprites-large", () => {
   assert.match(SPRITE_LARGE_TEMPLATES_DIR, /data[\\/]sprites-large$/);
 });
+
+// ---- the emoji fallback: an abstract concept with no honest single picture,
+// but a genuinely ubiquitous pictograph, renders as that glyph rather than
+// an invented scene or a skipped class. ------------------------------------
+
+const EMOJI_CLASSES = [
+  "anger", "autumn", "birthday", "fear", "hate", "holiday", "hope", "joy",
+  "love", "meeting", "spring", "summer", "surprise", "trip", "wedding", "winter",
+];
+
+test("every abstract-concept emoji class resolves to its own dedicated template, not the animal-root fallback", () => {
+  for (const cls of EMOJI_CLASSES) {
+    const svg = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.ok(svg.includes("<text"), `${cls}: expected an emoji <text> sprite, got ${svg}`);
+  }
+});
+
+test("an emoji sprite carries no [parameters] table — a glyph is not a gradient template", () => {
+  for (const cls of EMOJI_CLASSES) {
+    const t = REAL_LARGE_TEMPLATES.find((tpl) => tpl.classes.includes(cls));
+    assert.ok(t, `${cls}: no template found`);
+    assert.equal(t.parameters, undefined, `${cls}: an emoji sprite should never carry a material/colour parameter`);
+  }
+});
