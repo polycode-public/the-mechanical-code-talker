@@ -52,13 +52,29 @@ delivered plan docs; each records what its delivery deliberately did not include
     tolerance TEACH_RE/EXISTENTIAL_CLASS_TEACH_RE already had). This was never word-specific to
     "mammal": any bare teach sentence ending in punctuation, naming a word outside the ~180-word
     static lexicon, hit the same gap.
-  - **Still open**: meta-question misrouting (finding #3), the reasoning-layer gaps (disjointness
-    veto's object-side walk, negative-universal teach beyond is-a, 2-hop property inheritance,
-    contradiction disclosure at ask-time), and the remaining single-persona findings (filler-clause
-    prefixes, the GUI wording leak, the did-you-mean branch-preview mislabel, silent narrowing,
-    plan-justification follow-ups, optimality-as-count, and the smaller wall gaps). Full ranked
-    list and routing in the report; each closed item above has a regression test in
-    `test/corpus/inference.jsonl` and `test/corpus/grammar.jsonl`.
+  - **Closed**: the meta-question misroute cluster (finding #3, 10 instances) — a returning user's
+    "does this remembered feature still work" questions (/focus, /forget, /stats, compare, session
+    persistence) now get the real, honest answer instead of a teach-parser misfire, via a new
+    META_COMMAND_ANSWERS table; three more mechanism/capability phrasings ("do you use classical
+    logic", "what model are you built on", "can u browse the internet") join AI_IDENTITY_PHRASES;
+    "can u help me with smth" joins CAPABILITY_PHRASES.
+  - **Closed**: all four reasoning-layer gaps — the disjointness veto now walks the query OBJECT's
+    own superclass chain too (was subject-only), with a self-contradiction guard so a genuinely
+    contradictory taught pair still gets the existing inconsistency refusal rather than a false
+    confident "no"; the negative-universal teach frame generalizes from "no X is Y" to "no X can Y"
+    (the read side already resolved it correctly — only the write-side recognizer was missing);
+    2-hop taught property inheritance now explores every ⊑-parent breadth-first instead of
+    committing to whichever the fact list happened to list first (this was silently breaking in
+    any ordinary SEEDED session, not just the unseeded one the pre-existing corpus test covered —
+    a subject with both a seeded and a taught parent class could walk the wrong branch and miss a
+    real answer); and a directly-taught comparative contradiction ("disk-2 is smaller than disk-1"
+    taught right after the reverse) is now disclosed in the ask-time answer, not just silently held.
+  - **Still open**: the remaining single-persona findings — filler-clause prefixes, the GUI wording
+    leak, the did-you-mean branch-preview mislabel, silent narrowing, plan-justification follow-ups,
+    optimality-as-count, session-sidecar verbatim rewrite, and the smaller wall gaps (item 5 of the
+    report). Full ranked list and routing in the report; each closed item above has a regression
+    test in `test/corpus/inference.jsonl`, `test/corpus/grammar.jsonl`, `test/corpus/planning.jsonl`
+    or `test/corpus/templates.jsonl`.
 
 ## Discipline
 
