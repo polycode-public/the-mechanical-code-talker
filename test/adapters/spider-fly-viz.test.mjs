@@ -133,11 +133,22 @@ test("renderSpiderFlyHtml: the HUD panel and the POV overlay canvas are both pre
   assert.match(html, /visibleCells/, "the POV overlay reads the engine's own visibility primitive");
 });
 
-test("renderSpiderFlyHtml: the sprite layer resolves each agent's class through the shared registry", () => {
+test("renderSpiderFlyHtml: the sprite layer resolves each agent's class through the property-aware resolver, falling back to the shared registry", () => {
   const html = renderSpiderFlyHtml();
-  assert.match(html, /resolveSpriteForClass/);
+  assert.match(html, /resolveSpriteAsset/);
   assert.match(html, /SPRITE_REGISTRY/);
   assert.match(html, /id="spriteLayer"/);
+});
+
+test("renderSpiderFlyHtml: the sprite template set is embedded as page data, defaulting to an empty array", () => {
+  const data = embeddedJson(renderSpiderFlyHtml(), "SPIDERFLY");
+  assert.deepEqual(data.spriteTemplates, []);
+});
+
+test("renderSpiderFlyHtml: a passed-in spriteTemplates array is embedded verbatim", () => {
+  const templates = [{ classes: ["spider"], svg: "<svg>spider</svg>" }];
+  const data = embeddedJson(renderSpiderFlyHtml({ spriteTemplates: templates }), "SPIDERFLY");
+  assert.deepEqual(data.spriteTemplates, templates);
 });
 
 test("renderSpiderFlyHtml: the silk-thread signature element is drawn from the spider's own plan", () => {

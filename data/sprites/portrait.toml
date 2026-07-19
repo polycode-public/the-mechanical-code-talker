@@ -1,0 +1,5 @@
+# portrait — Ashcombe Hall's own drawing-room portrait (a container, hiding
+# the key): a gilt arched frame around a lighter canvas, with a bust
+# silhouette so it reads as a picture of someone, not an empty frame.
+classes = ["portrait"]
+svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 21 V7 C4 4 6.8 2 12 2 C17.2 2 20 4 20 7 V21 Z" fill="currentColor"/><path d="M6.3 19.4 V8.3 C6.3 6.2 8.4 4.8 12 4.8 C15.6 4.8 17.7 6.2 17.7 8.3 V19.4 Z" fill="currentColor" opacity="0.28"/><circle cx="12" cy="10.4" r="2.3" fill="currentColor" opacity="0.7"/><path d="M8 18.4 C8 15.2 9.6 13.4 12 13.4 C14.4 13.4 16 15.2 16 18.4 Z" fill="currentColor" opacity="0.7"/></svg>"""

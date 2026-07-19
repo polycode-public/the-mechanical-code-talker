@@ -1,0 +1,4 @@
+# lamp — Ashcombe Hall's own study lamp: a Victorian hurricane-lamp
+# silhouette — base, glass globe, a neck, and a small carved flame.
+classes = ["lamp"]
+svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 21 H15 L14 18 H10 Z" fill="currentColor"/><path d="M8.4 18 C7 15.6 7 12.6 8.6 10.4 H15.4 C17 12.6 17 15.6 15.6 18 Z" fill="currentColor"/><rect x="10.6" y="6.4" width="2.8" height="4.4" fill="currentColor" opacity="0.85"/><path d="M12 3.2 C13.4 4.6 13.8 6 12 7.4 C10.2 6 10.6 4.6 12 3.2 Z" fill="currentColor" opacity="0.55"/></svg>"""

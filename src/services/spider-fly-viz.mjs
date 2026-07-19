@@ -96,13 +96,18 @@ export function threadCellsForSpiderPlan(agents, geometry) {
 }
 
 /** The self-contained spider-and-fly page. Pure — the same output for the
- *  same `title` every time; every other piece of state this page shows is
- *  computed live in the browser once the sibling bundle loads. `?preview=1`
- *  on the page's own URL switches it into the small, auto-playing,
- *  non-interactive mode the home page's hero iframe embeds (§11) — one file
- *  serves both the hero and the "open full-screen" link, matching how
- *  ledger.html/plan.html are each one file embedded two ways. */
-export function renderSpiderFlyHtml({ title = DEFAULT_TITLE } = {}) {
+ *  same `title`/`spriteTemplates` every time; every other piece of state
+ *  this page shows is computed live in the browser once the sibling bundle
+ *  loads. `spriteTemplates` is the build step's own read of
+ *  data/sprites/*.toml (sprite-template-files.mjs), embedded as page data
+ *  the same reason adventure-viz.mjs's own worldPayload is — the browser
+ *  bundle stays fs-free. Defaults to `[]` (every agent falls back to the
+ *  flat SPRITE_REGISTRY, unchanged from before this module existed).
+ *  `?preview=1` on the page's own URL switches it into the small, auto-
+ *  playing, non-interactive mode the home page's hero iframe embeds (§11) —
+ *  one file serves both the hero and the "open full-screen" link, matching
+ *  how ledger.html/plan.html are each one file embedded two ways. */
+export function renderSpiderFlyHtml({ title = DEFAULT_TITLE, spriteTemplates = [] } = {}) {
   const gridData = embedJson({
     gridSize: GRID_SIZE,
     webCells: webCellIds(),
@@ -114,6 +119,7 @@ export function renderSpiderFlyHtml({ title = DEFAULT_TITLE } = {}) {
     tickWaitMs: TICK_WAIT_MS,
     maxFlyMass: FLY_INITIAL_MASS,
     maxSpiderMass: SPIDER_INITIAL_MASS,
+    spriteTemplates,
   });
 
   return `<!doctype html>
@@ -314,8 +320,14 @@ const SPIDERFLY = ${gridData};
     node = document.createElement("div");
     node.className = "sprite";
     node.dataset.cls = cls;
+    // Property-aware resolution (sprite-templates.mjs's resolveSpriteAsset):
+    // no agent here carries an mgx:hasProperty fact today, so propertyFacts
+    // stays empty and every agent resolves through its plain class template
+    // (or the flat SPRITE_REGISTRY, for a class with none) — the same output
+    // as before this module existed, just wired for the day an agent does
+    // carry one.
     const sprite = window.tmctSpiderFly
-      ? tmctSpiderFly.resolveSpriteForClass(cls, (session && session.taxonomyRows) || [], tmctSpiderFly.SPRITE_REGISTRY)
+      ? tmctSpiderFly.resolveSpriteAsset(cls, (session && session.taxonomyRows) || [], [], SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
       : "";
     node.innerHTML = sprite;
     if (!preview) {

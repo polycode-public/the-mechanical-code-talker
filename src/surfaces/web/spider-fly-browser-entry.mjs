@@ -54,6 +54,7 @@ import {
 } from "../../domain/spider-fly-world.mjs";
 import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame, liveWebs, DEFAULT_VISION_RADIUS } from "../../services/spider-fly.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY } from "../../domain/sprite-map.mjs";
+import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
 
 /** A live in-memory game the page's ticker and chat dock can both drive.
  *  Returns { memoryDir, sessionId, opening, initial, taxonomyRows, tick,
@@ -149,6 +150,6 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
 // a spider's remaining silk-thread path from its returned direction list, and
 // computing the POV overlay's visible-cell mask, both need them.
 globalThis.tmctSpiderFly = {
-  createSpiderFlySession, normFactTerm, resolveSpriteForClass, SPRITE_REGISTRY,
+  createSpiderFlySession, normFactTerm, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
   cellId, parseCellId, DIRECTION_DELTA, visibleCells, DEFAULT_VISION_RADIUS,
 };

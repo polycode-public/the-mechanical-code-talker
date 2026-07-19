@@ -154,6 +154,30 @@ function directSuperclassesOf(term, factRows) {
   return out;
 }
 
+/** The full rdfs:subClassOf ancestor chain for `className`, nearest-first,
+ *  INCLUDING the starting term itself as `chain[0]` — the same breadth-first
+ *  walk resolveSpriteForClass performs below, extracted so
+ *  sprite-templates.mjs's richer, property-aware resolver can repeat the
+ *  same specificity check at each level (fully-specific variant >
+ *  parameterized template > plain class sprite) without re-deriving the BFS.
+ *  Pure; `factRows` is read only, never mutated. */
+export function classAncestorChain(className, factRows) {
+  const start = normFactTerm(className);
+  const seen = new Set();
+  const queue = [start];
+  const chain = [];
+  while (queue.length) {
+    const term = queue.shift();
+    if (seen.has(term)) continue;
+    seen.add(term);
+    chain.push(term);
+    for (const parent of directSuperclassesOf(term, factRows)) {
+      if (!seen.has(parent)) queue.push(parent);
+    }
+  }
+  return chain;
+}
+
 /**
  * Resolve a class name to a sprite: `className` itself if the registry
  * carries it directly, otherwise the nearest rdfs:subClassOf ancestor
@@ -163,17 +187,8 @@ function directSuperclassesOf(term, factRows) {
  * Pure; `factRows` is read only, never mutated.
  */
 export function resolveSpriteForClass(className, factRows, spriteRegistry, { rootFallback = "animal" } = {}) {
-  const start = normFactTerm(className);
-  const seen = new Set();
-  const queue = [start];
-  while (queue.length) {
-    const term = queue.shift();
-    if (seen.has(term)) continue;
-    seen.add(term);
+  for (const term of classAncestorChain(className, factRows)) {
     if (Object.prototype.hasOwnProperty.call(spriteRegistry, term)) return spriteRegistry[term];
-    for (const parent of directSuperclassesOf(term, factRows)) {
-      if (!seen.has(parent)) queue.push(parent);
-    }
   }
   return spriteRegistry[rootFallback];
 }

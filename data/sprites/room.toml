@@ -1,0 +1,5 @@
+# room — a schematic floor plan: a washed interior (a solid tint, not a
+# hollow box) plus a doorway arch, kept abstract since a room is a space
+# to draw, not an object to render literally.
+classes = ["room"]
+svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="1" fill="currentColor" opacity="0.14"/><rect x="3" y="3" width="18" height="18" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 21 L9 13 A3 3 0 0 1 15 13 L15 21" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>"""
