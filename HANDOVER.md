@@ -137,6 +137,11 @@ delivered plan docs; each records what its delivery deliberately did not include
   line (the round-1 fix overwrote the goal once per eaten pair). The main event text was always
   correct for both; only the goal-line summary collapsed them. Fixed this round: eaten pairs are
   grouped by spider first, so the goal names every fly eaten that tick. Shipped.
+- Adventure edge-hunt round 4 of the second hunt (`playtests/PLAYTEST_LOG_014.md`): `examine <the
+  room you're standing in>` declined "I don't see X here" as if the room didn't exist — a room is
+  never the SUBJECT of a placement fact (only ever the object other things are placed in), so the
+  shared examine/talk presence check could never match it. Fixed this round: naming the current
+  room bypasses the presence check, the same way a carried object already does. Shipped.
 
 ## Discipline
 
