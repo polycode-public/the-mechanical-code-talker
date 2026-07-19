@@ -1,0 +1,58 @@
+# dog-with-emotion — the sprite tier's worked example for the shared
+# face-fragment mechanism (sprite-expressions.mjs): the same silhouette as
+# dog.toml, plus a required [face] anchor and a {{FACE}} placeholder that
+# resolves to whichever of the 6 curated mgx:feels words (happy/sad/angry/
+# scared/surprised/calm) the instance's own fact names. A dog with no
+# mgx:feels fact at all falls through to the plain dog.toml sprite, the
+# same dog/dog-with-colour precedent the icon tier already uses.
+#
+# {{FACE}} sits as the LAST child before </svg> (sprite-expressions.mjs's
+# own convention) so the resolved face paints over the body/highlight
+# shapes beneath it, never the reverse — every future *-with-emotion.toml
+# file should copy this exact shape: same body as the plain template,
+# [face] anchored on the SAME head circle's own cx/cy/r, {{FACE}} appended
+# last. dog.toml's own small dark eye-shadow ellipse is dropped here — it
+# sits right where the real eyes now go, and would muddy them.
+classes = ["dog"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="dog-with-emotion-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="13" cy="15" rx="6.4" ry="4.3" fill="url(#dog-with-emotion-fill)"/>
+  <circle cx="7" cy="9" r="3.6" fill="url(#dog-with-emotion-fill)"/>
+  <path d="M4.5 6.5 L2 3 L6 5 Z" fill="url(#dog-with-emotion-fill)"/>
+  <path d="M19 13 C22 12 22.5 15 20 16 Z" fill="url(#dog-with-emotion-fill)"/>
+  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <line x1="9" y1="19" x2="9" y2="22"/>
+    <line x1="17" y1="19" x2="17" y2="22"/>
+  </g>
+  <ellipse cx="9.6" cy="12.2" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.28"/>
+  {{FACE}}
+</svg>
+"""
+
+# The same cx/cy/r dog.toml's own head circle declares — scale is the
+# head's radius, since EXPRESSION_PALETTE's fragments are authored for a
+# unit (radius-1) face and this is what stretches them to fit THIS class's
+# own head size.
+[face]
+cx = 7
+cy = 9
+scale = 3.6
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

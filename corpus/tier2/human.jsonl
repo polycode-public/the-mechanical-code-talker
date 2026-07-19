@@ -622,6 +622,7 @@
 {"start":"/c/en/surprise","rel":"/r/CapableOf","end":"/c/en/cause_astonishment","weight":1,"surfaceText":"[[surprise]] CapableOf [[cause astonishment]]"}
 {"start":"/c/en/pride","rel":"/r/IsA","end":"/c/en/emotion","weight":1,"surfaceText":"[[pride]] IsA [[emotion]]"}
 {"start":"/c/en/pride","rel":"/r/CapableOf","end":"/c/en/bring_satisfaction","weight":1,"surfaceText":"[[pride]] CapableOf [[bring satisfaction]]"}
+{"start":"/c/en/sad","rel":"/r/IsA","end":"/c/en/emotion","weight":1,"surfaceText":"[[sad]] IsA [[emotion]]"}
 {"start":"/c/en/name","rel":"/r/UsedFor","end":"/c/en/identifying_a_person","weight":1,"surfaceText":"[[name]] UsedFor [[identifying a person]]"}
 {"start":"/c/en/name","rel":"/r/PartOf","end":"/c/en/identity","weight":1,"surfaceText":"[[name]] PartOf [[identity]]"}
 {"start":"/c/en/song","rel":"/r/HasA","end":"/c/en/word","weight":1,"surfaceText":"[[song]] HasA [[word]]"}

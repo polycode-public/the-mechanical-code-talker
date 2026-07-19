@@ -665,6 +665,7 @@ export const CORPUSES = {
       ["hope", "/r/IsA", "emotion"], ["hope", "/r/CapableOf", "inspire_action"],
       ["surprise", "/r/IsA", "emotion"], ["surprise", "/r/CapableOf", "cause_astonishment"],
       ["pride", "/r/IsA", "emotion"], ["pride", "/r/CapableOf", "bring_satisfaction"],
+      ["sad", "/r/IsA", "emotion"],
       ["name", "/r/UsedFor", "identifying_a_person"], ["name", "/r/PartOf", "identity"],
       ["song", "/r/HasA", "word"], ["song", "/r/UsedFor", "entertaining"],
       ["music", "/r/HasA", "song"], ["music", "/r/CapableOf", "bring_joy"],

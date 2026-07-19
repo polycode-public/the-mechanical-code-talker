@@ -151,6 +151,32 @@ test("spriteTemplateProblems flags a match table missing property or value", () 
   assert.ok(spriteTemplateProblems({ classes: ["dog"], svg: "<svg></svg>", match: { value: "black" } }).length > 0);
 });
 
+// ---- [face] and [parameters.emotion] must always be declared together ----
+
+const FACE_TABLE = { cx: 7, cy: 9, scale: 3.6 };
+const EMOTION_PARAM = { property: "mgx:feels", placeholder: "{{FACE}}", values: { happy: "<g/>" } };
+
+test("spriteTemplateProblems accepts a template declaring both face and parameters.emotion", () => {
+  assert.deepEqual(
+    spriteTemplateProblems({ classes: ["dog"], svg: "<svg>{{FACE}}</svg>", face: FACE_TABLE, parameters: { emotion: EMOTION_PARAM } }),
+    [],
+  );
+});
+
+test("spriteTemplateProblems accepts a template declaring neither face nor parameters.emotion", () => {
+  assert.deepEqual(spriteTemplateProblems({ classes: ["dog"], svg: "<svg></svg>" }), []);
+});
+
+test("spriteTemplateProblems flags a face table declared with no parameters.emotion to select it", () => {
+  const problems = spriteTemplateProblems({ classes: ["dog"], svg: "<svg></svg>", face: FACE_TABLE });
+  assert.ok(problems.some((p) => p.includes("face is declared without parameters.emotion")));
+});
+
+test("spriteTemplateProblems flags a parameters.emotion table declared with no face to anchor it", () => {
+  const problems = spriteTemplateProblems({ classes: ["dog"], svg: "<svg>{{FACE}}</svg>", parameters: { emotion: EMOTION_PARAM } });
+  assert.ok(problems.some((p) => p.includes("parameters.emotion is declared without a face")));
+});
+
 // ---- multi-placeholder parameters (the sprite tier's gradient shading) ----
 
 const GRADIENT_SVG =
@@ -278,6 +304,59 @@ test("spriteTemplateProblems flags a single-placeholder parameter whose values e
     parameters: { colour: { property: "mgx:hasProperty", placeholder: "{{FILL}}", values: { black: { light: "#000" } } } },
   });
   assert.ok(problems.some((p) => p.includes("must be a plain string for a single-placeholder parameter")));
+});
+
+// ---- two parameter tables on the same template (parameterizedFillAll) -----
+// the composition fix B.2.2 exists for: a template declaring both
+// [parameters.material] and [parameters.emotion] fills whichever of the
+// two an instance's own facts actually match, accumulating onto the same
+// running svg rather than stopping at the first dimension.
+
+const DUAL_SVG = "<svg>{{FILL}}{{FACE}}</svg>";
+const dualTemplate = () => ({
+  classes: ["lamp"],
+  svg: DUAL_SVG,
+  parameters: {
+    colour: { property: "mgx:hasProperty", placeholder: "{{FILL}}", values: { gold: "GOLD" } },
+    emotion: { property: "mgx:feels", placeholder: "{{FACE}}", values: { happy: "HAPPY-FACE" } },
+  },
+});
+
+test("a template with two parameter tables fills BOTH when both facts are present", () => {
+  const facts = [
+    { subject: "lamp-1", predicate: "mgx:hasProperty", object: "gold" },
+    { subject: "lamp-1", predicate: "mgx:feels", object: "happy" },
+  ];
+  const svg = resolveSpriteAsset("lamp", [], facts, [dualTemplate()], PLAIN_REGISTRY);
+  assert.equal(svg, "<svg>GOLDHAPPY-FACE</svg>");
+});
+
+test("a template with two parameter tables fills only the one dimension whose fact is present, leaving the other's placeholder untouched", () => {
+  const colourOnly = [{ subject: "lamp-1", predicate: "mgx:hasProperty", object: "gold" }];
+  const svgColourOnly = resolveSpriteAsset("lamp", [], colourOnly, [dualTemplate()], PLAIN_REGISTRY);
+  assert.equal(svgColourOnly, "<svg>GOLD{{FACE}}</svg>");
+
+  const emotionOnly = [{ subject: "lamp-1", predicate: "mgx:feels", object: "happy" }];
+  const svgEmotionOnly = resolveSpriteAsset("lamp", [], emotionOnly, [dualTemplate()], PLAIN_REGISTRY);
+  assert.equal(svgEmotionOnly, "<svg>{{FILL}}HAPPY-FACE</svg>");
+});
+
+test("specificity order still holds with two parameters present: a [match] variant still outranks the dual-parameter fill", () => {
+  const templates = [
+    dualTemplate(),
+    { classes: ["lamp"], svg: "<svg>lamp-hand-authored</svg>", match: { property: "mgx:hasProperty", value: "gold" } },
+  ];
+  const facts = [
+    { subject: "lamp-1", predicate: "mgx:hasProperty", object: "gold" },
+    { subject: "lamp-1", predicate: "mgx:feels", object: "happy" },
+  ];
+  const svg = resolveSpriteAsset("lamp", [], facts, templates, PLAIN_REGISTRY);
+  assert.equal(svg, "<svg>lamp-hand-authored</svg>");
+});
+
+test("specificity order still holds with two parameters present: no fact at all for either dimension falls through to the plain template", () => {
+  const templates = [{ classes: ["lamp"], svg: "<svg>lamp-plain</svg>" }, dualTemplate()];
+  assert.equal(resolveSpriteAsset("lamp", [], [], templates, PLAIN_REGISTRY), "<svg>lamp-plain</svg>");
 });
 
 // ---- the icon tier and the sprite tier resolve independently ---------------

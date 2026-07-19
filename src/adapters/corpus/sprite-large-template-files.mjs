@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { join, dirname } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import { expandMaterialReferences } from "../../domain/sprite-materials.mjs";
+import { expandExpressionReferences } from "../../domain/sprite-expressions.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 /** The sprite-tier template directory (data, not code) — every *.toml file
@@ -41,7 +42,10 @@ export const SPRITE_LARGE_TEMPLATES_DIR = join(HERE, "..", "..", "..", "data", "
  *  never go blank because one hand-authored sprite has a typo.
  *  test/adapters/sprite-large-template-files.test.mjs parses the real files
  *  directly (not through this lenient loader) so a broken file still fails a
- *  test loudly. */
+ *  test loudly. Material references expand first, expression references
+ *  second — the two indirections are independent (a template can carry
+ *  either, both, or neither) so the order between them never matters to the
+ *  result, only that both run before a template reaches a caller. */
 export function readSpriteLargeTemplateFiles(dir = SPRITE_LARGE_TEMPLATES_DIR) {
   let files;
   try {
@@ -58,5 +62,5 @@ export function readSpriteLargeTemplateFiles(dir = SPRITE_LARGE_TEMPLATES_DIR) {
       continue; // one malformed file never takes the others down
     }
   }
-  return expandMaterialReferences(templates);
+  return expandExpressionReferences(expandMaterialReferences(templates));
 }

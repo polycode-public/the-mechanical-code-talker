@@ -11,6 +11,7 @@ import { readSpriteLargeTemplateFiles, SPRITE_LARGE_TEMPLATES_DIR } from "../../
 import { readSpriteTemplateFiles } from "../../src/adapters/corpus/sprite-template-files.mjs";
 import { resolveSpriteAsset, spriteTemplateProblems } from "../../src/domain/sprite-templates.mjs";
 import { MATERIAL_PALETTE } from "../../src/domain/sprite-materials.mjs";
+import { EXPRESSION_PALETTE } from "../../src/domain/sprite-expressions.mjs";
 import { SPRITE_REGISTRY } from "../../src/domain/sprite-map.mjs";
 
 const REAL_LARGE_TEMPLATES = readSpriteLargeTemplateFiles();
@@ -81,7 +82,7 @@ test("an object with no taught mgx:madeOf value still resolves to a complete, pl
 });
 
 test("an object with no material vocabulary at all (dog) never carries a [parameters.material] table at the sprite tier", () => {
-  const dog = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes("dog"));
+  const dog = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes("dog") && !t.parameters?.emotion);
   assert.ok(dog, "sprite-large/dog.toml not found");
   assert.equal(dog.parameters, undefined);
 });
@@ -345,4 +346,48 @@ test("none of the pack's own 35 classes carries a [parameters.material] table, s
     const t = REAL_LARGE_TEMPLATES.find((x) => x.classes.includes(cls));
     assert.equal(t.parameters, undefined, `${cls}.toml should carry no material parameters`);
   }
+});
+
+// ---- the 3 real *-with-emotion.toml proof-of-concept files ----------------
+// (B.2's own worked examples for the shared face-fragment mechanism: one
+// for the 56-person-role wave, two for the 19-expressive-faced-animal wave)
+
+const EMOTION_WORDS = ["happy", "sad", "angry", "scared", "surprised", "calm"];
+const EMOTION_CLASSES = ["dog", "person", "cat"];
+
+const feels = (subject, object) => [{ subject, predicate: "mgx:feels", object }];
+
+test("every *-with-emotion.toml file loads as a real template with its own [face] table", () => {
+  for (const cls of EMOTION_CLASSES) {
+    const withEmotion = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes(cls) && t.parameters?.emotion);
+    assert.ok(withEmotion, `${cls}-with-emotion.toml not found among the loaded sprite-tier templates`);
+    assert.equal(typeof withEmotion.face?.cx, "number", `${cls}-with-emotion.toml: face.cx must be a number`);
+    assert.equal(typeof withEmotion.face?.cy, "number", `${cls}-with-emotion.toml: face.cy must be a number`);
+    assert.equal(typeof withEmotion.face?.scale, "number", `${cls}-with-emotion.toml: face.scale must be a number`);
+  }
+});
+
+for (const cls of EMOTION_CLASSES) {
+  for (const word of EMOTION_WORDS) {
+    test(`${cls} taught mgx:feels ${word} resolves placeholder-free with that emotion's own face fragment`, () => {
+      const svg = resolveSpriteAsset(cls, [], feels(`the-${cls}`, word), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+      assert.ok(!svg.includes("{{FACE"), `${cls}/${word}: no unresolved face placeholder may reach the rendered output`);
+      assert.ok(svg.includes(EXPRESSION_PALETTE[word]), `${cls}/${word}: the resolved svg must carry that emotion's own fragment markup`);
+    });
+  }
+}
+
+test("a class with no mgx:feels fact at all still resolves to the plain, faceless template — the dog/dog-with-colour precedent", () => {
+  for (const cls of EMOTION_CLASSES) {
+    const plain = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes(cls) && !t.parameters?.emotion);
+    const svg = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.equal(svg, plain.svg, `${cls}: an untaught instance must resolve to the plain ${cls}.toml sprite, never the emotion template`);
+    for (const word of EMOTION_WORDS) assert.ok(!svg.includes(EXPRESSION_PALETTE[word]), `${cls}: no face fragment may leak in with no mgx:feels fact`);
+  }
+});
+
+test("an mgx:feels value outside the 6-word curated vocabulary is never a guessed face — falls through to the plain template", () => {
+  const svg = resolveSpriteAsset("dog", [], feels("the-dog", "ecstatic"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+  const plain = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes("dog") && !t.parameters?.emotion);
+  assert.equal(svg, plain.svg);
 });
