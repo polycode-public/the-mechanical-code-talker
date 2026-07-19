@@ -544,7 +544,15 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     // the same way "what am I carrying" already reads inventory contents.
     // talk has no carried exception: NPCs are never portable.
     const carried = cmd.verb === "examine" && carriedByPlayer(state, object);
-    if (!carried && visibleRoomOf(object, { rows, state }) !== here) {
+    // The room the player is standing in is never the SUBJECT of a placement
+    // fact (only ever the OBJECT other things are placed in), so
+    // visibleRoomOf(object) can never equal `here` for a room's own name —
+    // "examine the study" while standing in the study would otherwise
+    // decline "I don't see a study here", which reads as the room not
+    // existing rather than the true state (you're in it). Treat naming the
+    // current room itself as always present.
+    const isCurrentRoom = object === here;
+    if (!carried && !isCurrentRoom && visibleRoomOf(object, { rows, state }) !== here) {
       return answer(
         `I don't see a ${object} here.`,
         noteFor(`${cmd.verb} — ${object} isn't visible in the ${here}; declined, hidden things stay hidden`),
