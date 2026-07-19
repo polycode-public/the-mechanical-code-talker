@@ -61,10 +61,27 @@
 // `visitedRoomIds`, the manual+auto-play exposure set
 // adventure-browser-entry.mjs threads forward (see that module's header for
 // why the two paths share one set rather than two).
+//
+// Edit mode (PLAN_GAMES_UPLIFT_V3.md Part C.4 item 4's operator addendum)
+// adds: `allRoomIds` (every room the world defines, feeding the SAME
+// `visitedRoomGraph` layout play mode's visited-only map already uses, just
+// with the visitation filter dropped — a parameter, not a second map
+// implementation), `suggestionsForTerm` (cursor-driven pills, calling
+// adventure-editor.mjs's `wordBeforeCursor` plus skos-view.mjs's
+// `relatedForTerm` and sprite-map.mjs's `classAncestorChain` — NOT spliced,
+// for the same reason roomCaptionText/pillsForRoom aren't, see below), and
+// `renderWorldEditorText`/`wordBeforeCursor` (adventure-editor.mjs's own
+// splice-safe render/cursor helpers, spliced in directly). The store writes
+// an edit implies run through the browser bundle's own `session.applyEdit`
+// (adventure-browser-entry.mjs), never here — this module only renders and
+// reads.
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
 import { worldDigestRows, roomAffordances, foldWorldState } from "./adventure.mjs";
 import { exposedFacts } from "./adventure-autoplay.mjs";
+import { relatedForTerm } from "../domain/skos-view.mjs";
+import { classAncestorChain } from "../domain/sprite-map.mjs";
+import { renderWorldEditorText, wordBeforeCursor } from "./adventure-editor.mjs";
 
 const DEFAULT_TITLE = "tmct — the adventure";
 const PREVIEW_MAX_TICKS = 30;
@@ -220,6 +237,19 @@ export function visitedRoomGraph(state, visitedRoomIds) {
   return { nodes, edges, hints };
 }
 
+/** Every room the world DEFINES at all (every subject the fact rows type as
+ *  `room`), regardless of whether the current session has ever visited it —
+ *  the edit mode's own "whole map" is exactly `visitedRoomGraph(state,
+ *  allRoomIds(rows))`: the SAME directional-grid layout play mode's visited-
+ *  only map uses, just fed every room instead of the exposure-filtered set,
+ *  so a room with no visited neighbour still lays out (as a disconnected
+ *  block) rather than vanishing. Pure. */
+export function allRoomIds(rows) {
+  return [...new Set((rows || [])
+    .filter((r) => r.predicate === "rdf:type" && r.object === "room")
+    .map((r) => r.subject))];
+}
+
 /** One status line per exposed `mgx:is-objective` fact, using the SAME
  *  three-state logic adventure-autoplay.mjs's own goal inference already
  *  distinguishes, restricted to what `visitedRoomIds` actually supports:
@@ -258,6 +288,33 @@ export function goalStatusLines(rows, state, visitedRoomIds) {
  *  a room the player has left, or an object already taken, never lingers. */
 export function pillsForRoom(rows, state, here) {
   return roomAffordances(rows, state, here);
+}
+
+/** Edit mode's cursor-driven suggestion pills for one typed `term`: the
+ *  lateral SKOS neighbourhood (`relatedForTerm`'s own synonyms/related
+ *  concepts) plus the vertical rdfs:subClassOf ancestor chain
+ *  (`classAncestorChain`, ancestors only — the term itself is dropped),
+ *  deduplicated and capped so a well-connected term never floods the pill
+ *  row. `[]` on an honest miss (neither lookup returns anything) — never a
+ *  fabricated suggestion. NOT .toString()-splice-safe (it calls two other
+ *  modules' exports) — the in-page script mirrors this same combination
+ *  against the browser bundle's own `tmctAdventure.relatedForTerm`/
+ *  `tmctAdventure.classAncestorChain`, the same reach-through-the-global
+ *  pattern `pillsFor`/`captionFor` already use for their own adventure.mjs
+ *  calls (see this module's header). */
+export function suggestionsForTerm(rows, term) {
+  const t = String(term || "").trim().toLowerCase();
+  if (!t) return [];
+  const out = [];
+  const seen = new Set([t]);
+  const push = (label) => { if (label && !seen.has(label)) { seen.add(label); out.push(label); } };
+  const related = relatedForTerm(rows, t);
+  if (related) {
+    for (const syn of related.synonyms) push(syn);
+    for (const rel of related.related) push(rel.prefLabel);
+  }
+  for (const ancestor of classAncestorChain(t, rows).slice(1)) push(ancestor);
+  return out.slice(0, 8);
 }
 
 /** A short caption for `here`, built ONLY from the rows worldDigestRows
@@ -310,45 +367,104 @@ export function renderAdventureHtml({
 <title>${escapeHtml(title)}</title>
 <style>
 ${THEME_TOKENS_CSS}
+  /* RPG chrome tokens — layered over the shared neutrals/accents above,
+     never replacing them: taught/corpus/entail/alert stay the SAME
+     provenance palette every other tmct viz page uses, repurposed here as
+     the class-badge ring colors (hero/townsfolk/fixture/item) — a visitor
+     who already knows what green/blue/gold/red mean from ledger.html reads
+     this page's "class" system for free. */
+  :root { --parchment: #ECE1C8; --parchment-strong: #E1D2A6; --gilt: #93701F; }
+  @media (prefers-color-scheme: dark) { :root { --parchment: #241E12; --parchment-strong: #2C2416; --gilt: #C0A054; } }
+  :root[data-theme="dark"] { --parchment: #241E12; --parchment-strong: #2C2416; --gilt: #C0A054; }
+  :root[data-theme="light"] { --parchment: #ECE1C8; --parchment-strong: #E1D2A6; --gilt: #93701F; }
+
   html { background: var(--bg); }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
-  main { max-width: 860px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
+  main { max-width: 920px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-  h1 { font-size: 1.4rem; margin: .3rem 0 .9rem; text-wrap: balance; }
+  .titlebar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin: .3rem 0 1rem; }
+  h1 { font-size: 1.4rem; margin: 0; text-wrap: balance; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
   button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 260px; gap: 1rem; align-items: start; }
+  .mode-toggle { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; padding: .4rem .8rem; border: 1px solid var(--gilt); background: var(--parchment); color: var(--ink); white-space: nowrap; }
+  .mode-toggle:hover:not(:disabled) { background: var(--parchment-strong); }
+  .mode-toggle:disabled { opacity: .5; cursor: default; }
+
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1rem; align-items: start; }
   @media (max-width: 760px) { .stage { grid-template-columns: 1fr; } }
-  .room-frame { position: relative; min-height: 210px; background: var(--taught-soft); border: 1px solid var(--line); padding: 1rem; display: flex; flex-direction: column; gap: .8rem; justify-content: flex-end; }
-  .sprite-row { display: flex; flex-wrap: wrap; gap: .6rem; align-items: flex-end; }
-  .sprite { width: 44px; height: 44px; }
+
+  /* the portrait frame — an ornate double-rule border with two small corner
+     fleurons (real glyphs, no external asset), sized to its OWN content
+     (the sprite row) rather than a fixed tall box, per operator feedback on
+     an earlier, mostly-empty version of this panel. */
+  .room-frame { position: relative; background: var(--parchment); border: 1px solid var(--gilt); outline: 1px solid var(--line); outline-offset: 4px; padding: 1.1rem; display: flex; flex-direction: column; gap: .6rem; }
+  .room-frame::before, .room-frame::after { content: "\\2766"; position: absolute; font-size: 1.1rem; color: var(--gilt); opacity: .85; line-height: 1; }
+  .room-frame::before { top: -.6rem; left: -.35rem; }
+  .room-frame::after { bottom: -.6rem; right: -.35rem; transform: rotate(180deg); }
+  .sprite-row { display: flex; flex-wrap: wrap; gap: .9rem .7rem; align-items: flex-start; min-height: 2.5rem; }
+
+  /* the class-badge system — this design's signature element: every sprite
+     gets a small ringed portrait frame plus a genre-flavored class word
+     (hero/townsfolk/fixture/item), colored through the SAME data-cls tokens
+     the rest of the site already uses for provenance. The sprite LABEL
+     underneath always names the real, specific thing (the cabinet, the
+     butler) — chrome around honest content, never instead of it. */
+  .sprite-card { display: flex; flex-direction: column; align-items: center; width: 62px; }
+  .sprite-frame { width: 52px; height: 52px; border-radius: 50%; background: var(--card); border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 7px; }
+  .sprite-frame[data-cls="adventurer"] { border-color: var(--taught); }
+  .sprite-frame[data-cls="person"] { border-color: var(--corpus); }
+  .sprite-frame[data-cls="container"], .sprite-frame[data-cls="furniture"] { border-color: var(--entail); }
+  .sprite-frame[data-cls="portable"] { border-color: var(--alert); }
+  .sprite-frame[data-cls="room"] { border-color: var(--muted); }
+  .sprite { width: 100%; height: 100%; }
   .sprite svg { width: 100%; height: 100%; display: block; }
   .sprite[data-cls="adventurer"] { color: var(--taught); }
   .sprite[data-cls="person"] { color: var(--corpus); }
   .sprite[data-cls="container"], .sprite[data-cls="furniture"] { color: var(--entail); }
   .sprite[data-cls="portable"] { color: var(--alert); }
   .sprite[data-cls="room"] { color: var(--muted); }
-  .sprite-label { font-family: ${MONO_STACK}; font-size: .62rem; text-align: center; color: var(--muted); margin-top: .15rem; }
-  .caption { background: var(--card); border: 1px solid var(--line); padding: .6rem .75rem; font-size: .9rem; }
+  .sprite-label { font-size: .74rem; text-align: center; color: var(--ink); margin-top: .3rem; line-height: 1.15; }
+  .class-badge { font-family: ${MONO_STACK}; font-size: .55rem; letter-spacing: .06em; text-transform: uppercase; margin-top: .15rem; padding: .04rem .4rem; border-radius: 999px; border: 1px solid var(--muted); color: var(--muted); }
+  .class-badge[data-cls="adventurer"] { border-color: var(--taught); color: var(--taught); }
+  .class-badge[data-cls="person"] { border-color: var(--corpus); color: var(--corpus); }
+  .class-badge[data-cls="container"], .class-badge[data-cls="furniture"] { border-color: var(--entail); color: var(--entail); }
+  .class-badge[data-cls="portable"] { border-color: var(--alert); color: var(--alert); }
+
   .side { display: flex; flex-direction: column; gap: .8rem; min-width: 0; }
-  .chat, .panel { background: var(--card); border: 1px solid var(--line); padding: .6rem .75rem; }
-  .chat h2, .panel h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .5rem; }
+  .chat, .panel { background: var(--card); border: 1px solid var(--line); border-top: 2px solid var(--gilt); padding: .65rem .75rem; }
+  .chat h2, .panel h2 { font-family: ${SERIF_STACK}; font-variant: small-caps; font-size: .8rem; letter-spacing: .06em; color: var(--gilt); font-weight: 600; margin: 0 0 .5rem; padding-bottom: .3rem; border-bottom: 1px solid var(--line); }
   .empty-note { font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); }
   .chips { display: flex; flex-wrap: wrap; gap: .35rem; }
   .chip { font-family: ${MONO_STACK}; font-size: .72rem; padding: .25rem .6rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; }
-  .roommap svg { width: 100%; height: auto; display: block; }
+
+  /* the manor map — a FIXED-size viewport regardless of room count or
+     layout shape (an operator report: an earlier version's container grew
+     and shrank with the graph, shoving the panels below it around as the
+     game progressed). The svg scales to fit via preserveAspectRatio, same
+     graph, same nodes, just letterboxed into a stable box. */
+  /* the wrapper div gets an explicit height too, not just .map-viewport
+     itself — an svg's own height:100% resolves against ITS PARENT's
+     height, and a percentage against an auto-height parent computes to
+     "auto" per spec, silently undoing the fixed-viewport intent below. */
+  .map-viewport { height: 190px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  .map-viewport > div { width: 100%; height: 100%; }
+  .map-viewport svg { width: 100%; height: 100%; display: block; }
   .roommap .room-edge { stroke: var(--line); stroke-width: 1.5; }
   .roommap .room-hint { fill: var(--muted); opacity: .45; }
   .roommap .room-node circle { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
   .roommap .room-node.current circle { stroke: var(--taught); fill: var(--taught-soft); stroke-width: 2; }
   .roommap .room-node text { font-family: ${MONO_STACK}; font-size: 6.5px; fill: var(--ink); text-anchor: middle; }
+  .roommap .room-node.clickable { cursor: pointer; }
+  .roommap .room-node.clickable:hover circle { stroke: var(--gilt); stroke-width: 2.5; }
+  .roommap .room-node.selected circle { stroke: var(--alert); stroke-width: 2.5; }
+
   .goal-status { display: flex; flex-direction: column; gap: .4rem; }
   .goal-status .g { display: flex; align-items: baseline; gap: .4rem; font-size: .86rem; line-height: 1.35; }
   .goal-status .dot { width: .5rem; height: .5rem; border-radius: 50%; flex: none; background: var(--muted); }
   .goal-status .g.known .dot { background: var(--corpus); }
   .goal-status .g.carried .dot { background: var(--taught); }
-  .chatlog { display: flex; flex-direction: column; gap: .4rem; max-height: 320px; overflow-y: auto; margin-bottom: .5rem; }
+  .chatlog { display: flex; flex-direction: column; gap: .4rem; max-height: 260px; overflow-y: auto; margin-bottom: .5rem; }
   .chatlog .u { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
   .chatlog .u::before { content: "tmct> "; color: var(--taught); }
   .chatlog .a { font-size: .88rem; line-height: 1.4; white-space: pre-wrap; }
@@ -358,6 +474,11 @@ ${THEME_TOKENS_CSS}
   .pills:empty { display: none; margin-bottom: 0; }
   .pill { font-family: ${MONO_STACK}; font-size: .72rem; padding: .25rem .6rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; }
   .pill:hover { border-color: var(--taught); }
+  /* the room's own prose, relocated (operator feedback) out of a bottom-of-
+     page strip and into the flow between the history/pills and the input —
+     a quoted manuscript line reporting what "look" would say right now. */
+  .caption { background: var(--parchment); border-left: 3px solid var(--gilt); padding: .55rem .7rem; font-size: .86rem; font-style: italic; margin: 0 0 .5rem; }
+  .caption:empty { display: none; margin: 0; }
   .chatask { display: flex; align-items: center; gap: .5rem; border-top: 1px solid var(--line); padding-top: .5rem; }
   .chatask .prompt { color: var(--taught); font-size: .78rem; font-family: ${MONO_STACK}; }
   .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .32rem .55rem; min-width: 0; }
@@ -369,47 +490,87 @@ ${THEME_TOKENS_CSS}
   .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
   .goal-line { font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); margin-top: .5rem; }
   .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .3rem; }
+
+  /* edit mode */
+  body:not(.editing) #editStage { display: none; }
+  body.editing #playStage, body.editing #playControls { display: none; }
+  .editor-stage { margin-top: .5rem; }
+  .edittext textarea { width: 100%; box-sizing: border-box; min-height: 380px; font-family: ${MONO_STACK}; font-size: .82rem; line-height: 1.55; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .6rem; resize: vertical; }
+  .edit-status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .4rem; min-height: 1.1em; }
+  .edit-status.pending { color: var(--entail); }
+  .edit-status.ok { color: var(--taught); }
+  .roomdetail .sprite-row { min-height: 3.2rem; }
+  #legendList { display: flex; flex-wrap: wrap; gap: .5rem .3rem; }
+
   body.preview .side, body.preview .controls-row, body.preview .status { display: none; }
   body.preview main { padding: 0; max-width: none; }
   body.preview .stage { display: block; }
-  body.preview .eyebrow, body.preview h1 { display: none; }
+  body.preview .eyebrow, body.preview h1, body.preview .mode-toggle, body.preview #editStage { display: none; }
 </style>
 </head>
 <body>
 <main>
   <div class="eyebrow">tmct &middot; the adventure</div>
-  <h1>A room, drawn from exactly what the text already says is there</h1>
-  <div class="stage">
+  <div class="titlebar">
+    <h1>A room, drawn from exactly what the text already says is there</h1>
+    <button id="editModeBtn" type="button" class="mode-toggle" disabled>edit the world</button>
+  </div>
+  <div class="stage" id="playStage">
     <div class="room-frame" id="roomFrame">
       <div class="sprite-row" id="spriteRow"></div>
     </div>
     <aside class="side" aria-label="The adventure's log and chat">
       <div class="chat">
-        <h2>what's happened, and what you can do</h2>
+        <h2>the manor's own account</h2>
         <div class="chatlog" id="chatlog" aria-live="polite"></div>
         <div class="pills" id="pills"></div>
+        <div class="caption" id="caption"></div>
         <form class="chatask" id="chatform">
           <span class="prompt mono">tmct&gt;</span>
           <input id="chatq" type="text" placeholder="go north" aria-label="Type a command, or ask a question" disabled>
         </form>
       </div>
       <div class="panel carrying">
-        <h2>carrying</h2>
+        <h2>satchel</h2>
         <div class="chips" id="carryList"></div>
       </div>
       <div class="panel roommap">
-        <h2>rooms visited</h2>
-        <div id="mapWrap"></div>
+        <h2>the manor, so far</h2>
+        <div class="map-viewport"><div id="mapWrap"></div></div>
       </div>
       <div class="panel goals">
-        <h2>goal</h2>
+        <h2>quest</h2>
         <div id="goalList"></div>
       </div>
     </aside>
   </div>
-  <div class="caption" id="caption"></div>
+
+  <div class="stage editor-stage" id="editStage" aria-label="The world editor">
+    <div class="panel edittext">
+      <h2>the world, in plain sentences</h2>
+      <textarea id="editorText" spellcheck="false" aria-label="The world's own facts as plain sentences, one per line — edit one and it flows back into the running world"></textarea>
+      <div class="pills" id="editorPills" aria-label="Ontologically related terms for the word before the cursor"></div>
+      <div class="edit-status" id="editorStatus"></div>
+    </div>
+    <aside class="side" aria-label="The whole manor, a clicked room, and the legend">
+      <div class="panel roommap">
+        <h2>the whole manor</h2>
+        <div class="map-viewport"><div id="editMapWrap"></div></div>
+      </div>
+      <div class="panel roomdetail">
+        <h2 id="roomDetailTitle">click a room</h2>
+        <div class="sprite-row" id="roomDetailSprites"></div>
+        <div class="caption" id="roomDetailCaption"></div>
+      </div>
+      <div class="panel legend">
+        <h2>legend</h2>
+        <div id="legendList"></div>
+      </div>
+    </aside>
+  </div>
+
   <div class="goal-line" id="goalLine"></div>
-  <div class="controls-row">
+  <div class="controls-row" id="playControls">
     <button id="resetBtn" type="button" disabled>reset</button>
     <button id="playBtn" type="button" disabled>&#9654; play</button>
     <button id="stepBtn" type="button" disabled>step</button>
@@ -430,8 +591,11 @@ const ADVENTURE = ${pageData};
   const roomSceneObjects = ${roomSceneObjects.toString()};
   const carriedItems = ${carriedItems.toString()};
   const visitedRoomGraph = ${visitedRoomGraph.toString()};
+  const allRoomIds = ${allRoomIds.toString()};
   const spriteAncestryRows = ${spriteAncestryRows.toString()};
   const factsForSubject = ${factsForSubject.toString()};
+  const renderWorldEditorText = ${renderWorldEditorText.toString()};
+  const wordBeforeCursor = ${wordBeforeCursor.toString()};
   const esc = ${escapeHtml.toString()};
   const el = (id) => document.getElementById(id);
   const spriteRow = el("spriteRow");
@@ -449,6 +613,15 @@ const ADVENTURE = ${pageData};
   const carryListEl = el("carryList");
   const mapWrapEl = el("mapWrap");
   const goalListEl = el("goalList");
+  const editModeBtn = el("editModeBtn");
+  const editorTextEl = el("editorText");
+  const editorPillsEl = el("editorPills");
+  const editorStatusEl = el("editorStatus");
+  const editMapWrapEl = el("editMapWrap");
+  const roomDetailTitleEl = el("roomDetailTitle");
+  const roomDetailSpritesEl = el("roomDetailSprites");
+  const roomDetailCaptionEl = el("roomDetailCaption");
+  const legendListEl = el("legendList");
 
   const params = new URLSearchParams(location.search);
   const preview = params.get("preview") === "1";
@@ -456,6 +629,51 @@ const ADVENTURE = ${pageData};
 
   let session = null;
   let lastTicks = 0;
+  let lastSnapshot = null;
+  let selectedRoomId = null;
+  let editRows = [];
+  let editState = { placements: new Map(), openness: new Map(), exits: new Map() };
+  let allStoreRows = [];
+
+  // ---- serialize every engine-touching call: the ticker, the chat dock and
+  // the editor sync all share one in-memory store, and any overlapping pair
+  // could race against the same write.
+  let lock = Promise.resolve();
+  function withLock(fn) {
+    const run = lock.then(fn, fn);
+    lock = run.catch(() => {});
+    return run;
+  }
+
+  // ---- large-sprite-tier wiring — fetches the gradient-shaded 400px tier
+  // (public/sprites-pack/manifest.json, built by scripts/build-demo-sprites-
+  // pack.mjs from data/sprites-large/*.toml) at page load, resolved through
+  // the exact same sprite-templates.mjs resolver the build-time icon tier
+  // already used. A failed fetch (offline preview, a stripped static host)
+  // just leaves the build-time icon tier (ADVENTURE.spriteTemplates) as the
+  // working fallback — this page is never blank because one asset had a
+  // hiccup, the same posture this project already takes elsewhere.
+  let activeSpriteTemplates = ADVENTURE.spriteTemplates;
+  fetch("./sprites-pack/manifest.json").then((r) => (r && r.ok ? r.json() : null)).then((data) => {
+    if (!data || !Array.isArray(data.templates) || !data.templates.length) return;
+    activeSpriteTemplates = data.templates;
+    if (lastSnapshot) redraw(lastSnapshot);
+    if (document.body.classList.contains("editing")) refreshEditPanels();
+  }).catch(() => { /* ADVENTURE.spriteTemplates already covers this page */ });
+
+  // ---- the class-badge system — this redesign's signature element: every
+  // sprite gets a small genre-flavored class word underneath its own real
+  // name, colored through the same data-cls tokens the rest of the site
+  // already uses for provenance (see the CSS block's own comment). Chrome
+  // wraps the content; the content itself — the sprite's real subject name,
+  // the caption text — is never replaced by it.
+  const CLASS_BADGE = { adventurer: "hero", person: "townsfolk", container: "fixture", furniture: "fixture", portable: "item", room: "room" };
+  const badgeFor = (cls) => CLASS_BADGE[cls] || cls;
+  function spriteCardHtml(label, cls, svg) {
+    return '<div class="sprite-card"><div class="sprite-frame" data-cls="' + esc(cls) + '"><div class="sprite" data-cls="' + esc(cls) + '">' + svg + '</div></div>'
+      + '<div class="sprite-label">' + esc(label) + '</div>'
+      + '<div class="class-badge" data-cls="' + esc(cls) + '">' + esc(badgeFor(cls)) + "</div></div>";
+  }
 
   function captionFor(rows, state, here) {
     const hereCased = here.charAt(0).toUpperCase() + here.slice(1);
@@ -494,13 +712,14 @@ const ADVENTURE = ${pageData};
       : '<span class="empty-note">nothing yet</span>';
   }
 
-  // ---- visited-room map — an SVG laid out directly from visitedRoomGraph's
-  // own directional grid, never a second layout. Edges only ever join two
-  // ALREADY-visited rooms; hints mark a known exit's direction from a
-  // visited room without naming or drawing the unvisited room itself.
-  function renderRoomMap(rows, state, visitedRoomIds) {
-    const graph = visitedRoomGraph(state, visitedRoomIds);
-    if (!graph.nodes.length) { mapWrapEl.innerHTML = '<span class="empty-note">nowhere yet</span>'; return; }
+  // ---- room map — ONE svg-building routine shared by play mode's visited-
+  // only map and edit mode's whole-map (visitedRoomGraph fed allRoomIds
+  // instead of the exposure set — a parameter, not a second layout), so the
+  // fixed-size-viewport CSS treatment and the node layout can never drift
+  // between the two. clickable adds a data-room attribute and a pointer
+  // cursor per node; play mode's own map stays purely informational.
+  function roomMapSvg(graph, clickable) {
+    if (!graph.nodes.length) return null;
     const cell = 56, radius = 15;
     const maxX = Math.max.apply(null, graph.nodes.map((n) => n.x));
     const maxY = Math.max.apply(null, graph.nodes.map((n) => n.y));
@@ -519,13 +738,27 @@ const ADVENTURE = ${pageData};
       return '<circle class="room-hint" cx="' + (cx(from) + d[0] * cell * 0.42) + '" cy="' + (cy(from) + d[1] * cell * 0.42) + '" r="3"></circle>';
     }).join("");
     const nodesSvg = graph.nodes.map((n) => {
-      const cls = "room-node" + (n.current ? " current" : "");
-      return '<g class="' + cls + '"><circle cx="' + cx(n) + '" cy="' + cy(n) + '" r="' + radius + '"></circle>'
+      const cls = "room-node" + (n.current ? " current" : "") + (clickable ? " clickable" : "") + (clickable && n.id === selectedRoomId ? " selected" : "");
+      const attr = clickable ? ' data-room="' + esc(n.id) + '"' : "";
+      return '<g class="' + cls + '"' + attr + '><circle cx="' + cx(n) + '" cy="' + cy(n) + '" r="' + radius + '"></circle>'
         + '<text x="' + cx(n) + '" y="' + (cy(n) + radius + 9) + '">' + esc(n.id) + "</text></g>";
     }).join("");
-    mapWrapEl.innerHTML = '<svg viewBox="0 0 ' + w + " " + h + '" role="img" aria-label="the rooms visited so far">'
+    return '<svg viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="' + (clickable ? "the whole manor \\u2014 click a room to inspect it" : "the rooms visited so far") + '">'
       + edgesSvg + hintsSvg + nodesSvg + "</svg>";
   }
+  function renderRoomMap(rows, state, visitedRoomIds) {
+    mapWrapEl.innerHTML = roomMapSvg(visitedRoomGraph(state, visitedRoomIds), false) || '<span class="empty-note">nowhere yet</span>';
+  }
+  function renderEditMap(rows, state) {
+    editMapWrapEl.innerHTML = roomMapSvg(visitedRoomGraph(state, allRoomIds(rows)), true) || '<span class="empty-note">this world defines no rooms</span>';
+  }
+  editMapWrapEl.addEventListener("click", (e) => {
+    const g = e.target.closest("[data-room]");
+    if (!g) return;
+    selectedRoomId = g.getAttribute("data-room");
+    renderEditMap(editRows, editState);
+    renderRoomDetail();
+  });
 
   // ---- goal panel — one line per exposed objective, a colored dot carrying
   // the same three-state read goalStatusLinesFor's own status field names.
@@ -572,44 +805,31 @@ const ADVENTURE = ${pageData};
   // ---- sprite resolution — property/instance-aware (sprite-templates.mjs's
   // resolveSpriteAsset), keyed on the OBJECT'S OWN NAME (via
   // spriteAncestryRows' synthetic subClassOf edge to its declared class) so
-  // a named object (cabinet, butler) can carry its own data/sprites/*.toml
+  // a named object (cabinet, butler) can carry its own data/sprites*.toml
   // template while the data-cls attribute still reflects the DECLARED class
   // (container/furniture/portable/person/room) — the CSS accent-color rules
   // stay keyed on that declared class unchanged. The player's own "you" row
   // has no backing fact row, so it resolves directly by its fixed
   // "adventurer" class with no ancestry/property rows to check.
   function resolveObjectSprite(rows, s) {
-    if (s.subject === "you") return tmctAdventure.resolveSpriteAsset("adventurer", [], [], ADVENTURE.spriteTemplates, tmctAdventure.SPRITE_REGISTRY);
+    if (s.subject === "you") return tmctAdventure.resolveSpriteAsset("adventurer", [], [], activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY, { instanceKey: "you" });
     return tmctAdventure.resolveSpriteAsset(
       s.subject, spriteAncestryRows(rows, s.subject), factsForSubject(rows, s.subject),
-      ADVENTURE.spriteTemplates, tmctAdventure.SPRITE_REGISTRY,
+      activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY, { instanceKey: s.subject },
     );
   }
 
   function redraw(snap) {
+    lastSnapshot = snap;
     const objects = roomSceneObjects(snap.rows, snap.state, snap.here);
     const sprites = [{ subject: "you", spriteClass: "adventurer" }, ...objects];
-    spriteRow.innerHTML = sprites.map((s) => {
-      const svg = resolveObjectSprite(snap.rows, s);
-      return '<div><div class="sprite" data-cls="' + esc(s.spriteClass) + '">' + svg + '</div>'
-        + '<div class="sprite-label">' + esc(s.subject) + "</div></div>";
-    }).join("");
+    spriteRow.innerHTML = sprites.map((s) => spriteCardHtml(s.subject, s.spriteClass, resolveObjectSprite(snap.rows, s))).join("");
     captionEl.textContent = captionFor(snap.rows, snap.state, snap.here);
     turnLabelEl.textContent = "turn: " + snap.turn;
     renderPills(snap.rows, snap.state, snap.here);
     renderCarrying(snap.rows, snap.state);
     renderRoomMap(snap.rows, snap.state, snap.visitedRoomIds);
     renderGoals(snap.rows, snap.state, snap.visitedRoomIds);
-  }
-
-  // ---- serialize every engine-touching call: the ticker and the chat dock
-  // share one in-memory store, and an overlapping tick()/turn() pair could
-  // race against the same @turnN write.
-  let lock = Promise.resolve();
-  function withLock(fn) {
-    const run = lock.then(fn, fn);
-    lock = run.catch(() => {});
-    return run;
   }
 
   chatformEl.addEventListener("submit", (e) => {
@@ -629,6 +849,157 @@ const ADVENTURE = ${pageData};
     });
   });
 
+  // ---- edit mode ---------------------------------------------------------
+  //
+  // The textarea is seeded from renderWorldEditorText over the world's OWN
+  // facts (session.applyEdit's own return already scopes writes to the
+  // world's provenance tag; here we scope READS the same way — the live
+  // store also carries the default persona's background corpus, and this
+  // page must never show, or risk retracting, a fact that isn't part of
+  // THIS world). Typing debounces two independent things at different
+  // paces: cursor-suggestion pills (fast, ~180ms — cheap, in-memory lookups
+  // per the investigation behind this feature) and the actual store sync
+  // (slower, ~400ms — so a mid-word keystroke state is never what gets
+  // read as "the user's intent"). session.applyEdit does the real parse +
+  // diff + write; this page only ever reads its result back.
+
+  function worldOnlyRows(rows) {
+    const prefix = "world:" + ADVENTURE.world.name;
+    return (rows || []).filter((r) => typeof r.provenance === "string" && r.provenance.indexOf(prefix) === 0);
+  }
+
+  function renderRoomDetail() {
+    if (!selectedRoomId) {
+      roomDetailTitleEl.textContent = "click a room";
+      roomDetailSpritesEl.innerHTML = "";
+      roomDetailCaptionEl.textContent = "";
+      return;
+    }
+    roomDetailTitleEl.textContent = selectedRoomId;
+    const objects = roomSceneObjects(editRows, editState, selectedRoomId);
+    roomDetailSpritesEl.innerHTML = objects.length
+      ? objects.map((o) => spriteCardHtml(o.subject, o.spriteClass, resolveObjectSprite(editRows, o))).join("")
+      : '<span class="empty-note">nothing placed here yet</span>';
+    roomDetailCaptionEl.textContent = captionFor(editRows, editState, selectedRoomId);
+  }
+
+  // ---- legend — every known object/character class this world actually
+  // uses, by its real icon. Scoped to worldOnlyRows so the background
+  // corpus's own (unrelated) rdf:type vocabulary never floods the list.
+  function renderLegend(rows) {
+    const subjects = new Set(rows.filter((r) => r.predicate === "rdf:type").map((r) => r.subject));
+    const classes = new Set(["adventurer"]);
+    subjects.forEach((s) => { if (s !== "player") classes.add(spriteClassForObject(rows, s)); });
+    legendListEl.innerHTML = Array.from(classes).sort().map((cls) => {
+      const svg = tmctAdventure.resolveSpriteAsset(cls, [], [], activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY, { instanceKey: "legend-" + cls });
+      return spriteCardHtml(cls, cls, svg);
+    }).join("");
+  }
+
+  function refreshEditPanels() {
+    renderEditMap(editRows, editState);
+    renderLegend(editRows);
+    renderRoomDetail();
+  }
+
+  function wordRangeBeforeCursor(text, cursorPos) {
+    const word = wordBeforeCursor(text, cursorPos);
+    return [cursorPos - word.length, cursorPos];
+  }
+
+  // ---- cursor-driven suggestion pills — the lateral SKOS neighbourhood
+  // (tmctAdventure.relatedForTerm) plus the vertical is-a ancestor chain
+  // (tmctAdventure.classAncestorChain), mirroring adventure-viz.mjs's own
+  // suggestionsForTerm against the browser bundle's global (the same
+  // reach-through-the-global pattern captionFor/pillsFor already use).
+  // Reads the FULL store (allStoreRows), not worldOnlyRows — a term's
+  // synonym/related-concept facts mostly live in the default background
+  // corpus, not in Ashcombe Hall's own vocabulary. Empty on an honest miss.
+  function renderSuggestionPills() {
+    const term = wordBeforeCursor(editorTextEl.value, editorTextEl.selectionStart);
+    if (!term) { editorPillsEl.innerHTML = ""; return; }
+    const related = tmctAdventure.relatedForTerm(allStoreRows, term);
+    const chain = tmctAdventure.classAncestorChain(term, allStoreRows);
+    const seen = new Set([term]);
+    const out = [];
+    const push = (label) => { if (label && !seen.has(label)) { seen.add(label); out.push(label); } };
+    if (related) { related.synonyms.forEach(push); related.related.forEach((r) => push(r.prefLabel)); }
+    chain.slice(1).forEach(push);
+    editorPillsEl.innerHTML = out.slice(0, 8)
+      .map((s) => '<button type="button" class="pill" data-insert="' + esc(s) + '">' + esc(s) + "</button>").join("");
+  }
+  editorPillsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".pill");
+    if (!btn) return;
+    const pos = editorTextEl.selectionStart;
+    const range = wordRangeBeforeCursor(editorTextEl.value, pos);
+    const value = editorTextEl.value;
+    const insert = btn.getAttribute("data-insert");
+    editorTextEl.value = value.slice(0, range[0]) + insert + value.slice(pos);
+    const newPos = range[0] + insert.length;
+    editorTextEl.setSelectionRange(newPos, newPos);
+    editorTextEl.focus();
+    onEditorChanged();
+  });
+
+  async function applyEditorText() {
+    if (!session) return;
+    editorStatusEl.className = "edit-status pending";
+    editorStatusEl.textContent = "reading the manor\\u2019s ledger\\u2026";
+    const result = await session.applyEdit(editorTextEl.value);
+    const snap = await session.snapshot();
+    allStoreRows = snap.rows;
+    editRows = worldOnlyRows(snap.rows);
+    editState = tmctAdventure.foldWorldState(editRows);
+    if (result.unrecognized.length) {
+      const lines = result.unrecognized.map((u) => u.line).join(", ");
+      editorStatusEl.className = "edit-status pending";
+      editorStatusEl.textContent = result.unrecognized.length + " line" + (result.unrecognized.length === 1 ? "" : "s")
+        + " not understood yet (line " + lines + ") \\u2014 left untouched until fixed.";
+    } else {
+      editorStatusEl.className = "edit-status ok";
+      editorStatusEl.textContent = (result.added || result.removed)
+        ? "synced \\u2014 " + result.added + " fact(s) added, " + result.removed + " retracted."
+        : "synced \\u2014 no change.";
+    }
+    refreshEditPanels();
+  }
+
+  let suggestTimer = null;
+  let syncTimer = null;
+  function scheduleSuggestions() { clearTimeout(suggestTimer); suggestTimer = setTimeout(renderSuggestionPills, 180); }
+  function scheduleSync() { clearTimeout(syncTimer); syncTimer = setTimeout(() => withLock(applyEditorText), 400); }
+  function onEditorChanged() { scheduleSuggestions(); scheduleSync(); }
+  editorTextEl.addEventListener("input", onEditorChanged);
+  editorTextEl.addEventListener("click", scheduleSuggestions);
+  editorTextEl.addEventListener("keyup", (e) => {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].indexOf(e.key) !== -1) scheduleSuggestions();
+  });
+
+  async function enterEditMode() {
+    ticker.pause();
+    const snap = await session.snapshot();
+    allStoreRows = snap.rows;
+    editRows = worldOnlyRows(snap.rows);
+    editState = tmctAdventure.foldWorldState(editRows);
+    editorTextEl.value = renderWorldEditorText(editRows, editState);
+    editorStatusEl.className = "edit-status";
+    editorStatusEl.textContent = "";
+    editorPillsEl.innerHTML = "";
+    selectedRoomId = null;
+    document.body.classList.add("editing");
+    refreshEditPanels();
+    editModeBtn.textContent = "back to playing";
+  }
+  async function exitEditMode() {
+    document.body.classList.remove("editing");
+    editModeBtn.textContent = "edit the world";
+    const snap = await session.snapshot();
+    redraw(snap);
+  }
+  editModeBtn.addEventListener("click", () => withLock(() =>
+    (document.body.classList.contains("editing") ? exitEditMode() : enterEditMode())));
+
   async function boot() {
     session = await tmctAdventure.createAdventureSession(ADVENTURE.world);
     lastTicks = 0;
@@ -639,7 +1010,7 @@ const ADVENTURE = ${pageData};
     statusEl.textContent = ADVENTURE.world.opening || "";
     addChatLine("t", esc(ADVENTURE.world.opening || "the adventure begins."));
     chatqEl.disabled = false;
-    resetBtn.disabled = false; playBtn.disabled = false; stepBtn.disabled = false;
+    resetBtn.disabled = false; playBtn.disabled = false; stepBtn.disabled = false; editModeBtn.disabled = false;
   }
 
   const ticker = createTicker({

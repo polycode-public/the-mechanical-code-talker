@@ -3,12 +3,17 @@
 // spider-fly-viz.test.mjs's own style) plus the pure render-glue functions
 // the page splices into its own inline script — spriteClassForObject,
 // visibleRoomOf, roomSceneObjects, carriedItems, visitedRoomGraph,
-// goalStatusLines, pillsForRoom — and the caption builder.
+// goalStatusLines, pillsForRoom — and the caption builder. allRoomIds/
+// suggestionsForTerm and the world editor's own markup (textarea, whole map,
+// room detail, legend) get their live end-to-end behavior exercised in
+// e2e/pages-adventure-edit.test.mjs; the assertions here are the fast,
+// structural pins.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   renderAdventureHtml, spriteClassForObject, visibleRoomOf, roomSceneObjects, carriedItems,
-  visitedRoomGraph, goalStatusLines, roomCaptionText, pillsForRoom, spriteAncestryRows, factsForSubject,
+  visitedRoomGraph, allRoomIds, goalStatusLines, roomCaptionText, pillsForRoom, suggestionsForTerm,
+  spriteAncestryRows, factsForSubject,
 } from "../../src/services/adventure-viz.mjs";
 import { foldWorldState } from "../../src/services/adventure.mjs";
 
@@ -200,6 +205,22 @@ test("visitedRoomGraph: two rooms visited but not reachable from each other lay 
   assert.equal(graph.edges.length, 0, "no edge is invented between rooms with no shared exit fact");
 });
 
+// ---- allRoomIds — edit mode's whole-map feed --------------------------------
+
+test("allRoomIds: every room the world types as 'room', regardless of whether it's been visited", () => {
+  assert.deepEqual(new Set(allRoomIds(MAP_ROWS)), new Set(["study", "library", "drawing-room", "cellar"]));
+});
+
+test("allRoomIds: feeding it straight into visitedRoomGraph draws every defined room, not just a visited subset", () => {
+  const state = foldWorldState(MAP_ROWS);
+  const graph = visitedRoomGraph(state, allRoomIds(MAP_ROWS));
+  assert.deepEqual(new Set(graph.nodes.map((n) => n.id)), new Set(["study", "library", "drawing-room", "cellar"]));
+});
+
+test("allRoomIds: a world with no rooms at all yields an empty list, never a fabricated one", () => {
+  assert.deepEqual(allRoomIds([{ subject: "cabinet", predicate: "rdf:type", object: "furniture" }]), []);
+});
+
 // ---- goalStatusLines ----------------------------------------------------------
 
 const OBJECTIVE_ROWS = [...ROWS, { subject: "letter", predicate: "mgx:is-objective", object: "true" }];
@@ -295,6 +316,34 @@ test("pillsForRoom: refreshes as the room's own state changes — unlocking a co
 
   const unlocked = [...locked, { subject: "cabinet@turn1", predicate: "mgx:fixed-in", object: "study" }];
   assert.deepEqual(pillsForRoom(unlocked, foldWorldState(unlocked), "study"), ["open cabinet"]);
+});
+
+// ---- suggestionsForTerm — edit mode's cursor-driven pills --------------------
+
+test("suggestionsForTerm: a taught synonym and related concept both surface, the queried term itself excluded", () => {
+  const rows = [
+    { subject: "lamp", predicate: "mgx:synonym", object: "lantern" },
+    { subject: "lamp", predicate: "mgx:relatedTo", object: "light" },
+  ];
+  assert.deepEqual(suggestionsForTerm(rows, "lamp"), ["lantern", "light"]);
+});
+
+test("suggestionsForTerm: the vertical is-a ancestor chain contributes too, nearest-first, the term itself dropped", () => {
+  const rows = [
+    { subject: "poodle", predicate: "rdfs:subClassOf", object: "dog" },
+    { subject: "dog", predicate: "rdfs:subClassOf", object: "animal" },
+  ];
+  assert.deepEqual(suggestionsForTerm(rows, "poodle"), ["dog", "animal"]);
+});
+
+test("suggestionsForTerm: an honest empty list when the term mints no concept and has no ancestors — never a fabricated suggestion", () => {
+  assert.deepEqual(suggestionsForTerm([{ subject: "cabinet", predicate: "rdf:type", object: "furniture" }], "cabinet"), []);
+  assert.deepEqual(suggestionsForTerm([], "anything"), []);
+});
+
+test("suggestionsForTerm: a blank term is an honest empty list, never a lookup against nothing", () => {
+  assert.deepEqual(suggestionsForTerm([{ subject: "lamp", predicate: "mgx:synonym", object: "lantern" }], ""), []);
+  assert.deepEqual(suggestionsForTerm([{ subject: "lamp", predicate: "mgx:synonym", object: "lantern" }], "   "), []);
 });
 
 // ---- renderAdventureHtml: page structure ------------------------------------
@@ -400,4 +449,62 @@ test("renderAdventureHtml: escapes a custom title", () => {
 
 test("renderAdventureHtml: deterministic — byte-identical output for identical input", () => {
   assert.equal(renderAdventureHtml({ worldPayload: WORLD_PAYLOAD }), renderAdventureHtml({ worldPayload: WORLD_PAYLOAD }));
+});
+
+// ---- renderAdventureHtml: the world editor's own markup ---------------------
+// (the live behavior — seeding, room click, the two-way sync, suggestion
+// pills, the legend — is exercised end to end in
+// e2e/pages-adventure-edit.test.mjs; these pin the structure only.)
+
+test("renderAdventureHtml: the edit-mode toggle and its whole textarea/map/room-detail/legend panel are all present", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /id="editModeBtn"/);
+  assert.match(html, /id="editorText"/);
+  assert.match(html, /id="editorPills"/);
+  assert.match(html, /id="editorStatus"/);
+  assert.match(html, /id="editMapWrap"/);
+  assert.match(html, /id="roomDetailTitle"/);
+  assert.match(html, /id="roomDetailSprites"/);
+  assert.match(html, /id="roomDetailCaption"/);
+  assert.match(html, /id="legendList"/);
+});
+
+test("renderAdventureHtml: the editor's textarea is seeded through renderWorldEditorText, spliced in rather than re-implemented", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /const renderWorldEditorText = /);
+  assert.match(html, /const wordBeforeCursor = /);
+  assert.match(html, /renderWorldEditorText\(editRows, editState\)/);
+});
+
+test("renderAdventureHtml: the whole map reuses visitedRoomGraph fed allRoomIds — a parameter, not a second layout", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /const allRoomIds = /);
+  assert.match(html, /visitedRoomGraph\(state, allRoomIds\(rows\)\)/);
+});
+
+test("renderAdventureHtml: edit-mode writes reach the store through session.applyEdit, never a direct memory write from this page", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /session\.applyEdit\(/);
+});
+
+test("renderAdventureHtml: suggestion pills read the browser bundle's relatedForTerm/classAncestorChain through the shared global", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /tmctAdventure\.relatedForTerm/);
+  assert.match(html, /tmctAdventure\.classAncestorChain/);
+});
+
+test("renderAdventureHtml: the large sprite tier is fetched at page load, same-origin, with the build-time icon tier as a working fallback", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /fetch\("\.\/sprites-pack\/manifest\.json"\)/);
+  assert.match(html, /activeSpriteTemplates = ADVENTURE\.spriteTemplates/);
+  assert.ok(!/(?:src|href)=["']https?:/.test(html), "still no external resource loads");
+});
+
+test("renderAdventureHtml: every sprite gets a class-badge alongside its own real name — chrome layered over content, not replacing it", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /class="class-badge"/);
+  assert.match(html, /spriteCardHtml\(/);
+  // The badge vocabulary is a genre synonym layer, never a substitute for
+  // the sprite's own label — spriteCardHtml always renders BOTH.
+  assert.match(html, /CLASS_BADGE = \{/);
 });
