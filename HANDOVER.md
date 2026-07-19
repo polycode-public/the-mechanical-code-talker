@@ -16,10 +16,16 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Version state (2026-07-18)
 
-v2.7.11 in the working tree: the adventure dead-end routing fixes, the spider-and-fly game
-(`archive/PLAN_SPIDER_FLY.md`, fully built), the TOOL-7/TOOL-8 router uplift, and a 5-round
-adventure-focused playtest edge hunt (`playtests/PLAYTEST_LOG_003.md` through `_007.md`) have
-all landed since 2.7.0, pipelines confirmed green at every round.
+v2.7.14 in the working tree: the adventure dead-end routing fixes, the spider-and-fly game
+(`archive/PLAN_SPIDER_FLY.md`, fully built), the TOOL-7/TOOL-8 router uplift, a 5-round
+adventure-focused playtest edge hunt (`playtests/PLAYTEST_LOG_003.md` through `_007.md`), a taught
+fact-value rule shape retiring open/close's hand-checked lock/open-state logic, 4 fresh benchmark
+reports plus `CAPABILITIES_2.7.12.md`, spider-fly ecology v2 (wander, spider-vs-spider avoidance,
+dynamic webs, mass symmetry — `PLAN_GAMES_UPLIFT_V2.md` Part A), an adventure graphical presence
+and goal-inferring auto-play (Part B), and 15 of the CONVERSATION backlog's 29 items have all
+landed since 2.7.0, pipelines confirmed green at every round. A second, 10-round playtest edge hunt
+(5 adventure, 5 spider-fly) targeting everything built since the first hunt is now underway
+(`playtests/PLAYTEST_LOG_008.md` onward).
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
@@ -101,6 +107,12 @@ delivered plan docs; each records what its delivery deliberately did not include
     and routing in the report; every closed item above has a regression test in
     `test/corpus/inference.jsonl`, `test/corpus/grammar.jsonl`, `test/corpus/planning.jsonl` or
     `test/corpus/templates.jsonl`.
+- Adventure edge-hunt round 1 of the second (10-round) hunt (`playtests/PLAYTEST_LOG_008.md`): a
+  direct "is X open/closed" question reported a fully-known, negative container state as an
+  epistemic gap ("I don't have a fact saying...") instead of answering "no, it's closed" — the
+  generic ask engine has no adjective→datatype-predicate mapping for `mgx:is-open`, a predicate this
+  session's own rule-shape retrofit introduced. Fixed this round: a new `worldOpennessAnswer` aside,
+  styled after the existing `worldWhereAnswer`, reads `state.openness` directly. Shipped.
 
 ## Discipline
 
