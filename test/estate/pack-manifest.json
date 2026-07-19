@@ -357,6 +357,7 @@
   "src/domain/seeded-random.mjs",
   "src/domain/skos-view.mjs",
   "src/domain/spider-fly-world.mjs",
+  "src/domain/sprite-expressions.mjs",
   "src/domain/sprite-map.mjs",
   "src/domain/sprite-materials.mjs",
   "src/domain/sprite-size.mjs",

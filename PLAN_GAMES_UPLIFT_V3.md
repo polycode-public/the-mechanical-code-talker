@@ -284,7 +284,14 @@ untouched). Edits: `src/domain/sprite-templates.mjs` (`parameterizedFillAll`, tw
 `return expandExpressionReferences(expandMaterialReferences(templates))`), `test/adapters/
 sprite-templates.test.mjs`, `test/adapters/sprite-large-template-files.test.mjs`.
 
-### B.4 Interim progress checkpoint (mid-build, harvested from the implementing agent)
+### B.4 Infrastructure half — SHIPPED (merged to main, commit fe4496f + merge)
+
+Independently re-verified by the coordinator (not just the implementing agent's own report): all
+126 named blast-radius tests + 183/183 `test:fast` re-run green on the merged worktree AND again on
+`main` post-merge; a fresh coordinator-run Playwright screenshot of all 6 emotions × the 3 example
+classes at real 400px confirmed every expression reads distinctly and the no-fact case correctly
+falls back to the plain template, zero console errors. Content-authoring wave (56 person-role + 19
+animal `-with-emotion.toml` files) is unblocked — ready to dispatch.
 
 **Done**: B.2.1 (`sad rdfs:subClassOf emotion` added to `corpus/tier2/generate.mjs`, regenerated +
 `--verify`d), B.2.2 (`parameterizedFill`→`parameterizedFillAll`, verified byte-identical against
