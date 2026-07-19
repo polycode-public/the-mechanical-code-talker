@@ -2305,12 +2305,20 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object, qua
  *  ONE canonical spelling to STORE rather than a lookup Set of candidates to
  *  match against). Deliberately tiny, no NLP — a stray false fold on an
  *  already-singular noun ending in "s" is a known, accepted limitation of this
- *  same naive scheme used elsewhere in this file (factTermVariants). */
+ *  same naive scheme used elsewhere in this file (factTermVariants).
+ *
+ *  "ss"/"ous" both stay excluded from the trailing-s strip: "ss" for the
+ *  existing reason (a doubled final consonant is never a plural marker), and
+ *  "ous" because no regular English noun plural ends that way at all — every
+ *  "-ous" word reaching this function is an ADJECTIVE ("venomous",
+ *  "dangerous", "curious"), and stripping its final letter as if it were a
+ *  plural "-s" produces a mangled non-word ("venomous" -> "venomou") rather
+ *  than a singular form of anything. */
 function singularizeSurface(word) {
   const w = String(word || "").trim();
   if (/[a-z]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
   if (/(ses|xes|zes|ches|shes)$/i.test(w)) return w.slice(0, -2);
-  if (/[a-z]s$/i.test(w) && !/ss$/i.test(w)) return w.slice(0, -1);
+  if (/[a-z]s$/i.test(w) && !/(?:ss|ous)$/i.test(w)) return w.slice(0, -1);
   return w;
 }
 
@@ -3263,12 +3271,22 @@ function matchBareCanTeach(text) {
  *  for a vowel-initial Y — "every monkey is a animal") reuses finish.mjs's
  *  own beginsWithVowelSound + the SAME grammar-rules.toml "article" rule
  *  (spelling-vowel/consonant exceptions included) rather than reimplementing
- *  vowel-sound detection a second time. */
+ *  vowel-sound detection a second time.
+ *
+ *  An object with NO article in the original ("every reptile is venomous")
+ *  is left BARE, never given one: that shape already means a property claim
+ *  (TEACH_PROPERTY_RE's own territory), and inserting "a"/"an" in front of an
+ *  adjective ("every reptile is a venomous") both reads wrong and asks the
+ *  user to teach a class-membership fact that was never what they said. Only
+ *  a payload that ALREADY carried an article gets its article corrected —
+ *  the "every monkey is a animal" -> "an animal" case this function exists
+ *  for in the first place. */
 function teachSuggestion(payload) {
-  const m = String(payload).match(/^(?:every |each |all |a |an )?([\w-]+) (?:is|are) (?:a |an )?([\w-]+)$/i);
+  const m = String(payload).match(/^(?:every |each |all |a |an )?([\w-]+) (?:is|are) (a |an )?([\w-]+)$/i);
   if (!m) return null;
   const subject = m[1].toLowerCase();
-  const object = m[2].toLowerCase();
+  const object = m[3].toLowerCase();
+  if (!m[2]) return `every ${subject} is ${object}`;
   const articleRule = grammarRules().find((r) => r.kind === "article");
   const article = articleRule && beginsWithVowelSound(object, articleRule) ? "an" : "a";
   return `every ${subject} is ${article} ${object}`;
@@ -3301,7 +3319,35 @@ async function existentialTeachRefusal(payload, lexicon) {
   const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   const singularSubject = singularOf(subject, lex, lookupNoun);
-  const universal = teachSuggestion(`${singularSubject} is ${singularOf(object, lex, lookupNoun)}`);
+  // The object may name a class NOUN ("some men are fathers" -> membership)
+  // or a bare ADJECTIVE property ("some reptiles are venomous" -> a property
+  // claim, not membership in a class called "venomous"). Only a genuine noun
+  // fold — a real lexicon entry, or the naive plural-suffix strip actually
+  // changing the word — means the object IS functioning as a plural noun
+  // here; anything else (an adjective the lexicon doesn't carry as a noun,
+  // and that doesn't end in a real plural suffix either) gets the property
+  // shape instead — no article, no fold — so the suggestion reads "every
+  // reptile is venomous", not the ungrammatical/mangled "every reptile is a
+  // venomous"/"a venomou".
+  const objectNounEntry = lookupNoun(lex, object);
+  const objectFold = objectNounEntry ? objectNounEntry.lemma : singularizeSurface(object);
+  const objectIsClassNoun = !!objectNounEntry || objectFold.toLowerCase() !== object.toLowerCase();
+  let universal;
+  if (objectIsClassNoun) {
+    const articleRule = grammarRules().find((r) => r.kind === "article");
+    const article = articleRule && beginsWithVowelSound(objectFold, articleRule) ? "an" : "a";
+    // The bare "every X is a Y" class-membership shape stores directly
+    // (unknownSubjectFallback's own territory) — no wrapper needed for the
+    // suggestion to actually work when followed verbatim.
+    universal = `every ${singularSubject} is ${article} ${objectFold.toLowerCase()}`;
+  } else {
+    // The bare property shape ("every reptile is venomous") does NOT store
+    // on its own — TEACH_PROPERTY_RE only fires on a "remember/note …"-
+    // wrapped payload — so the suggestion carries the wrapper too, or
+    // following it verbatim would hit the exact same both-sides-unknown
+    // decline again.
+    universal = `remember that every ${singularSubject} is ${object.toLowerCase()}`;
+  }
   return {
     text: `I can't store "${sentence.replace(/[.!]+$/, "")}" — "${quantifier.toLowerCase()}" claims only some of them, `
       + "and I store universals, so that isn't a shape I can store yet."
