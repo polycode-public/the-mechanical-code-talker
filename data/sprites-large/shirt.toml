@@ -1,0 +1,18 @@
+# shirt — a T-shirt silhouette, gradient/highlight only: clothing's own
+# colour varies too widely to name a material table the way lamp.toml's
+# metal or glass does.
+classes = ["shirt"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="shirt-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M9 3.4 L4 6 L2.4 10.4 L5.6 12 L7 9.6 V20.6 H17 V9.6 L18.4 12 L21.6 10.4 L20 6 L15 3.4 C14.4 4.6 13.2 5.4 12 5.4 C10.8 5.4 9.6 4.6 9 3.4 Z" fill="url(#shirt-fill)"/>
+  <path d="M9.4 4 C10 5 11 5.6 12 5.6" fill="none" stroke="#000000" stroke-width="0.4" opacity="0.2"/>
+  <path d="M7.6 10.4 L7.6 19.6" stroke="#ffffff" stroke-width="0.6" opacity="0.3"/>
+</svg>
+"""

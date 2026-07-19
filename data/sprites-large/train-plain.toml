@@ -1,0 +1,36 @@
+# train-plain — the fallback for a taught train with no mgx:madeOf value:
+# the same locomotive-and-carriage silhouette as train.toml, shaded from
+# currentColor instead of a material gradient, the same reasoning
+# ring-plain.toml gives for why a brand-new class needs its own fallback.
+classes = ["train"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="train-plain-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M2.4 18 L2.4 10.6 C2.4 9.2 3.4 8.4 5 8.4 H8.6 V18 Z" fill="url(#train-plain-fill)"/>
+  <rect x="8.6" y="7" width="12.4" height="11" rx="0.8" fill="url(#train-plain-fill)"/>
+  <rect x="1.4" y="7.4" width="2" height="2" rx="0.4" fill="url(#train-plain-fill)"/>
+  <rect x="4" y="9.6" width="3.4" height="3" rx="0.4" fill="#000000" opacity="0.24"/>
+  <rect x="10" y="8.4" width="3.2" height="3" rx="0.4" fill="#000000" opacity="0.24"/>
+  <rect x="14" y="8.4" width="3.2" height="3" rx="0.4" fill="#000000" opacity="0.24"/>
+  <rect x="18" y="8.4" width="2.4" height="3" rx="0.4" fill="#000000" opacity="0.24"/>
+  <path d="M9 7.6 L20.4 7.6" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
+  <g fill="#1a1a1a">
+    <circle cx="4.4" cy="19" r="1.6"/>
+    <circle cx="9.4" cy="19" r="1.6"/>
+    <circle cx="14" cy="19" r="1.6"/>
+    <circle cx="19" cy="19" r="1.6"/>
+  </g>
+  <g fill="#7a7a7a">
+    <circle cx="4.4" cy="19" r="0.6"/>
+    <circle cx="9.4" cy="19" r="0.6"/>
+    <circle cx="14" cy="19" r="0.6"/>
+    <circle cx="19" cy="19" r="0.6"/>
+  </g>
+</svg>
+"""

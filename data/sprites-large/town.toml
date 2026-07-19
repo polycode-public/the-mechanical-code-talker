@@ -1,0 +1,31 @@
+# town — four rectangular blocks of varying height read as a skyline
+# without needing room.toml's own square frame; a full-bleed silhouette
+# suits a wide urban view better than a bordered card.
+classes = ["town"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="town-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.16"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#town-fill)" stroke="currentColor" stroke-width="1.2">
+    <rect x="2.6" y="12" width="4.2" height="9.4"/>
+    <rect x="7.4" y="7" width="4.6" height="14.4"/>
+    <rect x="12.6" y="10" width="4" height="11.4"/>
+    <rect x="17.2" y="4.6" width="4.4" height="16.8"/>
+  </g>
+  <g fill="currentColor" opacity="0.7">
+    <rect x="8.2" y="9" width="1" height="1"/>
+    <rect x="10" y="9" width="1" height="1"/>
+    <rect x="8.2" y="12" width="1" height="1"/>
+    <rect x="10" y="12" width="1" height="1"/>
+    <rect x="18" y="7.4" width="1" height="1"/>
+    <rect x="19.8" y="7.4" width="1" height="1"/>
+    <rect x="18" y="10.4" width="1" height="1"/>
+    <rect x="19.8" y="10.4" width="1" height="1"/>
+  </g>
+  <path d="M17.6 5 L21.2 5" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
+</svg>
+"""

@@ -1,0 +1,26 @@
+# rabbit — the sprite tier's own long-eared creature: two long, narrow,
+# outward-splayed ears carry the silhouette's whole identity, the same
+# gradient/highlight treatment as dog.toml and no material table, since a
+# rabbit's own colour is a coat, not a substance.
+classes = ["rabbit"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="rabbit-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="9" cy="5.4" rx="1.5" ry="4.8" fill="url(#rabbit-fill)" transform="rotate(-14 9 5.4)"/>
+  <ellipse cx="13.4" cy="5.4" rx="1.5" ry="4.8" fill="url(#rabbit-fill)" transform="rotate(14 13.4 5.4)"/>
+  <ellipse cx="9" cy="5.6" rx="0.65" ry="3.4" fill="#000000" opacity="0.15" transform="rotate(-14 9 5.6)"/>
+  <ellipse cx="13.4" cy="5.6" rx="0.65" ry="3.4" fill="#000000" opacity="0.15" transform="rotate(14 13.4 5.6)"/>
+  <ellipse cx="12" cy="16" rx="6" ry="5.4" fill="url(#rabbit-fill)"/>
+  <circle cx="10.4" cy="9.6" r="4.2" fill="url(#rabbit-fill)"/>
+  <ellipse cx="9" cy="9" rx="1" ry="1.3" fill="#000000" opacity="0.24"/>
+  <circle cx="18" cy="17.6" r="1.8" fill="url(#rabbit-fill)"/>
+  <ellipse cx="8.6" cy="12.6" rx="2.4" ry="1.4" fill="#ffffff" opacity="0.28"/>
+  <ellipse cx="9.4" cy="8.6" rx="1.1" ry="0.8" fill="#ffffff" opacity="0.3"/>
+</svg>
+"""

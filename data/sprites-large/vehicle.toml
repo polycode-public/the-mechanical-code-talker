@@ -1,0 +1,32 @@
+# vehicle — the generic fallback for any vehicle with no sprite of its own:
+# a plain car silhouette gradient-shaded from its own taught mgx:madeOf
+# value, spanning metal, plastic and wood so an old cart reads as plausibly
+# as a car.
+classes = ["vehicle"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="vehicle-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <path d="M3.6 15.4 C3.6 13 5 12.4 7 12.4 L8.6 9.2 C9.2 8.2 10 7.8 11.2 7.8 H15 C16.2 7.8 17 8.2 17.6 9.2 L19.2 12.4 C21 12.4 20.4 13 20.4 15.4 Z" fill="url(#vehicle-fill)"/>
+  <path d="M9.6 9 L10.6 12.2 H17 L15.6 9 Z" fill="#000000" opacity="0.22"/>
+  <path d="M9.9 9.4 L10.7 11.8" stroke="#ffffff" stroke-width="0.5" opacity="0.35"/>
+  <circle cx="7.6" cy="16" r="2.2" fill="#1a1a1a"/>
+  <circle cx="16.6" cy="16" r="2.2" fill="#1a1a1a"/>
+  <circle cx="7.6" cy="16" r="0.9" fill="#7a7a7a"/>
+  <circle cx="16.6" cy="16" r="0.9" fill="#7a7a7a"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+metal = "metal"
+plastic = "plastic"
+wood = "wood"

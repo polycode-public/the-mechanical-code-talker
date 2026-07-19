@@ -1,0 +1,20 @@
+# village — two small cottages with pitched roofs and a single tree,
+# distinguished from town.toml's taller uniform blocks by scale and roof
+# shape rather than by a different technique.
+classes = ["village"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="village-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.16"/>
+    </linearGradient>
+  </defs>
+  <path d="M2.6 13.6 L6.4 10 L10.2 13.6 V19.4 H2.6 Z" fill="url(#village-fill)" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
+  <path d="M11.4 15 L15.6 10.8 L19.8 15 V21 H11.4 Z" fill="url(#village-fill)" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
+  <rect x="14.6" y="17" width="2" height="4" fill="currentColor" opacity="0.5"/>
+  <circle cx="5" cy="7" r="2.4" fill="#5ea25a"/>
+  <rect x="4.6" y="8.6" width="0.8" height="2" fill="#7a5230"/>
+  <path d="M11.8 15.4 L15.6 11.4 L19.2 15.4" stroke="#ffffff" stroke-width="0.5" opacity="0.35"/>
+</svg>
+"""

@@ -1,0 +1,21 @@
+# snake — a single thick gradient stroke tracing an S-curve stands in for
+# the whole body, the same reasoning spider.toml gives for keeping its own
+# legs flat strokes: a gradient FILL would read as noise at this width, a
+# gradient STROKE reads as a smooth cylindrical body.
+classes = ["snake"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="snake-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 20 C4 16 9 17 9 13 C9 9.4 4.6 10 4.6 6.4 C4.6 4 6.6 2.6 9 3.2" fill="none" stroke="url(#snake-fill)" stroke-width="4.2" stroke-linecap="round"/>
+  <circle cx="9.3" cy="3.4" r="2.1" fill="url(#snake-fill)"/>
+  <ellipse cx="8.6" cy="2.8" rx="0.6" ry="0.8" fill="#000000" opacity="0.3"/>
+  <path d="M11 3 L13.4 3.6 L11 4.2" fill="none" stroke="#c0362f" stroke-width="0.6" stroke-linecap="round"/>
+  <path d="M5.4 18.6 C5.4 16 8.4 16.6 8.4 14" fill="none" stroke="#ffffff" stroke-width="0.7" opacity="0.35"/>
+</svg>
+"""

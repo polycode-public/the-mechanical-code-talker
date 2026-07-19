@@ -1,0 +1,30 @@
+# ring — a jewelled band at the sprite tier: the shared metal treatment on a
+# thick stroke-only circle (the same skeleton-key idiom key.toml already
+# uses for a stroke-drawn line), plus a fixed-colour gem — a stone's own
+# colour comes from the stone, not the band underneath, the same reasoning
+# letter.toml's wax seal already carries.
+classes = ["ring"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="ring-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <circle cx="12" cy="14.5" r="6.2" fill="none" stroke="url(#ring-fill)" stroke-width="2.4"/>
+  <path d="M12 4.2 L15.2 8.6 L12 11.4 L8.8 8.6 Z" fill="#d8f3f7"/>
+  <path d="M12 4.2 L15.2 8.6 L12 11.4 Z" fill="#aee0ea" opacity="0.7"/>
+  <path d="M10.6 6.2 L12 4.2 L12 8.2 Z" fill="#ffffff" opacity="0.7"/>
+  <path d="M7.4 12.4 A6.2 6.2 0 0 1 11.6 8.6" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-linecap="round" opacity="0.4"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+gold = "metal"
+metal = "metal"

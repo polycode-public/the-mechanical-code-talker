@@ -1,0 +1,24 @@
+# snow — the same cloud silhouette as rain.toml, its streaks replaced with
+# soft round flakes so the two read as a pair without being confused for
+# each other.
+classes = ["snow"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="snow-cloud" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#eef2f6"/>
+      <stop offset="60%" stop-color="#cfd8e0"/>
+      <stop offset="100%" stop-color="#a7b2bd"/>
+    </linearGradient>
+  </defs>
+  <path d="M6.6 12 C4.2 12 3 10 4.2 8 C4.8 5.6 7.2 5 8.8 6.2 C9.8 4 13 3.6 14.6 5.8 C17.4 5.4 19.4 7.4 19 9.8 C20.6 10.2 21 12.2 19.4 13.2 C19 13.5 18.6 13.6 18 13.6 H7.4 C7.1 13.6 6.8 13.6 6.6 12 Z" fill="url(#snow-cloud)"/>
+  <ellipse cx="9" cy="7.8" rx="2.2" ry="1.4" fill="#ffffff" opacity="0.4"/>
+  <g fill="#eaf3fb" opacity="0.9">
+    <circle cx="7.4" cy="17" r="1"/>
+    <circle cx="12.2" cy="19.2" r="1.1"/>
+    <circle cx="16.6" cy="16.6" r="0.9"/>
+    <circle cx="10" cy="15" r="0.7"/>
+    <circle cx="15" cy="20.4" r="0.7"/>
+  </g>
+</svg>
+"""

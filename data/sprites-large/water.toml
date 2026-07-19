@@ -1,0 +1,17 @@
+# water — a single droplet, fixed blue throughout: water's own colour is
+# intrinsic the way lamp.toml's flame is, never a taught material.
+classes = ["water"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="water-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#eaf6f7"/>
+      <stop offset="55%" stop-color="#5aa9c4"/>
+      <stop offset="100%" stop-color="#2c7593"/>
+    </linearGradient>
+  </defs>
+  <path d="M12 2.4 C15.4 7.4 18.6 12 18.6 15.6 C18.6 19.7 15.6 22 12 22 C8.4 22 5.4 19.7 5.4 15.6 C5.4 12 8.6 7.4 12 2.4 Z" fill="url(#water-fill)"/>
+  <path d="M8.2 14.6 C8.2 17 9.4 18.6 11.2 19.2" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-linecap="round" opacity="0.4"/>
+  <ellipse cx="9.4" cy="8.6" rx="1.3" ry="1.8" fill="#ffffff" opacity="0.4"/>
+</svg>
+"""

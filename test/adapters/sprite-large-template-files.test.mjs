@@ -15,8 +15,26 @@ import { SPRITE_REGISTRY } from "../../src/domain/sprite-map.mjs";
 
 const REAL_LARGE_TEMPLATES = readSpriteLargeTemplateFiles();
 
+/** Every loaded template whose `classes` list names `cls`. */
+function templatesFor(cls) {
+  return REAL_LARGE_TEMPLATES.filter((t) => Array.isArray(t.classes) && t.classes.includes(cls));
+}
+
 test("readSpriteLargeTemplateFiles loads every real sprite-tier template file, at least the base pack's 23", () => {
   assert.ok(REAL_LARGE_TEMPLATES.length >= 23, `expected at least 23 templates, got ${REAL_LARGE_TEMPLATES.length}`);
+});
+
+const WIDER_VOCABULARY_CLASSES = [
+  "plant", "rabbit", "rain", "ring", "river", "road", "salt", "school", "sheep", "shirt",
+  "shoe", "shop", "snake", "snow", "sock", "stadium", "star", "stone", "street", "sugar",
+  "sun", "table", "tea", "tiger", "town", "train", "tree", "vegetable", "vehicle", "village",
+  "water", "waterway", "wine", "wolf",
+];
+
+test("every class in the wider vocabulary pack has at least one dedicated template", () => {
+  const totalClasses = new Set(REAL_LARGE_TEMPLATES.flatMap((t) => t.classes));
+  const missing = WIDER_VOCABULARY_CLASSES.filter((c) => !totalClasses.has(c));
+  assert.deepEqual(missing, [], `classes with no sprite-tier template at all: ${missing.join(", ")}`);
 });
 
 test("every real sprite-tier template is internally consistent", () => {
@@ -142,6 +160,33 @@ test("a garment class among the new pack (coat) resolves the woven material trea
   const svg = resolveSpriteAsset("coat", [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
   assert.ok(svg.includes(MATERIAL_PALETTE["woven material"].base));
   assert.ok(!svg.includes("{{FILL"));
+});
+
+test("a sample of the wider vocabulary pack resolves to its own dedicated template, not a shared fallback", () => {
+  const sample = ["rabbit", "tree", "sun", "river", "shirt", "salt", "stone", "waterway", "school", "wolf"];
+  for (const cls of sample) {
+    const own = templatesFor(cls);
+    assert.equal(own.length, 1, `${cls}: expected exactly one dedicated template, found ${own.length}`);
+    const svg = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.ok(svg.includes("<svg"), `${cls}: resolved svg must be a real <svg> string`);
+    assert.equal(svg, own[0].svg, `${cls}: resolveSpriteAsset must return this class's own template, not a fallback`);
+  }
+});
+
+test("ring/table/vehicle/train gain a taught mgx:madeOf gradient the same way the original pack's material-bearing classes do", () => {
+  const facts = [{ subject: "the-ring", predicate: "mgx:madeOf", object: "gold" }];
+  const svg = resolveSpriteAsset("ring", [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+  assert.ok(svg.includes(MATERIAL_PALETTE.metal.base));
+  assert.ok(!svg.includes("{{FILL"));
+});
+
+test("ring/table/vehicle/train are brand-new classes with no legacy sprite-registry entry, so each needs its own plain fallback when no material is taught", () => {
+  for (const cls of ["ring", "table", "vehicle", "train"]) {
+    assert.equal(templatesFor(cls).length, 2, `${cls}: expected a parameterized template plus a plain fallback`);
+    const svg = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.ok(!svg.includes("{{FILL"), `${cls}: an untaught instance must never leak a placeholder token`);
+    assert.ok(svg.includes(`${cls}-plain-fill`), `${cls}: an untaught instance must resolve to its OWN plain fallback, not the generic animal root`);
+  }
 });
 
 test("a missing directory reads as no templates at all, never throws", () => {

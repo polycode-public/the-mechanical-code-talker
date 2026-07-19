@@ -1,0 +1,25 @@
+# vegetable — a tapered root shape reads as unambiguously "a vegetable"
+# where the pack's first pepper-shaped draft read as a plain round fruit;
+# the root carries the gradient so a taught instance's own colour still
+# shows, the leafy top stays a fixed green the way a root's own leaves
+# never change colour with the root.
+classes = ["vegetable"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="vegetable-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M7.6 7.6 C7.2 6.6 8.2 5.7 9.3 6.1 L16.6 9 C17.8 9.5 17.9 10.6 17.1 11.5 L11.4 21.4 C10.7 22.4 9.4 21.9 9.3 20.7 Z" fill="url(#vegetable-fill)"/>
+  <path d="M9.6 10 L16.2 12.6" stroke="#000000" stroke-width="0.3" opacity="0.16"/>
+  <path d="M11 14.4 L15.2 16" stroke="#000000" stroke-width="0.3" opacity="0.14"/>
+  <path d="M12.2 17.8 L14.4 18.6" stroke="#000000" stroke-width="0.3" opacity="0.12"/>
+  <path d="M8.6 6.6 C8 4.6 8.6 2.6 10.2 1.6 C10 3.6 9.8 5 9.2 6.6 Z" fill="#4a7a34"/>
+  <path d="M9.4 6.2 C9.6 4 10.8 2.4 12.8 2 C12 3.8 11.2 5 10.2 6.6 Z" fill="#5a9040"/>
+  <path d="M10.4 6.4 C11.2 4.6 12.8 3.6 14.8 3.8 C13.6 5.2 12.2 6 10.8 6.8 Z" fill="#4a7a34"/>
+  <ellipse cx="10.6" cy="10.4" rx="1.6" ry="2.4" fill="#ffffff" opacity="0.3" transform="rotate(15 10.6 10.4)"/>
+</svg>
+"""

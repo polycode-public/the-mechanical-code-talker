@@ -1,0 +1,22 @@
+# stone — straight facet edges between the corner points read as a
+# faceted rock where the pack's first draft (all smooth bezier curves)
+# read closer to a blob; two bolder crack lines carry the fixed-dark
+# accent, gradient/highlight only: a stone's own taught colour still reads
+# as a lit rock face.
+classes = ["stone"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="stone-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 55%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 80%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M4.2 17 L3 13.4 L6.6 10.2 L8.6 6.8 L13 6 L16 7.6 L19.8 9.6 L20.6 13.4 L18.4 18.2 L13.4 20 L7.4 19.4 Z" fill="url(#stone-fill)"/>
+  <path d="M8.6 6.8 L10.6 11.6 L8 15.6" fill="none" stroke="#000000" stroke-width="0.6" opacity="0.35"/>
+  <path d="M16 7.6 L14.6 11.4 L17.6 13.4" fill="none" stroke="#000000" stroke-width="0.5" opacity="0.3"/>
+  <path d="M6.6 10.2 L8.6 6.8 L13 6" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.3"/>
+  <ellipse cx="9" cy="10.4" rx="2.2" ry="1.4" fill="#ffffff" opacity="0.28"/>
+</svg>
+"""
