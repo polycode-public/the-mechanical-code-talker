@@ -2,12 +2,13 @@
 // embedded world payload — these tests pin the page's STRUCTURE (mirroring
 // spider-fly-viz.test.mjs's own style) plus the pure render-glue functions
 // the page splices into its own inline script — spriteClassForObject,
-// roomSceneObjects, pillsForRoom — and the caption builder.
+// visibleRoomOf, roomSceneObjects, carriedItems, visitedRoomGraph,
+// goalStatusLines, pillsForRoom — and the caption builder.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  renderAdventureHtml, spriteClassForObject, roomSceneObjects, roomCaptionText, pillsForRoom,
-  spriteAncestryRows, factsForSubject,
+  renderAdventureHtml, spriteClassForObject, visibleRoomOf, roomSceneObjects, carriedItems,
+  visitedRoomGraph, goalStatusLines, roomCaptionText, pillsForRoom, spriteAncestryRows, factsForSubject,
 } from "../../src/services/adventure-viz.mjs";
 import { foldWorldState } from "../../src/services/adventure.mjs";
 
@@ -94,6 +95,169 @@ test("roomSceneObjects: an object in a different room is never drawn here", () =
   const state = foldWorldState(elsewhere);
   const objects = roomSceneObjects(elsewhere, state, "study");
   assert.ok(!objects.some((o) => o.subject === "key"));
+});
+
+test("visibleRoomOf: a room-typed subject resolves to itself", () => {
+  const state = foldWorldState(ROWS);
+  assert.equal(visibleRoomOf(ROWS, state, "study"), "study");
+});
+
+test("visibleRoomOf: a hidden object resolves to null, regardless of its own placement's own room", () => {
+  const state = foldWorldState(ROWS);
+  assert.equal(visibleRoomOf(ROWS, state, "letter"), null);
+});
+
+test("visibleRoomOf: a carried object resolves to null — carrying has no room", () => {
+  const carried = [...ROWS, { subject: "lamp@turn1", predicate: "mgx:located-in", object: "player" }];
+  const state = foldWorldState(carried);
+  assert.equal(visibleRoomOf(carried, state, "lamp"), null);
+});
+
+// ---- carriedItems -----------------------------------------------------------
+
+test("carriedItems: every object placed with the player, sorted, each with its sprite class", () => {
+  const carried = [
+    ...ROWS,
+    { subject: "lamp@turn1", predicate: "mgx:located-in", object: "player" },
+    { subject: "letter@turn2", predicate: "mgx:located-in", object: "player" },
+  ];
+  const state = foldWorldState(carried);
+  assert.deepEqual(carriedItems(carried, state), [
+    { subject: "lamp", spriteClass: "portable" },
+    { subject: "letter", spriteClass: "portable" },
+  ]);
+});
+
+test("carriedItems: an empty inventory is a plain empty array, never a fabricated entry", () => {
+  const state = foldWorldState(ROWS);
+  assert.deepEqual(carriedItems(ROWS, state), []);
+});
+
+// ---- visitedRoomGraph --------------------------------------------------------
+
+// A small three-room house, mirroring Ashcombe Hall's own north/south chain:
+// study <-north/south-> library <-north/south-> drawing-room, plus a spare
+// unconnected exit (down, to a cellar) off the study, so a hint has something
+// to point at without the cellar ever becoming a node.
+const MAP_ROWS = [
+  { subject: "player", predicate: "rdf:type", object: "adventurer" },
+  { subject: "player", predicate: "mgx:currently-in", object: "library" },
+  { subject: "study", predicate: "rdf:type", object: "room" },
+  { subject: "library", predicate: "rdf:type", object: "room" },
+  { subject: "drawing-room", predicate: "rdf:type", object: "room" },
+  { subject: "cellar", predicate: "rdf:type", object: "room" },
+  { subject: "study", predicate: "mgx:has-exit-north", object: "library" },
+  { subject: "library", predicate: "mgx:has-exit-south", object: "study" },
+  { subject: "library", predicate: "mgx:has-exit-north", object: "drawing-room" },
+  { subject: "drawing-room", predicate: "mgx:has-exit-south", object: "library" },
+  { subject: "study", predicate: "mgx:has-exit-down", object: "cellar" },
+];
+
+test("visitedRoomGraph: a room with a north exit to another visited room sits one row above it", () => {
+  const state = foldWorldState(MAP_ROWS);
+  const graph = visitedRoomGraph(state, ["study", "library"]);
+  const study = graph.nodes.find((n) => n.id === "study");
+  const library = graph.nodes.find((n) => n.id === "library");
+  assert.equal(study.y, library.y + 1, "study (south of library) sits one row below it");
+  assert.equal(study.x, library.x, "a pure north/south edge never shifts column");
+});
+
+test("visitedRoomGraph: the current room is flagged, from the player's own placement", () => {
+  const state = foldWorldState(MAP_ROWS);
+  const graph = visitedRoomGraph(state, ["study", "library"]);
+  assert.equal(graph.nodes.find((n) => n.id === "library").current, true);
+  assert.equal(graph.nodes.find((n) => n.id === "study").current, false);
+});
+
+test("visitedRoomGraph: an edge only exists between two rooms BOTH already visited", () => {
+  const state = foldWorldState(MAP_ROWS);
+  const graph = visitedRoomGraph(state, ["study", "library"]);
+  assert.equal(graph.nodes.length, 2, "the drawing-room is never drawn as a node — it hasn't been visited");
+  assert.ok(!graph.nodes.some((n) => n.id === "drawing-room"));
+  assert.ok(graph.edges.some((e) => (e.from === "study" && e.to === "library") || (e.from === "library" && e.to === "study")));
+});
+
+test("visitedRoomGraph: an exit toward an unvisited room is a direction-only hint, never a filled node", () => {
+  const state = foldWorldState(MAP_ROWS);
+  const graph = visitedRoomGraph(state, ["study"]);
+  assert.equal(graph.nodes.length, 1);
+  assert.ok(graph.hints.some((h) => h.from === "study" && h.direction === "north"), "the known-but-unvisited exit north to the library shows up as a hint");
+  assert.ok(graph.hints.some((h) => h.from === "study" && h.direction === "down"), "the exit down to the cellar shows up as a hint too");
+  assert.ok(!graph.hints.some((h) => h.direction === "north" && "room" in h), "a hint never carries the unvisited room's own name");
+});
+
+test("visitedRoomGraph: two rooms visited but not reachable from each other lay out as separate, non-overlapping blocks", () => {
+  const disconnected = [
+    ...MAP_ROWS,
+    { subject: "attic", predicate: "rdf:type", object: "room" },
+  ];
+  const state = foldWorldState(disconnected);
+  const graph = visitedRoomGraph(state, ["study", "attic"]);
+  assert.equal(graph.nodes.length, 2);
+  const study = graph.nodes.find((n) => n.id === "study");
+  const attic = graph.nodes.find((n) => n.id === "attic");
+  assert.notEqual(study.x, attic.x, "disconnected components never share a column");
+  assert.equal(graph.edges.length, 0, "no edge is invented between rooms with no shared exit fact");
+});
+
+// ---- goalStatusLines ----------------------------------------------------------
+
+const OBJECTIVE_ROWS = [...ROWS, { subject: "letter", predicate: "mgx:is-objective", object: "true" }];
+
+test("goalStatusLines: an objective not yet exposed at all reads as the opening-line-level knowledge only", () => {
+  const state = foldWorldState(OBJECTIVE_ROWS);
+  const lines = goalStatusLines(OBJECTIVE_ROWS, state, []);
+  assert.deepEqual(lines, [{ subject: "letter", status: "unknown", text: "there's a sought-after letter somewhere." }]);
+});
+
+test("goalStatusLines: never claims a known room before the room holding the object has actually been visited", () => {
+  const opened = [
+    ...OBJECTIVE_ROWS,
+    { subject: "cabinet@turn1", predicate: "mgx:is-open", object: "true" },
+    { subject: "letter@turn1", predicate: "mgx:located-in", object: "cabinet" },
+  ];
+  const state = foldWorldState(opened);
+  const lines = goalStatusLines(opened, state, []); // study never visited
+  assert.deepEqual(lines, [{ subject: "letter", status: "unknown", text: "there's a sought-after letter somewhere." }]);
+});
+
+test("goalStatusLines: exposed with a known room but not yet carried reads 'last known: ... is in the ...'", () => {
+  const opened = [
+    ...OBJECTIVE_ROWS,
+    { subject: "cabinet@turn1", predicate: "mgx:is-open", object: "true" },
+    { subject: "letter@turn1", predicate: "mgx:located-in", object: "cabinet" },
+  ];
+  const state = foldWorldState(opened);
+  const lines = goalStatusLines(opened, state, ["study"]);
+  assert.deepEqual(lines, [{ subject: "letter", status: "known", text: "last known: the letter is in the study." }]);
+});
+
+test("goalStatusLines: carried reuses runAdventureAutoplayTick's own win phrasing, regardless of visited rooms", () => {
+  const carried = [
+    ...OBJECTIVE_ROWS,
+    { subject: "cabinet@turn1", predicate: "mgx:is-open", object: "true" },
+    { subject: "letter@turn1", predicate: "mgx:located-in", object: "cabinet" },
+    { subject: "letter@turn2", predicate: "mgx:located-in", object: "player" },
+  ];
+  const state = foldWorldState(carried);
+  const lines = goalStatusLines(carried, state, []);
+  assert.deepEqual(lines, [{ subject: "letter", status: "carried", text: "carrying the letter — the adventure is won." }]);
+});
+
+test("goalStatusLines: one line per distinct objective marker, each with its own independent status", () => {
+  const twoGoals = [
+    ...OBJECTIVE_ROWS,
+    { subject: "key", predicate: "mgx:is-objective", object: "true" },
+  ];
+  const state = foldWorldState(twoGoals);
+  const lines = goalStatusLines(twoGoals, state, []);
+  assert.equal(lines.length, 2);
+  assert.deepEqual(new Set(lines.map((l) => l.subject)), new Set(["letter", "key"]));
+});
+
+test("goalStatusLines: a world with no objective marker at all yields no lines", () => {
+  const state = foldWorldState(ROWS);
+  assert.deepEqual(goalStatusLines(ROWS, state, []), []);
 });
 
 test("roomCaptionText: built only from worldDigestRows' own rows about the room and what's placed in it", () => {

@@ -45,6 +45,28 @@ async function openAdventurePage() {
   return { context, page, consoleErrors };
 }
 
+/** Type and submit one command, waiting for both the visitor's own echoed
+ *  line and tmct's reply to land in the chat log before returning. */
+async function sendCommand(page, text) {
+  const before = await page.locator("#chatlog > div").count();
+  await page.locator("#chatq").fill(text);
+  await page.locator("#chatq").press("Enter");
+  await page.waitForFunction(
+    (n) => document.querySelectorAll("#chatlog > div").length >= n,
+    before + 2,
+    { timeout: 10000 },
+  );
+}
+
+// The country-house mystery's own win playthrough (test/corpus/games/
+// adventure.jsonl's "adv-worked-example-full" row): two rooms north to the
+// drawing-room, open the portrait for the key, backtrack to the study, then
+// unlock and open the cabinet for the letter.
+const WIN_PLAYTHROUGH = [
+  "go north", "go north", "open the portrait", "take the key",
+  "go south", "go south", "unlock the cabinet with the key", "open the cabinet", "take the letter",
+];
+
 test("the adventure page boots with the opening line already in the chat log", async () => {
   const { context, page, consoleErrors } = await openAdventurePage();
   try {
@@ -123,6 +145,72 @@ test("auto-play's own tick narration lands in the SAME chat log manual chat uses
     // markup error would already have failed the console-error check below.
     await page.locator("#pills").waitFor({ state: "attached" });
     assert.deepEqual(consoleErrors, [], "no console error across manual chat and auto-play sharing one log");
+  } finally {
+    await context.close();
+  }
+});
+
+test("at boot: nothing carried yet, only the opening room on the map, and the goal reads as not-yet-found", async () => {
+  const { context, page, consoleErrors } = await openAdventurePage();
+  try {
+    assert.equal(await page.locator("#carryList .chip").count(), 0, "nothing is carried before the first move");
+    assert.match(await page.locator("#carryList").textContent(), /nothing yet/);
+
+    const roomLabels = await page.locator("#mapWrap .room-node text").allTextContents();
+    assert.deepEqual(roomLabels, ["study"], "only the opening room is a node on a fresh session");
+    assert.equal(await page.locator("#mapWrap .room-node.current text").textContent(), "study");
+
+    const goalText = await page.locator("#goalList").textContent();
+    assert.match(goalText, /somewhere/, "the goal is only known at the opening-line level before anything is explored");
+    assert.equal(await page.locator("#goalList .g.carried").count(), 0);
+    assert.equal(await page.locator("#goalList .g.known").count(), 0);
+    assert.deepEqual(consoleErrors, [], "no console error rendering the three panels at boot");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the full win playthrough: carrying, the visited map, and the goal status all update honestly turn by turn", async () => {
+  const { context, page, consoleErrors } = await openAdventurePage();
+  try {
+    // go north, go north — the drawing-room is now visited; the goal is
+    // still unknown, since the cabinet (in the study) hasn't been opened.
+    await sendCommand(page, WIN_PLAYTHROUGH[0]);
+    await sendCommand(page, WIN_PLAYTHROUGH[1]);
+    let roomLabels = await page.locator("#mapWrap .room-node text").allTextContents();
+    assert.deepEqual(new Set(roomLabels), new Set(["study", "library", "drawing-room"]), "exactly the rooms actually walked through so far, never the kitchen/garden/cellar this path never visits");
+    assert.equal(await page.locator("#mapWrap .room-node.current text").textContent(), "drawing-room");
+
+    // open the portrait, take the key — the portrait's own key is now
+    // carried; the letter itself is still nowhere the session has looked.
+    await sendCommand(page, WIN_PLAYTHROUGH[2]);
+    await sendCommand(page, WIN_PLAYTHROUGH[3]);
+    assert.deepEqual(await page.locator("#carryList .chip").allTextContents(), ["key"]);
+    assert.match(await page.locator("#goalList").textContent(), /somewhere/, "the letter's own room is still unknown — the cabinet holding it hasn't been opened yet");
+
+    // go south, go south — back in the study; the map must still show only
+    // the three rooms this path actually walked, the cabinet not yet opened.
+    await sendCommand(page, WIN_PLAYTHROUGH[4]);
+    await sendCommand(page, WIN_PLAYTHROUGH[5]);
+    roomLabels = await page.locator("#mapWrap .room-node text").allTextContents();
+    assert.deepEqual(new Set(roomLabels), new Set(["study", "library", "drawing-room"]));
+    assert.equal(await page.locator("#mapWrap .room-node.current text").textContent(), "study");
+
+    // unlock the cabinet with the key, open the cabinet — the letter's room
+    // is now known (the study, since the cabinet just opened here), but it
+    // isn't carried yet.
+    await sendCommand(page, WIN_PLAYTHROUGH[6]);
+    await sendCommand(page, WIN_PLAYTHROUGH[7]);
+    assert.match(await page.locator("#goalList").textContent(), /last known: the letter is in the study/);
+    assert.equal(await page.locator("#goalList .g.known").count(), 1);
+
+    // take the letter — carried, and the goal panel reads the adventure won.
+    await sendCommand(page, WIN_PLAYTHROUGH[8]);
+    assert.deepEqual(await page.locator("#carryList .chip").allTextContents(), ["key", "letter"]);
+    assert.match(await page.locator("#goalList").textContent(), /carrying the letter.*adventure is won/);
+    assert.equal(await page.locator("#goalList .g.carried").count(), 1);
+
+    assert.deepEqual(consoleErrors, [], "no console error across the full win playthrough");
   } finally {
     await context.close();
   }
