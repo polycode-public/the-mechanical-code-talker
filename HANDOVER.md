@@ -142,6 +142,12 @@ delivered plan docs; each records what its delivery deliberately did not include
   never the SUBJECT of a placement fact (only ever the object other things are placed in), so the
   shared examine/talk presence check could never match it. Fixed this round: naming the current
   room bypasses the presence check, the same way a carried object already does. Shipped.
+- Spider-fly edge-hunt round 4 of the second hunt (`playtests/PLAYTEST_LOG_015.md`): the SAME
+  movement-before-ecology seam rounds 1-3 fixed for goal text, now caught on mass — the eating
+  spider's own returned `tick.agents[spider].mass` stayed at its stale pre-eat movement-phase value
+  for the exact tick it ate, even though the store's own written fact was already correct. Fixed
+  this round: `runEcologyPass` now exposes the true post-eat mass on its `events` object, and the
+  existing eaten-pair loop reads it into `agents[spider].mass`. Shipped.
 
 ## Discipline
 
