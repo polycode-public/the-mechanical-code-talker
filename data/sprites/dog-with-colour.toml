@@ -1,0 +1,20 @@
+# dog-with-colour — the parameterized-property worked example
+# (PLAN target: "a dog that is black"). Same silhouette as dog.toml, but
+# every filled shape takes its color from the instance's OWN observed
+# mgx:hasProperty value rather than the page's currentColor accent, with a
+# thin currentColor stroke kept on each shape so a light value (white)
+# still reads against a light card background. A property value with no
+# entry in [parameters.colour.values] is not a match for this template at
+# all (see sprite-templates.mjs's own header for the naming/specificity
+# convention) — it falls through to the plain dog.toml sprite, never a
+# guessed color.
+classes = ["dog"]
+svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="13" cy="15" rx="6.4" ry="4.3" fill="{{FILL}}" stroke="currentColor" stroke-width="0.9"/><circle cx="7" cy="9" r="3.6" fill="{{FILL}}" stroke="currentColor" stroke-width="0.9"/><path d="M4.5 6.5 L2 3 L6 5 Z" fill="{{FILL}}" stroke="currentColor" stroke-width="0.9"/><path d="M19 13 C22 12 22.5 15 20 16 Z" fill="{{FILL}}" stroke="currentColor" stroke-width="0.9"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="9" y1="19" x2="9" y2="22"/><line x1="17" y1="19" x2="17" y2="22"/></g></svg>"""
+
+[parameters.colour]
+property = "mgx:hasProperty"
+placeholder = "{{FILL}}"
+
+[parameters.colour.values]
+black = "#22201d"
+white = "#f5f2ea"

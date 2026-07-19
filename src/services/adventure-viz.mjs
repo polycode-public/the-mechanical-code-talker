@@ -72,6 +72,31 @@ export function spriteClassForObject(rows, subject) {
   return typeRow ? typeRow.object : "portable";
 }
 
+/** `rows` plus one synthetic rdfs:subClassOf edge from `subject`'s own name
+ *  to its declared sprite class (spriteClassForObject's own result) — never
+ *  written back to the corpus, just handed to sprite-templates.mjs's
+ *  resolver so a NAMED object (`cabinet`, `butler`) can carry its own sprite
+ *  template while an unauthored object of the same declared class still
+ *  falls back through it cleanly. Ashcombe Hall's own objects have no
+ *  rdfs:subClassOf chain of their own (each is directly typed, e.g. `cabinet
+ *  rdf:type furniture`); this is the exact same ancestor-walk mechanism
+ *  spider-fly's real poodle-IsA-dog taxonomy already exercises, just
+ *  synthesized at render time for a world whose taxonomy doesn't reach this
+ *  deep. A no-op when the subject's own name already IS its declared class
+ *  (nothing to synthesize). Pure. */
+export function spriteAncestryRows(rows, subject) {
+  const declaredClass = spriteClassForObject(rows, subject);
+  if (subject === declaredClass) return rows;
+  return [...(rows || []), { subject, predicate: "rdfs:subClassOf", object: declaredClass }];
+}
+
+/** Every fact row belonging to `subject` — the small `{predicate, object}`
+ *  set sprite-templates.mjs's resolver checks a parameterized/match template
+ *  against (e.g. an mgx:hasProperty row). Pure. */
+export function factsForSubject(rows, subject) {
+  return (rows || []).filter((r) => r.subject === subject);
+}
+
 /** Every subject actually visible in `here`, sorted, each with its sprite
  *  class — mirroring adventure.mjs's own private `visibleRoomOf` walk (one
  *  containment hop through an OPEN container) so this can never draw a
@@ -133,14 +158,26 @@ export function roomCaptionText(rows, state, here) {
 /** The self-contained adventure page. Pure given `worldPayload` (the build
  *  step's own read of the real Ashcombe Hall world — `{ facts, rules,
  *  opening }`), the same "byte-identical for identical input" invariant
- *  every other viz page in this project holds. `?preview=1` switches into
- *  the small, auto-playing, non-interactive mode the home page's hero iframe
- *  embeds, matching spider-fly.html's own dual-purpose file. */
-export function renderAdventureHtml({ title = DEFAULT_TITLE, worldPayload = { facts: [], rules: [], opening: "" } } = {}) {
+ *  every other viz page in this project holds. `spriteTemplates` is the
+ *  build step's own read of data/sprites/*.toml (sprite-template-files.mjs's
+ *  readSpriteTemplateFiles), embedded as page data the same way the world
+ *  payload is — the browser cannot read the filesystem, so the parsed
+ *  templates travel as JSON rather than as a bundled fs read. Defaults to
+ *  `[]` (every sprite falls back to the flat SPRITE_REGISTRY, unchanged from
+ *  before this module existed) so existing callers that don't pass one keep
+ *  working. `?preview=1` switches into the small, auto-playing, non-
+ *  interactive mode the home page's hero iframe embeds, matching
+ *  spider-fly.html's own dual-purpose file. */
+export function renderAdventureHtml({
+  title = DEFAULT_TITLE,
+  worldPayload = { facts: [], rules: [], opening: "" },
+  spriteTemplates = [],
+} = {}) {
   const pageData = embedJson({
     world: worldPayload,
     previewMaxTicks: PREVIEW_MAX_TICKS,
     tickWaitMs: TICK_WAIT_MS,
+    spriteTemplates,
   });
 
   return `<!doctype html>
@@ -242,6 +279,8 @@ const ADVENTURE = ${pageData};
   const createTicker = ${createTicker.toString()};
   const spriteClassForObject = ${spriteClassForObject.toString()};
   const roomSceneObjects = ${roomSceneObjects.toString()};
+  const spriteAncestryRows = ${spriteAncestryRows.toString()};
+  const factsForSubject = ${factsForSubject.toString()};
   const esc = ${escapeHtml.toString()};
   const el = (id) => document.getElementById(id);
   const spriteRow = el("spriteRow");
@@ -303,11 +342,28 @@ const ADVENTURE = ${pageData};
     chatqEl.focus();
   });
 
+  // ---- sprite resolution — property/instance-aware (sprite-templates.mjs's
+  // resolveSpriteAsset), keyed on the OBJECT'S OWN NAME (via
+  // spriteAncestryRows' synthetic subClassOf edge to its declared class) so
+  // a named object (cabinet, butler) can carry its own data/sprites/*.toml
+  // template while the data-cls attribute still reflects the DECLARED class
+  // (container/furniture/portable/person/room) — the CSS accent-color rules
+  // stay keyed on that declared class unchanged. The player's own "you" row
+  // has no backing fact row, so it resolves directly by its fixed
+  // "adventurer" class with no ancestry/property rows to check.
+  function resolveObjectSprite(rows, s) {
+    if (s.subject === "you") return tmctAdventure.resolveSpriteAsset("adventurer", [], [], ADVENTURE.spriteTemplates, tmctAdventure.SPRITE_REGISTRY);
+    return tmctAdventure.resolveSpriteAsset(
+      s.subject, spriteAncestryRows(rows, s.subject), factsForSubject(rows, s.subject),
+      ADVENTURE.spriteTemplates, tmctAdventure.SPRITE_REGISTRY,
+    );
+  }
+
   function redraw(snap) {
     const objects = roomSceneObjects(snap.rows, snap.state, snap.here);
     const sprites = [{ subject: "you", spriteClass: "adventurer" }, ...objects];
     spriteRow.innerHTML = sprites.map((s) => {
-      const svg = tmctAdventure.resolveSpriteForClass(s.spriteClass, [], tmctAdventure.SPRITE_REGISTRY);
+      const svg = resolveObjectSprite(snap.rows, s);
       return '<div><div class="sprite" data-cls="' + esc(s.spriteClass) + '">' + svg + '</div>'
         + '<div class="sprite-label">' + esc(s.subject) + "</div></div>";
     }).join("");

@@ -27,6 +27,7 @@ import { execFileSync } from "node:child_process";
 
 import { stampVersion } from "../src/domain/version-stamp.mjs";
 import { importClosure } from "../src/adapters/import-closure.mjs";
+import { readSpriteTemplateFiles } from "../src/adapters/corpus/sprite-template-files.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..");
@@ -41,6 +42,13 @@ const OUT = join(SITE, "engine", "src");
 // The wink lemma/POS tier arrives through a computed specifier, so reading the
 // source cannot see it. Everything these two reach is walked like any other file.
 const DYNAMICALLY_LOADED = ["adapters/wink-model.mjs", "adapters/ask-nlp.mjs"];
+
+// The sprite template library (data/sprites/*.toml): read once, here, in
+// Node, and handed to both the spider-fly and adventure hero renders below
+// as embedded page data — the browser bundles stay fs-free, the same reason
+// Ashcombe Hall's own world facts are read once at build time rather than
+// bundled.
+const spriteTemplates = readSpriteTemplateFiles();
 
 // The footer's version number, rewritten from package.json on every build. The
 // page is tracked, so the committed copy carries whatever the last build wrote;
@@ -169,7 +177,7 @@ try {
   console.log(`wrote ${spiderFlyBundlePath} (${(spiderFlyBundleBytes / 1024).toFixed(0)} KB)`);
   const { renderSpiderFlyHtml } = await import(join(ROOT, "src", "services", "spider-fly-viz.mjs"));
   const spiderFlyPath = join(SITE, "spider-fly.html");
-  await writeF(spiderFlyPath, renderSpiderFlyHtml({}));
+  await writeF(spiderFlyPath, renderSpiderFlyHtml({ spriteTemplates }));
   console.log(`wrote ${spiderFlyPath}`);
 }
 
@@ -197,7 +205,7 @@ try {
       opening: world.meta?.opening || "",
     };
     const adventurePath = join(SITE, "adventure.html");
-    await writeF(adventurePath, renderAdventureHtml({ worldPayload }));
+    await writeF(adventurePath, renderAdventureHtml({ worldPayload, spriteTemplates }));
     console.log(`wrote ${adventurePath}`);
   }
 }

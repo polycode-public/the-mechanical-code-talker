@@ -1,0 +1,8 @@
+# butler — Ashcombe Hall's own butler: the person silhouette plus a stiff
+# wing-collar flaring OUT past the shoulder line (changing the outer
+# silhouette, not an internal opacity knockout — an internal light-on-dark
+# accent was tried first and proved invisible once shrunk to 44px; a
+# silhouette change survives shrinking the way gardener.toml's wide brim
+# does) and a bow-tie.
+classes = ["butler"]
+svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6.6" r="3.3" fill="currentColor"/><path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z" fill="currentColor"/><path d="M7.6 11.6 L11.3 13.2 L8.6 15.4 Z" fill="currentColor"/><path d="M16.4 11.6 L12.7 13.2 L15.4 15.4 Z" fill="currentColor"/><path d="M10.6 14.2 L12 16.1 L13.4 14.2 L12 18.6 Z" fill="currentColor" opacity="0.95"/></svg>"""

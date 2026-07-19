@@ -38,6 +38,7 @@ import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { foldWorldState, worldDigestRows, roomAffordances } from "../../services/adventure.mjs";
 import { runAdventureAutoplayTick } from "../../services/adventure-autoplay.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY } from "../../domain/sprite-map.mjs";
+import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
 
 /** A live in-memory adventure this page's ticker AND chat dock can both
  *  drive. Returns `{ memoryDir, autoplayTick, turn, snapshot }`.
@@ -121,5 +122,5 @@ export async function createAdventureSession(worldPayload) {
 // affordances the chat dock's own pills read from — the same posture
 // spider-fly-browser-entry.mjs's own globalThis.tmctSpiderFly re-export takes.
 globalThis.tmctAdventure = {
-  createAdventureSession, resolveSpriteForClass, SPRITE_REGISTRY, worldDigestRows, roomAffordances,
+  createAdventureSession, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset, worldDigestRows, roomAffordances,
 };

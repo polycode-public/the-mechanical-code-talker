@@ -1,0 +1,5 @@
+# adventurer — the player's own sprite: the person silhouette plus a
+# strap-and-satchel, so the one individual the player controls always
+# reads as visually distinct from the room's own cast of NPCs.
+classes = ["adventurer"]
+svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6.6" r="3.3" fill="currentColor"/><path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z" fill="currentColor"/><path d="M8.4 13.4 L17 17.6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" opacity="0.85"/><rect x="14.6" y="15.8" width="5" height="4.6" rx="1" fill="currentColor" opacity="0.6"/><rect x="16.3" y="16.6" width="1.6" height="1.2" rx="0.3" fill="currentColor" opacity="0.9"/></svg>"""

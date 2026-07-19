@@ -1,0 +1,5 @@
+# poodle — the seed taxonomy's worked example (poodle IsA dog): its own
+# pompom-cut head and tail, distinct from the plain dog sprite it would
+# otherwise fall back to.
+classes = ["poodle"]
+svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="13" cy="15" rx="6.4" ry="4.6" fill="currentColor"/><ellipse cx="10.8" cy="13.2" rx="1.8" ry="1.3" fill="currentColor" opacity="0.28"/><circle cx="7" cy="8.5" r="4" fill="currentColor"/><g fill="currentColor"><circle cx="4" cy="6" r="1.6"/><circle cx="7" cy="4.2" r="1.7"/><circle cx="10" cy="6" r="1.6"/></g><rect x="18.5" y="14" width="2.2" height="6" rx="1.1" fill="currentColor"/><circle cx="19.6" cy="13" r="1.5" fill="currentColor"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="9" y1="19.5" x2="9" y2="22"/><line x1="17" y1="19.5" x2="17" y2="22"/></g></svg>"""

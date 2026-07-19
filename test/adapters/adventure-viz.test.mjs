@@ -7,6 +7,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   renderAdventureHtml, spriteClassForObject, roomSceneObjects, roomCaptionText, pillsForRoom,
+  spriteAncestryRows, factsForSubject,
 } from "../../src/services/adventure-viz.mjs";
 import { foldWorldState } from "../../src/services/adventure.mjs";
 
@@ -40,6 +41,25 @@ test("spriteClassForObject: a plain typed object resolves to its own rdf:type", 
 
 test("spriteClassForObject: an object with no type fact at all falls back to 'portable'", () => {
   assert.equal(spriteClassForObject(ROWS, "mystery-thing"), "portable");
+});
+
+test("spriteAncestryRows: synthesizes a subClassOf edge from the object's own name to its declared class", () => {
+  const withAncestry = spriteAncestryRows(ROWS, "cabinet");
+  assert.ok(withAncestry.some((r) => r.subject === "cabinet" && r.predicate === "rdfs:subClassOf" && r.object === "container"));
+  assert.equal(withAncestry.length, ROWS.length + 1, "a single synthetic row is appended, the original rows are untouched");
+});
+
+test("spriteAncestryRows: a no-op when the subject's own name already equals its declared class (nothing to synthesize)", () => {
+  const rows = [{ subject: "portable", predicate: "rdf:type", object: "portable" }];
+  assert.equal(spriteAncestryRows(rows, "portable"), rows);
+});
+
+test("factsForSubject: returns only the rows belonging to the named subject", () => {
+  assert.deepEqual(factsForSubject(ROWS, "lamp"), [
+    { subject: "lamp", predicate: "rdf:type", object: "portable" },
+    { subject: "lamp", predicate: "mgx:located-in", object: "study" },
+  ]);
+  assert.deepEqual(factsForSubject(ROWS, "nobody-home"), []);
 });
 
 test("roomSceneObjects: draws every subject actually visible in the room, sorted, excluding the player", () => {
@@ -147,10 +167,31 @@ test("renderAdventureHtml: the play/pause/step/reset controls are all present", 
   assert.match(html, /id="turnLabel"/);
 });
 
-test("renderAdventureHtml: the sprite layer resolves each object's class through the shared registry", () => {
+test("renderAdventureHtml: the sprite layer resolves each object through the property-aware resolver, falling back to the shared registry", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
-  assert.match(html, /resolveSpriteForClass/);
+  assert.match(html, /resolveSpriteAsset/);
   assert.match(html, /SPRITE_REGISTRY/);
+});
+
+test("renderAdventureHtml: an object resolves by its OWN name (via a synthetic ancestry edge to its declared class), not just its declared class", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /spriteAncestryRows/);
+  assert.match(html, /factsForSubject/);
+});
+
+test("renderAdventureHtml: the sprite template set is embedded as page data, defaulting to an empty array", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  const m = /const ADVENTURE = (.*);/.exec(html);
+  const data = JSON.parse(m[1]);
+  assert.deepEqual(data.spriteTemplates, []);
+});
+
+test("renderAdventureHtml: a passed-in spriteTemplates array is embedded verbatim", () => {
+  const templates = [{ classes: ["cabinet"], svg: "<svg>cabinet</svg>" }];
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD, spriteTemplates: templates });
+  const m = /const ADVENTURE = (.*);/.exec(html);
+  const data = JSON.parse(m[1]);
+  assert.deepEqual(data.spriteTemplates, templates);
 });
 
 test("renderAdventureHtml: the world payload is embedded, not fetched separately", () => {
