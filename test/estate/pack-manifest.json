@@ -369,6 +369,7 @@
   "src/services/adventure-autoplay.mjs",
   "src/services/adventure-viz.mjs",
   "src/services/adventure.mjs",
+  "src/services/chat-page-viz.mjs",
   "src/services/chat-session.mjs",
   "src/services/chat.mjs",
   "src/services/cli-args.mjs",
