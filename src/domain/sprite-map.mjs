@@ -79,11 +79,53 @@ const ANIMAL_SVG =
   + '<g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="7" y1="17" x2="7" y2="21"/><line x1="17" y1="17" x2="17" y2="21"/></g>'
   + "</svg>";
 
+// ---- the adventure world's own class family (PLAN_GAMES_UPLIFT_V2.md Part B)
+// — a room's floor plan, a piece of furniture, a portable, a person, the
+// player's own adventurer sprite, and a container. Ashcombe Hall's own
+// classes resolve to these directly (no ancestor walk needed, since the
+// shipped world has no rdfs:subClassOf chain at all yet); the walk stays
+// ready for a future world whose taxonomy goes deeper, the same "poodle IsA
+// dog" mechanism spider-fly already exercises.
+
+const ROOM_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>'
+  + '<path d="M9 21 L9 13 A3 3 0 0 1 15 13 L15 21" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+
+const FURNITURE_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="3" rx="1" fill="currentColor"/>'
+  + '<rect x="4" y="8" width="3" height="12" fill="currentColor"/>'
+  + '<rect x="17" y="8" width="3" height="12" fill="currentColor"/></svg>';
+
+const PORTABLE_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="9" width="14" height="11" rx="1.5" fill="currentColor"/>'
+  + '<path d="M9 9 V6.5 A3 3 0 0 1 15 6.5 V9" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+
+const PERSON_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6.5" r="3.2" fill="currentColor"/>'
+  + '<path d="M6 21 C6 15.5 8.7 13 12 13 C15.3 13 18 15.5 18 21 Z" fill="currentColor"/></svg>';
+
+// The adventurer is the player's own sprite — the same silhouette as `person`
+// plus a small satchel, so the one individual the player controls always
+// reads as visually distinct from the cast of NPCs sharing the room.
+const ADVENTURER_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6.5" r="3.2" fill="currentColor"/>'
+  + '<path d="M6 21 C6 15.5 8.7 13 12 13 C15.3 13 18 15.5 18 21 Z" fill="currentColor"/>'
+  + '<rect x="15.5" y="13.5" width="4.5" height="5" rx="1" fill="currentColor" opacity="0.6"/></svg>';
+
+const CONTAINER_SVG =
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="10" width="18" height="10" rx="1.2" fill="currentColor"/>'
+  + '<path d="M3 10 L5 5 H19 L21 10 Z" fill="currentColor" opacity="0.7"/>'
+  + '<rect x="10.6" y="9.4" width="2.8" height="2.2" rx="0.4" fill="currentColor" opacity="0.35"/></svg>';
+
 /** The sprite registry: class name (normFactTerm-normalized) -> inline SVG
  *  markup. `animal` is this world's declared root fallback (PLAN_SPIDER_FLY.md
  *  §7 names "animal"/"object"/"plant" as the family of possible roots — a
  *  spider-and-fly board only ever needs "animal") — resolveSpriteForClass
- *  falls back to it once the ancestor walk exhausts with no closer hit. */
+ *  falls back to it once the ancestor walk exhausts with no closer hit. The
+ *  adventure world's classes (room/furniture/portable/person/adventurer/
+ *  container) are a second, unrelated root family sharing the one flat table —
+ *  a board only ever resolves classes from its own world, so the two never
+ *  collide in practice. */
 export const SPRITE_REGISTRY = Object.freeze({
   spider: SPIDER_SVG,
   fly: FLY_SVG,
@@ -91,6 +133,12 @@ export const SPRITE_REGISTRY = Object.freeze({
   poodle: POODLE_SVG,
   dog: DOG_SVG,
   animal: ANIMAL_SVG,
+  room: ROOM_SVG,
+  furniture: FURNITURE_SVG,
+  portable: PORTABLE_SVG,
+  person: PERSON_SVG,
+  adventurer: ADVENTURER_SVG,
+  container: CONTAINER_SVG,
 });
 
 /** Every direct rdfs:subClassOf superclass of `term`, from a flat fact-row

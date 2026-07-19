@@ -172,3 +172,32 @@ try {
   await writeF(spiderFlyPath, renderSpiderFlyHtml({}));
   console.log(`wrote ${spiderFlyPath}`);
 }
+
+// The adventure hero: the shipped Ashcombe Hall world's real facts+rules,
+// read ONCE through the same Node worlds-pack provider the CLI itself uses
+// and embedded straight into the page (adventure-viz.mjs's own header
+// explains why — the world's canonical definition is a Node-only JSONL
+// corpus source, not a pure JS module the browser bundle could call
+// directly), plus this game's own dedicated browser bundle.
+{
+  const { getWorldsPackProvider, clearWorldsPackCache } = await import(join(ROOT, "src", "adapters", "corpus", "worlds-pack.mjs"));
+  clearWorldsPackCache();
+  const world = await getWorldsPackProvider({}).load("ashcombe-hall");
+  if (!world) {
+    console.log("ashcombe-hall world not found in the worlds pack — run `npm run gen:worlds-pack` first; the adventure hero has no world to embed, so this is a heads-up, not a build failure");
+  } else {
+    const { main: buildAdventureBundle } = await import(join(here, "build-adventure-bundle.mjs"));
+    const { outPath: adventureBundlePath, size: adventureBundleBytes } = await buildAdventureBundle(SITE);
+    console.log(`wrote ${adventureBundlePath} (${(adventureBundleBytes / 1024).toFixed(0)} KB)`);
+    const { renderAdventureHtml } = await import(join(ROOT, "src", "services", "adventure-viz.mjs"));
+    const worldPayload = {
+      name: world.name,
+      facts: world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
+      rules: world.rules.map((r) => ({ name: r.name, ruleKind: r.ruleKind, slots: r.slots })),
+      opening: world.meta?.opening || "",
+    };
+    const adventurePath = join(SITE, "adventure.html");
+    await writeF(adventurePath, renderAdventureHtml({ worldPayload }));
+    console.log(`wrote ${adventurePath}`);
+  }
+}

@@ -269,6 +269,17 @@
     border-radius: 8px; background: var(--card);
   }
 
+  /* ---- adventure hero ---------------------------------------------------------------- */
+  .adventure-hero { margin: 1.4rem 0 0.4rem; }
+  .adventure-hero .hero-row {
+    display: flex; justify-content: space-between; align-items: baseline;
+    flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
+  }
+  .adventure-hero iframe {
+    width: 100%; height: 360px; border: 1px solid var(--border);
+    border-radius: 8px; background: var(--card);
+  }
+
   /* ---- transcript ------------------------------------------------------------------ */
   .transcript .ask { color: var(--accent); }
   .transcript .miss { color: var(--muted); }
@@ -372,6 +383,22 @@ I don't know "quokka" yet — teach me directly, e.g. "quokka is a &lt;thing&gt;
       <a href="./spider-fly.html">open full-screen &rarr;</a>
     </div>
     <iframe src="./spider-fly.html?preview=1" title="tmct spider and fly — two agents planning against each other on a partly-hidden grid"></iframe>
+  </div>
+
+  <h2>A text adventure, with a room you can actually see</h2>
+  <p>
+    Ashcombe Hall is an ordinary text adventure underneath — rooms, exits, a locked cabinet, a
+    letter to find. This view draws exactly what the text already says is in the room, nothing
+    more, and an auto-player infers its own goal and explores toward it using only what it has
+    actually walked into.
+  </p>
+
+  <div class="adventure-hero">
+    <div class="hero-row">
+      <span class="demo-label">Ashcombe Hall, exploring on its own toward whatever it can infer as the goal</span>
+      <a href="./adventure.html">open full-screen &rarr;</a>
+    </div>
+    <iframe src="./adventure.html?preview=1" title="tmct adventure — a room drawn from exactly what the text already says is there"></iframe>
   </div>
 
   <p>

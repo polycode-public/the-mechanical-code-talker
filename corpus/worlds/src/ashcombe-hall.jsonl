@@ -33,6 +33,7 @@
 {"world":"ashcombe-hall","kind":"fact","subject":"portrait","predicate":"mgx:fixed-in","object":"drawing-room"}
 {"world":"ashcombe-hall","kind":"fact","subject":"key","predicate":"mgx:hidden-in","object":"portrait"}
 {"world":"ashcombe-hall","kind":"fact","subject":"letter","predicate":"mgx:hidden-in","object":"cabinet"}
+{"world":"ashcombe-hall","kind":"fact","subject":"letter","predicate":"mgx:is-objective","object":"true"}
 {"world":"ashcombe-hall","kind":"fact","subject":"housekeeper","predicate":"mgx:currently-in","object":"kitchen"}
 {"world":"ashcombe-hall","kind":"fact","subject":"cook","predicate":"mgx:currently-in","object":"kitchen"}
 {"world":"ashcombe-hall","kind":"fact","subject":"butler","predicate":"mgx:currently-in","object":"drawing-room"}
