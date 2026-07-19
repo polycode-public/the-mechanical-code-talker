@@ -3576,6 +3576,39 @@ async function negativeUniversalTeach(sentence, { memoryDir, sessionId }) {
   return stored;
 }
 
+/** "no X can Y" — NEGATIVE_UNIVERSAL_TEACH_RE's sibling one relation over:
+ *  the same universal-exclusion shape, but for the "can"/capability relation
+ *  instead of is-a. "no goldfish can swim" (after "every fish can swim" /
+ *  "a goldfish is a fish") stores a class-level mgxneg:capableOf fact on
+ *  "goldfish" directly, which resolveCapabilityPolarity's existing "a direct
+ *  fact overrides an inherited general one" resolution already reads
+ *  correctly — the read side needed no change at all, only a write-side
+ *  recognizer for this phrasing, which fell to the plain grammar wall
+ *  before (neither BARE_CAN_TEACH_RE nor any other shape covers a LEADING
+ *  "no", only a leading every/all/a/an/bare). Single-word subject and verb
+ *  only, the same closed-shape discipline as its is-a sibling. */
+const NEGATIVE_UNIVERSAL_CAN_TEACH_RE = /^no\s+([\w-]+)\s+can\s+([a-z][\w-]*)[.!]*$/i;
+
+/** The mint for a NEGATIVE_UNIVERSAL_CAN_TEACH_RE match, mirroring
+ *  negativeUniversalTeach's own shape: null when the sentence isn't this
+ *  shape. */
+async function negativeUniversalCanTeach(sentence, { memoryDir, sessionId }) {
+  const m = String(sentence || "").trim().match(NEGATIVE_UNIVERSAL_CAN_TEACH_RE);
+  if (!m || !memoryDir) return null;
+  const subject = singularizeSurface(m[1]);
+  const verb = m[2].toLowerCase();
+  const stored = await teachFact(memoryDir, sessionId, {
+    subject, predicate: NEG_CAPABLE_OF_PREDICATE, object: verb,
+  });
+  if (!stored) {
+    return {
+      text: `I couldn't store the exclusion "no ${subject} can ${verb}" — say it with a single-word class name and verb ("no goldfish can swim") and I'll remember it as a negative capability.`,
+      via: "teach-miss", miss: true,
+    };
+  }
+  return stored;
+}
+
 async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null }) {
   // A closed discourse-marker preamble ahead of a teach sentence ("howdy
   // pardner, remember that TaskController is fragile") would otherwise
@@ -3923,15 +3956,16 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     }
   }
 
-  // NEGATIVE UNIVERSAL — "no X is a Y": the class-pair disjointness mint (or
-  // the reflexive refusal). Tried on both surfaces, ahead of every frame that
-  // could otherwise read "no X" as a subject literal — see
-  // NEGATIVE_UNIVERSAL_TEACH_RE's own docblock.
+  // NEGATIVE UNIVERSAL — "no X is a Y" (the class-pair disjointness mint, or
+  // the reflexive refusal) or its "no X can Y" capability sibling. Tried on
+  // both surfaces, ahead of every frame that could otherwise read "no X" as
+  // a subject literal — see NEGATIVE_UNIVERSAL_TEACH_RE's own docblock.
   {
     const negUniversalSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
     if (memoryDir && !QUESTION_LEAD_RE.test(negUniversalSrc)
       && !(await hasMidSentenceInterrogative(negUniversalSrc))) {
-      const negUniversal = await negativeUniversalTeach(negUniversalSrc, { memoryDir, sessionId });
+      const negUniversal = await negativeUniversalTeach(negUniversalSrc, { memoryDir, sessionId })
+        || await negativeUniversalCanTeach(negUniversalSrc, { memoryDir, sessionId });
       if (negUniversal) return negUniversal;
     }
   }
