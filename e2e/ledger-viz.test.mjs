@@ -10,6 +10,7 @@ import { appendFact, loadMemory, readFactRows, findContradictions } from "../src
 import {
   computeLedgerData, computeLedgerDataFromPayload, renderLedgerHtml,
   provBucketFor, phraseFor, familyFor, facetCounts,
+  bundleKeyFor, bundleLabelFor, computeLedgerStats,
 } from "../src/services/ledger-viz.mjs";
 
 const T_OLD = "2026-06-01T10:00:00.000Z";
@@ -320,4 +321,108 @@ test("renderLedgerHtml: the page inlines facetCounts verbatim and the segment ra
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
+});
+
+// ---- the dashboard strip: real counts over the full graph -----------------
+
+test("bundleKeyFor: folds a source string to its stable family prefix; a closed table with a verbatim fallback", () => {
+  assert.equal(bundleKeyFor("teach:chat:019f-abc@2026-07-19T22:00:00.000Z | import:hanoi-3.txt"), "teach:chat");
+  assert.equal(bundleKeyFor("corpus:human /r/IsA"), "corpus:human");
+  assert.equal(bundleKeyFor("corpus:seon"), "corpus:seon");
+  assert.equal(bundleKeyFor("ace:chat:xyz"), "ace:chat");
+  assert.equal(bundleKeyFor("entailed: cax-sco"), "entailed:cax-sco");
+  assert.equal(bundleKeyFor("operator"), "operator");
+  assert.equal(bundleKeyFor("import:hanoi-3.txt"), "import:hanoi-3.txt");
+  assert.equal(bundleKeyFor(""), "unrecorded");
+  assert.equal(bundleKeyFor("some-unrecognized-tag"), "some-unrecognized-tag", "an unknown tag reads as itself");
+});
+
+test("bundleLabelFor: human labels for the curated keys, verbatim fallback otherwise", () => {
+  assert.equal(bundleLabelFor("teach:chat"), "taught via chat");
+  assert.equal(bundleLabelFor("ace:chat"), "taught (parsed)");
+  assert.equal(bundleLabelFor("corpus:human"), "corpus: human");
+  assert.equal(bundleLabelFor("import:hanoi-3.txt"), "imported: hanoi-3.txt");
+  assert.equal(bundleLabelFor("entailed:cax-sco"), "entailed: cax-sco");
+  assert.equal(bundleLabelFor("unrecorded"), "unrecorded");
+  assert.equal(bundleLabelFor("some-unrecognized-tag"), "some-unrecognized-tag");
+});
+
+test("computeLedgerStats: real counts over the seeded fixture — tiers, bundles, predicates, density, quality", async () => {
+  const dir = await seededRepo();
+  try {
+    const data = await computeLedgerData(dir);
+    const s = data.stats;
+    assert.equal(s.totalFacts, 7);
+    assert.equal(s.totalTerms, 11);
+    assert.deepEqual(s.byProv, { taught: 3, corpus: 4, entailed: 0 });
+    assert.deepEqual(s.byTier, { 1: 0, 2: 4, 3: 3 });
+    assert.deepEqual(s.bundles.map((b) => [b.key, b.count]), [["corpus:human", 3], ["teach:chat", 3], ["corpus:seon", 1]]);
+    assert.equal(s.predicates[0].predicate, "mgx:hasProperty", "the only repeated predicate (logger's two answers) ranks first");
+    assert.equal(s.predicates[0].count, 2);
+    assert.equal(s.predicates.length, 6, "all six distinct predicates fit under the top-N cap");
+    assert.ok(Math.abs(s.density - 14 / 11) < 1e-9, "avg degree = 2*facts / terms, since every row bumps both its subject and object");
+    assert.equal(s.contradictionCount, 1);
+    assert.equal(s.firstLearned, T_OLD);
+    assert.equal(s.lastLearned, T_NEW);
+    assert.deepEqual(s.sparkline, [1, 2, 3, 4, 5, 6, 7], "small graphs sample at full resolution — one point per fact");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("computeLedgerStats: stats stay over the FULL graph even when the ledger view itself is row-capped", async () => {
+  const dir = await seededRepo();
+  try {
+    const payload = await loadMemory(dir);
+    const capped = computeLedgerDataFromPayload(payload, { term: "dog", rowLimit: 2 });
+    assert.equal(capped.rows.length, 2, "the embedded ledger rows are capped");
+    assert.equal(capped.stats.totalFacts, 7, "but the dashboard totals still count the whole graph");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("computeLedgerStats: an empty graph reports zeroed stats and an empty sparkline, never a throw", () => {
+  const s = computeLedgerStats([], [], []);
+  assert.equal(s.totalFacts, 0);
+  assert.equal(s.totalTerms, 0);
+  assert.deepEqual(s.byProv, { taught: 0, corpus: 0, entailed: 0 });
+  assert.deepEqual(s.bundles, []);
+  assert.deepEqual(s.predicates, []);
+  assert.equal(s.density, 0);
+  assert.equal(s.contradictionCount, 0);
+  assert.equal(s.firstLearned, null);
+  assert.deepEqual(s.sparkline, []);
+});
+
+test("renderLedgerHtml: the dashboard strip renders real, non-placeholder numbers over the seeded fixture", async () => {
+  const dir = await seededRepo();
+  try {
+    const data = await computeLedgerData(dir);
+    const html = renderLedgerHtml({ ...data, memoryAskBundle: "" });
+    assert.match(html, /<section class="dash"/);
+    assert.match(html, /facts\.total[\s\S]*?<span class="tile-value">7<\/span>/, "the real total-facts count renders, not a placeholder");
+    assert.match(html, /11 terms tracked/);
+    assert.match(html, /3 taught/);
+    assert.match(html, /4 corpus/);
+    assert.match(html, /0 entailed/);
+    assert.match(html, /corpus\.bundles/);
+    assert.match(html, /corpus: human/);
+    assert.match(html, /taught via chat/);
+    assert.match(html, /predicate\.top/);
+    assert.match(html, /data\.quality/);
+    assert.match(html, /<span class="tile-value">1<\/span>\s*<span class="tile-sub">term with more than one answer/);
+    assert.match(html, /class="tile tile-alert"/, "a real contradiction count marks the quality tile");
+    assert.match(html, /<svg class="spark"/, "the ingestion sparkline renders as inline SVG");
+    assert.match(html, /class="line" d="M/, "the sparkline path is a real polyline, not an empty placeholder");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("renderLedgerHtml: an empty graph's dashboard says so honestly instead of showing a fabricated zero-tile grid", async () => {
+  const html = renderLedgerHtml({ rows: [], terms: [], edges: [], focus: null, contradictions: [], worthALook: null, payload: null, meta: { shown: 0, total: 0, truncated: false }, stats: computeLedgerStats([], [], []), memoryAskBundle: "" });
+  assert.match(html, /nothing taught yet/);
+  assert.match(html, /not enough dated facts yet/);
+  assert.doesNotMatch(html, /<svg class="spark"/);
 });
