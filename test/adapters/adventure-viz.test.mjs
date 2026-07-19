@@ -1,12 +1,12 @@
 // adventure-viz: renderAdventureHtml is a pure string builder over an
 // embedded world payload — these tests pin the page's STRUCTURE (mirroring
-// spider-fly-viz.test.mjs's own style) plus the two pure render-glue
-// functions the page splices into its own inline script,
-// spriteClassForObject and roomSceneObjects, and the caption builder.
+// spider-fly-viz.test.mjs's own style) plus the pure render-glue functions
+// the page splices into its own inline script — spriteClassForObject,
+// roomSceneObjects, pillsForRoom — and the caption builder.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  renderAdventureHtml, spriteClassForObject, roomSceneObjects, roomCaptionText,
+  renderAdventureHtml, spriteClassForObject, roomSceneObjects, roomCaptionText, pillsForRoom,
 } from "../../src/services/adventure-viz.mjs";
 import { foldWorldState } from "../../src/services/adventure.mjs";
 
@@ -90,6 +90,29 @@ test("roomCaptionText: a room with no recorded facts about itself falls to the h
   assert.equal(roomCaptionText(rows, state, "garden"), "Nothing more about the garden is written down yet.");
 });
 
+test("pillsForRoom: reflects roomAffordances' own output faithfully for the current room, in the same order", () => {
+  const state = foldWorldState(ROWS);
+  assert.deepEqual(pillsForRoom(ROWS, state, "study"), ["unlock cabinet", "examine desk", "take lamp"]);
+});
+
+test("pillsForRoom: a room with nothing placed in it offers no pills at all", () => {
+  const rows = [{ subject: "garden", predicate: "rdf:type", object: "room" }, { subject: "player", predicate: "mgx:currently-in", object: "garden" }];
+  const state = foldWorldState(rows);
+  assert.deepEqual(pillsForRoom(rows, state, "garden"), []);
+});
+
+test("pillsForRoom: refreshes as the room's own state changes — unlocking a container swaps its pill for open's", () => {
+  const locked = [
+    { subject: "study", predicate: "rdf:type", object: "room" },
+    { subject: "cabinet", predicate: "mgx:is-container", object: "true" },
+    { subject: "cabinet", predicate: "mgx:stands-locked-in", object: "study" },
+  ];
+  assert.deepEqual(pillsForRoom(locked, foldWorldState(locked), "study"), ["unlock cabinet"]);
+
+  const unlocked = [...locked, { subject: "cabinet@turn1", predicate: "mgx:fixed-in", object: "study" }];
+  assert.deepEqual(pillsForRoom(unlocked, foldWorldState(unlocked), "study"), ["open cabinet"]);
+});
+
 // ---- renderAdventureHtml: page structure ------------------------------------
 
 const WORLD_PAYLOAD = { name: "ashcombe-hall", facts: [], rules: [], opening: "the adventure begins." };
@@ -100,6 +123,20 @@ test("renderAdventureHtml: the room stage, sprite row and caption are present", 
   assert.match(html, /id="spriteRow"/);
   assert.match(html, /id="caption"/);
   assert.match(html, /id="goalLine"/);
+});
+
+test("renderAdventureHtml: the chat dock's log, pills row and input form are all present", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /id="chatlog"/);
+  assert.match(html, /id="pills"/);
+  assert.match(html, /id="chatform"/);
+  assert.match(html, /id="chatq"/);
+});
+
+test("renderAdventureHtml: the pill row reads the room's affordances through the shared tmctAdventure global, not a re-implementation", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /tmctAdventure\.roomAffordances/);
+  assert.match(html, /renderPills\(/);
 });
 
 test("renderAdventureHtml: the play/pause/step/reset controls are all present", () => {
