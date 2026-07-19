@@ -2343,8 +2343,14 @@ function singularizeSurface(word) {
  *  longer 2-word subject first, backtracking to 1 word only if the tail
  *  doesn't then start with is/are — the "is/are" anchor immediately after
  *  the subject removes the ambiguity a fully free-form multi-word subject
- *  would otherwise have. */
-const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(is|are)\s+(?:an?\s+)?([\w-]+)$/i;
+ *  would otherwise have.
+ *
+ *  "any" joins every/each/all as a recognized universal-quantifier
+ *  determiner: "any spider is an arachnid" is the same claim as "every
+ *  spider is an arachnid". Without it here, "any" fell into the SUBJECT
+ *  capture instead (a 2-word "any spider"), minting a bogus compound term
+ *  disconnected from the real "spider" concept any other sentence grounds. */
+const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|any\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(is|are)\s+(?:an?\s+)?([\w-]+)$/i;
 
 /** ISA-family predicates (mirrors the private ISA_PREDICATES set defined near
  *  memoryFacts, below, at module scope — both are simple top-level consts
@@ -2546,8 +2552,8 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
  *  grounded via the fact just minted (not the static lexicon at all) and
  *  mints "container" the same way.
  *
- *  GATED ON A GENUINE UNIVERSAL QUANTIFIER ("every"/"each"/"all" — never bare/
- *  "a"/"an"/"your"): minting a NEW CLASS-LEVEL CONCEPT is inherently a general
+ *  GATED ON A GENUINE UNIVERSAL QUANTIFIER ("every"/"each"/"all"/"any" — never
+ *  bare/"a"/"an"/"your"): minting a NEW CLASS-LEVEL CONCEPT is inherently a general
  *  claim about a class, the same "every"/bare distinction unknownSubjectFallback's
  *  own docblock already draws between a class generalization and a claim
  *  about ONE specific entity. This is load-bearing, not cosmetic: a bare
@@ -2600,7 +2606,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon },
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
   const [, det, subjectRaw, verb, objectRaw] = m;
-  if (!/^(?:every|each|all)$/i.test((det || "").trim())) return null; // class-level mint needs a real universal quantifier
+  if (!/^(?:every|each|all|any)$/i.test((det || "").trim())) return null; // class-level mint needs a real universal quantifier
   const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir, cache);
