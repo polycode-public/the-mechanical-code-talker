@@ -780,6 +780,15 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
 // the same with or without it, and the fold IS the now.
 const WORLD_WHERE_RE = /^where(?:'s|\s+is|\s+are)\s+(?:the\s+|a\s+|an\s+)?(.+?)(?:\s+now)?[?.!\s]*$/i;
 
+// A mid-game "is X open/closed" aside. mgx:is-open is a datatype fact
+// ("true"/"false"), so the generic ask engine's adjective/property reader —
+// which looks for a CLASS/adjective membership fact, not a literal value —
+// has nothing to match and answers "I don't have a fact saying X", reading
+// as an epistemic gap even though the negation is fully known (the taught
+// effect wrote the opposite value). This aside reads state.openness directly,
+// the same fold containerStatusPhrase already reads for "look"/"examine".
+const WORLD_IS_OPEN_RE = /^is\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+(open|closed|shut)[?.!\s]*$/i;
+
 /** A locative aside about a placed world thing, answered from the SAME @turnN
  *  fold every other world reader uses — never the raw base rows, whose
  *  superseded placements would answer where things stood at load time. Null
@@ -820,6 +829,28 @@ async function worldWhereAnswer(line, { memoryDir }) {
     `the ${thing} is in the ${place.object}.`,
     `ADVENTURE — where-aside: ${thing}'s current placement from the world fold (as of turn ${place.turn})`,
     { goal: `locate the ${thing}` },
+  );
+}
+
+/** A mid-game "is X open/closed" aside, read from state.openness — the same
+ *  fold "look"/"examine" already phrase via containerStatusPhrase. Null when
+ *  the named thing has no openness fact at all (never a container, or one
+ *  never opened/closed this session), so an ordinary ask keeps its lane. */
+async function worldOpennessAnswer(line, { memoryDir }) {
+  const m = String(line).match(WORLD_IS_OPEN_RE);
+  if (!m) return null;
+  const thing = normFactTerm(m[1]);
+  const askedOpen = /^open$/i.test(m[2]);
+  let rows;
+  try { rows = readFactRows(await loadMemory(memoryDir)); } catch { return null; }
+  const state = foldWorldState(rows);
+  const openness = state.openness.get(thing);
+  if (!openness) return null;
+  const matches = askedOpen ? openness.open : !openness.open;
+  return answer(
+    `${matches ? "yes" : "no"} — the ${thing} is ${openness.open ? "open" : "closed"}.`,
+    `ADVENTURE — is-open-aside: ${thing}'s current openness from the world fold (as of turn ${openness.turn})`,
+    { goal: `check whether the ${thing} is ${m[2].toLowerCase()}` },
   );
 }
 
@@ -945,5 +976,7 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
   }
   const whereAside = await worldWhereAnswer(line, { memoryDir });
   if (whereAside) return whereAside;
+  const opennessAside = await worldOpennessAnswer(line, { memoryDir });
+  if (opennessAside) return opennessAside;
   return null; // a mid-game aside — the ordinary lanes answer, world untouched
 }
