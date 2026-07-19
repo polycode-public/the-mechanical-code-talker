@@ -1,0 +1,22 @@
+# gardener — Ashcombe Hall's own gardener at the sprite tier: sunhat brim,
+# crown, head and body share one gradient, with a highlight along the
+# brim's own leading edge (the widest, most light-catching part of the
+# silhouette, the same reason the icon tier made the brim wide in the
+# first place).
+classes = ["gardener"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="gardener-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="5.6" rx="7.4" ry="2" fill="url(#gardener-fill)"/>
+  <path d="M8.8 5.2 C8.8 3.1 10.2 1.6 12 1.6 C13.8 1.6 15.2 3.1 15.2 5.2 C15.2 5.6 15.1 6 15 6.3 L9 6.3 C8.9 6 8.8 5.6 8.8 5.2 Z" fill="url(#gardener-fill)" opacity="0.92"/>
+  <circle cx="12" cy="8.6" r="3.1" fill="url(#gardener-fill)"/>
+  <path d="M6 21 C6 15.5 8.7 13.1 12 13.1 C15.3 13.1 18 15.5 18 21 Z" fill="url(#gardener-fill)"/>
+  <ellipse cx="8.6" cy="4.9" rx="2.4" ry="0.7" fill="#ffffff" opacity="0.32"/>
+</svg>
+"""

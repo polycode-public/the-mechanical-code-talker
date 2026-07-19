@@ -1,0 +1,33 @@
+# portrait — Ashcombe Hall's own drawing-room portrait at the sprite tier:
+# only the FRAME carries the taught mgx:madeOf gradient (wood or a
+# gilt/metal frame) — the canvas and the bust silhouette inside stay a
+# fixed cream/sepia regardless of frame material, since a painting is a
+# painting whatever it's framed in. See portrait-round.toml for the one
+# shape-variant this pack demonstrates: an OVAL frame around the same
+# canvas, selected when the instance's own mgx:hasProperty says "round".
+classes = ["portrait"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="portrait-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="{{FILL_LIGHT}}"/>
+      <stop offset="55%" stop-color="{{FILL}}"/>
+      <stop offset="100%" stop-color="{{FILL_DARK}}"/>
+    </linearGradient>
+  </defs>
+  <path d="M4 21 V7 C4 4 6.8 2 12 2 C17.2 2 20 4 20 7 V21 Z" fill="url(#portrait-fill)"/>
+  <path d="M5.4 19.6 L5.4 8.3 C5.4 6.2 7.4 4.8 12 4.8 C16.6 4.8 18.6 6.2 18.6 8.3 L18.6 19.6 Z" fill="#f4ecd8"/>
+  <circle cx="12" cy="10.4" r="2.3" fill="#8a6a52" opacity="0.85"/>
+  <path d="M8 18.4 C8 15.2 9.6 13.4 12 13.4 C14.4 13.4 16 15.2 16 18.4 Z" fill="#8a6a52" opacity="0.85"/>
+  <path d="M4.8 6.4 C5.6 4.3 8 2.8 12 2.8" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+</svg>
+"""
+
+[parameters.material]
+property = "mgx:madeOf"
+placeholders = { light = "{{FILL_LIGHT}}", base = "{{FILL}}", dark = "{{FILL_DARK}}" }
+
+[parameters.material.values]
+wood = "wood"
+gold = "metal"
+metal = "metal"

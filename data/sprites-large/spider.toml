@@ -1,0 +1,30 @@
+# spider — the spider-and-fly board's own agent at the sprite tier: a
+# gradient abdomen and head, one highlight patch on the head, the eight
+# legs kept as flat strokes (a gradient stroke reads as noise at leg
+# thickness, unlike the key's own thicker strokes).
+classes = ["spider"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="spider-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12" cy="16" rx="5.2" ry="4.8" fill="url(#spider-fill)"/>
+  <ellipse cx="10.3" cy="14.3" rx="1.8" ry="1.4" fill="#000000" opacity="0.2"/>
+  <circle cx="12" cy="9.6" r="3.2" fill="url(#spider-fill)"/>
+  <g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round">
+    <path d="M9.4 8 L2.2 4.4"/>
+    <path d="M9 10.2 L1.4 9.4"/>
+    <path d="M9.2 12.6 L2 14.2"/>
+    <path d="M10 15.4 L3.4 19"/>
+    <path d="M14.6 8 L21.8 4.4"/>
+    <path d="M15 10.2 L22.6 9.4"/>
+    <path d="M14.8 12.6 L22 14.2"/>
+    <path d="M14 15.4 L20.6 19"/>
+  </g>
+  <ellipse cx="10.6" cy="8.6" rx="1.2" ry="0.9" fill="#ffffff" opacity="0.32"/>
+</svg>
+"""
