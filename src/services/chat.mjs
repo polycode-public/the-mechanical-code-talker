@@ -6662,7 +6662,23 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const subj = factTermVariants(normFactTerm, subjTerm);
     const obj = factTermVariants(normFactTerm, objTerm);
     const hit = facts.find((f) => f.predicate === compPredicate && subj.has(f.subject) && obj.has(f.object));
-    if (hit) return { text: `yes — ${renderFactLine(hit)}`, replace: true };
+    if (hit) {
+      // A comparative is antisymmetric — "X smaller than Y" and "Y smaller
+      // than X" can't both hold — so a directly-taught reversal is a real
+      // contradiction, just one the /memory summary's own contradiction
+      // detector never catches (that one looks for a SHARED subject with
+      // two different objects; this is the mirror shape, two facts with
+      // subject and object SWAPPED). Recorded, never disclosed before: a
+      // flat "yes" gave no hint the opposite was also taught. Surfaced here
+      // rather than silently picking a side, the same "both stand, never
+      // resolved silently" discipline this file's own /memory contradiction
+      // block already follows.
+      const reversed = facts.find((f) => f.predicate === compPredicate && subj.has(f.object) && obj.has(f.subject));
+      const caveat = reversed
+        ? ` — though you also told me the opposite: ${renderFactLine(reversed)}. Both are stored; I won't silently pick one.`
+        : "";
+      return { text: `yes — ${renderFactLine(hit)}${caveat}`, replace: true };
+    }
     const known = facts.filter((f) => f.predicate === compPredicate && (subj.has(f.subject) || subj.has(f.object)));
     const shown = known.length ? ` I do know: ${known.slice(0, 3).map(renderFactLine).join("; ")}.` : "";
     return {
