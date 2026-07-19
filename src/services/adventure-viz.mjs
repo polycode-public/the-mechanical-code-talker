@@ -19,27 +19,33 @@
 // already takes with its own precomputed memory payload, just applied to a
 // second kind of build-time data.
 //
-// Two pure, `.toString()`-splice-safe pieces are exported as real functions
+// Five pure, `.toString()`-splice-safe pieces are exported as real functions
 // (not raw inline-script text) so they can be pinned directly by tests, the
 // same discipline spider-fly-viz.mjs holds classOfAgentId/
 // threadCellsForSpiderPlan to: `spriteClassForObject` (an object's sprite
-// class, from its own rdf:type or mgx:is-container fact — NOT from
-// adventure.mjs's private isContainer/isTyped, which this module cannot
-// import without duplicating adventure.mjs's own closed vocabulary reading)
-// and `roomSceneObjects` (every subject actually visible in a room, mirrored
-// from adventure.mjs's private `visibleRoomOf` the same way
-// adventure-autoplay.mjs's own `roomOfSubject` already has to). Two further
-// pure helpers are exported for testing but NOT spliced, because each calls
-// an adventure.mjs export the in-page script instead reaches through the
-// browser bundle's own `tmctAdventure` global (mirroring how the inline
-// script calls `tmctSpiderFly.*` rather than re-importing
-// spider-fly-world.mjs): `roomCaptionText` (calls `worldDigestRows`; the
-// in-page `captionFor` mirrors it against `tmctAdventure.worldDigestRows`)
-// and `pillsForRoom` (the room's clickable command suggestions — a thin
+// class, from its own rdf:type or mgx:is-container fact), `visibleRoomOf`
+// (the room a subject's placement resolves into, for visibility — mirroring
+// adventure.mjs's own private `visibleRoomOf` the same way
+// adventure-autoplay.mjs's own `roomOfSubject` already has to), `roomSceneObjects`
+// (every subject actually visible in a room, built over `visibleRoomOf`),
+// `carriedItems` (every object placed with the player), and `visitedRoomGraph`
+// (a directions-only layout of the rooms a session has actually visited —
+// see its own header for the exposure discipline). None of these import
+// anything beyond this module's own exports, which is what keeps a raw
+// `.toString()` splice safe. Three further pure helpers are exported for
+// testing but NOT spliced, because each calls another module's export the
+// in-page script instead reaches through the browser bundle's own
+// `tmctAdventure` global (mirroring how the inline script calls
+// `tmctSpiderFly.*` rather than re-importing spider-fly-world.mjs):
+// `roomCaptionText` (calls `worldDigestRows`; the in-page `captionFor`
+// mirrors it against `tmctAdventure.worldDigestRows`), `pillsForRoom` (a thin
 // wrapper over adventure.mjs's own exported `roomAffordances`, whose header
 // explains why its list can never promise an action one of take/open/talk/
 // examine would then refuse; the in-page `pillsFor` mirrors it against
-// `tmctAdventure.roomAffordances`).
+// `tmctAdventure.roomAffordances`), and `goalStatusLines` (calls
+// `foldWorldState` and adventure-autoplay.mjs's own `exposedFacts`; the
+// in-page `goalStatusLinesFor` mirrors both against the `tmctAdventure`
+// global too).
 //
 // The chat dock (chatlog/chatform/chatq/pills, below) mirrors
 // spider-fly-viz.mjs's own side panel: every manual exchange (via
@@ -48,9 +54,17 @@
 // a visitor sees one continuous history rather than a line overwritten every
 // tick. `#caption`/`#goalLine` keep their existing job as the current-state
 // summary; the chat log is the persistent addition.
+//
+// Three further panels sit alongside the chat dock in `.side`: carrying
+// (`carriedItems`), the visited-room map (`visitedRoomGraph`), and goal
+// status (`goalStatusLines`) — all three read `session.snapshot()`'s own
+// `visitedRoomIds`, the manual+auto-play exposure set
+// adventure-browser-entry.mjs threads forward (see that module's header for
+// why the two paths share one set rather than two).
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
-import { worldDigestRows, roomAffordances } from "./adventure.mjs";
+import { worldDigestRows, roomAffordances, foldWorldState } from "./adventure.mjs";
+import { exposedFacts } from "./adventure-autoplay.mjs";
 
 const DEFAULT_TITLE = "tmct — the adventure";
 const PREVIEW_MAX_TICKS = 30;
@@ -97,32 +111,140 @@ export function factsForSubject(rows, subject) {
   return (rows || []).filter((r) => r.subject === subject);
 }
 
+/** The room a subject's placement resolves into, for VISIBILITY — a room
+ *  resolves to itself; an object placed directly in a room resolves to that
+ *  room; an object one containment hop inside an OPEN container resolves to
+ *  the container's own room; anything hidden, carried, or inside a closed
+ *  container resolves to null. Mirrors adventure.mjs's own private
+ *  `visibleRoomOf` / adventure-autoplay.mjs's own private `roomOfSubject`
+ *  exactly, against whatever rows/state pair the caller hands it: feeding it
+ *  the full fold (as `roomSceneObjects` does, since the player is already
+ *  standing in the room being drawn) lets an open container's contents show;
+ *  feeding it an exposure-filtered pair (as `goalStatusLines` does) is what
+ *  keeps a not-yet-visited location unknown. Pure, self-contained — no
+ *  reference to adventure.mjs's own private helpers, since those aren't
+ *  exported. */
+export function visibleRoomOf(rows, state, subject) {
+  const isRoom = (id) => (rows || []).some((r) => r.subject === id && r.predicate === "rdf:type" && r.object === "room");
+  if (isRoom(subject)) return subject;
+  const place = state.placements.get(subject);
+  if (!place || place.predicate === "mgx:hidden-in") return null;
+  if (place.predicate === "mgx:currently-in" || isRoom(place.object)) return place.object;
+  const holder = place.object;
+  if (holder === "player") return null;
+  if (!state.openness.get(holder)?.open) return null;
+  const holderPlace = state.placements.get(holder);
+  return holderPlace && holderPlace.predicate !== "mgx:hidden-in" ? holderPlace.object : null;
+}
+
 /** Every subject actually visible in `here`, sorted, each with its sprite
- *  class — mirroring adventure.mjs's own private `visibleRoomOf` walk (one
- *  containment hop through an OPEN container) so this can never draw a
- *  hidden or carried object the text digest wouldn't also mention. `player`
- *  is excluded; the caller draws the player's own adventurer sprite
- *  separately. Pure. */
+ *  class — built over `visibleRoomOf` (one containment hop through an OPEN
+ *  container) so this can never draw a hidden or carried object the text
+ *  digest wouldn't also mention. `player` is excluded; the caller draws the
+ *  player's own adventurer sprite separately. Pure. */
 export function roomSceneObjects(rows, state, here) {
-  const isTypedRoom = (subject) =>
-    (rows || []).some((r) => r.subject === subject && r.predicate === "rdf:type" && r.object === "room");
-  const visibleRoomOf = (subject) => {
-    const place = state.placements.get(subject);
-    if (!place || place.predicate === "mgx:hidden-in") return null;
-    if (place.predicate === "mgx:currently-in" || isTypedRoom(place.object)) return place.object;
-    const holder = place.object;
-    if (holder === "player") return null;
-    if (!state.openness.get(holder)?.open) return null;
-    const holderPlace = state.placements.get(holder);
-    return holderPlace && holderPlace.predicate !== "mgx:hidden-in" ? holderPlace.object : null;
-  };
   const out = [];
   for (const subject of [...state.placements.keys()].sort()) {
     if (subject === "player") continue;
-    if (visibleRoomOf(subject) !== here) continue;
+    if (visibleRoomOf(rows, state, subject) !== here) continue;
     out.push({ subject, spriteClass: spriteClassForObject(rows, subject) });
   }
   return out;
+}
+
+/** Every object currently `mgx:located-in` "player", sorted, each with its
+ *  sprite class — the exact placement `worldDigestRows`'/`inventoryAnswer`'s
+ *  own "carries the" branch already reads, just returned as a plain list
+ *  instead of prose. Pure. */
+export function carriedItems(rows, state) {
+  return [...state.placements]
+    .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === "player")
+    .map(([subject]) => ({ subject, spriteClass: spriteClassForObject(rows, subject) }))
+    .sort((a, b) => a.subject.localeCompare(b.subject));
+}
+
+/** A visited-rooms-only map: one node per room `visitedRoomIds` actually
+ *  names, laid out on an integer grid FROM the world's own has-exit-*
+ *  directions — never a force-directed guess, so a room with a north exit to
+ *  another visited room sits one row above it (up/down read the same way,
+ *  since neither world this project ships gives a vertical exit its own
+ *  lateral position). An edge is drawn only between two rooms BOTH already
+ *  visited, mirroring adventure-autoplay.mjs's own exposedExitApplyActions:
+ *  an exit fact belongs to the room whose subject it is, so it is only ever
+ *  read off a VISITED room's own state.exits entry, never an unvisited
+ *  room's. `hints` names every exit a visited room has toward a room not yet
+ *  visited — the direction only, never the unvisited room's own name, so a
+ *  caller can draw at most "there's an exit that way" and nothing more.
+ *  Disconnected visited rooms (not reachable from each other by traveled
+ *  edges) lay out as separate side-by-side blocks rather than overlapping.
+ *  Pure. */
+export function visitedRoomGraph(state, visitedRoomIds) {
+  const DELTA = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0], up: [0, -1], down: [0, 1] };
+  const visited = new Set(visitedRoomIds || []);
+  const here = state.placements.get("player")?.object ?? null;
+  const positions = new Map();
+  const edges = [];
+  const edgeKeys = new Set();
+  const hints = [];
+  let offsetX = 0;
+  for (const start of [...visited].sort()) {
+    if (positions.has(start)) continue;
+    positions.set(start, { x: offsetX, y: 0 });
+    const queue = [start];
+    const component = [start];
+    while (queue.length) {
+      const room = queue.shift();
+      const pos = positions.get(room);
+      const dirs = state.exits.get(room);
+      for (const direction of [...(dirs?.keys() ?? [])].sort()) {
+        const target = dirs.get(direction);
+        if (!visited.has(target)) { hints.push({ from: room, direction }); continue; }
+        const key = [room, target].sort().join("\0");
+        if (!edgeKeys.has(key)) { edgeKeys.add(key); edges.push({ from: room, to: target, direction }); }
+        if (!positions.has(target)) {
+          const [dx, dy] = DELTA[direction] ?? [0, 0];
+          positions.set(target, { x: pos.x + dx, y: pos.y + dy });
+          component.push(target);
+          queue.push(target);
+        }
+      }
+    }
+    offsetX = Math.max(...component.map((r) => positions.get(r).x)) + 2;
+  }
+  const minX = Math.min(0, ...[...positions.values()].map((p) => p.x));
+  const minY = Math.min(0, ...[...positions.values()].map((p) => p.y));
+  const nodes = [...visited].sort().map((room) => {
+    const p = positions.get(room) || { x: 0, y: 0 };
+    return { id: room, x: p.x - minX, y: p.y - minY, current: room === here };
+  });
+  return { nodes, edges, hints };
+}
+
+/** One status line per exposed `mgx:is-objective` fact, using the SAME
+ *  three-state logic adventure-autoplay.mjs's own goal inference already
+ *  distinguishes, restricted to what `visitedRoomIds` actually supports:
+ *  carried (the full, unfiltered state — carrying is always self-evidently
+ *  known, the same unconditional exposure the marker fact itself gets);
+ *  exposed with a known room (an `exposedFacts` filter, mirroring
+ *  runAdventureAutoplayTick's own objectiveRoom lookup, so a location is
+ *  never claimed before the room holding it has actually been visited); or
+ *  not yet exposed at all (the opening-line-level knowledge every session
+ *  gets unconditionally — the marker fact names the sought thing, nothing
+ *  more). Pure. */
+export function goalStatusLines(rows, state, visitedRoomIds) {
+  const ids = [...new Set((rows || [])
+    .filter((r) => r.predicate === "mgx:is-objective" && r.object === "true")
+    .map((r) => r.subject))];
+  const carriedIds = new Set(carriedItems(rows, state).map((o) => o.subject));
+  const exposedRows = exposedFacts(rows, visitedRoomIds);
+  const exposedState = foldWorldState(exposedRows);
+  return ids.map((id) => {
+    if (carriedIds.has(id)) return { subject: id, status: "carried", text: `carrying the ${id} — the adventure is won.` };
+    const room = visibleRoomOf(exposedRows, exposedState, id);
+    return room
+      ? { subject: id, status: "known", text: `last known: the ${id} is in the ${room}.` }
+      : { subject: id, status: "unknown", text: `there's a sought-after ${id} somewhere.` };
+  });
 }
 
 /** The clickable command suggestions for the room the player is CURRENTLY
@@ -210,8 +332,22 @@ ${THEME_TOKENS_CSS}
   .sprite-label { font-family: ${MONO_STACK}; font-size: .62rem; text-align: center; color: var(--muted); margin-top: .15rem; }
   .caption { background: var(--card); border: 1px solid var(--line); padding: .6rem .75rem; font-size: .9rem; }
   .side { display: flex; flex-direction: column; gap: .8rem; min-width: 0; }
-  .chat { background: var(--card); border: 1px solid var(--line); padding: .6rem .75rem; }
-  .chat h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .5rem; }
+  .chat, .panel { background: var(--card); border: 1px solid var(--line); padding: .6rem .75rem; }
+  .chat h2, .panel h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .5rem; }
+  .empty-note { font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); }
+  .chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .chip { font-family: ${MONO_STACK}; font-size: .72rem; padding: .25rem .6rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; }
+  .roommap svg { width: 100%; height: auto; display: block; }
+  .roommap .room-edge { stroke: var(--line); stroke-width: 1.5; }
+  .roommap .room-hint { fill: var(--muted); opacity: .45; }
+  .roommap .room-node circle { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
+  .roommap .room-node.current circle { stroke: var(--taught); fill: var(--taught-soft); stroke-width: 2; }
+  .roommap .room-node text { font-family: ${MONO_STACK}; font-size: 6.5px; fill: var(--ink); text-anchor: middle; }
+  .goal-status { display: flex; flex-direction: column; gap: .4rem; }
+  .goal-status .g { display: flex; align-items: baseline; gap: .4rem; font-size: .86rem; line-height: 1.35; }
+  .goal-status .dot { width: .5rem; height: .5rem; border-radius: 50%; flex: none; background: var(--muted); }
+  .goal-status .g.known .dot { background: var(--corpus); }
+  .goal-status .g.carried .dot { background: var(--taught); }
   .chatlog { display: flex; flex-direction: column; gap: .4rem; max-height: 320px; overflow-y: auto; margin-bottom: .5rem; }
   .chatlog .u { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
   .chatlog .u::before { content: "tmct> "; color: var(--taught); }
@@ -257,6 +393,18 @@ ${THEME_TOKENS_CSS}
           <input id="chatq" type="text" placeholder="go north" aria-label="Type a command, or ask a question" disabled>
         </form>
       </div>
+      <div class="panel carrying">
+        <h2>carrying</h2>
+        <div class="chips" id="carryList"></div>
+      </div>
+      <div class="panel roommap">
+        <h2>rooms visited</h2>
+        <div id="mapWrap"></div>
+      </div>
+      <div class="panel goals">
+        <h2>goal</h2>
+        <div id="goalList"></div>
+      </div>
     </aside>
   </div>
   <div class="caption" id="caption"></div>
@@ -278,7 +426,10 @@ const ADVENTURE = ${pageData};
   "use strict";
   const createTicker = ${createTicker.toString()};
   const spriteClassForObject = ${spriteClassForObject.toString()};
+  const visibleRoomOf = ${visibleRoomOf.toString()};
   const roomSceneObjects = ${roomSceneObjects.toString()};
+  const carriedItems = ${carriedItems.toString()};
+  const visitedRoomGraph = ${visitedRoomGraph.toString()};
   const spriteAncestryRows = ${spriteAncestryRows.toString()};
   const factsForSubject = ${factsForSubject.toString()};
   const esc = ${escapeHtml.toString()};
@@ -295,6 +446,9 @@ const ADVENTURE = ${pageData};
   const pillsEl = el("pills");
   const chatformEl = el("chatform");
   const chatqEl = el("chatq");
+  const carryListEl = el("carryList");
+  const mapWrapEl = el("mapWrap");
+  const goalListEl = el("goalList");
 
   const params = new URLSearchParams(location.search);
   const preview = params.get("preview") === "1";
@@ -309,6 +463,79 @@ const ADVENTURE = ${pageData};
       .filter((row) => row.subject !== "Player" && (row.object === here || row.subject === hereCased))
       .map((row) => row.subject + " " + row.predicate + " " + row.object + ".");
     return lines.length ? lines.join(" ") : "Nothing more about the " + here + " is written down yet.";
+  }
+
+  // ---- goal status — mirrors adventure-viz.mjs's own goalStatusLines
+  // against tmctAdventure.foldWorldState/tmctAdventure.exposedFacts (the
+  // same mirroring captionFor/pillsFor already do against their own
+  // adventure.mjs exports), so a location is never claimed before the room
+  // holding it has actually been visited this session.
+  function goalStatusLinesFor(rows, state, visitedRoomIds) {
+    const ids = Array.from(new Set(rows.filter((r) => r.predicate === "mgx:is-objective" && r.object === "true").map((r) => r.subject)));
+    const carriedIds = new Set(carriedItems(rows, state).map((o) => o.subject));
+    const exposedRows = tmctAdventure.exposedFacts(rows, visitedRoomIds);
+    const exposedState = tmctAdventure.foldWorldState(exposedRows);
+    return ids.map((id) => {
+      if (carriedIds.has(id)) return { subject: id, status: "carried", text: "carrying the " + id + " \\u2014 the adventure is won." };
+      const room = visibleRoomOf(exposedRows, exposedState, id);
+      return room
+        ? { subject: id, status: "known", text: "last known: the " + id + " is in the " + room + "." }
+        : { subject: id, status: "unknown", text: "there's a sought-after " + id + " somewhere." };
+    });
+  }
+
+  // ---- carrying panel — every object placed with the player, rendered as
+  // the same non-interactive chip shape the room's own pills use for
+  // actions, so the sidebar reads as one visual family.
+  function renderCarrying(rows, state) {
+    const items = carriedItems(rows, state);
+    carryListEl.innerHTML = items.length
+      ? items.map((o) => '<span class="chip">' + esc(o.subject) + "</span>").join("")
+      : '<span class="empty-note">nothing yet</span>';
+  }
+
+  // ---- visited-room map — an SVG laid out directly from visitedRoomGraph's
+  // own directional grid, never a second layout. Edges only ever join two
+  // ALREADY-visited rooms; hints mark a known exit's direction from a
+  // visited room without naming or drawing the unvisited room itself.
+  function renderRoomMap(rows, state, visitedRoomIds) {
+    const graph = visitedRoomGraph(state, visitedRoomIds);
+    if (!graph.nodes.length) { mapWrapEl.innerHTML = '<span class="empty-note">nowhere yet</span>'; return; }
+    const cell = 56, radius = 15;
+    const maxX = Math.max.apply(null, graph.nodes.map((n) => n.x));
+    const maxY = Math.max.apply(null, graph.nodes.map((n) => n.y));
+    const w = (maxX + 1) * cell, h = (maxY + 1) * cell + 14;
+    const cx = (n) => (n.x + 0.5) * cell;
+    const cy = (n) => (n.y + 0.5) * cell;
+    const byRoom = new Map(graph.nodes.map((n) => [n.id, n]));
+    const edgesSvg = graph.edges.map((e) => {
+      const a = byRoom.get(e.from), b = byRoom.get(e.to);
+      return '<line class="room-edge" x1="' + cx(a) + '" y1="' + cy(a) + '" x2="' + cx(b) + '" y2="' + cy(b) + '"></line>';
+    }).join("");
+    const HINT_DELTA = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0], up: [0, -1], down: [0, 1] };
+    const hintsSvg = graph.hints.map((hi) => {
+      const from = byRoom.get(hi.from);
+      const d = HINT_DELTA[hi.direction] || [0, 0];
+      return '<circle class="room-hint" cx="' + (cx(from) + d[0] * cell * 0.42) + '" cy="' + (cy(from) + d[1] * cell * 0.42) + '" r="3"></circle>';
+    }).join("");
+    const nodesSvg = graph.nodes.map((n) => {
+      const cls = "room-node" + (n.current ? " current" : "");
+      return '<g class="' + cls + '"><circle cx="' + cx(n) + '" cy="' + cy(n) + '" r="' + radius + '"></circle>'
+        + '<text x="' + cx(n) + '" y="' + (cy(n) + radius + 9) + '">' + esc(n.id) + "</text></g>";
+    }).join("");
+    mapWrapEl.innerHTML = '<svg viewBox="0 0 ' + w + " " + h + '" role="img" aria-label="the rooms visited so far">'
+      + edgesSvg + hintsSvg + nodesSvg + "</svg>";
+  }
+
+  // ---- goal panel — one line per exposed objective, a colored dot carrying
+  // the same three-state read goalStatusLinesFor's own status field names.
+  function renderGoals(rows, state, visitedRoomIds) {
+    const lines = goalStatusLinesFor(rows, state, visitedRoomIds);
+    goalListEl.innerHTML = lines.length
+      ? '<div class="goal-status">' + lines.map((l) =>
+          '<div class="g ' + l.status + '"><span class="dot"></span><span>' + esc(l.text) + "</span></div>").join("")
+        + "</div>"
+      : '<span class="empty-note">this world names no goal.</span>';
   }
 
   // ---- chat/event log — every manual exchange AND every auto-play tick's
@@ -370,6 +597,9 @@ const ADVENTURE = ${pageData};
     captionEl.textContent = captionFor(snap.rows, snap.state, snap.here);
     turnLabelEl.textContent = "turn: " + snap.turn;
     renderPills(snap.rows, snap.state, snap.here);
+    renderCarrying(snap.rows, snap.state);
+    renderRoomMap(snap.rows, snap.state, snap.visitedRoomIds);
+    renderGoals(snap.rows, snap.state, snap.visitedRoomIds);
   }
 
   // ---- serialize every engine-touching call: the ticker and the chat dock

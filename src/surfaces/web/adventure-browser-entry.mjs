@@ -36,7 +36,7 @@ import {
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { foldWorldState, worldDigestRows, roomAffordances } from "../../services/adventure.mjs";
-import { runAdventureAutoplayTick } from "../../services/adventure-autoplay.mjs";
+import { runAdventureAutoplayTick, exposedFacts } from "../../services/adventure-autoplay.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
 
@@ -59,10 +59,26 @@ export async function createAdventureSession(worldPayload) {
 
   const planHolder = { state: { adventure: { world: worldPayload.name } } };
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
-  let exposedRoomIds = new Set();
+  // visitedRoomIds is the ONE exposure set both `turn()` and `autoplayTick()`
+  // grow — a deliberate merge, not two separate histories. Both entry points
+  // move the SAME player through the SAME shared memoryDir: `here` is always
+  // read fresh off the live fact store (state.placements.get("player")), not
+  // off whichever path last ran, so by the time either call finishes, the
+  // room the player is standing in is genuinely known to a visitor looking
+  // at the page regardless of which control moved them there. Keeping two
+  // separate sets would make the map/goal panels UNDER-report a room a
+  // visitor plainly just walked autoplay through (or vice versa) — a false
+  // conservatism, not real honesty, since nothing about the OTHER path's
+  // moves is hidden from this same session. runAdventureAutoplayTick's own
+  // returned `exposedRoomIds` already folds forward whatever it was handed,
+  // so feeding it this merged set on every tick, and folding its result back
+  // into the same variable, is enough: manual moves feed autoplay's own
+  // reasoning, autoplay's moves feed the panels, with no separate
+  // bookkeeping either way.
+  let visitedRoomIds = new Set();
   const openingRows = readFactRows(await loadMemory(memoryDir));
   const openingHere = foldWorldState(openingRows).placements.get("player")?.object ?? null;
-  if (openingHere) exposedRoomIds = new Set([openingHere]);
+  if (openingHere) visitedRoomIds = new Set([openingHere]);
 
   const graph = parseEntities({ individuals: [], objectProperties: [] });
   const lexicon = loadLexicon();
@@ -78,16 +94,18 @@ export async function createAdventureSession(worldPayload) {
      *  `{ turn, goal, plan, done, stalled }` unmodified. */
     async autoplayTick() {
       const result = await runAdventureAutoplayTick(memoryDir, {
-        exposedRoomIds, planHolder, sessionId, env: {},
+        exposedRoomIds: visitedRoomIds, planHolder, sessionId, env: {},
       });
-      exposedRoomIds = result.exposedRoomIds;
+      visitedRoomIds = result.exposedRoomIds;
       return result;
     },
 
     /** One dispatched chat turn — the SAME runTurn the CLI and every other
      *  viz page's own chat dock run, over this session's own memoryDir. A
      *  throwing runTurn must never kill the session — the page has no other
-     *  chance to show this turn's answer. */
+     *  chance to show this turn's answer. Grows `visitedRoomIds` with the
+     *  player's post-turn room (a no-op add when the command didn't move
+     *  anyone) — the manual-play half of the merged exposure set. */
     async turn(line) {
       let result;
       try {
@@ -102,25 +120,33 @@ export async function createAdventureSession(worldPayload) {
       focus = result.focus;
       last = result.last;
       if ("planState" in result) planHolder.state = result.planState;
+      const here = foldWorldState(readFactRows(await loadMemory(memoryDir))).placements.get("player")?.object ?? null;
+      if (here) visitedRoomIds.add(here);
       return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null };
     },
 
     /** A read-only fold of the current room — no engine advance — for the
      *  page's own redraw after boot, after every tick, and after every
-     *  manual chat turn. */
+     *  manual chat turn. `visitedRoomIds` travels as a plain array (the same
+     *  merged exposure set `turn()`/`autoplayTick()` both grow) so the
+     *  carrying/map/goal panels can read it without holding a live
+     *  reference into this closure's own Set. */
     async snapshot() {
       const rows = readFactRows(await loadMemory(memoryDir));
       const state = foldWorldState(rows);
       const here = state.placements.get("player")?.object ?? null;
-      return { rows, state, here, turn: state.turnCount };
+      return { rows, state, here, turn: state.turnCount, visitedRoomIds: [...visitedRoomIds] };
     },
   };
 }
 
 // Re-exported so the page's own rendering script (adventure-viz.mjs) never
-// has to duplicate sprite resolution, the digest reader, or the room
-// affordances the chat dock's own pills read from — the same posture
-// spider-fly-browser-entry.mjs's own globalThis.tmctSpiderFly re-export takes.
+// has to duplicate sprite resolution, the digest reader, the room
+// affordances the chat dock's own pills read from, or (foldWorldState,
+// exposedFacts) the exposure-filtered fold the goal-status panel mirrors —
+// the same posture spider-fly-browser-entry.mjs's own
+// globalThis.tmctSpiderFly re-export takes.
 globalThis.tmctAdventure = {
-  createAdventureSession, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset, worldDigestRows, roomAffordances,
+  createAdventureSession, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
+  worldDigestRows, roomAffordances, foldWorldState, exposedFacts,
 };
