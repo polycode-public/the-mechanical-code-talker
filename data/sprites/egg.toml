@@ -1,4 +1,9 @@
 # egg — the spider-and-fly board's laid egg. The plain shell silhouette
 # plus one small carved highlight.
 classes = ["egg"]
-svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2 C7 2 4 10 4 15.5 C4 20 7.6 22 12 22 C16.4 22 20 20 20 15.5 C20 10 17 2 12 2 Z" fill="currentColor"/><ellipse cx="9.6" cy="9.5" rx="1.7" ry="2.4" fill="currentColor" opacity="0.28"/></svg>"""
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M12 2 C7 2 4 10 4 15.5 C4 20 7.6 22 12 22 C16.4 22 20 20 20 15.5 C20 10 17 2 12 2 Z" fill="currentColor"/>
+  <ellipse cx="9.6" cy="9.5" rx="1.7" ry="2.4" fill="currentColor" opacity="0.28"/>
+</svg>
+"""

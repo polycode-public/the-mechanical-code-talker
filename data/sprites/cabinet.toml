@@ -2,4 +2,12 @@
 # wardrobe silhouette, the gap between the doors reading as the seam, with
 # two knobs and a cornice band.
 classes = ["cabinet"]
-svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="2.5" width="7.2" height="19" rx="1" fill="currentColor"/><rect x="12.3" y="2.5" width="7.2" height="19" rx="1" fill="currentColor"/><rect x="4.5" y="2.5" width="15" height="1.4" fill="currentColor" opacity="0.4"/><circle cx="10.6" cy="12" r="0.9" fill="currentColor" opacity="0.35"/><circle cx="13.4" cy="12" r="0.9" fill="currentColor" opacity="0.35"/></svg>"""
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <rect x="4.5" y="2.5" width="7.2" height="19" rx="1" fill="currentColor"/>
+  <rect x="12.3" y="2.5" width="7.2" height="19" rx="1" fill="currentColor"/>
+  <rect x="4.5" y="2.5" width="15" height="1.4" fill="currentColor" opacity="0.4"/>
+  <circle cx="10.6" cy="12" r="0.9" fill="currentColor" opacity="0.35"/>
+  <circle cx="13.4" cy="12" r="0.9" fill="currentColor" opacity="0.35"/>
+</svg>
+"""

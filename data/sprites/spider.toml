@@ -2,4 +2,20 @@
 # (a lighter carved patch on the abdomen for shading) and eight thin
 # outward legs.
 classes = ["spider"]
-svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="12" cy="16" rx="5.2" ry="4.8" fill="currentColor"/><ellipse cx="10.3" cy="14.3" rx="1.8" ry="1.4" fill="currentColor" opacity="0.3"/><circle cx="12" cy="9.6" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round"><path d="M9.4 8 L2.2 4.4"/><path d="M9 10.2 L1.4 9.4"/><path d="M9.2 12.6 L2 14.2"/><path d="M10 15.4 L3.4 19"/><path d="M14.6 8 L21.8 4.4"/><path d="M15 10.2 L22.6 9.4"/><path d="M14.8 12.6 L22 14.2"/><path d="M14 15.4 L20.6 19"/></g></svg>"""
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <ellipse cx="12" cy="16" rx="5.2" ry="4.8" fill="currentColor"/>
+  <ellipse cx="10.3" cy="14.3" rx="1.8" ry="1.4" fill="currentColor" opacity="0.3"/>
+  <circle cx="12" cy="9.6" r="3.2" fill="currentColor"/>
+  <g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round">
+    <path d="M9.4 8 L2.2 4.4"/>
+    <path d="M9 10.2 L1.4 9.4"/>
+    <path d="M9.2 12.6 L2 14.2"/>
+    <path d="M10 15.4 L3.4 19"/>
+    <path d="M14.6 8 L21.8 4.4"/>
+    <path d="M15 10.2 L22.6 9.4"/>
+    <path d="M14.8 12.6 L22 14.2"/>
+    <path d="M14 15.4 L20.6 19"/>
+  </g>
+</svg>
+"""

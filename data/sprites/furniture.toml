@@ -2,4 +2,11 @@
 # of its own: a solid console-table silhouette (tapered legs, a carved
 # highlight along the top edge), replacing the old hollow-shelf outline.
 classes = ["furniture"]
-svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="6.5" width="17" height="3.2" rx="0.8" fill="currentColor"/><rect x="3.5" y="6.5" width="17" height="1" fill="currentColor" opacity="0.35"/><path d="M5.6 9.7 L4.6 20 L6.7 20 L7.2 9.7 Z" fill="currentColor"/><path d="M18.4 9.7 L16.8 20 L18.9 20 L19.4 9.7 Z" fill="currentColor"/></svg>"""
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <rect x="3.5" y="6.5" width="17" height="3.2" rx="0.8" fill="currentColor"/>
+  <rect x="3.5" y="6.5" width="17" height="1" fill="currentColor" opacity="0.35"/>
+  <path d="M5.6 9.7 L4.6 20 L6.7 20 L7.2 9.7 Z" fill="currentColor"/>
+  <path d="M18.4 9.7 L16.8 20 L18.9 20 L19.4 9.7 Z" fill="currentColor"/>
+</svg>
+"""

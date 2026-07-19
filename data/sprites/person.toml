@@ -1,4 +1,10 @@
 # person — the generic fallback for anyone with no NPC sprite of their own
 # (see butler/housekeeper/cook/gardener for the named Ashcombe Hall staff).
 classes = ["person"]
-svg = """<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6.6" r="3.3" fill="currentColor"/><path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z" fill="currentColor"/><path d="M12 12.8 C13.1 12.8 14.1 13 15 13.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.4" stroke-linecap="round"/></svg>"""
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <circle cx="12" cy="6.6" r="3.3" fill="currentColor"/>
+  <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z" fill="currentColor"/>
+  <path d="M12 12.8 C13.1 12.8 14.1 13 15 13.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.4" stroke-linecap="round"/>
+</svg>
+"""
