@@ -268,11 +268,23 @@ adventure-mood mechanics wasn't asked for; an instance with no fact falls throug
 plain template, exactly the `dog`/`dog-with-colour` precedent.
 
 **B.2.5 Staging.** Mirrors this session's own 160-sprite parallel build: one agent lands the shared
-palette + resolver fix + tests first (blocking dependency); 6 agents for the 56 person-role files
-(disjoint alphabetic batches); 1 agent for the 19 expressive-faced animal classes (cat, bear, lion,
-tiger, wolf, owl, mouse, rabbit, sheep, cow, pig, elephant, frog, horse, bird, spider, fly, poodle,
-dog — includes spider/fly, which Part A's `emotionFor` needs real art for); 1 agent last for the
-full-file-set test coverage.
+palette + resolver fix + tests first (blocking dependency); 3 agents for the 56 person-role files
+(disjoint ~19-class batches, actually run — 3 agents proved enough, not 6); 1 agent for the 17
+remaining expressive-faced animal classes (bear, lion, tiger, wolf, owl, mouse, rabbit, sheep, cow,
+pig, elephant, frog, horse, bird, spider, fly, poodle — dog/cat already shipped as B.2.3's worked
+examples).
+
+**SHIPPED: all 56 person-role classes** (3 batches, all independently re-verified by the
+coordinator — tests re-run directly, group-composite and headwear-collision judgment calls
+screenshot-checked, including king/nurse/officer/queen/team/soldier/worker specifically). 59 total
+`-with-emotion.toml` files now on `main` (3 worked examples + 56). Two of the three content agents
+found their worktree had forked before the B.4 infrastructure merged and self-corrected with a
+clean fast-forward `git merge main` before continuing — noted here since it's a real pattern worth
+watching for in the remaining animal-batch agent too. One agent (batch 3) also caught and fixed an
+authoring bug affecting all 18 of its own files (a stray literal `</content>` line breaking TOML
+parsing, silently falling through to the plain template with no face at all) before it reached the
+coordinator — full credit, this is exactly the "screenshot, find real problems, fix them" discipline
+this session expects.
 
 ### B.3 Files touched
 
