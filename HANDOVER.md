@@ -24,8 +24,8 @@ reports plus `CAPABILITIES_2.7.12.md`, spider-fly ecology v2 (wander, spider-vs-
 dynamic webs, mass symmetry — `PLAN_GAMES_UPLIFT_V2.md` Part A), an adventure graphical presence
 and goal-inferring auto-play (Part B), and 15 of the CONVERSATION backlog's 29 items have all
 landed since 2.7.0, pipelines confirmed green at every round. A second, 10-round playtest edge hunt
-(5 adventure, 5 spider-fly) targeting everything built since the first hunt is now underway
-(`playtests/PLAYTEST_LOG_008.md` onward).
+(5 adventure, 5 spider-fly) targeting everything built since the first hunt is complete
+(`playtests/PLAYTEST_LOG_008.md` through `_017.md`).
 
 Measured init sizes (fresh store, this machine): `init:large` 37,797 facts; `init:xl` 72,075
 (16.6s); `init:xxl` 238,866 (38.5s). `init:xxxl` stays undocumented-as-code (bulk ConceptNet
@@ -107,55 +107,9 @@ delivered plan docs; each records what its delivery deliberately did not include
     and routing in the report; every closed item above has a regression test in
     `test/corpus/inference.jsonl`, `test/corpus/grammar.jsonl`, `test/corpus/planning.jsonl` or
     `test/corpus/templates.jsonl`.
-- Adventure edge-hunt round 1 of the second (10-round) hunt (`playtests/PLAYTEST_LOG_008.md`): a
-  direct "is X open/closed" question reported a fully-known, negative container state as an
-  epistemic gap ("I don't have a fact saying...") instead of answering "no, it's closed" — the
-  generic ask engine has no adjective→datatype-predicate mapping for `mgx:is-open`, a predicate this
-  session's own rule-shape retrofit introduced. Fixed this round: a new `worldOpennessAnswer` aside,
-  styled after the existing `worldWhereAnswer`, reads `state.openness` directly. Shipped.
-- Spider-fly edge-hunt round 1 of the second hunt (`playtests/PLAYTEST_LOG_009.md`, the game's first
-  ever dedicated playtest): an eaten fly's stale pre-death goal line ("trapped in an active web —
-  can't move") sat right beside the same turn's own "fly-X was eaten" event text, contradicting it,
-  because `tick.agents` is built during movement, before `runEcologyPass` resolves eating. Fixed this
-  round: the eaten/starved fly is dropped from `agents` and the eating spider's goal now says "just
-  ate X in the web" instead of the now-false "co-located with X". Shipped.
-- Adventure edge-hunt round 2 of the second hunt (`playtests/PLAYTEST_LOG_010.md`): auto-play and
-  the graphical renderer, driven directly (neither has a chat-CLI surface by design), both confirmed
-  correct — no fix needed.
-- Spider-fly edge-hunt round 2 of the second hunt (`playtests/PLAYTEST_LOG_011.md`): the SAME class
-  of bug round 1 fixed, one level removed — a THIRD agent's goal (computed at movement time) can
-  keep naming a subject that dies later in the SAME tick's ecology pass, e.g. a fly "evading — last
-  saw spider-1" the very turn spider-1 starves. Fixed this round: every remaining agent's goal is
-  scrubbed of any died-this-tick reference before the existing eaten-pair handling runs. Shipped.
-- Adventure edge-hunt round 3 of the second hunt (`playtests/PLAYTEST_LOG_012.md`): `mgx:is-objective`
-  — the new internal marker auto-play's goal inference reads — leaked into the plain "examine" digest
-  as a raw, unphrased triple ("Letter mgx:is-objective true."). Fixed this round: added to the
-  digest's existing `VIEW_EXCLUDED_PREDICATES` set; the underlying fact rows (and auto-play's own
-  direct read of them) are unaffected. Shipped.
-- Spider-fly edge-hunt round 3 of the second hunt (`playtests/PLAYTEST_LOG_013.md`): a spider that
-  eats two flies co-located on the same cell in one tick only credited the LAST one in its own goal
-  line (the round-1 fix overwrote the goal once per eaten pair). The main event text was always
-  correct for both; only the goal-line summary collapsed them. Fixed this round: eaten pairs are
-  grouped by spider first, so the goal names every fly eaten that tick. Shipped.
-- Adventure edge-hunt round 4 of the second hunt (`playtests/PLAYTEST_LOG_014.md`): `examine <the
-  room you're standing in>` declined "I don't see X here" as if the room didn't exist — a room is
-  never the SUBJECT of a placement fact (only ever the object other things are placed in), so the
-  shared examine/talk presence check could never match it. Fixed this round: naming the current
-  room bypasses the presence check, the same way a carried object already does. Shipped.
-- Spider-fly edge-hunt round 4 of the second hunt (`playtests/PLAYTEST_LOG_015.md`): the SAME
-  movement-before-ecology seam rounds 1-3 fixed for goal text, now caught on mass — the eating
-  spider's own returned `tick.agents[spider].mass` stayed at its stale pre-eat movement-phase value
-  for the exact tick it ate, even though the store's own written fact was already correct. Fixed
-  this round: `runEcologyPass` now exposes the true post-eat mass on its `events` object, and the
-  existing eaten-pair loop reads it into `agents[spider].mass`. Shipped.
-- Adventure edge-hunt round 5 of the second hunt (`playtests/PLAYTEST_LOG_016.md`, closing the
-  adventure side of this hunt): a real-browser run of `adventure.html`'s Play button found
-  auto-play could never actually win Ashcombe Hall — the letter sits behind a locked cabinet needing
-  a key hidden in another container, and `runAdventureAutoplayTick` only ever issued `go`/`take`, so
-  a hidden object's room could never resolve and auto-play stalled having explored every room. Fixed
-  this round: a new "progress a known container" goal branch opens unlocked containers on sight,
-  unlocks a locked one when its instrument is carried, and detours to fetch a known-but-uncarried
-  instrument first. Confirmed winning both via a direct probe and a live-browser Play run. Shipped.
+- The second (10-round) playtest edge hunt is complete: 5 adventure rounds and 5 spider-fly rounds,
+  every finding fixed, regression-tested and shipped, pipelines green throughout
+  (`playtests/PLAYTEST_LOG_008.md` through `_017.md`).
 
 ## Discipline
 
