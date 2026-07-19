@@ -368,6 +368,7 @@
   "src/domain/text-stats.mjs",
   "src/domain/worlds-pack.mjs",
   "src/services/adventure-autoplay.mjs",
+  "src/services/adventure-editor.mjs",
   "src/services/adventure-viz.mjs",
   "src/services/adventure.mjs",
   "src/services/chat-page-viz.mjs",
