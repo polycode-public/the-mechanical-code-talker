@@ -146,3 +146,21 @@ test("renderSpiderFlyHtml: escapes a custom title", () => {
 test("renderSpiderFlyHtml: deterministic — byte-identical output for identical input", () => {
   assert.equal(renderSpiderFlyHtml(), renderSpiderFlyHtml());
 });
+
+test("renderSpiderFlyHtml: each agent's HUD row can carry a mass bar, scaled against the real fly/spider mass constants", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /mass-track/, "the mass bar's track element is drawn");
+  assert.match(html, /mass-fill/);
+  assert.match(html, /maxFlyMass/);
+  assert.match(html, /maxSpiderMass/);
+  const data = embeddedJson(html, "SPIDERFLY");
+  assert.equal(typeof data.maxFlyMass, "number");
+  assert.equal(typeof data.maxSpiderMass, "number");
+});
+
+test("renderSpiderFlyHtml: an active dynamic web is drawn distinctly from the static home zone (a different fill/stroke, threaded through every redraw call)", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /activeWebs/, "activeWebs threads through tick()/snapshot()/boot into drawBoard");
+  assert.match(html, /--alert-soft/, "the dynamic web fill is a different token than the static zone's --taught-soft");
+  assert.match(html, /setLineDash/, "a dashed outline further distinguishes a live dynamic web from the plain-filled static zone");
+});

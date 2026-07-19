@@ -16,6 +16,19 @@ export const GRID_SIZE = 10;
 export const WEB_HOME = Object.freeze({ x: 2, y: 2 });
 export const WEB_RADIUS = 1;
 
+// A spider-built dynamic web (src/services/spider-fly.mjs's hasActiveWebAt)
+// stays active for this many turns past the turn it was built, mirroring the
+// static home zone's own always-on web without needing separate code paths.
+export const WEB_DURATION_TURNS = 10;
+
+// Spider mass mirrors a fly's own (src/services/spider-fly.mjs's
+// FLY_INITIAL_MASS/FLY_MASS_DECREMENT_PER_TURN): a spider starves like a fly
+// does, and gains exactly a fly's remaining mass on an eat. Heavier starting
+// mass than a single fly's worth on purpose — a spider that eats nothing for
+// a while has some runway before starving.
+export const SPIDER_INITIAL_MASS = 15;
+export const SPIDER_MASS_DECREMENT_PER_TURN = 1;
+
 export const cellId = (x, y) => `cell-${x}-${y}`;
 
 const CELL_ID_RE = /^cell-(\d+)-(\d+)$/;

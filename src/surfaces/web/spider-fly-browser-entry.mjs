@@ -52,7 +52,7 @@ import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import {
   worldFactRows, WORLD_NAME, WORLD_OPENING, cellId, parseCellId, DIRECTION_DELTA, visibleCells,
 } from "../../domain/spider-fly-world.mjs";
-import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame, DEFAULT_VISION_RADIUS } from "../../services/spider-fly.mjs";
+import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame, liveWebs, DEFAULT_VISION_RADIUS } from "../../services/spider-fly.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY } from "../../domain/sprite-map.mjs";
 
 /** A live in-memory game the page's ticker and chat dock can both drive.
@@ -77,8 +77,8 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
   const { facts: startFacts } = await startSpiderFlyGame(memoryDir, { flyCount });
   const initialAgents = {};
   for (const f of startFacts) {
-    if (f.predicate !== "mgx:currently-in") continue;
-    initialAgents[f.subject] = { cell: f.object };
+    if (f.predicate === "mgx:currently-in") initialAgents[f.subject] = { ...initialAgents[f.subject], cell: f.object };
+    else if (f.predicate === "mgx:mass") initialAgents[f.subject] = { ...initialAgents[f.subject], mass: Number(f.object) };
   }
 
   const graph = parseEntities({ individuals: [], objectProperties: [] });
@@ -93,7 +93,7 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
     memoryDir,
     sessionId,
     opening: WORLD_OPENING,
-    initial: { turn: 0, agents: initialAgents },
+    initial: { turn: 0, agents: initialAgents, activeWebs: [] },
     taxonomyRows,
 
     /** Run one real engine turn directly. Returns spider-fly.mjs's own
@@ -127,16 +127,18 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
 
     /** A read-only fold of the CURRENT board — no engine advance, no goal
      *  lines (see the header comment: only a raw tick() recomputes those).
-     *  Lets the page resync positions/turn count after a chat-driven tick. */
+     *  Lets the page resync positions/turn count/mass/active webs after a
+     *  chat-driven tick. Web individuals are never listed as agents (that's
+     *  spider-1/fly-1/... only) — they surface only through activeWebs. */
     async snapshot() {
       const rows = readFactRows(await loadMemory(memoryDir));
       const state = foldSpiderFlyState(rows);
       const agents = {};
       for (const [id, place] of state.placements) {
-        if (state.removed.has(id)) continue;
-        agents[id] = { cell: place.cell };
+        if (state.removed.has(id) || /^web-\d+$/.test(id)) continue;
+        agents[id] = { cell: place.cell, mass: state.mass.get(id)?.value ?? null };
       }
-      return { turn: state.turnCount, agents };
+      return { turn: state.turnCount, agents, activeWebs: liveWebs(state.webs, state.turnCount) };
     },
   };
 }
