@@ -131,6 +131,16 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
   }
 }
 
+// "Talk to it"'s full-screen destination: the SAME chat bundle/seed/pack
+// built just above, reused as-is — chat.html is a second consumer of them,
+// never a second engine.
+{
+  const { renderChatHtml } = await import(join(ROOT, "src", "services", "chat-page-viz.mjs"));
+  const chatPagePath = join(SITE, "chat.html");
+  await writeF(chatPagePath, renderChatHtml());
+  console.log(`wrote ${chatPagePath}`);
+}
+
 // The sprite tier meant to be looked at closely (400px, gradient/highlight
 // material shading, data/sprites-large/*.toml): excluded from the npm
 // package entirely (package.json's own "!data/sprites-large/"), so only
