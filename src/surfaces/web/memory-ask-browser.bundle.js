@@ -23574,6 +23574,7 @@ ${JSON.stringify(envelope, null, 2)}`;
   // src/services/spider-fly.mjs
   init_planning();
   init_core();
+  init_hash();
 
   // src/services/spider-fly-turn.mjs
   init_core();
