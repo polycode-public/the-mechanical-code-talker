@@ -2308,6 +2308,17 @@ const GOAL_CONJUNCT_RE = new RegExp(
 // three only REPORT.
 const PLAN_WHAT_NEXT_RE = /^(?:what(?:'s|\s+is)?|whats)\s+the\s+next\s+move[?.!\s]*$/i;
 const PLAN_MOVE_COUNT_RE = /^how\s+many\s+moves(?:\s+(?:are\s+(?:there|left)|remain(?:ing)?|left|to\s+go|in\s+the\s+plan|total))?[?.!\s]*$/i;
+// "is that really the minimum number of moves?" / "could there be a shorter
+// plan than that?" — a confirmation of the planner's own optimality claim,
+// not a request to count anything (without this it fell to the unrelated
+// code-entity counter — "moves" reads as a countable noun to that reader —
+// producing "I can't count 'moves'" even though the planner's own solve
+// output already printed "N moves (shortest)"). findActionPath (planning.mjs)
+// is a real breadth-first search: it expands the state space depth-by-depth
+// and returns the FIRST goal state it finds, so whenever a plan exists its
+// move count IS provably the minimum from the state it started from — never
+// a guess, an actual guarantee of the search algorithm used.
+const PLAN_OPTIMALITY_CONFIRM_RE = /^(?:is\s+(?:that|this)\s+(?:really|actually)?\s*the\s+(?:minimum|fewest|optimal|shortest)(?:\s+possible)?\s+(?:number\s+of\s+moves|amount\s+of\s+moves|moves)|(?:is|could)\s+there\s+be\s+a\s+shorter\s+(?:plan|way|route)(?:\s+than\s+that)?|can\s+(?:it|this|that)\s+be\s+done\s+in\s+fewer\s+moves)[?.!\s]*$/i;
 const PLAN_WHY_MOVE_RE = /^why\s+(?:that|this|the\s+next|the)\s+move[?.!\s]*$/i;
 // Board-state read-backs, answered off the CURRENT board (the latest @stepK
 // snapshot, or the taught board before any step) so a read never contradicts
@@ -10478,6 +10489,15 @@ async function planFollowUpAnswer(query, { memoryDir, planHolder, pendingPager =
     const total = ps.actions.length;
     const remaining = Math.max(0, total - ps.cursor);
     return { text: remaining === total ? `${total} move${total === 1 ? "" : "s"} in the plan.` : `${total} move${total === 1 ? "" : "s"} in the plan, ${remaining} still to make.`, deduced: "count the moves in the active plan", note: "PLAN FOLLOW-UP — move count from the active plan" };
+  }
+  if (PLAN_OPTIMALITY_CONFIRM_RE.test(q)) {
+    if (!activePlan) return null;
+    const total = ps.actions.length;
+    return {
+      text: `yes — ${total} move${total === 1 ? "" : "s"} is the minimum: the plan search is a breadth-first search over every legal move from the current state, so it always finds the shortest path first. No shorter plan exists from where it started.`,
+      deduced: "confirm the plan's own optimality claim",
+      note: "PLAN FOLLOW-UP — optimality confirmed from the BFS search's own guarantee, not a guess",
+    };
   }
   if (PLAN_WHY_MOVE_RE.test(q)) {
     if (!activePlan) return null;
