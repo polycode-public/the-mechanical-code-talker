@@ -38,3 +38,24 @@ test("the homepage embeds the spider-and-fly hero: a preview iframe onto spider-
     "the three heroes render in order, all above the ELIZA/PARRY prose",
   );
 });
+
+test("the homepage embeds the adventure hero: a preview iframe onto adventure.html, a full-screen link, alongside the other heroes above the lineage prose", async () => {
+  const html = await readFile(INDEX, "utf8");
+  assert.match(html, /<div class="adventure-hero">/);
+  assert.match(html, /<iframe src="\.\/adventure\.html\?preview=1"/, "the embedded preview asks for the page's own non-interactive auto-play mode");
+  assert.match(html, /<a href="\.\/adventure\.html">open full-screen/);
+
+  const ledgerHero = html.indexOf('<div class="ledger-hero">');
+  const planHero = html.indexOf('<div class="plan-render">');
+  const spiderFlyHero = html.indexOf('<div class="spider-fly-hero">');
+  const adventureHero = html.indexOf('<div class="adventure-hero">');
+  const lineage = html.indexOf("<em>ELIZA/PARRY lineage</em>");
+  assert.ok(
+    [ledgerHero, planHero, spiderFlyHero, adventureHero, lineage].every((i) => i !== -1),
+    "all four heroes and the lineage prose are present",
+  );
+  assert.ok(
+    ledgerHero < planHero && planHero < spiderFlyHero && spiderFlyHero < adventureHero && adventureHero < lineage,
+    "the four heroes render in order, all above the ELIZA/PARRY prose",
+  );
+});
