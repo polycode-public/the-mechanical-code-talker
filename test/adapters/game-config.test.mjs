@@ -19,7 +19,8 @@ test("resolveGameConfig: a partial [games.spider-fly] override merges over the d
   assert.equal(resolved.spiderFly.spiderMassDecrementPerTurn, 2, "the set key overrides the default");
   assert.equal(resolved.spiderFly.spiderInitialMass, DEFAULT_GAME_CONFIG.spiderFly.spiderInitialMass, "every unset sibling keeps its default");
   assert.equal(resolved.spiderFly.flyInitialMass, DEFAULT_GAME_CONFIG.spiderFly.flyInitialMass);
-  assert.equal(resolved.spiderFly.visionRadius, DEFAULT_GAME_CONFIG.spiderFly.visionRadius);
+  assert.equal(resolved.spiderFly.spiderVisionRadius, DEFAULT_GAME_CONFIG.spiderFly.spiderVisionRadius);
+  assert.equal(resolved.spiderFly.flyVisionRadius, DEFAULT_GAME_CONFIG.spiderFly.flyVisionRadius);
   assert.deepEqual(resolved.guessNumber, DEFAULT_GAME_CONFIG.guessNumber, "an unrelated table is completely untouched");
   assert.deepEqual(resolved.planning, DEFAULT_GAME_CONFIG.planning);
 });
@@ -32,10 +33,13 @@ test("resolveGameConfig: every [games.spider-fly] snake_case key maps onto its c
         spider_mass_decrement_per_turn: 0.25,
         fly_initial_mass: 12,
         fly_mass_decrement_per_turn: 2,
-        vision_radius: 6,
+        spider_vision_radius: 6,
+        fly_vision_radius: 7,
         egg_hatch_delay_turns: 4,
         fly_spawn_interval_turns: 5,
-        eggs_eaten_threshold: 3,
+        egg_lay_mass_threshold: 30,
+        egg_hatch_count: 3,
+        min_hatchling_mass: 4,
         web_duration_turns: 8,
       },
     },
@@ -46,10 +50,13 @@ test("resolveGameConfig: every [games.spider-fly] snake_case key maps onto its c
     spiderMassDecrementPerTurn: 0.25,
     flyInitialMass: 12,
     flyMassDecrementPerTurn: 2,
-    visionRadius: 6,
+    spiderVisionRadius: 6,
+    flyVisionRadius: 7,
     eggHatchDelayTurns: 4,
     flySpawnIntervalTurns: 5,
-    eggsEatenThreshold: 3,
+    eggLayMassThreshold: 30,
+    eggHatchCount: 3,
+    minHatchlingMass: 4,
     webDurationTurns: 8,
   });
 });
@@ -74,7 +81,7 @@ test("resolveGameConfig: a partial [games.guess-number] override leaves the unse
 });
 
 test("resolveGameConfig returns a fully populated object of the same shape every time, never sparse", () => {
-  const resolved = resolveGameConfig({ games: { "spider-fly": { vision_radius: 2 } } });
+  const resolved = resolveGameConfig({ games: { "spider-fly": { spider_vision_radius: 2 } } });
   assert.deepEqual(Object.keys(resolved).sort(), ["guessNumber", "planning", "spiderFly"]);
   assert.deepEqual(Object.keys(resolved.spiderFly).sort(), Object.keys(DEFAULT_GAME_CONFIG.spiderFly).sort());
   assert.deepEqual(Object.keys(resolved.guessNumber).sort(), Object.keys(DEFAULT_GAME_CONFIG.guessNumber).sort());

@@ -12,7 +12,7 @@
 import {
   WORLD_NAME, WEB_HOME, WEB_DURATION_TURNS, SPIDER_INITIAL_MASS, SPIDER_MASS_DECREMENT_PER_TURN,
   cellId, parseCellId, chebyshevDistance, visibleCells, isInWebBlock, perimeterCells,
-  DIRECTION_DELTA,
+  DIRECTION_DELTA, oneStepDirectionBetween,
 } from "../domain/spider-fly-world.mjs";
 import { findActionPath, findReachableSet } from "../domain/planning.mjs";
 import { appendFacts, loadMemory, readFactRows } from "../adapters/memory/core.mjs";
@@ -29,7 +29,9 @@ export const FLY_INITIAL_MASS = 10;
 export const FLY_MASS_DECREMENT_PER_TURN = 1;
 export const EGG_HATCH_DELAY_TURNS = 3;
 export const FLY_SPAWN_INTERVAL_TURNS = 3;
-export const EGGS_EATEN_THRESHOLD = 2;
+export const EGG_LAY_MASS_THRESHOLD = 25;
+export const EGG_HATCH_COUNT = 2;
+export const MIN_HATCHLING_MASS = 3;
 export { SPIDER_INITIAL_MASS, SPIDER_MASS_DECREMENT_PER_TURN, WEB_DURATION_TURNS };
 
 // ---- seeded "randomness" (never Math.random) ---------------------------------
@@ -60,7 +62,8 @@ const WEB_ID_RE = /^web-\d+$/;
 
 /** Fold fact rows into the current spider-fly world state: per-subject
  *  newest placement (mgx:currently-in), newest fly mass, spider's newest
- *  flies-eaten count, each egg's laid-at-turn, each dynamic web's cell +
+ *  flies-eaten count, each spider's newest carrying status (mgx:carrying —
+ *  a fly id, or "none"), each egg's laid-at-turn, each dynamic web's cell +
  *  built-at turn, and the terminal eaten-by/starved/hatched-into markers that
  *  make a subject no longer live. The turn counter is derived, never stored —
  *  the largest @turnN suffix seen, exactly foldWorldState's own convention.
@@ -69,6 +72,7 @@ export function foldSpiderFlyState(factRows) {
   const placements = new Map();  // subject -> { cell, turn }
   const mass = new Map();        // fly/spider subject -> { value, turn }
   const fliesEaten = new Map();  // spider subject -> { value, turn }
+  const carrying = new Map();    // spider subject -> { flyId, turn } (flyId "none" omitted)
   const laidAtTurn = new Map();  // egg subject -> { value, turn }
   const webCell = new Map();     // web subject -> { cell, turn }
   const webBuiltAt = new Map();  // web subject -> { value, turn }
@@ -98,6 +102,14 @@ export function foldSpiderFlyState(factRows) {
     if (row.predicate === "mgx:flies-eaten") {
       const prior = fliesEaten.get(base);
       if (!prior || turn >= prior.turn) fliesEaten.set(base, { value: Number(row.object), turn });
+      continue;
+    }
+    if (row.predicate === "mgx:carrying") {
+      const prior = carrying.get(base);
+      if (!prior || turn >= prior.turn) {
+        if (row.object === "none") carrying.delete(base);
+        else carrying.set(base, { flyId: row.object, turn });
+      }
       continue;
     }
     if (row.predicate === "mgx:laid-at-turn") {
@@ -130,7 +142,7 @@ export function foldSpiderFlyState(factRows) {
   }
 
   const removed = new Set([...eatenBy.keys(), ...starved, ...hatchedInto.keys()]);
-  return { placements, mass, fliesEaten, laidAtTurn, webs, eatenBy, starved, hatchedInto, removed, turnCount };
+  return { placements, mass, fliesEaten, carrying, laidAtTurn, webs, eatenBy, starved, hatchedInto, removed, turnCount };
 }
 
 const sortedLiveSubjects = (state, re) =>
@@ -207,18 +219,31 @@ export function hasActiveWebAt(x, y, state, turn, webDurationTurns = WEB_DURATIO
 }
 
 /** The spider's multi-step path: findActionPath wired with isGoal =
- *  "co-located with the believed fly cell, and that cell has an active web
- *  (static or dynamic)." When the fly's believed cell sits outside every
- *  active web, isGoal can never fire (it doesn't depend on the search state,
- *  only on the fixed target), so this returns null — an honest "no path to
- *  an eat" rather than a path toward a cell that would never satisfy the eat
- *  condition. Null also covers "no believed target at all." `state`/`turn`
- *  are optional, defaulting to "static web zone only" (see hasActiveWebAt).
- *  `webDurationTurns` forwards to hasActiveWebAt unchanged. */
+ *  "co-located with the believed fly cell" — mere co-location, not
+ *  co-location-in-a-web. Catching a fly (the ecology pass's own catch step)
+ *  never needs a web; only the SEPARATE eat step does, once a caught fly is
+ *  actually carried into one (planSpiderPathToWeb's own job, run by the
+ *  movement priority a carrying spider takes over next tick). Null when no
+ *  believed target exists at all. `state`/`turn`/`webDurationTurns` are
+ *  accepted for signature symmetry with planSpiderPathToWeb and every other
+ *  caller in this file, but this function's own isGoal no longer reads
+ *  them. */
 export function planSpiderPath(spiderCell, believedFlyCell, applyActions, state, turn, webDurationTurns = WEB_DURATION_TURNS) {
   if (!believedFlyCell) return null;
-  const isGoal = (s) =>
-    s.x === believedFlyCell.x && s.y === believedFlyCell.y && hasActiveWebAt(s.x, s.y, state, turn, webDurationTurns);
+  const isGoal = (s) => s.x === believedFlyCell.x && s.y === believedFlyCell.y;
+  return findActionPath(spiderCell, isGoal, applyActions, { stateKey: spiderPathStateKey });
+}
+
+/** A carrying spider's own multi-step path home: findActionPath wired with
+ *  isGoal = "any actively-webbed cell" (hasActiveWebAt, reused directly,
+ *  unlike planSpiderPath there is no specific target cell — any live web
+ *  will do). Used by the movement priority (below) for a spider already
+ *  holding a fly: it races the fly to the nearest web rather than
+ *  continuing to chase. Returns null when no active web is reachable at all
+ *  (the caller falls back to greedySpiderApproach toward the static web's
+ *  home cell). */
+export function planSpiderPathToWeb(spiderCell, applyActions, state, turn, webDurationTurns = WEB_DURATION_TURNS) {
+  const isGoal = (s) => hasActiveWebAt(s.x, s.y, state, turn, webDurationTurns);
   return findActionPath(spiderCell, isGoal, applyActions, { stateKey: spiderPathStateKey });
 }
 
@@ -331,31 +356,17 @@ export function nearestBelievedTarget(observerSubject, observerCell, candidates,
   return best;
 }
 
-// ---- the ecology pass (§10): eat, lay, hatch, spawn, starve, all as
+// ---- the ecology pass (§10): catch, eat, lay, hatch, spawn, starve, all as
 // ordinary turn-gated checks in one fixed-order pass. Order matters and is
-// fixed deliberately: eat first (predation resolves on the turn's fresh
-// positions), then starve (a fly already claimed by an eat this turn cannot
-// also starve), then lay (reads the egg slot as it stood BEFORE this tick's
-// own hatch, so a hatch and a fresh lay never land the same turn), then
-// hatch, then spawn (reads the board as every earlier step in this same
-// pass left it, so a fly never spawns on a cell an eat/hatch just vacated
-// or occupied). ---------------------------------------------------------------
-
-function mostRecentEggLaidTurn(state) {
-  let max = -1;
-  for (const { value } of state.laidAtTurn.values()) max = Math.max(max, value);
-  return max;
-}
-
-function mostRecentEaterSpider(state, eatenDeltaBySpider) {
-  if (eatenDeltaBySpider.size) return [...eatenDeltaBySpider.keys()].sort()[0];
-  let best = null;
-  let bestTurn = -1;
-  for (const { spider, turn } of state.eatenBy.values()) {
-    if (turn > bestTurn) { bestTurn = turn; best = spider; }
-  }
-  return best;
-}
+// fixed deliberately: catch first (a spider not yet carrying claims an
+// uncarried live fly it now shares a cell with, web or not), then eat (only
+// a carrying spider standing in an active web actually consumes its catch —
+// predation resolves on the turn's fresh positions), then starve (a fly
+// already claimed by an eat this turn cannot also starve), then lay (reads
+// the egg slot as it stood BEFORE this tick's own hatch, so a hatch and a
+// fresh lay never land the same turn), then hatch, then spawn (reads the
+// board as every earlier step in this same pass left it, so a fly never
+// spawns on a cell an eat/hatch just vacated or occupied). ------------------
 
 /**
  * One ecology pass over the tick's post-movement state: `postMovePlacements`
@@ -365,11 +376,12 @@ function mostRecentEaterSpider(state, eatenDeltaBySpider) {
  * (`postMoveMassBySpider` is optional — a spider absent from it is simply
  * never starve-checked, so callers that don't track spider mass, e.g. older
  * tests, see no behavior change). `state` is the PRE-move fold (for history:
- * prior flies-eaten counts, prior eggs, prior eaten turns, live webs).
+ * prior flies-eaten counts, prior carrying status, prior eggs, live webs).
  * `config` (default DEFAULT_GAME_CONFIG.spiderFly) supplies every tunable
  * this pass reads: the initial masses a fallback/hatch/spawn mints, the
- * eggs-eaten lay threshold, the hatch delay, the spawn interval, and the web
- * duration the eat precondition checks against.
+ * egg-lay mass threshold, the hatch delay/count, the minimum hatchling mass,
+ * the spawn interval, and the web duration the eat precondition checks
+ * against.
  * Returns `{ writes, events }` — writes to append alongside the turn's
  * movement facts, events for the tick's own return payload. Pure.
  */
@@ -379,30 +391,57 @@ export function runEcologyPass({
 }) {
   const k = turn;
   const writes = [];
-  const events = { eaten: [], starved: [], laid: null, hatched: [], spawned: null, spawnedCell: null, massAfterEating: new Map() };
+  const events = {
+    caught: [], eaten: [], starved: [], laid: null, hatched: [], spawned: null, spawnedCell: null,
+    massAfterEating: new Map(),
+  };
 
   const spiders = [...postMovePlacements.keys()].filter((id) => /^spider-\d+$/.test(id)).sort();
   const flies = [...postMovePlacements.keys()].filter((id) => /^fly-\d+$/.test(id)).sort();
 
-  // 1. Eat — a spider and a fly sharing an actively-webbed cell (static home
-  // zone or a live dynamic web). The eating spider gains exactly the fly's
-  // post-decrement remaining mass, not a flat bonus.
+  // 1. Catch — a spider not already carrying a live fly claims the first
+  // uncarried live fly it shares a cell with this tick (web or not — the web
+  // only matters for the EAT step below). At most one catch per spider per
+  // tick. Starts from whatever every live spider was already carrying
+  // BEFORE this tick (state.carrying, filtered to a still-live captor and a
+  // still-live fly — a captor that died drops its stale carrying claim,
+  // freeing the fly to move independently again from the next tick on).
+  const carryingBySpider = new Map(); // spiderId -> flyId, this tick's working belief
+  for (const [spiderId, { flyId }] of state.carrying) {
+    if (postMovePlacements.has(spiderId) && postMovePlacements.has(flyId)) carryingBySpider.set(spiderId, flyId);
+  }
+  const carriedFlyIds = new Set(carryingBySpider.values());
+  for (const spiderId of spiders) {
+    if (carryingBySpider.has(spiderId)) continue;
+    const sCell = postMovePlacements.get(spiderId);
+    for (const flyId of flies) {
+      if (carriedFlyIds.has(flyId)) continue;
+      const fCell = postMovePlacements.get(flyId);
+      if (sCell.x !== fCell.x || sCell.y !== fCell.y) continue;
+      carryingBySpider.set(spiderId, flyId);
+      carriedFlyIds.add(flyId);
+      events.caught.push({ spider: spiderId, fly: flyId, cell: cellId(sCell.x, sCell.y) });
+      break;
+    }
+  }
+
+  // 2. Eat — a spider carrying a fly AND standing in an actively-webbed cell
+  // (static home zone or a live dynamic web) consumes it. The eating spider
+  // gains exactly the fly's post-decrement remaining mass, not a flat bonus.
   const claimedFlies = new Set();
   const eatenDeltaBySpider = new Map();
   const eatenMassBySpider = new Map();
   for (const spiderId of spiders) {
+    const flyId = carryingBySpider.get(spiderId);
+    if (!flyId) continue;
     const sCell = postMovePlacements.get(spiderId);
     if (!hasActiveWebAt(sCell.x, sCell.y, state, k, config.webDurationTurns)) continue;
-    for (const flyId of flies) {
-      if (claimedFlies.has(flyId)) continue;
-      const fCell = postMovePlacements.get(flyId);
-      if (sCell.x !== fCell.x || sCell.y !== fCell.y) continue;
-      claimedFlies.add(flyId);
-      eatenDeltaBySpider.set(spiderId, (eatenDeltaBySpider.get(spiderId) ?? 0) + 1);
-      eatenMassBySpider.set(spiderId, (eatenMassBySpider.get(spiderId) ?? 0) + (postMoveMassByFly.get(flyId) ?? 0));
-      writes.push({ subject: `${flyId}@turn${k}`, predicate: "mgx:eaten-by", object: spiderId });
-      events.eaten.push({ fly: flyId, spider: spiderId, cell: cellId(sCell.x, sCell.y) });
-    }
+    carryingBySpider.delete(spiderId);
+    claimedFlies.add(flyId);
+    eatenDeltaBySpider.set(spiderId, (eatenDeltaBySpider.get(spiderId) ?? 0) + 1);
+    eatenMassBySpider.set(spiderId, (eatenMassBySpider.get(spiderId) ?? 0) + (postMoveMassByFly.get(flyId) ?? 0));
+    writes.push({ subject: `${flyId}@turn${k}`, predicate: "mgx:eaten-by", object: spiderId });
+    events.eaten.push({ fly: flyId, spider: spiderId, cell: cellId(sCell.x, sCell.y) });
   }
   for (const [spiderId, delta] of eatenDeltaBySpider) {
     const newCount = (state.fliesEaten.get(spiderId)?.value ?? 0) + delta;
@@ -413,9 +452,11 @@ export function runEcologyPass({
     events.massAfterEating.set(spiderId, newSpiderMass);
   }
 
-  // 2. Starve — mass reached zero, and not already claimed by this turn's
+  // 3. Starve — mass reached zero, and not already claimed by this turn's
   // eat. Spiders waste away the same as flies; a spider that just ate
-  // survives regardless (eat resolves first).
+  // survives regardless (eat resolves first). A carried-but-not-yet-eaten
+  // fly starves exactly like a free one — its captor's carrying claim is
+  // dropped below so the spider doesn't keep "holding" a dead fly.
   for (const flyId of flies) {
     if (claimedFlies.has(flyId)) continue;
     if ((postMoveMassByFly.get(flyId) ?? 0) <= 0) {
@@ -424,6 +465,9 @@ export function runEcologyPass({
     }
   }
   const deadFliesThisTick = new Set([...claimedFlies, ...events.starved]);
+  for (const [spiderId, flyId] of carryingBySpider) {
+    if (events.starved.includes(flyId)) carryingBySpider.delete(spiderId);
+  }
   for (const spiderId of spiders) {
     if (eatenDeltaBySpider.has(spiderId)) continue;
     if (!postMoveMassBySpider.has(spiderId)) continue;
@@ -433,27 +477,47 @@ export function runEcologyPass({
     }
   }
 
-  // 3. Lay — the eat condition has fired enough times since the last egg (or
-  // once, at game start), with no live egg outstanding right now.
+  // Every live spider re-asserts its own mgx:carrying fact every tick (the
+  // same always-rewritten idiom mgx:currently-in/mgx:mass already use) — a
+  // merely-stopped write would leave a stale "carrying" row standing forever
+  // for the fold to keep honoring long after this tick's catch/eat actually
+  // changed it.
+  for (const spiderId of spiders) {
+    writes.push({ subject: `${spiderId}@turn${k}`, predicate: "mgx:carrying", object: carryingBySpider.get(spiderId) ?? "none" });
+  }
+
+  // 4. Lay — a spider's mass has reached the lay threshold AND it is
+  // standing in an active web, with no live egg outstanding right now. The
+  // laying spider resets to exactly its own initial mass; the surplus
+  // becomes the egg's own starting mass (an egg is never laid below the
+  // initial-mass reset, so the surplus is always >= 0).
   const liveEggId = [...state.laidAtTurn.keys()].find((id) => !state.removed.has(id));
   if (!liveEggId) {
-    const sinceTurn = mostRecentEggLaidTurn(state);
-    const threshold = sinceTurn === -1 ? 1 : config.eggsEatenThreshold;
-    let eatsSince = events.eaten.length;
-    for (const { turn: eatenTurn } of state.eatenBy.values()) if (eatenTurn > sinceTurn) eatsSince += 1;
-    if (eatsSince >= threshold) {
-      const eggSpider = mostRecentEaterSpider(state, eatenDeltaBySpider);
-      const eggCell = eggSpider ? (postMovePlacements.get(eggSpider) ?? parseCellId(state.placements.get(eggSpider)?.cell)) : null;
-      if (eggCell) {
-        const eggId = `egg-${1 + maxIdSuffix(state.placements.keys(), /^egg-(\d+)$/)}`;
-        writes.push({ subject: `${eggId}@turn${k}`, predicate: "mgx:currently-in", object: cellId(eggCell.x, eggCell.y) });
-        writes.push({ subject: `${eggId}@turn${k}`, predicate: "mgx:laid-at-turn", object: String(k) });
-        events.laid = eggId;
-      }
+    for (const spiderId of spiders) {
+      const sCell = postMovePlacements.get(spiderId);
+      if (!hasActiveWebAt(sCell.x, sCell.y, state, k, config.webDurationTurns)) continue;
+      const spiderMass = eatenDeltaBySpider.has(spiderId)
+        ? events.massAfterEating.get(spiderId)
+        : (postMoveMassBySpider.get(spiderId) ?? state.mass.get(spiderId)?.value ?? config.spiderInitialMass);
+      if (spiderMass < config.eggLayMassThreshold) continue;
+      const eggMass = spiderMass - config.spiderInitialMass;
+      writes.push({ subject: `${spiderId}@turn${k}`, predicate: "mgx:mass", object: String(config.spiderInitialMass) });
+      const eggId = `egg-${1 + maxIdSuffix(state.placements.keys(), /^egg-(\d+)$/)}`;
+      const eggCellId = cellId(sCell.x, sCell.y);
+      writes.push({ subject: `${eggId}@turn${k}`, predicate: "mgx:currently-in", object: eggCellId });
+      writes.push({ subject: `${eggId}@turn${k}`, predicate: "mgx:laid-at-turn", object: String(k) });
+      writes.push({ subject: `${eggId}@turn${k}`, predicate: "mgx:mass", object: String(eggMass) });
+      events.laid = eggId;
+      break; // one-egg-at-a-time cap — the first qualifying spider lays it
     }
   }
 
-  // 4. Hatch — any live egg laid exactly config.eggHatchDelayTurns turns ago.
+  // 5. Hatch — any live egg laid exactly config.eggHatchDelayTurns turns ago
+  // hatches into config.eggHatchCount spiders, capped by a floor on COUNT
+  // (never on hatch mass): actualHatchCount = max(1, min(eggHatchCount,
+  // floor(eggMass / minHatchlingMass))) — a too-small egg produces fewer,
+  // still-viable hatchlings rather than emaciated ones. The egg's mass
+  // splits evenly, remainder to the lowest-numbered hatchling.
   const liveEggIds = [...state.laidAtTurn.keys()].filter((id) => !state.removed.has(id)).sort();
   let nextSpiderNum = 1 + maxIdSuffix(state.placements.keys(), /^spider-(\d+)$/);
   for (const eggId of liveEggIds) {
@@ -461,15 +525,24 @@ export function runEcologyPass({
     if (laidTurn + config.eggHatchDelayTurns !== k) continue;
     const eggCell = state.placements.get(eggId)?.cell;
     if (!eggCell) continue;
-    const newSpiderId = `spider-${nextSpiderNum}`;
-    nextSpiderNum += 1;
-    writes.push({ subject: `${newSpiderId}@turn${k}`, predicate: "mgx:currently-in", object: eggCell });
-    writes.push({ subject: `${newSpiderId}@turn${k}`, predicate: "mgx:mass", object: String(config.spiderInitialMass) });
-    writes.push({ subject: `${eggId}@turn${k}`, predicate: "mgx:hatched-into", object: newSpiderId });
-    events.hatched.push({ egg: eggId, spider: newSpiderId, cell: eggCell });
+    const eggMass = state.mass.get(eggId)?.value ?? config.spiderInitialMass;
+    const hatchCount = Math.max(1, Math.min(config.eggHatchCount, Math.floor(eggMass / config.minHatchlingMass)));
+    const share = Math.floor(eggMass / hatchCount);
+    const remainder = eggMass - share * hatchCount;
+    const hatchlings = [];
+    for (let i = 0; i < hatchCount; i += 1) {
+      const newSpiderId = `spider-${nextSpiderNum}`;
+      nextSpiderNum += 1;
+      const hatchlingMass = share + (i === 0 ? remainder : 0);
+      writes.push({ subject: `${newSpiderId}@turn${k}`, predicate: "mgx:currently-in", object: eggCell });
+      writes.push({ subject: `${newSpiderId}@turn${k}`, predicate: "mgx:mass", object: String(hatchlingMass) });
+      hatchlings.push({ spider: newSpiderId, mass: hatchlingMass });
+    }
+    writes.push({ subject: `${eggId}@turn${k}`, predicate: "mgx:hatched-into", object: hatchlings[0].spider });
+    events.hatched.push({ egg: eggId, cell: eggCell, spiders: hatchlings });
   }
 
-  // 5. Spawn — every third turn, a new fly at a seeded pick among the
+  // 6. Spawn — every third turn, a new fly at a seeded pick among the
   // currently-uncontested perimeter cells (never Math.random — see
   // seededPick's own header comment).
   if (k % config.flySpawnIntervalTurns === 0) {
@@ -530,15 +603,48 @@ export async function startSpiderFlyGame(memoryDir, { flyCount = 1, config = DEF
 }
 
 function goalLineFor(subject, believed, arrived, kind) {
+  if (kind === "spider-carrying") return `carrying ${believed.subject} toward the web.`;
+  if (kind === "spider-carrying-delivered") return `carrying ${believed.subject} — already in the web, delivering it now.`;
   if (kind === "spider-avoid") return `avoiding ${believed.subject}, last seen at ${cellId(believed.cell.x, believed.cell.y)}.`;
   if (!believed) return kind === "spider" ? "no fly in sight — holding position in the web." : "no spider in sight — wandering.";
   const seenAt = cellId(believed.cell.x, believed.cell.y);
   if (kind === "spider") {
     return arrived
-      ? `co-located with ${believed.subject} in the web.`
+      ? `co-located with ${believed.subject} — catching it.`
       : `chasing ${believed.subject}, last seen at ${seenAt}.`;
   }
   return `evading — last saw ${believed.subject} at ${seenAt}.`;
+}
+
+/** A one-step "plan" for a greedy or held move — the direction from
+ *  `fromCell` to `toCell` as a length-1 array, or `[]` when the agent held
+ *  still. Every agent's `plan` field is populated this way when its move
+ *  came from one-ply greedy scoring or holding; a genuine multi-step search
+ *  result (planSpiderPath/planSpiderPathToWeb) supplies its own full
+ *  direction list instead — either way, `plan[0]` is always the direction
+ *  actually taken this tick — the facing driver a renderer keys sprite
+ *  orientation on. */
+function stepPlan(fromCell, toCell) {
+  const direction = oneStepDirectionBetween(fromCell, toCell);
+  return direction ? [direction] : [];
+}
+
+/** A full "world knowledge graph" snapshot for one observer this tick: every
+ *  OTHER named candidate's believed cell (believedCellOf — ground truth
+ *  inside vision, else the newest told fact addressed to this observer,
+ *  else null for "unknown") — feeds a per-agent belief panel. Deliberately
+ *  never ground truth: showing the observer's own honest gap
+ *  between belief and reality (visibly widened by a deceiving pill or a fed
+ *  false fact) is the whole point of that panel. Returns a plain
+ *  `{ [candidateId]: cellId | null }` map. */
+function beliefSnapshotFor(observerSubject, observerCell, candidateIds, state, opts) {
+  const belief = {};
+  for (const candidateId of candidateIds) {
+    if (candidateId === observerSubject) continue;
+    const cell = believedCellOf(candidateId, observerSubject, observerCell, state, opts);
+    belief[candidateId] = cell ? cellId(cell.x, cell.y) : null;
+  }
+  return belief;
 }
 
 /** Live (unexpired, by `turn`) dynamic webs from a `Map(webId -> {cell,
@@ -559,30 +665,37 @@ export function liveWebs(websMap, turn, webDurationTurns = WEB_DURATION_TURNS) {
 
 /**
  * One full tick: fold state, compute each live spider's and fly's belief,
- * replan/re-score, execute one movement step per agent (spiders: avoid other
- * spiders > chase flies > hold-and-web; flies: evade > wander, unless
- * trapped in an active web), run the ecology pass, and append everything as
- * this turn's @turnN facts in one write. `opts.toldFacts` is the belief
- * layer's chat-integration extension point (§4) — an array of `{ subject,
- * toAgent, cell, turn }` rows, empty until a later piece of work wires
- * chat-told positions through it.
+ * replan/re-score, execute one movement step per agent (spiders: carrying-
+ * not-yet-delivered > avoid other spiders > chase flies > hold-and-web;
+ * flies: carried (inert) > evade > wander, unless trapped in an active web),
+ * run the ecology pass, and append everything as this turn's @turnN facts in
+ * one write. `opts.toldFacts` is the belief layer's chat-integration
+ * extension point (§4) — an array of `{ subject, toAgent, cell, turn }`
+ * rows, empty until a later piece of work wires chat-told positions through
+ * it.
  *
  * Returns `{ turn, writes, agents, ecology, activeWebs }`: `agents` is keyed
  * by every live spider/fly subject after this tick, each `{ cell, goal,
- * plan, mass }` (the spider's `plan` is its found path's remaining
- * directions, or null when it has none this tick); `ecology` is the tick's
- * eaten/starved/laid/hatched/spawned event summary; `activeWebs` is every
- * currently-live dynamic web (static home zone excluded — that's fixed grid
- * geometry, not runtime state), for a renderer to draw distinctly.
+ * plan, mass, belief }` — `plan` is the direction sequence that produced
+ * THIS tick's move (a full multi-step search result when one was found,
+ * else a length-1 array for a single greedy step, else `[]` when the agent
+ * held still — `plan[0]` is always the direction actually taken, the facing
+ * driver a renderer keys sprite orientation on); `belief` is
+ * `{ [otherAgentId]: cellId | null }`,
+ * this agent's own believed position for every other live agent (never
+ * ground truth — see beliefSnapshotFor). `ecology` is the tick's own
+ * caught/eaten/starved/laid/hatched/spawned event summary; `activeWebs` is
+ * every currently-live dynamic web (static home zone excluded — that's
+ * fixed grid geometry, not runtime state), for a renderer to draw
+ * distinctly.
  *
  * `opts.config` (default DEFAULT_GAME_CONFIG.spiderFly) supplies every
- * tunable this tick reads: the vision radius, both agents' starting/decrement
- * masses, and the web duration, and is forwarded unchanged into
- * runEcologyPass.
+ * tunable this tick reads: each class's own vision radius, both agents'
+ * starting/decrement masses, and the web duration, and is forwarded
+ * unchanged into runEcologyPass.
  */
 export async function runSpiderFlyTick(memoryDir, opts = {}) {
   const { toldFacts = [], config = DEFAULT_GAME_CONFIG.spiderFly } = opts;
-  const visionRadius = config.visionRadius;
   const rows = readFactRows(await loadMemory(memoryDir));
   const state = foldSpiderFlyState(rows);
   const k = state.turnCount + 1;
@@ -605,48 +718,83 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
     const newMass = Math.max(0, priorMass - config.spiderMassDecrementPerTurn);
     postMoveMassBySpider.set(spiderId, newMass);
 
-    // Priority 1: avoid any OTHER live spider believed visible.
     const otherSpiders = spiders.filter((id) => id !== spiderId);
-    const avoidTarget = nearestBelievedTarget(spiderId, spiderCell, otherSpiders, state, { visionRadius, toldFacts });
+    const belief = beliefSnapshotFor(spiderId, spiderCell, [...otherSpiders, ...flies], state, { visionRadius: config.spiderVisionRadius, toldFacts });
+
+    // Priority 0: carrying a fly, above everything else — a
+    // carrying spider never drops its catch to avoid another spider or
+    // chase a second one (no spider-eats-spider mechanic exists anywhere in
+    // this engine, so "avoid" is resource contention, not survival, and
+    // dropping/abandoning the catch would undermine the whole mass-economy
+    // goal chain). Not yet delivered: race the shortest path to any active
+    // web (planSpiderPathToWeb), falling back to a greedy approach toward
+    // the static web's home cell when no path is found. Already delivered
+    // (already standing in an active web): hold still rather than run the
+    // ordinary priority chain, so the ecology pass's own eat gate (which
+    // reads this SAME post-move position) reliably resolves the delivery
+    // this exact tick instead of risking the spider wandering back out
+    // first.
+    const carriedFlyId = state.carrying.get(spiderId)?.flyId;
+    const isCarrying = Boolean(carriedFlyId) && !state.removed.has(carriedFlyId);
+    const alreadyDelivered = isCarrying && hasActiveWebAt(spiderCell.x, spiderCell.y, state, k, config.webDurationTurns);
+
     let nextCell;
-    let plan = null;
+    let plan;
     let goal;
-    if (avoidTarget) {
-      nextCell = greedySpiderAvoid(spiderCell, avoidTarget.cell, applyActions);
-      goal = goalLineFor(spiderId, avoidTarget, false, "spider-avoid");
+    if (isCarrying && alreadyDelivered) {
+      nextCell = spiderCell;
+      plan = [];
+      goal = goalLineFor(spiderId, { subject: carriedFlyId }, false, "spider-carrying-delivered");
+    } else if (isCarrying) {
+      const path = planSpiderPathToWeb(spiderCell, applyActions, state, k, config.webDurationTurns);
+      if (path && path.actions.length) { nextCell = path.states[1]; plan = path.actions; }
+      else { nextCell = greedySpiderApproach(spiderCell, WEB_HOME, applyActions); plan = stepPlan(spiderCell, nextCell); }
+      goal = goalLineFor(spiderId, { subject: carriedFlyId }, false, "spider-carrying");
     } else {
-      // Priority 2: chase a believed-visible fly, exactly as before.
-      const target = nearestBelievedTarget(spiderId, spiderCell, flies, state, { visionRadius, toldFacts });
-      if (target) {
-        nextCell = spiderCell;
-        const path = planSpiderPath(spiderCell, target.cell, applyActions, state, k, config.webDurationTurns);
-        if (path) {
-          if (path.actions.length) { nextCell = path.states[1]; plan = path.actions; }
-        } else {
-          nextCell = greedySpiderApproach(spiderCell, target.cell, applyActions);
-        }
-        // "Arrived" is the real eat precondition (co-located with the
-        // believed target, inside an active web) — NOT merely "didn't move
-        // this turn", which a greedy-approach spider also does whenever it's
-        // already at its closest reachable cell but still a step away
-        // (Chebyshev-adjacent isn't co-located; has-exit-* edges have no
-        // diagonal hop).
-        const arrived = nextCell.x === target.cell.x && nextCell.y === target.cell.y && hasActiveWebAt(nextCell.x, nextCell.y, state, k, config.webDurationTurns);
-        goal = goalLineFor(spiderId, target, arrived, "spider");
+      // Priority 1: avoid any OTHER live spider believed visible.
+      const avoidTarget = nearestBelievedTarget(spiderId, spiderCell, otherSpiders, state, { visionRadius: config.spiderVisionRadius, toldFacts });
+      if (avoidTarget) {
+        nextCell = greedySpiderAvoid(spiderCell, avoidTarget.cell, applyActions);
+        plan = stepPlan(spiderCell, nextCell);
+        goal = goalLineFor(spiderId, avoidTarget, false, "spider-avoid");
       } else {
-        // Priority 3: hold position, and build/refresh a web there unless an
-        // unexpired web already covers this exact cell.
-        nextCell = spiderCell;
-        const heldCellId = cellId(spiderCell.x, spiderCell.y);
-        if (!hasActiveWebAt(spiderCell.x, spiderCell.y, state, k, config.webDurationTurns)) {
-          const webId = `web-${nextWebNum}`;
-          nextWebNum += 1;
-          tickWebs.set(webId, { cell: heldCellId, builtAtTurn: k });
-          movementWrites.push({ subject: `${webId}@turn${k}`, predicate: "mgx:currently-in", object: heldCellId });
-          movementWrites.push({ subject: `${webId}@turn${k}`, predicate: "mgx:web-built-at-turn", object: String(k) });
-          goal = "no fly in sight — building a web here.";
+        // Priority 2: chase a believed-visible fly, exactly as before.
+        const target = nearestBelievedTarget(spiderId, spiderCell, flies, state, { visionRadius: config.spiderVisionRadius, toldFacts });
+        if (target) {
+          nextCell = spiderCell;
+          const path = planSpiderPath(spiderCell, target.cell, applyActions, state, k, config.webDurationTurns);
+          if (path) {
+            if (path.actions.length) { nextCell = path.states[1]; plan = path.actions; }
+            else plan = [];
+          } else {
+            nextCell = greedySpiderApproach(spiderCell, target.cell, applyActions);
+            plan = stepPlan(spiderCell, nextCell);
+          }
+          // "Arrived" is the real catch precondition (co-located with the
+          // believed target — a catch never needs a web, only the SEPARATE
+          // eat step that follows once it's carried into one) — NOT merely
+          // "didn't move this turn", which a greedy-approach spider also
+          // does whenever it's already at its closest reachable cell but
+          // still a step away (Chebyshev-adjacent isn't co-located;
+          // has-exit-* edges have no diagonal hop).
+          const arrived = nextCell.x === target.cell.x && nextCell.y === target.cell.y;
+          goal = goalLineFor(spiderId, target, arrived, "spider");
         } else {
-          goal = goalLineFor(spiderId, null, false, "spider");
+          // Priority 3: hold position, and build/refresh a web there unless an
+          // unexpired web already covers this exact cell.
+          nextCell = spiderCell;
+          plan = [];
+          const heldCellId = cellId(spiderCell.x, spiderCell.y);
+          if (!hasActiveWebAt(spiderCell.x, spiderCell.y, state, k, config.webDurationTurns)) {
+            const webId = `web-${nextWebNum}`;
+            nextWebNum += 1;
+            tickWebs.set(webId, { cell: heldCellId, builtAtTurn: k });
+            movementWrites.push({ subject: `${webId}@turn${k}`, predicate: "mgx:currently-in", object: heldCellId });
+            movementWrites.push({ subject: `${webId}@turn${k}`, predicate: "mgx:web-built-at-turn", object: String(k) });
+            goal = "no fly in sight — building a web here.";
+          } else {
+            goal = goalLineFor(spiderId, null, false, "spider");
+          }
         }
       }
     }
@@ -654,22 +802,54 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
     postMovePlacements.set(spiderId, nextCell);
     movementWrites.push({ subject: `${spiderId}@turn${k}`, predicate: "mgx:currently-in", object: cellId(nextCell.x, nextCell.y) });
     movementWrites.push({ subject: `${spiderId}@turn${k}`, predicate: "mgx:mass", object: String(newMass) });
-    agents[spiderId] = { cell: cellId(nextCell.x, nextCell.y), goal, plan, mass: newMass };
+    agents[spiderId] = { cell: cellId(nextCell.x, nextCell.y), goal, plan, mass: newMass, belief };
+  }
+
+  // A fly currently carried by a still-live spider (state.carrying, keyed by
+  // captor) rides that captor's own just-chosen cell instead of scoring its
+  // own move — fully inert, but its mass still decrements and it can still
+  // starve mid-transit below (an intended emergent failure mode). A captor
+  // that died since being folded self-heals the fly to independent movement
+  // for free: it's simply absent from this map (state.removed.has(spiderId)
+  // was never true for a captor still in `spiders`, so only a captor gone
+  // BEFORE this tick's fold — already excluded from `spiders` — is missing).
+  const captorOfFly = new Map();
+  for (const [spiderId, { flyId }] of state.carrying) {
+    if (spiders.includes(spiderId) && flies.includes(flyId)) captorOfFly.set(flyId, spiderId);
   }
 
   for (const flyId of flies) {
     const flyCell = parseCellId(state.placements.get(flyId).cell);
-    const believedSpider = nearestBelievedTarget(flyId, flyCell, spiders, state, { visionRadius, toldFacts });
-    const webbed = hasActiveWebAt(flyCell.x, flyCell.y, state, k, config.webDurationTurns);
-    const nextCell = webbed ? flyCell : greedyFlyMove(flyCell, believedSpider?.cell ?? null, applyActions, k, flyId);
+    const captorId = captorOfFly.get(flyId);
+    let nextCell;
+    let plan;
+    let goal;
+    if (captorId) {
+      nextCell = postMovePlacements.get(captorId);
+      plan = [];
+      goal = `being carried by ${captorId}.`;
+    } else {
+      const believedSpider = nearestBelievedTarget(flyId, flyCell, spiders, state, { visionRadius: config.flyVisionRadius, toldFacts });
+      const webbed = hasActiveWebAt(flyCell.x, flyCell.y, state, k, config.webDurationTurns);
+      if (webbed) {
+        nextCell = flyCell;
+        plan = [];
+        goal = "trapped in an active web — can't move.";
+      } else {
+        nextCell = greedyFlyMove(flyCell, believedSpider?.cell ?? null, applyActions, k, flyId);
+        plan = stepPlan(flyCell, nextCell);
+        goal = goalLineFor(flyId, believedSpider, true, "fly");
+      }
+    }
+    const belief = beliefSnapshotFor(flyId, captorId ? nextCell : flyCell, [...spiders, ...flies.filter((id) => id !== flyId)], state, { visionRadius: config.flyVisionRadius, toldFacts });
+
     postMovePlacements.set(flyId, nextCell);
     movementWrites.push({ subject: `${flyId}@turn${k}`, predicate: "mgx:currently-in", object: cellId(nextCell.x, nextCell.y) });
     const priorMass = state.mass.get(flyId)?.value ?? config.flyInitialMass;
     const newMass = Math.max(0, priorMass - config.flyMassDecrementPerTurn);
     postMoveMassByFly.set(flyId, newMass);
     movementWrites.push({ subject: `${flyId}@turn${k}`, predicate: "mgx:mass", object: String(newMass) });
-    const goal = webbed ? "trapped in an active web — can't move." : goalLineFor(flyId, believedSpider, true, "fly");
-    agents[flyId] = { cell: cellId(nextCell.x, nextCell.y), goal, mass: newMass };
+    agents[flyId] = { cell: cellId(nextCell.x, nextCell.y), goal, plan, mass: newMass, belief };
   }
 
   const ecology = runEcologyPass({ state, postMovePlacements, postMoveMassByFly, postMoveMassBySpider, turn: k, config });
@@ -698,7 +878,7 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
   // eaten" and still list fly-5's stale "trapped, can't move" goal one clause
   // later, as if it were still on the board. Drop it from `agents` (its own
   // goal is moot) and let the eating spider's line say what actually
-  // happened instead of the now-false "co-located with fly-5 in the web".
+  // happened instead of the now-false "co-located with fly-5 — catching it".
   // A spider can eat more than one fly in the same tick (several flies
   // co-located with it on the same cell) — group by spider first, rather
   // than overwriting the goal once per eaten fly, which silently credited
@@ -718,17 +898,31 @@ export async function runSpiderFlyTick(memoryDir, opts = {}) {
     }
   }
   for (const flyId of ecology.events.starved) delete agents[flyId];
+  // A fresh catch that wasn't ALSO delivered+eaten this same tick (the
+  // "just ate" override above already wins for that case) leaves both the
+  // spider's and the fly's pre-ecology goal stale (assigned during movement,
+  // before the catch resolved) — the spider's own chase/hold text and the
+  // fly's own evade/wander text neither one mentions the catch.
+  for (const { spider, fly } of ecology.events.caught) {
+    if (eatenBySpider.has(spider)) continue;
+    if (agents[spider]) agents[spider].goal = goalLineFor(spider, { subject: fly }, false, "spider-carrying");
+    if (agents[fly]) agents[fly].goal = `just caught by ${spider} — being carried.`;
+  }
   // A hatched spider or a spawned fly is minted by the ecology pass, which
   // runs AFTER the movement loops above already built `agents` from the
   // pre-tick roster — so without this, a brand-new individual is absent from
   // this tick's own returned agents (and so invisible on the board/HUD) even
   // though the very same tick's event text already announces it, only
-  // catching up the following tick once the fold picks it up naturally.
+  // catching up the following tick once the fold picks it up naturally. One
+  // egg can hatch into more than one spider — every hatchling gets its own
+  // agents[] entry, sharing the egg's own cell.
   for (const h of ecology.events.hatched) {
-    agents[h.spider] = { cell: h.cell, goal: "just hatched — no goal yet.", plan: null, mass: config.spiderInitialMass };
+    for (const { spider, mass } of h.spiders) {
+      agents[spider] = { cell: h.cell, goal: "just hatched — no goal yet.", plan: [], mass, belief: {} };
+    }
   }
   if (ecology.events.spawned && ecology.events.spawnedCell) {
-    agents[ecology.events.spawned] = { cell: ecology.events.spawnedCell, goal: "just arrived — no goal yet.", mass: config.flyInitialMass };
+    agents[ecology.events.spawned] = { cell: ecology.events.spawnedCell, goal: "just arrived — no goal yet.", plan: [], mass: config.flyInitialMass, belief: {} };
   }
   const writes = [...movementWrites, ...ecology.writes];
   const provenance = `${worldProvenanceTag(WORLD_NAME)}:turn${k}`;
