@@ -1,7 +1,8 @@
-# PLAN_SIX_EASY_PIECES.md — tailoring each demo page's knowledge and language capability to its job
+# PLAN_SIX_EASY_PIECES.md — the active plan for all six demo pages: knowledge, language, layout, and visuals
 
 Status: chat.html's cosmetic/functional round and the home-page rework shipped. The five-page
-knowledge/capability tailoring below is proposed, not started.
+knowledge/capability tailoring, the spider-fly layout change, and the adventure.html visual
+redesign below are proposed, not started.
 
 ## Origin
 
@@ -15,11 +16,16 @@ chat.html toward general LLM-alternative capability with "wikipedia omniscience,
 toward self-contained, domain-scoped depth with **no lazy loading** (zero runtime network
 dependency once the page has loaded).
 
-This project already has `PLAN_GAMES_UPLIFT_V3.md` as the direct precedent for a living,
-session-tracked plan doc covering these same six pages' visual/mechanical uplift (sprite emotion
-retrofit, spider-fly goals, the five-page site redesign, layout-bug sweeps). This doc is a sibling
-covering knowledge/capability uplift, not a duplicate — read that one for the visual/mechanical
-history, this one for the language/graph history.
+**This is now the one active, living plan doc for these six pages — full stop, not split by
+subject matter.** `PLAN_GAMES_UPLIFT_V3.md` (the prior plan covering the same pages' visual/
+mechanical uplift: sprite emotion retrofit, spider-fly goals, the five-page site redesign,
+layout-bug sweeps) is retired and archived (`archive/PLAN_GAMES_UPLIFT_V3.md`) now that this doc
+supersedes it (2026-07-21, operator instruction) — its one genuinely undelivered item (the
+sprites.html blank-region investigation, Part B below) is pulled forward into this doc rather than
+left behind in an archived file nobody reads. Layout and visual work for these pages (the
+spider-fly layout change and the adventure.html redesign, both below) lives here now too, alongside
+the knowledge/graph work — there is no subject-matter split between this doc and any other; if it
+touches one of these six pages, it's tracked here.
 
 ### Deployment context (so later reasoning in this doc doesn't get re-litigated on a false premise)
 
@@ -281,20 +287,36 @@ What's actually true today, checked this session rather than assumed — three o
 | **ledger.html** | Query-only dock over a graph (the demo's own small `public/demo-graph.json`, or a user's real graph via the CLI). One remaining lazy fetch: the wink-nlp CDN import. | Same wink de-lazying as plan.html (the shared-asset shape, not a per-bundle copy). Graph itself stays basic, per the operator — this page's job is to query, not to carry a big corpus. Audit the existing query-template library for phrasing gaps; it's an audit, not a new grammar. |
 | **sprites.html** | **No chat dock, no facts, no NLP at all** — a pure visual sprite catalog + a freeform scene-composer text box (`src/services/sprite-catalog-viz.mjs`), with no grounding underneath either. | The one net-new build in this plan: a new pure generator `src/domain/sprite-facts.mjs`, following the `spider-fly-world.mjs` pattern (with one structural difference, named below), walking the parsed sprite template set's class/tier/parameter definitions into real OWL-shaped facts (`<class> rdf:type SpriteClass`, `<class> hasParameter <param>`, etc.). `sprite-catalog-viz.mjs` embeds them at build time (same mechanism adventure.html already uses) and gains a chat dock wired to the same engine, seeded with these facts — no lazy loading, matching every other page in this round. Makes "what classes can you render?" / "what parameters does a person sprite take?" real, fact-grounded answers instead of nonexistent ones. Two costs the first draft left unstated: the dock brings this page its first `*-browser.bundle.js` (~1.6 MB at the other pages' current size, taking the page from 1.2 MB to ~2.8 MB); and the dock needs an explicit wink decision — load the same shared first-party wink asset as the other docks (preferred: a return visitor has already cached it), or run adapter-less on `wink-model.mjs`'s documented null path with a degraded lemma tier. State the choice in the build, don't let it fall out of an import. |
 
+### sprites.html — blank-region investigation, pulled forward from the archived plan
+
+`PLAN_GAMES_UPLIFT_V3.md`'s Part D screenshot review (2026-07-20) found `sprites.html`'s full-page
+screenshot shows a large blank region between the visible card content and the page's own footer,
+suspected `content-visibility: auto`/`contain-intrinsic-size` interacting with how a full-page
+screenshot captures off-screen sections — confirmed still present in the current source
+(`.group`/`.card` both carry `content-visibility: auto` with a `contain-intrinsic-size` placeholder
+in `sprite-catalog-viz.mjs`). That plan explicitly left it uninvestigated ("worth a follow-up look,
+not chased down this pass") rather than marking it fixed. It's the one item from that plan's own
+text that checking against the real code (not just the doc's prose) confirmed is genuinely still
+open — everything else that plan's text implied was unfinished (plan.html's PDDL panel and live
+chat-assert dock, adventure.html's edit mode) turned out to already be shipped in the real code; the
+old doc's own status text was simply stale for those. Proposed: confirm whether this is a real
+scroll-time visual bug or purely a screenshot-capture artifact (load the page and scroll manually,
+compare against the automated full-page screenshot), then either widen the
+`contain-intrinsic-size` estimate or size it from real measured card heights.
+
 ### adventure.html — visual redesign (proposed, not started)
 
 Operator review of the live page (screenshot, 2026-07-21): the current room view is mechanically
 correct — real facts render as a chip strip (you/cabinet/desk/lamp, each with a real class badge)
 and a single "current room" circle in "THE MANOR, SO FAR" — but reads as a bare functional layout,
-not a room. `PLAN_GAMES_UPLIFT_V3.md` already gave this page one thematic pass (an "RPG style" note
-in that plan's origin quotes); the operator's ask now is more specific and goes further: get the
+not a room. The now-archived `PLAN_GAMES_UPLIFT_V3.md` gave this page one earlier thematic pass (an
+"RPG style" note in that plan's origin quotes); this ask is more specific and goes further: get the
 `frontend-design` plugin to redesign it toward a **murder-mystery board game crossed with an RPG
 stats dashboard** — think Cluedo or Death on the Nile's room-and-suspect-board presentation — with
 **90s-RPG-era room-view fidelity, but with better icons** than the current plain circular glyphs.
-This is a visual/layout build, not a knowledge/graph one — it doesn't touch what facts the page
-knows, only how the room, its objects, and the "manor so far" map present them. Track it here
-because the operator asked for it in this document; the actual design work should invoke the
-`frontend-design` skill the same way `PLAN_GAMES_UPLIFT_V3.md`'s own thematic pass did.
+It doesn't touch what facts the page knows, only how the room, its objects, and the "manor so far"
+map present them — the actual design work should invoke the `frontend-design` skill, the same way
+the earlier archived pass did.
 
 ### spider-fly.html — layout change (proposed, not started)
 
@@ -318,11 +340,10 @@ Target layout, top to bottom:
 
 Mechanically this is a markup reorder plus a new grid-column split (a sibling of the existing
 `.stage`/`.tuning-grid` CSS grid rules, not a new layout technique) — no change to what the page
-knows or how the chat/tuning logic works, so it belongs alongside adventure.html's visual item
-above as a layout-only build, not a knowledge one. Re-run `e2e/pages-spider-fly.test.mjs` and the
-screenshot sweep afterward — both already assert this page's structure and would need updating to
-match the new order, the same way `pages-home.test.mjs`/`pages-index.test.mjs` were updated for the
-home-page rework this session.
+knows or how the chat/tuning logic works. Re-run `e2e/pages-spider-fly.test.mjs` and the screenshot
+sweep afterward — both already assert this page's structure and would need updating to match the
+new order, the same way `pages-home.test.mjs`/`pages-index.test.mjs` were updated for the home-page
+rework this session.
 
 **Generator precedent, so the sprites work doesn't invent a new pattern**: this codebase's
 established shape for "structured data source → OWL-shaped facts" is a pure generator function
@@ -434,7 +455,11 @@ this last, if at all.
    answered one real question from one real fact is not done.
 4. Gap-closing audits (spider-fly, adventure, plan vocabulary against their own UI-surfaced
    concepts).
-5. Standalone-export generalization (Part C) — optional, last.
+5. The spider-fly layout change and the adventure.html visual redesign — layout/visual builds,
+   sequenced alongside the audits since neither touches the same files as phases 1-3.
+6. sprites.html's blank-region investigation, pulled forward from the archived plan — small, can
+   land whenever convenient, no dependency on anything else here.
+7. Standalone-export generalization (Part C) — optional, last.
 
 Each phase: `npm run test:fast` + the specific blast radius (the relevant `e2e/pages-*.test.mjs`,
 `test/adapters/*-viz.test.mjs`), rebuild via `npm run demo:build`, and a CDP/Playwright check
@@ -446,10 +471,6 @@ phase, not one giant commit.
 
 - Not an implementation — Parts B and C are proposed work, not executed this session (operator's
   explicit instruction: this document is the deliverable for now).
-- Not a redesign of the visual/mechanical uplift `PLAN_GAMES_UPLIFT_V3.md` already shipped — this
-  doc is additive to that one, covering knowledge/graph capability, not layout or sprite art, with
-  one named exception: adventure.html's visual redesign (Part B) is tracked here because the
-  operator asked for it in this document, not because this doc's scope changed.
 - Not WordNet-full or live-Wikipedia's wider miss-hook — decided in principle (Part A) but held for
   a future round. The service worker is NOT in this list: it ships in Part B phase 1, not deferred
   (see "Deployment context," near the top of this doc, for why bandwidth/self-hosting cost isn't the
