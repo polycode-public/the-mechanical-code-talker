@@ -165,6 +165,49 @@ test("the plan link card leads to a real replay of the solved game", async () =>
   }
 });
 
+test("the plan page draws the puzzle's own pieces and nothing else from memory", async () => {
+  const { context, page } = await openPage("plan.html");
+  try {
+    await page.locator("#board").waitFor({ state: "visible" });
+    // The PDDL + OWL/RDF panel legitimately names domain/predicate terms
+    // (tmct-plan, smaller-than, rest-on, ...) that are not board pieces at
+    // all, so it is excluded here — it is checked on its own terms below.
+    // innerText only reflects rendered layout, so the panel is hidden (not
+    // cloned-and-detached, which loses layout and leaks script/style text)
+    // for the single synchronous read, then restored.
+    const replay = await page.locator("body").evaluate((body) => {
+      const panel = body.querySelector(".pddlpanel");
+      const prevDisplay = panel?.style.display ?? "";
+      if (panel) panel.style.display = "none";
+      const text = body.innerText;
+      if (panel) panel.style.display = prevDisplay;
+      return text;
+    });
+    // The board once drew every member of every class it had not declared as a
+    // block or a slot, which is the whole memory rather than the puzzle. A
+    // render that names a term the game never taught is that defect returning,
+    // and naming one piece is not enough to notice it.
+    const hanoiTerms = /^(disk-[1-3]|peg-[a-c])$/;
+    const drawn = [...replay.matchAll(/\b[a-z]+-[a-z0-9]+\b/g)].map(([term]) => term);
+    const strangers = [...new Set(drawn.filter((term) => !hanoiTerms.test(term)))];
+    assert.deepEqual(strangers, [], "the replay names only the pieces and places hanoi-3 taught");
+    assert.ok(drawn.length > 0, "the replay names the pieces at all");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the plan page's PDDL panel names only the puzzle's own objects and taught predicates", async () => {
+  const { context, page } = await openPage("plan.html");
+  try {
+    const pddl = await page.locator("#pddlOut").innerText();
+    assert.match(pddl, /disk-1/, "the PDDL objects include the puzzle's own pieces");
+    assert.match(pddl, /\(:action /, "the PDDL artifact includes at least one action");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the adventure link card leads to a real room scene", async () => {
   const { context, page } = await openPage("adventure.html");
   try {
