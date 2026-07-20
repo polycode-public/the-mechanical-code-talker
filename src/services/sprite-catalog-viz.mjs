@@ -55,18 +55,76 @@ import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from
 const DEFAULT_TITLE = "tmct — the sprite library";
 const MAX_CHAIN_DISPLAY = 6;
 
+/** A curated gap-fill for classes wordnet-xl's own prioritized subset
+ *  happens to carry NO rdfs:subClassOf row for at all (115 of 198 catalog
+ *  classes, checked directly against a build of this page) — every pair
+ *  here is real WordNet-derived data, the same corpus/wordnet/
+ *  wordnet-full.jsonl this module's header already describes evaluating
+ *  and rejecting as a BLANKET source (sense-conflation, 3000+ ancestors for
+ *  "poodle", minutes to walk). That rejection doesn't apply to a single
+ *  hand-verified relation per class: each pair below is the one /r/IsA row
+ *  (of however many wordnet-full.jsonl actually carries for that word) that
+ *  reads as the correct sense for a physical/common-noun catalog entry —
+ *  chosen the same way SEED_TAXONOMY above is hand-curated, not generated.
+ *  A term with only implausible senses on record (e.g. "pig" -> only
+ *  "ingot"/"live", "portable" -> only the archaic noun "typewriter") is
+ *  left OUT here on purpose rather than forced — it keeps today's honest
+ *  self-only chain instead of a confidently wrong one. Same for a term with
+ *  no /r/IsA row anywhere in wordnet-full.jsonl at all (autumn, grandmother,
+ *  human, manager) — a real, checked absence, not an oversight. */
+const CATALOG_TAXONOMY_GAPFILL = Object.freeze([
+  ["airport", "airfield"], ["ant", "hymenopterous insect"], ["artist", "creator"],
+  ["audience", "gathering"], ["baby", "child"], ["beach", "land"],
+  ["bee", "hymenopterous insect"], ["bicycle", "wheeled vehicle"], ["bird", "vertebrate"],
+  ["birthday", "anniversary"], ["boat", "vessel"], ["body of water", "thing"],
+  ["breakfast", "meal"], ["butler", "manservant"], ["butterfly", "lepidopterous insect"],
+  ["cabinet", "furniture"], ["car", "motor vehicle"], ["castle", "fortification"],
+  ["chair", "seat"], ["champion", "defender"], ["cheese", "dairy product"],
+  ["church", "place of worship"], ["citizen", "national"], ["city", "municipality"],
+  ["coin", "coinage"], ["container", "instrumentality"], ["crowd", "gathering"],
+  ["customer", "consumer"], ["daughter", "female offspring"], ["desk", "table"],
+  ["dinner", "meal"], ["doctor", "medical practitioner"], ["drink", "helping"],
+  ["elephant", "proboscidean"], ["factory", "plant"], ["family", "kin"],
+  ["farm", "workplace"], ["farmer", "creator"], ["fish", "aquatic vertebrate"],
+  ["food", "substance"], ["forest", "biome"], ["frog", "amphibian"],
+  ["furniture", "furnishing"], ["garden", "yard"], ["glove", "handwear"],
+  ["gold", "precious metal"], ["grandfather", "grandparent"], ["guest", "visitor"],
+  ["hate", "emotion"], ["home", "residence"], ["horse", "equine"],
+  ["hospital", "medical institution"], ["housekeeper", "domestic"], ["jewelry", "adornment"],
+  ["joy", "emotion"], ["lamp", "source of illumination"], ["lawyer", "professional"],
+  ["letter", "document"], ["lion", "big cat"], ["meal", "foodstuff"],
+  ["meat", "solid food"], ["meeting", "assembly"], ["money", "currency"],
+  ["mother", "parent"], ["mountain", "natural elevation"], ["museum", "depository"],
+  ["nurse", "health professional"], ["ocean", "body of water"], ["officer", "mariner"],
+  ["owl", "bird of prey"], ["planet", "celestial body"], ["portrait", "likeness"],
+  ["president", "head of state"], ["priest", "spiritual leader"], ["rabbit", "leporid"],
+  ["rain", "precipitation"], ["resident", "inhabitant"], ["river", "stream"],
+  ["road", "way"], ["room", "area"], ["sheep", "bovid"],
+  ["shoe", "footwear"], ["shop", "mercantile establishment"], ["snow", "precipitation"],
+  ["sock", "hosiery"], ["soldier", "enlisted person"], ["son", "male offspring"],
+  ["spring", "season"], ["star", "celestial body"], ["street", "thoroughfare"],
+  ["student", "enrollee"], ["sugar", "sweetening"], ["summer", "season"],
+  ["sun", "star"], ["table", "furniture"], ["teacher", "educator"],
+  ["team", "group"], ["town", "municipality"], ["train", "public transport"],
+  ["tree", "woody plant"], ["vehicle", "conveyance"], ["village", "settlement"],
+  ["visitor", "traveler"], ["waterway", "body of water"], ["wedding", "ceremony"],
+  ["wine", "alcohol"], ["winter", "season"], ["wolf", "canine"],
+  ["woman", "adult"],
+]);
+
 /** The real rdfs:subClassOf fact rows this catalog's ancestor chains walk —
  *  see this module's own header for why these two sources and not a third.
  *  I/O (reads corpus/wordnet/wordnet-xl.jsonl + its relation map); never
  *  called from renderSpriteCatalogHtml itself, which stays pure. */
 export async function loadSpriteOntologyFactRows() {
   const seedRows = SEED_TAXONOMY.map(([subject, object]) => ({ subject, predicate: "rdfs:subClassOf", object }));
+  const gapfillRows = CATALOG_TAXONOMY_GAPFILL.map(([subject, object]) => ({ subject, predicate: "rdfs:subClassOf", object }));
   const assertions = await loadSlice(join(WORDNET_DIR, "wordnet-xl.jsonl"));
   const map = await loadMap();
   const wordnetRows = toFacts(assertions, map, "corpus:wordnet-xl")
     .filter((f) => f.predicate === "rdfs:subClassOf")
     .map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object }));
-  return [...seedRows, ...wordnetRows];
+  return [...seedRows, ...gapfillRows, ...wordnetRows];
 }
 
 // ---- grouping (presentation only — every class still resolves through the
