@@ -644,6 +644,24 @@ in flight — relayed directly to the implementing agents, recorded here too:**
    verification (long combined provenance badges forcing a wide single-column grid) per this
    project's "don't narrow scope" rule.
 
+   **Follow-up, also shipped**: the dock itself was still query-only (`memory-ask-browser.bundle.js`
+   — `factAnswer`/`factReadBack`, no teach). Operator tried teaching it a fact directly ("blue is a
+   peg") and got the honest-miss refusal — working as designed for a read-only surface, but the
+   operator asked for real teaching, matching chat.html/spider-fly.html/adventure.html/plan.html.
+   Shipped: `src/surfaces/web/ledger-browser-entry.mjs` (`createLedgerSession`, mirrors
+   `chat-browser-entry.mjs`'s `createChatSession` shape) + `scripts/build-ledger-bundle.mjs`
+   (mirrors `build-plan-bundle.mjs`), gitignored and Pages-only — the CLI's own `tmct viz` output is
+   untouched (`ledgerBundleAvailable` defaults false, only `build-demo-site.mjs` sets it true), so
+   the published npm package gains no size and every existing CLI-output test still holds. A
+   successful teach re-renders the SAME view live (fact table, stat tiles, term minigraph), mirroring
+   `plan.html`'s own live chat-assert dock. Real bug found and fixed during verification: the dock's
+   refocus-on-answer logic ran on every turn including misses, and the honest-miss boilerplate text
+   happens to contain the real taught term "run" — a genuine miss was silently refocusing the view
+   onto it. Fixed to only refocus on a genuine answer, with a permanent regression test. Verified
+   independently by the coordinator: a real "blue is a peg" teach turn through a fresh Playwright
+   screenshot showed the fact count go 29→30, the "taught" stat tile update, and the term minigraph
+   re-center on the new term, live, no reload.
+
 ### C.5 Files touched
 
 New: `src/services/chat-viz.mjs` (or similarly named — `renderChatHtml`), `public/chat.html`,
