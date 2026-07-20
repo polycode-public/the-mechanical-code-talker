@@ -153,7 +153,13 @@ function isMemoryHandle(dir) {
 function isSqliteHandle(dir) {
   return !!dir && typeof dir === "object" && dir.backend === BACKEND_SQLITE;
 }
-function isMemoryOrSqliteHandle(dir) {
+/** True for a Backend B (in-memory) or Backend C (sqlite) handle — anything
+ *  that is NOT a plain repo-path string. Exported so every OTHER module that
+ *  takes a `dir` and might reach a raw `node:path`/`node:fs` call (blocks.mjs's
+ *  session-block index chief among them) can guard the same way this module
+ *  already does, instead of a bare `join(dir, …)` throwing Node's generic
+ *  "path argument must be of type string" at a caller with no idea why. */
+export function isMemoryOrSqliteHandle(dir) {
   return isMemoryHandle(dir) || isSqliteHandle(dir);
 }
 

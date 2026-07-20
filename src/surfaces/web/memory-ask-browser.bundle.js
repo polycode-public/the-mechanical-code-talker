@@ -9268,6 +9268,7 @@ ${bodyText}` : graphText, tier });
     findContradictions: () => findContradictions,
     findRuleByName: () => findRuleByName,
     findRulesByName: () => findRulesByName,
+    isMemoryOrSqliteHandle: () => isMemoryOrSqliteHandle,
     loadMemory: () => loadMemory,
     loadSyllogiseState: () => loadSyllogiseState,
     normFactPredicate: () => normFactPredicate,
@@ -22059,6 +22060,7 @@ ${codeblock}`, options);
       init_prose();
       init_text_stats();
       init_trust();
+      init_core();
       BLOCKS_DIR_REL = join(".tmct", "memory", "blocks");
     }
   });

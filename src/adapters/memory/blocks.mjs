@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { splitIdentifierWords, tokenizeProse } from "../../domain/prose.mjs";
 import { idfWeight } from "../../domain/text-stats.mjs";
 import { SOURCE_PRIOR } from "../../domain/memory/trust.mjs";
+import { isMemoryOrSqliteHandle } from "./core.mjs";
 
 // A block inherits its Source's trust (operator 1.0, corpus 0.7); retrieval
 // weights relevance × trust via a bounded factor (0.5 + trust, ~[0.5, 1.5]).
@@ -50,8 +51,14 @@ async function atomicWrite(file, text) {
 }
 
 /** Load the block index ({ blocks: { id: { file, tokens[], rank } } }); a
- *  missing index is the empty bootstrap. */
+ *  missing index is the empty bootstrap. Session-block folding writes to
+ *  `.tmct/memory/blocks/` on disk (fold.mjs, session end) — a Backend B/C
+ *  handle (createInMemoryStore/createSqliteMemoryStore) has no such directory
+ *  to read, so it gets the SAME empty bootstrap a fresh Backend A repo gets,
+ *  never a raw `path.join(dir, …)` TypeError from treating the handle object
+ *  as a path string. */
 export async function loadBlockIndex(dir) {
+  if (isMemoryOrSqliteHandle(dir)) return { blocks: {} };
   try {
     return JSON.parse(await readFile(join(blocksDir(dir), INDEX_NAME), "utf8"));
   } catch (e) {
@@ -142,6 +149,9 @@ function rerank(index) {
  */
 export async function saveBlock(dir, { id, text, sourceType = DEFAULT_BLOCK_SOURCE_TYPE, createdAt = "" }) {
   if (!id) throw new Error("a block needs an id");
+  if (isMemoryOrSqliteHandle(dir)) {
+    throw new Error("saveBlock: dir is a memory/sqlite handle — session-block folding is Backend A only (no on-disk blocks/ directory to write)");
+  }
   const bdir = blocksDir(dir);
   await mkdir(bdir, { recursive: true });
   const file = `${safeName(id)}.txt`;
@@ -161,6 +171,7 @@ export async function saveBlock(dir, { id, text, sourceType = DEFAULT_BLOCK_SOUR
 
 /** Remove a block (id unknown → no-op) and re-rank the survivors. */
 export async function removeBlock(dir, id) {
+  if (isMemoryOrSqliteHandle(dir)) return false; // nothing was ever written; removing is a no-op, not an error
   const index = await loadBlockIndex(dir);
   const entry = index.blocks[id];
   if (!entry) return false;

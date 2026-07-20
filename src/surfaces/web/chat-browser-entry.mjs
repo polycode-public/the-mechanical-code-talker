@@ -1,5 +1,5 @@
-// chat-browser-entry.mjs — the esbuild entry for the home page's embedded
-// chat (public/chat-ui.mjs, built by scripts/build-chat-bundle.mjs).
+// chat-browser-entry.mjs — the esbuild entry for chat.html's embedded chat
+// (built by scripts/build-chat-bundle.mjs).
 //
 // Unlike memory-ask-browser-entry.mjs (factAnswer/factReadBack only), this
 // exposes the FULL turn engine: createChatSession wraps chat.mjs's runTurn
@@ -17,7 +17,8 @@
 //     Web Crypto API instead, with a Date.now fallback for contexts
 //     without it.
 import { runTurn, vocabExampleHint } from "../../services/chat.mjs";
-import { createInMemoryStore, normFactTerm } from "../../adapters/memory/core.mjs";
+import { createInMemoryStore, normFactTerm, loadMemory, readFactRows } from "../../adapters/memory/core.mjs";
+import { provenanceTagToSource } from "../../domain/memory/trust.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
@@ -84,4 +85,51 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false } = 
   };
 }
 
-globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, normFactTerm, vocabExampleHint };
+/**
+ * The memory a running session holds, broken down by where each fact came
+ * from: the seed corpus bands it booted with (keyed by the SAME band name
+ * build-chat-seed.mjs/extensions.mjs seed under — "human", "seon",
+ * "conceptnet" today, whichever bands a future seed adds tomorrow) plus
+ * whatever has been taught THIS session over chat. Reuses memory/trust.mjs's
+ * own `provenanceTagToSource` against each fact's already-stored provenance
+ * tag(s) (readFactRows' `provenance`, the ' | '-joined compat string) rather
+ * than inventing a second provenance parse — the same tag chat.mjs's own
+ * "(source: ...)" citation already carries, so this panel and a turn's
+ * citation always agree on where a fact came from.
+ *
+ * Returns { total, bandCounts, taught }: `bandCounts` maps a band label to
+ * its fact count ("taught this session" for a teach/operator-sourced fact
+ * with no corpus band, "other" for anything provenance can't place);
+ * `taught` lists every session-taught fact (subject/predicate/object + its
+ * own provenance tag), most-recently-taught last — a stats panel's
+ * provenance column reads straight off this, no further lookup needed.
+ */
+export async function memoryStats(memoryDir) {
+  const memory = await loadMemory(memoryDir);
+  const rows = readFactRows(memory);
+  const bandCounts = {};
+  const taught = [];
+  for (const row of rows) {
+    const tags = String(row.provenance || "").split(" | ").filter(Boolean);
+    let band = null;
+    let isTaught = false;
+    let taughtTag = "";
+    for (const tag of tags) {
+      const src = provenanceTagToSource(tag);
+      if (!src) continue;
+      // corpusWeak (a /r/RelatedTo-strength triple, e.g. ConceptNet's or
+      // SEON's own weaker associations) names the SAME band as corpus (a
+      // /r/IsA-strength one) — both carry `src.name`, and a band count that
+      // dropped the weak tier would undercount a corpus by exactly its
+      // weak-relation facts (SEON: 19 of them, all `corpus-weak:seon`).
+      if ((src.kind === "corpus" || src.kind === "corpusWeak") && src.name) band = src.name;
+      if (src.kind === "teach" || src.kind === "operator") { isTaught = true; taughtTag = tag; }
+    }
+    const label = band || (isTaught ? "taught this session" : "other");
+    bandCounts[label] = (bandCounts[label] || 0) + 1;
+    if (isTaught) taught.push({ subject: row.subject, predicate: row.predicate, object: row.object, tag: taughtTag });
+  }
+  return { total: rows.length, bandCounts, taught };
+}
+
+globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, normFactTerm, vocabExampleHint, memoryStats };

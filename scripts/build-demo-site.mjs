@@ -108,16 +108,9 @@ const ledgerPath = join(SITE, "ledger.html");
 await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true }));
 console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
 
-// The home page's embedded chat: the full-engine browser bundle plus its
-// starter-memory seed, both generated (never committed) so the page always
-// serves what src/ builds today.
-//
-// public/chat-ui.mjs imports the shared ticker helper as a plain sibling ES
-// module (viz-ticker.mjs's own header names this exact usage), so a literal,
-// unmodified copy travels alongside it here — the same posture as
-// public/engine/src/'s copy of the domain sources above, just one file.
-cpSync(join(SRC, "services", "viz-ticker.mjs"), join(SITE, "viz-ticker.mjs"));
-console.log(`copied viz-ticker.mjs into ${SITE}`);
+// chat.html's full engine: the browser bundle plus its starter-memory seed,
+// both generated (never committed) so the page always serves what src/
+// builds today.
 const { main: buildChatBundle } = await import(join(here, "build-chat-bundle.mjs"));
 const { outPath: chatBundlePath, size: chatBundleBytes } = await buildChatBundle(SITE);
 console.log(`wrote ${chatBundlePath} (${(chatBundleBytes / 1024).toFixed(0)} KB)`);
@@ -125,20 +118,20 @@ const { main: buildChatSeed } = await import(join(here, "build-chat-seed.mjs"));
 const seed = await buildChatSeed(join(SITE, "chat-seed.json"));
 console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).toFixed(0)} KB)`);
 
-// The reference pack's browser subset (public/reference-pack/): cut from the
-// full pack when this machine carries one; skipped when it doesn't — the
-// page's fetch provider then reads null and a pack lookup stays the ordinary
-// honest miss. A pack that IS present but missing an allowlisted term still
-// fails the build loudly (build-demo-pack's own check).
+// The reference pack's browser subset (public/reference-pack/): EVERY term
+// the full pack at this machine already resolves, not a curated slice — the
+// lazy per-citation fetch path (chat-browser-entry.mjs's fetchPackProvider)
+// reaches whatever's already built, and a term genuinely absent from the pack
+// reads as the ordinary honest miss, same as it always did. Skipped outright
+// when this machine carries no pack at all.
 {
   const { referencePackDir } = await import(join(ROOT, "src", "adapters", "corpus", "reference-pack.mjs"));
   const packDir = referencePackDir();
   if (existsSync(join(packDir, "index.json.gz"))) {
-    const { buildDemoPack } = await import(join(here, "build-demo-pack.mjs"));
-    const { REFERENCE_PACK_TERMS } = await import(join(ROOT, "public", "chat-demos.mjs"));
+    const { buildDemoPack, allPackTerms } = await import(join(here, "build-demo-pack.mjs"));
     const packOut = join(SITE, "reference-pack");
     rmSync(packOut, { recursive: true, force: true });
-    const manifest = buildDemoPack({ srcDir: packDir, terms: REFERENCE_PACK_TERMS, outDir: packOut });
+    const manifest = buildDemoPack({ srcDir: packDir, terms: allPackTerms(packDir), outDir: packOut });
     console.log(`wrote ${packOut} (${Object.keys(manifest.terms).length} terms)`);
   } else {
     console.log(`reference pack not present at ${packDir} — demo pack skipped (run \`npm run gen:reference-pack\` to enable)`);

@@ -1,25 +1,22 @@
-// chat-page-viz.mjs — "Talk to it"'s full-screen destination
-// (PLAN_GAMES_UPLIFT_V3.md Part C.4 item 1): a self-contained document shaped
-// exactly like spider-fly-viz.mjs/adventure-viz.mjs's own page-builders — one
-// inlined <style> importing viz-theme.mjs's shared tokens, behaviour as an
-// inlined IIFE — reusing the SAME chat engine the home page's embedded
-// #tmct-chat widget runs (chat-browser.bundle.js's globalThis.tmctChat,
-// chat-seed.json, public/reference-pack/), referenced by the same same-origin
-// relative paths chat-ui.mjs already uses. This module does not import or
-// re-render chat-ui.mjs — it is a second, independent consumer of the same
-// engine/bundle, the same relationship spider-fly-viz.mjs's own inlined chat
-// dock already has with createSpiderFlySession (both call the shared
-// session.turn(line), neither reimplements it).
+// chat-page-viz.mjs — chat.html, the full-screen chat page: a self-contained
+// document shaped exactly like spider-fly-viz.mjs/adventure-viz.mjs's own
+// page-builders — one inlined <style> importing viz-theme.mjs's shared
+// tokens, behaviour as an inlined IIFE — running the full chat engine
+// (chat-browser.bundle.js's globalThis.tmctChat, chat-seed.json,
+// public/reference-pack/) by same-origin relative paths. The same
+// relationship spider-fly-viz.mjs's own inlined chat dock has with
+// createSpiderFlySession: both call the shared session.turn(line), neither
+// reimplements it.
 //
-// What's actually new here, versus the embedded widget: full-screen
-// post-ChatGPT-style chrome (centered message column, bottom-fixed composer,
+// This page's own chrome: full-screen post-ChatGPT-style layout (centered
+// message column, bottom-fixed composer,
 // message bubbles) and this page's own signature element — a quiet
 // per-message PROVENANCE CHIP (taught / corpus / entailed) next to every
 // grounded answer, tmct's actual differentiator versus an LLM chatbot. The
 // chip is read straight off the SAME "(source: ...)" citation chat.mjs's own
 // factPhrase/renderFactLine convention already appends to most answers (see
 // e.g. `dog is a kind of animal (source: corpus:conceptnet ...)` — already
-// asserted by e2e/pages-chat.test.mjs against the embedded widget), never a
+// asserted by e2e/pages-chat-fullscreen.test.mjs against this page), never a
 // second provenance computation against memory internals: `provBucketFor`
 // (ledger-viz.mjs) is spliced in unmodified and applied to whatever citation
 // text the answer already carries, so this page's chip and the ledger's own
@@ -34,7 +31,7 @@
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
 import { provBucketFor } from "./ledger-viz.mjs";
 
-const DEFAULT_TITLE = "tmct — talk to it";
+const DEFAULT_TITLE = "the-mechanical-code-talker — talk to it";
 
 // Reads left-to-right as the reader meets each tier: what you taught it
 // directly, what its bundled corpus already knew, what it worked out itself.
@@ -110,13 +107,13 @@ export function renderChatHtml({ title = DEFAULT_TITLE } = {}) {
 <!--
   Import map: resolves the "wink-nlp"/"wink-eng-lite-web-model" bare specifiers the
   sibling chat bundle's own dynamic import() needs (pinned to the exact versions
-  package.json depends on) to esm.sh CDN builds — the same seam index.html's own
-  import map wires up for the embedded chat, mirrored here because this page can be
-  opened standalone (no import map inherited from a host document). The bundle
-  itself never touches wink-nlp directly — wink-model.mjs's own header explains why
-  a static import would drag the ~1 MB model into every bundle; only the page's own
-  inline script performs this CDN import, exactly like public/chat-ui.mjs's own
-  tryLoadWink().
+  package.json depends on) to esm.sh CDN builds — the same seam plan.html and
+  ledger.html each wire up for their own live sessions, mirrored here because this
+  page can be opened standalone (no import map inherited from a host document). The
+  bundle itself never touches wink-nlp directly — wink-model.mjs's own header
+  explains why a static import would drag the ~1 MB model into every bundle; only
+  the page's own inline script performs this CDN import, the same bounded-race
+  tryLoadWink() pattern public/tmct-browser.mjs uses.
 -->
 <script type="importmap">
 {
@@ -129,7 +126,14 @@ export function renderChatHtml({ title = DEFAULT_TITLE } = {}) {
 <style>
 ${THEME_TOKENS_CSS}
   html, body { height: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; display: flex; flex-direction: column; overflow: hidden; }
+  /* body is the OUTER row: the chat column plus the stats panel docked to its
+     right, each a sibling flex item stretching to the full viewport height
+     (flex row's default cross-axis stretch) — .chatCol carries the column
+     layout the chat chrome itself needs (topbar/main/composer/statusline
+     stacked), so this page keeps working exactly as before, just inside one
+     more layer. */
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; display: flex; overflow: hidden; }
+  .chatCol { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
   .mono { font-family: ${MONO_STACK}; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; border: none; }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -145,7 +149,14 @@ ${THEME_TOKENS_CSS}
   .dot-taught { background: var(--taught); } .dot-corpus { background: var(--corpus); } .dot-entail { background: var(--entail); }
 
   main.chatMain { flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; }
-  .messages { max-width: 720px; margin: 0 auto; padding: 1.2rem 1rem 1.6rem; display: flex; flex-direction: column; gap: .15rem; min-height: 100%; }
+  /* box-sizing: border-box so min-height: 100% below counts the padding IN,
+     not on top of it — without this, .messages renders ~45px taller than
+     main.chatMain's own visible height (its 1.2rem/1.6rem vertical padding,
+     added past a content-box min-height), so the initial scrollToEnd() (the
+     very first thing boot() does, right after the boot system line lands)
+     scrolls that overflow out of view and clips the boot message half under
+     the topbar before anyone reads it. */
+  .messages { box-sizing: border-box; max-width: 720px; margin: 0 auto; padding: 1.2rem 1rem 1.6rem; display: flex; flex-direction: column; gap: .15rem; min-height: 100%; }
 
   .msg-row { display: flex; flex-direction: column; margin: .35rem 0; max-width: 100%; }
   .msg-row.user { align-items: flex-end; }
@@ -174,6 +185,22 @@ ${THEME_TOKENS_CSS}
   .composer-inner button[type="submit"]:disabled { opacity: .4; cursor: default; }
   .statusline { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .6rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
 
+  /* the provenance stats panel: what this session's memory holds, docked to
+     the right of the chat column (a real layout column, not an overlay) —
+     re-rendered after boot and after every turn from window.tmctChat's own
+     memoryStats(), never a second provenance computation. */
+  .statsPanel { flex: 0 0 300px; max-width: 300px; overflow-y: auto; border-left: 1px solid var(--line); padding: 1.1rem 1.2rem 1.6rem; font-family: ${MONO_STACK}; font-size: .74rem; line-height: 1.55; }
+  .statsPanel h2 { font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 1.3rem 0 .5rem; }
+  .statsPanel h2:first-child { margin-top: 0; }
+  .statsPanel .band-row { display: flex; justify-content: space-between; gap: .6rem; margin: 0; padding: .12rem 0; }
+  .statsPanel .band-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .statsPanel .taught-item { margin: 0 0 .7rem; }
+  .statsPanel .taught-tag { display: block; color: var(--muted); font-size: .66rem; margin-top: .15rem; word-break: break-word; }
+  .statsPanel .empty { color: var(--muted); margin: 0; }
+
+  @media (max-width: 860px) {
+    .statsPanel { display: none; }
+  }
   @media (max-width: 560px) {
     .legend { display: none; }
     .bubble { max-width: 92%; }
@@ -184,24 +211,29 @@ ${THEME_TOKENS_CSS}
 </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="eyebrow">tmct</span>
-      <h1>Talk to it</h1>
-    </div>
-    <div class="legend" aria-hidden="true">${legendHtml}</div>
-  </header>
-  <main class="chatMain">
-    <div class="messages" id="messages" role="log" aria-live="polite" aria-label="Conversation"></div>
-  </main>
-  <form class="composer" id="composer">
-    <div class="composer-inner">
-      <input id="composerInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
-        placeholder="loading the engine…" aria-label="Ask tmct something" disabled>
-      <button type="submit" id="composerSend" aria-label="Send" disabled>&#8594;</button>
-    </div>
-  </form>
-  <div class="statusline" id="status">loading the engine&hellip;</div>
+  <div class="chatCol">
+    <header class="topbar">
+      <div class="brand">
+        <span class="eyebrow">the-mechanical-code-talker</span>
+        <h1>Talk to it</h1>
+      </div>
+      <div class="legend" aria-hidden="true">${legendHtml}</div>
+    </header>
+    <main class="chatMain">
+      <div class="messages" id="messages" role="log" aria-live="polite" aria-label="Conversation"></div>
+    </main>
+    <form class="composer" id="composer">
+      <div class="composer-inner">
+        <input id="composerInput" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+          placeholder="loading the engine…" aria-label="Ask tmct something" disabled>
+        <button type="submit" id="composerSend" aria-label="Send" disabled>&#8594;</button>
+      </div>
+    </form>
+    <div class="statusline" id="status">loading the engine&hellip;</div>
+  </div>
+  <aside class="statsPanel" id="statsPanel" aria-label="This session's memory">
+    <p class="empty">loading memory stats&hellip;</p>
+  </aside>
 <script src="./chat-browser.bundle.js"></script>
 <script>
 (function () {
@@ -215,6 +247,7 @@ ${THEME_TOKENS_CSS}
   const inputEl = el("composerInput");
   const sendBtn = el("composerSend");
   const statusEl = el("status");
+  const statsPanelEl = el("statsPanel");
 
   function scrollToEnd() {
     messagesEl.parentElement.scrollTop = messagesEl.parentElement.scrollHeight;
@@ -284,8 +317,8 @@ ${THEME_TOKENS_CSS}
   }
 
   // ---- engine boot -------------------------------------------------------
-  // Mirrors chat-ui.mjs's own boot sequence against the SAME bundle/seed/pack
-  // — a second consumer of the shared engine, not a fork of it.
+  // The same bounded-race wink load public/tmct-browser.mjs uses, against
+  // this page's own bundle/seed/pack.
   const WINK_LOAD_TIMEOUT_MS = 8000;
   const timeoutAfter = (ms, reason) => new Promise((_, reject) => setTimeout(() => reject(new Error(reason)), ms));
 
@@ -348,6 +381,77 @@ ${THEME_TOKENS_CSS}
     },
   };
 
+  // ---- memory stats: the boot message's own numbers, and the docked panel -
+  // Both read window.tmctChat.memoryStats(memoryDir) (chat-browser-entry.mjs)
+  // — one computation, reused, so the boot line and the panel can never
+  // disagree with each other about what this session's memory holds.
+  const BAND_LABELS = { human: "human persona", seon: "seon ontology", conceptnet: "ConceptNet" };
+  const BAND_ORDER = ["human", "seon", "conceptnet", "taught this session", "other"];
+  const bandLabel = (key) => BAND_LABELS[key] || key;
+
+  /** The boot system line's own memory summary — every seed band this
+   *  session actually loaded, named with its real count, left-to-right in
+   *  BAND_ORDER; a session with nothing seeded says so plainly instead of
+   *  naming zero facts. */
+  function statsSummaryLine(stats) {
+    if (!stats || !stats.total) return "no starter memory; starting empty";
+    const parts = BAND_ORDER.filter((k) => stats.bandCounts[k]).map((k) => stats.bandCounts[k] + " " + bandLabel(k));
+    return parts.length
+      ? "starter memory: " + parts.join(" + ") + " (" + stats.total + " facts total)"
+      : stats.total + " starter facts loaded";
+  }
+
+  function bandRow(label, count) {
+    const row = document.createElement("p");
+    row.className = "band-row";
+    const l = document.createElement("span");
+    l.textContent = label;
+    const c = document.createElement("span");
+    c.className = "band-count";
+    c.textContent = String(count);
+    row.appendChild(l);
+    row.appendChild(c);
+    return row;
+  }
+
+  /** (Re)render the docked panel from a memoryStats() result — stats may be
+   *  passed in already-computed (boot reuses its own call rather than asking
+   *  twice); omitted, it fetches fresh. Best-effort: a session not ready yet,
+   *  or a read that throws, leaves the panel showing whatever it last showed
+   *  rather than blanking it. */
+  async function renderStatsPanel(stats) {
+    if (!stats) {
+      if (!window.tmctChatSession || !window.tmctChat.memoryStats) return;
+      try { stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir); }
+      catch { return; }
+    }
+    statsPanelEl.textContent = "";
+    statsPanelEl.appendChild(Object.assign(document.createElement("h2"), { textContent: "this session's memory" }));
+    statsPanelEl.appendChild(bandRow("total facts", stats.total));
+    for (const key of BAND_ORDER) {
+      if (stats.bandCounts[key]) statsPanelEl.appendChild(bandRow(bandLabel(key), stats.bandCounts[key]));
+    }
+
+    statsPanelEl.appendChild(Object.assign(document.createElement("h2"), { textContent: "taught this session" }));
+    if (!stats.taught.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = 'nothing yet \\u2014 teach it something ("a dog is a kind of animal") and it lands here, with its source.';
+      statsPanelEl.appendChild(empty);
+    } else {
+      for (const fact of stats.taught.slice(-8).reverse()) {
+        const item = document.createElement("p");
+        item.className = "taught-item";
+        item.appendChild(document.createTextNode(fact.subject + " " + fact.predicate + " " + fact.object));
+        const tag = document.createElement("span");
+        tag.className = "taught-tag";
+        tag.textContent = fact.tag;
+        item.appendChild(tag);
+        statsPanelEl.appendChild(item);
+      }
+    }
+  }
+
   function renderStatus() {
     const seedPart = seedPayload
       ? "starter memory: " + seedFacts + " facts"
@@ -377,7 +481,10 @@ ${THEME_TOKENS_CSS}
     const pendingRow = addPendingAssistantBubble();
     setBusy(true);
     window.tmctChatSession.turn(q)
-      .then((result) => settleAssistantBubble(pendingRow, result.answer, result.record))
+      .then((result) => {
+        settleAssistantBubble(pendingRow, result.answer, result.record);
+        return renderStatsPanel(); // a teach turn just grew this session's memory; a plain ask leaves it unchanged either way
+      })
       .catch((err) => settleAssistantBubble(pendingRow,
         "something went wrong answering that (" + (err && err.message ? err.message : err) + ") \\u2014 try rephrasing",
         { miss: true }))
@@ -396,9 +503,10 @@ ${THEME_TOKENS_CSS}
     await Promise.all([fetchSeed(), tryLoadWink()]);
     window.tmctChat.registerReferencePackProvider(fetchPackProvider);
     window.tmctChatSession = newSession();
-    addSystemLine(seedPayload
-      ? "tmct \\u2014 the real engine, running in this page \\u2014 " + seedFacts + " starter facts loaded"
-      : "tmct \\u2014 the real engine, running in this page \\u2014 no starter memory; starting empty");
+    const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
+    addSystemLine("tmct \\u2014 the real engine, running in this page \\u2014 " + statsSummaryLine(stats)
+      + ". Ask it something, or teach it a fact of your own.");
+    await renderStatsPanel(stats);
     inputEl.placeholder = seedPayload ? 'try "what is a dog"' : window.tmctChat.vocabExampleHint(false);
     renderStatus();
     setBusy(false);
