@@ -136,14 +136,17 @@ every consumer picks from equally.
   This isn't new work for three of the four: they already run on Backend B today (checked this
   session). It's also the right fit, not just the current fit — these four are "watch or query a
   fixed demo," where a clean start every load is correct behavior, not a missing feature.
-- **sqlite (Backend C) — the new default for `npm run chat`/`tmct chat`, replacing the file-backed
-  default.** Backend C already exists and has real test coverage (`node:sqlite`'s `DatabaseSync`) —
-  this is a routing change, not new engine work. The file-based backend (Backend A) is dropped as
-  `tmct chat`'s default; no migration path is needed (no existing user base to carry forward).
-  Open scope question this plan doesn't resolve: whether Backend A is retired from `tmct chat`
-  specifically or from the CLI/library entirely — other verbs (`tmct init`, `tmct memory`, `tmct
-  syllogise`) and library consumers may still want a plain, git-diffable JSON file, so "removed for
-  chat" and "removed everywhere" are different-sized changes. Name which one at build time.
+- **sqlite (Backend C) — the new default for `npm run chat`/`tmct chat`, and the file-backed
+  Backend A is retired outright, not just as `tmct chat`'s default.** Operator confirmed
+  (2026-07-21): no file backend, full stop. Backend C already exists and has real test coverage
+  (`node:sqlite`'s `DatabaseSync`) — this is a routing change, not new engine work; no migration
+  path is needed (no existing user base to carry forward). Consequence this plan states rather than
+  leaves implicit: any other CLI verb that currently defaults to Backend A for on-disk persistence
+  (`tmct init`, `tmct memory`, `tmct syllogise`, and any library consumer that wants persistence
+  rather than a bare in-memory session) has nothing left to default to but sqlite once Backend A is
+  gone — in-memory doesn't survive between separate CLI invocations, which those verbs need. Naming
+  every affected verb's new default is real, if mechanical, work this plan should track alongside
+  the chat-specific change, not assume falls out for free.
   Mechanic to name: `node:sqlite` still prints Node's `ExperimentalWarning` unless suppressed.
   `npm run chat` can suppress it exactly like `init:sqlite` already does — add
   `--disable-warning=ExperimentalWarning` to the script's own `node` invocation in `package.json`,
