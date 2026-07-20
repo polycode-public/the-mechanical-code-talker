@@ -111,6 +111,15 @@ means exactly that, not a default to be argued back from cost.
   Closes the gap where a taught (or future live-Wikipedia-fetched) fact vanishes on reload.
 - **Download-progress UI**: Fetch API's `Response.body` `ReadableStream` + `Content-Length`, no new
   dependency — sketch and code snippet already in `PAGE_WEIGHTS.md`.
+- **Fix the header the branding change shipped with.** `src/services/chat-page-viz.mjs` currently
+  renders `<span class="eyebrow">the-mechanical-code-talker</span>` followed by a separate
+  `<h1>Talk to it</h1>`, and `.eyebrow`'s CSS carries `text-transform: uppercase` — so the deployed
+  page shows "THE-MECHANICAL-CODE-TALKER" (transformed, not as typed) with "Talk to it" as its own
+  heading beside it, not the single lowercase line the operator asked for. Fix: drop the `<h1>Talk
+  to it</h1>` entirely and remove (or override, scoped to this element) the `.eyebrow` uppercase
+  transform, so the page reads exactly `the-mechanical-code-talker`, lowercase, as typed. Check
+  `DEFAULT_TITLE` (`"the-mechanical-code-talker — talk to it"`, the `<title>`/tab text) for the same
+  question — decide whether the tab title keeps "— talk to it" as a description or drops it too.
 
 ### Named constraint — CLI/browser chat parity
 
@@ -272,6 +281,21 @@ What's actually true today, checked this session rather than assumed — three o
 | **ledger.html** | Query-only dock over a graph (the demo's own small `public/demo-graph.json`, or a user's real graph via the CLI). One remaining lazy fetch: the wink-nlp CDN import. | Same wink de-lazying as plan.html (the shared-asset shape, not a per-bundle copy). Graph itself stays basic, per the operator — this page's job is to query, not to carry a big corpus. Audit the existing query-template library for phrasing gaps; it's an audit, not a new grammar. |
 | **sprites.html** | **No chat dock, no facts, no NLP at all** — a pure visual sprite catalog + a freeform scene-composer text box (`src/services/sprite-catalog-viz.mjs`), with no grounding underneath either. | The one net-new build in this plan: a new pure generator `src/domain/sprite-facts.mjs`, following the `spider-fly-world.mjs` pattern (with one structural difference, named below), walking the parsed sprite template set's class/tier/parameter definitions into real OWL-shaped facts (`<class> rdf:type SpriteClass`, `<class> hasParameter <param>`, etc.). `sprite-catalog-viz.mjs` embeds them at build time (same mechanism adventure.html already uses) and gains a chat dock wired to the same engine, seeded with these facts — no lazy loading, matching every other page in this round. Makes "what classes can you render?" / "what parameters does a person sprite take?" real, fact-grounded answers instead of nonexistent ones. Two costs the first draft left unstated: the dock brings this page its first `*-browser.bundle.js` (~1.6 MB at the other pages' current size, taking the page from 1.2 MB to ~2.8 MB); and the dock needs an explicit wink decision — load the same shared first-party wink asset as the other docks (preferred: a return visitor has already cached it), or run adapter-less on `wink-model.mjs`'s documented null path with a degraded lemma tier. State the choice in the build, don't let it fall out of an import. |
 
+### adventure.html — visual redesign (proposed, not started)
+
+Operator review of the live page (screenshot, 2026-07-21): the current room view is mechanically
+correct — real facts render as a chip strip (you/cabinet/desk/lamp, each with a real class badge)
+and a single "current room" circle in "THE MANOR, SO FAR" — but reads as a bare functional layout,
+not a room. `PLAN_GAMES_UPLIFT_V3.md` already gave this page one thematic pass (an "RPG style" note
+in that plan's origin quotes); the operator's ask now is more specific and goes further: get the
+`frontend-design` plugin to redesign it toward a **murder-mystery board game crossed with an RPG
+stats dashboard** — think Cluedo or Death on the Nile's room-and-suspect-board presentation — with
+**90s-RPG-era room-view fidelity, but with better icons** than the current plain circular glyphs.
+This is a visual/layout build, not a knowledge/graph one — it doesn't touch what facts the page
+knows, only how the room, its objects, and the "manor so far" map present them. Track it here
+because the operator asked for it in this document; the actual design work should invoke the
+`frontend-design` skill the same way `PLAN_GAMES_UPLIFT_V3.md`'s own thematic pass did.
+
 **Generator precedent, so the sprites work doesn't invent a new pattern**: this codebase's
 established shape for "structured data source → OWL-shaped facts" is a pure generator function
 living in `src/domain/*.mjs` (`spider-fly-world.mjs`'s `worldFactRows()`), with a thin
@@ -395,12 +419,36 @@ phase, not one giant commit.
 - Not an implementation — Parts B and C are proposed work, not executed this session (operator's
   explicit instruction: this document is the deliverable for now).
 - Not a redesign of the visual/mechanical uplift `PLAN_GAMES_UPLIFT_V3.md` already shipped — this
-  doc is additive to that one, covering knowledge/graph capability, not layout or sprite art.
+  doc is additive to that one, covering knowledge/graph capability, not layout or sprite art, with
+  one named exception: adventure.html's visual redesign (Part B) is tracked here because the
+  operator asked for it in this document, not because this doc's scope changed.
 - Not WordNet-full or live-Wikipedia's wider miss-hook — decided in principle (Part A) but held for
   a future round. The service worker is NOT in this list: it ships in Part B phase 1, not deferred
-  (see "Deployment context" below for why bandwidth/self-hosting cost isn't the constraint it might
-  look like elsewhere in this doc's earlier reasoning).
+  (see "Deployment context," near the top of this doc, for why bandwidth/self-hosting cost isn't the
+  constraint it might look like elsewhere in this doc's earlier reasoning).
 - Not the conversation-benchmark backlog itself (write-boundary narrowing, meta-question routing,
   filler prefixes, silent narrowing) — that work stays routed through `HANDOVER.md`, but Part A
   names where this plan's builds depend on it, and the persistence work should not land ahead of
   the teach-lane narrowing it amplifies.
+
+## Appendix — page weight, measured vs. predicted (2026-07-21)
+
+Nothing in Parts A-C below the "Shipped this session" list is built yet, so these are predictions
+against this session's real, measured baseline (`PAGE_WEIGHTS.md`), not new measurements. Where a
+number is genuinely unmeasured, it's named as such rather than guessed at.
+
+| page | measured today | predicted on-load after this plan | max growth from lazy loading |
+|---|---:|---|---:|
+| **chat.html** | 4.41 MB (CDN wink working) | Own doc + bundle + self-hosted wink (~1.0 MB precompressed vs. today's 1.29 MB CDN) puts the non-seed shape at roughly the same order as today. **The WordNet-xl reseed's size is the one real unknown here** — today's 1,264-fact seed is 1.5 MB; the target tier is 72,077 facts (measured via `init:xl` this session), plausibly tens of MB raw before this plan's own boot-budget check and byte-ceiling decision. Don't trust a precise total until that check runs. | Uncapped by design: the reference-pack ceiling is a real 4.32 MB; a future live-Wikipedia fallback adds more, bounded by session length and Wikipedia's 200 req/min limit, not a fixed byte cap the way the reference pack has one. |
+| **index.html** | 7.48 MB — stale, measured before the home-page rework removed the live chat embed | Screenshot/link content (small) + the still-separate "ask it about a codebase" demo (~775 KB unbundled modules + ~60 KB `demo-graph.json`) + shared wink asset (~1.0-1.3 MB) ≈ roughly 1.5-2.2 MB. Needs a fresh CDP pass, not a further estimate. | 0 — no remaining deferred fetch once wink is self-hosted. |
+| **ledger.html** | 3.99 MB (CDN wink already working) | ~3.7-4.0 MB, roughly unchanged — self-hosting swaps the CDN transfer for a shared, precompressed, same-origin one at similar or slightly smaller size. | 0 |
+| **plan.html** | 2.90 MB (CDN wink already working) | ~2.6-2.9 MB, same logic as ledger. | 0 |
+| **spider-fly.html** | 2.19 MB | ~2.2 MB, unchanged — no wink dependency, already zero third-party requests. | 0 |
+| **adventure.html** | 2.22 MB | ~2.22 MB, unchanged — the manifest is already counted in this figure; embedding it removes one HTTP request, not bytes. (The visual redesign above changes markup/CSS weight by an amount not yet designed, so not estimated here.) | 0 |
+| **sprites.html** | 1.20 MB (no bundle, no chat) | ~2.8 MB without the shared wink asset, ~3.8 MB if it takes wink too (open decision, Part B). | 0 |
+
+Two things worth remembering when this table gets revisited: the wink prototype measured only an
+~8.6% size drop from minification (4.00 MB → 3.66 MB) — not the large cut minification sometimes
+implies, so don't assume a bigger win from `minify: true` elsewhere either. And the service worker
+and precompression change what a *repeat* visit pays, not the on-load figures above, which are
+first-visit, cold-cache costs.
