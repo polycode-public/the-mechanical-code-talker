@@ -86,3 +86,8 @@ public/sprites-pack/
 # Chromium for the browser e2e tier. CI puts it here (PLAYWRIGHT_BROWSERS_PATH)
 # so the job cache can carry it between runs; `npm run e2e:browsers` fetches it.
 .playwright-browsers/
+
+# e2e/pages-screenshot-sweep.test.mjs's own output — a layout-review aid for
+# a human/agent to look at, regenerated fresh on every run, never a golden
+# image compared pixel-to-pixel and never committed.
+.screenshots/
