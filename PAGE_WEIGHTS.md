@@ -379,8 +379,76 @@ For grounded factual recall inside covered domains ("what is X", "who is Y", "wh
 
 Where it doesn't compete, and where no deterministic engineering exists yet to close the gap: genuinely novel composition — reasoning chains it wasn't taught, code synthesis, phrasing nobody templated, open-ended or creative writing. That isn't a wall this project hits by design choice; it's an open problem for template-based systems generally. Until something changes that, those queries land on the honest miss, same as any other ungrounded query today.
 
-### In progress (background agents, sections to follow as they land)
+## Wikipedia REST API — live learn-on-miss fallback (research)
 
-- Wikipedia REST API research — a fallback learn-on-miss source with no key and CORS support (`origin=*`), extending grounded recall to anything Wikipedia covers.
+Researched 2026-07-20. Not yet wired into any production code — this is a
+feasibility finding, and the next section covers what's actually blocking
+it.
+
+**Verdict: feasible with caveats.** Both candidate APIs work CORS-clean from
+a static, no-backend, no-key browser page. The blocker isn't network access
+— it's that tmct's existing miss-hook only fires for single lexicon nouns,
+not free-text queries, so wiring Wikipedia in here inherits that narrow
+scope unless a wider hook is built.
+
+**Endpoints verified live (curl, this session):**
+
+- `GET https://en.wikipedia.org/api/rest_v1/page/summary/{title}` — returns
+  `access-control-allow-origin: *` even with no `origin=*` param. Shape:
+  `{title, extract, description, revision, content_urls.desktop.page,
+  pageid, ...}`. A missing title returns a clean 404 — an easy miss signal.
+- `GET https://en.wikipedia.org/w/api.php?action=opensearch&format=json&origin=*&search={q}`
+  — CORS `*` only when `origin=*` is explicit (the classic Action API needs
+  it; REST doesn't). Returns `[query, [titles], [descriptions], [urls]]` — a
+  real free-text-to-title resolver. Confirmed live: `photosynthesis` →
+  `["Photosynthesis", "Photosynthetic efficiency", ...]`.
+- `action=query&prop=extracts&exintro=1&explaintext=1` also works (same
+  CORS), giving a longer intro extract keyed by pageid — an alternative to
+  the summary endpoint if more text is wanted.
+- **Two round-trips are required, confirmed**: opensearch (query → title)
+  then summary (title → article). No single-call path from free text to
+  article exists.
+
+**Rate limits/ToS** (mediawiki.org API:Etiquette, Wikimedia rate-limit
+docs): no hard cap on reads generally, but anonymous browser-identified
+requests get 200 req/min per IP; non-browser anonymous gets 10 req/min.
+Exceeding returns 429 with `Retry-After` (back off ≥5s if absent). Since
+every visitor's own browser calls Wikipedia directly, the limit is
+per-visitor, not shared — one page's traffic doesn't pool against
+another's.
+
+**Extraction pipeline:** `src/domain/reference-pack.mjs`'s
+`isReferenceArticleRow` needs `{term, title, text, summary, url, revid,
+isa?}` with `revid` a positive integer. A live response maps directly:
+`title` ← `titles.canonical`, `url` ← `content_urls.desktop.page`,
+`summary`/`text` ← `extract` (needs the char-cap logic from
+`scripts/fetch-reference-pack.mjs`, not currently exported from the domain
+module — a small adapter, not a rewrite), `revid` ← `Number(revision)`.
+Crucially, the provider seam already exists:
+`src/adapters/corpus/reference-pack.mjs`'s `registerReferencePackProvider({
+lookup(normTerm) })` is exactly the contract a live adapter would implement
+— swap-in, no `chat.mjs` change needed for the row shape itself.
+
+**The real constraint:** `cleanMissPackKey` (`src/services/chat.mjs` ~line
+9431) only gates on `cleanMissReferenceTerm`, which requires the term to
+already resolve via `lookupNoun(lexicon, t)` — i.e. this hook fires only for
+single words already in tmct's own closed lexicon, on "what is X" shaped
+misses. A Wikipedia fallback dropped into this seam answers only
+known-word misses more richly; it does not extend to arbitrary open
+questions without a separate, wider hook past the lexicon gate — a bigger
+design change than this research covers.
+
+**Integration sketch:** trigger only after the existing pack lookup returns
+null (never bypass it); do search+summary as two fetches; cache per-session
+in memory (or IndexedDB once that lands) keyed by term to avoid repeat
+calls; a simple client-side throttle (e.g. a token bucket at ~1 req/2s,
+well under 200/min) with 429/`Retry-After` respected. A live-fetched fact
+stored via the same `appendFact`/provenance path as reference-pack hits
+inherits the identical persistence gap already logged above (Backend B,
+zero storage) — it vanishes on reload exactly like a taught fact does, and
+should be fixed by the same IndexedDB work, not a separate one.
+
+## In progress (background agents, sections to follow as they land)
+
 - Home-page (`index.html`) rework — drop the embedded live demos in favor of static screenshots and links, for resilience.
 - `chat.html` polish — branding copy, a `/memory` command bug fix, a richer boot-status message with graph stats, a provenance side panel, and uncapping the reference-pack lazy-load to the full built 1.4 MB.
