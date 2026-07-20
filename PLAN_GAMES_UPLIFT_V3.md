@@ -1,6 +1,6 @@
 # PLAN_GAMES_UPLIFT_V3.md — spider-fly deep goals, a full sprite-emotion retrofit, and a five-page site redesign
 
-Status: DESIGNED, build in progress.
+Status: Parts A, B, C shipped. Part D (Playwright coverage) in progress.
 
 ## Origin
 
@@ -489,8 +489,23 @@ in flight — relayed directly to the implementing agents, recorded here too:**
    dashboard chrome (chunky beveled panels, stat-readout HUD, a resource-bar-style turn counter)
    WRAPPING the dusty-window-corner scene from Part A — two layers of one page, not competing
    directions. The new plan/belief panels (A.2.7) are natural HUD real estate for this theme.
-   **Status: only the window scene + mechanics landed (Part A) — the surrounding UI chrome is
-   still plain, not yet themed.** A dedicated pass is tracked separately (task #53).
+
+   **Status: shipped** (merged to main, commits `92e52b8`+`d7b5d48` + merge, re-verified by the
+   coordinator — 115/115 blast-radius, 183/183 `test:fast`, fresh Playwright screenshots light+dark
+   with zero console errors, real emotion/plan/belief data rendering). `emotionFor(agent, kind,
+   maxMass)` (`spider-fly-viz.mjs`) derives a face purely from the agent's own goal-line text — no
+   new persisted fact: spider `just ate`→happy, `carrying`/`chasing`/`co-located with`→angry,
+   `avoiding`→scared, else calm; fly `evading`/`being carried by`/`just caught by`/`trapped in an
+   active web`→scared, else calm. Re-resolved every redraw, DOM only touched when the resolved word
+   actually changes. `maxMass` is accepted but deliberately unused (no mass-ratio rule in the
+   confirmed table). Required switching the spider-fly build step to the LARGE sprite tier — the
+   small icon tier the page was embedding has no face geometry at all
+   (`scripts/build-demo-site.mjs`'s spider-fly block now calls `readSpriteLargeTemplateFiles()`
+   directly). Chrome: new page-local `--chrome-*` bevel tokens (light+dark) drive beveled panel
+   faces, segmented-pip LCD-well mass bars/turn-counter/chat-input, and keycap buttons that flip
+   raised→inset on `:active`; every touched rule targets `.side`/`.controls-row`/`.tuning`/
+   `.status`/`.eyebrow`/`h1`, all already hidden under `body.preview`, so the embedded home-page
+   hero iframe stays untouched.
 3. **It plans, and shows the work (`plan.html`)** — keep the sciency visual language, add: live
    parameter controls (disk count / max search depth), a chat-assert surface to teach new facts
    into the running world, and a **PDDL-plus-OWL/RDF plan artifact panel** showing the last-created
