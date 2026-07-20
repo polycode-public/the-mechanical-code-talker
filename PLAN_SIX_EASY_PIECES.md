@@ -20,11 +20,14 @@ dependency once the page has loaded).
 subject matter.** `PLAN_GAMES_UPLIFT_V3.md` (the prior plan covering the same pages' visual/
 mechanical uplift: sprite emotion retrofit, spider-fly goals, the five-page site redesign,
 layout-bug sweeps) is retired and archived (`archive/PLAN_GAMES_UPLIFT_V3.md`) now that this doc
-supersedes it (2026-07-21, operator instruction) — its one genuinely undelivered item (the
-sprites.html blank-region investigation, Part B below) is pulled forward into this doc rather than
-left behind in an archived file nobody reads. Layout and visual work for these pages (the
-spider-fly layout change and the adventure.html redesign, both below) lives here now too, alongside
-the knowledge/graph work — there is no subject-matter split between this doc and any other; if it
+supersedes it (2026-07-21, operator instruction). Checked against the real code rather than that
+plan's own (partly stale) status text: plan.html's PDDL panel/live chat-assert dock and
+adventure.html's edit mode are both already shipped, and the one item that plan flagged as
+genuinely still open (a `sprites.html` screenshot artifact) was operator-confirmed fine on the real
+page — nothing carries forward from that plan into this one. Layout and visual work for these
+pages (the spider-fly layout change and the adventure.html redesign, both below) lives here now
+too, alongside the knowledge/graph work — there is no subject-matter split between this doc and any
+other; if it
 touches one of these six pages, it's tracked here.
 
 ### Deployment context (so later reasoning in this doc doesn't get re-litigated on a false premise)
@@ -287,23 +290,6 @@ What's actually true today, checked this session rather than assumed — three o
 | **ledger.html** | Query-only dock over a graph (the demo's own small `public/demo-graph.json`, or a user's real graph via the CLI). One remaining lazy fetch: the wink-nlp CDN import. | Same wink de-lazying as plan.html (the shared-asset shape, not a per-bundle copy). Graph itself stays basic, per the operator — this page's job is to query, not to carry a big corpus. Audit the existing query-template library for phrasing gaps; it's an audit, not a new grammar. |
 | **sprites.html** | **No chat dock, no facts, no NLP at all** — a pure visual sprite catalog + a freeform scene-composer text box (`src/services/sprite-catalog-viz.mjs`), with no grounding underneath either. | The one net-new build in this plan: a new pure generator `src/domain/sprite-facts.mjs`, following the `spider-fly-world.mjs` pattern (with one structural difference, named below), walking the parsed sprite template set's class/tier/parameter definitions into real OWL-shaped facts (`<class> rdf:type SpriteClass`, `<class> hasParameter <param>`, etc.). `sprite-catalog-viz.mjs` embeds them at build time (same mechanism adventure.html already uses) and gains a chat dock wired to the same engine, seeded with these facts — no lazy loading, matching every other page in this round. Makes "what classes can you render?" / "what parameters does a person sprite take?" real, fact-grounded answers instead of nonexistent ones. Two costs the first draft left unstated: the dock brings this page its first `*-browser.bundle.js` (~1.6 MB at the other pages' current size, taking the page from 1.2 MB to ~2.8 MB); and the dock needs an explicit wink decision — load the same shared first-party wink asset as the other docks (preferred: a return visitor has already cached it), or run adapter-less on `wink-model.mjs`'s documented null path with a degraded lemma tier. State the choice in the build, don't let it fall out of an import. |
 
-### sprites.html — blank-region investigation, pulled forward from the archived plan
-
-`PLAN_GAMES_UPLIFT_V3.md`'s Part D screenshot review (2026-07-20) found `sprites.html`'s full-page
-screenshot shows a large blank region between the visible card content and the page's own footer,
-suspected `content-visibility: auto`/`contain-intrinsic-size` interacting with how a full-page
-screenshot captures off-screen sections — confirmed still present in the current source
-(`.group`/`.card` both carry `content-visibility: auto` with a `contain-intrinsic-size` placeholder
-in `sprite-catalog-viz.mjs`). That plan explicitly left it uninvestigated ("worth a follow-up look,
-not chased down this pass") rather than marking it fixed. It's the one item from that plan's own
-text that checking against the real code (not just the doc's prose) confirmed is genuinely still
-open — everything else that plan's text implied was unfinished (plan.html's PDDL panel and live
-chat-assert dock, adventure.html's edit mode) turned out to already be shipped in the real code; the
-old doc's own status text was simply stale for those. Proposed: confirm whether this is a real
-scroll-time visual bug or purely a screenshot-capture artifact (load the page and scroll manually,
-compare against the automated full-page screenshot), then either widen the
-`contain-intrinsic-size` estimate or size it from real measured card heights.
-
 ### adventure.html — visual redesign (proposed, not started)
 
 Operator review of the live page (screenshot, 2026-07-21): the current room view is mechanically
@@ -457,9 +443,7 @@ this last, if at all.
    concepts).
 5. The spider-fly layout change and the adventure.html visual redesign — layout/visual builds,
    sequenced alongside the audits since neither touches the same files as phases 1-3.
-6. sprites.html's blank-region investigation, pulled forward from the archived plan — small, can
-   land whenever convenient, no dependency on anything else here.
-7. Standalone-export generalization (Part C) — optional, last.
+6. Standalone-export generalization (Part C) — optional, last.
 
 Each phase: `npm run test:fast` + the specific blast radius (the relevant `e2e/pages-*.test.mjs`,
 `test/adapters/*-viz.test.mjs`), rebuild via `npm run demo:build`, and a CDP/Playwright check
