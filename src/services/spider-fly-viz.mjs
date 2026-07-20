@@ -128,6 +128,54 @@ export function facingDegreesFor(plan, previousDegrees) {
   return previousDegrees ?? 0;
 }
 
+/** The instance-level `mgx:feels` emotion for one spider-fly agent this
+ *  tick — a PURE derivation from state spider-fly.mjs's own `runSpiderFlyTick`
+ *  already returns on the agent (`goal`/`mass`), never a new persisted fact,
+ *  the same derive-don't-duplicate posture `hasActiveWebAt` already holds for
+ *  web state (PLAN_GAMES_UPLIFT_V3.md §B.2.4). Operator-confirmed mapping: a
+ *  spider that just ate is happy; a spider carrying an uncaught fly or
+ *  mid-chase (chasing, or co-located and about to catch) is angry (predatory
+ *  focus); a spider avoiding another spider is scared; a spider holding
+ *  position or building a web is calm. A fly evading a believed-visible
+ *  spider is scared, and so is the sharper form of the same fear — just
+ *  caught, or already being carried; a fly with no threat visible (wandering,
+ *  or trapped with none in sight) is calm.
+ *
+ *  `agent.goal` is spider-fly.mjs's own fixed-template text (`goalLineFor`'s
+ *  literal phrasing) — the only reliable per-tick discriminator this
+ *  function's caller has, and every real goal string that engine can ever
+ *  produce is matched below by its own distinguishing prefix. A goal this
+ *  function doesn't recognize (a freshly hatched/spawned agent's "no goal
+ *  yet", or the transient "X is gone — re-evaluating" scrub once a named
+ *  agent dies) falls through to "calm" — the 6-word vocabulary's own
+ *  deliberate no-strong-emotion baseline (sprite-expressions.mjs's B.2.1
+ *  design), not a guess.
+ *
+ *  `maxMass` is accepted for parity with this page's own per-class mass-bar
+ *  denominators (`SPIDERFLY.maxSpiderMass`/`maxFlyMass`) but unused today —
+ *  no state in the operator's own confirmed table keys off a mass ratio,
+ *  only off the goal text above. Self-contained (no outer refs),
+ *  `.toString()`-splice safe. */
+export function emotionFor(agent, kind, maxMass) {
+  const goal = agent?.goal || "";
+  if (kind === "spider") {
+    if (goal.startsWith("just ate")) return "happy";
+    if (goal.startsWith("carrying") || goal.startsWith("chasing") || goal.startsWith("co-located with")) return "angry";
+    if (goal.startsWith("avoiding")) return "scared";
+    return "calm";
+  }
+  if (kind === "fly") {
+    if (
+      goal.startsWith("evading")
+      || goal.startsWith("being carried by")
+      || goal.startsWith("just caught by")
+      || goal.startsWith("trapped in an active web")
+    ) return "scared";
+    return "calm";
+  }
+  return "calm";
+}
+
 /**
  * The updated corpse set for one redraw (§A.2.5 — visual-only, entirely
  * client-side; the actual starve/eat removal already happened in the
@@ -161,10 +209,14 @@ export function nextCorpses(prevCorpses, prevAgents, agents, turn, lingerTurns =
  *  same `title`/`spriteTemplates` every time; every other piece of state
  *  this page shows is computed live in the browser once the sibling bundle
  *  loads. `spriteTemplates` is the build step's own read of
- *  data/sprites/*.toml (sprite-template-files.mjs), embedded as page data
- *  the same reason adventure-viz.mjs's own worldPayload is — the browser
- *  bundle stays fs-free. Defaults to `[]` (every agent falls back to the
- *  flat SPRITE_REGISTRY, unchanged from before this module existed).
+ *  data/sprites-large/*.toml (sprite-large-template-files.mjs) — the large
+ *  tier, not the small icon tier every other embedder reads, because it's
+ *  the only one `spider-with-emotion.toml`/`fly-with-emotion.toml` (the live
+ *  `mgx:feels` wiring below resolves against) actually exist in — embedded
+ *  as page data the same reason adventure-viz.mjs's own worldPayload is —
+ *  the browser bundle stays fs-free. Defaults to `[]` (every agent falls
+ *  back to the flat SPRITE_REGISTRY, unchanged from before this module
+ *  existed).
  *  `?preview=1` on the page's own URL switches it into the small, auto-
  *  playing, non-interactive mode the home page's hero iframe embeds (§11) —
  *  one file serves both the hero and the "open full-screen" link, matching
@@ -203,11 +255,42 @@ ${THEME_TOKENS_CSS}
   @media (prefers-color-scheme: dark) { :root { --fly: #D9A94B; } }
   :root[data-theme="dark"] { --fly: #D9A94B; }
   :root[data-theme="light"] { --fly: #A6791F; }
+  /* The dashboard chrome (Part C.4.2): a beveled control-panel palette
+     WRAPPING the dusty-window board scene above, never touching it — every
+     rule below this block styles .side/.controls-row/.tuning/.status only,
+     all of which are hidden in ?preview=1 mode alongside .side itself, so
+     none of this bleeds into the embedded home-page hero. --chrome-face is
+     the panel's own warm plastic face; --chrome-edge-hi/-lo are its raised-
+     bevel light/shadow edges; --chrome-brass is the console's metal accent
+     (borders, active/hover states); --chrome-well/-well-ink are the dark
+     "LCD" readout a real panel's numeric window would use, deliberately
+     near-black in both themes (a lit readout reads dark-with-a-glow whether
+     the room around it is light or dark). --chrome-shadow-raised/-inset
+     compose the two bevel directions once so every panel/button/well below
+     just references one of them, never re-deriving the edge colors. */
+  :root {
+    --chrome-face: #DCD3B8; --chrome-face-hi: #EFE8CC; --chrome-edge-hi: #FBF7E6; --chrome-edge-lo: #8B7F5C;
+    --chrome-brass: #8A6A26; --chrome-brass-soft: rgba(138, 106, 38, .16);
+    --chrome-well: #201A10; --chrome-well-ink: #E8C876;
+    --chrome-shadow-raised: inset 0 1px 0 var(--chrome-edge-hi), inset 0 -1px 0 var(--chrome-edge-lo), 0 1px 2px rgba(0, 0, 0, .18);
+    --chrome-shadow-inset: inset 0 1px 3px var(--chrome-edge-lo), inset 0 -1px 0 var(--chrome-edge-hi);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --chrome-face: #2B2E23; --chrome-face-hi: #363A29; --chrome-edge-hi: #4C5138; --chrome-edge-lo: #14150D;
+      --chrome-brass: #D3AE5C; --chrome-brass-soft: rgba(211, 174, 92, .16);
+      --chrome-well: #0B0904; --chrome-well-ink: #F0D392; }
+  }
+  :root[data-theme="dark"] { --chrome-face: #2B2E23; --chrome-face-hi: #363A29; --chrome-edge-hi: #4C5138; --chrome-edge-lo: #14150D;
+    --chrome-brass: #D3AE5C; --chrome-brass-soft: rgba(211, 174, 92, .16);
+    --chrome-well: #0B0904; --chrome-well-ink: #F0D392; }
+  :root[data-theme="light"] { --chrome-face: #DCD3B8; --chrome-face-hi: #EFE8CC; --chrome-edge-hi: #FBF7E6; --chrome-edge-lo: #8B7F5C;
+    --chrome-brass: #8A6A26; --chrome-brass-soft: rgba(138, 106, 38, .16);
+    --chrome-well: #201A10; --chrome-well-ink: #E8C876; }
   html { background: var(--bg); }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1120px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
-  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--chrome-brass); }
   h1 { font-size: 1.4rem; margin: .3rem 0 .9rem; text-wrap: balance; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
   button:focus-visible, input:focus-visible, .sprite:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -246,35 +329,54 @@ ${THEME_TOKENS_CSS}
   .sprite.corpse .sprite-face { transform: none !important; }
   .thread-tip { position: absolute; transform: translate(-50%, -130%); font-family: ${MONO_STACK}; font-size: .68rem; background: var(--ink); color: var(--bg); padding: .1rem .4rem; border-radius: 3px; pointer-events: none; white-space: nowrap; display: none; }
   .side { display: flex; flex-direction: column; gap: .8rem; min-width: 0; }
-  .hud, .chat, .tuning { background: var(--card); border: 1px solid var(--line); padding: .6rem .75rem; }
-  .hud h2, .chat h2, .tuning h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .5rem; }
+  /* The console panel shell: a raised beveled plastic face (chrome-shadow-
+     raised), never the flat card/hairline the rest of the site uses — the
+     nameplate header below bleeds to this same panel's own edges via a
+     negative margin equal to this padding, so it reads as one welded unit,
+     not a label floating inside a box. */
+  .hud, .chat, .tuning { background: var(--chrome-face); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-raised); border-radius: 2px; padding: .6rem .75rem; }
+  .hud h2, .chat h2, .tuning h2 {
+    font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 600;
+    margin: -.6rem -.75rem .5rem; padding: .42rem .75rem;
+    background: var(--chrome-face-hi); border-bottom: 1px solid var(--chrome-edge-lo);
+    box-shadow: inset 0 1px 0 var(--chrome-edge-hi);
+    color: var(--ink); text-shadow: 0 1px 0 var(--chrome-edge-hi);
+  }
   /* Fixed-height, internally-scrolling — a hatch can mint several spiders
      at once now, so the agent count (and a naive card list's own height)
      can jump sharply; the panel must never grow the page underneath it. */
   .hud-list { max-height: 420px; overflow-y: auto; }
-  .hud-row { display: flex; flex-direction: column; gap: .1rem; padding: .4rem 0; border-top: 1px solid var(--line); }
-  .hud-row:first-of-type { border-top: none; }
-  .hud-id { font-family: ${MONO_STACK}; font-size: .74rem; }
+  .hud-row { display: flex; flex-direction: column; gap: .1rem; padding: .4rem 0; border-top: 1px solid var(--chrome-edge-lo); box-shadow: inset 0 1px 0 var(--chrome-edge-hi); }
+  .hud-row:first-of-type { border-top: none; box-shadow: none; }
+  .hud-id { font-family: ${MONO_STACK}; font-size: .74rem; font-weight: 600; }
   .hud-id.spider { color: var(--taught); } .hud-id.fly { color: var(--fly); } .hud-id.egg { color: var(--muted); }
   .hud-goal { font-size: .85rem; }
-  .hud-plan, .hud-belief { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); margin-top: .2rem; line-height: 1.4; }
-  .mass-track { height: 4px; margin-top: .3rem; background: var(--line); border-radius: 2px; overflow: hidden; }
-  .mass-fill { height: 100%; background: var(--taught); }
-  .mass-fill.fly { background: var(--fly); }
+  .hud-plan, .hud-belief { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); margin-top: .25rem; line-height: 1.4; padding-left: .5rem; border-left: 2px solid var(--chrome-brass); }
+  /* A stat-readout track: an inset "LCD" well, filled with a segmented pip
+     texture (repeating-linear-gradient) instead of a smooth gradient bar —
+     discrete resource units, the same reading-at-a-glance language a 90s
+     strategy game's own gold/mana meters use. */
+  .mass-track { height: 7px; margin-top: .35rem; background: var(--chrome-well); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 1px; overflow: hidden; }
+  .mass-fill { height: 100%; background: repeating-linear-gradient(90deg, var(--taught) 0 6px, rgba(0, 0, 0, .25) 6px 7px); }
+  .mass-fill.fly { background: repeating-linear-gradient(90deg, var(--fly) 0 6px, rgba(0, 0, 0, .25) 6px 7px); }
   .hud-empty { color: var(--muted); font-size: .85rem; }
   .chatlog { display: flex; flex-direction: column; gap: .4rem; max-height: 220px; overflow-y: auto; margin-bottom: .5rem; }
   .chatlog:empty { display: none; margin-bottom: 0; }
   .chatlog .u { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
   .chatlog .u::before { content: "tmct> "; color: var(--taught); }
   .chatlog .a { font-size: .88rem; line-height: 1.4; white-space: pre-wrap; }
-  .chatask { display: flex; align-items: center; gap: .5rem; border-top: 1px solid var(--line); padding-top: .5rem; }
+  .chatask { display: flex; align-items: center; gap: .5rem; border-top: 1px solid var(--chrome-edge-lo); padding-top: .5rem; }
   .chatlog:empty + .chatask { border-top: none; padding-top: 0; }
   .chatask .prompt { color: var(--taught); font-size: .78rem; font-family: ${MONO_STACK}; }
-  .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .32rem .55rem; min-width: 0; }
+  /* An inset "command slot" — the same LCD-well treatment the turn counter
+     and every live tuning readout below use, so typed input, live stats and
+     the turn plaque all read as one instrument panel, not three styles. */
+  .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--chrome-well); color: var(--chrome-well-ink); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: .32rem .55rem; min-width: 0; box-sizing: border-box; }
+  .chatask input::placeholder { color: var(--chrome-edge-hi); opacity: .55; }
   .chatask input:disabled { opacity: .5; }
   .chatpills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
-  .pill { font-family: ${MONO_STACK}; font-size: .68rem; padding: .2rem .6rem; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); color: var(--ink); white-space: nowrap; }
-  .pill:hover:not(:disabled) { border-color: var(--taught); }
+  .pill { font-family: ${MONO_STACK}; font-size: .68rem; padding: .2rem .6rem; border: 1px solid var(--chrome-edge-lo); border-radius: 99px; background: var(--chrome-face); color: var(--ink); box-shadow: inset 0 1px 0 var(--chrome-edge-hi); white-space: nowrap; }
+  .pill:hover:not(:disabled) { border-color: var(--chrome-brass); }
   .pill:disabled { opacity: .45; cursor: default; }
   .pill[data-role="addr"].active { border-color: var(--taught); color: var(--taught); }
   /* The dynamic deception-pill rail (§A.2.4): a true/false tag shown ONLY
@@ -282,7 +384,7 @@ ${THEME_TOKENS_CSS}
      submitted sentence itself (data-sentence, filled into #chatq on click)
      never carries the tag, so a clicked pill is indistinguishable from a
      hand-typed claim once it's in the input. */
-  .dynpills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--line); }
+  .dynpills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; padding-top: .5rem; border-top: 1px solid var(--chrome-edge-lo); }
   .dynpills:empty { display: none; padding-top: 0; border-top: none; }
   .pill[data-role="dyn-addr"][data-active="1"] { border-color: var(--taught); color: var(--taught); }
   .pill[data-role="dyn-claim"][data-truth="true"] { border-color: var(--taught-t2, var(--taught)); }
@@ -290,19 +392,50 @@ ${THEME_TOKENS_CSS}
   .pill[data-role="dyn-claim"][data-truth="false"] { border-style: dashed; border-color: var(--alert); }
   .pill[data-role="dyn-claim"][data-truth="false"]::before { content: "✕ "; opacity: .6; }
   .tuning-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 1rem; }
-  .tuning-col h3 { font-size: .74rem; margin: 0 0 .4rem; font-weight: 600; }
+  .tuning-col h3 { font-size: .74rem; margin: 0 0 .4rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
   .tuning-col.spider h3 { color: var(--taught); } .tuning-col.fly h3 { color: var(--fly); }
   .tuning-col label { display: block; font-size: .68rem; color: var(--muted); margin-bottom: .6rem; }
-  .tuning-col .tuning-val { font-family: ${MONO_STACK}; color: var(--ink); float: right; }
-  .tuning-col input[type="range"] { display: block; width: 100%; margin-top: .2rem; accent-color: var(--taught); }
+  /* Every live number on this page (this readout, the turn plaque below)
+     shares the same brass-on-well "LED" treatment — one readout language,
+     not a one-off flourish. */
+  .tuning-col .tuning-val { font-family: ${MONO_STACK}; font-variant-numeric: tabular-nums; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: 0 .35rem; float: right; }
+  .tuning-col input[type="range"] {
+    display: block; width: 100%; margin-top: .3rem; height: 6px; border-radius: 3px;
+    background: var(--chrome-well); box-shadow: var(--chrome-shadow-inset); accent-color: var(--taught);
+    -webkit-appearance: none; appearance: none;
+  }
   .tuning-col.fly input[type="range"] { accent-color: var(--fly); }
+  /* A lever-look thumb (a molded brass-edged cap) — appearance: none above
+     drops the OS's own native slider look in browsers that honor it;
+     accent-color just above is the fallback for any that don't. */
+  .tuning-col input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; margin-top: -4px; cursor: pointer;
+    background: var(--chrome-face-hi); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-raised);
+  }
+  .tuning-col.spider input[type="range"]::-webkit-slider-thumb { border-color: var(--taught); }
+  .tuning-col.fly input[type="range"]::-webkit-slider-thumb { border-color: var(--fly); }
+  .tuning-col input[type="range"]::-moz-range-track { height: 6px; border-radius: 3px; background: var(--chrome-well); box-shadow: var(--chrome-shadow-inset); }
+  .tuning-col input[type="range"]::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%; cursor: pointer; border: 1px solid var(--chrome-edge-lo);
+    background: var(--chrome-face-hi); box-shadow: var(--chrome-shadow-raised);
+  }
+  .tuning-col.spider input[type="range"]::-moz-range-thumb { border-color: var(--taught); }
+  .tuning-col.fly input[type="range"]::-moz-range-thumb { border-color: var(--fly); }
   .tuning-col input:disabled { opacity: .45; }
   .controls-row { display: flex; align-items: center; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
-  .controls-row button { font-family: ${MONO_STACK}; font-size: .78rem; padding: .3rem .7rem; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
-  .controls-row button:hover:not(:disabled) { border-color: var(--taught); }
-  .controls-row button:disabled { opacity: .4; cursor: default; }
-  .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
-  .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .5rem; }
+  /* Chunky keycaps: raised by default, pressed-in on :active — the one place
+     this redesign uses interaction (not animation) to sell "physical
+     control panel", and it costs nothing under reduced-motion since neither
+     state involves a transition, just an instant bevel swap. */
+  .controls-row button { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .03em; text-transform: uppercase; padding: .4rem .85rem; border-radius: 2px; border: 1px solid var(--chrome-edge-lo); background: var(--chrome-face); box-shadow: var(--chrome-shadow-raised); color: var(--ink); }
+  .controls-row button:hover:not(:disabled) { border-color: var(--chrome-brass); }
+  .controls-row button:active:not(:disabled) { box-shadow: var(--chrome-shadow-inset); }
+  .controls-row button:disabled { opacity: .4; cursor: default; box-shadow: none; }
+  /* The signature element: a brass-framed digital turn counter, the same
+     inset-well readout language as every stat above it — the one thing this
+     page is remembered by. */
+  .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .82rem; letter-spacing: .05em; text-transform: uppercase; font-variant-numeric: tabular-nums; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-brass); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: .3rem .7rem; }
+  .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .5rem; padding-left: .5rem; border-left: 2px solid var(--chrome-brass); }
   body.preview .side, body.preview .controls-row, body.preview .status, body.preview .tuning { display: none; }
   body.preview main { padding: 0; max-width: none; }
   body.preview .stage { display: block; }
@@ -386,6 +519,7 @@ const SPIDERFLY = ${gridData};
   const classOfAgentId = ${classOfAgentId.toString()};
   const threadCellsForSpiderPlan = ${threadCellsForSpiderPlan.toString()};
   const facingDegreesFor = ${facingDegreesFor.toString()};
+  const emotionFor = ${emotionFor.toString()};
   const nextCorpses = ${nextCorpses.toString()};
   const esc = ${escapeHtml.toString()};
   const el = (id) => document.getElementById(id);
@@ -447,6 +581,7 @@ const SPIDERFLY = ${gridData};
   const goalById = {};
   const spriteEls = {};
   const facingByAgent = {};
+  const emotionByAgent = {};
   let corpses = {};
   const corpseEls = {};
   let selectedAddresseeId = null;
@@ -461,9 +596,30 @@ const SPIDERFLY = ${gridData};
   function removeStaleSprites(agents) {
     for (const id of Object.keys(spriteEls)) {
       if (!agents[id]) {
-        spriteEls[id].remove(); delete spriteEls[id]; delete goalById[id]; delete facingByAgent[id];
+        spriteEls[id].remove(); delete spriteEls[id]; delete goalById[id]; delete facingByAgent[id]; delete emotionByAgent[id];
       }
     }
+  }
+
+  // maxMassFor/propertyFactsForAgent (emotionFor's own caller-side glue): only
+  // spider/fly carry the mgx:feels parameter (data/sprites-large/*-with-
+  // emotion.toml exists for those two classes only) — every other class (egg,
+  // and any class this page has no template for at all) keeps propertyFacts
+  // empty, resolving through its plain template exactly as before this page
+  // wired emotion through. maxMassFor mirrors massBarHtml's own per-class
+  // denominator below so the HUD's mass bar and the sprite's own expression
+  // read the same "how full" scale.
+  function maxMassFor(cls) {
+    return cls === "spider" ? SPIDERFLY.maxSpiderMass : cls === "fly" ? SPIDERFLY.maxFlyMass : null;
+  }
+  function propertyFactsForAgent(agent, cls) {
+    if (cls !== "spider" && cls !== "fly") return [];
+    return [{ predicate: "mgx:feels", object: emotionFor(agent, cls, maxMassFor(cls)) }];
+  }
+  function resolveSpriteFace(cls, propertyFacts) {
+    return window.tmctSpiderFly
+      ? tmctSpiderFly.resolveSpriteAsset(cls, (session && session.taxonomyRows) || [], propertyFacts, SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
+      : "";
   }
 
   function togglePov(id) {
@@ -475,27 +631,25 @@ const SPIDERFLY = ${gridData};
     if (e.key === "Escape" && povAgentId) togglePov(povAgentId);
   });
 
-  function ensureSpriteEl(id, cls) {
+  function ensureSpriteEl(id, cls, agent) {
     let node = spriteEls[id];
     if (node) return node;
     node = document.createElement("div");
     node.className = "sprite";
     node.dataset.cls = cls;
     // Property-aware resolution (sprite-templates.mjs's resolveSpriteAsset):
-    // no agent here carries an mgx:hasProperty fact today, so propertyFacts
-    // stays empty and every agent resolves through its plain class template
-    // (or the flat SPRITE_REGISTRY, for a class with none) — the same output
-    // as before this module existed, just wired for the day an agent does
-    // carry one.
-    const sprite = window.tmctSpiderFly
-      ? tmctSpiderFly.resolveSpriteAsset(cls, (session && session.taxonomyRows) || [], [], SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
-      : "";
+    // a spider/fly's live mgx:feels emotion (emotionFor, above) resolves it
+    // through the matching data/sprites-large/*-with-emotion.toml template;
+    // every other class (egg) keeps propertyFacts empty and resolves through
+    // its plain class template (or the flat SPRITE_REGISTRY), unchanged.
+    const propertyFacts = propertyFactsForAgent(agent, cls);
+    emotionByAgent[id] = propertyFacts[0] ? propertyFacts[0].object : null;
     // The sprite SVG lives in its own inner wrapper so plan-driven facing
     // (a CSS rotate on THIS wrapper) never fights the outer .sprite node's
     // own translate(-50%,-50%) positioning transform.
     const face = document.createElement("div");
     face.className = "sprite-face";
-    face.innerHTML = sprite;
+    face.innerHTML = resolveSpriteFace(cls, propertyFacts);
     node.appendChild(face);
     if (!preview) {
       node.tabIndex = 0;
@@ -515,7 +669,7 @@ const SPIDERFLY = ${gridData};
     removeStaleSprites(agents);
     for (const [id, a] of Object.entries(agents)) {
       const cls = classOfAgentId(id);
-      const node = ensureSpriteEl(id, cls);
+      const node = ensureSpriteEl(id, cls, a);
       const parsed = tmctSpiderFly.parseCellId(a.cell);
       if (!parsed) continue;
       const pct = cellCenterPct(parsed.x, parsed.y);
@@ -528,7 +682,20 @@ const SPIDERFLY = ${gridData};
       // whole point of this page, not a glitch).
       facingByAgent[id] = facingDegreesFor(a.plan, facingByAgent[id]);
       const face = node.querySelector(".sprite-face");
-      if (face) face.style.transform = "rotate(" + facingByAgent[id] + "deg)";
+      if (face) {
+        face.style.transform = "rotate(" + facingByAgent[id] + "deg)";
+        // Emotion changes tick-to-tick (a fly's fear spikes the instant a
+        // spider comes into view, a spider's joy fires the instant it eats),
+        // so this must re-resolve every redraw, not just at sprite creation —
+        // but only actually replace the DOM when the emotion word itself
+        // changed since last render, never on every tick regardless.
+        const propertyFacts = propertyFactsForAgent(a, cls);
+        const emotion = propertyFacts[0] ? propertyFacts[0].object : null;
+        if (emotion !== emotionByAgent[id]) {
+          emotionByAgent[id] = emotion;
+          face.innerHTML = resolveSpriteFace(cls, propertyFacts);
+        }
+      }
       if (a.goal) goalById[id] = a.goal;
     }
     lastAgents = agents;
@@ -554,9 +721,12 @@ const SPIDERFLY = ${gridData};
         node.setAttribute("aria-hidden", "true");
         const face = document.createElement("div");
         face.className = "sprite-face";
-        face.innerHTML = window.tmctSpiderFly
-          ? tmctSpiderFly.resolveSpriteAsset(corpse.cls, (session && session.taxonomyRows) || [], [], SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
-          : "";
+        // A corpse's expression is frozen — never re-resolved on later
+        // redraws (there's no more agent state to derive one from), and
+        // never emotion-parameterized at all (a rotting carcass has none),
+        // just its class's own plain template under the grayscale/fade the
+        // .sprite.corpse CSS rule already applies.
+        face.innerHTML = resolveSpriteFace(corpse.cls, []);
         node.appendChild(face);
         spriteLayer.appendChild(node);
         corpseEls[id] = node;
