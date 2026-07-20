@@ -296,6 +296,34 @@ knows, only how the room, its objects, and the "manor so far" map present them. 
 because the operator asked for it in this document; the actual design work should invoke the
 `frontend-design` skill the same way `PLAN_GAMES_UPLIFT_V3.md`'s own thematic pass did.
 
+### spider-fly.html — layout change (proposed, not started)
+
+Operator review of the live page (screenshot, 2026-07-21). Current structure, named against the
+real markup in `spider-fly-viz.mjs`: `<div class="stage">` is a two-column grid — `.board-frame`
+(the 10x10 canvas board) on the left, `<aside class="side">` on the right holding `.hud` ("agents":
+the fly-1/spider-1 status and plan bars) above `.chat` ("tell the spider or the fly something," the
+address/chat form and pills) — with `.tuning` (the "live tuning" slider strip: mass loss, spawn
+rate, vision, per class) sitting below `.stage` as a separate full-width block at the bottom.
+
+Target layout, top to bottom:
+1. A new top row, two columns: `.tuning` on the left at roughly two-thirds width, pinned to the
+   top of the page (not the bottom); the chat/agents column on the right at roughly a
+   quarter-width (the operator's own stated split — the two fractions leave room for a gutter
+   between them, matching `.stage`'s existing `gap`, rather than needing to sum to a full width).
+2. Within that right-hand column, swap `.chat` and `.hud`'s order: "tell the spider or the fly
+   something" comes first, with `.hud` ("agents") sitting directly below it — the reverse of
+   today's order.
+3. `.board-frame` (the grid) moves out of the two-column `.stage` entirely and becomes its own
+   full-width block below the new top row.
+
+Mechanically this is a markup reorder plus a new grid-column split (a sibling of the existing
+`.stage`/`.tuning-grid` CSS grid rules, not a new layout technique) — no change to what the page
+knows or how the chat/tuning logic works, so it belongs alongside adventure.html's visual item
+above as a layout-only build, not a knowledge one. Re-run `e2e/pages-spider-fly.test.mjs` and the
+screenshot sweep afterward — both already assert this page's structure and would need updating to
+match the new order, the same way `pages-home.test.mjs`/`pages-index.test.mjs` were updated for the
+home-page rework this session.
+
 **Generator precedent, so the sprites work doesn't invent a new pattern**: this codebase's
 established shape for "structured data source → OWL-shaped facts" is a pure generator function
 living in `src/domain/*.mjs` (`spider-fly-world.mjs`'s `worldFactRows()`), with a thin
