@@ -78,6 +78,7 @@ public/chat-browser.bundle.js
 public/spider-fly-browser.bundle.js
 public/adventure-browser.bundle.js
 public/plan-browser.bundle.js
+public/ledger-browser.bundle.js
 public/chat-seed.json
 public/reference-pack/
 public/viz-ticker.mjs

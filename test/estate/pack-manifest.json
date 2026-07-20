@@ -399,6 +399,7 @@
   "src/surfaces/tui/app.mjs",
   "src/surfaces/web/adventure-browser-entry.mjs",
   "src/surfaces/web/chat-browser-entry.mjs",
+  "src/surfaces/web/ledger-browser-entry.mjs",
   "src/surfaces/web/memory-ask-browser-entry.mjs",
   "src/surfaces/web/memory-ask-browser.bundle.js",
   "src/surfaces/web/plan-browser-entry.mjs",

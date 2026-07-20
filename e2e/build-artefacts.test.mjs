@@ -64,12 +64,21 @@ test("build-demo-site writes a public/ledger.html with the ledger payload and a 
   assert.match(res.stdout, /wrote .*ledger\.html \(chat dock enabled\)/);
 
   const html = await readFile(path.join(repoRoot, "public", "ledger.html"), "utf8");
-  const m = /const LEDGER = (.*);/.exec(html);
-  assert.ok(m, "the page embeds const LEDGER");
+  // LEDGER embeds as "let" (a post-teach re-render reassigns it wholesale —
+  // see ledger-viz.mjs's inline script), not "const" as before this feature.
+  const m = /(?:const|let) LEDGER = (.*);/.exec(html);
+  assert.ok(m, "the page embeds LEDGER");
   const ledger = JSON.parse(m[1]);
   assert.ok(ledger.rows.length > 0, "the demo payload renders real fact rows");
   assert.ok(ledger.rows.some((r) => r.s === "disk-1" || r.o === "disk-1"), "the hanoi-3 demo facts are present");
   assert.match(html, /tmctMemoryAsk/);
   assert.match(html, /id="chatform"/);
   assert.ok(!html.includes("chat unavailable"), "the dock renders enabled, not the disabled note");
+  // The live teach-capable bundle is a demo-site-only addition (never shipped
+  // by the CLI's own `tmct viz`) — confirm the site build actually offers it.
+  assert.match(html, /<script src="\.\/ledger-browser\.bundle\.js">/, "the live teach bundle is linked");
+  assert.ok(
+    existsSync(path.join(repoRoot, "public", "ledger-browser.bundle.js")),
+    "the live teach bundle was actually built alongside the page",
+  );
 });

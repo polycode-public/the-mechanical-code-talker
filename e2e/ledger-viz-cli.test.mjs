@@ -25,9 +25,12 @@ async function seededRepo() {
   return dir;
 }
 
+// LEDGER embeds as "let" (a post-teach re-render reassigns it wholesale —
+// see ledger-viz.mjs's inline script), PAYLOAD stays "const" — either
+// keyword is accepted here so this helper doesn't care which.
 function embeddedJson(html, name) {
-  const m = new RegExp(`const ${name} = (.*);`).exec(html);
-  assert.ok(m, `const ${name} = ...; not found in the rendered page`);
+  const m = new RegExp(`(?:const|let) ${name} = (.*);`).exec(html);
+  assert.ok(m, `const/let ${name} = ...; not found in the rendered page`);
   return JSON.parse(m[1]);
 }
 

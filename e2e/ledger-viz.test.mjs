@@ -147,9 +147,12 @@ test("renderLedgerHtml: self-contained page with parseable LEDGER/PAYLOAD, both 
     const data = await computeLedgerData(dir);
     const html = renderLedgerHtml({ ...data, memoryAskBundle: "" });
     assert.ok(!/<(script|link|img)[^>]+(src|href)\s*=\s*["']https?:/i.test(html), "no external resource loads");
+    // LEDGER embeds as "let" (a post-teach re-render reassigns it wholesale —
+    // see ledger-viz.mjs's inline script), PAYLOAD stays "const" — either
+    // keyword is accepted here so this helper doesn't care which.
     const grab = (name) => {
-      const m = new RegExp(`const ${name} = (.*);`).exec(html);
-      assert.ok(m, `const ${name} embedded`);
+      const m = new RegExp(`(?:const|let) ${name} = (.*);`).exec(html);
+      assert.ok(m, `const/let ${name} embedded`);
       return JSON.parse(m[1]);
     };
     const ledger = grab("LEDGER");
@@ -422,7 +425,15 @@ test("renderLedgerHtml: the dashboard strip renders real, non-placeholder number
 
 test("renderLedgerHtml: an empty graph's dashboard says so honestly instead of showing a fabricated zero-tile grid", async () => {
   const html = renderLedgerHtml({ rows: [], terms: [], edges: [], focus: null, contradictions: [], worthALook: null, payload: null, meta: { shown: 0, total: 0, truncated: false }, stats: computeLedgerStats([], [], []), memoryAskBundle: "" });
-  assert.match(html, /nothing taught yet/);
-  assert.match(html, /not enough dated facts yet/);
-  assert.doesNotMatch(html, /<svg class="spark"/);
+  // Scoped to the rendered <main> markup, before the first <script> tag: the
+  // live dock's inline script toString-embeds sparklineSvg's own SOURCE (so a
+  // post-teach re-render can call it client-side too — see renderLedgerHtml's
+  // inline script), and that source text itself contains the literal string
+  // `<svg class="spark"` regardless of what it would render for THIS data —
+  // a whole-page substring check would false-positive on the source, not the
+  // actual output.
+  const bodyOnly = html.slice(0, html.indexOf("<script>"));
+  assert.match(bodyOnly, /nothing taught yet/);
+  assert.match(bodyOnly, /not enough dated facts yet/);
+  assert.doesNotMatch(bodyOnly, /<svg class="spark"/);
 });
