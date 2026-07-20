@@ -1,10 +1,10 @@
 // The deployed home page, in a real browser: it loads clean, it shows the
-// fully-expanded sections, its explore band's four link cards each lead to a
-// real page, and it survives a phone-sized viewport. Nothing else drives
-// index.html end to end (the embedded chat itself is pages-chat.test.mjs's
-// job; the chat.html/plan.html/adventure.html/ledger.html/sprites.html pages'
-// own content is each page's own test file's job — this file only checks
-// index.html links to them and shows what it says it shows).
+// fully-expanded sections, every hero and explore-card is a screenshot plus
+// a link rather than a live embed, and it survives a phone-sized viewport.
+// Nothing else drives index.html end to end (the chat.html/plan.html/
+// adventure.html/ledger.html/sprites.html/spider-fly.html pages' own content
+// is each page's own test file's job — this file only checks index.html
+// links to them and shows what it says it shows).
 //
 // Third-party hosts are blocked for every run. The page's live-demo box loads
 // wink-nlp from a CDN, and a test that reached for it would pass or fail on
@@ -79,27 +79,44 @@ test("the home page serves every asset it asks for and logs no error of its own"
   }
 });
 
-test("the chat hero boots the real embedded engine and its full-screen link points at chat.html", async () => {
+test("the page embeds no live widget: no iframe, no #tmct-chat, no chat engine script tag", async () => {
   const { context, page } = await openHomePage();
   try {
-    await page.locator(".chat-hero").waitFor({ state: "visible" });
-    await assert.doesNotReject(
-      page.waitForFunction(() => !document.querySelector("#tmct-chat .chat-input")?.disabled, null, { timeout: 20_000 }),
-      "the embedded chat becomes usable",
-    );
-    const href = await page.locator(".chat-hero a").getAttribute("href");
-    assert.equal(href, "./chat.html");
+    assert.equal(await page.locator("iframe").count(), 0, "no page is embedded live in an iframe");
+    assert.equal(await page.locator("#tmct-chat").count(), 0, "the old embedded chat widget is gone");
+    assert.equal(await page.locator('script[src="./chat-browser.bundle.js"]').count(), 0, "the chat engine bundle is not loaded on the home page");
   } finally {
     await context.close();
   }
 });
 
-test("the spider-and-fly hero loads its own preview iframe", async () => {
+test("the chat hero shows a screenshot of chat.html and links to it, in both the caption and the image", async () => {
   const { context, page } = await openHomePage();
   try {
-    await assert.doesNotReject(page.locator(".spider-fly-hero").waitFor({ state: "visible" }));
-    const frame = page.frameLocator(".spider-fly-hero iframe");
-    await frame.locator("body").waitFor({ state: "visible" });
+    const hero = page.locator(".hero-shot").first();
+    await hero.waitFor({ state: "visible" });
+    const captionHref = await hero.locator(".hero-row a").getAttribute("href");
+    assert.equal(captionHref, "./chat.html");
+    const img = hero.locator("img");
+    await assert.doesNotReject(img.waitFor({ state: "visible" }), "the screenshot renders");
+    assert.match(await img.getAttribute("src"), /screenshots\/chat\.png$/);
+    const imgLinkHref = await hero.locator("a").last().getAttribute("href");
+    assert.equal(imgLinkHref, "./chat.html", "the screenshot itself is also a link to the full page");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the spider-and-fly hero shows a screenshot of spider-fly.html and links to it", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    const hero = page.locator(".hero-shot").nth(1);
+    await hero.waitFor({ state: "visible" });
+    const captionHref = await hero.locator(".hero-row a").getAttribute("href");
+    assert.equal(captionHref, "./spider-fly.html");
+    const img = hero.locator("img");
+    await assert.doesNotReject(img.waitFor({ state: "visible" }), "the screenshot renders");
+    assert.match(await img.getAttribute("src"), /screenshots\/spider-fly\.png$/);
   } finally {
     await context.close();
   }
@@ -149,6 +166,20 @@ test("the explore band's four link cards each lead to a real, working page", asy
     assert.equal(await cards.count(), 4, "exactly four link cards");
     const hrefs = await cards.evaluateAll((els) => els.map((el) => el.getAttribute("href")));
     assert.deepEqual(hrefs, ["./plan.html", "./adventure.html", "./ledger.html", "./sprites.html"]);
+  } finally {
+    await context.close();
+  }
+});
+
+test("the plan and ledger cards each show a screenshot of their own page", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    const planShot = page.locator('.explore-card[href="./plan.html"] img.explore-shot');
+    const ledgerShot = page.locator('.explore-card[href="./ledger.html"] img.explore-shot');
+    await assert.doesNotReject(planShot.waitFor({ state: "visible" }));
+    await assert.doesNotReject(ledgerShot.waitFor({ state: "visible" }));
+    assert.match(await planShot.getAttribute("src"), /screenshots\/plan\.png$/);
+    assert.match(await ledgerShot.getAttribute("src"), /screenshots\/ledger\.png$/);
   } finally {
     await context.close();
   }

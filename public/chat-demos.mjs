@@ -1,7 +1,8 @@
-// chat-demos.mjs — the home page chat's scripted demos and the reference
-// pack's demo term allowlist. Data only: chat-ui.mjs drives the demos, and
-// scripts/build-demo-pack.mjs reads REFERENCE_PACK_TERMS to cut the
-// browser-fetchable pack subset (it norm-folds the entries itself).
+// chat-demos.mjs — scripted chat turns and the reference pack's demo term
+// allowlist. Data only: e2e/web-chat-memory.test.mjs replays DEMOS at the
+// engine level, and scripts/build-demo-pack.mjs reads REFERENCE_PACK_TERMS
+// to cut the browser-fetchable pack subset (it norm-folds the entries
+// itself).
 
 /** Everyday terms the demo reference pack ships articles for. Each must
  *  resolve in the full pack — build-demo-pack fails loudly on one that

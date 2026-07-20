@@ -538,16 +538,17 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
 <!--
   Import map: resolves the "wink-nlp"/"wink-eng-lite-web-model" bare specifiers the
   live ask-and-teach dock's own dynamic import() needs (pinned to the exact versions
-  package.json depends on) to esm.sh CDN builds — the same seam index.html's own
-  import map wires up for the embedded chat, mirrored here because this page can be
-  opened standalone (no import map inherited from a host document; this includes the
-  self-contained file tmct viz writes to disk — a plain cross-origin dynamic
-  import() of a remote https:// URL, not a file:// read, so it works the same way
-  offline this page's own try/catch already handles for the deployed site: the
-  fetch fails and the wink tier degrades gracefully). Nothing in this file touches
-  wink-nlp directly — wink-model.mjs's own header explains why a static import would
-  drag the ~1 MB model into every bundle; only the page's own inline script performs
-  this CDN import, exactly like public/chat-ui.mjs's own tryLoadWink().
+  package.json depends on) to esm.sh CDN builds — the same seam chat.html and
+  plan.html each wire up for their own live sessions, mirrored here because this page
+  can be opened standalone (no import map inherited from a host document; this
+  includes the self-contained file tmct viz writes to disk — a plain cross-origin
+  dynamic import() of a remote https:// URL, not a file:// read, so it works the
+  same way offline this page's own try/catch already handles for the deployed site:
+  the fetch fails and the wink tier degrades gracefully). Nothing in this file
+  touches wink-nlp directly — wink-model.mjs's own header explains why a static
+  import would drag the ~1 MB model into every bundle; only the page's own inline
+  script performs this CDN import, the same bounded-race tryLoadWink() pattern
+  public/tmct-browser.mjs uses.
 -->
 <script type="importmap">
 {

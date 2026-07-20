@@ -64,13 +64,13 @@ test("provenanceChipFor: an answer with no citation and no assert via carries no
 
 // ---- renderChatHtml: page structure -----------------------------------
 
-test("renderChatHtml: mounts the SAME chat engine bundle the home page's embedded widget uses, by a same-origin relative path only", () => {
+test("renderChatHtml: mounts the chat engine bundle by a same-origin relative path only", () => {
   const html = renderChatHtml();
   assert.match(html, /<script src="\.\/chat-browser\.bundle\.js"><\/script>/);
   assert.ok(!/(?:src|href)=["']https?:/.test(html), "no external resource loads baked into the markup");
 });
 
-test("renderChatHtml: fetches the same seed and reference-pack paths chat-ui.mjs uses, never a second engine", () => {
+test("renderChatHtml: fetches the seed and reference-pack from same-origin paths, never a second engine", () => {
   const html = renderChatHtml();
   assert.match(html, /fetch\("\.\/chat-seed\.json"\)/);
   assert.match(html, /fetch\("\.\/reference-pack\/index\.json"\)/);

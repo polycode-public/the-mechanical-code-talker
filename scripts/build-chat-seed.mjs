@@ -1,6 +1,6 @@
 // scripts/build-chat-seed.mjs — regenerate public/chat-seed.json, the starter
-// memory behind the home page's embedded chat (public/chat-ui.mjs +
-// chat-browser.bundle.js). Seeded into an in-memory Backend-B handle through
+// memory behind chat.html's embedded chat engine (chat-browser.bundle.js).
+// Seeded into an in-memory Backend-B handle through
 // the REAL corpus seed path — resolveExtensions + seedActiveCorpusEntries,
 // the exact functions `tmct init` runs — then serialized from what the store
 // actually holds, so the page's vocabulary can never drift from the product's.

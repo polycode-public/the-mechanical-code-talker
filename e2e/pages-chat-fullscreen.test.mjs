@@ -1,12 +1,12 @@
 // "Talk to it"'s full-screen destination (public/chat.html), driven in a
-// real browser: the same engine the home page's embedded #tmct-chat widget
-// runs boots from the same bundle/seed, a live free-chat turn answers with
-// its provenance chip, an unknown term gets the honest miss with no chip at
-// all, and the page never overflows a phone viewport.
+// real browser: the full chat engine boots from its own bundle/seed, a live
+// free-chat turn answers with its provenance chip, an unknown term gets the
+// honest miss with no chip at all, and the page never overflows a phone
+// viewport.
 //
-// Third-party hosts are blocked for every run, exactly as in pages-chat/
-// pages-home: the wink lemma/POS tier degrades and the chat must still
-// answer — the engine and its memory ship with the page.
+// Third-party hosts are blocked for every run, exactly as in pages-home: the
+// wink lemma/POS tier degrades and the chat must still answer — the engine
+// and its memory ship with the page.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";

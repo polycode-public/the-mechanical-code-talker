@@ -6,8 +6,8 @@
 // Enter — never an honest miss.
 //
 // Third-party hosts are blocked for every run, exactly as in pages-home/
-// pages-chat: the whole engine ships with the page, so nothing here needs
-// the network.
+// pages-chat-fullscreen: the whole engine ships with the page, so nothing
+// here needs the network.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";

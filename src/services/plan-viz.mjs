@@ -296,13 +296,13 @@ export function renderPlanHtml({ plan, rendersAs = {}, sizeOrder = [], title } =
 <!--
   Import map: resolves the "wink-nlp"/"wink-eng-lite-web-model" bare specifiers the
   live re-solve session's own dynamic import() needs (pinned to the exact versions
-  package.json depends on) to esm.sh CDN builds — the same seam index.html's own
-  import map wires up for the embedded chat, mirrored here because this page can be
-  opened standalone (no import map inherited from a host document). The bundle
-  itself (./plan-browser.bundle.js) never touches wink-nlp directly — wink-model.mjs's
-  own header explains why a static import would drag the ~1 MB model into every
-  bundle; only the page's own inline script performs this CDN import, exactly like
-  public/chat-ui.mjs's own tryLoadWink().
+  package.json depends on) to esm.sh CDN builds — the same seam chat.html and
+  ledger.html each wire up for their own live sessions, mirrored here because this
+  page can be opened standalone (no import map inherited from a host document). The
+  bundle itself (./plan-browser.bundle.js) never touches wink-nlp directly —
+  wink-model.mjs's own header explains why a static import would drag the ~1 MB
+  model into every bundle; only the page's own inline script performs this CDN
+  import, the same bounded-race tryLoadWink() pattern public/tmct-browser.mjs uses.
 -->
 <script type="importmap">
 {
@@ -636,9 +636,9 @@ const PLAN = ${embedded};
     // "moving" to "move" — without it that one teach sentence honestly
     // declines and every position fact taught after it fails in turn. Load
     // wink from the CDN and register it, the SAME bounded-race pattern
-    // public/chat-ui.mjs and public/tmct-browser.mjs both use: a cross-
-    // origin dynamic import() can neither resolve nor reject on some
-    // failures, so an unbounded await would leave a resolve stuck forever.
+    // public/tmct-browser.mjs uses: a cross-origin dynamic import() can
+    // neither resolve nor reject on some failures, so an unbounded await
+    // would leave a resolve stuck forever.
     // Awaited before EVERY session creation below (idempotent — a second
     // await after the first attempt already settled resolves immediately).
     const WINK_LOAD_TIMEOUT_MS = 8000;

@@ -173,85 +173,14 @@
     font-size: 0.78rem;
   }
 
-  /* ---- embedded chat (the full turn engine, live) ---------------------------------- */
-  .chat-hero { margin: 1.4rem 0 0.4rem; }
-  .chat-hero .hero-row {
+  /* ---- static demo shots (screenshot + link, used for chat/spider-fly/plan/ledger) - */
+  .hero-shot { margin: 1.4rem 0 0.4rem; }
+  .hero-row {
     display: flex; justify-content: space-between; align-items: baseline;
     flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
   }
-  #tmct-chat { margin: 1.4rem 0 0.6rem; }
-  #tmct-chat .chat-frame {
-    background: var(--code-bg);
-    color: var(--code-fg);
-    border-radius: 8px;
-    padding: 1rem 1.2rem;
-    font: 13.5px/1.6 "SF Mono", Menlo, Consolas, monospace;
-  }
-  #tmct-chat .chat-log { min-height: 5.5em; max-height: 22em; overflow-y: auto; overscroll-behavior: contain; }
-  #tmct-chat .chat-log > div { white-space: pre-wrap; word-break: break-word; }
-  #tmct-chat .chat-user { margin-top: 0.4em; }
-  #tmct-chat .chat-prompt { color: var(--taught); }
-  #tmct-chat .chat-answer { color: var(--code-fg); margin-bottom: 0.35em; }
-  #tmct-chat .chat-miss { color: var(--muted); margin-bottom: 0.35em; }
-  #tmct-chat .chat-dim { color: var(--muted); }
-  #tmct-chat .chat-input-row { display: flex; align-items: baseline; margin-top: 0.4em; }
-  #tmct-chat .chat-input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: var(--code-fg);
-    font: inherit;
-    padding: 0;
-    min-width: 0;
-  }
-  #tmct-chat .chat-input::placeholder { color: var(--muted); }
-  #tmct-chat .chat-input:disabled { opacity: 0.5; }
-  #tmct-chat .chat-input:focus-visible { box-shadow: 0 1px 0 0 var(--taught); }
-  #tmct-chat .chat-demo-rail { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.6rem; }
-  #tmct-chat .chat-demo-rail button {
-    font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace;
-    color: var(--taught);
-    background: transparent;
-    border: 1px solid var(--line);
-    border-radius: 999px;
-    padding: 0.25em 0.9em;
-    cursor: pointer;
-  }
-  #tmct-chat .chat-demo-rail button:hover:not(:disabled) { border-color: var(--taught); }
-  #tmct-chat .chat-demo-rail button:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
-  #tmct-chat .chat-demo-rail button:disabled {
-    color: var(--muted);
-    border-style: dashed;
-    cursor: default;
-  }
-  #tmct-chat .chat-demo-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.6rem; }
-  #tmct-chat .chat-demo-controls button {
-    font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace;
-    color: var(--code-fg);
-    background: var(--code-bg);
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    padding: 0.25em 0.7em;
-    cursor: pointer;
-  }
-  #tmct-chat .chat-demo-controls button:hover:not(:disabled) { border-color: var(--taught); }
-  #tmct-chat .chat-demo-controls button:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
-  #tmct-chat .chat-demo-controls button:disabled { opacity: 0.4; cursor: default; }
-  #tmct-chat .chat-status {
-    font-size: 0.78rem;
-    color: var(--muted);
-    margin-top: 0.5rem;
-  }
-
-  /* ---- spider-and-fly hero ---------------------------------------------------------- */
-  .spider-fly-hero { margin: 1.4rem 0 0.4rem; }
-  .spider-fly-hero .hero-row {
-    display: flex; justify-content: space-between; align-items: baseline;
-    flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
-  }
-  .spider-fly-hero iframe {
-    width: 100%; height: 460px; border: 1px solid var(--line);
+  .hero-shot img {
+    display: block; width: 100%; height: auto; border: 1px solid var(--line);
     border-radius: 8px; background: var(--card);
   }
 
@@ -266,6 +195,9 @@
     padding: 1rem 1.1rem; text-decoration: none; color: inherit;
   }
   .explore-card:hover, .explore-card:focus-visible { border-color: var(--taught); }
+  .explore-card .explore-shot {
+    display: block; width: 100%; height: auto; border-radius: 5px; border: 1px solid var(--line);
+  }
   .explore-card h3 { font-size: 1rem; margin: 0; color: var(--ink); }
   .explore-card p { margin: 0; font-size: 0.86rem; color: var(--muted); line-height: 1.5; }
   .explore-card .go { align-self: flex-end; font-size: 0.8rem; color: var(--taught); }
@@ -296,34 +228,24 @@
 
   <h2>Talk to it</h2>
   <p>
-    This is the full chat engine, loaded into this page with the starter vocabulary
-    it ships. Ask it something, teach it something, or run a scripted demo. Every
-    answer is computed live in your browser and names its source.
+    This is the same chat engine as the CLI, running entirely in the browser: teach
+    it something, ask it something, or run a scripted demo, and every answer names
+    its source. The shot below is a real exchange with it; open the full page to
+    try your own.
   </p>
 
-  <div class="chat-hero">
+  <!-- A screenshot and a link, not a live embed: this section stays visible and
+       correct even if chat.html's own scripts fail to load, which an embedded
+       widget here would not. -->
+  <div class="hero-shot">
     <div class="hero-row">
-      <span class="demo-label">The real chat engine, running in this page</span>
+      <span class="demo-label">The real chat engine, mid-conversation</span>
       <a href="./chat.html">open full-screen &rarr;</a>
     </div>
-    <div id="tmct-chat" data-demo-state="idle">
-      <div class="chat-frame">
-        <div class="chat-log" role="log" aria-live="polite"></div>
-        <div class="chat-input-row">
-          <span class="chat-prompt">tmct&gt;&nbsp;</span>
-          <input class="chat-input" type="text" autocomplete="off" autocapitalize="off"
-                 spellcheck="false" disabled aria-label="Ask tmct a question"
-                 placeholder="loading the engine…">
-        </div>
-      </div>
-      <div class="chat-demo-rail" role="group" aria-label="Scripted demos"></div>
-      <div class="chat-demo-controls" role="group" aria-label="Demo playback controls" hidden>
-        <button type="button" data-ticker="reset" aria-label="Reset the demo">⏮ reset</button>
-        <button type="button" data-ticker="play" aria-label="Play the demo">▶ play</button>
-        <button type="button" data-ticker="step" aria-label="Step the demo forward one turn">step ▶</button>
-      </div>
-      <div class="chat-status">loading the engine…</div>
-    </div>
+    <a href="./chat.html">
+      <img src="./screenshots/chat.png" width="640" height="188"
+           alt="tmct chat page: the question 'what is a dog' answered with three facts, each naming its corpus source">
+    </a>
   </div>
 
   <h2>Two agents, planning against each other</h2>
@@ -335,12 +257,15 @@
     is one.
   </p>
 
-  <div class="spider-fly-hero">
+  <div class="hero-shot">
     <div class="hero-row">
-      <span class="demo-label">The spider and the fly, planning live against each other</span>
+      <span class="demo-label">The spider and the fly, mid-plan</span>
       <a href="./spider-fly.html">open full-screen &rarr;</a>
     </div>
-    <iframe src="./spider-fly.html?preview=1" title="tmct spider and fly — two agents planning against each other on a partly-hidden grid"></iframe>
+    <a href="./spider-fly.html">
+      <img src="./screenshots/spider-fly.png" width="640" height="438"
+           alt="tmct spider and fly page: a spider and a fly on a partly-hidden grid, with each agent's live plan status shown alongside">
+    </a>
   </div>
 
   <h2>Run the chat yourself</h2>
@@ -414,6 +339,8 @@ await runChat({
 
   <div class="explore-grid">
     <a class="explore-card" href="./plan.html">
+      <img class="explore-shot" src="./screenshots/plan.png" width="640" height="475"
+           alt="tmct plan page: a Tower of Hanoi board mid-solve, with the move list and the PDDL plan artifact alongside">
       <h3>It plans, and shows the work</h3>
       <p>Teach it a game's rules, then ask it to solve one. The planner replays every
       move it made, one by one.</p>
@@ -426,6 +353,8 @@ await runChat({
       <span class="go">open &rarr;</span>
     </a>
     <a class="explore-card" href="./ledger.html">
+      <img class="explore-shot" src="./screenshots/ledger.png" width="640" height="475"
+           alt="tmct memory ledger page: fact counts, a predicate breakdown, and the taught facts for the term 'peg'">
       <h3>The memory ledger</h3>
       <p>Browse the taught graph. Click any term inside a fact to drill in.</p>
       <span class="go">open &rarr;</span>
@@ -466,7 +395,5 @@ await runChat({
   </footer>
 </main>
 <script type="module" src="./demo-ui.mjs"></script>
-<script src="./chat-browser.bundle.js" defer></script>
-<script type="module" src="./chat-ui.mjs"></script>
 </body>
 </html>

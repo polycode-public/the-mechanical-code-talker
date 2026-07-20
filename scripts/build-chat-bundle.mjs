@@ -1,5 +1,5 @@
-// build-chat-bundle.mjs — bundle tmct's FULL chat turn engine for the home
-// page's embedded chat (public/chat-ui.mjs).
+// build-chat-bundle.mjs — bundle tmct's FULL chat turn engine for chat.html's
+// embedded chat.
 //
 // Builds ONE IIFE bundle:
 //   - src/surfaces/web/chat-browser-entry.mjs -> public/chat-browser.bundle.js —
