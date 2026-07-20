@@ -4,7 +4,10 @@
 //   engine/           unmodified copies of the engine sources the in-page demo runs
 //   demo-graph.json   the example code graph (see build-demo-graph.mjs)
 //   demo-memory.json  the taught payload behind the ledger (see build-demo-memory.mjs)
-//   ledger.html       the memory ledger, with the ask bundle inlined
+//   ledger.html       the memory ledger, with the ask bundle inlined AND a live
+//                     teach-and-ask chat dock over its own browser bundle —
+//                     `tmct viz`'s own output stays the lighter query-only page
+//                     (see ledger-viz.mjs's ledgerBundleAvailable doc)
 //   plan.html         the solved hanoi-3 replay plus a live re-solve session
 //                     (disk-count/max-depth controls, a chat-assert dock, a
 //                     PDDL+OWL/RDF plan panel) over its own browser bundle
@@ -83,8 +86,14 @@ stampPageVersion();
 execFileSync(process.execPath, [join(here, "build-demo-graph.mjs"), join(SITE, "demo-graph.json")], { stdio: "inherit" });
 
 // The ledger hero: build the memory payload through the real teach paths, then
-// render public/ledger.html (self-contained, memory-ask bundle inlined) —
-// the same page `tmct viz --ledger` writes, so the site can't drift from it.
+// render public/ledger.html (memory-ask bundle inlined, exactly as `tmct viz`
+// writes it) plus this page's own dedicated browser bundle (the full turn
+// engine, same posture as the plan/spider-fly/adventure bundles below —
+// generated fresh per build, never committed) so the deployed page's chat
+// dock can teach new facts, not just answer them. ledgerBundleAvailable:true
+// is what makes renderLedgerHtml link the sibling bundle at all — bin/tmct.mjs's
+// own `tmct viz` never passes it, so the CLI's own output stays exactly the
+// self-contained, query-only page it always was.
 const { main: buildDemoMemory } = await import(join(here, "build-demo-memory.mjs"));
 const { outPath: memoryPath } = await buildDemoMemory(join(SITE, "demo-memory.json"));
 const { readFile: readF, writeFile: writeF } = await import("node:fs/promises");
@@ -92,8 +101,11 @@ const { computeLedgerDataFromPayload, renderLedgerHtml, readMemoryAskBundle } = 
 const payload = JSON.parse(await readF(memoryPath, "utf8"));
 const ledgerData = computeLedgerDataFromPayload(payload, {});
 const memoryAskBundle = await readMemoryAskBundle();
+const { main: buildLedgerBundle } = await import(join(here, "build-ledger-bundle.mjs"));
+const { outPath: ledgerBundlePath, size: ledgerBundleBytes } = await buildLedgerBundle(SITE);
+console.log(`wrote ${ledgerBundlePath} (${(ledgerBundleBytes / 1024).toFixed(0)} KB)`);
 const ledgerPath = join(SITE, "ledger.html");
-await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle }));
+await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true }));
 console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
 
 // The home page's embedded chat: the full-engine browser bundle plus its

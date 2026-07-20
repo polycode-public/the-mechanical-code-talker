@@ -1,7 +1,13 @@
-// The in-page chat dock, driven in a real browser. The ledger page embeds the
-// committed ask bundle, so a visitor's question runs the same query engine the
-// CLI runs, against the same taught payload. This is the only test that proves
-// the browser surface answers rather than merely loading.
+// The in-page chat dock, driven in a real browser. The ledger page always
+// embeds the committed ask bundle (tmctMemoryAsk, the same query engine the
+// CLI runs), but on the Pages DEMO SITE this file builds and serves, the
+// live teach-and-ask bundle (tmctLedger) also loads and takes over the
+// dock's submit handler — the live-teach round trip itself is
+// e2e/pages-ledger-teach.test.mjs's job; this file's grounded-answer
+// assertions still hold either way (factAnswer/factReadBack's own phrasing
+// is shared code, not duplicated per engine), but an honest MISS routes
+// through runTurn's own richer cascade here, not tmctMemoryAsk's narrower
+// canned miss text.
 //
 // The page carries its own engine and payload, so third-party hosts are blocked:
 // the run is the same offline, and nothing here waits on a CDN.
@@ -85,14 +91,19 @@ test("a relation question chases the taught fact and names the subject", async (
   }
 });
 
-test("a term the graph has never seen is a miss, and the miss suggests terms it does hold", async () => {
+test("a term the graph has never seen is a miss, never a fabricated definition", async () => {
   const { context, page } = await openLedgerPage();
   try {
     const reply = await ask(page, "what is a quokka");
     assert.equal(reply.isMiss, true, "an unknown term is reported as a miss");
-    assert.match(reply.text, /can't ground that in this graph/, "the dock says it cannot answer");
-    assert.doesNotMatch(reply.text, /quokka is/i, "the miss invents no definition");
-    assert.match(reply.text, /try: "what is/, "the miss points at terms the graph holds");
+    // runTurn's own honest-miss cascade, not tmctMemoryAsk's canned text —
+    // see this file's own header for why the live dock answers here.
+    assert.match(reply.text, /don't know "quokka" yet/, "the dock says it cannot answer");
+    // The miss's own teach hint literally contains "quokka is a <thing>" as a
+    // fill-in-the-blank template — a real word after "is a" would be an
+    // actual fabricated claim; the placeholder is not one.
+    assert.doesNotMatch(reply.text, /quokka is a [a-z]/i, "the miss invents no definition");
+    assert.match(reply.text, /teach me directly/i, "the miss offers a way to teach it instead");
   } finally {
     await context.close();
   }

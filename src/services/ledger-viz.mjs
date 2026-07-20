@@ -393,12 +393,20 @@ function microbarsHtml(items) {
 /** The dashboard strip: fact/term totals, the tier bar, graph density, a data-
  *  quality tile keyed off the SAME contradiction count worthALook surfaces,
  *  and the corpus-bundle/predicate leaderboards. Every tile reads straight
- *  off `stats` (computeLedgerStats) — no client-side recomputation. */
-function dashboardHtml(stats) {
+ *  off `stats` (computeLedgerStats) — no client-side recomputation.
+ *
+ *  Also the live dock's own re-render target: `id="dash"` gives a post-teach
+ *  refresh a single element to replace (`el("dash").outerHTML = dashboardHtml(...)`
+ *  — see renderLedgerHtml's inline script), and `fresh: true` marks that
+ *  replacement with a quiet settle-fade (`.dash.fresh`, below) rather than a
+ *  silent swap — the SAME function serves the server-rendered initial paint
+ *  (fresh omitted) and every live update after it, so the two can never drift. */
+function dashboardHtml(stats, { fresh = false } = {}) {
   const s = stats || {};
   const total = s.totalFacts || 0;
+  const freshCls = fresh ? " fresh" : "";
   if (!total) {
-    return `<section class="dash" aria-label="Ledger metrics"><div class="tile"><span class="tile-label">facts.total</span><span class="tile-value">0</span><span class="tile-sub">nothing taught yet</span></div></section>`;
+    return `<section class="dash${freshCls}" id="dash" aria-label="Ledger metrics"><div class="tile"><span class="tile-label">facts.total</span><span class="tile-value">0</span><span class="tile-sub">nothing taught yet</span></div></section>`;
   }
   const terms = s.totalTerms || 0;
   const qualityCls = s.contradictionCount > 0 ? " tile-alert" : "";
@@ -406,7 +414,7 @@ function dashboardHtml(stats) {
   const predicatesHtml = s.predicates?.length
     ? microbarsHtml(s.predicates.map((p) => ({ label: p.phrase || p.predicate, count: p.count })))
     : `<span class="tile-sub">none yet</span>`;
-  return `<section class="dash" aria-label="Ledger metrics">
+  return `<section class="dash${freshCls}" id="dash" aria-label="Ledger metrics">
     <div class="tile">
       <span class="tile-label">facts.total</span>
       <span class="tile-value">${total}</span>
@@ -462,11 +470,40 @@ function sparklineSvg(stats) {
   </svg>`;
 }
 
+/** The sparkline's own caption — "learned <date>" for a single-day graph,
+ *  "first … last …" once it spans more than one, or the generic fallback
+ *  before any dated fact exists. Its own named function (not inlined at the
+ *  one server call site) so the live dock's post-teach refresh can call the
+ *  identical logic client-side — see renderLedgerHtml's `sparkCaptionHtml`
+ *  toString-embed, below. */
+function sparkCaptionHtml(stats) {
+  return stats?.firstLearned && stats?.lastLearned
+    ? (stats.firstLearned.slice(0, 10) === stats.lastLearned.slice(0, 10)
+        ? `learned ${escapeHtml(stats.lastLearned.slice(0, 10))}`
+        : `first ${escapeHtml(stats.firstLearned.slice(0, 10))} &middot; last ${escapeHtml(stats.lastLearned.slice(0, 10))}`)
+    : "cumulative facts, teach order";
+}
+
 /** One complete, self-contained document: the ledger, segment rail,
  *  worth-a-look panel, breadcrumb/search, two-hop minimap, and (when the
  *  memory-ask bundle is present) the ask-the-graph chat dock, all over the
- *  embedded LEDGER/PAYLOAD data. */
-export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, worthALook, payload, meta, memoryAskBundle, stats } = {}) {
+ *  embedded LEDGER/PAYLOAD data.
+ *
+ *  `ledgerBundleAvailable` (default false — every existing caller, including
+ *  bin/tmct.mjs's `tmct viz` and every test that doesn't pass it) governs
+ *  ONE thing: whether an external `<script src="./ledger-browser.bundle.js">`
+ *  reference is emitted at all. That bundle carries the full runTurn engine
+ *  (teach AND ask) and is Pages-demo-site-only — never built or shipped
+ *  alongside the CLI's own output — so the CLI's `renderLedgerHtml` call
+ *  never sets this and the page stays exactly as documented above, one
+ *  self-contained document with no external requests. Only
+ *  scripts/build-demo-site.mjs, which builds the sibling bundle itself
+ *  first, passes `true`. The dock's own runtime code below ALSO gates on
+ *  `typeof tmctLedger !== "undefined"` regardless — the two checks answer
+ *  different questions (did this render even offer the reference; did the
+ *  browser actually manage to load it), and both must hold for the live
+ *  path to run. */
+export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, worthALook, payload, meta, memoryAskBundle, stats, ledgerBundleAvailable = false } = {}) {
   const ledgerJson = embedJson({ rows: rows || [], terms: terms || [], edges: edges || [], focus: focus || null, contradictions: contradictions || [], worthALook: worthALook || null, meta: meta || { shown: 0, total: 0, truncated: false } });
   const payloadJson = embedJson(payload || { individuals: [], objectProperties: [] });
   const shown = meta?.shown ?? (rows || []).length;
@@ -474,7 +511,10 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
   const bundleStr = typeof memoryAskBundle === "string" ? memoryAskBundle : "";
   const hasMemChat = bundleStr.length > 0;
   // The placeholder is honest: the canonical exchange only when its terms are
-  // really in this payload, otherwise a real term from this graph.
+  // really in this payload, otherwise a real term from this graph. Left as
+  // the query-only wording even when the live bundle is offered — the dock's
+  // own script swaps it for a teach-aware placeholder the moment it confirms
+  // tmctLedger actually loaded (never claimed ahead of that confirmation).
   const termSet = new Set((terms || []).map((t) => t.term));
   const placeholder = termSet.has("ishmael")
     ? "who is the grandfather of ishmael"
@@ -488,11 +528,6 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
         </form>
       </div>`
     : `<div class="chat chat-off"><p class="chatnote">chat unavailable — run <span class="mono">npm run build:ask-bundle</span> to enable the in-page ask engine.</p></div>`;
-  const sparkCaption = stats?.firstLearned && stats?.lastLearned
-    ? (stats.firstLearned.slice(0, 10) === stats.lastLearned.slice(0, 10)
-        ? `learned ${escapeHtml(stats.lastLearned.slice(0, 10))}`
-        : `first ${escapeHtml(stats.firstLearned.slice(0, 10))} &middot; last ${escapeHtml(stats.lastLearned.slice(0, 10))}`)
-    : "cumulative facts, teach order";
 
   return `<!doctype html>
 <html lang="en">
@@ -594,12 +629,26 @@ ${THEME_TOKENS_CSS}
   .chatlog .a { font-size: .9rem; line-height: 1.45; }
   .chatlog .a.miss { color: var(--muted); }
   .chatlog .a.goal { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); }
+  .chatlog .a.pending { color: var(--muted); font-style: italic; }
+  .chatlog .a.taught { border-left: 2px solid var(--taught); padding-left: .55rem; }
+  .chatlog .a.taught .tag { display: block; font-family: ${MONO_STACK}; font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; color: var(--taught); margin-bottom: .18rem; }
   .chatask { display: flex; align-items: center; gap: .5rem; }
   .chatlog:not(:empty) + .chatask { border-top: 1px solid var(--line); margin-top: .55rem; padding-top: .55rem; }
   .chatask .prompt { color: var(--taught); font-size: .78rem; }
   .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .32rem .6rem; min-width: 0; }
+  .chatask input:disabled { opacity: .6; }
   .chatnote { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); margin: 0; }
-  @media (prefers-reduced-motion: no-preference) { .seg, .chip, .look { transition: border-color .12s ease, background-color .12s ease; } }
+  @media (prefers-reduced-motion: no-preference) {
+    .seg, .chip, .look { transition: border-color .12s ease, background-color .12s ease; }
+    /* A live teach re-render swaps the dash section wholesale (dashboardHtml
+       is called again in full — see the inline script below), so the "this
+       just changed" signal has to be an animation on the fresh markup itself,
+       never a transition (which needs an old and new state on the SAME node
+       to interpolate between). Off entirely under reduced motion — the
+       numbers still update, just without the settle-fade. */
+    .dash.fresh .tile { animation: freshsettle 1.6s ease-out; }
+    @keyframes freshsettle { from { background: var(--taught-soft); } to { background: var(--card); } }
+  }
 </style>
 </head>
 <body>
@@ -632,18 +681,22 @@ ${THEME_TOKENS_CSS}
         <p class="mapnote">dots = terms &middot; click to refocus &middot; dim = filtered out</p>
       </div>
       <h2>ingestion</h2>
-      <div class="mapwrap sparkwrap">
+      <div class="mapwrap sparkwrap" id="sparkWrap">
         ${sparklineSvg(stats)}
-        <p class="mapnote">${sparkCaption}</p>
+        <p class="mapnote">${sparkCaptionHtml(stats)}</p>
       </div>
     </aside>
   </div>
 </main>
 <script>
-const LEDGER = ${ledgerJson};
+// let, not const: a successful live teach reassigns this wholesale
+// (applyLedgerData, in the script below) so the page re-renders the graph
+// it actually holds, not the snapshot from the moment the page loaded.
+let LEDGER = ${ledgerJson};
 const PAYLOAD = ${payloadJson};
 </script>
 ${hasMemChat ? `<script>\n${bundleStr}\n</script>` : ""}
+${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` : ""}
 <script>
 (function () {
   "use strict";
@@ -651,15 +704,39 @@ ${hasMemChat ? `<script>\n${bundleStr}\n</script>` : ""}
   const facetCounts = ${facetCounts.toString()};
   const el = (id) => document.getElementById(id);
   const esc = ${escapeHtml.toString()};
+  // Aliased so the dashboard/sparkline builders below (toString-embedded
+  // verbatim from ledger-viz.mjs's own Node-side source, which calls
+  // escapeHtml/pct by their real names) resolve without a second copy.
+  const escapeHtml = esc;
+  const pct = ${pct.toString()};
+  const tierTileHtml = ${tierTileHtml.toString()};
+  const microbarsHtml = ${microbarsHtml.toString()};
+  const dashboardHtml = ${dashboardHtml.toString()};
+  const sparklineSvg = ${sparklineSvg.toString()};
+  const sparkCaptionHtml = ${sparkCaptionHtml.toString()};
   const FAMS = ["is-a", "has", "can", "used-for", "rests-on", "role", "other"];
   const FAM_LABEL = { "is-a": "is a kind of", has: "has", can: "can", "used-for": "used for", "rests-on": "rests on", role: "role / property", other: "other" };
   const PROVS = [["taught", "you taught"], ["corpus", "corpus"], ["entail", "entailed"]];
   const RECS = ["today", "this week", "older"];
   const provKey = (p) => (p === "entailed" ? "entail" : p); // css class key
-  const termIndex = new Map(LEDGER.terms.map((t) => [t.term, t]));
-  const rowById = new Map(LEDGER.rows.map((r) => [r.id, r]));
-  const contraById = new Map();
-  LEDGER.contradictions.forEach((ids, gi) => ids.forEach((id) => contraById.set(id, gi)));
+
+  // LEDGER (declared "let" in the embed script above this one — a classic,
+  // non-module script's top-level bindings are reachable as bare identifiers
+  // by every later script tag in the document, never as window.LEDGER; see
+  // e2e/pages-ledger.test.mjs's own note on this) and its indexes start as
+  // the server-rendered snapshot but are REASSIGNED wholesale after a live
+  // teach (applyLedgerData, below) — a successful teach through the dock
+  // changes the underlying graph, and the page has to show that, not keep
+  // rendering the page-load snapshot next to a chat log that merely SAYS
+  // something new was learned.
+  let termIndex, rowById, contraById;
+  function rebuildIndexes() {
+    termIndex = new Map(LEDGER.terms.map((t) => [t.term, t]));
+    rowById = new Map(LEDGER.rows.map((r) => [r.id, r]));
+    contraById = new Map();
+    LEDGER.contradictions.forEach((ids, gi) => ids.forEach((id) => contraById.set(id, gi)));
+  }
+  rebuildIndexes();
 
   let focus = LEDGER.focus;
   let trail = focus ? [{ term: focus, label: null }] : [];
@@ -845,10 +922,133 @@ ${hasMemChat ? `<script>\n${bundleStr}\n</script>` : ""}
     else el("qmiss").textContent = "no such term";
   });
 
-  // ---- the chat dock: the SAME engine + payload the CLI answers from ------
+  // A successful live teach re-derives the WHOLE ledger (computeLedgerDataFromPayload,
+  // the sibling bundle's own re-export of the exact function this page's build
+  // step called) and re-mounts it here — the same view a fresh page load
+  // would render, never a stale snapshot next to a chat log that only SAYS
+  // something new was learned. The dashboard/sparkline sections are replaced
+  // wholesale (dashboardHtml/sparklineSvg, toString-embedded above, are the
+  // SAME functions the server used for the very first paint) rather than
+  // patched, so they can never drift from what a fresh render would produce.
+  function applyLedgerData(freshData) {
+    LEDGER = {
+      rows: freshData.rows, terms: freshData.terms, edges: freshData.edges,
+      focus: freshData.focus, contradictions: freshData.contradictions,
+      worthALook: freshData.worthALook, meta: freshData.meta,
+    };
+    rebuildIndexes();
+    el("dash").outerHTML = dashboardHtml(freshData.stats, { fresh: true });
+    el("sparkWrap").innerHTML = sparklineSvg(freshData.stats) + '<p class="mapnote">' + sparkCaptionHtml(freshData.stats) + "</p>";
+    // computeLedgerDataFromPayload resolves an unset focus to the newest
+    // taught row's own subject — passing no explicit term (below) means every
+    // successful teach naturally jumps the view to what was just learned.
+    if (freshData.focus) refocusWithLabel(freshData.focus, null);
+    else render();
+  }
+
+  // ---- the chat dock: LIVE teach+ask over the sibling ledger-browser.bundle.js
+  // (window.tmctLedger) when the demo build offered it AND it actually
+  // loaded; falls back to the read-only tmctMemoryAsk engine below —
+  // unchanged from before this page could teach at all — otherwise.
+  // bin/tmct.mjs's own \`tmct viz\` output never offers the live bundle
+  // (renderLedgerHtml's own ledgerBundleAvailable defaults false there), so
+  // this branch is simply never reachable on a CLI-generated page.
   const resolveAnsweredTerm = ${resolveAnsweredTerm.toString()};
   const chatForm = el("chatform");
-  if (chatForm && typeof tmctMemoryAsk !== "undefined") {
+  if (chatForm && typeof tmctLedger !== "undefined" && typeof tmctLedger.createLedgerSession === "function") {
+    const log = el("chatlog");
+    const chatqEl = el("chatq");
+    chatqEl.placeholder = 'ask or teach the graph\\u2026 e.g. "blue is a peg"';
+    const addLine = (cls, html) => {
+      const d = document.createElement("div");
+      d.className = cls; d.innerHTML = html;
+      log.appendChild(d); log.scrollTop = log.scrollHeight;
+      return d;
+    };
+
+    let session = null;
+    // Serializes every engine-touching call through this one dock — the same
+    // posture plan-viz.mjs's own chat-assert dock takes with its withLock,
+    // so a fast double-submit can never race two turns over one session.
+    let lock = Promise.resolve();
+    const withLock = (fn) => { const run = lock.then(fn, fn); lock = run.catch(() => {}); return run; };
+
+    // The SAME bounded-race wink-nlp CDN load plan-viz.mjs's own chat-assert
+    // dock uses: a cross-origin dynamic import() can neither resolve nor
+    // reject on some failures, so an unbounded await would leave a session
+    // stuck forever. Best-effort — a teach sentence that needs the lemma tier
+    // just declines honestly without it, same as a checkout missing the
+    // optional deps.
+    const WINK_LOAD_TIMEOUT_MS = 8000;
+    const winkTimeout = (ms, reason) => new Promise((_, reject) => setTimeout(() => reject(new Error(reason)), ms));
+    let winkReady = null;
+    function tryLoadWink() {
+      if (winkReady) return winkReady;
+      winkReady = (async () => {
+        try {
+          const mods = await Promise.race([
+            Promise.all([import("wink-nlp"), import("wink-eng-lite-web-model")]),
+            winkTimeout(WINK_LOAD_TIMEOUT_MS, "wink-nlp CDN load timed out"),
+          ]);
+          const winkNLP = mods[0].default;
+          const model = mods[1].default;
+          tmctLedger.registerWinkModel(() => ({ winkNLP: winkNLP, model: model }));
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.warn("tmct ledger: wink-nlp CDN load failed, continuing without the lemma/POS tier", err);
+        }
+      })();
+      return winkReady;
+    }
+    tryLoadWink(); // fire eagerly at load, so it is likely settled by the first interaction
+
+    async function ensureSession() {
+      if (session) return session;
+      await tryLoadWink();
+      session = await tmctLedger.createLedgerSession({ seedPayload: PAYLOAD });
+      return session;
+    }
+
+    chatForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const q = chatqEl.value.trim();
+      if (!q) return;
+      chatqEl.value = "";
+      addLine("u", esc(q));
+      const pending = addLine("a pending", "computing\\u2026");
+      chatqEl.disabled = true;
+      withLock(async () => {
+        try {
+          const s = await ensureSession();
+          const result = await s.turn(q);
+          const record = result.record;
+          const taught = !!record && record.miss === false && (record.via === "assert" || record.via === "retract");
+          const body = esc(result.answer).replace(/\\n/g, "<br>");
+          pending.className = "a" + (taught ? " taught" : (record && record.miss ? " miss" : ""));
+          pending.innerHTML = taught ? '<span class="tag">taught</span>' + body : body;
+          if (taught) {
+            const fresh = tmctLedger.computeLedgerDataFromPayload(s.memoryDir.payload, {});
+            applyLedgerData(fresh);
+          } else if (!(record && record.miss)) {
+            // Only a genuine answer (never a miss) tries to resolve a
+            // refocus target — the honest-miss cascade's own boilerplate
+            // ("Run \`tmct init\`…") can contain a real term as an
+            // ordinary English word (e.g. "run", if the graph happens to
+            // hold it), and resolveAnsweredTerm has no way to tell that
+            // apart from the term genuinely being discussed.
+            const hit = resolveAnsweredTerm(result.answer, q, LEDGER.terms, tmctLedger.normFactTerm);
+            if (hit) refocusWithLabel(hit, q);
+          }
+        } catch {
+          pending.className = "a miss";
+          pending.textContent = "Something went wrong answering that. Try rephrasing, or reload the page.";
+        } finally {
+          chatqEl.disabled = false;
+          chatqEl.focus();
+        }
+      });
+    });
+  } else if (chatForm && typeof tmctMemoryAsk !== "undefined") {
     const memHandle = tmctMemoryAsk.createInMemoryStore();
     memHandle.payload = PAYLOAD;
     const log = el("chatlog");
