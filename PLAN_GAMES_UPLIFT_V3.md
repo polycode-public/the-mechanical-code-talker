@@ -646,6 +646,19 @@ modes, plus one chat-interaction-with-sensible-response assertion per page carry
 Baseline carried forward on every touched page: no console errors, no same-origin failures, no
 horizontal overflow at 375px.
 
+**Operator addendum — a permanent screenshot sweep, not a one-off**: this step must add real,
+committed Playwright code to the repo's own `e2e/` suite (using the existing
+`e2e/helpers/static-server.mjs` pattern, not a throwaway scratch script) that captures the home
+page and every full-screen page (`chat.html`, `spider-fly.html`, `plan.html`, `adventure.html`,
+`ledger.html`, `sprites.html`) at several in-game/interaction states (idle/loaded, mid-play after
+several ticks or turns, an open panel/pill state) and in both portrait and landscape viewports,
+saved to a known location on every run. A dedicated follow-up pass (tracked as task #54, run after
+this step) examines the sweep directly for exactly the class of layout bug already found and fixed
+once this session (adventure's map container, spider-fly's HUD panel): controls in a panel pinned
+to a div that grows/shrinks with its own content instead of staying fixed, large unused gaps
+between panels, and a column pushing its own content off the bottom of the viewport while leaving
+space unused elsewhere on the page.
+
 ## Sequencing
 
 Part A and Part B are independent file sets (Part B's palette must land before its own fan-out) and
