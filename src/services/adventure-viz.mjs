@@ -397,7 +397,11 @@ ${THEME_TOKENS_CSS}
   /* the portrait frame — an ornate double-rule border with two small corner
      fleurons (real glyphs, no external asset), sized to its OWN content
      (the sprite row) rather than a fixed tall box, per operator feedback on
-     an earlier, mostly-empty version of this panel. */
+     an earlier, mostly-empty version of this panel. Once shrunk to its own
+     content it's shorter than the right column's own account/pills/digest/
+     chat/satchel/map/quest stack, so it centers in the row instead of
+     sitting top-anchored above a dead gap of raw background. */
+  #playStage .room-frame { align-self: center; }
   .room-frame { position: relative; background: var(--parchment); border: 1px solid var(--gilt); outline: 1px solid var(--line); outline-offset: 4px; padding: 1.1rem; display: flex; flex-direction: column; gap: .6rem; }
   .room-frame::before, .room-frame::after { content: "\\2766"; position: absolute; font-size: 1.1rem; color: var(--gilt); opacity: .85; line-height: 1; }
   .room-frame::before { top: -.6rem; left: -.35rem; }
@@ -494,8 +498,15 @@ ${THEME_TOKENS_CSS}
   /* edit mode */
   body:not(.editing) #editStage { display: none; }
   body.editing #playStage, body.editing #playControls { display: none; }
-  .editor-stage { margin-top: .5rem; }
-  .edittext textarea { width: 100%; box-sizing: border-box; min-height: 380px; font-family: ${MONO_STACK}; font-size: .82rem; line-height: 1.55; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .6rem; resize: vertical; }
+  /* .stage's inherited align-items: start (kept for #playStage's own fixed-
+     size room panel) would otherwise top-align .edittext against the
+     manor-map/room-detail/legend column and leave a dead gap below the
+     textarea once that column grows taller — override to stretch just for
+     the editor, and let the textarea (not just its wrapper) absorb the
+     extra height so the editing area actually grows, not just its padding. */
+  .editor-stage { margin-top: .5rem; align-items: stretch; }
+  .editor-stage .edittext { display: flex; flex-direction: column; }
+  .edittext textarea { width: 100%; box-sizing: border-box; min-height: 380px; flex: 1 1 auto; font-family: ${MONO_STACK}; font-size: .82rem; line-height: 1.55; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .6rem; resize: vertical; }
   .edit-status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .4rem; min-height: 1.1em; }
   .edit-status.pending { color: var(--entail); }
   .edit-status.ok { color: var(--taught); }
