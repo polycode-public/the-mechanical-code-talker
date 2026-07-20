@@ -294,7 +294,7 @@ ${THEME_TOKENS_CSS}
   h1 { font-size: 1.4rem; margin: .3rem 0 .9rem; text-wrap: balance; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
   button:focus-visible, input:focus-visible, .sprite:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-  .stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 1.2rem; align-items: start; }
+  .stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 1.2rem; }
   @media (max-width: 760px) { .stage { grid-template-columns: 1fr; } }
   /* A dusty window corner: a soft light glow near the top-left (WEB_HOME
      already sits near that corner — spider-fly-world.mjs's own header
@@ -302,6 +302,14 @@ ${THEME_TOKENS_CSS}
      in the light. Decoration only — the 10x10 game grid itself is drawn by
      drawBoard() on the canvas beneath, unchanged. */
   .board-frame {
+    /* The side column's own height grows with the live agent count
+       (.hud-list caps out at 420px, then scrolls) — align-self keeps this
+       fixed-square board centered in whatever row height that produces,
+       instead of top-aligning it and leaving a dead gap below once the
+       side column outgrows the board. The grid's default align-items:
+       stretch would otherwise force this box tall, breaking its own
+       aspect-ratio square. */
+    align-self: center;
     position: relative; width: ${BOARD_PX}px; max-width: 100%; aspect-ratio: 1 / 1;
     background:
       radial-gradient(140% 140% at 6% 6%, rgba(255, 241, 199, .55), transparent 52%),

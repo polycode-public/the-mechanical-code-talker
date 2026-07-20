@@ -13,8 +13,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   renderSpriteCatalogHtml, buildSpriteCatalogEntries, groupForClass, paletteTreatmentFor,
-  tierSwatchesFor, parameterVariantsFor, GROUP_ADVENTURE, GROUP_PERSON, GROUP_OBJECT, GROUP_EMOJI,
-  PERSON_ROLE_CLASSES,
+  tierSwatchesFor, parameterVariantsFor, extractSceneItems, GROUP_ADVENTURE, GROUP_PERSON,
+  GROUP_OBJECT, GROUP_EMOJI, PERSON_ROLE_CLASSES,
 } from "../../src/services/sprite-catalog-viz.mjs";
 import { readSpriteTemplateFiles } from "../../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../../src/adapters/corpus/sprite-large-template-files.mjs";
@@ -189,4 +189,90 @@ test("every real emoji-fallback class in the large tier (a <text> glyph in its r
 test("PERSON_ROLE_CLASSES is a frozen, de-duplicated list", () => {
   assert.ok(Object.isFrozen(PERSON_ROLE_CLASSES));
   assert.equal(new Set(PERSON_ROLE_CLASSES).size, PERSON_ROLE_CLASSES.length);
+});
+
+// ---- the scene composer's free-text parser ----
+//
+// classIndex fixtures below are built the same way sprites.html's own
+// client-side buildClassIndexFromDom does — real material/variant labels
+// read off tierSwatchesFor's real output for the real large-tier templates,
+// never a hand-typed color-word list. This is the same real-data posture
+// the rest of this file already holds tierSwatchesFor/buildSpriteCatalogEntries
+// to.
+
+function realClassIndexFor(classNames) {
+  const index = {};
+  for (const cls of classNames) {
+    const materials = {};
+    for (const s of tierSwatchesFor(cls, largeTemplates, SPRITE_REGISTRY, "large")) {
+      if (s.kind === "material" || s.kind === "variant") materials[String(s.label).toLowerCase()] = true;
+    }
+    index[cls] = { materials };
+  }
+  return index;
+}
+
+test("extractSceneItems finds every real class named in a sentence, in the order they appear, with no material modifier", () => {
+  const classIndex = realClassIndexFor(["doctor", "hat", "cabinet"]);
+  const items = extractSceneItems("a doctor with a hat, and a cabinet", classIndex);
+  assert.deepEqual(items, [
+    { className: "doctor", materialLabel: null },
+    { className: "hat", materialLabel: null },
+    { className: "cabinet", materialLabel: null },
+  ]);
+});
+
+test("extractSceneItems honestly drops an unrecognized modifier word rather than inventing a material match — 'red lamp' draws a plain lamp", () => {
+  const classIndex = realClassIndexFor(["lamp"]);
+  assert.ok(!("red" in classIndex.lamp.materials), "the fixture's own real lamp materials never include 'red', or this test would prove nothing");
+  const items = extractSceneItems("red lamp", classIndex);
+  assert.deepEqual(items, [{ className: "lamp", materialLabel: null }]);
+});
+
+test("extractSceneItems matches a real taught-material word immediately before its class, keyed to that class's own real labels", () => {
+  const classIndex = realClassIndexFor(["cabinet", "lamp"]);
+  assert.deepEqual(extractSceneItems("wood cabinet", classIndex), [{ className: "cabinet", materialLabel: "wood" }]);
+  assert.deepEqual(extractSceneItems("glass lamp", classIndex), [{ className: "lamp", materialLabel: "glass" }]);
+});
+
+test("extractSceneItems never lets a material word valid for one class leak onto a different class", () => {
+  // "wood" is a real cabinet material but never a real lamp material — a
+  // material match must stay keyed to the class it actually precedes.
+  const classIndex = realClassIndexFor(["cabinet", "lamp"]);
+  assert.ok(!("wood" in classIndex.lamp.materials));
+  const items = extractSceneItems("wood lamp", classIndex);
+  assert.deepEqual(items, [{ className: "lamp", materialLabel: null }]);
+});
+
+test("extractSceneItems returns nothing for a sentence naming no real class — the honest miss, never a crash", () => {
+  const classIndex = realClassIndexFor(["doctor", "hat", "cabinet", "lamp"]);
+  assert.deepEqual(extractSceneItems("xyzzy plugh", classIndex), []);
+  assert.deepEqual(extractSceneItems("", classIndex), []);
+  assert.deepEqual(extractSceneItems(undefined, classIndex), []);
+});
+
+test("extractSceneItems prefers a real multi-word class over a shorter class name it would otherwise fragment into", () => {
+  // A hand-built fixture on purpose: this catalog carries no standalone
+  // "water" class today to collide with "body of water" (checked directly),
+  // so a same-catalog collision can't exercise this precedence rule. The
+  // rule itself — longest real class name wins the position it starts at —
+  // is still real product logic and needs its own coverage.
+  const classIndex = { water: { materials: {} }, "body of water": { materials: {} } };
+  const items = extractSceneItems("a wide body of water stretched out", classIndex);
+  assert.deepEqual(items, [{ className: "body of water", materialLabel: null }]);
+});
+
+test("extractSceneItems: 'body of water' is a real catalog class, resolved whole from real text with no other class fragmenting it", () => {
+  const classIndex = realClassIndexFor(["body of water"]);
+  const items = extractSceneItems("the body of water was calm", classIndex);
+  assert.deepEqual(items, [{ className: "body of water", materialLabel: null }]);
+});
+
+test("extractSceneItems repeats a class once per real occurrence in the text", () => {
+  const classIndex = realClassIndexFor(["cat"]);
+  const items = extractSceneItems("a cat, then another cat", classIndex);
+  assert.deepEqual(items, [
+    { className: "cat", materialLabel: null },
+    { className: "cat", materialLabel: null },
+  ]);
 });

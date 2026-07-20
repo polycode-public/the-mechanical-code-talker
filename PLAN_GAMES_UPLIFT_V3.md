@@ -661,18 +661,57 @@ modes, plus one chat-interaction-with-sensible-response assertion per page carry
 Baseline carried forward on every touched page: no console errors, no same-origin failures, no
 horizontal overflow at 375px.
 
-**Operator addendum — a permanent screenshot sweep, not a one-off**: this step must add real,
-committed Playwright code to the repo's own `e2e/` suite (using the existing
-`e2e/helpers/static-server.mjs` pattern, not a throwaway scratch script) that captures the home
-page and every full-screen page (`chat.html`, `spider-fly.html`, `plan.html`, `adventure.html`,
-`ledger.html`, `sprites.html`) at several in-game/interaction states (idle/loaded, mid-play after
-several ticks or turns, an open panel/pill state) and in both portrait and landscape viewports,
-saved to a known location on every run. A dedicated follow-up pass (tracked as task #54, run after
-this step) examines the sweep directly for exactly the class of layout bug already found and fixed
-once this session (adventure's map container, spider-fly's HUD panel): controls in a panel pinned
-to a div that grows/shrinks with its own content instead of staying fixed, large unused gaps
-between panels, and a column pushing its own content off the bottom of the viewport while leaving
-space unused elsewhere on the page.
+**Operator addendum — a permanent screenshot sweep, not a one-off**: shipped as
+`e2e/pages-screenshot-sweep.test.mjs` — 14 tests (7 pages × portrait/landscape), each walking a
+page through its own real interaction states (idle, mid-play, a pill click, edit mode, a live
+re-solve) and saving a screenshot per state to `.screenshots/layout-sweep/` (gitignored, regenerated
+fresh every run, not a golden-image gate) for direct visual review.
+
+**Graphics/layout review (task #54) — done, a real pass, not a skim**: examined every screenshot
+directly and found/fixed three real instances of the "left column doesn't stretch to match a taller
+right column" gap bug, all sharing one root cause across two pages (a `.stage`-style two-column CSS
+grid with a blanket `align-items: start`, so a shorter fixed/shrunk-to-content left panel sits
+top-anchored above a dead strip of raw background once the right column grows taller):
+- **spider-fly.html**: the board (a fixed-aspect-ratio square, `.board-frame`) opened a gap below it
+  once the AGENTS panel grew past 2-3 entries. Fix: `align-self: center` on `.board-frame` alone
+  (stretching it would have broken its own square aspect ratio) — confirmed no regression when the
+  board is the taller item (idle state).
+- **adventure.html edit mode**: the world-text `textarea` stopped at its own fixed `min-height`
+  while the manor-map/room-detail/legend column kept growing. Fix (different from the board, since a
+  bigger editing surface is strictly better UX, unlike a square board): `.editor-stage` overrides to
+  `align-items: stretch` and the textarea itself gets `flex: 1 1 auto` so the EXTRA height is real
+  usable editing space, not just a taller empty wrapper — scoped to edit mode only, play mode's
+  `.stage` keeps its own `align-items: start`.
+- **adventure.html play mode**: the room-frame portrait panel, already shrunk to fit its own content
+  per this session's earlier operator feedback, sat top-anchored above a dead gap once the
+  account/pills/digest/chat/satchel/map/quest column grew taller than it. Fix: `#playStage
+  .room-frame { align-self: center; }`, matching the board's own treatment.
+
+Also found and fixed, in the same pass (a data gap, not a layout gap, but surfaced via this same
+screenshot review): `sprites.html` had 115 of 198 classes (58%) rendering with NO `rdfs:subClassOf`
+ancestor chain at all — `corpus/wordnet/wordnet-xl.jsonl`'s prioritized subset simply has no IsA row
+for common nouns like cabinet/desk/butler/table/sun. Fixed by hand-curating a `CATALOG_TAXONOMY_
+GAPFILL` list in `sprite-catalog-viz.mjs` (109 entries), each the one correct physical/common-noun
+sense verified against `corpus/wordnet/wordnet-full.jsonl` (already evaluated and rejected as a
+BLANKET source in this module's own header — sense-conflation, minutes to walk — that rejection
+doesn't apply to one hand-verified relation per class, same curation posture as `SEED_TAXONOMY`).
+Left honest for 6 classes with no usable data on record: autumn/grandmother/human/manager have no
+IsA row anywhere in the full 192k-row file; pig/portable only have implausible senses (pig -> ingot/
+live; portable -> the archaic noun "typewriter") — a confidently wrong chain would be worse than
+today's honest self-only display.
+
+Reviewed and cleared with no fix needed: `chat.html`'s large gap between a short conversation and
+its bottom-pinned composer (the correct, intentional "post-ChatGPT" pattern — a composer anchored
+to the viewport bottom regardless of message count, not a layout bug); `plan.html`'s matched-height
+teach/PDDL panels (a deliberate `.lower` grid stretch, the empty teach-log panel is just an
+unpopulated chat log, not a bug); `ledger.html` and the home page (neither uses a two-column
+`.stage`-style grid this bug class applies to).
+
+One lower-priority finding noted, not yet investigated: `sprites.html`'s full-page screenshot shows
+a large blank region between the visible card content and the page's own footer, likely a
+`content-visibility: auto`/`contain-intrinsic-size` interaction with how a full-page screenshot
+captures off-screen sections rather than a bug real users hit while scrolling normally — worth a
+follow-up look, not chased down this pass.
 
 ## Sequencing
 

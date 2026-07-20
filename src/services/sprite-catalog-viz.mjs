@@ -55,18 +55,76 @@ import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from
 const DEFAULT_TITLE = "tmct — the sprite library";
 const MAX_CHAIN_DISPLAY = 6;
 
+/** A curated gap-fill for classes wordnet-xl's own prioritized subset
+ *  happens to carry NO rdfs:subClassOf row for at all (115 of 198 catalog
+ *  classes, checked directly against a build of this page) — every pair
+ *  here is real WordNet-derived data, the same corpus/wordnet/
+ *  wordnet-full.jsonl this module's header already describes evaluating
+ *  and rejecting as a BLANKET source (sense-conflation, 3000+ ancestors for
+ *  "poodle", minutes to walk). That rejection doesn't apply to a single
+ *  hand-verified relation per class: each pair below is the one /r/IsA row
+ *  (of however many wordnet-full.jsonl actually carries for that word) that
+ *  reads as the correct sense for a physical/common-noun catalog entry —
+ *  chosen the same way SEED_TAXONOMY above is hand-curated, not generated.
+ *  A term with only implausible senses on record (e.g. "pig" -> only
+ *  "ingot"/"live", "portable" -> only the archaic noun "typewriter") is
+ *  left OUT here on purpose rather than forced — it keeps today's honest
+ *  self-only chain instead of a confidently wrong one. Same for a term with
+ *  no /r/IsA row anywhere in wordnet-full.jsonl at all (autumn, grandmother,
+ *  human, manager) — a real, checked absence, not an oversight. */
+const CATALOG_TAXONOMY_GAPFILL = Object.freeze([
+  ["airport", "airfield"], ["ant", "hymenopterous insect"], ["artist", "creator"],
+  ["audience", "gathering"], ["baby", "child"], ["beach", "land"],
+  ["bee", "hymenopterous insect"], ["bicycle", "wheeled vehicle"], ["bird", "vertebrate"],
+  ["birthday", "anniversary"], ["boat", "vessel"], ["body of water", "thing"],
+  ["breakfast", "meal"], ["butler", "manservant"], ["butterfly", "lepidopterous insect"],
+  ["cabinet", "furniture"], ["car", "motor vehicle"], ["castle", "fortification"],
+  ["chair", "seat"], ["champion", "defender"], ["cheese", "dairy product"],
+  ["church", "place of worship"], ["citizen", "national"], ["city", "municipality"],
+  ["coin", "coinage"], ["container", "instrumentality"], ["crowd", "gathering"],
+  ["customer", "consumer"], ["daughter", "female offspring"], ["desk", "table"],
+  ["dinner", "meal"], ["doctor", "medical practitioner"], ["drink", "helping"],
+  ["elephant", "proboscidean"], ["factory", "plant"], ["family", "kin"],
+  ["farm", "workplace"], ["farmer", "creator"], ["fish", "aquatic vertebrate"],
+  ["food", "substance"], ["forest", "biome"], ["frog", "amphibian"],
+  ["furniture", "furnishing"], ["garden", "yard"], ["glove", "handwear"],
+  ["gold", "precious metal"], ["grandfather", "grandparent"], ["guest", "visitor"],
+  ["hate", "emotion"], ["home", "residence"], ["horse", "equine"],
+  ["hospital", "medical institution"], ["housekeeper", "domestic"], ["jewelry", "adornment"],
+  ["joy", "emotion"], ["lamp", "source of illumination"], ["lawyer", "professional"],
+  ["letter", "document"], ["lion", "big cat"], ["meal", "foodstuff"],
+  ["meat", "solid food"], ["meeting", "assembly"], ["money", "currency"],
+  ["mother", "parent"], ["mountain", "natural elevation"], ["museum", "depository"],
+  ["nurse", "health professional"], ["ocean", "body of water"], ["officer", "mariner"],
+  ["owl", "bird of prey"], ["planet", "celestial body"], ["portrait", "likeness"],
+  ["president", "head of state"], ["priest", "spiritual leader"], ["rabbit", "leporid"],
+  ["rain", "precipitation"], ["resident", "inhabitant"], ["river", "stream"],
+  ["road", "way"], ["room", "area"], ["sheep", "bovid"],
+  ["shoe", "footwear"], ["shop", "mercantile establishment"], ["snow", "precipitation"],
+  ["sock", "hosiery"], ["soldier", "enlisted person"], ["son", "male offspring"],
+  ["spring", "season"], ["star", "celestial body"], ["street", "thoroughfare"],
+  ["student", "enrollee"], ["sugar", "sweetening"], ["summer", "season"],
+  ["sun", "star"], ["table", "furniture"], ["teacher", "educator"],
+  ["team", "group"], ["town", "municipality"], ["train", "public transport"],
+  ["tree", "woody plant"], ["vehicle", "conveyance"], ["village", "settlement"],
+  ["visitor", "traveler"], ["waterway", "body of water"], ["wedding", "ceremony"],
+  ["wine", "alcohol"], ["winter", "season"], ["wolf", "canine"],
+  ["woman", "adult"],
+]);
+
 /** The real rdfs:subClassOf fact rows this catalog's ancestor chains walk —
  *  see this module's own header for why these two sources and not a third.
  *  I/O (reads corpus/wordnet/wordnet-xl.jsonl + its relation map); never
  *  called from renderSpriteCatalogHtml itself, which stays pure. */
 export async function loadSpriteOntologyFactRows() {
   const seedRows = SEED_TAXONOMY.map(([subject, object]) => ({ subject, predicate: "rdfs:subClassOf", object }));
+  const gapfillRows = CATALOG_TAXONOMY_GAPFILL.map(([subject, object]) => ({ subject, predicate: "rdfs:subClassOf", object }));
   const assertions = await loadSlice(join(WORDNET_DIR, "wordnet-xl.jsonl"));
   const map = await loadMap();
   const wordnetRows = toFacts(assertions, map, "corpus:wordnet-xl")
     .filter((f) => f.predicate === "rdfs:subClassOf")
     .map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object }));
-  return [...seedRows, ...wordnetRows];
+  return [...seedRows, ...gapfillRows, ...wordnetRows];
 }
 
 // ---- grouping (presentation only — every class still resolves through the
@@ -225,6 +283,78 @@ export function buildSpriteCatalogEntries({ iconTemplates = [], largeTemplates =
   });
 }
 
+// ---- scene composer (pure) ----
+//
+// The free-text "there is a..." box (PLAN_GAMES_UPLIFT_V3.md's own precedent:
+// adventure-viz.mjs's roomSceneObjects/room-frame) over THIS page's own
+// already-real classes — never a general NLU pass. extractSceneItems is the
+// one pure, unit-testable piece; the DOM index it's matched against
+// (className -> real swatch labels, read straight off this page's own
+// already-rendered `.card`/`.swatch-label` markup at load time — see this
+// module's own header for why that beats re-embedding the same SVG data a
+// second time) is built client-side in the inline script below, since
+// walking rendered DOM has no meaning in this pure module.
+
+/** `text`'s lowercase word runs with their token index, the unit
+ *  extractSceneItems matches class names against — punctuation never fuses
+ *  two real words into one token nor splits one real word into two. */
+function tokenizeSceneText(text) {
+  const tokens = [];
+  const re = /[A-Za-z]+/g;
+  let m;
+  while ((m = re.exec(String(text ?? "")))) tokens.push({ word: m[0].toLowerCase() });
+  return tokens;
+}
+
+/** Every real catalog class the free-typed `text` names, in the order each
+ *  first appears, paired with the real material label (one of that SAME
+ *  class's own swatch labels — never another class's, never a fabricated
+ *  one) immediately preceding it, or `null`. `classIndex` is
+ *  `{className: {materials}}` with `materials` keyed by lowercase label
+ *  (sprite-catalog-viz's own client-side `buildClassIndexFromDom` output, or
+ *  an equivalent test fixture) — a class name absent from `classIndex` can
+ *  never match, and a modifier word that isn't one of ITS matched class's
+ *  own material labels is silently dropped rather than guessed at, the same
+ *  honest-miss posture an unrecognized class name gets (an unmatched word,
+ *  e.g. "red" before a lamp with no red material, is never an error, just
+ *  silently not drawn). A multi-word class name (e.g. "body of water") is
+ *  checked, at every token position, before any shorter class that would
+ *  otherwise claim part of it — candidates are tried longest-word-count
+ *  first, so the longer name always wins the position it starts at. Pure. */
+export function extractSceneItems(text, classIndex) {
+  const index = classIndex || {};
+  const candidates = Object.keys(index)
+    .map((name) => ({ name, words: name.toLowerCase().split(/\s+/).filter(Boolean) }))
+    .filter((c) => c.words.length)
+    .sort((a, b) => b.words.length - a.words.length || b.name.length - a.name.length);
+  const tokens = tokenizeSceneText(text);
+  const used = new Array(tokens.length).fill(false);
+  const items = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    if (used[i]) continue;
+    const hit = candidates.find(({ words }) => {
+      if (i + words.length > tokens.length) return false;
+      for (let k = 0; k < words.length; k += 1) {
+        if (used[i + k] || tokens[i + k].word !== words[k]) return false;
+      }
+      return true;
+    });
+    if (!hit) continue;
+    let materialLabel = null;
+    if (i > 0 && !used[i - 1]) {
+      const materials = index[hit.name]?.materials || {};
+      const prevWord = tokens[i - 1].word;
+      if (Object.prototype.hasOwnProperty.call(materials, prevWord)) {
+        materialLabel = prevWord;
+        used[i - 1] = true;
+      }
+    }
+    for (let k = 0; k < hit.words.length; k += 1) used[i + k] = true;
+    items.push({ className: hit.name, materialLabel });
+  }
+  return items;
+}
+
 // ---- rendering ----
 
 function chainHtml(chain) {
@@ -303,7 +433,26 @@ ${THEME_TOKENS_CSS}
   main { max-width: 1180px; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   h1 { font-size: 1.4rem; margin: .3rem 0 .6rem; text-wrap: balance; }
-  .intro { max-width: 74ch; color: var(--muted); font-size: .92rem; }
+
+  .composer { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: .6rem 0 1.3rem; }
+  @media (max-width: 700px) { .composer { grid-template-columns: 1fr; } }
+  .composer .panel { background: var(--card); border: 1px solid var(--line); border-top: 2px solid var(--taught); padding: .75rem .85rem; min-width: 0; }
+  .composer h2 { font-family: ${SERIF_STACK}; font-variant: small-caps; font-size: .82rem; letter-spacing: .04em; color: var(--muted); font-weight: 600; margin: 0 0 .55rem; }
+  .composeform { display: flex; align-items: center; gap: .5rem; }
+  .composeform .prompt { color: var(--taught); font-size: .8rem; white-space: nowrap; }
+  .composeform input { flex: 1; font-family: ${MONO_STACK}; font-size: .82rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: .38rem .6rem; min-width: 0; }
+  .composeform input:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
+  .pills { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .6rem; }
+  .pill { font-family: ${MONO_STACK}; font-size: .7rem; padding: .22rem .55rem; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--ink); cursor: pointer; }
+  .pill:hover { border-color: var(--taught); }
+  .pill:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
+  .scene-frame { min-height: 5.6rem; display: flex; align-items: center; }
+  .scene-row { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-start; width: 100%; }
+  .scene-card { display: flex; flex-direction: column; align-items: center; width: 74px; }
+  .scene-sprite { width: 60px; height: 60px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; padding: 8px; box-sizing: border-box; }
+  .scene-sprite svg { width: 100%; height: 100%; display: block; }
+  .scene-label { font-size: .7rem; text-align: center; color: var(--ink); margin-top: .3rem; line-height: 1.2; }
+  .empty-note { font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); }
   .topbar { position: sticky; top: 0; z-index: 2; background: var(--bg); display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: .6rem 0; margin: 1rem 0 1.2rem; }
   .jump { font-family: ${MONO_STACK}; font-size: .72rem; padding: .18rem .55rem; border: 1px solid var(--line); border-radius: 99px; background: var(--card); color: var(--ink); text-decoration: none; }
   .jump:hover { border-color: var(--taught); }
@@ -337,21 +486,39 @@ ${THEME_TOKENS_CSS}
   .swatch-caption { font-family: ${MONO_STACK}; font-size: .58rem; color: var(--muted); line-height: 1.25; margin-top: .15rem; word-break: break-word; }
   .swatch-treat { display: block; opacity: .8; }
   footer.page { max-width: 74ch; margin: 2.5rem 0 0; padding-top: 1rem; border-top: 1px solid var(--line); font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
-  @media (prefers-reduced-motion: no-preference) { .jump, .swatch { transition: border-color .12s ease, opacity .12s ease; } }
+  @media (prefers-reduced-motion: no-preference) { .jump, .swatch, .pill { transition: border-color .12s ease, opacity .12s ease; } }
 </style>
 </head>
 <body>
 <main>
   <div class="eyebrow">tmct &middot; the sprite library</div>
-  <h1>Every shape the sprite library can draw, and why</h1>
-  <p class="intro">Two tiers share one resolver: a 44px icon set for the live games, a 400px
-    gradient-shaded set for a closer look. Each card below shows a class's real
-    <span class="mono">rdfs:subClassOf</span> ancestor chain and every swatch the real resolver
-    (<span class="mono">resolveSpriteAsset</span>) actually returns for it &mdash; a material-bearing
-    class shows its real taught-material variants, never an invented one. Every class shown here
-    already carries its own template, so live resolution always stops at the chain's own first
-    link (marked); the fuller chain is real ancestry on record in this catalog's corpus slice, kept
-    for context.</p>
+  <h1>Sprites</h1>
+  <div class="composer">
+    <section class="panel compose-panel" aria-label="Describe a scene">
+      <h2>describe a scene</h2>
+      <form class="composeform" id="composeForm">
+        <span class="prompt mono">there is a</span>
+        <input id="composeq" type="text" autocomplete="off"
+          placeholder="red lamp, a doctor with a hat, and a cabinet"
+          aria-label="Continue the sentence: there is a&hellip;">
+      </form>
+      <div class="pills" id="composePills" role="group" aria-label="quick words to add">
+        <button type="button" class="pill" data-fill="doctor">doctor</button>
+        <button type="button" class="pill" data-fill="hat">hat</button>
+        <button type="button" class="pill" data-fill="wood cabinet">wood cabinet</button>
+        <button type="button" class="pill" data-fill="glass lamp">glass lamp</button>
+        <button type="button" class="pill" data-fill="cat">cat</button>
+        <button type="button" class="pill" data-fill="garden">garden</button>
+      </div>
+    </section>
+    <section class="panel viewer-panel" aria-label="The composed scene">
+      <h2>the scene</h2>
+      <div class="scene-frame" id="sceneFrame">
+        <div class="scene-row" id="sceneRow" aria-live="polite"></div>
+        <span class="empty-note" id="sceneEmpty">nothing recognized yet &mdash; try &ldquo;a doctor with a hat, and a cabinet&rdquo;.</span>
+      </div>
+    </section>
+  </div>
   <div class="topbar">
     <nav aria-label="Jump to group">${navHtml}</nav>
     <div class="filter">
@@ -387,6 +554,77 @@ const SPRITE_CATALOG = ${pageData};
   }
   q.addEventListener("input", apply);
   apply();
+
+  // ---- the scene composer — reads the class/material index straight off
+  // THIS page's own already-rendered card and swatch-label markup (this
+  // module's own header explains why: never a second embedded copy of the
+  // same swatch data), so the composed scene below only ever shows a sprite
+  // this same page already proved the resolver draws.
+  const esc = ${escapeHtml.toString()};
+  const tokenizeSceneText = ${tokenizeSceneText.toString()};
+  const extractSceneItems = ${extractSceneItems.toString()};
+
+  function buildClassIndexFromDom() {
+    const index = {};
+    for (const card of cards) {
+      const largeRow = card.querySelector('.tier-row[data-tier="large"]');
+      if (!largeRow) continue;
+      let defaultSvg = null;
+      const materials = {};
+      for (const swatch of largeRow.querySelectorAll(".swatch")) {
+        const labelEl = swatch.querySelector(".swatch-label");
+        const svgEl = swatch.querySelector(".swatch-img");
+        if (!labelEl || !svgEl) continue;
+        const svg = svgEl.innerHTML;
+        if (swatch.classList.contains("plain")) defaultSvg = svg;
+        else if (swatch.classList.contains("fallback")) { if (!defaultSvg) defaultSvg = svg; }
+        else materials[labelEl.textContent.trim().toLowerCase()] = svg;
+      }
+      if (!defaultSvg) {
+        const firstSvg = largeRow.querySelector(".swatch-img");
+        if (firstSvg) defaultSvg = firstSvg.innerHTML;
+      }
+      index[card.dataset.cls] = { defaultSvg, materials };
+    }
+    return index;
+  }
+
+  const classIndex = buildClassIndexFromDom();
+  const composeqEl = document.getElementById("composeq");
+  const composeFormEl = document.getElementById("composeForm");
+  const composePillsEl = document.getElementById("composePills");
+  const sceneRowEl = document.getElementById("sceneRow");
+  const sceneEmptyEl = document.getElementById("sceneEmpty");
+
+  function renderScene(text) {
+    const items = extractSceneItems(text, classIndex);
+    if (!items.length) {
+      sceneRowEl.innerHTML = "";
+      sceneEmptyEl.hidden = false;
+      return;
+    }
+    sceneEmptyEl.hidden = true;
+    sceneRowEl.innerHTML = items.map((item) => {
+      const entry = classIndex[item.className];
+      if (!entry) return "";
+      const svg = (item.materialLabel && entry.materials[item.materialLabel]) || entry.defaultSvg || "";
+      const label = item.materialLabel ? item.materialLabel + " " + item.className : item.className;
+      return '<div class="scene-card"><div class="scene-sprite">' + svg + '</div><div class="scene-label">' + esc(label) + "</div></div>";
+    }).join("");
+  }
+
+  composeqEl.addEventListener("input", () => renderScene(composeqEl.value));
+  composeFormEl.addEventListener("submit", (e) => { e.preventDefault(); renderScene(composeqEl.value); });
+  composePillsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".pill");
+    if (!btn) return;
+    const phrase = btn.dataset.fill || "";
+    const current = composeqEl.value.trim();
+    composeqEl.value = current ? current + ", a " + phrase : phrase;
+    composeqEl.focus();
+    renderScene(composeqEl.value);
+  });
+  renderScene("");
 })();
 </script>
 </body>
