@@ -21,6 +21,20 @@ retrofit, spider-fly goals, the five-page site redesign, layout-bug sweeps). Thi
 covering knowledge/capability uplift, not a duplicate — read that one for the visual/mechanical
 history, this one for the language/graph history.
 
+### Deployment context (so later reasoning in this doc doesn't get re-litigated on a false premise)
+
+No real users yet — this is a business, and the deployment will sit behind CloudFront. Bandwidth
+and hosting-provider quota are not constraints on any decision in this document. Where reasoning
+earlier in this plan's history weighed "self-host an asset vs. let a third-party CDN absorb the
+transfer cost," that weighing doesn't apply here — self-hosting an asset (the wink vendor bundle,
+precompressed assets, anything cached by the service worker) is free to choose on its own technical
+merits (resilience, one fewer third party, cache control) without a bandwidth-cost column in the
+tradeoff. The operator also wants chat.html tested and built the way it might genuinely be embedded
+elsewhere, favoring a richer, more capable experience over a lighter one wherever the two trade off.
+Lazy loading is kept only where explicitly wanted (chat.html's reference-pack and any future live
+knowledge-source fetch, both on-demand by design) — everywhere else in this doc, "no lazy loading"
+means exactly that, not a default to be argued back from cost.
+
 ## Part A — chat.html (the main line of this session's work)
 
 ### Shipped this session
@@ -74,18 +88,22 @@ history, this one for the language/graph history.
 
 ### Decided, not yet built
 
-- **WordNet-xl as the seed tier**, replacing the current small human+seon+ConceptNet-200 seed —
-  the deliberately-chosen middle tier between today's ~4.4 MB boot and WordNet-full's ~25 MB source
-  (not part of this round; revisit its timing once the precompression/vendor work in Part B lands,
-  since a ~25 MB source is a different ask at compressed wire cost with a service worker in front
-  of it). Two mechanics to name when building the xl tier: `scripts/build-chat-seed.mjs` enforces
-  `SEED_BYTE_CEILING` (1.6 MB) today, so the ceiling gets raised deliberately, not deleted; and the
-  bigger seed needs a boot budget check — measure time-to-first-grounded-answer in the existing
-  Playwright harness before and after, so a seed that buys knowledge doesn't silently spend the
-  page's responsiveness.
-- **A service worker**, precaching wink-nlp/chat-seed/reference-pack — the single highest-leverage
-  move identified: turns every knowledge-source tier from "pay every visit" into "pay once."
-  Recommended to land *before* spending weight on bigger knowledge tiers.
+- **WordNet-xl as the seed tier.** Operator's choice, plain and simple — replaces the current small
+  human+seon+ConceptNet-200 seed. Two mechanics to name when building it: `scripts/build-chat-seed.mjs`
+  enforces `SEED_BYTE_CEILING` (1.6 MB) today, so the ceiling gets raised deliberately, not deleted;
+  and the bigger seed needs a boot budget check — measure time-to-first-grounded-answer in the
+  existing Playwright harness before and after, so a seed that buys knowledge doesn't silently spend
+  the page's responsiveness.
+- **A service worker, built now, not deferred.** Precaches wink-nlp/chat-seed/reference-pack — turns
+  every knowledge-source tier from "pay every visit" into "pay once." This is the single
+  highest-leverage move identified and it ships as part of this round, alongside the wink vendor
+  asset and precompression (Phasing item 1), not after them. What it caches (Cache Storage,
+  IndexedDB) is treated as best-effort and volatile by design, not a durable store: a browser can
+  evict it under storage pressure, private/incognito sessions won't keep it, a user can clear it —
+  and that's fine. To the user it should carry no more of a durability promise than an unsubmitted
+  webform's draft state: usually there, never guaranteed, nothing breaks if it's gone, just a
+  re-fetch. This round is indexing and caching; a genuinely durable backend (something other than
+  browser storage) is a separate, later concern, not something this phase needs to solve for.
 - **IndexedDB** for persistence, over `localStorage` (sync, string-only, ~5–10 MB cap — wrong tool
   for a multi-MB graph) and over WASM-sqlite (a real option later, once the graph is WordNet-full
   scale and needs SQLite's FTS5 full-text search over prose — not needed at the WordNet-xl tier
@@ -317,13 +335,14 @@ zero third parties anywhere, no per-bundle duplication.
 
 Pair it with **precompressed assets**: GitLab Pages documents serving `.gz`/`.br` variants placed
 next to files. Emitting them in `build-demo-site.mjs` for every sizable `.js`/`.json`/`.html`
-would cut the wink asset to ~1.0 MB wire and the rest of the site by a similar ratio — cheaper
-than the CDN transfer ever was, with no service worker required. This is documented behavior, not
-yet verified against this deployment: probe it on the next deploy (the phasing below names the
-check) before counting the savings, and if this deployment doesn't honor the variants, the
-service worker already decided in Part A covers the same property. While in there: the bundles
-ship unminified today and nothing depends on their being readable in production, so `minify: true`
-is a free sibling lever.
+would cut the wink asset to ~1.0 MB wire and the rest of the site by a similar ratio. This is
+documented behavior, not yet verified against this deployment: probe it on the next deploy (the
+phasing below names the check) before counting the savings. Compression and the service worker are
+not a fallback pair for each other — they solve different problems and both ship this round:
+compression shrinks what any single transfer costs, the service worker is what stops a return
+visitor paying for that transfer again at all. While in there: the bundles ship unminified today
+and nothing depends on their being readable in production, so `minify: true` is a free sibling
+lever.
 
 ## Part C — package distributions (proposed, lowest priority)
 
@@ -339,14 +358,18 @@ this last, if at all.
 
 ## Phasing for Parts B and C (not started)
 
-1. **The shared wink vendor asset + precompression** (the reshaped de-lazying, per the measured
-   section above): build `public/vendor/wink.js`, point ledger/plan — and chat.html/index.html —
-   at it through the existing `registerWinkModel` seam, emit `.gz`/`.br` variants in
-   `build-demo-site.mjs`. The prototype gate is already passed (numbers above). Verification this
-   phase owns: extend `scripts/post-deploy-smoke.mjs` to fetch one bundle with
-   `Accept-Encoding: br, gzip` and assert a `content-encoding` response header — that is the check
-   that the compression story actually serves, not just builds; if it fails, the byte math above
-   reverts to uncompressed and the service-worker work moves up the queue.
+1. **The shared wink vendor asset + precompression + the service worker** (the reshaped de-lazying,
+   per the measured section above, plus the persistence lever — all three ship together, none
+   deferred): build `public/vendor/wink.js`, point ledger/plan — and chat.html/index.html — at it
+   through the existing `registerWinkModel` seam; emit `.gz`/`.br` variants in
+   `build-demo-site.mjs`; register a service worker precaching the wink asset, chat-seed, and
+   reference-pack, treating what it caches as best-effort/volatile (browser storage can be evicted
+   or cleared; that's an accepted risk, not a bug to design around — see the service-worker item in
+   Part A). The wink prototype gate is already passed (numbers above). Verification this phase owns:
+   extend `scripts/post-deploy-smoke.mjs` to fetch one bundle with `Accept-Encoding: br, gzip` and
+   assert a `content-encoding` response header (confirms compression actually serves, not just
+   builds), and a Playwright check confirming a second page load serves the precached assets from
+   the service worker with zero network requests for them.
 2. **Adventure manifest embed** — mechanical, verified sound this session (the manifest is the
    whole pack, see the Part B table row).
 3. **sprites.html's net-new generator + chat dock** — the one real feature build in this plan.
@@ -373,9 +396,10 @@ phase, not one giant commit.
   explicit instruction: this document is the deliverable for now).
 - Not a redesign of the visual/mechanical uplift `PLAN_GAMES_UPLIFT_V3.md` already shipped — this
   doc is additive to that one, covering knowledge/graph capability, not layout or sprite art.
-- Not WordNet-full, live-Wikipedia's wider miss-hook, or the service worker's actual implementation
-  — all decided in principle (Part A) but held for a future round. Precompressed-asset emission is
-  NOT in this list: the wink measurement repriced the de-lazying, so it moved into Part B phase 1.
+- Not WordNet-full or live-Wikipedia's wider miss-hook — decided in principle (Part A) but held for
+  a future round. The service worker is NOT in this list: it ships in Part B phase 1, not deferred
+  (see "Deployment context" below for why bandwidth/self-hosting cost isn't the constraint it might
+  look like elsewhere in this doc's earlier reasoning).
 - Not the conversation-benchmark backlog itself (write-boundary narrowing, meta-question routing,
   filler prefixes, silent narrowing) — that work stays routed through `HANDOVER.md`, but Part A
   names where this plan's builds depend on it, and the persistence work should not land ahead of
