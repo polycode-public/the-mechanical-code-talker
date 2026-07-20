@@ -535,6 +535,28 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
+<!--
+  Import map: resolves the "wink-nlp"/"wink-eng-lite-web-model" bare specifiers the
+  live ask-and-teach dock's own dynamic import() needs (pinned to the exact versions
+  package.json depends on) to esm.sh CDN builds — the same seam index.html's own
+  import map wires up for the embedded chat, mirrored here because this page can be
+  opened standalone (no import map inherited from a host document; this includes the
+  self-contained file tmct viz writes to disk — a plain cross-origin dynamic
+  import() of a remote https:// URL, not a file:// read, so it works the same way
+  offline this page's own try/catch already handles for the deployed site: the
+  fetch fails and the wink tier degrades gracefully). Nothing in this file touches
+  wink-nlp directly — wink-model.mjs's own header explains why a static import would
+  drag the ~1 MB model into every bundle; only the page's own inline script performs
+  this CDN import, exactly like public/chat-ui.mjs's own tryLoadWink().
+-->
+<script type="importmap">
+{
+  "imports": {
+    "wink-nlp": "https://esm.sh/wink-nlp@2.4.0",
+    "wink-eng-lite-web-model": "https://esm.sh/wink-eng-lite-web-model@1.8.1"
+  }
+}
+</script>
 <style>
 ${THEME_TOKENS_CSS}
   html { background: var(--bg); }
