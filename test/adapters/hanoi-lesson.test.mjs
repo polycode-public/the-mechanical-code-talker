@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 
 import { hanoiLessonSentences } from "../../src/domain/hanoi-lesson.mjs";
 
-test("hanoiLessonSentences(3) reproduces data/games/hanoi-3.txt's own taught content, one fact per sentence", () => {
+test("hanoiLessonSentences(3) reproduces data/games/hanoi-3.txt's taught content plus the puzzle's own disk/peg inventory, one fact per sentence", () => {
   const sentences = hanoiLessonSentences(3);
   assert.deepEqual(sentences, [
     "a disk is a kind of game piece.",
@@ -18,6 +18,8 @@ test("hanoiLessonSentences(3) reproduces data/games/hanoi-3.txt's own taught con
     "peg-a is a peg.",
     "peg-b is a peg.",
     "peg-c is a peg.",
+    "puzzle has 3 disks.",
+    "puzzle has 3 pegs.",
     "disk-1 is smaller than disk-2.",
     "disk-1 is smaller than disk-3.",
     "disk-2 is smaller than disk-3.",
@@ -35,6 +37,12 @@ test("hanoiLessonSentences(3) reproduces data/games/hanoi-3.txt's own taught con
     "the goal is that every disk rests on peg-c.",
     "solve it.",
   ]);
+});
+
+test("hanoiLessonSentences: the puzzle-inventory disk fact tracks the disk count and singularizes at one disk", () => {
+  assert.ok(hanoiLessonSentences(5).includes("puzzle has 5 disks."));
+  assert.ok(hanoiLessonSentences(1).includes("puzzle has 1 disk."));
+  assert.ok(hanoiLessonSentences(1).includes("puzzle has 3 pegs."), "the peg count never varies");
 });
 
 test("hanoiLessonSentences: every entry is a single sentence ending in one terminator", () => {

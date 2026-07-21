@@ -1,11 +1,15 @@
 // spider-fly-world.mjs — the one pure definition of the spider/fly 10x10
 // grid: cell naming, Chebyshev geometry, the fixed web block, the seed
 // taxonomy, and the static fact/rule/meta rows the shipped world carries.
-// Pure, no imports (PLAN_SPIDER_FLY.md §3/§4/§7) — both
+// Pure — the only import is the sibling pure-data game-config.mjs, so the
+// structural self-description facts below quote the same shipped defaults
+// the engine actually runs. Both
 // scripts/gen-spider-fly-world.mjs (writes corpus/worlds/src/spider-fly.jsonl)
 // and src/services/spider-fly.mjs (the runtime) read the SAME grid/web
 // constants from here, so the shipped world and the engine that plays it can
 // never drift apart.
+
+import { DEFAULT_GAME_CONFIG } from "./game-config.mjs";
 
 export const WORLD_NAME = "spider-fly";
 export const GRID_SIZE = 10;
@@ -146,6 +150,55 @@ export function* worldFactRows() {
   }
   for (const [subject, superclass] of SEED_TAXONOMY) {
     yield { world: WORLD_NAME, kind: "fact", subject, predicate: "rdfs:subClassOf", object: superclass };
+  }
+  yield* structuralFactRows();
+}
+
+const pluralize = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+
+/** The board/web/agent structure the page's own controls and copy surface,
+ *  restated as askable facts — so "what is the board?" / "what is the vision
+ *  radius?" ground instead of missing. Every number is either grid geometry
+ *  (fixed here) or a shipped tuning default (game-config.mjs); the tunable
+ *  ones say "by default" because a live session's sliders or tmct.toml can
+ *  move them, and a fact that a slider drag falsifies would be a lie.
+ *  Predicates stick to the curated/readable families the fact reader
+ *  verbalizes cleanly ("has", "is", "covers", "lasts for", "starts with",
+ *  "loses", "lays", "arrives", "hatches after/into"). */
+export function* structuralFactRows() {
+  const fact = (subject, predicate, object) => ({ world: WORLD_NAME, kind: "fact", subject, predicate, object });
+  const knobs = DEFAULT_GAME_CONFIG.spiderFly;
+  let webCellCount = 0;
+  for (let y = 1; y <= GRID_SIZE; y += 1) {
+    for (let x = 1; x <= GRID_SIZE; x += 1) {
+      if (isInWebBlock(x, y)) webCellCount += 1;
+    }
+  }
+  yield fact("board", "rdf:type", "grid");
+  yield fact("board", "mgx:hasA", pluralize(GRID_SIZE, "row"));
+  yield fact("board", "mgx:hasA", pluralize(GRID_SIZE, "column"));
+  yield fact("board", "mgx:hasA", pluralize(GRID_SIZE * GRID_SIZE, "cell"));
+  yield fact("web", "mgx:cover", `${pluralize(webCellCount, "cell")} around ${cellId(WEB_HOME.x, WEB_HOME.y)}`);
+  yield fact("web", "mgx:last-for", `${pluralize(knobs.webDurationTurns, "turn")} by default when a spider builds one`);
+  yield fact("spider", "mgx:hasA", `vision radius of ${pluralize(knobs.spiderVisionRadius, "cell")} by default`);
+  yield fact("spider", "mgx:start-with", `mass ${knobs.spiderInitialMass} by default`);
+  yield fact("spider", "mgx:lose", `${knobs.spiderMassDecrementPerTurn} mass per turn by default`);
+  yield fact("spider", "mgx:lay", `one egg at mass ${knobs.eggLayMassThreshold} by default`);
+  yield fact("fly", "mgx:hasA", `vision radius of ${pluralize(knobs.flyVisionRadius, "cell")} by default`);
+  yield fact("fly", "mgx:start-with", `mass ${knobs.flyInitialMass} by default`);
+  yield fact("fly", "mgx:lose", `${knobs.flyMassDecrementPerTurn} mass per turn by default`);
+  yield fact("fly", "mgx:arrive", `every ${pluralize(knobs.flySpawnIntervalTurns, "turn")} at the edge of the board by default`);
+  yield fact("egg", "mgx:hatch-after", `${pluralize(knobs.eggHatchDelayTurns, "turn")} by default`);
+  yield fact("egg", "mgx:hatch-into", `${pluralize(knobs.eggHatchCount, "spider")} by default`);
+  // The page's own slider label is "vision radius", so that exact term must
+  // describe too, not just the per-class rows above. One combined row while
+  // the two class defaults agree, one row per class if they ever split —
+  // never a combined claim the config doesn't actually make.
+  if (knobs.spiderVisionRadius === knobs.flyVisionRadius) {
+    yield fact("vision radius", "mgx:hasProperty", `${pluralize(knobs.spiderVisionRadius, "cell")} for both the spider and the fly by default`);
+  } else {
+    yield fact("vision radius", "mgx:hasProperty", `${pluralize(knobs.spiderVisionRadius, "cell")} for the spider by default`);
+    yield fact("vision radius", "mgx:hasProperty", `${pluralize(knobs.flyVisionRadius, "cell")} for the fly by default`);
   }
 }
 

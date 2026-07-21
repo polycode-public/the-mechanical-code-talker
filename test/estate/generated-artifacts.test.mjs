@@ -147,6 +147,29 @@ test("the committed agentbench envelope stamps the version the package ships", (
   assert.equal(envelope.generatedFrom.stamp, version);
 });
 
+// The sprite-facts corpus is a function of data/sprites/ and
+// data/sprites-large/: add a template, a parameter or a material value and
+// the rows change. The committed file is what sprites.html's chat dock is
+// seeded from at build time, so a stale commit answers catalog questions
+// from templates that no longer exist.
+test("the committed sprite-facts corpus is what its generator produces today", () => {
+  const out = mkdtempSync(path.join(tmpdir(), "tmct-sprite-facts-freshness-"));
+  try {
+    execFileSync("node", [
+      path.join(repoRoot, "scripts", "gen-sprite-facts.mjs"),
+      "--out", path.join(out, "sprite-facts.jsonl"),
+    ], { cwd: repoRoot, stdio: "pipe" });
+    assert.equal(
+      sha(readFileSync(path.join(out, "sprite-facts.jsonl"))),
+      sha(readFileSync(path.join(repoRoot, "corpus", "sprites", "src", "sprite-facts.jsonl"))),
+      "corpus/sprites/src/sprite-facts.jsonl has drifted from data/sprites*/ — run "
+        + "`node scripts/gen-sprite-facts.mjs` and commit the result.",
+    );
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
 test("the committed ACE surface variants are what their generator produces today", { skip: missingWordnet }, () => {
   const out = mkdtempSync(path.join(tmpdir(), "tmct-variants-freshness-"));
   try {
@@ -165,5 +188,46 @@ test("the committed ACE surface variants are what their generator produces today
     }
   } finally {
     rmSync(out, { recursive: true, force: true });
+  }
+});
+
+// The spider-fly world source is generated (never hand-edited): its rows come
+// from src/domain/spider-fly-world.mjs's own constants and the shipped
+// game-config defaults, so a knob change that skips regeneration would ship a
+// board whose askable facts quote numbers the engine no longer runs.
+test("the committed spider-fly world source is what its generator produces today", () => {
+  const out = mkdtempSync(path.join(tmpdir(), "tmct-spider-fly-world-freshness-"));
+  try {
+    execFileSync("node", [
+      path.join(repoRoot, "scripts", "gen-spider-fly-world.mjs"),
+      "--out", path.join(out, "spider-fly.jsonl"),
+    ], { cwd: repoRoot, stdio: "pipe" });
+    assert.equal(
+      sha(readFileSync(path.join(out, "spider-fly.jsonl"))),
+      sha(readFileSync(path.join(repoRoot, "corpus", "worlds", "src", "spider-fly.jsonl"))),
+      "corpus/worlds/src/spider-fly.jsonl has drifted from spider-fly-world.mjs — run "
+        + "`node scripts/gen-spider-fly-world.mjs && npm run gen:worlds-pack` and commit the result.",
+    );
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
+// The shipped worlds-pack shards are gzipped copies of the src files; a src
+// edit that skips `npm run gen:worlds-pack` would leave the CLI loading a
+// board the src no longer describes.
+test("each committed worlds-pack shard decompresses to exactly its committed src file", async () => {
+  const { gunzipSync } = await import("node:zlib");
+  const srcDir = path.join(repoRoot, "corpus", "worlds", "src");
+  const { readdirSync } = await import("node:fs");
+  const worlds = readdirSync(srcDir).filter((f) => f.endsWith(".jsonl"));
+  assert.ok(worlds.length >= 2, "the pack ships at least the two known worlds");
+  for (const file of worlds) {
+    const shard = path.join(repoRoot, "corpus", "worlds", "shards", `${file}.gz`);
+    assert.equal(
+      gunzipSync(readFileSync(shard)).toString("utf8"),
+      readFileSync(path.join(srcDir, file), "utf8"),
+      `corpus/worlds/shards/${file}.gz has drifted from src/${file} — run \`npm run gen:worlds-pack\` and commit the result.`,
+    );
   }
 });

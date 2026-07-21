@@ -475,5 +475,22 @@
 {"world":"spider-fly","kind":"fact","subject":"arachnid","predicate":"rdfs:subClassOf","object":"animal"}
 {"world":"spider-fly","kind":"fact","subject":"fly","predicate":"rdfs:subClassOf","object":"insect"}
 {"world":"spider-fly","kind":"fact","subject":"insect","predicate":"rdfs:subClassOf","object":"animal"}
+{"world":"spider-fly","kind":"fact","subject":"board","predicate":"rdf:type","object":"grid"}
+{"world":"spider-fly","kind":"fact","subject":"board","predicate":"mgx:hasA","object":"10 rows"}
+{"world":"spider-fly","kind":"fact","subject":"board","predicate":"mgx:hasA","object":"10 columns"}
+{"world":"spider-fly","kind":"fact","subject":"board","predicate":"mgx:hasA","object":"100 cells"}
+{"world":"spider-fly","kind":"fact","subject":"web","predicate":"mgx:cover","object":"9 cells around cell-2-2"}
+{"world":"spider-fly","kind":"fact","subject":"web","predicate":"mgx:last-for","object":"10 turns by default when a spider builds one"}
+{"world":"spider-fly","kind":"fact","subject":"spider","predicate":"mgx:hasA","object":"vision radius of 4 cells by default"}
+{"world":"spider-fly","kind":"fact","subject":"spider","predicate":"mgx:start-with","object":"mass 15 by default"}
+{"world":"spider-fly","kind":"fact","subject":"spider","predicate":"mgx:lose","object":"0.5 mass per turn by default"}
+{"world":"spider-fly","kind":"fact","subject":"spider","predicate":"mgx:lay","object":"one egg at mass 25 by default"}
+{"world":"spider-fly","kind":"fact","subject":"fly","predicate":"mgx:hasA","object":"vision radius of 4 cells by default"}
+{"world":"spider-fly","kind":"fact","subject":"fly","predicate":"mgx:start-with","object":"mass 10 by default"}
+{"world":"spider-fly","kind":"fact","subject":"fly","predicate":"mgx:lose","object":"1 mass per turn by default"}
+{"world":"spider-fly","kind":"fact","subject":"fly","predicate":"mgx:arrive","object":"every 3 turns at the edge of the board by default"}
+{"world":"spider-fly","kind":"fact","subject":"egg","predicate":"mgx:hatch-after","object":"3 turns by default"}
+{"world":"spider-fly","kind":"fact","subject":"egg","predicate":"mgx:hatch-into","object":"2 spiders by default"}
+{"world":"spider-fly","kind":"fact","subject":"vision radius","predicate":"mgx:hasProperty","object":"4 cells for both the spider and the fly by default"}
 {"world":"spider-fly","kind":"rule","name":"go","ruleKind":"action-signature","slots":{"subjectClass":"spider","targetClass":"cell"}}
 {"world":"spider-fly","kind":"rule","name":"go","ruleKind":"action-effect","slots":{"predicate":"currently-in","subjectRole":"subject","objectRole":"target"}}

@@ -116,3 +116,14 @@ test("createPlanSession: a smaller puzzle (1 disk) is trivially solved with a si
   assert.equal(session.plan.actions[0].subject, "disk-1");
   assert.equal(session.plan.actions[0].target, "peg-c");
 });
+
+test("createPlanSession: the puzzle's own disk/peg inventory answers through the chat dock, tracks the disk count, and nonsense still misses", async () => {
+  const session = await createPlanSession({ diskCount: 4 });
+  const yesNo = await session.turn("does the puzzle have 4 disks?");
+  assert.match(yesNo.answer, /yes — .*puzzle has 4 disks/);
+  const described = await session.turn("what is the puzzle?");
+  assert.match(described.answer, /puzzle has 4 disks/);
+  assert.match(described.answer, /puzzle has 3 pegs/);
+  const miss = await session.turn("what is the flux capacitor?");
+  assert.match(miss.answer, /I don't know "flux capacitor"/);
+});

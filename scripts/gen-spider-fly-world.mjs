@@ -9,6 +9,9 @@
 //
 //   node scripts/gen-spider-fly-world.mjs
 //   npm run gen:worlds-pack   # then builds the shard from this source
+//
+// --out <path> redirects the write (the estate freshness guard regenerates
+// into a temp dir and compares, never touching the tracked file).
 
 import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -16,7 +19,10 @@ import { fileURLToPath } from "node:url";
 import { WORLD_NAME, worldFactRows, worldMetaRow, worldRuleRows } from "../src/domain/spider-fly-world.mjs";
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const OUT_FILE = join(REPO_ROOT, "corpus", "worlds", "src", `${WORLD_NAME}.jsonl`);
+const outFlagIndex = process.argv.indexOf("--out");
+const OUT_FILE = outFlagIndex !== -1 && process.argv[outFlagIndex + 1]
+  ? process.argv[outFlagIndex + 1]
+  : join(REPO_ROOT, "corpus", "worlds", "src", `${WORLD_NAME}.jsonl`);
 
 const rows = [worldMetaRow(), ...worldFactRows(), ...worldRuleRows()];
 writeFileSync(OUT_FILE, `${rows.map((r) => JSON.stringify(r)).join("\n")}\n`);

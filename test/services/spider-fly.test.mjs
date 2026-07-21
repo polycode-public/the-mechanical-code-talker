@@ -837,3 +837,53 @@ test("startSpiderFlyGame and runSpiderFlyTick both honour a custom config overri
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- the world's structural self-description facts ----------------------------
+
+test("worldFactRows restates the page-surfaced structure as facts, quoting the shipped defaults it actually runs", () => {
+  const rows = [...worldFactRows()];
+  const has = (subject, predicate, object) =>
+    rows.some((r) => r.subject === subject && r.predicate === predicate && r.object === object);
+  const knobs = DEFAULT_GAME_CONFIG.spiderFly;
+
+  assert.ok(has("board", "rdf:type", "grid"));
+  assert.ok(has("board", "mgx:hasA", "10 rows"));
+  assert.ok(has("board", "mgx:hasA", "10 columns"));
+  assert.ok(has("board", "mgx:hasA", "100 cells"));
+  assert.ok(has("web", "mgx:cover", "9 cells around cell-2-2"), "the web block's own cell count and home cell, derived, not typed in");
+  assert.ok(has("web", "mgx:last-for", `${knobs.webDurationTurns} turns by default when a spider builds one`));
+  assert.ok(has("spider", "mgx:hasA", `vision radius of ${knobs.spiderVisionRadius} cells by default`));
+  assert.ok(has("spider", "mgx:start-with", `mass ${knobs.spiderInitialMass} by default`));
+  assert.ok(has("spider", "mgx:lose", `${knobs.spiderMassDecrementPerTurn} mass per turn by default`));
+  assert.ok(has("spider", "mgx:lay", `one egg at mass ${knobs.eggLayMassThreshold} by default`));
+  assert.ok(has("fly", "mgx:hasA", `vision radius of ${knobs.flyVisionRadius} cells by default`));
+  assert.ok(has("fly", "mgx:start-with", `mass ${knobs.flyInitialMass} by default`));
+  assert.ok(has("fly", "mgx:lose", `${knobs.flyMassDecrementPerTurn} mass per turn by default`));
+  assert.ok(has("fly", "mgx:arrive", `every ${knobs.flySpawnIntervalTurns} turns at the edge of the board by default`));
+  assert.ok(has("egg", "mgx:hatch-after", `${knobs.eggHatchDelayTurns} turns by default`));
+  assert.ok(has("egg", "mgx:hatch-into", `${knobs.eggHatchCount} spiders by default`));
+  assert.ok(
+    has("vision radius", "mgx:hasProperty", `${knobs.spiderVisionRadius} cells for both the spider and the fly by default`),
+    "the exact slider-label term describes too, not only the per-class rows",
+  );
+});
+
+test("every tunable-knob structural fact says 'by default' — a slider or tmct.toml can move the number, so an unqualified claim would go stale", () => {
+  // Grid geometry is fixed in the world module itself, so those rows carry no
+  // qualifier; everything else quotes a game-config knob.
+  const geometryRows = new Set(["board", "web\0mgx:cover"]);
+  const structural = [...worldFactRows()].filter((r) =>
+    ["board", "web", "spider", "fly", "egg", "vision radius"].includes(r.subject)
+    && !["rdf:type", "rdfs:subClassOf"].includes(r.predicate));
+  assert.ok(structural.length >= 15, "the structural family is present at all");
+  for (const r of structural) {
+    if (geometryRows.has(r.subject) || geometryRows.has(`${r.subject}\0${r.predicate}`)) continue;
+    assert.match(r.object, /by default/, `${r.subject} ${r.predicate} ${r.object} quotes a tunable without saying "by default"`);
+  }
+});
+
+test("the static world rows alone fold to an empty live-game state — structural facts never read as agents", () => {
+  const state = foldSpiderFlyState([...worldFactRows()]);
+  assert.equal(state.placements.size, 0, "no world row places an agent");
+  assert.equal(state.mass.size, 0, "no world row carries a live mass");
+});

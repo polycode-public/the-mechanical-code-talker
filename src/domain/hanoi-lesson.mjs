@@ -17,6 +17,14 @@
 // relation is stored as given and never chased transitively (see the
 // "scale" variation documented in hanoi-3.txt itself), so a partial pairing
 // would leave some disks with no legal move.
+//
+// On top of hanoi-3.txt's own content, the lesson teaches two puzzle-
+// inventory facts ("puzzle has N disks." / "puzzle has 3 pegs.") so the
+// page's dock can answer "what is the puzzle?" / "does the puzzle have N
+// disks?" about the very control the page displays. The subject is bare
+// ("puzzle", no article) because that is the shape the has-teach frame
+// stores; the disk fact regenerates with the disk-count control, so it
+// tracks N instead of going stale.
 
 /** The taught lesson for an N-disk puzzle: the class/individual/ordering
  *  facts, the action rule, the render hints, the starting stack (largest at
@@ -33,6 +41,8 @@ export function hanoiLessonSentences(diskCount = 3, { goalPeg = "peg-c" } = {}) 
   sentences.push("a peg is a kind of place.");
   for (const d of disks) sentences.push(`${d} is a disk.`);
   for (const p of pegs) sentences.push(`${p} is a peg.`);
+  sentences.push(`puzzle has ${n} disk${n === 1 ? "" : "s"}.`);
+  sentences.push("puzzle has 3 pegs.");
   for (let i = 0; i < n; i += 1) {
     for (let j = i + 1; j < n; j += 1) sentences.push(`${disks[i]} is smaller than ${disks[j]}.`);
   }

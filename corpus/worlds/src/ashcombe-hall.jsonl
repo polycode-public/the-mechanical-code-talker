@@ -51,6 +51,9 @@
 {"world":"ashcombe-hall","kind":"fact","subject":"cook","predicate":"mgx:works-in","object":"kitchen"}
 {"world":"ashcombe-hall","kind":"fact","subject":"butler","predicate":"mgx:works-in","object":"drawing-room"}
 {"world":"ashcombe-hall","kind":"fact","subject":"gardener","predicate":"mgx:works-in","object":"garden"}
+{"world":"ashcombe-hall","kind":"fact","subject":"ashcombe hall","predicate":"mgx:hasA","object":"6 rooms"}
+{"world":"ashcombe-hall","kind":"fact","subject":"player","predicate":"mgx:hasA","object":"satchel"}
+{"world":"ashcombe-hall","kind":"fact","subject":"satchel","predicate":"mgx:usedFor","object":"carrying what the player takes"}
 {"world":"ashcombe-hall","kind":"rule","name":"go","ruleKind":"action-signature","slots":{"subjectClass":"adventurer","targetClass":"room"}}
 {"world":"ashcombe-hall","kind":"rule","name":"go","ruleKind":"action-signature","slots":{"subjectClass":"person","targetClass":"room"}}
 {"world":"ashcombe-hall","kind":"rule","name":"go","ruleKind":"action-effect","slots":{"predicate":"currently-in","subjectRole":"subject","objectRole":"target"}}
