@@ -114,6 +114,28 @@ export function loadProgressLine(parts) {
     : "loading the engine… " + mb(loaded) + " MB";
 }
 
+/**
+ * The exported transcript as one Markdown document: a title line naming the
+ * site version and the export date, then every turn in order as
+ * "**you:** ..." / "**tmct:** ...", with the provenance tier in parentheses
+ * when the turn carried one. Reads the page's transcript MODEL (an array of
+ * { role, text, chipTier }), never the DOM — the message column may
+ * virtualize long chats someday, and an export must still carry every turn.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe — the same
+ * discipline provenanceChipFor/loadProgressLine above hold.
+ */
+export function transcriptMarkdown(turns, meta) {
+  const version = (meta && meta.version) || "dev";
+  const date = (meta && meta.date) || "";
+  const lines = ["# tmct chat — v" + version + (date ? " — " + date : ""), ""];
+  for (const turn of turns || []) {
+    const tier = turn.chipTier ? " (" + turn.chipTier + ")" : "";
+    lines.push("**" + turn.role + ":** " + turn.text + tier, "");
+  }
+  return lines.join("\n");
+}
+
 /** The self-contained "talk to it" full-screen page. Pure — the same output
  *  for the same `title` every time; every other piece of state (the session,
  *  every message, every chip) is computed live in the browser once the
@@ -200,6 +222,13 @@ ${THEME_TOKENS_CSS}
   .composer-inner button[type="submit"]:disabled { opacity: .4; cursor: default; }
   .statusline { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .6rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
 
+  /* the composer's small utility row — right-aligned mono controls in the
+     statusline's own idiom, for anything that acts on the conversation as a
+     whole (export, print) rather than on one turn. */
+  .composer-tools { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .35rem; display: flex; justify-content: flex-end; align-items: center; gap: .5rem; }
+  .tool-btn { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .03em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .16rem .55rem; background: var(--card); }
+  .tool-btn:hover { color: var(--ink); }
+
   /* the provenance stats panel: what this session's memory holds, docked to
      the right of the chat column (a real layout column, not an overlay) —
      re-rendered after boot and after every turn from window.tmctChat's own
@@ -226,6 +255,21 @@ ${THEME_TOKENS_CSS}
   @media (prefers-reduced-motion: reduce) {
     * { scroll-behavior: auto !important; }
   }
+
+  /* print: the WHOLE transcript, not the scrolled-into-view slice — the
+     screen layout pins the message column to the viewport and scrolls inside
+     it, which would clip everything off-screen to one printed page. Undo the
+     pinning (heights auto, overflow visible, flex back to block flow) and
+     drop the interactive chrome; the bubbles and their provenance chips
+     print as-is. */
+  @media print {
+    html, body { height: auto; overflow: visible; }
+    body { display: block; }
+    .chatCol { display: block; }
+    main.chatMain { overflow: visible; height: auto; }
+    .messages { min-height: 0; }
+    form.composer, .statusline, .statsPanel, .legend { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -245,6 +289,10 @@ ${THEME_TOKENS_CSS}
           placeholder="loading the engine…" aria-label="Ask tmct something" disabled>
         <button type="submit" id="composerSend" aria-label="Send" disabled>&#8594;</button>
       </div>
+      <div class="composer-tools">
+        <button type="button" id="exportMd" class="tool-btn" title="download this conversation as Markdown">export .md</button>
+        <button type="button" id="printChat" class="tool-btn" title="print the whole conversation">print</button>
+      </div>
     </form>
     <div class="statusline" id="status">loading the engine&hellip;</div>
   </div>
@@ -258,6 +306,7 @@ ${THEME_TOKENS_CSS}
   const provBucketFor = ${provBucketFor.toString()};
   const provenanceChipFor = ${provenanceChipFor.toString()};
   const loadProgressLine = ${loadProgressLine.toString()};
+  const transcriptMarkdown = ${transcriptMarkdown.toString()};
   const el = (id) => document.getElementById(id);
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
@@ -318,6 +367,12 @@ ${THEME_TOKENS_CSS}
     entailed: "tmct derived this from taught facts, not read back verbatim",
   };
 
+  // The transcript MODEL — one entry per user submit and per settled
+  // assistant bubble (misses included), appended in display order. Export
+  // and print read this, never the DOM: the message column stays free to
+  // virtualize long chats without silently truncating an export.
+  const transcript = [];
+
   function settleAssistantBubble(row, answer, record) {
     const bubble = row.querySelector(".bubble");
     bubble.classList.remove("pending");
@@ -325,6 +380,7 @@ ${THEME_TOKENS_CSS}
     bubble.classList.toggle("miss", missed);
     bubble.textContent = answer;
     const tier = provenanceChipFor(answer, record, provBucketFor);
+    transcript.push({ role: "tmct", text: answer, chipTier: tier, ts: Date.now() });
     if (tier) {
       const key = tier === "entailed" ? "entail" : tier;
       const chip = document.createElement("span");
@@ -489,6 +545,7 @@ ${THEME_TOKENS_CSS}
   let persist = null;
   let saveTimer = null;
   let restoredCount = 0;
+  let siteVersion = "dev";
   window.tmctChatLastSave = null;
 
   function scheduleSave() {
@@ -634,6 +691,7 @@ ${THEME_TOKENS_CSS}
     if (!q || busy || !window.tmctChatSession) return;
     inputEl.value = "";
     addUserBubble(q);
+    transcript.push({ role: "you", text: q, chipTier: null, ts: Date.now() });
     const pendingRow = addPendingAssistantBubble();
     setBusy(true);
     window.tmctChatSession.turn(q)
@@ -651,13 +709,31 @@ ${THEME_TOKENS_CSS}
       });
   });
 
+  // ---- export + print: whole-conversation controls ------------------------
+  // Both read the transcript model; neither touches the network. The export
+  // downloads as a Blob (no server round-trip), and print relies on the
+  // @media print stylesheet above to un-pin the message column so every
+  // turn reaches paper.
+  el("exportMd").addEventListener("click", () => {
+    const md = transcriptMarkdown(transcript, { version: siteVersion, date: new Date(Date.now()).toISOString().slice(0, 10) });
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "tmct-chat.md";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  el("printChat").addEventListener("click", () => window.print());
+
   async function boot() {
     if (!window.tmctChat) {
       statusEl.textContent = "the chat engine didn't load \\u2014 this page needs its build step (npm run demo:build)";
       inputEl.placeholder = "chat engine unavailable";
       return;
     }
-    let siteVersion = "dev";
     await Promise.all([fetchSeed(), tryLoadWink(), fetchSiteVersion().then((v) => { siteVersion = v; })]);
     progressActive = false;
     window.tmctChat.registerReferencePackProvider(fetchPackProvider);
