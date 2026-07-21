@@ -141,8 +141,7 @@ ${THEME_TOKENS_CSS}
 
   .topbar { flex: 0 0 auto; display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: .7rem 1.1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .brand { display: flex; align-items: baseline; gap: .55rem; }
-  .eyebrow { font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-  .topbar h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
+  .eyebrow { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .08em; color: var(--muted); }
   .legend { display: flex; gap: .8rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
   .legend-item { display: inline-flex; align-items: center; gap: .32rem; white-space: nowrap; }
   .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
@@ -215,7 +214,6 @@ ${THEME_TOKENS_CSS}
     <header class="topbar">
       <div class="brand">
         <span class="eyebrow">the-mechanical-code-talker</span>
-        <h1>Talk to it</h1>
       </div>
       <div class="legend" aria-hidden="true">${legendHtml}</div>
     </header>
