@@ -402,6 +402,7 @@
   "src/surfaces/tui/app.mjs",
   "src/surfaces/web/adventure-browser-entry.mjs",
   "src/surfaces/web/chat-browser-entry.mjs",
+  "src/surfaces/web/idb-persist.mjs",
   "src/surfaces/web/ledger-browser-entry.mjs",
   "src/surfaces/web/memory-ask-browser-entry.mjs",
   "src/surfaces/web/memory-ask-browser.bundle.js",
