@@ -1,8 +1,13 @@
 # PLAN_CLASS_QUERY.md — "list/count all X of class Y", reconciled against what already shipped
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code. The item
-this document was commissioned to design turns out to be **mostly already shipped**; see "Current
-state" below for the precise reconciliation before any design content.
+Status: ARCHIVED 2026-07-21 (at 2.9.6). Phase 1's premise went stale — `answerMemoryCount` grew
+its own restrictor-tail discipline (`MEMORY_COUNT_ABOUT_TAIL_RE`/`memoryFactsAboutCount`), so
+"how many facts about horses are there" now answers a real restricted count and this document's
+proposed bare decline would regress it. Phases 2-4 remain open; the live re-verification and a
+fresh code trace with current anchors (including the correction that the reverse-membership
+branch lives in `factReadBackReaders`, not `factAnswer`, and that the new count lane must run
+before `answerQuantifierRecall`) are in `HANDOVER.md`'s first open item. The design content below
+is kept as written; read the trace in `HANDOVER.md` first.
 
 ## Origin
 

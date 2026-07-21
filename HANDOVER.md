@@ -17,44 +17,148 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 ## Open items
 
 `archive/` holds delivered plan docs; each records what its delivery deliberately did not include.
-What remains:
+Every item below was re-verified live on 2026-07-21 against a fresh `init:xl` graph (72,077 seeded
+facts) plus the merged seonix+demo code graphs, in one continuous piped chat session —
+`.tmct/session-019f8692-430d-79f3-9ee2-c38792f56746.log` holds the full transcript. What remains:
 
-- CONVERSATION persona-sweep backlog (`BENCHMARK_CONVERSATION_2.7.11.md`): 29 fresh findings
-  across 6 personas, ranked in the report. Worked in the report's priority order; what's still
-  open, named explicitly (genuine horizons, not forced): filler-clause prefix widening (the report
-  identifies one root cause behind several surface symptoms — "ok so", "oh nice. um what about",
-  "one more random thing," — but widening the existing short-prefix stripper to longer clause
-  shapes without over-matching real content needs its own design pass); silent narrowing without
-  disclosure ("the router" resolving to the Router class over the router.mjs module, a directory
-  reference narrowing to one of several members) — needs a design decision on how/where to surface
-  the narrower reading, not just a string tweak; plan-justification counterfactual and
-  alternative-choice questions ("what if disk-1 started on peg-c instead?", "why did you send
-  crate-c to a pallet instead of stacking it on crate-b?") — these ask the planner to explain a
-  path it did NOT take, which the current BFS never computes at all; the session sidecar/log still
-  rewrites verbatim natural-language input to the canonical form matched (a recurrence of a
-  previously-known, still-open item); and the smaller wall gaps not yet investigated — "give me the
-  big picture on this codebase", "tell me about the router thing", "what is the entry point"/"where
-  do i start reading", "what is the purpose of the validate module", "whats the most important
-  file" (a superlative with no default ranking criterion), casual/longer farewells. Full ranked list
-  and routing in the report.
+- Memory/taught-class list & count — the `archive/PLAN_CLASS_QUERY.md` remainder. Its Phase 1
+  shipped without the plan (live: "how many facts about horses are there" → `18 facts. (about
+  "horses")` — `answerMemoryCount` grew its own tail discipline, `MEMORY_COUNT_ABOUT_TAIL_RE`
+  `src/services/chat.mjs:788` + `memoryFactsAboutCount` `:793`; the plan's proposed bare decline
+  would now be a regression). Still missing, live-confirmed:
+  - `list facts` / `list utterances` fall to the code-graph compositional miss. The tested
+    mechanism (`dynamicClassQuery` `src/domain/ask.mjs:4082`, `resolveDynamicClass` `:4066`,
+    trigger REs `:4073-4074`, all unexported) never sees memory individuals from chat. Fix: a
+    memory-class list/count lane in `runTurn` beside `answerMemoryCount` (`chat.mjs:13424`),
+    loading via `await import("../adapters/memory/core.mjs")` like its siblings (`:841`),
+    rendering with `FACT_ANSWER_CAP = 32` (`:6161`) and the `pending`/"say 'more'" continuation
+    (`:7779`). Also covers the memory meta-classes Session/Source/Rule — today "how many sessions
+    are there" answers from the CODE graph's Session class, not the store.
+  - `how many animals are there` — no count over a taught class's members. The two-noun
+    quantifier lane swallows it first ("I was never told a quantifier": `HOW_MANY_ARE_RE`
+    `chat.mjs:745` reads "there" as the second noun), so the new count either precedes
+    `answerQuantifierRecall` (`:13436`) or that regex excludes "there". Count body: mirror the
+    reverse-membership branch in `factReadBackReaders` (`chat.mjs:9037-9070` — note it lives
+    there, NOT in `factAnswer` as the archived plan says), `objectHits` at `:9065`, return
+    `hits.length`.
+  - `list all animals` / `list the animals` — compositional miss. Fix: one more `else if (!term)`
+    arm after the bare what-is fallback (`chat.mjs:9058-9061`) matching
+    `list|show (all|the) <noun>`, with a restrictor-tail decline (export `DYNAMIC_TAIL_OK_RE`
+    `ask.mjs:4077`, or reuse chat's own filler-tail set `:783`).
+  - `count all facts about horses` — the count regex (`chat.mjs:814`) captures the word after
+    "count", which is "all". Allow an optional `all `.
+  - Related pattern, found this round: at xl scale "what is an animal" fills its cap with forward
+    corpus facts, so the reverse-membership listing never shows — a membership-list answer needs
+    its own trigger, not the definition lane's leftovers.
+  - Test homes: `test/adapters/wiring-facts-memory.test.mjs` (chat-reachable memory lane),
+    `test/adapters/chat-reference-lane.test.mjs` (membership count/list),
+    `test/adapters/ask-memory-class-query.test.mjs` (ask-level pins),
+    `test/adapters/showcase.test.mjs` (session-count pin).
 
-- Page-vocabulary audit findings routed to the chat engine (from the six-pages round): "what is
-  the letter?" on an adventure session reads back the `mgx:hidden-in` fact and spoils the hidden
-  key — the describe lane should exclude world-secret predicates the way the adventure lane's own
-  where-reader already does; predicate verbalization garbles world predicates ("currentlies in",
-  "workses in") — wants curated `FACT_PREDICATE_PHRASES` rows; lane gaps: "where am I?"/"what can
-  I do?"/"what is the quest?" on adventure sessions, "where is the spider?" on spider-fly, "what
-  is the goal?" on plan sessions (answers from the child corpus instead of planState), "how many
-  X are there?" cannot count taught class members, and the teach frame declines "the tower has 3
-  disks." (determiner subject) while the bare form teaches.
+- CONVERSATION persona-sweep remainder (`BENCHMARK_CONVERSATION_2.7.11.md`): 15 of the 29 routed
+  items landed between 2.7.12 and 2.9.6 and re-verified fixed live this round (teach period,
+  2-hop property inheritance, write boundary, meta-questions, disjointness object-walk,
+  contradiction disclosure, arithmetic decline, the suggested-repair cluster). Still open, with
+  fresh shapes from the live session:
+  - filler-clause widening: "ok so" now strips; "oh nice. um what about cats" and "one more
+    random thing, what is a horse" still unparse. Longer clause shapes need their own design pass.
+  - silent narrowing without disclosure: "what's in src/handlers" answers one module's members;
+    with two graphs merged, "is model.mjs not imported by store.mjs" silently picked seonix's
+    `src/store.mjs` over the demo's `src/core/store.mjs`, and "what functions are in Task"
+    resolved to the wrong entity (`TASK`) then reported no members.
+  - plan-justification counterfactuals ("why did you move disk-1 first instead of disk-2?",
+    "what if disk-1 started on peg-c instead?") — the BFS computes no untaken path today
+    (`chat.mjs:2361-2365` records the decision); still unparsed.
+  - verbatim-input instrument bugs, two fresh instances: the session `.log` rewrote "what people
+    do you know about" to `> what is a person`, and a multi-sentence teach line logs only its
+    last sentence ("disk-1 is a disk. disk-2 is a disk. disk-3 is a disk." → `> disk-3 is a
+    disk.`). The `.jsonl` sidecar keeps both forms; the `.log` restoration misses these paths.
+  - farewells/dismissals: "ok nvm" and "lol ok" get the identity blurb; the long thanks-farewell
+    ("alright, i think that's everything for today, thanks so much for the help!") now misroutes
+    into a teach decline about the pronoun "i" — worse than the wall it used to hit.
+  - still-walled asks: "tell me about the router thing"; "give me the big picture on this
+    codebase" (now with a stray "Did you mean BIG?"); "what is the entry point"; "what is the
+    purpose of the validate module"; "prove that X is Y"; "isn't a dog an animal?" (contracted
+    negative interrogative); the multi-sentence syllogism one-liner still doesn't split. "where
+    do i start reading" now misroutes to where-is-defined and confidently answers
+    `renderArchitecture()` — worse than its 2.7.11 wall. "whats the most important file" now
+    names its rank criteria but still picks no default.
+  - adjective predication cannot yet teach: "every snake is venomous" declines claiming
+    "venomous" is unknown even though "snake" is grounded — the every-X-is-Y frame wants a noun
+    class on the Y side; no adjective-attribute teach shape exists yet.
+  - guess-number non-numeric mid-game turn now falls to a plain parse miss (no vocab-learn write
+    observed) — downgraded from state mutation to a flow wall.
 
-- Live-Wikipedia trust prior: `reference:wikipedia-live` content scores the same 0.6 prior as the
-  curated, revision-pinned shipped pack. If live content should rank lower, that is one new
-  source kind in trust.mjs plus a parse branch.
+- Games/plan lane gaps (page-vocabulary round, confirmed and extended live):
+  - in-game questions misroute into code-graph lanes: "where am I?" → "no module matching I";
+    "where is the spider?" → module ambiguity over `bench/sizer.mjs`; "what can I do?" and
+    "what is the quest?" wall or answer corpus noise; "what is the goal?" mid-plan answers corpus
+    vocabulary about "goal" instead of planState.
+  - the describe lane spoils world secrets: "what is the letter?" reads back `letter hiddens in
+    cabinet (world:ashcombe-hall)` — and those world predicates verbalize garbled ("hiddens in",
+    "ises objective true"); `FACT_PREDICATE_PHRASES` (`chat.mjs:5523`) has no world rows. The
+    describe lane should exclude world-secret predicates the way the adventure where-reader does.
+  - the adventure "look" digest at xl leaks corpus facts into the room description ("Library is
+    used for study for test. Lit rdfs:subClassOf literary study.").
+  - the teach frame still declines a determiner subject: "the tower has 3 disks." misroutes to
+    ask(defines); bare "tower has 3 disks." teaches.
+  - NEW, largest: the hanoi solve fails against the xl graph — the full taught board + goal
+    returned "no plan found within 300 moves" after ~2.5 minutes, while the same sequence passes
+    the small-graph corpus tests. Suspect the goal's "every disk" enumeration (or the movable
+    set) sweeps corpus members of "disk" at xl scale; the goal quantifier likely needs to range
+    over taught instances of the taught class only. Reproduce with the session log's plan section.
 
-- Chat-seed scale: conceptnet is capped at 2,000 facts (10x the old 200) because the uncapped
-  init:xl set measures ~86 MB serialized. Lifting the caps means leaving the 16-24 MB seed
-  ceiling range — an operator call.
+- Live-Wikipedia trust prior: `reference:wikipedia-live` still parses as kind `reference` and
+  scores the same `SOURCE_PRIOR.reference = 0.6` (`src/domain/memory/trust.mjs:94`) as the
+  curated, revision-pinned pack. If live content should rank lower: one new source kind in
+  trust.mjs plus a parse branch on the `reference:wikipedia-live` prefix.
+
+- Chat-seed scale: `SEED_BAND_CAPS` (`scripts/build-chat-seed.mjs:46`) still caps conceptnet at
+  2,000 facts and wordnet-xl at 4,000 because the uncapped init:xl set measures ~86 MB
+  serialized. Lifting the caps means leaving the 16-24 MB seed ceiling range — an operator call.
+
+- The ledger query-template phrasing audit (`archive/PLAN_SIX_EASY_PIECES.md` Part B promised
+  it; it was dropped from the 2.9.1-2.9.5 delivery — no commit does it). To do: audit the ledger
+  page's existing query-template library for phrasing gaps the same way the spider-fly, adventure
+  and plan audits were done (`4285d0f` is the pattern to follow), and route what it finds either
+  into template rows or here. (Two other residuals are recorded and accepted in that archive doc:
+  library consumers still see Node's ExperimentalWarning — CLI entry points suppress it, a host
+  process embedding the services cannot be flagged from here; and live-Wikipedia's wider
+  miss-hook past the lexicon gate is a stated non-goal, now superseded by the knowledge-flows
+  item below.)
+
+- Knowledge flows — supplement, ingest, synthesise (operator-decided 2026-07-21). Four builds,
+  each independently shippable, against the baseline traced below:
+  1. "Ask Wikipedia even when I do know": both halves — an explicit phrasing ("what does
+     wikipedia say about X") that reaches the live lookup any time, even when local facts
+     answered; and a `/wiki` supplement mode where every grounded answer also appends the cited
+     live supplement. Today the live lane runs strictly after the shipped packs and only on a
+     clean miss (`cleanMissLiveKey` `src/services/chat.mjs:9564`).
+  2. Full-triple ingestion of learn-on-miss loads, both surfaces. Today only the child pack
+     ingests (the matched term's rows via `appendFacts`, `chat.mjs:9596-9608`, tagged
+     `child:conceptnet:<term>`, prior 0.7); reference-pack and live-Wikipedia hits store at most
+     ONE `rdfs:subClassOf` fact (`appendReferenceIsaFact` `chat.mjs:9613`, tags
+     `reference:simplewiki:<title>@<revid>` / `reference:wikipedia-live:<title>@<revid>`) and
+     the summary prose stays transient. Build: run the fetched summary through the extract
+     recognizer (plus the optimistic tier from item 4) and store every grounded triple,
+     source-tagged per source. On chat.html additionally fix persistence: IndexedDB saves only
+     on teach turns (`via === "assert"`, `public/chat.html:658`), so even today's one isa fact
+     is lost on reload — persist on any store write. Note the browser has no child-pack provider
+     registered (`chat.html:710` registers reference only), so that lane is idle there; the boot
+     seed itself is NOT lazy (the whole capped payload assigns at boot, `chat.html:431-452`).
+  3. Synthesis, auto + manual: after each ingest, a bounded focus-scoped materialisation pass
+     (the `expandFocus` frontier around the loaded term) connects the new facts back to the
+     graph; the full-batch `tmct syllogise` / `/syllogise <term>` verbs stay for deep passes.
+     Today nothing runs automatically — `syllogise()` is manual only (`bin/tmct.mjs:1131`,
+     `chat.mjs:12185`), derived facts write under `entailed:*` at prior 0.3, retractable.
+  4. Raw-text optimistic ingest from the CLI: `tmct extract --optimistic` fuzzy-word-matches the
+     sentences the strict recognizer skips (today every non-assert sentence is silently dropped,
+     `src/services/extract-facts.mjs:112-114`) into candidate facts under a NEW lower-trust
+     source kind, plus a `--canonical` output mode printing each ingested fact in canonical form
+     enriched with its links back to the existing graph (today facts store standalone; no
+     linking exists on the extract path). Trust work shared with the live-Wikipedia prior item
+     above: distinct source kinds (live, optimistic-extract) with their own priors in trust.mjs,
+     so fuzzy and live content rank below the curated packs by construction.
 
 ## Discipline
 
