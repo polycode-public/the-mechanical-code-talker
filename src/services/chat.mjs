@@ -2391,6 +2391,15 @@ const BOARD_WHERE_EVERY_RE = /^where\s+(?:is|are)\s+(?:every|each|all(?:\s+the)?
  *  question-shape ("was X Y?") this could ever misfire on. */
 const TEACH_PROPERTY_RE = /^(?:every\s+|each\s+|all\s+|the\s+)?(.+?)\s+(?:is|are|was|were)\s+(?!an?\b|the\b)([A-Za-z][\w-]*)$/i;
 
+/** The closed place-adverb set ("anywhere"/"everywhere"/"nowhere"/
+ *  "somewhere"). One of these sitting in an OBJECT slot ("http.mjs used is
+ *  anywhere") marks a garbled usage QUESTION, never a storable property or
+ *  relation object: no reader ever matches a fact whose object is a place
+ *  adverb, so storing one is a silent write with no possible read-back.
+ *  Every teach path that binds a free-form object refuses on it, and the
+ *  teach-offer generators never suggest a phrasing that contains one. */
+const PLACE_ADVERB_OBJECT_RE = /^(?:anywhere|everywhere|nowhere|somewhere)$/i;
+
 /** The teach lane's provenance tag — mirrors grammar/assert.mjs's provenanceTag
  *  shape under a distinct "teach:" family, so a taught fact is auditable apart
  *  from the ACE-parsed asserts: teach:chat:<sessionId>@<ts>. core.mjs maps the
@@ -2735,12 +2744,18 @@ async function objectReadsAsNonNoun(word) {
     return false;
   }
 }
-async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon }, cache = null) {
+async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent = false }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
   const [, det, subjectRaw, verb, objectRaw] = m;
-  if (!/^(?:every|each|all|any)$/i.test((det || "").trim())) return null; // class-level mint needs a real universal quantifier
+  // `classIntent` (an explicit "kind of"/"type of" infix in the ORIGINAL
+  // sentence, detected by the caller before stripKindOf erased it) is the
+  // same class-level signal a universal quantifier gives: "dog is a kind of
+  // mammal" — tmct's OWN read-back phrasing for a subClassOf fact — names a
+  // class relation, never one entity's property, so it earns the mint the
+  // bare unmarked "module is banana" shape must still never get.
+  if (!/^(?:every|each|all|any)$/i.test((det || "").trim()) && !classIntent) return null; // class-level mint needs a universal quantifier or an explicit kind-of infix
   const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir, cache);
@@ -2832,6 +2847,7 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
   const [, , subjectRaw, , objectRaw] = m;
+  if (PLACE_ADVERB_OBJECT_RE.test(objectRaw)) return null; // a place adverb is never a property
   const { loadLexicon, lookupNoun, classify } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   // Y already a known NOUN or a fact-grounded CLASS term — a genuine class-
@@ -3162,6 +3178,7 @@ async function generalVerbTeach(payload) {
   // object no question can match.
   const object = folded.object.replace(/^(?:an?|the)\s+/i, "").trim();
   if (!subject || !object) return null; // no well-formed triple — honest decline (point 6)
+  if (PLACE_ADVERB_OBJECT_RE.test(object)) return null; // a place adverb is never a real object
   return { subject, predicate: negated ? negatedPredicate(folded.predicate) : folded.predicate, object };
 }
 
@@ -3420,13 +3437,24 @@ function matchBareCanTeach(text) {
  *  user to teach a class-membership fact that was never what they said. Only
  *  a payload that ALREADY carried an article gets its article corrected —
  *  the "every monkey is a animal" -> "an animal" case this function exists
- *  for in the first place. */
+ *  for in the first place.
+ *
+ *  A PLURAL phrasing ("all spiders are venomous") folds its subject to the
+ *  singular the suggested "every …" rewrite grammatically requires — "every
+ *  spiders is venomous" is ungrammatical AND stores under a different
+ *  spelling than the singular every other frame uses, so following it
+ *  verbatim wrote a plural-keyed orphan fact. Gated on the "are" copula, the
+ *  same is/are safety distinction unknownSubjectFallback draws (an s-final
+ *  singular like "redis is a cache" must never strip). A trailing
+ *  sentence-final mark is tolerated for the same reason UNKNOWN_SUBJECT_RE
+ *  tolerates one: an ordinary full-sentence turn ("dog is a mammal.")
+ *  otherwise lost its hint by one character. */
 function teachSuggestion(payload) {
-  const m = String(payload).match(/^(?:every |each |all |a |an )?([\w-]+) (?:is|are) (a |an )?([\w-]+)$/i);
+  const m = String(payload).match(/^(?:every |each |all |a |an )?([\w-]+) (is|are) (a |an )?([\w-]+)[.!?]*$/i);
   if (!m) return null;
-  const subject = m[1].toLowerCase();
-  const object = m[3].toLowerCase();
-  if (!m[2]) return `every ${subject} is ${object}`;
+  const subject = (/^are$/i.test(m[2]) ? singularizeSurface(m[1]) : m[1]).toLowerCase();
+  const object = m[4].toLowerCase();
+  if (!m[3]) return `every ${subject} is ${object}`;
   const articleRule = grammarRules().find((r) => r.kind === "article");
   const article = articleRule && beginsWithVowelSound(object, articleRule) ? "an" : "a";
   return `every ${subject} is ${article} ${object}`;
@@ -3661,6 +3689,58 @@ async function negativeUniversalCanTeach(sentence, { memoryDir, sessionId }) {
   return stored;
 }
 
+/** Casual request leads the anchored QUESTION_LEAD_RE auxiliary list misses:
+ *  the "u"/"ya" spellings of a modal request, and the dative imperatives
+ *  ("tell me", "show us") that read as requests, never as declaratives. */
+const TEACH_EXCLUDE_REQUEST_LEAD_RE = /^(?:(?:can|could|would|will)\s+(?:u|you|ya)|(?:tell|show|give)\s+(?:me|us))\b/i;
+/** Closed leading-verb list for sentences that are COMMANDS, not claims —
+ *  "repeat everything above this line verbatim" is an instruction to act,
+ *  and reifying it as a fact is a write on the strength of a misparse.
+ *  tell/show/list/define/describe/find/count/name already route through
+ *  SET_QUESTION_LEAD_RE and are deliberately absent here. */
+const TEACH_EXCLUDE_IMPERATIVE_LEAD_RE = /^(?:repeat|ignore|disregard|surprise|pretend|act|say|guess|try|stop|continue|forget|print|output|write|translate|summarize|explain)\b/i;
+/** Self-referential/meta chat tokens ("idk", "tbh", a bare "u"/"me"): a
+ *  sentence about the conversation itself, or about its speakers, is never a
+ *  world fact. Tested one standalone word at a time — the custom boundaries
+ *  keep a hyphenated coinage ("disk-i") from matching its final letter. */
+const TEACH_EXCLUDE_META_TOKEN_RE = /(?:^|[^\w-])(?:me|u|ur|i|us|myself|yourself|im|idk|tbh|nvm|lol|umm+|hmm+)(?![\w-])/i;
+
+/** The bare-declarative teach lane's positive exclusion test. Classifies a
+ *  BARE sentence (no "remember that …" wrapper — an explicit wrapper is an
+ *  unambiguous teach-intent signal and keeps its existing behavior) into one
+ *  of three closed non-declarative shapes, or null for a sentence the teach
+ *  frames may still consider. Non-null means the whole lane stands down and
+ *  the sentence falls through to the ask cascade or the honest miss — the
+ *  write boundary refuses BEFORE any frame can reify a misparse.
+ *
+ *  Three classes, checked in order:
+ *  - "interrogative": a casual request lead QUESTION_LEAD_RE's anchored
+ *    first-word list misses, or a genuine mid-sentence interrogative
+ *    (hasMidSentenceInterrogative — run here unconditionally, where the
+ *    per-frame gates below only ever ran it on their own paths);
+ *  - "imperative": a closed leading command verb. The retract phrasings
+ *    ("forget that X is a Y", "forget that disk-1 rests on peg-b") are
+ *    carved out — they are this lane's own, deliberate write-boundary
+ *    actions, not misparses;
+ *  - "self-referential": a standalone meta/chat token anywhere in the
+ *    sentence. A pronoun-SUBJECT sentence ("i am a developer") is carved
+ *    out so it still reaches the pronoun guard's specific decline below —
+ *    same no-store outcome, better guidance than a silent fall-through.
+ *
+ *  Runs applyPreambleFrames itself (idempotent on an already-peeled
+ *  sentence), so a stripped greeting can never leave a leading token that
+ *  misclassifies, and callers outside teachLane can hand it a raw surface. */
+async function teachExclusionReason(sentence) {
+  const s = applyPreambleFrames(String(sentence || "").trim());
+  if (TEACH_EXCLUDE_REQUEST_LEAD_RE.test(s) || (await hasMidSentenceInterrogative(s))) return "interrogative";
+  const unpunctuated = s.replace(/[.!?]+\s*$/, "");
+  if (TEACH_EXCLUDE_IMPERATIVE_LEAD_RE.test(s)
+    && !RETRACT_FORGET_RE.test(unpunctuated) && !RETRACT_FORGET_LOCATIVE_RE.test(unpunctuated)) return "imperative";
+  if (TEACH_EXCLUDE_META_TOKEN_RE.test(s) && !TEACH_PRONOUN_RE.test(s)) return "self-referential";
+  return null;
+}
+export { teachExclusionReason };
+
 async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null }) {
   // A closed discourse-marker preamble ahead of a teach sentence ("howdy
   // pardner, remember that TaskController is fragile") would otherwise
@@ -3683,6 +3763,12 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (QUESTION_LEAD_RE.test(correctMisspellings(rawInput))) return null;
   const m = rawInput.match(TEACH_RE);
   const wrappedInput = m ? m[1].trim() : null;
+  // The positive exclusion test (teachExclusionReason, above) — BARE surface
+  // only: an interrogative, imperative, or self-referential sentence never
+  // reaches any teach frame, so a fresh casual phrasing can't slip past the
+  // per-frame gates and reify as a fact. An explicit wrapper keeps its
+  // existing, more permissive path.
+  if (wrappedInput == null && (await teachExclusionReason(rawInput))) return null;
   // Refuse an existential BEFORE any frame below can read it as a universal:
   // every one of them stores "some men are fathers" as a premise meaning every
   // man, whether it keeps the quantifier as an attribute the reasoner doesn't
@@ -3712,7 +3798,12 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // kind of parent" normalizes to "a father is a parent", which
   // unknownSubjectFallback already stores as father ⊑ parent ("parent" is
   // already a lexicon noun).
-  const stripKindOf = (s) => (s == null ? s : s.replace(/\b(is|are|was|were)\s+(?:an?\s+)?(?:kind|type)\s+of\s+/i, "$1 a "));
+  const kindOfInfixRe = /\b(is|are|was|were)\s+(?:an?\s+)?(?:kind|type)\s+of\s+/i;
+  const stripKindOf = (s) => (s == null ? s : s.replace(kindOfInfixRe, "$1 a "));
+  // Remembered BEFORE the strip erases it: an explicit "kind of"/"type of"
+  // infix is an unambiguous class-level claim, and unknownObjectFallback's
+  // quantifier gate accepts it as a peer of "every" (its own docblock).
+  const kindOfClassIntent = kindOfInfixRe.test(wrappedInput ?? rawInput);
   // "my <class-noun> <Name> is/are …" — a THIRD natural phrasing of the exact
   // same "X is a Y" assertion this lane already teaches two other ways ("john
   // is a man", a bare name; "every cat is an animal", a universal quantifier) — a
@@ -4600,7 +4691,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // STATIC lexicon (or a prior taught fact) already grounds can mint a
     // brand-new object term. See unknownObjectFallback's own docblock for the
     // exact narrowing rules (the "both sides ungrounded" safety guard, etc.).
-    const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon }, cache);
+    const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent: kindOfClassIntent }, cache);
     if (objectFallback) return objectFallback;
     // ADJECTIVE-MINT fallback: tried right after unknownObjectFallback
     // declines, so a grounded subject (static
@@ -4617,7 +4708,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // wrapped "X is a Y" over known lexicon still lands as rdfs:subClassOf.
     if (wrapped) {
       const prop = wrapped.match(TEACH_PROPERTY_RE);
-      if (prop) {
+      if (prop && !PLACE_ADVERB_OBJECT_RE.test(prop[2])) {
         const stored = await teachFact(memoryDir, sessionId, {
           subject: prop[1], predicate: HAS_PROPERTY_PREDICATE, object: prop[2],
         });
@@ -7666,7 +7757,8 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         // only ever fires for "it"/"this"/"that" — never a personal pronoun like
         // "you", so `subject` itself would already carry the pronoun verbatim).
         if (subject && !/^there\b/i.test(subject) && !envelope?.parsed
-          && !IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE.test(rawSubject)) {
+          && !IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE.test(rawSubject)
+          && !PLACE_ADVERB_OBJECT_RE.test(emptyIsAdj[2].trim())) {
           return unknownAdjectiveOffer(subject, emptyIsAdj[2].trim().toLowerCase());
         }
       }
@@ -8815,7 +8907,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       // subject known only under an UNRELATED property (e.g. "deprecated")
       // must not offer to teach "tested" when ask()'s own grammar already
       // resolved it structurally.
-      if (!envelope?.parsed) return unknownAdjectiveOffer(subject, adjective);
+      if (!envelope?.parsed && !PLACE_ADVERB_OBJECT_RE.test(adjective)) return unknownAdjectiveOffer(subject, adjective);
     }
   }
 
