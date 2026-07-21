@@ -313,6 +313,10 @@ main { max-width: 880px; margin: 0 auto; padding: 1.4rem 1rem 3rem; }
 h1 { font-size: 1.15rem; margin: 0 0 .8rem; }
 .chip { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .12rem .55rem; }
 .stage { display: grid; grid-template-columns: minmax(0, 1fr) 230px; gap: 1rem; }
+/* grid items refuse to shrink below their content's min-width by default, so
+   the 640px board would stretch the track and the whole page with it on a
+   phone — let the items shrink and the boardwrap scroll instead. */
+.stage > * { min-width: 0; }
 @media (max-width: 660px) { .stage { grid-template-columns: 1fr; } }
 .boardwrap { overflow-x: auto; }
 .board { position: relative; width: ${BOARD_W}px; height: ${BOARD_H}px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; }

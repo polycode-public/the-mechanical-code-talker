@@ -167,11 +167,8 @@ test("the dock's pill fills the input without submitting, and the submitted ques
   }
 });
 
-// At true phone width (375px) the fixed-pixel board still overflows today —
-// the layout sweep's own 768px portrait run is the narrow shape this page
-// currently promises, so that is the width pinned here.
-test("the plan page fits a tablet-portrait viewport without sideways scrolling", async () => {
-  const { context, page } = await openPlanPage({ viewport: { width: 768, height: 1024 } });
+test("the plan page fits a phone viewport without sideways scrolling — the board scrolls inside its own frame", async () => {
+  const { context, page } = await openPlanPage({ viewport: { width: 375, height: 812 } });
   try {
     const overflow = await page.evaluate(() => {
       const doc = document.documentElement;
