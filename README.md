@@ -119,16 +119,22 @@ tmct> /exit
 ```
 
 **[Try it live in your browser →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/)**
-is a real, interactive chat demo running client-side. Your browser runs the
-actual query engine, no server, no install. The page opens with a live chat
-you can talk to directly, then embeds the **memory ledger** (every fact as a
-readable sentence, drill by clicking the terms inside them), a Towers-of-Hanoi
-plan replayed move by move, and the two live games above — spider-fly and the
-text adventure — each with a link to open it full-screen.
+runs the actual query engine client-side. No server, no install. The landing
+page answers codebase questions live, and six more pages each ground their
+own domain: a full chat seeded with 19,228 facts (the same nine bands as
+`npm run init:xl`, capped to a 22.8 MB download), the **memory ledger**
+(every fact as a readable sentence; drill by clicking the terms inside), a
+Towers-of-Hanoi plan replayed move by move, the spider-and-fly and
+text-adventure games, and a sprite gallery whose chat dock answers from
+1,033 generated sprite facts.
+The site hosts its own copy of wink-nlp, ships its assets precompressed,
+and a service worker precaches the big ones, so a second visit works
+offline. `tmct chat --render spider-fly|adventure|sprites [--output <path>]`
+writes any of the three view pages as one self-contained file.
 
 From a clone, two build scripts regenerate that demo so you can check it
-offline before it deploys. The example graph, the ledger page, and the
-engine copy land in `public/`. The in-page chat's query bundle is rebuilt
+offline before it deploys. The example graph, the chat seed, the pages, and
+the engine copy land in `public/`. The in-page chat's query bundle is rebuilt
 from the same `src/` the CLI runs:
 
 ```bash e2e cwd=repo
@@ -381,8 +387,7 @@ contradict each other it names the contradicting pair and stops rather than
 guessing on. Say `think of a number` to swap seats: tmct commits to a secret
 and answers your guesses honestly, reveals on request, and corrects you from
 its own record if you claim it already said `correct`. The behaviour is
-pinned by `test/corpus/games/guess-number.jsonl`, and the home page's demo
-rail plays the guesser side live in your browser.
+pinned by `test/corpus/games/guess-number.jsonl`.
 
 **A text adventure.** Say `start the adventure` (or `play ashcombe hall`)
 and tmct loads a small country-house mystery from a lazily-fetched worlds
@@ -426,15 +431,25 @@ Facts first, prose second; if neither pack carries the term, the turn is the
 same honest miss it always was, byte for byte. An unknown word, a parse
 failure, or an ambiguous reading never consults a pack at all. The gate and
 both fallbacks are pinned by `test/corpus/reference.jsonl` and the
-chat-lane tests beside it, and the home page demos the article path live.
+chat-lane tests beside it.
+
+Live Wikipedia is the opt-in third tier, off by default. Turn it on with
+`/wiki on` in a session, `--live-wikipedia` on the command line,
+`TMCT_LIVE_WIKIPEDIA=1`, or `tier = "tier3"` under `[corpus]` in `tmct.toml`.
+The browser chat page has the same switch ("ask Wikipedia when I don't
+know"). When it is on and both shipped packs miss, tmct makes two requests
+to en.wikipedia.org (a title search, then the page summary) and answers as a
+cited read-out, CC BY-SA, pinned to the revision it read (provenance
+`reference:wikipedia-live:<Title>@<revid>`). A failed lookup (no matching
+title, a timeout, a rate limit) leaves the honest miss byte-identical.
 
 ## How it remembers
 
 tmct's memory has two layers, both fed by every parsed request and response and
 by cleaned session logs:
 
-- an **always-loaded OWL-labelled JSON graph** on disk under `.tmct/` (local
-  artifact, never committed);
+- an **always-loaded OWL-labelled graph** on disk under `.tmct/`, a SQLite
+  file by default (local artifact, never committed);
 - **text blocks under a PageRank-style index**, pulled into context on
   relevance rather than loaded wholesale.
 
@@ -456,20 +471,19 @@ reasoning).
 
 ### Memory backends
 
-The default memory backend writes an OWL-labelled JSON file under `.tmct/`.
-Two more exist: `memory` keeps taught facts in the process only, nothing
-written to disk; `sqlite` persists them to a local SQLite file instead
-(`.tmct/memory/graph.sqlite`). `tmct init --memory-backend sqlite` writes the
-choice into `tmct.toml` and every later `tmct chat` in that repo picks it up.
-Precedence is `--memory-backend` flag > `TMCT_MEMORY_BACKEND` env >
-tmct.toml's `[memory] backend` > the default. A library caller sets the same
-thing directly: `runChat({ memoryBackend: "sqlite" })`.
+The default backend persists taught facts to a local SQLite file
+(`.tmct/memory/graph.sqlite`). A second backend, `memory`, keeps them in the
+process only and writes nothing to disk. `tmct init --memory-backend <name>`
+writes the choice into `tmct.toml` and every later `tmct chat` in that repo
+picks it up. Precedence is `--memory-backend` flag > `TMCT_MEMORY_BACKEND`
+env > tmct.toml's `[memory] backend` > the sqlite default. A library caller
+sets the same thing directly: `runChat({ memoryBackend: "memory" })`.
 
 Three init presets in `package.json` wrap the common setups. What each one
 runs (`--force` re-initializes the same directory):
 
 ```bash
-npx tmct init --memory-backend sqlite        # npm run init:sqlite
+npx tmct init                                # npm run init:sqlite — sqlite is already the default backend
 npx tmct init --force --with-persona human   # npm run init:persona:human — the default persona, made explicit
 npx tmct init --force --with-persona empty   # npm run init:persona:empty — no seeded vocabulary at all
 ```
