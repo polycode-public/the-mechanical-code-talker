@@ -367,22 +367,45 @@ export function renderAdventureHtml({
 <title>${escapeHtml(title)}</title>
 <style>
 ${THEME_TOKENS_CSS}
-  /* RPG chrome tokens — layered over the shared neutrals/accents above,
-     never replacing them: taught/corpus/entail/alert stay the SAME
-     provenance palette every other tmct viz page uses, repurposed here as
-     the class-badge ring colors (hero/townsfolk/fixture/item) — a visitor
-     who already knows what green/blue/gold/red mean from ledger.html reads
-     this page's "class" system for free. */
-  :root { --parchment: #ECE1C8; --parchment-strong: #E1D2A6; --gilt: #93701F; }
-  @media (prefers-color-scheme: dark) { :root { --parchment: #241E12; --parchment-strong: #2C2416; --gilt: #C0A054; } }
-  :root[data-theme="dark"] { --parchment: #241E12; --parchment-strong: #2C2416; --gilt: #C0A054; }
-  :root[data-theme="light"] { --parchment: #ECE1C8; --parchment-strong: #E1D2A6; --gilt: #93701F; }
+  /* Murder-mystery board-game chrome — layered over the shared neutrals/
+     accents above, never replacing them: taught/corpus/entail/alert stay the
+     SAME provenance palette every other tmct viz page uses, repurposed here
+     as the class-badge ring colors (hero/townsfolk/fixture/item) — a visitor
+     who already knows what green/blue/gold/red means from ledger.html reads
+     this page's "class" system for free. The page-local decorative tokens:
+     parchment/gilt (the case-file paper and brass), baize (the board-game
+     felt the manor map sits on), and wall/floor (the room scene's papered
+     wall and parquet). */
+  :root {
+    --parchment: #ECE1C8; --parchment-strong: #E1D2A6; --gilt: #93701F;
+    --baize: #4A6B52; --baize-line: #33503C; --board-path: #E7DAB8;
+    --wall: #E9DDBE; --wall-stripe: rgba(147, 112, 31, .10);
+    --floor-a: #D9C398; --floor-b: #CFB884;
+  }
+  @media (prefers-color-scheme: dark) { :root {
+    --parchment: #241E12; --parchment-strong: #2C2416; --gilt: #C0A054;
+    --baize: #1E2C22; --baize-line: #4A6852; --board-path: #56604D;
+    --wall: #262013; --wall-stripe: rgba(192, 160, 84, .07);
+    --floor-a: #2B2314; --floor-b: #241E10;
+  } }
+  :root[data-theme="dark"] {
+    --parchment: #241E12; --parchment-strong: #2C2416; --gilt: #C0A054;
+    --baize: #1E2C22; --baize-line: #4A6852; --board-path: #56604D;
+    --wall: #262013; --wall-stripe: rgba(192, 160, 84, .07);
+    --floor-a: #2B2314; --floor-b: #241E10;
+  }
+  :root[data-theme="light"] {
+    --parchment: #ECE1C8; --parchment-strong: #E1D2A6; --gilt: #93701F;
+    --baize: #4A6B52; --baize-line: #33503C; --board-path: #E7DAB8;
+    --wall: #E9DDBE; --wall-stripe: rgba(147, 112, 31, .10);
+    --floor-a: #D9C398; --floor-b: #CFB884;
+  }
 
   html { background: var(--bg); }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 920px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
-  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gilt); }
   .titlebar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin: .3rem 0 1rem; }
   h1 { font-size: 1.4rem; margin: 0; text-wrap: balance; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
@@ -394,19 +417,37 @@ ${THEME_TOKENS_CSS}
   .stage { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1rem; align-items: start; }
   @media (max-width: 760px) { .stage { grid-template-columns: 1fr; } }
 
-  /* the portrait frame — an ornate double-rule border with two small corner
-     fleurons (real glyphs, no external asset), sized to its OWN content
-     (the sprite row) rather than a fixed tall box, per operator feedback on
-     an earlier, mostly-empty version of this panel. Once shrunk to its own
-     content it's shorter than the right column's own account/pills/digest/
-     chat/satchel/map/quest stack, so it centers in the row instead of
-     sitting top-anchored above a dead gap of raw background. */
+  /* the room view — a 90s-RPG interior cutaway, all CSS gradients, no
+     external asset: a striped papered wall over a gilt dado rail over a
+     diagonal-plank floor, framed by the same ornate double rule as before.
+     The sprite tiles sit on the floor band (align-items flex-end), so
+     furniture and people read as standing IN the room, against its wall,
+     rather than floating in a chip strip. */
   #playStage .room-frame { align-self: center; }
-  .room-frame { position: relative; background: var(--parchment); border: 1px solid var(--gilt); outline: 1px solid var(--line); outline-offset: 4px; padding: 1.1rem; display: flex; flex-direction: column; gap: .6rem; }
+  .room-frame {
+    position: relative; min-height: 250px;
+    background:
+      repeating-linear-gradient(90deg, var(--wall-stripe) 0 4px, transparent 4px 30px) 0 0 / 100% 58% no-repeat,
+      linear-gradient(var(--wall), var(--wall)) 0 0 / 100% 58% no-repeat,
+      linear-gradient(var(--gilt), var(--gilt)) 0 58% / 100% 3px no-repeat,
+      repeating-linear-gradient(78deg, var(--floor-a) 0 26px, var(--floor-b) 26px 52px);
+    border: 1px solid var(--gilt); outline: 1px solid var(--line); outline-offset: 4px;
+    padding: 2.6rem 1.1rem .8rem; display: flex; flex-direction: column; justify-content: flex-end; gap: .6rem;
+  }
   .room-frame::before, .room-frame::after { content: "\\2766"; position: absolute; font-size: 1.1rem; color: var(--gilt); opacity: .85; line-height: 1; }
   .room-frame::before { top: -.6rem; left: -.35rem; }
   .room-frame::after { bottom: -.6rem; right: -.35rem; transform: rotate(180deg); }
-  .sprite-row { display: flex; flex-wrap: wrap; gap: .9rem .7rem; align-items: flex-start; min-height: 2.5rem; }
+  /* the brass door plaque naming the room the scene is drawing — filled
+     from the same snapshot the caption already reads, never a new fact. */
+  .room-plaque {
+    position: absolute; top: .55rem; left: 50%; transform: translateX(-50%);
+    font-size: .66rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--gilt); background: var(--parchment); border: 1px solid var(--gilt);
+    box-shadow: inset 0 0 0 2px var(--parchment-strong);
+    padding: .22rem .9rem; white-space: nowrap;
+  }
+  .room-plaque:empty { display: none; }
+  .sprite-row { display: flex; flex-wrap: wrap; gap: .9rem .7rem; align-items: flex-end; min-height: 2.5rem; }
 
   /* the class-badge system — this design's signature element: every sprite
      gets a small ringed portrait frame plus a genre-flavored class word
@@ -414,8 +455,16 @@ ${THEME_TOKENS_CSS}
      the rest of the site already uses for provenance. The sprite LABEL
      underneath always names the real, specific thing (the cabinet, the
      butler) — chrome around honest content, never instead of it. */
-  .sprite-card { display: flex; flex-direction: column; align-items: center; width: 62px; }
-  .sprite-frame { width: 52px; height: 52px; border-radius: 50%; background: var(--card); border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 7px; }
+  .sprite-card { display: flex; flex-direction: column; align-items: center; width: 70px; }
+  /* a squared inventory-slot tile (the 90s-RPG idiom) instead of the old
+     thin circular ring: a raised card with an inner mat, the class color on
+     the outer border, and a soft ground shadow so the tile sits ON the
+     floor rather than hovering over it. */
+  .sprite-frame {
+    width: 60px; height: 60px; border-radius: 5px; background: var(--card);
+    border: 2px solid var(--line); box-shadow: inset 0 0 0 3px var(--parchment), 0 2px 3px rgba(0, 0, 0, .22);
+    display: flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 8px;
+  }
   .sprite-frame[data-cls="adventurer"] { border-color: var(--taught); }
   .sprite-frame[data-cls="person"] { border-color: var(--corpus); }
   .sprite-frame[data-cls="container"], .sprite-frame[data-cls="furniture"] { border-color: var(--entail); }
@@ -428,7 +477,9 @@ ${THEME_TOKENS_CSS}
   .sprite[data-cls="container"], .sprite[data-cls="furniture"] { color: var(--entail); }
   .sprite[data-cls="portable"] { color: var(--alert); }
   .sprite[data-cls="room"] { color: var(--muted); }
-  .sprite-label { font-size: .74rem; text-align: center; color: var(--ink); margin-top: .3rem; line-height: 1.15; }
+  /* the name plate under each tile gets its own parchment ground so it
+     stays legible over the parquet floor the row now sits on. */
+  .sprite-label { font-size: .74rem; text-align: center; color: var(--ink); margin-top: .3rem; line-height: 1.15; background: var(--parchment); border: 1px solid var(--line); border-radius: 2px; padding: .02rem .3rem; max-width: 100%; }
   .class-badge { font-family: ${MONO_STACK}; font-size: .55rem; letter-spacing: .06em; text-transform: uppercase; margin-top: .15rem; padding: .04rem .4rem; border-radius: 999px; border: 1px solid var(--muted); color: var(--muted); }
   .class-badge[data-cls="adventurer"] { border-color: var(--taught); color: var(--taught); }
   .class-badge[data-cls="person"] { border-color: var(--corpus); color: var(--corpus); }
@@ -436,11 +487,11 @@ ${THEME_TOKENS_CSS}
   .class-badge[data-cls="portable"] { border-color: var(--alert); color: var(--alert); }
 
   .side { display: flex; flex-direction: column; gap: .8rem; min-width: 0; }
-  .chat, .panel { background: var(--card); border: 1px solid var(--line); border-top: 2px solid var(--gilt); padding: .65rem .75rem; }
+  .chat, .panel { background: var(--card); border: 1px solid var(--line); border-top: 5px double var(--gilt); padding: .65rem .75rem; }
   .chat h2, .panel h2 { font-family: ${SERIF_STACK}; font-variant: small-caps; font-size: .8rem; letter-spacing: .06em; color: var(--gilt); font-weight: 600; margin: 0 0 .5rem; padding-bottom: .3rem; border-bottom: 1px solid var(--line); }
   .empty-note { font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); }
   .chips { display: flex; flex-wrap: wrap; gap: .35rem; }
-  .chip { font-family: ${MONO_STACK}; font-size: .72rem; padding: .25rem .6rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; }
+  .chip { font-family: ${MONO_STACK}; font-size: .72rem; padding: .25rem .6rem; border: 1px solid var(--gilt); background: var(--parchment); color: var(--ink); border-radius: 3px; }
 
   /* the manor map — a FIXED-size viewport regardless of room count or
      layout shape (an operator report: an earlier version's container grew
@@ -451,17 +502,23 @@ ${THEME_TOKENS_CSS}
      itself — an svg's own height:100% resolves against ITS PARENT's
      height, and a percentage against an auto-height parent computes to
      "auto" per spec, silently undoing the fixed-viewport intent below. */
-  .map-viewport { height: 190px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+  /* the manor board — this redesign's signature element: the visited-rooms
+     graph drawn as a Cluedo-style game board. Green baize under a brass
+     frame; each room a parchment rectangle with its name printed INSIDE;
+     the corridors parchment paths between rooms; the player's current room
+     ringed in the same taught-green every page uses for "this is live". */
+  .map-viewport { height: 190px; box-sizing: content-box; padding: 7px; background: var(--baize); border: 2px solid var(--gilt); box-shadow: inset 0 0 0 1px var(--baize-line); overflow: hidden; display: flex; align-items: center; justify-content: center; }
   .map-viewport > div { width: 100%; height: 100%; }
   .map-viewport svg { width: 100%; height: 100%; display: block; }
-  .roommap .room-edge { stroke: var(--line); stroke-width: 1.5; }
-  .roommap .room-hint { fill: var(--muted); opacity: .45; }
-  .roommap .room-node circle { fill: var(--card); stroke: var(--line); stroke-width: 1.5; }
-  .roommap .room-node.current circle { stroke: var(--taught); fill: var(--taught-soft); stroke-width: 2; }
-  .roommap .room-node text { font-family: ${MONO_STACK}; font-size: 6.5px; fill: var(--ink); text-anchor: middle; }
+  .map-viewport .empty-note { color: var(--parchment); opacity: .8; }
+  .roommap .room-edge { stroke: var(--board-path); stroke-width: 7; }
+  .roommap .room-hint { fill: var(--board-path); opacity: .8; }
+  .roommap .room-node rect { fill: var(--parchment); stroke: var(--baize-line); stroke-width: 1.5; }
+  .roommap .room-node.current rect { stroke: var(--taught); stroke-width: 2.5; }
+  .roommap .room-node text { font-family: ${MONO_STACK}; font-size: 7px; fill: var(--ink); text-anchor: middle; }
   .roommap .room-node.clickable { cursor: pointer; }
-  .roommap .room-node.clickable:hover circle { stroke: var(--gilt); stroke-width: 2.5; }
-  .roommap .room-node.selected circle { stroke: var(--alert); stroke-width: 2.5; }
+  .roommap .room-node.clickable:hover rect { stroke: var(--gilt); stroke-width: 2.5; }
+  .roommap .room-node.selected rect { stroke: var(--alert); stroke-width: 2.5; }
 
   .goal-status { display: flex; flex-direction: column; gap: .4rem; }
   .goal-status .g { display: flex; align-items: baseline; gap: .4rem; font-size: .86rem; line-height: 1.35; }
@@ -477,7 +534,7 @@ ${THEME_TOKENS_CSS}
   .pills { display: flex; flex-wrap: wrap; gap: .35rem; margin-bottom: .5rem; }
   .pills:empty { display: none; margin-bottom: 0; }
   .pill { font-family: ${MONO_STACK}; font-size: .72rem; padding: .25rem .6rem; border: 1px solid var(--line); background: var(--bg); color: var(--ink); border-radius: 999px; }
-  .pill:hover { border-color: var(--taught); }
+  .pill:hover { border-color: var(--gilt); background: var(--parchment); }
   /* the room's own prose, relocated (operator feedback) out of a bottom-of-
      page strip and into the flow between the history/pills and the input —
      a quoted manuscript line reporting what "look" would say right now. */
@@ -488,10 +545,10 @@ ${THEME_TOKENS_CSS}
   .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .32rem .55rem; min-width: 0; }
   .chatask input:disabled { opacity: .5; }
   .controls-row { display: flex; align-items: center; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
-  .controls-row button { font-family: ${MONO_STACK}; font-size: .78rem; padding: .3rem .7rem; border: 1px solid var(--line); background: var(--card); color: var(--ink); }
-  .controls-row button:hover:not(:disabled) { border-color: var(--taught); }
+  .controls-row button { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; padding: .38rem .85rem; border: 1px solid var(--gilt); background: var(--parchment); color: var(--ink); }
+  .controls-row button:hover:not(:disabled) { background: var(--parchment-strong); }
   .controls-row button:disabled { opacity: .4; cursor: default; }
-  .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+  .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); background: var(--parchment); border: 1px solid var(--gilt); padding: .3rem .6rem; font-variant-numeric: tabular-nums; }
   .goal-line { font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); margin-top: .5rem; }
   .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .3rem; }
 
@@ -528,6 +585,7 @@ ${THEME_TOKENS_CSS}
   </div>
   <div class="stage" id="playStage">
     <div class="room-frame" id="roomFrame">
+      <div class="room-plaque mono" id="roomName"></div>
       <div class="sprite-row" id="spriteRow"></div>
     </div>
     <aside class="side" aria-label="The adventure's log and chat">
@@ -610,6 +668,7 @@ const ADVENTURE = ${pageData};
   const esc = ${escapeHtml.toString()};
   const el = (id) => document.getElementById(id);
   const spriteRow = el("spriteRow");
+  const roomNameEl = el("roomName");
   const captionEl = el("caption");
   const goalLineEl = el("goalLine");
   const statusEl = el("status");
@@ -731,10 +790,14 @@ const ADVENTURE = ${pageData};
   // cursor per node; play mode's own map stays purely informational.
   function roomMapSvg(graph, clickable) {
     if (!graph.nodes.length) return null;
-    const cell = 56, radius = 15;
+    // Board-game footprints: each room a named rectangle (the name INSIDE
+    // it, the way a Cluedo board prints its rooms), corridors as wide paths
+    // between the footprints, direction-only hints as path stubs fading
+    // toward rooms not yet visited.
+    const cell = 64, roomW = 56, roomH = 26;
     const maxX = Math.max.apply(null, graph.nodes.map((n) => n.x));
     const maxY = Math.max.apply(null, graph.nodes.map((n) => n.y));
-    const w = (maxX + 1) * cell, h = (maxY + 1) * cell + 14;
+    const w = (maxX + 1) * cell, h = (maxY + 1) * cell;
     const cx = (n) => (n.x + 0.5) * cell;
     const cy = (n) => (n.y + 0.5) * cell;
     const byRoom = new Map(graph.nodes.map((n) => [n.id, n]));
@@ -746,13 +809,13 @@ const ADVENTURE = ${pageData};
     const hintsSvg = graph.hints.map((hi) => {
       const from = byRoom.get(hi.from);
       const d = HINT_DELTA[hi.direction] || [0, 0];
-      return '<circle class="room-hint" cx="' + (cx(from) + d[0] * cell * 0.42) + '" cy="' + (cy(from) + d[1] * cell * 0.42) + '" r="3"></circle>';
+      return '<circle class="room-hint" cx="' + (cx(from) + d[0] * cell * 0.42) + '" cy="' + (cy(from) + d[1] * cell * 0.42) + '" r="3.5"></circle>';
     }).join("");
     const nodesSvg = graph.nodes.map((n) => {
       const cls = "room-node" + (n.current ? " current" : "") + (clickable ? " clickable" : "") + (clickable && n.id === selectedRoomId ? " selected" : "");
       const attr = clickable ? ' data-room="' + esc(n.id) + '"' : "";
-      return '<g class="' + cls + '"' + attr + '><circle cx="' + cx(n) + '" cy="' + cy(n) + '" r="' + radius + '"></circle>'
-        + '<text x="' + cx(n) + '" y="' + (cy(n) + radius + 9) + '">' + esc(n.id) + "</text></g>";
+      return '<g class="' + cls + '"' + attr + '><rect x="' + (cx(n) - roomW / 2) + '" y="' + (cy(n) - roomH / 2) + '" width="' + roomW + '" height="' + roomH + '" rx="3"></rect>'
+        + '<text x="' + cx(n) + '" y="' + (cy(n) + 2.5) + '">' + esc(n.id) + "</text></g>";
     }).join("");
     return '<svg viewBox="0 0 ' + w + " " + h + '" preserveAspectRatio="xMidYMid meet" role="img" aria-label="' + (clickable ? "the whole manor \\u2014 click a room to inspect it" : "the rooms visited so far") + '">'
       + edgesSvg + hintsSvg + nodesSvg + "</svg>";
@@ -835,6 +898,7 @@ const ADVENTURE = ${pageData};
     const objects = roomSceneObjects(snap.rows, snap.state, snap.here);
     const sprites = [{ subject: "you", spriteClass: "adventurer" }, ...objects];
     spriteRow.innerHTML = sprites.map((s) => spriteCardHtml(s.subject, s.spriteClass, resolveObjectSprite(snap.rows, s))).join("");
+    roomNameEl.textContent = "the " + snap.here;
     captionEl.textContent = captionFor(snap.rows, snap.state, snap.here);
     turnLabelEl.textContent = "turn: " + snap.turn;
     renderPills(snap.rows, snap.state, snap.here);

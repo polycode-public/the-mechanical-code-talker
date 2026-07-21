@@ -500,6 +500,19 @@ test("renderAdventureHtml: the large sprite tier is fetched at page load, same-o
   assert.ok(!/(?:src|href)=["']https?:/.test(html), "still no external resource loads");
 });
 
+test("renderAdventureHtml: the manor map draws each room as a named board footprint, the label inside the rectangle", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /room-node[\s\S]{0,500}<rect x="/, "a room renders as a rect footprint");
+  assert.match(html, /\.roommap \.room-node rect \{ fill: var\(--parchment\)/, "the footprint fills with the parchment token in both schemes");
+  assert.match(html, /\.map-viewport \{[^}]*background: var\(--baize\)/, "the board sits on the baize felt");
+});
+
+test("renderAdventureHtml: the room scene carries a door plaque naming the current room, filled from the live snapshot", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /id="roomName"/);
+  assert.match(html, /roomNameEl\.textContent = "the " \+ snap\.here/);
+});
+
 test("renderAdventureHtml: every sprite gets a class-badge alongside its own real name — chrome layered over content, not replacing it", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
   assert.match(html, /class="class-badge"/);
