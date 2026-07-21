@@ -132,6 +132,43 @@ test("flipping the switch persists in localStorage and survives a reload", async
   }
 });
 
+test("a typed /wiki turn drives the same state as the switch: the checkbox, the statusline, and the stored preference all flip", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    const onReply = await ask(page, "/wiki on");
+    assert.match(await onReply.locator(".bubble").innerText(), /\bon\b/i, "the command turn acknowledges the new state");
+    assert.equal(await page.locator("#liveToggle").isChecked(), true, "the switch mirrors the session state the command flipped");
+    assert.match(await page.locator("#status").innerText(), /live wikipedia: on/);
+    assert.equal(await page.evaluate(() => localStorage.getItem("tmct.chat.liveWikipedia")), "on");
+
+    await ask(page, "/wiki off");
+    assert.equal(await page.locator("#liveToggle").isChecked(), false, "the command flips it back off");
+    assert.match(await page.locator("#status").innerText(), /live wikipedia: off/);
+    // Off is stored as the key's absence — the shipped default needs no entry.
+    assert.equal(await page.evaluate(() => localStorage.getItem("tmct.chat.liveWikipedia")), null);
+  } finally {
+    await context.close();
+  }
+});
+
+test("flipping the switch off again after use makes the very next miss attempt zero wikipedia requests", async () => {
+  const { context, page, thirdPartyAttempts } = await openChatPage();
+  try {
+    await page.locator(".liveLabel").click();
+    assert.equal(await page.locator("#liveToggle").isChecked(), true);
+    await page.locator(".liveLabel").click();
+    assert.equal(await page.locator("#liveToggle").isChecked(), false, "the switch flips straight back off");
+    assert.match(await page.locator("#status").innerText(), /live wikipedia: off/);
+
+    const row = await ask(page, "what is a quasar");
+    assert.equal(await row.locator(".bubble").getAttribute("class"), "bubble assistant miss", "the honest miss stands");
+    const wikipediaAttempts = thirdPartyAttempts.filter((u) => u.includes("wikipedia.org"));
+    assert.deepEqual(wikipediaAttempts, [], "off means off — no request toward wikipedia.org after the round trip");
+  } finally {
+    await context.close();
+  }
+});
+
 test("switched on, a miss question answers from the (fixture-served) live article, cited", async () => {
   const { context, page } = await openChatPage();
   try {

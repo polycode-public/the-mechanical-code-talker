@@ -159,6 +159,41 @@ test("an honest miss still reads as a miss, never fabricated, and never refocuse
   }
 });
 
+test("after a live teach, the you-taught facet selects exactly the taught row, and the fresh term is searchable by name", async () => {
+  const { context, page } = await openLedgerPage();
+  try {
+    const reply = await turn(page, "blue is a peg");
+    assert.equal(reply.taught, true, `expected a taught confirmation, got: ${reply.text}`);
+    assert.equal(await page.locator(".focuscard .term").innerText(), "blue", "the teach refocused the view onto the new term");
+
+    await page.locator("#segProv .seg", { hasText: "you taught" }).click();
+    assert.equal(
+      await page.locator("#segProv .seg", { hasText: "you taught" }).getAttribute("aria-pressed"),
+      "true",
+      "the facet reads as selected",
+    );
+    const rowClasses = await page.locator("#ledger .rows .row").evaluateAll((els) => els.map((el) => el.className));
+    assert.ok(rowClasses.length >= 1, "the taught tier holds at least the fact just taught");
+    for (const cls of rowClasses) assert.match(cls, /\bp-taught\b/, "every row on show is a taught-tier row");
+    assert.ok(
+      (await page.locator("#ledger .rows .row", { hasText: "blue" }).count()) >= 1,
+      "the just-taught fact itself is among them",
+    );
+    await page.locator("#segProv .seg", { hasText: "you taught" }).click();
+
+    // The search index was rebuilt from the fresh derivation, not the
+    // page-load snapshot — the brand-new term resolves by name.
+    const focusTarget = await page.evaluate(() => LEDGER.rows.find((r) => r.s === "blue")?.o);
+    assert.ok(focusTarget, "the taught row's own object is on record");
+    await page.fill("#q", "blue");
+    await page.press("#q", "Enter");
+    assert.equal(await page.locator("#qmiss").innerText(), "", "the fresh term is no search miss");
+    assert.equal(await page.locator(".focuscard .term").innerText(), "blue");
+  } finally {
+    await context.close();
+  }
+});
+
 test("reloading after a live teach shows the ORIGINAL static content again — no persistence, same posture as chat.html", async () => {
   const { context, page } = await openLedgerPage();
   try {

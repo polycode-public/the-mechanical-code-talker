@@ -246,6 +246,98 @@ test("an ungrounded dock question gets a refusal, never a guess", async () => {
   }
 });
 
+test("the dock's classes-on-record question grounds in the embedded catalog rows, naming the real class count", async () => {
+  const { context, page, consoleErrors } = await openSpritesPage();
+  try {
+    const catalogCards = await page.locator(".card").count();
+    const reply = await askDock(page, "what classes can you render?");
+    const text = await reply.innerText();
+    const counted = Number((text.match(/^(\d+) sprite classes are on record/) || [])[1]);
+    assert.ok(Number.isFinite(counted), `the answer opens with a real count, got: ${text}`);
+    assert.equal(counted, catalogCards, "the dock's count and the rendered catalog agree card for card");
+    assert.ok(await reply.evaluate((el) => el.classList.contains("grounded")), "the reply is marked as read from the embedded facts");
+    assert.deepEqual(consoleErrors, [], "the classes question answers without a console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a dock pill fills the input with its exact question without submitting it", async () => {
+  const { context, page } = await openSpritesPage();
+  try {
+    await page.locator('#dockPills .pill[data-q="what parameters does a cabinet sprite take?"]').click();
+    assert.equal(await page.locator("#dockq").inputValue(), "what parameters does a cabinet sprite take?");
+    assert.equal(await page.locator("#dockLog .a").count(), 0, "the pill only fills — the visitor presses Enter");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the catalog filter narrows the cards, hides emptied groups, counts the survivors, and clears back to everything", async () => {
+  const { context, page, consoleErrors } = await openSpritesPage();
+  try {
+    const total = await page.locator(".card").count();
+    await page.fill("#q", "cabinet");
+    const shown = await page.locator(".card:not([hidden])").count();
+    assert.ok(shown > 0 && shown < total, "the needle keeps some cards and drops others");
+    for (const cls of await page.locator(".card:not([hidden])").evaluateAll((els) => els.map((el) => el.dataset.cls + " " + el.dataset.group))) {
+      assert.match(cls, /cabinet/, "every surviving card matches the needle by class or group");
+    }
+    assert.equal(await page.locator("#qcount").innerText(), `${shown} / ${total}`, "the counter reads survivors over total");
+    const emptiedGroupsShown = await page.locator(".group").evaluateAll((els) =>
+      els.filter((el) => el.querySelectorAll(".card:not([hidden])").length === 0 && el.style.display !== "none").length,
+    );
+    assert.equal(emptiedGroupsShown, 0, "a group whose every card is filtered out hides its heading too");
+
+    await page.fill("#q", "");
+    assert.equal(await page.locator(".card:not([hidden])").count(), total, "clearing the filter restores every card");
+    assert.equal(await page.locator("#qcount").innerText(), "", "the counter goes quiet when nothing is filtered");
+    assert.deepEqual(consoleErrors, [], "filtering logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("every topbar jump anchor targets a real group section on this same page", async () => {
+  const { context, page } = await openSpritesPage();
+  try {
+    const hrefs = await page.locator(".jump").evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+    assert.ok(hrefs.length >= 3, "the topbar offers real group anchors");
+    for (const href of hrefs) {
+      assert.match(href, /^#g-/, "every jump is an in-page anchor");
+      assert.equal(await page.locator(`section[id="${href.slice(1)}"]`).count(), 1, `${href} names a real section`);
+    }
+    const personJump = page.locator('.jump[href="#g-person"]');
+    await personJump.click();
+    await page.waitForFunction(() => {
+      const rect = document.getElementById("g-person")?.getBoundingClientRect();
+      return rect && rect.top >= -8 && rect.top < window.innerHeight;
+    });
+  } finally {
+    await context.close();
+  }
+});
+
+test("the person card renders all six curated emotion variants as genuinely different sprites", async () => {
+  const { context, page } = await openSpritesPage();
+  try {
+    const card = page.locator('.card[data-cls="person"]');
+    await card.waitFor({ state: "visible" });
+    const swatches = await card.locator('.tier-row[data-tier="large"] .swatch').evaluateAll((els) => els.map((el) => ({
+      label: el.querySelector(".swatch-label")?.textContent?.trim() ?? "",
+      svg: el.querySelector(".swatch-img")?.innerHTML ?? "",
+    })));
+    const emotions = ["happy", "sad", "angry", "scared", "surprised", "calm"];
+    for (const emotion of emotions) {
+      assert.ok(swatches.some((s) => s.label === emotion), `the ${emotion} variant renders as its own swatch`);
+    }
+    const markups = new Set(swatches.filter((s) => emotions.includes(s.label)).map((s) => s.svg));
+    assert.equal(markups.size, emotions.length, "no two emotion variants share the same markup — the face genuinely changes");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the page fits a phone viewport without sideways scrolling", async () => {
   const { context, page } = await openSpritesPage({ viewport: { width: 375, height: 667 } });
   try {

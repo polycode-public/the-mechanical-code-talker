@@ -171,6 +171,86 @@ test("a phone-width viewport stacks the columns without horizontal overflow", as
   }
 });
 
+async function waitForTurn(page, n) {
+  await page.waitForFunction(
+    (want) => (document.querySelector("#turnLabel")?.textContent ?? "").trim() === "turn: " + want,
+    n,
+    { timeout: ANSWER_TIMEOUT_MS },
+  );
+}
+
+test("the step button advances the turn counter exactly once per click, and the HUD lists every agent with its own goal line", async () => {
+  const { context, page, consoleErrors } = await openSpiderFlyPage();
+  try {
+    assert.equal(await page.locator("#turnLabel").textContent(), "turn: 0");
+    await page.locator("#stepBtn").click();
+    await waitForTurn(page, 1);
+    await page.waitForFunction(() => !document.querySelector("#stepBtn")?.disabled, null, { timeout: ANSWER_TIMEOUT_MS });
+    assert.equal(await page.locator("#turnLabel").textContent(), "turn: 1", "one click, one turn — never a free-running loop");
+
+    await page.locator("#stepBtn").click();
+    await waitForTurn(page, 2);
+    await page.waitForFunction(() => !document.querySelector("#stepBtn")?.disabled, null, { timeout: ANSWER_TIMEOUT_MS });
+    assert.equal(await page.locator("#turnLabel").textContent(), "turn: 2", "the second click advances exactly one more");
+
+    const rows = await page.locator("#hud .hud-row").count();
+    assert.ok(rows >= 2, "the HUD lists at least the spider and the fly");
+    assert.ok(await page.locator("#hud .hud-id.spider").count() >= 1, "a spider row is on the HUD");
+    assert.ok(await page.locator("#hud .hud-id.fly").count() >= 1, "a fly row is on the HUD");
+    for (const goal of await page.locator("#hud .hud-row .hud-goal").allInnerTexts()) {
+      assert.ok(goal.trim().length > 0, "every agent's row carries a real goal line, never a blank");
+    }
+    assert.deepEqual(consoleErrors, [], "stepping logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("pausing mid-play freezes the turn counter, disables nothing it shouldn't, and re-enables single-stepping", async () => {
+  const { context, page, consoleErrors } = await openSpiderFlyPage();
+  try {
+    await page.locator("#playBtn").click();
+    await page.waitForFunction(() => /pause/.test(document.querySelector("#playBtn")?.textContent ?? ""), null, { timeout: ANSWER_TIMEOUT_MS });
+    assert.equal(await page.locator("#stepBtn").isDisabled(), true, "single-step is off while the loop is running");
+    await page.waitForFunction(
+      () => Number(((document.querySelector("#turnLabel")?.textContent ?? "").match(/turn:\s*(\d+)/) || [])[1] ?? 0) >= 3,
+      null,
+      { timeout: ANSWER_TIMEOUT_MS },
+    );
+
+    await page.locator("#playBtn").click();
+    await page.waitForFunction(() => /play/.test(document.querySelector("#playBtn")?.textContent ?? ""), null, { timeout: ANSWER_TIMEOUT_MS });
+    await page.waitForFunction(() => !document.querySelector("#stepBtn")?.disabled, null, { timeout: ANSWER_TIMEOUT_MS });
+    const frozenAt = await page.locator("#turnLabel").textContent();
+
+    // Three tick periods of wall-clock silence: a loop that survived the
+    // pause would have advanced the counter well inside this window.
+    await page.waitForTimeout(2200);
+    assert.equal(await page.locator("#turnLabel").textContent(), frozenAt, "the board is genuinely frozen, not just relabeled");
+    assert.deepEqual(consoleErrors, [], "play/pause logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a tuning slider drives its live value label without ticking the clock", async () => {
+  const { context, page, consoleErrors } = await openSpiderFlyPage();
+  try {
+    const before = await page.locator("#tvSpiderVision").innerText();
+    assert.ok(before.length > 0, "the slider label seeds from the engine's own shipped default");
+
+    await page.locator("#ctlSpiderVision").evaluate((input) => {
+      input.value = "8";
+      input.dispatchEvent(new Event("input"));
+    });
+    assert.equal(await page.locator("#tvSpiderVision").innerText(), "8", "the label mirrors the new value immediately");
+    assert.equal(await page.locator("#turnLabel").textContent(), "turn: 0", "retuning never runs a turn on its own");
+    assert.deepEqual(consoleErrors, [], "retuning logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the chat pills are absent from the preview-mode render the home page's hero iframe embeds", async () => {
   const { context, page } = await openSpiderFlyPage();
   try {
