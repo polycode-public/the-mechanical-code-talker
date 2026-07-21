@@ -311,7 +311,7 @@ ${THEME_TOKENS_CSS}
      in the light. Decoration only — the 10x10 game grid itself is drawn by
      drawBoard() on the canvas beneath, unchanged. */
   .board-frame {
-    margin: 1.2rem auto 0;
+    margin: 0 auto;
     position: relative; width: ${BOARD_PX}px; max-width: 100%; aspect-ratio: 1 / 1;
     background:
       radial-gradient(140% 140% at 6% 6%, rgba(255, 241, 199, .55), transparent 52%),
@@ -338,6 +338,7 @@ ${THEME_TOKENS_CSS}
   .sprite.corpse { filter: grayscale(1); opacity: .38; pointer-events: none; }
   .sprite.corpse .sprite-face { transform: none !important; }
   .thread-tip { position: absolute; transform: translate(-50%, -130%); font-family: ${MONO_STACK}; font-size: .68rem; background: var(--ink); color: var(--bg); padding: .1rem .4rem; border-radius: 3px; pointer-events: none; white-space: nowrap; display: none; }
+  .stage-left { display: flex; flex-direction: column; gap: 1.2rem; min-width: 0; }
   .side { display: flex; flex-direction: column; gap: .8rem; min-width: 0; }
   /* The console panel shell: a raised beveled plastic face (chrome-shadow-
      raised), never the flat card/hairline the rest of the site uses — the
@@ -448,7 +449,7 @@ ${THEME_TOKENS_CSS}
   .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .5rem; padding-left: .5rem; border-left: 2px solid var(--chrome-brass); }
   body.preview .side, body.preview .controls-row, body.preview .status, body.preview .tuning { display: none; }
   body.preview main { padding: 0; max-width: none; }
-  body.preview .stage { display: none; }
+  body.preview .stage, body.preview .stage-left { display: block; }
   body.preview .board-frame { margin: 0; }
   body.preview .eyebrow, body.preview h1 { display: none; }
 </style>
@@ -458,6 +459,7 @@ ${THEME_TOKENS_CSS}
   <div class="eyebrow">tmct &middot; spider and fly</div>
   <h1>A spider in its web, a fly on the board — each planning against the other</h1>
   <div class="stage">
+    <div class="stage-left">
     <div class="tuning" id="tuning">
       <h2>live tuning &mdash; mass loss, spawn rate, vision, per class</h2>
       <div class="tuning-grid">
@@ -480,6 +482,13 @@ ${THEME_TOKENS_CSS}
             <input type="range" id="ctlFlyVision" min="1" max="8" step="1" disabled></label>
         </div>
       </div>
+    </div>
+    <div class="board-frame" id="boardFrame">
+      <canvas id="board" width="${BOARD_PX}" height="${BOARD_PX}" aria-label="the 10x10 board"></canvas>
+      <canvas id="pov" width="${BOARD_PX}" height="${BOARD_PX}" aria-hidden="true"></canvas>
+      <div class="sprite-layer" id="spriteLayer"></div>
+      <div class="thread-tip" id="threadTip"></div>
+    </div>
     </div>
     <aside class="side" aria-label="Chat and agents">
       <div class="chat">
@@ -504,12 +513,6 @@ ${THEME_TOKENS_CSS}
         <div class="hud-list" id="hud"></div>
       </div>
     </aside>
-  </div>
-  <div class="board-frame" id="boardFrame">
-    <canvas id="board" width="${BOARD_PX}" height="${BOARD_PX}" aria-label="the 10x10 board"></canvas>
-    <canvas id="pov" width="${BOARD_PX}" height="${BOARD_PX}" aria-hidden="true"></canvas>
-    <div class="sprite-layer" id="spriteLayer"></div>
-    <div class="thread-tip" id="threadTip"></div>
   </div>
   <div class="controls-row">
     <button id="resetBtn" type="button" disabled>reset</button>

@@ -436,7 +436,7 @@ ${THEME_TOKENS_CSS}
      The sprite tiles sit on the floor band (align-items flex-end), so
      furniture and people read as standing IN the room, against its wall,
      rather than floating in a chip strip. */
-  #playStage .room-frame { align-self: center; }
+  #playStage .room-frame { align-self: start; position: sticky; top: 1rem; }
   .room-frame {
     position: relative; min-height: 250px;
     background:

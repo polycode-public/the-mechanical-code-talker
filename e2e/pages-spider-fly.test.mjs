@@ -133,7 +133,7 @@ test("no pill click ever submits the form on its own", async () => {
   }
 });
 
-test("the wide layout puts tuning left and chat right in the top row, chat above the agents HUD, and the board full-width below", async () => {
+test("the wide layout puts tuning and the board in the left column, chat above the agents HUD on the right", async () => {
   const { context, page } = await openSpiderFlyPage({ viewport: { width: 1280, height: 900 } });
   try {
     const boxes = await page.evaluate(() => {
@@ -144,10 +144,10 @@ test("the wide layout puts tuning left and chat right in the top row, chat above
       return { tuning: rect(".tuning"), chat: rect(".chat"), hud: rect(".hud"), board: rect(".board-frame") };
     });
     assert.ok(boxes.tuning.right < boxes.chat.left, "the tuning console sits left of the chat column");
-    assert.ok(boxes.tuning.width > boxes.chat.width * 2, "the tuning console takes the wide share of the top row");
+    assert.ok(boxes.tuning.width > boxes.chat.width * 2, "the tuning console takes the wide share of the row");
     assert.ok(boxes.chat.bottom <= boxes.hud.top + 1, "the chat dock sits above the agents HUD");
     assert.ok(boxes.board.top >= boxes.tuning.bottom - 1, "the board sits below the tuning console");
-    assert.ok(boxes.board.top >= boxes.chat.bottom - 1, "the board sits below the chat dock");
+    assert.ok(boxes.board.right < boxes.chat.left, "the board fills the left column beside the chat, not a row of its own");
   } finally {
     await context.close();
   }
