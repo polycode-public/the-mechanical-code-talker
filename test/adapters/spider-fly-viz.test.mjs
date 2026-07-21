@@ -126,6 +126,31 @@ test("renderSpiderFlyHtml: the chat pills sit inside .side, so they are hidden b
   assert.match(html, /body\.preview \.side,[^{]*\{ display: none; \}/, "the existing hiding rule still targets .side as a whole");
 });
 
+test("renderSpiderFlyHtml: the top row pairs the tuning console with the chat/agents column, and the board sits below it as its own full-width block", () => {
+  const html = renderSpiderFlyHtml();
+  const stageBlock = html.match(/<div class="stage">[\s\S]*?<\/aside>\s*<\/div>/)[0];
+  assert.match(stageBlock, /class="tuning"/, "the tuning console renders inside the top row");
+  assert.ok(
+    stageBlock.indexOf('class="tuning"') < stageBlock.indexOf('<aside class="side"'),
+    "the tuning console comes first (the left column), the side column second",
+  );
+  assert.ok(!stageBlock.includes("board-frame"), "the board no longer lives inside the top row");
+  assert.ok(
+    html.indexOf('class="board-frame"') > html.indexOf("</aside>"),
+    "the board renders after the top row as its own block",
+  );
+  assert.match(html, /\.stage \{[^}]*grid-template-columns: minmax\(0, 8fr\) minmax\(280px, 3fr\)/, "the top row splits roughly two-thirds to a quarter");
+});
+
+test("renderSpiderFlyHtml: within the side column the chat dock comes first, the agents HUD below it", () => {
+  const html = renderSpiderFlyHtml();
+  const sideBlock = html.match(/<aside class="side"[\s\S]*?<\/aside>/)[0];
+  assert.ok(
+    sideBlock.indexOf('class="chat"') < sideBlock.indexOf('class="hud"'),
+    "chat renders above the agents HUD",
+  );
+});
+
 test("renderSpiderFlyHtml: the HUD panel and the POV overlay canvas are both present", () => {
   const html = renderSpiderFlyHtml();
   assert.match(html, /id="hud"/);

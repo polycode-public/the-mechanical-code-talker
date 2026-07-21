@@ -34,8 +34,8 @@ after(async () => {
   if (siteDir) rmSync(siteDir, { recursive: true, force: true });
 });
 
-async function openSpiderFlyPage() {
-  const context = await browser.newContext();
+async function openSpiderFlyPage({ viewport } = {}) {
+  const context = await browser.newContext(viewport ? { viewport } : {});
   const page = await context.newPage();
   const consoleErrors = [];
   const failedRequests = [];
@@ -128,6 +128,44 @@ test("no pill click ever submits the form on its own", async () => {
     await page.locator('#chatpills button[data-addressee="spider"]').click();
     await page.locator('#chatpills button[data-direction="north"]').click();
     assert.equal(await page.locator("#chatlog .u").count(), 0, "no user turn line appears — the pill clicks only filled #chatq, they never submitted it");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the wide layout puts tuning left and chat right in the top row, chat above the agents HUD, and the board full-width below", async () => {
+  const { context, page } = await openSpiderFlyPage({ viewport: { width: 1280, height: 900 } });
+  try {
+    const boxes = await page.evaluate(() => {
+      const rect = (sel) => {
+        const r = document.querySelector(sel).getBoundingClientRect();
+        return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width };
+      };
+      return { tuning: rect(".tuning"), chat: rect(".chat"), hud: rect(".hud"), board: rect(".board-frame") };
+    });
+    assert.ok(boxes.tuning.right < boxes.chat.left, "the tuning console sits left of the chat column");
+    assert.ok(boxes.tuning.width > boxes.chat.width * 2, "the tuning console takes the wide share of the top row");
+    assert.ok(boxes.chat.bottom <= boxes.hud.top + 1, "the chat dock sits above the agents HUD");
+    assert.ok(boxes.board.top >= boxes.tuning.bottom - 1, "the board sits below the tuning console");
+    assert.ok(boxes.board.top >= boxes.chat.bottom - 1, "the board sits below the chat dock");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a phone-width viewport stacks the columns without horizontal overflow", async () => {
+  const { context, page } = await openSpiderFlyPage({ viewport: { width: 375, height: 667 } });
+  try {
+    const overflows = await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
+    );
+    assert.equal(overflows, false, "no horizontal scroll at 375px");
+    const stacked = await page.evaluate(() => {
+      const tuning = document.querySelector(".tuning").getBoundingClientRect();
+      const side = document.querySelector(".side").getBoundingClientRect();
+      return tuning.bottom <= side.top + 1;
+    });
+    assert.equal(stacked, true, "the top row's two columns stack at phone width");
   } finally {
     await context.close();
   }
