@@ -83,6 +83,32 @@ async function shoot(page, name) {
   await page.screenshot({ path: join(OUT_DIR, `${name}.png`), fullPage: true });
 }
 
+/** Submit one chat.html composer turn and wait for the answer to settle. */
+async function chatTurn(page, question) {
+  const before = await page.locator("#messages .msg-row.assistant").count();
+  await page.fill("#composerInput", question);
+  await page.press("#composerInput", "Enter");
+  await page.waitForFunction(
+    (n) => document.querySelectorAll("#messages .msg-row.assistant").length > n,
+    before,
+    { timeout: READY_TIMEOUT_MS },
+  );
+  await page.locator("#messages .msg-row.assistant").last().locator(".bubble:not(.pending)").waitFor({ timeout: READY_TIMEOUT_MS });
+}
+
+/** Submit one command through a #chatq/#chatlog dock (adventure, ledger)
+ *  and wait for the visitor's echo plus the reply to land. */
+async function dockTurn(page, text) {
+  const before = await page.locator("#chatlog > div").count();
+  await page.fill("#chatq", text);
+  await page.press("#chatq", "Enter");
+  await page.waitForFunction(
+    (n) => document.querySelectorAll("#chatlog > div").length >= n,
+    before + 2,
+    { timeout: READY_TIMEOUT_MS },
+  );
+}
+
 // One spec per page: how to reach "ready", and a chain of named states, each
 // building on the page left by the one before it (idle -> interact -> ...),
 // so a single page load covers every state instead of re-booting per shot.
@@ -91,7 +117,16 @@ const PAGES = [
     page: "home",
     path: "index.html",
     ready: async () => {},
-    states: [{ label: "idle", act: async () => {} }],
+    states: [
+      { label: "idle", act: async () => {} },
+      {
+        label: "demo-answered",
+        act: async (page) => {
+          await page.waitForFunction(() => /lemma\/POS tier: loaded/.test(document.querySelector(".demo-status")?.textContent ?? ""), null, { timeout: READY_TIMEOUT_MS });
+          await page.locator("#tmct-demo .term-answer").first().waitFor({ state: "visible", timeout: READY_TIMEOUT_MS });
+        },
+      },
+    ],
   },
   {
     page: "chat",
@@ -102,20 +137,25 @@ const PAGES = [
     },
     states: [
       { label: "idle", act: async () => {} },
+      { label: "conversation", act: async (page) => chatTurn(page, "what is a dog") },
       {
-        label: "conversation",
+        label: "wikipedia-on",
         act: async (page) => {
-          const before = await page.locator("#messages .msg-row.assistant").count();
-          await page.fill("#composerInput", "what is a dog");
-          await page.press("#composerInput", "Enter");
-          await page.waitForFunction(
-            (n) => document.querySelectorAll("#messages .msg-row.assistant").length > n,
-            before,
-            { timeout: READY_TIMEOUT_MS },
-          );
-          await page.locator("#messages .msg-row.assistant").last().locator(".bubble:not(.pending)").waitFor({ timeout: READY_TIMEOUT_MS });
+          await page.locator(".liveLabel").click();
+          await page.waitForFunction(() => /live wikipedia: on/.test(document.querySelector("#status")?.textContent ?? ""), null, { timeout: READY_TIMEOUT_MS });
         },
       },
+      {
+        label: "taught-panel",
+        act: async (page) => {
+          await chatTurn(page, "every zorbnug is a dog");
+          await page.waitForFunction(() => document.querySelectorAll("#statsPanel .taught-item").length > 0, null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+      // With the toggle on and every third-party host blocked, the live
+      // lookup fails and the dashed honest miss stands — the exact state a
+      // visitor on a broken connection sees.
+      { label: "live-miss", act: async (page) => chatTurn(page, "what is a quasar") },
     ],
   },
   {
@@ -133,6 +173,14 @@ const PAGES = [
         },
       },
       {
+        label: "stepped",
+        act: async (page) => {
+          await page.locator("#stepBtn").click();
+          await page.waitForFunction(() => (document.querySelector("#turnLabel")?.textContent ?? "").trim() === "turn: 1", null, { timeout: READY_TIMEOUT_MS });
+          await page.waitForFunction(() => !document.querySelector("#stepBtn")?.disabled, null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+      {
         label: "mid-play",
         act: async (page) => {
           await page.locator("#playBtn").click();
@@ -142,28 +190,67 @@ const PAGES = [
           }, null, { timeout: READY_TIMEOUT_MS }).catch(() => {});
         },
       },
+      {
+        label: "paused",
+        act: async (page) => {
+          if (/pause/.test((await page.locator("#playBtn").textContent()) ?? "")) await page.locator("#playBtn").click();
+          await page.waitForFunction(() => /play/.test(document.querySelector("#playBtn")?.textContent ?? ""), null, { timeout: READY_TIMEOUT_MS });
+          await page.waitForFunction(() => !document.querySelector("#stepBtn")?.disabled, null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+      {
+        label: "retuned",
+        act: async (page) => {
+          await page.locator("#ctlSpiderVision").evaluate((input) => {
+            input.value = "8";
+            input.dispatchEvent(new Event("input"));
+          });
+        },
+      },
     ],
   },
   {
     page: "plan",
     path: "plan.html",
     ready: async (page) => {
-      await page.locator("#board").waitFor({ state: "visible" });
+      await page.locator("#board .block").first().waitFor({ state: "visible" });
     },
     states: [
       { label: "idle", act: async () => {} },
       {
-        label: "live-resolved",
+        label: "mid-replay",
         act: async (page) => {
-          if (await page.locator("#resolveBtn").isDisabled()) return;
-          await page.fill("#diskCount", "5");
+          for (const step of [1, 2]) {
+            await page.locator("#next").click();
+            await page.waitForFunction(
+              (want) => (document.querySelector("#stepLabel")?.textContent ?? "").startsWith("step " + want + " /"),
+              step,
+              { timeout: READY_TIMEOUT_MS },
+            );
+          }
+        },
+      },
+      {
+        label: "replayed-to-end",
+        act: async (page) => {
+          await page.locator("#movelist li:not(.phasehead)").last().click();
+          await page.waitForFunction(() => /step 7 \/ 7/.test(document.querySelector("#stepLabel")?.textContent ?? ""), null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+      {
+        label: "dock-answered",
+        act: async (page) => {
+          await page.locator('#chatpills .pill[data-fill="what moves are legal now?"]').click();
+          await page.locator("#chatq").press("Enter");
+          await page.waitForFunction(() => document.querySelectorAll("#chatlog > div.a").length >= 1, null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+      {
+        label: "live-resolved-4-disks",
+        act: async (page) => {
+          await page.fill("#diskCount", "4");
           await page.locator("#resolveBtn").click();
-          // The wink tier loads from the site's own ./vendor/wink.js, so
-          // it succeeds even with third-party hosts blocked (see
-          // openPage) — this still waits only long enough to capture
-          // whichever honest state the live solve settles into, not for a
-          // guaranteed one.
-          await page.waitForFunction(() => /^live —/.test(document.getElementById("liveStatus")?.textContent ?? ""), null, { timeout: 6000 }).catch(() => {});
+          await page.waitForFunction(() => /^live — 4 disks/.test(document.getElementById("liveStatus")?.textContent ?? ""), null, { timeout: READY_TIMEOUT_MS });
         },
       },
     ],
@@ -177,10 +264,41 @@ const PAGES = [
     states: [
       { label: "idle", act: async () => {} },
       {
+        label: "walked-two-rooms",
+        act: async (page) => {
+          await dockTurn(page, "go north");
+          await dockTurn(page, "go north");
+        },
+      },
+      {
+        label: "satchel-carrying",
+        act: async (page) => {
+          await dockTurn(page, "open the portrait");
+          await dockTurn(page, "take the key");
+          await page.locator("#carryList .chip").first().waitFor({ timeout: READY_TIMEOUT_MS });
+        },
+      },
+      {
+        label: "won",
+        act: async (page) => {
+          for (const cmd of ["go south", "go south", "unlock the cabinet with the key", "open the cabinet", "take the letter"]) {
+            await dockTurn(page, cmd);
+          }
+          await page.waitForFunction(() => /adventure is won/.test(document.querySelector("#goalList")?.textContent ?? ""), null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+      {
         label: "edit-mode",
         act: async (page) => {
           await page.locator("#editModeBtn").click();
           await page.waitForFunction(() => document.body.classList.contains("editing"), null, { timeout: READY_TIMEOUT_MS }).catch(() => {});
+        },
+      },
+      {
+        label: "edit-room-selected",
+        act: async (page) => {
+          await page.locator('#editMapWrap .room-node[data-room="kitchen"]').click();
+          await page.waitForFunction(() => document.getElementById("roomDetailTitle")?.textContent === "kitchen", null, { timeout: READY_TIMEOUT_MS });
         },
       },
     ],
@@ -191,7 +309,40 @@ const PAGES = [
     ready: async (page) => {
       await page.locator(".dash").waitFor({ state: "visible" });
     },
-    states: [{ label: "idle", act: async () => {} }],
+    states: [
+      { label: "idle", act: async () => {} },
+      {
+        label: "facet-filtered",
+        act: async (page) => {
+          await page.locator("#segProv .seg", { hasText: "corpus" }).click();
+        },
+      },
+      {
+        label: "searched",
+        act: async (page) => {
+          await page.locator("#segProv .seg", { hasText: "corpus" }).click();
+          const target = await page.evaluate(() => {
+            const current = document.querySelector(".focuscard .term")?.textContent;
+            return LEDGER.terms.map((t) => t.term).find((t) => t !== current);
+          });
+          await page.fill("#q", target);
+          await page.press("#q", "Enter");
+        },
+      },
+      {
+        label: "post-teach",
+        act: async (page) => {
+          await dockTurn(page, "blue is a peg");
+          await page.waitForFunction(() => document.querySelector(".focuscard .term")?.textContent === "blue", null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+      {
+        label: "taught-facet",
+        act: async (page) => {
+          await page.locator("#segProv .seg", { hasText: "you taught" }).click();
+        },
+      },
+    ],
   },
   {
     page: "sprites",
@@ -199,7 +350,51 @@ const PAGES = [
     ready: async (page) => {
       await page.locator(".card").first().waitFor({ state: "visible" });
     },
-    states: [{ label: "idle", act: async () => {} }],
+    states: [
+      { label: "idle", act: async () => {} },
+      {
+        label: "composed-scene",
+        act: async (page) => {
+          await page.fill("#composeq", "a doctor with a hat, and a cabinet");
+          await page.waitForFunction(() => document.querySelectorAll("#sceneRow .scene-card").length >= 3, null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+      {
+        label: "material-scene",
+        act: async (page) => {
+          await page.fill("#composeq", "a wood cabinet, and a glass lamp");
+          await page.waitForFunction(
+            () => [...document.querySelectorAll("#sceneRow .scene-label")].some((el) => el.textContent === "wood cabinet"),
+            null,
+            { timeout: READY_TIMEOUT_MS },
+          );
+        },
+      },
+      {
+        label: "filtered",
+        act: async (page) => {
+          await page.fill("#q", "person");
+          await page.waitForFunction(() => (document.querySelector("#qcount")?.textContent ?? "").includes("/"), null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+      {
+        label: "dock-answered",
+        act: async (page) => {
+          await page.waitForFunction(() => !document.getElementById("dockq")?.disabled, null, { timeout: READY_TIMEOUT_MS });
+          await page.fill("#dockq", "what parameters does a person sprite take?");
+          await page.press("#dockq", "Enter");
+          await page.waitForFunction(() => document.querySelectorAll("#dockLog .a.grounded").length >= 1, null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+      {
+        label: "dock-miss",
+        act: async (page) => {
+          await page.fill("#dockq", "who painted the mona lisa?");
+          await page.press("#dockq", "Enter");
+          await page.waitForFunction(() => document.querySelectorAll("#dockLog .a.miss").length >= 1, null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+    ],
   },
 ];
 
