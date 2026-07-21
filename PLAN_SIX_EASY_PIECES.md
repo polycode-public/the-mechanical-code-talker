@@ -1,8 +1,13 @@
 # PLAN_SIX_EASY_PIECES.md — the active plan for all six demo pages: knowledge, language, layout, and visuals
 
-Status: chat.html's cosmetic/functional round and the home-page rework shipped. The five-page
-knowledge/capability tailoring, the spider-fly layout change, and the adventure.html visual
-redesign below are proposed, not started.
+Status: implemented. Everything this doc proposed has shipped: Part A's ladder (header fix,
+teach-lane narrowing, the capped init:xl seed with its boot-budget gate, the live Wikipedia
+learn-on-miss with the chat.html toggle and full CLI parity, backend C as the routed default with
+backend A retired, the download-progress statusline), Part B phases 1–5 (shared wink vendor +
+precompression + service worker, the adventure manifest embed, the sprites generator + chat dock,
+the vocabulary gap audits, the spider-fly layout change and the adventure visual redesign), and
+Part C's standalone --render exports. IndexedDB persistence for chat.html (with the adventure
+spike) is the one piece still landing. Remaining follow-ups live in HANDOVER.md, not here.
 
 ## Origin
 

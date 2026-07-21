@@ -38,6 +38,24 @@ What remains:
   file" (a superlative with no default ranking criterion), casual/longer farewells. Full ranked list
   and routing in the report.
 
+- Page-vocabulary audit findings routed to the chat engine (from the six-pages round): "what is
+  the letter?" on an adventure session reads back the `mgx:hidden-in` fact and spoils the hidden
+  key — the describe lane should exclude world-secret predicates the way the adventure lane's own
+  where-reader already does; predicate verbalization garbles world predicates ("currentlies in",
+  "workses in") — wants curated `FACT_PREDICATE_PHRASES` rows; lane gaps: "where am I?"/"what can
+  I do?"/"what is the quest?" on adventure sessions, "where is the spider?" on spider-fly, "what
+  is the goal?" on plan sessions (answers from the child corpus instead of planState), "how many
+  X are there?" cannot count taught class members, and the teach frame declines "the tower has 3
+  disks." (determiner subject) while the bare form teaches.
+
+- Live-Wikipedia trust prior: `reference:wikipedia-live` content scores the same 0.6 prior as the
+  curated, revision-pinned shipped pack. If live content should rank lower, that is one new
+  source kind in trust.mjs plus a parse branch.
+
+- Chat-seed scale: conceptnet is capped at 2,000 facts (10x the old 200) because the uncapped
+  init:xl set measures ~86 MB serialized. Lifting the caps means leaving the 16-24 MB seed
+  ceiling range — an operator call.
+
 ## Discipline
 
 `CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split, the test
