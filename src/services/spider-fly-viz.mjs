@@ -38,9 +38,9 @@ import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId } from "../domain
 import { FLY_INITIAL_MASS, EGG_LAY_MASS_THRESHOLD } from "./spider-fly.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 
-// A larger cell than this page's first cut (44px) — the board now fills
-// noticeably more of the stage's own width, closing most of the dead gap a
-// fixed-260px side column used to leave next to a small fixed-440px board.
+// A larger cell than this page's first cut (44px) — the board sits in its
+// own full-width block, so a bigger cell keeps it reading as the page's
+// main scene rather than a small inset square.
 const CELL_PX = 54;
 const BOARD_PX = CELL_PX * GRID_SIZE;
 const DEFAULT_TITLE = "tmct — the spider and the fly";
@@ -294,7 +294,11 @@ ${THEME_TOKENS_CSS}
   h1 { font-size: 1.4rem; margin: .3rem 0 .9rem; text-wrap: balance; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
   button:focus-visible, input:focus-visible, .sprite:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-  .stage { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 360px); gap: 1.2rem; }
+  /* The top row: the tuning console at roughly two-thirds width on the left,
+     the chat/agents column at roughly a quarter on the right — the 8fr/3fr
+     split plus the gap approximates that pair of fractions without them
+     needing to sum to a full width. */
+  .stage { display: grid; grid-template-columns: minmax(0, 8fr) minmax(280px, 3fr); gap: 1.2rem; align-items: start; }
   @media (max-width: 760px) { .stage { grid-template-columns: 1fr; } }
   /* A dusty window corner: a soft light glow near the top-left (WEB_HOME
      already sits near that corner — spider-fly-world.mjs's own header
@@ -302,14 +306,7 @@ ${THEME_TOKENS_CSS}
      in the light. Decoration only — the 10x10 game grid itself is drawn by
      drawBoard() on the canvas beneath, unchanged. */
   .board-frame {
-    /* The side column's own height grows with the live agent count
-       (.hud-list caps out at 420px, then scrolls) — align-self keeps this
-       fixed-square board centered in whatever row height that produces,
-       instead of top-aligning it and leaving a dead gap below once the
-       side column outgrows the board. The grid's default align-items:
-       stretch would otherwise force this box tall, breaking its own
-       aspect-ratio square. */
-    align-self: center;
+    margin: 1.2rem auto 0;
     position: relative; width: ${BOARD_PX}px; max-width: 100%; aspect-ratio: 1 / 1;
     background:
       radial-gradient(140% 140% at 6% 6%, rgba(255, 241, 199, .55), transparent 52%),
@@ -446,7 +443,8 @@ ${THEME_TOKENS_CSS}
   .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .5rem; padding-left: .5rem; border-left: 2px solid var(--chrome-brass); }
   body.preview .side, body.preview .controls-row, body.preview .status, body.preview .tuning { display: none; }
   body.preview main { padding: 0; max-width: none; }
-  body.preview .stage { display: block; }
+  body.preview .stage { display: none; }
+  body.preview .board-frame { margin: 0; }
   body.preview .eyebrow, body.preview h1 { display: none; }
 </style>
 </head>
@@ -455,17 +453,30 @@ ${THEME_TOKENS_CSS}
   <div class="eyebrow">tmct &middot; spider and fly</div>
   <h1>A spider in its web, a fly on the board — each planning against the other</h1>
   <div class="stage">
-    <div class="board-frame" id="boardFrame">
-      <canvas id="board" width="${BOARD_PX}" height="${BOARD_PX}" aria-label="the 10x10 board"></canvas>
-      <canvas id="pov" width="${BOARD_PX}" height="${BOARD_PX}" aria-hidden="true"></canvas>
-      <div class="sprite-layer" id="spriteLayer"></div>
-      <div class="thread-tip" id="threadTip"></div>
-    </div>
-    <aside class="side" aria-label="Agents and chat">
-      <div class="hud">
-        <h2>agents</h2>
-        <div class="hud-list" id="hud"></div>
+    <div class="tuning" id="tuning">
+      <h2>live tuning &mdash; mass loss, spawn rate, vision, per class</h2>
+      <div class="tuning-grid">
+        <div class="tuning-col spider">
+          <h3>spider</h3>
+          <label>mass lost/turn <span class="tuning-val" id="tvSpiderMass"></span>
+            <input type="range" id="ctlSpiderMass" min="0.1" max="3" step="0.1" disabled></label>
+          <label>hatchlings per egg <span class="tuning-val" id="tvSpiderSpawn"></span>
+            <input type="range" id="ctlSpiderSpawn" min="1" max="5" step="1" disabled></label>
+          <label>vision radius <span class="tuning-val" id="tvSpiderVision"></span>
+            <input type="range" id="ctlSpiderVision" min="1" max="8" step="1" disabled></label>
+        </div>
+        <div class="tuning-col fly">
+          <h3>fly</h3>
+          <label>mass lost/turn <span class="tuning-val" id="tvFlyMass"></span>
+            <input type="range" id="ctlFlyMass" min="0.1" max="3" step="0.1" disabled></label>
+          <label>spawns every N turns <span class="tuning-val" id="tvFlySpawn"></span>
+            <input type="range" id="ctlFlySpawn" min="1" max="10" step="1" disabled></label>
+          <label>vision radius <span class="tuning-val" id="tvFlyVision"></span>
+            <input type="range" id="ctlFlyVision" min="1" max="8" step="1" disabled></label>
+        </div>
       </div>
+    </div>
+    <aside class="side" aria-label="Chat and agents">
       <div class="chat">
         <h2>tell the spider or the fly something</h2>
         <div class="chatlog" id="chatlog" aria-live="polite"></div>
@@ -483,30 +494,17 @@ ${THEME_TOKENS_CSS}
         </div>
         <div class="dynpills" id="dynamicPills" role="group" aria-label="address one individual and feed it a true or false position claim"></div>
       </div>
+      <div class="hud">
+        <h2>agents</h2>
+        <div class="hud-list" id="hud"></div>
+      </div>
     </aside>
   </div>
-  <div class="tuning" id="tuning">
-    <h2>live tuning &mdash; mass loss, spawn rate, vision, per class</h2>
-    <div class="tuning-grid">
-      <div class="tuning-col spider">
-        <h3>spider</h3>
-        <label>mass lost/turn <span class="tuning-val" id="tvSpiderMass"></span>
-          <input type="range" id="ctlSpiderMass" min="0.1" max="3" step="0.1" disabled></label>
-        <label>hatchlings per egg <span class="tuning-val" id="tvSpiderSpawn"></span>
-          <input type="range" id="ctlSpiderSpawn" min="1" max="5" step="1" disabled></label>
-        <label>vision radius <span class="tuning-val" id="tvSpiderVision"></span>
-          <input type="range" id="ctlSpiderVision" min="1" max="8" step="1" disabled></label>
-      </div>
-      <div class="tuning-col fly">
-        <h3>fly</h3>
-        <label>mass lost/turn <span class="tuning-val" id="tvFlyMass"></span>
-          <input type="range" id="ctlFlyMass" min="0.1" max="3" step="0.1" disabled></label>
-        <label>spawns every N turns <span class="tuning-val" id="tvFlySpawn"></span>
-          <input type="range" id="ctlFlySpawn" min="1" max="10" step="1" disabled></label>
-        <label>vision radius <span class="tuning-val" id="tvFlyVision"></span>
-          <input type="range" id="ctlFlyVision" min="1" max="8" step="1" disabled></label>
-      </div>
-    </div>
+  <div class="board-frame" id="boardFrame">
+    <canvas id="board" width="${BOARD_PX}" height="${BOARD_PX}" aria-label="the 10x10 board"></canvas>
+    <canvas id="pov" width="${BOARD_PX}" height="${BOARD_PX}" aria-hidden="true"></canvas>
+    <div class="sprite-layer" id="spriteLayer"></div>
+    <div class="thread-tip" id="threadTip"></div>
   </div>
   <div class="controls-row">
     <button id="resetBtn" type="button" disabled>reset</button>
