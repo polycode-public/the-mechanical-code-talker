@@ -1,11 +1,13 @@
 // The hand-maintained homepage (public/index.html, git-tracked, with only its
-// version stamp generated). PLAN_GAMES_UPLIFT_V3.md Part C.2's reorg: five
-// fully-expanded sections (chat, the spider-and-fly hero, the CLI docs, the
-// codebase demo, the library docs) followed by an "explore more" band of link
-// cards onto plan.html/adventure.html/ledger.html/sprites.html. The chat and
+// version stamp generated): five fully-expanded sections (chat, the
+// spider-and-fly hero, the CLI docs, the codebase demo, the library docs)
+// followed by an "explore more" band of link cards onto
+// plan.html/adventure.html/ledger.html/sprites.html. The chat and
 // spider-and-fly sections are a screenshot plus a link, not a live embed —
-// see PLAN_SIX_EASY_PIECES.md for why. A static, no-browser structural check;
-// pages-home.test.mjs covers the same page with a real browser.
+// two live engines booting inside the homepage cost multi-MB loads and
+// competed for attention with the page's own copy. A static, no-browser
+// structural check; pages-home.test.mjs covers the same page with a real
+// browser.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
