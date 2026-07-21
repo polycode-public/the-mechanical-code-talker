@@ -32,6 +32,10 @@ import { registerReferencePackProvider } from "../../adapters/corpus/reference-p
 // per session, and e2e tests stub the provider the same way the pack's own
 // provider is stubbed. The adapter is fetch-only, so it bundles as-is.
 import { registerLiveReferenceProvider } from "../../adapters/corpus/wikipedia-live.mjs";
+// Best-effort IndexedDB persistence for the page's session store — the page
+// decides when to save/load/clear; this entry only carries the wrapper
+// across the bundle boundary.
+import { openPersistedStore } from "./idb-persist.mjs";
 
 /**
  * A browser chat session over the real turn engine.
@@ -143,4 +147,4 @@ export async function memoryStats(memoryDir) {
   return { total: rows.length, bandCounts, taught };
 }
 
-globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, normFactTerm, vocabExampleHint, memoryStats };
+globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, normFactTerm, vocabExampleHint, memoryStats, openPersistedStore };

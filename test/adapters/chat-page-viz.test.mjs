@@ -6,7 +6,7 @@
 // per-message provenance chip) is built on.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderChatHtml, provenanceChipFor, loadProgressLine } from "../../src/services/chat-page-viz.mjs";
+import { renderChatHtml, provenanceChipFor, loadProgressLine, transcriptMarkdown } from "../../src/services/chat-page-viz.mjs";
 import { provBucketFor } from "../../src/services/ledger-viz.mjs";
 
 // ---- provenanceChipFor: the pure classifier, exercised directly against
@@ -206,6 +206,94 @@ test("renderChatHtml: the switch is wired to the session and the stored preferen
   assert.match(html, /liveToggleEl\.checked = readLivePref\(\)/, "boot restores the stored preference before the session starts");
   assert.match(html, /onLiveLookup: function \(\) \{ statusEl\.textContent = "searching wikipedia\\u2026"; \}/, "an in-flight lookup announces itself on the statusline");
   assert.match(html, /"live wikipedia: " \+ \(liveToggleEl\.checked \? "on" : "off"\)/, "the statusline names the live state");
+});
+
+// ---- transcriptMarkdown: the export document, built from the model ---------
+
+test("transcriptMarkdown: a title line with version and date, then every turn in order with its role label", () => {
+  const md = transcriptMarkdown(
+    [
+      { role: "you", text: "what is a dog", chipTier: null },
+      { role: "tmct", text: "dog is a kind of animal (source: corpus:conceptnet)", chipTier: "corpus" },
+      { role: "you", text: "what is a zorblatt", chipTier: null },
+      { role: "tmct", text: 'I don\'t know "zorblatt" yet.', chipTier: null },
+    ],
+    { version: "2.9.1", date: "2026-07-21" },
+  );
+  const lines = md.split("\n");
+  assert.equal(lines[0], "# tmct chat — v2.9.1 — 2026-07-21");
+  const youAt = md.indexOf("**you:** what is a dog");
+  const tmctAt = md.indexOf("**tmct:** dog is a kind of animal");
+  const missAt = md.indexOf('**tmct:** I don\'t know "zorblatt" yet.');
+  assert.ok(youAt > 0 && tmctAt > youAt && missAt > tmctAt, "turns appear in conversation order");
+});
+
+test("transcriptMarkdown: the provenance tier lands in parentheses when a turn carries one, and nowhere when it doesn't", () => {
+  const md = transcriptMarkdown([
+    { role: "tmct", text: "answered", chipTier: "taught" },
+    { role: "tmct", text: "missed", chipTier: null },
+  ]);
+  assert.match(md, /\*\*tmct:\*\* answered \(taught\)/);
+  assert.match(md, /\*\*tmct:\*\* missed\n/);
+  assert.ok(!/missed \(/.test(md), "a miss gets no fabricated tier");
+});
+
+test("transcriptMarkdown: with no meta at all, the title still renders (dev version, no date), never a crash", () => {
+  assert.equal(transcriptMarkdown([]).split("\n")[0], "# tmct chat — vdev");
+  assert.equal(transcriptMarkdown(null), "# tmct chat — vdev\n");
+});
+
+// ---- export + print wiring on the page -------------------------------------
+
+test("renderChatHtml: export and print controls sit in the composer's tools row as non-submitting buttons", () => {
+  const html = renderChatHtml();
+  assert.match(html, /class="composer-tools"/);
+  assert.match(html, /<button type="button" id="exportMd"/);
+  assert.match(html, /<button type="button" id="printChat"/);
+});
+
+test("renderChatHtml: export and print read the transcript MODEL, never scraped bubbles", () => {
+  const html = renderChatHtml();
+  assert.match(html, /const transcript = \[\];/);
+  assert.match(html, /transcript\.push\(\{ role: "you"/);
+  assert.match(html, /transcript\.push\(\{ role: "tmct", text: answer, chipTier: tier/);
+  assert.match(html, /const transcriptMarkdown = /, "the pure builder is spliced in, not reimplemented");
+  assert.match(html, /transcriptMarkdown\(transcript, \{ version: siteVersion/);
+  assert.match(html, /download = "tmct-chat\.md"/);
+  assert.match(html, /window\.print\(\)/);
+});
+
+test("renderChatHtml: a print stylesheet un-pins the message column and drops the interactive chrome", () => {
+  const html = renderChatHtml();
+  const printBlock = html.slice(html.indexOf("@media print"), html.indexOf("</style>"));
+  assert.ok(printBlock.length > 0, "an @media print block exists");
+  assert.match(printBlock, /main\.chatMain \{ overflow: visible; height: auto; \}/);
+  assert.match(printBlock, /form\.composer, \.statusline, \.statsPanel, \.legend \{ display: none; \}/);
+});
+
+// ---- persistence wiring: the page keeps taught state on the device ---------
+
+test("renderChatHtml: the device store opens under a version+seed stamp and boot tries a restore before falling back to the fresh seed", () => {
+  const html = renderChatHtml();
+  assert.match(html, /openPersistedStore\(\{ storeKey: "chat", stamp: siteVersion \+ ":" \+ seedFacts \}\)/);
+  assert.match(html, /persist\.load\(\)/);
+  assert.match(html, /Restored " \+ restoredCount \+ " taught fact/, "the boot line names how many taught facts came back");
+  assert.match(html, /state kept best-effort on this device/);
+});
+
+test("renderChatHtml: a teach turn schedules a debounced save of a payload snapshot, never a save per keystroke or of the live object", () => {
+  const html = renderChatHtml();
+  assert.match(html, /result\.record\.via === "assert"\) scheduleSave\(\)/);
+  assert.match(html, /structuredClone\(session\.memoryDir\.payload\)/);
+  assert.match(html, /setTimeout\(\(\) => \{[\s\S]*?persist\.save/, "the save runs on a timer, not inline in the turn");
+  assert.match(html, /\}, 500\)/, "the debounce window is present");
+});
+
+test("renderChatHtml: the forget-everything control clears the device store and rebuilds from the fresh seed", () => {
+  const html = renderChatHtml();
+  assert.match(html, /id = "forgetEverything"/);
+  assert.match(html, /persist\.clear\(\)/);
+  assert.match(html, /forgot everything taught on this device/);
 });
 
 test("renderChatHtml: the brand line renders as typed — lowercase, single element, no heading beside it", () => {

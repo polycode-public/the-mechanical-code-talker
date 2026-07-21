@@ -114,6 +114,28 @@ export function loadProgressLine(parts) {
     : "loading the engine… " + mb(loaded) + " MB";
 }
 
+/**
+ * The exported transcript as one Markdown document: a title line naming the
+ * site version and the export date, then every turn in order as
+ * "**you:** ..." / "**tmct:** ...", with the provenance tier in parentheses
+ * when the turn carried one. Reads the page's transcript MODEL (an array of
+ * { role, text, chipTier }), never the DOM — the message column may
+ * virtualize long chats someday, and an export must still carry every turn.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe — the same
+ * discipline provenanceChipFor/loadProgressLine above hold.
+ */
+export function transcriptMarkdown(turns, meta) {
+  const version = (meta && meta.version) || "dev";
+  const date = (meta && meta.date) || "";
+  const lines = ["# tmct chat — v" + version + (date ? " — " + date : ""), ""];
+  for (const turn of turns || []) {
+    const tier = turn.chipTier ? " (" + turn.chipTier + ")" : "";
+    lines.push("**" + turn.role + ":** " + turn.text + tier, "");
+  }
+  return lines.join("\n");
+}
+
 /** The self-contained "talk to it" full-screen page. Pure — the same output
  *  for the same `title` every time; every other piece of state (the session,
  *  every message, every chip) is computed live in the browser once the
@@ -214,6 +236,13 @@ ${THEME_TOKENS_CSS}
 
   .statusline { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .6rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
 
+  /* the composer's small utility row — right-aligned mono controls in the
+     statusline's own idiom, for anything that acts on the conversation as a
+     whole (export, print) rather than on one turn. */
+  .composer-tools { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .35rem; display: flex; justify-content: flex-end; align-items: center; gap: .5rem; }
+  .tool-btn { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .03em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .16rem .55rem; background: var(--card); }
+  .tool-btn:hover { color: var(--ink); }
+
   /* the provenance stats panel: what this session's memory holds, docked to
      the right of the chat column (a real layout column, not an overlay) —
      re-rendered after boot and after every turn from window.tmctChat's own
@@ -226,6 +255,9 @@ ${THEME_TOKENS_CSS}
   .statsPanel .taught-item { margin: 0 0 .7rem; }
   .statsPanel .taught-tag { display: block; color: var(--muted); font-size: .66rem; margin-top: .15rem; word-break: break-word; }
   .statsPanel .empty { color: var(--muted); margin: 0; }
+  .statsPanel .forget-btn { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .18rem .55rem; margin-top: 1.1rem; background: var(--card); }
+  .statsPanel .forget-btn:hover { color: var(--ink); }
+  .statsPanel .persist-note { color: var(--muted); font-size: .64rem; margin: .4rem 0 0; }
 
   @media (max-width: 860px) {
     .statsPanel { display: none; }
@@ -236,6 +268,21 @@ ${THEME_TOKENS_CSS}
   }
   @media (prefers-reduced-motion: reduce) {
     * { scroll-behavior: auto !important; }
+  }
+
+  /* print: the WHOLE transcript, not the scrolled-into-view slice — the
+     screen layout pins the message column to the viewport and scrolls inside
+     it, which would clip everything off-screen to one printed page. Undo the
+     pinning (heights auto, overflow visible, flex back to block flow) and
+     drop the interactive chrome; the bubbles and their provenance chips
+     print as-is. */
+  @media print {
+    html, body { height: auto; overflow: visible; }
+    body { display: block; }
+    .chatCol { display: block; }
+    main.chatMain { overflow: visible; height: auto; }
+    .messages { min-height: 0; }
+    form.composer, .statusline, .statsPanel, .legend { display: none; }
   }
 </style>
 </head>
@@ -262,6 +309,10 @@ ${THEME_TOKENS_CSS}
           <span class="toggle-track" aria-hidden="true"><span class="toggle-knob"></span></span>
           <span>ask Wikipedia when I don&#8217;t know</span>
         </label>
+        <span class="tool-cluster">
+          <button type="button" id="exportMd" class="tool-btn" title="download this conversation as Markdown">export .md</button>
+          <button type="button" id="printChat" class="tool-btn" title="print the whole conversation">print</button>
+        </span>
       </div>
     </form>
     <div class="statusline" id="status">loading the engine&hellip;</div>
@@ -276,6 +327,7 @@ ${THEME_TOKENS_CSS}
   const provBucketFor = ${provBucketFor.toString()};
   const provenanceChipFor = ${provenanceChipFor.toString()};
   const loadProgressLine = ${loadProgressLine.toString()};
+  const transcriptMarkdown = ${transcriptMarkdown.toString()};
   const el = (id) => document.getElementById(id);
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
@@ -351,6 +403,12 @@ ${THEME_TOKENS_CSS}
     entailed: "tmct derived this from taught facts, not read back verbatim",
   };
 
+  // The transcript MODEL — one entry per user submit and per settled
+  // assistant bubble (misses included), appended in display order. Export
+  // and print read this, never the DOM: the message column stays free to
+  // virtualize long chats without silently truncating an export.
+  const transcript = [];
+
   function settleAssistantBubble(row, answer, record) {
     const bubble = row.querySelector(".bubble");
     bubble.classList.remove("pending");
@@ -358,6 +416,7 @@ ${THEME_TOKENS_CSS}
     bubble.classList.toggle("miss", missed);
     bubble.textContent = answer;
     const tier = provenanceChipFor(answer, record, provBucketFor);
+    transcript.push({ role: "tmct", text: answer, chipTier: tier, ts: Date.now() });
     if (tier) {
       const key = tier === "entailed" ? "entail" : tier;
       const chip = document.createElement("span");
@@ -455,6 +514,21 @@ ${THEME_TOKENS_CSS}
     }
   }
 
+  // The deploy's own version, read off the service worker file the build
+  // already stamps (its cache name embeds package.json's version) — the only
+  // same-origin place the number exists at runtime without a second build
+  // artifact. Best-effort: no worker file, no match, no network -> "dev".
+  async function fetchSiteVersion() {
+    try {
+      const res = await fetch("./tmct-sw.js");
+      if (!res.ok) return "dev";
+      const found = /tmct-precache-v(\\d+\\.\\d+\\.\\d+)/.exec(await res.text());
+      return found ? found[1] : "dev";
+    } catch {
+      return "dev";
+    }
+  }
+
   let seedPayload = null;
   let seedFacts = 0;
   async function fetchSeed() {
@@ -502,6 +576,49 @@ ${THEME_TOKENS_CSS}
       }
     },
   };
+
+  // ---- persistence: what you taught it survives a reload, on this device -
+  // Best-effort IndexedDB (window.tmctChat.openPersistedStore): the whole
+  // Backend-B payload snapshots after each teach turn, debounced so a burst
+  // of teaching costs one multi-MB write, not one per fact. The stamp ties a
+  // snapshot to this deploy (site version) AND this seed (fact count) — either
+  // changing discards the snapshot in favour of the fresh seed.
+  let persist = null;
+  let saveTimer = null;
+  let restoredCount = 0;
+  let siteVersion = "dev";
+  window.tmctChatLastSave = null;
+
+  function scheduleSave() {
+    if (!persist) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      const session = window.tmctChatSession;
+      if (!session) return;
+      const started = performance.now();
+      let snapshot;
+      try {
+        snapshot = structuredClone(session.memoryDir.payload);
+      } catch {
+        try { snapshot = JSON.parse(JSON.stringify(session.memoryDir.payload)); } catch { return; }
+      }
+      persist.save(snapshot).then((saved) => {
+        if (saved) window.tmctChatLastSave = { at: Date.now(), ms: Math.round(performance.now() - started) };
+      });
+    }, 500);
+  }
+
+  async function forgetEverything() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (persist) await persist.clear();
+    restoredCount = 0;
+    window.tmctChatSession = newSession();
+    const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
+    addSystemLine("forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats) + ").");
+    await renderStatsPanel(stats);
+  }
 
   // ---- memory stats: the boot message's own numbers, and the docked panel -
   // Both read window.tmctChat.memoryStats(memoryDir) (chat-browser-entry.mjs)
@@ -586,6 +703,21 @@ ${THEME_TOKENS_CSS}
         statsPanelEl.appendChild(item);
       }
     }
+
+    if (persist) {
+      const forget = document.createElement("button");
+      forget.type = "button";
+      forget.id = "forgetEverything";
+      forget.className = "forget-btn";
+      forget.textContent = "forget everything";
+      forget.title = "clear what this device has saved and restart from the fresh seed";
+      forget.addEventListener("click", forgetEverything);
+      statsPanelEl.appendChild(forget);
+      const note = document.createElement("p");
+      note.className = "persist-note";
+      note.textContent = "taught facts are kept best-effort on this device (IndexedDB), never sent anywhere.";
+      statsPanelEl.appendChild(note);
+    }
   }
 
   function renderStatus() {
@@ -623,11 +755,13 @@ ${THEME_TOKENS_CSS}
     if (!q || busy || !window.tmctChatSession) return;
     inputEl.value = "";
     addUserBubble(q);
+    transcript.push({ role: "you", text: q, chipTier: null, ts: Date.now() });
     const pendingRow = addPendingAssistantBubble();
     setBusy(true);
     window.tmctChatSession.turn(q)
       .then((result) => {
         settleAssistantBubble(pendingRow, result.answer, result.record);
+        if (result.record && result.record.via === "assert") scheduleSave();
         return renderStatsPanel(); // a teach turn just grew this session's memory; a plain ask leaves it unchanged either way
       })
       .catch((err) => settleAssistantBubble(pendingRow,
@@ -649,21 +783,58 @@ ${THEME_TOKENS_CSS}
       });
   });
 
+  // ---- export + print: whole-conversation controls ------------------------
+  // Both read the transcript model; neither touches the network. The export
+  // downloads as a Blob (no server round-trip), and print relies on the
+  // @media print stylesheet above to un-pin the message column so every
+  // turn reaches paper.
+  el("exportMd").addEventListener("click", () => {
+    const md = transcriptMarkdown(transcript, { version: siteVersion, date: new Date(Date.now()).toISOString().slice(0, 10) });
+    const blob = new Blob([md], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "tmct-chat.md";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  el("printChat").addEventListener("click", () => window.print());
+
   async function boot() {
     if (!window.tmctChat) {
       statusEl.textContent = "the chat engine didn't load \\u2014 this page needs its build step (npm run demo:build)";
       inputEl.placeholder = "chat engine unavailable";
       return;
     }
-    await Promise.all([fetchSeed(), tryLoadWink()]);
+    await Promise.all([fetchSeed(), tryLoadWink(), fetchSiteVersion().then((v) => { siteVersion = v; })]);
     progressActive = false;
     window.tmctChat.registerReferencePackProvider(fetchPackProvider);
+    if (window.tmctChat.openPersistedStore) {
+      persist = window.tmctChat.openPersistedStore({ storeKey: "chat", stamp: siteVersion + ":" + seedFacts });
+    }
+    const savedRecord = persist ? await persist.load() : null;
     liveToggleEl.checked = readLivePref();
-    window.tmctChatSession = newSession();
+    if (savedRecord && savedRecord.payload) {
+      window.tmctChatSession = window.tmctChat.createChatSession({
+        seedPayload: savedRecord.payload,
+        vocabSeeded: true,
+        liveReference: liveToggleEl.checked,
+        onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
+      });
+    } else {
+      window.tmctChatSession = newSession();
+    }
     if (window.tmctChatSession.setLiveReference) window.tmctChatSession.setLiveReference(liveToggleEl.checked);
     const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
+    if (savedRecord) restoredCount = stats.taught.length;
+    const restoredNote = savedRecord
+      ? " Restored " + restoredCount + " taught fact" + (restoredCount === 1 ? "" : "s")
+        + " from your last visit \\u2014 state kept best-effort on this device."
+      : "";
     addSystemLine("tmct \\u2014 the real engine, running in this page \\u2014 " + statsSummaryLine(stats)
-      + ". Ask it something, or teach it a fact of your own.");
+      + "." + restoredNote + " Ask it something, or teach it a fact of your own.");
     await renderStatsPanel(stats);
     inputEl.placeholder = seedPayload ? 'try "what is a dog"' : window.tmctChat.vocabExampleHint(false);
     renderStatus();

@@ -41,6 +41,7 @@ import { parseWorldEditorText, planWorldEditorSync } from "../../services/advent
 import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
+import { openPersistedStore } from "./idb-persist.mjs";
 
 /** A live in-memory adventure this page's ticker AND chat dock can both
  *  drive. Returns `{ memoryDir, autoplayTick, turn, snapshot }`.
@@ -48,15 +49,27 @@ import { relatedForTerm } from "../../domain/skos-view.mjs";
  *  openAdventure() itself does for a real session; `planHolder.state` is set
  *  the same way, so adventureTurn treats every subsequent call — auto-play's
  *  own or a visitor's typed one — as a live, already-open world rather than
- *  a fresh opening line. */
-export async function createAdventureSession(worldPayload) {
+ *  a fresh opening line.
+ *
+ *  `restoredPayload` (optional) is a whole Backend-B payload snapshot saved
+ *  by an earlier visit (idb-persist.mjs): assigned directly onto the fresh
+ *  store INSTEAD of re-appending the world's seed facts/rules — the snapshot
+ *  already carries them, plus every @turnN state row played since, so the
+ *  world resumes exactly where the fold left it. `restoredVisitedRoomIds`
+ *  carries the matching exposure set forward; without it, only the player's
+ *  current room counts as visited. */
+export async function createAdventureSession(worldPayload, { restoredPayload = null, restoredVisitedRoomIds = null } = {}) {
   const memoryDir = createInMemoryStore();
   const tag = `world:${worldPayload.name}`;
-  await appendFacts(memoryDir, worldPayload.facts.map((f) => ({
-    subject: f.subject, predicate: f.predicate, object: f.object, provenance: tag,
-  })));
-  for (const rule of worldPayload.rules) {
-    await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: tag });
+  if (restoredPayload) {
+    memoryDir.payload = { ...memoryDir.payload, ...restoredPayload };
+  } else {
+    await appendFacts(memoryDir, worldPayload.facts.map((f) => ({
+      subject: f.subject, predicate: f.predicate, object: f.object, provenance: tag,
+    })));
+    for (const rule of worldPayload.rules) {
+      await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: tag });
+    }
   }
 
   const planHolder = { state: { adventure: { world: worldPayload.name } } };
@@ -77,10 +90,10 @@ export async function createAdventureSession(worldPayload) {
   // into the same variable, is enough: manual moves feed autoplay's own
   // reasoning, autoplay's moves feed the panels, with no separate
   // bookkeeping either way.
-  let visitedRoomIds = new Set();
+  let visitedRoomIds = new Set(Array.isArray(restoredVisitedRoomIds) ? restoredVisitedRoomIds : []);
   const openingRows = readFactRows(await loadMemory(memoryDir));
   const openingHere = foldWorldState(openingRows).placements.get("player")?.object ?? null;
-  if (openingHere) visitedRoomIds = new Set([openingHere]);
+  if (openingHere) visitedRoomIds.add(openingHere);
 
   const graph = parseEntities({ individuals: [], objectProperties: [] });
   const lexicon = loadLexicon();
@@ -179,5 +192,5 @@ export async function createAdventureSession(worldPayload) {
 globalThis.tmctAdventure = {
   createAdventureSession, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
   worldDigestRows, roomAffordances, foldWorldState, exposedFacts,
-  relatedForTerm, classAncestorChain,
+  relatedForTerm, classAncestorChain, openPersistedStore,
 };
