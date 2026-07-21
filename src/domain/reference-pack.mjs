@@ -70,3 +70,105 @@ export function cleanMissReferenceTerm(term, lexicon = loadLexicon()) {
   if (!entry) return null;
   return normFactTerm(entry.lemma);
 }
+
+// ---- the live Wikipedia supplement (opt-in): the pure half -----------------
+
+export const LIVE_PACK_NAME = "wikipedia-live";
+
+/** The provenance tag a fact stored from a LIVE Wikipedia article carries —
+ *  the same reference:<pack>:<article>@<revid> shape the shipped pack uses,
+ *  so memory/trust.mjs parses it with no change: kind "reference", pack
+ *  "wikipedia-live". */
+export function liveProvenanceTag(article) {
+  return `reference:${LIVE_PACK_NAME}:${article.title}@${article.revid}`;
+}
+
+/** The cited answer for a clean miss the live lookup could ground: the
+ *  article's summary with its title, the LIVE source named, the licence and
+ *  the revision-pinned URL always visible. */
+export function renderLiveReferenceAnswer(term, article) {
+  return `${term} — ${article.summary} (source: live Wikipedia article "${article.title}", `
+    + `English Wikipedia, CC BY-SA 4.0 — ${article.url}?oldid=${article.revid})`;
+}
+
+/** The pure half of the LIVE clean-miss gate — same fold, shape check and
+ *  RELATION_TERM exclusion as cleanMissReferenceTerm, but WITHOUT the
+ *  lexicon-membership wall: a word the lexicon has never met is exactly what
+ *  a live lookup is for. A known lexicon entry still resolves to its lemma
+ *  (so "otters" and "otter" share one key); an unknown word keys on its own
+ *  folded form. Capped at three words — longer phrases are never a clean
+ *  vocabulary miss. */
+export function cleanMissLiveTerm(term, lexicon = loadLexicon()) {
+  const t = normFactTerm(term);
+  if (!t || !/^[a-z][a-z' -]*$/.test(t)) return null;
+  if (RELATION_TERM[t]) return null;
+  if (t.split(/\s+/).length > 3) return null;
+  const entry = lookupNoun(lexicon, t);
+  return entry ? normFactTerm(entry.lemma) : t;
+}
+
+// ---- summary/isa extraction, shared by the pack build and the live lookup --
+
+export const SUMMARY_CHAR_CAP = 400;
+
+/** Whole leading sentences of `text` up to `cap` chars; a first sentence
+ *  longer than the cap is hard-cut at it. */
+export function sentencesUpTo(text, cap) {
+  const parts = String(text ?? "").split(/(?<=[.!?])\s+/);
+  let out = "";
+  for (const part of parts) {
+    const candidate = out ? `${out} ${part}` : part;
+    if (candidate.length > cap) break;
+    out = candidate;
+  }
+  return out || String(text ?? "").slice(0, cap);
+}
+
+const ISA_RE = /^[A-Z][^.!?]{0,80}? (?:is|are) (?:(a|an|the) )?([a-z][a-z -]{1,60})/;
+
+// Words that end the noun phrase: a relative clause or a trailing modifier
+// carries detail, not the category ("a place where ships shelter" → place).
+const ISA_CLAUSE_CUT = new Set([
+  "that", "which", "where", "who", "whose", "whom", "when", "used", "found",
+  "made", "with", "in", "on", "for", "from", "by", "to", "and", "or",
+]);
+// Classifier heads carry no category of their own ("a member of the cat
+// family" names family membership, not what the thing is) — no isa beats a
+// generic one, because a stored subClassOf must stay meaningful.
+const ISA_GENERIC_HEADS = new Set([
+  "type", "kind", "sort", "form", "class", "variety", "group", "part",
+  "piece", "member", "way", "term", "name", "word", "thing", "example",
+  "family", "genus", "species", "unit", "series", "set", "list", "number",
+  "amount",
+]);
+const ISA_ARTICLES = new Set(["a", "an", "the"]);
+
+/** The isa lemma of a lead's first sentence, or null. The copula must sit in
+ *  the first sentence; an of-chain resolves to its final noun ("a kind of
+ *  dog" → dog); a bare-plural predicate counts only when the head is an
+ *  inflected plural the lexicon folds ("are animals that…" → animal, but
+ *  "is light" stays null); a generic classifier head is no isa at all. */
+export function isaOf(plain, lexicon) {
+  const m = String(plain ?? "").match(ISA_RE);
+  if (!m) return null;
+  const bare = !m[1];
+  const window = [];
+  for (const word of m[2].trim().split(/\s+/)) {
+    if (ISA_CLAUSE_CUT.has(word)) break;
+    window.push(word);
+    if (window.length >= 6) break;
+  }
+  const lastOf = window.lastIndexOf("of");
+  let headWords = lastOf >= 0 ? window.slice(lastOf + 1) : window;
+  while (headWords.length && ISA_ARTICLES.has(headWords[0])) headWords = headWords.slice(1);
+  if (!headWords.length) return null;
+  const headToken = headWords[headWords.length - 1].split("-").pop();
+  if (!headToken || ISA_GENERIC_HEADS.has(headToken)) return null;
+  const entry = lookupNoun(lexicon, headToken);
+  if (!entry) return null;
+  const lemma = normFactTerm(entry.lemma);
+  // A bare predicate ("is light") is only trusted when the head is an
+  // inflected plural the lexicon folded back to its lemma.
+  if (bare && (!/s$/.test(headToken) || normFactTerm(headToken) === lemma)) return null;
+  return lemma;
+}

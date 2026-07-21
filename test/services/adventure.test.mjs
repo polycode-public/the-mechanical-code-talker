@@ -11,7 +11,7 @@ import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/
 import { foldWorldState, runNpcPass, roomAffordances, worldDigestRows } from "../../src/services/adventure.mjs";
 import { driveSessionTurns } from "../helpers/session.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
-import { appendFacts, appendRule, loadMemory, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
+import { appendFacts, appendRule, loadMemory, openMemoryBackend, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
 import { compileDomain, movesFromRules, stateFromFacts } from "../../src/domain/domain.mjs";
 import { actionFamilies, capabilityFromActionRules } from "../../src/domain/router/taught.mjs";
 
@@ -242,7 +242,9 @@ test("the worked example writes every intermediate graph state, and the housekee
       ],
     );
     assert.match(String(turns[13].answer), /you take the letter/, "the win condition lands");
-    const rows = readFactRows(await loadMemory(dir));
+    const backend = await openMemoryBackend(dir, "");
+    const rows = readFactRows(await loadMemory(backend.dir));
+    await backend.close();
     const has = (subject, predicate, object) =>
       rows.some((r) => r.subject === subject && r.predicate === predicate && r.object === object);
     // The turn ledger: state-changing commands only (the failed take and the

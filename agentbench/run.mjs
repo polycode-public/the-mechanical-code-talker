@@ -120,9 +120,10 @@ export const MEMORY_FIXTURE = Object.freeze({
 /** Build the run context the driver receives. Materializes the ingested fixture
  *  to a throwaway .tmct/graph.json (mirroring chatbench's createRunnerDeps and a
  *  real graph writer's pipeline) so the REAL dispatchTool can resolve entities,
- *  plus a seeded .tmct/memory/graph.json (MEMORY_FIXTURE) so the memory-graph
- *  capability (tmct_related) can ground a positive case — routed by the
- *  resolver/goal drivers too, via ctx.resolveMemoryTerm, not only the stub floor.
+ *  plus MEMORY_FIXTURE seeded through the configured memory backend so the
+ *  memory-graph capability (tmct_related) can ground a positive case — routed
+ *  by the resolver/goal drivers too, via ctx.resolveMemoryTerm, not only the
+ *  stub floor.
  *  Returns { ctx, cleanup } — the caller MUST await cleanup(). */
 export async function createRunCtx() {
   const { dispatchTool } = await import(join(ROOT, "src", "tools", "server.mjs"));
@@ -136,7 +137,16 @@ export async function createRunCtx() {
   await mkdir(join(dir, ".tmct", "memory"), { recursive: true });
   const graphFile = join(dir, ".tmct", "graph.json");
   await writeFile(graphFile, graphJson);
-  await writeFile(join(dir, ".tmct", "memory", "graph.json"), JSON.stringify(MEMORY_FIXTURE));
+  {
+    const { openMemoryBackend, appendFacts } = await import(join(ROOT, "src", "adapters", "memory", "core.mjs"));
+    const backend = await openMemoryBackend(dir, "");
+    const attr = (ind, key) => ind.attributes.find((a) => a.key === key)?.value;
+    await appendFacts(backend.dir, MEMORY_FIXTURE.individuals.map((ind) => ({
+      subject: attr(ind, "subject"), predicate: attr(ind, "predicate"),
+      object: attr(ind, "object"), provenance: attr(ind, "provenance"),
+    })));
+    await backend.close();
+  }
   const config = { graphFile };
 
   // The parsed graph, loaded ONCE, so the resolver/planner can BIND entities
@@ -173,11 +183,20 @@ export async function createRunCtx() {
   };
 
   // resolveMemoryTerm(): the driver's MEMORY-graph binding oracle, the sibling
-  // of resolve() above — reads the seeded MEMORY_FIXTURE (via the same
-  // dirname(dirname(graphFile)) derivation memoryFactRows/tmct_related use) so
-  // a memoryTerm frame pick (tmct_related's `term`) can ground.
-  const resolveMemoryTermCtx = async (term) =>
-    resolveMemoryTerm(readFactRows(await loadMemory(dirname(dirname(config.graphFile)))), term);
+  // of resolve() above — reads the seeded MEMORY_FIXTURE through the same
+  // configured-backend resolution memoryFactRows/tmct_related use (off the
+  // dirname(dirname(graphFile)) repo derivation) so a memoryTerm frame pick
+  // (tmct_related's `term`) can ground.
+  const resolveMemoryTermCtx = async (term) => {
+    const { openConfiguredMemoryBackend, loadMemory: loadMem, readFactRows: readRows } =
+      await import(join(ROOT, "src", "adapters", "memory", "core.mjs"));
+    const backend = await openConfiguredMemoryBackend(dirname(dirname(config.graphFile)));
+    try {
+      return resolveMemoryTerm(readRows(await loadMem(backend.dir)), term);
+    } finally {
+      await backend.close();
+    }
+  };
 
   const ctx = { dispatch, resolve, resolveMemoryTerm: resolveMemoryTermCtx, graph, capabilityByName, config, selectTool };
   return { ctx, cleanup: () => rm(dir, { recursive: true, force: true }) };

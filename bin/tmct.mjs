@@ -533,6 +533,11 @@ async function main() {
     // session with the verbose developer/debug narrate mode already on. Default
     // OFF; `/narrate on`/`/narrate off` also toggles it mid-session.
     const narrate = rest.includes("--narrate");
+    // `--live-wikipedia` (or TMCT_LIVE_WIKIPEDIA=1 / tmct.toml corpus tier3,
+    // both read inside createSession): start with the live Wikipedia
+    // supplement on. Default OFF; `/wiki on`/`/wiki off` toggles it
+    // mid-session.
+    const liveReference = rest.includes("--live-wikipedia");
     // `--graph <path>` (repeatable) / `--config <path>` (src/services/cli-args.mjs): threaded
     // through as the new top tier of createSession's graph-resolution order (above
     // TMCT_GRAPH_FILE — see chat.mjs's own docblock at createSession). Omitted from
@@ -580,7 +585,7 @@ async function main() {
     if (prompt) {
       const { createSession } = await import("../src/services/chat.mjs");
       const { splitSentences } = await import("../src/services/sentences.mjs");
-      const session = await createSession({ repoPath, ephemeral, narrate, ...extra });
+      const session = await createSession({ repoPath, ephemeral, narrate, liveReference, ...extra });
       let finalAnswer = "";
       let finalPlan = null;
       let parts;
@@ -622,10 +627,10 @@ async function main() {
     const plain = rest.includes("--plain") || !process.stdin.isTTY || !process.stdout.isTTY;
     if (plain) {
       const { runChat } = await import("../src/services/chat.mjs");
-      await runChat({ repoPath, ephemeral, narrate, ...extra });
+      await runChat({ repoPath, ephemeral, narrate, liveReference, ...extra });
     } else {
       const { runTui } = await import("../src/surfaces/tui/app.mjs");
-      await runTui({ repoPath, ephemeral, narrate, ...extra });
+      await runTui({ repoPath, ephemeral, narrate, liveReference, ...extra });
     }
     return;
   }

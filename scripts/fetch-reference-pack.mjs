@@ -32,9 +32,11 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
-import { shardNameFor, cleanMissReferenceTerm, isReferenceArticleRow } from "../src/domain/reference-pack.mjs";
-import { normFactTerm } from "../src/domain/hash.mjs";
-import { loadLexicon, lookupNoun } from "../src/domain/grammar/lexicon.mjs";
+import {
+  shardNameFor, cleanMissReferenceTerm, isReferenceArticleRow,
+  sentencesUpTo, isaOf, SUMMARY_CHAR_CAP,
+} from "../src/domain/reference-pack.mjs";
+import { loadLexicon } from "../src/domain/grammar/lexicon.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(HERE, "..");
@@ -46,7 +48,11 @@ export const BUDGET_SHARDS_GZ_BYTES = Math.round(3.5 * 1024 * 1024);
 export const BUDGET_INDEX_GZ_BYTES = 600 * 1024;
 
 export const LEAD_CHAR_CAP = 2500;
-export const SUMMARY_CHAR_CAP = 400;
+
+// The summary/isa extraction helpers live in src/domain/reference-pack.mjs
+// now (the live Wikipedia lookup shares them); re-exported so this script
+// remains the pack pipeline's one import surface.
+export { sentencesUpTo, isaOf, SUMMARY_CHAR_CAP };
 
 export function dumpUrlFor(date) {
   return `https://dumps.wikimedia.org/simplewiki/${date}/simplewiki-${date}-pages-articles-multistream.xml.bz2`;
@@ -181,68 +187,6 @@ export function passesSanityCheck(plain) {
 }
 
 // ---- phase c: select --------------------------------------------------------
-
-/** Whole leading sentences of `text` up to `cap` chars; a first sentence
- *  longer than the cap is hard-cut at it. */
-export function sentencesUpTo(text, cap) {
-  const parts = String(text ?? "").split(/(?<=[.!?])\s+/);
-  let out = "";
-  for (const part of parts) {
-    const candidate = out ? `${out} ${part}` : part;
-    if (candidate.length > cap) break;
-    out = candidate;
-  }
-  return out || String(text ?? "").slice(0, cap);
-}
-
-const ISA_RE = /^[A-Z][^.!?]{0,80}? (?:is|are) (?:(a|an|the) )?([a-z][a-z -]{1,60})/;
-
-// Words that end the noun phrase: a relative clause or a trailing modifier
-// carries detail, not the category ("a place where ships shelter" → place).
-const ISA_CLAUSE_CUT = new Set([
-  "that", "which", "where", "who", "whose", "whom", "when", "used", "found",
-  "made", "with", "in", "on", "for", "from", "by", "to", "and", "or",
-]);
-// Classifier heads carry no category of their own ("a member of the cat
-// family" names family membership, not what the thing is) — no isa beats a
-// generic one, because a stored subClassOf must stay meaningful.
-const ISA_GENERIC_HEADS = new Set([
-  "type", "kind", "sort", "form", "class", "variety", "group", "part",
-  "piece", "member", "way", "term", "name", "word", "thing", "example",
-  "family", "genus", "species", "unit", "series", "set", "list", "number",
-  "amount",
-]);
-const ISA_ARTICLES = new Set(["a", "an", "the"]);
-
-/** The isa lemma of a lead's first sentence, or null. The copula must sit in
- *  the first sentence; an of-chain resolves to its final noun ("a kind of
- *  dog" → dog); a bare-plural predicate counts only when the head is an
- *  inflected plural the lexicon folds ("are animals that…" → animal, but
- *  "is light" stays null); a generic classifier head is no isa at all. */
-export function isaOf(plain, lexicon) {
-  const m = String(plain ?? "").match(ISA_RE);
-  if (!m) return null;
-  const bare = !m[1];
-  const window = [];
-  for (const word of m[2].trim().split(/\s+/)) {
-    if (ISA_CLAUSE_CUT.has(word)) break;
-    window.push(word);
-    if (window.length >= 6) break;
-  }
-  const lastOf = window.lastIndexOf("of");
-  let headWords = lastOf >= 0 ? window.slice(lastOf + 1) : window;
-  while (headWords.length && ISA_ARTICLES.has(headWords[0])) headWords = headWords.slice(1);
-  if (!headWords.length) return null;
-  const headToken = headWords[headWords.length - 1].split("-").pop();
-  if (!headToken || ISA_GENERIC_HEADS.has(headToken)) return null;
-  const entry = lookupNoun(lexicon, headToken);
-  if (!entry) return null;
-  const lemma = normFactTerm(entry.lemma);
-  // A bare predicate ("is light") is only trusted when the head is an
-  // inflected plural the lexicon folded back to its lemma.
-  if (bare && (!/s$/.test(headToken) || normFactTerm(headToken) === lemma)) return null;
-  return lemma;
-}
 
 function articleUrlFor(title) {
   return `https://simple.wikipedia.org/wiki/${encodeURIComponent(title.replace(/ /g, "_"))}`;

@@ -116,6 +116,7 @@ export async function createSession({
   gitRoot = gitToplevel,
   ephemeral = false,
   narrate = false,
+  liveReference = false,
   // The storage-backend seam: the default (empty or "default") resolves to
   // Backend C — the sqlite store at .tmct/memory/graph.sqlite, a live
   // node:sqlite connection lazily imported on open. The flat-file Backend A is
@@ -136,6 +137,12 @@ export async function createSession({
   // narrate mode already on. Session-scoped and mutable — `/narrate on|off`
   // flips it turn-to-turn (see `turn()` below). Default OFF.
   let narrateOn = narrate || /^(1|true|yes)$/i.test(String(env.TMCT_NARRATE || ""));
+  // LIVE WIKIPEDIA supplement (--live-wikipedia, TMCT_LIVE_WIKIPEDIA=1, or
+  // tmct.toml's corpus tier3 — the tier that already means "reach for the
+  // network"): start the session with the live lookup enabled. Session-scoped
+  // and mutable — `/wiki on|off` flips it turn-to-turn, exactly like narrate.
+  // Default OFF; the toml tier is folded in below, once toml has resolved.
+  let liveReferenceOn = liveReference || /^(1|true|yes)$/i.test(String(env.TMCT_LIVE_WIKIPEDIA || ""));
   // Graph resolution order (delegates to src/services/cli-args.mjs's
   // resolveRuntimeConfig): explicit --graph path(s) win outright; then --repo
   // (never silently redirected by env); then TMCT_GRAPH_FILE env; then
@@ -190,6 +197,10 @@ export async function createSession({
   // being null (no file, or one that failed to load above) by falling back
   // to the shipped defaults for every key.
   const gameConfig = resolveGameConfig(toml);
+
+  // tmct.toml's corpus tier3 opts the session into the live supplement too —
+  // the flag/env tiers above stay authoritative when set.
+  if (toml?.corpus?.tier === "tier3") liveReferenceOn = true;
 
   // Ephemeral: keep config.graphFile pointing at the READ graph, but divert the
   // write base (repo → logs/memory/sessions) to a throwaway temp dir. The committed
@@ -337,6 +348,7 @@ export async function createSession({
     get planState() { return planState; },
     get turns() { return turns; },
     get narrate() { return narrateOn; },
+    get liveReference() { return liveReferenceOn; },
     promptFor: () => promptFor(focus),
 
     /** One dispatched turn through the FULL sink sequencing (writeLog → writeSidecar
@@ -347,7 +359,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, vocabHint, tel, biasByBundle, planState, gameConfig });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -358,13 +370,15 @@ export async function createSession({
         turns += 1;
         return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, prompt: promptFor(focus) };
       }
-      const { answer, logLines, record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate } = result;
+      const { answer, logLines, record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate, liveReference: nextLiveReference } = result;
       focus = nextFocus;
       last = nextLast;
       if ("planState" in result) planState = result.planState;
-      // /narrate on|off (runCommand) rides the turn RESULT the same way a focus
-      // update does — apply it to this handle's session-scoped state.
+      // /narrate on|off and /wiki on|off (runCommand) ride the turn RESULT the
+      // same way a focus update does — apply them to this handle's
+      // session-scoped state.
       if (typeof nextNarrate === "boolean") narrateOn = nextNarrate;
+      if (typeof nextLiveReference === "boolean") liveReferenceOn = nextLiveReference;
       await writeLog(logLines.join("\n") + "\n");
       await writeSidecar(record);
       turnRecords.push(record);
@@ -417,12 +431,13 @@ export async function runChat({
   gitRoot = gitToplevel,
   ephemeral = false,
   narrate = false,
+  liveReference = false,
   memoryBackend = null,
 } = {}) {
   // createSession's first-run seed (~2-3s) produces ZERO output until it fully
   // resolves, which otherwise reads as `npm run chat` hanging with total silence.
   output.write("tmct — starting…\n");
-  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, memoryBackend });
+  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, liveReference, memoryBackend });
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
   for (const line of session.bannerLines) output.write(dim(line) + "\n");

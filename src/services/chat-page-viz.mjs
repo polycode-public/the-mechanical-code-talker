@@ -198,6 +198,20 @@ ${THEME_TOKENS_CSS}
   .composer-inner input:disabled { opacity: .55; }
   .composer-inner button[type="submit"] { width: 2.3rem; height: 2.3rem; border-radius: 50%; background: var(--ink); color: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 1rem; flex: 0 0 auto; }
   .composer-inner button[type="submit"]:disabled { opacity: .4; cursor: default; }
+
+  /* the live-Wikipedia opt-in row, under the input: a small pill switch in
+     the statusline's own mono idiom — quiet, off by default. The checkbox
+     itself is visually hidden but stays focusable, so the switch keeps
+     keyboard/screen-reader behaviour for free. */
+  .composer-tools { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .45rem; display: flex; align-items: center; }
+  .composer-tools .liveLabel { display: inline-flex; align-items: center; gap: .45rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); cursor: pointer; }
+  .composer-tools input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .toggle-track { position: relative; width: 26px; height: 14px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 99px; background: var(--card); flex: 0 0 auto; transition: background .15s ease, border-color .15s ease; }
+  .toggle-knob { position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); transition: transform .15s ease; }
+  #liveToggle:checked ~ .toggle-track { background: var(--corpus); border-color: var(--corpus); }
+  #liveToggle:checked ~ .toggle-track .toggle-knob { transform: translateX(12px); background: var(--bg); }
+  #liveToggle:focus-visible ~ .toggle-track { outline: 2px solid var(--ink); outline-offset: 2px; }
+
   .statusline { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .6rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
 
   /* the provenance stats panel: what this session's memory holds, docked to
@@ -242,6 +256,13 @@ ${THEME_TOKENS_CSS}
           placeholder="loading the engine…" aria-label="Ask tmct something" disabled>
         <button type="submit" id="composerSend" aria-label="Send" disabled>&#8594;</button>
       </div>
+      <div class="composer-tools">
+        <label class="liveLabel" title="Off by default. When on, a question nothing local can answer also asks en.wikipedia.org — two small requests per lookup, and the answer is cited (CC BY-SA).">
+          <input type="checkbox" id="liveToggle" role="switch" aria-label="ask Wikipedia when I don't know">
+          <span class="toggle-track" aria-hidden="true"><span class="toggle-knob"></span></span>
+          <span>ask Wikipedia when I don&#8217;t know</span>
+        </label>
+      </div>
     </form>
     <div class="statusline" id="status">loading the engine&hellip;</div>
   </div>
@@ -265,6 +286,21 @@ ${THEME_TOKENS_CSS}
   const sendBtn = el("composerSend");
   const statusEl = el("status");
   const statsPanelEl = el("statsPanel");
+  const liveToggleEl = el("liveToggle");
+
+  // The live-Wikipedia preference: "on" or absent. try/caught throughout —
+  // private-mode storage that throws must never break the page, it just
+  // forgets the preference between visits.
+  const LIVE_PREF_KEY = "tmct.chat.liveWikipedia";
+  function readLivePref() {
+    try { return localStorage.getItem(LIVE_PREF_KEY) === "on"; } catch { return false; }
+  }
+  function writeLivePref(on) {
+    try {
+      if (on) localStorage.setItem(LIVE_PREF_KEY, "on");
+      else localStorage.removeItem(LIVE_PREF_KEY);
+    } catch { /* private mode — the toggle still works this visit */ }
+  }
 
   function scrollToEnd() {
     messagesEl.parentElement.scrollTop = messagesEl.parentElement.scrollHeight;
@@ -436,7 +472,12 @@ ${THEME_TOKENS_CSS}
     try { return structuredClone(seedPayload); } catch { return JSON.parse(JSON.stringify(seedPayload)); }
   };
   function newSession() {
-    return window.tmctChat.createChatSession({ seedPayload: cloneSeed(), vocabSeeded: Boolean(seedPayload) });
+    return window.tmctChat.createChatSession({
+      seedPayload: cloneSeed(),
+      vocabSeeded: Boolean(seedPayload),
+      liveReference: liveToggleEl.checked,
+      onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
+    });
   }
 
   let packIndexPromise = null;
@@ -542,8 +583,17 @@ ${THEME_TOKENS_CSS}
       : winkStatus === "unavailable"
         ? "wink-nlp unavailable — curated + fuzzy tiers only (still zero guesses, zero LLM)"
         : "wink-nlp: loading\\u2026";
-    statusEl.textContent = seedPart + " \\u00b7 " + winkPart;
+    const livePart = "live wikipedia: " + (liveToggleEl.checked ? "on" : "off");
+    statusEl.textContent = seedPart + " \\u00b7 " + winkPart + " \\u00b7 " + livePart;
   }
+
+  liveToggleEl.addEventListener("change", function () {
+    writeLivePref(liveToggleEl.checked);
+    if (window.tmctChatSession && window.tmctChatSession.setLiveReference) {
+      window.tmctChatSession.setLiveReference(liveToggleEl.checked);
+    }
+    renderStatus();
+  });
 
   let busy = true;
   function setBusy(v) {
@@ -570,6 +620,16 @@ ${THEME_TOKENS_CSS}
         "something went wrong answering that (" + (err && err.message ? err.message : err) + ") \\u2014 try rephrasing",
         { miss: true }))
       .finally(() => {
+        // A "/wiki on|off" turn flips the session's own state — mirror it back
+        // into the switch and the stored preference, then settle the
+        // statusline (which the onLiveLookup hook may have overwritten with
+        // "searching wikipedia…" mid-turn).
+        if (window.tmctChatSession && typeof window.tmctChatSession.liveReference === "boolean"
+            && liveToggleEl.checked !== window.tmctChatSession.liveReference) {
+          liveToggleEl.checked = window.tmctChatSession.liveReference;
+          writeLivePref(liveToggleEl.checked);
+        }
+        renderStatus();
         setBusy(false);
         inputEl.focus();
       });
@@ -584,7 +644,9 @@ ${THEME_TOKENS_CSS}
     await Promise.all([fetchSeed(), tryLoadWink()]);
     progressActive = false;
     window.tmctChat.registerReferencePackProvider(fetchPackProvider);
+    liveToggleEl.checked = readLivePref();
     window.tmctChatSession = newSession();
+    if (window.tmctChatSession.setLiveReference) window.tmctChatSession.setLiveReference(liveToggleEl.checked);
     const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
     addSystemLine("tmct \\u2014 the real engine, running in this page \\u2014 " + statsSummaryLine(stats)
       + ". Ask it something, or teach it a fact of your own.");

@@ -46,8 +46,12 @@ import { readConstructionFiles } from "../adapters/corpus/construction-banks.mjs
 import { fuzzyMatchInSet, fuzzyBound } from "../domain/interpret/fuzzy.mjs";
 import { loadLexicon, lookupNoun } from "../domain/grammar/lexicon.mjs";
 import { pickPhrase } from "../domain/answer-variants.mjs";
-import { REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, referenceProvenanceTag } from "../domain/reference-pack.mjs";
+import {
+  REFERENCE_PACK_NAME, cleanMissReferenceTerm, renderReferenceAnswer, referenceProvenanceTag,
+  LIVE_PACK_NAME, cleanMissLiveTerm, renderLiveReferenceAnswer, liveProvenanceTag,
+} from "../domain/reference-pack.mjs";
 import { getReferencePackProvider } from "../adapters/corpus/reference-pack.mjs";
+import { getLiveReferenceProvider } from "../adapters/corpus/wikipedia-live.mjs";
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
@@ -5361,6 +5365,7 @@ export async function helpText() {
     ["/capabilities", "what /plan can plan over: the built-in graph tools plus your taught actions"],
     ["/syllogise <term>", "work out and remember what follows from the facts about a term (needed for chains longer than 2 hops)"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
+    ["/wiki on|off", "live Wikipedia supplement (default off): a question I can't answer also tries en.wikipedia.org (network), cited"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
   ];
@@ -9551,6 +9556,39 @@ async function referencePackMissAnswer(term, { graph, memoryDir, lexicon, env, c
   return key ? referencePackAnswerForKey(key, env) : null;
 }
 
+/** The LIVE variant of cleanMissPackKey — the same resolveEntity and
+ *  remembered-fact checks, but through cleanMissLiveTerm, which drops the
+ *  lexicon-membership wall: a word the lexicon has never met is exactly what
+ *  the live lookup exists for. Null means the turn proceeds byte-identically
+ *  to a live-off run. */
+async function cleanMissLiveKey(term, { graph, memoryDir, lexicon, cache }) {
+  if (!term || !memoryDir) return null;
+  let key = null;
+  try { key = cleanMissLiveTerm(term, lexicon ?? undefined); } catch { key = null; }
+  if (!key) return null;
+  if (await resolveEntity(graph, term)) return null;
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  const variants = factTermVariants(normFactTerm, term);
+  variants.add(key);
+  const rows = await factRows(memoryDir, cache);
+  if (rows.some((f) => variants.has(f.subject) || variants.has(f.object))) return null;
+  return key;
+}
+
+/** The live Wikipedia lookup for an already-gated key: the article, or null
+ *  (toggle-off provider, network failure, throttle, drift-guard rejection —
+ *  all byte-identical to a live-off run). `onLiveLookup` is a notify-only
+ *  hook (the web page's "searching wikipedia…" statusline); its own failure
+ *  is swallowed too. */
+async function liveReferenceAnswerForKey(key, onLiveLookup) {
+  try { if (typeof onLiveLookup === "function") onLiveLookup(key); } catch { /* notify-only */ }
+  let article = null;
+  try { article = await getLiveReferenceProvider().lookup(key); } catch { article = null; }
+  if (!article) return null;
+  return { key, article, text: renderLiveReferenceAnswer(key, article) };
+}
+
 /** The child-pack half of learn-on-miss, for an already-gated key: look the
  *  key up in the shipped child triples pack and append every fact under child
  *  provenance, so the SAME question can be re-asked from the store. Null on a
@@ -9572,13 +9610,13 @@ async function childPackFactsForKey(key, { memoryDir, env, cache }) {
 /** Store the article's first-sentence isa as a subClassOf fact carrying
  *  reference provenance — AFTER the cited answer composed, and failure-
  *  tolerated: the answer stands whether or not the fact lands. */
-async function appendReferenceIsaFact(memoryDir, key, article, cache) {
+async function appendReferenceIsaFact(memoryDir, key, article, cache, tagFor = referenceProvenanceTag) {
   if (!article?.isa) return;
   try {
     const { appendFact } = await import("../adapters/memory/core.mjs");
     await appendFact(memoryDir, {
       subject: key, predicate: "rdfs:subClassOf", object: article.isa,
-      provenance: referenceProvenanceTag(article),
+      provenance: tagFor(article),
     });
     if (cache) cache.rows = null;
   } catch { /* tolerated — the cited answer is already composed */ }
@@ -10741,7 +10779,7 @@ const DECISION_RECALL_RE = /^(?:remind\s+me\s+)?what\s+(?:did\s+)?(?:we|i|you)\s
  *  than silently accepted alongside the current location. */
 const MOVE_HISTORY_RE = /^where\s+did\s+(.+?)\s+(?:move|get\s+moved|go)(?:\s+to)?[?.!\s]*$/i;
 
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, gameConfig = DEFAULT_GAME_CONFIG }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null }) {
   const ts = new Date().toISOString();
   // DISCOURSE ANAPHORA: a follow-up like "which of those are tested" / "count
   // them" filters or counts the PREVIOUS answer's entity set, threaded as
@@ -11343,6 +11381,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
           const ref = await referencePackAnswerForKey(key, env);
           if (ref) bareMetaHit = { text: ref.text, replace: true, reference: ref };
         }
+        // The live Wikipedia supplement (opt-in), LAST — the shipped packs
+        // always speak first, and a live null/failure leaves bareMetaHit
+        // exactly as a live-off run would.
+        if (!bareMetaHit && liveReference && refTerm) {
+          const liveKey = await cleanMissLiveKey(refTerm, { graph, memoryDir, lexicon, cache });
+          const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup) : null;
+          if (live) bareMetaHit = { text: live.text, replace: true, live };
+        }
       }
     }
     // A bare "what is X" naming a REAL code-graph entity (not a taught fact,
@@ -11390,6 +11436,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     note(trace, "lane: (2b) REFERENCE PACK — a bare \"what is X\" clean miss answered from the shipped reference pack, cited");
     note(trace, `source: reference pack ${REFERENCE_PACK_NAME} — article "${bareMetaHit.reference.article.title}" (revid ${bareMetaHit.reference.article.revid})`);
     await appendReferenceIsaFact(memoryDir, bareMetaHit.reference.key, bareMetaHit.reference.article, cache);
+  } else if (bareMetaHit?.live) {
+    // The bare-form LIVE hit settles the same way, under live provenance.
+    answer = bareMetaHit.text;
+    via = "reference";
+    recordMiss = false;
+    handled = true;
+    note(trace, "lane: (2b) LIVE WIKIPEDIA — a bare \"what is X\" clean miss answered from a live en.wikipedia.org lookup (opt-in), cited");
+    note(trace, `source: live reference ${LIVE_PACK_NAME} — article "${bareMetaHit.live.article.title}" (revid ${bareMetaHit.live.article.revid})`);
+    await appendReferenceIsaFact(memoryDir, bareMetaHit.live.key, bareMetaHit.live.article, cache, liveProvenanceTag);
   } else if (bareMetaHit) {
     answer = bareMetaHit.replace ? bareMetaHit.text : `${answer}\n${bareMetaHit.text}`;
     // Same discipline as lane (3): a fact-lane return flagged `miss` is an
@@ -11799,6 +11854,22 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         await appendReferenceIsaFact(memoryDir, ref.key, ref.article, cache);
       }
     }
+    // The live Wikipedia supplement (opt-in), strictly AFTER both shipped
+    // packs: its own gate (no lexicon-membership wall) may pass where the
+    // pack gate could not, and a null/throwing lookup leaves the honest
+    // miss byte-identical to a live-off run.
+    if (miss && recordMiss && via === "composed" && liveReference && refTerm) {
+      const liveKey = await cleanMissLiveKey(refTerm, { graph, memoryDir, lexicon, cache });
+      const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup) : null;
+      if (live) {
+        answer = live.text;
+        via = "reference";
+        recordMiss = false;
+        note(trace, "lane: (4h) LIVE WIKIPEDIA — a clean miss answered from a live en.wikipedia.org lookup (opt-in), cited");
+        note(trace, `source: live reference ${LIVE_PACK_NAME} — article "${live.article.title}" (revid ${live.article.revid})`);
+        await appendReferenceIsaFact(memoryDir, live.key, live.article, cache, liveProvenanceTag);
+      }
+    }
   }
   // (5) #1 SHORT TAILORED MISS — replace ONLY the engine's full grammar cheat-sheet
   // wall (WALL_MISS_RE). Receipt-bearing misses keep their specific wording.
@@ -11982,24 +12053,26 @@ const GOAL_BY_COMMAND = {
   arch: "understand the overall architecture (package/module boundaries)",
   capabilities: "see what /plan can plan over — built-in query tools and taught actions",
   syllogise: "materialize the entailed facts that follow from what's remembered about one term",
+  wiki: "toggle the live Wikipedia supplement for questions nothing local can answer",
 };
 
 /** A slash-command → the mapped tool (or the /help, /focus, /narrate, unknown
  *  cases). Returns the same { answer, logLines, record, focus } shape as
  *  runAsk. Also carries a `goal` field mirroring runAsk's own, so
  *  withGoalLine's "Goal (inferred): …" line fires for command dispatches too. */
-async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, tel = null, biasByBundle = {}, cache = null }) {
+async function runCommand(line, { config, source, graph, focus, memoryDir, trace, narrate = false, liveReference = false, tel = null, biasByBundle = {}, cache = null }) {
   const ts = new Date().toISOString();
   const sp = line.indexOf(" ");
   const name = (sp === -1 ? line.slice(1) : line.slice(1, sp)).toLowerCase();
   const argText = (sp === -1 ? "" : line.slice(sp + 1)).trim();
-  const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus, narrateNext } = {}) => ({
+  const mk = (answer, { resolvedIds = [], miss = false, newFocus = focus, narrateNext, liveReferenceNext } = {}) => ({
     answer,
     logLines: [ts, `> ${line}`, answer, ""],
     record: { type: "turn", ts, query: line, command: name, via: "command", resolvedIds, answeredIds: [], miss },
     focus: newFocus,
     goal: GOAL_BY_COMMAND[name] || "use a specific tool/command directly",
     ...(narrateNext !== undefined ? { narrate: narrateNext } : {}),
+    ...(liveReferenceNext !== undefined ? { liveReference: liveReferenceNext } : {}),
   });
 
   if (name === "help") { note(trace, "goal: get oriented / learn available commands"); return mk(await helpText()); }
@@ -12021,6 +12094,20 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     }
     const next = arg === "on";
     return mk(`narrate mode ${next ? "on" : "off"}.`, { narrateNext: next });
+  }
+
+  // /wiki on|off — the live Wikipedia supplement toggle (session-scoped,
+  // exactly the /narrate pattern: the new state rides the turn RESULT as
+  // `liveReference`, and each session shell applies it to its own mutable
+  // state). A bare "/wiki" reports the CURRENT state and changes nothing.
+  if (name === "wiki") {
+    const arg = argText.toLowerCase();
+    if (arg !== "on" && arg !== "off") {
+      return mk(`live Wikipedia supplement is ${liveReference ? "on" : "off"} — /wiki on or /wiki off. `
+        + "When on, a question I can't answer also tries en.wikipedia.org (network).");
+    }
+    const next = arg === "on";
+    return mk(`live Wikipedia supplement ${next ? "on" : "off"}.`, { liveReferenceNext: next });
   }
 
   // /memory [verbose] — what tmct remembers, as text (the same renderer
@@ -12963,7 +13050,7 @@ function vocabAntecedentFrom(last) {
   return m[1];
 }
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, _noSplit = false } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, _noSplit = false } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -13026,7 +13113,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // the PLAN NEXT block below write planHolder.state; every other path leaves
   // it untouched, and the caller re-threads whatever comes back.
   const planHolder = { state: planState };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, gameConfig: resolvedGameConfig };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, gameConfig: resolvedGameConfig };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST

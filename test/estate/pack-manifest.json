@@ -278,6 +278,7 @@
   "src/adapters/corpus/sprite-template-files.mjs",
   "src/adapters/corpus/templates.mjs",
   "src/adapters/corpus/unknown-ingest.mjs",
+  "src/adapters/corpus/wikipedia-live.mjs",
   "src/adapters/corpus/worlds-pack.mjs",
   "src/adapters/graph-build.mjs",
   "src/adapters/graph-merge.mjs",

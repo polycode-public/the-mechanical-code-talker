@@ -185,6 +185,29 @@ test("renderChatHtml: exposes window.tmctChatReady, the same boot-readiness hook
   assert.match(html, /window\.tmctChatReady = boot\(\)/);
 });
 
+test("renderChatHtml: the live-Wikipedia switch renders under the composer — a real checkbox with switch semantics and its plain-words label", () => {
+  const html = renderChatHtml();
+  assert.match(html, /class="composer-tools"/);
+  assert.match(html, /<input type="checkbox" id="liveToggle" role="switch" aria-label="ask Wikipedia when I don't know">/);
+  assert.match(html, />ask Wikipedia when I don&#8217;t know</);
+  assert.ok(!html.includes('id="liveToggle" checked'), "the switch ships unchecked — live lookups are opt-in");
+  assert.match(html, /class="toggle-track"/, "the pill track renders");
+  assert.match(html, /#liveToggle:checked ~ \.toggle-track \{ background: var\(--corpus\)/, "the checked track tints with the corpus token");
+  const title = html.match(/label class="liveLabel" title="([^"]+)"/)?.[1] ?? "";
+  assert.match(title, /Off by default/);
+  assert.match(title, /two small requests/);
+  assert.match(title, /CC BY-SA/);
+});
+
+test("renderChatHtml: the switch is wired to the session and the stored preference, and the statusline reports the live state", () => {
+  const html = renderChatHtml();
+  assert.match(html, /"tmct\.chat\.liveWikipedia"/, "the preference persists under its own localStorage key");
+  assert.match(html, /setLiveReference\(liveToggleEl\.checked\)/, "a flip reaches the running session");
+  assert.match(html, /liveToggleEl\.checked = readLivePref\(\)/, "boot restores the stored preference before the session starts");
+  assert.match(html, /onLiveLookup: function \(\) \{ statusEl\.textContent = "searching wikipedia\\u2026"; \}/, "an in-flight lookup announces itself on the statusline");
+  assert.match(html, /"live wikipedia: " \+ \(liveToggleEl\.checked \? "on" : "off"\)/, "the statusline names the live state");
+});
+
 test("renderChatHtml: the brand line renders as typed — lowercase, single element, no heading beside it", () => {
   const html = renderChatHtml();
   assert.ok(html.includes('<span class="eyebrow">the-mechanical-code-talker</span>'));

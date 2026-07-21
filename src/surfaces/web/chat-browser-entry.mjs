@@ -28,6 +28,10 @@ import { registerWinkModel } from "../../adapters/wink-model.mjs";
 // null in the browser — build-chat-bundle stubs node:zlib as a thrower its
 // try/catch absorbs).
 import { registerReferencePackProvider } from "../../adapters/corpus/reference-pack.mjs";
+// The LIVE Wikipedia seam (opt-in, default off): the page's toggle enables it
+// per session, and e2e tests stub the provider the same way the pack's own
+// provider is stubbed. The adapter is fetch-only, so it bundles as-is.
+import { registerLiveReferenceProvider } from "../../adapters/corpus/wikipedia-live.mjs";
 
 /**
  * A browser chat session over the real turn engine.
@@ -42,7 +46,7 @@ import { registerReferencePackProvider } from "../../adapters/corpus/reference-p
  * { answer, end, record, plan } and threads focus/last/planState between
  * calls exactly as the CLI session does.
  */
-export function createChatSession({ seedPayload = null, vocabSeeded = false } = {}) {
+export function createChatSession({ seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null } = {}) {
   const memoryDir = createInMemoryStore();
   // Spread onto the store's own empty payload so a partial seed (individuals
   // and objectProperties only) still carries the classes/prefixes scaffolding
@@ -59,10 +63,15 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false } = 
   let focus = null;
   let last = null;
   let planState = null;
+  let liveReferenceOn = Boolean(liveReference);
 
   return {
     memoryDir,
     sessionId,
+    get liveReference() { return liveReferenceOn; },
+    /** The page's toggle seam: flip the live Wikipedia supplement for every
+     *  later turn (the `/wiki on|off` command flips the same state). */
+    setLiveReference(v) { liveReferenceOn = Boolean(v); },
 
     /** One dispatched turn. A throwing runTurn must never kill the session —
      *  the page has no other chance to show this turn's answer. */
@@ -72,6 +81,7 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false } = 
         result = await runTurn(line, {
           config: null, source: null, graph, focus, last, memoryDir, sessionId,
           env: {}, lexicon, vocabHint, planState,
+          liveReference: liveReferenceOn, onLiveLookup,
         });
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -80,6 +90,7 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false } = 
       focus = result.focus;
       last = result.last;
       if ("planState" in result) planState = result.planState;
+      if (typeof result.liveReference === "boolean") liveReferenceOn = result.liveReference;
       return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null };
     },
   };
@@ -132,4 +143,4 @@ export async function memoryStats(memoryDir) {
   return { total: rows.length, bandCounts, taught };
 }
 
-globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, normFactTerm, vocabExampleHint, memoryStats };
+globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, normFactTerm, vocabExampleHint, memoryStats };
