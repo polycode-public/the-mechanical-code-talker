@@ -1,4 +1,4 @@
-#!/usr/bin/env node
+#!/usr/bin/env -S node --disable-warning=ExperimentalWarning
 // tmct — The Mechanical Code Talker. The headline entry is CHAT: a bare
 // invocation drops you into a tolerant, offline, $0 prompt that guides you
 // toward precision queries about a repository (ELIZA/PARRY-style, but obsessed
@@ -34,6 +34,18 @@
 // static import here costs `tmct --help` nothing.
 import { renderUsage, unknownInvocationMessage } from "../src/domain/cli-verbs.mjs";
 
+// The default memory backend rides node:sqlite, which Node still ships behind
+// an ExperimentalWarning. The shebang and the package.json scripts both pass
+// --disable-warning=ExperimentalWarning, but a direct `node bin/tmct.mjs`
+// (spawnSync, some CI shells) bypasses both — so replace the default warning
+// printer with one that swallows exactly that warning and re-prints everything
+// else in Node's own format.
+process.removeAllListeners("warning");
+process.on("warning", (warning) => {
+  if (warning?.name === "ExperimentalWarning" && /sqlite/i.test(String(warning?.message || ""))) return;
+  process.stderr.write(`(node:${process.pid}) ${warning?.name || "Warning"}: ${warning?.message || warning}\n`);
+});
+
 const HELP = `tmct — The Mechanical Code Talker
 
 A tolerant, offline, $0 chat that guides you toward precision queries about a
@@ -51,9 +63,10 @@ TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files > --repo-derived
 "repo_path" fills the --repo tier when the flag is absent.
 
 Memory-backend precedence (chat; see src/services/chat.mjs createSession): --memory-backend
-flag > TMCT_MEMORY_BACKEND env > tmct.toml [memory] backend > "default" (the flat
-.tmct/ JSON file). Set it once with \`tmct init --memory-backend <...>\` and every
-later \`tmct chat\` in that repo picks it up with no flag needed.
+flag > TMCT_MEMORY_BACKEND env > tmct.toml [memory] backend > sqlite (the built-in
+default, .tmct/memory/graph.sqlite); "memory" keeps the store in-process only. Set it
+once with \`tmct init --memory-backend <...>\` and every later \`tmct chat\` in that
+repo picks it up with no flag needed.
 `;
 
 const argv = process.argv.slice(2);
@@ -626,9 +639,24 @@ async function main() {
     const rest = process.argv.slice(3);
     const verbose = rest.includes("--verbose") || rest.includes("-v");
     const { resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
-    const { inspectMemory } = await import("../src/adapters/memory/inspect.mjs");
-    const { repo } = await resolveRuntimeConfig({ argv: rest });
-    process.stdout.write(await inspectMemory(repo, { verbose }) + "\n");
+    const { renderMemory } = await import("../src/adapters/memory/inspect.mjs");
+    const { loadMemory, openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+    const { loadBlockIndex } = await import("../src/adapters/memory/blocks.mjs");
+    const { repo, toml } = await resolveRuntimeConfig({ argv: rest });
+    // Same backend resolution as chat's createSession, minus the (nonexistent
+    // here) CLI-flag tier: env > tmct.toml > the sqlite default — so this verb
+    // inspects the store a chat session in this repo actually writes.
+    const backendChoice = String(process.env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
+    const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
+    try {
+      const memory = await loadMemory(memoryDir);
+      // The folded-block index is file-backed beside the session logs, not part
+      // of the memory store — read it off the repo path directly.
+      const blocks = await loadBlockIndex(repo);
+      process.stdout.write(renderMemory({ memory, blocks }, { verbose }) + "\n");
+    } finally {
+      await closeMemoryStore();
+    }
     return;
   }
 
@@ -1023,14 +1051,23 @@ async function main() {
     };
     const { resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
     const { syllogise, DEFAULT_MAX_ENVIRONMENTS } = await import("../src/domain/syllogise.mjs");
-    const { loadMemory, readFactRows, appendFacts, loadSyllogiseState, saveSyllogiseState } = await import("../src/adapters/memory/core.mjs");
-    const { repo } = await resolveRuntimeConfig({ argv: rest });
-    const res = await syllogise(repo, {
-      depth: numFlag("--depth", 32), budget: numFlag("--budget", 50),
-      maxEnvironments: numFlag("--max-environments", DEFAULT_MAX_ENVIRONMENTS),
-      full: rest.includes("--full"),
-      store: { loadMemory, readFactRows, appendFacts, loadSyllogiseState, saveSyllogiseState },
-    });
+    const { loadMemory, readFactRows, appendFacts, loadSyllogiseState, saveSyllogiseState, openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+    const { repo, toml } = await resolveRuntimeConfig({ argv: rest });
+    // Same env > tmct.toml > default backend resolution as `tmct memory` — the
+    // entailed facts must land in the store chat reads back.
+    const backendChoice = String(process.env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
+    const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
+    let res;
+    try {
+      res = await syllogise(memoryDir, {
+        depth: numFlag("--depth", 32), budget: numFlag("--budget", 50),
+        maxEnvironments: numFlag("--max-environments", DEFAULT_MAX_ENVIRONMENTS),
+        full: rest.includes("--full"),
+        store: { loadMemory, readFactRows, appendFacts, loadSyllogiseState, saveSyllogiseState },
+      });
+    } finally {
+      await closeMemoryStore();
+    }
     process.stdout.write(
       `tmct syllogise — derived ${res.count} entailed fact(s) (mode ${res.mode}${res.mode === "delta" ? `, Δ${res.deltaSize}` : ""}, depth ${res.depth}, budget ${res.budget})`
       + (res.environmentsAdded > 0 ? `, ${res.environmentsAdded} alternate environment(s) recorded` : "")
@@ -1074,12 +1111,22 @@ async function main() {
     const focus = strFlag(rest, ["--focus"]);
     const term = strFlag(rest, ["--term"]); // seeds via normFactTerm; --focus wins when both are given
     const outPath = resolve(process.cwd(), strFlag(rest, ["--output", "--out"], "ledger.html"));
-    const { repo } = await resolveRuntimeConfig({ argv: rest });
-    const data = await computeLedgerData(repo, {
-      ...(focus ? { focus } : {}),
-      ...(!focus && term ? { term } : {}),
-      ...(rowLimit != null ? { rowLimit } : {}),
-    });
+    const { repo, toml } = await resolveRuntimeConfig({ argv: rest });
+    // Same env > tmct.toml > default backend resolution as `tmct memory` — the
+    // ledger must render the store chat actually wrote.
+    const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+    const backendChoice = String(process.env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
+    const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
+    let data;
+    try {
+      data = await computeLedgerData(memoryDir, {
+        ...(focus ? { focus } : {}),
+        ...(!focus && term ? { term } : {}),
+        ...(rowLimit != null ? { rowLimit } : {}),
+      });
+    } finally {
+      await closeMemoryStore();
+    }
     // readMemoryAskBundle never throws; an empty string renders the page with
     // an honest "chat unavailable" note instead of the dock (e.g. a fresh
     // checkout before the bundle's first build).
@@ -1198,12 +1245,18 @@ async function main() {
       process.stderr.write("tmct plan: needs a request, e.g. `tmct plan \"of the modules impacted by X, which are untested\"`\n");
       process.exit(2);
     }
-    const { repo, config } = await resolveRuntimeConfig({ argv: rest });
+    const { repo, config, toml } = await resolveRuntimeConfig({ argv: rest });
     const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("../src/domain/router/drive.mjs");
     const { capabilityPlanDeps } = await import("../src/services/chat.mjs");
+    // Same env > tmct.toml > default backend resolution as `tmct memory` — the
+    // taught world/rule records the planner registers live in the store chat
+    // wrote them to.
+    const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+    const backendChoice = String(process.env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
+    const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
     let ctx;
     try {
-      ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config, memoryDir: repo });
+      ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config, memoryDir });
     } catch (e) {
       process.stderr.write(`tmct plan: could not load the graph — ${e?.message || e}\n`);
       process.exit(1);
@@ -1256,6 +1309,7 @@ async function main() {
       }
     } finally {
       for (const dispose of ctx.disposers || []) dispose();
+      await closeMemoryStore();
     }
     return;
   }

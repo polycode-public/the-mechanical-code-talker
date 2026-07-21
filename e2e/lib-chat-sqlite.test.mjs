@@ -1,4 +1,5 @@
-// The library surface over the sqlite backend: import the public entry
+// The library surface over the sqlite backend — the CLI's default store,
+// selected explicitly here to pin the token: import the public entry
 // (src/services/index.mjs), open a session on Backend C, and run the three
 // capability flows — teach + read-back, the scripted guessing game, and
 // learn-on-miss over the real shipped reference pack. Then prove persistence

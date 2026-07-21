@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { sampleSize, balancedSample, renderMemory, inspectMemory } from "../../src/adapters/memory/inspect.mjs";
-import { appendFact, appendUtterances } from "../../src/adapters/memory/core.mjs";
+import { appendFact, appendUtterances, openMemoryBackend } from "../../src/adapters/memory/core.mjs";
 import { saveBlock } from "../../src/adapters/memory/blocks.mjs";
 import { runTurn } from "../../src/services/chat.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
@@ -19,19 +19,26 @@ const SESSION = "0189aaaa-0000-7000-8000-000000000000";
 
 /** A seeded fixture memory: 12 facts (one dual-provenance), one Q/A utterance
  *  pair in a session, one folded block. */
-async function seededMemory() {
-  const dir = await mkdtemp(join(tmpdir(), "tmct-inspect-"));
+/** Seed the fixture content: facts/utterances into `store` (a plain dir for
+ *  the Backend-A read-path tests, a routed handle for the CLI test), the
+ *  folded block always beside the repo dir (blocks are file-backed). */
+async function seedMemoryContent(store, blockDir) {
   for (let i = 0; i < 11; i += 1) {
-    await appendFact(dir, { subject: `thing ${i}`, predicate: "rdfs:subClassOf", object: "artifact", provenance: "corpus:test /r/IsA" });
+    await appendFact(store, { subject: `thing ${i}`, predicate: "rdfs:subClassOf", object: "artifact", provenance: "corpus:test /r/IsA" });
   }
   // the dual-provenance fact: corpus AND chat agree → tops the breadth ranking
-  await appendFact(dir, { subject: "module", predicate: "rdfs:subClassOf", object: "component", provenance: "corpus:test /r/IsA" });
-  await appendFact(dir, { subject: "module", predicate: "rdfs:subClassOf", object: "component", provenance: `ace:chat:${SESSION}@2026-07-04T10:00:00.000Z` });
-  await appendUtterances(dir, [
+  await appendFact(store, { subject: "module", predicate: "rdfs:subClassOf", object: "component", provenance: "corpus:test /r/IsA" });
+  await appendFact(store, { subject: "module", predicate: "rdfs:subClassOf", object: "component", provenance: `ace:chat:${SESSION}@2026-07-04T10:00:00.000Z` });
+  await appendUtterances(store, [
     { role: "visitor", text: "which modules import a.mjs", ts: "2026-07-04T10:00:01.000Z", sessionId: SESSION },
     { role: "tmct", text: "app/lib/b.mjs and app/lib/c.mjs.", ts: "2026-07-04T10:00:01.000Z", sessionId: SESSION, replyTo: `utt:${SESSION}#2026-07-04T10:00:01.000Z#visitor` },
   ]);
-  await saveBlock(dir, { id: SESSION, text: "Q: which modules import a.mjs\nA: app/lib/b.mjs and app/lib/c.mjs." });
+  await saveBlock(blockDir, { id: SESSION, text: "Q: which modules import a.mjs\nA: app/lib/b.mjs and app/lib/c.mjs." });
+}
+
+async function seededMemory() {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-inspect-"));
+  await seedMemoryContent(dir, dir);
   return dir;
 }
 
@@ -104,7 +111,13 @@ test("/memory chat command: same renderer, recorded as a command turn; no store 
 });
 
 test("tmct memory CLI: renders the same inspection text, exit 0", async () => {
-  const dir = await seededMemory();
+  // The CLI resolves the repo's ROUTED backend (the sqlite default), so this
+  // test seeds through the same route rather than the Backend-A internals the
+  // pure-renderer tests above exercise directly.
+  const dir = await mkdtemp(join(tmpdir(), "tmct-inspect-"));
+  const { dir: handle, close } = await openMemoryBackend(dir, "");
+  await seedMemoryContent(handle, dir);
+  await close();
   try {
     const r = spawnSync(process.execPath, [BIN, "memory", "--repo", dir], { encoding: "utf8" });
     assert.equal(r.status, 0, r.stderr);

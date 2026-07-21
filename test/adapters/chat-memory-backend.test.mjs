@@ -24,18 +24,25 @@ async function memoryEntries(dir) {
   try { return await readdir(join(dir, ".tmct", "memory")); } catch (e) { if (e?.code === "ENOENT") return []; throw e; }
 }
 
-test("createSession default (no memoryBackend): Backend A, unchanged — writes .tmct/memory/graph.json", async () => {
+test("createSession default (no memoryBackend): Backend C — the sqlite store, no flat-JSON Fact rows", async () => {
   clearCache();
   const dir = await tmpRepo();
   try {
     const s = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" } });
-    assert.equal(typeof s.memoryDir, "string", "memoryDir is the plain repo path, exactly as before");
+    assert.equal(s.memoryDir?.backend, "sqlite", "the default memoryDir is a Backend C handle — Backend A is retired from routing");
     await s.turn("every module is a component");
     const m = await loadMemory(s.memoryDir);
     const rows = readFactRows(m);
     assert.ok(rows.some((r) => r.subject === "module" && r.object === "component"), "taught fact recorded");
     await s.close();
-    assert.deepEqual(await memoryEntries(dir), ["graph.json"], "Backend A wrote the flat JSON file");
+    const entries = await memoryEntries(dir);
+    assert.ok(entries.includes("graph.sqlite"), "the default backend wrote graph.sqlite");
+    // The independent sessions.mjs utterance mirror may still leave an
+    // ordinary graph.json behind, but it must never carry the taught FACT.
+    if (entries.includes("graph.json")) {
+      const strayMemory = JSON.parse(await (await import("node:fs/promises")).readFile(join(dir, ".tmct", "memory", "graph.json"), "utf8"));
+      assert.equal(readFactRows(strayMemory).length, 0, "no Fact ever leaks into the session mirror's own file");
+    }
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -104,7 +111,7 @@ test("createSession({ memoryBackend: 'sqlite' }): env var TMCT_MEMORY_BACKEND=sq
 // precedence chain: bin/tmct.mjs's --memory-backend CLI flag (already the
 // resolved `memoryBackend` param by the time it reaches createSession) >
 // TMCT_MEMORY_BACKEND env > tmct.toml's `[memory] backend` > the built-in
-// default (Backend A). --------------------------------------------------
+// sqlite default. --------------------------------------------------------
 
 test("createSession({ repoPath }): tmct.toml's [memory] backend alone (no option, no env) selects the backend", async () => {
   clearCache();
@@ -157,13 +164,13 @@ test("createSession precedence: TMCT_MEMORY_BACKEND env beats tmct.toml, but los
   }
 });
 
-test("createSession: a tmct.toml [memory] backend of \"default\" (what `tmct init --memory-backend default` writes) falls through to Backend A, same as an absent value", async () => {
+test("createSession: a tmct.toml [memory] backend of \"default\" (what `tmct init --memory-backend default` writes) falls through to the sqlite default, same as an absent value", async () => {
   clearCache();
   const dir = await tmpRepo();
   try {
     await writeFile(join(dir, "tmct.toml"), '[memory]\nbackend = "default"\n');
     const s = await createSession({ repoPath: dir, env: { TMCT_NO_SEED: "1" } });
-    assert.equal(typeof s.memoryDir, "string", "\"default\" in tmct.toml behaves like no override — Backend A");
+    assert.equal(s.memoryDir?.backend, "sqlite", "\"default\" in tmct.toml behaves like no override — the sqlite default");
     await s.close();
   } finally {
     await rm(dir, { recursive: true, force: true });

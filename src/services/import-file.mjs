@@ -13,7 +13,7 @@ import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
 import { runTurn, uuidv7 } from "./chat.mjs";
-import { loadMemory, readFactRows, appendFact, openMemoryBackend } from "../adapters/memory/core.mjs";
+import { loadMemory, readFactRows, appendFact, openConfiguredMemoryBackend } from "../adapters/memory/core.mjs";
 import { loadConfig } from "../adapters/config.mjs";
 import { splitSentencesPreservingPaths } from "./sentences.mjs";
 
@@ -25,7 +25,7 @@ import { splitSentencesPreservingPaths } from "./sentences.mjs";
  *   comments: number, report: string
  * }>}
  */
-export async function importDefinitionFile(repoRoot, filePath, { env = process.env } = {}) {
+export async function importDefinitionFile(repoRoot, filePath, { env = process.env, memoryDir: injectedMemoryDir = null } = {}) {
   const root = resolve(repoRoot);
   const abs = resolve(root, filePath);
   const sourceTag = `import:${basename(abs)}`;
@@ -36,10 +36,11 @@ export async function importDefinitionFile(repoRoot, filePath, { env = process.e
   const body = lines.filter((l) => !l.trim().startsWith("#")).join("\n");
   const sentences = splitSentencesPreservingPaths(body);
 
-  const { loadTomlConfig } = await import("../adapters/toml-config.mjs");
-  const raw = await loadTomlConfig(root).catch(() => null);
-  const backend = String(raw?.memory?.backend || "default").trim().toLowerCase();
-  const { dir: memoryDir, close } = await openMemoryBackend(root, backend);
+  // An injected handle (a caller mid-session, or a build script pinned to the
+  // in-memory backend) is used as-is and left open — the caller owns it.
+  const opened = injectedMemoryDir ? null : await openConfiguredMemoryBackend(root, env);
+  const memoryDir = injectedMemoryDir ?? opened.dir;
+  const close = opened ? opened.close : async () => {};
   const config = loadConfig(env, root);
 
   const taught = [];

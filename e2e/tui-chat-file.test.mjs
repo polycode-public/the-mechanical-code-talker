@@ -1,21 +1,22 @@
-// The terminal surface over the default file backend, as a real spawned
+// The terminal surface over the default (sqlite) backend, as a real spawned
 // child: bin/tmct.mjs with piped (non-TTY) stdio is the --plain readline
 // shell over a temp repo. One seeded session exercises the three capability
 // flows in sequence — a seeded vocabulary answer, a scripted guess-the-number
 // game (thinker mode, deterministic through the TMCT_GAME_SECRET test seam),
 // and a learn-on-miss turn over the real shipped reference pack, whose stored
-// isa fact then answers the follow-up ask from the file-backend memory.
+// isa fact then answers the follow-up ask from the default backend's memory.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { loadMemory, openMemoryBackend, readFactRows } from "../src/adapters/memory/core.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 
-test("the spawned chat shell answers the seed, plays the game, and learns from the pack into its file store", async () => {
+test("the spawned chat shell answers the seed, plays the game, and learns from the pack into its default store", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-tui-file-"));
   try {
     const input = [
@@ -49,9 +50,14 @@ test("the spawned chat shell answers the seed, plays the game, and learns from t
     assert.match(res.stdout, /\(source: reference article "Otter", Simple English Wikipedia, CC BY-SA 4\.0/, "the pack answer carries the citation frame");
     assert.match(res.stdout, /otter is a kind of animal \(source: reference:simplewiki:Otter@\d+/, "the second ask answers from the stored reference fact");
 
-    // the file backend really holds what the session learned
-    const store = await readFile(join(dir, ".tmct", "memory", "graph.json"), "utf8");
-    assert.match(store, /reference:simplewiki:Otter@\d+/, "the reference-provenance fact is on disk");
+    // the default (sqlite) backend really holds what the session learned
+    const { dir: handle, close } = await openMemoryBackend(dir, "");
+    const rows = readFactRows(await loadMemory(handle));
+    await close();
+    assert.ok(
+      rows.some((r) => /reference:simplewiki:Otter@\d+/.test(r.provenance)),
+      "the reference-provenance fact is on disk in the routed store",
+    );
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

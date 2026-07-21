@@ -169,11 +169,12 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   // (snapshotMemory), not injected here.
   //
   // [memory] backend — the storage-backend seam (createSession's
-  // `memoryBackend` option / TMCT_MEMORY_BACKEND env): "default" (the flat
-  // OWL-labelled JSON file under .tmct/memory/), "memory" (in-process only,
-  // nothing on disk), or "sqlite" (a local SQLite file). Written by `tmct init
-  // --memory-backend <...>`; read by chat.mjs's createSession at CLI-flag > env >
-  // tmct.toml > default precedence, same order as everything else in this file.
+  // `memoryBackend` option / TMCT_MEMORY_BACKEND env): "sqlite" (a local
+  // SQLite file at .tmct/memory/graph.sqlite — also what "default"/unset
+  // resolves to), or "memory" (in-process only, nothing on disk). Written by
+  // `tmct init --memory-backend <...>`; read by chat.mjs's createSession at
+  // CLI-flag > env > tmct.toml > default precedence, same order as everything
+  // else in this file.
   const mem = src.memory || {};
   const memory = {};
   if (mem.retention_versions !== undefined) memory.retentionVersions = mem.retention_versions;

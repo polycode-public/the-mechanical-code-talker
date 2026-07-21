@@ -26,7 +26,8 @@ test("session handle: exposes the caller-owned { focus, lastAnswer, memoryDir, l
   const repo = await repoWithFixtureGraph("shape");
   const s = await createSession({ repoPath: repo, env: { TMCT_NO_SEED: "1" } });
   try {
-    assert.equal(s.memoryDir, repo, "memoryDir points at the repo the handle owns");
+    assert.equal(s.memoryDir?.backend, "sqlite", "memoryDir is the routed default (sqlite) handle");
+    assert.ok(String(s.memoryDir?.dbPath || "").startsWith(repo), "the sqlite store lives under the repo the handle owns");
     assert.ok(s.lexicon && s.lexicon.nouns instanceof Map, "the loaded lexicon rides the handle");
     assert.equal(s.focus, null, "no focus before any turn");
     assert.equal(s.lastAnswer, null, "no last answer before any turn");

@@ -116,12 +116,13 @@ export async function createSession({
   gitRoot = gitToplevel,
   ephemeral = false,
   narrate = false,
-  // The storage-backend seam: "file" (default) keeps memoryDir a plain
-  // repo-path string (Backend A). "memory" selects Backend B (zero disk I/O,
-  // session-scoped). "sqlite" selects Backend C (a live node:sqlite
-  // connection, lazily imported only when chosen). This is `tmct chat
-  // --memory-backend <...>`'s already-resolved value; full precedence (this
-  // param > TMCT_MEMORY_BACKEND env > tmct.toml > "default") resolved below.
+  // The storage-backend seam: the default (empty or "default") resolves to
+  // Backend C — the sqlite store at .tmct/memory/graph.sqlite, a live
+  // node:sqlite connection lazily imported on open. The flat-file Backend A is
+  // retired from routing. "memory" selects Backend B (zero disk I/O,
+  // session-scoped). This is `tmct chat --memory-backend <...>`'s
+  // already-resolved value; full precedence (this param > TMCT_MEMORY_BACKEND
+  // env > tmct.toml > the sqlite default) resolved below.
   memoryBackend = null,
 } = {}) {
   // EPHEMERAL mode (--ephemeral, or TMCT_EPHEMERAL=1): read the target graph but
@@ -259,9 +260,9 @@ export async function createSession({
   };
 
   // `memoryDir` is the opaque token every memory/core.mjs call in this file
-  // threads through unchanged. Backend A (default) keeps it the plain repo
-  // string; Backend B/C swap in a handle instead. Precedence — CLI flag > env
-  // > tmct.toml > default.
+  // threads through unchanged — always a Backend B/C handle from
+  // openMemoryBackend now that the flat-file Backend A is retired from
+  // routing. Precedence — CLI flag > env > tmct.toml > the sqlite default.
   const backendChoice = String(memoryBackend || env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
   // openMemoryBackend is the ONE shared resolver for this seam — init.mjs's
   // corpus seed calls the exact same function, so a repo's seeded facts and
@@ -276,14 +277,14 @@ export async function createSession({
   // bootstrap (a fixture/provider graph never seeds), only once (the marker),
   // and never when TMCT_NO_SEED=1 opts out.
   //
-  // Known Backend B/C limitation: seedBootstrapMemory/hasSeededVocabulary and
-  // sessions.mjs's own per-turn utterance mirror all resolve their marker
-  // file / repoDir directly off the STRING `repo` path, not the actual
-  // Backend B/C handle — so W3 seeding is skipped for a non-default backend,
-  // and a Backend B/C session's Utterance/Session individuals still land in
-  // an ordinary Backend-A .tmct/memory/graph.json. Taught FACTS themselves
-  // are unaffected: only the conversational transcript mirror leaks onto
-  // disk, never the facts.
+  // Known residual split: seedBootstrapMemory/hasSeededVocabulary resolve
+  // their marker file off the STRING `repo` path (correct — the marker is a
+  // file, not store content), so W3 seeding still only fires on the default
+  // token. And sessions.mjs's per-turn utterance mirror still writes an
+  // ordinary .tmct/memory/graph.json off the repo string — a file no routed
+  // reader opens now that Backend A is retired from routing. Taught FACTS
+  // themselves are unaffected: only the conversational transcript mirror
+  // leaks onto disk, never the facts.
   let seeded = null;
   if (empty && backendChoice === "" && String(env.TMCT_NO_SEED || "") !== "1") {
     seeded = await seedBootstrapMemory(repo, env);

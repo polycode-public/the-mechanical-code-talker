@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createSession, SEED_MARKER_REL } from "../src/services/chat.mjs";
-import { loadMemory, FACT_CLASS } from "../src/adapters/memory/core.mjs";
+import { loadMemory, openMemoryBackend, FACT_CLASS } from "../src/adapters/memory/core.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
@@ -29,8 +29,14 @@ const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", 
 // not a hardcoded bundle-name literal.
 const SEED_BANNER_RE = /^seeded (\d+) starter facts \((.+)\) — \/memory to inspect$/;
 
+/** Read a repo's memory back through the DEFAULT-routed backend (sqlite) —
+ *  the store the bootstrap seed actually writes. */
+const readRoutedMemory = async (dir) => {
+  const { dir: handle, close } = await openMemoryBackend(dir, "");
+  try { return await loadMemory(handle); } finally { await close(); }
+};
 const factCount = async (dir) =>
-  (await loadMemory(dir)).individuals.filter((i) => i.class === FACT_CLASS).length;
+  (await readRoutedMemory(dir)).individuals.filter((i) => i.class === FACT_CLASS).length;
 const exists = (p) => access(p).then(() => true, () => false);
 
 /** Find the banner's seed line and return { total, clauses, byBundle } — or null.
@@ -122,7 +128,7 @@ test("a tmct.toml activating tier2-aws seeds a second bundle alongside the defau
     assert.ok(banner.byBundle.human > 0 && banner.byBundle["tier2-aws"] > 0, `both bundles present: ${line}`);
     const sumOfClauses = Object.values(banner.byBundle).reduce((a, b) => a + b, 0);
     assert.equal(banner.total, sumOfClauses, "banner arithmetic includes both bundles");
-    const mem = await loadMemory(dir);
+    const mem = await readRoutedMemory(dir);
     const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
     const awsFact = facts.find((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
     assert.ok(awsFact, "a tier2-aws-provenance fact landed in memory");

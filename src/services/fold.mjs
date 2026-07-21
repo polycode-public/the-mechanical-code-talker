@@ -7,11 +7,14 @@
 // The cleaning rules themselves are pure and live in domain/memory/fold.mjs;
 // everything that touches the filesystem or the store lives here.
 
-import { mkdir, readdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { SESSIONS_DIR_REL, parseSessionJsonl, parseSessionLog } from "./sessions.mjs";
 import { removeBlock, saveBlock } from "../adapters/memory/blocks.mjs";
-import { CANONICALISED_FROM_PROP, FACT_CLASS, appendFacts, loadMemory, readFactRows, resolveMemoryGraphFile } from "../adapters/memory/core.mjs";
+import {
+  FACT_CLASS, appendCanonicalisedFromEdges, appendFacts, loadMemory,
+  openConfiguredMemoryBackend, readFactRows,
+} from "../adapters/memory/core.mjs";
 import { cleanSessionText } from "../domain/memory/fold.mjs";
 import { syllogise } from "../domain/syllogise.mjs";
 
@@ -24,38 +27,15 @@ const LOG_DIR_REL = ".tmct";
 // talking; we know exactly what the session touched). They are offline, $0,
 // best-effort side effects: a failure NEVER fails the fold.
 
-/** Atomic JSON write of the memory graph (temp-in-dir + rename), used here
- *  only to add mgx:canonicalisedFrom edges. */
-async function writeMemoryGraph(repoDir, payload) {
-  const file = resolveMemoryGraphFile(repoDir);
-  await mkdir(dirname(file), { recursive: true });
-  const tmp = `${file}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
-  await writeFile(tmp, JSON.stringify(payload));
-  await rename(tmp, file);
-}
-
-/** Add mgx:canonicalisedFrom edges (Fact → Utterance) into the payload, deduped
- *  by (subject,object) so a re-fold is idempotent — never duplicates a link. */
-function addCanonicalisedFromEdges(payload, links) {
-  let group = payload.objectProperties.find((g) => g?.prop === CANONICALISED_FROM_PROP);
-  if (!group) {
-    group = { predicate: "canonicalisedFrom", prop: CANONICALISED_FROM_PROP, count: 0, examples: [] };
-    payload.objectProperties.push(group);
-  }
-  for (const l of links) {
-    group.examples = group.examples.filter((e) => !(e?.subject === l.factId && e?.object === l.uttId));
-    group.examples.push({ subject: l.factId, object: l.uttId, subjectLabel: l.factLabel, objectLabel: l.uttLabel });
-  }
-  group.count = group.examples.length;
-}
-
 /** CANONISE + LINK, never replace: for each Fact whose provenance names a
  *  `ace:chat:<sessionId>@<ts>` utterance, add an mgx:canonicalisedFrom edge
- *  Fact -> Utterance (the utterance itself is left verbatim). Returns
- *  { linked, focus } — `focus` seeds the speculative pass below. */
-async function canoniseLinkSession(repoDir, sessionId) {
+ *  Fact -> Utterance (the utterance itself is left verbatim). `memoryDir` is
+ *  the already-opened store handle — the write goes through the store seam,
+ *  never a direct graph-file write. Returns { linked, focus } — `focus` seeds
+ *  the speculative pass below. */
+async function canoniseLinkSession(memoryDir, sessionId) {
   const focus = new Set();
-  const memory = await loadMemory(repoDir);
+  const memory = await loadMemory(memoryDir);
   const individuals = memory.individuals || [];
   if (!individuals.length) return { linked: [], focus };
   const uttById = new Map(individuals.filter((i) => i?.class === "Utterance").map((i) => [i.id, i]));
@@ -80,24 +60,28 @@ async function canoniseLinkSession(repoDir, sessionId) {
       links.push({ factId: r.id, factLabel: factById.get(r.id)?.label || r.id, uttId, uttLabel: utt.label || uttId });
     }
   }
-  if (links.length) {
-    addCanonicalisedFromEdges(memory, links);
-    await writeMemoryGraph(repoDir, memory);
-  }
+  if (links.length) await appendCanonicalisedFromEdges(memoryDir, links);
   return { linked: links, focus };
 }
 
-/** The fold-time idle pass (best-effort): canonise-link each folded session,
- *  then run one bounded speculative pass scoped to the union footprint (empty
- *  footprint -> skipped). Never throws — must never fail a fold. */
+/** The fold-time idle pass (best-effort): open the repo's configured memory
+ *  backend once (the fold only ever has the repo path in hand — its callers
+ *  are file-level), canonise-link each folded session through it, then run one
+ *  bounded speculative pass scoped to the union footprint (empty footprint ->
+ *  skipped). Never throws — must never fail a fold. */
 async function speculateOverSessions(repoDir, sessionIds) {
   try {
-    const focus = new Set();
-    for (const sid of sessionIds) {
-      const { focus: f } = await canoniseLinkSession(repoDir, sid);
-      for (const t of f) focus.add(t);
+    const { dir: memoryDir, close } = await openConfiguredMemoryBackend(repoDir);
+    try {
+      const focus = new Set();
+      for (const sid of sessionIds) {
+        const { focus: f } = await canoniseLinkSession(memoryDir, sid);
+        for (const t of f) focus.add(t);
+      }
+      if (focus.size) await syllogise(memoryDir, { focus, store: { loadMemory, readFactRows, appendFacts } });
+    } finally {
+      await close();
     }
-    if (focus.size) await syllogise(repoDir, { focus, store: { loadMemory, readFactRows, appendFacts } });
   } catch { /* offline best-effort: a fold never fails on the speculative pass */ }
 }
 

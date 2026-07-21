@@ -10,7 +10,7 @@ import { parseSessionLog, turnKey } from "../../src/services/sessions.mjs";
 import { cleanSessionText } from "../../src/domain/memory/fold.mjs";
 import { foldSessionLogs } from "../../src/services/fold.mjs";
 import { BLOCKS_DIR_REL, loadBlockIndex, retrieveBlocks } from "../../src/adapters/memory/blocks.mjs";
-import { appendFact, appendUtterances, loadMemory, readFactRows, CANONICALISED_FROM_PROP } from "../../src/adapters/memory/core.mjs";
+import { appendFact, appendUtterances, loadMemory, openMemoryBackend, readFactRows, CANONICALISED_FROM_PROP } from "../../src/adapters/memory/core.mjs";
 
 const SID = "01890000-0000-7000-8000-00000000f01d";
 const T = (n) => `2026-07-03T10:0${n}:00.000Z`;
@@ -160,14 +160,17 @@ test("foldSessionLogs: canonise+link edges the canonical Fact to its as-spoken u
   const TB = "2026-07-04T10:01:00.000Z";
   const dir = await mkdtemp(join(tmpdir(), "tmct-mem-canon-"));
   try {
-    // as-spoken utterances (the honest record) + the canonical Facts reified from
-    // them, tagged with the chat provenance the ACE bridge writes.
-    await appendUtterances(dir, [
+    // as-spoken utterances (the honest record) + the canonical Facts reified
+    // from them, tagged with the chat provenance the ACE bridge writes — seeded
+    // through the ROUTED backend, the same store the fold resolves for itself.
+    const { dir: handle, close } = await openMemoryBackend(dir, "");
+    await appendUtterances(handle, [
       { role: "visitor", text: "every cache is a store", ts: TA, sessionId: S, sessionStarted: T(0) },
       { role: "visitor", text: "every store is a component", ts: TB, sessionId: S, sessionStarted: T(0) },
     ]);
-    await appendFact(dir, { subject: "cache", predicate: "rdfs:subClassOf", object: "store", provenance: `ace:chat:${S}@${TA}` });
-    await appendFact(dir, { subject: "store", predicate: "rdfs:subClassOf", object: "component", provenance: `ace:chat:${S}@${TB}` });
+    await appendFact(handle, { subject: "cache", predicate: "rdfs:subClassOf", object: "store", provenance: `ace:chat:${S}@${TA}` });
+    await appendFact(handle, { subject: "store", predicate: "rdfs:subClassOf", object: "component", provenance: `ace:chat:${S}@${TB}` });
+    await close();
 
     // a matching sidecar so the fold processes this session id
     await mkdir(join(dir, ".tmct", "sessions"), { recursive: true });
@@ -181,7 +184,9 @@ test("foldSessionLogs: canonise+link edges the canonical Fact to its as-spoken u
 
     await foldSessionLogs(dir, { sessionId: S });
 
-    const memory = await loadMemory(dir);
+    const routed = await openMemoryBackend(dir, "");
+    const memory = await loadMemory(routed.dir);
+    await routed.close();
     const rows = readFactRows(memory);
     // recall reads CANONICAL: the reified fact is present and normalized
     const cacheStore = rows.find((r) => r.subject === "cache" && r.object === "store" && r.predicate === "rdfs:subClassOf");
@@ -207,7 +212,9 @@ test("foldSessionLogs: canonise+link edges the canonical Fact to its as-spoken u
 
     // re-fold is idempotent: no duplicate canonicalisedFrom edge
     await foldSessionLogs(dir, { sessionId: S });
-    const links2 = (await loadMemory(dir)).objectProperties.find((g) => g.prop === CANONICALISED_FROM_PROP);
+    const routed2 = await openMemoryBackend(dir, "");
+    const links2 = (await loadMemory(routed2.dir)).objectProperties.find((g) => g.prop === CANONICALISED_FROM_PROP);
+    await routed2.close();
     assert.equal(links2.examples.filter((e) => e.subject === cacheStore.id && e.object === uttId).length, 1);
   } finally {
     await rm(dir, { recursive: true, force: true });

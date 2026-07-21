@@ -1,11 +1,12 @@
 // memory/core.mjs versioning tests — snapshotMemory (manual-trigger primitive,
 // NOT wired to any automatic call site) and the manifest.json / graph.v{N}.json
-// discipline: numbered copies, retention pruning, and the resolveMemoryGraphFile
-// seam A1 introduced to close the write-path desync between core.mjs's
-// mutateMemory and fold.mjs's writeMemoryGraph.
+// discipline over the flat-JSON store: numbered copies, retention pruning, and
+// the resolveMemoryGraphFile path seam. (The fold's canonise-link write goes
+// through the backend-routed store seam now — covered in
+// memory-backend-default.test.mjs.)
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -155,61 +156,3 @@ test("snapshotMemory: manifest bootstrap defaults retentionVersions to DEFAULT_R
   }
 });
 
-// ---- A1 desync proof: core.mjs's write path and fold.mjs's writeMemoryGraph
-// resolve to the EXACT SAME file — no divergent file is ever created by the two
-// independent writers.
-test("A1 desync proof: mutateMemory (core.mjs) and writeMemoryGraph (fold.mjs) write to the exact same resolved file", async () => {
-  const dir = await tmpRepo();
-  try {
-    // core.mjs's write path: any public mutator funnels through mutateMemory.
-    await appendFact(dir, { subject: "a", predicate: "isa", object: "b" });
-
-    // fold.mjs's write path: canoniseLinkSession's writeMemoryGraph, exercised
-    // indirectly via foldSessionLogs so we drive the REAL fold.mjs code path
-    // (not a re-implementation) against the same tmp dir.
-    const { foldSessionLogs } = await import("../../src/services/fold.mjs");
-    await foldSessionLogs(dir); // no sessions recorded — a clean no-op write-free pass, proves no divergent file appears either
-
-    const memDir = join(dir, ".tmct", "memory");
-    const names = await readdir(memDir);
-    const graphFiles = names.filter((n) => n === "graph.json" || (n.startsWith("graph") && n.endsWith(".json") && !n.includes(".tmp-")));
-    // exactly one live graph file exists — both writers agree on ONE path
-    assert.deepEqual(graphFiles, ["graph.json"], `no divergent graph file: ${names}`);
-
-    // now prove it more directly: hand-roll a session so canoniseLinkSession's
-    // writeMemoryGraph actually fires, and confirm the SAME file core.mjs reads
-    // reflects its edges — i.e. resolveMemoryGraphFile(dir) really is the one
-    // file both writers touch.
-    const S = "0189eeee-0000-7000-8000-000000000000";
-    const TA = "2026-07-05T00:00:00.000Z";
-    await import("../../src/adapters/memory/core.mjs").then(({ appendUtterances }) =>
-      appendUtterances(dir, [{ role: "visitor", text: "every cache is a store", ts: TA, sessionId: S }]));
-    await appendFact(dir, { subject: "cache", predicate: "rdfs:subClassOf", object: "store", provenance: `ace:chat:${S}@${TA}` });
-    await mkdirSidecar(dir, S, TA);
-    await foldSessionLogs(dir, { sessionId: S });
-
-    // writeMemoryGraph's edge is visible via loadMemory (core.mjs's OWN read
-    // path) — proving both writers resolved to the SAME file, never two.
-    const after = await loadMemory(dir);
-    const links = (after.objectProperties || []).find((g) => g.prop === "mgx:canonicalisedFrom");
-    assert.ok(links && links.examples.length > 0, "fold.mjs's write landed on the exact file core.mjs reads back");
-
-    const namesAfter = (await readdir(memDir)).filter((n) => n === "graph.json" || (/^graph\.v\d+\.json$/.test(n)));
-    assert.deepEqual(namesAfter, ["graph.json"], "still exactly one live graph file after both writers ran");
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
-/** Minimal sidecar so foldSessionLogs({sessionId}) processes session S — the
- *  test only needs canoniseLinkSession's writeMemoryGraph to fire, not a real
- *  transcript/fold. */
-async function mkdirSidecar(dir, id, ts) {
-  const { mkdir } = await import("node:fs/promises");
-  await mkdir(join(dir, ".tmct", "sessions"), { recursive: true });
-  const sidecar = [
-    JSON.stringify({ type: "session", id, started: ts, repo: "/r" }),
-    JSON.stringify({ type: "turn", ts, query: "every cache is a store", via: "assert" }),
-  ].join("\n") + "\n";
-  await writeFile(join(dir, ".tmct", "sessions", `session-${id}.jsonl`), sidecar);
-}

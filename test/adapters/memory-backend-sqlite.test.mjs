@@ -1,5 +1,6 @@
-// memory/core.mjs's Backend C — SQLite (schema shape adapted
-// from seonix's src/store.mjs, write model is NOT: real per-row
+// memory/core.mjs's Backend C — SQLite, the ROUTED DEFAULT backend (see
+// memory-backend-default.test.mjs for the default-token routing itself;
+// schema shape adapted from seonix's src/store.mjs, write model is NOT: real per-row
 // INSERT/REPLACE/DELETE against a live, open node:sqlite connection kept for
 // the session's lifetime, not seonix's own rebuild-and-atomic-swap).
 //

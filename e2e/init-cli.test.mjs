@@ -14,11 +14,18 @@ import { mkdtemp, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadMemory, FACT_CLASS } from "../src/adapters/memory/core.mjs";
+import { loadMemory, openMemoryBackend, FACT_CLASS } from "../src/adapters/memory/core.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const runCli = (args, opts = {}) => spawnSync(process.execPath, [BIN, ...args], { encoding: "utf8", ...opts });
 const tmp = () => mkdtemp(join(tmpdir(), "tmct-init-cli-"));
+
+/** Read a repo's memory back through the DEFAULT-routed backend (sqlite) —
+ *  the store a zero-flag init actually seeds. */
+async function readRoutedMemory(dir) {
+  const { dir: handle, close } = await openMemoryBackend(dir, "");
+  try { return await loadMemory(handle); } finally { await close(); }
+}
 
 test("`tmct init --corpus aws`: seeds tier-2 facts NOW, tagged with the new hyphenated provenance", async () => {
   const dir = await tmp();
@@ -27,7 +34,7 @@ test("`tmct init --corpus aws`: seeds tier-2 facts NOW, tagged with the new hyph
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /seeded tier-2 corpus "aws" \(domain\) — \d+ fact\(s\) added/);
     assert.match(r.stdout, /Activated in tmct\.toml/);
-    const mem = await loadMemory(dir);
+    const mem = await readRoutedMemory(dir);
     const facts = mem.individuals.filter((i) => i.class === FACT_CLASS);
     const awsFacts = facts.filter((f) =>
       (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
@@ -61,7 +68,7 @@ test("a persisted --corpus choice is remembered: a later bare `tmct init` re-see
     await rm(join(dir, ".tmct"), { recursive: true, force: true }); // simulate a fresh install of the same config
     const second = runCli(["init"], { cwd: dir });
     assert.equal(second.status, 0, second.stderr);
-    const mem = await loadMemory(dir);
+    const mem = await readRoutedMemory(dir);
     const facts = mem.individuals.filter((i) => i.class === FACT_CLASS);
     const awsFacts = facts.filter((f) =>
       (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
@@ -93,7 +100,7 @@ test("`tmct init --detect`: suggests a tier-2 corpus from a manifest file, seeds
     // the plain `tmct init` this flag rides on top of always seeds the tier-1
     // default (seon + conceptnet) — --detect's own contract is narrower: it
     // never activates or seeds a TIER-2 bundle unasked.
-    const mem = await loadMemory(dir);
+    const mem = await readRoutedMemory(dir);
     const facts = mem.individuals.filter((i) => i.class === FACT_CLASS);
     const tier2 = facts.filter((f) =>
       (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2")));

@@ -1,6 +1,8 @@
 // memory/core.mjs — tmct's OWN conversational memory graph: a dedicated
-// OWL-labelled store at <repo>/.tmct/memory/graph.json, distinct from any
-// provider-supplied code graph. Utterances, Facts (reified RDF triples via
+// OWL-labelled store (routed default: the SQLite file at
+// <repo>/.tmct/memory/graph.sqlite; "memory" keeps it in-process; the
+// flat-JSON read/write path survives for callers holding a plain dir),
+// distinct from any provider-supplied code graph. Utterances, Facts (reified RDF triples via
 // appendFact), and Sessions are all typed twice — payload `class` and an
 // `rdf:type` attribute. Every append is crash-safe and idempotent (utterance
 // ids are deterministic, fact ids hash the triple).
@@ -12,7 +14,7 @@
 // systems toward triple terms) but does not deprecate. See
 // docs/references/schemas/rdf-reification-and-rdf-star.md.
 
-import { mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { proseTokensFor, buildProseIndex } from "../../domain/prose.mjs";
 import { fnv1aHex, normText, normFactTerm, normFactPredicate, factIdFor, factIdForTriple } from "../../domain/hash.mjs";
@@ -210,18 +212,37 @@ export function closeSqliteMemoryStore(handle) {
 /** Resolve a backend token ("memory" | "sqlite" | anything else) into
  *  `{ dir, close }` — the ONE shared resolver, so every entry point (init's
  *  corpus seed, bin/tmct.mjs, chat) picks the same backend for a repo rather
- *  than silently splitting its memory across two stores. */
+ *  than silently splitting its memory across two stores. The empty/"default"
+ *  token routes to the sqlite store: the flat-file Backend A is retired from
+ *  routing (loadMemory/persistMemory still honour a plain dir string for
+ *  callers that hold one directly). */
 export async function openMemoryBackend(repoRoot, backendChoice) {
   if (backendChoice === BACKEND_MEMORY) {
     return { dir: createInMemoryStore(), close: async () => {} };
   }
-  if (backendChoice === BACKEND_SQLITE) {
-    const dbPath = join(repoRoot, ".tmct", "memory", "graph.sqlite");
-    await mkdir(dirname(dbPath), { recursive: true });
-    const handle = await createSqliteMemoryStore(dbPath);
-    return { dir: handle, close: async () => closeSqliteMemoryStore(handle) };
+  const dbPath = join(repoRoot, ".tmct", "memory", "graph.sqlite");
+  const exists = (p) => access(p).then(() => true, () => false);
+  if (!(await exists(dbPath)) && (await exists(join(repoRoot, MEMORY_GRAPH_REL)))) {
+    process.stderr.write("found .tmct/memory/graph.json — the flat-file memory backend is retired; starting a fresh sqlite store (the old file is left untouched)\n");
   }
-  return { dir: repoRoot, close: async () => {} };
+  await mkdir(dirname(dbPath), { recursive: true });
+  const handle = await createSqliteMemoryStore(dbPath);
+  return { dir: handle, close: async () => closeSqliteMemoryStore(handle) };
+}
+
+/** openMemoryBackend for an entry point that holds only a repo path and has no
+ *  CLI-flag tier (the fold's idle pass, `tmct import --file`): resolve the
+ *  backend token the way the chat path does minus the flag —
+ *  TMCT_MEMORY_BACKEND env > tmct.toml's [memory] backend > the default. */
+export async function openConfiguredMemoryBackend(repoRoot, env = process.env) {
+  let backend = String(env?.TMCT_MEMORY_BACKEND || "").trim().toLowerCase();
+  if (!backend) {
+    try {
+      const { loadTomlConfig } = await import("../toml-config.mjs");
+      backend = String((await loadTomlConfig(repoRoot))?.memory?.backend || "").trim().toLowerCase();
+    } catch { backend = ""; }
+  }
+  return openMemoryBackend(repoRoot, backend);
 }
 
 /** Deep-clone a JSON-safe value — keeps every cache read/write from aliasing
@@ -1079,6 +1100,21 @@ export async function appendUtterances(dir, utterances) {
     recountClasses(payload);
   });
   return { ids };
+}
+
+/** Append mgx:canonicalisedFrom edges (canonical Fact → as-spoken Utterance),
+ *  deduped by (subject, object) via upsertEdge — the fold's canonise-link
+ *  write, routed through the same backend-dispatched mutate path as every
+ *  other append so it lands in whichever store the repo actually uses. */
+export async function appendCanonicalisedFromEdges(dir, links) {
+  if (!links?.length) return;
+  await mutateMemory(dir, (payload) => {
+    for (const l of links) {
+      upsertEdge(payload, { predicate: "canonicalisedFrom", prop: CANONICALISED_FROM_PROP }, {
+        subject: l.factId, object: l.uttId, subjectLabel: l.factLabel, objectLabel: l.uttLabel,
+      });
+    }
+  });
 }
 
 /** Append one grammar-derived OWL triple, RDF-reified as a `Fact` individual.

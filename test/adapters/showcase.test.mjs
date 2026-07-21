@@ -20,7 +20,7 @@ import { Readable, PassThrough } from "node:stream";
 import { runTurn, runChat } from "../../src/services/chat.mjs";
 import { clearCache } from "../../src/adapters/source.mjs";
 import { ingestSchemaDocs } from "../../src/tools/schema-docs.mjs";
-import { loadMemory, FACT_CLASS } from "../../src/adapters/memory/core.mjs";
+import { loadMemory, openMemoryBackend, FACT_CLASS } from "../../src/adapters/memory/core.mjs";
 
 const FIXTURE = new URL("../fixtures/entities.fixture.json", import.meta.url).pathname;
 
@@ -64,9 +64,11 @@ test("showcase 1: focus → pronoun → declarative memory → noisy typo repair
     assert.match(t, /app\/lib\/b\.mjs and app\/lib\/c\.mjs and app\/lib\/e\.mjs/, "vocative+filler+double-typo query still answers");
     assert.match(t, /3 classes\./, "aggregate count");
     assert.match(t, /Bye — flushing the session log/, "conversational close");
-    const m = await loadMemory(dir);
+    const { dir: handle, close } = await openMemoryBackend(dir, "");
+    const m = await loadMemory(handle);
+    await close();
     const fact = m.individuals.find((i) => i.class === FACT_CLASS);
-    assert.ok(fact, "the remembered fact is durably in .tmct/memory/graph.json");
+    assert.ok(fact, "the remembered fact is durably in the repo's default memory store");
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

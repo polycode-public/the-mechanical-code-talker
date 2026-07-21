@@ -10,7 +10,7 @@ import { mkdtemp, mkdir, rm, writeFile, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadMemory, FACT_CLASS } from "../src/adapters/memory/core.mjs";
+import { loadMemory, openMemoryBackend, FACT_CLASS } from "../src/adapters/memory/core.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const runCli = (args, opts = {}) => spawnSync(process.execPath, [BIN, ...args], { encoding: "utf8", ...opts });
@@ -147,7 +147,10 @@ test("`tmct init --ontology <path>` activates+seeds an ontology-kind entry", asy
     assert.match(toml, /\[extensions\.onto\]/);
     assert.match(toml, /kind = "ontology"/);
     assert.match(toml, /ontology_path/);
-    const mem = await loadMemory(dir);
+    // read back through the routed default backend — the store the seed wrote
+    const { dir: handle, close } = await openMemoryBackend(dir, "");
+    const mem = await loadMemory(handle);
+    await close();
     const facts = mem.individuals.filter((i) => i.class === FACT_CLASS);
     const fromOnto = facts.filter((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:onto")));
     assert.ok(fromOnto.length > 0);

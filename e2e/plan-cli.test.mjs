@@ -97,9 +97,17 @@ test("`tmct plan --tools` accepts a taught record name, validating after registr
     "disk-3 rests on peg-a.",
   ];
   try {
-    for (const sentence of teach) {
-      const r = await runTurn(sentence, { config: {}, memoryDir: memory, sessionId: "plan-cli-taught" });
-      assert.equal(r.record.via, "assert", `teach failed: "${sentence}" -> ${r.answer}`);
+    // Teach through the ROUTED default backend — the spawned `tmct plan
+    // --repo` below resolves the same store for this repo.
+    const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+    const { dir: memoryDir, close } = await openMemoryBackend(memory, "");
+    try {
+      for (const sentence of teach) {
+        const r = await runTurn(sentence, { config: {}, memoryDir, sessionId: "plan-cli-taught" });
+        assert.equal(r.record.via, "assert", `teach failed: "${sentence}" -> ${r.answer}`);
+      }
+    } finally {
+      await close();
     }
     const args = [BIN, "plan", "make every disk rest on peg-c", "--repo", memory, "--graph", join(REPO, ".tmct", "graph.json")];
     const ok = spawnSync(process.execPath, [...args, "--tools", "taught:move onto"], { encoding: "utf8" });

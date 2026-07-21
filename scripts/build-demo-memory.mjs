@@ -51,7 +51,7 @@ export async function main(outPath = join(ROOT, "public", "demo-memory.json")) {
 
   const repo = await mkdtemp(join(tmpdir(), "tmct-demo-memory-"));
   try {
-    const { dir: memoryDir, close } = await openMemoryBackend(repo, "default");
+    const { dir: memoryDir, close } = await openMemoryBackend(repo, "memory");
     try {
       const sessionId = uuidv7();
       for (const line of GRANDFATHER_TEACH) {
@@ -63,7 +63,7 @@ export async function main(outPath = join(ROOT, "public", "demo-memory.json")) {
       for (const [subject, predicate, object, provenance] of ANIMAL_FACTS) {
         await appendFact(memoryDir, { subject, predicate, object, provenance });
       }
-      const imported = await importDefinitionFile(repo, join(ROOT, "data", "games", "hanoi-3.txt"));
+      const imported = await importDefinitionFile(repo, join(ROOT, "data", "games", "hanoi-3.txt"), { memoryDir });
       if (imported.declined.length) {
         throw new Error(`hanoi-3.txt declined ${imported.declined.length} sentence(s):\n${imported.report}`);
       }

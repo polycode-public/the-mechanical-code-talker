@@ -122,10 +122,10 @@ ${seed.limit != null ? `limit = ${Number(seed.limit)}` : "# limit = 500"}
 [memory]
 # Storage backend for taught facts + the memory graph.
 # Precedence: --memory-backend flag > TMCT_MEMORY_BACKEND env > this file >
-# "default" (the built-in fallback).
-#   "default" — the flat OWL-labelled JSON file under .tmct/memory/. The default.
+# sqlite (the built-in default).
+#   "sqlite"  — a local SQLite file at .tmct/memory/graph.sqlite. The default.
 #   "memory"  — in-process only; nothing written to disk (a library caller's option).
-#   "sqlite"  — a local SQLite file at .tmct/memory/graph.sqlite.
+#   "default" — same as leaving this unset: the sqlite default applies.
 backend = ${JSON.stringify(config.memory.backend)}
 `;
   }
@@ -277,9 +277,14 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
     if (backendChoice === "memory") {
       seedNote = "seed skipped (memory backend is in-process only — nothing would persist past this command)";
     } else {
-      const { openMemoryBackend } = await import("../adapters/memory/core.mjs");
-      const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(root, backendChoice);
+      // The open itself sits inside the failure-tolerant try: an unopenable
+      // store (e.g. a directory squatting on graph.sqlite's path) degrades to
+      // an initialised-but-unseeded repo exactly like a broken corpus does.
+      let closeMemoryStore = async () => {};
       try {
+        const { openMemoryBackend } = await import("../adapters/memory/core.mjs");
+        const { dir: memoryDir, close } = await openMemoryBackend(root, backendChoice);
+        closeMemoryStore = close;
         const { resolveExtensions, seedActiveCorpusEntries } = await import("./extensions.mjs");
         const { entries } = await resolveExtensions(root);
         // `[seed] limit` caps the tier-1 ConceptNet band specifically (SEON is small

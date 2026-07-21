@@ -26,6 +26,12 @@ async function tmp() {
 async function exists(p) {
   try { await stat(p); return true; } catch { return false; }
 }
+/** Read a repo's memory back through the DEFAULT-routed backend (sqlite) —
+ *  the store a zero-flag init/chat actually writes. */
+async function readRoutedMemory(dir) {
+  const { dir: handle, close } = await openMemoryBackend(dir, "");
+  try { return await loadMemory(handle); } finally { await close(); }
+}
 
 test("fresh init: scaffolds .tmct/, writes tmct.toml, records provenance, returns structured result", async () => {
   const dir = await tmp();
@@ -85,7 +91,7 @@ test("seeding: on by default, offline, writes facts into .tmct/memory + a marker
     assert.ok(res.seedResult && res.seedResult.appended > 0);
     // marker present, memory graph carries Fact individuals
     assert.ok(await exists(join(dir, SEED_MARKER_REL)));
-    const mem = await loadMemory(dir);
+    const mem = await readRoutedMemory(dir);
     const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
     assert.ok(facts.length > 0, "seeded corpus facts landed in memory");
     // provenance records the seed
@@ -141,7 +147,7 @@ test("a tmct.toml activating tier2-aws: `tmct init`'s unified seed loop also see
     assert.equal(res.seeded, true);
     assert.ok(res.seedResult.perBundle["tier2-aws"], "the tier-2 bundle ran in the same loop");
     assert.ok(res.seedResult.perBundle["tier2-aws"].appended > 0, "tier2-aws facts landed");
-    const mem = await loadMemory(dir);
+    const mem = await readRoutedMemory(dir);
     const facts = (mem.individuals || []).filter((i) => i.class === "Fact");
     const awsFact = facts.find((f) => (f.attributes || []).some((a) => a.key === "provenance" && String(a.value).includes("corpus:tier2-aws")));
     assert.ok(awsFact, "a fact provenance-tagged corpus:tier2-aws is in memory");
@@ -217,9 +223,9 @@ test("seed is idempotent: marker short-circuits a second seed", async () => {
 test("seed failure degrades: a broken corpus still yields an initialised repo", async () => {
   const dir = await tmp();
   try {
-    // Pre-plant a directory where the memory graph FILE must go, so the seed's
-    // write fails — but the scaffold + config + provenance must still land.
-    await mkdir(join(dir, ".tmct", "memory", "graph.json"), { recursive: true });
+    // Pre-plant a directory where the sqlite store FILE must go, so the seed's
+    // store open fails — but the scaffold + config + provenance must still land.
+    await mkdir(join(dir, ".tmct", "memory", "graph.sqlite"), { recursive: true });
     const res = await initRepo(dir, { seed: true });
     assert.equal(res.seeded, false);
     assert.ok(await exists(join(dir, CONFIG_FILE)));
