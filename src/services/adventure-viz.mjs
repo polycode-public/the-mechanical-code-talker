@@ -75,7 +75,7 @@
 // an edit implies run through the browser bundle's own `session.applyEdit`
 // (adventure-browser-entry.mjs), never here — this module only renders and
 // reads.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
 import { worldDigestRows, roomAffordances, foldWorldState } from "./adventure.mjs";
 import { exposedFacts } from "./adventure-autoplay.mjs";
@@ -351,12 +351,18 @@ export function roomCaptionText(rows, state, here) {
  *  runtime fetch for it; empty, the icon tier simply stays active, the same
  *  fallback the old lazy fetch degraded to. `?preview=1` switches into the
  *  small, auto-playing, non-interactive mode the home page's hero iframe
- *  embeds, matching spider-fly.html's own dual-purpose file. */
+ *  embeds, matching spider-fly.html's own dual-purpose file.
+ *  `engineBundleJs` (the built adventure-browser bundle's own text) inlines
+ *  the engine into the page instead of the sibling `<script src>`, for the
+ *  CLI's standalone export — one downloadable file that runs from file://
+ *  with no sibling assets. Default empty keeps the site build's sibling-file
+ *  arrangement byte-identical. */
 export function renderAdventureHtml({
   title = DEFAULT_TITLE,
   worldPayload = { facts: [], rules: [], opening: "" },
   spriteTemplates = [],
   largeSpriteTemplates = [],
+  engineBundleJs = "",
 } = {}) {
   const pageData = embedJson({
     world: worldPayload,
@@ -657,7 +663,7 @@ ${THEME_TOKENS_CSS}
 <script>
 const ADVENTURE = ${pageData};
 </script>
-<script src="./adventure-browser.bundle.js"></script>
+${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `<script src="./adventure-browser.bundle.js"></script>`}
 <script>
 (function () {
   "use strict";

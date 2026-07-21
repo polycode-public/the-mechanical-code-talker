@@ -577,7 +577,10 @@ Usage:
                                the final answer (teach state first, trigger last)
        [--render blocks]       with --prompt: when the final turn produced a plan,
                                write it as a self-contained animated page
-       [--output <path>]       the rendered page's path (default plan.html)
+       [--render spider-fly|adventure|sprites]  write that demo view as one self-contained
+                               page (no --prompt; the game pages inline their engine)
+       [--output <path>]       the rendered page's path (default plan.html for
+                               blocks, <archetype>.html for the views)
        [--narrate]             start with narrate mode on — a verbose, developer-facing
                                trace of decision points/matched pattern/results/goal per
                                turn, appended under a "--- narrate ---" marker (also

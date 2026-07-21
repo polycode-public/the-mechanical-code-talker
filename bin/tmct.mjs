@@ -516,6 +516,86 @@ async function appendGraphFiles(repoRoot, graphPaths) {
   await writeConfig(repoRoot, cfg);
 }
 
+/** Build one game page's browser engine bundle into a throwaway dir and
+ *  return its text for inlining. The bundle builders live in scripts/ and
+ *  need esbuild — a git checkout with dev dependencies, not the npm package —
+ *  so an unbuildable engine is a clear refusal here, never a written page
+ *  that hangs at "loading the engine". */
+async function buildEngineBundleJs(builderFile) {
+  const { mkdtemp, readFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  let build;
+  try {
+    ({ main: build } = await import(new URL(`../scripts/${builderFile}`, import.meta.url).href));
+  } catch {
+    throw new Error(
+      `this render inlines the page's engine bundle, and its builder (scripts/${builderFile}) `
+      + "isn't available here — run it from a git checkout with dev dependencies installed (npm install)",
+    );
+  }
+  const dir = await mkdtemp(join(tmpdir(), "tmct-render-"));
+  try {
+    const { outPath } = await build(dir);
+    return await readFile(outPath, "utf8");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+}
+
+/** `--render spider-fly|adventure|sprites [--output <path>]` — write that demo
+ *  view as ONE self-contained file: build-time data read here in Node (the
+ *  same reads scripts/build-demo-site.mjs does for the deployed site), and,
+ *  for the two game pages, the engine bundle built fresh and inlined instead
+ *  of linked as a sibling — so the written file opens from file:// alone. */
+async function writeStandaloneViewPage(archetype, rest) {
+  const { strFlag } = await import("../src/services/cli-args.mjs");
+  const { writeFile } = await import("node:fs/promises");
+  const { resolve: resolvePath } = await import("node:path");
+  const outPath = resolvePath(process.cwd(), strFlag(rest, ["--output", "--out"], `${archetype}.html`));
+  let html;
+  if (archetype === "sprites") {
+    const { readSpriteTemplateFiles } = await import("../src/adapters/corpus/sprite-template-files.mjs");
+    const { readSpriteLargeTemplateFiles } = await import("../src/adapters/corpus/sprite-large-template-files.mjs");
+    const { loadSpriteOntologyFactRows, renderSpriteCatalogHtml } = await import("../src/services/sprite-catalog-viz.mjs");
+    html = renderSpriteCatalogHtml({
+      iconTemplates: readSpriteTemplateFiles(),
+      largeTemplates: readSpriteLargeTemplateFiles(),
+      factRows: await loadSpriteOntologyFactRows(),
+    });
+  } else if (archetype === "spider-fly") {
+    const engineBundleJs = await buildEngineBundleJs("build-spider-fly-bundle.mjs");
+    // The large sprite tier, same as the site build: the only tier the
+    // emotion-carrying spider/fly templates exist in. Missing (e.g. outside
+    // this checkout) reads as [], and every agent falls back to the flat
+    // built-in registry.
+    const { readSpriteLargeTemplateFiles } = await import("../src/adapters/corpus/sprite-large-template-files.mjs");
+    const { renderSpiderFlyHtml } = await import("../src/services/spider-fly-viz.mjs");
+    html = renderSpiderFlyHtml({ spriteTemplates: readSpriteLargeTemplateFiles(), engineBundleJs });
+  } else {
+    const engineBundleJs = await buildEngineBundleJs("build-adventure-bundle.mjs");
+    const { getWorldsPackProvider } = await import("../src/adapters/corpus/worlds-pack.mjs");
+    const world = await getWorldsPackProvider().load("ashcombe-hall");
+    if (!world) {
+      throw new Error("the ashcombe-hall world isn't in the worlds pack (corpus/worlds/) — run `npm run gen:worlds-pack` first");
+    }
+    const { readSpriteTemplateFiles } = await import("../src/adapters/corpus/sprite-template-files.mjs");
+    const { renderAdventureHtml } = await import("../src/services/adventure-viz.mjs");
+    html = renderAdventureHtml({
+      worldPayload: {
+        name: world.name,
+        facts: world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
+        rules: world.rules.map((r) => ({ name: r.name, ruleKind: r.ruleKind, slots: r.slots })),
+        opening: world.meta?.opening || "",
+      },
+      spriteTemplates: readSpriteTemplateFiles(),
+      engineBundleJs,
+    });
+  }
+  await writeFile(outPath, html, "utf8");
+  process.stdout.write(`wrote ${outPath} (${(Buffer.byteLength(html, "utf8") / 1024).toFixed(0)} KB, self-contained)\n`);
+}
+
 async function main() {
   const mode = process.argv[2];
 
@@ -567,16 +647,22 @@ async function main() {
     // FINAL turn's answer prints to stdout, and the process exits. Piped stdin
     // stays the interactive fallback.
     const prompt = strFlag(rest, ["--prompt"]);
-    // `--render <archetype> [--output <path>]` — after a one-shot --prompt whose
-    // final turn produced a plan, write the self-contained animated plan page
-    // (src/services/plan-viz.mjs). Requires --prompt: interactive chat has no single
-    // final turn to render.
+    // `--render <archetype> [--output <path>]` — write one standalone page.
+    // "blocks" is the animated plan replay (src/services/plan-viz.mjs) and
+    // requires --prompt: interactive chat has no single final turn to render.
+    // The demo views (spider-fly / adventure / sprites) take no prompt — their
+    // data is read at render time, and the two game pages inline a freshly
+    // built engine bundle so the file opens from file:// with no siblings.
     let renderArchetype;
     try {
-      renderArchetype = enumFlag(rest, ["--render"], ["blocks"]);
+      renderArchetype = enumFlag(rest, ["--render"], ["blocks", "spider-fly", "adventure", "sprites"]);
     } catch (e) {
       process.stderr.write(`tmct: ${e?.message || e}\n`);
       process.exit(2);
+    }
+    if (renderArchetype && renderArchetype !== "blocks") {
+      await writeStandaloneViewPage(renderArchetype, rest);
+      return;
     }
     if (renderArchetype && !prompt) {
       process.stderr.write("tmct: --render needs --prompt (a one-shot turn whose plan it renders)\n");

@@ -23,6 +23,14 @@ export function embedJson(value) {
     .replace(/\u2029/g, "\\u2029");
 }
 
+/** JS source made safe to sit inside an inline `<script>` tag. The only
+ *  sequence the HTML parser can end the tag on is a literal "</script", and
+ *  valid JS can only carry that inside a string/regex/comment — contexts
+ *  where "<\/script" reads back identically. */
+export function embedScriptText(js) {
+  return String(js ?? "").replaceAll("</script", "<\\/script");
+}
+
 /** hex "#RRGGBB" -> "rgba(r, g, b, a)" */
 function rgba(hex, alpha) {
   const n = parseInt(hex.slice(1), 16);
