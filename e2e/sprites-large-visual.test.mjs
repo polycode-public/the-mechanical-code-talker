@@ -23,6 +23,8 @@ const madeOf = (subject, value) => [{ subject, predicate: "mgx:madeOf", object: 
 // Two instances of the SAME class (lamp) with different taught materials —
 // the exact case that silently rendered identically before instanceKey
 // existed — plus one non-material class and the shape-variant pair.
+const feels = (subject, value) => [{ subject, predicate: "mgx:feels", object: value }];
+
 const INSTANCES = [
   { id: "lamp-gold", cls: "lamp", facts: madeOf("lamp-gold", "gold") },
   { id: "lamp-ceramic", cls: "lamp", facts: madeOf("lamp-ceramic", "ceramic") },
@@ -30,6 +32,9 @@ const INSTANCES = [
   { id: "spider-1", cls: "spider", facts: [] },
   { id: "portrait-plain", cls: "portrait", facts: [] },
   { id: "portrait-round", cls: "portrait", facts: [{ subject: "portrait-round", predicate: "mgx:hasProperty", object: "round" }] },
+  { id: "adult-plain", cls: "adult", facts: [] },
+  { id: "adult-happy", cls: "adult", facts: feels("adult-happy", "happy") },
+  { id: "adult-sad", cls: "adult", facts: feels("adult-sad", "sad") },
 ];
 
 let siteDir;
@@ -91,6 +96,23 @@ test("two differently-valued instances of the same class never share one gradien
     assert.deepEqual(duplicates, [], `duplicate DOM ids would make a browser reuse the FIRST instance's gradient for every later one: ${duplicates.join(", ")}`);
     assert.ok(ids.some((id) => id.includes("lamp-gold")), "the gold lamp's own namespaced id is present");
     assert.ok(ids.some((id) => id.includes("lamp-ceramic")), "the ceramic lamp's own namespaced id is present");
+  } finally {
+    await context.close();
+  }
+});
+
+test("two differently-feeling adults render different faces from each other AND from the plain adult — the emotion parameter is not a no-op", async () => {
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  try {
+    await page.goto(`${server.origin}/index.html`, { waitUntil: "networkidle" });
+    const markup = {};
+    for (const id of ["adult-plain", "adult-happy", "adult-sad"]) {
+      markup[id] = await page.locator(`.box[data-instance="${id}"] svg`).innerHTML();
+    }
+    assert.notEqual(markup["adult-happy"], markup["adult-sad"], "happy and sad resolve to genuinely different faces");
+    assert.notEqual(markup["adult-happy"], markup["adult-plain"], "a felt emotion is not the plain silhouette");
+    assert.notEqual(markup["adult-sad"], markup["adult-plain"]);
   } finally {
     await context.close();
   }

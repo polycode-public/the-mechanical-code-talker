@@ -153,6 +153,77 @@ test("the page serves every same-origin asset and logs no error of its own, acro
   }
 });
 
+test("the stats panel opens on the seed's own band counts, and they sum to the total the boot line names", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    const panel = page.locator("#statsPanel");
+    await panel.locator(".band-row").first().waitFor({ state: "visible" });
+    const headings = await panel.locator("h2").allInnerTexts();
+    assert.deepEqual(
+      headings.map((h) => h.toLowerCase()),
+      ["this session's memory", "taught this session"],
+      "the panel carries its two sections in order",
+    );
+
+    const rows = await panel.locator(".band-row").evaluateAll((els) =>
+      els.map((el) => ({
+        label: el.querySelector("span")?.textContent ?? "",
+        count: Number(el.querySelector(".band-count")?.textContent ?? "NaN"),
+      })),
+    );
+    const total = rows.find((r) => r.label === "total facts");
+    assert.ok(total && total.count > 0, "a real seed never boots with zero total facts");
+    const bandSum = rows.filter((r) => r.label !== "total facts").reduce((a, r) => a + r.count, 0);
+    assert.equal(bandSum, total.count, "the named band rows account for every seeded fact");
+
+    const bootLine = await page.locator("#messages .msg-row.system .bubble").first().innerText();
+    assert.match(bootLine, new RegExp(`\\(${total.count} facts total\\)`), "the boot line and the panel read the same total");
+
+    assert.match(await panel.innerText(), /nothing yet/, "before any teach, the taught section says so plainly");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a teach turn grows the stats panel live: total facts up by one, and the fact itself listed with its tag", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    const totalCount = async () => Number(
+      await page.locator("#statsPanel .band-row", { hasText: "total facts" }).locator(".band-count").innerText(),
+    );
+    const before = await totalCount();
+    assert.equal(await page.locator("#statsPanel .taught-item").count(), 0, "nothing taught yet");
+
+    await ask(page, "every flumph is a dog");
+    await page.waitForFunction(
+      () => document.querySelectorAll("#statsPanel .taught-item").length > 0,
+      null,
+      { timeout: ANSWER_TIMEOUT_MS },
+    );
+    assert.equal(await totalCount(), before + 1, "the total climbed by exactly the one taught fact");
+    const item = page.locator("#statsPanel .taught-item").first();
+    assert.match(await item.innerText(), /flumph/, "the panel names the fact just taught");
+    assert.ok(((await item.locator(".taught-tag").innerText()) ?? "").length > 0, "the fact carries its source tag");
+
+    await ask(page, "what is a dog");
+    assert.equal(await totalCount(), before + 1, "a plain ask leaves the session's memory unchanged");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the statusline reports all three of its segments once booted: seed size, wink tier, wikipedia switch", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    const status = await page.locator("#status").innerText();
+    assert.match(status, /starter memory: \d+ facts/, "the seed segment names a real count");
+    assert.match(status, /wink-nlp lemma\/POS tier: loaded/, "the wink tier loaded from the first-party vendor asset");
+    assert.match(status, /live wikipedia: off/, "the wikipedia switch reports its shipped default");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the page fits a phone viewport without sideways scrolling", async () => {
   const { context, page } = await openChatPage({ viewport: { width: 375, height: 667 } });
   try {

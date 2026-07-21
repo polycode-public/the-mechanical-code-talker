@@ -170,6 +170,29 @@ test("at boot: nothing carried yet, only the opening room on the map, and the go
   }
 });
 
+test("the room plaque names each room as it is walked, and taking an item fills a satchel tile without moving the scene", async () => {
+  const { context, page, consoleErrors } = await openAdventurePage();
+  try {
+    assert.equal(await page.locator("#roomName").textContent(), "the study", "the plaque opens on the opening room");
+
+    await sendCommand(page, "go north");
+    assert.equal(await page.locator("#roomName").textContent(), "the library", "one room north, the plaque follows");
+    await sendCommand(page, "go north");
+    assert.equal(await page.locator("#roomName").textContent(), "the drawing-room", "two rooms north, the plaque follows again");
+    const sceneLabels = await page.locator("#spriteRow .sprite-label").allTextContents();
+    assert.ok(sceneLabels.includes("portrait"), "the drawing-room scene draws its own furniture");
+
+    await sendCommand(page, "open the portrait");
+    await sendCommand(page, "take the key");
+    assert.deepEqual(await page.locator("#carryList .chip").allTextContents(), ["key"], "the taken item lands as a satchel tile");
+    assert.equal(await page.locator("#roomName").textContent(), "the drawing-room", "taking an item never moves the scene");
+
+    assert.deepEqual(consoleErrors, [], "no console error walking, opening, and taking");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the full win playthrough: carrying, the visited map, and the goal status all update honestly turn by turn", async () => {
   const { context, page, consoleErrors } = await openAdventurePage();
   try {

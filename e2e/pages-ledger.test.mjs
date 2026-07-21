@@ -111,6 +111,75 @@ test("the ingestion sparkline in the aside renders a real polyline over the same
   }
 });
 
+test("clicking a provenance facet filters the fact rows to that tier, and clicking it again restores the full view", async () => {
+  const { context, page } = await openLedgerPage();
+  try {
+    await page.locator("#segProv .seg").first().waitFor({ state: "visible" });
+    const rowsBefore = await page.locator("#ledger .rows .row").count();
+    assert.ok(rowsBefore > 0, "the default focus renders real rows to filter");
+
+    // The segment buttons are rebuilt on every render; read the label and
+    // css key of the busiest provenance facet off the live DOM, so the probe
+    // follows whatever this build's demo graph actually holds.
+    const segs = await page.locator("#segProv .seg").evaluateAll((els) => els.map((el) => ({
+      label: el.querySelector("span:not(.dot):not(.n)")?.textContent ?? "",
+      count: Number(el.querySelector(".n")?.textContent ?? "0"),
+      key: (el.querySelector(".dot")?.className.match(/d-(\w+)/) || [])[1] ?? "",
+    })));
+    const busiest = segs.reduce((a, b) => (b.count > a.count ? b : a));
+    assert.ok(busiest.count > 0 && busiest.key, "at least one provenance facet counts real rows");
+
+    await page.locator("#segProv .seg", { hasText: busiest.label }).click();
+    assert.equal(
+      await page.locator("#segProv .seg", { hasText: busiest.label }).getAttribute("aria-pressed"),
+      "true",
+      "the facet reads as selected",
+    );
+    const rowClasses = await page.locator("#ledger .rows .row").evaluateAll((els) => els.map((el) => el.className));
+    assert.ok(rowClasses.length > 0, "the selected facet leaves real rows on show");
+    for (const cls of rowClasses) {
+      assert.match(cls, new RegExp(`\\bp-${busiest.key}\\b`), "every rendered row belongs to the selected tier");
+    }
+
+    await page.locator("#segProv .seg", { hasText: busiest.label }).click();
+    assert.equal(
+      await page.locator("#segProv .seg", { hasText: busiest.label }).getAttribute("aria-pressed"),
+      "false",
+      "a second click clears the facet",
+    );
+    assert.equal(await page.locator("#ledger .rows .row").count(), rowsBefore, "the unfiltered view returns intact");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the go-to-term search refocuses onto a real term and grows the trail; an unknown term reports the miss and moves nothing", async () => {
+  const { context, page } = await openLedgerPage();
+  try {
+    await page.locator(".focuscard .term").waitFor({ state: "visible" });
+    const focusBefore = await page.locator(".focuscard .term").innerText();
+    const target = await page.evaluate(
+      (current) => LEDGER.terms.map((t) => t.term).find((t) => t !== current),
+      focusBefore,
+    );
+    assert.ok(target, "the demo graph holds more than one term to jump between");
+
+    await page.fill("#q", target);
+    await page.press("#q", "Enter");
+    assert.equal(await page.locator(".focuscard .term").innerText(), target, "the view refocuses onto the searched term");
+    assert.equal(await page.locator(".crumbs .crumb").count(), 2, "the jump lands on the focus trail");
+    assert.equal(await page.locator("#q").inputValue(), "", "a successful jump clears the search box");
+
+    await page.fill("#q", "zzz-not-a-term");
+    await page.press("#q", "Enter");
+    assert.equal(await page.locator("#qmiss").innerText(), "no such term", "an unknown term is refused, never guessed at");
+    assert.equal(await page.locator(".focuscard .term").innerText(), target, "a missed search moves the focus nowhere");
+    assert.equal(await page.locator(".crumbs .crumb").count(), 2, "a missed search adds no breadcrumb");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the ledger page fits a phone viewport without sideways scrolling, in both color schemes", async () => {
   for (const colorScheme of ["light", "dark"]) {
     const { context, page } = await openLedgerPage({ viewport: { width: 375, height: 812 }, colorScheme });
