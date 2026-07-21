@@ -47,6 +47,7 @@
 import { classAncestorChain, SPRITE_REGISTRY } from "../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../domain/sprite-templates.mjs";
 import { MATERIAL_PALETTE } from "../domain/sprite-materials.mjs";
+import { spriteFactRows } from "../domain/sprite-facts.mjs";
 import { SEED_TAXONOMY } from "../domain/spider-fly-world.mjs";
 import { loadSlice, loadMap, toFacts, WORDNET_DIR } from "../adapters/corpus/conceptnet.mjs";
 import { join } from "node:path";
@@ -355,6 +356,51 @@ export function extractSceneItems(text, classIndex) {
   return items;
 }
 
+// ---- catalog question lane (pure) ----
+
+/** The closed set of catalog-shaped questions the chat dock answers straight
+ *  off THIS page's own embedded sprite-facts rows (src/domain/
+ *  sprite-facts.mjs's output), before a line ever reaches the full engine —
+ *  the same closed-template posture extractSceneItems takes for the scene
+ *  composer. Returns { answer, grounding } (grounding = how many real rows
+ *  the answer was read from) or null for ANY question this lane doesn't own,
+ *  including a catalog-shaped question about a class with no rows on record —
+ *  the caller falls through to the engine, whose refusal is the honest miss.
+ *  Self-contained (no outer refs), `.toString()`-splice safe. Pure. */
+export function answerSpriteQuestion(text, rows) {
+  const all = Array.isArray(rows) ? rows : [];
+  const q = String(text ?? "").trim().toLowerCase().replace(/[?.!\s]+$/, "");
+
+  if (/^what (?:classes|sprites|sprite classes) (?:can you|do you|are there)(?:\s+(?:render|draw|show))?$/.test(q)) {
+    const classes = all
+      .filter((r) => r.predicate === "rdf:type" && r.object === "sprite class")
+      .map((r) => String(r.subject).replace(/ sprite$/, ""));
+    if (!classes.length) return null;
+    const sample = classes.slice(0, 10).join(", ");
+    return {
+      answer: `${classes.length} sprite classes are on record — ${sample}, … (the catalog below lists every one).`,
+      grounding: classes.length,
+    };
+  }
+
+  const m = q.match(/^(?:what|which) parameters? (?:does|do|can|will) (?:a |an |the )?(.+?)(?: sprite)? (?:take|accept|use)s?$/);
+  if (m) {
+    const subject = `${m[1]} sprite`;
+    const params = all.filter((r) => r.subject === subject && r.predicate === "mgx:take-parameter").map((r) => r.object);
+    if (!params.length) return null;
+    let grounding = params.length;
+    const parts = params.map((p) => {
+      const values = all.filter((r) => r.subject === subject && r.predicate === `mgx:accept-${p}`).map((r) => r.object);
+      grounding += values.length;
+      return values.length ? `${p} (${values.join(", ")})` : p;
+    });
+    const lead = params.length === 1 ? "one parameter" : `${params.length} parameters`;
+    return { answer: `a ${subject} takes ${lead}: ${parts.join("; ")}.`, grounding };
+  }
+
+  return null;
+}
+
 // ---- rendering ----
 
 function chainHtml(chain) {
@@ -410,14 +456,150 @@ function sectionHtml(group, entries) {
  *  identical input" invariant every other viz page in this project holds.
  *  All three default to `[]` so a caller mid-migration (no ontology facts
  *  loaded yet, say) still gets a page that renders, just with plainer
- *  ancestor chains. */
-export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [] } = {}) {
+ *  ancestor chains.
+ *
+ *  `spritesBundleAvailable: true` (ledger-viz.mjs's own ledgerBundleAvailable
+ *  idiom) is what adds the chat dock at all: the page then embeds the
+ *  sprite-facts rows (src/domain/sprite-facts.mjs, derived purely from the
+ *  same two template sets) and references the sibling
+ *  ./sprites-browser.bundle.js scripts/build-demo-site.mjs builds alongside
+ *  it. Left false, the page renders exactly as before — no dock, no bundle
+ *  reference, nothing extra to 404. */
+export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false } = {}) {
   const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows });
   const totalSwatches = entries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
   const pageData = embedJson({ classCount: entries.length, swatchCount: totalSwatches });
+  const dockRows = spritesBundleAvailable ? spriteFactRows({ iconTemplates, largeTemplates }) : [];
   const navHtml = CATALOG_GROUPS
     .map((g) => `<a class="jump" href="#g-${g.id}">${escapeHtml(g.label)} <span class="count">${entries.filter((e) => e.group === g.id).length}</span></a>`)
     .join("");
+
+  const dockCss = !spritesBundleAvailable ? "" : `
+  .dockwrap { margin: .2rem 0 1.3rem; }
+  .dockwrap .panel { background: var(--card); border: 1px solid var(--line); border-top: 2px solid var(--taught); padding: .75rem .85rem; }
+  .dockwrap h2 { font-family: ${SERIF_STACK}; font-variant: small-caps; font-size: .82rem; letter-spacing: .04em; color: var(--muted); font-weight: 600; margin: 0 0 .55rem; }
+  .dock-note { color: var(--muted); font-size: .8rem; margin: 0 0 .6rem; max-width: 72ch; }
+  .docklog { display: flex; flex-direction: column; gap: .4rem; max-height: 240px; overflow-y: auto; margin-bottom: .5rem; }
+  .docklog:empty { display: none; margin-bottom: 0; }
+  .docklog .u { font-family: ${MONO_STACK}; font-size: .76rem; color: var(--muted); }
+  .docklog .u::before { content: "tmct> "; color: var(--taught); }
+  .docklog .a { font-size: .88rem; line-height: 1.45; white-space: pre-wrap; }
+  .docklog .a.miss { color: var(--muted); font-style: italic; }
+  .docklog .a.grounded { border-left: 2px solid var(--taught); padding-left: .5rem; }
+  .dockask { display: flex; align-items: center; gap: .5rem; }
+  .dockask .prompt { color: var(--taught); font-size: .78rem; }
+  .dockask input { flex: 1; font-family: ${MONO_STACK}; font-size: .82rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: .38rem .6rem; min-width: 0; }
+  .dockask input:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
+  .dockask input:disabled { opacity: .5; }
+  .dock-status { font-size: .72rem; color: var(--muted); margin-top: .55rem; }
+`;
+
+  const dockHtml = !spritesBundleAvailable ? "" : `<div class="dockwrap">
+    <section class="panel" aria-label="Ask about the sprite catalog">
+      <h2>ask the catalog</h2>
+      <p class="dock-note">every answer is read from the sprite templates&rsquo; own facts &mdash; a question they can&rsquo;t ground gets a refusal, never a guess.</p>
+      <div class="docklog" id="dockLog" aria-live="polite"></div>
+      <form class="dockask" id="dockForm">
+        <span class="prompt mono">tmct&gt;</span>
+        <input id="dockq" type="text" autocomplete="off"
+          placeholder="what parameters does a person sprite take?"
+          aria-label="Ask about the sprite catalog" disabled>
+      </form>
+      <div class="pills" id="dockPills" role="group" aria-label="quick questions to ask">
+        <button type="button" class="pill" data-q="what parameters does a person sprite take?">person parameters</button>
+        <button type="button" class="pill" data-q="what parameters does a cabinet sprite take?">cabinet parameters</button>
+        <button type="button" class="pill" data-q="what classes can you render?">classes on record</button>
+        <button type="button" class="pill" data-q="what is a portrait sprite?">about the portrait sprite</button>
+      </div>
+      <div class="dock-status mono" id="dockStatus">loading the engine&hellip;</div>
+    </section>
+  </div>`;
+
+  const dockScripts = !spritesBundleAvailable ? "" : `<script>
+const SPRITE_CHAT = ${embedJson({ rows: dockRows })};
+</script>
+<script src="./sprites-browser.bundle.js"></script>
+<script>
+(function () {
+  "use strict";
+  const answerSpriteQuestion = ${answerSpriteQuestion.toString()};
+  const dockLogEl = document.getElementById("dockLog");
+  const dockFormEl = document.getElementById("dockForm");
+  const dockqEl = document.getElementById("dockq");
+  const dockPillsEl = document.getElementById("dockPills");
+  const dockStatusEl = document.getElementById("dockStatus");
+
+  // The SAME bounded-race wink load ledger/plan/chat use, against the site's
+  // shared first-party ./vendor/wink.js — a missing or slow asset degrades to
+  // the adapter-less tiers, never a broken dock.
+  const WINK_LOAD_TIMEOUT_MS = 8000;
+  const winkTimeout = (ms, reason) => new Promise((_, reject) => setTimeout(() => reject(new Error(reason)), ms));
+  let winkReady = null;
+  function tryLoadWink() {
+    if (winkReady) return winkReady;
+    winkReady = (async () => {
+      try {
+        const mod = await Promise.race([
+          import("./vendor/wink.js"),
+          winkTimeout(WINK_LOAD_TIMEOUT_MS, "wink vendor asset load timed out"),
+        ]);
+        tmctSprites.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
+      } catch (err) {
+        console.warn("tmct sprites: the wink vendor asset failed to load, continuing without the lemma/POS tier", err);
+      }
+    })();
+    return winkReady;
+  }
+  tryLoadWink();
+
+  function addDockLine(cls, text) {
+    const d = document.createElement("div");
+    d.className = cls;
+    d.textContent = text;
+    dockLogEl.appendChild(d);
+    dockLogEl.scrollTop = dockLogEl.scrollHeight;
+  }
+
+  let session = null;
+  // Serialize engine turns: overlapping calls share one in-memory store.
+  let lock = Promise.resolve();
+  const withLock = (fn) => { const run = lock.then(fn, fn); lock = run.catch(() => {}); return run; };
+
+  dockFormEl.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const q = dockqEl.value.trim();
+    if (!q) return;
+    dockqEl.value = "";
+    addDockLine("u", q);
+    const local = answerSpriteQuestion(q, SPRITE_CHAT.rows);
+    if (local) { addDockLine("a grounded", local.answer); return; }
+    if (!session) { addDockLine("a miss", "the engine is still loading \\u2014 try again in a moment."); return; }
+    withLock(async () => {
+      const result = await session.turn(q);
+      addDockLine(result.record && result.record.miss ? "a miss" : "a", result.answer);
+    });
+  });
+
+  dockPillsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".pill");
+    if (!btn) return;
+    dockqEl.value = btn.dataset.q || "";
+    dockqEl.focus();
+  });
+
+  (async () => {
+    try {
+      await tryLoadWink();
+      session = await tmctSprites.createSpriteCatalogSession({ factRows: SPRITE_CHAT.rows });
+      dockqEl.disabled = false;
+      dockStatusEl.textContent = SPRITE_CHAT.rows.length + " sprite facts on record \\u2014 ask away, or use a quick question.";
+    } catch (err) {
+      dockStatusEl.textContent = "the chat engine failed to load \\u2014 the catalog below still works.";
+      console.error("tmct sprites: dock boot failed", err);
+    }
+  })();
+})();
+</script>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -487,7 +669,7 @@ ${THEME_TOKENS_CSS}
   .swatch-treat { display: block; opacity: .8; }
   footer.page { max-width: 74ch; margin: 2.5rem 0 0; padding-top: 1rem; border-top: 1px solid var(--line); font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) { .jump, .swatch, .pill { transition: border-color .12s ease, opacity .12s ease; } }
-</style>
+${dockCss}</style>
 </head>
 <body>
 <main>
@@ -519,6 +701,7 @@ ${THEME_TOKENS_CSS}
       </div>
     </section>
   </div>
+  ${dockHtml}
   <div class="topbar">
     <nav aria-label="Jump to group">${navHtml}</nav>
     <div class="filter">
@@ -627,6 +810,7 @@ const SPRITE_CATALOG = ${pageData};
   renderScene("");
 })();
 </script>
+${dockScripts}
 </body>
 </html>
 `;

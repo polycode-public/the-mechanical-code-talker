@@ -79,10 +79,15 @@ public/spider-fly-browser.bundle.js
 public/adventure-browser.bundle.js
 public/plan-browser.bundle.js
 public/ledger-browser.bundle.js
+public/sprites-browser.bundle.js
 public/chat-seed.json
 public/reference-pack/
 public/viz-ticker.mjs
 public/sprites-pack/
+public/vendor/
+public/tmct-sw.js
+public/*.gz
+public/*.br
 
 # Chromium for the browser e2e tier. CI puts it here (PLAYWRIGHT_BROWSERS_PATH)
 # so the job cache can carry it between runs; `npm run e2e:browsers` fetches it.

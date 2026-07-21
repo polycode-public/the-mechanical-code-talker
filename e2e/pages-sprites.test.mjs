@@ -1,19 +1,25 @@
-// sprites.html's own scene composer, in a real browser: the "there is a"
+// sprites.html in a real browser: the scene composer (the "there is a"
 // lead-in plus a free-typed continuation resolves to real, already-rendered
-// catalog sprites (never a hand-simulated stand-in — see
-// sprite-catalog-viz.mjs's own header), an unrecognized word or class is
-// silently dropped rather than guessed at, and the rest of the catalog page
-// (topbar filter, class cards) is unaffected by the new panels above it.
+// catalog sprites — never a hand-simulated stand-in, see
+// sprite-catalog-viz.mjs's own header), the catalog itself (topbar filter,
+// class cards), and the chat dock, which answers catalog questions from the
+// sprite templates' own generated facts and hands everything else to the
+// full engine, whose refusal is the honest miss.
 //
 // Third-party hosts are blocked for every run, exactly as in pages-home/
 // pages-spider-fly: the whole page ships with itself, so nothing here needs
 // the network.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
-import { rmSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { rmSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { chromium } from "playwright";
-import { buildDemoSiteSnapshot } from "./helpers/demo-site.mjs";
+import { buildDemoSiteSnapshot, repoRoot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
+import { readSpriteTemplateFiles } from "../src/adapters/corpus/sprite-template-files.mjs";
+import { readSpriteLargeTemplateFiles } from "../src/adapters/corpus/sprite-large-template-files.mjs";
+import { loadSpriteOntologyFactRows, renderSpriteCatalogHtml } from "../src/services/sprite-catalog-viz.mjs";
 
 let siteDir;
 let server;
@@ -21,6 +27,21 @@ let browser;
 
 before(async () => {
   siteDir = buildDemoSiteSnapshot();
+  // Build this page's own chat-dock bundle and render sprites.html with the
+  // dock enabled — the same two calls the site build makes for the other
+  // chat-dock pages. If the snapshot build already did both, this rewrite is
+  // byte-identical; if it rendered the page dock-less, this is what puts the
+  // real artifact under test.
+  execFileSync(process.execPath, [path.join(repoRoot, "scripts", "build-sprites-bundle.mjs")], {
+    env: { ...process.env, TMCT_SPRITES_BUNDLE_OUT: siteDir },
+    stdio: "pipe",
+  });
+  writeFileSync(path.join(siteDir, "sprites.html"), renderSpriteCatalogHtml({
+    iconTemplates: readSpriteTemplateFiles(),
+    largeTemplates: readSpriteLargeTemplateFiles(),
+    factRows: await loadSpriteOntologyFactRows(),
+    spritesBundleAvailable: true,
+  }));
   server = await serveDirectory(siteDir);
   browser = await chromium.launch();
 });
@@ -179,6 +200,47 @@ test("a pill click appends its real phrase to the input and composes it into the
     await page.waitForFunction(() => document.querySelectorAll("#sceneRow .scene-card").length >= 2);
     const labels = await page.locator("#sceneRow .scene-label").allInnerTexts();
     assert.deepEqual(labels, ["doctor", "wood cabinet"]);
+  } finally {
+    await context.close();
+  }
+});
+
+async function askDock(page, question) {
+  await page.waitForFunction(() => {
+    const input = document.getElementById("dockq");
+    return input && !input.disabled;
+  }, undefined, { timeout: 60_000 });
+  const answered = await page.locator("#dockLog .a").count();
+  await page.fill("#dockq", question);
+  await page.press("#dockq", "Enter");
+  await page.waitForFunction((n) => document.querySelectorAll("#dockLog .a").length > n, answered);
+  return page.locator("#dockLog .a").last();
+}
+
+test("the dock grounds 'what parameters does a person sprite take?' in the template data's own real parameter", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openSpritesPage();
+  try {
+    const reply = await askDock(page, "what parameters does a person sprite take?");
+    const text = await reply.innerText();
+    assert.match(text, /emotion/, "the answer names the real parameter the person templates declare");
+    assert.match(text, /happy/, "the answer carries the parameter's own real value set");
+    assert.ok(await reply.evaluate((el) => el.classList.contains("grounded")), "the reply is marked as read from the embedded facts");
+    assert.deepEqual(failedRequests, [], "the dock's bundle and wink asset both load same-origin");
+    assert.deepEqual(consoleErrors, [], "the dock answers without a console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("an ungrounded dock question gets a refusal, never a guess", async () => {
+  const { context, page, consoleErrors } = await openSpritesPage();
+  try {
+    const reply = await askDock(page, "who painted the mona lisa?");
+    const text = await reply.innerText();
+    assert.match(text, /can't answer|don't know|no code graph/i, "the reply is a refusal");
+    assert.doesNotMatch(text, /leonardo|da vinci/i, "nothing is invented to fill the gap");
+    assert.ok(await reply.evaluate((el) => el.classList.contains("miss")), "the reply is marked as a miss");
+    assert.deepEqual(consoleErrors, [], "a miss never throws");
   } finally {
     await context.close();
   }
