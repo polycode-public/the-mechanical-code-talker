@@ -31,11 +31,11 @@ procedure, not a diff), *operator call* (a decision, not a build).
 
 | # | Item | Status | Checked | Motivation | Likelihood it sticks |
 |---|---|---|---|---|---|
-| 1 | `list facts`/`list utterances` memory-class lane | open, traced | 2026-07-21 | tested mechanism is unreachable from chat | high |
-| 2 | `how many animals` taught-class count | open, traced | 2026-07-21 | no lane; quantifier lane steals the phrasing | high |
-| 3 | `list all animals` trigger arm | open, traced | 2026-07-21 | working answer unreachable from this phrasing | high |
-| 4 | `count all facts about X` regex | open, traced | 2026-07-21 | "all" captured as the noun | high |
-| 5 | membership-list trigger (xl cap shadow) | open, traced | 2026-07-21 | forward facts fill the cap at xl | medium-high |
+| 1 | `list facts`/`list utterances` memory-class lane | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | tested mechanism is unreachable from chat | high |
+| 2 | `how many animals` taught-class count | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | no lane; quantifier lane steals the phrasing | high |
+| 3 | `list all animals` trigger arm | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | working answer unreachable from this phrasing | high |
+| 4 | `count all facts about X` regex | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | "all" captured as the noun | high |
+| 5 | membership-list trigger (xl cap shadow) | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | forward facts fill the cap at xl | medium-high |
 | 6 | narrowing disclosure (dir/graph/entity picks) | open, design | 2026-07-21 | wrong-feeling answers erode trust | medium |
 | 7 | verbatim log fixes (rewrite, multi-sentence) | open, traced | 2026-07-21 | the transcript is the instrument | high |
 | 8 | farewell/dismissal routing | open, traced | 2026-07-21 | polite close reads worse than a wall | medium-high |
@@ -45,22 +45,22 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 12 | in-game question routing guard | open, traced | 2026-07-21 | code answers inside a game, worst misroute class | medium-high |
 | 13 | world-secret spoiler + predicate phrases | open, traced | 2026-07-21 | spoils the game, in garbled English | high |
 | 14 | "look" digest corpus leak | open, traced | 2026-07-21 | room text must come from the world | medium-high |
-| 15 | determiner-subject teach | open, traced | 2026-07-21 | the natural form declines | high |
+| 15 | determiner-subject teach | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | the natural form declines | high |
 | 16 | hanoi solve at xl | open, reproduced | 2026-07-21 | biggest live falsehood found | medium |
 | 17 | live-Wikipedia trust prior | open, traced | 2026-07-21 | live must not outrank the pinned pack | high |
-| 18 | chat-seed caps | operator call | 2026-07-21 | seed-ceiling decision | n/a |
-| 19 | ledger query-template audit | open, process | 2026-07-22 | the quiet cut from 2.9.x | high |
+| 18 | chat-seed caps | in progress (decided: raise caps to ~40 MB ceiling; wt agent-a8d1b0cd6ce6cb74d) | 2026-07-21 | seed-ceiling decision | n/a |
+| 19 | ledger query-template audit | in progress, process (wt agent-a3d2079083c620fdd) | 2026-07-22 | the quiet cut from 2.9.x | high |
 | 20 | wiki even-when-known (ask + supplement) | open, decided | 2026-07-22 | corroboration, not just rescue | medium-high |
 | 21 | full-triple learn-on-miss ingestion | open, decided | 2026-07-22 | loads become durable knowledge | medium-high |
 | 22 | auto bounded synthesis per ingest | open, decided | 2026-07-22 | new facts should connect | medium-high |
 | 23 | `extract --optimistic` + `--canonical` | open, decided | 2026-07-22 | ingest real-world text | medium |
 | 24 | glow-Markdown session logs | open, sampled | 2026-07-22 | readable transcripts; the sample is the spec | high |
-| 25 | home page tiles | open, new scope | 2026-07-22 | tiles name capabilities | high |
-| 26 | adventure.html room-width strips | open, new scope | 2026-07-22 | kill the gap under the room | medium-high |
-| 27 | spider-fly layout + renames | open, new scope | 2026-07-22 | alignment, consistency | high |
-| 28 | spider-fly observable-facts panel | open, new scope | 2026-07-22 | planners' knowledge made inspectable | medium |
+| 25 | home page tiles | in progress, new scope (wt agent-a8d1b0cd6ce6cb74d) | 2026-07-22 | tiles name capabilities | high |
+| 26 | adventure.html room-width strips | in progress, new scope (wt agent-a8d1b0cd6ce6cb74d) | 2026-07-22 | kill the gap under the room | medium-high |
+| 27 | spider-fly layout + renames | in progress, new scope (wt agent-a8d1b0cd6ce6cb74d) | 2026-07-22 | alignment, consistency | high |
+| 28 | spider-fly observable-facts panel | in progress, new scope (wt agent-a8d1b0cd6ce6cb74d) | 2026-07-22 | planners' knowledge made inspectable | medium |
 | 29 | sense-splitting on read-back (Rover) | open, designed | 2026-07-22 | two concepts under one label | medium-high |
-| 30 | code explorer (Electron) | open, new scope | 2026-07-22 | explorable code graph on the desktop | medium |
+| 30 | code explorer (Electron) | in progress, new scope (wt agent-a9bda2b9ecef7fd14) | 2026-07-22 | explorable code graph on the desktop | medium |
 | 31 | ingest.html + ledger/chat ingest | open, new scope | 2026-07-22 | bring your own text | medium-high |
 | 32 | full IndexedDB re-initialisation button | open, new scope | 2026-07-22 | recover any page from any state | high |
 | 33 | triple-store export, every page | open, new scope | 2026-07-22 | data leaves in the standard shape | high |
