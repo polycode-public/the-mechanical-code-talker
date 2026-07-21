@@ -28,6 +28,10 @@ import { registerWinkModel } from "../../adapters/wink-model.mjs";
 // null in the browser — build-chat-bundle stubs node:zlib as a thrower its
 // try/catch absorbs).
 import { registerReferencePackProvider } from "../../adapters/corpus/reference-pack.mjs";
+// Best-effort IndexedDB persistence for the page's session store — the page
+// decides when to save/load/clear; this entry only carries the wrapper
+// across the bundle boundary.
+import { openPersistedStore } from "./idb-persist.mjs";
 
 /**
  * A browser chat session over the real turn engine.
@@ -132,4 +136,4 @@ export async function memoryStats(memoryDir) {
   return { total: rows.length, bandCounts, taught };
 }
 
-globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, normFactTerm, vocabExampleHint, memoryStats };
+globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, normFactTerm, vocabExampleHint, memoryStats, openPersistedStore };

@@ -212,6 +212,9 @@ ${THEME_TOKENS_CSS}
   .statsPanel .taught-item { margin: 0 0 .7rem; }
   .statsPanel .taught-tag { display: block; color: var(--muted); font-size: .66rem; margin-top: .15rem; word-break: break-word; }
   .statsPanel .empty { color: var(--muted); margin: 0; }
+  .statsPanel .forget-btn { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .18rem .55rem; margin-top: 1.1rem; background: var(--card); }
+  .statsPanel .forget-btn:hover { color: var(--ink); }
+  .statsPanel .persist-note { color: var(--muted); font-size: .64rem; margin: .4rem 0 0; }
 
   @media (max-width: 860px) {
     .statsPanel { display: none; }
@@ -419,6 +422,21 @@ ${THEME_TOKENS_CSS}
     }
   }
 
+  // The deploy's own version, read off the service worker file the build
+  // already stamps (its cache name embeds package.json's version) — the only
+  // same-origin place the number exists at runtime without a second build
+  // artifact. Best-effort: no worker file, no match, no network -> "dev".
+  async function fetchSiteVersion() {
+    try {
+      const res = await fetch("./tmct-sw.js");
+      if (!res.ok) return "dev";
+      const found = /tmct-precache-v(\\d+\\.\\d+\\.\\d+)/.exec(await res.text());
+      return found ? found[1] : "dev";
+    } catch {
+      return "dev";
+    }
+  }
+
   let seedPayload = null;
   let seedFacts = 0;
   async function fetchSeed() {
@@ -461,6 +479,48 @@ ${THEME_TOKENS_CSS}
       }
     },
   };
+
+  // ---- persistence: what you taught it survives a reload, on this device -
+  // Best-effort IndexedDB (window.tmctChat.openPersistedStore): the whole
+  // Backend-B payload snapshots after each teach turn, debounced so a burst
+  // of teaching costs one multi-MB write, not one per fact. The stamp ties a
+  // snapshot to this deploy (site version) AND this seed (fact count) — either
+  // changing discards the snapshot in favour of the fresh seed.
+  let persist = null;
+  let saveTimer = null;
+  let restoredCount = 0;
+  window.tmctChatLastSave = null;
+
+  function scheduleSave() {
+    if (!persist) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      const session = window.tmctChatSession;
+      if (!session) return;
+      const started = performance.now();
+      let snapshot;
+      try {
+        snapshot = structuredClone(session.memoryDir.payload);
+      } catch {
+        try { snapshot = JSON.parse(JSON.stringify(session.memoryDir.payload)); } catch { return; }
+      }
+      persist.save(snapshot).then((saved) => {
+        if (saved) window.tmctChatLastSave = { at: Date.now(), ms: Math.round(performance.now() - started) };
+      });
+    }, 500);
+  }
+
+  async function forgetEverything() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (persist) await persist.clear();
+    restoredCount = 0;
+    window.tmctChatSession = newSession();
+    const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
+    addSystemLine("forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats) + ").");
+    await renderStatsPanel(stats);
+  }
 
   // ---- memory stats: the boot message's own numbers, and the docked panel -
   // Both read window.tmctChat.memoryStats(memoryDir) (chat-browser-entry.mjs)
@@ -531,6 +591,21 @@ ${THEME_TOKENS_CSS}
         statsPanelEl.appendChild(item);
       }
     }
+
+    if (persist) {
+      const forget = document.createElement("button");
+      forget.type = "button";
+      forget.id = "forgetEverything";
+      forget.className = "forget-btn";
+      forget.textContent = "forget everything";
+      forget.title = "clear what this device has saved and restart from the fresh seed";
+      forget.addEventListener("click", forgetEverything);
+      statsPanelEl.appendChild(forget);
+      const note = document.createElement("p");
+      note.className = "persist-note";
+      note.textContent = "taught facts are kept best-effort on this device (IndexedDB), never sent anywhere.";
+      statsPanelEl.appendChild(note);
+    }
   }
 
   function renderStatus() {
@@ -564,6 +639,7 @@ ${THEME_TOKENS_CSS}
     window.tmctChatSession.turn(q)
       .then((result) => {
         settleAssistantBubble(pendingRow, result.answer, result.record);
+        if (result.record && result.record.via === "assert") scheduleSave();
         return renderStatsPanel(); // a teach turn just grew this session's memory; a plain ask leaves it unchanged either way
       })
       .catch((err) => settleAssistantBubble(pendingRow,
@@ -581,13 +657,27 @@ ${THEME_TOKENS_CSS}
       inputEl.placeholder = "chat engine unavailable";
       return;
     }
-    await Promise.all([fetchSeed(), tryLoadWink()]);
+    let siteVersion = "dev";
+    await Promise.all([fetchSeed(), tryLoadWink(), fetchSiteVersion().then((v) => { siteVersion = v; })]);
     progressActive = false;
     window.tmctChat.registerReferencePackProvider(fetchPackProvider);
-    window.tmctChatSession = newSession();
+    if (window.tmctChat.openPersistedStore) {
+      persist = window.tmctChat.openPersistedStore({ storeKey: "chat", stamp: siteVersion + ":" + seedFacts });
+    }
+    const savedRecord = persist ? await persist.load() : null;
+    if (savedRecord && savedRecord.payload) {
+      window.tmctChatSession = window.tmctChat.createChatSession({ seedPayload: savedRecord.payload, vocabSeeded: true });
+    } else {
+      window.tmctChatSession = newSession();
+    }
     const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
+    if (savedRecord) restoredCount = stats.taught.length;
+    const restoredNote = savedRecord
+      ? " Restored " + restoredCount + " taught fact" + (restoredCount === 1 ? "" : "s")
+        + " from your last visit \\u2014 state kept best-effort on this device."
+      : "";
     addSystemLine("tmct \\u2014 the real engine, running in this page \\u2014 " + statsSummaryLine(stats)
-      + ". Ask it something, or teach it a fact of your own.");
+      + "." + restoredNote + " Ask it something, or teach it a fact of your own.");
     await renderStatsPanel(stats);
     inputEl.placeholder = seedPayload ? 'try "what is a dog"' : window.tmctChat.vocabExampleHint(false);
     renderStatus();

@@ -185,6 +185,31 @@ test("renderChatHtml: exposes window.tmctChatReady, the same boot-readiness hook
   assert.match(html, /window\.tmctChatReady = boot\(\)/);
 });
 
+// ---- persistence wiring: the page keeps taught state on the device ---------
+
+test("renderChatHtml: the device store opens under a version+seed stamp and boot tries a restore before falling back to the fresh seed", () => {
+  const html = renderChatHtml();
+  assert.match(html, /openPersistedStore\(\{ storeKey: "chat", stamp: siteVersion \+ ":" \+ seedFacts \}\)/);
+  assert.match(html, /persist\.load\(\)/);
+  assert.match(html, /Restored " \+ restoredCount \+ " taught fact/, "the boot line names how many taught facts came back");
+  assert.match(html, /state kept best-effort on this device/);
+});
+
+test("renderChatHtml: a teach turn schedules a debounced save of a payload snapshot, never a save per keystroke or of the live object", () => {
+  const html = renderChatHtml();
+  assert.match(html, /result\.record\.via === "assert"\) scheduleSave\(\)/);
+  assert.match(html, /structuredClone\(session\.memoryDir\.payload\)/);
+  assert.match(html, /setTimeout\(\(\) => \{[\s\S]*?persist\.save/, "the save runs on a timer, not inline in the turn");
+  assert.match(html, /\}, 500\)/, "the debounce window is present");
+});
+
+test("renderChatHtml: the forget-everything control clears the device store and rebuilds from the fresh seed", () => {
+  const html = renderChatHtml();
+  assert.match(html, /id = "forgetEverything"/);
+  assert.match(html, /persist\.clear\(\)/);
+  assert.match(html, /forgot everything taught on this device/);
+});
+
 test("renderChatHtml: the brand line renders as typed — lowercase, single element, no heading beside it", () => {
   const html = renderChatHtml();
   assert.ok(html.includes('<span class="eyebrow">the-mechanical-code-talker</span>'));

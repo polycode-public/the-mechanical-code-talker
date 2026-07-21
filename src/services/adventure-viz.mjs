@@ -653,6 +653,51 @@ const ADVENTURE = ${pageData};
   let editState = { placements: new Map(), openness: new Map(), exits: new Map() };
   let allStoreRows = [];
 
+  // ---- persistence — the manor remembers your visit, on this device -------
+  // Best-effort IndexedDB (tmctAdventure.openPersistedStore): after any
+  // state-changing redraw, the whole Backend-B payload plus the visited-room
+  // exposure set snapshots under the "adventure" key, debounced. Restored on
+  // boot; reset clears it and starts the world over. The home page's preview
+  // iframe never persists — an auto-playing demo must not overwrite, or
+  // resurrect as, a visitor's own game.
+  let persist = null;
+  let persistSaveTimer = null;
+  window.tmctAdventureLastSave = null;
+
+  // The deploy's own version, read off the service worker file the build
+  // already stamps (its cache name embeds package.json's version) — the only
+  // same-origin place the number exists at runtime. Best-effort: "dev".
+  async function fetchSiteVersion() {
+    try {
+      const res = await fetch("./tmct-sw.js");
+      if (!res.ok) return "dev";
+      const found = /tmct-precache-v(\\d+\\.\\d+\\.\\d+)/.exec(await res.text());
+      return found ? found[1] : "dev";
+    } catch {
+      return "dev";
+    }
+  }
+
+  function schedulePersistSave() {
+    if (!persist || !session) return;
+    clearTimeout(persistSaveTimer);
+    persistSaveTimer = setTimeout(() => {
+      persistSaveTimer = null;
+      if (!session) return;
+      const started = performance.now();
+      let memoryPayload;
+      try {
+        memoryPayload = structuredClone(session.memoryDir.payload);
+      } catch {
+        try { memoryPayload = JSON.parse(JSON.stringify(session.memoryDir.payload)); } catch { return; }
+      }
+      const visitedRoomIds = lastSnapshot ? lastSnapshot.visitedRoomIds : [];
+      persist.save({ memoryPayload: memoryPayload, visitedRoomIds: visitedRoomIds }).then((saved) => {
+        if (saved) window.tmctAdventureLastSave = { at: Date.now(), ms: Math.round(performance.now() - started) };
+      });
+    }, 500);
+  }
+
   // ---- serialize every engine-touching call: the ticker, the chat dock and
   // the editor sync all share one in-memory store, and any overlapping pair
   // could race against the same write.
@@ -843,6 +888,7 @@ const ADVENTURE = ${pageData};
     renderCarrying(snap.rows, snap.state);
     renderRoomMap(snap.rows, snap.state, snap.visitedRoomIds);
     renderGoals(snap.rows, snap.state, snap.visitedRoomIds);
+    schedulePersistSave();
   }
 
   chatformEl.addEventListener("submit", (e) => {
@@ -1013,8 +1059,14 @@ const ADVENTURE = ${pageData};
   editModeBtn.addEventListener("click", () => withLock(() =>
     (document.body.classList.contains("editing") ? exitEditMode() : enterEditMode())));
 
-  async function boot() {
-    session = await tmctAdventure.createAdventureSession(ADVENTURE.world);
+  async function boot({ fresh = false } = {}) {
+    const saved = !fresh && persist ? await persist.load() : null;
+    session = await tmctAdventure.createAdventureSession(
+      ADVENTURE.world,
+      saved && saved.payload && saved.payload.memoryPayload
+        ? { restoredPayload: saved.payload.memoryPayload, restoredVisitedRoomIds: saved.payload.visitedRoomIds }
+        : {},
+    );
     lastTicks = 0;
     const snap = await session.snapshot();
     redraw(snap);
@@ -1022,6 +1074,9 @@ const ADVENTURE = ${pageData};
     chatlogEl.innerHTML = "";
     statusEl.textContent = ADVENTURE.world.opening || "";
     addChatLine("t", esc(ADVENTURE.world.opening || "the adventure begins."));
+    if (saved && snap.turn > 0) {
+      addChatLine("t", "resumed where you left off (turn " + snap.turn + ") \\u2014 progress kept best-effort on this device; reset starts the manor over.");
+    }
     chatqEl.disabled = false;
     resetBtn.disabled = false; playBtn.disabled = false; stepBtn.disabled = false; editModeBtn.disabled = false;
   }
@@ -1042,7 +1097,15 @@ const ADVENTURE = ${pageData};
       stepBtn.disabled = state.animating || state.playing;
       resetBtn.disabled = state.animating;
     },
-    onReset: () => withLock(boot),
+    onReset: () => withLock(async () => {
+      // Reset means "start the manor over", so the saved snapshot goes too —
+      // without the clear, the next visit would restore the game reset just
+      // threw away.
+      clearTimeout(persistSaveTimer);
+      persistSaveTimer = null;
+      if (persist) await persist.clear();
+      await boot({ fresh: true });
+    }),
     hasNext: () => !preview || lastTicks < ADVENTURE.previewMaxTicks,
     waitMs: ADVENTURE.tickWaitMs,
   });
@@ -1050,7 +1113,14 @@ const ADVENTURE = ${pageData};
   stepBtn.addEventListener("click", () => ticker.stepOnce());
   resetBtn.addEventListener("click", () => ticker.reset());
 
-  boot().then(() => { if (preview) ticker.play(); });
+  (async () => {
+    if (!preview && tmctAdventure.openPersistedStore) {
+      const siteVersion = await fetchSiteVersion();
+      persist = tmctAdventure.openPersistedStore({ storeKey: "adventure", stamp: siteVersion + ":" + ADVENTURE.world.name });
+    }
+    await boot();
+    if (preview) ticker.play();
+  })();
 })();
 </script>
 </body>
