@@ -9,7 +9,7 @@ import { mkdtemp, rm, readFile, access } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { appendFact } from "../src/adapters/memory/core.mjs";
+import { appendFact, openMemoryBackend } from "../src/adapters/memory/core.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const runCli = (dir, cwd, ...args) =>
@@ -18,10 +18,15 @@ const runCli = (dir, cwd, ...args) =>
 async function seededRepo() {
   const dir = await mkdtemp(join(tmpdir(), "tmct-ledger-cli-"));
   const TS = "2026-07-15T09:00:00.000Z";
-  await appendFact(dir, { subject: "dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:human /r/IsA", createdAt: TS });
-  await appendFact(dir, { subject: "dog", predicate: "mgx:hasA", object: "tail", provenance: "corpus:human /r/HasA", createdAt: TS });
-  await appendFact(dir, { subject: "cat", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:human /r/IsA", createdAt: TS });
-  await appendFact(dir, { subject: "ahab", predicate: "mgx:father", object: "john", provenance: "teach:chat", createdAt: TS });
+  const backend = await openMemoryBackend(dir, "");
+  try {
+    await appendFact(backend.dir, { subject: "dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:human /r/IsA", createdAt: TS });
+    await appendFact(backend.dir, { subject: "dog", predicate: "mgx:hasA", object: "tail", provenance: "corpus:human /r/HasA", createdAt: TS });
+    await appendFact(backend.dir, { subject: "cat", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:human /r/IsA", createdAt: TS });
+    await appendFact(backend.dir, { subject: "ahab", predicate: "mgx:father", object: "john", provenance: "teach:chat", createdAt: TS });
+  } finally {
+    await backend.close();
+  }
   return dir;
 }
 
