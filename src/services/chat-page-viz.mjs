@@ -507,8 +507,22 @@ ${THEME_TOKENS_CSS}
   // Both read window.tmctChat.memoryStats(memoryDir) (chat-browser-entry.mjs)
   // — one computation, reused, so the boot line and the panel can never
   // disagree with each other about what this session's memory holds.
-  const BAND_LABELS = { human: "human persona", seon: "seon ontology", conceptnet: "ConceptNet" };
-  const BAND_ORDER = ["human", "seon", "conceptnet", "taught this session", "other"];
+  const BAND_LABELS = {
+    human: "human persona",
+    "human-medium": "human persona (medium)",
+    "human-large": "human persona (large)",
+    seon: "seon ontology",
+    conceptnet: "ConceptNet",
+    "tier2-aws": "AWS",
+    "tier2-python": "Python",
+    "tier2-java": "Java",
+    "wordnet-xl": "WordNet",
+  };
+  const BAND_ORDER = [
+    "human", "human-medium", "human-large", "seon", "conceptnet",
+    "tier2-aws", "tier2-python", "tier2-java", "wordnet-xl",
+    "taught this session", "other",
+  ];
   const bandLabel = (key) => BAND_LABELS[key] || key;
 
   /** The boot system line's own memory summary — every seed band this
