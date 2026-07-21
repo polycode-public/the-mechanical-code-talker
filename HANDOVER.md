@@ -121,10 +121,8 @@ facts) plus the merged seonix+demo code graphs, in one continuous piped chat ses
   it; it was dropped from the 2.9.1-2.9.5 delivery — no commit does it). To do: audit the ledger
   page's existing query-template library for phrasing gaps the same way the spider-fly, adventure
   and plan audits were done (`4285d0f` is the pattern to follow), and route what it finds either
-  into template rows or here. (Two other residuals are recorded and accepted in that archive doc:
-  library consumers still see Node's ExperimentalWarning — CLI entry points suppress it, a host
-  process embedding the services cannot be flagged from here; and live-Wikipedia's wider
-  miss-hook past the lexicon gate is a stated non-goal, now superseded by the knowledge-flows
+  into template rows or here. (One other residual is recorded there: live-Wikipedia's wider
+  miss-hook past the lexicon gate was a stated non-goal, now superseded by the knowledge-flows
   item below.)
 
 - Knowledge flows — supplement, ingest, synthesise (operator-decided 2026-07-21). Four builds,
@@ -159,6 +157,37 @@ facts) plus the merged seonix+demo code graphs, in one continuous piped chat ses
      linking exists on the extract path). Trust work shared with the live-Wikipedia prior item
      above: distinct source kinds (live, optimistic-extract) with their own priors in trust.mjs,
      so fuzzy and live content rank below the curated packs by construction.
+
+- Session logs become glow-friendly Markdown. `.tmct/session-<id>.log` moves to
+  `session-<id>.md`: a `#` title carrying version/repo/start, one `###` heading per turn with a
+  time-of-day timestamp at millisecond precision (drop the full ISO date from every turn), the
+  user's line as a `>` blockquote (verbatim — the multi-sentence/rewrite log bugs above apply
+  here too), the reply in a fenced block, and a closing session-end line. A hand-made sample of
+  a real 101-turn session sits at `.tmct/session-019f8692-430d-79f3-9ee2-c38792f56746.md`
+  (render with `glow`) as the target look. Writer: `src/services/chat-session.mjs`
+  (`SESSION_LOG_DIR`, the per-turn `logLines` built at `chat.mjs:11982`); check the e2e that
+  reads the log file for the extension change.
+
+- Home page tiles (`e2e/pages-index.test.mjs` pins hero order and labels — update it with the
+  strings): the adventure tile gets a few character sprites composed over its icon,
+  movie-poster style; the sprite-library tile shows a range of sprite sizes instead of one; the
+  chat tile is labelled "Chat" (not "Talk to it") and gets an icon; the spider-fly tile line
+  "Two agents, planning against each other" becomes "multiple competing planning agents" and
+  gets an icon (both tiles keep their text links — the icons are additional); the adventure
+  line "A text adventure, with a room you can actually see" becomes "Location aware inference".
+
+- adventure.html layout (`src/services/adventure-viz.mjs`): quest and satchel become
+  full-width strips sized to the room view — quest strip on top, satchel strip under it, then
+  the room — and the reset/play/step + turn-count controls become one strip of the same width
+  pinned directly below the room. This removes the dead gap under the room view whenever the
+  right-hand column runs longer than the scene (operator screenshot, 2026-07-22).
+
+- spider-fly.html (`src/services/spider-fly-viz.mjs`): the tuning strip shortens to match the
+  grid's width; the TURN block joins the reset/play/step cluster; the hero line "A spider in
+  its web, a fly on the board — each planning against the other" becomes "multiple competing
+  planning agents"; and clicking the spider or the fly expands a section beside that agent in
+  the agents box showing a text rendering of the facts that agent can currently observe (the
+  engine's per-agent belief/exposure set, `src/services/spider-fly.mjs`).
 
 ## Discipline
 

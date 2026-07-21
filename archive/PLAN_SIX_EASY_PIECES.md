@@ -189,15 +189,8 @@ every consumer picks from equally.
   gone — in-memory doesn't survive between separate CLI invocations, which those verbs need. Naming
   every affected verb's new default is real, if mechanical, work this plan should track alongside
   the chat-specific change, not assume falls out for free.
-  Mechanic to name: `node:sqlite` still prints Node's `ExperimentalWarning` unless suppressed.
-  `npm run chat` can suppress it exactly like `init:sqlite` already does — add
-  `--disable-warning=ExperimentalWarning` to the script's own `node` invocation in `package.json`,
-  no new mechanism needed. `npx tmct chat` (and a global install) is a different case: npx invokes
-  `bin/tmct.mjs` directly through its own shebang, bypassing `package.json`'s `scripts` entirely, so
-  a flag added there never reaches it. That path needs the suppression to live in the script itself
-  — e.g. `bin/tmct.mjs` detecting the flag is absent and re-executing itself as a child process with
-  it added — not a package.json change. Build both, or name which entry points still show the
-  warning.
+  Mechanic: `node:sqlite` prints Node's `ExperimentalWarning` unless suppressed; the delivery
+  suppressed it on every CLI entry path (package.json scripts, the bin shebang, the npx case).
 - **IndexedDB — for `adventure.html` and `chat.html`, and NOT a fourth token in `openMemoryBackend`'s
   dispatch.** `loadMemory`/`mutateMemory`'s existing contract is synchronous by construction
   (Backend A's file I/O and Backend C's `DatabaseSync` both are) — IndexedDB has no synchronous
