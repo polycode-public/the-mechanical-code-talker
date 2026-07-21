@@ -398,7 +398,7 @@ join:
 
 ### Speculative TO-BE
 
-Drawn from the two fresh reports' backlogs and `HANDOVER.md`'s open items. Not a roadmap
+Drawn from the two fresh reports' backlogs and `NEXT.md`'s open items. Not a roadmap
 commitment; each checked against the tree as not-yet-shipped.
 
 - **The tied-candidate composer** (TOOL-8's silent pick, `BENCHMARK_AGENT_2.6.0.md` backlog 1) —
@@ -413,7 +413,7 @@ commitment; each checked against the tree as not-yet-shipped.
 - **The quantified-has teach's two edges** — a verb-tagged subject declines silently; an s-final
   subject clips to "len" in citations (`BENCHMARK_INFERENCE_2.6.0.md` backlog 1-2).
 - **Teach-path predicate minting for prepositional verbs** ("cat relates to milk" stores
-  `mgx:relate "to milk"`; `HANDOVER.md`) — would give the SKOS lane a teach phrasing.
+  `mgx:relate "to milk"`; `NEXT.md`) — would give the SKOS lane a teach phrasing.
 - **Agentbench fixture module-ids aligned to `mod:<path>`** so symbol-seeded impact results can be
   pinned referentially, and the `tmct_impact` declared param kind widened to match the Function
   seeds it now accepts (backlog 4, 6).
@@ -451,7 +451,7 @@ commitment; each checked against the tree as not-yet-shipped.
 
 ## 4.3 Per-plan feature-support (Done / Doing / Todo)
 
-Re-checked against the tree at this pin. `HANDOVER.md`'s endgame sequences plan archiving after
+Re-checked against the tree at this pin. `NEXT.md`'s endgame sequences plan archiving after
 this audit, so the three BUILT plans below are archive candidates once the in-flight reports land.
 
 - **`PLAN_LEARN_ON_MISS.md`** — pinned at 2.6.0, banner **BUILT** and true. **Done**: the shipped

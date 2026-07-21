@@ -372,7 +372,7 @@ neither moves a leaderboard number directly — same honest annotation as L7/L8.
   days-to-weeks).** `src/domain/router/planner.mjs` already does HTN decomposition with a POP
   causal-link chain, monitored execution, and an internal `why` trace; goal sentences
   and taught actions shipped in 1.11.0; `tmct plan` + the plan-viz page already render
-  goal and steps. The named gap (a 1.11.0 follow-up in `HANDOVER.md`) is the planner
+  goal and steps. The named gap (a 1.11.0 follow-up in `NEXT.md`) is the planner
   consuming `taught:` records, so "how can I build X" plans over a world model the user
   taught in sentences — with the plan page as the visible-thinking display.
 

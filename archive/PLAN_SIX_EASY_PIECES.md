@@ -7,7 +7,7 @@
 > for chat and adventure, the download-progress statusline), Part B phases 1–5 (shared wink
 > vendor + precompression + service worker, the adventure manifest embed, the sprites generator +
 > chat dock, the vocabulary gap audits, the spider-fly layout change and the adventure visual
-> redesign), and Part C's standalone --render exports. Remaining follow-ups live in HANDOVER.md.
+> redesign), and Part C's standalone --render exports. Remaining follow-ups live in NEXT.md.
 > The rest of this doc is the plan as written, kept as the record of what was proposed and why.
 
 ## Origin
@@ -208,7 +208,7 @@ every consumer picks from equally.
 ### What the conversation evidence says about the general-visitor framing
 
 `CAPABILITIES_2.7.12.md` and `BENCHMARK_CONVERSATION_2.7.11.md` (29 routed findings, mirrored into
-`HANDOVER.md`'s open items) put real, measured edges under the "LLM-alternative" framing, and two of
+`NEXT.md`'s open items) put real, measured edges under the "LLM-alternative" framing, and two of
 them interact directly with builds this plan proposes:
 
 - **IndexedDB persistence amplifies the open write-boundary finding — ranked #1 and #2 in the
@@ -263,7 +263,7 @@ them interact directly with builds this plan proposes:
     over the `router.mjs` module with no signal that it picked one of several candidates; a
     package/directory reference narrows to one member module the same way. Wrong-feeling rather
     than wrong, and it needs a design decision on where to surface the narrower reading, not a
-    string tweak (per `HANDOVER.md`).
+    string tweak (per `NEXT.md`).
   - The knowledge-tier ambition (WordNet-xl, live Wikipedia) raises what chat.html can answer once a
     question is routed correctly. None of it touches routing itself — a bigger seed or a live
     Wikipedia fallback both still travel through the same filler-prefix stripper and the same
@@ -459,7 +459,7 @@ phase, not one giant commit.
   (see "Deployment context," near the top of this doc, for why bandwidth/self-hosting cost isn't the
   constraint it might look like elsewhere in this doc's earlier reasoning).
 - Not the conversation-benchmark backlog itself (write-boundary narrowing, meta-question routing,
-  filler prefixes, silent narrowing) — that work stays routed through `HANDOVER.md`, but Part A
+  filler prefixes, silent narrowing) — that work stays routed through `NEXT.md`, but Part A
   names where this plan's builds depend on it, and the persistence work should not land ahead of
   the teach-lane narrowing it amplifies.
 

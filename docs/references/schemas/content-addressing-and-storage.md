@@ -51,7 +51,7 @@ significant bits of every input byte".
 `src/domain/hash.mjs:139` — `factIdFor(s, p, o) = fact:${fnv1aHex(s\0p\0o)}`, and `fnv1aHex` is
 **32-bit**, 8 hex characters. So N = 2³² and P(collision) ≈ 1 − e^(−k²/2N).
 
-`HANDOVER.md` publishes the fact counts, measured on real hardware:
+`NEXT.md` publishes the fact counts, measured on real hardware:
 
 | init tier | facts | P(at least one collision) |
 |---|--:|--:|

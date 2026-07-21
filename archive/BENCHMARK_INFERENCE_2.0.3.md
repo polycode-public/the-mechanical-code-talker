@@ -115,7 +115,7 @@ settled limits:
   fabricating — not that it detects the contradiction. **INF-C2 measures no consistency checking
   at all right now.**
 
-The second of these is exactly what `PLAN_CONSISTENCY_CHECK.md` would build, and `HANDOVER.md`
+The second of these is exactly what `PLAN_CONSISTENCY_CHECK.md` would build, and `NEXT.md`
 already lists that plan as a design awaiting a decision. This run is evidence for that decision:
 the C2 band is ready to grade a consistency checker the moment one exists, and until then its 20/20
 is a floor holding, not a capability.
@@ -175,9 +175,9 @@ stopped discriminating: every band it can author is clear, and 50 of its greens 
 than proofs. Two things would make the next run informative, and both are decisions rather than
 defects — flipping a declared ceiling once the capability behind it exists (chat-layer proof
 materialization for B2; a consistency checker for C2), or authoring a deeper band. Named here and
-mirrored to `HANDOVER.md`; not acted on, per this cycle's no-change rule.
+mirrored to `NEXT.md`; not acted on, per this cycle's no-change rule.
 
-## Open items mirrored to HANDOVER.md
+## Open items mirrored to NEXT.md
 
 - INFBENCH has stopped discriminating: 219/219 chat, 80/80 kernel, every band PASS, 0 verdict
   changes vs `BENCHMARK_INFERENCE_1.7.0.md`. It now measures the generator's reach, not the

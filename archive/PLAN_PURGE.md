@@ -617,7 +617,7 @@ does not exist), `telemetry.test.mjs:30`, `ask.test.mjs:91,365,614,681`, `memory
 Comment-prefixed lines only. An earlier count of 205 swept whole lines and caught test data and
 fixture strings, which are not commentary. `Gap N` and `BUG N` are **zero** — already clean.
 
-| Area | `PLAN_*.md` | `HANDOVER` | dates |
+| Area | `PLAN_*.md` | `NEXT` | dates |
 |---|---|---|---|
 | `src/` | 7 | 0 | 1 |
 | `bin/` | 3 | 0 | 1 |
@@ -658,7 +658,7 @@ sweep. See §12 Q1.
 ### 9.1 Archive every benchmark before 2.0.3 — **done, and half-done**
 
 Commit `b7d833e` moved all 8 files but skipped the repoint step below, so it **created 20 dangling
-references** and broke HANDOVER's three baseline citations. The move is done; the repair it needed
+references** and broke NEXT's three baseline citations. The move is done; the repair it needed
 is §9.4's job.
 
 All four axes have a 2.0.3 write-up, so the pre-2.0.3 set moved to `archive/`:
@@ -687,14 +687,14 @@ the model — it has no banner. Three commits set the real pattern (`d18c1db` ar
 records. `d18c1db`'s message states that rule outright, so we are following precedent, not
 inventing one.
 
-**Live pointers to repoint:** `HANDOVER.md:104-107, 120-124, 126-129` (the 1.7.0/1.8.0 baseline
+**Live pointers to repoint:** `NEXT.md:104-107, 120-124, 126-129` (the 1.7.0/1.8.0 baseline
 citations), `SKILL_CAPABILITIES_AUDIT.md:118-121`, `README.md:180`, `PLAN_CODE.md:20`,
-`PLAN_SYLLOGIST.md:8`, `HANDOVER.md:106,122,127`.
+`PLAN_SYLLOGIST.md:8`, `NEXT.md:106,122,127`.
 
-**Better than repointing, for HANDOVER.** Its three baseline claims are already restated in the
+**Better than repointing, for NEXT.** Its three baseline claims are already restated in the
 2.0.3 write-ups (`BENCHMARK_AGENT_2.0.3.md:3,142`; `BENCHMARK_INFERENCE_2.0.3.md:3`;
 `BENCHMARK_CEFR_ENGLISH_2.0.3.md:260`). So cite the 2.0.3 doc as the baseline-of-record and let it
-carry the 1.7.0 comparison internally. One pointer, current, and it stops HANDOVER from ageing again
+carry the 1.7.0 comparison internally. One pointer, current, and it stops NEXT from ageing again
 at 2.1.
 
 **`CAPABILITIES_1.7.3.md` no longer needs a decision.** `CAPABILITIES_2.0.3.md` exists, so it is
@@ -738,7 +738,7 @@ Rule 8 so nobody re-litigates it.
 `PLAN_ADVANCED_GRAMMAR.md` (:6, :617). §12 "Provenance" (:606-617) is a pointer table into files
 that do not exist.
 
-**`HANDOVER.md` — the entry-point doc sends every new session to three things that aren't there.**
+**`NEXT.md` — the entry-point doc sends every new session to three things that aren't there.**
 `:4` cites a ROADMAP section "Current capability surface"; ROADMAP has six headings and that is not
 one. `:198-199` cites `CEFR_ENGLISH_*`/`AGENTBENCH_*`/`INFBENCH_*`/`CONVERSATIONBENCH_*` artifacts —
 no file carries any of those prefixes, the convention is `BENCHMARK_<AXIS>_<version>.md`, and three
@@ -758,13 +758,13 @@ existed); `corpus/seon/README.md:53`; `chatbench/GRADED.md` (:71, :135, :140, :2
 
 ### 9.5 Duplication and drift
 
-- **`HANDOVER.md:151-164` vs `CLAUDE.md:12-26`** — the coordinator-model section. HANDOVER:151-152
+- **`NEXT.md:151-164` vs `CLAUDE.md:12-26`** — the coordinator-model section. NEXT:151-152
   says it is "copied verbatim". It is a paraphrase, so the two can drift silently, and it adds
   nothing but a pointer back. Cut to a pointer; CLAUDE.md is the source of truth.
 - **ROADMAP's plan index is worse than reported.** `## Design docs` (:101-106) is prose and names
   **zero** plans. The only plans ROADMAP names anywhere are 5, in `## What's next` and `## Research
   horizon`. There are 15 root PLAN files, so **10 are unreachable** from the doc that claims to
-  point at them. HANDOVER keeps a second list, and the two disagree. One list, one home.
+  point at them. NEXT keeps a second list, and the two disagree. One list, one home.
 - **`SKILL_CAPABILITIES_AUDIT.md:114-126`** — triple-stale worked example: cites the four reports
   §9.1 archives, computes `CAPABILITIES_1.8.14.md` (never existed), and says "even though
   `package.json` reads 1.12.1" (it reads 2.0.3). It is also self-undermining now, since all four
@@ -865,7 +865,7 @@ All seven are answered. Kept because the reasoning outlives the decision.
 
 6. **`STRATEGY_ADVISOR.log`** — gitignored and untracked, and the rule fixed at its source. The
    skill told the advisor "append-only; NEVER edit prior entries", which is *why* the file only
-   grew: every OPEN item in it was moot, already fixed, or long since mined into HANDOVER. The
+   grew: every OPEN item in it was moot, already fixed, or long since mined into NEXT. The
    advisor now prunes anything over a day old as it runs, and carries the file's header so a fresh
    checkout can recreate it.
 

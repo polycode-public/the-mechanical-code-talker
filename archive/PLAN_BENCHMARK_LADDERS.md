@@ -399,7 +399,7 @@ ladder**. The loop:
 1. The persona sweep runs several genuinely different frames in parallel and finds new
    dead-ends — the frames reach cases a single-frame ladder pass never would (the `john is a
    man` miss, the `blast radius` teach-misroute, the disjointness-blind proof).
-2. Each dead-end is routed (§1 Step 4) to a `HANDOVER.md` open item or a `PLAN_*.md`.
+2. Each dead-end is routed (§1 Step 4) to a `NEXT.md` open item or a `PLAN_*.md`.
 3. A later session fixes it and freezes a `test/chatflow-*.test.mjs` regression, tagged to the
    FLOW tier the dead-end belongs to.
 4. That frozen regression becomes ladder content: it is exactly what criterion 2 counts when

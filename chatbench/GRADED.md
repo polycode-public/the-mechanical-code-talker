@@ -142,7 +142,7 @@ see "Sampling"), restoring all three to the PASS/FAIL statistic.
 PLAN_ADVANCED_GRAMMAR.md §3 stage 0 pool growth (2026-07-07): the pool went
 **925 → 1075 cases** across **30 → 36 cells** (the five new C1 cells + the one
 new C2 cell above). The same pass also re-measured B1 discourse-reference+
-quantifier-counting (`g-b1-disc-count`) per HANDOVER follow-up #3's note that
+quantifier-counting (`g-b1-disc-count`) per NEXT follow-up #3's note that
 it sampled 0/5 red at tick-4 and was "likely already green": its pool is
 already at full size (25 candidate items = 25 pool items, so every generator
 run replays the WHOLE cell, not a sample) and now measures **25/25 green, 0

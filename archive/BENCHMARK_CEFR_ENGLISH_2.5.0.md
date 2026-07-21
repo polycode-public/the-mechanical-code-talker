@@ -107,7 +107,7 @@ it 2/2 (groundedness 2, honesty 2, rephrase 2). So this is a deterministic tier-
 by a frozen expectation drifting out of sync with a reworded product string, **not** a semantic
 regression in behaviour. The case set is append-only mid-arc, so the case itself cannot be edited
 here; the reconciliation (restore the wording, or record a deliberate expectation revision next
-cycle) is a HANDOVER item.
+cycle) is a NEXT item.
 
 ### `gq-impact-a` — a hard fail that is N=1 judge noise on unchanged output
 
@@ -344,7 +344,7 @@ Ranked for the next CEFR cycle, whoever runs it.
 - **This is a measure-only run** — no `src/`, `test/`, or pool edits were made while measuring, per
   `SKILL_BENCHMARK_CEFR_ENGLISH.md`.
 
-## Open items mirrored to HANDOVER.md
+## Open items mirrored to NEXT.md
 
 - `be-honest-empty` tier-1 PASS → FAIL: the bootstrap-empty reply was reworded (now "I can't answer
   that as a code question — no code graph is loaded …") and the case's frozen `answerMatch` still

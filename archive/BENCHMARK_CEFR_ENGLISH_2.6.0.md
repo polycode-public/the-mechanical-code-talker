@@ -274,7 +274,7 @@ misses, and `conv-guess-guesser`'s honesty 0 is the judge-charter artifact below
 - **`hm-pack-and-word-relations` 1.500 (honesty 1).** The judge calls turns 1-3 "exemplary" and
   docks the SKOS miss for offering no teach path ("teach me synonyms for otter"). Fair — and
   currently unbuildable as phrased: there is no synonym teach shape, which is exactly the
-  prepositional-verb predicate-minting decision already sitting with the operator (`HANDOVER.md`
+  prepositional-verb predicate-minting decision already sitting with the operator (`NEXT.md`
   open item). The miss text can grow a hint once that lands.
 
 ## Best examples — what good looks like at 2.6.0
@@ -387,7 +387,7 @@ Levers committed this cycle (before this measurement), and what each moved:
 ## Open items routed onward
 
 Mirrored into the coordinator's pickup list (this measurement worktree does not edit
-`HANDOVER.md`; the coordinator lands these lines on merge):
+`NEXT.md`; the coordinator lands these lines on merge):
 
 - `FIXTURE_CONTEXT` lacks the schema-doc glosses; a truthful `what does tests mean` schema answer
   hard-fails groundedness at 0.000 (`g-a1-naming-8`) — decision-log item 1, this report.

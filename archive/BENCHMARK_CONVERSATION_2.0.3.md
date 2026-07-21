@@ -333,35 +333,35 @@ peg-c` gives a hand-verified optimal 4.
 
 ## Routed backlog
 
-Every dead-end, one line each. All routed to `HANDOVER.md` unless marked otherwise.
+Every dead-end, one line each. All routed to `NEXT.md` unless marked otherwise.
 
 | # | Verbatim input | Diagnosis | Route |
 |---|---|---|---|
-| 0 | `disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a.` on its own line, then the goal, then `solve it` → **"3 moves (shortest)"**, move 1 illegal, goal never reached | a teach-only line is not sentence-split; all three sentences become one fact whose object is the rest of the line, and the planner plans over a phantom board. The same line WITH a goal sentence splits correctly (3 `•` bullets vs 1 blob) | HANDOVER |
-| 0b | `next` then `what rests on disk-2` → "disk-1 rests on disk-2", contradicting the same turn's `board@step1` | `next` advances planner state (legal-moves sees it) but the fact read-back path serves the pre-plan board; README:352 claims `next` writes board states to memory | HANDOVER |
-| 1 | `some men are fathers` → `is john a father` → **yes, with proof** | teach frame strips the quantifier without distinguishing ∃ from ∀; the I-proposition lands as `rdfs:subClassOf` and the reasoner proves a falsehood | HANDOVER |
-| 2 | `what would break if I change src/core/store.mjs` → **three people** | "break if I" stripped; residue matches the `touches` pattern; blast-radius becomes git blame | HANDOVER |
-| 3 | `what imports the deprecated legacy model.mjs` → answers about `model.mjs` | unresolved token residue dropped silently; the ambiguity guard fires only on multi-candidate collisions | HANDOVER |
-| 4 | `tell me about a dog` → "the graph is empty" | the article routes to code-graph lookup; corpus never consulted. Tier 0 | HANDOVER |
-| 5 | `show me the untested modules` → 9, `/untested` → 7 | the NL compositional route lacks the source-module filter the tool applies | HANDOVER |
-| 6 | `john is not a man` → `noted — forgotten` | the negative frame maps to retract; subclass negatives destroy information where capability negatives store | HANDOVER |
-| 7 | `what talks to the payment module?` (README headline) | `talks to` absent from the verb lexicon; `uses` does the job | HANDOVER |
-| 8 | `is every man mortal` → "I don't know anything about 'every man'" | ask frames don't strip the quantifier the teach frames strip | HANDOVER |
-| 9 | `are men mortal` → "I don't know anything about 'men'" | ask path skips the lemmatizer the teach path uses; suggestion text is ungrammatical | HANDOVER |
-| 10 | `what is a dog` → `go back to dogs` → `can it bark` → "not sure what 'it' refers to" | an unparsed turn clears the anaphora referent instead of leaving it | HANDOVER |
-| 11 | `src/core/store.mjs` (bare path) → couldn't parse | bare-entity orientation is wired for Class/Function, not Module | HANDOVER |
-| 12 | `zeus is not mortal` (unknown subject) → reports on an empty graph | negative frame no-ops with nothing to retract | HANDOVER |
-| 13 | `what about cats` → "Try: which modules import <name>" | miss hint hard-wired to the code-graph frame in a vocabulary session | HANDOVER |
-| 14 | `what are dogs` → ~6 lines of compositional syntax | miss hint doesn't scale to the question's register | HANDOVER |
-| 15 | `what else` / `why` → the identity blurb | `tell me more` has an expansion rule; its synonyms don't | HANDOVER |
-| 16 | `do all men die` → code-graph parse error | no `do/does <subject> <verb>` frame; falls to a hint about modules | HANDOVER |
-| 17 | `do all modules import model.mjs` → duplicated ambiguous parse, both readings fail | the universal quantifier over a module set isn't wired to the complement machinery `which modules do not import X` already has | HANDOVER |
-| 18 | `i was wondering what a dog is` → couldn't parse | politeness stripper handles the modal form, not the `i was wondering` frame | HANDOVER |
-| 19 | `no man is a stone` → `is john a stone` → "I can't confirm that" | disjointness stores as `owl:disjointWith` and is never consulted when answering. **Named capability gap, honest miss** — routed as a gap, not a defect | HANDOVER (capability) |
-| 20 | `hanoi-3.txt`'s own 4-disk recipe → `no plan found within 300 moves` | `smaller than` isn't transitive, so the shipped instruction's two `smaller` facts never establish disk-1/disk-2 vs disk-4. Honest decline; the shipped file promises 15 moves | HANDOVER (doc/product mismatch) |
-| 21 | `get all the disks onto peg-c` / `solve the towers of hanoi` → swallowed as facts, then `no goal set yet` | the goal frame is narrower than natural phrasing (`i want every disk on peg-c` works) | HANDOVER |
-| 22 | `what is the next move` / `how many moves` / `why that move` → code-graph replies | plan follow-ups aren't routed, though the plan output itself invites them | HANDOVER |
-| 23 | `is disk-1 clear?` at step 0 → "I don't have a fact saying disk-1 is clear" | clearness is derivable from the board and isn't derived; `hanoi-3.txt` advertises this exact phrasing | HANDOVER |
+| 0 | `disk-1 rests on disk-2. disk-2 rests on disk-3. disk-3 rests on peg-a.` on its own line, then the goal, then `solve it` → **"3 moves (shortest)"**, move 1 illegal, goal never reached | a teach-only line is not sentence-split; all three sentences become one fact whose object is the rest of the line, and the planner plans over a phantom board. The same line WITH a goal sentence splits correctly (3 `•` bullets vs 1 blob) | NEXT |
+| 0b | `next` then `what rests on disk-2` → "disk-1 rests on disk-2", contradicting the same turn's `board@step1` | `next` advances planner state (legal-moves sees it) but the fact read-back path serves the pre-plan board; README:352 claims `next` writes board states to memory | NEXT |
+| 1 | `some men are fathers` → `is john a father` → **yes, with proof** | teach frame strips the quantifier without distinguishing ∃ from ∀; the I-proposition lands as `rdfs:subClassOf` and the reasoner proves a falsehood | NEXT |
+| 2 | `what would break if I change src/core/store.mjs` → **three people** | "break if I" stripped; residue matches the `touches` pattern; blast-radius becomes git blame | NEXT |
+| 3 | `what imports the deprecated legacy model.mjs` → answers about `model.mjs` | unresolved token residue dropped silently; the ambiguity guard fires only on multi-candidate collisions | NEXT |
+| 4 | `tell me about a dog` → "the graph is empty" | the article routes to code-graph lookup; corpus never consulted. Tier 0 | NEXT |
+| 5 | `show me the untested modules` → 9, `/untested` → 7 | the NL compositional route lacks the source-module filter the tool applies | NEXT |
+| 6 | `john is not a man` → `noted — forgotten` | the negative frame maps to retract; subclass negatives destroy information where capability negatives store | NEXT |
+| 7 | `what talks to the payment module?` (README headline) | `talks to` absent from the verb lexicon; `uses` does the job | NEXT |
+| 8 | `is every man mortal` → "I don't know anything about 'every man'" | ask frames don't strip the quantifier the teach frames strip | NEXT |
+| 9 | `are men mortal` → "I don't know anything about 'men'" | ask path skips the lemmatizer the teach path uses; suggestion text is ungrammatical | NEXT |
+| 10 | `what is a dog` → `go back to dogs` → `can it bark` → "not sure what 'it' refers to" | an unparsed turn clears the anaphora referent instead of leaving it | NEXT |
+| 11 | `src/core/store.mjs` (bare path) → couldn't parse | bare-entity orientation is wired for Class/Function, not Module | NEXT |
+| 12 | `zeus is not mortal` (unknown subject) → reports on an empty graph | negative frame no-ops with nothing to retract | NEXT |
+| 13 | `what about cats` → "Try: which modules import <name>" | miss hint hard-wired to the code-graph frame in a vocabulary session | NEXT |
+| 14 | `what are dogs` → ~6 lines of compositional syntax | miss hint doesn't scale to the question's register | NEXT |
+| 15 | `what else` / `why` → the identity blurb | `tell me more` has an expansion rule; its synonyms don't | NEXT |
+| 16 | `do all men die` → code-graph parse error | no `do/does <subject> <verb>` frame; falls to a hint about modules | NEXT |
+| 17 | `do all modules import model.mjs` → duplicated ambiguous parse, both readings fail | the universal quantifier over a module set isn't wired to the complement machinery `which modules do not import X` already has | NEXT |
+| 18 | `i was wondering what a dog is` → couldn't parse | politeness stripper handles the modal form, not the `i was wondering` frame | NEXT |
+| 19 | `no man is a stone` → `is john a stone` → "I can't confirm that" | disjointness stores as `owl:disjointWith` and is never consulted when answering. **Named capability gap, honest miss** — routed as a gap, not a defect | NEXT (capability) |
+| 20 | `hanoi-3.txt`'s own 4-disk recipe → `no plan found within 300 moves` | `smaller than` isn't transitive, so the shipped instruction's two `smaller` facts never establish disk-1/disk-2 vs disk-4. Honest decline; the shipped file promises 15 moves | NEXT (doc/product mismatch) |
+| 21 | `get all the disks onto peg-c` / `solve the towers of hanoi` → swallowed as facts, then `no goal set yet` | the goal frame is narrower than natural phrasing (`i want every disk on peg-c` works) | NEXT |
+| 22 | `what is the next move` / `how many moves` / `why that move` → code-graph replies | plan follow-ups aren't routed, though the plan output itself invites them | NEXT |
+| 23 | `is disk-1 clear?` at step 0 → "I don't have a fact saying disk-1 is clear" | clearness is derivable from the board and isn't derived; `hanoi-3.txt` advertises this exact phrasing | NEXT |
 
 ## Next
 

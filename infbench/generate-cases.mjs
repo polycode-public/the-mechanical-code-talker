@@ -59,7 +59,7 @@ export { mulberry32, seededShuffle };
 // ---- fixture: the committed lexicon's class-noun vocabulary ----
 // PLAN_OSS_ACE_PARSER.md's ace-owl extraction briefly moved lexicon-core.json
 // out of src/domain/grammar/, but that extraction was REVERTED on operator
-// instruction (HANDOVER.md, 2026-07-10 — the unpublished-package incident):
+// instruction (NEXT.md, 2026-07-10 — the unpublished-package incident):
 // the parser and its lexicon are back in src/domain/grammar/ as the real
 // implementation, and the packages/ace-owl/ workspace is gone. This path had
 // gone stale pointing at the removed workspace (found while regenerating

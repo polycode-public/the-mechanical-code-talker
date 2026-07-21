@@ -256,7 +256,7 @@ day they land.
 
 ## Findings routed as backlog (worst first)
 
-Mirroring into `HANDOVER.md` is left to the integration session; this worktree's dispatch owns
+Mirroring into `NEXT.md` is left to the integration session; this worktree's dispatch owns
 `infbench/**` and this report only.
 
 1. **The quantified-has teach silently declines verb-tagged subjects.** "every overbid has a

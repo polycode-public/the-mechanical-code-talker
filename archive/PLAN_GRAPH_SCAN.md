@@ -11,7 +11,7 @@ minutes against the `init:xl` store. The three candidates below are still unreso
 ## Origin
 
 2026-07-13 session. The prior session added `npm run init:xl`/`init:xxl` (`package.json`), which seed
-much bigger corpora than before. Real measured numbers from `HANDOVER.md`: `init:large` seeds 37,797
+much bigger corpora than before. Real measured numbers from `NEXT.md`: `init:large` seeds 37,797
 facts; `init:xl` (that chain plus `--persona-size large` and `wordnet-xl`) seeds 72,075 facts in about
 8m25s; `init:xxl` swaps in `wordnet-full` (192,498 raw rows) and was still running past 70 minutes
 when that session stopped it. A single chat query against the `init:xl`-seeded repo — "what is a
@@ -238,7 +238,7 @@ check (not committed) confirms one `loadMemory` per `runTurn` call instead of th
 here for `factAnswer` alone.
 
 **Phase 3 — real-scale verification.** With Phase 1 landed, re-run `npm run init:xl` (now fast enough
-to iterate on directly) and record the real new wall-clock seed time in `HANDOVER.md`. Re-run the
+to iterate on directly) and record the real new wall-clock seed time in `NEXT.md`. Re-run the
 original "what is a horse" query against that real store, with Phase 2 also landed, and profile it if
 it's still slow. The seed re-measure landed (16.6s / 38.5s above). The query-side gap did not get
 pinned down, so the three candidates above stay open.

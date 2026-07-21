@@ -9,12 +9,12 @@ immediately below before reading anything else — **this document's own fix sit
 unreliable, and the corrections are recorded there.**
 
 Every item below has a verbatim reproducer and a named fix site. This is the single plan doc for the
-open items `HANDOVER.md` carries after the 2.0.3 benchmark cycle. Work it top to bottom; the order
+open items `NEXT.md` carries after the 2.0.3 benchmark cycle. Work it top to bottom; the order
 is by evidence strength and blast radius, not by area.
 
 Refreshed against the tree at **2.3.1** (`6dc4787`), after `PLAN_PURGE.md` executed. Sources:
 `BENCHMARK_{AGENT,CEFR_ENGLISH,CONVERSATION,INFERENCE}_2.0.3.md`, `CAPABILITIES_2.0.3.md`,
-`playtests/PLAYTEST_LOG_002.md`, `HANDOVER.md`.
+`playtests/PLAYTEST_LOG_002.md`, `NEXT.md`.
 
 **Every reproducer in Phases 1-3 was re-run at 2.3.1 and still reproduces.** The purge changed the
 furniture, not the behaviour. Line numbers still move under you — another session has uncommitted
@@ -54,7 +54,7 @@ there and not only here. In short:
   instruction. "The suite went green" is none of those — a green suite is a checkpoint, not a
   decision point, and the pull to stop is strongest exactly when a chunk completes well.
 - **Update this file in the same commit as the fix.** Not at the end. If a phase closes, mark it
-  here and delete its item from `HANDOVER.md` in that commit. A status doc written at the end is a
+  here and delete its item from `NEXT.md` in that commit. A status doc written at the end is a
   status doc that never gets written.
 - **Sub-agents must be told to update their own item's status here**, and given the right to edit
   this file for their rows only.
@@ -83,7 +83,7 @@ two-casings IRI defect, touches `ontology/` and coined identifiers only). 8 wait
    commit.
 3. "Pre-existing" needs a baseline commit in a worktree (`a840398` = 2.4.0) with a real
    `cp -R node_modules`, not a stash.
-4. Update your own rows in this file and `HANDOVER.md` in the same commit as the fix.
+4. Update your own rows in this file and `NEXT.md` in the same commit as the fix.
 
 Do not run the full `npm test` in a sub-agent — `test:smoke` after each edit, `test:fast` before
 each commit, plus the named blast radius. The full suite is the coordinator's, once, before a
@@ -1115,7 +1115,7 @@ everything, and generated artifacts are still wider than the diff.
 home page, the two contract docs, the corpus READMEs, chatbench, `examples/`, and the generated
 tool catalog. `e2e/pages-examples.test.mjs` replays the home page's transcripts against the live
 CLI through the README's own harness, so a page transcript is held at the same tier a README
-fence is. What is still open is listed in `HANDOVER.md`.
+fence is. What is still open is listed in `NEXT.md`.
 
 Two of this section's own citations were wrong, and the pattern is worth carrying:
 
@@ -1493,7 +1493,7 @@ Writing the prose first is how a README ends up claiming a headline example that
   ontology alignment triple is testable, and `test/adapters/grammar-ontology.test.mjs` is where.
 - Nothing in Phases 7-10 claims a capability the estate does not pin. `SKILL_CAPABILITIES_AUDIT.md`
   §1's rule holds on public surfaces too: no test, no claim.
-- Delete each item from `HANDOVER.md` as it closes. `HANDOVER.md` holds open items only — a closed
+- Delete each item from `NEXT.md` as it closes. `NEXT.md` holds open items only — a closed
   item is removed, not annotated.
 
 ## Already closed since 2.0.3, do not re-do

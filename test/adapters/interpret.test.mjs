@@ -585,7 +585,7 @@ test("subordination: a BARE clause (no delimiting comma) is untouched, and ordin
   assert.equal(applySubordinationFrames("modules changed since last week"), "modules changed since last week");
 });
 
-// ---- self-correction (found live, playtest sprint round 5, HANDOVER item 12.1): a
+// ---- self-correction: a
 // mid-sentence false start ("what -- sorry, who inherits from Record") used to break
 // term resolution — "couldn't resolve one of the terms in this question" — because
 // the abandoned fragment/dash debris fed straight into term extraction. Same closed-

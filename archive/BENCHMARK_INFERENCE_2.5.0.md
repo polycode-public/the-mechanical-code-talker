@@ -190,9 +190,9 @@ The next INFERENCE cycle's useful work is still corpus depth over prover work: w
 only 30 declared-ceiling greens left, the informative moves are flipping the last ceiling once the
 capability behind it exists (chat-layer multi-hop proof materialization for `b2ChainLenK`) or
 authoring a deeper band. Both are decisions rather than defects, named here and mirrored to
-`HANDOVER.md`.
+`NEXT.md`.
 
-## Open items mirrored to HANDOVER.md
+## Open items mirrored to NEXT.md
 
 - INFBENCH grew a real discriminator this cycle: `b1Existential` (40 chat + 10 kernel at INF-B1) tests
   the false-premise-proof class and 2.5.0 refuses it; INF-C2 flipped from declared ceiling to live

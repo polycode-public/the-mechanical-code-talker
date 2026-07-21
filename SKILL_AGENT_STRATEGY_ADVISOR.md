@@ -172,7 +172,7 @@ only place a human or agent who opens the file learns the pruning rule:
   finding to the next session, which is worse than no entry at all.
 
   Nothing else backs this file up, so anything worth keeping past a day has to be written somewhere
-  that is: an open item goes to HANDOVER.md, a design to the relevant PLAN_*.md, a measurement to a
+  that is: an open item goes to NEXT.md, a design to the relevant PLAN_*.md, a measurement to a
   BENCHMARK_* write-up. Mine it across first, then delete it here.
 
   No current entries.
@@ -182,7 +182,7 @@ PRUNE FIRST: every run, before anything else, delete each block whose [timestamp
 day old — whatever its STATUS, including OPEN. Your ticks are about a session happening now; a day
 later the batch shipped or died and the entry describes a repo that is gone, but still reads as
 live to whoever finds it. If a stale block names something that still matters, mine it into the
-doc that owns it (HANDOVER.md for an open item, a PLAN_*.md for a design) and say so in your
+doc that owns it (NEXT.md for an open item, a PLAN_*.md for a design) and say so in your
 return — then delete it here regardless. Nothing backs this file up, so mine it across BEFORE you
 delete it. Keep the header. Prune even on a "no new advice" run, and drop the "No current
 entries." line as soon as you append a real block.

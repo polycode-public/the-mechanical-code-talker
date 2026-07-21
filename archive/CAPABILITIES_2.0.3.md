@@ -336,7 +336,7 @@ it misread. That is a different failure mode, and a fixable one.
 
 ### Speculative TO-BE
 
-Drawn from the four current reports' own decision lines and `HANDOVER.md`'s ranked follow-ups.
+Drawn from the four current reports' own decision lines and `NEXT.md`'s ranked follow-ups.
 **Not a roadmap commitment.** Each was checked against the tree to confirm it has not already
 shipped.
 
@@ -412,7 +412,7 @@ the tree has overtaken.
 #### `PLAN_CHILD_CORPUS.md` — pinned at `0f8fb61`
 - **Done** — nothing, and it claims none. Its pipeline citations resolve.
 - **Doing** — none.
-- **Todo** — all five steps. `HANDOVER.md`'s framing checks out: steps 1 and 4 are decisions gating everything mechanical after them. **Its baseline numbers need a correction pass before they can serve as its own step-5 re-measure target**: most verify exactly (664 facts; 44,947 slice lines; 231 `CapableOf`; zero `fly` in the slice), but "1 kind of bird (`owl`), zero capabilities on it" is wrong — `human.jsonl` seeds `owl` **and** `swift`, and `owl` carries `CapableOf hunt_at_night`. The argument survives; the acceptance test does not.
+- **Todo** — all five steps. `NEXT.md`'s framing checks out: steps 1 and 4 are decisions gating everything mechanical after them. **Its baseline numbers need a correction pass before they can serve as its own step-5 re-measure target**: most verify exactly (664 facts; 44,947 slice lines; 231 `CapableOf`; zero `fly` in the slice), but "1 kind of bird (`owl`), zero capabilities on it" is wrong — `human.jsonl` seeds `owl` **and** `swift`, and `owl` carries `CapableOf hunt_at_night`. The argument survives; the acceptance test does not.
 
 #### `PLAN_CLASS_QUERY.md` — pinned at `6d6fff8`
 - **Done** — the item it was commissioned to design shipped before it (`dec95e8`): `resolveDynamicClass`/`dynamicClassQuery` (`ask.mjs:3705-3721`), pinned by `test/adapters/ask-memory-class-query.test.mjs`.
@@ -539,7 +539,7 @@ central failure family — a confident-wrong answer hiding behind a coverage bli
 
 **Both corrections are recorded here rather than applied to the plan files.** This cycle's operator
 instruction is measure-and-log; editing `PLAN_AGENTS.md`'s count is a change, and it is mirrored to
-`HANDOVER.md` instead.
+`NEXT.md` instead.
 
 ## 6. Summary — real counts, grepped
 
@@ -607,5 +607,5 @@ superset rows at #139-152):
 `npm test`: **2450 pass / 0 fail**, read in the foreground. CLI smoke: `printf 'hi\n/exit\n' | node
 bin/tmct.mjs` greets and exits 0.
 
-Every open item this audit found is mirrored one line each into `HANDOVER.md`, which is the next
+Every open item this audit found is mirrored one line each into `NEXT.md`, which is the next
 session's pickup list.

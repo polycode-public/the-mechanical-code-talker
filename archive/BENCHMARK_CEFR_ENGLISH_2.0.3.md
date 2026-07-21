@@ -95,7 +95,7 @@ This is the same failure family as the audit skill's own worked example
 same family as the modal-negation inversion `playtests/PLAYTEST_LOG_002.md` fixed: a dropped or
 mis-assigned role that yields a confident inverse rather than a miss.
 
-**Not fixed here**, per this cycle's no-change rule. Logged below and mirrored to `HANDOVER.md`
+**Not fixed here**, per this cycle's no-change rule. Logged below and mirrored to `NEXT.md`
 with the reproducer, the bisect, and the mechanism.
 
 ## Scores
@@ -252,7 +252,7 @@ no-change instruction it was **not implemented in this cycle**.
 - **Raw snapshotted** to `chatbench/results/raw/run-2.0.3/` before any later run can overwrite it.
 - **Case set unchanged** — 109 cases, same ids as 1.8.0; the diff found no new or removed case.
 
-## Open items mirrored to HANDOVER.md
+## Open items mirrored to NEXT.md
 
 - The fronted-agent passive answers the inverse. `by which modules is app/lib/b.mjs imported` →
   `app/lib/a.mjs.` (expected `app/functions/d/handler.mjs`), compiling to `forward(imports,

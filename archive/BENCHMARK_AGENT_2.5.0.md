@@ -134,7 +134,7 @@ and hallucination stays at zero. There is no rung to push past on the goal drive
 build to do here; the next AGENT cycle's useful work is deepening the case set rather than the
 engine — C2's 11 cases are all green, so the ladder has more headroom than the corpus tests.
 
-## Open item mirrored to HANDOVER.md
+## Open item mirrored to NEXT.md
 
 - The resolver floor still does not plan `ab-c2-what-to-test` (C2 plan-completion holds at 27%,
   unchanged since `BENCHMARK_AGENT_2.0.3.md`). This looks correct — the case's plan comes from the

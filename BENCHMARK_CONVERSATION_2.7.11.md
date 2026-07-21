@@ -215,7 +215,7 @@ taught-planning verification.
 
 Ranked cross-persona-confirmed findings first (§3.4's own ranking rule), then single-persona
 clusters by severity (write-mutation/confident-wrong, then soft, then honest-miss). Every row
-routes to `HANDOVER.md` (mirrored there as part of landing this report) unless marked otherwise.
+routes to `NEXT.md` (mirrored there as part of landing this report) unless marked otherwise.
 
 | # | Finding | Class | Hit by |
 |---|---|---|---|
@@ -265,4 +265,4 @@ Second priority: the meta-question cluster (finding #3) — six-plus real, answe
 tmct's own commands and session state have no recognizer and often actively misroute rather than
 declining, which reads worse to a user than an honest "I don't understand that" would.
 
-Every row above is mirrored into `HANDOVER.md`'s Open items as part of landing this report.
+Every row above is mirrored into `NEXT.md`'s Open items as part of landing this report.

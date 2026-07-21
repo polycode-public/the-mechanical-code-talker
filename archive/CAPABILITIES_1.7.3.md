@@ -103,7 +103,7 @@ for, delivered the same day the finding was written.
 ### Speculative TO-BE — where the table could move, if the backlog lands
 
 Purely speculative, not a roadmap commitment. Drawn fresh from the four current reports' own "Next"/
-decision-log sections and the current `HANDOVER.md`, checked directly against code. Two items from
+decision-log sections and the current `NEXT.md`, checked directly against code. Two items from
 `CAPABILITIES_1.6.0.md`'s own TO-BE list have shipped and are removed; two are unchanged:
 
 - ~~"`am-tests-cover` and `g-a1-naming-9` should not be expected to move"~~ — **half-resolved,
@@ -127,7 +127,7 @@ What's left, still open, checked directly against current code:
   rule that owns that composition step. Next pickup: trace the goal-classification step for this
   exact request shape.
 - **`PLAN_CONVERSATION.md` Finding 4** — anaphoric "SUBJECT verb which N" misroutes into
-  teach-a-fact. Bounded, three sub-problems, a concrete first-increment sketch exists (`HANDOVER.md`).
+  teach-a-fact. Bounded, three sub-problems, a concrete first-increment sketch exists (`NEXT.md`).
 - **A rephrase-hint pass on honest "nothing matches" misses** (`BENCHMARK_CEFR_ENGLISH_1.7.0.md`'s
   top decision-log pick) — 7+ cases across B1/C1 score zero on the judge's rephrase dimension despite
   being correct, honest misses that offer no nudge toward a working question.
@@ -140,7 +140,7 @@ What's left, still open, checked directly against current code:
   109-case pool structurally cannot score this capability at all (no default-persona/no-`--repo`
   case exists) — a scope decision for a future cycle.
 - **`PLAN_SYLLOGIST.md`'s retraction-aware, incremental reasoning research** — unchanged, "not a
-  near-term default" per `HANDOVER.md`.
+  near-term default" per `NEXT.md`.
 
 ---
 
@@ -315,7 +315,7 @@ territory for this catalog):
   never `tmct_impact`; the GDA expansion at `goal-reasoner.mjs:388-393` never fires for this request
   shape). `BENCHMARK_AGENT_1.7.0.md` confirms the case still plan-correct/result-incomplete, consistent
   with this trace. Still the top open item — see the TO-BE list above.
-- **B1 (ROADMAP/HANDOVER "out of design-ability horizon" wording) — applied.** Both docs reworded in
+- **B1 (ROADMAP/NEXT "out of design-ability horizon" wording) — applied.** Both docs reworded in
   this same pass to match `PLAN_CONVERSATION.md`'s own milder, accurate framing ("large, three
   sub-problems, not attempted in a single pass").
 
@@ -434,7 +434,7 @@ in `PLAN_CONVERSATION.md` Finding 2; nothing left open in this plan's own scope.
   tmct-owned local-git mode), the git-log-corpus/README-ingestion situational-fact seeding, the eager
   session/sessionless anchor individual, a rendering prototype spike (Cytoscape.js pseudo-3D depth
   layer). **Not archived this cycle**: this remaining scope is real, unbuilt feature work (a spike, a
-  new corpus-generation step, an architectural call), not a minor bug fittable in `HANDOVER.md` or a
+  new corpus-generation step, an architectural call), not a minor bug fittable in `NEXT.md` or a
   too-hard research question fittable in `TOO_HARD_AUDIT.md` — it stays a live plan.
 
 ### `PLAN_CONVERSATION.md` — archived this cycle
@@ -448,7 +448,7 @@ in `PLAN_CONVERSATION.md` Finding 2; nothing left open in this plan's own scope.
 - **Todo**: Finding 4 only (anaphoric "SUBJECT verb which N" misroute) — real, bounded, three named
   sub-problems, a concrete first-increment sketch. **Archived this cycle** (`git mv` to `archive/`,
   status banner updated) since this is the only open item and it's small enough to track as a
-  `HANDOVER.md` open item rather than warrant its own live root plan — matching this project's own
+  `NEXT.md` open item rather than warrant its own live root plan — matching this project's own
   convention for `PLAN_DID_YOU_SEE_HER_DUCK.md` and others above.
 
 ### `PLAN_SYLLOGIST.md`
@@ -458,7 +458,7 @@ in `PLAN_CONVERSATION.md` Finding 2; nothing left open in this plan's own scope.
 - **Done**: none, pulled out of `PLAN_INFERENCE_TESTING.md` on that plan's retirement.
 - **Doing**: none.
 - **Todo**: reusing match-state across passes in `src/domain/syllogise.mjs`, plus retraction-aware,
-  incremental consistency checking. "Not a near-term default" per `HANDOVER.md`, unchanged.
+  incremental consistency checking. "Not a near-term default" per `NEXT.md`, unchanged.
 
 ### Fully shipped and archived, one-line notes
 
@@ -498,8 +498,8 @@ Carried forward from `CAPABILITIES_1.6.0.md` §5, re-confirmed unchanged, plus n
   benchmark but aren't scored by any of the three scalar benchmarks** (CEFR/AGENTBENCH/INFBENCH) —
   the conversation benchmark's own case set is qualitative transcripts, not a graded pool, so these
   fixes have no scalar number to move.
-- **`HANDOVER.md` is no longer stale relative to this pin** — `CAPABILITIES_1.6.0.md` flagged this as
-  a recurring doc-lag pattern; this audit's own pass refreshes `HANDOVER.md` in the same cycle, closing
+- **`NEXT.md` is no longer stale relative to this pin** — `CAPABILITIES_1.6.0.md` flagged this as
+  a recurring doc-lag pattern; this audit's own pass refreshes `NEXT.md` in the same cycle, closing
   that specific instance. `agentbench/envelope.json`'s stale version field (row 36) remains the one
   standing doc-lag item.
 
@@ -523,7 +523,7 @@ re-deriving evidence directly rather than trusting the prior doc's word. **Zero 
   before or the same day the finding was written), 1 diagnosis sharpened (M2), 1 wording fix applied
   (B1).
 - **Doc archival this cycle**: `PLAN_CONVERSATION.md` archived (only Finding 4
-  remains open, tracked in `HANDOVER.md`). `PLAN_VIZ.md` and `PLAN_AGENTS.md` stay live — both carry
+  remains open, tracked in `NEXT.md`). `PLAN_VIZ.md` and `PLAN_AGENTS.md` stay live — both carry
   real, substantial unbuilt scope that doesn't fit "minor bug" or "too hard."
 - **Real, unresolved gaps carried forward unchanged**: #44/#45 (Hanoi/guess-number), #53-58
   (marginalia/seonix/Bedrock/Copilot integration), #73/#74 (named grammar gaps), #75 (cochange

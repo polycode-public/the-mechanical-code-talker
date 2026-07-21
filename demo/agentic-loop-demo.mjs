@@ -10,7 +10,7 @@
 // make that capability VISIBLE as a runnable transcript, not to build anything new.
 //
 // What this is NOT: a general-purpose coding agent. tmct has zero code-generation
-// or open-ended-reasoning capability (see HANDOVER.md / PLAN_TMCT_ECOSYSTEM_
+// or open-ended-reasoning capability (see NEXT.md / PLAN_TMCT_ECOSYSTEM_
 // INTEGRATION.md's honest framing) — this loop only ever answers CLOSED, DECLARED
 // goals over a code graph (the coverage-gap / keystone goal-rules in
 // src/domain/router/goal-reasoner.mjs). It cannot attempt a novel task outside those
@@ -101,7 +101,7 @@ async function main() {
   console.log("global-mode DOMAIN GATE — reusing ask.mjs's own NL grammar (parseQuery) to");
   console.log("require the request itself, not just the declared toolset, to be about the");
   console.log("deduced goal's domain — so it refuses honestly like request 4, zero request");
-  console.log("keywords added. See HANDOVER.md / PLAN_CAPABILITY_ROUTER.md for the history.");
+  console.log("keywords added. See NEXT.md / PLAN_CAPABILITY_ROUTER.md for the history.");
 }
 
 main().catch((e) => {

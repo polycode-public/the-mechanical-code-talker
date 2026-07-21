@@ -212,7 +212,7 @@ fits; check it still does). Columns are tmct plus a few named, specific models (
   cross-benchmark result. Say so. Re-confirm each against the current capability rather than
   copying it forward.
 - A `### Speculative TO-BE` subsection, drawn from the current reports' own "Next" sections and
-  `HANDOVER.md`'s ranked follow-ups. Not a roadmap commitment. Confirm against the tree that an item
+  `NEXT.md`'s ranked follow-ups. Not a roadmap commitment. Confirm against the tree that an item
   has not already shipped before listing it.
 
 ### 4.2 Per-benchmark feature-support

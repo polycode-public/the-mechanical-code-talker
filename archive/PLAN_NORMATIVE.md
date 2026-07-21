@@ -544,7 +544,7 @@ ontology declares it (owned, the mgx:touchedByCommit precedent). **The fixture r
 were NOT: `examples/mini-webapp` and `examples/polyglot` have no source tree and no in-repo
 indexer (tmct reads code graphs, it does not build them), so their `graph.json` was hand-edited at
 the leaf value — the token and its vocabulary note — which is the exact delta the generator would
-produce for a single-token rename. Those two files have no drift guard (see HANDOVER).** Step 2 (a
+produce for a single-token rename. Those two files have no drift guard (see NEXT).** Step 2 (a
 `seon:subkind` legacy read key in `codegraph.mjs`'s `PROP_KIND`) had no site: `subKind` is an
 ATTRIBUTE, never a relation, so it never entered `PROP_KIND` and old graphs render it generically by
 its own token with no alias.
@@ -826,7 +826,7 @@ was doing the reassuring, and nothing was doing the checking.**
 export const factIdFor = (s, p, o) => `fact:${fnv1aHex(`${s}\0${p}\0${o}`)}`;
 ```
 
-`fnv1aHex` is FNV-1a **32-bit**, 8 hex characters. N = 2³². Against the fact counts `HANDOVER.md`
+`fnv1aHex` is FNV-1a **32-bit**, 8 hex characters. N = 2³². Against the fact counts `NEXT.md`
 publishes, measured on real hardware:
 
 | init tier | facts | P(at least one collision) |

@@ -44,7 +44,7 @@ Caveats that travel with the four figures:
 - **CONVERSATION 2.7.11 is a persona sweep that predates this session's two new games' graphical/
   auto-play features** — its own text says so. 25 of 2.6.0's 29 routed items are now fixed (21 clean,
   4 with a residual), 4 are still broken (2 in a materially new shape), and free exploration surfaced
-  roughly 60 fresh findings, ranked into a 29-item routed backlog mirrored to `HANDOVER.md`.
+  roughly 60 fresh findings, ranked into a 29-item routed backlog mirrored to `NEXT.md`.
 
 ## What the four fresh reports change about this audit
 
@@ -434,7 +434,7 @@ moved from a router pick to a chat-lane write boundary — narrower, but not yet
 
 ### Speculative TO-BE
 
-Drawn from the four fresh reports' own backlogs and `HANDOVER.md`'s open items. Not a roadmap
+Drawn from the four fresh reports' own backlogs and `NEXT.md`'s open items. Not a roadmap
 commitment; each checked against the tree as not-yet-shipped.
 
 - **The write-boundary bug class's admission criteria, tightened generally.** CONVERSATION-2.7.11's own
@@ -546,9 +546,9 @@ Real, shipped work no benchmark scalar reaches.
 - **The child-pack build pipeline** (row 174's supply side): a keyword-indexed shard cut from a pinned
   ConceptNet 5.7.0 dump, `/r/NotCapableOf` admitted as the one ConceptNet negative for the child pack
   (the other four `/r/Not*` relations are ConceptNet's own deprecated relations, documented "do not
-  build on" — this closed a `HANDOVER.md` open item, `998301e`/`c527984`). The pack's integrity is an
+  build on" — this closed a `NEXT.md` open item, `998301e`/`c527984`). The pack's integrity is an
   estate property, not a benchmark score.
-- **Two `HANDOVER.md` open items closed as design decisions, not deferrals** (`c527984`): the Phase-5
+- **Two `NEXT.md` open items closed as design decisions, not deferrals** (`c527984`): the Phase-5
   "unifying agent-loop abstraction" question, closed as not warranted — evidenced by row 188's shared
   ticker primitive and the taught-rule engine (row 182) both being extracted only on demonstrated second
   use across four independent systems (Hanoi/river, guess-number, adventure, spider-fly), never built

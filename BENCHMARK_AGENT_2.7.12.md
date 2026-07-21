@@ -160,7 +160,7 @@ have.
 
 **Ship as-is.** Both rungs 2.6.0 flagged as the highest-priority build targets (TOOL-7's
 double-fire, TOOL-8's silent pick) are now fixed and measured clean on every arm that reaches them.
-The next capability worth building is whatever HANDOVER.md's open items name next — nothing on this
+The next capability worth building is whatever NEXT.md's open items name next — nothing on this
 ladder currently points at an unbuilt capability the way TOOL-7/TOOL-8 did last cycle.
 
 ## Backlog

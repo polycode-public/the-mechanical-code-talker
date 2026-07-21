@@ -1,4 +1,4 @@
-# HANDOVER — current state & kickoff
+# NEXT — current state & kickoff
 
 **Every item here is DONE or OPEN — there is no in-between, and nothing is deferred.** Work we decide
 not to do is deleted from scope, never negated in place or held as deferred. A chunk that is
@@ -188,6 +188,52 @@ facts) plus the merged seonix+demo code graphs, in one continuous piped chat ses
   planning agents"; and clicking the spider or the fly expands a section beside that agent in
   the agents box showing a text rendering of the facts that agent can currently observe (the
   engine's per-agent belief/exposure set, `src/services/spider-fly.mjs`).
+
+- Sense-splitting on fact read-back, with the class hierarchy shown. Live case (operator,
+  2026-07-21): "What is Rover?" returns `rover is a kind of dog (ace:chat …)` and `rover is a
+  kind of scout (corpus:human-large)` as one flat list — two concepts sharing a label, rendered
+  as if one thing. Under the open-world reading two mentions of "rover" are not the same
+  individual by default (OWL's non-unique name assumption); today the read-back neither shows
+  the hierarchy above each is-a object nor notices that the hierarchies never meet. Build, all
+  deterministic over the stored graph, no new vocabulary:
+  1. Extend the fact-list answer to show each is-a object's superclass chain (the transitive
+     `rdfs:subClassOf` closure the read-only proof kernels already walk — `findIsaChain`,
+     `src/domain/syllogise.mjs`), capped: "rover is a kind of dog → canine → mammal → animal".
+  2. Detect distinct concepts from the end triples: for every pair of same-predicate end
+     objects (here `dog`, `scout`), compare their ancestries. Distinct when (a) any ancestor
+     pair is stored or derivable `owl:disjointWith` (the cax-dw kernel already computes this);
+     else (b) the least common subsumer (Cohen, Borgida & Hirsh 1992) is the root/⊤ or sits
+     above a depth threshold — equivalently a Wu-Palmer (1994) depth-ratio similarity or a
+     Resnik (1995) information-content score of the LCS below threshold, both computable
+     deterministically from the stored closure (IC from stored fact counts, never a model);
+     else (c) the ancestries are wholly non-intersecting below the root. The literature name
+     for the task is word-sense discrimination / instance-level entity resolution; the OWL
+     rendering of the verdict is an implicit `owl:differentFrom` between the two senses.
+  3. When senses split, group the whole answer by concept — "rover, the dog: …" / "rover, the
+     scout: …" — same capped-list/pending conventions; when the check is inconclusive keep
+     today's flat list (grouping is presentation, never retraction — trust and contradiction
+     handling unchanged). Apply wherever a fact list renders (`factReadBackReaders`,
+     `chat.mjs:7660`), not just "what is X".
+
+- Two new demo pages, and store controls on every tmct-embedding page:
+  - code.html — the ledger.html pattern (readable fact-sentence ledger + chat dock) refocused
+    on a CODE graph: viewing and hinting for exploration — imports/calls/contains neighborhoods
+    around a focus symbol, with suggested next queries drawn from what the graph actually holds
+    (the compositional query shapes the chat already answers). The demo code graph
+    (`public/demo-graph.json`) is the obvious seed.
+  - ingest.html — takes a multi-line text block, a drag-and-dropped document, or a
+    browse-for-file; runs it through the ingest pipeline (the extract recognizer, plus the
+    optimistic tier and canonical/graph-linked rendering from the knowledge-flows item above);
+    writes the grounded facts to the page's store; renders the canonical form of what was
+    ingested; and offers that canonical output for download.
+  - ledger.html gains the same ingest affordance (paste/drop/browse), so new data can be
+    ingested and then examined in place; chat.html gains a file upload that feeds the same
+    pipeline.
+  - every tmct-embedding page gets a button forcing a FULL re-initialisation of its IndexedDB
+    store (drop the persisted payload and re-seed from the page's shipped seed — a harder reset
+    than chat/adventure's existing "forget everything"), and a triple-store export (download
+    the page's current facts as JSONL in the tmct/ConceptNet shape `tmct extract` already
+    emits, provenance included).
 
 ## Discipline
 

@@ -28,7 +28,7 @@ twice — once by the prompt and once by the approved plan.
 
 **The companion rule: write status as you go, not at the end.** That same session was told to record
 progress in the source docs and did it only when challenged, hours later. If a phase closes, mark
-it in its plan doc and delete its line from `HANDOVER.md` **in the same commit as the fix**. Status
+it in its plan doc and delete its line from `NEXT.md` **in the same commit as the fix**. Status
 written at the end is status never written. Sub-agents get the same instruction, and the right to
 edit their own rows.
 
@@ -181,7 +181,7 @@ rename across many files under time pressure.
 
 ## Comment and test-name hygiene
 
-Comments and test descriptions must never reference a PLAN/HANDOVER doc, a "Gap N"/"BUG N"/
+Comments and test descriptions must never reference a PLAN/NEXT doc, a "Gap N"/"BUG N"/
 "Phase N item N" label, a commit hash, an operator directive, or a date ("live-tested
 2026-07-09"). That framing belongs in the commit message or PR description, not the file. It rots
 the moment the doc it points to is archived, renamed, or deleted, and it builds up into exactly
@@ -190,7 +190,7 @@ on top of the general no-comments default above, not instead of it. Even a comme
 doc-reference trap still shouldn't exist unless it explains a genuinely non-obvious WHY.
 
 Test names must describe the behavior or outcome under test on their own terms. Write "resolves a
-2-hop alias chase through a taught subClassOf fact", not "HANDOVER item 2 regression: ...". A test
+2-hop alias chase through a taught subClassOf fact", not "NEXT item 2 regression: ...". A test
 whose only distinguishing feature is which historical item motivated it, not what it actually
 checks, is a candidate for deletion, not a rename.
 
@@ -258,6 +258,6 @@ bibliography carries both.
 
 - `npm test` — node --test suite; must stay green.
 - CLI smoke: `printf 'hi\n/exit\n' | node bin/tmct.mjs` must greet and exit 0.
-- See `HANDOVER.md` (open items) and the `PLAN_*.md` design docs,
+- See `NEXT.md` (open items) and the `PLAN_*.md` design docs,
   `SKILL_BENCHMARK_CEFR_ENGLISH.md` (autonomous chat tuning loop),
   `SKILL_AGENT_STRATEGY_ADVISOR.md` (background advisor recipe).

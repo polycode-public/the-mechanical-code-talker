@@ -1,6 +1,6 @@
 # PLAN_25_BACKLOG.md — close the 2.5.0 open items
 
-**Status: DELIVERED (2026-07-18 run; measured by the four BENCHMARK_*_2.6.0.md reports). This is the build order for the seven items `HANDOVER.md`
+**Status: DELIVERED (2026-07-18 run; measured by the four BENCHMARK_*_2.6.0.md reports). This is the build order for the seven items `NEXT.md`
 carries after the 2.5.0 benchmark round.** Work it top to bottom: the order is by evidence strength and blast radius,
 not by area. Every fix ships with its pin — no row, not done. Evidence lands at the tool layer
 (`test/tools/`) wherever a tool serves the shape (`SKILL_CAPABILITIES_AUDIT.md` §1); a chat-only
@@ -804,7 +804,7 @@ absent from that list, so it fell through both gates at once.
 attribute the writer emits is grounded, even when the payload vocabulary never documents it"
 (`:182`), but it checks a **hard-coded** list `["mgx:factJustification", "mgx:factQuantifier",
 "mgx:factProvenance"]`. A future undocumented emitted prop that is not in that list would still slip
-through. The strengthening HANDOVER asks for is a **store-derived diff**, not a longer hand-list.
+through. The strengthening NEXT asks for is a **store-derived diff**, not a longer hand-list.
 
 **Build.** In `test/adapters/grammar-ontology.test.mjs`, add a test that seeds a real store
 (`createInMemoryStore` + `appendFacts`, plus an entailed-fact write so the justification/quantifier
@@ -897,4 +897,4 @@ Optionally add and pin the `mgx:relatedTo rdfs:seeAlso skos:related` ontology an
    closes audit row 155.
 
 Version rolls per the operator's cadence, commit each, do not push — CI publishes on a version bump
-on `main`. Update this file and delete the matching `HANDOVER.md` line in the same commit as each fix.
+on `main`. Update this file and delete the matching `NEXT.md` line in the same commit as each fix.

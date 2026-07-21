@@ -27,7 +27,7 @@ chose and why.
   One cycle = one lever, so movement in the mean is attributable.
 - **Autonomous, interruptible.** There is no step-7 pause: the ranked menu that used to gate the
   next cycle is now a *logged decision record*. The operator steers by interrupting, by
-  re-prioritising the open items (`HANDOVER.md`, the `PLAN_*.md` docs), or by naming a lever at
+  re-prioritising the open items (`NEXT.md`, the `PLAN_*.md` docs), or by naming a lever at
   invocation.
 
 ## 1. The measurement contract (never weakened by this skill)
@@ -139,11 +139,11 @@ Every cycle MUST satisfy:
 **Step 1 — READ (pick the next lever).** Read, in order: the latest `BENCHMARK_CEFR_ENGLISH_<version>.md` (including
 its decision log — the previous cycle's ranked menu is this cycle's starting recommendation);
 `STRATEGY_ADVISOR.log` (the `OPEN` items the advisor flagged); and the **open items** in
-`HANDOVER.md` and the `PLAN_*.md` docs (the lever board). Pick **one lever** and write the prediction:
+`NEXT.md` and the `PLAN_*.md` docs (the lever board). Pick **one lever** and write the prediction:
 which cases/tags it should move, and by how much.
 
 **Step 2 — APPLY the lever.** Implement it. Keep `npm test` green at each step; keep
-`HANDOVER.md`'s open items current.
+`NEXT.md`'s open items current.
 
 > **Build concurrently (workstream fan-out) — the coordinator model.** This is `CLAUDE.md`'s
 > standing working model in practice: the main session is the COORDINATOR, not the worker. A
@@ -204,8 +204,8 @@ BEFORE the next run overwrites them**, then write **one file**, `BENCHMARK_CEFR_
   report and its transcript evidence are now one document, not a companion `_TRANSCRIPTS.md`.
 
 **Mirror every issue the cycle leaves open** (a pass→fail regression, an advisor `OPEN` item that
-outlives the cycle, an UNDER-COVERED cell) **into `HANDOVER.md`** as a one-line open item pointing
-at this write-up — `HANDOVER.md` is the next-session pickup list.
+outlives the cycle, an UNDER-COVERED cell) **into `NEXT.md`** as a one-line open item pointing
+at this write-up — `NEXT.md` is the next-session pickup list.
 
 **Step 7 — CONTINUE.** Apply the decision rule (§1). Re-rank the lever board from this cycle's
 evidence, record it (that's the step-6 decision log), pick the top lever, and go to step 1 of the
@@ -238,7 +238,7 @@ next cycle. No pause — the operator interrupts when they want the wheel.
 ## 5. One-paragraph TL;DR
 
 Run the chat tuning cycle **autonomously**: each cycle **reads** the last `BENCHMARK_CEFR_ENGLISH_<version>.md`
-decision log, `STRATEGY_ADVISOR.log`, and the open-items lever board (`HANDOVER.md`, the `PLAN_*.md` docs) to pick ONE lever + a
+decision log, `STRATEGY_ADVISOR.log`, and the open-items lever board (`NEXT.md`, the `PLAN_*.md` docs) to pick ONE lever + a
 prediction; **applies** it (fanning independent workstreams to parallel subagents, serialized on
 shared files); **smokes** (`npm test` + `printf 'hi\n/exit\n' | node bin/tmct.mjs` in graph-less
 and fixture-graph dirs — a failed smoke voids the run); **runs** the chatbench (one deterministic
@@ -253,6 +253,6 @@ alongside as the drift alarm**; **writes one file**, `BENCHMARK_CEFR_ENGLISH_<ve
 decision log, and an "Evidence / transcripts" section near the end with discriminating transcripts
 first — no separate `_TRANSCRIPTS.md` file), snapshotting raw judge output
 to `chatbench/results/raw/run-<version>[_00N]/` first and mirroring anything left open into
-`HANDOVER.md` as one-line pickup items; then applies the decision rule (**PASS = mean up AND no
+`NEXT.md` as one-line pickup items; then applies the decision rule (**PASS = mean up AND no
 pass→fail regression**) and **continues to the next cycle** — no hard pause; the operator
 interrupts at will.

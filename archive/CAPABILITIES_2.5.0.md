@@ -385,7 +385,7 @@ standards. Both are **read-side derivations**, stored nowhere and requiring no m
 
 ### Speculative TO-BE
 
-Drawn from the four fresh reports' decision lines and `HANDOVER.md`. **Not a roadmap commitment**;
+Drawn from the four fresh reports' decision lines and `NEXT.md`. **Not a roadmap commitment**;
 each checked against the tree as not-yet-shipped.
 
 - **Wire disjointness into the multi-hop subclass proof** (row 158) — `BENCHMARK_CONVERSATION_2.5.0.md`'s
@@ -420,7 +420,7 @@ each checked against the tree as not-yet-shipped.
 ### `SKILL_BENCHMARK_CONVERSATION.md`
 - Persona sweep, 6 frames (incl. the new returning-user frame), ~410 probes — **complete** (`BENCHMARK_CONVERSATION_2.5.0.md`)
 - Every 2.0.3 headline defect re-run and confirmed fixed — **complete** (`BENCHMARK_CONVERSATION_2.5.0.md`)
-- 11 new confident-wrong routed to HANDOVER, worst first the disjointness-ignoring proof — **todo**
+- 11 new confident-wrong routed to NEXT, worst first the disjointness-ignoring proof — **todo**
 - Ratcheting the ladder past Tier 0 (blocked by the teach-misroute family) — **todo**
 
 ### `SKILL_BENCHMARK_INFERENCE.md`
@@ -436,7 +436,7 @@ Re-checked against the tree at this pin. Plans unchanged since the 2.0.3 audit k
 the buckets below record only what moved or is new. `PLAN_PURGE.md` is executed (`e771348`).
 
 - **`PLAN_OPEN_ITEMS.md`** (NEW since 2.0.3) — Phases 1-7 and 10 **Done** (the six dropped-input fixes,
-  the §7 vocabulary/fact-id tail, PROV/SKOS). Its phase-table backlog is fully closed per `HANDOVER.md`.
+  the §7 vocabulary/fact-id tail, PROV/SKOS). Its phase-table backlog is fully closed per `NEXT.md`.
   **Todo**: only the 2.5.0 routed backlog (rows 158-161) and the CEFR/CHATBENCH re-measurement items.
 - **`PLAN_NORMATIVE.md`** (NEW, Phase 10) — **Done**: §7.5 PROV split and §7.6 SKOS view shipped
   (`a92c180`), pinned by `grammar-ontology.test.mjs`; the fact-id widened to a 64-bit SHA-256 truncation

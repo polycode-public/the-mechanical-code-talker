@@ -112,7 +112,7 @@ console-only cycle leaves a drifted band recorded nowhere. Snapshot the raw outp
 - a decision line: ship as-is, or the next capability to build.
 
 **Mirror every issue the cycle leaves open** (an open regression, an unexplained drift) **into
-`HANDOVER.md`** as a one-line open item pointing at this write-up — `HANDOVER.md` is the
+`NEXT.md`** as a one-line open item pointing at this write-up — `NEXT.md` is the
 next-session pickup list.
 
 ---
@@ -204,7 +204,7 @@ skipped-with-a-receipt, and a clean 0% on a not-yet-built capability is a ceilin
 failure — never force a fake pass. Write EVERY cycle up as `BENCHMARK_INFERENCE_<version>.md`
 (headline delta, per-band rung table with gate receipts, what's new, drift explained-or-open, a
 decision line), snapshotting raw output to `infbench/results/raw/run-<version>[_00N]/` first and
-mirroring anything left open into `HANDOVER.md` as one-line pickup items. If
+mirroring anything left open into `NEXT.md` as one-line pickup items. If
 every band lands where expected, ship as-is; if you want to
 push the ladder further, pick the next engine capability that
 unlocks the currently-gating band, hand-write that engine rule code (never mechanized — only case

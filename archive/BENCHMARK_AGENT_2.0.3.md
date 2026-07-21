@@ -136,7 +136,7 @@ C2's 11 cases are now all green, which means the ladder has more headroom than t
 One item is left open, and it is logged rather than acted on per this cycle's no-change rule:
 the resolver floor's `ab-c2-what-to-test` plan regression, above.
 
-## Open item mirrored to HANDOVER.md
+## Open item mirrored to NEXT.md
 
 - The resolver floor no longer plans `ab-c2-what-to-test` (`completed: true` → `false` since
   `BENCHMARK_AGENT_1.7.0.md`; C2 plan-completion 36% → 27%). Probably correct — the case's plan now

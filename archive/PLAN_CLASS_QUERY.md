@@ -6,8 +6,8 @@ its own restrictor-tail discipline (`MEMORY_COUNT_ABOUT_TAIL_RE`/`memoryFactsAbo
 proposed bare decline would regress it. Phases 2-4 remain open; the live re-verification and a
 fresh code trace with current anchors (including the correction that the reverse-membership
 branch lives in `factReadBackReaders`, not `factAnswer`, and that the new count lane must run
-before `answerQuantifierRecall`) are in `HANDOVER.md`'s first open item. The design content below
-is kept as written; read the trace in `HANDOVER.md` first.
+before `answerQuantifierRecall`) are in `NEXT.md`'s first open item. The design content below
+is kept as written; read the trace in `NEXT.md` first.
 
 ## Origin
 

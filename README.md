@@ -200,7 +200,7 @@ under a guard that proves the protected spans came through byte-for-byte.
 
 A frozen regression suite plays out full multi-turn dialogues built from these
 phrasings, from a single question up to a messy, typo-ridden real user.
-Tier-by-tier detail is in `HANDOVER.md`.
+Tier-by-tier detail is in `NEXT.md`.
 
 ## How it guides you
 
@@ -1082,7 +1082,7 @@ The full tables, judge scores, and transcripts are in the linked write-ups.
 | Groundedness | Every answer carries a source, and an empty graph reports itself empty. Judge-scored mean 1.809/2 over 138 cases, 5 hard fails, 136/138 tier-1. | Judged (`claude-haiku-4-5-20251001`, `judge-prompt-v2`) at N=1. The judge prompt moved v1→v2 since 2.6.0, so this is a measurement, not a clean lever comparison against the prior cycle. The judge runs in the offline eval harness, never in the product. | `BENCHMARK_CEFR_ENGLISH_2.7.12.md` |
 | Abstention (the honest miss) | 0% fabrication across 479 inference rows (379 chat + 100 kernel) and 0% hallucination across 272 agent rows | Structural, not a tuned threshold. tmct abstains because nothing matched, so the rows test a property of a no-model design rather than a score. | `BENCHMARK_INFERENCE_2.7.12.md`, `BENCHMARK_AGENT_2.7.12.md` |
 | Determinism | Byte-identical on rerun — a 379-case `--replay` clean across 2 runs, no LLM, no network, $0 per turn | A property of the no-model pipeline. | `BENCHMARK_INFERENCE_2.7.12.md` |
-| Dialogue robustness (persona sweep) | A 6-persona sweep (textbook logician, casual newcomer, new developer, adversarial sceptic, returning user, planning user) fixed 25 of the prior cycle's 29 routed findings (21 clean, 4 with a residual noted); 4 remain broken, 2 in a shape distinct from the original complaint | Free exploration across all six personas surfaced roughly 60 fresh findings beyond the ratchet check — the single highest-signal pattern: tmct's own suggested repair text was itself frequently broken when followed verbatim (since fixed, see `HANDOVER.md`). | `BENCHMARK_CONVERSATION_2.7.11.md` |
+| Dialogue robustness (persona sweep) | A 6-persona sweep (textbook logician, casual newcomer, new developer, adversarial sceptic, returning user, planning user) fixed 25 of the prior cycle's 29 routed findings (21 clean, 4 with a residual noted); 4 remain broken, 2 in a shape distinct from the original complaint | Free exploration across all six personas surfaced roughly 60 fresh findings beyond the ratchet check — the single highest-signal pattern: tmct's own suggested repair text was itself frequently broken when followed verbatim (since fixed, see `NEXT.md`). | `BENCHMARK_CONVERSATION_2.7.11.md` |
 
 Three offline benchmark rigs live in a clone (they are not in the npm
 package). Each replays a committed case set through the real product and

@@ -246,7 +246,7 @@ outside this pool's reach.
    ("nothing in the index matches that.", "No modules found whose module directly touches X.")
    that gives the user zero nudge toward a question that WOULD work.
 2. **`PLAN_CONVERSATION.md` Finding 4** — the anaphoric "SUBJECT verb which N" misroute into
-   teach-a-fact, still the top `HANDOVER.md` open item. ases as a side effect, the same cross-check `1.6.1`'s
+   teach-a-fact, still the top `NEXT.md` open item. ases as a side effect, the same cross-check `1.6.1`'s
    own cycle ran before starting new work.
 4. **A dual-draw or full-pool run** before the next release — carried over from `1.6.0`'s own
    decision log, still not done. This cycle's own per-cell wobble (`C1 temporal` +0.158 on zero

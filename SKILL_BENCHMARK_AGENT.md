@@ -97,7 +97,7 @@ Every cycle MUST satisfy:
 ## 2. The loop (one cycle; repeats until the ladder tops out or the operator stops)
 
 **Step 1 — READ.** Read the latest `BENCHMARK_AGENT_<version>.md` (its "one honest red kept" section, if
-any, and its decision on frontiers), the agent-axis open items in `HANDOVER.md`, and the current
+any, and its decision on frontiers), the agent-axis open items in `NEXT.md`, and the current
 `agentbench/cases.jsonl` rung counts. Decide which driver to measure (`--driver stub|resolver|goal`,
 per `agentbench/README.md`'s pluggable-driver seam) and whether this cycle is a pure measurement or
 targets a specific gated rung to push past.
@@ -148,8 +148,8 @@ cycle, one item per change with the commit it landed in; any deliberately-kept h
 that plans/executes correctly but doesn't compose the expected result, named as a frontier, not
 patched around); the discipline checklist (zero hallucination held, byte-identity verified, no
 overfit/leakage, boundary refusals still sharp, determinism); and a decision line. **Mirror every
-issue the cycle leaves open** (the kept honest red, an unexplained rung move) **into `HANDOVER.md`**
-as a one-line open item pointing at this write-up — `HANDOVER.md` is the next-session pickup list.
+issue the cycle leaves open** (the kept honest red, an unexplained rung move) **into `NEXT.md`**
+as a one-line open item pointing at this write-up — `NEXT.md` is the next-session pickup list.
 
 **Step 7 — CONTINUE.** If the operator wants the ladder pushed further, go to Step 1 of the next
 cycle with the next gated rung as the target. There is no autonomous no-pause loop here the way
@@ -213,4 +213,4 @@ HTN method, a new goal rule, new fixture-linted cases, the write-up) out to back
 under the coordinator model per `CLAUDE.md`, keeping the main chat free; write up the cycle as
 `BENCHMARK_AGENT_<version>.md` (headline delta, metric-pair table, per-driver comparison, what's new, any
 deliberately-kept honest red, the discipline checklist, a decision), mirroring anything left open
-into `HANDOVER.md` as one-line pickup items.
+into `NEXT.md` as one-line pickup items.
