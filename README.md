@@ -585,11 +585,15 @@ Usage:
                                trace of decision points/matched pattern/results/goal per
                                turn, appended under a "--- narrate ---" marker (also
                                TMCT_NARRATE=1; toggle mid-session with /narrate on|off)
+       [--live-wikipedia]      start with the live Wikipedia supplement on — a question
+                               nothing local can answer also tries en.wikipedia.org,
+                               cited (network; also TMCT_LIVE_WIKIPEDIA=1 or tmct.toml
+                               corpus tier3; toggle mid-session with /wiki on|off)
        [--plain]               force the plain readline shell (the default when
                                stdin/stdout is not a terminal)
        [--memory-backend <default|memory|sqlite>]  storage backend for taught facts this
                                session (CLI flag > TMCT_MEMORY_BACKEND env > tmct.toml's
-                               [memory] backend > "default", the flat .tmct/ JSON file)
+                               [memory] backend > sqlite, .tmct/memory/graph.sqlite)
 ```
 
 `tmct memory` is the CLI-side view of the same data the `/memory` chat command shows:

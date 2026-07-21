@@ -36,7 +36,7 @@ export const CLI_VERBS = [
       { flag: "[--narrate]", prose: ["start with narrate mode on — a verbose, developer-facing", "trace of decision points/matched pattern/results/goal per", "turn, appended under a \"--- narrate ---\" marker (also", "TMCT_NARRATE=1; toggle mid-session with /narrate on|off)"] },
       { flag: "[--live-wikipedia]", prose: ["start with the live Wikipedia supplement on — a question", "nothing local can answer also tries en.wikipedia.org,", "cited (network; also TMCT_LIVE_WIKIPEDIA=1 or tmct.toml", "corpus tier3; toggle mid-session with /wiki on|off)"] },
       { flag: "[--plain]", prose: ["force the plain readline shell (the default when", "stdin/stdout is not a terminal)"] },
-      { flag: "[--memory-backend <default|memory|sqlite>]", prose: ["storage backend for taught facts this", "session (CLI flag > TMCT_MEMORY_BACKEND env > tmct.toml's", "[memory] backend > \"default\", the flat .tmct/ JSON file)"] },
+      { flag: "[--memory-backend <default|memory|sqlite>]", prose: ["storage backend for taught facts this", "session (CLI flag > TMCT_MEMORY_BACKEND env > tmct.toml's", "[memory] backend > sqlite, .tmct/memory/graph.sqlite)"] },
     ],
   },
   {
