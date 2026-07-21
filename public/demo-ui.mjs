@@ -202,7 +202,7 @@ inputEl.addEventListener("keydown", (ev) => {
 
 function refreshWinkStatus() {
   const s = getWinkStatus();
-  if (s === "loaded") statusEl.textContent = "wink-nlp lemma/POS tier: loaded from esm.sh";
+  if (s === "loaded") statusEl.textContent = "wink-nlp lemma/POS tier: loaded";
   else if (s === "unavailable") statusEl.textContent = "wink-nlp unavailable — running curated + fuzzy tiers only (still zero guesses, zero LLM)";
   else statusEl.textContent = "wink-nlp: loading…";
   if (s === "pending") setTimeout(refreshWinkStatus, 200);

@@ -55,6 +55,11 @@ for (const file of walkModules(SRC)) {
   }
 
   for (const spec of relativeSpecifiers(text)) {
+    // Only .mjs/.json can be source modules (node ESM requires the
+    // extension). Anything else — ./vendor/wink.js in the viz pages' inline
+    // scripts — is a browser-runtime URL inside emitted page HTML, resolved
+    // against the deployed page, never against this file.
+    if (!/\.(?:mjs|json)$/.test(spec)) continue;
     const resolved = path.resolve(path.dirname(file), spec);
     if (!fs.existsSync(resolved)) {
       dangling.push(`src/${rel} -> ${spec}`);

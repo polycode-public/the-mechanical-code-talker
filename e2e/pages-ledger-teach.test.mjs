@@ -34,11 +34,11 @@ after(async () => {
   if (siteDir) rmSync(siteDir, { recursive: true, force: true });
 });
 
-/** Open ledger.html with third-party hosts blocked EXCEPT the wink-nlp CDN
- *  the live dock's own tryLoadWink() best-effort-loads — allowed through so
- *  a real load attempt can genuinely succeed or genuinely time out, same as
- *  a real visitor, rather than being forced into the no-wink degrade path by
- *  this harness. Returns the page plus what it logged/failed to fetch. */
+/** Open ledger.html with every third-party host blocked — the live dock's
+ *  own tryLoadWink() loads the wink tier from the site's first-party
+ *  ./vendor/wink.js, so a real load attempt genuinely succeeds same-origin,
+ *  exactly as for a real visitor. Returns the page plus what it logged and
+ *  what it failed to fetch. */
 async function openLedgerPage({ viewport, colorScheme } = {}) {
   const context = await browser.newContext({ ...(viewport ? { viewport } : {}), ...(colorScheme ? { colorScheme } : {}) });
   const page = await context.newPage();
@@ -46,9 +46,7 @@ async function openLedgerPage({ viewport, colorScheme } = {}) {
   const failedRequests = [];
 
   await page.route("**/*", (route) => {
-    const url = route.request().url();
-    if (url.startsWith(server.origin)) return route.continue();
-    if (/^https:\/\/esm\.sh\//.test(url)) return route.continue();
+    if (route.request().url().startsWith(server.origin)) return route.continue();
     return route.abort();
   });
   page.on("console", (msg) => {
@@ -58,6 +56,11 @@ async function openLedgerPage({ viewport, colorScheme } = {}) {
     consoleErrors.push(msg.text());
   });
   page.on("requestfailed", (req) => {
+    // A fetch the service worker answers from cache is cancelled at the
+    // network layer and reports net::ERR_ABORTED here even though the page
+    // received every byte; a genuinely failing asset reports a different
+    // error (and a plain 404 never fires requestfailed at all).
+    if (req.failure()?.errorText === "net::ERR_ABORTED") return;
     if (req.url().startsWith(server.origin)) failedRequests.push(req.url());
   });
   page.on("pageerror", (err) => consoleErrors.push(String(err)));

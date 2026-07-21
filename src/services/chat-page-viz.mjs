@@ -89,6 +89,31 @@ export function provenanceChipFor(answer, record, bucketFor) {
   return "corpus";
 }
 
+/**
+ * The boot statusline while the big assets stream in — "loading the engine…
+ * X MB / Y MB", aggregated across every asset currently downloading. `parts`
+ * is an array of { loaded, total } byte counts (total 0 when the response
+ * carried no Content-Length); with no usable total the line shows loaded
+ * bytes alone rather than inventing a denominator.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe — the same
+ * discipline provenanceChipFor above holds.
+ */
+export function loadProgressLine(parts) {
+  const mb = (n) => (n / 1048576).toFixed(1);
+  let loaded = 0;
+  let total = 0;
+  let totalKnown = true;
+  for (const p of parts || []) {
+    loaded += (p && p.loaded) || 0;
+    if (p && p.total > 0) total += p.total;
+    else totalKnown = false;
+  }
+  return totalKnown && total > 0
+    ? "loading the engine… " + mb(loaded) + " MB / " + mb(total) + " MB"
+    : "loading the engine… " + mb(loaded) + " MB";
+}
+
 /** The self-contained "talk to it" full-screen page. Pure — the same output
  *  for the same `title` every time; every other piece of state (the session,
  *  every message, every chip) is computed live in the browser once the
@@ -105,24 +130,15 @@ export function renderChatHtml({ title = DEFAULT_TITLE } = {}) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
 <!--
-  Import map: resolves the "wink-nlp"/"wink-eng-lite-web-model" bare specifiers the
-  sibling chat bundle's own dynamic import() needs (pinned to the exact versions
-  package.json depends on) to esm.sh CDN builds — the same seam plan.html and
-  ledger.html each wire up for their own live sessions, mirrored here because this
-  page can be opened standalone (no import map inherited from a host document). The
-  bundle itself never touches wink-nlp directly — wink-model.mjs's own header
-  explains why a static import would drag the ~1 MB model into every bundle; only
-  the page's own inline script performs this CDN import, the same bounded-race
-  tryLoadWink() pattern public/tmct-browser.mjs uses.
+  The wink lemma/POS tier loads from ./vendor/wink.js — the site's own shared
+  first-party bundle of wink-nlp + wink-eng-lite-web-model (built by
+  scripts/build-wink-vendor.mjs), one cached copy for every page, no CDN. The
+  chat bundle itself never touches wink directly — wink-model.mjs's own header
+  explains why a static import would drag the ~1 MB model into every bundle;
+  only the page's own inline script imports the vendor asset, the same
+  bounded-race tryLoadWink() pattern public/tmct-browser.mjs uses, and a
+  failed load degrades to the curated + fuzzy tiers, never an error.
 -->
-<script type="importmap">
-{
-  "imports": {
-    "wink-nlp": "https://esm.sh/wink-nlp@2.4.0",
-    "wink-eng-lite-web-model": "https://esm.sh/wink-eng-lite-web-model@1.8.1"
-  }
-}
-</script>
 <style>
 ${THEME_TOKENS_CSS}
   html, body { height: 100%; }
@@ -238,7 +254,10 @@ ${THEME_TOKENS_CSS}
   "use strict";
   const provBucketFor = ${provBucketFor.toString()};
   const provenanceChipFor = ${provenanceChipFor.toString()};
+  const loadProgressLine = ${loadProgressLine.toString()};
   const el = (id) => document.getElementById(id);
+
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
 
   const messagesEl = el("messages");
   const composerForm = el("composer");
@@ -316,22 +335,87 @@ ${THEME_TOKENS_CSS}
 
   // ---- engine boot -------------------------------------------------------
   // The same bounded-race wink load public/tmct-browser.mjs uses, against
-  // this page's own bundle/seed/pack.
+  // this page's own bundle/seed/pack — plus real download progress: the two
+  // big boot assets (the seed and the wink vendor bundle) stream through
+  // fetchWithProgress, and the statusline aggregates their byte counts until
+  // boot settles it back to the normal summary.
   const WINK_LOAD_TIMEOUT_MS = 8000;
-  const timeoutAfter = (ms, reason) => new Promise((_, reject) => setTimeout(() => reject(new Error(reason)), ms));
+
+  const progressParts = {};
+  let progressActive = true;
+  function noteProgress(key, loaded, total) {
+    progressParts[key] = { loaded: loaded, total: total };
+    if (progressActive) statusEl.textContent = loadProgressLine(Object.values(progressParts));
+  }
+
+  // Fetch the url reading the body as a stream, reporting (loadedBytes,
+  // totalBytes) after every chunk — total is 0 when the response carries no
+  // Content-Length. Resolves to a Blob of the whole body.
+  async function fetchWithProgress(url, onProgress) {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const total = Number(res.headers.get("content-length")) || 0;
+    if (!res.body || !res.body.getReader) {
+      const blob = await res.blob();
+      onProgress(blob.size, total || blob.size);
+      return blob;
+    }
+    const reader = res.body.getReader();
+    const chunks = [];
+    let loaded = 0;
+    for (;;) {
+      const step = await reader.read();
+      if (step.done) break;
+      chunks.push(step.value);
+      loaded += step.value.byteLength;
+      onProgress(loaded, total);
+    }
+    return new Blob(chunks);
+  }
 
   let winkStatus = "pending";
   async function tryLoadWink() {
+    // The bounded race guards the same failure the CDN era did — a load that
+    // neither resolves nor rejects — but measures 8s WITHOUT A BYTE rather
+    // than 8s wall-clock, so a slow link streaming real progress on a 3.5 MB
+    // asset is never abandoned mid-download.
+    let lastProgressAt = Date.now();
+    const winkProgress = (loaded, total) => {
+      lastProgressAt = Date.now();
+      noteProgress("wink", loaded, total);
+    };
+    const stallGuard = async () => {
+      for (;;) {
+        const idle = Date.now() - lastProgressAt;
+        if (idle >= WINK_LOAD_TIMEOUT_MS) throw new Error("wink vendor asset load stalled");
+        await new Promise((resolve) => setTimeout(resolve, WINK_LOAD_TIMEOUT_MS - idle));
+      }
+    };
     try {
-      const [{ default: winkNLP }, { default: model }] = await Promise.race([
-        Promise.all([import("wink-nlp"), import("wink-eng-lite-web-model")]),
-        timeoutAfter(WINK_LOAD_TIMEOUT_MS, "wink-nlp CDN load timed out"),
+      const mod = await Promise.race([
+        (async () => {
+          try {
+            // Streamed fetch -> Blob -> import, so the biggest asset on the
+            // page reports its progress; the vendor bundle is fully
+            // self-contained, so a blob URL resolves nothing further.
+            const blob = await fetchWithProgress("./vendor/wink.js", winkProgress);
+            const blobUrl = URL.createObjectURL(new Blob([blob], { type: "text/javascript" }));
+            try {
+              return await import(blobUrl);
+            } finally {
+              URL.revokeObjectURL(blobUrl);
+            }
+          } catch (err) {
+            return import("./vendor/wink.js");
+          }
+        })(),
+        stallGuard(),
       ]);
-      window.tmctChat.registerWinkModel(() => ({ winkNLP, model }));
+      window.tmctChat.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
       winkStatus = "loaded";
     } catch (err) {
       winkStatus = "unavailable";
-      console.warn("tmct chat: wink-nlp CDN load failed, continuing without the lemma/POS tier", err);
+      console.warn("tmct chat: the wink vendor asset failed to load, continuing without the lemma/POS tier", err);
     }
   }
 
@@ -339,9 +423,8 @@ ${THEME_TOKENS_CSS}
   let seedFacts = 0;
   async function fetchSeed() {
     try {
-      const res = await fetch("./chat-seed.json");
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      seedPayload = await res.json();
+      const blob = await fetchWithProgress("./chat-seed.json", (loaded, total) => noteProgress("seed", loaded, total));
+      seedPayload = JSON.parse(await blob.text());
       seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
     } catch (err) {
       seedPayload = null;
@@ -499,6 +582,7 @@ ${THEME_TOKENS_CSS}
       return;
     }
     await Promise.all([fetchSeed(), tryLoadWink()]);
+    progressActive = false;
     window.tmctChat.registerReferencePackProvider(fetchPackProvider);
     window.tmctChatSession = newSession();
     const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);

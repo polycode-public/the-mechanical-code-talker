@@ -294,24 +294,16 @@ export function renderPlanHtml({ plan, rendersAs = {}, sizeOrder = [], title } =
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(pageTitle)}</title>
 <!--
-  Import map: resolves the "wink-nlp"/"wink-eng-lite-web-model" bare specifiers the
-  live re-solve session's own dynamic import() needs (pinned to the exact versions
-  package.json depends on) to esm.sh CDN builds — the same seam chat.html and
-  ledger.html each wire up for their own live sessions, mirrored here because this
-  page can be opened standalone (no import map inherited from a host document). The
-  bundle itself (./plan-browser.bundle.js) never touches wink-nlp directly —
-  wink-model.mjs's own header explains why a static import would drag the ~1 MB
-  model into every bundle; only the page's own inline script performs this CDN
-  import, the same bounded-race tryLoadWink() pattern public/tmct-browser.mjs uses.
+  The wink lemma/POS tier loads from ./vendor/wink.js — the site's own shared
+  first-party bundle of wink-nlp + wink-eng-lite-web-model (built by
+  scripts/build-wink-vendor.mjs), one cached copy shared with chat.html and
+  ledger.html, no CDN. The bundle itself (./plan-browser.bundle.js) never
+  touches wink directly — wink-model.mjs's own header explains why a static
+  import would drag the ~1 MB model into every bundle; only the page's own
+  inline script performs the import, the same bounded-race tryLoadWink()
+  pattern public/tmct-browser.mjs uses, and a failed load degrades to the
+  curated + fuzzy tiers, never an error.
 -->
-<script type="importmap">
-{
-  "imports": {
-    "wink-nlp": "https://esm.sh/wink-nlp@2.4.0",
-    "wink-eng-lite-web-model": "https://esm.sh/wink-eng-lite-web-model@1.8.1"
-  }
-}
-</script>
 <style>
 ${THEME_TOKENS_CSS}
 html { background: var(--bg); }
@@ -432,6 +424,10 @@ const PLAN = ${embedded};
 <script>
 (function () {
   "use strict";
+  // Best-effort: a copy of this page opened without the sibling worker file
+  // (a tmct --render plan --output file, a file:// open) just swallows the
+  // registration failure and works exactly as before.
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
   const pageTitleEl = document.getElementById("pageTitle");
   const board = document.getElementById("board");
   const stepLabel = document.getElementById("stepLabel");
@@ -635,10 +631,10 @@ const PLAN = ${embedded};
     // rest on the target" sentence needs a real lemmatiser to reduce
     // "moving" to "move" — without it that one teach sentence honestly
     // declines and every position fact taught after it fails in turn. Load
-    // wink from the CDN and register it, the SAME bounded-race pattern
-    // public/tmct-browser.mjs uses: a cross-origin dynamic import() can
-    // neither resolve nor reject on some failures, so an unbounded await
-    // would leave a resolve stuck forever.
+    // wink from the site's shared first-party ./vendor/wink.js and register
+    // it, the SAME bounded-race pattern public/tmct-browser.mjs uses: a
+    // dynamic import() can neither resolve nor reject on some failures, so
+    // an unbounded await would leave a resolve stuck forever.
     // Awaited before EVERY session creation below (idempotent — a second
     // await after the first attempt already settled resolves immediately).
     const WINK_LOAD_TIMEOUT_MS = 8000;
@@ -648,14 +644,14 @@ const PLAN = ${embedded};
       if (winkReady) return winkReady;
       winkReady = (async () => {
         try {
-          const [{ default: winkNLP }, { default: model }] = await Promise.race([
-            Promise.all([import("wink-nlp"), import("wink-eng-lite-web-model")]),
-            winkTimeout(WINK_LOAD_TIMEOUT_MS, "wink-nlp CDN load timed out"),
+          const mod = await Promise.race([
+            import("./vendor/wink.js"),
+            winkTimeout(WINK_LOAD_TIMEOUT_MS, "wink vendor asset load timed out"),
           ]);
-          tmctPlan.registerWinkModel(() => ({ winkNLP, model }));
+          tmctPlan.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
         } catch (err) {
           // eslint-disable-next-line no-console
-          console.warn("tmct plan: wink-nlp CDN load failed, continuing without the lemma/POS tier", err);
+          console.warn("tmct plan: the wink vendor asset failed to load, continuing without the lemma/POS tier", err);
         }
       })();
       return winkReady;

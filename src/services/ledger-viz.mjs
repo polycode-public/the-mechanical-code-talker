@@ -536,28 +536,17 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
 <!--
-  Import map: resolves the "wink-nlp"/"wink-eng-lite-web-model" bare specifiers the
-  live ask-and-teach dock's own dynamic import() needs (pinned to the exact versions
-  package.json depends on) to esm.sh CDN builds — the same seam chat.html and
-  plan.html each wire up for their own live sessions, mirrored here because this page
-  can be opened standalone (no import map inherited from a host document; this
-  includes the self-contained file tmct viz writes to disk — a plain cross-origin
-  dynamic import() of a remote https:// URL, not a file:// read, so it works the
-  same way offline this page's own try/catch already handles for the deployed site:
-  the fetch fails and the wink tier degrades gracefully). Nothing in this file
-  touches wink-nlp directly — wink-model.mjs's own header explains why a static
-  import would drag the ~1 MB model into every bundle; only the page's own inline
-  script performs this CDN import, the same bounded-race tryLoadWink() pattern
-  public/tmct-browser.mjs uses.
+  The wink lemma/POS tier loads from ./vendor/wink.js — the site's own shared
+  first-party bundle of wink-nlp + wink-eng-lite-web-model (built by
+  scripts/build-wink-vendor.mjs), one cached copy shared with chat.html and
+  plan.html, no CDN. A copy of this page opened somewhere without the sibling
+  asset (the self-contained file tmct viz writes to disk, say) just fails that
+  one import and this page's own try/catch degrades the wink tier gracefully.
+  Nothing in this file touches wink directly — wink-model.mjs's own header
+  explains why a static import would drag the ~1 MB model into every bundle;
+  only the page's own inline script performs the import, the same bounded-race
+  tryLoadWink() pattern public/tmct-browser.mjs uses.
 -->
-<script type="importmap">
-{
-  "imports": {
-    "wink-nlp": "https://esm.sh/wink-nlp@2.4.0",
-    "wink-eng-lite-web-model": "https://esm.sh/wink-eng-lite-web-model@1.8.1"
-  }
-}
-</script>
 <style>
 ${THEME_TOKENS_CSS}
   html { background: var(--bg); }
@@ -723,6 +712,10 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
 <script>
 (function () {
   "use strict";
+  // Best-effort: a copy of this page opened without the sibling worker file
+  // (the CLI's own tmct viz output, a file:// open) just swallows the
+  // registration failure and works exactly as before.
+  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
   const DAY = 86400000;
   const facetCounts = ${facetCounts.toString()};
   const el = (id) => document.getElementById(id);
@@ -996,12 +989,12 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
     let lock = Promise.resolve();
     const withLock = (fn) => { const run = lock.then(fn, fn); lock = run.catch(() => {}); return run; };
 
-    // The SAME bounded-race wink-nlp CDN load plan-viz.mjs's own chat-assert
-    // dock uses: a cross-origin dynamic import() can neither resolve nor
-    // reject on some failures, so an unbounded await would leave a session
-    // stuck forever. Best-effort — a teach sentence that needs the lemma tier
-    // just declines honestly without it, same as a checkout missing the
-    // optional deps.
+    // The SAME bounded-race wink load plan-viz.mjs's own chat-assert dock
+    // uses, now against the site's shared first-party ./vendor/wink.js: a
+    // dynamic import() can neither resolve nor reject on some failures, so an
+    // unbounded await would leave a session stuck forever. Best-effort — a
+    // teach sentence that needs the lemma tier just declines honestly without
+    // it, same as a checkout missing the optional deps.
     const WINK_LOAD_TIMEOUT_MS = 8000;
     const winkTimeout = (ms, reason) => new Promise((_, reject) => setTimeout(() => reject(new Error(reason)), ms));
     let winkReady = null;
@@ -1009,16 +1002,14 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       if (winkReady) return winkReady;
       winkReady = (async () => {
         try {
-          const mods = await Promise.race([
-            Promise.all([import("wink-nlp"), import("wink-eng-lite-web-model")]),
-            winkTimeout(WINK_LOAD_TIMEOUT_MS, "wink-nlp CDN load timed out"),
+          const mod = await Promise.race([
+            import("./vendor/wink.js"),
+            winkTimeout(WINK_LOAD_TIMEOUT_MS, "wink vendor asset load timed out"),
           ]);
-          const winkNLP = mods[0].default;
-          const model = mods[1].default;
-          tmctLedger.registerWinkModel(() => ({ winkNLP: winkNLP, model: model }));
+          tmctLedger.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
         } catch (err) {
           // eslint-disable-next-line no-console
-          console.warn("tmct ledger: wink-nlp CDN load failed, continuing without the lemma/POS tier", err);
+          console.warn("tmct ledger: the wink vendor asset failed to load, continuing without the lemma/POS tier", err);
         }
       })();
       return winkReady;

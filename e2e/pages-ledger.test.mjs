@@ -47,6 +47,11 @@ async function openLedgerPage({ viewport, colorScheme } = {}) {
     consoleErrors.push(msg.text());
   });
   page.on("requestfailed", (req) => {
+    // A fetch the service worker answers from cache is cancelled at the
+    // network layer and reports net::ERR_ABORTED here even though the page
+    // received every byte; a genuinely failing asset reports a different
+    // error (and a plain 404 never fires requestfailed at all).
+    if (req.failure()?.errorText === "net::ERR_ABORTED") return;
     if (req.url().startsWith(server.origin)) failedRequests.push(req.url());
   });
   page.on("pageerror", (err) => consoleErrors.push(String(err)));

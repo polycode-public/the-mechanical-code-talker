@@ -493,11 +493,23 @@ test("renderAdventureHtml: suggestion pills read the browser bundle's relatedFor
   assert.match(html, /tmctAdventure\.classAncestorChain/);
 });
 
-test("renderAdventureHtml: the large sprite tier is fetched at page load, same-origin, with the build-time icon tier as a working fallback", () => {
-  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
-  assert.match(html, /fetch\("\.\/sprites-pack\/manifest\.json"\)/);
-  assert.match(html, /activeSpriteTemplates = ADVENTURE\.spriteTemplates/);
+test("renderAdventureHtml: the large sprite tier is embedded as page data — no runtime fetch — with the icon tier as a working fallback", () => {
+  const largeTemplates = [{ classes: ["cabinet"], svg: "<svg>large cabinet</svg>" }];
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD, largeSpriteTemplates: largeTemplates });
+  const m = /const ADVENTURE = (.*);/.exec(html);
+  const data = JSON.parse(m[1]);
+  assert.deepEqual(data.largeSpriteTemplates, largeTemplates, "the large tier travels as embedded page data");
+  assert.doesNotMatch(html, /sprites-pack\/manifest\.json/, "the page no longer fetches the manifest at runtime");
+  assert.match(html, /ADVENTURE\.largeSpriteTemplates/);
+  assert.match(html, /ADVENTURE\.spriteTemplates/, "the icon tier stays wired as the fallback");
   assert.ok(!/(?:src|href)=["']https?:/.test(html), "still no external resource loads");
+});
+
+test("renderAdventureHtml: with no large tier passed, the icon tier is the active set and the embed is an empty array", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  const m = /const ADVENTURE = (.*);/.exec(html);
+  const data = JSON.parse(m[1]);
+  assert.deepEqual(data.largeSpriteTemplates, []);
 });
 
 test("renderAdventureHtml: every sprite gets a class-badge alongside its own real name — chrome layered over content, not replacing it", () => {

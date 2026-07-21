@@ -344,19 +344,26 @@ export function roomCaptionText(rows, state, here) {
  *  templates travel as JSON rather than as a bundled fs read. Defaults to
  *  `[]` (every sprite falls back to the flat SPRITE_REGISTRY, unchanged from
  *  before this module existed) so existing callers that don't pass one keep
- *  working. `?preview=1` switches into the small, auto-playing, non-
- *  interactive mode the home page's hero iframe embeds, matching
- *  spider-fly.html's own dual-purpose file. */
+ *  working. `largeSpriteTemplates` is the gradient-shaded 400px tier
+ *  (data/sprites-large/*.toml, the same resolved array
+ *  scripts/build-demo-sprites-pack.mjs writes as its whole manifest) —
+ *  embedded at build time exactly like the icon tier, so the page makes no
+ *  runtime fetch for it; empty, the icon tier simply stays active, the same
+ *  fallback the old lazy fetch degraded to. `?preview=1` switches into the
+ *  small, auto-playing, non-interactive mode the home page's hero iframe
+ *  embeds, matching spider-fly.html's own dual-purpose file. */
 export function renderAdventureHtml({
   title = DEFAULT_TITLE,
   worldPayload = { facts: [], rules: [], opening: "" },
   spriteTemplates = [],
+  largeSpriteTemplates = [],
 } = {}) {
   const pageData = embedJson({
     world: worldPayload,
     previewMaxTicks: PREVIEW_MAX_TICKS,
     tickWaitMs: TICK_WAIT_MS,
     spriteTemplates,
+    largeSpriteTemplates,
   });
 
   return `<!doctype html>
@@ -656,21 +663,16 @@ const ADVENTURE = ${pageData};
     return run;
   }
 
-  // ---- large-sprite-tier wiring — fetches the gradient-shaded 400px tier
-  // (public/sprites-pack/manifest.json, built by scripts/build-demo-sprites-
-  // pack.mjs from data/sprites-large/*.toml) at page load, resolved through
-  // the exact same sprite-templates.mjs resolver the build-time icon tier
-  // already used. A failed fetch (offline preview, a stripped static host)
-  // just leaves the build-time icon tier (ADVENTURE.spriteTemplates) as the
-  // working fallback — this page is never blank because one asset had a
-  // hiccup, the same posture this project already takes elsewhere.
-  let activeSpriteTemplates = ADVENTURE.spriteTemplates;
-  fetch("./sprites-pack/manifest.json").then((r) => (r && r.ok ? r.json() : null)).then((data) => {
-    if (!data || !Array.isArray(data.templates) || !data.templates.length) return;
-    activeSpriteTemplates = data.templates;
-    if (lastSnapshot) redraw(lastSnapshot);
-    if (document.body.classList.contains("editing")) refreshEditPanels();
-  }).catch(() => { /* ADVENTURE.spriteTemplates already covers this page */ });
+  // ---- large-sprite-tier wiring — the gradient-shaded 400px tier
+  // (data/sprites-large/*.toml) arrives embedded at build time as
+  // ADVENTURE.largeSpriteTemplates, resolved through the exact same
+  // sprite-templates.mjs resolver the icon tier already used — no runtime
+  // fetch. A build without the large tier just leaves the icon tier
+  // (ADVENTURE.spriteTemplates) as the working fallback — this page is never
+  // blank because one tier is absent, the same posture this project already
+  // takes elsewhere.
+  const largeTier = ADVENTURE.largeSpriteTemplates;
+  const activeSpriteTemplates = Array.isArray(largeTier) && largeTier.length ? largeTier : ADVENTURE.spriteTemplates;
 
   // ---- the class-badge system — this redesign's signature element: every
   // sprite gets a small genre-flavored class word underneath its own real

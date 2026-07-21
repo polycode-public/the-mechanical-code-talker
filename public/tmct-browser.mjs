@@ -1,9 +1,10 @@
 // tmct-browser.mjs — the browser entry point that runs the REAL tmct query engine
 // client-side, no server, no LLM, no build step. Loaded as a plain <script type="module">
 // (see index.html's import map for how the "node:*" specifiers these engine files still
-// carry get resolved to the shims in ./engine-shims/, and how "wink-nlp"/
-// "wink-eng-lite-web-model" resolve to esm.sh CDN builds pinned to the exact versions
-// package.json depends on).
+// carry get resolved to the shims in ./engine-shims/). The wink lemma/POS tier loads
+// from ./vendor/wink.js — the site's own shared first-party bundle of wink-nlp +
+// wink-eng-lite-web-model (built by scripts/build-wink-vendor.mjs), one cached copy
+// shared with every other page's own tryLoadWink().
 //
 // askBrowser() computes its answer with src/domain/ask.mjs's ask(), running in the
 // visitor's own browser against public/demo-graph.json (a static copy of
@@ -24,12 +25,12 @@ const GRAPH_URL = new URL("./demo-graph.json", import.meta.url);
 let graphPromise = null;
 let winkStatus = "pending"; // "pending" | "loaded" | "unavailable"
 
-// Live-caught 2026-07-11: "never a silent hang" above was a claim, not a guarantee — a
-// REJECTED CDN import already degraded correctly (the catch block), but a dynamic
-// import() that neither resolves NOR rejects (a real, observed failure mode for a
-// cross-origin ESM import against an import-map-redirected specifier — some browsers
-// leave the promise permanently pending on a MIME-type mismatch or a stalled redirect,
-// rather than throwing) left `winkStatus` stuck at "pending" forever, and
+// Live-caught 2026-07-11 (CDN era, and the guard stands for the vendor asset too):
+// "never a silent hang" above was a claim, not a guarantee — a REJECTED import
+// already degraded correctly (the catch block), but a dynamic import() that neither
+// resolves NOR rejects (a real, observed failure mode — some browsers leave the
+// promise permanently pending on a MIME-type mismatch or a stalled redirect, rather
+// than throwing) left `winkStatus` stuck at "pending" forever, and
 // refreshWinkStatus's own poll loop (demo-ui.mjs) faithfully kept showing "loading…"
 // with no ceiling. A bounded race against a timeout closes this for real: whichever
 // settles first wins, and the timeout path degrades exactly like a genuine load
@@ -39,9 +40,10 @@ function timeout(ms, reason) {
   return new Promise((_, reject) => setTimeout(() => reject(new Error(reason)), ms));
 }
 
-/** Try to load wink-nlp + its English model from the CDN and register them with the
- *  engine's browser seam. On ANY failure (network hiccup, CDN hiccup, parse error, OR
- *  a load that never settles within WINK_LOAD_TIMEOUT_MS) this degrades honestly:
+/** Try to load the shared wink vendor asset (./vendor/wink.js — wink-nlp + its
+ *  English model in one first-party ESM bundle) and register it with the engine's
+ *  browser seam. On ANY failure (network hiccup, missing asset, parse error, OR a
+ *  load that never settles within WINK_LOAD_TIMEOUT_MS) this degrades honestly:
  *  registerWinkModel is simply never called, and ask.mjs's own documented fallback
  *  (loadWinkModel() returns null) makes the engine run adapter-less — the curated +
  *  bounded-fuzzy tiers still answer correctly, lemma/POS matching is just off. Never a
@@ -49,16 +51,16 @@ function timeout(ms, reason) {
  *  second half of that claim now, not just the try/catch. */
 async function tryLoadWink() {
   try {
-    const [{ default: winkNLP }, { default: model }] = await Promise.race([
-      Promise.all([import("wink-nlp"), import("wink-eng-lite-web-model")]),
-      timeout(WINK_LOAD_TIMEOUT_MS, "wink-nlp CDN load timed out"),
+    const { winkNLP, model } = await Promise.race([
+      import(new URL("./vendor/wink.js", import.meta.url).href),
+      timeout(WINK_LOAD_TIMEOUT_MS, "wink vendor asset load timed out"),
     ]);
     registerWinkModel(() => ({ winkNLP, model }));
     winkStatus = "loaded";
   } catch (err) {
     winkStatus = "unavailable";
     // eslint-disable-next-line no-console
-    console.warn("tmct: wink-nlp CDN load failed, continuing without the lemma/POS tier", err);
+    console.warn("tmct: the wink vendor asset failed to load, continuing without the lemma/POS tier", err);
   }
 }
 
@@ -76,7 +78,7 @@ function loadGraph() {
 }
 
 let enginePromise = null;
-/** Bring the engine fully up (wink CDN attempt + graph fetch, in parallel) exactly
+/** Bring the engine fully up (wink vendor-asset attempt + graph fetch, in parallel) exactly
  *  once. Resolves to {graph}. Never rejects — a wink failure degrades (see above); a
  *  graph fetch failure DOES reject, since without a graph there is nothing to answer
  *  from and askBrowser callers need an honest error, not a silent empty answer. */
@@ -94,7 +96,7 @@ export async function askBrowser(query) {
   return ask(graph, query);
 }
 
-/** Whether the wink-nlp CDN load succeeded — "pending" | "loaded" | "unavailable".
+/** Whether the wink vendor-asset load succeeded — "pending" | "loaded" | "unavailable".
  *  Exposed so the UI can honestly caption whether the lemma/POS tier is live. */
 export function getWinkStatus() {
   return winkStatus;

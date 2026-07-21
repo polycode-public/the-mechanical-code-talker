@@ -6,7 +6,7 @@
 // per-message provenance chip) is built on.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderChatHtml, provenanceChipFor } from "../../src/services/chat-page-viz.mjs";
+import { renderChatHtml, provenanceChipFor, loadProgressLine } from "../../src/services/chat-page-viz.mjs";
 import { provBucketFor } from "../../src/services/ledger-viz.mjs";
 
 // ---- provenanceChipFor: the pure classifier, exercised directly against
@@ -70,13 +70,38 @@ test("renderChatHtml: mounts the chat engine bundle by a same-origin relative pa
   assert.ok(!/(?:src|href)=["']https?:/.test(html), "no external resource loads baked into the markup");
 });
 
-test("renderChatHtml: fetches the seed and reference-pack from same-origin paths, never a second engine", () => {
+test("renderChatHtml: fetches the seed, wink vendor asset and reference-pack from same-origin paths, never a second engine", () => {
   const html = renderChatHtml();
-  assert.match(html, /fetch\("\.\/chat-seed\.json"\)/);
+  assert.match(html, /fetchWithProgress\("\.\/chat-seed\.json"/);
+  assert.match(html, /fetchWithProgress\("\.\/vendor\/wink\.js"/);
   assert.match(html, /fetch\("\.\/reference-pack\/index\.json"\)/);
   assert.match(html, /window\.tmctChat\.createChatSession/);
   assert.match(html, /window\.tmctChat\.registerWinkModel/);
   assert.match(html, /window\.tmctChat\.registerReferencePackProvider/);
+});
+
+test("renderChatHtml: registers the site service worker, tolerating its absence", () => {
+  const html = renderChatHtml();
+  assert.match(html, /navigator\.serviceWorker\.register\("\.\/tmct-sw\.js"\)\.catch/);
+});
+
+// ---- loadProgressLine: the boot statusline's pure aggregator --------------
+
+test("loadProgressLine: sums loaded and total bytes across assets into one MB line", () => {
+  const line = loadProgressLine([
+    { loaded: 524288, total: 1048576 },
+    { loaded: 1048576, total: 3145728 },
+  ]);
+  assert.equal(line, "loading the engine… 1.5 MB / 4.0 MB");
+});
+
+test("loadProgressLine: with any total unknown, shows loaded bytes alone rather than inventing a denominator", () => {
+  assert.equal(loadProgressLine([{ loaded: 1048576, total: 0 }]), "loading the engine… 1.0 MB");
+  assert.equal(loadProgressLine([{ loaded: 1048576, total: 2097152 }, { loaded: 100, total: 0 }]), "loading the engine… 1.0 MB");
+});
+
+test("loadProgressLine: an empty part list reads as zero loaded, never a crash", () => {
+  assert.equal(loadProgressLine([]), "loading the engine… 0.0 MB");
 });
 
 test("renderChatHtml: the composer (centered column, bottom-fixed input) markup is present", () => {

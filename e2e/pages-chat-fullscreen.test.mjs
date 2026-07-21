@@ -4,9 +4,9 @@
 // honest miss with no chip at all, and the page never overflows a phone
 // viewport.
 //
-// Third-party hosts are blocked for every run, exactly as in pages-home: the
-// wink lemma/POS tier degrades and the chat must still answer — the engine
-// and its memory ship with the page.
+// Third-party hosts are blocked for every run, exactly as in pages-home, and
+// nothing degrades: the engine, its memory AND the wink lemma/POS tier (the
+// site's own ./vendor/wink.js) all ship with the page.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
@@ -53,6 +53,11 @@ async function openChatPage({ viewport, colorScheme } = {}) {
     consoleErrors.push(msg.text());
   });
   page.on("requestfailed", (req) => {
+    // A fetch the service worker answers from cache is cancelled at the
+    // network layer and reports net::ERR_ABORTED here even though the page
+    // received every byte; a genuinely failing asset reports a different
+    // error (and a plain 404 never fires requestfailed at all).
+    if (req.failure()?.errorText === "net::ERR_ABORTED") return;
     if (req.url().startsWith(server.origin)) failedRequests.push(req.url());
   });
   page.on("pageerror", (err) => consoleErrors.push(String(err)));

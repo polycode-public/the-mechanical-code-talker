@@ -24,10 +24,11 @@
 // from the source at build time. The copies keep src/'s directory layout under
 // public/engine/src/, because their own relative imports have to keep resolving.
 
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { dirname, join, resolve } from "node:path";
+import { dirname, extname, join, resolve } from "node:path";
 import { execFileSync } from "node:child_process";
+import { brotliCompressSync, constants as zlibConstants, gzipSync } from "node:zlib";
 
 import { stampVersion } from "../src/domain/version-stamp.mjs";
 import { importClosure } from "../src/adapters/import-closure.mjs";
@@ -82,6 +83,15 @@ for (const rel of engineFiles) {
 console.log(`copied ${engineFiles.length} engine source files into ${OUT}`);
 
 stampPageVersion();
+
+// The shared wink vendor asset, built first: every page's lemma/POS tier
+// (chat/ledger/plan/index) imports this ONE same-origin file through the
+// registerWinkModel seam — no CDN, no per-bundle copy.
+{
+  const { buildWinkVendor } = await import(join(here, "build-wink-vendor.mjs"));
+  const { outPath: winkVendorPath, bytes: winkVendorBytes } = await buildWinkVendor(SITE);
+  console.log(`wrote ${winkVendorPath} (${(winkVendorBytes / 1048576).toFixed(2)} MB)`);
+}
 
 execFileSync(process.execPath, [join(here, "build-demo-graph.mjs"), join(SITE, "demo-graph.json")], { stdio: "inherit" });
 
@@ -156,11 +166,17 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
 // confirms the pack itself builds; sprites.html below reads the same large
 // tier a different way, straight off disk at build time, same as every
 // other viz page's build-time data.
+// The manifest is the ENTIRE large-sprite pack (one file, the full resolved
+// template set inline — see buildDemoSpritesPack), so holding onto it here
+// lets the adventure page embed it below instead of lazy-fetching the same
+// 560 KB back over the wire at every page load.
+let largeSpriteManifest = null;
 {
   const { buildDemoSpritesPack } = await import(join(here, "build-demo-sprites-pack.mjs"));
   const spritesPackOut = join(SITE, "sprites-pack");
   rmSync(spritesPackOut, { recursive: true, force: true });
   const { manifest, bytes } = buildDemoSpritesPack({ outDir: spritesPackOut });
+  largeSpriteManifest = manifest;
   console.log(`wrote ${spritesPackOut} (${manifest.templates.length} templates, ${(bytes / 1024).toFixed(1)} KB)`);
 }
 
@@ -175,8 +191,11 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
   const spriteLargeTemplates = readSpriteLargeTemplateFiles();
   const { loadSpriteOntologyFactRows, renderSpriteCatalogHtml } = await import(join(ROOT, "src", "services/sprite-catalog-viz.mjs"));
   const ontologyFactRows = await loadSpriteOntologyFactRows();
+  const { main: buildSpritesBundle } = await import(join(here, "build-sprites-bundle.mjs"));
+  const { outPath: spritesBundlePath, size: spritesBundleBytes } = await buildSpritesBundle(SITE);
+  console.log(`wrote ${spritesBundlePath} (${(spritesBundleBytes / 1024).toFixed(0)} KB)`);
   const spritesPagePath = join(SITE, "sprites.html");
-  const spritesHtml = renderSpriteCatalogHtml({ iconTemplates: spriteTemplates, largeTemplates: spriteLargeTemplates, factRows: ontologyFactRows });
+  const spritesHtml = renderSpriteCatalogHtml({ iconTemplates: spriteTemplates, largeTemplates: spriteLargeTemplates, factRows: ontologyFactRows, spritesBundleAvailable: true });
   await writeF(spritesPagePath, spritesHtml);
   console.log(`wrote ${spritesPagePath}`);
 }
@@ -259,7 +278,170 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
       opening: world.meta?.opening || "",
     };
     const adventurePath = join(SITE, "adventure.html");
-    await writeF(adventurePath, renderAdventureHtml({ worldPayload, spriteTemplates }));
+    await writeF(adventurePath, renderAdventureHtml({
+      worldPayload,
+      spriteTemplates,
+      largeSpriteTemplates: largeSpriteManifest ? largeSpriteManifest.templates : [],
+    }));
     console.log(`wrote ${adventurePath}`);
   }
+}
+
+// The site's service worker, version-stamped so a version bump rolls the
+// cache name and the activate step drops the previous release's entries.
+// What it caches is best-effort and volatile — browser storage can be
+// evicted or cleared; every page works identically without it, this only
+// stops a RETURN visitor re-paying for the big boot assets.
+function renderServiceWorker(version) {
+  return `"use strict";
+const CACHE = ${JSON.stringify("tmct-precache-v" + version)};
+// The page shell and its big boot assets. Cached one-by-one, tolerating any
+// individual 404 (a build without the reference pack, say) — cache.addAll
+// would refuse the whole install over one missing optional file.
+const PRECACHE = [
+  "./index.html",
+  "./chat.html",
+  "./chat-browser.bundle.js",
+  "./sprites-browser.bundle.js",
+  "./vendor/wink.js",
+  "./chat-seed.json",
+  "./reference-pack/index.json",
+];
+const precacheUrl = (p) => new URL(p, self.location.href).href;
+
+self.addEventListener("install", (event) => {
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE);
+    await Promise.all(PRECACHE.map(async (path) => {
+      try {
+        const res = await fetch(path, { cache: "no-cache" });
+        if (res.ok) await cache.put(precacheUrl(path), res);
+      } catch {}
+    }));
+    await self.skipWaiting();
+  })());
+});
+
+self.addEventListener("activate", (event) => {
+  event.waitUntil((async () => {
+    for (const key of await caches.keys()) {
+      if (key.startsWith("tmct-precache-") && key !== CACHE) await caches.delete(key);
+    }
+    await self.clients.claim();
+  })());
+});
+
+self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  if (url.origin !== self.location.origin || event.request.method !== "GET") return;
+  const href = url.origin + url.pathname;
+  const precached = PRECACHE.some((p) => precacheUrl(p) === href);
+  const packArticle = url.pathname.includes("/reference-pack/articles/");
+  const pageOrBundle = url.pathname.endsWith(".html") || url.pathname.endsWith("/") || url.pathname.endsWith(".bundle.js");
+  if (precached || packArticle) {
+    // Cache-first: immutable-per-release boot assets and the per-article
+    // pack tier (cached the first time a citation fetches it).
+    event.respondWith((async () => {
+      const cached = await caches.match(event.request, { ignoreSearch: true });
+      if (cached) return cached;
+      const res = await fetch(event.request);
+      if (res.ok) {
+        const cache = await caches.open(CACHE);
+        await cache.put(event.request, res.clone());
+      }
+      return res;
+    })());
+  } else if (pageOrBundle) {
+    // Network-first: pages and bundles track the deploy; the cache is only
+    // the offline fallback.
+    event.respondWith((async () => {
+      try {
+        const res = await fetch(event.request);
+        if (res.ok) {
+          const cache = await caches.open(CACHE);
+          await cache.put(event.request, res.clone());
+        }
+        return res;
+      } catch (err) {
+        const cached = await caches.match(event.request, { ignoreSearch: true });
+        if (cached) return cached;
+        throw err;
+      }
+    })());
+  }
+});
+`;
+}
+
+{
+  const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+  const swPath = join(SITE, "tmct-sw.js");
+  writeFileSync(swPath, renderServiceWorker(version));
+  console.log(`wrote ${swPath} (cache tmct-precache-v${version})`);
+}
+
+// Precompressed siblings (.gz/.br) for every sizable text asset, last, over
+// the finished site: GitLab Pages documents serving these variants when they
+// sit next to the file. The per-article reference-pack tier is skipped on
+// purpose — thousands of small files whose individual wins are tiny, tripling
+// the pack's file count for near-zero wire savings; scripts/post-deploy-smoke
+// probes whether the deployment actually honours the siblings.
+// TMCT_DEMO_PRECOMPRESS=0 skips the pass (the e2e snapshot builds set it —
+// their static server never serves the siblings, and brotli at quality 11
+// costs real seconds per build).
+if (process.env.TMCT_DEMO_PRECOMPRESS !== "0") {
+  const COMPRESS_EXTS = new Set([".js", ".mjs", ".json", ".html"]);
+  const MIN_BYTES = 50 * 1024;
+  const files = [];
+  const walk = (dir) => {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const full = join(dir, entry.name);
+      if (entry.isDirectory()) {
+        if (full === join(SITE, "reference-pack", "articles")) continue;
+        walk(full);
+      } else if (entry.isFile()) {
+        files.push(full);
+      }
+    }
+  };
+  walk(SITE);
+  // Clear every existing sibling first, so a source that shrank below the
+  // threshold (or vanished) can never leave a stale compressed twin behind
+  // for the host to serve in its place.
+  for (const f of files) {
+    if (f.endsWith(".gz") || f.endsWith(".br")) unlinkSync(f);
+  }
+  let preBytes = 0;
+  let gzBytes = 0;
+  let brBytes = 0;
+  let count = 0;
+  for (const f of files) {
+    if (f.endsWith(".gz") || f.endsWith(".br")) continue;
+    const ext = extname(f);
+    if (!COMPRESS_EXTS.has(ext)) continue;
+    const size = statSync(f).size;
+    // Every page document compresses regardless of size — the html files are
+    // few, and they're the first transfer of every visit; the byte floor only
+    // prunes the long tail of small js/json.
+    if (ext !== ".html" && size < MIN_BYTES) continue;
+    const body = readFileSync(f);
+    const gz = gzipSync(body, { level: 9 });
+    const br = brotliCompressSync(body, {
+      params: {
+        [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_TEXT,
+        [zlibConstants.BROTLI_PARAM_QUALITY]: 11,
+        [zlibConstants.BROTLI_PARAM_SIZE_HINT]: body.length,
+      },
+    });
+    writeFileSync(`${f}.gz`, gz);
+    writeFileSync(`${f}.br`, br);
+    preBytes += size;
+    gzBytes += gz.length;
+    brBytes += br.length;
+    count += 1;
+  }
+  const mb = (n) => (n / 1048576).toFixed(2);
+  console.log(`precompressed ${count} files: ${mb(preBytes)} MB raw -> ${mb(gzBytes)} MB gz / ${mb(brBytes)} MB br`);
+} else {
+  console.log("precompression skipped (TMCT_DEMO_PRECOMPRESS=0)");
 }

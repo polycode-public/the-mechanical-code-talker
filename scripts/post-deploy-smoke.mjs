@@ -47,12 +47,29 @@ async function pagesVersion() {
   return version;
 }
 
-/** One pass over both endpoints. Never throws; the caller decides when to give up. */
+/** Whether the deployment actually serves the precompressed sibling of the
+ *  wink vendor asset. GitLab Pages documents picking up the .gz/.br files the
+ *  build writes next to it; this probe is what turns that documented behavior
+ *  into a verified one. Returns the content-encoding served, or throws. */
+async function vendorEncoding() {
+  const url = new URL("vendor/wink.js", PAGES_URL.endsWith("/") ? PAGES_URL : `${PAGES_URL}/`).href;
+  const res = await fetch(url, {
+    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+    headers: { "accept-encoding": "br, gzip", "cache-control": "no-cache", "user-agent": `${name} post-deploy-smoke` },
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+  const encoding = res.headers.get("content-encoding");
+  if (!encoding) throw new Error("served with no content-encoding — the precompressed siblings are not being served");
+  return encoding;
+}
+
+/** One pass over all three endpoints. Never throws; the caller decides when to give up. */
 async function checkOnce() {
   const results = {};
   for (const [label, read] of [
     ["npm", publishedVersion],
     ["pages", pagesVersion],
+    ["vendor", vendorEncoding],
   ]) {
     try {
       results[label] = { value: await read() };
@@ -60,28 +77,36 @@ async function checkOnce() {
       results[label] = { error: err.message };
     }
   }
-  return { results, ok: results.npm.value === version && results.pages.value === version };
+  const ok = results.npm.value === version && results.pages.value === version && Boolean(results.vendor.value);
+  return { results, ok };
 }
 
 const describe = (r) => r.error ?? r.value;
 
 async function main() {
-  console.log(`checking ${name}@${version} is live on npm and at ${PAGES_URL}`);
+  console.log(`checking ${name}@${version} is live on npm and at ${PAGES_URL}, and that precompressed assets serve`);
   let last;
   for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
     last = await checkOnce();
-    const { npm, pages } = last.results;
-    console.log(`attempt ${attempt}/${ATTEMPTS}: npm=${describe(npm)} pages=${describe(pages)}`);
+    const { npm, pages, vendor } = last.results;
+    console.log(`attempt ${attempt}/${ATTEMPTS}: npm=${describe(npm)} pages=${describe(pages)} vendor-encoding=${describe(vendor)}`);
     if (last.ok) {
-      console.log(`both serve ${version}`);
+      console.log(`both serve ${version}, and vendor/wink.js serves content-encoding: ${vendor.value}`);
       return 0;
     }
     if (attempt < ATTEMPTS) await sleep(DELAY_MS);
   }
-  const { npm, pages } = last.results;
-  console.error(`after ${ATTEMPTS} attempts, ${version} is not live on both.`);
-  console.error(`  npm:   ${describe(npm)}`);
-  console.error(`  pages: ${describe(pages)}`);
+  const { npm, pages, vendor } = last.results;
+  console.error(`after ${ATTEMPTS} attempts, the deploy did not verify.`);
+  console.error(`  npm:    ${describe(npm)}`);
+  console.error(`  pages:  ${describe(pages)}`);
+  console.error(`  vendor: ${describe(vendor)}`);
+  if (vendor.error) {
+    console.error(
+      "  the vendor probe failing means precompressed serving on this deployment is still documented-but-unverified"
+      + " — the .gz/.br siblings built, but the host did not serve one.",
+    );
+  }
   return 1;
 }
 

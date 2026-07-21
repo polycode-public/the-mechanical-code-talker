@@ -29,13 +29,14 @@ export const stubNodeBuiltins = {
       //     dock's factAnswer/factReadBack call chain never executes (it reads
       //     an in-memory Backend-B handle). They throw only if actually called.
       // Bindings no reachable module imports were removed here: writeFileSync,
-      // access, extname, pathToFileURL, createHash, createRequireFromPath,
+      // extname, pathToFileURL, createHash, createRequireFromPath,
       // createServer (surfaces only), and DatabaseSync (node:sqlite Backend C,
       // opt-in and never selected in the browser — the store seam keeps it out).
       contents:
         "const unavailable = (name) => () => { throw new Error(name + ' unavailable in the browser ask bundle'); };\n"
         + "export const createRequire = unavailable('createRequire');\n"
         + "export const readFileSync = unavailable('readFileSync');\n"
+        + "export const access = unavailable('access');\n"
         + "export const readFile = unavailable('readFile');\n"
         + "export const writeFile = unavailable('writeFile');\n"
         + "export const appendFile = unavailable('appendFile');\n"
@@ -110,8 +111,10 @@ export function makeOptionalAdapterStubs(stubMap) {
 /** Bundle `entryFile` (relative to src/) into `outDir`/`outFile` as a classic
  *  IIFE browser script. Write-then-rename so a concurrent reader (a page
  *  inlining the bundle, a test evaluating it in a vm) always sees a complete
- *  file, old or new, never a truncated one mid-write. */
-export async function buildBundle({ entryFile, outFile, outDir, plugins, minify = false }) {
+ *  file, old or new, never a truncated one mid-write. Minified by default —
+ *  nothing depends on the shipped bundles being readable, and the wire cost
+ *  is real. */
+export async function buildBundle({ entryFile, outFile, outDir, plugins, minify = true }) {
   const outPath = join(outDir, outFile);
   const result = await build({
     entryPoints: [join(srcDir, entryFile)],

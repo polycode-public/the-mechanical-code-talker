@@ -9,10 +9,12 @@
   Import map: resolves the tiny set of `node:*` specifiers the copied engine source
   still carries (src/domain/grammar/lexicon.mjs, src/adapters/embed.mjs, src/adapters/wink-model.mjs — see
   engine-shims/*.mjs for what each shim actually does and why) to browser-safe
-  stand-ins, and resolves the wink-nlp / wink-eng-lite-web-model bare specifiers to
-  esm.sh CDN builds pinned to the exact versions package.json depends on. Nothing here
-  is bundled or transpiled — the engine/*.mjs files underneath are byte-identical
-  copies of src/*.mjs.
+  stand-ins. The wink lemma/POS tier is NOT mapped here: it loads from
+  ./vendor/wink.js, the site's own shared first-party bundle of wink-nlp +
+  wink-eng-lite-web-model (built by scripts/build-wink-vendor.mjs), imported by
+  tmct-browser.mjs's own bounded-race tryLoadWink(). Nothing here is bundled or
+  transpiled — the engine/*.mjs files underneath are byte-identical copies of
+  src/*.mjs.
 -->
 <script type="importmap">
 {
@@ -20,12 +22,11 @@
     "node:fs": "./engine-shims/node-fs.mjs",
     "node:path": "./engine-shims/node-path.mjs",
     "node:url": "./engine-shims/node-url.mjs",
-    "node:module": "./engine-shims/node-module.mjs",
-    "wink-nlp": "https://esm.sh/wink-nlp@2.4.0",
-    "wink-eng-lite-web-model": "https://esm.sh/wink-eng-lite-web-model@1.8.1"
+    "node:module": "./engine-shims/node-module.mjs"
   }
 }
 </script>
+<script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});</script>
 <style>
   /* Shared token names and hex values match src/services/viz-theme.mjs's
      TOKENS.light/TOKENS.dark exactly — the source of truth shared with the

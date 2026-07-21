@@ -158,11 +158,11 @@ const PAGES = [
           if (await page.locator("#resolveBtn").isDisabled()) return;
           await page.fill("#diskCount", "5");
           await page.locator("#resolveBtn").click();
-          // Third-party hosts are blocked here (see openPage), so the
-          // live path's own wink-nlp CDN fetch can never succeed — this
-          // waits only long enough to capture whichever honest state
-          // (solved, or degraded-without-the-lemma-tier) it settles into,
-          // not for a guaranteed live solve.
+          // The wink tier loads from the site's own ./vendor/wink.js, so
+          // it succeeds even with third-party hosts blocked (see
+          // openPage) — this still waits only long enough to capture
+          // whichever honest state the live solve settles into, not for a
+          // guaranteed one.
           await page.waitForFunction(() => /^live —/.test(document.getElementById("liveStatus")?.textContent ?? ""), null, { timeout: 6000 }).catch(() => {});
         },
       },

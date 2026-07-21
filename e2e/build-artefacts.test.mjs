@@ -23,7 +23,7 @@ const sizeOf = (rel) => {
   return statSync(abs).size;
 };
 
-test("demo:build produces the Pages demo artefacts", () => {
+test("demo:build produces the Pages demo artefacts", async () => {
   runNpmScript("demo:build");
   assert.ok(sizeOf("public/demo-graph.json") > 10_000, "demo-graph.json is non-trivial");
   assert.ok(sizeOf("public/ledger.html") > 100_000, "ledger.html carries the inlined bundle");
@@ -34,6 +34,27 @@ test("demo:build produces the Pages demo artefacts", () => {
   ]) {
     assert.ok(sizeOf(engineFile) > 0, `${engineFile} was copied`);
   }
+
+  // The shared first-party wink asset: one ESM bundle carrying wink-nlp AND
+  // its English model, which is why anything much under ~3.5 MB means the
+  // model got dropped.
+  assert.ok(sizeOf("public/vendor/wink.js") > 2_000_000, "vendor/wink.js carries the whole wink-nlp + model pair");
+
+  // Precompressed siblings next to every sizable text asset — what GitLab
+  // Pages serves as content-encoding when the deployment honours them.
+  for (const asset of ["public/vendor/wink.js", "public/chat-seed.json", "public/chat.html"]) {
+    const gz = sizeOf(`${asset}.gz`);
+    const br = sizeOf(`${asset}.br`);
+    assert.ok(gz > 0 && gz < sizeOf(asset), `${asset}.gz exists and is smaller than the original`);
+    assert.ok(br > 0 && br < sizeOf(asset), `${asset}.br exists and is smaller than the original`);
+  }
+
+  // The service worker, stamped with the shipping version so a release rolls
+  // the precache name and evicts the previous release's entries.
+  const { version } = JSON.parse(await readFile(path.join(repoRoot, "package.json"), "utf8"));
+  const sw = await readFile(path.join(repoRoot, "public", "tmct-sw.js"), "utf8");
+  assert.ok(sw.includes(`tmct-precache-v${version}`), "tmct-sw.js carries the package version in its cache name");
+  assert.match(sw, /vendor\/wink\.js/, "the service worker precaches the wink vendor asset");
 });
 
 // The build goes to a temp directory of our own. Other e2e files read the

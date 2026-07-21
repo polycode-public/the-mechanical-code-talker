@@ -6,10 +6,11 @@
 // is each page's own test file's job — this file only checks index.html
 // links to them and shows what it says it shows).
 //
-// Third-party hosts are blocked for every run. The page's live-demo box loads
-// wink-nlp from a CDN, and a test that reached for it would pass or fail on
-// someone else's uptime. Blocked, the run is identical on a laptop offline and
-// in CI, and the box drops to its lower tiers, which is asserted below.
+// Third-party hosts are blocked for every run, and the block must cost the
+// page nothing: every asset — the wink lemma/POS tier included, via the
+// site's own ./vendor/wink.js — is first-party, so the run is identical on a
+// laptop offline and in CI, and the live-demo box loads its full tier set,
+// which is asserted below.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, rmSync } from "node:fs";
@@ -58,6 +59,11 @@ async function openPage(path, { viewport } = {}) {
     consoleErrors.push(msg.text());
   });
   page.on("requestfailed", (req) => {
+    // A fetch the service worker answers from cache is cancelled at the
+    // network layer and reports net::ERR_ABORTED here even though the page
+    // received every byte; a genuinely failing asset reports a different
+    // error (and a plain 404 never fires requestfailed at all).
+    if (req.failure()?.errorText === "net::ERR_ABORTED") return;
     if (req.url().startsWith(server.origin)) failedRequests.push(req.url());
   });
   page.on("pageerror", (err) => consoleErrors.push(String(err)));
@@ -122,17 +128,18 @@ test("the spider-and-fly hero shows a screenshot of spider-fly.html and links to
   }
 });
 
-test("the live-demo box answers on its lower tiers when the wink CDN is unreachable", async () => {
+test("the live-demo box answers with the full wink tier loaded from the site's own vendor asset, third parties blocked", async () => {
   const { context, page } = await openHomePage();
   try {
     await page.locator("#tmct-demo").waitFor({ state: "visible" });
-    // The engine ships with the page; only the wink lemma/POS tier is remote.
-    // Losing it costs accuracy, and the box says so rather than going quiet.
+    // The whole engine ships with the page now, lemma/POS tier included
+    // (./vendor/wink.js) — so with every third-party host blocked the box
+    // still reports the tier loaded, not degraded.
     const status = page.locator("#tmct-demo ~ .demo-status, .demo-status");
     await status.first().waitFor({ state: "visible" });
     await assert.doesNotReject(
-      page.waitForFunction(() => /unavailable/.test(document.querySelector(".demo-status")?.textContent ?? "")),
-      "the box reports the missing tier",
+      page.waitForFunction(() => /lemma\/POS tier: loaded/.test(document.querySelector(".demo-status")?.textContent ?? "")),
+      "the box reports the lemma/POS tier loaded from the first-party asset",
     );
     await page.locator("#tmct-demo .term-answer").first().waitFor({ state: "visible" });
     const errors = await page.locator("#tmct-demo .term-error").count();

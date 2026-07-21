@@ -27,9 +27,12 @@ export function buildDemoSiteSnapshot() {
   for (const entry of TRACKED_SITE_FILES) {
     cpSync(path.join(repoRoot, "public", entry), path.join(siteDir, entry), { recursive: true });
   }
+  // Precompression off: these snapshots are served by the plain static test
+  // server, which never serves the .gz/.br siblings, and brotli at quality 11
+  // costs real seconds per build across every e2e file that builds one.
   execFileSync("npm", ["run", "demo:build"], {
     cwd: repoRoot,
-    env: { ...process.env, TMCT_DEMO_SITE_OUT: siteDir },
+    env: { ...process.env, TMCT_DEMO_SITE_OUT: siteDir, TMCT_DEMO_PRECOMPRESS: "0" },
     encoding: "utf8",
     timeout: 300_000,
   });
