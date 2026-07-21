@@ -4,12 +4,16 @@
 // to cut the browser-fetchable pack subset (it norm-folds the entries
 // itself).
 
-/** Everyday terms the demo reference pack ships articles for. Each must
+/** Terms the demo reference pack ships articles for. Each must
  *  resolve in the full pack — build-demo-pack fails loudly on one that
- *  doesn't. "otter" leads as the demo's lookup term; the page transcript's
- *  "quokka" stays an honest miss on purpose (not a lexicon noun, so the pack
- *  can never carry it — the two together show both sides of the fallback). */
+ *  doesn't. "license" leads as the demo's lookup term: learn-on-miss needs a
+ *  term the shipped chat seed does NOT already ground, and the seed's
+ *  WordNet/persona bands cover the everyday animal/object nouns below. The
+ *  page transcript's "quokka" stays an honest miss on purpose (not a lexicon
+ *  noun, so the pack can never carry it — the two together show both sides
+ *  of the fallback). */
 export const REFERENCE_PACK_TERMS = [
+  "license",
   "otter", "falcon", "badger", "beaver", "anchor", "compass", "saddle",
   "canoe", "harp", "flute", "marble", "barn", "canal", "ferry", "swan",
   "island", "meadow", "river", "mountain", "ocean", "torch", "oasis",

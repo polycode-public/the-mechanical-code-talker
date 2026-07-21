@@ -83,5 +83,5 @@ test("learn-on-miss: a pack term the memory misses is acquired from the referenc
   assert.ok(demo?.ready, "the learn-on-miss demo is live");
   const { answer, record } = await session.turn(demo.turns[0]);
   assert.ok(!record?.miss, "the pack lookup grounds the term instead of missing");
-  assert.match(answer, /\(source: reference article "Otter", Simple English Wikipedia/, "the answer cites the reference article as its source");
+  assert.match(answer, /\(source: reference article "License", Simple English Wikipedia/, "the answer cites the reference article as its source");
 });
