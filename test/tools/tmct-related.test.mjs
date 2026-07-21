@@ -4,39 +4,29 @@
 // never invents a neighbour.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { dispatchTool } from "../../src/tools/server.mjs";
 import { ToolError } from "../../src/adapters/config.mjs";
+import { appendFact, openConfiguredMemoryBackend } from "../../src/adapters/memory/core.mjs";
 
 const stubSource = { fetchEntities: async () => ({ objectProperties: [], individuals: [] }) };
 
-const factIndividual = (id, subject, predicate, object) => ({
-  id, class: "Fact",
-  attributes: [
-    { prop: "rdf:subject", key: "subject", value: subject },
-    { prop: "rdf:predicate", key: "predicate", value: predicate },
-    { prop: "rdf:object", key: "object", value: object },
-    { prop: "mgx:factProvenance", key: "provenance", value: "corpus:conceptnet" },
-  ],
-});
-
-/** A temp repo whose memory graph holds a synonym pair, a relatedTo edge, and one
+/** A temp repo whose CONFIGURED memory store (sqlite by default — the store the
+ *  tool's fall-through reads) holds a synonym pair, a relatedTo edge, and one
  *  plain isa fact — so "table" is a term the store knows but holds no relation
- *  facts for (the load-bearing near-miss). */
+ *  facts for (the essential near-miss). */
 async function repoWithRelationFacts() {
   const dir = await mkdtemp(join(tmpdir(), "tmct-related-"));
-  const mem = {
-    individuals: [
-      factIndividual("fact:1", "couch", "mgx:synonym", "sofa"),
-      factIndividual("fact:2", "sofa", "mgx:relatedTo", "cushion"),
-      factIndividual("fact:3", "table", "rdfs:subClassOf", "furniture"),
-    ],
-    objectProperties: [],
-  };
-  await mkdir(join(dir, ".tmct", "memory"), { recursive: true });
-  await writeFile(join(dir, ".tmct", "memory", "graph.json"), JSON.stringify(mem));
+  const { dir: mem, close } = await openConfiguredMemoryBackend(dir);
+  try {
+    await appendFact(mem, { subject: "couch", predicate: "mgx:synonym", object: "sofa", provenance: "corpus:conceptnet" });
+    await appendFact(mem, { subject: "sofa", predicate: "mgx:relatedTo", object: "cushion", provenance: "corpus:conceptnet" });
+    await appendFact(mem, { subject: "table", predicate: "rdfs:subClassOf", object: "furniture", provenance: "corpus:conceptnet" });
+  } finally {
+    await close();
+  }
   return { dir, config: { graphFile: join(dir, ".tmct", "graph.json") } };
 }
 

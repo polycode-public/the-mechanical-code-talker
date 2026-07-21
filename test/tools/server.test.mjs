@@ -12,6 +12,7 @@ import { HANDLERS } from "../../src/tools/handlers/index.mjs";
 import { renderToolsCatalog } from "../../src/tools/catalog.mjs";
 import { TOOL_DEFINITIONS, HOT_TOOLS, COLD_TOOLS, TOOL_NAMES } from "../../src/tools/definitions.mjs";
 import { ToolError } from "../../src/adapters/config.mjs";
+import { appendFact, openConfiguredMemoryBackend } from "../../src/adapters/memory/core.mjs";
 
 const fixture = JSON.parse(
   readFileSync(fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url)), "utf8"),
@@ -220,31 +221,21 @@ test("unexpected internal errors propagate as plain errors (callers wrap message
 // for a concept query (/subclasses /describe /members /find), fall through to the reified
 // isa-family facts in the MEMORY graph (with provenance), instead of a flat "no entity". ----
 
-/** A temp repo whose .tmct/memory/graph.json carries two reified isa Facts:
+/** A temp repo whose CONFIGURED memory store (sqlite by default — the same
+ *  store chat's taught facts land in, which is what the fall-through reads)
+ *  carries two reified isa Facts:
  *   gizmo  rdfs:subClassOf software   (a subclass of "software")
  *   software rdfs:subClassOf product  (a superclass of "software")
  * The code-map graph itself is still the stub fixture (no "software" entity there). */
 async function repoWithMemoryFacts() {
   const dir = await mkdtemp(join(tmpdir(), "tmct-mem-"));
-  const mem = {
-    individuals: [
-      { id: "fact:1", class: "Fact", attributes: [
-        { prop: "rdf:subject", key: "subject", value: "gizmo" },
-        { prop: "rdf:predicate", key: "predicate", value: "rdfs:subClassOf" },
-        { prop: "rdf:object", key: "object", value: "software" },
-        { prop: "mgx:factProvenance", key: "provenance", value: "corpus:conceptnet /r/IsA" },
-      ] },
-      { id: "fact:2", class: "Fact", attributes: [
-        { prop: "rdf:subject", key: "subject", value: "software" },
-        { prop: "rdf:predicate", key: "predicate", value: "rdfs:subClassOf" },
-        { prop: "rdf:object", key: "object", value: "product" },
-        { prop: "mgx:factProvenance", key: "provenance", value: "corpus:conceptnet /r/IsA" },
-      ] },
-    ],
-    objectProperties: [],
-  };
-  await mkdir(join(dir, ".tmct", "memory"), { recursive: true });
-  await writeFile(join(dir, ".tmct", "memory", "graph.json"), JSON.stringify(mem));
+  const { dir: mem, close } = await openConfiguredMemoryBackend(dir);
+  try {
+    await appendFact(mem, { subject: "gizmo", predicate: "rdfs:subClassOf", object: "software", provenance: "corpus:conceptnet /r/IsA" });
+    await appendFact(mem, { subject: "software", predicate: "rdfs:subClassOf", object: "product", provenance: "corpus:conceptnet /r/IsA" });
+  } finally {
+    await close();
+  }
   return { dir, config: { graphFile: join(dir, ".tmct", "graph.json") } };
 }
 

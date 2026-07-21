@@ -18,7 +18,7 @@
 
 import { mkdir, readFile, readdir, rename, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
-import { appendUtterances, CREATED_AT_PROP, UPDATED_AT_PROP } from "../adapters/memory/core.mjs";
+import { appendUtterances, openConfiguredMemoryBackend, CREATED_AT_PROP, UPDATED_AT_PROP } from "../adapters/memory/core.mjs";
 import { turnKey } from "../domain/memory/session-turns.mjs";
 
 export const SESSIONS_DIR_REL = join(".tmct", "sessions");
@@ -193,7 +193,12 @@ function repoDirFromGraphFile(graphFile) {
  *  change — it already calls appendSessionToGraph every turn. Each recorded turn becomes
  *  an a-visitor-said Utterance; the response prose is recovered from the human transcript
  *  (the sidecar only records ids) and recorded alongside as a tmct Utterance replying to
- *  it. Deterministic utterance ids make the per-turn replay idempotent. Once the sidecar
+ *  it. The write goes through the repo's CONFIGURED memory backend (the same store the
+ *  session's taught facts land in), opened fresh per append — never a raw Backend-A
+ *  graph.json off the repo path, so the fold's canonise-link finds these utterances.
+ *  Deterministic utterance ids make the per-turn replay idempotent, and each append
+ *  replays the WHOLE record so far, so the completed-append state is always the full
+ *  session even if a concurrent writer dropped an earlier turn's rows. Once the sidecar
  *  carries its end marker, the session is folded into the text-block corpus
  *  (memory/fold.mjs). */
 async function recordSessionMemory(graphFile, record, repoDirOverride = null) {
@@ -232,7 +237,14 @@ async function recordSessionMemory(graphFile, record, repoDirOverride = null) {
       });
     }
   }
-  await appendUtterances(repoDir, utterances);
+  if (utterances.length) {
+    const { dir: memoryDir, close } = await openConfiguredMemoryBackend(repoDir);
+    try {
+      await appendUtterances(memoryDir, utterances);
+    } finally {
+      await close();
+    }
+  }
 
   // Session over? The sidecar's end marker is authoritative (chat.mjs writes it
   // before the final upsert). Fold THIS session's transcript into the corpus.

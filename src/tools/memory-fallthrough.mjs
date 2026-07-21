@@ -4,7 +4,7 @@
 // facts instead, always citing provenance.
 
 import { dirname } from "node:path";
-import { loadMemory, readFactRows, normFactTerm } from "../adapters/memory/core.mjs";
+import { loadMemory, openConfiguredMemoryBackend, readFactRows, normFactTerm } from "../adapters/memory/core.mjs";
 
 // The reified isa-family predicates a memory Fact carries ("<subject> rdfs:subClassOf
 // <object>" / "rdf:type"): subject IS-A object. Subclasses of X = facts whose OBJECT is X;
@@ -14,11 +14,18 @@ const MEMORY_LIST_CAP = 40;
 
 /** Load the conversational-memory Facts as trust-bearing rows, failure-tolerant (no memory
  *  store / unreadable → [], so the tool still returns its honest code-map miss). repoRoot is
- *  the dir that CONTAINS .tmct/ (graphFile = <repo>/.tmct/graph.json), which is exactly the
- *  `dir` loadMemory joins MEMORY_GRAPH_REL onto. */
+ *  the dir that CONTAINS .tmct/ (graphFile = <repo>/.tmct/graph.json). The read goes through
+ *  the repo's CONFIGURED memory backend — the same store chat's taught facts land in — opened
+ *  fresh per call and closed before returning, never the retired flat-file store off a raw
+ *  repo path. */
 export async function memoryFactRows(config) {
   try {
-    return readFactRows(await loadMemory(dirname(dirname(config.graphFile))));
+    const { dir, close } = await openConfiguredMemoryBackend(dirname(dirname(config.graphFile)));
+    try {
+      return readFactRows(await loadMemory(dir));
+    } finally {
+      await close();
+    }
   } catch {
     return [];
   }

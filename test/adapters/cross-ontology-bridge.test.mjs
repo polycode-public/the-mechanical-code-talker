@@ -13,7 +13,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { rm } from "node:fs/promises";
 import { createSession } from "../../src/services/chat.mjs";
-import { loadMemory, readFactRows, appendFacts, removeFacts } from "../../src/adapters/memory/core.mjs";
+import { loadMemory, openMemoryBackend, readFactRows, appendFacts, removeFacts } from "../../src/adapters/memory/core.mjs";
 import { syllogise as syllogiseSeam, findIsaChain, SUBCLASS_PREDICATE, ENTAILED_PROVENANCE } from "../../src/domain/syllogise.mjs";
 
 // The persisting seam takes the store's read/write functions injected; wire
@@ -25,6 +25,7 @@ import { freshBootstrapRepo } from "../helpers/seeded-fixture.mjs";
 
 test("a taught hop composes with the corpus-seeded WordNet and Schema.org-bridge hops, and scm-sco materializes the full span", async () => {
   const dir = await freshBootstrapRepo("tmct-bridge-");
+  let backend;
   try {
     clearCache();
     const s = await createSession({ repoPath: dir, env: {} });
@@ -32,7 +33,8 @@ test("a taught hop composes with the corpus-seeded WordNet and Schema.org-bridge
     await s.close();
     assert.match(taught.answer, /noted — remembered/, "the taught link stores cleanly");
 
-    const rows = readFactRows(await loadMemory(dir));
+    backend = await openMemoryBackend(dir, "");
+    const rows = readFactRows(await loadMemory(backend.dir));
     const findFact = (subject, object) =>
       rows.find((r) => r.predicate === SUBCLASS_PREDICATE && r.subject === subject && r.object === object);
 
@@ -67,9 +69,9 @@ test("a taught hop composes with the corpus-seeded WordNet and Schema.org-bridge
 
     // ---- The OFFLINE materializing pass (scm-sco) actually collapses the
     // chain into one persisted fact ----
-    const result = await syllogise(dir, { focus: ["surgeon"], budget: 200 });
+    const result = await syllogise(backend.dir, { focus: ["surgeon"], budget: 200 });
     assert.ok(!result.truncated, "the focused pass completes without hitting its budget");
-    const derivedRows = readFactRows(await loadMemory(dir));
+    const derivedRows = readFactRows(await loadMemory(backend.dir));
     const entailed = derivedRows.find((r) =>
       r.predicate === SUBCLASS_PREDICATE && r.subject === "surgeon" && r.object === "schema person");
     assert.ok(entailed, "scm-sco materializes surgeon ⊑ schema person — the full cross-ontology span");
@@ -79,6 +81,7 @@ test("a taught hop composes with the corpus-seeded WordNet and Schema.org-bridge
     assert.ok(entailed.trust < wordnetHop.trust, "the entailed conclusion stays below its weakest real premise");
   } finally {
     clearCache();
+    await backend?.close();
     await rm(dir, { recursive: true, force: true });
   }
 });

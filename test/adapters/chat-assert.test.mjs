@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Readable, PassThrough } from "node:stream";
 import { runTurn, runChat } from "../../src/services/chat.mjs";
-import { loadMemory, FACT_CLASS } from "../../src/adapters/memory/core.mjs";
+import { loadMemory, openMemoryBackend, FACT_CLASS } from "../../src/adapters/memory/core.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
 import * as source from "../../src/adapters/source.mjs";
 
@@ -30,7 +30,9 @@ test("assertTurn: a declarative ACE sentence in a session lands a Fact in memory
     // (TMCT_NO_SEED: this test counts EXACT facts — the W3 corpus seed has its own suite)
     await runChat({ repoPath: dir, input, output: out, env: { TMCT_NO_SEED: "1" } });
     assert.match(text(), /noted — remembered 1 fact: module rdfs:subClassOf component/);
-    const m = await loadMemory(dir);
+    const backend = await openMemoryBackend(dir, "");
+    const m = await loadMemory(backend.dir);
+    await backend.close();
     const facts = m.individuals.filter((i) => i.class === FACT_CLASS);
     assert.equal(facts.length, 1, "exactly one fact stored");
     const attr = (k) => facts[0].attributes.find((a) => a.key === k)?.value;
@@ -95,7 +97,9 @@ test("assertTurn: questions and unknown-word declaratives never assert in a sess
     // (TMCT_NO_SEED: this test counts EXACT facts — the W3 corpus seed has its own suite)
     await runChat({ repoPath: dir, input, output: out, env: { TMCT_NO_SEED: "1" } });
     assert.doesNotMatch(text(), /noted — remembered/);
-    const m = await loadMemory(dir);
+    const backend = await openMemoryBackend(dir, "");
+    const m = await loadMemory(backend.dir);
+    await backend.close();
     assert.equal(m.individuals.filter((i) => i.class === FACT_CLASS).length, 0, "no facts written");
   } finally {
     await rm(dir, { recursive: true, force: true });

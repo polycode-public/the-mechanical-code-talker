@@ -14,7 +14,18 @@ import {
 } from "../../src/services/sessions.mjs";
 import { CLASS_DOCS, PREDICATE_DOCS } from "../../src/tools/schema-docs.mjs";
 import { runChat } from "../../src/services/chat.mjs";
-import { MEMORY_GRAPH_REL } from "../../src/adapters/memory/core.mjs";
+import { loadMemory, openConfiguredMemoryBackend } from "../../src/adapters/memory/core.mjs";
+
+/** Read the repo's memory store the way every routed reader does — through the
+ *  configured backend (sqlite by default), never a flat graph.json. */
+async function loadRepoMemory(dir) {
+  const { dir: mem, close } = await openConfiguredMemoryBackend(dir);
+  try {
+    return await loadMemory(mem);
+  } finally {
+    await close();
+  }
+}
 
 const SRC_SESSIONS = fileURLToPath(new URL("../../src/services/sessions.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
@@ -235,7 +246,7 @@ async function repoForMemory({ withEnd = false } = {}) {
   return dir;
 }
 
-test("appendSessionToGraph: the turn ALSO lands in .tmct/memory — visitor utterance + tmct reply with the transcript's answer text", async () => {
+test("appendSessionToGraph: the turn ALSO lands in the configured memory store — visitor utterance + tmct reply with the transcript's answer text, no flat graph.json", async () => {
   const dir = await repoForMemory();
   try {
     const graphFile = join(dir, ".tmct", "graph.json");
@@ -247,8 +258,14 @@ test("appendSessionToGraph: the turn ALSO lands in .tmct/memory — visitor utte
     assert.equal(g.individuals.filter((i) => i.class === SESSION_CLASS).length, 1);
     assert.ok(!g.individuals.some((i) => i.class === "Utterance"), "memory stays out of the provider graph");
 
-    // tmct's OWN graph holds the Q and the A, paired
-    const m = JSON.parse(await readFile(join(dir, ".tmct", "memory", "graph.json"), "utf8"));
+    // tmct's OWN store — the configured backend, where the session's facts also
+    // live — holds the Q and the A, paired. The retired flat-file store never
+    // appears: utterances and facts share ONE store, so the fold's
+    // canonise-link can find these utterances for real sessions.
+    const memEntries = await readdir(join(dir, ".tmct", "memory"));
+    assert.ok(!memEntries.includes("graph.json"), "the mirror writes the configured backend, never a flat graph.json");
+    assert.ok(memEntries.includes("graph.sqlite"), "the default backend's sqlite store received the write");
+    const m = await loadRepoMemory(dir);
     const utts = m.individuals.filter((i) => i.class === "Utterance");
     assert.equal(utts.length, 2, "one visitor + one tmct utterance, no duplicates from the replay");
     const attr = (ind, k) => ind.attributes.find((a) => a.key === k)?.value;
@@ -300,7 +317,7 @@ test("appendSessionToGraph: memory is best-effort and scoped — no .tmct layout
 
     // a poisoned memory store must not break the graph append (best-effort seam)
     await mkdir(join(dir, ".tmct", "memory"), { recursive: true });
-    await writeFile(join(dir, ".tmct", "memory", "graph.json"), "not json {");
+    await writeFile(join(dir, ".tmct", "memory", "graph.sqlite"), "not a sqlite database {");
     const res = await appendSessionToGraph(tmctGraph, RECORD);
     assert.equal(res.kept, 2, "graph append succeeded despite the broken memory store");
   } finally {
@@ -317,7 +334,8 @@ test("appendSessionToGraph: memory is best-effort and scoped — no .tmct layout
 // format through the SAME sequencing, or answer text silently stops reaching
 // memory. This test drives a scripted session through the real shell and asserts
 // every non-conversational, non-miss turn produced a NON-EMPTY tmct answer
-// utterance in .tmct/memory/graph.json — the tripwire transcript drift would trip.
+// utterance in the repo's configured memory store — the tripwire transcript
+// drift would trip.
 
 test("guard: every dispatched (non-conversational, non-miss) turn's answer lands as a NON-EMPTY memory utterance", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-sess-guard-"));
@@ -340,7 +358,7 @@ test("guard: every dispatched (non-conversational, non-miss) turn's answer lands
     const guarded = sidecar.turns.filter((t) => !t.conversational && !t.miss);
     assert.equal(guarded.length, 3, "the script dispatched exactly three answerable turns");
 
-    const memory = JSON.parse(await readFile(join(dir, MEMORY_GRAPH_REL), "utf8"));
+    const memory = await loadRepoMemory(dir);
     const byId = new Map(memory.individuals.map((i) => [i.id, i]));
     for (const t of guarded) {
       const utt = byId.get(`utt:${sidecar.id}#${t.ts}#tmct`);
@@ -349,6 +367,45 @@ test("guard: every dispatched (non-conversational, non-miss) turn's answer lands
       assert.ok(text && text.trim().length > 0,
         `the answer utterance text is non-empty for "${t.query}" (got ${JSON.stringify(text)})`);
     }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+// The session shell holds its own long-lived store connection (with a payload
+// cache) while the per-turn mirror opens a fresh one; a cached write from the
+// session's connection can drop rows the mirror appended in between. The mirror
+// replays the WHOLE record every turn with deterministic ids, so the state after
+// each completed append is always the full session. This test interleaves a
+// teach turn (a session-connection fact write) between mirrored turns and
+// asserts nothing is lost from the shared store by session end.
+test("a teach turn mid-session never loses earlier turns' utterances — facts and the full utterance mirror share one store", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-sess-teach-"));
+  try {
+    await mkdir(join(dir, ".tmct"), { recursive: true });
+    await writeFile(join(dir, ".tmct", "graph.json"), await readFile(FIXTURE, "utf8"));
+    const input = Readable.from([
+      "which modules import a.mjs\n",   // mirrored before the teach
+      "every module is a component\n",  // teach — writes a Fact through the session's own connection
+      "how many classes are there\n",   // mirrored after the teach
+      "/exit\n",
+    ]);
+    const out = new PassThrough();
+    out.resume();
+    const { sidecarFile } = await runChat({ repoPath: dir, input, output: out, env: { TMCT_NO_SEED: "1" } });
+
+    const sidecar = parseSessionJsonl(await readFile(sidecarFile, "utf8"));
+    const memory = await loadRepoMemory(dir);
+    const ids = new Set(memory.individuals.map((i) => i.id));
+    for (const t of sidecar.turns) {
+      assert.ok(ids.has(`utt:${sidecar.id}#${t.ts}#visitor`),
+        `the visitor utterance for "${t.query}" survived to session end`);
+    }
+    const facts = memory.individuals.filter((i) => i.class === "Fact");
+    assert.ok(facts.some((f) => {
+      const attr = (k) => f.attributes.find((a) => a?.key === k)?.value;
+      return attr("subject") === "module" && attr("object") === "component";
+    }), "the taught fact lives in the SAME store as the utterances");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -205,7 +205,7 @@ function spyOnPrepare(handle) {
   return { count: () => n, reset: () => { n = 0; } };
 }
 
-test("Backend C perf: loadMemory() reads from SQL only once — a second call on an unchanged handle issues ZERO queries", async () => {
+test("Backend C perf: loadMemory() reads from SQL only once — a second call on an unchanged handle issues only the cross-connection staleness probe", async () => {
   const { dir, handle } = await sqliteHandle();
   try {
     await appendFact(handle, { subject: "cache", predicate: "IsA", object: "concept", provenance: "corpus:seon" });
@@ -222,7 +222,7 @@ test("Backend C perf: loadMemory() reads from SQL only once — a second call on
 
     spy.reset();
     const second = await loadMemory(handle);
-    assert.equal(spy.count(), 0, "a second loadMemory call on an unchanged handle must issue ZERO SQL queries — served from the cache, not re-SELECTed");
+    assert.equal(spy.count(), 1, "a second loadMemory call on an unchanged handle issues exactly one query — the PRAGMA data_version staleness probe, never a re-SELECT of the payload");
 
     assert.deepEqual(second, first, "the cache-served read returns the exact same content as the fresh SQL read");
   } finally {
@@ -241,10 +241,11 @@ test("Backend C round trip: loadMemory -> mutate (appendFact, twice) -> loadMemo
 
     // The read right after a write must be served from the patched cache —
     // not a re-SELECT — proving persistSqlitePayload's cache patch actually
-    // ran (this is the query-count half of the correctness claim).
+    // ran (this is the query-count half of the correctness claim). One query
+    // is allowed: the PRAGMA data_version cross-connection staleness probe.
     const spy1 = spyOnPrepare(handle);
     const afterFirst = await loadMemory(handle);
-    assert.equal(spy1.count(), 0, "a read immediately after a write must be served from the patched cache, not a re-SELECT");
+    assert.equal(spy1.count(), 1, "a read immediately after a write issues only the staleness probe, never a payload re-SELECT");
 
     const rowsAfterFirst = readFactRows(afterFirst);
     assert.equal(rowsAfterFirst.length, 1, "the new fact is visible");
@@ -262,7 +263,7 @@ test("Backend C round trip: loadMemory -> mutate (appendFact, twice) -> loadMemo
 
     const spy2 = spyOnPrepare(handle);
     const afterSecond = await loadMemory(handle);
-    assert.equal(spy2.count(), 0, "still served from the cache after a second write, no re-SELECT");
+    assert.equal(spy2.count(), 1, "still served from the cache after a second write — only the staleness probe, no re-SELECT");
 
     const rowsAfterSecond = readFactRows(afterSecond);
     assert.equal(rowsAfterSecond.length, 1, "still ONE Fact individual, not two — upsert, not duplicate");
@@ -309,6 +310,28 @@ test("syllogise state round-trips through the sqlite meta table and survives a p
     await appendFact(handle, { subject: "cache", predicate: "rdfs:subClassOf", object: "store", provenance: "corpus:x" });
     assert.deepEqual(await loadSyllogiseState(handle), state);
   } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("Backend C cross-connection: a second connection's committed write is visible to a warm-cached handle, and its rows survive the first handle's next persist", async () => {
+  const { dir, handle } = await sqliteHandle();
+  const second = await createSqliteMemoryStore(handle.dbPath);
+  try {
+    await appendFact(handle, { subject: "alpha", predicate: "IsA", object: "letter", provenance: "corpus:seon" });
+    await loadMemory(handle); // warm the first handle's cache
+
+    await appendFact(second, { subject: "beta", predicate: "IsA", object: "letter", provenance: "corpus:seon" });
+
+    const seen = readFactRows(await loadMemory(handle));
+    assert.equal(seen.length, 2, "the other connection's committed fact is visible through the warm cache");
+
+    await appendFact(handle, { subject: "gamma", predicate: "IsA", object: "letter", provenance: "corpus:seon" });
+    const after = readFactRows(await loadMemory(second));
+    assert.equal(after.length, 3, "the first handle's persist keeps the second connection's row instead of deleting it as absent");
+  } finally {
+    closeSqliteMemoryStore(second);
     closeSqliteMemoryStore(handle);
     await rm(dir, { recursive: true, force: true });
   }

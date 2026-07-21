@@ -742,14 +742,15 @@ TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files > --repo-derived
 "repo_path" fills the --repo tier when the flag is absent.
 
 Memory-backend precedence (chat; see src/services/chat.mjs createSession): --memory-backend
-flag > TMCT_MEMORY_BACKEND env > tmct.toml [memory] backend > "default" (the flat
-.tmct/ JSON file). Set it once with `tmct init --memory-backend <...>` and every
-later `tmct chat` in that repo picks it up with no flag needed.
+flag > TMCT_MEMORY_BACKEND env > tmct.toml [memory] backend > sqlite (the built-in
+default, .tmct/memory/graph.sqlite); "memory" keeps the store in-process only. Set it
+once with `tmct init --memory-backend <...>` and every later `tmct chat` in that
+repo picks it up with no flag needed.
 ```
 
 `npm run init:large` in `package.json` chains one `init` and five `import --corpus`
 calls to combine every shipped bundle (human persona + seon + conceptnet +
-aws/python/java) into ~7,380 facts on the default flat-JSON backend, a working
+aws/python/java) into ~7,380 facts on the default sqlite backend, a working
 example to copy from. `init:xl` starts from the large persona tier and adds
 the wordnet-xl corpus (~72,000 facts); `init:xxl` swaps wordnet-xl for the
 full WordNet slice plus namenet (~239,000 facts, the biggest committed

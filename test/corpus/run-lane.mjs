@@ -209,8 +209,13 @@ export async function runChatRow(row, preds = predicates) {
     // (corpus-import predicates like mgx:relatedTo) straight into the scratch
     // repo's store, before the session opens over it.
     if (setup.facts?.length) {
-      const { appendFacts } = await import("../../src/adapters/memory/core.mjs");
-      await appendFacts(sessionOpts.repoPath, setup.facts);
+      const { appendFacts, openMemoryBackend } = await import("../../src/adapters/memory/core.mjs");
+      const backend = await openMemoryBackend(sessionOpts.repoPath, setup.memoryBackend ?? "");
+      try {
+        await appendFacts(backend.dir, setup.facts);
+      } finally {
+        await backend.close();
+      }
     }
     const teach = setup.teach ?? [];
     const turns = await driveSessionTurns(sessionOpts, [...teach, ...row.turns]);

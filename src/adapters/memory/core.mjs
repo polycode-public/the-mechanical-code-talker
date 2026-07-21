@@ -189,11 +189,29 @@ CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
 // Edge keys with dedicated columns; any other key round-trips via `extra`.
 const STD_EDGE_KEYS = new Set(["subject", "object", "subjectLabel", "objectLabel"]);
 
+// node:sqlite still emits an ExperimentalWarning on first import. Using it is
+// this module's deliberate choice, so the warning is pure noise for every
+// consumer (library embedders, examples, bare `node` scripts) — swallow that
+// one warning here, once, and re-emit everything else untouched.
+let sqliteWarningFilterInstalled = false;
+function installSqliteWarningFilter() {
+  if (sqliteWarningFilterInstalled) return;
+  sqliteWarningFilterInstalled = true;
+  const prior = process.listeners("warning").slice();
+  process.removeAllListeners("warning");
+  process.on("warning", (warning) => {
+    if (warning?.name === "ExperimentalWarning" && /sqlite/i.test(String(warning?.message))) return;
+    if (prior.length) for (const l of prior) l(warning);
+    else console.error(warning.stack || String(warning));
+  });
+}
+
 /** Open (creating if absent) a resident node:sqlite connection: a Backend C
  *  handle `{ backend: "sqlite", db, dbPath }`. `node:sqlite` is imported
  *  lazily — only opting into this backend ever loads it. Meant to be opened
  *  once per session; close via closeSqliteMemoryStore at session end. */
 export async function createSqliteMemoryStore(dbPath) {
+  installSqliteWarningFilter();
   const { DatabaseSync } = await import("node:sqlite");
   const db = new DatabaseSync(dbPath);
   db.exec("PRAGMA journal_mode = WAL");
@@ -251,9 +269,20 @@ const cloneJson = (v) => (v === undefined ? v : structuredClone(v));
 
 /** The loadMemory-equivalent read for Backend C: reconstructs from SQL once
  *  per handle (or after a failed write invalidates the cache), then returns a
- *  clone of `handle.cachedPayload` with zero SQL. */
+ *  clone of `handle.cachedPayload` with zero SQL.
+ *
+ *  PRAGMA data_version guards the cache across CONNECTIONS: it ticks when any
+ *  other connection commits to the same file (never for this connection's own
+ *  writes, which the cache already mirrors in lockstep). Without the check, a
+ *  second writer's rows would be invisible here — and this handle's next
+ *  persist would delete them as absent-from-payload. */
 function readSqlitePayload(handle) {
-  if (!handle.cachedPayload) handle.cachedPayload = buildSqlitePayloadFromRows(handle);
+  const dataVersion = handle.db.prepare("PRAGMA data_version").get()?.data_version;
+  if (handle.cachedPayload && handle.cachedDataVersion !== dataVersion) handle.cachedPayload = null;
+  if (!handle.cachedPayload) {
+    handle.cachedPayload = buildSqlitePayloadFromRows(handle);
+    handle.cachedDataVersion = dataVersion;
+  }
   return cloneJson(handle.cachedPayload);
 }
 
