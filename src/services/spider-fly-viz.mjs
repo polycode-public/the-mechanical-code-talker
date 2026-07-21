@@ -32,7 +32,7 @@
 // bundle's own real ES exports instead, since (unlike ledger-viz, which
 // reuses a FIXED shared bundle it can't extend for one page's own needs) this
 // page ships its own dedicated bundle and can just export what it needs.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
 import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId } from "../domain/spider-fly-world.mjs";
 import { FLY_INITIAL_MASS, EGG_LAY_MASS_THRESHOLD } from "./spider-fly.mjs";
@@ -220,8 +220,13 @@ export function nextCorpses(prevCorpses, prevAgents, agents, turn, lingerTurns =
  *  `?preview=1` on the page's own URL switches it into the small, auto-
  *  playing, non-interactive mode the home page's hero iframe embeds (§11) —
  *  one file serves both the hero and the "open full-screen" link, matching
- *  how ledger.html/plan.html are each one file embedded two ways. */
-export function renderSpiderFlyHtml({ title = DEFAULT_TITLE, spriteTemplates = [] } = {}) {
+ *  how ledger.html/plan.html are each one file embedded two ways.
+ *  `engineBundleJs` (the built spider-fly-browser bundle's own text) inlines
+ *  the engine into the page instead of the sibling `<script src>`, for the
+ *  CLI's standalone export — one downloadable file that runs from file://
+ *  with no sibling assets. Default empty keeps the site build's sibling-file
+ *  arrangement byte-identical. */
+export function renderSpiderFlyHtml({ title = DEFAULT_TITLE, spriteTemplates = [], engineBundleJs = "" } = {}) {
   const gridData = embedJson({
     gridSize: GRID_SIZE,
     webCells: webCellIds(),
@@ -519,7 +524,7 @@ ${THEME_TOKENS_CSS}
 <script>
 const SPIDERFLY = ${gridData};
 </script>
-<script src="./spider-fly-browser.bundle.js"></script>
+${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `<script src="./spider-fly-browser.bundle.js"></script>`}
 <script>
 (function () {
   "use strict";
