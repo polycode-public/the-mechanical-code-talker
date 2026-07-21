@@ -19,7 +19,53 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 `archive/` holds delivered plan docs; each records what its delivery deliberately did not include.
 Every item below was re-verified live on 2026-07-21 against a fresh `init:xl` graph (72,077 seeded
 facts) plus the merged seonix+demo code graphs, in one continuous piped chat session —
-`.tmct/session-019f8692-430d-79f3-9ee2-c38792f56746.log` holds the full transcript. What remains:
+`.tmct/session-019f8692-430d-79f3-9ee2-c38792f56746.log` holds the full transcript. The
+filler-clause widening and planner-counterfactual design passes live in
+`PLAN_FILLER_AND_COUNTERFACTUALS.md`. What remains here:
+
+### Summary grid
+
+Status vocabulary: *traced* (code anchors in hand, buildable), *design* (needs a decision or a
+design pass first), *decided* (operator-decided design, anchors traced), *process* (an audit or
+procedure, not a diff), *operator call* (a decision, not a build).
+
+| # | Item | Status | Checked | Motivation | Likelihood it sticks |
+|---|---|---|---|---|---|
+| 1 | `list facts`/`list utterances` memory-class lane | open, traced | 2026-07-21 | tested mechanism is unreachable from chat | high |
+| 2 | `how many animals` taught-class count | open, traced | 2026-07-21 | no lane; quantifier lane steals the phrasing | high |
+| 3 | `list all animals` trigger arm | open, traced | 2026-07-21 | working answer unreachable from this phrasing | high |
+| 4 | `count all facts about X` regex | open, traced | 2026-07-21 | "all" captured as the noun | high |
+| 5 | membership-list trigger (xl cap shadow) | open, traced | 2026-07-21 | forward facts fill the cap at xl | medium-high |
+| 6 | narrowing disclosure (dir/graph/entity picks) | open, design | 2026-07-21 | wrong-feeling answers erode trust | medium |
+| 7 | verbatim log fixes (rewrite, multi-sentence) | open, traced | 2026-07-21 | the transcript is the instrument | high |
+| 8 | farewell/dismissal routing | open, traced | 2026-07-21 | polite close reads worse than a wall | medium-high |
+| 9 | walled-asks cluster (router thing, big picture, entry point, …) | open, part-traced | 2026-07-21 | natural phrasings of answerable questions | medium |
+| 10 | adjective predication teach | open, design-light | 2026-07-21 | textbook teach declines | medium-high |
+| 11 | guess-number non-numeric turn | open, traced | 2026-07-21 | mid-game aside should coach | medium-high |
+| 12 | in-game question routing guard | open, traced | 2026-07-21 | code answers inside a game, worst misroute class | medium-high |
+| 13 | world-secret spoiler + predicate phrases | open, traced | 2026-07-21 | spoils the game, in garbled English | high |
+| 14 | "look" digest corpus leak | open, traced | 2026-07-21 | room text must come from the world | medium-high |
+| 15 | determiner-subject teach | open, traced | 2026-07-21 | the natural form declines | high |
+| 16 | hanoi solve at xl | open, reproduced | 2026-07-21 | biggest live falsehood found | medium |
+| 17 | live-Wikipedia trust prior | open, traced | 2026-07-21 | live must not outrank the pinned pack | high |
+| 18 | chat-seed caps | operator call | 2026-07-21 | seed-ceiling decision | n/a |
+| 19 | ledger query-template audit | open, process | 2026-07-22 | the quiet cut from 2.9.x | high |
+| 20 | wiki even-when-known (ask + supplement) | open, decided | 2026-07-22 | corroboration, not just rescue | medium-high |
+| 21 | full-triple learn-on-miss ingestion | open, decided | 2026-07-22 | loads become durable knowledge | medium-high |
+| 22 | auto bounded synthesis per ingest | open, decided | 2026-07-22 | new facts should connect | medium-high |
+| 23 | `extract --optimistic` + `--canonical` | open, decided | 2026-07-22 | ingest real-world text | medium |
+| 24 | glow-Markdown session logs | open, sampled | 2026-07-22 | readable transcripts; the sample is the spec | high |
+| 25 | home page tiles | open, new scope | 2026-07-22 | tiles name capabilities | high |
+| 26 | adventure.html room-width strips | open, new scope | 2026-07-22 | kill the gap under the room | medium-high |
+| 27 | spider-fly layout + renames | open, new scope | 2026-07-22 | alignment, consistency | high |
+| 28 | spider-fly observable-facts panel | open, new scope | 2026-07-22 | planners' knowledge made inspectable | medium |
+| 29 | sense-splitting on read-back (Rover) | open, designed | 2026-07-22 | two concepts under one label | medium-high |
+| 30 | code explorer (Electron) | open, new scope | 2026-07-22 | explorable code graph on the desktop | medium |
+| 31 | ingest.html + ledger/chat ingest | open, new scope | 2026-07-22 | bring your own text | medium-high |
+| 32 | full IndexedDB re-initialisation button | open, new scope | 2026-07-22 | recover any page from any state | high |
+| 33 | triple-store export, every page | open, new scope | 2026-07-22 | data leaves in the standard shape | high |
+
+The detailed items:
 
 - Memory/taught-class list & count — the `archive/PLAN_CLASS_QUERY.md` remainder. Its Phase 1
   shipped without the plan (live: "how many facts about horses are there" → `18 facts. (about
@@ -60,15 +106,10 @@ facts) plus the merged seonix+demo code graphs, in one continuous piped chat ses
   2-hop property inheritance, write boundary, meta-questions, disjointness object-walk,
   contradiction disclosure, arithmetic decline, the suggested-repair cluster). Still open, with
   fresh shapes from the live session:
-  - filler-clause widening: "ok so" now strips; "oh nice. um what about cats" and "one more
-    random thing, what is a horse" still unparse. Longer clause shapes need their own design pass.
   - silent narrowing without disclosure: "what's in src/handlers" answers one module's members;
     with two graphs merged, "is model.mjs not imported by store.mjs" silently picked seonix's
     `src/store.mjs` over the demo's `src/core/store.mjs`, and "what functions are in Task"
     resolved to the wrong entity (`TASK`) then reported no members.
-  - plan-justification counterfactuals ("why did you move disk-1 first instead of disk-2?",
-    "what if disk-1 started on peg-c instead?") — the BFS computes no untaken path today
-    (`chat.mjs:2361-2365` records the decision); still unparsed.
   - verbatim-input instrument bugs, two fresh instances: the session `.log` rewrote "what people
     do you know about" to `> what is a person`, and a multi-sentence teach line logs only its
     last sentence ("disk-1 is a disk. disk-2 is a disk. disk-3 is a disk." → `> disk-3 is a
@@ -215,17 +256,23 @@ facts) plus the merged seonix+demo code graphs, in one continuous piped chat ses
      handling unchanged). Apply wherever a fact list renders (`factReadBackReaders`,
      `chat.mjs:7660`), not just "what is X".
 
-- Two new demo pages, and store controls on every tmct-embedding page:
-  - code.html — the ledger.html pattern (readable fact-sentence ledger + chat dock) refocused
-    on a CODE graph: viewing and hinting for exploration — imports/calls/contains neighborhoods
-    around a focus symbol, with suggested next queries drawn from what the graph actually holds
-    (the compositional query shapes the chat already answers). The demo code graph
-    (`public/demo-graph.json`) is the obvious seed.
-  - ingest.html — takes a multi-line text block, a drag-and-dropped document, or a
-    browse-for-file; runs it through the ingest pipeline (the extract recognizer, plus the
-    optimistic tier and canonical/graph-linked rendering from the knowledge-flows item above);
-    writes the grounded facts to the page's store; renders the canonical form of what was
-    ingested; and offers that canonical output for download.
+- The code explorer, ingest surfaces, and store controls on every tmct-embedding page:
+  - the code explorer ships as an ELECTRON desktop app (a new channel): an Electron shell
+    around the ledger pattern (readable fact-sentence ledger + chat dock) refocused on a CODE
+    graph — imports/calls/contains neighborhoods around a focus symbol, with suggested next
+    queries drawn from what the graph actually holds (the compositional shapes the chat already
+    answers). It reuses the same browser-bundle seam the pages use
+    (`scripts/lib/browser-bundle.mjs`); opens a `graph.json` or a repo's `.tmct/`. The demo
+    code graph (`public/demo-graph.json`) is the shipped example. Electron lands as a
+    dev-dependency and a separate packaging script, never in the library's own dependency tree.
+  - ingest.html — a clean two-pane layout in the translate-tool idiom (operator screenshot,
+    2026-07-22): minimal chrome; mode pills across the top (Text | Document); left pane a
+    roomy free-text area accepting paste and drag-and-drop, with a browse-for-file control;
+    right pane the canonical facts rendering live as the pipeline grounds them, distinct from
+    the input by a soft panel background; a single action row (ingest, download canonical,
+    clear) under the panes. Behind it: the ingest pipeline (the extract recognizer plus the
+    optimistic tier and canonical/graph-linked rendering from the knowledge-flows item above),
+    writing grounded facts to the page's store and offering the canonical output for download.
   - ledger.html gains the same ingest affordance (paste/drop/browse), so new data can be
     ingested and then examined in place; chat.html gains a file upload that feeds the same
     pipeline.
@@ -234,6 +281,117 @@ facts) plus the merged seonix+demo code graphs, in one continuous piped chat ses
     than chat/adventure's existing "forget everything"), and a triple-store export (download
     the page's current facts as JSONL in the tmct/ConceptNet shape `tmct extract` already
     emits, provenance included).
+
+## Where each item lands — code, tests, docs, channels
+
+**Channel audit (2026-07-22).** The channel set for "surfaced everywhere applicable" is: the
+browser pages, the Ink TUI, the plain-shell CLI and its verbs, the JS library exports
+(`package.json` `exports`), the HTTP serve endpoint (`tmct serve`, POST /v1/messages), the graph
+tool layer (`tmct cli` / `dispatchTool` / `TOOLS.md` / `TOOL_DEFINITIONS`), and — new with item
+30 — the Electron shell. The operator's named four (browser, TUI, CLI, library) missed serve and
+the tool layer, which we already ship; both are folded into the entries below wherever they
+apply. Chat-lane fixes (items 1-16, 29) inherit every chat channel at once — TUI, plain CLI,
+browser bundles, serve, and library `runChat` all call the same `runTurn`.
+
+- **1-5, class-query lanes.** Code: as traced per sub-item above (`chat.mjs:13424` wiring,
+  `factReadBackReaders` `:9037-9070`, the `:814` regex, exports from `ask.mjs:4066-4082`).
+  Tests: unit in the four named test homes; tool level in `test/tools/ask.test.mjs` (the ask()
+  path already carries `dynamicClassQuery`); no e2e needed. Docs: README's query-shapes section
+  gains the memory-class rows; chat.html's suggested prompts add "list facts". Channels: all
+  chat channels inherit; the tool layer needs no new tool (counts ride the existing ask tool).
+- **6-11, conversation lanes.** Code: `chat.mjs` per sub-item — the narrowing sites need their
+  disclosure design first; farewell templates beside the existing FAREWELL set (`:1338`);
+  the "start reading" misroute wants a guard in the where-lane resolver; adjective predication
+  is a new closed teach frame beside the every-X-is-Y frame. Tests: corpus rows in
+  `template.*`/`grammar.*` lanes plus `test/adapters/interpret.test.mjs`; no e2e. Docs: none
+  (behavioral); the next CONVERSATION report measures them. Channels: inherit.
+- **12-16, games/plan.** Code: lane-precedence guard while a game slot is live
+  (`src/services/adventure.mjs` / `spider-fly-turn.mjs` interception boundary); world-secret
+  predicate exclusion in the describe lane the way the adventure where-reader already excludes;
+  curated world rows in `FACT_PREDICATE_PHRASES` (`chat.mjs:5523`); a world-source filter on the
+  look digest (`worldDigestRows`); the determiner arm in the has-teach frame; hanoi-at-xl —
+  scope the goal quantifier's member enumeration to taught instances (`src/domain/planning.mjs`
+  `findActionPath` callers + the goal-teach reader around `chat.mjs:2299`). Tests: unit in
+  `test/corpus/games/*.jsonl` rows + `test/services/spider-fly.test.mjs`; the hanoi fix gets a
+  seeded-corpus regression test (board + corpus noise in one store); no e2e. Docs: none.
+  Channels: inherit; the hanoi fix also protects serve callers.
+- **17, wiki trust prior.** Code: one source kind + a `reference:wikipedia-live` parse branch in
+  `src/domain/memory/trust.mjs` (`SOURCE_PRIOR`, `:94`). Tests: `test/adapters/
+  chat-inference-trust.test.mjs`, `provenance.test.mjs`. Docs: README's trust/provenance table
+  row. Channels: core ranking — every channel inherits.
+- **18, seed caps.** Decision only; if lifted: `scripts/build-chat-seed.mjs:46` and the boot
+  budget e2e (`e2e/pages-chat-boot-budget.test.mjs`) is the guard that must stay green; refresh
+  `PAGE_WEIGHTS.md` after.
+- **19, ledger template audit.** Process: follow the `4285d0f` pattern against
+  `src/services/ledger-viz.mjs`'s query templates; findings land as corpus rows or new items
+  here. Docs: none until findings.
+- **20-23, knowledge flows.** Code: as traced in the item (`cleanMissLiveKey` `chat.mjs:9564`,
+  `appendReferenceIsaFact` `:9613`, `appendFacts` `:9596`, `public/chat.html:658` persistence
+  trigger, `src/services/extract-facts.mjs:112` skip point, `syllogise.mjs` `expandFocus`).
+  Tests: unit — `chat-reference-lane`, `child-pack`/`chat-child-lane`,
+  `extract-facts-from-text`, `syllogise` test files; tool level — new cold tools (`tmct_ingest`,
+  `tmct_export`) pin in `test/tools/server.test.mjs` and regenerate `TOOLS.md`
+  (`test/estate/tool-docs.test.mjs` guards the drift); e2e — extend
+  `e2e/pages-chat-live-toggle.test.mjs` (supplement mode) and `e2e/web-chat-memory.test.mjs`
+  (ingested triples persist). Docs: README (Wikipedia section, the extract verb, the trust
+  table); chat.html's toggle copy gains the "even when I know" mode. Channels: browser + TUI +
+  CLI inherit the chat lanes; CLI adds the `extract` flags; library exports gain the ingest
+  entry point (extend `package.json` `exports` with the extract/ingest service); serve gains
+  nothing (ingest by API is out of scope until asked); tool layer gains the two cold tools.
+- **24, glow session logs.** Code: `src/services/chat-session.mjs` (`SESSION_LOG_DIR`, the
+  writer at `:246-258`) + the `logLines` shape (`chat.mjs:11982`); align the browser transcript
+  export (`chat.html`, shipped 2.9.x) to emit the SAME Markdown shape — one format, two
+  writers. Tests: unit on the session-file shape; `e2e/tui-chat-file.test.mjs` reads the log —
+  update it. Docs: README's session-log line + `bin/tmct.mjs` help text ("Session log → …").
+  Channels: TUI/CLI writer + browser export; library consumers get it via `createSession`
+  unchanged.
+- **25, home tiles.** Code: the pages-index builder (`scripts/build-demo-site.mjs` family).
+  Tests: `e2e/pages-index.test.mjs` label/order pins. Docs: the home page IS the doc; README's
+  pages list follows the new labels. Channels: browser only.
+- **26, adventure strips.** Code: `src/services/adventure-viz.mjs` layout. Tests: the adventure
+  page e2e + the screenshot sweep (the spider-fly layout pin, `7dfe87d`, is the pattern).
+  Channels: browser only.
+- **27-28, spider-fly.** Code: `src/services/spider-fly-viz.mjs` (layout, renames, the agents
+  box) + a read path exposing the per-agent belief set from `src/services/spider-fly.mjs`.
+  Tests: belief-exposure unit in `test/services/spider-fly.test.mjs`;
+  `e2e/pages-spider-fly.test.mjs` for the click-expand. Docs: the page's own copy. Channels:
+  browser panel; the same read path also feeds a chat phrasing ("what does the fly see?") so
+  TUI/CLI/serve inherit it — include that lane in the build.
+- **29, sense-splitting.** Code: a pure sense-cluster utility in `src/domain/` (ancestry
+  intersection, LCS depth/IC threshold, disjointness veto — reusing `findIsaChain` and the
+  cax-dw kernel read-only) + grouping in `factReadBackReaders` (`chat.mjs:7660`). Tests: unit
+  (new `test/adapters/sense-split.test.mjs` beside `chat-reference-lane`); tool level in
+  `test/tools/ask.test.mjs` if ask() lists adopt grouping; corpus rows in the `template.*`
+  lane. Docs: README's answer-shape section; the ledger page renders grouped senses naturally.
+  Channels: all chat channels inherit; `tmct viz`/ledger rendering optionally groups.
+- **30, code explorer (Electron).** Code: new `electron/` shell (main + preload) hosting the
+  ledger-pattern UI built from `scripts/lib/browser-bundle.mjs`; a hint panel generating
+  suggested queries from the loaded graph's own classes/edges (reuse `ask.mjs`'s compositional
+  vocabulary); open-a-graph / open-a-repo pickers. Tests: unit for the hint generator; an
+  Electron smoke via Playwright's `_electron` driver, kept OUT of `npm test` (a separate
+  script) so the suite stays hermetic. Docs: README gains a desktop section; a home-page tile
+  links instructions. Channels: Electron (new); the same UI stays servable as a plain page
+  later if wanted — build the UI channel-agnostic, only the shell is Electron.
+- **31, ingest surfaces.** Code: new `public/ingest.html` + `src/surfaces/web/
+  ingest-browser-entry.mjs` in the translate-tool two-pane idiom (mode pills Text | Document,
+  paste/drop/browse left, live canonical render right, one action row); `ledger-viz.mjs` dock
+  gains the same affordance; `chat.html` gains the file input. All three feed the one ingest
+  pipeline (items 21/23). Tests: unit rides the extract tests; e2e — new
+  `e2e/pages-ingest.test.mjs` (paste → canonical → download) plus extensions to the ledger and
+  chat page e2e. Docs: README pages list + a home tile. Channels: browser here; CLI parity is
+  `tmct extract`/`import --file` (+ the new flags); TUI parity — add an `/ingest <path>` chat
+  command so a terminal session can ingest a file without leaving chat; library parity —
+  export the extract service; tool layer — the `tmct_ingest` cold tool (item 20-23).
+- **32-33, store controls.** Code: a shared control strip in the browser entries
+  (`chat-browser-entry.mjs` and siblings) — full re-init = drop the IndexedDB payload and
+  re-seed from the page's shipped seed; export = serialize the Backend-B payload to the
+  `tmct extract` JSONL shape, provenance included. Tests: extend
+  `e2e/pages-chat-persistence.test.mjs` (re-init drops taught facts and survives reload;
+  export round-trips through `tmct import --file`); unit for the serializer beside the memory
+  backend tests. Docs: each page's footer copy + README. Channels: browser buttons; CLI parity
+  — `tmct memory --export <file.jsonl>` so the sqlite store exports the same shape (the audit
+  gap this item closes); TUI `/export <path>` alias; library — the serializer exports from the
+  memory adapter; tool layer — `tmct_export` (item 20-23).
 
 ## Discipline
 
