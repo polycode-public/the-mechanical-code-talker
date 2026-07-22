@@ -16,102 +16,15 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Open items
 
-`archive/` holds delivered plan docs; each records what its delivery deliberately did not include.
-Every item below was re-verified live on 2026-07-21 against a fresh `init:xl` graph (72,077 seeded
-facts) plus the merged seonix+demo code graphs, in one continuous piped chat session —
-`.tmct/session-019f8692-430d-79f3-9ee2-c38792f56746.log` holds the full transcript. The
-filler-clause widening and planner-counterfactual design passes live in
-`PLAN_FILLER_AND_COUNTERFACTUALS.md`. What remains here:
+None. The 2026-07-21 live-verified board (33 items, extended live to 35) cleared on 2026-07-22
+across the 2.10.x releases; `git log` from 2.10.0 to the current release holds the delivery
+record, and the filler-clause widening and planner-counterfactual design passes still live in
+`PLAN_FILLER_AND_COUNTERFACTUALS.md` as the plan of record for the next build.
 
-### Summary grid
-
-Status vocabulary: *traced* (code anchors in hand, buildable), *design* (needs a decision or a
-design pass first), *decided* (operator-decided design, anchors traced), *process* (an audit or
-procedure, not a diff), *operator call* (a decision, not a build).
-
-| # | Item | Status | Checked | Motivation | Likelihood it sticks |
-|---|---|---|---|---|---|
-| 17 | live-Wikipedia trust prior | in progress, traced (wt agent-a7b5d6ca215acb56d) | 2026-07-21 | live must not outrank the pinned pack | high |
-| 20 | wiki even-when-known (ask + supplement) | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | corroboration, not just rescue | medium-high |
-| 21 | full-triple learn-on-miss ingestion | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | loads become durable knowledge | medium-high |
-| 22 | auto bounded synthesis per ingest | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | new facts should connect | medium-high |
-| 23 | `extract --optimistic` + `--canonical` | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | ingest real-world text | medium |
-| 31 | ingest.html + ledger/chat ingest | in progress — remaining: `tmct_ingest` cold tool + optimistic tier (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | bring your own text | medium-high |
-
-The detailed items:
-
-- Live-Wikipedia trust prior: `reference:wikipedia-live` still parses as kind `reference` and
-  scores the same `SOURCE_PRIOR.reference = 0.6` (`src/domain/memory/trust.mjs:94`) as the
-  curated, revision-pinned pack. If live content should rank lower: one new source kind in
-  trust.mjs plus a parse branch on the `reference:wikipedia-live` prefix.
-
-- Knowledge flows — supplement, ingest, synthesise (operator-decided 2026-07-21). Four builds,
-  each independently shippable, against the baseline traced below:
-  1. "Ask Wikipedia even when I do know": both halves — an explicit phrasing ("what does
-     wikipedia say about X") that reaches the live lookup any time, even when local facts
-     answered; and a `/wiki` supplement mode where every grounded answer also appends the cited
-     live supplement. Today the live lane runs strictly after the shipped packs and only on a
-     clean miss (`cleanMissLiveKey` `src/services/chat.mjs:9564`).
-  2. Full-triple ingestion of learn-on-miss loads, both surfaces. Today only the child pack
-     ingests (the matched term's rows via `appendFacts`, `chat.mjs:9596-9608`, tagged
-     `child:conceptnet:<term>`, prior 0.7); reference-pack and live-Wikipedia hits store at most
-     ONE `rdfs:subClassOf` fact (`appendReferenceIsaFact` `chat.mjs:9613`, tags
-     `reference:simplewiki:<title>@<revid>` / `reference:wikipedia-live:<title>@<revid>`) and
-     the summary prose stays transient. Build: run the fetched summary through the extract
-     recognizer (plus the optimistic tier from item 4) and store every grounded triple,
-     source-tagged per source. On chat.html additionally fix persistence: IndexedDB saves only
-     on teach turns (`via === "assert"`, `public/chat.html:658`), so even today's one isa fact
-     is lost on reload — persist on any store write. Note the browser has no child-pack provider
-     registered (`chat.html:710` registers reference only), so that lane is idle there; the boot
-     seed itself is NOT lazy (the whole capped payload assigns at boot, `chat.html:431-452`).
-     Audit finding (2026-07-22, ledger round), fold into this build: for a rule-only concept
-     the user taught (e.g. a `grandfather` filter rule), the miss→child-pack fallback silently
-     answers from unrelated `conceptnet:grandfather` content instead of surfacing the taught
-     rule — taught knowledge must outrank the child-pack load on the same term.
-  3. Synthesis, auto + manual: after each ingest, a bounded focus-scoped materialisation pass
-     (the `expandFocus` frontier around the loaded term) connects the new facts back to the
-     graph; the full-batch `tmct syllogise` / `/syllogise <term>` verbs stay for deep passes.
-     Today nothing runs automatically — `syllogise()` is manual only (`bin/tmct.mjs:1131`,
-     `chat.mjs:12185`), derived facts write under `entailed:*` at prior 0.3, retractable.
-  4. Raw-text optimistic ingest from the CLI: `tmct extract --optimistic` fuzzy-word-matches the
-     sentences the strict recognizer skips (today every non-assert sentence is silently dropped,
-     `src/services/extract-facts.mjs:112-114`) into candidate facts under a NEW lower-trust
-     source kind, plus a `--canonical` output mode printing each ingested fact in canonical form
-     enriched with its links back to the existing graph (today facts store standalone; no
-     linking exists on the extract path). Trust work shared with the live-Wikipedia prior item
-     above: distinct source kinds (live, optimistic-extract) with their own priors in trust.mjs,
-     so fuzzy and live content rank below the curated packs by construction.
-
-## Where each item lands — code, tests, docs, channels
-
-**Channel audit (2026-07-22).** The channel set for "surfaced everywhere applicable" is: the
-browser pages, the Ink TUI, the plain-shell CLI and its verbs, the JS library exports
-(`package.json` `exports`), the HTTP serve endpoint (`tmct serve`, POST /v1/messages), the graph
-tool layer (`tmct cli` / `dispatchTool` / `TOOLS.md` / `TOOL_DEFINITIONS`), and — new with item
-30 — the Electron shell. The operator's named four (browser, TUI, CLI, library) missed serve and
-the tool layer, which we already ship; both are folded into the entries below wherever they
-apply. Chat-lane fixes (items 1-16, 29) inherit every chat channel at once — TUI, plain CLI,
-browser bundles, serve, and library `runChat` all call the same `runTurn`.
-
-- **17, wiki trust prior.** Code: one source kind + a `reference:wikipedia-live` parse branch in
-  `src/domain/memory/trust.mjs` (`SOURCE_PRIOR`, `:94`). Tests: `test/adapters/
-  chat-inference-trust.test.mjs`, `provenance.test.mjs`. Docs: README's trust/provenance table
-  row. Channels: core ranking — every channel inherits.
-- **20-23, knowledge flows.** Code: as traced in the item (`cleanMissLiveKey` `chat.mjs:9564`,
-  `appendReferenceIsaFact` `:9613`, `appendFacts` `:9596`, `public/chat.html:658` persistence
-  trigger, `src/services/extract-facts.mjs:112` skip point, `syllogise.mjs` `expandFocus`).
-  Tests: unit — `chat-reference-lane`, `child-pack`/`chat-child-lane`,
-  `extract-facts-from-text`, `syllogise` test files; tool level — new cold tools (`tmct_ingest`,
-  `tmct_export`) pin in `test/tools/server.test.mjs` and regenerate `TOOLS.md`
-  (`test/estate/tool-docs.test.mjs` guards the drift); e2e — extend
-  `e2e/pages-chat-live-toggle.test.mjs` (supplement mode) and `e2e/web-chat-memory.test.mjs`
-  (ingested triples persist). Docs: README (Wikipedia section, the extract verb, the trust
-  table); chat.html's toggle copy gains the "even when I know" mode. Channels: browser + TUI +
-  CLI inherit the chat lanes; CLI adds the `extract` flags; library exports gain the ingest
-  entry point (extend `package.json` `exports` with the extract/ingest service); serve gains
-  nothing (ingest by API is out of scope until asked); tool layer gains the two cold tools.
-- **31 remainder.** The `tmct_ingest` cold tool + the optimistic extract tier ride the
-  knowledge-flows batch (items 20-23).
+The natural next verification pass: a fresh live session against an `init:xl` graph plus the
+merged code graphs (the 2026-07-21 sweep's method) to re-map the miss wall at the new baseline,
+and a live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their
+deployed numbers.
 
 ## Discipline
 
@@ -149,6 +62,17 @@ Three hard-won lessons, carried forward:
    any stalled round, check `git worktree list` for its path
    — if it's gone, `TaskStop` that round and dispatch a fresh one instead, never `SendMessage` it
    back to life.
+
+4. Concurrent chat.mjs agents work when each brief pins its region (learn-on-miss block /
+   logLines + slash commands / factReadBackReaders) and forbids refactors — but the merge gate
+   must still rebuild the ask bundle (it inlines chat readers, so it drifts on every reader
+   change), re-run the pack-manifest check (three separate agents forgot new `src/` files in one
+   day), and watch for same-name declarations across branches (two batches both coined
+   `spiderFlyContextAnswer`; esbuild's duplicate-symbol error at bundle time was the catch).
+   Seed-content-dependent e2e pins are the other recurring merge hazard: raising the seed caps
+   silently grounded the learn-on-miss demo's lookup term, and the sense-split chain rendering
+   broke a source-adjacency pin — the fix each time is a probe against the real store, then the
+   pin follows the behavior.
 
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
 history, plus the `BENCHMARK_<axis>_<version>.md` reports and `archive/`.*
