@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { runTurn } from "../../src/services/chat.mjs";
-import { loadMemory, readFactRows, appendRule } from "../../src/adapters/memory/core.mjs";
+import { loadMemory, readFactRows, appendRule, appendFact } from "../../src/adapters/memory/core.mjs";
 import { registerChildPackProvider, clearChildPackCache } from "../../src/adapters/corpus/child-pack.mjs";
 import { registerReferencePackProvider } from "../../src/adapters/corpus/reference-pack.mjs";
 
@@ -76,6 +76,24 @@ test("the second ask answers from memory without another pack lookup", async () 
     const second = await turn("what is a robin", { memoryDir: dir, last: first.last });
     assert.match(second.answer, /robin is a kind of bird \(source: child:conceptnet:robin\)/);
     assert.equal(spy.calls, 1, "the stored facts block the gate, so the pack is read once");
+  } finally {
+    registerChildPackProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a child-pack load auto-synthesises: the new isa connects to a remembered superclass, deriving an entailed fact", async () => {
+  const dir = await freshRepo();
+  // remembered: a bird is an animal. The child pack will teach robin -> bird.
+  await appendFact(dir, { subject: "bird", predicate: "rdfs:subClassOf", object: "animal", provenance: "teach:chat:seed@2026-01-01T00:00:00.000Z" });
+  const row = { term: "robin", facts: [{ subject: "robin", predicate: "rdfs:subClassOf", object: "bird" }] };
+  registerChildPackProvider({ lookup: async () => row });
+  try {
+    await turn("what is a robin", { memoryDir: dir });
+    const rows = readFactRows(await loadMemory(dir));
+    const entailed = rows.find((f) => f.subject === "robin" && f.object === "animal");
+    assert.ok(entailed, "the transitive robin -> animal is materialised after the load");
+    assert.match(entailed.provenance, /^entailed:/, "the derived fact carries entailed provenance, retractable and low-trust");
   } finally {
     registerChildPackProvider(null);
     await rm(dir, { recursive: true, force: true });

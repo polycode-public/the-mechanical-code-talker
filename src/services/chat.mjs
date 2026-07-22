@@ -9900,6 +9900,7 @@ async function childPackFactsForKey(key, { memoryDir, env, cache }) {
     })));
   } catch { return null; }
   if (cache) cache.rows = null;
+  await synthesiseAroundTerm(memoryDir, key, cache);
   return { key, count: row.facts.length };
 }
 
@@ -9932,7 +9933,36 @@ async function ingestReferenceArticle(memoryDir, key, article, cache, tagFor = r
     await appendFacts(memoryDir, facts);
     if (cache) cache.rows = null;
   } catch { return 0; }
+  await synthesiseAroundTerm(memoryDir, key, cache);
   return facts.length;
+}
+
+// A learn-on-miss load stores a handful of new facts; the auto-synthesis pass
+// that connects them to the rest of the store is deliberately small — a low
+// budget, focus expanded through the loaded term — so it stays a per-ingest
+// materialisation, not the whole-store maintenance job /syllogise runs.
+const AUTO_SYNTHESIS_BUDGET = 12;
+
+/** After a learn-on-miss load stored new facts about `term`, run a bounded,
+ *  focus-scoped forward-chaining pass so the new facts connect to what's
+ *  already remembered — the auto sibling of the /syllogise command. Derived
+ *  facts carry entailed:* provenance at their discounted trust and are
+ *  retractable. Failure-tolerated: a synthesis miss never disturbs the answer
+ *  the load already composed. Returns the count derived. */
+async function synthesiseAroundTerm(memoryDir, term, cache) {
+  if (!memoryDir || !term) return 0;
+  try {
+    const { syllogise } = await import("../domain/syllogise.mjs");
+    const { loadMemory, readFactRows, appendFacts, normFactTerm } = await import("../adapters/memory/core.mjs");
+    const res = await syllogise(memoryDir, {
+      focus: [...factTermVariants(normFactTerm, term)],
+      expandFocus: true,
+      budget: AUTO_SYNTHESIS_BUDGET,
+      store: { loadMemory, readFactRows, appendFacts },
+    });
+    if (res?.count && cache) cache.rows = null;
+    return res?.count || 0;
+  } catch { return 0; }
 }
 
 /** The term an explicit "ask Wikipedia" phrasing names — "what does wikipedia

@@ -590,8 +590,15 @@ provenance** rather than silently picking a winner.
 batch: a forward-chaining materialisation over the memory's OWL 2 RL rule
 kernels (the classical syllogism is one of them, and the verb keeps Aristotle's
 broader sense; see the bibliography) that writes new **entailed** facts. They
-are low-trust and retractable, never outranking a stated fact, and this never
-runs on the chat's hot path.
+are low-trust and retractable, never outranking a stated fact.
+
+The full-store batch is a maintenance job, off the chat's hot path. One bounded
+sibling does run inline: when a learn-on-miss load pulls new facts in (a child
+pack, a reference or live-Wikipedia article), a small focus-scoped pass around
+the loaded term connects those new facts to what's already remembered, so a load
+becomes durable knowledge rather than an island. It shares the same kernels, the
+same `entailed:*` provenance and the same low, retractable trust; only its scope
+and budget shrink.
 
 ## Install & use
 
