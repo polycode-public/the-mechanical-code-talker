@@ -9819,11 +9819,20 @@ async function cleanMissPackKey(term, { graph, memoryDir, lexicon, cache }) {
   if (!key) return null;
   if (await resolveEntity(graph, term)) return null;
   let normFactTerm;
-  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  let loadMemory;
+  let readRuleRows;
+  try { ({ normFactTerm, loadMemory, readRuleRows } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const variants = factTermVariants(normFactTerm, term);
   variants.add(key);
   const rows = await factRows(memoryDir, cache);
   if (rows.some((f) => variants.has(f.subject) || variants.has(f.object))) return null;
+  // A taught RULE that owns this term outranks any pack load: surfacing
+  // unrelated conceptnet content over the user's own taught concept is worse
+  // than the honest miss the decline leaves standing.
+  try {
+    const ruleNames = readRuleRows(await loadMemory(memoryDir)).map((r) => normFactTerm(r.name)).filter(Boolean);
+    if (ruleNames.some((n) => variants.has(n))) return null;
+  } catch { /* tolerated — the fact gate above already ran */ }
   return key;
 }
 

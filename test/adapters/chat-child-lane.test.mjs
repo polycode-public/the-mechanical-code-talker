@@ -13,7 +13,7 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { runTurn } from "../../src/services/chat.mjs";
-import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { loadMemory, readFactRows, appendRule } from "../../src/adapters/memory/core.mjs";
 import { registerChildPackProvider, clearChildPackCache } from "../../src/adapters/corpus/child-pack.mjs";
 import { registerReferencePackProvider } from "../../src/adapters/corpus/reference-pack.mjs";
 
@@ -76,6 +76,21 @@ test("the second ask answers from memory without another pack lookup", async () 
     const second = await turn("what is a robin", { memoryDir: dir, last: first.last });
     assert.match(second.answer, /robin is a kind of bird \(source: child:conceptnet:robin\)/);
     assert.equal(spy.calls, 1, "the stored facts block the gate, so the pack is read once");
+  } finally {
+    registerChildPackProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a taught rule that owns the term outranks the child pack: the load is declined, not answered from conceptnet", async () => {
+  const dir = await freshRepo();
+  await appendRule(dir, { name: "robin", kind: "compose2", slots: { base1: "parent", base2: "parent" } });
+  const spy = { calls: 0, lookup: async () => { spy.calls += 1; return { term: "robin", facts: [{ subject: "robin", predicate: "rdfs:subClassOf", object: "bird" }] }; } };
+  registerChildPackProvider(spy);
+  try {
+    const r = await turn("what is a robin", { memoryDir: dir });
+    assert.equal(spy.calls, 0, "the user's own taught concept blocks the pack load entirely");
+    assert.ok(!(await factLines(dir)).some((l) => /child:conceptnet:robin/.test(l)), "no conceptnet content is pulled over the taught rule");
   } finally {
     registerChildPackProvider(null);
     await rm(dir, { recursive: true, force: true });
