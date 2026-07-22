@@ -729,10 +729,11 @@ async function main() {
     // with every other subcommand. No `--graph`: memory reads no code graph.
     const rest = process.argv.slice(3);
     const verbose = rest.includes("--verbose") || rest.includes("-v");
-    const { resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
+    const { resolveRuntimeConfig, strFlag } = await import("../src/services/cli-args.mjs");
     const { renderMemory } = await import("../src/adapters/memory/inspect.mjs");
     const { loadMemory, openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
     const { loadBlockIndex } = await import("../src/adapters/memory/blocks.mjs");
+    const exportPath = strFlag(rest, ["--export"]);
     const { repo, toml } = await resolveRuntimeConfig({ argv: rest });
     // Same backend resolution as chat's createSession, minus the (nonexistent
     // here) CLI-flag tier: env > tmct.toml > the sqlite default — so this verb
@@ -741,6 +742,20 @@ async function main() {
     const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
     try {
       const memory = await loadMemory(memoryDir);
+      // `--export <file.jsonl>` dumps every stored fact in the extract shape and
+      // exits — a backup/audit trail of the same store the tool layer and the
+      // browser pages serialize, one serializer for all three.
+      if (exportPath) {
+        const { serializeFactsJsonl } = await import("../src/adapters/memory/export-jsonl.mjs");
+        const { writeFile } = await import("node:fs/promises");
+        const { resolve } = await import("node:path");
+        const jsonl = serializeFactsJsonl(memory);
+        const out = resolve(process.cwd(), exportPath);
+        await writeFile(out, jsonl, "utf8");
+        const count = jsonl ? jsonl.trimEnd().split("\n").length : 0;
+        process.stderr.write(`wrote ${count} fact${count === 1 ? "" : "s"} to ${exportPath}\n`);
+        return;
+      }
       // The folded-block index is file-backed beside the session logs, not part
       // of the memory store — read it off the repo path directly.
       const blocks = await loadBlockIndex(repo);

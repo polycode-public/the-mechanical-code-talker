@@ -290,6 +290,13 @@ export const TOOL_DEFINITIONS = Object.freeze([
     inputSchema: symbolArg("The symbol a lean tmct_context bundle was built for."),
     example: { symbol: "django/utils/text.py" },
   },
+  {
+    name: "tmct_export",
+    tier: "cold",
+    summary: "Every stored memory fact as JSONL (subject/predicate/object/provenance) — the shape `tmct extract` emits, for backup or audit.",
+    inputSchema: { type: "object", required: [], properties: {} },
+    example: {},
+  },
 ]);
 
 export const HOT_TOOLS = TOOL_DEFINITIONS.filter((t) => t.tier === "hot");

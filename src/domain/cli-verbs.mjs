@@ -47,6 +47,7 @@ export const CLI_VERBS = [
     flags: [
       { flag: "[--config <path>]", prose: ["folded blocks (the /memory chat command, from the shell)"] },
       { flag: "[--verbose]", prose: [] },
+      { flag: "[--export <file.jsonl>]", prose: ["write every stored fact as JSONL (subject/predicate/object/", "provenance) to a file and exit — the shape `tmct extract`", "emits, for audit or backup"] },
     ],
   },
   {
@@ -77,7 +78,7 @@ export const CLI_VERBS = [
       { flag: "[--ontology <name|path>]", prose: ["DIFFERENT operation from the others: it APPENDS to"] },
       { flag: "[--lexicon <name|path>]", prose: ["tmct.toml's graph_files array (multi-graph growth),"] },
       { flag: "[--graph <path>]", prose: ["never an extensions-bundle activation."] },
-      { flag: "[--file <definition.txt>]", prose: ["teach a plain-text definition file sentence by", "sentence (# lines are comments); any declined", "sentence exits non-zero with the sentence named"] },
+      { flag: "[--file <defs.txt|facts.jsonl>]", prose: ["teach a definition file: a .txt taught sentence by", "sentence (# lines are comments; a declined sentence exits", "non-zero, named), or a .jsonl triple dump loaded fact by", "fact, keeping each line's own provenance"] },
       { flag: "[--memory-backend <default|memory|sqlite>]", prose: ["same knob as `tmct init`"] },
       { flag: "[--config <path>]", prose: [] },
     ],

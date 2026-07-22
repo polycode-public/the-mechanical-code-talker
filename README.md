@@ -649,6 +649,9 @@ Usage:
   tmct memory [--repo <abs>]   what tmct remembers: facts, utterances, sessions,
        [--config <path>]       folded blocks (the /memory chat command, from the shell)
        [--verbose]
+       [--export <file.jsonl>]  write every stored fact as JSONL (subject/predicate/object/
+                               provenance) to a file and exit — the shape `tmct extract`
+                               emits, for audit or backup
 ```
 
 `tmct init` sets up a repo for the first time: `.tmct/`, `tmct.toml`, a seed, and a
@@ -690,9 +693,10 @@ already set up. Its `--graph` flag works differently from the others: it appends
        [--ontology <name|path>]  DIFFERENT operation from the others: it APPENDS to
        [--lexicon <name|path>]  tmct.toml's graph_files array (multi-graph growth),
        [--graph <path>]        never an extensions-bundle activation.
-       [--file <definition.txt>]  teach a plain-text definition file sentence by
-                               sentence (# lines are comments); any declined
-                               sentence exits non-zero with the sentence named
+       [--file <defs.txt|facts.jsonl>]  teach a definition file: a .txt taught sentence by
+                               sentence (# lines are comments; a declined sentence exits
+                               non-zero, named), or a .jsonl triple dump loaded fact by
+                               fact, keeping each line's own provenance
        [--memory-backend <default|memory|sqlite>]  same knob as `tmct init`
        [--config <path>]
 ```
@@ -1005,7 +1009,7 @@ loads a repo's graph into a `{ dispatch, resolve, graph }` context,
 
 ## The tool surface
 
-Everything above runs on the same 23 tools. Each one is read-only, answers one question in a single call, and returns bounded output. None of them calls a model. A tool that cannot ground an answer says so — the same honest miss you get everywhere else in tmct.
+Everything above runs on the same 24 tools. Each one is read-only, answers one question in a single call, and returns bounded output. None of them calls a model. A tool that cannot ground an answer says so — the same honest miss you get everywhere else in tmct.
 
 Three of them are **hot**: their schemas stay resident, so an agent driving tmct sees them every turn and reaches for one call instead of a Read/Grep loop.
 
@@ -1077,6 +1081,7 @@ The remaining tools are **cold**: still served, but not billed to an agent every
 | `tmct_calls` | The in-repo symbols a function calls (fn→fn), each with file:line. | `symbol` (required) |
 | `tmct_cochanges` | Modules that historically change in the same commit as a symbol's module (git co-change). | `symbol` (required) |
 | `tmct_context_more` | The bundle sections a lean tmct_context omitted (siblings / tests / cochange / class members / re-exports). | `symbol` (required) |
+| `tmct_export` | Every stored memory fact as JSONL (subject/predicate/object/provenance) — the shape `tmct extract` emits, for backup or audit. | none |
 
 Add `repo_path` to any of them to point at a repository other than the working directory. `tmct init` also writes this catalog, with a worked invocation per tool, to `.tmct/TOOLS.md` inside the repo it indexed.
 
