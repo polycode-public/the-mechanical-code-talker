@@ -13,7 +13,7 @@ import assert from "node:assert/strict";
 import {
   renderAdventureHtml, spriteClassForObject, visibleRoomOf, roomSceneObjects, carriedItems,
   visitedRoomGraph, allRoomIds, goalStatusLines, roomCaptionText, pillsForRoom, suggestionsForTerm,
-  spriteAncestryRows, factsForSubject,
+  spriteAncestryRows, factsForSubject, scenePlacement, roomSceneLayout, roomKindForRoom,
 } from "../../src/services/adventure-viz.mjs";
 import { foldWorldState } from "../../src/services/adventure.mjs";
 
@@ -136,6 +136,131 @@ test("carriedItems: every object placed with the player, sorted, each with its s
 test("carriedItems: an empty inventory is a plain empty array, never a fabricated entry", () => {
   const state = foldWorldState(ROWS);
   assert.deepEqual(carriedItems(ROWS, state), []);
+});
+
+// ---- scenePlacement -----------------------------------------------------------
+
+test("scenePlacement: a current mgx:on-top-of row resolves to the surface plane, stacked on its own target", () => {
+  const rows = [...ROWS, { subject: "lamp", predicate: "mgx:on-top-of", object: "desk" }];
+  const state = foldWorldState(rows);
+  assert.deepEqual(scenePlacement(rows, state, "lamp"), { plane: "surface", stackedOn: "desk" });
+});
+
+test("scenePlacement: a current mgx:on-plane row resolves to that plane verbatim, with no stack target", () => {
+  const rows = [...ROWS, { subject: "lamp", predicate: "mgx:on-plane", object: "wall" }];
+  const state = foldWorldState(rows);
+  assert.deepEqual(scenePlacement(rows, state, "lamp"), { plane: "wall", stackedOn: null });
+});
+
+test("scenePlacement: a class default reached via rdf:type + rdfs:subClassOf ancestor walk, when neither instance predicate is set", () => {
+  const rows = [
+    { subject: "portrait", predicate: "rdf:type", object: "furniture" },
+    { subject: "portrait", predicate: "mgx:located-in", object: "study" },
+    { subject: "portrait", predicate: "rdfs:subClassOf", object: "painting" },
+    { subject: "painting", predicate: "mgx:default-plane", object: "wall" },
+  ];
+  const state = foldWorldState(rows);
+  assert.deepEqual(scenePlacement(rows, state, "portrait"), { plane: "wall", stackedOn: null });
+});
+
+test("scenePlacement: an object with no instance predicate and no class default falls to the floor", () => {
+  const state = foldWorldState(ROWS);
+  assert.deepEqual(scenePlacement(ROWS, state, "desk"), { plane: "floor", stackedOn: null });
+});
+
+test("scenePlacement: taking an object off its resting place invalidates the stale on-top-of row with no extra write — the same staleness rule foldWorldState already applies to placements", () => {
+  const rows = [
+    ...ROWS,
+    { subject: "lamp", predicate: "mgx:on-top-of", object: "desk" },
+    { subject: "lamp@turn1", predicate: "mgx:located-in", object: "player" },
+  ];
+  const state = foldWorldState(rows);
+  assert.deepEqual(scenePlacement(rows, state, "lamp"), { plane: "floor", stackedOn: null }, "the turn-0 on-top-of row is older than the turn-1 placement, so it no longer applies");
+});
+
+test("scenePlacement: a fresher on-top-of snapshot than the current placement still wins", () => {
+  const rows = [
+    ...ROWS,
+    { subject: "lamp@turn1", predicate: "mgx:on-top-of", object: "desk" },
+  ];
+  const state = foldWorldState(rows);
+  assert.deepEqual(scenePlacement(rows, state, "lamp"), { plane: "surface", stackedOn: "desk" }, "the turn-1 position is at least as new as the turn-0 placement");
+});
+
+// ---- roomSceneLayout ----------------------------------------------------------
+
+const STACK_ROWS = [
+  { subject: "player", predicate: "rdf:type", object: "adventurer" },
+  { subject: "player", predicate: "mgx:currently-in", object: "study" },
+  { subject: "study", predicate: "rdf:type", object: "room" },
+  { subject: "desk", predicate: "rdf:type", object: "furniture" },
+  { subject: "desk", predicate: "mgx:fixed-in", object: "study" },
+  { subject: "lamp", predicate: "rdf:type", object: "portable" },
+  { subject: "lamp", predicate: "mgx:located-in", object: "study" },
+  { subject: "lamp", predicate: "mgx:on-top-of", object: "desk" },
+  { subject: "key", predicate: "rdf:type", object: "portable" },
+  { subject: "key", predicate: "mgx:located-in", object: "study" },
+  { subject: "key", predicate: "mgx:on-top-of", object: "lamp" },
+  { subject: "portrait", predicate: "rdf:type", object: "furniture" },
+  { subject: "portrait", predicate: "mgx:fixed-in", object: "study" },
+  { subject: "portrait", predicate: "rdfs:subClassOf", object: "painting" },
+  { subject: "painting", predicate: "mgx:default-plane", object: "wall" },
+  { subject: "candle", predicate: "rdf:type", object: "portable" },
+  { subject: "candle", predicate: "mgx:located-in", object: "study" },
+  { subject: "candle", predicate: "mgx:on-top-of", object: "shelf" },
+];
+
+test("roomSceneLayout: a transitive on-top-of chain resolves to one stack, top item first, floor base last", () => {
+  const state = foldWorldState(STACK_ROWS);
+  const layout = roomSceneLayout(STACK_ROWS, state, "study");
+  const chain = layout.floor.find((s) => s.items.some((i) => i.subject === "desk"));
+  assert.deepEqual(chain.items.map((i) => i.subject), ["key", "lamp", "desk"]);
+});
+
+test("roomSceneLayout: a wall-mounted object (its class default, via ancestor walk) renders in the wall band, not a floor stack", () => {
+  const state = foldWorldState(STACK_ROWS);
+  const layout = roomSceneLayout(STACK_ROWS, state, "study");
+  assert.deepEqual(layout.wall, [{ subject: "portrait", spriteClass: "furniture" }]);
+  assert.ok(!layout.floor.some((s) => s.items.some((i) => i.subject === "portrait")));
+});
+
+test("roomSceneLayout: an item resting on a base that isn't itself visible in the room demotes to its own single-item floor stack", () => {
+  const state = foldWorldState(STACK_ROWS);
+  const layout = roomSceneLayout(STACK_ROWS, state, "study");
+  const candleStack = layout.floor.find((s) => s.items.some((i) => i.subject === "candle"));
+  assert.deepEqual(candleStack.items.map((i) => i.subject), ["candle"], "the shelf it names was never placed in this room, so candle stands on its own");
+});
+
+test("roomSceneLayout: floor stacks and the wall band both come out in a fixed, deterministic order", () => {
+  const state = foldWorldState(STACK_ROWS);
+  const layout = roomSceneLayout(STACK_ROWS, state, "study");
+  const bases = layout.floor.map((s) => s.items[s.items.length - 1].subject);
+  assert.deepEqual(bases, [...bases].sort(), "floor stacks sort by their own base subject");
+  const again = roomSceneLayout(STACK_ROWS, state, "study");
+  assert.deepEqual(layout, again, "the same input always lays out the same way");
+});
+
+test("roomSceneLayout: an empty room yields an empty wall band and no floor stacks, never a fabricated one", () => {
+  const rows = [{ subject: "garden", predicate: "rdf:type", object: "room" }, { subject: "player", predicate: "mgx:currently-in", object: "garden" }];
+  const state = foldWorldState(rows);
+  assert.deepEqual(roomSceneLayout(rows, state, "garden"), { wall: [], floor: [] });
+});
+
+// ---- roomKindForRoom ----------------------------------------------------------
+
+test("roomKindForRoom: rdf:type outdoor-space reads as outdoor", () => {
+  const rows = [{ subject: "garden", predicate: "rdf:type", object: "room" }, { subject: "garden", predicate: "rdf:type", object: "outdoor-space" }];
+  assert.equal(roomKindForRoom(rows, "garden"), "outdoor");
+});
+
+test("roomKindForRoom: rdf:type underground-space reads as underground", () => {
+  const rows = [{ subject: "cellar", predicate: "rdf:type", object: "room" }, { subject: "cellar", predicate: "rdf:type", object: "underground-space" }];
+  assert.equal(roomKindForRoom(rows, "cellar"), "underground");
+});
+
+test("roomKindForRoom: every other room, including one with no space typing at all, defaults to indoor", () => {
+  assert.equal(roomKindForRoom(ROWS, "study"), "indoor");
+  assert.equal(roomKindForRoom([], "nowhere"), "indoor");
 });
 
 // ---- visitedRoomGraph --------------------------------------------------------
@@ -356,6 +481,80 @@ test("renderAdventureHtml: the room stage, sprite row and caption are present", 
   assert.match(html, /id="spriteRow"/);
   assert.match(html, /id="caption"/);
   assert.match(html, /id="goalLine"/);
+});
+
+test("renderAdventureHtml: the world's own opening prose renders as a page note, escaped, right after the titlebar", () => {
+  const html = renderAdventureHtml({ worldPayload: { ...WORLD_PAYLOAD, opening: 'a <script>alert(1)</script> opening line' } });
+  const noteMatch = html.match(/<\/div>\s*<p class="page-note">([\s\S]*?)<\/p>/);
+  assert.ok(noteMatch, "a .page-note paragraph follows the titlebar");
+  assert.ok(!noteMatch[1].includes("<script>"), "the opening text is escaped, never raw HTML");
+  assert.match(html, /body\.preview[^{]*\.page-note \{ display: none; \}/, "the note is hidden in preview mode");
+});
+
+test("renderAdventureHtml: boot() no longer copies the opening into #status — the page note carries it instead", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.doesNotMatch(html, /statusEl\.textContent = ADVENTURE\.world\.opening/);
+});
+
+test("renderAdventureHtml: quest, the room frame, the controls row, the goal/status lines and the satchel appear in that order in the left column", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  const leftBlock = html.match(/<div class="stage-left">[\s\S]*?<\/div>\s*<\/div>\s*<aside/)[0];
+  const order = ["panel goals", 'id="roomFrame"', 'id="playControls"', 'id="goalLine"', 'id="status"', "panel carrying"]
+    .map((needle) => leftBlock.indexOf(needle));
+  assert.ok(order.every((i) => i !== -1), "every expected element is present in the left column");
+  for (let i = 1; i < order.length; i++) assert.ok(order[i - 1] < order[i], "the left column keeps quest, room, controls, goal/status, satchel in that order");
+});
+
+test("renderAdventureHtml: the 2/3-1/3 stage grid, the command box and the manor map both sit inside .stage-left, the aside keeps only chatlog/pills/caption", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /\.stage \{[^}]*grid-template-columns: minmax\(0, 2fr\) minmax\(280px, 1fr\)/);
+  const leftBlock = html.match(/<div class="stage-left">[\s\S]*?<\/div>\s*<\/div>\s*<aside/)[0];
+  assert.match(leftBlock, /panel command/, "the command box lives in the left column");
+  assert.match(leftBlock, /speak to the manor/);
+  assert.match(leftBlock, /id="chatform"/, "the chat entry form moved into the command box");
+  assert.match(leftBlock, /panel roommap/, "the manor map moved into the left column, last");
+  assert.ok(leftBlock.indexOf("panel command") < leftBlock.indexOf("panel roommap"), "the command box sits between the satchel and the map");
+  const asideBlock = html.match(/<aside class="side"[\s\S]*?<\/aside>/)[0];
+  assert.match(asideBlock, /id="chatlog"/);
+  assert.match(asideBlock, /id="pills"/);
+  assert.match(asideBlock, /id="caption"/);
+  assert.ok(!asideBlock.includes("chatform"), "the chat entry form no longer lives in the aside");
+  assert.ok(!asideBlock.includes("roommap"), "the map no longer lives in the aside");
+});
+
+test("renderAdventureHtml: the room frame carries the wall band, the floor band and the adventurer's own pinned-right slot", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /id="wallRow"/);
+  assert.match(html, /id="floorRow"/);
+  assert.match(html, /id="youSlot"/);
+  assert.match(html, /\.you-slot \{[^}]*margin-left: auto/, "the adventurer's slot pins to the right edge of the room");
+  assert.match(html, /\.sprite-stack \{[^}]*flex-direction: column/, "a stack renders as a column, top item first");
+});
+
+test("renderAdventureHtml: redraw() builds the scene from roomSceneLayout and renders the player's own card alone into #youSlot", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /const roomSceneLayout = /, "the layout helper is spliced in, not re-implemented");
+  assert.match(html, /roomSceneLayout\(snap\.rows, snap\.state, snap\.here\)/);
+  assert.match(html, /youSlotEl\.innerHTML = spriteCardHtml\("you", "adventurer"/);
+});
+
+test("renderAdventureHtml: the room frame carries a room-kind attribute and a top-right room-kind icon, both filled every redraw", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /id="roomKindIcon"/);
+  assert.match(html, /const roomKindForRoom = /, "the room-kind helper is spliced in, not re-implemented");
+  assert.match(html, /roomFrameEl\.setAttribute\("data-room-kind", roomKindForRoom\(snap\.rows, snap\.here\)\)/);
+  assert.match(html, /\.room-frame\[data-room-kind="outdoor"\]/);
+  assert.match(html, /\.room-frame\[data-room-kind="underground"\]/);
+});
+
+test("renderAdventureHtml: a double-click on a pill fills the input and submits it, leaving the plain click's fill-only behavior untouched", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /pillsEl\.addEventListener\("dblclick"/);
+  assert.match(html, /pillsEl\.addEventListener\("click"/);
+  const clickBlock = html.match(/pillsEl\.addEventListener\("click"[\s\S]*?\}\);/)[0];
+  assert.ok(!clickBlock.includes("requestSubmit"), "a single click never submits");
+  const dblclickBlock = html.match(/pillsEl\.addEventListener\("dblclick"[\s\S]*?\}\);/)[0];
+  assert.match(dblclickBlock, /chatformEl\.requestSubmit\(\)/);
 });
 
 test("renderAdventureHtml: the chat dock's log, pills row and input form are all present", () => {

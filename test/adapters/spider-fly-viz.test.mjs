@@ -150,7 +150,7 @@ test("renderSpiderFlyHtml: the left column stacks the controls strip, the board 
 
 test("renderSpiderFlyHtml: the controls strip and the tuning console both match the board's own fixed width", () => {
   const html = renderSpiderFlyHtml();
-  assert.match(html, /\.tuning, \.controls-panel \{ width: \d+px/, "one shared rule sizes both strips to the board");
+  assert.match(html, /\.tuning, \.controls-panel, \.head-inner \{ width: \d+px/, "one shared rule sizes both strips, and the header column, to the board");
 });
 
 test("renderSpiderFlyHtml: within the side column the chat dock comes first, the agents HUD below it", () => {
@@ -210,6 +210,26 @@ test("renderSpiderFlyHtml: preview mode is a runtime query-param switch, not a s
   assert.match(html, /previewMaxTurns/);
   assert.match(html, /get\("preview"\)/);
   assert.match(html, /classList\.toggle\("preview"/);
+});
+
+// ---- the header column, aligned to the board's own left edge ------------
+
+test("renderSpiderFlyHtml: the eyebrow and h1 sit inside .head-inner, itself inside a .page-head row above the real board stage", () => {
+  const html = renderSpiderFlyHtml();
+  const headBlock = html.match(/<div class="stage page-head">[\s\S]*?<\/div>\s*<\/div>/)[0];
+  assert.match(headBlock, /<div class="head-inner">[\s\S]*<div class="eyebrow">/);
+  assert.match(headBlock, /<h1>Multiple competing planning agents<\/h1>/);
+});
+
+test("renderSpiderFlyHtml: the literal <div class=\"stage\"> selector still uniquely finds the real board stage, not the header row", () => {
+  const html = renderSpiderFlyHtml();
+  const occurrences = html.split('<div class="stage">').length - 1;
+  assert.equal(occurrences, 1, "the header row carries the extra page-head class, so the bare selector never doubles up");
+});
+
+test("renderSpiderFlyHtml: the header row is hidden in preview mode alongside the rest of the chrome", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /body\.preview \.page-head \{ display: none; \}/);
 });
 
 test("renderSpiderFlyHtml: self-contained, reduced-motion respected, both theme schemes present", () => {

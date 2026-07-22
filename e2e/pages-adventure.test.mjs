@@ -122,6 +122,37 @@ test("clicking a pill fills the input with its exact command text without submit
   }
 });
 
+test("double-clicking a pill fills the input AND submits it, running a real turn", async () => {
+  const { context, page, consoleErrors } = await openAdventurePage();
+  try {
+    const pillCount = await page.locator("#pills .pill").count();
+    assert.ok(pillCount > 0, "the current room offers at least one contextual pill");
+    const pillText = await page.locator("#pills .pill").first().textContent();
+    const before = await page.locator("#chatlog > div").count();
+
+    // A real double-click, dispatched as the browser's own "dblclick" event
+    // rather than through the two-mousedown timing Playwright's higher-level
+    // dblclick() action simulates — the OS/browser double-click window is
+    // tight enough that a loaded CI host can round-trip the two synthetic
+    // clicks slower than that window, landing as two ordinary single clicks
+    // instead. Dispatching the event directly still exercises the page's own
+    // listener exactly as a real double-click would.
+    await page.locator("#pills .pill").first().evaluate((el) => el.dispatchEvent(new MouseEvent("dblclick", { bubbles: true })));
+
+    await page.waitForFunction(
+      (n) => document.querySelectorAll("#chatlog > div").length >= n,
+      before + 2,
+      { timeout: 10000 },
+    );
+    const lines = await page.locator("#chatlog > div").allTextContents();
+    assert.ok(lines.some((l) => l.includes(pillText)), "the pill's own command text ran as a real turn");
+    assert.equal(await page.locator("#chatq").inputValue(), "", "the input clears once the double-click's own submit runs");
+    assert.deepEqual(consoleErrors, [], "no console error double-clicking a pill");
+  } finally {
+    await context.close();
+  }
+});
+
 test("auto-play's own tick narration lands in the SAME chat log manual chat uses, and pills stay contextual", async () => {
   const { context, page, consoleErrors } = await openAdventurePage();
   try {

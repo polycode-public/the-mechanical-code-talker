@@ -19,16 +19,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 Site-uplift board (2026-07-22 approved plan: `~/.claude/plans/please-change-the-icons-snazzy-kernighan.md`).
 Each row is one task; the workstream that lands it deletes its row in the same commit.
 
-### WS-adventure-page — adventure/spider-fly presentation (sonnet)
-- [ ] controls row between room view and satchel; `#goalLine`/`#status` under controls
-- [ ] page-note from world opening after titlebar; stop assigning opening to `#status`; preview-mode hide
-- [ ] 2/3-1/3 stage grid; map into `.stage-left`; command box ("speak to the manor") holding `#chatform`
-- [ ] positional rendering: `scenePlacement` + `roomSceneLayout`, `#wallRow`/`#floorRow`/`#youSlot`/`.sprite-stack` (you pinned right; wall centered; floor pinned left; stack width = widest level)
-- [ ] room-kind border CSS (`data-room-kind` indoor/outdoor/underground) + top-right room-kind icon element
-- [ ] pills dblclick submits (click behavior unchanged)
-- [ ] spider-fly header left-aligned with board (`.page-head > .head-inner` width rule)
-- [ ] unit + e2e test updates (adventure-viz, spider-fly-viz, pages-adventure dblclick, pages-spider-fly alignment)
-
 ### WS-pages — chat/ingest page shells (sonnet, wave 2)
 - [ ] `memory-panel-viz.mjs` + `memory-stats.mjs` shared extraction; chat-page-viz refactor stays green
 - [ ] ingest: seed on by default (+`#seedToggle`), persistent session, IndexedDB persistence, stats panel + controls (export facts / reset to seed / forget everything)
