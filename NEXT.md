@@ -42,16 +42,12 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 14 | "look" digest corpus leak | open, traced | 2026-07-21 | room text must come from the world | medium-high |
 | 16 | hanoi solve at xl | open, reproduced | 2026-07-21 | biggest live falsehood found | medium |
 | 17 | live-Wikipedia trust prior | open, traced | 2026-07-21 | live must not outrank the pinned pack | high |
-| 18 | chat-seed caps | in progress (decided: raise caps to ~40 MB ceiling; wt agent-a8d1b0cd6ce6cb74d) | 2026-07-21 | seed-ceiling decision | n/a |
 | 20 | wiki even-when-known (ask + supplement) | open, decided | 2026-07-22 | corroboration, not just rescue | medium-high |
 | 21 | full-triple learn-on-miss ingestion | open, decided | 2026-07-22 | loads become durable knowledge | medium-high |
 | 22 | auto bounded synthesis per ingest | open, decided | 2026-07-22 | new facts should connect | medium-high |
 | 23 | `extract --optimistic` + `--canonical` | open, decided | 2026-07-22 | ingest real-world text | medium |
 | 24 | glow-Markdown session logs | open, sampled | 2026-07-22 | readable transcripts; the sample is the spec | high |
-| 25 | home page tiles | in progress, new scope (wt agent-a8d1b0cd6ce6cb74d) | 2026-07-22 | tiles name capabilities | high |
-| 26 | adventure.html room-width strips | in progress, new scope (wt agent-a8d1b0cd6ce6cb74d) | 2026-07-22 | kill the gap under the room | medium-high |
-| 27 | spider-fly layout + renames | in progress, new scope (wt agent-a8d1b0cd6ce6cb74d) | 2026-07-22 | alignment, consistency | high |
-| 28 | spider-fly observable-facts panel | in progress, new scope (wt agent-a8d1b0cd6ce6cb74d) | 2026-07-22 | planners' knowledge made inspectable | medium |
+| 28 | spider-fly observable-facts panel | open — browser panel shipped 2026-07-22; remaining: the chat phrasing lane over `beliefSnapshotFor` | 2026-07-22 | planners' knowledge made inspectable | medium |
 | 29 | sense-splitting on read-back (Rover) | open, designed | 2026-07-22 | two concepts under one label | medium-high |
 | 31 | ingest.html + ledger/chat ingest | open, new scope | 2026-07-22 | bring your own text | medium-high |
 | 32 | full IndexedDB re-initialisation button | open, new scope | 2026-07-22 | recover any page from any state | high |
@@ -113,10 +109,6 @@ The detailed items:
   curated, revision-pinned pack. If live content should rank lower: one new source kind in
   trust.mjs plus a parse branch on the `reference:wikipedia-live` prefix.
 
-- Chat-seed scale: `SEED_BAND_CAPS` (`scripts/build-chat-seed.mjs:46`) still caps conceptnet at
-  2,000 facts and wordnet-xl at 4,000 because the uncapped init:xl set measures ~86 MB
-  serialized. Lifting the caps means leaving the 16-24 MB seed ceiling range — an operator call.
-
 - Knowledge flows — supplement, ingest, synthesise (operator-decided 2026-07-21). Four builds,
   each independently shippable, against the baseline traced below:
   1. "Ask Wikipedia even when I do know": both halves — an explicit phrasing ("what does
@@ -164,29 +156,10 @@ The detailed items:
   (`SESSION_LOG_DIR`, the per-turn `logLines` built at `chat.mjs:11982`); check the e2e that
   reads the log file for the extension change.
 
-- Home page tiles (`e2e/pages-index.test.mjs` pins hero order and labels — update it with the
-  strings): the adventure tile gets a few character sprites composed over its icon,
-  movie-poster style; the sprite-library tile shows a range of sprite sizes instead of one; the
-  chat tile is labelled "Chat" (not "Talk to it") and gets an icon; the spider-fly tile line
-  "Two agents, planning against each other" becomes "multiple competing planning agents" and
-  gets an icon (both tiles keep their text links — the icons are additional); the adventure
-  line "A text adventure, with a room you can actually see" becomes "Location aware inference".
-  New tile, added 2026-07-22 with the desktop channel's delivery: a "Code explorer" tile —
-  "Explore a code graph on your desktop" — linking the README desktop section (it needs a local
-  build/launch, so keep it visually distinct from the hosted-page tiles).
-
-- adventure.html layout (`src/services/adventure-viz.mjs`): quest and satchel become
-  full-width strips sized to the room view — quest strip on top, satchel strip under it, then
-  the room — and the reset/play/step + turn-count controls become one strip of the same width
-  pinned directly below the room. This removes the dead gap under the room view whenever the
-  right-hand column runs longer than the scene (operator screenshot, 2026-07-22).
-
-- spider-fly.html (`src/services/spider-fly-viz.mjs`): the tuning strip shortens to match the
-  grid's width; the TURN block joins the reset/play/step cluster; the hero line "A spider in
-  its web, a fly on the board — each planning against the other" becomes "multiple competing
-  planning agents"; and clicking the spider or the fly expands a section beside that agent in
-  the agents box showing a text rendering of the facts that agent can currently observe (the
-  engine's per-agent belief/exposure set, `src/services/spider-fly.mjs`).
+- spider-fly observable-facts, the chat half: the browser panel ships (click the spider or the
+  fly to see the facts that agent can observe, over `beliefSnapshotFor` in
+  `src/services/spider-fly.mjs`); the same read path still wants a chat phrasing ("what does
+  the fly see?") so TUI/CLI/serve inherit it — build that lane beside the game lanes.
 
 - Sense-splitting on fact read-back, with the class hierarchy shown. Live case (operator,
   2026-07-21): "What is Rover?" returns `rover is a kind of dog (ace:chat …)` and `rover is a
@@ -263,9 +236,6 @@ browser bundles, serve, and library `runChat` all call the same `runTurn`.
   `src/domain/memory/trust.mjs` (`SOURCE_PRIOR`, `:94`). Tests: `test/adapters/
   chat-inference-trust.test.mjs`, `provenance.test.mjs`. Docs: README's trust/provenance table
   row. Channels: core ranking — every channel inherits.
-- **18, seed caps.** Decision only; if lifted: `scripts/build-chat-seed.mjs:46` and the boot
-  budget e2e (`e2e/pages-chat-boot-budget.test.mjs`) is the guard that must stay green; refresh
-  `PAGE_WEIGHTS.md` after.
 - **20-23, knowledge flows.** Code: as traced in the item (`cleanMissLiveKey` `chat.mjs:9564`,
   `appendReferenceIsaFact` `:9613`, `appendFacts` `:9596`, `public/chat.html:658` persistence
   trigger, `src/services/extract-facts.mjs:112` skip point, `syllogise.mjs` `expandFocus`).
@@ -286,18 +256,10 @@ browser bundles, serve, and library `runChat` all call the same `runTurn`.
   update it. Docs: README's session-log line + `bin/tmct.mjs` help text ("Session log → …").
   Channels: TUI/CLI writer + browser export; library consumers get it via `createSession`
   unchanged.
-- **25, home tiles.** Code: the pages-index builder (`scripts/build-demo-site.mjs` family).
-  Tests: `e2e/pages-index.test.mjs` label/order pins. Docs: the home page IS the doc; README's
-  pages list follows the new labels. Channels: browser only.
-- **26, adventure strips.** Code: `src/services/adventure-viz.mjs` layout. Tests: the adventure
-  page e2e + the screenshot sweep (the spider-fly layout pin, `7dfe87d`, is the pattern).
-  Channels: browser only.
-- **27-28, spider-fly.** Code: `src/services/spider-fly-viz.mjs` (layout, renames, the agents
-  box) + a read path exposing the per-agent belief set from `src/services/spider-fly.mjs`.
-  Tests: belief-exposure unit in `test/services/spider-fly.test.mjs`;
-  `e2e/pages-spider-fly.test.mjs` for the click-expand. Docs: the page's own copy. Channels:
-  browser panel; the same read path also feeds a chat phrasing ("what does the fly see?") so
-  TUI/CLI/serve inherit it — include that lane in the build.
+- **28 remainder, spider-fly chat lane.** Code: a chat phrasing ("what does the fly see?")
+  over `beliefSnapshotFor` (`src/services/spider-fly.mjs`), built beside the game lanes.
+  Tests: a corpus row in the games lane + `test/services/spider-fly.test.mjs`. Channels: all
+  chat channels inherit.
 - **29, sense-splitting.** Code: a pure sense-cluster utility in `src/domain/` (ancestry
   intersection, LCS depth/IC threshold, disjointness veto — reusing `findIsaChain` and the
   cax-dw kernel read-only) + grouping in `factReadBackReaders` (`chat.mjs:7660`). Tests: unit
