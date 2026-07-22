@@ -541,6 +541,17 @@ rather than the code graph. A taught class answers both shapes too: after
 "dog is a kind of animal", "how many animals are there" counts its members and
 "list all animals" reads them back, each cited to where it came from.
 
+When you ask about a term, the read-back shows each "is a kind of" object with
+its own superclass chain: "what is rover" answers "rover is a kind of dog →
+canine → mammal → animal". If one label carries two unrelated senses — you
+taught "rover is a dog" and a corpus row says "rover is a scout" — the answer
+groups by concept ("rover, the dog:" / "rover, the scout:") instead of listing
+two unrelated lines as if they were one thing. The split is deterministic over
+the stored hierarchy: two senses part when a stored disjointness separates
+their ancestors, when their chains never meet, or when they meet only at the
+very top. When the evidence is thin the answer stays a flat list — grouping is
+presentation, and it never retracts or reranks a fact.
+
 Teaching doesn't have to be typed, either. `tmct extract` runs a plain text
 file through the same recognizer the chat's teach lane uses. Sentences the
 recognizer grounds become fact rows; everything else is skipped and counted,

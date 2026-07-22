@@ -360,6 +360,7 @@
   "src/domain/router/set-algebra.mjs",
   "src/domain/router/taught.mjs",
   "src/domain/seeded-random.mjs",
+  "src/domain/sense-split.mjs",
   "src/domain/skos-view.mjs",
   "src/domain/spider-fly-world.mjs",
   "src/domain/sprite-expressions.mjs",

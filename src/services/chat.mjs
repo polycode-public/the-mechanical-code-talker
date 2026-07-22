@@ -55,6 +55,7 @@ import { getLiveReferenceProvider } from "../adapters/corpus/wikipedia-live.mjs"
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
+import { subClassParents, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { adventureTurn, unclaimedAdventureOpening } from "./adventure.mjs";
 import { spiderFlyTurn } from "./spider-fly-turn.mjs";
@@ -5114,6 +5115,12 @@ const MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB
 // terms. "what(?:'s|s|\s+is)" mirrors PERSONAL_ASSISTANT_NUDGE_RE's own
 // tolerance for the bare "whats" contraction spelling, just below.
 const MODULE_PURPOSE_RE = /^what(?:'s|s|\s+is)\s+(.+?)\s+(?:for|about)\??$/i;
+// "what is the purpose of the validate module" — the purpose-of phrasing of the
+// SAME module-grain overview, asking by the module's role rather than "for"/
+// "does". The captured object ("the validate module", "validate") is resolved
+// through the SAME exact-unique resolveEntity gate below; a non-module term
+// simply fails to resolve and the lane declines, so this never misroutes.
+const MODULE_PURPOSE_OF_RE = /^what(?:'s|s|\s+is)\s+the\s+(?:purpose|point|role|job|function)\s+of\s+(.+?)\??$/i;
 
 /** A module PATH as a reader types it — "src/core/store.mjs", "app/lib/b.mjs",
  *  or a bare "store.mjs". Requires a slash or a source-file extension, which is
@@ -5168,7 +5175,7 @@ async function moduleOrientLane(query, { graph }) {
   // (stripFillerWords already eats "please"/"could you" as filler; the politeness
   // regex only adds the "explain [to me]" wrapper on top).
   q = stripFillerWords(applyPreambleFrames(correctMisspellings(q))).replace(MODULE_ORIENT_POLITENESS_RE, "");
-  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE);
+  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_OF_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE);
   // "what does src/core/store.mjs do" already reached the overview; the bare
   // path and "what is <path>" did not, so the same module answered one
   // phrasing and walled two. Both are claimed here rather than in ask.mjs,
@@ -5974,6 +5981,74 @@ function renderFactLine(f) {
   // frame read as a definition-less non-answer on the re-ask.
   if (f.provenance.includes("reference:")) return `${factPhrase(f)}${cite}`;
   return `i learned: ${factPhrase(f)}${cite}`;
+}
+
+const SENSE_CITE_RE = / \(source: [^)]*\)$/;
+
+/** Append an is-a object's superclass chain to its rendered fact line, before
+ *  the citation: "rover is a kind of dog" becomes "rover is a kind of dog →
+ *  canine → mammal → animal". Only the subject-side is-a lines of the queried
+ *  term get a chain; every other line renders unchanged. */
+function renderFactLineWithChain(f, parents, subjectVariants) {
+  const base = renderFactLine(f);
+  if (!ISA_PREDICATES.has(f.predicate) || !subjectVariants.has(f.subject)) return base;
+  const chain = ancestryChain(f.object, parents, { cap: 6 });
+  if (chain.length <= 1) return base;
+  const suffix = ` → ${chain.slice(1).join(" → ")}`;
+  const cite = base.match(SENSE_CITE_RE);
+  return cite ? base.slice(0, cite.index) + suffix + cite[0] : base + suffix;
+}
+
+/** Render a subject-scan fact list with each is-a object's superclass chain
+ *  shown, and — when the subject's is-a objects split into distinct concepts
+ *  (a `dog` sense and a `scout` sense of one "rover") — grouped by concept.
+ *  Grouping is presentation only: every fact still renders and is cited, in
+ *  the same order, under a "<subject>, the <concept>:" heading.
+ *
+ *  Returns `{ lines, grouped }`. `lines` is the flat, chain-enhanced rendering
+ *  (indented by `indent`) the caller uses when senses do not split. `grouped`
+ *  is a ready `{ text, replace, pending? }` answer when they do, else null. */
+function senseSplitFactList(hits, rows, subjectVariants, { indent = "" } = {}) {
+  const subClassEdges = rows.filter((f) => f.predicate === SUBCLASS_PREDICATE).map((f) => [f.subject, f.object]);
+  const parents = subClassParents(subClassEdges);
+  const lines = hits.map((f) => `${indent}${renderFactLineWithChain(f, parents, subjectVariants)}`);
+
+  const isaSubjectFacts = hits.filter((f) => ISA_PREDICATES.has(f.predicate) && subjectVariants.has(f.subject));
+  const isaObjects = [...new Set(isaSubjectFacts.map((f) => f.object))];
+  if (isaObjects.length < 2) return { lines, grouped: null };
+  const disjointEdges = rows.filter((f) => f.predicate === "owl:disjointWith").map((f) => [f.subject, f.object]);
+  const { split, clusters } = clusterSenses(isaObjects, { parents, disjointEdges });
+  if (!split) return { lines, grouped: null };
+
+  const subject = isaSubjectFacts[0].subject;
+  const clusterOf = new Map();
+  for (const c of clusters) for (const o of c.objects) clusterOf.set(o, c);
+  const otherHits = hits.filter((f) => !(ISA_PREDICATES.has(f.predicate) && subjectVariants.has(f.subject)));
+
+  const blocks = [];
+  const restItems = [];
+  let shownCount = 0;
+  const addLine = (f) => {
+    const rendered = renderFactLineWithChain(f, parents, subjectVariants);
+    if (shownCount < FACT_ANSWER_CAP) { shownCount += 1; return `${indent}${rendered}`; }
+    restItems.push(rendered);
+    return null;
+  };
+  for (const c of clusters) {
+    const clusterLines = isaSubjectFacts.filter((f) => clusterOf.get(f.object) === c).map(addLine).filter(Boolean);
+    if (clusterLines.length) blocks.push(`${indent}${subject}, the ${c.label}:\n${clusterLines.join("\n")}`);
+  }
+  if (otherHits.length) {
+    const otherLines = otherHits.map(addLine).filter(Boolean);
+    if (otherLines.length) blocks.push(`${indent}also about ${subject}:\n${otherLines.join("\n")}`);
+  }
+  const extra = restItems.length ? `\n${indent}…and ${restItems.length} more — say 'more' to see them.` : "";
+  const grouped = {
+    text: blocks.join("\n") + extra,
+    replace: true,
+    ...(restItems.length ? { pending: { items: restItems, noun: "facts" } } : {}),
+  };
+  return { lines, grouped };
 }
 
 /** "a"/"an" for a term, through the SAME grammar-rules.toml "article" rule and
@@ -7075,7 +7150,8 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // "disclosed, never dropped" contract). Unconfigured/tied bias degrades to
     // trust-desc, byte-identical to before this feature existed.
     hits = rankByBiasThenTrust(hits, biasByBundle);
-    const lines = hits.map(renderFactLine);
+    const { lines, grouped } = senseSplitFactList(hits, await factRows(memoryDir, cache), variants);
+    if (grouped) return { ...grouped, replace: miss };
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
     const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
@@ -7624,12 +7700,13 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // renders (Part 6's "disclosed, never dropped" contract); literalHit/
     // viaSubtype above already resolved off the pre-rank order.
     hits = rankByBiasThenTrust(hits, biasByBundle);
-    const lines = hits.map((f) => `  ${renderFactLine(f)}`);
+    const header = `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}`
+      + `${viaSubtype ? " (including its known subtypes)" : ""}:`;
+    const { lines, grouped } = senseSplitFactList(hits, rows, variants, { indent: "  " });
+    if (grouped) return { ...grouped, text: `${header}\n${grouped.text}` };
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
     const extra = rest.length ? `\n  …and ${rest.length} more — say 'more' to see them.` : "";
-    const header = `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}`
-      + `${viaSubtype ? " (including its known subtypes)" : ""}:`;
     return { text: `${header}\n${shown.join("\n")}${extra}`, replace: true, ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}) };
   }
   return null;
@@ -10144,6 +10221,11 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
   // captured term, same class of gap stripTrailingDiscourseTag (ask-vocab.mjs)
   // already fixes for the meta-whatis vocab lane.
   term = stripTrailingDiscourseTag(term);
+  // "tell me about the router thing" / "the logging stuff" — a vague filler
+  // noun wrapped around a real term. Strip it so the describe lane resolves
+  // the term itself; an unresolvable remainder still declines to the ordinary
+  // miss below, so this only ever widens what grounds, never misroutes.
+  term = term.replace(/\s+(?:thing|things|thingy|stuff)$/i, "").trim() || term;
   if (DESCRIBE_PRONOUN_RE.test(term)) {
     if (!focus?.label) return null; // no standing focus to resolve against — honest decline
     term = focus.label;
