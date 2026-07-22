@@ -2906,15 +2906,36 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
-  const [, , subjectRaw, , objectRaw] = m;
+  const [, det, subjectRaw, verb, objectRaw] = m;
   if (PLACE_ADVERB_OBJECT_RE.test(objectRaw)) return null; // a place adverb is never a property
-  const { loadLexicon, lookupNoun, classify } = await import("../domain/grammar/lexicon.mjs");
+  const { loadLexicon, lookupNoun, lookupAdjective, classify } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   // Y already a known NOUN or a fact-grounded CLASS term — a genuine class-
   // membership sentence, unknownSubjectFallback/unknownObjectFallback's own
   // territory (already had first refusal on it) — never misread as a property.
   if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
     || (await isGroundedByFact(objectRaw, memoryDir, cache))) return null;
+  // CLASS-LEVEL adjective predication — "every snake is venomous": a universal
+  // quantifier over a grounded noun class, with an adjective complement. The
+  // quantifier is the same deliberate-generalization signal the article/
+  // capitalization stand-ins give for the specific-entity form below, so a
+  // bare-lexicon-grounded subject qualifies here (it would not for the
+  // unquantified property claim), and the fact is stored WITH its "every"
+  // quantifier so the read-back ("is a snake venomous", "are snakes venomous")
+  // holds for the whole class. The adjective is confirmed by the static lexicon
+  // or wink's POS tag (the same tag unknownObjectFallback used to defer here);
+  // a noun-shaped Y was already minted as a class upstream and never reaches
+  // this point.
+  const universalQuantifier = /^(?:every|each|all|any)$/i.test((det || "").trim());
+  if (universalQuantifier && (await isGroundedTerm(subjectRaw, lex, memoryDir, cache))
+    && (lookupAdjective(lex, objectRaw) || (await objectReadsAsNonNoun(objectRaw)))) {
+    const classSubject = /^are$/i.test(verb)
+      ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
+      : subjectRaw;
+    return teachFact(memoryDir, sessionId, {
+      subject: classSubject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, quantifier: "every",
+    });
+  }
   // Subject-side groundedness — strip a leading "the"/"a"/"an" first
   // (normFactTerm's own article-strip, mirrored here) so "the cache" checks
   // groundedness under its real head noun "cache", the same spelling
