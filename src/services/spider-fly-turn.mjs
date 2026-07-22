@@ -18,7 +18,7 @@
 import {
   DIRECTION_DELTA, WORLD_NAME, cellId, parseCellId, inBounds, chebyshevDistance, oneStepDirectionBetween,
 } from "../domain/spider-fly-world.mjs";
-import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame } from "./spider-fly.mjs";
+import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame, beliefSnapshotFor } from "./spider-fly.mjs";
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { getWorldsPackProvider } from "../adapters/corpus/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, readFactRows } from "../adapters/memory/core.mjs";
@@ -65,6 +65,12 @@ const SPIDER_FLY_TOLD_RE = new RegExp(
   + "(?:(north|south|east|west)|at\\s+(cell-\\d+-\\d+))[.!?\\s]*$",
   "i",
 );
+
+// The observable-facts read: "what does the fly see?" / "what can the
+// spider see?" — a closed vocabulary shape, styled after the other
+// game-lane regexes above, with the same optional numbered suffix
+// (SPIDER_FLY_ADDRESS_LEAD_RE's own "-<n>") for a board past one of a kind.
+const SPIDER_FLY_SEE_RE = /^what (?:does|can) the (spider|fly)(?:-(\d+))?\s+see[.!?\s]*$/i;
 
 const WORLD_OPENING_FALLBACK =
   "a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move — watch, or address one by name in chat.";
@@ -342,6 +348,48 @@ async function runTickAndRender({ planHolder, memoryDir, cache, toldFacts = [], 
   };
 }
 
+// ---- the observable-facts read: "what does the fly see?" -----------------
+
+/** One `[id, cellId | null]` belief entry as a sentence: `"spider-1 is at
+ *  cell-3-4."` when observed/told, `"fly-2 has not been observed."`
+ *  otherwise — the same wording spider-fly-viz.mjs's own click-expand panel
+ *  (observedFactsHtml) renders, so the chat phrasing and the browser panel
+ *  never disagree about what an agent can see. */
+function observedFactSentence(id, believedCell) {
+  return believedCell ? `${id} is at ${believedCell}.` : `${id} has not been observed.`;
+}
+
+/** "what does the fly see?" / "what does the spider see?" rendered as plain
+ *  text: the same beliefSnapshotFor read spider-fly.mjs's own tick loop and
+ *  the browser panel already use, over the CURRENT board state — read-only,
+ *  no tick runs, nothing is written. Candidates are every OTHER live agent
+ *  of either kind; toldFacts is empty (a told position only ever arrives
+ *  fresh alongside a tick — see runToldFactTurn — so there is none standing
+ *  between ticks to read back here). */
+async function spiderFlyContextAnswer(match, { memoryDir, gameConfig = DEFAULT_GAME_CONFIG }) {
+  const kind = match[1].toLowerCase();
+  const num = match[2];
+  const rows = readFactRows(await loadMemory(memoryDir));
+  const state = foldSpiderFlyState(rows);
+  const observerId = resolveAgentId(kind, num, state);
+  if (!observerId) return noSuchAgentAnswer(kind, "addressee");
+  const observerCell = parseCellId(state.placements.get(observerId).cell);
+  const candidateIds = [...liveIdsOfKind("spider", state), ...liveIdsOfKind("fly", state)];
+  const visionRadius = kind === "spider"
+    ? gameConfig?.spiderFly?.spiderVisionRadius
+    : gameConfig?.spiderFly?.flyVisionRadius;
+  const belief = beliefSnapshotFor(observerId, observerCell, candidateIds, state, { visionRadius });
+  const entries = Object.entries(belief);
+  const text = entries.length
+    ? `${observerId} sees: ${entries.map(([id, cell]) => observedFactSentence(id, cell)).join(" ")}`
+    : `${observerId} is alone on the board — nothing else to see.`;
+  return {
+    text,
+    lane: "game-inform",
+    note: `SPIDER-FLY — belief snapshot rendered for ${observerId} via beliefSnapshotFor (read-only, no tick run)`,
+  };
+}
+
 /** The addressed teach-frame turn: resolve the addressee and the belief
  *  subject, resolve the told cell, and run ONE tick with that told-fact fed
  *  in. Told-facts are NOT persisted on the session slot across turns — each
@@ -524,6 +572,11 @@ export async function spiderFlyTurn(line, { planHolder, memoryDir, env, cache = 
       };
     }
     return runToldFactTurn(told, { planHolder, memoryDir, cache, gameConfig });
+  }
+
+  const seeMatch = String(line).trim().match(SPIDER_FLY_SEE_RE);
+  if (seeMatch) {
+    return spiderFlyContextAnswer(seeMatch, { memoryDir, gameConfig });
   }
 
   if (SPIDER_FLY_TICK_RE.test(line)) {

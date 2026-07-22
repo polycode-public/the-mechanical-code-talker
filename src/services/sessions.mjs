@@ -1,7 +1,7 @@
 // sessions.mjs — chat sessions as first-class temporal graph data, like commits.
 //
 // A `tmct chat` session leaves two artifacts under the target repo:
-//   .tmct/session-<uuidv7>.log            — the human-readable transcript (chat.mjs)
+//   .tmct/session-<uuidv7>.md              — the human-readable transcript (chat-session.mjs, session-log-format.mjs)
 //   .tmct/sessions/session-<uuidv7>.jsonl — the STRUCTURED sidecar this module owns:
 //     {"type":"session", id, started, repo, tmctVersion}        (header line)
 //     {"type":"turn", ts, query, via, resolvedIds, answeredIds, miss}  (one per turn, flushed)
@@ -207,7 +207,7 @@ async function recordSessionMemory(graphFile, record, repoDirOverride = null) {
 
   let answers = new Map();
   try {
-    answers = parseSessionLog(await readFile(join(repoDir, ".tmct", `session-${record.id}.log`), "utf8"));
+    answers = parseSessionLog(await readFile(join(repoDir, ".tmct", `session-${record.id}.md`), "utf8"));
   } catch { /* no transcript (direct API callers) — record the requests alone */ }
 
   const utterances = [];
@@ -294,38 +294,72 @@ export function parseSessionJsonl(text) {
   return { id: String(header.id), started: String(header.started || ""), ended, turns };
 }
 
-// A transcript turn opens with an ISO-8601 ms timestamp line followed by the
-// echoed "> <query>" line (chat.mjs's logLines shape).
-const LOG_TS_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+// A transcript turn heading (session-log-format.mjs's sessionLogTurnMarkdown):
+// "### HH:MM:SS.mmm · turn N" — time of day only, no calendar date (the date
+// lives once, in the header byline). The header byline itself carries that
+// date: "*YYYY-MM-DD · started HH:MM:SS.mmm[ · repo ...]*".
+const MD_TURN_HEADING_RE = /^### (\d{2}:\d{2}:\d{2}\.\d{3}) · turn \d+$/;
+const MD_BYLINE_DATE_RE = /^\*(\d{4}-\d{2}-\d{2}) ·/;
 
 export { turnKey };
 
+/** The calendar date one UTC day after `dateStr` ("YYYY-MM-DD") — used to
+ *  carry the transcript's running date forward across a midnight rollover
+ *  (see parseSessionLog below). */
+function nextUtcDate(dateStr) {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
 /**
- * Parse a human-readable session transcript (.tmct/session-<id>.log) into a
+ * Parse a human-readable session transcript (.tmct/session-<id>.md) into a
  * Map of turnKey(ts, query) → answer text. The transcript is the ONLY session
  * artifact that carries the answer PROSE (the structured sidecar records ids,
- * not text),
+ * not text).
+ *
+ * Each turn heading carries only a TIME of day (see MD_TURN_HEADING_RE above)
+ * — the calendar date is read once from the header byline and carried
+ * forward turn to turn, advancing a day whenever a heading's time reads
+ * EARLIER than the turn before it (a midnight rollover on a long session).
+ * The reconstructed `date + "T" + time + "Z"` is then byte-identical to the
+ * full ISO timestamp session-log-format.mjs's writer sliced the time out of,
+ * so it matches the sidecar's own `record.ts` under turnKey exactly.
  */
 export function parseSessionLog(text) {
   const lines = String(text ?? "").split("\n");
   const answers = new Map();
-  let open = null; // { ts, query, answerLines }
-  const close = () => {
-    if (!open) return;
-    while (open.answerLines.length && !open.answerLines.at(-1).trim()) open.answerLines.pop();
-    answers.set(turnKey(open.ts, open.query), open.answerLines.join("\n"));
-    open = null;
-  };
-  for (let i = 0; i < lines.length; i += 1) {
-    if (LOG_TS_RE.test(lines[i]) && lines[i + 1]?.startsWith("> ")) {
-      close();
-      open = { ts: lines[i], query: lines[i + 1].slice(2), answerLines: [] };
-      i += 1;
-    } else if (open) {
-      open.answerLines.push(lines[i]);
+  let date = null;
+  let lastTime = null;
+  let i = 0;
+  while (i < lines.length) {
+    if (date === null) {
+      const dateMatch = lines[i].match(MD_BYLINE_DATE_RE);
+      if (dateMatch) date = dateMatch[1];
     }
+    const heading = date && lines[i].match(MD_TURN_HEADING_RE);
+    if (heading) {
+      const time = heading[1];
+      if (lastTime !== null && time < lastTime) date = nextUtcDate(date);
+      lastTime = time;
+      let j = i + 1;
+      if (lines[j] === "") j += 1;
+      const queryLine = lines[j];
+      if (queryLine?.startsWith("> ")) {
+        j += 1;
+        if (lines[j] === "") j += 1;
+        if (lines[j] === "```text") {
+          j += 1;
+          const answerLines = [];
+          while (j < lines.length && lines[j] !== "```") { answerLines.push(lines[j]); j += 1; }
+          answers.set(turnKey(`${date}T${time}Z`, queryLine.slice(2)), answerLines.join("\n"));
+          i = j + 1;
+          continue;
+        }
+      }
+    }
+    i += 1;
   }
-  close();
   return answers;
 }
 

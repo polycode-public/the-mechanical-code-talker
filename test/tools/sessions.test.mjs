@@ -15,6 +15,7 @@ import {
 import { CLASS_DOCS, PREDICATE_DOCS } from "../../src/tools/schema-docs.mjs";
 import { runChat } from "../../src/services/chat.mjs";
 import { loadMemory, openConfiguredMemoryBackend } from "../../src/adapters/memory/core.mjs";
+import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown } from "../../src/services/session-log-format.mjs";
 
 /** Read the repo's memory store the way every routed reader does — through the
  *  configured backend (sqlite by default), never a flat graph.json. */
@@ -228,16 +229,19 @@ test("foldInSessions: zero records is a no-op (session-less graphs stay byte-ide
 
 // ---- the memory side-write (item 9 wiring: chat.mjs untouched) ----
 
-/** A repo laid out the way chat.mjs leaves it: .tmct/graph.json + transcript
- *  log (+ optionally the structured sidecar). */
+/** A repo laid out the way chat-session.mjs leaves it: .tmct/graph.json +
+ *  the Markdown transcript (+ optionally the structured sidecar). Renders
+ *  the transcript through the real writer functions, not a hand-rolled
+ *  string, so this fixture drifts with the writer instead of silently
+ *  diverging from it. */
 async function repoForMemory({ withEnd = false } = {}) {
   const dir = await mkdtemp(join(tmpdir(), "tmct-sess-mem-"));
   await mkdir(join(dir, ".tmct", "sessions"), { recursive: true });
   await writeFile(join(dir, ".tmct", "graph.json"), JSON.stringify(freshEntities()));
   const t = RECORD.turns[0];
-  await writeFile(join(dir, ".tmct", `session-${RECORD.id}.log`),
-    `# tmct chat 0.2.0 — session started ${RECORD.started} — repo ${dir}\n\n` +
-    `${t.ts}\n> ${t.query}\napp/x.mjs is imported by:\n  - app/y.mjs\n\n`);
+  await writeFile(join(dir, ".tmct", `session-${RECORD.id}.md`),
+    sessionLogHeaderMarkdown({ version: "0.2.0", sessionId: RECORD.id, startedAt: RECORD.started, repo: dir })
+    + sessionLogTurnMarkdown({ startedAt: t.ts, turnNumber: 1, query: t.query, answer: "app/x.mjs is imported by:\n  - app/y.mjs" }));
   await writeFile(join(dir, ".tmct", "sessions", `session-${RECORD.id}.jsonl`), [
     JSON.stringify({ type: "session", id: RECORD.id, started: RECORD.started, repo: dir, tmctVersion: "0.2.0" }),
     JSON.stringify({ type: "turn", ...t }),
@@ -327,9 +331,10 @@ test("appendSessionToGraph: memory is best-effort and scoped — no .tmct layout
 
 // ---- GUARD: the shell-transcript tripwire ----
 // The memory subsystem recovers each turn's ANSWER text by RE-READING the human
-// transcript .tmct/session-<id>.log (parseSessionLog, keyed by turnKey(ts, query)),
-// which depends on (a) the sidecar record's ts matching the transcript block's ts
-// line and (b) writeLog flushing BEFORE the per-turn graph upsert. Any chat shell
+// transcript .tmct/session-<id>.md (parseSessionLog, keyed by turnKey(ts, query)),
+// which depends on (a) the sidecar record's ts matching the transcript block's own
+// heading (reconstructed from the header's date + the heading's time of day) and
+// (b) writeLog flushing BEFORE the per-turn graph upsert. Any chat shell
 // (readline today, an Ink TUI, anything future) must write the SAME transcript
 // format through the SAME sequencing, or answer text silently stops reaching
 // memory. This test drives a scripted session through the real shell and asserts

@@ -30,6 +30,7 @@
 // exist (both built earlier in that same script, for the embedded widget).
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
 import { provBucketFor } from "./ledger-viz.mjs";
+import { sessionLogTimeOfDay, sessionLogHeaderMarkdown, sessionLogTurnMarkdown } from "./session-log-format.mjs";
 
 const DEFAULT_TITLE = "the-mechanical-code-talker — talk to it";
 
@@ -115,25 +116,37 @@ export function loadProgressLine(parts) {
 }
 
 /**
- * The exported transcript as one Markdown document: a title line naming the
- * site version and the export date, then every turn in order as
- * "**you:** ..." / "**tmct:** ...", with the provenance tier in parentheses
- * when the turn carried one. Reads the page's transcript MODEL (an array of
- * { role, text, chipTier }), never the DOM — the message column may
- * virtualize long chats someday, and an export must still carry every turn.
+ * The exported transcript as ONE Markdown document, in the SAME shape the
+ * Node CLI/TUI's own .tmct/session-<id>.md writes (session-log-format.mjs,
+ * spliced in beside this function below): a title naming the version and a
+ * short session id, one heading per turn at millisecond time-of-day
+ * precision, the question as a verbatim blockquote, the answer in a fenced
+ * block. No closing session-end line — unlike a CLI session's close(), an
+ * export can happen mid-conversation, before anything has actually ended.
  *
- * Self-contained (no outer refs), `.toString()`-splice safe — the same
- * discipline provenanceChipFor/loadProgressLine above hold.
+ * Reads the page's transcript MODEL (an array alternating { role: "you" |
+ * "tmct", text, chipTier, ts }, one entry per submit and per settled
+ * reply), never the DOM — the message column may virtualize long chats
+ * someday, and an export must still carry every turn.
+ *
+ * `headerMd`/`turnMd` are the injected session-log-format.mjs builders
+ * (spliced in as their own consts alongside this function) — injected
+ * rather than imported so this function stays `.toString()`-splice safe,
+ * the same discipline provenanceChipFor's injected `bucketFor` holds.
  */
-export function transcriptMarkdown(turns, meta) {
+export function transcriptMarkdown(turns, meta, headerMd, turnMd) {
   const version = (meta && meta.version) || "dev";
-  const date = (meta && meta.date) || "";
-  const lines = ["# tmct chat — v" + version + (date ? " — " + date : ""), ""];
-  for (const turn of turns || []) {
-    const tier = turn.chipTier ? " (" + turn.chipTier + ")" : "";
-    lines.push("**" + turn.role + ":** " + turn.text + tier, "");
+  const sessionId = (meta && meta.sessionId) || "";
+  const list = turns || [];
+  let doc = headerMd({ version: version, sessionId: sessionId, startedAt: list.length ? list[0].ts : Date.now() });
+  let turnNumber = 0;
+  for (let i = 0; i < list.length; i += 1) {
+    if (list[i].role !== "you") continue;
+    turnNumber += 1;
+    const reply = list[i + 1] && list[i + 1].role === "tmct" ? list[i + 1] : null;
+    doc += turnMd({ startedAt: list[i].ts, turnNumber: turnNumber, query: list[i].text, answer: reply ? reply.text : "" });
   }
-  return lines.join("\n");
+  return doc;
 }
 
 /** The self-contained "talk to it" full-screen page. Pure — the same output
@@ -331,6 +344,9 @@ ${THEME_TOKENS_CSS}
   const provBucketFor = ${provBucketFor.toString()};
   const provenanceChipFor = ${provenanceChipFor.toString()};
   const loadProgressLine = ${loadProgressLine.toString()};
+  const sessionLogTimeOfDay = ${sessionLogTimeOfDay.toString()};
+  const sessionLogHeaderMarkdown = ${sessionLogHeaderMarkdown.toString()};
+  const sessionLogTurnMarkdown = ${sessionLogTurnMarkdown.toString()};
   const transcriptMarkdown = ${transcriptMarkdown.toString()};
   const el = (id) => document.getElementById(id);
 
@@ -793,7 +809,8 @@ ${THEME_TOKENS_CSS}
   // @media print stylesheet above to un-pin the message column so every
   // turn reaches paper.
   el("exportMd").addEventListener("click", () => {
-    const md = transcriptMarkdown(transcript, { version: siteVersion, date: new Date(Date.now()).toISOString().slice(0, 10) });
+    const sessionId = (window.tmctChatSession && window.tmctChatSession.sessionId) || "";
+    const md = transcriptMarkdown(transcript, { version: siteVersion, sessionId: sessionId }, sessionLogHeaderMarkdown, sessionLogTurnMarkdown);
     const blob = new Blob([md], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

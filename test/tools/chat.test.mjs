@@ -183,6 +183,83 @@ test("runTurn: /help lists the commands (from COMMANDS) and the ask question sha
   assert.match(answer, /which <functions\|classes\|modules>/, "shapes come from the engine's rephraseHint");
 });
 
+// ---- /export and /ingest: the store leaves/enters as plain files ----
+
+test("runTurn: /export writes the memory store as JSONL, the same shape tmct memory --export writes", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-chat-export-"));
+  try {
+    await runTurn("every raven is a bird", { config: CONFIG, memoryDir: dir });
+    const outPath = join(dir, "out.jsonl");
+    const { answer, record } = await runTurn(`/export ${outPath}`, { config: CONFIG, memoryDir: dir });
+    assert.match(answer, /^wrote \d+ facts? to /);
+    assert.equal(record.miss, false);
+    const written = (await readFile(outPath, "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+    assert.ok(written.length >= 1, "at least the taught fact was exported");
+    assert.ok(written.some((r) => r.subject === "raven" && r.predicate === "rdfs:subClassOf" && r.object === "bird"));
+    for (const r of written) assert.ok("provenance" in r, "every row carries its provenance, the extract shape");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runTurn: /export declines cleanly with no path, and with no memory store", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-chat-export-decline-"));
+  try {
+    const noArg = await runTurn("/export", { config: CONFIG, memoryDir: dir });
+    assert.match(noArg.answer, /\/export needs a path/);
+    assert.equal(noArg.record.miss, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+  const noStore = await runTurn("/export out.jsonl", { config: CONFIG, graph: await graph() });
+  assert.match(noStore.answer, /no memory store here/);
+  assert.equal(noStore.record.miss, true);
+});
+
+test("runTurn: /ingest reads a local text file, grounds the recognized sentences, and reports the count", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-chat-ingest-"));
+  try {
+    const filePath = join(dir, "notes.txt");
+    await writeFile(filePath, "Every otter is a mammal. The weather is nice today. Every mammal is an animal.\n");
+    const { answer, record } = await runTurn(`/ingest ${filePath}`, { config: CONFIG, memoryDir: dir });
+    assert.match(answer, /^ingested 2 facts from /);
+    assert.match(answer, /2 of 3 sentences recognized/);
+    assert.equal(record.miss, false);
+
+    // the ingested facts are grounded in THIS session's own store, not some
+    // other scratch dir — a follow-up question answers from them directly.
+    const { answer: recall } = await runTurn("is an otter a mammal", { config: CONFIG, memoryDir: dir });
+    assert.match(recall, /yes/i);
+    const { answer: chain } = await runTurn("is an otter an animal", { config: CONFIG, memoryDir: dir });
+    assert.match(chain, /yes/i);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runTurn: /ingest declines cleanly on a missing file and an empty grounding, never a stack", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-chat-ingest-decline-"));
+  try {
+    const missing = await runTurn(`/ingest ${join(dir, "nope.txt")}`, { config: CONFIG, memoryDir: dir });
+    assert.match(missing.answer, /couldn't read .*no such file/);
+    assert.equal(missing.record.miss, true);
+    assert.doesNotMatch(missing.answer, /\bat \w+.*:\d+:\d+/, "no stack frames leak");
+
+    const emptyFile = join(dir, "empty.txt");
+    await writeFile(emptyFile, "How are you today? What is the weather like?\n");
+    const empty = await runTurn(`/ingest ${emptyFile}`, { config: CONFIG, memoryDir: dir });
+    assert.match(empty.answer, /none grounded into a recognized fact shape/);
+    assert.equal(empty.record.miss, true);
+
+    const noArg = await runTurn("/ingest", { config: CONFIG, memoryDir: dir });
+    assert.match(noArg.answer, /\/ingest needs a path/);
+    const noStore = await runTurn(`/ingest ${emptyFile}`, { config: CONFIG, graph: await graph() });
+    assert.match(noStore.answer, /no memory store here/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- multi-turn context: the FOCUS entity + the "it" follow-up ----
 
 test("runTurn: an entity command sets the focus and records its resolved id", async () => {
@@ -535,7 +612,7 @@ test("runChat: a scripted conversational session — greeting, hit, why re-rende
     assert.match(shown, /Bye/, "farewell shown");
     const log = await readFile(logFile, "utf8");
     assert.match(log, /> bye\n/, "the bye turn is logged");
-    assert.match(log, /session end \d{4}-/, "the session ended cleanly after bye");
+    assert.match(log, /session end \d{2}:\d{2}:\d{2}\.\d{3}/, "the session ended cleanly after bye");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -575,7 +652,7 @@ test("runChat: not in a git repo (gitRoot → null) falls back to cwd", async ()
 
 // ---- runChat (scripted session, no TTY) ----
 
-test("runChat: scripted session writes .tmct/session-<uuidv7>.log with header, turns, exit", async () => {
+test("runChat: scripted session writes .tmct/session-<uuidv7>.md — glow-Markdown header, turns, exit", async () => {
   const dir = await repoWithFixtureGraph();
   try {
     const input = Readable.from(["which modules import a.mjs\n", "tell me a joke\n", "  \n", "/exit\n"]);
@@ -589,17 +666,17 @@ test("runChat: scripted session writes .tmct/session-<uuidv7>.log with header, t
     const names = await readdir(join(dir, SESSION_LOG_DIR));
     const logName = names.find((n) => n.startsWith("session-"));
     assert.ok(logName, "session log exists");
-    assert.match(logName, /^session-[0-9a-f-]{36}\.log$/);
-    assert.match(logName.slice("session-".length, -".log".length), UUID_V7_RE);
+    assert.match(logName, /^session-[0-9a-f-]{36}\.md$/);
+    assert.match(logName.slice("session-".length, -".md".length), UUID_V7_RE);
 
     const log = await readFile(logFile, "utf8");
-    assert.match(log, /^# tmct chat \d+\.\d+\.\d+ — session started \d{4}-.* — repo /, "header line");
-    assert.ok(log.includes(dir), "header names the repo");
-    assert.match(log, /> which modules import a\.mjs\n/);
+    assert.match(log, /^# tmct chat \d+\.\d+\.\d+ — session [0-9a-f]{8}\n\n\*\d{4}-\d{2}-\d{2} · started \d{2}:\d{2}:\d{2}\.\d{3} · repo /, "the title + byline carry version, a short session id, the date, and the repo");
+    assert.ok(log.includes(dir), "byline names the repo");
+    assert.match(log, /### \d{2}:\d{2}:\d{2}\.\d{3} · turn 1\n\n> which modules import a\.mjs\n\n```text\n/, "turn 1 is a time-of-day heading, a verbatim blockquote, then a fenced block");
     assert.match(log, /app\/lib\/b\.mjs/);
-    assert.match(log, /> tell me a joke\n/);
+    assert.match(log, /### \d{2}:\d{2}:\d{2}\.\d{3} · turn 2\n\n> tell me a joke\n\n```text\n/);
     assert.match(log, /couldn't parse this as a graph question/);
-    assert.match(log, /> \/exit\nsession end \d{4}-/, "exit + session end time are logged");
+    assert.match(log, /### \d{2}:\d{2}:\d{2}\.\d{3} · turn 3\n\n> \/exit\n\n```text\n```\n\n---\n\n\*session end \d{2}:\d{2}:\d{2}\.\d{3} — 3 turns\*\n$/, "the closing /exit marker and the session-end line");
 
     // the TUI itself: banner (repo, module count, log path), hint, prompt, answers
     const shown = text();
@@ -625,7 +702,7 @@ test("runChat: structured sidecar + read-time graph append — the session becom
 
     // sidecar: same uuid as the log, header + one line per turn + end marker, all valid JSON
     assert.ok(sidecarFile.startsWith(join(dir, ".tmct", "sessions") + "/"), sidecarFile);
-    const uuid = logFile.match(/session-([0-9a-f-]{36})\.log$/)[1];
+    const uuid = logFile.match(/session-([0-9a-f-]{36})\.md$/)[1];
     assert.ok(sidecarFile.endsWith(`session-${uuid}.jsonl`), "sidecar shares the session uuid");
     const lines = (await readFile(sidecarFile, "utf8")).trim().split("\n").map((l) => JSON.parse(l));
     assert.equal(lines.length, 4);
@@ -678,7 +755,7 @@ test("runChat: a slash-command turn is recorded — sidecar carries the command,
     assert.deepEqual(help.resolvedIds, [], "a no-entity command records no asksAbout id");
 
     // the /impact turn became first-class graph data — a Session node + asksAbout edge
-    const uuid = logFile.match(/session-([0-9a-f-]{36})\.log$/)[1];
+    const uuid = logFile.match(/session-([0-9a-f-]{36})\.md$/)[1];
     const gjson = JSON.parse(await readFile(join(dir, ".tmct", "graph.json"), "utf8"));
     const sess = gjson.individuals.find((i) => i.id === `session:${uuid}`);
     assert.ok(sess, "Session individual appended");
@@ -690,7 +767,7 @@ test("runChat: a slash-command turn is recorded — sidecar carries the command,
   }
 });
 
-test("runChat: the .log echoes the user's line verbatim — a rewritten opener and a multi-sentence teach both quote what was typed", async () => {
+test("runChat: the transcript echoes the user's line verbatim — a rewritten opener and a multi-sentence teach both quote what was typed", async () => {
   const dir = await repoWithFixtureGraph();
   try {
     const input = Readable.from([
@@ -720,7 +797,7 @@ test("runChat: input ending without /exit (Ctrl+D shape) still closes cleanly an
     const { logFile, turns } = await runChat({ repoPath: dir, input, output: out });
     assert.equal(turns, 1);
     const log = await readFile(logFile, "utf8");
-    assert.match(log, /session end \d{4}-/);
+    assert.match(log, /session end \d{2}:\d{2}:\d{2}\.\d{3}/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -763,7 +840,7 @@ test("cli chat: real binary, stdin closed after /exit → exit 0; graphless repo
     assert.equal(ok.status, 0, ok.stderr);
     assert.match(ok.stdout, /app\/lib\/b\.mjs/);
     const names = await readdir(join(dir, ".tmct"));
-    assert.ok(names.some((n) => /^session-.*\.log$/.test(n)), "binary session wrote its log");
+    assert.ok(names.some((n) => /^session-.*\.md$/.test(n)), "binary session wrote its log");
 
     // no graph → the bootstrap path: honest empty banner, greeting works, clean exit 0
     // (TMCT_NO_SEED: the W3 seeded-bootstrap path has its own suite — wiring-seed.test.mjs)

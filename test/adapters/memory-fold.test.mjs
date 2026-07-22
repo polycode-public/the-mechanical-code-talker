@@ -9,6 +9,7 @@ import { join } from "node:path";
 import { parseSessionLog, turnKey } from "../../src/services/sessions.mjs";
 import { cleanSessionText } from "../../src/domain/memory/fold.mjs";
 import { foldSessionLogs } from "../../src/services/fold.mjs";
+import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown, sessionLogEndMarkdown } from "../../src/services/session-log-format.mjs";
 import { BLOCKS_DIR_REL, loadBlockIndex, retrieveBlocks } from "../../src/adapters/memory/blocks.mjs";
 import { appendFact, appendUtterances, loadMemory, openMemoryBackend, readFactRows, CANONICALISED_FROM_PROP } from "../../src/adapters/memory/core.mjs";
 
@@ -35,25 +36,27 @@ function sidecarText(id = SID, turns = TURNS) {
   ].join("\n") + "\n";
 }
 
-// The transcript chat.mjs writes: header, per-turn [ts, "> query", answer, ""], footer.
+// The transcript chat-session.mjs writes: a header, one heading/blockquote/
+// fence block per turn, a closing session-end line (session-log-format.mjs).
 function logText(id = SID) {
-  const block = (ts, q, a) => `${ts}\n> ${q}\n${a}\n`;
-  return `# tmct chat 0.2.0 — session started ${T(0)} — repo /r\n\n` +
-    block(T(1), "hi", "Hello! Ask me about this codebase.") +
-    block(T(2), "which  modules import   config.mjs?", "config.mjs is imported by:\n  - app/lib/b.mjs") +
-    block(T(3), "/stats", "modules: 2\ncommits: 0") +
-    block(T(4), "thanks!!", "Any time.") +
-    block(T(5), "tell me about zorbulon", 'no symbol matching "zorbulon" found in the index.') +
-    block(T(6), "who calls helper?", "helper is called by app/lib/b.mjs.") +
-    block(T(7), "bye", "Bye!") +
-    `${T(8)}\n> /exit\nsession end ${T(8)}\n`;
+  const turn = (n, ts, q, a) => sessionLogTurnMarkdown({ startedAt: ts, turnNumber: n, query: q, answer: a });
+  return sessionLogHeaderMarkdown({ version: "0.2.0", sessionId: id, startedAt: T(0), repo: "/r" })
+    + turn(1, T(1), "hi", "Hello! Ask me about this codebase.")
+    + turn(2, T(2), "which  modules import   config.mjs?", "config.mjs is imported by:\n  - app/lib/b.mjs")
+    + turn(3, T(3), "/stats", "modules: 2\ncommits: 0")
+    + turn(4, T(4), "thanks!!", "Any time.")
+    + turn(5, T(5), "tell me about zorbulon", 'no symbol matching "zorbulon" found in the index.')
+    + turn(6, T(6), "who calls helper?", "helper is called by app/lib/b.mjs.")
+    + turn(7, T(7), "bye", "Bye!")
+    + turn(8, T(8), "/exit", "")
+    + sessionLogEndMarkdown({ endedAt: T(8), turnCount: 8 });
 }
 
 async function repoWithSession(id = SID) {
   const dir = await mkdtemp(join(tmpdir(), "tmct-mem-fold-"));
   await mkdir(join(dir, ".tmct", "sessions"), { recursive: true });
   await writeFile(join(dir, ".tmct", "sessions", `session-${id}.jsonl`), sidecarText(id));
-  await writeFile(join(dir, ".tmct", `session-${id}.log`), logText(id));
+  await writeFile(join(dir, ".tmct", `session-${id}.md`), logText(id));
   return dir;
 }
 
@@ -132,7 +135,7 @@ test("foldSessionLogs: sessionId scoping folds just that session; missing dir / 
   const dir = await repoWithSession();
   try {
     await writeFile(join(dir, ".tmct", "sessions", `session-${other}.jsonl`), sidecarText(other));
-    await writeFile(join(dir, ".tmct", `session-${other}.log`), logText(other));
+    await writeFile(join(dir, ".tmct", `session-${other}.md`), logText(other));
     const res = await foldSessionLogs(dir, { sessionId: other });
     assert.deepEqual(res.folded, [other], "only the named session folded");
     assert.deepEqual(Object.keys((await loadBlockIndex(dir)).blocks), [other]);

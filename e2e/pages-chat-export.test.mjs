@@ -1,7 +1,8 @@
 // chat.html's transcript export and print: the export control downloads a
-// Markdown file carrying every turn in order (misses included) with role
-// labels and provenance tiers, and print media expands the message column so
-// the whole transcript prints, not just the scrolled-into-view slice.
+// Markdown file in the same shape the CLI/TUI's own .tmct/session-<id>.md
+// writes — one heading per turn, the question as a blockquote, the answer in
+// a fenced block — and print media expands the message column so the whole
+// transcript prints, not just the scrolled-into-view slice.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync, rmSync } from "node:fs";
@@ -65,7 +66,7 @@ async function driveConversation(page) {
   await ask(page, "what is a zorblatt");
 }
 
-test("export downloads a Markdown transcript with every turn in order, role-labelled, tiers in parentheses, the miss included", async () => {
+test("export downloads a Markdown transcript in the shared session-log shape, every turn in order, the miss included", async () => {
   const { context, page } = await openChatPage();
   try {
     await driveConversation(page);
@@ -76,32 +77,21 @@ test("export downloads a Markdown transcript with every turn in order, role-labe
     assert.equal(download.suggestedFilename(), "tmct-chat.md");
     const md = readFileSync(await download.path(), "utf8");
 
-    assert.match(md.split("\n")[0], /^# tmct chat — v.+ — \d{4}-\d{2}-\d{2}$/, "the title line carries the site version and the export date");
+    assert.match(md.split("\n")[0], /^# tmct chat \S+ — session [0-9a-f]{0,8}$/, "the title line carries the site version and a short session id");
+    assert.match(md, /### \d{2}:\d{2}:\d{2}\.\d{3} · turn 1\n\n> what is a dog\n\n```text\n/, "turn 1 is a heading, a verbatim blockquote, then a fenced block");
 
-    // The miss is a multi-line answer (a code-graph decline, then the
-    // refusal), so its needle is the refusal sentence itself rather than a
-    // role-label prefix; order still pins every turn to its place.
-    const turns = [
-      ["**you:** what is a dog", null],
-      ["**tmct:** dog is a kind of animal", "corpus"],
-      ["**you:** every zorbnug is a dog", null],
-      ["**tmct:** noted", "taught"],
-      ["**you:** what is a zorblatt", null],
-      ["**tmct:** ", null],
-      ["I don't know \"zorblatt\" yet", null],
-    ];
+    // Every turn's own needle, in order — the fenced block means a role
+    // label no longer prefixes the reply, so each needle is the turn's own
+    // content (the question, or a phrase from its answer).
+    const turns = ["> what is a dog", "dog is a kind of animal", "> every zorbnug is a dog", "noted", "> what is a zorblatt", "I don't know \"zorblatt\" yet"];
     let cursor = -1;
-    for (const [needle, tier] of turns) {
+    for (const needle of turns) {
       const at = md.indexOf(needle, cursor + 1);
       assert.ok(at > cursor, `"${needle}" appears, after the previous turn (index ${at})`);
       cursor = at;
-      if (tier) {
-        const paragraph = md.slice(at, md.indexOf("\n**", at + 1) === -1 ? md.length : md.indexOf("\n**", at + 1));
-        assert.match(paragraph, new RegExp(`\\(${tier}\\)`), `the ${tier} tier is named in parentheses on its turn`);
-      }
     }
-    const lastLine = md.trimEnd().split("\n").at(-1);
-    assert.ok(!/\((?:taught|corpus|entailed)\)$/.test(lastLine), "the miss turn carries no tier parenthetical");
+    // No closing session-end marker — the export can happen mid-conversation.
+    assert.ok(!/session end/.test(md), "an export carries no session-end line — the session hasn't closed");
   } finally {
     await context.close();
   }

@@ -8,7 +8,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,6 +58,18 @@ test("the spawned chat shell answers the seed, plays the game, and learns from t
       rows.some((r) => /reference:simplewiki:Otter@\d+/.test(r.provenance)),
       "the reference-provenance fact is on disk in the routed store",
     );
+
+    // the session transcript is a glow-friendly Markdown file, not the old
+    // flat .log: a title carrying the version, one heading per turn at
+    // millisecond time-of-day precision, the verbatim question as a
+    // blockquote, the answer in a fenced block, and a closing session-end line.
+    const names = await readdir(join(dir, ".tmct"));
+    const logName = names.find((n) => /^session-.*\.md$/.test(n));
+    assert.ok(logName, "the session wrote a .md transcript, not .log");
+    const log = await readFile(join(dir, ".tmct", logName), "utf8");
+    assert.match(log, /^# tmct chat \S+ — session [0-9a-f]{8}\n/, "title carries the version and a short session id");
+    assert.match(log, /### \d{2}:\d{2}:\d{2}\.\d{3} · turn 1\n\n> what is a dog\n\n```text\n/, "turn 1 is verbatim under a time-of-day heading");
+    assert.match(log, /```\n\n---\n\n\*session end \d{2}:\d{2}:\d{2}\.\d{3} — \d+ turns?\*\n$/, "the transcript closes with a session-end line");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

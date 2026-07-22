@@ -12,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { spiderFlyTurn, pillsForSpiderFly, oneStepDirectionBetween } from "../../src/services/spider-fly-turn.mjs";
 import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
-import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { loadMemory, readFactRows, appendFacts } from "../../src/adapters/memory/core.mjs";
 
 test("spiderFlyTurn's opening move threads a custom gameConfig into startSpiderFlyGame's own written facts", async () => {
   const memoryDir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-turn-config-"));
@@ -160,4 +160,94 @@ test("pillsForSpiderFly: a spider with no live fly at all still offers its own a
   assert.deepEqual(addressPills, [{ id: "spider-1", kind: "spider", label: "@spider" }]);
   assert.equal(addresseeId, "spider-1");
   assert.deepEqual(claimPills, []);
+});
+
+// ---- "what does the fly/spider see?" — the observable-facts read lane -----
+
+/** A live game with spider-1/fly-1 placed at explicit cells, overriding the
+ *  opener's own seeded placement via a later @turn1 snapshot (foldSpiderFlyState
+ *  picks the newest turn per subject — the same shape runSpiderFlyTick's own
+ *  movement writes use), so a belief-snapshot test never depends on the
+ *  opener's seeded spawn cell. */
+async function openGameAt(memoryDir, { spiderCell, flyCell }) {
+  const planHolder = { state: null };
+  await spiderFlyTurn("watch the spider and the fly", { planHolder, memoryDir, env: {} });
+  await appendFacts(memoryDir, [
+    { subject: "spider-1@turn1", predicate: "mgx:currently-in", object: spiderCell, provenance: "test:spider-fly-turn" },
+    { subject: "fly-1@turn1", predicate: "mgx:currently-in", object: flyCell, provenance: "test:spider-fly-turn" },
+  ]);
+  return planHolder;
+}
+
+test("what does the spider see?: a fly within vision radius reads as observed, at its real cell", async () => {
+  const memoryDir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-see-near-"));
+  try {
+    const planHolder = await openGameAt(memoryDir, { spiderCell: "cell-5-5", flyCell: "cell-6-5" });
+    const result = await spiderFlyTurn("what does the spider see?", { planHolder, memoryDir, env: {} });
+    assert.ok(result, "the see-question is claimed by the spider-fly lane");
+    assert.equal(result.miss, undefined, "an observed snapshot is not a miss");
+    assert.match(result.text, /^spider-1 sees: fly-1 is at cell-6-5\.$/);
+  } finally {
+    await rm(memoryDir, { recursive: true, force: true });
+  }
+});
+
+test("what does the fly see?: a spider beyond vision radius reads as not observed — belief, never ground truth", async () => {
+  const memoryDir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-see-far-"));
+  try {
+    const planHolder = await openGameAt(memoryDir, { spiderCell: "cell-1-1", flyCell: "cell-10-10" });
+    const result = await spiderFlyTurn("what does the fly see?", { planHolder, memoryDir, env: {} });
+    assert.ok(result);
+    assert.match(result.text, /^fly-1 sees: spider-1 has not been observed\.$/);
+  } finally {
+    await rm(memoryDir, { recursive: true, force: true });
+  }
+});
+
+test("what can the spider see?: the alternate phrasing (\"can\" instead of \"does\") is recognized too", async () => {
+  const memoryDir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-see-can-"));
+  try {
+    const planHolder = await openGameAt(memoryDir, { spiderCell: "cell-5-5", flyCell: "cell-5-6" });
+    const result = await spiderFlyTurn("what can the spider see?", { planHolder, memoryDir, env: {} });
+    assert.ok(result);
+    assert.match(result.text, /fly-1 is at cell-5-6\./);
+  } finally {
+    await rm(memoryDir, { recursive: true, force: true });
+  }
+});
+
+test("what does the spider see?: read-only — no tick runs, the turn counter and board are untouched", async () => {
+  const memoryDir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-see-readonly-"));
+  try {
+    const planHolder = await openGameAt(memoryDir, { spiderCell: "cell-5-5", flyCell: "cell-5-6" });
+    const before = readFactRows(await loadMemory(memoryDir)).length;
+    await spiderFlyTurn("what does the spider see?", { planHolder, memoryDir, env: {} });
+    const after = readFactRows(await loadMemory(memoryDir)).length;
+    assert.equal(after, before, "no new facts were written by a see-question");
+    assert.equal(planHolder.state.spiderFly.turn, 0, "the turn counter never advanced");
+  } finally {
+    await rm(memoryDir, { recursive: true, force: true });
+  }
+});
+
+test("what does the spider see?: before any game is opened, the lane declines (falls through to the ordinary lanes)", async () => {
+  const memoryDir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-see-pregame-"));
+  try {
+    const planHolder = { state: null };
+    const result = await spiderFlyTurn("what does the spider see?", { planHolder, memoryDir, env: {} });
+    assert.equal(result, null, "not this lane's to answer — no game is running");
+  } finally {
+    await rm(memoryDir, { recursive: true, force: true });
+  }
+});
+
+test("what does the crab see?: an unaddressed kind never matches — only spider/fly are recognized", async () => {
+  const memoryDir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-see-crab-"));
+  try {
+    const planHolder = await openGameAt(memoryDir, { spiderCell: "cell-5-5", flyCell: "cell-5-6" });
+    const result = await spiderFlyTurn("what does the crab see?", { planHolder, memoryDir, env: {} });
+    assert.equal(result, null, "an unrecognized kind falls through, board untouched");
+  } finally {
+    await rm(memoryDir, { recursive: true, force: true });
+  }
 });

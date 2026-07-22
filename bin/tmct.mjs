@@ -55,7 +55,7 @@ Usage:
 ${renderUsage()}
 
 On a terminal, chat opens the full-screen TUI; piped input gets the plain shell.
-In chat: /help lists slash-commands; /exit leaves. Session log → <repo>/.tmct/session-<id>.log.
+In chat: /help lists slash-commands; /exit leaves. Session log → <repo>/.tmct/session-<id>.md.
 
 Shared graph-path precedence (chat/serve/cli; see src/services/cli-args.mjs): --graph flag(s) >
 TMCT_GRAPH_FILE env > tmct.toml graph_file/graph_files > --repo-derived
