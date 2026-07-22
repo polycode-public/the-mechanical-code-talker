@@ -163,6 +163,18 @@ test("scenePlacement: a class default reached via rdf:type + rdfs:subClassOf anc
   assert.deepEqual(scenePlacement(rows, state, "portrait"), { plane: "wall", stackedOn: null });
 });
 
+test("scenePlacement: a directly-taxonomized individual's own rdfs:subClassOf default wins over its generic rdf:type's default, even when the rdf:type row is written first — Ashcombe Hall's own portrait is both 'furniture' (floor) and subClassOf 'painting' (wall), and must land on the wall", () => {
+  const rows = [
+    { subject: "portrait", predicate: "rdf:type", object: "furniture" },
+    { subject: "portrait", predicate: "mgx:fixed-in", object: "drawing-room" },
+    { subject: "portrait", predicate: "rdfs:subClassOf", object: "painting" },
+    { subject: "furniture", predicate: "mgx:default-plane", object: "floor" },
+    { subject: "painting", predicate: "mgx:default-plane", object: "wall" },
+  ];
+  const state = foldWorldState(rows);
+  assert.deepEqual(scenePlacement(rows, state, "portrait"), { plane: "wall", stackedOn: null }, "the specific taxonomic fact outranks the coarse rendering class, regardless of which fact row came first");
+});
+
 test("scenePlacement: an object with no instance predicate and no class default falls to the floor", () => {
   const state = foldWorldState(ROWS);
   assert.deepEqual(scenePlacement(ROWS, state, "desk"), { plane: "floor", stackedOn: null });
@@ -244,6 +256,22 @@ test("roomSceneLayout: an empty room yields an empty wall band and no floor stac
   const rows = [{ subject: "garden", predicate: "rdf:type", object: "room" }, { subject: "player", predicate: "mgx:currently-in", object: "garden" }];
   const state = foldWorldState(rows);
   assert.deepEqual(roomSceneLayout(rows, state, "garden"), { wall: [], floor: [] });
+});
+
+test("roomSceneLayout: a furniture-typed painting still lands on the wall, not the floor, when furniture's own default conflicts with painting's — Ashcombe Hall's own portrait/furniture shape", () => {
+  const rows = [
+    { subject: "drawing-room", predicate: "rdf:type", object: "room" },
+    { subject: "player", predicate: "mgx:currently-in", object: "drawing-room" },
+    { subject: "portrait", predicate: "rdf:type", object: "furniture" },
+    { subject: "portrait", predicate: "mgx:fixed-in", object: "drawing-room" },
+    { subject: "portrait", predicate: "rdfs:subClassOf", object: "painting" },
+    { subject: "furniture", predicate: "mgx:default-plane", object: "floor" },
+    { subject: "painting", predicate: "mgx:default-plane", object: "wall" },
+  ];
+  const state = foldWorldState(rows);
+  const layout = roomSceneLayout(rows, state, "drawing-room");
+  assert.deepEqual(layout.wall, [{ subject: "portrait", spriteClass: "furniture" }]);
+  assert.deepEqual(layout.floor, [], "the portrait never lands on the floor despite its own generic rdf:type furniture");
 });
 
 // ---- roomKindForRoom ----------------------------------------------------------
@@ -536,6 +564,15 @@ test("renderAdventureHtml: redraw() builds the scene from roomSceneLayout and re
   assert.match(html, /const roomSceneLayout = /, "the layout helper is spliced in, not re-implemented");
   assert.match(html, /roomSceneLayout\(snap\.rows, snap\.state, snap\.here\)/);
   assert.match(html, /youSlotEl\.innerHTML = spriteCardHtml\("you", "adventurer"/);
+});
+
+test("renderAdventureHtml: every stacked item but the floor base renders as a compact, label-less card, so a resting item's own name/badge chrome never reads as a gap between it and what it rests on", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /function stackedSpriteCardHtml\(/);
+  assert.ok(!/stackedSpriteCardHtml[\s\S]{0,300}sprite-label/.test(html), "the compact card never carries the name/badge block");
+  const floorRowBlock = html.match(/floorRowEl\.innerHTML = [\s\S]*?\}\);/)[0];
+  assert.match(floorRowBlock, /baseIndex/, "the base (floor-standing) item in each stack is rendered differently from the items resting on it");
+  assert.match(floorRowBlock, /stackedSpriteCardHtml/);
 });
 
 test("renderAdventureHtml: the room frame carries a room-kind attribute and a top-right room-kind icon, both filled every redraw", () => {
