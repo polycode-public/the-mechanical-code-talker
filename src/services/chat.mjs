@@ -5611,7 +5611,7 @@ export async function helpText() {
     ["/capabilities", "what /plan can plan over: the built-in graph tools plus your taught actions"],
     ["/syllogise <term>", "work out and remember what follows from the facts about a term (needed for chains longer than 2 hops)"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
-    ["/wiki on|off", "live Wikipedia supplement (default off): a question I can't answer also tries en.wikipedia.org (network), cited"],
+    ["/wiki on|off|supplement", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded answer"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
   ];
@@ -12357,6 +12357,23 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     answer = `hypothetically, if ${counterfactualSubject[1].trim()} were removed: ${answer}`;
     note(trace, `intermediate: COUNTERFACTUAL_RE matched — compiled to a real traversal, wrapped as hypothetical ("${counterfactualSubject[1].trim()}" removed)`);
   }
+  // LIVE SUPPLEMENT (/wiki supplement): a grounded answer also carries what
+  // Wikipedia says about its subject — corroboration, not rescue. Scoped to a
+  // clean vocabulary subject (a "what is X" / "tell me about X" term), never a
+  // code-graph entity, and never doubled onto an answer that already IS a
+  // Wikipedia read-out. Failure-tolerated, and network-gated by the same toggle
+  // (the "supplement" value is truthy, so the rescue lanes above already ran).
+  if (liveReference === "supplement" && !recordMiss && via !== "reference") {
+    const supplementTerm = metaTermOf(query, envelope) || vagueTouchTermOf(query);
+    let liveKey = null;
+    try { liveKey = supplementTerm ? cleanMissLiveTerm(supplementTerm, lexicon ?? undefined) : null; } catch { liveKey = null; }
+    const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup) : null;
+    if (live) {
+      answer = `${answer}\nWikipedia adds: ${live.text}`;
+      await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon);
+      note(trace, `intermediate: LIVE SUPPLEMENT — appended a cited en.wikipedia.org read-out for "${supplementTerm}" (supplement mode)`);
+    }
+  }
   // The concept force answers WITH real example instances — those are the entities the
   // turn "asked about" (the SchemaClass meta-node is documentation, not a code entity),
   // so record + expand them, not the schema match.
@@ -12494,12 +12511,14 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
   // state). A bare "/wiki" reports the CURRENT state and changes nothing.
   if (name === "wiki") {
     const arg = argText.toLowerCase();
-    if (arg !== "on" && arg !== "off") {
-      return mk(`live Wikipedia supplement is ${liveReference ? "on" : "off"} — /wiki on or /wiki off. `
-        + "When on, a question I can't answer also tries en.wikipedia.org (network).");
+    const stateWord = (v) => (v === "supplement" ? "supplement" : v ? "on" : "off");
+    if (arg !== "on" && arg !== "off" && arg !== "supplement") {
+      return mk(`live Wikipedia supplement is ${stateWord(liveReference)} — /wiki on, /wiki off, or /wiki supplement. `
+        + "When on, a question I can't answer also tries en.wikipedia.org (network); "
+        + "supplement adds a cited Wikipedia read-out under every grounded answer too.");
     }
-    const next = arg === "on";
-    return mk(`live Wikipedia supplement ${next ? "on" : "off"}.`, { liveReferenceNext: next });
+    const next = arg === "supplement" ? "supplement" : arg === "on";
+    return mk(`live Wikipedia supplement ${stateWord(next)}.`, { liveReferenceNext: next });
   }
 
   // /memory [verbose] — what tmct remembers, as text (the same renderer

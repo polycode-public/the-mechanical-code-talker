@@ -243,18 +243,45 @@ test("/wiki flips ride the turn result: on, off, and a bare status report that c
 
     const status = await turn("/wiki", { memoryDir: dir, liveReference: true });
     assert.equal(status.liveReference, undefined, "a bare /wiki never flips the state");
-    assert.match(status.answer, /live Wikipedia supplement is on — \/wiki on or \/wiki off/);
+    assert.match(status.answer, /live Wikipedia supplement is on — \/wiki on, \/wiki off, or \/wiki supplement/);
     assert.match(status.answer, /en\.wikipedia\.org \(network\)/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
 });
 
-test("/help lists the /wiki toggle", async () => {
+test("/wiki supplement is the third state and rides the turn result", async () => {
+  const dir = await freshRepo();
+  try {
+    const sup = await turn("/wiki supplement", { memoryDir: dir });
+    assert.equal(sup.liveReference, "supplement");
+    assert.match(sup.answer, /live Wikipedia supplement supplement\./);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("supplement mode appends a cited Wikipedia read-out under a grounded vocabulary answer", async () => {
+  const dir = await freshRepo();
+  registerLiveReferenceProvider(hitProvider());
+  try {
+    // a remembered fact answers locally; supplement mode still corroborates from Wikipedia
+    await turn("every quasar is a star", { memoryDir: dir });
+    const r = await turn("what is a quasar", { memoryDir: dir, liveReference: "supplement" });
+    assert.match(r.answer, /quasar is a kind of star/, "the local answer still leads");
+    assert.match(r.answer, /Wikipedia adds: quasar — A quasar is a very bright object/, "the cited supplement follows");
+    assert.equal(r.record.miss, false);
+  } finally {
+    registerLiveReferenceProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("/help lists the /wiki toggle with all three states", async () => {
   const dir = await freshRepo();
   try {
     const r = await turn("/help", { memoryDir: dir });
-    assert.match(r.answer, /\/wiki on\|off\s+live Wikipedia supplement \(default off\)/);
+    assert.match(r.answer, /\/wiki on\|off\|supplement/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

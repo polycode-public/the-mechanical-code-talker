@@ -378,7 +378,9 @@ export async function createSession({
       // same way a focus update does — apply them to this handle's
       // session-scoped state.
       if (typeof nextNarrate === "boolean") narrateOn = nextNarrate;
-      if (typeof nextLiveReference === "boolean") liveReferenceOn = nextLiveReference;
+      // tri-state: false (off), true (rescue on a miss), or "supplement" (also
+      // append a cited read-out under every grounded answer).
+      if (typeof nextLiveReference === "boolean" || nextLiveReference === "supplement") liveReferenceOn = nextLiveReference;
       await writeLog(logLines.join("\n") + "\n");
       await writeSidecar(record);
       turnRecords.push(record);
