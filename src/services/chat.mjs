@@ -55,6 +55,7 @@ import { getLiveReferenceProvider } from "../adapters/corpus/wikipedia-live.mjs"
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
+import { subClassParents, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
 import { adventureTurn, unclaimedAdventureOpening } from "./adventure.mjs";
 import { spiderFlyTurn } from "./spider-fly-turn.mjs";
@@ -5941,6 +5942,74 @@ function renderFactLine(f) {
   return `i learned: ${factPhrase(f)}${cite}`;
 }
 
+const SENSE_CITE_RE = / \(source: [^)]*\)$/;
+
+/** Append an is-a object's superclass chain to its rendered fact line, before
+ *  the citation: "rover is a kind of dog" becomes "rover is a kind of dog →
+ *  canine → mammal → animal". Only the subject-side is-a lines of the queried
+ *  term get a chain; every other line renders unchanged. */
+function renderFactLineWithChain(f, parents, subjectVariants) {
+  const base = renderFactLine(f);
+  if (!ISA_PREDICATES.has(f.predicate) || !subjectVariants.has(f.subject)) return base;
+  const chain = ancestryChain(f.object, parents, { cap: 6 });
+  if (chain.length <= 1) return base;
+  const suffix = ` → ${chain.slice(1).join(" → ")}`;
+  const cite = base.match(SENSE_CITE_RE);
+  return cite ? base.slice(0, cite.index) + suffix + cite[0] : base + suffix;
+}
+
+/** Render a subject-scan fact list with each is-a object's superclass chain
+ *  shown, and — when the subject's is-a objects split into distinct concepts
+ *  (a `dog` sense and a `scout` sense of one "rover") — grouped by concept.
+ *  Grouping is presentation only: every fact still renders and is cited, in
+ *  the same order, under a "<subject>, the <concept>:" heading.
+ *
+ *  Returns `{ lines, grouped }`. `lines` is the flat, chain-enhanced rendering
+ *  (indented by `indent`) the caller uses when senses do not split. `grouped`
+ *  is a ready `{ text, replace, pending? }` answer when they do, else null. */
+function senseSplitFactList(hits, rows, subjectVariants, { indent = "" } = {}) {
+  const subClassEdges = rows.filter((f) => f.predicate === SUBCLASS_PREDICATE).map((f) => [f.subject, f.object]);
+  const parents = subClassParents(subClassEdges);
+  const lines = hits.map((f) => `${indent}${renderFactLineWithChain(f, parents, subjectVariants)}`);
+
+  const isaSubjectFacts = hits.filter((f) => ISA_PREDICATES.has(f.predicate) && subjectVariants.has(f.subject));
+  const isaObjects = [...new Set(isaSubjectFacts.map((f) => f.object))];
+  if (isaObjects.length < 2) return { lines, grouped: null };
+  const disjointEdges = rows.filter((f) => f.predicate === "owl:disjointWith").map((f) => [f.subject, f.object]);
+  const { split, clusters } = clusterSenses(isaObjects, { parents, disjointEdges });
+  if (!split) return { lines, grouped: null };
+
+  const subject = isaSubjectFacts[0].subject;
+  const clusterOf = new Map();
+  for (const c of clusters) for (const o of c.objects) clusterOf.set(o, c);
+  const otherHits = hits.filter((f) => !(ISA_PREDICATES.has(f.predicate) && subjectVariants.has(f.subject)));
+
+  const blocks = [];
+  const restItems = [];
+  let shownCount = 0;
+  const addLine = (f) => {
+    const rendered = renderFactLineWithChain(f, parents, subjectVariants);
+    if (shownCount < FACT_ANSWER_CAP) { shownCount += 1; return `${indent}${rendered}`; }
+    restItems.push(rendered);
+    return null;
+  };
+  for (const c of clusters) {
+    const clusterLines = isaSubjectFacts.filter((f) => clusterOf.get(f.object) === c).map(addLine).filter(Boolean);
+    if (clusterLines.length) blocks.push(`${indent}${subject}, the ${c.label}:\n${clusterLines.join("\n")}`);
+  }
+  if (otherHits.length) {
+    const otherLines = otherHits.map(addLine).filter(Boolean);
+    if (otherLines.length) blocks.push(`${indent}also about ${subject}:\n${otherLines.join("\n")}`);
+  }
+  const extra = restItems.length ? `\n${indent}…and ${restItems.length} more — say 'more' to see them.` : "";
+  const grouped = {
+    text: blocks.join("\n") + extra,
+    replace: true,
+    ...(restItems.length ? { pending: { items: restItems, noun: "facts" } } : {}),
+  };
+  return { lines, grouped };
+}
+
 /** "a"/"an" for a term, through the SAME grammar-rules.toml "article" rule and
  *  finish.mjs's beginsWithVowelSound every other agreement site in this file
  *  uses — never a hardcoded "a", which is ungrammatical for a vowel-initial
@@ -7037,7 +7106,8 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // "disclosed, never dropped" contract). Unconfigured/tied bias degrades to
     // trust-desc, byte-identical to before this feature existed.
     hits = rankByBiasThenTrust(hits, biasByBundle);
-    const lines = hits.map(renderFactLine);
+    const { lines, grouped } = senseSplitFactList(hits, await factRows(memoryDir, cache), variants);
+    if (grouped) return { ...grouped, replace: miss };
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
     const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
@@ -7580,12 +7650,13 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // renders (Part 6's "disclosed, never dropped" contract); literalHit/
     // viaSubtype above already resolved off the pre-rank order.
     hits = rankByBiasThenTrust(hits, biasByBundle);
-    const lines = hits.map((f) => `  ${renderFactLine(f)}`);
+    const header = `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}`
+      + `${viaSubtype ? " (including its known subtypes)" : ""}:`;
+    const { lines, grouped } = senseSplitFactList(hits, rows, variants, { indent: "  " });
+    if (grouped) return { ...grouped, text: `${header}\n${grouped.text}` };
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
     const extra = rest.length ? `\n  …and ${rest.length} more — say 'more' to see them.` : "";
-    const header = `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}`
-      + `${viaSubtype ? " (including its known subtypes)" : ""}:`;
     return { text: `${header}\n${shown.join("\n")}${extra}`, replace: true, ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}) };
   }
   return null;
