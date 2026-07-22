@@ -6,14 +6,15 @@
 
 /** Terms the demo reference pack ships articles for. Each must
  *  resolve in the full pack — build-demo-pack fails loudly on one that
- *  doesn't. "license" leads as the demo's lookup term: learn-on-miss needs a
- *  term the shipped chat seed does NOT already ground, and the seed's
- *  WordNet/persona bands cover the everyday animal/object nouns below. The
- *  page transcript's "quokka" stays an honest miss on purpose (not a lexicon
- *  noun, so the pack can never carry it — the two together show both sides
- *  of the fallback). */
+ *  doesn't. "identifier" leads as the demo's lookup term: learn-on-miss
+ *  needs a term the shipped chat seed does NOT already ground, and the
+ *  seed's conceptnet/WordNet/persona bands cover the everyday animal/object
+ *  nouns below (at the 40 MB seed they also cover "license", the previous
+ *  lead). The page transcript's "quokka" stays an honest miss on purpose
+ *  (not a lexicon noun, so the pack can never carry it — the two together
+ *  show both sides of the fallback). */
 export const REFERENCE_PACK_TERMS = [
-  "license",
+  "identifier", "license",
   "otter", "falcon", "badger", "beaver", "anchor", "compass", "saddle",
   "canoe", "harp", "flute", "marble", "barn", "canal", "ferry", "swan",
   "island", "meadow", "river", "mountain", "ocean", "torch", "oasis",
@@ -48,6 +49,6 @@ export const DEMOS = [
     id: "learn-on-miss",
     title: "Watch it learn a word",
     ready: true,
-    turns: [`what is a ${REFERENCE_PACK_TERMS[0]}`],
+    turns: [`what is ${/^[aeiou]/.test(REFERENCE_PACK_TERMS[0]) ? "an" : "a"} ${REFERENCE_PACK_TERMS[0]}`],
   },
 ];
