@@ -10,6 +10,7 @@ node_modules/
 !examples/**/.tmct/
 !examples/**/.tmct/graph.json
 examples/**/.tmct/session-*.log
+examples/**/.tmct/session-*.md
 examples/**/.tmct/memory/
 examples/**/.tmct/sessions/
 graph.html
@@ -22,6 +23,7 @@ graph.html
 !test/fixtures/large-scale/.tmct/
 !test/fixtures/large-scale/.tmct/graph.json
 test/fixtures/large-scale/.tmct/session-*.log
+test/fixtures/large-scale/.tmct/session-*.md
 test/fixtures/large-scale/.tmct/memory/
 test/fixtures/large-scale/.tmct/sessions/
 
@@ -31,6 +33,7 @@ test/fixtures/large-scale/.tmct/sessions/
 !test/fixtures/entities-repo/.tmct/
 !test/fixtures/entities-repo/.tmct/graph.json
 test/fixtures/entities-repo/.tmct/session-*.log
+test/fixtures/entities-repo/.tmct/session-*.md
 test/fixtures/entities-repo/.tmct/memory/
 test/fixtures/entities-repo/.tmct/sessions/
 

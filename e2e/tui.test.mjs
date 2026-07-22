@@ -144,7 +144,7 @@ test("TUI: a turn renders question+answer into the transcript, updates the focus
   const log = await readFile(session.logFile, "utf8");
   assert.match(log, /> which modules import a\.mjs\n/, "transcript log carries the turn in the canonical format");
   assert.match(log, /app\/lib\/b\.mjs/, "…with the answer prose (what memory re-reads)");
-  assert.match(log, /session end \d{4}-/, "close() wrote the clean session end");
+  assert.match(log, /session end \d{2}:\d{2}:\d{2}\.\d{3}/, "close() wrote the clean session end");
   const sidecar = (await readFile(session.sidecarFile, "utf8")).trim().split("\n").map((l) => JSON.parse(l));
   assert.equal(sidecar.filter((r) => r.type === "turn").length, 1);
   assert.equal(sidecar.at(-1).type, "end");
@@ -187,7 +187,7 @@ test("TUI: /exit ends the app without dispatching a turn; Ctrl+C and a conversat
       app.unmount();
       await session.close();
       assert.equal(session.turns, 0, "/exit is not a turn — same as the readline shell");
-      assert.match(await readFile(session.logFile, "utf8"), /session end \d{4}-/);
+      assert.match(await readFile(session.logFile, "utf8"), /session end \d{2}:\d{2}:\d{2}\.\d{3}/);
     }
     // a conversational "bye" — the turn's end:true exits the app after answering
     {
@@ -212,7 +212,7 @@ test("TUI: /exit ends the app without dispatching a turn; Ctrl+C and a conversat
       await app.waitUntilExit();
       app.unmount();
       await session.close();
-      assert.match(await readFile(session.logFile, "utf8"), /session end \d{4}-/, "Ctrl+C still flushes the clean end");
+      assert.match(await readFile(session.logFile, "utf8"), /session end \d{2}:\d{2}:\d{2}\.\d{3}/, "Ctrl+C still flushes the clean end");
     }
   } finally {
     await rm(dir, { recursive: true, force: true });

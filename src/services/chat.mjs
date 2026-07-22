@@ -7,7 +7,7 @@
 // `it`/`this`/`that` refer back to whatever the last command or answer
 // resolved.
 //
-// Sessions are logged to <repo>/SESSION_LOG_DIR/session-<uuidv7>.log, plus a
+// Sessions are logged to <repo>/SESSION_LOG_DIR/session-<uuidv7>.md, plus a
 // structured sidecar (.tmct/sessions/session-<uuidv7>.jsonl, sessions.mjs) and
 // a `Session` individual upserted into graph.json per turn.
 //
@@ -5610,6 +5610,8 @@ export async function helpText() {
     ["/plan <request>", "the capability router: plan+execute a compound or maintenance-goal request (\"of the modules impacted by X, which are untested\", \"what most needs a test\")"],
     ["/capabilities", "what /plan can plan over: the built-in graph tools plus your taught actions"],
     ["/syllogise <term>", "work out and remember what follows from the facts about a term (needed for chains longer than 2 hops)"],
+    ["/export <path>", "write the memory store to a file, as JSONL (the same shape `tmct memory --export` writes)"],
+    ["/ingest <path>", "read a local text file and store every fact the recognizer grounds from it (same recognizer as `tmct extract`)"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/wiki on|off", "live Wikipedia supplement (default off): a question I can't answer also tries en.wikipedia.org (network), cited"],
     ["/help", "this list"],
@@ -12347,6 +12349,8 @@ const GOAL_BY_COMMAND = {
   capabilities: "see what /plan can plan over — built-in query tools and taught actions",
   syllogise: "materialize the entailed facts that follow from what's remembered about one term",
   wiki: "toggle the live Wikipedia supplement for questions nothing local can answer",
+  export: "write the memory store to a file, in the standard JSONL shape",
+  ingest: "read a local text file and store every fact the recognizer grounds from it",
 };
 
 /** A slash-command → the mapped tool (or the /help, /focus, /narrate, unknown
@@ -12505,6 +12509,92 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
     } catch (e) {
       return mk(String(e?.message || e), { miss: true }); // a broken store reads as its own clean error
     }
+  }
+
+  // /export <path> — write the whole memory store as JSONL, the SAME shape
+  // `tmct memory --export` and the tmct_export cold tool already emit
+  // (serializeFactsJsonl, export-jsonl.mjs) — so a chat session can take its
+  // facts with it without dropping to a shell.
+  if (name === "export") {
+    note(trace, "goal: write the memory store to a file, in the standard JSONL shape");
+    if (!memoryDir) return mk("no memory store here — /export works inside a repo session.", { miss: true });
+    if (!argText) return mk("/export needs a path, e.g. `/export facts.jsonl`.", { miss: true });
+    try {
+      const { loadMemory } = await import("../adapters/memory/core.mjs");
+      const { serializeFactsJsonl } = await import("../adapters/memory/export-jsonl.mjs");
+      const { writeFile } = await import("node:fs/promises");
+      const { resolve } = await import("node:path");
+      const jsonl = serializeFactsJsonl(await loadMemory(memoryDir));
+      const out = resolve(process.cwd(), argText);
+      await writeFile(out, jsonl, "utf8");
+      const count = jsonl ? jsonl.trimEnd().split("\n").length : 0;
+      note(trace, `result: wrote ${count} fact(s) to ${out}`);
+      return mk(`wrote ${count} fact${count === 1 ? "" : "s"} to ${argText}.`);
+    } catch (e) {
+      return mk(String(e?.message || e), { miss: true }); // a broken store/path reads as its own clean error
+    }
+  }
+
+  // /ingest <path> — the TUI/CLI counterpart to `tmct extract`: read a local
+  // text file, run each sentence through the SAME recognizer the teach lane
+  // already grounds sentences with (runTurn itself — the identical per-
+  // sentence pass extract-facts.mjs's own CLI wrapper runs), and store every
+  // grounded fact into THIS session's own memory store. Deliberately does
+  // NOT call extract-facts.mjs's own main(): that entry point resolves its
+  // OWN memoryDir from a --repo path (or an ephemeral scratch dir), so it
+  // can never target the session's already-open backend handle — grounding
+  // through this session's live memoryDir is what makes an ingested fact
+  // answerable in the SAME conversation, not just written to disk somewhere.
+  if (name === "ingest") {
+    note(trace, "goal: ingest a local text file into the memory store, sentence by sentence");
+    if (!memoryDir) return mk("no memory store here — /ingest works inside a repo session.", { miss: true });
+    if (!argText) return mk("/ingest needs a path, e.g. `/ingest notes.txt`.", { miss: true });
+    const { resolve } = await import("node:path");
+    const { readFile } = await import("node:fs/promises");
+    const filePath = resolve(process.cwd(), argText);
+    let text;
+    try {
+      text = await readFile(filePath, "utf8");
+    } catch (e) {
+      return mk(`couldn't read ${argText} — ${e?.code === "ENOENT" ? "no such file." : String(e?.message || e)}`, { miss: true });
+    }
+    const { splitSentencesPreservingPaths } = await import("./sentences.mjs");
+    const { loadMemory, readFactRows, appendFact } = await import("../adapters/memory/core.mjs");
+    const { touchedFactRows } = await import("../domain/memory/touched-facts.mjs");
+    const sourceTag = filePath.split(/[\\/]/).pop();
+    const sentences = splitSentencesPreservingPaths(text);
+    let recognizedSentences = 0;
+    let factCount = 0;
+    for (const sentence of sentences) {
+      const before = readFactRows(await loadMemory(memoryDir));
+      const { record: ingestRecord } = await runTurn(sentence, { config, memoryDir, sessionId: uuidv7() });
+      if (ingestRecord?.via !== "assert" || ingestRecord?.miss) continue;
+      const after = readFactRows(await loadMemory(memoryDir));
+      const rows = touchedFactRows(before, after);
+      if (!rows.length) continue;
+      recognizedSentences += 1;
+      for (const row of rows) {
+        await appendFact(memoryDir, {
+          subject: row.subject, predicate: row.predicate, object: row.object,
+          provenance: `extracted:${sourceTag}`, quantifier: row.quantifier || "",
+        });
+        factCount += 1;
+      }
+    }
+    if (cache) cache.rows = null; // the fact-rows cache predates these writes
+    const skipped = sentences.length - recognizedSentences;
+    note(trace, `result: ${sentences.length} sentence(s), ${recognizedSentences} recognized, ${factCount} fact row(s), ${skipped} skipped`);
+    if (!factCount) {
+      return mk(
+        `read ${sentences.length} sentence${sentences.length === 1 ? "" : "s"} from ${argText} — none grounded into a `
+        + "recognized fact shape (an honest, expected gap; this is an attempt, not full NLU).",
+        { miss: true },
+      );
+    }
+    return mk(
+      `ingested ${factCount} fact${factCount === 1 ? "" : "s"} from ${argText} `
+      + `(${recognizedSentences} of ${sentences.length} sentence${sentences.length === 1 ? "" : "s"} recognized).`,
+    );
   }
 
   // /plan <request> — the capability router (src/domain/router/*): plan+execute a

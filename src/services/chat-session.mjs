@@ -28,6 +28,7 @@ import * as defaultSource from "../adapters/source.mjs";
 import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
 import { runTurn, hasSeededVocabulary, vocabExampleHint } from "./chat.mjs";
 import { resolveGameConfig } from "../domain/game-config.mjs";
+import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown, sessionLogEndMarkdown } from "./session-log-format.mjs";
 
 /** Where session logs live, relative to the target repo. `.tmct/` is the repo's
  *  one artifact directory (gitignored, machine-local) — flip this single constant
@@ -243,7 +244,7 @@ export async function createSession({
   const sessionsDir = join(repo, SESSIONS_DIR_REL);
   await mkdir(logDir, { recursive: true });
   await mkdir(sessionsDir, { recursive: true });
-  const logFile = join(logDir, `session-${sessionId}.log`);
+  const logFile = join(logDir, `session-${sessionId}.md`);
   const sidecarFile = join(sessionsDir, `session-${sessionId}.jsonl`);
   const stream = createWriteStream(logFile, { flags: "a" });
   const sidecar = createWriteStream(sidecarFile, { flags: "a" });
@@ -255,7 +256,7 @@ export async function createSession({
   const writeSidecar = (obj) => flush(sidecar, JSON.stringify(obj) + "\n");
 
   const startIso = new Date().toISOString();
-  await writeLog(`# tmct chat ${version} — session started ${startIso} — repo ${repo}\n\n`);
+  await writeLog(sessionLogHeaderMarkdown({ version, sessionId, startedAt: startIso, repo }));
   await writeSidecar({ type: "session", id: sessionId, started: startIso, repo, tmctVersion: version });
 
   // Read-time graph upsert (sessions.mjs): after every turn, the session becomes /
@@ -363,14 +364,14 @@ export async function createSession({
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
-        await writeLog(`${ts}\n> ${line}\nerror: ${message}\n`);
+        await writeLog(sessionLogTurnMarkdown({ startedAt: ts, turnNumber: turns + 1, query: line, answer: `error: ${message}` }));
         const errorRecord = { type: "error", ts, query: line, error: message };
         await writeSidecar(errorRecord);
         turnRecords.push(errorRecord);
         turns += 1;
         return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, prompt: promptFor(focus) };
       }
-      const { answer, logLines, record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate, liveReference: nextLiveReference } = result;
+      const { answer, record, focus: nextFocus, last: nextLast, end, narrate: nextNarrate, liveReference: nextLiveReference } = result;
       focus = nextFocus;
       last = nextLast;
       if ("planState" in result) planState = result.planState;
@@ -379,7 +380,7 @@ export async function createSession({
       // session-scoped state.
       if (typeof nextNarrate === "boolean") narrateOn = nextNarrate;
       if (typeof nextLiveReference === "boolean") liveReferenceOn = nextLiveReference;
-      await writeLog(logLines.join("\n") + "\n");
+      await writeLog(sessionLogTurnMarkdown({ startedAt: record.ts, turnNumber: turns + 1, query: line, answer }));
       await writeSidecar(record);
       turnRecords.push(record);
       // One telemetry line per dispatched turn (OFF by default → no-op). query.raw is
@@ -401,7 +402,9 @@ export async function createSession({
       if (closed) return;
       closed = true;
       const endIso = new Date().toISOString();
-      await writeLog(`${endIso}\n> /exit\nsession end ${endIso}\n`);
+      const closingTurnNumber = turns + 1;
+      await writeLog(sessionLogTurnMarkdown({ startedAt: endIso, turnNumber: closingTurnNumber, query: "/exit", answer: "" }));
+      await writeLog(sessionLogEndMarkdown({ endedAt: endIso, turnCount: closingTurnNumber }));
       await writeSidecar({ type: "end", ts: endIso });
       await upsertGraph(endIso);
       await new Promise((resolve) => stream.end(resolve));

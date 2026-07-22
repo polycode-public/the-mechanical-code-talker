@@ -8,6 +8,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { renderChatHtml, provenanceChipFor, loadProgressLine, transcriptMarkdown } from "../../src/services/chat-page-viz.mjs";
 import { provBucketFor } from "../../src/services/ledger-viz.mjs";
+import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown } from "../../src/services/session-log-format.mjs";
 
 // ---- provenanceChipFor: the pure classifier, exercised directly against
 // the real provBucketFor (the same function the page splices into its own
@@ -208,39 +209,43 @@ test("renderChatHtml: the switch is wired to the session and the stored preferen
   assert.match(html, /"live wikipedia: " \+ \(liveToggleEl\.checked \? "on" : "off"\)/, "the statusline names the live state");
 });
 
-// ---- transcriptMarkdown: the export document, built from the model ---------
+// ---- transcriptMarkdown: the export document, built from the model, in the
+// SAME shape session-log-format.mjs's Node writer renders (chat-session.mjs's
+// own .tmct/session-<id>.md) — a title, one heading per PAIRED turn, the
+// question as a blockquote, the answer in a fenced block.
 
-test("transcriptMarkdown: a title line with version and date, then every turn in order with its role label", () => {
+test("transcriptMarkdown: a title naming version+session, then every turn in order as a heading/blockquote/fence", () => {
   const md = transcriptMarkdown(
     [
-      { role: "you", text: "what is a dog", chipTier: null },
-      { role: "tmct", text: "dog is a kind of animal (source: corpus:conceptnet)", chipTier: "corpus" },
-      { role: "you", text: "what is a zorblatt", chipTier: null },
-      { role: "tmct", text: 'I don\'t know "zorblatt" yet.', chipTier: null },
+      { role: "you", text: "what is a dog", ts: 1000 },
+      { role: "tmct", text: "dog is a kind of animal (source: corpus:conceptnet)", chipTier: "corpus", ts: 1010 },
+      { role: "you", text: "what is a zorblatt", ts: 2000 },
+      { role: "tmct", text: 'I don\'t know "zorblatt" yet.', chipTier: null, ts: 2010 },
     ],
-    { version: "2.9.1", date: "2026-07-21" },
+    { version: "2.9.1", sessionId: "019f8692-abcd-abcd-abcd-abcdabcdabcd" },
+    sessionLogHeaderMarkdown, sessionLogTurnMarkdown,
   );
-  const lines = md.split("\n");
-  assert.equal(lines[0], "# tmct chat — v2.9.1 — 2026-07-21");
-  const youAt = md.indexOf("**you:** what is a dog");
-  const tmctAt = md.indexOf("**tmct:** dog is a kind of animal");
-  const missAt = md.indexOf('**tmct:** I don\'t know "zorblatt" yet.');
-  assert.ok(youAt > 0 && tmctAt > youAt && missAt > tmctAt, "turns appear in conversation order");
+  assert.match(md, /^# tmct chat 2\.9\.1 — session 019f8692\n/);
+  const t1At = md.indexOf("### ");
+  const youAt = md.indexOf("> what is a dog");
+  const tmctAt = md.indexOf("dog is a kind of animal");
+  const t2At = md.indexOf("> what is a zorblatt");
+  const missAt = md.indexOf('I don\'t know "zorblatt" yet.');
+  assert.ok(t1At > 0 && youAt > t1At && tmctAt > youAt && t2At > tmctAt && missAt > t2At, "turns appear in conversation order, each under its own heading");
 });
 
-test("transcriptMarkdown: the provenance tier lands in parentheses when a turn carries one, and nowhere when it doesn't", () => {
-  const md = transcriptMarkdown([
-    { role: "tmct", text: "answered", chipTier: "taught" },
-    { role: "tmct", text: "missed", chipTier: null },
-  ]);
-  assert.match(md, /\*\*tmct:\*\* answered \(taught\)/);
-  assert.match(md, /\*\*tmct:\*\* missed\n/);
-  assert.ok(!/missed \(/.test(md), "a miss gets no fabricated tier");
+test("transcriptMarkdown: an unanswered trailing question (export mid-turn) still renders, with an empty fenced block", () => {
+  const md = transcriptMarkdown(
+    [{ role: "you", text: "still thinking", ts: 1000 }],
+    { version: "dev", sessionId: "" },
+    sessionLogHeaderMarkdown, sessionLogTurnMarkdown,
+  );
+  assert.match(md, /> still thinking\n\n```text\n```\n\n$/);
 });
 
-test("transcriptMarkdown: with no meta at all, the title still renders (dev version, no date), never a crash", () => {
-  assert.equal(transcriptMarkdown([]).split("\n")[0], "# tmct chat — vdev");
-  assert.equal(transcriptMarkdown(null), "# tmct chat — vdev\n");
+test("transcriptMarkdown: with no meta at all, the title still renders (dev version), never a crash", () => {
+  assert.match(transcriptMarkdown([], {}, sessionLogHeaderMarkdown, sessionLogTurnMarkdown), /^# tmct chat dev — session \n/);
+  assert.match(transcriptMarkdown(null, null, sessionLogHeaderMarkdown, sessionLogTurnMarkdown), /^# tmct chat dev — session \n/);
 });
 
 // ---- export + print wiring on the page -------------------------------------
@@ -257,8 +262,10 @@ test("renderChatHtml: export and print read the transcript MODEL, never scraped 
   assert.match(html, /const transcript = \[\];/);
   assert.match(html, /transcript\.push\(\{ role: "you"/);
   assert.match(html, /transcript\.push\(\{ role: "tmct", text: answer, chipTier: tier/);
+  assert.match(html, /const sessionLogHeaderMarkdown = /, "the shared session-log header builder is spliced in");
+  assert.match(html, /const sessionLogTurnMarkdown = /, "the shared session-log turn builder is spliced in");
   assert.match(html, /const transcriptMarkdown = /, "the pure builder is spliced in, not reimplemented");
-  assert.match(html, /transcriptMarkdown\(transcript, \{ version: siteVersion/);
+  assert.match(html, /transcriptMarkdown\(transcript, \{ version: siteVersion, sessionId: sessionId \}, sessionLogHeaderMarkdown, sessionLogTurnMarkdown\)/);
   assert.match(html, /download = "tmct-chat\.md"/);
   assert.match(html, /window\.print\(\)/);
 });

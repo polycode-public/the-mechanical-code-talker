@@ -113,7 +113,7 @@ export async function foldSessionLogs(repoDir, { sessionId = null } = {}) {
       processed.push(record.id);
       let answers = new Map();
       try {
-        answers = parseSessionLog(await readFile(join(repoDir, LOG_DIR_REL, `session-${record.id}.log`), "utf8"));
+        answers = parseSessionLog(await readFile(join(repoDir, LOG_DIR_REL, `session-${record.id}.md`), "utf8"));
       } catch { /* transcript gone — fold question-only, honestly */ }
       const text = cleanSessionText(record, answers);
       if (text) {

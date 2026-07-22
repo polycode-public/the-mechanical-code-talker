@@ -479,6 +479,11 @@ by cleaned session logs:
 - **text blocks under a PageRank-style index**, pulled into context on
   relevance rather than loaded wholesale.
 
+Every session also writes its own human-readable transcript,
+`.tmct/session-<id>.md` — a glow-friendly Markdown file with one heading per
+turn, the question as a blockquote, the reply in a fenced block. The
+browser chat page's "export .md" button writes the same shape.
+
 With no graph at all, tmct starts empty and remembers what you tell it. The
 `.tmct/` graph is created from the conversation. On a first run it seeds the
 committed vocabulary so it knows what it's talking about from turn one: an
