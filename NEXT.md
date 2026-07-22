@@ -50,8 +50,8 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 28 | spider-fly observable-facts panel | open — browser panel shipped 2026-07-22; remaining: the chat phrasing lane over `beliefSnapshotFor` | 2026-07-22 | planners' knowledge made inspectable | medium |
 | 29 | sense-splitting on read-back (Rover) | open, designed | 2026-07-22 | two concepts under one label | medium-high |
 | 31 | ingest.html + ledger/chat ingest | open, new scope | 2026-07-22 | bring your own text | medium-high |
-| 32 | full IndexedDB re-initialisation button | in progress, new scope (wt agent-a08e0bf9a850688c6) | 2026-07-22 | recover any page from any state | high |
-| 33 | triple-store export, every page | in progress, new scope (wt agent-a08e0bf9a850688c6) | 2026-07-22 | data leaves in the standard shape | high |
+| 32 | full IndexedDB re-initialisation button | open — chat-page hard reset shipped 2026-07-22; remaining: ledger/adventure/spider-fly strips (rides item 31) | 2026-07-22 | recover any page from any state | high |
+| 33 | triple-store export, every page | open — serializer + CLI/tool/chat-page export shipped 2026-07-22; remaining: other pages' buttons + TUI `/export` (rides item 31 / chat batches) | 2026-07-22 | data leaves in the standard shape | high |
 
 The detailed items:
 
@@ -199,11 +199,10 @@ The detailed items:
   - ledger.html gains the same ingest affordance (paste/drop/browse), so new data can be
     ingested and then examined in place; chat.html gains a file upload that feeds the same
     pipeline.
-  - every tmct-embedding page gets a button forcing a FULL re-initialisation of its IndexedDB
-    store (drop the persisted payload and re-seed from the page's shipped seed — a harder reset
-    than chat/adventure's existing "forget everything"), and a triple-store export (download
-    the page's current facts as JSONL in the tmct/ConceptNet shape `tmct extract` already
-    emits, provenance included).
+  - store controls, the remainder: chat.html shipped both (hard reset-to-seed + JSONL fact
+    export over `src/adapters/memory/export-jsonl.mjs`, 2026-07-22). This page pass extends
+    the export button to ledger.html and settles export/hard-reset for adventure/spider-fly
+    (their persisted payload is game state with its own full reset).
 
 ## Where each item lands — code, tests, docs, channels
 
@@ -277,16 +276,14 @@ browser bundles, serve, and library `runChat` all call the same `runTurn`.
   `tmct extract`/`import --file` (+ the new flags); TUI parity — add an `/ingest <path>` chat
   command so a terminal session can ingest a file without leaving chat; library parity —
   export the extract service; tool layer — the `tmct_ingest` cold tool (item 20-23).
-- **32-33, store controls.** Code: a shared control strip in the browser entries
-  (`chat-browser-entry.mjs` and siblings) — full re-init = drop the IndexedDB payload and
-  re-seed from the page's shipped seed; export = serialize the Backend-B payload to the
-  `tmct extract` JSONL shape, provenance included. Tests: extend
-  `e2e/pages-chat-persistence.test.mjs` (re-init drops taught facts and survives reload;
-  export round-trips through `tmct import --file`); unit for the serializer beside the memory
-  backend tests. Docs: each page's footer copy + README. Channels: browser buttons; CLI parity
-  — `tmct memory --export <file.jsonl>` so the sqlite store exports the same shape (the audit
-  gap this item closes); TUI `/export <path>` alias; library — the serializer exports from the
-  memory adapter; tool layer — `tmct_export` (item 20-23).
+- **32-33 remainder, store controls on the other pages.** Shipped 2026-07-22: the serializer
+  (`src/adapters/memory/export-jsonl.mjs`), `tmct memory --export`, the `tmct_export` cold
+  tool, JSONL import via `tmct import --file`, and the chat page's export button + hard
+  reset-to-seed. Remaining, riding item 31's page pass: the export affordance on ledger.html
+  (it embeds a memory payload but has no IndexedDB persistence, so re-init is N/A there) and
+  an export/hard-reset decision on adventure/spider-fly (their persisted payload is game
+  state, and their reset already re-inits it); plus the TUI `/export <path>` alias over the
+  serializer, riding a chat batch.
 
 ## Discipline
 
