@@ -2,16 +2,21 @@
 // come out present, non-trivially sized, and (for the bundle) syntactically
 // valid JS. These are the tripwires for source moves: a module that changes
 // home without the build scripts following breaks here, not on deploy.
+//
+// A full demo:build plus a persona-size-large corpus chain elsewhere in
+// e2e/heavy/ are what makes this tier heavy rather than per-push — see
+// e2e/heavy's own rules:changes gate in .gitlab-ci.yml and `npm run
+// test:e2e:heavy`.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { execFileSync, spawnSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import { existsSync, mkdtempSync, statSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(fileURLToPath(import.meta.url), "..", "..");
+const repoRoot = path.resolve(fileURLToPath(import.meta.url), "..", "..", "..");
 const runNpmScript = (script, env = {}) =>
   execFileSync("npm", ["run", script], {
     cwd: repoRoot, env: { ...process.env, ...env }, encoding: "utf8", timeout: 300_000,
@@ -23,8 +28,12 @@ const sizeOf = (rel) => {
   return statSync(abs).size;
 };
 
+// Read by the ledger-page test below, once demo:build has actually run —
+// node runs the tests in one file in order, so this is set by the time it's read.
+let demoBuildOutput;
+
 test("demo:build produces the Pages demo artefacts", async () => {
-  runNpmScript("demo:build");
+  demoBuildOutput = runNpmScript("demo:build");
   assert.ok(sizeOf("public/demo-graph.json") > 10_000, "demo-graph.json is non-trivial");
   assert.ok(sizeOf("public/ledger.html") > 100_000, "ledger.html carries the inlined bundle");
   for (const engineFile of [
@@ -73,16 +82,12 @@ test("build:ask-bundle rebuilds a parseable browser bundle", () => {
 
 // The Pages build script's rendered page, in depth: public/ledger.html must
 // carry the embedded ledger payload and the inlined memory-ask bundle — the
-// page the homepage hero iframes. This runs the same script as demo:build
-// above; it lives in this file so the two runs (and the build:ask-bundle
-// rewrite of the bundle the page inlines) stay sequential — node runs the
-// tests in one file in order, but runs separate e2e files concurrently, and
-// they all write or read the same repo-level artefacts.
+// page the homepage hero iframes. Reads the output of the demo:build test
+// above rather than running scripts/build-demo-site.mjs a second time — both
+// tests already ran the same build; the assertions here just look closer at
+// what it wrote.
 test("build-demo-site writes a public/ledger.html with the ledger payload and a live chat dock", async () => {
-  const SCRIPT = path.join(repoRoot, "scripts", "build-demo-site.mjs");
-  const res = spawnSync(process.execPath, [SCRIPT], { encoding: "utf8" });
-  assert.equal(res.status, 0, res.stderr);
-  assert.match(res.stdout, /wrote .*ledger\.html \(chat dock enabled\)/);
+  assert.match(demoBuildOutput, /wrote .*ledger\.html \(chat dock enabled\)/);
 
   const html = await readFile(path.join(repoRoot, "public", "ledger.html"), "utf8");
   // LEDGER embeds as "let" (a post-teach re-render reassigns it wholesale —
