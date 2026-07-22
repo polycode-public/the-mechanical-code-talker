@@ -366,7 +366,7 @@ function observedFactSentence(id, believedCell) {
  *  of either kind; toldFacts is empty (a told position only ever arrives
  *  fresh alongside a tick — see runToldFactTurn — so there is none standing
  *  between ticks to read back here). */
-async function spiderFlyContextAnswer(match, { memoryDir, gameConfig = DEFAULT_GAME_CONFIG }) {
+async function spiderFlyBeliefAnswer(match, { memoryDir, gameConfig = DEFAULT_GAME_CONFIG }) {
   const kind = match[1].toLowerCase();
   const num = match[2];
   const rows = readFactRows(await loadMemory(memoryDir));
@@ -576,7 +576,7 @@ export async function spiderFlyTurn(line, { planHolder, memoryDir, env, cache = 
 
   const seeMatch = String(line).trim().match(SPIDER_FLY_SEE_RE);
   if (seeMatch) {
-    return spiderFlyContextAnswer(seeMatch, { memoryDir, gameConfig });
+    return spiderFlyBeliefAnswer(seeMatch, { memoryDir, gameConfig });
   }
 
   if (SPIDER_FLY_TICK_RE.test(line)) {
