@@ -40,9 +40,8 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 24 | glow-Markdown session logs | in progress, sampled (wt agent-adda6ef5cd3b8928a) | 2026-07-22 | readable transcripts; the sample is the spec | high |
 | 28 | spider-fly observable-facts panel | in progress — chat lane with wt agent-adda6ef5cd3b8928a | 2026-07-22 | planners' knowledge made inspectable | medium |
 | 29 | sense-splitting on read-back (Rover) | in progress, designed (wt agent-a5b4e776fb3ff7d3f) | 2026-07-22 | two concepts under one label | medium-high |
-| 31 | ingest.html + ledger/chat ingest | in progress, new scope (wt agent-aa256545dc7b62998) | 2026-07-22 | bring your own text | medium-high |
-| 32 | full IndexedDB re-initialisation button | in progress — remainder with wt agent-aa256545dc7b62998 (+ TUI /export with wt agent-adda6ef5cd3b8928a) | 2026-07-22 | recover any page from any state | high |
-| 33 | triple-store export, every page | in progress — remainder with wt agent-aa256545dc7b62998 (+ TUI /export with wt agent-adda6ef5cd3b8928a) | 2026-07-22 | data leaves in the standard shape | high |
+| 31 | ingest.html + ledger/chat ingest | in progress — browser surfaces + home tile shipped 2026-07-22; remaining: TUI `/ingest` (wt agent-adda6ef5cd3b8928a) + `tmct_ingest`/optimistic tier (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | bring your own text | medium-high |
+| 33 | triple-store export, every page | in progress — every fact-store page exports now; remaining: TUI `/export` (wt agent-adda6ef5cd3b8928a) | 2026-07-22 | data leaves in the standard shape | high |
 
 The detailed items:
 
@@ -135,23 +134,6 @@ The detailed items:
      handling unchanged). Apply wherever a fact list renders (`factReadBackReaders`,
      `chat.mjs:7660`), not just "what is X".
 
-- The ingest surfaces and store controls on every tmct-embedding page:
-  - ingest.html — a clean two-pane layout in the translate-tool idiom (operator screenshot,
-    2026-07-22): minimal chrome; mode pills across the top (Text | Document); left pane a
-    roomy free-text area accepting paste and drag-and-drop, with a browse-for-file control;
-    right pane the canonical facts rendering live as the pipeline grounds them, distinct from
-    the input by a soft panel background; a single action row (ingest, download canonical,
-    clear) under the panes. Behind it: the ingest pipeline (the extract recognizer plus the
-    optimistic tier and canonical/graph-linked rendering from the knowledge-flows item above),
-    writing grounded facts to the page's store and offering the canonical output for download.
-  - ledger.html gains the same ingest affordance (paste/drop/browse), so new data can be
-    ingested and then examined in place; chat.html gains a file upload that feeds the same
-    pipeline.
-  - store controls, the remainder: chat.html shipped both (hard reset-to-seed + JSONL fact
-    export over `src/adapters/memory/export-jsonl.mjs`, 2026-07-22). This page pass extends
-    the export button to ledger.html and settles export/hard-reset for adventure/spider-fly
-    (their persisted payload is game state with its own full reset).
-
 ## Where each item lands — code, tests, docs, channels
 
 **Channel audit (2026-07-22).** The channel set for "surfaced everywhere applicable" is: the
@@ -201,24 +183,8 @@ browser bundles, serve, and library `runChat` all call the same `runTurn`.
   `test/tools/ask.test.mjs` if ask() lists adopt grouping; corpus rows in the `template.*`
   lane. Docs: README's answer-shape section; the ledger page renders grouped senses naturally.
   Channels: all chat channels inherit; `tmct viz`/ledger rendering optionally groups.
-- **31, ingest surfaces.** Code: new `public/ingest.html` + `src/surfaces/web/
-  ingest-browser-entry.mjs` in the translate-tool two-pane idiom (mode pills Text | Document,
-  paste/drop/browse left, live canonical render right, one action row); `ledger-viz.mjs` dock
-  gains the same affordance; `chat.html` gains the file input. All three feed the one ingest
-  pipeline (items 21/23). Tests: unit rides the extract tests; e2e — new
-  `e2e/pages-ingest.test.mjs` (paste → canonical → download) plus extensions to the ledger and
-  chat page e2e. Docs: README pages list + a home tile. Channels: browser here; CLI parity is
-  `tmct extract`/`import --file` (+ the new flags); TUI parity — add an `/ingest <path>` chat
-  command so a terminal session can ingest a file without leaving chat; library parity —
-  export the extract service; tool layer — the `tmct_ingest` cold tool (item 20-23).
-- **32-33 remainder, store controls on the other pages.** Shipped 2026-07-22: the serializer
-  (`src/adapters/memory/export-jsonl.mjs`), `tmct memory --export`, the `tmct_export` cold
-  tool, JSONL import via `tmct import --file`, and the chat page's export button + hard
-  reset-to-seed. Remaining, riding item 31's page pass: the export affordance on ledger.html
-  (it embeds a memory payload but has no IndexedDB persistence, so re-init is N/A there) and
-  an export/hard-reset decision on adventure/spider-fly (their persisted payload is game
-  state, and their reset already re-inits it); plus the TUI `/export <path>` alias over the
-  serializer, riding a chat batch.
+- **31/33 remainder, chat-command parity.** TUI `/ingest <path>` + `/export <path>` ride the
+  session-log batch; the `tmct_ingest` cold tool + the optimistic tier ride knowledge flows.
 
 ## Discipline
 
