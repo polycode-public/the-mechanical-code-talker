@@ -31,22 +31,18 @@ procedure, not a diff), *operator call* (a decision, not a build).
 
 | # | Item | Status | Checked | Motivation | Likelihood it sticks |
 |---|---|---|---|---|---|
-| 9 | walled-asks cluster (router thing, big picture, entry point, …) | open — 8 of 10 phrasings fixed 2026-07-22; remaining: "tell me about the router thing" and "what is the purpose of the validate module" (honest misses now, want a design pass) | 2026-07-21 | natural phrasings of answerable questions | medium |
-| 12 | in-game question routing guard | in progress, traced (wt agent-af2b1d95c5c5eef5a) | 2026-07-21 | code answers inside a game, worst misroute class | medium-high |
-| 13 | world-secret spoiler + predicate phrases | in progress, traced (wt agent-af2b1d95c5c5eef5a) | 2026-07-21 | spoils the game, in garbled English | high |
-| 14 | "look" digest corpus leak | in progress, traced (wt agent-af2b1d95c5c5eef5a) | 2026-07-21 | room text must come from the world | medium-high |
-| 16 | hanoi solve at xl | in progress, reproduced (wt agent-af2b1d95c5c5eef5a) | 2026-07-21 | biggest live falsehood found | medium |
-| 17 | live-Wikipedia trust prior | open, traced | 2026-07-21 | live must not outrank the pinned pack | high |
-| 20 | wiki even-when-known (ask + supplement) | open, decided | 2026-07-22 | corroboration, not just rescue | medium-high |
-| 21 | full-triple learn-on-miss ingestion | open, decided | 2026-07-22 | loads become durable knowledge | medium-high |
-| 22 | auto bounded synthesis per ingest | open, decided | 2026-07-22 | new facts should connect | medium-high |
-| 23 | `extract --optimistic` + `--canonical` | open, decided | 2026-07-22 | ingest real-world text | medium |
-| 24 | glow-Markdown session logs | open, sampled | 2026-07-22 | readable transcripts; the sample is the spec | high |
-| 28 | spider-fly observable-facts panel | open — browser panel shipped 2026-07-22; remaining: the chat phrasing lane over `beliefSnapshotFor` | 2026-07-22 | planners' knowledge made inspectable | medium |
-| 29 | sense-splitting on read-back (Rover) | open, designed | 2026-07-22 | two concepts under one label | medium-high |
-| 31 | ingest.html + ledger/chat ingest | open, new scope | 2026-07-22 | bring your own text | medium-high |
-| 32 | full IndexedDB re-initialisation button | open — chat-page hard reset shipped 2026-07-22; remaining: ledger/adventure/spider-fly strips (rides item 31) | 2026-07-22 | recover any page from any state | high |
-| 33 | triple-store export, every page | open — serializer + CLI/tool/chat-page export shipped 2026-07-22; remaining: other pages' buttons + TUI `/export` (rides item 31 / chat batches) | 2026-07-22 | data leaves in the standard shape | high |
+| 9 | walled-asks cluster (router thing, big picture, entry point, …) | in progress — remainder with wt agent-a5b4e776fb3ff7d3f | 2026-07-21 | natural phrasings of answerable questions | medium |
+| 17 | live-Wikipedia trust prior | in progress, traced (wt agent-a7b5d6ca215acb56d) | 2026-07-21 | live must not outrank the pinned pack | high |
+| 20 | wiki even-when-known (ask + supplement) | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | corroboration, not just rescue | medium-high |
+| 21 | full-triple learn-on-miss ingestion | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | loads become durable knowledge | medium-high |
+| 22 | auto bounded synthesis per ingest | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | new facts should connect | medium-high |
+| 23 | `extract --optimistic` + `--canonical` | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | ingest real-world text | medium |
+| 24 | glow-Markdown session logs | in progress, sampled (wt agent-adda6ef5cd3b8928a) | 2026-07-22 | readable transcripts; the sample is the spec | high |
+| 28 | spider-fly observable-facts panel | in progress — chat lane with wt agent-adda6ef5cd3b8928a | 2026-07-22 | planners' knowledge made inspectable | medium |
+| 29 | sense-splitting on read-back (Rover) | in progress, designed (wt agent-a5b4e776fb3ff7d3f) | 2026-07-22 | two concepts under one label | medium-high |
+| 31 | ingest.html + ledger/chat ingest | in progress, new scope (wt agent-aa256545dc7b62998) | 2026-07-22 | bring your own text | medium-high |
+| 32 | full IndexedDB re-initialisation button | in progress — remainder with wt agent-aa256545dc7b62998 (+ TUI /export with wt agent-adda6ef5cd3b8928a) | 2026-07-22 | recover any page from any state | high |
+| 33 | triple-store export, every page | in progress — remainder with wt agent-aa256545dc7b62998 (+ TUI /export with wt agent-adda6ef5cd3b8928a) | 2026-07-22 | data leaves in the standard shape | high |
 | 34 | code.html in-browser code explorer | in progress, new scope (wt agent-a5999e9ed6339f73d) | 2026-07-22 | the explorer in the browser, desktop app stays | high |
 
 The detailed items:
@@ -56,23 +52,6 @@ The detailed items:
   unseen vocab noun) both now miss honestly instead of misrouting — the 2026-07-22 round fixed
   the other eight phrasings in the cluster. Both want a small design pass (closed template or
   resolver widening), not a lane rewrite.
-
-- Games/plan lane gaps (page-vocabulary round, confirmed and extended live):
-  - in-game questions misroute into code-graph lanes: "where am I?" → "no module matching I";
-    "where is the spider?" → module ambiguity over `bench/sizer.mjs`; "what can I do?" and
-    "what is the quest?" wall or answer corpus noise; "what is the goal?" mid-plan answers corpus
-    vocabulary about "goal" instead of planState.
-  - the describe lane spoils world secrets: "what is the letter?" reads back `letter hiddens in
-    cabinet (world:ashcombe-hall)` — and those world predicates verbalize garbled ("hiddens in",
-    "ises objective true"); `FACT_PREDICATE_PHRASES` (`chat.mjs:5523`) has no world rows. The
-    describe lane should exclude world-secret predicates the way the adventure where-reader does.
-  - the adventure "look" digest at xl leaks corpus facts into the room description ("Library is
-    used for study for test. Lit rdfs:subClassOf literary study.").
-  - NEW, largest: the hanoi solve fails against the xl graph — the full taught board + goal
-    returned "no plan found within 300 moves" after ~2.5 minutes, while the same sequence passes
-    the small-graph corpus tests. Suspect the goal's "every disk" enumeration (or the movable
-    set) sweeps corpus members of "disk" at xl scale; the goal quantifier likely needs to range
-    over taught instances of the taught class only. Reproduce with the session log's plan section.
 
 - Live-Wikipedia trust prior: `reference:wikipedia-live` still parses as kind `reference` and
   scores the same `SOURCE_PRIOR.reference = 0.6` (`src/domain/memory/trust.mjs:94`) as the
@@ -193,16 +172,6 @@ browser bundles, serve, and library `runChat` all call the same `runTurn`.
 - **9 remainder, the two walled asks.** Code: `chat.mjs` — a closed template or resolver
   widening per the detail bullet; design first. Tests: corpus rows in the `template.*` lane.
   Channels: inherit.
-- **12-14 + 16, games/plan.** Code: lane-precedence guard while a game slot is live
-  (`src/services/adventure.mjs` / `spider-fly-turn.mjs` interception boundary); world-secret
-  predicate exclusion in the describe lane the way the adventure where-reader already excludes;
-  curated world rows in `FACT_PREDICATE_PHRASES` (`chat.mjs:5523`); a world-source filter on the
-  look digest (`worldDigestRows`); hanoi-at-xl —
-  scope the goal quantifier's member enumeration to taught instances (`src/domain/planning.mjs`
-  `findActionPath` callers + the goal-teach reader around `chat.mjs:2299`). Tests: unit in
-  `test/corpus/games/*.jsonl` rows + `test/services/spider-fly.test.mjs`; the hanoi fix gets a
-  seeded-corpus regression test (board + corpus noise in one store); no e2e. Docs: none.
-  Channels: inherit; the hanoi fix also protects serve callers.
 - **17, wiki trust prior.** Code: one source kind + a `reference:wikipedia-live` parse branch in
   `src/domain/memory/trust.mjs` (`SOURCE_PRIOR`, `:94`). Tests: `test/adapters/
   chat-inference-trust.test.mjs`, `provenance.test.mjs`. Docs: README's trust/provenance table
