@@ -7,14 +7,20 @@
 // who happens to draw it.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { TEMPLATES } from "../public/demo-templates.mjs";
 import { ask } from "../src/domain/ask.mjs";
 import { parseEntities } from "../src/domain/codegraph.mjs";
 import { repoRoot } from "../test/readme/harness.mjs";
 
-const graph = parseEntities(JSON.parse(readFileSync(join(repoRoot, "public", "demo-graph.json"), "utf8")));
+// The graph is generated into a private temp file rather than read from
+// public/: this file must pass on a fresh checkout, whatever else ran first.
+const DEMO_GRAPH = join(mkdtempSync(join(tmpdir(), "tmct-demo-graph-")), "demo-graph.json");
+execFileSync("node", [join(repoRoot, "scripts", "build-demo-graph.mjs"), DEMO_GRAPH], { encoding: "utf8" });
+const graph = parseEntities(JSON.parse(readFileSync(DEMO_GRAPH, "utf8")));
 
 /** Every question the demo can build: each template across its substitutions. */
 function everyQuestion() {

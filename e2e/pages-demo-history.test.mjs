@@ -8,14 +8,20 @@
 // reaches for `document` as it loads, so it only runs in a browser.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runTurn } from "../src/services/chat.mjs";
 import { parseEntities } from "../src/domain/codegraph.mjs";
 import { repoRoot } from "../test/readme/harness.mjs";
 
 const DEMO_UI = join(repoRoot, "public", "demo-ui.mjs");
-const DEMO_GRAPH = join(repoRoot, "public", "demo-graph.json");
+
+// The graph is generated into a private temp file rather than read from
+// public/: this file must pass on a fresh checkout, whatever else ran first.
+const DEMO_GRAPH = join(mkdtempSync(join(tmpdir(), "tmct-demo-graph-")), "demo-graph.json");
+execFileSync("node", [join(repoRoot, "scripts", "build-demo-graph.mjs"), DEMO_GRAPH], { encoding: "utf8" });
 
 // runTurn returns the answer with the CLI's trailer ("Goal (inferred): …",
 // "Canonical: …") appended. The demo box renders the answer text alone, so the
