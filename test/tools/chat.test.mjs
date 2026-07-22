@@ -690,6 +690,28 @@ test("runChat: a slash-command turn is recorded — sidecar carries the command,
   }
 });
 
+test("runChat: the .log echoes the user's line verbatim — a rewritten opener and a multi-sentence teach both quote what was typed", async () => {
+  const dir = await repoWithFixtureGraph();
+  try {
+    const input = Readable.from([
+      "what people do you know about\n",
+      "disk-1 is a disk. disk-2 is a disk. disk-3 is a disk.\n",
+      "/exit\n",
+    ]);
+    const { out } = sink();
+    const { logFile } = await runChat({ repoPath: dir, input, output: out, env: { TMCT_NO_SEED: "1" } });
+    const log = await readFile(logFile, "utf8");
+    // The vocab-opener rewrite ("what is a person") must not leak into the echo.
+    assert.match(log, /^> what people do you know about$/m, "the opener is echoed verbatim");
+    assert.ok(!/^> what is a person$/m.test(log), "the internal rewrite never reaches the transcript");
+    // A multi-sentence teach echoes the WHOLE line, not just its last sentence.
+    assert.match(log, /^> disk-1 is a disk\. disk-2 is a disk\. disk-3 is a disk\.$/m, "the whole multi-sentence line is echoed");
+    assert.ok(!/^> disk-3 is a disk\.$/m.test(log), "the last sentence alone is never the echo");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("runChat: input ending without /exit (Ctrl+D shape) still closes cleanly and logs the end", async () => {
   const dir = await repoWithFixtureGraph();
   try {

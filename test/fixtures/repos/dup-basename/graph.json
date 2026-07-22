@@ -1,0 +1,38 @@
+{
+ "generated_at": "",
+ "prefixes": {
+  "seon": "http://se-on.org/ontologies/seon.owl#",
+  "mgx": "urn:tmct:mgx#",
+  "rdfs": "http://www.w3.org/2000/01/rdf-schema#"
+ },
+ "vocabulary": [
+  { "prop": "mgx:importsNamespace", "predicate": "imports", "note": "module→module" },
+  { "prop": "seon:declaresMethod", "predicate": "defines", "note": "module→function/class" }
+ ],
+ "classes": [
+  { "name": "Module", "count": 3 },
+  { "name": "Function", "count": 1 }
+ ],
+ "individuals": [
+  { "id": "mod:src/store.mjs", "label": "src/store.mjs", "class": "Module", "attributes": [] },
+  { "id": "mod:src/core/store.mjs", "label": "src/core/store.mjs", "class": "Module", "attributes": [] },
+  { "id": "mod:src/app.mjs", "label": "src/app.mjs", "class": "Module", "attributes": [] },
+  { "id": "fn:src/app.mjs#boot", "label": "boot", "class": "Function", "attributes": [] }
+ ],
+ "relations": [
+  {
+   "prop": "mgx:importsNamespace",
+   "predicate": "imports",
+   "edges": [
+    { "subject": "mod:src/app.mjs", "object": "mod:src/store.mjs" }
+   ]
+  },
+  {
+   "prop": "seon:declaresMethod",
+   "predicate": "defines",
+   "edges": [
+    { "subject": "mod:src/app.mjs", "object": "fn:src/app.mjs#boot" }
+   ]
+  }
+ ]
+}

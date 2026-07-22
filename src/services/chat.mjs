@@ -1069,7 +1069,7 @@ const CAPABILITY_PHRASES = [
   // as new natural phrasings surface, never a general "any long question is
   // an orientation request" rule.
   /^(?:can you\s+)?walk me through (?:this|the)\s+(?:app|codebase|repo|repository|project|code)\??$/i,
-  /^what(?:'s|s|\s+is) the big picture(?:\s+here)?\??$/i,
+  /^(?:what(?:'s|s|\s+is)|give me|show me|gimme) the big picture(?:\s+(?:here|(?:on|of|for|about)\s+(?:this|the)\s+(?:app|codebase|repo|repository|project|code)))?\??$/i,
   /^(?:give me|what's) the lay of the land\??$/i,
   // "what have we got here"/"what've we got here" — a casual, self-answering
   // opener (matches after a leading "so" strips via LEADING_CONNECTIVE_RE,
@@ -1411,6 +1411,7 @@ const T_GREETING_BY_PHRASE = {
 };
 const T_THANKS = "conversational-thanks";
 const T_FAREWELL = "conversational-farewell";
+const T_DISMISSAL = "conversational-dismissal";
 const T_ORIENTATION = "orientation-friendly";
 const T_WHY_EMPTY = "miss-no-previous-answer";
 /** Empty / degenerate-graph variants (#3/#5): shown when the loaded graph has 0
@@ -1512,6 +1513,21 @@ const OK_ACK = new Set([
   "ok", "okay", "cool", "aight", "fair enough", "got it", "gotcha", "noted",
   "sounds good", "sure", "cool cool", "right",
 ]);
+/** Dismissals — "drop it, no question here" beats. Routed to a warm dismissal
+ *  template, never the identity/orientation blurb (which reads like the tool
+ *  didn't understand the user was bowing out). Single-word entries also match as
+ *  tokens inside a short mixed line ("ok nvm"); multi-word entries match whole. */
+const DISMISSAL = new Set([
+  "nvm", "nevermind", "never mind", "nm", "forget it", "forget that",
+  "no worries", "no worry", "skip it", "leave it", "don't worry", "dont worry",
+  "no biggie", "it's fine", "its fine", "never mind then", "nvm then",
+]);
+/** Laughter beats — on their own, or leading/trailing a dismissal/ack ("lol ok",
+ *  "haha nvm"), they carry no graph intent. */
+const LAUGHTER = new Set([
+  "lol", "lolol", "lmao", "lmfao", "rofl", "haha", "hahaha", "hah",
+  "heh", "hehe", "ha", "hehehe",
+]);
 /** New-user / confused openers — "I don't know what this is" reads as an
  *  orientation request, not small-talk and not a grammar-wall near-miss; routed
  *  the same as CAPABILITY_PHRASES (→ orientationAnswer). */
@@ -1603,9 +1619,21 @@ const CLOSING_FILLER_CLAUSES = new Set([
   "that's everything i needed", "that's all i needed",
   "that's everything for today", "that's all for today",
 ]);
+/** Strip a hedging lead ("i think that's everything for today" → "that's
+ *  everything for today") so a hedged closing clause still matches the closed
+ *  set above — the hedge is register, not new content. */
+const CLOSING_HEDGE_RE = /^i (?:think|reckon|guess|believe|suppose|figure) /;
+const isClosingFillerClause = (c) => CLOSING_FILLER_CLAUSES.has(c) || CLOSING_FILLER_CLAUSES.has(c.replace(CLOSING_HEDGE_RE, ""));
+/** A thanks clause's optional "for … help" tail ("thanks so much for the help",
+ *  "thanks for all your help") — stripped before the closed THANKS lookup so the
+ *  bare "thanks" underneath matches. */
+const THANKS_HELP_TAIL_RE = /\s+for\s+(?:the\s+|your\s+|all\s+|all\s+the\s+|all\s+your\s+)?help\s*$/i;
 function farewellOrThanksSignal(raw, q) {
   const words = q.split(/\s+/).filter(Boolean);
-  if (words.length < 2 || words.length > 8 || looksCodeish(raw, q)) return null;
+  // The upper bound is generous because the real safety is the per-clause gate
+  // below (every non-thanks clause must itself be small-talk-shaped or a curated
+  // closing-filler clause), not the total word count.
+  if (words.length < 2 || words.length > 16 || looksCodeish(raw, q)) return null;
   const clauses = conversationalClauses(q);
   if (clauses.length < 2) return null; // single-clause lines: the exact whole-line checks own this
   // OK_ACK is deliberately NOT a signal here (unlike the exact whole-line check
@@ -1627,14 +1655,37 @@ function farewellOrThanksSignal(raw, q) {
     const ackMatch = rawClause.match(ACK_LEAD_RE);
     const clause = ackMatch ? ackMatch[1].trim() : rawClause;
     if (foldedBye(clause)) { byeHit = true; break; }
-    const deIntensified = clause.replace(TRAILING_INTENSIFIER_RE, "").trim();
+    const deIntensified = clause.replace(THANKS_HELP_TAIL_RE, "").replace(TRAILING_INTENSIFIER_RE, "").trim();
     if (thanksClauseIdx < 0 && closedOrCollapsed(deIntensified, THANKS, THANKS_COLLAPSED)) thanksClauseIdx = i;
   }
   if (byeHit) return "bye";
   const thanksHit = thanksClauseIdx >= 0 && clauses.every((c, i) => i === thanksClauseIdx
-    || CLOSING_FILLER_CLAUSES.has(c)
+    || isClosingFillerClause(c)
     || (c.split(/\s+/).filter(Boolean).length <= 3 && !looksCodeish(c, c.toLowerCase())));
   return thanksHit ? "thanks" : null;
+}
+
+/** A dismissal / laughter beat ("nvm", "lol ok", "haha never mind"): the whole
+ *  line, an ack lead-in peeled off a dismissal, or a short line whose every word
+ *  is laughter / an ack / a single-word dismissal with at least one laughter or
+ *  dismissal word (so a bare "ok"/"sure" still falls to the ack lane, not here).
+ *  Never fires on a codeish line. */
+function dismissalSignal(q) {
+  if (looksCodeish(q, q)) return false;
+  if (DISMISSAL.has(q) || LAUGHTER.has(q)) return true;
+  const words = q.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 5) return false;
+  const isFluff = (w) => LAUGHTER.has(w) || OK_ACK.has(w);
+  let lo = 0;
+  let hi = words.length;
+  let laughed = false;
+  while (lo < hi && isFluff(words[lo])) { if (LAUGHTER.has(words[lo])) laughed = true; lo += 1; }
+  while (hi > lo && isFluff(words[hi - 1])) { if (LAUGHTER.has(words[hi - 1])) laughed = true; hi -= 1; }
+  const core = words.slice(lo, hi).join(" ");
+  // Pure laughter+ack ("lol ok") is a dismissal only when a laughter beat was
+  // present — a bare stack of acks ("ok cool") still falls to the ack lane.
+  if (core === "") return laughed;
+  return DISMISSAL.has(core);
 }
 
 /** The fuzzy-typo fallback's candidate pool: every canonical phrase across the
@@ -1807,6 +1858,11 @@ function conversationalTurn(line, ctx) {
       note(ctx.trace, `pattern: template "${T_THANKS}" (data/templates/responses.jsonl)`);
       return mk(t(T_THANKS), { lane: "thanks" });
     }
+  }
+  if (dismissalSignal(q)) {
+    note(ctx.trace, "goal: casual/social — dismissal/laughter, no graph intent");
+    note(ctx.trace, "lane: conversational — dismissal (DISMISSAL/LAUGHTER closed set)");
+    return mk(t(T_DISMISSAL), { lane: "thanks" });
   }
   if (aiIdentityMatch(raw)) {
     note(ctx.trace, "goal: identity — is tmct an AI/LLM (a very likely first question)");
@@ -3004,15 +3060,36 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
-  const [, , subjectRaw, , objectRaw] = m;
+  const [, det, subjectRaw, verb, objectRaw] = m;
   if (PLACE_ADVERB_OBJECT_RE.test(objectRaw)) return null; // a place adverb is never a property
-  const { loadLexicon, lookupNoun, classify } = await import("../domain/grammar/lexicon.mjs");
+  const { loadLexicon, lookupNoun, lookupAdjective, classify } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   // Y already a known NOUN or a fact-grounded CLASS term — a genuine class-
   // membership sentence, unknownSubjectFallback/unknownObjectFallback's own
   // territory (already had first refusal on it) — never misread as a property.
   if (lookupNoun(lex, objectRaw) || GENERIC_ANCHOR_NOUNS.has(String(objectRaw).toLowerCase())
     || (await isGroundedByFact(objectRaw, memoryDir, cache))) return null;
+  // CLASS-LEVEL adjective predication — "every snake is venomous": a universal
+  // quantifier over a grounded noun class, with an adjective complement. The
+  // quantifier is the same deliberate-generalization signal the article/
+  // capitalization stand-ins give for the specific-entity form below, so a
+  // bare-lexicon-grounded subject qualifies here (it would not for the
+  // unquantified property claim), and the fact is stored WITH its "every"
+  // quantifier so the read-back ("is a snake venomous", "are snakes venomous")
+  // holds for the whole class. The adjective is confirmed by the static lexicon
+  // or wink's POS tag (the same tag unknownObjectFallback used to defer here);
+  // a noun-shaped Y was already minted as a class upstream and never reaches
+  // this point.
+  const universalQuantifier = /^(?:every|each|all|any)$/i.test((det || "").trim());
+  if (universalQuantifier && (await isGroundedTerm(subjectRaw, lex, memoryDir, cache))
+    && (lookupAdjective(lex, objectRaw) || (await objectReadsAsNonNoun(objectRaw)))) {
+    const classSubject = /^are$/i.test(verb)
+      ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
+      : subjectRaw;
+    return teachFact(memoryDir, sessionId, {
+      subject: classSubject, predicate: HAS_PROPERTY_PREDICATE, object: objectRaw, quantifier: "every",
+    });
+  }
   // Subject-side groundedness — strip a leading "the"/"a"/"an" first
   // (normFactTerm's own article-strip, mirrored here) so "the cache" checks
   // groundedness under its real head noun "cache", the same spelling
@@ -4955,7 +5032,7 @@ const WHAT_KNOW_RE = /^(?:what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?|what
 // do" needs the noun OPTIONAL after "this" (kept REQUIRED after "the") or it
 // falls through to MODULE_ORIENT_RE, which fails to resolve "this" as an
 // entity and hits the raw grammar wall.
-const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+this(?:\s+(?:app|code|codebase|project|repo))?\s+do|what\s+does\s+the\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
+const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+this(?:\s+(?:app|code|codebase|project|repo))?\s+do|what\s+does\s+the\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)(?:\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)?|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
 /** A bare "what is in here"/"what's in here"/"whats in here" — the SAME
  *  orientation intent as META_ORIENT_RE's own
  *  "what's in this repo"-shaped members, just phrased with the CONTEXT_WORDS
@@ -6940,6 +7017,20 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
           replace: miss,
         };
       }
+      // The term names nothing as a fact SUBJECT, but may exist only as the
+      // OBJECT of taught relations ("ahab is the father of ishmael" → "what is
+      // ishmael"): surface those reverse relations rather than missing, the same
+      // facts "what do you know about X" would list.
+      if (!predicate) {
+        const objectHits = rankByBiasThenTrust((await factRows(memoryDir, cache)).filter((f) => variants.has(f.object)), biasByBundle);
+        if (objectHits.length) {
+          const objLines = objectHits.map(renderFactLine);
+          const objShown = objLines.slice(0, FACT_ANSWER_CAP);
+          const objRest = objLines.slice(FACT_ANSWER_CAP);
+          const objExtra = objRest.length ? `\n…and ${objRest.length} more — say 'more' to see them.` : "";
+          return { text: objShown.join("\n") + objExtra, replace: miss, ...(objRest.length ? { pending: { items: objRest, noun: "facts" } } : {}) };
+        }
+      }
       return null;
     }
     // Bias only REORDERS — every hit still renders and is cited (Part 6's
@@ -8156,6 +8247,26 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
           : `I don't know anyone who is the ${relationName} of ${object} from what you've told me.`,
         replace: true,
       };
+    }
+  }
+
+  // Bare "who is/was <name>" with no relational "of Y" tail or genitive (those
+  // are the whoAsk reader's above) — surface every taught fact naming the
+  // person, whether as the subject or only as a relation OBJECT ("ahab is the
+  // father of ishmael" → "who is ishmael"). A name with no stored fact falls
+  // through unchanged.
+  {
+    const whoBare = qHedge.match(WHO_IS_BARE_RE);
+    if (whoBare) {
+      const nameVariants = factTermVariants(normFactTerm, whoBare[1]);
+      const hits = rankByBiasThenTrust(rows.filter((f) => nameVariants.has(f.subject) || nameVariants.has(f.object)), biasByBundle);
+      if (hits.length) {
+        const lines = hits.map(renderFactLine);
+        const shown = lines.slice(0, FACT_ANSWER_CAP);
+        const rest = lines.slice(FACT_ANSWER_CAP);
+        const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+        return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+      }
     }
   }
 
@@ -9612,6 +9723,13 @@ function relationDefinitions() {
  *  it — the fact-lookup path is a low-collision subject lookup, not a structural
  *  parse, so loosening it here is safe. */
 const BARE_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+/** A bare "who is/was <name>" with no relational tail ("of Y") or genitive
+ *  ("Y's role") — those keep their own specific who-readers. This single-token
+ *  form is armed into the meta-term fact lane only on a would-miss, and only
+ *  surfaces an answer when memory actually holds facts about the name (as a
+ *  subject or a relation object); with no such facts it returns null and the
+ *  turn falls through to the author/relation who-readers unchanged. */
+const WHO_IS_BARE_RE = /^who\s+(?:is|are|was|were)\s+(?:an?\s+|the\s+)?([\w'-]+)[?.!\s]*$/i;
 
 /** The meta term a "what is a X" / "what is X" / "what does X mean" / "define X"
  *  question asks about — from the parse when present, else recognized directly
@@ -11508,8 +11626,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // above.
   const capabilityAskShape = CAN_ASK_RE.test(gateQuery) || WHAT_CAN_DO_RE.test(gateQuery)
     || DO_VERB_ASK_RE.test(gateQuery) || WHICH_KIND_CAN_RE.test(gateQuery) || WHAT_CAN_VERB_RE.test(gateQuery);
+  // A bare "who is/was <name>" (no relational tail) is as short as the
+  // vocabulary openers above and trips isConversational's word-count catch-all
+  // the same way — factReadBack's bare-who reader surfaces the person's stored
+  // relations only on a real hit, so a name with no facts still falls to the
+  // ordinary card.
+  const whoIsShape = WHO_IS_BARE_RE.test(gateQuery);
   let bareMetaHit = null;
-  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape || capabilityAskShape || bareNounShape)) {
+  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape || capabilityAskShape || bareNounShape || whoIsShape)) {
     if (memoryDir) {
       // The bare noun asks its own "what is a X" — the readers never see the
       // single word, so the vocabulary route is the constructed question's.
@@ -12878,6 +13002,10 @@ const GAME_OBS_LOWER_RE = /^(?:no[,\s]+)?(?:lower|too\s+high|too\s+big|smaller|l
 const GAME_OBS_CORRECT_RE = /^(?:yes|yep|yeah|correct|you\s+got\s+it|you\s+guessed\s+it|that(?:'s|\s+is)\s+it|that(?:'s|\s+is)\s+right|got\s+it|spot\s+on)[.!?\s]*$/i;
 const GAME_GUESS_RE = /^(?:is\s+it\s+)?(-?\d{1,12})\s*\??[.!?\s]*$/;
 const GAME_FALSE_CORRECT_RE = /^(?:but\s+)?you\s+(?:already\s+)?said\s+(?:it\s+was\s+)?(?:correct|right)\b/i;
+// Thinking-aloud / hesitation fillers — a closed set (never a real question or a
+// graph query, which stay free to fall through to the normal lanes) that mid-game
+// coaches back toward a valid move instead of hitting a bare parse wall.
+const GAME_HESITATION_RE = /^(?:um+|uh+|erm+|hmm*|(?:hmm*,?\s+)?let me (?:think|see)(?:\s+about\s+(?:it|this))?|thinking|(?:just\s+)?(?:give me|gimme)\s+(?:a\s+)?(?:sec|second|minute|moment)|one\s+sec|hold\s+on|hang\s+on|not\s+sure|no\s+idea|i\s+dunno|dunno|idk|i\s+don'?t\s+know|i'?m\s+not\s+sure|good\s+question)[.!?\s]*$/i;
 
 /** A natural-language plan frame — the shapes planLaneAnswer owns. Mid-game
  *  these get the one-at-a-time decline instead of clobbering the slot. */
@@ -12913,7 +13041,12 @@ function gameContinuationAnswer(line, game, planHolder) {
     }
     const higher = GAME_OBS_HIGHER_RE.test(line);
     const lower = !higher && GAME_OBS_LOWER_RE.test(line);
-    if (!higher && !lower) return null;
+    if (!higher && !lower) {
+      if (GAME_HESITATION_RE.test(String(line).trim())) {
+        return { text: `take your time — my guess is still ${game.guess} (between ${game.lo} and ${game.hi}). Say higher, lower, or correct.`, goal: gameGoal(game), lane: "game-inform", note: "GAME — a hesitation filler mid-game; re-stated the standing guess without folding an observation" };
+      }
+      return null;
+    }
     const prior = game.guess;
     const next = { ...game };
     if (higher) { next.lo = prior + 1; next.loSetBy = { guess: prior }; }
@@ -12955,6 +13088,9 @@ function gameContinuationAnswer(line, game, planHolder) {
       ? `my last hint was "${game.lastHint}", after your guess of ${game.lastGuess}`
       : "you haven't guessed yet";
     return { text: `I haven't said "correct" yet — ${record}. Keep guessing.`, goal: gameGoal(game), lane: "game-answer", note: "GAME — rebutted a false \"you said correct\" from the game's own hint record" };
+  }
+  if (GAME_HESITATION_RE.test(String(line).trim())) {
+    return { text: `no rush — give me a number between ${game.lo0} and ${game.hi0}, or "I give up" to stop.`, goal: gameGoal(game), lane: "game-inform", note: "GAME — a hesitation filler mid-game; coached back to a valid guess without touching the secret" };
   }
   const m = String(line).trim().match(GAME_GUESS_RE);
   if (!m) return null;
@@ -13107,6 +13243,52 @@ function rewriteNegativePolarityOpener(line) {
   return null;
 }
 
+/** A CONTRACTED NEGATIVE INTERROGATIVE — "isn't a dog an animal?", "doesn't
+ *  store.mjs import config?": a confirmation-seeking question whose expected
+ *  answer is the positive yes/no. Folded to the plain positive interrogative the
+ *  isa/relation readers already answer, so it is ANSWERED rather than walling at
+ *  the grammar boundary or reading as a first-person declarative. A trailing "?"
+ *  is required — the whole negative-question signal — so a leading-"don't"
+ *  imperative ("don't show me tests") is never rewritten into a positive. */
+const NEG_CONTRACTION_LEAD = {
+  "isn't": "is", "isnt": "is", "aren't": "are", "arent": "are",
+  "wasn't": "was", "wasnt": "was", "weren't": "were", "werent": "were",
+  "doesn't": "does", "doesnt": "does", "don't": "do", "dont": "do",
+  "didn't": "did", "didnt": "did", "can't": "can", "cant": "can",
+  "couldn't": "could", "couldnt": "could", "won't": "will", "wont": "will",
+  "wouldn't": "would", "wouldnt": "would", "hasn't": "has", "hasnt": "has",
+  "haven't": "have", "havent": "have", "hadn't": "had", "hadnt": "had",
+  "shouldn't": "should", "shouldnt": "should",
+};
+function rewriteNegativeInterrogative(line) {
+  const s = String(line || "").trim();
+  if (!/\?\s*$/.test(s)) return null;
+  const m = s.replace(/[?.!\s]+$/, "").match(/^(\S+)\s+(.+)$/);
+  if (!m) return null;
+  const positive = NEG_CONTRACTION_LEAD[m[1].toLowerCase()];
+  if (!positive) return null;
+  return `${positive} ${m[2].trim()}`;
+}
+
+/** "what is the entry point" / "what's the main entry point of this codebase" /
+ *  "which file is the entry point" — the definition/which-file phrasings of the
+ *  entry-point question, folded onto the "where is the entry point" surface the
+ *  ask engine's own entry-point ranker (ask.mjs ENTRY_POINT_QUERY_RE) already
+ *  answers. Without this fold they parse as a vocabulary "what is X" miss. */
+const ENTRY_POINT_WHATIS_RE = /^(?:what(?:'s|s|\s+is)|which\s+(?:module|file|one)(?:\s+is)?)\s+(?:the\s+)?(?:main\s+|primary\s+)?entry[\s-]?points?(?:\s+(?:of|to|for)\s+(?:this|the)\s+(?:codebase|code|repo|repository|project|app))?[?.!\s]*$/i;
+const rewriteEntryPointQuestion = (line) => (ENTRY_POINT_WHATIS_RE.test(String(line || "").trim()) ? "where is the entry point" : null);
+
+/** "prove that X is a Y" / "prove X is Y" — a request for the isa yes/no with
+ *  its proof chain, folded onto the "is X a Y" surface the isa reader already
+ *  answers with a cited chain. Only the copula form folds; other "prove …"
+ *  phrasings fall through to their ordinary handling / honest miss. */
+const PROVE_THAT_RE = /^prove\s+(?:to\s+me\s+)?(?:that\s+)?(.+?)\s+(is|are)\s+(.+?)[?.!\s]*$/i;
+function rewriteProveThat(line) {
+  const m = String(line || "").trim().match(PROVE_THAT_RE);
+  if (!m) return null;
+  return `${m[2]} ${m[1].trim()} ${m[3].trim()}`;
+}
+
 /** A DISCONTIGUOUS verb frame, "SUBJECT uses OBJECT as its/a base(class)" —
  *  "uses" is split from its own qualifier ("as its base") around the object,
  *  so no contiguous phrase-table entry could ever register it, and "uses"
@@ -13238,7 +13420,8 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // — restored centrally inside withLast (below), once, for every dispatch path.
   const indirectMatch = line.match(INDIRECT_REQUEST_RE);
   const indirectLine = indirectMatch ? indirectMatch[1].trim() : line;
-  const preRewriteLine = rewriteVocabOpener(indirectLine) || indirectLine;
+  const preRewriteLine = rewriteEntryPointQuestion(indirectLine) || rewriteProveThat(indirectLine)
+    || rewriteVocabOpener(indirectLine) || indirectLine;
   // rewriteUsesAsBaseFrame's discontiguous-frame rewrite: applied here, once,
   // before ANY dispatch lane sees the text. Null (no-op) for every turn that
   // doesn't match one of the four discontiguous shapes.
@@ -13256,7 +13439,8 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // question is answered by the possession readers instead of walling (the
   // write boundary's own "?" gates already refuse to store it).
   const eslRewrite = rewriteEslMissingDoes(cleftRewrite || frameLine)
-    || rewriteNegativePolarityOpener(cleftRewrite || frameLine);
+    || rewriteNegativePolarityOpener(cleftRewrite || frameLine)
+    || rewriteNegativeInterrogative(cleftRewrite || frameLine);
   const cleftLine = eslRewrite || cleftRewrite || frameLine;
   // VOCABULARY pronoun antecedent — "what is a dog" then "can it bark". The
   // code-graph focus mechanism only ever binds {id,label} GRAPH entities, so
@@ -13291,13 +13475,16 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // captured from the PRE-narration finished result.
   const withLast = (result, fallbackGoal = "unclear — no goal signal for this turn type") => {
     const finished = attachDialogueAct(finish(result, { graph }), trace);
-    // Every dispatch path below built its own record off `workingLine` (the
-    // indirect-request wrapper stripped and/or the discontiguous-frame
-    // rewrite applied) — restore the ORIGINAL raw `line` into record.query
-    // and the logged transcript echo here, once, centrally.
+    // The logged transcript echo is ALWAYS the verbatim user line — no dispatch
+    // path's internal rewrite (the indirect-request wrapper, the vocab-opener /
+    // cleft / ESL rewrites, a discourse substitution) may leak into what the
+    // .log shows the user typed.
+    if (Array.isArray(finished.logLines) && finished.logLines.length > 1) finished.logLines[1] = `> ${line}`;
+    // record.query keeps its narrower restoration for the wrapper/rewrite frames
+    // the ask engine records off `workingLine`; the .jsonl sidecar also carries
+    // the verbatim line as `input`, below.
     if (indirectMatch || baseFrameRewrite || vocabAntecedent || eslRewrite) {
       if (finished.record) finished.record.query = line;
-      if (Array.isArray(finished.logLines) && finished.logLines.length > 1) finished.logLines[1] = `> ${line}`;
     }
     // The VERBATIM user line rides every turn record as `input`, beside
     // whatever `query` the dispatch path recorded — the session history must
@@ -13504,7 +13691,15 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       const endsInPlanTrigger = PLAN_SOLVE_RE.test(lastSentence) || GOAL_TEACH_RE.test(lastSentence)
         || GOAL_TEACH_INFINITIVE_RE.test(lastSentence) || GOAL_TEACH_VERBLESS_RE.test(lastSentence)
         || LEGAL_MOVES_RE.test(lastSentence);
-      if (endsInPlanTrigger || await everySentenceTeaches(sentences, lexicon)) {
+      // The syllogism one-liner — "Every man is mortal. Socrates is a man. Is
+      // Socrates mortal?": every sentence but the last teaches on its own, and
+      // the last is a question. Each teach stores (in order, so the question
+      // sees them), then the final sentence is answered as the payload behind
+      // the teach receipts, the same rendering the plan-trigger case uses.
+      const teachesThenAsks = !endsInPlanTrigger && /\?\s*$/.test(lastSentence.trim())
+        && await everySentenceTeaches(sentences.slice(0, -1), lexicon);
+      const finalIsPayload = endsInPlanTrigger || teachesThenAsks;
+      if (finalIsPayload || await everySentenceTeaches(sentences, lexicon)) {
         let f = focus; let l = last; let ps = planHolder.state;
         const receipts = [];
         let finalRec = null;
@@ -13526,7 +13721,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
         // a stray "Goal (inferred)" line the bulleted ones already dropped. Its
         // goal-line tail (everything after the receipt's first line) is kept once.
         let answer;
-        if (endsInPlanTrigger) {
+        if (finalIsPayload) {
           const receiptLines = receipts.slice(0, -1).map((t) => `• ${t}`).join("\n");
           answer = receiptLines ? `${receiptLines}\n\n${finalRec.answer}` : finalRec.answer;
         } else {
@@ -13538,6 +13733,12 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
         combined.planState = ps;
         combined.focus = f;
         combined.last = l;
+        // Each per-sentence turn recorded only its OWN sentence; the transcript
+        // echo and the turn record must quote the whole multi-sentence line the
+        // user actually typed, not just its last sentence.
+        const ts0 = Array.isArray(finalRec.logLines) && finalRec.logLines.length ? finalRec.logLines[0] : new Date().toISOString();
+        combined.logLines = [ts0, `> ${line}`, answer, ""];
+        if (finalRec.record) combined.record = { ...finalRec.record, query: line, input: line };
         return combined;
       }
     }
