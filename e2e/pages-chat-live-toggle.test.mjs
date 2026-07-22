@@ -151,6 +151,21 @@ test("a typed /wiki turn drives the same state as the switch: the checkbox, the 
   }
 });
 
+test("/wiki supplement adds a cited Wikipedia read-out under a grounded answer the store already gave", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    await routeWikipedia(page);
+    await ask(page, "/wiki supplement");
+    await ask(page, "every quasar is a star");
+    const row = await ask(page, "what is a quasar");
+    const bubbleText = await row.locator(".bubble").innerText();
+    assert.match(bubbleText, /quasar is a kind of star/, "the local answer still leads");
+    assert.match(bubbleText, /Wikipedia adds: quasar — A quasar is a very bright object/, "the cited supplement follows the grounded answer");
+  } finally {
+    await context.close();
+  }
+});
+
 test("flipping the switch off again after use makes the very next miss attempt zero wikipedia requests", async () => {
   const { context, page, thirdPartyAttempts } = await openChatPage();
   try {

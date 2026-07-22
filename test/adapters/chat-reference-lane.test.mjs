@@ -1,9 +1,10 @@
 // The learn-on-miss chat lane over the reference pack: only the CLEANEST
 // miss reaches the pack — a definition-shaped, lexicon-known term with no
 // graph entity and no remembered fact. A hit answers with the article's
-// summary, always cited, records no miss, and stores the article's isa as a
-// subClassOf fact with reference provenance so the next ask answers from
-// memory. Every other miss class leaves the turn byte-identical: unknown
+// summary, always cited, records no miss, and stores the triples the article
+// grounds (its isa plus the candidates the optimistic tier reads from the
+// summary) with reference provenance so the next ask answers from memory.
+// Every other miss class leaves the turn byte-identical: unknown
 // word, parse miss, relation term, taught term, curated corpus term. The
 // negatives are the load-bearing half — each proves the pack is never even
 // consulted (a spy provider counts lookups).
@@ -87,13 +88,18 @@ test("the bare form 'what is otter' reaches the pack under the same gate", async
   }
 });
 
-test("an article with no isa answers cited and stores nothing", async () => {
+test("an article with no curated isa still grounds a triple from its summary text, cited to the article", async () => {
   const dir = await freshRepo();
   try {
     const r = await turn("what is a falcon", { memoryDir: dir });
     assert.equal(r.record.via, "reference");
     assert.match(r.answer, /\(source: reference article "Falcon"/);
-    assert.deepEqual(await factLines(dir), [], "no fact is appended when the article carries no isa");
+    // No first-sentence isa on this article, but the optimistic tier reads the
+    // summary's "a falcon is a bird" into a triple — a load becomes durable
+    // knowledge rather than transient prose.
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(rows.some((f) => f.subject === "falcon" && f.object === "bird"), "the summary's isa-shaped sentence is grounded");
+    assert.ok(rows.every((f) => /^reference:simplewiki:Falcon@/.test(f.provenance)), "every grounded triple carries the article's source tag");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

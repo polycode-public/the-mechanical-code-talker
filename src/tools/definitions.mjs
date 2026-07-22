@@ -297,6 +297,20 @@ export const TOOL_DEFINITIONS = Object.freeze([
     inputSchema: { type: "object", required: [], properties: {} },
     example: {},
   },
+  {
+    name: "tmct_ingest",
+    tier: "cold",
+    summary: "Ground plain text into memory facts with the same deterministic recognizer the chat teach lane uses — the strict tier, plus an optional lower-trust fuzzy tier — and report the canonical triples.",
+    inputSchema: {
+      type: "object",
+      required: ["text"],
+      properties: {
+        text: { type: "string", description: "The plain text to ground into facts." },
+        optimistic: { type: "boolean", description: "Also run the lower-trust fuzzy tier over sentences the strict recognizer skips." },
+      },
+    },
+    example: { text: "A kettle is a container. An otter is a mammal.", optimistic: true },
+  },
 ]);
 
 export const HOT_TOOLS = TOOL_DEFINITIONS.filter((t) => t.tier === "hot");

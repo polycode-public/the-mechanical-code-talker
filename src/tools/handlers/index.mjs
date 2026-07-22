@@ -29,6 +29,7 @@ import { tmct_callees } from "./tmct-callees.mjs";
 import { tmct_calls } from "./tmct-calls.mjs";
 import { tmct_cochanges } from "./tmct-cochanges.mjs";
 import { tmct_export } from "./tmct-export.mjs";
+import { tmct_ingest } from "./tmct-ingest.mjs";
 
 export const HANDLERS = Object.freeze({
   tmct_context,
@@ -55,4 +56,5 @@ export const HANDLERS = Object.freeze({
   tmct_calls,
   tmct_cochanges,
   tmct_export,
+  tmct_ingest,
 });

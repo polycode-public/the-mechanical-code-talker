@@ -266,7 +266,10 @@ async function runCliMode() {
     }
     const config = await configFor(args.repo_path);
     try {
-      const text = await dispatchTool(sub, args, { config });
+      // The recognizer seam a tool like tmct_ingest needs: injected here (bin
+      // sits above the service layer) rather than imported by the tool layer.
+      const { ingestText } = await import("../src/services/extract-facts.mjs");
+      const text = await dispatchTool(sub, args, { config, ingest: ingestText });
       process.stdout.write(text + "\n");
     } catch (e) {
       process.stderr.write(`tmct: ${e?.message || e}\n`);

@@ -143,10 +143,10 @@ tmct:DocumentSource a owl:Class ;
       tmct:Source
       [ a owl:Restriction ;
         owl:onProperty mgx:sourceType ;
-        owl:someValuesFrom [ a rdfs:Datatype ; owl:oneOf ( "corpus" "corpusWeak" "web" "extracted" "reference" ) ] ]
+        owl:someValuesFrom [ a rdfs:Datatype ; owl:oneOf ( "corpus" "corpusWeak" "web" "extracted" "reference" "referenceLive" "optimisticExtract" ) ] ]
     )
   ] ;
-  rdfs:comment "A Source that IS a fixed document a Fact was read from: mgx:sourceType corpus | corpusWeak | web | extracted | reference. A prov:Entity. An mgx:statedBy edge to one of these is nearer prov:hadPrimarySource than attribution — a document is cited, not credited as an agent. A reference source names a shipped reference-pack article." .
+  rdfs:comment "A Source that IS a fixed document a Fact was read from: mgx:sourceType corpus | corpusWeak | web | extracted | reference | referenceLive. A prov:Entity. An mgx:statedBy edge to one of these is nearer prov:hadPrimarySource than attribution — a document is cited, not credited as an agent. A reference source names a shipped reference-pack article; referenceLive names a live-fetched Wikipedia article, scored below the curated pack; optimisticExtract names the fuzzy tier's candidate facts, scored below every curated pack." .
 
 tmct:ActivitySource a owl:Class ;
   rdfs:label "ActivitySource" ;

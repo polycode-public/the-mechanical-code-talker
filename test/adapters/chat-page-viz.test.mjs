@@ -288,9 +288,11 @@ test("renderChatHtml: the device store opens under a version+seed stamp and boot
   assert.match(html, /state kept best-effort on this device/);
 });
 
-test("renderChatHtml: a teach turn schedules a debounced save of a payload snapshot, never a save per keystroke or of the live object", () => {
+test("renderChatHtml: any store-writing turn schedules a debounced save of a payload snapshot, never a save per keystroke or of the live object", () => {
   const html = renderChatHtml();
-  assert.match(html, /result\.record\.via === "assert"\) scheduleSave\(\)/);
+  // Persist on any store write (teach OR a learn-on-miss load), not just a
+  // teach turn; only pure commands, which write nothing, stay out.
+  assert.match(html, /result\.record\.via !== "command"\) scheduleSave\(\)/);
   assert.match(html, /structuredClone\(session\.memoryDir\.payload\)/);
   assert.match(html, /setTimeout\(\(\) => \{[\s\S]*?persist\.save/, "the save runs on a timer, not inline in the turn");
   assert.match(html, /\}, 500\)/, "the debounce window is present");

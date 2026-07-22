@@ -437,6 +437,7 @@
   "src/tools/handlers/tmct-file-history.mjs",
   "src/tools/handlers/tmct-history.mjs",
   "src/tools/handlers/tmct-impact.mjs",
+  "src/tools/handlers/tmct-ingest.mjs",
   "src/tools/handlers/tmct-members.mjs",
   "src/tools/handlers/tmct-method-history.mjs",
   "src/tools/handlers/tmct-related.mjs",

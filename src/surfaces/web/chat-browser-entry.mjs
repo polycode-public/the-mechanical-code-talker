@@ -69,15 +69,18 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
   let focus = null;
   let last = null;
   let planState = null;
-  let liveReferenceOn = Boolean(liveReference);
+  // Tri-state, like the TUI: false (off), true (rescue on a miss), or
+  // "supplement" (also append a cited read-out under every grounded answer).
+  const normLive = (v) => (v === "supplement" ? "supplement" : Boolean(v));
+  let liveReferenceOn = normLive(liveReference);
 
   return {
     memoryDir,
     sessionId,
     get liveReference() { return liveReferenceOn; },
-    /** The page's toggle seam: flip the live Wikipedia supplement for every
-     *  later turn (the `/wiki on|off` command flips the same state). */
-    setLiveReference(v) { liveReferenceOn = Boolean(v); },
+    /** The page's toggle seam: set the live Wikipedia mode for every later turn
+     *  (the `/wiki on|off|supplement` command sets the same state). */
+    setLiveReference(v) { liveReferenceOn = normLive(v); },
 
     /** One dispatched turn. A throwing runTurn must never kill the session —
      *  the page has no other chance to show this turn's answer. */
@@ -96,7 +99,7 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
       focus = result.focus;
       last = result.last;
       if ("planState" in result) planState = result.planState;
-      if (typeof result.liveReference === "boolean") liveReferenceOn = result.liveReference;
+      if (typeof result.liveReference === "boolean" || result.liveReference === "supplement") liveReferenceOn = result.liveReference;
       return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null };
     },
   };

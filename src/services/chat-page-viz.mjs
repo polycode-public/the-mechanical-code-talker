@@ -317,7 +317,7 @@ ${THEME_TOKENS_CSS}
         <button type="submit" id="composerSend" aria-label="Send" disabled>&#8594;</button>
       </div>
       <div class="composer-tools">
-        <label class="liveLabel" title="Off by default. When on, a question nothing local can answer also asks en.wikipedia.org — two small requests per lookup, and the answer is cited (CC BY-SA).">
+        <label class="liveLabel" title="Off by default. When on, a question nothing local can answer also asks en.wikipedia.org — two small requests per lookup, and the answer is cited (CC BY-SA). Type /wiki supplement to also add a cited Wikipedia read-out under every grounded answer.">
           <input type="checkbox" id="liveToggle" role="switch" aria-label="ask Wikipedia when I don't know">
           <span class="toggle-track" aria-hidden="true"><span class="toggle-knob"></span></span>
           <span>ask Wikipedia when I don&#8217;t know</span>
@@ -781,8 +781,14 @@ ${THEME_TOKENS_CSS}
     window.tmctChatSession.turn(q)
       .then((result) => {
         settleAssistantBubble(pendingRow, result.answer, result.record);
-        if (result.record && result.record.via === "assert") scheduleSave();
-        return renderStatsPanel(); // a teach turn just grew this session's memory; a plain ask leaves it unchanged either way
+        // Persist on ANY store write, not just a teach turn: a learn-on-miss
+        // load (a child pack, a reference or live-Wikipedia article) and its
+        // auto-synthesis also append facts, and those were lost on reload when
+        // only via==="assert" saved. Commands write nothing, so they stay out.
+        // The save is debounced, so a read-through that changed nothing costs
+        // at most one coalesced write.
+        if (result.record && result.record.via !== "command") scheduleSave();
+        return renderStatsPanel(); // a teach or learned-load turn grew this session's memory; a plain ask leaves it unchanged either way
       })
       .catch((err) => settleAssistantBubble(pendingRow,
         "something went wrong answering that (" + (err && err.message ? err.message : err) + ") \\u2014 try rephrasing",

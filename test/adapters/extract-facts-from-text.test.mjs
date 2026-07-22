@@ -8,9 +8,10 @@ import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { main } from "../../src/services/extract-facts.mjs";
+import { main, ingestText, optimisticTriples } from "../../src/services/extract-facts.mjs";
 import { splitSentences } from "../../src/services/sentences.mjs";
 import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
+import { SOURCE_PRIOR } from "../../src/domain/memory/trust.mjs";
 
 const FIXTURE_TEXT = [
   "Every module is a component.", // recognized: universal class-membership
@@ -120,6 +121,68 @@ test("extract-facts-from-text: --repo writes straight into that repo's tmct memo
     assert.match(moduleRow.provenance, /extracted:sample\.txt/);
     assert.ok(moduleRow.sourceTypes.includes("extracted"));
     assert.ok(moduleRow.trust > 0, "trust is computed, not hand-set");
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+  }
+});
+
+// ---- the optimistic fuzzy tier -------------------------------------------
+
+test("optimisticTriples: a copula between two nouns yields an isa candidate; prose without a clean pair yields none", () => {
+  assert.deepEqual(optimisticTriples("In the wild, an otter is a small mammal."),
+    [{ subject: "otter", predicate: "rdfs:subClassOf", object: "mammal" }]);
+  assert.deepEqual(optimisticTriples("Dogs are friendly animals of course."),
+    [{ subject: "dog", predicate: "rdfs:subClassOf", object: "animal" }]);
+  // an adjective/preposition either side of the verb is never mistaken for the entity
+  assert.deepEqual(optimisticTriples("The quick brown fox jumps over something vague."), []);
+  // too short to hold a triple
+  assert.deepEqual(optimisticTriples("Hello there."), []);
+});
+
+test("ingestText: the optimistic tier stores a strict-skipped candidate under its own low-trust source kind", async () => {
+  const repoDir = await mkdtemp(join(tmpdir(), "tmct-ingest-opt-"));
+  try {
+    const strict = await ingestText("In the wild, an otter is a small mammal.", { memoryDir: repoDir, sourceTag: "wild.txt" });
+    assert.equal(strict.recognized, 0, "the leading clause makes this a strict skip");
+    assert.equal(strict.optimistic.length, 0, "optimistic is off by default");
+
+    const opt = await ingestText("In the wild, an otter is a small mammal.", { memoryDir: repoDir, sourceTag: "wild.txt", optimistic: true });
+    assert.equal(opt.optimistic.length, 1);
+    assert.equal(opt.optimistic[0].subject, "otter");
+    assert.equal(opt.optimistic[0].provenance, "optimistic-extract:wild.txt");
+
+    const rows = readFactRows(await loadMemory(repoDir));
+    const otter = rows.find((r) => r.subject === "otter" && r.object === "mammal");
+    assert.ok(otter, "the candidate landed in the store");
+    assert.ok(otter.sourceTypes.includes("optimisticExtract"));
+    // it carries NO operator/teach tag, so it stays at its own low prior — below
+    // even a lone curated pack article
+    assert.ok(!otter.sourceTypes.includes("operator") && !otter.sourceTypes.includes("teach"));
+    assert.ok(otter.trust <= SOURCE_PRIOR.optimisticExtract, `${otter.trust} is at or below the optimistic prior`);
+    assert.ok(otter.trust < SOURCE_PRIOR.reference, "a fuzzy candidate ranks below a curated pack article");
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+  }
+});
+
+test("ingestText: ephemeral (no memoryDir) grounds facts and mutates nothing on disk", async () => {
+  const result = await ingestText("Every module is a component. Grace mentors Alan.");
+  assert.equal(result.recognized, 2);
+  assert.equal(result.extracted.length, 2);
+  assert.ok(result.extracted.every((f) => /^extracted:/.test(f.provenance)));
+});
+
+test("ingestText: --canonical renders each ingested fact as a triple linked back into the store", async () => {
+  const repoDir = await mkdtemp(join(tmpdir(), "tmct-ingest-canon-"));
+  try {
+    const result = await ingestText("Every module is a component. Every component is a unit.", { memoryDir: repoDir, canonical: true });
+    assert.ok(Array.isArray(result.canonical));
+    assert.equal(result.canonical.length, result.extracted.length);
+    // "component" is both an object (of module) and a subject (of unit), so its
+    // canonical line names the other fact it links to
+    const componentLine = result.canonical.find((l) => l.startsWith("module "));
+    assert.match(componentLine, /module subClassOf component/);
+    assert.match(componentLine, /links to/);
   } finally {
     await rm(repoDir, { recursive: true, force: true });
   }

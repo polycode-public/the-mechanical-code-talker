@@ -45,6 +45,7 @@
     "./plan": "./src/domain/router/drive.mjs",
     "./generateCompletion": "./src/services/completions.mjs",
     "./createCompletionsGraphAdapter": "./src/services/completions.mjs",
+    "./ingest": "./src/services/extract-facts.mjs",
     "./repository-interface": "./src/adapters/repository-interface.mjs",
     "./conformance": "./src/tools/conformance.mjs"
   },

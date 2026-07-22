@@ -44,13 +44,16 @@ export const TOOLS = HOT_TOOLS.map(({ name, agentDescription, inputSchema }) => 
   inputSchema,
 }));
 
-export async function dispatchTool(name, args, { config, source = defaultSource, tel = null } = {}) {
+export async function dispatchTool(name, args, { config, source = defaultSource, tel = null, ingest = null } = {}) {
   // Reject an unknown tool BEFORE touching the graph — an unknown name never
   // triggers a load. hasOwn, so an inherited name ("constructor", "toString")
   // is unknown rather than a callable found on the prototype chain.
   if (!Object.hasOwn(HANDLERS, name)) throw new ToolError(`unknown tool: ${name}`);
   const handle = HANDLERS[name];
-  if (handle.ownsGraphLoad) return handle(args, { config, source, tel });
+  // `ingest` is the recognizer seam a caller in the service layer injects (the
+  // tool layer sits UNDER services and must not import one, so a tool that needs
+  // the chat recognizer receives it here rather than importing it).
+  if (handle.ownsGraphLoad) return handle(args, { config, source, tel, ingest });
   const graph = await loadGraph(config, source);
   // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json). Passed to
   // createGraphService so svc.snippet()/svc.context() are usable directly, and on to the

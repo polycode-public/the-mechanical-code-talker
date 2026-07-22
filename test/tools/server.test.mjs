@@ -13,6 +13,7 @@ import { renderToolsCatalog } from "../../src/tools/catalog.mjs";
 import { TOOL_DEFINITIONS, HOT_TOOLS, COLD_TOOLS, TOOL_NAMES } from "../../src/tools/definitions.mjs";
 import { ToolError } from "../../src/adapters/config.mjs";
 import { appendFact, openConfiguredMemoryBackend } from "../../src/adapters/memory/core.mjs";
+import { ingestText } from "../../src/services/extract-facts.mjs";
 
 const fixture = JSON.parse(
   readFileSync(fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url)), "utf8"),
@@ -304,6 +305,38 @@ test("tmct_export on an empty store says so honestly rather than emitting nothin
   try {
     const out = await dispatchTool("tmct_export", {}, { config: { graphFile: join(dir, ".tmct", "graph.json") }, source: stubSource });
     assert.match(out, /no facts to export/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("tmct_ingest grounds text into the memory store and reports the canonical triples", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ingest-tool-"));
+  const config = { graphFile: join(dir, ".tmct", "graph.json") };
+  try {
+    const out = await dispatchTool("tmct_ingest", { text: "Every module is a component." }, { config, source: stubSource, ingest: ingestText });
+    assert.match(out, /1 recognized/);
+    assert.match(out, /module subClassOf component/);
+    // it persisted: a second export sees the grounded fact
+    const dump = await dispatchTool("tmct_export", {}, { config, source: stubSource });
+    assert.match(dump, /"subject":"module"/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("tmct_ingest with optimistic reaches a sentence the strict recognizer skips", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ingest-opt-tool-"));
+  const config = { graphFile: join(dir, ".tmct", "graph.json") };
+  try {
+    const out = await dispatchTool("tmct_ingest", { text: "In the wild, an otter is a small mammal.", optimistic: true }, { config, source: stubSource, ingest: ingestText });
+    assert.match(out, /optimistic candidate/);
+    assert.match(out, /otter subClassOf mammal/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("tmct_ingest without the injected recognizer says so honestly rather than guessing", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ingest-noseam-"));
+  const config = { graphFile: join(dir, ".tmct", "graph.json") };
+  try {
+    const out = await dispatchTool("tmct_ingest", { text: "Every module is a component." }, { config, source: stubSource });
+    assert.match(out, /isn't wired into this context/);
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
