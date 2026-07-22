@@ -311,7 +311,9 @@ ${THEME_TOKENS_CSS}
         </label>
         <span class="tool-cluster">
           <button type="button" id="exportMd" class="tool-btn" title="download this conversation as Markdown">export .md</button>
+          <button type="button" id="exportFacts" class="tool-btn" title="download this session's facts as JSONL (the tmct extract shape, provenance included)">export facts</button>
           <button type="button" id="printChat" class="tool-btn" title="print the whole conversation">print</button>
+          <button type="button" id="reinitStore" class="tool-btn" title="drop everything saved on this device and reload from the shipped seed">reset to seed</button>
         </span>
       </div>
     </form>
@@ -801,6 +803,42 @@ ${THEME_TOKENS_CSS}
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
   el("printChat").addEventListener("click", () => window.print());
+
+  // ---- store controls: export the triple store, or reset it whole ----------
+  // "export facts" downloads the session's whole memory as JSONL (the same
+  // subject/predicate/object/provenance shape the extract and memory-export
+  // CLI paths emit), so what you taught leaves in the standard shape.
+  el("exportFacts").addEventListener("click", async () => {
+    const session = window.tmctChatSession;
+    if (!session || !window.tmctChat.exportFactsJsonl) return;
+    let jsonl;
+    try {
+      jsonl = await window.tmctChat.exportFactsJsonl(session.memoryDir);
+    } catch (err) {
+      statusEl.textContent = "couldn't export the facts (" + (err && err.message ? err.message : err) + ")";
+      return;
+    }
+    const blob = new Blob([jsonl], { type: "application/x-ndjson" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "tmct-facts.jsonl";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  // "reset to seed" is the full re-initialisation: drop the persisted payload
+  // outright and reload, so boot re-seeds from the page's shipped seed as if on
+  // a first visit. Harder than "forget everything", which only swaps the live
+  // session — this trusts nothing in memory and re-fetches the seed asset.
+  el("reinitStore").addEventListener("click", async () => {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (persist) await persist.clear();
+    window.location.reload();
+  });
 
   async function boot() {
     if (!window.tmctChat) {

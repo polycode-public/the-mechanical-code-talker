@@ -51,6 +51,32 @@ test("a definition file with an unteachable sentence exits 1 and names the sente
   }
 });
 
+test("a JSONL fact file imports each triple straight in, keeping its provenance, and exits 0", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-import-jsonl-"));
+  try {
+    assert.equal(runCli(dir, "init").status, 0);
+    const facts = join(dir, "facts.jsonl");
+    await writeFile(facts,
+      '{"subject":"zorble","predicate":"rdfs:subClassOf","object":"animal","provenance":"teach:chat:origin"}\n'
+      + '{"subject":"quibbit","predicate":"rdf:type","object":"zorble","provenance":"corpus:demo"}\n');
+    const imp = runCli(dir, "import", "--file", "facts.jsonl");
+    assert.equal(imp.status, 0, imp.stderr + imp.stdout);
+    assert.match(imp.stdout, /2 fact\(s\), 0 comment line\(s\) skipped/);
+    assert.match(imp.stdout, /imported — zorble rdfs:subClassOf animal/);
+    assert.match(imp.stdout, /2 fact\(s\) imported, 0 declined/);
+    assert.doesNotMatch(imp.stdout, /DECLINED/);
+
+    const dump = runCli(dir, "memory", "--verbose");
+    assert.equal(dump.status, 0, dump.stderr);
+    // The imported fact carries the exact provenance the JSONL line named — a
+    // faithful round trip, not a re-tag under the import source.
+    assert.match(dump.stdout, /zorble/);
+    assert.match(dump.stdout, /teach:chat:origin/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("re-init never duplicates the scaffold; re-import is idempotent (exit 0 both times)", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-import-idem-"));
   try {

@@ -18,6 +18,7 @@
 //     without it.
 import { runTurn, vocabExampleHint } from "../../services/chat.mjs";
 import { createInMemoryStore, normFactTerm, loadMemory, readFactRows } from "../../adapters/memory/core.mjs";
+import { serializeFactsJsonl } from "../../adapters/memory/export-jsonl.mjs";
 import { provenanceTagToSource } from "../../domain/memory/trust.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
@@ -147,4 +148,14 @@ export async function memoryStats(memoryDir) {
   return { total: rows.length, bandCounts, taught };
 }
 
-globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, normFactTerm, vocabExampleHint, memoryStats, openPersistedStore };
+/**
+ * The session's whole triple store as JSONL — one
+ * { subject, predicate, object, provenance } object per line, the same shape
+ * `tmct extract` and `tmct memory --export` emit. Reads the live memory the
+ * same way memoryStats does; the page offers it as a download.
+ */
+export async function exportFactsJsonl(memoryDir) {
+  return serializeFactsJsonl(await loadMemory(memoryDir));
+}
+
+globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, normFactTerm, vocabExampleHint, memoryStats, openPersistedStore, exportFactsJsonl };

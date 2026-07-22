@@ -287,6 +287,26 @@ test("bridge: a term unknown to BOTH graphs keeps the honest code-map ToolError"
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
+test("tmct_export dumps the memory store's every fact as JSONL, provenance on each line", async () => {
+  const { dir, config: memConfig } = await repoWithMemoryFacts();
+  try {
+    const out = await dispatchTool("tmct_export", {}, { config: memConfig, source: stubSource });
+    const records = out.split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    assert.equal(records.length, 2, "both stored facts export, one JSON object per line");
+    const gizmo = records.find((r) => r.subject === "gizmo");
+    assert.deepEqual(gizmo, { subject: "gizmo", predicate: "rdfs:subClassOf", object: "software", provenance: "corpus:conceptnet /r/IsA" });
+    assert.ok(records.every((r) => r.provenance.length > 0), "every exported line carries its provenance");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("tmct_export on an empty store says so honestly rather than emitting nothing", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-export-empty-"));
+  try {
+    const out = await dispatchTool("tmct_export", {}, { config: { graphFile: join(dir, ".tmct", "graph.json") }, source: stubSource });
+    assert.match(out, /no facts to export/);
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
 // ---- security fix regression: a crafted/corrupted graph.json carrying a `site.path` that
 // escapes the repo root (e.g. "../secret.txt") must never reach fs. Real repoRoot + a real
 // sibling "secret" file OUTSIDE it, so an unguarded readFile would genuinely read it. ----
