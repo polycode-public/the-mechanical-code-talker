@@ -32,6 +32,13 @@ conceptnet 7,000 / wordnet-xl 14,000, `scripts/build-chat-seed.mjs`): the six
 other rows still reflect the 2.9.4 live deployment. Re-measure chat.html
 against the live site once this change actually deploys.
 
+**ingest.html is new and not yet crawled.** Its eager assets are the shared
+`vendor/wink.js` (already counted once above) plus its own
+`ingest-browser.bundle.js` (~826 KB raw, the same ~830 KB weight class as the
+ledger/plan bundles); the page's own HTML is small (~15 KB). Its cold-load
+profile tracks plan.html's — wink plus one engine bundle — so it adds no new
+shared asset. Give it a real row here the next time the live site is crawled.
+
 Whole set, summing the seven per-page totals (chat.html's local-rebuild row
 carried through): **68,372,711 bytes raw (65.2 MB), 8,532,884 bytes wire
 (8.1 MB)**. Counting every distinct file once (what a full cold crawl

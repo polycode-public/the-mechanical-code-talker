@@ -524,6 +524,26 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
   const placeholder = termSet.has("ishmael")
     ? "who is the grandfather of ishmael"
     : (exampleTerm ? `ask the graph… e.g. what is ${exampleTerm.term}` : "ask the graph…");
+  // The paste-and-drop ingest panel plus the JSONL export ride the LIVE
+  // engine (window.tmctLedger): both teach into and read the dock's own
+  // session store, so they appear only where that bundle is offered — the
+  // demo site, never the CLI's self-contained tmct viz page.
+  const ingestHtml = ledgerBundleAvailable
+    ? `<div class="docktools">
+          <button type="button" id="ingestToggle" class="dockbtn">ingest text&hellip;</button>
+          <button type="button" id="exportFacts" class="dockbtn">export facts</button>
+        </div>
+        <div class="ingestpanel" id="ingestPanel" hidden>
+          <textarea id="ingestText" spellcheck="false" aria-label="Text to ingest into the graph"
+            placeholder="Paste text or drop a .txt/.md file. Each sentence it recognizes as a fact is added to the graph; the rest are skipped honestly."></textarea>
+          <div class="ingestrow">
+            <button type="button" class="dockbtn" id="ingestBrowse">browse&hellip;</button>
+            <input type="file" id="ingestFile" accept=".txt,.md,text/plain,text/markdown" hidden>
+            <button type="button" class="dockbtn primary" id="ingestRun">ingest</button>
+            <span class="ingeststatus mono" id="ingestStatus" aria-live="polite"></span>
+          </div>
+        </div>`
+    : "";
   const dockHtml = hasMemChat
     ? `<div class="chat">
         <div class="chatlog" id="chatlog" aria-live="polite"></div>
@@ -531,6 +551,7 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
           <span class="prompt mono">tmct&gt;</span>
           <input id="chatq" type="text" placeholder="${escapeHtml(placeholder)}" aria-label="Ask the graph">
         </form>
+        ${ingestHtml}
       </div>`
     : `<div class="chat chat-off"><p class="chatnote">chat unavailable — run <span class="mono">npm run build:ask-bundle</span> to enable the in-page ask engine.</p></div>`;
 
@@ -655,6 +676,16 @@ ${THEME_TOKENS_CSS}
   .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .32rem .6rem; min-width: 0; }
   .chatask input:disabled { opacity: .6; }
   .chatnote { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); margin: 0; }
+  .docktools { display: flex; gap: .5rem; margin-top: .55rem; }
+  .dockbtn { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: .22rem .6rem; background: var(--bg); cursor: pointer; }
+  .dockbtn:hover { color: var(--ink); border-color: var(--ink); }
+  .dockbtn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .ingestpanel { margin-top: .55rem; display: flex; flex-direction: column; gap: .45rem; }
+  .ingestpanel[hidden] { display: none; }
+  .ingestpanel textarea { width: 100%; box-sizing: border-box; min-height: 96px; resize: vertical; font-family: ${MONO_STACK}; font-size: .76rem; line-height: 1.45; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .6rem; }
+  .ingestpanel textarea.drag { outline: 2px dashed var(--corpus); outline-offset: -4px; }
+  .ingestrow { display: flex; align-items: center; gap: .5rem; }
+  .ingeststatus { font-size: .68rem; color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) {
     .seg, .chip, .look { transition: border-color .12s ease, background-color .12s ease; }
     /* A live teach re-render swaps the dash section wholesale (dashboardHtml
@@ -1067,6 +1098,85 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
         }
       });
     });
+
+    // ---- ingest + export: bring your own text, take the graph away ---------
+    // The ingest panel runs pasted/dropped/browsed text through the SAME dock
+    // session, one sentence at a time (tmctLedger.splitSentences, then
+    // s.turn), keeping only the sentences the recognizer grounds — then
+    // re-derives the whole ledger so the new facts can be examined in place.
+    // Export serializes that same session store to canonical JSONL.
+    const ingestToggle = el("ingestToggle");
+    if (ingestToggle) {
+      const panel = el("ingestPanel");
+      const ta = el("ingestText");
+      const runBtn = el("ingestRun");
+      const statusEl = el("ingestStatus");
+      const fileInput = el("ingestFile");
+      ingestToggle.addEventListener("click", () => {
+        panel.hidden = !panel.hidden;
+        if (!panel.hidden) ta.focus();
+      });
+      el("ingestBrowse").addEventListener("click", () => fileInput.click());
+      fileInput.addEventListener("change", async () => {
+        const f = fileInput.files && fileInput.files[0];
+        if (f) { try { ta.value = await f.text(); } catch { statusEl.textContent = "couldn't read that file"; } }
+        fileInput.value = "";
+      });
+      ["dragenter", "dragover"].forEach((ev) => ta.addEventListener(ev, (e) => { e.preventDefault(); ta.classList.add("drag"); }));
+      ["dragleave", "drop"].forEach((ev) => ta.addEventListener(ev, () => ta.classList.remove("drag")));
+      ta.addEventListener("drop", async (e) => {
+        e.preventDefault();
+        const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+        if (f) { try { ta.value = await f.text(); } catch { statusEl.textContent = "couldn't read that file"; } }
+      });
+      runBtn.addEventListener("click", () => {
+        const text = ta.value.trim();
+        if (!text) return;
+        statusEl.textContent = "reading\\u2026";
+        runBtn.disabled = true;
+        withLock(async () => {
+          try {
+            const s = await ensureSession();
+            const sentences = tmctLedger.splitSentences(text);
+            let grounded = 0;
+            for (const sentence of sentences) {
+              const r = await s.turn(sentence);
+              if (r.record && r.record.miss === false && r.record.via === "assert") grounded += 1;
+            }
+            const fresh = tmctLedger.computeLedgerDataFromPayload(s.memoryDir.payload, {});
+            applyLedgerData(fresh);
+            const skipped = sentences.length - grounded;
+            statusEl.textContent = sentences.length + " sentence" + (sentences.length === 1 ? "" : "s")
+              + ", " + grounded + " added" + (skipped ? ", " + skipped + " skipped" : "");
+          } catch {
+            statusEl.textContent = "something went wrong ingesting that";
+          } finally {
+            runBtn.disabled = false;
+          }
+        });
+      });
+    }
+
+    const exportBtn = el("exportFacts");
+    if (exportBtn) {
+      exportBtn.addEventListener("click", () => {
+        withLock(async () => {
+          try {
+            const s = await ensureSession();
+            const jsonl = await tmctLedger.exportFactsJsonl(s.memoryDir);
+            const blob = new Blob([jsonl], { type: "application/x-ndjson" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            link.href = url;
+            link.download = "tmct-facts.jsonl";
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 1000);
+          } catch { /* a failed export leaves the page untouched */ }
+        });
+      });
+    }
   } else if (chatForm && typeof tmctMemoryAsk !== "undefined") {
     const memHandle = tmctMemoryAsk.createInMemoryStore();
     memHandle.payload = PAYLOAD;

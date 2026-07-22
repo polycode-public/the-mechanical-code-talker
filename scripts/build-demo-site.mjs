@@ -158,6 +158,20 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
   console.log(`wrote ${chatPagePath}`);
 }
 
+// The ingest page: paste or drop text, keep only the facts the deterministic
+// recognizer can ground. Its own dedicated browser bundle (the full turn
+// engine's teach recognizer, same posture as the chat/ledger bundles above —
+// generated fresh per build, never committed), then the self-contained page.
+{
+  const { main: buildIngestBundle } = await import(join(here, "build-ingest-bundle.mjs"));
+  const { outPath: ingestBundlePath, size: ingestBundleBytes } = await buildIngestBundle(SITE);
+  console.log(`wrote ${ingestBundlePath} (${(ingestBundleBytes / 1024).toFixed(0)} KB)`);
+  const { renderIngestHtml } = await import(join(ROOT, "src", "services", "ingest-viz.mjs"));
+  const ingestPagePath = join(SITE, "ingest.html");
+  await writeF(ingestPagePath, renderIngestHtml());
+  console.log(`wrote ${ingestPagePath}`);
+}
+
 // The sprite tier meant to be looked at closely (400px, gradient/highlight
 // material shading, data/sprites-large/*.toml): excluded from the npm
 // package entirely (package.json's own "!data/sprites-large/"), so only
@@ -301,6 +315,7 @@ const CACHE = ${JSON.stringify("tmct-precache-v" + version)};
 const PRECACHE = [
   "./index.html",
   "./chat.html",
+  "./ingest.html",
   "./chat-browser.bundle.js",
   "./sprites-browser.bundle.js",
   "./vendor/wink.js",

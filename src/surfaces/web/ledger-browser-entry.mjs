@@ -17,7 +17,9 @@
 // never published — only the hosted demo site's public/ledger.html links to
 // it, as an optional sibling script the page degrades honestly without.
 import { runTurn, vocabExampleHint } from "../../services/chat.mjs";
-import { createInMemoryStore, normFactTerm } from "../../adapters/memory/core.mjs";
+import { createInMemoryStore, normFactTerm, loadMemory } from "../../adapters/memory/core.mjs";
+import { serializeFactsJsonl } from "../../adapters/memory/export-jsonl.mjs";
+import { splitSentencesPreservingPaths } from "../../services/sentences.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
@@ -78,8 +80,19 @@ export function createLedgerSession({ seedPayload = null, vocabSeeded = false } 
   };
 }
 
+/** The session's whole triple store as JSONL — the same
+ *  { subject, predicate, object, provenance } shape `tmct extract` and
+ *  `tmct memory --export` emit. The ledger dock's "export facts" control reads
+ *  this and offers it as a download. */
+export async function exportFactsJsonl(memoryDir) {
+  return serializeFactsJsonl(await loadMemory(memoryDir));
+}
+
 // Re-exported so ledger-viz.mjs's own inline script never has to duplicate
 // the derivation logic that builds rows/terms/edges/contradictions/
 // worthALook/stats from a payload — the same posture chat-browser-entry.mjs
 // takes re-exporting registerWinkModel for its own page's CDN wink load.
-globalThis.tmctLedger = { createLedgerSession, computeLedgerDataFromPayload, normFactTerm, registerWinkModel };
+// splitSentences + exportFactsJsonl carry the dock's paste-and-drop ingest and
+// its JSONL export across the bundle boundary, the same one-serializer posture
+// chat-browser-entry.mjs holds for its own page.
+globalThis.tmctLedger = { createLedgerSession, computeLedgerDataFromPayload, normFactTerm, registerWinkModel, splitSentences: splitSentencesPreservingPaths, exportFactsJsonl };

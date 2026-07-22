@@ -120,13 +120,16 @@ tmct> /exit
 
 **[Try it live in your browser →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/)**
 runs the actual query engine client-side. No server, no install. The landing
-page answers codebase questions live, and six more pages each ground their
+page answers codebase questions live, and seven more pages each ground their
 own domain: a full chat seeded with 19,228 facts (the same nine bands as
 `npm run init:xl`, capped to a 22.8 MB download), the **memory ledger**
-(every fact as a readable sentence; drill by clicking the terms inside), a
-Towers-of-Hanoi plan replayed move by move, the spider-and-fly and
-text-adventure games, and a sprite gallery whose chat dock answers from
-1,033 generated sprite facts.
+(every fact as a readable sentence; drill by clicking the terms inside), an
+**ingest page** that turns pasted or dropped text into grounded facts and
+downloads them as canonical JSONL, a Towers-of-Hanoi plan replayed move by
+move, the spider-and-fly and text-adventure games, and a sprite gallery whose
+chat dock answers from 1,033 generated sprite facts. The chat page and the
+ledger take the same paste-or-drop text in place; every page that holds a
+fact store exports it as JSONL.
 The site hosts its own copy of wink-nlp, ships its assets precompressed,
 and a service worker precaches the big ones, so a second visit works
 offline. `tmct chat --render spider-fly|adventure|sprites [--output <path>]`
