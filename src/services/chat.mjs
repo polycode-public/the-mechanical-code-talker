@@ -915,7 +915,7 @@ const CAPABILITY_PHRASES = [
   // as new natural phrasings surface, never a general "any long question is
   // an orientation request" rule.
   /^(?:can you\s+)?walk me through (?:this|the)\s+(?:app|codebase|repo|repository|project|code)\??$/i,
-  /^what(?:'s|s|\s+is) the big picture(?:\s+here)?\??$/i,
+  /^(?:what(?:'s|s|\s+is)|give me|show me|gimme) the big picture(?:\s+(?:here|(?:on|of|for|about)\s+(?:this|the)\s+(?:app|codebase|repo|repository|project|code)))?\??$/i,
   /^(?:give me|what's) the lay of the land\??$/i,
   // "what have we got here"/"what've we got here" — a casual, self-answering
   // opener (matches after a leading "so" strips via LEADING_CONNECTIVE_RE,
@@ -4863,7 +4863,7 @@ const WHAT_KNOW_RE = /^(?:what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?|what
 // do" needs the noun OPTIONAL after "this" (kept REQUIRED after "the") or it
 // falls through to MODULE_ORIENT_RE, which fails to resolve "this" as an
 // entity and hits the raw grammar wall.
-const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+this(?:\s+(?:app|code|codebase|project|repo))?\s+do|what\s+does\s+the\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
+const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+this(?:\s+(?:app|code|codebase|project|repo))?\s+do|what\s+does\s+the\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)(?:\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)?|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
 /** A bare "what is in here"/"what's in here"/"whats in here" — the SAME
  *  orientation intent as META_ORIENT_RE's own
  *  "what's in this repo"-shaped members, just phrased with the CONTEXT_WORDS
@@ -6848,6 +6848,20 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
           replace: miss,
         };
       }
+      // The term names nothing as a fact SUBJECT, but may exist only as the
+      // OBJECT of taught relations ("ahab is the father of ishmael" → "what is
+      // ishmael"): surface those reverse relations rather than missing, the same
+      // facts "what do you know about X" would list.
+      if (!predicate) {
+        const objectHits = rankByBiasThenTrust((await factRows(memoryDir, cache)).filter((f) => variants.has(f.object)), biasByBundle);
+        if (objectHits.length) {
+          const objLines = objectHits.map(renderFactLine);
+          const objShown = objLines.slice(0, FACT_ANSWER_CAP);
+          const objRest = objLines.slice(FACT_ANSWER_CAP);
+          const objExtra = objRest.length ? `\n…and ${objRest.length} more — say 'more' to see them.` : "";
+          return { text: objShown.join("\n") + objExtra, replace: miss, ...(objRest.length ? { pending: { items: objRest, noun: "facts" } } : {}) };
+        }
+      }
       return null;
     }
     // Bias only REORDERS — every hit still renders and is cited (Part 6's
@@ -8064,6 +8078,26 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
           : `I don't know anyone who is the ${relationName} of ${object} from what you've told me.`,
         replace: true,
       };
+    }
+  }
+
+  // Bare "who is/was <name>" with no relational "of Y" tail or genitive (those
+  // are the whoAsk reader's above) — surface every taught fact naming the
+  // person, whether as the subject or only as a relation OBJECT ("ahab is the
+  // father of ishmael" → "who is ishmael"). A name with no stored fact falls
+  // through unchanged.
+  {
+    const whoBare = qHedge.match(WHO_IS_BARE_RE);
+    if (whoBare) {
+      const nameVariants = factTermVariants(normFactTerm, whoBare[1]);
+      const hits = rankByBiasThenTrust(rows.filter((f) => nameVariants.has(f.subject) || nameVariants.has(f.object)), biasByBundle);
+      if (hits.length) {
+        const lines = hits.map(renderFactLine);
+        const shown = lines.slice(0, FACT_ANSWER_CAP);
+        const rest = lines.slice(FACT_ANSWER_CAP);
+        const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+        return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+      }
     }
   }
 
@@ -9520,6 +9554,13 @@ function relationDefinitions() {
  *  it — the fact-lookup path is a low-collision subject lookup, not a structural
  *  parse, so loosening it here is safe. */
 const BARE_WHATIS_RE = /^what\s+(?:is|are)\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
+/** A bare "who is/was <name>" with no relational tail ("of Y") or genitive
+ *  ("Y's role") — those keep their own specific who-readers. This single-token
+ *  form is armed into the meta-term fact lane only on a would-miss, and only
+ *  surfaces an answer when memory actually holds facts about the name (as a
+ *  subject or a relation object); with no such facts it returns null and the
+ *  turn falls through to the author/relation who-readers unchanged. */
+const WHO_IS_BARE_RE = /^who\s+(?:is|are|was|were)\s+(?:an?\s+|the\s+)?([\w'-]+)[?.!\s]*$/i;
 
 /** The meta term a "what is a X" / "what is X" / "what does X mean" / "define X"
  *  question asks about — from the parse when present, else recognized directly
@@ -11416,8 +11457,14 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // above.
   const capabilityAskShape = CAN_ASK_RE.test(gateQuery) || WHAT_CAN_DO_RE.test(gateQuery)
     || DO_VERB_ASK_RE.test(gateQuery) || WHICH_KIND_CAN_RE.test(gateQuery) || WHAT_CAN_VERB_RE.test(gateQuery);
+  // A bare "who is/was <name>" (no relational tail) is as short as the
+  // vocabulary openers above and trips isConversational's word-count catch-all
+  // the same way — factReadBack's bare-who reader surfaces the person's stored
+  // relations only on a real hit, so a name with no facts still falls to the
+  // ordinary card.
+  const whoIsShape = WHO_IS_BARE_RE.test(gateQuery);
   let bareMetaHit = null;
-  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape || capabilityAskShape || bareNounShape)) {
+  if ((isConversationalCandidate || isBareCamelCaseWhatisCandidate) && (bareWhatisShape || isAdjectiveShape || reversePredicateShape || capabilityAskShape || bareNounShape || whoIsShape)) {
     if (memoryDir) {
       // The bare noun asks its own "what is a X" — the readers never see the
       // single word, so the vocabulary route is the constructed question's.
@@ -13027,6 +13074,33 @@ function rewriteNegativePolarityOpener(line) {
   return null;
 }
 
+/** A CONTRACTED NEGATIVE INTERROGATIVE — "isn't a dog an animal?", "doesn't
+ *  store.mjs import config?": a confirmation-seeking question whose expected
+ *  answer is the positive yes/no. Folded to the plain positive interrogative the
+ *  isa/relation readers already answer, so it is ANSWERED rather than walling at
+ *  the grammar boundary or reading as a first-person declarative. A trailing "?"
+ *  is required — the whole negative-question signal — so a leading-"don't"
+ *  imperative ("don't show me tests") is never rewritten into a positive. */
+const NEG_CONTRACTION_LEAD = {
+  "isn't": "is", "isnt": "is", "aren't": "are", "arent": "are",
+  "wasn't": "was", "wasnt": "was", "weren't": "were", "werent": "were",
+  "doesn't": "does", "doesnt": "does", "don't": "do", "dont": "do",
+  "didn't": "did", "didnt": "did", "can't": "can", "cant": "can",
+  "couldn't": "could", "couldnt": "could", "won't": "will", "wont": "will",
+  "wouldn't": "would", "wouldnt": "would", "hasn't": "has", "hasnt": "has",
+  "haven't": "have", "havent": "have", "hadn't": "had", "hadnt": "had",
+  "shouldn't": "should", "shouldnt": "should",
+};
+function rewriteNegativeInterrogative(line) {
+  const s = String(line || "").trim();
+  if (!/\?\s*$/.test(s)) return null;
+  const m = s.replace(/[?.!\s]+$/, "").match(/^(\S+)\s+(.+)$/);
+  if (!m) return null;
+  const positive = NEG_CONTRACTION_LEAD[m[1].toLowerCase()];
+  if (!positive) return null;
+  return `${positive} ${m[2].trim()}`;
+}
+
 /** A DISCONTIGUOUS verb frame, "SUBJECT uses OBJECT as its/a base(class)" —
  *  "uses" is split from its own qualifier ("as its base") around the object,
  *  so no contiguous phrase-table entry could ever register it, and "uses"
@@ -13176,7 +13250,8 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // question is answered by the possession readers instead of walling (the
   // write boundary's own "?" gates already refuse to store it).
   const eslRewrite = rewriteEslMissingDoes(cleftRewrite || frameLine)
-    || rewriteNegativePolarityOpener(cleftRewrite || frameLine);
+    || rewriteNegativePolarityOpener(cleftRewrite || frameLine)
+    || rewriteNegativeInterrogative(cleftRewrite || frameLine);
   const cleftLine = eslRewrite || cleftRewrite || frameLine;
   // VOCABULARY pronoun antecedent — "what is a dog" then "can it bark". The
   // code-graph focus mechanism only ever binds {id,label} GRAPH entities, so
