@@ -498,6 +498,13 @@ nudges you to ground one side first. Quantified teaching stores the
 quantifier ("some functions are risky" … "how many functions are risky" →
 "A few."), and "how many facts are there" counts the store back.
 
+The store answers about its own contents directly. "list facts" and "list
+utterances" enumerate what it holds; "how many sessions are there", "how many
+sources", and "how many rules" count the store's own book-keeping classes
+rather than the code graph. A taught class answers both shapes too: after
+"dog is a kind of animal", "how many animals are there" counts its members and
+"list all animals" reads them back, each cited to where it came from.
+
 Teaching doesn't have to be typed, either. `tmct extract` runs a plain text
 file through the same recognizer the chat's teach lane uses. Sentences the
 recognizer grounds become fact rows; everything else is skipped and counted,

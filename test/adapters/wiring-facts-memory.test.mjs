@@ -251,6 +251,132 @@ test("SYNONYM_DENYLIST blocks a confirmed in-domain false pair ('interpreter'~'c
   }
 });
 
+test("'list facts' enumerates the stored Facts from chat, reading each back with its provenance", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-memclass-list-"));
+  try {
+    await appendFact(dir, { subject: "dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "ace:chat:t1@2026-07-07T00:00:00.000Z" });
+    await appendFact(dir, { subject: "cat", predicate: "rdfs:subClassOf", object: "animal", provenance: "ace:chat:t2@2026-07-07T00:00:00.000Z" });
+    const r = await runTurn("list facts", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.match(r.answer, /dog is a kind of animal/);
+    assert.match(r.answer, /cat is a kind of animal/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("'list sources' reads the memory store's Source individuals, not the code graph", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-memclass-sources-"));
+  try {
+    await appendFact(dir, { subject: "dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "ace:chat:t1@2026-07-07T00:00:00.000Z" });
+    const count = await runTurn("how many sources are there", { config: CONFIG, memoryDir: dir });
+    assert.equal(count.record.miss, false);
+    assert.match(count.answer, /^\d+ sources?\.$/);
+    const list = await runTurn("list sources", { config: CONFIG, memoryDir: dir });
+    assert.equal(list.record.miss, false);
+    assert.ok(list.answer.trim().length > 0);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an empty memory meta-class lists an honest 'none stored yet', never a fabricated line", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-memclass-empty-"));
+  try {
+    await appendFact(dir, { subject: "dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "ace:chat:t1@2026-07-07T00:00:00.000Z" });
+    const r = await runTurn("list utterances", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.miss, true);
+    assert.match(r.answer, /don't have any utterances stored yet/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a memory-class query with a real restrictor tail declines rather than answering a shorter question", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-memclass-restrict-"));
+  try {
+    await appendFact(dir, { subject: "dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "ace:chat:t1@2026-07-07T00:00:00.000Z" });
+    const r = await runTurn("list facts that mention widgets", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.miss, true);
+    assert.match(r.answer, /won't answer as if you hadn't asked it/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("'how many animals are there' counts a taught class's members, past the quantifier lane", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-taught-count-"));
+  try {
+    for (const s of ["dog", "cat", "horse"]) {
+      await appendFact(dir, { subject: s, predicate: "rdfs:subClassOf", object: "animal", provenance: `ace:chat:${s}@2026-07-07T00:00:00.000Z` });
+    }
+    const there = await runTurn("how many animals are there", { config: CONFIG, memoryDir: dir });
+    assert.equal(there.record.miss, false);
+    assert.match(there.answer, /^3 animals\.$/);
+    const know = await runTurn("how many animals do you know", { config: CONFIG, memoryDir: dir });
+    assert.match(know.answer, /^3 animals\.$/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("'list all animals' / 'list the animals' enumerate the taught members from their own trigger", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-member-list-"));
+  try {
+    for (const s of ["dog", "cat", "horse"]) {
+      await appendFact(dir, { subject: s, predicate: "rdfs:subClassOf", object: "animal", provenance: `ace:chat:${s}@2026-07-07T00:00:00.000Z` });
+    }
+    for (const q of ["list all animals", "list the animals"]) {
+      const r = await runTurn(q, { config: CONFIG, memoryDir: dir });
+      assert.equal(r.record.miss, false, q);
+      assert.match(r.answer, /dog is a kind of animal/, q);
+      assert.match(r.answer, /horse is a kind of animal/, q);
+    }
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("'count all facts about horses' reads 'all' as a filler, not the counted noun", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-count-all-"));
+  try {
+    await appendFact(dir, { subject: "horse", predicate: "rdfs:subClassOf", object: "animal", provenance: "ace:chat:t1@2026-07-07T00:00:00.000Z" });
+    await appendFact(dir, { subject: "horse", predicate: "mgx:eats", object: "hay", provenance: "ace:chat:t2@2026-07-07T00:00:00.000Z" });
+    const r = await runTurn("count all facts about horses", { config: CONFIG, memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.match(r.answer, /^2 facts\. \(about "horses"\)$/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a code-graph count is unaffected when the same noun was also asserted as a class ('every class is a component')", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-count-defer-"));
+  try {
+    const payload = JSON.parse(await readFile(FIXTURE, "utf8"));
+    await mkdir(join(dir, ".tmct"), { recursive: true });
+    await writeFile(join(dir, ".tmct", "graph.json"), JSON.stringify(payload));
+    const config = { graphFile: join(dir, ".tmct", "graph.json") };
+    const graph = parseEntities(payload);
+    const classCount = graph.individuals.filter((i) => i.class === "Class").length;
+    await appendFact(dir, { subject: "class", predicate: "rdfs:subClassOf", object: "component", provenance: "ace:chat:t1@2026-07-07T00:00:00.000Z" });
+    clearCache();
+    const r = await runTurn("how many components are there", { config, graph, memoryDir: dir });
+    assert.equal(r.record.miss, false);
+    assert.match(r.answer, new RegExp(`^${classCount} components\\.$`), "counts the asserted class's cardinality, not the one class-level fact");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("no-fact questions stay byte-unchanged honest misses, with and without memory", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-w4-nofact-"));
   try {

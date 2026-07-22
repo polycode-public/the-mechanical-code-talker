@@ -40,6 +40,23 @@ test("'a grandparent is a parent of a parent' stores a compose2 Rule (base1/base
   }
 });
 
+test("a determiner-led possession teaches the same fact as its bare form ('the tower has 3 disks' == 'tower has 3 disks')", async () => {
+  const dir = await mem("det-has");
+  try {
+    const det = await runTurn("the tower has 3 disks.", { config: CONFIG, memoryDir: dir, sessionId: "d1" });
+    assert.equal(det.record.miss, false, "the determiner-led form teaches, not misroutes to a code question");
+    assert.equal(det.record.via, "assert");
+    const rows = readFactRows(await loadMemory(dir));
+    assert.equal(rows.length, 1, "one possession fact stored");
+    assert.equal(rows[0].subject, "tower", "the determiner is stripped — the subject is the noun, not 'the'");
+    assert.equal(rows[0].predicate, "mgx:hasA");
+    assert.equal(rows[0].object, "3 disks");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("'a grandfather is a grandparent who is male' stores a filter Rule (base/property slots), never a Fact", async () => {
   const dir = await mem("filter");
   try {
