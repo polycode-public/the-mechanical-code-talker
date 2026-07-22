@@ -186,27 +186,52 @@ test("renderChatHtml: exposes window.tmctChatReady, the same boot-readiness hook
   assert.match(html, /window\.tmctChatReady = boot\(\)/);
 });
 
-test("renderChatHtml: the live-Wikipedia switch renders under the composer — a real checkbox with switch semantics and its plain-words label", () => {
+test("renderChatHtml: the wiki-mode radio group renders under the composer — off/miss/always, off checked by default", () => {
   const html = renderChatHtml();
-  assert.match(html, /class="composer-tools"/);
-  assert.match(html, /<input type="checkbox" id="liveToggle" role="switch" aria-label="ask Wikipedia when I don't know">/);
-  assert.match(html, />ask Wikipedia when I don&#8217;t know</);
-  assert.ok(!html.includes('id="liveToggle" checked'), "the switch ships unchecked — live lookups are opt-in");
-  assert.match(html, /class="toggle-track"/, "the pill track renders");
-  assert.match(html, /#liveToggle:checked ~ \.toggle-track \{ background: var\(--corpus\)/, "the checked track tints with the corpus token");
-  const title = html.match(/label class="liveLabel" title="([^"]+)"/)?.[1] ?? "";
+  assert.match(html, /class="composer-wiki"/);
+  assert.match(html, /<fieldset class="wikiMode" id="wikiMode"/);
+  assert.match(html, /<input type="radio" name="wikiMode" id="wikiOff" value="off" checked>/, "off ships checked — live lookups are opt-in");
+  assert.match(html, /<input type="radio" name="wikiMode" id="wikiMiss" value="miss">/);
+  assert.match(html, /<input type="radio" name="wikiMode" id="wikiAlways" value="always">/);
+  assert.ok(!html.includes('id="wikiMiss" checked') && !html.includes('id="wikiAlways" checked'), "only off ships checked");
+  const title = html.match(/fieldset class="wikiMode" id="wikiMode" title="([^"]+)"/)?.[1] ?? "";
   assert.match(title, /Off by default/);
   assert.match(title, /two small requests/);
   assert.match(title, /CC BY-SA/);
 });
 
-test("renderChatHtml: the switch is wired to the session and the stored preference, and the statusline reports the live state", () => {
+test("renderChatHtml: the synthesis slider renders next to the wiki radios, default budget 12", () => {
   const html = renderChatHtml();
-  assert.match(html, /"tmct\.chat\.liveWikipedia"/, "the preference persists under its own localStorage key");
-  assert.match(html, /setLiveReference\(liveToggleEl\.checked\)/, "a flip reaches the running session");
-  assert.match(html, /liveToggleEl\.checked = readLivePref\(\)/, "boot restores the stored preference before the session starts");
+  assert.match(html, /synthesize from wikipedia: <span id="synthValue" class="mono">12<\/span>/);
+  assert.match(html, /<input type="range" id="synthSlider" min="0" max="24" step="4" value="12">/);
+});
+
+test("renderChatHtml: the radio group is wired to the session and the stored preference, with legacy migration", () => {
+  const html = renderChatHtml();
+  assert.match(html, /"tmct\.chat\.wikiMode"/, "the mode persists under its own localStorage key");
+  assert.match(html, /"tmct\.chat\.liveWikipedia"/, "the legacy key is still read, for migration");
+  assert.match(html, /if \(localStorage\.getItem\(LEGACY_LIVE_PREF_KEY\) === "on"\) return "miss";/, "a legacy \"on\" preference migrates to the miss mode");
+  assert.match(html, /window\.tmctChatSession\.setLiveReference\(liveReferenceForMode\(mode\)\)/, "a flip reaches the running session");
+  assert.match(html, /const initialMode = readWikiMode\(\);/, "boot restores the stored mode before the session starts");
   assert.match(html, /onLiveLookup: function \(\) \{ statusEl\.textContent = "searching wikipedia\\u2026"; \}/, "an in-flight lookup announces itself on the statusline");
-  assert.match(html, /"live wikipedia: " \+ \(liveToggleEl\.checked \? "on" : "off"\)/, "the statusline names the live state");
+  assert.match(html, /"live wikipedia: " \+ liveStatusWord\(liveReference\)/, "the statusline names the live state");
+});
+
+test("renderChatHtml: setLiveReference(false|true|\"always\") is exactly what the three radio values map to", () => {
+  const html = renderChatHtml();
+  assert.match(html, /const liveReferenceForMode = \(mode\) => \(mode === "always" \? "always" : mode === "miss"\);/);
+});
+
+test("renderChatHtml: the synthesis slider is wired to setSynthesisBudget and its own storage key", () => {
+  const html = renderChatHtml();
+  assert.match(html, /"tmct\.chat\.synthBudget"/);
+  assert.match(html, /window\.tmctChatSession\.setSynthesisBudget\(n\)/);
+});
+
+test("renderChatHtml: a /wiki supplement turn clears every radio rather than leaving a stale one checked", () => {
+  const html = renderChatHtml();
+  assert.match(html, /const mode = liveReference === "always" \? "always" : liveReference === true \? "miss" : liveReference === false \? "off" : null;/);
+  assert.match(html, /setWikiModeRadios\(mode \|\| ""\);/);
 });
 
 // ---- transcriptMarkdown: the export document, built from the model, in the

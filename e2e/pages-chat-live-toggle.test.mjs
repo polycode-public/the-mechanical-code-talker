@@ -1,10 +1,14 @@
-// The "ask Wikipedia when I don't know" switch on public/chat.html, driven in
-// a real browser. OFF is the default and means what it says: a clean miss
-// makes zero request attempts toward wikipedia.org. Flipping the switch
-// persists in localStorage across a reload. ON, a miss question round-trips
-// the two Wikipedia endpoints (fulfilled here from fixtures — no test ever
-// touches the real site) and answers cited; a failing endpoint leaves the
-// honest miss standing, dashed bubble and all.
+// The "ask wikipedia" radio group on public/chat.html (off / when I don't
+// know / always), driven in a real browser. Off is the default and means
+// what it says: a clean miss makes zero request attempts toward
+// wikipedia.org. Miss mode is the previous toggle's own behavior: a miss
+// question round-trips the two Wikipedia endpoints (fulfilled here from
+// fixtures — no test ever touches the real site) and answers cited, while a
+// failing endpoint leaves the honest miss standing. Always widens that to a
+// grounded ask the store already answers — the answer still leads, with a
+// cited Wikipedia read-out appended. Picking a radio persists in
+// localStorage across a reload; a legacy "liveWikipedia=on" preference from
+// before the radio group existed migrates to miss on first boot.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
@@ -32,11 +36,13 @@ after(async () => {
 });
 
 /** Open chat.html with third-party requests blocked AND recorded — the
- *  recorder is how a test proves the OFF default never even tries the
+ *  recorder is how a test proves the off default never even tries the
  *  network. A test that wants Wikipedia answered registers its own more
  *  specific route AFTER this catch-all (Playwright matches the newest route
- *  first), so the abort here stays the fallback. */
-async function openChatPage() {
+ *  first), so the abort here stays the fallback. `localStorageSeed` (optional)
+ *  runs before the page's own boot script, so a test can drive a legacy or
+ *  pre-set preference without first clicking a radio through a fresh boot. */
+async function openChatPage({ localStorageSeed } = {}) {
   const context = await browser.newContext();
   const page = await context.newPage();
   const thirdPartyAttempts = [];
@@ -47,6 +53,10 @@ async function openChatPage() {
     thirdPartyAttempts.push(url);
     return route.abort();
   });
+
+  if (localStorageSeed) await page.addInitScript((seed) => {
+    for (const [key, value] of Object.entries(seed)) localStorage.setItem(key, value);
+  }, localStorageSeed);
 
   await page.goto(`${server.origin}/chat.html`, { waitUntil: "networkidle" });
   await page.waitForFunction(() => window.tmctChatReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
@@ -95,10 +105,15 @@ async function routeWikipedia(page, { status = 200 } = {}) {
   });
 }
 
-test("the switch ships off, and a miss question makes zero wikipedia.org request attempts", async () => {
+const checkedWikiMode = (page) => page.evaluate(() => {
+  const checked = Array.from(document.querySelectorAll('input[name="wikiMode"]')).find((r) => r.checked);
+  return checked ? checked.value : null;
+});
+
+test("off is the default, and a miss question makes zero wikipedia.org request attempts", async () => {
   const { context, page, thirdPartyAttempts } = await openChatPage();
   try {
-    assert.equal(await page.locator("#liveToggle").isChecked(), false, "the switch is off by default");
+    assert.equal(await checkedWikiMode(page), "off", "off is checked by default");
     assert.match(await page.locator("#status").innerText(), /live wikipedia: off/);
 
     const row = await ask(page, "what is a quasar");
@@ -110,42 +125,76 @@ test("the switch ships off, and a miss question makes zero wikipedia.org request
   }
 });
 
-test("flipping the switch persists in localStorage and survives a reload", async () => {
+test("picking a radio persists in localStorage and survives a reload", async () => {
   const { context, page } = await openChatPage();
   try {
-    await page.locator(".liveLabel").click();
-    assert.equal(await page.locator("#liveToggle").isChecked(), true);
+    await page.click("#wikiMiss");
+    assert.equal(await checkedWikiMode(page), "miss");
     assert.equal(
-      await page.evaluate(() => localStorage.getItem("tmct.chat.liveWikipedia")),
-      "on",
-      "the preference lands under its own key",
+      await page.evaluate(() => localStorage.getItem("tmct.chat.wikiMode")),
+      "miss",
+      "the mode persists under its own key",
     );
     assert.match(await page.locator("#status").innerText(), /live wikipedia: on/);
 
     await page.goto(`${server.origin}/chat.html`, { waitUntil: "networkidle" });
     await page.waitForFunction(() => window.tmctChatReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
     await page.evaluate(() => window.tmctChatReady);
-    assert.equal(await page.locator("#liveToggle").isChecked(), true, "the reloaded page restores the stored preference");
+    assert.equal(await checkedWikiMode(page), "miss", "the reloaded page restores the stored mode");
     assert.match(await page.locator("#status").innerText(), /live wikipedia: on/);
   } finally {
     await context.close();
   }
 });
 
-test("a typed /wiki turn drives the same state as the switch: the checkbox, the statusline, and the stored preference all flip", async () => {
+test("a legacy liveWikipedia=on preference migrates to the miss mode on first boot, and the legacy key is dropped", async () => {
+  const { context, page } = await openChatPage({ localStorageSeed: { "tmct.chat.liveWikipedia": "on" } });
+  try {
+    assert.equal(await checkedWikiMode(page), "miss", "the legacy \"on\" preference reads as the miss mode");
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem("tmct.chat.wikiMode")),
+      "miss",
+      "boot writes the migrated mode under the new key",
+    );
+    assert.equal(
+      await page.evaluate(() => localStorage.getItem("tmct.chat.liveWikipedia")),
+      null,
+      "the legacy key is cleared once migrated",
+    );
+  } finally {
+    await context.close();
+  }
+});
+
+test("a typed /wiki turn drives the same state as the radios: the checked value, the statusline, and the stored preference all flip", async () => {
   const { context, page } = await openChatPage();
   try {
     const onReply = await ask(page, "/wiki on");
     assert.match(await onReply.locator(".bubble").innerText(), /\bon\b/i, "the command turn acknowledges the new state");
-    assert.equal(await page.locator("#liveToggle").isChecked(), true, "the switch mirrors the session state the command flipped");
+    assert.equal(await checkedWikiMode(page), "miss", "the radios mirror the session state the command flipped");
     assert.match(await page.locator("#status").innerText(), /live wikipedia: on/);
-    assert.equal(await page.evaluate(() => localStorage.getItem("tmct.chat.liveWikipedia")), "on");
+    assert.equal(await page.evaluate(() => localStorage.getItem("tmct.chat.wikiMode")), "miss");
 
     await ask(page, "/wiki off");
-    assert.equal(await page.locator("#liveToggle").isChecked(), false, "the command flips it back off");
+    assert.equal(await checkedWikiMode(page), "off", "the command flips it back off");
     assert.match(await page.locator("#status").innerText(), /live wikipedia: off/);
-    // Off is stored as the key's absence — the shipped default needs no entry.
-    assert.equal(await page.evaluate(() => localStorage.getItem("tmct.chat.liveWikipedia")), null);
+    assert.equal(await page.evaluate(() => localStorage.getItem("tmct.chat.wikiMode")), "off");
+
+    await ask(page, "/wiki always");
+    assert.equal(await checkedWikiMode(page), "always");
+    assert.match(await page.locator("#status").innerText(), /live wikipedia: always/);
+    assert.equal(await page.evaluate(() => localStorage.getItem("tmct.chat.wikiMode")), "always");
+  } finally {
+    await context.close();
+  }
+});
+
+test("/wiki supplement clears every radio — it has none of its own — and the statusline names it truthfully", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    await ask(page, "/wiki supplement");
+    assert.equal(await checkedWikiMode(page), null, "no radio claims a mode /wiki supplement doesn't represent");
+    assert.match(await page.locator("#status").innerText(), /live wikipedia: supplement/);
   } finally {
     await context.close();
   }
@@ -166,13 +215,13 @@ test("/wiki supplement adds a cited Wikipedia read-out under a grounded answer t
   }
 });
 
-test("flipping the switch off again after use makes the very next miss attempt zero wikipedia requests", async () => {
+test("off means off: switching back to off after use makes the very next miss attempt zero wikipedia requests", async () => {
   const { context, page, thirdPartyAttempts } = await openChatPage();
   try {
-    await page.locator(".liveLabel").click();
-    assert.equal(await page.locator("#liveToggle").isChecked(), true);
-    await page.locator(".liveLabel").click();
-    assert.equal(await page.locator("#liveToggle").isChecked(), false, "the switch flips straight back off");
+    await page.click("#wikiMiss");
+    assert.equal(await checkedWikiMode(page), "miss");
+    await page.click("#wikiOff");
+    assert.equal(await checkedWikiMode(page), "off", "the radios flip straight back to off");
     assert.match(await page.locator("#status").innerText(), /live wikipedia: off/);
 
     const row = await ask(page, "what is a quasar");
@@ -184,11 +233,11 @@ test("flipping the switch off again after use makes the very next miss attempt z
   }
 });
 
-test("switched on, a miss question answers from the (fixture-served) live article, cited", async () => {
+test("miss mode: a miss question answers from the (fixture-served) live article, cited", async () => {
   const { context, page } = await openChatPage();
   try {
     await routeWikipedia(page);
-    await page.locator(".liveLabel").click();
+    await page.click("#wikiMiss");
 
     const row = await ask(page, "what is a quasar");
     const bubbleText = await row.locator(".bubble").innerText();
@@ -200,17 +249,38 @@ test("switched on, a miss question answers from the (fixture-served) live articl
   }
 });
 
-test("switched on with Wikipedia failing, the honest miss stands — dashed bubble, no chip, no citation", async () => {
+test("miss mode with Wikipedia failing, the honest miss stands — dashed bubble, no chip, no citation", async () => {
   const { context, page } = await openChatPage();
   try {
     await routeWikipedia(page, { status: 500 });
-    await page.locator(".liveLabel").click();
+    await page.click("#wikiMiss");
 
     const row = await ask(page, "what is a quasar");
     const bubbleText = await row.locator(".bubble").innerText();
     assert.doesNotMatch(bubbleText, /live Wikipedia article/, "no citation is fabricated from a failed lookup");
     assert.equal(await row.locator(".bubble").getAttribute("class"), "bubble assistant miss", "the miss keeps its dashed treatment");
     assert.equal(await row.locator(".provchip").count(), 0, "no provenance chip on a miss");
+  } finally {
+    await context.close();
+  }
+});
+
+test("always mode fetches even on an ask local facts already answer, and the grounded answer still leads", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    // routeWikipedia's own fixture route is registered AFTER (and so takes
+    // priority over) openChatPage's catch-all recorder — the fixture-cited
+    // text landing in the answer is itself the proof always reached the
+    // network; the recorder never sees a request the fixture route absorbed.
+    await routeWikipedia(page);
+    await ask(page, "every quasar is a star");
+    await page.click("#wikiAlways");
+    assert.equal(await checkedWikiMode(page), "always");
+
+    const row = await ask(page, "what is a quasar");
+    const bubbleText = await row.locator(".bubble").innerText();
+    assert.match(bubbleText, /quasar is a kind of star/, "the grounded answer still leads");
+    assert.match(bubbleText, /Wikipedia adds: quasar — A quasar is a very bright object/, "always widens the supplement to an ordinary grounded ask, cited from the live fixture");
   } finally {
     await context.close();
   }

@@ -1,0 +1,267 @@
+// ingest-viz: renderIngestHtml is a pure string builder — no engine state is
+// embedded (it all arrives live via the sibling ingest-browser.bundle.js,
+// exactly as chat-page-viz.mjs's own page works), so these tests pin the
+// page's STRUCTURE (mirroring chat-page-viz.test.mjs's own style) plus
+// factTripleParts and loadProgressLine, this page's own pure helpers.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { renderIngestHtml, factTripleParts, loadProgressLine } from "../../src/services/ingest-viz.mjs";
+import { createIngestSession, groundTextToFacts } from "../../src/surfaces/web/ingest-browser-entry.mjs";
+import { createInMemoryStore, readFactRows, loadMemory, appendFact } from "../../src/adapters/memory/core.mjs";
+
+// ---- factTripleParts: the pure row-shape reader ----------------------------
+
+test("factTripleParts: reads subject/predicate/object/provenance as strings, defaulting to empty", () => {
+  assert.deepEqual(
+    factTripleParts({ subject: "beagle", predicate: "rdfs:subClassOf", object: "dog", provenance: "teach:chat:x" }),
+    { subject: "beagle", predicate: "rdfs:subClassOf", object: "dog", provenance: "teach:chat:x" },
+  );
+  assert.deepEqual(factTripleParts({}), { subject: "", predicate: "", object: "", provenance: "" });
+  assert.deepEqual(factTripleParts(null), { subject: "", predicate: "", object: "", provenance: "" });
+});
+
+// ---- loadProgressLine: the boot statusline's pure aggregator ---------------
+
+test("loadProgressLine: sums loaded and total bytes across assets into one MB line", () => {
+  const line = loadProgressLine([
+    { loaded: 524288, total: 1048576 },
+    { loaded: 1048576, total: 3145728 },
+  ]);
+  assert.equal(line, "loading the engine… 1.5 MB / 4.0 MB");
+});
+
+test("loadProgressLine: with any total unknown, shows loaded bytes alone rather than inventing a denominator", () => {
+  assert.equal(loadProgressLine([{ loaded: 1048576, total: 0 }]), "loading the engine… 1.0 MB");
+});
+
+test("loadProgressLine: an empty part list reads as zero loaded, never a crash", () => {
+  assert.equal(loadProgressLine([]), "loading the engine… 0.0 MB");
+});
+
+// ---- renderIngestHtml: page structure --------------------------------------
+
+test("renderIngestHtml: mounts the ingest engine bundle by a same-origin relative path only", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /<script src="\.\/ingest-browser\.bundle\.js"><\/script>/);
+  assert.ok(!/(?:src|href)=["']https?:/.test(html), "no external resource loads baked into the markup");
+});
+
+test("renderIngestHtml: registers the site service worker, tolerating its absence", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /navigator\.serviceWorker\.register\("\.\/tmct-sw\.js"\)\.catch/);
+});
+
+test("renderIngestHtml: the two-pane layout (source textarea, canonical facts) is present", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /id="source"/);
+  assert.match(html, /id="facts"/);
+  assert.match(html, /id="factCount"/);
+  assert.match(html, /class="pills"/);
+});
+
+test("renderIngestHtml: deterministic — byte-identical output for identical input", () => {
+  assert.equal(renderIngestHtml(), renderIngestHtml());
+});
+
+test("renderIngestHtml: exposes window.tmctIngestReady, the same boot-readiness hook the e2e tests wait on", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /window\.tmctIngestReady = boot\(\)/);
+});
+
+test("renderIngestHtml: escapes a custom title", () => {
+  const html = renderIngestHtml({ title: 'a <script>alert(1)</script> title' });
+  assert.ok(!html.includes("<script>alert(1)</script> title"));
+  assert.match(html, /&lt;script&gt;/);
+});
+
+test("renderIngestHtml: self-contained, both theme schemes present, reduced-motion respected", () => {
+  const html = renderIngestHtml();
+  assert.ok(html.includes("prefers-color-scheme: dark"));
+  assert.ok(html.includes('data-theme="dark"') && html.includes('data-theme="light"'));
+  assert.ok(html.includes("prefers-reduced-motion"));
+});
+
+test("renderIngestHtml: fits a narrow viewport — the panes stack rather than overflowing", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /max-width: 720px[\s\S]{0,100}grid-template-columns: 1fr; grid-template-rows: 1fr 1fr;/);
+});
+
+// ---- seed parity: on by default, with a toggle and a real fetch -----------
+
+test("renderIngestHtml: seeds from the same chat-seed.json chat.html embeds, with progress reported", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /fetchWithProgress\("\.\/chat-seed\.json"/);
+  assert.match(html, /<input type="checkbox" id="seedToggle" checked>/, "the seed toggle ships checked — seeded by default");
+});
+
+test("renderIngestHtml: the seed toggle persists under its own storage key, off skipping the fetch outright", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /"tmct\.ingest\.seed"/);
+  assert.match(html, /if \(!seedToggleEl\.checked\) \{ seedPayload = null; seedFacts = 0; return; \}/, "the off branch never even attempts the request");
+});
+
+test("renderIngestHtml: the fuzzy low-trust tier checkbox ships off by default", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /<input type="checkbox" id="fuzzyToggle">/);
+  assert.ok(!html.includes('id="fuzzyToggle" checked'));
+  assert.match(html, /optimistic: fuzzyToggleEl\.checked/);
+});
+
+// ---- the docked memory panel: shared with chat.html ------------------------
+
+test("renderIngestHtml: the memory-panel-viz helpers are spliced in, not reimplemented", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /const bandLabelFor = /);
+  assert.match(html, /const statsSummaryLine = /);
+  assert.match(html, /const fetchWithProgress = /);
+  assert.match(html, /const renderStatsPanelInto = /);
+  assert.match(html, /class="statsPanel" id="statsPanel"/);
+});
+
+test("renderIngestHtml: the docked panel hides on a narrow viewport, matching chat.html's own breakpoint", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /max-width: 860px\)\s*\{\s*\n\s*\.statsPanel \{ display: none; \}/);
+});
+
+// ---- persistence: kept on this device, same convention as chat.html -------
+
+test("renderIngestHtml: the device store opens under a version+seed stamp and boot tries a restore before falling back to the fresh seed", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /openPersistedStore\(\{ storeKey: "ingest", stamp: siteVersion \+ ":" \+ seedFacts \}\)/);
+  assert.match(html, /persist\.load\(\)/);
+});
+
+test("renderIngestHtml: a grounded ingest schedules a debounced save of a payload snapshot, never a save per keystroke or of the live object", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /structuredClone\(session\.memoryDir\.payload\)/);
+  assert.match(html, /setTimeout\(\(\) => \{[\s\S]*?persist\.save/, "the save runs on a timer, not inline in the ingest call");
+  assert.match(html, /\}, 500\)/, "the debounce window is present");
+});
+
+test("renderIngestHtml: reset-to-seed clears the persisted store and reloads; forget-everything rebuilds the session without reloading", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /id="reinitStore"/);
+  assert.match(html, /window\.location\.reload\(\)/);
+  assert.match(html, /async function forgetEverything\(\) \{/);
+  assert.ok(!/async function forgetEverything\(\) \{[\s\S]{0,400}?location\.reload/.test(html), "forget-everything never reloads the page");
+});
+
+// ---- the persistent session: one store across ingest clicks ---------------
+
+test("renderIngestHtml: the ingest click never recreates the session — the click handler reads the existing one", () => {
+  const html = renderIngestHtml();
+  const handler = html.slice(html.indexOf('ingestBtn.addEventListener("click"'), html.indexOf("// ---- download the canonical facts"));
+  assert.ok(!handler.includes("createIngestSession"), "the ingest click path never calls createIngestSession itself");
+  assert.match(handler, /session\.ingest\(text/);
+});
+
+test("renderIngestHtml: clear only resets the UI, never the session", () => {
+  const html = renderIngestHtml();
+  const handler = html.slice(html.indexOf('clearBtn.addEventListener("click"'), html.indexOf("window.tmctIngestReady = boot()"));
+  assert.ok(!handler.includes("createIngestSession"), "clear never rebuilds the session");
+  assert.match(handler, /clearFactsPane\(\)/);
+});
+
+test("renderIngestHtml: export facts (renamed from download canonical) and reset to seed sit in the actions row", () => {
+  const html = renderIngestHtml();
+  assert.match(html, /<button type="button" class="btn" id="downloadBtn" disabled>export facts<\/button>/);
+  assert.match(html, /<button type="button" class="btn" id="reinitStore"[^>]*>reset to seed<\/button>/);
+});
+
+// ---- groundTextToFacts / createIngestSession: the page's real seam --------
+// The wiring behind the structure above — citation stripping, the
+// clause/pronoun fallback, the optimistic tier and the O(sentences) row-diff
+// fast path — exercised directly against the real recognizer, the same
+// engine every e2e page click drives.
+
+test("createIngestSession: a plain teach sentence grounds; a question is honestly skipped", async () => {
+  const session = createIngestSession();
+  const summary = await session.ingest("A beagle is a kind of dog. How are you today?");
+  assert.equal(summary.sentences, 2);
+  assert.equal(summary.recognized, 1);
+  assert.equal(summary.skipped, 1);
+  assert.deepEqual(summary.facts.map((f) => [f.subject, f.predicate, f.object]), [["beagle", "rdfs:subClassOf", "dog"]]);
+});
+
+test("createIngestSession: onFact is awaited once per grounded row, in reading order", async () => {
+  const session = createIngestSession();
+  const seen = [];
+  await session.ingest("A beagle is a kind of dog. A dog is a kind of animal.", {
+    onFact: async (fact) => { seen.push(fact.subject); },
+  });
+  assert.deepEqual(seen, ["beagle", "dog"]);
+});
+
+test("groundTextToFacts: a citation marker glued onto a sentence boundary never blocks the read that carries it", async () => {
+  const memoryDir = createInMemoryStore();
+  const summary = await groundTextToFacts(
+    "Sales are closely connected with marketing.[3] Sales and marketing have the same goal. Is this clear?",
+    { memoryDir, sessionId: "x" },
+  );
+  assert.ok(summary.facts.some((f) => f.subject === "sales" && f.predicate === "mgx:connected-with" && f.object === "marketing"));
+  assert.ok(summary.facts.some((f) => f.subject === "sales" && f.predicate === "mgx:same-goal-as" && f.object === "marketing"), "the leading [3] residue on the next sentence never blocks its own read");
+  assert.ok(!summary.facts.some((f) => /\[|\]|3/.test(f.object) || /\[|\]|3/.test(f.subject)), "no citation residue rides into a stored term");
+});
+
+test("groundTextToFacts: a whole-sentence miss falls back to its own clause fragment, grounding what the run-on itself never would", async () => {
+  const memoryDir = createInMemoryStore();
+  const summary = await groundTextToFacts(
+    "Zorbles are fast animals, and zorbles and quombats have the same habitat. Is this clear?",
+    { memoryDir, sessionId: "x" },
+  );
+  assert.ok(summary.facts.some((f) => f.subject === "quombats" && f.object === "same habitat"), "the trailing clause fragment grounds on its own, once the whole run-on sentence misses");
+});
+
+test("groundTextToFacts: a pronoun-led sentence resolves against the paragraph's last unique grounded subject", async () => {
+  const memoryDir = createInMemoryStore();
+  const summary = await groundTextToFacts("A beagle is a kind of dog. It is closely connected with hunting.", { memoryDir, sessionId: "x" });
+  assert.ok(summary.facts.some((f) => f.subject === "beagle" && f.predicate === "mgx:connected-with" && f.object === "hunting"));
+  assert.ok(!summary.facts.some((f) => f.subject === "it"), "the pronoun itself is never stored as a subject");
+});
+
+test("groundTextToFacts: the pronoun carry resets at a blank line — a new paragraph never resolves against the last one's subject", async () => {
+  const memoryDir = createInMemoryStore();
+  const summary = await groundTextToFacts("A beagle is a kind of dog.\n\nIt is closely connected with hunting.", { memoryDir, sessionId: "x" });
+  assert.ok(!summary.facts.some((f) => f.predicate === "mgx:connected-with"), "no antecedent survives the paragraph break, so the pronoun sentence stays an honest skip");
+});
+
+test("groundTextToFacts: the optimistic tier is off unless requested, and tags whatever it does ground as low-trust", async () => {
+  const memoryDir = createInMemoryStore();
+  const strict = await groundTextToFacts("A quombat is basically a wodget.", { memoryDir, sessionId: "x" });
+  assert.equal(strict.recognized, 0);
+
+  const memoryDir2 = createInMemoryStore();
+  const fuzzy = await groundTextToFacts("A quombat is basically a wodget.", { memoryDir: memoryDir2, sessionId: "x", optimistic: true });
+  assert.equal(fuzzy.recognized, 1);
+  assert.equal(fuzzy.facts[0].provenance, "optimistic-extract:page");
+});
+
+test("groundTextToFacts: no graph is ever passed to the turn engine — an ordinary \"the number of X\" phrase still teaches, not a code-graph count miss", async () => {
+  const memoryDir = createInMemoryStore();
+  const summary = await groundTextToFacts(
+    "Sales are activities related to selling or the number of goods sold in a period.",
+    { memoryDir, sessionId: "x" },
+  );
+  assert.ok(summary.facts.some((f) => f.subject === "sales" && f.predicate === "rdfs:subClassOf" && f.object === "activity"));
+  assert.ok(summary.facts.some((f) => f.subject === "sales" && f.predicate === "mgx:related-to" && f.object === "selling"));
+});
+
+test("groundTextToFacts: a Rule-only teach (no Fact row touched) counts as an honest skip, not a grounded sentence", async () => {
+  const memoryDir = createInMemoryStore();
+  // "a <name> is a <base1> of a <base2>" mints a compose2 Rule row, never a
+  // Fact row — the shape the perf fast path's row-length compare must still
+  // classify as "nothing to keep", even though the turn itself asserted.
+  const summary = await groundTextToFacts("A grandparent is a parent of a parent.", { memoryDir, sessionId: "x" });
+  assert.equal(summary.recognized, 0);
+  assert.equal(summary.facts.length, 0);
+});
+
+test("groundTextToFacts: the row-length fast path never mis-skips a real fact once the store already holds unrelated rows", async () => {
+  const memoryDir = createInMemoryStore();
+  await appendFact(memoryDir, { subject: "unrelated", predicate: "rdfs:subClassOf", object: "thing", provenance: "seed:test" });
+  const before = readFactRows(await loadMemory(memoryDir)).length;
+  const summary = await groundTextToFacts("A beagle is a kind of dog.", { memoryDir, sessionId: "x" });
+  assert.equal(summary.recognized, 1);
+  const after = readFactRows(await loadMemory(memoryDir)).length;
+  assert.equal(after, before + 1, "exactly one new row landed, on top of what the store already held");
+});
