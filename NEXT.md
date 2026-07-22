@@ -43,7 +43,6 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 31 | ingest.html + ledger/chat ingest | in progress, new scope (wt agent-aa256545dc7b62998) | 2026-07-22 | bring your own text | medium-high |
 | 32 | full IndexedDB re-initialisation button | in progress — remainder with wt agent-aa256545dc7b62998 (+ TUI /export with wt agent-adda6ef5cd3b8928a) | 2026-07-22 | recover any page from any state | high |
 | 33 | triple-store export, every page | in progress — remainder with wt agent-aa256545dc7b62998 (+ TUI /export with wt agent-adda6ef5cd3b8928a) | 2026-07-22 | data leaves in the standard shape | high |
-| 34 | code.html in-browser code explorer | in progress, new scope (wt agent-a5999e9ed6339f73d) | 2026-07-22 | the explorer in the browser, desktop app stays | high |
 
 The detailed items:
 
@@ -135,11 +134,6 @@ The detailed items:
      today's flat list (grouping is presentation, never retraction — trust and contradiction
      handling unchanged). Apply wherever a fact list renders (`factReadBackReaders`,
      `chat.mjs:7660`), not just "what is X".
-
-- code.html (operator-requested 2026-07-22): the code explorer ships as a hosted page too —
-  the desktop delivery built the UI channel-agnostic, so this is wiring: emit code.html from
-  the demo-site build over the demo code graph, repoint the home tile from the README link to
-  ./code.html, keep the desktop app and cross-link it from the page.
 
 - The ingest surfaces and store controls on every tmct-embedding page:
   - ingest.html — a clean two-pane layout in the translate-tool idiom (operator screenshot,
