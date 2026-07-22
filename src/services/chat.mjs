@@ -51,7 +51,8 @@ import {
   LIVE_PACK_NAME, cleanMissLiveTerm, renderLiveReferenceAnswer, liveProvenanceTag,
 } from "../domain/reference-pack.mjs";
 import { getReferencePackProvider } from "../adapters/corpus/reference-pack.mjs";
-import { getLiveReferenceProvider } from "../adapters/corpus/wikipedia-live.mjs";
+import { getLiveReferenceProvider, getResearchProvider } from "../adapters/corpus/wikipedia-live.mjs";
+import { researchTurn, researchSnapshot, resolveResearchConfig, RESEARCH_DEFAULTS } from "./research.mjs";
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
@@ -5771,6 +5772,7 @@ export async function helpText() {
     ["/ingest <path>", "read a local text file and store every fact the recognizer grounds from it (same recognizer as `tmct extract`)"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/wiki on|off|supplement|always", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded vocabulary answer; always widens that to every grounded answer"],
+    ["research <topic> [limit N]", "fetch the topic from Simple English Wikipedia (the explicit ask is the network consent), store what it grounds, and queue its linked topics — \"research next\" steps the queue; also status/stop"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
   ];
@@ -13947,7 +13949,7 @@ function vocabAntecedentFrom(last) {
   return m[1];
 }
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, _noSplit = false } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, _noSplit = false } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -14146,6 +14148,47 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       result.lane = unclaimed.lane;
       const rec = withLast(result, "play the adventure");
       rec.planState = planHolder.state;
+      return rec;
+    }
+  }
+
+  // RESEARCH — "research <topic>[, limit N]" runs a Simple English Wikipedia
+  // queue through the same ingest path a live-Wikipedia rescue uses: depth 0
+  // now, the lead section's linked topics queued for "research next" (which
+  // the web pages' auto-play button submits turn by turn). The explicit
+  // request is the network consent for its own fetches — unlike the
+  // clean-miss rescue, which fires on an ordinary question and so stays
+  // behind /wiki on. Queue state threads turn-to-turn as researchState, the
+  // same way planState does.
+  {
+    const researchHolder = { state: researchState };
+    const resolvedResearchConfig = researchConfig ?? RESEARCH_DEFAULTS;
+    const rTurn = await researchTurn(workingLine, {
+      holder: researchHolder,
+      memoryDir,
+      lexicon,
+      provider: getResearchProvider({ minIntervalMs: resolvedResearchConfig.minIntervalMs }),
+      config: resolvedResearchConfig,
+      planActive: Boolean(planHolder.state && !planHolder.state.done),
+      pagerActive: Boolean(Array.isArray(last?.detail?.pending?.items) && last.detail.pending.items.length),
+      notify: onLiveLookup,
+      ingest: (key, article, tag) =>
+        ingestReferenceArticle(memoryDir, key, article, factRowsCache, () => tag, lexicon, synthesisBudget),
+    });
+    if (rTurn) {
+      note(trace, `lane: ${rTurn.note}`);
+      note(trace, `goal: ${rTurn.goal}`);
+      const result = plainTurn(workingLine, rTurn.text, { via: "research", miss: !!rTurn.miss, focus });
+      result.lane = "research";
+      const snapshot = researchSnapshot(researchHolder.state);
+      if (snapshot) result.record.research = snapshot;
+      const rec = withLast(result, rTurn.goal);
+      rec.planState = planHolder.state;
+      rec.researchState = researchHolder.state;
+      // Present on EVERY research turn — null when the run ended or never
+      // started — so a UI can tell "queue cleared" from "not a research
+      // turn" (where the field is absent entirely).
+      rec.research = snapshot;
       return rec;
     }
   }

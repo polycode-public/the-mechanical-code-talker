@@ -125,6 +125,12 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   if (src.games !== undefined) cfg.games = src.games;
   if (src.planning !== undefined) cfg.planning = src.planning;
 
+  // Research-lane knobs (src/services/research.mjs): sparse PASS-THROUGH,
+  // same discipline as [games.*] — the raw `[research]` table
+  // (fanout_limit / depth_limit / min_interval_ms, snake_case) rides through
+  // unmodified; clamping and default-filling is resolveResearchConfig's job.
+  if (src.research !== undefined) cfg.research = src.research;
+
   const idx = src.index || {};
   const index = {};
   if (idx.languages !== undefined) index.languages = idx.languages;

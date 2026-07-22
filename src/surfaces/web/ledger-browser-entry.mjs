@@ -23,6 +23,7 @@ import { splitSentencesPreservingPaths } from "../../services/sentences.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
+import { registerResearchProvider } from "../../adapters/corpus/wikipedia-live.mjs";
 import { computeLedgerDataFromPayload } from "../../services/ledger-viz.mjs";
 
 /**
@@ -54,6 +55,7 @@ export function createLedgerSession({ seedPayload = null, vocabSeeded = false } 
   let focus = null;
   let last = null;
   let planState = null;
+  let researchState = null;
 
   return {
     memoryDir,
@@ -66,16 +68,20 @@ export function createLedgerSession({ seedPayload = null, vocabSeeded = false } 
       try {
         result = await runTurn(line, {
           config: null, source: null, graph, focus, last, memoryDir, sessionId,
-          env: {}, lexicon, vocabHint, planState,
+          env: {}, lexicon, vocabHint, planState, researchState,
         });
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
-        return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null };
+        return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null, research: null };
       }
       focus = result.focus;
       last = result.last;
       if ("planState" in result) planState = result.planState;
-      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null };
+      if ("researchState" in result) researchState = result.researchState;
+      // `research` distinguishes a queue snapshot (research turn) from null
+      // (a research turn that ended the run) from undefined (not a research
+      // turn) — the dock's controls only react to the first two.
+      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, research: result.research };
     },
   };
 }
@@ -95,4 +101,4 @@ export async function exportFactsJsonl(memoryDir) {
 // splitSentences + exportFactsJsonl carry the dock's paste-and-drop ingest and
 // its JSONL export across the bundle boundary, the same one-serializer posture
 // chat-browser-entry.mjs holds for its own page.
-globalThis.tmctLedger = { createLedgerSession, computeLedgerDataFromPayload, normFactTerm, registerWinkModel, splitSentences: splitSentencesPreservingPaths, exportFactsJsonl };
+globalThis.tmctLedger = { createLedgerSession, computeLedgerDataFromPayload, normFactTerm, registerWinkModel, registerResearchProvider, splitSentences: splitSentencesPreservingPaths, exportFactsJsonl };

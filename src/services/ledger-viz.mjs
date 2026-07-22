@@ -16,6 +16,7 @@
 
 import { loadMemory, readFactRows, findContradictions, normFactTerm } from "../adapters/memory/core.mjs";
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
+import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -533,6 +534,14 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
           <button type="button" id="ingestToggle" class="dockbtn">ingest text&hellip;</button>
           <button type="button" id="exportFacts" class="dockbtn">export facts</button>
         </div>
+        <div class="researchrow" title="Fetches the topic from Simple English Wikipedia into this graph, then queues the topics its lead section links to — each queued topic runs as its own dock turn, paced politely. Asking is the network consent for these fetches.">
+          <label for="researchTopic" class="mono">research:</label>
+          <input id="researchTopic" type="text" autocomplete="off" spellcheck="false"
+            placeholder="a topic, e.g. owls" aria-label="Topic to research on Simple English Wikipedia">
+          <button type="button" class="dockbtn" id="researchGo">go</button>
+          <button type="button" class="dockbtn" id="researchPlay" aria-pressed="false" hidden>play</button>
+          <span class="ingeststatus mono" id="researchStatus" aria-live="polite"></span>
+        </div>
         <div class="ingestpanel" id="ingestPanel" hidden>
           <textarea id="ingestText" spellcheck="false" aria-label="Text to ingest into the graph"
             placeholder="Paste text or drop a .txt/.md file. Each sentence it recognizes as a fact is added to the graph; the rest are skipped honestly."></textarea>
@@ -680,6 +689,10 @@ ${THEME_TOKENS_CSS}
   .dockbtn { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: .22rem .6rem; background: var(--bg); cursor: pointer; }
   .dockbtn:hover { color: var(--ink); border-color: var(--ink); }
   .dockbtn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .dockbtn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .researchrow { display: flex; align-items: center; gap: .5rem; margin-top: .45rem; font-size: .72rem; color: var(--muted); flex-wrap: wrap; }
+  .researchrow input { flex: 1 1 8rem; min-width: 6rem; font-family: ${MONO_STACK}; font-size: .72rem; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .25rem .55rem; }
+  .researchrow input::placeholder { color: var(--muted); }
   .ingestpanel { margin-top: .55rem; display: flex; flex-direction: column; gap: .45rem; }
   .ingestpanel[hidden] { display: none; }
   .ingestpanel textarea { width: 100%; box-sizing: border-box; min-height: 96px; resize: vertical; font-family: ${MONO_STACK}; font-size: .76rem; line-height: 1.45; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .6rem; }
@@ -1006,6 +1019,8 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   // (renderLedgerHtml's own ledgerBundleAvailable defaults false there), so
   // this branch is simply never reachable on a CLI-generated page.
   const resolveAnsweredTerm = ${resolveAnsweredTerm.toString()};
+  const createTicker = ${createTicker.toString()};
+  const prefersReducedMotion = ${prefersReducedMotion.toString()};
   const chatForm = el("chatform");
   if (chatForm && typeof tmctLedger !== "undefined" && typeof tmctLedger.createLedgerSession === "function") {
     const log = el("chatlog");
@@ -1175,6 +1190,90 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
             setTimeout(() => URL.revokeObjectURL(url), 1000);
           } catch { /* a failed export leaves the page untouched */ }
         });
+      });
+    }
+
+    // ---- research: a Simple English Wikipedia queue through the SAME dock
+    // session. The engine owns the queue (each turn's result.research is its
+    // snapshot); this dock decides WHEN "research next" is asked, through
+    // the shared viz-ticker verbs, and re-derives the whole ledger after a
+    // step that grounded facts so the new rows can be examined in place —
+    // the same refresh a successful teach performs.
+    const researchTopicEl = el("researchTopic");
+    if (researchTopicEl) {
+      const researchGoBtn = el("researchGo");
+      const researchPlayBtn = el("researchPlay");
+      const researchStatusEl = el("researchStatus");
+      let researchQueue = null; // the engine's latest snapshot, null when no run stands
+
+      function renderResearchControls(tickState) {
+        const st = tickState || researchTicker.getState();
+        researchPlayBtn.hidden = !(researchQueue && !researchQueue.complete);
+        researchPlayBtn.textContent = st.playing ? "pause" : "play";
+        researchPlayBtn.setAttribute("aria-pressed", String(st.playing));
+        researchStatusEl.textContent = !researchQueue ? ""
+          : researchQueue.complete
+            ? 'research "' + researchQueue.topic + '" complete \\u2014 ' + researchQueue.done.length + " topic" + (researchQueue.done.length === 1 ? "" : "s")
+            : researchQueue.done.length + " done \\u00b7 " + researchQueue.pending.length + " queued";
+      }
+
+      // One research turn through the dock — rendered exactly like a typed
+      // line, so the transcript reads as if the visitor asked each search.
+      function researchLine(q) {
+        addLine("u", esc(q));
+        const pending = addLine("a pending", "researching\\u2026");
+        return withLock(async () => {
+          try {
+            const s = await ensureSession();
+            const result = await s.turn(q);
+            const missed = !result.record || Boolean(result.record.miss);
+            pending.className = "a" + (missed ? " miss" : "");
+            pending.innerHTML = esc(result.answer).replace(/\\n/g, "<br>");
+            if (result.research !== undefined) {
+              researchQueue = result.research;
+              renderResearchControls();
+              if (!missed) {
+                const fresh = tmctLedger.computeLedgerDataFromPayload(s.memoryDir.payload, {});
+                applyLedgerData(fresh);
+              }
+            }
+            return result;
+          } catch {
+            pending.className = "a miss";
+            pending.textContent = "Something went wrong with that research step. Try again, or reload the page.";
+            return null;
+          }
+        });
+      }
+
+      const researchTicker = createTicker({
+        onTick: async () => { await researchLine("research next"); },
+        hasNext: () => Boolean(researchQueue && !researchQueue.complete),
+        onRender: renderResearchControls,
+        waitMs: 2400,
+      });
+
+      researchGoBtn.addEventListener("click", () => {
+        const topic = researchTopicEl.value.trim();
+        if (!topic) return;
+        researchTopicEl.value = "";
+        researchLine("research " + topic).then(() => {
+          // A fresh run with topics queued auto-plays, unless the visitor
+          // asked for reduced motion — the play button covers them too.
+          if (researchQueue && !researchQueue.complete && !prefersReducedMotion() && !researchTicker.getState().playing) {
+            researchTicker.play();
+          }
+        });
+      });
+      researchTopicEl.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") { e.preventDefault(); researchGoBtn.click(); }
+      });
+      // pause() directly, not play()'s own toggle: play() declines while a
+      // step is mid-animation, and a pause pressed exactly then must not be
+      // dropped — the in-flight step still settles, then the loop stops.
+      researchPlayBtn.addEventListener("click", () => {
+        if (researchTicker.getState().playing) researchTicker.pause();
+        else researchTicker.play();
       });
     }
   } else if (chatForm && typeof tmctMemoryAsk !== "undefined") {
