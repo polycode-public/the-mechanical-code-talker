@@ -46,10 +46,21 @@ function parseChatTagRest(rest) {
  *   reference:<pack>:<article>[@revid] -> { kind:"reference", pack, article }
  *     (split on the first two colons only; the article keeps any @revid and
  *      any spaces — "reference:simplewiki:Polar bear@912" stays one article)
+ *     EXCEPT the live-Wikipedia pack: reference:wikipedia-live:<article> parses
+ *      as kind "referenceLive", which scores below the curated revision-pinned
+ *      pack, so a live lookup never outranks the shipped article on the same term.
  *   extracted:<file-basename>  -> { kind:"extracted", name:<file-basename> }
  *   entailed:<rule>            -> { kind:"entailed",  rule:<rule> }
  * chat:/session: refs map to the operator; an unknown tag -> null (no Source).
  */
+// The one reference pack whose content is fetched live at query time rather
+// than shipped revision-pinned. Its facts score at the referenceLive prior
+// (below curated `reference`), so a live lookup never outranks the shipped pack.
+// Must equal reference-pack.mjs's LIVE_PACK_NAME; kept as a local literal so
+// trust.mjs stays import-free of the lexicon-loading pack module.
+const LIVE_REFERENCE_PACK = "wikipedia-live";
+const referenceKindFor = (pack) => (pack === LIVE_REFERENCE_PACK ? "referenceLive" : "reference");
+
 export function provenanceTagToSource(tag) {
   const t = String(tag || "").trim();
   if (!t) return null;
@@ -59,7 +70,8 @@ export function provenanceTagToSource(tag) {
     const rest = t.slice("reference:".length);
     const colon = rest.indexOf(":");
     if (colon < 0) return { kind: "reference", pack: rest || "unknown", article: "" };
-    return { kind: "reference", pack: rest.slice(0, colon) || "unknown", article: rest.slice(colon + 1) };
+    const pack = rest.slice(0, colon) || "unknown";
+    return { kind: referenceKindFor(pack), pack, article: rest.slice(colon + 1) };
   }
   const head = t.split(/\s+/)[0]; // drop trailing " /r/IsA" etc.
   if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
@@ -93,8 +105,9 @@ export const SOURCE_PRIOR = Object.freeze({
   corpus: 0.7,
   reference: 0.6,
   corpusWeak: 0.55,
-  web: 0.4,
+  referenceLive: 0.5,
   extracted: 0.45,
+  web: 0.4,
   entailed: 0.3,
 });
 

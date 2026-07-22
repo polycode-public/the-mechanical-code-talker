@@ -469,6 +469,11 @@ cited read-out, CC BY-SA, pinned to the revision it read (provenance
 `reference:wikipedia-live:<Title>@<revid>`). A failed lookup (no matching
 title, a timeout, a rate limit) leaves the honest miss byte-identical.
 
+A live article carries its own source-type prior (`referenceLive`, 0.5) below
+the curated revision-pinned pack (`reference`, 0.6). A fact fetched live never
+outranks the shipped article on the same term, and a fact you teach outranks
+both.
+
 ## How it remembers
 
 tmct's memory has two layers, both fed by every parsed request and response and

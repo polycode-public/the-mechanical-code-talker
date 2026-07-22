@@ -237,6 +237,43 @@ test("a reference-tagged fact materialises a per-article DocumentSource with sou
   }
 });
 
+// ---- live Wikipedia: a fetched-at-query-time article ranks below the pack --
+
+test("a live-Wikipedia article scores below the curated revision-pinned pack on the same term", () => {
+  const sources = { live: src("live", "referenceLive"), ref: src("ref", "reference") };
+  assert.equal(SOURCE_PRIOR.referenceLive, 0.5);
+  assert.ok(SOURCE_PRIOR.reference > SOURCE_PRIOR.referenceLive, "the curated pack outranks a live lookup");
+  const liveScore = computeTrust({ sourceIds: ["live"], createdAt: FRESH }, sources, { now: NOW }).score;
+  const refScore = computeTrust({ sourceIds: ["ref"], createdAt: FRESH }, sources, { now: NOW }).score;
+  assert.equal(liveScore, SOURCE_PRIOR.referenceLive);
+  assert.ok(refScore > liveScore, `${refScore} > ${liveScore}: the shipped pack wins on the same fresh term`);
+});
+
+test("a live-Wikipedia provenance tag parses to kind referenceLive; the curated pack stays reference", () => {
+  assert.deepEqual(provenanceTagToSource("reference:wikipedia-live:Otter@9184482"),
+    { kind: "referenceLive", pack: "wikipedia-live", article: "Otter@9184482" });
+  assert.deepEqual(provenanceTagToSource("reference:simplewiki:Otter@9184482"),
+    { kind: "reference", pack: "simplewiki", article: "Otter@9184482" });
+});
+
+test("a live-Wikipedia-tagged fact materialises a DocumentSource with sourceType referenceLive", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-live-trust-"));
+  try {
+    await appendFact(dir, {
+      subject: "otter", predicate: "rdfs:subClassOf", object: "mammal",
+      provenance: "reference:wikipedia-live:Otter@9184482", createdAt: FRESH,
+    });
+    const m = await loadMemory(dir);
+    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === "src:reference:wikipedia-live:Otter@9184482");
+    assert.ok(source, "one Source per live article, keyed the same pack:article@revid way");
+    const typeAttr = source.attributes.find((a) => a.prop === "mgx:sourceType");
+    assert.equal(typeAttr?.value, "referenceLive");
+    assert.deepEqual(provSourceClassFor("referenceLive"), { subClass: "tmct:DocumentSource", prov: "prov:Entity" });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- child pack: a lazy learn-on-miss ConceptNet fact as a Source ---------
 
 test("a child-pack provenance tag parses to the corpus tier — same 0.7 Source as the bulk conceptnet import", () => {
