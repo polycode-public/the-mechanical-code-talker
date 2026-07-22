@@ -9894,19 +9894,54 @@ async function childPackFactsForKey(key, { memoryDir, env, cache }) {
   return { key, count: row.facts.length };
 }
 
-/** Store the article's first-sentence isa as a subClassOf fact carrying
- *  reference provenance — AFTER the cited answer composed, and failure-
- *  tolerated: the answer stands whether or not the fact lands. */
-async function appendReferenceIsaFact(memoryDir, key, article, cache, tagFor = referenceProvenanceTag) {
-  if (!article?.isa) return;
+/** Store every triple the article's summary grounds — its first-sentence isa
+ *  plus each candidate the optimistic tier reads from the rest of the summary —
+ *  all under the article's own provenance, so a learned load becomes durable
+ *  knowledge rather than a single isa fact. Runs AFTER the cited answer composed
+ *  and is failure-tolerated: the answer stands whether or not the facts land.
+ *  The optimistic tier is pure (no recognizer re-entry), so this stays cheap on
+ *  the chat turn. Returns the count stored. */
+async function ingestReferenceArticle(memoryDir, key, article, cache, tagFor = referenceProvenanceTag, lexicon = null) {
+  if (!article) return 0;
+  const provenance = tagFor(article);
+  const facts = [];
+  const seen = new Set();
+  const add = (subject, predicate, object) => {
+    const id = `${subject}\0${predicate}\0${object}`;
+    if (subject && object && subject !== object && !seen.has(id)) { seen.add(id); facts.push({ subject, predicate, object, provenance }); }
+  };
+  if (article.isa) add(key, "rdfs:subClassOf", article.isa);
   try {
-    const { appendFact } = await import("../adapters/memory/core.mjs");
-    await appendFact(memoryDir, {
-      subject: key, predicate: "rdfs:subClassOf", object: article.isa,
-      provenance: tagFor(article),
-    });
+    const { optimisticTriples } = await import("./extract-facts.mjs");
+    for (const sentence of splitSentences(article.summary || article.text || "")) {
+      for (const t of optimisticTriples(sentence, { lexicon: lexicon ?? undefined })) add(t.subject, t.predicate, t.object);
+    }
+  } catch { /* the isa alone still lands below */ }
+  if (!facts.length) return 0;
+  try {
+    const { appendFacts } = await import("../adapters/memory/core.mjs");
+    await appendFacts(memoryDir, facts);
     if (cache) cache.rows = null;
-  } catch { /* tolerated — the cited answer is already composed */ }
+  } catch { return 0; }
+  return facts.length;
+}
+
+/** The term an explicit "ask Wikipedia" phrasing names — "what does wikipedia
+ *  say about X", "ask wikipedia about X", "X on wikipedia" — or null when the
+ *  line isn't such a request. Unlike the clean-miss gate, this fires even when
+ *  local facts could answer: the user asked Wikipedia specifically. */
+const WIKIPEDIA_ASK_RES = [
+  /^what\s+(?:does|do)\s+wikipedia\s+say\s+(?:about\s+)?(.+?)[?.!\s]*$/i,
+  /^ask\s+wikipedia\s+(?:about\s+)?(.+?)[?.!\s]*$/i,
+  /^(?:look\s+up\s+|tell\s+me\s+about\s+|what\s+(?:is|are)\s+(?:an?\s+|the\s+)?)?(.+?)\s+on\s+wikipedia[?.!\s]*$/i,
+];
+function wikipediaAskTerm(query) {
+  const q = String(query || "").trim();
+  for (const re of WIKIPEDIA_ASK_RES) {
+    const m = q.match(re);
+    if (m && m[1] && m[1].trim()) return m[1].trim().replace(/^(?:an?|the)\s+/i, "");
+  }
+  return null;
 }
 
 /** The concept term a vague "what is a X" / "tell me about X" / "what does X mean" /
@@ -11109,6 +11144,31 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       });
     }
   }
+  // EXPLICIT WIKIPEDIA ASK — "what does wikipedia say about X" / "ask wikipedia
+  // about X" / "X on wikipedia". Unlike the clean-miss packs, this fires even
+  // when local facts could answer: the user named the source. It still honours
+  // the network opt-in (a live lookup is a network request), so with the toggle
+  // off it points at /wiki on rather than reaching the network.
+  {
+    const wikiTerm = wikipediaAskTerm(query);
+    if (wikiTerm) {
+      note(trace, "goal: read what Wikipedia says about a named term (explicit source request)");
+      if (!liveReference) {
+        note(trace, "lane: WIKIPEDIA ASK — the explicit request needs the network opt-in; live Wikipedia is off");
+        return plainTurn(query, `live Wikipedia is off, so I won't reach the network. Turn it on with /wiki on (it fetches from en.wikipedia.org), then ask again.`, { via: "miss", miss: true, focus });
+      }
+      let liveKey = null;
+      try { liveKey = cleanMissLiveTerm(wikiTerm, lexicon ?? undefined); } catch { liveKey = null; }
+      const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup) : null;
+      if (live) {
+        await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon);
+        note(trace, `lane: WIKIPEDIA ASK — answered from a live en.wikipedia.org lookup, cited (article "${live.article.title}", revid ${live.article.revid})`);
+        return plainTurn(query, live.text, { via: "reference", miss: false, focus });
+      }
+      note(trace, "lane: WIKIPEDIA ASK — no matching live article (no title, timeout, throttle, or drift-guard reject)");
+      return plainTurn(query, `I couldn't reach a matching Wikipedia article for "${wikiTerm}" just now.`, { via: "miss", miss: true, focus });
+    }
+  }
   // COLLECTIVE PLURAL SUBJECT — see COLLECTIVE_FORWARD_RE. Members are the
   // modules whose path carries the plural as a component; two or more make it
   // a group question, answered as the disclosed union over every member. One
@@ -11720,15 +11780,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const coldPronounDecline = focus?.label ? null : coldPronounDeclineText(query);
   if (bareMetaHit?.reference) {
     // The bare-form reference hit mirrors (4h): the cited answer replaces the
-    // miss, the turn is no longer recorded as one, and the article's isa is
-    // stored after the answer composes.
+    // miss, the turn is no longer recorded as one, and the article's grounded
+    // triples are stored after the answer composes.
     answer = bareMetaHit.text;
     via = "reference";
     recordMiss = false;
     handled = true;
     note(trace, "lane: (2b) REFERENCE PACK — a bare \"what is X\" clean miss answered from the shipped reference pack, cited");
     note(trace, `source: reference pack ${REFERENCE_PACK_NAME} — article "${bareMetaHit.reference.article.title}" (revid ${bareMetaHit.reference.article.revid})`);
-    await appendReferenceIsaFact(memoryDir, bareMetaHit.reference.key, bareMetaHit.reference.article, cache);
+    await ingestReferenceArticle(memoryDir, bareMetaHit.reference.key, bareMetaHit.reference.article, cache, referenceProvenanceTag, lexicon);
   } else if (bareMetaHit?.live) {
     // The bare-form LIVE hit settles the same way, under live provenance.
     answer = bareMetaHit.text;
@@ -11737,7 +11797,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     handled = true;
     note(trace, "lane: (2b) LIVE WIKIPEDIA — a bare \"what is X\" clean miss answered from a live en.wikipedia.org lookup (opt-in), cited");
     note(trace, `source: live reference ${LIVE_PACK_NAME} — article "${bareMetaHit.live.article.title}" (revid ${bareMetaHit.live.article.revid})`);
-    await appendReferenceIsaFact(memoryDir, bareMetaHit.live.key, bareMetaHit.live.article, cache, liveProvenanceTag);
+    await ingestReferenceArticle(memoryDir, bareMetaHit.live.key, bareMetaHit.live.article, cache, liveProvenanceTag, lexicon);
   } else if (bareMetaHit) {
     answer = bareMetaHit.replace ? bareMetaHit.text : `${answer}\n${bareMetaHit.text}`;
     // Same discipline as lane (3): a fact-lane return flagged `miss` is an
@@ -12144,7 +12204,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         recordMiss = false;
         note(trace, "lane: (4h) REFERENCE PACK — a clean miss on a lexicon term answered from the shipped reference pack, cited");
         note(trace, `source: reference pack ${REFERENCE_PACK_NAME} — article "${ref.article.title}" (revid ${ref.article.revid})`);
-        await appendReferenceIsaFact(memoryDir, ref.key, ref.article, cache);
+        await ingestReferenceArticle(memoryDir, ref.key, ref.article, cache, referenceProvenanceTag, lexicon);
       }
     }
     // The live Wikipedia supplement (opt-in), strictly AFTER both shipped
@@ -12160,7 +12220,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         recordMiss = false;
         note(trace, "lane: (4h) LIVE WIKIPEDIA — a clean miss answered from a live en.wikipedia.org lookup (opt-in), cited");
         note(trace, `source: live reference ${LIVE_PACK_NAME} — article "${live.article.title}" (revid ${live.article.revid})`);
-        await appendReferenceIsaFact(memoryDir, live.key, live.article, cache, liveProvenanceTag);
+        await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon);
       }
     }
   }

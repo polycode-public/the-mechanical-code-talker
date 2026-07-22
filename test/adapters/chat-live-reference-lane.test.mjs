@@ -4,8 +4,9 @@
 // for. Default OFF is the load-bearing half — with the toggle off the
 // provider is never consulted at all — and a live failure of any kind leaves
 // the honest miss byte-identical to a live-off run. A hit answers cited under
-// wikipedia-live provenance, records no miss, and stores the article's isa as
-// a subClassOf fact trust.mjs parses back to the reference kind.
+// wikipedia-live provenance, records no miss, and stores the triples the
+// article grounds — its isa and every candidate the optimistic tier reads from
+// the summary — which trust.mjs parses back to the referenceLive kind.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -90,7 +91,7 @@ test("toggle ON: a lexicon-unknown clean miss answers from the live article, cit
     assert.ok(stored, "the article's isa lands as a subClassOf fact");
     assert.match(stored.provenance, /^reference:wikipedia-live:Quasar@1234567/);
     const src = provenanceTagToSource("reference:wikipedia-live:Quasar@1234567");
-    assert.equal(src.kind, "reference");
+    assert.equal(src.kind, "referenceLive", "the live pack scores below the curated pack");
     assert.equal(src.pack, "wikipedia-live");
   } finally {
     registerLiveReferenceProvider(null);
@@ -174,6 +175,55 @@ test("a remembered fact about the term blocks the live gate entirely", async () 
     assert.equal(spy.calls.length, 0, "memory answered; the live lookup never ran");
     assert.match(r.answer, /quasar is a kind of star/);
     assert.doesNotMatch(r.answer, /live Wikipedia article/);
+  } finally {
+    registerLiveReferenceProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a live hit stores every triple the summary grounds, not just the first-sentence isa", async () => {
+  const dir = await freshRepo();
+  registerLiveReferenceProvider(hitProvider());
+  try {
+    await turn("what is a quasar", { memoryDir: dir, liveReference: true });
+    const rows = readFactRows(await loadMemory(dir));
+    const isa = rows.find((f) => f.subject === "quasar" && f.object === "star");
+    const fromSummary = rows.find((f) => f.subject === "quasar" && f.object === "object");
+    assert.ok(isa, "the first-sentence isa lands");
+    assert.ok(fromSummary, "the optimistic tier grounds a second triple from the summary");
+    assert.ok(rows.every((f) => /^reference:wikipedia-live:Quasar@1234567/.test(f.provenance)), "every triple carries the article's own source tag");
+  } finally {
+    registerLiveReferenceProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an explicit 'what does wikipedia say about X' reaches the live lookup even when memory already answers", async () => {
+  const dir = await freshRepo();
+  const spy = hitProvider();
+  try {
+    await turn("every quasar is a star", { memoryDir: dir });
+    registerLiveReferenceProvider(spy);
+    const r = await turn("what does wikipedia say about quasar", { memoryDir: dir, liveReference: true });
+    assert.deepEqual(spy.calls, ["quasar"], "the explicit ask consults Wikipedia despite the remembered fact");
+    assert.match(r.answer, /live Wikipedia article "Quasar"/);
+    assert.equal(r.record.via, "reference");
+    assert.equal(r.record.miss, false);
+  } finally {
+    registerLiveReferenceProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an explicit Wikipedia ask with the toggle off points at /wiki on and never touches the network", async () => {
+  const dir = await freshRepo();
+  const spy = nullProvider();
+  registerLiveReferenceProvider(spy);
+  try {
+    const r = await turn("what does wikipedia say about quasar", { memoryDir: dir });
+    assert.equal(spy.calls.length, 0, "the network opt-in still gates the request");
+    assert.match(r.answer, /\/wiki on/);
+    assert.equal(r.record.miss, true);
   } finally {
     registerLiveReferenceProvider(null);
     await rm(dir, { recursive: true, force: true });
