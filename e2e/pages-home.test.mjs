@@ -165,18 +165,19 @@ test("the page keeps the steps to run the local chat and to use tmct as a librar
   }
 });
 
-test("the explore band's five link cards lead to five hosted pages", async () => {
+test("the explore band's six link cards lead to six hosted pages", async () => {
   const { context, page } = await openHomePage();
   try {
     await page.locator(".explore-grid").waitFor({ state: "visible" });
     const cards = page.locator(".explore-card");
-    assert.equal(await cards.count(), 5, "exactly five link cards");
+    assert.equal(await cards.count(), 6, "exactly six link cards");
     const hrefs = await cards.evaluateAll((els) => els.map((el) => el.getAttribute("href")));
     assert.deepEqual(hrefs, [
       "./plan.html",
       "./adventure.html",
       "./ledger.html",
       "./code.html",
+      "./ingest.html",
       "./sprites.html",
     ]);
   } finally {
