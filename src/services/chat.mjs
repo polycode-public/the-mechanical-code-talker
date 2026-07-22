@@ -13190,13 +13190,16 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // captured from the PRE-narration finished result.
   const withLast = (result, fallbackGoal = "unclear — no goal signal for this turn type") => {
     const finished = attachDialogueAct(finish(result, { graph }), trace);
-    // Every dispatch path below built its own record off `workingLine` (the
-    // indirect-request wrapper stripped and/or the discontiguous-frame
-    // rewrite applied) — restore the ORIGINAL raw `line` into record.query
-    // and the logged transcript echo here, once, centrally.
+    // The logged transcript echo is ALWAYS the verbatim user line — no dispatch
+    // path's internal rewrite (the indirect-request wrapper, the vocab-opener /
+    // cleft / ESL rewrites, a discourse substitution) may leak into what the
+    // .log shows the user typed.
+    if (Array.isArray(finished.logLines) && finished.logLines.length > 1) finished.logLines[1] = `> ${line}`;
+    // record.query keeps its narrower restoration for the wrapper/rewrite frames
+    // the ask engine records off `workingLine`; the .jsonl sidecar also carries
+    // the verbatim line as `input`, below.
     if (indirectMatch || baseFrameRewrite || vocabAntecedent || eslRewrite) {
       if (finished.record) finished.record.query = line;
-      if (Array.isArray(finished.logLines) && finished.logLines.length > 1) finished.logLines[1] = `> ${line}`;
     }
     // The VERBATIM user line rides every turn record as `input`, beside
     // whatever `query` the dispatch path recorded — the session history must
@@ -13437,6 +13440,12 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
         combined.planState = ps;
         combined.focus = f;
         combined.last = l;
+        // Each per-sentence turn recorded only its OWN sentence; the transcript
+        // echo and the turn record must quote the whole multi-sentence line the
+        // user actually typed, not just its last sentence.
+        const ts0 = Array.isArray(finalRec.logLines) && finalRec.logLines.length ? finalRec.logLines[0] : new Date().toISOString();
+        combined.logLines = [ts0, `> ${line}`, answer, ""];
+        if (finalRec.record) combined.record = { ...finalRec.record, query: line, input: line };
         return combined;
       }
     }
