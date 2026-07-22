@@ -379,9 +379,10 @@ export async function createSession({
       // same way a focus update does — apply them to this handle's
       // session-scoped state.
       if (typeof nextNarrate === "boolean") narrateOn = nextNarrate;
-      // tri-state: false (off), true (rescue on a miss), or "supplement" (also
-      // append a cited read-out under every grounded answer).
-      if (typeof nextLiveReference === "boolean" || nextLiveReference === "supplement") liveReferenceOn = nextLiveReference;
+      // four-state: false (off), true (rescue on a miss), "supplement" (also
+      // append a cited read-out under every grounded vocabulary answer), or
+      // "always" (widen that to every grounded answer).
+      if (typeof nextLiveReference === "boolean" || nextLiveReference === "supplement" || nextLiveReference === "always") liveReferenceOn = nextLiveReference;
       await writeLog(sessionLogTurnMarkdown({ startedAt: record.ts, turnNumber: turns + 1, query: line, answer }));
       await writeSidecar(record);
       turnRecords.push(record);

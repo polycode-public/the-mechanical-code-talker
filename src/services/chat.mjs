@@ -57,7 +57,7 @@ import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
 import { subClassParents, ancestryChain, clusterSenses } from "../domain/sense-split.mjs";
 import { relatedForTerm } from "../domain/skos-view.mjs";
-import { adventureTurn, unclaimedAdventureOpening } from "./adventure.mjs";
+import { adventureTurn, unclaimedAdventureOpening, foldWorldState } from "./adventure.mjs";
 import { spiderFlyTurn } from "./spider-fly-turn.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 
@@ -3138,7 +3138,8 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
 // sentence said ("tony never eats ribs" -> tony eats ribs) — a truthful teach
 // read back as a confident lie. It belongs to NEG_MARKER_SRC below.
 const TEACH_ADVERB_SKIP_SRC = "(?:(?:usually|often|sometimes|rarely|always|typically|generally|"
-  + "occasionally|frequently|normally|regularly|commonly|mostly|currently|still|also|really|actually)\\s+)?";
+  + "occasionally|frequently|normally|regularly|commonly|mostly|currently|still|also|really|actually|"
+  + "closely|strongly|directly)\\s+)?";
 /** The negation markers a teach/query frame recognizes, in ONE place so the
  *  teach side and the query side can never disagree about what negates a
  *  sentence — the same discipline TEACH_ADVERB_SKIP_SRC is shared under. */
@@ -3163,6 +3164,69 @@ function splitTeachNegation(payload) {
   return { payload: `${m[1]} ${canFamily ? "can " : ""}${m[3]}`.trim(), negated: true };
 }
 const GENERAL_VERB_TEACH_RE = new RegExp(`^([\\w'-]+)\\s+${TEACH_ADVERB_SKIP_SRC}([a-z]+)\\s+(.+?)[.!?]*$`, "i");
+/** The closed participle set the relational teach frames read as "X is
+ *  <participle> <prep> Y" — a past participle whose own form is the word, so it
+ *  reads back with no morphology. Closed by list (templates over general
+ *  grammar), so the frame can never widen onto an arbitrary "-ed" adjective. */
+const TEACH_PARTICIPLE_SRC = "connected|related|associated|linked|based|derived|composed|made|used|known|located|found|involved|concerned";
+/** The prepositions those participles take. A closed set, folded into the
+ *  minted predicate (mgx:<participle>-<prep>) the same way PREP_SRC folds into
+ *  the general-verb frame's. */
+const TEACH_PARTICIPLE_PREP_SRC = "with|to|from|by|of|in|on|for|as|about|into";
+/** "X is <participle> <prep> Y" — "sales are closely connected with marketing"
+ *  → sales mgx:connected-with marketing. The subject is one or two tokens (the
+ *  same bound the comparative/unknown-subject frames use), an optional adverb
+ *  is skipped, and the object is captured for a determiner-strip + 3-token cap
+ *  by its handler. */
+const PARTICIPLE_PREP_TEACH_RE = new RegExp(
+  `^(?:the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(?:is|are|was|were)\\s+${TEACH_ADVERB_SKIP_SRC}(${TEACH_PARTICIPLE_SRC})\\s+(${TEACH_PARTICIPLE_PREP_SRC})\\s+(.+)$`,
+  "i",
+);
+/** "X is a <noun> <participle> <prep> Y" — a copula-NP with a trailing
+ *  participle clause: "sales are activities related to selling" decomposes into
+ *  the class-membership half (sales ⊑ activity, through the ordinary mint/assert
+ *  path) AND the relational half (sales mgx:related-to selling). The NP head is
+ *  a single token, followed by a closed participle — which keeps this disjoint
+ *  from PARTICIPLE_PREP_TEACH_RE, where the participle sits right after the
+ *  copula. */
+const COPULA_NP_PARTICIPLE_TEACH_RE = new RegExp(
+  `^(?:the\\s+|an?\\s+)?([\\w'-]+(?:\\s+[\\w'-]+)?)\\s+(is|are|was|were)\\s+(?:an?\\s+)?([\\w'-]+)\\s+(${TEACH_PARTICIPLE_SRC})\\s+(${TEACH_PARTICIPLE_PREP_SRC})\\s+(.+)$`,
+  "i",
+);
+/** "A and B have/share the same <noun>" — "sales and marketing have the same
+ *  goal" → sales mgx:same-goal-as marketing. A closed shape; the conjunction
+ *  pre-pass leaves it alone (its second clause never opens with is/are/has/
+ *  have/can), so it reaches the teach dispatch whole. */
+const SAME_NOUN_TEACH_RE = /^(?:the\s+)?([\w'-]+)\s+and\s+(?:the\s+)?([\w'-]+)\s+(?:have|has|share|shares)\s+(?:the\s+)?same\s+([\w'-]+)[.!?]*$/i;
+/** "the letter is in the garden" — a locative teach whose subject the running
+ *  adventure world already places somewhere. Group 1 is the subject; the world
+ *  place is left to the fold, since the sentence is stored as a note either
+ *  way. */
+const LOCATIVE_TEACH_RE = /^(?:the\s+)?([\w'-]+)\s+(?:is|are|was|were)\s+(?:in|on|under|inside|at|near|behind|above|below)\s+(?:the\s+)?[\w'-]+/i;
+/** Fold a relational object down to its head phrase: cut at the first clause
+ *  boundary (a comma, semicolon, or a coordinating "or"/"and"), strip a leading
+ *  determiner, then cap at 3 tokens — "selling or the number of goods sold in a
+ *  period" folds to "selling", "the number of goods" to "number of goods".
+ *  Keeps a minted relational object bounded, the same discipline the general-
+ *  verb frame's own object fold uses. */
+function participleObject(raw) {
+  const cleaned = String(raw).trim()
+    .replace(/[.!?]+$/, "")
+    .split(/\s*[,;]\s*|\s+(?:or|and)\s+/i)[0]
+    .trim()
+    .replace(/^(?:the|an?|its|his|her|their|our|my|your|some|any)\s+/i, "");
+  return cleaned.split(/\s+/).slice(0, 3).join(" ");
+}
+/** Does a bare (unwrapped) sentence fit one of the relational teach frames —
+ *  including its negated twin, read through splitTeachNegation the same way the
+ *  general-verb and capability frames read theirs? Used only to admit the
+ *  sentence as a teach payload; the dispatch below re-matches and stores. */
+function matchesRelationalTeachFrame(sentence) {
+  const { payload } = splitTeachNegation(String(sentence || "").trim());
+  return PARTICIPLE_PREP_TEACH_RE.test(payload)
+    || COPULA_NP_PARTICIPLE_TEACH_RE.test(payload)
+    || SAME_NOUN_TEACH_RE.test(payload);
+}
 /** Determiners/quantifiers that make the FIRST token an article, not a real
  *  bare-name subject ("every controller…", "the cache…") — GENERAL_VERB_TEACH_RE
  *  would otherwise happily bind them as a 1-token subject and misread the
@@ -4869,7 +4933,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
 
   let payload = null;
   if (wrapped && /\b(?:is|are)\b/i.test(wrapped)) payload = wrapped;
-  else if ((BARE_DECLARATIVE_RE.test(raw) || COMPARATIVE_TEACH_RE.test(raw) || matchBareHabitualTeach(raw) || matchBareCanTeach(raw)) && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
+  else if ((BARE_DECLARATIVE_RE.test(raw) || COMPARATIVE_TEACH_RE.test(raw) || matchesRelationalTeachFrame(raw) || matchBareHabitualTeach(raw) || matchBareCanTeach(raw)) && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
   if (!payload) {
     // "remember margo eats ribs", re-escaping here through a combination
     // that mechanism's own deliberate subject-shape restriction doesn't
@@ -4900,6 +4964,58 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
         object: comp[3].trim().replace(/[.!?]+$/, ""),
       });
       if (stored) return stored;
+    }
+    // RELATIONAL teach frames — a participle+preposition claim
+    // ("sales are closely connected with marketing"), a copula-NP with a
+    // trailing participle ("sales are activities related to selling"), or a
+    // shared-attribute claim ("sales and marketing have the same goal"). Each
+    // reads through splitTeachNegation like its comparative/general-verb
+    // siblings, so a negated form stores the mgxneg: twin.
+    {
+      const { payload: posPayload, negated } = splitTeachNegation(String(payload).trim());
+      // (D) participle + preposition, checked ahead of the copula-NP form so a
+      // bare participle right after the copula is never misread as a noun.
+      const pp = posPayload.match(PARTICIPLE_PREP_TEACH_RE);
+      if (pp) {
+        const pred = `mgx:${pp[2].toLowerCase()}-${pp[3].toLowerCase()}`;
+        const stored = await teachFact(memoryDir, sessionId, {
+          subject: pp[1].trim(), predicate: negated ? negatedPredicate(pred) : pred,
+          object: participleObject(pp[4]),
+        });
+        if (stored) return stored;
+      }
+      // (E) copula-NP + trailing participle — decomposed into the
+      // class-membership half (subject ⊑ singular(NP head)) and the relational
+      // half. The copula-NP shape is a deliberate declarative, strong enough to
+      // mint the membership directly, so it lands even when neither term is in
+      // the lexicon (the acceptance the ingest pipeline needs). Either half may
+      // stand on its own if the other's write fails.
+      const np = posPayload.match(COPULA_NP_PARTICIPLE_TEACH_RE);
+      if (np) {
+        const subject = np[1].trim();
+        const relPred = `mgx:${np[4].toLowerCase()}-${np[5].toLowerCase()}`;
+        const isaStored = await teachFact(memoryDir, sessionId, {
+          subject, predicate: SUBCLASS_PREDICATE, object: singularizeSurface(np[3]),
+        });
+        const relStored = await teachFact(memoryDir, sessionId, {
+          subject, predicate: negated ? negatedPredicate(relPred) : relPred,
+          object: participleObject(np[6]),
+        });
+        const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
+        if (isaStored && relStored) return { text: `noted — remembered both: ${stripNoted(isaStored.text)}; and ${stripNoted(relStored.text)}`, via: "assert", miss: false };
+        if (relStored) return relStored;
+        if (isaStored) return isaStored;
+      }
+      // (F) shared attribute — "A and B have the same <noun>".
+      const same = posPayload.match(SAME_NOUN_TEACH_RE);
+      if (same) {
+        const pred = `mgx:same-${same[3].toLowerCase()}-as`;
+        const stored = await teachFact(memoryDir, sessionId, {
+          subject: same[1].trim(), predicate: negated ? negatedPredicate(pred) : pred,
+          object: same[2].trim(),
+        });
+        if (stored) return stored;
+      }
     }
     for (const cand of assertCandidates(payload)) {
       // assertTurn ITSELF records the "every" quantifier (point 3) on a plain
@@ -5624,7 +5740,7 @@ export async function helpText() {
     ["/export <path>", "write the memory store to a file, as JSONL (the same shape `tmct memory --export` writes)"],
     ["/ingest <path>", "read a local text file and store every fact the recognizer grounds from it (same recognizer as `tmct extract`)"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
-    ["/wiki on|off|supplement", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded answer"],
+    ["/wiki on|off|supplement|always", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded vocabulary answer; always widens that to every grounded answer"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
   ];
@@ -5904,6 +6020,14 @@ function predicatePhrase(predicate) {
   // "is smaller than" (never a 3sg fold — "smallers" isn't a word)
   const comp = /^mgx:([a-z]+(?:-[a-z]+)*)-than$/i.exec(p);
   if (comp) return `is ${comp[1].replace(/-/g, " ")} than`;
+  // a participle + preposition renders as its copula surface: mgx:connected-with
+  // -> "is connected with" (the participle is already a participle, so no 3sg
+  // fold — "connecteds" isn't a word)
+  const part = new RegExp(`^mgx:(${TEACH_PARTICIPLE_SRC})-([a-z]+)$`, "i").exec(p);
+  if (part) return `is ${part[1].toLowerCase()} ${part[2].toLowerCase()}`;
+  // a shared-attribute predicate: mgx:same-goal-as -> "has the same goal as"
+  const same = /^mgx:same-([a-z]+)-as$/i.exec(p);
+  if (same) return `has the same ${same[1].toLowerCase()} as`;
   const m = /^mgx:([a-z]+)(?:-([a-z]+))?$/i.exec(p);
   if (!m) return predicate;
   // a folded preposition renders back naturally: mgx:rest-on -> "rests on"
@@ -10012,7 +10136,7 @@ async function liveReferenceAnswerForKey(key, onLiveLookup) {
  *  key up in the shipped child triples pack and append every fact under child
  *  provenance, so the SAME question can be re-asked from the store. Null on a
  *  pack miss or any failure — the turn then proceeds byte-identically. */
-async function childPackFactsForKey(key, { memoryDir, env, cache }) {
+async function childPackFactsForKey(key, { memoryDir, env, cache, synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
   let row = null;
   try { row = await getChildPackProvider(env).lookup(key); } catch { row = null; }
   if (!row?.facts?.length) return null;
@@ -10023,7 +10147,7 @@ async function childPackFactsForKey(key, { memoryDir, env, cache }) {
     })));
   } catch { return null; }
   if (cache) cache.rows = null;
-  await synthesiseAroundTerm(memoryDir, key, cache);
+  await synthesiseAroundTerm(memoryDir, key, cache, synthesisBudget);
   return { key, count: row.facts.length };
 }
 
@@ -10034,7 +10158,7 @@ async function childPackFactsForKey(key, { memoryDir, env, cache }) {
  *  and is failure-tolerated: the answer stands whether or not the facts land.
  *  The optimistic tier is pure (no recognizer re-entry), so this stays cheap on
  *  the chat turn. Returns the count stored. */
-async function ingestReferenceArticle(memoryDir, key, article, cache, tagFor = referenceProvenanceTag, lexicon = null) {
+async function ingestReferenceArticle(memoryDir, key, article, cache, tagFor = referenceProvenanceTag, lexicon = null, synthesisBudget = AUTO_SYNTHESIS_BUDGET) {
   if (!article) return 0;
   const provenance = tagFor(article);
   const facts = [];
@@ -10056,7 +10180,7 @@ async function ingestReferenceArticle(memoryDir, key, article, cache, tagFor = r
     await appendFacts(memoryDir, facts);
     if (cache) cache.rows = null;
   } catch { return 0; }
-  await synthesiseAroundTerm(memoryDir, key, cache);
+  await synthesiseAroundTerm(memoryDir, key, cache, synthesisBudget);
   return facts.length;
 }
 
@@ -10072,15 +10196,15 @@ const AUTO_SYNTHESIS_BUDGET = 12;
  *  facts carry entailed:* provenance at their discounted trust and are
  *  retractable. Failure-tolerated: a synthesis miss never disturbs the answer
  *  the load already composed. Returns the count derived. */
-async function synthesiseAroundTerm(memoryDir, term, cache) {
-  if (!memoryDir || !term) return 0;
+async function synthesiseAroundTerm(memoryDir, term, cache, budget = AUTO_SYNTHESIS_BUDGET) {
+  if (!memoryDir || !term || budget <= 0) return 0;
   try {
     const { syllogise } = await import("../domain/syllogise.mjs");
     const { loadMemory, readFactRows, appendFacts, normFactTerm } = await import("../adapters/memory/core.mjs");
     const res = await syllogise(memoryDir, {
       focus: [...factTermVariants(normFactTerm, term)],
       expandFocus: true,
-      budget: AUTO_SYNTHESIS_BUDGET,
+      budget,
       store: { loadMemory, readFactRows, appendFacts },
     });
     if (res?.count && cache) cache.rows = null;
@@ -11280,8 +11404,12 @@ const DECISION_RECALL_RE = /^(?:remind\s+me\s+)?what\s+(?:did\s+)?(?:we|i|you)\s
  *  than silently accepted alongside the current location. */
 const MOVE_HISTORY_RE = /^where\s+did\s+(.+?)\s+(?:move|get\s+moved|go)(?:\s+to)?[?.!\s]*$/i;
 
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null }) {
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
   const ts = new Date().toISOString();
+  // The surface this turn runs on ("cli" default; "browser" from a web entry) —
+  // the honest-miss tail below points a browser/adventure miss at the teach
+  // lane instead of the CLI-only --repo/tmct-init remedy.
+  const browser = uiContext === "browser";
   // DISCOURSE ANAPHORA: a follow-up like "which of those are tested" / "count
   // them" filters or counts the PREVIOUS answer's entity set, threaded as
   // ask()'s `prev`. Prefers the FULL id set (`allIds`) over `matches`, since a
@@ -11340,7 +11468,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       try { liveKey = cleanMissLiveTerm(wikiTerm, lexicon ?? undefined); } catch { liveKey = null; }
       const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup) : null;
       if (live) {
-        await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon);
+        await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon, synthesisBudget);
         note(trace, `lane: WIKIPEDIA ASK — answered from a live en.wikipedia.org lookup, cited (article "${live.article.title}", revid ${live.article.revid})`);
         return plainTurn(query, live.text, { via: "reference", miss: false, focus });
       }
@@ -11503,8 +11631,12 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // examples are the wrong audience here), an unseeded one at the seed/
     // teach pair — vocabHint already carries exactly that split.
     answer = (!graph || noCodeGraph(graph)) && (!config || e?.emptyGraph || /^cannot read graph artifact\b/.test(thrown))
+      // A browser session has no `tmct init in a repo` to reach for, so its
+      // fallback drops that CLI-only remedy and keeps just the teach pointer.
       ? `I can't answer that as a code question — no code graph is loaded in this session. ${vocabHint
-        || "I can still remember and answer taught facts (try \"every bug is an issue\"), or run `tmct init` in a repo to index one."}`
+        || (browser
+          ? "I can still remember and answer taught facts (try \"every bug is an issue\")."
+          : "I can still remember and answer taught facts (try \"every bug is an issue\"), or run `tmct init` in a repo to index one.")}`
       : thrown;
     note(trace, `intermediate: the ask engine threw — ${thrown}`);
   }
@@ -11903,7 +12035,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       if (!bareMetaHit) {
         const refTerm = metaTermOf(factQuery, envelope);
         const key = refTerm ? await cleanMissPackKey(refTerm, { graph, memoryDir, lexicon, cache }) : null;
-        const learned = key ? await childPackFactsForKey(key, { memoryDir, env, cache }) : null;
+        const learned = key ? await childPackFactsForKey(key, { memoryDir, env, cache, synthesisBudget }) : null;
         if (learned) {
           const fact = (await factAnswer(memoryDir, factQuery, envelope, miss, biasByBundle, cache, newFocus?.label))
             ?? (await factReadBack(memoryDir, factQuery, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
@@ -11967,7 +12099,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     handled = true;
     note(trace, "lane: (2b) REFERENCE PACK — a bare \"what is X\" clean miss answered from the shipped reference pack, cited");
     note(trace, `source: reference pack ${REFERENCE_PACK_NAME} — article "${bareMetaHit.reference.article.title}" (revid ${bareMetaHit.reference.article.revid})`);
-    await ingestReferenceArticle(memoryDir, bareMetaHit.reference.key, bareMetaHit.reference.article, cache, referenceProvenanceTag, lexicon);
+    await ingestReferenceArticle(memoryDir, bareMetaHit.reference.key, bareMetaHit.reference.article, cache, referenceProvenanceTag, lexicon, synthesisBudget);
   } else if (bareMetaHit?.live) {
     // The bare-form LIVE hit settles the same way, under live provenance.
     answer = bareMetaHit.text;
@@ -11976,7 +12108,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     handled = true;
     note(trace, "lane: (2b) LIVE WIKIPEDIA — a bare \"what is X\" clean miss answered from a live en.wikipedia.org lookup (opt-in), cited");
     note(trace, `source: live reference ${LIVE_PACK_NAME} — article "${bareMetaHit.live.article.title}" (revid ${bareMetaHit.live.article.revid})`);
-    await ingestReferenceArticle(memoryDir, bareMetaHit.live.key, bareMetaHit.live.article, cache, liveProvenanceTag, lexicon);
+    await ingestReferenceArticle(memoryDir, bareMetaHit.live.key, bareMetaHit.live.article, cache, liveProvenanceTag, lexicon, synthesisBudget);
   } else if (bareMetaHit) {
     answer = bareMetaHit.replace ? bareMetaHit.text : `${answer}\n${bareMetaHit.text}`;
     // Same discipline as lane (3): a fact-lane return flagged `miss` is an
@@ -12222,6 +12354,26 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // kind of parent" as inherits) keeps its canonical: it genuinely
       // restates the relation the teach stored.
       if (envelope?.parsed?.fuzzyVerb) canonical = null;
+      // A mid-game locative teach is accepted and stored as the player's own
+      // note, but a running adventure's world only moves through actions — so
+      // when the taught subject is a term the world already places, the
+      // confirmation says so plainly. (The fold itself keeps taught rows out of
+      // the world state; this is the matching UX.)
+      if (!taught.miss && planHolder?.state?.adventure) {
+        const loc = String(query).trim().match(LOCATIVE_TEACH_RE);
+        if (loc) {
+          let placed = false;
+          try {
+            const { normFactTerm } = await import("../adapters/memory/core.mjs");
+            const world = foldWorldState(await factRows(memoryDir, cache));
+            placed = world.placements.has(normFactTerm(loc[1]));
+          } catch { placed = false; }
+          if (placed) {
+            answer = `${answer}\n(noted as your note — the game world itself only changes through actions like go, take and open.)`;
+            note(trace, "intermediate: mid-game locative teach — stored as a note; the adventure fold only moves through actions");
+          }
+        }
+      }
     }
   }
   // (4b) #4 AUTHOR lane — "who is <Name>", "what did <Name> touch",
@@ -12362,7 +12514,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   if (miss && recordMiss && via === "composed" && memoryDir) {
     const refTerm = metaTermOf(query, envelope);
     const key = refTerm ? await cleanMissPackKey(refTerm, { graph, memoryDir, lexicon, cache }) : null;
-    const learned = key ? await childPackFactsForKey(key, { memoryDir, env, cache }) : null;
+    const learned = key ? await childPackFactsForKey(key, { memoryDir, env, cache, synthesisBudget }) : null;
     if (learned) {
       const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle, cache, newFocus?.label))
         ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
@@ -12383,7 +12535,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         recordMiss = false;
         note(trace, "lane: (4h) REFERENCE PACK — a clean miss on a lexicon term answered from the shipped reference pack, cited");
         note(trace, `source: reference pack ${REFERENCE_PACK_NAME} — article "${ref.article.title}" (revid ${ref.article.revid})`);
-        await ingestReferenceArticle(memoryDir, ref.key, ref.article, cache, referenceProvenanceTag, lexicon);
+        await ingestReferenceArticle(memoryDir, ref.key, ref.article, cache, referenceProvenanceTag, lexicon, synthesisBudget);
       }
     }
     // The live Wikipedia supplement (opt-in), strictly AFTER both shipped
@@ -12399,7 +12551,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         recordMiss = false;
         note(trace, "lane: (4h) LIVE WIKIPEDIA — a clean miss answered from a live en.wikipedia.org lookup (opt-in), cited");
         note(trace, `source: live reference ${LIVE_PACK_NAME} — article "${live.article.title}" (revid ${live.article.revid})`);
-        await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon);
+        await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon, synthesisBudget);
       }
     }
   }
@@ -12421,12 +12573,25 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     note(trace, `lane: (5) SHORT TAILORED MISS — every lane above declined; ${repeat ? "REPEAT collapsed to one-liner (wall kindness)" : "the full grammar wall was shortened + tailored to the query's keywords"}`);
   }
   // #4 HONEST-EMPTY POLISH — an empty CODE graph: any still-standing engine
-  // dead-end (an honest empty, the short miss, the bootstrap note) carries the exit
-  // toward a real graph, unless it already points there. Only when genuinely empty.
+  // dead-end (an honest empty, the short miss, the bootstrap note) carries the
+  // exit toward a real graph, unless it already points there. Only when
+  // genuinely empty. The CLI keeps the --repo/example pointer verbatim; a
+  // browser or a live adventure has no such command to reach for, so each gets
+  // a teach-forward pointer (and the adventure also names the world asides that
+  // are guaranteed to hit).
+  const adventureLive = !!planHolder?.state?.adventure;
   if (recordMiss && (via === "composed" || via === "miss")
       && noCodeGraph(graph) && !/--repo|tmct init|no code graph/i.test(answer)) {
-    answer = `${answer}\n(this repo has no code graph — for structure, point me at a \`.tmct/graph.json\` with \`--repo <path>\` or run \`npm run example:mini\`; tmct doesn't index code itself.)`;
-    note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a --repo/tmct init pointer appended");
+    if (adventureLive) {
+      answer = `${answer}\n(I don't know that yet — you can teach me: say "remember: <thing> is a <kind>". Or ask the world: "look", "where is the key", "talk to the butler".)`;
+      note(trace, "intermediate: HONEST-EMPTY POLISH — a live adventure miss points at the teach lane and the world asides, not the --repo remedy");
+    } else if (browser) {
+      answer = `${answer}\n(I don't know that yet — you can teach me: say "remember: <thing> is a <kind>".)`;
+      note(trace, "intermediate: HONEST-EMPTY POLISH — a browser miss points at the teach lane, not the CLI-only --repo remedy");
+    } else {
+      answer = `${answer}\n(this repo has no code graph — for structure, point me at a \`.tmct/graph.json\` with \`--repo <path>\` or run \`npm run example:mini\`; tmct doesn't index code itself.)`;
+      note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a --repo/tmct init pointer appended");
+    }
   }
   // TEACH-OFFER: a "what is X" miss where X is genuinely unknown EVERYWHERE —
   // not a real graph entity, not a schema/vocab term, and not already in
@@ -12497,20 +12662,24 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     answer = `hypothetically, if ${counterfactualSubject[1].trim()} were removed: ${answer}`;
     note(trace, `intermediate: COUNTERFACTUAL_RE matched — compiled to a real traversal, wrapped as hypothetical ("${counterfactualSubject[1].trim()}" removed)`);
   }
-  // LIVE SUPPLEMENT (/wiki supplement): a grounded answer also carries what
-  // Wikipedia says about its subject — corroboration, not rescue. Scoped to a
-  // clean vocabulary subject (a "what is X" / "tell me about X" term), never a
-  // code-graph entity, and never doubled onto an answer that already IS a
-  // Wikipedia read-out. Failure-tolerated, and network-gated by the same toggle
-  // (the "supplement" value is truthy, so the rescue lanes above already ran).
-  if (liveReference === "supplement" && !recordMiss && via !== "reference") {
-    const supplementTerm = metaTermOf(query, envelope) || vagueTouchTermOf(query);
+  // LIVE SUPPLEMENT (/wiki supplement, and its superset /wiki always): a
+  // grounded answer also carries what Wikipedia says about its subject —
+  // corroboration, not rescue. Scoped to a clean vocabulary subject (a
+  // "what is X" / "tell me about X" term), never doubled onto an answer that
+  // already IS a Wikipedia read-out. Failure-tolerated, and network-gated by
+  // the same toggle (both values are truthy, so the rescue lanes above already
+  // ran). "always" widens the term fallback to an ordinary grounded ask's own
+  // parsed object, so a plain code/fact answer also gets corroborated; the
+  // adapter's throttle bounds the request rate.
+  if ((liveReference === "supplement" || liveReference === "always") && !recordMiss && via !== "reference") {
+    const supplementTerm = metaTermOf(query, envelope) || vagueTouchTermOf(query)
+      || (liveReference === "always" ? envelope?.parsed?.object : null);
     let liveKey = null;
     try { liveKey = supplementTerm ? cleanMissLiveTerm(supplementTerm, lexicon ?? undefined) : null; } catch { liveKey = null; }
     const live = liveKey ? await liveReferenceAnswerForKey(liveKey, onLiveLookup) : null;
     if (live) {
       answer = `${answer}\nWikipedia adds: ${live.text}`;
-      await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon);
+      await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon, synthesisBudget);
       note(trace, `intermediate: LIVE SUPPLEMENT — appended a cited en.wikipedia.org read-out for "${supplementTerm}" (supplement mode)`);
     }
   }
@@ -12653,13 +12822,14 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
   // state). A bare "/wiki" reports the CURRENT state and changes nothing.
   if (name === "wiki") {
     const arg = argText.toLowerCase();
-    const stateWord = (v) => (v === "supplement" ? "supplement" : v ? "on" : "off");
-    if (arg !== "on" && arg !== "off" && arg !== "supplement") {
-      return mk(`live Wikipedia supplement is ${stateWord(liveReference)} — /wiki on, /wiki off, or /wiki supplement. `
+    const stateWord = (v) => (v === "always" ? "always" : v === "supplement" ? "supplement" : v ? "on" : "off");
+    if (arg !== "on" && arg !== "off" && arg !== "supplement" && arg !== "always") {
+      return mk(`live Wikipedia supplement is ${stateWord(liveReference)} — /wiki on, /wiki off, /wiki supplement, or /wiki always. `
         + "When on, a question I can't answer also tries en.wikipedia.org (network); "
-        + "supplement adds a cited Wikipedia read-out under every grounded answer too.");
+        + "supplement adds a cited Wikipedia read-out under every grounded vocabulary answer too; "
+        + "always widens that to every grounded answer.");
     }
-    const next = arg === "supplement" ? "supplement" : arg === "on";
+    const next = arg === "always" ? "always" : arg === "supplement" ? "supplement" : arg === "on";
     return mk(`live Wikipedia supplement ${stateWord(next)}.`, { liveReferenceNext: next });
   }
 
@@ -13747,7 +13917,7 @@ function vocabAntecedentFrom(last) {
   return m[1];
 }
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, _noSplit = false } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, _noSplit = false } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -13812,7 +13982,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // the PLAN NEXT block below write planHolder.state; every other path leaves
   // it untouched, and the caller re-threads whatever comes back.
   const planHolder = { state: planState };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, gameConfig: resolvedGameConfig };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST

@@ -32,8 +32,8 @@ async function freshRepo() {
   return mkdtemp(join(tmpdir(), "tmct-live-lane-"));
 }
 
-async function turn(line, { memoryDir, env = noPackEnv, last = null, liveReference = false, onLiveLookup = null } = {}) {
-  return runTurn(line, { config: null, memoryDir, env, last, liveReference, onLiveLookup });
+async function turn(line, { memoryDir, env = noPackEnv, last = null, liveReference = false, onLiveLookup = null, synthesisBudget } = {}) {
+  return runTurn(line, { config: null, memoryDir, env, last, liveReference, onLiveLookup, ...(synthesisBudget === undefined ? {} : { synthesisBudget }) });
 }
 
 const QUASAR_ROW = {
@@ -243,7 +243,7 @@ test("/wiki flips ride the turn result: on, off, and a bare status report that c
 
     const status = await turn("/wiki", { memoryDir: dir, liveReference: true });
     assert.equal(status.liveReference, undefined, "a bare /wiki never flips the state");
-    assert.match(status.answer, /live Wikipedia supplement is on — \/wiki on, \/wiki off, or \/wiki supplement/);
+    assert.match(status.answer, /live Wikipedia supplement is on — \/wiki on, \/wiki off, \/wiki supplement, or \/wiki always/);
     assert.match(status.answer, /en\.wikipedia\.org \(network\)/);
   } finally {
     await rm(dir, { recursive: true, force: true });
@@ -277,11 +277,64 @@ test("supplement mode appends a cited Wikipedia read-out under a grounded vocabu
   }
 });
 
-test("/help lists the /wiki toggle with all three states", async () => {
+test("/wiki always is the fourth state and rides the turn result", async () => {
+  const dir = await freshRepo();
+  try {
+    const always = await turn("/wiki always", { memoryDir: dir });
+    assert.equal(always.liveReference, "always");
+    assert.match(always.answer, /live Wikipedia supplement always\./);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("always mode consults the provider on an ordinary grounded answer, not just a vocabulary one", async () => {
+  const dir = await freshRepo();
+  const provider = hitProvider();
+  registerLiveReferenceProvider(provider);
+  try {
+    // a remembered fact answers locally; always mode still corroborates from Wikipedia
+    await turn("every quasar is a star", { memoryDir: dir });
+    const r = await turn("what is a quasar", { memoryDir: dir, liveReference: "always" });
+    assert.match(r.answer, /quasar is a kind of star/, "the local answer still leads");
+    assert.match(r.answer, /Wikipedia adds: quasar — A quasar is a very bright object/, "always appends the cited read-out");
+    assert.deepEqual(provider.calls, ["quasar"], "the provider was consulted on the grounded answer");
+    assert.equal(r.record.miss, false);
+  } finally {
+    registerLiveReferenceProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("synthesis budget 0 stores the live article's facts but derives no entailed rows, while the default budget does", async () => {
+  const dirZero = await freshRepo();
+  const dirDefault = await freshRepo();
+  registerLiveReferenceProvider(hitProvider());
+  try {
+    for (const [dir, budget] of [[dirZero, 0], [dirDefault, undefined]]) {
+      await turn("every star is a thing", { memoryDir: dir });
+      await turn("what is a quasar", { memoryDir: dir, liveReference: true, synthesisBudget: budget });
+    }
+    const zero = readFactRows(await loadMemory(dirZero));
+    const dflt = readFactRows(await loadMemory(dirDefault));
+    // the article's own isa lands under both budgets
+    assert.ok(zero.some((f) => f.subject === "quasar" && f.object === "star"), "budget 0 still stores the article isa");
+    assert.ok(dflt.some((f) => f.subject === "quasar" && f.object === "star"), "the default budget stores it too");
+    // only the default budget's forward-chaining derives the entailed superclass
+    assert.ok(!zero.some((f) => /entailed/.test(f.provenance)), "budget 0 derives no entailed rows");
+    assert.ok(dflt.some((f) => /entailed/.test(f.provenance) && f.subject === "quasar" && f.object === "thing"), "the default budget chains quasar ⊑ star ⊑ thing");
+  } finally {
+    registerLiveReferenceProvider(null);
+    await rm(dirZero, { recursive: true, force: true });
+    await rm(dirDefault, { recursive: true, force: true });
+  }
+});
+
+test("/help lists the /wiki toggle with all four states", async () => {
   const dir = await freshRepo();
   try {
     const r = await turn("/help", { memoryDir: dir });
-    assert.match(r.answer, /\/wiki on\|off\|supplement/);
+    assert.match(r.answer, /\/wiki on\|off\|supplement\|always/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

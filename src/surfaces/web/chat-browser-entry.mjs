@@ -52,7 +52,7 @@ import { openPersistedStore } from "./idb-persist.mjs";
  * { answer, end, record, plan } and threads focus/last/planState between
  * calls exactly as the CLI session does.
  */
-export function createChatSession({ seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null } = {}) {
+export function createChatSession({ seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null, synthesisBudget = 12 } = {}) {
   const memoryDir = createInMemoryStore();
   // Spread onto the store's own empty payload so a partial seed (individuals
   // and objectProperties only) still carries the classes/prefixes scaffolding
@@ -69,18 +69,27 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
   let focus = null;
   let last = null;
   let planState = null;
-  // Tri-state, like the TUI: false (off), true (rescue on a miss), or
-  // "supplement" (also append a cited read-out under every grounded answer).
-  const normLive = (v) => (v === "supplement" ? "supplement" : Boolean(v));
+  // Four-state, like the CLI: false (off), true (rescue on a miss),
+  // "supplement" (also append a cited read-out under every grounded vocabulary
+  // answer), or "always" (widen that to every grounded answer). The two string
+  // modes stay strings so runTurn reads them as the supplement/always lanes.
+  const normLive = (v) => (v === "always" ? "always" : v === "supplement" ? "supplement" : Boolean(v));
   let liveReferenceOn = normLive(liveReference);
+  // The auto-synthesis budget for this session's learn-on-miss loads — the
+  // page's slider sets it; 0 stores article facts without any entailed rows.
+  let synthesisBudgetOn = Number.isFinite(synthesisBudget) ? synthesisBudget : 12;
 
   return {
     memoryDir,
     sessionId,
     get liveReference() { return liveReferenceOn; },
     /** The page's toggle seam: set the live Wikipedia mode for every later turn
-     *  (the `/wiki on|off|supplement` command sets the same state). */
+     *  (the `/wiki on|off|supplement|always` command sets the same state). */
     setLiveReference(v) { liveReferenceOn = normLive(v); },
+    get synthesisBudget() { return synthesisBudgetOn; },
+    /** The page's slider seam: set the auto-synthesis budget for every later
+     *  learn-on-miss load. Clamped to a non-negative integer; 0 disables it. */
+    setSynthesisBudget(n) { synthesisBudgetOn = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; },
 
     /** One dispatched turn. A throwing runTurn must never kill the session —
      *  the page has no other chance to show this turn's answer. */
@@ -91,6 +100,7 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
           config: null, source: null, graph, focus, last, memoryDir, sessionId,
           env: {}, lexicon, vocabHint, planState,
           liveReference: liveReferenceOn, onLiveLookup,
+          uiContext: "browser", synthesisBudget: synthesisBudgetOn,
         });
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -99,7 +109,7 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
       focus = result.focus;
       last = result.last;
       if ("planState" in result) planState = result.planState;
-      if (typeof result.liveReference === "boolean" || result.liveReference === "supplement") liveReferenceOn = result.liveReference;
+      if (typeof result.liveReference === "boolean" || result.liveReference === "supplement" || result.liveReference === "always") liveReferenceOn = result.liveReference;
       return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null };
     },
   };

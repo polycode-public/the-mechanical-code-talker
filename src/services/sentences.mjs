@@ -43,3 +43,22 @@ export function splitSentencesPreservingPaths(text) {
   }
   return out;
 }
+
+/** Bracketed reference residue an encyclopedia paragraph leaves in prose:
+ *  numeric footnote markers ([3], [12]), single-letter notes ([a]), and the
+ *  named ones ([note 4], [citation needed], [source?], [page 2]). Removed
+ *  case-insensitively so the sentence downstream reads as plain text, with the
+ *  gap tidied so "period.[3] Sales" becomes "period. Sales", not
+ *  "period.  Sales". A file path never carries a bracket, so a dotted module
+ *  identifier ("src/core/store.mjs") is left whole — only bracketed spans are
+ *  touched. Deliberately NOT wired into the shared splitter; a caller that
+ *  wants clean prose applies it before or after splitting. */
+export function stripCitationResidue(text) {
+  return String(text ?? "")
+    .replace(/\[\s*\d+\s*\]/g, "")
+    .replace(/\[\s*[a-z]\s*\]/gi, "")
+    .replace(/\[\s*(?:note|citation|ref|source|page|pp?)\b[^\]]*\]/gi, "")
+    .replace(/ +([.,;:!?])/g, "$1")
+    .replace(/ {2,}/g, " ")
+    .trim();
+}
