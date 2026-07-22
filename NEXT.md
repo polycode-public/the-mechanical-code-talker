@@ -36,10 +36,7 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 21 | full-triple learn-on-miss ingestion | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | loads become durable knowledge | medium-high |
 | 22 | auto bounded synthesis per ingest | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | new facts should connect | medium-high |
 | 23 | `extract --optimistic` + `--canonical` | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | ingest real-world text | medium |
-| 24 | glow-Markdown session logs | in progress, sampled (wt agent-adda6ef5cd3b8928a) | 2026-07-22 | readable transcripts; the sample is the spec | high |
-| 28 | spider-fly observable-facts panel | in progress — chat lane with wt agent-adda6ef5cd3b8928a | 2026-07-22 | planners' knowledge made inspectable | medium |
-| 31 | ingest.html + ledger/chat ingest | in progress — browser surfaces + home tile shipped 2026-07-22; remaining: TUI `/ingest` (wt agent-adda6ef5cd3b8928a) + `tmct_ingest`/optimistic tier (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | bring your own text | medium-high |
-| 33 | triple-store export, every page | in progress — every fact-store page exports now; remaining: TUI `/export` (wt agent-adda6ef5cd3b8928a) | 2026-07-22 | data leaves in the standard shape | high |
+| 31 | ingest.html + ledger/chat ingest | in progress — remaining: `tmct_ingest` cold tool + optimistic tier (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | bring your own text | medium-high |
 
 The detailed items:
 
@@ -85,21 +82,6 @@ The detailed items:
      above: distinct source kinds (live, optimistic-extract) with their own priors in trust.mjs,
      so fuzzy and live content rank below the curated packs by construction.
 
-- Session logs become glow-friendly Markdown. `.tmct/session-<id>.log` moves to
-  `session-<id>.md`: a `#` title carrying version/repo/start, one `###` heading per turn with a
-  time-of-day timestamp at millisecond precision (drop the full ISO date from every turn), the
-  user's line as a `>` blockquote (verbatim — the multi-sentence/rewrite log bugs above apply
-  here too), the reply in a fenced block, and a closing session-end line. A hand-made sample of
-  a real 101-turn session sits at `.tmct/session-019f8692-430d-79f3-9ee2-c38792f56746.md`
-  (render with `glow`) as the target look. Writer: `src/services/chat-session.mjs`
-  (`SESSION_LOG_DIR`, the per-turn `logLines` built at `chat.mjs:11982`); check the e2e that
-  reads the log file for the extension change.
-
-- spider-fly observable-facts, the chat half: the browser panel ships (click the spider or the
-  fly to see the facts that agent can observe, over `beliefSnapshotFor` in
-  `src/services/spider-fly.mjs`); the same read path still wants a chat phrasing ("what does
-  the fly see?") so TUI/CLI/serve inherit it — build that lane beside the game lanes.
-
 ## Where each item lands — code, tests, docs, channels
 
 **Channel audit (2026-07-22).** The channel set for "surfaced everywhere applicable" is: the
@@ -128,19 +110,8 @@ browser bundles, serve, and library `runChat` all call the same `runTurn`.
   CLI inherit the chat lanes; CLI adds the `extract` flags; library exports gain the ingest
   entry point (extend `package.json` `exports` with the extract/ingest service); serve gains
   nothing (ingest by API is out of scope until asked); tool layer gains the two cold tools.
-- **24, glow session logs.** Code: `src/services/chat-session.mjs` (`SESSION_LOG_DIR`, the
-  writer at `:246-258`) + the `logLines` shape (`chat.mjs:11982`); align the browser transcript
-  export (`chat.html`, shipped 2.9.x) to emit the SAME Markdown shape — one format, two
-  writers. Tests: unit on the session-file shape; `e2e/tui-chat-file.test.mjs` reads the log —
-  update it. Docs: README's session-log line + `bin/tmct.mjs` help text ("Session log → …").
-  Channels: TUI/CLI writer + browser export; library consumers get it via `createSession`
-  unchanged.
-- **28 remainder, spider-fly chat lane.** Code: a chat phrasing ("what does the fly see?")
-  over `beliefSnapshotFor` (`src/services/spider-fly.mjs`), built beside the game lanes.
-  Tests: a corpus row in the games lane + `test/services/spider-fly.test.mjs`. Channels: all
-  chat channels inherit.
-- **31/33 remainder, chat-command parity.** TUI `/ingest <path>` + `/export <path>` ride the
-  session-log batch; the `tmct_ingest` cold tool + the optimistic tier ride knowledge flows.
+- **31 remainder.** The `tmct_ingest` cold tool + the optimistic extract tier ride the
+  knowledge-flows batch (items 20-23).
 
 ## Discipline
 
