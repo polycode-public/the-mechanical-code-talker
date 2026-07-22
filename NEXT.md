@@ -23,6 +23,10 @@ Each row is one task; the workstream that lands it deletes its row in the same c
 - [ ] `scripts/gen-screenshots.mjs` (all 8 pages + capture manifest → `public/screenshots/`)
 - [ ] estate drift guard for screenshots (manifest/stamp + dimensions); CI job runs estate guards pre-deploy
 - [ ] regenerate all screenshots after design changes land; home page uses the new set
+- [ ] heavy README example tests leave CI; env-gated + `npm run check:readme` local tool
+- [ ] `interruptible: true` on every test-stage CI job (superseded pipelines auto-cancel)
+- [ ] e2e split: per-push browser/light suite vs `e2e:heavy` (build-artefacts, seed-scale) on `rules:changes` + schedule
+- [ ] ledger-build assertions fold into build-artefacts' single demo:build
 
 ### Coordinator
 - [ ] integration: `demo:build`, e2e sweep review, full `npm test`, main commit; `smoke:deploy` after operator-gated publish
