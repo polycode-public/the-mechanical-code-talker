@@ -184,13 +184,17 @@ export function roomSceneObjects(rows, state, here) {
  *  write, the same staleness rule `foldWorldState` already applies within
  *  its own placement map; then a current `mgx:on-plane` row (its own object
  *  taken as the plane verbatim); then a class default, found by a breadth-
- *  first walk from `subject` up BOTH `rdf:type` edges (an individual to its
- *  class) and `rdfs:subClassOf` edges (a class, or a directly-taxonomized
+ *  first walk up `rdfs:subClassOf` edges FIRST (a directly-taxonomized
  *  individual such as "portrait rdfs:subClassOf painting", to its own
- *  superclass) for the first `mgx:default-plane` fact — a DIFFERENT ancestor
- *  walk from sprite-map.mjs's own `classAncestorChain` (subClassOf-only, and
- *  an import this function can't take and stay `.toString()`-splice-safe);
- *  then the floor. Pure, fully self-contained in its own function body (no
+ *  superclass) for the first `mgx:default-plane` fact, falling back to a
+ *  second walk that also follows `rdf:type` edges (an individual to its
+ *  generic rendering class) only if the first finds nothing — a specific
+ *  taxonomic fact about the individual must outrank its own coarser
+ *  `rdf:type`, or which ancestor's default wins becomes an accident of fact
+ *  order rather than a taxonomy decision; a DIFFERENT ancestor walk from
+ *  sprite-map.mjs's own `classAncestorChain` (subClassOf-only, and an import
+ *  this function can't take and stay `.toString()`-splice-safe); then the
+ *  floor. Pure, fully self-contained in its own function body (no
  *  reference to any other name in this module) — reads `rows` fresh rather
  *  than a precomputed `positions` map, so it needs nothing beyond what
  *  `foldWorldState` already exposes on `state.placements`. */
@@ -208,7 +212,15 @@ export function scenePlacement(rows, state, subject) {
     }
     return best;
   }
-  function classDefaultPlane() {
+  // Two passes, not one BFS over both edge kinds at once: an individual
+  // directly `rdfs:subClassOf` a class (e.g. "portrait rdfs:subClassOf
+  // painting") is a deliberate, specific taxonomic fact and must win over
+  // its own, more generic `rdf:type` (e.g. "portrait rdf:type furniture",
+  // the coarse sprite/rendering category) whenever BOTH ancestors carry
+  // their own `mgx:default-plane` — a single combined-edge walk would
+  // instead return whichever ancestor happens to appear earlier in the
+  // fact rows, an accident of file order rather than a taxonomy decision.
+  function walkForDefaultPlane(edgePredicates) {
     const seen = new Set([subject]);
     const queue = [subject];
     while (queue.length) {
@@ -216,12 +228,14 @@ export function scenePlacement(rows, state, subject) {
       const defaultRow = (rows || []).find((r) => r.subject === node && r.predicate === "mgx:default-plane");
       if (defaultRow) return defaultRow.object;
       for (const row of rows || []) {
-        if (row.subject !== node) continue;
-        if (row.predicate !== "rdf:type" && row.predicate !== "rdfs:subClassOf") continue;
+        if (row.subject !== node || !edgePredicates.includes(row.predicate)) continue;
         if (!seen.has(row.object)) { seen.add(row.object); queue.push(row.object); }
       }
     }
     return null;
+  }
+  function classDefaultPlane() {
+    return walkForDefaultPlane(["rdfs:subClassOf"]) ?? walkForDefaultPlane(["rdf:type", "rdfs:subClassOf"]);
   }
   const placementTurn = state?.placements?.get(subject)?.turn ?? 0;
   const onTopOf = newestRowFor("mgx:on-top-of");
@@ -1015,6 +1029,19 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
       + '<div class="class-badge" data-cls="' + esc(cls) + '">' + esc(badgeFor(cls)) + "</div></div>";
   }
 
+  // A stacked item ABOVE the floor base: the frame only, no label/badge
+  // block underneath — stacking full cards (each carrying its own name +
+  // class badge under the icon) put that text between every pair of icons,
+  // reading as a large floating gap even though the CSS gap between the
+  // card boxes themselves was always the intended small one. The base
+  // item (bottom of the stack, standing on the floor) keeps its full
+  // spriteCardHtml identification; every item resting on something else
+  // shows an aria-label in its place, so the name is still available to
+  // assistive tech even though the sighted layout stays compact.
+  function stackedSpriteCardHtml(label, cls, svg) {
+    return '<div class="sprite-card" aria-label="' + esc(label) + '"><div class="sprite-frame" data-cls="' + esc(cls) + '"><div class="sprite" data-cls="' + esc(cls) + '">' + svg + "</div></div></div>";
+  }
+
   function captionFor(rows, state, here) {
     const hereCased = here.charAt(0).toUpperCase() + here.slice(1);
     const lines = tmctAdventure.worldDigestRows(rows, state)
@@ -1188,9 +1215,13 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     lastSnapshot = snap;
     const layout = roomSceneLayout(snap.rows, snap.state, snap.here);
     wallRowEl.innerHTML = layout.wall.map((s) => spriteCardHtml(s.subject, s.spriteClass, resolveObjectSprite(snap.rows, s))).join("");
-    floorRowEl.innerHTML = layout.floor.map((stack) =>
-      '<div class="sprite-stack">' + stack.items.map((s) => spriteCardHtml(s.subject, s.spriteClass, resolveObjectSprite(snap.rows, s))).join("") + "</div>"
-    ).join("");
+    floorRowEl.innerHTML = layout.floor.map((stack) => {
+      const baseIndex = stack.items.length - 1;
+      return '<div class="sprite-stack">' + stack.items.map((s, i) => {
+        const svg = resolveObjectSprite(snap.rows, s);
+        return i === baseIndex ? spriteCardHtml(s.subject, s.spriteClass, svg) : stackedSpriteCardHtml(s.subject, s.spriteClass, svg);
+      }).join("") + "</div>";
+    }).join("");
     youSlotEl.innerHTML = spriteCardHtml("you", "adventurer", resolveObjectSprite(snap.rows, { subject: "you", spriteClass: "adventurer" }));
     roomNameEl.textContent = "the " + snap.here;
     roomFrameEl.setAttribute("data-room-kind", roomKindForRoom(snap.rows, snap.here));

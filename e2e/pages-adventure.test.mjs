@@ -210,7 +210,10 @@ test("the room plaque names each room as it is walked, and taking an item fills 
     assert.equal(await page.locator("#roomName").textContent(), "the library", "one room north, the plaque follows");
     await sendCommand(page, "go north");
     assert.equal(await page.locator("#roomName").textContent(), "the drawing-room", "two rooms north, the plaque follows again");
-    const sceneLabels = await page.locator("#spriteRow .sprite-label").allTextContents();
+    // #roomFrame, not just #spriteRow: a wall-mounted object like the
+    // portrait renders in the separate #wallRow band alongside it, not
+    // inside the floor row.
+    const sceneLabels = await page.locator("#roomFrame .sprite-label").allTextContents();
     assert.ok(sceneLabels.includes("portrait"), "the drawing-room scene draws its own furniture");
 
     await sendCommand(page, "open the portrait");
