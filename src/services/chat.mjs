@@ -5111,6 +5111,12 @@ const MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB
 // terms. "what(?:'s|s|\s+is)" mirrors PERSONAL_ASSISTANT_NUDGE_RE's own
 // tolerance for the bare "whats" contraction spelling, just below.
 const MODULE_PURPOSE_RE = /^what(?:'s|s|\s+is)\s+(.+?)\s+(?:for|about)\??$/i;
+// "what is the purpose of the validate module" — the purpose-of phrasing of the
+// SAME module-grain overview, asking by the module's role rather than "for"/
+// "does". The captured object ("the validate module", "validate") is resolved
+// through the SAME exact-unique resolveEntity gate below; a non-module term
+// simply fails to resolve and the lane declines, so this never misroutes.
+const MODULE_PURPOSE_OF_RE = /^what(?:'s|s|\s+is)\s+the\s+(?:purpose|point|role|job|function)\s+of\s+(.+?)\??$/i;
 
 /** A module PATH as a reader types it — "src/core/store.mjs", "app/lib/b.mjs",
  *  or a bare "store.mjs". Requires a slash or a source-file extension, which is
@@ -5165,7 +5171,7 @@ async function moduleOrientLane(query, { graph }) {
   // (stripFillerWords already eats "please"/"could you" as filler; the politeness
   // regex only adds the "explain [to me]" wrapper on top).
   q = stripFillerWords(applyPreambleFrames(correctMisspellings(q))).replace(MODULE_ORIENT_POLITENESS_RE, "");
-  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE);
+  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_OF_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE);
   // "what does src/core/store.mjs do" already reached the overview; the bare
   // path and "what is <path>" did not, so the same module answered one
   // phrasing and walled two. Both are claimed here rather than in ask.mjs,
@@ -10171,6 +10177,11 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
   // captured term, same class of gap stripTrailingDiscourseTag (ask-vocab.mjs)
   // already fixes for the meta-whatis vocab lane.
   term = stripTrailingDiscourseTag(term);
+  // "tell me about the router thing" / "the logging stuff" — a vague filler
+  // noun wrapped around a real term. Strip it so the describe lane resolves
+  // the term itself; an unresolvable remainder still declines to the ordinary
+  // miss below, so this only ever widens what grounds, never misroutes.
+  term = term.replace(/\s+(?:thing|things|thingy|stuff)$/i, "").trim() || term;
   if (DESCRIBE_PRONOUN_RE.test(term)) {
     if (!focus?.label) return null; // no standing focus to resolve against — honest decline
     term = focus.label;
