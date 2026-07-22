@@ -3227,6 +3227,33 @@ function matchesRelationalTeachFrame(sentence) {
     || COPULA_NP_PARTICIPLE_TEACH_RE.test(payload)
     || SAME_NOUN_TEACH_RE.test(payload);
 }
+/** Does a relational-frame sentence name a code-graph entity? "the Router is
+ *  used by every handler" reads as a passive uses-CLAIM the ask engine verifies
+ *  against the graph ("No — no uses edge found…"), not a fact to store — the
+ *  participle+preposition frame would otherwise intercept it. When any term the
+ *  frame would store resolves to a graph entity, the frame yields so the graph
+ *  lane keeps the sentence. No graph (a bare/browser/ingest turn) means nothing
+ *  to yield to, so the frame proceeds. */
+async function relationalFrameNamesGraphEntity(sentence, graph) {
+  if (!graph) return false;
+  const { payload } = splitTeachNegation(String(sentence || "").trim());
+  let terms = null;
+  const pp = payload.match(PARTICIPLE_PREP_TEACH_RE);
+  if (pp) terms = [pp[1], participleObject(pp[4])];
+  else {
+    const np = payload.match(COPULA_NP_PARTICIPLE_TEACH_RE);
+    if (np) terms = [np[1], np[3], participleObject(np[6])];
+    else {
+      const same = payload.match(SAME_NOUN_TEACH_RE);
+      if (same) terms = [same[1], same[2]];
+    }
+  }
+  if (!terms) return false;
+  for (const t of terms) {
+    try { if (await resolveEntity(graph, String(t).trim())) return true; } catch { /* unresolved is fine */ }
+  }
+  return false;
+}
 /** Determiners/quantifiers that make the FIRST token an article, not a real
  *  bare-name subject ("every controller…", "the cache…") — GENERAL_VERB_TEACH_RE
  *  would otherwise happily bind them as a 1-token subject and misread the
@@ -4057,7 +4084,7 @@ async function teachExclusionReason(sentence) {
 }
 export { teachExclusionReason };
 
-async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null }) {
+async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null, graph = null }) {
   // A closed discourse-marker preamble ahead of a teach sentence ("howdy
   // pardner, remember that TaskController is fragile") would otherwise
   // corrupt TEACH_RE's own match, so strip it first. applyPreambleFrames is
@@ -4933,7 +4960,10 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
 
   let payload = null;
   if (wrapped && /\b(?:is|are)\b/i.test(wrapped)) payload = wrapped;
-  else if ((BARE_DECLARATIVE_RE.test(raw) || COMPARATIVE_TEACH_RE.test(raw) || matchesRelationalTeachFrame(raw) || matchBareHabitualTeach(raw) || matchBareCanTeach(raw)) && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
+  else if ((BARE_DECLARATIVE_RE.test(raw) || COMPARATIVE_TEACH_RE.test(raw)
+      || (matchesRelationalTeachFrame(raw) && !(await relationalFrameNamesGraphEntity(raw, graph)))
+      || matchBareHabitualTeach(raw) || matchBareCanTeach(raw))
+      && !QUESTION_LEAD_RE.test(raw) && !(await hasMidSentenceInterrogative(raw))) payload = raw;
   if (!payload) {
     // "remember margo eats ribs", re-escaping here through a combination
     // that mechanism's own deliberate subject-shape restriction doesn't
@@ -12335,7 +12365,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
   // memory, or say what CAN be remembered (LOUD), never the wall / a silent drop.
   if (miss && recordMiss && via === "composed") {
-    const taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache, planHolder });
+    const taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache, planHolder, graph });
     if (taught) {
       answer = taught.text; via = taught.via; recordMiss = taught.miss;
       if (!taught.miss) dialogueLaneOverride = "teach";
