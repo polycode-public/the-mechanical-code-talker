@@ -256,6 +256,15 @@ test("a live-Wikipedia provenance tag parses to kind referenceLive; the curated 
     { kind: "reference", pack: "simplewiki", article: "Otter@9184482" });
 });
 
+test("a research provenance tag parses to kind referenceLive, topic kept whole (spaces included), depth segment dropped from the identity", () => {
+  assert.deepEqual(provenanceTagToSource("research:owl@0"),
+    { kind: "referenceLive", pack: "research", article: "owl" });
+  assert.deepEqual(provenanceTagToSource("research:golden gate bridge@1"),
+    { kind: "referenceLive", pack: "research", article: "golden gate bridge" });
+  assert.deepEqual(provenanceTagToSource("research:"),
+    { kind: "referenceLive", pack: "research", article: "unknown" });
+});
+
 test("a live-Wikipedia-tagged fact materialises a DocumentSource with sourceType referenceLive", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-live-trust-"));
   try {

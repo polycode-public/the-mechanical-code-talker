@@ -80,6 +80,13 @@ test("normalizeConfig: [planning] max_depth rides through unmodified", async () 
   assert.deepEqual(norm.planning, { max_depth: 12 });
 });
 
+test("normalizeConfig: [research] rides through unmodified (sparse: absent when unset), snake_case keys untouched", async () => {
+  const none = await normalizeConfig({}, { configDir: "/x" });
+  assert.equal(none.research, undefined);
+  const norm = await normalizeConfig({ research: { fanout_limit: 3, depth_limit: 0, min_interval_ms: 4000 } }, { configDir: "/x" });
+  assert.deepEqual(norm.research, { fanout_limit: 3, depth_limit: 0, min_interval_ms: 4000 });
+});
+
 test("normalizeConfig: [games]/[planning] round-trip through a real tmct.toml on disk", async () => {
   const dir = await tmp();
   try {

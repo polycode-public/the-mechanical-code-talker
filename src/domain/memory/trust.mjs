@@ -77,6 +77,17 @@ export function provenanceTagToSource(tag) {
     const pack = rest.slice(0, colon) || "unknown";
     return { kind: referenceKindFor(pack), pack, article: rest.slice(colon + 1) };
   }
+  // research:<topic>@<depth> — the research lane's Simple English Wikipedia
+  // loads. Live-fetched at query time like the wikipedia-live pack, so it
+  // scores at the same referenceLive prior, below every curated pack. Parsed
+  // from the FULL tag (a topic may contain spaces); the depth segment records
+  // how far the fan-out reached and is not part of the Source identity.
+  if (t.startsWith("research:")) {
+    const rest = t.slice("research:".length);
+    const at = rest.lastIndexOf("@");
+    const topic = (at >= 0 ? rest.slice(0, at) : rest).trim();
+    return { kind: "referenceLive", pack: "research", article: topic || "unknown" };
+  }
   const head = t.split(/\s+/)[0]; // drop trailing " /r/IsA" etc.
   if (head.startsWith("corpus-weak:")) return { kind: "corpusWeak", name: head.slice("corpus-weak:".length) || "unknown" };
   if (head.startsWith("corpus:")) return { kind: "corpus", name: head.slice("corpus:".length) || "unknown" };
