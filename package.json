@@ -139,6 +139,7 @@
     "build:spider-fly-bundle": "node scripts/build-spider-fly-bundle.mjs",
     "build:plan-bundle": "node scripts/build-plan-bundle.mjs",
     "build:ledger-bundle": "node scripts/build-ledger-bundle.mjs",
+    "build:ingest-bundle": "node scripts/build-ingest-bundle.mjs",
     "build:code-explorer-bundle": "node scripts/build-code-explorer-bundle.mjs",
     "build:electron": "node scripts/build-electron-app.mjs",
     "electron": "electron electron/main.mjs",

@@ -419,6 +419,25 @@ const PAGES = [
       },
     ],
   },
+  {
+    page: "ingest",
+    path: "ingest.html",
+    ready: async (page) => {
+      await page.waitForFunction(() => window.tmctIngestReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
+      await page.evaluate(() => window.tmctIngestReady);
+    },
+    states: [
+      { label: "idle", act: async () => {} },
+      {
+        label: "ingested",
+        act: async (page) => {
+          await page.fill("#source", "A beagle is a kind of dog. A dog is a kind of animal.");
+          await page.locator("#ingestBtn").click();
+          await page.waitForFunction(() => document.querySelectorAll("#facts .fact").length >= 2, null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+    ],
+  },
 ];
 
 for (const spec of PAGES) {

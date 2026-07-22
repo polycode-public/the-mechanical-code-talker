@@ -107,6 +107,32 @@ test("export downloads a Markdown transcript with every turn in order, role-labe
   }
 });
 
+test("ingest file teaches every recognized fact into the session, skips the rest, and answers from what it just learned", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    const systemLines = () => page.locator("#messages .msg-row.system .bubble");
+    const seen = await systemLines().count();
+    await page.setInputFiles("#ingestInput", {
+      name: "creatures.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("A zorblax is a kind of gribbit. Is this a fact? A gribbit is a kind of creature."),
+    });
+    await page.waitForFunction(
+      (n) => document.querySelectorAll("#messages .msg-row.system .bubble").length > n,
+      seen,
+      { timeout: ANSWER_TIMEOUT_MS },
+    );
+    const summary = await systemLines().last().innerText();
+    assert.match(summary, /ingested creatures\.txt/, "the summary names the file");
+    assert.match(summary, /3 sentences read, 2 facts added, 1 skipped/, "only the two fact sentences ground; the question is skipped honestly");
+
+    const answer = await ask(page, "what is a zorblax");
+    assert.match(await answer.locator(".bubble").innerText(), /zorblax is a kind of gribbit/, "an ingested fact answers straight away from the session's own memory");
+  } finally {
+    await context.close();
+  }
+});
+
 test("print media expands the whole transcript — no fixed-height scroll clip — and hides the composer, statusline, stats panel and legend", async () => {
   const { context, page } = await openChatPage();
   try {

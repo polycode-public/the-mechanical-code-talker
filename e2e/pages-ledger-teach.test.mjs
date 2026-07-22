@@ -231,6 +231,56 @@ test("the live-taught state fits a phone viewport without sideways scrolling, in
   }
 });
 
+test("the ingest panel grounds pasted multi-sentence text into the graph, keeping only what it recognizes", async () => {
+  const { context, page, consoleErrors } = await openLedgerPage();
+  try {
+    const totalBefore = Number(await page.locator(".dash .tile", { hasText: "facts.total" }).locator(".tile-value").innerText());
+
+    await page.locator("#ingestToggle").click();
+    await page.locator("#ingestText").waitFor({ state: "visible" });
+    await page.fill("#ingestText", "A zorblex is a kind of quimzo. How are you today? A quimzo is a kind of blenth.");
+    await page.locator("#ingestRun").click();
+    await page.waitForFunction(
+      () => /added/.test(document.getElementById("ingestStatus")?.textContent ?? ""),
+      null,
+      { timeout: TURN_TIMEOUT_MS },
+    );
+
+    assert.match(
+      await page.locator("#ingestStatus").innerText(),
+      /3 sentences, 2 added, 1 skipped/,
+      "the question is skipped honestly; only the two fact sentences ground",
+    );
+    const totalAfter = Number(await page.locator(".dash .tile", { hasText: "facts.total" }).locator(".tile-value").innerText());
+    assert.equal(totalAfter, totalBefore + 2, "the ledger re-derives with exactly the two grounded facts added");
+    const hasNewTerm = await page.evaluate(() => LEDGER.terms.some((t) => t.term === "zorblex"));
+    assert.equal(hasNewTerm, true, "an ingested term is examinable in the ledger in place");
+    assert.deepEqual(consoleErrors, [], "ingesting logs no error of its own");
+  } finally {
+    await context.close();
+  }
+});
+
+test("export facts downloads the graph as JSONL in the extract shape", async () => {
+  const { context, page } = await openLedgerPage();
+  try {
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.locator("#exportFacts").click(),
+    ]);
+    const stream = await download.createReadStream();
+    const chunks = [];
+    for await (const chunk of stream) chunks.push(chunk);
+    const lines = Buffer.concat(chunks).toString("utf8").split("\n").filter(Boolean);
+    assert.ok(lines.length > 0, "the demo graph exports at least one fact line");
+    const rec = JSON.parse(lines[0]);
+    assert.ok(rec.subject && rec.predicate && rec.object, "each line carries a full triple");
+    assert.equal(typeof rec.provenance, "string", "each line names its provenance");
+  } finally {
+    await context.close();
+  }
+});
+
 test("a live teach turn logs no console error and fails no same-origin request", async () => {
   const { context, page, consoleErrors, failedRequests } = await openLedgerPage();
   try {

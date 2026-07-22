@@ -310,6 +310,8 @@ ${THEME_TOKENS_CSS}
           <span>ask Wikipedia when I don&#8217;t know</span>
         </label>
         <span class="tool-cluster">
+          <button type="button" id="ingestFile" class="tool-btn" title="load a .txt/.md file and teach every fact it recognizes into this session">ingest file</button>
+          <input type="file" id="ingestInput" accept=".txt,.md,text/plain,text/markdown" hidden>
           <button type="button" id="exportMd" class="tool-btn" title="download this conversation as Markdown">export .md</button>
           <button type="button" id="exportFacts" class="tool-btn" title="download this session's facts as JSONL (the tmct extract shape, provenance included)">export facts</button>
           <button type="button" id="printChat" class="tool-btn" title="print the whole conversation">print</button>
@@ -827,6 +829,49 @@ ${THEME_TOKENS_CSS}
     link.click();
     link.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+
+  // "ingest file" feeds a whole .txt/.md through the SAME session, one
+  // sentence at a time (window.tmctChat.splitSentences, then session.turn),
+  // teaching every sentence the recognizer grounds and skipping the rest
+  // honestly — the same pipeline the ingest page runs, reaching the chat's own
+  // memory so the taught facts answer questions straight away.
+  el("ingestFile").addEventListener("click", () => el("ingestInput").click());
+  el("ingestInput").addEventListener("change", async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    const session = window.tmctChatSession;
+    if (!file || busy || !session || !window.tmctChat.splitSentences) return;
+    let text;
+    try {
+      text = await file.text();
+    } catch (err) {
+      addSystemLine("couldn't read that file (" + (err && err.message ? err.message : err) + ").");
+      return;
+    }
+    const sentences = window.tmctChat.splitSentences(text);
+    if (!sentences.length) { addSystemLine("nothing to ingest in " + file.name + "."); return; }
+    setBusy(true);
+    statusEl.textContent = "ingesting " + file.name + "\\u2026";
+    let grounded = 0;
+    try {
+      for (const sentence of sentences) {
+        const result = await session.turn(sentence);
+        if (result.record && result.record.via === "assert" && !result.record.miss) grounded += 1;
+      }
+    } catch (err) {
+      addSystemLine("something went wrong ingesting " + file.name + " (" + (err && err.message ? err.message : err) + ").");
+    }
+    if (grounded) scheduleSave();
+    const skipped = sentences.length - grounded;
+    addSystemLine("ingested " + file.name + " \\u2014 " + sentences.length + " sentence"
+      + (sentences.length === 1 ? "" : "s") + " read, " + grounded + " fact"
+      + (grounded === 1 ? "" : "s") + " added"
+      + (skipped ? ", " + skipped + " skipped (not a recognized fact shape)" : "") + ".");
+    await renderStatsPanel();
+    renderStatus();
+    setBusy(false);
+    inputEl.focus();
   });
 
   // "reset to seed" is the full re-initialisation: drop the persisted payload

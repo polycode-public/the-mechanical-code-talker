@@ -19,6 +19,7 @@
 import { runTurn, vocabExampleHint } from "../../services/chat.mjs";
 import { createInMemoryStore, normFactTerm, loadMemory, readFactRows } from "../../adapters/memory/core.mjs";
 import { serializeFactsJsonl } from "../../adapters/memory/export-jsonl.mjs";
+import { splitSentencesPreservingPaths } from "../../services/sentences.mjs";
 import { provenanceTagToSource } from "../../domain/memory/trust.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
@@ -158,4 +159,4 @@ export async function exportFactsJsonl(memoryDir) {
   return serializeFactsJsonl(await loadMemory(memoryDir));
 }
 
-globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, normFactTerm, vocabExampleHint, memoryStats, openPersistedStore, exportFactsJsonl };
+globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, normFactTerm, vocabExampleHint, memoryStats, openPersistedStore, exportFactsJsonl, splitSentences: splitSentencesPreservingPaths };

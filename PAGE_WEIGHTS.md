@@ -37,9 +37,17 @@ build's `code.html` and `code-explorer.bundle.js`). The other six rows still
 reflect the 2.9.4 live deployment. Re-measure both against the live site
 once this change actually deploys.
 
+**ingest.html is new and not yet crawled.** Its eager assets are the shared
+`vendor/wink.js` (already counted once above) plus its own
+`ingest-browser.bundle.js` (~826 KB raw, the same ~830 KB weight class as the
+ledger/plan bundles); the page's own HTML is small (~15 KB). Its cold-load
+profile tracks plan.html's — wink plus one engine bundle — so it adds no new
+shared asset. Give it a real row here the next time the live site is crawled.
+
 Whole set, summing the eight per-page totals (the two local-rebuild rows
-carried through): **69,320,009 bytes raw (66.1 MB), 8,781,724 bytes wire
-(8.4 MB)**. Counting every distinct file once (what a full cold crawl
+carried through, ingest.html not yet counted): **69,320,009 bytes raw
+(66.1 MB), 8,781,724 bytes wire (8.4 MB)**. Counting every distinct file once
+(what a full cold crawl
 transfers, since the wink vendor and the service worker script are shared):
 **53 files, 54,695,817 bytes raw (52.2 MB), 5,617,928 bytes wire (5.4 MB)**.
 

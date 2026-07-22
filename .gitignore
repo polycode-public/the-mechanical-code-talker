@@ -75,12 +75,14 @@ public/adventure.html
 public/chat.html
 public/sprites.html
 public/code.html
+public/ingest.html
 public/chat-browser.bundle.js
 public/spider-fly-browser.bundle.js
 public/adventure-browser.bundle.js
 public/plan-browser.bundle.js
 public/ledger-browser.bundle.js
 public/sprites-browser.bundle.js
+public/ingest-browser.bundle.js
 public/code-explorer.bundle.js
 public/chat-seed.json
 public/reference-pack/
