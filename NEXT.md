@@ -19,11 +19,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 Site-uplift board (2026-07-22 approved plan: `~/.claude/plans/please-change-the-icons-snazzy-kernighan.md`).
 Each row is one task; the workstream that lands it deletes its row in the same commit.
 
-### WS-ci-screens — screenshots + drift detection (sonnet, wave 3)
-- [ ] `scripts/gen-screenshots.mjs` (all 8 pages + capture manifest → `public/screenshots/`)
-- [ ] estate drift guard for screenshots (manifest/stamp + dimensions); CI job runs estate guards pre-deploy
-- [ ] regenerate all screenshots after design changes land; home page uses the new set
-
 ### Coordinator
 - [ ] integration: `demo:build`, e2e sweep review, full `npm test`, main commit; `smoke:deploy` after operator-gated publish
 

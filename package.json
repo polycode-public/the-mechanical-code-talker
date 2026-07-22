@@ -88,6 +88,7 @@
     "test:fast": "node --disable-warning=ExperimentalWarning --test --test-concurrency=8 test/smoke/*.test.mjs test/fast/*.test.mjs test/tools/ask.test.mjs test/tools/server.test.mjs test/estate/import-layers.test.mjs",
     "test:e2e": "node --disable-warning=ExperimentalWarning --test \"e2e/**/*.test.mjs\"",
     "e2e:browsers": "playwright install chromium",
+    "gen:screenshots": "node scripts/gen-screenshots.mjs",
     "check:links": "node scripts/check-links.mjs",
     "check:pii": "node scripts/pii-lint.mjs",
     "check:pack": "node scripts/check-pack-manifest.mjs",
