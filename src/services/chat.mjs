@@ -13101,6 +13101,25 @@ function rewriteNegativeInterrogative(line) {
   return `${positive} ${m[2].trim()}`;
 }
 
+/** "what is the entry point" / "what's the main entry point of this codebase" /
+ *  "which file is the entry point" — the definition/which-file phrasings of the
+ *  entry-point question, folded onto the "where is the entry point" surface the
+ *  ask engine's own entry-point ranker (ask.mjs ENTRY_POINT_QUERY_RE) already
+ *  answers. Without this fold they parse as a vocabulary "what is X" miss. */
+const ENTRY_POINT_WHATIS_RE = /^(?:what(?:'s|s|\s+is)|which\s+(?:module|file|one)(?:\s+is)?)\s+(?:the\s+)?(?:main\s+|primary\s+)?entry[\s-]?points?(?:\s+(?:of|to|for)\s+(?:this|the)\s+(?:codebase|code|repo|repository|project|app))?[?.!\s]*$/i;
+const rewriteEntryPointQuestion = (line) => (ENTRY_POINT_WHATIS_RE.test(String(line || "").trim()) ? "where is the entry point" : null);
+
+/** "prove that X is a Y" / "prove X is Y" — a request for the isa yes/no with
+ *  its proof chain, folded onto the "is X a Y" surface the isa reader already
+ *  answers with a cited chain. Only the copula form folds; other "prove …"
+ *  phrasings fall through to their ordinary handling / honest miss. */
+const PROVE_THAT_RE = /^prove\s+(?:to\s+me\s+)?(?:that\s+)?(.+?)\s+(is|are)\s+(.+?)[?.!\s]*$/i;
+function rewriteProveThat(line) {
+  const m = String(line || "").trim().match(PROVE_THAT_RE);
+  if (!m) return null;
+  return `${m[2]} ${m[1].trim()} ${m[3].trim()}`;
+}
+
 /** A DISCONTIGUOUS verb frame, "SUBJECT uses OBJECT as its/a base(class)" —
  *  "uses" is split from its own qualifier ("as its base") around the object,
  *  so no contiguous phrase-table entry could ever register it, and "uses"
@@ -13232,7 +13251,8 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // — restored centrally inside withLast (below), once, for every dispatch path.
   const indirectMatch = line.match(INDIRECT_REQUEST_RE);
   const indirectLine = indirectMatch ? indirectMatch[1].trim() : line;
-  const preRewriteLine = rewriteVocabOpener(indirectLine) || indirectLine;
+  const preRewriteLine = rewriteEntryPointQuestion(indirectLine) || rewriteProveThat(indirectLine)
+    || rewriteVocabOpener(indirectLine) || indirectLine;
   // rewriteUsesAsBaseFrame's discontiguous-frame rewrite: applied here, once,
   // before ANY dispatch lane sees the text. Null (no-op) for every turn that
   // doesn't match one of the four discontiguous shapes.
@@ -13502,7 +13522,15 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       const endsInPlanTrigger = PLAN_SOLVE_RE.test(lastSentence) || GOAL_TEACH_RE.test(lastSentence)
         || GOAL_TEACH_INFINITIVE_RE.test(lastSentence) || GOAL_TEACH_VERBLESS_RE.test(lastSentence)
         || LEGAL_MOVES_RE.test(lastSentence);
-      if (endsInPlanTrigger || await everySentenceTeaches(sentences, lexicon)) {
+      // The syllogism one-liner — "Every man is mortal. Socrates is a man. Is
+      // Socrates mortal?": every sentence but the last teaches on its own, and
+      // the last is a question. Each teach stores (in order, so the question
+      // sees them), then the final sentence is answered as the payload behind
+      // the teach receipts, the same rendering the plan-trigger case uses.
+      const teachesThenAsks = !endsInPlanTrigger && /\?\s*$/.test(lastSentence.trim())
+        && await everySentenceTeaches(sentences.slice(0, -1), lexicon);
+      const finalIsPayload = endsInPlanTrigger || teachesThenAsks;
+      if (finalIsPayload || await everySentenceTeaches(sentences, lexicon)) {
         let f = focus; let l = last; let ps = planHolder.state;
         const receipts = [];
         let finalRec = null;
@@ -13524,7 +13552,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
         // a stray "Goal (inferred)" line the bulleted ones already dropped. Its
         // goal-line tail (everything after the receipt's first line) is kept once.
         let answer;
-        if (endsInPlanTrigger) {
+        if (finalIsPayload) {
           const receiptLines = receipts.slice(0, -1).map((t) => `• ${t}`).join("\n");
           answer = receiptLines ? `${receiptLines}\n\n${finalRec.answer}` : finalRec.answer;
         } else {

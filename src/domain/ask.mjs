@@ -896,7 +896,12 @@ function parseSuperlative(w, lc, nlp) {
   }
   const connectivity = lc.includes("connected") || lc.slice(extIdx, extIdx + 2).join(" ") === "most connected"
     || ["largest", "biggest", "smallest"].includes(lc[extIdx]);
-  if (!metric && connectivity) { metric = EDGE_NOUN_TO_METRIC.connections; metricNoun = "connections"; }
+  // A bare importance superlative ("the most important file") names no explicit
+  // edge metric, so it ranks by total connectivity — the sum of an entity's
+  // in/out edges, the most defensible deterministic proxy for "important".
+  const IMPORTANCE_WORDS = ["important", "significant", "central", "key", "core", "essential", "critical", "principal"];
+  const importanceRanked = lc.some((x) => IMPORTANCE_WORDS.includes(x));
+  if (!metric && (connectivity || importanceRanked)) { metric = EDGE_NOUN_TO_METRIC.connections; metricNoun = "connections"; }
   // entity noun anywhere (first match, deterministic); else default from a
   // metric that implies exactly one entity class ("test(s)" always ranks
   // Modules, the one declared exception — see METRIC_IMPLIES_ENTITY — so "what
