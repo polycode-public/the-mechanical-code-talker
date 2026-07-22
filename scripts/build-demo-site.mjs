@@ -11,6 +11,9 @@
 //   plan.html         the solved hanoi-3 replay plus a live re-solve session
 //                     (disk-count/max-depth controls, a chat-assert dock, a
 //                     PDDL+OWL/RDF plan panel) over its own browser bundle
+//   code.html         the code explorer over the demo code graph, the same
+//                     page the Electron desktop shell renders for itself
+//                     (see build-electron-app.mjs), over its own browser bundle
 //
 // It also stamps index.html's version from package.json, so the number the page
 // documents follows a version bump on its own.
@@ -117,6 +120,30 @@ console.log(`wrote ${ledgerBundlePath} (${(ledgerBundleBytes / 1024).toFixed(0)}
 const ledgerPath = join(SITE, "ledger.html");
 await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true }));
 console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
+
+// The code explorer: the exact page the Electron shell renders for itself
+// (renderCodeExplorerHtml, src/services/code-explorer-viz.mjs), seeded here
+// with the demo code graph built above, plus its own dedicated browser
+// bundle — generated fresh per build, never committed, same posture as the
+// ledger bundle above. showDesktopLink:true is the one option that differs
+// from the Electron build (scripts/build-electron-app.mjs), which renders
+// the identical page for the desktop shell and has nothing to point at.
+{
+  const { computeCodeExplorerData, renderCodeExplorerHtml, VENDOR_WINK_LOADER_JS } = await import(join(ROOT, "src", "services/code-explorer-viz.mjs"));
+  const { main: buildCodeExplorerBundle } = await import(join(here, "build-code-explorer-bundle.mjs"));
+  const { outPath: codeExplorerBundlePath, size: codeExplorerBundleBytes } = await buildCodeExplorerBundle(SITE);
+  console.log(`wrote ${codeExplorerBundlePath} (${(codeExplorerBundleBytes / 1024).toFixed(0)} KB)`);
+  const codeGraphPayload = JSON.parse(await readF(join(SITE, "demo-graph.json"), "utf8"));
+  const codeExplorerData = computeCodeExplorerData(codeGraphPayload, { title: "demo code graph" });
+  const codePath = join(SITE, "code.html");
+  await writeF(codePath, renderCodeExplorerHtml(codeExplorerData, {
+    bundleAvailable: true,
+    winkLoaderInline: VENDOR_WINK_LOADER_JS,
+    sourceName: "demo code graph",
+    showDesktopLink: true,
+  }));
+  console.log(`wrote ${codePath} (focus "${codeExplorerData.focus}", ${codeExplorerData.hints.length} hints)`);
+}
 
 // chat.html's full engine: the browser bundle plus its starter-memory seed,
 // both generated (never committed) so the page always serves what src/

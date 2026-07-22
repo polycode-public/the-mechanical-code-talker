@@ -66,7 +66,7 @@ test('"What an answer looks like" is gone: no transcript block, no leftover head
   assert.doesNotMatch(html, /class="adventure-hero"/, "the adventure hero embed is gone (demoted to a link card)");
 });
 
-test("the explore band lists exactly five link cards — plan/adventure/ledger, the desktop code explorer, sprites — in that order", async () => {
+test("the explore band lists exactly five link cards — plan/adventure/ledger/code explorer/sprites — in that order", async () => {
   const html = await readFile(INDEX, "utf8");
   const band = html.slice(html.indexOf('<div class="explore-grid">'), html.indexOf("<footer>"));
   const hrefs = [...band.matchAll(/<a class="explore-card[^"]*" href="([^"]+)"/g)].map((m) => m[1]);
@@ -74,14 +74,14 @@ test("the explore band lists exactly five link cards — plan/adventure/ledger, 
     "./plan.html",
     "./adventure.html",
     "./ledger.html",
-    "https://gitlab.com/polycode-projects/the-mechanical-code-talker#the-code-explorer-desktop",
+    "./code.html",
     "./sprites.html",
   ]);
   assert.match(band, /It plans, and shows the work/);
   assert.match(band, /Location aware inference/);
   assert.match(band, /The memory ledger/);
   assert.match(band, /Code explorer/);
-  assert.match(band, /explore-card-desktop/, "the desktop card is visually distinct from the hosted-page cards");
+  assert.doesNotMatch(band, /explore-card-desktop/, "the code-explorer card is a normal hosted-page card, not visually distinct");
   assert.match(band, /Sprite library/);
 });
 

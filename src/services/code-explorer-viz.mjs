@@ -31,6 +31,17 @@ export function edgePhrase(kind) {
   return EDGE_PHRASE.get(String(kind || "")) || String(kind || "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
 }
 
+// Both packagers (build-electron-app.mjs, build-demo-site.mjs) place
+// vendor/wink.js one level below the page they render, so the same loader
+// script inlines into renderCodeExplorerHtml's `winkLoaderInline` slot for
+// either channel.
+export const VENDOR_WINK_LOADER_JS = `window.__WINK_LOADER__ = async function () {
+  var m = await import("./vendor/wink.js");
+  return { winkNLP: m.winkNLP, model: m.model };
+};`;
+
+export const DESKTOP_APP_URL = "https://gitlab.com/polycode-projects/the-mechanical-code-talker#the-code-explorer-desktop";
+
 const LEDGER_ROW_LIMIT_DEFAULT = 4000;
 
 /** Pure derivation over an entities payload (individuals + objectProperties).
@@ -247,9 +258,11 @@ const CLIENT_JS = String.raw`
  * computeCodeExplorerData's output. `bundleInline` inlines the dock engine
  * (for a single-file page / a data: URL); otherwise `bundleAvailable` links
  * `./code-explorer.bundle.js`. `winkLoaderInline` optionally inlines a wink
- * model loader as `window.__WINK_LOADER__`.
+ * model loader as `window.__WINK_LOADER__`. `showDesktopLink` adds a line
+ * pointing at the desktop app's README section — the desktop shell itself
+ * renders this page too and passes `false`, since it has nothing to point at.
  */
-export function renderCodeExplorerHtml(data, { bundleInline = "", bundleAvailable = false, winkLoaderInline = "", sourceName = "demo code graph" } = {}) {
+export function renderCodeExplorerHtml(data, { bundleInline = "", bundleAvailable = false, winkLoaderInline = "", sourceName = "demo code graph", showDesktopLink = false } = {}) {
   const payloadJson = embedJson(data.payload);
   const dataJson = embedJson({ ledger: data.ledger, hints: data.hints, focus: data.focus, meta: data.meta });
   const title = escapeHtml(data.meta?.title || "code explorer");
@@ -304,6 +317,7 @@ ul.rows { list-style: none; margin: 0; padding: 0; }
 <header>
   <h1>tmct code explorer</h1>
   <span class="sub">source: <span id="source-name">${escapeHtml(sourceName)}</span></span>
+  ${showDesktopLink ? `<span class="sub">Also available as a <a href="${DESKTOP_APP_URL}">desktop app</a>.</span>` : ""}
   <div class="pickers">
     <button id="open-graph">Open graph…</button>
     <button id="open-repo">Open repo…</button>

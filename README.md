@@ -120,13 +120,14 @@ tmct> /exit
 
 **[Try it live in your browser →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/)**
 runs the actual query engine client-side. No server, no install. The landing
-page answers codebase questions live, and six more pages each ground their
+page answers codebase questions live, and seven more pages each ground their
 own domain: a full chat seeded with 19,228 facts (the same nine bands as
 `npm run init:xl`, capped to a 22.8 MB download), the **memory ledger**
-(every fact as a readable sentence; drill by clicking the terms inside), a
-Towers-of-Hanoi plan replayed move by move, the spider-and-fly and
-text-adventure games, and a sprite gallery whose chat dock answers from
-1,033 generated sprite facts.
+(every fact as a readable sentence; drill by clicking the terms inside), the
+**code explorer** (the same ledger UI refocused on a code graph, with a
+hint rail of suggested next questions), a Towers-of-Hanoi plan replayed move
+by move, the spider-and-fly and text-adventure games, and a sprite gallery
+whose chat dock answers from 1,033 generated sprite facts.
 The site hosts its own copy of wink-nlp, ships its assets precompressed,
 and a service worker precaches the big ones, so a second visit works
 offline. `tmct chat --render spider-fly|adventure|sprites [--output <path>]`
@@ -165,6 +166,11 @@ reads a `graph.json` (or a repo's `.tmct/` folder), shows every import, call and
 over the same graph. A hint rail suggests the next question from what the graph
 actually holds — "what does X import", "which functions call Y", "list
 functions" — so every suggestion resolves to a real answer.
+
+The identical page also runs as a plain hosted page, over the demo code
+graph — **[try it live →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/code.html)**
+— for a look with nothing to install. The desktop build below is for
+exploring your own repo or graph, which the hosted page cannot reach.
 
 Electron is a dev-only dependency and never ships in the npm package. Because
 `.npmrc` sets `ignore-scripts=true`, installing it does not fetch the runtime

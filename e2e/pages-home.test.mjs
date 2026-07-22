@@ -2,9 +2,9 @@
 // fully-expanded sections, every hero and explore-card is a screenshot plus
 // a link rather than a live embed, and it survives a phone-sized viewport.
 // Nothing else drives index.html end to end (the chat.html/plan.html/
-// adventure.html/ledger.html/sprites.html/spider-fly.html pages' own content
-// is each page's own test file's job — this file only checks index.html
-// links to them and shows what it says it shows).
+// adventure.html/ledger.html/sprites.html/spider-fly.html/code.html pages'
+// own content is each page's own test file's job — this file only checks
+// index.html links to them and shows what it says it shows).
 //
 // Third-party hosts are blocked for every run, and the block must cost the
 // page nothing: every asset — the wink lemma/POS tier included, via the
@@ -165,7 +165,7 @@ test("the page keeps the steps to run the local chat and to use tmct as a librar
   }
 });
 
-test("the explore band's five link cards lead to the four hosted pages plus the desktop build instructions", async () => {
+test("the explore band's five link cards lead to five hosted pages", async () => {
   const { context, page } = await openHomePage();
   try {
     await page.locator(".explore-grid").waitFor({ state: "visible" });
@@ -176,7 +176,7 @@ test("the explore band's five link cards lead to the four hosted pages plus the 
       "./plan.html",
       "./adventure.html",
       "./ledger.html",
-      "https://gitlab.com/polycode-projects/the-mechanical-code-talker#the-code-explorer-desktop",
+      "./code.html",
       "./sprites.html",
     ]);
   } finally {
