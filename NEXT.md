@@ -44,6 +44,7 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 32 | full IndexedDB re-initialisation button | in progress — remainder with wt agent-aa256545dc7b62998 (+ TUI /export with wt agent-adda6ef5cd3b8928a) | 2026-07-22 | recover any page from any state | high |
 | 33 | triple-store export, every page | in progress — remainder with wt agent-aa256545dc7b62998 (+ TUI /export with wt agent-adda6ef5cd3b8928a) | 2026-07-22 | data leaves in the standard shape | high |
 | 34 | code.html in-browser code explorer | in progress, new scope (wt agent-a5999e9ed6339f73d) | 2026-07-22 | the explorer in the browser, desktop app stays | high |
+| 35 | spider-fly controls/tuning swap | in progress, new scope (wt agent-ac1b4bfcc39e0b10e) | 2026-07-22 | operator layout request | high |
 
 The detailed items:
 
