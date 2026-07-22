@@ -9,18 +9,24 @@
 // (Text | Document) across the top, a roomy free-text area on the left that
 // takes paste and drag-and-drop plus a browse-for-file control, and a
 // soft-panel canonical facts pane on the right that fills LIVE as the
-// recognizer grounds each sentence. One action row under the panes: ingest,
-// download canonical, clear.
+// recognizer grounds each sentence, plus chat.html's own memory chrome:
+// starter memory seeded by default, a right-docked "this session's memory"
+// panel, and best-effort persistence across a reload. One options row above
+// the panes (seed with general knowledge / fuzzy low-trust tier); one
+// actions row under them (ingest, export facts, reset to seed, clear).
 //
 // Behind the panes is the ONE recognizer seam the browser bundle exposes —
 // session.ingest(text) — so a wider ingest tier plugs in without this page
-// changing. Grounded facts write to the page's own in-memory store; the
-// download serializes that store as canonical JSONL.
+// changing. Grounded facts write to a PERSISTENT session store that survives
+// across ingest clicks (a second paste extends the same memory, it never
+// starts over); the facts pane itself still shows only what THIS ingest just
+// grounded, live.
 //
 // renderIngestHtml() is pure: no I/O, deterministic output for identical
 // input. scripts/build-demo-site.mjs calls it directly and writes the result
 // to public/ingest.html, after ingest-browser.bundle.js already exists.
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
+import { bandLabelFor, statsSummaryLine, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
 
 const DEFAULT_TITLE = "the-mechanical-code-talker — ingest";
 
@@ -35,6 +41,29 @@ export function factTripleParts(fact) {
     object: String((fact && fact.object) || ""),
     provenance: String((fact && fact.provenance) || ""),
   };
+}
+
+/** The boot statusline while the big assets stream in — the same aggregator
+ *  chat-page-viz.mjs's own loadProgressLine is (kept as this page's own copy
+ *  rather than a shared import — the two pages' boot lines diverge slightly
+ *  and neither is a collaborator the other calls). `parts` is an array of
+ *  { loaded, total } byte counts (total 0 when the response carried no
+ *  Content-Length); with no usable total the line shows loaded bytes alone
+ *  rather than inventing a denominator. Self-contained, `.toString()`-splice
+ *  safe. */
+export function loadProgressLine(parts) {
+  const mb = (n) => (n / 1048576).toFixed(1);
+  let loaded = 0;
+  let total = 0;
+  let totalKnown = true;
+  for (const p of parts || []) {
+    loaded += (p && p.loaded) || 0;
+    if (p && p.total > 0) total += p.total;
+    else totalKnown = false;
+  }
+  return totalKnown && total > 0
+    ? "loading the engine… " + mb(loaded) + " MB / " + mb(total) + " MB"
+    : "loading the engine… " + mb(loaded) + " MB";
 }
 
 /** The self-contained ingest page. Pure — the same output for the same
@@ -57,10 +86,14 @@ export function renderIngestHtml({ title = DEFAULT_TITLE } = {}) {
 <style>
 ${THEME_TOKENS_CSS}
   html, body { height: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; display: flex; flex-direction: column; overflow: hidden; }
+  /* body is the OUTER row: the ingest column plus the stats panel docked to
+     its right, the same split chat.html's own body/.chatCol/.statsPanel
+     layout holds. */
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; display: flex; overflow: hidden; }
+  .ingestCol { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
   .mono { font-family: ${MONO_STACK}; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; border: none; }
-  button:focus-visible, textarea:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  button:focus-visible, textarea:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 
   header.topbar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .7rem 1.1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .brand { display: flex; flex-direction: column; gap: .1rem; }
@@ -73,6 +106,12 @@ ${THEME_TOKENS_CSS}
   .pills button { padding: .3rem .95rem; color: var(--muted); background: var(--card); border-right: 1px solid var(--line); }
   .pills button:last-child { border-right: none; }
   .pills button[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+
+  /* the options row — seed with general knowledge / the fuzzy low-trust
+     tier — both off/on switches in the statusline's own quiet mono idiom. */
+  .optionsRow { flex: 0 0 auto; display: flex; align-items: center; gap: 1.2rem; padding: .5rem 1.1rem; border-bottom: 1px solid var(--line); font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); flex-wrap: wrap; }
+  .optionToggle { display: inline-flex; align-items: center; gap: .4rem; cursor: pointer; white-space: nowrap; }
+  .optionToggle input { margin: 0; accent-color: var(--corpus); }
 
   /* the two panes: a roomy input on the left, a soft-panel facts render on the
      right. A CSS grid that stacks on a phone. */
@@ -106,6 +145,26 @@ ${THEME_TOKENS_CSS}
   .actions .btn:disabled { opacity: .45; cursor: default; }
   .actions .status { margin-left: auto; font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); }
 
+  /* the provenance stats panel: what this session's memory holds, docked to
+     the right of the ingest column (a real layout column, not an overlay) —
+     the same class names and breakpoint chat-page-viz.mjs's own docked panel
+     uses, re-rendered after boot and after every ingest from
+     window.tmctIngest's own memoryStats(). */
+  .statsPanel { flex: 0 0 300px; max-width: 300px; overflow-y: auto; border-left: 1px solid var(--line); padding: 1.1rem 1.2rem 1.6rem; font-family: ${MONO_STACK}; font-size: .74rem; line-height: 1.55; }
+  .statsPanel h2 { font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 1.3rem 0 .5rem; }
+  .statsPanel h2:first-child { margin-top: 0; }
+  .statsPanel .band-row { display: flex; justify-content: space-between; gap: .6rem; margin: 0; padding: .12rem 0; }
+  .statsPanel .band-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .statsPanel .taught-item { margin: 0 0 .7rem; }
+  .statsPanel .taught-tag { display: block; color: var(--muted); font-size: .66rem; margin-top: .15rem; word-break: break-word; }
+  .statsPanel .empty { color: var(--muted); margin: 0; }
+  .statsPanel .forget-btn { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .18rem .55rem; margin-top: 1.1rem; background: var(--card); }
+  .statsPanel .forget-btn:hover { color: var(--ink); }
+  .statsPanel .persist-note { color: var(--muted); font-size: .64rem; margin: .4rem 0 0; }
+
+  @media (max-width: 860px) {
+    .statsPanel { display: none; }
+  }
   @media (max-width: 720px) {
     main.panes { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
   }
@@ -113,46 +172,67 @@ ${THEME_TOKENS_CSS}
 </style>
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="eyebrow">the-mechanical-code-talker</span>
-      <span class="subtitle">ingest &mdash; paste or drop text; it keeps only the facts it can ground, and skips the rest honestly</span>
-    </div>
-    <div class="pills" role="group" aria-label="Input mode">
-      <button type="button" id="modeText" aria-pressed="true">Text</button>
-      <button type="button" id="modeDoc" aria-pressed="false">Document</button>
-    </div>
-  </header>
-  <main class="panes">
-    <section class="pane inPane" id="inPane" aria-label="Text to ingest">
-      <div class="pane-head">
-        <span id="srcLabel">your text</span>
-        <button type="button" class="browse" id="browseBtn">browse for a file&hellip;</button>
-        <input type="file" id="fileInput" accept=".txt,.md,text/plain,text/markdown" hidden>
+  <div class="ingestCol">
+    <header class="topbar">
+      <div class="brand">
+        <span class="eyebrow">the-mechanical-code-talker</span>
+        <span class="subtitle">ingest &mdash; paste or drop text; it keeps only the facts it can ground, and skips the rest honestly</span>
       </div>
-      <textarea id="source" spellcheck="false" autocapitalize="off"
-        placeholder="Paste text here, drop a .txt/.md file, or browse for one.&#10;&#10;Each sentence it recognizes as a fact (&quot;A beagle is a kind of dog.&quot;) is kept; every other sentence is skipped, never guessed at."></textarea>
-      <div class="dropHint">drop the file to load it</div>
-    </section>
-    <section class="pane outPane" aria-label="Grounded canonical facts">
-      <div class="pane-head">
-        <span>canonical facts</span>
-        <span id="factCount" class="mono"></span>
+      <div class="pills" role="group" aria-label="Input mode">
+        <button type="button" id="modeText" aria-pressed="true">Text</button>
+        <button type="button" id="modeDoc" aria-pressed="false">Document</button>
       </div>
-      <div id="facts"><p class="empty">Nothing ingested yet. The facts it grounds will appear here as it reads.</p></div>
-    </section>
-  </main>
-  <div class="actions">
-    <button type="button" class="btn primary" id="ingestBtn" disabled>ingest</button>
-    <button type="button" class="btn" id="downloadBtn" disabled>download canonical</button>
-    <button type="button" class="btn" id="clearBtn">clear</button>
-    <span class="status" id="status">loading the engine&hellip;</span>
+    </header>
+    <div class="optionsRow" id="optionsRow">
+      <label class="optionToggle" title="Loads chat.html's own starter memory (persona, ConceptNet, WordNet and the rest) before ingesting, so a taught fact can link into what it already knows. Off keeps the previous empty-store fast path.">
+        <input type="checkbox" id="seedToggle" checked>
+        seed with general knowledge
+      </label>
+      <label class="optionToggle" title="On a miss, also tries a copula or known relation verb flanked by two resolvable entities as a low-trust candidate fact, tagged optimistic-extract — below every curated source, and never able to corroborate one.">
+        <input type="checkbox" id="fuzzyToggle">
+        fuzzy tier (low-trust candidates)
+      </label>
+    </div>
+    <main class="panes">
+      <section class="pane inPane" id="inPane" aria-label="Text to ingest">
+        <div class="pane-head">
+          <span id="srcLabel">your text</span>
+          <button type="button" class="browse" id="browseBtn">browse for a file&hellip;</button>
+          <input type="file" id="fileInput" accept=".txt,.md,text/plain,text/markdown" hidden>
+        </div>
+        <textarea id="source" spellcheck="false" autocapitalize="off"
+          placeholder="Paste text here, drop a .txt/.md file, or browse for one.&#10;&#10;Each sentence it recognizes as a fact (&quot;A beagle is a kind of dog.&quot;) is kept; every other sentence is skipped, never guessed at."></textarea>
+        <div class="dropHint">drop the file to load it</div>
+      </section>
+      <section class="pane outPane" aria-label="Grounded canonical facts">
+        <div class="pane-head">
+          <span>canonical facts</span>
+          <span id="factCount" class="mono"></span>
+        </div>
+        <div id="facts"><p class="empty">Nothing ingested yet. The facts it grounds will appear here as it reads.</p></div>
+      </section>
+    </main>
+    <div class="actions">
+      <button type="button" class="btn primary" id="ingestBtn" disabled>ingest</button>
+      <button type="button" class="btn" id="downloadBtn" disabled>export facts</button>
+      <button type="button" class="btn" id="reinitStore" title="drop everything saved on this device and reload from the shipped seed">reset to seed</button>
+      <button type="button" class="btn" id="clearBtn">clear</button>
+      <span class="status" id="status">loading the engine&hellip;</span>
+    </div>
   </div>
+  <aside class="statsPanel" id="statsPanel" aria-label="This session's memory">
+    <p class="empty">loading memory stats&hellip;</p>
+  </aside>
 <script src="./ingest-browser.bundle.js"></script>
 <script>
 (function () {
   "use strict";
   const factTripleParts = ${factTripleParts.toString()};
+  const loadProgressLine = ${loadProgressLine.toString()};
+  const bandLabelFor = ${bandLabelFor.toString()};
+  const statsSummaryLine = ${statsSummaryLine.toString()};
+  const fetchWithProgress = ${fetchWithProgress.toString()};
+  const renderStatsPanelInto = ${renderStatsPanelInto.toString()};
   const el = (id) => document.getElementById(id);
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
@@ -170,9 +250,12 @@ ${THEME_TOKENS_CSS}
   const srcLabel = el("srcLabel");
   const modeTextBtn = el("modeText");
   const modeDocBtn = el("modeDoc");
+  const seedToggleEl = el("seedToggle");
+  const fuzzyToggleEl = el("fuzzyToggle");
+  const statsPanelEl = el("statsPanel");
 
   let session = null;
-  let grounded = 0; // facts on show in the right pane
+  let grounded = 0; // facts on show in the right pane, from the CURRENT ingest only
   let sourceTag = "pasted text"; // what the header names the current input
 
   // ---- input mode: Text | Document ---------------------------------------
@@ -233,12 +316,15 @@ ${THEME_TOKENS_CSS}
     ingestBtn.disabled = !session || !sourceEl.value.trim();
   }
 
-  // ---- the canonical facts pane ------------------------------------------
+  // ---- the canonical facts pane -------------------------------------------
+  // Shows only what the CURRENT ingest grounds, live — the underlying session
+  // store is persistent across ingest clicks (see below), but this pane
+  // clears at the start of every ingest so it never shows a stale mix of runs.
   function clearFactsPane() {
     factsEl.textContent = "";
     grounded = 0;
     factCountEl.textContent = "";
-    downloadBtn.disabled = true;
+    downloadBtn.disabled = !session;
     const empty = document.createElement("p");
     empty.className = "empty";
     empty.textContent = "Nothing ingested yet. The facts it grounds will appear here as it reads.";
@@ -275,20 +361,200 @@ ${THEME_TOKENS_CSS}
     factsEl.scrollTop = factsEl.scrollHeight;
   }
 
-  // ---- ingest: the one seam call -----------------------------------------
+  // ---- memory stats: the docked panel, same convention as chat.html --------
+  async function renderStatsPanel(stats) {
+    if (!stats) {
+      if (!session || !window.tmctIngest.memoryStats) return;
+      try { stats = await window.tmctIngest.memoryStats(session.memoryDir); }
+      catch { return; }
+    }
+    renderStatsPanelInto(statsPanelEl, stats, {
+      bandLabel: bandLabelFor,
+      taughtHint: "nothing yet \\u2014 ingest some text and its grounded facts land here, with their source.",
+      onForget: persist ? forgetEverything : null,
+      persistNote: "taught facts are kept best-effort on this device (IndexedDB), never sent anywhere.",
+    });
+  }
+
+  // ---- seed: chat.html's own starter memory, on by default -----------------
+  const SEED_PREF_KEY = "tmct.ingest.seed";
+  function readSeedPref() {
+    try {
+      const stored = localStorage.getItem(SEED_PREF_KEY);
+      return stored === null ? true : stored === "on";
+    } catch { return true; }
+  }
+  function writeSeedPref(on) {
+    try { localStorage.setItem(SEED_PREF_KEY, on ? "on" : "off"); } catch { /* private mode — this visit still works */ }
+  }
+
+  let seedPayload = null;
+  let seedFacts = 0;
+  const progressParts = {};
+  let progressActive = true;
+  function noteProgress(key, loaded, total) {
+    progressParts[key] = { loaded: loaded, total: total };
+    if (progressActive) statusEl.textContent = loadProgressLine(Object.values(progressParts));
+  }
+
+  // The one branch this page's seed choice makes: checked, fetch and parse
+  // the same chat-seed.json chat.html embeds; unchecked, skip the request
+  // outright and stay on the previous empty-store fast path.
+  async function fetchSeedIfWanted() {
+    if (!seedToggleEl.checked) { seedPayload = null; seedFacts = 0; return; }
+    try {
+      const blob = await fetchWithProgress("./chat-seed.json", (loaded, total) => noteProgress("seed", loaded, total));
+      seedPayload = JSON.parse(await blob.text());
+      seedFacts = (seedPayload.individuals || []).filter((i) => i.class === "Fact").length;
+    } catch (err) {
+      seedPayload = null;
+      seedFacts = 0;
+      console.warn("tmct ingest: chat-seed.json unavailable — starting unseeded", err);
+    }
+  }
+  function cloneSeed() {
+    if (!seedPayload) return null;
+    try { return structuredClone(seedPayload); } catch { return JSON.parse(JSON.stringify(seedPayload)); }
+  }
+  function newSession() {
+    return window.tmctIngest.createIngestSession({ seedPayload: cloneSeed(), vocabSeeded: Boolean(seedPayload) });
+  }
+
+  // ---- engine boot ---------------------------------------------------------
+  const WINK_LOAD_TIMEOUT_MS = 8000;
+  async function tryLoadWink() {
+    let settled = false;
+    const timeout = new Promise((_, reject) => setTimeout(() => { if (!settled) reject(new Error("wink load stalled")); }, WINK_LOAD_TIMEOUT_MS));
+    try {
+      const mod = await Promise.race([import("./vendor/wink.js"), timeout]);
+      settled = true;
+      window.tmctIngest.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
+      return "loaded";
+    } catch (err) {
+      settled = true;
+      console.warn("tmct ingest: the wink vendor asset failed to load; the recognizer needs it to split and parse sentences", err);
+      return "unavailable";
+    }
+  }
+
+  // The deploy's own version, read off the service worker file the build
+  // already stamps — the only same-origin place the number exists at runtime
+  // without a second build artifact. Best-effort: no worker file, no match,
+  // no network -> "dev".
+  async function fetchSiteVersion() {
+    try {
+      const res = await fetch("./tmct-sw.js");
+      if (!res.ok) return "dev";
+      const found = /tmct-precache-v(\\d+\\.\\d+\\.\\d+)/.exec(await res.text());
+      return found ? found[1] : "dev";
+    } catch {
+      return "dev";
+    }
+  }
+
+  // ---- persistence: taught facts survive a reload, on this device ----------
+  let persist = null;
+  let saveTimer = null;
+  let siteVersion = "dev";
+  window.tmctIngestLastSave = null;
+
+  function scheduleSave() {
+    if (!persist) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      if (!session) return;
+      const started = performance.now();
+      let snapshot;
+      try {
+        snapshot = structuredClone(session.memoryDir.payload);
+      } catch {
+        try { snapshot = JSON.parse(JSON.stringify(session.memoryDir.payload)); } catch { return; }
+      }
+      persist.save(snapshot).then((saved) => {
+        if (saved) window.tmctIngestLastSave = { at: Date.now(), ms: Math.round(performance.now() - started) };
+      });
+    }, 500);
+  }
+
+  async function forgetEverything() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (persist) await persist.clear();
+    session = newSession();
+    clearFactsPane();
+    updateIngestEnabled();
+    const stats = await window.tmctIngest.memoryStats(session.memoryDir);
+    statusEl.textContent = "forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats, bandLabelFor) + ").";
+    await renderStatsPanel(stats);
+  }
+
+  // Flipping the seed switch rebuilds the session from scratch under the new
+  // choice — a seeded and an unseeded store are different enough that
+  // half-carrying one visit's typed facts across the flip would be more
+  // confusing than starting clean.
+  seedToggleEl.addEventListener("change", async () => {
+    writeSeedPref(seedToggleEl.checked);
+    ingestBtn.disabled = true;
+    statusEl.textContent = seedToggleEl.checked ? "loading starter memory\\u2026" : "starting unseeded\\u2026";
+    await fetchSeedIfWanted();
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    session = newSession();
+    clearFactsPane();
+    const stats = await window.tmctIngest.memoryStats(session.memoryDir);
+    statusEl.textContent = statsSummaryLine(stats, bandLabelFor) + " \\u2014 ready.";
+    await renderStatsPanel(stats);
+    updateIngestEnabled();
+    sourceEl.focus();
+  });
+
+  async function boot() {
+    if (!window.tmctIngest) {
+      statusEl.textContent = "the ingest engine didn't load \\u2014 this page needs its build step (npm run demo:build)";
+      return;
+    }
+    seedToggleEl.checked = readSeedPref();
+    const [winkStatus] = await Promise.all([
+      tryLoadWink(),
+      fetchSeedIfWanted(),
+      fetchSiteVersion().then((v) => { siteVersion = v; }),
+    ]);
+    progressActive = false;
+    if (window.tmctIngest.openPersistedStore) {
+      persist = window.tmctIngest.openPersistedStore({ storeKey: "ingest", stamp: siteVersion + ":" + seedFacts });
+    }
+    const savedRecord = persist ? await persist.load() : null;
+    session = savedRecord && savedRecord.payload
+      ? window.tmctIngest.createIngestSession({ seedPayload: savedRecord.payload, vocabSeeded: true })
+      : newSession();
+    setMode(false);
+    updateIngestEnabled();
+    const stats = await window.tmctIngest.memoryStats(session.memoryDir);
+    const winkPart = winkStatus === "loaded"
+      ? "wink-nlp: loaded"
+      : "wink-nlp unavailable \\u2014 the recognizer can't split sentences without it";
+    statusEl.textContent = statsSummaryLine(stats, bandLabelFor) + " \\u00b7 " + winkPart
+      + (savedRecord ? " \\u2014 restored from your last visit." : " \\u2014 paste or drop text, then ingest.");
+    await renderStatsPanel(stats);
+    sourceEl.focus();
+  }
+
+  // ---- ingest: the one seam call -------------------------------------------
+  // The session is PERSISTENT across ingest clicks — a second paste extends
+  // the same memory rather than starting over — so only the facts pane
+  // clears per click, never the underlying store.
   let busy = false;
   ingestBtn.addEventListener("click", async () => {
     const text = sourceEl.value.trim();
     if (!text || busy || !session) return;
     busy = true;
     ingestBtn.disabled = true;
-    // A fresh ingest starts a fresh store, so the right pane and the canonical
-    // download always describe exactly the text now in the box.
-    session = window.tmctIngest.createIngestSession();
     clearFactsPane();
     statusEl.textContent = "reading\\u2026";
     try {
       const summary = await session.ingest(text, {
+        optimistic: fuzzyToggleEl.checked,
         onFact: (fact) => { appendFactRow(fact); return new Promise((r) => setTimeout(r, 0)); },
       });
       statusEl.textContent = summary.sentences + " sentence" + (summary.sentences === 1 ? "" : "s")
@@ -303,7 +569,10 @@ ${THEME_TOKENS_CSS}
           note.textContent = "No sentence here was a fact it could ground. Try a plain statement like \\u201cA beagle is a kind of dog.\\u201d";
           factsEl.appendChild(note);
         }
+      } else {
+        scheduleSave();
       }
+      await renderStatsPanel();
     } catch (err) {
       statusEl.textContent = "something went wrong reading that (" + (err && err.message ? err.message : err) + ")";
     } finally {
@@ -312,7 +581,7 @@ ${THEME_TOKENS_CSS}
     }
   });
 
-  // ---- download the canonical facts as JSONL -----------------------------
+  // ---- download the canonical facts as JSONL -------------------------------
   downloadBtn.addEventListener("click", async () => {
     if (!session || !window.tmctIngest.exportFactsJsonl) return;
     let jsonl;
@@ -333,48 +602,28 @@ ${THEME_TOKENS_CSS}
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   });
 
+  // "reset to seed" is the full re-initialisation: drop the persisted payload
+  // outright and reload, so boot re-seeds from the page's shipped seed as if
+  // on a first visit.
+  el("reinitStore").addEventListener("click", async () => {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (persist) await persist.clear();
+    window.location.reload();
+  });
+
+  // "clear" only resets the UI (the textarea and this-run's facts pane) — the
+  // underlying session and everything it has grounded so far stays intact,
+  // matching the persistent-session contract above.
   clearBtn.addEventListener("click", () => {
     sourceEl.value = "";
     sourceTag = "pasted text";
     srcLabel.textContent = modeDocBtn.getAttribute("aria-pressed") === "true" ? "drop or browse for a file" : "pasted text";
-    session = window.tmctIngest ? window.tmctIngest.createIngestSession() : null;
     clearFactsPane();
     statusEl.textContent = "cleared";
     updateIngestEnabled();
     sourceEl.focus();
   });
-
-  // ---- engine boot -------------------------------------------------------
-  const WINK_LOAD_TIMEOUT_MS = 8000;
-  async function tryLoadWink() {
-    let settled = false;
-    const timeout = new Promise((_, reject) => setTimeout(() => { if (!settled) reject(new Error("wink load stalled")); }, WINK_LOAD_TIMEOUT_MS));
-    try {
-      const mod = await Promise.race([import("./vendor/wink.js"), timeout]);
-      settled = true;
-      window.tmctIngest.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
-      return "loaded";
-    } catch (err) {
-      settled = true;
-      console.warn("tmct ingest: the wink vendor asset failed to load; the recognizer needs it to split and parse sentences", err);
-      return "unavailable";
-    }
-  }
-
-  async function boot() {
-    if (!window.tmctIngest) {
-      statusEl.textContent = "the ingest engine didn't load \\u2014 this page needs its build step (npm run demo:build)";
-      return;
-    }
-    const winkStatus = await tryLoadWink();
-    session = window.tmctIngest.createIngestSession();
-    setMode(false);
-    updateIngestEnabled();
-    statusEl.textContent = winkStatus === "loaded"
-      ? "ready \\u2014 paste or drop text, then ingest"
-      : "wink-nlp unavailable \\u2014 the recognizer can't split sentences without it";
-    sourceEl.focus();
-  }
 
   window.tmctIngestReady = boot().catch((err) => {
     console.error("tmct ingest failed to boot", err);
