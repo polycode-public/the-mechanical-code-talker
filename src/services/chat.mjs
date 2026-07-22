@@ -21,7 +21,7 @@ import { join, dirname } from "node:path";
 import { dispatchTool, loadGraph, TOOLS } from "../tools/server.mjs";
 import { ToolError } from "../adapters/config.mjs";
 import { parseEntities, edgesOfKind, moduleCountOf, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
-import { classDisplayName } from "../domain/ask.mjs";
+import { classDisplayName, DYNAMIC_TAIL_OK_RE } from "../domain/ask.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
 import * as defaultSource from "../adapters/source.mjs";
 import { loadTemplates, render as renderTemplate } from "../adapters/corpus/templates.mjs";
@@ -811,7 +811,7 @@ async function answerMemoryCount(memoryDir, query) {
   // the bare "how many do you know" (no explicit noun) defaults to remembered facts
   if (/\bhow many(?:\s+(?:things?|facts?))?\s+(?:do|d'?)\s+(?:you|u)\s+know\b/.test(q)) cls = "Fact";
   if (!cls) {
-    const m = q.match(/\b(?:how many|number of|count(?:\s+the)?)\s+([a-z]+)\b(.*)$/);
+    const m = q.match(/\b(?:how many|number of|count(?:\s+the)?)\s+(?:all\s+)?([a-z]+)\b(.*)$/);
     if (m) {
       cls = MEMORY_COUNT_NOUNS[m[1]] || null;
       tail = m[2].trim();
@@ -842,6 +842,160 @@ async function answerMemoryCount(memoryDir, query) {
   let mem;
   try { mem = await loadMemory(memoryDir); } catch { return null; }
   return said((mem.individuals || []).filter((i) => (i.class || "") === cls).length);
+}
+
+// ---- memory-store LIST + meta-class count ("list facts", "list utterances",
+// "how many sessions are there") — the same reified individuals answerMemoryCount
+// tallies, but enumerated, and reaching the meta-classes (Session/Source/Rule) the
+// count lane skips. dynamicClassQuery (ask.mjs) already answers these when handed a
+// memory-shaped graph, but the chat path hands ask() the CODE graph, so the store's
+// own individuals were never reachable from a chat turn. This reads the store
+// directly, mirroring answerMemoryCount's own lazy/failure-tolerated load. ----
+
+/** Chat-phrasing nouns → the memory-store class they name. Fact/Utterance are
+ *  shared with answerMemoryCount (which owns their counts); the meta-classes are
+ *  reachable only here. */
+const MEMORY_CLASS_QUERY_NOUNS = {
+  fact: "Fact", facts: "Fact",
+  utterance: "Utterance", utterances: "Utterance",
+  session: "Session", sessions: "Session",
+  source: "Source", sources: "Source",
+  rule: "Rule", rules: "Rule",
+};
+const MEMORY_CLASS_PLURALS = {
+  Fact: "facts", Utterance: "utterances", Session: "sessions", Source: "sources", Rule: "rules",
+};
+const MEMORY_CLASS_LIST_TRIGGER_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][a-z-]*)\s*(.*)$/i;
+const MEMORY_CLASS_COUNT_TRIGGER_RE = /^(?:how\s+many|number\s+of|count(?:\s+the)?)\s+(?:all\s+)?([a-z][a-z-]*)\s*(.*)$/i;
+
+/** One display line per stored individual of a class: a Fact reads back through
+ *  the same renderFactLine every other fact list uses; the other classes show
+ *  their own label. */
+function memoryClassLine(cls, ind, factByLabel) {
+  if (cls === "Fact") {
+    const row = factByLabel.get(ind.id);
+    if (row) return renderFactLine(row);
+  }
+  return String(ind.label || ind.id || "").trim();
+}
+
+/** Recognise "list <memory-class>" (any class) and "how many <meta-class>"
+ *  (Session/Source/Rule — Fact/Utterance counts stay with answerMemoryCount) and
+ *  answer off the store. Returns { text, pending } or null (→ the next lane owns
+ *  it). A real restrictor tail declines rather than answering a shorter question
+ *  nobody asked. */
+async function answerMemoryClassQuery(memoryDir, query) {
+  if (!memoryDir) return null;
+  const q = String(query).trim();
+  const listM = q.match(MEMORY_CLASS_LIST_TRIGGER_RE);
+  const countM = listM ? null : q.match(MEMORY_CLASS_COUNT_TRIGGER_RE);
+  const m = listM || countM;
+  if (!m) return null;
+  const cls = MEMORY_CLASS_QUERY_NOUNS[m[1].toLowerCase()];
+  if (!cls) return null;
+  // Fact/Utterance counts carry answerMemoryCount's own about-tail discipline;
+  // never re-answer them from this simpler lane.
+  if (countM && (cls === "Fact" || cls === "Utterance")) return null;
+  const plural = MEMORY_CLASS_PLURALS[cls];
+  const tail = (m[2] || "").trim();
+  if (!DYNAMIC_TAIL_OK_RE.test(tail)) {
+    const verb = listM ? "list" : "count";
+    return {
+      text: `I can ${verb} the ${plural} I hold, but not the "${tail}" part of that question — `
+        + `so I won't answer as if you hadn't asked it. `
+        + `Ask "${verb} ${plural}" for all of them.`,
+      miss: true,
+    };
+  }
+  let loadMemory;
+  let readFactRows;
+  try { ({ loadMemory, readFactRows } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  let mem;
+  try { mem = await loadMemory(memoryDir); } catch { return null; }
+  const inds = (mem.individuals || []).filter((i) => (i.class || "") === cls);
+  if (countM) return { text: `${inds.length} ${inds.length === 1 ? plural.replace(/s$/, "") : plural}.` };
+  if (!inds.length) return { text: `I don't have any ${plural} stored yet.`, miss: true };
+  const factByLabel = cls === "Fact" ? new Map(readFactRows(mem).map((r) => [r.id, r])) : new Map();
+  const lines = inds.map((ind) => memoryClassLine(cls, ind, factByLabel));
+  const shown = lines.slice(0, FACT_ANSWER_CAP);
+  const rest = lines.slice(FACT_ANSWER_CAP);
+  const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+  return {
+    text: shown.join("\n") + extra,
+    ...(rest.length ? { pending: { items: rest, noun: plural } } : {}),
+  };
+}
+
+// "how many animals are there" — a real count of a TAUGHT class's members
+// (every "X is a kind of animal" fact), distinct from answerQuantifierRecall's
+// literal quantifier lookup. Placed ahead of it in runTurn: HOW_MANY_ARE_RE
+// reads "there" as a second noun and answers "I was never told a quantifier",
+// stealing the phrasing before a member count ever runs.
+const TAUGHT_CLASS_COUNT_RE = /^how\s+many\s+([a-z][\w-]*)\s*(.*)$/i;
+
+/** Count the taught members of a class named by a plain noun ("how many animals
+ *  are there" → every "X is a kind of animal"). Declines (null) for a real
+ *  code-countable class (answerCount owns it) or a class nothing was taught
+ *  about, so structural counts and the quantifier lane are unaffected. */
+async function answerTaughtClassCount(memoryDir, query, biasByBundle = {}, cache = null) {
+  if (!memoryDir) return null;
+  const m = String(query).trim().match(TAUGHT_CLASS_COUNT_RE);
+  if (!m) return null;
+  if (!DYNAMIC_TAIL_OK_RE.test((m[2] || "").trim())) return null;
+  const asked = m[1].toLowerCase();
+  if (COUNT_NOUNS[asked]) return null; // a real graph-countable class — answerCount owns it
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  const rows = await factRows(memoryDir, cache);
+  const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
+  const variants = factTermVariants(normFactTerm, asked);
+  const members = rankByBiasThenTrust(isa.filter((f) => variants.has(f.object)), biasByBundle);
+  if (!members.length) return null; // nothing taught under this class name — later lanes own it
+  // A member whose SUBJECT is itself a countable graph class ("every class is a
+  // component") is an asserted-vocabulary cardinality, not a member enumeration —
+  // countFromFacts counts the real class, so defer to it rather than tallying the
+  // one class-level fact.
+  if (members.some((f) => COUNT_NOUNS[String(f.subject).toLowerCase()])) return null;
+  return `${members.length} ${members.length === 1 ? asked.replace(/s$/, "") : asked}.`;
+}
+
+// "list all animals" / "list the animals" — enumerate a taught class's members,
+// with its OWN trigger rather than the "what is an animal" definition lane's
+// leftovers: at scale the definition lane fills its cap with forward corpus facts
+// before the reverse-membership listing ever shows, and the conversational
+// orientation lane claims the bare "list …" phrasing before factReadBack runs.
+const MEMBERSHIP_LIST_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][\w-]*)\s*(.*)$/i;
+
+/** List the taught members of a class named by a plain noun ("list all animals"
+ *  → every "X is a kind of animal"). Declines (null) for a code-countable class
+ *  or a class nothing was taught about; declines with a message for a real
+ *  restrictor tail rather than answering as if it weren't there. */
+async function answerMembershipList(memoryDir, query, biasByBundle = {}, cache = null) {
+  if (!memoryDir) return null;
+  const m = String(query).trim().match(MEMBERSHIP_LIST_RE);
+  if (!m) return null;
+  const asked = m[1].toLowerCase();
+  if (COUNT_NOUNS[asked]) return null; // a real graph-countable class — the code list lane owns it
+  const tail = (m[2] || "").trim();
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  const rows = await factRows(memoryDir, cache);
+  const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
+  const variants = factTermVariants(normFactTerm, asked);
+  const members = rankByBiasThenTrust(isa.filter((f) => variants.has(f.object)), biasByBundle);
+  if (!members.length) return null; // nothing taught under this class name — later lanes own it
+  if (!DYNAMIC_TAIL_OK_RE.test(tail)) {
+    return {
+      text: `I can list the ${asked}, but not the "${tail}" part of that question — `
+        + `so I won't answer as if you hadn't asked it. Ask "list ${asked}" for all of them.`,
+      miss: true,
+    };
+  }
+  const lines = members.map(renderFactLine);
+  const shown = lines.slice(0, FACT_ANSWER_CAP);
+  const rest = lines.slice(FACT_ANSWER_CAP);
+  const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+  return { text: shown.join("\n") + extra, ...(rest.length ? { pending: { items: rest, noun: asked } } : {}) };
 }
 
 /** `/stats`: a one-screen overview of the graph — class counts, relationship
@@ -2975,6 +3129,13 @@ const quantifiedHasSubject = (m) => (/^all$/i.test(m[1]) ? singularizeSurface(m[
 const quantifiedHasObject = (m) => (/^all$/i.test(m[1])
   ? m[3].replace(/[\w'-]+$/, (w) => singularizeSurface(w))
   : m[3]);
+/** The determiner-led possession teach ("the tower has 3 disks", "the robot has
+ *  2 arms", "my car has 4 wheels") — the closed has/have verb pins the split the
+ *  same way the universal quantifier pins QUANTIFIED_HAS_TEACH_RE's, so a leading
+ *  definite/possessive determiner needs no verb-position guessing. The subject is
+ *  the single noun between the determiner and the verb; a two-token subject stays
+ *  declined, like the preposition-pinned frame, because nothing names its head. */
+const DETERMINER_HAS_TEACH_RE = /^(?:the|an?|my|your|our|their|his|her|its)\s+([\w'-]+)\s+(?:has|have|had)\s+(.+?)[.!?]*$/i;
 /** Verbs owned by an earlier, more specific recognizer in this lane — is/are
  *  (class-membership/property, above) and owns/maintains (ownership, above).
  *  generalVerbTeach declines outright on these so it can never race a more
@@ -3142,10 +3303,15 @@ async function generalVerbTeach(payload) {
   // declines here exactly as it always has.
   if (GENERAL_VERB_DETERMINER_RE.test(subjectRaw)) {
     const quantHas = p.match(QUANTIFIED_HAS_TEACH_RE);
+    const detHas = !quantHas ? p.match(DETERMINER_HAS_TEACH_RE) : null;
     if (quantHas) {
       subjectRaw = quantifiedHasSubject(quantHas);
       verbRaw = "has";
       objectRaw = quantifiedHasObject(quantHas);
+    } else if (detHas) {
+      subjectRaw = detHas[1];
+      verbRaw = "has";
+      objectRaw = detHas[2];
     } else {
       const det = p.match(GENERAL_VERB_DETERMINER_TEACH_RE);
       if (!det) return null; // not a bare-name subject, and no preposition to pin the verb
@@ -4579,17 +4745,20 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // of THAT subject — the same word generalVerbTeach will store — and leave
     // every other sentence reading its first word exactly as before.
     const detLed = raw.match(GENERAL_VERB_DETERMINER_TEACH_RE);
-    const quantHasLed = detLed ? null : raw.match(QUANTIFIED_HAS_TEACH_RE);
+    const detHasLed = detLed ? null : raw.match(DETERMINER_HAS_TEACH_RE);
+    const quantHasLed = (detLed || detHasLed) ? null : raw.match(QUANTIFIED_HAS_TEACH_RE);
     const subjectWord = detLed ? detLed[1].split(/\s+/).pop()
-      : (quantHasLed ? quantifiedHasSubject(quantHasLed) : raw.match(/^([\w'-]+)/)?.[1]);
+      : (detHasLed ? detHasLed[1]
+        : (quantHasLed ? quantifiedHasSubject(quantHasLed) : raw.match(/^([\w'-]+)/)?.[1]));
     // The quantifier lead ("every … has …") is itself a strong declarative
     // signal, so it overrides the single-token POS gate: a noun that doubles
     // as a verb ("every overbid has a gouger" — wink tags "overbid" VERB)
-    // used to be a SILENT no-op and a later miss. NON_DECLARATIVE_OPENER_RE
-    // runs even for a quantifier lead — "every umm has a thing" isn't a real
-    // quantified sentence, just filler that happens to fit the shape.
+    // used to be a SILENT no-op and a later miss. A determiner-led possession
+    // ("the tower has 3 disks") pins the same way, so it gets the same override.
+    // NON_DECLARATIVE_OPENER_RE runs even for these leads — "every umm has a
+    // thing" isn't a real quantified sentence, just filler that fits the shape.
     if (subjectWord && !NON_DECLARATIVE_OPENER_RE.test(subjectWord)
-      && (quantHasLed || (await subjectIsNounOrPropn(subjectWord)))) {
+      && (quantHasLed || detHasLed || (await subjectIsNounOrPropn(subjectWord)))) {
       // A PLURAL explicit-capability surface ("wrens can hum") whose
       // SINGULAR is a grounded term stores under the singular first — the
       // spelling the grounding fact and every query-side variant fold use —
@@ -13427,6 +13596,46 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       note(trace, "goal: get a count of a memory-store kind (facts/utterances)");
       note(trace, "lane: answerMemoryCount — matched a MEMORY_COUNT_NOUNS entry, answered off the .tmct/memory graph header");
       return withLast(plainTurn(workingLine, memCount, { via: "count", focus }), "get a count of a memory-store kind");
+    }
+  }
+  // "list facts"/"list utterances"/"how many sessions are there" — enumerate the
+  // stored individuals answerMemoryCount only tallies, and reach the meta-classes
+  // (Session/Source/Rule) it skips. Placed here so ask()'s CODE-graph lanes never
+  // steal the phrasing; declines cleanly for a code-graph noun or a real restrictor.
+  if (memoryDir) {
+    const memClass = await answerMemoryClassQuery(memoryDir, workingLine);
+    if (memClass != null) {
+      const goal = "list or count a memory-store kind (facts/utterances/sessions/sources/rules)";
+      note(trace, `goal: ${goal}`);
+      note(trace, "lane: answerMemoryClassQuery — matched a memory-store class noun, answered off the .tmct/memory store's own individuals");
+      const turn = plainTurn(workingLine, memClass.text, { via: memClass.miss ? "miss" : "fact", miss: !!memClass.miss, focus });
+      if (memClass.pending) turn.detail = { traversal: null, matches: [], pending: memClass.pending };
+      return withLast(turn, goal);
+    }
+  }
+  // "how many animals are there" — count a taught class's members, ahead of the
+  // quantifier lane (which reads "there" as a second noun and answers "I was never
+  // told a quantifier" for the exact same phrasing).
+  if (memoryDir) {
+    const taughtCount = await answerTaughtClassCount(memoryDir, workingLine, biasByBundle, factRowsCache);
+    if (taughtCount != null) {
+      note(trace, 'goal: count the taught members of a class ("how many animals are there")');
+      note(trace, "lane: answerTaughtClassCount — matched a plain-noun count over taught isa-facts whose OBJECT is that class");
+      return withLast(plainTurn(workingLine, taughtCount, { via: "count", focus }), "count a taught class's members");
+    }
+  }
+  // "list all animals"/"list the animals" — enumerate a taught class's members
+  // from its own trigger, ahead of the conversational orientation lane that would
+  // otherwise claim the bare "list …" phrasing.
+  if (memoryDir) {
+    const memberList = await answerMembershipList(memoryDir, workingLine, biasByBundle, factRowsCache);
+    if (memberList != null) {
+      const goal = "list the taught members of a class";
+      note(trace, `goal: ${goal}`);
+      note(trace, "lane: answerMembershipList — matched a bare 'list <noun>' over taught isa-facts whose OBJECT is that class");
+      const turn = plainTurn(workingLine, memberList.text, { via: memberList.miss ? "miss" : "fact", miss: !!memberList.miss, focus });
+      if (memberList.pending) turn.detail = { traversal: null, matches: [], pending: memberList.pending };
+      return withLast(turn, goal);
     }
   }
   // "how many Xs are Ys" — a taught-quantifier RECALL, checked explicitly

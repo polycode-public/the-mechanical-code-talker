@@ -836,7 +836,7 @@ ${THEME_TOKENS_CSS}
     addSystemLine("tmct \\u2014 the real engine, running in this page \\u2014 " + statsSummaryLine(stats)
       + "." + restoredNote + " Ask it something, or teach it a fact of your own.");
     await renderStatsPanel(stats);
-    inputEl.placeholder = seedPayload ? 'try "what is a dog"' : window.tmctChat.vocabExampleHint(false);
+    inputEl.placeholder = seedPayload ? 'try "what is a dog" or "list facts"' : window.tmctChat.vocabExampleHint(false);
     renderStatus();
     setBusy(false);
     inputEl.focus();
