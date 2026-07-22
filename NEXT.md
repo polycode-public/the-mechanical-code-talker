@@ -28,6 +28,12 @@ Each row is one task; the workstream that lands it deletes its row in the same c
 - [ ] e2e split: per-push browser/light suite vs `e2e:heavy` (build-artefacts, seed-scale) on `rules:changes` + schedule
 - [ ] ledger-build assertions fold into build-artefacts' single demo:build
 
+### WS-research — research lane over Simple English Wikipedia (fable)
+- [ ] engine: `research <topic>` lane — Simple English Wikipedia at depth 0, ingest as graph facts (lazy ontology/lexicon load), linked-node fan-out at depth 1; limits from the chat request else config defaults; per-search progress reported as it lands
+- [ ] fair use: throttle/backoff/user-agent per Wikipedia etiquette; optimize up to (never past) that point
+- [ ] chat.html: "research: [topic]" entry with auto play/pause; ticks through searches as if the user asked each
+- [ ] ledger.html: same research feature in its dock
+
 ### Coordinator
 - [ ] integration: `demo:build`, e2e sweep review, full `npm test`, main commit; `smoke:deploy` after operator-gated publish
 
