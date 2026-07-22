@@ -16,11 +16,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Open items
 
-### WS-code-ide (code.html IDE shell)
-
-- [ ] Tests: e2e pages-code run green against the new shell (no-body-scroll, seed loading,
-      graph+knowledge dual answering, graph-only degrade).
-
 The prior board (33 items, extended live to 35) cleared on 2026-07-22
 across the 2.10.x releases; `git log` from 2.10.0 to the current release holds the delivery
 record, and the filler-clause widening and planner-counterfactual design passes still live in

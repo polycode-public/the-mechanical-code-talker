@@ -1,7 +1,10 @@
-// The standalone code-explorer page in a real browser: it loads clean, the
-// ledger rows and the hint rail render from the demo code graph embedded in
-// the page, and clicking a hint (or submitting its text through the chat
-// form) reaches a real dock answer over the live browser bundle. The
+// The standalone code-explorer page in a real browser: the IDE shell loads
+// clean and fills the viewport without page scroll, the explorer ledger and
+// hint rail render from the demo code graph embedded in the page, clicking a
+// hint (or submitting its text through the chat form) reaches a real answer
+// over the live browser bundle, and the chat's general-knowledge seed loads
+// lazily — answering "what is a dog" beside the graph lanes — or degrades to
+// graph-only with a status note when the seed asset is unavailable. The
 // embedded-in-the-homepage-card path is pages-home.test.mjs's job; this file
 // drives public/code.html directly, mirroring pages-ledger.test.mjs.
 import test, { after, before } from "node:test";
@@ -30,15 +33,17 @@ after(async () => {
 });
 
 /** Open code.html with third-party hosts blocked, same posture as every
- *  sibling page test in this suite. Returns the page plus what it logged and
- *  what it failed to fetch. */
-async function openCodePage() {
+ *  sibling page test in this suite. `blockSeed` also aborts the same-origin
+ *  chat-seed.json fetch, for the graph-only degrade path. Returns the page
+ *  plus what it logged and what it failed to fetch. */
+async function openCodePage({ blockSeed = false } = {}) {
   const context = await browser.newContext();
   const page = await context.newPage();
   const consoleErrors = [];
   const failedRequests = [];
 
   await page.route("**/*", (route) => {
+    if (blockSeed && route.request().url().includes("chat-seed.json")) return route.abort();
     if (route.request().url().startsWith(server.origin)) return route.continue();
     return route.abort();
   });
@@ -116,8 +121,8 @@ test("clicking a hint reaches a real dock answer over the live bundle", async ()
       "the clicked hint's own text is echoed as the visitor's turn",
     );
     const answer = await page.locator("#chat-log .turn-tmct .said").first().innerText();
-    assert.ok(answer.length > 0, "the dock returns a real answer, not a blank turn");
-    assert.doesNotMatch(answer, /the live dock is not loaded on this page/, "the live bundle answered, not the static-view fallback");
+    assert.ok(answer.length > 0, "the chat returns a real answer, not a blank turn");
+    assert.doesNotMatch(answer, /the live chat is not loaded on this page/, "the live bundle answered, not the static-view fallback");
   } finally {
     await context.close();
   }
@@ -135,6 +140,73 @@ test("submitting a hint's text through the chat form reaches the same live answe
     await page.locator("#chat-log .turn-tmct").first().waitFor({ timeout: READY_TIMEOUT_MS });
     const answer = await page.locator("#chat-log .turn-tmct .said").first().innerText();
     assert.ok(answer.length > 0, "a manually submitted question also reaches a real answer");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the shell fills the viewport: the document itself never scrolls, in either direction", async () => {
+  const { context, page } = await openCodePage();
+  try {
+    await page.locator("#ledger .row").first().waitFor({ state: "visible" });
+    const overflow = await page.evaluate(() => {
+      const doc = document.documentElement;
+      return {
+        scrollWidth: doc.scrollWidth, clientWidth: doc.clientWidth,
+        scrollHeight: doc.scrollHeight, clientHeight: doc.clientHeight,
+      };
+    });
+    assert.ok(overflow.scrollWidth <= overflow.clientWidth + 1, "no sideways page scroll");
+    assert.ok(overflow.scrollHeight <= overflow.clientHeight + 1, "no vertical page scroll — panels scroll internally");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the general-knowledge seed loads with a visible status, and one session answers a seeded question beside a graph question", async () => {
+  const { context, page } = await openCodePage();
+  try {
+    await page.waitForFunction(
+      () => /general knowledge: \d+ facts/.test(document.getElementById("seed-status")?.textContent || ""),
+      null,
+      { timeout: 60_000 },
+    );
+
+    await page.fill("#chat-input", "what is a dog");
+    await page.press("#chat-input", "Enter");
+    await page.locator("#chat-log .turn-tmct").first().waitFor({ timeout: 60_000 });
+    const seededAnswer = await page.locator("#chat-log .turn-tmct .said").first().innerText();
+    assert.match(seededAnswer, /dog is a kind of animal/, "a question the code graph cannot ground answers from the seed");
+
+    const hintText = await page.locator(".hint").first().getAttribute("data-q");
+    await page.locator(".hint").first().click();
+    await page.waitForFunction(
+      () => document.querySelectorAll("#chat-log .turn-tmct").length >= 2,
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+    const graphAnswer = await page.locator("#chat-log .turn-tmct .said").nth(1).innerText();
+    assert.ok(graphAnswer.length > 0, `the same session still answers the graph question "${hintText}"`);
+    assert.doesNotMatch(graphAnswer, /this repo has no code graph/, "the code graph stayed registered beside the seed");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a missing seed degrades to graph-only chat with a status note, never a broken page", async () => {
+  const { context, page } = await openCodePage({ blockSeed: true });
+  try {
+    await page.waitForFunction(
+      () => /graph-only/.test(document.getElementById("seed-status")?.textContent || ""),
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+
+    await page.locator(".hint").first().waitFor({ state: "visible" });
+    await page.locator(".hint").first().click();
+    await page.locator("#chat-log .turn-tmct").first().waitFor({ timeout: READY_TIMEOUT_MS });
+    const answer = await page.locator("#chat-log .turn-tmct .said").first().innerText();
+    assert.ok(answer.length > 0, "graph questions still answer without the seed");
   } finally {
     await context.close();
   }
