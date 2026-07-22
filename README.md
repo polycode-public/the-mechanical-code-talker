@@ -170,7 +170,7 @@ Electron is a dev-only dependency and never ships in the npm package. Because
 `.npmrc` sets `ignore-scripts=true`, installing it does not fetch the runtime
 binary; fetch it once, then build and launch:
 
-```bash
+```bash skip=network
 npm i -D electron
 node node_modules/electron/install.js   # fetch the Electron binary (ignore-scripts skips this)
 npm run build:electron                  # render electron/renderer/ from the demo graph
