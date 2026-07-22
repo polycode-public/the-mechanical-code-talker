@@ -267,7 +267,7 @@ test("the legend lists every class the world actually uses, each with a real ico
   try {
     await enterEditMode(page);
     const labels = await page.locator("#legendList .sprite-label").allTextContents();
-    assert.deepEqual(new Set(labels), new Set(["adventurer", "person", "furniture", "container", "portable", "room"]));
+    assert.deepEqual(new Set(labels), new Set(["adventurer", "person", "furniture", "container", "portable", "room", "book", "pan"]));
     assert.equal(await page.locator("#legendList .sprite-card svg").count(), labels.length, "every legend entry actually renders an svg icon");
     assert.deepEqual(consoleErrors, []);
   } finally {
