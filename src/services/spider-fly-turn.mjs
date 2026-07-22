@@ -381,6 +381,68 @@ async function runToldFactTurn(match, { planHolder, memoryDir, cache, gameConfig
   });
 }
 
+// ---- in-game orientation asides ---------------------------------------------
+//
+// "where is the spider", "where am I", "what can I do", "what is the goal" —
+// while the board is live these must answer from the board, not fall through to
+// the code-graph lanes, where "where is the spider" reads "spider" as a module
+// name and "what is the goal" answers from corpus vocabulary. There is no
+// player piece here (both agents move on their own), so "where am I" reports
+// the watcher stance and where the pieces stand.
+
+const SF_WHERE_AGENT_RE = /^where(?:'s|\s+is|\s+are)\s+(?:the\s+)?(spider|fly)(?:-\d+)?(?:\s+now)?[?.!\s]*$/i;
+const SF_WHERE_AM_I_RE = /^where\s+am\s+i(?:\s+now)?[?.!\s]*$/i;
+const SF_OPTIONS_RE = /^(?:what\s+can\s+i\s+do(?:\s+(?:here|now))?|what\s+are\s+my\s+options|what\s+(?:should|do)\s+i\s+do(?:\s+(?:here|now))?|what\s+now)[?.!\s]*$/i;
+const SF_GOAL_RE = /^(?:what(?:'s|\s+is)\s+(?:the\s+|my\s+)?(?:goal|objective|point|quest|aim)|what\s+are\s+they\s+(?:doing|trying\s+to\s+do)|what\s+am\s+i\s+(?:trying\s+to\s+do|(?:supposed|meant)\s+to\s+do))[?.!\s]*$/i;
+
+const WATCHER_STANCE = 'you have no piece here — both agents move on their own. Watch, say "tick" to advance, or address one, e.g. "@spider the fly is east".';
+
+const positionsOfKind = (kind, state) =>
+  liveIdsOfKind(kind, state).map((id) => `${id} at ${state.placements.get(id).cell}`);
+
+async function spiderFlyContextAnswer(line, { memoryDir }) {
+  const l = String(line).trim();
+  const whereAgent = l.match(SF_WHERE_AGENT_RE);
+  const asksWhereMe = SF_WHERE_AM_I_RE.test(l);
+  const asksOptions = SF_OPTIONS_RE.test(l);
+  const asksGoal = SF_GOAL_RE.test(l);
+  if (!whereAgent && !asksWhereMe && !asksOptions && !asksGoal) return null;
+  let state;
+  try { state = foldSpiderFlyState(readFactRows(await loadMemory(memoryDir))); } catch { return null; }
+
+  if (whereAgent) {
+    const kind = whereAgent[1].toLowerCase();
+    const positions = positionsOfKind(kind, state);
+    return {
+      text: positions.length ? `${positions.join("; ")}.` : `there's no live ${kind} on the board right now.`,
+      lane: "game-answer",
+      note: `SPIDER-FLY — where-aside: ${kind} positions from the current board fold`,
+      goal: `find the ${kind}`,
+      miss: !positions.length,
+    };
+  }
+
+  if (asksWhereMe) {
+    return { text: WATCHER_STANCE, lane: "game-inform", note: "SPIDER-FLY — where-am-I aside: the watcher stance (no player piece)", goal: "understand your role" };
+  }
+
+  if (asksOptions) {
+    return {
+      text: 'say "tick" to advance a turn, or address an agent — e.g. "@spider the fly is east" or "@spider the fly is at cell-7-3" to plant a belief. Say "stop watching" to end.',
+      lane: "game-inform",
+      note: "SPIDER-FLY — options aside: the live game's own commands",
+      goal: "see what you can do",
+    };
+  }
+
+  return {
+    text: "the spider hunts the fly; the fly tries to stay clear. You watch it play out — plant a belief to nudge one, or say \"tick\" to advance.",
+    lane: "game-inform",
+    note: "SPIDER-FLY — goal aside: the game's predator/prey objective",
+    goal: "understand the game",
+  };
+}
+
 // ---- the lane ------------------------------------------------------------
 
 /**
@@ -467,6 +529,9 @@ export async function spiderFlyTurn(line, { planHolder, memoryDir, env, cache = 
   if (SPIDER_FLY_TICK_RE.test(line)) {
     return runTickAndRender({ planHolder, memoryDir, cache, toldFacts: [], gameConfig });
   }
+
+  const contextAside = await spiderFlyContextAnswer(line, { memoryDir });
+  if (contextAside) return contextAside;
 
   return null; // an unaddressed aside — the ordinary lanes answer, board untouched
 }

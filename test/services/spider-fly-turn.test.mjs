@@ -52,6 +52,31 @@ test("spiderFlyTurn defaults to DEFAULT_GAME_CONFIG when no gameConfig is passed
   }
 });
 
+test("a live board answers in-game orientation asides from the board, never falling through to the code lanes", async () => {
+  const memoryDir = await mkdtemp(join(tmpdir(), "tmct-spider-fly-turn-asides-"));
+  try {
+    const planHolder = { state: null };
+    await spiderFlyTurn("watch the spider and the fly", { planHolder, memoryDir, env: {} });
+
+    const ask = (line) => spiderFlyTurn(line, { planHolder, memoryDir, env: {} });
+
+    const wherePiece = await ask("where is the spider?");
+    assert.match(wherePiece.text, /spider-1 at cell-\d+-\d+/, "reads the spider's cell from the board fold");
+
+    const whereMe = await ask("where am I?");
+    assert.match(whereMe.text, /no piece here/i, "explains the watcher stance rather than reading 'I' as a module");
+
+    const options = await ask("what can I do?");
+    assert.match(options.text, /tick/i);
+    assert.match(options.text, /@spider/i);
+
+    const goal = await ask("what is the goal?");
+    assert.match(goal.text, /spider hunts the fly/i, "describes the predator/prey objective, not corpus vocabulary about 'goal'");
+  } finally {
+    await rm(memoryDir, { recursive: true, force: true });
+  }
+});
+
 // ---- oneStepDirectionBetween -------------------------------------------
 
 test("oneStepDirectionBetween names the compass direction for an exact one-cell cardinal step, and null for anything else", () => {

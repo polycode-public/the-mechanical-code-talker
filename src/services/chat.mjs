@@ -2499,6 +2499,10 @@ const GOAL_CONJUNCT_RE = new RegExp(
 // three only REPORT.
 const PLAN_WHAT_NEXT_RE = /^(?:what(?:'s|\s+is)?|whats)\s+the\s+next\s+move[?.!\s]*$/i;
 const PLAN_MOVE_COUNT_RE = /^how\s+many\s+moves(?:\s+(?:are\s+(?:there|left)|remain(?:ing)?|left|to\s+go|in\s+the\s+plan|total))?[?.!\s]*$/i;
+// "what is the goal" while a goal is held — a read-back off planState, so a
+// mid-plan aside never falls to the child-pack lane and answers from corpus
+// vocabulary about the word "goal".
+const PLAN_GOAL_READBACK_RE = /^(?:what(?:'s|\s+is)\s+(?:the\s+|my\s+)?goal|remind\s+me\s+(?:of\s+|what\s+)?the\s+goal(?:\s+is)?|what\s+am\s+i\s+solving\s+for|what\s+goal(?:'s|\s+is)\s+(?:set|held))[?.!\s]*$/i;
 // "is that really the minimum number of moves?" / "could there be a shorter
 // plan than that?" — a confirmation of the planner's own optimality claim,
 // not a request to count anything (without this it fell to the unrelated
@@ -5721,7 +5725,37 @@ const FACT_PREDICATE_PHRASES = {
   "mgx:similarTo": "is similar to",
   "mgx:relatedTo": "is related to",
   "mgx:symbolOf": "is a symbol of",
+  // A loaded adventure world's placement predicates, so a describe read-back of
+  // a visible prop reads as English ("lamp is in the study") instead of the
+  // mechanical -s fold garbling them ("lamp locateds in study"). The world's
+  // SECRET/mechanics predicates (a hidden object's location, the objective
+  // marker, the lock/open/NPC internals) are kept out of the describe lane
+  // entirely by WORLD_INTERNAL_PREDICATES below, so they never render at all.
+  "mgx:currently-in": "is in",
+  "mgx:located-in": "is in",
+  "mgx:fixed-in": "is fixed in",
+  "mgx:stands-locked-in": "stands locked in",
+  "mgx:works-in": "works in",
 };
+
+/** The world-mechanics predicates the generic describe read-back must never
+ *  surface: a hidden object's location and the objective marker spoil the
+ *  puzzle, and the lock/container/open/NPC-schedule flags are datatype internals
+ *  the adventure's own readers answer in-game. Mirrors adventure.mjs's own
+ *  VIEW_EXCLUDED_PREDICATES — the same discipline the room-look digest uses. */
+const WORLD_INTERNAL_PREDICATES = new Set([
+  "mgx:hidden-in", "mgx:is-objective", "mgx:unlocks-with",
+  "mgx:is-npc", "mgx:acts-on-turn", "mgx:acts-toward",
+  "mgx:is-container", "mgx:is-open",
+]);
+
+/** The world PLACEMENT predicates carry curated phrases above so they render as
+ *  English, but they must stay OUT of the query-marker families derived from
+ *  FACT_PREDICATE_PHRASES — "what is in the study" is a members-of-class query,
+ *  not a reverse placement lookup, and "is in" is far too broad an anchor. */
+const WORLD_PLACEMENT_PREDICATES = new Set([
+  "mgx:currently-in", "mgx:located-in", "mgx:fixed-in", "mgx:stands-locked-in", "mgx:works-in",
+]);
 
 /** The MECHANICAL fallback for a predicate this table has no curated entry
  *  for — specifically generalVerbTeach's minted "mgx:<lemma>" predicates
@@ -5812,6 +5846,7 @@ function relationRoleWord(predicate) {
 // (no curated second table) — the single-letter "a" is excluded, too short
 // to anchor on without risking eating a genuine multi-word subject.
 const TRAILING_PREDICATE_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
+  .filter(([predicate]) => !WORLD_PLACEMENT_PREDICATES.has(predicate))
   .map(([predicate, phrase]) => {
     const m = /^(?:is|are)\s+(.+)$/i.exec(phrase);
     return m ? { predicate, marker: m[1].trim().toLowerCase() } : null;
@@ -6577,7 +6612,7 @@ const REVERSE_PREDICATE_EXCLUDE = new Set([
   "mgx:ownedBy", "owl:disjointWith", "mgx:hasProperty", "mgx:receivesAction",
 ]);
 const REVERSE_PREDICATE_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
-  .filter(([predicate]) => !REVERSE_PREDICATE_EXCLUDE.has(predicate))
+  .filter(([predicate]) => !REVERSE_PREDICATE_EXCLUDE.has(predicate) && !WORLD_PLACEMENT_PREDICATES.has(predicate))
   .map(([predicate, phrase]) => ({
     predicate,
     re: new RegExp(`^what\\s+${escapeRegex(phrase)}\\s+(.+?)[?.!\\s]*$`, "i"),
@@ -6603,7 +6638,7 @@ const FORWARD_YESNO_EXCLUDE = new Set([
   "mgx:ownedBy",
 ]);
 const FORWARD_YESNO_MARKERS = Object.entries(FACT_PREDICATE_PHRASES)
-  .filter(([predicate]) => !FORWARD_YESNO_EXCLUDE.has(predicate))
+  .filter(([predicate]) => !FORWARD_YESNO_EXCLUDE.has(predicate) && !WORLD_PLACEMENT_PREDICATES.has(predicate))
   .map(([predicate, phrase]) => {
     let re;
     if (phrase === "can be") {
@@ -6926,8 +6961,11 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const variants = factTermVariants(normFactTerm, subject);
     // factRows (trust+sourceIds-bearing), not the plain memoryFacts shape — the
     // bias-weighted ranking below needs each hit's sourceIds to resolve which
-    // bundle it came from (memory/bias.mjs's biasForRow).
-    const subjectHits = (await factRows(memoryDir, cache)).filter((f) => variants.has(f.subject));
+    // bundle it came from (memory/bias.mjs's biasForRow). A live world's secret
+    // and mechanics predicates are dropped so "what is the letter" never reads
+    // back where it's hidden or that it's the objective (WORLD_INTERNAL_PREDICATES).
+    const subjectHits = (await factRows(memoryDir, cache))
+      .filter((f) => variants.has(f.subject) && !WORLD_INTERNAL_PREDICATES.has(f.predicate));
     let hits = predicate ? subjectHits.filter((f) => f.predicate === predicate) : subjectHits;
     if (!hits.length) {
       // The subject itself is known, but not under this specific relation —
@@ -7442,6 +7480,12 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
         hits = rows.filter((f) => overlaps(f.subject) || overlaps(f.object));
       }
     }
+    // A live adventure world's mechanics never leak through the describe lane:
+    // "what is the letter" must not read back where it's hidden or that it's the
+    // objective, and those datatype internals render as garbled non-English
+    // besides. The adventure's own where/openness readers answer the legitimate
+    // in-game questions from the world fold.
+    hits = hits.filter((f) => !WORLD_INTERNAL_PREDICATES.has(f.predicate));
     // A genuinely empty result here is a real miss: "what do you know about
     // the last commit" needs a TEACH-OFFER, not a bare wall — added as a LATE
     // runTurn-level addition, below, alongside the sibling "what is X" offer,
@@ -10566,7 +10610,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
   if (wantsLegal) {
     let moves;
     try {
-      moves = movesFromRules(state, domain);
+      moves = movesFromRules(state, domain, { scope: "taught" });
     } catch (err) {
       if (err instanceof PlanBudgetError) {
         return { text: `too many possible moves to enumerate here (${err.message}) — narrow the classes involved.`, via: "plan", deduced: "list the legal moves (budget exceeded)", note: "plan lane — budget decline" };
@@ -10656,7 +10700,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
   }
   let isGoal;
   try {
-    isGoal = compileGoal(goals, domain);
+    isGoal = compileGoal(goals, domain, { scope: "taught" });
   } catch (err) {
     return { text: `I can't compile that goal: ${err?.message ?? err}`, via: "plan", deduced: "plan a move sequence (uncompilable goal)", note: "plan lane — goal compile decline" };
   }
@@ -10664,7 +10708,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
   const maxDepth = gameConfig?.planning?.maxDepth ?? DEFAULT_GAME_CONFIG.planning.maxDepth;
   let found;
   try {
-    found = findActionPath(state, isGoal, (s) => movesFromRules(s, domain), { maxDepth, stateKey: stateKeyFor });
+    found = findActionPath(state, isGoal, (s) => movesFromRules(s, domain, { scope: "taught" }), { maxDepth, stateKey: stateKeyFor });
   } catch (err) {
     if (err instanceof PlanBudgetError) {
       return { text: `the search space is too large (${err.message}) — narrow the classes involved.`, via: "plan", deduced: "plan a move sequence (budget exceeded)", note: "plan lane — budget decline" };
@@ -10765,7 +10809,7 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
   const factRows = readFactRows(payload);
   const domain = compileDomain(factRows, readRuleRows(payload));
   const finalState = stateFromFacts(factRows, domain);
-  const holds = compileGoal(ps.goals, domain)(finalState);
+  const holds = compileGoal(ps.goals, domain, { scope: "taught" })(finalState);
   planHolder.state = { ...planHolder.state, done: true };
   return {
     text: holds
@@ -10822,6 +10866,18 @@ async function planFollowUpAnswer(query, { memoryDir, planHolder, pendingPager =
     };
   }
 
+  if (PLAN_GOAL_READBACK_RE.test(q)) {
+    if (!ps || !(ps.goalTexts?.length || ps.goals?.length)) return null;
+    const goalText = ps.goalTexts?.length ? ps.goalTexts.join("; ") : "the goal you set";
+    const status = activePlan
+      ? ` A plan is ready — ${ps.actions.length} move${ps.actions.length === 1 ? "" : "s"}; say "next" to step through it.`
+      : ' Say "solve it" when the board is taught.';
+    return {
+      text: `the goal is that ${goalText}.${status}`,
+      deduced: "read back the held goal",
+      note: "PLAN FOLLOW-UP — goal read-back from the held planState",
+    };
+  }
   if (PLAN_WHAT_NEXT_RE.test(q)) {
     if (!activePlan) return null;
     if (ps.done || ps.cursor >= ps.actions.length) {
