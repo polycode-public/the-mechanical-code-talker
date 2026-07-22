@@ -31,6 +31,7 @@
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
 import { provBucketFor } from "./ledger-viz.mjs";
 import { sessionLogTimeOfDay, sessionLogHeaderMarkdown, sessionLogTurnMarkdown } from "./session-log-format.mjs";
+import { bandLabelFor, statsSummaryLine, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
 
 const DEFAULT_TITLE = "the-mechanical-code-talker — talk to it";
 
@@ -234,25 +235,25 @@ ${THEME_TOKENS_CSS}
   .composer-inner button[type="submit"] { width: 2.3rem; height: 2.3rem; border-radius: 50%; background: var(--ink); color: var(--bg); display: flex; align-items: center; justify-content: center; font-size: 1rem; flex: 0 0 auto; }
   .composer-inner button[type="submit"]:disabled { opacity: .4; cursor: default; }
 
-  /* the live-Wikipedia opt-in row, under the input: a small pill switch in
-     the statusline's own mono idiom — quiet, off by default. The checkbox
-     itself is visually hidden but stays focusable, so the switch keeps
-     keyboard/screen-reader behaviour for free. */
-  .composer-tools { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .45rem; display: flex; align-items: center; }
-  .composer-tools .liveLabel { display: inline-flex; align-items: center; gap: .45rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); cursor: pointer; }
-  .composer-tools input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-  .toggle-track { position: relative; width: 26px; height: 14px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 99px; background: var(--card); flex: 0 0 auto; transition: background .15s ease, border-color .15s ease; }
-  .toggle-knob { position: absolute; top: 1px; left: 1px; width: 10px; height: 10px; border-radius: 50%; background: var(--muted); transition: transform .15s ease; }
-  #liveToggle:checked ~ .toggle-track { background: var(--corpus); border-color: var(--corpus); }
-  #liveToggle:checked ~ .toggle-track .toggle-knob { transform: translateX(12px); background: var(--bg); }
-  #liveToggle:focus-visible ~ .toggle-track { outline: 2px solid var(--ink); outline-offset: 2px; }
+  /* the wikipedia-mode row, under the input: a plain radio group (off / on a
+     miss / always) plus the synthesis-budget slider, both in the
+     statusline's own quiet mono idiom. "supplement" (typed /wiki supplement
+     only) has no radio of its own — every radio clears when that mode is
+     active, and the statusline names it instead. */
+  .composer-wiki { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .4rem; display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
+  fieldset.wikiMode { border: none; margin: 0; padding: 0; display: inline-flex; align-items: center; gap: .7rem; }
+  fieldset.wikiMode legend { padding: 0; margin-right: .15rem; font: inherit; color: inherit; }
+  fieldset.wikiMode label { display: inline-flex; align-items: center; gap: .28rem; cursor: pointer; white-space: nowrap; }
+  fieldset.wikiMode input[type="radio"] { margin: 0; accent-color: var(--corpus); }
+  .synthRow { display: inline-flex; align-items: center; gap: .5rem; white-space: nowrap; }
+  .synthRow input[type="range"] { width: 88px; accent-color: var(--corpus); }
 
   .statusline { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .6rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
 
-  /* the composer's small utility row — right-aligned mono controls in the
-     statusline's own idiom, for anything that acts on the conversation as a
-     whole (export, print) rather than on one turn. */
-  .composer-tools { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .35rem; display: flex; justify-content: flex-end; align-items: center; gap: .5rem; }
+  /* the composer's small utility row — right-aligned mono controls, for
+     anything that acts on the conversation as a whole (export, print, reset)
+     rather than on one turn. */
+  .composer-tools { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .35rem; display: flex; justify-content: flex-end; align-items: center; gap: .5rem; flex-wrap: wrap; }
   .tool-btn { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .03em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .16rem .55rem; background: var(--card); }
   .tool-btn:hover { color: var(--ink); }
 
@@ -316,20 +317,25 @@ ${THEME_TOKENS_CSS}
           placeholder="loading the engine…" aria-label="Ask tmct something" disabled>
         <button type="submit" id="composerSend" aria-label="Send" disabled>&#8594;</button>
       </div>
-      <div class="composer-tools">
-        <label class="liveLabel" title="Off by default. When on, a question nothing local can answer also asks en.wikipedia.org — two small requests per lookup, and the answer is cited (CC BY-SA). Type /wiki supplement to also add a cited Wikipedia read-out under every grounded answer.">
-          <input type="checkbox" id="liveToggle" role="switch" aria-label="ask Wikipedia when I don't know">
-          <span class="toggle-track" aria-hidden="true"><span class="toggle-knob"></span></span>
-          <span>ask Wikipedia when I don&#8217;t know</span>
+      <div class="composer-wiki">
+        <fieldset class="wikiMode" id="wikiMode" title="Off by default. &quot;when I don't know&quot;: a question nothing local can answer also asks en.wikipedia.org — two small requests per lookup, cited (CC BY-SA). &quot;always&quot;: every grounded answer also gets a cited Wikipedia read-out. Type /wiki supplement for that same read-out on grounded answers only, without switching this to always.">
+          <legend>ask wikipedia</legend>
+          <label><input type="radio" name="wikiMode" id="wikiOff" value="off" checked> off</label>
+          <label><input type="radio" name="wikiMode" id="wikiMiss" value="miss"> when I don&#8217;t know</label>
+          <label><input type="radio" name="wikiMode" id="wikiAlways" value="always"> always</label>
+        </fieldset>
+        <label class="synthRow" for="synthSlider" title="How many facts to work out and store, entailed, after each Wikipedia-sourced load. 0 stores the article's own stated facts only, with no entailment pass.">
+          synthesize from wikipedia: <span id="synthValue" class="mono">12</span>
+          <input type="range" id="synthSlider" min="0" max="24" step="4" value="12">
         </label>
-        <span class="tool-cluster">
-          <button type="button" id="ingestFile" class="tool-btn" title="load a .txt/.md file and teach every fact it recognizes into this session">ingest file</button>
-          <input type="file" id="ingestInput" accept=".txt,.md,text/plain,text/markdown" hidden>
-          <button type="button" id="exportMd" class="tool-btn" title="download this conversation as Markdown">export .md</button>
-          <button type="button" id="exportFacts" class="tool-btn" title="download this session's facts as JSONL (the tmct extract shape, provenance included)">export facts</button>
-          <button type="button" id="printChat" class="tool-btn" title="print the whole conversation">print</button>
-          <button type="button" id="reinitStore" class="tool-btn" title="drop everything saved on this device and reload from the shipped seed">reset to seed</button>
-        </span>
+      </div>
+      <div class="composer-tools">
+        <button type="button" id="ingestFile" class="tool-btn" title="load a .txt/.md file and teach every fact it recognizes into this session">ingest file</button>
+        <input type="file" id="ingestInput" accept=".txt,.md,text/plain,text/markdown" hidden>
+        <button type="button" id="exportMd" class="tool-btn" title="download this conversation as Markdown">export .md</button>
+        <button type="button" id="exportFacts" class="tool-btn" title="download this session's facts as JSONL (the tmct extract shape, provenance included)">export facts</button>
+        <button type="button" id="printChat" class="tool-btn" title="print the whole conversation">print</button>
+        <button type="button" id="reinitStore" class="tool-btn" title="drop everything saved on this device and reload from the shipped seed">reset to seed</button>
       </div>
     </form>
     <div class="statusline" id="status">loading the engine&hellip;</div>
@@ -348,6 +354,10 @@ ${THEME_TOKENS_CSS}
   const sessionLogHeaderMarkdown = ${sessionLogHeaderMarkdown.toString()};
   const sessionLogTurnMarkdown = ${sessionLogTurnMarkdown.toString()};
   const transcriptMarkdown = ${transcriptMarkdown.toString()};
+  const bandLabelFor = ${bandLabelFor.toString()};
+  const statsSummaryLine = ${statsSummaryLine.toString()};
+  const fetchWithProgress = ${fetchWithProgress.toString()};
+  const renderStatsPanelInto = ${renderStatsPanelInto.toString()};
   const el = (id) => document.getElementById(id);
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
@@ -358,20 +368,54 @@ ${THEME_TOKENS_CSS}
   const sendBtn = el("composerSend");
   const statusEl = el("status");
   const statsPanelEl = el("statsPanel");
-  const liveToggleEl = el("liveToggle");
+  const wikiModeFieldset = el("wikiMode");
+  const wikiModeRadios = Array.prototype.slice.call(wikiModeFieldset.querySelectorAll('input[type="radio"]'));
+  const synthSliderEl = el("synthSlider");
+  const synthValueEl = el("synthValue");
 
-  // The live-Wikipedia preference: "on" or absent. try/caught throughout —
-  // private-mode storage that throws must never break the page, it just
-  // forgets the preference between visits.
-  const LIVE_PREF_KEY = "tmct.chat.liveWikipedia";
-  function readLivePref() {
-    try { return localStorage.getItem(LIVE_PREF_KEY) === "on"; } catch { return false; }
-  }
-  function writeLivePref(on) {
+  // The wikipedia mode: "off" | "miss" (the radio's own value for what the
+  // session calls plain true, a rescue on a clean miss) | "always". "supplement"
+  // (typed /wiki supplement only) never lands here — a turn that sets it
+  // clears every radio instead, read back off the session's own getter.
+  // try/caught throughout — private-mode storage that throws must never
+  // break the page, it just forgets the preference between visits.
+  const WIKI_MODE_KEY = "tmct.chat.wikiMode";
+  const LEGACY_LIVE_PREF_KEY = "tmct.chat.liveWikipedia";
+  function readWikiMode() {
     try {
-      if (on) localStorage.setItem(LIVE_PREF_KEY, "on");
-      else localStorage.removeItem(LIVE_PREF_KEY);
-    } catch { /* private mode — the toggle still works this visit */ }
+      const stored = localStorage.getItem(WIKI_MODE_KEY);
+      if (stored === "off" || stored === "miss" || stored === "always") return stored;
+      if (localStorage.getItem(LEGACY_LIVE_PREF_KEY) === "on") return "miss";
+    } catch { /* private mode — starts at the default this visit */ }
+    return "off";
+  }
+  function writeWikiMode(mode) {
+    try {
+      localStorage.setItem(WIKI_MODE_KEY, mode);
+      localStorage.removeItem(LEGACY_LIVE_PREF_KEY);
+    } catch { /* private mode — the choice still works this visit */ }
+  }
+  const liveReferenceForMode = (mode) => (mode === "always" ? "always" : mode === "miss");
+  function setWikiModeRadios(mode) {
+    for (const radio of wikiModeRadios) radio.checked = radio.value === mode;
+  }
+  function checkedWikiMode() {
+    const checked = wikiModeRadios.find((r) => r.checked);
+    return checked ? checked.value : "off";
+  }
+
+  // The synthesis budget: how many facts an auto-synthesis pass may add,
+  // entailed, after each Wikipedia-sourced load. 0 disables it.
+  const SYNTH_BUDGET_KEY = "tmct.chat.synthBudget";
+  function readSynthBudget() {
+    try {
+      const n = Number(localStorage.getItem(SYNTH_BUDGET_KEY));
+      if (Number.isFinite(n) && n >= 0 && n <= 24) return n;
+    } catch { /* private mode — starts at the default this visit */ }
+    return 12;
+  }
+  function writeSynthBudget(n) {
+    try { localStorage.setItem(SYNTH_BUDGET_KEY, String(n)); } catch { /* private mode — this visit still works */ }
   }
 
   function scrollToEnd() {
@@ -463,31 +507,6 @@ ${THEME_TOKENS_CSS}
     if (progressActive) statusEl.textContent = loadProgressLine(Object.values(progressParts));
   }
 
-  // Fetch the url reading the body as a stream, reporting (loadedBytes,
-  // totalBytes) after every chunk — total is 0 when the response carries no
-  // Content-Length. Resolves to a Blob of the whole body.
-  async function fetchWithProgress(url, onProgress) {
-    const res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    const total = Number(res.headers.get("content-length")) || 0;
-    if (!res.body || !res.body.getReader) {
-      const blob = await res.blob();
-      onProgress(blob.size, total || blob.size);
-      return blob;
-    }
-    const reader = res.body.getReader();
-    const chunks = [];
-    let loaded = 0;
-    for (;;) {
-      const step = await reader.read();
-      if (step.done) break;
-      chunks.push(step.value);
-      loaded += step.value.byteLength;
-      onProgress(loaded, total);
-    }
-    return new Blob(chunks);
-  }
-
   let winkStatus = "pending";
   async function tryLoadWink() {
     // The bounded race guards the same failure the CDN era did — a load that
@@ -569,7 +588,8 @@ ${THEME_TOKENS_CSS}
     return window.tmctChat.createChatSession({
       seedPayload: cloneSeed(),
       vocabSeeded: Boolean(seedPayload),
-      liveReference: liveToggleEl.checked,
+      liveReference: liveReferenceForMode(checkedWikiMode()),
+      synthesisBudget: readSynthBudget(),
       onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
     });
   }
@@ -636,7 +656,7 @@ ${THEME_TOKENS_CSS}
     restoredCount = 0;
     window.tmctChatSession = newSession();
     const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
-    addSystemLine("forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats) + ").");
+    addSystemLine("forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats, bandLabelFor) + ").");
     await renderStatsPanel(stats);
   }
 
@@ -644,48 +664,8 @@ ${THEME_TOKENS_CSS}
   // Both read window.tmctChat.memoryStats(memoryDir) (chat-browser-entry.mjs)
   // — one computation, reused, so the boot line and the panel can never
   // disagree with each other about what this session's memory holds.
-  const BAND_LABELS = {
-    human: "human persona",
-    "human-medium": "human persona (medium)",
-    "human-large": "human persona (large)",
-    seon: "seon ontology",
-    conceptnet: "ConceptNet",
-    "tier2-aws": "AWS",
-    "tier2-python": "Python",
-    "tier2-java": "Java",
-    "wordnet-xl": "WordNet",
-  };
-  const BAND_ORDER = [
-    "human", "human-medium", "human-large", "seon", "conceptnet",
-    "tier2-aws", "tier2-python", "tier2-java", "wordnet-xl",
-    "taught this session", "other",
-  ];
-  const bandLabel = (key) => BAND_LABELS[key] || key;
-
-  /** The boot system line's own memory summary — every seed band this
-   *  session actually loaded, named with its real count, left-to-right in
-   *  BAND_ORDER; a session with nothing seeded says so plainly instead of
-   *  naming zero facts. */
-  function statsSummaryLine(stats) {
-    if (!stats || !stats.total) return "no starter memory; starting empty";
-    const parts = BAND_ORDER.filter((k) => stats.bandCounts[k]).map((k) => stats.bandCounts[k] + " " + bandLabel(k));
-    return parts.length
-      ? "starter memory: " + parts.join(" + ") + " (" + stats.total + " facts total)"
-      : stats.total + " starter facts loaded";
-  }
-
-  function bandRow(label, count) {
-    const row = document.createElement("p");
-    row.className = "band-row";
-    const l = document.createElement("span");
-    l.textContent = label;
-    const c = document.createElement("span");
-    c.className = "band-count";
-    c.textContent = String(count);
-    row.appendChild(l);
-    row.appendChild(c);
-    return row;
-  }
+  // bandLabelFor/statsSummaryLine/renderStatsPanelInto are the shared
+  // memory-panel-viz.mjs helpers, spliced in above.
 
   /** (Re)render the docked panel from a memoryStats() result — stats may be
    *  passed in already-computed (boot reuses its own call rather than asking
@@ -698,46 +678,18 @@ ${THEME_TOKENS_CSS}
       try { stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir); }
       catch { return; }
     }
-    statsPanelEl.textContent = "";
-    statsPanelEl.appendChild(Object.assign(document.createElement("h2"), { textContent: "this session's memory" }));
-    statsPanelEl.appendChild(bandRow("total facts", stats.total));
-    for (const key of BAND_ORDER) {
-      if (stats.bandCounts[key]) statsPanelEl.appendChild(bandRow(bandLabel(key), stats.bandCounts[key]));
-    }
+    renderStatsPanelInto(statsPanelEl, stats, {
+      bandLabel: bandLabelFor,
+      onForget: persist ? forgetEverything : null,
+      persistNote: "taught facts are kept best-effort on this device (IndexedDB), never sent anywhere.",
+    });
+  }
 
-    statsPanelEl.appendChild(Object.assign(document.createElement("h2"), { textContent: "taught this session" }));
-    if (!stats.taught.length) {
-      const empty = document.createElement("p");
-      empty.className = "empty";
-      empty.textContent = 'nothing yet \\u2014 teach it something ("a dog is a kind of animal") and it lands here, with its source.';
-      statsPanelEl.appendChild(empty);
-    } else {
-      for (const fact of stats.taught.slice(-8).reverse()) {
-        const item = document.createElement("p");
-        item.className = "taught-item";
-        item.appendChild(document.createTextNode(fact.subject + " " + fact.predicate + " " + fact.object));
-        const tag = document.createElement("span");
-        tag.className = "taught-tag";
-        tag.textContent = fact.tag;
-        item.appendChild(tag);
-        statsPanelEl.appendChild(item);
-      }
-    }
-
-    if (persist) {
-      const forget = document.createElement("button");
-      forget.type = "button";
-      forget.id = "forgetEverything";
-      forget.className = "forget-btn";
-      forget.textContent = "forget everything";
-      forget.title = "clear what this device has saved and restart from the fresh seed";
-      forget.addEventListener("click", forgetEverything);
-      statsPanelEl.appendChild(forget);
-      const note = document.createElement("p");
-      note.className = "persist-note";
-      note.textContent = "taught facts are kept best-effort on this device (IndexedDB), never sent anywhere.";
-      statsPanelEl.appendChild(note);
-    }
+  // "supplement" (typed /wiki supplement only) has no radio; the statusline
+  // still names it, read straight off the session's own liveReference getter
+  // rather than the last radio the page itself set.
+  function liveStatusWord(liveReference) {
+    return liveReference === "always" ? "always" : liveReference === "supplement" ? "supplement" : liveReference ? "on" : "off";
   }
 
   function renderStatus() {
@@ -749,16 +701,40 @@ ${THEME_TOKENS_CSS}
       : winkStatus === "unavailable"
         ? "wink-nlp unavailable — curated + fuzzy tiers only (still zero guesses, zero LLM)"
         : "wink-nlp: loading\\u2026";
-    const livePart = "live wikipedia: " + (liveToggleEl.checked ? "on" : "off");
+    const liveReference = window.tmctChatSession ? window.tmctChatSession.liveReference : liveReferenceForMode(checkedWikiMode());
+    const livePart = "live wikipedia: " + liveStatusWord(liveReference);
     statusEl.textContent = seedPart + " \\u00b7 " + winkPart + " \\u00b7 " + livePart;
   }
 
-  liveToggleEl.addEventListener("change", function () {
-    writeLivePref(liveToggleEl.checked);
+  // A "/wiki on|off|supplement|always" turn flips the session's own state;
+  // this mirrors it back into the radio group and the stored preference.
+  // "supplement" clears every radio (it has none of its own) rather than
+  // leaving a stale mode checked.
+  function mirrorWikiModeFromSession() {
+    const session = window.tmctChatSession;
+    if (!session || typeof session.liveReference === "undefined") return;
+    const liveReference = session.liveReference;
+    const mode = liveReference === "always" ? "always" : liveReference === true ? "miss" : liveReference === false ? "off" : null;
+    setWikiModeRadios(mode || "");
+    if (mode) writeWikiMode(mode);
+  }
+
+  wikiModeFieldset.addEventListener("change", function () {
+    const mode = checkedWikiMode();
+    writeWikiMode(mode);
     if (window.tmctChatSession && window.tmctChatSession.setLiveReference) {
-      window.tmctChatSession.setLiveReference(liveToggleEl.checked);
+      window.tmctChatSession.setLiveReference(liveReferenceForMode(mode));
     }
     renderStatus();
+  });
+
+  synthSliderEl.addEventListener("input", function () {
+    const n = Number(synthSliderEl.value);
+    synthValueEl.textContent = String(n);
+    writeSynthBudget(n);
+    if (window.tmctChatSession && window.tmctChatSession.setSynthesisBudget) {
+      window.tmctChatSession.setSynthesisBudget(n);
+    }
   });
 
   let busy = true;
@@ -794,15 +770,11 @@ ${THEME_TOKENS_CSS}
         "something went wrong answering that (" + (err && err.message ? err.message : err) + ") \\u2014 try rephrasing",
         { miss: true }))
       .finally(() => {
-        // A "/wiki on|off" turn flips the session's own state — mirror it back
-        // into the switch and the stored preference, then settle the
-        // statusline (which the onLiveLookup hook may have overwritten with
-        // "searching wikipedia…" mid-turn).
-        if (window.tmctChatSession && typeof window.tmctChatSession.liveReference === "boolean"
-            && liveToggleEl.checked !== window.tmctChatSession.liveReference) {
-          liveToggleEl.checked = window.tmctChatSession.liveReference;
-          writeLivePref(liveToggleEl.checked);
-        }
+        // A "/wiki on|off|supplement|always" turn flips the session's own
+        // state — mirror it back into the radio group and the stored
+        // preference, then settle the statusline (which the onLiveLookup
+        // hook may have overwritten with "searching wikipedia…" mid-turn).
+        mirrorWikiModeFromSession();
         renderStatus();
         setBusy(false);
         inputEl.focus();
@@ -921,25 +893,29 @@ ${THEME_TOKENS_CSS}
       persist = window.tmctChat.openPersistedStore({ storeKey: "chat", stamp: siteVersion + ":" + seedFacts });
     }
     const savedRecord = persist ? await persist.load() : null;
-    liveToggleEl.checked = readLivePref();
+    const initialMode = readWikiMode();
+    setWikiModeRadios(initialMode);
+    writeWikiMode(initialMode); // settles a legacy-key migration under the new key immediately, not only on the next radio change
+    synthSliderEl.value = String(readSynthBudget());
+    synthValueEl.textContent = synthSliderEl.value;
     if (savedRecord && savedRecord.payload) {
       window.tmctChatSession = window.tmctChat.createChatSession({
         seedPayload: savedRecord.payload,
         vocabSeeded: true,
-        liveReference: liveToggleEl.checked,
+        liveReference: liveReferenceForMode(initialMode),
+        synthesisBudget: readSynthBudget(),
         onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
       });
     } else {
       window.tmctChatSession = newSession();
     }
-    if (window.tmctChatSession.setLiveReference) window.tmctChatSession.setLiveReference(liveToggleEl.checked);
     const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
     if (savedRecord) restoredCount = stats.taught.length;
     const restoredNote = savedRecord
       ? " Restored " + restoredCount + " taught fact" + (restoredCount === 1 ? "" : "s")
         + " from your last visit \\u2014 state kept best-effort on this device."
       : "";
-    addSystemLine("tmct \\u2014 the real engine, running in this page \\u2014 " + statsSummaryLine(stats)
+    addSystemLine("tmct \\u2014 the real engine, running in this page \\u2014 " + statsSummaryLine(stats, bandLabelFor)
       + "." + restoredNote + " Ask it something, or teach it a fact of your own.");
     await renderStatsPanel(stats);
     inputEl.placeholder = seedPayload ? 'try "what is a dog" or "list facts"' : window.tmctChat.vocabExampleHint(false);
