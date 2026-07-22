@@ -1,0 +1,11 @@
+# pan — the kitchen's default portable: a frying pan seen from above with a
+# long handle, so a taken pan reads as its own thing rather than the generic
+# portable box.
+classes = ["pan"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <circle cx="10" cy="14" r="6" fill="currentColor"/>
+  <circle cx="10" cy="14" r="3.6" fill="currentColor" opacity="0.35"/>
+  <rect x="15" y="13" width="7" height="2" rx="1" fill="currentColor"/>
+</svg>
+"""

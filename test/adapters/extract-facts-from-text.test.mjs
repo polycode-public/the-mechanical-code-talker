@@ -8,7 +8,7 @@ import { mkdtemp, rm, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { main, ingestText, optimisticTriples } from "../../src/services/extract-facts.mjs";
+import { main, ingestText, optimisticTriples, clauseCandidates } from "../../src/services/extract-facts.mjs";
 import { splitSentences } from "../../src/services/sentences.mjs";
 import { loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 import { SOURCE_PRIOR } from "../../src/domain/memory/trust.mjs";
@@ -170,6 +170,70 @@ test("ingestText: ephemeral (no memoryDir) grounds facts and mutates nothing on 
   assert.equal(result.recognized, 2);
   assert.equal(result.extracted.length, 2);
   assert.ok(result.extracted.every((f) => /^extracted:/.test(f.provenance)));
+});
+
+// ---- clause candidates ---------------------------------------------------
+
+test("clauseCandidates: whole sentence first, then verb-bearing clauses of a marker split", () => {
+  const cands = clauseCandidates("They are one department because both want to sell products");
+  assert.equal(cands[0], "They are one department because both want to sell products", "the whole sentence leads");
+  assert.ok(cands.includes("They are one department"), "the head clause is a fallback");
+  assert.ok(cands.includes("both want to sell products"), "the because-clause is a fallback");
+  // a sentence with no clause marker offers only itself
+  assert.deepEqual(clauseCandidates("A quasar is a bright object"), ["A quasar is a bright object"]);
+  // a fragment under three tokens, or one with no verb, is never offered
+  const short = clauseCandidates("cats and dogs");
+  assert.deepEqual(short, ["cats and dogs"], "a verbless two-token clause is dropped");
+});
+
+// ---- the Simple-English-Wikipedia Sales paragraph ------------------------
+
+const SALES_PARAGRAPH =
+  "Sales are activities related to selling or the number of goods sold in a period.[3] "
+  + "Sales are closely connected with marketing. "
+  + "They are often seen as one department, because both want to sell products. "
+  + "Sales and marketing have the same goal.";
+
+test("ingestText: the Sales paragraph yields the decomposed facts and never a garbled pronoun fact", async () => {
+  const repoDir = await mkdtemp(join(tmpdir(), "tmct-ingest-sales-"));
+  try {
+    const result = await ingestText(SALES_PARAGRAPH, { memoryDir: repoDir, sourceTag: "sales.txt" });
+    const rows = readFactRows(await loadMemory(repoDir));
+    const has = (s, p, o) => rows.some((f) => f.subject === s && f.predicate === p && f.object === o);
+
+    // the copula-NP decomposition: class membership + the trailing relation
+    assert.ok(has("sales", "rdfs:subClassOf", "activity"), "sales is a kind of activity");
+    assert.ok(has("sales", "mgx:related-to", "selling"), "sales is related to selling");
+    // the participle + preposition frame, adverb skipped
+    assert.ok(has("sales", "mgx:connected-with", "marketing"), "sales is connected with marketing");
+    // the shared-attribute frame (sentence 4)
+    assert.ok(has("sales", "mgx:same-goal-as", "marketing"), "sales shares a goal with marketing");
+    assert.ok(result.recognized >= 3, "at least three sentences are recognized");
+
+    // the because-clause sentence may honestly skip, but the pronoun carry must
+    // never mint a garbled "they"/department fact
+    assert.ok(!rows.some((f) => f.subject === "they" || f.subject === "it"), "no pronoun subject is ever stored");
+    assert.ok(!rows.some((f) => /department|product/.test(f.object)), "the because-clause never garbles into a fact");
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+  }
+});
+
+test("ingestText: citation markers are stripped before grounding", async () => {
+  const repoDir = await mkdtemp(join(tmpdir(), "tmct-ingest-cite-"));
+  try {
+    await ingestText("Sales are closely connected with marketing.[3]", { memoryDir: repoDir, sourceTag: "c.txt" });
+    const rows = readFactRows(await loadMemory(repoDir));
+    assert.ok(rows.some((f) => f.subject === "sales" && f.object === "marketing"), "the [3] never blocks the read");
+    assert.ok(!rows.some((f) => /\[|\]|3/.test(f.object)), "no citation residue rode into a stored term");
+  } finally {
+    await rm(repoDir, { recursive: true, force: true });
+  }
+});
+
+test("ingestText: an imperative or a listing request still declines, never a fabricated fact", async () => {
+  assert.equal((await ingestText("Tell me a joke.")).recognized, 0, "an imperative grounds nothing");
+  assert.equal((await ingestText("List modules in nope.")).recognized, 0, "a listing request grounds nothing");
 });
 
 test("ingestText: --canonical renders each ingested fact as a triple linked back into the store", async () => {

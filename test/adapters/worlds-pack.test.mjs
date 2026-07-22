@@ -12,6 +12,7 @@ import { fileURLToPath } from "node:url";
 import {
   WORLD_RULE_KINDS, isWorldName, isWorldsIndexEntry,
   isWorldFactRow, isWorldRuleRow, isWorldMetaRow, isWorldRow, worldProvenanceTag,
+  expandWorldDefaultContents,
 } from "../../src/domain/worlds-pack.mjs";
 import {
   worldsPackDir, loadWorldsIndex, loadWorld,
@@ -64,6 +65,49 @@ test("index entries and the three row kinds validate their shipped shapes and re
 
 test("a loaded world's provenance tag names the world", () => {
   assert.equal(worldProvenanceTag("ashcombe-hall"), "world:ashcombe-hall");
+});
+
+// ---- class-default contents -------------------------------------------------
+
+test("a space's default contents mint one placed, portable, typed instance per default", () => {
+  const facts = [
+    { world: "w", kind: "fact", subject: "library", predicate: "rdf:type", object: "room" },
+    { world: "w", kind: "fact", subject: "kitchen", predicate: "rdf:type", object: "room" },
+    { world: "w", kind: "fact", subject: "library", predicate: "mgx:default-contains", object: "book" },
+    { world: "w", kind: "fact", subject: "kitchen", predicate: "mgx:default-contains", object: "pan" },
+  ];
+  const out = expandWorldDefaultContents(facts);
+  const has = (s, p, o) => out.some((r) => r.subject === s && r.predicate === p && r.object === o);
+  assert.ok(has("book", "rdf:type", "book"), "the book is typed as its own class (so it resolves its own sprite)");
+  assert.ok(has("book", "rdf:type", "portable"), "and as portable (so the take family accepts it)");
+  assert.ok(has("book", "mgx:located-in", "library"), "and placed in the library");
+  assert.ok(has("pan", "mgx:located-in", "kitchen"));
+  assert.ok(out.every((r) => r.world === "w" && r.kind === "fact"), "minted rows keep the world-row wrapper");
+});
+
+test("a satisfied default mints nothing; a collision mints a numbered instance", () => {
+  const satisfied = [
+    { subject: "library", predicate: "mgx:default-contains", object: "book" },
+    { subject: "tome", predicate: "rdf:type", object: "book" },
+    { subject: "tome", predicate: "mgx:located-in", object: "library" },
+  ];
+  assert.equal(
+    expandWorldDefaultContents(satisfied).length, satisfied.length,
+    "the library already holds a book, so nothing is minted",
+  );
+
+  const collide = [
+    { subject: "library", predicate: "mgx:default-contains", object: "book" },
+    { subject: "book", predicate: "rdf:type", object: "trophy" },
+  ];
+  const out = expandWorldDefaultContents(collide);
+  assert.ok(out.some((r) => r.subject === "book-2" && r.predicate === "mgx:located-in" && r.object === "library"),
+    "the name 'book' is taken by an unrelated instance, so the minted one is 'book-2'");
+});
+
+test("no default-contains fact is a pure pass-through", () => {
+  const facts = [{ subject: "a", predicate: "rdf:type", object: "room" }];
+  assert.equal(expandWorldDefaultContents(facts), facts, "same array, untouched");
 });
 
 // ---- the fs loader over the committed fixture -------------------------------

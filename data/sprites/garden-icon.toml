@@ -1,0 +1,12 @@
+# garden — an outdoor space, so no room box: a tree over a ground line reads
+# as open air rather than an interior, matching the outdoor room-kind border.
+classes = ["garden"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <path d="M3 20 H21" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M12 20 V12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+  <circle cx="12" cy="8.5" r="5" fill="currentColor" opacity="0.7"/>
+  <circle cx="7.5" cy="17" r="1" fill="currentColor" opacity="0.5"/>
+  <circle cx="16.5" cy="17" r="1" fill="currentColor" opacity="0.5"/>
+</svg>
+"""

@@ -162,7 +162,7 @@ export async function unclaimedAdventureOpening(line, { env }) {
  *  the meta opening speaks. */
 async function resumedPosition(memoryDir) {
   try {
-    const state = foldWorldState(readFactRows(await loadMemory(memoryDir)));
+    const state = foldWorldState(worldActionRows(readFactRows(await loadMemory(memoryDir))));
     if (!state.turnCount) return null;
     return state.placements.get("player")?.object ?? null;
   } catch {
@@ -176,8 +176,27 @@ const SNAPSHOT_RE = /^(.+)@turn(\d+)$/;
 const PLACEMENT_PREDICATES = new Set([
   "mgx:currently-in", "mgx:located-in", "mgx:fixed-in", "mgx:stands-locked-in", "mgx:hidden-in",
 ]);
+// Supplemental positional relations: where a thing sits WITHIN its room,
+// never where its room is. Folded like placements (newest per subject) but
+// kept apart, since visibility and movement key on the placement, not on
+// which surface a thing rests against.
+const POSITION_PREDICATES = new Set(["mgx:on-top-of", "mgx:on-plane", "mgx:under"]);
 const OPEN_PREDICATE = "mgx:is-open";
 const EXIT_PREDICATE_RE = /^mgx:has-exit-([a-z]+)$/;
+
+/** The rows a live world's STATE fold may see: those the world itself wrote
+ *  (provenance empty, or `world:*` — the loaded shard and its @turn
+ *  snapshots), never a taught assert (`teach:chat:*`) or a merged corpus. The
+ *  game world changes only through actions; a locative fact the player TAUGHT
+ *  mid-game is their own note, and must not silently move a prop. Digest and
+ *  background-colour paths keep the unfiltered rows — a taught fact still
+ *  reads back as prose, it just never folds into the playable state. */
+export function worldActionRows(rows) {
+  return (rows || []).filter((r) => {
+    const prov = String(r.provenance || "").trim();
+    return prov === "" || prov.startsWith("world:");
+  });
+}
 
 /** Fold fact rows into the CURRENT world state: per subject, the newest
  *  placement (base row = turn 0, @turnN snapshots override), the newest
@@ -185,6 +204,7 @@ const EXIT_PREDICATE_RE = /^mgx:has-exit-([a-z]+)$/;
  *  suffix written so far — derived, never stored). Pure. */
 export function foldWorldState(factRows) {
   const placements = new Map(); // subject -> { predicate, object, turn }
+  const positions = new Map();  // subject -> { predicate, object, turn }
   const openness = new Map();   // subject -> { open, turn }
   const exits = new Map();      // room -> Map(direction -> room)
   let turnCount = 0;
@@ -198,6 +218,11 @@ export function foldWorldState(factRows) {
       if (!prior || turn >= prior.turn) placements.set(base, { predicate: row.predicate, object: row.object, turn });
       continue;
     }
+    if (POSITION_PREDICATES.has(row.predicate)) {
+      const prior = positions.get(base);
+      if (!prior || turn >= prior.turn) positions.set(base, { predicate: row.predicate, object: row.object, turn });
+      continue;
+    }
     if (row.predicate === OPEN_PREDICATE) {
       const prior = openness.get(base);
       if (!prior || turn >= prior.turn) openness.set(base, { open: row.object === "true", turn });
@@ -209,7 +234,46 @@ export function foldWorldState(factRows) {
       exits.get(row.subject).set(exit[1], row.object);
     }
   }
-  return { placements, openness, exits, turnCount };
+  return { placements, positions, openness, exits, turnCount };
+}
+
+/** A subject's CURRENT within-room position, or null. A position goes stale
+ *  the moment the subject is placed somewhere new: taking the lamp writes a
+ *  later-turn placement, so its turn-0 `on-top-of desk` no longer holds and
+ *  no extra write is needed to retract it. */
+export function currentPosition(state, subject) {
+  const pos = state.positions.get(subject);
+  if (!pos) return null;
+  const place = state.placements.get(subject);
+  if (place && pos.turn < place.turn) return null;
+  return pos;
+}
+
+/** The default surface a subject's class implies, walking its rdf:type and
+ *  rdfs:subClassOf edges for an `mgx:default-plane` fact. A non-floor plane
+ *  (wall, ceiling) wins over floor wherever both are reachable — a portrait
+ *  typed both `furniture` (floor) and, via `painting`, wall reads as hanging
+ *  on the wall. Returns the plane, or null when no class default applies.
+ *  Pure. */
+function classDefaultPlane(rows, subject) {
+  const edgesFrom = (node) => (rows || [])
+    .filter((r) => r.subject === node && (r.predicate === "rdf:type" || r.predicate === "rdfs:subClassOf"))
+    .map((r) => r.object);
+  const planeOf = (node) => (rows || [])
+    .find((r) => r.subject === node && r.predicate === "mgx:default-plane")?.object ?? null;
+  const seen = new Set([subject]);
+  const queue = edgesFrom(subject);
+  let fallback = null;
+  while (queue.length) {
+    const node = queue.shift();
+    if (seen.has(node)) continue;
+    seen.add(node);
+    const plane = planeOf(node);
+    if (plane && plane !== "floor") return plane;
+    if (plane && !fallback) fallback = plane;
+    queue.push(...edgesFrom(node));
+  }
+  return fallback;
 }
 
 // ---- the world interpreter ---------------------------------------------------
@@ -384,11 +448,20 @@ async function writeWorldTurn(memoryDir, world, k, facts, cache) {
 const VIEW_EXCLUDED_PREDICATES = new Set([
   "mgx:hidden-in", "mgx:is-open", "mgx:is-npc", "mgx:is-container",
   "mgx:unlocks-with", "mgx:acts-on-turn", "mgx:acts-toward",
-  // mgx:is-objective (PLAN_GAMES_UPLIFT_V2.md Part B) is an internal marker
-  // for auto-play's goal inference — the same information the opening
-  // narration already tells a human player in prose, never meant to surface
-  // as a raw, unphrased triple ("Letter mgx:is-objective true.") itself.
+  // is-objective is an internal marker for auto-play's goal inference — the
+  // same information the opening narration already tells a human player in
+  // prose, never meant to surface as a raw, unphrased triple ("Letter
+  // mgx:is-objective true.") itself.
   "mgx:is-objective",
+  // Staff knowledge is the whole puzzle: a room look must never leak
+  // "Gardener knows-where letter" or the game is spoiled. It reaches the
+  // player only through the talk lane, which resolves each pointer live.
+  "mgx:knows-where", "mgx:knows-objective", "mgx:knows-about",
+  // Class-schema facts describe the ontology, not the scene. default-contains
+  // is already materialized into real instances at load; default-plane and
+  // subClassOf drive positional rendering by their own readers, and read as
+  // raw triples if they land in room prose.
+  "mgx:default-contains", "mgx:default-plane", "rdfs:subClassOf",
 ]);
 
 const sentenceCase = (term) => String(term).charAt(0).toUpperCase() + String(term).slice(1);
@@ -450,6 +523,18 @@ export function worldDigestRows(rows, state) {
     }[place.predicate];
     if (phrase) push(subject, phrase, place.object);
   }
+  // Where a placed thing sits within its room — an instance position (the
+  // lamp on the desk) if one is current, else a notable class default (a
+  // portrait on the wall). Floor is the unremarkable default the room view
+  // already assumes, so it is left unsaid.
+  const POSITION_PHRASE = { "mgx:on-top-of": "is on the", "mgx:on-plane": "is on the", "mgx:under": "is under the" };
+  for (const [subject, place] of state.placements) {
+    if (place.predicate === "mgx:hidden-in" || place.object === "player") continue;
+    const pos = currentPosition(state, subject);
+    if (pos && POSITION_PHRASE[pos.predicate]) { push(subject, POSITION_PHRASE[pos.predicate], pos.object); continue; }
+    const plane = classDefaultPlane(rows, subject);
+    if (plane && plane !== "floor") push(subject, "is usually on the", plane);
+  }
   for (const row of rows || []) {
     if (SNAPSHOT_RE.test(row.subject)) continue;                 // folded above
     // Room text comes from the world source only. A merged corpus overlaps a
@@ -459,6 +544,7 @@ export function worldDigestRows(rows, state) {
     // only drops rows a non-world source provably owns.
     if (isNonWorldSourced(row)) continue;
     if (PLACEMENT_PREDICATES.has(row.predicate)) continue;       // folded above
+    if (POSITION_PREDICATES.has(row.predicate)) continue;        // folded above
     if (VIEW_EXCLUDED_PREDICATES.has(row.predicate)) continue;
     const exit = EXIT_PREDICATE_RE.exec(row.predicate);
     if (exit) { push(row.subject, `has an exit ${exit[1]} to the`, row.object); continue; }
@@ -537,10 +623,54 @@ function containerDatatypeState(state, object) {
   return rows;
 }
 
+/** The knowledge a person shares when talked to, resolved against the LIVE
+ *  world fold this turn — never a frozen string, so it stays true as the
+ *  world changes and honest when it doesn't know. `knows-where` reveals a
+ *  thing's current location, a hidden one included: talking to the staff is
+ *  the sanctioned way to learn a hiding place, while the where-is aside keeps
+ *  declining. `knows-objective` states the quest. `knows-about` topics come
+ *  back for the caller to digest. Pure. */
+export function personKnowledgeLines(rows, state, person) {
+  const lines = [];
+  for (const objective of factObjects(rows, person, "mgx:knows-objective")) {
+    lines.push(`the ${objective} is what you're after — find it and carry it out of the house.`);
+  }
+  for (const thing of factObjects(rows, person, "mgx:knows-where")) {
+    const place = state.placements.get(thing);
+    if (!place) continue;
+    lines.push(isTyped(rows, thing, "person")
+      ? `you'll find the ${thing} in the ${place.object}.`
+      : `the ${thing} is in the ${place.object}.`);
+  }
+  return { lines, aboutTopics: factObjects(rows, person, "mgx:knows-about") };
+}
+
+/** What a person can report from where they stand this turn — derived each
+ *  turn, never stored: who and what shares their room, each container's
+ *  open/locked status, and what unlocks a locked one there. Pure. */
+export function personRoomReport(rows, state, person) {
+  const room = state.placements.get(person)?.object ?? null;
+  if (!room) return "";
+  const here = [...state.placements.keys()]
+    .filter((s) => s !== person && s !== "player" && visibleRoomOf(s, { rows, state }) === room)
+    .sort();
+  const parts = [];
+  if (here.length) parts.push(`here in the ${room}: the ${here.join(", the ")}.`);
+  for (const thing of here) {
+    if (!isContainer(rows, thing)) continue;
+    parts.push(containerStatusPhrase(thing, { state }));
+    const key = factObjects(rows, thing, "mgx:unlocks-with")[0];
+    if (key && state.placements.get(thing)?.predicate === "mgx:stands-locked-in") {
+      parts.push(`the ${thing} needs the ${key} to open.`);
+    }
+  }
+  return parts.join(" ");
+}
+
 async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
   const memory = await loadMemory(memoryDir);
   const rows = readFactRows(memory);
-  const state = foldWorldState(rows);
+  const state = foldWorldState(worldActionRows(rows));
   const here = state.placements.get("player")?.object ?? null;
   const noteFor = (detail) => `ADVENTURE — ${detail}`;
 
@@ -608,6 +738,24 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
       );
     }
     const person = isTyped(rows, object, "person");
+    // Talking to a person is the game's reveal channel: the staff share what
+    // they know (a hiding place, the quest, a topic) and report their own
+    // room, all resolved from the live fold this turn.
+    if (cmd.verb === "talk" && person) {
+      const { lines, aboutTopics } = personKnowledgeLines(rows, state, object);
+      const aboutLines = [];
+      for (const topic of aboutTopics) {
+        const digested = await worldDigest(topic, { memoryDir, memory, rows, state, graph });
+        if (digested) aboutLines.push(digested);
+      }
+      const report = personRoomReport(rows, state, object);
+      const said = [...lines, ...aboutLines, report].filter(Boolean).join(" ");
+      return answer(
+        said ? `the ${object} says: ${said}` : `the ${object} has nothing to tell you right now.`,
+        noteFor(`talk — the ${object}'s live knowledge (knows-where/objective/about from the current fold) and a derived room report`),
+        { goal: `talk to the ${object}` },
+      );
+    }
     const digest = await worldDigest(object, { memoryDir, memory, rows, state, graph });
     const body = digest ?? `nothing more about the ${object} is written down yet.`;
     const containerNote = !person && isContainer(rows, object) ? ` ${containerStatusPhrase(object, { state })}` : "";
@@ -649,7 +797,7 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     // player is never left to retype "look" to see what just changed.
     const freshMemory = await loadMemory(memoryDir);
     const freshRows = readFactRows(freshMemory);
-    const freshState = foldWorldState(freshRows);
+    const freshState = foldWorldState(worldActionRows(freshRows));
     const relookDigest = await worldDigest(playerRoomAfter, { memoryDir, memory: freshMemory, rows: freshRows, state: freshState, graph });
     const actions = roomAffordances(freshRows, freshState, playerRoomAfter);
     const relook = `you are in the ${playerRoomAfter}. ${relookDigest ?? "Nothing more about it is written down yet."}${affordanceSuffix(actions)}`;
@@ -874,13 +1022,13 @@ async function worldWhereAnswer(line, { memoryDir }) {
   const thing = normFactTerm(m[1]);
   let rows;
   try { rows = readFactRows(await loadMemory(memoryDir)); } catch { return null; }
-  const state = foldWorldState(rows);
+  const state = foldWorldState(worldActionRows(rows));
   const place = state.placements.get(thing);
   if (!place) return null;
   if (place.predicate === "mgx:hidden-in") {
     return answer(
-      `nothing you've seen says where the ${thing} is.`,
-      `ADVENTURE — where-aside: ${thing} is hidden; declined without naming the hiding place`,
+      `nothing you've seen says where the ${thing} is. Someone in the house may know — try talking to the staff.`,
+      `ADVENTURE — where-aside: ${thing} is hidden; declined without naming the hiding place, pointed at the talk lane`,
       { miss: true, goal: `locate the ${thing}` },
     );
   }
@@ -916,7 +1064,7 @@ async function worldOpennessAnswer(line, { memoryDir }) {
   const askedOpen = /^open$/i.test(m[2]);
   let rows;
   try { rows = readFactRows(await loadMemory(memoryDir)); } catch { return null; }
-  const state = foldWorldState(rows);
+  const state = foldWorldState(worldActionRows(rows));
   const openness = state.openness.get(thing);
   if (!openness) return null;
   const matches = askedOpen ? openness.open : !openness.open;
@@ -947,7 +1095,7 @@ async function worldContextAnswer(line, { memoryDir }) {
   if (!asksWhere && !asksOptions && !asksQuest) return null;
   let rows;
   try { rows = readFactRows(await loadMemory(memoryDir)); } catch { return null; }
-  const state = foldWorldState(rows);
+  const state = foldWorldState(worldActionRows(rows));
   const here = state.placements.get("player")?.object ?? null;
 
   if (asksWhere) {
@@ -982,7 +1130,7 @@ async function worldContextAnswer(line, { memoryDir }) {
 async function inventoryAnswer({ memoryDir, graph }) {
   const memory = await loadMemory(memoryDir);
   const rows = readFactRows(memory);
-  const state = foldWorldState(rows);
+  const state = foldWorldState(worldActionRows(rows));
   const carried = [...state.placements]
     .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === "player")
     .map(([thing]) => thing)

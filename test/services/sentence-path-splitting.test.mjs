@@ -12,9 +12,23 @@ import { join } from "node:path";
 import {
   splitSentencesPreservingPaths,
   carriesASentenceBoundary,
+  stripCitationResidue,
 } from "../../src/services/sentences.mjs";
 import { main as extractMain } from "../../src/services/extract-facts.mjs";
 import { importDefinitionFile } from "../../src/services/import-file.mjs";
+
+test("stripCitationResidue: removes bracketed footnote markers, keeps file paths whole", () => {
+  assert.equal(
+    stripCitationResidue("Sales are activities.[3] They connect to marketing.[12]"),
+    "Sales are activities. They connect to marketing.",
+  );
+  assert.equal(stripCitationResidue("A claim[a] with a lettered note."), "A claim with a lettered note.");
+  assert.equal(stripCitationResidue("Unproven claim.[citation needed]"), "Unproven claim.");
+  assert.equal(stripCitationResidue("See the note[note 4] for detail."), "See the note for detail.");
+  // a dotted module path carries no bracket, so it is untouched
+  assert.equal(stripCitationResidue("Edit src/core/store.mjs to fix it."), "Edit src/core/store.mjs to fix it.");
+  assert.equal(stripCitationResidue(""), "");
+});
 
 test("carriesASentenceBoundary: true only for a terminator followed by whitespace and a word", () => {
   assert.equal(carriesASentenceBoundary("Dogs are mammals. Cats are mammals."), true);

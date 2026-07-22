@@ -55,9 +55,9 @@ async function seedLineWorld({ objectiveRoom = null, extraFacts = [] } = {}) {
     facts.push({ subject: "prize", predicate: "mgx:located-in", object: objectiveRoom });
     facts.push({ subject: "prize", predicate: "mgx:is-objective", object: "true" });
   }
-  await appendFacts(dir, facts.map((f) => ({ ...f, provenance: "test:line-world" })));
+  await appendFacts(dir, facts.map((f) => ({ ...f, provenance: "world:line-world" })));
   for (const rule of [...GO_RULES, ...TAKE_RULES]) {
-    await appendRule(dir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: "test:line-world" });
+    await appendRule(dir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: "world:line-world" });
   }
   return dir;
 }
@@ -147,9 +147,9 @@ test("explore: once every exit from the current room is already exposed, auto-pl
     { subject: "c", predicate: "mgx:has-exit-west", object: "b" },
     { subject: "b", predicate: "mgx:has-exit-north", object: "e" },
     { subject: "e", predicate: "mgx:has-exit-south", object: "b" },
-  ].map((f) => ({ ...f, provenance: "test:branch-world" })));
+  ].map((f) => ({ ...f, provenance: "world:branch-world" })));
   for (const rule of [...GO_RULES, ...TAKE_RULES]) {
-    await appendRule(dir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: "test:branch-world" });
+    await appendRule(dir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: "world:branch-world" });
   }
 
   const planHolder = planHolderFor();
@@ -162,7 +162,7 @@ test("explore: once every exit from the current room is already exposed, auto-pl
 
 test("win: the objective is already carried — done, no further move, no write", async () => {
   const dir = await seedLineWorld({ objectiveRoom: "a" });
-  await appendFacts(dir, [{ subject: "prize@turn1", predicate: "mgx:located-in", object: "player", provenance: "test:setup" }]);
+  await appendFacts(dir, [{ subject: "prize@turn1", predicate: "mgx:located-in", object: "player", provenance: "world:line-world" }]);
   const before = readFactRows(await loadMemory(dir)).length;
   const planHolder = planHolderFor();
   const result = await runAdventureAutoplayTick(dir, { exposedRoomIds: new Set(["a"]), planHolder });
@@ -170,6 +170,20 @@ test("win: the objective is already carried — done, no further move, no write"
   assert.equal(result.stalled, false);
   const after = readFactRows(await loadMemory(dir)).length;
   assert.equal(after, before, "a win tick writes nothing — no move to make");
+});
+
+test("a taught fact never steers auto-play: a teach-provenance objective is invisible to the fold", async () => {
+  const dir = await seedLineWorld();
+  // A note the player taught mid-game, shaped exactly like a real objective
+  // placement but carrying teach provenance — it must not become a goal.
+  await appendFacts(dir, [
+    { subject: "decoy", predicate: "rdf:type", object: "portable", provenance: "teach:chat:local" },
+    { subject: "decoy", predicate: "mgx:located-in", object: "d", provenance: "teach:chat:local" },
+    { subject: "decoy", predicate: "mgx:is-objective", object: "true", provenance: "teach:chat:local" },
+  ]);
+  const planHolder = planHolderFor();
+  const result = await runAdventureAutoplayTick(dir, { exposedRoomIds: new Set(["a"]), planHolder });
+  assert.match(result.goal, /exploring|stalled/, "with no world objective, auto-play explores or stalls — it never chases the taught decoy");
 });
 
 test("fetch: the objective's room is exposed but not co-located — auto-play paths toward it over the exposed exit-graph, one step per tick", async () => {
@@ -236,10 +250,10 @@ test("a world with no player position at all reports an honest stall, never a fa
 
 async function seedRoomsWithRules(facts, ruleSets = [GO_RULES, TAKE_RULES, OPEN_RULES, UNLOCK_RULES]) {
   const dir = createInMemoryStore();
-  await appendFacts(dir, facts.map((f) => ({ ...f, provenance: "test:container-world" })));
+  await appendFacts(dir, facts.map((f) => ({ ...f, provenance: "world:container-world" })));
   for (const rules of ruleSets) {
     for (const rule of rules) {
-      await appendRule(dir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: "test:container-world" });
+      await appendRule(dir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: "world:container-world" });
     }
   }
   return dir;

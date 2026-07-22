@@ -69,3 +69,53 @@ export function isWorldRow(row) {
 export function worldProvenanceTag(worldName) {
   return `world:${worldName}`;
 }
+
+const DEFAULT_CONTAINS_PREDICATE = "mgx:default-contains";
+
+/** Materialize a world's class-default contents: for every
+ *  `<room> mgx:default-contains <class>` fact, mint one placed, portable
+ *  instance of that class in that room unless the room already holds one. A
+ *  minted book gets `rdf:type <class>` (so it resolves its own sprite),
+ *  `rdf:type portable` (so the take family accepts it), and
+ *  `mgx:located-in <room>` (so it shows up in the room and can be carried
+ *  out). Pure and deterministic: defaults are visited in sorted order, and a
+ *  collision mints `<class>-2`, `<class>-3`… so re-running never renames an
+ *  earlier instance. Rows keep whatever world/kind wrapper the input rows
+ *  carry, so both a loaded shard (world rows) and a bare triple list expand
+ *  the same way. */
+export function expandWorldDefaultContents(facts) {
+  const rows = facts || [];
+  const defaults = rows
+    .filter((r) => r.predicate === DEFAULT_CONTAINS_PREDICATE)
+    .sort((a, b) => `${a.subject}\0${a.object}`.localeCompare(`${b.subject}\0${b.object}`));
+  if (!defaults.length) return rows;
+
+  const instanceIds = new Set(rows.filter((r) => r.predicate === "rdf:type").map((r) => r.subject));
+  const placedIn = new Map();
+  for (const r of rows) {
+    if (r.predicate === "mgx:located-in") placedIn.set(r.subject, r.object);
+  }
+  const roomAlreadyHas = (klass, room) =>
+    rows.some((r) => r.predicate === "rdf:type" && r.object === klass && placedIn.get(r.subject) === room);
+
+  const wrapper = rows.find((r) => typeof r.world === "string" && r.kind === "fact");
+  const wrap = (subject, predicate, object) => ({
+    ...(wrapper ? { world: wrapper.world, kind: "fact" } : {}),
+    subject, predicate, object,
+  });
+
+  const minted = [];
+  for (const d of defaults) {
+    const room = d.subject;
+    const klass = d.object;
+    if (roomAlreadyHas(klass, room)) continue;
+    let id = klass;
+    let n = 1;
+    while (instanceIds.has(id)) { n += 1; id = `${klass}-${n}`; }
+    instanceIds.add(id);
+    minted.push(wrap(id, "rdf:type", klass));
+    minted.push(wrap(id, "rdf:type", "portable"));
+    minted.push(wrap(id, "mgx:located-in", room));
+  }
+  return minted.length ? [...rows, ...minted] : rows;
+}
