@@ -30,7 +30,6 @@ Each row is one task; the workstream that lands it deletes its row in the same c
 
 ### WS-plan-docs — PLAN_AGENTS.md + PLAN_CODE.md refresh (fable)
 - [ ] PLAN_AGENTS.md: re-baseline today's agent capabilities, code refs match current code, gap assessment vs "enough"
-- [ ] PLAN_CODE.md: re-baseline vs current code; non-LLM code-generation strategy survey (50 years + July 2026 web research incl. revivable dead-ends); planning-over-code-states design (language-neutral transformations, adaptor materialisation, verify, re-index loop)
 
 ### Coordinator
 - [ ] integration: `demo:build`, e2e sweep review, full `npm test`, main commit; `smoke:deploy` after operator-gated publish
