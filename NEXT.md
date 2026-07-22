@@ -20,10 +20,6 @@ Site-uplift board (2026-07-22 approved plan). Each row is one task; the workstre
 deletes its row in the same commit. Other workstreams' rows (WS-world, WS-chat-engine, WS-home,
 WS-pages, WS-code-ide, WS-ci-screens) land from their own worktrees and are reconciled at merge.
 
-### WS-adventure-page — adventure/spider-fly presentation (sonnet)
-- [ ] spider-fly header left-aligned with board (`.page-head > .head-inner` width rule)
-- [ ] unit + e2e test updates (spider-fly-viz, pages-spider-fly alignment)
-
 The natural next verification pass (carried, not this workstream's): a fresh live session against
 an `init:xl` graph plus the merged code graphs to re-map the miss wall at the new baseline, and a
 live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their deployed

@@ -304,7 +304,7 @@ ${THEME_TOKENS_CSS}
      split plus the gap approximates that pair of fractions without them
      needing to sum to a full width. */
   .stage { display: grid; grid-template-columns: minmax(0, 8fr) minmax(280px, 3fr); gap: 1.2rem; align-items: start; }
-  @media (max-width: 760px) { .stage { grid-template-columns: 1fr; } }
+  @media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
   /* A dusty window corner: a soft light glow near the top-left (WEB_HOME
      already sits near that corner — spider-fly-world.mjs's own header
      comment), and a faint diagonal weave standing in for dust/silk caught
@@ -349,7 +349,18 @@ ${THEME_TOKENS_CSS}
   /* Both the controls strip above the board and the tuning strip below it
      match the board's own width (not the wider stage-left column they sit
      in), so all three line up as one visual stack. */
-  .tuning, .controls-panel { width: ${BOARD_PX}px; max-width: 100%; margin: 0 auto; box-sizing: border-box; }
+  .tuning, .controls-panel, .head-inner { width: ${BOARD_PX}px; max-width: 100%; margin: 0 auto; box-sizing: border-box; }
+  /* the eyebrow+h1 sit in their own board-width column (.head-inner), inside
+     a .page-head row that mirrors the real board's own 8fr/3fr split below
+     it — the second, empty column just holds that split in place so the
+     first column's own left edge lines up with the board's, instead of the
+     wider page margin. min-width: 0 matches .stage-left's own override:
+     without it, a grid item's default automatic minimum size is its
+     content's own max-content width, and at the phone-width single-column
+     override below the fixed-width child would force the track (and the
+     page) wider than the viewport instead of actually shrinking. */
+  .page-head { margin-bottom: 0; }
+  .head-inner { min-width: 0; }
   .hud h2, .chat h2, .tuning h2 {
     font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 600;
     margin: -.6rem -.75rem .5rem; padding: .42rem .75rem;
@@ -465,13 +476,18 @@ ${THEME_TOKENS_CSS}
   body.preview main { padding: 0; max-width: none; }
   body.preview .stage, body.preview .stage-left { display: block; }
   body.preview .board-frame { margin: 0; }
-  body.preview .eyebrow, body.preview h1 { display: none; }
+  body.preview .page-head { display: none; }
 </style>
 </head>
 <body>
 <main>
-  <div class="eyebrow">tmct &middot; spider and fly</div>
-  <h1>Multiple competing planning agents</h1>
+  <div class="stage page-head">
+    <div class="head-inner">
+      <div class="eyebrow">tmct &middot; spider and fly</div>
+      <h1>Multiple competing planning agents</h1>
+    </div>
+    <div></div>
+  </div>
   <div class="stage">
     <div class="stage-left">
     <div class="controls-panel" id="controlsPanel" aria-label="game controls">

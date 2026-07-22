@@ -169,6 +169,19 @@ test("the wide layout puts the controls strip, the board and the tuning console 
   }
 });
 
+test("the eyebrow/h1 header column's left edge lines up with the board's own left edge, not the page's wider margin", async () => {
+  const { context, page } = await openSpiderFlyPage({ viewport: { width: 1280, height: 900 } });
+  try {
+    const boxes = await page.evaluate(() => ({
+      head: document.querySelector(".head-inner").getBoundingClientRect().left,
+      board: document.querySelector(".board-frame").getBoundingClientRect().left,
+    }));
+    assert.ok(Math.abs(boxes.head - boxes.board) <= 1, "the header column and the board share the same left edge");
+  } finally {
+    await context.close();
+  }
+});
+
 test("a phone-width viewport stacks the columns without horizontal overflow", async () => {
   const { context, page } = await openSpiderFlyPage({ viewport: { width: 375, height: 667 } });
   try {
