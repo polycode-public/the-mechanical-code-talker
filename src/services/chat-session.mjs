@@ -404,7 +404,7 @@ export async function createSession({
       });
       await upsertGraph(record.ts);
       turns += 1;
-      return { answer, end: Boolean(end), prompt: promptFor(focus), plan: result.plan ?? null, research: result.research ?? null, record };
+      return { answer, end: Boolean(end), prompt: promptFor(focus), plan: result.plan ?? null, research: result.research, record };
     },
 
     /** End-of-session close: end lines in both artifacts, the final graph upsert

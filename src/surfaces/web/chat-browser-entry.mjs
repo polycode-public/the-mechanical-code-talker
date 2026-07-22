@@ -114,7 +114,10 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
       if ("planState" in result) planState = result.planState;
       if ("researchState" in result) researchState = result.researchState;
       if (typeof result.liveReference === "boolean" || result.liveReference === "supplement" || result.liveReference === "always") liveReferenceOn = result.liveReference;
-      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null, research: result.research ?? null };
+      // `research` distinguishes three cases on purpose: a queue snapshot
+      // (research turn), null (a research turn that ended the run), and
+      // undefined (not a research turn — the page leaves its controls alone).
+      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null, research: result.research };
     },
   };
 }

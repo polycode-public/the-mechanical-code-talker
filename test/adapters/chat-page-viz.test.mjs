@@ -114,6 +114,18 @@ test("renderChatHtml: the composer (centered column, bottom-fixed input) markup 
   assert.match(html, /class="messages"/);
 });
 
+test("renderChatHtml: the research affordance is present — topic entry, go, a play/pause control over the shared ticker, submitted through the one turn path", () => {
+  const html = renderChatHtml();
+  assert.match(html, /id="researchTopic"/);
+  assert.match(html, /id="researchGo"/);
+  assert.match(html, /id="researchPlay"/);
+  assert.match(html, /id="researchQueueStatus"/);
+  assert.match(html, /const createTicker = /, "the shared viz-ticker verbs are spliced in, not reimplemented");
+  assert.match(html, /const prefersReducedMotion = /, "reduced motion gates the auto-play");
+  assert.match(html, /submitLine\("research next"\)/, "each auto-played step is asked exactly as a typed turn");
+  assert.match(html, /Simple English Wikipedia/, "the control says where the fetches go before anyone clicks");
+});
+
 test("renderChatHtml: messages render as bubbles, distinguishing user from assistant", () => {
   const html = renderChatHtml();
   assert.match(html, /className = "bubble user"/);

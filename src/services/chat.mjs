@@ -14166,6 +14166,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     const rTurn = await researchTurn(workingLine, {
       holder: researchHolder,
       memoryDir,
+      lexicon,
       provider: getResearchProvider({ minIntervalMs: resolvedResearchConfig.minIntervalMs }),
       config: resolvedResearchConfig,
       planActive: Boolean(planHolder.state && !planHolder.state.done),
@@ -14184,7 +14185,10 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       const rec = withLast(result, rTurn.goal);
       rec.planState = planHolder.state;
       rec.researchState = researchHolder.state;
-      if (snapshot) rec.research = snapshot;
+      // Present on EVERY research turn — null when the run ended or never
+      // started — so a UI can tell "queue cleared" from "not a research
+      // turn" (where the field is absent entirely).
+      rec.research = snapshot;
       return rec;
     }
   }

@@ -30,6 +30,7 @@
 // exist (both built earlier in that same script, for the embedded widget).
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
 import { provBucketFor } from "./ledger-viz.mjs";
+import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
 import { sessionLogTimeOfDay, sessionLogHeaderMarkdown, sessionLogTurnMarkdown } from "./session-log-format.mjs";
 import { bandLabelFor, statsSummaryLine, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
 
@@ -248,6 +249,18 @@ ${THEME_TOKENS_CSS}
   .synthRow { display: inline-flex; align-items: center; gap: .5rem; white-space: nowrap; }
   .synthRow input[type="range"] { width: 88px; accent-color: var(--corpus); }
 
+  /* the research row: type a topic, and the page asks "research <topic>"
+     then ticks "research next" turns through the queue — play/pause rides
+     the shared viz-ticker verbs. Same quiet mono idiom as the wiki row. */
+  .composer-research { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .4rem; display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
+  .composer-research label[for="researchTopic"] { white-space: nowrap; }
+  .composer-research input[type="text"] { flex: 1 1 8rem; min-width: 6rem; font-family: ${MONO_STACK}; font-size: .72rem; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .28rem .55rem; }
+  .composer-research input[type="text"]::placeholder { color: var(--muted); }
+  .research-btn { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .03em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .16rem .55rem; background: var(--card); }
+  .research-btn:hover { color: var(--ink); }
+  .research-btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  #researchQueueStatus { white-space: nowrap; }
+
   .statusline { max-width: 720px; margin: 0 auto; padding: 0 1.1rem .6rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
 
   /* the composer's small utility row — right-aligned mono controls, for
@@ -329,6 +342,14 @@ ${THEME_TOKENS_CSS}
           <input type="range" id="synthSlider" min="0" max="24" step="4" value="12">
         </label>
       </div>
+      <div class="composer-research">
+        <label for="researchTopic" title="Fetches the topic from Simple English Wikipedia and stores the facts it grounds, then queues the topics its lead section links to. Asking is the network consent for these fetches; each queued topic is asked as its own chat turn, paced politely.">research:</label>
+        <input id="researchTopic" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
+          placeholder="a topic, e.g. owls" aria-label="Topic to research on Simple English Wikipedia">
+        <button type="button" id="researchGo" class="research-btn">go</button>
+        <button type="button" id="researchPlay" class="research-btn" aria-pressed="false" hidden>play</button>
+        <span id="researchQueueStatus" aria-live="polite"></span>
+      </div>
       <div class="composer-tools">
         <button type="button" id="ingestFile" class="tool-btn" title="load a .txt/.md file and teach every fact it recognizes into this session">ingest file</button>
         <input type="file" id="ingestInput" accept=".txt,.md,text/plain,text/markdown" hidden>
@@ -358,6 +379,8 @@ ${THEME_TOKENS_CSS}
   const statsSummaryLine = ${statsSummaryLine.toString()};
   const fetchWithProgress = ${fetchWithProgress.toString()};
   const renderStatsPanelInto = ${renderStatsPanelInto.toString()};
+  const createTicker = ${createTicker.toString()};
+  const prefersReducedMotion = ${prefersReducedMotion.toString()};
   const el = (id) => document.getElementById(id);
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
@@ -745,40 +768,117 @@ ${THEME_TOKENS_CSS}
     sendBtn.disabled = v || !ready;
   }
 
+  // ONE dispatched turn through the page — the composer form and the
+  // research ticker both submit here, so an auto-played "research next"
+  // renders exactly like a typed one: user bubble, transcript entry, pending
+  // bubble, settle, persist, stats. Resolves once the turn has settled (the
+  // ticker awaits it before pacing the next step).
+  async function submitLine(q) {
+    if (!q || busy || !window.tmctChatSession) return null;
+    addUserBubble(q);
+    transcript.push({ role: "you", text: q, chipTier: null, ts: Date.now() });
+    const pendingRow = addPendingAssistantBubble();
+    setBusy(true);
+    let result = null;
+    try {
+      result = await window.tmctChatSession.turn(q);
+      settleAssistantBubble(pendingRow, result.answer, result.record);
+      // Persist on ANY store write, not just a teach turn: a learn-on-miss
+      // load (a child pack, a reference or live-Wikipedia article, a
+      // research step) and its auto-synthesis also append facts, and those
+      // were lost on reload when only via==="assert" saved. Commands write
+      // nothing, so they stay out. The save is debounced, so a read-through
+      // that changed nothing costs at most one coalesced write.
+      if (result.record && result.record.via !== "command") scheduleSave();
+      await renderStatsPanel(); // a teach or learned-load turn grew this session's memory; a plain ask leaves it unchanged either way
+    } catch (err) {
+      settleAssistantBubble(pendingRow,
+        "something went wrong answering that (" + (err && err.message ? err.message : err) + ") \\u2014 try rephrasing",
+        { miss: true });
+    } finally {
+      // A "/wiki on|off|supplement|always" turn flips the session's own
+      // state — mirror it back into the radio group and the stored
+      // preference, then settle the statusline (which the onLiveLookup
+      // hook may have overwritten with "searching wikipedia…" mid-turn).
+      mirrorWikiModeFromSession();
+      renderStatus();
+      setBusy(false);
+    }
+    if (result) noteResearchResult(result);
+    return result;
+  }
+
   composerForm.addEventListener("submit", (e) => {
     e.preventDefault();
     const q = inputEl.value.trim();
     if (!q || busy || !window.tmctChatSession) return;
     inputEl.value = "";
-    addUserBubble(q);
-    transcript.push({ role: "you", text: q, chipTier: null, ts: Date.now() });
-    const pendingRow = addPendingAssistantBubble();
-    setBusy(true);
-    window.tmctChatSession.turn(q)
-      .then((result) => {
-        settleAssistantBubble(pendingRow, result.answer, result.record);
-        // Persist on ANY store write, not just a teach turn: a learn-on-miss
-        // load (a child pack, a reference or live-Wikipedia article) and its
-        // auto-synthesis also append facts, and those were lost on reload when
-        // only via==="assert" saved. Commands write nothing, so they stay out.
-        // The save is debounced, so a read-through that changed nothing costs
-        // at most one coalesced write.
-        if (result.record && result.record.via !== "command") scheduleSave();
-        return renderStatsPanel(); // a teach or learned-load turn grew this session's memory; a plain ask leaves it unchanged either way
-      })
-      .catch((err) => settleAssistantBubble(pendingRow,
-        "something went wrong answering that (" + (err && err.message ? err.message : err) + ") \\u2014 try rephrasing",
-        { miss: true }))
-      .finally(() => {
-        // A "/wiki on|off|supplement|always" turn flips the session's own
-        // state — mirror it back into the radio group and the stored
-        // preference, then settle the statusline (which the onLiveLookup
-        // hook may have overwritten with "searching wikipedia…" mid-turn).
-        mirrorWikiModeFromSession();
-        renderStatus();
-        setBusy(false);
-        inputEl.focus();
-      });
+    submitLine(q).then(() => inputEl.focus());
+  });
+
+  // ---- the research queue: play/pause over "research next" turns ----------
+  // The engine owns the queue (each turn's result.research is its snapshot);
+  // this page only decides WHEN the next step is asked, through the shared
+  // viz-ticker verbs, paced no faster than the adapter's own polite interval.
+  const researchTopicEl = el("researchTopic");
+  const researchGoBtn = el("researchGo");
+  const researchPlayBtn = el("researchPlay");
+  const researchQueueStatusEl = el("researchQueueStatus");
+  const RESEARCH_TICK_MS = 2400;
+  let researchQueue = null; // the engine's latest snapshot, null when no run stands
+
+  const researchTicker = createTicker({
+    onTick: async () => { await submitLine("research next"); },
+    hasNext: () => Boolean(researchQueue && !researchQueue.complete),
+    onRender: renderResearchControls,
+    waitMs: RESEARCH_TICK_MS,
+  });
+
+  function renderResearchControls(tickState) {
+    const state = tickState || researchTicker.getState();
+    researchPlayBtn.hidden = !(researchQueue && !researchQueue.complete);
+    researchPlayBtn.textContent = state.playing ? "pause" : "play";
+    researchPlayBtn.setAttribute("aria-pressed", String(state.playing));
+    if (!researchQueue) {
+      researchQueueStatusEl.textContent = "";
+    } else if (researchQueue.complete) {
+      researchQueueStatusEl.textContent = 'research "' + researchQueue.topic + '" complete \\u2014 '
+        + researchQueue.done.length + " topic" + (researchQueue.done.length === 1 ? "" : "s") + " grounded";
+    } else {
+      researchQueueStatusEl.textContent = 'research "' + researchQueue.topic + '": '
+        + researchQueue.done.length + " done \\u00b7 " + researchQueue.pending.length + " queued";
+    }
+  }
+
+  /** Fold one settled turn's research field into the controls. A snapshot
+   *  (re)arms them; null (a run that ended) clears them; undefined (not a
+   *  research turn) leaves them alone. A FRESH run with topics queued starts
+   *  auto-play, unless the visitor asked for reduced motion — the play
+   *  button is the same control either way. */
+  function noteResearchResult(result) {
+    if (result.research === undefined) return;
+    const previous = researchQueue;
+    researchQueue = result.research;
+    const freshRun = Boolean(researchQueue && !researchQueue.complete && (!previous || previous.complete || previous.topic !== researchQueue.topic));
+    renderResearchControls();
+    if (freshRun && !prefersReducedMotion() && !researchTicker.getState().playing) researchTicker.play();
+  }
+
+  researchGoBtn.addEventListener("click", () => {
+    const topic = researchTopicEl.value.trim();
+    if (!topic || busy || !window.tmctChatSession) return;
+    researchTopicEl.value = "";
+    submitLine("research " + topic);
+  });
+  researchTopicEl.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); researchGoBtn.click(); }
+  });
+  researchPlayBtn.addEventListener("click", () => {
+    // pause() directly, not play()'s own toggle: play() declines while a
+    // step is mid-animation, and a pause pressed exactly then must not be
+    // dropped — the in-flight step still settles, then the loop stops.
+    if (researchTicker.getState().playing) researchTicker.pause();
+    else researchTicker.play();
   });
 
   // ---- export + print: whole-conversation controls ------------------------

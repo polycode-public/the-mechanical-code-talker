@@ -78,7 +78,10 @@ export function createLedgerSession({ seedPayload = null, vocabSeeded = false } 
       last = result.last;
       if ("planState" in result) planState = result.planState;
       if ("researchState" in result) researchState = result.researchState;
-      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, research: result.research ?? null };
+      // `research` distinguishes a queue snapshot (research turn) from null
+      // (a research turn that ended the run) from undefined (not a research
+      // turn) — the dock's controls only react to the first two.
+      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, research: result.research };
     },
   };
 }

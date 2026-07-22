@@ -24,6 +24,23 @@
 // moves on. No fact is ever fabricated to keep a research run tidy.
 
 import { normFactTerm } from "../domain/hash.mjs";
+import { loadLexicon, lookupNoun } from "../domain/grammar/lexicon.mjs";
+
+/** The search key a topic folds to: normFactTerm, then the lexicon lemma
+ *  when the noun is known ("owls" → "owl") — the same fold the live
+ *  clean-miss gate applies, and what keeps the provider's topic-drift guard
+ *  happy with an inflected request. An unknown word keys on its own folded
+ *  form (a topic the lexicon has never met is a fine thing to research). */
+export function researchTopicKey(topic, lexicon = null) {
+  const t = normFactTerm(topic);
+  if (!t) return "";
+  try {
+    const lex = lexicon ?? loadLexicon();
+    const entry = lookupNoun(lex, t);
+    if (entry) return normFactTerm(entry.lemma) || t;
+  } catch { /* lexicon unavailable — the folded form still works */ }
+  return t;
+}
 
 /** The most linked topics any request or config may queue at depth 1 —
  *  the fair-use cap on a research run's total round trips. */
@@ -127,8 +144,8 @@ function progressLine(state) {
   return `${done}${skipped}; ${state.pending.length} linked topic${state.pending.length === 1 ? "" : "s"} still queued — "research next" fetches the next one.`;
 }
 
-async function startRun({ topic, limit }, { holder, provider, ingest, config, notify }) {
-  const key = normFactTerm(topic);
+async function startRun({ topic, limit }, { holder, provider, ingest, config, notify, lexicon }) {
+  const key = researchTopicKey(topic, lexicon);
   if (!key) {
     holder.state = null;
     return { text: `I can't make a search key out of "${topic}".`, miss: true };
@@ -209,7 +226,7 @@ async function stepRun({ holder, provider, ingest, notify }) {
  *
  * `ctx`: { holder, provider, ingest(key, article, tag) -> stored count,
  * config (resolveResearchConfig's shape), memoryDir, planActive,
- * pagerActive, notify }.
+ * pagerActive, notify, lexicon }.
  */
 export async function researchTurn(line, ctx) {
   const req = parseResearchRequest(line);

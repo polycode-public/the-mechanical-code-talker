@@ -29,7 +29,6 @@ Each row is one task; the workstream that lands it deletes its row in the same c
 - [ ] ledger-build assertions fold into build-artefacts' single demo:build
 
 ### WS-research — research lane over Simple English Wikipedia (fable)
-- [ ] chat.html: "research: [topic]" entry with auto play/pause; ticks through searches as if the user asked each
 - [ ] ledger.html: same research feature in its dock
 
 ### Coordinator

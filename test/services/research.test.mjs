@@ -14,6 +14,7 @@ import {
   resolveResearchConfig,
   parseResearchRequest,
   researchProvenanceTag,
+  researchTopicKey,
   renderResearchAnswer,
   researchSnapshot,
   researchTurn,
@@ -235,6 +236,17 @@ test("a non-research line returns null and touches nothing", async () => {
   const ctx = ctxFor(provider, ingestRecorder());
   assert.equal(await researchTurn("what is an owl", ctx), null);
   assert.equal(provider.calls.length, 0);
+});
+
+test("an inflected topic folds to its lexicon lemma, so \"research owls\" searches under \"owl\"", async () => {
+  assert.equal(researchTopicKey("owls"), "owl");
+  assert.equal(researchTopicKey("the Owl"), "owl");
+  assert.equal(researchTopicKey("zzyzzx"), "zzyzzx", "an unknown word keys on its own folded form");
+  const provider = cannedProvider({ articles: { owl: ROW("Owl") }, links: {} });
+  const ctx = ctxFor(provider, ingestRecorder());
+  const r = await researchTurn("research owls", ctx);
+  assert.equal(r.miss, false);
+  assert.deepEqual(provider.calls[0], ["lookup", "owl"]);
 });
 
 test("the provenance tag and the cited line render the documented shapes", () => {
