@@ -430,13 +430,19 @@ ${THEME_TOKENS_CSS}
   .stage { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1rem; align-items: start; }
   @media (max-width: 760px) { .stage { grid-template-columns: 1fr; } }
 
+  /* the left column: quest and satchel as full-width strips above the room,
+     the room itself, then the reset/play/step/turn strip pinned directly
+     below it — everything in this column shares the room's own width, so
+     the column's total height tracks the side column instead of leaving a
+     gap under a lone, short room panel. */
+  .stage-left { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+
   /* the room view — a 90s-RPG interior cutaway, all CSS gradients, no
      external asset: a striped papered wall over a gilt dado rail over a
      diagonal-plank floor, framed by the same ornate double rule as before.
      The sprite tiles sit on the floor band (align-items flex-end), so
      furniture and people read as standing IN the room, against its wall,
      rather than floating in a chip strip. */
-  #playStage .room-frame { align-self: start; position: sticky; top: 1rem; }
   .room-frame {
     position: relative; min-height: 250px;
     background:
@@ -557,7 +563,7 @@ ${THEME_TOKENS_CSS}
   .chatask .prompt { color: var(--taught); font-size: .78rem; font-family: ${MONO_STACK}; }
   .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .32rem .55rem; min-width: 0; }
   .chatask input:disabled { opacity: .5; }
-  .controls-row { display: flex; align-items: center; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
+  .controls-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
   .controls-row button { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; padding: .38rem .85rem; border: 1px solid var(--gilt); background: var(--parchment); color: var(--ink); }
   .controls-row button:hover:not(:disabled) { background: var(--parchment-strong); }
   .controls-row button:disabled { opacity: .4; cursor: default; }
@@ -567,7 +573,7 @@ ${THEME_TOKENS_CSS}
 
   /* edit mode */
   body:not(.editing) #editStage { display: none; }
-  body.editing #playStage, body.editing #playControls { display: none; }
+  body.editing #playStage { display: none; }
   /* .stage's inherited align-items: start (kept for #playStage's own fixed-
      size room panel) would otherwise top-align .edittext against the
      manor-map/room-detail/legend column and leave a dead gap below the
@@ -583,7 +589,7 @@ ${THEME_TOKENS_CSS}
   .roomdetail .sprite-row { min-height: 3.2rem; }
   #legendList { display: flex; flex-wrap: wrap; gap: .5rem .3rem; }
 
-  body.preview .side, body.preview .controls-row, body.preview .status { display: none; }
+  body.preview .side, body.preview .stage-left > .panel, body.preview .controls-row, body.preview .status { display: none; }
   body.preview main { padding: 0; max-width: none; }
   body.preview .stage { display: block; }
   body.preview .eyebrow, body.preview h1, body.preview .mode-toggle, body.preview #editStage { display: none; }
@@ -597,9 +603,25 @@ ${THEME_TOKENS_CSS}
     <button id="editModeBtn" type="button" class="mode-toggle" disabled>edit the world</button>
   </div>
   <div class="stage" id="playStage">
-    <div class="room-frame" id="roomFrame">
-      <div class="room-plaque mono" id="roomName"></div>
-      <div class="sprite-row" id="spriteRow"></div>
+    <div class="stage-left">
+      <div class="panel goals">
+        <h2>quest</h2>
+        <div id="goalList"></div>
+      </div>
+      <div class="panel carrying">
+        <h2>satchel</h2>
+        <div class="chips" id="carryList"></div>
+      </div>
+      <div class="room-frame" id="roomFrame">
+        <div class="room-plaque mono" id="roomName"></div>
+        <div class="sprite-row" id="spriteRow"></div>
+      </div>
+      <div class="controls-row" id="playControls">
+        <button id="resetBtn" type="button" disabled>reset</button>
+        <button id="playBtn" type="button" disabled>&#9654; play</button>
+        <button id="stepBtn" type="button" disabled>step</button>
+        <span class="turn mono" id="turnLabel">turn: 0</span>
+      </div>
     </div>
     <aside class="side" aria-label="The adventure's log and chat">
       <div class="chat">
@@ -612,17 +634,9 @@ ${THEME_TOKENS_CSS}
           <input id="chatq" type="text" placeholder="go north" aria-label="Type a command, or ask a question" disabled>
         </form>
       </div>
-      <div class="panel carrying">
-        <h2>satchel</h2>
-        <div class="chips" id="carryList"></div>
-      </div>
       <div class="panel roommap">
         <h2>the manor, so far</h2>
         <div class="map-viewport"><div id="mapWrap"></div></div>
-      </div>
-      <div class="panel goals">
-        <h2>quest</h2>
-        <div id="goalList"></div>
       </div>
     </aside>
   </div>
@@ -652,12 +666,6 @@ ${THEME_TOKENS_CSS}
   </div>
 
   <div class="goal-line" id="goalLine"></div>
-  <div class="controls-row" id="playControls">
-    <button id="resetBtn" type="button" disabled>reset</button>
-    <button id="playBtn" type="button" disabled>&#9654; play</button>
-    <button id="stepBtn" type="button" disabled>step</button>
-    <span class="turn mono" id="turnLabel">turn: 0</span>
-  </div>
   <div class="status" id="status">loading the engine&hellip;</div>
 </main>
 <script>
