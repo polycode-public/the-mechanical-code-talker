@@ -32,10 +32,10 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | # | Item | Status | Checked | Motivation | Likelihood it sticks |
 |---|---|---|---|---|---|
 | 9 | walled-asks cluster (router thing, big picture, entry point, …) | open — 8 of 10 phrasings fixed 2026-07-22; remaining: "tell me about the router thing" and "what is the purpose of the validate module" (honest misses now, want a design pass) | 2026-07-21 | natural phrasings of answerable questions | medium |
-| 12 | in-game question routing guard | open, traced | 2026-07-21 | code answers inside a game, worst misroute class | medium-high |
-| 13 | world-secret spoiler + predicate phrases | open, traced | 2026-07-21 | spoils the game, in garbled English | high |
-| 14 | "look" digest corpus leak | open, traced | 2026-07-21 | room text must come from the world | medium-high |
-| 16 | hanoi solve at xl | open, reproduced | 2026-07-21 | biggest live falsehood found | medium |
+| 12 | in-game question routing guard | in progress, traced (wt agent-af2b1d95c5c5eef5a) | 2026-07-21 | code answers inside a game, worst misroute class | medium-high |
+| 13 | world-secret spoiler + predicate phrases | in progress, traced (wt agent-af2b1d95c5c5eef5a) | 2026-07-21 | spoils the game, in garbled English | high |
+| 14 | "look" digest corpus leak | in progress, traced (wt agent-af2b1d95c5c5eef5a) | 2026-07-21 | room text must come from the world | medium-high |
+| 16 | hanoi solve at xl | in progress, reproduced (wt agent-af2b1d95c5c5eef5a) | 2026-07-21 | biggest live falsehood found | medium |
 | 17 | live-Wikipedia trust prior | open, traced | 2026-07-21 | live must not outrank the pinned pack | high |
 | 20 | wiki even-when-known (ask + supplement) | open, decided | 2026-07-22 | corroboration, not just rescue | medium-high |
 | 21 | full-triple learn-on-miss ingestion | open, decided | 2026-07-22 | loads become durable knowledge | medium-high |
