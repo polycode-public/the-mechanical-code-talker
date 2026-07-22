@@ -286,7 +286,7 @@ test("the Source split maps every stored sourceType to one PROV top class, in th
     operator: "tmct:AgentSource", teach: "tmct:AgentSource", provider: "tmct:AgentSource",
     corpus: "tmct:DocumentSource", corpusWeak: "tmct:DocumentSource", web: "tmct:DocumentSource",
     extracted: "tmct:DocumentSource", reference: "tmct:DocumentSource",
-    referenceLive: "tmct:DocumentSource",
+    referenceLive: "tmct:DocumentSource", optimisticExtract: "tmct:DocumentSource",
     entailed: "tmct:ActivitySource",
   };
   for (const sourceType of Object.keys(SOURCE_PRIOR)) {

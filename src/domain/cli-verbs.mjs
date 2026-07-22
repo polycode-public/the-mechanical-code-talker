@@ -92,6 +92,8 @@ export const CLI_VERBS = [
       { flag: "[--file <text-file>]", prose: ["teach recognizer and keep the facts it grounds; every", "other sentence is skipped and counted, never paraphrased"] },
       { flag: "[--repo <abs>]", prose: ["write the facts into that repo's own tmct memory; without", "it nothing on disk is mutated and the facts print as JSONL"] },
       { flag: "[--out <file.jsonl>]", prose: ["write that JSONL to a file instead of stdout"] },
+      { flag: "[--optimistic]", prose: ["also run a lower-trust fuzzy tier over the sentences the", "strict recognizer skips; candidates rank below every curated pack"] },
+      { flag: "[--canonical]", prose: ["print each grounded fact as a triple linked into the store"] },
     ],
   },
   {

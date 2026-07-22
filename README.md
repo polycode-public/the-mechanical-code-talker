@@ -556,6 +556,20 @@ Pass `--repo <path>` instead to write the recognized facts straight into
 that repo's memory, or `--out <file.jsonl>` to save the rows. Each one
 carries an `extracted:<file>` provenance tag at its own trust tier.
 
+`--optimistic` adds a second, lower-trust tier over the sentences the strict
+recognizer skips: a copula or a known relation verb flanked by two nouns
+becomes a candidate triple, stored under its own `optimistic-extract:<file>`
+provenance (prior 0.35, below every curated pack) with no operator tag riding
+alongside — so a fuzzy guess can never corroborate a curated fact. It is an
+attempt, not full NLU: a sentence with no clean pair yields nothing.
+`--canonical` prints each grounded fact as a triple, noting how each endpoint
+already links into the store.
+
+The same pipeline is one library seam, `ingestText(text, options)` (exported
+as `@polycode-projects/the-mechanical-code-talker/ingest`), and one cold tool,
+`tmct_ingest` — so a browser page, a script, or a tool-calling agent can ground
+text without the CLI.
+
 ### Provenance and trust
 
 Every fact and text block records **where it came from and when**. Sources are
@@ -716,6 +730,9 @@ above — the same teach recognizer, reading a file instead of your typing:
        [--repo <abs>]          write the facts into that repo's own tmct memory; without
                                it nothing on disk is mutated and the facts print as JSONL
        [--out <file.jsonl>]    write that JSONL to a file instead of stdout
+       [--optimistic]          also run a lower-trust fuzzy tier over the sentences the
+                               strict recognizer skips; candidates rank below every curated pack
+       [--canonical]           print each grounded fact as a triple linked into the store
 ```
 
 `tmct extend --validate` checks a third-party extension pack's declared resources
@@ -1014,7 +1031,7 @@ loads a repo's graph into a `{ dispatch, resolve, graph }` context,
 
 ## The tool surface
 
-Everything above runs on the same 24 tools. Each one is read-only, answers one question in a single call, and returns bounded output. None of them calls a model. A tool that cannot ground an answer says so — the same honest miss you get everywhere else in tmct.
+Everything above runs on the same 25 tools. Each one is read-only, answers one question in a single call, and returns bounded output. None of them calls a model. A tool that cannot ground an answer says so — the same honest miss you get everywhere else in tmct.
 
 Three of them are **hot**: their schemas stay resident, so an agent driving tmct sees them every turn and reaches for one call instead of a Read/Grep loop.
 
@@ -1087,6 +1104,7 @@ The remaining tools are **cold**: still served, but not billed to an agent every
 | `tmct_cochanges` | Modules that historically change in the same commit as a symbol's module (git co-change). | `symbol` (required) |
 | `tmct_context_more` | The bundle sections a lean tmct_context omitted (siblings / tests / cochange / class members / re-exports). | `symbol` (required) |
 | `tmct_export` | Every stored memory fact as JSONL (subject/predicate/object/provenance) — the shape `tmct extract` emits, for backup or audit. | none |
+| `tmct_ingest` | Ground plain text into memory facts with the same deterministic recognizer the chat teach lane uses — the strict tier, plus an optional lower-trust fuzzy tier — and report the canonical triples. | `text` (required), `optimistic` |
 
 Add `repo_path` to any of them to point at a repository other than the working directory. `tmct init` also writes this catalog, with a worked invocation per tool, to `.tmct/TOOLS.md` inside the repo it indexed.
 

@@ -50,6 +50,10 @@ function parseChatTagRest(rest) {
  *      as kind "referenceLive", which scores below the curated revision-pinned
  *      pack, so a live lookup never outranks the shipped article on the same term.
  *   extracted:<file-basename>  -> { kind:"extracted", name:<file-basename> }
+ *   optimistic-extract:<file-basename> -> { kind:"optimisticExtract", name }
+ *     (the fuzzy tier of `tmct extract --optimistic`: a candidate the strict
+ *      recognizer skipped, stored under its OWN low prior so it never
+ *      corroborates a curated pack — no operator/teach tag rides alongside)
  *   entailed:<rule>            -> { kind:"entailed",  rule:<rule> }
  * chat:/session: refs map to the operator; an unknown tag -> null (no Source).
  */
@@ -90,6 +94,7 @@ export function provenanceTagToSource(tag) {
   }
   if (head.startsWith("web:")) return { kind: "web", url: head.slice("web:".length) };
   if (head.startsWith("url:")) return { kind: "web", url: head.slice("url:".length) };
+  if (head.startsWith("optimistic-extract:")) return { kind: "optimisticExtract", name: head.slice("optimistic-extract:".length) || "unknown" };
   if (head.startsWith("extracted:")) return { kind: "extracted", name: head.slice("extracted:".length) || "unknown" };
   if (head.startsWith("entailed:")) return { kind: "entailed", rule: head.slice("entailed:".length) };
   if (head.startsWith("chat:") || head.startsWith("session:") || head.startsWith("operator")) return { kind: "operator" };
@@ -108,6 +113,7 @@ export const SOURCE_PRIOR = Object.freeze({
   referenceLive: 0.5,
   extracted: 0.45,
   web: 0.4,
+  optimisticExtract: 0.35,
   entailed: 0.3,
 });
 

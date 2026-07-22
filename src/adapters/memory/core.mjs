@@ -94,7 +94,7 @@ const MEMORY_VOCABULARY = [
   { prop: DERIVED_FROM_PROP, predicate: "derivedFrom", note: "umbrella: a Fact derived from a Source (or another Fact). ext ref prov:wasDerivedFrom (UNVERIFIED-pending-web-check)" },
   { prop: STATED_BY_PROP, predicate: "statedBy", note: "subPropertyOf derivedFrom: a Source directly asserts this Fact (one edge per independent source — replaces the factProvenance union)" },
   { prop: CANONICALISED_FROM_PROP, predicate: "canonicalisedFrom", note: "subPropertyOf derivedFrom: a canonical Fact cleaned from a raw Block/Source, never replacing it" },
-  { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | corpusWeak | reference | referenceLive | extracted | web | entailed (the trust-prior key)" },
+  { prop: "mgx:sourceType", note: "a Source's kind: operator | teach | provider | corpus | corpusWeak | reference | referenceLive | extracted | optimisticExtract | web | entailed (the trust-prior key)" },
   { prop: "mgx:sourceUrl", note: "a web Source's URL" },
   { prop: "mgx:sourceRule", note: "an entailed Source's rule id" },
   { prop: "mgx:sourceReliability", note: "actor-level (session-scoped) trust nudge in [0.5,1.5], neutral 1.0 when absent — materialised by recomputeSourceReliability from a session's asserted-vs-contradicted track record (memory/trust.mjs's sessionReliabilityFrom); folds into computeTrust's per-source prior" },
@@ -777,6 +777,8 @@ function sourceIdFor(desc) {
     case "referenceLive": return { id: `src:reference:${desc.pack}:${desc.article}`, type: "referenceLive" };
     // One Source per source-file basename, not per extraction run.
     case "extracted": return { id: `src:extracted:${desc.name}`, type: "extracted" };
+    // The fuzzy tier's candidates: one low-trust Source per source label.
+    case "optimisticExtract": return { id: `src:optimistic-extract:${desc.name}`, type: "optimisticExtract" };
     case "web": return { id: `src:learned:web:${fnv1aHex(String(desc.url || ""))}`, type: "web", url: String(desc.url || "") };
     case "entailed": return { id: `src:entailed:${desc.rule}`, type: "entailed", rule: String(desc.rule || "") };
     default: return null;
@@ -800,6 +802,7 @@ const PROV_CLASS_BY_SOURCE_TYPE = Object.freeze({
   referenceLive: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
   web: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
   extracted: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
+  optimisticExtract: { subClass: "tmct:DocumentSource", prov: "prov:Entity" },
   entailed: { subClass: "tmct:ActivitySource", prov: "prov:Activity" },
 });
 
