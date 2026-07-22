@@ -4210,6 +4210,26 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       content = `${content}\n${lines.join("\n")}`;
     }
   }
+  // NARROWING DISCLOSURE: the resolver picked ONE entity among several distinct
+  // name-matches (a scored win, not a tie — a tie renders as branches above and
+  // is excluded here). Whether the pick then produced an answer or an empty
+  // result, disclose it and the count of the other matches in one line, so a
+  // silent narrowing (a merged graph's src/store.mjs over src/core/store.mjs, a
+  // directory term landing on one module, a wrong-case pick reporting no members)
+  // is never mistaken for the only reading.
+  if (!rendered.ambiguous && result.objMatch && Array.isArray(result.candidates) && result.candidates.length) {
+    // A ranked shape (entry-point, superlative) carries its runners-up in
+    // `matches` and discloses them its own way; a NAME-narrowing carries the
+    // narrowed-away candidates OUTSIDE `matches`. Only the latter is disclosed.
+    const matchIds = new Set((result.matches || []).map((m) => m && m.id));
+    const others = result.candidates.filter((c) => c && c.id && c.id !== result.objMatch.id && !matchIds.has(c.id));
+    if (others.length) {
+      const shown = others.slice(0, 3).map((c) => c.label).filter(Boolean);
+      const more = others.length - shown.length;
+      const list = shown.join(", ") + (more > 0 ? `, +${more} more` : "");
+      content = `${content}\n(answering for ${result.objMatch.label} — ${others.length} other match${others.length === 1 ? "" : "es"}: ${list})`;
+    }
+  }
   return {
     content,
     tmct_ask: {
