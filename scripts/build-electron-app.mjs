@@ -16,7 +16,7 @@ import { readFile, writeFile, mkdir, access } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
-import { computeCodeExplorerData, renderCodeExplorerHtml } from "../src/services/code-explorer-viz.mjs";
+import { computeCodeExplorerData, renderCodeExplorerHtml, VENDOR_WINK_LOADER_JS } from "../src/services/code-explorer-viz.mjs";
 import { main as buildCodeExplorerBundle } from "./build-code-explorer-bundle.mjs";
 import { buildWinkVendor } from "./build-wink-vendor.mjs";
 
@@ -24,11 +24,6 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(HERE, "..");
 const RENDERER_DIR = join(ROOT, "electron", "renderer");
 const DEMO_GRAPH = join(ROOT, "public", "demo-graph.json");
-
-const WINK_LOADER = `window.__WINK_LOADER__ = async function () {
-  var m = await import("./vendor/wink.js");
-  return { winkNLP: m.winkNLP, model: m.model };
-};`;
 
 async function exists(p) {
   try { await access(p); return true; } catch { return false; }
@@ -48,7 +43,7 @@ export async function buildElectronApp() {
   const data = computeCodeExplorerData(payload, { title: "demo code graph" });
   const html = renderCodeExplorerHtml(data, {
     bundleAvailable: true,
-    winkLoaderInline: WINK_LOADER,
+    winkLoaderInline: VENDOR_WINK_LOADER_JS,
     sourceName: "demo code graph",
   });
   const indexPath = join(RENDERER_DIR, "index.html");

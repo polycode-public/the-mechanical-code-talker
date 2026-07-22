@@ -396,6 +396,29 @@ const PAGES = [
       },
     ],
   },
+  {
+    page: "code",
+    path: "code.html",
+    ready: async (page) => {
+      await page.locator("#ledger .row").first().waitFor({ state: "visible" });
+    },
+    states: [
+      { label: "idle", act: async () => {} },
+      {
+        label: "focus-changed",
+        act: async (page) => {
+          await page.locator("#ledger .term").first().click();
+        },
+      },
+      {
+        label: "hint-answered",
+        act: async (page) => {
+          await page.locator(".hint").first().click();
+          await page.waitForFunction(() => document.querySelectorAll("#chat-log .turn-tmct").length >= 1, null, { timeout: READY_TIMEOUT_MS });
+        },
+      },
+    ],
+  },
 ];
 
 for (const spec of PAGES) {

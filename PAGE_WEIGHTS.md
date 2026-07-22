@@ -9,7 +9,7 @@ serves the precompressed `.br` siblings the build writes), and a real Chromium
 cold load per page (Playwright, CDP `Network.loadingFinished`
 `encodedDataLength` summed over every request).
 
-## The seven pages
+## The eight pages
 
 | page | own HTML (raw) | eager assets (raw) | eager assets (br wire) | cold-load total (wire) | third-party requests |
 |---|---:|---:|---:|---:|---:|
@@ -20,23 +20,28 @@ cold load per page (Playwright, CDP `Network.loadingFinished`
 | adventure.html | 638,500 | 855,135 | 237,588 | 276,409 | 0 |
 | sprites.html | 1,290,920 | 4,490,799 | 1,021,426 | 1,067,525 | 0 |
 | plan.html | 37,857 | 4,500,964 | 1,024,446 | 1,032,627 | 0 |
+| code.html | 89,938 | 857,360 | 236,631 | 248,840 | 0 |
 
 Cold-load total is page HTML wire + eager assets wire. The Chromium run
 confirmed every page within ~0.1% (response headers account for the gap) and
 confirmed the request lists: no page makes any third-party request — every
 byte comes from the site's own origin.
 
-**chat.html's row is a local rebuild, not a live re-crawl** (measured
-2026-07-22 against a worktree build with `SEED_BAND_CAPS` raised to
-conceptnet 7,000 / wordnet-xl 14,000, `scripts/build-chat-seed.mjs`): the six
-other rows still reflect the 2.9.4 live deployment. Re-measure chat.html
-against the live site once this change actually deploys.
+**chat.html's and code.html's rows are local rebuilds, not a live re-crawl.**
+chat.html (measured 2026-07-22 against a worktree build with
+`SEED_BAND_CAPS` raised to conceptnet 7,000 / wordnet-xl 14,000,
+`scripts/build-chat-seed.mjs`) and code.html (measured the same day, the
+first build to ship the page at all — a real Chromium cold load confirmed
+its eager request list, brotli sizes computed directly against the local
+build's `code.html` and `code-explorer.bundle.js`). The other six rows still
+reflect the 2.9.4 live deployment. Re-measure both against the live site
+once this change actually deploys.
 
-Whole set, summing the seven per-page totals (chat.html's local-rebuild row
-carried through): **68,372,711 bytes raw (65.2 MB), 8,532,884 bytes wire
-(8.1 MB)**. Counting every distinct file once (what a full cold crawl
+Whole set, summing the eight per-page totals (the two local-rebuild rows
+carried through): **69,320,009 bytes raw (66.1 MB), 8,781,724 bytes wire
+(8.4 MB)**. Counting every distinct file once (what a full cold crawl
 transfers, since the wink vendor and the service worker script are shared):
-**51 files, 53,748,519 bytes raw (51.3 MB), 5,369,088 bytes wire (5.1 MB)**.
+**53 files, 54,695,817 bytes raw (52.2 MB), 5,617,928 bytes wire (5.4 MB)**.
 
 ## Notes on the numbers
 
@@ -66,6 +71,12 @@ compressed).
 **sprites.html.** Its own HTML carries the embedded sprite data (1,290,920
 raw, 46,099 br), plus the dock bundle `sprites-browser.bundle.js` and the
 wink vendor.
+
+**code.html.** Its own HTML carries the embedded demo code graph, so the page
+makes only one other eager request, `code-explorer.bundle.js`. Unlike the
+other dock pages here, it does not fetch the wink vendor at load — the dock
+loads it lazily, only once a visitor actually asks a question — so it is the
+lightest of the eight cold loads at 249 KB wire.
 
 **The service worker.** index, chat, ledger and plan register `tmct-sw.js`
 (adventure and chat also fetch it for the stamp). On install it precaches the
