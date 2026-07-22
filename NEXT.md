@@ -31,7 +31,6 @@ procedure, not a diff), *operator call* (a decision, not a build).
 
 | # | Item | Status | Checked | Motivation | Likelihood it sticks |
 |---|---|---|---|---|---|
-| 9 | walled-asks cluster (router thing, big picture, entry point, …) | in progress — remainder with wt agent-a5b4e776fb3ff7d3f | 2026-07-21 | natural phrasings of answerable questions | medium |
 | 17 | live-Wikipedia trust prior | in progress, traced (wt agent-a7b5d6ca215acb56d) | 2026-07-21 | live must not outrank the pinned pack | high |
 | 20 | wiki even-when-known (ask + supplement) | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | corroboration, not just rescue | medium-high |
 | 21 | full-triple learn-on-miss ingestion | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | loads become durable knowledge | medium-high |
@@ -39,17 +38,10 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 23 | `extract --optimistic` + `--canonical` | in progress, decided (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | ingest real-world text | medium |
 | 24 | glow-Markdown session logs | in progress, sampled (wt agent-adda6ef5cd3b8928a) | 2026-07-22 | readable transcripts; the sample is the spec | high |
 | 28 | spider-fly observable-facts panel | in progress — chat lane with wt agent-adda6ef5cd3b8928a | 2026-07-22 | planners' knowledge made inspectable | medium |
-| 29 | sense-splitting on read-back (Rover) | in progress, designed (wt agent-a5b4e776fb3ff7d3f) | 2026-07-22 | two concepts under one label | medium-high |
 | 31 | ingest.html + ledger/chat ingest | in progress — browser surfaces + home tile shipped 2026-07-22; remaining: TUI `/ingest` (wt agent-adda6ef5cd3b8928a) + `tmct_ingest`/optimistic tier (wt agent-a7b5d6ca215acb56d) | 2026-07-22 | bring your own text | medium-high |
 | 33 | triple-store export, every page | in progress — every fact-store page exports now; remaining: TUI `/export` (wt agent-adda6ef5cd3b8928a) | 2026-07-22 | data leaves in the standard shape | high |
 
 The detailed items:
-
-- Walled-asks remainder (item 9): "tell me about the router thing" (fuzzy "the X thing"
-  resolution) and "what is the purpose of the validate module" (purpose-of phrasing over an
-  unseen vocab noun) both now miss honestly instead of misrouting — the 2026-07-22 round fixed
-  the other eight phrasings in the cluster. Both want a small design pass (closed template or
-  resolver widening), not a lane rewrite.
 
 - Live-Wikipedia trust prior: `reference:wikipedia-live` still parses as kind `reference` and
   scores the same `SOURCE_PRIOR.reference = 0.6` (`src/domain/memory/trust.mjs:94`) as the
@@ -108,32 +100,6 @@ The detailed items:
   `src/services/spider-fly.mjs`); the same read path still wants a chat phrasing ("what does
   the fly see?") so TUI/CLI/serve inherit it — build that lane beside the game lanes.
 
-- Sense-splitting on fact read-back, with the class hierarchy shown. Live case (operator,
-  2026-07-21): "What is Rover?" returns `rover is a kind of dog (ace:chat …)` and `rover is a
-  kind of scout (corpus:human-large)` as one flat list — two concepts sharing a label, rendered
-  as if one thing. Under the open-world reading two mentions of "rover" are not the same
-  individual by default (OWL's non-unique name assumption); today the read-back neither shows
-  the hierarchy above each is-a object nor notices that the hierarchies never meet. Build, all
-  deterministic over the stored graph, no new vocabulary:
-  1. Extend the fact-list answer to show each is-a object's superclass chain (the transitive
-     `rdfs:subClassOf` closure the read-only proof kernels already walk — `findIsaChain`,
-     `src/domain/syllogise.mjs`), capped: "rover is a kind of dog → canine → mammal → animal".
-  2. Detect distinct concepts from the end triples: for every pair of same-predicate end
-     objects (here `dog`, `scout`), compare their ancestries. Distinct when (a) any ancestor
-     pair is stored or derivable `owl:disjointWith` (the cax-dw kernel already computes this);
-     else (b) the least common subsumer (Cohen, Borgida & Hirsh 1992) is the root/⊤ or sits
-     above a depth threshold — equivalently a Wu-Palmer (1994) depth-ratio similarity or a
-     Resnik (1995) information-content score of the LCS below threshold, both computable
-     deterministically from the stored closure (IC from stored fact counts, never a model);
-     else (c) the ancestries are wholly non-intersecting below the root. The literature name
-     for the task is word-sense discrimination / instance-level entity resolution; the OWL
-     rendering of the verdict is an implicit `owl:differentFrom` between the two senses.
-  3. When senses split, group the whole answer by concept — "rover, the dog: …" / "rover, the
-     scout: …" — same capped-list/pending conventions; when the check is inconclusive keep
-     today's flat list (grouping is presentation, never retraction — trust and contradiction
-     handling unchanged). Apply wherever a fact list renders (`factReadBackReaders`,
-     `chat.mjs:7660`), not just "what is X".
-
 ## Where each item lands — code, tests, docs, channels
 
 **Channel audit (2026-07-22).** The channel set for "surfaced everywhere applicable" is: the
@@ -145,9 +111,6 @@ the tool layer, which we already ship; both are folded into the entries below wh
 apply. Chat-lane fixes (items 1-16, 29) inherit every chat channel at once — TUI, plain CLI,
 browser bundles, serve, and library `runChat` all call the same `runTurn`.
 
-- **9 remainder, the two walled asks.** Code: `chat.mjs` — a closed template or resolver
-  widening per the detail bullet; design first. Tests: corpus rows in the `template.*` lane.
-  Channels: inherit.
 - **17, wiki trust prior.** Code: one source kind + a `reference:wikipedia-live` parse branch in
   `src/domain/memory/trust.mjs` (`SOURCE_PRIOR`, `:94`). Tests: `test/adapters/
   chat-inference-trust.test.mjs`, `provenance.test.mjs`. Docs: README's trust/provenance table
@@ -176,13 +139,6 @@ browser bundles, serve, and library `runChat` all call the same `runTurn`.
   over `beliefSnapshotFor` (`src/services/spider-fly.mjs`), built beside the game lanes.
   Tests: a corpus row in the games lane + `test/services/spider-fly.test.mjs`. Channels: all
   chat channels inherit.
-- **29, sense-splitting.** Code: a pure sense-cluster utility in `src/domain/` (ancestry
-  intersection, LCS depth/IC threshold, disjointness veto — reusing `findIsaChain` and the
-  cax-dw kernel read-only) + grouping in `factReadBackReaders` (`chat.mjs:7660`). Tests: unit
-  (new `test/adapters/sense-split.test.mjs` beside `chat-reference-lane`); tool level in
-  `test/tools/ask.test.mjs` if ask() lists adopt grouping; corpus rows in the `template.*`
-  lane. Docs: README's answer-shape section; the ledger page renders grouped senses naturally.
-  Channels: all chat channels inherit; `tmct viz`/ledger rendering optionally groups.
 - **31/33 remainder, chat-command parity.** TUI `/ingest <path>` + `/export <path>` ride the
   session-log batch; the `tmct_ingest` cold tool + the optimistic tier ride knowledge flows.
 
