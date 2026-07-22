@@ -14,7 +14,7 @@ cold load per page (Playwright, CDP `Network.loadingFinished`
 | page | own HTML (raw) | eager assets (raw) | eager assets (br wire) | cold-load total (wire) | third-party requests |
 |---|---:|---:|---:|---:|---:|
 | index.html | 18,153 | 4,856,462 | 1,541,298 | 1,546,402 | 0 |
-| chat.html | 38,848 | 28,357,150 | 2,291,296 | 2,301,214 | 0 |
+| chat.html | 38,848 | 45,035,285 | 3,141,139 | 3,151,057 | 0 |
 | spider-fly.html | 614,718 | 845,819 | 233,567 | 269,923 | 0 |
 | ledger.html | 652,024 | 4,497,227 | 1,023,670 | 1,188,941 | 0 |
 | adventure.html | 638,500 | 855,135 | 237,588 | 276,409 | 0 |
@@ -26,11 +26,17 @@ confirmed every page within ~0.1% (response headers account for the gap) and
 confirmed the request lists: no page makes any third-party request — every
 byte comes from the site's own origin.
 
-Whole set, summing the seven per-page totals: **51,694,576 bytes raw
-(51.7 MB), 7,683,041 bytes wire (7.7 MB)**. Counting every distinct file once
-(what a full cold crawl transfers, since the wink vendor and the service
-worker script are shared): **51 files, 37,070,384 bytes raw (37.1 MB),
-4,519,245 bytes wire (4.5 MB)**.
+**chat.html's row is a local rebuild, not a live re-crawl** (measured
+2026-07-22 against a worktree build with `SEED_BAND_CAPS` raised to
+conceptnet 7,000 / wordnet-xl 14,000, `scripts/build-chat-seed.mjs`): the six
+other rows still reflect the 2.9.4 live deployment. Re-measure chat.html
+against the live site once this change actually deploys.
+
+Whole set, summing the seven per-page totals (chat.html's local-rebuild row
+carried through): **68,372,711 bytes raw (65.2 MB), 8,532,884 bytes wire
+(8.1 MB)**. Counting every distinct file once (what a full cold crawl
+transfers, since the wink vendor and the service worker script are shared):
+**51 files, 53,748,519 bytes raw (51.3 MB), 5,369,088 bytes wire (5.1 MB)**.
 
 ## Notes on the numbers
 
@@ -40,13 +46,17 @@ pages load it eagerly — index, chat, ledger, sprites, plan — but the browser
 pays for it once: HTTP cache plus the service worker's precache serve every
 later page from the first copy.
 
-**chat.html.** The seed, `chat-seed.json`, is 23,861,630 bytes raw but
-1,266,619 on the wire (br compresses the JSON 19:1), so chat's whole cold
-boot is 2.3 MB. The page also fetches `tmct-sw.js` (2,756) to show the
-release stamp. The reference pack loads lazily: `reference-pack/index.json`
-(104,924 raw / 20,407 br) on the first citation, then one article JSON per
-citation (1–4 KB each; 4,224 terms mapping to 3,887 article files, ~15.5 MB
-on disk that is never bulk-fetched).
+**chat.html.** The seed, `chat-seed.json`, is 40,539,765 bytes raw but
+2,116,462 on the wire (br compresses the JSON ~19:1, same ratio as before the
+caps rose), so chat's whole cold boot is 3.1 MB. The page also fetches
+`tmct-sw.js` (2,756) to show the release stamp. The reference pack loads
+lazily: `reference-pack/index.json` (104,924 raw / 20,407 br) on the first
+citation, then one article JSON per citation (1–4 KB each; 4,224 terms
+mapping to 3,887 article files, ~15.5 MB on disk that is never bulk-fetched).
+The bigger seed cost only bytes, not boot time: a real-browser measurement
+(`e2e/pages-chat-boot-budget.test.mjs`) still grounds the first seeded
+answer at ~1.5 s against a 20 s budget, since everything here is local
+JSON parsing, not network latency.
 
 **index.html.** Loads the ask demo as unbundled modules: 27 `engine/src/**`
 files (772,496 raw / 375,280 wire), `demo-graph.json`, the wink vendor, and

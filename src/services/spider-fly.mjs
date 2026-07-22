@@ -636,8 +636,11 @@ function stepPlan(fromCell, toCell) {
  *  never ground truth: showing the observer's own honest gap
  *  between belief and reality (visibly widened by a deceiving pill or a fed
  *  false fact) is the whole point of that panel. Returns a plain
- *  `{ [candidateId]: cellId | null }` map. */
-function beliefSnapshotFor(observerSubject, observerCell, candidateIds, state, opts) {
+ *  `{ [candidateId]: cellId | null }` map. Exported as the read path for
+ *  what one agent can currently observe — every caller (this file's own
+ *  tick loop, a viz panel, a future chat lane) reads the same computation,
+ *  never a re-derived copy of it. */
+export function beliefSnapshotFor(observerSubject, observerCell, candidateIds, state, opts) {
   const belief = {};
   for (const candidateId of candidateIds) {
     if (candidateId === observerSubject) continue;

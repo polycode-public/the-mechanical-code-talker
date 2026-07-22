@@ -346,6 +346,10 @@ ${THEME_TOKENS_CSS}
      negative margin equal to this padding, so it reads as one welded unit,
      not a label floating inside a box. */
   .hud, .chat, .tuning { background: var(--chrome-face); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-raised); border-radius: 2px; padding: .6rem .75rem; }
+  /* the tuning strip matches the board's own width (not the wider stage-left
+     column it sits in) so the two line up as one visual stack, the same way
+     the board-frame below it is already centered at a fixed width. */
+  .tuning { width: ${BOARD_PX}px; max-width: 100%; margin: 0 auto; box-sizing: border-box; }
   .hud h2, .chat h2, .tuning h2 {
     font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 600;
     margin: -.6rem -.75rem .5rem; padding: .42rem .75rem;
@@ -357,12 +361,22 @@ ${THEME_TOKENS_CSS}
      at once now, so the agent count (and a naive card list's own height)
      can jump sharply; the panel must never grow the page underneath it. */
   .hud-list { max-height: 420px; overflow-y: auto; }
-  .hud-row { display: flex; flex-direction: column; gap: .1rem; padding: .4rem 0; border-top: 1px solid var(--chrome-edge-lo); box-shadow: inset 0 1px 0 var(--chrome-edge-hi); }
+  .hud-row { display: flex; align-items: flex-start; gap: .6rem; padding: .4rem 0; border-top: 1px solid var(--chrome-edge-lo); box-shadow: inset 0 1px 0 var(--chrome-edge-hi); }
   .hud-row:first-of-type { border-top: none; box-shadow: none; }
+  .hud-row.clickable { cursor: pointer; }
+  .hud-row.clickable:hover, .hud-row.clickable:focus-visible { background: var(--chrome-brass-soft); }
+  .hud-main { display: flex; flex-direction: column; gap: .1rem; flex: 1 1 auto; min-width: 0; }
   .hud-id { font-family: ${MONO_STACK}; font-size: .74rem; font-weight: 600; }
   .hud-id.spider { color: var(--taught); } .hud-id.fly { color: var(--fly); } .hud-id.egg { color: var(--muted); }
   .hud-goal { font-size: .85rem; }
   .hud-plan, .hud-belief { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); margin-top: .25rem; line-height: 1.4; padding-left: .5rem; border-left: 2px solid var(--chrome-brass); }
+  /* the click-expand facts panel (§28): beside the clicked spider/fly's own
+     row, never a separate popover or a second panel elsewhere on the page —
+     the same believedCellOf/beliefSnapshotFor read path spider-fly.mjs
+     already computes every tick for planning, rendered here as full
+     sentences instead of the compact believes:-line above. */
+  .hud-detail { flex: 1 1 auto; min-width: 0; font-family: ${MONO_STACK}; font-size: .64rem; line-height: 1.5; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: .35rem .5rem; }
+  .hud-detail-title { text-transform: uppercase; letter-spacing: .06em; opacity: .75; margin-bottom: .2rem; }
   /* A stat-readout track: an inset "LCD" well, filled with a segmented pip
      texture (repeating-linear-gradient) instead of a smooth gradient bar —
      discrete resource units, the same reading-at-a-glance language a 90s
@@ -457,7 +471,7 @@ ${THEME_TOKENS_CSS}
 <body>
 <main>
   <div class="eyebrow">tmct &middot; spider and fly</div>
-  <h1>A spider in its web, a fly on the board — each planning against the other</h1>
+  <h1>Multiple competing planning agents</h1>
   <div class="stage">
     <div class="stage-left">
     <div class="tuning" id="tuning">
@@ -543,6 +557,10 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const spriteLayer = el("spriteLayer");
   const threadTip = el("threadTip");
   const hudEl = el("hud");
+  // Which agent ids currently show their expanded observed-facts panel —
+  // survives renderHud() rebuilding the list's innerHTML every tick, since
+  // that's the only way this state can persist across a full re-render.
+  const expandedAgents = new Set();
   const chatlogEl = el("chatlog");
   const chatformEl = el("chatform");
   const chatqEl = el("chatq");
@@ -783,20 +801,58 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     return '<div class="hud-belief">believes: ' + text + "</div>";
   }
 
+  // The full text rendering behind the click-expand panel: one sentence per
+  // other candidate the observer currently has a belief about, or "has not
+  // been observed" for a candidate it doesn't — the same belief map
+  // beliefLineHtml already compresses into a single line, spelled out in
+  // full beside the clicked agent instead of abbreviated above it.
+  function observedFactsHtml(observerId, belief) {
+    const entries = Object.entries(belief || {});
+    const lines = entries.length
+      ? entries.map(([id, cell]) => '<div class="hud-detail-line">'
+          + (cell ? esc(id) + " is at " + esc(cell) + "." : esc(id) + " has not been observed.")
+          + "</div>").join("")
+      : '<div class="hud-detail-line">nothing else is on the board yet.</div>';
+    return '<div class="hud-detail"><div class="hud-detail-title">' + esc(observerId) + " observes</div>" + lines + "</div>";
+  }
+
   function renderHud() {
     const ids = Object.keys(lastAgents).sort();
     if (!ids.length) { hudEl.innerHTML = '<div class="hud-empty">no agents on the board.</div>'; return; }
     hudEl.innerHTML = ids.map((id) => {
       const cls = classOfAgentId(id);
       const a = lastAgents[id];
-      return '<div class="hud-row"><span class="hud-id ' + esc(cls) + '">' + esc(id) + '</span>'
+      const clickable = cls === "spider" || cls === "fly";
+      const expanded = clickable && expandedAgents.has(id);
+      const main = '<div class="hud-main"><span class="hud-id ' + esc(cls) + '">' + esc(id) + '</span>'
         + '<span class="hud-goal">' + esc(goalById[id] || "watching\\u2026") + "</span>"
         + massBarHtml(cls, a.mass)
         + planLineHtml(a.plan)
         + beliefLineHtml(a.belief)
         + "</div>";
+      const attrs = clickable ? ' role="button" tabindex="0" aria-expanded="' + (expanded ? "true" : "false") + '"' : "";
+      return '<div class="hud-row' + (clickable ? " clickable" : "") + '" data-agent-id="' + esc(id) + '"' + attrs + '>'
+        + main + (expanded ? observedFactsHtml(id, a.belief) : "")
+        + "</div>";
     }).join("");
   }
+
+  function toggleAgentExpansion(id) {
+    if (!id) return;
+    if (expandedAgents.has(id)) expandedAgents.delete(id); else expandedAgents.add(id);
+    renderHud();
+  }
+  hudEl.addEventListener("click", (event) => {
+    const row = event.target.closest(".hud-row.clickable");
+    if (row) toggleAgentExpansion(row.dataset.agentId);
+  });
+  hudEl.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    const row = event.target.closest(".hud-row.clickable");
+    if (!row) return;
+    event.preventDefault();
+    toggleAgentExpansion(row.dataset.agentId);
+  });
 
   const threadGeometry = {
     parseCellId: (id) => tmctSpiderFly.parseCellId(id),
