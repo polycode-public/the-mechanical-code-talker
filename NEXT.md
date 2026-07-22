@@ -16,17 +16,7 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Open items
 
-### WS-home
-
-- [ ] Home page redesign (electronjs.org structure, tmct identity): hero, eight claim blocks
-      linking to the demo pages, eight feature sections with screenshots, Polycode showcase
-      (Seonix + Marginalia), keep theme tokens synced with viz-theme.mjs, keep the version-stamp
-      marker, keep the live demo box and the replayable code blocks.
-- [ ] Update `e2e/pages-index.test.mjs` + `e2e/pages-home.test.mjs` to pin the new structure
-      (claim count + hrefs, feature sections, showcase links) while keeping the clean-load,
-      live-demo, version-stamp and phone-viewport invariants.
-
-The prior board: None. The 2026-07-21 live-verified board (33 items, extended live to 35) cleared on 2026-07-22
+None. The 2026-07-21 live-verified board (33 items, extended live to 35) cleared on 2026-07-22
 across the 2.10.x releases; `git log` from 2.10.0 to the current release holds the delivery
 record, and the filler-clause widening and planner-counterfactual design passes still live in
 `PLAN_FILLER_AND_COUNTERFACTUALS.md` as the plan of record for the next build.

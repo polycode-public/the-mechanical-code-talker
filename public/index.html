@@ -30,7 +30,8 @@
 <style>
   /* Shared token names and hex values match src/services/viz-theme.mjs's
      TOKENS.light/TOKENS.dark exactly — the source of truth shared with the
-     ledger/plan/chat/sprite pages. Update there first, then here.
+     ledger/plan/chat/sprite pages. Update there first, then here. The -soft
+     values are viz-theme's own derived rgba() tiers, copied at the same alpha.
      --code-bg/--code-fg have no shared equivalent (this page's own terminal-block
      colours, outside the trust-tier palette) and stay page-local. */
   :root {
@@ -38,6 +39,8 @@
     --ink: #23272B;
     --muted: #6E7168;
     --taught: #2E7D4F;
+    --entail: #B07C2E;
+    --entail-soft: rgba(176, 124, 46, 0.14);
     --card: #FFFFFF;
     --line: #DDD9D0;
     --code-bg: #1B1F24;
@@ -49,6 +52,8 @@
       --ink: #E7E5DF;
       --muted: #9A9E95;
       --taught: #5FBE8B;
+      --entail: #D9A554;
+      --entail-soft: rgba(217, 165, 84, 0.14);
       --card: #1C2126;
       --line: #2B3036;
       --code-bg: #101418;
@@ -57,26 +62,23 @@
   }
   :root[data-theme="dark"] {
     --bg: #15181C; --ink: #E7E5DF; --muted: #9A9E95; --taught: #5FBE8B;
+    --entail: #D9A554; --entail-soft: rgba(217, 165, 84, 0.14);
     --card: #1C2126; --line: #2B3036; --code-bg: #101418; --code-fg: #CFD5CB;
   }
   :root[data-theme="light"] {
     --bg: #F7F6F2; --ink: #23272B; --muted: #6E7168; --taught: #2E7D4F;
+    --entail: #B07C2E; --entail-soft: rgba(176, 124, 46, 0.14);
     --card: #FFFFFF; --line: #DDD9D0; --code-bg: #1B1F24; --code-fg: #D6DAD1;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     background: var(--bg);
     color: var(--ink);
-    font: 17px/1.6 Georgia, "Times New Roman", serif;
+    font: 17px/1.6 "Charter", "Bitstream Charter", Georgia, "Times New Roman", serif;
     padding: 3rem 1.25rem 4rem;
   }
-  main { max-width: 44rem; margin: 0 auto; }
-  h1 {
-    font-size: 2.1rem;
-    line-height: 1.2;
-    letter-spacing: -0.01em;
-  }
-  h1 .long { display: block; font-size: 1.05rem; font-weight: normal; color: var(--muted); margin-top: 0.35rem; font-style: italic; }
+  main { max-width: 62rem; margin: 0 auto; }
+  .copy { max-width: 44rem; margin-left: auto; margin-right: auto; }
   h2 {
     font-size: 1.25rem;
     margin: 2.4rem 0 0.7rem;
@@ -86,7 +88,7 @@
   p { margin: 0.7rem 0; }
   em { color: var(--taught); font-style: italic; }
   a { color: var(--taught); }
-  .lede { font-size: 1.1rem; margin-top: 1.2rem; }
+  a:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
   pre {
     background: var(--code-bg);
     color: var(--code-fg);
@@ -104,16 +106,126 @@
     padding: 0.05em 0.3em;
   }
   pre code { background: none; border: none; padding: 0; }
+  .eyebrow {
+    font: 600 0.72rem/1.5 "SF Mono", Menlo, Consolas, monospace;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--entail);
+    margin: 0 0 0.6rem;
+  }
   footer {
-    margin-top: 3rem;
+    margin-top: 3.5rem;
     padding-top: 1rem;
     border-top: 1px solid var(--line);
     font-size: 0.9rem;
     color: var(--muted);
   }
 
-  /* ---- live chat demo ------------------------------------------------------------ */
-  .demo-wrap { margin: 1.6rem 0 0.6rem; }
+  /* ---- hero ------------------------------------------------------------------------ */
+  .hero { text-align: center; max-width: 46rem; margin: 0 auto 3.2rem; }
+  .hero h1 {
+    font-size: clamp(2.4rem, 6vw, 3.3rem);
+    line-height: 1.1;
+    letter-spacing: -0.01em;
+  }
+  .hero h1 .long {
+    display: block; font-size: 1.1rem; font-weight: normal; color: var(--muted);
+    margin-top: 0.55rem; font-style: italic; line-height: 1.5;
+  }
+  .lede { font-size: 1.12rem; margin-top: 1.1rem; }
+  .hero-install {
+    display: inline-block;
+    margin-top: 1.1rem;
+    background: var(--code-bg);
+    color: var(--code-fg);
+    font: 0.82rem/1 "SF Mono", Menlo, Consolas, monospace;
+    padding: 0.7em 1.1em;
+    border-radius: 6px;
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .hero-install .ps1 { color: var(--taught); }
+
+  /* ---- claim grid (each claim links to the page that shows it) --------------------- */
+  .band-head { text-align: center; max-width: 40rem; margin: 0 auto 1.5rem; }
+  .band-head h2 { border-bottom: none; padding-bottom: 0; margin: 0; font-size: 1.5rem; }
+  .claim-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(14.5rem, 1fr));
+    gap: 0.9rem; margin: 0 0 1rem;
+  }
+  .claim {
+    display: flex; flex-direction: column; gap: 0.45rem;
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 1.05rem 1.1rem; text-decoration: none; color: inherit;
+    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  }
+  .claim:hover, .claim:focus-visible {
+    border-color: var(--entail);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.07);
+  }
+  .claim .claim-icon { height: 26px; color: var(--entail); }
+  .claim .claim-icon svg { width: 26px; height: 26px; }
+  .claim .claim-icon.dual svg { width: 22px; height: 22px; }
+  .claim h3 { font-size: 1.02rem; margin: 0; color: var(--ink); }
+  .claim p { margin: 0; font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+  .claim .claim-page {
+    margin-top: auto; align-self: flex-start;
+    font: 0.7rem/1 "SF Mono", Menlo, Consolas, monospace;
+    color: var(--muted); background: var(--bg);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 0.3em 0.75em;
+  }
+  .claim:hover .claim-page, .claim:focus-visible .claim-page {
+    color: var(--entail); border-color: var(--entail);
+  }
+
+  /* ---- feature sections, each screenshot framed as a numbered plate ---------------- */
+  .feature {
+    display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
+    gap: 1.4rem 3rem; align-items: center;
+    margin: 3.4rem 0;
+  }
+  .feature.flip .plate { order: -1; }
+  .feature h2 { border-bottom: none; padding-bottom: 0; margin: 0.2rem 0 0; font-size: 1.45rem; }
+  .feature .feature-copy p { font-size: 0.98rem; }
+  .feature .open-link { font-size: 0.9rem; }
+  /* The plate frame and alt text keep a feature readable while its screenshot
+     is still awaiting capture, so the section never shows a bare broken image. */
+  .plate { margin: 0; }
+  .plate .plate-frame {
+    display: block;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.55rem;
+    outline: 1px solid var(--entail-soft);
+    outline-offset: 4px;
+  }
+  .plate img {
+    display: block; width: 100%; height: auto;
+    aspect-ratio: 1024 / 600; object-fit: cover;
+    background: var(--bg); border: 1px solid var(--line);
+    color: var(--muted); font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace;
+  }
+  .plate figcaption {
+    margin-top: 0.6rem; text-align: center;
+    font: 0.7rem/1.5 "SF Mono", Menlo, Consolas, monospace;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
+  }
+  .plate figcaption .plate-no { color: var(--entail); }
+  @media (max-width: 760px) {
+    .feature { grid-template-columns: 1fr; gap: 1rem; margin: 2.6rem 0; }
+    .feature.flip .plate { order: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .claim, .showcase-card { transition: none; }
+    .claim:hover, .claim:focus-visible { transform: none; }
+  }
+
+  /* ---- live chat demo (inside the code-explorer feature) --------------------------- */
+  .demo-wrap { margin: 1.2rem 0 0.6rem; }
   .demo-label {
     font-size: 0.8rem;
     text-transform: uppercase;
@@ -174,56 +286,11 @@
     font-size: 0.78rem;
   }
 
-  /* ---- static demo shots (screenshot + link, used for chat/spider-fly/plan/ledger) - */
-  .hero-shot { margin: 1.4rem 0 0.4rem; }
-  .hero-row {
-    display: flex; justify-content: space-between; align-items: baseline;
-    flex-wrap: wrap; gap: 0.4rem; margin-bottom: 0.4rem;
-  }
-  .hero-shot img {
-    display: block; width: 100%; height: auto; border: 1px solid var(--line);
-    border-radius: 8px; background: var(--card);
-  }
-
-  /* ---- explore band (link cards to plan/adventure/ledger/sprites) ------------------ */
-  .explore-grid {
-    display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
-    gap: 0.9rem; margin: 1.1rem 0 0.4rem;
-  }
-  .explore-card {
-    display: flex; flex-direction: column; gap: 0.45rem;
-    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
-    padding: 1rem 1.1rem; text-decoration: none; color: inherit;
-  }
-  .explore-card:hover, .explore-card:focus-visible { border-color: var(--taught); }
-  .explore-card .explore-shot {
-    display: block; width: 100%; height: auto; border-radius: 5px; border: 1px solid var(--line);
-  }
-  .explore-card h3 { font-size: 1rem; margin: 0; color: var(--ink); }
-  .explore-card p { margin: 0; font-size: 0.86rem; color: var(--muted); line-height: 1.5; }
-  .explore-card .go { align-self: flex-end; font-size: 0.8rem; color: var(--taught); }
-
-  /* ---- hero-shot heading icons (chat/spider-fly tiles) ------------------------- */
-  .tile-heading {
-    display: flex; align-items: center; gap: 0.5rem;
-    margin: 2.4rem 0 0.7rem; border-bottom: 1px solid var(--line); padding-bottom: 0.3rem;
-  }
-  .tile-heading h2 { margin: 0; border-bottom: none; padding-bottom: 0; }
-  .tile-icon { width: 22px; height: 22px; color: var(--taught); flex: 0 0 auto; }
-  .tile-icon-dual { display: inline-flex; gap: 0.15rem; flex: 0 0 auto; }
-  .tile-icon-dual svg { width: 20px; height: 20px; color: var(--taught); }
-
-  /* ---- adventure-card poster (a few sprites layered over its icon area) -------- */
-  .adventure-poster { position: relative; height: 46px; margin-bottom: 0.15rem; }
-  .adventure-poster svg { position: absolute; bottom: 0; color: var(--taught); }
-  .adventure-poster .poster-back { left: 0; width: 32px; height: 32px; opacity: 0.5; }
-  .adventure-poster .poster-mid { left: 18px; width: 40px; height: 40px; opacity: 0.78; }
-  .adventure-poster .poster-front { left: 44px; width: 32px; height: 32px; }
-
-  .sprite-teaser { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.15rem; }
+  /* ---- sprite teaser chips (inside the sprite-library feature) --------------------- */
+  .sprite-teaser { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
   .sprite-chip {
     display: flex; align-items: center; gap: 0.4rem;
-    background: var(--bg); border: 1px solid var(--line); border-radius: 999px;
+    background: var(--card); border: 1px solid var(--line); border-radius: 999px;
     padding: 0.28rem 0.65rem 0.28rem 0.28rem;
   }
   .sprite-chip svg { width: 20px; height: 20px; color: var(--taught); flex: 0 0 auto; }
@@ -233,189 +300,290 @@
   .sprite-chain { font: 10.5px/1.3 "SF Mono", Menlo, Consolas, monospace; color: var(--muted); white-space: nowrap; }
   .sprite-chain .own { color: var(--ink); }
   .sprite-chain .arrow { opacity: 0.55; padding: 0 0.15em; }
+
+  /* ---- Polycode showcase ----------------------------------------------------------- */
+  .showcase-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 0.9rem; margin: 1.1rem 0 0.4rem;
+  }
+  .showcase-card {
+    display: flex; flex-direction: column; gap: 0.4rem;
+    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+    padding: 1.05rem 1.1rem; text-decoration: none; color: inherit;
+    transition: border-color 0.15s ease;
+  }
+  .showcase-card:hover, .showcase-card:focus-visible { border-color: var(--entail); }
+  .showcase-card h3 { font-size: 1.02rem; margin: 0; color: var(--ink); }
+  .showcase-card p { margin: 0; font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+  .showcase-card .showcase-domain {
+    font: 0.72rem/1.4 "SF Mono", Menlo, Consolas, monospace;
+    color: var(--taught);
+  }
 </style>
 </head>
 <body>
 <main>
-  <h1>tmct
-    <span class="long">The Mechanical Code Talker — a pure-JS, no-LLM, offline, $0 chatbot</span>
-  </h1>
+  <header class="hero">
+    <p class="eyebrow">Polycode projects &middot; pure JS &middot; no LLM &middot; offline &middot; $0</p>
+    <h1>tmct
+      <span class="long">The Mechanical Code Talker — a pure-JS, no-LLM, offline, $0 chatbot</span>
+    </h1>
+    <p class="lede">
+      Ask tmct a question and you get an answer you can check. Every fact it gives you
+      names where it came from. When it doesn't know, it says so. Nothing calls a model,
+      and it costs nothing to run.
+    </p>
+    <p class="hero-install"><span class="ps1">$</span> npm install -g @polycode-projects/the-mechanical-code-talker</p>
+  </header>
 
-  <p class="lede">
-    Ask tmct a question and you get an answer you can check. Every fact it gives you
-    names where it came from. When it doesn't know, it says so. Nothing calls a model,
-    and it costs nothing to run.
-  </p>
-
-  <div class="tile-heading">
-    <svg class="tile-icon" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z"
-            fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-      <circle cx="8.2" cy="11" r="1" fill="currentColor"/>
-      <circle cx="12" cy="11" r="1" fill="currentColor"/>
-      <circle cx="15.8" cy="11" r="1" fill="currentColor"/>
-    </svg>
-    <h2>Chat</h2>
-  </div>
-  <p>
-    This is the same chat engine as the CLI, running entirely in the browser: teach
-    it something, ask it something, or run a scripted demo, and every answer names
-    its source. The shot below is a real exchange with it; open the full page to
-    try your own.
-  </p>
-
-  <!-- A screenshot and a link, not a live embed: this section stays visible and
-       correct even if chat.html's own scripts fail to load, which an embedded
-       widget here would not. -->
-  <div class="hero-shot">
-    <div class="hero-row">
-      <span class="demo-label">The real chat engine, mid-conversation</span>
-      <a href="./chat.html">open full-screen &rarr;</a>
+  <section class="claims" aria-label="what the demo pages show">
+    <div class="band-head">
+      <p class="eyebrow">eight demonstrations</p>
+      <h2>Every claim below links to the page that shows it</h2>
     </div>
-    <a href="./chat.html">
-      <img src="./screenshots/chat.png" width="640" height="188"
-           alt="tmct chat page: the question 'what is a dog' answered with three facts, each naming its corpus source">
-    </a>
-  </div>
-
-  <div class="tile-heading">
-    <span class="tile-icon-dual" aria-hidden="true">
-      <svg viewBox="0 0 24 24"><ellipse cx="12" cy="16" rx="5.2" ry="4.8" fill="currentColor"/><ellipse cx="10.3" cy="14.3" rx="1.8" ry="1.4" fill="currentColor" opacity="0.3"/><circle cx="12" cy="9.6" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round"><path d="M9.4 8 L2.2 4.4"/><path d="M9 10.2 L1.4 9.4"/><path d="M9.2 12.6 L2 14.2"/><path d="M10 15.4 L3.4 19"/><path d="M14.6 8 L21.8 4.4"/><path d="M15 10.2 L22.6 9.4"/><path d="M14.8 12.6 L22 14.2"/><path d="M14 15.4 L20.6 19"/></g></svg>
-      <svg viewBox="0 0 24 24"><ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="currentColor"/><circle cx="12" cy="7" r="2.7" fill="currentColor"/><ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="currentColor" opacity="0.3"/><g fill="currentColor" opacity="0.55"><path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z"/><path d="M15 10 C21 6 22 4 21 2 C18 2 15 6 13.5 10 Z"/></g><g stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M9.6 17 L7.4 19.4"/><path d="M14.4 17 L16.6 19.4"/></g></svg>
-    </span>
-    <h2>Multiple competing planning agents</h2>
-  </div>
-  <p>
-    A spider waits in its web; a fly drifts onto the board and loses strength the longer
-    it stays. Neither is played by you — each one plans its own next move over the same
-    graph, seeing only part of the board, and you can only tell one of them something by
-    typing to it. The spider's live plan is drawn as a thread, because a plan here already
-    is one.
-  </p>
-
-  <div class="hero-shot">
-    <div class="hero-row">
-      <span class="demo-label">The spider and the fly, mid-plan</span>
-      <a href="./spider-fly.html">open full-screen &rarr;</a>
+    <div class="claim-grid">
+      <a class="claim" href="./chat.html">
+        <span class="claim-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8.2" cy="11" r="1" fill="currentColor"/><circle cx="12" cy="11" r="1" fill="currentColor"/><circle cx="15.8" cy="11" r="1" fill="currentColor"/></svg>
+        </span>
+        <h3>The real engine, in the page</h3>
+        <p>The same chat engine as the CLI, running in your browser. Every answer names its source.</p>
+        <span class="claim-page">chat.html</span>
+      </a>
+      <a class="claim" href="./spider-fly.html">
+        <span class="claim-icon dual" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="16" rx="5.2" ry="4.8" fill="currentColor"/><ellipse cx="10.3" cy="14.3" rx="1.8" ry="1.4" fill="currentColor" opacity="0.3"/><circle cx="12" cy="9.6" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round"><path d="M9.4 8 L2.2 4.4"/><path d="M9 10.2 L1.4 9.4"/><path d="M9.2 12.6 L2 14.2"/><path d="M10 15.4 L3.4 19"/><path d="M14.6 8 L21.8 4.4"/><path d="M15 10.2 L22.6 9.4"/><path d="M14.8 12.6 L22 14.2"/><path d="M14 15.4 L20.6 19"/></g></svg>
+          <svg viewBox="0 0 24 24"><ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="currentColor"/><circle cx="12" cy="7" r="2.7" fill="currentColor"/><ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="currentColor" opacity="0.3"/><g fill="currentColor" opacity="0.55"><path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z"/><path d="M15 10 C21 6 22 4 21 2 C18 2 15 6 13.5 10 Z"/></g><g stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M9.6 17 L7.4 19.4"/><path d="M14.4 17 L16.6 19.4"/></g></svg>
+        </span>
+        <h3>Competing planning agents</h3>
+        <p>A spider and a fly each plan their own moves over the same graph, seeing only part of the board.</p>
+        <span class="claim-page">spider-fly.html</span>
+      </a>
+      <a class="claim" href="./plan.html">
+        <span class="claim-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 4v4"/><path d="M4 20h16"/></g><rect x="9.5" y="8" width="5" height="2.6" rx="1.3" fill="currentColor"/><rect x="7.5" y="11.6" width="9" height="2.6" rx="1.3" fill="currentColor"/><rect x="5.5" y="15.2" width="13" height="2.6" rx="1.3" fill="currentColor"/></svg>
+        </span>
+        <h3>It plans, and shows the work</h3>
+        <p>Tower of Hanoi solved move by move, with the plan on show as PDDL and OWL artifacts.</p>
+        <span class="claim-page">plan.html</span>
+      </a>
+      <a class="claim" href="./adventure.html">
+        <span class="claim-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="6.5" y="7.5" width="11" height="9" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="12" cy="12.5" r="1.7" fill="currentColor"/></svg>
+        </span>
+        <h3>A room drawn from the text</h3>
+        <p>Ashcombe Hall renders exactly what its facts say is in the room, and nothing else.</p>
+        <span class="claim-page">adventure.html</span>
+      </a>
+      <a class="claim" href="./ledger.html">
+        <span class="claim-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9 4v16" stroke="currentColor" stroke-width="1"/><g stroke="currentColor" stroke-width="1.3" stroke-linecap="round"><path d="M11.5 8.5h5"/><path d="M11.5 12h5"/><path d="M11.5 15.5h5"/></g></svg>
+        </span>
+        <h3>The memory ledger</h3>
+        <p>Every fact, where it came from, and how far to trust it.</p>
+        <span class="claim-page">ledger.html</span>
+      </a>
+      <a class="claim" href="./code.html">
+        <span class="claim-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M9 6 4 12l5 6"/><path d="M15 6l5 6-5 6"/></g></svg>
+        </span>
+        <h3>Ask it about a codebase</h3>
+        <p>Imports, calls and members around any symbol in a code graph.</p>
+        <span class="claim-page">code.html</span>
+      </a>
+      <a class="claim" href="./ingest.html">
+        <span class="claim-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 8.5 12 12l3.5-3.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></g></svg>
+        </span>
+        <h3>It keeps only what it can ground</h3>
+        <p>Paste text. Each sentence becomes a checkable fact, or it is refused.</p>
+        <span class="claim-page">ingest.html</span>
+      </a>
+      <a class="claim" href="./sprites.html">
+        <span class="claim-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><ellipse cx="13" cy="15" rx="6.4" ry="4.3" fill="currentColor"/><circle cx="7" cy="9" r="3.6" fill="currentColor"/><ellipse cx="6.1" cy="8" rx="1" ry="1.3" fill="currentColor" opacity="0.3"/><path d="M4.5 6.5 L2 3 L6 5 Z" fill="currentColor"/><path d="M19 13 C22 12 22.5 15 20 16 Z" fill="currentColor"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="9" y1="19" x2="9" y2="22"/><line x1="17" y1="19" x2="17" y2="22"/></g></svg>
+        </span>
+        <h3>The sprite library</h3>
+        <p>Every shape the site can draw, mapped to the ontology class it belongs to.</p>
+        <span class="claim-page">sprites.html</span>
+      </a>
     </div>
-    <a href="./spider-fly.html">
-      <img src="./screenshots/spider-fly.png" width="640" height="438"
-           alt="tmct spider and fly page: a spider and a fly on a partly-hidden grid, with each agent's live plan status shown alongside">
-    </a>
-  </div>
+  </section>
 
-  <h2>Run the chat yourself</h2>
-  <pre><code>npm install -g @polycode-projects/the-mechanical-code-talker</code></pre>
-  <p>Point it at a repo's graph and ask about the code. This runs against
-  <code>examples/mini-webapp</code>, which ships in the repo:</p>
-  <pre data-tmct-session="tmct chat --repo examples/mini-webapp --ephemeral" data-tmct-cwd="repo"><code>tmct&gt; what talks to store.mjs?
-src/handlers/tasks.mjs and src/handlers/users.mjs.
-tmct&gt; which modules do not import logger?
-…
-tmct&gt; /exit</code></pre>
-  <p>Or start with nothing. tmct bootstraps an empty memory and remembers what you
-  tell it. Use <code>tmct chat --repo /path/to/repo</code> to point it at your own.</p>
-  <pre><code>tmct init         # scaffold .tmct/, tmct.toml, seed the default persona + provenance
-tmct viz          # write the ledger page — see the link below
-tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code></pre>
+  <!-- The eight features below repeat the claims in the same order, each with its
+       page's screenshot framed as a numbered plate. Plates V to VIII wait on their
+       screenshots; the frame and alt text keep those sections readable meanwhile. -->
 
-  <p>
-    A chatbot in the <em>ELIZA/PARRY lineage</em>, obsessed with software the way PARRY
-    was obsessed with the mafia. Interpretation is <em>mechanical</em> and memory is an
-    <em>OWL-labelled graph</em> on disk. It starts stocked with an everyday vocabulary.
-    Point it at a codebase and it reasons over that too. It also holds a thread: ask
-    about something, then ask "what calls it?", and tmct still knows what "it" means.
-  </p>
+  <section class="feature" id="feature-chat">
+    <div class="feature-copy">
+      <h2>The real engine, in the page</h2>
+      <p>
+        This is the same chat engine as the CLI, running entirely in the browser: teach
+        it something, ask it something, or run a scripted demo, and every answer names
+        its source. The shot here is a real exchange with it; open the full page to
+        try your own.
+      </p>
+      <a class="open-link" href="./chat.html">open chat.html &rarr;</a>
+    </div>
+    <figure class="plate">
+      <a class="plate-frame" href="./chat.html">
+        <img src="./screenshots/chat.png" width="640" height="375"
+             alt="tmct chat page: the question 'what is a dog' answered with three facts, each naming its corpus source">
+      </a>
+      <figcaption><span class="plate-no">Plate I</span> &middot; chat.html</figcaption>
+    </figure>
+  </section>
 
-  <h2>Ask it about a codebase</h2>
+  <section class="feature flip" id="feature-spider-fly">
+    <div class="feature-copy">
+      <h2>Multiple competing planning agents</h2>
+      <p>
+        A spider waits in its web. A fly drifts onto the board and loses strength the
+        longer it stays. Neither is played by you. Each one plans its own next move over
+        the same graph, seeing only part of the board, and you can only tell one of them
+        something by typing to it. The spider's live plan is drawn as a thread, because
+        a plan here already is one.
+      </p>
+      <a class="open-link" href="./spider-fly.html">open spider-fly.html &rarr;</a>
+    </div>
+    <figure class="plate">
+      <a class="plate-frame" href="./spider-fly.html">
+        <img src="./screenshots/spider-fly.png" width="640" height="375"
+             alt="tmct spider and fly page: a spider and a fly on a partly-hidden grid, with each agent's live plan status shown alongside">
+      </a>
+      <figcaption><span class="plate-no">Plate II</span> &middot; spider-fly.html</figcaption>
+    </figure>
+  </section>
 
-  <div class="demo-wrap">
-    <div class="demo-label">Live demo — running the real engine, right now, in your browser</div>
-    <div id="tmct-demo">
-      <div class="term-lines"></div>
-      <div class="term-input-row">
-        <span class="term-prompt">tmct&gt; </span>
-        <input class="term-input" type="text" autocomplete="off" autocapitalize="off"
-               spellcheck="false" disabled
-               placeholder="ask your own question about examples/mini-webapp…">
+  <section class="feature" id="feature-plan">
+    <div class="feature-copy">
+      <h2>It plans, and shows the work</h2>
+      <p>
+        Teach it a game's rules, then ask it to solve one. The planner replays every
+        move it made, one by one, and a side panel shows the plan as a PDDL artifact
+        and as OWL facts, so you can read exactly what it searched over. Change the
+        disk count and it solves again, live.
+      </p>
+      <a class="open-link" href="./plan.html">open plan.html &rarr;</a>
+    </div>
+    <figure class="plate">
+      <a class="plate-frame" href="./plan.html">
+        <img src="./screenshots/plan.png" width="640" height="375"
+             alt="tmct plan page: a Tower of Hanoi board mid-solve, with the move list and the PDDL plan artifact alongside">
+      </a>
+      <figcaption><span class="plate-no">Plate III</span> &middot; plan.html</figcaption>
+    </figure>
+  </section>
+
+  <section class="feature flip" id="feature-adventure">
+    <div class="feature-copy">
+      <h2>A room drawn from the text</h2>
+      <p>
+        Ashcombe Hall is a small manor built from its own facts. The room view shows
+        exactly what the text says is there, and nothing else. An auto-player explores
+        the house, infers its own goal, and plays toward it with the same planner the
+        other pages use.
+      </p>
+      <a class="open-link" href="./adventure.html">open adventure.html &rarr;</a>
+    </div>
+    <figure class="plate">
+      <a class="plate-frame" href="./adventure.html">
+        <img src="./screenshots/adventure.png" width="640" height="375"
+             alt="tmct adventure page: a room of Ashcombe Hall drawn from its facts, with the map and satchel alongside">
+      </a>
+      <figcaption><span class="plate-no">Plate IV</span> &middot; adventure.html</figcaption>
+    </figure>
+  </section>
+
+  <section class="feature" id="feature-ledger">
+    <div class="feature-copy">
+      <h2>The memory ledger</h2>
+      <p>
+        Browse the taught graph. Every fact shows its provenance and its trust tier,
+        and every term inside a fact is a link, so you can drill from any answer down
+        to what it rests on. A chat dock lets you teach and ask against the same store.
+      </p>
+      <a class="open-link" href="./ledger.html">open ledger.html &rarr;</a>
+    </div>
+    <figure class="plate">
+      <a class="plate-frame" href="./ledger.html">
+        <img src="./screenshots/ledger.png" width="640" height="375"
+             alt="tmct memory ledger page: fact counts, a predicate breakdown, and the taught facts for the term 'peg'">
+      </a>
+      <figcaption><span class="plate-no">Plate V</span> &middot; ledger.html</figcaption>
+    </figure>
+  </section>
+
+  <section class="feature flip" id="feature-code">
+    <div class="feature-copy">
+      <h2>Ask it about a codebase</h2>
+      <p>
+        Point it at a code graph and ask about the code: imports, calls and members
+        around any symbol, with suggested next questions. It also holds a thread. Ask
+        about something, then ask "what calls it?", and tmct still knows what "it"
+        means.
+      </p>
+      <a class="open-link" href="./code.html">open code.html &rarr;</a>
+    </div>
+    <figure class="plate">
+      <a class="plate-frame" href="./code.html">
+        <img src="./screenshots/code.png" width="640" height="375"
+             alt="tmct code explorer page: imports, calls and members around a symbol of the demo code graph, with a chat dock alongside">
+      </a>
+      <figcaption><span class="plate-no">Plate VI</span> &middot; code.html</figcaption>
+    </figure>
+  </section>
+
+  <div class="copy">
+    <div class="demo-wrap">
+      <div class="demo-label">Live demo — running the real engine, right now, in your browser</div>
+      <div id="tmct-demo">
+        <div class="term-lines"></div>
+        <div class="term-input-row">
+          <span class="term-prompt">tmct&gt; </span>
+          <input class="term-input" type="text" autocomplete="off" autocapitalize="off"
+                 spellcheck="false" disabled
+                 placeholder="ask your own question about examples/mini-webapp…">
+        </div>
+      </div>
+      <div class="demo-status term-status">wink-nlp: loading…</div>
+      <div class="demo-cli">
+        This box asks a real question of a small fixture repo's code graph
+        (<code>examples/mini-webapp</code>) using the exact same query engine the CLI
+        ships. It runs live, client-side; nothing is precomputed on a server (GitLab
+        Pages doesn't have one). The same question against a real repo, from a terminal:
+        <pre class="term-cli"></pre>
       </div>
     </div>
-    <div class="demo-status term-status">wink-nlp: loading…</div>
-    <div class="demo-cli">
-      This box asks a real question of a small fixture repo's code graph
-      (<code>examples/mini-webapp</code>) using the exact same query engine the CLI
-      ships. It runs live, client-side; nothing is precomputed on a server (GitLab
-      Pages doesn't have one). The same question against a real repo, from a terminal:
-      <pre class="term-cli"></pre>
-    </div>
   </div>
 
-  <h2>Use it as a library</h2>
-  <p>
-    The chat surface is a function. Feed it lines, read the answers, and the same
-    grounding and provenance rules apply.
-  </p>
-  <pre><code>import { Readable } from "node:stream";
-import { runChat } from "@polycode-projects/the-mechanical-code-talker";
+  <section class="feature" id="feature-ingest">
+    <div class="feature-copy">
+      <h2>It keeps only what it can ground</h2>
+      <p>
+        Bring your own text. Paste or drop it and watch each sentence ground into a
+        fact. A sentence the engine cannot ground gets a refusal rather than a guess.
+        Download the result as canonical JSONL.
+      </p>
+      <a class="open-link" href="./ingest.html">open ingest.html &rarr;</a>
+    </div>
+    <figure class="plate">
+      <a class="plate-frame" href="./ingest.html">
+        <img src="./screenshots/ingest.png" width="640" height="375"
+             alt="tmct ingest page: pasted text grounding sentence by sentence into facts">
+      </a>
+      <figcaption><span class="plate-no">Plate VII</span> &middot; ingest.html</figcaption>
+    </figure>
+  </section>
 
-await runChat({
-  repoPath: "./my-repo",
-  input: Readable.from([
-    "ahab is the father of john\n",
-    "who is the father of john\n",
-    "/exit\n",
-  ]),
-  output: process.stdout,
-});</code></pre>
-  <p>Full feature list, the detailed-answer pipeline, and the rest of the library API in the
-  <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a>.</p>
-
-  <h2>More to explore</h2>
-  <p>Five more pages, built from the same engine and the same taught memory.</p>
-
-  <div class="explore-grid">
-    <a class="explore-card" href="./plan.html">
-      <img class="explore-shot" src="./screenshots/plan.png" width="640" height="475"
-           alt="tmct plan page: a Tower of Hanoi board mid-solve, with the move list and the PDDL plan artifact alongside">
-      <h3>It plans, and shows the work</h3>
-      <p>Teach it a game's rules, then ask it to solve one. The planner replays every
-      move it made, one by one.</p>
-      <span class="go">open &rarr;</span>
-    </a>
-    <a class="explore-card" href="./adventure.html">
-      <div class="adventure-poster" aria-hidden="true">
-        <svg class="poster-back" viewBox="0 0 24 24"><ellipse cx="13" cy="15" rx="6.4" ry="4.3" fill="currentColor"/><circle cx="7" cy="9" r="3.6" fill="currentColor"/><ellipse cx="6.1" cy="8" rx="1" ry="1.3" fill="currentColor" opacity="0.3"/><path d="M4.5 6.5 L2 3 L6 5 Z" fill="currentColor"/><path d="M19 13 C22 12 22.5 15 20 16 Z" fill="currentColor"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="9" y1="19" x2="9" y2="22"/><line x1="17" y1="19" x2="17" y2="22"/></g></svg>
-        <svg class="poster-mid" viewBox="0 0 24 24"><ellipse cx="12" cy="16" rx="5.2" ry="4.8" fill="currentColor"/><ellipse cx="10.3" cy="14.3" rx="1.8" ry="1.4" fill="currentColor" opacity="0.3"/><circle cx="12" cy="9.6" r="3.2" fill="currentColor"/><g stroke="currentColor" stroke-width="1.1" fill="none" stroke-linecap="round"><path d="M9.4 8 L2.2 4.4"/><path d="M9 10.2 L1.4 9.4"/><path d="M9.2 12.6 L2 14.2"/><path d="M10 15.4 L3.4 19"/><path d="M14.6 8 L21.8 4.4"/><path d="M15 10.2 L22.6 9.4"/><path d="M14.8 12.6 L22 14.2"/><path d="M14 15.4 L20.6 19"/></g></svg>
-        <svg class="poster-front" viewBox="0 0 24 24"><ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="currentColor"/><circle cx="12" cy="7" r="2.7" fill="currentColor"/><ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="currentColor" opacity="0.3"/><g fill="currentColor" opacity="0.55"><path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z"/><path d="M15 10 C21 6 22 4 21 2 C18 2 15 6 13.5 10 Z"/></g><g stroke="currentColor" stroke-width="1" stroke-linecap="round"><path d="M9.6 17 L7.4 19.4"/><path d="M14.4 17 L16.6 19.4"/></g></svg>
-      </div>
-      <h3>Location aware inference</h3>
-      <p>Ashcombe Hall, drawn from exactly what the text says is there. An auto-player
-      explores it and infers its own goal.</p>
-      <span class="go">open &rarr;</span>
-    </a>
-    <a class="explore-card" href="./ledger.html">
-      <img class="explore-shot" src="./screenshots/ledger.png" width="640" height="475"
-           alt="tmct memory ledger page: fact counts, a predicate breakdown, and the taught facts for the term 'peg'">
-      <h3>The memory ledger</h3>
-      <p>Browse the taught graph. Click any term inside a fact to drill in.</p>
-      <span class="go">open &rarr;</span>
-    </a>
-    <a class="explore-card" href="./code.html">
-      <h3>Code explorer</h3>
-      <p>Explore a code graph on your desktop. Imports, calls and members around any
-      symbol, with a chat dock and suggested next questions.</p>
-      <span class="go">open &rarr;</span>
-    </a>
-    <a class="explore-card" href="./ingest.html">
-      <h3>Ingest</h3>
-      <p>Bring your own text. Paste or drop it, watch each sentence ground into a
-      fact, and download the result as canonical JSONL.</p>
-      <span class="go">open &rarr;</span>
-    </a>
-    <a class="explore-card" href="./sprites.html">
-      <h3>Sprite library</h3>
-      <p>Every shape the sprite library can draw, mapped to the real ontology class it
-      belongs to.</p>
+  <section class="feature flip" id="feature-sprites">
+    <div class="feature-copy">
+      <h2>The sprite library</h2>
+      <p>
+        Every shape the sprite library can draw, mapped to the real ontology class it
+        belongs to. A term without a sprite of its own borrows its nearest ancestor's,
+        so a poodle draws as a dog.
+      </p>
       <div class="sprite-teaser">
         <span class="sprite-chip size-sm">
           <svg viewBox="0 0 24 24" aria-hidden="true"><ellipse cx="13" cy="15" rx="6.4" ry="4.6" fill="currentColor"/><ellipse cx="10.8" cy="13.2" rx="1.8" ry="1.3" fill="currentColor" opacity="0.28"/><circle cx="7" cy="8.5" r="4" fill="currentColor"/><g fill="currentColor"><circle cx="4" cy="6" r="1.6"/><circle cx="7" cy="4.2" r="1.7"/><circle cx="10" cy="6" r="1.6"/></g><rect x="18.5" y="14" width="2.2" height="6" rx="1.1" fill="currentColor"/><circle cx="19.6" cy="13" r="1.5" fill="currentColor"/><g stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="9" y1="19.5" x2="9" y2="22"/><line x1="17" y1="19.5" x2="17" y2="22"/></g></svg>
@@ -434,9 +602,87 @@ await runChat({
           <span class="sprite-chain"><span class="own">fly</span><span class="arrow">&rsaquo;</span>insect<span class="arrow">&rsaquo;</span>animal</span>
         </span>
       </div>
-      <span class="go">open &rarr;</span>
-    </a>
+      <a class="open-link" href="./sprites.html">open sprites.html &rarr;</a>
+    </div>
+    <figure class="plate">
+      <a class="plate-frame" href="./sprites.html">
+        <img src="./screenshots/sprites.png" width="640" height="375"
+             alt="tmct sprite library page: sprite shapes mapped to the ontology classes they belong to">
+      </a>
+      <figcaption><span class="plate-no">Plate VIII</span> &middot; sprites.html</figcaption>
+    </figure>
+  </section>
+
+  <div class="copy">
+    <h2 id="run">Run the chat yourself</h2>
+    <pre><code>npm install -g @polycode-projects/the-mechanical-code-talker</code></pre>
+    <p>Point it at a repo's graph and ask about the code. This runs against
+    <code>examples/mini-webapp</code>, which ships in the repo:</p>
+    <pre data-tmct-session="tmct chat --repo examples/mini-webapp --ephemeral" data-tmct-cwd="repo"><code>tmct&gt; what talks to store.mjs?
+src/handlers/tasks.mjs and src/handlers/users.mjs.
+tmct&gt; which modules do not import logger?
+…
+tmct&gt; /exit</code></pre>
+    <p>Or start with nothing. tmct bootstraps an empty memory and remembers what you
+    tell it. Use <code>tmct chat --repo /path/to/repo</code> to point it at your own.</p>
+    <pre><code>tmct init         # scaffold .tmct/, tmct.toml, seed the default persona + provenance
+tmct viz          # write the ledger page — see the link below
+tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code></pre>
+
+    <p>
+      A chatbot in the <em>ELIZA/PARRY lineage</em>, obsessed with software the way PARRY
+      was obsessed with the mafia. Interpretation is <em>mechanical</em> and memory is an
+      <em>OWL-labelled graph</em> on disk. It starts stocked with an everyday vocabulary.
+      Point it at a codebase and it reasons over that too.
+    </p>
+
+    <h2>Use it as a library</h2>
+    <p>
+      The chat surface is a function. Feed it lines, read the answers, and the same
+      grounding and provenance rules apply.
+    </p>
+    <pre><code>import { Readable } from "node:stream";
+import { runChat } from "@polycode-projects/the-mechanical-code-talker";
+
+await runChat({
+  repoPath: "./my-repo",
+  input: Readable.from([
+    "ahab is the father of john\n",
+    "who is the father of john\n",
+    "/exit\n",
+  ]),
+  output: process.stdout,
+});</code></pre>
+    <p>Full feature list, the detailed-answer pipeline, and the rest of the library API in the
+    <a href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#readme">README</a>.</p>
   </div>
+
+  <section class="showcase">
+    <div class="band-head">
+      <p class="eyebrow">the project family</p>
+      <h2>Polycode projects</h2>
+    </div>
+    <div class="copy">
+      <p>
+        tmct grew out of two sibling Polycode projects, and the family is taking up the
+        tmct library in return.
+      </p>
+    </div>
+    <div class="showcase-grid">
+      <a class="showcase-card" href="https://seonix.polycode.co.uk/">
+        <h3>Seonix</h3>
+        <span class="showcase-domain">seonix.polycode.co.uk</span>
+        <p>One of the two sibling projects tmct's engine was seeded out of. It is
+        adopting the tmct library.</p>
+      </a>
+      <a class="showcase-card" href="https://marginalia.polycode.co.uk/">
+        <h3>Marginalia</h3>
+        <span class="showcase-domain">marginalia.polycode.co.uk</span>
+        <p>The other sibling project tmct was seeded out of, also adopting the tmct
+        library.</p>
+      </a>
+    </div>
+  </section>
 
   <footer>
     <p>MPL-2.0 &middot;

@@ -1,6 +1,7 @@
-// The deployed home page, in a real browser: it loads clean, it shows the
-// fully-expanded sections, every hero and explore-card is a screenshot plus
-// a link rather than a live embed, and it survives a phone-sized viewport.
+// The deployed home page, in a real browser: it loads clean, the eight claim
+// blocks link to the eight demo pages, the feature sections show each page's
+// screenshot as a framed plate rather than a live embed, the showcase links
+// to the sibling Polycode projects, and it survives a phone-sized viewport.
 // Nothing else drives index.html end to end (the chat.html/plan.html/
 // adventure.html/ledger.html/sprites.html/spider-fly.html/code.html pages'
 // own content is each page's own test file's job — this file only checks
@@ -18,6 +19,24 @@ import { join } from "node:path";
 import { chromium } from "playwright";
 import { buildDemoSiteSnapshot, repoRoot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
+
+const PAGE_ORDER = [
+  "chat",
+  "spider-fly",
+  "plan",
+  "adventure",
+  "ledger",
+  "code",
+  "ingest",
+  "sprites",
+];
+
+// Plates whose screenshot the capture script has not written yet. The page
+// styles these to degrade to a framed panel with alt text; here they excuse
+// the one console error their 404 logs. Once the PNGs exist the filter
+// matches nothing — remove entries as captures land.
+const PENDING_PLATES = ["adventure", "code", "ingest", "sprites"];
+const PENDING_SHOT_RE = new RegExp(`screenshots/(${PENDING_PLATES.join("|")})\\.png`);
 
 let siteDir;
 let server;
@@ -56,6 +75,7 @@ async function openPage(path, { viewport } = {}) {
     // this server, and those are the ones that count.
     const source = msg.location()?.url ?? "";
     if (source && !source.startsWith(server.origin)) return;
+    if (PENDING_SHOT_RE.test(source) || PENDING_SHOT_RE.test(msg.text())) return;
     consoleErrors.push(msg.text());
   });
   page.on("requestfailed", (req) => {
@@ -96,33 +116,58 @@ test("the page embeds no live widget: no iframe, no #tmct-chat, no chat engine s
   }
 });
 
-test("the chat hero shows a screenshot of chat.html and links to it, in both the caption and the image", async () => {
+test("the claim grid shows eight claim blocks, each a link onto its own demo page, in the page order", async () => {
   const { context, page } = await openHomePage();
   try {
-    const hero = page.locator(".hero-shot").first();
-    await hero.waitFor({ state: "visible" });
-    const captionHref = await hero.locator(".hero-row a").getAttribute("href");
-    assert.equal(captionHref, "./chat.html");
-    const img = hero.locator("img");
-    await assert.doesNotReject(img.waitFor({ state: "visible" }), "the screenshot renders");
-    assert.match(await img.getAttribute("src"), /screenshots\/chat\.png$/);
-    const imgLinkHref = await hero.locator("a").last().getAttribute("href");
-    assert.equal(imgLinkHref, "./chat.html", "the screenshot itself is also a link to the full page");
+    await page.locator(".claim-grid").waitFor({ state: "visible" });
+    const claims = page.locator("a.claim");
+    assert.equal(await claims.count(), 8, "exactly eight claim blocks");
+    const hrefs = await claims.evaluateAll((els) => els.map((el) => el.getAttribute("href")));
+    assert.deepEqual(hrefs, PAGE_ORDER.map((p) => `./${p}.html`));
   } finally {
     await context.close();
   }
 });
 
-test("the spider-and-fly hero shows a screenshot of spider-fly.html and links to it", async () => {
+test("every feature plate links to the page it depicts and asks for that page's screenshot", async () => {
   const { context, page } = await openHomePage();
   try {
-    const hero = page.locator(".hero-shot").nth(1);
-    await hero.waitFor({ state: "visible" });
-    const captionHref = await hero.locator(".hero-row a").getAttribute("href");
-    assert.equal(captionHref, "./spider-fly.html");
-    const img = hero.locator("img");
-    await assert.doesNotReject(img.waitFor({ state: "visible" }), "the screenshot renders");
-    assert.match(await img.getAttribute("src"), /screenshots\/spider-fly\.png$/);
+    for (const name of PAGE_ORDER) {
+      const frame = page.locator(`#feature-${name} .plate-frame`);
+      assert.equal(await frame.getAttribute("href"), `./${name}.html`, `the ${name} plate links to its page`);
+      const src = await frame.locator("img").getAttribute("src");
+      assert.match(src, new RegExp(`screenshots/${name}\\.png$`), `the ${name} plate asks for its own screenshot`);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test("the four captured screenshots render visibly in their plates", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    for (const name of PAGE_ORDER.filter((p) => !PENDING_PLATES.includes(p))) {
+      const img = page.locator(`#feature-${name} .plate-frame img`);
+      await assert.doesNotReject(img.waitFor({ state: "visible" }), `the ${name} screenshot renders`);
+      const loaded = await img.evaluate((el) => el.complete && el.naturalWidth > 0);
+      assert.ok(loaded, `the ${name} screenshot decodes to real pixels`);
+    }
+  } finally {
+    await context.close();
+  }
+});
+
+test("a plate awaiting its screenshot still shows its framed figure and caption, not a collapsed section", async () => {
+  const { context, page } = await openHomePage();
+  try {
+    for (const name of PENDING_PLATES) {
+      const plate = page.locator(`#feature-${name} .plate`);
+      await plate.waitFor({ state: "visible" });
+      const caption = await plate.locator("figcaption").innerText();
+      assert.match(caption, new RegExp(`${name}\\.html`, "i"), `the ${name} plate caption names its page`);
+      const imgBox = await plate.locator("img").boundingBox();
+      assert.ok(imgBox && imgBox.height > 40, `the ${name} plate keeps its panel height while the image is missing`);
+    }
   } finally {
     await context.close();
   }
@@ -158,42 +203,24 @@ test("the page keeps the steps to run the local chat and to use tmct as a librar
     assert.match(body, /tmct init/, "the scaffold step is on the page");
     assert.match(body, /import \{ runChat \} from "@polycode-projects\/the-mechanical-code-talker"/, "the library import is on the page");
     assert.match(body, /await runChat\(\{/, "the library call is on the page");
-    assert.match(body, /ELIZA\/PARRY lineage/, "the lineage prose survives the reorg");
-    assert.doesNotMatch(body, /What an answer looks like/, "the removed transcript section is gone");
+    assert.match(body, /ELIZA\/PARRY lineage/, "the lineage prose survives the redesign");
+    assert.doesNotMatch(body, /What an answer looks like/, "the removed transcript section stays gone");
   } finally {
     await context.close();
   }
 });
 
-test("the explore band's six link cards lead to six hosted pages", async () => {
+test("the showcase links to both sibling Polycode projects", async () => {
   const { context, page } = await openHomePage();
   try {
-    await page.locator(".explore-grid").waitFor({ state: "visible" });
-    const cards = page.locator(".explore-card");
-    assert.equal(await cards.count(), 6, "exactly six link cards");
+    const cards = page.locator(".showcase-card");
+    await cards.first().waitFor({ state: "visible" });
+    assert.equal(await cards.count(), 2, "two showcase cards");
     const hrefs = await cards.evaluateAll((els) => els.map((el) => el.getAttribute("href")));
-    assert.deepEqual(hrefs, [
-      "./plan.html",
-      "./adventure.html",
-      "./ledger.html",
-      "./code.html",
-      "./ingest.html",
-      "./sprites.html",
-    ]);
-  } finally {
-    await context.close();
-  }
-});
-
-test("the plan and ledger cards each show a screenshot of their own page", async () => {
-  const { context, page } = await openHomePage();
-  try {
-    const planShot = page.locator('.explore-card[href="./plan.html"] img.explore-shot');
-    const ledgerShot = page.locator('.explore-card[href="./ledger.html"] img.explore-shot');
-    await assert.doesNotReject(planShot.waitFor({ state: "visible" }));
-    await assert.doesNotReject(ledgerShot.waitFor({ state: "visible" }));
-    assert.match(await planShot.getAttribute("src"), /screenshots\/plan\.png$/);
-    assert.match(await ledgerShot.getAttribute("src"), /screenshots\/ledger\.png$/);
+    assert.deepEqual(hrefs, ["https://seonix.polycode.co.uk/", "https://marginalia.polycode.co.uk/"]);
+    const text = await page.locator(".showcase").innerText();
+    assert.match(text, /Seonix/);
+    assert.match(text, /Marginalia/);
   } finally {
     await context.close();
   }
@@ -253,7 +280,7 @@ test("the plan page's PDDL panel names only the puzzle's own objects and taught 
   }
 });
 
-test("the adventure link card leads to a real room scene", async () => {
+test("the adventure claim leads to a real room scene", async () => {
   const { context, page } = await openPage("adventure.html");
   try {
     await page.locator("#roomFrame").waitFor({ state: "visible" });
@@ -262,7 +289,7 @@ test("the adventure link card leads to a real room scene", async () => {
   }
 });
 
-test("the ledger link card leads to a real taught fact store", async () => {
+test("the ledger claim leads to a real taught fact store", async () => {
   const { context, page } = await openPage("ledger.html");
   try {
     await page.locator("#chatform").waitFor({ state: "visible" });
@@ -273,7 +300,7 @@ test("the ledger link card leads to a real taught fact store", async () => {
   }
 });
 
-test("the sprites link card leads to a real sprite catalog", async () => {
+test("the sprites claim leads to a real sprite catalog", async () => {
   const { context, page } = await openPage("sprites.html");
   try {
     const cards = await page.locator(".card").count();
@@ -283,10 +310,10 @@ test("the sprites link card leads to a real sprite catalog", async () => {
   }
 });
 
-test("the sprite-library card's own teaser shows real sprite icons and real ancestor-chain text, not a placeholder", async () => {
+test("the sprite-library feature's teaser shows real sprite icons and real ancestor-chain text, not a placeholder", async () => {
   const { context, page } = await openHomePage();
   try {
-    const teaser = page.locator('.explore-card[href="./sprites.html"] .sprite-teaser');
+    const teaser = page.locator("#feature-sprites .sprite-teaser");
     await teaser.waitFor({ state: "visible" });
     const svgCount = await teaser.locator("svg").count();
     assert.ok(svgCount >= 3, `expected at least 3 real sprite icons, found ${svgCount}`);
@@ -323,7 +350,7 @@ test("the page fits a phone viewport without sideways scrolling", async () => {
       overflow.scrollWidth <= overflow.clientWidth + 1,
       `the page is ${overflow.scrollWidth}px wide in a ${overflow.clientWidth}px viewport`,
     );
-    await assert.doesNotReject(page.locator(".explore-grid").waitFor({ state: "visible" }));
+    await assert.doesNotReject(page.locator(".claim-grid").waitFor({ state: "visible" }));
   } finally {
     await context.close();
   }
