@@ -35,7 +35,7 @@ const PAGE_ORDER = [
 // styles these to degrade to a framed panel with alt text; here they excuse
 // the one console error their 404 logs. Once the PNGs exist the filter
 // matches nothing — remove entries as captures land.
-const PENDING_PLATES = ["adventure", "code", "ingest", "sprites"];
+const PENDING_PLATES = [];
 const PENDING_SHOT_RE = new RegExp(`screenshots/(${PENDING_PLATES.join("|")})\\.png`);
 
 let siteDir;
