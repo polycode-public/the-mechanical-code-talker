@@ -31,11 +31,6 @@ procedure, not a diff), *operator call* (a decision, not a build).
 
 | # | Item | Status | Checked | Motivation | Likelihood it sticks |
 |---|---|---|---|---|---|
-| 1 | `list facts`/`list utterances` memory-class lane | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | tested mechanism is unreachable from chat | high |
-| 2 | `how many animals` taught-class count | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | no lane; quantifier lane steals the phrasing | high |
-| 3 | `list all animals` trigger arm | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | working answer unreachable from this phrasing | high |
-| 4 | `count all facts about X` regex | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | "all" captured as the noun | high |
-| 5 | membership-list trigger (xl cap shadow) | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | forward facts fill the cap at xl | medium-high |
 | 6 | narrowing disclosure (dir/graph/entity picks) | open, design | 2026-07-21 | wrong-feeling answers erode trust | medium |
 | 7 | verbatim log fixes (rewrite, multi-sentence) | open, traced | 2026-07-21 | the transcript is the instrument | high |
 | 8 | farewell/dismissal routing | open, traced | 2026-07-21 | polite close reads worse than a wall | medium-high |
@@ -45,7 +40,6 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 12 | in-game question routing guard | open, traced | 2026-07-21 | code answers inside a game, worst misroute class | medium-high |
 | 13 | world-secret spoiler + predicate phrases | open, traced | 2026-07-21 | spoils the game, in garbled English | high |
 | 14 | "look" digest corpus leak | open, traced | 2026-07-21 | room text must come from the world | medium-high |
-| 15 | determiner-subject teach | in progress, traced (wt agent-a3bbb8b3c6bb6b604) | 2026-07-21 | the natural form declines | high |
 | 16 | hanoi solve at xl | open, reproduced | 2026-07-21 | biggest live falsehood found | medium |
 | 17 | live-Wikipedia trust prior | open, traced | 2026-07-21 | live must not outrank the pinned pack | high |
 | 18 | chat-seed caps | in progress (decided: raise caps to ~40 MB ceiling; wt agent-a8d1b0cd6ce6cb74d) | 2026-07-21 | seed-ceiling decision | n/a |
@@ -64,40 +58,6 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 33 | triple-store export, every page | open, new scope | 2026-07-22 | data leaves in the standard shape | high |
 
 The detailed items:
-
-- Memory/taught-class list & count — the `archive/PLAN_CLASS_QUERY.md` remainder. Its Phase 1
-  shipped without the plan (live: "how many facts about horses are there" → `18 facts. (about
-  "horses")` — `answerMemoryCount` grew its own tail discipline, `MEMORY_COUNT_ABOUT_TAIL_RE`
-  `src/services/chat.mjs:788` + `memoryFactsAboutCount` `:793`; the plan's proposed bare decline
-  would now be a regression). Still missing, live-confirmed:
-  - `list facts` / `list utterances` fall to the code-graph compositional miss. The tested
-    mechanism (`dynamicClassQuery` `src/domain/ask.mjs:4082`, `resolveDynamicClass` `:4066`,
-    trigger REs `:4073-4074`, all unexported) never sees memory individuals from chat. Fix: a
-    memory-class list/count lane in `runTurn` beside `answerMemoryCount` (`chat.mjs:13424`),
-    loading via `await import("../adapters/memory/core.mjs")` like its siblings (`:841`),
-    rendering with `FACT_ANSWER_CAP = 32` (`:6161`) and the `pending`/"say 'more'" continuation
-    (`:7779`). Also covers the memory meta-classes Session/Source/Rule — today "how many sessions
-    are there" answers from the CODE graph's Session class, not the store.
-  - `how many animals are there` — no count over a taught class's members. The two-noun
-    quantifier lane swallows it first ("I was never told a quantifier": `HOW_MANY_ARE_RE`
-    `chat.mjs:745` reads "there" as the second noun), so the new count either precedes
-    `answerQuantifierRecall` (`:13436`) or that regex excludes "there". Count body: mirror the
-    reverse-membership branch in `factReadBackReaders` (`chat.mjs:9037-9070` — note it lives
-    there, NOT in `factAnswer` as the archived plan says), `objectHits` at `:9065`, return
-    `hits.length`.
-  - `list all animals` / `list the animals` — compositional miss. Fix: one more `else if (!term)`
-    arm after the bare what-is fallback (`chat.mjs:9058-9061`) matching
-    `list|show (all|the) <noun>`, with a restrictor-tail decline (export `DYNAMIC_TAIL_OK_RE`
-    `ask.mjs:4077`, or reuse chat's own filler-tail set `:783`).
-  - `count all facts about horses` — the count regex (`chat.mjs:814`) captures the word after
-    "count", which is "all". Allow an optional `all `.
-  - Related pattern, found this round: at xl scale "what is an animal" fills its cap with forward
-    corpus facts, so the reverse-membership listing never shows — a membership-list answer needs
-    its own trigger, not the definition lane's leftovers.
-  - Test homes: `test/adapters/wiring-facts-memory.test.mjs` (chat-reachable memory lane),
-    `test/adapters/chat-reference-lane.test.mjs` (membership count/list),
-    `test/adapters/ask-memory-class-query.test.mjs` (ask-level pins),
-    `test/adapters/showcase.test.mjs` (session-count pin).
 
 - CONVERSATION persona-sweep remainder (`BENCHMARK_CONVERSATION_2.7.11.md`): 15 of the 29 routed
   items landed between 2.7.12 and 2.9.6 and re-verified fixed live this round (teach period,
@@ -142,8 +102,6 @@ The detailed items:
     describe lane should exclude world-secret predicates the way the adventure where-reader does.
   - the adventure "look" digest at xl leaks corpus facts into the room description ("Library is
     used for study for test. Lit rdfs:subClassOf literary study.").
-  - the teach frame still declines a determiner subject: "the tower has 3 disks." misroutes to
-    ask(defines); bare "tower has 3 disks." teaches.
   - NEW, largest: the hanoi solve fails against the xl graph — the full taught board + goal
     returned "no plan found within 300 moves" after ~2.5 minutes, while the same sequence passes
     the small-graph corpus tests. Suspect the goal's "every disk" enumeration (or the movable
@@ -285,23 +243,17 @@ the tool layer, which we already ship; both are folded into the entries below wh
 apply. Chat-lane fixes (items 1-16, 29) inherit every chat channel at once — TUI, plain CLI,
 browser bundles, serve, and library `runChat` all call the same `runTurn`.
 
-- **1-5, class-query lanes.** Code: as traced per sub-item above (`chat.mjs:13424` wiring,
-  `factReadBackReaders` `:9037-9070`, the `:814` regex, exports from `ask.mjs:4066-4082`).
-  Tests: unit in the four named test homes; tool level in `test/tools/ask.test.mjs` (the ask()
-  path already carries `dynamicClassQuery`); no e2e needed. Docs: README's query-shapes section
-  gains the memory-class rows; chat.html's suggested prompts add "list facts". Channels: all
-  chat channels inherit; the tool layer needs no new tool (counts ride the existing ask tool).
 - **6-11, conversation lanes.** Code: `chat.mjs` per sub-item — the narrowing sites need their
   disclosure design first; farewell templates beside the existing FAREWELL set (`:1338`);
   the "start reading" misroute wants a guard in the where-lane resolver; adjective predication
   is a new closed teach frame beside the every-X-is-Y frame. Tests: corpus rows in
   `template.*`/`grammar.*` lanes plus `test/adapters/interpret.test.mjs`; no e2e. Docs: none
   (behavioral); the next CONVERSATION report measures them. Channels: inherit.
-- **12-16, games/plan.** Code: lane-precedence guard while a game slot is live
+- **12-14 + 16, games/plan.** Code: lane-precedence guard while a game slot is live
   (`src/services/adventure.mjs` / `spider-fly-turn.mjs` interception boundary); world-secret
   predicate exclusion in the describe lane the way the adventure where-reader already excludes;
   curated world rows in `FACT_PREDICATE_PHRASES` (`chat.mjs:5523`); a world-source filter on the
-  look digest (`worldDigestRows`); the determiner arm in the has-teach frame; hanoi-at-xl —
+  look digest (`worldDigestRows`); hanoi-at-xl —
   scope the goal quantifier's member enumeration to taught instances (`src/domain/planning.mjs`
   `findActionPath` callers + the goal-teach reader around `chat.mjs:2299`). Tests: unit in
   `test/corpus/games/*.jsonl` rows + `test/services/spider-fly.test.mjs`; the hanoi fix gets a
