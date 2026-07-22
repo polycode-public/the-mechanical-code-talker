@@ -128,6 +128,9 @@ console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no 
 // ledger bundle above. showDesktopLink:true is the one option that differs
 // from the Electron build (scripts/build-electron-app.mjs), which renders
 // the identical page for the desktop shell and has nothing to point at.
+// The page also fetches ./chat-seed.json (built further down this script)
+// at runtime for its chat's general-knowledge bands — nothing to embed
+// here, and a build without the seed leaves the page graph-only.
 {
   const { computeCodeExplorerData, renderCodeExplorerHtml, VENDOR_WINK_LOADER_JS } = await import(join(ROOT, "src", "services/code-explorer-viz.mjs"));
   const { main: buildCodeExplorerBundle } = await import(join(here, "build-code-explorer-bundle.mjs"));

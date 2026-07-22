@@ -49,6 +49,17 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
 - Decompose into workstreams with **clear file-ownership boundaries**; serialize on shared
   files (one agent owns `package.json`, `src/`, `bin/`, `test/` sequences; docs/site tracks
   run in parallel).
+- **Pick each sub-agent's model deliberately, and pick the lowest tier that meets the task's
+  needs** — the ladder runs Fable to Opus to Sonnet to Haiku. Engine work in a large, subtle file
+  (chat.mjs, adventure.mjs) earns a top-tier model; page markup/CSS against a written design
+  earns Sonnet; mechanical sweeps (renames across files, manifest updates, format-only edits)
+  earn Haiku. When decomposing, **group tasks that need a similar level into the same
+  workstream** so one agent's minimum required model serves the whole group — don't staple one
+  hard task onto a batch of easy ones, because the hard task then prices the whole batch at the
+  top tier.
+- The generated site pages under `public/` are gitignored build outputs and go stale on disk
+  the moment `src/` moves. Before inspecting one (or screenshotting it), run a fresh
+  `npm run demo:build` so what you read matches the code.
 - **Keep the chat for chat**: anything long-running (benchmarks, judge passes, builds, test
   sweeps) executes as a BACKGROUND task at maximum safe concurrency; the main session
   launches it, keeps coordinating and conversing, and collects results on the completion
