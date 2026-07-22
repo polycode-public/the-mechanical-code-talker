@@ -19,7 +19,7 @@
 // already takes with its own precomputed memory payload, just applied to a
 // second kind of build-time data.
 //
-// Five pure, `.toString()`-splice-safe pieces are exported as real functions
+// Eight pure, `.toString()`-splice-safe pieces are exported as real functions
 // (not raw inline-script text) so they can be pinned directly by tests, the
 // same discipline spider-fly-viz.mjs holds classOfAgentId/
 // threadCellsForSpiderPlan to: `spriteClassForObject` (an object's sprite
@@ -28,6 +28,11 @@
 // adventure.mjs's own private `visibleRoomOf` the same way
 // adventure-autoplay.mjs's own `roomOfSubject` already has to), `roomSceneObjects`
 // (every subject actually visible in a room, built over `visibleRoomOf`),
+// `scenePlacement` (an object's rendering plane and, if stacked, what it
+// rests on — instance on-top-of/on-plane facts, then a class-default
+// ancestor walk, then floor), `roomSceneLayout` (the room split into a wall
+// band and floor stacks, over `roomSceneObjects` and `scenePlacement`),
+// `roomKindForRoom` (a room's border treatment, from its own rdf:type),
 // `carriedItems` (every object placed with the player), and `visitedRoomGraph`
 // (a directions-only layout of the rooms a session has actually visited —
 // see its own header for the exposure discipline). None of these import
@@ -55,9 +60,10 @@
 // tick. `#caption`/`#goalLine` keep their existing job as the current-state
 // summary; the chat log is the persistent addition.
 //
-// Three further panels sit alongside the chat dock in `.side`: carrying
-// (`carriedItems`), the visited-room map (`visitedRoomGraph`), and goal
-// status (`goalStatusLines`) — all three read `session.snapshot()`'s own
+// The chat dock is the whole of `.side`; carrying (`carriedItems`), the
+// visited-room map (`visitedRoomGraph`) and goal status (`goalStatusLines`)
+// render into their own panels in `.stage-left` instead, alongside the room
+// view and its controls — all three read `session.snapshot()`'s own
 // `visitedRoomIds`, the manual+auto-play exposure set
 // adventure-browser-entry.mjs threads forward (see that module's header for
 // why the two paths share one set rather than two).
@@ -167,6 +173,124 @@ export function roomSceneObjects(rows, state, here) {
     out.push({ subject, spriteClass: spriteClassForObject(rows, subject) });
   }
   return out;
+}
+
+/** Where `subject` renders in its room's scene: `{plane, stackedOn}`, plane
+ *  one of "floor"/"surface"/"wall"/"ceiling". Resolution order: a CURRENT
+ *  `mgx:on-top-of` row (plane "surface", `stackedOn` the object rested on) —
+ *  "current" meaning its own newest turn is at least as new as `subject`'s
+ *  own newest PLACEMENT turn (`state.placements`), so `take lamp` off a desk
+ *  auto-invalidates a stale `lamp mgx:on-top-of desk` row with no extra
+ *  write, the same staleness rule `foldWorldState` already applies within
+ *  its own placement map; then a current `mgx:on-plane` row (its own object
+ *  taken as the plane verbatim); then a class default, found by a breadth-
+ *  first walk from `subject` up BOTH `rdf:type` edges (an individual to its
+ *  class) and `rdfs:subClassOf` edges (a class, or a directly-taxonomized
+ *  individual such as "portrait rdfs:subClassOf painting", to its own
+ *  superclass) for the first `mgx:default-plane` fact — a DIFFERENT ancestor
+ *  walk from sprite-map.mjs's own `classAncestorChain` (subClassOf-only, and
+ *  an import this function can't take and stay `.toString()`-splice-safe);
+ *  then the floor. Pure, fully self-contained in its own function body (no
+ *  reference to any other name in this module) — reads `rows` fresh rather
+ *  than a precomputed `positions` map, so it needs nothing beyond what
+ *  `foldWorldState` already exposes on `state.placements`. */
+export function scenePlacement(rows, state, subject) {
+  const snapshotRe = /^(.+)@turn(\d+)$/;
+  function newestRowFor(predicate) {
+    let best = null;
+    for (const row of rows || []) {
+      if (row.predicate !== predicate) continue;
+      const m = snapshotRe.exec(row.subject);
+      const base = m ? m[1] : row.subject;
+      if (base !== subject) continue;
+      const turn = m ? Number(m[2]) : 0;
+      if (!best || turn >= best.turn) best = { object: row.object, turn };
+    }
+    return best;
+  }
+  function classDefaultPlane() {
+    const seen = new Set([subject]);
+    const queue = [subject];
+    while (queue.length) {
+      const node = queue.shift();
+      const defaultRow = (rows || []).find((r) => r.subject === node && r.predicate === "mgx:default-plane");
+      if (defaultRow) return defaultRow.object;
+      for (const row of rows || []) {
+        if (row.subject !== node) continue;
+        if (row.predicate !== "rdf:type" && row.predicate !== "rdfs:subClassOf") continue;
+        if (!seen.has(row.object)) { seen.add(row.object); queue.push(row.object); }
+      }
+    }
+    return null;
+  }
+  const placementTurn = state?.placements?.get(subject)?.turn ?? 0;
+  const onTopOf = newestRowFor("mgx:on-top-of");
+  if (onTopOf && onTopOf.turn >= placementTurn) return { plane: "surface", stackedOn: onTopOf.object };
+  const onPlane = newestRowFor("mgx:on-plane");
+  if (onPlane && onPlane.turn >= placementTurn) return { plane: onPlane.object, stackedOn: null };
+  const defaultPlane = classDefaultPlane();
+  if (defaultPlane) return { plane: defaultPlane, stackedOn: null };
+  return { plane: "floor", stackedOn: null };
+}
+
+/** The room scene laid out for drawing: `{wall, floor}`. `wall` is every
+ *  wall- or ceiling-mounted visible object (deterministic, subject order).
+ *  `floor` is one entry per floor-standing stack, `{items: [top..base]}` —
+ *  a `mgx:on-top-of` chain is resolved transitively (an item on an item on a
+ *  floor base becomes one three-level stack), and an item whose own
+ *  `stackedOn` target is not itself VISIBLE in this room (or is itself
+ *  wall/ceiling-mounted, so has no floor footprint to stack onto) demotes to
+ *  its own single-item floor stack rather than vanishing. Built over
+ *  `roomSceneObjects` and `scenePlacement`, so it can never draw an object
+ *  the flat room view wouldn't already show. Pure. */
+export function roomSceneLayout(rows, state, here) {
+  const objects = roomSceneObjects(rows, state, here);
+  const bySubject = new Map(objects.map((o) => [o.subject, o]));
+  const placementOf = new Map(objects.map((o) => [o.subject, scenePlacement(rows, state, o.subject)]));
+
+  const wall = [];
+  const stackedOnBy = new Map(); // base subject -> [subjects resting directly on it]
+  const bases = [];
+
+  for (const o of objects) {
+    const placement = placementOf.get(o.subject);
+    if (placement.plane === "wall" || placement.plane === "ceiling") { wall.push(o); continue; }
+    const targetPlacement = placement.stackedOn ? placementOf.get(placement.stackedOn) : null;
+    const targetHasFloorFootprint = targetPlacement && targetPlacement.plane !== "wall" && targetPlacement.plane !== "ceiling";
+    if (placement.plane === "surface" && placement.stackedOn !== o.subject && targetHasFloorFootprint) {
+      if (!stackedOnBy.has(placement.stackedOn)) stackedOnBy.set(placement.stackedOn, []);
+      stackedOnBy.get(placement.stackedOn).push(o.subject);
+      continue;
+    }
+    bases.push(o.subject);
+  }
+
+  wall.sort((a, b) => a.subject.localeCompare(b.subject));
+  bases.sort((a, b) => a.localeCompare(b));
+  for (const list of stackedOnBy.values()) list.sort((a, b) => a.localeCompare(b));
+
+  const visitedForStack = new Set();
+  function stackFrom(base) {
+    if (visitedForStack.has(base)) return [];
+    visitedForStack.add(base);
+    const items = [];
+    for (const child of stackedOnBy.get(base) || []) items.push(...stackFrom(child));
+    items.push(bySubject.get(base));
+    return items;
+  }
+
+  return { wall, floor: bases.map((base) => ({ items: stackFrom(base) })) };
+}
+
+/** A room's kind for its border treatment: "outdoor" (`rdf:type
+ *  outdoor-space`), "underground" (`rdf:type underground-space`), else
+ *  "indoor" — the default, covering every room the current shipped world
+ *  defines. Pure, self-contained. */
+export function roomKindForRoom(rows, roomId) {
+  const isRoomTyped = (kind) => (rows || []).some((r) => r.subject === roomId && r.predicate === "rdf:type" && r.object === kind);
+  if (isRoomTyped("outdoor-space")) return "outdoor";
+  if (isRoomTyped("underground-space")) return "underground";
+  return "indoor";
 }
 
 /** Every object currently `mgx:located-in` "player", sorted, each with its
@@ -394,24 +518,36 @@ ${THEME_TOKENS_CSS}
     --baize: #4A6B52; --baize-line: #33503C; --board-path: #E7DAB8;
     --wall: #E9DDBE; --wall-stripe: rgba(147, 112, 31, .10);
     --floor-a: #D9C398; --floor-b: #CFB884;
+    --sky: #BFE0EE; --hedge: #3F6B45;
+    --stone: #6E6A63; --stone-b: rgba(110, 106, 99, .18);
+    --stone-floor-a: #504C46; --stone-floor-b: #464340;
   }
   @media (prefers-color-scheme: dark) { :root {
     --parchment: #241E12; --parchment-strong: #2C2416; --gilt: #C0A054;
     --baize: #1E2C22; --baize-line: #4A6852; --board-path: #56604D;
     --wall: #262013; --wall-stripe: rgba(192, 160, 84, .07);
     --floor-a: #2B2314; --floor-b: #241E10;
+    --sky: #16232B; --hedge: #2E4A33;
+    --stone: #3A3834; --stone-b: rgba(255, 255, 255, .05);
+    --stone-floor-a: #17150F; --stone-floor-b: #100E0A;
   } }
   :root[data-theme="dark"] {
     --parchment: #241E12; --parchment-strong: #2C2416; --gilt: #C0A054;
     --baize: #1E2C22; --baize-line: #4A6852; --board-path: #56604D;
     --wall: #262013; --wall-stripe: rgba(192, 160, 84, .07);
     --floor-a: #2B2314; --floor-b: #241E10;
+    --sky: #16232B; --hedge: #2E4A33;
+    --stone: #3A3834; --stone-b: rgba(255, 255, 255, .05);
+    --stone-floor-a: #17150F; --stone-floor-b: #100E0A;
   }
   :root[data-theme="light"] {
     --parchment: #ECE1C8; --parchment-strong: #E1D2A6; --gilt: #93701F;
     --baize: #4A6B52; --baize-line: #33503C; --board-path: #E7DAB8;
     --wall: #E9DDBE; --wall-stripe: rgba(147, 112, 31, .10);
     --floor-a: #D9C398; --floor-b: #CFB884;
+    --sky: #BFE0EE; --hedge: #3F6B45;
+    --stone: #6E6A63; --stone-b: rgba(110, 106, 99, .18);
+    --stone-floor-a: #504C46; --stone-floor-b: #464340;
   }
 
   html { background: var(--bg); }
@@ -427,14 +563,23 @@ ${THEME_TOKENS_CSS}
   .mode-toggle:hover:not(:disabled) { background: var(--parchment-strong); }
   .mode-toggle:disabled { opacity: .5; cursor: default; }
 
-  .stage { display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1rem; align-items: start; }
+  /* the room-view + map column runs roughly two-thirds width, the manor's
+     own account (chat log + pills + caption) a third. */
+  .stage { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 1rem; align-items: start; }
   @media (max-width: 760px) { .stage { grid-template-columns: 1fr; } }
 
-  /* the left column: quest and satchel as full-width strips above the room,
-     the room itself, then the reset/play/step/turn strip pinned directly
-     below it — everything in this column shares the room's own width, so
-     the column's total height tracks the side column instead of leaving a
-     gap under a lone, short room panel. */
+  /* the room's own opening prose, relocated (operator feedback) out of a
+     bottom-of-page strip and into a spider-fly-style note directly under the
+     titlebar — the same "sight-read the world before you touch anything"
+     framing spider-fly.html's own header paragraph already gives its board. */
+  .page-note { background: var(--parchment); border-left: 3px solid var(--gilt); padding: .6rem .85rem; font-size: .9rem; font-style: italic; margin: 0 0 1rem; }
+  .page-note:empty { display: none; margin: 0; }
+
+  /* the left column: quest, the room itself, the reset/play/step/turn strip,
+     the goal/status lines, satchel, the command box and the manor map, all
+     as full-width strips sharing the room's own width — the column's total
+     height tracks the side column instead of leaving a gap under a lone,
+     short room panel. */
   .stage-left { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
 
   /* the room view — a 90s-RPG interior cutaway, all CSS gradients, no
@@ -456,6 +601,24 @@ ${THEME_TOKENS_CSS}
   .room-frame::before, .room-frame::after { content: "\\2766"; position: absolute; font-size: 1.1rem; color: var(--gilt); opacity: .85; line-height: 1; }
   .room-frame::before { top: -.6rem; left: -.35rem; }
   .room-frame::after { bottom: -.6rem; right: -.35rem; transform: rotate(180deg); }
+  /* outdoor: a sky band over a hedge-green divider, no gilt — cellar and
+     study/library etc. stay on the indoor gradient above (the default), so
+     only a room actually typed outdoor-space/underground-space repaints. */
+  .room-frame[data-room-kind="outdoor"] {
+    background:
+      linear-gradient(var(--sky), var(--sky)) 0 0 / 100% 58% no-repeat,
+      linear-gradient(var(--hedge), var(--hedge)) 0 58% / 100% 3px no-repeat,
+      repeating-linear-gradient(78deg, var(--floor-a) 0 26px, var(--floor-b) 26px 52px);
+    border-color: var(--hedge);
+  }
+  /* underground: stone-grey stripes over a darker floor, no gilt rail. */
+  .room-frame[data-room-kind="underground"] {
+    background:
+      repeating-linear-gradient(90deg, var(--stone-b) 0 4px, transparent 4px 30px) 0 0 / 100% 58% no-repeat,
+      linear-gradient(var(--stone), var(--stone)) 0 0 / 100% 58% no-repeat,
+      repeating-linear-gradient(78deg, var(--stone-floor-a) 0 26px, var(--stone-floor-b) 26px 52px);
+    border-color: var(--stone);
+  }
   /* the brass door plaque naming the room the scene is drawing — filled
      from the same snapshot the caption already reads, never a new fact. */
   .room-plaque {
@@ -466,7 +629,35 @@ ${THEME_TOKENS_CSS}
     padding: .22rem .9rem; white-space: nowrap;
   }
   .room-plaque:empty { display: none; }
-  .sprite-row { display: flex; flex-wrap: wrap; gap: .9rem .7rem; align-items: flex-end; min-height: 2.5rem; }
+  /* the room-kind icon — filled through the exact same property-aware
+     sprite resolver the room's own object cards use, keyed on the room's own
+     name (so library/kitchen/garden reach their large TOMLs, everything else
+     falls back through room's own ancestor chain to the generic room icon). */
+  .room-kind-icon { position: absolute; top: .55rem; right: .6rem; width: 28px; height: 28px; opacity: .92; }
+  .room-kind-icon svg { width: 100%; height: 100%; display: block; }
+  .room-kind-icon:empty { display: none; }
+  .sprite-row { display: flex; align-items: flex-end; gap: .9rem .7rem; min-height: 2.5rem; }
+  /* the floor band: every non-wall-mounted stack, wrapping and pinned to the
+     left edge of the room, as the flat sprite row always has. */
+  .floor-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .9rem .7rem; }
+  /* the adventurer's own card, pinned to the right edge of the room view —
+     margin-left: auto inside the shared flex row pushes it there regardless
+     of how many floor stacks sit to its left. */
+  .you-slot { margin-left: auto; display: flex; align-items: flex-end; flex: none; }
+  /* one on-top-of chain, drawn as a column: the topmost item first, the
+     floor-standing base last — shrink-wrapped so the stack's own width is
+     whichever level is widest, never the room's full width. */
+  .sprite-stack { display: flex; flex-direction: column; align-items: center; gap: .3rem; width: max-content; }
+  /* the wall band: centered, absolutely laid over the papered-wall portion
+     of the room frame (roughly its top 8%-52% — the gilt dado sits at 58%),
+     items bottom-aligned so a hung painting's own frame reads as flush
+     against the dado rail beneath it. */
+  .wall-row {
+    position: absolute; left: 1.1rem; right: 1.1rem; top: 8%; height: 44%;
+    display: flex; justify-content: center; align-items: flex-end; gap: .9rem .7rem;
+    flex-wrap: wrap; pointer-events: none;
+  }
+  .wall-row:empty { display: none; }
 
   /* the class-badge system — this design's signature element: every sprite
      gets a small ringed portrait frame plus a genre-flavored class word
@@ -587,12 +778,14 @@ ${THEME_TOKENS_CSS}
   .edit-status.pending { color: var(--entail); }
   .edit-status.ok { color: var(--taught); }
   .roomdetail .sprite-row { min-height: 3.2rem; }
+  .roomdetail[data-room-kind="outdoor"] { border-top-color: var(--hedge); }
+  .roomdetail[data-room-kind="underground"] { border-top-color: var(--stone); }
   #legendList { display: flex; flex-wrap: wrap; gap: .5rem .3rem; }
 
   body.preview .side, body.preview .stage-left > .panel, body.preview .controls-row, body.preview .status { display: none; }
   body.preview main { padding: 0; max-width: none; }
   body.preview .stage { display: block; }
-  body.preview .eyebrow, body.preview h1, body.preview .mode-toggle, body.preview #editStage { display: none; }
+  body.preview .eyebrow, body.preview h1, body.preview .mode-toggle, body.preview #editStage, body.preview .page-note { display: none; }
 </style>
 </head>
 <body>
@@ -602,19 +795,21 @@ ${THEME_TOKENS_CSS}
     <h1>A room, drawn from exactly what the text already says is there</h1>
     <button id="editModeBtn" type="button" class="mode-toggle" disabled>edit the world</button>
   </div>
+  <p class="page-note">${escapeHtml(worldPayload.opening)}</p>
   <div class="stage" id="playStage">
     <div class="stage-left">
       <div class="panel goals">
         <h2>quest</h2>
         <div id="goalList"></div>
       </div>
-      <div class="panel carrying">
-        <h2>satchel</h2>
-        <div class="chips" id="carryList"></div>
-      </div>
       <div class="room-frame" id="roomFrame">
         <div class="room-plaque mono" id="roomName"></div>
-        <div class="sprite-row" id="spriteRow"></div>
+        <div class="room-kind-icon" id="roomKindIcon"></div>
+        <div class="wall-row" id="wallRow"></div>
+        <div class="sprite-row" id="spriteRow">
+          <div class="floor-row" id="floorRow"></div>
+          <div class="you-slot" id="youSlot"></div>
+        </div>
       </div>
       <div class="controls-row" id="playControls">
         <button id="resetBtn" type="button" disabled>reset</button>
@@ -622,13 +817,14 @@ ${THEME_TOKENS_CSS}
         <button id="stepBtn" type="button" disabled>step</button>
         <span class="turn mono" id="turnLabel">turn: 0</span>
       </div>
-    </div>
-    <aside class="side" aria-label="The adventure's log and chat">
-      <div class="chat">
-        <h2>the manor's own account</h2>
-        <div class="chatlog" id="chatlog" aria-live="polite"></div>
-        <div class="pills" id="pills"></div>
-        <div class="caption" id="caption"></div>
+      <div class="goal-line" id="goalLine"></div>
+      <div class="status" id="status">loading the engine&hellip;</div>
+      <div class="panel carrying">
+        <h2>satchel</h2>
+        <div class="chips" id="carryList"></div>
+      </div>
+      <div class="panel command">
+        <h2>speak to the manor</h2>
         <form class="chatask" id="chatform">
           <span class="prompt mono">tmct&gt;</span>
           <input id="chatq" type="text" placeholder="go north" aria-label="Type a command, or ask a question" disabled>
@@ -637,6 +833,14 @@ ${THEME_TOKENS_CSS}
       <div class="panel roommap">
         <h2>the manor, so far</h2>
         <div class="map-viewport"><div id="mapWrap"></div></div>
+      </div>
+    </div>
+    <aside class="side" aria-label="The adventure's log and chat">
+      <div class="chat">
+        <h2>the manor's own account</h2>
+        <div class="chatlog" id="chatlog" aria-live="polite"></div>
+        <div class="pills" id="pills"></div>
+        <div class="caption" id="caption"></div>
       </div>
     </aside>
   </div>
@@ -653,7 +857,7 @@ ${THEME_TOKENS_CSS}
         <h2>the whole manor</h2>
         <div class="map-viewport"><div id="editMapWrap"></div></div>
       </div>
-      <div class="panel roomdetail">
+      <div class="panel roomdetail" id="roomDetailPanel">
         <h2 id="roomDetailTitle">click a room</h2>
         <div class="sprite-row" id="roomDetailSprites"></div>
         <div class="caption" id="roomDetailCaption"></div>
@@ -664,9 +868,6 @@ ${THEME_TOKENS_CSS}
       </div>
     </aside>
   </div>
-
-  <div class="goal-line" id="goalLine"></div>
-  <div class="status" id="status">loading the engine&hellip;</div>
 </main>
 <script>
 const ADVENTURE = ${pageData};
@@ -679,6 +880,9 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const spriteClassForObject = ${spriteClassForObject.toString()};
   const visibleRoomOf = ${visibleRoomOf.toString()};
   const roomSceneObjects = ${roomSceneObjects.toString()};
+  const scenePlacement = ${scenePlacement.toString()};
+  const roomSceneLayout = ${roomSceneLayout.toString()};
+  const roomKindForRoom = ${roomKindForRoom.toString()};
   const carriedItems = ${carriedItems.toString()};
   const visitedRoomGraph = ${visitedRoomGraph.toString()};
   const allRoomIds = ${allRoomIds.toString()};
@@ -688,8 +892,12 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const wordBeforeCursor = ${wordBeforeCursor.toString()};
   const esc = ${escapeHtml.toString()};
   const el = (id) => document.getElementById(id);
-  const spriteRow = el("spriteRow");
+  const roomFrameEl = el("roomFrame");
   const roomNameEl = el("roomName");
+  const roomKindIconEl = el("roomKindIcon");
+  const wallRowEl = el("wallRow");
+  const floorRowEl = el("floorRow");
+  const youSlotEl = el("youSlot");
   const captionEl = el("caption");
   const goalLineEl = el("goalLine");
   const statusEl = el("status");
@@ -709,6 +917,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const editorPillsEl = el("editorPills");
   const editorStatusEl = el("editorStatus");
   const editMapWrapEl = el("editMapWrap");
+  const roomDetailPanelEl = el("roomDetailPanel");
   const roomDetailTitleEl = el("roomDetailTitle");
   const roomDetailSpritesEl = el("roomDetailSprites");
   const roomDetailCaptionEl = el("roomDetailCaption");
@@ -936,6 +1145,15 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     chatqEl.value = btn.textContent;
     chatqEl.focus();
   });
+  // A double-click runs the pill's own command immediately — the single
+  // click above still only fills the input, so a visitor who meant to edit
+  // it first loses nothing.
+  pillsEl.addEventListener("dblclick", (e) => {
+    const btn = e.target.closest(".pill");
+    if (!btn || !chatqEl || !chatformEl) return;
+    chatqEl.value = btn.textContent;
+    chatformEl.requestSubmit();
+  });
 
   // ---- sprite resolution — property/instance-aware (sprite-templates.mjs's
   // resolveSpriteAsset), keyed on the OBJECT'S OWN NAME (via
@@ -954,12 +1172,29 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     );
   }
 
+  // ---- the room-kind icon — filled through the SAME property-aware
+  // resolver the sprite cards use, keyed on the room's own name, so a room
+  // with its own large-tier template (library, kitchen, garden) shows it and
+  // everything else falls back through room's own ancestor chain to the
+  // generic room icon.
+  function roomKindIconSvg(rows, here) {
+    return tmctAdventure.resolveSpriteAsset(
+      here, spriteAncestryRows(rows, here), factsForSubject(rows, here),
+      activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY, { instanceKey: "roomkind-" + here },
+    );
+  }
+
   function redraw(snap) {
     lastSnapshot = snap;
-    const objects = roomSceneObjects(snap.rows, snap.state, snap.here);
-    const sprites = [{ subject: "you", spriteClass: "adventurer" }, ...objects];
-    spriteRow.innerHTML = sprites.map((s) => spriteCardHtml(s.subject, s.spriteClass, resolveObjectSprite(snap.rows, s))).join("");
+    const layout = roomSceneLayout(snap.rows, snap.state, snap.here);
+    wallRowEl.innerHTML = layout.wall.map((s) => spriteCardHtml(s.subject, s.spriteClass, resolveObjectSprite(snap.rows, s))).join("");
+    floorRowEl.innerHTML = layout.floor.map((stack) =>
+      '<div class="sprite-stack">' + stack.items.map((s) => spriteCardHtml(s.subject, s.spriteClass, resolveObjectSprite(snap.rows, s))).join("") + "</div>"
+    ).join("");
+    youSlotEl.innerHTML = spriteCardHtml("you", "adventurer", resolveObjectSprite(snap.rows, { subject: "you", spriteClass: "adventurer" }));
     roomNameEl.textContent = "the " + snap.here;
+    roomFrameEl.setAttribute("data-room-kind", roomKindForRoom(snap.rows, snap.here));
+    roomKindIconEl.innerHTML = roomKindIconSvg(snap.rows, snap.here);
     captionEl.textContent = captionFor(snap.rows, snap.state, snap.here);
     turnLabelEl.textContent = "turn: " + snap.turn;
     renderPills(snap.rows, snap.state, snap.here);
@@ -1007,11 +1242,13 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 
   function renderRoomDetail() {
     if (!selectedRoomId) {
+      roomDetailPanelEl.setAttribute("data-room-kind", "");
       roomDetailTitleEl.textContent = "click a room";
       roomDetailSpritesEl.innerHTML = "";
       roomDetailCaptionEl.textContent = "";
       return;
     }
+    roomDetailPanelEl.setAttribute("data-room-kind", roomKindForRoom(editRows, selectedRoomId));
     roomDetailTitleEl.textContent = selectedRoomId;
     const objects = roomSceneObjects(editRows, editState, selectedRoomId);
     roomDetailSpritesEl.innerHTML = objects.length
@@ -1150,7 +1387,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     redraw(snap);
     goalLineEl.textContent = "";
     chatlogEl.innerHTML = "";
-    statusEl.textContent = ADVENTURE.world.opening || "";
+    statusEl.textContent = "";
     addChatLine("t", esc(ADVENTURE.world.opening || "the adventure begins."));
     if (saved && snap.turn > 0) {
       addChatLine("t", "resumed where you left off (turn " + snap.turn + ") \\u2014 progress kept best-effort on this device; reset starts the manor over.");

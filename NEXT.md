@@ -16,15 +16,18 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Open items
 
-None. The 2026-07-21 live-verified board (33 items, extended live to 35) cleared on 2026-07-22
-across the 2.10.x releases; `git log` from 2.10.0 to the current release holds the delivery
-record, and the filler-clause widening and planner-counterfactual design passes still live in
-`PLAN_FILLER_AND_COUNTERFACTUALS.md` as the plan of record for the next build.
+Site-uplift board (2026-07-22 approved plan). Each row is one task; the workstream that lands it
+deletes its row in the same commit. Other workstreams' rows (WS-world, WS-chat-engine, WS-home,
+WS-pages, WS-code-ide, WS-ci-screens) land from their own worktrees and are reconciled at merge.
 
-The natural next verification pass: a fresh live session against an `init:xl` graph plus the
-merged code graphs (the 2026-07-21 sweep's method) to re-map the miss wall at the new baseline,
-and a live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their
-deployed numbers.
+### WS-adventure-page — adventure/spider-fly presentation (sonnet)
+- [ ] spider-fly header left-aligned with board (`.page-head > .head-inner` width rule)
+- [ ] unit + e2e test updates (spider-fly-viz, pages-spider-fly alignment)
+
+The natural next verification pass (carried, not this workstream's): a fresh live session against
+an `init:xl` graph plus the merged code graphs to re-map the miss wall at the new baseline, and a
+live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their deployed
+numbers.
 
 ## Discipline
 
