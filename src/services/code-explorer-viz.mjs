@@ -1,13 +1,20 @@
-// code-explorer-viz.mjs — the code-graph "ledger" the desktop shell renders:
-// each import/call/contains edge read back as a plain sentence, a hint rail of
-// suggested next queries, and a live chat dock over the same graph. The two
-// derivations are pure so the shell, the packaging script, and the unit tests
-// all share one code path; renderCodeExplorerHtml builds one self-contained
-// document with no external requests.
+// code-explorer-viz.mjs — the code explorer as a full-viewport IDE shell:
+// a title bar (graph source, Open graph…/Open repo…), an explorer sidebar
+// reading each import/call/contains edge back as a plain sentence, a chat
+// centre over the same graph with a rail of suggested questions, and a status
+// bar carrying the graph's own counts. The chat session seeds BOTH the loaded
+// code graph and chat.html's general-knowledge bands (./chat-seed.json,
+// fetched lazily at runtime), so one conversation answers "what is a queue"
+// and "what imports src/core/model.mjs" alike — and degrades to graph-only
+// when the seed asset is unavailable.
 //
-// The channel is deliberately thin: this is the SAME ledger-pattern UI the
-// browser ledger page uses, refocused on a code graph, and it stays servable
-// as a plain page — only the Electron shell around it (electron/) is desktop.
+// The derivations are pure so the shell, the packaging scripts, and the unit
+// tests all share one code path; renderCodeExplorerHtml builds one
+// self-contained document that both packagers ship unchanged — the site build
+// (scripts/build-demo-site.mjs) and the Electron desktop shell
+// (scripts/build-electron-app.mjs). Panels are plain sections inside the
+// sidebar/centre grid, so a later panel is one more <section class="panel">,
+// not a re-architecture.
 
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
 import { generateCodeHints } from "../domain/code-explorer-hints.mjs";
@@ -121,6 +128,7 @@ const CLIENT_JS = String.raw`
     input: document.getElementById("chat-input"),
     dockNote: document.getElementById("dock-note"),
     source: document.getElementById("source-name"),
+    seedStatus: document.getElementById("seed-status"),
   };
   var session = null;
 
@@ -174,7 +182,7 @@ const CLIENT_JS = String.raw`
     renderHints(data);
   }
 
-  function appendLog(role, text) {
+  function appendTurn(role, text) {
     var div = document.createElement("div");
     div.className = "turn turn-" + role;
     div.innerHTML = '<span class="who">' + (role === "you" ? "you" : "tmct") + '</span><span class="said">' + esc(text) + '</span>';
@@ -182,23 +190,93 @@ const CLIENT_JS = String.raw`
     els.log.scrollTop = els.log.scrollHeight;
   }
 
+  function appendNote(text) {
+    var div = document.createElement("div");
+    div.className = "turn turn-note";
+    div.textContent = text;
+    els.log.appendChild(div);
+  }
+
+  // ---- the general-knowledge seed --------------------------------------
+  // The same chat-seed.json chat.html boots from, loaded lazily so the shell
+  // paints instantly: same-origin fetch on the site, the preload bridge's
+  // readSeed under the desktop shell (a file:// page cannot fetch). The
+  // status bar narrates the load; a missing or failing seed leaves the chat
+  // graph-only and says so, never broken.
+  var seedState = { status: api ? "loading" : "absent", payload: null, facts: 0 };
+  function seedNote(text) { if (els.seedStatus) els.seedStatus.textContent = text; }
+  function mbText(n) { return (n / 1048576).toFixed(1); }
+
+  async function fetchTextWithProgress(url, onProgress) {
+    var res = await fetch(url);
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    var total = Number(res.headers.get("content-length")) || 0;
+    if (!res.body || !res.body.getReader) return res.text();
+    var reader = res.body.getReader();
+    var chunks = [];
+    var loaded = 0;
+    for (;;) {
+      var step = await reader.read();
+      if (step.done) break;
+      chunks.push(step.value);
+      loaded += step.value.byteLength;
+      onProgress(loaded, total);
+    }
+    return new Blob(chunks).text();
+  }
+
+  async function loadSeed() {
+    try {
+      var text = null;
+      if (window.tmctDesktop && typeof window.tmctDesktop.readSeed === "function") {
+        seedNote("loading general knowledge…");
+        text = await window.tmctDesktop.readSeed();
+      } else {
+        text = await fetchTextWithProgress("./chat-seed.json", function (loaded, total) {
+          seedNote("loading general knowledge… " + mbText(loaded) + (total ? " of " + mbText(total) : "") + " MB");
+        });
+      }
+      if (text) {
+        seedState.payload = JSON.parse(text);
+        seedState.facts = (seedState.payload.individuals || []).filter(function (i) { return i.class === "Fact"; }).length;
+        seedState.status = "ready";
+        seedNote("general knowledge: " + seedState.facts + " facts");
+        return;
+      }
+    } catch (e) {
+      console.warn("tmct code explorer: chat-seed unavailable, continuing graph-only", e);
+    }
+    seedState.status = "absent";
+    seedNote("graph-only — general knowledge unavailable");
+  }
+  var seedPromise = api ? loadSeed() : Promise.resolve();
+
+  function cloneSeed() {
+    if (!seedState.payload) return null;
+    try { return structuredClone(seedState.payload); } catch (e) { return JSON.parse(JSON.stringify(seedState.payload)); }
+  }
+
   async function ensureSession() {
     if (session || !api || !api.createCodeExplorerSession) return session;
-    var winkLoaded = true;
     if (api.registerWinkModel && window.__WINK_LOADER__) {
       try { var mod = await window.__WINK_LOADER__(); api.registerWinkModel(function () { return mod; }); }
-      catch (e) { winkLoaded = false; }
+      catch (e) { /* the lemma/POS tier is optional */ }
     }
-    session = api.createCodeExplorerSession({ graphPayload: DATA.payload });
+    await seedPromise;
+    session = api.createCodeExplorerSession({
+      graphPayload: DATA.payload,
+      seedPayload: cloneSeed(),
+      vocabSeeded: seedState.status === "ready",
+    });
     return session;
   }
 
   async function ask(q) {
-    appendLog("you", q);
+    appendTurn("you", q);
     var s = await ensureSession();
-    if (!s) { appendLog("tmct", "the live dock is not loaded on this page."); return; }
+    if (!s) { appendTurn("tmct", "the live chat is not loaded on this page."); return; }
     var res = await s.turn(q);
-    appendLog("tmct", res.answer);
+    appendTurn("tmct", res.answer);
   }
 
   // Delegate term + hint clicks.
@@ -219,7 +297,8 @@ const CLIENT_JS = String.raw`
     });
   }
 
-  // Desktop pickers, present only under the Electron shell.
+  // Desktop pickers, present only under the Electron shell. A swapped graph
+  // starts a fresh session; the general-knowledge seed carries over.
   function wirePicker(id, method, updateSource) {
     var btn = document.getElementById(id);
     if (!btn) return;
@@ -245,8 +324,11 @@ const CLIENT_JS = String.raw`
   wirePicker("open-repo", "openRepo", true);
 
   if (!api) {
-    if (els.dockNote) els.dockNote.textContent = "static view — the live chat dock is unavailable on this page.";
+    if (els.dockNote) els.dockNote.textContent = "static view — the live chat is unavailable on this page.";
     if (els.input) els.input.disabled = true;
+    seedNote("static view");
+  } else {
+    appendNote("Ask about this code graph — or anything its general knowledge covers, like “what is a queue”.");
   }
 
   mountView(DATA);
@@ -254,8 +336,8 @@ const CLIENT_JS = String.raw`
 `;
 
 /**
- * One self-contained HTML document for the code explorer. `data` is
- * computeCodeExplorerData's output. `bundleInline` inlines the dock engine
+ * One self-contained HTML document: the full-viewport IDE shell over
+ * computeCodeExplorerData's output. `bundleInline` inlines the chat engine
  * (for a single-file page / a data: URL); otherwise `bundleAvailable` links
  * `./code-explorer.bundle.js`. `winkLoaderInline` optionally inlines a wink
  * model loader as `window.__WINK_LOADER__`. `showDesktopLink` adds a line
@@ -265,7 +347,6 @@ const CLIENT_JS = String.raw`
 export function renderCodeExplorerHtml(data, { bundleInline = "", bundleAvailable = false, winkLoaderInline = "", sourceName = "demo code graph", showDesktopLink = false } = {}) {
   const payloadJson = embedJson(data.payload);
   const dataJson = embedJson({ ledger: data.ledger, hints: data.hints, focus: data.focus, meta: data.meta });
-  const title = escapeHtml(data.meta?.title || "code explorer");
 
   return `<!doctype html>
 <html lang="en">
@@ -276,75 +357,102 @@ export function renderCodeExplorerHtml(data, { bundleInline = "", bundleAvailabl
 <style>
 ${THEME_TOKENS_CSS}
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; }
-header { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; padding: 0.8rem 1.1rem; border-bottom: 1px solid var(--line); }
-header h1 { font-size: 1.05rem; margin: 0; font-weight: 600; }
-header .sub { color: var(--muted); font-size: 0.85rem; }
-header .pickers { margin-left: auto; display: flex; gap: 0.5rem; }
+html, body { height: 100%; }
+body { margin: 0; overflow: hidden; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; }
+.shell { height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; }
+
+.titlebar { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; padding: 0.5rem 0.9rem; background: var(--card); border-bottom: 1px solid var(--line); box-shadow: inset 0 -2px 0 var(--entail-soft); }
+.titlebar .mark { width: 15px; height: 15px; color: var(--entail); flex: none; }
+.titlebar h1 { font-size: 0.95rem; margin: 0; font-weight: 600; letter-spacing: 0.02em; }
+.titlebar .sub { color: var(--muted); font-size: 0.76rem; font-family: ${MONO_STACK}; }
+.titlebar .sub a { color: var(--corpus); }
+.titlebar .pickers { margin-left: auto; display: flex; gap: 0.45rem; }
 button { font: inherit; cursor: pointer; }
 button:disabled { cursor: default; opacity: 0.5; }
-.pickers button { background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: 0.35rem 0.7rem; font-size: 0.85rem; }
-#stats { padding: 0.4rem 1.1rem; color: var(--muted); font-size: 0.8rem; font-family: ${MONO_STACK}; border-bottom: 1px solid var(--line); }
-main { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(260px, 1fr); gap: 0; align-items: stretch; }
-@media (max-width: 720px) { main { grid-template-columns: 1fr; } }
-.ledger-pane { padding: 0.6rem 1.1rem 2rem; min-height: 60vh; }
-.rail { border-left: 1px solid var(--line); padding: 0.6rem 1rem 2rem; display: flex; flex-direction: column; gap: 1rem; }
-h2 { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 0.4rem; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--entail); outline-offset: 1px; }
+.pickers button { background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: 0.3rem 0.65rem; font-size: 0.8rem; }
+.pickers button:hover { border-color: var(--entail); }
+
+.workbench { display: grid; grid-template-columns: minmax(230px, 320px) minmax(0, 1fr); min-height: 0; }
+.sidebar { display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--line); }
+.panel { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.panel-head { margin: 0; padding: 0.45rem 0.9rem; flex: none; display: flex; align-items: baseline; gap: 0.45rem; font-family: ${MONO_STACK}; font-size: 0.66rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); border-bottom: 1px solid var(--line); }
+.panel-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0.5rem 0.9rem 1rem; }
+.focus-line { font-family: ${MONO_STACK}; font-size: 0.72rem; color: var(--corpus); text-transform: none; letter-spacing: 0; overflow-wrap: anywhere; }
 ul.rows { list-style: none; margin: 0; padding: 0; }
-.row { padding: 0.28rem 0.4rem; border-radius: 5px; font-size: 0.95rem; line-height: 1.5; }
+.row { padding: 0.26rem 0.35rem; border-radius: 4px; font-size: 0.88rem; line-height: 1.45; }
 .row-focus { background: var(--corpus-soft); }
 .row.muted, .muted { color: var(--muted); }
-.term { background: none; border: none; padding: 0; color: var(--corpus); font-family: ${MONO_STACK}; font-size: 0.85rem; text-decoration: underline; text-decoration-color: var(--line); }
+.term { background: none; border: none; padding: 0; color: var(--corpus); font-family: ${MONO_STACK}; font-size: 0.8rem; text-align: left; text-decoration: underline; text-decoration-color: var(--line); overflow-wrap: anywhere; }
 .term:hover { text-decoration-color: var(--corpus); }
 .verb { color: var(--muted); }
-.hints { display: flex; flex-direction: column; gap: 0.35rem; }
-.hint { text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 0.35rem 0.55rem; font-size: 0.85rem; color: var(--ink); }
-.hint:hover { border-color: var(--corpus); }
-.dock { display: flex; flex-direction: column; gap: 0.4rem; }
-#chat-log { display: flex; flex-direction: column; gap: 0.4rem; max-height: 40vh; overflow-y: auto; }
-.turn { font-size: 0.9rem; line-height: 1.45; }
-.turn .who { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
-.turn-you .said { color: var(--ink); }
-.turn-tmct .said { color: var(--taught); white-space: pre-wrap; }
-#chat-form { display: flex; gap: 0.4rem; }
-#chat-input { flex: 1; font: inherit; padding: 0.4rem 0.5rem; border: 1px solid var(--line); border-radius: 6px; background: var(--card); color: var(--ink); }
-#chat-form button { background: var(--corpus); color: #fff; border: none; border-radius: 6px; padding: 0.4rem 0.8rem; }
-#dock-note { color: var(--muted); font-size: 0.78rem; }
-.focus-line { font-family: ${MONO_STACK}; font-size: 0.85rem; }
+
+.editor { display: flex; flex-direction: column; min-height: 0; background: var(--card); }
+#chat-log { flex: 1; min-height: 0; overflow-y: auto; padding: 0.9rem 1.1rem; display: flex; flex-direction: column; gap: 0.7rem; }
+.turn { max-width: 46rem; font-size: 0.95rem; line-height: 1.5; }
+.turn .who { display: block; font-family: ${MONO_STACK}; font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin-bottom: 0.15rem; }
+.turn-you .said { font-family: ${MONO_STACK}; font-size: 0.84rem; }
+.turn-tmct { border-left: 2px solid var(--entail); padding-left: 0.7rem; }
+.turn-tmct .said { white-space: pre-wrap; }
+.turn-note { color: var(--muted); font-style: italic; font-size: 0.85rem; }
+.suggest { flex: none; border-top: 1px solid var(--line); padding: 0.45rem 1.1rem 0.1rem; }
+.suggest-label { font-family: ${MONO_STACK}; font-size: 0.66rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
+.hints { display: flex; flex-wrap: wrap; gap: 0.35rem; max-height: 5.6rem; overflow-y: auto; padding: 0.35rem 0 0.45rem; }
+.hint { background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 0.24rem 0.7rem; font-size: 0.8rem; color: var(--ink); text-align: left; }
+.hint:hover { border-color: var(--entail); }
+#chat-form { flex: none; display: flex; gap: 0.5rem; padding: 0.55rem 1.1rem 0.8rem; border-top: 1px solid var(--line); }
+#chat-input { flex: 1; min-width: 0; font: inherit; font-size: 0.92rem; padding: 0.5rem 0.65rem; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); }
+#chat-form button { background: var(--entail); color: var(--card); font-weight: 600; border: none; border-radius: 4px; padding: 0.5rem 1rem; font-size: 0.9rem; }
+
+.statusbar { display: flex; align-items: baseline; gap: 1rem; flex-wrap: wrap; padding: 0.32rem 0.9rem; font-family: ${MONO_STACK}; font-size: 0.7rem; color: var(--muted); background: var(--entail-soft); border-top: 1px solid var(--entail); }
+#seed-status { margin-left: auto; text-align: right; }
+
+@media (max-width: 760px) {
+  .workbench { grid-template-columns: 1fr; grid-template-rows: minmax(0, 34%) minmax(0, 1fr); }
+  .sidebar { border-right: none; border-bottom: 1px solid var(--line); }
+}
 </style>
 </head>
 <body>
-<header>
-  <h1>tmct code explorer</h1>
-  <span class="sub">source: <span id="source-name">${escapeHtml(sourceName)}</span></span>
-  ${showDesktopLink ? `<span class="sub">Also available as a <a href="${DESKTOP_APP_URL}">desktop app</a>.</span>` : ""}
-  <div class="pickers">
-    <button id="open-graph">Open graph…</button>
-    <button id="open-repo">Open repo…</button>
-  </div>
-</header>
-<div id="stats"></div>
-<main>
-  <section class="ledger-pane">
-    <h2>Facts around <span class="focus-line" id="focus-name">—</span></h2>
-    <ul class="rows" id="ledger"></ul>
-  </section>
-  <aside class="rail">
-    <div>
-      <h2>Try asking</h2>
-      <div class="hints" id="hints"></div>
+<div class="shell">
+  <header class="titlebar">
+    <svg class="mark" viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0l1 2.3a5.8 5.8 0 0 1 1.9.8L13.3 2l.7.7-1.1 2.4c.4.6.6 1.2.8 1.9L16 8l-2.3 1a5.8 5.8 0 0 1-.8 1.9l1.1 2.4-.7.7-2.4-1.1a5.8 5.8 0 0 1-1.9.8L8 16l-1-2.3a5.8 5.8 0 0 1-1.9-.8L2.7 14l-.7-.7 1.1-2.4a5.8 5.8 0 0 1-.8-1.9L0 8l2.3-1c.2-.7.4-1.3.8-1.9L2 2.7l.7-.7 2.4 1.1A5.8 5.8 0 0 1 7 2.3L8 0zm0 5.2A2.8 2.8 0 1 0 8 10.8 2.8 2.8 0 0 0 8 5.2z"/></svg>
+    <h1>tmct code explorer</h1>
+    <span class="sub">source: <span id="source-name">${escapeHtml(sourceName)}</span></span>
+    ${showDesktopLink ? `<span class="sub">Also available as a <a href="${DESKTOP_APP_URL}">desktop app</a>.</span>` : ""}
+    <div class="pickers">
+      <button id="open-graph">Open graph…</button>
+      <button id="open-repo">Open repo…</button>
     </div>
-    <div class="dock">
-      <h2>Chat</h2>
+  </header>
+  <div class="workbench">
+    <aside class="sidebar">
+      <section class="panel" data-panel="explorer">
+        <h2 class="panel-head">Facts around <span class="focus-line" id="focus-name">—</span></h2>
+        <div class="panel-body">
+          <ul class="rows" id="ledger"></ul>
+        </div>
+      </section>
+    </aside>
+    <section class="editor" data-panel="conversation">
+      <h2 class="panel-head">Conversation</h2>
       <div id="chat-log"></div>
+      <div class="suggest">
+        <span class="suggest-label">Try asking</span>
+        <div class="hints" id="hints"></div>
+      </div>
       <form id="chat-form">
-        <input id="chat-input" type="text" autocomplete="off" placeholder="ask about this graph…">
+        <input id="chat-input" type="text" autocomplete="off" placeholder="ask about this graph, or anything it knows…">
         <button type="submit">Ask</button>
       </form>
-      <div id="dock-note"></div>
-    </div>
-  </aside>
-</main>
+    </section>
+  </div>
+  <footer class="statusbar">
+    <span id="stats"></span>
+    <span id="dock-note"></span>
+    <span id="seed-status"></span>
+  </footer>
+</div>
 <script>window.__CODE_EXPLORER__ = Object.assign({ payload: ${payloadJson} }, ${dataJson});</script>
 ${winkLoaderInline ? `<script>\n${embedScriptText(winkLoaderInline)}\n</script>` : ""}
 ${bundleInline ? `<script>\n${embedScriptText(bundleInline)}\n</script>` : ""}

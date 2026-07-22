@@ -59,11 +59,6 @@ Each row is one task; the workstream that lands it deletes its row in the same c
 - [ ] chat: wiki radio group off/on-miss/always (`tmct.chat.wikiMode`, legacy migration) + synth slider (0-24, default 12)
 - [ ] new ingest-viz/memory-panel-viz unit tests; pages-ingest + pages-chat-live-toggle e2e rewrites
 
-### WS-code-ide — VS Code-like code explorer (fable + frontend-design, wave 2)
-- [ ] full-viewport IDE shell: title bar, ledger/hints/stats as dockable widgets, chat as the centre, status bar; existing tools kept
-- [ ] chat seeded with chat-seed general-knowledge bands AND the demo code graph (Copilot-2024 idiom)
-- [ ] identical document ships to site + Electron; `test:electron` green; shell extensible for later PLAN_CODE.md / PLAN_REPO_INDEX.md panels
-
 ### WS-ci-screens — screenshots + drift detection (sonnet, wave 3)
 - [ ] `scripts/gen-screenshots.mjs` (all 8 pages + capture manifest → `public/screenshots/`)
 - [ ] estate drift guard for screenshots (manifest/stamp + dimensions); CI job runs estate guards pre-deploy
