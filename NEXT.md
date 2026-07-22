@@ -16,15 +16,11 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Open items
 
-Site-uplift board (2026-07-22 approved plan: `~/.claude/plans/please-change-the-icons-snazzy-kernighan.md`).
-Each row is one task; the workstream that lands it deletes its row in the same commit.
-
-### Coordinator
-- [ ] integration: `demo:build`, e2e sweep review, full `npm test`, main commit; `smoke:deploy` after operator-gated publish
-
-Carried from before this board: a fresh live-session miss-wall re-map at the new baseline, and a
-live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their deployed
-numbers.
+- [ ] operator: create the nightly scheduled pipeline in the GitLab UI (`e2e:heavy`, `dep:audit` and `renovate` key off `$CI_PIPELINE_SOURCE == "schedule"`)
+- [ ] a fresh live-session miss-wall re-map at the new baseline
+- [ ] a live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their deployed numbers
+- [ ] PLAN_AGENTS.md gap items 1-5 (serve plan verb, external-proposal seam, four frozen rows, replan-on-drift, dormant seeds) — tmct-only, independent, ~a week combined
+- [ ] PLAN_CODE.md Track 5 first milestone (planned two-step refactor, JS adaptor, verified, re-indexed) — sign-off-gated per that doc
 
 ## Discipline
 
