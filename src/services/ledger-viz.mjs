@@ -515,10 +515,15 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
   // the query-only wording even when the live bundle is offered — the dock's
   // own script swaps it for a teach-aware placeholder the moment it confirms
   // tmctLedger actually loaded (never claimed ahead of that confirmation).
+  // The example term skips anything under 3 characters — the SAME floor the
+  // dock's own miss-tips apply below — so a graph whose highest-degree term
+  // is a short stopword-shaped fragment (init:large corpora carry plenty:
+  // "os", "ip", "s3") never becomes the one example a visitor sees.
   const termSet = new Set((terms || []).map((t) => t.term));
+  const exampleTerm = (terms || []).find((t) => t && t.term && t.term.length >= 3);
   const placeholder = termSet.has("ishmael")
     ? "who is the grandfather of ishmael"
-    : (terms && terms.length ? `ask the graph… e.g. what is ${terms[0].term}` : "ask the graph…");
+    : (exampleTerm ? `ask the graph… e.g. what is ${exampleTerm.term}` : "ask the graph…");
   const dockHtml = hasMemChat
     ? `<div class="chat">
         <div class="chatlog" id="chatlog" aria-live="polite"></div>
