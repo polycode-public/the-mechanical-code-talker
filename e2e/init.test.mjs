@@ -104,25 +104,6 @@ test("seeding: on by default, offline, writes facts into .tmct/memory + a marker
   }
 });
 
-test("the `code` persona's seed lands SEON and ConceptNet together, matching chat.mjs's own bootstrap", async () => {
-  const dir = await tmp();
-  try {
-    const res = await initRepo(dir, { seed: true, persona: PERSONA_PRESETS.code });
-    assert.ok(res.seedResult.seon > 0, "the curated SEON ontology landed");
-    assert.ok(res.seedResult.conceptnet > 1000, "the ConceptNet band still landed, uncapped");
-    assert.equal(res.seedResult.perBundle.seon.appended, res.seedResult.seon);
-    assert.equal(res.seedResult.perBundle.conceptnet.appended, res.seedResult.conceptnet);
-    // the `code` persona's own extensions override doesn't touch `human` (still
-    // shipped active:true), so the total also includes it — internal
-    // consistency is against the SUM of every bundle that actually ran, not
-    // just the two named fields.
-    const total = Object.values(res.seedResult.perBundle).reduce((n, b) => n + (b.appended || 0), 0);
-    assert.equal(res.seedResult.appended, total, "counts are internally consistent");
-  } finally {
-    await rm(dir, { recursive: true, force: true });
-  }
-});
-
 test("`tmct init`'s zero-flag (default) seed: the human persona only; seon/conceptnet stay opt-in", async () => {
   const dir = await tmp();
   try {

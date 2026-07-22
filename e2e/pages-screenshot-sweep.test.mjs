@@ -141,7 +141,7 @@ const PAGES = [
       {
         label: "wikipedia-on",
         act: async (page) => {
-          await page.locator(".liveLabel").click();
+          await page.locator("#wikiMiss").click();
           await page.waitForFunction(() => /live wikipedia: on/.test(document.querySelector("#status")?.textContent ?? ""), null, { timeout: READY_TIMEOUT_MS });
         },
       },
@@ -431,7 +431,11 @@ const PAGES = [
       {
         label: "ingested",
         act: async (page) => {
-          await page.fill("#source", "A beagle is a kind of dog. A dog is a kind of animal.");
+          // Invented terms, not "a dog is a kind of animal": the page seeds
+          // with the full starter memory by default, and a sentence already
+          // in that seed grounds as a duplicate rather than a new fact, which
+          // never reaches the count this waits for.
+          await page.fill("#source", "A wozzle is a kind of dog. A florp is a kind of animal.");
           await page.locator("#ingestBtn").click();
           await page.waitForFunction(() => document.querySelectorAll("#facts .fact").length >= 2, null, { timeout: READY_TIMEOUT_MS });
         },

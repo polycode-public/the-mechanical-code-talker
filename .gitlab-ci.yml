@@ -67,6 +67,7 @@ secret_detection:
 # lockfile only — tmct is pure JS, so there is no pom.xml to scan.
 dep:audit:
   stage: test
+  interruptible: true
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
   script:
@@ -89,6 +90,7 @@ dep:audit:
 # NPM_TOKEN gate.
 renovate:
   stage: test
+  interruptible: true
   image: renovate/renovate:43.264.2
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule" && $RENOVATE_TOKEN'
@@ -101,6 +103,7 @@ renovate:
 
 unit:
   stage: test
+  interruptible: true
   script:
     - npm ci
     - npm test
@@ -110,6 +113,7 @@ unit:
 # file ships, nothing expected goes missing.
 pack:contents:
   stage: test
+  interruptible: true
   script:
     - npm ci
     - npm run check:publint
@@ -120,13 +124,14 @@ pack:contents:
 # scripts/check-licences.mjs.
 license:deps:
   stage: test
+  interruptible: true
   script:
     - npm ci
     - npm run check:licences
 
 # The e2e tier: real-binary spawns, build smoke, and the browser journeys
-# (e2e/*.test.mjs). Its own pipeline column, so the tier's pass/fail is visible
-# at the top level.
+# (e2e/*.test.mjs — top-level only, so this glob never picks up e2e/heavy/).
+# Its own pipeline column, so the tier's pass/fail is visible at the top level.
 #
 # Chromium is installed explicitly. .npmrc's ignore-scripts=true stops
 # playwright's install hook, so `npm ci` never downloads a browser as a side
@@ -135,6 +140,7 @@ license:deps:
 # version lives there and each version wants its own build.
 e2e:
   stage: e2e
+  interruptible: true
   variables:
     PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.playwright-browsers"
   cache:
@@ -147,6 +153,38 @@ e2e:
     - npm ci
     - npx playwright install --with-deps chromium
     - npm run test:e2e
+
+# The heavy half of the e2e tier (e2e/heavy/*.test.mjs): a full demo:build, an
+# uncapped ConceptNet seed, and a full-store export/import round trip —
+# together several minutes of real signal, but not on every push. Runs when a
+# push actually touches what these tests exercise, and on the nightly
+# schedule (the same one dep:audit/renovate use) so drift still gets caught
+# even on a quiet week.
+e2e:heavy:
+  stage: e2e
+  interruptible: true
+  variables:
+    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.playwright-browsers"
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .playwright-browsers
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - changes:
+        - scripts/build-*.mjs
+        - src/adapters/corpus/**/*
+        - corpus/**/*
+        - data/**/*
+        - package.json
+        - package-lock.json
+        - e2e/heavy/**/*
+  script:
+    - npm ci
+    - npx playwright install --with-deps chromium
+    - npm run test:e2e:heavy
 
 # Publish the package to PUBLIC npmjs.org. Automatic on main, but the release
 # TRIGGER is a VERSION BUMP, not a push or a tag: the script compares

@@ -142,7 +142,7 @@ offline before it deploys. The example graph, the chat seed, the pages, and
 the engine copy land in `public/`. The in-page chat's query bundle is rebuilt
 from the same `src/` the CLI runs:
 
-```bash e2e cwd=repo
+```bash e2e heavy cwd=repo
 npm run demo:build        # public/: demo graph, memory, ledger page, engine copy
 npm run build:ask-bundle  # the browser query bundle the in-page chat runs
 ```
@@ -869,7 +869,7 @@ the wordnet-xl corpus (~72,000 facts); `init:xxl` swaps wordnet-xl for the
 full WordNet slice plus namenet (~239,000 facts, the biggest committed
 vocabulary — expect its imports to take a minute). The xl chain, spelled out:
 
-```bash e2e
+```bash e2e heavy
 npx tmct init --persona-size large   # npm run init:xl runs this whole chain from a clone
 npx tmct import --corpus seon
 npx tmct import --corpus conceptnet
