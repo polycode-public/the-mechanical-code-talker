@@ -54,7 +54,7 @@ import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
 import { runTurn, uuidv7 } from "./chat.mjs";
-import { splitSentencesPreservingPaths } from "./sentences.mjs";
+import { splitSentencesPreservingPaths, stripCitationResidue } from "./sentences.mjs";
 import { loadMemory, readFactRows, appendFact } from "../adapters/memory/core.mjs";
 import { loadConfig } from "../adapters/config.mjs";
 import { touchedFactRows } from "../domain/memory/touched-facts.mjs";
@@ -202,6 +202,63 @@ export function optimisticTriples(sentence, { lexicon = loadLexicon(), nlp } = {
   return engine ? optimisticTriplesPos(sentence, lexicon, engine) : optimisticTriplesLexical(sentence, lexicon);
 }
 
+// A closed set of clause markers a compound sentence hinges on. A candidate
+// fragment is only kept when it stands alone as a clause; the marker set is
+// deliberately small so a run-on never shatters into noise.
+const CLAUSE_MARKER_RE = /,?\s+(?:because|since|although|though|whereas|while|so|and|but)\s+/i;
+// The copula/auxiliary/light-verb words that mark a fragment as a would-be
+// clause when no wink POS tagger is on hand — the same closed-list discipline
+// the strict teach frames use in place of a probabilistic tag.
+const CLAUSE_VERBISH = new Set([
+  "is", "are", "was", "were", "be", "been", "being", "am",
+  "has", "have", "had", "can", "could", "will", "would", "should",
+  "do", "does", "did", "want", "wants", "need", "needs", "make", "makes", "made",
+]);
+
+/** Does the fragment carry a verb-ish token — a real VERB/AUX when wink tags
+ *  it, else one of the closed copula/aux words above? A clause with no verb is
+ *  a noun pile, never a sentence to ground. */
+function fragmentHasVerb(fragment, nlp) {
+  const engine = nlp === undefined ? winkInstance() : nlp;
+  if (engine) {
+    try {
+      const pos = engine.readDoc(String(fragment)).tokens().out(engine.its.pos);
+      if (pos.some((p) => p === "VERB" || p === "AUX")) return true;
+    } catch { /* fall through to the closed-list check */ }
+  }
+  return String(fragment).toLowerCase().split(/\s+/).some((w) => CLAUSE_VERBISH.has(w));
+}
+
+/**
+ * The grounding candidates a sentence offers, WHOLE SENTENCE FIRST: the strict
+ * recognizer should always get the full sentence before any fragment, so a
+ * clause split only ever adds fallbacks, never pre-empts a clean whole-sentence
+ * read. When the sentence hinges on a closed clause marker
+ * (because/since/although/though/whereas/while/so/and/but), each side is added
+ * as a fallback — but only a fragment of at least 3 tokens that carries a
+ * verb-ish token, so a stray connective can't split a sentence into noise.
+ * Returns [sentence, ...fragments] with no duplicates.
+ */
+export function clauseCandidates(sentence, { nlp } = {}) {
+  const whole = String(sentence ?? "").trim();
+  const out = [whole];
+  if (!whole) return out;
+  const parts = whole.split(CLAUSE_MARKER_RE).map((s) => s.trim()).filter(Boolean);
+  if (parts.length <= 1) return out;
+  for (const part of parts) {
+    if (part === whole || out.includes(part)) continue;
+    if (part.split(/\s+/).length < 3) continue;
+    if (!fragmentHasVerb(part, nlp)) continue;
+    out.push(part);
+  }
+  return out;
+}
+
+// The pronoun subjects a bounded carry substitutes with the paragraph's last
+// grounded subject. Ingest only — a chat turn resolves "it"/"they" against the
+// live focus, never a stale paragraph carry.
+const PRONOUN_LEAD_RE = /^(?:they|it|these|those|this)\b\s*/i;
+
 /** A readable predicate for canonical output: the local part of an rdfs:/ace:
  *  CURIE, otherwise the predicate verbatim. */
 const readablePredicate = (predicate) => String(predicate).replace(/^[a-z]+:/i, "");
@@ -256,7 +313,11 @@ export async function ingestText(text, {
   memoryDir = null, sourceTag = "text", optimistic = false,
   canonical = false, config = null, lexicon = null,
 } = {}) {
-  const sentences = splitSentencesPreservingPaths(String(text ?? ""));
+  // Paragraphs first (blank-line separated), so the pronoun carry never bridges
+  // a topic break: a fresh paragraph clears the last-subject it would resolve
+  // "they"/"it" against. Each paragraph then splits into sentences the shared
+  // path-preserving way.
+  const paragraphs = String(text ?? "").split(/\n[ \t]*\n/);
   const ephemeral = !memoryDir;
   const dir = memoryDir || await mkdtemp(join(tmpdir(), "tmct-ingest-"));
   // `dir` may be a backend handle (a sqlite store), not a path — only a real
@@ -268,46 +329,75 @@ export async function ingestText(text, {
 
   const extracted = [];
   const optimisticFacts = [];
+  let sentenceCount = 0;
   let recognizedSentences = 0;
   let optimisticSentences = 0;
 
+  // One recognized read of some text form: null when the strict recognizer
+  // grounds nothing, else the Fact rows it touched.
+  const strictRows = async (form) => {
+    const { recognized, rows } = await runSentence(form, { config: cfg, memoryDir: dir });
+    return recognized && rows.length ? rows : null;
+  };
+
   try {
-    for (const sentence of sentences) {
-      const { recognized, rows } = await runSentence(sentence, { config: cfg, memoryDir: dir });
-      if (recognized && rows.length) {
-        recognizedSentences += 1;
-        const tag = `extracted:${sourceTag}`;
-        for (const row of rows) {
-          await appendFact(dir, {
-            subject: row.subject, predicate: row.predicate, object: row.object,
-            provenance: tag, quantifier: row.quantifier || "",
-          });
-          extracted.push({
-            subject: row.subject, predicate: row.predicate, object: row.object,
-            provenance: tag, quantifier: row.quantifier || "", sentence,
-          });
+    for (const paragraph of paragraphs) {
+      // The last unique grounded subject in THIS paragraph, carried onto a
+      // later pronoun-led sentence the strict recognizer couldn't ground on
+      // its own. Cleared at the paragraph boundary.
+      let carrySubject = null;
+      for (const sentence of splitSentencesPreservingPaths(paragraph)) {
+        sentenceCount += 1;
+        const cleaned = stripCitationResidue(sentence);
+        // Whole sentence first, then each closed-marker clause as a fallback.
+        let rows = null;
+        for (const candidate of clauseCandidates(cleaned, { nlp })) {
+          rows = await strictRows(candidate);
+          if (rows) break;
         }
-        continue;
-      }
-      if (!optimistic) continue;
-      const candidates = optimisticTriples(sentence, { lexicon: lex, nlp });
-      if (!candidates.length) continue;
-      optimisticSentences += 1;
-      const tag = `optimistic-extract:${sourceTag}`;
-      for (const t of candidates) {
-        await appendFact(dir, {
-          subject: t.subject, predicate: t.predicate, object: t.object, provenance: tag,
-        });
-        optimisticFacts.push({ ...t, provenance: tag, sentence });
+        // Bounded pronoun carry: a "they/it/these/those/this …" sentence the
+        // recognizer skipped is retried once with the paragraph's last grounded
+        // subject in the pronoun's place. Never a chat turn — ingest only.
+        if (!rows && carrySubject && PRONOUN_LEAD_RE.test(cleaned)) {
+          rows = await strictRows(cleaned.replace(PRONOUN_LEAD_RE, `${carrySubject} `));
+        }
+        if (rows) {
+          recognizedSentences += 1;
+          const subjects = new Set(rows.map((r) => r.subject));
+          if (subjects.size === 1) carrySubject = [...subjects][0];
+          const tag = `extracted:${sourceTag}`;
+          for (const row of rows) {
+            await appendFact(dir, {
+              subject: row.subject, predicate: row.predicate, object: row.object,
+              provenance: tag, quantifier: row.quantifier || "",
+            });
+            extracted.push({
+              subject: row.subject, predicate: row.predicate, object: row.object,
+              provenance: tag, quantifier: row.quantifier || "", sentence,
+            });
+          }
+          continue;
+        }
+        if (!optimistic) continue;
+        const candidates = optimisticTriples(cleaned, { lexicon: lex, nlp });
+        if (!candidates.length) continue;
+        optimisticSentences += 1;
+        const tag = `optimistic-extract:${sourceTag}`;
+        for (const t of candidates) {
+          await appendFact(dir, {
+            subject: t.subject, predicate: t.predicate, object: t.object, provenance: tag,
+          });
+          optimisticFacts.push({ ...t, provenance: tag, sentence });
+        }
       }
     }
 
     const result = {
-      sentences: sentences.length,
+      sentences: sentenceCount,
       recognized: recognizedSentences,
       extracted,
       optimistic: optimisticFacts,
-      skipped: sentences.length - recognizedSentences - optimisticSentences,
+      skipped: sentenceCount - recognizedSentences - optimisticSentences,
     };
     if (canonical) {
       result.canonical = canonicalLines([...extracted, ...optimisticFacts], readFactRows(await loadMemory(dir)));

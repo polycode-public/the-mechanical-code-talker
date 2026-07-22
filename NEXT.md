@@ -19,15 +19,8 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 Site-uplift board (2026-07-22 approved plan: `~/.claude/plans/please-change-the-icons-snazzy-kernighan.md`).
 Each row is one task; the workstream that lands it deletes its row in the same commit.
 
-### WS-chat-engine — chat.mjs + extraction/live (opus)
-- [ ] corpus row `adventure-miss-teach` (asserts the adventure miss answer lacks `--repo`) — blocked on the uiContext/adventure-live gate below; add it when that lands
-- [ ] `uiContext` through `runTurn`; HONEST-EMPTY POLISH gated `!browser && !adventureLive`; teach-forward miss texts (adventure + browser variants); chat.mjs:11505 browser variant
-- [ ] mid-game locative teach note "(noted as your note — the game world itself only changes through actions…)"
-- [ ] wiki `"always"` mode + `/wiki always` + normLive updates (chat-browser-entry, chat-session, TUI)
-- [ ] synthesis budget: `synthesiseAroundTerm(..., budget)`, threading, `createChatSession({synthesisBudget})` + `setSynthesisBudget`
-- [ ] teach frames: participle+prep (D), copula-NP decomposition (E), same-noun (F); adverb-skip additions
-- [ ] `stripCitationResidue` (sentences.mjs), `clauseCandidates` (extract-facts.mjs), optimistic-tier `{optimistic}` option
-- [ ] Sales-paragraph acceptance fixture + negative guards; live-reference-lane tests (always mode; budget 0 → no `entailed:*`)
+### WS-chat-engine — follow-up (coordinator)
+- [ ] corpus row `adventure-miss-teach` (asserts the adventure miss answer lacks `--repo`) — its gate has landed; add the row at integration
 
 ### WS-adventure-page — adventure/spider-fly presentation (sonnet)
 - [ ] controls row between room view and satchel; `#goalLine`/`#status` under controls
