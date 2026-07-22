@@ -126,21 +126,31 @@ test("renderSpiderFlyHtml: the chat pills sit inside .side, so they are hidden b
   assert.match(html, /body\.preview \.side,[^{]*\{ display: none; \}/, "the existing hiding rule still targets .side as a whole");
 });
 
-test("renderSpiderFlyHtml: the left column stacks the tuning console over the board, the chat/agents column beside them", () => {
+test("renderSpiderFlyHtml: the left column stacks the controls strip, the board and the tuning console in that order, the chat/agents column beside them", () => {
   const html = renderSpiderFlyHtml();
   const stageBlock = html.match(/<div class="stage">[\s\S]*?<\/aside>\s*<\/div>/)[0];
   const leftBlock = stageBlock.match(/<div class="stage-left">[\s\S]*?<aside/)[0];
+  assert.match(leftBlock, /class="controls-panel"/, "the controls strip renders in the left column");
+  assert.match(leftBlock, /class="board-frame"/, "the board renders in the left column");
   assert.match(leftBlock, /class="tuning"/, "the tuning console renders in the left column");
-  assert.match(leftBlock, /class="board-frame"/, "the board renders in the left column, under the tuning console");
   assert.ok(
-    leftBlock.indexOf('class="tuning"') < leftBlock.indexOf('class="board-frame"'),
-    "tuning first, board below it",
+    leftBlock.indexOf('class="controls-panel"') < leftBlock.indexOf('class="board-frame"'),
+    "the controls strip sits above the board, in the tuning console's former place",
+  );
+  assert.ok(
+    leftBlock.indexOf('class="board-frame"') < leftBlock.indexOf('class="tuning"'),
+    "the tuning console now sits below the board",
   );
   assert.ok(
     stageBlock.indexOf('class="stage-left"') < stageBlock.indexOf('<aside class="side"'),
     "the left column comes first, the side column second",
   );
   assert.match(html, /\.stage \{[^}]*grid-template-columns: minmax\(0, 8fr\) minmax\(280px, 3fr\)/, "the row splits roughly two-thirds to a quarter");
+});
+
+test("renderSpiderFlyHtml: the controls strip and the tuning console both match the board's own fixed width", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /\.tuning, \.controls-panel \{ width: \d+px/, "one shared rule sizes both strips to the board");
 });
 
 test("renderSpiderFlyHtml: within the side column the chat dock comes first, the agents HUD below it", () => {

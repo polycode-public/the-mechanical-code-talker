@@ -346,10 +346,10 @@ ${THEME_TOKENS_CSS}
      negative margin equal to this padding, so it reads as one welded unit,
      not a label floating inside a box. */
   .hud, .chat, .tuning { background: var(--chrome-face); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-raised); border-radius: 2px; padding: .6rem .75rem; }
-  /* the tuning strip matches the board's own width (not the wider stage-left
-     column it sits in) so the two line up as one visual stack, the same way
-     the board-frame below it is already centered at a fixed width. */
-  .tuning { width: ${BOARD_PX}px; max-width: 100%; margin: 0 auto; box-sizing: border-box; }
+  /* Both the controls strip above the board and the tuning strip below it
+     match the board's own width (not the wider stage-left column they sit
+     in), so all three line up as one visual stack. */
+  .tuning, .controls-panel { width: ${BOARD_PX}px; max-width: 100%; margin: 0 auto; box-sizing: border-box; }
   .hud h2, .chat h2, .tuning h2 {
     font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; font-weight: 600;
     margin: -.6rem -.75rem .5rem; padding: .42rem .75rem;
@@ -447,7 +447,7 @@ ${THEME_TOKENS_CSS}
   .tuning-col.spider input[type="range"]::-moz-range-thumb { border-color: var(--taught); }
   .tuning-col.fly input[type="range"]::-moz-range-thumb { border-color: var(--fly); }
   .tuning-col input:disabled { opacity: .45; }
-  .controls-row { display: flex; align-items: center; gap: .6rem; margin-top: 1rem; flex-wrap: wrap; }
+  .controls-row { display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; }
   /* Chunky keycaps: raised by default, pressed-in on :active — the one place
      this redesign uses interaction (not animation) to sell "physical
      control panel", and it costs nothing under reduced-motion since neither
@@ -461,7 +461,7 @@ ${THEME_TOKENS_CSS}
      page is remembered by. */
   .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .82rem; letter-spacing: .05em; text-transform: uppercase; font-variant-numeric: tabular-nums; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-brass); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: .3rem .7rem; }
   .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .5rem; padding-left: .5rem; border-left: 2px solid var(--chrome-brass); }
-  body.preview .side, body.preview .controls-row, body.preview .status, body.preview .tuning { display: none; }
+  body.preview .side, body.preview .controls-panel, body.preview .tuning { display: none; }
   body.preview main { padding: 0; max-width: none; }
   body.preview .stage, body.preview .stage-left { display: block; }
   body.preview .board-frame { margin: 0; }
@@ -474,6 +474,21 @@ ${THEME_TOKENS_CSS}
   <h1>Multiple competing planning agents</h1>
   <div class="stage">
     <div class="stage-left">
+    <div class="controls-panel" id="controlsPanel" aria-label="game controls">
+      <div class="controls-row">
+        <button id="resetBtn" type="button" disabled>reset</button>
+        <button id="playBtn" type="button" disabled>&#9654; play</button>
+        <button id="stepBtn" type="button" disabled>step</button>
+        <span class="turn mono" id="turnLabel">turn: 0</span>
+      </div>
+      <div class="status" id="status">loading the engine&hellip;</div>
+    </div>
+    <div class="board-frame" id="boardFrame">
+      <canvas id="board" width="${BOARD_PX}" height="${BOARD_PX}" aria-label="the 10x10 board"></canvas>
+      <canvas id="pov" width="${BOARD_PX}" height="${BOARD_PX}" aria-hidden="true"></canvas>
+      <div class="sprite-layer" id="spriteLayer"></div>
+      <div class="thread-tip" id="threadTip"></div>
+    </div>
     <div class="tuning" id="tuning">
       <h2>live tuning &mdash; mass loss, spawn rate, vision, per class</h2>
       <div class="tuning-grid">
@@ -496,12 +511,6 @@ ${THEME_TOKENS_CSS}
             <input type="range" id="ctlFlyVision" min="1" max="8" step="1" disabled></label>
         </div>
       </div>
-    </div>
-    <div class="board-frame" id="boardFrame">
-      <canvas id="board" width="${BOARD_PX}" height="${BOARD_PX}" aria-label="the 10x10 board"></canvas>
-      <canvas id="pov" width="${BOARD_PX}" height="${BOARD_PX}" aria-hidden="true"></canvas>
-      <div class="sprite-layer" id="spriteLayer"></div>
-      <div class="thread-tip" id="threadTip"></div>
     </div>
     </div>
     <aside class="side" aria-label="Chat and agents">
@@ -528,13 +537,6 @@ ${THEME_TOKENS_CSS}
       </div>
     </aside>
   </div>
-  <div class="controls-row">
-    <button id="resetBtn" type="button" disabled>reset</button>
-    <button id="playBtn" type="button" disabled>&#9654; play</button>
-    <button id="stepBtn" type="button" disabled>step</button>
-    <span class="turn mono" id="turnLabel">turn: 0</span>
-  </div>
-  <div class="status" id="status">loading the engine&hellip;</div>
 </main>
 <script>
 const SPIDERFLY = ${gridData};
