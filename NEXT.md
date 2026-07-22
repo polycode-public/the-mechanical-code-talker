@@ -49,7 +49,6 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 16 | hanoi solve at xl | open, reproduced | 2026-07-21 | biggest live falsehood found | medium |
 | 17 | live-Wikipedia trust prior | open, traced | 2026-07-21 | live must not outrank the pinned pack | high |
 | 18 | chat-seed caps | in progress (decided: raise caps to ~40 MB ceiling; wt agent-a8d1b0cd6ce6cb74d) | 2026-07-21 | seed-ceiling decision | n/a |
-| 19 | ledger query-template audit | in progress, process (wt agent-a3d2079083c620fdd) | 2026-07-22 | the quiet cut from 2.9.x | high |
 | 20 | wiki even-when-known (ask + supplement) | open, decided | 2026-07-22 | corroboration, not just rescue | medium-high |
 | 21 | full-triple learn-on-miss ingestion | open, decided | 2026-07-22 | loads become durable knowledge | medium-high |
 | 22 | auto bounded synthesis per ingest | open, decided | 2026-07-22 | new facts should connect | medium-high |
@@ -60,7 +59,6 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 27 | spider-fly layout + renames | in progress, new scope (wt agent-a8d1b0cd6ce6cb74d) | 2026-07-22 | alignment, consistency | high |
 | 28 | spider-fly observable-facts panel | in progress, new scope (wt agent-a8d1b0cd6ce6cb74d) | 2026-07-22 | planners' knowledge made inspectable | medium |
 | 29 | sense-splitting on read-back (Rover) | open, designed | 2026-07-22 | two concepts under one label | medium-high |
-| 30 | code explorer (Electron) | in progress, new scope (wt agent-a9bda2b9ecef7fd14) | 2026-07-22 | explorable code graph on the desktop | medium |
 | 31 | ingest.html + ledger/chat ingest | open, new scope | 2026-07-22 | bring your own text | medium-high |
 | 32 | full IndexedDB re-initialisation button | open, new scope | 2026-07-22 | recover any page from any state | high |
 | 33 | triple-store export, every page | open, new scope | 2026-07-22 | data leaves in the standard shape | high |
@@ -123,7 +121,10 @@ The detailed items:
     negative interrogative); the multi-sentence syllogism one-liner still doesn't split. "where
     do i start reading" now misroutes to where-is-defined and confidently answers
     `renderArchitecture()` — worse than its 2.7.11 wall. "whats the most important file" now
-    names its rank criteria but still picks no default.
+    names its rank criteria but still picks no default. Audit finding (2026-07-22, ledger
+    round): a bare "what is ishmael" / "who is ishmael" misses entirely when the entity exists
+    only as a relation object (the relation-chase phrasing "who is the grandfather of ishmael"
+    grounds fine) — the read-back should surface the relations the entity participates in.
   - adjective predication cannot yet teach: "every snake is venomous" declines claiming
     "venomous" is unknown even though "snake" is grounded — the every-X-is-Y frame wants a noun
     class on the Y side; no adjective-attribute teach shape exists yet.
@@ -158,14 +159,6 @@ The detailed items:
   2,000 facts and wordnet-xl at 4,000 because the uncapped init:xl set measures ~86 MB
   serialized. Lifting the caps means leaving the 16-24 MB seed ceiling range — an operator call.
 
-- The ledger query-template phrasing audit (`archive/PLAN_SIX_EASY_PIECES.md` Part B promised
-  it; it was dropped from the 2.9.1-2.9.5 delivery — no commit does it). To do: audit the ledger
-  page's existing query-template library for phrasing gaps the same way the spider-fly, adventure
-  and plan audits were done (`4285d0f` is the pattern to follow), and route what it finds either
-  into template rows or here. (One other residual is recorded there: live-Wikipedia's wider
-  miss-hook past the lexicon gate was a stated non-goal, now superseded by the knowledge-flows
-  item below.)
-
 - Knowledge flows — supplement, ingest, synthesise (operator-decided 2026-07-21). Four builds,
   each independently shippable, against the baseline traced below:
   1. "Ask Wikipedia even when I do know": both halves — an explicit phrasing ("what does
@@ -185,6 +178,10 @@ The detailed items:
      is lost on reload — persist on any store write. Note the browser has no child-pack provider
      registered (`chat.html:710` registers reference only), so that lane is idle there; the boot
      seed itself is NOT lazy (the whole capped payload assigns at boot, `chat.html:431-452`).
+     Audit finding (2026-07-22, ledger round), fold into this build: for a rule-only concept
+     the user taught (e.g. a `grandfather` filter rule), the miss→child-pack fallback silently
+     answers from unrelated `conceptnet:grandfather` content instead of surfacing the taught
+     rule — taught knowledge must outrank the child-pack load on the same term.
   3. Synthesis, auto + manual: after each ingest, a bounded focus-scoped materialisation pass
      (the `expandFocus` frontier around the loaded term) connects the new facts back to the
      graph; the full-batch `tmct syllogise` / `/syllogise <term>` verbs stay for deep passes.
@@ -216,6 +213,9 @@ The detailed items:
   "Two agents, planning against each other" becomes "multiple competing planning agents" and
   gets an icon (both tiles keep their text links — the icons are additional); the adventure
   line "A text adventure, with a room you can actually see" becomes "Location aware inference".
+  New tile, added 2026-07-22 with the desktop channel's delivery: a "Code explorer" tile —
+  "Explore a code graph on your desktop" — linking the README desktop section (it needs a local
+  build/launch, so keep it visually distinct from the hosted-page tiles).
 
 - adventure.html layout (`src/services/adventure-viz.mjs`): quest and satchel become
   full-width strips sized to the room view — quest strip on top, satchel strip under it, then
@@ -256,15 +256,7 @@ The detailed items:
      handling unchanged). Apply wherever a fact list renders (`factReadBackReaders`,
      `chat.mjs:7660`), not just "what is X".
 
-- The code explorer, ingest surfaces, and store controls on every tmct-embedding page:
-  - the code explorer ships as an ELECTRON desktop app (a new channel): an Electron shell
-    around the ledger pattern (readable fact-sentence ledger + chat dock) refocused on a CODE
-    graph — imports/calls/contains neighborhoods around a focus symbol, with suggested next
-    queries drawn from what the graph actually holds (the compositional shapes the chat already
-    answers). It reuses the same browser-bundle seam the pages use
-    (`scripts/lib/browser-bundle.mjs`); opens a `graph.json` or a repo's `.tmct/`. The demo
-    code graph (`public/demo-graph.json`) is the shipped example. Electron lands as a
-    dev-dependency and a separate packaging script, never in the library's own dependency tree.
+- The ingest surfaces and store controls on every tmct-embedding page:
   - ingest.html — a clean two-pane layout in the translate-tool idiom (operator screenshot,
     2026-07-22): minimal chrome; mode pills across the top (Text | Document); left pane a
     roomy free-text area accepting paste and drag-and-drop, with a browse-for-file control;
@@ -322,9 +314,6 @@ browser bundles, serve, and library `runChat` all call the same `runTurn`.
 - **18, seed caps.** Decision only; if lifted: `scripts/build-chat-seed.mjs:46` and the boot
   budget e2e (`e2e/pages-chat-boot-budget.test.mjs`) is the guard that must stay green; refresh
   `PAGE_WEIGHTS.md` after.
-- **19, ledger template audit.** Process: follow the `4285d0f` pattern against
-  `src/services/ledger-viz.mjs`'s query templates; findings land as corpus rows or new items
-  here. Docs: none until findings.
 - **20-23, knowledge flows.** Code: as traced in the item (`cleanMissLiveKey` `chat.mjs:9564`,
   `appendReferenceIsaFact` `:9613`, `appendFacts` `:9596`, `public/chat.html:658` persistence
   trigger, `src/services/extract-facts.mjs:112` skip point, `syllogise.mjs` `expandFocus`).
@@ -364,14 +353,6 @@ browser bundles, serve, and library `runChat` all call the same `runTurn`.
   `test/tools/ask.test.mjs` if ask() lists adopt grouping; corpus rows in the `template.*`
   lane. Docs: README's answer-shape section; the ledger page renders grouped senses naturally.
   Channels: all chat channels inherit; `tmct viz`/ledger rendering optionally groups.
-- **30, code explorer (Electron).** Code: new `electron/` shell (main + preload) hosting the
-  ledger-pattern UI built from `scripts/lib/browser-bundle.mjs`; a hint panel generating
-  suggested queries from the loaded graph's own classes/edges (reuse `ask.mjs`'s compositional
-  vocabulary); open-a-graph / open-a-repo pickers. Tests: unit for the hint generator; an
-  Electron smoke via Playwright's `_electron` driver, kept OUT of `npm test` (a separate
-  script) so the suite stays hermetic. Docs: README gains a desktop section; a home-page tile
-  links instructions. Channels: Electron (new); the same UI stays servable as a plain page
-  later if wanted — build the UI channel-agnostic, only the shell is Electron.
 - **31, ingest surfaces.** Code: new `public/ingest.html` + `src/surfaces/web/
   ingest-browser-entry.mjs` in the translate-tool two-pane idiom (mode pills Text | Document,
   paste/drop/browse left, live canonical render right, one action row); `ledger-viz.mjs` dock
