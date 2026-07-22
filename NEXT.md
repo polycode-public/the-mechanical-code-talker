@@ -16,15 +16,70 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Open items
 
-None. The 2026-07-21 live-verified board (33 items, extended live to 35) cleared on 2026-07-22
-across the 2.10.x releases; `git log` from 2.10.0 to the current release holds the delivery
-record, and the filler-clause widening and planner-counterfactual design passes still live in
-`PLAN_FILLER_AND_COUNTERFACTUALS.md` as the plan of record for the next build.
+Site-uplift board (2026-07-22 approved plan: `~/.claude/plans/please-change-the-icons-snazzy-kernighan.md`).
+Each row is one task; the workstream that lands it deletes its row in the same commit.
 
-The natural next verification pass: a fresh live session against an `init:xl` graph plus the
-merged code graphs (the 2026-07-21 sweep's method) to re-map the miss wall at the new baseline,
-and a live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their
-deployed numbers.
+### WS-world — world data + adventure engine (opus)
+- [ ] `expandWorldDefaultContents` in `src/domain/worlds-pack.mjs`, wired in the adapter `load()`; unit tests (satisfied-skip, `book`/`book-2` minting, ancestor typing, determinism)
+- [ ] ashcombe-hall.jsonl: space taxonomy rows (room/outdoor-space/underground-space subClassOf space; garden/cellar dual-typed)
+- [ ] ashcombe-hall.jsonl: positions (`lamp mgx:on-top-of desk`), class defaults (`painting mgx:default-plane wall`, portrait subClassOf painting, furniture/portable floor), default contents (library→book, kitchen→pan; no garden flower)
+- [ ] ashcombe-hall.jsonl: staff knowledge rows (gardener/housekeeper/butler/cook knows-where / knows-objective / knows-about + 2 flavor rows)
+- [ ] adventure.mjs: `positions` in `foldWorldState` + `currentPosition` (turn-staleness rule); where-is position phrasing
+- [ ] adventure.mjs: digest updates — position phrases, knows-*/default-contains in `VIEW_EXCLUDED_PREDICATES` (spoiler guard), default-plane "is usually on the"
+- [ ] adventure.mjs: `personKnowledgeLines` + `personRoomReport` (derived room state incl. unlocks-with); talk-branch rewrite for persons
+- [ ] adventure.mjs: `worldActionRows` provenance filter at every state fold (+ autoplay + browser snapshot); digests keep unfiltered rows
+- [ ] adventure-browser-entry: real `vocabHint`, `uiContext: "browser"`, actions-only snapshot fold
+- [ ] ontology/tmct-core.ttl section 1f (space, on-top-of, on-plane, under, default-plane, default-contains, knows-*)
+- [ ] sprite TOMLs: library/kitchen/garden/cellar/study/drawing-room/book/pan icons (+ large tier); pack-manifest (icon tier only); `gen:sprite-facts`, `gen:worlds-pack`
+- [ ] corpus rows: adventure-position, adventure-defaults, adventure-knowledge (+negative), adventure-teach-isolation, adventure-miss-teach; flower rows stay green
+
+### WS-chat-engine — chat.mjs + extraction/live (opus)
+- [ ] `uiContext` through `runTurn`; HONEST-EMPTY POLISH gated `!browser && !adventureLive`; teach-forward miss texts (adventure + browser variants); chat.mjs:11505 browser variant
+- [ ] mid-game locative teach note "(noted as your note — the game world itself only changes through actions…)"
+- [ ] wiki `"always"` mode + `/wiki always` + normLive updates (chat-browser-entry, chat-session, TUI)
+- [ ] synthesis budget: `synthesiseAroundTerm(..., budget)`, threading, `createChatSession({synthesisBudget})` + `setSynthesisBudget`
+- [ ] teach frames: participle+prep (D), copula-NP decomposition (E), same-noun (F); adverb-skip additions
+- [ ] `stripCitationResidue` (sentences.mjs), `clauseCandidates` (extract-facts.mjs), optimistic-tier `{optimistic}` option
+- [ ] Sales-paragraph acceptance fixture + negative guards; live-reference-lane tests (always mode; budget 0 → no `entailed:*`)
+
+### WS-adventure-page — adventure/spider-fly presentation (sonnet)
+- [ ] controls row between room view and satchel; `#goalLine`/`#status` under controls
+- [ ] page-note from world opening after titlebar; stop assigning opening to `#status`; preview-mode hide
+- [ ] 2/3-1/3 stage grid; map into `.stage-left`; command box ("speak to the manor") holding `#chatform`
+- [ ] positional rendering: `scenePlacement` + `roomSceneLayout`, `#wallRow`/`#floorRow`/`#youSlot`/`.sprite-stack` (you pinned right; wall centered; floor pinned left; stack width = widest level)
+- [ ] room-kind border CSS (`data-room-kind` indoor/outdoor/underground) + top-right room-kind icon element
+- [ ] pills dblclick submits (click behavior unchanged)
+- [ ] spider-fly header left-aligned with board (`.page-head > .head-inner` width rule)
+- [ ] unit + e2e test updates (adventure-viz, spider-fly-viz, pages-adventure dblclick, pages-spider-fly alignment)
+
+### WS-home — index.html electron-style redesign (fable + frontend-design)
+- [ ] claim blocks (each links to its demo page), feature sections with screenshots, Polycode family showcase (Seonix, Marginalia — siblings adopting the tmct library)
+- [ ] keep theme tokens in sync with viz-theme.mjs; update pages-index/pages-home e2e
+
+### WS-pages — chat/ingest page shells (sonnet, wave 2)
+- [ ] `memory-panel-viz.mjs` + `memory-stats.mjs` shared extraction; chat-page-viz refactor stays green
+- [ ] ingest: seed on by default (+`#seedToggle`), persistent session, IndexedDB persistence, stats panel + controls (export facts / reset to seed / forget everything)
+- [ ] ingest: `groundTextToFacts` perf (row-count fast path) + clause/pronoun-carry wiring + optimistic checkbox (default off)
+- [ ] chat: wiki radio group off/on-miss/always (`tmct.chat.wikiMode`, legacy migration) + synth slider (0-24, default 12)
+- [ ] new ingest-viz/memory-panel-viz unit tests; pages-ingest + pages-chat-live-toggle e2e rewrites
+
+### WS-code-ide — VS Code-like code explorer (fable + frontend-design, wave 2)
+- [ ] full-viewport IDE shell: title bar, ledger/hints/stats as dockable widgets, chat as the centre, status bar; existing tools kept
+- [ ] chat seeded with chat-seed general-knowledge bands AND the demo code graph (Copilot-2024 idiom)
+- [ ] identical document ships to site + Electron; `test:electron` green; shell extensible for later PLAN_CODE.md / PLAN_REPO_INDEX.md panels
+
+### WS-ci-screens — screenshots + drift detection (sonnet, wave 3)
+- [ ] `scripts/gen-screenshots.mjs` (all 8 pages + capture manifest → `public/screenshots/`)
+- [ ] estate drift guard for screenshots (manifest/stamp + dimensions); CI job runs estate guards pre-deploy
+- [ ] regenerate all screenshots after design changes land; home page uses the new set
+
+### Coordinator
+- [ ] CLAUDE.md: sub-agent model-selection guidance (lowest sufficient tier down to Haiku; group similar-difficulty tasks) + fresh-`demo:build`-before-inspecting note
+- [ ] integration: `demo:build`, e2e sweep review, full `npm test`, main commit; `smoke:deploy` after operator-gated publish
+
+Carried from before this board: a fresh live-session miss-wall re-map at the new baseline, and a
+live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their deployed
+numbers.
 
 ## Discipline
 
