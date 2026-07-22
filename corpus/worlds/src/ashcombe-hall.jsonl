@@ -54,6 +54,33 @@
 {"world":"ashcombe-hall","kind":"fact","subject":"ashcombe hall","predicate":"mgx:hasA","object":"6 rooms"}
 {"world":"ashcombe-hall","kind":"fact","subject":"player","predicate":"mgx:hasA","object":"satchel"}
 {"world":"ashcombe-hall","kind":"fact","subject":"satchel","predicate":"mgx:usedFor","object":"carrying what the player takes"}
+{"world":"ashcombe-hall","kind":"fact","subject":"room","predicate":"rdfs:subClassOf","object":"space"}
+{"world":"ashcombe-hall","kind":"fact","subject":"outdoor-space","predicate":"rdfs:subClassOf","object":"space"}
+{"world":"ashcombe-hall","kind":"fact","subject":"underground-space","predicate":"rdfs:subClassOf","object":"space"}
+{"world":"ashcombe-hall","kind":"fact","subject":"garden","predicate":"rdf:type","object":"outdoor-space"}
+{"world":"ashcombe-hall","kind":"fact","subject":"cellar","predicate":"rdf:type","object":"underground-space"}
+{"world":"ashcombe-hall","kind":"fact","subject":"portrait","predicate":"rdfs:subClassOf","object":"painting"}
+{"world":"ashcombe-hall","kind":"fact","subject":"painting","predicate":"mgx:default-plane","object":"wall"}
+{"world":"ashcombe-hall","kind":"fact","subject":"furniture","predicate":"mgx:default-plane","object":"floor"}
+{"world":"ashcombe-hall","kind":"fact","subject":"portable","predicate":"mgx:default-plane","object":"floor"}
+{"world":"ashcombe-hall","kind":"fact","subject":"lamp","predicate":"mgx:on-top-of","object":"desk"}
+{"world":"ashcombe-hall","kind":"fact","subject":"book","predicate":"rdfs:subClassOf","object":"portable"}
+{"world":"ashcombe-hall","kind":"fact","subject":"pan","predicate":"rdfs:subClassOf","object":"portable"}
+{"world":"ashcombe-hall","kind":"fact","subject":"library","predicate":"mgx:default-contains","object":"book"}
+{"world":"ashcombe-hall","kind":"fact","subject":"kitchen","predicate":"mgx:default-contains","object":"pan"}
+{"world":"ashcombe-hall","kind":"fact","subject":"gardener","predicate":"mgx:knows-where","object":"letter"}
+{"world":"ashcombe-hall","kind":"fact","subject":"housekeeper","predicate":"mgx:knows-where","object":"key"}
+{"world":"ashcombe-hall","kind":"fact","subject":"butler","predicate":"mgx:knows-objective","object":"letter"}
+{"world":"ashcombe-hall","kind":"fact","subject":"butler","predicate":"mgx:knows-where","object":"housekeeper"}
+{"world":"ashcombe-hall","kind":"fact","subject":"butler","predicate":"mgx:knows-where","object":"cook"}
+{"world":"ashcombe-hall","kind":"fact","subject":"butler","predicate":"mgx:knows-where","object":"gardener"}
+{"world":"ashcombe-hall","kind":"fact","subject":"cook","predicate":"mgx:knows-where","object":"gardener"}
+{"world":"ashcombe-hall","kind":"fact","subject":"gardener","predicate":"mgx:knows-about","object":"garden"}
+{"world":"ashcombe-hall","kind":"fact","subject":"housekeeper","predicate":"mgx:knows-about","object":"study"}
+{"world":"ashcombe-hall","kind":"fact","subject":"butler","predicate":"mgx:knows-about","object":"drawing-room"}
+{"world":"ashcombe-hall","kind":"fact","subject":"cook","predicate":"mgx:knows-about","object":"kitchen"}
+{"world":"ashcombe-hall","kind":"fact","subject":"garden","predicate":"mgx:hasA","object":"old apple tree"}
+{"world":"ashcombe-hall","kind":"fact","subject":"kitchen","predicate":"mgx:usedFor","object":"cooking the hall's meals"}
 {"world":"ashcombe-hall","kind":"rule","name":"go","ruleKind":"action-signature","slots":{"subjectClass":"adventurer","targetClass":"room"}}
 {"world":"ashcombe-hall","kind":"rule","name":"go","ruleKind":"action-signature","slots":{"subjectClass":"person","targetClass":"room"}}
 {"world":"ashcombe-hall","kind":"rule","name":"go","ruleKind":"action-effect","slots":{"predicate":"currently-in","subjectRole":"subject","objectRole":"target"}}

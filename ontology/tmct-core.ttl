@@ -883,3 +883,74 @@ mgx:usedFor a owl:ObjectProperty ;
   rdfs:seeAlso cn:UsedFor ;
   rdfs:comment "Corpus relation, mirrored from ConceptNet /r/UsedFor: \"a {start} is used for {end}\"." .
 
+# ---------------------------------------------------------------------------
+# 1f. Game-world vocabulary (the worlds pack, corpus/worlds/).
+#
+#     The shipped adventure worlds (corpus/worlds/src/*.jsonl) are plain fact
+#     rows, typed and placed with the same mgx: namespace the rest of the
+#     store uses. This section is the formal home for the terms those worlds
+#     add on top of the conversational-memory and corpus vocabulary above:
+#     the space taxonomy a room sits under, the three instance-level
+#     positional relations, the two class-default relations the loader reads,
+#     and the three staff-knowledge relations the talk lane resolves.
+#
+#     A `space` is a place a player can be — the abstraction over an indoor
+#     room, an outdoor space and an underground one, so the world's rooms
+#     share a common superclass without every room-kind having to name it.
+#     Bare terms, tmct's house style; the outside alignment is rdfs:seeAlso to
+#     schema.org/Place, which holds only under the restriction that these are
+#     game locations, not the full civic-address model Place carries.
+# ---------------------------------------------------------------------------
+
+mgx:space a owl:Class ;
+  rdfs:label "space" ;
+  rdfs:seeAlso <https://schema.org/Place> ;
+  rdfs:comment "A place a player can occupy in a game world — the superclass of room, outdoor-space and underground-space. seeAlso schema.org/Place, not a subclass of it: a game space is not the full postal/civic Place." .
+
+mgx:room a owl:Class ;
+  rdfs:label "room" ;
+  rdfs:subClassOf mgx:space ;
+  rdfs:comment "An indoor space in a game world. Movement and container code keys on this exact type; the space superclass is additive." .
+
+mgx:outdoor-space a owl:Class ;
+  rdfs:label "outdoor-space" ;
+  rdfs:subClassOf mgx:space ;
+  rdfs:comment "An open-air game space (Ashcombe Hall's garden), typed beside its room type so the room-keyed movement code is unaffected." .
+
+mgx:underground-space a owl:Class ;
+  rdfs:label "underground-space" ;
+  rdfs:subClassOf mgx:space ;
+  rdfs:comment "A below-ground game space (Ashcombe Hall's cellar), typed beside its room type." .
+
+mgx:on-top-of a owl:ObjectProperty ;
+  rdfs:label "on-top-of" ;
+  rdfs:comment "An instance rests on another instance (a lamp on a desk). Supplemental to the subject's own placement fact, never a replacement for it; a fresh placement written on a later turn supersedes it." .
+
+mgx:on-plane a owl:DatatypeProperty ;
+  rdfs:label "on-plane" ;
+  rdfs:comment "The surface an instance sits against — one of wall, floor, ceiling. Read by the room-view renderer; supplemental to the subject's placement fact." .
+
+mgx:under a owl:ObjectProperty ;
+  rdfs:label "under" ;
+  rdfs:comment "An instance sits beneath another instance. Defined for completeness; supplemental to placement, the same way on-top-of is." .
+
+mgx:default-plane a owl:DatatypeProperty ;
+  rdfs:label "default-plane" ;
+  rdfs:comment "A class's default surface (a painting hangs on the wall; furniture and portables rest on the floor). Read at render/digest time by walking a subject's type and subclass chain; never materialized as an instance fact." .
+
+mgx:default-contains a owl:ObjectProperty ;
+  rdfs:label "default-contains" ;
+  rdfs:comment "A space's default contents by class (a library contains a book; a kitchen contains a pan). Materialized once at world load: one placed, portable instance per default unless the space already holds one." .
+
+mgx:knows-where a owl:ObjectProperty ;
+  rdfs:label "knows-where" ;
+  rdfs:comment "A person knows where a thing is. Resolved against the live world state at talk time — including hidden things, since talking to the staff is the sanctioned way to learn a hiding place; the where-is aside stays a decline." .
+
+mgx:knows-objective a owl:ObjectProperty ;
+  rdfs:label "knows-objective" ;
+  rdfs:comment "A person knows what the player is trying to achieve, phrased as the quest at talk time." .
+
+mgx:knows-about a owl:ObjectProperty ;
+  rdfs:label "knows-about" ;
+  rdfs:comment "A person knows a topic, spoken as a short digest of that topic's own facts at talk time." .
+
