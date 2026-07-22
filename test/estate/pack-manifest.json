@@ -403,6 +403,7 @@
   "src/services/memory-panel-viz.mjs",
   "src/services/plan-pddl.mjs",
   "src/services/plan-viz.mjs",
+  "src/services/research.mjs",
   "src/services/sentences.mjs",
   "src/services/session-log-format.mjs",
   "src/services/sessions.mjs",

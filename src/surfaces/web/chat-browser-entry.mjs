@@ -33,7 +33,9 @@ import { registerReferencePackProvider } from "../../adapters/corpus/reference-p
 // The LIVE Wikipedia seam (opt-in, default off): the page's toggle enables it
 // per session, and e2e tests stub the provider the same way the pack's own
 // provider is stubbed. The adapter is fetch-only, so it bundles as-is.
-import { registerLiveReferenceProvider } from "../../adapters/corpus/wikipedia-live.mjs";
+// registerResearchProvider is the research lane's sibling seam
+// (simple.wikipedia.org) — same stubbing contract for its e2e tests.
+import { registerLiveReferenceProvider, registerResearchProvider } from "../../adapters/corpus/wikipedia-live.mjs";
 // Best-effort IndexedDB persistence for the page's session store — the page
 // decides when to save/load/clear; this entry only carries the wrapper
 // across the bundle boundary.
@@ -69,6 +71,7 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
   let focus = null;
   let last = null;
   let planState = null;
+  let researchState = null;
   // Four-state, like the CLI: false (off), true (rescue on a miss),
   // "supplement" (also append a cited read-out under every grounded vocabulary
   // answer), or "always" (widen that to every grounded answer). The two string
@@ -98,19 +101,20 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
       try {
         result = await runTurn(line, {
           config: null, source: null, graph, focus, last, memoryDir, sessionId,
-          env: {}, lexicon, vocabHint, planState,
+          env: {}, lexicon, vocabHint, planState, researchState,
           liveReference: liveReferenceOn, onLiveLookup,
           uiContext: "browser", synthesisBudget: synthesisBudgetOn,
         });
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
-        return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null, plan: null };
+        return { answer: `Something went wrong answering that (${message}). Try rephrasing, or /help.`, end: false, record: null, plan: null, research: null };
       }
       focus = result.focus;
       last = result.last;
       if ("planState" in result) planState = result.planState;
+      if ("researchState" in result) researchState = result.researchState;
       if (typeof result.liveReference === "boolean" || result.liveReference === "supplement" || result.liveReference === "always") liveReferenceOn = result.liveReference;
-      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null };
+      return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null, research: result.research ?? null };
     },
   };
 }
@@ -172,4 +176,4 @@ export async function exportFactsJsonl(memoryDir) {
   return serializeFactsJsonl(await loadMemory(memoryDir));
 }
 
-globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, normFactTerm, vocabExampleHint, memoryStats, openPersistedStore, exportFactsJsonl, splitSentences: splitSentencesPreservingPaths };
+globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, registerResearchProvider, normFactTerm, vocabExampleHint, memoryStats, openPersistedStore, exportFactsJsonl, splitSentences: splitSentencesPreservingPaths };

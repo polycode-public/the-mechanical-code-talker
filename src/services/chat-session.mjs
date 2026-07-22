@@ -28,6 +28,7 @@ import * as defaultSource from "../adapters/source.mjs";
 import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
 import { runTurn, hasSeededVocabulary, vocabExampleHint } from "./chat.mjs";
 import { resolveGameConfig } from "../domain/game-config.mjs";
+import { resolveResearchConfig } from "./research.mjs";
 import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown, sessionLogEndMarkdown } from "./session-log-format.mjs";
 
 /** Where session logs live, relative to the target repo. `.tmct/` is the repo's
@@ -199,6 +200,11 @@ export async function createSession({
   // to the shipped defaults for every key.
   const gameConfig = resolveGameConfig(toml);
 
+  // The research lane's knobs (fan-out cap, depth, the polite interval) —
+  // resolved once per session from the same tmct.toml, defaults filling
+  // every unset key exactly as resolveGameConfig does above.
+  const researchConfig = resolveResearchConfig(toml);
+
   // tmct.toml's corpus tier3 opts the session into the live supplement too —
   // the flag/env tiers above stay authoritative when set.
   if (toml?.corpus?.tier === "tier3") liveReferenceOn = true;
@@ -337,6 +343,7 @@ export async function createSession({
   let focus = null; // the current focus entity ({id,label}) — threaded turn to turn
   let last = null;  // the last dispatched answer ({query,answer,detail}) — why/say-more re-renders it
   let planState = null; // the in-progress plan (goals/moves/cursor) — cleared by completion or a fresh goal, never by an aside
+  let researchState = null; // the in-progress research queue — advanced by "research next", cleared by completion or "research stop"
   let closed = false;
 
   return {
@@ -347,6 +354,7 @@ export async function createSession({
     get focus() { return focus; },
     get lastAnswer() { return last; },
     get planState() { return planState; },
+    get researchState() { return researchState; },
     get turns() { return turns; },
     get narrate() { return narrateOn; },
     get liveReference() { return liveReferenceOn; },
@@ -360,7 +368,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -375,6 +383,7 @@ export async function createSession({
       focus = nextFocus;
       last = nextLast;
       if ("planState" in result) planState = result.planState;
+      if ("researchState" in result) researchState = result.researchState;
       // /narrate on|off and /wiki on|off (runCommand) ride the turn RESULT the
       // same way a focus update does — apply them to this handle's
       // session-scoped state.
@@ -395,7 +404,7 @@ export async function createSession({
       });
       await upsertGraph(record.ts);
       turns += 1;
-      return { answer, end: Boolean(end), prompt: promptFor(focus), plan: result.plan ?? null, record };
+      return { answer, end: Boolean(end), prompt: promptFor(focus), plan: result.plan ?? null, research: result.research ?? null, record };
     },
 
     /** End-of-session close: end lines in both artifacts, the final graph upsert

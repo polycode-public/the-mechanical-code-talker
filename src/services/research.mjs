@@ -208,16 +208,17 @@ async function stepRun({ holder, provider, ingest, notify }) {
  * threads it to the next turn.
  *
  * `ctx`: { holder, provider, ingest(key, article, tag) -> stored count,
- * config (resolveResearchConfig's shape), memoryDir, planActive, notify }.
+ * config (resolveResearchConfig's shape), memoryDir, planActive,
+ * pagerActive, notify }.
  */
 export async function researchTurn(line, ctx) {
   const req = parseResearchRequest(line);
   if (!req) return null;
-  const { holder, memoryDir, planActive } = ctx;
+  const { holder, memoryDir, planActive, pagerActive } = ctx;
   const pendingRun = Boolean(holder.state && holder.state.pending.length);
   // A bare "next" belongs to an active plan first, then to paging — this
   // lane only claims it when a research queue is the one thing running.
-  if (req.kind === "bareNext" && (!pendingRun || planActive)) return null;
+  if (req.kind === "bareNext" && (!pendingRun || planActive || pagerActive)) return null;
   const goal = "research a topic on Simple English Wikipedia and remember what it grounds";
   const wrap = (r, note) => ({ ...r, goal, note });
   if (req.kind === "status") {
