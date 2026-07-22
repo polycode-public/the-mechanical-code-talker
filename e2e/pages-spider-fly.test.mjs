@@ -133,7 +133,7 @@ test("no pill click ever submits the form on its own", async () => {
   }
 });
 
-test("the wide layout puts tuning and the board in the left column, tuning matching the board's own width, chat above the agents HUD on the right", async () => {
+test("the wide layout puts the controls strip, the board and the tuning console in the left column in that order, chat above the agents HUD on the right", async () => {
   const { context, page } = await openSpiderFlyPage({ viewport: { width: 1280, height: 900 } });
   try {
     const boxes = await page.evaluate(() => {
@@ -141,16 +141,29 @@ test("the wide layout puts tuning and the board in the left column, tuning match
         const r = document.querySelector(sel).getBoundingClientRect();
         return { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width };
       };
-      return { tuning: rect(".tuning"), chat: rect(".chat"), hud: rect(".hud"), board: rect(".board-frame") };
+      return {
+        controls: rect("#controlsPanel"),
+        tuning: rect(".tuning"),
+        chat: rect(".chat"),
+        hud: rect(".hud"),
+        board: rect(".board-frame"),
+      };
     });
+    assert.ok(boxes.controls.right < boxes.chat.left, "the controls strip sits left of the chat column");
     assert.ok(boxes.tuning.right < boxes.chat.left, "the tuning console sits left of the chat column");
+    assert.ok(
+      Math.abs(boxes.controls.width - boxes.board.width) <= 2,
+      "the controls strip shrinks to the grid's own width, the tuning console's former place",
+    );
     assert.ok(
       Math.abs(boxes.tuning.width - boxes.board.width) <= 2,
       "the tuning console shrinks to the grid's own width, not the wider column it sits in",
     );
     assert.ok(boxes.chat.bottom <= boxes.hud.top + 1, "the chat dock sits above the agents HUD");
-    assert.ok(boxes.board.top >= boxes.tuning.bottom - 1, "the board sits below the tuning console");
+    assert.ok(boxes.controls.bottom <= boxes.board.top + 1, "the controls strip sits above the board, in the tuning console's former place");
+    assert.ok(boxes.board.bottom <= boxes.tuning.top + 1, "the board sits above the tuning console, which has moved below it");
     assert.ok(boxes.board.right < boxes.chat.left, "the board fills the left column beside the chat, not a row of its own");
+    assert.ok(boxes.controls.top <= boxes.chat.top + 1, "the controls strip sits roughly level with, and left of, the teach input box");
   } finally {
     await context.close();
   }
