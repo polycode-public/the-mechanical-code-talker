@@ -19,9 +19,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 Site-uplift board (2026-07-22 approved plan: `~/.claude/plans/please-change-the-icons-snazzy-kernighan.md`).
 Each row is one task; the workstream that lands it deletes its row in the same commit.
 
-### WS-chat-engine — follow-up (coordinator)
-- [ ] corpus row `adventure-miss-teach` (asserts the adventure miss answer lacks `--repo`) — its gate has landed; add the row at integration
-
 ### WS-adventure-page — adventure/spider-fly presentation (sonnet)
 - [ ] controls row between room view and satchel; `#goalLine`/`#status` under controls
 - [ ] page-note from world opening after titlebar; stop assigning opening to `#status`; preview-mode hide
