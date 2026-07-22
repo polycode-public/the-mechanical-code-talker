@@ -18,8 +18,8 @@ const INDEX = fileURLToPath(new URL("../public/index.html", import.meta.url));
 test("the homepage shows a chat screenshot (not a live embed) with a full-screen link to chat.html", async () => {
   const html = await readFile(INDEX, "utf8");
   assert.doesNotMatch(html, /<div id="tmct-chat" data-demo-state="idle">/, "the old live chat widget is gone");
-  const shotStart = html.indexOf("<h2>Talk to it</h2>");
-  const shotEnd = html.indexOf("<h2>Two agents", shotStart);
+  const shotStart = html.indexOf("<h2>Chat</h2>");
+  const shotEnd = html.indexOf("<h2>Multiple competing", shotStart);
   const section = html.slice(shotStart, shotEnd);
   assert.match(section, /<div class="hero-shot">/, "a screenshot-and-link block replaces the old embed");
   assert.match(section, /<img src="\.\/screenshots\/chat\.png"/, "the chat screenshot is shown");
@@ -29,7 +29,7 @@ test("the homepage shows a chat screenshot (not a live embed) with a full-screen
 test("the homepage shows a spider-and-fly screenshot (not a live iframe) with a full-screen link", async () => {
   const html = await readFile(INDEX, "utf8");
   assert.doesNotMatch(html, /<iframe/, "no page is embedded live in an iframe");
-  const shotStart = html.indexOf("<h2>Two agents, planning against each other</h2>");
+  const shotStart = html.indexOf("<h2>Multiple competing planning agents</h2>");
   const shotEnd = html.indexOf("<h2>Run the chat yourself</h2>", shotStart);
   const section = html.slice(shotStart, shotEnd);
   assert.match(section, /<div class="hero-shot">/, "a screenshot-and-link block replaces the old embed");
@@ -39,8 +39,8 @@ test("the homepage shows a spider-and-fly screenshot (not a live iframe) with a 
 
 test("the five fully-expanded sections render in the exact order the reorg specifies", async () => {
   const html = await readFile(INDEX, "utf8");
-  const talkToIt = html.indexOf("<h2>Talk to it</h2>");
-  const twoAgents = html.indexOf("<h2>Two agents, planning against each other</h2>");
+  const talkToIt = html.indexOf("<h2>Chat</h2>");
+  const twoAgents = html.indexOf("<h2>Multiple competing planning agents</h2>");
   const runItYourself = html.indexOf("<h2>Run the chat yourself</h2>");
   const askCodebase = html.indexOf('<div class="demo-wrap">');
   const useAsLibrary = html.indexOf("<h2>Use it as a library</h2>");
@@ -53,7 +53,7 @@ test("the five fully-expanded sections render in the exact order the reorg speci
   assert.ok(
     talkToIt < twoAgents && twoAgents < runItYourself && runItYourself < askCodebase
       && askCodebase < useAsLibrary && useAsLibrary < exploreBand && exploreBand < footer,
-    "talk to it, two agents, run it yourself, ask about a codebase, use it as a library, explore band, footer — in that order",
+    "chat, multiple competing planning agents, run it yourself, ask about a codebase, use it as a library, explore band, footer — in that order",
   );
 });
 
@@ -72,7 +72,7 @@ test("the explore band lists exactly four link cards, onto plan/adventure/ledger
   const hrefs = [...band.matchAll(/<a class="explore-card[^"]*" href="([^"]+)"/g)].map((m) => m[1]);
   assert.deepEqual(hrefs, ["./plan.html", "./adventure.html", "./ledger.html", "./sprites.html"]);
   assert.match(band, /It plans, and shows the work/);
-  assert.match(band, /A text adventure, with a room you can actually see/);
+  assert.match(band, /Location aware inference/);
   assert.match(band, /The memory ledger/);
   assert.match(band, /Sprite library/);
 });
