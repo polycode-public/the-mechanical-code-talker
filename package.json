@@ -139,6 +139,10 @@
     "build:spider-fly-bundle": "node scripts/build-spider-fly-bundle.mjs",
     "build:plan-bundle": "node scripts/build-plan-bundle.mjs",
     "build:ledger-bundle": "node scripts/build-ledger-bundle.mjs",
+    "build:code-explorer-bundle": "node scripts/build-code-explorer-bundle.mjs",
+    "build:electron": "node scripts/build-electron-app.mjs",
+    "electron": "electron electron/main.mjs",
+    "test:electron": "node --test electron/smoke.test.mjs",
     "build:sprites-bundle": "node scripts/build-sprites-bundle.mjs",
     "build:wink-vendor": "node scripts/build-wink-vendor.mjs",
     "build:chat-seed": "node scripts/build-chat-seed.mjs",
@@ -159,6 +163,7 @@
     "extract:facts": "node --disable-warning=ExperimentalWarning bin/tmct.mjs extract"
   },
   "devDependencies": {
+    "electron": "^43.2.0",
     "esbuild": "0.28.1",
     "ink-testing-library": "4.0.0",
     "playwright": "1.61.1",

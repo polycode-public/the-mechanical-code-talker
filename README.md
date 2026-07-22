@@ -157,6 +157,32 @@ npx tmct chat --prompt 'disk-1 rests on disk-2. disk-2 rests on disk-3.
 
 More on the game file and the planner under "Teach it a game" below.
 
+### The code explorer (desktop)
+
+The same ledger UI, refocused on a code graph, also runs as a desktop app. It
+reads a `graph.json` (or a repo's `.tmct/` folder), shows every import, call and
+`contains` edge as a plain sentence around a focus symbol, and docks a live chat
+over the same graph. A hint rail suggests the next question from what the graph
+actually holds — "what does X import", "which functions call Y", "list
+functions" — so every suggestion resolves to a real answer.
+
+Electron is a dev-only dependency and never ships in the npm package. Because
+`.npmrc` sets `ignore-scripts=true`, installing it does not fetch the runtime
+binary; fetch it once, then build and launch:
+
+```bash
+npm i -D electron
+node node_modules/electron/install.js   # fetch the Electron binary (ignore-scripts skips this)
+npm run build:electron                  # render electron/renderer/ from the demo graph
+npm run electron                        # open the code explorer on the demo graph
+```
+
+Open a graph or a repo from the window's title bar to explore your own code.
+The UI is channel-agnostic — only the Electron shell (`electron/main.mjs` +
+`electron/preload.cjs`) is desktop-specific; the same page stays servable as a
+plain web page. `npm run test:electron` runs the shell smoke via Playwright and
+skips cleanly when the binary is absent.
+
 ## How it interprets you
 
 Every message runs through **multiple concurrent interpretation strategies**:

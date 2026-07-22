@@ -80,6 +80,7 @@ public/adventure-browser.bundle.js
 public/plan-browser.bundle.js
 public/ledger-browser.bundle.js
 public/sprites-browser.bundle.js
+public/code-explorer.bundle.js
 public/chat-seed.json
 public/reference-pack/
 public/viz-ticker.mjs
@@ -92,6 +93,11 @@ public/*.br
 # Chromium for the browser e2e tier. CI puts it here (PLAYWRIGHT_BROWSERS_PATH)
 # so the job cache can carry it between runs; `npm run e2e:browsers` fetches it.
 .playwright-browsers/
+
+# electron/renderer/ is BUILT fresh by scripts/build-electron-app.mjs (the demo
+# graph rendered to HTML + the dock bundle + the wink vendor asset) and never
+# committed — the electron/ shell (main + preload) is the only committed part.
+electron/renderer/
 
 # e2e/pages-screenshot-sweep.test.mjs's own output — a layout-review aid for
 # a human/agent to look at, regenerated fresh on every run, never a golden
