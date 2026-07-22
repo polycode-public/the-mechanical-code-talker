@@ -5,8 +5,17 @@
 // arrives as data from the memory store's fact/Rule rows. Plugs into
 // planning.mjs's findActionPath as its applyActions.
 
+import { provenanceTagToSource } from "./memory/trust.mjs";
+
 const MEMBER_EDGE_PREDICATES = new Set(["rdfs:subClassOf", "rdf:type"]);
 const SNAPSHOT_RE = /^(.+)@step(\d+)$/;
+
+/** The class-member list a grounding step ranges over. The default "all" is
+ *  every typed member; "taught" restricts to instances a person taught, the
+ *  scope the plan lane uses so a merged corpus never widens a quantified goal
+ *  or the movable set. Falls back to nothing for an unknown scope. */
+const membersInScope = (domain, cls, scope) =>
+  (scope === "taught" ? domain.taughtClassMembers : domain.classMembers)?.[cls] || [];
 
 /** Trim a taught term defensively: some teach frames keep a sentence's
  *  trailing punctuation in the captured object. */
@@ -110,18 +119,34 @@ export function compileDomain(factRows, ruleRows) {
 
   // Class membership from typing edges. A member is a subject with a typing
   // edge into the class and no typing edge pointing at itself (a leaf).
-  const edges = (factRows || []).map(normRow).filter((r) => MEMBER_EDGE_PREDICATES.has(r.predicate));
-  const hasIncoming = new Set(edges.map((r) => r.object));
-  const classMembers = {};
-  for (const edge of edges) {
-    if (hasIncoming.has(edge.subject)) continue;
-    (classMembers[edge.object] ??= []).push(edge.subject);
-  }
-  for (const members of Object.values(classMembers)) {
-    members.sort();
-    // de-dup while keeping order
-    for (let i = members.length - 1; i > 0; i -= 1) if (members[i] === members[i - 1]) members.splice(i, 1);
-  }
+  const membersFromEdges = (typingEdges) => {
+    const hasIncoming = new Set(typingEdges.map((r) => r.object));
+    const members = {};
+    for (const edge of typingEdges) {
+      if (hasIncoming.has(edge.subject)) continue;
+      (members[edge.object] ??= []).push(edge.subject);
+    }
+    for (const list of Object.values(members)) {
+      list.sort();
+      // de-dup while keeping order
+      for (let i = list.length - 1; i > 0; i -= 1) if (list[i] === list[i - 1]) list.splice(i, 1);
+    }
+    return members;
+  };
+  const typingRows = (factRows || []).filter((r) => MEMBER_EDGE_PREDICATES.has(normTerm(r.predicate)));
+  const edges = typingRows.map(normRow);
+  const classMembers = membersFromEdges(edges);
+  // The same membership, restricted to instances a person taught (an operator
+  // assert or a teach-lane frame). A planner that quantifies over a class —
+  // "every X" — ranges over the taught individuals only: a merged corpus can
+  // type dozens of unrelated things into that class, and sweeping those into
+  // the goal makes it unsatisfiable and the search fruitless. classMembers
+  // keeps every member for the readers that want them all.
+  const taughtEdges = edges.filter((_, i) => {
+    const kind = provenanceTagToSource(typingRows[i].provenance)?.kind;
+    return kind === "operator" || kind === "teach";
+  });
+  const taughtClassMembers = membersFromEdges(taughtEdges);
 
   // A class-bound word (an effect role or constraint term that is neither
   // "subject" nor "target") is substituted by its class's sole member at
@@ -158,7 +183,7 @@ export function compileDomain(factRows, ruleRows) {
     .filter((r) => !dynamicPredicates.has(r.predicate) && !MEMBER_EDGE_PREDICATES.has(r.predicate))
     .sort(rowSort);
 
-  return { actions, classMembers, dynamicPredicates, ordering };
+  return { actions, classMembers, taughtClassMembers, dynamicPredicates, ordering };
 }
 
 const domainIndividuals = (domain) => {
@@ -312,13 +337,16 @@ function constraintViolated(action, nextState, domain) {
 }
 
 /** Every legal grounded action from `state`, with its successor.
- *  Deterministic: actions, signatures, and members are walked sorted. */
-export function movesFromRules(state, domain, { budget = 5000 } = {}) {
+ *  Deterministic: actions, signatures, and members are walked sorted. `scope`
+ *  ("all" | "taught") picks which class members ground the moves — the plan
+ *  lane passes "taught" so corpus members of a taught class never enter the
+ *  movable set. */
+export function movesFromRules(state, domain, { budget = 5000, scope = "all" } = {}) {
   let groundings = 0;
   for (const action of domain.actions) {
     for (const sig of action.signatures) {
-      groundings += (domain.classMembers[sig.subjectClass] || []).length *
-        (domain.classMembers[sig.targetClass] || []).length;
+      groundings += membersInScope(domain, sig.subjectClass, scope).length *
+        membersInScope(domain, sig.targetClass, scope).length;
     }
   }
   if (groundings > budget) throw new PlanBudgetError(groundings, budget);
@@ -327,8 +355,8 @@ export function movesFromRules(state, domain, { budget = 5000 } = {}) {
   for (const action of domain.actions) {
     const [verb, particle] = action.name.split(/\s+/);
     for (const sig of action.signatures) {
-      for (const subject of domain.classMembers[sig.subjectClass] || []) {
-        for (const target of domain.classMembers[sig.targetClass] || []) {
+      for (const subject of membersInScope(domain, sig.subjectClass, scope)) {
+        for (const target of membersInScope(domain, sig.targetClass, scope)) {
           if (subject === target) continue;
           let ok = true;
           for (const precond of action.preconds) {
@@ -360,7 +388,7 @@ export function movesFromRules(state, domain, { budget = 5000 } = {}) {
  *  state predicate. Satisfaction is a transitive walk along the goal
  *  predicate: a stacked member reaches the goal object through its support
  *  chain, which a direct row lookup cannot see. */
-export function compileGoal(goalSpecs, domain) {
+export function compileGoal(goalSpecs, domain, { scope = "all" } = {}) {
   const specs = (goalSpecs || []).map((g) => ({
     universal: Boolean(g.universal),
     term: normTerm(g.term),
@@ -369,7 +397,7 @@ export function compileGoal(goalSpecs, domain) {
   }));
   const checks = [];
   for (const spec of specs) {
-    const members = spec.universal ? domain.classMembers[spec.term] || [] : [spec.term];
+    const members = spec.universal ? membersInScope(domain, spec.term, scope) : [spec.term];
     if (spec.universal && members.length === 0) {
       throw new Error(`the goal names "${spec.term}" as a class, but it has no known members`);
     }

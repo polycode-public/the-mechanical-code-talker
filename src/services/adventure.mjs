@@ -408,9 +408,21 @@ const BACKGROUND_FACT_PHRASES = {
   "mgx:atLocation": "is found in",
 };
 
+/** True when a fact row is provably owned by a NON-world source (a merged
+ *  corpus, a reference pack, a taught assert) rather than the loaded world. A
+ *  row with no provenance is not "non-world" — a hand-built digest view carries
+ *  none, and the room-look filter keeps those. World facts and their @turn
+ *  snapshots tag as `world:<name>[:turnN]`. */
+function isNonWorldSourced(row) {
+  const prov = String(row.provenance || "").trim();
+  return prov !== "" && !prov.startsWith("world:");
+}
+
 /** The digest's fact view: current placements (folded), exits, typing and
  *  every other surviving fact, with phrase predicates and sentence-cased
- *  subjects so the pipeline's sentence splitter sees real sentences. Pure. */
+ *  subjects so the pipeline's sentence splitter sees real sentences. Room text
+ *  is world-sourced only — a merged corpus's overlap on a room's own vocabulary
+ *  never leaks into the description. Pure. */
 export function worldDigestRows(rows, state) {
   const out = [];
   const seen = new Set();
@@ -440,6 +452,12 @@ export function worldDigestRows(rows, state) {
   }
   for (const row of rows || []) {
     if (SNAPSHOT_RE.test(row.subject)) continue;                 // folded above
+    // Room text comes from the world source only. A merged corpus overlaps a
+    // room's own vocabulary ("library rdfs:subClassOf literary study"), and
+    // without this those rows leak into the room description as stray sentences.
+    // A row with no provenance (a hand-built test view) is kept — the filter
+    // only drops rows a non-world source provably owns.
+    if (isNonWorldSourced(row)) continue;
     if (PLACEMENT_PREDICATES.has(row.predicate)) continue;       // folded above
     if (VIEW_EXCLUDED_PREDICATES.has(row.predicate)) continue;
     const exit = EXIT_PREDICATE_RE.exec(row.predicate);
@@ -909,6 +927,58 @@ async function worldOpennessAnswer(line, { memoryDir }) {
   );
 }
 
+// The in-game orientation asides — "where am I", "what can I do", "what is the
+// quest/goal". Without a world-state answer these fall through to the ordinary
+// lanes and misroute: "where am I" reads "I" as a module name, "what can I do"
+// walls, and "what is the goal" answers from corpus vocabulary about the word
+// "goal". A live world answers each from its own fold first.
+const WORLD_WHERE_AM_I_RE = /^where\s+am\s+i(?:\s+now)?[?.!\s]*$/i;
+const WORLD_OPTIONS_RE = /^(?:what\s+can\s+i\s+do(?:\s+(?:here|now))?|what\s+are\s+my\s+options|what\s+(?:should|do)\s+i\s+do(?:\s+(?:here|now))?|what\s+now)[?.!\s]*$/i;
+const WORLD_QUEST_RE = /^(?:what(?:'s|\s+is)\s+(?:the\s+|my\s+)?(?:quest|goal|objective|mission|aim)|what\s+am\s+i\s+(?:trying\s+to\s+do|(?:supposed|meant)\s+to\s+do)|what\s+do\s+i\s+do\s+here)[?.!\s]*$/i;
+
+/** The in-game orientation asides, answered from the world fold: the player's
+ *  room, the room's real affordances, and the world's objective. Null when the
+ *  line is none of them, so an ordinary question keeps its lane. */
+async function worldContextAnswer(line, { memoryDir }) {
+  const l = String(line).trim();
+  const asksWhere = WORLD_WHERE_AM_I_RE.test(l);
+  const asksOptions = WORLD_OPTIONS_RE.test(l);
+  const asksQuest = WORLD_QUEST_RE.test(l);
+  if (!asksWhere && !asksOptions && !asksQuest) return null;
+  let rows;
+  try { rows = readFactRows(await loadMemory(memoryDir)); } catch { return null; }
+  const state = foldWorldState(rows);
+  const here = state.placements.get("player")?.object ?? null;
+
+  if (asksWhere) {
+    return here
+      ? answer(`you are in the ${here}.`, "ADVENTURE — where-am-I aside: the player's own room from the current world fold", { goal: "check where you are" })
+      : answer("the world has no written player position yet.", "ADVENTURE — where-am-I aside: no player placement", { miss: true, goal: "check where you are" });
+  }
+
+  if (asksOptions) {
+    const actions = here ? roomAffordances(rows, state, here) : [];
+    return answer(
+      actions.length ? `you can: ${actions.join(", ")}.` : `nothing obvious here — say "look" to look around${here ? ` the ${here}` : ""}.`,
+      `ADVENTURE — options aside: the ${here}'s roomAffordances, the same list "look" appends`,
+      { goal: "see what you can do here" },
+    );
+  }
+
+  const objectiveId = rows.find((r) => r.predicate === "mgx:is-objective" && r.object === "true")?.subject ?? null;
+  return objectiveId
+    ? answer(
+        `your goal is to find the ${objectiveId} and pick it up.`,
+        `ADVENTURE — quest aside: the world's objective (${objectiveId}), named without spoiling where it is`,
+        { goal: `find the ${objectiveId}` },
+      )
+    : answer(
+        `this world sets no explicit goal — explore it, and say "look" to see your options.`,
+        "ADVENTURE — quest aside: no objective marker in this world",
+        { goal: "explore the world" },
+      );
+}
+
 async function inventoryAnswer({ memoryDir, graph }) {
   const memory = await loadMemory(memoryDir);
   const rows = readFactRows(memory);
@@ -1033,5 +1103,7 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
   if (whereAside) return whereAside;
   const opennessAside = await worldOpennessAnswer(line, { memoryDir });
   if (opennessAside) return opennessAside;
+  const contextAside = await worldContextAnswer(line, { memoryDir });
+  if (contextAside) return contextAside;
   return null; // a mid-game aside — the ordinary lanes answer, world untouched
 }
