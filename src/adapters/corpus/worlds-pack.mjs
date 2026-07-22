@@ -15,7 +15,7 @@ import { readFileSync } from "node:fs";
 import { gunzipSync } from "node:zlib";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { isWorldsIndexEntry, isWorldRow, isWorldFactRow, isWorldRuleRow, isWorldMetaRow } from "../../domain/worlds-pack.mjs";
+import { isWorldsIndexEntry, isWorldRow, isWorldFactRow, isWorldRuleRow, isWorldMetaRow, expandWorldDefaultContents } from "../../domain/worlds-pack.mjs";
 
 const PKG_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
@@ -84,7 +84,13 @@ export function loadWorld(dir, worldName) {
         else if (isWorldMetaRow(row) && !meta) meta = row;
       } catch { /* tolerated: a bad line loses one row, not the world */ }
     }
-    if (facts.length || rules.length || meta) payload = { name: worldName, facts, rules, meta };
+    // Class-default contents (library -> a book, kitchen -> a pan) are
+    // materialized here, the one choke point every loader path runs through
+    // (openAdventure, the site build, the tests) — never baked into the
+    // shipped shard, which stays a byte-copy of its hand-authored source.
+    if (facts.length || rules.length || meta) {
+      payload = { name: worldName, facts: expandWorldDefaultContents(facts), rules, meta };
+    }
   }
   worldCacheByKey.set(key, payload);
   return payload;

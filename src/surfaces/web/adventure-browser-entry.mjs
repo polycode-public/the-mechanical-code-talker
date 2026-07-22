@@ -35,7 +35,7 @@ import {
 } from "../../adapters/memory/core.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
-import { foldWorldState, worldDigestRows, roomAffordances } from "../../services/adventure.mjs";
+import { foldWorldState, worldDigestRows, roomAffordances, worldActionRows } from "../../services/adventure.mjs";
 import { runAdventureAutoplayTick, exposedFacts } from "../../services/adventure-autoplay.mjs";
 import { parseWorldEditorText, planWorldEditorSync } from "../../services/adventure-editor.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
@@ -92,7 +92,7 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
   // bookkeeping either way.
   let visitedRoomIds = new Set(Array.isArray(restoredVisitedRoomIds) ? restoredVisitedRoomIds : []);
   const openingRows = readFactRows(await loadMemory(memoryDir));
-  const openingHere = foldWorldState(openingRows).placements.get("player")?.object ?? null;
+  const openingHere = foldWorldState(worldActionRows(openingRows)).placements.get("player")?.object ?? null;
   if (openingHere) visitedRoomIds.add(openingHere);
 
   const graph = parseEntities({ individuals: [], objectProperties: [] });
@@ -126,7 +126,9 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
       try {
         result = await runTurn(line, {
           config: null, source: null, graph, focus, last, memoryDir, sessionId,
-          env: {}, lexicon, vocabHint: "", planState: planHolder.state,
+          env: {}, lexicon, uiContext: "browser",
+          vocabHint: 'Try a world question ("where is the key"), or teach me: "remember: the moat is a ditch".',
+          planState: planHolder.state,
         });
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);
@@ -135,7 +137,7 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
       focus = result.focus;
       last = result.last;
       if ("planState" in result) planHolder.state = result.planState;
-      const here = foldWorldState(readFactRows(await loadMemory(memoryDir))).placements.get("player")?.object ?? null;
+      const here = foldWorldState(worldActionRows(readFactRows(await loadMemory(memoryDir)))).placements.get("player")?.object ?? null;
       if (here) visitedRoomIds.add(here);
       return { answer: result.answer, end: Boolean(result.end), record: result.record ?? null, plan: result.plan ?? null };
     },
@@ -148,7 +150,9 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
      *  reference into this closure's own Set. */
     async snapshot() {
       const rows = readFactRows(await loadMemory(memoryDir));
-      const state = foldWorldState(rows);
+      // State the page plays and maps from is the game world only; the raw
+      // rows still travel for the digest's background colour.
+      const state = foldWorldState(worldActionRows(rows));
       const here = state.placements.get("player")?.object ?? null;
       return { rows, state, here, turn: state.turnCount, visitedRoomIds: [...visitedRoomIds] };
     },
