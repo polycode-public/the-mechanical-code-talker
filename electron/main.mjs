@@ -1,9 +1,10 @@
 // electron/main.mjs — the desktop shell for the tmct code explorer. It is the
 // ONLY desktop-specific piece: it opens a window on the channel-agnostic
 // renderer (electron/renderer/index.html, built by
-// scripts/build-electron-app.mjs) and answers two file-picker requests over
-// IPC — open a graph.json, or open a repo whose .tmct/ holds one. Everything
-// the window shows is the same ledger-pattern UI a plain page would serve.
+// scripts/build-electron-app.mjs) and answers three requests over IPC — open
+// a graph.json, open a repo whose .tmct/ holds one, or read the packaged
+// general-knowledge seed (a file:// page cannot fetch it). Everything the
+// window shows is the same IDE-shell page a plain browser would serve.
 //
 // No tmct library code runs here; the renderer's own bundle carries the engine.
 // The main process only reads a file the user picked and hands its parsed
@@ -33,6 +34,13 @@ async function firstExisting(candidates) {
 }
 
 function registerIpc() {
+  // The packaged chat-seed.json as text (the renderer parses it) — null when
+  // the packaging step could not place one, and the page runs graph-only.
+  ipcMain.handle("code-explorer:read-seed", async () => {
+    try { return await readFile(join(HERE, "renderer", "chat-seed.json"), "utf8"); }
+    catch { return null; }
+  });
+
   ipcMain.handle("code-explorer:open-graph", async () => {
     const res = await dialog.showOpenDialog({
       title: "Open a tmct graph",

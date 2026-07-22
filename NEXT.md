@@ -18,12 +18,8 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ### WS-code-ide (code.html IDE shell)
 
-- [ ] Desktop parity: ship chat-seed.json beside the Electron renderer during packaging, read it
-      through the preload bridge, and keep renderCodeExplorerHtml the single document both
-      packagers ship. Verify `npm run build:electron` + `npm run test:electron`.
-- [ ] Tests: unit coverage for the shell document and the seeded session; e2e pages-code updated
-      for the new shell, no-body-scroll, seed loading and graph+knowledge dual answering; the
-      Electron smoke extended to the seed status.
+- [ ] Tests: e2e pages-code run green against the new shell (no-body-scroll, seed loading,
+      graph+knowledge dual answering, graph-only degrade).
 
 The prior board (33 items, extended live to 35) cleared on 2026-07-22
 across the 2.10.x releases; `git log` from 2.10.0 to the current release holds the delivery

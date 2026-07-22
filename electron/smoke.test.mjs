@@ -1,7 +1,9 @@
 // electron/smoke.test.mjs — the desktop shell smoke, driven by Playwright's
 // _electron. It launches the real Electron app on the built renderer and
-// checks the ledger-pattern UI comes up: the fact ledger has rows, the hint
-// rail carries suggested queries, and the demo focus symbol is named.
+// checks the IDE shell comes up: the explorer ledger has rows, the hint rail
+// carries suggested queries, the demo focus symbol is named, the status bar
+// reports the graph's counts, and the general-knowledge seed settles into a
+// definite state (loaded, or the clean graph-only note).
 //
 // Kept OUT of `npm test` on purpose — it needs the Electron binary and a real
 // windowing launch, neither of which belongs in the hermetic suite. Run it with
@@ -42,7 +44,7 @@ async function resolvePlaywrightElectron() {
   }
 }
 
-test("the desktop shell renders the code ledger, hints, and focus symbol", async (t) => {
+test("the desktop shell renders the IDE shell: ledger, hints, focus, stats, and a settled seed state", async (t) => {
   const _electron = await resolvePlaywrightElectron();
   if (!_electron) { t.skip("playwright is not installed"); return; }
   const { electronPath, reason } = await resolveElectronBinary();
@@ -71,6 +73,18 @@ test("the desktop shell renders the code ledger, hints, and focus symbol", async
 
     const firstHint = (await win.locator("#hints .hint").first().textContent())?.trim();
     assert.ok(firstHint && firstHint.length > 0, "a hint has text");
+
+    const stats = (await win.locator("#stats").textContent())?.trim();
+    assert.match(stats ?? "", /\d+ individuals/, "the status bar reports the graph's individual count");
+
+    // The seed either loads (the packaged chat-seed.json over the preload
+    // bridge) or the page says plainly it is running graph-only — never a
+    // hung "loading" state and never a blank.
+    await win.waitForFunction(
+      () => /general knowledge: \d+ facts|graph-only/.test(document.getElementById("seed-status")?.textContent || ""),
+      null,
+      { timeout: 30000 },
+    );
   } finally {
     await app.close();
   }
