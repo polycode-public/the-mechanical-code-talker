@@ -18,12 +18,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ### WS-code-ide (code.html IDE shell)
 
-- [ ] Rebuild code.html as a full-viewport VS Code-like shell (title bar / explorer sidebar /
-      chat centre / status bar) in tmct's own visual identity, keeping every existing capability
-      as a panel: facts ledger, hint rail, stats line, Open graph/Open repo, desktop-app link.
-- [ ] Seed the page's chat session with the chat-seed general-knowledge bands as well as the
-      code graph: lazy same-origin fetch with a visible loading state, clean graph-only degrade
-      when the seed is unavailable.
 - [ ] Desktop parity: ship chat-seed.json beside the Electron renderer during packaging, read it
       through the preload bridge, and keep renderCodeExplorerHtml the single document both
       packagers ship. Verify `npm run build:electron` + `npm run test:electron`.
