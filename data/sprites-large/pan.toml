@@ -1,0 +1,18 @@
+# pan — the kitchen's default portable at the sprite tier: a frying pan seen
+# from above with a long handle and a soft gradient, so a taken pan reads as
+# its own object rather than the generic portable.
+classes = ["pan"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <radialGradient id="pan-wash" cx="0.4" cy="0.35" r="0.7">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.22"/>
+    </radialGradient>
+  </defs>
+  <circle cx="10" cy="14" r="6" fill="currentColor"/>
+  <circle cx="10" cy="14" r="6" fill="url(#pan-wash)"/>
+  <circle cx="10" cy="14" r="3.6" fill="#000000" opacity="0.28"/>
+  <rect x="15" y="12.9" width="7.2" height="2.2" rx="1.1" fill="currentColor"/>
+</svg>
+"""
