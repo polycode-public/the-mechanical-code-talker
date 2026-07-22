@@ -128,11 +128,16 @@ test("a universal quantified as 'any' stores under the real class term, never a 
   });
 });
 
-test("the every-rewrite hint folds a plural subject to the grammatical singular", async () => {
+test("a universally quantified plural adjective teaches the class property under the singular subject", async () => {
   await withStore(async (dir) => {
     const { answer } = await runTurn("all spiders are venomous", { memoryDir: dir, sessionId: "s1" });
-    assert.match(answer, /"every spider is venomous"/, "the suggested rewrite is the singular phrasing");
-    assert.doesNotMatch(answer, /spiders is/, "never the ungrammatical plural-subject rewrite");
+    assert.match(answer, /noted — remembered: spider is venomous/, "the teach folds the plural to the singular");
+    const rows = await factRows(dir);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "spider");
+    assert.equal(rows[0].predicate, "mgx:hasProperty");
+    assert.equal(rows[0].object, "venomous");
+    assert.equal(rows[0].quantifier, "every");
   });
 });
 
