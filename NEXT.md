@@ -50,8 +50,8 @@ procedure, not a diff), *operator call* (a decision, not a build).
 | 28 | spider-fly observable-facts panel | open — browser panel shipped 2026-07-22; remaining: the chat phrasing lane over `beliefSnapshotFor` | 2026-07-22 | planners' knowledge made inspectable | medium |
 | 29 | sense-splitting on read-back (Rover) | open, designed | 2026-07-22 | two concepts under one label | medium-high |
 | 31 | ingest.html + ledger/chat ingest | open, new scope | 2026-07-22 | bring your own text | medium-high |
-| 32 | full IndexedDB re-initialisation button | open, new scope | 2026-07-22 | recover any page from any state | high |
-| 33 | triple-store export, every page | open, new scope | 2026-07-22 | data leaves in the standard shape | high |
+| 32 | full IndexedDB re-initialisation button | in progress, new scope (wt agent-a08e0bf9a850688c6) | 2026-07-22 | recover any page from any state | high |
+| 33 | triple-store export, every page | in progress, new scope (wt agent-a08e0bf9a850688c6) | 2026-07-22 | data leaves in the standard shape | high |
 
 The detailed items:
 
