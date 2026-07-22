@@ -196,6 +196,12 @@
     padding: 1rem 1.1rem; text-decoration: none; color: inherit;
   }
   .explore-card:hover, .explore-card:focus-visible { border-color: var(--taught); }
+  .explore-card-desktop { border-style: dashed; }
+  .explore-card-desktop h3::after {
+    content: "desktop app"; margin-left: 0.5rem; font-size: 0.68rem; font-weight: normal;
+    color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 0.1rem 0.45rem;
+    vertical-align: middle;
+  }
   .explore-card .explore-shot {
     display: block; width: 100%; height: auto; border-radius: 5px; border: 1px solid var(--line);
   }
@@ -399,6 +405,12 @@ await runChat({
       <h3>The memory ledger</h3>
       <p>Browse the taught graph. Click any term inside a fact to drill in.</p>
       <span class="go">open &rarr;</span>
+    </a>
+    <a class="explore-card explore-card-desktop" href="https://gitlab.com/polycode-projects/the-mechanical-code-talker#the-code-explorer-desktop">
+      <h3>Code explorer</h3>
+      <p>Explore a code graph on your desktop. Imports, calls and members around any
+      symbol, with a chat dock and suggested next questions.</p>
+      <span class="go">build &amp; run &rarr;</span>
     </a>
     <a class="explore-card" href="./sprites.html">
       <h3>Sprite library</h3>
