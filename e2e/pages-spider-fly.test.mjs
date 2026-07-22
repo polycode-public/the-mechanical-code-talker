@@ -133,7 +133,7 @@ test("no pill click ever submits the form on its own", async () => {
   }
 });
 
-test("the wide layout puts tuning and the board in the left column, chat above the agents HUD on the right", async () => {
+test("the wide layout puts tuning and the board in the left column, tuning matching the board's own width, chat above the agents HUD on the right", async () => {
   const { context, page } = await openSpiderFlyPage({ viewport: { width: 1280, height: 900 } });
   try {
     const boxes = await page.evaluate(() => {
@@ -144,7 +144,10 @@ test("the wide layout puts tuning and the board in the left column, chat above t
       return { tuning: rect(".tuning"), chat: rect(".chat"), hud: rect(".hud"), board: rect(".board-frame") };
     });
     assert.ok(boxes.tuning.right < boxes.chat.left, "the tuning console sits left of the chat column");
-    assert.ok(boxes.tuning.width > boxes.chat.width * 2, "the tuning console takes the wide share of the row");
+    assert.ok(
+      Math.abs(boxes.tuning.width - boxes.board.width) <= 2,
+      "the tuning console shrinks to the grid's own width, not the wider column it sits in",
+    );
     assert.ok(boxes.chat.bottom <= boxes.hud.top + 1, "the chat dock sits above the agents HUD");
     assert.ok(boxes.board.top >= boxes.tuning.bottom - 1, "the board sits below the tuning console");
     assert.ok(boxes.board.right < boxes.chat.left, "the board fills the left column beside the chat, not a row of its own");
@@ -201,6 +204,50 @@ test("the step button advances the turn counter exactly once per click, and the 
       assert.ok(goal.trim().length > 0, "every agent's row carries a real goal line, never a blank");
     }
     assert.deepEqual(consoleErrors, [], "stepping logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("clicking a spider or fly row expands an observed-facts panel beside it, and clicking again collapses it", async () => {
+  const { context, page, consoleErrors } = await openSpiderFlyPage();
+  try {
+    await page.locator("#stepBtn").click();
+    await waitForTurn(page, 1);
+
+    const spiderRow = page.locator('#hud .hud-row:has(.hud-id.spider)').first();
+    await spiderRow.waitFor({ timeout: ANSWER_TIMEOUT_MS });
+    assert.equal(await spiderRow.getAttribute("aria-expanded"), "false", "the row starts collapsed");
+    assert.equal(await spiderRow.locator(".hud-detail").count(), 0, "no observed-facts panel before the click");
+
+    await spiderRow.click();
+    await spiderRow.locator(".hud-detail").waitFor({ timeout: ANSWER_TIMEOUT_MS });
+    assert.equal(await spiderRow.getAttribute("aria-expanded"), "true", "the row reports itself expanded");
+    const detailText = await spiderRow.locator(".hud-detail").innerText();
+    assert.match(detailText, /observes/i, "the panel names whose observation this is");
+    assert.match(detailText, /fly-\d+ (is at cell-\d+-\d+|has not been observed)\./, "the panel states, per other agent, either its believed cell or that it hasn't been seen");
+
+    await spiderRow.click();
+    await page.waitForFunction(
+      (row) => row.querySelector(".hud-detail") === null,
+      await spiderRow.elementHandle(),
+      { timeout: ANSWER_TIMEOUT_MS },
+    );
+    assert.equal(await spiderRow.getAttribute("aria-expanded"), "false", "a second click collapses the panel again");
+    assert.deepEqual(consoleErrors, [], "expanding and collapsing the panel logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("an egg row (if any) never becomes clickable — the observed-facts panel is spider/fly only", async () => {
+  const { context, page } = await openSpiderFlyPage();
+  try {
+    const eggRows = page.locator('#hud .hud-row:has(.hud-id.egg)');
+    const count = await eggRows.count();
+    for (let i = 0; i < count; i++) {
+      assert.equal(await eggRows.nth(i).getAttribute("role"), null, "an egg row carries no button role");
+    }
   } finally {
     await context.close();
   }

@@ -6,7 +6,7 @@ import { join } from "node:path";
 import {
   foldSpiderFlyState, gridApplyActions, spiderPathStateKey, planSpiderPath, planSpiderPathToWeb,
   greedyFlyMove, randomFlyWander, greedySpiderApproach, greedySpiderAvoid,
-  believedCellOf, nearestBelievedTarget, hasActiveWebAt,
+  believedCellOf, nearestBelievedTarget, hasActiveWebAt, beliefSnapshotFor,
   runEcologyPass, startSpiderFlyGame, runSpiderFlyTick,
   FLY_INITIAL_MASS, SPIDER_INITIAL_MASS, SPIDER_MASS_DECREMENT_PER_TURN, WEB_DURATION_TURNS,
 } from "../../src/services/spider-fly.mjs";
@@ -206,6 +206,27 @@ test("believedCellOf is ground truth inside the vision radius, unknown outside i
     null,
     "a told fact addressed to a different agent never leaks into this observer's belief",
   );
+});
+
+test("beliefSnapshotFor maps every other candidate to its believed cell or null, skipping the observer's own id", () => {
+  const rows = [
+    { subject: "fly-1", predicate: "mgx:currently-in", object: "cell-5-2" },
+    { subject: "fly-2", predicate: "mgx:currently-in", object: "cell-8-8" },
+  ];
+  const state = foldSpiderFlyState(rows);
+  const snapshot = beliefSnapshotFor("spider-1", { x: 2, y: 2 }, ["spider-1", "fly-1", "fly-2"], state, { visionRadius: 4 });
+  assert.deepEqual(snapshot, { "fly-1": "cell-5-2", "fly-2": null }, "fly-1 sits inside vision, fly-2 outside it and untold");
+  assert.ok(!("spider-1" in snapshot), "the observer never appears in its own belief snapshot");
+});
+
+test("beliefSnapshotFor folds a told fact into the exposure set exactly like believedCellOf does alone", () => {
+  const rows = [{ subject: "fly-1", predicate: "mgx:currently-in", object: "cell-8-8" }];
+  const state = foldSpiderFlyState(rows);
+  const snapshot = beliefSnapshotFor("spider-1", { x: 2, y: 2 }, ["fly-1"], state, {
+    visionRadius: 2,
+    toldFacts: [{ subject: "fly-1", toAgent: "spider-1", cell: "cell-6-2", turn: 4 }],
+  });
+  assert.deepEqual(snapshot, { "fly-1": "cell-6-2" });
 });
 
 test("nearestBelievedTarget picks the closest candidate the observer has any belief about, skipping unbelieved ones", () => {
