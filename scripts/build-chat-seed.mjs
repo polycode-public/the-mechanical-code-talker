@@ -30,20 +30,23 @@ const here = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(here, "..");
 
 /** The largest chat-seed.json this builder will let through, in bytes. The
- *  capped default configuration measures ~22.8 MB and boots inside the page's
+ *  capped default configuration measures ~38.7 MB and boots inside the page's
  *  boot budget (e2e/pages-chat-boot-budget.test.mjs holds it there). A bigger
  *  asset is a bug in the seed selection: lower a SEED_BAND_CAPS entry, never
  *  raise this number casually — the page fetches the whole file before the
  *  chat can answer a seeded question. */
-export const SEED_BYTE_CEILING = 24 * 1024 * 1024;
+export const SEED_BYTE_CEILING = 40 * 1024 * 1024;
 
 /** Pinned per-band fact caps for the two bands whose full size dwarfs the
  *  byte ceiling. Definitional predicates seed first (each capped band gets
  *  the ConceptNet band's own `prefer` order), so the WordNet-xl cap is spent
  *  on its hypernym (subClassOf) backbone. Pinned as counts, not computed
  *  from bytes at build time, so the deploy asset is identical on every
- *  machine that holds the same corpus files. */
-export const SEED_BAND_CAPS = Object.freeze({ conceptnet: 2000, "wordnet-xl": 4000 });
+ *  machine that holds the same corpus files. Raised from 2000/4000 to
+ *  7000/14000 (measured ~38.7 MB against the boot-budget guard, ~1.3 MB of
+ *  headroom under the byte ceiling above) — a further raise is a fresh
+ *  measurement against that same guard, not a bigger number chosen by eye. */
+export const SEED_BAND_CAPS = Object.freeze({ conceptnet: 7000, "wordnet-xl": 14000 });
 
 // `tmct init --persona-size <size>` activates these additive human-persona
 // size bands on top of the always-active `human` (same ladder bin/tmct.mjs
