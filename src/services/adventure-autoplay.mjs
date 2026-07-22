@@ -26,7 +26,7 @@
 // fact simply has nothing for this module to infer a goal toward.
 import { findActionPath } from "../domain/planning.mjs";
 import { loadMemory, readFactRows } from "../adapters/memory/core.mjs";
-import { foldWorldState, adventureTurn } from "./adventure.mjs";
+import { foldWorldState, adventureTurn, worldActionRows } from "./adventure.mjs";
 
 const SNAPSHOT_RE = /^(.+)@turn(\d+)$/;
 const baseSubjectOf = (subject) => SNAPSHOT_RE.exec(subject)?.[1] ?? subject;
@@ -138,7 +138,10 @@ async function stepTowardThenAct({
  */
 export async function runAdventureAutoplayTick(memoryDir, opts = {}) {
   const { exposedRoomIds, planHolder, sessionId = "", env = {}, graph = null, cache = null } = opts;
-  const rows = readFactRows(await loadMemory(memoryDir));
+  // Auto-play reasons over the game world only — the same isolation the manual
+  // command path uses, so a fact the player taught mid-game never steers the
+  // planner toward a room the world never placed anything in.
+  const rows = worldActionRows(readFactRows(await loadMemory(memoryDir)));
   const state = foldWorldState(rows);
   const here = state.placements.get("player")?.object ?? null;
   const exposed = new Set(exposedRoomIds || []);
