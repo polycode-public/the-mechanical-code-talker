@@ -8,7 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
-import { foldWorldState, runNpcPass, roomAffordances, worldDigestRows } from "../../src/services/adventure.mjs";
+import { foldWorldState, runNpcPass, roomAffordances, worldDigestRows, currentPosition, worldActionRows, personKnowledgeLines, personRoomReport } from "../../src/services/adventure.mjs";
 import { driveSessionTurns } from "../helpers/session.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, openMemoryBackend, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
@@ -120,6 +120,64 @@ test("the digest view folds placements, phrases the predicates, and keeps hidden
   assert.ok(sentences.includes("Player is an adventurer"), "typing rows keep vowel-aware articles");
   assert.ok(!sentences.some((s) => /hidden/.test(s)), "hidden placements stay out of the view");
   assert.ok(!sentences.some((s) => /unlocks-with|acts-on-turn/.test(s)), "puzzle wiring stays out of the view");
+});
+
+test("a position is current until the subject is placed anew, then goes stale with no extra write", () => {
+  const rows = [
+    { subject: "lamp", predicate: "mgx:located-in", object: "study" },
+    { subject: "lamp", predicate: "mgx:on-top-of", object: "desk" },
+    { subject: "lamp@turn4", predicate: "mgx:located-in", object: "player" },
+  ];
+  const state = foldWorldState(rows);
+  const before = foldWorldState(rows.slice(0, 2));
+  assert.deepEqual(currentPosition(before, "lamp"), { predicate: "mgx:on-top-of", object: "desk", turn: 0 },
+    "on the desk while it still rests in the study");
+  assert.equal(currentPosition(state, "lamp"), null, "taking the lamp (turn 4) supersedes the turn-0 position with no retraction row");
+});
+
+test("worldActionRows keeps world-sourced and provenance-free rows, drops taught and merged-corpus rows", () => {
+  const rows = [
+    { subject: "letter", predicate: "mgx:hidden-in", object: "cabinet", provenance: "world:ashcombe-hall" },
+    { subject: "letter", predicate: "mgx:located-in", object: "garden", provenance: "teach:chat:local" },
+    { subject: "hand", predicate: "rdf:type", object: "view" },
+    { subject: "flower", predicate: "mgx:atLocation", object: "garden", provenance: "corpus:conceptnet" },
+  ];
+  const kept = worldActionRows(rows);
+  assert.deepEqual(kept.map((r) => r.predicate), ["mgx:hidden-in", "rdf:type"],
+    "the world's own row and the hand-built view row survive; the taught note and the merged corpus row do not");
+});
+
+test("personKnowledgeLines resolves live pointers — a hidden thing revealed, a person located, the quest named", () => {
+  const rows = [
+    { subject: "gardener", predicate: "rdf:type", object: "person" },
+    { subject: "gardener", predicate: "mgx:knows-where", object: "letter" },
+    { subject: "gardener", predicate: "mgx:knows-where", object: "butler" },
+    { subject: "gardener", predicate: "mgx:knows-objective", object: "letter" },
+    { subject: "gardener", predicate: "mgx:knows-about", object: "garden" },
+    { subject: "butler", predicate: "rdf:type", object: "person" },
+    { subject: "butler", predicate: "mgx:currently-in", object: "drawing-room" },
+    { subject: "letter", predicate: "mgx:hidden-in", object: "cabinet" },
+  ];
+  const state = foldWorldState(rows);
+  const { lines, aboutTopics } = personKnowledgeLines(rows, state, "gardener");
+  assert.ok(lines.includes("the letter is in the cabinet."), "a hidden thing's place is revealed through talk");
+  assert.ok(lines.includes("you'll find the butler in the drawing-room."), "a person is located");
+  assert.ok(lines.some((l) => /letter is what you're after/.test(l)), "the objective is named as the quest");
+  assert.deepEqual(aboutTopics, ["garden"], "about-topics come back for the caller to digest");
+});
+
+test("personRoomReport states who and what shares a person's room and each container's status", () => {
+  const rows = [
+    { subject: "butler", predicate: "rdf:type", object: "person" },
+    { subject: "butler", predicate: "mgx:currently-in", object: "drawing-room" },
+    { subject: "portrait", predicate: "mgx:fixed-in", object: "drawing-room" },
+    { subject: "portrait", predicate: "mgx:is-container", object: "true" },
+    { subject: "drawing-room", predicate: "rdf:type", object: "room" },
+  ];
+  const state = foldWorldState(rows);
+  const report = personRoomReport(rows, state, "butler");
+  assert.match(report, /here in the drawing-room: the portrait\./);
+  assert.match(report, /the portrait is closed\./);
 });
 
 test("roomAffordances branches each visible object onto exactly the verb that would accept it", () => {
