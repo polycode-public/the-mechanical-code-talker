@@ -74,7 +74,6 @@ Each row is one task; the workstream that lands it deletes its row in the same c
 - [ ] regenerate all screenshots after design changes land; home page uses the new set
 
 ### Coordinator
-- [ ] CLAUDE.md: sub-agent model-selection guidance (lowest sufficient tier down to Haiku; group similar-difficulty tasks) + fresh-`demo:build`-before-inspecting note
 - [ ] integration: `demo:build`, e2e sweep review, full `npm test`, main commit; `smoke:deploy` after operator-gated publish
 
 Carried from before this board: a fresh live-session miss-wall re-map at the new baseline, and a

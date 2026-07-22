@@ -50,7 +50,7 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
   files (one agent owns `package.json`, `src/`, `bin/`, `test/` sequences; docs/site tracks
   run in parallel).
 - **Pick each sub-agent's model deliberately, and pick the lowest tier that meets the task's
-  needs** — the ladder runs down through Sonnet to Haiku. Engine work in a large, subtle file
+  needs** — the ladder runs Fable to Opus to Sonnet to Haiku. Engine work in a large, subtle file
   (chat.mjs, adventure.mjs) earns a top-tier model; page markup/CSS against a written design
   earns Sonnet; mechanical sweeps (renames across files, manifest updates, format-only edits)
   earn Haiku. When decomposing, **group tasks that need a similar level into the same
