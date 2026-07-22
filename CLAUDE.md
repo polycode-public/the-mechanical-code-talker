@@ -119,6 +119,15 @@ In order:
 `node --test "test/estate/*.test.mjs"` costs seconds. Running all of it to check a one-line edit is
 a habit, not a check.
 
+### README examples are checked locally, not per-push
+
+The README's two heavy copy-paste examples cost ~6 CI-minutes and exercise machinery the init
+and seed tests already cover at smaller scale, so they are not in the per-push pipeline at all.
+**After changing the CLI surface (bin/ flags, command output), the library's public exports, or
+any flow a README example walks through, run `npm run check:readme` locally** — it runs
+`e2e/readme-examples.test.mjs` with the heavy examples enabled. The lighter README example
+checks still run in the per-push e2e tier.
+
 ### Two names for "smoke"
 
 `smoke:deploy` already owns the word in this repo and means something else entirely — a probe
