@@ -52,10 +52,6 @@ Each row is one task; the workstream that lands it deletes its row in the same c
 - [ ] spider-fly header left-aligned with board (`.page-head > .head-inner` width rule)
 - [ ] unit + e2e test updates (adventure-viz, spider-fly-viz, pages-adventure dblclick, pages-spider-fly alignment)
 
-### WS-home — index.html electron-style redesign (fable + frontend-design)
-- [ ] claim blocks (each links to its demo page), feature sections with screenshots, Polycode family showcase (Seonix, Marginalia — siblings adopting the tmct library)
-- [ ] keep theme tokens in sync with viz-theme.mjs; update pages-index/pages-home e2e
-
 ### WS-pages — chat/ingest page shells (sonnet, wave 2)
 - [ ] `memory-panel-viz.mjs` + `memory-stats.mjs` shared extraction; chat-page-viz refactor stays green
 - [ ] ingest: seed on by default (+`#seedToggle`), persistent session, IndexedDB persistence, stats panel + controls (export facts / reset to seed / forget everything)
