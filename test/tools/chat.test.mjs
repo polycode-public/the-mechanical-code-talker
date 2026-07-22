@@ -183,6 +183,83 @@ test("runTurn: /help lists the commands (from COMMANDS) and the ask question sha
   assert.match(answer, /which <functions\|classes\|modules>/, "shapes come from the engine's rephraseHint");
 });
 
+// ---- /export and /ingest: the store leaves/enters as plain files ----
+
+test("runTurn: /export writes the memory store as JSONL, the same shape tmct memory --export writes", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-chat-export-"));
+  try {
+    await runTurn("every raven is a bird", { config: CONFIG, memoryDir: dir });
+    const outPath = join(dir, "out.jsonl");
+    const { answer, record } = await runTurn(`/export ${outPath}`, { config: CONFIG, memoryDir: dir });
+    assert.match(answer, /^wrote \d+ facts? to /);
+    assert.equal(record.miss, false);
+    const written = (await readFile(outPath, "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+    assert.ok(written.length >= 1, "at least the taught fact was exported");
+    assert.ok(written.some((r) => r.subject === "raven" && r.predicate === "rdfs:subClassOf" && r.object === "bird"));
+    for (const r of written) assert.ok("provenance" in r, "every row carries its provenance, the extract shape");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runTurn: /export declines cleanly with no path, and with no memory store", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-chat-export-decline-"));
+  try {
+    const noArg = await runTurn("/export", { config: CONFIG, memoryDir: dir });
+    assert.match(noArg.answer, /\/export needs a path/);
+    assert.equal(noArg.record.miss, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+  const noStore = await runTurn("/export out.jsonl", { config: CONFIG, graph: await graph() });
+  assert.match(noStore.answer, /no memory store here/);
+  assert.equal(noStore.record.miss, true);
+});
+
+test("runTurn: /ingest reads a local text file, grounds the recognized sentences, and reports the count", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-chat-ingest-"));
+  try {
+    const filePath = join(dir, "notes.txt");
+    await writeFile(filePath, "Every otter is a mammal. The weather is nice today. Every mammal is an animal.\n");
+    const { answer, record } = await runTurn(`/ingest ${filePath}`, { config: CONFIG, memoryDir: dir });
+    assert.match(answer, /^ingested 2 facts from /);
+    assert.match(answer, /2 of 3 sentences recognized/);
+    assert.equal(record.miss, false);
+
+    // the ingested facts are grounded in THIS session's own store, not some
+    // other scratch dir — a follow-up question answers from them directly.
+    const { answer: recall } = await runTurn("is an otter a mammal", { config: CONFIG, memoryDir: dir });
+    assert.match(recall, /yes/i);
+    const { answer: chain } = await runTurn("is an otter an animal", { config: CONFIG, memoryDir: dir });
+    assert.match(chain, /yes/i);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runTurn: /ingest declines cleanly on a missing file and an empty grounding, never a stack", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-chat-ingest-decline-"));
+  try {
+    const missing = await runTurn(`/ingest ${join(dir, "nope.txt")}`, { config: CONFIG, memoryDir: dir });
+    assert.match(missing.answer, /couldn't read .*no such file/);
+    assert.equal(missing.record.miss, true);
+    assert.doesNotMatch(missing.answer, /\bat \w+.*:\d+:\d+/, "no stack frames leak");
+
+    const emptyFile = join(dir, "empty.txt");
+    await writeFile(emptyFile, "How are you today? What is the weather like?\n");
+    const empty = await runTurn(`/ingest ${emptyFile}`, { config: CONFIG, memoryDir: dir });
+    assert.match(empty.answer, /none grounded into a recognized fact shape/);
+    assert.equal(empty.record.miss, true);
+
+    const noArg = await runTurn("/ingest", { config: CONFIG, memoryDir: dir });
+    assert.match(noArg.answer, /\/ingest needs a path/);
+    const noStore = await runTurn(`/ingest ${emptyFile}`, { config: CONFIG, graph: await graph() });
+    assert.match(noStore.answer, /no memory store here/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- multi-turn context: the FOCUS entity + the "it" follow-up ----
 
 test("runTurn: an entity command sets the focus and records its resolved id", async () => {
