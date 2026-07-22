@@ -171,6 +171,30 @@ test("renderLedgerHtml: self-contained page with parseable LEDGER/PAYLOAD, both 
   }
 });
 
+test("renderLedgerHtml: the query-only placeholder's example term skips short, stopword-shaped terms even when they outrank everything else by degree", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-ledger-placeholder-"));
+  try {
+    // "os" out-degrees every other term (4 distinct facts touch it) but reads
+    // as a stray fragment, not an askable concept — the SAME floor the dock's
+    // own miss-tips already apply (LEDGER.terms.filter(t.term.length >= 3)),
+    // so the one example a visitor sees should honor it too.
+    await appendFact(dir, { subject: "os", predicate: "mgx:hasA", object: "kernel", provenance: "corpus:human" });
+    await appendFact(dir, { subject: "os", predicate: "mgx:hasA", object: "shell", provenance: "corpus:human" });
+    await appendFact(dir, { subject: "os", predicate: "mgx:hasA", object: "filesystem", provenance: "corpus:human" });
+    await appendFact(dir, { subject: "os", predicate: "mgx:capableOf", object: "boot", provenance: "corpus:human" });
+    const data = await computeLedgerData(dir);
+    assert.equal(data.terms[0].term, "os", "the fixture's own degree ranking puts the short term first");
+    const fake = "/* fake-bundle-marker */ globalThis.tmctMemoryAsk = {};";
+    const html = renderLedgerHtml({ ...data, memoryAskBundle: fake });
+    const placeholder = /placeholder="([^"]*)"[^>]*aria-label="Ask the graph"/.exec(html)?.[1];
+    assert.ok(placeholder, "the chat input's placeholder attribute renders");
+    assert.doesNotMatch(placeholder, /what is os\b/, "the top-degree term is too short to serve as the example");
+    assert.match(placeholder, /what is [a-z-]{3,}/, "a real 3+ character term still fills the example");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- phase 2: the chat dock ------------------------------------------------
 
 import { resolveAnsweredTerm } from "../src/services/ledger-viz.mjs";
