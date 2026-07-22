@@ -21,12 +21,12 @@ test("sessionLogHeaderMarkdown: title + byline + divider, byte-identical to the 
     version: "2.9.6",
     sessionId: "019f8692-430d-79f3-9ee2-c38792f56746",
     startedAt: "2026-07-21T21:26:00.206Z",
-    repo: "/Users/antony/projects/polycode-projects/the-mechanical-code-talker",
+    repo: "/srv/projects/the-mechanical-code-talker",
   });
   assert.equal(
     header,
     "# tmct chat 2.9.6 — session 019f8692\n\n"
-    + "*2026-07-21 · started 21:26:00.206 · repo /Users/antony/projects/polycode-projects/the-mechanical-code-talker*\n\n"
+    + "*2026-07-21 · started 21:26:00.206 · repo /srv/projects/the-mechanical-code-talker*\n\n"
     + "---\n\n",
   );
 });
