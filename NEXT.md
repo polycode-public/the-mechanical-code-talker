@@ -31,12 +31,12 @@ procedure, not a diff), *operator call* (a decision, not a build).
 
 | # | Item | Status | Checked | Motivation | Likelihood it sticks |
 |---|---|---|---|---|---|
-| 6 | narrowing disclosure (dir/graph/entity picks) | open, design | 2026-07-21 | wrong-feeling answers erode trust | medium |
-| 7 | verbatim log fixes (rewrite, multi-sentence) | open, traced | 2026-07-21 | the transcript is the instrument | high |
-| 8 | farewell/dismissal routing | open, traced | 2026-07-21 | polite close reads worse than a wall | medium-high |
-| 9 | walled-asks cluster (router thing, big picture, entry point, …) | open, part-traced | 2026-07-21 | natural phrasings of answerable questions | medium |
-| 10 | adjective predication teach | open, design-light | 2026-07-21 | textbook teach declines | medium-high |
-| 11 | guess-number non-numeric turn | open, traced | 2026-07-21 | mid-game aside should coach | medium-high |
+| 6 | narrowing disclosure (dir/graph/entity picks) | in progress, design (wt agent-ae3f3cbb25c854585) | 2026-07-21 | wrong-feeling answers erode trust | medium |
+| 7 | verbatim log fixes (rewrite, multi-sentence) | in progress, traced (wt agent-ae3f3cbb25c854585) | 2026-07-21 | the transcript is the instrument | high |
+| 8 | farewell/dismissal routing | in progress, traced (wt agent-ae3f3cbb25c854585) | 2026-07-21 | polite close reads worse than a wall | medium-high |
+| 9 | walled-asks cluster (router thing, big picture, entry point, …) | in progress, part-traced (wt agent-ae3f3cbb25c854585) | 2026-07-21 | natural phrasings of answerable questions | medium |
+| 10 | adjective predication teach | in progress, design-light (wt agent-ae3f3cbb25c854585) | 2026-07-21 | textbook teach declines | medium-high |
+| 11 | guess-number non-numeric turn | in progress, traced (wt agent-ae3f3cbb25c854585) | 2026-07-21 | mid-game aside should coach | medium-high |
 | 12 | in-game question routing guard | open, traced | 2026-07-21 | code answers inside a game, worst misroute class | medium-high |
 | 13 | world-secret spoiler + predicate phrases | open, traced | 2026-07-21 | spoils the game, in garbled English | high |
 | 14 | "look" digest corpus leak | open, traced | 2026-07-21 | room text must come from the world | medium-high |
