@@ -28,9 +28,6 @@ Each row is one task; the workstream that lands it deletes its row in the same c
 - [ ] e2e split: per-push browser/light suite vs `e2e:heavy` (build-artefacts, seed-scale) on `rules:changes` + schedule
 - [ ] ledger-build assertions fold into build-artefacts' single demo:build
 
-### WS-research — research lane over Simple English Wikipedia (fable)
-- [ ] ledger.html: same research feature in its dock
-
 ### Coordinator
 - [ ] integration: `demo:build`, e2e sweep review, full `npm test`, main commit; `smoke:deploy` after operator-gated publish
 
