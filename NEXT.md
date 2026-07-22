@@ -31,12 +31,7 @@ procedure, not a diff), *operator call* (a decision, not a build).
 
 | # | Item | Status | Checked | Motivation | Likelihood it sticks |
 |---|---|---|---|---|---|
-| 6 | narrowing disclosure (dir/graph/entity picks) | in progress, design (wt agent-ae3f3cbb25c854585) | 2026-07-21 | wrong-feeling answers erode trust | medium |
-| 7 | verbatim log fixes (rewrite, multi-sentence) | in progress, traced (wt agent-ae3f3cbb25c854585) | 2026-07-21 | the transcript is the instrument | high |
-| 8 | farewell/dismissal routing | in progress, traced (wt agent-ae3f3cbb25c854585) | 2026-07-21 | polite close reads worse than a wall | medium-high |
-| 9 | walled-asks cluster (router thing, big picture, entry point, …) | in progress, part-traced (wt agent-ae3f3cbb25c854585) | 2026-07-21 | natural phrasings of answerable questions | medium |
-| 10 | adjective predication teach | in progress, design-light (wt agent-ae3f3cbb25c854585) | 2026-07-21 | textbook teach declines | medium-high |
-| 11 | guess-number non-numeric turn | in progress, traced (wt agent-ae3f3cbb25c854585) | 2026-07-21 | mid-game aside should coach | medium-high |
+| 9 | walled-asks cluster (router thing, big picture, entry point, …) | open — 8 of 10 phrasings fixed 2026-07-22; remaining: "tell me about the router thing" and "what is the purpose of the validate module" (honest misses now, want a design pass) | 2026-07-21 | natural phrasings of answerable questions | medium |
 | 12 | in-game question routing guard | open, traced | 2026-07-21 | code answers inside a game, worst misroute class | medium-high |
 | 13 | world-secret spoiler + predicate phrases | open, traced | 2026-07-21 | spoils the game, in garbled English | high |
 | 14 | "look" digest corpus leak | open, traced | 2026-07-21 | room text must come from the world | medium-high |
@@ -55,37 +50,11 @@ procedure, not a diff), *operator call* (a decision, not a build).
 
 The detailed items:
 
-- CONVERSATION persona-sweep remainder (`BENCHMARK_CONVERSATION_2.7.11.md`): 15 of the 29 routed
-  items landed between 2.7.12 and 2.9.6 and re-verified fixed live this round (teach period,
-  2-hop property inheritance, write boundary, meta-questions, disjointness object-walk,
-  contradiction disclosure, arithmetic decline, the suggested-repair cluster). Still open, with
-  fresh shapes from the live session:
-  - silent narrowing without disclosure: "what's in src/handlers" answers one module's members;
-    with two graphs merged, "is model.mjs not imported by store.mjs" silently picked seonix's
-    `src/store.mjs` over the demo's `src/core/store.mjs`, and "what functions are in Task"
-    resolved to the wrong entity (`TASK`) then reported no members.
-  - verbatim-input instrument bugs, two fresh instances: the session `.log` rewrote "what people
-    do you know about" to `> what is a person`, and a multi-sentence teach line logs only its
-    last sentence ("disk-1 is a disk. disk-2 is a disk. disk-3 is a disk." → `> disk-3 is a
-    disk.`). The `.jsonl` sidecar keeps both forms; the `.log` restoration misses these paths.
-  - farewells/dismissals: "ok nvm" and "lol ok" get the identity blurb; the long thanks-farewell
-    ("alright, i think that's everything for today, thanks so much for the help!") now misroutes
-    into a teach decline about the pronoun "i" — worse than the wall it used to hit.
-  - still-walled asks: "tell me about the router thing"; "give me the big picture on this
-    codebase" (now with a stray "Did you mean BIG?"); "what is the entry point"; "what is the
-    purpose of the validate module"; "prove that X is Y"; "isn't a dog an animal?" (contracted
-    negative interrogative); the multi-sentence syllogism one-liner still doesn't split. "where
-    do i start reading" now misroutes to where-is-defined and confidently answers
-    `renderArchitecture()` — worse than its 2.7.11 wall. "whats the most important file" now
-    names its rank criteria but still picks no default. Audit finding (2026-07-22, ledger
-    round): a bare "what is ishmael" / "who is ishmael" misses entirely when the entity exists
-    only as a relation object (the relation-chase phrasing "who is the grandfather of ishmael"
-    grounds fine) — the read-back should surface the relations the entity participates in.
-  - adjective predication cannot yet teach: "every snake is venomous" declines claiming
-    "venomous" is unknown even though "snake" is grounded — the every-X-is-Y frame wants a noun
-    class on the Y side; no adjective-attribute teach shape exists yet.
-  - guess-number non-numeric mid-game turn now falls to a plain parse miss (no vocab-learn write
-    observed) — downgraded from state mutation to a flow wall.
+- Walled-asks remainder (item 9): "tell me about the router thing" (fuzzy "the X thing"
+  resolution) and "what is the purpose of the validate module" (purpose-of phrasing over an
+  unseen vocab noun) both now miss honestly instead of misrouting — the 2026-07-22 round fixed
+  the other eight phrasings in the cluster. Both want a small design pass (closed template or
+  resolver widening), not a lane rewrite.
 
 - Games/plan lane gaps (page-vocabulary round, confirmed and extended live):
   - in-game questions misroute into code-graph lanes: "where am I?" → "no module matching I";
@@ -215,12 +184,9 @@ the tool layer, which we already ship; both are folded into the entries below wh
 apply. Chat-lane fixes (items 1-16, 29) inherit every chat channel at once — TUI, plain CLI,
 browser bundles, serve, and library `runChat` all call the same `runTurn`.
 
-- **6-11, conversation lanes.** Code: `chat.mjs` per sub-item — the narrowing sites need their
-  disclosure design first; farewell templates beside the existing FAREWELL set (`:1338`);
-  the "start reading" misroute wants a guard in the where-lane resolver; adjective predication
-  is a new closed teach frame beside the every-X-is-Y frame. Tests: corpus rows in
-  `template.*`/`grammar.*` lanes plus `test/adapters/interpret.test.mjs`; no e2e. Docs: none
-  (behavioral); the next CONVERSATION report measures them. Channels: inherit.
+- **9 remainder, the two walled asks.** Code: `chat.mjs` — a closed template or resolver
+  widening per the detail bullet; design first. Tests: corpus rows in the `template.*` lane.
+  Channels: inherit.
 - **12-14 + 16, games/plan.** Code: lane-precedence guard while a game slot is live
   (`src/services/adventure.mjs` / `spider-fly-turn.mjs` interception boundary); world-secret
   predicate exclusion in the describe lane the way the adventure where-reader already excludes;
