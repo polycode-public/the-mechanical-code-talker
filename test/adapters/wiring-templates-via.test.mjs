@@ -44,6 +44,7 @@ const FROZEN = {
   "conversational-greeting-good-evening": "Good evening. Ask me about this codebase, or /help.",
   "conversational-thanks": "Any time. Ask another, or /help for what I can do.",
   "conversational-farewell": "Bye — flushing the session log. Come back with a question any time.",
+  "conversational-dismissal": "No worries. Ask another, or /help for what I can do.",
   // orientation-friendly carries {example1}/{example2} — LIVE example queries
   // from the loaded graph; the generic pair reproduces the pre-slot text.
   "orientation-friendly": [

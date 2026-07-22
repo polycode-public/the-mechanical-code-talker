@@ -60,6 +60,7 @@
 {"id":"conversational-greeting-good-evening","class":"conversational","register":"friendly","template":"Good evening. Ask me about this codebase, or /help."}
 {"id":"conversational-thanks","class":"conversational","register":"friendly","template":"Any time. Ask another, or /help for what I can do."}
 {"id":"conversational-farewell","class":"conversational","register":"friendly","template":"Bye — flushing the session log. Come back with a question any time."}
+{"id":"conversational-dismissal","class":"conversational","register":"friendly","template":"No worries. Ask another, or /help for what I can do."}
 {"id":"orientation-friendly","class":"orientation","register":"friendly","template":"I'm tmct — a deterministic, offline code-graph assistant (no LLM). I answer questions about THIS codebase's structure — imports, calls, definitions,\nhistory and counts. For example:\n  which modules import {example1}\n  what calls {example2}\n  how many classes are there\n/help for commands, /stats for an overview of the graph."}
 {"id":"miss-no-previous-answer","class":"miss","register":"friendly","template":"No previous answer to expand yet — ask me a question first, then say \"why\" or \"say more\"."}
 {"id":"conversational-greeting-empty","class":"conversational","register":"friendly","template":"Hi. I'm tmct. {vocabHint} Point me at a repo with `--repo <path>` for code-structure questions too (imports, calls, definitions). /help for commands."}

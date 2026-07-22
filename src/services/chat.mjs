@@ -1257,6 +1257,7 @@ const T_GREETING_BY_PHRASE = {
 };
 const T_THANKS = "conversational-thanks";
 const T_FAREWELL = "conversational-farewell";
+const T_DISMISSAL = "conversational-dismissal";
 const T_ORIENTATION = "orientation-friendly";
 const T_WHY_EMPTY = "miss-no-previous-answer";
 /** Empty / degenerate-graph variants (#3/#5): shown when the loaded graph has 0
@@ -1358,6 +1359,21 @@ const OK_ACK = new Set([
   "ok", "okay", "cool", "aight", "fair enough", "got it", "gotcha", "noted",
   "sounds good", "sure", "cool cool", "right",
 ]);
+/** Dismissals — "drop it, no question here" beats. Routed to a warm dismissal
+ *  template, never the identity/orientation blurb (which reads like the tool
+ *  didn't understand the user was bowing out). Single-word entries also match as
+ *  tokens inside a short mixed line ("ok nvm"); multi-word entries match whole. */
+const DISMISSAL = new Set([
+  "nvm", "nevermind", "never mind", "nm", "forget it", "forget that",
+  "no worries", "no worry", "skip it", "leave it", "don't worry", "dont worry",
+  "no biggie", "it's fine", "its fine", "never mind then", "nvm then",
+]);
+/** Laughter beats — on their own, or leading/trailing a dismissal/ack ("lol ok",
+ *  "haha nvm"), they carry no graph intent. */
+const LAUGHTER = new Set([
+  "lol", "lolol", "lmao", "lmfao", "rofl", "haha", "hahaha", "hah",
+  "heh", "hehe", "ha", "hehehe",
+]);
 /** New-user / confused openers — "I don't know what this is" reads as an
  *  orientation request, not small-talk and not a grammar-wall near-miss; routed
  *  the same as CAPABILITY_PHRASES (→ orientationAnswer). */
@@ -1449,9 +1465,21 @@ const CLOSING_FILLER_CLAUSES = new Set([
   "that's everything i needed", "that's all i needed",
   "that's everything for today", "that's all for today",
 ]);
+/** Strip a hedging lead ("i think that's everything for today" → "that's
+ *  everything for today") so a hedged closing clause still matches the closed
+ *  set above — the hedge is register, not new content. */
+const CLOSING_HEDGE_RE = /^i (?:think|reckon|guess|believe|suppose|figure) /;
+const isClosingFillerClause = (c) => CLOSING_FILLER_CLAUSES.has(c) || CLOSING_FILLER_CLAUSES.has(c.replace(CLOSING_HEDGE_RE, ""));
+/** A thanks clause's optional "for … help" tail ("thanks so much for the help",
+ *  "thanks for all your help") — stripped before the closed THANKS lookup so the
+ *  bare "thanks" underneath matches. */
+const THANKS_HELP_TAIL_RE = /\s+for\s+(?:the\s+|your\s+|all\s+|all\s+the\s+|all\s+your\s+)?help\s*$/i;
 function farewellOrThanksSignal(raw, q) {
   const words = q.split(/\s+/).filter(Boolean);
-  if (words.length < 2 || words.length > 8 || looksCodeish(raw, q)) return null;
+  // The upper bound is generous because the real safety is the per-clause gate
+  // below (every non-thanks clause must itself be small-talk-shaped or a curated
+  // closing-filler clause), not the total word count.
+  if (words.length < 2 || words.length > 16 || looksCodeish(raw, q)) return null;
   const clauses = conversationalClauses(q);
   if (clauses.length < 2) return null; // single-clause lines: the exact whole-line checks own this
   // OK_ACK is deliberately NOT a signal here (unlike the exact whole-line check
@@ -1473,14 +1501,37 @@ function farewellOrThanksSignal(raw, q) {
     const ackMatch = rawClause.match(ACK_LEAD_RE);
     const clause = ackMatch ? ackMatch[1].trim() : rawClause;
     if (foldedBye(clause)) { byeHit = true; break; }
-    const deIntensified = clause.replace(TRAILING_INTENSIFIER_RE, "").trim();
+    const deIntensified = clause.replace(THANKS_HELP_TAIL_RE, "").replace(TRAILING_INTENSIFIER_RE, "").trim();
     if (thanksClauseIdx < 0 && closedOrCollapsed(deIntensified, THANKS, THANKS_COLLAPSED)) thanksClauseIdx = i;
   }
   if (byeHit) return "bye";
   const thanksHit = thanksClauseIdx >= 0 && clauses.every((c, i) => i === thanksClauseIdx
-    || CLOSING_FILLER_CLAUSES.has(c)
+    || isClosingFillerClause(c)
     || (c.split(/\s+/).filter(Boolean).length <= 3 && !looksCodeish(c, c.toLowerCase())));
   return thanksHit ? "thanks" : null;
+}
+
+/** A dismissal / laughter beat ("nvm", "lol ok", "haha never mind"): the whole
+ *  line, an ack lead-in peeled off a dismissal, or a short line whose every word
+ *  is laughter / an ack / a single-word dismissal with at least one laughter or
+ *  dismissal word (so a bare "ok"/"sure" still falls to the ack lane, not here).
+ *  Never fires on a codeish line. */
+function dismissalSignal(q) {
+  if (looksCodeish(q, q)) return false;
+  if (DISMISSAL.has(q) || LAUGHTER.has(q)) return true;
+  const words = q.split(/\s+/).filter(Boolean);
+  if (words.length < 2 || words.length > 5) return false;
+  const isFluff = (w) => LAUGHTER.has(w) || OK_ACK.has(w);
+  let lo = 0;
+  let hi = words.length;
+  let laughed = false;
+  while (lo < hi && isFluff(words[lo])) { if (LAUGHTER.has(words[lo])) laughed = true; lo += 1; }
+  while (hi > lo && isFluff(words[hi - 1])) { if (LAUGHTER.has(words[hi - 1])) laughed = true; hi -= 1; }
+  const core = words.slice(lo, hi).join(" ");
+  // Pure laughter+ack ("lol ok") is a dismissal only when a laughter beat was
+  // present — a bare stack of acks ("ok cool") still falls to the ack lane.
+  if (core === "") return laughed;
+  return DISMISSAL.has(core);
 }
 
 /** The fuzzy-typo fallback's candidate pool: every canonical phrase across the
@@ -1653,6 +1704,11 @@ function conversationalTurn(line, ctx) {
       note(ctx.trace, `pattern: template "${T_THANKS}" (data/templates/responses.jsonl)`);
       return mk(t(T_THANKS), { lane: "thanks" });
     }
+  }
+  if (dismissalSignal(q)) {
+    note(ctx.trace, "goal: casual/social — dismissal/laughter, no graph intent");
+    note(ctx.trace, "lane: conversational — dismissal (DISMISSAL/LAUGHTER closed set)");
+    return mk(t(T_DISMISSAL), { lane: "thanks" });
   }
   if (aiIdentityMatch(raw)) {
     note(ctx.trace, "goal: identity — is tmct an AI/LLM (a very likely first question)");
@@ -12709,6 +12765,10 @@ const GAME_OBS_LOWER_RE = /^(?:no[,\s]+)?(?:lower|too\s+high|too\s+big|smaller|l
 const GAME_OBS_CORRECT_RE = /^(?:yes|yep|yeah|correct|you\s+got\s+it|you\s+guessed\s+it|that(?:'s|\s+is)\s+it|that(?:'s|\s+is)\s+right|got\s+it|spot\s+on)[.!?\s]*$/i;
 const GAME_GUESS_RE = /^(?:is\s+it\s+)?(-?\d{1,12})\s*\??[.!?\s]*$/;
 const GAME_FALSE_CORRECT_RE = /^(?:but\s+)?you\s+(?:already\s+)?said\s+(?:it\s+was\s+)?(?:correct|right)\b/i;
+// Thinking-aloud / hesitation fillers — a closed set (never a real question or a
+// graph query, which stay free to fall through to the normal lanes) that mid-game
+// coaches back toward a valid move instead of hitting a bare parse wall.
+const GAME_HESITATION_RE = /^(?:um+|uh+|erm+|hmm*|(?:hmm*,?\s+)?let me (?:think|see)(?:\s+about\s+(?:it|this))?|thinking|(?:just\s+)?(?:give me|gimme)\s+(?:a\s+)?(?:sec|second|minute|moment)|one\s+sec|hold\s+on|hang\s+on|not\s+sure|no\s+idea|i\s+dunno|dunno|idk|i\s+don'?t\s+know|i'?m\s+not\s+sure|good\s+question)[.!?\s]*$/i;
 
 /** A natural-language plan frame — the shapes planLaneAnswer owns. Mid-game
  *  these get the one-at-a-time decline instead of clobbering the slot. */
@@ -12744,7 +12804,12 @@ function gameContinuationAnswer(line, game, planHolder) {
     }
     const higher = GAME_OBS_HIGHER_RE.test(line);
     const lower = !higher && GAME_OBS_LOWER_RE.test(line);
-    if (!higher && !lower) return null;
+    if (!higher && !lower) {
+      if (GAME_HESITATION_RE.test(String(line).trim())) {
+        return { text: `take your time — my guess is still ${game.guess} (between ${game.lo} and ${game.hi}). Say higher, lower, or correct.`, goal: gameGoal(game), lane: "game-inform", note: "GAME — a hesitation filler mid-game; re-stated the standing guess without folding an observation" };
+      }
+      return null;
+    }
     const prior = game.guess;
     const next = { ...game };
     if (higher) { next.lo = prior + 1; next.loSetBy = { guess: prior }; }
@@ -12786,6 +12851,9 @@ function gameContinuationAnswer(line, game, planHolder) {
       ? `my last hint was "${game.lastHint}", after your guess of ${game.lastGuess}`
       : "you haven't guessed yet";
     return { text: `I haven't said "correct" yet — ${record}. Keep guessing.`, goal: gameGoal(game), lane: "game-answer", note: "GAME — rebutted a false \"you said correct\" from the game's own hint record" };
+  }
+  if (GAME_HESITATION_RE.test(String(line).trim())) {
+    return { text: `no rush — give me a number between ${game.lo0} and ${game.hi0}, or "I give up" to stop.`, goal: gameGoal(game), lane: "game-inform", note: "GAME — a hesitation filler mid-game; coached back to a valid guess without touching the secret" };
   }
   const m = String(line).trim().match(GAME_GUESS_RE);
   if (!m) return null;
