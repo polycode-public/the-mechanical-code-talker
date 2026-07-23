@@ -16,6 +16,7 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Open items
 
+- [ ] build `synthbench/code/` per `SKILL_BENCHMARK_CODE_SYNTHESIS.md` — harness is specified (SYN-0…SYN-8 ladder, PLAN_CODE tracks 2/3/5), unbuilt; SYN-0 (one observable edit through the plan-act-verify loop on a JS source fixture) is the first build target
 - [ ] **one `SKILL_PLAIN_PROSE.md` pass**, commit, push, and a final roll — operator-instructed; the five edge-hunt rounds shipped as 2.11.2-2.11.6 (playtest logs 018-022).
 - [ ] research extraction stores at most one triple per sentence (the copula wins and the rest is skipped) — real facts a summary offers get dropped ("a volcano … has lava coming out from a magma chamber", "formed by the movement of tectonic plates"); widening to multiple triples per sentence needs its own design pass over `optimisticTriples`' one-triple contract (playtest 023)
 - [ ] the research queue is session-local but the reply promises "'research next' fetches the next one" — a new CLI session answers "no research is running"; either persist the queue under `.tmct/` or have the reply say the queue lives in this session (playtest 023)
