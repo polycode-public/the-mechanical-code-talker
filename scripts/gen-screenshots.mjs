@@ -23,7 +23,7 @@ const READY_TIMEOUT_MS = 30_000;
 const SETTLE_MS = 250;
 
 // Same order the home page lists its claim blocks and feature plates in.
-const PAGE_ORDER = ["chat", "spider-fly", "plan", "adventure", "ledger", "code", "ingest", "sprites"];
+const PAGE_ORDER = ["chat", "spider-fly", "plan", "adventure", "ledger", "code", "ingest", "sprites", "research"];
 
 /** Each page's own boot signal, mirrored from its e2e file rather than a
  *  blind timeout: the composer/board/dashboard/catalog element the page
@@ -51,12 +51,16 @@ const READY_CHECKS = {
     await page.evaluate(() => window.tmctIngestReady);
   },
   sprites: (page) => page.locator(".card").first().waitFor({ state: "visible", timeout: READY_TIMEOUT_MS }),
+  research: async (page) => {
+    await page.waitForFunction(() => window.tmctResearchReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
+    await page.evaluate(() => window.tmctResearchReady);
+  },
 };
 
 // ingest.html's own e2e file loads with "load" rather than "networkidle" —
 // every other page uses "networkidle" in its own file, so each page keeps the
 // wait style its own test already trusts.
-const GOTO_WAIT_UNTIL = { ingest: "load" };
+const GOTO_WAIT_UNTIL = { ingest: "load", research: "load" };
 
 /** Read a PNG's pixel dimensions straight out of its IHDR chunk (bytes 16-23,
  *  big-endian width then height) — the only two fields this file needs, so
