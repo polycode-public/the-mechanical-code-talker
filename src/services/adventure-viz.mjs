@@ -428,6 +428,20 @@ export function pillsForRoom(rows, state, here) {
   return roomAffordances(rows, state, here);
 }
 
+/** The chat input's grounding placeholder, built from an affordance list: the
+ *  first couple of OBJECT commands (examine/take/open/unlock/talk to <thing>)
+ *  spelled with the room's real props, so the empty input teaches the grounded
+ *  noun form ("examine lamp, take letter…") rather than a bare pronoun the
+ *  player has no antecedent for yet. `fallback` stands in when the list holds
+ *  no object command (a room with only exits, or a just-emptied object dock).
+ *  Pure and `.toString()`-splice-safe — the page splices it in and drives both
+ *  input docks off it every redraw. */
+export function groundedPlaceholder(actions, fallback) {
+  const objectActions = (actions || []).filter((a) => /^(?:examine|take|open|unlock|talk to) /.test(a));
+  if (!objectActions.length) return fallback;
+  return objectActions.slice(0, 2).join(", ") + "…";
+}
+
 /** Edit mode's cursor-driven suggestion pills for one typed `term`: the
  *  lateral SKOS neighbourhood (`relatedForTerm`'s own synonyms/related
  *  concepts) plus the vertical rdfs:subClassOf ancestor chain
@@ -929,7 +943,7 @@ ${THEME_TOKENS_CSS}
       <div class="docklog" id="objDockLog" aria-live="polite"></div>
       <form class="chatask" id="objForm">
         <span class="prompt mono">tmct&gt;</span>
-        <input id="objInput" type="text" placeholder="examine it, take it&hellip;" aria-label="Type a command for this object">
+        <input id="objInput" type="text" placeholder="examine lamp, take key&hellip;" aria-label="Type a command for this object">
       </form>
     </div>
   </div>
@@ -975,6 +989,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const carriedItems = ${carriedItems.toString()};
   const visitedRoomGraph = ${visitedRoomGraph.toString()};
   const allRoomIds = ${allRoomIds.toString()};
+  const groundedPlaceholder = ${groundedPlaceholder.toString()};
   const spriteAncestryRows = ${spriteAncestryRows.toString()};
   const factsForSubject = ${factsForSubject.toString()};
   const renderWorldEditorText = ${renderWorldEditorText.toString()};
@@ -1260,6 +1275,9 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     if (!lastSnapshot || !objLightboxSubject) { objPillsEl.innerHTML = ""; return; }
     const actions = objectPillsFor(lastSnapshot.rows, lastSnapshot.state, lastSnapshot.here, objLightboxSubject);
     objPillsEl.innerHTML = actions.map((a) => '<button type="button" class="pill">' + esc(a) + "</button>").join("");
+    // Grounded to the open object itself ("take lamp…"), so the dock teaches
+    // the noun form even though a bare pronoun now binds here too.
+    objInputEl.placeholder = groundedPlaceholder(actions, "examine " + objLightboxSubject);
   }
   // A dock turn: paused, echoed into the main transcript AND the dock, run on
   // the one session, then the main page and the lightbox both redraw off the
@@ -1369,6 +1387,10 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   function renderPills(rows, state, here) {
     const actions = pillsFor(rows, state, here);
     pillsEl.innerHTML = actions.map((a) => '<button type="button" class="pill">' + esc(a) + "</button>").join("");
+    // The empty input teaches the grounded noun form off the same affordance
+    // list the pills read — real props from THIS room, so a first-time player
+    // types "examine lamp", not a pronoun with nothing to bind to yet.
+    chatqEl.placeholder = groundedPlaceholder(actions, "go north");
   }
   pillsEl.addEventListener("click", (e) => {
     const btn = e.target.closest(".pill");

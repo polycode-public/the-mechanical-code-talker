@@ -81,6 +81,26 @@ test("the adventure page boots with the opening line already in the chat log", a
   }
 });
 
+test("the chat input placeholder grounds itself in the room's real props — the opening study teaches a noun form, never a bare pronoun", async () => {
+  const { context, page, consoleErrors } = await openAdventurePage();
+  try {
+    const placeholder = await page.locator("#chatq").getAttribute("placeholder");
+    assert.match(placeholder, /^(?:examine|take|open|unlock|talk to) /, "the placeholder opens with a grounded object command");
+    assert.doesNotMatch(placeholder, /\b(?:it|them|him|her)\b/, "the placeholder never teaches a bare pronoun with no antecedent");
+
+    // The object lightbox's own dock grounds to the open object, not a pronoun.
+    await page.locator('#roomFrame .sprite-card[data-look-subject="lamp"]').first().click();
+    await page.waitForFunction(() => !document.querySelector("#objLightbox").hidden, null, { timeout: 10000 });
+    const objPlaceholder = await page.locator("#objInput").getAttribute("placeholder");
+    assert.match(objPlaceholder, /lamp/, "the object dock grounds its placeholder to the open object");
+    assert.doesNotMatch(objPlaceholder, /\b(?:it|them|him|her)\b/, "the object dock placeholder never teaches a bare pronoun either");
+
+    assert.deepEqual(consoleErrors, [], "no console error checking the grounded placeholders");
+  } finally {
+    await context.close();
+  }
+});
+
 test("a manually typed command gets echoed and answered in the chat log", async () => {
   const { context, page, consoleErrors } = await openAdventurePage();
   try {
