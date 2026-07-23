@@ -16,6 +16,7 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Open items
 
+- [ ] start `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slice 1 — build `src/domain/discourse.mjs` (the four closed tables, `emptyRecord`/`register`/`bind`/`retire`), thread the record through `runTurn` beside `focus` and `last`, and register from the commit-filter lane only. Nothing reads it yet, so no lane can regress; a unit file over the pure module plus a probe that the record fills is the whole test surface. Slice 2 then flips the frozen row `games/cross-turn-temporal-composition-unbuilt`
 - [ ] finish the repo index: merge the `repo-index` branch (its pipeline is green at `bcf72df0`), then the `PLAN_REPO_INDEX.md` remainder — phase 5 (`init --repo --with-persona code` runs `indexRepository` after scaffolding) and phase 6 (the PLAN_CODE.md move into seonix, cross-repo). Language scope is settled: tmct ships JS/TS + Python, seonix registers C#/Java through the backend seam, so what remains on the language axis is proving that seam admits an out-of-repo backend with no tmct change
 
 ## Discipline
