@@ -39,6 +39,14 @@ unblocks PLAN_CODE.md Track 5's re-index stage; the rest of the plan's ordering 
   flags; and porting `extract.mjs`'s heavier method-call/interface resolution (tmct's `buildEntities`
   is the older, simpler variant — the seonix one carries a tiered method-callee fallback that C#/Java
   estates lean on).
+- **Phase 4 — DONE (doc reconciliation).** Every "not an indexer / doesn't index code" claim that
+  became false is reworded: `README.md`'s repository-interface section, `docs/adapter-contract.md`'s
+  opening, `src/adapters/source.mjs`'s seam comment (kept as the read-side boundary, now naming the
+  `src/index/` producer explicitly), the `package.json` description + `bin/tmct.mjs` header/HELP, and
+  the four live chat strings (`chat.mjs` count/orientation/honest-empty, `chat-session.mjs` banner) —
+  each now offers `tmct index` first, with `--repo` kept for an externally-produced graph. The
+  test-pinned prefixes ("no code graph is loaded…") were preserved. Items 4/5 in the table (the
+  `memory`/`syllogise` subcommand-scoped "reads no code graph" comments) stay as-is — still true.
 
 ## Origin
 
@@ -402,11 +410,10 @@ aws-cdk-examples, commander/express, gson) as a real-world correctness check, no
 only. Exit criterion per language: the same conformance suite passes against a real repo in that
 language.
 
-**Phase 4 — doc reconciliation.** Reword every stale claim in Part 4's table (README, `docs/adapter-
-contract.md`, `src/adapters/source.mjs`, the `src/services/chat.mjs` live strings) now that they are genuinely false.
-Follows the repo's own discipline: name the claim, state the supersession, reword —
-already done in Part 4 above; this phase is where the actual file edits land. `npm test` green
-throughout (some tests likely assert the old strings — expect to update pinned-string tests here).
+**Phase 4 — doc reconciliation. DONE.** Every stale "not an indexer / doesn't index code" claim
+reworded (README, `docs/adapter-contract.md`, `src/adapters/source.mjs`, `package.json`, `bin/tmct.mjs`,
+and the `src/services/chat.mjs` + `chat-session.mjs` live strings). No pinned-string test broke — the
+tests match on the "no code graph is loaded" prefixes, which were preserved.
 
 **Phase 5 — the persona-gated onboarding path.** Wire `tmct init --repo <path> --with-persona code`
 to run Phase 2's indexer, per Part 6's design. No changes to `runTurn`/`runAsk`/`ask.mjs`. Exit

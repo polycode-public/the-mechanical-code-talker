@@ -2,7 +2,8 @@
 // tmct — The Mechanical Code Talker. The headline entry is CHAT: a bare
 // invocation drops you into a tolerant, offline, $0 prompt that guides you
 // toward precision queries about a repository (ELIZA/PARRY-style, but obsessed
-// with software). No model calls; tmct keeps no codebase index of its own.
+// with software). No model calls; tmct indexes a repo on request (tmct index)
+// or reads a graph any other producer wrote.
 //
 //   tmct                                   → interactive chat (the headline)
 //   tmct chat [--repo <abs>] [--plain]     → same, explicit
@@ -49,7 +50,7 @@ process.on("warning", (warning) => {
 const HELP = `tmct — The Mechanical Code Talker
 
 A tolerant, offline, $0 chat that guides you toward precision queries about a
-software repository. No model calls; no codebase index of its own.
+software repository. No model calls; index a repo with \`tmct index\`, or read any producer's graph.
 
 Usage:
 ${renderUsage()}

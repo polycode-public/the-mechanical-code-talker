@@ -332,9 +332,9 @@ export async function createSession({
     // no code graph → point at how to GET one (a graph producer / --repo / the shipped
     // example), and at what IS answerable now — `vocabHint` is only ever a term
     // confirmed to resolve in THIS session's actual seed state (see vocabExampleHint),
-    // never a hardcoded example that might not have been seeded. tmct reads graphs;
-    // it never indexes code itself.
-    ...(noCodeGraph ? [`for code structure, point me at a .tmct/graph.json with --repo <path> or try \`npm run example:mini\` (tmct reads graphs, it doesn't index code). ${vocabHint}`] : []),
+    // never a hardcoded example that might not have been seeded. tmct can index a
+    // repo itself (`tmct index`) or read a graph any other producer wrote.
+    ...(noCodeGraph ? [`for code structure, index this repo with \`tmct index\`, or point me at a .tmct/graph.json with --repo <path> (or try \`npm run example:mini\`). ${vocabHint}`] : []),
     "pass --repo <path> to target a different repo",
     "ask a question, or /help for commands (/stats for an overview) — /exit to leave",
   ];

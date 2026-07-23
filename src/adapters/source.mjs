@@ -3,12 +3,14 @@
 // stub it); in production it reads the JSON artifact the deterministic indexer
 // wrote to config.graphFile. No network, no model calls.
 //
-// This module is the PROVIDER SEAM (docs/adapter-contract.md):
-// any graph producer can feed tmct either by writing the entities-payload JSON
-// where config.graphFile points, or by registering a custom loader with
-// registerProvider() — no indexer is ever imported here. tmct only READS
-// through this seam; its own writes go to .tmct/memory/ (src/memory/), never
-// back into a provider's artifact.
+// This module is the READ SEAM (docs/adapter-contract.md): any graph producer
+// can feed tmct either by writing the entities-payload JSON where
+// config.graphFile points, or by registering a custom loader with
+// registerProvider(). The PRODUCER lives elsewhere — tmct's own `tmct index`
+// (src/index/) is one such producer, and it writes through that same file path,
+// not through this module. Keeping the reader and the producer in separate module
+// trees is deliberate: this module only READS, and tmct's own writes go to
+// .tmct/memory/ (src/memory/), never back into a provider's graph artifact.
 
 import { readFile } from "node:fs/promises";
 import { ToolError } from "./config.mjs";
