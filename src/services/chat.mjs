@@ -52,7 +52,8 @@ import {
 } from "../domain/reference-pack.mjs";
 import { getReferencePackProvider } from "../adapters/corpus/reference-pack.mjs";
 import { getLiveReferenceProvider, getResearchProvider } from "../adapters/corpus/wikipedia-live.mjs";
-import { researchTurn, researchSnapshot, resolveResearchConfig, RESEARCH_DEFAULTS } from "./research.mjs";
+import { researchTurn, researchSnapshot, resolveResearchConfig, RESEARCH_DEFAULTS, parseResearchRequest } from "./research.mjs";
+import { loadResearchQueue, saveResearchQueue } from "../adapters/research-queue-store.mjs";
 import { CHILD_PACK_NAME, childProvenanceTag } from "../domain/child-pack.mjs";
 import { getChildPackProvider } from "../adapters/corpus/child-pack.mjs";
 import { dialogueActForLane } from "../domain/dialogue-acts.mjs";
@@ -14548,7 +14549,16 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // behind /wiki on. Queue state threads turn-to-turn as researchState, the
   // same way planState does.
   {
-    const researchHolder = { state: researchState };
+    // A fresh CLI session carries no in-memory queue, so a research-family line
+    // arriving with none resumes the queue persisted under .tmct/ — that is
+    // what makes "research next"/"status"/"stop" work across process restarts.
+    // The gate keeps ordinary turns off the disk (only a parsed research line
+    // loads), and a store with no path (the browser) simply reads back null.
+    let priorResearchState = researchState;
+    if (!priorResearchState && parseResearchRequest(workingLine)) {
+      priorResearchState = await loadResearchQueue(memoryDir);
+    }
+    const researchHolder = { state: priorResearchState };
     const resolvedResearchConfig = researchConfig ?? RESEARCH_DEFAULTS;
     const rTurn = await researchTurn(workingLine, {
       holder: researchHolder,
@@ -14569,6 +14579,10 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       result.lane = "research";
       const snapshot = researchSnapshot(researchHolder.state);
       if (snapshot) result.record.research = snapshot;
+      // Write-through: persist the queue this turn just mutated (start, next,
+      // skip), and clear the file when it ended (stop, or a failed start that
+      // left no run). A store with no path no-ops, so the browser is untouched.
+      await saveResearchQueue(memoryDir, researchHolder.state);
       const rec = withLast(result, rTurn.goal);
       rec.planState = planHolder.state;
       rec.researchState = researchHolder.state;
