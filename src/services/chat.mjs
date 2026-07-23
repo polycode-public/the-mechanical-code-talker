@@ -4233,7 +4233,7 @@ async function teachExclusionReason(sentence) {
 }
 export { teachExclusionReason };
 
-async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null, graph = null }) {
+async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cache = null, planHolder = null, graph = null, gameConfig = DEFAULT_GAME_CONFIG }) {
   // A closed discourse-marker preamble ahead of a teach sentence ("howdy
   // pardner, remember that TaskController is fragile") would otherwise
   // corrupt TEACH_RE's own match, so strip it first. applyPreambleFrames is
@@ -4349,7 +4349,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (memoryDir && !QUESTION_LEAD_RE.test(conjSrc) && /\s+and\s+/i.test(conjSrc)
     && !(await hasMidSentenceInterrogative(conjSrc))) {
     const rewrap = (half) => (wrapped != null ? `remember that ${half}` : half);
-    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache, planHolder });
+    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache, planHolder, gameConfig });
     const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
     const shared = conjSrc.match(/^(.+?)\s+and\s+((?:is|are|has|have|can)\b.+)$/i);
     const sharedSubject = shared ? shared[1].match(/^(.+?)\s+(?:is|are|has|have|can)\b/i)?.[1]?.trim() : null;
@@ -4569,13 +4569,15 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     }
   }
 
-  // MID-PLAN BOARD TEACH — a locative fact about a piece the LIVE plan's
-  // moves touch is declined naming the plan, never accepted-then-ignored:
-  // the plan's board rides @step snapshots, so a base-fact write here would
-  // be confirmed ("noted — remembered") and then contradicted by the very
-  // next "next". Scoped to the locative teach shape over the plan's own
-  // pieces; every other teach (new vocabulary, new pieces, rules) is
-  // untouched, and with no live plan nothing changes at all.
+  // MID-PLAN BOARD TEACH — a locative fact about a piece the LIVE plan's moves
+  // touch is accepted and the plan is re-searched from the moved board, never
+  // confirmed-then-contradicted by the next move. The change is written as a
+  // NEW whole-board @step snapshot layer (never a base fact — a base write here
+  // would sit under the standing snapshots and trip the contradictory-board
+  // check on the next solve), then the goal is re-searched from the board as it
+  // now stands. Scoped to the locative teach shape over the plan's own pieces;
+  // every other teach (new vocabulary, new pieces, rules) is untouched, and
+  // with no live plan nothing changes at all.
   {
     const livePlan = planHolder?.state && !planHolder.state.done
       && Array.isArray(planHolder.state.actions) && planHolder.state.actions.length
@@ -4583,13 +4585,49 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     const boardSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
     const board = livePlan ? boardSrc.match(BOARD_TEACH_LOCATIVE_RE) : null;
     if (board && memoryDir && !QUESTION_LEAD_RE.test(boardSrc)) {
-      const { normFactTerm } = await import("../adapters/memory/core.mjs");
+      const { normFactTerm, appendFact } = await import("../adapters/memory/core.mjs");
       const planPieces = new Set(livePlan.actions.flatMap((a) => [normFactTerm(a.subject), normFactTerm(a.target)]));
       if (planPieces.has(normFactTerm(board[1])) || planPieces.has(normFactTerm(board[4]))) {
+        const { maxSnapshotStep } = await import("../domain/domain.mjs");
+        const { factRows, domain, state } = await loadPlanContext(memoryDir);
+        // The single-placement change over the current fold: same subject and
+        // predicate, new object. Written as the whole mutated board under a
+        // fresh @step layer, so stateFromFacts reads it as the live board and no
+        // base fact is left to contradict the next solve.
+        const subject = normFactTerm(board[1]);
+        const predicate = `mgx:${board[2].toLowerCase()}-${board[3].toLowerCase()}`;
+        const object = normFactTerm(board[4]);
+        const mutated = state.filter((r) => !(r.subject === subject && r.predicate === predicate));
+        mutated.push({ subject, predicate, object });
+        const layer = maxSnapshotStep(factRows, domain) + 1;
+        for (const r of mutated) {
+          await appendFact(memoryDir, {
+            subject: `${r.subject}@step${layer}`, predicate: r.predicate, object: r.object,
+            provenance: `plan:${sessionId || "chat"}:teach-replan:step${layer}`,
+          });
+        }
         const at = livePlan.cursor > 0 ? `step ${livePlan.cursor} of ${livePlan.actions.length}` : `0 of ${livePlan.actions.length} moves made`;
+        const goalText = livePlan.goalText ?? livePlan.goalTexts?.join("; ") ?? "the held goal";
+        const remembered = `noted — remembered: "${board[0]}".`;
+        const replan = await solveHeldGoals({ memoryDir, planHolder, gameConfig });
+        if (replan.plan) {
+          const moves = replan.plan.actions.map((a, i) => `${i + 1}. ${a.label}`).join("; ");
+          return {
+            text: `${remembered} That changes the board the live plan was standing on (${at}, toward: ${goalText}), so I replanned from the board as it now stands: ${moves}. Say "next" to make move 1.`,
+            via: "plan", miss: false,
+          };
+        }
+        // The write STANDS, but nothing reaches the goal from the moved board:
+        // the old plan is dropped (goals kept, plan reset) and the failed replan
+        // is named, never a silent success.
+        const maxDepth = gameConfig?.planning?.maxDepth ?? DEFAULT_GAME_CONFIG.planning.maxDepth;
+        planHolder.state = {
+          goals: livePlan.goals, goalTexts: livePlan.goalTexts,
+          actions: null, states: null, stepGoals: null, cursor: 0, done: false,
+        };
         return {
-          text: `a plan is live (${at}, toward: ${livePlan.goalText ?? livePlan.goalTexts?.join("; ") ?? "the held goal"}) — I won't change the board mid-plan: the plan's moves write board@step snapshots, and "${board[0]}" would sit under them, silently contradicted by the next move. Say "forget the goal" first, re-teach the board, then "solve it" to replan.`,
-          via: "teach-miss", miss: true,
+          text: `${remembered} That changes the board the live plan was standing on (${at}, toward: ${goalText}) — from this new board no plan reaches the goal within ${maxDepth} moves, so the old plan is dropped. Re-teach the board or say "forget the goal".`,
+          via: "plan", miss: false,
         };
       }
     }
@@ -11300,7 +11338,57 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
   const wantsSolve = PLAN_SOLVE_RE.test(q);
   const wantsLegal = LEGAL_MOVES_RE.test(q);
   if (!wantsSolve && !wantsLegal) return null;
+  if (wantsSolve) return solveHeldGoals({ memoryDir, planHolder, gameConfig });
 
+  // "what moves are legal now" — one ply off the current board, no search.
+  let ctx;
+  try {
+    ctx = await loadPlanContext(memoryDir);
+  } catch (err) {
+    return { text: `I can't read the taught domain: ${err?.message ?? err}`, via: "plan", deduced: "plan a move sequence", note: "plan lane — domain load failed" };
+  }
+  const { domain, state } = ctx;
+  if (!domain.actions.length) {
+    return {
+      text: `no action rules taught yet — teach the game first (e.g. "you can move a disk onto a peg").`,
+      via: "plan", deduced: "plan a move sequence (no action rules yet)", note: "plan lane — honest decline: no action rules",
+    };
+  }
+  if (!state.length) {
+    return {
+      text: `no current state taught yet — state the board first (e.g. "disk-1 rests on peg-a").`,
+      via: "plan", deduced: "plan a move sequence (no state yet)", note: "plan lane — honest decline: empty state",
+    };
+  }
+  const { movesFromRules, PlanBudgetError } = await import("../domain/domain.mjs");
+  let moves;
+  try {
+    moves = movesFromRules(state, domain, { scope: "taught" });
+  } catch (err) {
+    if (err instanceof PlanBudgetError) {
+      return { text: `too many possible moves to enumerate here (${err.message}) — narrow the classes involved.`, via: "plan", deduced: "list the legal moves (budget exceeded)", note: "plan lane — budget decline" };
+    }
+    throw err;
+  }
+  if (!moves.length) {
+    return { text: "no legal moves from the current state.", via: "plan", deduced: "list the legal moves (none)", note: "plan lane — legal moves: none" };
+  }
+  const lines = moves.map((m, i) => `  ${i + 1}. ${actionLabel(m.action.name, m.action.subject, m.action.target)}`);
+  return {
+    text: `${moves.length} legal move${moves.length === 1 ? "" : "s"} from here:\n${lines.join("\n")}`,
+    via: "plan", deduced: "list the legal moves from the current state",
+    note: "plan lane — movesFromRules over the current snapshot, one ply, no search",
+  };
+}
+
+/** Search the taught rules for a shortest sequence to the held goal(s) from the
+ *  CURRENT board fold (the newest @stepK snapshot, else the taught board).
+ *  Mints the plan onto planHolder.state and returns the plan-found reply on
+ *  success; on any missing precondition or an unreachable goal it returns the
+ *  matching honest decline and leaves planHolder.state untouched. Shared by the
+ *  plan lane's "solve it" and by the two drift sites that re-search after the
+ *  board moves under a live plan. */
+async function solveHeldGoals({ memoryDir, planHolder, gameConfig = DEFAULT_GAME_CONFIG }) {
   let ctx;
   try {
     ctx = await loadPlanContext(memoryDir);
@@ -11320,30 +11408,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
       via: "plan", deduced: "plan a move sequence (no state yet)", note: "plan lane — honest decline: empty state",
     };
   }
-  const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError } = await import("../domain/domain.mjs");
-
-  if (wantsLegal) {
-    let moves;
-    try {
-      moves = movesFromRules(state, domain, { scope: "taught" });
-    } catch (err) {
-      if (err instanceof PlanBudgetError) {
-        return { text: `too many possible moves to enumerate here (${err.message}) — narrow the classes involved.`, via: "plan", deduced: "list the legal moves (budget exceeded)", note: "plan lane — budget decline" };
-      }
-      throw err;
-    }
-    if (!moves.length) {
-      return { text: "no legal moves from the current state.", via: "plan", deduced: "list the legal moves (none)", note: "plan lane — legal moves: none" };
-    }
-    const lines = moves.map((m, i) => `  ${i + 1}. ${actionLabel(m.action.name, m.action.subject, m.action.target)}`);
-    return {
-      text: `${moves.length} legal move${moves.length === 1 ? "" : "s"} from here:\n${lines.join("\n")}`,
-      via: "plan", deduced: "list the legal moves from the current state",
-      note: "plan lane — movesFromRules over the current snapshot, one ply, no search",
-    };
-  }
-
-  // "solve it" — the full search.
+  const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError, maxSnapshotStep } = await import("../domain/domain.mjs");
   if (!planHolder.state?.goals?.length) {
     return {
       text: `no goal set yet — teach one first (e.g. "the goal is that every disk rests on peg-c").`,
@@ -11460,8 +11525,13 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
   // instead of an honest miss — see PLAN_WHY_SHORTEST_RE's own call site.
   const becauseText = `you taught me the "${ruleNames}" rule${domain.actions.length === 1 ? "" : "s"}`
     + `${ordering.length ? ` and ${ordering.length} ordering fact${ordering.length === 1 ? "" : "s"}` : ""}.`;
+  // The snapshot layer a fresh plan's step writes stack ABOVE: 0 on an
+  // untouched board, K after a prior plan left @stepK rows standing. Without it
+  // a replan's step 1 would write @step1 below the standing @stepK layer and be
+  // read as stale by stateFromFacts (which prefers the newest snapshot).
+  const stepBase = maxSnapshotStep(factRows, domain);
   planHolder.state = {
-    ...planHolder.state, actions, states: found.states, stepGoals, cursor: 0, done: false, goalText, becauseText,
+    ...planHolder.state, actions, states: found.states, stepGoals, cursor: 0, done: false, goalText, becauseText, stepBase,
   };
   const moveLines = actions.map((a, i) => `  ${i + 1}. ${a.label}`);
   // A piece with no taught position is an ASSUMPTION the plan silently makes
@@ -11497,23 +11567,27 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
 /** Execute the active plan's next move: append the successor snapshot's rows
  *  as @stepK facts, advance the cursor, and on the final step re-read the
  *  store and confirm the goal from the WRITTEN facts (never assumed). */
-async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
+async function executePlanStep(planHolder, { memoryDir, sessionId = "", gameConfig = DEFAULT_GAME_CONFIG }) {
   const ps = planHolder.state;
   const k = ps.cursor + 1;
+  // The snapshot index the board rows are written under: it stacks above any
+  // layer standing when the plan was minted (stepBase), while k stays the plan's
+  // own 1-of-N move counter. On a fresh board stepBase is 0 and snap === k.
+  const snap = (ps.stepBase ?? 0) + k;
   const action = ps.actions[ps.cursor];
   const rows = ps.states[k];
   const { appendFact, loadMemory, readFactRows } = await import("../adapters/memory/core.mjs");
   for (const row of rows) {
     await appendFact(memoryDir, {
-      subject: `${row.subject}@step${k}`, predicate: row.predicate, object: row.object,
-      provenance: `plan:${sessionId || "chat"}:step${k}`,
+      subject: `${row.subject}@step${snap}`, predicate: row.predicate, object: row.object,
+      provenance: `plan:${sessionId || "chat"}:step${snap}`,
     });
   }
   planHolder.state = { ...ps, cursor: k };
   const boardLine = rows.map((r) => `${r.subject} ${predicatePhrase(r.predicate)} ${r.object}`).join("; ");
   if (k < ps.actions.length) {
     return {
-      text: `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}`,
+      text: `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${snap}: ${boardLine}`,
       deduced: ps.stepGoals[k] ? ps.stepGoals[k] : `continue the plan (step ${k + 1} of ${ps.actions.length})`,
     };
   }
@@ -11525,12 +11599,31 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
   const domain = compileDomain(factRows, readRuleRows(payload));
   const finalState = stateFromFacts(factRows, domain);
   const holds = compileGoal(ps.goals, domain, { scope: "taught" })(finalState);
+  const movedLine = `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${snap}: ${boardLine}`;
+  if (holds) {
+    planHolder.state = { ...planHolder.state, done: true };
+    return {
+      text: `${movedLine}\n\ndone — ${ps.goalText} (checked against board@step${snap}'s written facts, not assumed).`,
+      deduced: `goal reached — ${ps.goalText} (${k} of ${k} steps)`,
+    };
+  }
+  // The final board doesn't reach the goal — the plan or the board drifted.
+  // Before settling for the miss, re-search from the board as it now stands: a
+  // found plan is disclosed and held (never a silent success), a miss keeps the
+  // honest failure and names the failed replan.
+  const replan = await solveHeldGoals({ memoryDir, planHolder, gameConfig });
+  if (replan.plan) {
+    const moves = replan.plan.actions.map((a, i) => `${i + 1}. ${a.label}`).join("; ");
+    return {
+      text: `${movedLine}\n\nBUT the goal does NOT hold against the written facts — the state drifted, so I replanned from board@step${snap}: ${moves}. Say "next" to continue.`,
+      deduced: "plan finished but the goal check failed — replanned from the drifted board",
+    };
+  }
+  const maxDepth = gameConfig?.planning?.maxDepth ?? DEFAULT_GAME_CONFIG.planning.maxDepth;
   planHolder.state = { ...planHolder.state, done: true };
   return {
-    text: holds
-      ? `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}\n\ndone — ${ps.goalText} (checked against board@step${k}'s written facts, not assumed).`
-      : `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}\n\nBUT the goal does NOT hold against the written facts — the plan or the state drifted; re-teach the state and solve again.`,
-    deduced: holds ? `goal reached — ${ps.goalText} (${k} of ${k} steps)` : "plan finished but the goal check failed",
+    text: `${movedLine}\n\nBUT the goal does NOT hold against the written facts — the plan or the state drifted; re-teach the state and solve again — I looked for a new plan from board@step${snap} and found none within ${maxDepth} moves.`,
+    deduced: "plan finished but the goal check failed",
   };
 }
 
@@ -12661,7 +12754,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // (4) #2 TEACH lane — a teach-shaped would-miss nothing above answered: route to
   // memory, or say what CAN be remembered (LOUD), never the wall / a silent drop.
   if (miss && recordMiss && via === "composed") {
-    const taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache, planHolder, graph });
+    const taught = await teachLane(query, { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig });
     if (taught) {
       answer = taught.text; via = taught.via; recordMiss = taught.miss;
       if (!taught.miss) dialogueLaneOverride = "teach";
@@ -14504,7 +14597,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   if (memoryDir && PLAN_NEXT_RE.test(workingLine)
       && planHolder.state && !planHolder.state.done
       && Array.isArray(planHolder.state.actions) && planHolder.state.cursor < planHolder.state.actions.length) {
-    const step = await executePlanStep(planHolder, { memoryDir, sessionId });
+    const step = await executePlanStep(planHolder, { memoryDir, sessionId, gameConfig: resolvedGameConfig });
     note(trace, `goal: ${step.deduced}`);
     note(trace, "lane: PLAN NEXT — executed the active plan's next move as an @stepK snapshot write");
     const stepTurn = plainTurn(workingLine, step.text, { via: "plan", focus });
