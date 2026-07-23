@@ -1,7 +1,8 @@
 # PLAN_CODE.md — non-LLM code generation and transformation in tmct
 
 > **STATUS (re-baselined 2026-07-22).** Track 1 (rule/frame synthesis, `synthbench/`) **SHIPPED
-> 2026-07-08**. Tracks 2–4 (JS repair, JS snippet synthesis, HTML/CSS synthesis) remain
+> 2026-07-08** as an offline harness; wiring a synthesized rule into the product path is still a
+> scoping spike (§2.1). Tracks 2–4 (JS repair, JS snippet synthesis, HTML/CSS synthesis) remain
 > **designs** (§8) — no implementation exists. The new headline proposal is
 > **Track 5 (§3): planning over code states** — a code change as a classical plan whose actions
 > are language-neutral transformation operators, materialised per language by an adaptor,
@@ -98,6 +99,18 @@ One backward-compatible product change shipped with it: the `ruleSet` param on
 This track is the repo's local proof of the survey's central claim (§4): a closed grammar plus
 a trusted verification oracle turns "code generation" into bounded search, with no model in the
 loop. Track 5 generalizes exactly this posture from router data to code.
+
+### 2.1 Open — synthesized rules in the product path (spike first)
+
+Track 1 is harness-side. `synthbench/rules/` synthesizes a novel `GOAL_RULE` deterministically at
+0% fabrication, but nothing in the product path loads a synthesized rule: `goal-reasoner.mjs` runs
+its two hand-written entries, and the `ruleSet` param's only overriding caller is the synthesis
+oracle itself.
+
+The oracle and the enumerator exist, so the missing piece is not machinery. It is the surface: what
+a taught-in-chat synthesis should look like, when a synthesized rule is allowed to fire against a
+user's own graph, and how its provenance reads back. That is a scoping spike before it is a build,
+and it is unscoped today.
 
 ---
 
