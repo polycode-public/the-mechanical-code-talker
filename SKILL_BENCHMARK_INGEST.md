@@ -148,8 +148,8 @@ Every cycle MUST satisfy:
 ## 2. The loop (one cycle; repeats until the ladder tops out or the operator stops)
 
 **Step 1 — READ.** Read the latest `BENCHMARK_INGEST_<version>.md` (its decision on frontiers and
-any deliberately-kept honest miss), the ingest-axis open items in `NEXT.md` (the verb-tier partitive
-subject; the DRT-lite typed record), and the current
+any deliberately-kept honest miss), the ingest-axis open items in `NEXT.md` (the DRT-lite typed
+record), and the current
 `ingestbench/cases.jsonl` rung counts. Decide whether this cycle is a pure measurement or targets a
 specific gated rung to push past.
 
@@ -184,8 +184,8 @@ receipt for everything above it.
   re-measurement as-is — a clean re-measurement is a legitimate, reportable outcome, not a null
   result.
 - **A rung you want to move past is gating, or the case set should grow deeper:** implement the next
-  extraction capability that unlocks it — add the subject-side partitive climb for `ING-3`, build the
-  DRT-lite typed discourse record for `ING-6`, or wire the live paraphrase generator/verifier for
+  extraction capability that unlocks it — build the DRT-lite typed discourse record for `ING-6`, or
+  wire the live paraphrase generator/verifier for
   `ING-7` (`PLAN_PARAPHRASE_VERIFICATION.md`'s phases). Regression-test (`npm test` green — no
   exception for extraction work), and re-run this cycle from Step 2 to confirm the target rung's gate
   now passes before moving further up the ladder.
@@ -214,7 +214,7 @@ than an automatic re-arm.
 ## 3. Cadence
 
 - One cycle per extraction capability. Size the cycle to the build, not a fixed time box — the
-  subject-side partitive climb or the typed discourse record is real work, not a lever toggle.
+  typed discourse record or the live paraphrase verifier is real work, not a lever toggle.
 - A pure re-measurement (no build) is a fast, cheap cycle on the deterministic tiers — worth running
   whenever `src/services/extract-facts.mjs`, `ingestReferenceArticle`, or the reference packs change,
   to catch a regression before it compounds.
@@ -266,8 +266,8 @@ The upper rungs are research horizons with named literatures (`ING-6` DRT-lite: 
 centering; `ING-9` full restatement: open IE and AMR-style semantic parsing), useful measurement
 headroom, graded never claimed. If every rung lands where expected, ship the re-measurement; if you
 want the ladder pushed further, implement the next extraction capability that unlocks the gating
-rung (the subject-side partitive climb, the DRT-lite record, the live
-paraphrase verifier), keep `npm test` green, and re-run to confirm the gate passes. Fan cycle work
+rung (the DRT-lite record, the live paraphrase
+verifier), keep `npm test` green, and re-run to confirm the gate passes. Fan cycle work
 that decomposes into independent workstreams out to background sub-agents under the coordinator model
 (`CLAUDE.md`), keeping the main chat free; write up the cycle as `BENCHMARK_INGEST_<version>.md`
 (headline delta, per-rung fidelity table, best-examples pick, predictions-vs-actuals, what's new, any

@@ -151,6 +151,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
   // folded — "a string instrument" is the class "string instrument", never
   // its modifier "string"; a single-word run keeps the plain lemma fold.
   const isNounish = (i) => pos[i] === "NOUN" || pos[i] === "PROPN";
+  const runLoOf = (i) => { let lo = i; while (lo - 1 >= 0 && isNounish(lo - 1)) lo -= 1; return lo; };
   const entityRunAt = (i) => {
     let lo = i;
     let hi = i;
@@ -171,6 +172,42 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
   const nearestEntity = (idx, step, blocked = null) => {
     const i = nearestEntityIndex(idx, step, blocked);
     return i === null ? null : entityRunAt(i);
+  };
+  // The subject-side mirror of the copula-object of-chain rule: when a found
+  // subject run is the inner noun of an of-chain ("the weight of all of the
+  // snow …"), climb to the outer run's nominal head ("weight"), bounded to two
+  // hops. A classifier head (type/kind/sort/…) reads THROUGH — a "kind of X"
+  // outer never becomes the subject, so the inner noun is kept. When the run is
+  // governed by "of" but no readable noun heads the chain (a mis-tagged head,
+  // e.g. "the top of the mountain …"), return null: an honest abstain, never the
+  // inner-noun confusion ("mountain", "snow"). A run not governed by "of" is
+  // returned unchanged. Returns a run-lo index to fold, or null to abstain.
+  const ofChainSkip = (k) => {
+    const p = pos[k];
+    return p === "DET" || p === "ADJ" || p === "ADV" || p === "NUM";
+  };
+  const climbSubjectRun = (found) => {
+    let lo = runLoOf(found);
+    for (let hop = 0; hop < 2; hop += 1) {
+      let g = lo - 1;
+      while (g >= 0 && ofChainSkip(g)) g -= 1;
+      if (g < 0 || values[g]?.toLowerCase() !== "of") return lo; // not an of-chain object
+      let k = g - 1;
+      while (k >= 0 && !isNounish(k) && (ofChainSkip(k) || values[k]?.toLowerCase() === "of")) k -= 1;
+      if (k < 0 || !isNounish(k)) return null; // no readable head — abstain
+      if (COPULA_OF_READ_THROUGH.has(String(values[k]).toLowerCase())) return lo; // classifier reads through
+      lo = runLoOf(k);
+    }
+    return lo;
+  };
+  // The subject resolution shared by the relation-verb tiers: a run climbed
+  // through its of-chain and folded, or null when the of-chain has no readable
+  // head (abstain rather than store the inner-noun confusion).
+  const climbedSubjectAt = (idx) => {
+    const found = nearestEntityIndex(idx, -1);
+    if (found === null) return null;
+    const climbed = climbSubjectRun(found);
+    return climbed === null ? null : entityRunAt(climbed);
   };
   // A relation verb whose nearest content token leftward (skipping adverbs and
   // the auxiliaries of its own verb complex) is a relative pronoun sits in a
@@ -216,11 +253,15 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
   };
   // The copula's own modal chain ("can be", "may be") is part of one verb
   // complex — the subject scan starts left of it, while a free-standing VERB
-  // on the way still voids the frame.
+  // on the way still voids the frame. An of-chain subject climbs to its head
+  // ("the weight of the snow is …" → weight); a mis-headed of-chain abstains.
   const copulaSubjectAt = (i) => {
     let k = i - 1;
     while (k >= 0 && pos[k] === "AUX") k -= 1;
-    return nearestEntity(k + 1, -1, COPULA_FRAME_BLOCKERS);
+    const found = nearestEntityIndex(k + 1, -1, COPULA_FRAME_BLOCKERS);
+    if (found === null) return null;
+    const climbed = climbSubjectRun(found);
+    return climbed === null ? null : entityRunAt(climbed);
   };
 
   const triples = [];
@@ -264,20 +305,24 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
       if (OPTIMISTIC_COPULAS.has(word)) continue;
       const verb = lookupVerb(lexicon, word);
       if (!verb) continue;
-      const subject = inRelativeFrame(i) ? copulaSubject : nearestEntity(i, -1);
+      const subject = inRelativeFrame(i) ? copulaSubject : climbedSubjectAt(i);
+      if (subject === null) continue;
       push(subject, predicateOf(verb), nearestEntity(i, +1));
     }
     return triples;
   }
 
-  // Pass 2b — no copula isa: the relation-verb tier over the whole sentence.
-  // VERB-tagged only, so a bare AUX ("Earth has …") in a non-frame sentence
-  // stays an honest miss.
+  // Pass 2b — no copula isa: the relation-verb tier over the whole sentence,
+  // climbing an of-chain subject to its head ("the weight of the snow creates
+  // pressure" → weight creates pressure, not snow). VERB-tagged only, so a bare
+  // AUX ("Earth has …") in a non-frame sentence stays an honest miss.
   for (let i = 1; i < values.length - 1; i += 1) {
     if (pos[i] !== "VERB") continue;
     const verb = lookupVerb(lexicon, values[i].toLowerCase());
     if (!verb) continue;
-    push(nearestEntity(i, -1), predicateOf(verb), nearestEntity(i, +1));
+    const subject = climbedSubjectAt(i);
+    if (subject === null) continue;
+    push(subject, predicateOf(verb), nearestEntity(i, +1));
   }
   return triples;
 }

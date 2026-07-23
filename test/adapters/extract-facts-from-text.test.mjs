@@ -338,6 +338,34 @@ test("optimisticTriples: a naming periphrasis stays copular; the copula's own mo
   );
 });
 
+test("optimisticTriples: a verb-tier of-chain subject climbs to its head, never the inner noun", () => {
+  // The nearest noun left of "creates" is the of-chain's inner noun ("snow");
+  // the grammatical subject is its head ("weight"), reached by a two-hop climb
+  // through "of all of the".
+  assert.deepEqual(
+    optimisticTriples("The weight of all of the snow creates pressure."),
+    [{ subject: "weight", predicate: "tmct:creates", object: "pressure" }],
+  );
+  // The same climb over a single "of".
+  assert.deepEqual(
+    optimisticTriples("The pressure of the ice creates heat."),
+    [{ subject: "pressure", predicate: "tmct:creates", object: "heat" }],
+  );
+  // A classifier head reads THROUGH — "a kind of X" outer never becomes the
+  // subject, so the inner noun is kept.
+  assert.deepEqual(
+    optimisticTriples("A kind of snow creates pressure."),
+    [{ subject: "snow", predicate: "tmct:creates", object: "pressure" }],
+  );
+});
+
+test("optimisticTriples: a copula-subject of-chain with no readable head abstains, never the inner-noun confusion", () => {
+  // "The top of the mountain is a crater" is not "mountain ⊑ crater": the
+  // subject is "top", which the tagger reads as a modifier, so no readable head
+  // fronts the of-chain and the frame abstains rather than store the inner noun.
+  assert.deepEqual(optimisticTriples("The top of the mountain is a crater."), []);
+});
+
 test("optimisticTriples: a non-relative multi-verb sentence contributes a fact per clause", () => {
   // Two coordinated clauses, each with its own nearest-entity-leftward subject:
   // one sentence, two facts, neither in a relative frame.
