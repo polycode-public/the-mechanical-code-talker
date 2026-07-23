@@ -156,7 +156,7 @@ tmct's own terms:
 Both are staged in the horizon docs and, until their capability lands, sit at the honest-miss floor
 exactly as the P-axis cells do — a judged miss, not a fabricated answer. Naming them keeps the
 scale's top calibrated against the horizon rather than implying C2 is the end.
-`REPORT_AGI_CHECK_IN.md` maps the same two absences (its open-discourse-record and other-minds
+`SKILL_BENCHMARK_AGI_SCALES.md` maps the same two absences (its open-discourse-record and other-minds
 items) at the classic-capability level.
 
 ## 2. The loop (one cycle; repeats without pausing)

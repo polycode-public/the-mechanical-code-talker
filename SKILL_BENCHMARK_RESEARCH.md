@@ -264,7 +264,7 @@ them yet:
 - **RES-7 — need-directed research.** A case carries a `need`: a question and the fact that answers it
   (`answeredBy`, a title in the fixture whose summary grounds the answer). A passing run researches
   until that fact is grounded, then stops — the queue serves the information need rather than a fixed
-  fan-out. This brushes autonomous goal formation (`REPORT_AGI_CHECK_IN.md`'s different-in-kind list:
+  fan-out. This brushes autonomous goal formation (`SKILL_BENCHMARK_AGI_SCALES.md`'s goal-origination scale:
   a run that pursues a goal rather than draining a queue). Candidate literatures: information foraging
   and information scent (Pirolli & Card 1999), the anomalous-state-of-knowledge model of an
   information need (Belkin 1980), question-driven retrieval. Until a tier is designed, these cases sit

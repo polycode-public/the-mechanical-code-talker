@@ -24,7 +24,7 @@ named for that meaning. Do not compare a SYN rung against CHATBENCH's CEFR grade
 | SYN-5 | Multi-step with replanning | a plan of three or more operators where a mid-plan tier-1 drift forces a replan from observed state, not an edit against a stale snapshot |
 | SYN-6 | Capability from spec | synthesize a NEW capability into the fixture app from a behavioral spec — planning + PBE composed, the spec's own acceptance tests as the oracle |
 | SYN-7 | Self-source change | a planned transformation on tmct's OWN non-core source, verified by tmct's own suite (the fixture is now the repo) |
-| SYN-8 | Bootstrapping | regenerate a working tmct SUBSYSTEM from its own specs and tests — the self-improvement capability `REPORT_AGI_CHECK_IN.md` names as different-in-kind |
+| SYN-8 | Bootstrapping | regenerate a working tmct SUBSYSTEM from its own specs and tests — the self-improvement capability `SKILL_BENCHMARK_AGI_SCALES.md` names as different-in-kind |
 
 **SYN-0…SYN-4 are the near ladder** — each maps to a track already designed in `PLAN_CODE.md` (SYN-0
 and SYN-3/4 to Track 5, SYN-1 to Track 3, SYN-2 to Track 2), and Track 1's shipped
@@ -34,7 +34,7 @@ unbuilt. **SYN-7…SYN-8 are horizons**, not walls: `SYN-7` needs the self-sourc
 §8 stages as a later step past the fixture milestone; `SYN-8` edges toward open-ended
 self-improvement, and the AGI-shaped version of that (improvement that rewrites the improver or the
 operator catalogue itself, not a regeneration from a fixed catalogue) begins at the miss wall
-`REPORT_AGI_CHECK_IN.md` marks. Candidate literatures for the horizons are the plan docs' own:
+`SKILL_BENCHMARK_AGI_SCALES.md` marks. Candidate literatures for the horizons are the plan docs' own:
 Opdyke's behavior-preservation preconditions (1992), CEGIS, equality saturation (egg/egglog/Ruler),
 APR/TBar template repair, and for self-hosting the plan-calculus lineage (Programmer's Apprentice,
 Rich & Waters). Until a rung is built it sits at the honest-miss floor as a **ceiling marker**,
@@ -381,7 +381,7 @@ examples for PBE, mutation-testing for repair, byte-determinism for transformati
 from SYN-0 (one observable edit, verified by running it) through SYN-4 (the §3.7 two-step refactor,
 suite green, drift caught, poisoned variant refused) to the SYN-7/SYN-8 horizons (self-source change,
 then bootstrapping a subsystem from its own specs and tests — the self-improvement capability
-`REPORT_AGI_CHECK_IN.md` names as different-in-kind, sitting at the miss wall until built, framed as a
+`SKILL_BENCHMARK_AGI_SCALES.md` names as different-in-kind, sitting at the miss wall until built, framed as a
 research horizon with the plan docs' own candidate literatures, never as a wall). If every rung lands
 where expected, ship the re-measurement; to push further, build the next `PLAN_CODE.md` track
 capability that unlocks the gating rung, keep `npm test` green, and re-run to confirm the gate passes.

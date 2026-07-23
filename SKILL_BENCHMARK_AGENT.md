@@ -43,7 +43,7 @@ with headroom, not a claim the router does either yet. The AGI won't sit in this
 rungs are where its agent-side capabilities would first register. They carry no cases in
 `agentbench/cases.jsonl` today: a horizon rung's cases get authored when a design for it exists
 (`PLAN_AGENTS.md` §5 — R1 for TOOL-9, R3 for TOOL-10), the same defer-until-buildable discipline
-INF-7/INF-8 hold in `SKILL_BENCHMARK_INFERENCE.md`. `REPORT_AGI_CHECK_IN.md` maps the same
+INF-7/INF-8 hold in `SKILL_BENCHMARK_INFERENCE.md`. `SKILL_BENCHMARK_AGI_SCALES.md` maps the same
 capabilities at the classic-AI level.
 
 The measurement contract (§1) applies to them unchanged, the zero-hallucination line included: a
