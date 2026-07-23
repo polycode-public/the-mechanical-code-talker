@@ -179,4 +179,24 @@ export async function exportFactsJsonl(memoryDir) {
   return serializeFactsJsonl(await loadMemory(memoryDir));
 }
 
-globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, registerResearchProvider, normFactTerm, vocabExampleHint, memoryStats, openPersistedStore, exportFactsJsonl, splitSentences: splitSentencesPreservingPaths };
+/**
+ * Every fact a "research <topic>" run has stored so far, in storage order —
+ * the exposure the "researched this session" panel needs and runTurn's
+ * result doesn't otherwise carry (a research turn's own record reports a
+ * per-topic FACT COUNT, research.mjs's own researchSnapshot, never the
+ * triples themselves). Reads the same provenance tags memoryStats already
+ * folds (readFactRows' `provenance`, the ' | '-joined compat string),
+ * filtered to the `research:<topicKey>@<depth>` prefix research.mjs's own
+ * `researchProvenanceTag` stamps every research-sourced fact with, rather
+ * than a second ingest-path computation — so this can never list a fact
+ * research didn't actually store.
+ */
+export async function researchedFactRows(memoryDir) {
+  const memory = await loadMemory(memoryDir);
+  const rows = readFactRows(memory);
+  return rows
+    .filter((row) => String(row.provenance || "").split(" | ").some((tag) => tag.startsWith("research:")))
+    .map((row) => ({ subject: row.subject, predicate: row.predicate, object: row.object }));
+}
+
+globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, registerResearchProvider, normFactTerm, vocabExampleHint, memoryStats, openPersistedStore, exportFactsJsonl, researchedFactRows, splitSentences: splitSentencesPreservingPaths };

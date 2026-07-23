@@ -142,6 +142,34 @@ test("a typed research request grounds the topic cited, then auto-plays the queu
   }
 });
 
+test("the researched-this-session panel lists each topic's own passage, its source link, and the facts it actually grounded", async () => {
+  const { context, page } = await openChatPage();
+  try {
+    await routeSimpleWikipedia(page);
+    await ask(page, "research owls, limit 2");
+    await page.waitForFunction(
+      () => Array.from(document.querySelectorAll("#messages .msg-row.assistant .bubble"))
+        .some((b) => /research on "owls" is complete/.test(b.textContent)),
+      null,
+      { timeout: RUN_TIMEOUT_MS },
+    );
+    await page.waitForFunction(
+      () => document.querySelectorAll("#researchedPanel .researched-item").length >= 3,
+      null,
+      { timeout: ANSWER_TIMEOUT_MS },
+    );
+    const items = await page.locator("#researchedPanel .researched-item").allInnerTexts();
+    assert.ok(items.some((t) => t.includes("Owl") && t.includes("An owl is a bird")), "the depth-0 topic's own retrieved passage is listed");
+    assert.ok(items.some((t) => t.includes("Bird") && t.includes("A bird is an animal")), "a queued topic's own retrieved passage is listed too");
+    const links = await page.locator("#researchedPanel .researched-link").evaluateAll((els) => els.map((el) => el.href));
+    assert.ok(links.some((href) => href.includes("simple.wikipedia.org/wiki/Owl")), "each entry links back to the article it actually read");
+    const factTexts = await page.locator("#researchedPanel .researched-facts li").allInnerTexts();
+    assert.ok(factTexts.some((t) => t.includes("owl") && t.includes("bird")), "the fact that passage grounded is listed alongside it, not just the passage");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the research row's own entry submits the request, and pause really stops the ticking until play resumes it", async () => {
   const { context, page } = await openChatPage();
   try {

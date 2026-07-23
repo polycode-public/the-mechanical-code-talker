@@ -588,8 +588,7 @@ ${THEME_TOKENS_CSS}
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1080px; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
-  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; flex-wrap: wrap; gap: .4em 1.2em; }
-  h1 { font-size: 1.4rem; margin: .3rem 0 .9rem; text-wrap: balance; }
+  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; flex-wrap: wrap; gap: .4em 1.2em; margin-bottom: .9rem; }
   button { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
   .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: .5rem 0; margin-bottom: 1.1rem; }
@@ -715,7 +714,6 @@ ${THEME_TOKENS_CSS}
 <body>
 <main>
   <div class="eyebrow"><span>tmct &middot; memory ledger</span><span id="counts"></span></div>
-  <h1>A graph you can read</h1>
   ${dashboardHtml(stats)}
   <div class="topbar">
     <nav class="crumbs" id="crumbs" aria-label="Focus trail"></nav>

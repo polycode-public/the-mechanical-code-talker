@@ -118,6 +118,26 @@ export function loadProgressLine(parts) {
 }
 
 /**
+ * The "researched this session" panel's own reading of a settled research
+ * turn's answer — the passage it read and where it read it, straight off
+ * research.mjs's own `renderResearchAnswer` shape (`term — summary (source:
+ * research article "title", Simple English Wikipedia, CC BY-SA 4.0 — url)`),
+ * never a second fetch: the citation text is already the retrieved passage,
+ * this just pulls its pieces apart for display. Returns null on anything
+ * else (a miss, a status/stop reply, or text that doesn't open this way) —
+ * an honest "nothing to show" rather than a guessed passage.
+ *
+ * Self-contained, `.toString()`-splice safe — the same discipline every
+ * other pure export in this module holds.
+ */
+export function parseResearchAnswer(answer) {
+  const text = String(answer || "");
+  const m = /^(.*?) — ([\s\S]*?) \(source: research article "([^"]+)", Simple English Wikipedia, CC BY-SA 4\.0 — (\S+)\)/.exec(text);
+  if (!m) return null;
+  return { term: m[1], passage: m[2], title: m[3], url: m[4] };
+}
+
+/**
  * The exported transcript as ONE Markdown document, in the SAME shape the
  * Node CLI/TUI's own .tmct/session-<id>.md writes (session-log-format.mjs,
  * spliced in beside this function below): a title naming the version and a
@@ -286,6 +306,24 @@ ${THEME_TOKENS_CSS}
   .statsPanel .forget-btn:hover { color: var(--ink); }
   .statsPanel .persist-note { color: var(--muted); font-size: .64rem; margin: .4rem 0 0; }
 
+  /* the "researched this session" panel: its own section under the memory
+     stats, filled from window.tmctChat.researchedFactRows() plus each
+     settled research turn's own answer text — the passage tmct actually
+     read, the article it read it from, and the facts that passage grounded.
+     A sibling section, not folded into #statsPanelStats — that div's own
+     re-render (renderStatsPanelInto) clears and rebuilds its children on
+     every turn, which would wipe this section's own history too if it lived
+     inside it. */
+  #researchedPanel:not(:empty) { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line); }
+  .statsPanel .researched-item { margin: 0 0 .9rem; padding-bottom: .8rem; border-bottom: 1px dashed var(--line); }
+  .statsPanel .researched-item:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+  .statsPanel .researched-title { display: block; color: var(--ink); font-weight: 600; }
+  .statsPanel .researched-passage { display: block; color: var(--muted); margin: .3rem 0; }
+  .statsPanel .researched-link { display: inline-block; margin: 0 0 .3rem; }
+  .statsPanel .researched-facts { margin: .3rem 0 0; padding-left: 1.1rem; }
+  .statsPanel .researched-facts li { margin: .12rem 0; }
+  .statsPanel .researched-none { color: var(--muted); font-style: italic; margin: .3rem 0 0; }
+
   @media (max-width: 860px) {
     .statsPanel { display: none; }
   }
@@ -361,8 +399,9 @@ ${THEME_TOKENS_CSS}
     </form>
     <div class="statusline" id="status">loading the engine&hellip;</div>
   </div>
-  <aside class="statsPanel" id="statsPanel" aria-label="This session's memory">
-    <p class="empty">loading memory stats&hellip;</p>
+  <aside class="statsPanel" id="statsPanel" aria-label="This session's memory and research">
+    <div id="statsPanelStats"><p class="empty">loading memory stats&hellip;</p></div>
+    <div id="researchedPanel"></div>
   </aside>
 <script src="./chat-browser.bundle.js"></script>
 <script>
@@ -371,6 +410,7 @@ ${THEME_TOKENS_CSS}
   const provBucketFor = ${provBucketFor.toString()};
   const provenanceChipFor = ${provenanceChipFor.toString()};
   const loadProgressLine = ${loadProgressLine.toString()};
+  const parseResearchAnswer = ${parseResearchAnswer.toString()};
   const sessionLogTimeOfDay = ${sessionLogTimeOfDay.toString()};
   const sessionLogHeaderMarkdown = ${sessionLogHeaderMarkdown.toString()};
   const sessionLogTurnMarkdown = ${sessionLogTurnMarkdown.toString()};
@@ -390,7 +430,8 @@ ${THEME_TOKENS_CSS}
   const inputEl = el("composerInput");
   const sendBtn = el("composerSend");
   const statusEl = el("status");
-  const statsPanelEl = el("statsPanel");
+  const statsPanelEl = el("statsPanelStats");
+  const researchedPanelEl = el("researchedPanel");
   const wikiModeFieldset = el("wikiMode");
   const wikiModeRadios = Array.prototype.slice.call(wikiModeFieldset.querySelectorAll('input[type="radio"]'));
   const synthSliderEl = el("synthSlider");
@@ -708,6 +749,98 @@ ${THEME_TOKENS_CSS}
     });
   }
 
+  // ---- researched this session: what "research <topic>" has actually read
+  // and grounded so far — each entry pairs the passage a settled research
+  // turn's own answer cites (parseResearchAnswer, off the SAME "(source:
+  // research article ...)" text the chat bubble already shows) with the real
+  // facts that turn stored, read back through window.tmctChat.
+  // researchedFactRows(memoryDir) rather than re-deriving them from the
+  // answer text — the citation names WHERE tmct read, the fact rows name
+  // WHAT it kept, and this panel never invents either from the other.
+  const researchedEntries = [];
+  const researchedFactKeysSeen = new Set();
+
+  function renderResearchedPanel() {
+    researchedPanelEl.textContent = "";
+    researchedPanelEl.appendChild(Object.assign(document.createElement("h2"), { textContent: "researched this session" }));
+    if (!researchedEntries.length) {
+      const empty = document.createElement("p");
+      empty.className = "empty";
+      empty.textContent = 'nothing yet — ask it to "research <a topic>" and what it reads, with the passage and the facts it grounded, lands here.';
+      researchedPanelEl.appendChild(empty);
+      return;
+    }
+    for (const entry of researchedEntries.slice(-8).reverse()) {
+      const item = document.createElement("div");
+      item.className = "researched-item";
+      const title = document.createElement("span");
+      title.className = "researched-title";
+      title.textContent = entry.title || "(untitled)";
+      item.appendChild(title);
+      if (entry.passage) {
+        const passage = document.createElement("span");
+        passage.className = "researched-passage";
+        passage.textContent = entry.passage;
+        item.appendChild(passage);
+      }
+      if (entry.url) {
+        const link = document.createElement("a");
+        link.className = "researched-link";
+        link.href = entry.url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "source \\u2197";
+        item.appendChild(link);
+      }
+      if (entry.facts.length) {
+        const list = document.createElement("ul");
+        list.className = "researched-facts";
+        for (const fact of entry.facts) {
+          const li = document.createElement("li");
+          li.textContent = fact.subject + " " + fact.predicate + " " + fact.object;
+          list.appendChild(li);
+        }
+        item.appendChild(list);
+      } else {
+        const none = document.createElement("p");
+        none.className = "researched-none";
+        none.textContent = "no new fact grounded from this passage.";
+        item.appendChild(none);
+      }
+      researchedPanelEl.appendChild(item);
+    }
+  }
+
+  /** After a settled, non-miss research turn: read back the facts that turn
+   *  actually stored (a set-diff against every research fact seen so far, so
+   *  a later step never re-lists an earlier one's facts) and pair them with
+   *  this turn's own cited passage. A turn that grounded nothing new (an
+   *  empty article, or a re-fetch of an already-known one) still gets its
+   *  own entry — the passage was still read, even where nothing new stuck. */
+  async function noteResearchLearned(result) {
+    if (result.research === undefined || !result.record || result.record.miss) return;
+    if (!window.tmctChat.researchedFactRows || !window.tmctChatSession) return;
+    let rows;
+    try { rows = await window.tmctChat.researchedFactRows(window.tmctChatSession.memoryDir); }
+    catch { return; }
+    const newFacts = [];
+    for (const row of rows) {
+      const key = row.subject + "|" + row.predicate + "|" + row.object;
+      if (researchedFactKeysSeen.has(key)) continue;
+      researchedFactKeysSeen.add(key);
+      newFacts.push(row);
+    }
+    const parsed = parseResearchAnswer(result.answer);
+    if (!parsed && !newFacts.length) return;
+    researchedEntries.push({
+      title: parsed ? parsed.title : "",
+      passage: parsed ? parsed.passage : "",
+      url: parsed ? parsed.url : "",
+      facts: newFacts,
+    });
+    renderResearchedPanel();
+  }
+
   // "supplement" (typed /wiki supplement only) has no radio; the statusline
   // still names it, read straight off the session's own liveReference getter
   // rather than the last radio the page itself set.
@@ -791,6 +924,7 @@ ${THEME_TOKENS_CSS}
       // that changed nothing costs at most one coalesced write.
       if (result.record && result.record.via !== "command") scheduleSave();
       await renderStatsPanel(); // a teach or learned-load turn grew this session's memory; a plain ask leaves it unchanged either way
+      await noteResearchLearned(result);
     } catch (err) {
       settleAssistantBubble(pendingRow,
         "something went wrong answering that (" + (err && err.message ? err.message : err) + ") \\u2014 try rephrasing",
@@ -1018,6 +1152,18 @@ ${THEME_TOKENS_CSS}
     addSystemLine("tmct \\u2014 the real engine, running in this page \\u2014 " + statsSummaryLine(stats, bandLabelFor)
       + "." + restoredNote + " Ask it something, or teach it a fact of your own.");
     await renderStatsPanel(stats);
+    // A restored session may already carry earlier research facts (they
+    // persist with everything else this session taught) — seed the
+    // seen-set from them so a later research turn only reports what's
+    // actually new, without fabricating passages for a visit this page
+    // was never open to read.
+    if (window.tmctChat.researchedFactRows) {
+      try {
+        const existingResearch = await window.tmctChat.researchedFactRows(window.tmctChatSession.memoryDir);
+        for (const row of existingResearch) researchedFactKeysSeen.add(row.subject + "|" + row.predicate + "|" + row.object);
+      } catch { /* best-effort seeding only — a fresh session has none to seed */ }
+    }
+    renderResearchedPanel();
     inputEl.placeholder = seedPayload ? 'try "what is a dog" or "list facts"' : window.tmctChat.vocabExampleHint(false);
     renderStatus();
     setBusy(false);
