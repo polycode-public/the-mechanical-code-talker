@@ -39,8 +39,8 @@ excluded. A claim in tmct that rests on the exact published wording needs the pu
 ## Why tmct reads this
 
 The conversational lanes classify what a visitor is doing — asking, teaching, greeting, correcting.
-When this entry was written tmct had **no intent vocabulary at all** (`CAPABILITIES_2.0.3.md` row
-139, `absent`), so this is the rare case where a standard was adopted before the code existed,
+When this entry was written tmct had **no intent vocabulary at all**, so this is the rare case
+where a standard was adopted before the code existed,
 instead of reconciled after. The adopted subset is listed at the end of this entry.
 
 ## The ten dimensions
