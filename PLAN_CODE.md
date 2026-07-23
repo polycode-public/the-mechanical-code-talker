@@ -24,12 +24,12 @@ in the product) is now the visible industry direction, not a private constraint.
 
 - **`synthbench/`** — Track 1's shipped harness: `phrasing/` (a `PHRASING_FRAMES`
   template-generalization synthesizer over `src/domain/interpret/normalize.mjs`'s frame table)
-  and `rules/` (`cases.jsonl`, `enumerate.mjs` — the bounded `GOAL_RULE` field-grammar
-  enumerator, `oracle.mjs` — verification through the real engine, `synthesize.mjs` — the CEGIS
+  and `rules/` (`cases.jsonl`, `enumerate.mjs`: the bounded `GOAL_RULE` field-grammar
+  enumerator, `oracle.mjs`: verification through the real engine, `synthesize.mjs`: the CEGIS
   loop). Reproduces both hand-written `GOAL_RULES` byte-for-byte and synthesized one novel rule,
   0% call fabrication, held-out-checked.
 - **`src/domain/router/`** — the substrate Track 1 synthesizes into: `registry.mjs` (closed
-  `KINDS` — `Symbol`/`Module`/`Class`/`Query`/`Kind`/`Package` — and `PRECOND` vocabularies;
+  `KINDS`, namely `Symbol`/`Module`/`Class`/`Query`/`Kind`/`Package`, and `PRECOND` vocabularies;
   every built-in capability `readOnly: true`), `goal-reasoner.mjs` (`GOAL_RULES` with two live
   entries, `coverage-invariant` and `cochange-risk-invariant`; `applicableRules`/`goalReason`
   both take an optional `ruleSet` param whose only overriding caller is the synthesis oracle),
@@ -266,9 +266,10 @@ extractor; (vii) the receipt. Each is separately testable; none touches tmct's o
 
 ## 4. The survey — fifty years of non-LLM program generation and transformation
 
-What each family does, where it went, and — the question this survey exists to answer — which
-historical stalls are revivable now that coding assistants and abundant compute can author and
-curate the rule bases, oracles, and corpora that were the bottleneck. Bibliography in §9.
+This section covers what each family does, where it went, and which historical stalls are
+revivable now that coding assistants and abundant compute can author and curate the rule bases,
+oracles, and corpora that were the bottleneck. That third question is the one this survey exists
+to answer. Bibliography in §9.
 
 ### 4.1 Transformational programming (1970s–90s)
 
@@ -395,11 +396,11 @@ scaled and improved ICSE 2024), Difftastic, diffsitter, RefactoringMiner-based A
 
 One stall recurs across §4.1, §4.3, §4.6, and APR's template family: **the knowledge was the
 bottleneck, not the engine.** Transformation catalogues, domain theories, cliché libraries,
-grammars, fix templates, oracles, labeled corpora — all hand-authored, all expensive, each
+grammars, fix templates, oracles, labeled corpora: all hand-authored, all expensive, each
 system dying or plateauing when its knowledge base stopped growing. That cost has now
 collapsed: coding assistants author rules/recipes/operators offline at marginal cost, and
 compute makes wide validation (fuzzing, SMT, test sweeps, Ruler-style rule inference) cheap.
-The engines these fields built — deterministic, auditable, replayable — were never the weak
+The engines these fields built (deterministic, auditable, replayable) were never the weak
 part. The revival move is therefore: keep the engines' discipline, refill their knowledge
 bases with assistant-authored, human-reviewed, statically-committed data. That is tmct's
 existing corpus posture applied to code, and Track 5 is its concrete instance.

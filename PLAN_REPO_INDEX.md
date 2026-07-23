@@ -24,8 +24,8 @@ of those four are already done. tmct already ships a versioned, OWL-grounded que
 layer (`src/domain/ask.mjs`, `src/domain/codegraph.mjs`, `src/adapters/repository-interface.mjs`), its own ontology already
 aligns to seonix's code-entity vocabulary term-for-term (`ontology/tmct-core.ttl`), and seonix
 already depends on tmct as a library and routes its own chat surface through tmct's (confirmed live
-in seonix's `package.json` and `src/chat-shim.mjs`). The one piece that is genuinely, completely
-absent from tmct is **parsing** — reading `.py`/`.js`/`.cs`/`.java` source off disk and turning it
+in seonix's `package.json` and `src/chat-shim.mjs`). The one piece that is completely
+absent from tmct is **parsing**: reading `.py`/`.js`/`.cs`/`.java` source off disk and turning it
 into graph entities. Every code graph tmct has ever operated on was produced by something else. This
 document's real scope is narrower than "port the repository indexing code" suggests: port the five
 language extractors and their orchestration, wire them into a producer function that already exists
@@ -234,7 +234,7 @@ the rewording happens.
 Split into the three things the operator's framing named, checked separately because they turn out
 to need very different amounts of new work:
 
-**1. Parsing — genuinely new work, the actual gap.** Port, in order of dependency weight (lightest
+**1. Parsing, the actual gap and the only new work here.** Port, in order of dependency weight (lightest
 first):
 
 - `seonix/src/extract_ast.py` (Python, stdlib `ast`, zero new dependencies) — first, because it adds
@@ -364,7 +364,7 @@ only. Exit criterion per language: the same conformance suite passes against a r
 language.
 
 **Phase 4 — doc reconciliation.** Reword every stale claim in Part 4's table (README, `docs/adapter-
-contract.md`, `src/adapters/source.mjs`, the `src/services/chat.mjs` live strings) now that they are genuinely false.
+contract.md`, `src/adapters/source.mjs`, the `src/services/chat.mjs` live strings) now that they are false.
 Follows the repo's own discipline: name the claim, state the supersession, reword —
 already done in Part 4 above; this phase is where the actual file edits land. `npm test` green
 throughout (some tests likely assert the old strings — expect to update pinned-string tests here).

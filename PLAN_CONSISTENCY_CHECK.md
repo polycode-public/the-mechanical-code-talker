@@ -12,7 +12,7 @@ gets **one shot** — the check is a gate, not a gradient.
 
 ## Why the grammar is the mechanism, not the check
 
-The check is the smaller half. The load-bearing part is that a claim must be **expressible**
+The check is the smaller half. What matters more is that a claim must be **expressible**
 before it can be asserted: if the caller may only say what tmct parses, and everything tmct
 parses is checkable against the store, then an unverifiable claim is *unsayable* rather than
 caught after the fact. A post-hoc validator filters bad output; a grammar prevents it being
@@ -143,7 +143,7 @@ So the surface is three groups with one discipline:
 
 The read/write split is the invariant. One writer, named, explicit; everything else reads.
 
-## Storage — already three backends, and the choice is load-bearing here
+## Storage — already three backends, and the choice matters here
 
 `MEMORY_BACKENDS = ["file", "memory", "sqlite"]` (`test/corpus/run-lane.mjs`;
 `src/adapters/memory/core.mjs` calls them Backend A/B/C). All three are live today:
@@ -184,7 +184,7 @@ alive between the feed and the check.
 
 That has consequences worth stating before anyone builds it:
 
-- **Session identity becomes load-bearing.** Two callers sharing one process must not share
+- **Session identity is what keeps two callers' stores apart.** Two callers sharing one process must not share
   one store, or caller A's fed context silently answers caller B's check — the corroboration
   failure, but across tenants. The handle is per-session; the key has to come from the
   transport.

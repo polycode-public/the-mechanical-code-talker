@@ -134,7 +134,7 @@ back as prose but never moves a prop. Two agent-relevant mechanisms:
 
 **Goal-directed autoplay** (`src/services/adventure-autoplay.mjs`): plays a loaded world by
 itself. It infers the goal from one generic marker fact (`mgx:is-objective`), reasons only over
-`exposedFacts` — the rooms this run has actually moved into — and makes every move as the same
+`exposedFacts` (the rooms this run has actually moved into), and makes every move as the same
 plain command string a human types, through the identical `adventureTurn`. It reports a stall the
 moment no further move is justified.
 
@@ -324,7 +324,7 @@ it isn't rediscovered from scratch); a cross-repo shared trust vocabulary (needs
 keep its LLM-decision confidence at persistence time first — an integration spec between two
 existing systems, not research).
 
-**R3 — frontier-open, record-not-commit:** open-world relevance bounding (the frame problem —
+**R3 — frontier-open, record-not-commit:** open-world relevance bounding (the frame problem:
 closed-world planning is shipped here; no settled deterministic engineering exists yet for the
 open-world side, so those requests land on the miss wall); Winograd-class coreference (same
 status); a merged cross-domain ontology at the ~2M-word scale (unattempted in the literature this

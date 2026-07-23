@@ -310,7 +310,7 @@ numbers when it lands; until then the bases are a pointer, not a baseline.
 - **L2 — char 3–5-grams on the CLINC150 OOS axis.** Measured: +11.5 OOS recall at equal
   accuracy. Slow index; CLINC-only (measured no gain on HWU64's closed-set task).
 - **L3 — wink-nlp lemma/token normalization in the matcher tokenizer.** Est. +1–2 on both
-  scales; also the first lever that makes the adapter genuinely tmct-flavoured rather
+  scales; also the first lever that makes the adapter tmct-flavoured rather
   than generic IR.
 - **L4 — WordNet synonym/hypernym expansion from `corpus/wordnet/wordnet-full.jsonl`.**
   Deterministic query-token expansion (synset siblings at a fixed weight discount)

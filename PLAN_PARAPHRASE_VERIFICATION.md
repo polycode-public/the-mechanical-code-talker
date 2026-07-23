@@ -22,8 +22,8 @@ surviving in git history only. It read:
 > contradict the other sentence-by-sentence.
 
 This document is the design for the paraphrase-verified-via-`syllogise.mjs` piece of that goal,
-which is genuinely open and not yet started. That one paragraph was the entire existing
-design — nothing deeper exists anywhere in the repo. The rest of this document works out how it
+which is open and not yet started. That one paragraph was the entire existing
+design; nothing deeper exists anywhere in the repo. The rest of this document works out how it
 actually has to run.
 
 ## Summary of the finding
