@@ -1,5 +1,5 @@
 {
-  "tmctVersion": "2.11.11",
+  "tmctVersion": "2.11.12",
   "viewport": {
     "width": 1024,
     "height": 600
@@ -120,7 +120,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "9162e4c6d7b6ab65c0e0d12677fb7df094649b77320f53c2f13fa27706a14276"
+      "sha256": "6bab6e1199be08de8b361302827e8330b6dfbb210fa383656bef533b15c199f6"
     }
   ]
 }
