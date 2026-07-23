@@ -17,7 +17,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 ## Open items
 
 - [ ] **one `SKILL_PLAIN_PROSE.md` pass**, commit, push, and a final roll — operator-instructed; the five edge-hunt rounds shipped as 2.11.2-2.11.6 (playtest logs 018-022).
-- [ ] a fresh live-session miss-wall re-map at the new baseline
 - [ ] research extraction stores at most one triple per sentence (the copula wins and the rest is skipped) — real facts a summary offers get dropped ("a volcano … has lava coming out from a magma chamber", "formed by the movement of tectonic plates"); widening to multiple triples per sentence needs its own design pass over `optimisticTriples`' one-triple contract (playtest 023)
 - [ ] the research queue is session-local but the reply promises "'research next' fetches the next one" — a new CLI session answers "no research is running"; either persist the queue under `.tmct/` or have the reply say the queue lives in this session (playtest 023)
 - [ ] the relation-verb extraction tier lets a partitive of-chain steal the subject — "The weight of all of the snow creates pressure" stores "snow creates pressure" (inner noun, not the head "weight"); the copula tier's three-way of-chain rule (playtest 025) is the model for a matching subject-side climb (playtest 025)
