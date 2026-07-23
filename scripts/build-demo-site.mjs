@@ -202,6 +202,23 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
   console.log(`wrote ${ingestPagePath}`);
 }
 
+// The research page: grow one in-memory graph three ways (research a term over
+// Simple English Wikipedia, teach by telling, ingest documents) and ask it a
+// question scoped by source. Its own dedicated browser bundle (the full turn
+// engine plus the ingest recognizer, same posture as the chat/ingest bundles
+// above — generated fresh per build, never committed), then the self-contained
+// page. It reuses ./chat-seed.json (built above) for its seed corpus bands and
+// ./reference-pack/ (built above) at runtime, so nothing new to embed here.
+{
+  const { main: buildResearchBundle } = await import(join(here, "build-research-bundle.mjs"));
+  const { outPath: researchBundlePath, size: researchBundleBytes } = await buildResearchBundle(SITE);
+  console.log(`wrote ${researchBundlePath} (${(researchBundleBytes / 1024).toFixed(0)} KB)`);
+  const { renderResearchHtml } = await import(join(ROOT, "src", "services", "research-viz.mjs"));
+  const researchPagePath = join(SITE, "research.html");
+  await writeF(researchPagePath, renderResearchHtml());
+  console.log(`wrote ${researchPagePath}`);
+}
+
 // The sprite tier meant to be looked at closely (400px, gradient/highlight
 // material shading, data/sprites-large/*.toml): excluded from the npm
 // package entirely (package.json's own "!data/sprites-large/"), so only
@@ -346,6 +363,7 @@ const PRECACHE = [
   "./index.html",
   "./chat.html",
   "./ingest.html",
+  "./research.html",
   "./chat-browser.bundle.js",
   "./sprites-browser.bundle.js",
   "./vendor/wink.js",
