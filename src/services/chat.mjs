@@ -11243,7 +11243,57 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
   const wantsSolve = PLAN_SOLVE_RE.test(q);
   const wantsLegal = LEGAL_MOVES_RE.test(q);
   if (!wantsSolve && !wantsLegal) return null;
+  if (wantsSolve) return solveHeldGoals({ memoryDir, planHolder, gameConfig });
 
+  // "what moves are legal now" — one ply off the current board, no search.
+  let ctx;
+  try {
+    ctx = await loadPlanContext(memoryDir);
+  } catch (err) {
+    return { text: `I can't read the taught domain: ${err?.message ?? err}`, via: "plan", deduced: "plan a move sequence", note: "plan lane — domain load failed" };
+  }
+  const { domain, state } = ctx;
+  if (!domain.actions.length) {
+    return {
+      text: `no action rules taught yet — teach the game first (e.g. "you can move a disk onto a peg").`,
+      via: "plan", deduced: "plan a move sequence (no action rules yet)", note: "plan lane — honest decline: no action rules",
+    };
+  }
+  if (!state.length) {
+    return {
+      text: `no current state taught yet — state the board first (e.g. "disk-1 rests on peg-a").`,
+      via: "plan", deduced: "plan a move sequence (no state yet)", note: "plan lane — honest decline: empty state",
+    };
+  }
+  const { movesFromRules, PlanBudgetError } = await import("../domain/domain.mjs");
+  let moves;
+  try {
+    moves = movesFromRules(state, domain, { scope: "taught" });
+  } catch (err) {
+    if (err instanceof PlanBudgetError) {
+      return { text: `too many possible moves to enumerate here (${err.message}) — narrow the classes involved.`, via: "plan", deduced: "list the legal moves (budget exceeded)", note: "plan lane — budget decline" };
+    }
+    throw err;
+  }
+  if (!moves.length) {
+    return { text: "no legal moves from the current state.", via: "plan", deduced: "list the legal moves (none)", note: "plan lane — legal moves: none" };
+  }
+  const lines = moves.map((m, i) => `  ${i + 1}. ${actionLabel(m.action.name, m.action.subject, m.action.target)}`);
+  return {
+    text: `${moves.length} legal move${moves.length === 1 ? "" : "s"} from here:\n${lines.join("\n")}`,
+    via: "plan", deduced: "list the legal moves from the current state",
+    note: "plan lane — movesFromRules over the current snapshot, one ply, no search",
+  };
+}
+
+/** Search the taught rules for a shortest sequence to the held goal(s) from the
+ *  CURRENT board fold (the newest @stepK snapshot, else the taught board).
+ *  Mints the plan onto planHolder.state and returns the plan-found reply on
+ *  success; on any missing precondition or an unreachable goal it returns the
+ *  matching honest decline and leaves planHolder.state untouched. Shared by the
+ *  plan lane's "solve it" and by the two drift sites that re-search after the
+ *  board moves under a live plan. */
+async function solveHeldGoals({ memoryDir, planHolder, gameConfig = DEFAULT_GAME_CONFIG }) {
   let ctx;
   try {
     ctx = await loadPlanContext(memoryDir);
@@ -11264,29 +11314,6 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
     };
   }
   const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError, maxSnapshotStep } = await import("../domain/domain.mjs");
-
-  if (wantsLegal) {
-    let moves;
-    try {
-      moves = movesFromRules(state, domain, { scope: "taught" });
-    } catch (err) {
-      if (err instanceof PlanBudgetError) {
-        return { text: `too many possible moves to enumerate here (${err.message}) — narrow the classes involved.`, via: "plan", deduced: "list the legal moves (budget exceeded)", note: "plan lane — budget decline" };
-      }
-      throw err;
-    }
-    if (!moves.length) {
-      return { text: "no legal moves from the current state.", via: "plan", deduced: "list the legal moves (none)", note: "plan lane — legal moves: none" };
-    }
-    const lines = moves.map((m, i) => `  ${i + 1}. ${actionLabel(m.action.name, m.action.subject, m.action.target)}`);
-    return {
-      text: `${moves.length} legal move${moves.length === 1 ? "" : "s"} from here:\n${lines.join("\n")}`,
-      via: "plan", deduced: "list the legal moves from the current state",
-      note: "plan lane — movesFromRules over the current snapshot, one ply, no search",
-    };
-  }
-
-  // "solve it" — the full search.
   if (!planHolder.state?.goals?.length) {
     return {
       text: `no goal set yet — teach one first (e.g. "the goal is that every disk rests on peg-c").`,
