@@ -6737,9 +6737,27 @@ const RELATION_WHO_ASK_RE =
  *  ([\w-]+) so the 's split is unambiguous. */
 const GENITIVE_WHO_ASK_RE =
   /^(?:who|what)\s+(?:is|are|was|were)\s+([\w-]+(?:\s+[A-Z][\w-]*)?)'s\s+([a-z][\w-]*)[?.!\s]*$/i;
-function matchGenitiveWhoAsk(q) {
-  const g = String(q).match(GENITIVE_WHO_ASK_RE);
-  return g ? [g[0], g[2], g[1]] : null;
+/** The fact lane reads the raw surface, so the ask path's contraction table
+ *  never reaches these readers — expand just the interrogative lead
+ *  ("who's"/"whos"/"what's"/"whats") so both relation-ask surfaces accept it.
+ *  "whose" never matches (the trailing "e" fails the boundary). */
+const WHO_WHAT_LEAD_CONTRACTION_RE = /^(who|what)'?s\s+/i;
+const expandWhoWhatLead = (q) => String(q).replace(WHO_WHAT_LEAD_CONTRACTION_RE, (full, w) => `${w} is `);
+/** The apostrophe-less genitive ("who is petes father") — accepted ONLY when
+ *  the stripped possessor is already a term some stored fact names, so a
+ *  plain plural or a pronoun ("who is his father") can never be mis-split
+ *  into a claimed-then-missed relation ask; this reader's own miss text is
+ *  definitive, never a fall-through, so the gate must sit at match time. */
+const GENITIVE_WHO_ASK_BARE_RE =
+  /^(?:who|what)\s+(?:is|are|was|were)\s+([\w-]{2,}?)s\s+([a-z][\w-]*)[?.!\s]*$/i;
+function matchGenitiveWhoAsk(q, isKnownFactTerm = null) {
+  const expanded = expandWhoWhatLead(q);
+  const g = expanded.match(GENITIVE_WHO_ASK_RE);
+  if (g) return [g[0], g[2], g[1]];
+  if (!isKnownFactTerm) return null;
+  const b = expanded.match(GENITIVE_WHO_ASK_BARE_RE);
+  if (!b) return null;
+  return isKnownFactTerm(b[1]) ? [b[0], b[2], b[1]] : null;
 }
 
 /** "list the descendants of ahab" — the REACHABILITY-SET list query: a
@@ -7184,7 +7202,7 @@ function withDeducedGoal(res, envelope, query) {
   if (!goal && res.generalVerbQuery) goal = TAUGHT_FACT_LOOKUP_GOAL;
   if (!goal) {
     const yesNo = q.match(RELATION_FACT_YESNO_RE);
-    const whoAsk = yesNo ? null : (q.match(RELATION_WHO_ASK_RE) || matchGenitiveWhoAsk(q));
+    const whoAsk = yesNo ? null : (expandWhoWhatLead(q).match(RELATION_WHO_ASK_RE) || matchGenitiveWhoAsk(q));
     const role = yesNo ? yesNo[2] : whoAsk ? whoAsk[1] : null;
     if (role && !ISA_IDIOM_ROLE_WORDS.has(role.toLowerCase())) goal = TAUGHT_FACT_LOOKUP_GOAL;
   }
@@ -8624,7 +8642,10 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
   // sharing it with (a0): RELATION_WHO_ASK_RE and RELATION_FACT_YESNO_RE never
   // both match the same query (one starts with "who", the other with
   // "is/are/was/were"), so the two blocks never run in the same call.
-  const whoAsk = qHedge.match(RELATION_WHO_ASK_RE) || matchGenitiveWhoAsk(qHedge);
+  const whoAsk = expandWhoWhatLead(qHedge).match(RELATION_WHO_ASK_RE) || matchGenitiveWhoAsk(qHedge, (base) => {
+    const known = factTermVariants(normFactTerm, base);
+    return rows.some((f) => known.has(f.subject) || known.has(f.object));
+  });
   if (whoAsk) {
     const relationName = whoAsk[1].trim().toLowerCase();
     const rawObject = whoAsk[2].trim();
@@ -8684,7 +8705,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
       // oddly as "I don't know ANYONE who is the capital…" — the neutral
       // "nothing/anyone" split below matches whichever interrogative word the
       // query actually used.
-      const isWhatAsk = /^what\b/i.test(qHedge);
+      const isWhatAsk = /^what\b/i.test(expandWhoWhatLead(qHedge));
       return {
         text: isWhatAsk
           ? `I don't know what the ${relationName} of ${object} is from what you've told me.`
