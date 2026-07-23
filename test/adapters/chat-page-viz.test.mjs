@@ -6,7 +6,7 @@
 // per-message provenance chip) is built on.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { renderChatHtml, provenanceChipFor, loadProgressLine, transcriptMarkdown } from "../../src/services/chat-page-viz.mjs";
+import { renderChatHtml, provenanceChipFor, loadProgressLine, transcriptMarkdown, parseResearchAnswer } from "../../src/services/chat-page-viz.mjs";
 import { provBucketFor } from "../../src/services/ledger-viz.mjs";
 import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown } from "../../src/services/session-log-format.mjs";
 
@@ -348,4 +348,54 @@ test("renderChatHtml: the brand line renders as typed — lowercase, single elem
   assert.ok(!html.includes("<h1>"));
   const eyebrowRule = html.match(/\.eyebrow \{[^}]*\}/)?.[0] ?? "";
   assert.ok(!eyebrowRule.includes("text-transform"), "eyebrow must not transform the brand's case");
+});
+
+// ---- parseResearchAnswer: the researched panel's own reading of a settled
+// research turn's answer text, off research.mjs's own renderResearchAnswer
+// citation shape — never a second fetch.
+
+test("parseResearchAnswer: pulls the passage, article title and source url out of a research turn's own cited answer", () => {
+  const answer = 'owl — an owl is a bird of prey. (source: research article "Owl", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Owl?oldid=123)\nstored 2 facts from "Owl". queued 3 linked topics.';
+  const parsed = parseResearchAnswer(answer);
+  assert.deepEqual(parsed, {
+    term: "owl",
+    passage: "an owl is a bird of prey.",
+    title: "Owl",
+    url: "https://simple.wikipedia.org/wiki/Owl?oldid=123",
+  });
+});
+
+test("parseResearchAnswer: a miss, a status line, or any text that isn't this citation shape reads as null, never a guessed passage", () => {
+  assert.equal(parseResearchAnswer('I couldn\'t ground "zorblatt" from Simple English Wikipedia just now — no matching article. Nothing was stored.'), null);
+  assert.equal(parseResearchAnswer('research on "owls" is complete — 3 topics grounded, 5 facts stored.'), null);
+  assert.equal(parseResearchAnswer(""), null);
+  assert.equal(parseResearchAnswer(undefined), null);
+});
+
+// ---- renderChatHtml: the researched-this-session panel ---------------------
+
+test("renderChatHtml: a second docked section, seeded empty, sits alongside the memory stats — its own render survives a stats re-render rather than being wiped by it", () => {
+  const html = renderChatHtml();
+  assert.match(html, /id="statsPanelStats"/, "the stats panel moved into its own nested div");
+  assert.match(html, /id="researchedPanel"/, "the researched panel is a SIBLING div, not nested inside the stats div");
+  assert.match(html, /const statsPanelEl = el\("statsPanelStats"\);/);
+  assert.match(html, /const researchedPanelEl = el\("researchedPanel"\);/);
+});
+
+test("renderChatHtml: the researched panel reads real fact rows through window.tmctChat.researchedFactRows, never re-deriving them from the answer text", () => {
+  const html = renderChatHtml();
+  assert.match(html, /window\.tmctChat\.researchedFactRows\(window\.tmctChatSession\.memoryDir\)/);
+  assert.match(html, /const parseResearchAnswer = /, "the pure citation parser is spliced in, not reimplemented");
+});
+
+test("renderChatHtml: every settled, non-miss research turn is offered to the researched panel", () => {
+  const html = renderChatHtml();
+  assert.match(html, /await noteResearchLearned\(result\);/);
+  assert.match(html, /if \(result\.research === undefined \|\| !result\.record \|\| result\.record\.miss\) return;/);
+});
+
+test("renderChatHtml: the researched panel renders its own heading and an honest empty state before anything has been researched", () => {
+  const html = renderChatHtml();
+  assert.match(html, /textContent: "researched this session"/);
+  assert.match(html, /nothing yet — ask it to "research/);
 });

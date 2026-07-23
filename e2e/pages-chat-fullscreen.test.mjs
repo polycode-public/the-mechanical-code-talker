@@ -161,8 +161,8 @@ test("the stats panel opens on the seed's own band counts, and they sum to the t
     const headings = await panel.locator("h2").allInnerTexts();
     assert.deepEqual(
       headings.map((h) => h.toLowerCase()),
-      ["this session's memory", "taught this session"],
-      "the panel carries its two sections in order",
+      ["this session's memory", "taught this session", "researched this session"],
+      "the panel carries its three sections in order",
     );
 
     const rows = await panel.locator(".band-row").evaluateAll((els) =>
