@@ -2,13 +2,12 @@
 
 > **STATUS (re-baselined 2026-07-22).** Track 1 (rule/frame synthesis, `synthbench/`) **SHIPPED
 > 2026-07-08**. Tracks 2–4 (JS repair, JS snippet synthesis, HTML/CSS synthesis) remain
-> **sign-off-gated designs** (§8) — no implementation exists. The new headline proposal is
+> **designs** (§8) — no implementation exists. The new headline proposal is
 > **Track 5 (§3): planning over code states** — a code change as a classical plan whose actions
 > are language-neutral transformation operators, materialised per language by an adaptor,
 > verified against real tests, with the code graph re-indexed between steps. Track 5 is grounded
 > in machinery the repo already ships (the planning lane, the code graph, the Track 1 oracle
-> posture) and in the survey of fifty years of non-LLM program transformation in §4. It is also
-> sign-off-gated.
+> posture) and in the survey of fifty years of non-LLM program transformation in §4.
 
 **Ground rules.** tmct's constitution: no LLM in the product path, ever (`CLAUDE.md`). Synthesis
 and transformation here mean **search + verification over closed grammars and closed operator
@@ -97,7 +96,7 @@ loop. Track 5 generalizes exactly this posture from router data to code.
 
 ---
 
-## 3. Track 5 (headline proposal, sign-off-gated) — planning over code states
+## 3. Track 5 (headline proposal) — planning over code states
 
 The operator's target: use the classical-planning machinery tmct already ships to plan over
 **code states**. A code change is a PLAN. Its actions are **language-neutral code
@@ -209,7 +208,7 @@ anything, and until the catalogue is big enough for spelling variants to matter,
 right k. Both readings keep the product deterministic; neither ever samples.
 
 Exists today: nothing edits source (by standing policy, tmct only reads). This stage is the
-new capability category §8 gates. Partial precedent: `src/adapters/source-slice.mjs`
+new capability category §8 names. Partial precedent: `src/adapters/source-slice.mjs`
 locates source ranges for entities, which is the read half of site location.
 
 ### 3.5 Verification tiers
@@ -432,7 +431,7 @@ the product. tmct is not swimming against the current here; it is early to the d
 
 ---
 
-## 5. Track 2 (sign-off-gated) — goal-directed program repair: planning over mutation actions (JS)
+## 5. Track 2 — goal-directed program repair: planning over mutation actions (JS)
 
 Design retained from the 2026-07-16 revision, compressed. Start from an existing function plus
 a target expressed as test executions (failing tests to flip, green set to keep). This is APR,
@@ -467,10 +466,10 @@ are half-observable; Track 5 plans over behavior-preserving transformations wher
 declarable as graph deltas. Track 5's tier-1 check and Track 2's predicted-vs-actual ledger
 are the same instrument.
 
-## 6. Tracks 3 and 4 (sign-off-gated) — from-scratch JS and HTML/CSS synthesis
+## 6. Tracks 3 and 4 — from-scratch JS and HTML/CSS synthesis
 
 Compressed; specs and staging retained in git history (this file, pre-2026-07-22) and
-re-expanded at sign-off if these tracks proceed.
+re-expanded if these tracks proceed.
 
 - **Track 3 — pure-JS snippets from I/O examples.** Classic PBE over closed operator families
   (arith, compare/ternary, string, array), bottom-up enumeration depth-capped at
@@ -493,19 +492,18 @@ and Track 5's verify stage when it runs a fixture's test suite — execute candi
 code, and Playwright is the unified answer: real OS-process isolation, one environment that
 runs JS (`page.evaluate`), renders DOM/CSS (`page.content`, `getComputedStyle`), already
 pinned (1.61.1) in `devDependencies` with Chromium installed by the e2e tier — no new
-dependency, but a NEW USE of an existing one (running code the search wrote), which is part of
-what §8 gates. Track 5's tier-2/3 test runs execute the fixture's own suite via its own runner
-in a subprocess, the mildest form of this surface, named at sign-off all the same.
+dependency, but a NEW USE of an existing one (running code the search wrote), which §8
+records. Track 5's tier-2/3 test runs execute the fixture's own suite via its own runner
+in a subprocess, the mildest form of this surface.
 
-## 8. Sign-off gates — per track, not as a bundle
+## 8. Risk profiles — per track, not as a bundle
 
 Every built-in registry capability reads the graph (`readOnly: true`, hardcoded). Taught action
 families cross that line for world state only, never auto-dispatched. Synthesis and
 transformation are the first capability category to generate or MODIFY source artifacts — a
-first for the product's ethos, not an incremental feature. The tracks' risk profiles differ
-and are approved separately:
+first for the product's ethos, not an incremental feature. The tracks' risk profiles differ:
 
-| Track | The ask | Sandbox | New surface |
+| Track | Scope | Sandbox | New surface |
 |---|---|---|---|
 | 1 | shipped 2026-07-08 | none | none (data through trusted code) |
 | 5 | plan + materialise + verify + re-index over a FIXTURE repo | subprocess test runs | first source-editing capability (adaptor); depends on PLAN_REPO_INDEX's JS extractor |
@@ -513,8 +511,8 @@ and are approved separately:
 | 3 | from-scratch JS snippets | Playwright | candidate code execution |
 | 4 | HTML/CSS fragments | Playwright | rendering-based verification, fuzzier than anything measured today |
 
-Track 5's gate is the operator's to open, with its milestone (§3.7) scoped to a fixture repo —
-tmct's own source is not a Track 5 target until a separate, later sign-off says so. Risks
+Track 5's milestone (§3.7) is scoped to a fixture repo; extending it to tmct's own source is a
+later, separate step. Risks
 carried from the prior revision, all still live: PBE overfitting (held-out checks mandatory);
 equivalence signals are approximations, never proofs; search spaces grow with every grammar,
 fastest where verification is fuzziest; caches fail closed; no LLM in any search loop, even

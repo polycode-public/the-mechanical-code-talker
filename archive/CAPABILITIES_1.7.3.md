@@ -208,7 +208,7 @@ each re-checking cited evidence directly against the real code at this pin — n
 | 44 | Towers-of-Hanoi goal-directed planning loop | claimed-only | `PLAN_HANOI.md:3` "Status: RESEARCH / DESIGN — not yet implemented" | unchanged since `CAPABILITIES_1.6.0.md` |
 | 45 | "I am thinking of a number" closed-loop game | claimed-only | `PLAN_GUESS_NUMBER.md:3` "Status: RESEARCH / DESIGN — not yet implemented" | unchanged since `CAPABILITIES_1.6.0.md` |
 | 46 | Program synthesis Track 1 (`GOAL_RULE` synthesis) | implemented | `synthbench/{phrasing,rules}/` | unchanged since `CAPABILITIES_1.6.0.md` |
-| 47 | Program synthesis Tracks 2-4 (Playwright sandbox) | claimed-only, sign-off-gated | no `playwright` in `package.json` | unchanged since `CAPABILITIES_1.6.0.md` |
+| 47 | Program synthesis Tracks 2-4 (Playwright sandbox) | claimed-only | no `playwright` in `package.json` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 48 | Completions pipeline Stage 0 (broad search + grouping) | implemented | `src/domain/completions/search.mjs`, `group.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 49 | Completions pipeline Stage 2 (extractive ranking) | implemented | `src/domain/completions/rank.mjs` | unchanged since `CAPABILITIES_1.6.0.md` |
 | 50 | Completions pipeline wired into a user-facing chat answer path | implemented, gap closed | `src/services/chat.mjs:6475` `completionsRescueAnswer` (was `:6177`) | evidence line shifted; wiring unchanged |
@@ -395,7 +395,7 @@ before or the same day the finding was written — this doc's hunt works), 1 has
 - **Done**: Track 1, `GOAL_RULE`/`PHRASING_FRAMES` synthesis, `synthbench/{phrasing,rules}/`.
 - **Doing**: none.
 - **Todo**: Tracks 2-4 (bounded-mutation JS repair, HTML/CSS-fragment synthesis via a Playwright
-  sandbox), each gated on its own separate operator sign-off.
+  sandbox).
 
 ### `PLAN_DID_YOU_SEE_HER_DUCK.md`
 

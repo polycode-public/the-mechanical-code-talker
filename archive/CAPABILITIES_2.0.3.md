@@ -145,7 +145,7 @@ decision`, unchanged since refresh 1.
 | 44 | Towers-of-Hanoi goal-directed planning loop | **implemented** | row `planning.solve.hanoi` — teaches 22 facts/rules, then solves to the 7-move optimum with the plan attached | **status change, the biggest in range**: was `claimed-only`. `PLAN_HANOI.md` archived as delivered (`8fec87c`); the 1.7.3 cite is gone and was wrong |
 | 45 | "I am thinking of a number" closed-loop game | claimed-only | `PLAN_GUESS_NUMBER.md:3` RESEARCH/DESIGN | unchanged — zero hits for guesser/thinker/bisection |
 | 46 | Program synthesis Track 1 (`GOAL_RULE` synthesis) | implemented | `test/adapters/synth-rules.test.mjs` reproduces both hand-written rules byte-for-byte on held-out examples | unchanged |
-| 47 | Program synthesis Tracks 2-4 (sandbox) | claimed-only, sign-off-gated | `PLAN_CODE.md:26` sign-off gate | **evidence claim now false as written**: "no playwright in package.json" — playwright 1.61.1 is a devDep (`package.json:74`), used only by the browser e2e tier. Status holds for a different reason |
+| 47 | Program synthesis Tracks 2-4 (sandbox) | claimed-only | `PLAN_CODE.md:26` | **evidence claim now false as written**: "no playwright in package.json" — playwright 1.61.1 is a devDep (`package.json:74`), used only by the browser e2e tier. Status holds for a different reason |
 | 48 | Completions Stage 0 (broad search + grouping) | implemented | `test/adapters/completions-stage0.test.mjs:90,109,131,161,183` | unchanged |
 | 49 | Completions Stage 2 (extractive ranking) | implemented | `test/adapters/completions-stage2.test.mjs` | unchanged |
 | 50 | Completions wired into a user-facing answer | implemented | `test/adapters/chat-completions-wiring.test.mjs:56,77,95,111` | line dead (`:6475` → `:8596`) |
@@ -422,7 +422,7 @@ the tree has overtaken.
 #### `PLAN_CODE.md` — pinned at `6d6fff8`
 - **Done** — Track 1, all five staged units: `synthbench/rules/*`, `synthbench/phrasing/*`, pinned by `test/adapters/synth-{rules,phrasing}.test.mjs` (16 tests). The default-preserving `ruleSet` seam is real (`goal-reasoner.mjs:86,165`).
 - **Doing** — none.
-- **Todo** — Tracks 2-4, each still gated on operator sign-off. **§5's load-bearing premise has gone stale**: it argues tmct carries no browser-adjacent dependency, but `package.json:74` now has playwright 1.61.1 for the browser e2e tier. The dependency-weight tradeoff it stages as the big ask has already been paid for an unrelated reason. What is still a first for this repo is the untrusted-code-execution surface (§8).
+- **Todo** — Tracks 2-4. **§5's load-bearing premise has gone stale**: it argues tmct carries no browser-adjacent dependency, but `package.json:74` now has playwright 1.61.1 for the browser e2e tier. The dependency-weight tradeoff it stages as the big ask has already been paid for an unrelated reason. What is still a first for this repo is the untrusted-code-execution surface (§8).
 
 #### `PLAN_CONSISTENCY_CHECK.md` — pinned at `0f8fb61`
 - **Done** — nothing built. Its "mostly assembly" inventory resolves.

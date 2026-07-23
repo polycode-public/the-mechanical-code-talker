@@ -192,7 +192,7 @@ three newer, unshipped tracks about writing and testing arbitrary program code i
   "mutation.*template|GenProg|APR|program.repair"` across every `.mjs` file returns zero hits. All
   three depend on a sandboxed headless browser (`PLAN_CODE.md` §5). The dependency half of that ask
   is already paid: tmct pins `playwright` 1.61.1 in `devDependencies` and installs Chromium via
-  `npm run e2e:browsers` for the browser e2e tier. What Tracks 2-4 still need operator sign-off on is
+  `npm run e2e:browsers` for the browser e2e tier. What is new in Tracks 2-4 is
   the use, not the install — tmct's first untrusted-code-execution surface (`PLAN_CODE.md` §8).
 
 **Why this matters for "move PLAN_CODE.md into seonix":** the dependency leg of this argument is
@@ -394,8 +394,8 @@ document.
   extraction is ported; flagged, not designed.
 - **Dependency footprint growth.** tmct's current dependency list is deliberately small (`ink`,
   `react`, `smol-toml`, `wink-eng-lite-web-model`, `wink-nlp`). Adding `typescript`, `tree-sitter` and
-  its language grammars is a real, measurable change to that footprint — worth an explicit sign-off
-  moment before Phase 3, similar to the sign-off `PLAN_CODE.md` itself required for Playwright.
+  its language grammars is a real, measurable change to that footprint — worth stating plainly
+  before Phase 3.
 - **Unverified, needs follow-up:** the exact content of seonix's `PLAN_LARGE_CODEBASE.md`,
   `PLAN_TUNE_SEARCH_SPACE.md`, and the other seonix-side plan docs found during this research but not
   read in full — one of them may already be the natural home for PLAN_CODE.md's Tracks 2-4 once it

@@ -145,7 +145,7 @@ their stable evidence identifier and restate the status.
 | 44 | Towers-of-Hanoi goal-directed planning loop | implemented | row `planning.solve.hanoi` | unchanged |
 | 45 | "I am thinking of a number" closed-loop game | implemented | lane `test/corpus/games/guess-number.test.mjs` — **13/13 re-run** | unchanged status; new evidence — `651395e` retrofits Play/pause/step/reset onto the demo rail (row 188), closing `PLAN_SPIDER_FLY.md` §12's last open step |
 | 46 | Program synthesis Track 1 (`GOAL_RULE` synthesis) | implemented | `test/adapters/synth-rules.test.mjs` | unchanged |
-| 47 | Program synthesis Tracks 2-4 (sandbox) | claimed-only, sign-off-gated | `PLAN_CODE.md` sign-off gate; zero mutation/repair code confirmed absent | unchanged |
+| 47 | Program synthesis Tracks 2-4 (sandbox) | claimed-only | `PLAN_CODE.md`; zero mutation/repair code confirmed absent | unchanged |
 | 48 | Completions Stage 0 (broad search + grouping) | implemented | `test/adapters/completions-stage0.test.mjs` | unchanged |
 | 49 | Completions Stage 2 (extractive ranking) | implemented | `test/adapters/completions-stage2.test.mjs` | unchanged |
 | 50 | Completions wired into a user-facing answer | implemented | `test/adapters/chat-completions-wiring.test.mjs` | unchanged |
@@ -521,7 +521,7 @@ Re-checked against the tree at this pin.
 - **`PLAN_CLASS_QUERY.md`** — RESEARCH/DESIGN, not implemented, unchanged. All 5 phases still open.
 - **`PLAN_PARAPHRASE_VERIFICATION.md`** — RESEARCH/DESIGN, general verifier not built, unchanged. The one
   narrow slice already shipped at 2.6.0 (`verifySubClassParaphrase`) is confirmed still present.
-- **`PLAN_CODE.md`** — Track 1 SHIPPED (row 46); Tracks 2-4 sign-off-gated (row 47), unchanged.
+- **`PLAN_CODE.md`** — Track 1 SHIPPED (row 46); Tracks 2-4 designs only (row 47), unchanged.
 - **`PLAN_NLU_BENCHMARKS.md`** — RESEARCH/DESIGN, nothing live, unchanged. Its own "as-is estimate"
   section cites stale counts (15 registry capabilities, 22 declared tools — both now 16 and 23); flagged
   to the coordinator rather than edited, outside this audit's scoped deliverable.

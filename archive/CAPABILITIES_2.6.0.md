@@ -138,7 +138,7 @@ their stable evidence identifier and restate the status.
 | 44 | Towers-of-Hanoi goal-directed planning loop | implemented | row `planning.solve.hanoi` | unchanged |
 | 45 | "I am thinking of a number" closed-loop game | **implemented** | lane `test/corpus/games/guess-number.test.mjs` — 12 rows, **13/13 at this pin** (`/tmp/b5-rows1-66-guessnum.log`): keys `games.guess-number.{guesser,thinker,bounds,contradiction,exclusive,aside}`; deterministic secret via the `TMCT_GAME_SECRET` seam; the browser demo drives the guesser to a win inside the 7-guess bound (`e2e/chat-browser-bundle.test.mjs`) | **MOVED**: `claimed-only` → `implemented`. Closed-loop belief narrowing over hidden state, both seats, on the plan slot (`63aa556`); a hint-offer opening hands tmct the guessing seat (`9c0fb6b`). `PLAN_GUESS_NUMBER.md` is BUILT |
 | 46 | Program synthesis Track 1 (`GOAL_RULE` synthesis) | implemented | `test/adapters/synth-rules.test.mjs` | unchanged |
-| 47 | Program synthesis Tracks 2-4 (sandbox) | claimed-only, sign-off-gated | `PLAN_CODE.md` sign-off gate | unchanged |
+| 47 | Program synthesis Tracks 2-4 (sandbox) | claimed-only | `PLAN_CODE.md` | unchanged |
 | 48 | Completions Stage 0 (broad search + grouping) | implemented | `test/adapters/completions-stage0.test.mjs` | unchanged |
 | 49 | Completions Stage 2 (extractive ranking) | implemented | `test/adapters/completions-stage2.test.mjs` | unchanged |
 | 50 | Completions wired into a user-facing answer | implemented | `test/adapters/chat-completions-wiring.test.mjs` | unchanged |
@@ -477,7 +477,7 @@ this audit, so the three BUILT plans below are archive candidates once the in-fl
   false; fixed since).
 - **`PLAN_CLASS_QUERY.md`** / **`PLAN_ADVENTURE.md`** — RESEARCH/DESIGN, both reconciled in-body
   against what shipped generically since; remaining scope open.
-- **`PLAN_CODE.md`** — Track 1 SHIPPED (row 46); Tracks 2-4 sign-off-gated (row 47).
+- **`PLAN_CODE.md`** — Track 1 SHIPPED (row 46); Tracks 2-4 designs only (row 47).
 - **`PLAN_MUD.md`, `PLAN_NLU_BENCHMARKS.md`, `PLAN_REPO_INDEX.md`, `PLAN_CHILD_CORPUS.md`,
   `PLAN_PARAPHRASE_VERIFICATION.md`** — RESEARCH/DESIGN, nothing live, unchanged. Note for
   `PLAN_NLU_BENCHMARKS.md`: row 139's flip gives it the intent-label vocabulary it assumed absent.

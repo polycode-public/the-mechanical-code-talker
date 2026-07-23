@@ -138,7 +138,7 @@ their stable evidence identifier and restate the status.
 | 44 | Towers-of-Hanoi goal-directed planning loop | implemented | row `planning.solve.hanoi` (teaches, solves to 7-move optimum) | unchanged |
 | 45 | "I am thinking of a number" closed-loop game | claimed-only | `PLAN_GUESS_NUMBER.md` RESEARCH/DESIGN; zero hits for guesser/thinker/bisection | unchanged |
 | 46 | Program synthesis Track 1 (`GOAL_RULE` synthesis) | implemented | `test/adapters/synth-rules.test.mjs` | unchanged |
-| 47 | Program synthesis Tracks 2-4 (sandbox) | claimed-only, sign-off-gated | `PLAN_CODE.md` sign-off gate | unchanged |
+| 47 | Program synthesis Tracks 2-4 (sandbox) | claimed-only | `PLAN_CODE.md` | unchanged |
 | 48 | Completions Stage 0 (broad search + grouping) | implemented | `test/adapters/completions-stage0.test.mjs` | unchanged |
 | 49 | Completions Stage 2 (extractive ranking) | implemented | `test/adapters/completions-stage2.test.mjs` | unchanged |
 | 50 | Completions wired into a user-facing answer | implemented | `test/adapters/chat-completions-wiring.test.mjs` | unchanged |

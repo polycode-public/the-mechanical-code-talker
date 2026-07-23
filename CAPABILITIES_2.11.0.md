@@ -168,7 +168,7 @@ deep prose sits on what moved, not on what didn't.
 | 44 | Towers-of-Hanoi goal-directed planning loop | implemented | row `planning.solve.hanoi` | unchanged |
 | 45 | "I am thinking of a number" closed-loop game | implemented | `test/corpus/games/guess-number.test.mjs` | unchanged status; `70d7000` routes dismissals to a warm template and coaches non-numeric guesses |
 | 46 | Program synthesis Track 1 (`GOAL_RULE` synthesis) | implemented | `test/adapters/synth-rules.test.mjs` | unchanged; `PLAN_CODE.md` re-baselined 2026-07-22, Track 1 still SHIPPED |
-| 47 | Program synthesis Tracks 2-4 (sandbox) | claimed-only, sign-off-gated | `PLAN_CODE.md` §8 sign-off gate | unchanged status; `PLAN_CODE.md`'s re-baseline adds a Track 5 headline proposal (planning over code states) — still sign-off-gated, nothing built (see §4.3) |
+| 47 | Program synthesis Tracks 2-4 (sandbox) | claimed-only | `PLAN_CODE.md` §8 | unchanged status; `PLAN_CODE.md`'s re-baseline adds a Track 5 headline proposal (planning over code states) — nothing built (see §4.3) |
 | 48 | Completions Stage 0 (broad search + grouping) | implemented | `test/adapters/completions-stage0.test.mjs` | unchanged |
 | 49 | Completions Stage 2 (extractive ranking) | implemented | `test/adapters/completions-stage2.test.mjs` | unchanged |
 | 50 | Completions wired into a user-facing answer | implemented | `test/adapters/chat-completions-wiring.test.mjs` | unchanged |
@@ -496,7 +496,7 @@ each checked against the tree as not-yet-shipped.
   external-proposal validation seam, the frozen discourse rows, replan-on-drift, activating the
   wider seed/unknown-word ingestion) — tmct-only and independent, per that plan's own sequencing.
 - **`PLAN_CODE.md`'s Track 5** (planning over code states as classical plans over graph states) — a
-  headline proposal this cycle's re-baseline states, sign-off-gated, nothing built yet.
+  headline proposal this cycle's re-baseline states, nothing built yet.
 
 ## 4.2 Per-benchmark feature-support
 
@@ -554,8 +554,8 @@ Re-checked against the tree at this pin.
   citations; its gap table and sequencing needed no correction.
 - **`PLAN_CODE.md`** — pinned at 2026-07-22 (re-baseline). **Done**: Track 1 (rule/frame synthesis)
   SHIPPED 2026-07-08 (row 46). **Doing**: nothing. **Todo**: Tracks 2-4 (JS repair/synthesis, HTML/
-  CSS synthesis) remain sign-off-gated designs, no implementation (row 47); Track 5 (planning over
-  code states, this re-baseline's headline proposal) is designed but not built — sign-off-gated.
+  CSS synthesis) remain designs, no implementation (row 47); Track 5 (planning over
+  code states, this re-baseline's headline proposal) is designed but not built.
 - **`PLAN_FILLER_AND_COUNTERFACTUALS.md`** — new root doc this cycle, pinned 2026-07-22. **Done**:
   nothing — it is a design pass, not yet a diff. **Doing**: nothing. **Todo**: both items it names
   (filler-clause-prefix widening, planner counterfactuals) are open by its own account; live evidence
@@ -669,7 +669,7 @@ Two different numbers matter here and this audit reports both rather than pickin
 |---|--:|
 | `implemented` (incl. sub-variants: opt-in, on-by-default, extended, deepened, estate-guarded, gated-out-of-`npm test`, in a sibling repo, library-level) | **179** |
 | `partial` (incl. the new registry-gap caveat, row 210) | 10 |
-| `claimed-only` (incl. research-horizon, sign-off-gated, documented-decline sub-variants) | 14 |
+| `claimed-only` (incl. research-horizon and documented-decline sub-variants) | 14 |
 | `absent` | 2 |
 | `reverted` | 1 |
 | retired / process change | 2 |
