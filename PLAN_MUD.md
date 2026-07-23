@@ -87,8 +87,8 @@ carried on every fact that backend writes.
   trust contribution up or down," currently keyed by SESSION id. A handle is the natural
   generalization:
   the SAME mechanism, keyed by a stable per-user identity instead of a throwaway session UUID, so a
-  handle's reliability genuinely accumulates across every session that handle ever connects with —
-  no new trust math needed, just a new Source-identity shape feeding the existing one.
+  handle's reliability accumulates across every session that handle ever connects with.
+  No new trust math is needed, just a new Source-identity shape feeding the existing one.
 
 ## Backend D — a DynamoDB table per named server, reached directly over the AWS SDK
 
@@ -212,9 +212,9 @@ profile in `~/.aws/config`, exactly what `aws configure sso` already produces). 
    regardless of whether the active credentials came from Tier 1's guest identity or a Tier 2
    Identity-Center profile; only what the resulting IAM permissions actually allow differs.
 
-**Why Tier 3 is dropped**: the repository is open source. Anyone wanting a genuinely
-private, specific-people-only shared world can already clone it and stand up their own AWS resources
-— which is exactly Tier 2's own model, just run by a different person for a different table. Tier 3's
+**Why Tier 3 is dropped**: the repository is open source. Anyone wanting a
+private, specific-people-only shared world can already clone it and stand up their own AWS resources,
+which is exactly Tier 2's own model, just run by a different person for a different table. Tier 3's
 entire purpose (restrict a shared world to a named set of real people) is already fully served by
 "self-host your own Tier 2 server and manage your own Identity Center users," at zero additional tmct
 code. Building a second, parallel, tmct-hosted multi-tenant identity system (Cognito social login,
@@ -259,7 +259,7 @@ already-documented principle in `renderFactLine`'s own docblock) — the readabl
 prefix, not the `(source: ...)` tag, consistent with how every other provenance kind already works
 here; no new citation-formatting logic needed, just a new prefix branch.
 
-**New query shape: "what did `<handle>` tell you"** — a reverse-by-SOURCE lookup, a genuinely new lane
+**New query shape: "what did `<handle>` tell you"** is a reverse-by-SOURCE lookup, a new lane
 in `chat.mjs`'s routing (nothing today filters facts by WHO stated them, only by subject term). Design:
 resolve `<handle>` to its Source id (`src:teach:handle:<handle>`), find every Fact `mgx:statedBy`-
 linked to that Source (the SAME edge group `recomputeFactTrust`/`statedByObjectsFor` already read for
@@ -273,9 +273,9 @@ inventing a new one.
 
 1. Backend D itself: the DynamoDB-backed store implementing the same individual read/write shape
    Backend A/B/C already share, `server:<name>`/`server:<handle>@<name>` value parsing in
-   `enumFlag`/`openMemoryBackend`, unit tested against a local DynamoDB-compatible test double (e.g.
-   `amazon/dynamodb-local` in Docker for CI — this is the one backend that genuinely needs
-   network-call mocking in tests, unlike `node:sqlite` which needed none).
+   `enumFlag`/`openMemoryBackend`, unit tested against a local DynamoDB-compatible test double
+   (e.g. `amazon/dynamodb-local` in Docker for CI). This is the one backend that needs
+   network-call mocking in tests, unlike `node:sqlite` which needed none.
 2. Tier 1: provision the real guest table + Identity Pool + TTL attribute + throughput cap by hand
    once (documented as an ops runbook, not automated — a one-time setup, not something every install
    repeats), ship its public config in the published package, verify the full anonymous round trip

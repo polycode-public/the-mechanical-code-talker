@@ -27,7 +27,7 @@ measurement contract, this cycle ran `--single` explicitly (killing the now-defa
 left `--sample` at its default fraction (matching this cycle's brief: "no `--sample` override
 needed"). The result is the **92-case stratified go-to sample**, not 2.7.12's 138-case full-pool
 take (which used `--sample 1 --single` to grab every case). **The two cycles' case counts differ,
-so the headline mean is not a clean like-for-like number** — see "Headline numbers" below for the
+so the headline mean is not a clean like-for-like number.** See "Headline numbers" below for the
 sharper, matched comparison this cycle can actually support.
 
 ## Profile
@@ -49,10 +49,10 @@ go-to default). Judge model **`claude-haiku-4-5-20251001`**, prompt **`judge-pro
 
 - **Overall mean: 1.787/2**, 92 cases, **1 hard fail**, **0 voided** samples, **90/92 tier-1 pass**.
 - **Raw comparison to 2.7.12 (1.809/2, 138 cases, 5 hard fails):** the mean is **down 0.022** and
-  the hard-fail count is down from 5 to 1 — but the case counts differ (92 vs 138), so neither
+  the hard-fail count is down from 5 to 1, but the case counts differ (92 vs 138), so neither
   number is a clean apples-to-apples read. The hard-fail **rate** dropped more clearly: 5/138
   (3.6%) → 1/92 (1.1%).
-- **The sharper signal — six cases identifiable in both cycles' reports** (2.7.12's evidence
+- **The sharper signal: six cases identifiable in both cycles' reports** (2.7.12's evidence
   section named these by id): `g-b2-count-temp-1`, `g-b2-passive-9`, `g-b2-rel-1`,
   `g-c2-garden-1`, `g-c2-xturn-1`, `g-c2-xturn-2`. Direct per-case comparison:
 
@@ -67,7 +67,7 @@ go-to default). Judge model **`claude-haiku-4-5-20251001`**, prompt **`judge-pro
 
   Four of six moved up, one is flat-to-slightly-down on a case now scored with an extra rubric
   dimension, one is unchanged. This reads as real, if uneven, movement across the 369 commits that
-  landed between the two cycles — not something this pass root-causes to a single change, since no
+  landed between the two cycles. This pass does not root-cause it to a single change, since no
   lever was applied and no bisection was run.
 
 ## Per-tag breakdown
@@ -85,7 +85,7 @@ go-to default). Judge model **`claude-haiku-4-5-20251001`**, prompt **`judge-pro
 | **graded (all)** | **92** | **1.787** | **1** |
 
 `memory-recall` (3 cases in the full pool) drew zero cases into this cycle's 92-case stratified
-sample — absent from this table because the sample didn't reach it, not because the tag was
+sample. It is absent from this table because the sample didn't reach it, not because the tag was
 dropped. Every hard fail sits in the untagged `graded` catch-all, same as 2.7.12.
 
 ## BEST-EXAMPLES pick
@@ -97,8 +97,8 @@ answer: nothing in the index matches that. Try "who touched <a module that actua
 or "/describe <module>" to see what's in the index.
 ```
 *What this demonstrates:* 2.7.12 scored this exact case a hard fail (groundedness 0, honesty 0,
-rephrase 0). 2.11.0 scores it 1.834 — the relative clause no longer misparses into a false answer,
-and the miss carries a genuinely usable rephrase hint. This is the single clearest improvement this
+rephrase 0). 2.11.0 scores it 1.834. The relative clause no longer misparses into a false answer,
+and the miss carries a usable rephrase hint. This is the single clearest improvement this
 cycle's evidence can point to.
 
 **2. Three-hop focus tracking survives a `/describe`, a pronoun, and a plural pronoun in a row — `mt-focus-drift` (B1, discourse-reference)**
@@ -141,7 +141,7 @@ say: which of all those is untested
 answer: couldn't parse this as a graph question. Try: "which modules import <name>" or "what calls
 <name>". Type /help for all query shapes.
 ```
-*What this demonstrates:* the same case 2.7.12 used as its own best example — two real hops of
+*What this demonstrates:* the same case 2.7.12 used as its own best example: two real hops of
 composition resolve correctly, and the third (filtering an accumulated set by an untested
 predicate) still declines rather than guessing. The capability gap is unchanged from 2.7.12; the
 honest-miss discipline around it is what's being verified again here.
@@ -154,12 +154,12 @@ answer: 1 commit.
 *What this demonstrates:* verbatim the same wrong answer 2.7.12 reported (the fixture's module
 derives from two commit ids, not one), and the fixed-string tier-1 check still passes it. The judge
 score moved from an effective 0 to 0.25 (groundedness partially recovered to 0.5) but correctness
-is still 0 — this is the same regex-shaped-pass-but-wrong-answer failure mode the rubric exists to
+is still 0. This is the same regex-shaped-pass-but-wrong-answer failure mode the rubric exists to
 catch, unresolved across both cycles.
 
 ## Judge model + prompt version
 
-`claude-haiku-4-5-20251001`, `judge-prompt-v2`. **Unchanged since 2.7.12** — this cycle's number is
+`claude-haiku-4-5-20251001`, `judge-prompt-v2`. **Unchanged since 2.7.12.** This cycle's number is
 a same-instrument comparison on that axis, even though the case count differs (see "Headline
 numbers").
 
@@ -191,8 +191,8 @@ informationally (not applied here):
    phrase the current greeting dropped). Both score well under the judge rubric (1.334 and 2.0), so
    this is case-hygiene, not a product regression — flagged, not fixed, since the case set is
    append-only this cycle.
-6. **Attribute what moved `g-b2-rel-1` and `g-b2-passive-9` from hard fail to honest-miss-with-hint**
-   — 369 commits landed between 2.7.12 and 2.11.0 (`git log --oneline f0910a4..HEAD`); no single
+6. **Attribute what moved `g-b2-rel-1` and `g-b2-passive-9` from hard fail to honest-miss-with-hint:**
+   369 commits landed between 2.7.12 and 2.11.0 (`git log --oneline f0910a4..HEAD`); no single
    commit was isolated as the cause in this pass. A future cycle could bisect the two cases'
    `runTurn` behavior across that range before crediting any specific fix.
 

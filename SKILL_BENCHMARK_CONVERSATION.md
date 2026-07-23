@@ -68,10 +68,10 @@ This skill has **three modes**, sharing the same discipline (§1):
 
 ---
 
-## 0. The load-bearing idea
+## 0. The core idea
 
 tmct's promise (item 1) is a **tolerant** surface that **guides you toward precision**. The failure
-mode is not a wrong answer — it is a **dead-end**: a turn that neither answers nor nudges, so the
+mode is not a wrong answer. It is a **dead-end**: a turn that neither answers nor nudges, so the
 conversation stops. A dead-end is any turn whose reply is one of:
 
 - the grammar wall ("couldn't parse this as a graph question. Try: …"),

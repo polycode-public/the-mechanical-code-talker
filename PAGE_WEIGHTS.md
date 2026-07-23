@@ -24,14 +24,14 @@ cold load per page (Playwright, CDP `Network.loadingFinished`
 
 Cold-load total is page HTML wire + eager assets wire. The Chromium run
 confirmed every page within ~0.1% (response headers account for the gap) and
-confirmed the request lists: no page makes any third-party request — every
+confirmed the request lists: no page makes any third-party request. Every
 byte comes from the site's own origin.
 
 **chat.html's and code.html's rows are local rebuilds, not a live re-crawl.**
 chat.html (measured 2026-07-22 against a worktree build with
 `SEED_BAND_CAPS` raised to conceptnet 7,000 / wordnet-xl 14,000,
 `scripts/build-chat-seed.mjs`) and code.html (measured the same day, the
-first build to ship the page at all — a real Chromium cold load confirmed
+first build to ship the page at all: a real Chromium cold load confirmed
 its eager request list, brotli sizes computed directly against the local
 build's `code.html` and `code-explorer.bundle.js`). The other six rows still
 reflect the 2.9.4 live deployment. Re-measure both against the live site
@@ -41,7 +41,7 @@ once this change actually deploys.
 `vendor/wink.js` (already counted once above) plus its own
 `ingest-browser.bundle.js` (~826 KB raw, the same ~830 KB weight class as the
 ledger/plan bundles); the page's own HTML is small (~15 KB). Its cold-load
-profile tracks plan.html's — wink plus one engine bundle — so it adds no new
+profile tracks plan.html's (wink plus one engine bundle), so it adds no new
 shared asset. Give it a real row here the next time the live site is crawled.
 
 Whole set, summing the eight per-page totals (the two local-rebuild rows
@@ -55,7 +55,7 @@ transfers, since the wink vendor and the service worker script are shared):
 
 **The shared wink vendor.** `vendor/wink.js` (wink-nlp plus the English lite
 model, 3,655,359 raw / 790,260 br) is the single largest shared asset. Five
-pages load it eagerly — index, chat, ledger, sprites, plan — but the browser
+pages load it eagerly (index, chat, ledger, sprites, plan), but the browser
 pays for it once: HTTP cache plus the service worker's precache serve every
 later page from the first copy.
 
@@ -73,7 +73,7 @@ JSON parsing, not network latency.
 
 **index.html.** Loads the ask demo as unbundled modules: 27 `engine/src/**`
 files (772,496 raw / 375,280 wire), `demo-graph.json`, the wink vendor, and
-four screenshot PNGs (350,961 bytes, served identity — PNG is already
+four screenshot PNGs (350,961 bytes, served identity since PNG is already
 compressed).
 
 **sprites.html.** Its own HTML carries the embedded sprite data (1,290,920
@@ -82,18 +82,18 @@ wink vendor.
 
 **code.html.** Its own HTML carries the embedded demo code graph, so the page
 makes only one other eager request, `code-explorer.bundle.js`. Unlike the
-other dock pages here, it does not fetch the wink vendor at load — the dock
-loads it lazily, only once a visitor actually asks a question — so it is the
+other dock pages here, it does not fetch the wink vendor at load; the dock
+loads it lazily, only once a visitor actually asks a question. So it is the
 lightest of the eight cold loads at 249 KB wire.
 
 **The service worker.** index, chat, ledger and plan register `tmct-sw.js`
 (adventure and chat also fetch it for the stamp). On install it precaches the
-boot tier — `index.html`, `chat.html`, `chat-browser.bundle.js`,
+boot tier: `index.html`, `chat.html`, `chat-browser.bundle.js`,
 `sprites-browser.bundle.js`, `vendor/wink.js`, `chat-seed.json`,
-`reference-pack/index.json` — and serves those cache-first (reference-pack
+`reference-pack/index.json`. It serves those cache-first (reference-pack
 articles too, once fetched); pages and bundles are network-first with the
 cache as offline fallback. So a second visit pays wire cost only for the
-page HTML and bundle revalidation, and a fully offline reload of chat works —
+page HTML and bundle revalidation, and a fully offline reload of chat works.
 `e2e/pages-service-worker.test.mjs` proves it, so it is not re-measured here.
 
 **Encoding coverage.** HTML, bundles and JSON ship `.br`/`.gz` siblings and

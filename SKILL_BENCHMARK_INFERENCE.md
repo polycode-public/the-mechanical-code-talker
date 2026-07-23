@@ -22,8 +22,8 @@ profiles RL/EL, the ALC→SHOIQ→SROIQ progression, `PLAN_SYLLOGIST_EL_DL.md`):
 | INF-4 | Restriction | someValuesFrom application + long chains (`cls-svf`/`scm-svf`) |
 | INF-5 | Cardinality | cardinality lower bounds, first step outside RL (`c1Cardinality`, `c1ScmSvfApply`) |
 | INF-6 | Consistency | disjointness-clash detection across stored memory (`c2Inconsistent`) |
-| INF-7 | Constructed restriction (OWL 2 EL) | classify through undeclared class expressions — nested existentials, existential chains — needs EL saturation (`elConstructedRestriction`, `elExistentialChain`) |
-| INF-8 | Reasoning by cases (OWL 2 DL) | disjunction elimination, complement classes — needs a branching tableau — plus the disjointness-proof-soundness discriminator (`dlDisjunction`, `dlComplement`, `dlDisjointProofSoundness`) |
+| INF-7 | Constructed restriction (OWL 2 EL) | classify through undeclared class expressions (nested existentials, existential chains); needs EL saturation (`elConstructedRestriction`, `elExistentialChain`) |
+| INF-8 | Reasoning by cases (OWL 2 DL) | disjunction elimination, complement classes; needs a branching tableau plus the disjointness-proof-soundness discriminator (`dlDisjunction`, `dlComplement`, `dlDisjointProofSoundness`) |
 | INF-9 | Abduction (best explanation) | select the best explanation for an observation over a CLOSED hypothesis set — diagnosis-shaped, deduction run backwards (`REPORT_AGI_CHECK_IN.md`, "Absent at the same level" item 4) |
 | INF-10 | Causal & counterfactual | "what if it had gone the other way", evaluated over the planner's own state snapshots: a modified start re-solved and compared, never a guessed outcome (`PLAN_FILLER_AND_COUNTERFACTUALS.md` §2) |
 
@@ -117,7 +117,7 @@ is a **ceiling marker**, not a failure — name it as exactly that.
   it, regression-test, and re-run this cycle from Step 1 to confirm the target band's gate now
   passes before considering the next capability above it.
 
-**Step 6 — WRITE the cycle up.** Every cycle, not only when a version just shipped — a
+**Step 6 — WRITE the cycle up.** Every cycle, not only when a version just shipped: a
 console-only cycle leaves a drifted band recorded nowhere. Snapshot the raw output first
 (`infbench/results/raw/run-<version>[_00N]/`, per Step 2's stamping rule), then write
 `BENCHMARK_INFERENCE_<version>.md` (same artifact-naming convention `SKILL_BENCHMARK_CEFR_ENGLISH.md`
@@ -177,7 +177,7 @@ still-current.**
 
 > **Coordinator model applies here too.** Per `CLAUDE.md`'s standing working model, the main
 > session is the coordinator, not the worker. `npm run infbench` (Step 1's regenerate + Step 2's
-> run) and `npm test` are both cheap here — INFBENCH is deterministic and free — but a
+> run) and `npm test` are both cheap here (INFBENCH is deterministic and free), but a
 > substantial stage's engine work (a new forward-chainer, a consistency checker) is real
 > implementation effort and can run as a background sub-agent while the coordinator keeps the
 > main chat free for the operator; the coordinator picks the result up on the completion

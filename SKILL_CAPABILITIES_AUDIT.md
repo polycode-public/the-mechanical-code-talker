@@ -227,7 +227,7 @@ One subsection per live root `PLAN_*.md`, plus any `archive/PLAN_*.md` still car
 A plan that is fully shipped and archived gets a one-line pointer, not a bucketed subsection.
 
 Each subsection opens with a **`pinned at <commit-or-version>`** line, then three lists scoped to
-that plan's own scope: **Done** (shipped, with a code or commit citation), **Doing** (genuinely in
+that plan's own scope: **Done** (shipped, with a code or commit citation), **Doing** (actually in
 progress), **Todo** (still open by the plan's own account, re-checked against the tree).
 
 ### 4.4 Non-benchmarked capabilities

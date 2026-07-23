@@ -40,7 +40,7 @@ Caveats that travel with the four figures:
 - **INFERENCE 2.11.0 is byte-identical to 2.7.12 on every band, every template, both arms.** 379/379
   chat, 100/100 kernel, 0% fabrication, `--replay` byte-identical across 2 runs. 374 commits landed
   in the window and several touch the disjointness/proof-chain path directly, but none happens to
-  exercise a case shape this generator produces — the report's own account, re-confirmed here.
+  exercise a case shape this generator produces. This re-confirms the report's own account.
 - **CEFR_ENGLISH 2.11.0 changed its sample, not its instrument.** Judge model and prompt
   (`claude-haiku-4-5-20251001`, `judge-prompt-v2`) are unchanged since 2.7.12, so this is a
   same-instrument comparison — but `chatbench/run.mjs`'s CLI defaults drifted (dual-draw became the
