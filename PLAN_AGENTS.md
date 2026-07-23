@@ -105,9 +105,11 @@ does not yet expose a "plan this whole request" verb (§4, gap H).
   `tmct.toml`'s `[plan] max_depth` (default 300).
 - "next" executes one move, writing `@stepN` board-snapshot facts sourced to the plan; the final
   step re-reads the store and confirms the goal from the written facts, never assuming success.
-- There is no undo; "solve it" replans from the current board. A live plan also guards its base:
-  re-teaching board facts mid-plan is refused by name (the `@step` snapshots would silently
-  contradict them), with "forget the goal" as the stated exit.
+- There is no undo; "solve it" replans from the current board. Re-teaching a live plan's own piece
+  mid-plan writes the change as a new whole-board `@step` snapshot layer (never a base fact, which
+  the snapshots would silently contradict) and re-searches from it: a found plan is disclosed and
+  held, a miss keeps the write, drops the old plan, and names the failed replan. The end-of-plan
+  goal check re-searches the same way when the final board has drifted.
 - The search is domain-general: the suite teaches hanoi as sentences for 1–8 disks and asserts
   2^n − 1 moves every time; `crates.txt` (different rules, a two-goal conjunction) and the river
   crossing solve with zero interpreter changes.
@@ -275,7 +277,7 @@ capability.**
 | G | Learning on a miss | **Present** | child/reference/wiki + synthesis budget (§2.6) |
 | H | Programmatic plan surface | **Partial** | library export ships; `/v1/messages` dispatches single calls, no plan verb |
 | I | Validating externally proposed calls | **Partial** | `hallucinationsIn` exists; only internal callers feed it — nothing external proposes a call yet |
-| J | Replanning on world change | **Partial** | mid-plan base-mutation guard refuses + on-demand replan; the router's RECOVER branch replans one step; no automatic replan on drift |
+| J | Replanning on world change | **Present** | a mid-plan board teach writes a new whole-board snapshot layer and re-searches from it (disclosed), and the end-of-plan goal check re-searches on drift; the router's RECOVER branch replans one step |
 | K | Cross-turn discourse record | **Partial** | prev-set anaphora lanes work; four frozen rows mark the edges; no typed record (DRT-lite, R1) |
 | L | Goal recognition (inferring a goal from behavior) | **Absent, one scoped instance** | autoplay's marker-based inference is world-scoped; the bounded (N+1) scheme is an R1 spike |
 | M | The four cross-repo mounts | **Partial** | seonix and the bedrock rung ship; marginalia (both tracks) and the Copilot shim do not |
@@ -291,14 +293,12 @@ capability.**
    Claude Code hardening item, and it turns the shim into a checked tool-loop peer.
 3. **K (near half) — the four frozen rows** (~1–2 days each). Each names its fix; flipping a row
    is deliberate, so the corpus lanes measure the closure.
-4. **J — replan on drift** (~1–2 days). The guard already detects the conflict; the uplift is
-   re-searching from the current fold instead of refusing, disclosed in the reply.
-5. **O — activate the wider seeds and unknown-word ingestion** (~1 day + a measurement pass).
+4. **O — activate the wider seeds and unknown-word ingestion** (~1 day + a measurement pass).
    Decision-shaped: the machinery is tested and dormant.
-6. **M — Bedrock live wire test + assessor** (~2–3 days, cross-repo). The two named gaps: the
+5. **M — Bedrock live wire test + assessor** (~2–3 days, cross-repo). The two named gaps: the
    wire format has never been proven end-to-end between the released packages, and nothing
    produces the `{score, confidence, needs}` classification `route()` consumes.
-7. **M — the Copilot/OpenAI-Chat-Completions shim** (~2–3 days). A second protocol adapter over
+6. **M — the Copilot/OpenAI-Chat-Completions shim** (~2–3 days). A second protocol adapter over
    the same `runTurn`/`dispatchTool` engine the Messages shim wraps.
 8. **M — the seonix combined index** (several days, cross-repo). Mount the graph through the
    extension seam; re-verify RI depth at the combined scale.
