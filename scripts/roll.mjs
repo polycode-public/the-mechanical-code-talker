@@ -9,13 +9,14 @@
 //
 // It bumps package.json (and the lockfile) with NO git tag and NO commit — the
 // caller commits — then regenerates the artifacts a release must not ship stale:
-// the two version-stamped ones (the agentbench envelope and the home-page footer)
-// AND the browser ask bundle. The bundle is code-derived, not version-stamped, so
-// a version-only roll leaves its bytes unchanged — but it is force-rebuilt here
-// anyway because a comment change anywhere in its wide import closure drifts it,
-// and `npm publish` packs the committed copy. (The GitLab Pages deploy rebuilds it
-// too, so the deployed page is never stale either; this keeps the PACKAGED copy
-// honest at release time.)
+// the three version-stamped ones (the agentbench envelope, the home-page footer,
+// and the screenshot manifest's tmctVersion field) AND the browser ask bundle.
+// The bundle is code-derived, not version-stamped, so a version-only roll leaves
+// its bytes unchanged — but it is force-rebuilt here anyway because a comment
+// change anywhere in its wide import closure drifts it, and `npm publish` packs
+// the committed copy. (The GitLab Pages deploy rebuilds it too, so the deployed
+// page is never stale either; this keeps the PACKAGED copy honest at release
+// time.)
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -49,5 +50,6 @@ console.log(`\nrolled to ${version} — regenerating version-stamped artifacts\n
 run("node", ["agentbench/generate-envelope.mjs"]); // agentbench/envelope.json (version-stamped)
 run("npm", ["run", "demo:build"]); // public/index.html footer stamp (version-stamped)
 run("npm", ["run", "build:ask-bundle"]); // force the packaged ask bundle fresh from its closure
+run("npm", ["run", "gen:screenshots"]); // public/screenshots/manifest.json's tmctVersion stamp
 
 console.log(`\nroll complete: ${version}. Review with \`git status\`, then commit.`);
