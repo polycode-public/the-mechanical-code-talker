@@ -3163,6 +3163,14 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   if (!m) return null;
   const [, det, subjectRaw, verb, objectRaw] = m;
   if (PLACE_ADVERB_OBJECT_RE.test(objectRaw)) return null; // a place adverb is never a property
+  // An ARTICLED complement ("a dog is a mammal") is a noun-phrase kind claim,
+  // never an adjective property — but UNKNOWN_SUBJECT_RE strips the object's
+  // article before capture, so objectRaw alone can't show the difference from
+  // "the cache is bespoke". Without this re-check, a fact-grounded subject
+  // silently minted the kind claim as an mgx:hasProperty garble that the isa
+  // read-back then denied. Declining here lands on the honest teach-miss,
+  // whose nudge already names the storable form ("every dog is a mammal").
+  if (/\s+(?:is|are)\s+an?\s+[\w-]+[.!?]*\s*$/i.test(String(payload).trim())) return null;
   const { loadLexicon, lookupNoun, lookupAdjective, classify } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
   // Y already a known NOUN or a fact-grounded CLASS term — a genuine class-
