@@ -113,12 +113,17 @@ test("the sprite-library feature carries a real sprite teaser: real inline icons
   assert.match(section, /fly.*insect.*animal/s);
 });
 
-test("the CSS custom-property tokens match src/services/viz-theme.mjs's own token names", async () => {
+test("the home page carries its own neutral palette and rounded-sans type, not the shared trust-tier tokens", async () => {
   const html = await readFile(INDEX, "utf8");
-  assert.match(html, /--ink: #23272B/, "the fg token is viz-theme's --ink");
-  assert.match(html, /--taught: #2E7D4F/, "the accent token is viz-theme's --taught");
-  assert.match(html, /--entail: #B07C2E/, "the brass token is viz-theme's --entail");
-  assert.match(html, /--line: #DDD9D0/, "the border token is viz-theme's --line");
+  assert.match(html, /--bg: #FFFFFF/, "the ground is white, not the old cream");
+  assert.match(html, /--ink: #1A1A1A/, "the fg is a neutral near-black");
+  assert.match(html, /--taught: #1B7A4B/, "the single accent is a restrained green");
+  assert.match(html, /--entail: #3F3F46/, "the structural accent is a neutral dark grey, not brass");
+  assert.match(html, /--line: #E6E6E1/, "the border is a hairline neutral grey");
+  assert.match(html, /--font-display:[^;]*ui-rounded/, "the display face is a rounded sans, not a serif");
+  assert.match(html, /--font-body:[^;]*system-ui/, "the body face is a system sans, not a serif");
+  assert.doesNotMatch(html, /Charter|Georgia|Times New Roman/, "the old serif stack is gone");
+  assert.doesNotMatch(html, /#F7F6F2/, "the old cream ground is gone");
   assert.doesNotMatch(html, /--fg:/, "the old --fg token name is gone");
   assert.doesNotMatch(html, /--accent:/, "the old --accent token name is gone");
   assert.doesNotMatch(html, /--border:/, "the old --border token name is gone");
