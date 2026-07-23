@@ -1261,7 +1261,8 @@ async function main() {
     const rest = process.argv.slice(3);
     if (rest.includes("--help") || rest.includes("-h")) {
       process.stdout.write(
-        "tmct serve — Anthropic Messages API-compatible endpoint (POST /v1/messages)\n\n" +
+        "tmct serve — Anthropic Messages API-compatible endpoint (POST /v1/messages)\n" +
+        "             plus a capability-router plan verb (POST /v1/plan)\n\n" +
         "Usage:\n" +
         "  tmct serve [--repo <abs>] [--graph <path>] [--config <path>] [--host <h>] [--port <n>]\n\n" +
         "  --repo <abs>   target a repo's graph (<abs>/.tmct/graph.json); default: git root/cwd\n" +
@@ -1270,9 +1271,14 @@ async function main() {
         "  --config <path>  an alternate tmct.toml location (a file or a directory)\n" +
         "  --host <h>     bind address (default 127.0.0.1)\n" +
         "  --port <n>     TCP port (default 8787; 0 picks an ephemeral port)\n\n" +
-        "Request:  { model, messages:[...], tools:[...], max_tokens, system? }\n" +
-        "Response: { id, type:\"message\", role:\"assistant\", content:[...blocks], stop_reason, usage }\n" +
-        "          usage is always { input_tokens: 0, output_tokens: 0 } — tmct is the $0 floor.\n",
+        "POST /v1/messages\n" +
+        "  Request:  { model, messages:[...], tools:[...], max_tokens, system? }\n" +
+        "  Response: { id, type:\"message\", role:\"assistant\", content:[...blocks], stop_reason, usage }\n" +
+        "            usage is always { input_tokens: 0, output_tokens: 0 } — tmct is the $0 floor.\n\n" +
+        "POST /v1/plan\n" +
+        "  Request:  { request: \"<NL request>\", tools?: [\"tmct_impact\", ...] }\n" +
+        "  Response: the capability-router loop result — grounded { driver, calls, proof,\n" +
+        "            composed?, usage } or an in-band honest { refused: true, why }.\n",
       );
       return;
     }
@@ -1287,13 +1293,19 @@ async function main() {
     // REPLACES serve's old cwd-only default (loadConfig had no git-root
     // fallback) with the same git-root-aware default every other subcommand
     // now shares — a deliberate, documented unification, not a regression.
-    const { config } = await resolveRuntimeConfig({ argv: rest });
-    const srv = await startServer({ config, host, port });
+    const { repo, config, toml } = await resolveRuntimeConfig({ argv: rest });
+    // Open the taught store the same env > tmct.toml > default way `tmct plan`
+    // does, so /v1/plan reasons over the taught world/rule records chat wrote —
+    // registered per request and unregistered after, never mutated by serve.
+    const { openMemoryBackend } = await import("../src/adapters/memory/core.mjs");
+    const backendChoice = String(process.env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
+    const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
+    const srv = await startServer({ config, host, port, memoryDir });
     process.stdout.write(
-      `tmct serve — Anthropic Messages API at ${srv.url}/v1/messages (POST) — ` +
+      `tmct serve — Anthropic Messages API at ${srv.url}/v1/messages (POST), plan at ${srv.url}/v1/plan (POST) — ` +
       `graph ${srv.config.graphFile} — usage billed $0 — Ctrl+C to stop\n`,
     );
-    const shutdown = async () => { await srv.close(); process.exit(0); };
+    const shutdown = async () => { await srv.close(); await closeMemoryStore(); process.exit(0); };
     process.on("SIGINT", shutdown);
     process.on("SIGTERM", shutdown);
     return; // the listening server keeps the event loop alive

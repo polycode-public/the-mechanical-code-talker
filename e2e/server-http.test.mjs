@@ -9,9 +9,10 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
-import { startServer, respondToMessages, selectTool } from "../src/surfaces/http/server-http.mjs";
+import { startServer, respondToMessages, respondToPlan, selectTool } from "../src/surfaces/http/server-http.mjs";
 import { parseEntities } from "../src/domain/codegraph.mjs";
 import { dispatchTool } from "../src/tools/server.mjs";
+import { declaredCapabilityNames } from "../src/domain/router/drive.mjs";
 import * as source from "../src/adapters/source.mjs";
 
 const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
@@ -26,6 +27,16 @@ const ANTHROPIC_TOOLS = [
 /** POST a Messages request to a running server; resolve the parsed JSON + status. */
 async function post(base, body) {
   const res = await fetch(`${base}/v1/messages`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  return { status: res.status, json: await res.json() };
+}
+
+/** POST a plan request to a running server; resolve the parsed JSON + status. */
+async function postPlan(base, body) {
+  const res = await fetch(`${base}/v1/plan`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
@@ -136,6 +147,7 @@ test("serve: GET / self-describes the endpoint, tools and $0 pricing", async () 
     const d = await (await fetch(`${srv.url}/`)).json();
     assert.equal(d.service, "tmct");
     assert.equal(d.endpoint.path, "/v1/messages");
+    assert.deepEqual(d.plan_endpoint, { method: "POST", path: "/v1/plan" });
     assert.ok(Array.isArray(d.tools) && d.tools.length >= 1);
     assert.deepEqual(d.usage_pricing, { input_tokens: 0, output_tokens: 0 });
   } finally {
@@ -192,6 +204,88 @@ test("selectTool: command → specific tool; question → tmct_ask; small-talk /
   assert.equal(selectTool("which functions call Widget", new Set(["some_other_tool"])), null);
 });
 
+// ---- the external-proposal seam (a caller-proposed tool_use on /v1/messages) ----
+
+/** A transcript that ENDS on an assistant tool_use — a caller proposing `name`
+ *  for tmct to validate and (if clean) execute. */
+function proposal(name, input, tools) {
+  return {
+    model: "tmct",
+    tools,
+    messages: [
+      { role: "user", content: "run a tool for me" },
+      { role: "assistant", content: [{ type: "tool_use", id: "toolu_prop", name, input }] },
+    ],
+  };
+}
+
+test("proposal: a clean declared capability is validated and executed (end_turn, no problems)", async () => {
+  const graph = parseEntities(await source.fetchEntities(CONFIG));
+  const expected = await dispatchTool("tmct_describe", { symbol: "fnAlpha" }, { config: CONFIG });
+  const out = await respondToMessages(
+    proposal("tmct_describe", { symbol: "fnAlpha" }, [{ name: "tmct_describe" }, { name: "tmct_ask" }]),
+    { config: CONFIG, graph },
+  );
+  assert.equal(out.stop_reason, "end_turn");
+  assert.equal(out.content[0].text, expected);
+  assert.deepEqual(out.tmct_checked_call, { name: "tmct_describe", input: { symbol: "fnAlpha" }, problems: [] });
+});
+
+test("proposal: a hallucinated tool name is a refusal naming the unknown-tool reason", async () => {
+  const graph = parseEntities(await source.fetchEntities(CONFIG));
+  const out = await respondToMessages(
+    proposal("tmct_impcat", { symbol: "fnAlpha" }, [{ name: "tmct_describe" }]),
+    { config: CONFIG, graph },
+  );
+  assert.equal(out.stop_reason, "refusal");
+  assert.match(out.content[0].text, /unknown-tool/);
+  assert.match(out.content[0].text, /Nothing was executed/);
+  assert.equal(out.tmct_checked_call.problems[0].reason, "unknown-tool");
+});
+
+test("proposal: an argument the capability does not accept is an unknown-arg refusal", async () => {
+  const graph = parseEntities(await source.fetchEntities(CONFIG));
+  const out = await respondToMessages(
+    proposal("tmct_describe", { symbol: "fnAlpha", wibble: 1 }, [{ name: "tmct_describe" }]),
+    { config: CONFIG, graph },
+  );
+  assert.equal(out.stop_reason, "refusal");
+  assert.match(out.content[0].text, /unknown-arg/);
+  assert.ok(out.tmct_checked_call.problems.some((p) => p.reason === "unknown-arg" && p.detail === "tmct_describe.wibble"));
+});
+
+test("proposal: a required argument missing is a missing-arg refusal", async () => {
+  const graph = parseEntities(await source.fetchEntities(CONFIG));
+  const out = await respondToMessages(
+    proposal("tmct_describe", {}, [{ name: "tmct_describe" }]),
+    { config: CONFIG, graph },
+  );
+  assert.equal(out.stop_reason, "refusal");
+  assert.match(out.content[0].text, /missing-arg/);
+});
+
+test("proposal: a real capability the request did not declare is an undeclared refusal", async () => {
+  const graph = parseEntities(await source.fetchEntities(CONFIG));
+  const out = await respondToMessages(
+    proposal("tmct_callers", { symbol: "fnAlpha" }, [{ name: "tmct_describe" }]),
+    { config: CONFIG, graph },
+  );
+  assert.equal(out.stop_reason, "refusal");
+  assert.match(out.content[0].text, /undeclared/);
+});
+
+test("proposal: a caller's own declared tool is handed back honestly, not refused", async () => {
+  const graph = parseEntities(await source.fetchEntities(CONFIG));
+  const out = await respondToMessages(
+    proposal("get_weather", { city: "Paris" }, [{ name: "get_weather" }, { name: "tmct_describe" }]),
+    { config: CONFIG, graph },
+  );
+  assert.equal(out.stop_reason, "end_turn");
+  assert.match(out.content[0].text, /your own tool/);
+  assert.match(out.content[0].text, /Nothing was executed/);
+  assert.equal(out.tmct_checked_call, undefined);
+});
+
 // ---- text-only + self-description + errors (retained from step 1) ----
 
 test("respondToMessages: no tools declared → a cited text block + end_turn + $0 usage", async () => {
@@ -202,6 +296,76 @@ test("respondToMessages: no tools declared → a cited text block + end_turn + $
   );
   assert.equal(out.stop_reason, "end_turn");
   assert.equal(out.content[0].type, "text");
+  assert.deepEqual(out.usage, { input_tokens: 0, output_tokens: 0 });
+});
+
+// ---- the plan verb (POST /v1/plan) ----
+
+test("plan: a single-shot request grounds to one registry call with $0 usage", async () => {
+  const srv = await startServer({ config: CONFIG, port: 0 });
+  try {
+    const r = await postPlan(srv.url, { request: "who calls fnAlpha" });
+    assert.equal(r.status, 200);
+    assert.equal(r.json.refused, false);
+    assert.equal(r.json.request, "who calls fnAlpha");
+    assert.ok(Array.isArray(r.json.calls) && r.json.calls.length >= 1);
+    assert.ok(declaredCapabilityNames().includes(r.json.calls[0].name));
+    assert.deepEqual(r.json.usage, { input_tokens: 0, output_tokens: 0 });
+  } finally {
+    await srv.close();
+  }
+});
+
+test("plan: a compound request decomposes into an ordered multi-call plan", async () => {
+  const srv = await startServer({ config: CONFIG, port: 0 });
+  try {
+    const r = await postPlan(srv.url, { request: "of the modules impacted by app/lib/a.mjs, which are untested" });
+    assert.equal(r.status, 200);
+    assert.equal(r.json.refused, false);
+    assert.ok(r.json.calls.length >= 2);
+    for (const c of r.json.calls) assert.ok(declaredCapabilityNames().includes(c.name));
+  } finally {
+    await srv.close();
+  }
+});
+
+test("plan: a request nothing grounds is an in-band honest refusal, not an error", async () => {
+  const srv = await startServer({ config: CONFIG, port: 0 });
+  try {
+    const r = await postPlan(srv.url, { request: "xyzzy plugh frobnicate wibble" });
+    assert.equal(r.status, 200);
+    assert.equal(r.json.refused, true);
+    assert.ok(r.json.why && r.json.why.length > 0);
+  } finally {
+    await srv.close();
+  }
+});
+
+test("plan: an unknown tools name and a missing request are clean 400s", async () => {
+  const srv = await startServer({ config: CONFIG, port: 0 });
+  try {
+    const unknown = await postPlan(srv.url, { request: "who calls fnAlpha", tools: ["tmct_callers", "tmct_not_a_tool"] });
+    assert.equal(unknown.status, 400);
+    assert.equal(unknown.json.type, "error");
+    assert.match(unknown.json.error.message, /unknown tools name\(s\): tmct_not_a_tool/);
+
+    const missing = await postPlan(srv.url, { tools: ["tmct_callers"] });
+    assert.equal(missing.status, 400);
+    assert.equal(missing.json.type, "error");
+
+    const empty = await postPlan(srv.url, { request: "   " });
+    assert.equal(empty.status, 400);
+  } finally {
+    await srv.close();
+  }
+});
+
+test("respondToPlan: grounds a single-shot request over a passed-in graph without a socket", async () => {
+  const graph = parseEntities(await source.fetchEntities(CONFIG));
+  const out = await respondToPlan({ request: "who calls fnAlpha" }, { config: CONFIG, graph });
+  assert.equal(out.refused, false);
+  assert.equal(out.request, "who calls fnAlpha");
+  assert.ok(declaredCapabilityNames().includes(out.calls[0].name));
   assert.deepEqual(out.usage, { input_tokens: 0, output_tokens: 0 });
 });
 
