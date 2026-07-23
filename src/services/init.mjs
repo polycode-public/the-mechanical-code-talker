@@ -40,7 +40,13 @@ export function defaultConfig() {
   return {
     graphFile: join(".tmct", "graph.json"),
     corpus: { tier: "tier1" },
-    seed: { enabled: true },
+    // captureUnknownContext defaults ON: every shipped tier-1/tier-2 curated
+    // bundle maps cleanly (no ace="none" relation appears in any of them), so
+    // this is a no-op against the default persona — it only starts capturing
+    // once an operator also activates a raw bundle like conceptnet/seon that
+    // has genuinely dropped rows, and there the capture is bounded by
+    // unknownContextLimit.
+    seed: { enabled: true, captureUnknownContext: true },
   };
 }
 
@@ -114,6 +120,14 @@ enabled = ${seed.enabled ? "true" : "false"}
 # By default the WHOLE committed slice seeds (no cap — the operator's "seed all").
 # To cap it, uncomment and set a number (definitional band first):
 ${seed.limit != null ? `limit = ${Number(seed.limit)}` : "# limit = 500"}
+# Also capture a term that only ever appears in a relation the axiom graph
+# drops (e.g. DerivedFrom/HasContext) — tagged with the passage it was found
+# in, instead of vanishing. A no-op against every shipped bundle (none of
+# them carry a dropped relation); it starts capturing once a bundle that does
+# (conceptnet, seon, or a host-supplied one) is also active.
+capture_unknown_context = ${seed.captureUnknownContext ? "true" : "false"}
+# How many distinct terms one capture_unknown_context pass captures, at most:
+${seed.unknownContextLimit != null ? `unknown_context_limit = ${Number(seed.unknownContextLimit)}` : "# unknown_context_limit = 500"}
 `;
   // [memory] backend — only emitted when a caller actually supplies it.
   let out = base;
@@ -292,7 +306,10 @@ export async function initRepo(dir, { force = false, seed, env = process.env, pe
         if (config.seed?.limit != null && entries.has("conceptnet")) {
           entries.set("conceptnet", { ...entries.get("conceptnet"), limit: Number(config.seed.limit) });
         }
-        const { appended, skipped, total, perBundle } = await seedActiveCorpusEntries(memoryDir, entries);
+        const { appended, skipped, total, perBundle } = await seedActiveCorpusEntries(memoryDir, entries, {
+          captureUnknownContext: config.seed?.captureUnknownContext,
+          unknownContextLimit: config.seed?.unknownContextLimit,
+        });
         // If every active bundle failed, re-throw the first error so the outer catch
         // reports it, rather than claiming success with zero facts written.
         const bundleNames = Object.keys(perBundle);
@@ -363,6 +380,8 @@ async function readWrittenConfig(tomlPath, base) {
       cfg.seed = { ...cfg.seed };
       if (raw.seed.enabled !== undefined) cfg.seed.enabled = Boolean(raw.seed.enabled);
       if (raw.seed.limit !== undefined) cfg.seed.limit = Number(raw.seed.limit);
+      if (raw.seed.capture_unknown_context !== undefined) cfg.seed.captureUnknownContext = Boolean(raw.seed.capture_unknown_context);
+      if (raw.seed.unknown_context_limit !== undefined) cfg.seed.unknownContextLimit = Number(raw.seed.unknown_context_limit);
     }
     // Sparse pass-through — src/services/extensions.mjs validates; this layer just carries the
     // raw tables through unmodified.

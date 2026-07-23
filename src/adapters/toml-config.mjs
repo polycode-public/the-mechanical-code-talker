@@ -108,6 +108,8 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   const seedCfg = {};
   if (seed.enabled !== undefined) seedCfg.enabled = seed.enabled;
   if (seed.limit !== undefined) seedCfg.limit = seed.limit;
+  if (seed.capture_unknown_context !== undefined) seedCfg.captureUnknownContext = seed.capture_unknown_context;
+  if (seed.unknown_context_limit !== undefined) seedCfg.unknownContextLimit = seed.unknown_context_limit;
   if (Object.keys(seedCfg).length) cfg.seed = seedCfg;
 
   // Extension-pack seam (src/services/extensions.mjs): sparse PASS-THROUGH only — the

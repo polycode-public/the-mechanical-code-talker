@@ -52,6 +52,37 @@ test("normalizeConfig: an unrecognized [memory] backend value still passes throu
   assert.equal(norm.memory.backend, "bogus");
 });
 
+// ---- [seed] capture_unknown_context / unknown_context_limit: sparse, same
+// discipline as enabled/limit above — snake_case in the file, camelCase in
+// the normalized shape, present only when the key is actually set.
+
+test("normalizeConfig: [seed] capture_unknown_context alone — cfg.seed = { captureUnknownContext }, no other seed key", async () => {
+  const norm = await normalizeConfig({ seed: { capture_unknown_context: true } }, { configDir: "/x" });
+  assert.deepEqual(norm.seed, { captureUnknownContext: true });
+});
+
+test("normalizeConfig: [seed] unknown_context_limit alone — cfg.seed = { unknownContextLimit }", async () => {
+  const norm = await normalizeConfig({ seed: { unknown_context_limit: 200 } }, { configDir: "/x" });
+  assert.deepEqual(norm.seed, { unknownContextLimit: 200 });
+});
+
+test("normalizeConfig: [seed] enabled + capture_unknown_context together — both keys land in cfg.seed", async () => {
+  const norm = await normalizeConfig({ seed: { enabled: true, capture_unknown_context: false } }, { configDir: "/x" });
+  assert.deepEqual(norm.seed, { enabled: true, captureUnknownContext: false });
+});
+
+test("normalizeConfig: [seed] capture_unknown_context round-trips through a real tmct.toml on disk", async () => {
+  const dir = await tmp();
+  try {
+    await writeFile(join(dir, "tmct.toml"), "[seed]\ncapture_unknown_context = true\n");
+    const raw = await loadTomlConfig(dir);
+    const norm = await normalizeConfig(raw, { configDir: dir });
+    assert.equal(norm.seed.captureUnknownContext, true);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 // ---- [games.*] / [planning]: sparse raw pass-through, same discipline as
 // [extensions]/[bias] above — src/domain/game-config.mjs's resolveGameConfig
 // owns the snake_case -> camelCase mapping and the default fill, never this
