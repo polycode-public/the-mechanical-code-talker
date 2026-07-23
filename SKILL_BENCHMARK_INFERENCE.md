@@ -24,6 +24,8 @@ profiles RL/EL, the ALC→SHOIQ→SROIQ progression, `PLAN_SYLLOGIST_EL_DL.md`):
 | INF-6 | Consistency | disjointness-clash detection across stored memory (`c2Inconsistent`) |
 | INF-7 | Constructed restriction (OWL 2 EL) | classify through undeclared class expressions — nested existentials, existential chains — needs EL saturation (`elConstructedRestriction`, `elExistentialChain`) |
 | INF-8 | Reasoning by cases (OWL 2 DL) | disjunction elimination, complement classes — needs a branching tableau — plus the disjointness-proof-soundness discriminator (`dlDisjunction`, `dlComplement`, `dlDisjointProofSoundness`) |
+| INF-9 | Abduction (best explanation) | select the best explanation for an observation over a CLOSED hypothesis set — diagnosis-shaped, deduction run backwards (`REPORT_AGI_CHECK_IN.md`, "Absent at the same level" item 4) |
+| INF-10 | Causal & counterfactual | "what if it had gone the other way", evaluated over the planner's own state snapshots: a modified start re-solved and compared, never a guessed outcome (`PLAN_FILLER_AND_COUNTERFACTUALS.md` §2) |
 
 INFBENCH grades classical-logic inference capability (fabrication vs completion on this fragment
 ladder), while `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s CEFR bands grade linguistic complexity in
@@ -38,6 +40,24 @@ answer would be a fabrication, and the floor is a miss. The one exception is INF
 discriminator** that flips from ceiling to pass the day the CONVERSATION-routed proof-path fix (a
 subclass proof must consult `owl:disjointWith` before certifying) lands — the concrete
 cross-benchmark link where a defect the persona sweep found becomes a pinned INFBENCH case.
+
+### The scale's upper bound (INF-9, INF-10 — defined ahead of design)
+
+INF-1..INF-6 ship and gate nowhere; INF-7/INF-8 are named horizons with `PLAN_SYLLOGIST_EL_DL.md`
+as the build path. INF-9 and INF-10 extend the ladder one step past deduction, into the next two
+classic-AI inference modes `REPORT_AGI_CHECK_IN.md` maps as absent at the same level: abduction
+(inferring the best explanation) and causal/counterfactual reasoning. They are defined here so the
+scale has headroom past what today's engine reaches — a ruler with room above the reading, not a
+claim the engine does either yet. The AGI won't live on this ladder; these two rungs are where its
+deductive-cousin capabilities would register.
+
+Neither has a generator template in `infbench/cases.jsonl` yet, so both sit at the honest-miss
+floor exactly as INF-7/INF-8 do, and their cases get authored when the engine behind them exists:
+INF-9 needs a ranked closed hypothesis set and a best-explanation selector; INF-10 needs
+`PLAN_FILLER_AND_COUNTERFACTUALS.md` §2's re-solve-from-modified-start over the planner's own
+snapshots. The fabrication rule (§2) holds for both verbatim — fabrication is any answered verdict
+not pinned by the case's own literal at generation time, so an unranked guess at a cause, or a
+made-up counterfactual outcome, is a fabrication and the floor is a miss.
 
 This shape is closer to **`SKILL_BENCHMARK_CEFR_ENGLISH.md`'s** measure→apply-one-lever→re-measure loop than
 to a delegated chat-round sprint (`SKILL_BENCHMARK_CONVERSATION.md`'s capped sprint mode), and this doc
