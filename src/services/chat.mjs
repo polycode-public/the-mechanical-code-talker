@@ -8526,7 +8526,19 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         }
       }
     }
-    return null;
+    // An isa-shaped FIRST turn on a pristine store falls THROUGH to the isa
+    // reader below rather than taking the empty-store bail-out: that reader's
+    // body tolerates rows=[] end-to-end (every derived array is empty) and
+    // lands on the specific "I don't know X at all yet — teach me" closer, so
+    // the very first "is X a Y" no longer hits the generic grammar wall just
+    // because nothing has been taught yet. The graph inherits-bridge above
+    // already answers the code-entity direct/converse cases before this point.
+    // A leading "there" subject is existential ("is there a class called X"),
+    // which ISA_ASK_RE also matches but a LATER existence lane owns and answers
+    // better — it keeps the bail-out, mirroring this block's own emptyIsAdj
+    // "there" exclusion above. Every OTHER empty-store shape keeps the bail-out.
+    const fallThroughIsa = qHedge.match(ISA_ASK_RE) || matchWhyIsa(q);
+    if (!((fallThroughIsa && !/^there\b/i.test(fallThroughIsa[1].trim())) || CONFIRM_TAG_RE.test(q))) return null;
   }
   const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
   const byTrust = (a, b) => b.trust - a.trust;

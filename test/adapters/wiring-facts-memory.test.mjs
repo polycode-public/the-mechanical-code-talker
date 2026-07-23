@@ -377,13 +377,19 @@ test("a code-graph count is unaffected when the same noun was also asserted as a
   }
 });
 
-test("no-fact questions stay byte-unchanged honest misses, with and without memory", async () => {
+test("a pristine store's FIRST isa question warms to the specific closer; a whole-store recall keeps its wall's first line", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-w4-nofact-"));
   try {
+    // With a store present (even an empty one), the very first "is X a Y" now
+    // names the unknown subject and offers to be taught, rather than the generic
+    // grammar wall. With NO store at all there is nowhere to teach to, so the
+    // bare wall still stands.
     const withMemory1 = await runTurn("is a zebra a mammal", { config: CONFIG, memoryDir: dir });
     const bare1 = await runTurn("is a zebra a mammal", { config: CONFIG });
-    assert.equal(withMemory1.answer, bare1.answer, "\"is a zebra a mammal\" unchanged");
-    assert.equal(withMemory1.record.miss, true);
+    assert.match(withMemory1.answer, /I can't confirm that — I don't know "zebra" at all yet\. If it's true, teach me: "zebra is a kind of mammal"\./);
+    assert.doesNotMatch(withMemory1.answer, /couldn't parse this as a graph question/);
+    assert.match(bare1.answer, /couldn't parse this as a graph question/, "no store at all -> the bare wall stands");
+    assert.equal(withMemory1.record.miss, true, "still an honest miss, never a guessed answer");
     assert.notEqual(withMemory1.record.via, "fact");
 
     const withMemory2 = await runTurn("what do you know about giraffes", { config: CONFIG, memoryDir: dir });
@@ -395,5 +401,59 @@ test("no-fact questions stay byte-unchanged honest misses, with and without memo
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("teaching the fact then re-asking flips a first-turn isa miss to a cited yes — the empty-store fall-through never shadows the taught path", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-w4-firstisa-teach-"));
+  try {
+    const first = await runTurn("is a zebra a mammal", { config: CONFIG, memoryDir: dir });
+    assert.match(first.answer, /I don't know "zebra" at all yet/, "first turn: the specific closer");
+    assert.equal(first.record.miss, true);
+
+    await appendFact(dir, {
+      subject: "zebra", predicate: "rdfs:subClassOf", object: "mammal",
+      provenance: "teach:chat:t-firstisa@2026-07-23T00:00:00.000Z",
+    });
+    clearCache();
+    const reask = await runTurn("is a zebra a mammal", { config: CONFIG, memoryDir: dir });
+    assert.match(reask.answer, /yes — you told me: zebra is a kind of mammal \(source: teach:chat:t-firstisa@/);
+    assert.equal(reask.record.miss, false);
+    assert.equal(reask.record.via, "fact");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the empty-store isa fall-through is scoped: a graph-entity subject still defers, and a non-isa yes/no keeps its bail-out offer byte-identical", async () => {
+  // A graph entity as the isa subject is deferred by the isa reader's own
+  // graph-entity guard, so factReadBack returns null and the turn lands where it
+  // did before — the fall-through only rescues plain-vocabulary subjects, never
+  // starts answering (or vocab-teach-offering) a code entity.
+  const gDir = await mkdtemp(join(tmpdir(), "tmct-w4-graphsubj-"));
+  try {
+    const g = await runTurn("is app/lib/a.mjs a component", { config: CONFIG, graph: GRAPH, memoryDir: gDir });
+    assert.equal(g.record.miss, true);
+    assert.doesNotMatch(g.answer, /I don't know "app\/lib\/a\.mjs" at all yet/, "a graph entity keeps its deliberate deferral, no vocab-teach offer");
+  } finally {
+    clearCache();
+    await rm(gDir, { recursive: true, force: true });
+  }
+
+  // Control: a NON-isa shape (an adjective yes/no) never enters the isa
+  // fall-through; its empty-store bail-out offer is unchanged and deterministic
+  // across two independent pristine stores.
+  const dirA = await mkdtemp(join(tmpdir(), "tmct-w4-ctrl-a-"));
+  const dirB = await mkdtemp(join(tmpdir(), "tmct-w4-ctrl-b-"));
+  try {
+    const a = await runTurn("is the checkout flow deprecated", { config: CONFIG, memoryDir: dirA });
+    const b = await runTurn("is the checkout flow deprecated", { config: CONFIG, memoryDir: dirB });
+    assert.equal(a.answer, b.answer, "the non-isa empty-store bail-out is unchanged and deterministic");
+    assert.match(a.answer, /I don't know anything about "the checkout flow" yet — teach me directly/);
+  } finally {
+    clearCache();
+    await rm(dirA, { recursive: true, force: true });
+    await rm(dirB, { recursive: true, force: true });
   }
 });
