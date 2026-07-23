@@ -301,6 +301,7 @@
   "src/adapters/providers/fixture.mjs",
   "src/adapters/providers/graph-service.mjs",
   "src/adapters/repository-interface.mjs",
+  "src/adapters/research-queue-store.mjs",
   "src/adapters/source-slice.mjs",
   "src/adapters/source.mjs",
   "src/adapters/toml-config.mjs",
