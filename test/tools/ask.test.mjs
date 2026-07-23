@@ -1533,3 +1533,27 @@ test("ask(): an excluded second-clause bigram leaves the stacked-relative produc
   const { content } = ask(graph, "classes inherited from Base used in app/widget.mjs");
   assert.doesNotMatch(content, /^nothing in the index matches that \(classes\)\./);
 });
+
+// ---- a bare entity-type filter narrows the previous result set to one class ----
+
+test("ask(): 'which of them are <kind>' narrows the prior set to that class", () => {
+  const prior = ask(miniWebappGraph, "which modules import http.mjs");
+  const prev = prior.tmct_ask.matches.map((m) => m.id);
+  assert.ok(prev.length >= 3);
+  // The prior set is all Modules, so narrowing it to functions empties it —
+  // and the receipt names the FILTER's kind, not the base set's.
+  const empty = ask(miniWebappGraph, "which of them are functions", { prev });
+  assert.equal(empty.tmct_ask.miss, true);
+  assert.match(empty.content, /^nothing in the index matches that \(functions\)\./);
+  // Narrowing to its own class keeps every member.
+  const kept = ask(miniWebappGraph, "which of them are modules", { prev });
+  assert.equal(kept.tmct_ask.miss, false);
+  assert.equal(kept.tmct_ask.matches.length, prev.length);
+});
+
+test("ask(): 'how many of them are <kind>' counts the narrowed set and names that kind even at zero", () => {
+  const prior = ask(miniWebappGraph, "which modules import http.mjs");
+  const prev = prior.tmct_ask.matches.map((m) => m.id);
+  assert.match(ask(miniWebappGraph, "how many of them are modules", { prev }).content, new RegExp(`^${prev.length} modules\\.`));
+  assert.match(ask(miniWebappGraph, "how many of them are functions", { prev }).content, /^0 functions\./);
+});

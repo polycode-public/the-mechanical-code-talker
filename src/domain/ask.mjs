@@ -646,6 +646,12 @@ function parsePredicateFilter(words, nlp) {
   const restLc = lc.slice(i);
   if (!rest.length) return { type: "all" };
   if (restLc.every((x) => QUALIFIERS[x])) return { type: "qual", filters: restLc };
+  // A bare concrete entity noun ("which of them are functions") narrows the
+  // prior set to one class rather than testing a relation.
+  if (rest.length === 1) {
+    const en = entityNoun(restLc[0]);
+    if (en && !en.placeholder && en.entityType) return { type: "entity", entityType: en.entityType };
+  }
   const clause = parseSimpleClause(`what ${rest.join(" ")}`, nlp);
   if (clause && (clause.shape === "reverse" || clause.shape === "forward") && clause.object) {
     return { type: "clause", clause };
@@ -1777,6 +1783,8 @@ function evalAnaphora(graph, ast, opts) {
   const f = ast.filter;
   if (f && f.type === "qual") {
     items = items.filter((ind) => f.filters.every((q) => qualHolds(graph, ind, QUALIFIERS[q])));
+  } else if (f && f.type === "entity") {
+    items = items.filter((ind) => ind.class === f.entityType);
   } else if (f && f.type === "clause") {
     const r = resolveObject(graph, f.clause.object);
     if (!r.match) items = [];
@@ -1791,9 +1799,12 @@ function evalAnaphora(graph, ast, opts) {
   }
   // A count over a prior set names the entity kind when survivors share a
   // class; fall back to the prior set's own class when the filter empties it,
-  // so the honest-empty render still names what was checked.
+  // so the honest-empty render still names what was checked. An entity-type
+  // filter that empties the set names the FILTER's kind ("functions"), not the
+  // base set's — the reader asked which of them were that kind.
   const sameClass = (list) => (list.length && list.every((x) => x.class === list[0].class) ? list[0].class : null);
-  const common = items.length ? sameClass(items) : sameClass(baseItems);
+  const emptyClass = f && f.type === "entity" ? f.entityType : sameClass(baseItems);
+  const common = items.length ? sameClass(items) : emptyClass;
   if (ast.mode === "count") return { compositeKind: "count", count: items.length, entityType: common, matches: [] };
   return { compositeKind: "set", matches: items, entityType: common };
 }
