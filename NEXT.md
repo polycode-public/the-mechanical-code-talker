@@ -19,7 +19,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 - [ ] research extraction stores at most one triple per sentence (the copula wins and the rest is skipped) — real facts a summary offers get dropped ("a volcano … has lava coming out from a magma chamber", "formed by the movement of tectonic plates"); widening to multiple triples per sentence needs its own design pass over `optimisticTriples`' one-triple contract (playtest 023)
 - [ ] the research queue is session-local but the reply promises "'research next' fetches the next one" — a new CLI session answers "no research is running"; either persist the queue under `.tmct/` or have the reply say the queue lives in this session (playtest 023)
 - [ ] the relation-verb extraction tier lets a partitive of-chain steal the subject — "The weight of all of the snow creates pressure" stores "snow creates pressure" (inner noun, not the head "weight"); the copula tier's three-way of-chain rule (playtest 025) is the model for a matching subject-side climb (playtest 025)
-- [ ] frozen row 19 (`cross-turn-temporal-composition-unbuilt`) needs the DRT-lite typed discourse record — the R1 spike PLAN_AGENTS §5 stages, not a day-scale close. (PLAN_AGENTS gap J, replan-on-drift, landed in the wave-2 branch; items 1, 2, 5 and three of the four frozen rows are merged)
 
 ## Discipline
 

@@ -316,7 +316,12 @@ in `docs/references/papers/`.
   explicit reject class. Autoplay's `mgx:is-objective` inference is a first, world-scoped
   instance of the shape; the general scheme is unbuilt.
 - **DRT-lite typed discourse record** — a bounded structure tracking entities and relations
-  across turns, feeding slot-filling. The four frozen rows in §3 are its acceptance tests.
+  across turns, feeding slot-filling. Three of its four original acceptance rows are flipped;
+  the standing acceptance test is the frozen compositional-lane row
+  `games/cross-turn-temporal-composition-unbuilt` ("was that before logger.mjs was touched" —
+  composing a prior answer's commit set with a fresh last-touch read across turns). A
+  closed-template treatment can't carry that state, which is what makes this a spike rather
+  than a day-scale close; `SKILL_BENCHMARK_CONVERSATION.md`'s FLOW-7 rung grades it once built.
 
 **R2 — real but distant:** a hand-built closed-domain dependency/categorial grammar (recorded so
 it isn't rediscovered from scratch); a cross-repo shared trust vocabulary (needs marginalia to
