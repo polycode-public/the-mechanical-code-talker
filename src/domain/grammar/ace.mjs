@@ -106,7 +106,12 @@ function resolveNP(lexicon, tokensIn, { allowCompound = false } = {}) {
     if (proper) return { term: `${ns}${proper}`, individual: true, extras: [], unknown: [] };
     if (CODE_REF.test(t)) return { term: `${ns}${t}`, individual: true, extras: [], unknown: [] };
     const noun = lookupNoun(lexicon, t, { singularOnly });
-    if (noun) return { term: `${ns}${noun.lemma}`, individual: false, noun, extras: [], unknown: [] };
+    // `folded` marks a match that only exists because lookupNoun's own
+    // trailing-"-s" strip or irregular-plural table rewrote the surface word
+    // — never an exact lexicon hit. parseCopula (below) uses this to keep a
+    // proper name that happens to fold to an unrelated dictionary word
+    // ("whiskers" -> "whisker") from silently losing its spelling.
+    if (noun) return { term: `${ns}${noun.lemma}`, individual: false, noun, folded: noun.lemma.toLowerCase() !== t.toLowerCase(), extras: [], unknown: [] };
     return { term: null, individual: false, extras: [], unknown: [t] };
   }
   if (tokens.length === 2) {
@@ -159,6 +164,26 @@ function resolveNP(lexicon, tokensIn, { allowCompound = false } = {}) {
   }
   // 0 or 3+ tokens: not a fragment NP. Name the undeclared words if any.
   return { term: null, individual: false, extras: [], unknown: tokens.filter((t) => !classify(t, lexicon)) };
+}
+
+/** A bare single-token subject (no determiner of its own) that resolveNP only
+ *  resolved via a fold, immediately followed by an indefinite-article object
+ *  ("whiskers is A CAT", "every whiskers is A CAT"), is the canonical
+ *  individual-naming shape ("john is a man") wearing a proper name that
+ *  happens to fold to an unrelated dictionary word ("whiskers" ->
+ *  "whisker"). Trusting the fold here silently rewrites the taught subject's
+ *  spelling; declining it and reporting the token as unknown lets the
+ *  caller's own novel-individual fallback store the literal typed word
+ *  instead — the same honest-miss-over-guess call this file's
+ *  exact/irregular-only folds already make everywhere else. Shared by
+ *  parseCopula and parseEvery, the two patterns whose subject slot can hold
+ *  a bare single token immediately followed by "a"/"an". */
+function declineFoldedBareSubject(np, subjectToks, objectHead) {
+  if (np.term != null && !np.individual && np.folded
+    && subjectToks.length === 1 && /^an?$/i.test(objectHead)) {
+    return { term: null, individual: false, extras: [], unknown: [subjectToks[0]] };
+  }
+  return np;
 }
 
 /** The shared miss result: a structural fit with undeclared words returns the
@@ -349,7 +374,16 @@ function parseEvery(lexicon, toks, lower) {
   if (isIdx <= 1 || isIdx === toks.length - 1) return null;
   const rest = toks.slice(isIdx + 1);
   const everyAdjOnly = rest.length === 1 ? lookupAdjective(lexicon, rest[0]) : null;
-  const np1 = resolveNP(lexicon, toks.slice(1, isIdx), { allowCompound: !everyAdjOnly });
+  const subjectToks = toks.slice(1, isIdx);
+  // Same fold-vs-individual ambiguity parseCopula guards against — a
+  // determiner-less "every whiskers is a cat" reaches the identical
+  // single-token resolveNP fold ("whiskers" -> "whisker") assertCandidates
+  // manufactures as a candidate phrasing whenever the bare payload has no
+  // determiner of its own, so this needs the same declineFoldedBareSubject
+  // guard or that candidate alone re-opens the bug parseCopula just closed.
+  const np1 = declineFoldedBareSubject(
+    resolveNP(lexicon, subjectToks, { allowCompound: !everyAdjOnly }), subjectToks, rest[0],
+  );
   if (everyAdjOnly) return adjectiveCopula(lexicon, PATTERN_ADJECTIVE, np1, everyAdjOnly);
   const np2 = resolveNP(lexicon, rest, { allowCompound: true });
   if (np1.term == null || np2.term == null) return missOrNull(PATTERN_SUB_CLASS_OF, [np1, np2]);
@@ -414,7 +448,13 @@ function parseOfForm(lexicon, toks, lower) {
 function parseCopula(lexicon, toks, lower, isIdx) {
   const rest = toks.slice(isIdx + 1);
   if (!rest.length) return null;
-  const np1 = resolveNP(lexicon, toks.slice(0, isIdx), { allowCompound: rest.length > 1 });
+  const subjectToks = toks.slice(0, isIdx);
+  // parseAce never reaches here for "are", only singular "is" — see
+  // declineFoldedBareSubject's own docblock for why a bare single-token
+  // subject that only resolves by folding needs this guard.
+  const np1 = declineFoldedBareSubject(
+    resolveNP(lexicon, subjectToks, { allowCompound: rest.length > 1 }), subjectToks, rest[0],
+  );
   if (rest.length === 1) {
     const adj = lookupAdjective(lexicon, rest[0]);
     if (adj) return adjectiveCopula(lexicon, PATTERN_ADJECTIVE, np1, adj);

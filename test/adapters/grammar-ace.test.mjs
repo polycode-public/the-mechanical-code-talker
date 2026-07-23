@@ -174,6 +174,27 @@ test("unknown lexicon words: structural fit → empty triples + residue naming t
   assert.deepEqual(mid.residue, ["frobnicate"], "known ends, unknown middle: the 'if you mean X…' hook");
 });
 
+test("a bare single-token subject that only resolves via the trailing-s fold declines rather than silently renaming the taught individual", () => {
+  // "whisker" is a real lexicon-core.json noun; "whiskers" (a plausible pet
+  // name typed as an ordinary bare-copula individual claim) must not be
+  // read as its plural and stored under the folded lemma instead.
+  const r = parseAce("whiskers is a cat");
+  assert.equal(r.pattern, "subClassOf");
+  assert.deepEqual(r.triples, []);
+  assert.deepEqual(r.residue, ["whiskers"]);
+  // The same fold-only ambiguity under "every" — assertCandidates (chat.mjs)
+  // tries this exact phrasing as a candidate for any determiner-less payload.
+  const every = parseAce("every whiskers is a cat");
+  assert.deepEqual(every.residue, ["whiskers"]);
+  // An EXACT (unfolded) single-token subject still resolves as a class
+  // exactly as before — only a fold-derived match declines.
+  const exact = parseAce("whisker is a bristle");
+  assert.equal(exact.pattern, "subClassOf");
+  assert.deepEqual(exact.triples, [
+    { subject: "tmct:whisker", predicate: "rdfs:subClassOf", object: "tmct:bristle", kind: "rdfs:subClassOf" },
+  ]);
+});
+
 test("case and whitespace tolerance: parses are invariant under casing, padding and terminal punctuation", () => {
   const canon = parseAce("every module is a unit");
   assert.deepEqual(parseAce("  EVERY   Module IS a  Unit.  "), canon);

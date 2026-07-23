@@ -62,6 +62,17 @@ test("exact curated match always wins: an already-exact query parses IDENTICALLY
   assert.deepEqual(on, off);
 });
 
+test("lemma tier does not resurrect the naming sense of \"called\" as an active calls verb", () => {
+  // lemma("called") is "call", itself an ACTIVE verb-table entry, so the lemma
+  // tier used to resolve "cat is called whiskers" before the passive-participle
+  // guard ever ran, reading a naming statement as "cat calls whiskers". An
+  // honest null either way — with the adapter (lemma tier reachable) and
+  // without it (falls to the exact-word participle fallback instead).
+  assert.equal(parseQuery("my cat is called whiskers"), null);
+  assert.equal(parseQuery("cat is called whiskers"), null);
+  assert.equal(parseQuery("cat is called whiskers", { nlp: null }), null);
+});
+
 // ---- consumer 2: the POS signal, used ONLY inside the det+NOUN+"of" frame it
 // provably fixes. The wink probe showed "import" is tagged NOUN even in genuine
 // verb use ("which modules import walk.mjs"), so a general POS veto would break

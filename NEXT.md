@@ -25,8 +25,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 - [ ] `g-c2-garden-1`'s garden-path parse is the sole hard fail at 2.11.0 (unchanged since 2.7.12) — see `BENCHMARK_CEFR_ENGLISH_2.11.0.md` decision log item 1
 - [ ] `g-b2-count-temp-1`'s commit-undercounting bug is unchanged since 2.7.12 (verbatim same wrong answer) — see `BENCHMARK_CEFR_ENGLISH_2.11.0.md` decision log item 2
 - [ ] two tier-1 `answerMatch` patterns have drifted from current product copy (`be-honest-empty`, `conv-hello-there`) — both score well under the judge, so this is case-hygiene, not a regression — see `BENCHMARK_CEFR_ENGLISH_2.11.0.md` decision log item 5
-- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #3: "k what abt users.mjs"-shaped casual fragments are silently taught as garbage facts — the bare-declarative teach lane needs a positive test excluding interrogative/imperative/fragment shapes before it accepts anything, not another one-off phrase fix
-- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #1: a sentence opening with "I" ("I am new here", "I want to know X") misparses as a teach attempt about the pronoun "i" instead of being read as an ordinary opener
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #2: the "are you an LLM / what model are you" family still misroutes under casual phrasing outside the closed set (three fresh wordings this cycle)
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #4: internet/web-access capability questions ("can you browse the web") misroute into a module-name search instead of a clean offline decline
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #5: a non-sequitur identity blurb fires instead of a targeted decline for nonsense input or a fuzzy-matchable typo (recurrence of 2.7.11 #28)
@@ -34,15 +32,12 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #7: small-talk/opinion questions wall inconsistently — only one exact phrasing of "how are you" gets the on-brand no-feelings decline
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #8: "can you make up an answer if you don't know" — a direct test of the honest-miss promise — walls instead of confirming it on-brand
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #9: "prove that X is Y" still unrecognized despite "is X a Y" proof machinery working (recurrence of 2.7.11 #13)
-- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #10: "my cat is called whiskers" (naming an individual) misroutes into a code `calls` relationship query
-- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #11: teaching a term ending in "s" silently singularizes it, breaking later recall (recurrence-class of 2.7.11 #12)
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #12: "does X have Y" (has-property) routes into the code `defines` relation instead
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #13: "the Task" (definite article before a real class name) isn't recognized even though "Task" is
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #14: the broad "detailed summary" completions question walls under a near-miss non-native phrasing though the exact wording passed in 2.7.11
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #15: "used anywhere" open-existential usage questions give an unclear answer where the bounded-pair "used by Y" phrasing gives a crisp yes/no
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #16: "whats X do" (dropping "does") fails to resolve even for a real, indexed function
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #17: "what about X, what he/it do" sometimes silently answers the reverse relation instead of the forward one
-- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #18: a filler/colon-led preamble before a real teach sentence breaks parsing of an otherwise-supported shape
 - [ ] `CAPABILITIES_2.11.0.md` row 210: `tmct_ingest` and `tmct_export` (shipped this cycle) are declared and dispatched but sit outside both the capability registry and `EXCLUDED_FROM_REGISTRY` — the same gap `tmct_related` had before its 2.7.12 fix (`96d40fe`/`e5f84e1`); register them or exclude them by name
 
 ## Discipline
