@@ -92,5 +92,16 @@ Three hard-won lessons, carried forward:
    take over. A second identical stall on the same agent means stop it and let the coordinator
    commit its (real, verified) work directly — that recovery took minutes and lost nothing.
 
+7. (2026-07-24) The merge gate's blast-radius run is not a substitute for the full suite on a
+   push to `main`. A merge whose own lane and estate guard were green went out without
+   `npm test`; CI's `unit` job then failed on `test/adapters/memory-seed-perf.test.mjs`'s
+   scaling ratio (12.72x against its 12x bar) — a contention flake, not a regression (the
+   local full suite ran 4093/4093 straight after). Two corrections: run the full suite before
+   every push that reaches the remote, and when a timing test flakes, harden it rather than
+   re-running it. That test had already been hardened once (min-of-5 after flakes at 6.30x and
+   10.49x); the remaining weakness is that a RATIO amplifies leftover noise asymmetrically —
+   the long batch's every trial can catch contention while the short batch catches a quiet
+   moment. Its bar is now 20x, which still leaves the whole quadratic band (64x up) outside.
+
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
 history, plus the `BENCHMARK_<axis>_<version>.md` reports and `archive/`.*
