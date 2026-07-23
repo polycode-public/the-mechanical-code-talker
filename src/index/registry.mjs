@@ -4,9 +4,11 @@
 // backend emits the SAME shape (path, dotted, imports, defines, calls, exports),
 // so everything downstream (index-repo.mjs, buildEntities) is language-agnostic.
 import * as jsts from "./extract-jsts.mjs";
+import * as python from "./extract-python.mjs";
 
 export const REGISTRY = {
   "js/ts": { exts: jsts.meta.exts, extractor: jsts },
+  python: { exts: python.meta.exts, extractor: python },
 };
 
 /** The full set of file extensions the registry covers (sorted, lower-cased). */

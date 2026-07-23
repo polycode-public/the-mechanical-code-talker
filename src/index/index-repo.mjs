@@ -8,13 +8,13 @@
 // of the reader/producer boundary source.mjs documents — source.mjs READS a
 // graph, this module PRODUCES one; they are deliberately separate modules.
 
-import { spawn } from "node:child_process";
 import { writeFile, mkdir, stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { buildEntities } from "../adapters/graph-build.mjs";
 import { ingestSchemaDocs } from "../tools/schema-docs.mjs";
 import { loadIgnores, relPath } from "./walk.mjs";
 import { ingestRepo, LANG_EXTS } from "./registry.mjs";
+import { exec } from "./spawn.mjs";
 
 // Every file extension the index covers — gates the git-log file filters so
 // history is collected for exactly the languages the extractors parsed.
@@ -40,36 +40,6 @@ function historySymbolDepth(env = process.env) {
   if (raw === undefined || raw === "") return HISTORY_SYMBOL_DEPTH;
   const n = Number(raw);
   return Number.isFinite(n) && n >= 0 ? Math.floor(n) : HISTORY_SYMBOL_DEPTH;
-}
-
-/** spawn, collect stdout; resolve {code, stdout, stderr, timedOut, truncated}
- *  (never reject). `timeout` (ms, >0) arms a SIGKILL wall-clock; `truncated` is set
- *  when stdout exceeded maxBuffer (dropped bytes → an incomplete result the caller
- *  must NOT treat as authoritative). */
-export function exec(cmd, args, { cwd, maxBuffer = 512 * 1024 * 1024, timeout = 0 } = {}) {
-  return new Promise((resolve) => {
-    const child = spawn(cmd, args, { cwd });
-    let stdout = "";
-    let stderr = "";
-    let size = 0;
-    let truncated = false;
-    let timedOut = false;
-    const timer = timeout > 0 ? setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeout) : null;
-    child.stdout?.on("data", (d) => { size += d.length; if (size <= maxBuffer) stdout += d; else truncated = true; });
-    child.stderr?.on("data", (d) => (stderr += d));
-    child.on("close", (code) => {
-      if (timer) clearTimeout(timer);
-      if (timedOut) {
-        resolve({ code: -1, stdout, stderr: stderr + `timed out after ${Math.round(timeout / 1000)}s`, timedOut: true, truncated });
-      } else {
-        resolve({ code: code ?? -1, stdout, stderr, timedOut: false, truncated });
-      }
-    });
-    child.on("error", (err) => {
-      if (timer) clearTimeout(timer);
-      resolve({ code: -1, stdout, stderr: stderr + String(err), timedOut, truncated });
-    });
-  });
 }
 
 /** A one-line failure reason for a git-history exec, or null on clean success.

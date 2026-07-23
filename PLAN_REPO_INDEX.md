@@ -28,6 +28,17 @@ unblocks PLAN_CODE.md Track 5's re-index stage; the rest of the plan's ordering 
   `test/index/index-repo-write.test.mjs` — the written artifact reads back through the provider seam
   (`fetchEntities`) into a real `architecture`/`resolve` hit, and re-indexing the same source with a
   pinned timestamp is byte-identical. The graph it writes feeds `chat --repo`/`serve`/`cli` unchanged.
+- **Phase 3 — PARTIAL (Python backend registered).** `src/index/extract_ast.py` (stdlib `ast`, zero
+  npm dependency) ported and driven by `src/index/extract-python.mjs`, which runs it as a subprocess
+  (`src/index/spawn.mjs`, shared with the git passes) and degrades gracefully when `python3` is
+  absent — it skips the `.py` files and still produces the JS/TS graph. The registry
+  (`src/index/registry.mjs`) now carries two backends; `tmct index` reports each. Proven by
+  `test/index/python-extractor.test.mjs` (conformance + edge assertions, skipped without python3).
+  Remaining in Phase 3: C# (Roslyn/tree-sitter) and Java (JavaParser/tree-sitter) — each needs an
+  external toolchain (.NET, a JDK) or a `tree-sitter` npm grammar, the real footprint growth the plan
+  flags; and porting `extract.mjs`'s heavier method-call/interface resolution (tmct's `buildEntities`
+  is the older, simpler variant — the seonix one carries a tiered method-callee fallback that C#/Java
+  estates lean on).
 
 ## Origin
 
@@ -382,7 +393,8 @@ backend to register.
 Exit criterion met via `test/index/index-repo-write.test.mjs`: the written artifact reads back through
 the provider seam into a real query hit, and re-indexing is byte-identical.
 
-**Phase 3 — the remaining four language backends.** Port `extract.mjs`'s full merge/resolve layer
+**Phase 3 — the remaining language backends. PARTIAL: Python landed (stdlib `ast`, zero npm dep).**
+C#/Java remain (each needs an external toolchain or a tree-sitter grammar). Port `extract.mjs`'s full merge/resolve layer
 (import/call resolution, git-history edges), then `jsts_tsc.mjs` (JS/TS), then `cs_roslyn.mjs`/
 `cs_treesitter.mjs` (C#), then `java_javaparser.mjs`/`java_treesitter.mjs` (Java) — each independently
 testable, each against a subset of seonix's own pinned bench corpora (Django, eShopOnWeb,
