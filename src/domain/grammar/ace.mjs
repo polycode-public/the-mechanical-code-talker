@@ -641,7 +641,14 @@ export function parseImperative(sentence, lexicon = loadLexicon()) {
 
   if (verb === "look") {
     if (!rest.length || (rest.length === 1 && lower[0] === "around")) return command({});
-    return null;
+    // "look <object>" — a bare noun after look reads as a close look at that
+    // thing, routed through the same object handler examine/talk share (which
+    // resolves presence and declines an absent thing by name). "look at <x>"
+    // never reaches here — its 2-token synonym prefix already resolved to
+    // examine — so this arm only ever sees the bare-noun form.
+    const object = imperativeNP(lexicon, rest);
+    if (object.term == null) return miss(object.unknown);
+    return command({ object: object.term });
   }
   if (verb === "examine" || verb === "talk") {
     if (!rest.length) return null;

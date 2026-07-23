@@ -682,6 +682,13 @@ ${THEME_TOKENS_CSS}
      underneath always names the real, specific thing (the cabinet, the
      butler) — chrome around honest content, never instead of it. */
   .sprite-card { display: flex; flex-direction: column; align-items: center; width: 70px; }
+  /* a room sprite the visitor can click for a lights-down close look — a
+     pointer cursor and a gilt ring on hover. Wall-mounted cards live in a
+     pointer-events: none band (so the band never eats a floor click), so a
+     clickable one re-enables its own pointer events. */
+  .sprite-card.clickable { cursor: pointer; }
+  .sprite-card.clickable:hover .sprite-frame { border-color: var(--gilt); box-shadow: inset 0 0 0 3px var(--parchment), 0 0 0 2px var(--gilt), 0 2px 3px rgba(0, 0, 0, .22); }
+  .wall-row .sprite-card.clickable { pointer-events: auto; }
   /* a squared inventory-slot tile (the 90s-RPG idiom) instead of the old
      thin circular ring: a raised card with an inner mat, the class color on
      the outer border, and a soft ground shadow so the tile sits ON the
@@ -758,6 +765,29 @@ ${THEME_TOKENS_CSS}
   .roommap .room-node.clickable { cursor: pointer; }
   .roommap .room-node.clickable:hover rect { stroke: var(--gilt); stroke-width: 2.5; }
   .roommap .room-node.selected rect { stroke: var(--alert); stroke-width: 2.5; }
+
+  /* the object lightbox — the SAME lights-down treatment the map lightbox
+     uses (fixed dimmed backdrop, z-index 60, close on backdrop click/Escape),
+     framed as a parchment case-file card: the clicked object's large sprite
+     (the sprites-page 400px tier, via the same resolveObjectSprite the room
+     cards use), its live "look <object>" reply, and an object-scoped chat
+     dock — its own affordance pills filtered to this object, plus free text.
+     Every dock turn runs through the ONE live session, so the main
+     transcript/quest/satchel reflect it. */
+  .obj-lightbox { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 2.4rem; background: rgba(10, 8, 4, .74); }
+  .obj-lightbox[hidden] { display: none; }
+  .obj-lightbox-inner { width: min(92vw, 560px); max-height: 88vh; overflow-y: auto; background: var(--parchment); color: var(--ink); border: 3px solid var(--gilt); box-shadow: inset 0 0 0 2px var(--parchment-strong), 0 12px 48px rgba(0, 0, 0, .5); padding: 1.1rem 1.2rem 1.2rem; box-sizing: border-box; }
+  .obj-title { font-family: ${SERIF_STACK}; font-variant: small-caps; font-size: 1rem; letter-spacing: .06em; color: var(--gilt); font-weight: 600; margin: 0 0 .6rem; padding-bottom: .3rem; border-bottom: 1px solid var(--line); }
+  .obj-scene { display: flex; align-items: center; justify-content: center; padding: .5rem 0 1rem; }
+  .obj-sprite { width: min(46vmin, 300px); height: min(46vmin, 300px); }
+  .obj-sprite svg { width: 100%; height: 100%; display: block; }
+  .obj-look { font-size: .9rem; line-height: 1.45; white-space: pre-wrap; background: var(--card); border-left: 3px solid var(--gilt); padding: .55rem .7rem; margin: 0 0 .8rem; }
+  .obj-look:empty { display: none; }
+  .docklog { display: flex; flex-direction: column; gap: .4rem; max-height: 200px; overflow-y: auto; margin-bottom: .5rem; }
+  .docklog:empty { display: none; }
+  .docklog .u { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
+  .docklog .u::before { content: "tmct> "; color: var(--taught); }
+  .docklog .a { font-size: .86rem; line-height: 1.4; white-space: pre-wrap; }
 
   .goal-status { display: flex; flex-direction: column; gap: .4rem; }
   .goal-status .g { display: flex; align-items: baseline; gap: .4rem; font-size: .86rem; line-height: 1.35; }
@@ -890,6 +920,19 @@ ${THEME_TOKENS_CSS}
   <div class="map-lightbox" id="mapLightbox" role="dialog" aria-modal="true" aria-label="The manor map, enlarged" hidden>
     <div class="map-lightbox-inner roommap" id="mapLightboxInner"></div>
   </div>
+  <div class="obj-lightbox" id="objLightbox" role="dialog" aria-modal="true" aria-label="A closer look at an object" hidden>
+    <div class="obj-lightbox-inner" id="objLightboxInner">
+      <h2 class="obj-title" id="objTitle"></h2>
+      <div class="obj-scene" id="objScene"></div>
+      <div class="obj-look" id="objLook"></div>
+      <div class="pills" id="objPills"></div>
+      <div class="docklog" id="objDockLog" aria-live="polite"></div>
+      <form class="chatask" id="objForm">
+        <span class="prompt mono">tmct&gt;</span>
+        <input id="objInput" type="text" placeholder="examine it, take it&hellip;" aria-label="Type a command for this object">
+      </form>
+    </div>
+  </div>
 
   <div class="stage editor-stage" id="editStage" aria-label="The world editor">
     <div class="panel edittext">
@@ -960,6 +1003,14 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const mapViewportEl = el("mapViewport");
   const mapLightboxEl = el("mapLightbox");
   const mapLightboxInnerEl = el("mapLightboxInner");
+  const objLightboxEl = el("objLightbox");
+  const objTitleEl = el("objTitle");
+  const objSceneEl = el("objScene");
+  const objLookEl = el("objLook");
+  const objPillsEl = el("objPills");
+  const objDockLogEl = el("objDockLog");
+  const objFormEl = el("objForm");
+  const objInputEl = el("objInput");
   const goalListEl = el("goalList");
   const editModeBtn = el("editModeBtn");
   const editorTextEl = el("editorText");
@@ -980,6 +1031,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   let lastTicks = 0;
   let lastSnapshot = null;
   let selectedRoomId = null;
+  let objLightboxSubject = null;
   let editRows = [];
   let editState = { placements: new Map(), openness: new Map(), exits: new Map() };
   let allStoreRows = [];
@@ -1058,8 +1110,15 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // the caption text — is never replaced by it.
   const CLASS_BADGE = { adventurer: "hero", person: "townsfolk", container: "fixture", furniture: "fixture", portable: "item", room: "room" };
   const badgeFor = (cls) => CLASS_BADGE[cls] || cls;
-  function spriteCardHtml(label, cls, svg) {
-    return '<div class="sprite-card"><div class="sprite-frame" data-cls="' + esc(cls) + '"><div class="sprite" data-cls="' + esc(cls) + '">' + svg + '</div></div>'
+  // A truthy subject marks the card clickable and tags it with the object it
+  // names, so the room frame's own delegated handler can open the object
+  // lightbox for it. The player's own "you" card and the edit-mode / legend /
+  // satchel cards pass none, so only real room props are clickable.
+  function clickAttrs(subject) {
+    return subject ? ' clickable" data-look-subject="' + esc(subject) + '"' : '"';
+  }
+  function spriteCardHtml(label, cls, svg, subject) {
+    return '<div class="sprite-card' + clickAttrs(subject) + '><div class="sprite-frame" data-cls="' + esc(cls) + '"><div class="sprite" data-cls="' + esc(cls) + '">' + svg + '</div></div>'
       + '<div class="sprite-label">' + esc(label) + '</div>'
       + '<div class="class-badge" data-cls="' + esc(cls) + '">' + esc(badgeFor(cls)) + "</div></div>";
   }
@@ -1073,8 +1132,8 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // spriteCardHtml identification; every item resting on something else
   // shows an aria-label in its place, so the name is still available to
   // assistive tech even though the sighted layout stays compact.
-  function stackedSpriteCardHtml(label, cls, svg) {
-    return '<div class="sprite-card" aria-label="' + esc(label) + '"><div class="sprite-frame" data-cls="' + esc(cls) + '"><div class="sprite" data-cls="' + esc(cls) + '">' + svg + "</div></div></div>";
+  function stackedSpriteCardHtml(label, cls, svg, subject) {
+    return '<div class="sprite-card' + clickAttrs(subject) + ' aria-label="' + esc(label) + '"><div class="sprite-frame" data-cls="' + esc(cls) + '"><div class="sprite" data-cls="' + esc(cls) + '">' + svg + "</div></div></div>";
   }
 
   function captionFor(rows, state, here) {
@@ -1174,6 +1233,97 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   mapLightboxEl.addEventListener("click", (e) => { if (e.target === mapLightboxEl) closeMapLightbox(); });
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !mapLightboxEl.hidden) closeMapLightbox(); });
 
+  // ---- the object lightbox — clicking a room sprite opens a lights-down
+  // close look at that thing (the SAME lights-down/backdrop/Escape pattern as
+  // the map lightbox): its large sprite, its live "look <object>" reply
+  // (adventure.mjs's grounded look, run through THIS session), and an
+  // object-scoped chat dock. The dock's pills are the room's own affordance
+  // list filtered to this object (pillsFor, the same source the main hint
+  // pills read), plus a free-text input. Every dock turn runs through the ONE
+  // live session, echoes into the MAIN transcript and redraws the main page,
+  // so the satchel/quest/room all reflect it after close — no forked state.
+  function addObjDockLine(cls, html) {
+    const d = document.createElement("div");
+    d.className = cls; d.innerHTML = html;
+    objDockLogEl.appendChild(d); objDockLogEl.scrollTop = objDockLogEl.scrollHeight;
+  }
+  function objectPillsFor(rows, state, here, subject) {
+    return pillsFor(rows, state, here).filter((a) => a.split(" ").pop() === subject);
+  }
+  function renderObjScene() {
+    if (!lastSnapshot || !objLightboxSubject) { objSceneEl.innerHTML = ""; return; }
+    const cls = spriteClassForObject(lastSnapshot.rows, objLightboxSubject);
+    const svg = resolveObjectSprite(lastSnapshot.rows, { subject: objLightboxSubject, spriteClass: cls });
+    objSceneEl.innerHTML = '<div class="obj-sprite" data-cls="' + esc(cls) + '">' + svg + "</div>";
+  }
+  function renderObjPills() {
+    if (!lastSnapshot || !objLightboxSubject) { objPillsEl.innerHTML = ""; return; }
+    const actions = objectPillsFor(lastSnapshot.rows, lastSnapshot.state, lastSnapshot.here, objLightboxSubject);
+    objPillsEl.innerHTML = actions.map((a) => '<button type="button" class="pill">' + esc(a) + "</button>").join("");
+  }
+  // A dock turn: paused, echoed into the main transcript AND the dock, run on
+  // the one session, then the main page and the lightbox both redraw off the
+  // fresh snapshot — the board stays open.
+  function runObjTurn(line) {
+    ticker.pause();
+    addChatLine("u", esc(line));
+    addObjDockLine("u", esc(line));
+    return withLock(async () => {
+      const result = await session.turn(line);
+      addChatLine("a", esc(result.answer).replace(/\\n/g, "<br>"));
+      addObjDockLine("a", esc(result.answer).replace(/\\n/g, "<br>"));
+      const snap = await session.snapshot();
+      redraw(snap);
+      renderObjScene();
+      renderObjPills();
+    });
+  }
+  async function openObjectLightbox(subject) {
+    if (!session || !lastSnapshot) return;
+    ticker.pause();
+    objLightboxSubject = subject;
+    objTitleEl.textContent = "the " + subject;
+    objDockLogEl.innerHTML = "";
+    objLookEl.textContent = "";
+    objInputEl.value = "";
+    renderObjScene();
+    renderObjPills();
+    objLightboxEl.hidden = false;
+    objInputEl.focus();
+    // The initial look is a real, read-only turn on the live session (it writes
+    // nothing, so it needs no main-transcript echo — it IS the board's own
+    // content); pill/typed turns below do echo, since they can change state.
+    await withLock(async () => {
+      const result = await session.turn("look " + subject);
+      objLookEl.textContent = result.answer;
+    });
+  }
+  function closeObjectLightbox() {
+    objLightboxEl.hidden = true;
+    objLightboxSubject = null;
+    objDockLogEl.innerHTML = "";
+    objInputEl.value = "";
+  }
+  roomFrameEl.addEventListener("click", (e) => {
+    const card = e.target.closest(".sprite-card[data-look-subject]");
+    if (!card) return;
+    openObjectLightbox(card.getAttribute("data-look-subject"));
+  });
+  objPillsEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".pill");
+    if (!btn) return;
+    runObjTurn(btn.textContent);
+  });
+  objFormEl.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const q = objInputEl.value.trim();
+    if (!q || !session) return;
+    objInputEl.value = "";
+    runObjTurn(q);
+  });
+  objLightboxEl.addEventListener("click", (e) => { if (e.target === objLightboxEl) closeObjectLightbox(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !objLightboxEl.hidden) closeObjectLightbox(); });
+
   function renderEditMap(rows, state) {
     editMapWrapEl.innerHTML = roomMapSvg(visitedRoomGraph(state, allRoomIds(rows)), true) || '<span class="empty-note">this world defines no rooms</span>';
   }
@@ -1268,12 +1418,12 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   function redraw(snap) {
     lastSnapshot = snap;
     const layout = roomSceneLayout(snap.rows, snap.state, snap.here);
-    wallRowEl.innerHTML = layout.wall.map((s) => spriteCardHtml(s.subject, s.spriteClass, resolveObjectSprite(snap.rows, s))).join("");
+    wallRowEl.innerHTML = layout.wall.map((s) => spriteCardHtml(s.subject, s.spriteClass, resolveObjectSprite(snap.rows, s), s.subject)).join("");
     floorRowEl.innerHTML = layout.floor.map((stack) => {
       const baseIndex = stack.items.length - 1;
       return '<div class="sprite-stack">' + stack.items.map((s, i) => {
         const svg = resolveObjectSprite(snap.rows, s);
-        return i === baseIndex ? spriteCardHtml(s.subject, s.spriteClass, svg) : stackedSpriteCardHtml(s.subject, s.spriteClass, svg);
+        return i === baseIndex ? spriteCardHtml(s.subject, s.spriteClass, svg, s.subject) : stackedSpriteCardHtml(s.subject, s.spriteClass, svg, s.subject);
       }).join("") + "</div>";
     }).join("");
     youSlotEl.innerHTML = spriteCardHtml("you", "adventurer", resolveObjectSprite(snap.rows, { subject: "you", spriteClass: "adventurer" }));

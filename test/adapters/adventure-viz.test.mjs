@@ -582,6 +582,27 @@ test("renderAdventureHtml: the manor map is a fixed square that opens a dimmed l
   assert.match(html, /e\.key === "Escape"/, "Escape also closes the lightbox");
 });
 
+test("renderAdventureHtml: a room sprite is clickable and opens the object lightbox — its large sprite, its live look reply, and an object-scoped chat dock", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  // clickable cards carry the object name; the player's own "you" card and the
+  // stacked/legend cards don't, so only real props open the lightbox.
+  assert.match(html, /clickable" data-look-subject="/, "a clickable sprite card is tagged with the object it names");
+  assert.match(html, /spriteCardHtml\(s\.subject, s\.spriteClass, resolveObjectSprite\(snap\.rows, s\), s\.subject\)/, "floor and wall props pass their subject, so they are clickable");
+  assert.match(html, /youSlotEl\.innerHTML = spriteCardHtml\("you", "adventurer", resolveObjectSprite\(snap\.rows, \{ subject: "you"[^)]*\}\)\)/, "the player's own card passes no subject, so it is never clickable");
+  assert.match(html, /<div class="obj-lightbox"[^>]*hidden>/, "the object lightbox ships hidden");
+  assert.match(html, /id="objScene"/);
+  assert.match(html, /id="objLook"/);
+  assert.match(html, /id="objPills"/);
+  assert.match(html, /id="objForm"/);
+  // the delegated open handler, the scoped-pill derivation, the shared-session
+  // turn, and the backdrop/Escape close — the same discipline as the map box.
+  assert.match(html, /roomFrameEl\.addEventListener\("click"/, "a delegated click on the room frame opens the lightbox");
+  assert.match(html, /\.sprite-card\[data-look-subject\]/);
+  assert.match(html, /pillsFor\(rows, state, here\)\.filter\(\(a\) => a\.split\(" "\)\.pop\(\) === subject\)/, "the object's pills are the room's own affordance list filtered to this object");
+  assert.match(html, /const result = await session\.turn\(line\);/, "a dock turn runs through the one live session");
+  assert.match(html, /if \(e\.target === objLightboxEl\) closeObjectLightbox\(\)/, "a click inside the board must not close it");
+});
+
 test("renderAdventureHtml: the room-kind icon renders at twice a room-object sprite's own frame size", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
   assert.match(html, /\.sprite-frame \{[^}]*width: 60px; height: 60px/, "a room-object sprite frame is 60px");

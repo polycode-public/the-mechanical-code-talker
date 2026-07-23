@@ -272,3 +272,42 @@ test("the full win playthrough: carrying, the visited map, and the goal status a
     await context.close();
   }
 });
+
+test("clicking a room sprite opens the object lightbox — its live look reply and object-scoped pills — and a pill turn runs on the same session, reflected on the main page after close", async () => {
+  const { context, page, consoleErrors } = await openAdventurePage();
+  try {
+    // The lamp sits on the study desk at the opening; its floor/stack card is
+    // clickable and opens the lights-down close look.
+    await page.locator('#roomFrame .sprite-card[data-look-subject="lamp"]').first().click();
+    await page.waitForFunction(() => !document.querySelector("#objLightbox").hidden, null, { timeout: 10000 });
+    await page.waitForFunction(() => document.querySelector("#objLook").textContent.includes("look closely"), null, { timeout: 10000 });
+
+    const look = await page.locator("#objLook").textContent();
+    assert.match(look, /you look closely at the lamp/);
+    assert.match(look, /Lamp is on the desk/, "the live grounded look states the object's own world facts");
+    assert.match(look, /Class: lamp → portable/, "and its is-a class chain");
+
+    // the object's pills are the room's own affordance list filtered to it.
+    assert.deepEqual(await page.locator("#objPills .pill").allTextContents(), ["take lamp"]);
+
+    const beforeMain = await page.locator("#chatlog > div").count();
+    await page.locator("#objPills .pill").first().click();
+    await page.waitForFunction(() => document.querySelectorAll("#objDockLog > div").length >= 2, null, { timeout: 10000 });
+
+    // the result rendered INSIDE the lightbox, which stayed open.
+    assert.equal(await page.locator("#objLightbox").evaluate((e) => e.hidden), false, "the pill turn never closes the board");
+    assert.match(await page.locator("#objDockLog").textContent(), /you take the lamp/, "the turn's result renders in the dock");
+
+    // one session: the main transcript and the satchel both reflect the turn.
+    assert.ok(await page.locator("#chatlog > div").count() > beforeMain, "the main transcript reflects the object-lightbox turn");
+    assert.deepEqual(await page.locator("#carryList .chip").allTextContents(), ["lamp"], "the satchel picked up the lamp the lightbox turn took");
+
+    // Escape closes it, same as the map lightbox.
+    await page.keyboard.press("Escape");
+    await page.waitForFunction(() => document.querySelector("#objLightbox").hidden, null, { timeout: 5000 });
+
+    assert.deepEqual(consoleErrors, [], "no console error opening the object lightbox, running a scoped turn, and closing it");
+  } finally {
+    await context.close();
+  }
+});

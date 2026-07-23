@@ -25,11 +25,13 @@ test("a bare transitive command resolves its object through the lexicon-noun gat
   assert.deepEqual(parse("close the cabinet"), { pattern: "imperative", verb: "close", object: "cabinet", residue: [] });
 });
 
-test("look stands alone (optionally 'around'); 'look at X' is the examine synonym, not this pattern", () => {
+test("look stands alone or takes a bare object; 'look at X' is the examine synonym", () => {
   assert.deepEqual(parse("look"), { pattern: "imperative", verb: "look", residue: [] });
   assert.deepEqual(parse("look around"), { pattern: "imperative", verb: "look", residue: [] });
   assert.deepEqual(parse("look at the portrait"), { pattern: "imperative", verb: "examine", object: "portrait", residue: [] });
-  assert.equal(parse("look the portrait"), null, "bare 'look OBJECT' with no 'at' is still not a pattern");
+  assert.deepEqual(parse("look the portrait"), { pattern: "imperative", verb: "look", object: "portrait", residue: [] },
+    "a bare 'look OBJECT' now carries its object — the close-look surface, routed through the shared object handler");
+  assert.deepEqual(parse("look housekeeper"), { pattern: "imperative", verb: "look", object: "housekeeper", residue: [] });
 });
 
 test("unlock carries its instrument through 'with', and works bare when the instrument is omitted", () => {

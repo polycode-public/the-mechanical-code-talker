@@ -556,6 +556,44 @@ export function worldDigestRows(rows, state) {
   return out;
 }
 
+/** The physical-property lines a close "look <object>" states: the object's
+ *  own world facts, phrased through the SAME worldDigestRows view a room look
+ *  reads (so mgx:knows-*, the NPC schedule, is-objective and the rest of the
+ *  puzzle wiring are already excluded there), minus its bare rdf:type line —
+ *  the class hierarchy renders that as its own is-a chain instead. A carried
+ *  object surfaces through the "carries the" line the digest already produces.
+ *  Pure. */
+export function objectLookProperties(rows, state, object) {
+  const subjectCased = sentenceCase(object);
+  return worldDigestRows(rows, state)
+    .filter((r) => (r.subject === subjectCased && r.predicate !== "is a" && r.predicate !== "is an")
+      || (r.predicate === "carries the" && r.object === object))
+    .map((r) => `${r.subject} ${r.predicate} ${r.object}.`);
+}
+
+/** An object's class hierarchy as an is-a chain, nearest-first and opening
+ *  with the object itself ("housekeeper → person"): a breadth-first walk up
+ *  the world's OWN rdf:type and rdfs:subClassOf edges (worldActionRows, so a
+ *  merged corpus's taxonomy for the same word never joins the chain), the same
+ *  upward-class rendering chat's "what do you know about X" shows. Pure. */
+export function objectClassChain(rows, object) {
+  const worldRows = worldActionRows(rows);
+  const parentsOf = (node) => worldRows
+    .filter((r) => r.subject === node && (r.predicate === "rdf:type" || r.predicate === "rdfs:subClassOf"))
+    .map((r) => r.object);
+  const seen = new Set([object]);
+  const chain = [object];
+  const queue = [...parentsOf(object)];
+  while (queue.length) {
+    const node = queue.shift();
+    if (seen.has(node)) continue;
+    seen.add(node);
+    chain.push(node);
+    queue.push(...parentsOf(node));
+  }
+  return chain;
+}
+
 async function worldDigest(prompt, { memoryDir, memory, rows, state, graph }) {
   const view = worldDigestRows(rows, state);
   const store = {
@@ -689,7 +727,7 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     );
   }
 
-  if (cmd.verb === "look") {
+  if (cmd.verb === "look" && !cmd.object) {
     const digest = await worldDigest(here, { memoryDir, memory, rows, state, graph });
     const actions = roomAffordances(rows, state, here);
     return answer(
@@ -699,13 +737,13 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     );
   }
 
-  if (cmd.verb === "examine" || cmd.verb === "talk") {
+  if (cmd.verb === "examine" || cmd.verb === "talk" || cmd.verb === "look") {
     const object = cmd.object;
     // A carried object has no room to be "visible in" (visibleRoomOf returns
-    // null for anything held by the player) — examine still applies to it,
-    // the same way "what am I carrying" already reads inventory contents.
+    // null for anything held by the player) — examine and look still apply to
+    // it, the same way "what am I carrying" already reads inventory contents.
     // talk has no carried exception: NPCs are never portable.
-    const carried = cmd.verb === "examine" && carriedByPlayer(state, object);
+    const carried = (cmd.verb === "examine" || cmd.verb === "look") && carriedByPlayer(state, object);
     // The room the player is standing in is never the SUBJECT of a placement
     // fact (only ever the OBJECT other things are placed in), so
     // visibleRoomOf(object) can never equal `here` for a room's own name —
@@ -730,7 +768,7 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
         { miss: true },
       );
     }
-    if (notHere && !(cmd.verb === "examine" && backgroundOnlyMention(rows, state, object))) {
+    if (notHere && !((cmd.verb === "examine" || cmd.verb === "look") && backgroundOnlyMention(rows, state, object))) {
       return answer(
         `I don't see a ${object} here.`,
         noteFor(`${cmd.verb} — ${object} isn't visible in the ${here}; declined, hidden things stay hidden`),
@@ -738,6 +776,27 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
       );
     }
     const person = isTyped(rows, object, "person");
+    // "look <object>" on a real placed prop is the grounded close look: every
+    // physical fact the world writes about the thing (its placement, its
+    // within-room position, any datatype property — all via the SAME
+    // worldDigestRows view that already drops the puzzle wiring and the
+    // staff-knowledge pointers), plus its class hierarchy as an is-a chain,
+    // plus a container's open/locked state. A background-only mention has no
+    // placed facts of its own, so it falls through to the examine digest below
+    // (the same general-knowledge answer "what is a flower" gives).
+    if (cmd.verb === "look" && !backgroundOnlyMention(rows, state, object)) {
+      const propLines = objectLookProperties(rows, state, object);
+      const chain = objectClassChain(rows, object);
+      const parts = [`you look closely at the ${object}.`];
+      if (propLines.length) parts.push(propLines.join(" "));
+      if (chain.length > 1) parts.push(`Class: ${chain.join(" → ")}.`);
+      if (!person && isContainer(rows, object)) parts.push(containerStatusPhrase(object, { state }));
+      return answer(
+        parts.join(" "),
+        noteFor(`look at ${object} — its world-fact properties (via worldDigestRows, knows-*/puzzle-wiring excluded) and its rdf:type/subClassOf is-a chain`),
+        { goal: `take a closer look at the ${object}` },
+      );
+    }
     // Talking to a person is the game's reveal channel: the staff share what
     // they know (a hiding place, the quest, a topic) and report their own
     // room, all resolved from the live fold this turn.
