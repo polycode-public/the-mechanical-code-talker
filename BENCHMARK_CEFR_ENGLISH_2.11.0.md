@@ -196,6 +196,13 @@ informationally (not applied here):
    commit was isolated as the cause in this pass. A future cycle could bisect the two cases'
    `runTurn` behavior across that range before crediting any specific fix.
 
+**2026-07-24 (hand-revision completion — item 5 above)** — two tier-1 `answerMatch` patterns
+updated via case-hygiene append: `be-honest-empty-v2` (supersedes `be-honest-empty` whose
+expectation matched outdated empty-graph copy) and `conv-hello-there-v2` (supersedes
+`conv-hello-there` which expected a Zork-nod phrase dropped from the current greeting). Both
+original cases stay per the append-only rule; the v2 rows are now the live expectations.
+`chatbench/graded-pool.jsonl` grew from 138 to 139 cases.
+
 ## Evidence / transcripts
 
 **Discriminating first — the six cases both cycles' reports name, verbatim (2.11.0 answers):**
