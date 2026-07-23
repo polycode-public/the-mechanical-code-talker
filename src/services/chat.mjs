@@ -9997,6 +9997,14 @@ const STACCATO_LEAKED_CONNECTIVES = new Set(["and", "also", "so", "then", "now"]
  *  named `edithistory`) is never mistaken for the pronoun. */
 const PRONOUN_IN_QUERY_RE = new RegExp(`\\b(?:${[...CONTEXT_WORDS].join("|")})\\b`, "i");
 
+/** The referring pronouns an EMBEDDED "what about X, <wh-clause>" swap replaces
+ *  — CONTEXT_WORDS (it/this/that/here) plus the personal pronouns
+ *  PRONOUN_IN_QUERY_RE deliberately omits (he/she/they/them): the embedded
+ *  clause's own subject/object, not a prior-turn antecedent, so a subject
+ *  pronoun like "he" that never appears in a code-graph query still has to be
+ *  swappable here. */
+const EMBEDDED_PRONOUN_RE = /\b(?:it|this|that|here|he|she|they|them)\b/i;
+
 /** DISCOURSE CONTINUATION: "what about X" carries the PRIOR
  *  turn's question shape across the turn boundary — re-asking it with X in place of
  *  the previous subject/object. Returns the reconstructed query (parsed like any
@@ -10007,6 +10015,32 @@ function discourseRewrite(query, last) {
   let newSubj;
   if (m) {
     newSubj = m[1].trim();
+    // An embedded question spliced into the "what about" subject ("what about
+    // the store, what it do") must NEVER be substituted into the prior turn's
+    // shape — that inherits the prior turn's DIRECTION onto a question asking
+    // the opposite ("who uses store.mjs" then "…what it do" would answer "who
+    // uses the store"). Split on the interior wh-clause and re-read the
+    // remainder against a CLOSED micro-set; a clause outside it is an honest
+    // miss, never the prior-turn substitution below. A comma NOT followed by a
+    // wh-word ("what about the store, please") never matches and keeps its
+    // ordinary swap.
+    const embedded = newSubj.match(/^(.+?),\s*(what|who|which|where|how)\b\s*(.*)$/i);
+    if (embedded) {
+      const embSubj = embedded[1].trim();
+      const wh = embedded[2].toLowerCase();
+      const rest = embedded[3].trim();
+      // "what [it/this/that/he/she] do(es)" → the module overview of the new
+      // subject, which MODULE_ORIENT_RE serves verbatim.
+      if (wh === "what" && /^(?:he|she|it|this|that)?\s*do(?:es)?$/i.test(rest)) {
+        return `what does ${embSubj} do`;
+      }
+      // A wh-clause carrying its OWN pronoun ("what does it call") → swap that
+      // pronoun for the new subject and ask the clause standalone.
+      if (EMBEDDED_PRONOUN_RE.test(rest)) {
+        return `${wh} ${rest.replace(EMBEDDED_PRONOUN_RE, () => embSubj)}`;
+      }
+      return null;
+    }
   } else {
     const sm = String(query).match(STACCATO_SWAP_RE);
     const cand = sm?.[1]?.trim();
