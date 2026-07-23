@@ -570,7 +570,6 @@ ${THEME_TOKENS_CSS}
   main { max-width: 920px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--gilt); }
   .titlebar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin: .3rem 0 1rem; }
-  h1 { font-size: 1.4rem; margin: 0; text-wrap: balance; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
   button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   .mode-toggle { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; padding: .4rem .8rem; border: 1px solid var(--gilt); background: var(--parchment); color: var(--ink); white-space: nowrap; }
@@ -646,8 +645,11 @@ ${THEME_TOKENS_CSS}
   /* the room-kind icon — filled through the exact same property-aware
      sprite resolver the room's own object cards use, keyed on the room's own
      name (so library/kitchen/garden reach their large TOMLs, everything else
-     falls back through room's own ancestor chain to the generic room icon). */
-  .room-kind-icon { position: absolute; top: .55rem; right: .6rem; width: 28px; height: 28px; opacity: .92; }
+     falls back through room's own ancestor chain to the generic room icon).
+     Rendered at 120px — twice a room-object sprite's own 60px frame
+     (.sprite-frame below) — so the room itself reads as the biggest thing
+     drawn in its own scene. */
+  .room-kind-icon { position: absolute; top: .5rem; right: .6rem; width: 120px; height: 120px; opacity: .92; }
   .room-kind-icon svg { width: 100%; height: 100%; display: block; }
   .room-kind-icon:empty { display: none; }
   .sprite-row { display: flex; align-items: flex-end; gap: .9rem .7rem; min-height: 2.5rem; }
@@ -735,6 +737,19 @@ ${THEME_TOKENS_CSS}
   .map-viewport > div { width: 100%; height: 100%; }
   .map-viewport svg { width: 100%; height: 100%; display: block; }
   .map-viewport .empty-note { color: var(--parchment); opacity: .8; }
+  /* the play-mode map only: a fixed SQUARE viewport (width pinned to the
+     same 190px height above, centered) rather than stretching to the side
+     column's own width — the svg still scales to fit inside it either way,
+     this just keeps the board's own footprint stable and click-to-enlarge
+     honest about what it's enlarging. */
+  .map-viewport-fixed { width: 190px; margin: 0 auto; cursor: zoom-in; }
+  /* the lights-down map lightbox — the same board, the same roomMapSvg
+     output, just drawn bigger over a dimmed backdrop. Closes on a click
+     anywhere outside the enlarged board, or Escape. */
+  .map-lightbox { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 2.4rem; background: rgba(10, 8, 4, .74); }
+  .map-lightbox[hidden] { display: none; }
+  .map-lightbox-inner { width: min(70vmin, 640px); height: min(70vmin, 640px); background: var(--baize); border: 3px solid var(--gilt); box-shadow: inset 0 0 0 1px var(--baize-line), 0 12px 48px rgba(0, 0, 0, .5); padding: 16px; box-sizing: border-box; }
+  .map-lightbox-inner svg { width: 100%; height: 100%; display: block; }
   .roommap .room-edge { stroke: var(--board-path); stroke-width: 7; }
   .roommap .room-hint { fill: var(--board-path); opacity: .8; }
   .roommap .room-node rect { fill: var(--parchment); stroke: var(--baize-line); stroke-width: 1.5; }
@@ -764,6 +779,19 @@ ${THEME_TOKENS_CSS}
      a quoted manuscript line reporting what "look" would say right now. */
   .caption { background: var(--parchment); border-left: 3px solid var(--gilt); padding: .55rem .7rem; font-size: .86rem; font-style: italic; margin: 0 0 .5rem; }
   .caption:empty { display: none; margin: 0; }
+  /* "what would you like to do" — the room's own contextual pills sit
+     top-right of the heading, on the header's own row; more pills than fit
+     wrap onto further lines still pinned to the right (justify-content:
+     flex-end on the inner .pills flex box), so the block grows down and
+     toward the left rather than pushing the heading around. */
+  .command-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .3rem .6rem; margin: 0 0 .5rem; padding-bottom: .3rem; border-bottom: 1px solid var(--line); }
+  .command-head h2 { flex: 0 0 auto; margin: 0; padding: 0; border-bottom: none; }
+  /* nowrap on .command-head itself keeps the pills box on the SAME row as
+     the heading (top-right); .pills' own min-width: 0 lets IT shrink below
+     its natural width so ITS children (not the whole box) are what wraps
+     onto further lines, staying right-anchored rather than dropping the
+     whole pill row under the heading. */
+  .command-head .pills { flex: 1 1 auto; min-width: 0; justify-content: flex-end; margin-bottom: 0; }
   .chatask { display: flex; align-items: center; gap: .5rem; border-top: 1px solid var(--line); padding-top: .5rem; }
   .chatask .prompt { color: var(--taught); font-size: .78rem; font-family: ${MONO_STACK}; }
   .chatask input { flex: 1; font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); padding: .32rem .55rem; min-width: 0; }
@@ -799,22 +827,33 @@ ${THEME_TOKENS_CSS}
   body.preview .side, body.preview .stage-left > .panel, body.preview .controls-row, body.preview .status { display: none; }
   body.preview main { padding: 0; max-width: none; }
   body.preview .stage { display: block; }
-  body.preview .eyebrow, body.preview h1, body.preview .mode-toggle, body.preview #editStage, body.preview .page-note { display: none; }
+  body.preview .eyebrow, body.preview .mode-toggle, body.preview #editStage, body.preview .page-note { display: none; }
 </style>
 </head>
 <body>
 <main>
-  <div class="eyebrow">tmct &middot; the adventure</div>
   <div class="titlebar">
-    <h1>A room, drawn from exactly what the text already says is there</h1>
+    <div class="eyebrow">tmct &middot; the adventure</div>
     <button id="editModeBtn" type="button" class="mode-toggle" disabled>edit the world</button>
   </div>
   <p class="page-note">${escapeHtml(worldPayload.opening)}</p>
   <div class="stage" id="playStage">
     <div class="stage-left">
+      <div class="controls-row" id="playControls">
+        <button id="resetBtn" type="button" disabled>reset</button>
+        <button id="playBtn" type="button" disabled>&#9654; play</button>
+        <button id="stepBtn" type="button" disabled>step</button>
+        <span class="turn mono" id="turnLabel">turn: 0</span>
+      </div>
+      <div class="goal-line" id="goalLine"></div>
+      <div class="status" id="status">loading the engine&hellip;</div>
       <div class="panel goals">
         <h2>quest</h2>
         <div id="goalList"></div>
+      </div>
+      <div class="panel carrying">
+        <h2>satchel</h2>
+        <div class="chips" id="carryList"></div>
       </div>
       <div class="room-frame" id="roomFrame">
         <div class="room-plaque mono" id="roomName"></div>
@@ -825,38 +864,31 @@ ${THEME_TOKENS_CSS}
           <div class="you-slot" id="youSlot"></div>
         </div>
       </div>
-      <div class="controls-row" id="playControls">
-        <button id="resetBtn" type="button" disabled>reset</button>
-        <button id="playBtn" type="button" disabled>&#9654; play</button>
-        <button id="stepBtn" type="button" disabled>step</button>
-        <span class="turn mono" id="turnLabel">turn: 0</span>
-      </div>
-      <div class="goal-line" id="goalLine"></div>
-      <div class="status" id="status">loading the engine&hellip;</div>
-      <div class="panel carrying">
-        <h2>satchel</h2>
-        <div class="chips" id="carryList"></div>
-      </div>
       <div class="panel command">
-        <h2>speak to the manor</h2>
+        <div class="command-head">
+          <h2>What would you like to do</h2>
+          <div class="pills" id="pills"></div>
+        </div>
         <form class="chatask" id="chatform">
           <span class="prompt mono">tmct&gt;</span>
           <input id="chatq" type="text" placeholder="go north" aria-label="Type a command, or ask a question" disabled>
         </form>
       </div>
-      <div class="panel roommap">
-        <h2>the manor, so far</h2>
-        <div class="map-viewport"><div id="mapWrap"></div></div>
-      </div>
     </div>
     <aside class="side" aria-label="The adventure's log and chat">
+      <div class="panel roommap">
+        <h2>the manor, so far</h2>
+        <div class="map-viewport map-viewport-fixed" id="mapViewport"><div id="mapWrap"></div></div>
+      </div>
       <div class="chat">
         <h2>the manor's own account</h2>
         <div class="chatlog" id="chatlog" aria-live="polite"></div>
-        <div class="pills" id="pills"></div>
         <div class="caption" id="caption"></div>
       </div>
     </aside>
+  </div>
+  <div class="map-lightbox" id="mapLightbox" role="dialog" aria-modal="true" aria-label="The manor map, enlarged" hidden>
+    <div class="map-lightbox-inner roommap" id="mapLightboxInner"></div>
   </div>
 
   <div class="stage editor-stage" id="editStage" aria-label="The world editor">
@@ -925,6 +957,9 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const chatqEl = el("chatq");
   const carryListEl = el("carryList");
   const mapWrapEl = el("mapWrap");
+  const mapViewportEl = el("mapViewport");
+  const mapLightboxEl = el("mapLightbox");
+  const mapLightboxInnerEl = el("mapLightboxInner");
   const goalListEl = el("goalList");
   const editModeBtn = el("editModeBtn");
   const editorTextEl = el("editorText");
@@ -1120,6 +1155,25 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   function renderRoomMap(rows, state, visitedRoomIds) {
     mapWrapEl.innerHTML = roomMapSvg(visitedRoomGraph(state, visitedRoomIds), false) || '<span class="empty-note">nowhere yet</span>';
   }
+
+  // ---- the map lightbox — clicking the fixed-square play-mode map redraws
+  // the SAME roomMapSvg output larger, over a dimmed backdrop; clicking the
+  // backdrop (not the board itself) or pressing Escape closes it.
+  function openMapLightbox() {
+    if (!lastSnapshot) return;
+    const svg = roomMapSvg(visitedRoomGraph(lastSnapshot.state, lastSnapshot.visitedRoomIds), false);
+    if (!svg) return;
+    mapLightboxInnerEl.innerHTML = svg;
+    mapLightboxEl.hidden = false;
+  }
+  function closeMapLightbox() {
+    mapLightboxEl.hidden = true;
+    mapLightboxInnerEl.innerHTML = "";
+  }
+  mapViewportEl.addEventListener("click", openMapLightbox);
+  mapLightboxEl.addEventListener("click", (e) => { if (e.target === mapLightboxEl) closeMapLightbox(); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !mapLightboxEl.hidden) closeMapLightbox(); });
+
   function renderEditMap(rows, state) {
     editMapWrapEl.innerHTML = roomMapSvg(visitedRoomGraph(state, allRoomIds(rows)), true) || '<span class="empty-note">this world defines no rooms</span>';
   }

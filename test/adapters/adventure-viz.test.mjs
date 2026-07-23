@@ -524,30 +524,68 @@ test("renderAdventureHtml: boot() no longer copies the opening into #status — 
   assert.doesNotMatch(html, /statusEl\.textContent = ADVENTURE\.world\.opening/);
 });
 
-test("renderAdventureHtml: quest, the room frame, the controls row, the goal/status lines and the satchel appear in that order in the left column", () => {
+test("renderAdventureHtml: the controls row, goal/status lines, quest, satchel, the room frame and the command box appear in that order in the left column", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
   const leftBlock = html.match(/<div class="stage-left">[\s\S]*?<\/div>\s*<\/div>\s*<aside/)[0];
-  const order = ["panel goals", 'id="roomFrame"', 'id="playControls"', 'id="goalLine"', 'id="status"', "panel carrying"]
+  const order = ['id="playControls"', 'id="goalLine"', 'id="status"', "panel goals", "panel carrying", 'id="roomFrame"', "panel command"]
     .map((needle) => leftBlock.indexOf(needle));
   assert.ok(order.every((i) => i !== -1), "every expected element is present in the left column");
-  for (let i = 1; i < order.length; i++) assert.ok(order[i - 1] < order[i], "the left column keeps quest, room, controls, goal/status, satchel in that order");
+  for (let i = 1; i < order.length; i++) {
+    assert.ok(order[i - 1] < order[i], "the left column keeps controls, goal/status, quest, satchel, room, command in that order");
+  }
 });
 
-test("renderAdventureHtml: the 2/3-1/3 stage grid, the command box and the manor map both sit inside .stage-left, the aside keeps only chatlog/pills/caption", () => {
+test("renderAdventureHtml: the 2/3-1/3 stage grid, the command box sits inside .stage-left, the manor map and chat log both moved into the aside", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
   assert.match(html, /\.stage \{[^}]*grid-template-columns: minmax\(0, 2fr\) minmax\(280px, 1fr\)/);
   const leftBlock = html.match(/<div class="stage-left">[\s\S]*?<\/div>\s*<\/div>\s*<aside/)[0];
   assert.match(leftBlock, /panel command/, "the command box lives in the left column");
-  assert.match(leftBlock, /speak to the manor/);
-  assert.match(leftBlock, /id="chatform"/, "the chat entry form moved into the command box");
-  assert.match(leftBlock, /panel roommap/, "the manor map moved into the left column, last");
-  assert.ok(leftBlock.indexOf("panel command") < leftBlock.indexOf("panel roommap"), "the command box sits between the satchel and the map");
+  assert.match(leftBlock, /What would you like to do/);
+  assert.match(leftBlock, /id="chatform"/, "the chat entry form lives in the command box");
+  assert.match(leftBlock, /id="pills"/, "the pills moved into the command box");
+  assert.ok(!leftBlock.includes("panel roommap"), "the manor map no longer lives in the left column");
   const asideBlock = html.match(/<aside class="side"[\s\S]*?<\/aside>/)[0];
+  assert.match(asideBlock, /panel roommap/, "the manor map moved into the aside");
   assert.match(asideBlock, /id="chatlog"/);
-  assert.match(asideBlock, /id="pills"/);
   assert.match(asideBlock, /id="caption"/);
   assert.ok(!asideBlock.includes("chatform"), "the chat entry form no longer lives in the aside");
-  assert.ok(!asideBlock.includes("roommap"), "the map no longer lives in the aside");
+  assert.ok(!asideBlock.includes('id="pills"'), "the pills no longer live in the aside");
+  assert.ok(asideBlock.indexOf("panel roommap") < asideBlock.indexOf('class="chat"'), "the map sits above the manor's own account");
+});
+
+test("renderAdventureHtml: the tagline is gone — the titlebar carries only the brand eyebrow and the edit-mode toggle", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.ok(!html.includes("A room, drawn from exactly what the text already says is there"));
+  assert.ok(!html.includes("<h1>"));
+  const titlebarBlock = html.match(/<div class="titlebar">[\s\S]*?<\/div>\s*<\/div>/)[0];
+  assert.match(titlebarBlock, /class="eyebrow"/);
+  assert.match(titlebarBlock, /id="editModeBtn"/);
+});
+
+test("renderAdventureHtml: the command box's pills sit in a header row beside the renamed heading, right-anchored so they wrap toward it rather than pushing it around", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /<div class="command-head">\s*<h2>What would you like to do<\/h2>\s*<div class="pills" id="pills"><\/div>\s*<\/div>/);
+  assert.match(html, /\.command-head \{[^}]*display: flex/);
+  assert.match(html, /\.command-head \.pills \{[^}]*justify-content: flex-end/);
+});
+
+test("renderAdventureHtml: the manor map is a fixed square that opens a dimmed lightbox on click, and closes on an outside click", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /id="mapViewport"/);
+  assert.match(html, /class="map-viewport map-viewport-fixed"/);
+  assert.match(html, /\.map-viewport-fixed \{[^}]*width: 190px/, "the fixed square pins the same width as the existing 190px height");
+  assert.match(html, /id="mapLightbox"/);
+  assert.match(html, /<div class="map-lightbox-inner roommap" id="mapLightboxInner">/, "carries the roommap class too, or the .roommap-scoped board CSS (parchment fill, mono labels) never applies to the enlarged board");
+  assert.match(html, /<div class="map-lightbox"[^>]*hidden>/, "the lightbox ships hidden");
+  assert.match(html, /mapViewportEl\.addEventListener\("click", openMapLightbox\)/);
+  assert.match(html, /if \(e\.target === mapLightboxEl\) closeMapLightbox\(\)/, "a click on the board itself must not close it");
+  assert.match(html, /e\.key === "Escape"/, "Escape also closes the lightbox");
+});
+
+test("renderAdventureHtml: the room-kind icon renders at twice a room-object sprite's own frame size", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.match(html, /\.sprite-frame \{[^}]*width: 60px; height: 60px/, "a room-object sprite frame is 60px");
+  assert.match(html, /\.room-kind-icon \{[^}]*width: 120px; height: 120px/, "the room icon is exactly 2x that");
 });
 
 test("renderAdventureHtml: the room frame carries the wall band, the floor band and the adventurer's own pinned-right slot", () => {
