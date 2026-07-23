@@ -242,11 +242,18 @@ export function registerCapability(cap) {
 }
 
 // ---- unregistered dispatch tools ---------------------------------------------
-// Dispatch tools not yet registered; each names the precondition work it needs first.
+// Dispatch tools not yet registered; each names the work it needs first — a
+// precondition/effect design, or resolver wiring, before it can join the registry.
 export const EXCLUDED_FROM_REGISTRY = Object.freeze({
   tmct_context: "unbounded edit-context bundle (multi-file); needs a size/budget precondition",
   tmct_context_more: "unbounded context continuation; same as tmct_context",
   tmct_snippet: "raw source-file read (reads the filesystem); needs a file-read + span precondition",
+  tmct_ask: "the plain-English question entry point itself — calls ask.mjs directly and bypasses the capability planner; not one of the planner's operators",
+  tmct_export: "reads the memory store's whole fact set with no discriminating param and no resolver goal frame; needs NL-reachability wiring before it can join",
+  tmct_ingest: "writes into the memory store (grounds facts); capability() only models read-only operators, so a write path needs its own precondition/effect design first",
+  tmct_file_history: "a module-grain cut of the same history edge tmct_history already models; no NL frame distinguishes the granularities yet",
+  tmct_method_history: "a method-grain cut of the same history edge tmct_history already models; no NL frame distinguishes the granularities yet",
+  tmct_class_history: "a class-grain cut of the same history edge tmct_history already models; no NL frame distinguishes the granularities yet",
 });
 
 /** The full registry as a plain frozen object (facts + index), for callers that
