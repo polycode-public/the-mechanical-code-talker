@@ -162,6 +162,11 @@ Widget-untested qualifier, and because/even-though subordination. All 16 flip
 back from frontier, 11 sibling frontier rows in the same families flip with
 them, none flip the other way: 964 passing, 111 frontier. Still 1,075 cases
 across 36 cells; the go-to pool stays 138.
+2026-07-24 (hand-authored case supersede) — one case appended: `conv-hello-there-v2`
+(supersedes `conv-hello-there` whose expectation matched outdated Zork-nod
+greeting copy — the old case stays, per the append-only rule; from here the v2
+row is the live expectation and the v1 row's tier-1 failure is a historical
+artifact). Case hygiene via deliberate pool revision. **139 cases.**
 Session-mode cases may carry a case-level `env` (e.g. `TMCT_GAME_SECRET` pins
 the thinker-seat secret so the replay is deterministic).
 Regenerate with
