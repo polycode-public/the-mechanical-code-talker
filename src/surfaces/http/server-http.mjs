@@ -16,9 +16,12 @@
 
 import { createServer } from "node:http";
 import { runTurn, selectTool, capabilityPlanDeps } from "../../services/chat.mjs";
-import { TOOLS } from "../../tools/server.mjs";
+import { TOOLS, dispatchTool } from "../../tools/server.mjs";
 import { runCapabilityPlan, buildCapabilityPlanCtx, declaredCapabilityNames } from "../../domain/router/drive.mjs";
+import { isCapability } from "../../domain/router/registry.mjs";
+import { hallucinationsIn } from "../../domain/router/call-validator.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
+import { ToolError } from "../../adapters/config.mjs";
 import { uuidv7 } from "../../adapters/uuid.mjs";
 import * as defaultSource from "../../adapters/source.mjs";
 
@@ -84,9 +87,58 @@ function assistantMessage(model, content, stopReason) {
   };
 }
 
+/** The first tool_use block of a transcript that ENDS on an assistant message —
+ *  a caller PROPOSING a call for tmct to validate and (if clean) run. Returns
+ *  { name, input, id, rest } (rest = any further tool_use blocks in the same
+ *  message, noted in the reply but not executed) or null. A transcript that ends
+ *  user-role with a tool_result is the loop-closing shape, not a proposal, so
+ *  this returns null for it — its final message is not an assistant message. */
+function proposedToolUse(messages) {
+  if (!Array.isArray(messages) || messages.length === 0) return null;
+  const last = messages[messages.length - 1];
+  if (!last || last.role !== "assistant" || !Array.isArray(last.content)) return null;
+  const uses = last.content.filter((b) => b && b.type === "tool_use" && typeof b.name === "string");
+  if (!uses.length) return null;
+  const [first, ...rest] = uses;
+  return {
+    name: first.name,
+    input: first.input && typeof first.input === "object" ? first.input : {},
+    id: first.id,
+    rest,
+  };
+}
+
+/** One human line for a hallucination-taxonomy problem, its reason in parentheses
+ *  so a caller can grep the machine reason off the prose. */
+function describeProblem(p, name) {
+  switch (p.reason) {
+    case "unknown-tool": return `"${p.detail}" is not a capability I know (unknown-tool)`;
+    case "undeclared": return `"${p.detail}" is a real capability but was not declared in this request (undeclared)`;
+    case "unknown-arg": return `${p.detail} is not an argument ${name} accepts (unknown-arg)`;
+    case "missing-arg": return `${p.detail} (missing-arg)`;
+    default: return `${p.detail} (${p.reason})`;
+  }
+}
+
+/** The tmct capabilities a request declared — what tmct will actually validate
+ *  and execute, as named in a hand-back / refusal so the caller can see the set. */
+function declaredCapabilityList(declaredNames) {
+  const caps = [...declaredNames].filter(isCapability);
+  return caps.length ? caps.join(", ") : "(none)";
+}
+
+/** Append the "N further calls not processed" note (when a proposal carried more
+ *  than one tool_use block) to a reply text. */
+function withRestNote(text, rest) {
+  if (!rest.length) return text;
+  return `${text}\n(${rest.length} further proposed call(s) in the same message were not processed: ${rest.map((b) => b.name).join(", ")}.)`;
+}
+
 /**
  * Produce the Messages-API response for one request body. Pure over its inputs
  * (the loaded graph + config), so it is unit-testable without a socket.
+ *   - a caller-PROPOSED tool_use (transcript ends on an assistant tool_use) →
+ *     validate with hallucinationsIn, then execute (end_turn) or refuse
  *   - a returned tool_result → end_turn text (relay the tool's output)
  *   - a mapped, declared graph tool → tool_use
  *   - otherwise → end_turn text via runTurn
@@ -96,6 +148,57 @@ export async function respondToMessages(body, { config, graph, source = defaultS
   const declaredNames = new Set(
     (Array.isArray(tools) ? tools : []).map((t) => t && t.name).filter(Boolean),
   );
+
+  // A caller-proposed call: validate it against the registry + the declared set
+  // before anything runs, then execute a clean call or refuse a hallucinated one
+  // with the taxonomy's reason. Checked FIRST — a proposal ends on an assistant
+  // tool_use, so the loop-closing tool_result branch below (final user turn)
+  // never fires for it, and this never fires for a loop close.
+  const proposal = proposedToolUse(messages);
+  if (proposal) {
+    const { name, input, rest } = proposal;
+
+    // A tool the caller declared that is NOT a tmct capability is the caller's
+    // OWN tool — hand it back honestly rather than burning the taxonomy's
+    // unknown-tool (which stays reserved for a genuinely invented name).
+    if (declaredNames.has(name) && !isCapability(name)) {
+      const text = `"${name}" is your own tool, not a tmct capability — tmct validates and executes only tmct capabilities (${declaredCapabilityList(declaredNames)}). Nothing was executed.`;
+      return assistantMessage(model, [{ type: "text", text: withRestNote(text, rest) }], "end_turn");
+    }
+
+    const problems = hallucinationsIn({ name, input }, [...declaredNames]);
+    if (problems.length) {
+      const lines = problems.map((p) => `refusing the proposed call — ${describeProblem(p, name)}.`);
+      lines.push(`Nothing was executed; declared capabilities: ${declaredCapabilityList(declaredNames)}.`);
+      const msg = assistantMessage(model, [{ type: "text", text: withRestNote(lines.join("\n"), rest) }], "refusal");
+      msg.tmct_checked_call = { name, input, problems };
+      return msg;
+    }
+
+    // Clean. A taught: record is simulated over the taught rules only — never a
+    // dispatchable tool — so decline honestly rather than dispatch an "unknown
+    // tool" error under a call that actually validated.
+    if (name.startsWith("taught:")) {
+      const text = `"${name}" is a taught action — simulated over the taught rules, not a dispatchable tool — so nothing was executed. Run it in chat with "next".`;
+      const msg = assistantMessage(model, [{ type: "text", text: withRestNote(text, rest) }], "end_turn");
+      msg.tmct_checked_call = { name, input, problems: [] };
+      return msg;
+    }
+    try {
+      const out = await dispatchTool(name, input, { config, source });
+      const msg = assistantMessage(model, [{ type: "text", text: withRestNote(out, rest) }], "end_turn");
+      msg.tmct_checked_call = { name, input, problems: [] };
+      return msg;
+    } catch (e) {
+      if (!(e instanceof ToolError)) throw e;
+      // A well-formed call that grounded nothing is an honest MISS, not a
+      // refusal — the taxonomy is clean; the graph simply had no answer.
+      const text = `the proposed call was well-formed but grounded nothing: ${e.message}`;
+      const msg = assistantMessage(model, [{ type: "text", text: withRestNote(text, rest) }], "end_turn");
+      msg.tmct_checked_call = { name, input, problems: [] };
+      return msg;
+    }
+  }
 
   // Closing the loop: the caller executed our tool_use and returned a
   // tool_result. Relay it as the final, cited answer with end_turn.
