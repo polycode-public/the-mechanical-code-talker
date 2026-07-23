@@ -89,9 +89,29 @@ test("count+temp grain: 'how many commits touched <symbol>' counts at SYMBOL gra
 });
 
 test("count+temp grain: 'how many commits touched <module>' stays at MODULE grain", () => {
-  assert.match(runAsk("how many commits touched app/lib/a.mjs").content, /^1 commit\.$/);
+  // app/lib/a.mjs derives from two commit ids (git:abc1234, git:def5678) but carries
+  // only one touches edge (def5678 has no Commit individual of its own) — the count
+  // reads the module's own provenance, same as /describe's "touched by 2 commit(s)"
+  // attestation line, not the narrower touches-edge set.
+  assert.match(runAsk("how many commits touched app/lib/a.mjs").content, /^2 commits\.$/);
   // a symbol with no touchesSymbol edge is an honest 0, not a module-grain false hit.
   assert.match(runAsk("how many commits touched fnAlpha").content, /^0 commits\.$/);
+});
+
+test("commit count reads provenance, not just touches edges, so it never undercounts", () => {
+  // app/lib/b.mjs derives from git:abc1234 but carries NO touches edge of its own
+  // (only app/lib/a.mjs does) — a touches-edge-only count returns the false "0
+  // commits" a provenance-backed count corrects to 1.
+  assert.match(runAsk("how many commits touched app/lib/b.mjs").content, /^1 commit\.$/);
+  // The same fix composes under a nested relative clause, the phrasing that first
+  // surfaced the bug: "the module that defines fnAlpha" resolves to app/lib/a.mjs,
+  // whose two-commit provenance the composed count must also read.
+  assert.match(runAsk("how many commits touched the module that defines fnAlpha").content, /^2 commits\.$/);
+  // A module with neither a touches edge nor derived_from provenance is still an
+  // honest zero — the fix adds provenance as a SOURCE, never fabricates one.
+  assert.match(runAsk("how many commits touched app/lib/c.mjs").content, /^0 commits\.$/);
+  // An unresolvable object stays an honest miss (0), not the whole-graph reverse set.
+  assert.match(runAsk("how many commits touched zebra.mjs").content, /^0 commits\.$/);
 });
 
 test("grain FIX: null-entityType 'what calls <fn>' reads the callsSymbol grain (Widget.render → fnAlpha)", () => {

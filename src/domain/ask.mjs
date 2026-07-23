@@ -1236,6 +1236,29 @@ function reverseOverSet(graph, kind, entityType, objectIds) {
   return [];
 }
 
+const GIT_PROV_REF_RE = /^git:(.+)$/i;
+
+/** How many distinct commits are attested to have touched a SET of entities —
+ *  the same "touched by N commit(s)" convention renderDescribe's attestation
+ *  line already uses (codegraph.mjs's turnRefCount), not the narrower "touches
+ *  edge count" reverseOverSet(kind="touches") returns. A commit can be recorded
+ *  in an entity's own `derived_from` provenance with no full Commit individual
+ *  of its own (the ingester's touches-edge and provenance-ref writes can drift,
+ *  e.g. a truncated commit walk) — reverseOverSet alone then undercounts, or
+ *  misses entirely when NO touches edge survived. Deduped by short sha so a
+ *  provenance ref naming a commit that DOES have a touches-edge individual
+ *  isn't double-counted. */
+function commitTouchCount(graph, objectIds) {
+  const shas = new Set(reverseOverSet(graph, "touches", "Commit", objectIds).map((c) => String(c.label || "").toLowerCase()));
+  for (const id of objectIds) {
+    for (const ref of graph.byId.get(id)?.derived_from || []) {
+      const m = GIT_PROV_REF_RE.exec(String(ref || ""));
+      if (m) shas.add(m[1].toLowerCase());
+    }
+  }
+  return shas.size;
+}
+
 /** Forward traversal over a SET of subject ids (the "things {X…} call/define" step). */
 function forwardOverSet(graph, kind, subjectIds) {
   const edges = kindsFor(kind).flatMap((k) => edgesOfKind(graph, k)).filter((e) => subjectIds.has(e.subject));
@@ -1934,6 +1957,24 @@ function evalUniversal(graph, ast, opts) {
   };
 }
 
+/** The object-id set a "how many commits touched <X>" count restricts to,
+ *  covering both AST shapes that phrasing compiles to: a flat single-object
+ *  reverse clause ("how many commits touched app/lib/a.mjs") or a composed
+ *  reverseSet over a nested inner set ("… touched the module that defines
+ *  fnAlpha"). Null for every other count shape (including an unresolved or
+ *  ambiguous object), so the caller falls back to its plain evalSet(base)
+ *  count unchanged. */
+function commitTouchObjectIds(graph, base, opts) {
+  if (base.node === "reverseSet" && base.kind === "touches" && base.entityType === "Commit") {
+    return new Set(evalSet(graph, base.inner, opts).map((i) => i.id));
+  }
+  if (base.node === "clause" && base.clause?.shape === "reverse" && base.clause.kind === "touches" && base.clause.entityType === "Commit") {
+    const { objMatch, ambiguous } = traverse(graph, base.clause, opts);
+    return objMatch && !ambiguous ? new Set([objMatch.id]) : null;
+  }
+  return null;
+}
+
 /** Compile any compositional AST to a result object traverse() returns for the
  *  simple path — {matches, …} plus compositeKind/compositeMiss flags render() reads. */
 function evalComposite(graph, ast, opts = {}) {
@@ -1941,7 +1982,16 @@ function evalComposite(graph, ast, opts = {}) {
   if (ast.node === "exists") return evalExists(graph, ast);
   if (ast.node === "qualCheck") return evalQualCheck(graph, ast, opts);
   if (ast.node === "universal") return evalUniversal(graph, ast, opts);
-  if (ast.node === "count") return { compositeKind: "count", count: evalSet(graph, ast.base, opts).length, entityType: ast.entityType, matches: [] };
+  if (ast.node === "count") {
+    // "how many commits touched <X>" — count against provenance attestation
+    // (commitTouchCount), not the bare touches-edge set evalSet(base) would
+    // give: see commitTouchCount's own doc for why the two can disagree.
+    const commitTouchIds = commitTouchObjectIds(graph, ast.base, opts);
+    if (commitTouchIds) {
+      return { compositeKind: "count", count: commitTouchCount(graph, commitTouchIds), entityType: ast.entityType, matches: [] };
+    }
+    return { compositeKind: "count", count: evalSet(graph, ast.base, opts).length, entityType: ast.entityType, matches: [] };
+  }
   if (ast.node === "list") return { compositeKind: "list", matches: evalSet(graph, ast.base, opts), entityType: ast.entityType, scoped: ast.scoped };
   if (ast.node === "superlative") return evalSuperlative(graph, ast);
   if (ast.node === "temporal") return evalTemporal(graph, ast, opts);
