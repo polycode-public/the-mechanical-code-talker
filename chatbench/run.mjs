@@ -36,10 +36,14 @@
 // (chatbench/graded-pool.jsonl) is sampled per run. The frozen v1 core was
 // folded into it as fully-graded cells at case-set v3 (eaf33f0), so there is
 // no separate ungraded always-run tier unless a caller supplies one via
-// --cases — stratified per grade×construction cell, seeded, with a
-// DUAL DRAW by default (two independent samples whose per-cell agreement is
-// the instrument's own reliability check). --ladder gates grades ascending;
-// --grade runs one band. With no pool file present, behavior is exactly v1.
+// --cases. The go-to default (--sample 1, SKILL_BENCHMARK_CEFR_ENGLISH.md §1)
+// takes the WHOLE pool as a single draw — nothing is left to cross-validate
+// against, so dual-draw never fires. A caller who narrows --sample below 1
+// gets a stratified per grade×construction draw, DUAL by default (two
+// independent samples whose per-cell agreement is the instrument's own
+// reliability check), unless --single is also passed. --ladder gates grades
+// ascending; --grade runs one band. With no pool file present, behavior is
+// exactly v1.
 //
 // Usage:
 //   node chatbench/run.mjs --stamp <label> [--cases chatbench/cases.jsonl]
@@ -499,7 +503,7 @@ export function parseJsonl(text) {
 
 function parseArgs(argv) {
   return parseFlags(argv, {
-    defaults: { cases: DEFAULT_CASES, sample: 0.1 },
+    defaults: { cases: DEFAULT_CASES, sample: 1 },
     flags: {
       "--stamp": { key: "stamp" },
       "--cases": { key: "cases" },
@@ -652,10 +656,13 @@ export async function main(argv = process.argv.slice(2)) {
     pool = fromPool;
   }
 
-  // Sampling: --only pins exact ids (no sampling); otherwise a stratified
-  // seeded draw per cell — DUAL by default (parallel-forms reliability, see
-  // GRADED.md): two disjoint-where-possible draws whose per-cell agreement is
-  // the instrument's self-test. Seeds derive from the stamp unless --seed.
+  // Sampling: --only pins exact ids (no sampling); the default --sample 1
+  // takes the whole pool as a single draw (the go-to profile,
+  // SKILL_BENCHMARK_CEFR_ENGLISH.md §1). Narrowing --sample below 1 switches
+  // to a stratified seeded draw per cell — DUAL by default (parallel-forms
+  // reliability, see GRADED.md): two disjoint-where-possible draws whose
+  // per-cell agreement is the instrument's self-test. Seeds derive from the
+  // stamp unless --seed.
   const dual = args.only ? false : (args.dual ?? pool.length > 0);
   const seedA = args.seed ?? fnv1a(args.stamp);
   const seedB = (seedA + 1) >>> 0;

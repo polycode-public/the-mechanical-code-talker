@@ -57,23 +57,25 @@ Every cycle MUST satisfy:
   v1 core (formerly the separate `chatbench/cases.jsonl`, 49 hand-authored capability cases) was
   folded IN as fully-graded cells (each assigned a real CEFR grade + construction, not left as a
   separate ungraded tier) rather than kept as its own file — every case in `graded-pool.jsonl` is
-  now a first-class graded-pool citizen. The default profile is capped at **10 cases per CEFR
-  grade** (60 pool-native + the 49 folded-in core cases = **109 cases total**), small enough to run
-  routinely without the old file split. The set is **append-only per cycle**: new cases may be
-  added between runs (record the addition in the write-up), but existing cases are never edited or
-  removed mid-arc. Editing a case invalidates every prior cycle's comparison against it.
+  now a first-class graded-pool citizen. The default profile started capped at **10 cases per CEFR
+  grade** (60 pool-native + the 49 folded-in core cases = 109 cases total) when case-set v3 landed;
+  targeted construction-coverage additions since then have grown it past that per-grade floor —
+  it stands at **138 cases** as of 2026-07-18 (`wc -l chatbench/graded-pool.jsonl` is the live
+  count). The set is **append-only per cycle**: new cases may be added between runs (record the
+  addition in the write-up), but existing cases are never edited or removed mid-arc. Editing a
+  case invalidates every prior cycle's comparison against it.
   > **Footnote — extending to the full pool.** The complete, ungapped CEFR pool (1,075 cases across
   > all grade×construction cells, the historical default before 2026-07-10) is preserved at
   > `chatbench/graded-pool-max.jsonl`. Point `--pool` at it (`node chatbench/run.mjs --pool
   > chatbench/graded-pool-max.jsonl ...`) for a full-coverage run — this is the exception, not the
-  > go-to; reach for it when the 10-per-grade default's frontier coverage genuinely isn't enough
-  > (e.g. validating a lever against every construction cell, not just a sample of each).
+  > go-to; reach for it when the go-to pool's frontier coverage genuinely isn't enough (e.g.
+  > validating a lever against every construction cell, not just a sample of each).
 - **Deterministic replay:** each case's `turns` are replayed through `runTurn`. The product is
   deterministic, so **ONE product run per arm** is sufficient; repetition adds nothing.
 - **The judge is the noisy part — default N=2, single draw.** Each case's transcript is scored by
   an **LLM-as-judge**. The go-to profile judges at **N=2 samples per case, single draw** (`node
-  chatbench/judge.mjs --samples 2`, no `--dual`) — cheap enough (109 cases × 2 = 218 judge calls) to
-  run routinely against the 10-per-grade default. **N ≥ 3 samples, and/or the dual-draw
+  chatbench/judge.mjs --samples 2`, no `--dual`) — cheap enough (138 cases × 2 = 276 judge calls) to
+  run routinely against the go-to pool. **N ≥ 3 samples, and/or the dual-draw
   parallel-forms check (§ below), stay available** for a higher-confidence pass (e.g. before a
   release, or against the full `graded-pool-max.jsonl`) but are no longer the default — see the
   "Dual-draw agreement" bullet below for when to reach for it. **Judge model + prompt version are
@@ -91,17 +93,20 @@ Every cycle MUST satisfy:
 - **Judge integrity:** a judge refusal or format failure **VOIDS that case's score** for that
   sample. It is re-sampled or excluded, **never counted as a fail**.
 - **Graded-pool sampling (case-set v3, 2026-07-10 — supersedes v2's ~10×-pool/10%-sample scheme):**
-  the go-to `graded-pool.jsonl` is already capped at 10 cases/grade (§1's opening bullet), so a
-  routine run takes the **whole file** (`--sample 1`), not a further stratified sub-sample — the
-  10-per-grade cap IS the anti-overfitting/cost control now, not a runtime sampling step over a
-  bigger pool. The regression rule is correspondingly simpler: cross-cycle pass→fail regression is
-  checked directly against the prior cycle's row for the same case id; **cell-level means** (grade
-  × construction, single-area vs combination cells reported separately) stay the comparable
+  a bare invocation (`node chatbench/run.mjs --stamp <label>`) DEFAULTS to `--sample 1` — the go-to
+  `graded-pool.jsonl`'s whole file, not a further stratified sub-sample — because the pool stays
+  cheap enough to run in full every cycle even as append-only additions grow it past its original
+  10-per-grade floor (§1's opening bullet). With nothing left to sample, a whole-file run is a
+  single draw by construction; `--dual` has no effect against `--sample 1` (see the next bullet).
+  The regression rule is correspondingly simple: cross-cycle pass→fail regression is checked
+  directly against the prior cycle's row for the same case id; **cell-level means** (grade ×
+  construction, single-area vs combination cells reported separately) stay the comparable
   cross-cycle statistic. **When running against the full `graded-pool-max.jsonl` footnote profile**
-  (above), v2's stratified-sampling behavior still applies as documented in `chatbench/GRADED.md` — that file
-  is large enough to need it; the go-to 109-case profile is not.
+  (above), narrow `--sample` below 1 and v2's stratified-sampling behavior applies as documented in
+  `chatbench/GRADED.md` — that file is large enough to need it; the go-to profile is not.
 - **Dual-draw agreement (parallel-forms reliability) — optional, off by default in the go-to
-  profile.** The go-to profile runs **single-draw** (`--single`, no `--dual`) since its whole point
+  profile.** The go-to profile runs **single-draw** (the `--sample 1` default; `--single` is only
+  needed when also narrowing `--sample`) since its whole point
   is a cheap, routine pass; dual-draw's parallel-forms reliability check remains available and
   recommended before a release or when running against the full pool — every graded measurement
   runs as TWO
@@ -242,8 +247,9 @@ decision log, `STRATEGY_ADVISOR.log`, and the open-items lever board (`NEXT.md`,
 prediction; **applies** it (fanning independent workstreams to parallel subagents, serialized on
 shared files); **smokes** (`npm test` + `printf 'hi\n/exit\n' | node bin/tmct.mjs` in graph-less
 and fixture-graph dirs — a failed smoke voids the run); **runs** the chatbench (one deterministic
-product run per arm over the append-only `chatbench/graded-pool.jsonl` go-to profile — 109 cases,
-10/CEFR-grade, the folded-in frozen v1 core included — then N=2 single-draw pinned-judge samples
+product run per arm over the append-only `chatbench/graded-pool.jsonl` go-to profile — 138 cases
+(the folded-in frozen v1 core plus construction-coverage growth past the original 10/CEFR-grade
+floor) — then N=2 single-draw pinned-judge samples
 per case by default (N≥3 + dual-draw remain available against the full `graded-pool-max.jsonl`
 footnote profile for a higher-confidence pass) on the 0–2
 groundedness/correctness/honesty-on-miss/rephrase-hint rubric — wrong-confident

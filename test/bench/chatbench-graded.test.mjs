@@ -32,9 +32,10 @@ import {
 // grown for dual-draw reliability) else the MIN_PER_CELL floor.
 const cellSample = (cell) => CELL_SAMPLE[cellKey(cell)] ?? MIN_PER_CELL;
 
-// chatbench/graded-pool.jsonl is the smaller GO-TO default (109 cases,
-// 10/CEFR-grade, the folded-in frozen v1 core included —
-// SKILL_BENCHMARK_CEFR_ENGLISH.md §1). The tests below validate the
+// chatbench/graded-pool.jsonl is the smaller GO-TO default (138 cases,
+// started at 10/CEFR-grade plus the folded-in frozen v1 core, grown since via
+// append-only construction-coverage additions — SKILL_BENCHMARK_CEFR_ENGLISH.md
+// §1). The tests below validate the
 // canonical FULL pool's own structural invariants (GRADED_MATRIX cell sizes,
 // the stratified-sampling algorithm's behavior against a real ~10x-run-size
 // pool) — those invariants apply to the untouched full pool, preserved at

@@ -9,7 +9,7 @@ stays no-LLM; the judge lives only here.
 
 | file | role |
 | --- | --- |
-| `graded-pool.jsonl` | the go-to case set (case-set v3): **109 cases across 12 cells** — 10 per CEFR grade plus the 49 hand-authored capability cases the deleted `cases.jsonl` used to hold, each now carrying a real grade + construction. The default `--pool`; a run draws 5 per cell (60 of the 109) |
+| `graded-pool.jsonl` | the go-to case set (case-set v3): started at **109 cases across 12 cells** — 10 per CEFR grade plus the 49 hand-authored capability cases the deleted `cases.jsonl` used to hold, each now carrying a real grade + construction — and has grown via append-only construction-coverage additions to **138 cases**. The default `--pool`; a run takes the whole file by default (`--sample 1`) |
 | `graded-pool-max.jsonl` | the full CEFR pool: **1,075 cases across 36 cells**, sampled per run. The higher-confidence profile, reached with `--pool` — see `GRADED.md`, which describes this file |
 | `graded.mjs` | graded registries + pure logic: matrix, stratified/dual sampling, agreement, ladder, rollups |
 | `generate-graded.mjs` | deterministic pool generator (replays the engine to auto-author expectations) |
@@ -45,15 +45,18 @@ Useful during development: `--only <id,id>` (both run and judge), `--samples 1`.
 
 ## The graded layer (full design in `GRADED.md`, which describes `graded-pool-max.jsonl`)
 
-`chatbench:run` runs a stratified sample of the pool — per grade×construction
-cell, `max(5, round(0.1 ×
-pool))` cases — as a **dual draw** by default: two independent seeded samples
-(`product-a.jsonl` = v1 + draw A; `product-b.jsonl` = draw B), whose per-cell
-agreement (`agreement.json` + the printed table) is the instrument's own
-reliability check. A DISAGREEING cell is UNDER-COVERED: grow its pool/sample
-and exclude it from cycle statistics until it agrees. Three **census cells**
-(B1 pronoun-binding, B1 temporal, C1 temporal — `CELL_SAMPLE`) are drawn in
-FULL every run so they always agree (cycle-4 pool growth; see `GRADED.md`).
+`chatbench:run` defaults to `--sample 1`, so a bare invocation takes the
+**whole pool** as a single draw — the go-to profile
+(`SKILL_BENCHMARK_CEFR_ENGLISH.md` §1). Narrowing `--sample` below 1 switches
+to a stratified sample of the pool — per grade×construction cell,
+`max(5, round(fraction × pool))` cases — as a **dual draw** by default: two
+independent seeded samples (`product-a.jsonl` = v1 + draw A; `product-b.jsonl`
+= draw B), whose per-cell agreement (`agreement.json` + the printed table) is
+the instrument's own reliability check. A DISAGREEING cell is UNDER-COVERED:
+grow its pool/sample and exclude it from cycle statistics until it agrees.
+Three **census cells** (B1 pronoun-binding, B1 temporal, C1 temporal —
+`CELL_SAMPLE`) are drawn in FULL every sampled run so they always agree
+(cycle-4 pool growth; see `GRADED.md`).
 
 `GRADED_MATRIX` and its cell sizes describe the full pool. The default
 `graded-pool.jsonl` carries 12 of those 36 cells, so read any per-cell claim
@@ -77,9 +80,9 @@ reproducible and auditable.
 Flags (all additive; with no pool file the runner behaves exactly as v1):
 
 ```sh
-npm run chatbench:run -- --stamp graded-smoke        # v1 + dual graded draws
-#   --single            one draw instead of the dual pair
-#   --sample <fraction> per-cell sampling fraction (default 0.1; 1 = whole pool)
+npm run chatbench:run -- --stamp graded-smoke        # v1 + the whole pool, single draw
+#   --single            one draw instead of the dual pair (only matters below --sample 1)
+#   --sample <fraction> per-cell sampling fraction (default 1 = whole pool)
 #   --seed <n>          draw seed (default fnv1a(stamp); recorded in rows)
 #   --grade B1          run one graded band only
 #   --ladder            grades ascend; grade N unreliable → N+1… skipped

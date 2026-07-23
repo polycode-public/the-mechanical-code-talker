@@ -115,7 +115,7 @@ silently.
 
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
-| `chatbench/README.md` | 109 cases across 12 cells | `graded-pool.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
+| `chatbench/README.md` | 138 cases | `graded-pool.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
 | `chatbench/GRADED.md` | 1,075 cases across 36 cells | `graded-pool-max.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
 
 Both figures were counted off the pools for this table and both match.
