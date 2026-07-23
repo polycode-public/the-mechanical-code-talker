@@ -227,8 +227,8 @@ resolves to a real graph traversal or declines cleanly:
   (*because/although/while*), conditionals, and false-premise flags ("why
   does X still import Y" when it no longer does).
 
-The full catalog with measured coverage lives in `CAPABILITIES_2.7.12.md` and
-the `BENCHMARK_*.md` reports.
+The full catalog with measured coverage lives in the `BENCHMARK_*.md`
+reports.
 
 **Response finishing.** Before an answer prints, it is segmented into typed
 spans: prose versus *protected* entities, paths, numbers, code, provenance,

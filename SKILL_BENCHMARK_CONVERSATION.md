@@ -274,8 +274,8 @@ what lets it produce a position and a gate.
   corpus lane (cross-turn temporal composition) is its standing acceptance test.
 - **FLOW-8 — Nested other-minds dialogue.** talking about what ANOTHER agent believes — a believer
   of beliefs, not only a first-order belief about the world. The spider-fly false-belief world is the
-  world-side floor; this rung grades holding that nesting in conversation (`REPORT_AGI_CHECK_IN.md`'s
-  other-minds depth).
+  world-side floor; this rung grades holding that nesting in conversation (`SKILL_BENCHMARK_AGI_SCALES.md`'s
+  other-minds depth scale).
 
 FLOW-7 and FLOW-8 sit above the ratcheting FLOW-0→FLOW-6 ladder, not inside it: the ratchet gate
 (below) still runs FLOW-0→FLOW-6, and these two carry no frozen `test/chatflow-*.test.mjs`

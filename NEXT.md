@@ -8,8 +8,8 @@ Prefer deleting a sentence to negating it.
 
 Living handover. Any session resumes from here. **Plan of record: the `PLAN_*.md` design docs** —
 each states its own status in its opening lines; `archive/` holds the delivered ones. This file
-holds ONLY what to do next. Completed work is not narrated here; `git log`, the `BENCHMARK_*.md`
-reports and `CAPABILITIES_*.md` hold that record.
+holds ONLY what to do next. Completed work is not narrated here; `git log` and the `BENCHMARK_*.md`
+reports hold that record.
 
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
