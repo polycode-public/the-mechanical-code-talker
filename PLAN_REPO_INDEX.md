@@ -1,11 +1,67 @@
 # PLAN_REPO_INDEX.md — tmct grows its own code parsers, ported from seonix
 
 Status: IN FLIGHT on the `repo-index` branch (kept off `main` while the 2026-07-24 batch
-cleared). Phases 1 (JS/TS producer), 2 (`tmct index` CLI verb) and 4 (doc reconciliation) are
-implemented there, with example fixtures (`examples/tiny-webapp-src`, `examples/tiny-lib-py`)
-and a Python backend from phase 3; C#/Java (phase 3 remainder), phase 5 (persona-gated init
-wiring) and phase 6 (the PLAN_CODE.md move to seonix) remain. The branch's own copy of this
-file carries the implementation log; on `main`, nothing below is live code yet.
+cleared; branch head `bcf72df0`, its pipeline green — the one CI catch was the bare-invocation
+usage pin needing the new `index` verb, a reminder that the e2e tier sits outside `npm test`).
+On `main`, nothing below this status is live code yet; the branch carries it all. Remaining
+after the branch merges: phase 3's C#/Java backends (external toolchain or tree-sitter, plus
+the method-callee resolution port `graph-build.mjs` needs for those estates), phase 5 (`init
+--repo --with-persona code` runs `indexRepository` after scaffolding), and phase 6 (the
+PLAN_CODE.md move into seonix, cross-repo). NEXT.md carries the finishing item.
+
+### Implementation log (branch `repo-index`)
+
+- **Phase 1 — DONE (JS/TS backend, reordered first).** A new producer module tree under `src/index/`:
+  `walk.mjs` (deterministic file walker + `.tmctignore`), `extract-jsts.mjs` (the TypeScript
+  compiler-API JS/TS extractor, ported from `seonix/src/jsts_tsc.mjs`), `registry.mjs` (the
+  language-backend registry, JS/TS registered), and `index-repo.mjs` (walk + git history + assemble
+  via the existing `buildEntities` + `ingestSchemaDocs` + write `<repo>/.tmct/graph.json`). Proven by
+  `test/index/js-extractor-seam.test.mjs`: real `.mjs` source off disk produces a graph that passes
+  the full `runConformance` kit (graph-only AND source-capable, reading real bodies over the emitted
+  line spans), with the Repository Interface unchanged. Fixture: `test/fixtures/js-repo/`.
+- **Dependency decision.** Added `typescript ~5.6.2` as a runtime dependency — the plan's own pick for
+  JS/TS (Part 5) and what seonix's extractor is built on. The port is verbatim structure minus
+  seonix's `mgx:serves`/`mgx:callsHttp` un-typed-interface extraction (HTTP routes/client calls),
+  which tmct's `buildEntities` does not consume and the plan flags as a seonix-only open risk. No
+  `tree-sitter`/Roslyn/JavaParser weight enters until Phase 3 ports C#/Java.
+- **Not carried over from seonix's `extract.mjs`:** the v2 wire format, session fold-in, the gated
+  interfaces feature, the manifest/telemetry/summary layers. tmct's producer writes the plain
+  entities-payload JSON `source.mjs` already reads.
+- **Phase 2 — DONE (the CLI surface).** `tmct index [--repo <abs>] [--no-history]` is a first-class
+  verb (`src/domain/cli-verbs.mjs` + the dispatcher arm in `bin/tmct.mjs`): it walks the repo, writes
+  `<repo>/.tmct/graph.json`, and reports modules/symbols/bytes per language. Proven by
+  `test/index/index-repo-write.test.mjs` — the written artifact reads back through the provider seam
+  (`fetchEntities`) into a real `architecture`/`resolve` hit, and re-indexing the same source with a
+  pinned timestamp is byte-identical. The graph it writes feeds `chat --repo`/`serve`/`cli` unchanged.
+- **Phase 3 — PARTIAL (Python backend registered).** `src/index/extract_ast.py` (stdlib `ast`, zero
+  npm dependency) ported and driven by `src/index/extract-python.mjs`, which runs it as a subprocess
+  (`src/index/spawn.mjs`, shared with the git passes) and degrades gracefully when `python3` is
+  absent — it skips the `.py` files and still produces the JS/TS graph. The registry
+  (`src/index/registry.mjs`) now carries two backends; `tmct index` reports each. Proven by
+  `test/index/python-extractor.test.mjs` (conformance + edge assertions, skipped without python3).
+  Remaining in Phase 3: C# (Roslyn/tree-sitter) and Java (JavaParser/tree-sitter) — each needs an
+  external toolchain (.NET, a JDK) or a `tree-sitter` npm grammar, the real footprint growth the plan
+  flags; and porting `extract.mjs`'s heavier method-call/interface resolution (tmct's `buildEntities`
+  is the older, simpler variant — the seonix one carries a tiered method-callee fallback that C#/Java
+  estates lean on).
+- **Example fixtures — DONE.** Two small, real source trees under `examples/`, sized for indexing
+  demos and as PLAN_CODE.md Track 5's first-milestone fixture: `examples/tiny-webapp-src/` (5 plain
+  JS modules, no npm dependency, `parseRow` with exactly two call sites in two different importing
+  modules — the planned rename/move target) and `examples/tiny-lib-py/` (4 stdlib-only Python
+  modules). Each ships its own runnable test suite (`node --test`, `python3 -m unittest discover`).
+  Proven by `test/index/example-fixtures.test.mjs`: both index cleanly through `extractRepo`, the
+  graph shows `loadRows->parseRow` and `previewFirstRow->parseRow` as the two `callsSymbol` edges
+  into the rename target, and each fixture's own test suite passes standalone (the Python half skips
+  gracefully without python3, matching `python-extractor.test.mjs`'s pattern).
+- **Phase 4 — DONE (doc reconciliation).** Every "not an indexer / doesn't index code" claim that
+  became false is reworded: `README.md`'s repository-interface section, `docs/adapter-contract.md`'s
+  opening, `src/adapters/source.mjs`'s seam comment (kept as the read-side boundary, now naming the
+  `src/index/` producer explicitly), the `package.json` description + `bin/tmct.mjs` header/HELP, and
+  the four live chat strings (`chat.mjs` count/orientation/honest-empty, `chat-session.mjs` banner) —
+  each now offers `tmct index` first, with `--repo` kept for an externally-produced graph. The
+  test-pinned prefixes ("no code graph is loaded…") were preserved. Items 4/5 in the table (the
+  `memory`/`syllogise` subcommand-scoped "reads no code graph" comments) stay as-is — still true.
+
 
 ## Origin
 
