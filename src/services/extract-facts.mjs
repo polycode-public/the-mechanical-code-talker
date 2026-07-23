@@ -113,6 +113,10 @@ const COPULA_FRAME_BLOCKERS = new Set(["VERB", "AUX", "ADP", "SCONJ", "CCONJ"]);
 // Of-chain handling on a copula object: classifier heads read through to the
 // real class; partitive containers state composition and yield no isa.
 const COPULA_OF_READ_THROUGH = new Set(["type", "kind", "sort", "form", "class", "variety", "species", "breed", "genus"]);
+// Naming periphrases stay copular: "can be termed as a name", "is known as",
+// "is defined as" — the participle + "as" carries the same class claim the
+// bare copula does, unlike any other verb after "is".
+const COPULA_NAMING_PARTICIPLES = new Set(["termed", "known", "defined", "described", "referred", "called", "classified"]);
 const COPULA_PARTITIVE_HEADS = new Set(["body", "mass", "group", "collection", "set", "series", "number", "amount", "piece", "part", "lot", "pair", "bunch", "pile"]);
 
 /** Fold an entity surface to its stored key: a lexicon noun's lemma, else the
@@ -174,6 +178,10 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
   // composition, never a class ("a large body of ice" — no isa at all).
   const copulaObjectAt = (i) => {
     for (let j = i + 1; j < values.length; j += 1) {
+      // A naming periphrasis ("… termed as …", "… known as …") keeps the
+      // frame copular: skip the participle and its "as" and read on.
+      if ((pos[j] === "VERB" || pos[j] === "AUX") && COPULA_NAMING_PARTICIPLES.has(values[j]?.toLowerCase())
+        && values[j + 1]?.toLowerCase() === "as") { j += 1; continue; }
       if (pos[j] === "PUNCT" || COPULA_FRAME_BLOCKERS.has(pos[j])) {
         if (values[j]?.toLowerCase() !== "of") return null;
         return null;
@@ -190,9 +198,17 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
     }
     return null;
   };
+  // The copula's own modal chain ("can be", "may be") is part of one verb
+  // complex — the subject scan starts left of it, while a free-standing VERB
+  // on the way still voids the frame.
+  const copulaSubjectAt = (i) => {
+    let k = i - 1;
+    while (k >= 0 && pos[k] === "AUX") k -= 1;
+    return nearestEntity(k + 1, -1, COPULA_FRAME_BLOCKERS);
+  };
   for (let i = 1; i < values.length - 1; i += 1) {
     if (pos[i] === "AUX" && OPTIMISTIC_COPULAS.has(values[i].toLowerCase())) {
-      const subject = nearestEntity(i, -1, COPULA_FRAME_BLOCKERS);
+      const subject = copulaSubjectAt(i);
       const object = copulaObjectAt(i);
       if (subject && object && subject !== object) return [{ subject, predicate: "rdfs:subClassOf", object }];
     }

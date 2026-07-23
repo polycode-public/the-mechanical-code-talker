@@ -315,3 +315,15 @@ test("optimisticTriples: a partitive container is composition, never a class; a 
     [{ subject: "chess", predicate: "rdfs:subClassOf", object: "game" }],
   );
 });
+
+test("optimisticTriples: a naming periphrasis stays copular; the copula's own modal chain is crossable", () => {
+  assert.deepEqual(
+    optimisticTriples("An identifier can be termed as a name given to something unique, an object, or a set of objects."),
+    [{ subject: "identifier", predicate: "rdfs:subClassOf", object: "name" }],
+  );
+  // "is grouped into" has no "as" — still a passive complement, still no isa.
+  assert.deepEqual(
+    optimisticTriples("Most of this land is grouped into large continents, like North America."),
+    [],
+  );
+});
