@@ -2196,7 +2196,7 @@ const WALL_MISS_ANYWHERE_RE = /couldn't parse this as a graph question\. Try:/;
 // bare "X is a Y" declarative the graph parser couldn't handle → route to the
 // assert/memory path; when it can't be stored, say what CAN be remembered
 // instead of the grammar wall or a silent data loss.
-const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi|learn)\b(?:\s+(?:this|that|also))?[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
+const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+would)\s+like\s+you\s+to\s+)?(?:remember|note|keep in mind|jot down|for the record|fyi|learn|teach(?:\s+me)?)\b(?:\s+(?:this|that|also))?[:,]?\s*(?:that\s+)?(.+?)[.?!]*$/i;
 // A trailing sentence-final mark ([.!?]*) is tolerated at the very end: an
 // ordinary first turn typed as a full sentence ("every dog is a mammal.")
 // otherwise failed this shape test by one character whenever neither ACE nor
@@ -2945,8 +2945,20 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
   const [, det, subjectRaw, verb, objectRaw] = m;
   const { loadLexicon, lookupNoun, lookupAdjective, classify } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
-  // A known X's own ACE miss is a real miss — never silently reinterpreted here.
-  if (classify(subjectRaw, lex)) return null;
+  // A known X's own ACE miss is a real miss — never silently reinterpreted
+  // here. EXCEPT: classify() folds a trailing "-s" the same way resolveNP
+  // does (lexicon.mjs's lookupNoun), so a bare proper name that happens to
+  // end in "s" and collide with an unrelated dictionary noun ("whiskers" ->
+  // "whisker") reads as "already known" under a SINGULAR "is" sentence, where
+  // no plural evidence supports the fold at all (the genuinely-plural "are"
+  // case is handled correctly a few lines down). Refuse only the fold's own
+  // contribution here — an EXACT noun hit (no fold), or any non-noun
+  // classification (a real verb/adjective/proper name/determiner), still
+  // blocks this fallback exactly as before.
+  const subjectClass = classify(subjectRaw, lex);
+  const subjectFoldedNounOnly = subjectClass?.pos === "noun" && !/^are$/i.test(verb)
+    && (lookupNoun(lex, subjectRaw)?.lemma || "").toLowerCase() !== String(subjectRaw).toLowerCase();
+  if (subjectClass && !subjectFoldedNounOnly) return null;
   const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
   // Singularize the SUBJECT before storage, but ONLY on a genuinely PLURAL
   // phrasing ("all men ARE mortal", verb "are"). This
@@ -3304,12 +3316,26 @@ function participleObject(raw) {
 /** Does a bare (unwrapped) sentence fit one of the relational teach frames —
  *  including its negated twin, read through splitTeachNegation the same way the
  *  general-verb and capability frames read theirs? Used only to admit the
- *  sentence as a teach payload; the dispatch below re-matches and stores. */
+ *  sentence as a teach payload; the dispatch below re-matches and stores.
+ *
+ *  Each regex's own subject capture is a bare word/short NP with no pronoun
+ *  exclusion of its own (unlike generalVerbTeach's GENERAL_VERB_NOT_A_VERB_RE
+ *  check) — this frame used to be reached only once the bare-sentence pronoun
+ *  guard (TEACH_PRONOUN_BARE_RE) had already declined, but that guard is
+ *  deliberately narrow (copula + a SHORT complement only), so a pronoun
+ *  subject with a longer relational complement ("it is closely connected
+ *  with hunting" — the ingest pronoun-carry mechanism's own first, expected-
+ *  to-fail attempt) reaches here unprotected. isTeachPronoun is the same
+ *  closed check every other mint fallback in this lane uses. */
 function matchesRelationalTeachFrame(sentence) {
   const { payload } = splitTeachNegation(String(sentence || "").trim());
-  return PARTICIPLE_PREP_TEACH_RE.test(payload)
-    || COPULA_NP_PARTICIPLE_TEACH_RE.test(payload)
-    || SAME_NOUN_TEACH_RE.test(payload);
+  const pp = payload.match(PARTICIPLE_PREP_TEACH_RE);
+  if (pp) return !isTeachPronoun(pp[1]);
+  const np = payload.match(COPULA_NP_PARTICIPLE_TEACH_RE);
+  if (np) return !isTeachPronoun(np[1]);
+  const same = payload.match(SAME_NOUN_TEACH_RE);
+  if (same) return !isTeachPronoun(same[1]) && !isTeachPronoun(same[2]);
+  return false;
 }
 /** Does a relational-frame sentence name a code-graph entity? "the Router is
  *  used by every handler" reads as a passive uses-CLAIM the ask engine verifies
@@ -3426,7 +3452,17 @@ const GENERAL_VERB_ANYWHERE_EXCLUDE_RE = /\b(?:is|are|am|owns|maintains)\b/i;
  *  the legit "mentors" as NOUN, so a POS gate would have regressed a real
  *  teach; a closed list (templates over general grammar rules) is both more
  *  reliable here and, being closed, can never widen recognition the way a
- *  probabilistic POS heuristic could. */
+ *  probabilistic POS heuristic could.
+ *
+ *  The interrogative pronouns (what/who/which/where/when/why/how) join the
+ *  list for the same reason: a dropped-copula casual fragment ("k what abt
+ *  users.mjs", missing the "is" QUESTION_LEAD_RE/hasMidSentenceInterrogative
+ *  both expect) leaves the WH-word sitting in the verb slot exactly like "if"
+ *  or "in" above — subject "k", verb "what", object "abt users.mjs" — and
+ *  the SAME nonsense -s fold ("k WHATs abt users.mjs") mints it as a fact. A
+ *  WH-word is never a genuine general-verb-frame verb, so this is the same
+ *  pure narrowing the block above already describes, just closing the one
+ *  closed class it left out. */
 const GENERAL_VERB_NOT_A_VERB_RE = new RegExp(
   "^(?:"
   // personal/possessive/demonstrative pronouns + determiners (mirrors, and
@@ -3439,6 +3475,9 @@ const GENERAL_VERB_NOT_A_VERB_RE = new RegExp(
   + "|up|down|off|out|above|below|between|among|against|without|within|along|across|behind|beyond|upon|toward|towards|per"
   // conjunctions/subordinators
   + "|and|but|or|if|because|although|though|while|when|since|unless|until|whether|so|nor|than|as"
+  // interrogative pronouns/adverbs — never a real verb, only ever the
+  // fronted question-word of a copula-dropped fragment
+  + "|what|who|whom|whose|which|where|why|how"
   + ")$",
   "i",
 );
@@ -3994,20 +4033,38 @@ function habitualGroundingHintText(line, habitual) {
  *  a demonstrated entity ("that is a bug", pointing at something real) is a
  *  much closer call than "every you is a womble".
  *
- *  The verb slot matches ANY word, not just the is/are/am copula: a pronoun
+ *  The verb slot matches ANY word, not just the is/are/am copula — a pronoun
  *  is just as invalid a fact subject under a general verb ("remember you has
- *  a hat", "remember he eats ribs") as it is under "is" — this is a
- *  grammatical category error regardless of the verb — keeping the guard
- *  ahead of every teach recognizer (copula AND general-verb alike) the same
- *  way it already stood ahead of teachSuggestion/unknownSubjectFallback. */
-// The contracted forms ("i'm new here …") join the bare pronouns: a leading
-// pronoun+copula contraction is exactly as invalid a fact subject, and it
-// slipped past this guard into the general-verb mint as a one-token "i'm".
-const TEACH_PRONOUNS = Object.freeze([
-  "you're", "i'm", "it's", "they're", "he's", "she's", "we're",
-  "you", "i", "it", "they", "he", "she", "we",
-]);
-const TEACH_PRONOUN_RE = new RegExp(`^(?:every\\s+|each\\s+|all\\s+|some\\s+|a few\\s+|a\\s+|an\\s+)?(${TEACH_PRONOUNS.join("|")})\\s+\\S+`, "i");
+ *  a hat", "remember he eats ribs") as it is under "is" — but ONLY once an
+ *  explicit "remember"/"note"/"teach me"-style wrapper (TEACH_RE) already
+ *  named this an unambiguous teach attempt (TEACH_PRONOUN_WRAPPED_RE, tried
+ *  first when `wrapped` is set). A BARE sentence with no such signal gets the
+ *  narrower TEACH_PRONOUN_BARE_RE instead: pronoun + copula + a SHORT
+ *  complement (one word, one optional leading article) — the exact shape
+ *  TEACH_PROPERTY_RE/BARE_DECLARATIVE_RE would themselves recognize from a
+ *  legal subject. Without that narrowing, an ordinary opener that merely
+ *  STARTS with "I" ("I am new here", "I want to know X") reached this guard
+ *  too (teachLane is the LAST lane tried, after every query strategy already
+ *  missed) and fired the copula-specific decline over a sentence no frame
+ *  would ever have stored regardless of subject — a confusing answer to a
+ *  question nobody asked. Those now fall to teachExclusionReason's existing
+ *  self-referential exclusion (a standalone "i"/"me" is already a
+ *  TEACH_EXCLUDE_META_TOKEN_RE hit) or to generalVerbTeach's own silent
+ *  decline (GENERAL_VERB_NOT_A_VERB_RE covers the same closed pronoun set) —
+ *  the same clean stand-down a non-pronoun subject already gets. */
+const TEACH_PRONOUNS_BARE = Object.freeze(["you", "i", "it", "they", "he", "she", "we"]);
+// The contracted forms ("i'm new here …") bake the copula into one token, so
+// they get their own branch below rather than a separate copula match.
+const TEACH_PRONOUNS_CONTRACTED = Object.freeze(["you're", "i'm", "it's", "they're", "he's", "she's", "we're"]);
+const TEACH_PRONOUNS = Object.freeze([...TEACH_PRONOUNS_CONTRACTED, ...TEACH_PRONOUNS_BARE]);
+const TEACH_PRONOUN_WRAPPED_RE = new RegExp(`^(?:every\\s+|each\\s+|all\\s+|some\\s+|a few\\s+|a\\s+|an\\s+)?(${TEACH_PRONOUNS.join("|")})\\s+\\S+`, "i");
+const TEACH_PRONOUN_BARE_RE = new RegExp(
+  "^(?:every\\s+|each\\s+|all\\s+|some\\s+|a few\\s+|a\\s+|an\\s+)?"
+  + `(?:(${TEACH_PRONOUNS_BARE.join("|")})\\s+(?:is|are|am|was|were)`
+  + `|(${TEACH_PRONOUNS_CONTRACTED.join("|")}))`
+  + "\\s+(?:an?\\s+)?[\\w'-]+[.!?]*$",
+  "i",
+);
 /** The same closed set, read as a whole-word membership test: a pronoun is no
  *  more a legal fact subject when a reader LIFTS one out of a prior answer than
  *  when a teach frame offers one. */
@@ -4163,7 +4220,7 @@ async function teachExclusionReason(sentence) {
   const unpunctuated = s.replace(/[.!?]+\s*$/, "");
   if (TEACH_EXCLUDE_IMPERATIVE_LEAD_RE.test(s)
     && !RETRACT_FORGET_RE.test(unpunctuated) && !RETRACT_FORGET_LOCATIVE_RE.test(unpunctuated)) return "imperative";
-  if (TEACH_EXCLUDE_META_TOKEN_RE.test(s) && !TEACH_PRONOUN_RE.test(s)) return "self-referential";
+  if (TEACH_EXCLUDE_META_TOKEN_RE.test(s) && !TEACH_PRONOUN_BARE_RE.test(s)) return "self-referential";
   return null;
 }
 export { teachExclusionReason };
@@ -4340,10 +4397,10 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // wrapped; trailing punctuation stripped the same way the OWNS/SOME_A_FEW
   // lanes below do) before anything else in this function, so a pronoun
   // subject NEVER reaches teachSuggestion's "did you mean" hint or
-  // unknownSubjectFallback's direct-write path — see TEACH_PRONOUN_RE's own
-  // docblock above for why.
+  // unknownSubjectFallback's direct-write path — see TEACH_PRONOUN_WRAPPED_RE/
+  // TEACH_PRONOUN_BARE_RE's own shared docblock above for why the two differ.
   const pronounSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
-  const pronounMatch = pronounSrc.match(TEACH_PRONOUN_RE);
+  const pronounMatch = pronounSrc.match(wrapped != null ? TEACH_PRONOUN_WRAPPED_RE : TEACH_PRONOUN_BARE_RE);
   // A pronoun-led sentence that's ALSO a mid-sentence question ("it uses
   // which controller as its base") isn't a pronoun-classification problem at
   // all — "it" was never going to be storable either way, so naming the
@@ -4359,7 +4416,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // declining right here.
   if (pronounMatch && !ACTION_SIGNATURE_TEACH_RE.test(pronounSrc)
     && !(await hasMidSentenceInterrogative(pronounSrc))) {
-    const pronoun = pronounMatch[1];
+    const pronoun = pronounMatch[1] || pronounMatch[2];
     return {
       text: `I can't store a fact about "${pronoun}" as a class — pronouns aren't things I can classify. `
         + `I remember facts in the shape "every X is a Y", where X is a specific noun, not a pronoun. `
@@ -4371,10 +4428,14 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // NEGATION ("X is not a Y") and RETRACTION ("forget that X is a Y"). Two
   // sentences, two intents, and the split is the point: a negative is a source
   // DISAGREEING, never an instruction to destroy. Each branch documents itself
-  // below; both are tried here, right after the pronoun guard, so a pronoun
-  // subject ("it is not an animal") still falls to that guard's own decline
-  // first (TEACH_PRONOUN_RE matches ANY verb after the pronoun, including
-  // "is not"), never reaching this block.
+  // below; both are tried here, right after the pronoun guard. A WRAPPED
+  // pronoun subject ("remember that it is not an animal") still falls to that
+  // guard's own decline first. A BARE one ("it is not an animal") reaches this
+  // block instead, but stays safe either way: retractNotMatch's own "gated on
+  // the positive existing" rule below finds no stored "it ⊑ …" fact to
+  // disagree with (a pronoun was never a legal mint subject anywhere in this
+  // lane), so it falls through to the ordinary cascade unstored, same as
+  // today — just without this guard's more specific wording.
   const retractSrc = (wrapped ?? raw).replace(/[.!?]+\s*$/, "");
   const retractSrcMidQuestion = memoryDir && !QUESTION_LEAD_RE.test(retractSrc)
     ? await hasMidSentenceInterrogative(retractSrc) : false;
@@ -8178,13 +8239,14 @@ const IS_ADJECTIVE_PRONOUN_RE = /^(?:it|this|that)$/i;
  *  SUBJECT capture — factReadBack then treats "you"/"you like"/"you secretly
  *  chatgpt or" as a literal fact subject and offers to teach a fact ABOUT the
  *  pronoun ("remember that you is happy"), exactly the grammatical category
- *  error TEACH_PRONOUN_RE (above) was already built to reject
- *  on the teach-lane side. Same pronoun set (you|i|they|he|she|we) reused
- *  here, checked at the START of the subject capture only (not anchored to
- *  the whole capture — a pronoun subject can carry trailing words, "you
- *  like"/"you secretly … or", the same way TEACH_PRONOUN_RE's own `\s+\S+`
- *  tail allows). "it" is deliberately EXCLUDED from this set, unlike
- *  TEACH_PRONOUN_RE — IS_ADJECTIVE_PRONOUN_RE (just above) already gives "it"
+ *  error TEACH_PRONOUN_WRAPPED_RE/TEACH_PRONOUN_BARE_RE (above) were already
+ *  built to reject on the teach-lane side. Same pronoun set (you|i|they|he|
+ *  she|we) reused here, checked at the START of the subject capture only
+ *  (not anchored to the whole capture — a pronoun subject can carry trailing
+ *  words, "you like"/"you secretly … or", the same class of category error
+ *  those two regexes reject on the teach-lane side). "it" is deliberately
+ *  EXCLUDED from this set, unlike TEACH_PRONOUN_WRAPPED_RE/
+ *  TEACH_PRONOUN_BARE_RE — IS_ADJECTIVE_PRONOUN_RE (just above) already gives "it"
  *  its own correct, wanted behavior (anaphoric resolution against the
  *  session's current FOCUS, "is it deprecated" → resolves off focusLabel),
  *  which this guard must not shadow. Every call site below is expected to

@@ -111,6 +111,13 @@ export function parseKeywordSpot(text, nlp = null) {
       fuzzyVerb = { from: lcWords[at], to: fuzzyWords[at] };
     }
   }
+  // Tracks whether verbHit came from PASSIVE_PARTICIPLE_TO_KIND's fallback
+  // rather than an active VERB_TO_KIND entry — that table's own header says
+  // it's only meant to fire once a passive auxiliary AND an agent-marking
+  // "by" are confirmed. A direct complement with no "by" ("my cat is called
+  // whiskers") is the naming sense of "call", not the invoke-relation passive,
+  // so this flag gates the ask-shape SVO fallback below from misreading it.
+  let verbFromParticiple = false;
   if (!verbHit) {
     // A participle with no active verb entry still marks a passive when a passive
     // auxiliary precedes it — with or without an agent "by" phrase. "is http.mjs
@@ -129,10 +136,28 @@ export function parseKeywordSpot(text, nlp = null) {
     for (let i = 0; i < lcWords.length; i += 1) {
       const k = PASSIVE_PARTICIPLE_TO_KIND[lcWords[i]];
       if (k && lcWords[i] === "used" && lcWords[i + 1] === "for") continue;
-      if (k && lcWords.slice(0, i).some((w) => PASSIVE_AUX.has(w))) { verbHit = { kind: k, start: i, end: i + 1 }; break; }
+      if (k && lcWords.slice(0, i).some((w) => PASSIVE_AUX.has(w))) {
+        verbHit = { kind: k, start: i, end: i + 1 };
+        verbFromParticiple = true;
+        break;
+      }
     }
   }
   if (!verbHit) return null;
+  // A single-word verbHit whose LITERAL surface text (not the lemma the tier-2
+  // pass may have rewritten it to) is itself a PASSIVE_PARTICIPLE_TO_KIND entry,
+  // preceded by a passive auxiliary, is the same "needs a confirmed 'by' agent"
+  // case the fallback loop above already flags — checked here too because the
+  // lemma tier reaches it independently: lemma("called") is "call", an ACTIVE
+  // verb-table entry in its own right, so tier 2 resolves verbHit before the
+  // fallback loop ever runs, silently losing the participle reading. "my cat is
+  // called whiskers" (the naming sense of "call") must not be read as though
+  // "cat" were the active subject invoking "whiskers".
+  if (!verbFromParticiple && verbHit.end - verbHit.start === 1
+    && PASSIVE_PARTICIPLE_TO_KIND[lcWords[verbHit.start]]
+    && lcWords.slice(0, verbHit.start).some((w) => PASSIVE_AUX.has(w))) {
+    verbFromParticiple = true;
+  }
   // A tier-3 verb is a REPAIR, not a reading — downstream consumers (the teach
   // lane's canonical receipt, and the chat surface's fuzzy-verb decline) need
   // to know the difference AND which word was rewritten, so {from, to} rides
@@ -232,6 +257,18 @@ export function parseKeywordSpot(text, nlp = null) {
     if (agent) return stamp({ shape: "forward", entityType, modifier, kind, object: agent });
     if (patient) return stamp({ shape: "reverse", entityType, modifier, kind, object: patient });
   }
+
+  // "called" specifically (never the rest of the participle family — "was it
+  // touched recently"/"is X used anywhere" are genuine bare-passive code
+  // queries with a trailing adverb, not a competing sense, and must keep
+  // reaching their existing reading) carries a whole separate NAMING sense
+  // ("my cat is called whiskers") distinct from the invoke-relation passive
+  // this table exists for. A following complement with no "by" agent is that
+  // naming sense, not "whiskers calls cat" — falling through to the
+  // active-SVO/reverse branches below would read the participle as if it
+  // were an active verb and answer a code-graph question nobody asked, so
+  // this misses honestly instead.
+  if (verbFromParticiple && byIdx < 0 && afterText && lcWords[verbHit.start] === "called") return null;
 
   if (beforeText && afterText) {
     const verbPhrase = canonWords.slice(verbHit.start, verbHit.end).join(" ");

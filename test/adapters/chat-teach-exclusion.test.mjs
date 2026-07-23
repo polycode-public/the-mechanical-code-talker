@@ -117,6 +117,60 @@ test("a bare first-person sentence gets the pronoun decline, never a stored fact
   });
 });
 
+test("a first-person opener with a non-copula predicate stands down instead of firing the pronoun decline", async () => {
+  await withStore(async (dir) => {
+    for (const s of ["i am new here", "i want to know all functions in tasks.mjs", "i read your README, i want to test some claims"]) {
+      const { answer } = await runTurn(s, { memoryDir: dir, sessionId: "s1" });
+      assert.doesNotMatch(answer, /pronouns aren't things I can classify/, `"${s}" must not fire the copula-specific pronoun decline`);
+      assert.doesNotMatch(answer, /noted — remembered/, `"${s}" must never store`);
+      assert.equal((await factRows(dir)).length, 0, `"${s}" must leave the fact store untouched`);
+    }
+  });
+});
+
+test("a bare pronoun subject with a relational participle+preposition predicate is never stored under the pronoun", async () => {
+  await withStore(async (dir) => {
+    // Mirrors the ingest pronoun-carry mechanism's own first, expected-to-fail
+    // attempt ("it is closely connected with hunting") before it substitutes
+    // the paragraph's real subject in the pronoun's place.
+    const { answer } = await runTurn("it is closely connected with hunting", { memoryDir: dir, sessionId: "s1" });
+    assert.doesNotMatch(answer, /noted — remembered/);
+    assert.equal((await factRows(dir)).length, 0);
+  });
+});
+
+test("a casual question fragment with a WH-word standing where a general-verb frame reads its verb is never stored", async () => {
+  await withStore(async (dir) => {
+    const { answer } = await runTurn("k what abt users.mjs", { memoryDir: dir, sessionId: "s1" });
+    assert.doesNotMatch(answer, /noted — remembered/);
+    assert.equal((await factRows(dir)).length, 0);
+  });
+});
+
+test("teaching a term that only resolves via the lexicon's trailing-s fold stores under the typed spelling, never the folded lemma", async () => {
+  await withStore(async (dir) => {
+    // "whisker" is a real lexicon-core.json noun; "whiskers" (a plausible pet
+    // name) must not be silently rewritten to it under a singular "is".
+    const { answer } = await runTurn("whiskers is a cat", { memoryDir: dir, sessionId: "s1" });
+    assert.match(answer, /noted — remembered/);
+    const rows = await factRows(dir);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "whiskers");
+    assert.equal(rows[0].object, "cat");
+  });
+});
+
+test("a filler/colon-led preamble before a real teach sentence still reaches the shape it wraps", async () => {
+  await withStore(async (dir) => {
+    const { answer } = await runTurn("ok, one more, teach me: no server is a client", { memoryDir: dir, sessionId: "s1" });
+    assert.match(answer, /noted — remembered/);
+    const rows = await factRows(dir);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "server");
+    assert.equal(rows[0].object, "client");
+  });
+});
+
 test("a universal quantified as 'any' stores under the real class term, never a quantifier-fused subject", async () => {
   await withStore(async (dir) => {
     const { answer } = await runTurn("any spider is an arachnid", { memoryDir: dir, sessionId: "s1" });

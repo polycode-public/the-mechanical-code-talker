@@ -128,8 +128,12 @@ const GREETING_PREAMBLE_RE = /^(?:hi|hiya|hello|hey|yo|howdy|g'?day|yeah\s+nah|g
  *  the "thanks" word family: "thanks so much, <Q>" -> "<Q>". */
 const THANKS_PREAMBLE_RE = /^(?:thanks|thank\s+you|many\s+thanks|thx|ty|cheers)(?:\s+(?:so\s+much|a\s+lot|very\s+much|a\s+bunch))?\s*[,—–-]\s*(?:(?:just\s+a\s+)?quick\s+question\s*[,:—–-]?\s*)?(.+)$/i;
 /** Acknowledgement lead-in with a delimiter ("ok cool, <Q>"), repeating (`+`)
- *  so a stack of ack-words peels in one pass. */
-const ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|aight|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good|no worries|no problem)[\s,]+)+(.+)$/i;
+ *  so a stack of ack-words peels in one pass. "one more"/"another one"/"just
+ *  one more" join the ack-word alternation as the same discourse move under a
+ *  different wording — a throwaway counting aside before the real content,
+ *  never part of the content itself ("ok, one more, teach me: no server is a
+ *  client" must peel exactly as "ok cool, <Q>" already does). */
+const ACK_PREAMBLE_RE = /^(?:(?:ok(?:ay)?|aight|cool|alright|sure|right|fine|great|nice|got it|gotcha|sounds good|no worries|no problem|(?:just\s+)?(?:one|another)\s+more|another\s+one)[\s,]+)+(.+)$/i;
 /** Self-orientation lead-in with a delimiter — "just poking around, <Q>",
  *  "first time using this, <Q>". */
 const BROWSING_PREAMBLE_RE = /^(?:just\s+(?:poking\s+around|looking\s+around|browsing|exploring|checking\s+(?:this|it)\s+out)|first\s+time\s+(?:trying\s+this\s+out|using\s+this|here)|i'?m\s+new\s+(?:here|around\s+here|to\s+(?:this|all\s+this)(?:\s+(?:repo|codebase|project|app|tool|thing))?))\s*[,.—–-]\s*(.+)$/i;
