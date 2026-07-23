@@ -5405,6 +5405,17 @@ const MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)\\s+do${TRAILING_ADVE
  *  ending safe — a syntactic match against a term that isn't a real entity
  *  simply falls through unchanged, same as every other lane in this file. */
 const MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB_RE}\\??$`, "i");
+/** "whats X do" / "what's X do" / "what is X do" — the CONTRACTED phrasing of
+ *  "what does X do", where the auxiliary collapses into the "what's"/"whats"
+ *  opener and "do" trails the term. MODULE_ORIENT_RE's own "does BEFORE the
+ *  term" anchor never sees it, and MODULE_ORIENT_SVO_RE needs a literal "what "
+ *  (with a space) so the bare "whats" spelling escapes that too. Safe to end
+ *  this loosely because the lane's exact-unique resolveEntity gate below is
+ *  still the sole authority — same argument as MODULE_ORIENT_SVO_RE: a term
+ *  that is not a real unique entity (a pronoun subject "whats it do", a
+ *  non-word) simply declines. The "what(?:'s|s|\s+is)" opener mirrors
+ *  MODULE_PURPOSE_RE's tolerance for the apostrophe-less "whats" contraction. */
+const MODULE_ORIENT_IS_DO_RE = new RegExp(`^what(?:'s|s|\\s+is)\\s+(.+?)\\s+do${TRAILING_ADVERB_RE}\\??$`, "i");
 // Purpose/identity phrasing: "whats X for"/"what's X
 // about"/"what is X for", the sibling of "what does X do" that asks for the
 // SAME module-grain overview. Deliberately does NOT claim the literal noun
@@ -5474,7 +5485,7 @@ async function moduleOrientLane(query, { graph }) {
   // (stripFillerWords already eats "please"/"could you" as filler; the politeness
   // regex only adds the "explain [to me]" wrapper on top).
   q = stripFillerWords(applyPreambleFrames(correctMisspellings(q))).replace(MODULE_ORIENT_POLITENESS_RE, "");
-  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_OF_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE);
+  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_OF_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE) || q.match(MODULE_ORIENT_IS_DO_RE);
   // "what does src/core/store.mjs do" already reached the overview; the bare
   // path and "what is <path>" did not, so the same module answered one
   // phrasing and walled two. Both are claimed here rather than in ask.mjs,
