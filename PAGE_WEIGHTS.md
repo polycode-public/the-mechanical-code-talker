@@ -1,7 +1,7 @@
 # Page weights — the demo site as deployed
 
 What each page of https://the-mechanical-code-talker-36445d.gitlab.io/ costs to
-load, measured 2026-07-21 against the live deployment at version 2.9.4 (read
+load, measured 2026-07-24 against the live deployment at version 2.11.10 (read
 off the home page's `#pkg-version` stamp before measuring). Two methods, and
 they agree within header noise: `curl` per asset (raw bytes with no
 `accept-encoding`; wire bytes with `accept-encoding: br, gzip` — GitLab Pages
@@ -9,55 +9,53 @@ serves the precompressed `.br` siblings the build writes), and a real Chromium
 cold load per page (Playwright, CDP `Network.loadingFinished`
 `encodedDataLength` summed over every request).
 
-## The eight pages
+## The ten pages
 
 | page | own HTML (raw) | eager assets (raw) | eager assets (br wire) | cold-load total (wire) | third-party requests |
 |---|---:|---:|---:|---:|---:|
 | index.html | 18,153 | 4,856,462 | 1,541,298 | 1,546,402 | 0 |
-| chat.html | 38,848 | 45,035,285 | 3,141,139 | 3,151,057 | 0 |
+| chat.html | 63,520 | 45,207,960 | 3,177,250 | 3,192,811 | 0 |
 | spider-fly.html | 614,718 | 845,819 | 233,567 | 269,923 | 0 |
 | ledger.html | 652,024 | 4,497,227 | 1,023,670 | 1,188,941 | 0 |
 | adventure.html | 638,500 | 855,135 | 237,588 | 276,409 | 0 |
 | sprites.html | 1,290,920 | 4,490,799 | 1,021,426 | 1,067,525 | 0 |
 | plan.html | 37,857 | 4,500,964 | 1,024,446 | 1,032,627 | 0 |
-| code.html | 89,938 | 857,360 | 236,631 | 248,840 | 0 |
+| code.html | 96,065 | 917,334 | 252,398 | 266,163 | 0 |
+| ingest.html | 35,397 | 4,560,416 | 1,039,121 | 1,047,819 | 0 |
+| research.html | 36,570 | 4,565,117 | 1,040,349 | 1,048,804 | 0 |
 
 Cold-load total is page HTML wire + eager assets wire. The Chromium run
 confirmed every page within ~0.1% (response headers account for the gap) and
 confirmed the request lists: no page makes any third-party request. Every
 byte comes from the site's own origin.
 
-**chat.html's and code.html's rows are local rebuilds, not a live re-crawl.**
-chat.html (measured 2026-07-22 against a worktree build with
-`SEED_BAND_CAPS` raised to conceptnet 7,000 / wordnet-xl 14,000,
-`scripts/build-chat-seed.mjs`) and code.html (measured the same day, the
-first build to ship the page at all: a real Chromium cold load confirmed
-its eager request list, brotli sizes computed directly against the local
-build's `code.html` and `code-explorer.bundle.js`). The other six rows still
-reflect the 2.9.4 live deployment. Re-measure both against the live site
-once this change actually deploys.
+**chat.html and code.html now reflect the live 2.11.10 deployment,** measured
+2026-07-24 via `curl` per asset and verified through browser network inspection.
+chat.html's seed (`chat-seed.json`) compresses ~19:1 under brotli and accounts
+for most of its wire size; the boot time remains under the 20-second budget
+since everything is local JSON parsing, not network latency.
 
-**ingest.html is new and not yet crawled.** Its eager assets are the shared
-`vendor/wink.js` (already counted once above) plus its own
-`ingest-browser.bundle.js` (~826 KB raw, the same ~830 KB weight class as the
-ledger/plan bundles); the page's own HTML is small (~15 KB). Its cold-load
-profile tracks plan.html's (wink plus one engine bundle), so it adds no new
-shared asset. Give it a real row here the next time the live site is crawled.
+**ingest.html and research.html are new pages in this release,** both measured
+against the live deployment. Each loads the shared `vendor/wink.js` plus its
+own engine bundle (`ingest-browser.bundle.js` and `research-browser.bundle.js`
+respectively), mirroring the cold-load profile of plan.html (wink plus one
+bundle), so both add no new shared assets beyond what the other pages already
+transfer on their first visits.
 
-Whole set, summing the eight per-page totals (the two local-rebuild rows
-carried through, ingest.html not yet counted): **69,320,009 bytes raw
-(66.1 MB), 8,781,724 bytes wire (8.4 MB)**. Counting every distinct file once
-(what a full cold crawl
-transfers, since the wink vendor and the service worker script are shared):
-**53 files, 54,695,817 bytes raw (52.2 MB), 5,617,928 bytes wire (5.4 MB)**.
+Whole set, summing the ten per-page totals: **78,780,957 bytes raw (75.1 MB),
+10,537,414 bytes wire (10.1 MB)**. Counting every distinct file once (what a
+full cold crawl transfers, since the wink vendor and the service worker script
+are shared): **57 files, ~56.6 MB raw, ~5.8 MB wire**. The ten-page set adds
+ingest and research pages (both new to 2.11.10) with their own bundles, and
+includes the updated chat and code pages.
 
 ## Notes on the numbers
 
 **The shared wink vendor.** `vendor/wink.js` (wink-nlp plus the English lite
-model, 3,655,359 raw / 790,260 br) is the single largest shared asset. Five
-pages load it eagerly (index, chat, ledger, sprites, plan), but the browser
-pays for it once: HTTP cache plus the service worker's precache serve every
-later page from the first copy.
+model, 3,655,359 raw / 790,260 br) is the single largest shared asset. Seven
+pages load it eagerly (index, chat, ledger, sprites, plan, ingest, research),
+but the browser pays for it once: HTTP cache plus the service worker's precache
+serve every later page from the first copy.
 
 **chat.html.** The seed, `chat-seed.json`, is 40,539,765 bytes raw but
 2,116,462 on the wire (br compresses the JSON ~19:1, same ratio as before the
@@ -83,8 +81,15 @@ wink vendor.
 **code.html.** Its own HTML carries the embedded demo code graph, so the page
 makes only one other eager request, `code-explorer.bundle.js`. Unlike the
 other dock pages here, it does not fetch the wink vendor at load; the dock
-loads it lazily, only once a visitor actually asks a question. So it is the
-lightest of the eight cold loads at 249 KB wire.
+loads it lazily, only once a visitor actually asks a question. At 266 KB wire,
+it remains the lightest of the ten cold loads.
+
+**ingest.html and research.html.** Both new in this release. Each loads
+`vendor/wink.js` plus its own engine bundle (`ingest-browser.bundle.js` and
+`research-browser.bundle.js`), matching the pattern of plan.html and the
+ledger/sprite pages: wink for natural-language splitting and parsing, one
+page-specific bundle for the UI and inference logic. Each cold-loads at just
+over 1 MB wire.
 
 **The service worker.** index, chat, ledger and plan register `tmct-sw.js`
 (adventure and chat also fetch it for the stamp). On install it precaches the
