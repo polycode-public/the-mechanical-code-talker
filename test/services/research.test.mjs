@@ -11,7 +11,10 @@ import assert from "node:assert/strict";
 import {
   RESEARCH_DEFAULTS,
   RESEARCH_FANOUT_MAX,
+  RESEARCH_MAX_DEPTH,
+  RESEARCH_MAX_TOPICS,
   resolveResearchConfig,
+  clampResearchConfig,
   parseResearchRequest,
   researchProvenanceTag,
   researchTopicKey,
@@ -69,6 +72,13 @@ test("parseResearchRequest reads the start shape, with and without a limit, arti
   assert.deepEqual(parseResearchRequest('research "polar bears" with limit 2'), { kind: "start", topic: "polar bears", limit: 2 });
 });
 
+test("parseResearchRequest reads a depth token, alongside a limit in either order", () => {
+  assert.deepEqual(parseResearchRequest("research owls depth 2"), { kind: "start", topic: "owls", depth: 2 });
+  assert.deepEqual(parseResearchRequest("research owls, limit 3 depth 2"), { kind: "start", topic: "owls", limit: 3, depth: 2 });
+  assert.deepEqual(parseResearchRequest("research owls depth 2, limit 3"), { kind: "start", topic: "owls", limit: 3, depth: 2 });
+  assert.deepEqual(parseResearchRequest("research the roman empire with depth 3"), { kind: "start", topic: "roman empire", depth: 3 });
+});
+
 test("parseResearchRequest reads the queue verbs before the start shape ever sees them", () => {
   assert.deepEqual(parseResearchRequest("research next"), { kind: "next" });
   assert.deepEqual(parseResearchRequest("research continue"), { kind: "next" });
@@ -86,14 +96,25 @@ test("parseResearchRequest declines a non-research line", () => {
 
 // ---- config ----------------------------------------------------------------
 
-test("resolveResearchConfig ships defaults, clamps the fan-out, caps depth at 1, and only ever raises the interval", () => {
+test("resolveResearchConfig ships defaults, clamps the fan-out and depth, caps the node budget, and only ever raises the interval", () => {
   assert.deepEqual(resolveResearchConfig(null), { ...RESEARCH_DEFAULTS });
-  const cfg = resolveResearchConfig({ research: { fanout_limit: 99, depth_limit: 7, min_interval_ms: 250 } });
+  const cfg = resolveResearchConfig({ research: { fanout_limit: 99, depth_limit: 7, max_topics: 999, min_interval_ms: 250 } });
   assert.equal(cfg.fanoutLimit, RESEARCH_FANOUT_MAX, "the fan-out cap holds against a large config value");
-  assert.equal(cfg.depthLimit, 1, "depth clamps to the engineered range");
+  assert.equal(cfg.maxDepth, RESEARCH_MAX_DEPTH, "depth clamps to the engineered ceiling");
+  assert.equal(cfg.maxTopics, RESEARCH_MAX_TOPICS, "the node budget clamps to its ceiling");
   assert.equal(cfg.minIntervalMs, RESEARCH_DEFAULTS.minIntervalMs, "the polite interval never drops below the floor");
   assert.equal(resolveResearchConfig({ research: { min_interval_ms: 5000 } }).minIntervalMs, 5000, "raising it is allowed");
   assert.equal(resolveResearchConfig({ research: { fanout_limit: 0 } }).fanoutLimit, 0, "zero fan-out is a legal choice");
+  assert.equal(resolveResearchConfig({ research: { max_depth: 2 } }).maxDepth, 2, "max_depth is read as the depth knob");
+});
+
+test("clampResearchConfig folds a camelCase partial onto defaults and clamps every knob to its range", () => {
+  assert.deepEqual(clampResearchConfig({}), { ...RESEARCH_DEFAULTS });
+  const cfg = clampResearchConfig({ maxDepth: 9, maxTopics: 0, fanoutLimit: -3 });
+  assert.equal(cfg.maxDepth, RESEARCH_MAX_DEPTH, "depth clamps to its ceiling");
+  assert.equal(cfg.maxTopics, 1, "the node budget clamps to its floor of 1");
+  assert.equal(cfg.fanoutLimit, 0, "a negative fan-out clamps to zero");
+  assert.equal(clampResearchConfig({ maxTopics: NaN }).maxTopics, RESEARCH_DEFAULTS.maxTopics, "a non-finite knob falls back to its default");
 });
 
 // ---- the run mechanics -----------------------------------------------------
@@ -210,6 +231,65 @@ test("config depth_limit 0 and fanout 0 both mean no fan-out: the run completes 
     assert.match(r.text, /no linked topics queued — research on "owl" is complete\./);
     assert.ok(!provider.calls.some(([m]) => m === "linkedTitles"), "no links round trip is spent when nothing may queue");
   }
+});
+
+test("a depth-2 run fans out again when a queued topic is fetched: its own lead links enqueue at depth 2, stamped @2, never re-queuing a met topic", async () => {
+  const provider = cannedProvider({
+    articles: {
+      owl: ROW("Owl"), bird: ROW("Bird"), feather: ROW("Feather"), wing: ROW("Wing"),
+    },
+    links: {
+      Owl: ["Bird"],
+      Bird: ["Feather", "Wing", "Owl"], // "Owl" is the run topic — must never re-queue
+    },
+  });
+  const ingest = ingestRecorder(1);
+  const ctx = ctxFor(provider, ingest);
+  const start = await researchTurn("research owl, limit 5 depth 2", ctx);
+  assert.match(start.text, /queued 1 linked topic: Bird following links up to depth 2/);
+  assert.deepEqual(researchSnapshot(ctx.holder.state).pending, ["Bird"]);
+
+  const step = await researchTurn("research next", ctx);
+  assert.equal(step.miss, false);
+  assert.match(step.text, /^bird —/);
+  // Bird's own lead links joined the queue at depth 2 — Owl (the run topic) did not.
+  assert.deepEqual(researchSnapshot(ctx.holder.state).pending, ["Feather", "Wing"]);
+  assert.equal(ingest.calls[1].tag, "research:owl@1", "the depth-1 topic stamps @1");
+
+  const step2 = await researchTurn("research next", ctx);
+  assert.match(step2.text, /^feather —/);
+  assert.equal(ingest.calls[2].tag, "research:owl@2", "a depth-2 topic stamps the run topic @2");
+  // depth 2 is the ceiling: Feather does not fan out to a depth-3 tier.
+  assert.deepEqual(researchSnapshot(ctx.holder.state).pending, ["Wing"]);
+});
+
+test("the total node budget stops a deep run fetching once grounded+pending reaches the cap, and the progress line says so", async () => {
+  const provider = cannedProvider({
+    articles: { owl: ROW("Owl"), bird: ROW("Bird"), night: ROW("Night"), feather: ROW("Feather") },
+    links: {
+      Owl: ["Bird", "Night", "Feather"],
+      Bird: ["Feather", "Night"],
+    },
+  });
+  const ingest = ingestRecorder(1);
+  const config = resolveResearchConfig({ research: { max_topics: 3 } });
+  const ctx = ctxFor(provider, ingest, { config });
+  // depth 2, generous fan-out, but a node budget of 3: Owl + only 2 more.
+  await researchTurn("research owl, limit 5 depth 2", ctx);
+  const snapAfterStart = researchSnapshot(ctx.holder.state);
+  assert.equal(snapAfterStart.maxTopics, 3);
+  assert.deepEqual(snapAfterStart.pending, ["Bird", "Night"], "the start fan-out is bounded by the budget, not the fan-out cap");
+  assert.equal(snapAfterStart.nodeCapReached, true, "the budget bound the fan-out at the start");
+
+  const step1 = await researchTurn("research next", ctx);
+  // Bird is fetched (grounded == 2), but no new topic is queued: the budget is spent.
+  assert.deepEqual(researchSnapshot(ctx.holder.state).pending, ["Night"]);
+
+  const step2 = await researchTurn("research next", ctx);
+  const snap = researchSnapshot(ctx.holder.state);
+  assert.equal(snap.complete, true);
+  assert.equal(snap.done.length, 3, "exactly the node budget of topics were grounded, no more");
+  assert.match(step2.text, /research on "owl" reached its node budget — 3 topics grounded/);
 });
 
 test("the fan-out never queues the topic itself or a duplicate fold of it", async () => {

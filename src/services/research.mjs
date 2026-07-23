@@ -42,34 +42,64 @@ export function researchTopicKey(topic, lexicon = null) {
   return t;
 }
 
-/** The most linked topics any request or config may queue at depth 1 —
- *  the fair-use cap on a research run's total round trips. */
+/** The most linked topics any single fan-out may queue — the per-fan-out cap
+ *  the request's "limit N" (or the configured `fanoutLimit`) sets, itself
+ *  bounded here. */
 export const RESEARCH_FANOUT_MAX = 12;
+
+/** How deep the link fan-out may follow: depth 0 is the requested topic, and
+ *  each further tier is the previous tier's own lead-section links. The user
+ *  knob (page "maximum node depth", CLI `depth D`) is clamped to this. */
+export const RESEARCH_MAX_DEPTH = 3;
+
+/** The largest total node budget a run may carry — the page's "maximum
+ *  response nodes" upper bound. `maxTopics` caps how many topics one run
+ *  fetches and stores in total (depth 0 counts as the first). */
+export const RESEARCH_MAX_TOPICS = 50;
 
 export const RESEARCH_DEFAULTS = Object.freeze({
   fanoutLimit: 5,
-  depthLimit: 1,
+  maxDepth: 1,
+  maxTopics: 12,
   minIntervalMs: 2000,
 });
 
 const clampInt = (n, lo, hi) => Math.min(hi, Math.max(lo, Math.floor(n)));
 
+/** A partial `{ fanoutLimit?, maxDepth?, maxTopics?, minIntervalMs? }` (camelCase,
+ *  as the page and CLI supply it) folded onto the shipped defaults and clamped
+ *  to the engineered ranges: fan-out at RESEARCH_FANOUT_MAX, depth at
+ *  RESEARCH_MAX_DEPTH, the node budget at [1, RESEARCH_MAX_TOPICS], and the
+ *  polite interval only ever RAISED above its floor, never lowered. Every
+ *  non-finite field falls back to its default, so a corrupt/absent value is
+ *  the shipped knob, never a crash. */
+export function clampResearchConfig(partial = {}) {
+  const cfg = { ...RESEARCH_DEFAULTS };
+  const fanout = Number(partial.fanoutLimit);
+  if (Number.isFinite(fanout)) cfg.fanoutLimit = clampInt(fanout, 0, RESEARCH_FANOUT_MAX);
+  const depth = Number(partial.maxDepth);
+  if (Number.isFinite(depth)) cfg.maxDepth = clampInt(depth, 0, RESEARCH_MAX_DEPTH);
+  const topics = Number(partial.maxTopics);
+  if (Number.isFinite(topics)) cfg.maxTopics = clampInt(topics, 1, RESEARCH_MAX_TOPICS);
+  const interval = Number(partial.minIntervalMs);
+  if (Number.isFinite(interval)) cfg.minIntervalMs = Math.max(RESEARCH_DEFAULTS.minIntervalMs, interval);
+  return cfg;
+}
+
 /** tmct.toml's `[research]` table → the lane's effective knobs, shipped
  *  defaults filling every unset key (the same posture resolveGameConfig
  *  takes with `[games.*]`). `fanout_limit` caps at RESEARCH_FANOUT_MAX;
- *  `depth_limit` is 0 (no fan-out) or 1 (the depths engineered today);
- *  `min_interval_ms` may only RAISE the polite floor between round trips,
- *  never lower it. */
+ *  `depth_limit`/`max_depth` set how deep the fan-out follows (0 means no
+ *  fan-out); `max_topics` sets the total node budget; `min_interval_ms` may
+ *  only RAISE the polite floor between round trips, never lower it. */
 export function resolveResearchConfig(toml = null) {
   const raw = toml?.research || {};
-  const cfg = { ...RESEARCH_DEFAULTS };
-  const fanout = Number(raw.fanout_limit);
-  if (Number.isFinite(fanout)) cfg.fanoutLimit = clampInt(fanout, 0, RESEARCH_FANOUT_MAX);
-  const depth = Number(raw.depth_limit);
-  if (Number.isFinite(depth)) cfg.depthLimit = clampInt(depth, 0, 1);
-  const interval = Number(raw.min_interval_ms);
-  if (Number.isFinite(interval)) cfg.minIntervalMs = Math.max(RESEARCH_DEFAULTS.minIntervalMs, interval);
-  return cfg;
+  return clampResearchConfig({
+    fanoutLimit: raw.fanout_limit,
+    maxDepth: raw.max_depth ?? raw.depth_limit,
+    maxTopics: raw.max_topics,
+    minIntervalMs: raw.min_interval_ms,
+  });
 }
 
 // The verbs that step/inspect/end a run, checked before the start shape so
@@ -77,16 +107,21 @@ export function resolveResearchConfig(toml = null) {
 const RESEARCH_NEXT_RE = /^research[,:]?\s+(?:next|continue|more)\s*[.!?]*$/i;
 const RESEARCH_STATUS_RE = /^research[,:]?\s+status\s*[.!?]*$/i;
 const RESEARCH_STOP_RE = /^research[,:]?\s+(?:stop|cancel|quit|end)\s*[.!?]*$/i;
-const RESEARCH_START_RE = /^research[,:]?\s+(.+?)(?:[,;]?\s+(?:with\s+)?limit\s+(\d{1,3}))?\s*[.!?]*$/i;
+const RESEARCH_START_RE = /^research[,:]?\s+(.+?)\s*[.!?]*$/i;
+// The trailing knob tokens a start request may carry, stripped one at a time
+// off the END so "limit N" and "depth D" read in either order: "research owls,
+// limit 2 depth 2" and "research owls depth 2, limit 2" both parse the same.
+const RESEARCH_OPTION_RE = /[,;]?\s+(?:with\s+)?(limit|depth)\s+(\d{1,3})$/i;
 // A bare continuation word steps the queue too, but only when a run is
 // actually pending and no plan lane owns the word — parseResearchRequest
 // reports it as its own kind so the caller can apply that gate.
 const BARE_NEXT_RE = /^(?:next|continue|carry on|keep going)\s*[.!?]*$/i;
 
-/** The research request a line carries, or null. Kinds: start {topic,
- *  limit?}, next, bareNext, status, stop. The topic keeps the user's own
- *  words minus a leading article and any wrapping quotes; limit is only
- *  present when the request named one. */
+/** The research request a line carries, or null. Kinds: start {topic, limit?,
+ *  depth?}, next, bareNext, status, stop. The topic keeps the user's own words
+ *  minus a leading article and any wrapping quotes; `limit` (per-fan-out cap)
+ *  and `depth` (how deep the fan-out follows) are present only when the request
+ *  named them. */
 export function parseResearchRequest(line) {
   const q = String(line || "").trim();
   if (!q) return null;
@@ -96,13 +131,21 @@ export function parseResearchRequest(line) {
   if (RESEARCH_STOP_RE.test(q)) return { kind: "stop" };
   const m = q.match(RESEARCH_START_RE);
   if (!m) return null;
-  const topic = m[1].trim()
+  let rest = m[1].trim();
+  const opts = {};
+  for (let om = rest.match(RESEARCH_OPTION_RE); om; om = rest.match(RESEARCH_OPTION_RE)) {
+    const kind = om[1].toLowerCase();
+    if (opts[kind] === undefined) opts[kind] = Number(om[2]);
+    rest = rest.slice(0, om.index).trim();
+  }
+  const topic = rest
     .replace(/^["'‘’“”]+|["'‘’“”]+$/g, "")
     .replace(/^(?:an?|the)\s+/i, "")
     .trim();
   if (!topic) return null;
   const out = { kind: "start", topic };
-  if (m[2] !== undefined) out.limit = Number(m[2]);
+  if (opts.limit !== undefined) out.limit = opts.limit;
+  if (opts.depth !== undefined) out.depth = opts.depth;
   return out;
 }
 
@@ -122,29 +165,101 @@ export function renderResearchAnswer(term, article) {
 }
 
 /** The queue as plain data for a UI: pending titles, per-topic fact counts,
- *  skips, and whether the run is complete. Null for no run. */
+ *  skips, the two node knobs this run carries, and whether the run is complete
+ *  (and, if so, whether the node budget is why). Null for no run. */
 export function researchSnapshot(state) {
   if (!state) return null;
   return {
     topic: state.topic,
     limit: state.limit,
+    maxDepth: runMaxDepth(state),
+    maxTopics: runMaxTopics(state),
     pending: [...state.pending],
     done: state.done.map((d) => ({ title: d.title, facts: d.facts, depth: d.depth })),
     skipped: [...state.skipped],
     complete: state.pending.length === 0,
+    nodeCapReached: Boolean(state.nodeCapReached),
   };
 }
 
 const totalFacts = (state) => state.done.reduce((sum, d) => sum + d.facts, 0);
 
-function progressLine(state) {
-  const done = `${state.done.length} topic${state.done.length === 1 ? "" : "s"} grounded, ${totalFacts(state)} fact${totalFacts(state) === 1 ? "" : "s"} stored`;
-  const skipped = state.skipped.length ? `, ${state.skipped.length} skipped` : "";
-  if (!state.pending.length) return `research on "${state.topic}" is complete — ${done}${skipped}.`;
-  return `${done}${skipped}; ${state.pending.length} linked topic${state.pending.length === 1 ? "" : "s"} still queued — "research next" fetches the next one.`;
+/** The run's effective knobs, defaulted so a queue resumed from an older
+ *  persisted file (which carried neither field) reads as today's depth-1
+ *  behaviour rather than crashing. */
+const runMaxDepth = (state) => (Number.isFinite(state?.maxDepth) ? state.maxDepth : RESEARCH_DEFAULTS.maxDepth);
+const runMaxTopics = (state) => (Number.isFinite(state?.maxTopics) ? state.maxTopics : RESEARCH_DEFAULTS.maxTopics);
+const runFanout = (state) => clampInt(Number.isFinite(state?.limit) ? state.limit : RESEARCH_DEFAULTS.fanoutLimit, 0, RESEARCH_FANOUT_MAX);
+
+/** The depth a queued title carries, or 1 for a queue resumed off an older
+ *  file that never recorded per-title depths. */
+const pendingDepth = (state, title) => {
+  const d = state.depths ? state.depths[normFactTerm(title)] : undefined;
+  return Number.isFinite(d) ? d : 1;
+};
+
+/** Every folded title this run has already touched — the run key, its grounded
+ *  topics, its skips and its still-pending queue — so a fan-out never re-queues
+ *  a topic the run has met. */
+function queuedFolds(state) {
+  const seen = new Set();
+  if (state.key) seen.add(state.key);
+  for (const d of state.done) { const f = normFactTerm(d.title); if (f) seen.add(f); }
+  for (const t of state.skipped) { const f = normFactTerm(t); if (f) seen.add(f); }
+  for (const t of state.pending) { const f = normFactTerm(t); if (f) seen.add(f); }
+  return seen;
 }
 
-async function startRun({ topic, limit }, { holder, provider, ingest, config, notify, lexicon }) {
+/** Queue `article`'s lead-section links at `fromDepth + 1`, subject to the run's
+ *  depth ceiling, its per-fan-out cap and — crucially — its TOTAL node budget:
+ *  the number added never pushes grounded+pending past `maxTopics`. Sets
+ *  `state.nodeCapReached` when the budget (not the depth, not a lack of links)
+ *  is what stopped the fan-out, so the progress line can say so. Returns the
+ *  titles it enqueued. */
+async function enqueueFrom(state, article, fromDepth, provider) {
+  const childDepth = fromDepth + 1;
+  if (childDepth > runMaxDepth(state)) return [];
+  const fanoutCap = runFanout(state);
+  if (fanoutCap <= 0 || typeof provider.linkedTitles !== "function") return [];
+  const budget = runMaxTopics(state) - (state.done.length + state.pending.length);
+  const want = Math.min(fanoutCap, budget);
+  if (want <= 0) { state.nodeCapReached = true; return []; }
+  let linked = null;
+  try { linked = await provider.linkedTitles(article.title, { limit: want + 2 }); } catch { linked = null; }
+  const seen = queuedFolds(state);
+  if (!state.depths) state.depths = {};
+  const added = [];
+  for (const title of linked || []) {
+    const folded = normFactTerm(title);
+    if (!folded || seen.has(folded)) continue;
+    seen.add(folded);
+    state.pending.push(title);
+    state.depths[folded] = childDepth;
+    added.push(title);
+    if (added.length >= want) break;
+  }
+  // The budget, not the fan-out cap, was the binding constraint: the run wanted
+  // more topics than the node budget would allow and filled to that ceiling.
+  if (want < fanoutCap && added.length >= want) state.nodeCapReached = true;
+  return added;
+}
+
+function progressLine(state) {
+  const n = state.done.length;
+  const facts = totalFacts(state);
+  const done = `${n} topic${n === 1 ? "" : "s"} grounded, ${facts} fact${facts === 1 ? "" : "s"} stored`;
+  const skipped = state.skipped.length ? `, ${state.skipped.length} skipped` : "";
+  const capped = Boolean(state.nodeCapReached);
+  if (!state.pending.length) {
+    if (capped) return `research on "${state.topic}" reached its node budget — ${done}${skipped}.`;
+    return `research on "${state.topic}" is complete — ${done}${skipped}.`;
+  }
+  const queued = `${state.pending.length} linked topic${state.pending.length === 1 ? "" : "s"} still queued`;
+  if (capped) return `${done}${skipped}; ${queued} — "research next" fetches the next one. Node budget of ${runMaxTopics(state)} reached, so no more topics will be added; "research stop" clears the queue.`;
+  return `${done}${skipped}; ${queued} — "research next" fetches the next one.`;
+}
+
+async function startRun({ topic, limit, depth }, { holder, provider, ingest, config, notify, lexicon }) {
   const key = researchTopicKey(topic, lexicon);
   if (!key) {
     holder.state = null;
@@ -167,25 +282,17 @@ async function startRun({ topic, limit }, { holder, provider, ingest, config, no
     0,
     RESEARCH_FANOUT_MAX,
   );
-  let pending = [];
-  if (fanout > 0 && config.depthLimit > 0 && typeof provider.linkedTitles === "function") {
-    let linked = null;
-    try { linked = await provider.linkedTitles(article.title, { limit: fanout + 2 }); } catch { linked = null; }
-    const seen = new Set([key, normFactTerm(article.title)]);
-    for (const title of linked || []) {
-      const folded = normFactTerm(title);
-      if (!folded || seen.has(folded)) continue;
-      seen.add(folded);
-      pending.push(title);
-      if (pending.length >= fanout) break;
-    }
-  }
+  const maxDepth = Number.isFinite(depth) ? clampInt(depth, 0, RESEARCH_MAX_DEPTH) : config.maxDepth;
+  const maxTopics = Number.isFinite(config.maxTopics) ? config.maxTopics : RESEARCH_DEFAULTS.maxTopics;
   holder.state = {
-    topic, key, title: article.title, limit: fanout,
-    pending, done: [{ title: article.title, facts, depth: 0 }], skipped: [],
+    topic, key, title: article.title, limit: fanout, maxDepth, maxTopics,
+    pending: [], depths: {}, done: [{ title: article.title, facts, depth: 0 }],
+    skipped: [], nodeCapReached: false,
   };
+  const pending = await enqueueFrom(holder.state, article, 0, provider);
+  const depthNote = maxDepth > 1 ? ` following links up to depth ${maxDepth}` : "";
   const queueLine = pending.length
-    ? `queued ${pending.length} linked topic${pending.length === 1 ? "" : "s"}: ${pending.join(", ")} — "research next" fetches the next one (the page's play button does this for you).`
+    ? `queued ${pending.length} linked topic${pending.length === 1 ? "" : "s"}: ${pending.join(", ")}${depthNote} — "research next" fetches the next one (the page's play button does this for you).`
     : `no linked topics queued — research on "${topic}" is complete.`;
   return {
     text: `${renderResearchAnswer(key, article)}\nstored ${facts} fact${facts === 1 ? "" : "s"} from "${article.title}". ${queueLine}`,
@@ -196,7 +303,9 @@ async function startRun({ topic, limit }, { holder, provider, ingest, config, no
 async function stepRun({ holder, provider, ingest, notify }) {
   const state = holder.state;
   const title = state.pending[0];
+  const depth = pendingDepth(state, title);
   state.pending = state.pending.slice(1);
+  if (state.depths) delete state.depths[normFactTerm(title)];
   try { if (typeof notify === "function") notify(title); } catch { /* notify-only */ }
   let article = null;
   try { article = await (provider.pageByTitle ? provider.pageByTitle(title) : provider.lookup(normFactTerm(title))); } catch { article = null; }
@@ -209,8 +318,9 @@ async function stepRun({ holder, provider, ingest, notify }) {
   }
   const key = normFactTerm(article.title) || normFactTerm(title);
   let facts = 0;
-  try { facts = await ingest(key, article, researchProvenanceTag(state.key, 1)); } catch { facts = 0; }
-  state.done = [...state.done, { title: article.title, facts, depth: 1 }];
+  try { facts = await ingest(key, article, researchProvenanceTag(state.key, depth)); } catch { facts = 0; }
+  state.done = [...state.done, { title: article.title, facts, depth }];
+  if (depth < runMaxDepth(state)) await enqueueFrom(state, article, depth, provider);
   return {
     text: `${renderResearchAnswer(key, article)}\nstored ${facts} fact${facts === 1 ? "" : "s"} from "${article.title}". ${progressLine(state)}`,
     miss: false,

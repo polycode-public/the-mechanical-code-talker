@@ -129,8 +129,9 @@ export async function normalizeConfig(raw, { configDir } = {}) {
 
   // Research-lane knobs (src/services/research.mjs): sparse PASS-THROUGH,
   // same discipline as [games.*] — the raw `[research]` table
-  // (fanout_limit / depth_limit / min_interval_ms, snake_case) rides through
-  // unmodified; clamping and default-filling is resolveResearchConfig's job.
+  // (fanout_limit / max_depth / max_topics / min_interval_ms, snake_case)
+  // rides through unmodified; clamping and default-filling is
+  // resolveResearchConfig's job.
   if (src.research !== undefined) cfg.research = src.research;
 
   const idx = src.index || {};
