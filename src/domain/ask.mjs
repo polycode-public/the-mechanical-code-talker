@@ -3355,6 +3355,15 @@ function bareVerbFor(kind) {
   return RELATIONS[kind]?.bare || kind;
 }
 
+/** The passive participle of a relation ("uses" -> "used", "imports" ->
+ *  "imported"), for the confirming "X is <participle> by Y" frame. The bare
+ *  forms in this vocabulary are all regular, so a single +d/+ed rule covers
+ *  them. */
+function passiveParticipleFor(kind) {
+  const bare = bareVerbFor(kind);
+  return bare.endsWith("e") ? `${bare}d` : `${bare}ed`;
+}
+
 /** English gloss of a SET-COMPLEMENT AST — the shape parseNegation compiles
  *  "which X do not <verb> Y" into (allOfClass DIFFERENCE the positive set).
  *  Restates the question in the same grammar the positive canonical uses
@@ -3816,6 +3825,16 @@ function renderCore(parsed, result, graph) {
     return {
       content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${object}. ${touchesRephraseHint(graph)}`,
       miss: true, ambiguous: false,
+    };
+  }
+  // A polar reverse question ("is X used anywhere") with exactly one match
+  // reads as a confirming yes that names the single subject, rather than a bare
+  // one-item list. Scoped to one match: two or more keep the plain list.
+  if (parsed.polar && result.matches.length === 1) {
+    const objLabel = result.objMatch?.label || parsed.object;
+    return {
+      content: `Yes — ${objLabel} is ${passiveParticipleFor(parsed.kind)} by ${result.matches[0].label}.`,
+      miss: false, ambiguous: false, matches: result.matches,
     };
   }
   // Route by the matched entities' actual class, not just the parsed hint —

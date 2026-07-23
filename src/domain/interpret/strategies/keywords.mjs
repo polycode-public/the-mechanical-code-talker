@@ -328,7 +328,11 @@ export function parseKeywordSpot(text, nlp = null) {
     // nobody asked, so this declines and the sentence misses honestly.
     if (beforeText.split(/\s+/).length > 1) return null;
     if (kind === "touches") return stamp({ shape: "when", entityType: null, modifier: "direct", kind, object: beforeText });
-    return stamp({ shape: "reverse", entityType, modifier, kind, object: beforeText });
+    // A sentence that LEADS with the passive auxiliary is an interrogative
+    // yes/no ("is X used anywhere"), not a declarative patient statement; mark
+    // it so a single reverse match can render a confirming Yes frame.
+    const polar = PASSIVE_AUX.has(lcWords[0]);
+    return stamp({ shape: "reverse", entityType, modifier, kind, object: beforeText, ...(polar ? { polar: true } : {}) });
   }
   // forward keeps the spotted entityType (traverse()'s commit-as-subject grain
   // selection); modifier stays hardcoded since no forward closure traversal exists.
