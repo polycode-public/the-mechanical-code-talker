@@ -28,90 +28,96 @@
 </script>
 <script>if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});</script>
 <style>
-  /* Shared token names and hex values match src/services/viz-theme.mjs's
-     TOKENS.light/TOKENS.dark exactly — the source of truth shared with the
-     ledger/plan/chat/sprite pages. Update there first, then here. The -soft
-     values are viz-theme's own derived rgba() tiers, copied at the same alpha.
-     --code-bg/--code-fg have no shared equivalent (this page's own terminal-block
-     colours, outside the trust-tier palette) and stay page-local. */
+  /* The home page carries its own quiet, near-monochrome palette and type — a
+     white ground, a neutral grey scale, and a single restrained green accent
+     reserved for grounding and provenance cues. It deliberately does NOT mirror
+     src/services/viz-theme.mjs; those trust-tier tokens stay the shared source
+     of truth for the ledger/plan/chat/sprite pages, which keep their own look.
+     --code-bg/--code-fg are this page's own terminal-block colours. */
   :root {
-    --bg: #F7F6F2;
-    --ink: #23272B;
-    --muted: #6E7168;
-    --taught: #2E7D4F;
-    --entail: #B07C2E;
-    --entail-soft: rgba(176, 124, 46, 0.14);
-    --card: #FFFFFF;
-    --line: #DDD9D0;
-    --code-bg: #1B1F24;
-    --code-fg: #D6DAD1;
+    --font-display: ui-rounded, "SF Pro Rounded", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --font-body: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    --font-mono: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+    --bg: #FFFFFF;
+    --ink: #1A1A1A;
+    --muted: #6F6F76;
+    --taught: #1B7A4B;
+    --entail: #3F3F46;
+    --entail-soft: rgba(63, 63, 70, 0.10);
+    --card: #FAFAF9;
+    --line: #E6E6E1;
+    --code-bg: #18181B;
+    --code-fg: #E4E4E7;
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --bg: #15181C;
-      --ink: #E7E5DF;
-      --muted: #9A9E95;
-      --taught: #5FBE8B;
-      --entail: #D9A554;
-      --entail-soft: rgba(217, 165, 84, 0.14);
-      --card: #1C2126;
-      --line: #2B3036;
-      --code-bg: #101418;
-      --code-fg: #CFD5CB;
+      --bg: #0B0B0C;
+      --ink: #F3F3F2;
+      --muted: #9A9AA1;
+      --taught: #4FB27C;
+      --entail: #A1A1AA;
+      --entail-soft: rgba(161, 161, 170, 0.12);
+      --card: #17171A;
+      --line: #2A2A2E;
+      --code-bg: #101012;
+      --code-fg: #D4D4D8;
     }
   }
   :root[data-theme="dark"] {
-    --bg: #15181C; --ink: #E7E5DF; --muted: #9A9E95; --taught: #5FBE8B;
-    --entail: #D9A554; --entail-soft: rgba(217, 165, 84, 0.14);
-    --card: #1C2126; --line: #2B3036; --code-bg: #101418; --code-fg: #CFD5CB;
+    --bg: #0B0B0C; --ink: #F3F3F2; --muted: #9A9AA1; --taught: #4FB27C;
+    --entail: #A1A1AA; --entail-soft: rgba(161, 161, 170, 0.12);
+    --card: #17171A; --line: #2A2A2E; --code-bg: #101012; --code-fg: #D4D4D8;
   }
   :root[data-theme="light"] {
-    --bg: #F7F6F2; --ink: #23272B; --muted: #6E7168; --taught: #2E7D4F;
-    --entail: #B07C2E; --entail-soft: rgba(176, 124, 46, 0.14);
-    --card: #FFFFFF; --line: #DDD9D0; --code-bg: #1B1F24; --code-fg: #D6DAD1;
+    --bg: #FFFFFF; --ink: #1A1A1A; --muted: #6F6F76; --taught: #1B7A4B;
+    --entail: #3F3F46; --entail-soft: rgba(63, 63, 70, 0.10);
+    --card: #FAFAF9; --line: #E6E6E1; --code-bg: #18181B; --code-fg: #E4E4E7;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
     background: var(--bg);
     color: var(--ink);
-    font: 17px/1.6 "Charter", "Bitstream Charter", Georgia, "Times New Roman", serif;
-    padding: 3rem 1.25rem 4rem;
+    font: 16.5px/1.65 var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    padding: clamp(2.75rem, 6vw, 4.5rem) 1.25rem 5rem;
   }
   main { max-width: 62rem; margin: 0 auto; }
   .copy { max-width: 44rem; margin-left: auto; margin-right: auto; }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 600; letter-spacing: -0.01em; }
   h2 {
-    font-size: 1.25rem;
-    margin: 2.4rem 0 0.7rem;
+    font-size: 1.3rem;
+    margin: 2.6rem 0 0.7rem;
     border-bottom: 1px solid var(--line);
-    padding-bottom: 0.3rem;
+    padding-bottom: 0.35rem;
   }
   p { margin: 0.7rem 0; }
-  em { color: var(--taught); font-style: italic; }
-  a { color: var(--taught); }
-  a:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
+  em { color: var(--taught); font-style: normal; font-weight: 600; }
+  a { color: var(--taught); text-decoration: none; }
+  a:hover { text-decoration: underline; text-underline-offset: 3px; }
+  a:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; border-radius: 2px; }
   pre {
     background: var(--code-bg);
     color: var(--code-fg);
-    font: 14px/1.55 "SF Mono", Menlo, Consolas, monospace;
+    font: 13.5px/1.6 var(--font-mono);
     padding: 1rem 1.2rem;
-    border-radius: 6px;
+    border-radius: 12px;
     overflow-x: auto;
     margin: 0.9rem 0;
   }
   code {
-    font: 0.88em "SF Mono", Menlo, Consolas, monospace;
+    font: 0.88em var(--font-mono);
     background: var(--card);
     border: 1px solid var(--line);
-    border-radius: 3px;
-    padding: 0.05em 0.3em;
+    border-radius: 5px;
+    padding: 0.05em 0.32em;
   }
   pre code { background: none; border: none; padding: 0; }
   .eyebrow {
-    font: 600 0.72rem/1.5 "SF Mono", Menlo, Consolas, monospace;
-    letter-spacing: 0.16em;
+    font: 600 0.72rem/1.5 var(--font-mono);
+    letter-spacing: 0.18em;
     text-transform: uppercase;
-    color: var(--entail);
-    margin: 0 0 0.6rem;
+    color: var(--muted);
+    margin: 0 0 0.7rem;
   }
   footer {
     margin-top: 3.5rem;
@@ -122,60 +128,64 @@
   }
 
   /* ---- hero ------------------------------------------------------------------------ */
-  .hero { text-align: center; max-width: 46rem; margin: 0 auto 3.2rem; }
+  .hero { text-align: center; max-width: 48rem; margin: 0 auto 4rem; }
   .hero h1 {
-    font-size: clamp(2.4rem, 6vw, 3.3rem);
-    line-height: 1.1;
-    letter-spacing: -0.01em;
+    font-size: clamp(2.15rem, 5.5vw, 3rem);
+    font-weight: 600;
+    line-height: 1.08;
+    letter-spacing: -0.025em;
   }
   .hero h1 .long {
-    display: block; font-size: 1.1rem; font-weight: normal; color: var(--muted);
-    margin-top: 0.55rem; font-style: italic; line-height: 1.5;
+    display: block; font-family: var(--font-body); font-size: 1.05rem;
+    font-weight: 400; color: var(--muted);
+    margin-top: 0.6rem; font-style: normal; line-height: 1.5; letter-spacing: 0;
   }
-  .lede { font-size: 1.12rem; margin-top: 1.1rem; }
+  .lede {
+    font-size: 1.15rem; color: var(--muted);
+    margin: 1.2rem auto 0; max-width: 36rem;
+  }
   .hero-install {
     display: inline-block;
-    margin-top: 1.1rem;
-    background: var(--code-bg);
-    color: var(--code-fg);
-    font: 0.82rem/1 "SF Mono", Menlo, Consolas, monospace;
-    padding: 0.7em 1.1em;
-    border-radius: 6px;
+    margin-top: 1.6rem;
+    background: var(--card);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    font: 0.85rem/1 var(--font-mono);
+    padding: 0.8em 1.15em;
+    border-radius: 10px;
     max-width: 100%;
     overflow-x: auto;
     white-space: nowrap;
   }
-  .hero-install .ps1 { color: var(--taught); }
+  .hero-install .ps1 { color: var(--muted); }
 
   /* ---- claim grid (each claim links to the page that shows it) --------------------- */
-  .band-head { text-align: center; max-width: 40rem; margin: 0 auto 1.5rem; }
-  .band-head h2 { border-bottom: none; padding-bottom: 0; margin: 0; font-size: 1.5rem; }
+  .band-head { text-align: center; max-width: 40rem; margin: 0 auto 1.75rem; }
+  .band-head h2 { border-bottom: none; padding-bottom: 0; margin: 0; font-size: 1.6rem; }
   .claim-grid {
     display: grid; grid-template-columns: repeat(auto-fit, minmax(14.5rem, 1fr));
-    gap: 0.9rem; margin: 0 0 1rem;
+    gap: 1rem; margin: 0 0 1rem;
   }
   .claim {
-    display: flex; flex-direction: column; gap: 0.45rem;
-    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
-    padding: 1.05rem 1.1rem; text-decoration: none; color: inherit;
-    transition: border-color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+    display: flex; flex-direction: column; gap: 0.5rem;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 1.15rem 1.2rem; text-decoration: none; color: inherit;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
   }
   .claim:hover, .claim:focus-visible {
     border-color: var(--entail);
-    transform: translateY(-2px);
-    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.07);
   }
   .claim .claim-icon { height: 26px; color: var(--entail); }
   .claim .claim-icon svg { width: 26px; height: 26px; }
   .claim .claim-icon.dual svg { width: 22px; height: 22px; }
-  .claim h3 { font-size: 1.02rem; margin: 0; color: var(--ink); }
-  .claim p { margin: 0; font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+  .claim h3 { font-size: 1.05rem; margin: 0; color: var(--ink); }
+  .claim p { margin: 0; font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
   .claim .claim-page {
     margin-top: auto; align-self: flex-start;
-    font: 0.7rem/1 "SF Mono", Menlo, Consolas, monospace;
+    font: 0.7rem/1 var(--font-mono);
     color: var(--muted); background: var(--bg);
     border: 1px solid var(--line); border-radius: 999px;
-    padding: 0.3em 0.75em;
+    padding: 0.32em 0.8em;
   }
   .claim:hover .claim-page, .claim:focus-visible .claim-page {
     color: var(--entail); border-color: var(--entail);
@@ -184,13 +194,13 @@
   /* ---- feature sections, each screenshot framed as a numbered plate ---------------- */
   .feature {
     display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 6fr);
-    gap: 1.4rem 3rem; align-items: center;
-    margin: 3.4rem 0;
+    gap: 1.6rem 3.5rem; align-items: center;
+    margin: 4.2rem 0;
   }
   .feature.flip .plate { order: -1; }
-  .feature h2 { border-bottom: none; padding-bottom: 0; margin: 0.2rem 0 0; font-size: 1.45rem; }
-  .feature .feature-copy p { font-size: 0.98rem; }
-  .feature .open-link { font-size: 0.9rem; }
+  .feature h2 { border-bottom: none; padding-bottom: 0; margin: 0.2rem 0 0; font-size: 1.5rem; }
+  .feature .feature-copy p { font-size: 1rem; color: var(--muted); }
+  .feature .open-link { font-size: 0.92rem; }
   /* The plate frame and alt text keep a feature readable while its screenshot
      is still awaiting capture, so the section never shows a bare broken image. */
   .plate { margin: 0; }
@@ -198,30 +208,30 @@
     display: block;
     background: var(--card);
     border: 1px solid var(--line);
-    border-radius: 3px;
-    padding: 0.55rem;
+    border-radius: 14px;
+    padding: 0.6rem;
     outline: 1px solid var(--entail-soft);
     outline-offset: 4px;
   }
   .plate img {
     display: block; width: 100%; height: auto;
     aspect-ratio: 1024 / 600; object-fit: cover;
+    border-radius: 8px;
     background: var(--bg); border: 1px solid var(--line);
-    color: var(--muted); font: 12px/1.5 "SF Mono", Menlo, Consolas, monospace;
+    color: var(--muted); font: 12px/1.5 var(--font-mono);
   }
   .plate figcaption {
-    margin-top: 0.6rem; text-align: center;
-    font: 0.7rem/1.5 "SF Mono", Menlo, Consolas, monospace;
+    margin-top: 0.65rem; text-align: center;
+    font: 0.7rem/1.5 var(--font-mono);
     letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted);
   }
   .plate figcaption .plate-no { color: var(--entail); }
   @media (max-width: 760px) {
-    .feature { grid-template-columns: 1fr; gap: 1rem; margin: 2.6rem 0; }
+    .feature { grid-template-columns: 1fr; gap: 1rem; margin: 3rem 0; }
     .feature.flip .plate { order: 0; }
   }
   @media (prefers-reduced-motion: reduce) {
     .claim, .showcase-card { transition: none; }
-    .claim:hover, .claim:focus-visible { transform: none; }
   }
 
   /* ---- live chat demo (inside the code-explorer feature) --------------------------- */
@@ -236,9 +246,9 @@
   #tmct-demo {
     background: var(--code-bg);
     color: var(--code-fg);
-    border-radius: 8px;
+    border-radius: 12px;
     padding: 1rem 1.2rem;
-    font: 13.5px/1.6 "SF Mono", Menlo, Consolas, monospace;
+    font: 13.5px/1.6 var(--font-mono);
     overflow-x: auto;
     min-height: 3.5em;
   }
@@ -297,7 +307,7 @@
   .sprite-chip.size-sm svg { width: 14px; height: 14px; }
   .sprite-chip.size-lg svg { width: 27px; height: 27px; }
   .sprite-chip.size-xl svg { width: 34px; height: 34px; }
-  .sprite-chain { font: 10.5px/1.3 "SF Mono", Menlo, Consolas, monospace; color: var(--muted); white-space: nowrap; }
+  .sprite-chain { font: 10.5px/1.3 var(--font-mono); color: var(--muted); white-space: nowrap; }
   .sprite-chain .own { color: var(--ink); }
   .sprite-chain .arrow { opacity: 0.55; padding: 0 0.15em; }
 
@@ -308,15 +318,15 @@
   }
   .showcase-card {
     display: flex; flex-direction: column; gap: 0.4rem;
-    background: var(--card); border: 1px solid var(--line); border-radius: 8px;
-    padding: 1.05rem 1.1rem; text-decoration: none; color: inherit;
+    background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+    padding: 1.15rem 1.2rem; text-decoration: none; color: inherit;
     transition: border-color 0.15s ease;
   }
   .showcase-card:hover, .showcase-card:focus-visible { border-color: var(--entail); }
-  .showcase-card h3 { font-size: 1.02rem; margin: 0; color: var(--ink); }
-  .showcase-card p { margin: 0; font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
+  .showcase-card h3 { font-size: 1.05rem; margin: 0; color: var(--ink); }
+  .showcase-card p { margin: 0; font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
   .showcase-card .showcase-domain {
-    font: 0.72rem/1.4 "SF Mono", Menlo, Consolas, monospace;
+    font: 0.72rem/1.4 var(--font-mono);
     color: var(--taught);
   }
 </style>
@@ -326,7 +336,7 @@
   <header class="hero">
     <p class="eyebrow">Polycode projects &middot; pure JS &middot; no LLM &middot; offline &middot; $0</p>
     <h1>tmct
-      <span class="long">The Mechanical Code Talker — a pure-JS, no-LLM, offline, $0 chatbot</span>
+      <span class="long">&nbsp;</span>
     </h1>
     <p class="lede">
       Ask tmct a question and you get an answer you can check. Every fact it gives you
@@ -339,14 +349,13 @@
   <section class="claims" aria-label="what the demo pages show">
     <div class="band-head">
       <p class="eyebrow">eight demonstrations</p>
-      <h2>Every claim below links to the page that shows it</h2>
     </div>
     <div class="claim-grid">
       <a class="claim" href="./chat.html">
         <span class="claim-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M4 5h16a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H9l-4 3v-3H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><circle cx="8.2" cy="11" r="1" fill="currentColor"/><circle cx="12" cy="11" r="1" fill="currentColor"/><circle cx="15.8" cy="11" r="1" fill="currentColor"/></svg>
         </span>
-        <h3>The real engine, in the page</h3>
+        <h3>Natural language on the web without a backend</h3>
         <p>The same chat engine as the CLI, running in your browser. Every answer names its source.</p>
         <span class="claim-page">chat.html</span>
       </a>
@@ -371,7 +380,7 @@
         <span class="claim-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="6.5" y="7.5" width="11" height="9" fill="none" stroke="currentColor" stroke-width="1"/><circle cx="12" cy="12.5" r="1.7" fill="currentColor"/></svg>
         </span>
-        <h3>A room drawn from the text</h3>
+        <h3>Shall we play a game?</h3>
         <p>Ashcombe Hall renders exactly what its facts say is in the room, and nothing else.</p>
         <span class="claim-page">adventure.html</span>
       </a>
@@ -395,7 +404,7 @@
         <span class="claim-icon" aria-hidden="true">
           <svg viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v9"/><path d="M8.5 8.5 12 12l3.5-3.5"/><path d="M4 14v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></g></svg>
         </span>
-        <h3>It keeps only what it can ground</h3>
+        <h3>Documents to Facts</h3>
         <p>Paste text. Each sentence becomes a checkable fact, or it is refused.</p>
         <span class="claim-page">ingest.html</span>
       </a>
