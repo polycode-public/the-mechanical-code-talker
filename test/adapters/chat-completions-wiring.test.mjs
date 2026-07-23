@@ -73,6 +73,24 @@ test("COMPLETIONS RESCUE: \"give me a detailed summary of how X works\" now answ
   }
 });
 
+test("COMPLETIONS RESCUE: dropping the article before \"detailed\" and the \"of\" before \"how\" still reaches the pipeline — a non-native speaker's grammar naturally hits both", async () => {
+  const dir = await seedWidgetRepo();
+  try {
+    const g = await graph();
+    const { answer, record } = await runTurn(
+      "can you give me detailed summary how the Widget works",
+      { config: CONFIG, graph: g, memoryDir: dir },
+    );
+    assert.equal(record.via, "completion", "the dropped article/preposition still reach the COMPLETIONS RESCUE lane, not the grammar wall");
+    assert.equal(record.miss, false);
+    assert.doesNotMatch(answer, /couldn't parse this as a graph question/);
+    assert.match(answer, /Widget/);
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("COMPLETIONS RESCUE: the \"explain in detail how X works\" and bare \"detailed overview of X\" siblings also reach the pipeline", async () => {
   const dir = await seedWidgetRepo();
   try {

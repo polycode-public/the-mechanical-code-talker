@@ -246,6 +246,23 @@ export const VERB_TO_KIND = Object.freeze(
   ),
 );
 
+/** The bare possessive "has"/"have"/"holds"/"hold" is bucketed onto `defines`
+ *  (RELATIONS.defines.verbs above) for genuine code shapes ("what modules
+ *  does app.mjs have", "does createTask have tests") — but those reach the
+ *  grammar/keyword-spot strategies pre-rewritten onto a different verb by
+ *  normalize.mjs's PHRASING_FRAMES (has-tests -> "what tests X", members ->
+ *  "what does X contain"), and the possession/property sense of "have" over a
+ *  TAUGHT individual ("does whiskers have fur") is answered entirely by
+ *  chat.mjs's own has-a/hasProperty readers, upstream of both strategies. So
+ *  a bare have-family verb reaching either strategy's TWO-NAMED-ROLE "ask"
+ *  shape ("does X have Y", free-text subject and object, no grain check) has
+ *  no legitimate code question left to mean, and confidently framing it as
+ *  "locate what a module/class defines" is worse than an honest miss — both
+ *  grammar.mjs (T1/T2/T3) and keywords.mjs check this set to decline instead.
+ *  Shared here (rather than declared per-file) so the two strategies' bundled
+ *  builds never collide on the same top-level identifier. */
+export const HAS_FAMILY_VERBS = Object.freeze(new Set(["has", "have", "holds", "hold"]));
+
 /** "what is a kind of X" / "what is a subclass of X" collision fix: some
  *  inherits verbs are themselves phrased "is a <continuation>", which would
  *  otherwise collide with grammar.mjs's literal meta-whatis reading and

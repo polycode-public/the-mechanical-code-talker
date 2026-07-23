@@ -10609,9 +10609,13 @@ async function compareAnswer(query, { graph, config, source }) {
  *  "give me a detailed overview of X", wired to src/domain/completions/'s extractive
  *  multi-sentence pipeline below. Two closed shapes (DETAILED_HOW_WORKS_RE
  *  tried first, more specific); distinct from DESCRIBE_WRAPPER_RE, which
- *  neither anchors on "give me"/"explain ... in detail". */
+ *  neither anchors on "give me"/"explain ... in detail". The article before
+ *  "detailed" and the "of" before "how" are both OPTIONAL: a non-native
+ *  speaker's "give me detailed summary how this application works" carries
+ *  the identical intent as the fully-articled form, and dropping either word
+ *  changes nothing the pipeline downstream reads — same shape, same term. */
 const DETAILED_HOW_WORKS_RE =
-  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:give\s+me\s+a\s+detailed\s+(?:summary|overview|explanation)\s+of\s+how|explain\s+(?:to\s+me\s+)?in\s+detail\s+how)\s+(.+?)\s+works\s*\??$/i;
+  /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?(?:give\s+me\s+(?:an?\s+)?detailed\s+(?:summary|overview|explanation)\s+(?:of\s+)?how|explain\s+(?:to\s+me\s+)?in\s+detail\s+how)\s+(.+?)\s+works\s*\??$/i;
 
 const DETAILED_OVERVIEW_RE =
   /^(?:(?:can|could|would)\s+you\s+(?:please\s+)?|please\s+)?give\s+me\s+a\s+detailed\s+(?:overview|summary|explanation)\s+of\s+(.+?)\s*\??$/i;
