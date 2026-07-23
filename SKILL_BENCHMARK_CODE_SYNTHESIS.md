@@ -390,3 +390,9 @@ gate receipts, what's new, kept ceiling markers, discipline checklist, decision)
 output to `synthbench/code/results/raw/run-<version>[_00N]/` first and mirroring anything left open
 into `NEXT.md`. This pass is docs-only: the harness is specified, `synthbench/code/` is unbuilt, and
 SYN-0 is the first build target.
+
+**Precondition for any cycle:** `synthbench/code/` must exist before this skill can run at all.
+Its build (SYN-0 first: one observable edit through the plan-act-verify loop on a JS source
+fixture) is an OUTPUT of `PLAN_CODE.md`'s tracks — the plan owns the build, this skill owns the
+measurement. A session invoked on this skill while the harness is absent builds it first, per
+that plan.

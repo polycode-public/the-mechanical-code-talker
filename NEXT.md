@@ -16,7 +16,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Open items
 
-- [ ] build `synthbench/code/` per `SKILL_BENCHMARK_CODE_SYNTHESIS.md` — harness is specified (SYN-0…SYN-8 ladder, PLAN_CODE tracks 2/3/5), unbuilt; SYN-0 (one observable edit through the plan-act-verify loop on a JS source fixture) is the first build target
 - [ ] research extraction stores at most one triple per sentence (the copula wins and the rest is skipped) — real facts a summary offers get dropped ("a volcano … has lava coming out from a magma chamber", "formed by the movement of tectonic plates"); widening to multiple triples per sentence needs its own design pass over `optimisticTriples`' one-triple contract (playtest 023)
 - [ ] the research queue is session-local but the reply promises "'research next' fetches the next one" — a new CLI session answers "no research is running"; either persist the queue under `.tmct/` or have the reply say the queue lives in this session (playtest 023)
 - [ ] the relation-verb extraction tier lets a partitive of-chain steal the subject — "The weight of all of the snow creates pressure" stores "snow creates pressure" (inner noun, not the head "weight"); the copula tier's three-way of-chain rule (playtest 025) is the model for a matching subject-side climb (playtest 025)

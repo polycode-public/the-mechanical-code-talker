@@ -8,6 +8,11 @@
 > verified against real tests, with the code graph re-indexed between steps. Track 5 is grounded
 > in machinery the repo already ships (the planning lane, the code graph, the Track 1 oracle
 > posture) and in the survey of fifty years of non-LLM program transformation in §4.
+> **A named output of this plan:** the `synthbench/code/` harness
+> (`SKILL_BENCHMARK_CODE_SYNTHESIS.md` specifies it, SYN-0…SYN-8) — each track that lands brings
+> its rung family's cases and runner with it, SYN-0 first (one observable edit through the
+> plan-act-verify loop on a JS source fixture, `examples/tiny-webapp-src` once the repo-index
+> branch merges). The bench is that skill's precondition; the build is this plan's deliverable.
 
 **Ground rules.** tmct's constitution: no LLM in the product path, ever (`CLAUDE.md`). Synthesis
 and transformation here mean **search + verification over closed grammars and closed operator
