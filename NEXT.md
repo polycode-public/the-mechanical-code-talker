@@ -21,6 +21,10 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 - [ ] a live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their deployed numbers
 - [ ] PLAN_AGENTS.md gap items 1-5 (serve plan verb, external-proposal seam, four frozen rows, replan-on-drift, dormant seeds) — tmct-only, independent, ~a week combined
 - [ ] PLAN_CODE.md Track 5 first milestone (planned two-step refactor, JS adaptor, verified, re-indexed) — sign-off-gated per that doc
+- [ ] `chatbench/run.mjs`'s CLI defaults have drifted from `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1's prose: a bare invocation now defaults to dual-draw (not single), and the default stratified sample draws 92 cases, not the "109" the skill still names — see `BENCHMARK_CEFR_ENGLISH_2.11.0.md`'s timing note
+- [ ] `g-c2-garden-1`'s garden-path parse is the sole hard fail at 2.11.0 (unchanged since 2.7.12) — see `BENCHMARK_CEFR_ENGLISH_2.11.0.md` decision log item 1
+- [ ] `g-b2-count-temp-1`'s commit-undercounting bug is unchanged since 2.7.12 (verbatim same wrong answer) — see `BENCHMARK_CEFR_ENGLISH_2.11.0.md` decision log item 2
+- [ ] two tier-1 `answerMatch` patterns have drifted from current product copy (`be-honest-empty`, `conv-hello-there`) — both score well under the judge, so this is case-hygiene, not a regression — see `BENCHMARK_CEFR_ENGLISH_2.11.0.md` decision log item 5
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #3: "k what abt users.mjs"-shaped casual fragments are silently taught as garbage facts — the bare-declarative teach lane needs a positive test excluding interrogative/imperative/fragment shapes before it accepts anything, not another one-off phrase fix
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #1: a sentence opening with "I" ("I am new here", "I want to know X") misparses as a teach attempt about the pronoun "i" instead of being read as an ordinary opener
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #2: the "are you an LLM / what model are you" family still misroutes under casual phrasing outside the closed set (three fresh wordings this cycle)
