@@ -6904,6 +6904,7 @@ const WHAT_IS_PREP_FACT_RE = new RegExp(`^what(?:'s|\\s+is|\\s+are)\\s+(${PREP_S
 //    the named kind via a direct isa-family fact.
 const DO_VERB_ASK_RE = /^(?:do|does)\s+(all\s+|every\s+)?(?:an?\s+|the\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z-]+)[?.!\s]*$/i;
 const WHAT_CAN_VERB_RE = /^what\s+can\s+(?!be\s)(.+?)[?.!\s]*$/i;
+const WHAT_CANNOT_VERB_RE = /^what\s+(?:cannot|can't|cant|can\s+not)\s+(.+?)[?.!\s]*$/i;
 const WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(.+?)[?.!\s]*$/i;
 
 /** The negative surface of a yes/no question asks the SAME question as its
@@ -6924,13 +6925,22 @@ const WHICH_KIND_CAN_RE = /^(?:which|what)\s+([\w'-]+(?:\s+[\w'-]+)*?)\s+can\s+(
  *  trying the raw question first would take a garbage bind over the good one. */
 function positiveQuestionSurface(q) {
   const s = String(q || "")
-    .replace(/^(?:can't|cannot|can not)\s+/i, "can ")
+    .replace(/^(?:can't|cannot|can not|cant)\s+/i, "can ")
     .replace(/^(?:doesn't|does not)\s+/i, "does ")
     .replace(/^(?:don't|do not)\s+/i, "do ")
     .replace(/^(?:didn't|did not)\s+/i, "did ")
     .replace(/\s+(?:not|never)\s+/i, " ");
   return s.replace(/\s+/g, " ").trim();
 }
+/** A negated surface ("can a dog not bark") is answered by the positive
+ *  reader (see positiveQuestionSurface's docblock), but a bare yes/no lead
+ *  then reads as agreeing with the asked polarity — drop the lead and let
+ *  the cited fact carry the real polarity on its own. */
+function withoutPolarityLead(reply) {
+  const text = String(reply.text || "").replace(/^(?:yes|no) — /i, "");
+  return text === reply.text ? reply : { ...reply, text };
+}
+const collapsedSurface = (q) => String(q || "").replace(/\s+/g, " ").trim();
 
 /** Cite an isa chain the way (b3b) already cites one — each step as its own
  *  phrase plus verbatim source. Shared so the inherited-capability answers and
@@ -7607,11 +7617,13 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   // capabilityReply). Mirrors the ISA_ASK_RE block just above on the "never a
   // guessed no" discipline: a "no" here is a REMEMBERED negative, never the
   // absence of a positive.
-  const can = positiveQuestionSurface(q).match(CAN_ASK_RE);
+  const surfacedCan = positiveQuestionSurface(q);
+  const can = surfacedCan.match(CAN_ASK_RE);
   if (can) {
     const facts = await factRows(memoryDir, cache);
     const canUniversal = can[1];
-    const reply = capabilityReply(can[2], can[3], facts);
+    let reply = capabilityReply(can[2], can[3], facts);
+    if (reply && surfacedCan !== collapsedSurface(q)) reply = withoutPolarityLead(reply);
     // Quantified ("can all/every X ..."): the stored facts are generic, and a
     // bare "yes" would claim universality the memory can't support — the same
     // hedge the do-support surface applies, echoing the quantifier as typed.
@@ -7711,7 +7723,8 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   // (falls through instead): the shape is looser than (b2)'s, so a do-lead
   // question some later reader owns must keep its turn. The can't-confirm
   // branch is additionally miss-gated for the same reason.
-  const doAsk = positiveQuestionSurface(q).match(DO_VERB_ASK_RE);
+  const surfacedDo = positiveQuestionSurface(q);
+  const doAsk = surfacedDo.match(DO_VERB_ASK_RE);
   if (doAsk) {
     const facts = await factRows(memoryDir, cache);
     const universal = !!doAsk[1];
@@ -7719,7 +7732,8 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const obj = factTermVariants(normFactTerm, doAsk[3]);
     // the SAME resolver (b2) answers through, so "do penguins fly" and "can a
     // penguin fly" can never disagree in one session
-    const reply = capabilityReply(doAsk[2], doAsk[3], facts);
+    let reply = capabilityReply(doAsk[2], doAsk[3], facts);
+    if (reply && surfacedDo !== collapsedSurface(q)) reply = withoutPolarityLead(reply);
     if (reply && universal) {
       // Echo the quantifier as typed ("every dog", "all dogs") — "all dog"
       // for a singular every-question is a garbled echo.
@@ -7836,6 +7850,28 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       const preamble = inKind.length ? "" : `nothing I remember ties these to "${whichCan[1]}", but:\n`;
       return { text: preamble + shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
     }
+  }
+
+  // (b3c-neg) "what cannot fly" — the negative twin of (b3c): every stored
+  // mgxneg:capableOf fact whose OBJECT matches. A matched shape with NO
+  // stored negatives returns a definitive memory miss rather than falling
+  // through — the conversational catch-all downstream misread this surface
+  // as small talk and answered with the identity card.
+  const cannotVerb = q.match(WHAT_CANNOT_VERB_RE);
+  if (cannotVerb && cannotVerb[1].trim().split(/\s+/).at(-1)?.toLowerCase() !== "do") {
+    const negVariants = factTermVariants(normFactTerm, cannotVerb[1]);
+    const negHits = (await factRows(memoryDir, cache)).filter(
+      (f) => f.predicate === "mgxneg:capableOf" && negVariants.has(f.object),
+    );
+    if (negHits.length) {
+      const ranked = rankByBiasThenTrust(uniqueFacts(negHits), biasByBundle);
+      const lines = ranked.map(renderFactLine);
+      const shown = lines.slice(0, FACT_ANSWER_CAP);
+      const rest = lines.slice(FACT_ANSWER_CAP);
+      const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+      return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+    }
+    return { text: `nothing I remember says anything cannot ${cannotVerb[1].trim()}.`, replace: true, miss: true };
   }
 
   // (b3c) "what can fly" — the unrestricted reverse-by-verb sibling of (b3b):
@@ -12218,7 +12254,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // same divert-only-on-a-real-hit treatment as the reverse predicates
   // above.
   const capabilityAskShape = CAN_ASK_RE.test(gateQuery) || WHAT_CAN_DO_RE.test(gateQuery)
-    || DO_VERB_ASK_RE.test(gateQuery) || WHICH_KIND_CAN_RE.test(gateQuery) || WHAT_CAN_VERB_RE.test(gateQuery);
+    || DO_VERB_ASK_RE.test(gateQuery) || WHICH_KIND_CAN_RE.test(gateQuery) || WHAT_CAN_VERB_RE.test(gateQuery)
+    || WHAT_CANNOT_VERB_RE.test(gateQuery);
   // A bare "who is/was <name>" (no relational tail) is as short as the
   // vocabulary openers above and trips isConversational's word-count catch-all
   // the same way — factReadBack's bare-who reader surfaces the person's stored
