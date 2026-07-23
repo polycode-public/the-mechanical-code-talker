@@ -279,3 +279,22 @@ test("optimisticTriples: the isa scan never crosses a clause or a prepositional 
     [{ subject: "volcano", predicate: "rdfs:subClassOf", object: "mountain" }],
   );
 });
+
+test("optimisticTriples: a compound noun is captured whole, never reduced to its modifier", () => {
+  // "string instrument" is the class; "string" alone is its modifier and a
+  // wrong fact ("a violin is a kind of string").
+  assert.deepEqual(
+    optimisticTriples("The violin is a string instrument which has four strings and is played with a bow."),
+    [{ subject: "violin", predicate: "rdfs:subClassOf", object: "string instrument" }],
+  );
+  // The subject side captures its run the same way.
+  assert.deepEqual(
+    optimisticTriples("A guinea pig is a small rodent."),
+    [{ subject: "guinea pig", predicate: "rdfs:subClassOf", object: "rodent" }],
+  );
+  // Single-word entities keep the plain lemma fold.
+  assert.deepEqual(
+    optimisticTriples("A dog is an animal."),
+    [{ subject: "dog", predicate: "rdfs:subClassOf", object: "animal" }],
+  );
+});

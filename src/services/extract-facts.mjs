@@ -132,11 +132,24 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
     values = doc.tokens().out(nlp.its.value);
     pos = doc.tokens().out(nlp.its.pos);
   } catch { return []; }
+  // A found noun is read as its whole contiguous NOUN/PROPN run, head-lemma
+  // folded — "a string instrument" is the class "string instrument", never
+  // its modifier "string"; a single-word run keeps the plain lemma fold.
+  const isNounish = (i) => pos[i] === "NOUN" || pos[i] === "PROPN";
+  const entityRunAt = (i) => {
+    let lo = i;
+    let hi = i;
+    while (lo - 1 >= 0 && isNounish(lo - 1)) lo -= 1;
+    while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
+    if (lo === hi) return foldEntity(values[i], lexicon);
+    const head = lookupNoun(lexicon, String(values[hi]).toLowerCase());
+    return normFactTerm([...values.slice(lo, hi), head ? head.lemma : values[hi]].join(" "));
+  };
   const nearestEntity = (idx, step, blocked = null) => {
     for (let i = idx + step; i >= 0 && i < values.length; i += step) {
       if (pos[i] === "PUNCT") break;
       if (blocked && blocked.has(pos[i])) break;
-      if (pos[i] === "NOUN" || pos[i] === "PROPN") return foldEntity(values[i], lexicon);
+      if (isNounish(i)) return entityRunAt(i);
     }
     return null;
   };
