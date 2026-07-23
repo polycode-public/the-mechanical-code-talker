@@ -6826,7 +6826,7 @@ const FACT_ANSWER_CAP = 32;
  *  RELATION_WHO_ASK_RE's required leading "is/are/was/were" (those two live in
  *  the separate factReadBack, only ever reached via `factAnswer(...) ??
  *  factReadBack(...)` — never both). */
-const CAN_ASK_RE = /^(?:can|could)\s+(?:an?\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z]+)[?.!\s]*$/i;
+const CAN_ASK_RE = /^(?:can|could)\s+(all\s+|every\s+)?(?:an?\s+)?([\w'-]+(?:\s+[\w'-]+)*?)\s+([a-z]+)[?.!\s]*$/i;
 const DOES_HAVE_ASK_RE = /^(?:does|do)\s+(?:an?\s+|the\s+)?(.+?)\s+have\s+(?:an?\s+|the\s+)?(.+?)[?.!\s]*$/i;
 const WHAT_CAN_DO_RE = /^what\s+can\s+(?:an?\s+)?(.+?)\s+do[?.!\s]*$/i;
 const WHAT_HAS_RE = /^what\s+has\s+(?:an?\s+)?(.+?)[?.!\s]*$/i;
@@ -7584,14 +7584,24 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
   const can = positiveQuestionSurface(q).match(CAN_ASK_RE);
   if (can) {
     const facts = await factRows(memoryDir, cache);
-    const reply = capabilityReply(can[1], can[2], facts);
+    const canUniversal = can[1];
+    const reply = capabilityReply(can[2], can[3], facts);
+    // Quantified ("can all/every X ..."): the stored facts are generic, and a
+    // bare "yes" would claim universality the memory can't support — the same
+    // hedge the do-support surface applies, echoing the quantifier as typed.
+    if (reply && canUniversal) {
+      return {
+        text: `I can't speak for ${canUniversal.trim()} ${can[2]} — what I remember is generic, not universal. ${reply.text}.`,
+        replace: true,
+      };
+    }
     if (reply) return reply;
     // A KNOWN subject with capability facts, none matching: an honest,
     // specific miss citing what it CAN do — the same closer the is-a ladder
     // answers with, instead of the misleading structural parse wall. An
     // unknown subject still declines. Never a guessed "no": absence of a
     // capableOf fact proves nothing.
-    const subj = factTermVariants(normFactTerm, can[1]);
+    const subj = factTermVariants(normFactTerm, can[2]);
     const knownCan = facts.filter((f) => f.predicate === "mgx:capableOf" && subj.has(f.subject));
     if (knownCan.length) {
       const shown = knownCan.slice(0, 3).map(renderFactLine).join("; ");
@@ -7599,14 +7609,14 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       // not as the user typed it — 'teach me: "a birds can swim"' is a
       // garbled hint that can't round-trip.
       return {
-        text: `I can't confirm that — nothing I remember says ${can[1]} can ${can[2]}. I do know: ${shown}. If it's true, teach me: "a ${knownCan[0].subject} can ${can[2]}".`,
+        text: `I can't confirm that — nothing I remember says ${can[2]} can ${can[3]}. I do know: ${shown}. If it's true, teach me: "a ${knownCan[0].subject} can ${can[3]}".`,
         replace: true,
         miss: true,
       };
     }
     // nothing about the subject at all — report the class base rate, and answer
     // neither yes nor no
-    return capabilityBaseRateReply(can[1], can[2], facts);
+    return capabilityBaseRateReply(can[2], can[3], facts);
   }
 
   // (b2b) "does a dog have a tail" — yes iff a remembered possession fact
@@ -7685,8 +7695,10 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // penguin fly" can never disagree in one session
     const reply = capabilityReply(doAsk[2], doAsk[3], facts);
     if (reply && universal) {
+      // Echo the quantifier as typed ("every dog", "all dogs") — "all dog"
+      // for a singular every-question is a garbled echo.
       return {
-        text: `I can't speak for all ${doAsk[2]} — what I remember is generic, not universal. ${reply.text}.`,
+        text: `I can't speak for ${doAsk[1].trim()} ${doAsk[2]} — what I remember is generic, not universal. ${reply.text}.`,
         replace: true,
       };
     }
