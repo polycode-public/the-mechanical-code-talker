@@ -12,7 +12,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
   renderAdventureHtml, spriteClassForObject, visibleRoomOf, roomSceneObjects, carriedItems,
-  visitedRoomGraph, allRoomIds, goalStatusLines, roomCaptionText, pillsForRoom, suggestionsForTerm,
+  visitedRoomGraph, allRoomIds, goalStatusLines, roomCaptionText, pillsForRoom, groundedPlaceholder, suggestionsForTerm,
   spriteAncestryRows, factsForSubject, scenePlacement, roomSceneLayout, roomKindForRoom,
 } from "../../src/services/adventure-viz.mjs";
 import { foldWorldState } from "../../src/services/adventure.mjs";
@@ -451,6 +451,20 @@ test("roomCaptionText: a room with no recorded facts about itself falls to the h
 test("pillsForRoom: reflects roomAffordances' own output faithfully for the current room, in the same order", () => {
   const state = foldWorldState(ROWS);
   assert.deepEqual(pillsForRoom(ROWS, state, "study"), ["unlock cabinet", "examine desk", "take lamp"]);
+});
+
+test("groundedPlaceholder: teaches the grounded noun form off the room's own affordances, first two object commands only", () => {
+  const state = foldWorldState(ROWS);
+  assert.equal(groundedPlaceholder(pillsForRoom(ROWS, state, "study"), "go north"), "unlock cabinet, examine desk…");
+});
+
+test("groundedPlaceholder: drops exit commands, keeping only object commands", () => {
+  assert.equal(groundedPlaceholder(["go north", "go down", "take lamp"], "go north"), "take lamp…");
+});
+
+test("groundedPlaceholder: a room with no object command falls back to the given default, never a bare pronoun", () => {
+  assert.equal(groundedPlaceholder(["go north", "go south"], "go north"), "go north");
+  assert.equal(groundedPlaceholder([], "examine cabinet"), "examine cabinet");
 });
 
 test("pillsForRoom: a room with nothing placed in it offers no pills at all", () => {
