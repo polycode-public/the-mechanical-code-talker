@@ -1492,3 +1492,68 @@ test("ask(): 'which module has the most tests' keeps its descending rank", () =>
   assert.match(content, /src\/core\/model\.mjs/);
   assert.match(content, /the most tests \(2\)/);
 });
+
+// ---- stacked reduced-relative clauses (two reduced relatives on one head noun) ----
+
+test("ask(): two reduced relatives on one head compose to the intersection, each clause in its own direction", () => {
+  const graph = buildGraph();
+  // "inherited from Base" is object-role (reverse: the classes that inherit Base);
+  // "defined in app/widget.mjs" is agent-role (forward: what widget.mjs defines).
+  // Widget satisfies both, so the intersection names it — and only the correct
+  // per-clause direction reaches it (a forward inherits leg would seed empty).
+  const { content, tmct_ask } = ask(graph, "classes inherited from Base defined in app/widget.mjs");
+  assert.equal(tmct_ask.miss, false);
+  assert.equal(content, "Widget.");
+});
+
+test("ask(): a stacked reduced-relative whose two clauses point apart is a receipted honest empty", () => {
+  const graph = buildGraph();
+  // Widget inherits Base but is defined in app/widget.mjs, not app/base.mjs, so
+  // the intersection is empty; the receipt still names the asked kind.
+  const { content, tmct_ask } = ask(graph, "classes inherited from Base defined in app/base.mjs");
+  assert.equal(tmct_ask.miss, true);
+  assert.match(content, /^nothing in the index matches that \(classes\)\./);
+});
+
+test("ask(): the head noun's class filters the stacked-relative seed, so a forward defines leg never leaks a method into a classes answer", () => {
+  const graph = buildGraph();
+  // app/widget.mjs defines both the class Widget and the method Widget.render;
+  // asking for "classes" must drop the method from the seed set.
+  const classes = ask(graph, "classes defined in app/widget.mjs defined in app/widget.mjs");
+  assert.equal(classes.tmct_ask.miss, false);
+  assert.equal(classes.content, "Widget.");
+  assert.doesNotMatch(classes.content, /render/);
+});
+
+test("ask(): an excluded second-clause bigram leaves the stacked-relative production dormant", () => {
+  const graph = buildGraph();
+  // "used in" is deliberately absent from the reduced-relative table, so this
+  // never composes as an intersection; it falls through to the legacy route and
+  // does not produce the composite receipted-empty a real stacked relative would.
+  const { content } = ask(graph, "classes inherited from Base used in app/widget.mjs");
+  assert.doesNotMatch(content, /^nothing in the index matches that \(classes\)\./);
+});
+
+// ---- a bare entity-type filter narrows the previous result set to one class ----
+
+test("ask(): 'which of them are <kind>' narrows the prior set to that class", () => {
+  const prior = ask(miniWebappGraph, "which modules import http.mjs");
+  const prev = prior.tmct_ask.matches.map((m) => m.id);
+  assert.ok(prev.length >= 3);
+  // The prior set is all Modules, so narrowing it to functions empties it —
+  // and the receipt names the FILTER's kind, not the base set's.
+  const empty = ask(miniWebappGraph, "which of them are functions", { prev });
+  assert.equal(empty.tmct_ask.miss, true);
+  assert.match(empty.content, /^nothing in the index matches that \(functions\)\./);
+  // Narrowing to its own class keeps every member.
+  const kept = ask(miniWebappGraph, "which of them are modules", { prev });
+  assert.equal(kept.tmct_ask.miss, false);
+  assert.equal(kept.tmct_ask.matches.length, prev.length);
+});
+
+test("ask(): 'how many of them are <kind>' counts the narrowed set and names that kind even at zero", () => {
+  const prior = ask(miniWebappGraph, "which modules import http.mjs");
+  const prev = prior.tmct_ask.matches.map((m) => m.id);
+  assert.match(ask(miniWebappGraph, "how many of them are modules", { prev }).content, new RegExp(`^${prev.length} modules\\.`));
+  assert.match(ask(miniWebappGraph, "how many of them are functions", { prev }).content, /^0 functions\./);
+});

@@ -19,6 +19,11 @@ import { VOCAB_WORDS, eligibleForCanon, fuzzyVocabWord } from "../fuzzy.mjs";
 const PASSIVE_AUX = new Set(["is", "are", "was", "were", "be", "been", "being", "get", "gets", "got"]);
 const WH_WORDS = new Set(["which", "what", "who", "whom", "whose"]);
 const PLACEHOLDER_SET = new Set(PLACEHOLDER_NOUNS.map((w) => w.toLowerCase()));
+// A trailing time adverb on a bare passive ("was X touched RECENTLY") is not the
+// relation's object — it modifies the whole clause. Only consulted on the
+// participle path with no agent "by", so it can never touch an active-verb
+// object slot. Mirrors ask.mjs's TEMPORAL_TRAIL_FILLER for the when-shape.
+const TEMPORAL_TRAILING_ADVERBS = new Set(["recently", "lately", "yet", "already", "ever", "again"]);
 // See ask-vocab.mjs's own HAS_FAMILY_VERBS for why a bare have-family verb
 // never resolves to `defines` in this strategy's two-named-role "ask" shape
 // below (the forward/reverse branches keep their own tested grain-check
@@ -198,7 +203,14 @@ export function parseKeywordSpot(text, nlp = null) {
     .join(" ")
     .trim();
   const beforeText = sideText(0, verbHit.start);
-  const afterText = sideText(verbHit.end, words.length);
+  let afterText = sideText(verbHit.end, words.length);
+  // A lone trailing time adverb after a bare participle ("was it touched
+  // recently") is clause-level, not the relation's object; drop it so the
+  // sentence reaches the bare-passive branch and answers over the patient
+  // instead of trying to resolve "recently" as a term.
+  if (verbFromParticiple && !lcWords.includes("by") && TEMPORAL_TRAILING_ADVERBS.has(afterText.toLowerCase())) {
+    afterText = "";
+  }
   const kind = verbHit.kind;
   // slices read canonWords, not lcWords: the entity/modifier spans were matched
   // against the canonicalized array, whose word IS the table key.
@@ -316,7 +328,11 @@ export function parseKeywordSpot(text, nlp = null) {
     // nobody asked, so this declines and the sentence misses honestly.
     if (beforeText.split(/\s+/).length > 1) return null;
     if (kind === "touches") return stamp({ shape: "when", entityType: null, modifier: "direct", kind, object: beforeText });
-    return stamp({ shape: "reverse", entityType, modifier, kind, object: beforeText });
+    // A sentence that LEADS with the passive auxiliary is an interrogative
+    // yes/no ("is X used anywhere"), not a declarative patient statement; mark
+    // it so a single reverse match can render a confirming Yes frame.
+    const polar = PASSIVE_AUX.has(lcWords[0]);
+    return stamp({ shape: "reverse", entityType, modifier, kind, object: beforeText, ...(polar ? { polar: true } : {}) });
   }
   // forward keeps the spotted entityType (traverse()'s commit-as-subject grain
   // selection); modifier stays hardcoded since no forward closure traversal exists.

@@ -23,7 +23,7 @@ import {
   CONTEXT_PRONOUNS, META_MEANING_VERBS,
   WHERE_MARKERS, MENTION_MARKERS,
   RELATIVE_PRONOUNS, PLACEHOLDER_NOUNS, BOOLEAN_CONNECTIVES, QUALIFIERS,
-  PASSIVE_PARTICIPLE_TO_KIND, GENERIC_AGENT_WORDS,
+  PASSIVE_PARTICIPLE_TO_KIND, GENERIC_AGENT_WORDS, REDUCED_RELATIVE_CLAUSES,
   AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
   stripTrailingScopeFiller,
@@ -236,7 +236,55 @@ function parseComposite(text, nlp) {
     || parseList(w, lc, nlp, 0)
     || parseNested(w, lc, nlp, 0)
     || parsePluralAnaphoraObject(w, lc, nlp)
+    || parseStackedReducedRelative(w, lc)
     || parseRelationalOrQualified(w, lc, nlp, 0);
+}
+
+// Two reduced relatives stacked on one head noun ("classes INHERITED FROM
+// Widget DEFINED IN c.mjs") — a garden-path shape a naive incremental parser
+// misattaches as a second main clause. Both clauses modify the head, so the
+// reading is their intersection. Each clause's REDUCED_RELATIVE_CLAUSES entry
+// says whether its term is the relation's object (reverse: the subjects that
+// point at it) or its agent (forward: the term's own targets). The head noun's
+// entityType rides the SEED clause, so a forward "defines" leg that would
+// otherwise return every symbol is filtered to the asked kind. Anything that
+// isn't exactly [lead] head bigram term bigram term returns null, leaving
+// every other shape's behavior byte-identical.
+const STACKED_RRC_LEAD = new Set(["which", "the", "all"]);
+function parseStackedReducedRelative(w, lc) {
+  let i = 0;
+  if (STACKED_RRC_LEAD.has(lc[i])) i += 1;
+  const noun = entityNoun(lc[i]);
+  if (!noun || noun.placeholder || !noun.entityType) return null;
+  const entityType = noun.entityType;
+  i += 1;
+  const bigramAt = (k) => (k + 1 < lc.length ? REDUCED_RELATIVE_CLAUSES[`${lc[k]} ${lc[k + 1]}`] : undefined);
+  const rr1 = bigramAt(i);
+  if (!rr1) return null;
+  const term1Start = i + 2;
+  let split = -1;
+  let rr2;
+  for (let k = term1Start; k + 1 < lc.length; k += 1) {
+    const hit = bigramAt(k);
+    if (hit) { split = k; rr2 = hit; break; }
+  }
+  if (split < 0) return null;
+  const term1 = w.slice(term1Start, split).join(" ").trim();
+  const term2 = w.slice(split + 2).join(" ").trim();
+  if (!term1 || !term2) return null;
+  const clauseFor = (rr, term) => (rr.role === "object"
+    ? { shape: "reverse", kind: rr.kind, entityType, modifier: "direct", object: term }
+    : { shape: "forward", kind: rr.kind, modifier: "direct", object: term });
+  const seed = clauseFor(rr1, term1);
+  seed.entityType = entityType;   // head-noun class filter on the seed set
+  return {
+    node: "boolean",
+    entityType,
+    atoms: [
+      { op: "seed", kind: "set", ast: { node: "clause", clause: seed } },
+      { op: "intersection", kind: "set", ast: { node: "clause", clause: clauseFor(rr2, term2) } },
+    ],
+  };
 }
 
 // Negation as set complement: "which X do not <verb> Y" compiles to
@@ -598,6 +646,12 @@ function parsePredicateFilter(words, nlp) {
   const restLc = lc.slice(i);
   if (!rest.length) return { type: "all" };
   if (restLc.every((x) => QUALIFIERS[x])) return { type: "qual", filters: restLc };
+  // A bare concrete entity noun ("which of them are functions") narrows the
+  // prior set to one class rather than testing a relation.
+  if (rest.length === 1) {
+    const en = entityNoun(restLc[0]);
+    if (en && !en.placeholder && en.entityType) return { type: "entity", entityType: en.entityType };
+  }
   const clause = parseSimpleClause(`what ${rest.join(" ")}`, nlp);
   if (clause && (clause.shape === "reverse" || clause.shape === "forward") && clause.object) {
     return { type: "clause", clause };
@@ -1729,6 +1783,8 @@ function evalAnaphora(graph, ast, opts) {
   const f = ast.filter;
   if (f && f.type === "qual") {
     items = items.filter((ind) => f.filters.every((q) => qualHolds(graph, ind, QUALIFIERS[q])));
+  } else if (f && f.type === "entity") {
+    items = items.filter((ind) => ind.class === f.entityType);
   } else if (f && f.type === "clause") {
     const r = resolveObject(graph, f.clause.object);
     if (!r.match) items = [];
@@ -1743,9 +1799,12 @@ function evalAnaphora(graph, ast, opts) {
   }
   // A count over a prior set names the entity kind when survivors share a
   // class; fall back to the prior set's own class when the filter empties it,
-  // so the honest-empty render still names what was checked.
+  // so the honest-empty render still names what was checked. An entity-type
+  // filter that empties the set names the FILTER's kind ("functions"), not the
+  // base set's — the reader asked which of them were that kind.
   const sameClass = (list) => (list.length && list.every((x) => x.class === list[0].class) ? list[0].class : null);
-  const common = items.length ? sameClass(items) : sameClass(baseItems);
+  const emptyClass = f && f.type === "entity" ? f.entityType : sameClass(baseItems);
+  const common = items.length ? sameClass(items) : emptyClass;
   if (ast.mode === "count") return { compositeKind: "count", count: items.length, entityType: common, matches: [] };
   return { compositeKind: "set", matches: items, entityType: common };
 }
@@ -3296,6 +3355,15 @@ function bareVerbFor(kind) {
   return RELATIONS[kind]?.bare || kind;
 }
 
+/** The passive participle of a relation ("uses" -> "used", "imports" ->
+ *  "imported"), for the confirming "X is <participle> by Y" frame. The bare
+ *  forms in this vocabulary are all regular, so a single +d/+ed rule covers
+ *  them. */
+function passiveParticipleFor(kind) {
+  const bare = bareVerbFor(kind);
+  return bare.endsWith("e") ? `${bare}d` : `${bare}ed`;
+}
+
 /** English gloss of a SET-COMPLEMENT AST — the shape parseNegation compiles
  *  "which X do not <verb> Y" into (allOfClass DIFFERENCE the positive set).
  *  Restates the question in the same grammar the positive canonical uses
@@ -3747,9 +3815,26 @@ function renderCore(parsed, result, graph) {
       };
     }
     const entityWord = nounFor(parsed.entityType || "Module", 2);
+    // Name the resolved antecedent, not the raw pronoun: "who touched it" that
+    // bound "it" to fnAlpha must say so, or the receipt reads as though nothing
+    // was resolved at all. Scoped to a context pronoun so a typed term keeps the
+    // wording the reader chose, never its normalized graph label.
+    const object = (result.objMatch && CONTEXT_PRONOUNS.includes(String(parsed.object || "").toLowerCase()))
+      ? result.objMatch.label
+      : parsed.object;
     return {
-      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}. ${touchesRephraseHint(graph)}`,
+      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${object}. ${touchesRephraseHint(graph)}`,
       miss: true, ambiguous: false,
+    };
+  }
+  // A polar reverse question ("is X used anywhere") with exactly one match
+  // reads as a confirming yes that names the single subject, rather than a bare
+  // one-item list. Scoped to one match: two or more keep the plain list.
+  if (parsed.polar && result.matches.length === 1) {
+    const objLabel = result.objMatch?.label || parsed.object;
+    return {
+      content: `Yes — ${objLabel} is ${passiveParticipleFor(parsed.kind)} by ${result.matches[0].label}.`,
+      miss: false, ambiguous: false, matches: result.matches,
     };
   }
   // Route by the matched entities' actual class, not just the parsed hint —
