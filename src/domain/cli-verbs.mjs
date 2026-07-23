@@ -69,6 +69,15 @@ export const CLI_VERBS = [
     ],
   },
   {
+    mode: "index",
+    errorLabel: "index",
+    usage: "tmct index [--repo <abs>]",
+    prose: ["produce a code graph from a repo's OWN source (default: cwd):"],
+    flags: [
+      { flag: "[--no-history]", prose: ["walk the tree, parse JS/TS with the TypeScript compiler", "API, read git history, and write <repo>/.tmct/graph.json —", "the artifact chat/serve/cli then read. --no-history skips", "the git passes (no commit/touches/cochange edges)"] },
+    ],
+  },
+  {
     mode: "import",
     errorLabel: "import",
     usage: "tmct import [--repo <abs>]",

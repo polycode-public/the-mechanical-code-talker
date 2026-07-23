@@ -22,6 +22,12 @@ unblocks PLAN_CODE.md Track 5's re-index stage; the rest of the plan's ordering 
 - **Not carried over from seonix's `extract.mjs`:** the v2 wire format, session fold-in, the gated
   interfaces feature, the manifest/telemetry/summary layers. tmct's producer writes the plain
   entities-payload JSON `source.mjs` already reads.
+- **Phase 2 — DONE (the CLI surface).** `tmct index [--repo <abs>] [--no-history]` is a first-class
+  verb (`src/domain/cli-verbs.mjs` + the dispatcher arm in `bin/tmct.mjs`): it walks the repo, writes
+  `<repo>/.tmct/graph.json`, and reports modules/symbols/bytes per language. Proven by
+  `test/index/index-repo-write.test.mjs` — the written artifact reads back through the provider seam
+  (`fetchEntities`) into a real `architecture`/`resolve` hit, and re-indexing the same source with a
+  pinned timestamp is byte-identical. The graph it writes feeds `chat --repo`/`serve`/`cli` unchanged.
 
 ## Origin
 
@@ -371,10 +377,10 @@ existing `buildEntities()` through `src/index/`. Exit criterion met against a re
 unchanged. Python (`extract_ast.py`) remains to port — it adds no dependency and is the natural next
 backend to register.
 
-**Phase 2 — the CLI surface.** A new command (`tmct index [--repo <path>]`, or extending `tmct init
---repo` to run it) that writes `.tmct/graph.json` from real source, using Phase 1's Python backend.
-Exit criterion: `npm run example:mini`-equivalent smoke test against a real small Python repo,
-`npm test` green throughout.
+**Phase 2 — the CLI surface. DONE.** `tmct index [--repo <path>] [--no-history]` writes
+`.tmct/graph.json` from real source (JS/TS via Phase 1's backend; Python once its backend registers).
+Exit criterion met via `test/index/index-repo-write.test.mjs`: the written artifact reads back through
+the provider seam into a real query hit, and re-indexing is byte-identical.
 
 **Phase 3 — the remaining four language backends.** Port `extract.mjs`'s full merge/resolve layer
 (import/call resolution, git-history edges), then `jsts_tsc.mjs` (JS/TS), then `cs_roslyn.mjs`/
