@@ -42,7 +42,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #16: "whats X do" (dropping "does") fails to resolve even for a real, indexed function
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #17: "what about X, what he/it do" sometimes silently answers the reverse relation instead of the forward one
 - [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #18: a filler/colon-led preamble before a real teach sentence breaks parsing of an otherwise-supported shape
-- [ ] `CAPABILITIES_2.11.0.md` row 210: `tmct_ingest` and `tmct_export` (shipped this cycle) are declared and dispatched but sit outside both the capability registry and `EXCLUDED_FROM_REGISTRY` — the same gap `tmct_related` had before its 2.7.12 fix (`96d40fe`/`e5f84e1`); register them or exclude them by name
 
 ## Discipline
 
