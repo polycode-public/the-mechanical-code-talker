@@ -9,7 +9,7 @@
 // share the slot.
 
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
-import { parseImperative } from "../domain/grammar/ace.mjs";
+import { parseImperative, OBJECT_PRONOUNS } from "../domain/grammar/ace.mjs";
 import { createCompletionsGraphAdapter } from "../domain/completions/graph-adapter.mjs";
 import { actionFamilies } from "../domain/router/taught.mjs";
 import { compileDomain, precondHolds, roleBinding } from "../domain/domain.mjs";
@@ -1224,6 +1224,63 @@ function renderedImperativeCommand(cmd) {
   return parts.join(" ");
 }
 
+// ---- pronoun binding: the session focus ---------------------------------------
+//
+// A world command may name its object with a pronoun ("examine it", "take
+// them", "talk to him") instead of a noun. The antecedent is not in the
+// sentence — it's the last thing the player successfully acted on this
+// session, the FOCUS — so the parser leaves the pronoun bare (ace.mjs's
+// OBJECT_PRONOUNS) and the lane binds it here, through ONE seam that every
+// object-taking verb passes on its way to runWorldCommand. With no focus
+// standing, a pronoun gets an honest reference nudge, never the vocabulary
+// decline (a pronoun is a reference, not an unknown word).
+
+const PRONOUN_SLOTS = ["object", "indirectObject", "instrument"];
+
+const commandHasPronoun = (cmd) => PRONOUN_SLOTS.some((s) => cmd[s] && OBJECT_PRONOUNS.has(cmd[s]));
+
+/** A pronoun command with no focus standing: the reference nudge, embedding a
+ *  real, actionable object from the current room when one is on show (else a
+ *  static example). Never the "I don't know the word" line — the vocabulary
+ *  misdiagnosis is unreachable for a pronoun. */
+async function noFocusPronounNudge(pronoun, { memoryDir }) {
+  let example = null;
+  try {
+    const rows = readFactRows(await loadMemory(memoryDir));
+    const state = foldWorldState(worldActionRows(rows));
+    const here = state.placements.get("player")?.object ?? null;
+    if (here) {
+      for (const action of roomAffordances(rows, state, here)) {
+        const m = action.match(/^(?:examine|take|open|unlock|talk to) (.+)$/);
+        if (m) { example = m[1]; break; }
+      }
+    }
+  } catch { /* no probe available — the static example carries the nudge */ }
+  const eg = example ?? "lamp";
+  return answer(
+    `I'm not sure what "${pronoun}" refers to yet — name the thing, e.g. "examine ${eg}".`,
+    `ADVENTURE — pronoun "${pronoun}" arrived with no focus standing; asked which thing it means, never the vocabulary decline`,
+    { miss: true },
+  );
+}
+
+/** Bind any pronoun object/indirect/instrument slot to the session focus.
+ *  Returns `{ cmd }` with the pronouns rewritten to the focus term, or `{
+ *  nudge }` (the reference nudge) when a pronoun stands but no focus does. A
+ *  command with no pronoun passes straight through untouched. */
+async function bindPronouns(cmd, { focus, memoryDir }) {
+  if (!commandHasPronoun(cmd)) return { cmd };
+  if (!focus) {
+    const pronoun = PRONOUN_SLOTS.map((s) => cmd[s]).find((v) => v && OBJECT_PRONOUNS.has(v));
+    return { nudge: await noFocusPronounNudge(pronoun, { memoryDir }) };
+  }
+  const bound = { ...cmd };
+  for (const s of PRONOUN_SLOTS) {
+    if (bound[s] && OBJECT_PRONOUNS.has(bound[s])) bound[s] = focus;
+  }
+  return { cmd: bound };
+}
+
 // ---- the lane ----------------------------------------------------------------
 
 /**
@@ -1292,9 +1349,18 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
     };
   }
   if (INVENTORY_RE.test(line)) return inventoryAnswer({ memoryDir, graph });
-  const cmd = parseImperative(line, lexicon ?? undefined);
-  if (cmd) {
+  const parsed = parseImperative(line, lexicon ?? undefined);
+  if (parsed) {
+    const bound = await bindPronouns(parsed, { focus: adventure.focus, memoryDir });
+    if (bound.nudge) return bound.nudge;
+    const cmd = bound.cmd;
     const result = await runWorldCommand(cmd, { world: adventure.world, memoryDir, env, graph, cache });
+    // The object a command SUCCESSFULLY named becomes the focus a later
+    // pronoun binds to — so "look lamp" then "examine it" reads the lamp, and
+    // "talk to housekeeper" makes "him"/"her" the housekeeper. A miss leaves
+    // the standing focus untouched; a bare room look or a move carries no
+    // object and so never disturbs it.
+    if (!result.miss && cmd.object) adventure.focus = cmd.object;
     if (!cmd.corrected?.length) return result;
     // A fuzzy-repaired verb or direction still executes normally, but the
     // response says what it read the line as, so a genuine miss is never

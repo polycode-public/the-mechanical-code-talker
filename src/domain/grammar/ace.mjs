@@ -528,6 +528,15 @@ export function parseAce(sentence, lexicon = loadLexicon()) {
 const IMPERATIVE_VERBS = new Set(["go", "take", "drop", "open", "unlock", "close", "give", "look", "talk", "examine"]);
 const IMPERATIVE_DIRECTIONS = new Set(["north", "south", "east", "west", "up", "down"]);
 
+// The object pronouns an imperative object slot may carry ("examine it", "take
+// them", "talk to him"). This parser only MARKS such a slot with the bare
+// pronoun as its term — the antecedent lives in the running world, not the
+// sentence, so binding it to a concrete object is the adventure lane's job (it
+// alone holds the session's FOCUS). Kept out of resolveNP's lexicon gate on
+// purpose: a pronoun is never a declared noun, so without this it rides out as
+// residue and mis-declines as an unknown word.
+export const OBJECT_PRONOUNS = new Set(["it", "them", "him", "her"]);
+
 const VERB_SYNONYMS = new Map([
   ["pick up", "take"], ["pick", "take"], ["grab", "take"],
   ["put down", "drop"], ["set down", "drop"], ["leave", "drop"],
@@ -603,8 +612,14 @@ function resolveImperativeVerb(toks) {
   return { ...retried, corrected: { from: first, to: fixedFirst } };
 }
 
-/** Resolve one imperative object phrase to its bare lexicon term. */
+/** Resolve one imperative object phrase to its bare lexicon term. A lone
+ *  object pronoun ("it", "them", "him", "her") rides through as its own term
+ *  for the lane to bind against the session focus — never a lexicon lookup,
+ *  never residue. */
 function imperativeNP(lexicon, tokens) {
+  if (tokens.length === 1 && OBJECT_PRONOUNS.has(tokens[0].toLowerCase())) {
+    return { term: tokens[0].toLowerCase(), unknown: [] };
+  }
   const np = resolveNP(lexicon, tokens);
   if (np.term == null) return { term: null, unknown: np.unknown };
   return { term: local(lexicon, np.term), unknown: [] };
