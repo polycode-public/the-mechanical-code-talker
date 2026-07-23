@@ -16,6 +16,9 @@ import { serveDirectory } from "./helpers/static-server.mjs";
 
 const READY_TIMEOUT_MS = 30_000;
 const GROW_TIMEOUT_MS = 20_000;
+// A multi-topic research run is paced by the adapter's polite 2s interval
+// between round trips and the page's own 2.4s auto-play tick.
+const DEEP_RUN_TIMEOUT_MS = 60_000;
 
 let siteDir;
 let server;
@@ -183,6 +186,95 @@ test("the ask is scoped by source: a fact abstains once its own source is unchec
     const inScope = await ask(page, "what is a florp");
     assert.equal(inScope.miss, false, "the ingested fact answers when its own source is the checked one");
     assert.match(inScope.text, /florp/i, "the answer names the ingested subject");
+  } finally {
+    await context.close();
+  }
+});
+
+// A two-tier link graph, so a depth-2 run has somewhere deeper to go: Owl's
+// lead links reach Bird/Night/Feather, and Bird's own reach Feather/Wing.
+const SUMMARIES = {
+  Owl: { title: "Owl", extract: "An owl is a bird. Owls hunt at night.", revision: "201", content_urls: { desktop: { page: "https://simple.wikipedia.org/wiki/Owl" } } },
+  Bird: { title: "Bird", extract: "A bird is an animal. Birds have feathers.", revision: "202", content_urls: { desktop: { page: "https://simple.wikipedia.org/wiki/Bird" } } },
+  Night: { title: "Night", extract: "Night is the dark part of the day.", revision: "203", content_urls: { desktop: { page: "https://simple.wikipedia.org/wiki/Night" } } },
+  Feather: { title: "Feather", extract: "A feather is a covering.", revision: "204", content_urls: { desktop: { page: "https://simple.wikipedia.org/wiki/Feather" } } },
+  Wing: { title: "Wing", extract: "A wing is a limb.", revision: "205", content_urls: { desktop: { page: "https://simple.wikipedia.org/wiki/Wing" } } },
+};
+const LEAD_LINKS = {
+  Owl: ["Bird", "Night", "Feather"],
+  Bird: ["Feather", "Wing", "Owl"],
+};
+
+/** Answer opensearch, the per-page lead-section links parse, and the per-title
+ *  REST summaries from fixtures, with the CORS header a cross-origin fetch
+ *  needs. Registered after the page's blanket third-party block, so it wins. */
+async function routeSimpleWikipedia(page) {
+  await page.route("https://simple.wikipedia.org/**", (route) => {
+    const url = route.request().url();
+    const ok = (body) => route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body });
+    if (url.includes("action=opensearch")) return ok(JSON.stringify(["owl", ["Owl"], [""], [""]]));
+    if (url.includes("action=parse")) {
+      const from = Object.keys(LEAD_LINKS).find((t) => url.includes("page=" + t));
+      const links = (LEAD_LINKS[from] || []).map((title) => ({ ns: 0, exists: true, title }));
+      return ok(JSON.stringify({ parse: { links } }));
+    }
+    const title = decodeURIComponent(url.split("/summary/")[1] || "");
+    const summary = SUMMARIES[title];
+    if (!summary) return route.fulfill({ status: 404, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: "{}" });
+    return ok(JSON.stringify(summary));
+  });
+}
+
+test("the node knobs govern the run: depth 2 with a small node budget grounds exactly the budget and says the budget is why it stopped", async () => {
+  const { context, page, consoleErrors } = await openResearchPage();
+  try {
+    await routeSimpleWikipedia(page);
+    await page.fill("#researchNodes", "3");
+    await page.fill("#researchDepth", "2");
+    await page.fill("#researchTopic", "owl");
+    await page.click("#researchGo");
+
+    // The queue auto-plays; it is finished when the note says so.
+    await page.waitForFunction(
+      () => /complete/.test(document.querySelector("#researchNote")?.textContent || ""),
+      null,
+      { timeout: DEEP_RUN_TIMEOUT_MS },
+    );
+    const note = await page.locator("#researchNote").innerText();
+    assert.match(note, /research "owl" complete/);
+    assert.match(note, /3 topics grounded/, "the run grounded exactly its node budget, not the whole fan-out");
+    assert.match(note, /\(depth 2, budget 3\)/, "the page's own knob values ride the run and are visible in its status");
+    assert.match(note, /node budget reached/, "the budget, not a lack of links, is named as the reason it stopped");
+
+    const keys = await sourceKeys(page);
+    assert.ok(keys.includes("research"), "a research source appears once the run grounds facts");
+    assert.deepEqual(consoleErrors, [], "the run logs no error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a depth-2 run reaches a topic no depth-1 run could: a second-tier link is grounded and answers", async () => {
+  const { context, page } = await openResearchPage();
+  try {
+    await routeSimpleWikipedia(page);
+    // Budget 4, depth 2, fan-out 1 per tier via the run's own limit token so the
+    // queue must go DEEPER rather than wider to spend its budget.
+    await page.fill("#researchNodes", "4");
+    await page.fill("#researchDepth", "2");
+    await page.fill("#researchTopic", "owl, limit 1");
+    await page.click("#researchGo");
+
+    await page.waitForFunction(
+      () => /complete/.test(document.querySelector("#researchNote")?.textContent || ""),
+      null,
+      { timeout: DEEP_RUN_TIMEOUT_MS },
+    );
+    // Owl (depth 0) -> Bird (depth 1) -> Feather (depth 2): a depth-1 run stops
+    // at Bird, so Feather in the history is the depth-2 hop actually happening.
+    const researchHistory = await page.locator("details.source:has(input[data-key='research']) .srcHistory .subj")
+      .evaluateAll((els) => els.map((e) => e.textContent || ""));
+    assert.ok(researchHistory.some((s) => /^feathers?$/.test(s)), `expected a depth-2 topic in the research history, got ${JSON.stringify(researchHistory)}`);
   } finally {
     await context.close();
   }

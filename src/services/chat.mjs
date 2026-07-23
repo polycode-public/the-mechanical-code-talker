@@ -5974,7 +5974,7 @@ export async function helpText() {
     ["/ingest <path>", "read a local text file and store every fact the recognizer grounds from it (same recognizer as `tmct extract`)"],
     ["/narrate on|off", "verbose developer/debug mode: decision points, matched pattern, results+sources, goal per turn"],
     ["/wiki on|off|supplement|always", "live Wikipedia (default off): on tries en.wikipedia.org when I can't answer (network), cited; supplement also adds a read-out under every grounded vocabulary answer; always widens that to every grounded answer"],
-    ["research <topic> [limit N]", "fetch the topic from Simple English Wikipedia (the explicit ask is the network consent), store what it grounds, and queue its linked topics — \"research next\" steps the queue; also status/stop"],
+    ["research <topic> [limit N] [depth D]", "fetch the topic from Simple English Wikipedia (the explicit ask is the network consent), store what it grounds, and queue its linked topics — \"research next\" steps the queue; also status/stop. limit N caps the links queued per topic, depth D how many hops the queue follows (1 by default); a run also stops at its total node budget"],
     ["/help", "this list"],
     ["/exit", "leave the session (also Ctrl+C / Ctrl+D)"],
   ];
@@ -14540,10 +14540,12 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     }
   }
 
-  // RESEARCH — "research <topic>[, limit N]" runs a Simple English Wikipedia
-  // queue through the same ingest path a live-Wikipedia rescue uses: depth 0
-  // now, the lead section's linked topics queued for "research next" (which
-  // the web pages' auto-play button submits turn by turn). The explicit
+  // RESEARCH — "research <topic>[, limit N][, depth D]" runs a Simple English
+  // Wikipedia queue through the same ingest path a live-Wikipedia rescue uses:
+  // depth 0 now, the lead section's linked topics queued for "research next"
+  // (which the web pages' auto-play button submits turn by turn), and each of
+  // those fanning out again while the run's depth knob allows, up to its total
+  // node budget. The explicit
   // request is the network consent for its own fetches — unlike the
   // clean-miss rescue, which fires on an ordinary question and so stays
   // behind /wiki on. Queue state threads turn-to-turn as researchState, the

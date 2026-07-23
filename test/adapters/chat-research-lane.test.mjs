@@ -297,7 +297,7 @@ test("/help lists the research lane", async () => {
   const dir = await freshRepo();
   try {
     const r = await turn("/help", { memoryDir: dir });
-    assert.match(r.answer, /research <topic> \[limit N\]/);
+    assert.match(r.answer, /research <topic> \[limit N\] \[depth D\]/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
