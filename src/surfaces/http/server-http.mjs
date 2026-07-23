@@ -15,8 +15,9 @@
 // HTTP surface.
 
 import { createServer } from "node:http";
-import { runTurn, selectTool } from "../../services/chat.mjs";
+import { runTurn, selectTool, capabilityPlanDeps } from "../../services/chat.mjs";
 import { TOOLS } from "../../tools/server.mjs";
+import { runCapabilityPlan, buildCapabilityPlanCtx, declaredCapabilityNames } from "../../domain/router/drive.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { uuidv7 } from "../../adapters/uuid.mjs";
 import * as defaultSource from "../../adapters/source.mjs";
@@ -127,6 +128,44 @@ export async function respondToMessages(body, { config, graph, source = defaultS
   return assistantMessage(model, [{ type: "text", text: answer }], "end_turn");
 }
 
+/** The capability names a /v1/plan request restricts its plan to (its `tools`
+ *  array of names or `{name}` objects), and any that are not registered
+ *  capabilities — the route rejects an `unknown` list with a 400 before the loop
+ *  ever runs. A request with no `tools` plans over every registered capability. */
+function planToolNames(body) {
+  const declared = declaredCapabilityNames();
+  if (!Array.isArray(body?.tools)) return { tools: declared, declared, unknown: [] };
+  const tools = body.tools.map((t) => (typeof t === "string" ? t : t && t.name)).filter(Boolean);
+  const unknown = tools.filter((t) => !declared.includes(t));
+  return { tools, declared, unknown };
+}
+
+/**
+ * Produce the /v1/plan response for one request body — the capability router
+ * (runCapabilityPlan) over HTTP, the same loop result the library export and the
+ * `tmct plan --json` CLI already return. Assumes a validated body (the route
+ * rejects a missing `request` or an unknown tool name with a 400 first).
+ *   - refused  → { request, ...loopResult } — an in-band honest "no plan found",
+ *                not a protocol error (still HTTP 200)
+ *   - grounded → { request, ...loopResult, usage } with $0 usage
+ *
+ * Per-request taught-action registrations ride ctx.disposers and are unregistered
+ * in the finally, so a second request re-reads the store instead of colliding on
+ * an already-registered taught capability name.
+ */
+export async function respondToPlan(body, { config, graph, memoryDir = null, source = defaultSource } = {}) {
+  const request = typeof body?.request === "string" ? body.request.trim() : "";
+  const { tools } = planToolNames(body);
+  const ctx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config, source, graph, memoryDir });
+  try {
+    const result = await runCapabilityPlan(request, tools, ctx);
+    if (result.refused) return { request, ...result };
+    return { request, ...result, usage: { ...ZERO_USAGE } };
+  } finally {
+    for (const dispose of ctx.disposers || []) dispose();
+  }
+}
+
 /** Self-description payload (GET /) — lets a routing target discover the endpoint
  *  and the tools tmct can back with just an HTTP GET. */
 function describe(config) {
@@ -134,6 +173,7 @@ function describe(config) {
     service: "tmct",
     description: "Anthropic Messages API-compatible, deterministic, no-LLM graph router (the $0 floor).",
     endpoint: { method: "POST", path: "/v1/messages" },
+    plan_endpoint: { method: "POST", path: "/v1/plan" },
     graph: config && config.graphFile,
     tools: TOOLS.map((t) => ({ name: t.name, description: t.description, input_schema: t.inputSchema })),
     usage_pricing: ZERO_USAGE,
@@ -174,7 +214,7 @@ function sendError(res, status, type, message) {
  *   host   — bind address (default 127.0.0.1)
  *   port   — TCP port; 0 picks an ephemeral port (tests)
  */
-export async function startServer({ config, host = "127.0.0.1", port = 0, source = defaultSource } = {}) {
+export async function startServer({ config, host = "127.0.0.1", port = 0, source = defaultSource, memoryDir = null } = {}) {
   if (!config || !config.graphFile) throw new Error("startServer requires config.graphFile");
   // Load the graph once, up front. A missing artifact loads as the empty
   // bootstrap graph — runTurn tolerates it (an honest empty/orienting answer).
@@ -185,6 +225,32 @@ export async function startServer({ config, host = "127.0.0.1", port = 0, source
       const url = new URL(req.url, "http://localhost");
       if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/v1/models")) {
         sendJson(res, 200, describe(config));
+        return;
+      }
+      if (url.pathname === "/v1/plan") {
+        if (req.method !== "POST") {
+          sendError(res, 405, "invalid_request_error", "POST /v1/plan");
+          return;
+        }
+        let body;
+        try {
+          body = JSON.parse((await readBody(req)) || "{}");
+        } catch {
+          sendError(res, 400, "invalid_request_error", "request body is not valid JSON");
+          return;
+        }
+        const request = typeof body?.request === "string" ? body.request.trim() : "";
+        if (!request) {
+          sendError(res, 400, "invalid_request_error", "`request` is required and must be a non-empty string");
+          return;
+        }
+        const { unknown, declared } = planToolNames(body);
+        if (unknown.length) {
+          sendError(res, 400, "invalid_request_error", `unknown tools name(s): ${unknown.join(", ")}; registered capabilities: ${declared.join(", ")}`);
+          return;
+        }
+        const out = await respondToPlan(body, { config, graph, memoryDir, source });
+        sendJson(res, 200, out);
         return;
       }
       if (url.pathname !== "/v1/messages") {
