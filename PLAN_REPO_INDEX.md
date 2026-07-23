@@ -39,6 +39,15 @@ unblocks PLAN_CODE.md Track 5's re-index stage; the rest of the plan's ordering 
   flags; and porting `extract.mjs`'s heavier method-call/interface resolution (tmct's `buildEntities`
   is the older, simpler variant — the seonix one carries a tiered method-callee fallback that C#/Java
   estates lean on).
+- **Example fixtures — DONE.** Two small, real source trees under `examples/`, sized for indexing
+  demos and as PLAN_CODE.md Track 5's first-milestone fixture: `examples/tiny-webapp-src/` (5 plain
+  JS modules, no npm dependency, `parseRow` with exactly two call sites in two different importing
+  modules — the planned rename/move target) and `examples/tiny-lib-py/` (4 stdlib-only Python
+  modules). Each ships its own runnable test suite (`node --test`, `python3 -m unittest discover`).
+  Proven by `test/index/example-fixtures.test.mjs`: both index cleanly through `extractRepo`, the
+  graph shows `loadRows->parseRow` and `previewFirstRow->parseRow` as the two `callsSymbol` edges
+  into the rename target, and each fixture's own test suite passes standalone (the Python half skips
+  gracefully without python3, matching `python-extractor.test.mjs`'s pattern).
 - **Phase 4 — DONE (doc reconciliation).** Every "not an indexer / doesn't index code" claim that
   became false is reworded: `README.md`'s repository-interface section, `docs/adapter-contract.md`'s
   opening, `src/adapters/source.mjs`'s seam comment (kept as the read-side boundary, now naming the
