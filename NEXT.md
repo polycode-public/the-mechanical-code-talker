@@ -21,6 +21,24 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 - [ ] a live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their deployed numbers
 - [ ] PLAN_AGENTS.md gap items 1-5 (serve plan verb, external-proposal seam, four frozen rows, replan-on-drift, dormant seeds) — tmct-only, independent, ~a week combined
 - [ ] PLAN_CODE.md Track 5 first milestone (planned two-step refactor, JS adaptor, verified, re-indexed) — sign-off-gated per that doc
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #3: "k what abt users.mjs"-shaped casual fragments are silently taught as garbage facts — the bare-declarative teach lane needs a positive test excluding interrogative/imperative/fragment shapes before it accepts anything, not another one-off phrase fix
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #1: a sentence opening with "I" ("I am new here", "I want to know X") misparses as a teach attempt about the pronoun "i" instead of being read as an ordinary opener
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #2: the "are you an LLM / what model are you" family still misroutes under casual phrasing outside the closed set (three fresh wordings this cycle)
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #4: internet/web-access capability questions ("can you browse the web") misroute into a module-name search instead of a clean offline decline
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #5: a non-sequitur identity blurb fires instead of a targeted decline for nonsense input or a fuzzy-matchable typo (recurrence of 2.7.11 #28)
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #6: casual farewells with "thanks" but not "bye" ("gtg thx") don't register as a close (recurrence of 2.7.11 #20)
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #7: small-talk/opinion questions wall inconsistently — only one exact phrasing of "how are you" gets the on-brand no-feelings decline
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #8: "can you make up an answer if you don't know" — a direct test of the honest-miss promise — walls instead of confirming it on-brand
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #9: "prove that X is Y" still unrecognized despite "is X a Y" proof machinery working (recurrence of 2.7.11 #13)
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #10: "my cat is called whiskers" (naming an individual) misroutes into a code `calls` relationship query
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #11: teaching a term ending in "s" silently singularizes it, breaking later recall (recurrence-class of 2.7.11 #12)
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #12: "does X have Y" (has-property) routes into the code `defines` relation instead
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #13: "the Task" (definite article before a real class name) isn't recognized even though "Task" is
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #14: the broad "detailed summary" completions question walls under a near-miss non-native phrasing though the exact wording passed in 2.7.11
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #15: "used anywhere" open-existential usage questions give an unclear answer where the bounded-pair "used by Y" phrasing gives a crisp yes/no
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #16: "whats X do" (dropping "does") fails to resolve even for a real, indexed function
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #17: "what about X, what he/it do" sometimes silently answers the reverse relation instead of the forward one
+- [ ] `BENCHMARK_CONVERSATION_2.11.0.md` #18: a filler/colon-led preamble before a real teach sentence breaks parsing of an otherwise-supported shape
 
 ## Discipline
 
