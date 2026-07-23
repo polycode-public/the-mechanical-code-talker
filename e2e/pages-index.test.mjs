@@ -1,6 +1,6 @@
 // The hand-maintained homepage (public/index.html, git-tracked, with only its
-// version stamp generated): a hero, a grid of eight claim blocks that each
-// link to the demo page showing that claim, eight feature sections repeating
+// version stamp generated): a hero, a grid of claim blocks that each
+// link to the demo page showing that claim, one feature section per page repeating
 // the claims with a framed screenshot plate each, the run-yourself and
 // library docs, and a Polycode-family showcase. A static, no-browser
 // structural check; pages-home.test.mjs covers the same page with a real
@@ -21,9 +21,10 @@ const PAGE_ORDER = [
   "code",
   "ingest",
   "sprites",
+  "research",
 ];
 
-test("the claim grid lists exactly eight claim links, one per demo page, in the page order", async () => {
+test("the claim grid lists exactly one claim link per demo page, in the page order", async () => {
   const html = await readFile(INDEX, "utf8");
   const grid = html.slice(html.indexOf('<div class="claim-grid">'), html.indexOf('<section class="feature"'));
   const hrefs = [...grid.matchAll(/<a class="claim" href="([^"]+)"/g)].map((m) => m[1]);
@@ -56,13 +57,13 @@ test("each demo page gets a feature section whose plate shows that page's screen
   }
 });
 
-test("the feature sections repeat the claims in claim-grid order, plates numbered I to VIII", async () => {
+test("the feature sections repeat the claims in claim-grid order, plates numbered I to IX", async () => {
   const html = await readFile(INDEX, "utf8");
   const positions = PAGE_ORDER.map((page) => html.indexOf(`id="feature-${page}"`));
   assert.ok(positions.every((i) => i !== -1));
   assert.deepEqual(positions, [...positions].sort((a, b) => a - b), "feature order matches claim order");
   const numerals = [...html.matchAll(/<span class="plate-no">Plate ([IVX]+)<\/span>/g)].map((m) => m[1]);
-  assert.deepEqual(numerals, ["I", "II", "III", "IV", "V", "VI", "VII", "VIII"]);
+  assert.deepEqual(numerals, ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"]);
 });
 
 test("the page carries one live demo box and no live page embeds", async () => {

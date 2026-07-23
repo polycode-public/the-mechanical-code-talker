@@ -108,6 +108,19 @@
         "height": 600
       },
       "sha256": "c8cebf69b4d36e71c6f1729021b388af871af4240af1b509eaab53b692e7778f"
+    },
+    {
+      "page": "research",
+      "file": "research.png",
+      "viewport": {
+        "width": 1024,
+        "height": 600
+      },
+      "png": {
+        "width": 1024,
+        "height": 600
+      },
+      "sha256": "9162e4c6d7b6ab65c0e0d12677fb7df094649b77320f53c2f13fa27706a14276"
     }
   ]
 }
