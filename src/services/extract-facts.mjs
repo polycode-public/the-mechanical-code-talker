@@ -106,6 +106,10 @@ const OPTIMISTIC_SKIP = new Set([
   "our", "my", "your", "some", "any", "one", "kind", "sort", "type", "of",
 ]);
 const OPTIMISTIC_ENTITY_HOPS = 4;
+// Crossing any of these while scanning for a copula's entities voids the isa
+// read — the noun on the far side belongs to a different clause or to a
+// prepositional complement, not to "X is a Y".
+const COPULA_FRAME_BLOCKERS = new Set(["VERB", "AUX", "ADP", "SCONJ", "CCONJ"]);
 
 /** Fold an entity surface to its stored key: a lexicon noun's lemma, else the
  *  word's own normFactTerm (the optimistic tier mints unlisted content nouns
@@ -128,21 +132,29 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
     values = doc.tokens().out(nlp.its.value);
     pos = doc.tokens().out(nlp.its.pos);
   } catch { return []; }
-  const nearestEntity = (idx, step) => {
+  const nearestEntity = (idx, step, blocked = null) => {
     for (let i = idx + step; i >= 0 && i < values.length; i += step) {
       if (pos[i] === "PUNCT") break;
+      if (blocked && blocked.has(pos[i])) break;
       if (pos[i] === "NOUN" || pos[i] === "PROPN") return foldEntity(values[i], lexicon);
     }
     return null;
   };
-  const tripleAt = (i, predicate) => {
-    const subject = nearestEntity(i, -1);
-    const object = nearestEntity(i, +1);
+  const tripleAt = (i, predicate, blocked = null) => {
+    const subject = nearestEntity(i, -1, blocked);
+    const object = nearestEntity(i, +1, blocked);
     return subject && object && subject !== object ? { subject, predicate, object } : null;
   };
+  // An isa needs a CLEAN copula frame: only determiners/adjectives/adverbs/
+  // numerals may sit between each entity and the copula. Crossing a verb or
+  // auxiliary means the noun belongs to another clause ("one reason life can
+  // exist here IS that earth …" is not "life is-a earth"); crossing a
+  // preposition or subordinator means locative/complement predication ("water
+  // is IN the oceans", "land is grouped INTO continents") — none of them
+  // class membership.
   for (let i = 1; i < values.length - 1; i += 1) {
     if (pos[i] === "AUX" && OPTIMISTIC_COPULAS.has(values[i].toLowerCase())) {
-      const t = tripleAt(i, "rdfs:subClassOf");
+      const t = tripleAt(i, "rdfs:subClassOf", COPULA_FRAME_BLOCKERS);
       if (t) return [t];
     }
   }

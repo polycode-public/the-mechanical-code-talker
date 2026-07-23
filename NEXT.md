@@ -18,6 +18,8 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 - [ ] **one `SKILL_PLAIN_PROSE.md` pass**, commit, push, and a final roll — operator-instructed; the five edge-hunt rounds shipped as 2.11.2-2.11.6 (playtest logs 018-022).
 - [ ] a fresh live-session miss-wall re-map at the new baseline
+- [ ] research extraction stores at most one triple per sentence (the copula wins and the rest is skipped) — real facts a summary offers get dropped ("a volcano … has lava coming out from a magma chamber", "formed by the movement of tectonic plates"); widening to multiple triples per sentence needs its own design pass over `optimisticTriples`' one-triple contract (playtest 023)
+- [ ] the research queue is session-local but the reply promises "'research next' fetches the next one" — a new CLI session answers "no research is running"; either persist the queue under `.tmct/` or have the reply say the queue lives in this session (playtest 023)
 - [ ] a live-site crawl to give `PAGE_WEIGHTS.md`'s local-rebuild rows (chat, code, ingest) their deployed numbers
 - [ ] PLAN_AGENTS.md gap item 4 (replan-on-drift) — in flight this session (wave-2 agent); items 1, 2, 5 and three of the four frozen rows are merged; frozen row 19 (`cross-turn-temporal-composition-unbuilt`) needs the DRT-lite typed discourse record — the R1 spike PLAN_AGENTS §5 stages, not a day-scale close
 - [ ] re-run the chatbench C2 garden slice under the judge to confirm `g-c2-garden-1`'s new stacked-reduced-relative parse grades clean (the deterministic expect passes by probe; the 2.11.0 write-up's decision log item 1 records the prior hard fail)

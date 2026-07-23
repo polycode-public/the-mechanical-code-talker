@@ -251,3 +251,31 @@ test("ingestText: --canonical renders each ingested fact as a triple linked back
     await rm(repoDir, { recursive: true, force: true });
   }
 });
+
+test("optimisticTriples: the isa scan never crosses a clause or a prepositional complement", () => {
+  // A copula inside a subordinate frame is not "X is-a Y" — the nouns either
+  // side belong to different clauses.
+  assert.deepEqual(
+    optimisticTriples("One big reason life can exist here is that Earth has a lot of water on its surface."),
+    [],
+  );
+  // A locative "is in" is placement, not class membership.
+  assert.deepEqual(
+    optimisticTriples("Most of Earth's water is in the oceans, which cover most of the planet's surface."),
+    [],
+  );
+  // A passive participle after the copula is not class membership either.
+  assert.deepEqual(
+    optimisticTriples("Most of this land is grouped into large continents, like North America and Africa."),
+    [],
+  );
+  // The clean copula frames those guards must not touch.
+  assert.deepEqual(
+    optimisticTriples("Earth is the third planet from the Sun and the only place known where life exists."),
+    [{ subject: "earth", predicate: "rdfs:subClassOf", object: "planet" }],
+  );
+  assert.deepEqual(
+    optimisticTriples("A volcano is a mountain that has lava coming out from a magma chamber under the ground."),
+    [{ subject: "volcano", predicate: "rdfs:subClassOf", object: "mountain" }],
+  );
+});
