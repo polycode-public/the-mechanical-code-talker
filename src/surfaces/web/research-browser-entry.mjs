@@ -27,6 +27,7 @@
 // it fresh on every deploy, never committed, the same posture the chat/ingest
 // bundles document for their own output.
 import { runTurn, vocabExampleHint, factAnswer, factReadBack } from "../../services/chat.mjs";
+import { clampResearchConfig } from "../../services/research.mjs";
 import { createInMemoryStore, normFactTerm, loadMemory, readFactRows, removeFacts } from "../../adapters/memory/core.mjs";
 import { serializeFactsJsonl } from "../../adapters/memory/export-jsonl.mjs";
 import { provenanceTagToSource } from "../../domain/memory/trust.mjs";
@@ -222,6 +223,11 @@ export function createResearchSession({ seedPayload = null, vocabSeeded = false,
   const normLive = (v) => (v === "always" ? "always" : v === "supplement" ? "supplement" : Boolean(v));
   let liveReferenceOn = normLive(liveReference);
   let synthesisBudgetOn = Number.isFinite(synthesisBudget) ? synthesisBudget : 12;
+  // The two research node knobs the page exposes ("maximum response nodes",
+  // "maximum node depth"), clamped to the engineered ranges. A change applies
+  // to the NEXT run started; a run already going keeps the knobs it captured
+  // (they ride its persisted state), so its queue stays internally consistent.
+  let researchConfig = clampResearchConfig();
 
   return {
     memoryDir,
@@ -232,6 +238,11 @@ export function createResearchSession({ seedPayload = null, vocabSeeded = false,
     setLiveReference(v) { liveReferenceOn = normLive(v); },
     get synthesisBudget() { return synthesisBudgetOn; },
     setSynthesisBudget(n) { synthesisBudgetOn = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0; },
+    get researchConfig() { return { ...researchConfig }; },
+    /** Update the node knobs for the NEXT run. `partial` is any of
+     *  { maxTopics, maxDepth, fanoutLimit, minIntervalMs }; each is clamped and
+     *  unset keys keep their current value. */
+    setResearchConfig(partial) { researchConfig = clampResearchConfig({ ...researchConfig, ...(partial || {}) }); },
 
     /** One chat-engine turn (research/teach/ask). A throw never kills the
      *  session — the page has no other chance to show this turn's answer. */
@@ -240,7 +251,7 @@ export function createResearchSession({ seedPayload = null, vocabSeeded = false,
       try {
         result = await runTurn(line, {
           config: null, source: null, graph, focus, last, memoryDir, sessionId: chatSessionId,
-          env: {}, lexicon, vocabHint, planState, researchState,
+          env: {}, lexicon, vocabHint, planState, researchState, researchConfig,
           liveReference: liveReferenceOn, onLiveLookup,
           uiContext: "browser", synthesisBudget: synthesisBudgetOn,
         });

@@ -189,6 +189,71 @@ test("a queue persists under .tmct and resumes in a later session with no in-mem
   }
 });
 
+function twoLevelProvider() {
+  const articles = {
+    owl: ROW("Owl", "An owl is a bird."),
+    bird: ROW("Bird", "A bird is an animal."),
+    feather: ROW("Feather", "A feather is a covering."),
+    wing: ROW("Wing", "A wing is a limb."),
+  };
+  const links = { Owl: ["Bird"], Bird: ["Feather", "Wing"] };
+  const p = {
+    calls: [],
+    async lookup(key) { p.calls.push(["lookup", key]); return articles[key] ?? null; },
+    async pageByTitle(title) { p.calls.push(["pageByTitle", title]); return articles[String(title).toLowerCase()] ?? null; },
+    async linkedTitles(title) { p.calls.push(["linkedTitles", title]); return links[title] ?? null; },
+  };
+  return p;
+}
+
+test("a depth-2 request persists both node knobs, and a later stateless session resumes them so its own step still fans out at depth 2", async () => {
+  const dir = await freshRepo();
+  registerResearchProvider(twoLevelProvider());
+  try {
+    // Session one: a depth-2 run. Owl queues Bird at depth 1.
+    const start = await turn("research owl, limit 5 depth 2", { memoryDir: dir });
+    assert.equal(start.research.maxDepth, 2, "the run carries the requested depth");
+    assert.deepEqual(start.researchState.pending, ["Bird"]);
+    const raw = JSON.parse(await readFile(queueFile(dir), "utf8"));
+    assert.equal(raw.maxDepth, 2, "the persisted queue carries the depth knob");
+    assert.ok(Number.isFinite(raw.maxTopics), "the persisted queue carries the node budget");
+
+    // Session two: no in-memory state. The resumed run must keep depth 2, so
+    // stepping Bird fans out its own links (Feather, Wing) at depth 2.
+    const step1 = await turn("research next", { memoryDir: dir });
+    assert.match(step1.answer, /^bird — A bird is an animal\./);
+    assert.deepEqual(step1.research.pending, ["Feather", "Wing"], "the resumed depth-2 run fans out from the stepped topic");
+
+    // The depth-2 topic grounds under research:owl@2.
+    const step2 = await turn("research next", { memoryDir: dir });
+    assert.match(step2.answer, /^feather —/);
+    const rows = readFactRows(await loadMemory(dir));
+    assert.ok(rows.some((f) => /^research:owl@2/.test(f.provenance)), "a resumed depth-2 topic stamps @2");
+  } finally {
+    registerResearchProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("an older persisted queue with no depth knobs resumes as today's depth-1 behaviour, never a crash", async () => {
+  const dir = await freshRepo();
+  registerResearchProvider(twoLevelProvider());
+  try {
+    // A queue file shaped like the pre-knob release: core fields only.
+    await mkdir(join(dir, ".tmct"), { recursive: true });
+    const legacy = { topic: "owl", key: "owl", title: "Owl", limit: 5, pending: ["Bird"], done: [{ title: "Owl", facts: 1, depth: 0 }], skipped: [] };
+    await writeFile(queueFile(dir), JSON.stringify(legacy), "utf8");
+    const step = await turn("research next", { memoryDir: dir });
+    assert.match(step.answer, /^bird — A bird is an animal\./);
+    // Depth defaults to 1, so Bird does NOT fan out — the run completes.
+    assert.deepEqual(step.research.pending, [], "a knob-less resume behaves as a depth-1 run");
+    assert.match(step.answer, /research on "owl" is complete/);
+  } finally {
+    registerResearchProvider(null);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("research stop in a later session clears the persisted queue file", async () => {
   const dir = await freshRepo();
   registerResearchProvider(owlProvider());
@@ -232,7 +297,7 @@ test("/help lists the research lane", async () => {
   const dir = await freshRepo();
   try {
     const r = await turn("/help", { memoryDir: dir });
-    assert.match(r.answer, /research <topic> \[limit N\]/);
+    assert.match(r.answer, /research <topic> \[limit N\] \[depth D\]/);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

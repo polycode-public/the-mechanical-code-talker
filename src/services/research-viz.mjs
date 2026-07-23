@@ -128,6 +128,9 @@ ${THEME_TOKENS_CSS}
   .card .note { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); min-height: 1rem; }
   .optionToggle { display: inline-flex; align-items: center; gap: .35rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); cursor: pointer; }
   .optionToggle input { margin: 0; accent-color: var(--corpus); }
+  .knobs { display: flex; gap: .9rem; align-items: center; flex-wrap: wrap; }
+  .knob { display: inline-flex; align-items: center; gap: .4rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
+  .knob input[type="number"] { width: 3.4rem; font-family: ${MONO_STACK}; font-size: .74rem; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .25rem .35rem; text-align: right; }
 
   /* highlights + ask, two columns */
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; align-items: start; }
@@ -196,6 +199,14 @@ ${THEME_TOKENS_CSS}
           <button type="button" class="btn primary" id="researchGo" disabled>research</button>
           <button type="button" class="btn" id="researchNext" hidden>research next</button>
           <button type="button" class="btn" id="researchPlay" aria-pressed="false" hidden>play</button>
+        </div>
+        <div class="knobs">
+          <label class="knob" title="How many topics one research run may fetch and store in total (the first topic counts as one). A deep run stops fetching once it reaches this budget.">
+            max nodes <input id="researchNodes" type="number" min="1" max="50" step="1" value="12" inputmode="numeric" aria-label="Maximum response nodes">
+          </label>
+          <label class="knob" title="How deep the link fan-out follows: depth 1 is the topic's own lead links, depth 2 those topics' links, and so on. Applies to the next run you start.">
+            max depth <input id="researchDepth" type="number" min="1" max="3" step="1" value="1" inputmode="numeric" aria-label="Maximum node depth">
+          </label>
         </div>
         <p class="note" id="researchNote"></p>
       </div>
@@ -593,13 +604,29 @@ ${THEME_TOKENS_CSS}
     el("researchPlay").setAttribute("aria-pressed", String(state.playing));
     const note = el("researchNote");
     if (!researchQueue) { /* leave whatever the last turn's note said */ }
-    else if (researchQueue.complete) {
-      note.textContent = 'research "' + researchQueue.topic + '" complete — '
-        + researchQueue.done.length + " topic" + (researchQueue.done.length === 1 ? "" : "s") + " grounded.";
-    } else {
-      note.textContent = 'research "' + researchQueue.topic + '": '
-        + researchQueue.done.length + " done · " + researchQueue.pending.length + " queued.";
+    else {
+      const depth = researchQueue.maxDepth || 1;
+      const budget = researchQueue.maxTopics || 0;
+      const knobs = " (depth " + depth + (budget ? ", budget " + budget : "") + ")";
+      const capped = researchQueue.nodeCapReached ? " — node budget reached" : "";
+      if (researchQueue.complete) {
+        note.textContent = 'research "' + researchQueue.topic + '" complete — '
+          + researchQueue.done.length + " topic" + (researchQueue.done.length === 1 ? "" : "s") + " grounded" + knobs + capped + ".";
+      } else {
+        note.textContent = 'research "' + researchQueue.topic + '": '
+          + researchQueue.done.length + " done · " + researchQueue.pending.length + " queued" + knobs + capped + ".";
+      }
     }
+  }
+
+  // Read the two node knobs off the page and hand them to the session for the
+  // NEXT run started. A run already going keeps the knobs it captured.
+  function applyResearchConfig() {
+    if (!session || !session.setResearchConfig) return;
+    session.setResearchConfig({
+      maxTopics: parseInt(el("researchNodes").value, 10),
+      maxDepth: parseInt(el("researchDepth").value, 10),
+    });
   }
 
   async function researchStep(line) {
@@ -619,6 +646,7 @@ ${THEME_TOKENS_CSS}
   async function startResearch() {
     const topic = el("researchTopic").value.trim();
     if (!topic || !session) return;
+    applyResearchConfig();
     el("researchTopic").value = "";
     el("researchNote").textContent = 'researching "' + topic + '"…';
     const previous = researchQueue;
