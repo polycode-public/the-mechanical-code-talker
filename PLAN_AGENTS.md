@@ -1,7 +1,8 @@
 # PLAN_AGENTS.md — the agent capability plan
 
 *(Drafted 2026-07-10 as "tmct as the shared deterministic agent substrate"; re-baselined
-2026-07-22 against v2.10.5. The 2026-07-10 draft absorbed seven sibling design docs, deleted at
+2026-07-22 against v2.10.5, refreshed 2026-07-23 against `CAPABILITIES_2.11.0.md` per
+`SKILL_CAPABILITIES_AUDIT.md` §5. The 2026-07-10 draft absorbed seven sibling design docs, deleted at
 `8cd3b36`; `git show 8cd3b36^` has the originals, and this file's own git history holds the
 absorbed narrative, the v1.4.0 build record, and the phase-by-phase status blocks this rewrite
 compressed.)*
@@ -150,7 +151,11 @@ is a `tmct.toml` `[games.spider-fly]` knob; the mechanic is pinned in
 
 - `src/tools/definitions.mjs` — 25 declared tools (`TOOL_DEFINITIONS`): 3 hot (`tmct_context`,
   `tmct_snippet`, `tmct_ask` — schemas resident every turn) and 22 cold (served via
-  `tmct cli <tool>`); dispatch in `src/tools/server.mjs`, catalog in `src/tools/catalog.mjs`.
+  `tmct cli <tool>`); dispatch in `src/tools/server.mjs`, catalog in `src/tools/catalog.mjs`. Two
+  of the 22 cold tools, `tmct_ingest` and `tmct_export` (shipped 2026-07-21/22), are declared and
+  dispatched but sit outside both the capability registry and `EXCLUDED_FROM_REGISTRY` — the same
+  shape `tmct_related` had before its 2.7.12 fix (`CAPABILITIES_2.11.0.md` row 210). Reachable today
+  via `/ingest`/`/export` in chat and `tmct cli`, not via the router's NL resolution.
 - `src/surfaces/http/server-http.mjs` — the Anthropic-Messages-API-compatible `POST /v1/messages`
   shim behind `tmct serve`; `e2e/server-http.test.mjs` drives a real
   request → `tool_use` → `tool_result` → `end_turn` loop against a live process.
@@ -203,14 +208,16 @@ Both keep LLMs on the eval side, per the constitution:
 
 - `agentbench/` — 68 cases over the TOOL-0…TOOL-8 ladder, four deterministic driver arms
   (stub/shim/resolver/goal). The goal arm clears every rung: 68/68, `rungReached: TOOL-8`,
-  `gatedAt: null`, 0% hallucination. Write-up: `BENCHMARK_AGENT_2.7.12.md` (2026-07-19);
+  `gatedAt: null`, 0% hallucination. Write-up: `BENCHMARK_AGENT_2.11.0.md` (2026-07-23, byte-identical
+  to `BENCHMARK_AGENT_2.7.12.md` on every rung — no router commit landed in the window);
   method: `SKILL_BENCHMARK_AGENT.md`.
 - `agentbench/envelope.json` — the machine-readable capability envelope, regenerated
-  deterministically (`node agentbench/generate-envelope.mjs`), stamped 2.10.5;
+  deterministically (`node agentbench/generate-envelope.mjs`), stamped 2.11.0;
   `maxContextTokens` stays `null` because agentbench measures no token accounting.
 - Abstention is structural: 0% fabrication across 479 inference rows and 0% hallucination across
-  272 agent rows (`BENCHMARK_INFERENCE_2.7.12.md`, `BENCHMARK_AGENT_2.7.12.md`).
-- `CAPABILITIES_2.7.12.md` is the newest capabilities audit; per `SKILL_CAPABILITIES_AUDIT.md`
+  272 agent rows (`BENCHMARK_INFERENCE_2.11.0.md`, `BENCHMARK_AGENT_2.11.0.md`, both byte-identical
+  to their 2.7.12 predecessors).
+- `CAPABILITIES_2.11.0.md` is the newest capabilities audit; per `SKILL_CAPABILITIES_AUDIT.md`
   §5, it is the ground truth this doc's baseline follows.
 
 ## 3. The arc — shipped, in flight, proposed

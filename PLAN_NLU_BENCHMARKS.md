@@ -23,10 +23,11 @@ defeats the purpose.
 
 ## Where tmct stands today (the as-is estimate)
 
-tmct's capability universe is: 15 read-only code-graph capabilities
-(`src/domain/router/registry.mjs`, `capabilities()`), a 22-tool declared surface
+tmct's capability universe is: 16 read-only code-graph capabilities
+(`src/domain/router/registry.mjs`, `capabilities()`), a 25-tool declared surface
 (`src/tools/definitions.mjs`, of which `tmct_context`, `tmct_snippet` and `tmct_ask` are the hot
-tier `src/tools/server.mjs` dispatches), a
+tier `src/tools/server.mjs` dispatches; `CAPABILITIES_2.11.0.md` row 210 flags two of the 25,
+`tmct_ingest`/`tmct_export`, as dispatched but not yet in the capability registry), a
 commonsense fact/teach surface in `src/services/chat.mjs` (IsA/HasA/CapableOf over a small
 animal-flavoured seed corpus), and runtime-taught game actions. None of the CLINC150/HWU64 domains
 (banking, travel, weather, alarms, music, cooking, ...) exist anywhere in the product. A sweep of
@@ -98,10 +99,11 @@ substitute for the matcher. It matters in three places:
 
 The estate is now organised around a tested tool surface and a keyed corpus: `src/` is five layers
 with downward-only imports (`test/estate/import-layers.test.mjs`), `src/tools/` is the tool layer,
-and `test/corpus/` holds ~790 rows across 11 JSONL lanes (793 measured 2026-07-17), each row keyed by
-the production or capability it pins and driven through the real session. The lanes grow most weeks,
-so treat any row count here as a snapshot — `wc -l test/corpus/*.jsonl test/corpus/games/*.jsonl` is
-the live one. `node scripts/corpus-matrix.mjs` prints the
+and `test/corpus/` holds 1101 rows across 15 JSONL lanes / 531 keys (measured 2026-07-23, per
+`CAPABILITIES_2.11.0.md`), each row keyed by the production or capability it pins and driven through
+the real session. The lanes grow most weeks, so treat any row count here as a snapshot — `wc -l
+test/corpus/*.jsonl test/corpus/games/*.jsonl` is the live one. `node scripts/corpus-matrix.mjs`
+prints the
 key × lane matrix; `--gaps` names the keys a single row pins and the keys with no negative row.
 That changes three things for this plan, and leaves the central problem untouched.
 
