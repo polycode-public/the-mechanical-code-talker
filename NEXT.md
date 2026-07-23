@@ -21,7 +21,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 - [ ] the research queue is session-local but the reply promises "'research next' fetches the next one" — a new CLI session answers "no research is running"; either persist the queue under `.tmct/` or have the reply say the queue lives in this session (playtest 023)
 - [ ] the relation-verb extraction tier lets a partitive of-chain steal the subject — "The weight of all of the snow creates pressure" stores "snow creates pressure" (inner noun, not the head "weight"); the copula tier's three-way of-chain rule (playtest 025) is the model for a matching subject-side climb (playtest 025)
 - [ ] frozen row 19 (`cross-turn-temporal-composition-unbuilt`) needs the DRT-lite typed discourse record — the R1 spike PLAN_AGENTS §5 stages, not a day-scale close. (PLAN_AGENTS gap J, replan-on-drift, landed in the wave-2 branch; items 1, 2, 5 and three of the four frozen rows are merged)
-- [ ] re-run the chatbench C2 garden slice under the judge to confirm `g-c2-garden-1`'s new stacked-reduced-relative parse grades clean (the deterministic expect passes by probe; the 2.11.0 write-up's decision log item 1 records the prior hard fail)
 
 ## Discipline
 
