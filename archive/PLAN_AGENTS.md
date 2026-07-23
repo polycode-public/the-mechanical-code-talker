@@ -1,4 +1,23 @@
-# PLAN_AGENTS.md — the agent capability plan
+# PLAN_AGENTS.md — the agent capability plan (ARCHIVED 2026-07-24)
+
+**Status: DELIVERED and archived.** The five-stage agent loop this plan set as its target —
+perceive, decide, act, verify, learn — is complete and measured, served to a human in chat and
+the CLI, to a program through the library export and the `POST /v1/plan` HTTP verb, and to
+tmct's own autonomous demo agents. Gaps A-J and O in §4's table are Present; the 2026-07-24 batch closed
+the last of them (the serve plan verb, the external-proposal seam, replan-on-drift, and the
+wider seeds).
+
+**What moved on, and where:** the product-path rule-synthesis spike (gap N) is now
+`PLAN_CODE.md` §2.1, the doc that owns `synthbench/`. The two R1 research spikes (the DRT-lite
+typed discourse record and bounded (N+1) goal recognition) are
+`PLAN_DISCOURSE_AND_RECOGNITION.md`. Everything else this file carried — the cross-repo mounts
+(gap M), the R2 and R3 horizons, and the §6 non-goals — is deliberately out of live scope, kept
+here as the record rather than carried forward.
+
+*The original document follows, unedited.*
+
+---
+
 
 *(Drafted 2026-07-10 as "tmct as the shared deterministic agent substrate"; re-baselined
 2026-07-22 against v2.10.5, refreshed 2026-07-23 against the benchmark write-ups and the tree
