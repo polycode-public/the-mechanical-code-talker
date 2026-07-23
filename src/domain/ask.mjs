@@ -3795,8 +3795,15 @@ function renderCore(parsed, result, graph) {
       };
     }
     const entityWord = nounFor(parsed.entityType || "Module", 2);
+    // Name the resolved antecedent, not the raw pronoun: "who touched it" that
+    // bound "it" to fnAlpha must say so, or the receipt reads as though nothing
+    // was resolved at all. Scoped to a context pronoun so a typed term keeps the
+    // wording the reader chose, never its normalized graph label.
+    const object = (result.objMatch && CONTEXT_PRONOUNS.includes(String(parsed.object || "").toLowerCase()))
+      ? result.objMatch.label
+      : parsed.object;
     return {
-      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${parsed.object}. ${touchesRephraseHint(graph)}`,
+      content: `No ${entityWord} found whose module directly ${verbFor(parsed.kind)} ${object}. ${touchesRephraseHint(graph)}`,
       miss: true, ambiguous: false,
     };
   }
