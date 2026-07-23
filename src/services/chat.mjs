@@ -12091,6 +12091,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const staccatoSwapMatch = String(query).match(STACCATO_SWAP_RE);
   const isStaccatoSwap = !!(last?.query && staccatoSwapMatch && NAME_TOKEN_RE.test(staccatoSwapMatch[1]?.trim() || ""));
   const isWhatAboutContinuation = !!(last?.query && WHAT_ABOUT_RE.test(String(query))) || isStaccatoSwap;
+  // A bare vague-touch OPENER ("wat about validate", "tell me about store.mjs")
+  // whose term resolves to a UNIQUE graph entity is a genuine describe request,
+  // not small talk — defer past the conversational card so describeWrapperAnswer
+  // (4d, below) serves its module/entity overview. Distinct from
+  // isWhatAboutContinuation above, which needs a prior turn: this fires on the
+  // FIRST turn too, and covers the "tell me about"/"explain" surfaces
+  // vagueTouchTermOf reads. resolveEntity already declines on ambiguity, so an
+  // ambiguous or unknown term ("wat about xyzzy") keeps today's orientation card.
+  const vagueTouchTerm = graph ? vagueTouchTermOf(String(query)) : null;
+  const isVagueTouchResolvable = !!(vagueTouchTerm && await resolveEntity(graph, vagueTouchTerm));
   // Same exemption for "describe it"/"tell me about that" — needs the SAME
   // deferral to reach describeWrapperAnswer's focus-aware pronoun resolution.
   // Gated on an actual standing focus, same honest-decline discipline as
@@ -12202,7 +12212,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* leave false — the ordinary path decides */ }
     }
   }
-  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach && !isBareRelationalVerbTeach;
+  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isVagueTouchResolvable && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach && !isBareRelationalVerbTeach;
   // A turn whose pronoun was bound to a vocabulary antecedent is PROVABLY a
   // fact question ("can it bark" → "can dog bark") — never conversational,
   // however short. Without this, the substituted 3-worder still trips

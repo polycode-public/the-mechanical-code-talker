@@ -7,10 +7,19 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
+import { readFileSync } from "node:fs";
 import { runTurn } from "../src/services/chat.mjs";
+import { parseEntities } from "../src/domain/codegraph.mjs";
 
 const CONFIG = { graphFile: fileURLToPath(new URL("./fixtures/entities.fixture.json", import.meta.url)) };
 const bare = (line) => runTurn(line, { config: CONFIG, graph: null });
+
+// The committed mini-webapp graph — a real repo with a src/core/validate.mjs
+// module, used by the vague-touch-opener probes below (which need a graph the
+// bare FLOW-0 turns above deliberately lack).
+const MINI_WEBAPP_GRAPH = fileURLToPath(new URL("../examples/mini-webapp/.tmct/graph.json", import.meta.url));
+const miniWebappGraph = parseEntities(JSON.parse(readFileSync(MINI_WEBAPP_GRAPH, "utf8")));
+const onMiniWebapp = (line) => runTurn(line, { config: { graphFile: MINI_WEBAPP_GRAPH }, graph: miniWebappGraph });
 
 // ---- #2: the "are you an LLM / what model are you" family ----
 
@@ -95,4 +104,18 @@ test("a direct probe of the honest-miss promise (\"can you make up an answer if 
   const r = await bare("can you make up an answer if you dont actually know");
   assert.match(r.answer, /never make up an answer/i);
   assert.doesNotMatch(r.answer, /couldn't read that as a question/i);
+});
+
+// ---- a resolvable vague-touch opener reaches the describe path, not the card ----
+
+test("a misspelled vague-touch opener whose term resolves uniquely (\"wat about validate\") answers the module, not the orientation card", async () => {
+  const r = await onMiniWebapp("wat about validate");
+  assert.match(r.answer, /validate\.mjs/);
+  assert.doesNotMatch(r.answer, /deterministic, offline code-graph assistant/i);
+  assert.equal(r.record.miss, false);
+});
+
+test("a vague-touch opener whose term resolves to nothing (\"wat about xyzzy\") stays on the orientation card", async () => {
+  const r = await onMiniWebapp("wat about xyzzy");
+  assert.match(r.answer, /deterministic, offline code-graph assistant/i);
 });
