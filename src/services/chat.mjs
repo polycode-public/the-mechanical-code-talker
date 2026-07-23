@@ -1082,6 +1082,11 @@ const CAPABILITY_PHRASES = [
   // — closed to the same self-referential noun set META_ORIENT_RE uses, so a
   // real module/class named literally "repo"/"codebase" is never at risk.
   /^what(?:'s|s|\s+is) in (?:this|the)\s+(?:app|codebase|repo|repository|project|code)\??$/i,
+  // "can I ask you something random" — an ordinary conversational preamble
+  // asking permission before a real question, not itself a question about
+  // anything nameable. Answered the same as any other vague opener: sure,
+  // here's what I can help with.
+  /^can i ask (?:you\s+)?something(?:\s+random)?\??$/i,
 ];
 /** IDENTITY questions — "who/what are you", by name, in plain or ESL-ish phrasing.
  *  Routed to a self-description (identity-self) that works regardless of graph
@@ -1132,6 +1137,25 @@ const AI_IDENTITY_PHRASES = [
   // product path (no-LLM constitution, deterministic offline reasoning), so
   // this is a real "no", not the generic capability listing.
   /^can (?:you|u) (?:browse|access|use|go on|connect to) the internet\??$/i,
+  // "can you look things up on the internet" / "browse the web to check
+  // something" — the same offline-capability question as the entry just
+  // above, worded around "web"/"look up" instead of "browse the internet".
+  // With no closed match, this fell into a code-graph module-name search for
+  // the literal words instead of the plain "no, I'm offline" answer.
+  /^can (?:you|u) look (?:things?\s+)?up on the internet\??$/i,
+  /^can (?:you|u) (?:browse|search|check) the web(?:\s+to\s+check\s+(?:something|this|that))?\??$/i,
+  // "are you like chatgpt or gemini or something" — the comparison phrasing
+  // of the "are you an AI" question, a named model or two followed by a
+  // trailing "or something" hedge.
+  /^(?:are you|r u)\s+like\s+(?:chatgpt|gpt|claude|gemini|llama)(?:\s+or\s+(?:chatgpt|gpt|claude|gemini|llama))*\s+or\s+something\??$/i,
+  // "what model are you, gpt-4 or claude or something else" — the SAME
+  // open-pick question "what model are you built on" already answers, just
+  // without the "built/based/running on" bridge phrase.
+  /^what model are you,?\s*(?:gpt-?\d(?:\.\d)?|chatgpt|claude|gemini|llama)(?:\s+or\s+(?:gpt-?\d(?:\.\d)?|chatgpt|claude|gemini|llama|something\s+else))*\??$/i,
+  // "can you use an LLM to answer this" — asks the identical no-LLM question
+  // as "do you use ai", just with "use an LLM to answer this" as the verb
+  // phrase instead of a bare "use ai".
+  /^can (?:you|u) use (?:an? )?(?:llm|ai|gpt|chatgpt) to answer (?:this|that|it)\??$/i,
 ];
 
 /** META-COMMAND/SESSION questions — a RETURNING USER checking whether a
@@ -1219,10 +1243,25 @@ const FEELINGS_PHRASES = [
   // "keeps growing as new natural phrasings surface" precedent.
   /^how (?:are|r) (?:you|u) doing(?:\s+today)?\??$/i,
   /^what(?:'s|s|\s+is) your (?:favou?rite\s+(?:colou?r|food|movie|book|band|song|number)|name)\??$/i,
-  /^do you (?:get|ever get) bored\??$/i,
+  /^do you (?:get|ever get) (?:bored|tired)\??$/i,
   /^what do you do for fun\??$/i,
   /^can you (?:tell|make)\s+(?:me\s+)?(?:a\s+)?jokes?\??$/i,
   /^do you (?:know|know anything|know much)\s+about\s+(?:movies?|sports?|music|tv|television)(?:\s+or\s+(?:movies?|sports?|music|tv|television))?\??$/i,
+  // "do you think dogs are smarter than cats" — a personal-opinion comparison,
+  // same family as the direct personal questions above: closed to a small
+  // comparative-adjective vocabulary, open on the two compared things (the
+  // SAME discipline PHRASING_FRAMES' object captures use elsewhere).
+  /^do you think .+?\s+(?:is|are)\s+(?:smarter|dumber|better|worse|nicer|cooler|cuter|friendlier|stronger|faster)\s+than\s+.+\??$/i,
+];
+/** "can you make up an answer if you don't actually know" — a direct probe of
+ *  the product's own headline promise (the honest miss: a query it can't
+ *  ground gets a refusal, never a guess). With no closed match this fell to
+ *  the plain grammar wall instead of confirming the very thing it asked
+ *  about. Same family/placement as FEELINGS_PHRASES just above. */
+const HONEST_MISS_PHRASES = [
+  /^can (?:you|u) make up an answer if you (?:don'?t|do\s+not) (?:actually\s+|really\s+)?know\??$/i,
+  /^(?:do|would) you (?:ever\s+)?(?:make (?:something|stuff) up|make up an answer)(?:\s+if you (?:don'?t|do\s+not) know)?\??$/i,
+  /^what if you (?:don'?t|do\s+not) know (?:the\s+)?answer\??$/i,
 ];
 /** "whats 2+2" — a bare arithmetic expression, not a code/vocabulary question
  *  at all. With no closed-set match of its own, this fell into the SAME
@@ -1235,6 +1274,15 @@ const FEELINGS_PHRASES = [
  *  structural answer, never this decline. "+"/"*"/"/" have no such
  *  collision in tmct's own vocabulary. */
 const ARITHMETIC_RE = /\d+\s*[+*/]\s*\d+/;
+/** A bare SQL data-definition/manipulation statement typed at the prompt
+ *  ("DROP TABLE users;") — nonsense as a code-graph question, and with no
+ *  closed match of its own this fell to the ≤3-word catch-all's identity/
+ *  orientation blurb, the same wrong-flavor miss ARITHMETIC_RE exists to
+ *  avoid for arithmetic. Each alternative requires the FULL SQL clause shape
+ *  (not just the bare leading verb), so an ordinary English imperative
+ *  ("update the readme") is never caught here — "table"/"from"/"into"/"set"
+ *  are the words that make this unambiguously SQL rather than English. */
+const SQL_STATEMENT_RE = /^(?:(?:drop|truncate|alter)\s+table|delete\s+from|insert\s+into|update\s+[a-z0-9_.]+\s+set)\s+[a-z0-9_.]+\b/i;
 /** The structural verbs/nouns that mark a near-miss code question (→ keep the
  *  precise grammar hint, not the friendly nudge). */
 const STRUCT_WORDS = new Set([
@@ -1428,6 +1476,10 @@ const T_ORIENTATION_EMPTY = "orientation-empty";
 const T_IDENTITY_SELF = "identity-self";
 const T_IDENTITY_NOT_LLM = "identity-not-an-llm";
 const T_IDENTITY_NO_FEELINGS = "identity-no-feelings";
+/** Confirms the honest-miss promise itself when a user asks about it directly
+ *  ("can you make up an answer if you don't know"). Same "works regardless of
+ *  graph state" family as the identity answers just above. */
+const T_IDENTITY_HONEST_MISS = "identity-honest-miss";
 /** THE CONCEPT FORCE (concept.mjs): the three-band answer to a vague "what is a X"
  *  that names a known concept WITH instances — {definition}/{examples}/{followups}. */
 const T_CONCEPT = "concept-force";
@@ -1497,6 +1549,13 @@ const BYE = new Set([
   "bye", "goodbye", "quit", "exit", "see ya", "see you", "cya", "later", "farewell",
   "peace", "peace out", "im off", "i'm off", "gtg", "gotta go", "catch you later",
   "farewell then",
+  // "gtg thx" — the SAME "gtg" farewell above, immediately followed by a
+  // thanks word with no delimiter between them (so farewellOrThanksSignal's
+  // comma/semicolon clause split never sees two clauses to work with).
+  // Whole-phrase entry rather than a general "bye word + thanks word, no
+  // delimiter" mechanism — closed and hand-curated, this exact reported
+  // phrasing only.
+  "gtg thx",
   // "good day to you" deliberately does NOT live here: it's a formal-register
   // GREETING, not a farewell. foldedBye is checked before GREET in
   // conversationalTurn, so having it here would silently end the session on
@@ -1514,6 +1573,11 @@ const WHY = new Set([
 const OK_ACK = new Set([
   "ok", "okay", "cool", "aight", "fair enough", "got it", "gotcha", "noted",
   "sounds good", "sure", "cool cool", "right",
+  // "haha ok fair enough" — a laughter beat leading a two-word ack ("fair
+  // enough") that dismissalSignal's own peeling can't reach: it peels
+  // single-WORD fluff off each end, but "fair enough" is itself two words.
+  // Whole-phrase entry, closed and hand-curated, this exact reported phrasing.
+  "haha ok fair enough",
 ]);
 /** Dismissals — "drop it, no question here" beats. Routed to a warm dismissal
  *  template, never the identity/orientation blurb (which reads like the tool
@@ -1620,6 +1684,11 @@ const CLOSING_FILLER_CLAUSES = new Set([
   "that's everything for now", "that's all for now",
   "that's everything i needed", "that's all i needed",
   "that's everything for today", "that's all for today",
+  // "thats enough for now" — the same closing-filler shape, worded around
+  // "enough" instead of "everything"/"all", and without the apostrophe a
+  // casual typer routinely drops (conversationalTurn's own `q` never runs an
+  // apostrophe/contraction pass, so both spellings are curated explicitly).
+  "that's enough for now", "thats enough for now",
 ]);
 /** Strip a hedging lead ("i think that's everything for today" → "that's
  *  everything for today") so a hedged closing clause still matches the closed
@@ -1875,6 +1944,20 @@ function conversationalTurn(line, ctx) {
     note(ctx.trace, "goal: identity — does tmct have feelings/consciousness (small-talk persona finding)");
     note(ctx.trace, "lane: conversational — identity/feelings (FEELINGS_PHRASES closed set)");
     return mk(t(T_IDENTITY_NO_FEELINGS), { lane: "help" });
+  }
+  if (HONEST_MISS_PHRASES.some((re) => re.test(raw))) {
+    note(ctx.trace, "goal: identity — a direct probe of the honest-miss promise itself");
+    note(ctx.trace, "lane: conversational — identity/honest-miss (HONEST_MISS_PHRASES closed set)");
+    return mk(t(T_IDENTITY_HONEST_MISS), { lane: "help" });
+  }
+  if (SQL_STATEMENT_RE.test(raw)) {
+    note(ctx.trace, "goal: nonsense input shaped like a SQL statement — a targeted decline, not the identity blurb");
+    note(ctx.trace, "lane: conversational — SQL-statement decline (SQL_STATEMENT_RE)");
+    return mk(
+      "That reads like a SQL statement, not a question about a code graph or taught facts. "
+      + "Try \"what is a dog\" for vocabulary, or point me at a repo with --repo <path>.",
+      { lane: "help" },
+    );
   }
   if (ARITHMETIC_RE.test(raw)) {
     note(ctx.trace, "goal: arithmetic — not a code/vocabulary question, an honest decline");
