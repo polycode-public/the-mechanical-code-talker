@@ -1,5 +1,5 @@
-// The deployed home page, in a real browser: it loads clean, the eight claim
-// blocks link to the eight demo pages, the feature sections show each page's
+// The deployed home page, in a real browser: it loads clean, the claim
+// blocks link to the demo pages, the feature sections show each page's
 // screenshot as a framed plate rather than a live embed, the showcase links
 // to the sibling Polycode projects, and it survives a phone-sized viewport.
 // Nothing else drives index.html end to end (the chat.html/plan.html/
@@ -29,6 +29,7 @@ const PAGE_ORDER = [
   "code",
   "ingest",
   "sprites",
+  "research",
 ];
 
 // Plates whose screenshot the capture script has not written yet. The page
@@ -116,12 +117,12 @@ test("the page embeds no live widget: no iframe, no #tmct-chat, no chat engine s
   }
 });
 
-test("the claim grid shows eight claim blocks, each a link onto its own demo page, in the page order", async () => {
+test("the claim grid shows one claim block per demo page, each a link onto its page, in the page order", async () => {
   const { context, page } = await openHomePage();
   try {
     await page.locator(".claim-grid").waitFor({ state: "visible" });
     const claims = page.locator("a.claim");
-    assert.equal(await claims.count(), 8, "exactly eight claim blocks");
+    assert.equal(await claims.count(), PAGE_ORDER.length, "one claim block per demo page");
     const hrefs = await claims.evaluateAll((els) => els.map((el) => el.getAttribute("href")));
     assert.deepEqual(hrefs, PAGE_ORDER.map((p) => `./${p}.html`));
   } finally {
