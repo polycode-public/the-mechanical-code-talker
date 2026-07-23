@@ -256,9 +256,14 @@ export async function resolveExtensions(repoRoot, { configFile } = {}) {
  *
  *  FAILURE-TOLERANT per bundle: one bad third-party pack's seedMemory throw is caught and
  *  recorded as `perBundle[name].error` while every other bundle still seeds normally.
- *  Returns `{ appended, skipped, total, perBundle: { name: {appended,skipped,total,error?} } }`. */
-export async function seedActiveCorpusEntries(repo, entries) {
+ *  Returns `{ appended, skipped, total, perBundle: { name: {appended,skipped,total,error?} } }`.
+ *
+ *  `opts.captureUnknownContext`/`opts.unknownContextLimit` (both optional) forward to
+ *  every seedMemory call unchanged — the tmct.toml `[seed]` knob (toml-config.mjs)
+ *  applies uniformly across whichever bundles are active, not per-bundle. */
+export async function seedActiveCorpusEntries(repo, entries, opts = {}) {
   const { seedMemory } = await import("../adapters/corpus/conceptnet.mjs");
+  const { captureUnknownContext, unknownContextLimit } = opts;
   const perBundle = {};
   let appended = 0;
   let skipped = 0;
@@ -274,6 +279,8 @@ export async function seedActiveCorpusEntries(repo, entries) {
         provenancePrefix: entry.provenancePrefix,
         limit: entry.limit,
         prefer: entry.prefer,
+        captureUnknownContext,
+        unknownContextLimit,
       });
       perBundle[name] = { appended: res.appended, skipped: res.skipped, total: res.total };
       appended += res.appended;

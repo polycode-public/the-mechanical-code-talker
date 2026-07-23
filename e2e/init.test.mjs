@@ -74,10 +74,12 @@ test("tmct.toml is documented, parseable, and round-trips through the config loa
     assert.equal(raw.graph_file, join(".tmct", "graph.json"));
     assert.equal(raw.corpus.tier, "tier1");
     assert.equal(raw.seed.enabled, true);
+    assert.equal(raw.seed.capture_unknown_context, true);
     const norm = await normalizeConfig(raw, { configDir: dir });
     assert.equal(norm.corpus.tier, "tier1");
     assert.equal(norm.seed.enabled, true);
     assert.equal(norm.seed.limit, undefined, "no cap by default — the whole slice seeds (0.7.0 seed-all)");
+    assert.equal(norm.seed.captureUnknownContext, true);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -264,6 +266,14 @@ enabled = true
 # By default the WHOLE committed slice seeds (no cap — the operator's "seed all").
 # To cap it, uncomment and set a number (definitional band first):
 # limit = 500
+# Also capture a term that only ever appears in a relation the axiom graph
+# drops (e.g. DerivedFrom/HasContext) — tagged with the passage it was found
+# in, instead of vanishing. A no-op against every shipped bundle (none of
+# them carry a dropped relation); it starts capturing once a bundle that does
+# (conceptnet, seon, or a host-supplied one) is also active.
+capture_unknown_context = true
+# How many distinct terms one capture_unknown_context pass captures, at most:
+# unknown_context_limit = 500
 `,
   );
 });
