@@ -140,6 +140,10 @@ const BROWSING_PREAMBLE_RE = /^(?:just\s+(?:poking\s+around|looking\s+around|bro
 /** Repeated leading hedge adverb before a polite request verb ("maybe
  *  possibly tell me <Q>"). No delimiter required, unlike ACK_PREAMBLE_RE. */
 const HEDGE_ADVERB_PREAMBLE_RE = /^(?:(?:maybe|possibly|perhaps)\s+)+(.+)$/i;
+/** Leading courtesy marker ("please tell me <Q>", "please, what is a dog").
+ *  MODAL_WRAPPER_RE only strips a "please" INSIDE its own frame, so a
+ *  sentence that leads with one never reached any wrapper. */
+const PLEASE_PREAMBLE_RE = /^(?:please[\s,]+)+(.+)$/i;
 /** A floating "if it's not too much trouble" aside — a mid-sentence
  *  parenthetical, stripped wherever it appears (not start-anchored). */
 const TROUBLE_ASIDE_RE = /,?\s*if\s+(?:it'?s|it\s+is|that'?s|that\s+is)\s+not\s+too\s+much\s+(?:trouble|bother|hassle)\s*,?\s*/i;
@@ -148,9 +152,14 @@ const MODAL_WRAPPER_RE = /^(?:can|could|would|will)\s+you\s+(?:please\s+)?(.+?)(
 /** "explain [to me|please]* <Q>" -> "<Q>", gated on an interrogative
  *  remainder so it only unwraps a real WH-question underneath. */
 const EXPLAIN_WRAPPER_RE = /^explain\s+(?:to\s+me\s+|please\s+)*(.+?)\??$/i;
-/** "tell me <Q>" (bare, no "about") -> "<Q>"; "tell me about X" is a
- *  different, untouched territory (chat.mjs's vagueTouchTermOf). */
-const TELL_ME_WRAPPER_RE = /^tell\s+me\s+(.+?)\??$/i;
+/** "tell me [please] <Q>" (bare, no "about") -> "<Q>"; "tell me about X" is a
+ *  different, untouched territory (chat.mjs's vagueTouchTermOf). The optional
+ *  infix "please" mirrors MODAL_WRAPPER_RE's own. */
+const TELL_ME_WRAPPER_RE = /^tell\s+me\s+(?:please\s+)?(.+?)\??$/i;
+/** "[would/do you] mind telling me <Q>" -> "<Q>" — the gerund sibling of
+ *  TELL_ME_WRAPPER_RE (MODAL_WRAPPER_RE peels a leading "would you", leaving
+ *  the bare "mind telling me" form this also matches directly). */
+const MIND_TELLING_WRAPPER_RE = /^(?:(?:would|do)\s+you\s+)?mind\s+telling\s+(?:me|us)\s+(?:please\s+)?(.+?)\??$/i;
 /** "do you know <Q>" -> "<Q>", gated on an interrogative remainder — so
  *  "do you know anything about movies" (small-talk, no embedded question)
  *  passes through untouched. */
@@ -213,6 +222,8 @@ export function applyPreambleFrames(text) {
     if (m) q = m[1].trim();
     m = q.match(HEDGE_ADVERB_PREAMBLE_RE);
     if (m) q = m[1].trim();
+    m = q.match(PLEASE_PREAMBLE_RE);
+    if (m) q = m[1].trim();
     m = q.match(TOPIC_SWITCH_PREAMBLE_RE);
     if (m) q = m[1].trim();
     m = q.match(MODAL_WRAPPER_RE);
@@ -220,6 +231,8 @@ export function applyPreambleFrames(text) {
     m = q.match(EXPLAIN_WRAPPER_RE);
     if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
     m = q.match(TELL_ME_WRAPPER_RE);
+    if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
+    m = q.match(MIND_TELLING_WRAPPER_RE);
     if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
     m = q.match(KNOW_WRAPPER_RE);
     if (m && INTERROGATIVE_LEAD_RE.test(m[1].trim())) q = m[1].trim();
