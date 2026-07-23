@@ -110,6 +110,10 @@ const OPTIMISTIC_ENTITY_HOPS = 4;
 // read — the noun on the far side belongs to a different clause or to a
 // prepositional complement, not to "X is a Y".
 const COPULA_FRAME_BLOCKERS = new Set(["VERB", "AUX", "ADP", "SCONJ", "CCONJ"]);
+// Of-chain handling on a copula object: classifier heads read through to the
+// real class; partitive containers state composition and yield no isa.
+const COPULA_OF_READ_THROUGH = new Set(["type", "kind", "sort", "form", "class", "variety", "species", "breed", "genus"]);
+const COPULA_PARTITIVE_HEADS = new Set(["body", "mass", "group", "collection", "set", "series", "number", "amount", "piece", "part", "lot", "pair", "bunch", "pile"]);
 
 /** Fold an entity surface to its stored key: a lexicon noun's lemma, else the
  *  word's own normFactTerm (the optimistic tier mints unlisted content nouns
@@ -165,10 +169,32 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
   // preposition or subordinator means locative/complement predication ("water
   // is IN the oceans", "land is grouped INTO continents") — none of them
   // class membership.
+  // An of-chain on the object reads through a classifier head to the real
+  // class ("a type of mammal" → mammal); a partitive container head states
+  // composition, never a class ("a large body of ice" — no isa at all).
+  const copulaObjectAt = (i) => {
+    for (let j = i + 1; j < values.length; j += 1) {
+      if (pos[j] === "PUNCT" || COPULA_FRAME_BLOCKERS.has(pos[j])) {
+        if (values[j]?.toLowerCase() !== "of") return null;
+        return null;
+      }
+      if (!isNounish(j)) continue;
+      let hi = j;
+      while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
+      const headWord = String(values[hi]).toLowerCase();
+      const nextIsOf = values[hi + 1]?.toLowerCase() === "of";
+      if (!nextIsOf) return entityRunAt(j);
+      if (COPULA_OF_READ_THROUGH.has(headWord)) { i = hi + 1; j = hi + 1; continue; }
+      if (COPULA_PARTITIVE_HEADS.has(headWord)) return null;
+      return entityRunAt(j);
+    }
+    return null;
+  };
   for (let i = 1; i < values.length - 1; i += 1) {
     if (pos[i] === "AUX" && OPTIMISTIC_COPULAS.has(values[i].toLowerCase())) {
-      const t = tripleAt(i, "rdfs:subClassOf", COPULA_FRAME_BLOCKERS);
-      if (t) return [t];
+      const subject = nearestEntity(i, -1, COPULA_FRAME_BLOCKERS);
+      const object = copulaObjectAt(i);
+      if (subject && object && subject !== object) return [{ subject, predicate: "rdfs:subClassOf", object }];
     }
   }
   for (let i = 1; i < values.length - 1; i += 1) {

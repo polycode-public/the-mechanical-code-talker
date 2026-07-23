@@ -206,3 +206,13 @@ test("the committed fixture pack matches its own manifest byte-for-byte", async 
     assert.equal(createHash("sha256").update(body).digest("hex"), entry.sha256, `${entry.file}: sha256 drifted`);
   }
 });
+
+test("isaOf: an of-chain reads through classifier heads only — a partitive container yields no isa", async () => {
+  const { isaOf } = await import("../../src/domain/reference-pack.mjs");
+  const { loadLexicon } = await import("../../src/domain/grammar/lexicon.mjs");
+  const lex = loadLexicon();
+  assert.equal(isaOf("A glacier is a large body of ice and snow.", lex), null);
+  assert.equal(isaOf("A lake is a large body of water.", lex), null);
+  assert.equal(isaOf("A poodle is a kind of dog.", lex), "dog");
+  assert.equal(isaOf("Chess is a game of skill.", lex), "game");
+});

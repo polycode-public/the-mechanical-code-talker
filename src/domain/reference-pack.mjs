@@ -139,9 +139,16 @@ const ISA_GENERIC_HEADS = new Set([
   "type", "kind", "sort", "form", "class", "variety", "group", "part",
   "piece", "member", "way", "term", "name", "word", "thing", "example",
   "family", "genus", "species", "unit", "series", "set", "list", "number",
-  "amount",
+  "amount", "body", "mass",
 ]);
 const ISA_ARTICLES = new Set(["a", "an", "the"]);
+// The classifier heads an of-chain reads THROUGH to the real class ("a kind
+// of dog" → dog). Any other head before "of" keeps the outer phrase: "a body
+// of ice" states composition, and "a game of skill" is a game — neither
+// makes the of-object the class.
+const ISA_OF_READ_THROUGH = new Set([
+  "type", "kind", "sort", "form", "class", "variety", "species", "breed", "genus",
+]);
 
 /** The isa lemma of a lead's first sentence, or null. The copula must sit in
  *  the first sentence; an of-chain resolves to its final noun ("a kind of
@@ -158,8 +165,13 @@ export function isaOf(plain, lexicon) {
     window.push(word);
     if (window.length >= 6) break;
   }
-  const lastOf = window.lastIndexOf("of");
-  let headWords = lastOf >= 0 ? window.slice(lastOf + 1) : window;
+  let headWords = window;
+  for (let ofIdx = headWords.indexOf("of"); ofIdx > 0; ofIdx = headWords.indexOf("of")) {
+    const outer = headWords[ofIdx - 1]?.split("-").pop();
+    if (outer && ISA_OF_READ_THROUGH.has(outer)) { headWords = headWords.slice(ofIdx + 1); continue; }
+    headWords = headWords.slice(0, ofIdx);
+    break;
+  }
   while (headWords.length && ISA_ARTICLES.has(headWords[0])) headWords = headWords.slice(1);
   if (!headWords.length) return null;
   const headToken = headWords[headWords.length - 1].split("-").pop();

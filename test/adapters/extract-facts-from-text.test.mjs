@@ -298,3 +298,20 @@ test("optimisticTriples: a compound noun is captured whole, never reduced to its
     [{ subject: "dog", predicate: "rdfs:subClassOf", object: "animal" }],
   );
 });
+
+test("optimisticTriples: a partitive container is composition, never a class; a classifier reads through", () => {
+  // "a large body of ice" states what a glacier is made of, not what kind of
+  // thing it is — no isa at all.
+  assert.deepEqual(optimisticTriples("A glacier is a large body of ice and snow."), []);
+  assert.deepEqual(optimisticTriples("A lake is a large body of water."), []);
+  // A classifier head reads through to the real class.
+  assert.deepEqual(
+    optimisticTriples("A dog is a type of mammal."),
+    [{ subject: "dog", predicate: "rdfs:subClassOf", object: "mammal" }],
+  );
+  // A plain content head before "of" keeps the outer class.
+  assert.deepEqual(
+    optimisticTriples("Chess is a game of skill."),
+    [{ subject: "chess", predicate: "rdfs:subClassOf", object: "game" }],
+  );
+});
