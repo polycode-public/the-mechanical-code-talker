@@ -2,7 +2,7 @@
 
 ## Reporting a vulnerability
 
-Please report security vulnerabilities **privately** — do not open a public
+Please report security vulnerabilities **privately**: do not open a public
 issue or merge request for a suspected vulnerability.
 
 - **Email:** antony@polycode.co.uk
@@ -31,29 +31,29 @@ Node.js (**>=24**).
 Security scanning runs in GitLab CI (`.gitlab-ci.yml`):
 
 - **Per pipeline (non-blocking):**
-  - **SAST** — GitLab stock `semgrep` analyzer, run in the `verify` stage with
+  - **SAST**: GitLab stock `semgrep` analyzer, run in the `verify` stage with
     `needs: []` and `allow_failure: true` (reports, never gates the pipeline).
-  - **Secret Detection** — GitLab stock secret scanner, same non-blocking setup.
+  - **Secret Detection**: GitLab stock secret scanner, same non-blocking setup.
   - Both scope out committed corpus/data/site assets via `SAST_EXCLUDED_PATHS` /
     `SECRET_DETECTION_EXCLUDED_PATHS`.
 
-- **Nightly (scheduled pipeline, BLOCKING) — the `dep:audit` job:**
-  - `npm audit --audit-level=high` (`npm run audit`) — **fails the job** on any
+- **Nightly (scheduled pipeline, BLOCKING), the `dep:audit` job:**
+  - `npm audit --audit-level=high` (`npm run audit`): **fails the job** on any
     high or critical advisory.
-  - `npm outdated` — visibility only, never fails the job.
-  - **Google OSV-Scanner** — pinned release (`v2.0.2`, not `latest`), scanning
+  - `npm outdated`: visibility only, never fails the job.
+  - **Google OSV-Scanner**: pinned release (`v2.0.2`, not `latest`), scanning
     `package-lock.json`.
   - The nightly schedule is created manually in GitLab
     (Settings → CI/CD → Pipeline schedules, e.g. `0 3 * * *` on `main`).
 
 - **On publish:**
-  - `npm publish --provenance --access public` — packages are published with
+  - `npm publish --provenance --access public`: packages are published with
     **npm provenance** (a signed, verifiable link from the published tarball back
     to this CI pipeline and source commit).
 
 - **Not applicable (pure-JS package):**
-  - **Container Scanning** — N/A, tmct ships no container image.
-  - **IaC / KICS scanning** — N/A, tmct contains no infrastructure-as-code.
+  - **Container Scanning**: N/A, tmct ships no container image.
+  - **IaC / KICS scanning**: N/A, tmct contains no infrastructure-as-code.
 
 ## Full-history secret scan
 

@@ -29,7 +29,7 @@ overfitting-to-judge, and regressions before several cycles compound them.
 
 ---
 
-## 0. The load-bearing insight (why this works at all)
+## 0. The key mechanism (why this works at all)
 
 **Only the main conversation loop can write to the chat.** A subagent (spawned via the Agent
 tool), a cron/scheduled agent, and a background shell command cannot post a message to the

@@ -127,7 +127,7 @@ and if so, is that move explained (a real behavior change, spot-verified) or une
 regression to chase down before writing anything up)?
 
 **Step 4 — DECIDE (apply the rung gate, §1).** Walk TOOL-0→TOOL-8 in order. The first ungated PASS is real
-progress; the first gate failure names exactly where the ladder currently tops out, honestly, with a
+progress; the first gate failure names exactly where the ladder currently tops out, with a
 receipt for everything above it.
 
 **Step 5 — SHIP OR BUILD.** Two outcomes:

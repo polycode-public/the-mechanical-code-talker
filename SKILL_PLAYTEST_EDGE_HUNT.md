@@ -143,7 +143,7 @@ noise-strip → ACE → constructions.
 | Parsed fine, answer phrased badly | `src/answer-variants.*`, `data/templates/responses.jsonl`, `src/services/finish.mjs` + `data/templates/grammar-rules.toml` (byte-stable contract — read that file's header first) |
 
 **The templating mindset (this is the important one).** When a fix means adding a special case
-to a general rule — an extra `|alternative` in a grammar.mjs regex, a carve-out for one phrasing —
+to a general rule (an extra `|alternative` in a grammar.mjs regex, a carve-out for one phrasing),
 stop and ask whether you're overfitting. The project's preferred move for irregular language is
 the construction bank: `data/templates/constructions/` holds closed template families as DATA
 (pattern → AST skeleton), loaded by `src/domain/interpret/strategies/constructions.mjs` and validated at

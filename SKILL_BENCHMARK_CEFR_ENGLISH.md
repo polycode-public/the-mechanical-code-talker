@@ -170,12 +170,12 @@ which cases/tags it should move, and by how much.
 3. the same pipe in a **fixture-graph dir** — must greet and exit 0.
 Do not proceed to step 4 unless all three pass; record that they passed.
 
-**Step 4 — RUN the chatbench — concurrently, in the background.** One deterministic product run
-per arm (replay every case's turns through `runTurn` — seconds, free), then fan out the judge at
+**Step 4 — RUN the chatbench, concurrently, in the background.** One deterministic product run
+per arm (replay every case's turns through `runTurn`: seconds, free), then fan out the judge at
 **maximum safe concurrency** (`--concurrency 12` is the default; the judge is embarrassingly
-parallel — independent subprocess calls with per-sample retry — so wall-time divides by the lane
+parallel (independent subprocess calls with per-sample retry), so wall-time divides by the lane
 count until the API rate limit pushes back; if throttling appears, halve it). The run ALWAYS
-executes as a background task: **the chat stays for chat** — the coordinator launches the run,
+executes as a background task: **the chat stays for chat**, the coordinator launches the run,
 keeps coordinating (merges, advisor ticks, operator questions), and picks the results up on the
 completion notification. Never block the conversation on a benchmark.
 

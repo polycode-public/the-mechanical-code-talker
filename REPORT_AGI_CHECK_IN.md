@@ -36,8 +36,8 @@ Each of these is a standard capability area with settled literatures. Nothing he
 research-hard by nature; each would be its own engineering arc of the kind the repo already
 does (closed vocabularies, bounded search, verified data).
 
-1. **Sub-symbolic perception.** No path from raw signal — pixels, audio, sensor streams — to
-   symbols. Ingestion starts where symbols already exist.
+1. **Sub-symbolic perception.** Nothing here turns raw signal (pixels, audio, sensor streams)
+   into symbols yet. Ingestion starts where symbols already exist.
 2. **Reasoning under uncertainty.** Facts carry trust and provenance, but there are no
    degrees of belief, no updating on evidence, no probabilistic inference. Everything is
    grounded-or-miss.
@@ -45,7 +45,7 @@ does (closed vocabularies, bounded search, verified data).
    rule. The example-driven generalization it owns (the CEGIS loop) runs offline in the
    harness, by design.
 4. **Abduction.** It deduces consequences; it does not infer the best explanation for an
-   observation — no diagnosis-shaped reasoning.
+   observation. No diagnosis-shaped reasoning.
 5. **Analogy.** No case-based or structure-mapping reasoning.
 6. **Causal and counterfactual reasoning.** State snapshots exist; a causal model and
    "what if it had gone the other way" do not. The counterfactuals plan doc stages a first
@@ -57,14 +57,14 @@ does (closed vocabularies, bounded search, verified data).
 
 If every area above were engineered closed, the result would be a broader narrow system.
 These are the capabilities that separate that from general intelligence, and the site's own
-boundary marker — the miss wall — is where each would have to begin:
+boundary marker (the miss wall) is where each would have to begin:
 
-- **Transfer.** Acquiring a genuinely new domain with no authored rule base, corpus, or
+- **Transfer.** Acquiring a new domain with no authored rule base, corpus, or
   operator catalogue behind it. Every growth path tmct has is authored somewhere.
 - **Autonomous goal formation.** Its goals are declared or deduced from closed rules. It
   does not want new things, and it is not curious.
 - **Concept invention.** It mints new terms inside existing slots; it does not invent a new
-  representational primitive — a kind of relation the ontology never anticipated.
+  representational primitive: a kind of relation the ontology never anticipated.
 - **Open-ended self-improvement.** The code-planning track edges toward code that edits
   code, deterministically, on fixtures, from a fixed catalogue. Improvement that changes the
   improver is a different thing.

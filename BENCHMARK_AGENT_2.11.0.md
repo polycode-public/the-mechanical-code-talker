@@ -9,13 +9,13 @@
 
 **Headline: nothing moved. Every rung gates in the same place as `BENCHMARK_AGENT_2.7.12.md`, on
 all four drivers, to the percentage point.** No router/planner commit landed between 2.7.12 and
-2.11.0 (`git log` confirms — see "What's new" below), so this cycle is a pure measurement pass, not
+2.11.0 (`git log` confirms; see "What's new" below), so this cycle is a pure measurement pass, not
 a build cycle, exactly as scoped. The goal driver still clears all nine rungs 68/68 (100%). The
 resolver floor still gates at TOOL-6 (36%, 4/11). The stub and shim floors still gate at TOOL-3.
 
 ## Run
 
-`node agentbench/run.mjs --driver <stub|shim|resolver|goal> --ladder --stamp 2.11.0-<driver>` — 68
+`node agentbench/run.mjs --driver <stub|shim|resolver|goal> --ladder --stamp 2.11.0-<driver>`: 68
 cases per arm, no LLM, no network, no judge. All four exited 0. Raw (untracked, per
 `agentbench/results/.gitignore`):
 `agentbench/results/raw/run-2.11.0-{stub,shim,resolver,goal}/product.jsonl`.
@@ -56,7 +56,7 @@ Driver `resolver-0.8.0` only — no goal reasoner.
 | TOOL-8 | 3 | 3 | **100%** | **100%** | 0% | PASS |
 | **all** | **68** | **61** | **90%** | **90%** | **0%** | gated at TOOL-6 |
 
-Same TOOL-6 gate position and the same 36% number as 2.7.12 — the coverage-gap/cochange/keystone
+Same TOOL-6 gate position and the same 36% number as 2.7.12. The coverage-gap/cochange/keystone
 proofs still need the goal-reasoner's own composition step, which this arm deliberately doesn't
 have. TOOL-7/TOOL-8 clear the raw threshold on this arm (their fixes live below the goal-reasoner
 layer) but stay skipped-with-a-receipt in the ladder rollup because TOOL-6 gates first.
@@ -97,7 +97,7 @@ Driver `shim-transport` — the `server-http.mjs` selectTool routing, reused in-
 | TOOL-8 | 3 | 2 | 67% | 67% | **0%** | skipped (gated by TOOL-3) |
 | **all** | **68** | **24** | **35%** | **34%** | **0%** | gated at TOOL-3 |
 
-Same gate as 2.7.12 (TOOL-3), same 24/68 shape — the shim is a transport floor, not a routing
+Same gate as 2.7.12 (TOOL-3), same 24/68 shape. The shim is a transport floor, not a routing
 brain, by design.
 
 ## Per-driver comparison
@@ -110,7 +110,7 @@ brain, by design.
 | hallucination | **0%** | **0%** | **0%** | **0%** |
 | ladder tops out | TOOL-3 | TOOL-3 | TOOL-6 | **TOOL-8 (clears everything)** |
 
-**0% hallucination holds at every rung on all four drivers — 272 rows.** Every number in this
+**0% hallucination holds at every rung on all four drivers: 272 rows.** Every number in this
 table matches `BENCHMARK_AGENT_2.7.12.md`'s table exactly. No rung moved.
 
 ## What's new since 2.7.12
@@ -133,18 +133,18 @@ cycle.
 
 ## Deliberately-kept honest red
 
-Same one as 2.7.12: the resolver floor's TOOL-6 gate (36%) is correct-and-expected, not a defect —
-the coverage-gap/cochange/keystone composed proofs need the goal-reasoner's own composition step,
+Same one as 2.7.12: the resolver floor's TOOL-6 gate (36%) is correct-and-expected, not a defect.
+The coverage-gap/cochange/keystone composed proofs need the goal-reasoner's own composition step,
 which this arm deliberately doesn't carry. No new honest red surfaced this cycle.
 
 ## Discipline checklist
 
-- **Zero hallucination held** — 0% at every rung on all four drivers, 272 rows total.
-- **No router lever touched this cycle** — this was a measurement pass only, per the task scope;
+- **Zero hallucination held**: 0% at every rung on all four drivers, 272 rows total.
+- **No router lever touched this cycle**: this was a measurement pass only, per the task scope;
   `git log` confirms no `src/domain/router/` commit landed between 2.7.12 and 2.11.0.
-- **Case set append-only, unchanged** — still 68 cases, no addition or edit this cycle.
-- **Bench-import direction stays one-way** — `grep -rn "from ['\"].*agentbench\|require(['\"].*agentbench\|import.*agentbench" src/` returns nothing; the handful of `grep -r 'agentbench' src/` hits are comments describing the relationship, not imports.
-- **Byte-identity of the numbers against 2.7.12** verified by direct table comparison — every
+- **Case set append-only, unchanged**: still 68 cases, no addition or edit this cycle.
+- **Bench-import direction stays one-way**: `grep -rn "from ['\"].*agentbench\|require(['\"].*agentbench\|import.*agentbench" src/` returns nothing; the handful of `grep -r 'agentbench' src/` hits are comments describing the relationship, not imports.
+- **Byte-identity of the numbers against 2.7.12** verified by direct table comparison: every
   rung, every driver, matches to the percentage point.
 
 ## Decision
