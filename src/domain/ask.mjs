@@ -23,7 +23,7 @@ import {
   CONTEXT_PRONOUNS, META_MEANING_VERBS,
   WHERE_MARKERS, MENTION_MARKERS,
   RELATIVE_PRONOUNS, PLACEHOLDER_NOUNS, BOOLEAN_CONNECTIVES, QUALIFIERS,
-  PASSIVE_PARTICIPLE_TO_KIND, GENERIC_AGENT_WORDS,
+  PASSIVE_PARTICIPLE_TO_KIND, GENERIC_AGENT_WORDS, REDUCED_RELATIVE_CLAUSES,
   AGGREGATE_TRIGGERS, LIST_TRIGGERS, SUPERLATIVE_EXTREMES, EDGE_NOUN_TO_METRIC, METRIC_IMPLIES_ENTITY, ANAPHORA_TRIGGERS,
   MEMBERSHIP_KINDS, CASCADE_NOISE, CASCADE_SYNONYMS, HELP_TRIGGERS,
   stripTrailingScopeFiller,
@@ -236,7 +236,55 @@ function parseComposite(text, nlp) {
     || parseList(w, lc, nlp, 0)
     || parseNested(w, lc, nlp, 0)
     || parsePluralAnaphoraObject(w, lc, nlp)
+    || parseStackedReducedRelative(w, lc)
     || parseRelationalOrQualified(w, lc, nlp, 0);
+}
+
+// Two reduced relatives stacked on one head noun ("classes INHERITED FROM
+// Widget DEFINED IN c.mjs") — a garden-path shape a naive incremental parser
+// misattaches as a second main clause. Both clauses modify the head, so the
+// reading is their intersection. Each clause's REDUCED_RELATIVE_CLAUSES entry
+// says whether its term is the relation's object (reverse: the subjects that
+// point at it) or its agent (forward: the term's own targets). The head noun's
+// entityType rides the SEED clause, so a forward "defines" leg that would
+// otherwise return every symbol is filtered to the asked kind. Anything that
+// isn't exactly [lead] head bigram term bigram term returns null, leaving
+// every other shape's behavior byte-identical.
+const STACKED_RRC_LEAD = new Set(["which", "the", "all"]);
+function parseStackedReducedRelative(w, lc) {
+  let i = 0;
+  if (STACKED_RRC_LEAD.has(lc[i])) i += 1;
+  const noun = entityNoun(lc[i]);
+  if (!noun || noun.placeholder || !noun.entityType) return null;
+  const entityType = noun.entityType;
+  i += 1;
+  const bigramAt = (k) => (k + 1 < lc.length ? REDUCED_RELATIVE_CLAUSES[`${lc[k]} ${lc[k + 1]}`] : undefined);
+  const rr1 = bigramAt(i);
+  if (!rr1) return null;
+  const term1Start = i + 2;
+  let split = -1;
+  let rr2;
+  for (let k = term1Start; k + 1 < lc.length; k += 1) {
+    const hit = bigramAt(k);
+    if (hit) { split = k; rr2 = hit; break; }
+  }
+  if (split < 0) return null;
+  const term1 = w.slice(term1Start, split).join(" ").trim();
+  const term2 = w.slice(split + 2).join(" ").trim();
+  if (!term1 || !term2) return null;
+  const clauseFor = (rr, term) => (rr.role === "object"
+    ? { shape: "reverse", kind: rr.kind, entityType, modifier: "direct", object: term }
+    : { shape: "forward", kind: rr.kind, modifier: "direct", object: term });
+  const seed = clauseFor(rr1, term1);
+  seed.entityType = entityType;   // head-noun class filter on the seed set
+  return {
+    node: "boolean",
+    entityType,
+    atoms: [
+      { op: "seed", kind: "set", ast: { node: "clause", clause: seed } },
+      { op: "intersection", kind: "set", ast: { node: "clause", clause: clauseFor(rr2, term2) } },
+    ],
+  };
 }
 
 // Negation as set complement: "which X do not <verb> Y" compiles to

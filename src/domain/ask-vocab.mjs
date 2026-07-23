@@ -317,6 +317,38 @@ export const PASSIVE_PARTICIPLE_TO_KIND = Object.freeze({
   touched: "touches", changed: "touches", modified: "touches", edited: "touches", updated: "touches",
 });
 
+// ---- stacked reduced-relative clauses: a "<participle> <preposition>" bigram
+// that opens a reduced relative modifying a head noun ("classes INHERITED FROM
+// Widget DEFINED IN c.mjs"). Each entry names the relation kind and which role
+// the following term fills:
+//   role "object" — the surface is active-disguised, the preposition marks the
+//     relation's OBJECT, so the answer is the SUBJECTS pointing at the term (a
+//     reverse traversal): "inherited from Widget" -> the classes that inherit
+//     Widget.
+//   role "agent"  — a genuine passive whose "by"/"in" marks the AGENT, so the
+//     answer is the term's own FORWARD targets: "defined in c.mjs" -> what
+//     c.mjs defines.
+// Only consulted by parseStackedReducedRelative, which requires TWO such
+// bigrams on one head noun; a single reduced relative keeps its existing route.
+// Naming senses and directionally-ambiguous bigrams ("imported from", "used
+// in/for", "called <name>") are deliberately absent so they stay honest misses.
+export const REDUCED_RELATIVE_CLAUSES = Object.freeze({
+  "inherited from": { kind: "inherits", role: "object" },
+  "extended from": { kind: "inherits", role: "object" },
+  "subclassed from": { kind: "inherits", role: "object" },
+  "defined in": { kind: "defines", role: "agent" },
+  "declared in": { kind: "defines", role: "agent" },
+  "contained in": { kind: "contains", role: "agent" },
+  "imported by": { kind: "imports", role: "agent" },
+  "called by": { kind: "calls", role: "agent" },
+  "used by": { kind: "uses", role: "agent" },
+  "tested by": { kind: "tests", role: "agent" },
+  "covered by": { kind: "tests", role: "agent" },
+  "touched by": { kind: "touches", role: "agent" },
+  "changed by": { kind: "touches", role: "agent" },
+  "exported by": { kind: "reexports", role: "agent" },
+});
+
 // ---- normalization: contractions/informal spellings expanded before parsing,
 // shared by both parse strategies. ----
 export const CONTRACTIONS = Object.freeze({
