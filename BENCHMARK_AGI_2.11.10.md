@@ -1,4 +1,4 @@
-# BENCHMARK_AGI_2.11.9.md — first AGI-scales cycle, assessment only
+# BENCHMARK_AGI_2.11.10.md — first AGI-scales cycle, assessment only
 
 The first cycle of `SKILL_BENCHMARK_AGI_SCALES.md`, graded against `package.json` 2.11.9.
 

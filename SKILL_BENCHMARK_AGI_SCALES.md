@@ -50,7 +50,7 @@ Every cycle MUST satisfy:
 
 - **Artifact naming — match the `package.json` version.** A cycle's write-up is named after the
   tmct version it grades: `BENCHMARK_AGI_<version>.md`. A RE-RUN of the same version (a re-read after
-  a fix, a second reviewer) appends `_00N`: `BENCHMARK_AGI_2.11.9_001.md`, `_002`, … — the same
+  a fix, a second reviewer) appends `_00N`: `BENCHMARK_AGI_2.11.10_001.md`, `_002`, … — the same
   convention `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1, `SKILL_BENCHMARK_INFERENCE.md` §1, and
   `SKILL_BENCHMARK_AGENT.md` §1 all use.
 - **Record the timing.** The write-up carries the wall-clock start and end of the **assessment**
