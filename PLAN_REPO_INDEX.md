@@ -1,6 +1,27 @@
 # PLAN_REPO_INDEX.md — tmct grows its own code parsers, ported from seonix
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
+Status: IN PROGRESS on branch `repo-index`. Phase 1 (JS/TS producer proving the seam) is live.
+The operator reprioritised the JS/TS backend ahead of the plan's Python-first ordering, because it
+unblocks PLAN_CODE.md Track 5's re-index stage; the rest of the plan's ordering stands.
+
+### Implementation log (branch `repo-index`)
+
+- **Phase 1 — DONE (JS/TS backend, reordered first).** A new producer module tree under `src/index/`:
+  `walk.mjs` (deterministic file walker + `.tmctignore`), `extract-jsts.mjs` (the TypeScript
+  compiler-API JS/TS extractor, ported from `seonix/src/jsts_tsc.mjs`), `registry.mjs` (the
+  language-backend registry, JS/TS registered), and `index-repo.mjs` (walk + git history + assemble
+  via the existing `buildEntities` + `ingestSchemaDocs` + write `<repo>/.tmct/graph.json`). Proven by
+  `test/index/js-extractor-seam.test.mjs`: real `.mjs` source off disk produces a graph that passes
+  the full `runConformance` kit (graph-only AND source-capable, reading real bodies over the emitted
+  line spans), with the Repository Interface unchanged. Fixture: `test/fixtures/js-repo/`.
+- **Dependency decision.** Added `typescript ~5.6.2` as a runtime dependency — the plan's own pick for
+  JS/TS (Part 5) and what seonix's extractor is built on. The port is verbatim structure minus
+  seonix's `mgx:serves`/`mgx:callsHttp` un-typed-interface extraction (HTTP routes/client calls),
+  which tmct's `buildEntities` does not consume and the plan flags as a seonix-only open risk. No
+  `tree-sitter`/Roslyn/JavaParser weight enters until Phase 3 ports C#/Java.
+- **Not carried over from seonix's `extract.mjs`:** the v2 wire format, session fold-in, the gated
+  interfaces feature, the manifest/telemetry/summary layers. tmct's producer writes the plain
+  entities-payload JSON `source.mjs` already reads.
 
 ## Origin
 
@@ -343,12 +364,12 @@ must stay in seonix. Nothing in this document changes that division.
 
 ## Phased implementation plan
 
-**Phase 1 — one language, prove the seam.** Port `seonix/src/extract_ast.py` (Python, stdlib `ast`,
-zero new dependencies) and a minimal version of `extract_lang.mjs`'s dispatch pattern. Wire its
-output into `graph-build.mjs`'s existing, currently-uncalled `buildEntities()`. Exit criterion: a
-real Python repo produces a `.tmct/graph.json` that passes the existing Repository Interface
-conformance suite (`test/adapters/repository-interface.test.mjs`) without modification to
-the interface itself.
+**Phase 1 — one language, prove the seam. DONE — landed with JS/TS first (operator reprioritisation).**
+The JS/TS backend (`seonix/src/jsts_tsc.mjs`) was ported ahead of Python, wired into `graph-build.mjs`'s
+existing `buildEntities()` through `src/index/`. Exit criterion met against a real JS repo
+(`test/fixtures/js-repo/`) via `test/index/js-extractor-seam.test.mjs`, passing the conformance kit
+unchanged. Python (`extract_ast.py`) remains to port — it adds no dependency and is the natural next
+backend to register.
 
 **Phase 2 — the CLI surface.** A new command (`tmct index [--repo <path>]`, or extending `tmct init
 --repo` to run it) that writes `.tmct/graph.json` from real source, using Phase 1's Python backend.
