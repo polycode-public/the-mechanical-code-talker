@@ -186,9 +186,14 @@ An abstract step ("rename `f` to `parseRow` in module `m`") is language-neutral.
 **adaptor** turns it into concrete edits for one language: for JS, the list of exact text
 edits across the defining module and every importer, computed from the graph's own edge set.
 The adaptor is deterministic given (abstract step, graph, source text). One adaptor per
-language; JS first, since the repo, its fixtures, and its test estate are JS. The adaptor's
-contract mirrors `repository-interface.mjs`: a versioned, typed service with closed miss
-reasons ("site not found", "source drifted since index") rather than best-effort edits.
+language; JS first, since the repo, its fixtures, and its test estate are JS. tmct's own
+language scope is JS/TS and Python (`PLAN_REPO_INDEX.md` phase 3), so those are the adaptors
+that ship here — and, as with the index backends, the adaptor contract stays language-neutral
+so a consumer can register one for a language tmct doesn't carry. The operator layer above it
+never learns what language a step will be materialised into: that is the whole point of
+planning over graph states rather than over source text. The adaptor's contract mirrors
+`repository-interface.mjs`: a versioned, typed service with closed miss reasons ("site not
+found", "source drifted since index") rather than best-effort edits.
 
 **The jittering question, both readings designed.** The operator's phrase "possibly jittering
 at that stage" admits two readings:

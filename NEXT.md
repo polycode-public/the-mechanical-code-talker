@@ -16,7 +16,7 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Open items
 
-- [ ] finish the repo index: merge the `repo-index` branch (its pipeline is green at `bcf72df0`), then the `PLAN_REPO_INDEX.md` remainder — phase 3's C#/Java backends (external-toolchain or tree-sitter decision, plus the method-callee resolution port `graph-build.mjs` needs for those estates), phase 5 (`init --repo --with-persona code` runs `indexRepository` after scaffolding), and phase 6 (the PLAN_CODE.md move into seonix, cross-repo). The branch's copy of the plan carries the implementation log and the continuation notes
+- [ ] finish the repo index: merge the `repo-index` branch (its pipeline is green at `bcf72df0`), then the `PLAN_REPO_INDEX.md` remainder — phase 5 (`init --repo --with-persona code` runs `indexRepository` after scaffolding) and phase 6 (the PLAN_CODE.md move into seonix, cross-repo). Language scope is settled: tmct ships JS/TS + Python, seonix registers C#/Java through the backend seam, so what remains on the language axis is proving that seam admits an out-of-repo backend with no tmct change
 
 ## Discipline
 

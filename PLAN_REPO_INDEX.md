@@ -4,10 +4,11 @@ Status: IN FLIGHT on the `repo-index` branch (kept off `main` while the 2026-07-
 cleared; branch head `bcf72df0`, its pipeline green — the one CI catch was the bare-invocation
 usage pin needing the new `index` verb, a reminder that the e2e tier sits outside `npm test`).
 On `main`, nothing below this status is live code yet; the branch carries it all. Remaining
-after the branch merges: phase 3's C#/Java backends (external toolchain or tree-sitter, plus
-the method-callee resolution port `graph-build.mjs` needs for those estates), phase 5 (`init
---repo --with-persona code` runs `indexRepository` after scaffolding), and phase 6 (the
-PLAN_CODE.md move into seonix, cross-repo). NEXT.md carries the finishing item.
+after the branch merges: phase 5 (`init --repo --with-persona code` runs `indexRepository` after
+scaffolding) and phase 6 (the PLAN_CODE.md move into seonix, cross-repo). **tmct's language
+scope is settled at JS/TS + Python** (phase 3, below): C#/Java stay in seonix, which registers
+them through the same backend seam — what tmct owes is language independence at that seam, not
+more extractors. NEXT.md carries the finishing item.
 
 ### Implementation log (branch `repo-index`)
 
@@ -416,13 +417,35 @@ the interface itself.
 Exit criterion: `npm run example:mini`-equivalent smoke test against a real small Python repo,
 `npm test` green throughout.
 
-**Phase 3 — the remaining four language backends.** Port `extract.mjs`'s full merge/resolve layer
-(import/call resolution, git-history edges), then `jsts_tsc.mjs` (JS/TS), then `cs_roslyn.mjs`/
-`cs_treesitter.mjs` (C#), then `java_javaparser.mjs`/`java_treesitter.mjs` (Java) — each independently
-testable, each against a subset of seonix's own pinned bench corpora (Django, eShopOnWeb,
-aws-cdk-examples, commander/express, gson) as a real-world correctness check, not synthetic fixtures
-only. Exit criterion per language: the same conformance suite passes against a real repo in that
-language.
+**Phase 3 — JS/TS, and the seam that lets seonix carry the rest.** Port `jsts_tsc.mjs` (JS/TS) and
+`extract.mjs`'s merge/resolve layer (import/call resolution, git-history edges). Exit criterion:
+the conformance suite passes against a real repo in each of tmct's two languages, tested against a
+subset of seonix's own pinned bench corpora (commander/express for JS, Django for Python) as a
+real-world check, not synthetic fixtures only.
+
+**tmct's language scope is JS/TS and Python. C# and Java live in seonix.** That is a division of
+labour, not a limit on the graph: tmct is written in JS and its own dogfooding target is JS, Python
+rides along at zero dependency cost (stdlib `ast`, degrading gracefully when `python3` is absent),
+and C#/Java each need an external toolchain (a built .NET tool, a JDK helper) or a `tree-sitter`
+grammar — real footprint for languages nothing in this project uses. seonix already owns mature
+Roslyn and JavaParser backends and the bench corpora that exercise them.
+
+**What tmct owes that division: language independence at the seam.** seonix must be able to bolt a
+language on without forking tmct. Concretely, the following stay language-neutral and are tested as
+such:
+
+- `src/index/registry.mjs` accepts a backend from OUTSIDE this repo — a registration call, not a
+  hardcoded switch — so seonix registers Roslyn/JavaParser against the same contract the shipped
+  two use.
+- The backend contract itself (`{path, dotted, imports, defines, calls, exports}` per module) carries
+  no language-specific field, and `buildEntities`/the ontology name no language.
+- The conformance kit (`runConformance`) is the acceptance test any backend passes, wherever it
+  lives; an externally-registered backend is graded exactly as a shipped one.
+- `SKILL_BENCHMARK_CODE_INDEX.md`'s IDX-5 (multi-language parity) grades a registered language
+  against the same rungs, and scores an absent language as unmeasured rather than wrong.
+
+A language tmct doesn't ship is therefore a language it can still consume — the graph shape, the
+query engine, and the ontology never learn what produced a module.
 
 **Phase 4 — doc reconciliation.** Reword every stale claim in Part 4's table (README, `docs/adapter-
 contract.md`, `src/adapters/source.mjs`, the `src/services/chat.mjs` live strings) now that they are false.
@@ -447,10 +470,12 @@ document.
 - **The `codegraph.mjs` duplicate-fork risk** (Part 2) is real today, independent of this plan, and
   gets slightly more relevant once tmct's own parser exists and both repos are producing graphs.
   Not resolved here.
-- **Whether tmct should eventually adopt seonix's more mature C#/Java backends (Roslyn, JavaParser)
-  wholesale, or build and maintain a leaner subset** — left to Phase 3's own findings, not decided in
-  advance. Roslyn and JavaParser both need external toolchains (a built .NET tool, a JDK helper)
-  that add real operational weight tmct has never carried.
+- **~~Whether tmct should adopt seonix's C#/Java backends~~ — DECIDED (2026-07-24): it doesn't.**
+  tmct ships JS/TS and Python; seonix keeps Roslyn and JavaParser and registers them through the
+  backend seam (Phase 3). The open question that replaces it is narrower and testable: does the
+  registry seam actually admit an out-of-repo backend end to end — registration, conformance,
+  IDX-5 scoring — with no tmct change? A seonix-side backend registered against a released tmct is
+  the proof.
 - **The `mgx:serves`/`mgx:callshttp` ontology gap** (Part 5) — only matters if/when HTTP-route
   extraction is ported; flagged, not designed.
 - **Dependency footprint growth.** tmct's current dependency list is deliberately small (`ink`,
