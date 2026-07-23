@@ -101,9 +101,40 @@ renovate:
   script:
     - renovate $CI_PROJECT_PATH
 
+# ---- consumer-impacting path set -------------------------------------------
+# The heavy pipeline — the suite, package hygiene, the licence audit, the e2e
+# tier, the Pages deploy, the npm publish and the post-deploy smoke — only earns
+# its cost when a commit can change what a consumer receives: the installed npm
+# package or the deployed home page. These globs are that surface. They cover
+# the shipped code and its committed data, the build and test machinery that
+# proves it, the fixtures the demo build reads, and the manifests that pin
+# versions. .gitlab-ci.yml is in the set so a pipeline change proves itself.
+# A commit confined to design docs, plans, or benchmark notes touches none of
+# them, so it runs only the cheap always-on doc guards (links:check, pii:lint)
+# and the stock security templates. README.md is deliberately NOT in this set:
+# it ships to npm but never to the web page, so the two jobs that own the npm
+# surface (pack:contents, publish:npm) add it to their own rules instead.
+.consumer-paths: &consumer-paths
+  - src/**/*
+  - bin/**/*
+  - corpus/**/*
+  - data/**/*
+  - ontology/**/*
+  - public/**/*
+  - scripts/**/*
+  - test/**/*
+  - e2e/**/*
+  - examples/**/*
+  - agentbench/envelope.json
+  - package.json
+  - package-lock.json
+  - .gitlab-ci.yml
+
 unit:
   stage: test
   interruptible: true
+  rules:
+    - changes: *consumer-paths
   script:
     - npm ci
     - npm test
@@ -114,6 +145,13 @@ unit:
 pack:contents:
   stage: test
   interruptible: true
+  # The consumer-impacting set OR README.md: this job is the guard on the shipped
+  # file list, and README.md is one of the shipped files, so a README-only push
+  # must still prove the manifest.
+  rules:
+    - changes: *consumer-paths
+    - changes:
+        - README.md
   script:
     - npm ci
     - npm run check:publint
@@ -125,6 +163,8 @@ pack:contents:
 license:deps:
   stage: test
   interruptible: true
+  rules:
+    - changes: *consumer-paths
   script:
     - npm ci
     - npm run check:licences
@@ -141,6 +181,8 @@ license:deps:
 e2e:
   stage: e2e
   interruptible: true
+  rules:
+    - changes: *consumer-paths
   variables:
     PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.playwright-browsers"
   cache:
@@ -196,14 +238,27 @@ e2e:heavy:
 # doesn't run) rather than failing loud on every push.
 publish:npm:
   stage: deploy
+  # Optional so a README-only push still runs the publish gate: README.md is in
+  # this job's rules but not in unit/e2e's, so on that push those two are absent
+  # from the pipeline. The job re-runs `npm test` itself below, so the guard
+  # holds either way.
   needs:
-    - unit
-    - e2e
+    - job: unit
+      optional: true
+    - job: e2e
+      optional: true
   rules:
     # schedule-guarded: the nightly dep:audit schedule must not re-publish.
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
+    # The npm surface: the consumer-impacting set OR README.md, which ships to
+    # npm. A version bump always touches package.json, so real publishes still
+    # fire; a README-only push starts the job and the version gate no-ops it.
     - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
+      changes: *consumer-paths
+    - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
+      changes:
+        - README.md
   id_tokens:
     # npm provenance on GitLab CI signs the build via Sigstore using this OIDC
     # token (npm reads SIGSTORE_ID_TOKEN); the aud must be sigstore.
@@ -248,7 +303,10 @@ pages:
     # schedule-guarded: the nightly dep:audit schedule must not redeploy Pages.
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
+    # The web surface: the consumer-impacting set only. README.md is not here —
+    # it ships to npm, never to the page — so a README-only push never redeploys.
     - if: '$CI_COMMIT_BRANCH == "main"'
+      changes: *consumer-paths
   script:
     - echo "publishing public/ to GitLab Pages"
     - npm ci
@@ -285,7 +343,11 @@ smoke:post-deploy:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
+    # Only when a consumer-impacting commit could have produced a new publish or
+    # deploy to smoke. Pages and publish:npm gate on the same set, so the two
+    # jobs this one needs are always in the pipeline when this job is.
     - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
+      changes: *consumer-paths
   retry: 2
   script:
     - npm run smoke:deploy
