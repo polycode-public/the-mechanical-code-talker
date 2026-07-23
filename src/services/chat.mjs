@@ -11263,7 +11263,7 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
       via: "plan", deduced: "plan a move sequence (no state yet)", note: "plan lane — honest decline: empty state",
     };
   }
-  const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError } = await import("../domain/domain.mjs");
+  const { movesFromRules, stateKeyFor, compileGoal, PlanBudgetError, maxSnapshotStep } = await import("../domain/domain.mjs");
 
   if (wantsLegal) {
     let moves;
@@ -11403,8 +11403,13 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
   // instead of an honest miss — see PLAN_WHY_SHORTEST_RE's own call site.
   const becauseText = `you taught me the "${ruleNames}" rule${domain.actions.length === 1 ? "" : "s"}`
     + `${ordering.length ? ` and ${ordering.length} ordering fact${ordering.length === 1 ? "" : "s"}` : ""}.`;
+  // The snapshot layer a fresh plan's step writes stack ABOVE: 0 on an
+  // untouched board, K after a prior plan left @stepK rows standing. Without it
+  // a replan's step 1 would write @step1 below the standing @stepK layer and be
+  // read as stale by stateFromFacts (which prefers the newest snapshot).
+  const stepBase = maxSnapshotStep(factRows, domain);
   planHolder.state = {
-    ...planHolder.state, actions, states: found.states, stepGoals, cursor: 0, done: false, goalText, becauseText,
+    ...planHolder.state, actions, states: found.states, stepGoals, cursor: 0, done: false, goalText, becauseText, stepBase,
   };
   const moveLines = actions.map((a, i) => `  ${i + 1}. ${a.label}`);
   // A piece with no taught position is an ASSUMPTION the plan silently makes
@@ -11443,20 +11448,24 @@ async function planLaneAnswer(query, { memoryDir, planHolder, sessionId = "", ga
 async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
   const ps = planHolder.state;
   const k = ps.cursor + 1;
+  // The snapshot index the board rows are written under: it stacks above any
+  // layer standing when the plan was minted (stepBase), while k stays the plan's
+  // own 1-of-N move counter. On a fresh board stepBase is 0 and snap === k.
+  const snap = (ps.stepBase ?? 0) + k;
   const action = ps.actions[ps.cursor];
   const rows = ps.states[k];
   const { appendFact, loadMemory, readFactRows } = await import("../adapters/memory/core.mjs");
   for (const row of rows) {
     await appendFact(memoryDir, {
-      subject: `${row.subject}@step${k}`, predicate: row.predicate, object: row.object,
-      provenance: `plan:${sessionId || "chat"}:step${k}`,
+      subject: `${row.subject}@step${snap}`, predicate: row.predicate, object: row.object,
+      provenance: `plan:${sessionId || "chat"}:step${snap}`,
     });
   }
   planHolder.state = { ...ps, cursor: k };
   const boardLine = rows.map((r) => `${r.subject} ${predicatePhrase(r.predicate)} ${r.object}`).join("; ");
   if (k < ps.actions.length) {
     return {
-      text: `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}`,
+      text: `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${snap}: ${boardLine}`,
       deduced: ps.stepGoals[k] ? ps.stepGoals[k] : `continue the plan (step ${k + 1} of ${ps.actions.length})`,
     };
   }
@@ -11471,8 +11480,8 @@ async function executePlanStep(planHolder, { memoryDir, sessionId = "" }) {
   planHolder.state = { ...planHolder.state, done: true };
   return {
     text: holds
-      ? `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}\n\ndone — ${ps.goalText} (checked against board@step${k}'s written facts, not assumed).`
-      : `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${k}: ${boardLine}\n\nBUT the goal does NOT hold against the written facts — the plan or the state drifted; re-teach the state and solve again.`,
+      ? `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${snap}: ${boardLine}\n\ndone — ${ps.goalText} (checked against board@step${snap}'s written facts, not assumed).`
+      : `moved — ${action.label} (step ${k} of ${ps.actions.length}). board@step${snap}: ${boardLine}\n\nBUT the goal does NOT hold against the written facts — the plan or the state drifted; re-teach the state and solve again.`,
     deduced: holds ? `goal reached — ${ps.goalText} (${k} of ${k} steps)` : "plan finished but the goal check failed",
   };
 }

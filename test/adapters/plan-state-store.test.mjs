@@ -58,3 +58,41 @@ test("executed plan steps write @stepK snapshot rows into the store; the final s
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+test("a second plan minted after a prior plan left @step1 standing writes its step above it and confirms from the right layer", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "plan-store-replan-"));
+  try {
+    let state = { focus: null, last: null, planState: null };
+    const turn = async (line) => {
+      const r = await runTurn(line, {
+        config: {}, memoryDir: dir,
+        focus: state.focus, last: state.last, planState: state.planState,
+      });
+      state.focus = r.focus ?? state.focus;
+      state.last = r.last ?? state.last;
+      if ("planState" in r) state.planState = r.planState;
+      return r;
+    };
+    for (const line of DOMAIN) await turn(line);
+    await turn("the goal is that every disk rests on peg-b.");
+    await turn("solve it");
+    await turn("next"); // disk-1 now rests on peg-b at board@step1
+    // A fresh goal off the finished plan, solved from the board@step1 fold.
+    await turn("the goal is that every disk rests on peg-a.");
+    const solve2 = await turn("solve it");
+    assert.match(String(solve2.answer), /^plan found — 1 move/);
+    const final2 = await turn("next");
+    // The move must write @step2 (above the standing @step1) and confirm from it.
+    assert.match(String(final2.answer), /board@step2:/);
+    assert.match(String(final2.answer), /done — every disk rests on peg-a \(checked against board@step2's written facts, not assumed\)\./);
+    assert.equal(state.planState.stepBase, 1);
+    const rows = readFactRows(await loadMemory(dir));
+    const step2 = rows.filter((r) => r.subject === "disk-1@step2");
+    assert.equal(step2.length, 1);
+    assert.equal(step2[0].predicate, "mgx:rest-on");
+    assert.equal(step2[0].object, "peg-a");
+  } finally {
+    clearCache();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
