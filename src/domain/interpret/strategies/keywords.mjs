@@ -8,7 +8,7 @@
 import {
   VERB_TO_KIND, ENTITY_TO_TYPE, MODIFIER_TO_KIND,
   WHERE_MARKERS, MENTION_MARKERS, PLACEHOLDER_NOUNS, PASSIVE_PARTICIPLE_TO_KIND,
-  INHERITS_REVERSE_VERBS,
+  INHERITS_REVERSE_VERBS, HAS_FAMILY_VERBS,
 } from "../../ask-vocab.mjs";
 import { STOPWORDS } from "../normalize.mjs";
 import { VOCAB_WORDS, eligibleForCanon, fuzzyVocabWord } from "../fuzzy.mjs";
@@ -19,6 +19,10 @@ import { VOCAB_WORDS, eligibleForCanon, fuzzyVocabWord } from "../fuzzy.mjs";
 const PASSIVE_AUX = new Set(["is", "are", "was", "were", "be", "been", "being", "get", "gets", "got"]);
 const WH_WORDS = new Set(["which", "what", "who", "whom", "whose"]);
 const PLACEHOLDER_SET = new Set(PLACEHOLDER_NOUNS.map((w) => w.toLowerCase()));
+// See ask-vocab.mjs's own HAS_FAMILY_VERBS for why a bare have-family verb
+// never resolves to `defines` in this strategy's two-named-role "ask" shape
+// below (the forward/reverse branches keep their own tested grain-check
+// decline, per that constant's own docblock).
 
 /** Find the longest phrase from `table`'s keys that appears as a contiguous
  *  run of `words` (case already lowercased by the caller). Longest-match-first
@@ -221,15 +225,23 @@ export function parseKeywordSpot(text, nlp = null) {
     const [patient, agent] = agentIsFronted
       ? [roleText(passiveAuxIdx + 1, words.length), roleText(byIdx + 1, passiveAuxIdx)]
       : [roleText(0, byIdx), roleText(byIdx + 1, words.length)];
-    if (patient && agent) return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject: agent, object: patient });
+    if (patient && agent) {
+      if (kind === "defines" && HAS_FAMILY_VERBS.has(canonWords.slice(verbHit.start, verbHit.end).join(" "))) return null;
+      return stamp({ shape: "ask", entityType: null, modifier: "direct", kind, subject: agent, object: patient });
+    }
     if (agent) return stamp({ shape: "forward", entityType, modifier, kind, object: agent });
     if (patient) return stamp({ shape: "reverse", entityType, modifier, kind, object: patient });
   }
 
   if (beforeText && afterText) {
+    const verbPhrase = canonWords.slice(verbHit.start, verbHit.end).join(" ");
+    // The bare have-family "ask" shape ("does X have Y") declines here, same
+    // reasoning as grammar.mjs's T1 (see HAS_FAMILY_VERBS above) — never for
+    // the entityType-driven forward/reverse branches below, which keep their
+    // own tested grain-check decline.
+    if (kind === "defines" && HAS_FAMILY_VERBS.has(verbPhrase)) return null;
     // A semantically-reverse verb ("superclass of") swaps subject/object, same as
     // grammar.mjs's T1.
-    const verbPhrase = canonWords.slice(verbHit.start, verbHit.end).join(" ");
     let subject = beforeText;
     let object = afterText;
     if (INHERITS_REVERSE_VERBS.includes(verbPhrase)) [subject, object] = [object, subject];
