@@ -118,6 +118,13 @@ const COPULA_OF_READ_THROUGH = new Set(["type", "kind", "sort", "form", "class",
 // bare copula does, unlike any other verb after "is".
 const COPULA_NAMING_PARTICIPLES = new Set(["termed", "known", "defined", "described", "referred", "called", "classified"]);
 const COPULA_PARTITIVE_HEADS = new Set(["body", "mass", "group", "collection", "set", "series", "number", "amount", "piece", "part", "lot", "pair", "bunch", "pile"]);
+// The relative pronouns that open a clause predicating about the SENTENCE
+// subject: "a mountain that has lava" is a fact about the volcano, so the
+// relative clause's verb binds to the copula's own subject, not to its object.
+const RELATIVE_PRONOUNS = new Set(["that", "which", "who", "whom", "whose"]);
+// At most this many triples from one sentence — a bound so a run-on can never
+// shatter into noise, not a first-wins cap.
+const MAX_TRIPLES_PER_SENTENCE = 4;
 
 /** Fold an entity surface to its stored key: a lexicon noun's lemma, else the
  *  word's own normFactTerm (the optimistic tier mints unlisted content nouns
@@ -153,18 +160,27 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
     const head = lookupNoun(lexicon, String(values[hi]).toLowerCase());
     return normFactTerm([...values.slice(lo, hi), head ? head.lemma : values[hi]].join(" "));
   };
-  const nearestEntity = (idx, step, blocked = null) => {
+  const nearestEntityIndex = (idx, step, blocked = null) => {
     for (let i = idx + step; i >= 0 && i < values.length; i += step) {
       if (pos[i] === "PUNCT") break;
       if (blocked && blocked.has(pos[i])) break;
-      if (isNounish(i)) return entityRunAt(i);
+      if (isNounish(i)) return i;
     }
     return null;
   };
-  const tripleAt = (i, predicate, blocked = null) => {
-    const subject = nearestEntity(i, -1, blocked);
-    const object = nearestEntity(i, +1, blocked);
-    return subject && object && subject !== object ? { subject, predicate, object } : null;
+  const nearestEntity = (idx, step, blocked = null) => {
+    const i = nearestEntityIndex(idx, step, blocked);
+    return i === null ? null : entityRunAt(i);
+  };
+  // A relation verb whose nearest content token leftward (skipping adverbs and
+  // the auxiliaries of its own verb complex) is a relative pronoun sits in a
+  // "that/which …" relative clause — its subject is the sentence subject.
+  const inRelativeFrame = (i) => {
+    for (let k = i - 1; k >= 0; k -= 1) {
+      if (pos[k] === "ADV" || pos[k] === "AUX") continue;
+      return RELATIVE_PRONOUNS.has(String(values[k]).toLowerCase());
+    }
+    return false;
   };
   // An isa needs a CLEAN copula frame: only determiners/adjectives/adverbs/
   // numerals may sit between each entity and the copula. Crossing a verb or
@@ -191,10 +207,10 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
       while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
       const headWord = String(values[hi]).toLowerCase();
       const nextIsOf = values[hi + 1]?.toLowerCase() === "of";
-      if (!nextIsOf) return entityRunAt(j);
+      if (!nextIsOf) return { label: entityRunAt(j), hi };
       if (COPULA_OF_READ_THROUGH.has(headWord)) { i = hi + 1; j = hi + 1; continue; }
       if (COPULA_PARTITIVE_HEADS.has(headWord)) return null;
-      return entityRunAt(j);
+      return { label: entityRunAt(j), hi };
     }
     return null;
   };
@@ -206,21 +222,64 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
     while (k >= 0 && pos[k] === "AUX") k -= 1;
     return nearestEntity(k + 1, -1, COPULA_FRAME_BLOCKERS);
   };
+
+  const triples = [];
+  const seen = new Set();
+  const push = (subject, predicate, object) => {
+    if (!(subject && object && subject !== object)) return;
+    const key = `${subject}\0${predicate}\0${object}`;
+    if (seen.has(key) || triples.length >= MAX_TRIPLES_PER_SENTENCE) return;
+    seen.add(key);
+    triples.push({ subject, predicate, object });
+  };
+
+  // Pass 1 — the first clean copula frame yields the isa (all guards unchanged);
+  // its subject and object-run end anchor the relative-clause continuation.
+  let copulaSubject = null;
+  let copulaObjHi = -1;
   for (let i = 1; i < values.length - 1; i += 1) {
     if (pos[i] === "AUX" && OPTIMISTIC_COPULAS.has(values[i].toLowerCase())) {
       const subject = copulaSubjectAt(i);
       const object = copulaObjectAt(i);
-      if (subject && object && subject !== object) return [{ subject, predicate: "rdfs:subClassOf", object }];
+      if (subject && object && subject !== object.label) {
+        push(subject, "rdfs:subClassOf", object.label);
+        copulaSubject = subject;
+        copulaObjHi = object.hi;
+        break;
+      }
     }
   }
+
+  // Pass 2a — with a copula isa in hand, CONTINUE past its object for relation
+  // verbs (has/creates/…), so one sentence contributes every fact it grounds.
+  // A "that/which <verb>" clause right after the object predicates about the
+  // SENTENCE subject ("a mountain that has lava" → volcano has lava); any other
+  // relation verb keeps its nearest-entity-leftward subject. AUX relation verbs
+  // ("has") count here — but only inside a copula frame that already resolved,
+  // so a bare "… is that Earth has …" complement never mints "earth has lot".
+  if (copulaSubject) {
+    for (let i = copulaObjHi + 1; i < values.length; i += 1) {
+      if (pos[i] !== "VERB" && pos[i] !== "AUX") continue;
+      const word = values[i].toLowerCase();
+      if (OPTIMISTIC_COPULAS.has(word)) continue;
+      const verb = lookupVerb(lexicon, word);
+      if (!verb) continue;
+      const subject = inRelativeFrame(i) ? copulaSubject : nearestEntity(i, -1);
+      push(subject, predicateOf(verb), nearestEntity(i, +1));
+    }
+    return triples;
+  }
+
+  // Pass 2b — no copula isa: the relation-verb tier over the whole sentence.
+  // VERB-tagged only, so a bare AUX ("Earth has …") in a non-frame sentence
+  // stays an honest miss.
   for (let i = 1; i < values.length - 1; i += 1) {
     if (pos[i] !== "VERB") continue;
     const verb = lookupVerb(lexicon, values[i].toLowerCase());
     if (!verb) continue;
-    const t = tripleAt(i, predicateOf(verb));
-    if (t) return [t];
+    push(nearestEntity(i, -1), predicateOf(verb), nearestEntity(i, +1));
   }
-  return [];
+  return triples;
 }
 
 /** The lexical fallback for a checkout with no wink model: a copula flanked by
@@ -254,11 +313,15 @@ function optimisticTriplesLexical(sentence, lexicon) {
 }
 
 /**
- * A bounded triple candidate from a sentence the strict recognizer skipped: a
- * copula (→ rdfs:subClassOf) or a lexicon-known relation verb (→ its predicate)
- * flanked by two entities. At most one triple per sentence; [] when nothing
- * resolves both sides — no guessing past the shape. Uses wink POS tags when a
- * model is available (the precise tier), else a narrower lexicon-only fallback.
+ * The bounded triple candidates from a sentence the strict recognizer skipped:
+ * a copula (→ rdfs:subClassOf) and, past its object, the relation verbs it
+ * grounds (→ their predicates), so one sentence contributes every fact it holds
+ * ("a volcano is a mountain that has lava" → volcano ⊑ mountain AND volcano has
+ * lava). Every triple passes the same entity/guard checks on its own, deduped,
+ * capped at MAX_TRIPLES_PER_SENTENCE so a run-on never shatters into noise; []
+ * when nothing resolves both sides — no guessing past the shape. Uses wink POS
+ * tags when a model is available (the precise tier), else a narrower
+ * lexicon-only fallback.
  *
  *   opts.lexicon  a loaded lexicon (the core vocabulary when absent).
  *   opts.nlp      a wink instance (winkInstance() when absent); null forces the
