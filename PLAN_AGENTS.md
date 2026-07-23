@@ -275,42 +275,35 @@ capability.**
 | E | Autonomy under partial observability, with belief state | **Present at demo scale** | autoplay's exposure filter; spider-fly beliefs (§2.4) |
 | F | Multi-agent worlds | **Present at demo scale** | spiders/flies, NPCs (§2.4) |
 | G | Learning on a miss | **Present** | child/reference/wiki + synthesis budget (§2.6) |
-| H | Programmatic plan surface | **Partial** | library export ships; `/v1/messages` dispatches single calls, no plan verb |
-| I | Validating externally proposed calls | **Partial** | `hallucinationsIn` exists; only internal callers feed it — nothing external proposes a call yet |
+| H | Programmatic plan surface | **Present** | the library export and `POST /v1/plan` on `tmct serve` both run the whole loop; a refusal is an in-band 200, never a protocol error |
+| I | Validating externally proposed calls | **Present** | a transcript ending on an assistant `tool_use` is a caller proposal: `hallucinationsIn` checks it, then execute or refuse with the taxonomy reason (`stop_reason: "refusal"` + `tmct_checked_call`) |
 | J | Replanning on world change | **Present** | a mid-plan board teach writes a new whole-board snapshot layer and re-searches from it (disclosed), and the end-of-plan goal check re-searches on drift; the router's RECOVER branch replans one step |
-| K | Cross-turn discourse record | **Partial** | prev-set anaphora lanes work; four frozen rows mark the edges; no typed record (DRT-lite, R1) |
+| K | Cross-turn discourse record | **Partial** | prev-set anaphora lanes work; three of the four frozen rows are flipped (pronoun-naming honest-empty, temporal-adverb strip, bare-type filter); row 19 (cross-turn temporal composition) waits on the typed record (DRT-lite, R1) |
 | L | Goal recognition (inferring a goal from behavior) | **Absent, one scoped instance** | autoplay's marker-based inference is world-scoped; the bounded (N+1) scheme is an R1 spike |
 | M | The four cross-repo mounts | **Partial** | seonix and the bedrock rung ship; marginalia (both tracks) and the Copilot shim do not |
 | N | Synthesized rules in the product path | **Offline prototype** | synthbench CEGIS works; product wiring unscoped |
-| O | Wider seeds + unknown-word ingestion | **Built, inactive** | opt-in bundles; `captureUnknownContext` defaults false |
+| O | Wider seeds + unknown-word ingestion | **Present** | `tier2-general` activates per repo via `tmct.toml` like its siblings; `capture_unknown_context` is a `[seed]` knob, on in the shipped config (measured: a no-op for the curated bundles, bounded capture for raw conceptnet) |
 
-**Ranked closure list** (nearest first; day-scale estimates, single agent):
+**Ranked closure list** (nearest first; day-scale estimates, single agent). H, I, J, O and the
+near half of K closed 2026-07-23/24 (see the gap table's evidence column); what remains:
 
-1. **H — a plan verb on `tmct serve`** (~1 day). Expose `runCapabilityPlan` over HTTP the way the
-   library already exposes it; the loop result shape exists.
-2. **I — the external-proposal seam** (~1–2 days). Accept a caller-proposed `tool_use` call,
-   check it with `hallucinationsIn`, execute or refuse with the taxonomy's reason. This is the
-   Claude Code hardening item, and it turns the shim into a checked tool-loop peer.
-3. **K (near half) — the four frozen rows** (~1–2 days each). Each names its fix; flipping a row
-   is deliberate, so the corpus lanes measure the closure.
-4. **O — activate the wider seeds and unknown-word ingestion** (~1 day + a measurement pass).
-   Decision-shaped: the machinery is tested and dormant.
-5. **M — Bedrock live wire test + assessor** (~2–3 days, cross-repo). The two named gaps: the
+1. **M — Bedrock live wire test + assessor** (~2–3 days, cross-repo). The two named gaps: the
    wire format has never been proven end-to-end between the released packages, and nothing
    produces the `{score, confidence, needs}` classification `route()` consumes.
-6. **M — the Copilot/OpenAI-Chat-Completions shim** (~2–3 days). A second protocol adapter over
+2. **M — the Copilot/OpenAI-Chat-Completions shim** (~2–3 days). A second protocol adapter over
    the same `runTurn`/`dispatchTool` engine the Messages shim wraps.
-8. **M — the seonix combined index** (several days, cross-repo). Mount the graph through the
+3. **M — the seonix combined index** (several days, cross-repo). Mount the graph through the
    extension seam; re-verify RI depth at the combined scale.
-9. **M — the marginalia interpreter** (a week-plus, cross-repo; the largest single chunk). The
+4. **M — the marginalia interpreter** (a week-plus, cross-repo; the largest single chunk). The
    SPARQL-backed RI adapter and the `vocab.mjs`→corpus compiler; most bridging is mechanical,
    the `Capability` entries per relation need real authoring.
-10. **N — product-side rule synthesis** (spike first). The oracle and enumerator exist; what a
-    taught-in-chat synthesis surface should look like is unscoped.
-11. **K (far half) and L — DRT-lite and bounded goal recognition** (research spikes, R1 below).
+5. **N — product-side rule synthesis** (spike first). The oracle and enumerator exist; what a
+   taught-in-chat synthesis surface should look like is unscoped.
+6. **K (far half) and L — DRT-lite and bounded goal recognition** (research spikes, R1 below).
+   Row 19 of the compositional lane is DRT-lite's standing acceptance test.
 
-Sequencing: 1–5 are tmct-only and independent; 6–9 need the sibling repos and operator gating;
-10–11 start as spikes, not builds.
+Sequencing: 1–4 need the sibling repos and operator coordination; 5–6 start as spikes, not
+builds.
 
 ## 5. Research horizon
 

@@ -92,5 +92,16 @@ Three hard-won lessons, carried forward:
    applies to a roll commit too, even though `roll.mjs`'s own artifact regeneration feels like it
    should be self-verifying.
 
+6. (2026-07-24) Lesson 5's brief line is necessary but not sufficient: with the up-front
+   "foreground only, never end your turn on a running command" instruction in EVERY dispatch,
+   four of eight background sub-agents in one session still ended turns on "I'll wait for the
+   notification" — twice for runs that were genuinely live (those resume correctly on the real
+   notification; leave them alone once `ps` confirms the process), twice for phantom waits
+   (nothing running; `SendMessage` the correction, pointing at the teed log if the run already
+   finished green). The triage that works: `ps aux | grep <worktree-id>` FIRST, then
+   `git log`/`status` on the worktree — a live process means wait, a dead one means correct or
+   take over. A second identical stall on the same agent means stop it and let the coordinator
+   commit its (real, verified) work directly — that recovery took minutes and lost nothing.
+
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
 history, plus the `BENCHMARK_<axis>_<version>.md` reports and `archive/`.*
