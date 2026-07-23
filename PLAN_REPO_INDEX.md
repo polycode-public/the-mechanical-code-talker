@@ -1,6 +1,11 @@
 # PLAN_REPO_INDEX.md — tmct grows its own code parsers, ported from seonix
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
+Status: IN FLIGHT on the `repo-index` branch (kept off `main` while the 2026-07-24 batch
+cleared). Phases 1 (JS/TS producer), 2 (`tmct index` CLI verb) and 4 (doc reconciliation) are
+implemented there, with example fixtures (`examples/tiny-webapp-src`, `examples/tiny-lib-py`)
+and a Python backend from phase 3; C#/Java (phase 3 remainder), phase 5 (persona-gated init
+wiring) and phase 6 (the PLAN_CODE.md move to seonix) remain. The branch's own copy of this
+file carries the implementation log; on `main`, nothing below is live code yet.
 
 ## Origin
 
