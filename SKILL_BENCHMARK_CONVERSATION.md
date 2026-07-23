@@ -240,12 +240,13 @@ to flow.
 
 ### 2.1 The FLOW ladder — a bounded, named flow-complexity ladder
 
-The **FLOW ladder** (`FLOW-0…FLOW-6`) is CONVERSATION's own scale, drawn from conversational
-complexity — distinct from CHATBENCH's CEFR, INFBENCH's `INF-1…INF-8`, and AGENTBENCH's
-`TOOL-0…TOOL-8`. It is **bounded by construction**: there is no open `FLOW-7`. FLOW-6 (the messy
-real user) is the top, and new complexity that doesn't fit an existing tier grows that tier's
-content — it does not add a rung. The ladder is the ruler; being bounded is what lets it produce a
-position and a gate.
+The **FLOW ladder** (`FLOW-0…FLOW-6`, plus two horizon rungs) is CONVERSATION's own scale, drawn
+from conversational complexity — distinct from CHATBENCH's CEFR, INFBENCH's `INF-1…INF-8`, and
+AGENTBENCH's `TOOL-0…TOOL-8`. Its **surface-messiness axis tops at FLOW-6** (the messy real user):
+new messiness that doesn't fit an existing tier grows that tier's content, it does not add a rung.
+Above FLOW-6 sit two **capability-depth horizon rungs** (FLOW-7, FLOW-8), defined ahead of design so
+the scale extends just past what the plan docs anticipate. The ladder is the ruler; a defined top is
+what lets it produce a position and a gate.
 
 - **FLOW-0 — Bootstrap: before any graph, the identity surface.** No `--repo`, a bare `tmct chat` in
   an empty dir. Greetings, identity ("who are you", "what are you", "are you an AI/ChatGPT"), help/
@@ -267,6 +268,21 @@ position and a gate.
   later, mix with graph truth; the honest "I don't know that yet" that offers to learn.
 - **FLOW-6 — The messy real user.** typos, politeness frames, topic switches, "no wait", vague
   openers, "what can you tell me about this repo" — the conversation a stranger actually has.
+- **FLOW-7 — Typed cross-turn discourse record (DRT-lite).** a query whose meaning composes across
+  several prior ANSWERS through a typed record that tracks entities and relations turn to turn, past
+  the prev-set anaphora the lanes already carry (`PLAN_AGENTS.md` R1). Row 19 of the compositional
+  corpus lane (cross-turn temporal composition) is its standing acceptance test.
+- **FLOW-8 — Nested other-minds dialogue.** talking about what ANOTHER agent believes — a believer
+  of beliefs, not only a first-order belief about the world. The spider-fly false-belief world is the
+  world-side floor; this rung grades holding that nesting in conversation (`REPORT_AGI_CHECK_IN.md`'s
+  other-minds depth).
+
+FLOW-7 and FLOW-8 sit above the ratcheting FLOW-0→FLOW-6 ladder, not inside it: the ratchet gate
+(below) still runs FLOW-0→FLOW-6, and these two carry no frozen `test/chatflow-*.test.mjs`
+regressions yet — a horizon rung's cases get authored when its capability lands (DRT-lite / R1 for
+FLOW-7, other-minds nesting for FLOW-8), the same defer-until-buildable discipline the other three
+benches hold for their top rungs. The AGI won't sit in this sandbox; these two rungs are where its
+discourse-side depth would register.
 
 #### The ratchet criterion (mechanical, per tier)
 

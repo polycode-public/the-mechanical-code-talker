@@ -27,11 +27,36 @@ call→retrieve-then-call→plan levels, Li et al. 2023; τ-bench's tool-agent-u
 | TOOL-6 | Goal deduction | self-directed: deduce the goal, then plan it |
 | TOOL-7 | Recovery & replanning | a plan step fails (a tool returns empty/error) and the driver observes the failure and replans a fallback rather than dying on the dead branch — `expect.recover` (grounding: ReAct/Reflexion, τ-bench recovery) |
 | TOOL-8 | Composition under ambiguity | the goal/entity is underspecified: enumerate the tied readings (`expect.candidateResults`, one dispatched read per tied candidate) or refuse-with-a-nudge — never an arbitrary pick, never a hallucinated call |
+| TOOL-9 | Goal recognition | infer the goal from an observed action sequence, then confirm it against a bounded scheme — N declared goals plus an explicit reject class — rather than force-fit a partial trace to the nearest goal (grounding: `PLAN_AGENTS.md` R1's bounded (N+1) goal recognition; plan recognition as planning, Ramírez & Geffner 2010) |
+| TOOL-10 | Open-world relevance | plan when the closed-world assumption fails: the facts the request turns on are not all declared (`PLAN_AGENTS.md` R3, the frame problem). Grade the honest handling — bound the relevant set, or land on the miss wall naming what's missing, never a guess at the unstated world |
 
 TOOL-0..TOOL-8 are on record clean under the goal driver (`agentbench/envelope.json`'s
 `rungReached: TOOL-8`) — the replanning branch lives in the planner's own method table, the
 tied-candidate composer at the resolver's binding seam. Don't compare a TOOL rung against a CEFR
 grade or an `INF-*` band: same ladder shape, unrelated axes.
+
+### The scale's upper bound (TOOL-9, TOOL-10 — defined ahead of design)
+
+TOOL-0..TOOL-8 are reached and measured (above). TOOL-9 and TOOL-10 sit past the current ladder,
+defined here so the scale extends just past what `PLAN_AGENTS.md` anticipates — a measuring stick
+with headroom, not a claim the router does either yet. The AGI won't sit in this sandbox; these two
+rungs are where its agent-side capabilities would first register. They carry no cases in
+`agentbench/cases.jsonl` today: a horizon rung's cases get authored when a design for it exists
+(`PLAN_AGENTS.md` §5 — R1 for TOOL-9, R3 for TOOL-10), the same defer-until-buildable discipline
+INF-7/INF-8 hold in `SKILL_BENCHMARK_INFERENCE.md`. `REPORT_AGI_CHECK_IN.md` maps the same
+capabilities at the classic-AI level.
+
+The measurement contract (§1) applies to them unchanged, the zero-hallucination line included: a
+recognized goal outside the declared N+1 set, or a plan over undeclared facts asserted as grounded,
+fails outright. Expect-shapes, sketched in the case format so a future author has a target:
+
+- **TOOL-9** grades an inferred goal against the bounded set. `expect.inferredGoal` names the
+  recognized goal or the reject class — `{"inferredGoal":"restock","reject":false}` for a trace that
+  fits a declared goal, `{"reject":true}` when it fits none — the honest miss carried into
+  recognition, not a forced nearest-fit.
+- **TOOL-10** grades the relevance boundary: either `expect.refuse` with the missing-world reason
+  named, or an `expect.relevanceBound` listing the facts the plan declared it needs and could not
+  ground — the frame problem handled honestly, not a guessed-complete world.
 
 > **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_AGENT.md` and run an AGENTBENCH
 > cycle"* (optionally: a driver to measure, a rung to target, a version stamp).
