@@ -5405,6 +5405,17 @@ const MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)\\s+do${TRAILING_ADVE
  *  ending safe — a syntactic match against a term that isn't a real entity
  *  simply falls through unchanged, same as every other lane in this file. */
 const MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB_RE}\\??$`, "i");
+/** "whats X do" / "what's X do" / "what is X do" — the CONTRACTED phrasing of
+ *  "what does X do", where the auxiliary collapses into the "what's"/"whats"
+ *  opener and "do" trails the term. MODULE_ORIENT_RE's own "does BEFORE the
+ *  term" anchor never sees it, and MODULE_ORIENT_SVO_RE needs a literal "what "
+ *  (with a space) so the bare "whats" spelling escapes that too. Safe to end
+ *  this loosely because the lane's exact-unique resolveEntity gate below is
+ *  still the sole authority — same argument as MODULE_ORIENT_SVO_RE: a term
+ *  that is not a real unique entity (a pronoun subject "whats it do", a
+ *  non-word) simply declines. The "what(?:'s|s|\s+is)" opener mirrors
+ *  MODULE_PURPOSE_RE's tolerance for the apostrophe-less "whats" contraction. */
+const MODULE_ORIENT_IS_DO_RE = new RegExp(`^what(?:'s|s|\\s+is)\\s+(.+?)\\s+do${TRAILING_ADVERB_RE}\\??$`, "i");
 // Purpose/identity phrasing: "whats X for"/"what's X
 // about"/"what is X for", the sibling of "what does X do" that asks for the
 // SAME module-grain overview. Deliberately does NOT claim the literal noun
@@ -5474,7 +5485,7 @@ async function moduleOrientLane(query, { graph }) {
   // (stripFillerWords already eats "please"/"could you" as filler; the politeness
   // regex only adds the "explain [to me]" wrapper on top).
   q = stripFillerWords(applyPreambleFrames(correctMisspellings(q))).replace(MODULE_ORIENT_POLITENESS_RE, "");
-  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_OF_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE);
+  const m = q.match(MODULE_ORIENT_RE) || q.match(MODULE_PURPOSE_OF_RE) || q.match(MODULE_PURPOSE_RE) || q.match(MODULE_ORIENT_SVO_RE) || q.match(MODULE_ORIENT_IS_DO_RE);
   // "what does src/core/store.mjs do" already reached the overview; the bare
   // path and "what is <path>" did not, so the same module answered one
   // phrasing and walled two. Both are claimed here rather than in ask.mjs,
@@ -10009,6 +10020,14 @@ const STACCATO_LEAKED_CONNECTIVES = new Set(["and", "also", "so", "then", "now"]
  *  named `edithistory`) is never mistaken for the pronoun. */
 const PRONOUN_IN_QUERY_RE = new RegExp(`\\b(?:${[...CONTEXT_WORDS].join("|")})\\b`, "i");
 
+/** The referring pronouns an EMBEDDED "what about X, <wh-clause>" swap replaces
+ *  — CONTEXT_WORDS (it/this/that/here) plus the personal pronouns
+ *  PRONOUN_IN_QUERY_RE deliberately omits (he/she/they/them): the embedded
+ *  clause's own subject/object, not a prior-turn antecedent, so a subject
+ *  pronoun like "he" that never appears in a code-graph query still has to be
+ *  swappable here. */
+const EMBEDDED_PRONOUN_RE = /\b(?:it|this|that|here|he|she|they|them)\b/i;
+
 /** DISCOURSE CONTINUATION: "what about X" carries the PRIOR
  *  turn's question shape across the turn boundary — re-asking it with X in place of
  *  the previous subject/object. Returns the reconstructed query (parsed like any
@@ -10019,6 +10038,32 @@ function discourseRewrite(query, last) {
   let newSubj;
   if (m) {
     newSubj = m[1].trim();
+    // An embedded question spliced into the "what about" subject ("what about
+    // the store, what it do") must NEVER be substituted into the prior turn's
+    // shape — that inherits the prior turn's DIRECTION onto a question asking
+    // the opposite ("who uses store.mjs" then "…what it do" would answer "who
+    // uses the store"). Split on the interior wh-clause and re-read the
+    // remainder against a CLOSED micro-set; a clause outside it is an honest
+    // miss, never the prior-turn substitution below. A comma NOT followed by a
+    // wh-word ("what about the store, please") never matches and keeps its
+    // ordinary swap.
+    const embedded = newSubj.match(/^(.+?),\s*(what|who|which|where|how)\b\s*(.*)$/i);
+    if (embedded) {
+      const embSubj = embedded[1].trim();
+      const wh = embedded[2].toLowerCase();
+      const rest = embedded[3].trim();
+      // "what [it/this/that/he/she] do(es)" → the module overview of the new
+      // subject, which MODULE_ORIENT_RE serves verbatim.
+      if (wh === "what" && /^(?:he|she|it|this|that)?\s*do(?:es)?$/i.test(rest)) {
+        return `what does ${embSubj} do`;
+      }
+      // A wh-clause carrying its OWN pronoun ("what does it call") → swap that
+      // pronoun for the new subject and ask the clause standalone.
+      if (EMBEDDED_PRONOUN_RE.test(rest)) {
+        return `${wh} ${rest.replace(EMBEDDED_PRONOUN_RE, () => embSubj)}`;
+      }
+      return null;
+    }
   } else {
     const sm = String(query).match(STACCATO_SWAP_RE);
     const cand = sm?.[1]?.trim();
@@ -12103,6 +12148,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   const staccatoSwapMatch = String(query).match(STACCATO_SWAP_RE);
   const isStaccatoSwap = !!(last?.query && staccatoSwapMatch && NAME_TOKEN_RE.test(staccatoSwapMatch[1]?.trim() || ""));
   const isWhatAboutContinuation = !!(last?.query && WHAT_ABOUT_RE.test(String(query))) || isStaccatoSwap;
+  // A bare vague-touch OPENER ("wat about validate", "tell me about store.mjs")
+  // whose term resolves to a UNIQUE graph entity is a genuine describe request,
+  // not small talk — defer past the conversational card so describeWrapperAnswer
+  // (4d, below) serves its module/entity overview. Distinct from
+  // isWhatAboutContinuation above, which needs a prior turn: this fires on the
+  // FIRST turn too, and covers the "tell me about"/"explain" surfaces
+  // vagueTouchTermOf reads. resolveEntity already declines on ambiguity, so an
+  // ambiguous or unknown term ("wat about xyzzy") keeps today's orientation card.
+  const vagueTouchTerm = graph ? vagueTouchTermOf(String(query)) : null;
+  const isVagueTouchResolvable = !!(vagueTouchTerm && await resolveEntity(graph, vagueTouchTerm));
   // Same exemption for "describe it"/"tell me about that" — needs the SAME
   // deferral to reach describeWrapperAnswer's focus-aware pronoun resolution.
   // Gated on an actual standing focus, same honest-decline discipline as
@@ -12214,7 +12269,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       } catch { /* leave false — the ordinary path decides */ }
     }
   }
-  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach && !isBareRelationalVerbTeach;
+  const conversationalCandidateBaseGate = !handled && miss && !envelope?.parsed && !isWhatAboutContinuation && !isVagueTouchResolvable && !isDescribePronounContinuation && !isExplainTouch && !isStaccatoNegation && !isVagueRelationTouch && !isStaccatoComparative && !isStaccatoPronounNoFocus && !isPluralMembershipTeach && !isBareRelationalVerbTeach;
   // A turn whose pronoun was bound to a vocabulary antecedent is PROVABLY a
   // fact question ("can it bark" → "can dog bark") — never conversational,
   // however short. Without this, the substituted 3-worder still trips
