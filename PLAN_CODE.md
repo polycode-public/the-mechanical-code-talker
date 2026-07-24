@@ -112,6 +112,83 @@ a taught-in-chat synthesis should look like, when a synthesized rule is allowed 
 user's own graph, and how its provenance reads back. That is a scoping spike before it is a build,
 and it is unscoped today.
 
+#### 2.1.1 The spike's findings (scoping deliverable)
+
+> Reconciliation note for integration: this subsection is the §2.1 rule-synthesis spike written
+> against PLAN_CODE.md's own §2.1. If a `PLAN_CODE_PLANNING.md` (or another extracted doc) now owns
+> Track 5 and §2.1, move this block there and delete it here — it belongs wherever synthbench's
+> owner lives, next to the §2.1 stub above.
+
+**What loading a synthesized rule into the product path would touch.** The read path is short and
+already parameterised, so this is a surface question, not an engine one:
+
+- **The dispatch call site.** The product path reaches `goalReason` at one place —
+  `src/domain/router/drive.mjs` (the `goalReason(request, tools, ctx, { driver: GOAL_DRIVER })`
+  call). It passes no `ruleSet`, so it runs the frozen built-in `GOAL_RULES`
+  (`src/domain/router/goal-reasoner.mjs`). Loading a synthesized rule means giving `drive.mjs` a
+  rule set that is `GOAL_RULES` plus the vetted synthesized entries — the only functional change at
+  the call site, and it is a one-argument change the `ruleSet` param was designed for (Track 1's one
+  backward-compatible product change, §2).
+- **Where a synthesized rule lives at rest.** `GOAL_RULES` is a committed, frozen constant. A
+  synthesized rule is not authored in source, so it needs a store: the natural home is the on-disk
+  memory (`.tmct/`, the OWL-labelled graph the taught action families already use), read at session
+  start the way taught facts and rules are. That reuses `src/adapters/memory/core.mjs`'s Rule
+  individuals — a `GOAL_RULE` is closed data (focusClass over the registry `KINDS`, modes, subGoals,
+  compose), so a `RULE_KIND_GOAL_RULE` sibling of the existing rule kinds can carry it under the same
+  content-addressing, SHACL and provenance discipline, with no new persistence layer.
+- **The compile/merge step.** `drive.mjs` would read the persisted synthesized rules, run each
+  through the SAME oracle gate the harness uses (`synthbench/rules/oracle.mjs` — `passesExample`
+  against the rule's pinned labelled examples) before admitting it, then hand `goalReason` the merged
+  set. Admission is a verification, not a trust: a rule that no longer reproduces its own labelled
+  examples against the current engine is dropped and counted, never fired — the honest-miss ethos
+  applied to the rule base itself.
+- **Provenance read-back.** `goalReason` already returns a proof/receipt. A synthesized rule that
+  fires must mark its provenance so the receipt reads "grounded via a synthesized rule (from these
+  labelled examples, admitted by the oracle on <engine version>)", distinct from a hand-written
+  rule's line. The provenance tag lands on the Rule individual at synthesis time and rides the
+  proof out, so a user can always see that a synthesized rule, not a shipped one, answered them.
+
+**The risk surface.**
+
+- **A synthesized rule is data through trusted code, not executed code.** It is the same posture as
+  Track 1's oracle (§2, §8): no sandbox, because nothing untrusted ever runs — the rule is a closed
+  `GOAL_RULE` record dispatched by the unmodified engine. This keeps the spike on the near side of
+  the source-editing line Track 5's adaptor crosses.
+- **Coverage bleed is the real risk.** A synthesized rule admitted against its own labelled examples
+  could still fire on a request those examples never covered and produce a plausible-but-unintended
+  dispatch. The mitigation is the same one the harness already enforces: a synthesized rule is
+  admitted only for the focusClass/mode its examples pin, and its subGoals must backward-chain to a
+  capability in the live toolset (`groundableInToolset`), so a rule can never borrow coverage it was
+  not verified for. Held-out examples stay mandatory.
+- **Rule-set determinism.** Two synthesized rules that both match one request would make dispatch
+  order-dependent. `applicableRules` already refuses on more than one applicable rule (an ambiguous
+  meta-goal is an honest miss, not a pick), so the existing ambiguity guard covers this — but the
+  admission step must preserve it, never silently prefer a synthesized rule over a built-in one.
+- **Provenance integrity.** A synthesized rule whose provenance tag is lost would read back as a
+  hand-written rule. The tag is part of the Rule individual's content address, so a rule that lost
+  its tag is a different (and un-admitted) rule — the store's own discipline protects this.
+
+**Staged proposal (each stage separately shippable, none crosses the source-editing line).**
+
+1. **Read-only admission, off by default.** Add the `RULE_KIND_GOAL_RULE` store shape and a
+   `drive.mjs` path that reads persisted synthesized rules, oracle-gates them, and merges them into
+   the dispatch rule set behind a flag that defaults off. Ship with the provenance tag and the
+   receipt line. Nothing synthesizes yet; a hand-placed synthesized rule (from `synthbench/rules/`)
+   is the test fixture.
+2. **Teach-in-chat synthesis.** Wire the enumerator + oracle (`synthbench/rules/synthesize.mjs`) to a
+   chat surface: a user gives labelled examples ("when I ask X, call Y"), the loop synthesizes a rule
+   that reproduces them at 0% fabrication or honestly reports no rule found, and — on success —
+   persists it as a `RULE_KIND_GOAL_RULE` with provenance. Still gated by stage 1's admission on
+   every load.
+3. **Default-on, with the audit surface.** Once the receipt, the ambiguity guard and the held-out
+   discipline have miles on them, turn admission on by default and add a `tmct`-side listing of which
+   synthesized rules are live, their labelled examples, and their last admission result — the rule
+   base as auditable as any committed corpus.
+
+The whole spike stays inside the constitution: no model is in the synthesis loop (the enumerator is
+bounded search, the oracle is the real engine), and every synthesized rule is as reviewable as a
+hand-written one — Track 1's proof, carried from the harness into the product path.
+
 ---
 
 ## 3. Track 5 (headline proposal) — planning over code states
