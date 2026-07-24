@@ -18,10 +18,10 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
-- the 3.0.3 nine-bench sweep — six of eight write-ups merged (AGENT, RESEARCH, CODE_SYNTHESIS,
-  CODE_INDEX, INGEST, INFERENCE); still running: CEFR_ENGLISH
-  `worktree-agent-a723d79ada8493878`, CONVERSATION `worktree-agent-a8cf6f586793855a1`;
-  AGI_SCALES dispatches once their envelopes land, reading the lever-7 aggregator
+- the 3.0.3 nine-bench sweep — seven of eight write-ups merged (AGENT, RESEARCH, CODE_SYNTHESIS,
+  CODE_INDEX, INGEST, INFERENCE, CONVERSATION); still running: CEFR_ENGLISH
+  `worktree-agent-a723d79ada8493878`; AGI_SCALES dispatches once its envelope lands, reading the
+  lever-7 aggregator
 
 
 
@@ -53,6 +53,13 @@ Each line names its worktree branch; delete the line in the same commit that int
 - [ ] `BENCHMARK_CODE_SYNTHESIS_3.0.3.md` (founding cycle): only SYN-0 is built; SYN-3's single
   rename operator (`PLAN_CODE_PLANNING.md` Track 5) is the next capability to build to push the
   ladder past its current gate
+
+CONVERSATION 3.0.3 sweep (see `BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
+
+- [ ] "give me an overview of this project" gets the identity card, not the architecture overview — the recognizer catches "architecture" but not the "overview of {this project/codebase/repo}" sibling; extend the architecture/overview intent set (FLOW-3)
+- [ ] "what are the packages here" is swallowed by the vocabulary/digest lane ("package means box"), and "list the packages" reports packages isn't a listable kind though the architecture answer already computes them — add packages as a listable kind and guard the digest lane from a plain package-enumeration ask (FLOW-3)
+- [ ] "thanks bye" (thanks-word directly adjacent to a bye-word, no delimiter) misparses as a capability-teach ("a thank can bye") instead of closing — exclude a leading thanks+bye adjacency from the capability-teach lane; class of the 2.11.0 farewell finding, now fixed for "gtg thx" but not this adjacency (FLOW-6)
+- [ ] (low priority, judge-flagged) "what is a cache" reads the seeded Wikipedia digest with its source line but doesn't signal it's general vocabulary rather than a fact from this repo's graph — an intended surface with a cited source, not a wall; consider a "general vocabulary, not from this codebase" cue
 
 ## Discipline
 
