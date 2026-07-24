@@ -89,19 +89,36 @@ export const stubNodeZlib = {
  *  real import site's "inlined viewer bundle" comment). `stubMap` keys are
  *  matched as a SUFFIX of the import specifier as each importer writes it, so
  *  a key carries just enough trailing path to be unambiguous and keeps
- *  matching wherever the module itself lives; values are the replacement
- *  module source. A binding stubbed as an explicit `undefined` export (not an
- *  empty module) keeps the calling code's own `typeof X !== "undefined"`
- *  guards working. */
+ *  matching wherever the module itself lives; values are either a bare string
+ *  (the replacement module source, resolved with no directory context — fine
+ *  for a stub with no imports of its own) or `{contents, resolveDir}` when the
+ *  stub itself needs to import a real sibling module (`resolveDir` is handed
+ *  straight to esbuild's onLoad result so that import resolves as if the stub
+ *  file actually lived there). A binding stubbed as an explicit `undefined`
+ *  export (not an empty module) keeps the calling code's own
+ *  `typeof X !== "undefined"` guards working.
+ *
+ *  onResolve reports the module's identity as the canonical SUFFIX key, not
+ *  the raw specifier string each importer wrote (`args.path`) — two importers
+ *  can spell the same target differently (a dynamic `import("../adapters/...")`
+ *  three levels up vs. a static `import "../../adapters/..."` four levels
+ *  up), and esbuild keys its module graph by that identity. Reporting the raw
+ *  path would give each spelling its own virtual module instance, with its
+ *  own top-level state — fatal for a stub that carries any (a live table a
+ *  setter writes and a later reader reads back), so every spelling of one
+ *  stub key resolves to the SAME module instance here. */
 export function makeOptionalAdapterStubs(stubMap) {
   return {
     name: "stub-optional-adapters",
     setup(b) {
       for (const suffix of Object.keys(stubMap)) {
         const filter = new RegExp(suffix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + "$");
-        b.onResolve({ filter }, (args) => ({ path: args.path, namespace: "adapter-stub-" + suffix }));
+        const entry = stubMap[suffix];
+        const contents = typeof entry === "string" ? entry : entry.contents;
+        const resolveDir = typeof entry === "string" ? undefined : entry.resolveDir;
+        b.onResolve({ filter }, () => ({ path: suffix, namespace: "adapter-stub-" + suffix }));
         b.onLoad({ filter: /.*/, namespace: "adapter-stub-" + suffix }, () => ({
-          contents: stubMap[suffix], loader: "js",
+          contents, loader: "js", ...(resolveDir ? { resolveDir } : {}),
         }));
       }
     },

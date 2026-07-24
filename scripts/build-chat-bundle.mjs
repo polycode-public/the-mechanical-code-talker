@@ -34,9 +34,25 @@ const OPTIONAL_ADAPTER_STUBS = {
   // the fs+TOML side of the construction banks — never read in the browser
   // (the strategy above is stubbed out entirely).
   "corpus/construction-banks.mjs": "export const CONSTRUCTIONS_DIR = \"\";\nexport const readConstructionFiles = () => ({ relations: [], constructions: [] });\n",
-  // the fs+TOML side of the digest bank — the embedded chat falls back to the
-  // flat fact list when no digest is available.
-  "corpus/digest-bank.mjs": "export const readDigestStructures = () => null;\nexport const loadDigestStructureTable = () => null;\nexport const digestTermFromRows = () => null;\n",
+  // the fs+TOML side of the digest bank swaps for a live, in-memory twin: the
+  // page's own script calls setDigestStructures(rows) once per session
+  // (chat-browser-entry.mjs, fed the build-time-embedded [[structure]] rows —
+  // see chat-page-viz.mjs), and this module's digestTermFromRows delegates to
+  // digest-client.mjs's browser-native pipeline over that table, so
+  // termDigestReadBack's dynamic import (chat.mjs) sees a real digest instead
+  // of the always-null stub this used to be.
+  "corpus/digest-bank.mjs": {
+    resolveDir: join(ROOT, "src", "adapters", "corpus"),
+    contents:
+      "import { digestTermFromRowsBrowser } from \"../../surfaces/web/digest-client.mjs\";\n"
+      + "let structures = [];\n"
+      + "export function setDigestStructures(rows) { structures = Array.isArray(rows) ? rows : []; }\n"
+      + "export const readDigestStructures = () => structures;\n"
+      + "export const loadDigestStructureTable = () => null; // interface parity only, unused by this call path\n"
+      + "export function digestTermFromRows(term, termRows, allRows, opts = {}) {\n"
+      + "  return digestTermFromRowsBrowser(term, termRows, allRows, structures, opts);\n"
+      + "}\n",
+  },
   // phrasing variety stays OFF in the embedded chat — the browser answer is
   // always the base phrase, exactly as when the variants file can't be read.
   "answer-variants.mjs": "export const pickPhrase = (poolId, key, base) => base;\n",

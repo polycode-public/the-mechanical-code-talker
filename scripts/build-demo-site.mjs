@@ -208,8 +208,14 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
 // never a second engine.
 {
   const { renderChatHtml } = await import(join(ROOT, "src", "services", "chat-page-viz.mjs"));
+  // The digest sentence-structure bank, read once here (node-side, where the
+  // TOML is) and embedded in the page, same as research.html's own call just
+  // below — chat.html's answer flow feeds these rows to the chat bundle's
+  // live digest-bank twin (chat-browser-entry.mjs) so a long answer leads
+  // with a composed digest instead of always falling back to the flat list.
+  const { readDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
   const chatPagePath = join(SITE, "chat.html");
-  await writeF(chatPagePath, renderChatHtml());
+  await writeF(chatPagePath, renderChatHtml({ digestStructures: readDigestStructures() }));
   console.log(`wrote ${chatPagePath}`);
 }
 

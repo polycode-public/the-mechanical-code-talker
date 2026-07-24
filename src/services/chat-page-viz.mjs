@@ -172,10 +172,18 @@ export function transcriptMarkdown(turns, meta, headerMd, turnMd) {
 }
 
 /** The self-contained "talk to it" full-screen page. Pure — the same output
- *  for the same `title` every time; every other piece of state (the session,
- *  every message, every chip) is computed live in the browser once the
- *  sibling chat bundle loads, exactly as the embedded widget already works. */
-export function renderChatHtml({ title = DEFAULT_TITLE } = {}) {
+ *  for the same `title`/`digestStructures` every time; every other piece of
+ *  state (the session, every message, every chip) is computed live in the
+ *  browser once the sibling chat bundle loads, exactly as the embedded widget
+ *  already works. `digestStructures` are the pre-parsed [[structure]] rows of
+ *  the digest sentence-structure bank, embedded so a long answer can lead
+ *  with a composed digest instead of the flat fact list — the same table
+ *  research.html/ledger.html already embed, fed here to the chat bundle's own
+ *  live digest-bank twin (see chat-browser-entry.mjs) rather than to a
+ *  client-side digest panel of this page's own; an empty list degrades to the
+ *  flat list exactly as before this page could digest at all. */
+export function renderChatHtml({ title = DEFAULT_TITLE, digestStructures = [] } = {}) {
+  const digestStructuresJson = JSON.stringify(Array.isArray(digestStructures) ? digestStructures : []);
   const legendHtml = PROV_LEGEND.map(
     ([key, label]) => `<span class="legend-item"><i class="dot dot-${provKey(key)}"></i>${escapeHtml(label)}</span>`,
   ).join("");
@@ -421,6 +429,7 @@ ${THEME_TOKENS_CSS}
   const renderStatsPanelInto = ${renderStatsPanelInto.toString()};
   const createTicker = ${createTicker.toString()};
   const prefersReducedMotion = ${prefersReducedMotion.toString()};
+  const DIGEST_STRUCTURES = ${digestStructuresJson};
   const el = (id) => document.getElementById(id);
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
@@ -655,6 +664,7 @@ ${THEME_TOKENS_CSS}
       liveReference: liveReferenceForMode(checkedWikiMode()),
       synthesisBudget: readSynthBudget(),
       onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
+      digestStructures: DIGEST_STRUCTURES,
     });
   }
 
@@ -1139,6 +1149,7 @@ ${THEME_TOKENS_CSS}
         liveReference: liveReferenceForMode(initialMode),
         synthesisBudget: readSynthBudget(),
         onLiveLookup: function () { statusEl.textContent = "searching wikipedia\\u2026"; },
+        digestStructures: DIGEST_STRUCTURES,
       });
     } else {
       window.tmctChatSession = newSession();
