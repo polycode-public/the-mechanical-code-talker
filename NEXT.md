@@ -18,6 +18,13 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
+- the 3.0.3 nine-bench sweep, eight axes running (AGENT `worktree-agent-aa53af64a8b971d1c`,
+  INFERENCE `worktree-agent-a0cfc57fddaefaaf3`, CODE_INDEX `worktree-agent-a156b2ecd00c0ad00`,
+  CODE_SYNTHESIS `worktree-agent-a743484b3ac8fa47b`, RESEARCH `worktree-agent-aae6bf6241afbffe7`,
+  INGEST `worktree-agent-a32137087f3e2b206`, CEFR_ENGLISH `worktree-agent-a723d79ada8493878`,
+  CONVERSATION `worktree-agent-a8cf6f586793855a1`); AGI_SCALES dispatches once their envelopes
+  land, reading the lever-7 aggregator
+
 
 
 ## Open items
