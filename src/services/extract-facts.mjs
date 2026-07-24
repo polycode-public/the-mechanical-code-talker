@@ -125,6 +125,12 @@ const RELATIVE_PRONOUNS = new Set(["that", "which", "who", "whom", "whose"]);
 // At most this many triples from one sentence — a bound so a run-on can never
 // shatter into noise, not a first-wins cap.
 const MAX_TRIPLES_PER_SENTENCE = 4;
+// How far a copula object scan walks past an attributive-adjective compound
+// (wink tokenizes "medium-sized" as NOUN + "-" + VERB and never re-fuses it) to
+// reach the real head noun through a coordinate modifier list
+// (", burrowing, nocturnal mammal"). A small, explicit bound: past it the object
+// abstains rather than guess, so a long noun pile never mints a stray class.
+const ATTRIBUTIVE_CHAIN_MAX_HOPS = 8;
 
 /** Fold an entity surface to its stored key: a lexicon noun's lemma, else the
  *  word's own normFactTerm (the optimistic tier mints unlisted content nouns
@@ -242,6 +248,25 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
       if (!isNounish(j)) continue;
       let hi = j;
       while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
+      // A NOUN immediately followed by "-" then a VERB or ADJ is the left half of
+      // an attributive-adjective compound wink never re-fused ("medium-sized"),
+      // not the class. Walk forward through the coordinate modifier list (hyphens,
+      // commas, "and", further ADJ/VERB tokens) to the real head noun and re-point
+      // there; abstain if none appears within the bound, never mint the modifier.
+      if (values[hi + 1] === "-" && (pos[hi + 2] === "VERB" || pos[hi + 2] === "ADJ")) {
+        let head = null;
+        let k = hi + 1;
+        for (let hop = 0; hop < ATTRIBUTIVE_CHAIN_MAX_HOPS && k < values.length; hop += 1, k += 1) {
+          if (isNounish(k)) { head = k; break; }
+          const w = values[k]?.toLowerCase();
+          if (w === "-" || w === "," || w === "and" || pos[k] === "ADJ" || pos[k] === "VERB" || pos[k] === "CCONJ") continue;
+          break;
+        }
+        if (head === null) return null;
+        j = head;
+        hi = head;
+        while (hi + 1 < values.length && isNounish(hi + 1)) hi += 1;
+      }
       const headWord = String(values[hi]).toLowerCase();
       const nextIsOf = values[hi + 1]?.toLowerCase() === "of";
       if (!nextIsOf) return { label: entityRunAt(j), hi };

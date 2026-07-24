@@ -309,6 +309,25 @@ test("optimisticTriples: a compound noun is captured whole, never reduced to its
   );
 });
 
+test("optimisticTriples: an attributive hyphenated adjective is skipped; the real head noun after a modifier list is the class", () => {
+  // wink tokenizes "medium-sized" as medium/NOUN + "-"/PUNCT + sized/VERB and
+  // never re-fuses it, so a naive noun-run stops at "medium" and mints the wrong
+  // class. The object scan must walk past the whole coordinate modifier list
+  // ("medium-sized, burrowing, nocturnal") to the real head noun "mammal".
+  assert.deepEqual(
+    optimisticTriples("The aardvark is a medium-sized, burrowing, nocturnal mammal."),
+    [{ subject: "aardvark", predicate: "rdfs:subClassOf", object: "mammal" }],
+  );
+  // A hyphenated compound whose second half is not a VERB/ADJ (mother-in-law:
+  // NOUN + "-" + ADP) never triggers the attributive walk. This sentence's
+  // pre-existing "law ⊑ teacher" read (a separate subject-side truncation, not
+  // fixed here) is confirmed unchanged, so the new check did not make it worse.
+  assert.deepEqual(
+    optimisticTriples("My mother-in-law is a teacher."),
+    [{ subject: "law", predicate: "rdfs:subClassOf", object: "teacher" }],
+  );
+});
+
 test("optimisticTriples: a partitive container is composition, never a class; a classifier reads through", () => {
   // "a large body of ice" states what a glacier is made of, not what kind of
   // thing it is — no isa at all.
