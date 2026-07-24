@@ -45,7 +45,9 @@ Each line names its worktree branch; delete the line in the same commit that int
   6. "what is car used for" (no article) fails while "what is a car used for" works — widen the
      article tolerance in that reader;
   7. (corpus quality, separate) human-medium seeds mis-extract adjectives: "straight/simple is a
-     kind of person";
+     kind of person"; the child conceptnet pack holds "kettle is a kind of pot in" and the
+     "vessle" spelling — the digest lead makes these prominent ("Kettles are a pot in and a
+     vessle"), so a pack-quality pass now has a visible payoff;
   8. (already in flight) the 53-fact read-back wall is the digest layer's target specimen — the
      stage-5 wiring agent should check "what do you know about a person" renders grouped.
 

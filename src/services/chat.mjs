@@ -6460,8 +6460,10 @@ async function termDigestReadBack(term, termRows, allRows, lines) {
   try { article = digestTermFromRows(term, termRows, allRows); }
   catch { return null; }
   if (!article || !article.paragraphs.length) return null;
+  const sources = [...new Set((article.sources || []).map((s) => s.provenance).filter(Boolean))];
+  const sourceLine = sources.length ? `(sources: ${sources.join("; ")})\n` : "";
   const escape = `Say 'show the facts' for all ${lines.length} stored facts.`;
-  const text = `${article.paragraphs.join("\n\n")}\n\n${escape}`;
+  const text = `${article.paragraphs.join("\n\n")}\n\n${sourceLine}${escape}`;
   return { text, pending: { items: lines, noun: "facts" } };
 }
 
