@@ -46,7 +46,7 @@ test("bare invocation with non-TTY stdin reaches CHAT (the headline argv splice)
   const unknown = runCli("frobnicate");
   assert.equal(unknown.status, 2);
   assert.match(unknown.stderr, /unknown invocation "frobnicate"/);
-  assert.match(unknown.stderr, /Use `chat`, `memory`, `init`, `index`, `import`, `extract`, `extend --validate`, `syllogise`, `viz`, `serve`, `plan`, `cli <tool> …`, or `cli digest …`/);
+  assert.match(unknown.stderr, /Use `chat`, `memory`, `init`, `index`, `import`, `extract`, `extend --validate`, `syllogise`, `viz`, `digest`, `serve`, `plan`, `cli <tool> …`, or `cli digest …`/);
 });
 
 test("cli <toolName>: any tool routes to dispatchTool and prints its text result", async () => {
