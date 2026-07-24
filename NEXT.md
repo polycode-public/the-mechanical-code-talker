@@ -14,6 +14,21 @@ reports hold that record.
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
+## In flight (2026-07-24, ten concurrent worktree agents off `3f7a209c`, coordinator batching to main)
+
+Each line names its worktree branch; delete the line in the same commit that integrates the work.
+
+- fixture-corruption fix + example-graph byte-pin guard — `worktree-agent-ab16acd7e65856c4b`
+- discourse record slices 1+2 (PLAN_DISCOURSE_AND_RECOGNITION Part A) — `worktree-agent-a7e1eb742050b37d0`
+- repo-index phase 5, `init --with-persona code` runs the indexer — `worktree-agent-a320961a5e406d102`
+- repo-index phase 6, PLAN_CODE.md → seonix + tmct-side Track 5/§2.1 extraction — `worktree-agent-afa3e9b694e3d26fd`
+- benchmark mechanisation levers 1+6/2/3/7 (PLAN_BENCHMARK_MECHANISATION) — `worktree-agent-aef6ab2019223c753`
+- digest stages 1–4 as pure modules (PLAN_DIGEST; stage-5 wiring dispatches after discourse lands) — `worktree-agent-a9f701e5d2c1029b8`
+- idxbench + researchbench harnesses (their SKILL_BENCHMARK docs) — `worktree-agent-af3e4262349bcba57`
+- synthbench/code harness — `worktree-agent-a68922e15db7a1c68`
+- ingestbench harness (ING-8 checker; ING-9 dry-run only) — `worktree-agent-a32126735fd410725`
+- PLAN_CODE Track 5 foundations §3.1–3.3 + §2.1 scoping spike — `worktree-agent-af82e4e64eee61759`
+
 ## Open items
 
 - [ ] a read path writes to a committed fixture: `node bin/tmct.mjs chat --repo examples/mini-webapp` overwrites `examples/mini-webapp/.tmct/graph.json` (2,338 lines → 1, and the content genuinely differs from the committed hand-stamped version, not just formatting). Found while probing for `PLAN_DISCOURSE_AND_RECOGNITION.md`; the file was restored by hand before staging. tmct's own contract is that it READS a graph and never produces or mutates one (`docs/adapter-contract.md`), so something on the chat path is writing back — find it, stop it, and pin the fixture's bytes in an estate guard so the next occurrence fails a test instead of a reviewer's eye
