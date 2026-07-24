@@ -58,3 +58,41 @@ test("renderAgiRow prints one line per scale with its measured/assessment label"
   assert.ok(md.includes("assessment only"));
   assert.equal(md.split("\n").filter((l) => l.startsWith("- **")).length, 8);
 });
+
+const okAgentbench = { metrics: { overall: { hallucinationRate: 0, planCompletion: 1 } }, ladder: { rungReached: "TOOL-8" } };
+const okInfbenchChat = { capability: { chat: { fabricationZero: true, metrics: { overall: { completion: 1 } } } } };
+const okChatbench = { capability: { hardFailRate: 0, tier1PassRate: 0.92 } };
+
+test("buildAgiRow's abstention-calibration degrades to the agentbench-only reading when infbench/chatbench envelopes are absent", async () => {
+  const agentbench = JSON.parse(await readFile(ENVELOPE_FILE, "utf8"));
+  const row = buildAgiRow({ agentbench, version: "9.9.9" });
+  const scale = row.scales.find((s) => s.scale === "abstention-calibration");
+  assert.equal(scale.measured, true);
+  assert.ok(!/spans three pools/.test(scale.reading));
+});
+
+test("buildAgiRow's abstention-calibration reports the three-pool reading only once agentbench, infbench's chat arm, and chatbench ALL clear their zero-fabrication check", () => {
+  const row = buildAgiRow({ agentbench: okAgentbench, infbench: okInfbenchChat, chatbench: okChatbench, version: "9.9.9" });
+  const scale = row.scales.find((s) => s.scale === "abstention-calibration");
+  assert.equal(scale.measured, true);
+  assert.match(scale.reading, /spans three pools/);
+});
+
+test("buildAgiRow's abstention-calibration stays at the agentbench-only reading when only one of infbench/chatbench clears", () => {
+  const infOnly = buildAgiRow({ agentbench: okAgentbench, infbench: okInfbenchChat, version: "9.9.9" })
+    .scales.find((s) => s.scale === "abstention-calibration");
+  assert.ok(!/spans three pools/.test(infOnly.reading));
+  const dirtyChat = { capability: { hardFailRate: 0.1, tier1PassRate: 0.9 } };
+  const chatDirty = buildAgiRow({ agentbench: okAgentbench, infbench: okInfbenchChat, chatbench: dirtyChat, version: "9.9.9" })
+    .scales.find((s) => s.scale === "abstention-calibration");
+  assert.ok(!/spans three pools/.test(chatDirty.reading));
+});
+
+test("buildAgiRow's knowledge-scale-tolerance reads corpus/child/manifest.json's counts.facts directly, and stays assessment-only when absent", () => {
+  const withManifest = buildAgiRow({ childManifest: { counts: { facts: 12345 } }, version: "9.9.9" })
+    .scales.find((s) => s.scale === "knowledge-scale-tolerance");
+  assert.equal(withManifest.measured, true);
+  assert.match(withManifest.reading, /12,345 triples/);
+  const withoutManifest = buildAgiRow({ version: "9.9.9" }).scales.find((s) => s.scale === "knowledge-scale-tolerance");
+  assert.equal(withoutManifest.measured, false);
+});
