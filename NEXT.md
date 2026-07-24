@@ -40,6 +40,13 @@ Each line names its worktree branch; delete the line in the same commit that int
 - [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 3–5 (plural binding past a count, the tie refusal, the remaining bindable-form lanes) — slices 1–2 shipped 2026-07-24 (the record threads through `runTurn`, and `games/cross-turn-temporal-composition-composes` is the flipped row); the plan doc stages what's next
 - [ ] prove the repo-index backend seam admits an out-of-repo backend with no tmct change: seonix registers a C#/Java backend against a released tmct 3.0.x (registration, conformance, IDX-5 scoring). Seonix-side work — their inbox has the phase-6 handover; `PLAN_REPO_INDEX.md` Open risks names the proof. Everything else in that plan (branch merge, phases 1–6) is delivered
 
+CONVERSATION 3.0.3 sweep (see `BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
+
+- [ ] "give me an overview of this project" gets the identity card, not the architecture overview — the recognizer catches "architecture" but not the "overview of {this project/codebase/repo}" sibling; extend the architecture/overview intent set (FLOW-3)
+- [ ] "what are the packages here" is swallowed by the vocabulary/digest lane ("package means box"), and "list the packages" reports packages isn't a listable kind though the architecture answer already computes them — add packages as a listable kind and guard the digest lane from a plain package-enumeration ask (FLOW-3)
+- [ ] "thanks bye" (thanks-word directly adjacent to a bye-word, no delimiter) misparses as a capability-teach ("a thank can bye") instead of closing — exclude a leading thanks+bye adjacency from the capability-teach lane; class of the 2.11.0 farewell finding, now fixed for "gtg thx" but not this adjacency (FLOW-6)
+- [ ] (low priority, judge-flagged) "what is a cache" reads the seeded Wikipedia digest with its source line but doesn't signal it's general vocabulary rather than a fact from this repo's graph — an intended surface with a cited source, not a wall; consider a "general vocabulary, not from this codebase" cue
+
 ## Discipline
 
 `CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split, the test
