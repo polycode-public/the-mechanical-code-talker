@@ -3,9 +3,9 @@
 Status: MERGED to `main` (2026-07-24, lands in 3.0.0). Phases 1–4 are live code on `main`; the
 implementation log below records what the `repo-index` branch delivered. The branch's one e2e
 catch — the bare-invocation usage pin needing the new `index` verb — was re-applied at merge (the
-fix had been rebased out of the branch head). Remaining: phase 5 (`init --repo --with-persona
-code` runs `indexRepository` after scaffolding) and phase 6 (the PLAN_CODE.md move into seonix,
-cross-repo). **tmct's language scope is settled at JS/TS + Python** (phase 3, below): C#/Java stay
+fix had been rebased out of the branch head). Phase 5 (`init --repo --with-persona code` runs
+`indexRepository` after scaffolding) is now live code too. Remaining: phase 6 (the PLAN_CODE.md
+move into seonix, cross-repo). **tmct's language scope is settled at JS/TS + Python** (phase 3, below): C#/Java stay
 in seonix, which registers them through the same backend seam — what tmct owes is language
 independence at that seam, not more extractors. NEXT.md carries the finishing item.
 
@@ -451,10 +451,12 @@ reworded (README, `docs/adapter-contract.md`, `src/adapters/source.mjs`, `packag
 and the `src/services/chat.mjs` + `chat-session.mjs` live strings). No pinned-string test broke — the
 tests match on the "no code graph is loaded" prefixes, which were preserved.
 
-**Phase 5 — the persona-gated onboarding path.** Wire `tmct init --repo <path> --with-persona code`
-to run Phase 2's indexer, per Part 6's design. No changes to `runTurn`/`runAsk`/`ask.mjs`. Exit
-criterion: one command produces a repo whose chat session answers both a fact question ("what is a
-dog") and a code-structure question ("which modules import X") in the same session, backed by a
+**Phase 5 — the persona-gated onboarding path. DONE.** `tmct init --repo <path> --with-persona code`
+(`bin/tmct.mjs`'s init dispatcher) now also runs Phase 2's indexer against the repo's real source,
+writing `.tmct/graph.json` alongside the persona's corpus-bias preset — no changes to
+`runTurn`/`runAsk`/`ask.mjs`. Exit criterion met (`test/index/init-persona-code-onboarding.test.mjs`):
+one CLI command produces a repo whose chat session answers both a fact question ("what is a dog")
+and a code-structure question ("which modules import X") in the same session, backed by the
 self-produced graph.
 
 **Phase 6 — `PLAN_CODE.md` relocates, and Phase 2 of this plan (seonix-side) begins.** Move

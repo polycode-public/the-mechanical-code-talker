@@ -19,7 +19,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
 - discourse record slices 1+2 (PLAN_DISCOURSE_AND_RECOGNITION Part A) — `worktree-agent-a7e1eb742050b37d0`
-- repo-index phase 5, `init --with-persona code` runs the indexer — `worktree-agent-a320961a5e406d102`
 - repo-index phase 6, PLAN_CODE.md → seonix + tmct-side Track 5/§2.1 extraction — `worktree-agent-afa3e9b694e3d26fd`
 - benchmark mechanisation levers 1+6/2/3/7 (PLAN_BENCHMARK_MECHANISATION) — `worktree-agent-aef6ab2019223c753`
 - digest stages 1–4 as pure modules (PLAN_DIGEST; stage-5 wiring dispatches after discourse lands) — `worktree-agent-a9f701e5d2c1029b8`
