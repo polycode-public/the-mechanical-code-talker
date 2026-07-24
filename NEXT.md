@@ -38,6 +38,7 @@ Each line names its worktree branch; delete the line in the same commit that int
   architecture/overview/basename/disclosure fix pass
 
 - [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 3–5 (plural binding past a count, the tie refusal, the remaining bindable-form lanes) — slices 1–2 shipped 2026-07-24 (the record threads through `runTurn`, and `games/cross-turn-temporal-composition-composes` is the flipped row); the plan doc stages what's next
+- [ ] INGESTBENCH ladder tops out at ING-6 (38% recall < 50% floor) — the ordinal/temporal-threading slice is what would lift it and un-gate ING-7's already-passing value-compare plus the two judged rungs (ING-8 2.0/2, ING-9 1.5/2); founding baseline measured in `BENCHMARK_INGEST_3.0.3.md`, run `SKILL_BENCHMARK_INGEST.md` to re-measure after the slice lands
 - [ ] prove the repo-index backend seam admits an out-of-repo backend with no tmct change: seonix registers a C#/Java backend against a released tmct 3.0.x (registration, conformance, IDX-5 scoring). Seonix-side work — their inbox has the phase-6 handover; `PLAN_REPO_INDEX.md` Open risks names the proof. Everything else in that plan (branch merge, phases 1–6) is delivered
 
 ## Discipline
