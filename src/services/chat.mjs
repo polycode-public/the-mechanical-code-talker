@@ -5922,6 +5922,10 @@ async function presuppositionNudge(query, { graph, memoryDir }) {
  *  WALL_MISS_RE: the suppression keys on the PREVIOUS answer matching it, so this
  *  text self-limits — a third consecutive miss re-offers the tailored hint. */
 const WALL_REPEAT_ONELINER = "still couldn't parse that — /help lists every query shape.";
+/** The graph-less bootstrap wall's opening line — shared with the teach-offer
+ *  collapse below, which treats this wall (like the shortened generic wall)
+ *  as text a term-specific offer REPLACES rather than stacks under. */
+const NO_GRAPH_BOOTSTRAP_WALL_LEAD = "I can't answer that as a code question — no code graph is loaded in this session.";
 
 /** The orientation-repeat one-liner. The conversational
  *  orientation branch sits OUTSIDE the composed-only wall-shortening gate (it
@@ -7275,8 +7279,8 @@ function withDeducedGoal(res, envelope, query) {
 }
 
 async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle = {}, cache = null, focusLabel = null) {
-  let normFactTerm;
-  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  let normFactTerm; let normFactPredicate;
+  try { ({ normFactTerm, normFactPredicate } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   const q = String(query).trim();
 
   // (a-pre) "what is used for riding" / "what can be used for riding" / "what
@@ -7498,7 +7502,29 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // matched against fact subjects, and — the actual bug — the result is
     // FILTERED to just that one predicate (mgx:usedFor) instead of every
     // relation about the subject undifferentiated.
-    const { subject, predicate } = splitMetaPredicate(metaTerm);
+    const split = splitMetaPredicate(metaTerm);
+    const { predicate } = split;
+    // A leading article survives the T5/BARE_WHATIS capture ("what is the car
+    // used for" → "the car") — stripped the same way normFactTerm strips it,
+    // so the article never decides whether the subject matches.
+    let subject = split.subject.replace(/^(?:the|an?)\s+/i, "").trim() || split.subject;
+    // A predicate-shaped ask whose subject is the session anaphor ("what is
+    // it used for") resolves against the standing focus, exactly as the
+    // IS_ADJECTIVE/ISA yes/no readers resolve theirs. With no focus standing
+    // the pronoun is named and declined (the cold-pronoun voice) — never a
+    // fact lookup on the literal word "it", and never a teach-offer for it.
+    let focusSubstituted = false;
+    if (predicate && IS_ADJECTIVE_PRONOUN_RE.test(subject)) {
+      if (!focusLabel) {
+        const tail = String(FACT_PREDICATE_PHRASES[predicate] || "").replace(/^(?:is|are)\s+/, "");
+        return {
+          text: `not sure what "${subject.toLowerCase()}" refers to yet — name the subject directly, e.g. "what is a <name>${tail ? ` ${tail}` : ""}".`,
+          replace: miss, miss: true, selfContainedMiss: true,
+        };
+      }
+      subject = focusLabel;
+      focusSubstituted = true;
+    }
     const variants = factTermVariants(normFactTerm, subject);
     // factRows (trust+sourceIds-bearing), not the plain memoryFacts shape — the
     // bias-weighted ranking below needs each hit's sourceIds to resolve which
@@ -7507,16 +7533,23 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // back where it's hidden or that it's the objective (WORLD_INTERNAL_PREDICATES).
     const subjectHits = (await factRows(memoryDir, cache))
       .filter((f) => variants.has(f.subject) && !WORLD_INTERNAL_PREDICATES.has(f.predicate));
-    let hits = predicate ? subjectHits.filter((f) => f.predicate === predicate) : subjectHits;
+    // Matched through normFactPredicate, so a fact stored under a minted
+    // spelling of the same relation ("mgx:used-for", from the participle
+    // teach frame, in a store written before the spellings converged) is
+    // found by the curated spelling it means.
+    let hits = predicate ? subjectHits.filter((f) => normFactPredicate(f.predicate) === predicate) : subjectHits;
     if (!hits.length) {
-      // The subject itself is known, but not under this specific relation —
-      // an honest, specific "no" rather than falling through to the generic
-      // "isn't a term in this graph's own vocabulary" wall (which would be
-      // actively misleading here: the subject IS a known term).
-      if (predicate && subjectHits.length) {
+      // The subject itself is known — as a fact subject, or as the standing
+      // focus a pronoun just resolved to — but not under this specific
+      // relation: an honest, specific "no" rather than falling through to
+      // the generic "isn't a term in this graph's own vocabulary" wall
+      // (which would be actively misleading here: the subject IS a known
+      // term).
+      if (predicate && (subjectHits.length || focusSubstituted)) {
         return {
           text: `I don't have any "${FACT_PREDICATE_PHRASES[predicate]}" facts about ${subject}.`,
           replace: miss,
+          ...(subjectHits.length ? {} : { miss: true }),
         };
       }
       // The term names nothing as a fact SUBJECT, but may exist only as the
@@ -8356,6 +8389,14 @@ const HAS_METHOD_OPEN_RE = /^what\s+methods\s+does\s+([\w'-]+)\s+have[?.!\s]*$/i
  *  cascade/orientation nudge that already handles it. */
 const IS_ADJECTIVE_YESNO_RE = /^(?:is|are|was|were)\s+(.+?)\s+([A-Za-z][\w-]*)[?.!\s]*$/i;
 const IS_ADJECTIVE_PRONOUN_RE = /^(?:it|this|that)$/i;
+/** A backtracked subject that is really a cross-turn temporal comparison —
+ *  a bindable form followed by a comparison word ("that before chat.mjs
+ *  was", from "was that before chat.mjs was touched"). The comparison lane
+ *  owns the closed-participle family; a cousin with a participle outside
+ *  that set still lands here, and offering to teach a fact about "that
+ *  before chat.mjs was" is a category error, so the property readers
+ *  decline it the way they decline a personal-pronoun subject. */
+const BINDABLE_COMPARISON_SUBJECT_RE = /^(?:it|this|that)(?:\s+one)?\s+(?:before|after)\b/i;
 /** IS_ADJECTIVE_YESNO_RE's
  *  subject capture is unbounded/unrestricted (see its own docblock above), so
  *  a pronoun-subject IDENTITY question ("are you happy", "are you like
@@ -8572,6 +8613,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
         // "you", so `subject` itself would already carry the pronoun verbatim).
         if (subject && !/^there\b/i.test(subject) && !envelope?.parsed
           && !IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE.test(rawSubject)
+          && !BINDABLE_COMPARISON_SUBJECT_RE.test(rawSubject)
           && !PLACE_ADVERB_OBJECT_RE.test(emptyIsAdj[2].trim())) {
           return unknownAdjectiveOffer(subject, emptyIsAdj[2].trim().toLowerCase());
         }
@@ -9632,7 +9674,7 @@ async function factReadBackReaders(memoryDir, query, envelope, miss, graph = nul
     // this whole reader decline HONESTLY — no fact lookup, no teach-offer —
     // and fall through to whatever handles identity/small-talk questions
     // instead, rather than special-casing a return here.
-    const subject = IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE.test(rawSubject) ? null
+    const subject = IS_ADJECTIVE_YESNO_PRONOUN_SUBJECT_RE.test(rawSubject) || BINDABLE_COMPARISON_SUBJECT_RE.test(rawSubject) ? null
       : IS_ADJECTIVE_PRONOUN_RE.test(rawSubject) ? (focusLabel || null) : rawSubject;
     const adjective = isAdj[2].trim().toLowerCase();
     if (subject) {
@@ -11857,35 +11899,51 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // the two ISO dates compare with both sides cited. Checked BEFORE the ask
   // engine (the same precedence RENAME_HISTORY_RE takes, below) so the
   // sentence never reaches the keyword-spot strategy's multi-token patient
-  // guard; an unbound form, an undated referent, or an unanswerable clause
-  // all fall through, and that guard's honest miss stands unchanged.
+  // guard. A form this shape that CANNOT compose still ends here, with a
+  // specific miss naming what's missing (no referent for the form, an
+  // undated referent, no graph, an undatable clause) — falling through used
+  // to hand the sentence to the teach-offer cascade, which read "that before
+  // X was" as a subject to learn facts about.
   {
-    const cmp = graph && discourseHolder ? String(query).trim().match(TEMPORAL_COMPARISON_RE) : null;
+    const cmp = String(query).trim().match(TEMPORAL_COMPARISON_RE);
     if (cmp) {
       const [, form, cmpOp, clauseSubject, participle] = cmp;
-      const bound = bindDiscourseForm(discourseHolder.record, form);
-      const refDay = String(bound?.referent?.attrs?.date || "").slice(0, 10);
-      if (bound?.referent && refDay) {
-        const { ask } = await import("../domain/ask.mjs");
-        const fresh = ask(graph, `when was ${clauseSubject} ${participle}`);
-        const freshHit = (!fresh?.tmct_ask?.miss && !fresh?.tmct_ask?.ambiguous) ? fresh?.tmct_ask?.matches?.[0] : null;
-        const freshCommit = freshHit?.id ? graph.byId?.get?.(freshHit.id) : null;
-        const clauseDay = freshCommit?.class === "Commit"
-          ? String((freshCommit.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10)
-          : "";
-        if (clauseDay) {
-          const holds = cmpOp.toLowerCase() === "before" ? refDay < clauseDay : refDay > clauseDay;
-          const relation = refDay < clauseDay ? "came before" : refDay > clauseDay ? "came after" : "landed on the same day as";
-          const verb = participle.toLowerCase();
-          const text = `${holds ? "Yes" : "No"} — ${bound.referent.label} (${refDay}) ${relation} ${clauseSubject} was last ${verb} (${freshCommit.label}, ${clauseDay}).`;
-          note(trace, "goal: compare a prior answer's dated referent against a freshly read event (cross-turn temporal composition)");
-          note(trace, `lane: TEMPORAL_COMPARISON_RE — "${form}" bound ${bound.referent.label} (${refDay}) through the discourse record; the embedded clause re-ran as its own when-question`);
-          const turn = plainTurn(query, text, { via: "composed", miss: false, focus });
-          const cited = [graph.byId?.get?.(bound.referent.ids[0]), freshCommit].filter(Boolean);
-          turn.detail = { traversal: `discourse ${bound.referent.ref} (${refDay}) vs last-${verb} of ${clauseSubject} (${clauseDay})`, matches: cited };
-          return turn;
-        }
+      const verb = participle.toLowerCase();
+      const refMiss = (text) => {
+        note(trace, "goal: compare a prior answer's dated referent against a freshly read event (cross-turn temporal composition)");
+        note(trace, `lane: TEMPORAL_COMPARISON_RE — "${form}" could not compose a comparison; a specific miss names why, never the teach-offer cascade`);
+        return plainTurn(query, text, { via: "miss", miss: true, focus });
+      };
+      const bound = discourseHolder ? bindDiscourseForm(discourseHolder.record, form) : null;
+      if (!bound?.referent) {
+        return refMiss(`I don't have a referent for "${form}" yet — nothing answered earlier in this conversation binds it. Ask about the event first (e.g. "when was ${clauseSubject} last ${verb}"), then ask the comparison again.`);
       }
+      const refDay = String(bound.referent.attrs?.date || "").slice(0, 10);
+      if (!refDay) {
+        return refMiss(`"${form}" refers to ${bound.referent.label}, but I have no date on record for it — so I can't place it before or after ${clauseSubject} was ${verb}.`);
+      }
+      if (!graph) {
+        return refMiss(`"${form}" refers to ${bound.referent.label} (${refDay}), but I need a code graph to date when ${clauseSubject} was last ${verb} — no code graph is loaded.`);
+      }
+      const { ask } = await import("../domain/ask.mjs");
+      const fresh = ask(graph, `when was ${clauseSubject} ${participle}`);
+      const freshHit = (!fresh?.tmct_ask?.miss && !fresh?.tmct_ask?.ambiguous) ? fresh?.tmct_ask?.matches?.[0] : null;
+      const freshCommit = freshHit?.id ? graph.byId?.get?.(freshHit.id) : null;
+      const clauseDay = freshCommit?.class === "Commit"
+        ? String((freshCommit.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10)
+        : "";
+      if (!clauseDay) {
+        return refMiss(`"${form}" refers to ${bound.referent.label} (${refDay}), but I couldn't date when ${clauseSubject} was last ${verb} in this index — so I can't compare the two.`);
+      }
+      const holds = cmpOp.toLowerCase() === "before" ? refDay < clauseDay : refDay > clauseDay;
+      const relation = refDay < clauseDay ? "came before" : refDay > clauseDay ? "came after" : "landed on the same day as";
+      const text = `${holds ? "Yes" : "No"} — ${bound.referent.label} (${refDay}) ${relation} ${clauseSubject} was last ${verb} (${freshCommit.label}, ${clauseDay}).`;
+      note(trace, "goal: compare a prior answer's dated referent against a freshly read event (cross-turn temporal composition)");
+      note(trace, `lane: TEMPORAL_COMPARISON_RE — "${form}" bound ${bound.referent.label} (${refDay}) through the discourse record; the embedded clause re-ran as its own when-question`);
+      const turn = plainTurn(query, text, { via: "composed", miss: false, focus });
+      const cited = [graph.byId?.get?.(bound.referent.ids[0]), freshCommit].filter(Boolean);
+      turn.detail = { traversal: `discourse ${bound.referent.ref} (${refDay}) vs last-${verb} of ${clauseSubject} (${clauseDay})`, matches: cited };
+      return turn;
     }
   }
   // RENAME HISTORY — "what was X called before" and its siblings. The index
@@ -12099,7 +12157,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     answer = (!graph || noCodeGraph(graph)) && (!config || e?.emptyGraph || /^cannot read graph artifact\b/.test(thrown))
       // A browser session has no `tmct init in a repo` to reach for, so its
       // fallback drops that CLI-only remedy and keeps just the teach pointer.
-      ? `I can't answer that as a code question — no code graph is loaded in this session. ${vocabHint
+      ? `${NO_GRAPH_BOOTSTRAP_WALL_LEAD} ${vocabHint
         || (browser
           ? "I can still remember and answer taught facts (try \"every bug is an issue\")."
           : "I can still remember and answer taught facts (try \"every bug is an issue\"), or run `tmct init` in a repo to index one.")}`
@@ -12566,6 +12624,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (fallback) bareMetaHit = { text: fallback.text, replace: true };
   }
   const coldPronounDecline = focus?.label ? null : coldPronounDeclineText(query);
+  let selfContainedMiss = false;
   if (bareMetaHit?.reference) {
     // The bare-form reference hit mirrors (4h): the cited answer replaces the
     // miss, the turn is no longer recorded as one, and the article's grounded
@@ -12689,6 +12748,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // (the isa ladder's "I can't confirm that" closers) — the turn record
       // keeps miss=true and via stays untouched, so miss-rate metrics and
       // recall's own miss-gated lanes see it exactly like the wall it replaced.
+      // One flagged `selfContainedMiss` already names its own recovery, so
+      // the empty-graph orientation pointer below stays off it — a pronoun
+      // decline with an index pointer under it is two answers to one turn.
+      if (fact.selfContainedMiss) selfContainedMiss = true;
       if (!fact.miss) {
         via = "fact";
         recordMiss = false;
@@ -13037,6 +13100,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // WALL KINDNESS: a second consecutive wall collapses to a one-liner whose
   // text does NOT match WALL_MISS_RE — self-limiting, so a third consecutive
   // miss re-offers the tailored hint instead of droning.
+  let genericWallMiss = false;
   if (miss && recordMiss && via === "composed" && WALL_MISS_RE.test(answer)) {
     const repeat = last?.answer && WALL_MISS_RE.test(String(last.answer));
     // A GRAPH-LESS session's wall must not hand a vocabulary question a list
@@ -13047,17 +13111,59 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         ? `I couldn't read that as a question I can answer. ${vocabHint} Type /help for all query shapes.`
         : shortMissHint(query));
     via = "miss";
+    genericWallMiss = true;
     note(trace, `lane: (5) SHORT TAILORED MISS — every lane above declined; ${repeat ? "REPEAT collapsed to one-liner (wall kindness)" : "the full grammar wall was shortened + tailored to the query's keywords"}`);
+  }
+  // TEACH-OFFER (computed first, applied after the polish below): a "what is
+  // X" miss where X is genuinely unknown EVERYWHERE — not a real graph
+  // entity, not a schema/vocab term, and not already in memory. Computed
+  // ahead of the empty-graph polish because the two are alternative
+  // recoveries for the same dead-end: a miss that is about to offer the
+  // teach lane must not ALSO grow an index-this-repo pointer, or one
+  // unparsed turn stacks three separate messages.
+  let teachOffer = null;
+  if (recordMiss && (via === "composed" || via === "miss") && memoryDir) {
+    // "what do you know about X" is its OWN sibling shape — checked FIRST,
+    // without a resolveEntity(graph) gate: it's inherently a MEMORY question,
+    // so "nothing yet, teach me" is appropriate even when X is also a real
+    // graph entity.
+    // Contraction-expanded, so "what's X" earns the same offer "what is X"
+    // does. Both shapes below anchor on the written-out copula.
+    const offerSrc = expandContractions(String(query).trim());
+    const knowAboutTerm = offerSrc.match(KNOW_ABOUT_RE)?.[1]?.trim();
+    const offerTerm = knowAboutTerm || metaTermOf(offerSrc, envelope);
+    // A term that LEADS with a bindable anaphor ("it used for", from an
+    // unresolved "what is it used for") is a pronoun that failed to bind,
+    // not a teachable subject — offering to learn facts about it would echo
+    // the garble back as an invitation to store it.
+    const anaphorLedTerm = offerTerm && /^(?:it|this|that|these|those|them)\b/i.test(offerTerm.trim());
+    if (offerTerm && !anaphorLedTerm) {
+      let normFactTerm;
+      try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { normFactTerm = null; }
+      if (normFactTerm) {
+        const cleanTerm = normFactTerm(offerTerm);
+        const ent = knowAboutTerm ? null : await resolveEntity(graph, offerTerm);
+        if (!ent) {
+          const variants = factTermVariants(normFactTerm, offerTerm);
+          const known = (await memoryFacts(memoryDir)).some((f) => variants.has(f.subject) || variants.has(f.object));
+          if (!known) teachOffer = unknownVocabTermOffer(cleanTerm);
+        }
+      }
+    }
   }
   // #4 HONEST-EMPTY POLISH — an empty CODE graph: any still-standing engine
   // dead-end (an honest empty, the short miss, the bootstrap note) carries the
-  // exit toward a real graph, unless it already points there. Only when
-  // genuinely empty. The CLI keeps the --repo/example pointer verbatim; a
-  // browser or a live adventure has no such command to reach for, so each gets
-  // a teach-forward pointer (and the adventure also names the world asides that
-  // are guaranteed to hit).
+  // exit toward a real graph, unless it already points there — or unless the
+  // turn already names its own recovery (a self-contained decline, or a
+  // teach-offer about to land). Only when genuinely empty. The CLI keeps the
+  // --repo/example pointer verbatim; a browser or a live adventure has no
+  // such command to reach for, so each gets a teach-forward pointer (and the
+  // adventure also names the world asides that are guaranteed to hit).
+  // A live adventure keeps its polish even beside a teach-offer: the world
+  // asides ("look", "talk to the butler") are guidance the offer can't carry.
   const adventureLive = !!planHolder?.state?.adventure;
-  if (recordMiss && (via === "composed" || via === "miss")
+  if (recordMiss && (via === "composed" || via === "miss") && !selfContainedMiss
+      && (adventureLive || !teachOffer)
       && noCodeGraph(graph) && !/--repo|tmct init|no code graph/i.test(answer)) {
     if (adventureLive) {
       answer = `${answer}\n(I don't know that yet — you can teach me: say "remember: <thing> is a <kind>". Or ask the world: "look", "where is the key", "talk to the butler".)`;
@@ -13070,36 +13176,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a tmct index/--repo pointer appended");
     }
   }
-  // TEACH-OFFER: a "what is X" miss where X is genuinely unknown EVERYWHERE —
-  // not a real graph entity, not a schema/vocab term, and not already in
-  // memory — gets a short offer appended UNDER the existing miss text, never
-  // replacing it.
-  if (recordMiss && (via === "composed" || via === "miss") && memoryDir) {
-    // "what do you know about X" is its OWN sibling shape — checked FIRST,
-    // without a resolveEntity(graph) gate: it's inherently a MEMORY question,
-    // so "nothing yet, teach me" is appropriate even when X is also a real
-    // graph entity.
-    // Contraction-expanded, so "what's X" earns the same offer "what is X"
-    // does. Both shapes below anchor on the written-out copula.
-    const offerSrc = expandContractions(String(query).trim());
-    const knowAboutTerm = offerSrc.match(KNOW_ABOUT_RE)?.[1]?.trim();
-    const offerTerm = knowAboutTerm || metaTermOf(offerSrc, envelope);
-    if (offerTerm) {
-      let normFactTerm;
-      try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { normFactTerm = null; }
-      if (normFactTerm) {
-        const cleanTerm = normFactTerm(offerTerm);
-        const ent = knowAboutTerm ? null : await resolveEntity(graph, offerTerm);
-        if (!ent) {
-          const variants = factTermVariants(normFactTerm, offerTerm);
-          const known = (await memoryFacts(memoryDir)).some((f) => variants.has(f.subject) || variants.has(f.object));
-          if (!known) {
-            answer = `${answer}\n${unknownVocabTermOffer(cleanTerm)}`;
-            note(trace, `intermediate: TEACH-OFFER — "${cleanTerm}" is unknown to both the graph and memory, so the miss got an offer to learn appended`);
-          }
-        }
-      }
-    }
+  if (teachOffer) {
+    // On a GENERIC wall (the shortened "couldn't read that", or the
+    // graph-less bootstrap wall) the offer IS the whole answer — the wall
+    // names no term, so keeping it above the offer stacks two messages
+    // where one carries everything. A receipt-bearing specific miss keeps
+    // the offer appended beneath it, unchanged.
+    const genericWall = genericWallMiss || answer.startsWith(NO_GRAPH_BOOTSTRAP_WALL_LEAD);
+    answer = genericWall ? teachOffer : `${answer}\n${teachOffer}`;
+    note(trace, `intermediate: TEACH-OFFER — the term is unknown to both the graph and memory, so the miss ${genericWall ? "collapsed to the offer to learn" : "got an offer to learn appended"}`);
   }
   // COLLISION RESTORE (pairs with relaxedTeachCollision, above): if nothing in
   // the would-miss cascade actually stored/answered anything, fall back to

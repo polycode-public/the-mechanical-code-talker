@@ -375,6 +375,16 @@ test("goal-reasoner e2e: domain gate — an unrelated global-mode request REFUSE
   assert.match(String(r.why), /open-world.*escalate/, "the honest open-world seam, not an invented goal");
 });
 
+test("goal-reasoner e2e: the domain-gate refusal reads as plain language — names what it can plan about, never the grammar machinery", async () => {
+  const r = await goalDriver("write a haiku about pizza", ["tmct_impact", "tmct_untested"], SHARED.ctx);
+  assert.equal(r.refused, true);
+  const why = String(r.why);
+  assert.match(why, /I can only plan toward goals about things this graph knows/, "the honest content: what the planner CAN plan about");
+  assert.match(why, /modules/, "the covered domain, as a plain plural noun");
+  assert.doesNotMatch(why, /ask\.mjs|NL grammar|entity kind|focusClass/i, "no internals leak into user-facing chat text");
+  assert.doesNotMatch(why, /about Module\b/, "the raw class name never reads as prose");
+});
+
 test("goal-reasoner e2e: the gate is DOMAIN-based, not a keyword blocklist (held-out off-domain phrasings)", async () => {
   const tools = ["tmct_impact", "tmct_untested"];
   for (const request of [
