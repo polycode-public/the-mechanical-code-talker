@@ -144,6 +144,13 @@ canonicalization). New: the graph-delta effect vocabulary itself (a closed set o
 add/del-entity, add/del-edge, retitle-entity effect tokens over the ontology's classes and
 predicates).
 
+Landed: `src/domain/codeplan/graph-delta.mjs` — the code-graph state (entities + edges), the
+five-token closed effect vocabulary (`EFFECT_OPS`) over the closed `ENTITY_CLASSES` /
+`EDGE_PREDICATES` sets, `applyGraphEffect`/`applyGraphEffects` (pure, fail-loud on an ill-formed
+delta), the path-independent `canonicalStateKey`, `diffGraphStates`/`effectsEqual` for the tier-1
+declared-vs-observed ledger (§3.5), and `graphStateFromEntities` to read a state out of a loaded
+graph payload. Tests: `test/domain/codeplan-graph-delta.test.mjs`.
+
 ### 3.2 The operator catalogue: transformations as taught action families
 
 Each transformation operator is one taught action family, slot for slot:
