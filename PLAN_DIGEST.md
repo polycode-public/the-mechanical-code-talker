@@ -184,8 +184,17 @@ structure, and composition — not new knowledge.
      digest threshold leads with the digest paragraph, the full list held behind the
      "show the facts"/"more" escape (`src/services/chat.mjs`, the subject-scan region only). The
      in-browser dock stubs the bank loader out and falls back to the flat list. DONE.
-   - The research and ledger term panels: render the digest shape client-side from a
-     build-time-embedded structure table. NOT STARTED.
+   - The ledger term panel: the focus card leads with the digest paragraph and its sources.
+     The digest is computed node-side by the demo generator (`scripts/build-demo-site.mjs`, where
+     the sentence-structure bank is readable) and embedded for the client focus card to render on
+     the initial focus. DONE for the demo site's initial focus. Client refocus to another term,
+     and the CLI `tmct viz` page, still show the fact groups without a digest — a client-side
+     digest over the embedded rows plus an embedded structure table is the next step, and needs
+     the digest-ready rows embedded alongside the ledger rows.
+   - The research per-source panel: the research page grows its store in the browser, so its
+     digest runs client-side over the live in-browser store from an embedded structure table (the
+     pure `digestTerm` links into a browser bundle). NOT STARTED — the next step after the
+     ledger's client-side digest, sharing the same embedded-table mechanism.
 
 ## Decisions recorded
 

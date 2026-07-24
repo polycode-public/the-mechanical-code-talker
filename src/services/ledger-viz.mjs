@@ -504,8 +504,8 @@ function sparkCaptionHtml(stats) {
  *  different questions (did this render even offer the reference; did the
  *  browser actually manage to load it), and both must hold for the live
  *  path to run. */
-export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, worthALook, payload, meta, memoryAskBundle, stats, ledgerBundleAvailable = false } = {}) {
-  const ledgerJson = embedJson({ rows: rows || [], terms: terms || [], edges: edges || [], focus: focus || null, contradictions: contradictions || [], worthALook: worthALook || null, meta: meta || { shown: 0, total: 0, truncated: false } });
+export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, worthALook, payload, meta, memoryAskBundle, stats, ledgerBundleAvailable = false, focusDigest = null } = {}) {
+  const ledgerJson = embedJson({ rows: rows || [], terms: terms || [], edges: edges || [], focus: focus || null, contradictions: contradictions || [], worthALook: worthALook || null, meta: meta || { shown: 0, total: 0, truncated: false }, focusDigest: focusDigest || null });
   const payloadJson = embedJson(payload || { individuals: [], objectProperties: [] });
   const shown = meta?.shown ?? (rows || []).length;
   const title = `tmct ledger — ${shown} fact${shown === 1 ? "" : "s"}${focus ? ` (focus: ${escapeHtml(focus)})` : ""}`;
@@ -641,6 +641,9 @@ ${THEME_TOKENS_CSS}
   .focuscard { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .8rem 1rem; margin-bottom: 1rem; }
   .focuscard .term { font-size: 1.35rem; font-weight: 700; }
   .focuscard .klass, .focuscard .stats { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); margin-top: .3rem; font-variant-numeric: tabular-nums; }
+  .focuscard .focusdigest { margin-top: .7rem; font-size: .92rem; line-height: 1.5; }
+  .focuscard .focusdigest p { margin: 0 0 .4rem; }
+  .focuscard .focusdigest .dgsrc { font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); margin-top: .2rem; }
   .group { margin: 1.1rem 0; }
   .group h3 { font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .35rem; display: flex; align-items: baseline; gap: .5rem; }
   .group h3::after { content: ""; flex: 1; border-top: 1px solid var(--line); transform: translateY(-.2em); }
@@ -860,10 +863,18 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
     const srcs = new Set(all.map((r) => r.src.split(" | ")[0]));
     const dates = all.map((r) => r.createdAt).filter(Boolean).sort();
     const klass = all.find((r) => r.s === focus && r.family === "is-a");
+    // The digest paragraph is computed server-side for the page's initial focus
+    // (renderLedgerHtml has the payload and reads the sentence-structure bank);
+    // a client refocus to another term shows the fact groups without it.
+    const dg = (focus === LEDGER.focus && LEDGER.focusDigest && LEDGER.focusDigest.paragraphs && LEDGER.focusDigest.paragraphs.length) ? LEDGER.focusDigest : null;
+    const digestHtml = dg
+      ? '<div class="focusdigest">' + dg.paragraphs.map((p) => "<p>" + esc(p) + "</p>").join("") +
+        (dg.sources && dg.sources.length ? '<p class="dgsrc">sources: ' + esc(dg.sources.join("; ")) + "</p>" : "") + "</div>"
+      : "";
     let html = '<div class="focuscard"><div class="term">' + esc(focus) + "</div>" +
       '<div class="klass">' + (klass ? esc(klass.phrase + " " + klass.o) : "no class recorded") + "</div>" +
       '<div class="stats">' + all.length + " facts &middot; " + srcs.size + " source" + (srcs.size === 1 ? "" : "s") +
-      (dates.length ? " &middot; first " + esc(dates[0].slice(0, 10)) + " &middot; last " + esc(dates[dates.length - 1].slice(0, 10)) : "") + "</div></div>";
+      (dates.length ? " &middot; first " + esc(dates[0].slice(0, 10)) + " &middot; last " + esc(dates[dates.length - 1].slice(0, 10)) : "") + "</div>" + digestHtml + "</div>";
     const bracketed = new Set();
     for (const fam of FAMS) {
       const rows = mine.filter((r) => r.family === fam && !bracketed.has(r.id));

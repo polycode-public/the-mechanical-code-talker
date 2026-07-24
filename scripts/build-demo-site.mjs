@@ -113,12 +113,31 @@ const { readFile: readF, writeFile: writeF } = await import("node:fs/promises");
 const { computeLedgerDataFromPayload, renderLedgerHtml, readMemoryAskBundle } = await import(join(ROOT, "src", "services/ledger-viz.mjs"));
 const payload = JSON.parse(await readF(memoryPath, "utf8"));
 const ledgerData = computeLedgerDataFromPayload(payload, {});
+// The focus term's digest paragraph, computed here — node-side, where the
+// sentence-structure bank is readable — and embedded for the ledger's focus
+// card; a client refocus to another term shows the fact groups without it.
+const { readFactRows: readLedgerFactRows } = await import(join(ROOT, "src", "adapters/memory/core.mjs"));
+const { digestTermFromRows } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
+let focusDigest = null;
+if (ledgerData.focus) {
+  const allFactRows = readLedgerFactRows(payload);
+  const focusRows = allFactRows.filter((r) => r.subject === ledgerData.focus);
+  const article = focusRows.length ? digestTermFromRows(ledgerData.focus, focusRows, allFactRows, { budget: 8 }) : null;
+  if (article && article.paragraphs.length) {
+    focusDigest = {
+      term: ledgerData.focus,
+      paragraphs: article.paragraphs,
+      sources: [...new Set(article.sources.map((s) => s.provenance).filter(Boolean))],
+      factCount: article.detail.factCount,
+    };
+  }
+}
 const memoryAskBundle = await readMemoryAskBundle();
 const { main: buildLedgerBundle } = await import(join(here, "build-ledger-bundle.mjs"));
 const { outPath: ledgerBundlePath, size: ledgerBundleBytes } = await buildLedgerBundle(SITE);
 console.log(`wrote ${ledgerBundlePath} (${(ledgerBundleBytes / 1024).toFixed(0)} KB)`);
 const ledgerPath = join(SITE, "ledger.html");
-await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true }));
+await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true, focusDigest }));
 console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
 
 // The code explorer: the exact page the Electron shell renders for itself
