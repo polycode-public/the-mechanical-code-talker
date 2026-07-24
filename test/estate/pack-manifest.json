@@ -319,6 +319,7 @@
   "src/domain/codeplan/graph-delta.mjs",
   "src/domain/codeplan/graph-predicates.mjs",
   "src/domain/codeplan/operators.mjs",
+  "src/domain/codeplan/planner.mjs",
   "src/domain/completions/complete.mjs",
   "src/domain/completions/graph-adapter.mjs",
   "src/domain/completions/group.mjs",

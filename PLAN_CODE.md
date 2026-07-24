@@ -213,6 +213,17 @@ start.
 Exists today: `findActionPath`, `compileGoal`, the honest-miss discipline. New: goal predicates
 over graph shape; later, the e-graph layer.
 
+Landed: `src/domain/codeplan/planner.mjs` — the closed goal-predicate vocabulary
+(`GOAL_PREDICATES`: entity-titled, entity-in-module, entity-absent, edge-present, edge-absent),
+`compileCodeGoal` (their conjunction as one state predicate), `deriveContext` (the goal-derived
+parameter pool that keeps operator enumeration bounded), and `planCodeChange` — `findActionPath`
+over `codeGraphMoves`, keyed by `canonicalStateKey`, shortest plan first, `null` on an honest
+miss, with a per-step receipt (operator, binding, declared effect, before/after snapshot). Tested
+over the committed tiny-webapp fixture graph (read immutably): a three-step rename-then-move
+refactor of `parseRow` is found and byte-deterministic on re-run, and two honest misses hold — a
+rename into a locked-in sibling collision, and deleting a still-called entity — both return
+`null`, never a guess. Tests: `test/domain/codeplan-planner.test.mjs`.
+
 ### 3.4 The adaptor: language-specific materialisation
 
 An abstract step ("rename `f` to `parseRow` in module `m`") is language-neutral. The
