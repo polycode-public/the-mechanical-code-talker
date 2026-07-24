@@ -19,7 +19,7 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
 - playtest batch 2 fixes, items 1/2/4/5/6 (anaphora, unbound-referent miss form, message stacking, /plan prose, article tolerance) — `worktree-agent-a246401d1d358f876`
-- client-side digest for research/ledger/viz panels (the stage-5 remainder) — `worktree-agent-a688b1a79f79d7bbc`
+- client-side digest for research/ledger/viz panels (the stage-5 remainder) — `worktree-agent-af9a1bc55f51cdfbd` (first cut stopped clean: its branch point predated the digest merge)
 
 
 ## Open items
