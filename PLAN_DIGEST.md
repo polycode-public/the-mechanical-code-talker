@@ -180,8 +180,10 @@ structure, and composition — not new knowledge.
      once and returns null when it is unavailable so a browser-stubbed surface falls back). DONE.
    - `tmct digest <term>` (`src/domain/cli-verbs.mjs` + the bin dispatcher arm): the narrative
      leads, its sources follow, the stored-fact count points at the ledger. DONE.
-   - Chat's term read-back: lead with the digest when a term answer would run past the digest
-     threshold, the full fact list behind "show the facts"/"more". NOT STARTED.
+   - Chat's term read-back: an undifferentiated "what is X" whose flat fact list runs past the
+     digest threshold leads with the digest paragraph, the full list held behind the
+     "show the facts"/"more" escape (`src/services/chat.mjs`, the subject-scan region only). The
+     in-browser dock stubs the bank loader out and falls back to the flat list. DONE.
    - The research and ledger term panels: render the digest shape client-side from a
      build-time-embedded structure table. NOT STARTED.
 

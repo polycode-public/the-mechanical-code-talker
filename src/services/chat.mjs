@@ -6411,6 +6411,35 @@ function senseSplitFactList(hits, rows, subjectVariants, { indent = "" } = {}) {
   return { lines, grouped };
 }
 
+// A subject-scan term answer longer than this many flat fact lines leads with a
+// deterministic digest paragraph (src/domain/digest) and holds the full list
+// behind the escape; a shorter answer is already readable as a list.
+const DIGEST_READBACK_THRESHOLD = 8;
+
+/** The digest lead for a subject-scan term answer: a bounded narrative first
+ *  (selection, sentence structures, composition — all deterministic, no model),
+ *  the full fact list held behind the "show the facts"/"more" escape. `termRows`
+ *  are the term's own fact rows, `allRows` the whole store the statistics scan
+ *  over, `lines` the already-rendered flat fact list the escape reveals.
+ *
+ *  Returns { text, pending } or null. Null when the structure bank is
+ *  unavailable (the in-browser dock stubs the filesystem loader out) or the
+ *  selector kept nothing renderable, so the caller falls back to the flat list —
+ *  the same graceful degradation the construction banks take in a browser
+ *  bundle. Deterministic; the digest reads only stored facts. */
+async function termDigestReadBack(term, termRows, allRows, lines) {
+  let digestTermFromRows;
+  try { ({ digestTermFromRows } = await import("../adapters/corpus/digest-bank.mjs")); }
+  catch { return null; }
+  let article;
+  try { article = digestTermFromRows(term, termRows, allRows); }
+  catch { return null; }
+  if (!article || !article.paragraphs.length) return null;
+  const escape = `Say 'show the facts' for all ${lines.length} stored facts.`;
+  const text = `${article.paragraphs.join("\n\n")}\n\n${escape}`;
+  return { text, pending: { items: lines, noun: "facts" } };
+}
+
 /** "a"/"an" for a term, through the SAME grammar-rules.toml "article" rule and
  *  finish.mjs's beginsWithVowelSound every other agreement site in this file
  *  uses — never a hardcoded "a", which is ungrammatical for a vowel-initial
@@ -7538,7 +7567,17 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // "disclosed, never dropped" contract). Unconfigured/tied bias degrades to
     // trust-desc, byte-identical to before this feature existed.
     hits = rankByBiasThenTrust(hits, biasByBundle);
-    const { lines, grouped } = senseSplitFactList(hits, await factRows(memoryDir, cache), variants);
+    const allRows = await factRows(memoryDir, cache);
+    const { lines, grouped } = senseSplitFactList(hits, allRows, variants);
+    // A long undifferentiated "what is X" leads with the digest — a bounded
+    // narrative over the same facts — and holds the full list behind the escape.
+    // It wins over the sense-split grouping here: the digest's own selector
+    // filters the mis-sensed branch that grouping would otherwise surface as its
+    // own block. Falls back to grouping/flat when the digest is unavailable.
+    const digested = (!predicate && lines.length > DIGEST_READBACK_THRESHOLD)
+      ? await termDigestReadBack(subject, hits, allRows, lines)
+      : null;
+    if (digested) return { ...digested, replace: miss };
     if (grouped) return { ...grouped, replace: miss };
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
@@ -13751,7 +13790,11 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
 // the same pending state. Any other (real) query produces a fresh `last` without
 // `pending`, so the remainder is naturally cleared — no stale continuation. ----
 const PAGE = 32;
-const MORE_RE = /^(?:more|show more|see more|the rest|next|continue|go on)\b[.!?]*$/i;
+// "show the facts"/"show the chains" are the digest read-back's own escape
+// (the digest holds the full fact list — chains included, since the flat lines
+// carry their is-a ancestry — on the same pending remainder), folded in here so
+// they page the held list exactly as "more" does.
+const MORE_RE = /^(?:more|show more|see more|the rest|next|continue|go on|show(?: me)? the facts|show the chains)\b[.!?]*$/i;
 
 /** The impact-intent gate — "what would break if I change X" and its natural
  *  neighbours, routed to the same /impact closure. Sibling of normalize.mjs's
