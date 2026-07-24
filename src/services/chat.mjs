@@ -11814,6 +11814,12 @@ const DECISION_RECALL_RE = /^(?:remind\s+me\s+)?what\s+(?:did\s+)?(?:we|i|you)\s
  *  than silently accepted alongside the current location. */
 const MOVE_HISTORY_RE = /^where\s+did\s+(.+?)\s+(?:move|get\s+moved|go)(?:\s+to)?[?.!\s]*$/i;
 
+/** "was that before logger.mjs was touched" — a singular bindable form, a
+ *  comparison word, and an embedded passive clause. The closed participle set
+ *  is the touch family the when-question path answers; anything else keeps
+ *  the honest miss. */
+const TEMPORAL_COMPARISON_RE = /^(?:was|is)\s+(this one|that one|it|this|that)\s+(before|after)\s+(.+?)\s+(?:was|were)\s+(touched|changed|modified|edited|updated)[?.!\s]*$/i;
+
 async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
   const ts = new Date().toISOString();
   // The surface this turn runs on ("cli" default; "browser" from a web entry) —
@@ -11842,6 +11848,45 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     askQuery = String(askQuery).trim()
       .replace(/^(?:and|so|then|also)\s+/i, "")
       .replace(/how many\s+/i, "how many of those ");
+  }
+  // TEMPORAL COMPARISON ACROSS TURNS — "was that before logger.mjs was
+  // touched": a singular bindable form, a comparison word, and an embedded
+  // passive clause. The form binds against the session's discourse record (a
+  // dated referent a previous answer established), the embedded clause runs
+  // fresh through the same when-question path a standalone turn takes, and
+  // the two ISO dates compare with both sides cited. Checked BEFORE the ask
+  // engine (the same precedence RENAME_HISTORY_RE takes, below) so the
+  // sentence never reaches the keyword-spot strategy's multi-token patient
+  // guard; an unbound form, an undated referent, or an unanswerable clause
+  // all fall through, and that guard's honest miss stands unchanged.
+  {
+    const cmp = graph && discourseHolder ? String(query).trim().match(TEMPORAL_COMPARISON_RE) : null;
+    if (cmp) {
+      const [, form, cmpOp, clauseSubject, participle] = cmp;
+      const bound = bindDiscourseForm(discourseHolder.record, form);
+      const refDay = String(bound?.referent?.attrs?.date || "").slice(0, 10);
+      if (bound?.referent && refDay) {
+        const { ask } = await import("../domain/ask.mjs");
+        const fresh = ask(graph, `when was ${clauseSubject} ${participle}`);
+        const freshHit = (!fresh?.tmct_ask?.miss && !fresh?.tmct_ask?.ambiguous) ? fresh?.tmct_ask?.matches?.[0] : null;
+        const freshCommit = freshHit?.id ? graph.byId?.get?.(freshHit.id) : null;
+        const clauseDay = freshCommit?.class === "Commit"
+          ? String((freshCommit.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10)
+          : "";
+        if (clauseDay) {
+          const holds = cmpOp.toLowerCase() === "before" ? refDay < clauseDay : refDay > clauseDay;
+          const relation = refDay < clauseDay ? "came before" : refDay > clauseDay ? "came after" : "landed on the same day as";
+          const verb = participle.toLowerCase();
+          const text = `${holds ? "Yes" : "No"} — ${bound.referent.label} (${refDay}) ${relation} ${clauseSubject} was last ${verb} (${freshCommit.label}, ${clauseDay}).`;
+          note(trace, "goal: compare a prior answer's dated referent against a freshly read event (cross-turn temporal composition)");
+          note(trace, `lane: TEMPORAL_COMPARISON_RE — "${form}" bound ${bound.referent.label} (${refDay}) through the discourse record; the embedded clause re-ran as its own when-question`);
+          const turn = plainTurn(query, text, { via: "composed", miss: false, focus });
+          const cited = [graph.byId?.get?.(bound.referent.ids[0]), freshCommit].filter(Boolean);
+          turn.detail = { traversal: `discourse ${bound.referent.ref} (${refDay}) vs last-${verb} of ${clauseSubject} (${clauseDay})`, matches: cited };
+          return turn;
+        }
+      }
+    }
   }
   // RENAME HISTORY — "what was X called before" and its siblings. The index
   // records current names only, and without this gate "called" fuzzes onto

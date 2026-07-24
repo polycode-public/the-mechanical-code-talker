@@ -1,9 +1,10 @@
 # PLAN_DISCOURSE_AND_RECOGNITION.md — two bounded records: cross-turn discourse, and goal recognition
 
-Status: Part A slice 1 is built (`src/domain/discourse.mjs`; the commit-filter lane registers,
-the session shell threads the record). Everything else is design. Everything described as
-current behaviour was read off the tree and run against `examples/mini-webapp` while this
-document was written.
+Status: Part A slices 1–2 are built (`src/domain/discourse.mjs`; the commit-filter lane
+registers, the session shell threads the record, and the temporal-comparison lane flips the
+frozen row — now `games/cross-turn-temporal-composition-composes`). Everything else is design.
+Everything described as current behaviour was read off the tree and run against
+`examples/mini-webapp` while this document was written.
 
 ## Why the two sit together
 
@@ -112,17 +113,18 @@ The carry is **untyped and singular**. One focus, one previous answer, one flat 
 
 ## A2. The gap, walked turn by turn
 
-The standing acceptance test is the frozen row `games/cross-turn-temporal-composition-unbuilt` in
-`test/corpus/games/compositional.jsonl` (the other docs call it **row 19**). Three of its four
-original siblings have since been flipped, which is what makes this one worth designing for rather
-than widening a template again:
+The standing acceptance test was the frozen row `games/cross-turn-temporal-composition-unbuilt` in
+`test/corpus/games/compositional.jsonl` (the other docs call it **row 19**) — flipped by slice 2
+and renamed `games/cross-turn-temporal-composition-composes`. Its three original siblings had
+been flipped first, each by a closed-template treatment over the existing carry; this one is what
+made the typed record worth designing rather than widening a template again:
 
 | frozen row | what flipping it took |
 |---|---|
 | `games/honest-empty-echoes-raw-pronoun` | the honest-empty receipt names the resolved antecedent (`fnAlpha`) instead of echoing `it` |
 | `games/temporal-adverb-read-as-object-term` | a trailing clause-level time adverb is stripped before the patient read, so `recently` is never resolved as a term |
 | `games/bare-type-discourse-filter-narrows-prev-set` | a bare entity-type follow-up narrows the prior set, and an emptied set names the **filter's** kind, not the base set's |
-| `games/cross-turn-temporal-composition-unbuilt` | **open** |
+| `games/cross-turn-temporal-composition-composes` | slice 2: bind the pivot through the typed record, re-read the embedded clause, compare the dates |
 
 All three were closed-template treatments over the existing carry. Each one added a rule about
 words. None of them needed anything the turn boundary was not already carrying.
@@ -395,12 +397,16 @@ envelope's additive `discourse` field, so both ask paths register at one point i
 pure module) and `test/domain/discourse-commit-filter-registration.test.mjs` (the record fills
 after a commit-filter turn).
 
-**Slice 2 — the temporal comparison, which flips the frozen row.**
-One lane, checked before the keyword-spot strategy: a singular bindable form, a comparison word
-(`before`/`after`), and an embedded passive clause. Bind, read the clause fresh, compare two ISO
-dates, render with both cited. An unbound form or a missed clause keeps today's miss.
-Flips `games/cross-turn-temporal-composition-unbuilt` and rewrites that one row's expectations. It
-touches no other row.
+**Slice 2 — the temporal comparison, which flips the frozen row. BUILT.**
+One lane (`TEMPORAL_COMPARISON_RE` in `runAsk`, checked before the ask engine so the sentence
+never reaches the keyword-spot strategy): a singular bindable form, a comparison word
+(`before`/`after`), and an embedded passive clause. Bind, read the clause fresh through the same
+when-question path a standalone turn takes, compare two ISO dates, render with both cited — the
+same-day case says so rather than forcing before/after. An unbound form or a missed clause keeps
+today's miss, and the multi-token patient guard stays exactly as it was. Flipped
+`games/cross-turn-temporal-composition-unbuilt` → `games/cross-turn-temporal-composition-composes`
+(that one row only), with the `answerMatchesNone` guards kept. Tests:
+`test/domain/discourse-temporal-comparison.test.mjs` plus the corpus row.
 
 **Slice 3 — plural binding, and surviving a count.**
 Register `set` referents from the listing and filter lanes. `evalAnaphora` gains the record as a
@@ -459,14 +465,13 @@ several prior answers through a typed record that tracks entities and relations 
 the prev-set anaphora the lanes already carry.* It sits above the ratcheting FLOW-0→FLOW-6 ladder
 and carries no frozen regressions yet, by the defer-until-buildable rule the four benches share.
 
-**The standing acceptance test.** `games/cross-turn-temporal-composition-unbuilt`. It is frozen at
-the honest miss today, and flipping it means rewriting that row's expectations to assert the
-composed comparison, with the `answerMatchesNone` guards kept so the old wrong reading cannot come
-back.
+**The standing acceptance test.** `games/cross-turn-temporal-composition-composes` (formerly
+`…-unbuilt`). Flipped by slice 2: the row asserts the composed comparison naming both dates, with
+the `answerMatchesNone` guards kept so the old wrong reading cannot come back.
 
 **A passing cycle looks like this:**
 
-1. The frozen row asserts the composed answer, naming both dates, and is green.
+1. The flipped row asserts the composed answer, naming both dates, and is green. **Done (slice 2).**
 2. Every other row in `test/corpus/games/compositional.jsonl` is unchanged and green, and so is
    every `test/chatflow-*.test.mjs` tier.
 3. FLOW-7 gains authored cases in the CONVERSATION cycle: at least one per A4 shape, replayed as
@@ -761,8 +766,8 @@ stub rather than a citation.
   contract both halves inherit.
 - `SKILL_BENCHMARK_AGI_SCALES.md` — temporal-causal depth (Part A) and goal-origination distance
   (Part B); both scales' next rungs are what these two halves deliver.
-- `test/corpus/games/compositional.jsonl` — the frozen acceptance row and its three flipped
-  siblings.
+- `test/corpus/games/compositional.jsonl` — the flipped acceptance row
+  (`games/cross-turn-temporal-composition-composes`) and its three earlier-flipped siblings.
 - `docs/references/schemas/ace-6.7.md` — interpretation rule 15, the binding rule's grounding.
 - `docs/references/planning/BDI_GOAL_DRIVEN_AUTONOMY.md` — the meta-loop `goal-reasoner.mjs`
   implements, which recognition sits beside rather than replaces.
