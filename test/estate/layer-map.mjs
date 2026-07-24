@@ -14,7 +14,12 @@
 // a tool answers one graph question over domain and adapters and needs no service,
 // while chat is a service whose job includes dispatching tools. surfaces sit on top
 // and may reach anything below.
-export const LAYER_RANK = { domain: 0, adapters: 1, tools: 2, services: 3, surfaces: 4 };
+//
+// index is the code-graph PRODUCER: it composes adapters (buildEntities) and tools
+// (schema-docs) to write a graph.json, so it points down into both. It sits under
+// services because a service (the index CLI command, a mid-plan re-index) drives it,
+// while it never reaches up into chat.
+export const LAYER_RANK = { domain: 0, adapters: 1, tools: 2, index: 3, services: 4, surfaces: 5 };
 
 /** Layer for a src/-relative path, or null when nothing claims it. */
 export function layerOf(relPath) {

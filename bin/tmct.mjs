@@ -2,7 +2,8 @@
 // tmct — The Mechanical Code Talker. The headline entry is CHAT: a bare
 // invocation drops you into a tolerant, offline, $0 prompt that guides you
 // toward precision queries about a repository (ELIZA/PARRY-style, but obsessed
-// with software). No model calls; tmct keeps no codebase index of its own.
+// with software). No model calls; tmct indexes a repo on request (tmct index)
+// or reads a graph any other producer wrote.
 //
 //   tmct                                   → interactive chat (the headline)
 //   tmct chat [--repo <abs>] [--plain]     → same, explicit
@@ -49,7 +50,7 @@ process.on("warning", (warning) => {
 const HELP = `tmct — The Mechanical Code Talker
 
 A tolerant, offline, $0 chat that guides you toward precision queries about a
-software repository. No model calls; no codebase index of its own.
+software repository. No model calls; index a repo with \`tmct index\`, or read any producer's graph.
 
 Usage:
 ${renderUsage()}
@@ -982,6 +983,36 @@ async function main() {
         }
       }
       return;
+    }
+    return;
+  }
+
+  if (mode === "index") {
+    // `tmct index` — the code-graph PRODUCER. Walks a repo's own source, parses
+    // it (JS/TS today, via the TypeScript compiler API), reads git history, and
+    // writes <repo>/.tmct/graph.json — the same artifact chat/serve/cli read
+    // through the provider seam. This is tmct producing a graph for the first
+    // time; the seam that consumes one is unchanged.
+    const rest = process.argv.slice(3);
+    const { strFlag } = await import("../src/services/cli-args.mjs");
+    const { resolve: resolvePath } = await import("node:path");
+    const { indexRepository } = await import("../src/index/index-repo.mjs");
+    const repoFlag = strFlag(rest, ["--repo"]);
+    const repoRoot = repoFlag ? resolvePath(process.cwd(), repoFlag) : process.cwd();
+    const noHistory = rest.includes("--no-history");
+    const stats = await indexRepository(repoRoot, noHistory ? { historyDepth: 0 } : {});
+    for (const { pass, message } of stats.gitErrors || []) {
+      process.stderr.write(`tmct index: WARNING git history pass '${pass}' — ${message} (graph built without those edges)\n`);
+    }
+    const perLang = Object.entries(stats.perLang)
+      .map(([lang, s]) => `${lang}: ${s.modules} modules, ${s.symbols} symbols`).join("; ");
+    const kib = (stats.bytes / 1024).toFixed(1);
+    process.stdout.write(
+      `tmct index — wrote ${stats.graphFile} (${stats.modules} modules, ${stats.symbols} symbols; ${kib} KiB)\n`
+      + (perLang ? `${perLang}\n` : "no supported source found under the repo\n"),
+    );
+    if (stats.failures?.length) {
+      process.stderr.write(`tmct index: ${stats.failures.length} file(s) failed to parse (skipped): ${stats.failures.slice(0, 5).join(", ")}${stats.failures.length > 5 ? ", …" : ""}\n`);
     }
     return;
   }

@@ -1,9 +1,12 @@
 # The graph-provider adapter contract
 
-tmct **consumes** a code graph; it never produces or mutates one. This document
-is the complete touchpoint between tmct and any graph producer (seonix, a CI
-indexer, a hand-written JSON file, an in-process loader): what tmct reads, in
-what shape, from where, and the guarantees each side gets.
+tmct **reads** a code graph through this seam; its own writes go to `.tmct/memory/`,
+never back into a provider's artifact. It can also **produce** a graph — `tmct index`
+(`src/index/`) walks a repo's source and writes one through `graph-build.mjs`'s
+`buildEntities()` — but that is a separate write-side module tree; this seam stays
+read-only, and any other producer (seonix, a CI indexer, a hand-written JSON file,
+an in-process loader) feeds it the same way. This document is the complete touchpoint:
+what tmct reads, in what shape, from where, and the guarantees each side gets.
 
 ## The seam, in one sentence
 

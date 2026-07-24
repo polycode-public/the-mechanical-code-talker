@@ -1,4 +1,5 @@
 node_modules/
+__pycache__/
 
 # tmct's own graph/session artifacts (machine-local, rebuildable)
 .tmct/

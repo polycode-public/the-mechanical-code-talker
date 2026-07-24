@@ -1,14 +1,13 @@
 # PLAN_REPO_INDEX.md — tmct grows its own code parsers, ported from seonix
 
-Status: IN FLIGHT on the `repo-index` branch (kept off `main` while the 2026-07-24 batch
-cleared; branch head `bcf72df0`, its pipeline green — the one CI catch was the bare-invocation
-usage pin needing the new `index` verb, a reminder that the e2e tier sits outside `npm test`).
-On `main`, nothing below this status is live code yet; the branch carries it all. Remaining
-after the branch merges: phase 5 (`init --repo --with-persona code` runs `indexRepository` after
-scaffolding) and phase 6 (the PLAN_CODE.md move into seonix, cross-repo). **tmct's language
-scope is settled at JS/TS + Python** (phase 3, below): C#/Java stay in seonix, which registers
-them through the same backend seam — what tmct owes is language independence at that seam, not
-more extractors. NEXT.md carries the finishing item.
+Status: MERGED to `main` (2026-07-24, lands in 3.0.0). Phases 1–4 are live code on `main`; the
+implementation log below records what the `repo-index` branch delivered. The branch's one e2e
+catch — the bare-invocation usage pin needing the new `index` verb — was re-applied at merge (the
+fix had been rebased out of the branch head). Remaining: phase 5 (`init --repo --with-persona
+code` runs `indexRepository` after scaffolding) and phase 6 (the PLAN_CODE.md move into seonix,
+cross-repo). **tmct's language scope is settled at JS/TS + Python** (phase 3, below): C#/Java stay
+in seonix, which registers them through the same backend seam — what tmct owes is language
+independence at that seam, not more extractors. NEXT.md carries the finishing item.
 
 ### Implementation log (branch `repo-index`)
 
@@ -62,7 +61,6 @@ more extractors. NEXT.md carries the finishing item.
   each now offers `tmct index` first, with `--repo` kept for an externally-produced graph. The
   test-pinned prefixes ("no code graph is loaded…") were preserved. Items 4/5 in the table (the
   `memory`/`syllogise` subcommand-scoped "reads no code graph" comments) stay as-is — still true.
-
 
 ## Origin
 
@@ -405,23 +403,24 @@ must stay in seonix. Nothing in this document changes that division.
 
 ## Phased implementation plan
 
-**Phase 1 — one language, prove the seam.** Port `seonix/src/extract_ast.py` (Python, stdlib `ast`,
-zero new dependencies) and a minimal version of `extract_lang.mjs`'s dispatch pattern. Wire its
-output into `graph-build.mjs`'s existing, currently-uncalled `buildEntities()`. Exit criterion: a
-real Python repo produces a `.tmct/graph.json` that passes the existing Repository Interface
-conformance suite (`test/adapters/repository-interface.test.mjs`) without modification to
-the interface itself.
+**Phase 1 — one language, prove the seam. DONE — landed with JS/TS first (operator reprioritisation).**
+The JS/TS backend (`seonix/src/jsts_tsc.mjs`) was ported ahead of Python, wired into `graph-build.mjs`'s
+existing `buildEntities()` through `src/index/`. Exit criterion met against a real JS repo
+(`test/fixtures/js-repo/`) via `test/index/js-extractor-seam.test.mjs`, passing the conformance kit
+unchanged. Python (`extract_ast.py`) remains to port — it adds no dependency and is the natural next
+backend to register.
 
-**Phase 2 — the CLI surface.** A new command (`tmct index [--repo <path>]`, or extending `tmct init
---repo` to run it) that writes `.tmct/graph.json` from real source, using Phase 1's Python backend.
-Exit criterion: `npm run example:mini`-equivalent smoke test against a real small Python repo,
-`npm test` green throughout.
+**Phase 2 — the CLI surface. DONE.** `tmct index [--repo <path>] [--no-history]` writes
+`.tmct/graph.json` from real source (JS/TS via Phase 1's backend; Python once its backend registers).
+Exit criterion met via `test/index/index-repo-write.test.mjs`: the written artifact reads back through
+the provider seam into a real query hit, and re-indexing is byte-identical.
 
-**Phase 3 — JS/TS, and the seam that lets seonix carry the rest.** Port `jsts_tsc.mjs` (JS/TS) and
-`extract.mjs`'s merge/resolve layer (import/call resolution, git-history edges). Exit criterion:
-the conformance suite passes against a real repo in each of tmct's two languages, tested against a
-subset of seonix's own pinned bench corpora (commander/express for JS, Django for Python) as a
-real-world check, not synthetic fixtures only.
+**Phase 3 — JS/TS, and the seam that lets seonix carry the rest. DONE for tmct's two shipped
+languages.** Both backends are registered in `src/index/registry.mjs`: JS/TS via the TypeScript
+compiler API (`extract-jsts.mjs`), Python via stdlib `ast` (`extract-python.mjs` +
+`extract_ast.py`), each passing the conformance kit against a real repo fixture. What remains on
+the language axis is proving the seam admits an out-of-repo backend with no tmct change (Open
+risks, below).
 
 **tmct's language scope is JS/TS and Python. C# and Java live in seonix.** That is a division of
 labour, not a limit on the graph: tmct is written in JS and its own dogfooding target is JS, Python
@@ -447,11 +446,10 @@ such:
 A language tmct doesn't ship is therefore a language it can still consume — the graph shape, the
 query engine, and the ontology never learn what produced a module.
 
-**Phase 4 — doc reconciliation.** Reword every stale claim in Part 4's table (README, `docs/adapter-
-contract.md`, `src/adapters/source.mjs`, the `src/services/chat.mjs` live strings) now that they are false.
-Follows the repo's own discipline: name the claim, state the supersession, reword —
-already done in Part 4 above; this phase is where the actual file edits land. `npm test` green
-throughout (some tests likely assert the old strings — expect to update pinned-string tests here).
+**Phase 4 — doc reconciliation. DONE.** Every stale "not an indexer / doesn't index code" claim
+reworded (README, `docs/adapter-contract.md`, `src/adapters/source.mjs`, `package.json`, `bin/tmct.mjs`,
+and the `src/services/chat.mjs` + `chat-session.mjs` live strings). No pinned-string test broke — the
+tests match on the "no code graph is loaded" prefixes, which were preserved.
 
 **Phase 5 — the persona-gated onboarding path.** Wire `tmct init --repo <path> --with-persona code`
 to run Phase 2's indexer, per Part 6's design. No changes to `runTurn`/`runAsk`/`ask.mjs`. Exit

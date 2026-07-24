@@ -602,7 +602,7 @@ export function answerCount(graph, query) {
     // empty — an honest, non-dangling message pointing at how to load one.
     if (!kinds.length) {
       return `I can't count "${noun}" — no code graph is loaded yet, so there's nothing to count ` +
-        `(point me at one with --repo, or run "npm run example:mini").`;
+        `(index this repo with "tmct index", point me at another with --repo, or run "npm run example:mini").`;
     }
     return `I can't count "${noun}". I count: ${kinds.join(", ")}. ` +
       `Try "how many classes are there".`;
@@ -2077,8 +2077,8 @@ function orientationAnswer(templates, graph, vocabHint) {
  *  null), matching the file's "never crash, always degrade to one honest line"
  *  ethos. Kept short and hand-written so it never drifts silently. */
 const ORIENTATION_EMPTY_FALLBACK = "I'm tmct — a deterministic, offline chat assistant (no LLM). "
-  + "For code structure (imports, calls, definitions) point me at a repo with `--repo <path>`, "
-  + "or try the shipped example `npm run example:mini`. tmct reads graphs; it doesn't index code itself. /help for commands.";
+  + "For code structure (imports, calls, definitions) run `tmct index` here, point me at a repo with `--repo <path>`, "
+  + "or try the shipped example `npm run example:mini`. /help for commands.";
 
 /** A dynamic orientation string for the meta/self lane: a /stats-style overview
  *  when a code graph is loaded, else the honest empty-graph orientation — rendered
@@ -13009,8 +13009,8 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       answer = `${answer}\n(I don't know that yet — you can teach me: say "remember: <thing> is a <kind>".)`;
       note(trace, "intermediate: HONEST-EMPTY POLISH — a browser miss points at the teach lane, not the CLI-only --repo remedy");
     } else {
-      answer = `${answer}\n(this repo has no code graph — for structure, point me at a \`.tmct/graph.json\` with \`--repo <path>\` or run \`npm run example:mini\`; tmct doesn't index code itself.)`;
-      note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a --repo/tmct init pointer appended");
+      answer = `${answer}\n(this repo has no code graph — index it with \`tmct index\`, point me at a \`.tmct/graph.json\` with \`--repo <path>\`, or run \`npm run example:mini\`.)`;
+      note(trace, "intermediate: HONEST-EMPTY POLISH — the loaded graph has 0 modules, so the dead-end got a tmct index/--repo pointer appended");
     }
   }
   // TEACH-OFFER: a "what is X" miss where X is genuinely unknown EVERYWHERE —

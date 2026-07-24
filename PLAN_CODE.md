@@ -269,9 +269,12 @@ should demonstrate the real loop.
 ### 3.7 First end-to-end milestone (small enough to demo)
 
 **A planned two-step refactor on a small JS fixture repo, materialised through the JS adaptor,
-verified by the fixture's own test suite, graph re-indexed between steps.** Concretely, on a
-fixture shaped like `examples/mini-webapp`: step 1 **rename** a function with two call sites;
-step 2 **move** it to a sibling module, importers updated. The demo artifact is the plan
+verified by the fixture's own test suite, graph re-indexed between steps.** The fixture is
+`examples/tiny-webapp-src/` (5 plain JS modules, no npm dependency, its own `node --test` suite):
+step 1 **rename** `parseRow` (`lib/parse.mjs`), which has exactly two call sites — `lib/store.mjs`'s
+`loadRows` and `app.mjs`'s `previewFirstRow`, confirmed as the graph's two `callsSymbol` edges into
+it by `test/index/example-fixtures.test.mjs`; step 2 **move** it to a sibling module, importers
+updated. The demo artifact is the plan
 receipt, `tmct plan`-style: the goal predicate, each step's operator, its checked
 preconditions, its declared vs observed graph delta, and the tier results — ending with the
 fixture suite green and the graph's answer to "where is `parseRow` defined" reflecting the

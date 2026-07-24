@@ -81,7 +81,7 @@ for (const file of walkModules(SRC)) {
   }
 }
 
-test("every module under src/ sits in one of the five layer directories", () => {
+test("every module under src/ sits in one of the layer directories", () => {
   assert.deepEqual(unmapped, [], `not in a layer directory:\n${unmapped.join("\n")}`);
 });
 

@@ -1150,8 +1150,10 @@ node bin/tmct.mjs cli tmct_untested '{"repo_path":"examples/mini-webapp"}'
 
 ## The repository interface
 
-tmct is not an indexer, so it consumes a graph through a typed contract any
-producer can implement. That contract is first-class: a **versioned (1.1.0),
+tmct consumes a graph through a typed contract any producer can implement —
+including its own `tmct index` command, which walks a repo's source and writes
+the graph, and any external producer (seonix, a CI indexer, a hand-written JSON
+file) feeding the same seam. That contract is first-class: a **versioned (1.1.0),
 OWL-grounded, machine-readable service definition** (`docs/repository-interface.md`
 plus a JSON schema) of every service, its arguments, result types, and error
 contract. The interface returns a miss as a normal value. It never throws to
