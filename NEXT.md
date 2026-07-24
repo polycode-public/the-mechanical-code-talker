@@ -76,9 +76,6 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   against the 80% floor and RES-3..6 sit skipped-with-a-receipt behind it. Next cycle's build:
   a relevance-ordering pass over the queued titles in `src/services/research.mjs` that pushes
   RES-2 past its floor without regressing RES-0/RES-1 recall or inventing traversal
-- [ ] `BENCHMARK_CODE_SYNTHESIS_3.0.3.md` (founding cycle): only SYN-0 is built; SYN-3's single
-  rename operator (`PLAN_CODE_PLANNING.md` Track 5) is the next capability to build to push the
-  ladder past its current gate
 
 CONVERSATION 3.0.3 sweep (see `BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
 
