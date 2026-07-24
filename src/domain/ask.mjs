@@ -2371,6 +2371,14 @@ function joinedQueryForm(term) {
     .replace(/[\s\-_]+/g, "");
 }
 
+/** Ceiling of tier 3's weakest scoring band (the term-component-overlap
+ *  fraction): a candidate scores exactly this when EVERY component of the
+ *  term appears in its label, strictly less on a partial overlap. Every
+ *  NAME-evidence band (stem/containment/joined/derivational) scores
+ *  hundreds and up, so score < this ceiling means the candidate shares only
+ *  some generic path components with the term. */
+const COMPONENT_OVERLAP_MAX = 10;
+
 /** Resolve a free-text object/subject term against the graph's individuals, in
  *  priority order: a sha-shaped term first resolves against Commit
  *  individuals by unique id/label prefix, then (1) exact label/id match, (2)
@@ -2549,7 +2557,7 @@ function resolveObjectCore(graph, term, { expectedClass = null } = {}) {
         // stem hit from the tier above, nor a fuller-fraction overlap on another
         // candidate. termComps.length > 0 is guaranteed here (overlap > 0 requires
         // at least one termComps entry to have matched).
-        scored.push({ ind: m, score: (overlap / termComps.length) * 10 });
+        scored.push({ ind: m, score: (overlap / termComps.length) * COMPONENT_OVERLAP_MAX });
       }
     }
   }
@@ -2557,9 +2565,20 @@ function resolveObjectCore(graph, term, { expectedClass = null } = {}) {
   if (scored.length) {
     const [best, ...rest] = scored;
     const tied = rest.filter((x) => x.score === best.score);
+    // A PARTIAL component-overlap runner-up (score < COMPONENT_OVERLAP_MAX:
+    // some but not all of the term's own tokens, e.g. graph-merge.mjs
+    // sharing only "graph"/"mjs" with "graph-build.mjs") is not another
+    // reading of the term, and disclosing it in the "(answering for X — N
+    // other matches)" note reads as leakage. A candidate that matched EVERY
+    // term token (score === COMPONENT_OVERLAP_MAX) or matched by name
+    // evidence (score above the band) stays disclosed. A partial-overlap
+    // winner keeps its partial peers — they are all the evidence there is.
+    const disclosable = best.score >= COMPONENT_OVERLAP_MAX
+      ? rest.filter((x) => x.score >= COMPONENT_OVERLAP_MAX)
+      : rest;
     return {
       match: best.ind,
-      candidates: rest.slice(0, 4).map((x) => x.ind),
+      candidates: disclosable.slice(0, 4).map((x) => x.ind),
       tier: 3,
       ambiguous: tied.length > 0,
     };

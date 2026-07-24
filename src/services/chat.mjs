@@ -1074,6 +1074,15 @@ const CAPABILITY_PHRASES = [
   /^(?:can you\s+)?walk me through (?:this|the)\s+(?:app|codebase|repo|repository|project|code)\??$/i,
   /^(?:what(?:'s|s|\s+is)|give me|show me|gimme) the big picture(?:\s+(?:here|(?:on|of|for|about)\s+(?:this|the)\s+(?:app|codebase|repo|repository|project|code)))?\??$/i,
   /^(?:give me|what's) the lay of the land\??$/i,
+  // "give me an overview" / "an overview" — the plain-word sibling of "the
+  // big picture" just above, same optional here/of-this-repo tail. Without a
+  // closed entry the word "overview" prose-matches real symbols in an
+  // indexed graph (moduleOverviewText) and the describe rescue dumps that
+  // symbol's card. The detailed forms ("give me a detailed overview of X")
+  // carry a mandatory "detailed"+of-term and stay with the completions
+  // rescue, untouched by this anchor.
+  /^(?:(?:can|could|would) you\s+)?(?:give me|show me|gimme)\s+an overview(?:\s+(?:here|(?:on|of|for|about)\s+(?:this|the)\s+(?:app|codebase|repo|repository|project|code)))?\??$/i,
+  /^an overview(?:\s+please)?\??$/i,
   // "what have we got here"/"what've we got here" — a casual, self-answering
   // opener (matches after a leading "so" strips via LEADING_CONNECTIVE_RE,
   // leaving this as the bare remainder).
@@ -5545,9 +5554,24 @@ async function moduleOrientLane(query, { graph }) {
   // to end in a module path would be claimed here.
   const tailLooksLikePath = !!(m || identityMatch) && phraseWords.length > 1 && MODULE_PATH_RE.test(pathTail);
   // The identity phrasing ("what is <term>") only ever claims a path-shaped
-  // term — bare, or with modifier words ahead of a path-shaped tail; the
-  // orient/purpose phrasings carry their own anchors.
-  if (!m && !MODULE_PATH_RE.test(bare) && !tailLooksLikePath) return null;
+  // term — bare, or with modifier words ahead of a path-shaped tail — or,
+  // below, a bare extensionless module basename.
+  //
+  // "what is codegraph": both siblings of that question already resolve the
+  // module ("what is codegraph.mjs" via MODULE_PATH_RE, "describe codegraph"
+  // via resolveSymbol's basename tier), so the extensionless identity form
+  // resolves by the same evidence — exact basename-stem equality against
+  // exactly ONE module. The gate stays strict: a single bare word with no
+  // article (an articled "what is a dog" keeps its vocabulary reading), and
+  // any tie or non-module term declines unchanged.
+  if (!m && !MODULE_PATH_RE.test(bare) && !tailLooksLikePath) {
+    if (!identityMatch || !/^[\w$][\w$.-]*$/.test(identityMatch)) return null;
+    const stemLc = bare.toLowerCase();
+    const stemHits = graph.individuals.filter((i) => i.class === "Module"
+      && String(i.label).toLowerCase().split("/").pop().replace(/\.[a-z0-9]+$/, "") === stemLc);
+    if (stemHits.length !== 1) return null;
+    return { text: moduleOverviewText(graph, stemHits[0]), via: "meta" };
+  }
   const ent = await resolveEntity(graph, m ? phrase : bare);
   if (ent) {
     const ind = graph.byId?.get?.(ent.id);
@@ -11813,6 +11837,24 @@ const DECISION_RECALL_RE = /^(?:remind\s+me\s+)?what\s+(?:did\s+)?(?:we|i|you)\s
  *  than silently accepted alongside the current location. */
 const MOVE_HISTORY_RE = /^where\s+did\s+(.+?)\s+(?:move|get\s+moved|go)(?:\s+to)?[?.!\s]*$/i;
 
+/** ARCHITECTURE-OVERVIEW intent — "show me the architecture", "what is the
+ *  architecture of this repo": the whole-repo map the /arch command renders.
+ *  A closed phrase set, because the literal word "architecture" is also a
+ *  plausible SYMBOL substring in many graphs (renderArchitecture,
+ *  tmct_architecture) — the symbol-describe rescues would otherwise resolve
+ *  the word to one such symbol and dump its definition card instead of the
+ *  map. Every phrasing here names the architecture as a TOPIC (an article,
+ *  an of-this-repo tail, or an overview/map noun); a query that NAMES a
+ *  symbol ("describe renderArchitecture") never matches. */
+const ARCH_OVERVIEW_LEAD = "(?:(?:can|could|would)\\s+you\\s+(?:please\\s+)?)?(?:(?:show|give)\\s+(?:me|us)\\s+|describe\\s+|explain\\s+|what(?:'s|s|\\s+is)\\s+)?";
+const ARCH_OVERVIEW_TAIL = "(?:\\s+(?:of|for)\\s+(?:this|the)\\s+(?:app|codebase|repo|repository|project|code))?";
+const ARCH_OVERVIEW_PHRASES = [
+  // Article-carried: "the architecture" alone, or wrapped/tailed.
+  new RegExp(`^${ARCH_OVERVIEW_LEAD}the\\s+architecture(?:\\s+(?:overview|map|diagram))?${ARCH_OVERVIEW_TAIL}(?:\\s+here)?\\??$`, "i"),
+  // Article-less: anchored by the of-this-repo tail or the overview/map noun instead.
+  new RegExp(`^${ARCH_OVERVIEW_LEAD}architecture\\s+(?:(?:of|for)\\s+(?:this|the)\\s+(?:app|codebase|repo|repository|project|code)|overview|map|diagram)\\??$`, "i"),
+];
+
 async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
   const ts = new Date().toISOString();
   // The surface this turn runs on ("cli" default; "browser" from a web entry) —
@@ -12198,10 +12240,32 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, `goal: ${deduced} (revised — the raw \"what else\" phrasing was recognized directly, not the relaxed/reparsed envelope)`);
     }
   }
+  // (0a) ARCHITECTURE OVERVIEW — see ARCH_OVERVIEW_PHRASES. Answered here,
+  // before the meta/orientation lanes and long before the symbol-resolve
+  // rescues (4d), so the closed architecture phrasings reach the map instead
+  // of a literal-token symbol card or the vocabulary-touch teach offer.
+  if (!handled && miss && graph && !noCodeGraph(graph)) {
+    // The RAW text is tried alongside the peeled one: applyPreambleFrames'
+    // show/give-me bridge rewrites "show me the architecture" into "describe
+    // architecture", which drops the article this closed set anchors on.
+    const archRaw = correctMisspellings(String(query).trim());
+    const archPeeled = applyPreambleFrames(archRaw);
+    if (ARCH_OVERVIEW_PHRASES.some((re) => re.test(archRaw) || re.test(archPeeled))) {
+      try {
+        const archText = await dispatchTool("tmct_architecture", {}, { config, source, tel });
+        if (archText) {
+          answer = archText; via = "meta"; recordMiss = false; handled = true;
+          deduced = "understand the overall architecture (package/module boundaries)";
+          note(trace, `goal: ${deduced} (revised — a closed architecture-overview phrasing was recognized directly)`);
+          note(trace, "lane: (0a) ARCHITECTURE OVERVIEW — routed to the whole-repo architecture map (/arch), never a literal symbol lookup on the word \"architecture\"");
+        }
+      } catch { /* the tool couldn't load a graph — the ordinary lanes decide */ }
+    }
+  }
   // (1) #2 META/SELF: bare self/session questions ("what do you know", "what is this
   // codebase", "how do i start") → a summary / orientation, answered before the
   // fact-dump readers so "what do you know" gets a summary, not raw facts.
-  if (miss) {
+  if (!handled && miss) {
     const meta = await metaLane(query, { graph, memoryDir, last, templates, vocabHint, focus });
     if (meta) {
       // A lane may answer with a better-worded decline (the module-orient
