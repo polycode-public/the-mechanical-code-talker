@@ -114,14 +114,49 @@ what we author together once, and what runs without a model afterwards.
 ## What we would do together, in order
 
 1. Lever 1 (cache) + lever 6 (skip-unchanged) — pure harness work, no judgment authoring; one
-   session. Biggest cost and wall-clock cut.
+   session. Biggest cost and wall-clock cut. **DONE 2026-07-24**, including the paid seed pass.
 2. Lever 2's first bulk distillation pass over the current all-green judged pool — one
    authoring session with review.
 3. Lever 3's rubrics + calibration set — one authoring session; then measure the small judge's
-   agreement before trusting it with anything.
-4. Lever 4 when `ingestbench/` gets built (its spec already stages the deterministic/judged
-   boundary at ING-7/8).
+   agreement before trusting it with anything. Machinery DONE; the paired calibration runs
+   remain.
+4. Lever 4 — unblocked: `ingestbench/` exists and stages the deterministic/judged boundary
+   exactly as this plan assumed (deterministic checker at ING-7, judge at ING-8/9).
 
 The invariants that never move: graders are committed, reviewed data; a fabricated pass is
 impossible by construction (caches key on answer content, matchers are tighter than the judge,
 down-tiered judges are calibration-gated); and no model output ever enters the product path.
+
+## Cost to land the remainder (measured basis, 2026-07-24)
+
+The measured constants these estimates rest on: judge throughput is ~0.32 calls/s at
+concurrency 24 (API-latency-bound — 48-way gave no gain), so 2,150 calls ≈ ~1.9 h; the seed
+pass proved the cache (final top-up: 47 judged, 1,028 inherited); a harness-building background
+agent runs 50k–400k tokens and 15 min–1 h; the full 21-agent 3.0.x session plus its ~4,300-call
+judge activity crossed one monthly spend limit — the remainder below is roughly a tenth of that
+session.
+
+| item | agent effort | judge cost | wall clock |
+|---|---|---|---|
+| Lever 4 (ING-8 checker) | one agent authors candidate paraphrase pairs; one builds the checker + held-out gate (the sibling ING-7 checker was ~18 min inside a ~180k-token build) | ~200 pairs × 2 samples ≈ 400 haiku calls ≈ ~20 min | ~2–3 h |
+| Lever 2 distillation pass | one agent runs the distiller over the all-green pool, sample-reviews the generated matchers, freezes tests | zero — that is the lever's point | ~1–2 h |
+| Lever 3 calibration grade | one agent runs paired frontier + small-model passes over the committed 52-case set, then the mechanical `--gate` | ~52 × 2 models × 2 samples ≈ 200 calls ≈ ~15 min | ~1 h |
+
+Total: about half a coordinated session — three background agents, mostly parallel (~2–3 h wall
+clock), 0.5–1M tokens of agent work, under ~600 haiku judge calls (~35 min of API time).
+
+Two scheduling caveats:
+
+1. **Lever 4's bottleneck is corpus, not code.** The checker distills from JUDGED examples and
+   only two real ING-8/9 verdicts exist (`BENCHMARK_INGEST_3.0.3.md`). The pair-authoring and
+   judging pass is the unavoidable paid step; the checker build is mechanical after it.
+2. **Lever 2's "byte-stable across two cycles" rule** strictly wants a second full-pool judged
+   cycle to compare against (3.0.3 was the first). The pragmatic reading — product replay is
+   deterministic, so wording stability is established by replay, not re-judging — keeps it
+   free; the strict reading adds one ~2,150-call cycle that the cache would mostly inherit
+   anyway.
+
+The payoff already banked plus what the remainder buys: an ordinary CEFR cycle has dropped from
+2,150 judge calls to the dozens the cache misses; matchers pull the routine tier to zero calls;
+ING-8 leaves the judged column. The judge ends as an appeal court invoked rarely, not a
+per-cycle bill.
