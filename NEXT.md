@@ -23,7 +23,6 @@ Each line names its worktree branch; delete the line in the same commit that int
 - digest stages 1–4 as pure modules (PLAN_DIGEST; stage-5 wiring dispatches after discourse lands) — `worktree-agent-a9f701e5d2c1029b8`
 - idxbench + researchbench harnesses (their SKILL_BENCHMARK docs) — `worktree-agent-af3e4262349bcba57`
 - ingestbench harness (ING-8 checker; ING-9 dry-run only) — `worktree-agent-a32126735fd410725`
-- PLAN_CODE Track 5 foundations §3.1–3.3 + §2.1 scoping spike — `worktree-agent-af82e4e64eee61759`
 
 ## Open items
 

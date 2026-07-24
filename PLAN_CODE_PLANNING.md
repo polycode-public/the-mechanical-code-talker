@@ -11,11 +11,12 @@
 >
 > **Component status, whole arc:**
 > - Track 1 (`synthbench/`, §2) — **SHIPPED** 2026-07-08. Unchanged by this move.
-> - §2.1 (loading a synthesized rule into the product path) — **PROPOSED**, a scoping spike, not
->   yet started.
-> - Track 5 §3.1-§3.3 (state, operator catalogue, planner) — **IN-FLIGHT**: a concurrent
->   workstream is implementing this slice against `examples/tiny-webapp-src`. Update these lines
->   in place as slices land — nothing in §3 should be read as shipped until it is marked so here.
+> - §2.1 (loading a synthesized rule into the product path) — the scoping spike is **DONE**
+>   (§2.1.1: read path, store shape, admission gate, provenance, a three-stage proposal); the
+>   build itself (stage 1, read-only admission) is **PROPOSED**.
+> - Track 5 §3.1-§3.3 (state, operator catalogue, planner) — **SHIPPED** 2026-07-24 as
+>   `src/domain/codeplan/` (graph-delta.mjs, graph-predicates.mjs, operators.mjs, planner.mjs);
+>   each section below carries its Landed note.
 > - Track 5 §3.4-§3.5 (adaptor, verification tiers) — **PROPOSED**, design only.
 > - Track 5 §3.6 (re-index) — its dependency, `PLAN_REPO_INDEX.md`'s JS/TS + Python extractor, is
 >   **SHIPPED** (merged 2026-07-24, tmct 3.0.0). Wiring the re-index call into the plan-act-verify
@@ -111,8 +112,78 @@ oracle itself.
 
 The oracle and the enumerator exist, so the missing piece is not machinery. It is the surface: what
 a taught-in-chat synthesis should look like, when a synthesized rule is allowed to fire against a
-user's own graph, and how its provenance reads back. That is a scoping spike before it is a build,
-and it is unscoped today.
+user's own graph, and how its provenance reads back. That is a scoping spike before it is a build.
+
+#### 2.1.1 The spike's findings (scoping deliverable)
+
+**What loading a synthesized rule into the product path would touch.** The read path is short and
+already parameterised, so this is a surface question, not an engine one:
+
+- **The dispatch call site.** The product path reaches `goalReason` at one place —
+  `src/domain/router/drive.mjs` (the `goalReason(request, tools, ctx, { driver: GOAL_DRIVER })`
+  call). It passes no `ruleSet`, so it runs the frozen built-in `GOAL_RULES`
+  (`src/domain/router/goal-reasoner.mjs`). Loading a synthesized rule means giving `drive.mjs` a
+  rule set that is `GOAL_RULES` plus the vetted synthesized entries — the only functional change at
+  the call site, and it is a one-argument change the `ruleSet` param was designed for (Track 1's one
+  backward-compatible product change, §2).
+- **Where a synthesized rule lives at rest.** `GOAL_RULES` is a committed, frozen constant. A
+  synthesized rule is not authored in source, so it needs a store: the natural home is the on-disk
+  memory (`.tmct/`, the OWL-labelled graph the taught action families already use), read at session
+  start the way taught facts and rules are. That reuses `src/adapters/memory/core.mjs`'s Rule
+  individuals — a `GOAL_RULE` is closed data (focusClass over the registry `KINDS`, modes, subGoals,
+  compose), so a `RULE_KIND_GOAL_RULE` sibling of the existing rule kinds can carry it under the same
+  content-addressing, SHACL and provenance discipline, with no new persistence layer.
+- **The compile/merge step.** `drive.mjs` would read the persisted synthesized rules, run each
+  through the SAME oracle gate the harness uses (`synthbench/rules/oracle.mjs` — `passesExample`
+  against the rule's pinned labelled examples) before admitting it, then hand `goalReason` the merged
+  set. Admission is a verification, not a trust: a rule that no longer reproduces its own labelled
+  examples against the current engine is dropped and counted, never fired — the honest-miss ethos
+  applied to the rule base itself.
+- **Provenance read-back.** `goalReason` already returns a proof/receipt. A synthesized rule that
+  fires must mark its provenance so the receipt reads "grounded via a synthesized rule (from these
+  labelled examples, admitted by the oracle on <engine version>)", distinct from a hand-written
+  rule's line. The provenance tag lands on the Rule individual at synthesis time and rides the
+  proof out, so a user can always see that a synthesized rule, not a shipped one, answered them.
+
+**The risk surface.**
+
+- **A synthesized rule is data through trusted code, not executed code.** It is the same posture as
+  Track 1's oracle (§2): no sandbox, because nothing untrusted ever runs — the rule is a closed
+  `GOAL_RULE` record dispatched by the unmodified engine.
+- **Coverage bleed is the real risk.** A synthesized rule admitted against its own labelled examples
+  could still fire on a request those examples never covered and produce a plausible-but-unintended
+  dispatch. The mitigation is the same one the harness already enforces: a synthesized rule is
+  admitted only for the focusClass/mode its examples pin, and its subGoals must backward-chain to a
+  capability in the live toolset (`groundableInToolset`), so a rule can never borrow coverage it was
+  not verified for. Held-out examples stay mandatory.
+- **Rule-set determinism.** Two synthesized rules that both match one request would make dispatch
+  order-dependent. `applicableRules` already refuses on more than one applicable rule (an ambiguous
+  meta-goal is an honest miss, not a pick), so the existing ambiguity guard covers this — but the
+  admission step must preserve it, never silently prefer a synthesized rule over a built-in one.
+- **Provenance integrity.** A synthesized rule whose provenance tag is lost would read back as a
+  hand-written rule. The tag is part of the Rule individual's content address, so a rule that lost
+  its tag is a different (and un-admitted) rule — the store's own discipline protects this.
+
+**Staged proposal (each stage separately shippable, none crosses the source-editing line).**
+
+1. **Read-only admission, off by default.** Add the `RULE_KIND_GOAL_RULE` store shape and a
+   `drive.mjs` path that reads persisted synthesized rules, oracle-gates them, and merges them into
+   the dispatch rule set behind a flag that defaults off. Ship with the provenance tag and the
+   receipt line. Nothing synthesizes yet; a hand-placed synthesized rule (from `synthbench/rules/`)
+   is the test fixture.
+2. **Teach-in-chat synthesis.** Wire the enumerator + oracle (`synthbench/rules/synthesize.mjs`) to a
+   chat surface: a user gives labelled examples ("when I ask X, call Y"), the loop synthesizes a rule
+   that reproduces them at 0% fabrication or honestly reports no rule found, and — on success —
+   persists it as a `RULE_KIND_GOAL_RULE` with provenance. Still gated by stage 1's admission on
+   every load.
+3. **Default-on, with the audit surface.** Once the receipt, the ambiguity guard and the held-out
+   discipline have miles on them, turn admission on by default and add a `tmct`-side listing of which
+   synthesized rules are live, their labelled examples, and their last admission result — the rule
+   base as auditable as any committed corpus.
+
+The whole spike stays inside the constitution: no model is in the synthesis loop (the enumerator is
+bounded search, the oracle is the real engine), and every synthesized rule is as reviewable as a
+hand-written one — Track 1's proof, carried from the harness into the product path.
 
 ---
 
@@ -148,6 +219,13 @@ canonicalization). New: the graph-delta effect vocabulary itself (a closed set o
 add/del-entity, add/del-edge, retitle-entity effect tokens over the ontology's classes and
 predicates).
 
+Landed: `src/domain/codeplan/graph-delta.mjs` — the code-graph state (entities + edges), the
+five-token closed effect vocabulary (`EFFECT_OPS`) over the closed `ENTITY_CLASSES` /
+`EDGE_PREDICATES` sets, `applyGraphEffect`/`applyGraphEffects` (pure, fail-loud on an ill-formed
+delta), the path-independent `canonicalStateKey`, `diffGraphStates`/`effectsEqual` for the tier-1
+declared-vs-observed ledger (§3.5), and `graphStateFromEntities` to read a state out of a loaded
+graph payload. Tests: `test/domain/codeplan-graph-delta.test.mjs`.
+
 ### 3.2 The operator catalogue: transformations as taught action families
 
 Each transformation operator is one taught action family, slot for slot:
@@ -177,6 +255,19 @@ signature/precondition vocabulary extended from world-state facts to graph predi
 `PRECOND` pattern in `registry.mjs` is the template: a small closed predicate vocabulary,
 resolver-checked).
 
+Landed: `src/domain/codeplan/graph-predicates.mjs` — the closed, resolver-checked precondition
+vocabulary (`GRAPH_PRECONDITIONS`): no-name-collision, move-introduces-no-import-cycle,
+single-definition, no-self-recursion, no-inbound-dependencies, each a pure predicate over graph
+shape. `src/domain/codeplan/operators.mjs` — the catalogue as reviewable data (`CODE_OPERATORS`):
+signature (graph shape), named preconditions, declared graph-delta effect, and the coverage
+constraint. Grounders for rename / create-module / move / delete-dead expand a catalogue entry
+plus a goal-derived parameter pool into legal moves; inline, extract-function, add-parameter,
+wrap, split-module and apply-semantic-patch are catalogue entries carrying their
+signature/preconditions and awaiting a grounder. `codeGraphMoves` is the deterministic
+`applyActions` for the planner, pruning any move that would drop test coverage. An entity id is a
+stable node identity (a move swaps its `defines` edge, keeping the id) so the adaptor (§3.4) owns
+the path/id materialisation. Tests: `test/domain/codeplan-operators.test.mjs`.
+
 ### 3.3 The planner: bounded BFS to a graph-predicate goal
 
 The goal is a graph predicate set, same species as `compileGoal`'s goal specs: "function
@@ -196,6 +287,17 @@ start.
 
 Exists today: `findActionPath`, `compileGoal`, the honest-miss discipline. New: goal predicates
 over graph shape; later, the e-graph layer.
+
+Landed: `src/domain/codeplan/planner.mjs` — the closed goal-predicate vocabulary
+(`GOAL_PREDICATES`: entity-titled, entity-in-module, entity-absent, edge-present, edge-absent),
+`compileCodeGoal` (their conjunction as one state predicate), `deriveContext` (the goal-derived
+parameter pool that keeps operator enumeration bounded), and `planCodeChange` — `findActionPath`
+over `codeGraphMoves`, keyed by `canonicalStateKey`, shortest plan first, `null` on an honest
+miss, with a per-step receipt (operator, binding, declared effect, before/after snapshot). Tested
+over the committed tiny-webapp fixture graph (read immutably): a three-step rename-then-move
+refactor of `parseRow` is found and byte-deterministic on re-run, and two honest misses hold — a
+rename into a locked-in sibling collision, and deleting a still-called entity — both return
+`null`, never a guess. Tests: `test/domain/codeplan-planner.test.mjs`.
 
 ### 3.4 The adaptor: language-specific materialisation
 
