@@ -920,6 +920,35 @@ async function main() {
     // on disk: one copy-paste Bash invocation per tool, rewritten on every init.
     process.stdout.write(`cold-tool catalog: ${await writeToolsCatalog(repoRoot)}\n`);
 
+    // `--with-persona code`: on top of the corpus-vocabulary bias `initRepo` just wrote,
+    // also run the repository INDEXER (`tmct index`'s own machinery) against this repo's
+    // real source, so one command produces a `.tmct/graph.json` backed by the repo itself —
+    // not just a bias preset. `chat --repo` already reads whatever graph is on disk; this
+    // is the onboarding path that puts one there. Failure-tolerant like the corpus seed
+    // above: a repo that can't be indexed (no supported source, or a parse error) degrades
+    // to an initialized-but-graphless repo, never a crashed init.
+    if (personaName === "code") {
+      try {
+        const { indexRepository } = await import("../src/index/index-repo.mjs");
+        const stats = await indexRepository(repoRoot);
+        for (const { pass, message } of stats.gitErrors || []) {
+          process.stderr.write(`tmct init: WARNING git history pass '${pass}' — ${message} (graph built without those edges)\n`);
+        }
+        const perLang = Object.entries(stats.perLang)
+          .map(([lang, s]) => `${lang}: ${s.modules} modules, ${s.symbols} symbols`).join("; ");
+        const kib = (stats.bytes / 1024).toFixed(1);
+        process.stdout.write(
+          `code persona: indexed the repo — wrote ${stats.graphFile} (${stats.modules} modules, ${stats.symbols} symbols; ${kib} KiB)\n`
+          + (perLang ? `${perLang}\n` : "no supported source found under the repo\n"),
+        );
+        if (stats.failures?.length) {
+          process.stderr.write(`tmct init: ${stats.failures.length} file(s) failed to parse (skipped): ${stats.failures.slice(0, 5).join(", ")}${stats.failures.length > 5 ? ", …" : ""}\n`);
+        }
+      } catch (e) {
+        process.stderr.write(`tmct init: code persona indexing skipped (${e?.message || e})\n`);
+      }
+    }
+
     // `--corpus`/`--ontology`/`--lexicon` now mean "activate this bundle and
     // PERSIST that into tmct.toml" — so a second `tmct init` (or the next chat
     // bootstrap) remembers the choice, unlike the old ad hoc path, which had
