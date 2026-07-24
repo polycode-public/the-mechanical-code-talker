@@ -19,7 +19,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
 - digest stage 5 wiring (chat term answer, research.html/ledger panels, `tmct digest` CLI verb over `digestTerm`) — `worktree-agent-a3c5b757df037f27e`
-- playtest fix batch items 1–6 (architecture routing, overview phrase, init announce, basename resolve, disambiguation noise) — `worktree-agent-a45d10550d7478140`
 
 ## Open items
 
@@ -48,26 +47,10 @@ Each line names its worktree branch; delete the line in the same commit that int
   8. (already in flight) the 53-fact read-back wall is the digest layer's target specimen — the
      stage-5 wiring agent should check "what do you know about a person" renders grouped.
 
-- [ ] playtest batch (2026-07-24, 3.0.0 indexing surface; fix together once the discourse agent
-  releases chat.mjs — no fabrications found, all items are routing/orientation):
-  1. "show me the architecture" resolves the SYMBOL `renderArchitecture` and dumps its definition
-     instead of routing to the architecture map — the symbol-describe lane wins on the literal
-     token before any architecture-intent lane (chat.mjs ~334);
-  2. no NL phrasing reaches the architecture overview at all ("what is the architecture of this
-     repo" falls to the vocabulary-touch teach-offer) — the map is reachable only via `tmct cli
-     digest`;
-  3. "give me an overview" fails to parse while "the big picture"/"the lay of the land" are wired
-     (META_ORIENT closed set, chat.mjs ~1075) — add the overview phrasings;
-  4. `tmct init` on a source tree already auto-indexes (9-module call answers work) but announces
-     only paths+seeds — add an "indexed N modules" line so the capability is discoverable;
-  5. "what is codegraph" (bare module basename) gets orientation boilerplate while "what is
-     codegraph.mjs" and "describe codegraph" both resolve — align the "what is X" resolver with
-     describe's basename resolution;
-  6. importer disambiguation notes leak fuzzy non-matches ("3 other matches" naming modules with
-     no textual relation to the query);
-  7. (recorded, decide separately) teaching a fact about a code entity is refused because graph
-     entities don't count as grounded terms for teach — the one place code-graph and taught
-     memory don't compose today.
+- [ ] (recorded 2026-07-24, decide separately) teaching a fact about a code entity is refused
+  because graph entities don't count as grounded terms for teach — the one place code-graph and
+  taught memory don't compose today; the rest of that playtest batch shipped with the
+  architecture/overview/basename/disclosure fix pass
 
 - [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 3–5 (plural binding past a count, the tie refusal, the remaining bindable-form lanes) — slices 1–2 shipped 2026-07-24 (the record threads through `runTurn`, and `games/cross-turn-temporal-composition-composes` is the flipped row); the plan doc stages what's next
 - [ ] prove the repo-index backend seam admits an out-of-repo backend with no tmct change: seonix registers a C#/Java backend against a released tmct 3.0.x (registration, conformance, IDX-5 scoring). Seonix-side work — their inbox has the phase-6 handover; `PLAN_REPO_INDEX.md` Open risks names the proof. Everything else in that plan (branch merge, phases 1–6) is delivered

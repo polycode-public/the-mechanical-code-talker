@@ -53,6 +53,7 @@ test("`tmct init --repo <dir> --with-persona code` writes a self-produced graph,
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /code persona: indexed the repo — wrote .*graph\.json \(4 modules, 9 symbols/);
     assert.match(r.stdout, /js\/ts: 4 modules, 9 symbols/);
+    assert.match(r.stdout, /indexed 4 modules \(9 symbols\) — code questions now work/, "a produced graph announces the capability it unlocked");
     assert.match(r.stdout, /Seeded \d+ corpus facts? into memory/);
 
     const graphFile = join(dir, ".tmct", "graph.json");
@@ -85,6 +86,7 @@ test("`tmct init --with-persona code` against a repo with no supported source: d
     const r = runCli(["init", "--with-persona", "code"], { cwd: dir, env: { ...process.env, TMCT_NO_SEED: "1" } });
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /no supported source found under the repo/);
+    assert.doesNotMatch(r.stdout, /code questions now work/, "no source means no capability announce line");
     const graphFile = join(dir, ".tmct", "graph.json");
     assert.ok(await exists(graphFile), "the indexer still writes an (empty-modules) graph.json — degrade, don't skip the write");
     const entities = JSON.parse(await readFile(graphFile, "utf8"));

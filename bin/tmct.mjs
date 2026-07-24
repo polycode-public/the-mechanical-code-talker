@@ -941,6 +941,14 @@ async function main() {
           `code persona: indexed the repo — wrote ${stats.graphFile} (${stats.modules} modules, ${stats.symbols} symbols; ${kib} KiB)\n`
           + (perLang ? `${perLang}\n` : "no supported source found under the repo\n"),
         );
+        // The capability the graph just unlocked, said out loud — a graphless
+        // repo (no supported source) gets no such promise.
+        if (stats.modules > 0) {
+          process.stdout.write(
+            `indexed ${stats.modules} modules (${stats.symbols} symbols) — code questions now work in \`tmct chat\`: `
+            + `try "which modules import <path>" or "what does <module> do".\n`,
+          );
+        }
         if (stats.failures?.length) {
           process.stderr.write(`tmct init: ${stats.failures.length} file(s) failed to parse (skipped): ${stats.failures.slice(0, 5).join(", ")}${stats.failures.length > 5 ? ", …" : ""}\n`);
         }
@@ -1040,6 +1048,14 @@ async function main() {
       `tmct index — wrote ${stats.graphFile} (${stats.modules} modules, ${stats.symbols} symbols; ${kib} KiB)\n`
       + (perLang ? `${perLang}\n` : "no supported source found under the repo\n"),
     );
+    // Same discoverability line the code-persona init prints: the graph just
+    // unlocked code questions, so say so — but never over an empty graph.
+    if (stats.modules > 0) {
+      process.stdout.write(
+        `indexed ${stats.modules} modules (${stats.symbols} symbols) — code questions now work in \`tmct chat\`: `
+        + `try "which modules import <path>" or "what does <module> do".\n`,
+      );
+    }
     if (stats.failures?.length) {
       process.stderr.write(`tmct index: ${stats.failures.length} file(s) failed to parse (skipped): ${stats.failures.slice(0, 5).join(", ")}${stats.failures.length > 5 ? ", …" : ""}\n`);
     }
