@@ -29,6 +29,27 @@ Each line names its worktree branch; delete the line in the same commit that int
 
 ## Open items
 
+- [ ] playtest batch (2026-07-24, 3.0.0 indexing surface; fix together once the discourse agent
+  releases chat.mjs — no fabrications found, all items are routing/orientation):
+  1. "show me the architecture" resolves the SYMBOL `renderArchitecture` and dumps its definition
+     instead of routing to the architecture map — the symbol-describe lane wins on the literal
+     token before any architecture-intent lane (chat.mjs ~334);
+  2. no NL phrasing reaches the architecture overview at all ("what is the architecture of this
+     repo" falls to the vocabulary-touch teach-offer) — the map is reachable only via `tmct cli
+     digest`;
+  3. "give me an overview" fails to parse while "the big picture"/"the lay of the land" are wired
+     (META_ORIENT closed set, chat.mjs ~1075) — add the overview phrasings;
+  4. `tmct init` on a source tree already auto-indexes (9-module call answers work) but announces
+     only paths+seeds — add an "indexed N modules" line so the capability is discoverable;
+  5. "what is codegraph" (bare module basename) gets orientation boilerplate while "what is
+     codegraph.mjs" and "describe codegraph" both resolve — align the "what is X" resolver with
+     describe's basename resolution;
+  6. importer disambiguation notes leak fuzzy non-matches ("3 other matches" naming modules with
+     no textual relation to the query);
+  7. (recorded, decide separately) teaching a fact about a code entity is refused because graph
+     entities don't count as grounded terms for teach — the one place code-graph and taught
+     memory don't compose today.
+
 - [ ] start `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slice 1 — build `src/domain/discourse.mjs` (the four closed tables, `emptyRecord`/`register`/`bind`/`retire`), thread the record through `runTurn` beside `focus` and `last`, and register from the commit-filter lane only. Nothing reads it yet, so no lane can regress; a unit file over the pure module plus a probe that the record fills is the whole test surface. Slice 2 then flips the frozen row `games/cross-turn-temporal-composition-unbuilt`
 - [ ] finish the repo index: the `repo-index` branch is merged (3.0.0); what remains is the `PLAN_REPO_INDEX.md` remainder — phase 5 (`init --repo --with-persona code` runs `indexRepository` after scaffolding) and phase 6 (the PLAN_CODE.md move into seonix, cross-repo). Language scope is settled: tmct ships JS/TS + Python, seonix registers C#/Java through the backend seam, so what remains on the language axis is proving that seam admits an out-of-repo backend with no tmct change
 
