@@ -1,9 +1,10 @@
 # PLAN_DIGEST.md — from a fact list to a readable digest
 
-Status: stages 1–4 built as pure modules + committed data (`src/domain/digest/`,
-`data/templates/constructions/digest-sentence-structures.toml`). Stage 5 (chat term answer,
-research.html panels, ledger term view, `tmct digest`) is the remaining wiring over the
-`digestTerm` seam. Written 2026-07-24 against 2.11.11.
+Status: stages 1–5 built. Stages 1–4 are the pure modules + committed data (`src/domain/digest/`,
+`data/templates/constructions/digest-sentence-structures.toml`); stage 5 wires the seam into
+every surface — chat's term answer, `tmct digest`, and the client-side digest on research.html,
+the ledger's focus card (recomputed on refocus), and the CLI `tmct viz` page (over
+`src/surfaces/web/digest-client.mjs`). Written 2026-07-24 against 2.11.11.
 
 ## What this is for
 
