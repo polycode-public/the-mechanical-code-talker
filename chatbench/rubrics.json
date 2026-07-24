@@ -1,0 +1,123 @@
+{
+  "schemaVersion": 1,
+  "note": "Per-construction rubrics (PLAN lever 3): committed, reviewed data. Each family lists the constructions it covers, the four scored dimensions, and a short checklist of quotable criteria the judge applies. The verdict schema stays the three-field-plus-rephrase 0|1|2 rubric (chatbench/rubric.schema.json) — no prose verdicts. familyOf() in chatbench/rubrics.mjs maps a construction (single or combo) onto one of these families.",
+  "families": {
+    "vocabulary": {
+      "constructions": ["naming-vocabulary"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "The named term is defined from the graph's own schema vocabulary, not invented.",
+        "A term with no schema entry gets an honest miss, never a guessed gloss.",
+        "An ambiguous term (meta sense vs predicate sense) is flagged, not silently resolved one way."
+      ]
+    },
+    "factoid": {
+      "constructions": ["svo-query"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "The subject, verb and object all resolve to entities/edges the graph holds.",
+        "A query over an entity the graph lacks is an honest miss.",
+        "The answer cites the grounding entity id or source site where one exists."
+      ]
+    },
+    "counting": {
+      "constructions": ["quantifier-counting"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "The count matches the number of matching entities in the graph exactly.",
+        "A scoped or superlative count applies the scope before counting.",
+        "Zero matches is answered as zero, not as a miss."
+      ]
+    },
+    "negation": {
+      "constructions": ["negation"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "The negated set is the complement of the positive set within the right universe.",
+        "\"untested\"/\"not imported\" is computed from the edges, not guessed.",
+        "An empty complement is answered as empty, honestly."
+      ]
+    },
+    "passive": {
+      "constructions": ["reversible-passive"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "The passive's argument roles are not swapped (imported-by is the reverse of imports).",
+        "The answer names the entity on the correct side of the edge.",
+        "A role with no filler is an honest miss."
+      ]
+    },
+    "binding": {
+      "constructions": ["pronoun-binding"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "The pronoun binds to the correct prior referent, resolved from the discourse, not surface proximity.",
+        "A binding that only world knowledge could settle (Winograd-style) is either resolved correctly or honestly declined.",
+        "The final answer follows from the resolved binding."
+      ]
+    },
+    "temporal": {
+      "constructions": ["temporal"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "Commit/history facts come from the graph's provenance, not invented dates or authors.",
+        "Last-touch / ordering reads respect the recorded order.",
+        "A history question the graph cannot answer is an honest miss."
+      ]
+    },
+    "discourse": {
+      "constructions": ["discourse-reference", "discourse-deixis", "cross-turn-composition"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "A reference to a prior answer set (\"which of those\", \"the second one\") resolves against the actual prior result.",
+        "Cross-turn composition uses the earlier answers, not a re-derivation that ignores them.",
+        "When the prior context is missing or unresolvable, the answer says so rather than guessing."
+      ]
+    },
+    "composition": {
+      "constructions": ["relative-embedded", "coordination-compositional", "subordination", "conditional", "ellipsis"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "Each clause is grounded and the composed answer respects the boolean/relative structure.",
+        "An elided fragment is re-instantiated into the correct prior slot.",
+        "A branch with no grounding drops out honestly rather than being filled in."
+      ]
+    },
+    "assert-recall": {
+      "constructions": ["assert-recall"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "A taught fact is stored and later recalled with its provenance (the session/fact frame).",
+        "Recall cites what was told, not a fabricated source.",
+        "A recall for something never taught is an honest miss."
+      ]
+    },
+    "presupposition": {
+      "constructions": ["presupposition", "pragmatic-implicature"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "A true presupposition is confirmed; a false one is corrected, never silently accommodated.",
+        "An indirect speech act is answered on its intended meaning where the graph grounds it.",
+        "An unverifiable nested claim is declined, not accommodated."
+      ]
+    },
+    "garden-path": {
+      "constructions": ["garden-path"],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "The anchored, first-match template resolves the surface ambiguity without local misparsing.",
+        "The answer reflects the intended parse, grounded in the graph.",
+        "A genuinely unresolvable parse is an honest miss."
+      ]
+    },
+    "surface-noise": {
+      "constructions": [],
+      "dimensions": ["groundedness", "correctness", "honesty", "rephrase"],
+      "criteria": [
+        "Politeness/filler noise is stripped and the underlying query answered as if clean.",
+        "The noise never changes the grounded answer.",
+        "A query that is only noise is an honest miss."
+      ]
+    }
+  }
+}
