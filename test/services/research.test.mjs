@@ -21,7 +21,9 @@ import {
   renderResearchAnswer,
   researchSnapshot,
   researchTurn,
+  relevanceOrder,
 } from "../../src/services/research.mjs";
+import { nlpAdapter } from "../../src/adapters/ask-nlp.mjs";
 
 const ROW = (title, summary = `${title} is a thing.`) => ({
   term: title.toLowerCase(),
@@ -336,4 +338,58 @@ test("the provenance tag and the cited line render the documented shapes", () =>
     renderResearchAnswer("owl", ROW("Owl", "An owl is a bird.")),
     'owl — An owl is a bird. (source: research article "Owl", Simple English Wikipedia, CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/Owl?oldid=42)',
   );
+});
+
+test("relevanceOrder tiers the Volcano lead links: kin sharing the seed's word first, hub common nouns after the fallback tier, the citation last", () => {
+  const titles = ["Active volcano", "Earth", "East African Rift", "Geology", "Hawaii", "ISBN 0-19-960146-4"];
+  const ordered = relevanceOrder(titles, "Volcano", nlpAdapter());
+  assert.deepEqual(
+    ordered,
+    ["Active volcano", "East African Rift", "Hawaii", "Earth", "Geology", "ISBN 0-19-960146-4"],
+    "kin (shares \"volcano\") first, then the fallback tier in its own order, then the two common-noun hubs, then the citation",
+  );
+});
+
+test("relevanceOrder tier 0 catches a lexical-token match regardless of case or word position", () => {
+  const ordered = relevanceOrder(["Owl feathers", "Night", "The Great Owl"], "owl", nlpAdapter());
+  assert.deepEqual(ordered.slice(0, 2), ["Owl feathers", "The Great Owl"], "both share the token \"owl\" with the seed, so both land in tier 0, original order preserved");
+  assert.equal(ordered[2], "Night", "the non-matching title still lands after tier 0");
+});
+
+test("relevanceOrder recognizes DOI/ISBN prefixes, bare years and \"Nth century\" as citation-shaped, ranked last", () => {
+  const titles = ["doi:10.1000/xyz", "1969", "19th century", "Bird"];
+  const ordered = relevanceOrder(titles, "owl", nlpAdapter());
+  assert.deepEqual(ordered.slice(0, 1), ["Bird"], "the one non-citation candidate sorts ahead of every citation-shaped one");
+  assert.deepEqual(new Set(ordered.slice(1)), new Set(titles.slice(0, 3)), "all three citation shapes land in the trailing tier");
+});
+
+test("relevanceOrder degrades gracefully with no nlp adapter: tier 2 never fires, so common-noun hubs stay in the fallback tier's original order", () => {
+  const titles = ["Active volcano", "Earth", "East African Rift", "Geology", "Hawaii", "ISBN 0-19-960146-4"];
+  const ordered = relevanceOrder(titles, "Volcano", null);
+  assert.deepEqual(
+    ordered,
+    ["Active volcano", "Earth", "East African Rift", "Geology", "Hawaii", "ISBN 0-19-960146-4"],
+    "with no POS signal, Earth/Geology never separate from the fallback tier — only the lexical and citation tiers still apply",
+  );
+});
+
+test("relevanceOrder never throws when nlp.posTags itself throws, and still degrades that candidate to the fallback tier", () => {
+  const throwingNlp = { posTags() { throw new Error("wink unavailable"); } };
+  assert.doesNotThrow(() => relevanceOrder(["Earth", "Bird"], "owl", throwingNlp));
+  assert.deepEqual(relevanceOrder(["Earth", "Bird"], "owl", throwingNlp), ["Earth", "Bird"]);
+});
+
+test("relevanceOrder is a stable sort within a tier: candidates landing in the same tier keep their original relative order", () => {
+  // Four titles that all fall in the fallback tier (no lexical overlap with the
+  // seed, not citation-shaped, not single-word) — the reorder must never touch
+  // their relative order.
+  const titles = ["Zebra crossing", "Aardvark burrow", "Middle ground", "Beta test"];
+  assert.deepEqual(relevanceOrder(titles, "owl", nlpAdapter()), titles);
+});
+
+test("relevanceOrder never drops or duplicates a candidate", () => {
+  const titles = ["Active volcano", "Earth", "East African Rift", "Geology", "Hawaii", "ISBN 0-19-960146-4", "Magma"];
+  const ordered = relevanceOrder(titles, "Volcano", nlpAdapter());
+  assert.equal(ordered.length, titles.length);
+  assert.deepEqual([...ordered].sort(), [...titles].sort());
 });

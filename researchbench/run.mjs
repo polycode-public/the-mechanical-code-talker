@@ -23,9 +23,16 @@ import { fileURLToPath } from "node:url";
 
 import { researchTurn, researchSnapshot, RESEARCH_DEFAULTS } from "../src/services/research.mjs";
 import { registerResearchProvider, getResearchProvider } from "../src/adapters/corpus/wikipedia-live.mjs";
+import { setDefaultNlpAdapter } from "../src/domain/interpret/nlp-registry.mjs";
+import { nlpAdapter } from "../src/adapters/ask-nlp.mjs";
 import { loadGraph, createFixtureResearchProvider } from "./fixture/provider.mjs";
 import { parseCases, gradeWalk, rollup, ladderGate, renderRollup, RUNGS } from "./grade.mjs";
 import { parseFlags } from "../benchlib/bench.mjs";
+
+// The same process-default lemma/POS adapter chat.mjs/server.mjs/services/index.mjs
+// register at load time — the lane's relevanceOrder tiering only has a POS signal
+// to work with when this is wired up, exactly as it is in every real run.
+setDefaultNlpAdapter(nlpAdapter);
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
