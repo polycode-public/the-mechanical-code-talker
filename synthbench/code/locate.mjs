@@ -54,3 +54,46 @@ export function locateFunctionBody(sf, name) {
   }
   return hit ?? { found: false };
 }
+
+/** The identifier span of a top-level declaration named `name` — the same
+ *  define shapes `locateFunctionBody` recognizes (`function name(){…}`,
+ *  `const name = () => {…}`/`const name = function(){…}`), but returning the
+ *  NAME token's own span rather than its body, so a rename can overwrite just
+ *  the identifier. Returns { found:false } when no such top-level declaration
+ *  exists. */
+export function locateDeclarationIdentifier(sf, name) {
+  for (const stmt of sf.statements) {
+    if (ts.isFunctionDeclaration(stmt) && stmt.name && stmt.name.text === name) {
+      return { found: true, start: stmt.name.getStart(sf), end: stmt.name.getEnd() };
+    }
+    if (ts.isVariableStatement(stmt)) {
+      for (const d of stmt.declarationList.declarations) {
+        if (ts.isIdentifier(d.name) && d.name.text === name) {
+          return { found: true, start: d.name.getStart(sf), end: d.name.getEnd() };
+        }
+      }
+    }
+  }
+  return { found: false };
+}
+
+/** Every identifier span in `sf` that REFERENCES `name` as a call target
+ *  (`name(...)`) or as an unaliased named-import specifier (`import { name }
+ *  from "…"`) — the two reference shapes a rename must rewrite in an importing
+ *  module. Not a general "find every identifier" walk: a value reference with
+ *  no call (`const f = name;`) or an aliased import (`import { name as n }`,
+ *  whose local binding stays `n`) are deliberately out of scope, matching what
+ *  a rename actually needs to keep resolving. Spans come back start-ordered. */
+export function locateReferenceIdentifiers(sf, name) {
+  const spans = [];
+  const visit = (node) => {
+    if (ts.isImportSpecifier(node) && !node.propertyName && ts.isIdentifier(node.name) && node.name.text === name) {
+      spans.push({ start: node.name.getStart(sf), end: node.name.getEnd() });
+    } else if (ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === name) {
+      spans.push({ start: node.expression.getStart(sf), end: node.expression.getEnd() });
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sf, visit);
+  return spans.sort((a, b) => a.start - b.start);
+}

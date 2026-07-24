@@ -9,6 +9,15 @@
       "preconditions": ["target-module-parses", "target-function-defined", "target-function-has-block-body"],
       "effect": "prepend a stdout emission of <token> to <targetFunction>'s block body",
       "emit": "console.log(<token>);"
+    },
+    {
+      "id": "rename-entity",
+      "family": "planned-edit",
+      "rungs": ["SYN-3"],
+      "params": ["entityId", "newTitle"],
+      "preconditions": ["entity-defined", "no-name-collision", "target-module-parses"],
+      "effect": "retitle <entityId> to <newTitle>, rewriting its declaration and every call-site/import reference across its defining module and every importing module",
+      "emit": "retitle-entity"
     }
   ]
 }

@@ -53,12 +53,23 @@ export function parseCases(text) {
   });
 }
 
+// The planned-edit family covers more than one operator shape now (SYN-0's
+// insert-observable-print, param-shaped targetModule/targetFunction/token;
+// SYN-3's rename-entity, param-shaped entityId/newTitle) — lint dispatches on
+// goal.operator to the shape that operator actually declares in the catalogue,
+// after checking what every planned-edit case shares regardless of operator.
 function lintPlannedEdit(c, errors) {
   const g = c.goal ?? {};
-  for (const k of ["operator", "targetModule", "targetFunction"]) {
+  if (typeof g.operator !== "string" || !g.operator) errors.push(`${c.id}: goal.operator must be a non-empty string`);
+  if (!Array.isArray(c.catalogue) || !c.catalogue.length) errors.push(`${c.id}: catalogue must be a non-empty array of operator ids`);
+  if (g.operator === "rename-entity") lintRenameGoal(c, g, errors);
+  else lintInsertPrintGoal(c, g, errors);
+}
+
+function lintInsertPrintGoal(c, g, errors) {
+  for (const k of ["targetModule", "targetFunction"]) {
     if (typeof g[k] !== "string" || !g[k]) errors.push(`${c.id}: goal.${k} must be a non-empty string`);
   }
-  if (!Array.isArray(c.catalogue) || !c.catalogue.length) errors.push(`${c.id}: catalogue must be a non-empty array of operator ids`);
   if (!c.poisoned) {
     if (typeof g.token !== "string" || !g.token) errors.push(`${c.id}: a non-poisoned planned-edit needs goal.token`);
     const tiers = c.expect?.tiers;
@@ -72,6 +83,15 @@ function lintPlannedEdit(c, errors) {
         if (se.contains !== g.token) errors.push(`${c.id}: goal.sideEffect.contains must equal goal.token (the observable the edit emits)`);
       }
     }
+  }
+}
+
+function lintRenameGoal(c, g, errors) {
+  if (typeof g.entityId !== "string" || !g.entityId) errors.push(`${c.id}: goal.entityId must be a non-empty string`);
+  if (typeof g.newTitle !== "string" || !g.newTitle) errors.push(`${c.id}: goal.newTitle must be a non-empty string`);
+  if (!c.poisoned) {
+    const tiers = c.expect?.tiers;
+    if (!Array.isArray(tiers) || !tiers.length) errors.push(`${c.id}: a non-poisoned case needs expect.tiers (a non-empty array)`);
   }
 }
 

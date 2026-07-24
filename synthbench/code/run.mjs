@@ -20,8 +20,9 @@ import { fileURLToPath } from "node:url";
 
 import { pool, parseFlags } from "../../benchlib/bench.mjs";
 import { parseCases, gradeCase, rollup, ladderGate, renderRollup, RUNGS, COMPLETION_FLOOR } from "./grade.mjs";
-import { synthesizePlannedEdit } from "./synth.mjs";
+import { synthesizePlannedEdit, synthesizeRename } from "./synth.mjs";
 import { verifyPlannedEdit } from "./verify/tiers.mjs";
+import { graphStateFromEntities } from "../../src/domain/codeplan/graph-delta.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, "..", "..");
@@ -40,26 +41,38 @@ const readModuleFrom = (fixtureRoot) => (relModule) => {
   return readFileSync(p, "utf8");
 };
 
+/** The fixture's committed pre-edit code graph, as graph-delta.mjs state —
+ *  what a rename's preconditions check against. */
+const loadFixtureGraphState = (fixtureRoot) =>
+  graphStateFromEntities(JSON.parse(readFileSync(join(fixtureRoot, ".tmct", "graph.json"), "utf8")));
+
 /** Synthesize + verify one case into a graded row (deterministic). Only the
  *  planned-edit family has a verifier today; a case of any other family is a
  *  hard configuration error, not a silent skip (the plan owns building its
- *  verifier before its cases land). */
-export function runCase(caseDef, stamp) {
+ *  verifier before its cases land). Within planned-edit, the case's own
+ *  goal.operator selects the synthesizer — rename-entity (SYN-3) checks its
+ *  preconditions against the fixture's code graph, every other operator
+ *  (SYN-0's insert-observable-print) against the parsed source alone. */
+export async function runCase(caseDef, stamp) {
   if (caseDef.family !== "planned-edit") {
     throw new Error(`case ${caseDef.id}: no verifier built for family '${caseDef.family}' — build it before adding its cases (PLAN_CODE.md owns the build)`);
   }
   const fixtureRoot = join(ROOT, caseDef.fixture);
   const readModule = readModuleFrom(fixtureRoot);
 
-  const synth = synthesizePlannedEdit(caseDef, readModule);
-  const synthAgain = synthesizePlannedEdit(caseDef, readModule);
+  const synthesize = caseDef.goal?.operator === "rename-entity"
+    ? () => synthesizeRename(caseDef, readModule, loadFixtureGraphState(fixtureRoot))
+    : () => synthesizePlannedEdit(caseDef, readModule);
+
+  const synth = synthesize();
+  const synthAgain = synthesize();
   const byteDeterministic = JSON.stringify(synth.edits ?? null) === JSON.stringify(synthAgain.edits ?? null);
 
   let outcome;
   if (synth.abstained) {
     outcome = { abstained: true, refusalReason: synth.refusalReason, tier0Ok: false, verifiedComplete: false, byteDeterministic, tiers: {} };
   } else {
-    const v = verifyPlannedEdit(caseDef, synth, fixtureRoot);
+    const v = await verifyPlannedEdit(caseDef, synth, fixtureRoot);
     outcome = {
       abstained: false,
       refusalReason: null,
