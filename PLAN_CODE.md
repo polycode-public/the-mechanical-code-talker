@@ -180,6 +180,19 @@ signature/precondition vocabulary extended from world-state facts to graph predi
 `PRECOND` pattern in `registry.mjs` is the template: a small closed predicate vocabulary,
 resolver-checked).
 
+Landed: `src/domain/codeplan/graph-predicates.mjs` — the closed, resolver-checked precondition
+vocabulary (`GRAPH_PRECONDITIONS`): no-name-collision, move-introduces-no-import-cycle,
+single-definition, no-self-recursion, no-inbound-dependencies, each a pure predicate over graph
+shape. `src/domain/codeplan/operators.mjs` — the catalogue as reviewable data (`CODE_OPERATORS`):
+signature (graph shape), named preconditions, declared graph-delta effect, and the coverage
+constraint. Grounders for rename / create-module / move / delete-dead expand a catalogue entry
+plus a goal-derived parameter pool into legal moves; inline, extract-function, add-parameter,
+wrap, split-module and apply-semantic-patch are catalogue entries carrying their
+signature/preconditions and awaiting a grounder. `codeGraphMoves` is the deterministic
+`applyActions` for the planner, pruning any move that would drop test coverage. An entity id is a
+stable node identity (a move swaps its `defines` edge, keeping the id) so the adaptor (§3.4) owns
+the path/id materialisation. Tests: `test/domain/codeplan-operators.test.mjs`.
+
 ### 3.3 The planner: bounded BFS to a graph-predicate goal
 
 The goal is a graph predicate set, same species as `compileGoal`'s goal specs: "function
