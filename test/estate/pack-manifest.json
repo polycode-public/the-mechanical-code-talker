@@ -326,6 +326,7 @@
   "src/domain/completions/search.mjs",
   "src/domain/concept.mjs",
   "src/domain/dialogue-acts.mjs",
+  "src/domain/discourse.mjs",
   "src/domain/domain.mjs",
   "src/domain/game-config.mjs",
   "src/domain/grammar/ace.mjs",

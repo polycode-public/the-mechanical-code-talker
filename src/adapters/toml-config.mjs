@@ -134,6 +134,11 @@ export async function normalizeConfig(raw, { configDir } = {}) {
   // resolveResearchConfig's job.
   if (src.research !== undefined) cfg.research = src.research;
 
+  // Discourse-record knob (src/domain/discourse.mjs): sparse PASS-THROUGH,
+  // same discipline — the raw `[discourse]` table (max_referents) rides
+  // through; default-filling is resolveDiscourseConfig's job.
+  if (src.discourse !== undefined) cfg.discourse = src.discourse;
+
   const idx = src.index || {};
   const index = {};
   if (idx.languages !== undefined) index.languages = idx.languages;

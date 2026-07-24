@@ -1,8 +1,9 @@
 # PLAN_DISCOURSE_AND_RECOGNITION.md — two bounded records: cross-turn discourse, and goal recognition
 
-Status: DESIGN. Neither half is built. Nothing in this document is live code, and no file named
-here as new exists yet. Everything described as current behaviour was read off the tree and run
-against `examples/mini-webapp` while this document was written.
+Status: Part A slice 1 is built (`src/domain/discourse.mjs`; the commit-filter lane registers,
+the session shell threads the record). Everything else is design. Everything described as
+current behaviour was read off the tree and run against `examples/mini-webapp` while this
+document was written.
 
 ## Why the two sit together
 
@@ -385,12 +386,14 @@ teaching produced the answer, so the follow-up cites it instead of re-resolving 
 Five slices. Each is independently testable, each is corpus-pinned, and only slice 2 changes an
 existing frozen expectation.
 
-**Slice 1 — the record, written but never read.**
-Build `src/domain/discourse.mjs` with the four closed tables, `emptyRecord()`, `register()`,
-`bind()` and `retire()`. Thread the record through `runTurn` beside `focus` and `last`, and register
-from the commit-filter lane only. Nothing reads it, so no lane can regress. Tests: a unit file over
-the pure module, plus a probe asserting the record fills after a commit-filter turn. **This is the
-startable first slice.**
+**Slice 1 — the record, written but never read. BUILT.**
+`src/domain/discourse.mjs` holds the four closed tables, `emptyRecord()`, `register()`, `bind()`
+and `retire()`; the record threads through `runTurn` beside `focus` and `last`, the session shell
+holds it across turns, and the commit-filter lane registers (its typed referents ride the ask
+envelope's additive `discourse` field, so both ask paths register at one point in `runAsk`).
+`[discourse] max_referents` resolves per session. Tests: `test/domain/discourse.test.mjs` (the
+pure module) and `test/domain/discourse-commit-filter-registration.test.mjs` (the record fills
+after a commit-filter turn).
 
 **Slice 2 — the temporal comparison, which flips the frozen row.**
 One lane, checked before the keyword-spot strategy: a singular bindable form, a comparison word

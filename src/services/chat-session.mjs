@@ -28,6 +28,7 @@ import * as defaultSource from "../adapters/source.mjs";
 import { resolveExtensions, mergedLexiconExtra } from "./extensions.mjs";
 import { runTurn, hasSeededVocabulary, vocabExampleHint } from "./chat.mjs";
 import { resolveGameConfig } from "../domain/game-config.mjs";
+import { emptyRecord, resolveDiscourseConfig } from "../domain/discourse.mjs";
 import { resolveResearchConfig } from "./research.mjs";
 import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown, sessionLogEndMarkdown } from "./session-log-format.mjs";
 
@@ -344,6 +345,9 @@ export async function createSession({
   let last = null;  // the last dispatched answer ({query,answer,detail}) — why/say-more re-renders it
   let planState = null; // the in-progress plan (goals/moves/cursor) — cleared by completion or a fresh goal, never by an aside
   let researchState = null; // the in-progress research queue — advanced by "research next", cleared by completion or "research stop"
+  // The typed discourse record ([discourse] max_referents caps it) — session-scoped
+  // like the focus, threaded turn to turn, never persisted.
+  let discourseRecord = emptyRecord(resolveDiscourseConfig(toml));
   let closed = false;
 
   return {
@@ -368,7 +372,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -384,6 +388,7 @@ export async function createSession({
       last = nextLast;
       if ("planState" in result) planState = result.planState;
       if ("researchState" in result) researchState = result.researchState;
+      if ("discourse" in result) discourseRecord = result.discourse;
       // /narrate on|off and /wiki on|off (runCommand) ride the turn RESULT the
       // same way a focus update does — apply them to this handle's
       // session-scoped state.
