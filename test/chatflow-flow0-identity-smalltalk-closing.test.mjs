@@ -1,7 +1,7 @@
 // FLOW-0 (bootstrap: before any graph, the identity surface) regressions for
 // dead-ends a 2.11.0 persona sweep found in the identity/AI, capability-
 // decline, farewell/closing, and small-talk recognizer families
-// (BENCHMARK_CONVERSATION_2.11.0.md's routed backlog #2, #4, #5, #6, #7, #8).
+// (archive/BENCHMARK_CONVERSATION_2.11.0.md's routed backlog #2, #4, #5, #6, #7, #8).
 // Every probe runs with no graph and no memory store — a bare `tmct chat`
 // with no --repo, matching FLOW-0's own discipline.
 import { test } from "node:test";

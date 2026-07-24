@@ -7,7 +7,7 @@
   back; each arm takes low single-digit seconds — no LLM, no network, no judge).
 - **Analysis + write-up:** 05:39:28–05:55 CEST, same session.
 
-**Headline: nothing moved. Every rung gates in the same place as `BENCHMARK_AGENT_2.11.0.md`, on
+**Headline: nothing moved. Every rung gates in the same place as `archive/BENCHMARK_AGENT_2.11.0.md`, on
 all four drivers, to the percentage point.** No router/planner commit landed between 2.11.0 and
 3.0.3 (`git log` confirms; see "What's new" below), so this cycle is a pure measurement pass, not
 a build cycle. The goal driver still clears all nine rungs 68/68 (100%). The resolver floor still
@@ -111,7 +111,7 @@ brain, by design.
 | ladder tops out | TOOL-3 | TOOL-3 | TOOL-6 | **TOOL-8 (clears everything)** |
 
 **0% hallucination holds at every rung on all four drivers: 272 rows.** Every number in this
-table matches `BENCHMARK_AGENT_2.11.0.md`'s table exactly. No rung moved.
+table matches `archive/BENCHMARK_AGENT_2.11.0.md`'s table exactly. No rung moved.
 
 ## What's new since 2.11.0
 

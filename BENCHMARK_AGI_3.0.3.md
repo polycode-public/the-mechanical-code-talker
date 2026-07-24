@@ -62,7 +62,7 @@ it reads more scales as scalars when INFBENCH and CHATBENCH grow committed envel
 
 ## Code assessment
 
-The reviewed reading of the tree and demos, updated from `BENCHMARK_AGI_2.11.10.md`. That cycle's
+The reviewed reading of the tree and demos, updated from `archive/BENCHMARK_AGI_2.11.10.md`. That cycle's
 map still describes the chat, inference, planning, teaching, and multi-agent surfaces accurately;
 this section records what 3.0.x added and what it changed in the absence list.
 
@@ -127,7 +127,7 @@ and any movement toward the rung above.
   measured cases, 0% false-pass on SYNTHBENCH-CODE — seven harnesses now hold the same fixed-risk
   point. CEFR_ENGLISH 3.0.3 (write-up not yet merged at assessment time; numbers from the sweep):
   tier-1 replay 1068/1075, judged mean ~1.78/2 with ~50 hard fails on the graded pool, against
-  2.11.0's 1.787/2 on its 92-case sample (`BENCHMARK_CEFR_ENGLISH_2.11.0.md`).
+  2.11.0's 1.787/2 on its 92-case sample (`archive/BENCHMARK_CEFR_ENGLISH_2.11.0.md`).
 - **Transfer breadth — entry rung held; assessment only.** Three plan-lane domains (hanoi, river
   crossing, crates) acquired with zero engine changes, on record. Movement in mechanism, not yet
   in reading: the index registry seam acquired Python as a second language backend at IDX-5 parity

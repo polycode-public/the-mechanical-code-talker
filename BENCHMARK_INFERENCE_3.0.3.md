@@ -8,7 +8,7 @@
 - **Analysis (this write-up):** 05:47:17 → 05:52 CEST.
 
 **Headline: nothing moved.** Every per-band number (completion, fabrication, ceiling/pass split)
-is byte-identical to `BENCHMARK_INFERENCE_2.11.0.md`, on both the kernel arm and the chat arm. 577
+is byte-identical to `archive/BENCHMARK_INFERENCE_2.11.0.md`, on both the kernel arm and the chat arm. 577
 commits landed between the two reports, including 72 that touch `src/services/chat.mjs`, and none
 of them changed a single row on this generated case set. Case counts are also byte-identical on
 every template. No commit in the range touched `src/domain/syllogise.mjs`.
