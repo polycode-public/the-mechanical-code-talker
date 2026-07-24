@@ -1,6 +1,5 @@
 // agentbench/generate-envelope.mjs — generates agentbench/envelope.json, the
-// MACHINE-READABLE capability envelope PLAN_AGENTS.md §3 names ("Phase 0 —
-// Foundations"): a small, stable summary of what the latest gate-PASS AGENTBENCH
+// MACHINE-READABLE capability envelope: a small, stable summary of what the latest gate-PASS AGENTBENCH
 // run actually PROVES tmct can be trusted for, so a downstream calibration (e.g.
 // bedrock-meter's hand-set `TMCT_ENVELOPE` in router-ladder.mjs) has a real
 // artifact to check itself against instead of drifting from tmct's measured

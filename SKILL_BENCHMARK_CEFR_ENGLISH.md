@@ -146,12 +146,12 @@ to claim a reading level (see the axis note above), so C2 is the top of the borr
 top of what the product's language work has ahead of it. Two capabilities sit beyond the scale, in
 tmct's own terms:
 
-- **Full discourse-record composition** — the typed cross-turn record (DRT-lite, `PLAN_AGENTS.md`
-  R1) that composes meaning across several prior answers, past the prev-set anaphora the lanes carry
+- **Full discourse-record composition** — the typed cross-turn record (DRT-lite,
+  `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A) that composes meaning across several prior answers, past the prev-set anaphora the lanes carry
   today. The `C2:cross-turn-composition` HORIZON_CELL (above) is where a first probe of it is
   staged; the record itself is unbuilt.
 - **Winograd-class coreference** — pronoun resolution that turns on world knowledge, not surface
-  agreement (`PLAN_AGENTS.md` R3).
+  agreement (`archive/PLAN_AGENTS.md` §5 R3).
 
 Both are staged in the horizon docs and, until their capability lands, sit at the honest-miss floor
 exactly as the P-axis cells do — a judged miss, not a fabricated answer. Naming them keeps the

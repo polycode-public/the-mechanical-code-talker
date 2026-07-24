@@ -270,7 +270,7 @@ what lets it produce a position and a gate.
   openers, "what can you tell me about this repo" — the conversation a stranger actually has.
 - **FLOW-7 — Typed cross-turn discourse record (DRT-lite).** a query whose meaning composes across
   several prior ANSWERS through a typed record that tracks entities and relations turn to turn, past
-  the prev-set anaphora the lanes already carry (`PLAN_AGENTS.md` R1). Row 19 of the compositional
+  the prev-set anaphora the lanes already carry (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part A). Row 19 of the compositional
   corpus lane (cross-turn temporal composition) is its standing acceptance test.
 - **FLOW-8 — Nested other-minds dialogue.** talking about what ANOTHER agent believes — a believer
   of beliefs, not only a first-order belief about the world. The spider-fly false-belief world is the

@@ -173,7 +173,7 @@ export const CORPUSES = {
     ],
   },
 
-  // PLAN_AGENTS.md Phase 1's "wider general-knowledge seed set" bullet: the
+  // The wider general-knowledge seed set: the
   // three corpuses above are all code-domain-specific (a LANGUAGE or a cloud
   // DOMAIN); this one deliberately is NOT — everyday-knowledge concepts (the
   // natural world, weather, food, common objects) with zero code-domain

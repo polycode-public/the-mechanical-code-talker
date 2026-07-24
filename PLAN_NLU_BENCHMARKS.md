@@ -122,7 +122,7 @@ That changes three things for this plan, and leaves the central problem untouche
   checked on every `npm test` instead of rotting between cycles.
 - **Confirmed failure families get a home.** Step 5 folds each confirmed family back as a keyed row
   that freezes the current wrong answer, so a later fix has to flip it deliberately. The chat-surface
-  debt rows in `PLAN_AGENTS.md` §3 are the worked precedent.
+  debt rows in `archive/PLAN_AGENTS.md` §3 are the worked precedent.
 - **The promotion path is concrete if the matcher is ever promoted.** The layer rule decides where it
   could live: harness-only means outside `src/` entirely, and a promoted matcher would be a `domain/`
   module the tool layer calls, with a contract test and a registry entry. That remains a separate,
