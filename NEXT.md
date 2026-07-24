@@ -18,12 +18,11 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
-- the 3.0.3 nine-bench sweep — AGENT, RESEARCH and CODE_SYNTHESIS write-ups merged; still
-  running: INFERENCE `worktree-agent-a8b0a890b9608d283` (relaunched — first round stalled with
-  its worktree auto-removed), CODE_INDEX `worktree-agent-a156b2ecd00c0ad00`, INGEST
-  `worktree-agent-a32137087f3e2b206`, CEFR_ENGLISH `worktree-agent-a723d79ada8493878`,
-  CONVERSATION `worktree-agent-a8cf6f586793855a1`; AGI_SCALES dispatches once their envelopes
-  land, reading the lever-7 aggregator
+- the 3.0.3 nine-bench sweep — AGENT, RESEARCH, CODE_SYNTHESIS and CODE_INDEX write-ups merged;
+  still running: INFERENCE `worktree-agent-a8b0a890b9608d283` (relaunched — first round stalled
+  with its worktree auto-removed), INGEST `worktree-agent-a32137087f3e2b206`, CEFR_ENGLISH
+  `worktree-agent-a723d79ada8493878`, CONVERSATION `worktree-agent-a8cf6f586793855a1`;
+  AGI_SCALES dispatches once their envelopes land, reading the lever-7 aggregator
 
 
 
