@@ -59,6 +59,9 @@ const OPTIONAL_ADAPTER_STUBS = {
   // the fs+TOML side of the construction banks — never read in the browser
   // (the strategy above is stubbed out entirely).
   "corpus/construction-banks.mjs": "export const CONSTRUCTIONS_DIR = \"\";\nexport const readConstructionFiles = () => ({ relations: [], constructions: [] });\n",
+  // the fs+TOML side of the digest bank — the in-browser dock falls back to
+  // the flat fact list when no digest is available.
+  "corpus/digest-bank.mjs": "export const readDigestStructures = () => null;\nexport const loadDigestStructureTable = () => null;\nexport const digestTermFromRows = () => null;\n",
   // phrasing variety stays OFF in the dock — the browser answer is always the
   // base phrase, exactly as it was when the variants file couldn't be read.
   "answer-variants.mjs": "export const pickPhrase = (poolId, key, base) => base;\n",

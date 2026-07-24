@@ -1328,6 +1328,59 @@ async function main() {
     return;
   }
 
+  if (mode === "digest") {
+    // `tmct digest <term>` — the vocabulary-side digest: turn what the graph
+    // knows about one term into a bounded, readable paragraph, deterministically
+    // (src/domain/digest, wired through corpus/digest-bank.mjs), beside the
+    // code-side `tmct cli digest`. Same repo/backend resolution as `viz`.
+    const rest = process.argv.slice(3);
+    const term = rest.find((a) => !a.startsWith("-"));
+    if (!term) {
+      process.stderr.write("tmct digest — name a term: `tmct digest <term>`\n");
+      process.exitCode = 1;
+      return;
+    }
+    const { resolveRuntimeConfig } = await import("../src/services/cli-args.mjs");
+    const { openMemoryBackend, loadMemory, readFactRows, normFactTerm } = await import("../src/adapters/memory/core.mjs");
+    const { digestTermFromRows } = await import("../src/adapters/corpus/digest-bank.mjs");
+    const { repo, toml } = await resolveRuntimeConfig({ argv: rest });
+    const backendChoice = String(process.env.TMCT_MEMORY_BACKEND || toml?.memory?.backend || "").trim().toLowerCase();
+    const { dir: memoryDir, close: closeMemoryStore } = await openMemoryBackend(repo, backendChoice);
+    let rows;
+    try { rows = readFactRows(await loadMemory(memoryDir)); } finally { await closeMemoryStore(); }
+    // Fold a naive plural to its base on BOTH sides so "aardvark" reaches a
+    // stored "aardvarks" and vice versa — the store keeps whichever number the
+    // teaching sentence used.
+    const baseTerm = (s) => {
+      const x = normFactTerm(s);
+      if (x.endsWith("es")) return x.slice(0, -2);
+      if (x.endsWith("s")) return x.slice(0, -1);
+      return x;
+    };
+    const wantedBase = baseTerm(term);
+    const termRows = rows.filter((r) => baseTerm(r.subject) === wantedBase);
+    if (!termRows.length) {
+      process.stdout.write(`I don't have anything stored about "${term}".\n`);
+      return;
+    }
+    // Render under the term's own stored spelling, not the query's — a plural
+    // query ("doctors") reads back as the singular the store holds ("doctor").
+    const subject = termRows[0].subject;
+    const article = digestTermFromRows(subject, termRows, rows, { budget: 12 });
+    if (!article || !article.paragraphs.length) {
+      // No structure bank, or nothing the selector kept — surface the plain
+      // fact count rather than an empty digest.
+      process.stdout.write(`${subject} — ${termRows.length} fact(s) stored. Run \`tmct viz --focus ${subject}\` for the full ledger.\n`);
+      return;
+    }
+    const sources = article.sources.map((s) => s.provenance).filter(Boolean);
+    const out = [`${subject}`, ...article.paragraphs];
+    if (sources.length) out.push("", `Sources: ${[...new Set(sources)].join("; ")}`);
+    out.push(`${article.detail.factCount} fact(s) stored — \`tmct viz --focus ${subject}\` shows them all.`);
+    process.stdout.write(out.join("\n") + "\n");
+    return;
+  }
+
   if (mode === "serve") {
     // `tmct serve` — the Phase-A capability-router interface: an Anthropic
     // Messages API-compatible HTTP endpoint (POST /v1/messages) over the graph.

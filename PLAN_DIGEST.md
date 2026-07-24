@@ -173,7 +173,28 @@ structure, and composition — not new knowledge.
    view, and `tmct digest <term>` on the CLI beside the code-side `cli digest`. Thin wiring over
    `digestTerm(term, rows, store, table, opts)` (`src/domain/digest/index.mjs`): the surface
    builds the fact rows and the store statistics from the graph it already holds, hands them in,
-   and renders the returned article. NOT STARTED.
+   and renders the returned article.
+   - The wiring seam is shared: `src/domain/digest/store-stats.mjs` (pure — one row scan yields
+     the selector's store-relative signals and the ancestry chains) and
+     `src/adapters/corpus/digest-bank.mjs` (`digestTermFromRows`, which reads the committed bank
+     once and returns null when it is unavailable so a browser-stubbed surface falls back). DONE.
+   - `tmct digest <term>` (`src/domain/cli-verbs.mjs` + the bin dispatcher arm): the narrative
+     leads, its sources follow, the stored-fact count points at the ledger. DONE.
+   - Chat's term read-back: an undifferentiated "what is X" whose flat fact list runs past the
+     digest threshold leads with the digest paragraph, the full list held behind the
+     "show the facts"/"more" escape (`src/services/chat.mjs`, the subject-scan region only). The
+     in-browser dock stubs the bank loader out and falls back to the flat list. DONE.
+   - The ledger term panel: the focus card leads with the digest paragraph and its sources.
+     The digest is computed node-side by the demo generator (`scripts/build-demo-site.mjs`, where
+     the sentence-structure bank is readable) and embedded for the client focus card to render on
+     the initial focus. DONE for the demo site's initial focus. Client refocus to another term,
+     and the CLI `tmct viz` page, still show the fact groups without a digest — a client-side
+     digest over the embedded rows plus an embedded structure table is the next step, and needs
+     the digest-ready rows embedded alongside the ledger rows.
+   - The research per-source panel: the research page grows its store in the browser, so its
+     digest runs client-side over the live in-browser store from an embedded structure table (the
+     pure `digestTerm` links into a browser bundle). NOT STARTED — the next step after the
+     ledger's client-side digest, sharing the same embedded-table mechanism.
 
 ## Decisions recorded
 

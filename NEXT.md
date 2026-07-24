@@ -18,7 +18,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
-- digest stage 5 wiring (chat term answer, research.html/ledger panels, `tmct digest` CLI verb over `digestTerm`) — `worktree-agent-a3c5b757df037f27e`
 
 ## Open items
 
@@ -47,6 +46,10 @@ Each line names its worktree branch; delete the line in the same commit that int
   8. (already in flight) the 53-fact read-back wall is the digest layer's target specimen — the
      stage-5 wiring agent should check "what do you know about a person" renders grouped.
 
+- [ ] digest's last surface: a client-side digest for the research page's per-source panels (and
+  the ledger client-refocus / CLI-`viz` cards) — the pure `digestTerm` linked into a browser
+  bundle over an embedded structure table plus digest-ready rows; the research store grows
+  in-browser so it has no node-side path. `PLAN_DIGEST.md` stage 5 records per-surface status
 - [ ] (recorded 2026-07-24, decide separately) teaching a fact about a code entity is refused
   because graph entities don't count as grounded terms for teach — the one place code-graph and
   taught memory don't compose today; the rest of that playtest batch shipped with the
