@@ -19,9 +19,11 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
 - the 3.0.3 nine-bench sweep — seven of eight write-ups merged (AGENT, RESEARCH, CODE_SYNTHESIS,
-  CODE_INDEX, INGEST, INFERENCE, CONVERSATION); still running: CEFR_ENGLISH
-  `worktree-agent-a723d79ada8493878`; AGI_SCALES dispatches once its envelope lands, reading the
-  lever-7 aggregator
+  CODE_INDEX, INGEST, INFERENCE, CONVERSATION); the CEFR judge seed pass runs in the
+  coordinator's own tree (the worktree round was auto-removed mid-judge — long unattended runs
+  need a stable workspace); AGI_SCALES dispatches once CEFR lands
+- CONVERSATION dead-end fixes 1–4 (overview-of-project intent, packages as a listable kind,
+  thanks+bye adjacency, general-vocabulary cue) — `worktree-agent-a039ec2403aeaac6c`
 
 
 
