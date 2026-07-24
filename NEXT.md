@@ -14,20 +14,32 @@ reports hold that record.
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
-## In flight (2026-07-24, ten concurrent worktree agents off `3f7a209c`, coordinator batching to main)
+## Where the 2026-07-24 session ended
 
-Each line names its worktree branch; delete the line in the same commit that integrates the work.
+The 3.0.0 batch delivered end to end: the repo-index merge (major roll to 3.0.0), the
+fixture-corruption fix with its byte-pin estate guard, discourse slices 1–2 (row 19 composes),
+repo-index phases 5–6 (PLAN_CODE.md split — Track 5/§2.1 stayed as `PLAN_CODE_PLANNING.md`, the
+rest moved to seonix as a local, unpushed commit with an inbox note to `codememory`), the
+mechanised benchmark harness (levers 1/2/3/6/7 plus the seeded `chatbench/verdict-cache.json`),
+the digest layer across every surface including in-browser, the codeplan foundations
+(§3.1–3.3 + the §2.1 spike findings), four new bench harnesses (idxbench, researchbench,
+synthbench/code, ingestbench), two playtest sweeps with their fix batches, and **all nine
+3.0.3 benchmark write-ups** (`BENCHMARK_{AGENT,INFERENCE,CEFR_ENGLISH,CONVERSATION,CODE_INDEX,
+CODE_SYNTHESIS,INGEST,RESEARCH,AGI}_3.0.3.md`). Published: 3.0.0 → 3.0.4; the final batch (3.0.5)
+carries the CEFR/AGI write-ups and this handover. Zero fabrications found in any sweep or bench.
 
-- the 3.0.3 nine-bench sweep — seven of eight write-ups merged (AGENT, RESEARCH, CODE_SYNTHESIS,
-  CODE_INDEX, INGEST, INFERENCE, CONVERSATION); the CEFR judge seed pass runs in the
-  coordinator's own tree (the worktree round was auto-removed mid-judge — long unattended runs
-  need a stable workspace); AGI_SCALES dispatches once CEFR lands
-- CONVERSATION dead-end fixes 1–4 (overview-of-project intent, packages as a listable kind,
-  thanks+bye adjacency, general-vocabulary cue) — `worktree-agent-a039ec2403aeaac6c`
-
-
+One uncommitted remainder: the CONVERSATION dead-end fix round died on a spend limit before its
+first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
 
 ## Open items
+
+- [ ] the four CONVERSATION dead-ends (block below) — a fix agent was dispatched and lost to a
+  spend limit before committing; re-dispatch is the next session's first cheap win
+- [ ] re-pin the agentbench envelope stamp: `BENCHMARK_AGI_3.0.3.md` flags that
+  `agentbench/envelope.json` re-stamped to 3.0.4 under the roll while the write-ups measure
+  3.0.3 — decide whether the envelope stamp should track package.json or the measured cycle
+- [ ] grow the AGI aggregator's scalar coverage: only agentbench commits an envelope today
+  (2/8 scales scalar); INFBENCH/CHATBENCH envelopes are the next cheap growth
 
 - [ ] temporal comparison binds only a literal SHA from the prior query text — the two most
   natural antecedents (a date-filter result set; "when was X last touched") don't bind; this is
