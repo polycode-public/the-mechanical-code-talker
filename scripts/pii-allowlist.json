@@ -27,6 +27,11 @@
       "reason": "upstream maintainer address inside the verbatim MIT licence text vendored as a test fixture (test/fixtures/large-scale/js-express/LICENSE)"
     },
     {
+      "match": "idxbench@example.invalid",
+      "kind": "email",
+      "reason": "synthetic git identity idxbench/run.mjs stamps on its throwaway per-run history repos (.invalid is the RFC 2606 reserved TLD, unroutable by construction)"
+    },
+    {
       "match": "Antony at Polycode",
       "kind": "name",
       "reason": "the intended public author identity (the repository's git committer name)"
