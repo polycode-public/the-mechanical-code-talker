@@ -55,13 +55,6 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   `subClassOf medium` before the real head noun — the digest selector filters it today
   (minority-sense demotion), but the bad edge still lands in the store
   (`archive/PLAN_DIGEST.md` documents the diagnosis)
-- [ ] chat.html doesn't render the digest lead when a term's facts were built up via research
-  in-session and then asked about (operator-observed 2026-07-24). The in-browser chat bundle
-  deliberately stubs `corpus/digest-bank.mjs` (the fs+TOML side) and falls back to the flat
-  list — the fix is the same browser-native path the research/ledger panels got
-  (`src/surfaces/web/digest-client.mjs` over an embedded structure table), wired into the
-  chat.html bundle's term read-back so the digest threshold behaves the same in-browser as in
-  the CLI; verify against a research-grown store, not just a seeded one
 
 - [ ] (recorded 2026-07-24, decide separately) teaching a fact about a code entity is refused
   because graph entities don't count as grounded terms for teach — the one place code-graph and
