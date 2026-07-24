@@ -1,4 +1,4 @@
-// synthbench/rules/oracle.mjs — PLAN_CODE.md Track 1, Stage 3 (§1.4/§6): the
+// synthbench/rules/oracle.mjs — PLAN_CODE_PLANNING.md Track 1, Stage 3 (§1.4/§6): the
 // VERIFICATION ORACLE. Needs no sandbox at all (§5: "the candidate is DATA,
 // not code, run by the SAME trusted engine already shipped") — a candidate
 // GOAL_RULE is inserted into a CLONED rule array and run through the real,

@@ -35,7 +35,7 @@ shape, unrelated axes.
 | IDX-7 | Temporal / history edges | git module-level `touches` plus symbol-level line-range `touches` edges; `tmct index --no-history` is the clean-skip control that must produce a graph with zero history edges and nothing else changed |
 | IDX-8 | Semantic-depth resolution | a method call dispatched through an interface or heritage chain, where the callee cannot be read off a single call site. No settled deterministic engineering exists yet for the general case (the seonix-port horizon the producer branch's own notes name); until a resolver is designed these land on the honest miss wall — an unresolved callee, never a guessed edge. |
 | IDX-9 | Self-index | index tmct itself and answer its own architecture questions (which modules import `chat.mjs`, what the `init --with-persona code` wiring touches — `PLAN_REPO_INDEX.md` phase 5) |
-| IDX-10 | Round-trip refactor fidelity | the graph is rich enough that a `PLAN_CODE.md` Track 5 refactor verifies from the graph alone: a step's DECLARED graph delta matches the OBSERVED delta after re-index (§3.5's tier-1 predicted-vs-actual ledger), and "where is X defined" reflects the move |
+| IDX-10 | Round-trip refactor fidelity | the graph is rich enough that a `PLAN_CODE_PLANNING.md` Track 5 refactor verifies from the graph alone: a step's DECLARED graph delta matches the OBSERVED delta after re-index (§3.5's tier-1 predicted-vs-actual ledger), and "where is X defined" reflects the move |
 
 `IDX-0…IDX-10` is a finite ladder because today's producer covers two languages and structural
 resolution. It is not a fixed ceiling: IDX-8's semantic resolver, more languages at IDX-5, and

@@ -4,8 +4,9 @@ Status: MERGED to `main` (2026-07-24, lands in 3.0.0). Phases 1–4 are live cod
 implementation log below records what the `repo-index` branch delivered. The branch's one e2e
 catch — the bare-invocation usage pin needing the new `index` verb — was re-applied at merge (the
 fix had been rebased out of the branch head). Remaining: phase 5 (`init --repo --with-persona
-code` runs `indexRepository` after scaffolding) and phase 6 (the PLAN_CODE.md move into seonix,
-cross-repo). **tmct's language scope is settled at JS/TS + Python** (phase 3, below): C#/Java stay
+code` runs `indexRepository` after scaffolding). Phase 6 (the PLAN_CODE.md move into seonix,
+cross-repo) is DONE — see its own entry below. **tmct's language scope is settled at JS/TS +
+Python** (phase 3, below): C#/Java stay
 in seonix, which registers them through the same backend seam — what tmct owes is language
 independence at that seam, not more extractors. NEXT.md carries the finishing item.
 
@@ -457,11 +458,12 @@ criterion: one command produces a repo whose chat session answers both a fact qu
 dog") and a code-structure question ("which modules import X") in the same session, backed by a
 self-produced graph.
 
-**Phase 6 — `PLAN_CODE.md` relocates, and Phase 2 of this plan (seonix-side) begins.** Move
-`PLAN_CODE.md` to seonix per Part 7, with the Track 1 / Tracks 2-4 split stated in the moved file's
-own status line. Sequencing Tracks
-2-4's actual design work is seonix's own plan-doc process from here, not designed further in this
-document.
+**Phase 6 — DONE (2026-07-24).** `PLAN_CODE.md` split per Part 7: Track 5 (§3) and §2.1 (the
+product-path rule-synthesis spike) extracted into tmct's own `PLAN_CODE_PLANNING.md`; Tracks 2-4
+and the accompanying survey moved to seonix as `PLAN_CODE_SYNTHESIS.md`, whose own status line
+states the split and names both destination docs. The original `PLAN_CODE.md` is now
+`archive/PLAN_CODE.md`, banner and all. Sequencing Tracks 2-4's actual design work is seonix's own
+plan-doc process from here, not designed further in this document.
 
 ## Open risks / unresolved questions
 

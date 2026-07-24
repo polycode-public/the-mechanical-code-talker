@@ -1,5 +1,5 @@
 // synthbench/phrasing/examples.mjs — Stage 0 hand-written labeled examples
-// (PLAN_CODE.md §6, stage-0 exit bar: "synthesizes >=1 of the 6 existing
+// (PLAN_CODE_PLANNING.md §6, stage-0 exit bar: "synthesizes >=1 of the 6 existing
 // frame families byte-identically from its own hand-written examples"). Each
 // entry names a real PHRASING_FRAMES family (src/domain/interpret/normalize.mjs) and
 // gives >=2 paired {from, to} utterances sharing that family's fixed

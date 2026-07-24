@@ -1,11 +1,11 @@
-// synthbench/rules/synthesize.mjs — PLAN_CODE.md Track 1, Stage 4 (§1.4/§6):
+// synthbench/rules/synthesize.mjs — PLAN_CODE_PLANNING.md Track 1, Stage 4 (§1.4/§6):
 // the CEGIS refinement loop. Narrows enumerate.mjs's bounded candidate set
 // down to the ones that reproduce EVERY given labeled example exactly (each
 // failing example is a genuine counter-example that prunes every candidate
 // whose subGoals/compose combination cannot reproduce it — textbook CEGIS,
-// PLAN_CODE.md §1.4), then confirms the deterministic survivor against a
+// PLAN_CODE_PLANNING.md §1.4), then confirms the deterministic survivor against a
 // held-out example set never used during the narrowing itself (the direct
-// mitigation for the overfitting risk PLAN_CODE.md §7 names).
+// mitigation for the overfitting risk PLAN_CODE_PLANNING.md §7 names).
 //
 // DETERMINISM (the operator's own requirement, restated): enumerateCandidates()
 // walks fixed, frozen arrays in a fixed nested-loop order, so its output order
@@ -22,7 +22,7 @@ import { enumerateCandidates } from "./enumerate.mjs";
 import { passesExample, groundableInToolset } from "./oracle.mjs";
 
 /** Deterministic CEGIS synthesis. `given`/`heldOut` are agentbench-case-shaped
- *  labeled examples (PLAN_CODE.md §1.3: `{id, tools, request, expect}`).
+ *  labeled examples (PLAN_CODE_PLANNING.md §1.3: `{id, tools, request, expect}`).
  *  Returns:
  *    { ok:true,  candidate, survivorCount, trace }         — synthesis succeeded
  *    { ok:false, reason, trace, candidate? }                — honest miss:

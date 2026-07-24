@@ -1,6 +1,6 @@
 // The two small example codebases under examples/ — tiny-webapp-src (JS/TS) and
 // tiny-lib-py (Python) — exist for two future uses: indexing demos, and
-// PLAN_CODE.md Track 5's first milestone (a planned rename-then-move refactor of
+// PLAN_CODE_PLANNING.md Track 5's first milestone (a planned rename-then-move refactor of
 // tiny-webapp-src's parseRow, verified by the fixture's own test suite). This
 // proves both index cleanly today, that the graph sees parseRow's exact two call
 // sites the milestone depends on, and that each fixture's own test suite passes
