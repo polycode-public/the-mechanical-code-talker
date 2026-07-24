@@ -138,6 +138,32 @@ test("teaching a genuinely new fact updates the chat log AND the fact table/stat
   }
 });
 
+test("a live teach's fresh focus card reads the just-taught term back as a digest, recomputed client-side over the grown store", async () => {
+  const { context, page } = await openLedgerPage();
+  try {
+    await turn(page, "blue is a peg");
+    assert.equal(await page.locator(".focuscard .term").innerText(), "blue", "the teach refocused onto the new term");
+
+    // The focus card's digest is not a build-time artifact — "blue" was never
+    // in the static snapshot, so this paragraph can only be a client recompute
+    // over the store the teach just grew, through the live tmctLedger engine.
+    const digest = page.locator(".focuscard .focusdigest");
+    await digest.waitFor({ state: "visible", timeout: TURN_TIMEOUT_MS });
+    const paras = await digest.locator("p:not(.dgsrc)").allInnerTexts();
+    assert.match(paras.join(" "), /blue is a peg/i, `the digest reads the taught fact back, got ${JSON.stringify(paras)}`);
+
+    // The sources ride through in the shared idiom, and the flat fact list is
+    // reachable behind the explicit escape.
+    assert.match((await digest.locator(".dgsrc").innerText()).trim(), /^\(sources:.*\)$/, "the digest names its sources");
+    assert.equal(await digest.locator(".dgfacts").getAttribute("open"), null, "the fact list starts collapsed");
+    await digest.locator(".dgfacts > summary").click();
+    const facts = await digest.locator(".dgfacts .dgfactlist .dgfact").allInnerTexts();
+    assert.ok(facts.join(" ").toLowerCase().includes("blue"), "show the facts reveals the stored fact behind the narrative");
+  } finally {
+    await context.close();
+  }
+});
+
 test("an honest miss still reads as a miss, never fabricated, and never refocuses the view", async () => {
   const { context, page } = await openLedgerPage();
   try {

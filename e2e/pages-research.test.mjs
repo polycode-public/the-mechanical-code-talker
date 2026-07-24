@@ -106,6 +106,17 @@ async function ask(page, q) {
   return { text: (await answerEl.textContent()) || "", miss: await answerEl.evaluate((e) => e.classList.contains("miss")) };
 }
 
+async function digestTerm(page, term) {
+  await page.fill("#digestInput", term);
+  await page.click("#digestGo");
+  await page.waitForFunction(
+    () => Boolean(document.querySelector("#digestOut .dgcard, #digestOut .miss")),
+    null,
+    { timeout: GROW_TIMEOUT_MS },
+  );
+  return page.locator("#digestOut");
+}
+
 test("the research page serves every asset it asks for and logs no error of its own", async () => {
   const { context, page, consoleErrors, failedRequests } = await openResearchPage();
   try {
@@ -290,6 +301,75 @@ test("reset clears the grown graph back to the seed sources", async () => {
     const keys = await sourceKeys(page);
     assert.ok(keys.every((k) => k.startsWith("seed:")), "after reset only the seed sources remain");
     assert.equal(await page.locator("#recentList .fact").count(), 0, "recently-learned is empty again");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the term digest reads a grown term back as a narrative, names its sources, and holds the full fact list behind 'show the facts'", async () => {
+  const { context, page, consoleErrors } = await openResearchPage();
+  try {
+    // Two facts about one invented term, grounded through ingest, so the digest
+    // has a definition to lead with and a second fact for the detail escape.
+    await ingest(page, DOC);
+    const out = await digestTerm(page, "florp");
+
+    const card = out.locator(".dgcard");
+    assert.equal(await card.count(), 1, "a grown term digests to a card, not a miss");
+    const paras = await card.locator("p:not(.dgsrc)").allInnerTexts();
+    assert.ok(paras.length >= 1, "the digest leads with at least one narrative paragraph");
+    assert.ok(paras.join(" ").toLowerCase().includes("florp"), "the narrative names the term");
+    assert.match(paras.join(" "), /animal/i, "the narrative states the taught class");
+
+    // Provenance rides through in the "(sources: …)" idiom the chat and CLI use.
+    const src = (await card.locator(".dgsrc").innerText()).trim();
+    assert.match(src, /^\(sources:.*\)$/, `the sources line matches the idiom, got ${JSON.stringify(src)}`);
+
+    // The full fact list is reachable, but only behind the explicit escape:
+    // the rows sit inside a collapsed <details>, so they are present in the DOM
+    // yet not shown until the summary is clicked.
+    assert.equal(await card.locator(".dgfacts").getAttribute("open"), null, "the fact list starts collapsed");
+    assert.equal(await card.locator(".dgfacts .factlist .fact").first().isVisible(), false, "the flat facts are hidden until asked for");
+    await card.locator(".dgfacts > summary").click();
+    const factSubjects = await card.locator(".dgfacts .factlist .fact .subj").allInnerTexts();
+    assert.ok(factSubjects.length >= 2, `show the facts reveals every stored fact, got ${factSubjects.length}`);
+    assert.ok(factSubjects.every((s) => /^florps?$/.test(s)), "the revealed facts are all about the term");
+
+    assert.deepEqual(consoleErrors, [], "digesting a term logs no error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the term digest abstains on a term the graph holds nothing about, never guessing", async () => {
+  const { context, page } = await openResearchPage();
+  try {
+    const out = await digestTerm(page, "zzzznonexistentzzz");
+    assert.equal(await out.locator(".dgcard").count(), 0, "an unknown term produces no digest card");
+    const miss = (await out.locator(".miss").innerText()).toLowerCase();
+    assert.match(miss, /abstain|nothing is stored|no grounded/, "the empty digest is worded as an abstention");
+  } finally {
+    await context.close();
+  }
+});
+
+test("clicking a best-connected term reads it back through the digest panel", async () => {
+  const { context, page } = await openResearchPage();
+  try {
+    await ingest(page, DOC); // grows the graph so best-connected terms appear
+    const chip = page.locator("#hubsList .chip.tapchip").first();
+    // The chip's aria-label carries the exact term it digests, so the test does
+    // not depend on which term ranks highest in the seeded graph.
+    const label = await chip.getAttribute("aria-label");
+    const term = String(label || "").replace(/^read a digest of /, "");
+    assert.ok(term.length > 0, "the hub chip names the term it will digest");
+    await chip.click();
+    await page.waitForFunction(
+      () => Boolean(document.querySelector("#digestOut .dgcard, #digestOut .miss")),
+      null,
+      { timeout: GROW_TIMEOUT_MS },
+    );
+    assert.equal(await page.locator("#digestInput").inputValue(), term, "clicking the chip digests that exact term");
   } finally {
     await context.close();
   }

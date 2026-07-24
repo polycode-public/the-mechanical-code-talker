@@ -25,6 +25,7 @@ import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
 import { registerResearchProvider } from "../../adapters/corpus/wikipedia-live.mjs";
 import { computeLedgerDataFromPayload } from "../../services/ledger-viz.mjs";
+import { digestTermFromPayloadBrowser } from "./digest-client.mjs";
 
 /**
  * A browser ledger-dock session over the real turn engine — createChatSession's
@@ -101,4 +102,4 @@ export async function exportFactsJsonl(memoryDir) {
 // splitSentences + exportFactsJsonl carry the dock's paste-and-drop ingest and
 // its JSONL export across the bundle boundary, the same one-serializer posture
 // chat-browser-entry.mjs holds for its own page.
-globalThis.tmctLedger = { createLedgerSession, computeLedgerDataFromPayload, normFactTerm, registerWinkModel, registerResearchProvider, splitSentences: splitSentencesPreservingPaths, exportFactsJsonl };
+globalThis.tmctLedger = { createLedgerSession, computeLedgerDataFromPayload, normFactTerm, registerWinkModel, registerResearchProvider, splitSentences: splitSentencesPreservingPaths, exportFactsJsonl, digestTermFromPayloadBrowser };

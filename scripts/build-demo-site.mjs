@@ -117,7 +117,12 @@ const ledgerData = computeLedgerDataFromPayload(payload, {});
 // sentence-structure bank is readable — and embedded for the ledger's focus
 // card; a client refocus to another term shows the fact groups without it.
 const { readFactRows: readLedgerFactRows } = await import(join(ROOT, "src", "adapters/memory/core.mjs"));
-const { digestTermFromRows } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
+const { digestTermFromRows, readDigestStructures: readLedgerDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
+// The digest structure table, embedded so the page recomputes a term's digest
+// client-side on refocus (over the store the dock grows in the browser) rather
+// than losing the focus card. The server digest below stays as the initial
+// focus's fallback for a page whose engine bundle never loads.
+const ledgerDigestStructures = readLedgerDigestStructures();
 let focusDigest = null;
 if (ledgerData.focus) {
   const allFactRows = readLedgerFactRows(payload);
@@ -128,6 +133,7 @@ if (ledgerData.focus) {
       term: ledgerData.focus,
       paragraphs: article.paragraphs,
       sources: [...new Set(article.sources.map((s) => s.provenance).filter(Boolean))],
+      facts: (article.detail.facts || []).map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
       factCount: article.detail.factCount,
     };
   }
@@ -137,7 +143,7 @@ const { main: buildLedgerBundle } = await import(join(here, "build-ledger-bundle
 const { outPath: ledgerBundlePath, size: ledgerBundleBytes } = await buildLedgerBundle(SITE);
 console.log(`wrote ${ledgerBundlePath} (${(ledgerBundleBytes / 1024).toFixed(0)} KB)`);
 const ledgerPath = join(SITE, "ledger.html");
-await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true, focusDigest }));
+await writeF(ledgerPath, renderLedgerHtml({ ...ledgerData, memoryAskBundle, ledgerBundleAvailable: true, focusDigest, digestStructures: ledgerDigestStructures }));
 console.log(`wrote ${ledgerPath} (${memoryAskBundle ? "chat dock enabled" : "no bundle — dock disabled"})`);
 
 // The code explorer: the exact page the Electron shell renders for itself
@@ -233,8 +239,12 @@ console.log(`wrote ${seed.outPath} (${seed.facts} facts, ${(seed.bytes / 1024).t
   const { outPath: researchBundlePath, size: researchBundleBytes } = await buildResearchBundle(SITE);
   console.log(`wrote ${researchBundlePath} (${(researchBundleBytes / 1024).toFixed(0)} KB)`);
   const { renderResearchHtml } = await import(join(ROOT, "src", "services", "research-viz.mjs"));
+  // The digest sentence-structure bank, read once here (node-side, where the
+  // TOML is), embedded in the page so the research digest composes client-side
+  // over the store it grows in the browser — no TOML parser ever ships.
+  const { readDigestStructures } = await import(join(ROOT, "src", "adapters/corpus/digest-bank.mjs"));
   const researchPagePath = join(SITE, "research.html");
-  await writeF(researchPagePath, renderResearchHtml());
+  await writeF(researchPagePath, renderResearchHtml({ digestStructures: readDigestStructures() }));
   console.log(`wrote ${researchPagePath}`);
 }
 

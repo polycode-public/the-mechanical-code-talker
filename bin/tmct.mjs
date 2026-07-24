@@ -1316,7 +1316,30 @@ async function main() {
     // an honest "chat unavailable" note instead of the dock (e.g. a fresh
     // checkout before the bundle's first build).
     const memoryAskBundle = await readMemoryAskBundle();
-    await writeFile(outPath, renderLedgerHtml({ ...data, memoryAskBundle }), "utf8");
+    // The digest structure table, embedded so the page reads a term back as a
+    // narrative client-side on refocus (over the store this page carries) — the
+    // same mechanism the demo ledger uses, sharing the memory-ask engine's own
+    // browser digest helper. The initial focus also gets a node-side digest as
+    // the fallback for a page whose engine bundle never loads.
+    const { readDigestStructures, digestTermFromRows } = await import("../src/adapters/corpus/digest-bank.mjs");
+    const { readFactRows: readVizFactRows } = await import("../src/adapters/memory/core.mjs");
+    const digestStructures = readDigestStructures();
+    let focusDigest = null;
+    if (data.focus && data.payload) {
+      const allFactRows = readVizFactRows(data.payload);
+      const focusRows = allFactRows.filter((r) => r.subject === data.focus);
+      const article = focusRows.length ? digestTermFromRows(data.focus, focusRows, allFactRows, { budget: 8 }) : null;
+      if (article && article.paragraphs.length) {
+        focusDigest = {
+          term: data.focus,
+          paragraphs: article.paragraphs,
+          sources: [...new Set(article.sources.map((s) => s.provenance).filter(Boolean))],
+          facts: (article.detail.facts || []).map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
+          factCount: article.detail.factCount,
+        };
+      }
+    }
+    await writeFile(outPath, renderLedgerHtml({ ...data, memoryAskBundle, digestStructures, focusDigest }), "utf8");
     process.stdout.write(
       `tmct viz — wrote ${data.meta.shown} fact row(s) around ${data.focus ? `'${data.focus}'` : "no focus"} to ${outPath}\n`,
     );
