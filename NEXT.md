@@ -39,6 +39,11 @@ Each line names its worktree branch; delete the line in the same commit that int
 
 - [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 3–5 (plural binding past a count, the tie refusal, the remaining bindable-form lanes) — slices 1–2 shipped 2026-07-24 (the record threads through `runTurn`, and `games/cross-turn-temporal-composition-composes` is the flipped row); the plan doc stages what's next
 - [ ] prove the repo-index backend seam admits an out-of-repo backend with no tmct change: seonix registers a C#/Java backend against a released tmct 3.0.x (registration, conformance, IDX-5 scoring). Seonix-side work — their inbox has the phase-6 handover; `PLAN_REPO_INDEX.md` Open risks names the proof. Everything else in that plan (branch merge, phases 1–6) is delivered
+- [ ] RESEARCHBENCH's founding cycle (`BENCHMARK_RESEARCH_3.0.3.md`) gates at RES-2: the research
+  lane's fan-out queues in plain document order with no relevance ranking, so ordering scores 67%
+  against the 80% floor and RES-3..6 sit skipped-with-a-receipt behind it. Next cycle's build:
+  a relevance-ordering pass over the queued titles in `src/services/research.mjs` that pushes
+  RES-2 past its floor without regressing RES-0/RES-1 recall or inventing traversal
 
 ## Discipline
 
