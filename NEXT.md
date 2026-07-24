@@ -18,12 +18,12 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
-- the 3.0.3 nine-bench sweep — AGENT and RESEARCH write-ups merged; still running:
-  INFERENCE `worktree-agent-a0cfc57fddaefaaf3`, CODE_INDEX `worktree-agent-a156b2ecd00c0ad00`,
-  CODE_SYNTHESIS `worktree-agent-a743484b3ac8fa47b`, INGEST `worktree-agent-a32137087f3e2b206`,
-  CEFR_ENGLISH `worktree-agent-a723d79ada8493878`, CONVERSATION
-  `worktree-agent-a8cf6f586793855a1`; AGI_SCALES dispatches once their envelopes land, reading
-  the lever-7 aggregator
+- the 3.0.3 nine-bench sweep — AGENT, RESEARCH and CODE_SYNTHESIS write-ups merged; still
+  running: INFERENCE `worktree-agent-a8b0a890b9608d283` (relaunched — first round stalled with
+  its worktree auto-removed), CODE_INDEX `worktree-agent-a156b2ecd00c0ad00`, INGEST
+  `worktree-agent-a32137087f3e2b206`, CEFR_ENGLISH `worktree-agent-a723d79ada8493878`,
+  CONVERSATION `worktree-agent-a8cf6f586793855a1`; AGI_SCALES dispatches once their envelopes
+  land, reading the lever-7 aggregator
 
 
 
@@ -51,6 +51,9 @@ Each line names its worktree branch; delete the line in the same commit that int
   against the 80% floor and RES-3..6 sit skipped-with-a-receipt behind it. Next cycle's build:
   a relevance-ordering pass over the queued titles in `src/services/research.mjs` that pushes
   RES-2 past its floor without regressing RES-0/RES-1 recall or inventing traversal
+- [ ] `BENCHMARK_CODE_SYNTHESIS_3.0.3.md` (founding cycle): only SYN-0 is built; SYN-3's single
+  rename operator (`PLAN_CODE_PLANNING.md` Track 5) is the next capability to build to push the
+  ladder past its current gate
 
 ## Discipline
 
