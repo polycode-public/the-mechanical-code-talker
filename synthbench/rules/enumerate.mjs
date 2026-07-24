@@ -1,4 +1,4 @@
-// synthbench/rules/enumerate.mjs — PLAN_CODE.md Track 1, Stage 2 (§1.3/§6):
+// synthbench/rules/enumerate.mjs — PLAN_CODE_PLANNING.md Track 1, Stage 2 (§1.3/§6):
 // the BOUNDED field-grammar enumerator over the exact shape
 // src/domain/router/goal-reasoner.mjs's GOAL_RULES entries declare. Produces
 // candidate rule OBJECTS only — nothing here runs a candidate through the
@@ -9,7 +9,7 @@
 // a set src/domain/router/registry.mjs or src/domain/router/resolver.mjs already declares —
 // the topic list is READ from the registry's own `knows(...)` add-effects
 // (never a copied string list), so this enumerator's search space grows
-// automatically the day a new capability is registered (PLAN_CODE.md §7: "every
+// automatically the day a new capability is registered (PLAN_CODE_PLANNING.md §7: "every
 // future capability added to the registry linearly grows Track 1's space
 // too"). This mirrors resolver.mjs's own `nlReachableTopics()` — derive from
 // the registry, never invent a topic outside it.
@@ -65,14 +65,14 @@ export const FOCUS_CLASSES = Object.freeze(
 );
 
 // The closed 2-element powerset of {"scoped","global"} minus the empty set —
-// PLAN_CODE.md §1.1's own literal "3 possibilities" for the `modes` field.
+// PLAN_CODE_PLANNING.md §1.1's own literal "3 possibilities" for the `modes` field.
 export const MODE_SETS = Object.freeze([
   Object.freeze(["scoped"]),
   Object.freeze(["global"]),
   Object.freeze(["scoped", "global"]),
 ]);
 
-// set-algebra.mjs's exported operator names (PLAN_CODE.md §1.1's `compose.op`
+// set-algebra.mjs's exported operator names (PLAN_CODE_PLANNING.md §1.1's `compose.op`
 // field) — read as literal names here because the OPERATORS themselves are
 // consumed as declarative data by goal-reasoner.mjs's `compose` interpreter,
 // not applied directly by this enumerator (candidates are DATA, never code).
@@ -104,7 +104,7 @@ export function topicBindsEntity(topic) {
  *  topics, but this enumerator does not hardcode that judgement — a
  *  non-coverage no-arg topic like "architecture" is left IN the search space
  *  and pruned by the verification oracle instead, the same "let the oracle
- *  decide, don't pre-judge" discipline PLAN_CODE.md §1.4 describes). */
+ *  decide, don't pre-judge" discipline PLAN_CODE_PLANNING.md §1.4 describes). */
 export function partitionTopics() {
   const topics = allTopics();
   return {
@@ -131,7 +131,7 @@ function composeTemplates(coverageTopic, relTopic) {
 
 /** Mechanically build ONE frozen candidate rule — the exact GOAL_RULES shape
  *  (goal-reasoner.mjs:61-74's own docblock pins the field set). `invariant`
- *  is POST-HOC free text composed FROM the rule's own fields (PLAN_CODE.md
+ *  is POST-HOC free text composed FROM the rule's own fields (PLAN_CODE_PLANNING.md
  *  §1.1: "not searched"), never independently authored. `id`/`achieves` are
  *  mechanically slugged from the same fields, so two calls with the same
  *  logical candidate always produce the same id (determinism). */

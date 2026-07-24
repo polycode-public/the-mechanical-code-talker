@@ -4,7 +4,8 @@ The repeatable loop that drives tmct's **deterministic code synthesis and transf
 one rung at a time: run the ladder, read the rung table, decide ship-or-build, and if building, pick
 the next track capability, implement it, regression-test, and re-measure. The harness is
 `synthbench/code/` — a dev-only sibling of the shipped `synthbench/rules/` and `synthbench/phrasing/`
-(Track 1), grading the code tracks of `PLAN_CODE.md`. This skill is the loop a session RUNS every
+(Track 1), grading the code tracks split across `PLAN_CODE_PLANNING.md` (tmct: Tracks 1 and 5)
+and seonix's `PLAN_CODE_SYNTHESIS.md` (Tracks 2-4). This skill is the loop a session RUNS every
 time it wants to advance the ladder.
 
 **The SYN ladder (`SYN-0…SYN-8`) is its own scale, drawn from this bench's own domain.**
@@ -26,8 +27,9 @@ named for that meaning. Do not compare a SYN rung against CHATBENCH's CEFR grade
 | SYN-7 | Self-source change | a planned transformation on tmct's OWN non-core source, verified by tmct's own suite (the fixture is now the repo) |
 | SYN-8 | Bootstrapping | regenerate a working tmct SUBSYSTEM from its own specs and tests — the self-improvement capability `SKILL_BENCHMARK_AGI_SCALES.md` names as different-in-kind |
 
-**SYN-0…SYN-4 are the near ladder** — each maps to a track already designed in `PLAN_CODE.md` (SYN-0
-and SYN-3/4 to Track 5, SYN-1 to Track 3, SYN-2 to Track 2), and Track 1's shipped
+**SYN-0…SYN-4 are the near ladder** — each maps to a track already designed (SYN-0 and SYN-3/4 to
+tmct's `PLAN_CODE_PLANNING.md` Track 5, SYN-1 to seonix's `PLAN_CODE_SYNTHESIS.md` Track 3, SYN-2
+to Track 2 in the same doc), and Track 1's shipped
 `synthbench/rules`/`synthbench/phrasing` is the floor beneath SYN-0 (a synthesized `GOAL_RULE` is a
 code artifact through a trusted oracle, no sandbox). **SYN-5…SYN-6 are the mid ladder** — designed,
 unbuilt. **SYN-7…SYN-8 are horizons**, not walls: `SYN-7` needs the self-source posture Track 5's
@@ -43,7 +45,7 @@ measured and named, never patched to a fake pass.
 > **STATUS (docs-only, 2026-07-23):** this document SPECIFIES the harness; `synthbench/code/` is not
 > built yet. Track 1 (`synthbench/rules`, `synthbench/phrasing`) is shipped and is the floor.
 > **SYN-0 is the first build target** — the smallest end-to-end slice (one observable edit through
-> the plan-act-verify loop on a JS fixture), staged in `PLAN_CODE.md` §3.7's sub-list.
+> the plan-act-verify loop on a JS fixture), staged in `PLAN_CODE_PLANNING.md` §3.7's sub-list.
 
 > **Invoke it by telling a session:** *"Follow `SKILL_BENCHMARK_CODE_SYNTHESIS.md` and run a
 > SYNTHBENCH-CODE cycle"* (optionally: a rung to target, a track to build, a version stamp). Until
@@ -74,8 +76,9 @@ Every cycle MUST satisfy:
   siblings) are versioned alongside; a fixture edit is a case edit.
 - **No LLM anywhere in the loop — not in the product, not in the search, not in the dev harness.**
   Synthesis is bounded enumeration and planning over closed grammars and closed operator catalogues,
-  verified by real execution. `PLAN_CODE.md` §8 is binding here: a harness that ships artifacts into
-  `src/` is transitively the product path, so no model call may enter any search loop even offline.
+  verified by real execution. `PLAN_CODE_PLANNING.md`'s Ground rules are binding here: a harness that
+  ships artifacts into `src/` is transitively the product path, so no model call may enter any search
+  loop even offline.
   Assistants author the catalogues, grammars, and cases offline as reviewed static data (the Track 1
   posture); the engine executes them. Two runs over the same fixture and stamp produce byte-identical
   results (§5's determinism check).
@@ -177,7 +180,7 @@ and the loop must replan from observed state. SYN-7 points `fixture` at tmct's o
 `tiers` at tmct's own suite.
 
 **Family B — expression synthesis from examples (SYN-1).** Track 3's shape, retained from
-`PLAN_CODE.md` §6:
+seonix's `PLAN_CODE_SYNTHESIS.md` §3:
 ```
 { id, rung, kind, signature,
   grammar,                     // the closed operator family (arith, compare/ternary, string, array)
@@ -222,7 +225,7 @@ The subsystem's own tests and specs are the whole oracle: regenerate the impleme
 tests, run the full suite, confirm byte-determinism. A subsystem the fixed catalogue cannot regenerate
 lands on the honest-miss floor as a ceiling marker — the horizon named up top, not a wall.
 
-## 4. Verification tiers (echoing `PLAN_CODE.md` §3.5)
+## 4. Verification tiers (echoing `PLAN_CODE_PLANNING.md` §3.5)
 
 Track 1's oracle posture extended to real code: run candidates through the real, unmodified toolchain,
 never a simulation. Which tiers apply is declared per case (`expect.tiers`).
@@ -238,11 +241,10 @@ never a simulation. Which tiers apply is declared per case (`expect.tiers`).
 Tier 1 is the transformation rungs' honest core: a mismatch between the declared delta and the
 re-indexed observed delta ABORTS the plan and replans from observed state — a miss, never a guess.
 This is exactly the drift SYN-4 must demonstrate-and-catch and SYN-5 must replan around. GumTree-class
-tree diffing (`PLAN_CODE.md` §4.9) is the candidate instrument if tier 1 ever needs finer grain than
-graph-delta comparison. Tier 1 depends on `PLAN_REPO_INDEX.md`'s ported JS extractor feeding
-`buildEntities` — until it lands, a stage-0 harness re-indexes the fixture with the same external
-producer that built it (`PLAN_CODE.md` §3.6), workable for SYN-0…SYN-3 on the demo fixture, and the
-JS extractor is SYN-4's own prerequisite.
+tree diffing (`PLAN_CODE_PLANNING.md` §4.9) is the candidate instrument if tier 1 ever needs finer
+grain than graph-delta comparison. Tier 1's re-index dependency, `PLAN_REPO_INDEX.md`'s JS/TS +
+Python extractor, SHIPPED 2026-07-24 (tmct 3.0.0) — see `PLAN_CODE_PLANNING.md` §3.6 for the
+remaining wiring work.
 
 ## 5. Scoring and overfitting checks
 
@@ -250,7 +252,8 @@ JS extractor is SYN-4's own prerequisite.
   verified-completion ≥ 50%, in ladder order with skipped-with-a-receipt above the first failure.
 - **Held-out examples (SYN-1, SYN-6).** Given examples establish candidacy; held-out examples decide
   it. A candidate is checked against held-out inputs ONLY after every given example passes, and a
-  single held-out miss rejects it as overfit. This is `PLAN_CODE.md` §6's floor discipline and PBE's
+  single held-out miss rejects it as overfit. This is seonix's `PLAN_CODE_SYNTHESIS.md` §3's floor
+  discipline and PBE's
   standard guard (FlashFill/PROSE version-space practice).
 - **Mutation-testing validation (SYN-2), mandatory per Track 2's own mitigations.** A repair that
   flips the failing test is re-checked against deliberately mutated versions of the fixture: a patch
@@ -265,7 +268,8 @@ JS extractor is SYN-4's own prerequisite.
   case, held-out / mutation overfit gates clear, byte-identity verified, no `synthbench`-in-`src`
   import leak, no model call in any loop.
 
-## 6. The sandbox (per `PLAN_CODE.md` §7)
+## 6. The sandbox (per tmct's `PLAN_CODE_PLANNING.md` §5 for the subprocess tiers, and seonix's
+`PLAN_CODE_SYNTHESIS.md` §5/§7 for the Playwright tiers)
 
 - **SYN-0, SYN-3, SYN-4, SYN-5, SYN-7 (planned transformations)** run the fixture's own test suite via
   its own runner in a **subprocess** — the mildest form of the surface, real OS-process isolation, no
@@ -274,7 +278,7 @@ JS extractor is SYN-4's own prerequisite.
 - **SYN-1, SYN-6 (synthesized JS)** execute candidate-authored expressions in **Playwright**
   (`page.evaluate`): real isolation, value-compare outputs, prune on throw/timeout. Playwright 1.61.1
   is already pinned in `devDependencies` with Chromium installed by `npm run e2e:browsers` — no new
-  dependency, a new USE of an existing one, which `PLAN_CODE.md` §8 records.
+  dependency, a new USE of an existing one, which seonix's `PLAN_CODE_SYNTHESIS.md` §6 records.
 - **SYN-2 (repair)** runs the fixture's test suite over candidate-mutated source in Playwright /
   subprocess — candidate-influenced code execution, the sharper surface Track 2 carries.
 - **SYN-8 (bootstrapping)** runs tmct's own suite over regenerated source in a subprocess.
@@ -284,8 +288,9 @@ JS extractor is SYN-4's own prerequisite.
 ## 7. The loop (one cycle; repeats until the ladder tops out or the operator stops)
 
 **Step 1 — READ.** Read the latest `BENCHMARK_CODE_SYNTHESIS_<version>.md` (its ceiling markers and
-its decision on frontiers), the code-axis open items in `NEXT.md`, `PLAN_CODE.md`'s current track
-status, and the current `synthbench/code/cases.jsonl` rung counts. Decide whether this cycle is a
+its decision on frontiers), the code-axis open items in `NEXT.md`, tmct's `PLAN_CODE_PLANNING.md`
+Track 5 status and seonix's `PLAN_CODE_SYNTHESIS.md` Track 2-4 status, and the current
+`synthbench/code/cases.jsonl` rung counts. Decide whether this cycle is a
 pure re-measurement or targets a specific gated rung to push past, and which track's capability that
 requires.
 
@@ -318,7 +323,8 @@ with a receipt for every rung above it.
   re-measurement as-is — a clean re-measurement is a legitimate, reportable outcome, not a null result.
 - **A rung you want to move past is gating:** implement the next track capability that unlocks it — a
   new operator in the catalogue, the JS adaptor, a new verification tier, a re-index stage, a new
-  fixture-linted case family — following `PLAN_CODE.md`'s staging (SYN-0's slice first, then SYN-3's
+  fixture-linted case family — following the owning doc's staging (tmct's `PLAN_CODE_PLANNING.md`
+  for SYN-0/3/4, seonix's `PLAN_CODE_SYNTHESIS.md` for SYN-1/2) (SYN-0's slice first, then SYN-3's
   single operator, then SYN-4's §3.7 milestone, upward). Regression-test (`npm test` green — no
   exception for engine work), and re-run this cycle from Step 2 to confirm the target rung's gate now
   passes before moving further up.
@@ -364,7 +370,8 @@ normal operator check-in, not an autonomous re-arm.
 - **No LLM leaks into the product, the search, or the harness.** SYNTHBENCH-CODE's whole value is a
   deterministic ruler for a deterministic synthesizer that ships artifacts a review reads as
   hand-written. A model call in any path — product, dev search loop, or grader — is rejected by
-  definition (`PLAN_CODE.md` §8).
+  definition (`PLAN_CODE_PLANNING.md`'s Ground rules and `PLAN_CODE_SYNTHESIS.md`'s parallel
+  invariant).
 
 ## 9. One-paragraph TL;DR
 
@@ -383,8 +390,9 @@ suite green, drift caught, poisoned variant refused) to the SYN-7/SYN-8 horizons
 then bootstrapping a subsystem from its own specs and tests — the self-improvement capability
 `SKILL_BENCHMARK_AGI_SCALES.md` names as different-in-kind, sitting at the miss wall until built, framed as a
 research horizon with the plan docs' own candidate literatures, never as a wall). If every rung lands
-where expected, ship the re-measurement; to push further, build the next `PLAN_CODE.md` track
-capability that unlocks the gating rung, keep `npm test` green, and re-run to confirm the gate passes.
+where expected, ship the re-measurement; to push further, build the next track capability (tmct's
+`PLAN_CODE_PLANNING.md` for Track 5, seonix's `PLAN_CODE_SYNTHESIS.md` for Tracks 2-4) that unlocks
+the gating rung, keep `npm test` green, and re-run to confirm the gate passes.
 Write up `BENCHMARK_CODE_SYNTHESIS_<version>.md` (headline delta, timing, per-rung metric table with
 gate receipts, what's new, kept ceiling markers, discipline checklist, decision), snapshotting raw
 output to `synthbench/code/results/raw/run-<version>[_00N]/` first and mirroring anything left open
@@ -393,6 +401,7 @@ SYN-0 is the first build target.
 
 **Precondition for any cycle:** `synthbench/code/` must exist before this skill can run at all.
 Its build (SYN-0 first: one observable edit through the plan-act-verify loop on a JS source
-fixture) is an OUTPUT of `PLAN_CODE.md`'s tracks — the plan owns the build, this skill owns the
+fixture) is an OUTPUT of `PLAN_CODE_PLANNING.md`'s (and seonix's `PLAN_CODE_SYNTHESIS.md`'s)
+tracks — the plan owns the build, this skill owns the
 measurement. A session invoked on this skill while the harness is absent builds it first, per
 that plan.

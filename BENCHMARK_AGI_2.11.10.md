@@ -86,7 +86,7 @@ the capabilities that separate that from general intelligence, and the site's ow
 The site's thesis, inverted: it demonstrates how far deterministic, auditable machinery goes across
 the classic capability areas, and the miss wall marks precisely where the different-in-kind
 capabilities would have to start. The no-LLM product path is a constitutional decision, not a
-capability claim; the horizon sections of the plan docs (`PLAN_DISCOURSE_AND_RECOGNITION.md`, `PLAN_CODE.md` §4)
+capability claim; the horizon sections of the plan docs (`PLAN_DISCOURSE_AND_RECOGNITION.md`, `PLAN_CODE_PLANNING.md` §4)
 carry the staged next steps for the near items.
 
 ---

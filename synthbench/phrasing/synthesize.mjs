@@ -1,10 +1,10 @@
-// synthbench/phrasing/synthesize.mjs — Stage 0 (PLAN_CODE.md §1.2/§6): the
+// synthbench/phrasing/synthesize.mjs — Stage 0 (PLAN_CODE_PLANNING.md §1.2/§6): the
 // PHRASING_FRAMES warm-up. Synthesizes ONE `{re, to}` frame — the exact shape
 // src/domain/interpret/normalize.mjs's PHRASING_FRAMES table declares — from a small
 // set of PAIRED utterance examples `{from, to}`, e.g.
 //   ("what functions are in Task", "what does Task contain")
 //   ("what functions are in Widget", "what does Widget contain")
-// This is the smaller warm-up instance of Track 1's species (PLAN_CODE.md
+// This is the smaller warm-up instance of Track 1's species (PLAN_CODE_PLANNING.md
 // §1.2): not an arbitrary regex search, but a TEMPLATE INSTANTIATION — the
 // varying span (the object, "Task"/"Widget") generalizes into a capture
 // group, and the fixed scaffold around it (both in `from` and in `to`)

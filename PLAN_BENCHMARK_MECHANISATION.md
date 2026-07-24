@@ -7,7 +7,7 @@ nine `SKILL_BENCHMARK_*.md` docs at 2.11.10.
 
 The eval harness may use LLMs; the product may not. Today that budget concentrates in a few
 places — above all the CEFR judge — and most of it re-buys the same judgment every cycle. The
-fix is the same split the repo's own constitution and `PLAN_CODE.md` §4 describe: a frontier
+fix is the same split the repo's own constitution and `PLAN_CODE_PLANNING.md` §4 describe: a frontier
 model (this one) authors graders, rubrics and caches ONCE, as reviewed committed data; the
 harness then runs them mechanically, forever, at near-zero model cost. Each lever below names
 what we author together once, and what runs without a model afterwards.
@@ -52,7 +52,7 @@ what we author together once, and what runs without a model afterwards.
    forever, we author a deterministic equivalence checker (normalization + synonym tables over
    the closed relation vocabulary, seeded from `verifySubClassParaphrase`'s pattern) from a
    corpus of judged examples, then hold it to a held-out judged set. The judge stays only for
-   ING-9's whole-document fidelity. This is the ReaComp pattern `PLAN_CODE.md` §4.11 cites,
+   ING-9's whole-document fidelity. This is the ReaComp pattern `PLAN_CODE_PLANNING.md` §4.11 cites,
    applied to our own harness.
 
 5. **CONVERSATION's ratchet, made a rule.** Every judged pass becomes a frozen chatflow
