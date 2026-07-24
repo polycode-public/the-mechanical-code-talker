@@ -50,6 +50,11 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   of person"), and the child conceptnet pack holds "kettle is a kind of pot in" plus the "vessle"
   spelling — the digest lead now makes these prominent, so a pack-quality pass has a visible
   payoff
+- [ ] fix the entailment sense-collision at source: `copulaObjectAt` in
+  `src/services/extract-facts.mjs` reads "medium-sized" as "medium" (NOUN) and mints
+  `subClassOf medium` before the real head noun — the digest selector filters it today
+  (minority-sense demotion), but the bad edge still lands in the store
+  (`archive/PLAN_DIGEST.md` documents the diagnosis)
 
 - [ ] (recorded 2026-07-24, decide separately) teaching a fact about a code entity is refused
   because graph entities don't count as grounded terms for teach — the one place code-graph and
@@ -58,7 +63,7 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
 
 - [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 3–5 (plural binding past a count, the tie refusal, the remaining bindable-form lanes) — slices 1–2 shipped 2026-07-24 (the record threads through `runTurn`, and `games/cross-turn-temporal-composition-composes` is the flipped row); the plan doc stages what's next
 - [ ] INGESTBENCH ladder tops out at ING-6 (38% recall < 50% floor) — the ordinal/temporal-threading slice is what would lift it and un-gate ING-7's already-passing value-compare plus the two judged rungs (ING-8 2.0/2, ING-9 1.5/2); founding baseline measured in `BENCHMARK_INGEST_3.0.3.md`, run `SKILL_BENCHMARK_INGEST.md` to re-measure after the slice lands
-- [ ] prove the repo-index backend seam admits an out-of-repo backend with no tmct change: seonix registers a C#/Java backend against a released tmct 3.0.x (registration, conformance, IDX-5 scoring). Seonix-side work — their inbox has the phase-6 handover; `PLAN_REPO_INDEX.md` Open risks names the proof. Everything else in that plan (branch merge, phases 1–6) is delivered
+- [ ] prove the repo-index backend seam admits an out-of-repo backend with no tmct change: seonix registers a C#/Java backend against a released tmct 3.0.x (registration, conformance, IDX-5 scoring). Seonix-side work — their inbox has the phase-6 handover; `archive/PLAN_REPO_INDEX.md` Open risks names the proof. Everything else in that plan (branch merge, phases 1–6) is delivered
 - [ ] RESEARCHBENCH's founding cycle (`BENCHMARK_RESEARCH_3.0.3.md`) gates at RES-2: the research
   lane's fan-out queues in plain document order with no relevance ranking, so ordering scores 67%
   against the 80% floor and RES-3..6 sit skipped-with-a-receipt behind it. Next cycle's build:

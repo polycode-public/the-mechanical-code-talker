@@ -242,7 +242,7 @@ Tier 1 is the transformation rungs' honest core: a mismatch between the declared
 re-indexed observed delta ABORTS the plan and replans from observed state — a miss, never a guess.
 This is exactly the drift SYN-4 must demonstrate-and-catch and SYN-5 must replan around. GumTree-class
 tree diffing (`PLAN_CODE_PLANNING.md` §4.9) is the candidate instrument if tier 1 ever needs finer
-grain than graph-delta comparison. Tier 1's re-index dependency, `PLAN_REPO_INDEX.md`'s JS/TS +
+grain than graph-delta comparison. Tier 1's re-index dependency, `archive/PLAN_REPO_INDEX.md`'s JS/TS +
 Python extractor, SHIPPED 2026-07-24 (tmct 3.0.0) — see `PLAN_CODE_PLANNING.md` §3.6 for the
 remaining wiring work.
 

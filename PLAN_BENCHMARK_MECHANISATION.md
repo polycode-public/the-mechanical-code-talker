@@ -1,9 +1,13 @@
 # PLAN_BENCHMARK_MECHANISATION.md — intelligence authored once, benchmarks run mechanical
 
-Status: harness machinery LANDED (levers 1, 2, 3, 6, 7); the paid authoring passes those
-levers unlock are flagged for the coordinator (real judge sweep, the bulk matcher distillation,
-the calibration grade). Lever 4 waits on `ingestbench/`. Written 2026-07-24 against the nine
-`SKILL_BENCHMARK_*.md` docs at 2.11.10.
+Status: harness machinery LANDED (levers 1, 2, 3, 6, 7), and lever 1's seed pass has RUN — the
+3.0.3 cycle judged the full 1,075-case pool and committed `chatbench/verdict-cache.json`
+(`BENCHMARK_CEFR_ENGLISH_3.0.3.md`; its final top-up judged 47 and inherited 1,028, the
+mechanism working as designed). Remaining scope, all unblocked: lever 4 (`ingestbench/` now
+exists — wire its deterministic equivalence checker into the judged tiers' cycle), the bulk
+matcher distillation over the all-green pool (lever 2's authoring pass), and the calibration
+grade (lever 3's paired frontier/small-model runs feeding `--gate`). Written 2026-07-24 against
+the nine `SKILL_BENCHMARK_*.md` docs at 2.11.10.
 
 ## What landed (the mechanism; the paid runs stay the coordinator's)
 

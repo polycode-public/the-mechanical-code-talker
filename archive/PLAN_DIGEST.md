@@ -1,4 +1,10 @@
-# PLAN_DIGEST.md — from a fact list to a readable digest
+# PLAN_DIGEST.md — from a fact list to a readable digest (ARCHIVED 2026-07-24)
+
+**Status: DELIVERED and archived.** Stages 1–5 shipped across every surface (chat term answer,
+`tmct digest`, and the client-side digest on research.html, the ledger focus card, and the CLI
+viz page). The one remainder this doc recorded — fixing the entailment sense-collision at source
+in `src/services/extract-facts.mjs`, not just filtering it in the selector — moved to
+`../NEXT.md`; nothing else here is live scope.
 
 Status: stages 1–5 built. Stages 1–4 are the pure modules + committed data (`src/domain/digest/`,
 `data/templates/constructions/digest-sentence-structures.toml`); stage 5 wires the seam into

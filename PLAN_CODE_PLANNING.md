@@ -1,6 +1,6 @@
 # PLAN_CODE_PLANNING.md — planning over code states, and the still-open rule-synthesis spike
 
-> **Status.** Extracted from `PLAN_CODE.md` on 2026-07-24 as part of `PLAN_REPO_INDEX.md` Phase 6
+> **Status.** Extracted from `PLAN_CODE.md` on 2026-07-24 as part of `archive/PLAN_REPO_INDEX.md` Phase 6
 > (the original document is now `archive/PLAN_CODE.md`, banner and all). This doc keeps the two
 > pieces of the old plan that stay in tmct: **Track 1** (`synthbench/`, SHIPPED 2026-07-08 —
 > unchanged by the move, and this doc still owns it) and **Track 5** (planning over code states,
@@ -18,7 +18,7 @@
 >   `src/domain/codeplan/` (graph-delta.mjs, graph-predicates.mjs, operators.mjs, planner.mjs);
 >   each section below carries its Landed note.
 > - Track 5 §3.4-§3.5 (adaptor, verification tiers) — **PROPOSED**, design only.
-> - Track 5 §3.6 (re-index) — its dependency, `PLAN_REPO_INDEX.md`'s JS/TS + Python extractor, is
+> - Track 5 §3.6 (re-index) — its dependency, `archive/PLAN_REPO_INDEX.md`'s JS/TS + Python extractor, is
 >   **SHIPPED** (merged 2026-07-24, tmct 3.0.0). Wiring the re-index call into the plan-act-verify
 >   loop itself is still **PROPOSED**.
 > - Track 5 §3.7 (first milestone) — the fixture (`examples/tiny-webapp-src`) is **SHIPPED**; the
@@ -65,7 +65,7 @@ in the product) is now the visible industry direction, not a private constraint.
   `INTERFACE_VERSION = "1.1.0"`: 16 services, closed `MISS_REASONS`, OWL-grounded),
   `src/adapters/graph-build.mjs` (`buildEntities` — the reference producer of the graph shape),
   `ontology/tmct-core.ttl` (code-entity classes and predicates, term-aligned with seonix).
-- **Parsing — no longer the open gap it was.** `PLAN_REPO_INDEX.md`'s JS/TS + Python extractors
+- **Parsing — no longer the open gap it was.** `archive/PLAN_REPO_INDEX.md`'s JS/TS + Python extractors
   (`src/index/`, the `tmct index` CLI verb) merged 2026-07-24 (tmct 3.0.0): `buildEntities` now
   has a real caller, and a repo's own `.tmct/graph.json` can be produced from its own source.
   C#/Java stay in seonix, registered through the same backend seam. Track 5 §3.6's re-index
@@ -306,7 +306,7 @@ An abstract step ("rename `f` to `parseRow` in module `m`") is language-neutral.
 edits across the defining module and every importer, computed from the graph's own edge set.
 The adaptor is deterministic given (abstract step, graph, source text). One adaptor per
 language; JS first, since the repo, its fixtures, and its test estate are JS. tmct's own
-language scope is JS/TS and Python (`PLAN_REPO_INDEX.md` phase 3), so those are the adaptors
+language scope is JS/TS and Python (`archive/PLAN_REPO_INDEX.md` phase 3), so those are the adaptors
 that ship here — and, as with the index backends, the adaptor contract stays language-neutral
 so a consumer can register one for a language tmct doesn't carry. The operator layer above it
 never learns what language a step will be materialised into: that is the whole point of
@@ -365,7 +365,7 @@ predictions-vs-actuals ledger pattern (chatbench). New: the tier harness itself.
 ### 3.6 Re-index, then plan the next step
 
 After a verified step, the graph is rebuilt from the edited source and the next step plans from
-the OBSERVED state. `PLAN_REPO_INDEX.md`'s JS/TS + Python extractor (`tmct index`, feeding
+the OBSERVED state. `archive/PLAN_REPO_INDEX.md`'s JS/TS + Python extractor (`tmct index`, feeding
 `buildEntities` in `graph-build.mjs`) SHIPPED 2026-07-24 (tmct 3.0.0) — Track 5's re-index
 dependency is met for the milestone's JS fixture. What remains here is wiring the re-index call
 into the plan-act-verify loop itself: after each step's verification tiers (§3.5) pass, invoke
@@ -588,7 +588,7 @@ product's ethos, not an incremental feature.
 | Track | Scope | Sandbox | New surface |
 |---|---|---|---|
 | 1 | shipped 2026-07-08 | none | none (data through trusted code) |
-| 5 | plan + materialise + verify + re-index over a FIXTURE repo | subprocess test runs | first source-editing capability (adaptor); depends on `PLAN_REPO_INDEX.md`'s JS extractor (now shipped) |
+| 5 | plan + materialise + verify + re-index over a FIXTURE repo | subprocess test runs | first source-editing capability (adaptor); depends on `archive/PLAN_REPO_INDEX.md`'s JS extractor (now shipped) |
 
 Tracks 2-4's risk profiles (candidate JS/HTML/CSS execution in Playwright, edits to real
 existing functions) moved to seonix with those tracks; see `PLAN_CODE_SYNTHESIS.md`.
@@ -670,4 +670,4 @@ The 2025-2026 frontier:
 - <repo-checkout>/synthbench/rules/oracle.mjs
 - <repo-checkout>/agentbench/grade.mjs
 - <repo-checkout>/test/corpus/planning.jsonl
-- <repo-checkout>/PLAN_REPO_INDEX.md
+- <repo-checkout>/archive/PLAN_REPO_INDEX.md

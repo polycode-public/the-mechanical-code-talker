@@ -30,11 +30,11 @@ shape, unrelated axes.
 | IDX-2 | Direct call edges | a unique-named callee resolves to a symbol-granular `callsSymbol` edge (`Widget.render->parseNode`) |
 | IDX-3 | Exports & re-exports | a module's export set is emitted; a re-export chain resolves to the origin symbol |
 | IDX-4 | Restatement fidelity | the graph answers the canonical questions ("where is X defined", "who calls X") byte-consistently with the source, and a source-capable read returns the real body over the emitted line span. The Ingest-restatement mirror. |
-| IDX-5 | Multi-language parity | JS/TS and Python emit the same contract shape and answer the same canonical Q&A per language. C#/Java are `PLAN_REPO_INDEX.md` phase-3 horizons: until a backend registers, that language is ABSENT, scored as unmeasured, never as wrong. |
+| IDX-5 | Multi-language parity | JS/TS and Python emit the same contract shape and answer the same canonical Q&A per language. C#/Java are `archive/PLAN_REPO_INDEX.md` phase-3 horizons: until a backend registers, that language is ABSENT, scored as unmeasured, never as wrong. |
 | IDX-6 | Deterministic re-index | same source + pinned timestamp → byte-identical `graph.json`. Already proven on the producer branch (`test/index/index-repo-write.test.mjs`); IDXBENCH re-asserts it as a scored axis every run. |
 | IDX-7 | Temporal / history edges | git module-level `touches` plus symbol-level line-range `touches` edges; `tmct index --no-history` is the clean-skip control that must produce a graph with zero history edges and nothing else changed |
 | IDX-8 | Semantic-depth resolution | a method call dispatched through an interface or heritage chain, where the callee cannot be read off a single call site. No settled deterministic engineering exists yet for the general case (the seonix-port horizon the producer branch's own notes name); until a resolver is designed these land on the honest miss wall — an unresolved callee, never a guessed edge. |
-| IDX-9 | Self-index | index tmct itself and answer its own architecture questions (which modules import `chat.mjs`, what the `init --with-persona code` wiring touches — `PLAN_REPO_INDEX.md` phase 5) |
+| IDX-9 | Self-index | index tmct itself and answer its own architecture questions (which modules import `chat.mjs`, what the `init --with-persona code` wiring touches — `archive/PLAN_REPO_INDEX.md` phase 5) |
 | IDX-10 | Round-trip refactor fidelity | the graph is rich enough that a `PLAN_CODE_PLANNING.md` Track 5 refactor verifies from the graph alone: a step's DECLARED graph delta matches the OBSERVED delta after re-index (§3.5's tier-1 predicted-vs-actual ledger), and "where is X defined" reflects the move |
 
 `IDX-0…IDX-10` is a finite ladder because today's producer covers two languages and structural
@@ -138,7 +138,7 @@ criterion (`test/index/js-extractor-seam.test.mjs`), which is why it is IDXBENCH
 ## 3. The loop (one cycle; repeats until the ladder tops out or the operator stops)
 
 **Step 1 — READ.** Read the latest `BENCHMARK_CODE_INDEX_<version>.md` (its kept-red section and its
-decision on frontiers), the code-index open items in `NEXT.md`, `PLAN_REPO_INDEX.md`'s
+decision on frontiers), the code-index open items in `NEXT.md`, `archive/PLAN_REPO_INDEX.md`'s
 implementation-log phase markers, and the current `idxbench/cases.jsonl` rung counts. Decide which
 language or rung this cycle measures, and whether it is a pure re-measurement or targets a gated rung
 to push past.
