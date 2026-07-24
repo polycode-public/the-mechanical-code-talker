@@ -56,7 +56,8 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PassThrough, Readable } from "node:stream";
-import { parseJsonlRows, parseFlags } from "../benchlib/bench.mjs";
+import { parseJsonlRows, parseFlags, pool } from "../benchlib/bench.mjs";
+import { partitionForReuse, stampReuseFields } from "./skip-unchanged.mjs";
 import {
   GRADES, fnv1a, validateConstruction,
   stratifiedSample, dualDraws, computeAgreement, renderAgreementTable,
@@ -483,6 +484,42 @@ export async function runCase(caseDef, deps) {
   };
 }
 
+/** Run a list of cases into rows IN ORDER, sharding across workers when
+ *  `concurrency > 1` (PLAN lever 6). turns-mode cases replay through the pure
+ *  runTurn and are safe to run in parallel; SESSION-mode cases clear a
+ *  process-global source cache (createRunnerDeps.clearCache, see runSessionCase)
+ *  so they must stay strictly sequential and never overlap another case — they
+ *  are run one-by-one after the parallel batch. Order is preserved by index
+ *  regardless. `run` is injectable (the reuse-aware wrapper below, or runCase). */
+export async function runCasesOrdered(cases, deps, { run = runCase, concurrency = 1 } = {}) {
+  if (concurrency <= 1) {
+    const rows = [];
+    for (const c of cases) rows.push(await run(c, deps));
+    return rows;
+  }
+  const rows = new Array(cases.length);
+  const parallelIdx = [];
+  const sessionIdx = [];
+  cases.forEach((c, i) => (c.mode === "session" ? sessionIdx : parallelIdx).push(i));
+  await pool(parallelIdx, concurrency, async (i) => { rows[i] = await run(cases[i], deps); });
+  for (const i of sessionIdx) rows[i] = await run(cases[i], deps);
+  return rows;
+}
+
+/** A reuse-aware case runner (PLAN lever 6 skip-unchanged): returns the prior
+ *  row verbatim when `reuse` holds one for the case, else replays it and stamps
+ *  the reuse provenance so the NEXT run can reuse it. With no engine token the
+ *  reuse map is empty and rows are stamped as before — byte-identical to a run
+ *  that never asked for reuse. */
+export function makeReusingRunner({ reuse = new Map(), engineToken = null } = {}) {
+  return async (caseDef, deps) => {
+    const kept = reuse.get(caseDef.id);
+    if (kept) return kept;
+    const row = await runCase(caseDef, deps);
+    return engineToken ? stampReuseFields(row, caseDef, engineToken) : row;
+  };
+}
+
 /** Compare this run's rows to a prior product.jsonl's: a regression is a case
  *  that PASSED tier-1 before and fails now (SKILL §1's decision rule input). */
 export function compareProducts(priorRows, currentRows) {
@@ -517,6 +554,9 @@ function parseArgs(argv) {
       "--single": { key: "dual", flag: false },
       "--grade": { key: "grade", value: (v) => v.toUpperCase() },
       "--ladder": { key: "ladder", flag: true },
+      "--reuse": { key: "reuse" },
+      "--engine-token": { key: "engineToken" },
+      "--concurrency": { key: "concurrency", value: Number },
     },
   });
 }
@@ -558,7 +598,7 @@ async function fileExists(path) {
  *  chases a ceiling while the floor leaks. `run` is injectable (defaults to the
  *  real runCase) so the gating integration is unit-testable without the engine.
  *  Returns { rows, skipped, reliabilityByGrade } where skipped = [{grade, reason}]. */
-export async function runGradedDraw(gradedCases, deps, { ladder, run = runCase } = {}) {
+export async function runGradedDraw(gradedCases, deps, { ladder, run = runCase, concurrency = 1 } = {}) {
   const rows = [];
   const skipped = [];
   const reliabilityByGrade = {};
@@ -570,8 +610,7 @@ export async function runGradedDraw(gradedCases, deps, { ladder, run = runCase }
       skipped.push({ grade, reason: gatedBy });
       continue;
     }
-    const gradeRows = [];
-    for (const caseDef of ofGrade) gradeRows.push(await run(caseDef, deps));
+    const gradeRows = await runCasesOrdered(ofGrade, deps, { run, concurrency });
     rows.push(...gradeRows);
     reliabilityByGrade[grade] = gradeReliability(gradeRows);
     if (ladder && !reliabilityByGrade[grade].reliable) {
@@ -678,6 +717,17 @@ export async function main(argv = process.argv.slice(2)) {
     drawB = []; // a full-pool run has nothing left to cross-validate against
   }
 
+  // Skip-unchanged execution (PLAN lever 6): with --reuse <prior.jsonl> and
+  // --engine-token <tok>, a case whose input hash and engine token match a prior
+  // row inherits that row instead of replaying. Without a token nothing is
+  // reused and rows are byte-identical to a plain run. --concurrency shards the
+  // turns-mode replays across workers (session cases stay sequential).
+  const concurrency = args.concurrency ?? 1;
+  const engineToken = args.engineToken ?? null;
+  const priorRows = args.reuse ? parseJsonl(await readFile(args.reuse, "utf8")) : [];
+  const { reuse, counts: reuseCounts } = partitionForReuse([...selected, ...drawA, ...drawB], priorRows, engineToken);
+  const run = makeReusingRunner({ reuse, engineToken });
+
   const { deps, cleanup } = await createRunnerDeps(args.stamp);
   const rows = [];
   const rowsB = [];
@@ -688,16 +738,16 @@ export async function main(argv = process.argv.slice(2)) {
   // every determinism/row-equality assertion — it lands only in timings.json.
   const wallStart = performance.now();
   try {
-    for (const caseDef of selected) rows.push(await runCase(caseDef, deps)); // sequential: session cases share tmpdir space, and product runs are ms-cheap
+    rows.push(...await runCasesOrdered(selected, deps, { run, concurrency }));
     if (drawA.length) {
       deps.sampling = { seed: seedA, fraction: args.sample, draw: dual ? "A" : "single" };
-      const a = await runGradedDraw(drawA, deps, { ladder: args.ladder });
+      const a = await runGradedDraw(drawA, deps, { ladder: args.ladder, run, concurrency });
       rows.push(...a.rows);
       skippedA = a.skipped;
     }
     if (drawB.length) {
       deps.sampling = { seed: seedB, fraction: args.sample, draw: "B" };
-      const b = await runGradedDraw(drawB, deps, { ladder: args.ladder });
+      const b = await runGradedDraw(drawB, deps, { ladder: args.ladder, run, concurrency });
       rowsB.push(...b.rows);
       skippedB = b.skipped;
     }
@@ -705,6 +755,7 @@ export async function main(argv = process.argv.slice(2)) {
   } finally {
     await cleanup();
   }
+  if (engineToken) console.log(`skip-unchanged: ${reuseCounts.reused} reused, ${reuseCounts.run} replayed (${reuseCounts.total} total, engine token ${engineToken}).`);
   const wallMs = performance.now() - wallStart;
 
   await mkdir(outDir, { recursive: true });

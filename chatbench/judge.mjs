@@ -34,15 +34,31 @@
 // --dry-run emits the exact prompts (prompts.jsonl) without calling claude —
 // what the tests exercise; no test ever makes a live call.
 //
+// Delta-judging (PLAN lever 1): with --cache <file>, a run inherits the prior
+// verdict for every case whose answer text and judge identity are unchanged
+// (chatbench/verdict-cache.mjs), and sends ONLY the changed cases to the judge.
+// On a typical cycle (a handful of fixes) this drops the judge call count from
+// the whole pool to the dozens that actually moved. The cache is rewritten from
+// the run (inherited entries carried forward, judged entries refreshed) so it
+// stays current; --dry-run reports the partition and emits prompts for the fresh
+// cases only.
+//
 // Usage:
 //   node chatbench/judge.mjs --product <product.jsonl> [--samples 3]
 //     [--concurrency 12] [--out <dir>] [--dry-run] [--only id,id]
+//     [--cache <verdict-cache.json>]
 
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+
+import {
+  emptyCache, partition, buildCache, mergeJudged,
+} from "./verdict-cache.mjs";
+import { familyIndex } from "./rubrics.mjs";
+import { batchRows, buildBatchPrompt } from "./batch-judge.mjs";
 
 const execFileP = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -51,6 +67,7 @@ export const JUDGE_MODEL = "claude-haiku-4-5-20251001"; // pinned FULL model id 
 export const PROMPT_VERSION = "judge-prompt-v2";
 export const PROMPT_FILE = join(HERE, `${PROMPT_VERSION}.txt`);
 export const SCHEMA_FILE = join(HERE, "rubric.schema.json");
+export const RUBRICS_FILE = join(HERE, "rubrics.json");
 export const DIMENSIONS = ["groundedness", "correctness", "honesty", "rephrase"];
 
 const JUDGE_TIMEOUT_MS = 120000;
@@ -259,8 +276,21 @@ function parseArgs(argv) {
       "--out": { key: "out" },
       "--dry-run": { key: "dryRun", flag: true },
       "--only": { key: "only", value: (v) => v.split(",").map((s) => s.trim()).filter(Boolean) },
+      "--cache": { key: "cache" },
+      "--batch": { key: "batch", value: Number },
     },
   });
+}
+
+async function fileExists(path) {
+  try { await access(path); return true; } catch { return false; }
+}
+
+/** Load the verdict cache at `path` (empty when absent or unreadable — a missing
+ *  cache means "judge everything", never an error). */
+async function loadCache(path) {
+  if (!path || !(await fileExists(path))) return emptyCache();
+  try { return JSON.parse(await readFile(path, "utf8")); } catch { return emptyCache(); }
 }
 
 export async function main(argv = process.argv.slice(2)) {
@@ -275,7 +305,15 @@ export async function main(argv = process.argv.slice(2)) {
   let rows = parseJsonl(await readFile(args.product, "utf8"));
   if (args.only) rows = rows.filter((r) => args.only.includes(r.caseId));
 
-  const prompts = rows.map((row) => ({
+  // Delta-judging (lever 1): with --cache, judge only the cases whose answer text
+  // or judge identity changed; the rest inherit the prior verdict verbatim.
+  const ctx = { judgeModel: JUDGE_MODEL, promptVersion: PROMPT_VERSION };
+  const priorCache = await loadCache(args.cache);
+  const { fresh, inherited, counts } = args.cache
+    ? partition(rows, priorCache, ctx)
+    : { fresh: rows, inherited: new Map(), counts: { total: rows.length, fresh: rows.length, inherited: 0 } };
+
+  const prompts = fresh.map((row) => ({
     caseId: row.caseId,
     dimensions: row.judge?.dimensions ?? DIMENSIONS,
     prompt: buildPrompt(row, template),
@@ -283,8 +321,29 @@ export async function main(argv = process.argv.slice(2)) {
 
   if (args.dryRun) {
     const file = join(outDir, "prompts.jsonl");
+    const inheritNote = args.cache ? ` (${counts.inherited} inherited from cache, ${counts.fresh} fresh)` : "";
+    // Batch mode (lever 6): emit ONE prompt per rubric-family batch of up to
+    // --batch cases, instead of one per case — the shared criteria/context are
+    // paid once per batch. Dry-run only here; the pure logic is batch-judge.mjs.
+    if (args.batch > 0) {
+      const rubrics = JSON.parse(await readFile(RUBRICS_FILE, "utf8"));
+      const index = familyIndex(rubrics);
+      const batches = batchRows(fresh, index, { size: args.batch });
+      const batchPrompts = batches.map((b) => ({
+        family: b.family,
+        caseIds: b.rows.map((r) => r.caseId),
+        prompt: buildBatchPrompt(b, {
+          rubric: rubrics.families[b.family],
+          context: b.rows[0]?.judge?.context ?? "",
+          renderTranscript,
+        }),
+      }));
+      await writeFile(file, batchPrompts.map((p) => JSON.stringify(p)).join("\n") + "\n");
+      console.log(`dry run (batched): ${batchPrompts.length} batch prompt(s) over ${fresh.length} case(s) written to ${file} — no judge calls made${inheritNote}.`);
+      return 0;
+    }
     await writeFile(file, prompts.map((p) => JSON.stringify(p)).join("\n") + "\n");
-    console.log(`dry run: ${prompts.length} prompt(s) written to ${file} — no judge calls made.`);
+    console.log(`dry run: ${prompts.length} prompt(s) written to ${file} — no judge calls made${inheritNote}.`);
     return 0;
   }
 
@@ -316,13 +375,24 @@ export async function main(argv = process.argv.slice(2)) {
   });
   process.stderr.write("\n");
 
+  // Fold the freshly-judged rows back together with the inherited ones, so
+  // judged.jsonl + summary cover the WHOLE product set even when only the changed
+  // cases were re-judged. Then rewrite the cache from this run (inherited entries
+  // carried forward, judged entries refreshed) so the next cycle inherits from it.
+  const allJudged = args.cache ? mergeJudged(judged, inherited) : judged;
   const judgedFile = join(outDir, "judged.jsonl");
-  await writeFile(judgedFile, judged.map((r) => JSON.stringify(r)).join("\n") + "\n");
-  const summary = computeSummary(rows, judged, { samples: args.samples });
+  await writeFile(judgedFile, allJudged.map((r) => JSON.stringify(r)).join("\n") + "\n");
+  const summary = computeSummary(rows, allJudged, { samples: args.samples });
   const summaryFile = join(outDir, "summary.json");
   await writeFile(summaryFile, JSON.stringify(summary, null, 2) + "\n");
 
+  if (args.cache) {
+    const nextCache = buildCache(rows, judged, inherited, ctx, priorCache);
+    await writeFile(args.cache, JSON.stringify(nextCache, null, 2) + "\n");
+  }
+
   console.log(`judged ${summary.overall.cases} case(s) x ${args.samples} sample(s) with ${JUDGE_MODEL} (${PROMPT_VERSION}).`);
+  if (args.cache) console.log(`delta-judging: ${counts.fresh} judged, ${counts.inherited} inherited from cache (${counts.total} total).`);
   console.log(`overall mean ${summary.overall.mean} / 2 — hard fails ${summary.overall.hardFailCount} — voided samples ${summary.overall.voidCount}.`);
   console.log(`judged: ${judgedFile}\nsummary: ${summaryFile}`);
   return 0;
