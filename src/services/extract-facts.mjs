@@ -53,7 +53,8 @@ import { readFile, writeFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
 
-import { runTurn, uuidv7 } from "./chat.mjs";
+import { runTurn, uuidv7, stripLeadingDiscourseAdverb } from "./chat.mjs";
+import { beginsWithVowelSound, grammarRules } from "./finish.mjs";
 import { splitSentencesPreservingPaths, stripCitationResidue } from "./sentences.mjs";
 import { loadMemory, readFactRows, appendFact } from "../adapters/memory/core.mjs";
 import { loadConfig } from "../adapters/config.mjs";
@@ -434,6 +435,17 @@ export function clauseCandidates(sentence, { nlp } = {}) {
 // live focus, never a stale paragraph carry.
 const PRONOUN_LEAD_RE = /^(?:they|it|these|those|this)\b\s*/i;
 
+/** Re-article a bare carried subject so the retried sentence is a grammatical
+ *  habitual surface the recognizer accepts: "cell" → "a cell", "orbit" → "an
+ *  orbit". Uses the same vowel-sound-aware article rule (grammar-rules.toml)
+ *  the chat recognizer's own capability rewrite uses, rather than a hardcoded
+ *  "a". */
+function articledSubject(subject) {
+  const articleRule = grammarRules().find((r) => r.kind === "article");
+  const article = articleRule && beginsWithVowelSound(subject, articleRule) ? "an" : "a";
+  return `${article} ${subject}`;
+}
+
 /** A readable predicate for canonical output: the local part of an rdfs:/ace:
  *  CURIE, otherwise the predicate verbatim. */
 const readablePredicate = (predicate) => String(predicate).replace(/^[a-z]+:/i, "");
@@ -532,9 +544,14 @@ export async function ingestText(text, {
         }
         // Bounded pronoun carry: a "they/it/these/those/this …" sentence the
         // recognizer skipped is retried once with the paragraph's last grounded
-        // subject in the pronoun's place. Never a chat turn — ingest only.
-        if (!rows && carrySubject && PRONOUN_LEAD_RE.test(cleaned)) {
-          rows = await strictRows(cleaned.replace(PRONOUN_LEAD_RE, `${carrySubject} `));
+        // subject in the pronoun's place. A leading ordinal/temporal discourse
+        // adverb ("Then it splits.") is stripped first so the pronoun reaches
+        // the sentence front; the carried subject is re-articled ("a cell") so
+        // the retry is a grammatical habitual surface. Never a chat turn —
+        // ingest only.
+        const threaded = stripLeadingDiscourseAdverb(cleaned);
+        if (!rows && carrySubject && PRONOUN_LEAD_RE.test(threaded)) {
+          rows = await strictRows(threaded.replace(PRONOUN_LEAD_RE, `${articledSubject(carrySubject)} `));
         }
         if (rows) {
           recognizedSentences += 1;

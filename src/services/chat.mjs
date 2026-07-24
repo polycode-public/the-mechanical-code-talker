@@ -3868,8 +3868,27 @@ const HABITUAL_VERB_EXCLUDE = new Set([
   "please", "thanks", "kindly", "anyway", "though", "indeed", "maybe",
   "perhaps", "still", "too", "also", "instead", "now", "then", "here", "there",
 ]);
+/** Sentence-initial ordinal/temporal discourse adverbs — the "First", "Then",
+ *  "Next" … that thread a narrative across sentences without belonging to the
+ *  clause they lead. A closed set: a connective in this slot carries sequence,
+ *  not content, so stripping it lets "First a cell grows." read as the same
+ *  capability teach the bare "a cell grows." already does. */
+const LEADING_DISCOURSE_ADVERBS = [
+  "first", "second", "third", "then", "next", "finally",
+  "later", "meanwhile", "afterward", "afterwards",
+];
+const LEADING_DISCOURSE_ADVERB_RE = new RegExp(
+  `^(?:${LEADING_DISCOURSE_ADVERBS.join("|")})\\b\\s*,?\\s+`, "i",
+);
+/** Strip one leading ordinal/temporal discourse adverb (case-insensitive,
+ *  optional trailing comma) from the start of `text`, leaving the clause that
+ *  followed it. A word not in the closed set, or one with no clause after it,
+ *  is left untouched. */
+export function stripLeadingDiscourseAdverb(text) {
+  return String(text || "").trim().replace(LEADING_DISCOURSE_ADVERB_RE, "");
+}
 function matchBareHabitualTeach(text) {
-  const t = String(text || "").trim();
+  const t = stripLeadingDiscourseAdverb(String(text || "").trim());
   const plural = t.match(/^(?:all\s+|every\s+)?([\w-]+s)\s+([a-z][\w-]*)[.!?]*$/i);
   if (plural && !STRUCT_WORDS.has(plural[2].toLowerCase()) && !HABITUAL_VERB_EXCLUDE.has(plural[2].toLowerCase()) && !/[^s]s$/i.test(plural[2])) {
     const subject = singularizeSurface(plural[1].toLowerCase());

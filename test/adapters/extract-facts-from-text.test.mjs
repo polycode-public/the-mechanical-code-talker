@@ -172,6 +172,22 @@ test("ingestText: ephemeral (no memoryDir) grounds facts and mutates nothing on 
   assert.ok(result.extracted.every((f) => /^extracted:/.test(f.provenance)));
 });
 
+test("ingestText: a leading ordinal adverb threads a capability across two sentences", async () => {
+  const result = await ingestText("First a cell grows. Then it splits.");
+  assert.equal(result.recognized, 2, "both the lead sentence and the threaded pronoun sentence ground");
+  const has = (s, p, o) => result.extracted.some((f) => f.subject === s && f.predicate === p && f.object === o);
+  assert.ok(has("cell", "mgx:capableOf", "grow"), '"First a cell grows." grounds cell capableOf grow');
+  assert.ok(has("cell", "mgx:capableOf", "split"), '"Then it splits." carries the cell subject and grounds split');
+  assert.ok(!result.extracted.some((f) => f.subject === "it"), "the pronoun is never stored as a subject");
+});
+
+test("ingestText: a leading temporal adverb before a habitual clause grounds it", async () => {
+  const result = await ingestText("First a seed sprouts. Then it flowers.");
+  const has = (s, p, o) => result.extracted.some((f) => f.subject === s && f.predicate === p && f.object === o);
+  assert.ok(has("seed", "mgx:capableOf", "sprout"), "the ordinal lead-in is stripped before the habitual match");
+  assert.ok(has("seed", "mgx:capableOf", "flower"), "the threaded pronoun sentence grounds the second capability");
+});
+
 // ---- clause candidates ---------------------------------------------------
 
 test("clauseCandidates: whole sentence first, then verb-bearing clauses of a marker split", () => {
