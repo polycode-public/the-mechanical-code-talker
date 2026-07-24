@@ -48,7 +48,9 @@ function labelFromId(id) {
  *  reader never sees a torn graph.json and a crash never destroys the old one. */
 async function atomicWriteJson(file, obj) {
   const tmp = `${file}.tmp-${process.pid}-${Math.random().toString(36).slice(2, 10)}`;
-  await writeFile(tmp, JSON.stringify(obj));
+  // 2-space indent: a legitimate session upsert into a hand-formatted graph
+  // reflows to the same pretty shape a producer wrote, not one compact line.
+  await writeFile(tmp, JSON.stringify(obj, null, 2));
   await rename(tmp, file);
 }
 
