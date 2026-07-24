@@ -377,7 +377,7 @@ test("a code-graph count is unaffected when the same noun was also asserted as a
   }
 });
 
-test("a pristine store's FIRST isa question warms to the specific closer; a whole-store recall keeps its wall's first line", async () => {
+test("a pristine store's FIRST isa question warms to the specific closer; an unknown-term recall collapses its generic wall to the teach offer alone", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-w4-nofact-"));
   try {
     // With a store present (even an empty one), the very first "is X a Y" now
@@ -394,9 +394,10 @@ test("a pristine store's FIRST isa question warms to the specific closer; a whol
 
     const withMemory2 = await runTurn("what do you know about giraffes", { config: CONFIG, memoryDir: dir });
     const bare2 = await runTurn("what do you know about giraffes", { config: CONFIG });
-    assert.equal(withMemory2.answer.split("\n")[0], bare2.answer.split("\n")[0], "the wall text itself is unchanged");
-    assert.match(withMemory2.answer, /I don't know "giraffes" yet — teach me directly/);
-    assert.doesNotMatch(bare2.answer, /teach me directly/, "no memoryDir -> no teach-offer (nowhere to store it)");
+    assert.match(withMemory2.answer, /^I don't know "giraffes" yet — teach me directly/, "the generic wall collapses to the offer — one coherent miss, not a stack");
+    assert.doesNotMatch(withMemory2.answer, /couldn't parse this as a graph question/);
+    assert.match(bare2.answer, /couldn't parse this as a graph question/, "no memoryDir -> no teach-offer (nowhere to store it), so the wall stands");
+    assert.doesNotMatch(bare2.answer, /teach me directly/);
     assert.equal(withMemory2.record.miss, true);
   } finally {
     clearCache();

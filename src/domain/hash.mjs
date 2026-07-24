@@ -129,7 +129,10 @@ export function normFactTerm(t) {
  *  Closed on purpose — a table, not an inflection rule. Entries are added when
  *  a curated predicate's surface phrase is a plain verb ("causes", "wants",
  *  "requires", "involves") whose lemma the teach lane would otherwise mint
- *  unrelated. Relations that invert their arguments (mgx:ownedBy,
+ *  unrelated — or when the participle+preposition teach frame mints a
+ *  hyphenated spelling of a curated relation with the SAME arguments in the
+ *  SAME direction ("X is used for Y" → mgx:used-for, the curated mgx:usedFor).
+ *  Relations that invert their arguments (mgx:ownedBy,
  *  mgx:createdBy) are absent: "X owns Y" and "X is owned by Y" are not the
  *  same fact, so folding them would store a lie. */
 const CANONICAL_FACT_PREDICATE = new Map([
@@ -138,6 +141,8 @@ const CANONICAL_FACT_PREDICATE = new Map([
   ["mgx:want", "mgx:desires"],
   ["mgx:require", "mgx:hasPrerequisite"],
   ["mgx:involve", "mgx:hasSubevent"],
+  ["mgx:used-for", "mgx:usedFor"],
+  ["mgx:made-of", "mgx:madeOf"],
 ]);
 
 /** Normalize a fact PREDICATE: whitespace-collapse + cap (normText's storage

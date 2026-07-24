@@ -18,38 +18,20 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
-- playtest batch 2 fixes, items 1/2/4/5/6 (anaphora, unbound-referent miss form, message stacking, /plan prose, article tolerance) — `worktree-agent-a246401d1d358f876`
 - client-side digest for research/ledger/viz panels (the stage-5 remainder) — `worktree-agent-af9a1bc55f51cdfbd` (first cut stopped clean: its branch point predated the digest merge)
 
 
 ## Open items
 
-- [ ] playtest batch 2 (2026-07-24, memory/discourse/games surfaces; no fabrications — every
-  failure is a miss or a garbled parse; fix once chat.mjs frees up, transcripts in the session
-  scratchpad):
-  1. anaphora half-wired: "what is it used for" leaves the anaphor unsubstituted (literal subject
-     "it used for" → teach fallback) while "is it an animal" resolves — align the UsedFor/what-is
-     reader with the IsA yes/no anaphor substitution;
-  2. the unbindable-referent surface garbles: "was that before X was touched" with no bindable
-     referent parses as a TEACH offer with subject "that before X was" — an unbound form should
-     say it has no referent for "that", never offer to be taught the garble (the miss itself is
-     designed; the FORM is the bug);
-  3. temporal comparison binds only a literal SHA from the prior query text — the two most
-     natural antecedents (a date-filter result set; "when was X last touched") don't bind; this
-     is PLAN_DISCOURSE_AND_RECOGNITION slices 3–5 territory (bind from the answer's referent,
-     plural sets) — fold these transcripts into that plan's staging;
-  4. one unparsed turn stacks three messages (couldn't-read + no-code-graph + teach-fallback) —
-     collapse to one;
-  5. /plan-over-taught-action error prose leaks internals ("ask.mjs's own NL grammar", "Module")
-     — rewrite as user-facing;
-  6. "what is car used for" (no article) fails while "what is a car used for" works — widen the
-     article tolerance in that reader;
-  7. (corpus quality, separate) human-medium seeds mis-extract adjectives: "straight/simple is a
-     kind of person"; the child conceptnet pack holds "kettle is a kind of pot in" and the
-     "vessle" spelling — the digest lead makes these prominent ("Kettles are a pot in and a
-     vessle"), so a pack-quality pass now has a visible payoff;
-  8. (already in flight) the 53-fact read-back wall is the digest layer's target specimen — the
-     stage-5 wiring agent should check "what do you know about a person" renders grouped.
+- [ ] temporal comparison binds only a literal SHA from the prior query text — the two most
+  natural antecedents (a date-filter result set; "when was X last touched") don't bind; this is
+  PLAN_DISCOURSE_AND_RECOGNITION slices 3–5 territory (bind from the answer's referent, plural
+  sets); playtest transcripts are folded into that plan's staging (the unbound form now misses
+  cleanly — the garbled teach-offer is fixed)
+- [ ] corpus quality pass: human-medium seeds mis-extract adjectives ("straight/simple is a kind
+  of person"), and the child conceptnet pack holds "kettle is a kind of pot in" plus the "vessle"
+  spelling — the digest lead now makes these prominent, so a pack-quality pass has a visible
+  payoff
 
 - [ ] digest's last surface: a client-side digest for the research page's per-source panels (and
   the ledger client-refocus / CLI-`viz` cards) — the pure `digestTerm` linked into a browser
