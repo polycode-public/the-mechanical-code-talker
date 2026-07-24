@@ -1,0 +1,34 @@
+{
+  "articles": {
+    "Volcano": {
+      "summary": "A volcano is a place where hot rock and gas come out of the ground.",
+      "leadLinks": ["Active volcano", "Earth", "East African Rift", "Geology", "Hawaii", "ISBN 0-19-960146-4"]
+    },
+    "Active volcano": {
+      "summary": "An active volcano is one that has erupted in recent history and may erupt again.",
+      "leadLinks": ["Volcano", "Magma"]
+    },
+    "East African Rift": {
+      "summary": "The East African Rift is a place where the African continent is slowly splitting apart.",
+      "leadLinks": ["Africa", "Earth"]
+    },
+    "Hawaii": {
+      "summary": "Hawaii is a group of volcanic islands in the Pacific Ocean.",
+      "leadLinks": ["Pacific Ocean", "Earth"]
+    },
+    "Geology": {
+      "summary": "Geology is the study of the Earth's rocks and the processes that shape them.",
+      "leadLinks": ["Earth", "Rock (geology)"]
+    },
+    "Earth": {
+      "summary": "Earth is the third planet from the Sun and the only known home to life.",
+      "leadLinks": ["Geology", "Sun"]
+    },
+    "Magma": {
+      "summary": "Magma is hot melted rock found under the surface of a volcano.",
+      "leadLinks": ["Volcano"]
+    }
+  },
+  "deadTitles": ["Africa", "Pacific Ocean", "Rock (geology)", "Sun", "ISBN 0-19-960146-4"],
+  "genericTerms": ["Wikipedia", "Portal:Contents", "Main Page"]
+}
