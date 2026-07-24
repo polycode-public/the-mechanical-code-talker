@@ -18,11 +18,11 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
-- the 3.0.3 nine-bench sweep — AGENT, RESEARCH, CODE_SYNTHESIS and CODE_INDEX write-ups merged;
-  still running: INFERENCE `worktree-agent-a8b0a890b9608d283` (relaunched — first round stalled
-  with its worktree auto-removed), INGEST `worktree-agent-a32137087f3e2b206`, CEFR_ENGLISH
-  `worktree-agent-a723d79ada8493878`, CONVERSATION `worktree-agent-a8cf6f586793855a1`;
-  AGI_SCALES dispatches once their envelopes land, reading the lever-7 aggregator
+- the 3.0.3 nine-bench sweep — AGENT, RESEARCH, CODE_SYNTHESIS, CODE_INDEX and INGEST write-ups
+  merged; still running: INFERENCE `worktree-agent-a8b0a890b9608d283` (relaunched — first round
+  stalled with its worktree auto-removed), CEFR_ENGLISH `worktree-agent-a723d79ada8493878`,
+  CONVERSATION `worktree-agent-a8cf6f586793855a1`; AGI_SCALES dispatches once their envelopes
+  land, reading the lever-7 aggregator
 
 
 
@@ -44,6 +44,7 @@ Each line names its worktree branch; delete the line in the same commit that int
   architecture/overview/basename/disclosure fix pass
 
 - [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 3–5 (plural binding past a count, the tie refusal, the remaining bindable-form lanes) — slices 1–2 shipped 2026-07-24 (the record threads through `runTurn`, and `games/cross-turn-temporal-composition-composes` is the flipped row); the plan doc stages what's next
+- [ ] INGESTBENCH ladder tops out at ING-6 (38% recall < 50% floor) — the ordinal/temporal-threading slice is what would lift it and un-gate ING-7's already-passing value-compare plus the two judged rungs (ING-8 2.0/2, ING-9 1.5/2); founding baseline measured in `BENCHMARK_INGEST_3.0.3.md`, run `SKILL_BENCHMARK_INGEST.md` to re-measure after the slice lands
 - [ ] prove the repo-index backend seam admits an out-of-repo backend with no tmct change: seonix registers a C#/Java backend against a released tmct 3.0.x (registration, conformance, IDX-5 scoring). Seonix-side work — their inbox has the phase-6 handover; `PLAN_REPO_INDEX.md` Open risks names the proof. Everything else in that plan (branch merge, phases 1–6) is delivered
 - [ ] RESEARCHBENCH's founding cycle (`BENCHMARK_RESEARCH_3.0.3.md`) gates at RES-2: the research
   lane's fan-out queues in plain document order with no relevance ranking, so ordering scores 67%
