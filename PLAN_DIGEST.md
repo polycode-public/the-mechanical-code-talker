@@ -173,7 +173,17 @@ structure, and composition — not new knowledge.
    view, and `tmct digest <term>` on the CLI beside the code-side `cli digest`. Thin wiring over
    `digestTerm(term, rows, store, table, opts)` (`src/domain/digest/index.mjs`): the surface
    builds the fact rows and the store statistics from the graph it already holds, hands them in,
-   and renders the returned article. NOT STARTED.
+   and renders the returned article.
+   - The wiring seam is shared: `src/domain/digest/store-stats.mjs` (pure — one row scan yields
+     the selector's store-relative signals and the ancestry chains) and
+     `src/adapters/corpus/digest-bank.mjs` (`digestTermFromRows`, which reads the committed bank
+     once and returns null when it is unavailable so a browser-stubbed surface falls back). DONE.
+   - `tmct digest <term>` (`src/domain/cli-verbs.mjs` + the bin dispatcher arm): the narrative
+     leads, its sources follow, the stored-fact count points at the ledger. DONE.
+   - Chat's term read-back: lead with the digest when a term answer would run past the digest
+     threshold, the full fact list behind "show the facts"/"more". NOT STARTED.
+   - The research and ledger term panels: render the digest shape client-side from a
+     build-time-embedded structure table. NOT STARTED.
 
 ## Decisions recorded
 

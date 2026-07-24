@@ -802,6 +802,17 @@ self-contained HTML file you can open in a browser:
                                rows; --term resolves via the same normalization chat uses.
 ```
 
+`tmct digest <term>` turns what the graph knows about one term into a short, readable
+paragraph — the vocabulary-side sibling of `tmct cli digest`'s code map. The narrative
+leads, its sources follow, and the full fact count points at the ledger for the rest:
+
+```output:help:digest
+  tmct digest <term>           a readable digest of what the graph knows about one term:
+       [--repo <abs>]          a bounded narrative first (selected, sense-filtered,
+       [--graph <path>]        deduped), then its sources and the stored-fact count.
+       [--config <path>]       The vocabulary-side sibling of `cli digest`'s code map.
+```
+
 `tmct serve` runs an Anthropic Messages API-compatible HTTP endpoint over the graph,
 so a tool-loop client can call tmct like a model, at $0:
 
