@@ -1,0 +1,97 @@
+# data/templates/constructions/digest-sentence-structures.toml — the digest
+# layer's sentence-structure bank (PLAN_DIGEST.md stage 2). A closed table of
+# sentence skeletons keyed by relation FAMILY and FORM, hand-authored and
+# reviewed as DATA, in the same committed-TOML idiom the construction banks in
+# this directory already use. A new family or a reworded frame is an edit to
+# this file, never a code change — src/domain/digest/structures.mjs validates
+# and renders these skeletons but never invents one.
+#
+# The existing construction-bank loader (adapters/corpus/construction-banks.mjs)
+# reads only [[relation]] and [[construction]] tables, so it ignores this file's
+# [[structure]] rows; the digest layer reads them through its own path.
+#
+# Each row is one (family, form) pairing:
+#   family  one of the digest families (isa | location | partOf | capableOf |
+#           usedFor) — the closed set stage 1 groups predicates under. Each is
+#           verb-coherent: every predicate in it shares this frame's verb.
+#   form    single   — one fact of the family
+#           several  — two or more facts of the family, merged into one clause
+#           chained  — one isa fact plus its rendered ancestry chain
+#   template  the skeleton. Placeholders the renderer fills (words.mjs supplies
+#             the article, plural and casing):
+#               {TERM} {TERM_CAP}          the term, lower / sentence-leading
+#               {A_TERM} {A_TERM_CAP}      "an aardvark" / "An aardvark"
+#               {TERMS} {TERMS_CAP}        "aardvarks" / "Aardvarks"
+#               {PRONOUN} {PRONOUN_CAP}    "it" / "It" (after first mention)
+#               {OBJECT}                   the first object, raw
+#               {A_OBJECT}                 "a mammal" (article chosen per word)
+#               {OBJECTS_A}                "a mammal, a burrowing animal, and …"
+#               {OBJECTS_PLURAL}           "mammals, burrowing animals, and …"
+#               {OBJECTS_RAW}              "dig, and swim" (no article)
+#               {CHAIN}                    "a mammal, and so an animal"
+#           Any placeholder with no value for this call renders empty.
+
+# ---- isa: the definition frame (copula) -----------------------------------
+
+[[structure]]
+family = "isa"
+form = "single"
+template = "{A_TERM_CAP} is {A_OBJECT}."
+
+[[structure]]
+family = "isa"
+form = "several"
+template = "{TERMS_CAP} are {OBJECTS_A}."
+
+[[structure]]
+family = "isa"
+form = "chained"
+template = "{A_TERM_CAP} is {CHAIN}."
+
+# ---- location: where it is found (atLocation / locatedNear) ----------------
+
+[[structure]]
+family = "location"
+form = "single"
+template = "{PRONOUN_CAP} is found in {OBJECT}."
+
+[[structure]]
+family = "location"
+form = "several"
+template = "{PRONOUN_CAP} is found in {OBJECTS_RAW}."
+
+# ---- partOf: what it belongs to -------------------------------------------
+
+[[structure]]
+family = "partOf"
+form = "single"
+template = "{PRONOUN_CAP} is part of {A_OBJECT}."
+
+[[structure]]
+family = "partOf"
+form = "several"
+template = "{PRONOUN_CAP} is part of {OBJECTS_A}."
+
+# ---- capableOf: what it can do --------------------------------------------
+
+[[structure]]
+family = "capableOf"
+form = "single"
+template = "{PRONOUN_CAP} can {OBJECT}."
+
+[[structure]]
+family = "capableOf"
+form = "several"
+template = "{PRONOUN_CAP} can {OBJECTS_RAW}."
+
+# ---- usedFor: what it is used for -----------------------------------------
+
+[[structure]]
+family = "usedFor"
+form = "single"
+template = "{PRONOUN_CAP} is used for {OBJECT}."
+
+[[structure]]
+family = "usedFor"
+form = "several"
+template = "{PRONOUN_CAP} is used for {OBJECTS_RAW}."

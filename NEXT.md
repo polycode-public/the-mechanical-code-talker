@@ -19,7 +19,7 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
 - benchmark mechanisation levers 1+6/2/3/7 (PLAN_BENCHMARK_MECHANISATION) — `worktree-agent-aef6ab2019223c753`
-- digest stages 1–4 as pure modules (PLAN_DIGEST; stage-5 wiring dispatches after discourse lands) — `worktree-agent-a9f701e5d2c1029b8`
+- digest stage 5 wiring (chat term answer, research.html/ledger panels, `tmct digest` CLI verb over `digestTerm`) — dispatches next, now that discourse released chat.mjs
 - idxbench + researchbench harnesses (their SKILL_BENCHMARK docs) — `worktree-agent-af3e4262349bcba57`
 
 ## Open items

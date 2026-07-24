@@ -1,0 +1,13 @@
+{
+  "uninformativeClassMaxShare": 0.35,
+  "uninformativeClassMinSubjects": 12,
+  "entailedDepthPenalty": 0.2,
+  "minoritySensePenalty": 0.5,
+  "minScore": 0.05,
+  "budget": {
+    "chatReply": 5,
+    "researchPanel": 10,
+    "cliDigest": 12,
+    "ledgerTerm": 8
+  }
+}
