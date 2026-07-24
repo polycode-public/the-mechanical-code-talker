@@ -1,0 +1,5 @@
+# This example ships a committed, hand-stamped .tmct/graph.json. read_only keeps
+# a plain `tmct chat --repo examples/polyglot` (no --ephemeral) from writing a
+# Session node back into it: the session reads the graph but persists nothing.
+[graph]
+read_only = true

@@ -209,6 +209,13 @@ export async function createSession({
   // the flag/env tiers above stay authoritative when set.
   if (toml?.corpus?.tier === "tier3") liveReferenceOn = true;
 
+  // tmct.toml's [graph] read_only turns any session against this repo into a
+  // read-only one, exactly as --ephemeral does: the graph is read for
+  // structure but nothing (upsert, logs, memory) is written back into the
+  // repo's .tmct/. Committed example fixtures carry it so a plain
+  // `tmct chat --repo examples/<x>` never mutates the hand-stamped graph.
+  if (toml?.graph?.readOnly) ephemeral = true;
+
   // Ephemeral: keep config.graphFile pointing at the READ graph, but divert the
   // write base (repo → logs/memory/sessions) to a throwaway temp dir. The committed
   // target is never touched; the demo's memory simply doesn't persist across runs.

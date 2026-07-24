@@ -1,0 +1,6 @@
+{
+  "examples/mini-webapp/.tmct/graph.json": "28bd3c381cfa88d9a2256fc1c2e89bb31335c67b49dc7255616a9d8a9cdbdd0f",
+  "examples/polyglot/.tmct/graph.json": "32e52974df343a2f2f5330f6963a468da679d4c1c340b0f091f004fd09e55200",
+  "examples/tiny-lib-py/.tmct/graph.json": "06be8c94d9f58887bad0e4b9880b939e68b3b781c46ee8a44465bd5d7b1f45a7",
+  "examples/tiny-webapp-src/.tmct/graph.json": "1bdbcdb6ee926283fd4e628efc5e7028e5476e92e89ef07e3f53b8e3d1fcaf53"
+}

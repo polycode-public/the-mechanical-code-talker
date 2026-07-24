@@ -149,6 +149,11 @@ up on the next fetch. Any other read/parse failure is a clean `ToolError`.
   A provider payload is read-only input; `.tmct/memory/` is tmct-only output.
 - Providers registered via `registerProvider` are **read-only by
   construction**: nothing in tmct calls back into a provider to write.
+- A repo whose `tmct.toml` sets `[graph] read_only = true` takes even the
+  session-observation write off the table: chat reads the graph but writes no
+  `Session` node, transcript, or memory back into its `.tmct/` (the committed
+  `examples/*` fixtures carry it so a plain `tmct chat --repo examples/<x>`
+  can't rewrite the hand-stamped graph).
 
 ## 6. Minimal provider checklist
 

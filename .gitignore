@@ -57,6 +57,11 @@ tmct.toml
 # ephemerally, so nothing else is ever written under them).
 !test/fixtures/repos/**/tmct.toml
 
+# ...and the bundled examples: each ships a committed tmct.toml carrying
+# [graph] read_only = true, so a plain `tmct chat --repo examples/<x>` reads the
+# committed graph without ever writing a session back into it.
+!examples/**/tmct.toml
+
 # scripts/extract-persona-sources.mjs's own output — a maintainer curation
 # WORKSHEET (candidates for hand-review), regenerated on demand from the two
 # locally-cloned reference repos, never the final committed content itself

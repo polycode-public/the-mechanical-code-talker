@@ -102,6 +102,14 @@ export async function normalizeConfig(raw, { configDir } = {}) {
     const arr = Array.isArray(src.graph_files) ? src.graph_files : [src.graph_files];
     cfg.graphFiles = arr.map((p) => resolve(dir, String(p)));
   }
+  // [graph] read_only — a chat session against this repo READS the graph but
+  // writes nothing back into its .tmct/: no per-turn session upsert into
+  // graph.json, no transcript/sidecar logs, no memory droppings. A committed
+  // example fixture sets it so a plain `tmct chat --repo examples/<x>` (no
+  // --ephemeral) can never rewrite the hand-stamped graph. Sparse like the
+  // rest: absent when unset, so "unset" stays distinguishable from "false".
+  const graph = src.graph || {};
+  if (graph.read_only !== undefined) cfg.graph = { readOnly: graph.read_only };
   const corpus = src.corpus || {};
   if (corpus.tier !== undefined) cfg.corpus = { tier: corpus.tier };
   const seed = src.seed || {};
