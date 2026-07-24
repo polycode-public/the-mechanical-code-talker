@@ -22,7 +22,6 @@ Each line names its worktree branch; delete the line in the same commit that int
 - benchmark mechanisation levers 1+6/2/3/7 (PLAN_BENCHMARK_MECHANISATION) — `worktree-agent-aef6ab2019223c753`
 - digest stages 1–4 as pure modules (PLAN_DIGEST; stage-5 wiring dispatches after discourse lands) — `worktree-agent-a9f701e5d2c1029b8`
 - idxbench + researchbench harnesses (their SKILL_BENCHMARK docs) — `worktree-agent-af3e4262349bcba57`
-- ingestbench harness (ING-8 checker; ING-9 dry-run only) — `worktree-agent-a32126735fd410725`
 
 ## Open items
 

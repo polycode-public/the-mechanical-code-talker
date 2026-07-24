@@ -1,0 +1,22 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "tmct ingestbench judge rubric (SKILL_BENCHMARK_INGEST.md §1)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["forward", "backward", "rationale"],
+  "properties": {
+    "forward": {
+      "description": "0-2: does every claim in the RESTATEMENT follow from the INPUT (no fact added the source does not support)? 2 = every restated claim is grounded in the input; 0 = the restatement asserts something the input never says. null when not scored.",
+      "anyOf": [{ "type": "integer", "minimum": 0, "maximum": 2 }, { "type": "null" }]
+    },
+    "backward": {
+      "description": "0-2: does every claim in the INPUT appear in the RESTATEMENT (nothing the source stated is lost)? 2 = full coverage; 1 = partial; 0 = most of the input's meaning is missing. null when not scored.",
+      "anyOf": [{ "type": "integer", "minimum": 0, "maximum": 2 }, { "type": "null" }]
+    },
+    "rationale": {
+      "description": "One or two sentences justifying the scores.",
+      "type": "string",
+      "maxLength": 600
+    }
+  }
+}
