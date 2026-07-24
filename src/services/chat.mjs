@@ -2862,22 +2862,27 @@ async function isGroundedByFact(term, memoryDir, cache = null) {
 }
 
 /** Shared "is this term grounded in ANY sense" aggregate — a static lexicon
- *  word (any part of speech, via `classify`), a GENERIC_ANCHOR_NOUNS root, OR
- *  a term already anchored by a previously taught isa-family fact
- *  (isGroundedByFact, above). Used by unknownObjectFallback's subject/object
- *  groundedness checks below, where no part-of-speech branching follows —
- *  just "known or not". (unknownSubjectFallback's own object-known check,
- *  above/below, stays narrower and NOUN-specific — see its own comment — so
- *  an object that's merely a known ADJECTIVE doesn't get misrouted into the
- *  class/subClassOf branch instead of the property branch.) */
-async function isGroundedTerm(term, lex, memoryDir, cache = null) {
+ *  word (any part of speech, via `classify`), a GENERIC_ANCHOR_NOUNS root, a
+ *  term already anchored by a previously taught isa-family fact
+ *  (isGroundedByFact, above), OR — when a code graph is supplied — a symbol
+ *  the code graph itself resolves (resolveSymbol, codegraph.mjs — the SAME
+ *  resolver /describe/`/members`/`/subclasses` already use, so "known to
+ *  describe" and "known to teach" can never disagree). Used by
+ *  unknownObjectFallback's subject/object groundedness checks below, where no
+ *  part-of-speech branching follows — just "known or not". (unknownSubjectFallback's
+ *  own object-known check, above/below, stays narrower and NOUN-specific — see
+ *  its own comment — so an object that's merely a known ADJECTIVE doesn't get
+ *  misrouted into the class/subClassOf branch instead of the property branch.) */
+async function isGroundedTerm(term, lex, memoryDir, cache = null, graph = null) {
   const raw = String(term ?? "").trim();
   if (!raw) return false;
   if (GENERIC_ANCHOR_NOUNS.has(raw.toLowerCase())) return true;
   const { classify } = await import("../domain/grammar/lexicon.mjs");
   if (classify(raw, lex)) return true;
+  if (graph && resolveSymbol(graph, raw)?.match) return true;
   return isGroundedByFact(raw, memoryDir, cache);
 }
+export { isGroundedTerm };
 
 /** The "both sides ungrounded" grounding NUDGE: reuses teachSuggestion's own
  *  "compute a hint, APPEND it to the existing honest-miss message, never
@@ -2899,15 +2904,15 @@ async function isGroundedTerm(term, lex, memoryDir, cache = null) {
  *  unchanged) whenever the payload doesn't fit the shape, or at least one
  *  side IS already grounded — a DIFFERENT, more specific reason it declined,
  *  where this nudge would be actively unhelpful noise. */
-async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null) {
+async function ungroundedPairHint(payload, lexicon, memoryDir, cache = null, graph = null) {
   if (!memoryDir) return "";
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return "";
   const [, , subjectRaw, , objectRaw] = m;
   const { loadLexicon } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
-  if (await isGroundedTerm(subjectRaw, lex, memoryDir, cache)) return "";
-  if (await isGroundedTerm(objectRaw, lex, memoryDir, cache)) return "";
+  if (await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph)) return "";
+  if (await isGroundedTerm(objectRaw, lex, memoryDir, cache, graph)) return "";
   // Chaining the second term UNDER the first's now-grounded proper name
   // ("every man is a john") is technically accepted by the grammar (once
   // "john" is grounded, ANY term can be taught as a kind of it), but reads as
@@ -3070,7 +3075,7 @@ async function objectReadsAsNonNoun(word) {
     return false;
   }
 }
-async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent = false }, cache = null) {
+async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent = false, graph = null }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
@@ -3084,9 +3089,9 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, c
   if (!/^(?:every|each|all|any)$/i.test((det || "").trim()) && !classIntent) return null; // class-level mint needs a universal quantifier or an explicit kind-of infix
   const { loadLexicon, lookupNoun } = await import("../domain/grammar/lexicon.mjs");
   const lex = lexicon || loadLexicon();
-  const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir, cache);
+  const subjectGrounded = await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph);
   if (!subjectGrounded) return null; // ungrounded subject isn't this fallback's asymmetry — never a guessed mint
-  const objectGrounded = await isGroundedTerm(objectRaw, lex, memoryDir, cache);
+  const objectGrounded = await isGroundedTerm(objectRaw, lex, memoryDir, cache, graph);
   if (objectGrounded) return null; // object already known — nothing to mint
   if (await objectReadsAsNonNoun(objectRaw)) return null; // reads like an adjective/verb, not a class noun — defer to unknownAdjectiveFallback
   const quantifier = /^every$/i.test((det || "").trim()) ? "every" : "";
@@ -3168,7 +3173,7 @@ async function unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, c
  *  otherwise provide. "the cache is bespoke" and "Mary is female" both carry
  *  one of those signals (the leading "the", and capitalization,
  *  respectively); "module is banana" carries none. */
-async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon }, cache = null) {
+async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon, graph = null }, cache = null) {
   if (!memoryDir) return null;
   const m = String(payload).trim().match(UNKNOWN_SUBJECT_RE);
   if (!m) return null;
@@ -3201,7 +3206,7 @@ async function unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon
   // a noun-shaped Y was already minted as a class upstream and never reaches
   // this point.
   const universalQuantifier = /^(?:every|each|all|any)$/i.test((det || "").trim());
-  if (universalQuantifier && (await isGroundedTerm(subjectRaw, lex, memoryDir, cache))
+  if (universalQuantifier && (await isGroundedTerm(subjectRaw, lex, memoryDir, cache, graph))
     && (lookupAdjective(lex, objectRaw) || (await objectReadsAsNonNoun(objectRaw)))) {
     const classSubject = /^are$/i.test(verb)
       ? (lookupNoun(lex, subjectRaw)?.lemma || singularizeSurface(subjectRaw))
@@ -4360,7 +4365,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   if (memoryDir && !QUESTION_LEAD_RE.test(conjSrc) && /\s+and\s+/i.test(conjSrc)
     && !(await hasMidSentenceInterrogative(conjSrc))) {
     const rewrap = (half) => (wrapped != null ? `remember that ${half}` : half);
-    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache, planHolder, gameConfig });
+    const recurse = (half) => teachLane(rewrap(half), { memoryDir, sessionId, lexicon, cache, planHolder, graph, gameConfig });
     const stripNoted = (t) => String(t).replace(/^noted — remembered(?:\s+\d+\s+facts?)?:\s*/i, "").trim();
     const shared = conjSrc.match(/^(.+?)\s+and\s+((?:is|are|has|have|can)\b.+)$/i);
     const sharedSubject = shared ? shared[1].match(/^(.+?)\s+(?:is|are|has|have|can)\b/i)?.[1]?.trim() : null;
@@ -5145,7 +5150,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       if (canShape && canSingular !== canShape.subject) {
         let canLex = lexicon;
         if (!canLex) { const { loadLexicon } = await import("../domain/grammar/lexicon.mjs"); canLex = loadLexicon(); }
-        if (await isGroundedTerm(canSingular, canLex, memoryDir, cache)) {
+        if (await isGroundedTerm(canSingular, canLex, memoryDir, cache, graph)) {
           const stored = await teachFact(memoryDir, sessionId, {
             subject: canSingular, predicate: await capabilityPredicate(canShape.negated), object: canShape.verb,
           });
@@ -5273,7 +5278,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
       // every query-side variant fold) uses; a proper noun that only looks
       // plural ("redis") falls back to its own spelling.
       for (const subj of new Set([singularizeSurface(habitualTeach.subject), habitualTeach.subject])) {
-        if (await isGroundedTerm(subj, habLex, memoryDir, cache)) {
+        if (await isGroundedTerm(subj, habLex, memoryDir, cache, graph)) {
           const stored = await teachFact(memoryDir, sessionId, {
             subject: subj, predicate: await capabilityPredicate(habitualTeach.negated), object: habitualTeach.verb,
           });
@@ -5294,7 +5299,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // STATIC lexicon (or a prior taught fact) already grounds can mint a
     // brand-new object term. See unknownObjectFallback's own docblock for the
     // exact narrowing rules (the "both sides ungrounded" safety guard, etc.).
-    const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent: kindOfClassIntent }, cache);
+    const objectFallback = await unknownObjectFallback(payload, { memoryDir, sessionId, lexicon, classIntent: kindOfClassIntent, graph }, cache);
     if (objectFallback) return objectFallback;
     // ADJECTIVE-MINT fallback: tried right after unknownObjectFallback
     // declines, so a grounded subject (static
@@ -5303,7 +5308,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     // docblock for the exact narrowing rules (the "both sides ungrounded"
     // safety guard, and why this must be a standalone function rather than
     // nested inside unknownSubjectFallback).
-    const adjectiveFallback = await unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon }, cache);
+    const adjectiveFallback = await unknownAdjectiveFallback(payload, { memoryDir, sessionId, lexicon, graph }, cache);
     if (adjectiveFallback) return adjectiveFallback;
     // PROPERTY teach — "remember/note that <X> is <adjective>": wrapper-REQUIRED
     // (a bare "X is deprecated" is never silently reified), and only after the
@@ -5366,7 +5371,7 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
   // Grounding NUDGE: APPENDED, never a replacement, exactly like "did" above
   // — see ungroundedPairHint's own docblock for why this is scoped to the
   // "both sides ungrounded, fits the X is/are Y shape" case only.
-  const groundingHint = await ungroundedPairHint(payload, lexicon, memoryDir, cache);
+  const groundingHint = await ungroundedPairHint(payload, lexicon, memoryDir, cache, graph);
   return {
     text: `I couldn't store that —${why} I remember facts in the shape "every X is a Y", where X and Y are `
       + `words I know.${did}${groundingHint} Type /memory to see what I already remember.`,
