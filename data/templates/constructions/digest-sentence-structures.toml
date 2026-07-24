@@ -10,19 +10,30 @@
 # reads only [[relation]] and [[construction]] tables, so it ignores this file's
 # [[structure]] rows; the digest layer reads them through its own path.
 #
-# Each row is one (family, form) pairing:
+# Each row is one wording for a (family, form) pairing. A key may hold several
+# rows: the renderer collects them all and picks one by a deterministic hash of
+# term|family|form|variantSeed, so a key with one wording always renders that
+# wording, while a key with several gives natural variety that stays stable
+# across runs. An exact-string duplicate under a key is folded; a second, truly
+# different wording is kept as another variant.
 #   family  one of the digest families (isa | location | partOf | capableOf |
 #           usedFor) — the closed set stage 1 groups predicates under. Each is
 #           verb-coherent: every predicate in it shares this frame's verb.
 #   form    single   — one fact of the family
 #           several  — two or more facts of the family, merged into one clause
 #           chained  — one isa fact plus its rendered ancestry chain
+#           group    — one body sentence of the multi-sentence isa digest: the
+#                      facts that share an immediate parent class, named together
+#           closer   — the closing sentence of the multi-sentence isa digest:
+#                      the highest-level ontology roots the term sits under
 #   template  the skeleton. Placeholders the renderer fills (words.mjs supplies
 #             the article, plural and casing):
 #               {TERM} {TERM_CAP}          the term, lower / sentence-leading
 #               {A_TERM} {A_TERM_CAP}      "an aardvark" / "An aardvark"
 #               {TERMS} {TERMS_CAP}        "aardvarks" / "Aardvarks"
 #               {PRONOUN} {PRONOUN_CAP}    "it" / "It" (after first mention)
+#               {PARENT} {A_PARENT}        the shared immediate parent of a group
+#                                          — "mammal" / "a mammal"
 #               {OBJECT}                   the first object, raw
 #               {A_OBJECT}                 "a mammal" (article chosen per word)
 #               {OBJECTS_A}                "a mammal, a burrowing animal, and …"
@@ -48,6 +59,50 @@ family = "isa"
 form = "chained"
 template = "{A_TERM_CAP} is {CHAIN}."
 
+# ---- isa group: one body sentence for facts under a shared parent class -----
+
+[[structure]]
+family = "isa"
+form = "group"
+template = "As a kind of {PARENT}, {PRONOUN} is also {OBJECTS_A}."
+
+[[structure]]
+family = "isa"
+form = "group"
+template = "Being {A_PARENT}, {PRONOUN} is {OBJECTS_A} too."
+
+[[structure]]
+family = "isa"
+form = "group"
+template = "Within the {PARENT} family, {PRONOUN} counts as {OBJECTS_A}."
+
+[[structure]]
+family = "isa"
+form = "group"
+template = "As {A_PARENT}, {PRONOUN} is {OBJECTS_A}."
+
+# ---- isa closer: the highest-level roots the term sits under ----------------
+
+[[structure]]
+family = "isa"
+form = "closer"
+template = "More broadly, {TERMS} sit within {OBJECTS_A} in the wider hierarchy."
+
+[[structure]]
+family = "isa"
+form = "closer"
+template = "More generally, {TERMS} fall under {OBJECTS_A}."
+
+[[structure]]
+family = "isa"
+form = "closer"
+template = "Higher up, {TERMS} are kinds of {OBJECTS_PLURAL}."
+
+[[structure]]
+family = "isa"
+form = "closer"
+template = "Zooming out, {TERMS} belong among {OBJECTS_PLURAL}."
+
 # ---- location: where it is found (atLocation / locatedNear) ----------------
 
 [[structure]]
@@ -60,6 +115,21 @@ family = "location"
 form = "several"
 template = "{PRONOUN_CAP} is found in {OBJECTS_RAW}."
 
+[[structure]]
+family = "location"
+form = "several"
+template = "{PRONOUN_CAP} lives in {OBJECTS_RAW}."
+
+[[structure]]
+family = "location"
+form = "several"
+template = "You'll find {PRONOUN} in {OBJECTS_RAW}."
+
+[[structure]]
+family = "location"
+form = "several"
+template = "{PRONOUN_CAP} turns up in {OBJECTS_RAW}."
+
 # ---- partOf: what it belongs to -------------------------------------------
 
 [[structure]]
@@ -69,8 +139,38 @@ template = "{PRONOUN_CAP} is part of {A_OBJECT}."
 
 [[structure]]
 family = "partOf"
+form = "single"
+template = "{PRONOUN_CAP} belongs to {A_OBJECT}."
+
+[[structure]]
+family = "partOf"
+form = "single"
+template = "{PRONOUN_CAP} forms part of {A_OBJECT}."
+
+[[structure]]
+family = "partOf"
+form = "single"
+template = "{PRONOUN_CAP} makes up part of {A_OBJECT}."
+
+[[structure]]
+family = "partOf"
 form = "several"
 template = "{PRONOUN_CAP} is part of {OBJECTS_A}."
+
+[[structure]]
+family = "partOf"
+form = "several"
+template = "{PRONOUN_CAP} belongs to {OBJECTS_A}."
+
+[[structure]]
+family = "partOf"
+form = "several"
+template = "{PRONOUN_CAP} forms part of {OBJECTS_A}."
+
+[[structure]]
+family = "partOf"
+form = "several"
+template = "{PRONOUN_CAP} is one part of {OBJECTS_A}."
 
 # ---- capableOf: what it can do --------------------------------------------
 
@@ -84,6 +184,21 @@ family = "capableOf"
 form = "several"
 template = "{PRONOUN_CAP} can {OBJECTS_RAW}."
 
+[[structure]]
+family = "capableOf"
+form = "several"
+template = "{PRONOUN_CAP} is able to {OBJECTS_RAW}."
+
+[[structure]]
+family = "capableOf"
+form = "several"
+template = "{PRONOUN_CAP} knows how to {OBJECTS_RAW}."
+
+[[structure]]
+family = "capableOf"
+form = "several"
+template = "{PRONOUN_CAP} tends to {OBJECTS_RAW}."
+
 # ---- usedFor: what it is used for -----------------------------------------
 
 [[structure]]
@@ -93,5 +208,35 @@ template = "{PRONOUN_CAP} is used for {OBJECT}."
 
 [[structure]]
 family = "usedFor"
+form = "single"
+template = "{PRONOUN_CAP} helps with {OBJECT}."
+
+[[structure]]
+family = "usedFor"
+form = "single"
+template = "People use {PRONOUN} for {OBJECT}."
+
+[[structure]]
+family = "usedFor"
+form = "single"
+template = "{PRONOUN_CAP} works for {OBJECT}."
+
+[[structure]]
+family = "usedFor"
 form = "several"
 template = "{PRONOUN_CAP} is used for {OBJECTS_RAW}."
+
+[[structure]]
+family = "usedFor"
+form = "several"
+template = "{PRONOUN_CAP} helps with {OBJECTS_RAW}."
+
+[[structure]]
+family = "usedFor"
+form = "several"
+template = "People use {PRONOUN} for {OBJECTS_RAW}."
+
+[[structure]]
+family = "usedFor"
+form = "several"
+template = "{PRONOUN_CAP} works for {OBJECTS_RAW}."

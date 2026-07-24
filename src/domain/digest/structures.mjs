@@ -6,9 +6,10 @@
 // sibling word helpers.
 
 import { articleFor, pluralOf, capitalizeFirst, series } from "./words.mjs";
+import { fnv1a32 } from "../hash.mjs";
 
 const VALID_FAMILIES = new Set(["isa", "location", "partOf", "capableOf", "usedFor"]);
-const VALID_FORMS = new Set(["single", "several", "chained"]);
+const VALID_FORMS = new Set(["single", "several", "chained", "group", "closer"]);
 
 const keyFor = (family, form) => `${family}:${form}`;
 
@@ -16,8 +17,10 @@ const keyFor = (family, form) => `${family}:${form}`;
  * Validate and index the raw [[structure]] rows into a Map keyed by
  * `family:form`. Closed-vocabulary discipline, same as the construction banks:
  * an unknown family or form, or a missing template, drops the row rather than
- * coercing it. First occurrence of a (family, form) wins; a later duplicate is
- * ignored.
+ * coercing it. Every valid row for a (family, form) is collected into that
+ * key's `templates` list, so the renderer can pick one deterministically from
+ * the pool; an exact-string duplicate is folded, but a second distinct wording
+ * is kept as another variant.
  */
 export function buildStructureTable(structures) {
   const table = new Map();
@@ -26,8 +29,9 @@ export function buildStructureTable(structures) {
     if (typeof s.form !== "string" || !VALID_FORMS.has(s.form)) continue;
     if (typeof s.template !== "string" || !s.template.trim()) continue;
     const key = keyFor(s.family, s.form);
-    if (table.has(key)) continue;
-    table.set(key, { family: s.family, form: s.form, template: s.template });
+    if (!table.has(key)) table.set(key, { family: s.family, form: s.form, templates: [] });
+    const entry = table.get(key);
+    if (!entry.templates.includes(s.template)) entry.templates.push(s.template);
   }
   return table;
 }
@@ -44,12 +48,15 @@ function renderChain(chain) {
   return `${head}, and so ${series(rest.map(withArticle))}`;
 }
 
-/** The slot values for one render, derived from the term, its objects and an
- *  optional ancestry chain. A placeholder with no derived value renders empty. */
-function slotsFor(term, objects, chain) {
+/** The slot values for one render, derived from the term, its objects, an
+ *  optional ancestry chain and an optional parent class (the shared immediate
+ *  ancestor a `group` sentence hangs off). A placeholder with no derived value
+ *  renders empty. */
+function slotsFor(term, objects, chain, parent) {
   const t = String(term || "").trim();
   const objs = (objects || []).map((o) => String(o || "").trim()).filter(Boolean);
   const first = objs[0] || "";
+  const p = String(parent || "").trim();
   return {
     TERM: t,
     TERM_CAP: capitalizeFirst(t),
@@ -59,6 +66,8 @@ function slotsFor(term, objects, chain) {
     TERMS_CAP: capitalizeFirst(pluralOf(t)),
     PRONOUN: "it",
     PRONOUN_CAP: "It",
+    PARENT: p,
+    A_PARENT: p ? withArticle(p) : "",
     OBJECT: first,
     A_OBJECT: first ? withArticle(first) : "",
     OBJECTS_A: series(objs.map(withArticle)),
@@ -82,9 +91,22 @@ function fill(template, slots) {
  * Render one clause for `facts` (all of one family) using the structure the
  * table holds for (family, form). `form` defaults by fact count — one fact is
  * "single", more is "several" — unless the caller names a form (e.g. "chained"
- * with an ancestry chain). Returns { text, rows, family, form } so the sentence
- * traces to the exact fact rows behind it, or null when no structure matches or
- * there are no facts.
+ * with an ancestry chain, or "group"/"closer" for the multi-sentence isa body).
+ *
+ * When a key holds more than one wording, the one that renders is picked by a
+ * deterministic FNV-1a hash of `term|family|form|variantSeed` — the same
+ * paraphrase-pool tool answer-variants.mjs uses — so the choice is stable across
+ * runs but varies by term (and by `variantSeed`, e.g. the shared parent, so two
+ * group sentences under one term can read differently). A single-wording key
+ * always resolves to that one wording.
+ *
+ * `opts.objectsOverride` renders words other than the raw fact objects (a closer
+ * sentence names root concepts, not the facts) while the returned `rows` stays
+ * the real backing facts, so provenance survives. `opts.parent` fills the
+ * `{PARENT}`/`{A_PARENT}` slots a group sentence hangs off.
+ *
+ * Returns { text, rows, family, form } so the sentence traces to the exact fact
+ * rows behind it, or null when no structure matches or there are no facts.
  */
 export function renderStructure(table, family, facts, opts = {}) {
   const rows = (facts || []).filter(Boolean);
@@ -92,9 +114,12 @@ export function renderStructure(table, family, facts, opts = {}) {
   const term = opts.term ?? rows[0].subject ?? "";
   const form = opts.form || (rows.length > 1 ? "several" : "single");
   const entry = table instanceof Map ? table.get(keyFor(family, form)) : null;
-  if (!entry) return null;
-  const objects = rows.map((r) => r.object);
-  const text = fill(entry.template, slotsFor(term, objects, opts.chain));
+  const templates = entry ? entry.templates : null;
+  if (!templates || !templates.length) return null;
+  const variantSeed = opts.variantSeed ?? "";
+  const idx = fnv1a32(`${term}|${family}|${form}|${variantSeed}`) % templates.length;
+  const objects = opts.objectsOverride || rows.map((r) => r.object);
+  const text = fill(templates[idx], slotsFor(term, objects, opts.chain, opts.parent));
   if (!text) return null;
   return { text, rows, family, form };
 }
