@@ -23,6 +23,31 @@ Each line names its worktree branch; delete the line in the same commit that int
 
 ## Open items
 
+- [ ] playtest batch 2 (2026-07-24, memory/discourse/games surfaces; no fabrications — every
+  failure is a miss or a garbled parse; fix once chat.mjs frees up, transcripts in the session
+  scratchpad):
+  1. anaphora half-wired: "what is it used for" leaves the anaphor unsubstituted (literal subject
+     "it used for" → teach fallback) while "is it an animal" resolves — align the UsedFor/what-is
+     reader with the IsA yes/no anaphor substitution;
+  2. the unbindable-referent surface garbles: "was that before X was touched" with no bindable
+     referent parses as a TEACH offer with subject "that before X was" — an unbound form should
+     say it has no referent for "that", never offer to be taught the garble (the miss itself is
+     designed; the FORM is the bug);
+  3. temporal comparison binds only a literal SHA from the prior query text — the two most
+     natural antecedents (a date-filter result set; "when was X last touched") don't bind; this
+     is PLAN_DISCOURSE_AND_RECOGNITION slices 3–5 territory (bind from the answer's referent,
+     plural sets) — fold these transcripts into that plan's staging;
+  4. one unparsed turn stacks three messages (couldn't-read + no-code-graph + teach-fallback) —
+     collapse to one;
+  5. /plan-over-taught-action error prose leaks internals ("ask.mjs's own NL grammar", "Module")
+     — rewrite as user-facing;
+  6. "what is car used for" (no article) fails while "what is a car used for" works — widen the
+     article tolerance in that reader;
+  7. (corpus quality, separate) human-medium seeds mis-extract adjectives: "straight/simple is a
+     kind of person";
+  8. (already in flight) the 53-fact read-back wall is the digest layer's target specimen — the
+     stage-5 wiring agent should check "what do you know about a person" renders grouped.
+
 - [ ] playtest batch (2026-07-24, 3.0.0 indexing surface; fix together once the discourse agent
   releases chat.mjs — no fabrications found, all items are routing/orientation):
   1. "show me the architecture" resolves the SYMBOL `renderArchitecture` and dumps its definition
