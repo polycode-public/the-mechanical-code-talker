@@ -27,7 +27,7 @@ reading is never compared against a CEFR grade or an `INF-*` band.
 | **Abstention calibration** | how much it answers at what fabrication rate: the risk-coverage trade, with every bench's zero-fabrication gate as the fixed-risk point | fabrication 0% at ≥50% coverage on the graded pools (on record across INFBENCH, AGENTBENCH, CHATBENCH) | a measured risk-coverage curve, coverage growing version-on-version at fixed zero risk |
 | **Transfer breadth** | how many domains it acquires with no engine change | three plan-lane domains acquired with zero engine changes (hanoi, river crossing, crates, on record) | a domain outside the shipped vocabularies acquired teach-only in one session |
 | **Other-minds depth** | how deep the belief nesting goes (`SKILL_BENCHMARK_CONVERSATION.md` FLOW-8, plus the spider-fly worlds) | depth 1: spider-fly beliefs including taught false beliefs, on record in its corpus lane | depth 2 in conversation, a believer of beliefs (FLOW-8) |
-| **Temporal-causal depth** | ordering, last-touch, cross-turn composition, counterfactual re-solve (`SKILL_BENCHMARK_INFERENCE.md` INF-10, plus frozen compositional row 19) | ordered snapshots plus last-touch temporal reads, on record | one cross-turn temporal composition (frozen row 19) and one re-solved counterfactual (INF-10) |
+| **Temporal-causal depth** | ordering, last-touch, cross-turn composition, counterfactual re-solve (`SKILL_BENCHMARK_INFERENCE.md` INF-10, plus compositional row 19 — flipped 2026-07-24, now `cross-turn-temporal-composition-composes`) | ordered snapshots plus last-touch temporal reads, on record | one cross-turn temporal composition (row 19, now composing) and one re-solved counterfactual (INF-10) |
 | **Goal-origination distance** | how far a goal travels from declared to self-originated, on four notches (`SKILL_BENCHMARK_AGENT.md` TOOL-6 deduced-and-reached, TOOL-9 inferred-and-horizon) | notch 2 of 4: declared goals plus deduced maintenance goals, the goal-reasoner on record | notch 3, a goal inferred from an observed trace (TOOL-9) |
 | **Knowledge-scale tolerance** | how many facts it answers over while holding zero fabrication | the shipped seed bands (~93k triples) answer with 0% fabrication, on record | the same at 10× facts with tie-rates held |
 | **Stability × plasticity** | growth per session against interference with what it already knew | append-only teach with prior answers byte-stable within a session, regression-pinned across the corpus lanes | a measured growth-per-session rate with a zero-interference guarantee across sessions |
@@ -82,7 +82,7 @@ grown a probe.
 **Step 2 — ASSESS.** Re-read the codebase and demos against the eight scales. For each scale,
 confirm the entry rung still holds (its source still passes) and note anything that moved toward the
 rung above. Where a sibling bench owns the axis, read its latest write-up rather than re-deriving:
-FLOW-8 for other-minds depth, INF-10 and frozen row 19 for temporal-causal depth, TOOL-6/TOOL-9 for
+FLOW-8 for other-minds depth, INF-10 and compositional row 19 (now composing) for temporal-causal depth, TOOL-6/TOOL-9 for
 goal-origination distance.
 
 **Step 3 — READ THE SCALES.** For each scale, record the current rung: the entry rung passed, plus
@@ -126,7 +126,7 @@ Grade tmct against eight general-intelligence scales — abstention calibration,
 other-minds depth, temporal-causal depth, goal-origination distance, knowledge-scale tolerance,
 stability × plasticity, loop closure — each running from an entry rung tmct passes today to a
 described rung above it, so the metric is held from the first cycle. Where a sibling bench owns the
-axis (FLOW-8 for other-minds, INF-10 and frozen row 19 for temporal-causal, TOOL-6/TOOL-9 for
+axis (FLOW-8 for other-minds, INF-10 and compositional row 19 (now composing) for temporal-causal, TOOL-6/TOOL-9 for
 goal-origination, every bench's zero-fabrication gate for abstention), point there rather than
 re-deriving the number. A cycle reads the tree and demos against the scales, records the entry rung
 and any measured progress toward the next, and writes `BENCHMARK_AGI_<version>.md` (headline,

@@ -1841,18 +1841,26 @@ function evalRecentCommits(graph) {
 const COMMIT_FILTER_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 /** Resolves the pivot (a literal ISO date, or a named commit whose own date
  *  becomes the pivot), then filters every Commit's date against it. An
- *  unresolvable pivot declines honestly (pivotResolved:false). */
+ *  unresolvable pivot declines honestly (pivotResolved:false).
+ *
+ *  A resolved answer also carries `referents` — the typed discourse referents
+ *  this answer establishes (the result set, and the pivot commit the question
+ *  was ABOUT, which the focus rules deliberately refuse to hold). Emitted
+ *  here, beside the fully typed result, before render() flattens it all to a
+ *  sentence; the session layer is what registers them into its record. */
 function evalCommitFilter(graph, ast) {
   const { op, pivotRaw } = ast;
   const dateOf = (c) => String((c.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10);
   let pivotDate = null;
   let pivotId = null;
+  let pivotLabel = null;
   if (COMMIT_FILTER_DATE_RE.test(pivotRaw)) {
     pivotDate = pivotRaw;
   } else {
     const { match, ambiguous } = resolveObject(graph, pivotRaw, { expectedClass: "Commit" });
     if (match && !ambiguous && match.class === "Commit" && dateOf(match)) {
       pivotId = match.id;
+      pivotLabel = match.label;
       pivotDate = dateOf(match);
     }
   }
@@ -1867,7 +1875,24 @@ function evalCommitFilter(graph, ast) {
       return d === pivotDate; // "on"
     })
     .sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
-  return { compositeKind: "commitFilter", op, pivotRaw, pivotDate, pivotResolved: true, matches };
+  const referents = [];
+  if (matches.length) {
+    referents.push({
+      kind: "set", class: "Commit",
+      label: `${matches.length} commit${matches.length === 1 ? "" : "s"} ${op} ${pivotRaw}`,
+      ids: matches.map((c) => c.id),
+      attrs: { count: matches.length, op, ...(pivotId ? { pivot: pivotId } : {}) },
+      lane: "commitFilter",
+    });
+  }
+  if (pivotId) {
+    referents.push({
+      kind: "event", class: "Commit", label: pivotLabel,
+      ids: [pivotId], attrs: { date: pivotDate },
+      lane: "commitFilter",
+    });
+  }
+  return { compositeKind: "commitFilter", op, pivotRaw, pivotDate, pivotResolved: true, matches, referents };
 }
 
 /** Temporal over a nested set: the commits that touched any member of the
@@ -4384,6 +4409,11 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       // edit-distance, announced in the content as "assuming you meant …");
       // null for every literal-identifier tier.
       matchedVia: result.matchedVia || null,
+      // The typed discourse referents this answer established (see
+      // evalCommitFilter) — additive, present only when a lane emitted them,
+      // so a session layer can register them without re-deriving the answer's
+      // typed content from its rendered sentence.
+      ...(Array.isArray(result.referents) && result.referents.length ? { discourse: result.referents } : {}),
       ...(rendered.ambiguous ? { candidates: rendered.candidates, candidateParses: rendered.candidateParses } : {}),
     },
   };

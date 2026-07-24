@@ -18,7 +18,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
-- discourse record slices 1+2 (PLAN_DISCOURSE_AND_RECOGNITION Part A) — `worktree-agent-a7e1eb742050b37d0`
 - benchmark mechanisation levers 1+6/2/3/7 (PLAN_BENCHMARK_MECHANISATION) — `worktree-agent-aef6ab2019223c753`
 - digest stages 1–4 as pure modules (PLAN_DIGEST; stage-5 wiring dispatches after discourse lands) — `worktree-agent-a9f701e5d2c1029b8`
 - idxbench + researchbench harnesses (their SKILL_BENCHMARK docs) — `worktree-agent-af3e4262349bcba57`
@@ -46,7 +45,7 @@ Each line names its worktree branch; delete the line in the same commit that int
      entities don't count as grounded terms for teach — the one place code-graph and taught
      memory don't compose today.
 
-- [ ] start `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slice 1 — build `src/domain/discourse.mjs` (the four closed tables, `emptyRecord`/`register`/`bind`/`retire`), thread the record through `runTurn` beside `focus` and `last`, and register from the commit-filter lane only. Nothing reads it yet, so no lane can regress; a unit file over the pure module plus a probe that the record fills is the whole test surface. Slice 2 then flips the frozen row `games/cross-turn-temporal-composition-unbuilt`
+- [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 3–5 (plural binding past a count, the tie refusal, the remaining bindable-form lanes) — slices 1–2 shipped 2026-07-24 (the record threads through `runTurn`, and `games/cross-turn-temporal-composition-composes` is the flipped row); the plan doc stages what's next
 - [ ] prove the repo-index backend seam admits an out-of-repo backend with no tmct change: seonix registers a C#/Java backend against a released tmct 3.0.x (registration, conformance, IDX-5 scoring). Seonix-side work — their inbox has the phase-6 handover; `PLAN_REPO_INDEX.md` Open risks names the proof. Everything else in that plan (branch merge, phases 1–6) is delivered
 
 ## Discipline

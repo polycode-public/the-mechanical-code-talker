@@ -40,10 +40,11 @@ paraphrase/textual-entailment work behind `PLAN_PARAPHRASE_VERIFICATION.md`):
 | ING-9 | Full-fidelity restatement | an arbitrary document restated with nothing lost and nothing added — the top of the scale, graded for headroom, never claimed |
 
 The ladder is a finite, useful scale, not a boundary on what the system can become. `ING-6`'s typed
-discourse record is a scoping spike, not a settled build (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part A; frozen row 19,
-`cross-turn-temporal-composition-unbuilt`); candidate literatures are discourse representation
-theory (Kamp & Reyle 1993), file-change semantics (Heim 1982), and centering (Grosz, Joshi &
-Weinstein 1995). `ING-7`'s deterministic equivalence check has a shipped isa-family slice
+discourse record has its first two slices shipped (`PLAN_DISCOURSE_AND_RECOGNITION.md` Part A:
+`src/domain/discourse.mjs` threads through `runTurn`, and the once-frozen row 19 now composes as
+`cross-turn-temporal-composition-composes`); slices 3–5 stay staged in that plan. The grounding
+literatures are discourse representation theory (Kamp & Reyle 1993), file-change semantics
+(Heim 1982), and centering (Grosz, Joshi & Weinstein 1995). `ING-7`'s deterministic equivalence check has a shipped isa-family slice
 (`verifySubClassParaphrase` / `paraphraseVerifiedSubClass`, `src/domain/paraphrase.mjs`) and a
 designed general contract (`PLAN_PARAPHRASE_VERIFICATION.md`). `ING-9` names the open extraction
 frontier — arbitrary relation coverage and complete meaning representation — with candidate

@@ -22,6 +22,7 @@ import { dispatchTool, loadGraph, TOOLS } from "../tools/server.mjs";
 import { ToolError } from "../adapters/config.mjs";
 import { parseEntities, edgesOfKind, moduleCountOf, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
 import { classDisplayName, DYNAMIC_TAIL_OK_RE } from "../domain/ask.mjs";
+import { emptyRecord as emptyDiscourseRecord, advanceTurn as advanceDiscourseTurn, register as registerReferent, bind as bindDiscourseForm } from "../domain/discourse.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
 import * as defaultSource from "../adapters/source.mjs";
 import { loadTemplates, render as renderTemplate } from "../adapters/corpus/templates.mjs";
@@ -11813,7 +11814,13 @@ const DECISION_RECALL_RE = /^(?:remind\s+me\s+)?what\s+(?:did\s+)?(?:we|i|you)\s
  *  than silently accepted alongside the current location. */
 const MOVE_HISTORY_RE = /^where\s+did\s+(.+?)\s+(?:move|get\s+moved|go)(?:\s+to)?[?.!\s]*$/i;
 
-async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
+/** "was that before logger.mjs was touched" — a singular bindable form, a
+ *  comparison word, and an embedded passive clause. The closed participle set
+ *  is the touch family the when-question path answers; anything else keeps
+ *  the honest miss. */
+const TEMPORAL_COMPARISON_RE = /^(?:was|is)\s+(this one|that one|it|this|that)\s+(before|after)\s+(.+?)\s+(?:was|were)\s+(touched|changed|modified|edited|updated)[?.!\s]*$/i;
+
+async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
   const ts = new Date().toISOString();
   // The surface this turn runs on ("cli" default; "browser" from a web entry) —
   // the honest-miss tail below points a browser/adventure miss at the teach
@@ -11841,6 +11848,45 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     askQuery = String(askQuery).trim()
       .replace(/^(?:and|so|then|also)\s+/i, "")
       .replace(/how many\s+/i, "how many of those ");
+  }
+  // TEMPORAL COMPARISON ACROSS TURNS — "was that before logger.mjs was
+  // touched": a singular bindable form, a comparison word, and an embedded
+  // passive clause. The form binds against the session's discourse record (a
+  // dated referent a previous answer established), the embedded clause runs
+  // fresh through the same when-question path a standalone turn takes, and
+  // the two ISO dates compare with both sides cited. Checked BEFORE the ask
+  // engine (the same precedence RENAME_HISTORY_RE takes, below) so the
+  // sentence never reaches the keyword-spot strategy's multi-token patient
+  // guard; an unbound form, an undated referent, or an unanswerable clause
+  // all fall through, and that guard's honest miss stands unchanged.
+  {
+    const cmp = graph && discourseHolder ? String(query).trim().match(TEMPORAL_COMPARISON_RE) : null;
+    if (cmp) {
+      const [, form, cmpOp, clauseSubject, participle] = cmp;
+      const bound = bindDiscourseForm(discourseHolder.record, form);
+      const refDay = String(bound?.referent?.attrs?.date || "").slice(0, 10);
+      if (bound?.referent && refDay) {
+        const { ask } = await import("../domain/ask.mjs");
+        const fresh = ask(graph, `when was ${clauseSubject} ${participle}`);
+        const freshHit = (!fresh?.tmct_ask?.miss && !fresh?.tmct_ask?.ambiguous) ? fresh?.tmct_ask?.matches?.[0] : null;
+        const freshCommit = freshHit?.id ? graph.byId?.get?.(freshHit.id) : null;
+        const clauseDay = freshCommit?.class === "Commit"
+          ? String((freshCommit.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10)
+          : "";
+        if (clauseDay) {
+          const holds = cmpOp.toLowerCase() === "before" ? refDay < clauseDay : refDay > clauseDay;
+          const relation = refDay < clauseDay ? "came before" : refDay > clauseDay ? "came after" : "landed on the same day as";
+          const verb = participle.toLowerCase();
+          const text = `${holds ? "Yes" : "No"} — ${bound.referent.label} (${refDay}) ${relation} ${clauseSubject} was last ${verb} (${freshCommit.label}, ${clauseDay}).`;
+          note(trace, "goal: compare a prior answer's dated referent against a freshly read event (cross-turn temporal composition)");
+          note(trace, `lane: TEMPORAL_COMPARISON_RE — "${form}" bound ${bound.referent.label} (${refDay}) through the discourse record; the embedded clause re-ran as its own when-question`);
+          const turn = plainTurn(query, text, { via: "composed", miss: false, focus });
+          const cited = [graph.byId?.get?.(bound.referent.ids[0]), freshCommit].filter(Boolean);
+          turn.detail = { traversal: `discourse ${bound.referent.ref} (${refDay}) vs last-${verb} of ${clauseSubject} (${clauseDay})`, matches: cited };
+          return turn;
+        }
+      }
+    }
   }
   // RENAME HISTORY — "what was X called before" and its siblings. The index
   // records current names only, and without this gate "called" fuzzes onto
@@ -12020,6 +12066,17 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       "isn't resolved to anything yet — name the term directly, or ask a question that resolves one first.",
     );
     if (envJson) { try { envelope = JSON.parse(envJson); } catch { envelope = null; } }
+    // Typed discourse referents the answer established (the ask envelope's
+    // additive `discourse` field, emitted beside the eval where the answer's
+    // content is still typed) register into the session's record here — the
+    // one point both ask paths (direct call and dispatchTool) converge.
+    if (discourseHolder && Array.isArray(envelope?.discourse)) {
+      for (const { lane, ...spec } of envelope.discourse) {
+        discourseHolder.record = registerReferent(discourseHolder.record, {
+          ...spec, from: { turn: discourseHolder.record.turn, lane, query: askQuery },
+        });
+      }
+    }
   } catch (e) {
     const thrown = String(e?.message || e);
     // A graph-less session's ask dispatch fails reading the never-configured
@@ -14337,7 +14394,7 @@ function vocabAntecedentFrom(last) {
   return m[1];
 }
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, _noSplit = false } = {}) {
+export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -14402,7 +14459,12 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // the PLAN NEXT block below write planHolder.state; every other path leaves
   // it untouched, and the caller re-threads whatever comes back.
   const planHolder = { state: planState };
-  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget };
+  // The session's typed discourse record rides the same holder pattern,
+  // threaded turn-to-turn beside focus and last. Registration happens where
+  // an answer's typed content is in hand (runAsk, off the ask envelope's
+  // `discourse` referents); the caller re-threads whatever comes back.
+  const discourseHolder = { record: discourse ?? emptyDiscourseRecord() };
+  const ctx = { config, source, graph, focus, last, memoryDir, sessionId, templates, env, lexicon, trace, narrate, liveReference, onLiveLookup, vocabHint: resolvedVocabHint, tel, biasByBundle, cache: factRowsCache, vocabAntecedent, planHolder, discourseHolder, gameConfig: resolvedGameConfig, uiContext, synthesisBudget };
   // A DISPATCHED turn (count / slash-command / ask) becomes the new "last
   // answer" that why/say-more re-renders; a conversational turn does not.
   // Every dispatched turn's result passes through finish() here — the LAST
@@ -14446,10 +14508,16 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       detail: finished.detail ?? null,
       grounded: finished.record?.miss ? (last?.grounded ?? null) : finished.answer,
     };
+    // Every dispatched turn advances the discourse record's turn counter —
+    // the counter is the registration ordinal that makes a same-turn tie
+    // detectable, so it moves once, here, on the one path every dispatched
+    // turn shares. Conversational turns bypass withLast and leave the record
+    // untouched, exactly as they leave `last`.
+    discourseHolder.record = advanceDiscourseTurn(discourseHolder.record);
     // Goal/canonical lines append onto the PRE-narration `finished` result
     // `nextLast` was captured from, so a narrated turn still gets both short
     // lines up top plus the full trace block after.
-    return { ...withNarration(withCanonicalLine(withGoalLine(finished)), trace, fallbackGoal), last: nextLast };
+    return { ...withNarration(withCanonicalLine(withGoalLine(finished)), trace, fallbackGoal), last: nextLast, discourse: discourseHolder.record };
   };
 
   // Slash-optional system commands: a bare leading command word ("stats",
@@ -14692,17 +14760,18 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
         && await everySentenceTeaches(sentences.slice(0, -1), lexicon);
       const finalIsPayload = endsInPlanTrigger || teachesThenAsks;
       if (finalIsPayload || await everySentenceTeaches(sentences, lexicon)) {
-        let f = focus; let l = last; let ps = planHolder.state;
+        let f = focus; let l = last; let ps = planHolder.state; let d = discourseHolder.record;
         const receipts = [];
         let finalRec = null;
         for (const sentence of sentences) {
           const r = await runTurn(sentence, {
             config, source, graph, focus: f, last: l, memoryDir, sessionId, env, lexicon,
-            narrate: false, vocabHint, tel, biasByBundle, planState: ps, _noSplit: true,
+            narrate: false, vocabHint, tel, biasByBundle, planState: ps, discourse: d, _noSplit: true,
           });
           f = r.focus ?? f;
           l = r.last ?? l;
           if ("planState" in r) ps = r.planState;
+          if ("discourse" in r) d = r.discourse;
           finalRec = r;
           receipts.push(String(r.answer ?? "").split("\n")[0]);
         }
@@ -14725,6 +14794,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
         combined.planState = ps;
         combined.focus = f;
         combined.last = l;
+        combined.discourse = d;
         // Each per-sentence turn recorded only its OWN sentence; the transcript
         // echo and the turn record must quote the whole multi-sentence line the
         // user actually typed, not just its last sentence.
