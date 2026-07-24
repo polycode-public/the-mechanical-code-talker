@@ -73,9 +73,14 @@ export function loadProgressLine(parts) {
 }
 
 /** The self-contained research page. Pure — the same output for the same
- *  `title` every time; every piece of state is computed live in the browser
- *  once the sibling research bundle loads. */
-export function renderResearchHtml({ title = DEFAULT_TITLE } = {}) {
+ *  input every time; every piece of state is computed live in the browser once
+ *  the sibling research bundle loads. `digestStructures` are the pre-parsed
+ *  [[structure]] rows of the digest sentence-structure bank, embedded so the
+ *  page can digest a term client-side over its grown store (no TOML parser in
+ *  the browser); an empty list leaves the digest panel degrading to an honest
+ *  "no digest available" the same way the node stub does. */
+export function renderResearchHtml({ title = DEFAULT_TITLE, digestStructures = [] } = {}) {
+  const digestStructuresJson = JSON.stringify(Array.isArray(digestStructures) ? digestStructures : []);
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -148,7 +153,25 @@ ${THEME_TOKENS_CSS}
 
   .chips { display: flex; flex-wrap: wrap; gap: .4rem; }
   .chip { font-family: ${MONO_STACK}; font-size: .74rem; border: 1px solid var(--line); border-radius: 99px; padding: .2rem .6rem; background: var(--bg); }
+  .chip.tapchip { cursor: pointer; }
+  .chip.tapchip:hover { border-color: var(--ink); }
   .chip .deg { color: var(--muted); margin-left: .35rem; }
+
+  /* the term digest: a narrative card, its sources, and the flat fact list one
+     click away behind "show the facts". */
+  .digestpanel .hint { font-size: .78rem; color: var(--muted); margin: 0 0 .55rem; }
+  .digestout { min-height: 1.4rem; }
+  .digestout .empty { color: var(--muted); font-size: .82rem; margin: .2rem 0; }
+  .digestout .miss { color: var(--muted); font-size: .88rem; border: 1px dashed var(--line); border-radius: 8px; padding: .55rem .7rem; }
+  .dgcard { border: 1px solid var(--line); border-radius: 8px; padding: .7rem .85rem .8rem; background: var(--bg); }
+  .dgterm { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: .4rem; }
+  .dgcard p { margin: 0 0 .5rem; font-size: .95rem; }
+  .dgcard p:last-of-type { margin-bottom: 0; }
+  .dgsrc { font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); word-break: break-word; }
+  .dgfacts { margin-top: .6rem; }
+  .dgfacts > summary { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--corpus); cursor: pointer; list-style: revert; }
+  .dgfacts[open] > summary { margin-bottom: .35rem; }
+  .dgfacts .factlist { border-top: 1px solid var(--line); }
 
   /* ask, scoped by source */
   .askRow { display: flex; gap: .5rem; margin: .2rem 0 .7rem; }
@@ -247,6 +270,16 @@ ${THEME_TOKENS_CSS}
       </div>
     </div>
 
+    <h2 class="band">read a term back</h2>
+    <div class="panel digestpanel">
+      <p class="hint">Pick a term the graph knows and it reads back a short narrative &mdash; the facts it holds, composed into sentences with the sources named, deterministic and never a guess. The full fact list stays one click away behind &ldquo;show the facts&rdquo;.</p>
+      <div class="askRow">
+        <input id="digestInput" type="text" autocomplete="off" spellcheck="false" placeholder="a term the graph knows, e.g. dog" aria-label="A term to read back as a digest" disabled>
+        <button type="button" class="btn primary" id="digestGo" disabled>digest</button>
+      </div>
+      <div id="digestOut" class="digestout" aria-live="polite"><p class="empty">Ask for a digest, or click a term under &ldquo;best-connected terms&rdquo; above.</p></div>
+    </div>
+
     <h2 class="band">ask the graph</h2>
     <div class="cols">
       <div class="panel">
@@ -283,6 +316,10 @@ ${THEME_TOKENS_CSS}
   const createTicker = ${createTicker.toString()};
   const prefersReducedMotion = ${prefersReducedMotion.toString()};
   const el = (id) => document.getElementById(id);
+  // The digest sentence-structure bank, pre-parsed at build time — the browser
+  // has no TOML parser, so the page carries the table the client-side digest
+  // composes from.
+  const DIGEST_STRUCTURES = ${digestStructuresJson};
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
 
@@ -332,7 +369,7 @@ ${THEME_TOKENS_CSS}
     try { return structuredClone(seedPayload); } catch { return JSON.parse(JSON.stringify(seedPayload)); }
   };
   function newSession() {
-    return window.tmctResearch.createResearchSession({ seedPayload: cloneSeed(), vocabSeeded: Boolean(seedPayload) });
+    return window.tmctResearch.createResearchSession({ seedPayload: cloneSeed(), vocabSeeded: Boolean(seedPayload), digestStructures: DIGEST_STRUCTURES });
   }
 
   // The curated reference pack provider, same fetch seam chat.html registers,
@@ -377,6 +414,8 @@ ${THEME_TOKENS_CSS}
     el("ingestGo").disabled = false;
     el("askInput").disabled = false;
     el("askGo").disabled = false;
+    el("digestInput").disabled = false;
+    el("digestGo").disabled = false;
     el("exportFacts").disabled = false;
   }
 
@@ -427,13 +466,16 @@ ${THEME_TOKENS_CSS}
       return;
     }
     for (const hub of hubs) {
-      const chip = document.createElement("span");
-      chip.className = "chip";
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "chip tapchip";
+      chip.setAttribute("aria-label", "read a digest of " + hub.term);
       chip.appendChild(document.createTextNode(hub.term));
       const deg = document.createElement("span");
       deg.className = "deg";
       deg.textContent = hub.degree + (hub.degree === 1 ? " fact" : " facts");
       chip.appendChild(deg);
+      chip.addEventListener("click", () => { el("digestInput").value = hub.term; digest(); });
       box.appendChild(chip);
     }
   }
@@ -543,6 +585,64 @@ ${THEME_TOKENS_CSS}
   }
   el("askGo").addEventListener("click", ask);
   el("askInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); ask(); } });
+
+  // ---- digest a term: the narrative read-back over the grown store ---------
+  function renderDigestFact(fact) {
+    const row = document.createElement("div");
+    row.className = "fact";
+    const dot = document.createElement("span"); dot.className = "dot tone-seed";
+    const subj = document.createElement("span"); subj.className = "subj"; subj.textContent = String(fact.subject || "");
+    const pred = document.createElement("span"); pred.className = "pred"; pred.textContent = String(fact.predicate || "");
+    const obj = document.createElement("span"); obj.className = "obj"; obj.textContent = String(fact.object || "");
+    row.appendChild(dot); row.appendChild(subj); row.appendChild(pred); row.appendChild(obj);
+    return row;
+  }
+  function renderDigest(term, view) {
+    const box = el("digestOut");
+    box.textContent = "";
+    if (!view) {
+      const p = document.createElement("p"); p.className = "miss";
+      p.textContent = 'No grounded digest for "' + term + '" — nothing is stored about it, or nothing the digest could compose. It abstains rather than guess.';
+      box.appendChild(p);
+      return;
+    }
+    const card = document.createElement("div"); card.className = "dgcard";
+    const head = document.createElement("div"); head.className = "dgterm mono"; head.textContent = view.term || term;
+    card.appendChild(head);
+    for (const para of view.paragraphs) {
+      const p = document.createElement("p"); p.textContent = para; card.appendChild(p);
+    }
+    if (view.sources && view.sources.length) {
+      const src = document.createElement("p"); src.className = "dgsrc";
+      src.textContent = "(sources: " + view.sources.join("; ") + ")";
+      card.appendChild(src);
+    }
+    const facts = view.facts || [];
+    if (facts.length) {
+      const det = document.createElement("details"); det.className = "dgfacts";
+      const sum = document.createElement("summary");
+      sum.textContent = "show the facts (" + view.factCount + ")";
+      det.appendChild(sum);
+      const list = document.createElement("div"); list.className = "factlist";
+      for (const f of facts) list.appendChild(renderDigestFact(f));
+      det.appendChild(list);
+      card.appendChild(det);
+    }
+    box.appendChild(card);
+  }
+  async function digest() {
+    const term = el("digestInput").value.trim();
+    if (!term || !session) return;
+    const box = el("digestOut");
+    box.textContent = "";
+    const wait = document.createElement("p"); wait.className = "empty"; wait.textContent = "reading it back…";
+    box.appendChild(wait);
+    let view = null;
+    try { view = await session.digest(term); } catch { view = null; }
+    renderDigest(term, view);
+  }
+  el("digestGo").addEventListener("click", digest);
+  el("digestInput").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); digest(); } });
 
   // ---- grow: teach by telling --------------------------------------------
   async function teach() {

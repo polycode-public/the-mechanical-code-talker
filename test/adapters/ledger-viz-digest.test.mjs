@@ -49,10 +49,12 @@ test("the ledger page embeds the focus term's digest paragraph", async () => {
   assert.deepEqual(embedded.focusDigest.paragraphs, focusDigest.paragraphs);
 });
 
-test("the focus card renders the digest only for the initial focus term", async () => {
+test("the focus card recomputes the digest client-side on refocus, with the server digest as the initial-focus fallback", async () => {
   const { html } = await ledgerPageForDoctor();
-  // The client focus card gates the digest on focus === LEDGER.focus and styles
-  // it under .focusdigest — both present in the rendered page.
+  // Every focus runs the client digest first (over the embedded structure
+  // table), falling back to the server-computed focusDigest for the initial
+  // focus alone — both branches, and the .focusdigest styling, in the page.
+  assert.match(html, /clientDigest\(focus\)/);
   assert.match(html, /focus === LEDGER\.focus && LEDGER\.focusDigest/);
   assert.match(html, /\.focusdigest \{/);
 });

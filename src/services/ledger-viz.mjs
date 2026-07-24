@@ -504,8 +504,8 @@ function sparkCaptionHtml(stats) {
  *  different questions (did this render even offer the reference; did the
  *  browser actually manage to load it), and both must hold for the live
  *  path to run. */
-export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, worthALook, payload, meta, memoryAskBundle, stats, ledgerBundleAvailable = false, focusDigest = null } = {}) {
-  const ledgerJson = embedJson({ rows: rows || [], terms: terms || [], edges: edges || [], focus: focus || null, contradictions: contradictions || [], worthALook: worthALook || null, meta: meta || { shown: 0, total: 0, truncated: false }, focusDigest: focusDigest || null });
+export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, worthALook, payload, meta, memoryAskBundle, stats, ledgerBundleAvailable = false, focusDigest = null, digestStructures = [] } = {}) {
+  const ledgerJson = embedJson({ rows: rows || [], terms: terms || [], edges: edges || [], focus: focus || null, contradictions: contradictions || [], worthALook: worthALook || null, meta: meta || { shown: 0, total: 0, truncated: false }, focusDigest: focusDigest || null, digestStructures: Array.isArray(digestStructures) ? digestStructures : [] });
   const payloadJson = embedJson(payload || { individuals: [], objectProperties: [] });
   const shown = meta?.shown ?? (rows || []).length;
   const title = `tmct ledger — ${shown} fact${shown === 1 ? "" : "s"}${focus ? ` (focus: ${escapeHtml(focus)})` : ""}`;
@@ -644,6 +644,12 @@ ${THEME_TOKENS_CSS}
   .focuscard .focusdigest { margin-top: .7rem; font-size: .92rem; line-height: 1.5; }
   .focuscard .focusdigest p { margin: 0 0 .4rem; }
   .focuscard .focusdigest .dgsrc { font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); margin-top: .2rem; }
+  .focuscard .focusdigest .dgfacts { margin-top: .5rem; }
+  .focuscard .focusdigest .dgfacts > summary { font-family: ${MONO_STACK}; font-size: .7rem; color: var(--corpus); cursor: pointer; }
+  .focuscard .focusdigest .dgfacts[open] > summary { margin-bottom: .35rem; }
+  .focuscard .focusdigest .dgfactlist { border-top: 1px solid var(--line); }
+  .focuscard .focusdigest .dgfact { font-size: .72rem; padding: .22rem 0; border-bottom: 1px solid var(--line); word-break: break-word; }
+  .focuscard .focusdigest .dgfact:last-child { border-bottom: none; }
   .group { margin: 1.1rem 0; }
   .group h3 { font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .35rem; display: flex; align-items: baseline; gap: .5rem; }
   .group h3::after { content: ""; flex: 1; border-top: 1px solid var(--line); transform: translateY(-.2em); }
@@ -808,6 +814,30 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   let trail = focus ? [{ term: focus, label: null }] : [];
   const sel = { prov: new Set(), fam: new Set(), rec: new Set() };
 
+  // The store the client-side digest reads. Defaults to the page's embedded
+  // PAYLOAD (a static viz page never changes it); once a live dock session
+  // exists it points at that session's store, which teach/research grow in
+  // place, so a digest of a just-taught term reads the fresh facts.
+  let getLivePayload = () => PAYLOAD;
+  // Whichever loaded bundle carries the browser digest helper — the demo
+  // ledger's own live engine (tmctLedger) or the committed memory-ask engine
+  // the CLI viz page inlines (tmctMemoryAsk). Null before either loads, and the
+  // focus card then keeps whatever server-computed digest it shipped.
+  const digestHelper = () =>
+    (typeof tmctLedger !== "undefined" && tmctLedger && tmctLedger.digestTermFromPayloadBrowser)
+    || (typeof tmctMemoryAsk !== "undefined" && tmctMemoryAsk && tmctMemoryAsk.digestTermFromPayloadBrowser)
+    || null;
+  // The digest for one term, computed live in the browser from the embedded
+  // structure table, or null when no structures were embedded, no engine has
+  // loaded, or the term holds nothing to compose.
+  function clientDigest(term) {
+    const structures = LEDGER.digestStructures;
+    const helper = digestHelper();
+    if (!term || !helper || !structures || !structures.length) return null;
+    try { return helper(getLivePayload(), term, structures, { budget: 8 }); }
+    catch { return null; }
+  }
+
   const recOf = (r) => {
     const t = Date.parse(r.createdAt);
     if (!Number.isFinite(t)) return "older";
@@ -863,13 +893,23 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
     const srcs = new Set(all.map((r) => r.src.split(" | ")[0]));
     const dates = all.map((r) => r.createdAt).filter(Boolean).sort();
     const klass = all.find((r) => r.s === focus && r.family === "is-a");
-    // The digest paragraph is computed server-side for the page's initial focus
-    // (renderLedgerHtml has the payload and reads the sentence-structure bank);
-    // a client refocus to another term shows the fact groups without it.
-    const dg = (focus === LEDGER.focus && LEDGER.focusDigest && LEDGER.focusDigest.paragraphs && LEDGER.focusDigest.paragraphs.length) ? LEDGER.focusDigest : null;
+    // The digest paragraph recomputes client-side on every focus, from the
+    // embedded structure table over the current store — so a refocus reads the
+    // new term back rather than losing the card. The server-computed focus
+    // digest is the fallback for the initial focus alone, kept for a page whose
+    // engine bundle never loads (its client digest would come back null).
+    const dg = clientDigest(focus)
+      || ((focus === LEDGER.focus && LEDGER.focusDigest && LEDGER.focusDigest.paragraphs && LEDGER.focusDigest.paragraphs.length) ? LEDGER.focusDigest : null);
+    const dgFacts = (dg && Array.isArray(dg.facts)) ? dg.facts : [];
+    const factsEscapeHtml = dgFacts.length
+      ? '<details class="dgfacts"><summary>show the facts (' + dgFacts.length + ')</summary><div class="dgfactlist">' +
+        dgFacts.map((f) => '<div class="dgfact"><span class="mono">' + esc(String(f.subject || "")) + " " + esc(String(f.predicate || "")) + " " + esc(String(f.object || "")) + "</span></div>").join("") +
+        "</div></details>"
+      : "";
     const digestHtml = dg
       ? '<div class="focusdigest">' + dg.paragraphs.map((p) => "<p>" + esc(p) + "</p>").join("") +
-        (dg.sources && dg.sources.length ? '<p class="dgsrc">sources: ' + esc(dg.sources.join("; ")) + "</p>" : "") + "</div>"
+        (dg.sources && dg.sources.length ? '<p class="dgsrc">(sources: ' + esc(dg.sources.join("; ")) + ")</p>" : "") +
+        factsEscapeHtml + "</div>"
       : "";
     let html = '<div class="focuscard"><div class="term">' + esc(focus) + "</div>" +
       '<div class="klass">' + (klass ? esc(klass.phrase + " " + klass.o) : "no class recorded") + "</div>" +
@@ -1009,6 +1049,11 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       rows: freshData.rows, terms: freshData.terms, edges: freshData.edges,
       focus: freshData.focus, contradictions: freshData.contradictions,
       worthALook: freshData.worthALook, meta: freshData.meta,
+      // The embedded structure table is build-time data a re-derivation never
+      // recomputes; carry it across so a digest of the just-taught term still
+      // has a table to compose from. The stale server focusDigest is dropped —
+      // the client recompute over the grown store supersedes it.
+      digestStructures: LEDGER.digestStructures,
     };
     rebuildIndexes();
     el("dash").outerHTML = dashboardHtml(freshData.stats, { fresh: true });
@@ -1080,6 +1125,10 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       if (session) return session;
       await tryLoadWink();
       session = await tmctLedger.createLedgerSession({ seedPayload: PAYLOAD });
+      // From here the live store is the source of truth for the digest, so a
+      // digest of a term taught this session reads its fresh facts — the store
+      // grows in place, so this one closure stays current.
+      getLivePayload = () => session.memoryDir.payload;
       return session;
     }
 

@@ -17,8 +17,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { chromium } from "playwright";
-import { appendFact } from "../src/adapters/memory/core.mjs";
+import { appendFact, readFactRows } from "../src/adapters/memory/core.mjs";
 import { computeLedgerData, renderLedgerHtml, readMemoryAskBundle } from "../src/services/ledger-viz.mjs";
+import { readDigestStructures, digestTermFromRows } from "../src/adapters/corpus/digest-bank.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
 
 const ANSWER_TIMEOUT_MS = 15_000;
@@ -49,7 +50,26 @@ async function seededRepo() {
 async function buildAndServeQueryOnlyLedger(memoryDir) {
   const data = await computeLedgerData(memoryDir);
   const memoryAskBundle = await readMemoryAskBundle();
-  const html = renderLedgerHtml({ ...data, memoryAskBundle });
+  // Exactly what bin/tmct.mjs's viz mode embeds: the structure table (so the
+  // page reads a refocused term back client-side) and the initial focus's
+  // node-side digest (the fallback for a page whose engine never loads).
+  const digestStructures = readDigestStructures();
+  let focusDigest = null;
+  if (data.focus && data.payload) {
+    const allFactRows = readFactRows(data.payload);
+    const focusRows = allFactRows.filter((r) => r.subject === data.focus);
+    const article = focusRows.length ? digestTermFromRows(data.focus, focusRows, allFactRows, { budget: 8 }) : null;
+    if (article && article.paragraphs.length) {
+      focusDigest = {
+        term: data.focus,
+        paragraphs: article.paragraphs,
+        sources: [...new Set(article.sources.map((s) => s.provenance).filter(Boolean))],
+        facts: (article.detail.facts || []).map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
+        factCount: article.detail.factCount,
+      };
+    }
+  }
+  const html = renderLedgerHtml({ ...data, memoryAskBundle, digestStructures, focusDigest });
   const siteDir = await mkdtemp(join(tmpdir(), "tmct-ledger-query-dock-site-"));
   await writeFile(join(siteDir, "ledger.html"), html, "utf8");
   const server = await serveDirectory(siteDir);
@@ -193,6 +213,49 @@ test("the example-term placeholder itself grounds when typed verbatim", async ()
       const example = /^ask the graph… e\.g\. (.+)$/.exec(placeholder)[1];
       const reply = await ask(page, example);
       assert.equal(reply.isMiss, false, `the placeholder's own example query "${example}" grounds`);
+    } finally {
+      await context.close();
+    }
+  } finally {
+    await server.close();
+    await rm(siteDir, { recursive: true, force: true });
+    await rm(memoryDir, { recursive: true, force: true });
+  }
+});
+
+test("the query-only page reads a refocused term back as a digest, computed client-side from the embedded structure table over the same store", async () => {
+  const memoryDir = await seededRepo();
+  const { siteDir, server } = await buildAndServeQueryOnlyLedger(memoryDir);
+  try {
+    const { context, page } = await openPage(server);
+    try {
+      // Refocus to a term that composes, through the search box. No live teach
+      // bundle is present here, so a digest for the new focus can only come from
+      // the client path over tmctMemoryAsk — the CLI page's own engine.
+      await page.fill("#q", "cat");
+      await page.press("#q", "Enter");
+      await page.waitForFunction(
+        () => /\bcat\b/.test(document.querySelector(".focuscard .term")?.textContent || ""),
+        null,
+        { timeout: ANSWER_TIMEOUT_MS },
+      );
+
+      const digest = page.locator(".focuscard .focusdigest");
+      await digest.waitFor({ state: "visible", timeout: ANSWER_TIMEOUT_MS });
+      const paras = await digest.locator("p:not(.dgsrc)").allInnerTexts();
+      assert.ok(paras.join(" ").toLowerCase().includes("cat"), `the refocused digest reads the new term back, got ${JSON.stringify(paras)}`);
+      assert.match(paras.join(" "), /animal/i, "the narrative states the term's class");
+
+      // Provenance rides through in the shared "(sources: …)" idiom.
+      const src = (await digest.locator(".dgsrc").innerText()).trim();
+      assert.match(src, /^\(sources:.*\)$/, `the sources line matches the idiom, got ${JSON.stringify(src)}`);
+
+      // The full fact list is reachable behind the explicit escape.
+      assert.equal(await digest.locator(".dgfacts").getAttribute("open"), null, "the fact list starts collapsed");
+      await digest.locator(".dgfacts > summary").click();
+      const facts = await digest.locator(".dgfacts .dgfactlist .dgfact").allInnerTexts();
+      assert.ok(facts.length >= 1, "show the facts reveals the stored facts behind the narrative");
+      assert.ok(facts.join(" ").toLowerCase().includes("cat"), "the revealed facts are about the refocused term");
     } finally {
       await context.close();
     }

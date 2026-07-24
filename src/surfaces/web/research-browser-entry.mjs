@@ -38,6 +38,7 @@ import { registerReferencePackProvider } from "../../adapters/corpus/reference-p
 import { registerLiveReferenceProvider, registerResearchProvider } from "../../adapters/corpus/wikipedia-live.mjs";
 import { groundTextToFacts } from "./ingest-browser-entry.mjs";
 import { openPersistedStore } from "./idb-persist.mjs";
+import { digestTermFromPayloadBrowser } from "./digest-client.mjs";
 
 // The Fact individual's first-write-wins timestamp, read straight off the
 // stored attribute (mgx:createdAt) so a "recently learned" ordering never
@@ -202,7 +203,7 @@ export async function researchSnapshot(memoryDir, sessionIds = {}, { recentCap =
  *
  * Returns the store plus both session ids so the page can classify provenance.
  */
-export function createResearchSession({ seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null, synthesisBudget = 12 } = {}) {
+export function createResearchSession({ seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null, synthesisBudget = 12, digestStructures = null } = {}) {
   const memoryDir = createInMemoryStore();
   if (seedPayload) memoryDir.payload = { ...memoryDir.payload, ...seedPayload };
 
@@ -310,6 +311,24 @@ export function createResearchSession({ seedPayload = null, vocabSeeded = false,
         try { ans = await factReadBack(dir, query, null, true, null); } catch { ans = null; }
       }
       return ans && ans.text ? { text: ans.text, miss: false } : { text: "", miss: true };
+    },
+
+    /**
+     * A deterministic digest of one term over the live in-browser store, run
+     * client-side through the pure digest layer from the structure table
+     * embedded in the page (no filesystem, no LLM). Returns the render-ready
+     * view { term, paragraphs, sources, facts, factCount } — the narrative
+     * leads, the sources ride through, the full fact list stays behind the
+     * "show the facts" escape — or null when the term holds no facts, no
+     * structures were embedded, or the selector kept nothing renderable.
+     */
+    async digest(term, { budget = 10 } = {}) {
+      const t = normFactTerm(term);
+      if (!t) return null;
+      let payload;
+      try { payload = await loadMemory(memoryDir); } catch { return null; }
+      try { return digestTermFromPayloadBrowser(payload, t, digestStructures, { budget }); }
+      catch { return null; }
     },
   };
 }

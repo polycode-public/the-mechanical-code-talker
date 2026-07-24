@@ -8,8 +8,13 @@
 // bypassing the structural-graph parse pipeline this dock has no use for.
 import { factAnswer, factReadBack } from "../../services/chat.mjs";
 import { createInMemoryStore, normFactTerm } from "../../adapters/memory/core.mjs";
+import { digestTermFromPayloadBrowser } from "./digest-client.mjs";
 
 // normFactTerm is re-exported too, for the page's client-side term normalization.
 // factReadBack carries the taught-relation chases (grandfather-style questions)
 // that factAnswer's own lanes don't reach.
-globalThis.tmctMemoryAsk = { factAnswer, factReadBack, createInMemoryStore, normFactTerm };
+// digestTermFromPayloadBrowser lets the CLI `tmct viz` page read a refocused
+// term back as a digest client-side, from the structure table the page embeds —
+// the same narrative the demo ledger's live bundle produces, over the same
+// static store this page already carries.
+globalThis.tmctMemoryAsk = { factAnswer, factReadBack, createInMemoryStore, normFactTerm, digestTermFromPayloadBrowser };

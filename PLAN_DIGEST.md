@@ -1,9 +1,10 @@
 # PLAN_DIGEST.md — from a fact list to a readable digest
 
-Status: stages 1–4 built as pure modules + committed data (`src/domain/digest/`,
-`data/templates/constructions/digest-sentence-structures.toml`). Stage 5 (chat term answer,
-research.html panels, ledger term view, `tmct digest`) is the remaining wiring over the
-`digestTerm` seam. Written 2026-07-24 against 2.11.11.
+Status: stages 1–5 built. Stages 1–4 are the pure modules + committed data (`src/domain/digest/`,
+`data/templates/constructions/digest-sentence-structures.toml`); stage 5 wires the seam into
+every surface — chat's term answer, `tmct digest`, and the client-side digest on research.html,
+the ledger's focus card (recomputed on refocus), and the CLI `tmct viz` page (over
+`src/surfaces/web/digest-client.mjs`). Written 2026-07-24 against 2.11.11.
 
 ## What this is for
 
@@ -184,17 +185,21 @@ structure, and composition — not new knowledge.
      digest threshold leads with the digest paragraph, the full list held behind the
      "show the facts"/"more" escape (`src/services/chat.mjs`, the subject-scan region only). The
      in-browser dock stubs the bank loader out and falls back to the flat list. DONE.
-   - The ledger term panel: the focus card leads with the digest paragraph and its sources.
-     The digest is computed node-side by the demo generator (`scripts/build-demo-site.mjs`, where
-     the sentence-structure bank is readable) and embedded for the client focus card to render on
-     the initial focus. DONE for the demo site's initial focus. Client refocus to another term,
-     and the CLI `tmct viz` page, still show the fact groups without a digest — a client-side
-     digest over the embedded rows plus an embedded structure table is the next step, and needs
-     the digest-ready rows embedded alongside the ledger rows.
+   - The ledger term panel: the focus card leads with the digest paragraph, its sources, and the
+     full fact list behind a "show the facts" escape. The initial focus's digest is computed
+     node-side by the generator (`scripts/build-demo-site.mjs` and bin/tmct.mjs's viz mode, where
+     the sentence-structure bank is readable) as a fallback; every refocus recomputes client-side
+     over the embedded structure table (`renderLedgerHtml`'s `digestStructures`) from the current
+     store — the demo ledger's live grown store through `tmctLedger`, the CLI `tmct viz` page's
+     static store through the committed `tmctMemoryAsk` engine. The browser digest links through
+     `src/surfaces/web/digest-client.mjs` (the pure `digestTerm` plus `readFactRows`, no TOML
+     parser). DONE.
    - The research per-source panel: the research page grows its store in the browser, so its
-     digest runs client-side over the live in-browser store from an embedded structure table (the
-     pure `digestTerm` links into a browser bundle). NOT STARTED — the next step after the
-     ledger's client-side digest, sharing the same embedded-table mechanism.
+     "read a term back" panel digests client-side over the live in-browser store from the embedded
+     structure table (`createResearchSession`'s `digestStructures`, run through
+     `src/surfaces/web/digest-client.mjs`). A hub chip or the term box leads with the narrative,
+     names its sources in the `(sources: …)` idiom, and holds the flat fact list behind
+     "show the facts". DONE.
 
 ## Decisions recorded
 

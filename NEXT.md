@@ -18,7 +18,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 Each line names its worktree branch; delete the line in the same commit that integrates the work.
 
-- client-side digest for research/ledger/viz panels (the stage-5 remainder) — `worktree-agent-af9a1bc55f51cdfbd` (first cut stopped clean: its branch point predated the digest merge)
 
 
 ## Open items
@@ -33,10 +32,6 @@ Each line names its worktree branch; delete the line in the same commit that int
   spelling — the digest lead now makes these prominent, so a pack-quality pass has a visible
   payoff
 
-- [ ] digest's last surface: a client-side digest for the research page's per-source panels (and
-  the ledger client-refocus / CLI-`viz` cards) — the pure `digestTerm` linked into a browser
-  bundle over an embedded structure table plus digest-ready rows; the research store grows
-  in-browser so it has no node-side path. `PLAN_DIGEST.md` stage 5 records per-surface status
 - [ ] (recorded 2026-07-24, decide separately) teaching a fact about a code entity is refused
   because graph entities don't count as grounded terms for teach — the one place code-graph and
   taught memory don't compose today; the rest of that playtest batch shipped with the
