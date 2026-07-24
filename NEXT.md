@@ -35,9 +35,6 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
 
 - [ ] the four CONVERSATION dead-ends (block below) — a fix agent was dispatched and lost to a
   spend limit before committing; re-dispatch is the next session's first cheap win
-- [ ] re-pin the agentbench envelope stamp: `BENCHMARK_AGI_3.0.3.md` flags that
-  `agentbench/envelope.json` re-stamped to 3.0.4 under the roll while the write-ups measure
-  3.0.3 — decide whether the envelope stamp should track package.json or the measured cycle
 - [ ] grow the AGI aggregator's scalar coverage: only agentbench commits an envelope today
   (2/8 scales scalar); INFBENCH/CHATBENCH envelopes are the next cheap growth
 
@@ -70,7 +67,6 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
 
 - [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 3–5 (plural binding past a count, the tie refusal, the remaining bindable-form lanes) — slices 1–2 shipped 2026-07-24 (the record threads through `runTurn`, and `games/cross-turn-temporal-composition-composes` is the flipped row); the plan doc stages what's next
 - [ ] INGESTBENCH ladder tops out at ING-6 (38% recall < 50% floor) — the ordinal/temporal-threading slice is what would lift it and un-gate ING-7's already-passing value-compare plus the two judged rungs (ING-8 2.0/2, ING-9 1.5/2); founding baseline measured in `BENCHMARK_INGEST_3.0.3.md`, run `SKILL_BENCHMARK_INGEST.md` to re-measure after the slice lands
-- [ ] prove the repo-index backend seam admits an out-of-repo backend with no tmct change: seonix registers a C#/Java backend against a released tmct 3.0.x (registration, conformance, IDX-5 scoring). Seonix-side work — their inbox has the phase-6 handover; `archive/PLAN_REPO_INDEX.md` Open risks names the proof. Everything else in that plan (branch merge, phases 1–6) is delivered
 - [ ] RESEARCHBENCH's founding cycle (`BENCHMARK_RESEARCH_3.0.3.md`) gates at RES-2: the research
   lane's fan-out queues in plain document order with no relevance ranking, so ordering scores 67%
   against the 80% floor and RES-3..6 sit skipped-with-a-receipt behind it. Next cycle's build:

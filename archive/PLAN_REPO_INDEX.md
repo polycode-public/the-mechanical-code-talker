@@ -2,7 +2,7 @@
 
 **Status: DELIVERED and archived.** Phases 1–6 all shipped in the 3.0.x line. The one open line —
 proving the backend registry seam admits an out-of-repo backend with no tmct change — is
-seonix-side work and lives in `../NEXT.md`; nothing else here is live scope.
+seonix-side work; nothing else here is live scope.
 
 Status: MERGED to `main` (2026-07-24, lands in 3.0.0). Phases 1–4 are live code on `main`; the
 implementation log below records what the `repo-index` branch delivered. The branch's one e2e
