@@ -6,10 +6,21 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { runTurn, NARRATE_MARKER, factAnswer, factReadBack } from "../../src/services/chat.mjs";
-import { createInMemoryStore, appendFact } from "../../src/adapters/memory/core.mjs";
+import { createInMemoryStore, appendFact, openMemoryBackend } from "../../src/adapters/memory/core.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
 import * as source from "../../src/adapters/source.mjs";
+
+/** A throwaway on-disk memory store, for the turn types (teach/count) that
+ *  only fire with a write target. Returns the store dir and a cleanup. */
+async function scratchMemory() {
+  const root = await mkdtemp(path.join(tmpdir(), "tmct-goal-line-"));
+  const backend = await openMemoryBackend(root, "");
+  return { memoryDir: backend.dir, cleanup: async () => { await backend.close(); await rm(root, { recursive: true, force: true }); } };
+}
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
@@ -71,4 +82,38 @@ test("goal field: absent (undefined) on a hit whose shape maps to no goal, and n
   assert.equal(canHit.goal, undefined, "no goal wording exists for this shape — the field stays absent, the dock renders no line");
   const miss = await factAnswer(h, "zzz unparseable zzz", null, true, {});
   assert.equal(miss, null, "a miss stays a plain null — no goal-bearing wrapper object");
+});
+
+// ---- the plainTurn `goal` seam: teach carries it, a count stays silent -----
+// A teach confirmation now sets `result.goal`, so the trailer appends — but
+// `last.answer` (what why/say-more and the repeat-detection walls compare)
+// must still be the pre-trailer bytes, exactly as for an ask turn.
+
+test("goal line: a teach confirmation NOW carries the trailer and the `goal` field, while last.answer stays the pre-trailer bytes", async () => {
+  const { memoryDir, cleanup } = await scratchMemory();
+  try {
+    const r = await runTurn("every dog is a animal", { memoryDir, sessionId: "s1", env: { TMCT_NO_SEED: "1" } });
+    assert.match(r.answer, /\n\nGoal \(inferred\): Teach\/remember a new fact\./, "the teach confirmation grows the trailer");
+    assert.equal(r.goal, "teach/remember a new fact", "the additive `goal` field carries the reused teach-lane string");
+    assert.doesNotMatch(r.last.answer, /Goal \(inferred\)/, "last.answer stays clean — the walls see the pre-trailer text");
+    const withoutTrailers = r.answer
+      .replace(/\n\nCanonical:[^\n]*$/, "")
+      .replace(/\n\nGoal \(inferred\):[^\n]*$/, "");
+    assert.equal(r.last.answer, withoutTrailers, "last.answer is exactly the pre-goal-line, pre-canonical-line answer");
+  } finally {
+    await cleanup();
+  }
+});
+
+test("goal line: a memory-store count still carries NO trailer and no `goal` field — the count family stays the documented silent case", async () => {
+  const { memoryDir, cleanup } = await scratchMemory();
+  try {
+    await runTurn("every dog is a animal", { memoryDir, sessionId: "s1", env: { TMCT_NO_SEED: "1" } });
+    const r = await runTurn("how many facts do you know", { memoryDir, sessionId: "s1", env: { TMCT_NO_SEED: "1" } });
+    assert.match(r.answer, /^\d+ facts?\.$/, "the count answers");
+    assert.doesNotMatch(r.answer, /Goal \(inferred\)/, "no trailer on a count");
+    assert.equal(r.goal, undefined, "the count never sets the `goal` field");
+  } finally {
+    await cleanup();
+  }
 });

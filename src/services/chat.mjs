@@ -273,9 +273,12 @@ function withNarration(result, trace, fallbackGoal) {
  *  above. Appending (not prepending) keeps the many tests that pin composed
  *  answers with a start-anchored regex intact.
  *
- *  `result.goal` is set by runAsk and by runCommand's own mk()
- *  (GOAL_BY_COMMAND, below); a plain count or a teach confirmation never
- *  carries the field, so this is a no-op for those turn types by
+ *  `result.goal` is set by runAsk, by runCommand's own mk()
+ *  (GOAL_BY_COMMAND, below), and by the plainTurn call sites that already
+ *  hold a precise goal string (a teach confirmation, a taxonomy/SKOS or
+ *  memory-store lookup, a plan-lane step, and runAsk's own honest-decline
+ *  early returns). A plain numeric count is the one turn type that stays
+ *  silent — it never sets the field, so this is a no-op there by
  *  construction. Also a no-op when `result.goal` is null/empty, so an
  *  unclear turn never grows a "Goal (inferred): unclear" line.
  *
@@ -11992,10 +11995,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     if (cmp) {
       const [, form, cmpOp, clauseSubject, participle] = cmp;
       const verb = participle.toLowerCase();
+      const temporalGoal = "compare a prior answer's dated referent against a freshly read event (cross-turn temporal composition)";
       const refMiss = (text) => {
-        note(trace, "goal: compare a prior answer's dated referent against a freshly read event (cross-turn temporal composition)");
+        note(trace, `goal: ${temporalGoal}`);
         note(trace, `lane: TEMPORAL_COMPARISON_RE — "${form}" could not compose a comparison; a specific miss names why, never the teach-offer cascade`);
-        return plainTurn(query, text, { via: "miss", miss: true, focus });
+        return plainTurn(query, text, { via: "miss", miss: true, focus, goal: temporalGoal });
       };
       const bound = discourseHolder ? bindDiscourseForm(discourseHolder.record, form) : null;
       if (!bound?.referent) {
@@ -12021,9 +12025,9 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       const holds = cmpOp.toLowerCase() === "before" ? refDay < clauseDay : refDay > clauseDay;
       const relation = refDay < clauseDay ? "came before" : refDay > clauseDay ? "came after" : "landed on the same day as";
       const text = `${holds ? "Yes" : "No"} — ${bound.referent.label} (${refDay}) ${relation} ${clauseSubject} was last ${verb} (${freshCommit.label}, ${clauseDay}).`;
-      note(trace, "goal: compare a prior answer's dated referent against a freshly read event (cross-turn temporal composition)");
+      note(trace, `goal: ${temporalGoal}`);
       note(trace, `lane: TEMPORAL_COMPARISON_RE — "${form}" bound ${bound.referent.label} (${refDay}) through the discourse record; the embedded clause re-ran as its own when-question`);
-      const turn = plainTurn(query, text, { via: "composed", miss: false, focus });
+      const turn = plainTurn(query, text, { via: "composed", miss: false, focus, goal: temporalGoal });
       const cited = [graph.byId?.get?.(bound.referent.ids[0]), freshCommit].filter(Boolean);
       turn.detail = { traversal: `discourse ${bound.referent.ref} (${refDay}) vs last-${verb} of ${clauseSubject} (${clauseDay})`, matches: cited };
       return turn;
@@ -12043,7 +12047,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, "goal: recover a name history the index does not record (honest decline)");
       note(trace, "lane: RENAME_HISTORY_RE — the index carries no rename data, so the calls-relation misread is refused by name");
       return plainTurn(query, `I can't say what ${ent ? ent.label : `"${term}"`} was called before — this index records current names only, no rename history. ${named}${ent ? ` here; "who touched ${ent.label}" lists its recorded commits` : ""}.`, {
-        via: "miss", miss: true, focus,
+        via: "miss", miss: true, focus, goal: "recover a name history the index does not record (honest decline)",
       });
     }
   }
@@ -12055,10 +12059,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   {
     const wikiTerm = wikipediaAskTerm(query);
     if (wikiTerm) {
-      note(trace, "goal: read what Wikipedia says about a named term (explicit source request)");
+      const wikiGoal = "read what Wikipedia says about a named term (explicit source request)";
+      note(trace, `goal: ${wikiGoal}`);
       if (!liveReference) {
         note(trace, "lane: WIKIPEDIA ASK — the explicit request needs the network opt-in; live Wikipedia is off");
-        return plainTurn(query, `live Wikipedia is off, so I won't reach the network. Turn it on with /wiki on (it fetches from en.wikipedia.org), then ask again.`, { via: "miss", miss: true, focus });
+        return plainTurn(query, `live Wikipedia is off, so I won't reach the network. Turn it on with /wiki on (it fetches from en.wikipedia.org), then ask again.`, { via: "miss", miss: true, focus, goal: wikiGoal });
       }
       let liveKey = null;
       try { liveKey = cleanMissLiveTerm(wikiTerm, lexicon ?? undefined); } catch { liveKey = null; }
@@ -12066,10 +12071,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       if (live) {
         await ingestReferenceArticle(memoryDir, live.key, live.article, cache, liveProvenanceTag, lexicon, synthesisBudget);
         note(trace, `lane: WIKIPEDIA ASK — answered from a live en.wikipedia.org lookup, cited (article "${live.article.title}", revid ${live.article.revid})`);
-        return plainTurn(query, live.text, { via: "reference", miss: false, focus });
+        return plainTurn(query, live.text, { via: "reference", miss: false, focus, goal: wikiGoal });
       }
       note(trace, "lane: WIKIPEDIA ASK — no matching live article (no title, timeout, throttle, or drift-guard reject)");
-      return plainTurn(query, `I couldn't reach a matching Wikipedia article for "${wikiTerm}" just now.`, { via: "miss", miss: true, focus });
+      return plainTurn(query, `I couldn't reach a matching Wikipedia article for "${wikiTerm}" just now.`, { via: "miss", miss: true, focus, goal: wikiGoal });
     }
   }
   // COLLECTIVE PLURAL SUBJECT — see COLLECTIVE_FORWARD_RE. Members are the
@@ -12095,9 +12100,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         const text = labels.length
           ? `the ${stem} here are ${memberList} — together they ${verb}: ${joinList(labels)}.`
           : `the ${stem} here are ${memberList} — none of them has ${verb} edges in the index.`;
-        note(trace, `goal: read a forward relation over a module GROUP (${members.length} members), unioned with the set disclosed`);
+        const groupGoal = `read a forward relation over a module GROUP (${members.length} members), unioned with the set disclosed`;
+        note(trace, `goal: ${groupGoal}`);
         note(trace, `lane: COLLECTIVE_FORWARD_RE — "${stem}" resolved to ${members.length} modules; answered the union, never a silent single best-match`);
-        const turn = plainTurn(query, text, { via: "composed", miss: !labels.length, focus });
+        const turn = plainTurn(query, text, { via: "composed", miss: !labels.length, focus, goal: groupGoal });
         turn.detail = { traversal: `${verb} edges unioned over ${memberList}`, matches: [...union.keys()].map((id) => graph.byId?.get?.(id)).filter(Boolean) };
         return turn;
       }
@@ -12122,7 +12128,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         note(trace, "goal: recover a move history the index does not record (premise denied, current location cited)");
         note(trace, "lane: MOVE_HISTORY_RE — no move data exists; the current location answers with the premise named");
         return plainTurn(query, `this index records current locations only, so I can't confirm ${ent.label} moved anywhere.${located}`, {
-          via: "composed", miss: false, focus,
+          via: "composed", miss: false, focus, goal: "recover a move history the index does not record (premise denied, current location cited)",
         });
       }
     }
@@ -12140,7 +12146,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       note(trace, `lane: DECISION_RECALL_RE — routed to the folded-session recall surface, ${recalled ? "a relevant block answered" : "nothing relevant folded (honest miss)"}`);
       return plainTurn(query, recalled
         ?? `I don't have a recorded decision about "${term}" — I keep facts and session transcripts, and nothing folded mentions deciding on it. "what did i ask before" lists the last session's questions.`, {
-        via: recalled ? "recall" : "miss", miss: !recalled, focus,
+        via: recalled ? "recall" : "miss", miss: !recalled, focus, goal: "recall a decision from the conversation record (session-recall surface)",
       });
     }
   }
@@ -12152,7 +12158,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const summary = await recallSummary(memoryDir);
     note(trace, summary ? "source: memory/fold.mjs recallSummary" : "intermediate: no folded session blocks yet — nothing to recall");
     return plainTurn(query, summary ?? "nothing to recall yet — no earlier session has been folded into memory.", {
-      via: "recall", miss: !summary, focus,
+      via: "recall", miss: !summary, focus, goal: "recall what was discussed earlier (explicit recall phrasing)",
     });
   }
   // An explicit "this file"/"that module" kind-noun scope signal is collapsed
@@ -13400,7 +13406,7 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
 
 /** A non-ask, non-dispatch chat turn (count answer, /stats) — the same
  *  { answer, logLines, record, focus } shape, recorded like any other turn. */
-function plainTurn(query, answer, { command, via = "composed", miss = false, focus = null, canonical = null } = {}) {
+function plainTurn(query, answer, { command, via = "composed", miss = false, focus = null, canonical = null, goal = null } = {}) {
   const ts = new Date().toISOString();
   return {
     answer,
@@ -13412,6 +13418,10 @@ function plainTurn(query, answer, { command, via = "composed", miss = false, foc
       canonical,
     },
     focus,
+    // Absent by default, so an untouched plainTurn call stays trailer-free.
+    // A caller that already holds a precise goal string passes it here, and
+    // withGoalLine appends the "Goal (inferred): …" line for that turn.
+    ...(goal ? { goal } : {}),
   };
 }
 
@@ -13895,7 +13905,7 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
           .map((t) => `fact(${JSON.stringify(normFactTerm(t.subject))}, ${JSON.stringify(t.predicate)}, ${JSON.stringify(normFactTerm(t.object))})`)
           .join(", ")).join(" | "),
       };
-      return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical });
+      return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical, goal: "teach/remember a new fact" });
     }
     const parse = parseAce(line, lex);
     if (!parse || !parse.triples?.length || parse.residue?.length) return null;
@@ -13972,7 +13982,7 @@ async function assertTurn(line, { memoryDir, sessionId, focus, lexicon = null, c
         .map((t) => `fact(${JSON.stringify(normFactTerm(t.subject))}, ${JSON.stringify(t.predicate)}, ${JSON.stringify(normFactTerm(t.object))})`)
         .join(", "),
     };
-    return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical });
+    return plainTurn(line, answer, { command: "assert", via: "assert", focus, canonical, goal: "teach/remember a new fact" });
   } catch {
     return null; // grammar unavailable / write failed — fall through to the engine
   }
@@ -14878,7 +14888,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     const step = await executePlanStep(planHolder, { memoryDir, sessionId, gameConfig: resolvedGameConfig });
     note(trace, `goal: ${step.deduced}`);
     note(trace, "lane: PLAN NEXT — executed the active plan's next move as an @stepK snapshot write");
-    const stepTurn = plainTurn(workingLine, step.text, { via: "plan", focus });
+    const stepTurn = plainTurn(workingLine, step.text, { via: "plan", focus, goal: step.deduced });
     stepTurn.lane = "imperative";
     const rec = withLast(stepTurn, step.deduced);
     rec.planState = planHolder.state;
@@ -14899,7 +14909,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
     if (follow) {
       note(trace, `goal: ${follow.deduced}`);
       note(trace, `lane: ${follow.note}`);
-      const rec = withLast(plainTurn(workingLine, follow.text, { via: "plan", focus }), follow.deduced);
+      const rec = withLast(plainTurn(workingLine, follow.text, { via: "plan", focus, goal: follow.deduced }), follow.deduced);
       rec.planState = planHolder.state;
       return rec;
     }
@@ -15021,7 +15031,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       note(trace, "goal: teach/remember a new fact (bare declarative taxonomy)");
       note(trace, "lane: bareTaxonomyTeach — hyphenated-instance or article-led kind-of declarative, stored before the ask engine could parse it as a question");
       const taxonomyTurn = plainTurn(workingLine, taxonomy.text, { via: taxonomy.via, miss: taxonomy.miss, focus });
-      if (!taxonomy.miss) taxonomyTurn.lane = "teach";
+      if (!taxonomy.miss) { taxonomyTurn.lane = "teach"; taxonomyTurn.goal = "teach/remember a new fact"; }
       return withLast(taxonomyTurn, "teach/remember a new fact");
     }
   }
@@ -15066,6 +15076,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       note(trace, `goal: ${goal}`);
       note(trace, "lane: answerMemoryClassQuery — matched a memory-store class noun, answered off the .tmct/memory store's own individuals");
       const turn = plainTurn(workingLine, memClass.text, { via: memClass.miss ? "miss" : "fact", miss: !!memClass.miss, focus });
+      if (!memClass.miss) turn.goal = goal;
       if (memClass.pending) turn.detail = { traversal: null, matches: [], pending: memClass.pending };
       return withLast(turn, goal);
     }
@@ -15091,6 +15102,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       note(trace, `goal: ${goal}`);
       note(trace, "lane: answerMembershipList — matched a bare 'list <noun>' over taught isa-facts whose OBJECT is that class");
       const turn = plainTurn(workingLine, memberList.text, { via: memberList.miss ? "miss" : "fact", miss: !!memberList.miss, focus });
+      if (!memberList.miss) turn.goal = goal;
       if (memberList.pending) turn.detail = { traversal: null, matches: [], pending: memberList.pending };
       return withLast(turn, goal);
     }
