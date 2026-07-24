@@ -1,7 +1,9 @@
 # PLAN_DIGEST.md — from a fact list to a readable digest
 
-Status: PROPOSAL — for operator review. Nothing here is built. Written 2026-07-24 against
-2.11.11.
+Status: stages 1–4 built as pure modules + committed data (`src/domain/digest/`,
+`data/templates/constructions/digest-sentence-structures.toml`). Stage 5 (chat term answer,
+research.html panels, ledger term view, `tmct digest`) is the remaining wiring over the
+`digestTerm` seam. Written 2026-07-24 against 2.11.11.
 
 ## What this is for
 
@@ -153,16 +155,40 @@ structure, and composition — not new knowledge.
 
 ## Staging
 
-1. **The selector alone**, behind the existing read-back: same list output, better order, the
-   uninformative-class cut applied. Measurable on its own (does the top-5 contain the facts a
-   reader wants?).
-2. **Sentence structures** for the isa/partOf/capableOf families, rendering the top facts as
-   sentences instead of lines.
-3. **Paragraph composition** with pronoun substitution and the provenance paragraph.
-4. **Article templates**, and the "show the facts" / "show the chains" escapes that keep the
-   detail reachable.
+1. **The selector** — `src/domain/digest/select.mjs`. Scores each candidate row by provenance
+   tier, chain depth (a stated fact beats a closure-derived one), store-relative informativeness,
+   relation coverage and sense agreement, then cuts to a budget breadth-first across families.
+   Every cut row is returned in `cut` with its reason, so nothing is discarded silently. DONE.
+2. **Sentence structures** — `data/templates/constructions/digest-sentence-structures.toml`,
+   validated and rendered by `src/domain/digest/structures.mjs`. Closed table keyed by relation
+   family and form (isa/location/partOf/capableOf/usedFor); a new family is a new TOML block, no
+   code change. DONE.
+3. **Paragraph composition** — `src/domain/digest/compose.mjs`. Lead sentence names the term,
+   later sentences refer back with a pronoun, definition and description land in separate
+   paragraphs, sentence-count caps hold. DONE.
+4. **Article templates** — `src/domain/digest/article.mjs`. Term-article, research-run and
+   session-digest shapes, each returning the full fact list (spoken and cut) behind the
+   `show the facts` / `show the chains` escape as data the wiring renders. DONE.
 5. **The surfaces**: chat's term answer, research.html's per-source panels, the ledger's term
-   view, and `tmct digest <term>` on the CLI beside the code-side `cli digest`.
+   view, and `tmct digest <term>` on the CLI beside the code-side `cli digest`. Thin wiring over
+   `digestTerm(term, rows, store, table, opts)` (`src/domain/digest/index.mjs`): the surface
+   builds the fact rows and the store statistics from the graph it already holds, hands them in,
+   and renders the returned article. NOT STARTED.
+
+## Decisions recorded
+
+- **Per-surface digest budgets** (`src/domain/digest/config.json`, `budget`): chat reply 5,
+  research panel 10, `tmct digest` 12, ledger term view 8. The wiring passes `opts.budget`; these
+  are the defaults.
+- **The uninformative-class cut is store-relative**, thresholds committed as data
+  (`config.json`): a class more than `uninformativeClassMaxShare` (0.35) of the store's isa
+  subjects share is cut, but only once the store holds at least `uninformativeClassMinSubjects`
+  (12) subjects, below which the share is too noisy to trust. The cut runs before sense
+  clustering — a bare, high-share class with no ancestry would otherwise bridge distinct senses
+  into one cluster.
+- **Store statistics are the wiring's input, not the selector's job.** The selector is pure over
+  `{ classSubjectCounts, totalSubjects, subClassEdges, disjointEdges }`; one graph scan in stage 5
+  produces them.
 
 ## Invariants
 
@@ -174,12 +200,31 @@ structure, and composition — not new knowledge.
 - Provenance survives composition: a digest names its sources, as the specimen's own research
   replies already do.
 
+## The sense-collision at source
+
+The specimen's `aardvark is a kind of medium → environment → …` branch traces to a bad ROOT edge,
+`aardvark rdfs:subClassOf medium`, not to the closure that fans it out (the closure is correct
+given a wrong input). That edge is minted in `src/services/extract-facts.mjs`: `copulaObjectAt`
+scans rightward from the copula for the first noun-ish token to use as the isa object, and in
+"The aardvark is a medium-sized, burrowing, nocturnal mammal" the adjective "medium" (from
+"medium-sized") is read as that noun instead of the real head "mammal". The `software`,
+`government` and `legal document` branches are the same shape from other seed sentences.
+
+That fix lands in the extraction pass, which is a services module outside the digest layer's
+domain surface. Per the operator decision, this pass filters the noise in the selector rather
+than reaching across the ownership boundary: an isa object whose sense cluster disagrees with the
+term's dominant sense is demoted below the score floor and cut (traceable in `cut` with reason
+`below-floor`), and the store-relative frequency cut removes the correct-but-useless top classes.
+The specimen acceptance test (`test/domain/digest-specimen.test.mjs`) asserts the fan-out reduces
+to a bounded paragraph with the noise gone.
+
+The source fix — a hyphenated-adjective / attributive-adjective guard in `copulaObjectAt` so
+"medium-sized" never heads an isa, tracked against a wink POS read of the token — belongs to the
+extraction workstream; until it lands, the selector filter carries it, and no bad edge reaches the
+narrative.
+
 ## Open questions for the operator
 
-- Digest length defaults per surface (chat reply vs research panel vs `tmct digest`).
-- Whether the uninformative-class cut is store-relative (frequency-computed per session) or a
-  committed table; store-relative adapts, committed is reproducible. The measurement in stage 1
-  should settle it.
-- Whether the entailment sense-collision seen in the specimen ("medium" → software/government
-  branches) is fixed at the source (the synthesis pass) as well as filtered here. Both, most
-  likely, and the digest work will surface which hooks misfire.
+- Whether the chained isa form ("a mammal, and so an animal") or the several form ("a mammal, a
+  vertebrate, and an animal") reads better as the default when a lone isa fact has an ancestry
+  chain. Both are wired; compose picks chained only for a single isa fact with a supplied chain.
