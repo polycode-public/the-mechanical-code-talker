@@ -25,6 +25,7 @@
 
 import { normFactTerm } from "../domain/hash.mjs";
 import { loadLexicon, lookupNoun } from "../domain/grammar/lexicon.mjs";
+import { defaultNlp } from "../domain/interpret/nlp-registry.mjs";
 
 /** The search key a topic folds to: normFactTerm, then the lexicon lemma
  *  when the noun is known ("owls" → "owl") — the same fold the live
@@ -210,12 +211,87 @@ function queuedFolds(state) {
   return seen;
 }
 
+// The lexical-token split a fan-out candidate and the seed topic both fold
+// through before comparison — lowercased, split on anything that isn't a
+// letter or digit, empty pieces dropped.
+const LEXICAL_SPLIT_RE = /[^a-z0-9]+/i;
+function lexicalTokens(text) {
+  return String(text || "").toLowerCase().split(LEXICAL_SPLIT_RE).filter(Boolean);
+}
+function sharesLexicalToken(title, seedTokens) {
+  if (!seedTokens.size) return false;
+  for (const tok of lexicalTokens(title)) if (seedTokens.has(tok)) return true;
+  return false;
+}
+
+// A citation-shaped candidate: an ISBN/DOI prefix, a bare year, or a
+// "Nth century" phrase — the shape raw Wikipedia link lists carry for their
+// source apparatus rather than a kin article.
+const CITATION_PREFIX_RE = /^(isbn|doi)[\s:.-]/i;
+const CITATION_BARE_YEAR_RE = /^\d{3,4}$/;
+const CITATION_CENTURY_RE = /\b\d{1,2}(?:st|nd|rd|th)\s+century\b/i;
+function isCitationShaped(title) {
+  const t = String(title || "").trim();
+  if (!t) return false;
+  return CITATION_PREFIX_RE.test(t) || CITATION_BARE_YEAR_RE.test(t) || CITATION_CENTURY_RE.test(t);
+}
+
+const SINGLE_WORD_TITLE_RE = /^[A-Za-z][A-Za-z'-]*$/;
+// A short, neutral sentence to tag a bare candidate word inside — wink-nlp
+// reads an isolated capitalized word as PROPN with no sentence context to
+// tell it otherwise, so the word is lowercased and read at this fixed slot
+// inside real subject/verb/object context instead.
+const NOUN_CARRIER_PREFIX = ["this", "is", "about", "the"];
+const NOUN_CARRIER_SUFFIX = ["and", "its", "history"];
+const NOUN_CARRIER_WORD_INDEX = NOUN_CARRIER_PREFIX.length;
+
+/** True when `title` is a single word a general-English POS tagger reads as
+ *  a common noun (hub articles like "Earth"/"Geology") rather than a proper
+ *  noun (kin articles like "Hawaii") — false whenever `nlp` is unavailable,
+ *  never a throw. */
+function readsAsCommonNoun(title, nlp) {
+  if (!nlp || typeof nlp.posTags !== "function") return false;
+  const t = String(title || "").trim();
+  if (!SINGLE_WORD_TITLE_RE.test(t)) return false;
+  const carrier = [...NOUN_CARRIER_PREFIX, t.toLowerCase(), ...NOUN_CARRIER_SUFFIX];
+  let tags;
+  try { tags = nlp.posTags(carrier); } catch { return false; }
+  return Array.isArray(tags) && tags[NOUN_CARRIER_WORD_INDEX] === "NOUN";
+}
+
+/** Stable-sorts fan-out candidates into relevance tiers — never reorders
+ *  within a tier, only reprioritizes between them — from information the
+ *  runtime actually has (title strings, the seed topic, an optional POS
+ *  tagger), never bench-only ground truth:
+ *  0. shares a lexical token with `seedTopic` ("Active volcano" ~ "Volcano");
+ *  1. everything else, in original document order (the fallback tier);
+ *  2. a single-word title a POS tagger reads as a common noun rather than a
+ *     proper noun — the hub-article signal ("Earth", "Geology");
+ *  3. a citation-shaped title (ISBN/DOI prefix, bare year, "Nth century").
+ *  With no `nlp` adapter registered, tier 2 never fires (everything that
+ *  would have landed there stays in tier 1) — degrades gracefully, never
+ *  throws, never drops a candidate. */
+export function relevanceOrder(titles, seedTopic, nlp = null) {
+  const list = Array.isArray(titles) ? titles : [];
+  const seedTokens = new Set(lexicalTokens(seedTopic));
+  const tiers = [[], [], [], []];
+  for (const title of list) {
+    if (sharesLexicalToken(title, seedTokens)) { tiers[0].push(title); continue; }
+    if (isCitationShaped(title)) { tiers[3].push(title); continue; }
+    if (readsAsCommonNoun(title, nlp)) { tiers[2].push(title); continue; }
+    tiers[1].push(title);
+  }
+  return [...tiers[0], ...tiers[1], ...tiers[2], ...tiers[3]];
+}
+
 /** Queue `article`'s lead-section links at `fromDepth + 1`, subject to the run's
  *  depth ceiling, its per-fan-out cap and — crucially — its TOTAL node budget:
  *  the number added never pushes grounded+pending past `maxTopics`. Sets
  *  `state.nodeCapReached` when the budget (not the depth, not a lack of links)
- *  is what stopped the fan-out, so the progress line can say so. Returns the
- *  titles it enqueued. */
+ *  is what stopped the fan-out, so the progress line can say so. Candidates are
+ *  relevance-ordered (relevanceOrder) before the fan-out cap truncates them, so
+ *  a capped fetch keeps kin articles over generic hubs. Returns the titles it
+ *  enqueued. */
 async function enqueueFrom(state, article, fromDepth, provider) {
   const childDepth = fromDepth + 1;
   if (childDepth > runMaxDepth(state)) return [];
@@ -226,10 +302,11 @@ async function enqueueFrom(state, article, fromDepth, provider) {
   if (want <= 0) { state.nodeCapReached = true; return []; }
   let linked = null;
   try { linked = await provider.linkedTitles(article.title, { limit: want + 2 }); } catch { linked = null; }
+  const ordered = relevanceOrder(linked || [], article.title, defaultNlp());
   const seen = queuedFolds(state);
   if (!state.depths) state.depths = {};
   const added = [];
-  for (const title of linked || []) {
+  for (const title of ordered) {
     const folded = normFactTerm(title);
     if (!folded || seen.has(folded)) continue;
     seen.add(folded);
