@@ -67,6 +67,18 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
 - Commit per completed step with the repo-local identity (`antony@polycode.co.uk` /
   `Antony at Polycode`). Keep the tests green at every commit — but which tests depends on where
   the commit lands, see "Test the blast radius" below.
+- **Before merging a worktree, check `git status --short` inside it, not just its last commit.**
+  A sub-agent can leave real, uncommitted work behind (an untracked test file it wrote but never
+  `git add`ed) that vanishes the moment the worktree is removed — the coordinator gets exactly
+  one look. (Recovered once: a `-ses` singularization fix's own test file sat untracked in an
+  abandoned worktree for hours before this check would have caught it.)
+- **Remove the worktree (and its branch) as soon as its commit is merged onto `main`** —
+  `git worktree remove <path>` then `git branch -d worktree-agent-<id>` (safe delete; it refuses
+  if the branch isn't actually an ancestor of `main`, which is exactly the check you want).
+  Skipping this is how `.claude/worktrees/` and `git branch` silently accumulate hundreds of
+  already-integrated directories/refs across sessions — recovered once after 89 stale entries
+  had piled up over a week, none of them at risk (their content was already on `main`) but all
+  of them dead weight. Do this in the same breath as the merge, not as a later cleanup pass.
 - **Publish continuously, batch what lands while CI builds.** Merge each sub-agent's verified
   commit onto local `main` as soon as it's ready — don't hold everything for one end-of-session
   merge sweep. Run the full suite once (still only at the actual push moment — see "Test the
