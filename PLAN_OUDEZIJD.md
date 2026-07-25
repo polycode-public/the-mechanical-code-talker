@@ -1,7 +1,11 @@
 # PLAN_OUDEZIJD.md — a real city, grounded in history, explored like an adventure
 
 Status: RESEARCH / DESIGN — not started. Origin: an operator idea, 2026-07-25. Nothing in this
-document is live code.
+document is live code. **This plan lives in the tmct repo as a design record only.** The actual
+build is a separate, standalone application in its own new repository, with its own AWS account
+and public website, consuming tmct as a published library dependency — not a feature added to
+the tmct package itself. §0 below states exactly which pieces are tmct's own responsibility
+(reusable as-is by any consumer) versus the new repo's own.
 
 ## The idea, in one paragraph
 
@@ -23,6 +27,56 @@ into your record too. On arrival or on travelling to a new time, the player them
 generated as a person statistically plausible for that place and moment — a tourist at 2am in
 2026, a Germanic marsh-dwelling tribesperson in 1000 BC. The default entry point is outside 32
 Oudezijds Voorburgwal, right now, in real time.
+
+## 0. Where this actually gets built, and in what order
+
+**A separate repo, not this one.** This document stays in tmct as a design record — the ideas,
+grounded against tmct's real capability, so a future build starts from something concrete rather
+than a blank page. The build itself is a new, standalone repository with its own AWS account and
+public website, depending on tmct as a published library (`@polycode-projects/
+the-mechanical-code-talker`, its `./repository-interface` and other public exports), the same way
+any third-party consumer would. This matters for one thing specifically: **tmct's own
+constitution — no LLM anywhere in the product path — governs the tmct package.** It does not
+extend to a separate downstream application built on top of it. That's not a loophole; it's the
+same boundary tmct already draws for its own offline eval harness (an LLM is allowed there
+because it's not the shipped product), generalized to a consumer repo that isn't the shipped
+product either.
+
+**Where the LLM actually goes.** The operator's own plan: build `PLAN_MUD.md`'s persistence
+first, tune the ingest pipeline against real Amsterdam documents, and only once that's standalone
+and stable, add an LLM layer on top for two specific jobs — phrasing NPC dialogue, and augmenting
+a historic image with graph-aware objects. Both are downstream **rendering**, not fact-finding:
+- **Dialogue.** The prompt shape is exactly a grounded-generation pattern: "given this speaker's
+  character context and known facts (including prior conversation, per §2a), and the situation,
+  generate a response to the player's message." tmct's job stops at supplying that
+  structured, provenance-tagged context (§3) — the LLM's job is turning already-grounded facts
+  into natural-sounding phrasing, never inventing a fact of its own. This is a materially
+  different role from §1's interpolation question: the LLM never decides *whether* a fact is
+  true or how long it persists, only *how a true fact is said out loud*.
+- **Images.** Augmenting a real historic image with objects the graph knows are present, in an
+  otherwise separate step from §2's text-based generation. New capability, in the new repo, not
+  in tmct — no existing tmct subsystem does image generation or editing today.
+
+**Why building `PLAN_MUD.md` first, and tuning on real ingest, is the right order.** Everything
+else in this document (the temporal ontology, the lazy-generation policy, the provenance scheme)
+is speculative until real Amsterdam source material has actually been run through `ingestText()`
+and the gaps in what it produces are visible. Persistence has to exist first for any of that
+tuning to be worth keeping between sessions.
+
+**A new requirement this surfaces, not previously named: Dutch-language ingestion.**
+`ingestText()` and the whole interpretation pipeline underneath it (`wink-nlp` with
+`wink-eng-lite-web-model`, the ACE grammar, the lexicon) is English-only today — confirmed
+directly against `package.json`'s dependencies, not assumed. Real Amsterdam archival material
+("in het nederlands," the operator's own phrase) will include Dutch-language source documents,
+especially older records. tmct has no Dutch-language recognizer, tokenizer, or lexicon of any
+kind. This needs its own resolution before Dutch documents can be ingested directly — either
+translating source text to English before it reaches `ingestText()` (simpler, but loses whatever
+`ingestText()` can't recover from a translation, and translation is itself a place an LLM might
+reasonably sit, upstream of tmct's own deterministic extraction rather than replacing it), or a
+genuinely new Dutch-language pipeline parallel to the English one (a much larger undertaking:
+a new `wink`-compatible model, a new lexicon, new grammar coverage). Named here as a real,
+concrete new-capability gap, not folded into §6's more general sourcing question — this one is
+about *reading* the sources, not finding them.
 
 ## Related work — what already exists, and what's genuinely new here
 
@@ -359,13 +413,14 @@ today — every piece named above is proposed, not shipped.
 | Cross-player NPC-replay of a player's recorded history (§2a) | new capability, design horizon |
 | Cross-player write-back into another player's own record (§2a) | new capability, design horizon |
 | Player-authored provenance category (§3) | new capability, design horizon |
+| Dutch-language ingestion (§0) | new capability, design horizon — two known approaches (translate upstream of `ingestText`, or a parallel Dutch pipeline), not an open research question |
 | Real historical data acquisition and licensing (Amsterdam) | **research horizon** — outside engineering, needs its own investigation |
 | Census category-frequency data for weighted sampling | **research horizon** — a data-preparation project, not a code change |
 | Pre-recordkeeping-era data regime (archaeological/anthropological, e.g. 1000 BC) | **research horizon** — a different sourcing and modelling question, not a bigger version of the Amsterdam-archive one |
 | Abuse/griefing mitigation for cross-player history write-back (§2a) | **research horizon** — a trust-and-safety design question, not named here |
 | City-scale graph size, unmeasured | open question, not yet scoped |
 
-Excluding the three rows already shipped or designed elsewhere, nineteen pieces are new. Twelve
+Excluding the three rows already shipped or designed elsewhere, twenty pieces are new. Thirteen
 are design horizon — known engineering, buildable once someone commits the time, several with
 real prior art already in this codebase to build against. One (the player's own arrival persona)
 is a direct reuse of an already-covered mechanism, not genuinely new work on its own. One (city
