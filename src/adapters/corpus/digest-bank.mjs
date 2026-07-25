@@ -5,9 +5,15 @@
 // in src/domain/digest; only the TOML read lives here, so every node surface
 // (chat, `tmct digest`, the page generators) shares one seam.
 //
-// A browser bundle stubs this module out (the ask/chat dock never digests
-// in-page — the pages digest client-side from a table embedded at build time),
-// so every consumer treats a null article as "fall back to the flat fact list".
+// build-chat-bundle.mjs swaps this module for a live in-memory twin (the
+// chat dock DOES digest in-page there — chat-browser-entry.mjs feeds it the
+// build-time-embedded [[structure]] rows via setDigestStructures); every
+// other browser bundle (ask, ledger's static render) still stubs it out to
+// null, so those consumers keep treating a null article as "fall back to the
+// flat fact list". setDigestStructures below is a no-op on THIS, the real
+// node-side module — kept only for interface parity with the live bundle
+// twin, so a file that imports both under plain Node (as a chat-engine
+// contract test does) resolves the same export set either way.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
@@ -18,6 +24,12 @@ import { digestStoreStats, chainsForObjects, isaObjectsOf } from "../../domain/d
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BANK_FILE = join(HERE, "..", "..", "..", "data", "templates", "constructions", "digest-sentence-structures.toml");
+
+/** No-op here — the node-side adapter always reads its structures from the
+ *  committed TOML bank (below), never from an externally-supplied table. Only
+ *  the browser bundle's live twin (build-chat-bundle.mjs's stub) actually
+ *  holds state behind this setter. */
+export function setDigestStructures() {}
 
 /** The raw [[structure]] rows parsed from the committed bank, once. A missing or
  *  unparseable bank yields an empty list — the digest degrades to the caller's

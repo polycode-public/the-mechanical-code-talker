@@ -10,12 +10,21 @@
 // built seed payload (scripts/build-chat-seed.mjs), so teach turns, recall,
 // proof chains and the honest miss all run client-side with zero I/O.
 //
-// Two browser traps this file owns so no caller can fall into them:
+// Three browser traps this file owns so no caller can fall into them:
 //   - runTurn defaults `env` to process.env, and a browser has no `process`
 //     global — every turn here passes `env: {}` explicitly;
 //   - the uuid adapter needs node:crypto — the session id comes from the
 //     Web Crypto API instead, with a Date.now fallback for contexts
-//     without it.
+//     without it;
+//   - setDigestStructures is imported from adapters/corpus/digest-bank.mjs.
+//     Under the bundle build, scripts/build-chat-bundle.mjs swaps that import
+//     for a live in-memory twin, and this call actually feeds it the page's
+//     embedded structure rows; this file is ALSO imported directly by plain
+//     Node (e2e/web-chat-memory.test.mjs, exercising the same engine contract
+//     without a browser), where the import resolves to the real fs+TOML
+//     adapter — its own setDigestStructures is a documented no-op there
+//     (see that module's header), so the call is harmless either way, never
+//     a load error and never a behavior change on the Node side.
 import { runTurn, vocabExampleHint } from "../../services/chat.mjs";
 import { createInMemoryStore, normFactTerm, loadMemory, readFactRows } from "../../adapters/memory/core.mjs";
 import { serializeFactsJsonl } from "../../adapters/memory/export-jsonl.mjs";
@@ -24,6 +33,7 @@ import { provenanceTagToSource } from "../../domain/memory/trust.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
+import { setDigestStructures } from "../../adapters/corpus/digest-bank.mjs";
 // The reference-pack provider seam: the page registers a fetch-backed
 // provider over public/reference-pack/ so the engine's pack lookups work
 // where the gzipped fs layout cannot (the module's own fs loader degrades to
@@ -50,11 +60,21 @@ import { openPersistedStore } from "./idb-persist.mjs";
  * payload carries the starter vocabulary, so an unseeded session offers the
  * teach pointer instead of an example it cannot answer.
  *
+ * `digestStructures` (optional) is the page's build-time-embedded
+ * [[structure]] rows from the digest sentence-structure bank (chat-page-viz.mjs's
+ * DIGEST_STRUCTURES) — fed once to the bundle's live digest-bank twin so a
+ * long "what is X" answer leads with a composed digest instead of always
+ * falling back to the flat fact list (the bundle's stub used to return null
+ * unconditionally). Harmless to call more than once per page load: the table
+ * is module-scope, last write wins, and every session created after this one
+ * shares it.
+ *
  * Returns { memoryDir, sessionId, turn }. `turn(line)` resolves to
  * { answer, end, record, plan } and threads focus/last/planState between
  * calls exactly as the CLI session does.
  */
-export function createChatSession({ seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null, synthesisBudget = 12 } = {}) {
+export function createChatSession({ seedPayload = null, vocabSeeded = false, liveReference = false, onLiveLookup = null, synthesisBudget = 12, digestStructures = null } = {}) {
+  setDigestStructures(digestStructures || []);
   const memoryDir = createInMemoryStore();
   // Spread onto the store's own empty payload so a partial seed (individuals
   // and objectProperties only) still carries the classes/prefixes scaffolding

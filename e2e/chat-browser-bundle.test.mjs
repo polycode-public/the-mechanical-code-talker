@@ -18,8 +18,10 @@ import { join } from "node:path";
 import vm from "node:vm";
 
 import { main as buildChatBundle } from "../scripts/build-chat-bundle.mjs";
+import { readDigestStructures } from "../src/adapters/corpus/digest-bank.mjs";
 
 const MAX_BUNDLE_BYTES = 4 * 1024 * 1024;
+const DIGEST_STRUCTURES = readDigestStructures();
 
 let buildDir;
 let bundle;
@@ -148,6 +150,41 @@ test("learn-on-miss reaches a registered pack provider from inside the bundle an
   } finally {
     vm.runInContext("tmctChat.registerReferencePackProvider(null)", ctx);
   }
+});
+
+// A 9-fact isa cluster for one term, one fact over the DIGEST_READBACK_THRESHOLD
+// (8) so chat.mjs's own subject-scan answer takes the digest branch.
+const DIGEST_OBJECTS = ["apple", "banana", "cherry", "date", "elderberry", "fig", "grape", "honeydew", "indigo"];
+function digestFixturePayload() {
+  return {
+    individuals: DIGEST_OBJECTS.map((obj, i) => factIndividual(`fact:g${i}`, "gizmo", "rdfs:subClassOf", obj, "corpus:test /r/IsA")),
+    objectProperties: [],
+  };
+}
+
+test("a session created with digestStructures answers a long term list with a composed digest lead, not the flat fact-line list", async () => {
+  const ctx = browserContext();
+  ctx.__digestPayload = digestFixturePayload();
+  ctx.__digestStructures = DIGEST_STRUCTURES;
+  vm.runInContext("globalThis.__s = tmctChat.createChatSession({ seedPayload: __digestPayload, vocabSeeded: true, digestStructures: __digestStructures })", ctx);
+  const { answer } = await turn(ctx, "what is a gizmo");
+  // termDigestReadBack's own escape line ("Say 'show the facts' for all N
+  // stored facts.") only ever appears on the digest path — the flat/grouped
+  // fallbacks close with "…and N more — say 'more' to see them." instead
+  // (chat.mjs's answerFact), so this pair of assertions is a real structural
+  // check, not a wording guess.
+  assert.match(answer, /Say 'show the facts' for all 9 stored facts\./, `expected a digest lead, got: ${answer}`);
+  assert.doesNotMatch(answer, /…and \d+ more — say 'more' to see them\./);
+  assert.match(answer, /gizmos are/i, "the isa 'several' template names the term in its composed sentence");
+});
+
+test("a session created with no digestStructures still degrades to the flat fact list for the same long term list, and never throws", async () => {
+  const ctx = browserContext();
+  ctx.__digestPayload = digestFixturePayload();
+  vm.runInContext("globalThis.__s = tmctChat.createChatSession({ seedPayload: __digestPayload, vocabSeeded: true })", ctx);
+  const { answer } = await turn(ctx, "what is a gizmo");
+  assert.doesNotMatch(answer, /Say 'show the facts' for all \d+ stored facts\./, "with no structure table the digest path never fires");
+  assert.match(answer, /gizmo is a kind of apple/, "the flat fact-line list still answers, one bracketed line per fact");
 });
 
 test("an unseeded session still turns, and the false vocab hint offers the teach pointer instead of an unanswerable example", async () => {
