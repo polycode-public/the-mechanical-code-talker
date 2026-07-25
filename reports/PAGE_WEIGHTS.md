@@ -1,5 +1,10 @@
 # Page weights — the demo site as deployed
 
+**Report revision 1** — measured 2026-07-24 against deployed version 2.11.10, 10 pages. The
+revision counter is this report's own version, independent of the package version: it advances
+every time this page is re-measured, whether or not a package version bump happened alongside.
+Refresh via `SKILL_PAGE_WEIGHTS.md`.
+
 What each page of https://the-mechanical-code-talker-36445d.gitlab.io/ costs to
 load, measured 2026-07-24 against the live deployment at version 2.11.10 (read
 off the home page's `#pkg-version` stamp before measuring). Two methods, and
