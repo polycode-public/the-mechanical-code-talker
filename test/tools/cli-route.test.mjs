@@ -91,6 +91,25 @@ test("`cli <tool>` with no repo hint still reports an empty graph honestly, neve
   }
 });
 
+test("`chat --repo`: a teach sentence about a code-graph entity grounds through the graph, not just the static lexicon", async () => {
+  const dir = await repoWithFixtureGraph("tmct-cli-teach-");
+  try {
+    const r = runCli(["chat", "--repo", dir], {
+      input: "/describe Widget\nevery Widget is a container\n/exit\n",
+      env: { TMCT_NO_SEED: "1" },
+    });
+    assert.equal(r.status, 0, r.stderr);
+    // the code graph already knows Widget as a Class before the teach turn
+    assert.match(r.stdout, /Widget — Class/);
+    // the teach turn now succeeds — the class-mint reads back with a real confirmation,
+    // never the "I don't recognize … as words I know" honest-miss refusal
+    assert.match(r.stdout, /noted — remembered: widget is a kind of container/);
+    assert.doesNotMatch(r.stdout, /I don't recognize/);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("`tmct init` writes the cold-tool catalog to <repo>/.tmct/TOOLS.md", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-init-catalog-"));
   try {
