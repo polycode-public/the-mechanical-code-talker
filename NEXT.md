@@ -38,11 +38,11 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
 
 - [ ] temporal comparison binds only a literal SHA from the prior query text — the two most
   natural antecedents (a date-filter result set; "when was X last touched") don't bind; this is
-  PLAN_DISCOURSE_AND_RECOGNITION slices 3–5 territory (bind from the answer's referent, plural
-  sets); playtest transcripts are folded into that plan's staging (the unbound form now misses
-  cleanly — the garbled teach-offer is fixed)
+  PLAN_DISCOURSE_AND_RECOGNITION slice 5 territory (bind from the answer's referent); playtest
+  transcripts are folded into that plan's staging (the unbound form now misses cleanly — the
+  garbled teach-offer is fixed)
 
-- [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 3–5 (plural binding past a count, the tie refusal, the remaining bindable-form lanes) — slices 1–2 shipped 2026-07-24 (the record threads through `runTurn`, and `games/cross-turn-temporal-composition-composes` is the flipped row); the plan doc stages what's next
+- [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 4–5 (the tie refusal, the remaining bindable-form lanes) — slices 1–3 shipped (the record threads through `runTurn`, the commit-filter/listing/filter lanes register, `games/cross-turn-temporal-composition-composes` composes, and a set now survives a count so a later "which of those" still binds it); the plan doc stages what's next
 
 CONVERSATION 3.0.3 sweep (see `BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
 

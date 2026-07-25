@@ -1,8 +1,9 @@
 # PLAN_DISCOURSE_AND_RECOGNITION.md — two bounded records: cross-turn discourse, and goal recognition
 
-Status: Part A slices 1–2 are built (`src/domain/discourse.mjs`; the commit-filter lane
-registers, the session shell threads the record, and the temporal-comparison lane flips the
-frozen row — now `games/cross-turn-temporal-composition-composes`). Everything else is design.
+Status: Part A slices 1–3 are built (`src/domain/discourse.mjs`; the commit-filter lane
+registers, the session shell threads the record, the temporal-comparison lane flips the frozen
+row — now `games/cross-turn-temporal-composition-composes` — and the listing/filter lanes now
+register plural `set` referents that survive a count). Everything else is design.
 Everything described as current behaviour was read off the tree and run against
 `examples/mini-webapp` while this document was written.
 
@@ -408,11 +409,14 @@ today's miss, and the multi-token patient guard stays exactly as it was. Flipped
 (that one row only), with the `answerMatchesNone` guards kept. Tests:
 `test/domain/discourse-temporal-comparison.test.mjs` plus the corpus row.
 
-**Slice 3 — plural binding, and surviving a count.**
-Register `set` referents from the listing and filter lanes. `evalAnaphora` gains the record as a
-fallback source for `opts.prev`, consulted only when `last.detail.allIds`/`matches` is empty, so
-every working anaphora lane keeps its current path unchanged. Closes the count-erases-the-chain
-behaviour recorded in A1. New corpus rows for the three-hop chain.
+**Slice 3 — plural binding, and surviving a count. BUILT.**
+The listing/filter lanes (the simple relation-listing path in `ask()`, `evalComposite`'s generic
+set fallback, `evalMembershipComposite`, and `evalAnaphora`'s own narrowed result) register a
+`set` referent; `runAsk`'s `prev` derivation falls back to a record-bound `those` set only when
+`last.detail.allIds`/`matches` is empty, so every working anaphora lane keeps its current path.
+Closes the count-erases-the-chain behaviour recorded in A1: a set survives a count and a further
+narrowing still binds it. Tests: `test/domain/discourse-plural-binding-registration.test.mjs`
+plus the three new `games.compositional.anaphora` corpus rows.
 
 **Slice 4 — the ambiguity refusal.**
 Turn on the tie branch in `bind()` and pin the refusal wording in the corpus. Until this slice the
