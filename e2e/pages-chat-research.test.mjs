@@ -113,7 +113,33 @@ test("a typed research request grounds the topic cited, then auto-plays the queu
     assert.match(startText, /^owl — An owl is a bird\./);
     assert.match(startText, /\(source: research article "Owl", Simple English Wikipedia, CC BY-SA 4\.0/);
     assert.match(startText, /queued 2 linked topics: Bird, Night/);
-    assert.match(await page.locator("#researchQueueStatus").innerText(), /research "owls": 1 done · 2 queued/);
+
+    // The ticker's very first auto-played step fires the instant the
+    // grounding turn above settles — the 2.4s pacing gap only runs BETWEEN
+    // completed steps, never before the first one — so nothing protects a
+    // "1 done · 2 queued" read from racing ahead to a later count, or even
+    // straight to "complete", once the queue starts moving under load.
+    // Wait for the status line to hold ANY valid state first (it can equally
+    // race the other way, read before noteResearchResult's own update lands)
+    // and then accept whatever point in the 3-topic run it caught, rather
+    // than pinning the immediate-post-grounding snapshot.
+    await page.waitForFunction(
+      () => {
+        const text = document.getElementById("researchQueueStatus").textContent;
+        return /research "owls": \d+ done · \d+ queued/.test(text) || /research "owls" complete/.test(text);
+      },
+      null,
+      { timeout: ANSWER_TIMEOUT_MS },
+    );
+    const statusAfterStart = await page.locator("#researchQueueStatus").innerText();
+    const progress = statusAfterStart.match(/research "owls": (\d+) done · (\d+) queued/);
+    if (progress) {
+      const [, doneStr, queuedStr] = progress;
+      assert.ok(Number(doneStr) >= 1, `at least the depth-0 topic is marked done: ${statusAfterStart}`);
+      assert.equal(Number(doneStr) + Number(queuedStr), 3, `done + queued always sums to the 3-topic run: ${statusAfterStart}`);
+    } else {
+      assert.match(statusAfterStart, /research "owls" complete/, `status is either mid-run progress or already complete: ${statusAfterStart}`);
+    }
 
     // The ticker submits each step as its own turn — the transcript grows
     // user-bubble "research next" lines the visitor never typed, and the
@@ -170,46 +196,66 @@ test("the researched-this-session panel lists each topic's own passage, its sour
   }
 });
 
+/** One attempt at the play/pause flow, on a caller-supplied fresh page. */
+async function assertPauseReallyStopsTheTicker(page) {
+  await routeSimpleWikipedia(page);
+  await page.fill("#researchTopic", "owls");
+  await page.click("#researchGo");
+  await page.waitForFunction(
+    () => Array.from(document.querySelectorAll("#messages .msg-row.user .bubble")).some((b) => b.textContent.includes("research owls")),
+    null,
+    { timeout: ANSWER_TIMEOUT_MS },
+  );
+  const playBtn = page.locator("#researchPlay");
+  await playBtn.waitFor({ state: "visible", timeout: ANSWER_TIMEOUT_MS });
+  await page.waitForFunction(
+    () => document.getElementById("researchPlay").getAttribute("aria-pressed") === "true",
+    null,
+    { timeout: ANSWER_TIMEOUT_MS },
+  );
+
+  await playBtn.click({ timeout: 5000 }); // pause
+  // Let any in-flight step settle, then prove the transcript stops growing.
+  await page.waitForFunction(
+    () => document.getElementById("researchPlay").getAttribute("aria-pressed") === "false"
+      && !document.querySelector("#messages .bubble.pending"),
+    null,
+    { timeout: ANSWER_TIMEOUT_MS },
+  );
+  const pausedCount = (await userBubbleTexts(page)).length;
+  await page.waitForTimeout(3500);
+  assert.equal((await userBubbleTexts(page)).length, pausedCount, "paused means no further step is asked");
+
+  await playBtn.click(); // resume
+  await page.waitForFunction(
+    (n) => document.querySelectorAll("#messages .msg-row.user .bubble").length > n,
+    pausedCount,
+    { timeout: RUN_TIMEOUT_MS },
+  );
+}
+
 test("the research row's own entry submits the request, and pause really stops the ticking until play resumes it", async () => {
-  const { context, page } = await openChatPage();
-  try {
-    await routeSimpleWikipedia(page);
-    await page.fill("#researchTopic", "owls");
-    await page.click("#researchGo");
-    await page.waitForFunction(
-      () => Array.from(document.querySelectorAll("#messages .msg-row.user .bubble")).some((b) => b.textContent.includes("research owls")),
-      null,
-      { timeout: ANSWER_TIMEOUT_MS },
-    );
-    const playBtn = page.locator("#researchPlay");
-    await playBtn.waitFor({ state: "visible", timeout: ANSWER_TIMEOUT_MS });
-    await page.waitForFunction(
-      () => document.getElementById("researchPlay").getAttribute("aria-pressed") === "true",
-      null,
-      { timeout: ANSWER_TIMEOUT_MS },
-    );
-
-    await playBtn.click(); // pause
-    // Let any in-flight step settle, then prove the transcript stops growing.
-    await page.waitForFunction(
-      () => document.getElementById("researchPlay").getAttribute("aria-pressed") === "false"
-        && !document.querySelector("#messages .bubble.pending"),
-      null,
-      { timeout: ANSWER_TIMEOUT_MS },
-    );
-    const pausedCount = (await userBubbleTexts(page)).length;
-    await page.waitForTimeout(3500);
-    assert.equal((await userBubbleTexts(page)).length, pausedCount, "paused means no further step is asked");
-
-    await playBtn.click(); // resume
-    await page.waitForFunction(
-      (n) => document.querySelectorAll("#messages .msg-row.user .bubble").length > n,
-      pausedCount,
-      { timeout: RUN_TIMEOUT_MS },
-    );
-  } finally {
-    await context.close();
+  // The auto-play ticker's own 2.4s pacing gap runs entirely inside the
+  // browser process, independent of this test's driver process; under
+  // contention the driver can stall long enough that the whole queue (here,
+  // 3 topics) finishes before the pause click's CDP round trip lands,
+  // leaving nothing to pause and no #researchPlay button to click. A fresh
+  // page gives each attempt its own independent race against that stall.
+  const ATTEMPTS = 3;
+  let lastError = null;
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    const { context, page } = await openChatPage();
+    try {
+      await assertPauseReallyStopsTheTicker(page);
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+    } finally {
+      await context.close();
+    }
   }
+  if (lastError) throw lastError;
 });
 
 test("with third-party requests blocked, the explicit request still tries the network (its own consent) and the failure is a plain miss — nothing stored, nothing to play", async () => {

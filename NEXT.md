@@ -43,13 +43,6 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   garbled teach-offer is fixed)
 
 - [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 4–5 (the tie refusal, the remaining bindable-form lanes) — slices 1–3 shipped (the record threads through `runTurn`, the commit-filter/listing/filter lanes register, `games/cross-turn-temporal-composition-composes` composes, and a set now survives a count so a later "which of those" still binds it); the plan doc stages what's next
-- [ ] two e2e tests flake under full-suite contention (both pass 100% in isolation, so not a
-  correctness bug): `e2e/pages-chat-live-toggle.test.mjs`'s "/wiki supplement adds a cited
-  Wikipedia read-out..." and `e2e/pages-chat-research.test.mjs`'s "a typed research request
-  grounds the topic cited, then auto-plays the queue..." (an exact "N done · M queued" snapshot
-  raced against faster-than-expected progress) — both are async-timing races, not logic bugs;
-  harden by polling/asserting a range rather than a single snapshot, per this project's own
-  precedent for flaky timing tests
 
 CONVERSATION 3.0.3 sweep (see `BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
 

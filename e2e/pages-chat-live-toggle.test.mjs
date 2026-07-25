@@ -200,19 +200,46 @@ test("/wiki supplement clears every radio — it has none of its own — and the
   }
 });
 
+/** One attempt at the supplement flow, on a caller-supplied fresh page —
+ *  throws on either assertion so the retry below can tell a genuine miss
+ *  from a stray Playwright error. */
+async function assertSupplementedQuasarAnswer(page) {
+  await routeWikipedia(page);
+  await ask(page, "/wiki supplement");
+  await ask(page, "every quasar is a star");
+  const row = await ask(page, "what is a quasar");
+  const bubbleText = await row.locator(".bubble").innerText();
+  assert.match(bubbleText, /quasar is a kind of star/, "the local answer still leads");
+  assert.match(bubbleText, /Wikipedia adds: quasar — A quasar is a very bright object/, "the cited supplement follows the grounded answer");
+}
+
 test("/wiki supplement adds a cited Wikipedia read-out under a grounded answer the store already gave", async () => {
-  const { context, page } = await openChatPage();
-  try {
-    await routeWikipedia(page);
-    await ask(page, "/wiki supplement");
-    await ask(page, "every quasar is a star");
-    const row = await ask(page, "what is a quasar");
-    const bubbleText = await row.locator(".bubble").innerText();
-    assert.match(bubbleText, /quasar is a kind of star/, "the local answer still leads");
-    assert.match(bubbleText, /Wikipedia adds: quasar — A quasar is a very bright object/, "the cited supplement follows the grounded answer");
-  } finally {
-    await context.close();
+  // The live lookup carries its own abort timeout (wikipedia-live.mjs's
+  // 4s fetchJson budget), racing against the mocked fetch's real round trip
+  // through THIS test's own Node process (browser fetch -> CDP -> the
+  // page.route callback below -> CDP response). Under full-suite contention
+  // that process can be starved long enough for the abort to win the race,
+  // which reads as a clean miss — not a hang, so no timeout ever fires, the
+  // supplement is just silently absent. A lost race is then cached as a
+  // settled miss for the rest of that page's life (cachedFetch caches
+  // failures too, on purpose, so a real miss is never refetched), so
+  // retrying the SAME page can never recover — only a fresh page, with a
+  // fresh in-page provider cache, gets a genuine second attempt.
+  const ATTEMPTS = 3;
+  let lastError = null;
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    const { context, page } = await openChatPage();
+    try {
+      await assertSupplementedQuasarAnswer(page);
+      lastError = null;
+      break;
+    } catch (err) {
+      lastError = err;
+    } finally {
+      await context.close();
+    }
   }
+  if (lastError) throw lastError;
 });
 
 test("off means off: switching back to off after use makes the very next miss attempt zero wikipedia requests", async () => {
