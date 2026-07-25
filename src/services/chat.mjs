@@ -12065,7 +12065,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         note(trace, `lane: TEMPORAL_COMPARISON_RE — "${form}" could not compose a comparison; a specific miss names why, never the teach-offer cascade`);
         return plainTurn(query, text, { via: "miss", miss: true, focus, goal: temporalGoal });
       };
-      const bound = discourseHolder ? bindDiscourseForm(discourseHolder.record, form) : null;
+      const bound = discourseHolder ? bindDiscourseForm(discourseHolder.record, form, { tieRefuses: true }) : null;
+      if (bound?.tie) {
+        const options = joinOr(bound.tie.map((r) => r.label));
+        return refMiss(`"${form}" could mean ${options} — which do you mean?`);
+      }
       if (!bound?.referent) {
         return refMiss(`I don't have a referent for "${form}" yet — nothing answered earlier in this conversation binds it. Ask about the event first (e.g. "when was ${clauseSubject} last ${verb}"), then ask the comparison again.`);
       }
@@ -14136,6 +14140,10 @@ function matchImpactIntent(line) {
   return null;
 }
 const joinList = (a) => (a.length > 1 ? `${a.slice(0, -1).join(", ")} and ${a[a.length - 1]}` : (a[0] ?? ""));
+// A discourse tie lists its options with a short Oxford-comma "or" join,
+// deliberately not the resolver's longer numbered ambiguity format.
+const joinOr = (a) => (a.length > 2 ? `${a.slice(0, -1).join(", ")}, or ${a[a.length - 1]}`
+  : a.length === 2 ? `${a[0]} or ${a[1]}` : (a[0] ?? ""));
 
 /** Render the next page of a held remainder (pending: {items:[str], noun}). Returns a
  *  plain turn whose `detail.pending` carries what's still unseen (null when the batch
