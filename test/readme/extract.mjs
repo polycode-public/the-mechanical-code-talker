@@ -21,10 +21,10 @@
 //   text               illustrative only; never executed or asserted
 //
 // Attributes after the tag refine treatment:
-//   e2e                runs from e2e/readme-examples.test.mjs, not the fast tier
+//   e2e                runs from test-e2e/readme-examples.test.mjs, not the fast tier
 //   heavy              (e2e blocks only) a full corpus seed or site build, run
 //                      only when TMCT_CHECK_README=1 — see
-//                      e2e/readme-examples.test.mjs
+//                      test-e2e/readme-examples.test.mjs
 //   skip=<reason>      never run (network: would touch the network;
 //                      offline-eval-only: needs an LLM judge)
 //   cwd=repo           run from a clone's root instead of a temp dir

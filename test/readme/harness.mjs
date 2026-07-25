@@ -1,6 +1,6 @@
 // Executes README blocks parsed by extract.mjs and asserts their pinned text
 // against the live product. Shared by the fast tier (test/readme/) and the
-// e2e tier (e2e/readme-examples.test.mjs).
+// e2e tier (test-e2e/readme-examples.test.mjs).
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdtempSync, mkdirSync, rmSync, symlinkSync, writeFileSync, chmodSync } from "node:fs";

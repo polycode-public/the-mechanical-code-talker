@@ -65,7 +65,7 @@ lazily: `reference-pack/index.json` (104,924 raw / 20,407 br) on the first
 citation, then one article JSON per citation (1–4 KB each; 4,224 terms
 mapping to 3,887 article files, ~15.5 MB on disk that is never bulk-fetched).
 The bigger seed cost only bytes, not boot time: a real-browser measurement
-(`e2e/pages-chat-boot-budget.test.mjs`) still grounds the first seeded
+(`test-e2e/pages-chat-boot-budget.test.mjs`) still grounds the first seeded
 answer at ~1.5 s against a 20 s budget, since everything here is local
 JSON parsing, not network latency.
 
@@ -99,7 +99,7 @@ boot tier: `index.html`, `chat.html`, `chat-browser.bundle.js`,
 articles too, once fetched); pages and bundles are network-first with the
 cache as offline fallback. So a second visit pays wire cost only for the
 page HTML and bundle revalidation, and a fully offline reload of chat works.
-`e2e/pages-service-worker.test.mjs` proves it, so it is not re-measured here.
+`test-e2e/pages-service-worker.test.mjs` proves it, so it is not re-measured here.
 
 **Encoding coverage.** HTML, bundles and JSON ship `.br`/`.gz` siblings and
 serve br. Plain `.mjs` modules, PNGs and `tmct-sw.js` serve identity, which

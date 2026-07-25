@@ -123,7 +123,7 @@ renovate:
   - public/**/*
   - scripts/**/*
   - test/**/*
-  - e2e/**/*
+  - test-e2e/**/*
   - examples/**/*
   - agentbench/envelope.json
   - package.json
@@ -209,12 +209,12 @@ license:deps:
 # The e2e tier, split into named channels — one column per demo page (plus
 # tui/cli) instead of one long serial run, so a failure points straight at the
 # page and the pipeline's wall-clock is the slowest channel, not the sum of
-# all of them. `e2e/*.test.mjs` — top-level only; e2e/heavy/ is the separate
+# all of them. `test-e2e/*.test.mjs` — top-level only; test-e2e/heavy/ is the separate
 # `e2e:heavy` job below.
 #
 # Two base templates: `.e2e-web-base` installs Chromium for channels that spawn
 # a real browser page; `.e2e-lite-base` skips it for the CLI/TUI channels that
-# never do (confirmed via `grep -l 'from "playwright"' e2e/*.test.mjs`, 24 of
+# never do (confirmed via `grep -l 'from "playwright"' test-e2e/*.test.mjs`, 24 of
 # 52 files). .npmrc's ignore-scripts=true stops playwright's install hook, so
 # `npm ci` never downloads a browser as a side effect; the browsers land in the
 # project dir (PLAYWRIGHT_BROWSERS_PATH) so the cache can carry them, keyed on
@@ -249,106 +249,106 @@ e2e-web-index:
   script:
     - >-
       node --disable-warning=ExperimentalWarning --test
-      e2e/pages-index.test.mjs e2e/pages-home.test.mjs
-      e2e/pages-demo-history.test.mjs e2e/pages-demo-templates.test.mjs
-      e2e/pages-examples.test.mjs e2e/pages-service-worker.test.mjs
-      e2e/memory-ask-browser-bundle.test.mjs e2e/readme-examples.test.mjs
-      e2e/cli-render-views.test.mjs
+      test-e2e/pages-index.test.mjs test-e2e/pages-home.test.mjs
+      test-e2e/pages-demo-history.test.mjs test-e2e/pages-demo-templates.test.mjs
+      test-e2e/pages-examples.test.mjs test-e2e/pages-service-worker.test.mjs
+      test-e2e/memory-ask-browser-bundle.test.mjs test-e2e/readme-examples.test.mjs
+      test-e2e/cli-render-views.test.mjs
 
 e2e-web-chat:
   extends: .e2e-web-base
   script:
     - >-
       node --disable-warning=ExperimentalWarning --test
-      e2e/pages-chat-fullscreen.test.mjs e2e/pages-chat-persistence.test.mjs
-      e2e/pages-chat-export.test.mjs e2e/pages-chat-digest.test.mjs
-      e2e/pages-chat-boot-budget.test.mjs e2e/browser-chat.test.mjs
-      e2e/chat-prompt.test.mjs e2e/chat-browser-bundle.test.mjs
-      e2e/build-chat-assets.test.mjs
+      test-e2e/pages-chat-fullscreen.test.mjs test-e2e/pages-chat-persistence.test.mjs
+      test-e2e/pages-chat-export.test.mjs test-e2e/pages-chat-digest.test.mjs
+      test-e2e/pages-chat-boot-budget.test.mjs test-e2e/browser-chat.test.mjs
+      test-e2e/chat-prompt.test.mjs test-e2e/chat-browser-bundle.test.mjs
+      test-e2e/build-chat-assets.test.mjs
 
 e2e-web-chat-research:
   extends: .e2e-web-base
   script:
     - >-
       node --disable-warning=ExperimentalWarning --test
-      e2e/pages-chat-research.test.mjs e2e/pages-chat-live-toggle.test.mjs
-      e2e/web-chat-memory.test.mjs
+      test-e2e/pages-chat-research.test.mjs test-e2e/pages-chat-live-toggle.test.mjs
+      test-e2e/web-chat-memory.test.mjs
 
 e2e-web-research:
   extends: .e2e-web-base
   script:
-    - node --disable-warning=ExperimentalWarning --test e2e/pages-research.test.mjs
+    - node --disable-warning=ExperimentalWarning --test test-e2e/pages-research.test.mjs
 
 e2e-web-ingest:
   extends: .e2e-web-base
   script:
-    - node --disable-warning=ExperimentalWarning --test e2e/pages-ingest.test.mjs
+    - node --disable-warning=ExperimentalWarning --test test-e2e/pages-ingest.test.mjs
 
 e2e-web-sprites:
   extends: .e2e-web-base
   script:
     - >-
       node --disable-warning=ExperimentalWarning --test
-      e2e/pages-sprites.test.mjs e2e/sprites-large-visual.test.mjs
+      test-e2e/pages-sprites.test.mjs test-e2e/sprites-large-visual.test.mjs
 
 e2e-web-ledger:
   extends: .e2e-web-base
   script:
     - >-
       node --disable-warning=ExperimentalWarning --test
-      e2e/pages-ledger.test.mjs e2e/pages-ledger-teach.test.mjs
-      e2e/pages-ledger-research.test.mjs e2e/ledger-viz-query-only-dock.test.mjs
-      e2e/ledger-viz-cli.test.mjs e2e/ledger-viz.test.mjs
+      test-e2e/pages-ledger.test.mjs test-e2e/pages-ledger-teach.test.mjs
+      test-e2e/pages-ledger-research.test.mjs test-e2e/ledger-viz-query-only-dock.test.mjs
+      test-e2e/ledger-viz-cli.test.mjs test-e2e/ledger-viz.test.mjs
 
 e2e-web-code:
   extends: .e2e-web-base
   script:
-    - node --disable-warning=ExperimentalWarning --test e2e/pages-code.test.mjs
+    - node --disable-warning=ExperimentalWarning --test test-e2e/pages-code.test.mjs
 
 e2e-web-spider-fly:
   extends: .e2e-web-base
   script:
-    - node --disable-warning=ExperimentalWarning --test e2e/pages-spider-fly.test.mjs
+    - node --disable-warning=ExperimentalWarning --test test-e2e/pages-spider-fly.test.mjs
 
 e2e-web-plan:
   extends: .e2e-web-base
   script:
     - >-
       node --disable-warning=ExperimentalWarning --test
-      e2e/pages-plan.test.mjs e2e/plan-cli.test.mjs e2e/plan-browser-entry.test.mjs
+      test-e2e/pages-plan.test.mjs test-e2e/plan-cli.test.mjs test-e2e/plan-browser-entry.test.mjs
 
 e2e-web-adventure:
   extends: .e2e-web-base
   script:
     - >-
       node --disable-warning=ExperimentalWarning --test
-      e2e/pages-adventure.test.mjs e2e/pages-adventure-edit.test.mjs
+      test-e2e/pages-adventure.test.mjs test-e2e/pages-adventure-edit.test.mjs
 
 # Its own job: dynamically-named tests (one per page x orientation), the
 # heaviest single file (~36s), cross-cutting so it doesn't fit any one channel.
 e2e-web-screenshot-sweep:
   extends: .e2e-web-base
   script:
-    - node --disable-warning=ExperimentalWarning --test e2e/pages-screenshot-sweep.test.mjs
+    - node --disable-warning=ExperimentalWarning --test test-e2e/pages-screenshot-sweep.test.mjs
 
 # No browser: pure stdio/process spawns.
 e2e-tui:
   extends: .e2e-lite-base
   script:
-    - node --disable-warning=ExperimentalWarning --test e2e/tui.test.mjs e2e/tui-chat-file.test.mjs
+    - node --disable-warning=ExperimentalWarning --test test-e2e/tui.test.mjs test-e2e/tui-chat-file.test.mjs
 
 e2e-cli:
   extends: .e2e-lite-base
   script:
     - >-
       node --disable-warning=ExperimentalWarning --test
-      e2e/cli-smoke.test.mjs e2e/cli-help.test.mjs e2e/cli-config-flags.test.mjs
-      e2e/init.test.mjs e2e/init-cli.test.mjs e2e/bootstrap-seed.test.mjs
-      e2e/import-file.test.mjs e2e/digest-cli.test.mjs e2e/memory-export.test.mjs
-      e2e/domain-river.test.mjs e2e/domain-crates.test.mjs e2e/lib-chat-sqlite.test.mjs
-      e2e/build-demo-memory.test.mjs e2e/server-http.test.mjs e2e/server-http-smoke.test.mjs
+      test-e2e/cli-smoke.test.mjs test-e2e/cli-help.test.mjs test-e2e/cli-config-flags.test.mjs
+      test-e2e/init.test.mjs test-e2e/init-cli.test.mjs test-e2e/bootstrap-seed.test.mjs
+      test-e2e/import-file.test.mjs test-e2e/digest-cli.test.mjs test-e2e/memory-export.test.mjs
+      test-e2e/domain-river.test.mjs test-e2e/domain-crates.test.mjs test-e2e/lib-chat-sqlite.test.mjs
+      test-e2e/build-demo-memory.test.mjs test-e2e/server-http.test.mjs test-e2e/server-http-smoke.test.mjs
 
-# The heavy half of the e2e tier (e2e/heavy/*.test.mjs): a full demo:build, an
+# The heavy half of the e2e tier (test-e2e/heavy/*.test.mjs): a full demo:build, an
 # uncapped ConceptNet seed, and a full-store export/import round trip —
 # together several minutes of real signal, but not on every push. Runs when a
 # push actually touches what these tests exercise, and on the nightly
@@ -374,7 +374,7 @@ e2e:heavy:
         - data/**/*
         - package.json
         - package-lock.json
-        - e2e/heavy/**/*
+        - test-e2e/heavy/**/*
   script:
     - npm ci
     - npx playwright install --with-deps chromium

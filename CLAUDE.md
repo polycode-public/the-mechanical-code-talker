@@ -155,7 +155,7 @@ The README's two heavy copy-paste examples cost ~6 CI-minutes and exercise machi
 and seed tests already cover at smaller scale, so they are not in the per-push pipeline at all.
 **After changing the CLI surface (bin/ flags, command output), the library's public exports, or
 any flow a README example walks through, run `npm run check:readme` locally** — it runs
-`e2e/readme-examples.test.mjs` with the heavy examples enabled. The lighter README example
+`test-e2e/readme-examples.test.mjs` with the heavy examples enabled. The lighter README example
 checks still run in the per-push e2e tier.
 
 ### Two names for "smoke"

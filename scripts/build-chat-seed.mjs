@@ -31,7 +31,7 @@ const ROOT = join(here, "..");
 
 /** The largest chat-seed.json this builder will let through, in bytes. The
  *  capped default configuration measures ~38.7 MB and boots inside the page's
- *  boot budget (e2e/pages-chat-boot-budget.test.mjs holds it there). A bigger
+ *  boot budget (test-e2e/pages-chat-boot-budget.test.mjs holds it there). A bigger
  *  asset is a bug in the seed selection: lower a SEED_BAND_CAPS entry, never
  *  raise this number casually — the page fetches the whole file before the
  *  chat can answer a seeded question. */

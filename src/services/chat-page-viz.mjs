@@ -16,7 +16,7 @@
 // chip is read straight off the SAME "(source: ...)" citation chat.mjs's own
 // factPhrase/renderFactLine convention already appends to most answers (see
 // e.g. `dog is a kind of animal (source: corpus:conceptnet ...)` — already
-// asserted by e2e/pages-chat-fullscreen.test.mjs against this page), never a
+// asserted by test-e2e/pages-chat-fullscreen.test.mjs against this page), never a
 // second provenance computation against memory internals: `provBucketFor`
 // (ledger-viz.mjs) is spliced in unmodified and applied to whatever citation
 // text the answer already carries, so this page's chip and the ledger's own

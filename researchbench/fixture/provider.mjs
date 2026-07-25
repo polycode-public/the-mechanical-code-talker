@@ -2,7 +2,7 @@
 // ({lookup, pageByTitle, linkedTitles}) over the frozen stub wiki graph
 // (graph.json), registered through the lane's own seam
 // (registerResearchProvider, src/adapters/corpus/wikipedia-live.mjs) —
-// the same seam e2e/pages-ledger-research.test.mjs stubs. No network, ever:
+// the same seam test-e2e/pages-ledger-research.test.mjs stubs. No network, ever:
 // every method reads the committed JSON, never fetch.
 
 import { readFileSync } from "node:fs";

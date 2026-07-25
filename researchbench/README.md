@@ -16,7 +16,7 @@ graded run.
 frozen stub graph (`researchbench/fixture/graph.json`) registered through the
 lane's own provider seam (`registerResearchProvider`,
 `src/adapters/corpus/wikipedia-live.mjs`) — the same seam
-`e2e/pages-ledger-research.test.mjs` stubs. Two runs over the same fixture and
+`test-e2e/pages-ledger-research.test.mjs` stubs. Two runs over the same fixture and
 stamp produce byte-identical `product.jsonl`.
 
 ## The ladder

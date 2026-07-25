@@ -6,7 +6,7 @@
 // goalStatusLines, pillsForRoom — and the caption builder. allRoomIds/
 // suggestionsForTerm and the world editor's own markup (textarea, whole map,
 // room detail, legend) get their live end-to-end behavior exercised in
-// e2e/pages-adventure-edit.test.mjs; the assertions here are the fast,
+// test-e2e/pages-adventure-edit.test.mjs; the assertions here are the fast,
 // structural pins.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -763,7 +763,7 @@ test("renderAdventureHtml: deterministic — byte-identical output for identical
 // ---- renderAdventureHtml: the world editor's own markup ---------------------
 // (the live behavior — seeding, room click, the two-way sync, suggestion
 // pills, the legend — is exercised end to end in
-// e2e/pages-adventure-edit.test.mjs; these pin the structure only.)
+// test-e2e/pages-adventure-edit.test.mjs; these pin the structure only.)
 
 test("renderAdventureHtml: the edit-mode toggle and its whole textarea/map/room-detail/legend panel are all present", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });

@@ -4,7 +4,7 @@
 // test/adapters/router-resolver.test.mjs (which drives the pure router
 // machinery directly), this file proves the wiring a library caller invokes —
 // all the way to a correct composed answer or an honest refuse. The `tmct
-// plan` CLI binary is covered from e2e/plan-cli.test.mjs, and the chat /plan
+// plan` CLI binary is covered from test-e2e/plan-cli.test.mjs, and the chat /plan
 // command by the planning corpus lane.
 
 import { test, after } from "node:test";

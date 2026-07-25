@@ -48,7 +48,7 @@ function buildStartLine(caseDef) {
 
 /** Drive one case's walk through the REAL lane against the fixture provider,
  *  registered through the lane's own seam for the duration of this case (then
- *  restored) — the same seam e2e/pages-ledger-research.test.mjs stubs.
+ *  restored) — the same seam test-e2e/pages-ledger-research.test.mjs stubs.
  *  Returns {afterStart, final}, both researchSnapshot() shapes: `afterStart`
  *  is the queue right after the depth-0 fetch (RES-1's "queued in document
  *  order" check), `final` is the snapshot after driving the case's `budget`

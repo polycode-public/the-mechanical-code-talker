@@ -1,5 +1,5 @@
 // chat-demos.mjs — scripted chat turns and the reference pack's demo term
-// allowlist. Data only: e2e/web-chat-memory.test.mjs replays DEMOS at the
+// allowlist. Data only: test-e2e/web-chat-memory.test.mjs replays DEMOS at the
 // engine level, and scripts/build-demo-pack.mjs reads REFERENCE_PACK_TERMS
 // to cut the browser-fetchable pack subset (it norm-folds the entries
 // itself).

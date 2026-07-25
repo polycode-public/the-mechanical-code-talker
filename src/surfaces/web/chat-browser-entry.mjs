@@ -20,7 +20,7 @@
 //     Under the bundle build, scripts/build-chat-bundle.mjs swaps that import
 //     for a live in-memory twin, and this call actually feeds it the page's
 //     embedded structure rows; this file is ALSO imported directly by plain
-//     Node (e2e/web-chat-memory.test.mjs, exercising the same engine contract
+//     Node (test-e2e/web-chat-memory.test.mjs, exercising the same engine contract
 //     without a browser), where the import resolves to the real fs+TOML
 //     adapter — its own setDigestStructures is a documented no-op there
 //     (see that module's header), so the call is harmless either way, never

@@ -113,7 +113,7 @@ public/*.br
 # committed — the electron/ shell (main + preload) is the only committed part.
 electron/renderer/
 
-# e2e/pages-screenshot-sweep.test.mjs's own output — a layout-review aid for
+# test-e2e/pages-screenshot-sweep.test.mjs's own output — a layout-review aid for
 # a human/agent to look at, regenerated fresh on every run, never a golden
 # image compared pixel-to-pixel and never committed.
 .screenshots/

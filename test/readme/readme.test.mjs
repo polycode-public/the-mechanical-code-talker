@@ -1,6 +1,6 @@
 // Runs the README's fast runnable blocks against the live product, so a
 // documented example that stops working fails the suite. Heavy blocks
-// (attrs.e2e) run from e2e/readme-examples.test.mjs instead; skip-marked
+// (attrs.e2e) run from test-e2e/readme-examples.test.mjs instead; skip-marked
 // blocks never run.
 import test from "node:test";
 import assert from "node:assert/strict";

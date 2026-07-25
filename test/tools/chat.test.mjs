@@ -2,7 +2,7 @@
 // against the entities fixture, and a binary smoke of `tmct chat`. The turn
 // function is exercised through the SAME dispatchTool path the CLI uses, with
 // config.graphFile pointed straight at the committed fixture (the same trick
-// e2e/cli-smoke.test.mjs's repoWithFixtureGraph plays via .tmct/).
+// test-e2e/cli-smoke.test.mjs's repoWithFixtureGraph plays via .tmct/).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";

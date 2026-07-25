@@ -80,7 +80,7 @@ Every cycle MUST satisfy:
   **frozen stub wiki graph committed as a fixture** (`researchbench/fixture/`), never against
   `simple.wikipedia.org`. The stub is registered through the lane's own provider seam
   (`registerResearchProvider`, `src/adapters/corpus/wikipedia-live.mjs`), the same seam the ledger
-  e2e test stubs (`e2e/pages-ledger-research.test.mjs`'s `SUMMARIES` / `routeSimpleWikipedia`). Two
+  e2e test stubs (`test-e2e/pages-ledger-research.test.mjs`'s `SUMMARIES` / `routeSimpleWikipedia`). Two
   runs over the same fixture and stamp produce byte-identical `product.jsonl`. One run per arm is
   sufficient; there is no judge-noise tier to sample against, unlike CHATBENCH. A cycle that reaches
   the real network in grading is a broken harness, not a result — the whole point is a deterministic
@@ -202,7 +202,7 @@ The harness this skill specifies. Build it in the first cycle, then it is sacred
   `{ title, summary, leadLinks: [ titles, in document order ] }`. The graph is closed — every title
   a `leadLinks` list names either has its own fixture entry or is a deliberate dead title (the stub
   returns null for it, exercising the skip path). This is the same stub shape
-  `e2e/pages-ledger-research.test.mjs` builds inline (`SUMMARIES` plus the `action=parse` link list),
+  `test-e2e/pages-ledger-research.test.mjs` builds inline (`SUMMARIES` plus the `action=parse` link list),
   lifted into a committed fixture so grading never touches the live site. `leadLinks` order is
   authored to match how a real lead section introduces the topic, because the lane orders the queue
   by document order (`linkedTitles` reads `section=0`, not an alphabetical `prop=links`).

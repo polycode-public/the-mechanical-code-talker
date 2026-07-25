@@ -4,7 +4,7 @@
 // produce is an answer a reader might see. Substitution sets are PRUNED to the
 // entries that resolve (e.g. "which modules import X" excludes the 3 modules nothing
 // imports; "what calls X" excludes functions with no tracked caller), and
-// e2e/pages-demo-templates.test.mjs asks every pair against public/demo-graph.json
+// test-e2e/pages-demo-templates.test.mjs asks every pair against public/demo-graph.json
 // through the same ask() the page calls, so a pair that starts missing fails the
 // suite instead of showing a reader a miss the demo picked for them.
 export const TEMPLATES = [

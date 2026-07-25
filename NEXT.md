@@ -41,7 +41,7 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   before slice 4 landed, so it still binds a same-turn tie by recency; a real plural tie isn't
   reachable through any current lane yet (no lane registers two `set` referents in one turn), so
   this is a small follow-up wiring change, not a live bug
-- [ ] `e2e/pages-ledger-teach.test.mjs` (bundle-load and refocus assertions) flakes under real
+- [ ] `test-e2e/pages-ledger-teach.test.mjs` (bundle-load and refocus assertions) flakes under real
   multi-file e2e contention — surfaced while stress-verifying the chat/research hardening above;
   a different feature area (ledger UI) with no shared root cause, not yet investigated
 

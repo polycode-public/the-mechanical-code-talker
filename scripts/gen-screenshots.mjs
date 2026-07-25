@@ -4,7 +4,7 @@
 // the capture ran against.
 //
 // Builds a fresh site snapshot the same way the e2e suite does (see
-// e2e/helpers/demo-site.mjs) so every plate always shows the current design,
+// test-e2e/helpers/demo-site.mjs) so every plate always shows the current design,
 // never a build left over from an earlier session. Run via `npm run
 // gen:screenshots`.
 import { createHash } from "node:crypto";
@@ -13,8 +13,8 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { chromium } from "playwright";
 
-import { buildDemoSiteSnapshot, repoRoot } from "../e2e/helpers/demo-site.mjs";
-import { serveDirectory } from "../e2e/helpers/static-server.mjs";
+import { buildDemoSiteSnapshot, repoRoot } from "../test-e2e/helpers/demo-site.mjs";
+import { serveDirectory } from "../test-e2e/helpers/static-server.mjs";
 
 const VIEWPORT = { width: 1024, height: 600 };
 const READY_TIMEOUT_MS = 30_000;

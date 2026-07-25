@@ -795,7 +795,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   // LEDGER (declared "let" in the embed script above this one — a classic,
   // non-module script's top-level bindings are reachable as bare identifiers
   // by every later script tag in the document, never as window.LEDGER; see
-  // e2e/pages-ledger.test.mjs's own note on this) and its indexes start as
+  // test-e2e/pages-ledger.test.mjs's own note on this) and its indexes start as
   // the server-rendered snapshot but are REASSIGNED wholesale after a live
   // teach (applyLedgerData, below) — a successful teach through the dock
   // changes the underlying graph, and the page has to show that, not keep
