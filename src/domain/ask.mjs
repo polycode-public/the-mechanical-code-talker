@@ -92,6 +92,23 @@ function nounFor(entityType, n) {
   return n === 1 ? s : p;
 }
 
+/** A discourse `set` referent for a class-homogeneous result list — the typed
+ *  content a listing/filter answer establishes, so a later "which of those …"
+ *  binds it (see evalCommitFilter for the shape the session layer registers).
+ *  Returns an empty array when nothing typed can be registered: no member
+ *  class, or an empty result. `extra` carries a lane's own sibling flags (the
+ *  anaphora lane's `bound: true`). */
+function setReferentsFor(cls, matches, lane, extra = {}) {
+  if (!cls || !matches.length) return [];
+  return [{
+    kind: "set", class: cls,
+    label: `${matches.length} ${nounFor(cls, matches.length)}`,
+    ids: matches.map((m) => m.id),
+    attrs: { count: matches.length },
+    lane, ...extra,
+  }];
+}
+
 /** A class enum rendered as prose words ("GlobalVariable" -> "global
  *  variable"), lowercase to match nounFor's own convention. For the render
  *  sites that must name the enum itself rather than a curated PLURAL_FORMS
@@ -1806,7 +1823,13 @@ function evalAnaphora(graph, ast, opts) {
   const emptyClass = f && f.type === "entity" ? f.entityType : sameClass(baseItems);
   const common = items.length ? sameClass(items) : emptyClass;
   if (ast.mode === "count") return { compositeKind: "count", count: items.length, entityType: common, matches: [] };
-  return { compositeKind: "set", matches: items, entityType: common };
+  // A narrowed, class-homogeneous result registers as a NEW set referent so
+  // the narrowing survives a later count and binds a further "which of those".
+  // It rides `bound: true` (a follow-up derived FROM the standing set), so the
+  // session layer's register() does not evict the set on the class change a
+  // narrowing produces.
+  const referents = setReferentsFor(common, items, "anaphora", { bound: true });
+  return { compositeKind: "set", matches: items, entityType: common, referents };
 }
 
 // Structural kinds counted for "most-connected" (total degree). Symbol-grain and
@@ -1938,6 +1961,9 @@ function evalMembershipComposite(graph, ast, opts) {
   const filterFn = qualNode
     ? (ind) => qualNode.filters.every((f) => qualHolds(graph, ind, QUALIFIERS[f]))
     : null;
+  // A class-typed membership result registers as a discourse set referent (see
+  // evalCommitFilter) so a later "which of those …" binds it.
+  const membershipReferents = (list) => setReferentsFor(entityType, list, "membership");
   const owner = resolveMembershipOwner(graph, memNode.term, opts && opts.contextId);
   if (owner.kind === "dir") {
     let objs;
@@ -1947,14 +1973,16 @@ function evalMembershipComposite(graph, ast, opts) {
       objs = uniqueById(MEMBERSHIP_KINDS.flatMap((k) => forwardOverSet(graph, k, ids))).filter((o) => o.class === entityType);
     }
     if (filterFn) objs = objs.filter(filterFn);
-    return { compositeKind: "set", matches: objs, entityType };
+    return { compositeKind: "set", matches: objs, entityType, referents: membershipReferents(objs) };
   }
   if (owner.kind === "miss") return { compositeKind: "set", matches: [], entityType };
   const { own, inherited, viaLabel } = computeMembership(graph, owner.id, owner.entityClass, entityType, filterFn);
   const inheritedNotOwn = !own.length && inherited.length > 0;
+  const finalMatches = inheritedNotOwn ? inherited : own;
   return {
-    compositeKind: "membership", entityType, matches: inheritedNotOwn ? inherited : own,
+    compositeKind: "membership", entityType, matches: finalMatches,
     inheritedNotOwn, viaLabel, ownerLabel: owner.label,
+    referents: membershipReferents(finalMatches),
   };
 }
 
@@ -2102,7 +2130,13 @@ function evalComposite(graph, ast, opts = {}) {
     && !(Array.isArray(opts.prev) && opts.prev.length)) {
     return { compositeMiss: true, reason: "no-prev", matches: [] };
   }
-  return { compositeKind: "set", matches: evalSet(graph, ast, opts), entityType: ast.entityType || null };
+  const matches = evalSet(graph, ast, opts);
+  const entityType = ast.entityType || null;
+  // A resolved, class-typed listing/filter set registers as a discourse
+  // referent (see evalCommitFilter) so a later "which of those …" binds it. A
+  // qualifier node is held back for the qualifier-listing lane.
+  const referents = ast.node === "qualifier" ? [] : setReferentsFor(entityType, matches, "compositeSet");
+  return { compositeKind: "set", matches, entityType, referents };
 }
 
 // ---- compositional render: templated, same "honest miss vs cited hit"
@@ -4408,6 +4442,18 @@ export function ask(graph, query, { contextId = null, nlp = undefined, prev = nu
       const list = shown.join(", ") + (more > 0 ? `, +${more} more` : "");
       content = `${content}\n(answering for ${result.objMatch.label} — ${others.length} other match${others.length === 1 ? "" : "es"}: ${list})`;
     }
+  }
+  // A plain relation LISTING ("which modules import X", "which functions call
+  // X") resolves through the simple traverse path, not evalComposite, so it
+  // registers its class-typed result here — the same set referent the
+  // composite listing lanes emit, so a later "which of those …" binds it. Only
+  // a real, non-empty, class-homogeneous answer no lane already registered
+  // (the composite lanes set result.referents themselves).
+  if (!Array.isArray(result.referents) && !rendered.miss && !rendered.ambiguous
+    && (parsed?.shape === "reverse" || parsed?.shape === "forward")
+    && parsed.entityType && Array.isArray(result.matches) && result.matches.length
+    && result.matches.every((m) => m && m.class === parsed.entityType)) {
+    result = { ...result, referents: setReferentsFor(parsed.entityType, result.matches, "relationListing") };
   }
   return {
     content,

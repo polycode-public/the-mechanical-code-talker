@@ -12012,9 +12012,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // them" filters or counts the PREVIOUS answer's entity set, threaded as
   // ask()'s `prev`. Prefers the FULL id set (`allIds`) over `matches`, since a
   // concept-force listing caps `matches` at MAX_EXAMPLES.
-  const prev = (last?.detail?.allIds && last.detail.allIds.length)
+  let prev = (last?.detail?.allIds && last.detail.allIds.length)
     ? last.detail.allIds.filter(Boolean)
     : (last?.detail?.matches || []).map((m) => m?.id).filter(Boolean);
+  // A count erases its own matches to [], so the previous turn carries no id
+  // set for the next "which of those" to narrow. When the carry is empty, fall
+  // back to the session record: a standing `set` referent that "those" binds
+  // keeps a narrowed set alive across a counting hop. No same-turn plural tie
+  // is reachable yet (no lane registers two set referents in one turn), so this
+  // probe needs no tie refusal.
+  if (!prev.length && discourseHolder) {
+    const boundSet = bindDiscourseForm(discourseHolder.record, "those");
+    if (boundSet?.referent?.ids?.length) prev = boundSet.referent.ids.filter(Boolean);
+  }
   // The query the ENGINE parses: a "what about X" continuation is rewritten to the
   // prior shape with X swapped in; everything else parses verbatim. The record and
   // transcript keep the user's ACTUAL words (`query`), only the parse target changes.
@@ -12272,10 +12282,10 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     // content is still typed) register into the session's record here — the
     // one point both ask paths (direct call and dispatchTool) converge.
     if (discourseHolder && Array.isArray(envelope?.discourse)) {
-      for (const { lane, ...spec } of envelope.discourse) {
+      for (const { lane, bound, ...spec } of envelope.discourse) {
         discourseHolder.record = registerReferent(discourseHolder.record, {
           ...spec, from: { turn: discourseHolder.record.turn, lane, query: askQuery },
-        });
+        }, { bound: !!bound });
       }
     }
   } catch (e) {

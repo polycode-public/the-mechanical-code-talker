@@ -42,7 +42,7 @@ test("a commit-filter turn fills the discourse record with a set referent and th
   assert.deepEqual({ lane: set.from.lane, turn: set.from.turn }, { lane: "commitFilter", turn: 0 });
 });
 
-test("a non-registering turn advances the counter but leaves the standing referents alone", async () => {
+test("a following module listing registers its own set, retiring the commit set but keeping the dated pivot", async () => {
   const graph = await miniWebappGraph();
   const first = await runTurn("what changed before 1b2c3d4e5f60", {
     config: { graphFile: GRAPH_FILE }, graph, discourse: emptyRecord(),
@@ -51,6 +51,11 @@ test("a non-registering turn advances the counter but leaves the standing refere
     config: { graphFile: GRAPH_FILE }, graph, discourse: first.discourse, last: first.last,
   });
   assert.equal(second.discourse.turn, 2);
-  assert.equal(second.discourse.referents.length, 2, "a listing lane does not register yet");
-  assert.deepEqual(second.discourse.referents.map((x) => x.kind).sort(), ["event", "set"]);
+  const set = second.discourse.referents.find((x) => x.kind === "set");
+  const event = second.discourse.referents.find((x) => x.kind === "event");
+  assert.equal(set.class, "Module", "the listing lane now registers its own module set");
+  assert.equal(set.ids.length, 3);
+  assert.ok(!second.discourse.referents.some((x) => x.kind === "set" && x.class === "Commit"),
+    "a module set after a commit set retires the commit set — 'those' no longer means the commits");
+  assert.equal(event.label, "1b2c3d4e5f60", "the dated pivot event survives: a topic shift retires only the same kind");
 });
