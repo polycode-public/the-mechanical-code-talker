@@ -131,10 +131,10 @@ renovate:
   - .gitlab-ci.yml
 
 # The suite split four ways so a push isn't gated on one long serial run.
-# `scripts/list-unit-test-files.mjs` is the one place the >30s exclusion list
-# lives; test:slow's own package.json script names those same four files
+# `scripts/list-unit-test-files.mjs` is the one place the >=20s exclusion list
+# lives; test:slow's own package.json script names those same five files
 # directly. Rebalance the buckets if a file's own timing drifts across that
-# 30s line.
+# 20s line.
 unit:smoke:
   stage: test
   interruptible: true
@@ -153,7 +153,7 @@ unit:fast:
     - npm ci
     - npm run test:fast
 
-# Everything except the four files test:slow owns.
+# Everything except the five files test:slow owns.
 unit:
   stage: test
   interruptible: true
@@ -163,10 +163,10 @@ unit:
     - npm ci
     - npm run test:unit
 
-# The four files with at least one test over 30s: synthbench's SYN rungs, the
-# generated-artifacts estate guards, the README shell-example harness, and the
-# bench-smoke corpus lane. Isolated so their wall-clock doesn't sit on the
-# critical path of the other three tiers.
+# The five files with at least one test over 20s: synthbench's SYN rungs, the
+# generated-artifacts estate guards, the README shell-example harness, the
+# bench-smoke corpus lane, and the inference corpus lane. Isolated so their
+# wall-clock doesn't sit on the critical path of the other three tiers.
 unit:slow:
   stage: test
   interruptible: true
