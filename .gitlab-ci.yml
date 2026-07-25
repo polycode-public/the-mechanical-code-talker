@@ -130,6 +130,30 @@ renovate:
   - package-lock.json
   - .gitlab-ci.yml
 
+# The suite split four ways so a push isn't gated on one long serial run.
+# `scripts/list-unit-test-files.mjs` is the one place the >30s exclusion list
+# lives; test:slow's own package.json script names those same four files
+# directly. Rebalance the buckets if a file's own timing drifts across that
+# 30s line.
+unit:smoke:
+  stage: test
+  interruptible: true
+  rules:
+    - changes: *consumer-paths
+  script:
+    - npm ci
+    - npm run test:smoke
+
+unit:fast:
+  stage: test
+  interruptible: true
+  rules:
+    - changes: *consumer-paths
+  script:
+    - npm ci
+    - npm run test:fast
+
+# Everything except the four files test:slow owns.
 unit:
   stage: test
   interruptible: true
@@ -137,7 +161,20 @@ unit:
     - changes: *consumer-paths
   script:
     - npm ci
-    - npm test
+    - npm run test:unit
+
+# The four files with at least one test over 30s: synthbench's SYN rungs, the
+# generated-artifacts estate guards, the README shell-example harness, and the
+# bench-smoke corpus lane. Isolated so their wall-clock doesn't sit on the
+# critical path of the other three tiers.
+unit:slow:
+  stage: test
+  interruptible: true
+  rules:
+    - changes: *consumer-paths
+  script:
+    - npm ci
+    - npm run test:slow
 
 # Package hygiene: publint over the exports map, and the file list npm pack
 # would publish diffed against the committed expected manifest — no stray
@@ -169,16 +206,20 @@ license:deps:
     - npm ci
     - npm run check:licences
 
-# The e2e tier: real-binary spawns, build smoke, and the browser journeys
-# (e2e/*.test.mjs — top-level only, so this glob never picks up e2e/heavy/).
-# Its own pipeline column, so the tier's pass/fail is visible at the top level.
+# The e2e tier, split into named channels — one column per demo page (plus
+# tui/cli) instead of one long serial run, so a failure points straight at the
+# page and the pipeline's wall-clock is the slowest channel, not the sum of
+# all of them. `e2e/*.test.mjs` — top-level only; e2e/heavy/ is the separate
+# `e2e:heavy` job below.
 #
-# Chromium is installed explicitly. .npmrc's ignore-scripts=true stops
-# playwright's install hook, so `npm ci` never downloads a browser as a side
-# effect; the browsers land in the project dir (PLAYWRIGHT_BROWSERS_PATH) so the
-# cache can carry them, keyed on the lockfile because the pinned playwright
-# version lives there and each version wants its own build.
-e2e:
+# Two base templates: `.e2e-web-base` installs Chromium for channels that spawn
+# a real browser page; `.e2e-lite-base` skips it for the CLI/TUI channels that
+# never do (confirmed via `grep -l 'from "playwright"' e2e/*.test.mjs`, 24 of
+# 52 files). .npmrc's ignore-scripts=true stops playwright's install hook, so
+# `npm ci` never downloads a browser as a side effect; the browsers land in the
+# project dir (PLAYWRIGHT_BROWSERS_PATH) so the cache can carry them, keyed on
+# the lockfile because the pinned playwright version lives there.
+.e2e-web-base:
   stage: e2e
   interruptible: true
   rules:
@@ -191,10 +232,121 @@ e2e:
         - package-lock.json
     paths:
       - .playwright-browsers
-  script:
+  before_script:
     - npm ci
     - npx playwright install --with-deps chromium
-    - npm run test:e2e
+
+.e2e-lite-base:
+  stage: e2e
+  interruptible: true
+  rules:
+    - changes: *consumer-paths
+  before_script:
+    - npm ci
+
+e2e-web-index:
+  extends: .e2e-web-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      e2e/pages-index.test.mjs e2e/pages-home.test.mjs
+      e2e/pages-demo-history.test.mjs e2e/pages-demo-templates.test.mjs
+      e2e/pages-examples.test.mjs e2e/pages-service-worker.test.mjs
+      e2e/memory-ask-browser-bundle.test.mjs e2e/readme-examples.test.mjs
+      e2e/cli-render-views.test.mjs
+
+e2e-web-chat:
+  extends: .e2e-web-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      e2e/pages-chat-fullscreen.test.mjs e2e/pages-chat-persistence.test.mjs
+      e2e/pages-chat-export.test.mjs e2e/pages-chat-digest.test.mjs
+      e2e/pages-chat-boot-budget.test.mjs e2e/browser-chat.test.mjs
+      e2e/chat-prompt.test.mjs e2e/chat-browser-bundle.test.mjs
+      e2e/build-chat-assets.test.mjs
+
+e2e-web-chat-research:
+  extends: .e2e-web-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      e2e/pages-chat-research.test.mjs e2e/pages-chat-live-toggle.test.mjs
+      e2e/web-chat-memory.test.mjs
+
+e2e-web-research:
+  extends: .e2e-web-base
+  script:
+    - node --disable-warning=ExperimentalWarning --test e2e/pages-research.test.mjs
+
+e2e-web-ingest:
+  extends: .e2e-web-base
+  script:
+    - node --disable-warning=ExperimentalWarning --test e2e/pages-ingest.test.mjs
+
+e2e-web-sprites:
+  extends: .e2e-web-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      e2e/pages-sprites.test.mjs e2e/sprites-large-visual.test.mjs
+
+e2e-web-ledger:
+  extends: .e2e-web-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      e2e/pages-ledger.test.mjs e2e/pages-ledger-teach.test.mjs
+      e2e/pages-ledger-research.test.mjs e2e/ledger-viz-query-only-dock.test.mjs
+      e2e/ledger-viz-cli.test.mjs e2e/ledger-viz.test.mjs
+
+e2e-web-code:
+  extends: .e2e-web-base
+  script:
+    - node --disable-warning=ExperimentalWarning --test e2e/pages-code.test.mjs
+
+e2e-web-spider-fly:
+  extends: .e2e-web-base
+  script:
+    - node --disable-warning=ExperimentalWarning --test e2e/pages-spider-fly.test.mjs
+
+e2e-web-plan:
+  extends: .e2e-web-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      e2e/pages-plan.test.mjs e2e/plan-cli.test.mjs e2e/plan-browser-entry.test.mjs
+
+e2e-web-adventure:
+  extends: .e2e-web-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      e2e/pages-adventure.test.mjs e2e/pages-adventure-edit.test.mjs
+
+# Its own job: dynamically-named tests (one per page x orientation), the
+# heaviest single file (~36s), cross-cutting so it doesn't fit any one channel.
+e2e-web-screenshot-sweep:
+  extends: .e2e-web-base
+  script:
+    - node --disable-warning=ExperimentalWarning --test e2e/pages-screenshot-sweep.test.mjs
+
+# No browser: pure stdio/process spawns.
+e2e-tui:
+  extends: .e2e-lite-base
+  script:
+    - node --disable-warning=ExperimentalWarning --test e2e/tui.test.mjs e2e/tui-chat-file.test.mjs
+
+e2e-cli:
+  extends: .e2e-lite-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      e2e/cli-smoke.test.mjs e2e/cli-help.test.mjs e2e/cli-config-flags.test.mjs
+      e2e/init.test.mjs e2e/init-cli.test.mjs e2e/bootstrap-seed.test.mjs
+      e2e/import-file.test.mjs e2e/digest-cli.test.mjs e2e/memory-export.test.mjs
+      e2e/domain-river.test.mjs e2e/domain-crates.test.mjs e2e/lib-chat-sqlite.test.mjs
+      e2e/build-demo-memory.test.mjs e2e/server-http.test.mjs e2e/server-http-smoke.test.mjs
 
 # The heavy half of the e2e tier (e2e/heavy/*.test.mjs): a full demo:build, an
 # uncapped ConceptNet seed, and a full-store export/import round trip —
@@ -239,13 +391,48 @@ e2e:heavy:
 publish:npm:
   stage: deploy
   # Optional so a README-only push still runs the publish gate: README.md is in
-  # this job's rules but not in unit/e2e's, so on that push those two are absent
-  # from the pipeline. The job re-runs `npm test` itself below, so the guard
-  # holds either way.
+  # this job's rules but not in the test/e2e jobs' rules, so on that push all of
+  # these are absent from the pipeline. The job re-runs `npm test` itself below,
+  # so the guard holds either way. One entry per split job (the old single
+  # `unit`/`e2e` pair, now four unit tiers and fourteen e2e channels) so deploy
+  # still starts as soon as test+e2e clear, without waiting on pack:contents/
+  # license:deps in the same stage.
   needs:
+    - job: unit:smoke
+      optional: true
+    - job: unit:fast
+      optional: true
     - job: unit
       optional: true
-    - job: e2e
+    - job: unit:slow
+      optional: true
+    - job: e2e-web-index
+      optional: true
+    - job: e2e-web-chat
+      optional: true
+    - job: e2e-web-chat-research
+      optional: true
+    - job: e2e-web-research
+      optional: true
+    - job: e2e-web-ingest
+      optional: true
+    - job: e2e-web-sprites
+      optional: true
+    - job: e2e-web-ledger
+      optional: true
+    - job: e2e-web-code
+      optional: true
+    - job: e2e-web-spider-fly
+      optional: true
+    - job: e2e-web-plan
+      optional: true
+    - job: e2e-web-adventure
+      optional: true
+    - job: e2e-web-screenshot-sweep
+      optional: true
+    - job: e2e-tui
+      optional: true
+    - job: e2e-cli
       optional: true
   rules:
     # schedule-guarded: the nightly dep:audit schedule must not re-publish.
