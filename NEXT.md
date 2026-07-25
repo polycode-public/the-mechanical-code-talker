@@ -36,12 +36,11 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
 - [ ] the four CONVERSATION dead-ends (block below) — a fix agent was dispatched and lost to a
   spend limit before committing; re-dispatch is the next session's first cheap win
 
-- [ ] temporal comparison over a PLURAL antecedent — a date-filter result set (`what changed
-  before <sha>`) registers and survives a count, but the singular `TEMPORAL_COMPARISON_RE` lane
-  binds only singular forms, so comparing a set's dates needs its own lane. The plan records this
-  as a separate follow-on (slice 3 deliberately kept the regex to two single ISO dates). The
-  singular "when was X last touched" antecedent now binds (slice 5c)
-
+- [ ] wire `bind()`'s `{ tieRefuses: true }` into the plural temporal-comparison lane
+  (`PLURAL_TEMPORAL_COMPARISON_RE` in `chat.mjs`) alongside the singular one — built on a base
+  before slice 4 landed, so it still binds a same-turn tie by recency; a real plural tie isn't
+  reachable through any current lane yet (no lane registers two `set` referents in one turn), so
+  this is a small follow-up wiring change, not a live bug
 - [ ] two e2e tests flake under full-suite contention (both pass 100% in isolation, so not a
   correctness bug): `e2e/pages-chat-live-toggle.test.mjs`'s "/wiki supplement adds a cited
   Wikipedia read-out..." and `e2e/pages-chat-research.test.mjs`'s "a typed research request

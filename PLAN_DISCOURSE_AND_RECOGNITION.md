@@ -4,8 +4,9 @@ Status: Part A slices 1–5 are all built (`src/domain/discourse.mjs`; the commi
 registers, the session shell threads the record, the temporal-comparison lane flips the frozen
 row — now `games/cross-turn-temporal-composition-composes` — the listing/filter lanes register
 plural `set` referents that survive a count, the superlative, qualifier, dated-fact and adventure
-lanes register too, and the temporal lane refuses and lists a same-turn tie rather than picking by
-recency). All of Part B is still design.
+lanes register too, the temporal lane refuses and lists a same-turn tie rather than picking by
+recency, and a plural temporal comparison (`were those before X was touched`) composes over a
+plural set, quantifying the members it dates from the graph). All of Part B is still design.
 Everything described as current behaviour was read off the tree and run against
 `examples/mini-webapp` while this document was written.
 
@@ -420,6 +421,27 @@ Closes the count-erases-the-chain behaviour recorded in A1: a set survives a cou
 narrowing still binds it. Tests: `test/domain/discourse-plural-binding-registration.test.mjs`
 plus the three new `games.compositional.anaphora` corpus rows.
 
+**Follow-on to slice 3 (2026-07-25) — temporal comparison over a plural antecedent. BUILT.**
+Slice 2's `TEMPORAL_COMPARISON_RE` binds only the singular forms and compares two single ISO dates,
+so a date-filter result set (`what changed before <sha>`) that registers and survives a count had
+no way to be compared as a set. `PLURAL_TEMPORAL_COMPARISON_RE` in `runAsk` is its plural sibling:
+a plural bindable form (`those`/`them`/`these`), a comparison word, and the same embedded passive
+clause. `those` binds the `set` referent slice 3 registers, every member is dated from the graph
+(the set referent carries member ids, not per-member dates, so the dates are read here the same way
+the clause is read fresh — `discourse.mjs`'s closed `REFERENT_ATTRS` needed no new key), the clause
+re-runs as its own when-question, and the answer quantifies the set against that date — `Yes — all
+N …`, `No — none of the N …`, or `Partly — M of the N … ; the other K did not` — with the clause
+commit and its date cited. A set whose members are not all datable refuses honestly (a `Module`
+listing has no dates to compare), and an unbound form, an undatable clause, or a missing graph keep
+the same specific misses the singular lane makes. Checked before the ask engine for the same reason
+slice 2 is, so `those before logger.mjs was` never reaches the keyword-spot multi-token patient
+guard. Tests: `test/domain/discourse-plural-temporal-comparison.test.mjs` plus two new
+`games.compositional.temporal` corpus rows (the composed M-of-N answer, and the undatable-set
+refusal). Built against a base before slice 4 landed, so it binds by recency rather than calling
+`bind()` with `{ tieRefuses: true }` — a same-turn plural tie is unreachable today anyway (no lane
+registers two `set` referents in one turn), but wiring the flag in alongside the singular lane
+(below) is a real, still-open remainder now that slice 4's `joinOr` helper exists to render it.
+
 **Slice 4 — the ambiguity refusal. BUILT.**
 The temporal-comparison lane calls `bind()` with `{ tieRefuses: true }` and, before its
 unbound-referent miss, renders a refuse-and-list line — *"'that' could mean A or B — which do you
@@ -429,10 +451,11 @@ untouched: one admitting referent binds, several from different turns resolve by
 `test/domain/discourse-tie-refusal.test.mjs` — the pure `bind()` tie branch on a synthetic
 same-turn record, plus a `runTurn` turn against the mini-webapp graph that refuses and lists.
 The real chat-corpus tie row (a genuine same-turn tie reached through actual conversation, not a
-hand-built record) is deferred to slice 5a: superlative-winner registration is the first lane that
+hand-built record) is closed by slice 5a's superlative-winner registration — the first lane that
 registers two singular-admitting referents in one turn, so it is what first makes a live tie
-reachable. Until then the tie branch is exercised only by the synthetic unit test, which is the
-intended staging.
+reachable — see `games/superlative-winner-and-score-tie-a-singular-pronoun` under slice 5 below.
+The plural temporal lane above still binds by recency; that lane's own `tieRefuses` wiring is the
+one open remainder from this slice.
 
 **Slice 5 — the remaining lanes register. BUILT.**
 The superlative lane registers its winner as an `entity` (or a metric tie as a `set`) plus the
