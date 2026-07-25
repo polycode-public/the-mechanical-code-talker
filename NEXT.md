@@ -43,11 +43,6 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   cleanly — the garbled teach-offer is fixed)
 
 - [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 3–5 (plural binding past a count, the tie refusal, the remaining bindable-form lanes) — slices 1–2 shipped 2026-07-24 (the record threads through `runTurn`, and `games/cross-turn-temporal-composition-composes` is the flipped row); the plan doc stages what's next
-- [ ] `singularizeSurface` (`src/services/chat.mjs`) strips `-ses`/`-xes`/`-zes`/`-ches`/`-shes`
-  words by dropping the last 2 characters unconditionally — right for "buses"→"bus"/"boxes"→"box",
-  wrong for "collapses"→"collaps" (should be "collapse"); surfaced by the INGESTBENCH
-  ordinal/temporal-threading fix (2026-07-25), which grounds the fact but stores the misspelled
-  object. Fix in progress this session.
 
 CONVERSATION 3.0.3 sweep (see `BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
 
