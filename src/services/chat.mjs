@@ -2749,6 +2749,20 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object, qua
 // are Ys" recall. Deliberately NARROW: only the SUBJECT gets a free pass past
 // parseAce's closed lexicon-noun gate, never the OBJECT. ----
 
+/** Singular nouns that already END in a bare sibilant "-s" and so form their
+ *  plural with "-es" (bus -> buses, gas -> gases, lens -> lenses). When a
+ *  "-ses" word strips two letters onto one of these, the "-es" was the plural
+ *  marker and the stem is correct; every OTHER "-ses" word kept a silent "-e"
+ *  and singularizes by stripping one letter (see singularizeSurface). Doubled
+ *  "-ss" stems (class, glass, boss) are caught by pattern, so only single-"s"
+ *  stems need listing here. */
+const BARE_SIBILANT_S_NOUNS = new Set([
+  "bus", "gas", "plus", "minus", "surplus", "lens", "bias", "atlas", "canvas",
+  "virus", "bonus", "campus", "census", "chorus", "circus", "focus", "status",
+  "iris", "genius", "sinus", "walrus", "cactus", "fungus", "radius", "nucleus",
+  "alias", "crocus", "abacus", "syllabus", "octopus", "platypus",
+]);
+
 /** Naive plural → singular fold for the "some/a few Xs are Ys" surface forms
  *  (mirrors factTermVariants' own naive -es/-s stripping, below, but returns
  *  ONE canonical spelling to STORE rather than a lookup Set of candidates to
@@ -2766,10 +2780,26 @@ async function teachFact(memoryDir, sessionId, { subject, predicate, object, qua
 function singularizeSurface(word) {
   const w = String(word || "").trim();
   if (/[a-z]ies$/i.test(w)) return `${w.slice(0, -3)}y`;
-  if (/(ses|xes|zes|ches|shes)$/i.test(w)) return w.slice(0, -2);
+  if (/[a-z]ses$/i.test(w)) {
+    // "-ses" is genuinely ambiguous. A base already ending in "-se" just adds
+    // "-s" (collapse -> collapses, cause -> causes, rose -> roses), so the
+    // singular strips ONE letter. A base ending in a bare sibilant "-s" adds
+    // "-es" (bus -> buses, class -> classes, lens -> lenses), so the singular
+    // strips TWO. Spelling alone can't separate every pair, so strip two only
+    // when the two-char strip lands on a doubled "-ss" or a known bare-sibilant
+    // "-s" noun; otherwise the base kept its silent "-e" and one letter comes
+    // off. The other "-es" endings (-xes/-zes/-ches/-shes) keep the plain
+    // two-char strip below.
+    const stem = w.slice(0, -2);
+    if (/ss$/i.test(stem) || BARE_SIBILANT_S_NOUNS.has(stem.toLowerCase())) return stem;
+    return w.slice(0, -1);
+  }
+  if (/(xes|zes|ches|shes)$/i.test(w)) return w.slice(0, -2);
   if (/[a-z]s$/i.test(w) && !/(?:ss|ous)$/i.test(w)) return w.slice(0, -1);
   return w;
 }
+
+export { singularizeSurface };
 
 /** "(every|each|all|a|an )?X is/are (a|an )?Y" — the shape the unknown-subject
  *  fallback recognizes (group 2 = X, group 4 = Y); group 1 (when present)
