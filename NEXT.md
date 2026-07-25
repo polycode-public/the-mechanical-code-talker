@@ -42,7 +42,7 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   transcripts are folded into that plan's staging (the unbound form now misses cleanly — the
   garbled teach-offer is fixed)
 
-- [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 4–5 (the tie refusal, the remaining bindable-form lanes) — slices 1–3 shipped (the record threads through `runTurn`, the commit-filter/listing/filter lanes register, `games/cross-turn-temporal-composition-composes` composes, and a set now survives a count so a later "which of those" still binds it); the plan doc stages what's next
+- [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slice 5 (the remaining bindable-form lanes: superlative winners, qualifier listings, fact lanes, and the adventure's world commands) — slices 1–4 shipped (the record threads through `runTurn`, the commit-filter/listing/filter lanes register, `games/cross-turn-temporal-composition-composes` composes, a set survives a count so a later "which of those" still binds it, and a same-turn tie now refuses and lists rather than picking by recency); the real chat-corpus tie row waits on slice 5a's superlative-winner registration, the first lane that registers two singular-admitting referents in one turn; the plan doc stages what's next
 - [ ] two e2e tests flake under full-suite contention (both pass 100% in isolation, so not a
   correctness bug): `e2e/pages-chat-live-toggle.test.mjs`'s "/wiki supplement adds a cited
   Wikipedia read-out..." and `e2e/pages-chat-research.test.mjs`'s "a typed research request

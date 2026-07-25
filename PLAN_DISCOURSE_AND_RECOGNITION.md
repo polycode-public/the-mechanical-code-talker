@@ -1,9 +1,10 @@
 # PLAN_DISCOURSE_AND_RECOGNITION.md — two bounded records: cross-turn discourse, and goal recognition
 
-Status: Part A slices 1–3 are built (`src/domain/discourse.mjs`; the commit-filter lane
+Status: Part A slices 1–4 are built (`src/domain/discourse.mjs`; the commit-filter lane
 registers, the session shell threads the record, the temporal-comparison lane flips the frozen
-row — now `games/cross-turn-temporal-composition-composes` — and the listing/filter lanes now
-register plural `set` referents that survive a count). Everything else is design.
+row — now `games/cross-turn-temporal-composition-composes` — the listing/filter lanes now
+register plural `set` referents that survive a count, and the temporal lane refuses and lists a
+same-turn tie rather than picking by recency). Everything else is design.
 Everything described as current behaviour was read off the tree and run against
 `examples/mini-webapp` while this document was written.
 
@@ -418,11 +419,19 @@ Closes the count-erases-the-chain behaviour recorded in A1: a set survives a cou
 narrowing still binds it. Tests: `test/domain/discourse-plural-binding-registration.test.mjs`
 plus the three new `games.compositional.anaphora` corpus rows.
 
-**Slice 4 — the ambiguity refusal.**
-Turn on the tie branch in `bind()` and pin the refusal wording in the corpus. Until this slice the
-tie branch resolves by recency, which is today's behaviour with a smaller record; after it, a real
-tie refuses and lists. Its own corpus rows, in both directions (a tie refuses, a clear case still
-answers).
+**Slice 4 — the ambiguity refusal. BUILT.**
+The temporal-comparison lane calls `bind()` with `{ tieRefuses: true }` and, before its
+unbound-referent miss, renders a refuse-and-list line — *"'that' could mean A or B — which do you
+mean?"*, Oxford-comma "or"-joined over the tied labels — routed through the same `refMiss` helper
+the lane's other declines use, so it reads as an ordinary honest miss. The clear (non-tie) path is
+untouched: one admitting referent binds, several from different turns resolve by recency. Tests:
+`test/domain/discourse-tie-refusal.test.mjs` — the pure `bind()` tie branch on a synthetic
+same-turn record, plus a `runTurn` turn against the mini-webapp graph that refuses and lists.
+The real chat-corpus tie row (a genuine same-turn tie reached through actual conversation, not a
+hand-built record) is deferred to slice 5a: superlative-winner registration is the first lane that
+registers two singular-admitting referents in one turn, so it is what first makes a live tie
+reachable. Until then the tie branch is exercised only by the synthetic unit test, which is the
+intended staging.
 
 **Slice 5 — the remaining lanes register.**
 Superlative winners, qualifier listings, fact-lane answers, and the adventure's world commands.
