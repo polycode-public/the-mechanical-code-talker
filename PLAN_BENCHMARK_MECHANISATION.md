@@ -35,10 +35,17 @@ the nine `SKILL_BENCHMARK_*.md` docs at 2.11.10.
   (`chatbench/batch-judge.mjs`; `judge.mjs --batch <n>`, dry-run-emitted). Defaults are unchanged:
   no engine token means byte-identical rows and single-lane replay.
 - **Lever 7 — AGI-scales aggregation.** `scripts/agi-scales-aggregate.mjs` reads the sibling benches'
-  committed envelopes (AGENTBENCH's today) and emits the eight entry-rung readings mechanically,
-  marking a scale MEASURED only when a bench artifact produced the scalar — abstention calibration
-  and goal-origination distance read scalars off the envelope; the other six read assessment-only.
-  No rung is ever fabricated.
+  committed envelopes (AGENTBENCH's and INFBENCH's; CHATBENCH's generator exists — `chatbench/generate-envelope.mjs`,
+  a pure read+reshape over an already-graded run's summary.json/product.jsonl, no model calls of its
+  own — but its envelope is committed only once a live judge pass has actually produced a summary to
+  read) and emits the eight entry-rung readings mechanically, marking a scale MEASURED only when a
+  bench artifact produced the scalar. Abstention calibration reads AGENTBENCH's zero-hallucination
+  gate alone until INFBENCH's/CHATBENCH's envelopes both also clear their own zero-fabrication check,
+  at which point it reports the reading spanning all three pools; goal-origination distance reads
+  AGENTBENCH's reached ladder rung; knowledge-scale-tolerance reads `corpus/child/manifest.json`'s
+  fact count directly. The other five read assessment-only. No rung or reading is ever fabricated,
+  and every new envelope is read null-safe — an older checkout without one degrades to the readings
+  available before it existed.
 
 Coordinator hand-off: to expose the delta-judging default, add to `package.json` scripts —
 `"chatbench:judge:cached": "node chatbench/judge.mjs --cache chatbench/verdict-cache.json"` —

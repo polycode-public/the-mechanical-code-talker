@@ -147,6 +147,36 @@ test("the committed agentbench envelope stamps the version the package ships", (
   assert.equal(envelope.generatedFrom.stamp, version);
 });
 
+// Same drift risk as the agentbench envelope above, and the same fix: INFBENCH
+// drives every case through a real runChat transcript, so this is slower than
+// the other guards here but still a pure re-run over the committed cases file.
+test("the committed infbench envelope is what its generator produces today", () => {
+  const out = mkdtempSync(path.join(tmpdir(), "tmct-infbench-envelope-freshness-"));
+  try {
+    execFileSync("node", [
+      path.join(repoRoot, "infbench", "generate-envelope.mjs"),
+      "--out", path.join(out, "envelope.json"),
+    ], { cwd: repoRoot, stdio: "pipe" });
+    assert.equal(
+      sha(readFileSync(path.join(out, "envelope.json"))),
+      sha(readFileSync(path.join(repoRoot, "infbench", "envelope.json"))),
+      "infbench/envelope.json has drifted from its generator — run `node infbench/generate-envelope.mjs` "
+        + "and commit the result.\nIt reports the capability the latest INFBENCH run proves for both the kernel "
+        + "and chat arms, stamped with the package version, so a stale commit hands a downstream reader the "
+        + "wrong release's measurement.",
+    );
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
+
+test("the committed infbench envelope stamps the version the package ships", () => {
+  const envelope = JSON.parse(readFileSync(path.join(repoRoot, "infbench", "envelope.json"), "utf8"));
+  const { version } = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
+  assert.equal(envelope.generatedFrom.infbenchVersion, version);
+  assert.equal(envelope.generatedFrom.stamp, version);
+});
+
 // The sprite-facts corpus is a function of data/sprites/ and
 // data/sprites-large/: add a template, a parameter or a material value and
 // the rows change. The committed file is what sprites.html's chat dock is
