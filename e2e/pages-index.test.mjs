@@ -34,7 +34,7 @@ test("the claim grid lists exactly one claim link per demo page, in the page ord
 test("every claim block names the page it opens in a filename chip that matches its href", async () => {
   const html = await readFile(INDEX, "utf8");
   const grid = html.slice(html.indexOf('<div class="claim-grid">'), html.indexOf('<section class="feature"'));
-  const chips = [...grid.matchAll(/<span class="claim-page">([^<]+)<\/span>/g)].map((m) => m[1]);
+  const chips = [...grid.matchAll(/<span class="claim-page">([^<]+)/g)].map((m) => m[1].trim());
   assert.deepEqual(chips, PAGE_ORDER.map((p) => `${p}.html`));
 });
 
@@ -51,7 +51,7 @@ test("each demo page gets a feature section whose plate shows that page's screen
     );
     assert.match(
       section,
-      new RegExp(`<a class="plate-frame" href="\\./${page}\\.html">`),
+      new RegExp(`<a class="plate-frame" href="\\./${page}\\.html"[^>]*>`),
       `the ${page} plate links to the page it depicts`,
     );
   }
