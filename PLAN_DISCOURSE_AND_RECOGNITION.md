@@ -2,8 +2,10 @@
 
 Status: Part A slices 1–3 are built (`src/domain/discourse.mjs`; the commit-filter lane
 registers, the session shell threads the record, the temporal-comparison lane flips the frozen
-row — now `games/cross-turn-temporal-composition-composes` — and the listing/filter lanes now
-register plural `set` referents that survive a count). Everything else is design.
+row — now `games/cross-turn-temporal-composition-composes` — the listing/filter lanes now
+register plural `set` referents that survive a count, and a plural temporal comparison
+(`were those before X was touched`) composes over that set, quantifying the members it dates from
+the graph). Everything else is design.
 Everything described as current behaviour was read off the tree and run against
 `examples/mini-webapp` while this document was written.
 
@@ -417,6 +419,26 @@ set fallback, `evalMembershipComposite`, and `evalAnaphora`'s own narrowed resul
 Closes the count-erases-the-chain behaviour recorded in A1: a set survives a count and a further
 narrowing still binds it. Tests: `test/domain/discourse-plural-binding-registration.test.mjs`
 plus the three new `games.compositional.anaphora` corpus rows.
+
+**Follow-on to slice 3 (2026-07-25) — temporal comparison over a plural antecedent. BUILT.**
+Slice 2's `TEMPORAL_COMPARISON_RE` binds only the singular forms and compares two single ISO dates,
+so a date-filter result set (`what changed before <sha>`) that registers and survives a count had
+no way to be compared as a set. `PLURAL_TEMPORAL_COMPARISON_RE` in `runAsk` is its plural sibling:
+a plural bindable form (`those`/`them`/`these`), a comparison word, and the same embedded passive
+clause. `those` binds the `set` referent slice 3 registers, every member is dated from the graph
+(the set referent carries member ids, not per-member dates, so the dates are read here the same way
+the clause is read fresh — `discourse.mjs`'s closed `REFERENT_ATTRS` needed no new key), the clause
+re-runs as its own when-question, and the answer quantifies the set against that date — `Yes — all
+N …`, `No — none of the N …`, or `Partly — M of the N … ; the other K did not` — with the clause
+commit and its date cited. A set whose members are not all datable refuses honestly (a `Module`
+listing has no dates to compare), and an unbound form, an undatable clause, or a missing graph keep
+the same specific misses the singular lane makes. Checked before the ask engine for the same reason
+slice 2 is, so `those before logger.mjs was` never reaches the keyword-spot multi-token patient
+guard. Tests: `test/domain/discourse-plural-temporal-comparison.test.mjs` plus two new
+`games.compositional.temporal` corpus rows (the composed M-of-N answer, and the undatable-set
+refusal). A same-turn plural tie is unreachable (no lane registers two `set` referents in one
+turn), so this lane binds by recency like slice 3; wiring `bind()`'s `{ tieRefuses: true }` into
+both temporal lanes together is the natural companion once slice 4 lands the tie-refusal machinery.
 
 **Slice 4 — the ambiguity refusal.**
 Turn on the tie branch in `bind()` and pin the refusal wording in the corpus. Until this slice the

@@ -11984,6 +11984,15 @@ const MOVE_HISTORY_RE = /^where\s+did\s+(.+?)\s+(?:move|get\s+moved|go)(?:\s+to)
  *  the honest miss. */
 const TEMPORAL_COMPARISON_RE = /^(?:was|is)\s+(this one|that one|it|this|that)\s+(before|after)\s+(.+?)\s+(?:was|were)\s+(touched|changed|modified|edited|updated)[?.!\s]*$/i;
 
+/** "were those before logger.mjs was touched" — the plural sibling of
+ *  TEMPORAL_COMPARISON_RE. A plural bindable form (`those`/`them`/`these`)
+ *  binds a `set` referent a listing/filter answer established, and the
+ *  comparison runs over the whole set: each member is dated from the graph,
+ *  and the answer quantifies (all / none / M of N) rather than forcing one
+ *  date. A set whose members are not all datable refuses, the same honest
+ *  miss the singular lane takes on an undated referent. */
+const PLURAL_TEMPORAL_COMPARISON_RE = /^(?:were|are)\s+(those|them|these)\s+(before|after)\s+(.+?)\s+(?:was|were)\s+(touched|changed|modified|edited|updated)[?.!\s]*$/i;
+
 /** ARCHITECTURE-OVERVIEW intent — "show me the architecture", "what is the
  *  architecture of this repo": the whole-repo map the /arch command renders.
  *  A closed phrase set, because the literal word "architecture" is also a
@@ -12094,6 +12103,76 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       const turn = plainTurn(query, text, { via: "composed", miss: false, focus, goal: temporalGoal });
       const cited = [graph.byId?.get?.(bound.referent.ids[0]), freshCommit].filter(Boolean);
       turn.detail = { traversal: `discourse ${bound.referent.ref} (${refDay}) vs last-${verb} of ${clauseSubject} (${clauseDay})`, matches: cited };
+      return turn;
+    }
+  }
+  // TEMPORAL COMPARISON OVER A PLURAL ANTECEDENT — "were those before
+  // logger.mjs was touched": the plural sibling of the block above. `those`
+  // binds a `set` referent a prior listing/filter established, and the whole
+  // set is compared against the freshly read clause date. Each member is dated
+  // from the graph (the set referent carries member ids, not per-member dates,
+  // so the dates are read here the same way the clause is read fresh), and the
+  // answer quantifies over the set — all, none, or M of N — rather than
+  // forcing the set onto a single date. A set whose members are not all
+  // datable refuses honestly, and an unbound form, an undatable clause, or a
+  // missing graph keep today's miss, the same specific declines the singular
+  // lane makes. Checked here, before the ask engine, for the same reason the
+  // singular lane is: otherwise "those before logger.mjs was" reaches the
+  // keyword-spot strategy as multi-token patient wreckage and the teach-offer
+  // cascade reads it as a subject to learn facts about.
+  {
+    const cmp = String(query).trim().match(PLURAL_TEMPORAL_COMPARISON_RE);
+    if (cmp) {
+      const [, form, cmpOp, clauseSubject, participle] = cmp;
+      const verb = participle.toLowerCase();
+      const temporalGoal = "compare a prior answer's dated set against a freshly read event (cross-turn temporal composition over a plural antecedent)";
+      const refMiss = (text) => {
+        note(trace, `goal: ${temporalGoal}`);
+        note(trace, `lane: PLURAL_TEMPORAL_COMPARISON_RE — "${form}" could not compose a set comparison; a specific miss names why, never the teach-offer cascade`);
+        return plainTurn(query, text, { via: "miss", miss: true, focus, goal: temporalGoal });
+      };
+      const bound = discourseHolder ? bindDiscourseForm(discourseHolder.record, form) : null;
+      if (!bound?.referent) {
+        return refMiss(`I don't have a set for "${form}" yet — nothing answered earlier in this conversation binds it. Ask for the set first (e.g. "what changed before <commit>"), then ask the comparison again.`);
+      }
+      const set = bound.referent;
+      const total = set.ids.length;
+      if (!graph) {
+        return refMiss(`"${form}" refers to ${set.label}, but I need a code graph to date its members and when ${clauseSubject} was last ${verb} — no code graph is loaded.`);
+      }
+      const dateOfId = (id) => {
+        const ind = graph.byId?.get?.(id);
+        return ind ? String((ind.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10) : "";
+      };
+      const memberDates = set.ids.map(dateOfId);
+      const undated = memberDates.filter((d) => !d).length;
+      if (undated) {
+        return refMiss(`"${form}" refers to ${set.label}, but not every member carries a date I can compare — ${undated} of the ${total} have no date on record, so I can't place the set before or after ${clauseSubject} was ${verb}.`);
+      }
+      const { ask } = await import("../domain/ask.mjs");
+      const fresh = ask(graph, `when was ${clauseSubject} ${participle}`);
+      const freshHit = (!fresh?.tmct_ask?.miss && !fresh?.tmct_ask?.ambiguous) ? fresh?.tmct_ask?.matches?.[0] : null;
+      const freshCommit = freshHit?.id ? graph.byId?.get?.(freshHit.id) : null;
+      const clauseDay = freshCommit?.class === "Commit"
+        ? String((freshCommit.attributes || []).find((a) => a.key === "date")?.value || "").slice(0, 10)
+        : "";
+      if (!clauseDay) {
+        return refMiss(`"${form}" refers to ${set.label}, but I couldn't date when ${clauseSubject} was last ${verb} in this index — so I can't compare the set to it.`);
+      }
+      const before = cmpOp.toLowerCase() === "before";
+      const satisfied = memberDates.filter((d) => before ? d < clauseDay : d > clauseDay).length;
+      const relation = before ? "came before" : "came after";
+      const tail = `${clauseSubject} was last ${verb} (${freshCommit.label}, ${clauseDay})`;
+      const text = satisfied === total
+        ? `Yes — all ${set.label} ${relation} ${tail}.`
+        : satisfied === 0
+          ? `No — none of the ${set.label} ${relation} ${tail}.`
+          : `Partly — ${satisfied} of the ${set.label} ${relation} ${tail}; the other ${total - satisfied} did not.`;
+      note(trace, `goal: ${temporalGoal}`);
+      note(trace, `lane: PLURAL_TEMPORAL_COMPARISON_RE — "${form}" bound ${set.label} (${total} dated members) through the discourse record; ${satisfied}/${total} ${relation} the freshly read clause (${clauseDay})`);
+      const turn = plainTurn(query, text, { via: "composed", miss: false, focus, goal: temporalGoal });
+      const cited = [...set.ids.map((id) => graph.byId?.get?.(id)), freshCommit].filter(Boolean);
+      turn.detail = { traversal: `discourse ${set.ref} (${total} members) vs last-${verb} of ${clauseSubject} (${clauseDay})`, matches: cited };
       return turn;
     }
   }
