@@ -6696,7 +6696,7 @@ function suggestibleSubjectPhrase(subject) {
  *  take the article. */
 const QUANTIFIER_LEAD_RE = /^(?:every|each|all|any)\s+/i;
 
-function factTermVariants(normFactTerm, term) {
+export function factTermVariants(normFactTerm, term) {
   const t = normFactTerm(term);
   const v = new Set();
   // The ask frames glue a quantifier onto the subject and looked up "every

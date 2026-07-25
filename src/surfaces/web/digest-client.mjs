@@ -14,7 +14,8 @@
 
 import { buildStructureTable, digestTerm } from "../../domain/digest/index.mjs";
 import { digestStoreStats, chainsForObjects, isaObjectsOf } from "../../domain/digest/store-stats.mjs";
-import { readFactRows } from "../../adapters/memory/core.mjs";
+import { readFactRows, normFactTerm } from "../../adapters/memory/core.mjs";
+import { factTermVariants } from "../../services/chat.mjs";
 
 /**
  * Digest one term end to end from fact rows and a pre-parsed structure table.
@@ -40,14 +41,18 @@ export function digestTermFromRowsBrowser(term, termRows, allRows, structures, o
  * in-browser surface already holds (the ledger's embedded PAYLOAD, the ledger
  * dock's live memoryDir.payload, the research session's store). Scans the
  * payload once for the term's own rows and the whole-store statistics, so a
- * caller never has to run readFactRows itself.
+ * caller never has to run readFactRows itself. Matches `term` against a fact's
+ * subject through the same spelling-variant fold `factTermVariants` gives the
+ * "what is X" fact reader (plural/irregular-plural folding), so a term seeded
+ * as "dog" is still found when queried as "dogs".
  *
  * Returns the render-ready view (see digestViewFromArticle) or null when the
  * term has no rows, no structures were supplied, or the selector kept nothing.
  */
 export function digestTermFromPayloadBrowser(payload, term, structures, opts = {}) {
   const rows = readFactRows(payload || { individuals: [], objectProperties: [] });
-  const termRows = rows.filter((r) => r.subject === term);
+  const variants = factTermVariants(normFactTerm, term);
+  const termRows = rows.filter((r) => variants.has(r.subject));
   if (!termRows.length) return null;
   const article = digestTermFromRowsBrowser(term, termRows, rows, structures, opts);
   return digestViewFromArticle(article);
