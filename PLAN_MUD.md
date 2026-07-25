@@ -269,6 +269,61 @@ the result the same way the existing `/memory`-style "N remembered facts about X
 already does, just keyed by handle instead of subject term — reusing an existing render template, not
 inventing a new one.
 
+## Exercising this design against `PLAN_OUDEZIJD.md`'s needs
+
+`PLAN_OUDEZIJD.md` (a persistent, temporally-grounded city adventure) is this design's first
+concrete second consumer beyond its own original ask — a real test of whether Backend D's shape
+generalizes or needs a redesign. It mostly generalizes. Four gaps are real; each maps to a small,
+additive extension of what's already designed above, not a new architecture.
+
+**1. Durable world-content writes from an anonymous (Tier 1) session.** Tier 1's 8-hour TTL
+(above) is correct for a guest's own teach/take actions, but wrong for `PLAN_OUDEZIJD.md`'s
+lazily-generated room/NPC content (its §2), which needs to outlive the session that first
+generated it even when that session was anonymous — otherwise every constructed fact a casual
+visitor's exploration fills in vanishes in 8 hours, and the next visitor pays the same generation
+cost over again for the same spot. **Fix: `expiresAt` is a per-item write-time decision, already
+independent of which identity is connected** — Backend D already sets it per item, not per
+connection (Tier 1's own text: "gets `expiresAt = now + 8h` set at write time... by Backend D
+itself"). A new write-time rule, checked before the existing tier-based default: a write tagged
+as world-content generation (§2/§2a's `constructed` provenance) omits `expiresAt` regardless of
+tier, the same way CI-seeded baseline writes already do. No new mechanism — one more case in a
+branch that already exists.
+
+**2. A presence index: "has anyone been recorded at this (place, time)?"** `PLAN_OUDEZIJD.md`
+§2a needs to answer this without a full table scan, for both the schedule-driven NPC read path and
+the player-presence-replay path. **Already generalizes**: the table shape above already names
+"a `class` attribute with a Global Secondary Index" as the mechanism for exactly this kind of
+query. This needs one more GSI, on a composite `place`/`timeSlot` attribute pair, alongside the
+existing `class` GSI already proposed — an additive index, not a schema change to the base item
+shape.
+
+**3. Revision without rewriting the past.** `PLAN_OUDEZIJD.md` §2a's resolution — a player
+revisiting an identical (place, time) supersedes their own prior recorded actions there, but an
+observer who already recorded a cross-player encounter keeps their own dated fact — is the SAME
+same-slot-replacement pattern `src/domain/discourse.mjs`'s `register()` already implements this
+session for discourse referents (a new registration replaces the same slot going forward; nothing
+already read is retroactively changed). Backend D doesn't need new machinery for this either: a
+revised action-history item is a new content-addressed individual with a `supersedes: <old-id>`
+attribute, exactly the shape Fact rows already use for corrections elsewhere in tmct. The GSI from
+point 2 always resolves to the newest (non-superseded) item for a given (place, time); anything
+written by an observer before the revision keeps pointing at the id it actually observed.
+
+**4. Cross-player write-back into another player's own record needs no new permission model.**
+`PLAN_OUDEZIJD.md` §2a's open question is abuse mitigation (still unresolved, named there,
+not here) — but the mechanics of "player B writes a fact that becomes part of player A's durable
+history" turn out to need nothing new from this design specifically, because Tier 2's access
+control is already table-scoped, not row-scoped (point 3 in "Named-account access control," above:
+a Permission Set is scoped to `tmct-server-<name>`'s DynamoDB actions as a whole). Any
+authenticated player on a server can already write any item in that table today, by design — so an
+item recording "player B's action, concerning player A's presence at (place, time)" is an ordinary
+write with an `actor`/`concerns` attribute pair, not a permissions problem this document has to
+solve. Worth stating plainly since it could easily be assumed to need new IAM design and doesn't.
+
+None of these four require a new backend, a new tier, or new credential/authentication machinery
+— every one is an additive attribute, an additive GSI, or a write-time rule on top of what's
+already specified. That's the actual finding of this exercise: the design holds up against a
+second, structurally different consumer without a redesign.
+
 ## Phasing
 
 1. Backend D itself: the DynamoDB-backed store implementing the same individual read/write shape
@@ -291,6 +346,11 @@ inventing a new one.
 6. An ops runbook for enabling IAM Identity Center + Permission Sets on a self-hoster's own account —
    documentation, not tmct code, since Identity Center administration is intentionally outside this
    design's own surface.
+7. The `PLAN_OUDEZIJD.md`-specific extensions named above (the write-time durable-content rule,
+   the place/timeSlot GSI, the `supersedes` attribute) — layered on top of Backend D once it exists,
+   built only when `PLAN_OUDEZIJD.md` itself is actually picked up, not before. Nothing above
+   blocks phases 1-6; this phase exists so the extension is scoped and named rather than improvised
+   later.
 
 ## Non-goals
 
@@ -310,6 +370,10 @@ inventing a new one.
 - Handle *verification* on Tier 1 (the anonymous guest server) — a guest-tier handle is a self-chosen
   display label, not an identity claim tmct verifies in any way; only Tier 2's Identity-Center-gated
   handles correspond to a real, administered account.
+- Row-level (per-item) access control. Considered and rejected while exercising this design against
+  `PLAN_OUDEZIJD.md` (above): Tier 2's table-scoped Permission Set already lets any authenticated
+  player write any item on a shared server, which is what that plan's cross-player write-back needs
+  anyway. A finer-grained ACL would be new machinery this design doesn't otherwise require.
 - Any change to tmct's own product-path architecture — still fully deterministic, no LLM, no new
   attack surface inside `chat.mjs`/`runTurn` itself. This document is entirely about which storage
   backend a chat session's facts land in, who it says wrote them, and how a client authenticates to
