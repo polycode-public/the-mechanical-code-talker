@@ -35,31 +35,19 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
 
 - [ ] the four CONVERSATION dead-ends (block below) — a fix agent was dispatched and lost to a
   spend limit before committing; re-dispatch is the next session's first cheap win
-- [ ] grow the AGI aggregator's scalar coverage: only agentbench commits an envelope today
-  (2/8 scales scalar); INFBENCH/CHATBENCH envelopes are the next cheap growth
 
 - [ ] temporal comparison binds only a literal SHA from the prior query text — the two most
   natural antecedents (a date-filter result set; "when was X last touched") don't bind; this is
   PLAN_DISCOURSE_AND_RECOGNITION slices 3–5 territory (bind from the answer's referent, plural
   sets); playtest transcripts are folded into that plan's staging (the unbound form now misses
   cleanly — the garbled teach-offer is fixed)
-- [ ] corpus quality pass: human-medium seeds mis-extract adjectives ("straight/simple is a kind
-  of person"), and the child conceptnet pack holds "kettle is a kind of pot in" plus the "vessle"
-  spelling — the digest lead now makes these prominent, so a pack-quality pass has a visible
-  payoff
-- [ ] fix the entailment sense-collision at source: `copulaObjectAt` in
-  `src/services/extract-facts.mjs` reads "medium-sized" as "medium" (NOUN) and mints
-  `subClassOf medium` before the real head noun — the digest selector filters it today
-  (minority-sense demotion), but the bad edge still lands in the store
-  (`archive/PLAN_DIGEST.md` documents the diagnosis)
 
 - [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 3–5 (plural binding past a count, the tie refusal, the remaining bindable-form lanes) — slices 1–2 shipped 2026-07-24 (the record threads through `runTurn`, and `games/cross-turn-temporal-composition-composes` is the flipped row); the plan doc stages what's next
-- [ ] INGESTBENCH ladder tops out at ING-6 (38% recall < 50% floor) — the ordinal/temporal-threading slice is what would lift it and un-gate ING-7's already-passing value-compare plus the two judged rungs (ING-8 2.0/2, ING-9 1.5/2); founding baseline measured in `BENCHMARK_INGEST_3.0.3.md`, run `SKILL_BENCHMARK_INGEST.md` to re-measure after the slice lands
-- [ ] RESEARCHBENCH's founding cycle (`BENCHMARK_RESEARCH_3.0.3.md`) gates at RES-2: the research
-  lane's fan-out queues in plain document order with no relevance ranking, so ordering scores 67%
-  against the 80% floor and RES-3..6 sit skipped-with-a-receipt behind it. Next cycle's build:
-  a relevance-ordering pass over the queued titles in `src/services/research.mjs` that pushes
-  RES-2 past its floor without regressing RES-0/RES-1 recall or inventing traversal
+- [ ] `singularizeSurface` (`src/services/chat.mjs`) strips `-ses`/`-xes`/`-zes`/`-ches`/`-shes`
+  words by dropping the last 2 characters unconditionally — right for "buses"→"bus"/"boxes"→"box",
+  wrong for "collapses"→"collaps" (should be "collapse"); surfaced by the INGESTBENCH
+  ordinal/temporal-threading fix (2026-07-25), which grounds the fact but stores the misspelled
+  object. Fix in progress this session.
 
 CONVERSATION 3.0.3 sweep (see `BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
 
