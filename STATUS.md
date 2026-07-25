@@ -1,0 +1,123 @@
+# STATUS — tmct's latest measured capability, one page
+
+What tmct's benchmark suite last proved, what the last full CI pipeline run actually exercised,
+and where every open design doc stands. This page is generated from the reports committed in
+`reports/`, the root `PLAN_*.md` docs, and the most recent pipeline on `main` — see
+`SKILL_REFRESH_STATUS.md` for the refresh recipe. It does not re-run anything itself.
+
+**Measured tree: 3.0.3. Repo now at 3.0.6.** The numbers below are the last full sweep's
+numbers, not a live reading. Real work has landed since 3.0.3 was measured — discourse Part A
+slices 3–5 and the plural temporal-comparison lane (`PLAN_DISCOURSE_AND_RECOGNITION.md`), this
+repo-layout restructuring — none of it re-benchmarked yet. Treat every number here as "true as
+of 3.0.3", not "true today", until the next sweep lands.
+
+## Last CI pipeline: every consumer surface exercised, all green
+
+[Pipeline #2705534943](https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/pipelines/2705534943),
+commit `8e87d836`, 2026-07-25, **27/27 jobs green** in ~9 minutes wall-clock (jobs run in
+parallel; the longest single job was `unit:slow` at 133s). This is the pipeline that first
+validated the CI restructuring itself — the e2e suite split into 14 page-scoped channels and the
+`unit` job split into four tiers — landing clean on its first real run.
+
+| job | what it exercises at the consumer surface |
+|---|---|
+| `e2e-web-index` | `index.html` (home page), demo-history/demo-templates replay, service-worker install |
+| `e2e-web-chat` | `chat.html`: fullscreen, persistence, export, digest, boot budget |
+| `e2e-web-chat-research` | `chat.html`'s research toggle and live Wikipedia supplement |
+| `e2e-web-research` | `research.html` |
+| `e2e-web-ingest` | `ingest.html` |
+| `e2e-web-sprites` | `sprites.html` |
+| `e2e-web-ledger` | `ledger.html`, teach mode, research dock, query-only viz |
+| `e2e-web-code` | `code.html` |
+| `e2e-web-spider-fly` | `spider-fly.html` |
+| `e2e-web-plan` | `plan.html` |
+| `e2e-web-adventure` | `adventure.html`, edit mode |
+| `e2e-web-screenshot-sweep` | visual regression across every page, every viewport |
+| `e2e-tui` | the terminal UI surface |
+| `e2e-cli` | the `tmct` CLI: init, import, chat, viz, plan, memory, server |
+| `unit`, `unit:fast`, `unit:smoke`, `unit:slow` | internal correctness underneath every surface above (4,458 tests total as of this tree) |
+| `pack:contents` | what `npm install` actually receives — the published file list, diffed against the committed manifest |
+| `license:deps` | the dependency tree a consumer inherits stays inside the licence allowlist |
+| `publish:npm` | the real `npm publish` gate — version-checked, provenance-signed |
+| `pages` | the GitLab Pages deploy — the live public site |
+| `smoke:post-deploy` | a post-deploy check against the **live** deployed site and the **live** npm registry, not a local approximation |
+| `links:check`, `pii:lint`, `semgrep-sast`, `secret_detection` | repo hygiene and security scanning — not consumer-facing directly, but gate what ships |
+
+`e2e:heavy` (a full `demo:build`, an uncapped ConceptNet seed, an export/import round trip) did
+not run on this push — it's gated on paths this push didn't touch, plus a nightly schedule.
+
+## The nine axes, at a glance
+
+Source: `reports/BENCHMARK_SUMMARY_3.0.3.md`, itself drawn from the nine per-axis reports below.
+
+| axis | result | vs baseline | gate / ceiling | source |
+|---|---|---|---|---|
+| AGENT | 68/68 at the goal ceiling (TOOL-8), 0% hallucination on all four drivers | byte-identical to 2.11.0 | resolver floor tops at TOOL-6 | `reports/BENCHMARK_AGENT_3.0.3.md` |
+| INFERENCE | kernel 100/100, chat 379/379, 0% fabrication, all bands pass | byte-identical to 2.11.0 across 577 commits | INF-7/INF-8 ceiling-graded (56/379) | `reports/BENCHMARK_INFERENCE_3.0.3.md` |
+| CEFR_ENGLISH | full 1,075-case pool judged: mean 1.773/2, 1068/1075 tier-1, 60 hard fails, 0 voids | 2.11.0 judged a 92-case sample (1.787); same tier-1 fail family (`g-b2-count-temp-*`), 12× the coverage | C1/C2 carry 36 of 60 hard fails | `reports/BENCHMARK_CEFR_ENGLISH_3.0.3.md` |
+| CONVERSATION | 37/40 judged turns FLOW; dead-end density ~43% → ~8% of turns; 12 new frozen regressions | ladder advances FLOW-0 → gates at FLOW-3 | two routing edges (overview-of-project, packages) | `reports/BENCHMARK_CONVERSATION_3.0.3.md` |
+| CODE_INDEX (founding) | IDX-0..9 all pass; conformance 180/180; 0 fabrication on 21 check surfaces | — | IDX-10 has no cases yet; C# reads unmeasured | `reports/BENCHMARK_CODE_INDEX_3.0.3.md` |
+| CODE_SYNTHESIS (founding) | SYN-0 passes its gate: 4/4, 100% verified completion, 0 false-pass, byte-deterministic | — | SYN-1..8 named markers; SYN-3's rename operator is next | `reports/BENCHMARK_CODE_SYNTHESIS_3.0.3.md` |
+| INGEST (founding) | ING-0..5 at 100% recall/precision; precision 100% on every rung | — | gates at ING-6 (38% recall vs 50% floor — the ordinal/temporal horizon); judged headroom: ING-8 2.0/2, ING-9 1.5/2 | `reports/BENCHMARK_INGEST_3.0.3.md` |
+| RESEARCH (founding) | RES-0/RES-1 pass; zero invented traversal | — | gates at RES-2 (ordering 67% vs 80% floor — no relevance ranking yet) | `reports/BENCHMARK_RESEARCH_3.0.3.md` |
+| AGI_SCALES | all eight entry rungs held; three scales moved (temporal-causal, stability×plasticity, loop closure) | 2.11.10 assessment | 2/8 scales scalar via the aggregator | `reports/BENCHMARK_AGI_3.0.3.md` |
+
+**Headline (3.0.3): zero fabrication on every axis.** No harness, judge, or playtest found a
+single invented fact in the sweep.
+
+## The gates, ranked by leverage
+
+From `reports/BENCHMARK_SUMMARY_3.0.3.md`'s own ranking — the fixes with the widest downstream
+unlock, most leveraged first:
+
+1. **RES-2 ordering (67% vs 80%)** — one relevance-ordering pass in `src/services/research.mjs`
+   un-gates RES-3..6, which already hold receipts.
+2. **ING-6 ordinal/temporal threading (38% vs 50%)** — the "First … Then …" slice; lifting it
+   un-gates ING-7 and promotes the strong judged headroom.
+3. **FLOW-3's two routing edges** — closed-set additions (overview-of-project phrasing, packages
+   as a listable kind).
+4. **SYN-3's rename operator** — the first real transformation for the synthesis ladder.
+
+All four are tracked as open items in `NEXT.md` with their owning plan docs.
+
+## The design docs: what's delivered, what's next, what's a research horizon
+
+Every `PLAN_*.md` at the repo root, one line of goal, what's shipped, what remains within known
+engineering (**design horizon** — a plan exists or is straightforward to write), and what
+remains genuinely open (**research horizon** — no settled approach exists yet; named, not
+claimed impossible, per this project's own "no capability walls" discipline). Delivered plans
+retire to `archive/`; everything below is still live.
+
+| plan | goal | delivered | design horizon (known engineering) | research horizon (open problem) |
+|---|---|---|---|---|
+| `PLAN_DISCOURSE_AND_RECOGNITION.md` | two bounded, typed, refusable records: cross-turn discourse referents, and agent goal recognition | Part A (discourse) slices 1–5 all built — referents register, bind, tie-refuse, and a plural temporal comparison composes over a set | Part B (goal recognition: fitting a trace to a declared goal by operator containment, an N+1 "reject" class) is still design | — |
+| `PLAN_BENCHMARK_MECHANISATION.md` | author judge intelligence once, replay benchmark runs mechanically thereafter | levers 1 (verdict cache), 2 (tier-promotion matchers), 3 (rubric compilation), 6 (execution speed), 7 (AGI-scales aggregation) landed; lever 1's seed pass ran the full 1,075-case CEFR pool | lever 4 (wiring ingestbench's equivalence checker into the judged cycle), lever 2's bulk matcher-distillation authoring pass, lever 3's paired calibration grade | — |
+| `PLAN_CODE_PLANNING.md` | planning over code states: search + verification over closed operator catalogues, never an LLM guessing code | Track 1 (`test-benchmarks/synthbench/`) shipped; Track 5 §3.1–3.3 (state, operator catalogue, planner) shipped as `src/domain/codeplan/`; §3.6's re-index dependency shipped | §2.1's stage-1 build (read-only rule admission), Track 5 §3.4–3.5 (adaptor, verification tiers), §3.6's re-index wiring into the plan-act-verify loop, §3.7's two-step refactor milestone | — |
+| `PLAN_CONSISTENCY_CHECK.md` | tmct as a consistency-checking service: an LLM tool loop proposes a claim in tmct's grammar, tmct returns a verdict (including an honest "unknown", never a silent pass) and the canonical form | approved in outline by the operator | the whole build — grammar-gated claim intake, the four-verdict check, one-shot semantics | — |
+| `PLAN_PARAPHRASE_VERIFICATION.md` | a verified paraphrase shown alongside a literal answer, never instead of it, checked against the graph rather than assumed | the isa-family narrow slice (`paraphraseVerifiedSubClass`, closure-backed) already ships in the teach confirmation | the general `verifyParaphrase()`: this doc's own finding is that most paraphrase shapes need triple-equality checking, not `syllogise.mjs` entailment — only class-swap-along-⊑ paraphrases fit the closure kernels, and that generator doesn't exist yet either | — |
+| `PLAN_EMBEDDINGS.md` | semantic-similarity search over the code graph | a working, dependency-free embedder (safetensors reader, WordPiece tokenizer, mean-pool + L2-normalise) shipped once, then was deleted at 2.1.0 as dead code — nothing called it | rebuilding it, if a real caller ever wants it — the architecture (a duck-typed `opts.embedder`, domain/adapter split) is proven and recorded | — |
+| `PLAN_MUD.md` | persistent, shared tmct worlds over a `server:` memory backend — multiplayer without a shared host to log into | design only; six rounds of framing converged on a per-server DynamoDB-shaped backend with an anonymous-tier TTL and IAM Identity Center for private servers | the actual build: the storage backend, the TTL/throttle policy, the CI-seeded durable lexicon | — |
+| `PLAN_FILLER_AND_COUNTERFACTUALS.md` | two passes: parsing through sentence-initial filler clauses via closed-set templates; planner counterfactuals | neither started | the filler-clause widening (a closed discourse-marker inventory, strip-and-retry accepted only on double match) is scoped design work | the planner-counterfactuals half is less scoped in this doc than the filler-clause half; treat it as needing its own design pass before estimating further |
+| `PLAN_NLU_BENCHMARKS.md` | score tmct against two third-party NLU benchmarks (CLINC150, HWU64) for outsider-reproducible credibility | nothing built; the as-is estimate shows tmct's capability universe doesn't cover either benchmark's domains (banking, travel, weather, …) yet | building the domain/intent coverage those benchmarks require, and the scoring adapter itself, is closed-set content-authoring work this project already does elsewhere | a fair scoring protocol for an *abstaining* system against benchmarks built for forced-choice classifiers is a real methodological question this doc doesn't fully resolve |
+| `PLAN_SYLLOGIST_EL_DL.md` | inference beyond OWL 2 RL: an EL classifier (saturation-based TBox classification), then a DL tableau prover (targeting ALC, growing toward SHOIQ) | nothing built; explicitly sequenced after two cheaper RL-shaped uplifts | the EL tier extends the current pure-kernel architecture with a different, but well-understood, algorithm | the DL tier's tableau calculus is well-studied in isolation, but this doc names the actual gap plainly: the literature is silent on combining tableau reasoning with a system that also has to carry tmct's trust/provenance/budget guards — that combination has no settled engineering yet |
+
+## Site weight
+
+Source: `reports/PAGE_WEIGHTS.md` — see that file for its own version stamp and per-page
+breakdown. Not duplicated here; refresh it via `SKILL_PAGE_WEIGHTS.md` when the deployed site
+changes materially.
+
+## Methodology pins
+
+Judge model (CEFR, CONVERSATION, INGEST ING-8/9): `claude-haiku-4-5-20251001`, prompts
+`judge-prompt-v2` / `ingest-judge-v1`, N=2. Product path: no model call anywhere; every
+deterministic axis replayed byte-identically. The judge is offline-eval tooling only, never in
+the shipped product — see `CLAUDE.md`'s project section.
+
+## Refreshing this page
+
+Run `SKILL_REFRESH_STATUS.md` after a new benchmark sweep lands (a new or updated
+`reports/BENCHMARK_*.md`), after a new pipeline resolves on `main`, or when this page's
+"measured tree" version falls materially behind `package.json`'s current version. The skill does
+not run benchmarks itself, and does not trigger a pipeline — it reads whatever reports and
+pipeline results already exist and resynthesizes this page from them.

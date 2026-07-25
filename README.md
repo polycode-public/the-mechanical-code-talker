@@ -17,6 +17,30 @@ Teach it a fact in plain English and it mints a node. Ask it a question and
 it answers from what it was seeded with, what you taught it, and what it can
 derive by rule from both. Every answer is either grounded or an honest miss.
 
+## Repository layout
+
+| directory | contains |
+|---|---|
+| `bin/` | the CLI entrypoint (`tmct.mjs`) |
+| `src/` | the shipped product: `domain/` (pure logic), `adapters/` (I/O, storage, providers), `services/` (chat, adventure, research, ledger, plan), `surfaces/` (CLI, HTTP, TUI, web), `index/` (repo indexing) |
+| `corpus/` | committed corpus and template data (ConceptNet, WordNet, NameNet, the generated persona vocab) |
+| `data/` | seed data assets: sprites, phrasebook, games, response templates |
+| `ontology/` | the software ontology (`tmct-core.ttl`) and memory shapes, in Turtle |
+| `scripts/` | build, check, and maintenance scripts (`npm run` targets live here) |
+| `examples/` | runnable example scripts and fixture repos used by the README's own examples and the test suite |
+| `demo/` | standalone demo scripts (e.g. the agentic-loop demo) |
+| `electron/` | the Electron desktop app wrapper |
+| `docs/` | reference docs: the adapter/repository-interface contracts, bibliography |
+| `test/` | the unit, corpus, and estate-guard test suite (`npm test`) |
+| `test-e2e/` | the end-to-end suite: real CLI/TUI spawns and Playwright browser journeys (`npm run test:e2e`) |
+| `test-benchmarks/` | the benchmark harnesses (agentbench, chatbench, idxbench, infbench, ingestbench, researchbench, synthbench) and their shared `benchlib/` |
+| `reports/` | benchmark write-ups (`BENCHMARK_*.md`) and `PAGE_WEIGHTS.md` — see the root `STATUS.md` for the one-page summary these feed |
+| `playtests/` | numbered playtest session logs, one edge found and fixed per entry |
+| `archive/` | delivered `PLAN_*.md`/`BENCHMARK_*.md` docs, kept for history |
+| `public/` | the built demo site — a gitignored output of `npm run demo:build`, never hand-edited |
+
+`node_modules/` (dependencies) and dotfiles/hidden tooling directories are omitted above.
+
 ## Teach it, then ask it to reason
 
 This is real, runnable output. No cherry-picking, no model anywhere in the
@@ -1179,9 +1203,11 @@ service. The LLM agent stays outside tmct, as the no-LLM ethos requires.
 
 ## Measuring it
 
-What the 2.7.11/2.7.12 cycle measured, on 2026-07-19. Each figure links to its
-method and carries, in the same row, the caveat that changes what it means.
-The full tables, judge scores, and transcripts are in the linked write-ups.
+**For the latest measured numbers, see `STATUS.md`** — a one-page summary of the most
+recent full sweep, citing its source reports by name. What follows here is what the 2.7.11/2.7.12
+cycle measured, on 2026-07-19, kept for its own detail. Each figure links to its method and
+carries, in the same row, the caveat that changes what it means. The full tables, judge scores,
+and transcripts are in the linked write-ups.
 
 | What it does | Result (2.7.12) | Read the number with this | Method |
 |---|---|---|---|
