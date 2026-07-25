@@ -41,13 +41,9 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   before slice 4 landed, so it still binds a same-turn tie by recency; a real plural tie isn't
   reachable through any current lane yet (no lane registers two `set` referents in one turn), so
   this is a small follow-up wiring change, not a live bug
-- [ ] two e2e tests flake under full-suite contention (both pass 100% in isolation, so not a
-  correctness bug): `e2e/pages-chat-live-toggle.test.mjs`'s "/wiki supplement adds a cited
-  Wikipedia read-out..." and `e2e/pages-chat-research.test.mjs`'s "a typed research request
-  grounds the topic cited, then auto-plays the queue..." (an exact "N done · M queued" snapshot
-  raced against faster-than-expected progress) — both are async-timing races, not logic bugs;
-  harden by polling/asserting a range rather than a single snapshot, per this project's own
-  precedent for flaky timing tests
+- [ ] `e2e/pages-ledger-teach.test.mjs` (bundle-load and refocus assertions) flakes under real
+  multi-file e2e contention — surfaced while stress-verifying the chat/research hardening above;
+  a different feature area (ledger UI) with no shared root cause, not yet investigated
 
 CONVERSATION 3.0.3 sweep (see `BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
 
