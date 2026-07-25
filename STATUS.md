@@ -1,9 +1,10 @@
 # STATUS — tmct's latest measured capability, one page
 
 What tmct's benchmark suite last proved, what the last full CI pipeline run actually exercised,
-and where every open design doc stands. This page is generated from the reports committed in
-`reports/`, the root `PLAN_*.md` docs, and the most recent pipeline on `main` — see
-`SKILL_REFRESH_STATUS.md` for the refresh recipe. It does not re-run anything itself.
+where every open design doc stands, and how `README.md`'s own claims hold up against the tree.
+This page is generated from the reports committed in `reports/`, the root `PLAN_*.md` docs,
+`README.md`, and the most recent pipeline on `main` — see `SKILL_REFRESH_STATUS.md` for the
+refresh recipe. It does not re-run anything itself.
 
 **Measured tree: 3.0.3. Repo now at 3.0.6.** The numbers below are the last full sweep's
 numbers, not a live reading. Real work has landed since 3.0.3 was measured — discourse Part A
@@ -100,6 +101,48 @@ retire to `archive/`; everything below is still live.
 | `PLAN_FILLER_AND_COUNTERFACTUALS.md` | two passes: parsing through sentence-initial filler clauses via closed-set templates; planner counterfactuals | neither started | the filler-clause widening (a closed discourse-marker inventory, strip-and-retry accepted only on double match) is scoped design work | the planner-counterfactuals half is less scoped in this doc than the filler-clause half; treat it as needing its own design pass before estimating further |
 | `PLAN_NLU_BENCHMARKS.md` | score tmct against two third-party NLU benchmarks (CLINC150, HWU64) for outsider-reproducible credibility | nothing built; the as-is estimate shows tmct's capability universe doesn't cover either benchmark's domains (banking, travel, weather, …) yet | building the domain/intent coverage those benchmarks require, and the scoring adapter itself, is closed-set content-authoring work this project already does elsewhere | a fair scoring protocol for an *abstaining* system against benchmarks built for forced-choice classifiers is a real methodological question this doc doesn't fully resolve |
 | `PLAN_SYLLOGIST_EL_DL.md` | inference beyond OWL 2 RL: an EL classifier (saturation-based TBox classification), then a DL tableau prover (targeting ALC, growing toward SHOIQ) | nothing built; explicitly sequenced after two cheaper RL-shaped uplifts | the EL tier extends the current pure-kernel architecture with a different, but well-understood, algorithm | the DL tier's tableau calculus is well-studied in isolation, but this doc names the actual gap plainly: the literature is silent on combining tableau reasoning with a system that also has to carry tmct's trust/provenance/budget guards — that combination has no settled engineering yet |
+
+## README audit: claims vs. reality
+
+What `README.md` claims, cross-checked against the tree. Covers every `##` section's headline
+claim (17 sections); not a line-by-line audit of every sentence. "Consumer surface" names where a
+real user actually meets the capability (CLI flag, web page, published npm export); "tested"
+names the tier.
+
+| README claim | implemented | consumer surface | tested |
+|---|---|---|---|
+| Teach a fact in plain English, mint a graph node | yes (`src/services/chat.mjs` teach lane) | CLI `tmct chat`, web `chat.html` | unit (`test/chatflow-*.test.mjs`), corpus lanes, e2e `pages-chat-*` |
+| Ask a question, get a grounded answer or an honest miss | yes (`src/domain/ask.mjs`) | CLI, `chat.html`, `tmct_ask` tool | unit (`test/domain/*.test.mjs`), corpus lanes |
+| Multi-hop inference by rule (grandparent-from-parent-of-parent) | yes (`src/domain/syllogise.mjs`) | CLI, web chat | corpus `inference` lane, `test/bench/infbench.test.mjs` |
+| Tolerant paraphrase parsing (drop determiners, contractions, passives, clefts) | yes (`src/domain/interpret/`) | CLI, web chat | corpus `grammar`/`templates` lanes |
+| Guided suggestions / `/help` | yes | CLI `/help` | not directly e2e-pinned as its own suite; covered incidentally in CLI smoke |
+| Grounded, sourced answers with a digest lead | yes (`src/domain/digest*`) | `chat.html`, `research.html`, `ledger.html` dock | e2e `pages-chat-digest`, `pages-ledger*` |
+| Live Wikipedia as an opt-in cited tier (`/wiki on`) | yes | CLI flag, `chat.html` toggle | e2e `pages-chat-live-toggle` |
+| Planning across the graph (Towers-of-Hanoi style) | yes (`src/domain/router/`) | CLI `tmct plan`, `plan.html` | e2e `pages-plan`, `plan-cli` |
+| Teach a game, then plan against it | yes | CLI, web | corpus `games/*` lanes |
+| Play a game (adventure, spider-and-fly) | yes | CLI `--render`, `adventure.html`, `spider-fly.html` | e2e `pages-adventure*`, `pages-spider-fly` |
+| Learning on a miss (teach offered after a failed lookup) | yes | CLI, web chat | corpus lanes; noted in `NEXT.md`'s own merge-hazard history |
+| Persistent memory across sessions, multiple backends | yes (`src/adapters/memory/`) | CLI `tmct memory`, `--repo` persistence | unit `test/adapters/memory-*`, e2e `pages-chat-persistence` |
+| Install via npm / npx, CLI usage | yes | `bin/tmct.mjs` | e2e `cli-smoke`, `init*` |
+| The tool surface (`tmct_ask`, `tmct_context`, `tmct_snippet`, `tmct_ingest`, …) | yes (`src/tools/`) | published npm exports, HTTP server | unit `test/tools/*` (19 files) |
+| The repository interface (arbitrary-repo indexing contract) | yes (`src/adapters/repository-interface.mjs`) | published npm export `./repository-interface` | `docs/repository-interface.md` + its schema, estate guards |
+| Measuring it (benchmark claims) | yes, but the inline table is stale (2.7.12) | this page (`STATUS.md`) is now the live pointer | see the axes table above |
+| Provenance / standards / licensing | narrative and legal, not testable capability claims | — | — |
+
+## What's shipped but not in README
+
+Found by checking the reverse direction — real, tested, deployed capability the README's
+narrative doesn't name. Not an exhaustive sweep; two concrete, verified findings:
+
+- **`research.html`** — a tenth deployed page (`reports/PAGE_WEIGHTS.md` lists it; e2e
+  `pages-research` and `pages-chat-research` exercise it), but README's live-demo paragraph
+  names only eight pages beyond the landing page and doesn't mention it by name or describe a
+  standalone research-grounding surface.
+- **Cross-turn pronoun/anaphora binding** (`it`/`that`/`those` resolving to a prior turn's
+  referent, refusing honestly on a genuine same-turn tie) — all of
+  `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A is shipped and corpus-tested
+  (`test/corpus/games/compositional.jsonl`), but README's capability narrative never mentions
+  follow-up/context-carrying questions at all.
 
 ## Site weight
 

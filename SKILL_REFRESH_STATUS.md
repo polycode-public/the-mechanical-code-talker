@@ -1,11 +1,12 @@
 # SKILL_REFRESH_STATUS.md — regenerate STATUS.md from the committed reports and the latest CI run
 
 This skill resynthesizes `STATUS.md` (repo root), the one-page capability summary, from whatever
-`reports/BENCHMARK_*.md` and `reports/PAGE_WEIGHTS.md` reports are already committed, plus the
-most recent CI pipeline result on `main`. **It never runs a benchmark itself, and never triggers
-a pipeline.** If the reports are stale, that staleness is what the refreshed STATUS.md must say,
-honestly, not paper over — running a sweep is a separate activity (`SKILL_BENCHMARK_*.md` per
-axis) that this skill's own output should prompt, not silently substitute for.
+`reports/BENCHMARK_*.md` and `reports/PAGE_WEIGHTS.md` reports are already committed, the root
+`PLAN_*.md` design docs, `README.md`'s own claims, and the most recent CI pipeline result on
+`main`. **It never runs a benchmark itself, never triggers a pipeline, and never edits any of the
+source documents it reads.** If a source is stale, that staleness is what the refreshed STATUS.md
+must say, honestly, not paper over — running a sweep or fixing a README gap is separate work
+this skill's output should prompt, not silently substitute for.
 
 STATUS.md lives at the repo root, not inside `reports/` — it's the front door that points into
 that directory, not one of the reports itself.
@@ -20,6 +21,10 @@ that directory, not one of the reports itself.
 - STATUS.md's "measured tree" line has fallen materially behind `package.json`'s current
   `version` — real capability work has landed since the last sweep and a reader deserves to know
   the gap exists, even before anyone re-benchmarks.
+- A root `PLAN_*.md` changed status (a slice shipped, a plan retired to `archive/`, a new plan
+  appeared).
+- `README.md` changed, or enough time/capability drift has passed that its claims-vs-reality
+  table is worth re-checking.
 - The operator asks for it directly.
 
 ## Part 1 — the benchmark summary
@@ -97,15 +102,74 @@ that directory, not one of the reports itself.
 15. **One table row per plan**, columns: plan, goal (one line), delivered, design horizon,
     research horizon (`—` if none). Cite nothing beyond what each plan's own text supports.
 
-## Part 4 — write and ship
+## Part 4 — the README audit
 
-16. **Write `STATUS.md`** at the repo root, matching its existing section order (measured-tree
+16. **Walk every `##` section of `README.md`** and extract its headline capability claim — not
+    every sentence, the section's actual claim. Seventeen sections is the going size; re-count
+    fresh each run (`grep -n '^## ' README.md`), don't assume the prior count still holds.
+17. **For each claim, fill three columns:**
+    - **Implemented** — does the code exist? Name the module (`src/domain/...`,
+      `src/services/...`).
+    - **Consumer surface** — where does a real user actually meet it? Name it specifically: a CLI
+      flag, a named web page (`chat.html`, `plan.html`, …), a published npm export, an MCP-style
+      tool name. "The product" is not specific enough.
+    - **Tested** — which tier, named: a unit test file/directory, an e2e file, a corpus lane. "It's
+      tested" without a path is not verifiable.
+18. **Then check the reverse direction**: real, shipped, tested capability that README's own
+    narrative doesn't mention. This is the harder, more valuable half — a stale README under-sells
+    what tmct does at least as often as it over-sells. Two known-good techniques:
+    - Grep for a page's own filename (`research.html`, `ingest.html`, …) in README; a shipped page
+      (check `reports/PAGE_WEIGHTS.md`'s page list) with zero mentions is a strong candidate —
+      confirm it's genuinely undocumented (not just referred to by a different name) before
+      reporting it.
+    - Cross-check a fully-`BUILT`/shipped `PLAN_*.md` slice against README's narrative for the
+      same capability area; a slice shipped and corpus/unit-tested with nothing in README
+      describing what a user can now ask or do is a real omission.
+    Report every finding as evidence (the grep, the file, the test), not an assertion — and don't
+    claim exhaustiveness this skill's own procedure doesn't deliver; say what was actually checked.
+19. **Note staleness in README's own numbers separately** (e.g. an inline benchmark table citing
+    an old version) — that's a different defect from a missing claim, and conflating the two makes
+    both harder to act on.
+
+## Part 5 — write and ship
+
+20. **Write `STATUS.md`** at the repo root, matching its existing section order (measured-tree
     banner → CI pipeline section → at-a-glance axis table → gates ranked → design docs table →
-    site weight pointer → methodology pins → this refresh pointer) so a diff against the prior
-    version shows only what actually changed.
-17. **Commit** with the specific report filenames, pipeline ID, and/or plan docs that motivated
-    the refresh named in the message. Update `NEXT.md` in the same commit if the refresh closes
-    or narrows an item.
+    README audit table → omissions list → site weight pointer → methodology pins → this refresh
+    pointer) so a diff against the prior version shows only what actually changed.
+21. **Commit** with the specific report filenames, pipeline ID, plan docs, and/or README sections
+    that motivated the refresh named in the message. Update `NEXT.md` in the same commit if the
+    refresh closes or narrows an item (e.g. a found README omission worth fixing separately).
+
+## Execution — coordinator model
+
+This skill's four read-heavy parts have different depth requirements; per `CLAUDE.md`'s
+coordinator/sub-agent ladder, match the model tier to each, and don't staple a hard part onto an
+easy batch (that prices the whole batch at the top tier). Running this skill solo end-to-end is
+fine for a small drift (one new report, one pipeline); dispatch it when several parts need
+refreshing at once.
+
+- **Parts 1 and 2** (benchmark summary, CI pipeline) are largely mechanical: enumerate, read,
+  cite, tabulate against an existing template. Sonnet-tier, or Haiku if the prior STATUS.md's own
+  structure is given as a worked example to follow.
+- **Part 3** (PLAN docs) needs real judgment — the design-horizon-vs-research-horizon call is a
+  substantive read of each plan's own reasoning, not a lookup. Sonnet at minimum; Opus if several
+  plans changed status since the last refresh and the classification calls are non-obvious.
+- **Part 4** (the README audit) is the widest-reaching part — it requires cross-referencing a
+  1000+ line README against `src/`, `test/`, `test-e2e/`, and `reports/PAGE_WEIGHTS.md`. This is
+  a good candidate for its own dispatched sub-agent (worktree-isolated is unnecessary — this
+  skill only reads, never edits source files) or a `fork` if run from an interactive coordinator
+  session, since the grep/read legwork is high-volume and doesn't need to stay in the
+  coordinator's own context. Sonnet is sufficient for the forward direction (claim → evidence);
+  the reverse direction (finding omissions) benefits from a more capable model or a second
+  independent pass, since it's the part most likely to under-deliver on a first try.
+- **Part 5** (write and ship) is the coordinator's own job — it's synthesizing multiple
+  sub-agents' output into one coherent page with a consistent voice and section order, which is
+  exactly the kind of integration step that shouldn't be delegated further.
+
+A reasonable dispatch shape for a full refresh: run Parts 1+2 and Part 3 as two parallel
+sub-agents (no shared files — both only read and report back), Part 4 as a third parallel
+sub-agent or fork, then the coordinator does Part 5 itself once all three report back.
 
 ## What NOT to do
 
@@ -122,3 +186,11 @@ that directory, not one of the reports itself.
 - Don't classify a design doc's remainder as "research horizon" unless the plan's own text names
   a real open problem; don't call a genuine open problem "just needs engineering" either. Both
   directions misrepresent what's actually left.
+- Don't edit `README.md` as part of this skill — a found gap or a stale number is a finding to
+  report, and real enough to fold into the current work per this project's "don't narrow scope on
+  your own judgment" rule, but fixing README is a separate, reviewable change, not something to
+  slip in silently while regenerating STATUS.md.
+- Don't claim the README audit is exhaustive when it covered section headlines, not every
+  sentence — say what was actually checked.
+- Don't dispatch Part 5 (the write-up) to a sub-agent — synthesizing several parts into one
+  consistent page is the coordinator's own integration work.
