@@ -42,13 +42,6 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   as a separate follow-on (slice 3 deliberately kept the regex to two single ISO dates). The
   singular "when was X last touched" antecedent now binds (slice 5c)
 
-`PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 1–5 are all shipped: the record threads
-through `runTurn`; the commit-filter, listing/filter, superlative, qualifier, dated-fact and
-adventure lanes all register; a set survives a count; a same-turn tie refuses and lists rather
-than picking by recency; `games/cross-turn-temporal-composition-composes` composes and a
-standalone "when was X last touched" feeds the comparison. Confirm
-`games/superlative-winner-and-score-tie-a-singular-pronoun` is green now that both halves have
-landed.
 - [ ] two e2e tests flake under full-suite contention (both pass 100% in isolation, so not a
   correctness bug): `e2e/pages-chat-live-toggle.test.mjs`'s "/wiki supplement adds a cited
   Wikipedia read-out..." and `e2e/pages-chat-research.test.mjs`'s "a typed research request
