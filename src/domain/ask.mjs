@@ -1946,7 +1946,17 @@ function evalSuperlative(graph, ast) {
   if (!scored.length) return { compositeKind: "superlative", entityType: ast.entityType, matches: [] };
   const best = scored[0].score;
   const winners = scored.filter((s) => s.score === best).map((s) => s.ind);
-  return { compositeKind: "superlative", entityType: ast.entityType, metricNoun: ast.metricNoun, extreme: ast.extreme, score: best, matches: winners };
+  // What the ranking established, as discourse referents (see evalCommitFilter
+  // for the shape the session layer registers). A lone winner is one entity a
+  // later "it"/"this"/"that" can bind; a metric tie (two winners on the same
+  // score) is a set instead, since no singular form should silently pick one.
+  // The score itself is always a measure referent, so "is that bigger than X"
+  // binds the number the ranking produced rather than re-deriving it.
+  const referents = winners.length >= 2
+    ? setReferentsFor(ast.entityType, winners, "superlative")
+    : [{ kind: "entity", class: ast.entityType, label: winners[0].label, ids: [winners[0].id], attrs: {}, lane: "superlative" }];
+  referents.push({ kind: "measure", label: `${best} ${ast.metricNoun}`, ids: [], attrs: { metric: best }, lane: "superlative" });
+  return { compositeKind: "superlative", entityType: ast.entityType, metricNoun: ast.metricNoun, extreme: ast.extreme, score: best, matches: winners, referents };
 }
 
 /** Top-level "<kind> of/in <owner>" membership eval, covering both a bare
@@ -2047,7 +2057,11 @@ function evalQualCheck(graph, ast, opts) {
   }
   const rawHolds = qualHolds(graph, r.match, QUALIFIERS[qualifier]);
   const holds = negated ? !rawHolds : rawHolds;
-  return { compositeKind: "qualCheck", subject: r.match, qualifier, negated, holds, matches: [r.match] };
+  // The subject the check resolved is a discourse referent either way — the
+  // answer being "no" does not make the entity any less bindable by a
+  // follow-up (see evalCommitFilter for the registration shape).
+  const referents = [{ kind: "entity", class: r.match.class, label: r.match.label, ids: [r.match.id], attrs: {}, lane: "qualCheck" }];
+  return { compositeKind: "qualCheck", subject: r.match, qualifier, negated, holds, matches: [r.match], referents };
 }
 
 /** Universal-over-a-set: the object is grounded first (an unknown one is an
@@ -2134,8 +2148,9 @@ function evalComposite(graph, ast, opts = {}) {
   const entityType = ast.entityType || null;
   // A resolved, class-typed listing/filter set registers as a discourse
   // referent (see evalCommitFilter) so a later "which of those …" binds it. A
-  // qualifier node is held back for the qualifier-listing lane.
-  const referents = ast.node === "qualifier" ? [] : setReferentsFor(entityType, matches, "compositeSet");
+  // qualifier listing ("which modules are tested") registers the same way, just
+  // under its own lane name.
+  const referents = setReferentsFor(entityType, matches, ast.node === "qualifier" ? "qualifierListing" : "compositeSet");
   return { compositeKind: "set", matches, entityType, referents };
 }
 
@@ -3145,8 +3160,15 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
       }
       commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
     }
+    // The dated commit this answer named is a discourse `event` referent, so a
+    // later "was that before X was touched" binds it (see evalCommitFilter).
+    // Only when a dated commit resolved — an undated one is the render's honest
+    // miss, and a referent with no date could not feed the comparison lane.
+    const referents = commits.length && dateOf(commits[0])
+      ? [{ kind: "event", class: "Commit", label: commits[0].label, ids: [commits[0].id], attrs: { date: dateOf(commits[0]).slice(0, 10) }, lane: "when" }]
+      : [];
     return {
-      matches: commits, objMatch, candidates, ambiguous, matchedVia, whenShape: true,
+      matches: commits, objMatch, candidates, ambiguous, matchedVia, whenShape: true, referents,
       traversal: `touches+touchesSymbol edges where object = ${objMatch.label}, newest commit date first`,
     };
   }
@@ -3169,8 +3191,14 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
       if (c && c.class === "Commit") commits.push(c);
     }
     commits.sort((a, b) => dateOf(b).localeCompare(dateOf(a)));
+    // The dated commit behind the "who last touched X" answer is the same
+    // `event` referent the when-shape registers, so either phrasing feeds a
+    // later temporal comparison. Registered only when the commit carries a date.
+    const referents = commits.length && dateOf(commits[0])
+      ? [{ kind: "event", class: "Commit", label: commits[0].label, ids: [commits[0].id], attrs: { date: dateOf(commits[0]).slice(0, 10) }, lane: "whoLast" }]
+      : [];
     return {
-      matches: commits, objMatch, candidates, ambiguous, matchedVia, whoLastShape: true,
+      matches: commits, objMatch, candidates, ambiguous, matchedVia, whoLastShape: true, referents,
       traversal: `touches+touchesSymbol edges where object = ${objMatch.label}, newest commit's author`,
     };
   }

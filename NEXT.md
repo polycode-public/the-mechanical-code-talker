@@ -36,13 +36,19 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
 - [ ] the four CONVERSATION dead-ends (block below) — a fix agent was dispatched and lost to a
   spend limit before committing; re-dispatch is the next session's first cheap win
 
-- [ ] temporal comparison binds only a literal SHA from the prior query text — the two most
-  natural antecedents (a date-filter result set; "when was X last touched") don't bind; this is
-  PLAN_DISCOURSE_AND_RECOGNITION slice 5 territory (bind from the answer's referent); playtest
-  transcripts are folded into that plan's staging (the unbound form now misses cleanly — the
-  garbled teach-offer is fixed)
+- [ ] temporal comparison over a PLURAL antecedent — a date-filter result set (`what changed
+  before <sha>`) registers and survives a count, but the singular `TEMPORAL_COMPARISON_RE` lane
+  binds only singular forms, so comparing a set's dates needs its own lane. The plan records this
+  as a separate follow-on (slice 3 deliberately kept the regex to two single ISO dates). The
+  singular "when was X last touched" antecedent now binds (slice 5c)
 
-- [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slices 4–5 (the tie refusal, the remaining bindable-form lanes) — slices 1–3 shipped (the record threads through `runTurn`, the commit-filter/listing/filter lanes register, `games/cross-turn-temporal-composition-composes` composes, and a set now survives a count so a later "which of those" still binds it); the plan doc stages what's next
+- [ ] `PLAN_DISCOURSE_AND_RECOGNITION.md` Part A slice 4 (the ambiguity tie refusal) — slices 1–3
+  and 5 shipped (the record threads through `runTurn`; the commit-filter, listing/filter,
+  superlative, qualifier, dated-fact and adventure lanes all register; a set survives a count;
+  `games/cross-turn-temporal-composition-composes` composes and a standalone "when was X last
+  touched" now feeds the comparison). Slice 5a's tie row
+  (`games/superlative-winner-and-score-tie-a-singular-pronoun`) is authored and turns green the
+  moment slice 4 wires `tieRefuses` into the temporal-comparison bind
 
 CONVERSATION 3.0.3 sweep (see `BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
 

@@ -14823,7 +14823,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // otherwise read as a declarative or an orientation ask.
   {
     const advTurn = await adventureTurn(workingLine, {
-      planHolder, memoryDir, sessionId, env, lexicon, graph, cache: factRowsCache, isPlanFrameLine,
+      planHolder, memoryDir, sessionId, env, lexicon, graph, cache: factRowsCache, isPlanFrameLine, discourseHolder,
     });
     if (advTurn) {
       note(trace, `lane: ${advTurn.note}`);
