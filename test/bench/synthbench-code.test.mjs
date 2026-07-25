@@ -53,6 +53,39 @@ test("the runner clears the SYN-0 rung end to end: real edit, real verification,
   assert.equal(ladder.gatedAt, null, "SYN-0 does not gate itself");
 });
 
+test("the runner clears the SYN-3 rung end to end: real rename, real re-index, honest collision refusal", async () => {
+  const { cases } = parseCases(CASES_TEXT);
+  const syn3 = cases.filter((c) => c.rung === "SYN-3");
+  const { rows, rolled, ladder } = await runSynthbenchCode(syn3, { stamp: "smoke", ladder: true });
+
+  for (const r of rows) {
+    assert.equal(typeof r.caseId, "string");
+    assert.equal(r.rung, "SYN-3");
+    assert.ok(r.outcome && r.verdict, `${r.caseId} missing outcome/verdict`);
+    assert.equal(typeof r.verdict.pass, "boolean");
+  }
+
+  // a non-poisoned rename produced a verified, byte-deterministic artifact
+  // whose declared graph-delta reconciles against the re-indexed observation
+  const positive = rows.find((r) => !r.poisoned);
+  assert.equal(positive.verdict.verifiedComplete, true, "a positive SYN-3 case must verify-complete");
+  assert.equal(positive.outcome.tiers["graph-delta"].ok, true, "the declared retitle must reconcile against the re-indexed graph");
+  assert.equal(positive.outcome.byteDeterministic, true, "the synthesized edit must be byte-deterministic");
+
+  // a name-collision poisoned case refuses rather than emitting a mangled rename
+  const poisoned = rows.find((r) => r.poisoned === true);
+  assert.equal(poisoned.outcome.abstained, true, "a poisoned SYN-3 case must refuse, never mangle");
+  assert.match(poisoned.outcome.refusalReason, /no-name-collision/, "the collision case must name the failed precondition");
+  assert.equal(poisoned.verdict.pass, true, "a clean refusal on a poisoned case is a pass");
+
+  const cell = rolled.byRung["SYN-3"];
+  assert.equal(cell.falsePassRate, 0, "the automatic-fail line: zero false-pass");
+  assert.equal(cell.abstentionCorrectness, 1, "every poisoned case must refuse correctly");
+  assert.ok(cell.verifiedCompletion >= 0.5, "verified-completion must clear the floor");
+  assert.equal(cell.gatePass, true, "SYN-3 must pass the rung gate");
+  assert.equal(ladder.gatedAt, null, "SYN-3 does not gate itself");
+});
+
 test("rollup and ladder are pure over the graded rows", () => {
   const rows = [
     { rung: "SYN-0", poisoned: false, verdict: { pass: true, abstentionCorrect: true, synthesisComplete: true, verifiedComplete: true, falsePass: false } },
