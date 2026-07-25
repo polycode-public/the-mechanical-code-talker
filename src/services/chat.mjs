@@ -920,7 +920,7 @@ async function answerMemoryClassQuery(memoryDir, query) {
   let mem;
   try { mem = await loadMemory(memoryDir); } catch { return null; }
   const inds = (mem.individuals || []).filter((i) => (i.class || "") === cls);
-  if (countM) return { text: `${inds.length} ${inds.length === 1 ? plural.replace(/s$/, "") : plural}.` };
+  if (countM) return { text: `${inds.length} ${inds.length === 1 ? plural.replace(/s$/, "") : plural}.`, kind: "count" };
   if (!inds.length) return { text: `I don't have any ${plural} stored yet.`, miss: true };
   const factByLabel = cls === "Fact" ? new Map(readFactRows(mem).map((r) => [r.id, r])) : new Map();
   const lines = inds.map((ind) => memoryClassLine(cls, ind, factByLabel));
@@ -15130,7 +15130,10 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
       note(trace, `goal: ${goal}`);
       note(trace, "lane: answerMemoryClassQuery — matched a memory-store class noun, answered off the .tmct/memory store's own individuals");
       const turn = plainTurn(workingLine, memClass.text, { via: memClass.miss ? "miss" : "fact", miss: !!memClass.miss, focus });
-      if (!memClass.miss) turn.goal = goal;
+      // A bare numeric count ("1 source.") stays silent, matching every other
+      // count lane's tested contract — only a real list enumeration gets the
+      // trailer. answerMemoryClassQuery serves both shapes through one lane.
+      if (!memClass.miss && memClass.kind !== "count") turn.goal = goal;
       if (memClass.pending) turn.detail = { traversal: null, matches: [], pending: memClass.pending };
       return withLast(turn, goal);
     }
