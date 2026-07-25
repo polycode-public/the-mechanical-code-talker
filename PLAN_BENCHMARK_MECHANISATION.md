@@ -2,7 +2,7 @@
 
 Status: harness machinery LANDED (levers 1, 2, 3, 6, 7), and lever 1's seed pass has RUN — the
 3.0.3 cycle judged the full 1,075-case pool and committed `test-benchmarks/chatbench/verdict-cache.json`
-(`BENCHMARK_CEFR_ENGLISH_3.0.3.md`; its final top-up judged 47 and inherited 1,028, the
+(`reports/BENCHMARK_CEFR_ENGLISH_3.0.3.md`; its final top-up judged 47 and inherited 1,028, the
 mechanism working as designed). Remaining scope, all unblocked: lever 4 (`test-benchmarks/ingestbench/` now
 exists — wire its deterministic equivalence checker into the judged tiers' cycle), the bulk
 matcher distillation over the all-green pool (lever 2's authoring pass), and the calibration
@@ -155,7 +155,7 @@ clock), 0.5–1M tokens of agent work, under ~600 haiku judge calls (~35 min of 
 Two scheduling caveats:
 
 1. **Lever 4's bottleneck is corpus, not code.** The checker distills from JUDGED examples and
-   only two real ING-8/9 verdicts exist (`BENCHMARK_INGEST_3.0.3.md`). The pair-authoring and
+   only two real ING-8/9 verdicts exist (`reports/BENCHMARK_INGEST_3.0.3.md`). The pair-authoring and
    judging pass is the unavoidable paid step; the checker build is mechanical after it.
 2. **Lever 2's "byte-stable across two cycles" rule** strictly wants a second full-pool judged
    cycle to compare against (3.0.3 was the first). The pragmatic reading — product replay is

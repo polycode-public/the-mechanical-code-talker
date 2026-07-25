@@ -227,7 +227,7 @@ resolves to a real graph traversal or declines cleanly:
   (*because/although/while*), conditionals, and false-premise flags ("why
   does X still import Y" when it no longer does).
 
-The full catalog with measured coverage lives in the `BENCHMARK_*.md`
+The full catalog with measured coverage lives in the `reports/BENCHMARK_*.md`
 reports.
 
 **Response finishing.** Before an answer prints, it is segmented into typed
@@ -1229,7 +1229,6 @@ hardened:
 - CI runs **SAST and secret detection**.
 - A nightly **`npm audit` + OSV-Scanner** job watches dependencies.
 - Releases are published with **npm provenance** (`--provenance`).
-- A coordinated-disclosure `SECURITY.md` policy covers reports.
 
 The content-address hash is single-sourced in `src/domain/hash.mjs`, so the
 cross-version-stable fact-id contract has exactly one definition.

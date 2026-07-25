@@ -4,7 +4,7 @@
     {
       "match": "antony@polycode.co.uk",
       "kind": "email",
-      "reason": "the intended public author/maintainer contact for this repository (package.json author, SECURITY.md contact)"
+      "reason": "the repo-local git commit identity CLAUDE.md and SKILL_BENCHMARK_CEFR_ENGLISH.md cite for coordinator commits"
     },
     {
       "match": "noreply@anthropic.com",

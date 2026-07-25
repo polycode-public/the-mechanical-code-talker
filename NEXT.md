@@ -8,8 +8,8 @@ Prefer deleting a sentence to negating it.
 
 Living handover. Any session resumes from here. **Plan of record: the `PLAN_*.md` design docs** —
 each states its own status in its opening lines; `archive/` holds the delivered ones. This file
-holds ONLY what to do next. Completed work is not narrated here; `git log` and the `BENCHMARK_*.md`
-reports hold that record.
+holds ONLY what to do next. Completed work is not narrated here; `git log` and the
+`reports/BENCHMARK_*.md` reports hold that record.
 
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
@@ -45,7 +45,7 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   multi-file e2e contention — surfaced while stress-verifying the chat/research hardening above;
   a different feature area (ledger UI) with no shared root cause, not yet investigated
 
-CONVERSATION 3.0.3 sweep (see `BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
+CONVERSATION 3.0.3 sweep (see `reports/BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
 
 - [ ] "give me an overview of this project" gets the identity card, not the architecture overview — the recognizer catches "architecture" but not the "overview of {this project/codebase/repo}" sibling; extend the architecture/overview intent set (FLOW-3)
 - [ ] "what are the packages here" is swallowed by the vocabulary/digest lane ("package means box"), and "list the packages" reports packages isn't a listable kind though the architecture answer already computes them — add packages as a listable kind and guard the digest lane from a plain package-enumeration ask (FLOW-3)
@@ -138,4 +138,4 @@ Three hard-won lessons, carried forward:
    moment. Its bar is now 20x, which still leaves the whole quadratic band (64x up) outside.
 
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
-history, plus the `BENCHMARK_<axis>_<version>.md` reports and `archive/`.*
+history, plus the `reports/BENCHMARK_<axis>_<version>.md` reports and `archive/`.*
