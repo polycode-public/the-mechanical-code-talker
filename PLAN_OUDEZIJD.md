@@ -24,6 +24,23 @@ generated as a person statistically plausible for that place and moment — a to
 2026, a Germanic marsh-dwelling tribesperson in 1000 BC. The default entry point is outside 32
 Oudezijds Voorburgwal, right now, in real time.
 
+## Related work — what already exists, and what's genuinely new here
+
+Checked 2026-07-26, not an exhaustive literature review. Two real projects cover pieces of this:
+[Discovery Tour by Assassin's Creed](https://www.ubisoft.com/en-us/game/assassins-creed/discovery-tour)
+(Ancient Egypt, Ancient Greece, Viking Age England) ships historian-curated exploration of a
+researched historical world — the closest existing match to "walk a real place, learn real
+facts," but every fact in it is hand-authored for a fixed tour, with no procedural gap-filling and
+no per-fact provenance distinction between attested and constructed. Asynchronous "ghost"
+mechanics in other multiplayer games (another player's recorded past becoming content you
+encounter) are the closest genre precedent for §2a's player-history-as-NPC idea, but nothing
+found replays another player's own recorded actions at the exact spacetime coordinate they
+happened, or writes an encounter with that replay back into the original player's own durable
+record. The combination this document proposes — real historical grounding, honest procedural
+gap-filling with disclosed provenance, and cross-player history-as-NPC in one system — doesn't
+match anything found. §6 names a real, active project (Amsterdam Time Machine) building the kind
+of data infrastructure this plan would draw from.
+
 ## What this grounds in — real, shipped tmct capability
 
 Nothing here starts from zero. Four subsystems already do most of the mechanical work this idea
@@ -258,7 +275,16 @@ real research question this document does not resolve:
   (Stadsarchief Amsterdam) and Dutch national statistics (CBS) hold deep historical
   address/population/census records, some already digitised — but what's programmatically
   accessible, in what format, and under what reuse terms is a research question this document
-  hasn't answered and shouldn't guess at.
+  hasn't answered and shouldn't guess at. **A concrete lead, confirmed 2026-07-26, not yet
+  investigated further:** the [Amsterdam Time Machine](https://www.amsterdamtimemachine.nl/)
+  (University of Amsterdam's CREATE digital-humanities lab) is a real, active project building
+  exactly this kind of spatially- and temporally-navigable Amsterdam data infrastructure —
+  people, places, relationships, events, objects, unfolding through space and time, with museum
+  and archive partners — and sits inside the wider [Time Machine
+  Europe](https://www.timemachine.eu/) initiative (~300 institutions across 32 countries
+  digitising archives at continental scale). This doesn't resolve the licensing/access question
+  above, but it means the underlying data work isn't starting from nothing, and is worth a real
+  conversation with that project before assuming any acquisition has to be done from scratch.
 - **What the census-category sampling (§2) actually needs.** "Weighted by real category
   frequency" only works once real category-frequency tables exist for the relevant decades and
   neighbourhoods — a data-preparation project in its own right, not a code change.
