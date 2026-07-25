@@ -67,7 +67,25 @@ session is the COORDINATOR (plans, launches, integrates, answers the operator), 
 - Commit per completed step with the repo-local identity (`antony@polycode.co.uk` /
   `Antony at Polycode`). Keep the tests green at every commit — but which tests depends on where
   the commit lands, see "Test the blast radius" below.
-- Push/publish is gated on the operator (CI publishes on version bump on `main`).
+- **Publish continuously, batch what lands while CI builds.** Merge each sub-agent's verified
+  commit onto local `main` as soon as it's ready — don't hold everything for one end-of-session
+  merge sweep. Run the full suite once (still only at the actual push moment — see "Test the
+  blast radius"), then push immediately once at least one commit is ready. Poll the pipeline
+  (`glab ci status --branch=main --compact` or `glab ci get --branch=main --output json`; `glab`
+  is installed and authenticated) until it resolves — budget ~15-20 minutes for a push that
+  touches `src`/`test`/`package.json` (the `e2e`/`e2e:heavy`/`publish:npm` jobs dominate), ~2-3
+  minutes for a docs-only one (only the cheap `verify`-stage jobs run). While waiting, keep
+  merging any further sub-agent commits onto local `main` as they land — don't push again until
+  the in-flight pipeline resolves, so pipelines never race each other. Once it goes green: if
+  commits have stacked up since that push, `npm run roll` (bump the patch version, regenerate
+  the version-stamped artifacts), run the full suite again, commit, and push that batch — this
+  both ships the accumulated work and gives `publish:npm`'s version check something real to
+  publish (see `.gitlab-ci.yml`'s `deploy` stage — it only publishes on an actual version
+  increase). Repeat wait → batch → roll → push until nothing is left stacked. If a pipeline goes
+  red, don't push through it — diagnose and fix (harden a flaky timing test rather than
+  re-running it, per NEXT.md's own precedent) before the next push. **The one thing this doesn't
+  relax: the full suite stays mandatory before every push that reaches `main` — this changes
+  *when* you push, never *whether* you test first.**
 
 ## Test the blast radius, not the whole suite
 
