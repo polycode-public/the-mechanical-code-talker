@@ -1,5 +1,5 @@
 {
-  "tmctVersion": "3.0.5",
+  "tmctVersion": "3.0.6",
   "viewport": {
     "width": 1024,
     "height": 600
@@ -16,7 +16,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "25e868a373ea6eef1205b435e27cba0d836faf28196d22fa18286ce209aef5b8"
+      "sha256": "af094326ee69cd7d8480478b70b2b77dbeb583a803be2b6af9bb2cf483674373"
     },
     {
       "page": "spider-fly",
@@ -81,7 +81,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "4235dbd9e9774743dc1cc3626383b17c4e377933c2f51d88aede78611ba476bf"
+      "sha256": "b64838d73968e30ff799ebe0438774761b5c19315b3dfa071db8d687d34a7ba6"
     },
     {
       "page": "ingest",
@@ -94,7 +94,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "b98c2fb1a8ee7351f42a6e1ee683d5cfa1806b09ac326eb83fc63e64e53712c6"
+      "sha256": "6da19f24ed122cfe8c36adfffacb2ad44e0a0faa83798da7f8c17d5138a31f1b"
     },
     {
       "page": "sprites",
@@ -120,7 +120,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "6bab6e1199be08de8b361302827e8330b6dfbb210fa383656bef533b15c199f6"
+      "sha256": "ff3bdb469aa361a67ec0989d5b05f5a27599cb7517ff0d34b22fa7fed92ae4ca"
     }
   ]
 }
