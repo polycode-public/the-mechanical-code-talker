@@ -1,4 +1,4 @@
-# PLAN_HISTORICAL_CITY.md — a real city, grounded in history, explored like an adventure
+# PLAN_TIME_MACHINE.md — a real city, grounded in history, explored like an adventure
 
 Status: RESEARCH / DESIGN — not started. Origin: an operator idea, 2026-07-25. Nothing in this
 document is live code.
@@ -15,8 +15,14 @@ from then on. Objects respawn or don't depending on what they are: street litter
 overnight, a shop's stock restocks, a unique stolen artwork stays gone. NPCs remember what a
 player tells them and answer what they're asked. When a player next observes an NPC, that NPC's
 story is caught up to the present — including the times they weren't where they were last seen.
-The world persists across sessions and players, the way `PLAN_MUD.md` already designs for. The
-default entry point is outside 32 Oudezijds Voorburgwal, right now, in real time.
+The world persists across sessions and players, the way `PLAN_MUD.md` already designs for. A
+player's own presence at a place and time is itself durable: revisit that exact spacetime and you
+can change what you did there; another player visiting while you're recorded as having been there
+meets you, replayed as an NPC from your own history, and what happens in that meeting writes back
+into your record too. On arrival or on travelling to a new time, the player themselves is
+generated as a person statistically plausible for that place and moment — a tourist at 2am in
+2026, a Germanic marsh-dwelling tribesperson in 1000 BC. The default entry point is outside 32
+Oudezijds Voorburgwal, right now, in real time.
 
 ## What this grounds in — real, shipped tmct capability
 
@@ -123,17 +129,75 @@ already has proven working:
   its removal is recorded) and evaluating it lazily when the object's room is next observed,
   never on a background tick. This needs no new engine — just a policy table keyed by
   `objectClassChain`'s existing output.
+- **The player's own arrival persona reuses this exact mechanism.** Spawning fresh, or travelling
+  to a new time, samples the player's own in-world persona from the same closed-catalogue
+  approach — a person statistically plausible for that place and moment (a tourist at 2am in
+  2026; a member of an era-appropriate culture for 1000 BC, marsh-dwelling, Iron Age). This is not
+  a new mechanism on top of the three above; it's the identical lazy-generate-once-then-durable
+  pattern applied to one more entity — the player. §6 below extends the sourcing question this
+  raises for eras with no census at all.
+
+## 2a. Player presence as durable, replayable history
+
+The operator's own extension names a genuinely new case, distinct from the three above: **a
+player's own actions become part of the world's durable record, at the exact place and time they
+happened, replayable to other players as an NPC.**
+
+- **Every visit is a fact, keyed to (player, place, time).** When a player is at a location at a
+  moment, what they do there is recorded as their own durable action history for that exact
+  spacetime coordinate — not shared world content (§2, §3), scoped to that one player.
+- **Revisiting the identical spacetime coordinate lets a player redo it.** If the same player
+  later returns to that exact (place, time) — travelling back to a moment they've already lived
+  through in-world — their new actions there supersede the old ones as that player's own current
+  record for that coordinate, the same superseding-by-date pattern §1's temporal facts already
+  use, just keyed one level finer (per player, not just per fact).
+- **A second player arriving at that same (place, time) meets the first player's recorded history,
+  replayed as an NPC.** The read side reuses what already ships — `personRoomReport`/
+  `personKnowledgeLines` — driven by a different source: a script of recorded actions instead of a
+  generated schedule (§2's third bullet). The first player doesn't need to be online for this;
+  their history is durable and drives the replay on its own.
+- **What the second player does in that encounter writes into the first player's own record.**
+  Talking to the replayed player, giving them something, telling them something — all of it
+  becomes part of the first player's durable character history, attributed to them, even though
+  they weren't present when it happened. The next time the first player is observed (by anyone,
+  including themselves on a future revisit), that encounter is part of what's caught up.
+- **Revision doesn't rewrite the past — it only changes what's shown to future observers.** If the
+  first player later revisits and changes their recorded actions at that coordinate (the second
+  bullet above), a second player who already met the old version keeps whatever they already
+  recorded — their own observation is its own dated fact, not a window onto a mutable present.
+  Only a *later* observer sees the revised version. This preserves the same append-and-supersede
+  discipline §1 already uses for every other temporal fact; nothing here needs the graph to
+  actually rewrite history, only to keep serving the newest version forward.
+
+**New capability required**, on top of what §2 already names: a player-scoped, spacetime-keyed
+action-history fact shape; a presence index (given a (place, time) query, is any player's history
+recorded there, to decide whether to spawn their NPC-replay); the replay-from-history driver
+itself (structurally similar to the schedule-driven NPC read path, different source data); and
+the cross-player write-back path, which needs an explicit note on WHOSE facts these are — they
+carry player B's authorship of the interaction but get attributed into player A's own durable
+record, a permission/ownership crossing nothing else in this design does.
+
+**One real open question this raises, not resolved here: abuse.** A player can write real,
+durable content into another player's own persistent record without that player's live consent —
+put words in their recorded mouth, however it's actually implemented. Every other UGC-into-
+another-user's-space design (multiplayer "ghost"/message-leaving mechanics in other games are the
+closest genre precedent) has needed some mitigation — reporting, rate limits, a review layer. This
+plan does not propose one; it's a real trust-and-safety design question, not a technical detail,
+and belongs in its own pass once the core mechanism above is worth building.
 
 ## 3. Attested vs. constructed — the provenance mechanism that keeps the honesty promise
 
 Directly answering §1's research question at the mechanism level (the *policy* question — how
-far to interpolate — stays open): every fact this world holds gets one of two provenance stamps,
-using the same citation shape tmct already uses for live sources
+far to interpolate — stays open): every fact this world holds gets one of three provenance
+stamps, using the same citation shape tmct already uses for live sources
 (`reference:wikipedia-live:<Title>@<revid>`):
 
 - **Attested** — sourced from a real historical record, with the record named and dated.
 - **Constructed** — sampled to fill a gap (§2), tagged with the generation policy and date it was
   filled, never presented as if a survey recorded it.
+- **Player-authored** — genuinely happened, inside this simulated world, in a real session (§2a).
+  Not a claim about real history and not a sampled placeholder — a third category, because it's
+  neither. Tagged with which player and when, the same way any other fact is dated and sourced.
 
 A room or NPC description composed from constructed facts says so, plainly, the same way a live
 Wikipedia answer already cites `reference:wikipedia-live:...` rather than presenting borrowed
@@ -206,6 +270,19 @@ real research question this document does not resolve:
 Choosing Amsterdam specifically over a city with more clearly open historical data is itself a
 scoping decision worth revisiting once the licensing research above lands.
 
+**A second, qualitatively different data regime for eras before recordkeeping.** The operator's
+own example — 1000 BC, centuries before Amsterdam existed as a settlement at all — names a real
+gap the city-archive research above doesn't cover. Everything in §1–§2a assumes a *documented*
+era: named addresses, named residents, census categories. Deep prehistory has none of that. What
+exists instead is archaeological and anthropological consensus at the level of material culture
+and settlement pattern — coarser by construction, never individual-level, and (this document
+takes no position on it) itself a live scholarly question for exactly which cultural label, if
+any, fits the lower Rhine–Meuse delta at that specific date. This isn't a bigger version of §6's
+first bullet; it's a **different sourcing and modelling question**, needing its own research pass
+into what's authoritative at that resolution, and how coarse "statistically plausible person"
+sampling has to be once there's no census to weight against. Named here as a real, separate
+research horizon, not folded into the Amsterdam-archive question above.
+
 ## 7. Time model
 
 The world's "now" defaults to real wall-clock time — the default entry point is outside 32
@@ -226,7 +303,14 @@ same NPC recalls it (`personKnowledgeLines`, extended to hold player-taught fact
 tomorrow, a different coin is there (`Litter`-class respawn, §2). The player asks about a
 specific, real historical artwork once housed nearby; if the graph's temporal data marks it
 stolen before the query date, it is honestly gone, not offered, with the theft's own record cited
-as the reason. None of this composes today — every piece named above is proposed, not shipped.
+as the reason. On arrival, the player themselves is generated as a plausible tourist for 2am on a
+weekday (§2's fourth bullet) — the same mechanism that would generate them as a plausible
+marsh-dwelling Iron Age local if they instead travelled to 1000 BC (§6's second research item).
+A second player, visiting the same address the next day, finds the first player recorded there
+the day before, replayed as an NPC from their own actions (§2a); the second player greets them,
+and that greeting becomes part of the first player's own durable history, waiting for them the
+next time anyone — including themselves — visits that spacetime again. None of this composes
+today — every piece named above is proposed, not shipped.
 
 ## 9. Summary: what's new capability vs. what's research
 
@@ -244,13 +328,24 @@ as the reason. None of this composes today — every piece named above is propos
 | Wikipedia image fetch/cache + link preservation | new capability, design horizon |
 | Durable (non-TTL) shared-world tier | new capability, design horizon, depends on `PLAN_MUD.md` |
 | Concurrent-observer race handling on lazy fill | new capability, design horizon, depends on `PLAN_MUD.md` |
+| Player's own generated arrival persona | direct reuse of the closed-catalogue mechanism above — not new beyond it |
+| Player-scoped, spacetime-keyed durable action history (§2a) | new capability, design horizon |
+| Cross-player NPC-replay of a player's recorded history (§2a) | new capability, design horizon |
+| Cross-player write-back into another player's own record (§2a) | new capability, design horizon |
+| Player-authored provenance category (§3) | new capability, design horizon |
 | Real historical data acquisition and licensing (Amsterdam) | **research horizon** — outside engineering, needs its own investigation |
 | Census category-frequency data for weighted sampling | **research horizon** — a data-preparation project, not a code change |
+| Pre-recordkeeping-era data regime (archaeological/anthropological, e.g. 1000 BC) | **research horizon** — a different sourcing and modelling question, not a bigger version of the Amsterdam-archive one |
+| Abuse/griefing mitigation for cross-player history write-back (§2a) | **research horizon** — a trust-and-safety design question, not named here |
 | City-scale graph size, unmeasured | open question, not yet scoped |
 
-Nine of the twelve new pieces above are design horizon — known engineering, buildable once
-someone commits the time, several with real prior art already in this codebase to build against.
-Three are genuinely open: the interpolation-policy question (§1), and the two real-world data
-questions (§6). None of the three are claimed unreachable — they're named plainly, as this
-project's own discipline requires, so a future session can pick them up as actual investigations
-rather than rediscovering that they're open.
+Excluding the three rows already shipped or designed elsewhere, nineteen pieces are new. Twelve
+are design horizon — known engineering, buildable once someone commits the time, several with
+real prior art already in this codebase to build against. One (the player's own arrival persona)
+is a direct reuse of an already-covered mechanism, not genuinely new work on its own. One (city
+scale) is unmeasured rather than either designed or researched. Five are genuinely open: the
+interpolation-policy question (§1), the two real-world data questions plus the newly-named
+pre-recordkeeping data regime (§6), and cross-player write-back abuse mitigation (§2a). None of
+the five are claimed unreachable — they're named plainly, as this project's own discipline
+requires, so a future session can pick them up as actual investigations rather than
+rediscovering that they're open.
