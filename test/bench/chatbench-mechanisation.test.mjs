@@ -12,25 +12,25 @@ import { fileURLToPath } from "node:url";
 import {
   answerHash, answerText, judgeIdentity, entryValidFor,
   partition, buildCache, mergeJudged, emptyCache,
-} from "../../chatbench/verdict-cache.mjs";
+} from "../../test-benchmarks/chatbench/verdict-cache.mjs";
 import {
   escapeRegex, groundedTokens, distillMatcher, matcherPasses,
   matcherTighterThanJudge, isStablePass, cycleReadings,
   proposePromotions, partitionByPromotion,
-} from "../../chatbench/matchers.mjs";
+} from "../../test-benchmarks/chatbench/matchers.mjs";
 import {
   validateRubrics, familyIndex, familyOf, groupByFamily,
   selectCalibrationSet, verdictBucket, agreementByFamily, gateDownTier, pickModel,
-} from "../../chatbench/rubrics.mjs";
+} from "../../test-benchmarks/chatbench/rubrics.mjs";
 import {
   caseInputHash, partitionForReuse, stampReuseFields,
-} from "../../chatbench/skip-unchanged.mjs";
-import { batchRows, buildBatchPrompt, parseBatchOutput } from "../../chatbench/batch-judge.mjs";
-import { validateScores, renderTranscript } from "../../chatbench/judge.mjs";
-import { parseCases } from "../../chatbench/run.mjs";
+} from "../../test-benchmarks/chatbench/skip-unchanged.mjs";
+import { batchRows, buildBatchPrompt, parseBatchOutput } from "../../test-benchmarks/chatbench/batch-judge.mjs";
+import { validateScores, renderTranscript } from "../../test-benchmarks/chatbench/judge.mjs";
+import { parseCases } from "../../test-benchmarks/chatbench/run.mjs";
 
-const POOL_FILE = fileURLToPath(new URL("../../chatbench/graded-pool.jsonl", import.meta.url));
-const RUBRICS_FILE = fileURLToPath(new URL("../../chatbench/rubrics.json", import.meta.url));
+const POOL_FILE = fileURLToPath(new URL("../../test-benchmarks/chatbench/graded-pool.jsonl", import.meta.url));
+const RUBRICS_FILE = fileURLToPath(new URL("../../test-benchmarks/chatbench/rubrics.json", import.meta.url));
 
 const CTX = { judgeModel: "claude-haiku-4-5-20251001", promptVersion: "judge-prompt-v2" };
 const row = (caseId, answer, extra = {}) => ({

@@ -8440,7 +8440,7 @@ const CARD_EXISTENCE_ASK_RE = /^does\s+an?\s+(.+?)\s+have\s+an?\s+(.+?)[?.!\s]*$
 /** The 4 pattern-5 cardinality-restriction predicates buildCardinalityRestrictions
  *  reconstructs from — owl:onProperty (shared scaffolding with someValuesFrom
  *  restrictions too) is added alongside this set by each reader below, not
- *  folded into it here, mirroring infbench/grade.mjs's own identically-named
+ *  folded into it here, mirroring test-benchmarks/infbench/grade.mjs's own identically-named
  *  set + separate owl:onProperty handling. */
 const CARDINALITY_ROW_PREDICATES = new Set(["owl:cardinality", "owl:minCardinality", "owl:maxCardinality", "owl:onClass"]);
 /** "who owns <X>" / "who maintains <X>" — the closed ownership read-back over
@@ -11215,7 +11215,7 @@ async function conceptForceAnswer(query, envelope, { graph, config, source, memo
   const definition = (await seonDefinitions()).get(term) ?? null;
   if (!definition) return null;
   // The runChat shell hands the loaded graph straight in; the pure runTurn(config)
-  // path (tests, chatbench) does not, so load it the same way dispatchTool does when
+  // path (tests, test-benchmarks/chatbench) does not, so load it the same way dispatchTool does when
   // it's missing. Failure-tolerated: no loadable graph → no concept force.
   let g = graph;
   if (!g && config && source) {

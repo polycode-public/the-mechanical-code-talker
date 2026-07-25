@@ -6,8 +6,8 @@
 // entry rungs are facts a sibling bench already records — above all abstention
 // calibration (every bench's zero-fabrication gate) and goal-origination
 // distance (AGENTBENCH's reached ladder rung). This script reads the sibling
-// benches' MACHINE-READABLE artifacts (agentbench/envelope.json, infbench/envelope.json,
-// chatbench/envelope.json — the latter two read null-safe when absent, e.g. an
+// benches' MACHINE-READABLE artifacts (test-benchmarks/agentbench/envelope.json, test-benchmarks/infbench/envelope.json,
+// test-benchmarks/chatbench/envelope.json — the latter two read null-safe when absent, e.g. an
 // older checkout or a run where chatbench's envelope wasn't regenerated) and
 // emits the per-scale row mechanically, so an AGI-scales cycle pastes measured
 // readings rather than re-deriving them.
@@ -22,14 +22,14 @@
 //   node scripts/agi-scales-aggregate.mjs [--agentbench <envelope.json>]
 //     [--infbench <envelope.json>] [--chatbench <envelope.json>]
 //     [--child-manifest <manifest.json>] [--out <agi-scales-row.json>]
-//     (defaults: agentbench/envelope.json, infbench/envelope.json,
-//      chatbench/envelope.json, corpus/child/manifest.json; stdout)
+//     (defaults: test-benchmarks/agentbench/envelope.json, test-benchmarks/infbench/envelope.json,
+//      test-benchmarks/chatbench/envelope.json, corpus/child/manifest.json; stdout)
 
 import { access, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { parseFlags } from "../benchlib/bench.mjs";
+import { parseFlags } from "../test-benchmarks/benchlib/bench.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(HERE);
@@ -47,7 +47,7 @@ export function goalNotchFromRung(rung) {
   return { notch: 1, label: "notch 1 of 4 — declared goals only" };
 }
 
-// Mirrors infbench/grade.mjs's own COMPLETION_FLOOR — duplicated here rather
+// Mirrors test-benchmarks/infbench/grade.mjs's own COMPLETION_FLOOR — duplicated here rather
 // than imported because this script reads only the sibling benches' committed
 // envelope.json ARTIFACTS (never their source), the same discipline the file
 // header above documents.
@@ -55,7 +55,7 @@ const INFBENCH_COMPLETION_FLOOR = 0.5;
 
 // The honest-gate floor for CHATBENCH's judge-derived hard-fail rate: 0%,
 // exactly the zero-fabrication bar AGENTBENCH/INFBENCH hold their own gates to
-// (chatbench/judge.mjs's isHardFail is CHATBENCH's nearest analogue to a
+// (test-benchmarks/chatbench/judge.mjs's isHardFail is CHATBENCH's nearest analogue to a
 // confident, wrong, directional verdict).
 const CHATBENCH_HARD_FAIL_FLOOR = 0;
 
@@ -182,9 +182,9 @@ async function readJsonIfPresent(path) {
 function parseArgs(argv) {
   return parseFlags(argv, {
     defaults: {
-      agentbench: join(ROOT, "agentbench", "envelope.json"),
-      infbench: join(ROOT, "infbench", "envelope.json"),
-      chatbench: join(ROOT, "chatbench", "envelope.json"),
+      agentbench: join(ROOT, "test-benchmarks", "agentbench", "envelope.json"),
+      infbench: join(ROOT, "test-benchmarks", "infbench", "envelope.json"),
+      chatbench: join(ROOT, "test-benchmarks", "chatbench", "envelope.json"),
       childManifest: join(ROOT, "corpus", "child", "manifest.json"),
     },
     flags: {

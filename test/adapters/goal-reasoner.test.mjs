@@ -1,5 +1,5 @@
 // test/goal-reasoner.test.mjs — the closed-world C2 goal-reasoner
-// (src/domain/router/goal-reasoner.mjs + agentbench/driver-goal.mjs).
+// (src/domain/router/goal-reasoner.mjs + test-benchmarks/agentbench/driver-goal.mjs).
 //
 // Three groups:
 //   1. UNIT — the declared goal model + the pure meta-loop primitives (goal
@@ -24,14 +24,14 @@ import { fileURLToPath } from "node:url";
 import {
   GOAL_RULES, MAX_TICKS, backwardChainGoal, applicableRules, threatsAmong, dropCondition, goalReason,
 } from "../../src/domain/router/goal-reasoner.mjs";
-import { goalDriver } from "../../agentbench/driver-goal.mjs";
-import { cochangesLabels, untestedModules, intersect } from "../../agentbench/results.mjs";
+import { goalDriver } from "../../test-benchmarks/agentbench/driver-goal.mjs";
+import { cochangesLabels, untestedModules, intersect } from "../../test-benchmarks/agentbench/results.mjs";
 import { capabilities } from "../../src/domain/router/registry.mjs";
-import { createRunCtx, runAgentbench, BENCH_VERSION, loadFixtureLabels } from "../../agentbench/run.mjs";
-import { parseCases, hallucinationsIn } from "../../agentbench/grade.mjs";
-import { resolverDriver } from "../../agentbench/driver-resolver.mjs";
+import { createRunCtx, runAgentbench, BENCH_VERSION, loadFixtureLabels } from "../../test-benchmarks/agentbench/run.mjs";
+import { parseCases, hallucinationsIn } from "../../test-benchmarks/agentbench/grade.mjs";
+import { resolverDriver } from "../../test-benchmarks/agentbench/driver-resolver.mjs";
 
-const CASES_FILE = fileURLToPath(new URL("../../agentbench/cases.jsonl", import.meta.url));
+const CASES_FILE = fileURLToPath(new URL("../../test-benchmarks/agentbench/cases.jsonl", import.meta.url));
 
 // ONE shared run context (speed insurance, mirroring
 // test/adapters/router-resolver.test.mjs): every consumer below is READ-ONLY over the

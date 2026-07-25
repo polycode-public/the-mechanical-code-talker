@@ -36,7 +36,7 @@ Every cycle MUST satisfy:
 
 - **Artifact naming — match the `package.json` version.** A benchmark's write-up is named after the
   tmct version it measures: `BENCHMARK_CEFR_ENGLISH_<version>.md`, raw under
-  `chatbench/results/raw/run-<version>/`. A RE-RUN of the SAME version (re-measure without a version
+  `test-benchmarks/chatbench/results/raw/run-<version>/`. A RE-RUN of the SAME version (re-measure without a version
   bump — a harness fix, a re-judge, a second draw) appends `_00N`: `BENCHMARK_CEFR_ENGLISH_0.7.0_001.md`, `_002`,
   …, `run-0.7.0_001/`. So the artifact name always says which shipped version it scores, and the
   `_00N` suffix orders re-runs of that version. (The historical `CEFR_ENGLISH_001…006` cycle-numbered
@@ -52,29 +52,29 @@ Every cycle MUST satisfy:
   (`BENCHMARK_CEFR_ENGLISH_<version>.md` + `BENCHMARK_CEFR_ENGLISH_<version>_TRANSCRIPTS.md`); that split ends here. The
   already-archived `_TRANSCRIPTS.md` files under `archive/` stay exactly as they are — historical
   artifacts, not something to merge or backfill.
-- **Case set (case-set v3, 2026-07-10): `chatbench/graded-pool.jsonl` is the sole, GO-TO profile.**
+- **Case set (case-set v3, 2026-07-10): `test-benchmarks/chatbench/graded-pool.jsonl` is the sole, GO-TO profile.**
   One JSON object per line: `{ id, grade, construction, turns[], expectations, tags }`. The frozen
-  v1 core (formerly the separate `chatbench/cases.jsonl`, 49 hand-authored capability cases) was
+  v1 core (formerly the separate `test-benchmarks/chatbench/cases.jsonl`, 49 hand-authored capability cases) was
   folded IN as fully-graded cells (each assigned a real CEFR grade + construction, not left as a
   separate ungraded tier) rather than kept as its own file — every case in `graded-pool.jsonl` is
   now a first-class graded-pool citizen. The default profile started capped at **10 cases per CEFR
   grade** (60 pool-native + the 49 folded-in core cases = 109 cases total) when case-set v3 landed;
   targeted construction-coverage additions since then have grown it past that per-grade floor —
-  it stands at **138 cases** as of 2026-07-18 (`wc -l chatbench/graded-pool.jsonl` is the live
+  it stands at **138 cases** as of 2026-07-18 (`wc -l test-benchmarks/chatbench/graded-pool.jsonl` is the live
   count). The set is **append-only per cycle**: new cases may be added between runs (record the
   addition in the write-up), but existing cases are never edited or removed mid-arc. Editing a
   case invalidates every prior cycle's comparison against it.
   > **Footnote — extending to the full pool.** The complete, ungapped CEFR pool (1,075 cases across
   > all grade×construction cells, the historical default before 2026-07-10) is preserved at
-  > `chatbench/graded-pool-max.jsonl`. Point `--pool` at it (`node chatbench/run.mjs --pool
-  > chatbench/graded-pool-max.jsonl ...`) for a full-coverage run — this is the exception, not the
+  > `test-benchmarks/chatbench/graded-pool-max.jsonl`. Point `--pool` at it (`node test-benchmarks/chatbench/run.mjs --pool
+  > test-benchmarks/chatbench/graded-pool-max.jsonl ...`) for a full-coverage run — this is the exception, not the
   > go-to; reach for it when the go-to pool's frontier coverage genuinely isn't enough (e.g.
   > validating a lever against every construction cell, not just a sample of each).
 - **Deterministic replay:** each case's `turns` are replayed through `runTurn`. The product is
   deterministic, so **ONE product run per arm** is sufficient; repetition adds nothing.
 - **The judge is the noisy part — default N=2, single draw.** Each case's transcript is scored by
   an **LLM-as-judge**. The go-to profile judges at **N=2 samples per case, single draw** (`node
-  chatbench/judge.mjs --samples 2`, no `--dual`) — cheap enough (138 cases × 2 = 276 judge calls) to
+  test-benchmarks/chatbench/judge.mjs --samples 2`, no `--dual`) — cheap enough (138 cases × 2 = 276 judge calls) to
   run routinely against the go-to pool. **N ≥ 3 samples, and/or the dual-draw
   parallel-forms check (§ below), stay available** for a higher-confidence pass (e.g. before a
   release, or against the full `graded-pool-max.jsonl`) but are no longer the default — see the
@@ -93,7 +93,7 @@ Every cycle MUST satisfy:
 - **Judge integrity:** a judge refusal or format failure **VOIDS that case's score** for that
   sample. It is re-sampled or excluded, **never counted as a fail**.
 - **Graded-pool sampling (case-set v3, 2026-07-10 — supersedes v2's ~10×-pool/10%-sample scheme):**
-  a bare invocation (`node chatbench/run.mjs --stamp <label>`) DEFAULTS to `--sample 1` — the go-to
+  a bare invocation (`node test-benchmarks/chatbench/run.mjs --stamp <label>`) DEFAULTS to `--sample 1` — the go-to
   `graded-pool.jsonl`'s whole file, not a further stratified sub-sample — because the pool stays
   cheap enough to run in full every cycle even as append-only additions grow it past its original
   10-per-grade floor (§1's opening bullet). With nothing left to sample, a whole-file run is a
@@ -103,7 +103,7 @@ Every cycle MUST satisfy:
   construction, single-area vs combination cells reported separately) stay the comparable
   cross-cycle statistic. **When running against the full `graded-pool-max.jsonl` footnote profile**
   (above), narrow `--sample` below 1 and v2's stratified-sampling behavior applies as documented in
-  `chatbench/GRADED.md` — that file is large enough to need it; the go-to profile is not.
+  `test-benchmarks/chatbench/GRADED.md` — that file is large enough to need it; the go-to profile is not.
 - **Dual-draw agreement (parallel-forms reliability) — optional, off by default in the go-to
   profile.** The go-to profile runs **single-draw** (the `--sample 1` default; `--single` is only
   needed when also narrowing `--sample`) since its whole point
@@ -132,7 +132,7 @@ Every cycle MUST satisfy:
   complete only when several prior ANSWERS are composed — Grosz/Joshi/Weinstein centering, the axis
   CONVERSATION measures qualitatively but CEFR never had). This is a NEW AXIS, **not** a super-C2
   grade: the CEFR letters still only vocabulary-grade construction difficulty. The cases live in the
-  go-to `graded-pool.jsonl` on the `HORIZON_CELLS` (`chatbench/graded.mjs`: `C1:pragmatic-implicature`,
+  go-to `graded-pool.jsonl` on the `HORIZON_CELLS` (`test-benchmarks/chatbench/graded.mjs`: `C1:pragmatic-implicature`,
   `C2:cross-turn-composition`) — graded as a named horizon, deliberately NOT sized into
   `GRADED_MATRIX`, because the pragmatic/discourse routing they test does not exist in the product
   yet: most sit at the honest-miss floor and the judge scores them as misses, exactly as INF-C2 sat
@@ -174,7 +174,7 @@ which cases/tags it should move, and by how much.
 > standing working model in practice: the main session is the COORDINATOR, not the worker. A
 > cycle's changes usually decompose into mostly-independent **workstreams** — e.g. the
 > *interpretation pipeline* (`src/domain/interpret/`), *memory* (`src/memory/`), the *bench harness*
-> (`chatbench/`), and *docs* — that can be built **in parallel by background subagents** while the
+> (`test-benchmarks/chatbench/`), and *docs* — that can be built **in parallel by background subagents** while the
 > coordinator keeps the main chat free for the operator. Two rules make this safe: (a)
 > **serialize on shared files** — `chat.mjs` and `runTurn`'s orchestration are touched by several
 > workstreams, so land the foundational change there first, then layer the others on; (b) **give
@@ -209,7 +209,7 @@ between operator check-ins** — surface anything non-obvious; it appends `OPEN`
 **Step 6 — WRITE the cycle up.** The artifact name **matches `package.json`'s version** (see
 "Artifact naming" in §1): `BENCHMARK_CEFR_ENGLISH_<version>.md` for the release under test (e.g.
 `BENCHMARK_CEFR_ENGLISH_0.7.0.md`), and a same-version RE-RUN appends `_00N` (`BENCHMARK_CEFR_ENGLISH_0.7.0_001.md`, `_002`,
-…). On completion: **snapshot the raw judge outputs to `chatbench/results/raw/run-<version>[_00N]/`
+…). On completion: **snapshot the raw judge outputs to `test-benchmarks/chatbench/results/raw/run-<version>[_00N]/`
 BEFORE the next run overwrites them**, then write **one file**, `BENCHMARK_CEFR_ENGLISH_<version>.md`:
 - the headline mean (+ hard-fail count) at the top;
 - a **BEST-EXAMPLES pick in the summary** — 3-5 verbatim transcript excerpts showing the most
@@ -247,7 +247,7 @@ next cycle. No pause — the operator interrupts when they want the wheel.
 
 - **The case set is sacred.** Append-only between cycles; never edit or delete existing cases
   mid-arc; record every addition in the write-up.
-- **Snapshot before overwrite.** `chatbench/results/raw/run-<version>[_00N]/` is written before
+- **Snapshot before overwrite.** `test-benchmarks/chatbench/results/raw/run-<version>[_00N]/` is written before
   the next run starts — a skipped snapshot is a process slip the advisor flags.
 - **`STRATEGY_ADVISOR.log` is append-only.** Never edit or reorder prior entries. When you act on
   an `OPEN` item, append a short `✅ DONE` note. Commit the log alongside the related change.
@@ -267,7 +267,7 @@ decision log, `STRATEGY_ADVISOR.log`, and the open-items lever board (`NEXT.md`,
 prediction; **applies** it (fanning independent workstreams to parallel subagents, serialized on
 shared files); **smokes** (`npm test` + `printf 'hi\n/exit\n' | node bin/tmct.mjs` in graph-less
 and fixture-graph dirs — a failed smoke voids the run); **runs** the chatbench (one deterministic
-product run per arm over the append-only `chatbench/graded-pool.jsonl` go-to profile — 138 cases
+product run per arm over the append-only `test-benchmarks/chatbench/graded-pool.jsonl` go-to profile — 138 cases
 (the folded-in frozen v1 core plus construction-coverage growth past the original 10/CEFR-grade
 floor) — then N=2 single-draw pinned-judge samples
 per case by default (N≥3 + dual-draw remain available against the full `graded-pool-max.jsonl`
@@ -278,7 +278,7 @@ alongside as the drift alarm**; **writes one file**, `BENCHMARK_CEFR_ENGLISH_<ve
 + the best-examples pick, per-tag, predictions-vs-actuals, per-lever analysis, ranked next-cycle
 decision log, and an "Evidence / transcripts" section near the end with discriminating transcripts
 first — no separate `_TRANSCRIPTS.md` file), snapshotting raw judge output
-to `chatbench/results/raw/run-<version>[_00N]/` first and mirroring anything left open into
+to `test-benchmarks/chatbench/results/raw/run-<version>[_00N]/` first and mirroring anything left open into
 `NEXT.md` as one-line pickup items; then applies the decision rule (**PASS = mean up AND no
 pass→fail regression**) and **continues to the next cycle** — no hard pause; the operator
 interrupts at will.

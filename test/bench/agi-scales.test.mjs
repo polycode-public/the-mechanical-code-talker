@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 
 import { buildAgiRow, goalNotchFromRung, renderAgiRow } from "../../scripts/agi-scales-aggregate.mjs";
 
-const ENVELOPE_FILE = fileURLToPath(new URL("../../agentbench/envelope.json", import.meta.url));
+const ENVELOPE_FILE = fileURLToPath(new URL("../../test-benchmarks/agentbench/envelope.json", import.meta.url));
 
 test("goalNotchFromRung maps AGENTBENCH ladder rungs to goal-origination notches", () => {
   assert.equal(goalNotchFromRung(null), null);

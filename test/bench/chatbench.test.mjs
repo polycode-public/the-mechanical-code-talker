@@ -13,23 +13,23 @@ import {
   TAGS, EXPECT_KEYS, JUDGE_DIMENSIONS, FIXTURE_CONTEXT,
   parseCases, evaluateExpect, summarizeTier1, runTurnsCase, runSessionCase,
   compareProducts,
-} from "../../chatbench/run.mjs";
+} from "../../test-benchmarks/chatbench/run.mjs";
 import {
   JUDGE_MODEL, PROMPT_VERSION, DIMENSIONS,
   renderTranscript, buildPrompt, validateScores, parseJudgeOutput, maskScores,
   judgeSample, sampleMean, isHardFail, computeSummary, pool,
-} from "../../chatbench/judge.mjs";
+} from "../../test-benchmarks/chatbench/judge.mjs";
 import {
   renderReport, renderTranscripts, orderDiscriminating,
   cellRollup, uncoveredCells, undeclaredCells,
-} from "../../chatbench/report.mjs";
-import { OFF_MATRIX_FOLD_CELLS, HORIZON_CELLS } from "../../chatbench/graded.mjs";
+} from "../../test-benchmarks/chatbench/report.mjs";
+import { OFF_MATRIX_FOLD_CELLS, HORIZON_CELLS } from "../../test-benchmarks/chatbench/graded.mjs";
 import { runChat } from "../../src/services/chat.mjs";
 import { parseSessionJsonl, parseSessionLog, turnKey } from "../../src/services/sessions.mjs";
 
-const POOL_FILE = fileURLToPath(new URL("../../chatbench/graded-pool.jsonl", import.meta.url));
-const PROMPT_FILE = fileURLToPath(new URL(`../../chatbench/${PROMPT_VERSION}.txt`, import.meta.url));
-const SCHEMA_FILE = fileURLToPath(new URL("../../chatbench/rubric.schema.json", import.meta.url));
+const POOL_FILE = fileURLToPath(new URL("../../test-benchmarks/chatbench/graded-pool.jsonl", import.meta.url));
+const PROMPT_FILE = fileURLToPath(new URL(`../../test-benchmarks/chatbench/${PROMPT_VERSION}.txt`, import.meta.url));
+const SCHEMA_FILE = fileURLToPath(new URL("../../test-benchmarks/chatbench/rubric.schema.json", import.meta.url));
 
 // ---- frozen v1 core lint. The core cases live in graded-pool.jsonl as
 // fully-graded cells rather than in a separate ungraded file, and are
@@ -576,7 +576,7 @@ test("pins: full judge model id (never an alias) + versioned prompt file + expec
     assert.ok(prompt.includes(phrase), `v2 prompt names the ${phrase} surface`);
   }
   // superseded prompt versions stay committed so recorded runs stay auditable.
-  const v1 = fileURLToPath(new URL("../../chatbench/judge-prompt-v1.txt", import.meta.url));
+  const v1 = fileURLToPath(new URL("../../test-benchmarks/chatbench/judge-prompt-v1.txt", import.meta.url));
   assert.ok((await readFile(v1, "utf8")).length > 500, "the superseded v1 prompt text stays");
   assert.deepEqual(DIMENSIONS, JUDGE_DIMENSIONS, "runner and judge agree on the rubric dimensions");
   assert.ok(EXPECT_KEYS.includes("baselineFail"));

@@ -51,7 +51,7 @@ scale has headroom past what today's engine reaches — a ruler with room above 
 claim the engine does either yet. The AGI won't live on this ladder; these two rungs are where its
 deductive-cousin capabilities would register.
 
-Neither has a generator template in `infbench/cases.jsonl` yet, so both sit at the honest-miss
+Neither has a generator template in `test-benchmarks/infbench/cases.jsonl` yet, so both sit at the honest-miss
 floor exactly as INF-7/INF-8 do, and their cases get authored when the engine behind them exists:
 INF-9 needs a ranked closed hypothesis set and a best-explanation selector; INF-10 needs
 `PLAN_FILLER_AND_COUNTERFACTUALS.md` §2's re-solve-from-modified-start over the planner's own
@@ -62,7 +62,7 @@ made-up counterfactual outcome, is a fabrication and the floor is a miss.
 This shape is closer to **`SKILL_BENCHMARK_CEFR_ENGLISH.md`'s** measure→apply-one-lever→re-measure loop than
 to a delegated chat-round sprint (`SKILL_BENCHMARK_CONVERSATION.md`'s capped sprint mode), and this doc
 follows `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s structure most closely for that reason: INFBENCH is a
-deterministic benchmark replay (`node infbench/run.mjs`), not a natural conversation, so there is no
+deterministic benchmark replay (`node test-benchmarks/infbench/run.mjs`), not a natural conversation, so there is no
 "curious user" to delegate to a sub-agent round-by-round the way a playtest sprint delegates chat
 turns — the loop's unit is "one engine-build stage measured against a fixed ladder," the same unit
 `SKILL_BENCHMARK_CEFR_ENGLISH.md` calls "one lever." Where the capped-sprint shape genuinely fits (a short,
@@ -76,17 +76,17 @@ doesn't (delegated rounds, live chat transcripts, a round cap) it doesn't force 
 
 ## 1. The cycle (one pass through measure → decide → write → build)
 
-**Step 1 — REGENERATE.** Run `node infbench/generate-cases.mjs --seed <n>` (default seed recorded
+**Step 1 — REGENERATE.** Run `node test-benchmarks/infbench/generate-cases.mjs --seed <n>` (default seed recorded
 in the generator; omit `--seed` to reuse it). This is deterministic and generated-first, mirroring
-`chatbench/generate-graded.mjs`'s discipline: same seed →
-byte-identical `infbench/cases.jsonl`. It prints per-template counts — treat that printed table as
-the authoritative count, the same convention `chatbench/GRADED.md` uses for chatbench's pool. Never hand-edit
-`infbench/cases.jsonl`; it is a build artifact, not a fixture.
+`test-benchmarks/chatbench/generate-graded.mjs`'s discipline: same seed →
+byte-identical `test-benchmarks/infbench/cases.jsonl`. It prints per-template counts — treat that printed table as
+the authoritative count, the same convention `test-benchmarks/chatbench/GRADED.md` uses for chatbench's pool. Never hand-edit
+`test-benchmarks/infbench/cases.jsonl`; it is a build artifact, not a fixture.
 
-**Step 2 — RUN.** Run `node infbench/run.mjs`. This replays every case through the two drive points
+**Step 2 — RUN.** Run `node test-benchmarks/infbench/run.mjs`. This replays every case through the two drive points
 (the pure kernel prover, `src/domain/syllogise.mjs`; and the chat surface via `runChat()`), grades
 deterministically (no LLM anywhere in this loop — INFBENCH has no judge tier that decides truth),
-writes `infbench/results/raw/run-<version>[_00N]/product.jsonl` (the out dir is keyed on `--stamp`;
+writes `test-benchmarks/infbench/results/raw/run-<version>[_00N]/product.jsonl` (the out dir is keyed on `--stamp`;
 a same-version re-run passes a `_00N`-suffixed stamp so the prior run's raw output survives), and
 prints the per-band rung table plus ladder receipts to the console. **`npm run infbench` chains both steps** (`generate-cases.mjs` then
 `run.mjs`) — confirmed present in `package.json` as of this doc's writing; the plan doc that
@@ -119,7 +119,7 @@ is a **ceiling marker**, not a failure — name it as exactly that.
 
 **Step 6 — WRITE the cycle up.** Every cycle, not only when a version just shipped: a
 console-only cycle leaves a drifted band recorded nowhere. Snapshot the raw output first
-(`infbench/results/raw/run-<version>[_00N]/`, per Step 2's stamping rule), then write
+(`test-benchmarks/infbench/results/raw/run-<version>[_00N]/`, per Step 2's stamping rule), then write
 `BENCHMARK_INFERENCE_<version>.md` (same artifact-naming convention `SKILL_BENCHMARK_CEFR_ENGLISH.md`
 §1 uses: named after the `package.json` version measured, same-version re-runs append `_00N`):
 - a headline naming the honest delta versus the last cycle;
@@ -158,7 +158,7 @@ exactly as `SKILL_BENCHMARK_CEFR_ENGLISH.md`'s own deterministic-replay clause a
 When Step 5 says "build," pick the **next engine capability that unlocks the currently-gating
 band** — do not skip ahead to a capability for a higher band while a lower gate is still open; the
 ladder rule (§2) means a later band's rules can't be honestly measured until the earlier gate
-clears anyway. The originally staged capabilities (the `infbench/` harness itself; `cax-sco` type
+clears anyway. The originally staged capabilities (the `test-benchmarks/infbench/` harness itself; `cax-sco` type
 propagation in `src/domain/syllogise.mjs`; the bounded live proof-chain chase in `src/services/chat.mjs`; `cax-dw`
 disjointness; the forward-chainer; the consistency checker) are all shipped, so a build cycle today
 means a NEW band or rule the ladder grows to cover — **re-verify current ladder status from the
@@ -198,8 +198,8 @@ still-current.**
   explicitly borrows from chatbench — report higher bands as
   skipped-with-a-receipt, and resist the temptation to read anything into their raw numbers until
   the actual gating band clears.
-- **`infbench/cases.jsonl` is a build artifact, never hand-edited.** If a case looks wrong, fix the
-  generator template and regenerate — the same discipline `chatbench/graded-pool.jsonl` already
+- **`test-benchmarks/infbench/cases.jsonl` is a build artifact, never hand-edited.** If a case looks wrong, fix the
+  generator template and regenerate — the same discipline `test-benchmarks/chatbench/graded-pool.jsonl` already
   holds.
 - **Don't assume `npm run infbench` exists.** The plan doc that preceded this skill was written
   before that convenience script landed; verify it's still there (`grep infbench package.json`)
@@ -214,8 +214,8 @@ still-current.**
 
 ## 5. One-paragraph TL;DR
 
-Run `node infbench/generate-cases.mjs --seed <n>` (or `npm run infbench` if present, verified not
-assumed) to deterministically regenerate `infbench/cases.jsonl`, then `node infbench/run.mjs` to
+Run `node test-benchmarks/infbench/generate-cases.mjs --seed <n>` (or `npm run infbench` if present, verified not
+assumed) to deterministically regenerate `test-benchmarks/infbench/cases.jsonl`, then `node test-benchmarks/infbench/run.mjs` to
 replay it through the kernel+chat drive points and grade it deterministically — no judge, no LLM,
 anywhere in this loop. Read the printed per-band rung table and apply the ladder gate strictly in
 order INF-1→INF-8: 0% fabrication
@@ -223,7 +223,7 @@ at ≥50% completion passes a band, the first band that fails gates every band a
 skipped-with-a-receipt, and a clean 0% on a not-yet-built capability is a ceiling marker, not a
 failure — never force a fake pass. Write EVERY cycle up as `BENCHMARK_INFERENCE_<version>.md`
 (headline delta, per-band rung table with gate receipts, what's new, drift explained-or-open, a
-decision line), snapshotting raw output to `infbench/results/raw/run-<version>[_00N]/` first and
+decision line), snapshotting raw output to `test-benchmarks/infbench/results/raw/run-<version>[_00N]/` first and
 mirroring anything left open into `NEXT.md` as one-line pickup items. If
 every band lands where expected, ship as-is; if you want to
 push the ladder further, pick the next engine capability that

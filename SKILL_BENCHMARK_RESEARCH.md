@@ -3,10 +3,10 @@
 The repeatable loop that drives the tmct **research traversal** forward one crawl capability at a
 time: run the ladder against a frozen stub wiki graph, read the rung table, decide ship-or-build,
 and if building, implement the next queue/ordering/stopping capability, regression-test, and
-re-measure. RESEARCHBENCH is `researchbench/`'s harness; this skill is the loop a session runs each
+re-measure. RESEARCHBENCH is `test-benchmarks/researchbench/`'s harness; this skill is the loop a session runs each
 time it wants to advance the ladder.
 
-**Status: this skill specifies the harness; `researchbench/` does not exist yet — the first cycle
+**Status: this skill specifies the harness; `test-benchmarks/researchbench/` does not exist yet — the first cycle
 builds it from this spec, then measures against it.**
 
 **What this bench grades: the TRAVERSAL, not the per-article facts.** The research lane
@@ -62,7 +62,7 @@ Every cycle MUST satisfy:
 
 - **Artifact naming — match the `package.json` version.** A cycle's write-up is named after the tmct
   version it measures: `BENCHMARK_RESEARCH_<version>.md`, raw under
-  `researchbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a
+  `test-benchmarks/researchbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a
   re-verify) appends `_00N`: `BENCHMARK_RESEARCH_2.12.0_001.md`, `_002`, … — the same convention
   `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1, `SKILL_BENCHMARK_AGENT.md` §1 and `SKILL_BENCHMARK_INFERENCE.md`
   §1 already use.
@@ -70,14 +70,14 @@ Every cycle MUST satisfy:
   **benchmarking session** (the run itself) and the start and end of the **analysis** (reading the
   results and writing the report). State the date and both intervals — a reader comparing two
   versions needs the measurement time and the write-up time as separate figures.
-- **Fixed, versioned case set:** `researchbench/cases.jsonl` — one JSON object per line (case shape
+- **Fixed, versioned case set:** `test-benchmarks/researchbench/cases.jsonl` — one JSON object per line (case shape
   in §3). Append-only once the RESEARCHBENCH arc starts: new cases may be added between cycles (record
   the addition in the write-up), existing cases are never edited or removed mid-arc, for the same
   reason every other bench's case set is sacred — editing a case invalidates every prior cycle's
   comparison against it. The frozen stub wiki graph (§3) is part of the case set and is sacred the
   same way: a fixture article's summary or lead-link list is never edited mid-arc.
 - **No live wiki, no LLM, no judge — fully deterministic.** Grading runs the traversal against a
-  **frozen stub wiki graph committed as a fixture** (`researchbench/fixture/`), never against
+  **frozen stub wiki graph committed as a fixture** (`test-benchmarks/researchbench/fixture/`), never against
   `simple.wikipedia.org`. The stub is registered through the lane's own provider seam
   (`registerResearchProvider`, `src/adapters/corpus/wikipedia-live.mjs`), the same seam the ledger
   e2e test stubs (`test-e2e/pages-ledger-research.test.mjs`'s `SUMMARIES` / `routeSimpleWikipedia`). Two
@@ -95,7 +95,7 @@ Every cycle MUST satisfy:
 - **The metric trio per rung.** A single number is gameable (a crawler that fetches everything scores
   perfect recall while following every hub; one that fetches nothing scores perfect hub-avoidance at
   zero recall), so a graded rung reports all three, each a pure function over the fixture graph and
-  the recorded walk (`researchbench/grade.mjs`):
+  the recorded walk (`test-benchmarks/researchbench/grade.mjs`):
   - **ordering score** — of every (useful term, hub) pair the seed's lead links to, the fraction the
     queue orders correctly (useful before hub). `1 − inversions / pairs`. Undefined (reported `n/a`)
     when a case has no hub in its lead, which is fine below RES-2.
@@ -107,7 +107,7 @@ Every cycle MUST satisfy:
   ladder-gating rule).** Rungs run **RES-0 → RES-1 → … → RES-8**, strictly in that order. A rung
   PASSES iff it clears its floor with no automatic-fail: `RECALL_FLOOR = 0.5` on recall@budget, and
   where the rung tests them, `HUB_FLOOR = 0.8` on hub-avoidance and `ORDER_FLOOR = 0.8` on ordering
-  (constants in `researchbench/grade.mjs`; which floors apply to which rung is fixed by the rung's
+  (constants in `test-benchmarks/researchbench/grade.mjs`; which floors apply to which rung is fixed by the rung's
   `what it tests` column). The FIRST rung that fails its gate gates every rung above it — report those
   higher rungs as **skipped-with-a-receipt** (e.g. `RES-5 skipped: gated by RES-4 recall 0.33 < 0.5`),
   the same Meta-2 discipline `SKILL_BENCHMARK_INFERENCE.md` §2 and `SKILL_BENCHMARK_AGENT.md` §1 hold:
@@ -122,7 +122,7 @@ Every cycle MUST satisfy:
   gets the useful terms **within the same round-trip budget** the throttle would have paced. A rung
   that clears recall only by exceeding the budget fails: reaching everything is not the goal, reaching
   the useful terms cheaply is.
-- **Bench-import direction stays one way.** The product (`src/`) never imports from `researchbench/`;
+- **Bench-import direction stays one way.** The product (`src/`) never imports from `test-benchmarks/researchbench/`;
   the bench imports downward from `src/services/research.mjs` (the queue, `researchSnapshot`,
   `parseResearchRequest`) and stubs the provider from `src/adapters/corpus/wikipedia-live.mjs`. A cycle
   that reverses this is a real regression — verify with `grep -r 'researchbench' src/` before writing
@@ -132,15 +132,15 @@ Every cycle MUST satisfy:
 
 **Step 1 — READ.** Read the latest `BENCHMARK_RESEARCH_<version>.md` (its rung table, any kept honest
 red, its decision on frontiers), the research-lane open items in `NEXT.md`, and the current
-`researchbench/cases.jsonl` rung counts. Decide whether this cycle is a pure re-measurement or targets
+`test-benchmarks/researchbench/cases.jsonl` rung counts. Decide whether this cycle is a pure re-measurement or targets
 a specific gated rung to push past.
 
-**Step 2 — RUN the ladder.** `node researchbench/run.mjs --ladder --stamp <version>` (the provisioned
+**Step 2 — RUN the ladder.** `node test-benchmarks/researchbench/run.mjs --ladder --stamp <version>` (the provisioned
 script is `npm run researchbench:run -- --stamp <version>`). It registers the fixture provider,
 replays each case's `research <seed>` + `research next` walk through `researchTurn` with the fixture
 stubbing every fetch, records the actual walk (fetched titles in order, skips, per-topic grounded
 flag) from `researchSnapshot`, grades deterministically, snapshots raw output to
-`researchbench/results/raw/run-<version>[_00N]/product.jsonl`, and prints the per-rung metric-trio
+`test-benchmarks/researchbench/results/raw/run-<version>[_00N]/product.jsonl`, and prints the per-rung metric-trio
 table plus ladder receipts. Fast and free — no judge concurrency to manage, no network.
 
 > **Coordinator model — background sub-agents for the build, not (usually) the run.** Per `CLAUDE.md`'s
@@ -148,7 +148,7 @@ table plus ladder receipts. Fast and free — no judge concurrency to manage, no
 > is cheap enough to run inline most cycles. What benefits from delegation is the build in Step 5: a
 > cycle that touches mostly-independent workstreams — a new ordering rule in the queue
 > (`src/services/research.mjs`), a hub-signal module, new fixture articles and cases in
-> `researchbench/`, the write-up — can fan those out to background sub-agents with clear file-ownership
+> `test-benchmarks/researchbench/`, the write-up — can fan those out to background sub-agents with clear file-ownership
 > boundaries, serialized on the shared queue file, while the coordinator keeps the main chat free.
 
 **Step 3 — READ the rung table.** For each rung, read ordering / hub-avoidance / recall@budget against
@@ -192,13 +192,13 @@ ends with a normal operator check-in rather than an automatic re-arm.
 
 ---
 
-## 3. The harness (`researchbench/`)
+## 3. The harness (`test-benchmarks/researchbench/`)
 
 The harness this skill specifies. Build it in the first cycle, then it is sacred.
 
-**Layout**, mirroring `agentbench/` and `infbench/`:
+**Layout**, mirroring `test-benchmarks/agentbench/` and `test-benchmarks/infbench/`:
 
-- `researchbench/fixture/` — the **frozen stub wiki graph**, committed. One entry per article:
+- `test-benchmarks/researchbench/fixture/` — the **frozen stub wiki graph**, committed. One entry per article:
   `{ title, summary, leadLinks: [ titles, in document order ] }`. The graph is closed — every title
   a `leadLinks` list names either has its own fixture entry or is a deliberate dead title (the stub
   returns null for it, exercising the skip path). This is the same stub shape
@@ -206,7 +206,7 @@ The harness this skill specifies. Build it in the first cycle, then it is sacred
   lifted into a committed fixture so grading never touches the live site. `leadLinks` order is
   authored to match how a real lead section introduces the topic, because the lane orders the queue
   by document order (`linkedTitles` reads `section=0`, not an alphabetical `prop=links`).
-- `researchbench/cases.jsonl` — the append-only case set. Case shape:
+- `test-benchmarks/researchbench/cases.jsonl` — the append-only case set. Case shape:
   ```
   { id, rung,                         // "res-volcano-order", "RES-2"
     seed,                             // "volcano" — the research <seed> line
@@ -220,11 +220,11 @@ The harness this skill specifies. Build it in the first cycle, then it is sacred
   `goldFollow` and `goldHubs` are curated per case against the committed fixture — both are subsets of
   the seed's reachable titles, partitioned by hand into useful and hub. A title in neither is neutral:
   reaching it neither helps recall nor hurts hub-avoidance.
-- `researchbench/run.mjs` — registers the fixture provider (`registerResearchProvider`), replays each
+- `test-benchmarks/researchbench/run.mjs` — registers the fixture provider (`registerResearchProvider`), replays each
   case, records the walk, grades, snapshots raw, prints the table. `--ladder` ascends the rungs and
   applies the gate; `--rung RES-N` runs one; `--stamp <version>` keys the raw dir.
-- `researchbench/grade.mjs` — the three pure metrics (§1) and the gate. No network, no model.
-- `researchbench/README.md` — the mechanics in full, the way `agentbench/README.md` documents
+- `test-benchmarks/researchbench/grade.mjs` — the three pure metrics (§1) and the gate. No network, no model.
+- `test-benchmarks/researchbench/README.md` — the mechanics in full, the way `test-benchmarks/agentbench/README.md` documents
   AGENTBENCH.
 
 **The hub-signal treatment — deterministic, closed, two signals.** A hub is what the crawl should
@@ -328,7 +328,7 @@ receipt.
 
 ## 6. One-paragraph TL;DR
 
-Run `node researchbench/run.mjs --ladder --stamp <version>` (fast, free, fully deterministic — a
+Run `node test-benchmarks/researchbench/run.mjs --ladder --stamp <version>` (fast, free, fully deterministic — a
 frozen stub wiki graph registered through the lane's provider seam, no live wiki, no LLM, no judge)
 and read the per-rung metric trio — ordering score, hub-avoidance rate, recall@budget — against the
 honest gate: recall@budget ≥ 0.5 with hub-avoidance ≥ 0.8 and ordering ≥ 0.8 where the rung tests

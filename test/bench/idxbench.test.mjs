@@ -3,14 +3,14 @@
 // the real producer (extractRepo/assembleEntities + the conformance gate) and
 // writes a well-formed row, and the pure grader catches the empty-gold
 // fabrication case IDX-8 relies on. The full ladder runs via
-// `node idxbench/run.mjs --ladder` (fast, but touches git/fs) — deliberately
+// `node test-benchmarks/idxbench/run.mjs --ladder` (fast, but touches git/fs) — deliberately
 // not the whole case set here, so `npm test` gates the instrument.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-import { parseCases, gradeEdges, RUNGS } from "../../idxbench/grade.mjs";
-import { runIdxbench, DEFAULT_CASES } from "../../idxbench/run.mjs";
+import { parseCases, gradeEdges, RUNGS } from "../../test-benchmarks/idxbench/grade.mjs";
+import { runIdxbench, DEFAULT_CASES } from "../../test-benchmarks/idxbench/run.mjs";
 
 test("the committed case set lints clean and every rung is a real rung", async () => {
   const text = await readFile(DEFAULT_CASES, "utf8");

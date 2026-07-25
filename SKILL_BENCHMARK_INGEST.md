@@ -5,10 +5,10 @@ capability at a time: run the ladder, read the rung table, decide ship-or-build,
 pick the next capability, implement it, regression-test, and re-measure. INGESTBENCH grades how
 faithfully `ingestText` (`src/services/extract-facts.mjs`) turns a document into stored facts —
 from a single grounded term up to a full-fidelity restatement of an arbitrary document in canonical
-statements, with nothing lost and nothing added. The harness is `ingestbench/`; this skill is the
+statements, with nothing lost and nothing added. The harness is `test-benchmarks/ingestbench/`; this skill is the
 loop a session runs every time it wants to advance the ladder.
 
-**Status (2026-07-23): this document specifies the harness. The `ingestbench/` build is later
+**Status (2026-07-23): this document specifies the harness. The `test-benchmarks/ingestbench/` build is later
 work.** The ladder, the case shape, the grading modes, the scoring, and the measurement contract
 below are the specification a build follows. The extraction machinery the bench measures already
 ships (`ingestText`, `optimisticTriples`, `clauseCandidates`, the pronoun carry in
@@ -66,7 +66,7 @@ Every cycle MUST satisfy:
 
 - **Artifact naming — match the `package.json` version.** A cycle's write-up is named after the
   tmct version it measures: `BENCHMARK_INGEST_<version>.md`, raw under
-  `ingestbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a
+  `test-benchmarks/ingestbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a
   re-judge, a second draw) appends `_00N`: `BENCHMARK_INGEST_2.11.9_001.md`, `_002`, … — the same
   convention `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1, `SKILL_BENCHMARK_AGENT.md` §1, and
   `SKILL_BENCHMARK_INFERENCE.md` §1 already use.
@@ -74,7 +74,7 @@ Every cycle MUST satisfy:
   **benchmarking session** (the extraction run plus any judge fan-out) and the start and end of the
   **analysis** (reading the scores and writing the report). State the date and both intervals — a
   reader comparing two versions needs the measurement time and the write-up time as separate figures.
-- **Fixed, versioned case set:** `ingestbench/cases.jsonl` — one JSON object per line
+- **Fixed, versioned case set:** `test-benchmarks/ingestbench/cases.jsonl` — one JSON object per line
   (`id`, `rung`, `input`, `expect`, `grade`, `tags`). Append-only once the INGESTBENCH arc starts:
   new cases may be added between cycles (record the addition in the write-up), existing cases are
   never edited or removed mid-arc, for the same reason every sibling bench holds its case set
@@ -140,7 +140,7 @@ Every cycle MUST satisfy:
   the same discipline `SKILL_BENCHMARK_AGENT.md` §1 and `SKILL_BENCHMARK_INFERENCE.md` §2 hold:
   don't pay to judge a ceiling while the floor leaks. `--ladder` runs the rungs ascending and
   applies this automatically.
-- **Bench-import direction stays one way.** The product (`src/`) never imports from `ingestbench/`;
+- **Bench-import direction stays one way.** The product (`src/`) never imports from `test-benchmarks/ingestbench/`;
   the bench imports downward from `src/services/extract-facts.mjs` (`ingestText`,
   `optimisticTriples`, `clauseCandidates`) and `src/domain/paraphrase.mjs`. A cycle that reverses
   this is a real regression, not a refactor detail — verify with `grep -r 'ingestbench' src/` before
@@ -151,10 +151,10 @@ Every cycle MUST satisfy:
 **Step 1 — READ.** Read the latest `BENCHMARK_INGEST_<version>.md` (its decision on frontiers and
 any deliberately-kept honest miss), the ingest-axis open items in `NEXT.md` (the DRT-lite typed
 record), and the current
-`ingestbench/cases.jsonl` rung counts. Decide whether this cycle is a pure measurement or targets a
+`test-benchmarks/ingestbench/cases.jsonl` rung counts. Decide whether this cycle is a pure measurement or targets a
 specific gated rung to push past.
 
-**Step 2 — RUN the ladder.** `node ingestbench/run.mjs --ladder --stamp <version>`. The
+**Step 2 — RUN the ladder.** `node test-benchmarks/ingestbench/run.mjs --ladder --stamp <version>`. The
 deterministic tiers (`ING-0`–`ING-7`) are fast and free — no judge concurrency to manage. When the
 cycle reaches the judged tiers (`ING-8`, `ING-9`), fan the judge out at maximum safe concurrency the
 way `SKILL_BENCHMARK_CEFR_ENGLISH.md` §Step 4 does, and run that fan-out as a **background task** so
@@ -163,7 +163,7 @@ the main chat stays free for the operator.
 > **Coordinator model — background sub-agents for the build.** Per `CLAUDE.md`'s standing working
 > model, the main session is the coordinator, not the worker. A cycle that touches multiple
 > mostly-independent workstreams — a new extraction rule in `src/services/extract-facts.mjs`, new
-> cases in `ingestbench/cases.jsonl`, the paraphrase-equivalence wiring, the write-up — fans those
+> cases in `test-benchmarks/ingestbench/cases.jsonl`, the paraphrase-equivalence wiring, the write-up — fans those
 > out to background sub-agents with clear file-ownership boundaries, serialized on any shared file
 > (`extract-facts.mjs`, `chat.mjs`'s `ingestReferenceArticle`), while the coordinator keeps the main
 > chat free and picks results up on each completion notification. Any genuinely long run (the judged
@@ -228,7 +228,7 @@ than an automatic re-arm.
 - **The case set is sacred.** Append-only between cycles; never edit or delete an existing case
   mid-arc; record every addition in the write-up. Verify every `expect.statements` literal by
   running the ingest and reading the store back, never by hand-authoring a guess.
-- **Snapshot before overwrite.** `ingestbench/results/raw/run-<version>[_00N]/` is written before the
+- **Snapshot before overwrite.** `test-benchmarks/ingestbench/results/raw/run-<version>[_00N]/` is written before the
   next run starts — a same-version re-run stamps `_00N` rather than clobbering the prior run's raw
   output. A skipped snapshot is a process slip.
 - **No wrong fact is non-negotiable.** No cycle ships an extraction change that trades a wrong fact
@@ -252,8 +252,8 @@ than an automatic re-arm.
 
 ## 5. One-paragraph TL;DR
 
-Run `node ingestbench/run.mjs --ladder --stamp <version>` over the append-only
-`ingestbench/cases.jsonl` and read the per-rung fidelity — precision, recall, and the four
+Run `node test-benchmarks/ingestbench/run.mjs --ladder --stamp <version>` over the append-only
+`test-benchmarks/ingestbench/cases.jsonl` and read the per-rung fidelity — precision, recall, and the four
 failure classes (missed-useful, fabricated, confused, greedy-span) — against the honest gate:
 **no wrong fact at ≥50% recall** passes a rung (`ING-0 → ING-9`, strictly in order), the first rung
 that fails gates every rung above it skipped-with-a-receipt, and a correct abstention on an

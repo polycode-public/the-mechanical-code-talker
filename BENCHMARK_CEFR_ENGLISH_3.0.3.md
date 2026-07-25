@@ -5,14 +5,14 @@ sample), 60 hard fails, 1068/1075 tier-1 pass, 0 voided samples in the final jud
 
 This cycle is a **measurement pass plus the founding cache-seed**: it is the first run of the
 mechanised harness (`PLAN_BENCHMARK_MECHANISATION.md` levers 1 and 6) against the whole pool, and
-its committed artifact of record is `chatbench/verdict-cache.json` — 1,075 verdict entries keyed
+its committed artifact of record is `test-benchmarks/chatbench/verdict-cache.json` — 1,075 verdict entries keyed
 by (case id, answer hash, judge model, prompt version, context version). No lever was applied to
 `src/`; this write-up measures 3.0.3 as shipped.
 
 ## Timing (2026-07-24, local CEST)
 
 - **Product replay:** ~06:15, full pool, deterministic, **4.3s wall** for 1,075 rows
-  (per-band means 10–32ms/row; `chatbench/results/raw/run-3.0.3/timings.json`).
+  (per-band means 10–32ms/row; `test-benchmarks/chatbench/results/raw/run-3.0.3/timings.json`).
 - **Judge fan-out (seed pass):** 06:15 → 08:44 in three passes at concurrency 24,
   model `claude-haiku-4-5-20251001`, prompt `judge-prompt-v2`, N=2 single draw.
   The first pass voided 189 samples and the second 89 when the account hit a spend
@@ -52,7 +52,7 @@ actually represented in the number.
 
 ## What this cycle changes for every future cycle
 
-The committed `chatbench/verdict-cache.json` means an ordinary future cycle judges only cases
+The committed `test-benchmarks/chatbench/verdict-cache.json` means an ordinary future cycle judges only cases
 whose ANSWER TEXT changed: the projected judge-call drop is from 2,150 calls to the dozens a
 typical change actually touches (this cycle's own final pass demonstrated 47/1,075). The cache
 keys on answer content plus the judge identity (model, prompt, context version), so a pin bump
@@ -62,11 +62,11 @@ re-judges everything by construction — a fabricated pass by stale inheritance 
 
 - Judge model `claude-haiku-4-5-20251001` (pinned full id), prompt `judge-prompt-v2`,
   context `fixture-context-v3`, N=2 samples, single product draw.
-- Reproduce: `node chatbench/run.mjs --pool chatbench/graded-pool-max.jsonl --sample 1 --single
-  --concurrency 12 --stamp 3.0.3` then `node chatbench/judge.mjs --product
-  chatbench/results/raw/run-3.0.3/product.jsonl --samples 2 --concurrency 24 --cache
-  chatbench/verdict-cache.json`.
-- Raw (gitignored): `chatbench/results/raw/run-3.0.3/` (`product.jsonl`, `judged.jsonl`,
+- Reproduce: `node test-benchmarks/chatbench/run.mjs --pool test-benchmarks/chatbench/graded-pool-max.jsonl --sample 1 --single
+  --concurrency 12 --stamp 3.0.3` then `node test-benchmarks/chatbench/judge.mjs --product
+  test-benchmarks/chatbench/results/raw/run-3.0.3/product.jsonl --samples 2 --concurrency 24 --cache
+  test-benchmarks/chatbench/verdict-cache.json`.
+- Raw (gitignored): `test-benchmarks/chatbench/results/raw/run-3.0.3/` (`product.jsonl`, `judged.jsonl`,
   `summary.json`, `timings.json`).
 
 ## Operational note for future judge passes

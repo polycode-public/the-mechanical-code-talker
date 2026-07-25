@@ -30,7 +30,7 @@ after(async () => {
   await rm(REPO, { recursive: true, force: true });
 });
 
-// The known-good composed answer agentbench/cases.jsonl pins for this exact
+// The known-good composed answer test-benchmarks/agentbench/cases.jsonl pins for this exact
 // fixture + request (ab-c1-untested-in-impact).
 const KNOWN_INTERSECT = ["app/lib/c.mjs", "app/lib/e.mjs", "app/lib/f.mjs", "scripts/g.mjs"];
 

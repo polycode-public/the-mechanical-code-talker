@@ -47,7 +47,7 @@ Date **2026-07-24**. `package.json` version measured: **3.0.3**.
 - **Model:** `claude-haiku-4-5-20251001` (the full pinned id, never an alias), via the
   authenticated `claude` CLI.
 - **Invocation:** `claude -p <prompt> --model <id> --output-format json --json-schema <schema>`,
-  the same shape `chatbench/judge.mjs` uses.
+  the same shape `test-benchmarks/chatbench/judge.mjs` uses.
 - **Prompt version:** `conversation-flow-v1` — a per-turn FLOW/DEAD-END rubric grounded in
   §0's definition (FLOW = answers or gives a guiding nudge / honest miss that keeps the
   conversation alive; DEAD-END = a bare wall, a confusing misparse, a fabricated answer, or

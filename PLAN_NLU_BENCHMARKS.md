@@ -143,7 +143,7 @@ That changes three things for this plan, and leaves the central problem untouche
 
 ## Design: a benchmark adapter, not a product rewrite
 
-New top-level `nlubench/` directory, sibling to `chatbench/`, holding data plumbing, the
+New top-level `nlubench/` directory, sibling to `test-benchmarks/chatbench/`, holding data plumbing, the
 matcher, the runners and the reports, plus a `bench.nlubench` smoke row in
 `test/corpus/bench-smoke.jsonl`. The matcher trains from the benchmarks' example utterances; that is
 the layer tmct lacks today.
@@ -173,7 +173,7 @@ product-path domain via `registerCapability` is a separate, later decision.
 
 ### Scoring integration
 
-- Runners follow `chatbench/run.mjs` conventions: `--stamp` from the CLI, no `Date.now`,
+- Runners follow `test-benchmarks/chatbench/run.mjs` conventions: `--stamp` from the CLI, no `Date.now`,
   byte-identical result rows, JSONL per-case output under `nlubench/results/raw/run-<version>/`.
 - Write-ups follow the chatbench measurement contract: `BENCHMARK_CLINC150_<version>.md`
   and `BENCHMARK_HWU64_<version>.md`, named for the `package.json` version they measure,

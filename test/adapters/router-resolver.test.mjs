@@ -22,11 +22,11 @@ import {
   reachableCapabilityNames, extractEntity,
 } from "../../src/domain/router/resolver.mjs";
 import { decompose, isMultiStep, plan, MAX_STEPS } from "../../src/domain/router/planner.mjs";
-import { resolverDriver } from "../../agentbench/driver-resolver.mjs";
-import { runAgentbench, createRunCtx } from "../../agentbench/run.mjs";
-import { parseCases, COMPLETION_FLOOR } from "../../agentbench/grade.mjs";
+import { resolverDriver } from "../../test-benchmarks/agentbench/driver-resolver.mjs";
+import { runAgentbench, createRunCtx } from "../../test-benchmarks/agentbench/run.mjs";
+import { parseCases, COMPLETION_FLOOR } from "../../test-benchmarks/agentbench/grade.mjs";
 
-const CASES_FILE = fileURLToPath(new URL("../../agentbench/cases.jsonl", import.meta.url));
+const CASES_FILE = fileURLToPath(new URL("../../test-benchmarks/agentbench/cases.jsonl", import.meta.url));
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 async function graphCtx() {

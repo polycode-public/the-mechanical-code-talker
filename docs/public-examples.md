@@ -111,12 +111,12 @@ Counts were checked against the files for this table and all match. The row
 counts are not asserted as numbers, so a regrow that forgets the README drifts
 silently.
 
-## chatbench/
+## test-benchmarks/chatbench/
 
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
-| `chatbench/README.md` | 138 cases | `graded-pool.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
-| `chatbench/GRADED.md` | 1,075 cases across 36 cells | `graded-pool-max.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
+| `test-benchmarks/chatbench/README.md` | 138 cases | `graded-pool.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
+| `test-benchmarks/chatbench/GRADED.md` | 1,075 cases across 36 cells | `graded-pool-max.jsonl` | `test/bench/chatbench-graded.test.mjs` | estate |
 
 Both figures were counted off the pools for this table and both match.
 

@@ -243,8 +243,8 @@ export async function runTaughtPlan(request, tools, ctx) {
 /** The full drive: resolver/planner first; a refusal there falls through to
  *  the taught world-goal lane (runTaughtPlan, above), and only a request that
  *  is not a world goal escalates to the closed-world goal-reasoner. Mirrors
- *  agentbench's driver-resolver.mjs + driver-goal.mjs composition, with no
- *  agentbench/ dependency (agentbench/ is dev-only, never shipped). Returns a
+ *  test-benchmarks/agentbench's driver-resolver.mjs + driver-goal.mjs composition, with no
+ *  test-benchmarks/agentbench/ dependency (test-benchmarks/agentbench/ is dev-only, never shipped). Returns a
  *  loopResult:
  *  `{ calls, refused, terminated, proof, why, driver, composed?, observed?, candidateResults? }`.
  *

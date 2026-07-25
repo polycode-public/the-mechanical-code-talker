@@ -1,9 +1,9 @@
 # PLAN_BENCHMARK_MECHANISATION.md — intelligence authored once, benchmarks run mechanical
 
 Status: harness machinery LANDED (levers 1, 2, 3, 6, 7), and lever 1's seed pass has RUN — the
-3.0.3 cycle judged the full 1,075-case pool and committed `chatbench/verdict-cache.json`
+3.0.3 cycle judged the full 1,075-case pool and committed `test-benchmarks/chatbench/verdict-cache.json`
 (`BENCHMARK_CEFR_ENGLISH_3.0.3.md`; its final top-up judged 47 and inherited 1,028, the
-mechanism working as designed). Remaining scope, all unblocked: lever 4 (`ingestbench/` now
+mechanism working as designed). Remaining scope, all unblocked: lever 4 (`test-benchmarks/ingestbench/` now
 exists — wire its deterministic equivalence checker into the judged tiers' cycle), the bulk
 matcher distillation over the all-green pool (lever 2's authoring pass), and the calibration
 grade (lever 3's paired frontier/small-model runs feeding `--gate`). Written 2026-07-24 against
@@ -11,31 +11,31 @@ the nine `SKILL_BENCHMARK_*.md` docs at 2.11.10.
 
 ## What landed (the mechanism; the paid runs stay the coordinator's)
 
-- **Lever 1 — verdict cache.** `chatbench/verdict-cache.mjs`; `chatbench/judge.mjs --cache <file>`.
+- **Lever 1 — verdict cache.** `test-benchmarks/chatbench/verdict-cache.mjs`; `test-benchmarks/chatbench/judge.mjs --cache <file>`.
   A run inherits the prior verdict for every case whose answer text AND judge identity (model +
   prompt version + `fixture-context` grain) are unchanged, and judges only the changed cases. The
   cache is rewritten each run. Deterministic; keyed on answer content, never a file date.
-- **Lever 2 — tier-promotion matchers.** `chatbench/matchers.mjs`. Distils a case judged PASS with
+- **Lever 2 — tier-promotion matchers.** `test-benchmarks/chatbench/matchers.mjs`. Distils a case judged PASS with
   byte-stable wording across two cycles into a deterministic `answerMatch` of escaped-literal
   grounded tokens — tighter than the judge by construction (`matcherTighterThanJudge`). A promoted
   case gates on its matcher and the judge is the appeal court for a matcher that now fails. The
   bulk distillation over the all-green pool is a reviewed authoring pass for the coordinator.
 - **Lever 3 — rubric compilation + down-tiering.** Per-construction rubrics as committed data
-  (`chatbench/rubrics.json`); `chatbench/rubrics.mjs` maps a construction to a rubric family and
+  (`test-benchmarks/chatbench/rubrics.json`); `test-benchmarks/chatbench/rubrics.mjs` maps a construction to a rubric family and
   holds the calibration-set selection, the per-family agreement metric, the down-tier gate and the
-  model pick. `chatbench/calibrate.mjs --select` writes the ~50-case set (`chatbench/calibration.jsonl`);
+  model pick. `test-benchmarks/chatbench/calibrate.mjs --select` writes the ~50-case set (`test-benchmarks/chatbench/calibration.jsonl`);
   `--gate` reads a frontier + a small-model summary and emits the down-tier decision. The two paid
   grade passes are the coordinator's; the gate is calibration-locked — a family never leaves the
   frontier model unmeasured.
-- **Lever 6 — execution speed.** Skip-unchanged replay (`chatbench/skip-unchanged.mjs`;
-  `chatbench/run.mjs --reuse <prior.jsonl> --engine-token <tok>`) reuses a prior product row when the
+- **Lever 6 — execution speed.** Skip-unchanged replay (`test-benchmarks/chatbench/skip-unchanged.mjs`;
+  `test-benchmarks/chatbench/run.mjs --reuse <prior.jsonl> --engine-token <tok>`) reuses a prior product row when the
   case input hash and engine token match; `--concurrency <n>` shards turns-mode replays (session
   cases stay sequential — they share a process-global source cache). The seeded fixture store is
   already built once per run and cloned per case. Residual judge calls batch per rubric family
-  (`chatbench/batch-judge.mjs`; `judge.mjs --batch <n>`, dry-run-emitted). Defaults are unchanged:
+  (`test-benchmarks/chatbench/batch-judge.mjs`; `judge.mjs --batch <n>`, dry-run-emitted). Defaults are unchanged:
   no engine token means byte-identical rows and single-lane replay.
 - **Lever 7 — AGI-scales aggregation.** `scripts/agi-scales-aggregate.mjs` reads the sibling benches'
-  committed envelopes (AGENTBENCH's and INFBENCH's; CHATBENCH's generator exists — `chatbench/generate-envelope.mjs`,
+  committed envelopes (AGENTBENCH's and INFBENCH's; CHATBENCH's generator exists — `test-benchmarks/chatbench/generate-envelope.mjs`,
   a pure read+reshape over an already-graded run's summary.json/product.jsonl, no model calls of its
   own — but its envelope is committed only once a live judge pass has actually produced a summary to
   read) and emits the eight entry-rung readings mechanically, marking a scale MEASURED only when a
@@ -48,7 +48,7 @@ the nine `SKILL_BENCHMARK_*.md` docs at 2.11.10.
   available before it existed.
 
 Coordinator hand-off: to expose the delta-judging default, add to `package.json` scripts —
-`"chatbench:judge:cached": "node chatbench/judge.mjs --cache chatbench/verdict-cache.json"` —
+`"chatbench:judge:cached": "node test-benchmarks/chatbench/judge.mjs --cache test-benchmarks/chatbench/verdict-cache.json"` —
 (this sub-agent does not edit `package.json`). The verdict cache file itself is written on the
 first cached judged run and committed as reviewed data thereafter.
 
@@ -127,7 +127,7 @@ what we author together once, and what runs without a model afterwards.
 3. Lever 3's rubrics + calibration set — one authoring session; then measure the small judge's
    agreement before trusting it with anything. Machinery DONE; the paired calibration runs
    remain.
-4. Lever 4 — unblocked: `ingestbench/` exists and stages the deterministic/judged boundary
+4. Lever 4 — unblocked: `test-benchmarks/ingestbench/` exists and stages the deterministic/judged boundary
    exactly as this plan assumed (deterministic checker at ING-7, judge at ING-8/9).
 
 The invariants that never move: graders are committed, reviewed data; a fabricated pass is

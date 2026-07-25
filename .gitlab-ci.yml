@@ -125,7 +125,7 @@ renovate:
   - test/**/*
   - test-e2e/**/*
   - examples/**/*
-  - agentbench/envelope.json
+  - test-benchmarks/agentbench/envelope.json
   - package.json
   - package-lock.json
   - .gitlab-ci.yml

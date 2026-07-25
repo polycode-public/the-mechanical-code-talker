@@ -1208,10 +1208,10 @@ The smallest real slice of each, the same invocations the test suite's
 bench-smoke lane replays:
 
 ```bash cwd=repo
-node chatbench/run.mjs --stamp smoke --only g-a1-naming-1 --out /tmp/chatbench-smoke
-node infbench/generate-cases.mjs --out /tmp/infbench-cases.jsonl
-node infbench/run.mjs --cases /tmp/infbench-cases.jsonl --only inf-1-lookup-subClassOf-001 --stamp smoke --out /tmp/infbench-smoke
-node agentbench/run.mjs --stamp smoke --driver stub --only ab-a0-describe-widget --out /tmp/agentbench-smoke
+node test-benchmarks/chatbench/run.mjs --stamp smoke --only g-a1-naming-1 --out /tmp/chatbench-smoke
+node test-benchmarks/infbench/generate-cases.mjs --out /tmp/infbench-cases.jsonl
+node test-benchmarks/infbench/run.mjs --cases /tmp/infbench-cases.jsonl --only inf-1-lookup-subClassOf-001 --stamp smoke --out /tmp/infbench-smoke
+node test-benchmarks/agentbench/run.mjs --stamp smoke --driver stub --only ab-a0-describe-widget --out /tmp/agentbench-smoke
 ```
 
 Grading beyond tier 1 uses an LLM as judge. The offline eval harness is the
@@ -1291,7 +1291,7 @@ edition, the retrieval date, the terms tmct uses, and what could not be verified
 
 | source | edition | what tmct uses it for |
 |---|---|---|
-| Council of Europe, CEFR — Companion volume | 2020, ISBN 978-92-871-8621-8 | The band labels A1–C2 the chat benchmark grades against. CEFR measures what a *person* can do communicatively; grading the difficulty of *prompts* by band is tmct's adaptation, not a CEFR-validated use. The band descriptions in `chatbench/GRADED.md` are tmct's own prose. |
+| Council of Europe, CEFR — Companion volume | 2020, ISBN 978-92-871-8621-8 | The band labels A1–C2 the chat benchmark grades against. CEFR measures what a *person* can do communicatively; grading the difficulty of *prompts* by band is tmct's adaptation, not a CEFR-validated use. The band descriptions in `test-benchmarks/chatbench/GRADED.md` are tmct's own prose. |
 | Reiter, "On Closed World Data Bases" | *Logic and Data Bases*, Plenum, 1978, pp. 55–76 | Both halves of the honest miss. The planner's operator model is **closed-world**, which is what makes a plan checkable. The chat layer is **open-world**: it will not read "no matching rule" as "the answer is no". |
 | Chow, "On optimum recognition error and reject tradeoff" | *IEEE Trans. Information Theory* 16(1), 1970 | Prior art for the goal. The literature calls a refusal **abstention**, or selective prediction, and Chow's reject option is its root. Those methods threshold a confidence score; tmct has none, and abstains because nothing matched — which is why the row above names the mechanism. |
 | Ji et al., "Survey of Hallucination in Natural Language Generation" | *ACM Computing Surveys* 55(12), 2023 | Groundedness, and what tmct is avoiding by having no model to hallucinate with. |

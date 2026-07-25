@@ -20,10 +20,10 @@ The 3.0.0 batch delivered end to end: the repo-index merge (major roll to 3.0.0)
 fixture-corruption fix with its byte-pin estate guard, discourse slices 1–2 (row 19 composes),
 repo-index phases 5–6 (PLAN_CODE.md split — Track 5/§2.1 stayed as `PLAN_CODE_PLANNING.md`, the
 rest moved to seonix as a local, unpushed commit with an inbox note to `codememory`), the
-mechanised benchmark harness (levers 1/2/3/6/7 plus the seeded `chatbench/verdict-cache.json`),
+mechanised benchmark harness (levers 1/2/3/6/7 plus the seeded `test-benchmarks/chatbench/verdict-cache.json`),
 the digest layer across every surface including in-browser, the codeplan foundations
 (§3.1–3.3 + the §2.1 spike findings), four new bench harnesses (idxbench, researchbench,
-synthbench/code, ingestbench), two playtest sweeps with their fix batches, and **all nine
+test-benchmarks/synthbench/code, ingestbench), two playtest sweeps with their fix batches, and **all nine
 3.0.3 benchmark write-ups** (`BENCHMARK_{AGENT,INFERENCE,CEFR_ENGLISH,CONVERSATION,CODE_INDEX,
 CODE_SYNTHESIS,INGEST,RESEARCH,AGI}_3.0.3.md`). Published: 3.0.0 → 3.0.4; the final batch (3.0.5)
 carries the CEFR/AGI write-ups and this handover. Zero fabrications found in any sweep or bench.

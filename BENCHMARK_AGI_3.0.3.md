@@ -33,7 +33,7 @@ and never in the product path.
 ## The mechanised aggregator (new since 2.11.10)
 
 `node scripts/agi-scales-aggregate.mjs` reads sibling benches' committed machine-readable envelopes
-(today: `agentbench/envelope.json`) and emits the eight entry-rung readings, scalar only where a
+(today: `test-benchmarks/agentbench/envelope.json`) and emits the eight entry-rung readings, scalar only where a
 bench artifact produced the number. This cycle's run:
 
 ```

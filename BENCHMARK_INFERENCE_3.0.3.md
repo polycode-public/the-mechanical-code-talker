@@ -15,11 +15,11 @@ every template. No commit in the range touched `src/domain/syllogise.mjs`.
 
 ## Run
 
-`node infbench/generate-cases.mjs --seed 20260707` (the generator's own default seed — the same
-one 2.11.0 used) then `node infbench/run.mjs --replay --stamp 3.0.3`. 379 cases, two drive points
+`node test-benchmarks/infbench/generate-cases.mjs --seed 20260707` (the generator's own default seed — the same
+one 2.11.0 used) then `node test-benchmarks/infbench/run.mjs --replay --stamp 3.0.3`. 379 cases, two drive points
 per case: the pure kernel prover (`src/domain/syllogise.mjs`) and the chat surface via the real
 turn engine (`runChat()`). No LLM, no judge, no network. `--replay`: **byte-identical across 2
-runs — PASSED.** Raw: `infbench/results/raw/run-3.0.3/product.jsonl` (479 rows: 379 chat + 100
+runs — PASSED.** Raw: `test-benchmarks/infbench/results/raw/run-3.0.3/product.jsonl` (479 rows: 379 chat + 100
 kernel).
 
 `npm run infbench` is present in `package.json` (confirmed via `grep infbench package.json` per the

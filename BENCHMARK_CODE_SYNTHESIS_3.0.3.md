@@ -10,7 +10,7 @@
 - **Analysis + write-up:** 05:39:03–05:55 CEST, same session.
 
 **Headline: this is the first SYNTHBENCH-CODE cycle ever run — there is no prior write-up to
-compare against.** `synthbench/code/` landed today in `6c4db643` ("Build the synthbench/code
+compare against.** `test-benchmarks/synthbench/code/` landed today in `6c4db643` ("Build the test-benchmarks/synthbench/code
 SYN-0 harness"), built to the contract `SKILL_BENCHMARK_CODE_SYNTHESIS.md` specifies. SYN-0 is
 the only built rung; SYN-1…SYN-8 print as named ceiling markers, not failures — capabilities
 `PLAN_CODE_PLANNING.md` and seonix's `PLAN_CODE_SYNTHESIS.md` stage for later cycles. This
@@ -18,12 +18,12 @@ write-up is the baseline every future cycle measures against.
 
 ## Run
 
-`npm run synthbench:code -- --ladder --stamp 3.0.3` → `node synthbench/code/run.mjs --ladder
+`npm run synthbench:code -- --ladder --stamp 3.0.3` → `node test-benchmarks/synthbench/code/run.mjs --ladder
 --stamp 3.0.3`. 4 cases, all in the built family (`planned-edit`, SYN-0). No LLM, no network.
-Exited 0 on both runs. Raw output (untracked, per `synthbench/code/results/.gitignore`):
+Exited 0 on both runs. Raw output (untracked, per `test-benchmarks/synthbench/code/results/.gitignore`):
 
-- `synthbench/code/results/raw/run-3.0.3/product.jsonl`
-- `synthbench/code/results/raw/run-3.0.3_001/product.jsonl` (the re-run; the harness's own
+- `test-benchmarks/synthbench/code/results/raw/run-3.0.3/product.jsonl`
+- `test-benchmarks/synthbench/code/results/raw/run-3.0.3_001/product.jsonl` (the re-run; the harness's own
   `_00N` snapshot convention fired automatically on the second invocation rather than
   clobbering the first)
 
@@ -61,7 +61,7 @@ fixture and reading its stdout (tier "side-effect") — real execution, no simul
 poisoned cases hit a named precondition and refused cleanly: no edit, no partial artifact, the
 failed precondition stated. Nothing here is a false-pass.
 
-SYN-1…SYN-8 have zero cases in `synthbench/code/cases.jsonl` today (still 4 lines total, all
+SYN-1…SYN-8 have zero cases in `test-benchmarks/synthbench/code/cases.jsonl` today (still 4 lines total, all
 SYN-0) — the ladder-gate rule reports them as ceiling markers rather than reading anything into
 an empty pool. SYN-0 clearing its own gate means SYN-0 is the ladder's honest top for this
 cycle; no rung above it has ever been exercised.
@@ -80,20 +80,20 @@ Two layers, both held:
 
 ## What's new this cycle
 
-Everything — this is the founding cycle. Landed in `6c4db643` ("Build the synthbench/code SYN-0
+Everything — this is the founding cycle. Landed in `6c4db643` ("Build the test-benchmarks/synthbench/code SYN-0
 harness"), 2026-07-24, ahead of this benchmark run:
 
-- `synthbench/code/run.mjs` — the ladder driver (`--ladder`, `--rung`, `--stamp`), wired to
+- `test-benchmarks/synthbench/code/run.mjs` — the ladder driver (`--ladder`, `--rung`, `--stamp`), wired to
   `npm run synthbench:code`.
-- `synthbench/code/synth.mjs` — the deterministic synthesizer: binds a taught operator from the
+- `test-benchmarks/synthbench/code/synth.mjs` — the deterministic synthesizer: binds a taught operator from the
   case goal, refuses when a precondition fails, grep-clean of the fixture's own identifiers.
-- `synthbench/code/verify/{sandbox,tiers}.mjs` — real verification: `node --check` re-parse
+- `test-benchmarks/synthbench/code/verify/{sandbox,tiers}.mjs` — real verification: `node --check` re-parse
   (tier 0) plus running the edited export in an OS-process sandbox over a throwaway fixture copy
   and reading its stdout.
-- `synthbench/code/grade.mjs` — the pure grader: the four metrics, the rung gate, the
+- `test-benchmarks/synthbench/code/grade.mjs` — the pure grader: the four metrics, the rung gate, the
   byte-determinism check.
-- `synthbench/code/cases.jsonl` — 4 SYN-0 cases (2 positive, 2 poisoned), plus
-  `synthbench/code/catalogue/operators.json` (the taught operator catalogue).
+- `test-benchmarks/synthbench/code/cases.jsonl` — 4 SYN-0 cases (2 positive, 2 poisoned), plus
+  `test-benchmarks/synthbench/code/catalogue/operators.json` (the taught operator catalogue).
 - `test/bench/synthbench-code.test.mjs` — the harness's own regression cover.
 
 No prior cycle exists to diff against, so there is no rung-movement question to answer this
@@ -129,7 +129,7 @@ staging predicts for a first cycle run the same day the harness landed.
   independent processes (`run-3.0.3` vs `run-3.0.3_001`, identical md5).
 - **No `synthbench`-in-`src` import leak:** `grep -rn "synthbench" src/` returns nothing.
 - **Case set append-only:** no case edited or removed this cycle (there was no prior cycle to
-  edit against); 4 lines in `synthbench/code/cases.jsonl`, unchanged since `6c4db643`.
+  edit against); 4 lines in `test-benchmarks/synthbench/code/cases.jsonl`, unchanged since `6c4db643`.
 - **No LLM anywhere in the loop:** the synthesizer binds from a closed operator catalogue and a
   compiled goal predicate; the verifier runs real code in a subprocess sandbox; the grader is
   pure arithmetic over the outcomes. No model call in any of the three.

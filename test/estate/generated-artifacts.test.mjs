@@ -98,13 +98,13 @@ test("the committed infbench cases are what their generator produces today", () 
   const out = mkdtempSync(path.join(tmpdir(), "tmct-infbench-cases-freshness-"));
   try {
     execFileSync("node", [
-      path.join(repoRoot, "infbench", "generate-cases.mjs"),
+      path.join(repoRoot, "test-benchmarks", "infbench", "generate-cases.mjs"),
       "--out", path.join(out, "cases.jsonl"),
     ], { cwd: repoRoot, stdio: "pipe" });
     assert.equal(
       sha(readFileSync(path.join(out, "cases.jsonl"))),
-      sha(readFileSync(path.join(repoRoot, "infbench", "cases.jsonl"))),
-      "infbench/cases.jsonl has drifted from its generator — run `node infbench/generate-cases.mjs` and "
+      sha(readFileSync(path.join(repoRoot, "test-benchmarks", "infbench", "cases.jsonl"))),
+      "test-benchmarks/infbench/cases.jsonl has drifted from its generator — run `node test-benchmarks/infbench/generate-cases.mjs` and "
         + "commit the result.\nThe ladder is drawn from src/domain/grammar/lexicon-core.json at DEFAULT_SEED, "
         + "so a lexicon change redraws every case. `npm run infbench` regenerates before it runs, so a stale "
         + "commit is not the case set the last run graded.",
@@ -116,7 +116,7 @@ test("the committed infbench cases are what their generator produces today", () 
 
 // The envelope is the only artifact here that stamps the package version into
 // its own body (generatedFrom.agentbenchVersion/stamp both come from
-// BENCH_VERSION, which agentbench/run.mjs reads out of package.json). So a
+// BENCH_VERSION, which test-benchmarks/agentbench/run.mjs reads out of package.json). So a
 // version bump alone drifts it, with no AGENTBENCH change at all — and it drifts
 // in the direction that matters, because the envelope exists for a downstream
 // calibration to check itself against and a stale stamp tells that consumer it
@@ -125,13 +125,13 @@ test("the committed agentbench envelope is what its generator produces today", (
   const out = mkdtempSync(path.join(tmpdir(), "tmct-envelope-freshness-"));
   try {
     execFileSync("node", [
-      path.join(repoRoot, "agentbench", "generate-envelope.mjs"),
+      path.join(repoRoot, "test-benchmarks", "agentbench", "generate-envelope.mjs"),
       "--out", path.join(out, "envelope.json"),
     ], { cwd: repoRoot, stdio: "pipe" });
     assert.equal(
       sha(readFileSync(path.join(out, "envelope.json"))),
-      sha(readFileSync(path.join(repoRoot, "agentbench", "envelope.json"))),
-      "agentbench/envelope.json has drifted from its generator — run `node agentbench/generate-envelope.mjs` "
+      sha(readFileSync(path.join(repoRoot, "test-benchmarks", "agentbench", "envelope.json"))),
+      "test-benchmarks/agentbench/envelope.json has drifted from its generator — run `node test-benchmarks/agentbench/generate-envelope.mjs` "
         + "and commit the result.\nIt reports the capability a gate-PASS run proves, stamped with the package "
         + "version, so a stale commit hands a downstream calibration the wrong release's measurement.",
     );
@@ -141,7 +141,7 @@ test("the committed agentbench envelope is what its generator produces today", (
 });
 
 test("the committed agentbench envelope stamps the version the package ships", () => {
-  const envelope = JSON.parse(readFileSync(path.join(repoRoot, "agentbench", "envelope.json"), "utf8"));
+  const envelope = JSON.parse(readFileSync(path.join(repoRoot, "test-benchmarks", "agentbench", "envelope.json"), "utf8"));
   const { version } = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
   assert.equal(envelope.generatedFrom.agentbenchVersion, version);
   assert.equal(envelope.generatedFrom.stamp, version);
@@ -154,13 +154,13 @@ test("the committed infbench envelope is what its generator produces today", () 
   const out = mkdtempSync(path.join(tmpdir(), "tmct-infbench-envelope-freshness-"));
   try {
     execFileSync("node", [
-      path.join(repoRoot, "infbench", "generate-envelope.mjs"),
+      path.join(repoRoot, "test-benchmarks", "infbench", "generate-envelope.mjs"),
       "--out", path.join(out, "envelope.json"),
     ], { cwd: repoRoot, stdio: "pipe" });
     assert.equal(
       sha(readFileSync(path.join(out, "envelope.json"))),
-      sha(readFileSync(path.join(repoRoot, "infbench", "envelope.json"))),
-      "infbench/envelope.json has drifted from its generator — run `node infbench/generate-envelope.mjs` "
+      sha(readFileSync(path.join(repoRoot, "test-benchmarks", "infbench", "envelope.json"))),
+      "test-benchmarks/infbench/envelope.json has drifted from its generator — run `node test-benchmarks/infbench/generate-envelope.mjs` "
         + "and commit the result.\nIt reports the capability the latest INFBENCH run proves for both the kernel "
         + "and chat arms, stamped with the package version, so a stale commit hands a downstream reader the "
         + "wrong release's measurement.",
@@ -171,7 +171,7 @@ test("the committed infbench envelope is what its generator produces today", () 
 });
 
 test("the committed infbench envelope stamps the version the package ships", () => {
-  const envelope = JSON.parse(readFileSync(path.join(repoRoot, "infbench", "envelope.json"), "utf8"));
+  const envelope = JSON.parse(readFileSync(path.join(repoRoot, "test-benchmarks", "infbench", "envelope.json"), "utf8"));
   const { version } = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8"));
   assert.equal(envelope.generatedFrom.infbenchVersion, version);
   assert.equal(envelope.generatedFrom.stamp, version);

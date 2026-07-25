@@ -19,5 +19,5 @@ we borrow their *structure*, never their content).
 | IRT (item response theory) | Psychometric difficulty-placement method | maintenance methodology; pragmatic stand-in: per-cycle pass-rate bands | Method, not data |
 
 Backbone decision: CEFR bands x TROG/CELF construction blocks (original items only).
-Consumer in repo: `chatbench/cases.jsonl` graded tags (case-set v2), `test/showcase.test.mjs`
+Consumer in repo: `test-benchmarks/chatbench/cases.jsonl` graded tags (case-set v2), `test/showcase.test.mjs`
 promotion rule (100% for two cycles → retained showcase; 0% → ceiling marker, not failure).

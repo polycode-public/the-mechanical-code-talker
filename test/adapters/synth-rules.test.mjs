@@ -1,15 +1,15 @@
 // The GOAL_RULE synthesis harness, in four groups, one per build unit:
-//   1. the labeled-example harness (synthbench/rules/cases.jsonl) round-trips
-//      losslessly through agentbench/grade.mjs's OWN parseCases — reused, not
+//   1. the labeled-example harness (test-benchmarks/synthbench/rules/cases.jsonl) round-trips
+//      losslessly through test-benchmarks/agentbench/grade.mjs's OWN parseCases — reused, not
 //      reinvented ("a labeled example for rule synthesis IS an agentbench
 //      case").
-//   2. the bounded field-grammar enumerator (synthbench/rules/enumerate.mjs)
+//   2. the bounded field-grammar enumerator (test-benchmarks/synthbench/rules/enumerate.mjs)
 //      — count + structural validity, no engine wiring yet.
-//   3. the verification oracle (synthbench/rules/oracle.mjs) — a candidate
+//   3. the verification oracle (test-benchmarks/synthbench/rules/oracle.mjs) — a candidate
 //      cloned into its OWN rule set, run through the real goalReason,
 //      reproduces BOTH hand-written GOAL_RULES entries byte-for-byte on their
 //      own labeled examples.
-//   4. the full CEGIS loop (synthbench/rules/synthesize.mjs) — synthesizes a
+//   4. the full CEGIS loop (test-benchmarks/synthbench/rules/synthesize.mjs) — synthesizes a
 //      genuinely NOVEL rule (not hand-written anywhere in
 //      src/domain/router/goal-reasoner.mjs) against a held-out example set, at 0%
 //      fabrication, deterministically.
@@ -19,17 +19,17 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { parseCases, hallucinationsIn } from "../../agentbench/grade.mjs";
-import { createRunCtx, loadFixtureLabels } from "../../agentbench/run.mjs";
+import { parseCases, hallucinationsIn } from "../../test-benchmarks/agentbench/grade.mjs";
+import { createRunCtx, loadFixtureLabels } from "../../test-benchmarks/agentbench/run.mjs";
 import { GOAL_RULES, goalReason } from "../../src/domain/router/goal-reasoner.mjs";
 import { backwardChain } from "../../src/domain/router/resolver.mjs";
 import {
   enumerateCandidates, allTopics, partitionTopics, FOCUS_CLASSES, MODE_SETS, COMPOSE_OPS,
-} from "../../synthbench/rules/enumerate.mjs";
-import { runCandidate, passesExample, groundableInToolset } from "../../synthbench/rules/oracle.mjs";
-import { synthesizeGoalRule } from "../../synthbench/rules/synthesize.mjs";
+} from "../../test-benchmarks/synthbench/rules/enumerate.mjs";
+import { runCandidate, passesExample, groundableInToolset } from "../../test-benchmarks/synthbench/rules/oracle.mjs";
+import { synthesizeGoalRule } from "../../test-benchmarks/synthbench/rules/synthesize.mjs";
 
-const CASES_FILE = fileURLToPath(new URL("../../synthbench/rules/cases.jsonl", import.meta.url));
+const CASES_FILE = fileURLToPath(new URL("../../test-benchmarks/synthbench/rules/cases.jsonl", import.meta.url));
 
 async function loadCases() {
   const knownLabels = await loadFixtureLabels();
@@ -45,7 +45,7 @@ const byId = (cases, id) => {
 
 // ---- 1. the labeled-example harness round-trips losslessly ------------------
 
-test("labeled examples: synthbench/rules/cases.jsonl round-trips losslessly through agentbench's OWN parseCases", async () => {
+test("labeled examples: test-benchmarks/synthbench/rules/cases.jsonl round-trips losslessly through agentbench's OWN parseCases", async () => {
   const { cases, errors } = await loadCases();
   assert.deepEqual(errors, [], "zero lint errors — every case is well-formed against the real registry + fixture");
   assert.equal(cases.length, 13);

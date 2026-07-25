@@ -709,7 +709,7 @@ the count, the ids, and the source of each. Nothing recognizes anything yet.
 
 **Slice 3 — containment and the reject class.** `recognizeGoal(trace, goals, ctx)` returning
 `{ goal, reject, proof, why }` with the three outcomes and no fourth. The first TOOL-9 cases land in
-`agentbench/cases.jsonl` here, including at least one that must reject.
+`test-benchmarks/agentbench/cases.jsonl` here, including at least one that must reject.
 
 **Slice 4 — autoplay re-based on the general recognizer.** Autoplay's single marker read becomes one
 declared goal among N. Its behaviour on the shipped worlds must not change, pinned by the existing
@@ -758,10 +758,10 @@ fits none.
 
 **A passing cycle looks like this:**
 
-1. TOOL-9 cases exist in `agentbench/cases.jsonl`, appended (never edited into existing rows), with
+1. TOOL-9 cases exist in `test-benchmarks/agentbench/cases.jsonl`, appended (never edited into existing rows), with
    the addition recorded in the write-up. At least one case must reject, and at least one must be
    ambiguous and refuse.
-2. The goal driver reads `rungReached: TOOL-9` in `agentbench/envelope.json`, regenerated
+2. The goal driver reads `rungReached: TOOL-9` in `test-benchmarks/agentbench/envelope.json`, regenerated
    deterministically.
 3. Hallucination stays 0%. A goal recognized outside the declared N+1 set fails outright, by the
    measurement contract that already governs every rung.

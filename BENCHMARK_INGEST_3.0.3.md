@@ -24,12 +24,12 @@ rungs, scored with the real `claude-haiku-4-5-20251001` judge, read 2.0/2 on `IN
 ## Run
 
 `npm run ingestbench:run -- --ladder --stamp 3.0.3`: 20 cases, one deterministic pass, exit 0. Raw
-output (untracked, per `ingestbench/results/.gitignore`):
-`ingestbench/results/raw/run-3.0.3/product.jsonl`, with `judge-input.jsonl` for the two judged
+output (untracked, per `test-benchmarks/ingestbench/results/.gitignore`):
+`test-benchmarks/ingestbench/results/raw/run-3.0.3/product.jsonl`, with `judge-input.jsonl` for the two judged
 rungs.
 
 Determinism confirmed with a separate `--replay` run: rows byte-identical across two passes over
-the same cases and version (`ingestbench/run.mjs --replay: byte-identical across 2 runs — determinism
+the same cases and version (`test-benchmarks/ingestbench/run.mjs --replay: byte-identical across 2 runs — determinism
 check PASSED`).
 
 ## The rung table — 20 cases
@@ -99,7 +99,7 @@ are skipped-with-a-receipt in the formal rollup; the verdicts below are informat
 readings on the harness-produced restatements, not ladder-cleared passes.
 
 - **Judge model:** `claude-haiku-4-5-20251001` (the full pinned id, unchanged).
-- **Prompt version:** `ingest-judge-v1` (`ingestbench/ingest-judge-v1.txt`).
+- **Prompt version:** `ingest-judge-v1` (`test-benchmarks/ingestbench/ingest-judge-v1.txt`).
 - **Samples:** 3 per case; **voids:** 0; **overall mean:** 1.75 / 2.
 
 | rung | case | forward | backward | mean | reading |
@@ -168,11 +168,11 @@ second kept miss: three of four claims dropped, none invented.
 
 ## What's new this cycle
 
-- **The `ingestbench/` harness landed** (`7e7a154a`, "Build the ingestbench harness to
+- **The `test-benchmarks/ingestbench/` harness landed** (`7e7a154a`, "Build the ingestbench harness to
   SKILL_BENCHMARK_INGEST.md", 2026-07-24). This cycle is its first run. Nothing in the extraction
   path (`src/services/extract-facts.mjs`) changed for this cycle; it measures the shipped `ingestText`
   seam as-is.
-- **Case set:** 20 cases in `ingestbench/cases.jsonl`, the founding set. No additions or edits this
+- **Case set:** 20 cases in `test-benchmarks/ingestbench/cases.jsonl`, the founding set. No additions or edits this
   cycle; the set is append-only from here.
 
 ## Discipline checklist
@@ -184,7 +184,7 @@ second kept miss: three of four claims dropped, none invented.
   never imports from the bench.
 - **Judge integrity:** real `claude-haiku-4-5-20251001` judge, prompt `ingest-judge-v1`, 3 samples
   per case, 0 voids. Model and prompt pins recorded above and in
-  `ingestbench/results/raw/run-3.0.3/summary.json`. The pin was not changed.
+  `test-benchmarks/ingestbench/results/raw/run-3.0.3/summary.json`. The pin was not changed.
 - **Gate reported, not hidden:** `ING-6` gates at 38%; `ING-7`/`ING-8`/`ING-9` reported
   skipped-with-a-receipt in the ladder rollup even though `ING-7`'s raw numbers pass and the judged
   rungs score well.

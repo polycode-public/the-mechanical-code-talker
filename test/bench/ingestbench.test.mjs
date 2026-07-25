@@ -2,7 +2,7 @@
 // case lint over the committed file's schema, the fidelity classifier's rules,
 // the ING-7 deterministic equivalence check, the rung rollup + ladder gate math,
 // the judge's pure prompt/parse helpers, and one smoke run of the runner over its
-// smallest rung. The full ladder runs via `node ingestbench/run.mjs --ladder`
+// smallest rung. The full ladder runs via `node test-benchmarks/ingestbench/run.mjs --ladder`
 // (fast + free on the deterministic rungs) — deliberately NOT in `npm test`, so
 // the suite gates the instrument while the bench measures the product.
 import { test } from "node:test";
@@ -14,9 +14,9 @@ import { join } from "node:path";
 import {
   parseCases, classifyStored, verifyCanonicalRestatement, gradeDeterministicCase,
   rollup, ladderGate, restateDocument, canonicalTriple, COMPLETION_FLOOR, RUNGS,
-} from "../../ingestbench/grade.mjs";
-import { runIngestbench, main as runMain } from "../../ingestbench/run.mjs";
-import { buildPrompt, validateScores, parseJudgeOutput, DIMENSIONS } from "../../ingestbench/judge.mjs";
+} from "../../test-benchmarks/ingestbench/grade.mjs";
+import { runIngestbench, main as runMain } from "../../test-benchmarks/ingestbench/run.mjs";
+import { buildPrompt, validateScores, parseJudgeOutput, DIMENSIONS } from "../../test-benchmarks/ingestbench/judge.mjs";
 
 const caseLine = (fields) => JSON.stringify({
   id: "ing-1-clean-isa-cat",
@@ -222,7 +222,7 @@ test("parseJudgeOutput reads the structured envelope and rejects a malformed one
 // ---- SMOKE: the runner executes its smallest rung and writes a well-formed result ----
 
 test("the runner grades the smallest rung deterministically", async () => {
-  const { cases } = parseCases(await readFile(new URL("../../ingestbench/cases.jsonl", import.meta.url), "utf8"));
+  const { cases } = parseCases(await readFile(new URL("../../test-benchmarks/ingestbench/cases.jsonl", import.meta.url), "utf8"));
   const floor = cases.filter((c) => c.rung === RUNGS[0]);
   assert.ok(floor.length >= 1, "there is at least one ING-0 case to smoke-test");
   const { rows, rolled } = await runIngestbench(floor, { concurrency: 2, ladder: true });

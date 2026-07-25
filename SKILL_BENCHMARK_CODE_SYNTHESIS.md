@@ -3,7 +3,7 @@
 The repeatable loop that drives tmct's **deterministic code synthesis and transformation** forward
 one rung at a time: run the ladder, read the rung table, decide ship-or-build, and if building, pick
 the next track capability, implement it, regression-test, and re-measure. The harness is
-`synthbench/code/` — a dev-only sibling of the shipped `synthbench/rules/` and `synthbench/phrasing/`
+`test-benchmarks/synthbench/code/` — a dev-only sibling of the shipped `test-benchmarks/synthbench/rules/` and `test-benchmarks/synthbench/phrasing/`
 (Track 1), grading the code tracks split across `PLAN_CODE_PLANNING.md` (tmct: Tracks 1 and 5)
 and seonix's `PLAN_CODE_SYNTHESIS.md` (Tracks 2-4). This skill is the loop a session RUNS every
 time it wants to advance the ladder.
@@ -30,7 +30,7 @@ named for that meaning. Do not compare a SYN rung against CHATBENCH's CEFR grade
 **SYN-0…SYN-4 are the near ladder** — each maps to a track already designed (SYN-0 and SYN-3/4 to
 tmct's `PLAN_CODE_PLANNING.md` Track 5, SYN-1 to seonix's `PLAN_CODE_SYNTHESIS.md` Track 3, SYN-2
 to Track 2 in the same doc), and Track 1's shipped
-`synthbench/rules`/`synthbench/phrasing` is the floor beneath SYN-0 (a synthesized `GOAL_RULE` is a
+`test-benchmarks/synthbench/rules`/`test-benchmarks/synthbench/phrasing` is the floor beneath SYN-0 (a synthesized `GOAL_RULE` is a
 code artifact through a trusted oracle, no sandbox). **SYN-5…SYN-6 are the mid ladder** — designed,
 unbuilt. **SYN-7…SYN-8 are horizons**, not walls: `SYN-7` needs the self-source posture Track 5's
 §8 stages as a later step past the fixture milestone; `SYN-8` edges toward open-ended
@@ -42,8 +42,8 @@ APR/TBar template repair, and for self-hosting the plan-calculus lineage (Progra
 Rich & Waters). Until a rung is built it sits at the honest-miss floor as a **ceiling marker**,
 measured and named, never patched to a fake pass.
 
-> **STATUS (docs-only, 2026-07-23):** this document SPECIFIES the harness; `synthbench/code/` is not
-> built yet. Track 1 (`synthbench/rules`, `synthbench/phrasing`) is shipped and is the floor.
+> **STATUS (docs-only, 2026-07-23):** this document SPECIFIES the harness; `test-benchmarks/synthbench/code/` is not
+> built yet. Track 1 (`test-benchmarks/synthbench/rules`, `test-benchmarks/synthbench/phrasing`) is shipped and is the floor.
 > **SYN-0 is the first build target** — the smallest end-to-end slice (one observable edit through
 > the plan-act-verify loop on a JS fixture), staged in `PLAN_CODE_PLANNING.md` §3.7's sub-list.
 
@@ -60,7 +60,7 @@ Every cycle MUST satisfy:
 
 - **Artifact naming — match the `package.json` version.** A cycle's write-up is named after the tmct
   version it measures: `BENCHMARK_CODE_SYNTHESIS_<version>.md`, raw under
-  `synthbench/code/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a
+  `test-benchmarks/synthbench/code/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a
   second fixture, a re-verify) appends `_00N`: `BENCHMARK_CODE_SYNTHESIS_0.9.0_001.md`, `_002`, … —
   the convention `SKILL_BENCHMARK_AGENT.md` §1, `SKILL_BENCHMARK_INFERENCE.md` §1, and
   `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1 all use.
@@ -68,7 +68,7 @@ Every cycle MUST satisfy:
   ladder run, including any sandbox test execution) and the start and end of the analysis (reading
   results and writing the report), with the date. A reader comparing two versions needs the
   measurement time and the write-up time as separate figures.
-- **Fixed, versioned case set:** `synthbench/code/cases.jsonl` — one JSON object per line, keyed by
+- **Fixed, versioned case set:** `test-benchmarks/synthbench/code/cases.jsonl` — one JSON object per line, keyed by
   `rung`. Append-only once the SYN arc starts: new cases may be added between cycles (record the
   addition in the write-up), existing cases are never edited or removed mid-arc — editing a case
   invalidates every prior cycle's comparison against it, the same reason every other bench's case set
@@ -87,7 +87,7 @@ Every cycle MUST satisfy:
   subprocess, or the candidate code in Playwright (§6), or `graph-build.mjs`'s re-index and a
   value-compare of the observed graph delta against the step's declared effect. Never a model of the
   toolchain, never a re-derivation of the expected result; compare to pinned literals and to what the
-  real run reports (`agentbench/grade.mjs`'s zero-fabrication posture).
+  real run reports (`test-benchmarks/agentbench/grade.mjs`'s zero-fabrication posture).
 - **The automatic-fail line: zero false-pass.** A case reported PASS whose artifact does NOT actually
   survive its full verification stack fails the whole rung outright, no matter how good the rest looks
   — the synthesis analogue of AGENTBENCH's zero-hallucination line. Equivalently: a produced artifact
@@ -121,35 +121,35 @@ Every cycle MUST satisfy:
   candidate (SYN-2) that flips the failing test but dies under mutation-testing validation (§5) is NOT
   verified-complete. A transformation (SYN-3…SYN-8) that passes once but is not byte-deterministic on
   re-run is NOT verified-complete. Overfit is a verification failure, graded as one.
-- **Bench-import direction stays one way.** The product (`src/`) never imports from `synthbench/`; the
+- **Bench-import direction stays one way.** The product (`src/`) never imports from `test-benchmarks/synthbench/`; the
   bench imports downward from `src/` (the planner, the code graph, `graph-build.mjs`, the adaptor once
   it exists). Verify with `grep -r 'synthbench' src/` before writing up a cycle as clean, the same
   guard AGENTBENCH holds on its own directory.
 
-## 2. The harness — `synthbench/code/` layout
+## 2. The harness — `test-benchmarks/synthbench/code/` layout
 
 A dev-only sibling directory, never listed in `package.json`'s `files` or `exports`, exactly as
-`synthbench/rules/` and `synthbench/phrasing/` sit today. The proposed shape:
+`test-benchmarks/synthbench/rules/` and `test-benchmarks/synthbench/phrasing/` sit today. The proposed shape:
 
-- `synthbench/code/cases.jsonl` — the append-only case set (§3), keyed by rung.
-- `synthbench/code/run.mjs` — the ladder driver: `--ladder` walks SYN-0→SYN-8 ascending and applies
+- `test-benchmarks/synthbench/code/cases.jsonl` — the append-only case set (§3), keyed by rung.
+- `test-benchmarks/synthbench/code/run.mjs` — the ladder driver: `--ladder` walks SYN-0→SYN-8 ascending and applies
   the gate; `--rung SYN-N` runs one; `--stamp <version>` keys the raw output dir. Provision
   `npm run synthbench:code -- --stamp <version>` when the harness lands (and verify it exists rather
   than assume it — the same lesson `SKILL_BENCHMARK_INFERENCE.md` §4 records for `npm run infbench`).
-- `synthbench/code/grade.mjs` — pure deterministic grading: the four metrics (§1), the gate, the
+- `test-benchmarks/synthbench/code/grade.mjs` — pure deterministic grading: the four metrics (§1), the gate, the
   overfit checks, byte-determinism. No network, no model call.
-- `synthbench/code/verify/` — the verification tiers (§4): the re-parse pass, the re-index +
+- `test-benchmarks/synthbench/code/verify/` — the verification tiers (§4): the re-parse pass, the re-index +
   declared-vs-observed delta comparison, the subprocess test-runner harness, the Playwright
   `page.evaluate` / `setContent` harness.
-- `synthbench/code/catalogue/` — the taught operator catalogue and the PBE/repair grammars as static
+- `test-benchmarks/synthbench/code/catalogue/` — the taught operator catalogue and the PBE/repair grammars as static
   reviewed data (rename, move, extract, inline, the PAR/TBar mutation templates, the closed
   expression grammars). Authored offline, committed, treated as data the engine runs — never
   hardcoded engine behavior.
-- `synthbench/code/fixtures/` (or `examples/tiny-webapp-src`) — the source-bearing JS fixture repos
+- `test-benchmarks/synthbench/code/fixtures/` (or `examples/tiny-webapp-src`) — the source-bearing JS fixture repos
   the cases transform. `examples/mini-webapp` is the graph-only precedent (it ships `.tmct/graph.json`
   with no source); SYN needs fixtures that ship real source AND their own test suite so tiers 2–3 can
   run them.
-- `synthbench/code/results/raw/run-<version>[_00N]/` — snapshotted raw output, written before the
+- `test-benchmarks/synthbench/code/results/raw/run-<version>[_00N]/` — snapshotted raw output, written before the
   next run overwrites it.
 
 ## 3. Case shape per rung family
@@ -290,11 +290,11 @@ remaining wiring work.
 **Step 1 — READ.** Read the latest `BENCHMARK_CODE_SYNTHESIS_<version>.md` (its ceiling markers and
 its decision on frontiers), the code-axis open items in `NEXT.md`, tmct's `PLAN_CODE_PLANNING.md`
 Track 5 status and seonix's `PLAN_CODE_SYNTHESIS.md` Track 2-4 status, and the current
-`synthbench/code/cases.jsonl` rung counts. Decide whether this cycle is a
+`test-benchmarks/synthbench/code/cases.jsonl` rung counts. Decide whether this cycle is a
 pure re-measurement or targets a specific gated rung to push past, and which track's capability that
 requires.
 
-**Step 2 — RUN the ladder.** `node synthbench/code/run.mjs --ladder --stamp <version>` (the
+**Step 2 — RUN the ladder.** `node test-benchmarks/synthbench/code/run.mjs --ladder --stamp <version>` (the
 provisioned `npm run synthbench:code -- --stamp <version>` once it exists). The planning and
 enumeration are fast and free; the sandbox test runs cost seconds to as-costed. If a cycle's fixture
 suite is large, or several fixtures run in one pass, the run itself moves to a BACKGROUND task under
@@ -330,7 +330,7 @@ with a receipt for every rung above it.
   passes before moving further up.
 
 **Step 6 — WRITE the cycle up.** Snapshot the raw output first
-(`synthbench/code/results/raw/run-<version>[_00N]/`), then write
+(`test-benchmarks/synthbench/code/results/raw/run-<version>[_00N]/`), then write
 `BENCHMARK_CODE_SYNTHESIS_<version>.md`: a headline naming the honest delta versus the last cycle; the
 run's four timing stamps; the per-rung metric table with gate receipts (skipped-with-a-receipt lines
 and named ceiling markers included); what's new this cycle, one item per change with the commit it
@@ -375,7 +375,7 @@ normal operator check-in, not an autonomous re-arm.
 
 ## 9. One-paragraph TL;DR
 
-Run `node synthbench/code/run.mjs --ladder --stamp <version>` (fast planning + enumeration, real
+Run `node test-benchmarks/synthbench/code/run.mjs --ladder --stamp <version>` (fast planning + enumeration, real
 sandboxed verification, no LLM anywhere) and read the per-rung metrics — synthesis-completion,
 verified-completion, abstention-correctness, false-pass — against the honest gate: **false-pass = 0
 AND every poisoned case refused AND verified-completion ≥ 50%** passes a rung (SYN-0→SYN-8, strictly in
@@ -395,11 +395,11 @@ where expected, ship the re-measurement; to push further, build the next track c
 the gating rung, keep `npm test` green, and re-run to confirm the gate passes.
 Write up `BENCHMARK_CODE_SYNTHESIS_<version>.md` (headline delta, timing, per-rung metric table with
 gate receipts, what's new, kept ceiling markers, discipline checklist, decision), snapshotting raw
-output to `synthbench/code/results/raw/run-<version>[_00N]/` first and mirroring anything left open
-into `NEXT.md`. This pass is docs-only: the harness is specified, `synthbench/code/` is unbuilt, and
+output to `test-benchmarks/synthbench/code/results/raw/run-<version>[_00N]/` first and mirroring anything left open
+into `NEXT.md`. This pass is docs-only: the harness is specified, `test-benchmarks/synthbench/code/` is unbuilt, and
 SYN-0 is the first build target.
 
-**Precondition for any cycle:** `synthbench/code/` must exist before this skill can run at all.
+**Precondition for any cycle:** `test-benchmarks/synthbench/code/` must exist before this skill can run at all.
 Its build (SYN-0 first: one observable edit through the plan-act-verify loop on a JS source
 fixture) is an OUTPUT of `PLAN_CODE_PLANNING.md`'s (and seonix's `PLAN_CODE_SYNTHESIS.md`'s)
 tracks — the plan owns the build, this skill owns the

@@ -8,7 +8,7 @@
 - **Analysis + write-up:** 05:38:54–05:55 CEST, same session.
 
 **Headline: the first-ever RESEARCHBENCH run measures exactly what `SKILL_BENCHMARK_RESEARCH.md`
-and `researchbench/README.md` said it would — RES-0 and RES-1 pass clean, RES-2 gates on its
+and `test-benchmarks/researchbench/README.md` said it would — RES-0 and RES-1 pass clean, RES-2 gates on its
 ordering floor (67% against an 80% floor), and RES-3 through RES-6 report skipped-with-a-receipt
 because the ladder gates ascending.** This is not a broken harness or a missed target: today's
 research lane queues its fan-out in plain document order with no relevance ranking, so a rung that
@@ -17,16 +17,16 @@ baseline this cycle exists to record.
 
 ## Run
 
-`npm run researchbench:run -- --ladder --stamp 3.0.3` (`node researchbench/run.mjs --ladder --stamp
+`npm run researchbench:run -- --ladder --stamp 3.0.3` (`node test-benchmarks/researchbench/run.mjs --ladder --stamp
 3.0.3`): 9 cases, one per rung RES-0…RES-8, against the committed volcano fixture
-(`researchbench/fixture/graph.json`), no live wiki, no LLM, no judge. Exit 0. Raw output (untracked,
-per `researchbench/results/.gitignore`):
-`researchbench/results/raw/run-3.0.3/product.jsonl`.
+(`test-benchmarks/researchbench/fixture/graph.json`), no live wiki, no LLM, no judge. Exit 0. Raw output (untracked,
+per `test-benchmarks/researchbench/results/.gitignore`):
+`test-benchmarks/researchbench/results/raw/run-3.0.3/product.jsonl`.
 
 ## The rung table (metric trio + gate)
 
 Gate: recall@budget ≥ 50% always; hub-avoidance ≥ 80% and ordering ≥ 80% only where the rung's own
-"what it tests" column names them (`RUNG_CHECKS` in `researchbench/grade.mjs`); zero invented
+"what it tests" column names them (`RUNG_CHECKS` in `test-benchmarks/researchbench/grade.mjs`); zero invented
 traversal. The **PASS/---- column below is each rung graded in isolation** against its own
 applicable floors; the **ladder line under the table is the ascending walk**, which gates every rung
 above the first floor-miss regardless of that rung's own isolated number.
@@ -57,7 +57,7 @@ column reads PASS even though the ladder walk has already gated at RES-2. Both r
 correct at once: a rung's own number and its place in the ascending walk are different questions,
 exactly as `SKILL_BENCHMARK_RESEARCH.md` §1's rung-gate rule specifies.
 
-RES-7 and RES-8 never reach the lane at all (`isCeilingRung` in `researchbench/run.mjs`) — they are
+RES-7 and RES-8 never reach the lane at all (`isCeilingRung` in `test-benchmarks/researchbench/run.mjs`) — they are
 named research horizons, not floor-misses, and the ladder excludes them from the gate walk
 entirely (`ladderGate`'s `tiers` filter drops them before `ladderGateBy` runs).
 
@@ -67,7 +67,7 @@ harness's automatic-fail line held clean on its first-ever run.
 
 ## Worked example — the canonical volcano case (RES-1/RES-2, `res-volcano-queue` / `res-volcano-order`)
 
-Seed `Volcano`'s lead links, in document order (`researchbench/fixture/graph.json`):
+Seed `Volcano`'s lead links, in document order (`test-benchmarks/researchbench/fixture/graph.json`):
 
 ```
 Active volcano, Earth, East African Rift, Geology, Hawaii, ISBN 0-19-960146-4
@@ -90,7 +90,7 @@ dead title the fixture returns null for and is excluded from `goldFollow`). Hub-
 identifier link goes unfetched because it's a dead title skipped by the lane's own dead-link path,
 not because anything demoted it).
 
-This is precisely the shape `researchbench/README.md` predicted before this run ever executed:
+This is precisely the shape `test-benchmarks/researchbench/README.md` predicted before this run ever executed:
 "today's fan-out is plain document order with no relevance ranking or hub demotion, so RES-2's
 ordering floor (0.8) legitimately fails against the canonical volcano case (order score ≈0.67)."
 The measured 0.667 confirms that prediction to three decimal places.
@@ -98,11 +98,11 @@ The measured 0.667 confirms that prediction to three decimal places.
 ## What's new this cycle
 
 - **The harness itself, built from `SKILL_BENCHMARK_RESEARCH.md`'s spec** (commit `3803fe96`,
-  landed same-day, ahead of this write-up): `researchbench/fixture/graph.json` (the volcano
-  fixture), `researchbench/fixture/provider.mjs` (the provider seam adapter), `researchbench/grade.mjs`
-  (the metric trio + ladder gate), `researchbench/run.mjs` (the runner driving the real
-  `researchTurn`/`researchSnapshot` lane), `researchbench/cases.jsonl` (9 cases, one per rung),
-  `researchbench/README.md` (the mechanics). This cycle is the harness's first measured run, not a
+  landed same-day, ahead of this write-up): `test-benchmarks/researchbench/fixture/graph.json` (the volcano
+  fixture), `test-benchmarks/researchbench/fixture/provider.mjs` (the provider seam adapter), `test-benchmarks/researchbench/grade.mjs`
+  (the metric trio + ladder gate), `test-benchmarks/researchbench/run.mjs` (the runner driving the real
+  `researchTurn`/`researchSnapshot` lane), `test-benchmarks/researchbench/cases.jsonl` (9 cases, one per rung),
+  `test-benchmarks/researchbench/README.md` (the mechanics). This cycle is the harness's first measured run, not a
   re-measurement — there is no prior `BENCHMARK_RESEARCH_*.md` to diff against.
 - `researchbench:run` added to `package.json` scripts (this cycle), so the loop can invoke it the
   same way `agentbench:run`/`infbench:run` are invoked.
@@ -130,14 +130,14 @@ literature in `SKILL_BENCHMARK_RESEARCH.md` §3.
 - **Byte-identity**: this is the harness's first run, so there is no prior stamp to diff against;
   a re-run of `--stamp 3.0.3` before any code changes reproduces the same table (the harness has no
   randomness — every metric is a pure function over the committed fixture and the recorded walk).
-- **Fixture untouched**: `researchbench/fixture/graph.json` is read-only this cycle; no article,
+- **Fixture untouched**: `test-benchmarks/researchbench/fixture/graph.json` is read-only this cycle; no article,
   `leadLinks` order, or `deadTitles`/`genericTerms` entry changed.
 - **One-way import held**: `grep -rn "researchbench" src/` returns nothing — the bench imports
   downward from `src/services/research.mjs` and `src/adapters/corpus/wikipedia-live.mjs`, never the
   reverse.
 - **No live wiki reached**: the fixture provider is registered for the duration of every case
   (`registerResearchProvider`/`getResearchProvider` in `driveCase`) and unregistered after; nothing
-  in `researchbench/` imports a live-network adapter.
+  in `test-benchmarks/researchbench/` imports a live-network adapter.
 - **Case set and fixture stay append-only from here**: this cycle adds none beyond the founding 9;
   the next cycle that wants deeper coverage records the addition in its own write-up, per
   `SKILL_BENCHMARK_RESEARCH.md` §1.
@@ -145,7 +145,7 @@ literature in `SKILL_BENCHMARK_RESEARCH.md` §3.
 ## Decision
 
 **Ship the founding baseline as-is.** RES-2's ordering gate is the honest, expected first-cycle
-result — the skill doc and `researchbench/README.md` both named it before this run executed, and
+result — the skill doc and `test-benchmarks/researchbench/README.md` both named it before this run executed, and
 the measured numbers confirm the prediction. The next RESEARCHBENCH cycle's Step 5 target is a
 relevance-ordering pass over the queued titles that pushes RES-2's ordering score past 0.8 without
 regressing RES-0/RES-1's recall or inventing any traversal — that is real lane engineering

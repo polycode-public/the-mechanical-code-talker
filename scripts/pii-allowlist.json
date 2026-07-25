@@ -29,7 +29,7 @@
     {
       "match": "idxbench@example.invalid",
       "kind": "email",
-      "reason": "synthetic git identity idxbench/run.mjs stamps on its throwaway per-run history repos (.invalid is the RFC 2606 reserved TLD, unroutable by construction)"
+      "reason": "synthetic git identity test-benchmarks/idxbench/run.mjs stamps on its throwaway per-run history repos (.invalid is the RFC 2606 reserved TLD, unroutable by construction)"
     },
     {
       "match": "Antony at Polycode",

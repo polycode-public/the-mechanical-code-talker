@@ -3,11 +3,11 @@
 The repeatable loop that drives the tmct **code-index producer** forward one fidelity rung at a
 time: index a fixture repo, compare the produced graph against a gold entity/edge set and a set of
 canonical question/answer pairs, decide ship-or-build, and if building, add the next extractor or
-resolver capability, regression-test, and re-measure. IDXBENCH is `idxbench/`'s harness; this skill
+resolver capability, regression-test, and re-measure. IDXBENCH is `test-benchmarks/idxbench/`'s harness; this skill
 is the loop a session RUNS every time it wants to advance the ladder.
 
-> **Build status: the harness is specified here, not yet built.** `idxbench/` does not exist yet.
-> This document is the design a later session implements; nothing in `idxbench/` is live code.
+> **Build status: the harness is specified here, not yet built.** `test-benchmarks/idxbench/` does not exist yet.
+> This document is the design a later session implements; nothing in `test-benchmarks/idxbench/` is live code.
 
 **What it grades: does the produced graph RESTATE the source?** This is the code sibling of the
 Ingest restatement check. Ingest reads prose and restates it as canonical graph statements you can
@@ -53,14 +53,14 @@ Every cycle MUST satisfy:
 
 - **Artifact naming — match the `package.json` version.** A cycle's write-up is named after the
   tmct version it measures: `BENCHMARK_CODE_INDEX_<version>.md`, raw under
-  `idxbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a second
+  `test-benchmarks/idxbench/results/raw/run-<version>[_00N]/`. A RE-RUN of the same version (a harness fix, a second
   language, a re-verify) appends `_00N`: `BENCHMARK_CODE_INDEX_0.9.0_001.md`, `_002`, … — the same
   convention `SKILL_BENCHMARK_AGENT.md` §1, `SKILL_BENCHMARK_CEFR_ENGLISH.md` §1, and
   `SKILL_BENCHMARK_INFERENCE.md` §1 already use.
 - **Record the timing.** The write-up carries four wall-clock stamps: the start and end of the
   **indexing session** (the producer runs) and the start and end of the **analysis** (reading the
   gold comparison and writing the report). State the date and both intervals.
-- **Fixed, versioned case set:** `idxbench/cases.jsonl` — one JSON object per line:
+- **Fixed, versioned case set:** `test-benchmarks/idxbench/cases.jsonl` — one JSON object per line:
   `{ id, rung, repo, gold: { entities[], edges[] }, questions: [{ q, expect }] }`. `repo` names a
   committed fixture tree; `gold` is the authored truth for that fixture; `questions` are the
   canonical Q&A pairs. Append-only once the arc starts: new cases may be added between cycles
@@ -74,7 +74,7 @@ Every cycle MUST satisfy:
   run. This is the one rule that makes IDXBENCH a fidelity measure rather than a change-detector.
 - **No LLM, no judge, fully deterministic.** Grading compares the produced entity set and edge set
   against `gold`, and each produced canonical answer against its `expect`, with pure functions in
-  `idxbench/grade.mjs`. No network, no model call anywhere in this loop. Two runs over the same tree
+  `test-benchmarks/idxbench/grade.mjs`. No network, no model call anywhere in this loop. Two runs over the same tree
   and stamp produce byte-identical output. One run per arm is sufficient; there is no judge-noise
   tier to sample against, unlike CHATBENCH.
 - **The automatic-fail line: zero fabrication.** A produced entity with no witness in the source, or
@@ -96,7 +96,7 @@ Every cycle MUST satisfy:
 - **The rung-gate rule (the IDXBENCH analogue of AGENTBENCH's rung gate).** Rungs run
   **IDX-0 → IDX-1 → … → IDX-10**, strictly in that order. A rung PASSES iff **zero fabrication**
   (precision on invention is perfect — no tolerance), **recall ≥ `RECALL_FLOOR` (0.5,
-  `idxbench/grade.mjs`)** on the rung's target relation, and **every canonical Q&A for that rung
+  `test-benchmarks/idxbench/grade.mjs`)** on the rung's target relation, and **every canonical Q&A for that rung
   exact**. A missed edge below the floor is a recall shortfall, not a fabrication; an invented edge
   is fatal regardless of recall. The FIRST rung that fails this gate gates every rung above it —
   report those higher rungs as **skipped-with-a-receipt** (e.g. `IDX-8 skipped: gated by IDX-4 Q&A
@@ -114,7 +114,7 @@ Every cycle MUST satisfy:
 - **Reference bands stay illustrative, never run.** External code-graph tools (seonix's own pinned
   bench corpora — Django, eShopOnWeb, aws-cdk-examples, commander/express, gson) are anchors for a
   future write-up, not scores this harness produces. Don't claim a number for them.
-- **Bench-import direction stays one way.** The product (`src/`) never imports from `idxbench/`; the
+- **Bench-import direction stays one way.** The product (`src/`) never imports from `test-benchmarks/idxbench/`; the
   bench imports downward from `src/index/index-repo.mjs`, `src/index/registry.mjs`, and
   `src/tools/conformance.mjs`. A cycle that reverses this is a real regression — verify with
   `grep -r 'idxbench' src/` before writing up a cycle as clean.
@@ -129,7 +129,7 @@ Every cycle MUST satisfy:
 lands on `main` ahead of them, so the spec is reviewable before the harness is built.
 
 Until `repo-index` merges, an IDXBENCH cycle runs against the branch: `git fetch origin repo-index`
-and index from a checkout or worktree of it, or run the cycle after the merge. `idxbench/` itself
+and index from a checkout or worktree of it, or run the cycle after the merge. `test-benchmarks/idxbench/` itself
 (harness, cases, gold sets) can be authored on either branch, but its Step 2 run needs the producer
 present. Once `repo-index` merges to `main`, delete this section and treat the producer as a normal
 `main` dependency. The conformance kit `runConformance` is already the branch's own Phase-1 exit
@@ -139,11 +139,11 @@ criterion (`test/index/js-extractor-seam.test.mjs`), which is why it is IDXBENCH
 
 **Step 1 — READ.** Read the latest `BENCHMARK_CODE_INDEX_<version>.md` (its kept-red section and its
 decision on frontiers), the code-index open items in `NEXT.md`, `archive/PLAN_REPO_INDEX.md`'s
-implementation-log phase markers, and the current `idxbench/cases.jsonl` rung counts. Decide which
+implementation-log phase markers, and the current `test-benchmarks/idxbench/cases.jsonl` rung counts. Decide which
 language or rung this cycle measures, and whether it is a pure re-measurement or targets a gated rung
 to push past.
 
-**Step 2 — RUN the ladder.** `node idxbench/run.mjs --ladder --stamp <version>` (provisioned as
+**Step 2 — RUN the ladder.** `node test-benchmarks/idxbench/run.mjs --ladder --stamp <version>` (provisioned as
 `npm run idxbench:run -- --stamp <version>`). Each case indexes its fixture with a pinned timestamp
 and `historyDepth` fixed by the rung, runs `runConformance` against the produced graph, then grades
 entities/edges/Q&A against `gold`. Fast and free — no judge concurrency to manage. Route it through
@@ -188,7 +188,7 @@ deliberately-kept red (a rung that resolves structure correctly but misses a can
 as a frontier, not patched around); the discipline checklist (zero fabrication held, determinism
 byte-verified, gold authored from source not captured, conformance kit green, import direction one
 way); and a decision line. Snapshot the raw grader output to
-`idxbench/results/raw/run-<version>[_00N]/` BEFORE the next run overwrites it. **Mirror every issue
+`test-benchmarks/idxbench/results/raw/run-<version>[_00N]/` BEFORE the next run overwrites it. **Mirror every issue
 the cycle leaves open** (a kept red, an unexplained rung move, an under-covered language) **into
 `NEXT.md`** as a one-line open item pointing at this write-up.
 
@@ -204,7 +204,7 @@ toggle — so each cycle ends with a normal operator check-in rather than an aut
 - One cycle per producer capability: a language backend, a call-edge resolver class, a history pass,
   the self-index fixture. Size the cycle to that, not to a fixed time box.
 - A pure re-measurement (no build) is a fast, cheap cycle — worth running whenever `src/index/` or
-  `idxbench/cases.jsonl` changes, to catch a fidelity regression before it compounds.
+  `test-benchmarks/idxbench/cases.jsonl` changes, to catch a fidelity regression before it compounds.
 - Run alongside the other bench cycles when a release touches both the chat surface and the
   producer; they measure different axes of the same release.
 
@@ -221,7 +221,7 @@ toggle — so each cycle ends with a normal operator check-in rather than an aut
   not shipped with a caveat. An unresolvable reference is a miss, never a guessed edge.
 - **A gated rung is reported, not hidden.** Skipped-with-a-receipt, every time, even when a gated
   rung's raw numbers look fine by coincidence.
-- **Snapshot before overwrite.** `idxbench/results/raw/run-<version>[_00N]/` is written before the
+- **Snapshot before overwrite.** `test-benchmarks/idxbench/results/raw/run-<version>[_00N]/` is written before the
   next run starts; a same-version re-run stamps `_00N` rather than clobbering the prior raw output.
 - **Push state is session-scoped.** Commit locally with the repo-local identity; whether to push
   depends on the current session's operator authorization, same as every other loop in this repo.
@@ -232,7 +232,7 @@ toggle — so each cycle ends with a normal operator check-in rather than an aut
 
 ## 6. One-paragraph TL;DR
 
-Run `node idxbench/run.mjs --ladder --stamp <version>` (fast, free, fully deterministic — no judge,
+Run `node test-benchmarks/idxbench/run.mjs --ladder --stamp <version>` (fast, free, fully deterministic — no judge,
 no LLM anywhere) and read each rung's metric set — entity precision/recall, per-predicate edge
 precision/recall, canonical Q&A exactness, and byte-identical re-index — against the honest gate:
 **zero fabrication, recall ≥ 0.5, every canonical Q&A exact** passes a rung (`IDX-0 → IDX-10`,
@@ -248,5 +248,5 @@ re-measurement; to push further, implement the next producer capability that unl
 keep `npm test` green, and re-run to confirm the gate passes. Write up as
 `BENCHMARK_CODE_INDEX_<version>.md` (headline delta, per-rung metric table, per-language comparison,
 best-examples pick, what's new, any kept red, the discipline checklist, a decision), snapshotting raw
-grader output to `idxbench/results/raw/run-<version>[_00N]/` first and mirroring anything left open
+grader output to `test-benchmarks/idxbench/results/raw/run-<version>[_00N]/` first and mirroring anything left open
 into `NEXT.md`. The harness is specified here, not yet built.

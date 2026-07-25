@@ -20,7 +20,7 @@ import { capabilityPlanDeps } from "../../src/services/chat.mjs";
 
 const FIXTURE = fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url));
 
-// The known-good composed answers agentbench/cases.jsonl already pins for this
+// The known-good composed answers test-benchmarks/agentbench/cases.jsonl already pins for this
 // exact fixture + request (ab-c1-untested-in-impact / ab-c2-what-to-test) — the
 // SAME ground truth the router's own benchmark grades against, not a
 // hand-derived-here truth this file invents on its own.

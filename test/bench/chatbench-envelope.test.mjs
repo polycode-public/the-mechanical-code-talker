@@ -1,16 +1,16 @@
-// chatbench/generate-envelope.mjs tests: buildEnvelope is a pure read+reshape
+// test-benchmarks/chatbench/generate-envelope.mjs tests: buildEnvelope is a pure read+reshape
 // over an already-graded run's own product.jsonl + summary.json (no model call,
 // no I/O) — see the generator's own file header for why. Since no live chatbench
 // judge run's summary.json/product.jsonl was available on this machine when
 // these tests were authored, the fixtures below are hand-built to match the
-// exact shapes chatbench/run.mjs's product rows and chatbench/judge.mjs's
+// exact shapes test-benchmarks/chatbench/run.mjs's product rows and test-benchmarks/chatbench/judge.mjs's
 // computeSummary() actually produce (tier1.pass, overall.{cases,mean,
 // hardFailCount,voidCount,tier1PassCount}, samplesPerCase) rather than replaying
 // a real run.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { buildEnvelope, SCHEMA_VERSION } from "../../chatbench/generate-envelope.mjs";
+import { buildEnvelope, SCHEMA_VERSION } from "../../test-benchmarks/chatbench/generate-envelope.mjs";
 
 const productRow = (caseId, { tier1Pass = true } = {}) => ({
   caseId,

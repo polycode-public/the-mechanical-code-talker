@@ -3,7 +3,7 @@
 // smallest rung through the REAL lane (src/services/research.mjs) against the
 // fixture provider and writes a well-formed row, and the pure grader's hub
 // signal and invented-traversal check hold on hand-built inputs. The full
-// ladder runs via `node researchbench/run.mjs --ladder` — deliberately not the
+// ladder runs via `node test-benchmarks/researchbench/run.mjs --ladder` — deliberately not the
 // whole case set here, so `npm test` gates the instrument.
 import { test } from "node:test";
 import assert from "node:assert/strict";
@@ -11,9 +11,9 @@ import { readFile } from "node:fs/promises";
 
 import {
   parseCases, RUNGS, computeHubSet, reachableFromSeed, gradeWalk,
-} from "../../researchbench/grade.mjs";
-import { runResearchbench, DEFAULT_CASES } from "../../researchbench/run.mjs";
-import { loadGraph } from "../../researchbench/fixture/provider.mjs";
+} from "../../test-benchmarks/researchbench/grade.mjs";
+import { runResearchbench, DEFAULT_CASES } from "../../test-benchmarks/researchbench/run.mjs";
+import { loadGraph } from "../../test-benchmarks/researchbench/fixture/provider.mjs";
 
 test("the committed case set lints clean and every rung is a real rung", async () => {
   const text = await readFile(DEFAULT_CASES, "utf8");

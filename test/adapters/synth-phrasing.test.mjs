@@ -1,4 +1,4 @@
-// The PHRASING_FRAMES warm-up synthesizer (synthbench/phrasing/synthesize.mjs):
+// The PHRASING_FRAMES warm-up synthesizer (test-benchmarks/synthbench/phrasing/synthesize.mjs):
 // synthesizes the existing frame families byte-identically from their own
 // hand-written examples, and the synthesis process itself is deterministic —
 // same input, same output, no randomness.
@@ -6,8 +6,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { synthesizeFrame, applyFrame } from "../../synthbench/phrasing/synthesize.mjs";
-import { FAMILIES } from "../../synthbench/phrasing/examples.mjs";
+import { synthesizeFrame, applyFrame } from "../../test-benchmarks/synthbench/phrasing/synthesize.mjs";
+import { FAMILIES } from "../../test-benchmarks/synthbench/phrasing/examples.mjs";
 import { applyPhrasingFrames } from "../../src/domain/interpret/normalize.mjs";
 
 // ---- determinism -------------------------------------------------------------

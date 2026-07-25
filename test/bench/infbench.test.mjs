@@ -8,7 +8,7 @@ import assert from "node:assert/strict";
 
 import {
   parseCases, rollup, renderRollup, ceilingCapabilities, gradeChatRow,
-} from "../../infbench/grade.mjs";
+} from "../../test-benchmarks/infbench/grade.mjs";
 
 const caseLine = (fields) => JSON.stringify({
   id: "inf-1-lookup-subClassOf-001",

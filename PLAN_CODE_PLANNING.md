@@ -2,7 +2,7 @@
 
 > **Status.** Extracted from `PLAN_CODE.md` on 2026-07-24 as part of `archive/PLAN_REPO_INDEX.md` Phase 6
 > (the original document is now `archive/PLAN_CODE.md`, banner and all). This doc keeps the two
-> pieces of the old plan that stay in tmct: **Track 1** (`synthbench/`, SHIPPED 2026-07-08 —
+> pieces of the old plan that stay in tmct: **Track 1** (`test-benchmarks/synthbench/`, SHIPPED 2026-07-08 —
 > unchanged by the move, and this doc still owns it) and **Track 5** (planning over code states,
 > the headline proposal). Tracks 2-4 (JS program repair, from-scratch JS snippet synthesis,
 > HTML/CSS synthesis) and the accompanying fifty-year survey moved to seonix as
@@ -10,7 +10,7 @@
 > the benchmarking harness and MCP tool surface that grades that shape of work.
 >
 > **Component status, whole arc:**
-> - Track 1 (`synthbench/`, §2) — **SHIPPED** 2026-07-08. Unchanged by this move.
+> - Track 1 (`test-benchmarks/synthbench/`, §2) — **SHIPPED** 2026-07-08. Unchanged by this move.
 > - §2.1 (loading a synthesized rule into the product path) — the scoping spike is **DONE**
 >   (§2.1.1: read path, store shape, admission gate, provenance, a three-stage proposal); the
 >   build itself (stage 1, read-only admission) is **PROPOSED**.
@@ -37,7 +37,7 @@ in the product) is now the visible industry direction, not a private constraint.
 
 ## 1. Baseline — what exists today for Track 1 and Track 5
 
-- **`synthbench/`** — Track 1's shipped harness: `phrasing/` (a `PHRASING_FRAMES`
+- **`test-benchmarks/synthbench/`** — Track 1's shipped harness: `phrasing/` (a `PHRASING_FRAMES`
   template-generalization synthesizer over `src/domain/interpret/normalize.mjs`'s frame table)
   and `rules/` (`cases.jsonl`, `enumerate.mjs`: the bounded `GOAL_RULE` field-grammar
   enumerator, `oracle.mjs`: verification through the real engine, `synthesize.mjs`: the CEGIS
@@ -80,7 +80,7 @@ in the product) is now the visible industry direction, not a private constraint.
 
 ## 2. Track 1 (SHIPPED 2026-07-08) — synthesizing a `GOAL_RULE` or `PHRASING_FRAMES` entry
 
-The record, compressed; the code in `synthbench/` is the reference.
+The record, compressed; the code in `test-benchmarks/synthbench/` is the reference.
 
 - **Shape.** A `GOAL_RULE` is closed data: `focusClass` over the registry's `KINDS`, `modes`
   over `{scoped, global}`, `subGoals` over the topics `backwardChain` can reach, `compose` over
@@ -90,7 +90,7 @@ The record, compressed; the code in `synthbench/` is the reference.
 - **Oracle.** A candidate is DATA run by the SAME trusted engine every hand-written rule runs
   through: clone `GOAL_RULES`, pass via the `ruleSet` param, call the real
   `applicableRules`/`goalReason`, value-compare `calls`/`composed`/`proof` to static `expect`
-  literals (`agentbench/grade.mjs`'s zero-fabrication posture — compare to pinned literals,
+  literals (`test-benchmarks/agentbench/grade.mjs`'s zero-fabrication posture — compare to pinned literals,
   never re-derive). No sandbox: no untrusted code ever executes.
 - **CEGIS.** A failing example is a counter-example that prunes the enumeration on the next
   pass. Exit bar met: a novel rule synthesized at 0% fabrication against held-out examples,
@@ -105,7 +105,7 @@ loop. Track 5 generalizes exactly this posture from router data to code.
 
 ### 2.1 Open — synthesized rules in the product path (spike first)
 
-Track 1 is harness-side. `synthbench/rules/` synthesizes a novel `GOAL_RULE` deterministically at
+Track 1 is harness-side. `test-benchmarks/synthbench/rules/` synthesizes a novel `GOAL_RULE` deterministically at
 0% fabrication, but nothing in the product path loads a synthesized rule: `goal-reasoner.mjs` runs
 its two hand-written entries, and the `ruleSet` param's only overriding caller is the synthesis
 oracle itself.
@@ -134,7 +134,7 @@ already parameterised, so this is a surface question, not an engine one:
   compose), so a `RULE_KIND_GOAL_RULE` sibling of the existing rule kinds can carry it under the same
   content-addressing, SHACL and provenance discipline, with no new persistence layer.
 - **The compile/merge step.** `drive.mjs` would read the persisted synthesized rules, run each
-  through the SAME oracle gate the harness uses (`synthbench/rules/oracle.mjs` — `passesExample`
+  through the SAME oracle gate the harness uses (`test-benchmarks/synthbench/rules/oracle.mjs` — `passesExample`
   against the rule's pinned labelled examples) before admitting it, then hand `goalReason` the merged
   set. Admission is a verification, not a trust: a rule that no longer reproduces its own labelled
   examples against the current engine is dropped and counted, never fired — the honest-miss ethos
@@ -169,9 +169,9 @@ already parameterised, so this is a surface question, not an engine one:
 1. **Read-only admission, off by default.** Add the `RULE_KIND_GOAL_RULE` store shape and a
    `drive.mjs` path that reads persisted synthesized rules, oracle-gates them, and merges them into
    the dispatch rule set behind a flag that defaults off. Ship with the provenance tag and the
-   receipt line. Nothing synthesizes yet; a hand-placed synthesized rule (from `synthbench/rules/`)
+   receipt line. Nothing synthesizes yet; a hand-placed synthesized rule (from `test-benchmarks/synthbench/rules/`)
    is the test fixture.
-2. **Teach-in-chat synthesis.** Wire the enumerator + oracle (`synthbench/rules/synthesize.mjs`) to a
+2. **Teach-in-chat synthesis.** Wire the enumerator + oracle (`test-benchmarks/synthbench/rules/synthesize.mjs`) to a
    chat surface: a user gives labelled examples ("when I ask X, call Y"), the loop synthesizes a rule
    that reproduces them at 0% fabrication or honestly reports no rule found, and — on success —
    persists it as a `RULE_KIND_GOAL_RULE` with provenance. Still gated by stage 1's admission on
@@ -667,7 +667,7 @@ The 2025-2026 frontier:
 - <repo-checkout>/src/adapters/graph-build.mjs
 - <repo-checkout>/src/adapters/source-slice.mjs
 - <repo-checkout>/src/domain/interpret/normalize.mjs
-- <repo-checkout>/synthbench/rules/oracle.mjs
-- <repo-checkout>/agentbench/grade.mjs
+- <repo-checkout>/test-benchmarks/synthbench/rules/oracle.mjs
+- <repo-checkout>/test-benchmarks/agentbench/grade.mjs
 - <repo-checkout>/test/corpus/planning.jsonl
 - <repo-checkout>/archive/PLAN_REPO_INDEX.md

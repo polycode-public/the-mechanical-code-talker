@@ -13,13 +13,13 @@ gate — IDX-0 through IDX-9, zero fabrication, 25/25 cases.** There is no prior
 `BENCHMARK_CODE_INDEX_*.md` to compare against; this write-up is the baseline every later cycle
 measures its own rung movement against. IDX-10 (round-trip refactor fidelity) has no cases yet — it
 needs `PLAN_CODE.md` Track 5's predicted-vs-actual ledger as a runnable primitive first, so it is
-absent from the table rather than gated, exactly as `idxbench/README.md` already documents.
+absent from the table rather than gated, exactly as `test-benchmarks/idxbench/README.md` already documents.
 
 ## Run
 
 `npm run idxbench:run -- --ladder --stamp 3.0.3`: 25 cases, one run, no LLM, no network, no judge.
-Exited 0. Raw output (untracked, `idxbench/results/.gitignore` covers `raw/`):
-`idxbench/results/raw/run-3.0.3/product.jsonl`.
+Exited 0. Raw output (untracked, `test-benchmarks/idxbench/results/.gitignore` covers `raw/`):
+`test-benchmarks/idxbench/results/raw/run-3.0.3/product.jsonl`.
 
 ## The rung table
 
@@ -43,7 +43,7 @@ skipped-with-a-receipt this cycle.
 **Zero fabrication across all 21 fabrication-check surfaces** (3 entity blocks + 18 edge-predicate
 blocks): every one reads `extra: 0`. **Conformance clean on all 20 graphs that carry it**
 (`runConformance` 9/9 assertions each, 180/180 total) — `IDX-6`'s four cases score determinism only
-and don't run the kit, matching `idxbench/run.mjs`'s own design.
+and don't run the kit, matching `test-benchmarks/idxbench/run.mjs`'s own design.
 
 ## IDX-5 per-language readings
 
@@ -70,7 +70,7 @@ Five canonical restatements the graph got byte-consistent with the source, one p
    not just a bare top-level name. Demonstrates: qualified-name resolution inside a class body.
 4. **"Where is `parse_price` defined?"** (Python, `idx5-py-parity`) → same Q&A template, same exact
    result shape as the JS case above. Demonstrates: cross-language parity at IDX-5.
-5. **"Where is `greet` defined?"** (Python, `idx3-reexport-chain`, `idxbench/fixtures/reexport-py`)
+5. **"Where is `greet` defined?"** (Python, `idx3-reexport-chain`, `test-benchmarks/idxbench/fixtures/reexport-py`)
    → resolves through a re-export (`pkg/__init__.py` re-declaring `pkg/core.py`'s `greet` via
    `__all__`) back to the origin symbol, not the re-exporting module. Demonstrates: re-export-chain
    resolution, IDX-3's harder half.
@@ -84,12 +84,12 @@ No prior cycle exists, so "what's new" is the arc that got the producer to a sco
 - **`16aea803`** — the JS/TS producer wires `buildEntities` to real source (not a stub).
 - **`c59f022d`** — a Python backend registers against `src/index/registry.mjs`, using the stdlib
   `ast` module via `extract_ast.py` — zero npm dependency for the Python side.
-- **`3803fe96`** — `idxbench/` and `researchbench/` land: the harness this cycle runs.
+- **`3803fe96`** — `test-benchmarks/idxbench/` and `test-benchmarks/researchbench/` land: the harness this cycle runs.
 - **`b3ca25ef`** — every bench gets an `npm run <bench>:run` script (`idxbench:run` included).
 - Version rolls `3.0.1` → `3.0.2` → `3.0.3` carry no further content change to the producer or the
   harness.
 
-Case set: 25 lines in `idxbench/cases.jsonl`, all new this cycle (there is no prior version to diff
+Case set: 25 lines in `test-benchmarks/idxbench/cases.jsonl`, all new this cycle (there is no prior version to diff
 against). No case was edited or removed — the append-only rule has nothing to enforce yet.
 
 ## Kept open (not red — absence, not failure)
@@ -107,8 +107,8 @@ Nothing this cycle qualifies as a kept red: every rung the case set can score, s
 - **Zero fabrication held**: 0% across 21 fabrication-check surfaces (3 entity + 18 edge-predicate
   blocks), all reading `extra: 0`.
 - **Conformance kit green**: 20/20 graphs, 180/180 `runConformance` assertions.
-- **Gold authored from source**: `idxbench/cases.jsonl`'s `gold` blocks were authored by reading the
-  fixture source (`idxbench/README.md`'s own contract); this cycle did not regenerate any gold from
+- **Gold authored from source**: `test-benchmarks/idxbench/cases.jsonl`'s `gold` blocks were authored by reading the
+  fixture source (`test-benchmarks/idxbench/README.md`'s own contract); this cycle did not regenerate any gold from
   producer output.
 - **Determinism byte-verified**: 4/4 IDX-6 cases re-index the same fixture twice against a pinned
   timestamp and compare byte-identical.

@@ -15,10 +15,10 @@ gates at TOOL-6 (36%, 4/11). The stub and shim floors still gate at TOOL-3.
 
 ## Run
 
-`node agentbench/run.mjs --driver <stub|shim|resolver|goal> --ladder --stamp 3.0.3-<driver>`: 68
+`node test-benchmarks/agentbench/run.mjs --driver <stub|shim|resolver|goal> --ladder --stamp 3.0.3-<driver>`: 68
 cases per arm, no LLM, no network, no judge. All four exited 0. Raw (untracked, per
-`agentbench/results/.gitignore`):
-`agentbench/results/raw/run-3.0.3-{stub,shim,resolver,goal}/product.jsonl`.
+`test-benchmarks/agentbench/results/.gitignore`):
+`test-benchmarks/agentbench/results/raw/run-3.0.3-{stub,shim,resolver,goal}/product.jsonl`.
 
 ## The metric pair, per rung — goal driver (Stage 5), 68 cases
 
@@ -115,22 +115,22 @@ table matches `archive/BENCHMARK_AGENT_2.11.0.md`'s table exactly. No rung moved
 
 ## What's new since 2.11.0
 
-`git log --oneline 623fb828..HEAD -- agentbench/ src/domain/router/` (`623fb828` is the "roll to
-2.11.0" commit) shows one commit touching `src/domain/router/` and none touching `agentbench/`:
+`git log --oneline 623fb828..HEAD -- test-benchmarks/agentbench/ src/domain/router/` (`623fb828` is the "roll to
+2.11.0" commit) shows one commit touching `src/domain/router/` and none touching `test-benchmarks/agentbench/`:
 
 - **`71430c4d` — six dispatch tools (`tmct_ingest`, `tmct_export`, `tmct_ask`,
   `tmct_file_history`, `tmct_method_history`, `tmct_class_history`) joined
   `EXCLUDED_FROM_REGISTRY`** in `src/domain/router/registry.mjs`, closing a `tmct_related`-shaped
   gap where a dispatched tool sat outside both the capability registry and the exclusion list.
   This only adds documented-exclusion entries; it does not touch any capability already used by an
-  `agentbench/cases.jsonl` case, doesn't touch `grade.mjs` or any driver, and doesn't add or remove
+  `test-benchmarks/agentbench/cases.jsonl` case, doesn't touch `grade.mjs` or any driver, and doesn't add or remove
   a capability the case set exercises. The identical numbers above confirm it changed no measured
   behavior.
 - Every other touch between 2.11.0 and 3.0.3 is version-stamp rolls (`chore: roll <version>`) or
-  chat-surface fixes (anaphor substitution, research/ledger features) outside `agentbench/` and
+  chat-surface fixes (anaphor substitution, research/ledger features) outside `test-benchmarks/agentbench/` and
   `src/domain/router/`.
 
-Case set: still 68 lines in `agentbench/cases.jsonl`, unchanged since 2.11.0 — no new cases this
+Case set: still 68 lines in `test-benchmarks/agentbench/cases.jsonl`, unchanged since 2.11.0 — no new cases this
 cycle.
 
 ## Deliberately-kept honest red

@@ -8,10 +8,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
-import { parseCases, RUNGS, rollup, ladderGate } from "../../synthbench/code/grade.mjs";
-import { runSynthbenchCode, DEFAULT_CASES } from "../../synthbench/code/run.mjs";
+import { parseCases, RUNGS, rollup, ladderGate } from "../../test-benchmarks/synthbench/code/grade.mjs";
+import { runSynthbenchCode, DEFAULT_CASES } from "../../test-benchmarks/synthbench/code/run.mjs";
 
-const CASES_TEXT = await readFile(fileURLToPath(new URL("../../synthbench/code/cases.jsonl", import.meta.url)), "utf8");
+const CASES_TEXT = await readFile(fileURLToPath(new URL("../../test-benchmarks/synthbench/code/cases.jsonl", import.meta.url)), "utf8");
 
 test("cases.jsonl lints clean and every case sits on a known SYN rung", () => {
   const { cases, errors } = parseCases(CASES_TEXT);
