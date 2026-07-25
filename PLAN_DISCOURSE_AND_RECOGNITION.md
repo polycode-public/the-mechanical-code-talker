@@ -1,9 +1,12 @@
 # PLAN_DISCOURSE_AND_RECOGNITION.md — two bounded records: cross-turn discourse, and goal recognition
 
-Status: Part A slices 1–3 are built (`src/domain/discourse.mjs`; the commit-filter lane
+Status: Part A slices 1–3 and 5 are built (`src/domain/discourse.mjs`; the commit-filter lane
 registers, the session shell threads the record, the temporal-comparison lane flips the frozen
-row — now `games/cross-turn-temporal-composition-composes` — and the listing/filter lanes now
-register plural `set` referents that survive a count). Everything else is design.
+row — now `games/cross-turn-temporal-composition-composes` — the listing/filter lanes register
+plural `set` referents that survive a count, and the superlative, qualifier, dated-fact and
+adventure lanes register too). Slice 4 (the ambiguity refusal) is the remaining Part A slice;
+slice 5a's authored same-turn tie row goes green the moment slice 4 wires the tie refusal into the
+temporal-comparison bind. All of Part B is still design.
 Everything described as current behaviour was read off the tree and run against
 `examples/mini-webapp` while this document was written.
 
@@ -424,11 +427,19 @@ tie branch resolves by recency, which is today's behaviour with a smaller record
 tie refuses and lists. Its own corpus rows, in both directions (a tie refuses, a clear case still
 answers).
 
-**Slice 5 — the remaining lanes register.**
-Superlative winners, qualifier listings, fact-lane answers, and the adventure's world commands.
-`adventure.focus` becomes one referent among N rather than a second focus holder, and
-`bindPronouns` binds through `bind()` while keeping the reference nudge it gives today when nothing
-is standing.
+**Slice 5 — the remaining lanes register. BUILT.**
+The superlative lane registers its winner as an `entity` (or a metric tie as a `set`) plus the
+score as a `measure`; the qualifier check registers its resolved subject either way, and the
+qualifier listing its result `set`; the `when`/`who-last` fact lanes register the dated commit as
+an `event`, so a standalone "when was X last touched" now feeds the temporal comparison a later
+turn. The adventure's world commands drop `adventure.focus` for a real `AdventureObject` referent
+in the shared record, and `bindPronouns` binds through `bind()` — all four surface pronouns
+normalizing to one lane-scoped `it` probe — while keeping the reference nudge verbatim when nothing
+stands. Tests: `test/domain/discourse-superlative-and-qualifier-registration.test.mjs`,
+`discourse-fact-lane-registration.test.mjs` and `discourse-adventure-binding.test.mjs`, plus new
+`games/compositional` and `games/adventure` corpus rows. Slice 5a registers a superlative winner
+and its score in one turn — both admitting `it`/`this`/`that` — which is what first makes a
+same-turn singular tie reachable; its tie corpus row is authored and rides red until slice 4.
 
 ## A6. Risks and non-goals
 

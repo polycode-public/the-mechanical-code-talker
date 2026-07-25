@@ -10,6 +10,7 @@
 
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { parseImperative, OBJECT_PRONOUNS } from "../domain/grammar/ace.mjs";
+import { register as registerReferent, bind as bindDiscourseForm } from "../domain/discourse.mjs";
 import { createCompletionsGraphAdapter } from "../domain/completions/graph-adapter.mjs";
 import { actionFamilies } from "../domain/router/taught.mjs";
 import { compileDomain, precondHolds, roleBinding } from "../domain/domain.mjs";
@@ -1224,14 +1225,16 @@ function renderedImperativeCommand(cmd) {
   return parts.join(" ");
 }
 
-// ---- pronoun binding: the session focus ---------------------------------------
+// ---- pronoun binding: the session discourse record ----------------------------
 //
 // A world command may name its object with a pronoun ("examine it", "take
 // them", "talk to him") instead of a noun. The antecedent is not in the
-// sentence — it's the last thing the player successfully acted on this
-// session, the FOCUS — so the parser leaves the pronoun bare (ace.mjs's
+// sentence — it's the last adventure object the player successfully acted on
+// this session — so the parser leaves the pronoun bare (ace.mjs's
 // OBJECT_PRONOUNS) and the lane binds it here, through ONE seam that every
-// object-taking verb passes on its way to runWorldCommand. With no focus
+// object-taking verb passes on its way to runWorldCommand. The antecedent lives
+// as one referent among N in the shared discourse record, so an adventure
+// object is bound the same way a code-graph answer's referent is. With nothing
 // standing, a pronoun gets an honest reference nudge, never the vocabulary
 // decline (a pronoun is a reference, not an unknown word).
 
@@ -1264,19 +1267,25 @@ async function noFocusPronounNudge(pronoun, { memoryDir }) {
   );
 }
 
-/** Bind any pronoun object/indirect/instrument slot to the session focus.
- *  Returns `{ cmd }` with the pronouns rewritten to the focus term, or `{
- *  nudge }` (the reference nudge) when a pronoun stands but no focus does. A
- *  command with no pronoun passes straight through untouched. */
-async function bindPronouns(cmd, { focus, memoryDir }) {
+/** Bind any pronoun object/indirect/instrument slot to the last adventure
+ *  object in the discourse record. Returns `{ cmd }` with the pronouns
+ *  rewritten to that object's term, or `{ nudge }` (the reference nudge) when a
+ *  pronoun stands but no adventure object does. A command with no pronoun
+ *  passes straight through untouched. All four surface pronouns
+ *  (it/them/him/her) normalize to the one `it` probe, then bind to the newest
+ *  referent THIS lane registered — the record may also hold code-graph
+ *  referents, so the bind is scoped to `lane: "adventure"`. */
+async function bindPronouns(cmd, { discourseHolder, memoryDir }) {
   if (!commandHasPronoun(cmd)) return { cmd };
-  if (!focus) {
+  const probe = discourseHolder ? bindDiscourseForm(discourseHolder.record, "it") : null;
+  const focusTerm = (probe?.candidates || []).find((r) => r.from?.lane === "adventure")?.label ?? null;
+  if (!focusTerm) {
     const pronoun = PRONOUN_SLOTS.map((s) => cmd[s]).find((v) => v && OBJECT_PRONOUNS.has(v));
     return { nudge: await noFocusPronounNudge(pronoun, { memoryDir }) };
   }
   const bound = { ...cmd };
   for (const s of PRONOUN_SLOTS) {
-    if (bound[s] && OBJECT_PRONOUNS.has(bound[s])) bound[s] = focus;
+    if (bound[s] && OBJECT_PRONOUNS.has(bound[s])) bound[s] = focusTerm;
   }
   return { cmd: bound };
 }
@@ -1292,7 +1301,7 @@ async function bindPronouns(cmd, { focus, memoryDir }) {
  * recognizer, injected so the two lanes can never disagree about what a plan
  * frame is.
  */
-export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "", env, lexicon = null, graph = null, cache = null, isPlanFrameLine = () => false }) {
+export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "", env, lexicon = null, graph = null, cache = null, isPlanFrameLine = () => false, discourseHolder = null }) {
   const slot = planHolder?.state ?? null;
   const adventure = slot?.adventure ?? null;
   const opening = matchAdventureOpening(line);
@@ -1351,16 +1360,22 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
   if (INVENTORY_RE.test(line)) return inventoryAnswer({ memoryDir, graph });
   const parsed = parseImperative(line, lexicon ?? undefined);
   if (parsed) {
-    const bound = await bindPronouns(parsed, { focus: adventure.focus, memoryDir });
+    const bound = await bindPronouns(parsed, { discourseHolder, memoryDir });
     if (bound.nudge) return bound.nudge;
     const cmd = bound.cmd;
     const result = await runWorldCommand(cmd, { world: adventure.world, memoryDir, env, graph, cache });
-    // The object a command SUCCESSFULLY named becomes the focus a later
-    // pronoun binds to — so "look lamp" then "examine it" reads the lamp, and
-    // "talk to housekeeper" makes "him"/"her" the housekeeper. A miss leaves
-    // the standing focus untouched; a bare room look or a move carries no
-    // object and so never disturbs it.
-    if (!result.miss && cmd.object) adventure.focus = cmd.object;
+    // The object a command SUCCESSFULLY named registers as a discourse referent
+    // a later pronoun binds to — so "look lamp" then "examine it" reads the
+    // lamp, and "talk to housekeeper" makes "him"/"her" the housekeeper. A miss
+    // leaves the record untouched; a bare room look or a move carries no object
+    // and so never disturbs it.
+    if (!result.miss && cmd.object && discourseHolder) {
+      discourseHolder.record = registerReferent(discourseHolder.record, {
+        kind: "entity", class: "AdventureObject", label: cmd.object,
+        ids: [`adventure:${cmd.object}`], attrs: {},
+        from: { turn: discourseHolder.record.turn, lane: "adventure", query: line },
+      });
+    }
     if (!cmd.corrected?.length) return result;
     // A fuzzy-repaired verb or direction still executes normally, but the
     // response says what it read the line as, so a genuine miss is never
