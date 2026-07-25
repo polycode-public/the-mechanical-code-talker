@@ -9,7 +9,6 @@
 {"start":"/c/en/dead","rel":"/r/HasA","end":"/c/en/dead person","weight":1,"surfaceText":"[[dead]] HasA [[dead person]]"}
 {"start":"/c/en/pick","rel":"/r/IsA","end":"/c/en/elite","weight":1,"surfaceText":"[[pick]] IsA [[elite]]"}
 {"start":"/c/en/double","rel":"/r/IsA","end":"/c/en/actor","weight":1,"surfaceText":"[[double]] IsA [[actor]]"}
-{"start":"/c/en/straight","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[straight]] IsA [[person]]"}
 {"start":"/c/en/cast","rel":"/r/IsA","end":"/c/en/gathering","weight":1,"surfaceText":"[[cast]] IsA [[gathering]]"}
 {"start":"/c/en/dry","rel":"/r/IsA","end":"/c/en/reformer","weight":1,"surfaceText":"[[dry]] IsA [[reformer]]"}
 {"start":"/c/en/bank","rel":"/r/IsA","end":"/c/en/financial institution","weight":1,"surfaceText":"[[bank]] IsA [[financial institution]]"}
@@ -125,7 +124,6 @@
 {"start":"/c/en/couple","rel":"/r/IsA","end":"/c/en/pair","weight":1,"surfaceText":"[[couple]] IsA [[pair]]"}
 {"start":"/c/en/divine","rel":"/r/IsA","end":"/c/en/reverend","weight":1,"surfaceText":"[[divine]] IsA [[reverend]]"}
 {"start":"/c/en/pledge","rel":"/r/IsA","end":"/c/en/member","weight":1,"surfaceText":"[[pledge]] IsA [[member]]"}
-{"start":"/c/en/simple","rel":"/r/IsA","end":"/c/en/person","weight":1,"surfaceText":"[[simple]] IsA [[person]]"}
 {"start":"/c/en/sponge","rel":"/r/IsA","end":"/c/en/learner","weight":1,"surfaceText":"[[sponge]] IsA [[learner]]"}
 {"start":"/c/en/system","rel":"/r/IsA","end":"/c/en/group","weight":1,"surfaceText":"[[system]] IsA [[group]]"}
 {"start":"/c/en/system","rel":"/r/HasA","end":"/c/en/hierarchy","weight":1,"surfaceText":"[[system]] HasA [[hierarchy]]"}
