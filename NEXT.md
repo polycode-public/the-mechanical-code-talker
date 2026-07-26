@@ -14,27 +14,7 @@ holds ONLY what to do next. Completed work is not narrated here; `git log` and t
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
-## Where the 2026-07-24 session ended
-
-The 3.0.0 batch delivered end to end: the repo-index merge (major roll to 3.0.0), the
-fixture-corruption fix with its byte-pin estate guard, discourse slices 1–2 (row 19 composes),
-repo-index phases 5–6 (PLAN_CODE.md split — Track 5/§2.1 stayed as `PLAN_CODE_PLANNING.md`, the
-rest moved to seonix as a local, unpushed commit with an inbox note to `codememory`), the
-mechanised benchmark harness (levers 1/2/3/6/7 plus the seeded `test-benchmarks/chatbench/verdict-cache.json`),
-the digest layer across every surface including in-browser, the codeplan foundations
-(§3.1–3.3 + the §2.1 spike findings), four new bench harnesses (idxbench, researchbench,
-test-benchmarks/synthbench/code, ingestbench), two playtest sweeps with their fix batches, and **all nine
-3.0.3 benchmark write-ups** (`BENCHMARK_{AGENT,INFERENCE,CEFR_ENGLISH,CONVERSATION,CODE_INDEX,
-CODE_SYNTHESIS,INGEST,RESEARCH,AGI}_3.0.3.md`). Published: 3.0.0 → 3.0.4; the final batch (3.0.5)
-carries the CEFR/AGI write-ups and this handover. Zero fabrications found in any sweep or bench.
-
-One uncommitted remainder: the CONVERSATION dead-end fix round died on a spend limit before its
-first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
-
 ## Open items
-
-- [ ] the four CONVERSATION dead-ends (block below) — a fix agent was dispatched and lost to a
-  spend limit before committing; re-dispatch is the next session's first cheap win
 
 - [ ] no public browser-safe entry point for `ask()` — **needed by seonix's tmct-3.x upgrade**
   (`seonix/PLAN_TMCT.md`, its browser ask-bundle builder). `ask` is already re-exported from the
@@ -70,15 +50,12 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
 - [ ] `PLAN_AWS.md` (website migration to AWS, distinct from the memory-backend plan above) —
   Phases 2-5's file deliverables are built and merged (`infra/` CDK workspace, `AWS_ACCOUNTS.md`,
   `docs/AWS_SETUP.md`, `scripts/assume-aws.sh`, `scripts/fast-deploy-web.sh`, plus Phase 6/7's
-  `deploy:website`/`e2e:deployed` CI jobs and the `TMCT_E2E_BASE_URL` e2e switch) — nothing
-  executed against real AWS yet. Live execution (account creation, OIDC/role provisioning, CDK
-  bootstrap+deploy, DNS/cert, CI variables, cutover) is in progress this session using an
-  authenticated `management` AWS profile; remaining checklist lives in `PLAN_AWS.md` itself.
-- [ ] wire `bind()`'s `{ tieRefuses: true }` into the plural temporal-comparison lane
-  (`PLURAL_TEMPORAL_COMPARISON_RE` in `chat.mjs`) alongside the singular one — built on a base
-  before slice 4 landed, so it still binds a same-turn tie by recency; a real plural tie isn't
-  reachable through any current lane yet (no lane registers two `set` referents in one turn), so
-  this is a small follow-up wiring change, not a live bug
+  `deploy:website`/`e2e:deployed` CI jobs and the `TMCT_E2E_BASE_URL` e2e switch). Phase 1 is done
+  live: `tmct-ci` (`026621560310`) and `tmct-prod` (`000868243177`) exist, in the Workloads OU,
+  recorded in `AWS_ACCOUNTS.md`. Still open: OIDC/actions-role provisioning (Phase 3, trust-policy
+  placeholders are already filled with the real account IDs), the deployment-role admin grant, CDK
+  bootstrap+deploy, DNS/cert, CI variables, and cutover — remaining checklist lives in
+  `PLAN_AWS.md` itself.
 - [ ] `test-e2e/pages-ledger-teach.test.mjs` (bundle-load and refocus assertions) flakes under real
   multi-file e2e contention — investigated once more without a confirmed root cause. A solo run
   passes cleanly with wide timing margin (each `turn()` resolves in 1-2s against a 20s deadline).
@@ -88,13 +65,6 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   run of `pages-ledger-teach.test.mjs` alongside 3-5 other heavy `pages-*` files via an explicit
   file list, in a worktree that already has a commit (so it can't be reclaimed mid-run), rather
   than the whole uncapped directory at once.
-
-CONVERSATION 3.0.3 sweep (see `reports/BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
-
-- [ ] "give me an overview of this project" gets the identity card, not the architecture overview — the recognizer catches "architecture" but not the "overview of {this project/codebase/repo}" sibling; extend the architecture/overview intent set (FLOW-3)
-- [ ] "what are the packages here" is swallowed by the vocabulary/digest lane ("package means box"), and "list the packages" reports packages isn't a listable kind though the architecture answer already computes them — add packages as a listable kind and guard the digest lane from a plain package-enumeration ask (FLOW-3)
-- [ ] "thanks bye" (thanks-word directly adjacent to a bye-word, no delimiter) misparses as a capability-teach ("a thank can bye") instead of closing — exclude a leading thanks+bye adjacency from the capability-teach lane; class of the 2.11.0 farewell finding, now fixed for "gtg thx" but not this adjacency (FLOW-6)
-- [ ] (low priority, judge-flagged) "what is a cache" reads the seeded Wikipedia digest with its source line but doesn't signal it's general vocabulary rather than a fact from this repo's graph — an intended surface with a cited source, not a wall; consider a "general vocabulary, not from this codebase" cue
 
 ## Discipline
 
