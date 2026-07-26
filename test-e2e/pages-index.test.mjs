@@ -75,13 +75,18 @@ test("the page carries one live demo box and no live page embeds", async () => {
   assert.doesNotMatch(html, /<pre class="transcript"/);
 });
 
-test("the showcase names both sibling Polycode projects and links to them", async () => {
+test("the showcase names the Polycode family projects and links to them", async () => {
   const html = await readFile(INDEX, "utf8");
   const showcase = html.slice(html.indexOf('<section class="showcase">'), html.indexOf("<footer>"));
   const hrefs = [...showcase.matchAll(/<a class="showcase-card" href="([^"]+)"/g)].map((m) => m[1]);
-  assert.deepEqual(hrefs, ["https://seonix.polycode.co.uk/", "https://marginalia.polycode.co.uk/"]);
+  assert.deepEqual(hrefs, [
+    "https://seonix.polycode.co.uk/",
+    "https://marginalia.polycode.co.uk/",
+    "https://gitlab.com/polycode-projects/bedrock-meter",
+  ]);
   assert.match(showcase, /Seonix/);
   assert.match(showcase, /Marginalia/);
+  assert.match(showcase, /Bedrock Meter/);
   assert.match(showcase, /tmct library/, "the showcase words the family as adopting the tmct library");
 });
 

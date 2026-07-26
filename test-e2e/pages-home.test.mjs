@@ -211,17 +211,22 @@ test("the page keeps the steps to run the local chat and to use tmct as a librar
   }
 });
 
-test("the showcase links to both sibling Polycode projects", async () => {
+test("the showcase links to the Polycode family projects", async () => {
   const { context, page } = await openHomePage();
   try {
     const cards = page.locator(".showcase-card");
     await cards.first().waitFor({ state: "visible" });
-    assert.equal(await cards.count(), 2, "two showcase cards");
+    assert.equal(await cards.count(), 3, "three showcase cards");
     const hrefs = await cards.evaluateAll((els) => els.map((el) => el.getAttribute("href")));
-    assert.deepEqual(hrefs, ["https://seonix.polycode.co.uk/", "https://marginalia.polycode.co.uk/"]);
+    assert.deepEqual(hrefs, [
+      "https://seonix.polycode.co.uk/",
+      "https://marginalia.polycode.co.uk/",
+      "https://gitlab.com/polycode-projects/bedrock-meter",
+    ]);
     const text = await page.locator(".showcase").innerText();
     assert.match(text, /Seonix/);
     assert.match(text, /Marginalia/);
+    assert.match(text, /Bedrock Meter/);
   } finally {
     await context.close();
   }
