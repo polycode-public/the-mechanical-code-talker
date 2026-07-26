@@ -154,6 +154,55 @@ test("evaluateExpect: no expect → no checks (a scripted setup turn)", () => {
   assert.deepEqual(evaluateExpect(undefined, OUTCOME), []);
 });
 
+// ---- lever 4: ingestbench's deterministic equivalence checker wired into
+// tier-1, so a subclass-paraphrase case settles free instead of needing the
+// judge ----
+
+test("evaluateExpect: subclassParaphrase accepts ANY valid closed-template paraphrase, not just one pinned string", () => {
+  // The product picks one of four closed templates deterministically per
+  // (subject, object) — a case author who pins the literal string couples the
+  // case to that pick. subclassParaphrase instead accepts whichever template
+  // surfaced, as long as it is a genuine paraphrase of the same pair.
+  const everyForm = evaluateExpect(
+    { subclassParaphrase: { subject: "cache", object: "component" } },
+    { answer: "noted — remembered 1 fact: cache rdfs:subClassOf component (every cache is a component)" },
+  );
+  assert.equal(everyForm.length, 1);
+  assert.equal(everyForm[0].pass, true, JSON.stringify(everyForm));
+
+  const kindOfForm = evaluateExpect(
+    { subclassParaphrase: { subject: "cache", object: "component" } },
+    { answer: "noted — remembered 1 fact: cache rdfs:subClassOf component (cache is a kind of component)" },
+  );
+  assert.equal(kindOfForm[0].pass, true, "a different template for the SAME pair still verifies");
+
+  const wholeAnswerForm = evaluateExpect(
+    { subclassParaphrase: { subject: "dog", object: "animal" } },
+    { answer: "dog counts as an animal" },
+  );
+  assert.equal(wholeAnswerForm[0].pass, true, "checks the whole answer too, not only a parenthetical clause");
+});
+
+test("evaluateExpect: subclassParaphrase rejects a paraphrase of the wrong pair or no paraphrase at all", () => {
+  const wrongPair = evaluateExpect(
+    { subclassParaphrase: { subject: "cache", object: "component" } },
+    { answer: "noted — remembered 1 fact: cache rdfs:subClassOf component (every widget is a container)" },
+  );
+  assert.equal(wrongPair[0].pass, false);
+
+  const swapped = evaluateExpect(
+    { subclassParaphrase: { subject: "cache", object: "component" } },
+    { answer: "noted — remembered 1 fact: component rdfs:subClassOf cache (every component is a cache)" },
+  );
+  assert.equal(swapped[0].pass, false, "subject/object swap is a different claim, never accepted as equivalent");
+
+  const noParaphrase = evaluateExpect(
+    { subclassParaphrase: { subject: "cache", object: "component" } },
+    { answer: "noted — remembered 1 fact: cache rdfs:subClassOf component" },
+  );
+  assert.equal(noParaphrase[0].pass, false, "the machine-notation triple alone is not a paraphrase claim");
+});
+
 test("summarizeTier1: baselineFail turns never fail the case; all-green baselineFail flags improvement", () => {
   const ok = { checks: [{ key: "miss", pass: true }], baselineFail: false };
   const bad = { checks: [{ key: "miss", pass: false, expected: false, actual: true }], baselineFail: false };
@@ -277,6 +326,40 @@ test("runSessionCase: clears the product read cache before EVERY session (H1a be
   });
   assert.equal(transcript.length, 2);
   assert.equal(cleared, 2, "one cache clear per session run");
+});
+
+test("runSessionCase: a real teach-confirmation answer settles a subclassParaphrase case at tier-1, no judge involved", async () => {
+  // The visitor teaches with "kind of" wording; the product's own paraphrase
+  // suffix picks a DIFFERENT closed template ("every cache is a component" —
+  // deterministic per (subject, object), src/domain/paraphrase.mjs) rather
+  // than echoing the visitor's phrasing back. A case pinning the literal
+  // string would either have to special-case that pick or go stale the moment
+  // the template table changes; subclassParaphrase settles it on meaning.
+  const caseDef = {
+    id: "stub-subclass-paraphrase", tags: ["conversational"], mode: "session", graph: "empty",
+    env: { TMCT_NO_SEED: "1" },
+    turns: [{
+      say: "a cache is a kind of component", session: 1,
+      expect: { miss: false, subclassParaphrase: { subject: "cache", object: "component" } },
+    }],
+  };
+  const { transcript, turnEvals } = await runSessionCase(caseDef, {
+    runChat, parseSessionJsonl, parseSessionLog, turnKey, graphJson: "{}",
+  });
+  assert.match(transcript[0].answer, /\(every cache is a component\)/, "the product's own deterministic template pick");
+  assert.doesNotMatch(transcript[0].answer, /cache is a kind of component/, "not an echo of the visitor's wording");
+  const tier1 = summarizeTier1(turnEvals);
+  assert.equal(tier1.pass, true, JSON.stringify(tier1.failing));
+
+  // The same real answer against the WRONG pair fails tier-1 deterministically
+  // too — the check is a real equivalence test, not a rubber stamp.
+  const wrongPairEvals = [{
+    checks: evaluateExpect({ subclassParaphrase: { subject: "widget", object: "container" } }, {
+      answer: transcript[0].answer,
+    }),
+    baselineFail: false, improvedIn: null,
+  }];
+  assert.equal(summarizeTier1(wrongPairEvals).pass, false);
 });
 
 // ---- compare (the regression gate) ----

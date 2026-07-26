@@ -3,11 +3,15 @@
 Status: harness machinery LANDED (levers 1, 2, 3, 6, 7), and lever 1's seed pass has RUN — the
 3.0.3 cycle judged the full 1,075-case pool and committed `test-benchmarks/chatbench/verdict-cache.json`
 (`reports/BENCHMARK_CEFR_ENGLISH_3.0.3.md`; its final top-up judged 47 and inherited 1,028, the
-mechanism working as designed). Remaining scope, all unblocked: lever 4 (`test-benchmarks/ingestbench/` now
-exists — wire its deterministic equivalence checker into the judged tiers' cycle), the bulk
-matcher distillation over the all-green pool (lever 2's authoring pass), and the calibration
-grade (lever 3's paired frontier/small-model runs feeding `--gate`). Written 2026-07-24 against
-the nine `SKILL_BENCHMARK_*.md` docs at 2.11.10.
+mechanism working as designed). Lever 4's chatbench half has also LANDED: `chatbench/run.mjs`'s
+tier-1 carries `expect.subclassParaphrase`, checked with ingestbench's own ING-7 checker
+(`verifySubClassParaphrase`, `src/domain/paraphrase.mjs`) — a case whose answer only needs to be a
+valid subclass paraphrase, not one pinned literal string, now settles free instead of reaching the
+judge. Remaining scope: the bulk matcher distillation over the all-green pool (lever 2's authoring
+pass), the calibration grade (lever 3's paired frontier/small-model runs feeding `--gate`), and
+ING-8's own corpus-authored equivalence checker (a separate, larger piece — "The levers" §4 below;
+not touched by the chatbench wiring). Written 2026-07-24 against the nine `SKILL_BENCHMARK_*.md`
+docs at 2.11.10; the chatbench wiring landed 2026-07-27.
 
 ## What landed (the mechanism; the paid runs stay the coordinator's)
 
@@ -27,6 +31,13 @@ the nine `SKILL_BENCHMARK_*.md` docs at 2.11.10.
   `--gate` reads a frontier + a small-model summary and emits the down-tier decision. The two paid
   grade passes are the coordinator's; the gate is calibration-locked — a family never leaves the
   frontier model unmeasured.
+- **Lever 4 (chatbench half) — subclass-paraphrase equivalence in tier-1.**
+  `test-benchmarks/chatbench/run.mjs`'s `expect.subclassParaphrase: {subject, object}` checks a
+  turn's answer with ingestbench's own ING-7 checker (`verifySubClassParaphrase`,
+  `src/domain/paraphrase.mjs`) instead of a pinned `answerMatch` string — a case whose answer only
+  needs to be a valid `rdfs:subClassOf` paraphrase of the pair, not one hardcoded template pick,
+  settles at tier-1 for free. ING-8's own corpus-authored checker (the harder, whole-document piece
+  "The levers" §4 describes) is a separate, larger, not-yet-started step.
 - **Lever 6 — execution speed.** Skip-unchanged replay (`test-benchmarks/chatbench/skip-unchanged.mjs`;
   `test-benchmarks/chatbench/run.mjs --reuse <prior.jsonl> --engine-token <tok>`) reuses a prior product row when the
   case input hash and engine token match; `--concurrency <n>` shards turns-mode replays (session
@@ -127,8 +138,10 @@ what we author together once, and what runs without a model afterwards.
 3. Lever 3's rubrics + calibration set — one authoring session; then measure the small judge's
    agreement before trusting it with anything. Machinery DONE; the paired calibration runs
    remain.
-4. Lever 4 — unblocked: `test-benchmarks/ingestbench/` exists and stages the deterministic/judged boundary
-   exactly as this plan assumed (deterministic checker at ING-7, judge at ING-8/9).
+4. Lever 4's chatbench half — **DONE 2026-07-27**: ING-7's checker now runs inside chatbench's
+   tier-1 (`expect.subclassParaphrase`, above). `test-benchmarks/ingestbench/` still stages the
+   deterministic/judged boundary exactly as this plan assumed (deterministic checker at ING-7,
+   judge at ING-8/9) — ING-8's own corpus-authored checker is the piece still to author.
 
 The invariants that never move: graders are committed, reviewed data; a fabricated pass is
 impossible by construction (caches key on answer content, matchers are tighter than the judge,

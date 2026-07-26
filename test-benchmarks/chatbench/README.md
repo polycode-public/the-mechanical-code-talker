@@ -199,7 +199,16 @@ the current engine).
 - **tier-1 `expect` keys** (all optional): `miss`, `answerMatch` /
   `answerNotMatch` (regex or list of regexes), `answeredIdsInclude`,
   `resolvedIdsInclude`, `focusLabel` (turns mode only), `end` (turns mode
-  only), and `baselineFail`.
+  only), `baselineFail`, and `subclassParaphrase`.
+- **`expect.subclassParaphrase: {subject, object}`** — settles a case whose
+  answer only needs to be a valid `rdfs:subClassOf` paraphrase of
+  `subject`/`object`, not one pinned literal string. Checked with
+  ingestbench's own deterministic equivalence checker
+  (`verifySubClassParaphrase`, `src/domain/paraphrase.mjs`, the function its
+  ING-7 rung uses): free, exact, and immune to which of the closed template
+  set (`is a kind of`/`is a type of`/`every … is a …`/`counts as a …`) the
+  product happened to pick. Use it instead of `answerMatch` for a teach
+  confirmation whose paraphrase clause you don't want to hardcode.
 - **`expect.baselineFail: true`** marks a DOCUMENTED current weakness: the
   expectation states the *desired* behavior, the runner records the checks but
   never fails the case on them, and if a lever makes them pass the case is

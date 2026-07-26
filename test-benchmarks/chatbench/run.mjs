@@ -16,8 +16,13 @@
 //
 // Tier-1 expectations (deterministic, evaluated here — the LLM judge is tier 2,
 // chatbench/judge.mjs): miss flag, answer regex/substring, answered/resolved id
-// membership, post-turn focus label, session end. A turn marked
-// expect.baselineFail:true documents a KNOWN current miss: its checks are
+// membership, post-turn focus label, session end, subclass-paraphrase
+// equivalence. The last of these settles a case whose answer only needs to be
+// a valid subClassOf paraphrase of a given (subject, object) — not one
+// verbatim string — via ingestbench's own deterministic checker
+// (verifySubClassParaphrase, src/domain/paraphrase.mjs): free and exact,
+// where an answerMatch pin would otherwise force the case author to hardcode
+// which of the closed template set the product happened to pick. A turn marked
 // evaluated and recorded but never fail the case; if they all pass, the case is
 // flagged `improvedBaselineTurns` (a lever fixed a documented weakness). Once a
 // lever DOES fix it, the turn gains expect.improvedIn:"<cycle>" (cycle 2 onward):
@@ -65,6 +70,7 @@ import {
   timingRollup, renderTimings,
 } from "./graded.mjs";
 import { CLASS_DOCS, PREDICATE_DOCS } from "../../src/tools/schema-docs.mjs";
+import { verifySubClassParaphrase } from "../../src/domain/paraphrase.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(dirname(HERE));
@@ -85,6 +91,7 @@ const EXTRA_TAGS = ["graded", "template-lane"];
 export const EXPECT_KEYS = [
   "miss", "answerMatch", "answerNotMatch", "answeredIdsInclude",
   "resolvedIdsInclude", "focusLabel", "end", "baselineFail", "improvedIn",
+  "subclassParaphrase",
 ];
 export const JUDGE_DIMENSIONS = ["groundedness", "correctness", "honesty", "rephrase"];
 const MODES = ["turns", "session"];
@@ -204,6 +211,12 @@ export function parseCases(text) {
             errors.push(`${tat}: improvedIn only annotates a baselineFail:true turn (it records the cycle that fixed the documented weakness)`);
           }
         }
+        if ("subclassParaphrase" in turn.expect) {
+          const sp = turn.expect.subclassParaphrase;
+          if (!sp || typeof sp !== "object" || typeof sp.subject !== "string" || typeof sp.object !== "string") {
+            errors.push(`${tat}: subclassParaphrase must be {subject, object} strings`);
+          }
+        }
       }
     });
     if (c.judge) {
@@ -220,6 +233,19 @@ export function parseCases(text) {
 // ---- tier-1 evaluation ----
 
 const toArray = (v) => (Array.isArray(v) ? v : [v]);
+
+/** Candidate substrings a subclassParaphrase check tries against a turn's
+ *  answer text: each parenthetical clause (the shape chat.mjs's
+ *  paraphraseVerifiedSubClass suffix produces — "noted — remembered 1 fact:
+ *  cache rdfs:subClassOf component (every cache is a component)") plus the
+ *  whole answer, so the check isn't coupled to that one formatting
+ *  convention. */
+function subclassParaphraseCandidates(answer) {
+  const text = String(answer ?? "");
+  const candidates = [...text.matchAll(/\(([^()]+)\)/g)].map((m) => m[1].trim());
+  candidates.push(text.trim());
+  return candidates;
+}
 
 /** Evaluate one turn's expectations against its outcome
  *  ({ answer, miss, resolvedIds, answeredIds, focusLabel?, end? }).
@@ -244,6 +270,12 @@ export function evaluateExpect(expect, outcome) {
   }
   if ("focusLabel" in expect) add("focusLabel", outcome.focusLabel === expect.focusLabel, expect.focusLabel, outcome.focusLabel ?? null);
   if ("end" in expect) add("end", Boolean(outcome.end) === expect.end, expect.end, Boolean(outcome.end));
+  if (expect.subclassParaphrase) {
+    const { subject, object, existingEdges = [] } = expect.subclassParaphrase;
+    const verified = subclassParaphraseCandidates(outcome.answer)
+      .some((candidate) => verifySubClassParaphrase(subject, object, candidate, existingEdges).verified);
+    add("subclassParaphrase", verified, { subject, object }, outcome.answer ?? "");
+  }
   return checks;
 }
 
