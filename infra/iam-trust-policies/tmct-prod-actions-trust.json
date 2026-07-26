@@ -5,7 +5,7 @@
       "Sid": "GitLabOIDCAssumeFromTmctRepoMainOnly",
       "Effect": "Allow",
       "Principal": {
-        "Federated": "arn:aws:iam::TBD_PROD_ACCOUNT_ID:oidc-provider/gitlab.com"
+        "Federated": "arn:aws:iam::000868243177:oidc-provider/gitlab.com"
       },
       "Action": "sts:AssumeRoleWithWebIdentity",
       "Condition": {

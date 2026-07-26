@@ -5,7 +5,7 @@
       "Sid": "AssumeFromTmctCIActionsRole",
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::TBD_CI_ACCOUNT_ID:role/tmct-ci-gitlab-actions-role"
+        "AWS": "arn:aws:iam::026621560310:role/tmct-ci-gitlab-actions-role"
       },
       "Action": "sts:AssumeRole"
     }

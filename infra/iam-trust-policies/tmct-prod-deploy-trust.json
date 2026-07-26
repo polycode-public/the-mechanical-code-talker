@@ -5,7 +5,7 @@
       "Sid": "AssumeFromTmctProdActionsRole",
       "Effect": "Allow",
       "Principal": {
-        "AWS": "arn:aws:iam::TBD_PROD_ACCOUNT_ID:role/tmct-prod-gitlab-actions-role"
+        "AWS": "arn:aws:iam::000868243177:role/tmct-prod-gitlab-actions-role"
       },
       "Action": "sts:AssumeRole"
     }
