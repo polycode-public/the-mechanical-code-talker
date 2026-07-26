@@ -12,6 +12,10 @@ import { RELATION_TERM } from "./concept.mjs";
 export const REFERENCE_PACK_NAME = "simplewiki";
 export const REFERENCE_SHARD_COUNT = 64;
 
+/** The grain cue every encyclopedia-grounded answer carries: this is a word's
+ *  general meaning, not something read out of the graph the session is about. */
+export const GENERAL_VOCABULARY_CUE = "General vocabulary, not from this codebase.";
+
 /** The shard a term's article row lives in: FNV-1a first byte mod 64, as the
  *  file basename "ref-00" … "ref-3f". Part of the pack's on-disk contract —
  *  the build script shards with THIS function, so the reader never scans. */
@@ -43,10 +47,14 @@ export function isReferenceArticleRow(row) {
 }
 
 /** The cited answer for a clean miss the pack could ground: the article's
- *  summary with its title, licence and revision-pinned URL always visible. */
+ *  summary with its title, licence and revision-pinned URL always visible,
+ *  then the grain cue. Without the cue a reader has to recognize the source
+ *  name to tell this apart from a fact read out of their own graph — both
+ *  answer the same "what is X" question in the same voice. */
 export function renderReferenceAnswer(term, article) {
   return `${term} — ${article.summary} (source: reference article "${article.title}", `
-    + `Simple English Wikipedia, CC BY-SA 4.0 — ${article.url}?oldid=${article.revid})`;
+    + `Simple English Wikipedia, CC BY-SA 4.0 — ${article.url}?oldid=${article.revid})`
+    + ` ${GENERAL_VOCABULARY_CUE}`;
 }
 
 /** The provenance tag a fact stored from a pack article carries —
@@ -88,7 +96,8 @@ export function liveProvenanceTag(article) {
  *  the revision-pinned URL always visible. */
 export function renderLiveReferenceAnswer(term, article) {
   return `${term} — ${article.summary} (source: live Wikipedia article "${article.title}", `
-    + `English Wikipedia, CC BY-SA 4.0 — ${article.url}?oldid=${article.revid})`;
+    + `English Wikipedia, CC BY-SA 4.0 — ${article.url}?oldid=${article.revid})`
+    + ` ${GENERAL_VOCABULARY_CUE}`;
 }
 
 /** The pure half of the LIVE clean-miss gate — same fold, shape check and

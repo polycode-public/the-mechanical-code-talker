@@ -74,12 +74,13 @@ test("index-entry and article-row validators accept the shipped shapes and rejec
   assert.ok(!isReferenceArticleRow({ ...good, isa: "" }), "an isa field, when present, must name a term");
 });
 
-test("renderReferenceAnswer cites title, licence and the revision-pinned URL in one line", () => {
+test("renderReferenceAnswer cites title, licence and the revision-pinned URL in one line, then names the grain", () => {
   const article = row("otter", 9184482);
   assert.equal(
     renderReferenceAnswer("otter", article),
     'otter — A otter is a thing. (source: reference article "Otter", Simple English Wikipedia, '
-      + "CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/otter?oldid=9184482)",
+      + "CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/otter?oldid=9184482)"
+      + " General vocabulary, not from this codebase.",
   );
 });
 
