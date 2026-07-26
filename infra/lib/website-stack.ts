@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Copyright 2026 Polycode Limited
 
-import { existsSync, readdirSync, statSync } from "node:fs";
-import { extname, join, relative, sep } from "node:path";
+import { copyFileSync, existsSync, mkdtempSync, readdirSync, statSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { basename, extname, join, relative, sep } from "node:path";
 import {
   Stack,
   StackProps,
@@ -212,12 +213,20 @@ export class WebsiteStack extends Stack {
         [".br", "br"],
         [".gz", "gzip"],
       ] as const) {
+        // `s3deploy.Source.asset()` only accepts a directory or a .zip, never
+        // a bare file — so stage this one sibling file alone in its own temp
+        // directory. `destinationKeyPrefix` below already supplies the
+        // asset's own subdirectory, so the staged file only needs its
+        // basename to land at the same S3 key this always used.
+        const siblingFileName = `${basename(relativeAsset)}${ext}`;
+        const stagingDir = mkdtempSync(join(tmpdir(), "tmct-oversized-sibling-"));
+        copyFileSync(join(SITE_SOURCE_DIR, `${relativeAsset}${ext}`), join(stagingDir, siblingFileName));
         const siblingDeployment = new s3deploy.BucketDeployment(
           this,
           `OversizedSibling${encoding === "br" ? "Br" : "Gz"}${relativeAsset.replace(/[^a-zA-Z0-9]/g, "")}`,
           {
             destinationBucket: publishBucket,
-            sources: [s3deploy.Source.asset(join(SITE_SOURCE_DIR, `${relativeAsset}${ext}`))],
+            sources: [s3deploy.Source.asset(stagingDir)],
             destinationKeyPrefix: relativeAsset.includes("/")
               ? relativeAsset.slice(0, relativeAsset.lastIndexOf("/"))
               : undefined,
