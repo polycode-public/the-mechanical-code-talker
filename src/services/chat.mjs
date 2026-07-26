@@ -20,7 +20,7 @@
 import { join, dirname } from "node:path";
 import { dispatchTool, loadGraph, TOOLS } from "../tools/server.mjs";
 import { ToolError } from "../adapters/config.mjs";
-import { parseEntities, edgesOfKind, moduleCountOf, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
+import { parseEntities, edgesOfKind, moduleCountOf, packageCounts, modulesOf, renderAuthorCard, renderAuthorTouches, renderCommitAuthor, resolveSymbol, renderCompare } from "../domain/codegraph.mjs";
 import { classDisplayName, DYNAMIC_TAIL_OK_RE } from "../domain/ask.mjs";
 import { emptyRecord as emptyDiscourseRecord, advanceTurn as advanceDiscourseTurn, register as registerReferent, bind as bindDiscourseForm } from "../domain/discourse.mjs";
 import { uuidv7 } from "../adapters/uuid.mjs";
@@ -462,6 +462,7 @@ const COUNT_NOUNS = {
   class: "Class", classes: "Class",
   function: "Function", functions: "Function", func: "Function", funcs: "Function",
   module: "Module", modules: "Module", file: "Module", files: "Module",
+  package: "Package", packages: "Package",
   method: "Method", methods: "Method",
   attribute: "Attribute", attributes: "Attribute",
   variable: "GlobalVariable", variables: "GlobalVariable", global: "GlobalVariable", globals: "GlobalVariable",
@@ -472,18 +473,25 @@ const COUNT_NOUNS = {
 /** class → [singular, plural] display noun, for echoing a count back in English. */
 const CLASS_LABELS = {
   Class: ["class", "classes"], Function: ["function", "functions"],
-  Module: ["module", "modules"], Method: ["method", "methods"],
+  Module: ["module", "modules"], Package: ["package", "packages"],
+  Method: ["method", "methods"],
   Attribute: ["attribute", "attributes"], GlobalVariable: ["variable", "variables"],
   Commit: ["commit", "commits"], Session: ["session", "sessions"],
 };
 const classNoun = (cls, n) => { const [s, p] = CLASS_LABELS[cls] || [cls, `${cls}s`]; return n === 1 ? s : p; };
 
-/** Count individuals of a class in the loaded graph (live, not the header field). */
-const countClass = (graph, cls) => graph.individuals.filter((i) => (i.class || "") === cls).length;
+/** Count individuals of a class in the loaded graph (live, not the header field).
+ *  No individual is ever stored with class "Package" — packages are the
+ *  directories grouping the modules, derived the same way the architecture map
+ *  derives them. */
+const countClass = (graph, cls) => (cls === "Package"
+  ? packageCounts(modulesOf(graph)).size
+  : graph.individuals.filter((i) => (i.class || "") === cls).length);
 
 /** The classes this graph can actually count, as a human list ("classes, functions, …"). */
 function countableKinds(graph) {
   const present = new Set(graph.individuals.map((i) => i.class).filter(Boolean));
+  if (present.has("Module")) present.add("Package");
   return Object.keys(CLASS_LABELS).filter((c) => present.has(c)).map((c) => CLASS_LABELS[c][1]);
 }
 

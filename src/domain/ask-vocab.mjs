@@ -287,6 +287,10 @@ export const ENTITY_TO_TYPE = Object.freeze({
   method: "Method", methods: "Method",
   class: "Class", classes: "Class",
   module: "Module", modules: "Module", mod: "Module", mods: "Module", file: "Module", files: "Module",
+  // "Package" is a pseudo-type like "Change" below: no node is ever stored
+  // with that class. ask.mjs derives packages from module labels, the same
+  // derivation the architecture map uses.
+  package: "Package", packages: "Package",
   attribute: "Attribute", attributes: "Attribute", field: "Attribute", fields: "Attribute",
   variable: "GlobalVariable", variables: "GlobalVariable", global: "GlobalVariable", globals: "GlobalVariable",
   // "Change" is a pseudo-type, not a node class: ask.mjs's traverse() reads it

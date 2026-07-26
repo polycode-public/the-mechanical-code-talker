@@ -1277,19 +1277,36 @@ export function renderSubclasses(graph, ind) {
 const ARCH_PKG_CAP = 25;
 const ARCH_HUB_CAP = 15;
 
+/** The directories that group a set of modules, each mapped to how many
+ *  modules it holds. A package is not a node class — no individual is ever
+ *  stored with class "Package" — so every surface that reports packages
+ *  (the architecture map, ask()'s package list and count) derives them from
+ *  module labels, and this is the one place that derivation lives. A module
+ *  at the repo root has no directory, so it groups under "(root)". */
+export function packageCounts(modules) {
+  const counts = new Map();
+  for (const m of modules) {
+    const dir = m.label.includes("/") ? m.label.slice(0, m.label.lastIndexOf("/")) : "(root)";
+    counts.set(dir, (counts.get(dir) || 0) + 1);
+  }
+  return counts;
+}
+
+/** Every module in the graph, optionally scoped to a path prefix. */
+export function modulesOf(graph, prefix = "") {
+  const norm = normPath(prefix);
+  return graph.individuals.filter(
+    (i) => (i.class || "") === "Module" && (!norm || normPath(i.label).startsWith(norm)),
+  );
+}
+
 /** Package/module tree + the most-imported (hub) modules — replaces reading the dir
  *  tree and many files to learn the shape. Optional `pkg` prefix scopes it. */
 export function renderArchitecture(graph, { pkg = "" } = {}) {
   const norm = normPath(pkg);
-  const modules = graph.individuals.filter(
-    (i) => (i.class || "") === "Module" && (!norm || normPath(i.label).startsWith(norm)),
-  );
+  const modules = modulesOf(graph, pkg);
   if (!modules.length) return norm ? `no modules under "${pkg}".` : "no modules in the graph.";
-  const pkgCount = new Map();
-  for (const m of modules) {
-    const dir = m.label.includes("/") ? m.label.slice(0, m.label.lastIndexOf("/")) : "(root)";
-    pkgCount.set(dir, (pkgCount.get(dir) || 0) + 1);
-  }
+  const pkgCount = packageCounts(modules);
   const inDeg = new Map();
   for (const e of edgesOfKind(graph, "imports")) inDeg.set(e.object, (inDeg.get(e.object) || 0) + 1);
   const modSet = new Set(modules.map((m) => m.id));

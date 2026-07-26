@@ -29,6 +29,35 @@ test("\"what is the architecture of this codebase\" routes to the architecture o
   assert.equal(r.record.miss, false);
 });
 
+test("\"what are the packages here\" enumerates the directories grouping the modules", async () => {
+  const r = await ask("what are the packages here");
+  assert.match(r.answer, /src\/core/);
+  assert.match(r.answer, /src\/handlers/);
+  assert.match(r.answer, /src\/server/);
+  assert.doesNotMatch(r.answer, /means the same as/i);
+  assert.equal(r.record.miss, false);
+});
+
+test("\"list the packages\" and \"show me the packages\" enumerate the same set", async () => {
+  const listed = await ask("list the packages");
+  const shown = await ask("show me the packages");
+  assert.match(listed.answer, /src\/core/);
+  assert.equal(shown.answer, listed.answer);
+});
+
+test("\"how many packages are there\" agrees with the count the architecture map reports", async () => {
+  const r = await ask("how many packages are there");
+  assert.match(r.answer, /^5 packages\./);
+  const arch = await ask("what is the architecture of this codebase");
+  assert.match(arch.answer, /in 5 package\(s\)/);
+});
+
+test("an unlistable kind names packages among the kinds it can list", async () => {
+  const r = await ask("list widgets");
+  assert.match(r.answer, /isn't a listable kind/);
+  assert.match(r.answer, /packages/);
+});
+
 // ---- code-index query family ----
 
 test("\"which modules are in src/core\" lists the three core modules", async () => {

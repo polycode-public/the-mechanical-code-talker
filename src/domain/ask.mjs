@@ -15,7 +15,7 @@
 // ask.mjs's own `touches`/`cochange` verbs answer one-hop structural edges
 // (mgx:touchedByCommit / mgx:changeCoupledWith).
 
-import { relationKind, impactClosure, moduleCountOf, normPath, HISTORY_CAP } from "./codegraph.mjs";
+import { relationKind, impactClosure, moduleCountOf, normPath, packageCounts, modulesOf, HISTORY_CAP } from "./codegraph.mjs";
 import { isTestPath } from "./module-paths.mjs";
 import {
   RELATIONS,
@@ -84,6 +84,7 @@ const PLURAL_FORMS = {
   Attribute: ["attribute", "attributes"], GlobalVariable: ["variable", "variables"],
   Commit: ["commit", "commits"],
   Change: ["change", "changes"],
+  Package: ["package", "packages"],
   Fact: ["fact", "facts"], Utterance: ["utterance", "utterances"],
   Session: ["session", "sessions"], Source: ["source", "sources"], Rule: ["rule", "rules"],
 };
@@ -851,7 +852,7 @@ function parseAggregate(w, lc, nlp) {
 
 const LIST_SKIP = new Set(["the", "a", "an", "all", "me", "us"]);
 const LIST_TRIGGERS_SORTED = [...LIST_TRIGGERS].sort((a, b) => b.split(" ").length - a.split(" ").length);
-const LISTABLE_KINDS = "functions, classes, methods, modules, attributes, variables, or commits";
+const LISTABLE_KINDS = "functions, classes, methods, modules, packages, attributes, variables, or commits";
 // A leading "in"/"inside"/"under" right after the entity noun is an
 // unambiguous location-scope tail, never a reverse-clause predicate object.
 const SCOPE_PREPOSITIONS = new Set(["in", "inside", "under"]);
@@ -1638,11 +1639,25 @@ function computeFind(graph, entityType, term) {
   return { narrow: [], broad: sortFindHits([...broadHits.values()]) };
 }
 
+/** The graph's packages as list/count-shaped individuals. Packages are derived
+ *  from module labels rather than stored as nodes (see codegraph.mjs's
+ *  packageCounts), so these carry a `pkg:` id of their own and resolve to
+ *  nothing in graph.byId — a follow-up that tries to traverse one gets an
+ *  empty result, never a wrong one. Ordered by module count, the same order
+ *  the architecture map prints, so the two surfaces agree. */
+function packageIndividuals(graph) {
+  return [...packageCounts(modulesOf(graph)).entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([dir]) => ({ id: `pkg:${dir}`, label: dir, class: "Package" }));
+}
+
 /** Compile a set-producing AST into an array of individuals. */
 function evalSet(graph, ast, opts) {
   switch (ast.node) {
     case "clause": return traverse(graph, ast.clause, opts).matches || [];
-    case "allOfClass": return graph.individuals.filter((i) => i.class === ast.entityType);
+    case "allOfClass":
+      if (ast.entityType === "Package") return packageIndividuals(graph);
+      return graph.individuals.filter((i) => i.class === ast.entityType);
     // Predicate-find as a set atom: the narrow-then-broaden cascade's result,
     // transparently flattened ("related, not exact" is a render concern).
     case "find": {
@@ -2249,7 +2264,7 @@ function renderComposite(parsed, result, graph) {
     }
     // Kinds that don't live in a module (or have no module-scope parse at
     // all, like memory-graph classes) get no narrow-by-module hint.
-    const scopeable = !["Module", "Commit", "Fact", "Utterance", "Session", "Source", "Rule"].includes(result.entityType);
+    const scopeable = !["Module", "Package", "Commit", "Fact", "Utterance", "Session", "Source", "Rule"].includes(result.entityType);
     const hint = (!result.scoped && scopeable && result.matches.length > OVERFLOW_CAP)
       ? ` — narrow with "${nounFor(result.entityType, 2)} in <module>"`
       : "";

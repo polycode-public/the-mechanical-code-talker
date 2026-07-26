@@ -110,10 +110,10 @@ const INTERROGATIVE_LEAD_RE = /^(?:which|what|who|whose|where|when|why|how)\b/i;
  *  untouched so that working path keeps it. Two shapes: a plural kind noun in
  *  tail position, or a bare (det +) singular kind noun and nothing else. */
 const LISTING_TAIL_KINDS = new Set([
-  "modules", "files", "functions", "methods", "classes", "attributes", "fields",
+  "modules", "files", "packages", "functions", "methods", "classes", "attributes", "fields",
   "properties", "variables", "globals", "commits", "changes", "tests", "members",
 ]);
-const BARE_KIND_RE = /^(?:all\s+|the\s+)?(?:module|file|function|method|class|attribute|field|property|variable|global|commit|change|test|member)\??$/i;
+const BARE_KIND_RE = /^(?:all\s+|the\s+)?(?:module|file|package|function|method|class|attribute|field|property|variable|global|commit|change|test|member)\??$/i;
 const isListingRemainder = (rest) => {
   if (BARE_KIND_RE.test(rest)) return true;
   const words = rest.replace(/\?+\s*$/, "").trim().split(/\s+/);
