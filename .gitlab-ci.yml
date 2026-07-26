@@ -497,6 +497,11 @@ publish:npm:
 deploy:website:
   stage: deploy
   image: nikolaik/python-nodejs:python3.13-nodejs24
+  # Required for the PROD_* CI/CD variables (environment-scoped to production)
+  # to actually inject into this job — GitLab only applies a non-wildcard
+  # variable scope to jobs whose `environment` matches it.
+  environment:
+    name: production
   rules:
     # schedule-guarded: the nightly dep:audit schedule must not redeploy the site.
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
@@ -536,42 +541,46 @@ deploy:website:
 # schema-docs.mjs's ingestSchemaDocs, run offline) so the published demo graph can never
 # drift from source.
 #
-# Stays in the pipeline alongside deploy:website during the AWS migration's
-# burn-in period (PLAN_AWS.md) — this is still the live site, so it keeps
-# publishing until the cutover phase repoints things at the AWS edge and
-# retires this job.
+# Cut over to the AWS edge (deploy:website, tmct.polycode.co.uk): this job no
+# longer publishes the real site. It now publishes a one-page meta-refresh +
+# canonical-link stub so old deep links and the homepage field baked into
+# every previously published npm version keep resolving somewhere real,
+# instead of 404ing outright. Delete this job entirely once that old traffic
+# has died down.
 pages:
   stage: deploy
   rules:
     # schedule-guarded: the nightly dep:audit schedule must not redeploy Pages.
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
-    # The web surface: the consumer-impacting set only. README.md is not here —
-    # it ships to npm, never to the page — so a README-only push never redeploys.
     - if: '$CI_COMMIT_BRANCH == "main"'
-      changes: *consumer-paths
   script:
-    - echo "publishing public/ to GitLab Pages"
-    - npm ci
-    # demo:build INLINES the ask bundle into ledger.html rather than building it, so
-    # without this the deployed chat dock would run whatever bundle was last committed
-    # by hand. Rebuilding here means the page always matches main.
-    # test/estate/generated-artifacts.test.mjs is what keeps the committed copy honest
-    # for `npm publish`, which packs the file itself.
-    - npm run build:ask-bundle
-    # Literal, unmodified copies of the browser-clean engine sources into
-    # public/engine/ (mirroring src/'s own directory structure so their relative
-    # `import`s keep resolving) + a freshly regenerated public/demo-graph.json — see
-    # scripts/build-demo-site.mjs's header for the full rationale. Both are
-    # .gitignored; this is the only place they're produced.
-    - npm run demo:build
+    - mkdir -p public
+    - rm -rf public/*
+    - |
+      cat > public/index.html <<'STUB'
+      <!doctype html>
+      <html lang="en">
+      <head>
+      <meta charset="utf-8">
+      <meta http-equiv="refresh" content="0; url=https://tmct.polycode.co.uk/">
+      <link rel="canonical" href="https://tmct.polycode.co.uk/">
+      <title>tmct has moved</title>
+      </head>
+      <body>
+      <p>tmct has moved to <a href="https://tmct.polycode.co.uk/">https://tmct.polycode.co.uk/</a>.</p>
+      </body>
+      </html>
+      STUB
   artifacts:
     paths:
       - public
 
 # After a real publish, check that what the world serves is what we built: npm's
-# registry and the Pages home page must both show package.json's version. Both
-# lag a publish by a minute or two, so the script polls before reporting.
+# registry and the AWS-hosted home page must both show package.json's version.
+# Both lag a publish by a minute or two, so the script polls before reporting.
+# Follows package.json's `homepage` automatically -- no script change needed
+# for the cutover, only which job this waits on.
 #
 # It runs only on main, only with NPM_TOKEN, and never from a schedule — the
 # same gate publish:npm uses, because there is nothing to smoke without a
@@ -582,14 +591,15 @@ smoke:post-deploy:
   stage: verify
   needs:
     - publish:npm
-    - pages
+    - deploy:website
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
     # Only when a consumer-impacting commit could have produced a new publish or
-    # deploy to smoke. Pages and publish:npm gate on the same set, so the two
-    # jobs this one needs are always in the pipeline when this job is.
-    - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN'
+    # deploy to smoke, AND both jobs this one needs are actually in the pipeline
+    # (deploy:website's own rule additionally requires PROD_AWS_DEPLOY_ROLE_ARN —
+    # checking it here too keeps `needs:` from ever pointing at an absent job).
+    - if: '$CI_COMMIT_BRANCH == "main" && $NPM_TOKEN && $PROD_AWS_DEPLOY_ROLE_ARN'
       changes: *consumer-paths
   retry: 2
   script:
@@ -610,6 +620,8 @@ e2e:deployed:
   stage: verify
   needs:
     - deploy:website
+  environment:
+    name: production
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never

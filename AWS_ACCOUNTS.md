@@ -98,8 +98,23 @@ Trust-policy JSON lives in `infra/iam-trust-policies/`.
   `arn:aws:acm:us-east-1:000868243177:certificate/8e8aa751-9c16-4cd8-a7c5-42d6595e6ec5`,
   valid until 2027-02-09. Validated via the CNAME in `tmct-prod-apex`'s zone once the NS
   delegation above propagated. **Phase 5 complete.**
-- ⏳ SSO permission-set assignments (Admin+PowerUser on ci, Admin+ReadOnly on prod).
-- ⏳ GitLab CI variables (the seven named in `.gitlab-ci.yml`'s Phase 6 comment block).
+- ✅ **SSO permission-set assignments done** — Admin+PowerUser on tmct-ci, Admin+ReadOnly on
+  tmct-prod, all four `create-account-assignment` calls confirmed `SUCCEEDED`.
+- ✅ **GitLab CI variables set**, all seven, via `glab variable set` (prod ones `--scope
+  production`; `deploy:website`/`e2e:deployed` given a matching `environment: production` so the
+  scope actually applies — GitLab only injects a non-wildcard-scoped variable into a job whose
+  `environment` matches it).
+- ✅ **Website stack deployed**: `tmct-prod-prod-website`, CloudFront `d1wf3da8rbekm0.cloudfront.net`
+  (distribution `E1YEAO48PKAJHE`), bucket `tmct-prod-prod-web-000868243177`. Confirmed serving
+  real content directly via the CloudFront domain (HTTP 200); `tmct.polycode.co.uk` itself was
+  still resolving through a stale negative-DNS-cache entry from pre-deploy nameserver checks at
+  last check (the SOA's negative-cache TTL is 24h) — the A-record and CloudFront are both
+  confirmed correct via the AWS API, so this clears on its own, not a real fault.
+- ✅ **Cutover done**: `package.json`'s `homepage` now points at `https://tmct.polycode.co.uk/`;
+  `pages` now publishes a meta-refresh + canonical-link redirect stub instead of the real site;
+  `smoke:post-deploy` now needs `deploy:website` instead of `pages`.
+- ⏳ Post-cutover `SKILL_PAGE_WEIGHTS` run → `reports/PAGE_WEIGHTS.md` revision 2 (once DNS
+  fully clears, so the measurement hits the real deployed edge, not a stale-cache miss).
 
 ## Reproduce / finish provisioning
 
