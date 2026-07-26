@@ -34,7 +34,7 @@ export const SIMPLE_WIKIPEDIA_ORIGIN = "https://simple.wikipedia.org";
  *  refuse to override the User-Agent request header, so the API-recognised
  *  Api-User-Agent header carries the same string there; under Node both are
  *  sent. */
-export const WIKIMEDIA_USER_AGENT = "the-mechanical-code-talker (+https://polycode-projects.gitlab.io/the-mechanical-code-talker/)";
+export const WIKIMEDIA_USER_AGENT = "the-mechanical-code-talker (+https://tmct.polycode.co.uk/)";
 
 const DEFAULT_TIMEOUT_MS = 4000;
 const DEFAULT_MIN_INTERVAL_MS = 2000;
