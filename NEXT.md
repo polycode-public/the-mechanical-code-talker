@@ -50,14 +50,27 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   consumes tmct's backend the moment it lands here instead of maintaining its own AWS persistence
   layer. Full design writeup: `PLAN_MEMORY_BACKEND_AWS.md` (relocated from seonix's `PLAN_TMCT.md`
   2026-07-26; this is a tmct/marginalia concern, not a consumer-repo one)
+- [ ] `PLAN_AWS.md` (website migration to AWS, distinct from the memory-backend plan above) —
+  Phases 2-5's file deliverables are built and merged (`infra/` CDK workspace, `AWS_ACCOUNTS.md`,
+  `docs/AWS_SETUP.md`, `scripts/assume-aws.sh`, `scripts/fast-deploy-web.sh`, plus Phase 6/7's
+  `deploy:website`/`e2e:deployed` CI jobs and the `TMCT_E2E_BASE_URL` e2e switch) — nothing
+  executed against real AWS yet. Live execution (account creation, OIDC/role provisioning, CDK
+  bootstrap+deploy, DNS/cert, CI variables, cutover) is in progress this session using an
+  authenticated `management` AWS profile; remaining checklist lives in `PLAN_AWS.md` itself.
 - [ ] wire `bind()`'s `{ tieRefuses: true }` into the plural temporal-comparison lane
   (`PLURAL_TEMPORAL_COMPARISON_RE` in `chat.mjs`) alongside the singular one — built on a base
   before slice 4 landed, so it still binds a same-turn tie by recency; a real plural tie isn't
   reachable through any current lane yet (no lane registers two `set` referents in one turn), so
   this is a small follow-up wiring change, not a live bug
 - [ ] `test-e2e/pages-ledger-teach.test.mjs` (bundle-load and refocus assertions) flakes under real
-  multi-file e2e contention — surfaced while stress-verifying the chat/research hardening above;
-  a different feature area (ledger UI) with no shared root cause, not yet investigated
+  multi-file e2e contention — investigated once more without a confirmed root cause. A solo run
+  passes cleanly with wide timing margin (each `turn()` resolves in 1-2s against a 20s deadline).
+  An attempt to reproduce under real contention (the full `test:e2e` directory, uncapped
+  concurrency) produced only environment-artifact failures (`ENOENT`/cwd-removed errors across
+  unrelated files), not a genuine per-test race — not usable signal. Best next attempt: a bounded
+  run of `pages-ledger-teach.test.mjs` alongside 3-5 other heavy `pages-*` files via an explicit
+  file list, in a worktree that already has a commit (so it can't be reclaimed mid-run), rather
+  than the whole uncapped directory at once.
 
 CONVERSATION 3.0.3 sweep (see `reports/BENCHMARK_CONVERSATION_3.0.3.md`), routed dead-ends:
 
