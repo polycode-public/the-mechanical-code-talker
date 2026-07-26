@@ -89,17 +89,16 @@ Trust-policy JSON lives in `infra/iam-trust-policies/`.
   `tmct-prod-apex`: zone `Z016664215EH1WLK6NZGI`, nameservers
   `ns-980.awsdns-58.net, ns-347.awsdns-43.com, ns-2006.awsdns-58.co.uk, ns-1232.awsdns-26.org`.
   Neither is public yet — no NS delegation in the parent zone.
-- ✅ **ACM cert requested**, us-east-1, `tmct-prod`:
-  `arn:aws:acm:us-east-1:000868243177:certificate/8e8aa751-9c16-4cd8-a7c5-42d6595e6ec5`.
-  Validation CNAME added to the `tmct-prod-apex` zone (`_a370942e7c56c074a06fb403d1234b1c
-  .tmct.polycode.co.uk` → `_7b3b250514b535ff0ac90cf767f1f15a.jkddzztszm.acm-validations.aws`).
-  Stuck at `PENDING_VALIDATION` until the zone is actually reachable — see the next item.
-- ⏳ **NS delegation in the parent `polycode.co.uk` zone (polycode-management)** — the one
-  remaining live-DNS step, deliberately held for an explicit operator go-ahead (touches a real,
-  currently-working zone). Once added, the ACM cert above validates on its own (DNS propagation
-  + AWS's periodic re-check, no manual step after the NS record lands).
+- ✅ **NS delegation added in the parent `polycode.co.uk` zone (`Z2981ZT3I1K2HT`,
+  polycode-management)**, operator-confirmed. First attempt pointed at `tmct-ci-apex`'s
+  nameservers by mistake (the validation CNAME lives in `tmct-prod-apex`'s zone) — corrected via
+  an UPSERT to `tmct-prod-apex`'s actual nameservers
+  (`ns-980.awsdns-58.net, ns-347.awsdns-43.com, ns-2006.awsdns-58.co.uk, ns-1232.awsdns-26.org`).
+- ✅ **ACM cert issued**, us-east-1, `tmct-prod`:
+  `arn:aws:acm:us-east-1:000868243177:certificate/8e8aa751-9c16-4cd8-a7c5-42d6595e6ec5`,
+  valid until 2027-02-09. Validated via the CNAME in `tmct-prod-apex`'s zone once the NS
+  delegation above propagated. **Phase 5 complete.**
 - ⏳ SSO permission-set assignments (Admin+PowerUser on ci, Admin+ReadOnly on prod).
-- ⏳ GitLab CI variables (the seven named in `.gitlab-ci.yml`'s Phase 6 comment block).
 - ⏳ GitLab CI variables (the seven named in `.gitlab-ci.yml`'s Phase 6 comment block).
 
 ## Reproduce / finish provisioning
