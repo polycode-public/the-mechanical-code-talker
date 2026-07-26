@@ -46,10 +46,17 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
   backend — full materialization, mutate in JS, write-behind — against S3+DynamoDB instead of a local
   file: one JSON object per graph version in S3, with DynamoDB holding only a lightweight
   manifest/version-pointer row to the latest version. Build tmct's new backend the same way — an
-  `s3`/`s3+dynamo` backend behind the existing `--memory-backend` precedence — so seonix, marginalia,
-  and bedrock-meter all get it for free the moment it lands here, instead of each repo bolting on its
-  own AWS persistence layer independently (see `seonix/PLAN_TMCT.md`'s "Graph backend evolution"
-  section for the full writeup this item is drawn from)
+  `s3`/`s3+dynamo` backend behind the existing `--memory-backend` precedence — so marginalia
+  consumes tmct's backend the moment it lands here instead of maintaining its own AWS persistence
+  layer. Full design writeup: `PLAN_MEMORY_BACKEND_AWS.md` (relocated from seonix's `PLAN_TMCT.md`
+  2026-07-26; this is a tmct/marginalia concern, not a consumer-repo one)
+- [ ] `src/services/index.mjs` still claims subpath exports that the exports-map shrink
+  (`25bbece4`) removed — `:9` (`./chat`), `:52` (`./init`), `:58` (`./toml-config`); fix the three
+  comments or restore the subpaths. While in there, decide whether `createGraphService`
+  (`src/adapters/providers/graph-service.mjs:136`) gets re-exported from the root — it lost its
+  `./graph-service` subpath in the same shrink, and seonix's tmct-3.x upgrade (now the core
+  activity in `seonix/PLAN_TMCT.md`) consumes it; today a deep path is its only route. (Relayed
+  from seonix's PLAN_TMCT.md verification pass, 2026-07-26.)
 - [ ] wire `bind()`'s `{ tieRefuses: true }` into the plural temporal-comparison lane
   (`PLURAL_TEMPORAL_COMPARISON_RE` in `chat.mjs`) alongside the singular one — built on a base
   before slice 4 landed, so it still binds a same-turn tie by recency; a real plural tie isn't
