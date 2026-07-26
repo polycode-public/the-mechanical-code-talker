@@ -1565,15 +1565,8 @@ const BYE = new Set([
   "bye", "goodbye", "quit", "exit", "see ya", "see you", "cya", "later", "farewell",
   "peace", "peace out", "im off", "i'm off", "gtg", "gotta go", "catch you later",
   "farewell then",
-  // "gtg thx" — the SAME "gtg" farewell above, immediately followed by a
-  // thanks word with no delimiter between them (so farewellOrThanksSignal's
-  // comma/semicolon clause split never sees two clauses to work with).
-  // Whole-phrase entry rather than a general "bye word + thanks word, no
-  // delimiter" mechanism — closed and hand-curated, this exact reported
-  // phrasing only.
-  "gtg thx",
   // "good day to you" deliberately does NOT live here: it's a formal-register
-  // GREETING, not a farewell. foldedBye is checked before GREET in
+  // GREETING, not a farewell. farewellClause is checked before GREET in
   // conversationalTurn, so having it here would silently end the session on
   // a plain formal greeting — every turn piped after it dropped with no log
   // entry, a worse outcome than any wall.
@@ -1679,15 +1672,39 @@ const CLAUSE_SPLIT_RE = /\s*[,;]\s*(?:and\s+)?|\s+and\s+/;
 function conversationalClauses(q) {
   return q.split(CLAUSE_SPLIT_RE).map((c) => c.trim()).filter(Boolean);
 }
-/** BYE match tolerant of informal reduplication ("bye bye", "no no" — general,
- *  not specific to any one word): a clause consisting of the SAME word twice
- *  folds to one instance before the ordinary closed/collapsed BYE lookup.
- *  Shared by the single-clause whole-line check and the multi-clause scan
- *  below, so "bye bye" resolves the same way whether or not a comma follows it. */
-function foldedBye(clause) {
+/** A thanks phrase and a bye phrase butted together with NO delimiter between
+ *  them, in either order ("gtg thx", "thanks bye"). conversationalClauses
+ *  splits on a comma, semicolon or a standalone "and", so these lines arrive
+ *  as one clause and match neither closed set whole. Splitting at each word
+ *  boundary and matching the two halves against their own sets keeps both
+ *  halves closed — no new literal, and no phrase is recognized here that
+ *  isn't already recognized alone. Without this the leading thanks word reads
+ *  as a bare subject noun and the farewell reads as its verb, so "thanks bye"
+ *  parses as a habitual-teach ("a thank can bye"). */
+function gluedThanksBye(clause) {
+  const words = clause.split(/\s+/).filter(Boolean);
+  for (let split = 1; split < words.length; split += 1) {
+    const head = words.slice(0, split).join(" ");
+    const tail = words.slice(split).join(" ");
+    const headIsBye = !!closedOrCollapsed(head, BYE, BYE_COLLAPSED);
+    const tailIsBye = !!closedOrCollapsed(tail, BYE, BYE_COLLAPSED);
+    const headIsThanks = !!closedOrCollapsed(head, THANKS, THANKS_COLLAPSED);
+    const tailIsThanks = !!closedOrCollapsed(tail, THANKS, THANKS_COLLAPSED);
+    if ((headIsBye && tailIsThanks) || (headIsThanks && tailIsBye)) return true;
+  }
+  return false;
+}
+/** Does this clause end the session? The closed BYE set, or informal
+ *  reduplication of one of its entries ("bye bye", "no no" — general, not
+ *  specific to any one word), or a thanks word glued to a bye word. Shared by
+ *  the single-clause whole-line check and the multi-clause scan below, so
+ *  "bye bye" resolves the same way whether or not a comma follows it. Bye wins
+ *  over thanks: a farewell should end the session even alongside gratitude. */
+function farewellClause(clause) {
   if (closedOrCollapsed(clause, BYE, BYE_COLLAPSED)) return true;
   const folded = clause.match(REPEATED_WORD_RE);
-  return !!(folded && closedOrCollapsed(folded[1], BYE, BYE_COLLAPSED));
+  if (folded && closedOrCollapsed(folded[1], BYE, BYE_COLLAPSED)) return true;
+  return gluedThanksBye(clause);
 }
 /** Closing-filler clauses — the CONTENT half of a farewell/thanks sentence
  *  ("thanks, that's everything for now") that isn't itself gratitude or bye
@@ -1741,7 +1758,7 @@ function farewellOrThanksSignal(raw, q) {
     const rawClause = clauses[i];
     const ackMatch = rawClause.match(ACK_LEAD_RE);
     const clause = ackMatch ? ackMatch[1].trim() : rawClause;
-    if (foldedBye(clause)) { byeHit = true; break; }
+    if (farewellClause(clause)) { byeHit = true; break; }
     const deIntensified = clause.replace(THANKS_HELP_TAIL_RE, "").replace(TRAILING_INTENSIFIER_RE, "").trim();
     if (thanksClauseIdx < 0 && closedOrCollapsed(deIntensified, THANKS, THANKS_COLLAPSED)) thanksClauseIdx = i;
   }
@@ -1879,9 +1896,9 @@ function conversationalTurn(line, ctx) {
       ...(end ? { end: true } : {}),
     }, ctx.trace);
   };
-  if (foldedBye(q)) {
+  if (farewellClause(q)) {
     note(ctx.trace, "goal: casual/social — ending the session (no graph intent)");
-    note(ctx.trace, "lane: conversational — farewell (BYE closed set, incl. bare reduplication e.g. \"bye bye\")");
+    note(ctx.trace, "lane: conversational — farewell (BYE closed set, incl. bare reduplication e.g. \"bye bye\" and a thanks word glued to a bye word e.g. \"thanks bye\")");
     return mk(t(T_FAREWELL), { end: true });
   }
   {

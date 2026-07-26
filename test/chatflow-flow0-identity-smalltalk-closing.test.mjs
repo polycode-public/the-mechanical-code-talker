@@ -70,6 +70,19 @@ test("\"gtg thx\" (a bye word and a thanks word with no delimiter) ends the sess
   assert.match(r.answer, /Bye/i);
 });
 
+test("\"thanks bye\" (the same glue in the other order) ends the session instead of parsing as a habitual teach", async () => {
+  const r = await bare("thanks bye");
+  assert.equal(r.end, true);
+  assert.match(r.answer, /Bye/i);
+  assert.doesNotMatch(r.answer, /I'll remember/i);
+});
+
+test("a bare thanks with no farewell beside it still acknowledges without ending the session", async () => {
+  const r = await bare("thanks");
+  assert.notEqual(r.end, true);
+  assert.match(r.answer, /Any time/i);
+});
+
 test("\"alright, thats enough for now, thanks\" gets a warm closing acknowledgement instead of the grammar wall", async () => {
   const r = await bare("alright, thats enough for now, thanks");
   assert.match(r.answer, /Any time/i);
