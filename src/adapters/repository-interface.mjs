@@ -236,9 +236,9 @@ export const REPOSITORY_INTERFACE = Object.freeze({
     },
     subclasses: {
       group: "resolution", args: { classId: "string" },
-      result: `{ bases: ${IND}[], subclasses: ${IND}[] }`,
+      result: `{ bases: ${IND}[], subclasses: ${IND}[], levels: Array<${IND}[]> }`,
       misses: ["UNRESOLVED_TERM"], concurrency: CONCURRENT_SAFE,
-      purpose: "Forward bases + the transitive reverse inheritance closure (who extends this).",
+      purpose: "Forward bases + the transitive reverse inheritance closure (who extends this). `subclasses` is the flat closure; `levels` groups the same individuals by inheritance depth (direct children first), mirroring `impact`'s leveled shape.",
     },
     exports: {
       group: "resolution", args: { moduleId: "string" },

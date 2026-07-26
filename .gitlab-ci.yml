@@ -515,6 +515,7 @@ deploy:website:
     - npm run demo:build
     - source scripts/assume-aws.sh prod
     - cd infra
+    - npm ci
     - npx cdk deploy tmct-prod-prod-website --require-approval never
         -c env=prod -c slug=prod -c account="${TMCT_PROD_ACCOUNT_ID}" -c region=eu-west-2
         -c hostname=tmct.polycode.co.uk -c certArn="${TMCT_PROD_CERT_ARN}"

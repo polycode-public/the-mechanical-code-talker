@@ -90,12 +90,12 @@
       "args": {
         "classId": "string"
       },
-      "result": "{ bases: Individual[], subclasses: Individual[] }",
+      "result": "{ bases: Individual[], subclasses: Individual[], levels: Array<Individual[]> }",
       "misses": [
         "UNRESOLVED_TERM"
       ],
       "concurrency": "concurrent-safe: reads immutable graph truth; no shared mutable state",
-      "purpose": "Forward bases + the transitive reverse inheritance closure (who extends this)."
+      "purpose": "Forward bases + the transitive reverse inheritance closure (who extends this). `subclasses` is the flat closure; `levels` groups the same individuals by inheritance depth (direct children first), mirroring `impact`'s leveled shape."
     },
     "exports": {
       "group": "resolution",

@@ -197,21 +197,26 @@ export function createGraphService(graph, { sourceAccess = false, repoRoot = nul
       }
       const seen = new Set([classId]);
       const subs = [];
+      const levels = [];
       let frontier = [classId];
       for (let d = 0; d < 8 && frontier.length; d += 1) {
         const next = [];
+        const level = [];
         for (const cur of frontier) {
           for (const childId of childrenOf.get(cur) || []) {
             if (seen.has(childId)) continue;
             seen.add(childId);
             const c = byId.get(childId);
-            subs.push(c ? toIndividual(c) : { id: childId, label: childId, class: "Class", attributes: [] });
+            const proj = c ? toIndividual(c) : { id: childId, label: childId, class: "Class", attributes: [] };
+            subs.push(proj);
+            level.push(proj);
             next.push(childId);
           }
         }
+        if (level.length) levels.push(level);
         frontier = next;
       }
-      return hit({ bases, subclasses: subs });
+      return hit({ bases, subclasses: subs, levels });
     },
 
     exports(moduleId) {

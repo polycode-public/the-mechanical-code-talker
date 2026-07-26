@@ -156,6 +156,8 @@ test("[fixture] resolve → describe → members/subclasses/edges chain over rea
   const subs = svc.subclasses("cls:base");
   assert.ok(isHit(subs));
   assert.deepEqual(subs.value.subclasses.map((s) => s.label).sort(), ["Button", "Widget"]);
+  assert.deepEqual(subs.value.levels.map((level) => level.map((s) => s.label)), [["Widget"], ["Button"]],
+    "levels groups the closure by inheritance depth: Widget is a direct child of Base, Button only reaches Base through Widget");
 
   const edges = svc.edges(id, "imports");
   assert.ok(isHit(edges) && edges.value.edges.length === 1);
