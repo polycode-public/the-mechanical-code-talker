@@ -89,8 +89,17 @@ Trust-policy JSON lives in `infra/iam-trust-policies/`.
   `tmct-prod-apex`: zone `Z016664215EH1WLK6NZGI`, nameservers
   `ns-980.awsdns-58.net, ns-347.awsdns-43.com, ns-2006.awsdns-58.co.uk, ns-1232.awsdns-26.org`.
   Neither is public yet — no NS delegation in the parent zone.
+- ✅ **ACM cert requested**, us-east-1, `tmct-prod`:
+  `arn:aws:acm:us-east-1:000868243177:certificate/8e8aa751-9c16-4cd8-a7c5-42d6595e6ec5`.
+  Validation CNAME added to the `tmct-prod-apex` zone (`_a370942e7c56c074a06fb403d1234b1c
+  .tmct.polycode.co.uk` → `_7b3b250514b535ff0ac90cf767f1f15a.jkddzztszm.acm-validations.aws`).
+  Stuck at `PENDING_VALIDATION` until the zone is actually reachable — see the next item.
+- ⏳ **NS delegation in the parent `polycode.co.uk` zone (polycode-management)** — the one
+  remaining live-DNS step, deliberately held for an explicit operator go-ahead (touches a real,
+  currently-working zone). Once added, the ACM cert above validates on its own (DNS propagation
+  + AWS's periodic re-check, no manual step after the NS record lands).
 - ⏳ SSO permission-set assignments (Admin+PowerUser on ci, Admin+ReadOnly on prod).
-- ⏳ ACM cert (us-east-1) + DNS validation; Route53 NS delegation.
+- ⏳ GitLab CI variables (the seven named in `.gitlab-ci.yml`'s Phase 6 comment block).
 - ⏳ GitLab CI variables (the seven named in `.gitlab-ci.yml`'s Phase 6 comment block).
 
 ## Reproduce / finish provisioning
