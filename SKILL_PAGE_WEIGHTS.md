@@ -39,7 +39,7 @@ confirms the deploy is current.
 
 ## 2. Confirm the deployed version
 
-    BASE=https://the-mechanical-code-talker-36445d.gitlab.io
+    BASE=https://tmct.polycode.co.uk
     curl -s "$BASE/" | grep -o 'id="pkg-version">[^<]*'
 
 Record this exact version string — it is what the new report revision stamps itself against. If
@@ -52,8 +52,10 @@ For every page in the §1 list, against `$BASE`:
 
 - **Raw bytes** (`curl`, no `accept-encoding`):
   `curl -s -o /dev/null -w '%{size_download}' "$BASE/<page>"`
-- **Wire bytes** (`curl` with `accept-encoding: br, gzip` — GitLab Pages serves the precompressed
-  `.br` sibling): `curl -s -o /dev/null -H 'Accept-Encoding: br, gzip' -w '%{size_download} %header{content-encoding}' "$BASE/<page>"`
+- **Wire bytes** (`curl` with `accept-encoding: br, gzip` — CloudFront compresses most assets on
+  the fly; for the few over its compression size ceiling, a CloudFront Function rewrites the
+  request to the precompressed `.br`/`.gz` sibling by `Accept-Encoding`):
+  `curl -s -o /dev/null -H 'Accept-Encoding: br, gzip' -w '%{size_download} %header{content-encoding}' "$BASE/<page>"`
 - **Cold-load total and third-party request count**: a real Chromium cold load per page
   (Playwright, CDP `Network.enable`, sum `Network.loadingFinished`'s `encodedDataLength` over
   every request in a fresh context). Pass `{ serviceWorkers: "block" }` to `newContext` — a

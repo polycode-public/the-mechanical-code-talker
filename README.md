@@ -142,7 +142,7 @@ src/handlers/tasks.mjs and src/handlers/users.mjs.
 tmct> /exit
 ```
 
-**[Try it live in your browser →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/)**
+**[Try it live in your browser →](https://tmct.polycode.co.uk/)**
 runs the actual query engine client-side. No server, no install. The landing
 page answers codebase questions live, and eight more pages each ground their
 own domain: a full chat seeded with 32,646 facts (the same nine bands as
@@ -197,7 +197,7 @@ functions". Every suggestion resolves to a real answer.
 
 The identical page also runs as a plain hosted page over the demo code
 graph, with nothing to install:
-**[try it live →](https://polycode-projects.gitlab.io/the-mechanical-code-talker/code.html)**.
+**[try it live →](https://tmct.polycode.co.uk/code.html)**.
 The desktop build below is for exploring your own repo or graph, which the
 hosted page cannot reach.
 

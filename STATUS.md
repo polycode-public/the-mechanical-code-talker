@@ -40,12 +40,15 @@ validated the CI restructuring itself — the e2e suite split into 14 page-scope
 | `pack:contents` | what `npm install` actually receives — the published file list, diffed against the committed manifest |
 | `license:deps` | the dependency tree a consumer inherits stays inside the licence allowlist |
 | `publish:npm` | the real `npm publish` gate — version-checked, provenance-signed |
-| `pages` | the GitLab Pages deploy — the live public site |
+| `deploy:website` | the AWS deploy (CloudFront + S3) — the live public site at tmct.polycode.co.uk |
+| `e2e:deployed` | read-only page checks run against the live deployed site, not a local build |
 | `smoke:post-deploy` | a post-deploy check against the **live** deployed site and the **live** npm registry, not a local approximation |
 | `links:check`, `pii:lint`, `semgrep-sast`, `secret_detection` | repo hygiene and security scanning — not consumer-facing directly, but gate what ships |
 
 `e2e:heavy` (a full `demo:build`, an uncapped ConceptNet seed, an export/import round trip) did
 not run on this push — it's gated on paths this push didn't touch, plus a nightly schedule.
+`deploy:website` and `e2e:deployed` are the post-cutover job names; the linked pipeline above
+predates the rename and ran under the old `pages` job.
 
 ## The nine axes, at a glance
 
