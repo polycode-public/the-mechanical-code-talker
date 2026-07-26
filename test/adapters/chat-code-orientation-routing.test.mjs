@@ -80,6 +80,17 @@ test("'describe renderArchitecture' still resolves the symbol itself — naming 
   assert.doesNotMatch(answer, /^Architecture: \d+ module/);
 });
 
+test("'give me an overview of this project' names the repo as the subject and reaches the architecture map", async () => {
+  const answer = await turn("give me an overview of this project");
+  assert.match(answer, /^Architecture: \d+ module\(s\)/);
+  assert.doesNotMatch(answer, /I'm tmct/);
+});
+
+test("'show me an overview of this codebase' reaches the same map", async () => {
+  const answer = await turn("show me an overview of this codebase");
+  assert.match(answer, /^Architecture: \d+ module\(s\)/);
+});
+
 test("'give me an overview' gets the orientation card, never a fuzzy symbol card", async () => {
   const answer = await turn("give me an overview");
   assert.match(answer, /I'm tmct/);

@@ -1079,13 +1079,15 @@ const CAPABILITY_PHRASES = [
   /^(?:what(?:'s|s|\s+is)|give me|show me|gimme) the big picture(?:\s+(?:here|(?:on|of|for|about)\s+(?:this|the)\s+(?:app|codebase|repo|repository|project|code)))?\??$/i,
   /^(?:give me|what's) the lay of the land\??$/i,
   // "give me an overview" / "an overview" — the plain-word sibling of "the
-  // big picture" just above, same optional here/of-this-repo tail. Without a
-  // closed entry the word "overview" prose-matches real symbols in an
-  // indexed graph (moduleOverviewText) and the describe rescue dumps that
-  // symbol's card. The detailed forms ("give me a detailed overview of X")
-  // carry a mandatory "detailed"+of-term and stay with the completions
-  // rescue, untouched by this anchor.
-  /^(?:(?:can|could|would) you\s+)?(?:give me|show me|gimme)\s+an overview(?:\s+(?:here|(?:on|of|for|about)\s+(?:this|the)\s+(?:app|codebase|repo|repository|project|code)))?\??$/i,
+  // big picture" just above. Without a closed entry the word "overview"
+  // prose-matches real symbols in an indexed graph (moduleOverviewText) and
+  // the describe rescue dumps that symbol's card. The detailed forms ("give
+  // me a detailed overview of X") carry a mandatory "detailed"+of-term and
+  // stay with the completions rescue, untouched by this anchor. An explicit
+  // of-this-repo tail is NOT matched here: that names the repo as the
+  // subject, so ARCH_OVERVIEW_PHRASES answers it with the architecture map
+  // instead of this card.
+  /^(?:(?:can|could|would) you\s+)?(?:give me|show me|gimme)\s+an overview(?:\s+here)?\??$/i,
   /^an overview(?:\s+please)?\??$/i,
   // "what have we got here"/"what've we got here" — a casual, self-answering
   // opener (matches after a leading "so" strips via LEADING_CONNECTIVE_RE,
@@ -12003,12 +12005,17 @@ const PLURAL_TEMPORAL_COMPARISON_RE = /^(?:were|are)\s+(those|them|these)\s+(bef
  *  an of-this-repo tail, or an overview/map noun); a query that NAMES a
  *  symbol ("describe renderArchitecture") never matches. */
 const ARCH_OVERVIEW_LEAD = "(?:(?:can|could|would)\\s+you\\s+(?:please\\s+)?)?(?:(?:show|give)\\s+(?:me|us)\\s+|describe\\s+|explain\\s+|what(?:'s|s|\\s+is)\\s+)?";
-const ARCH_OVERVIEW_TAIL = "(?:\\s+(?:of|for)\\s+(?:this|the)\\s+(?:app|codebase|repo|repository|project|code))?";
+const ARCH_OVERVIEW_OF_REPO = "(?:of|for)\\s+(?:this|the)\\s+(?:app|codebase|repo|repository|project|code)";
+const ARCH_OVERVIEW_TAIL = `(?:\\s+${ARCH_OVERVIEW_OF_REPO})?`;
 const ARCH_OVERVIEW_PHRASES = [
   // Article-carried: "the architecture" alone, or wrapped/tailed.
   new RegExp(`^${ARCH_OVERVIEW_LEAD}the\\s+architecture(?:\\s+(?:overview|map|diagram))?${ARCH_OVERVIEW_TAIL}(?:\\s+here)?\\??$`, "i"),
   // Article-less: anchored by the of-this-repo tail or the overview/map noun instead.
-  new RegExp(`^${ARCH_OVERVIEW_LEAD}architecture\\s+(?:(?:of|for)\\s+(?:this|the)\\s+(?:app|codebase|repo|repository|project|code)|overview|map|diagram)\\??$`, "i"),
+  new RegExp(`^${ARCH_OVERVIEW_LEAD}architecture\\s+(?:${ARCH_OVERVIEW_OF_REPO}|overview|map|diagram)\\??$`, "i"),
+  // Architecture-less: the topic noun stands in for the word, so the of-this-repo
+  // tail is REQUIRED here. A bare "give me an overview" names no subject and
+  // falls through to the ordinary lanes.
+  new RegExp(`^${ARCH_OVERVIEW_LEAD}(?:(?:an?|the)\\s+)?(?:overview|map|diagram)\\s+${ARCH_OVERVIEW_OF_REPO}(?:\\s+here)?\\??$`, "i"),
 ];
 
 async function runAsk(query, { config, source, graph, focus, last, templates, memoryDir, sessionId = "", lexicon = null, env, trace, vocabHint = null, tel = null, biasByBundle = {}, cache = null, vocabAntecedent = null, planHolder = null, discourseHolder = null, gameConfig = DEFAULT_GAME_CONFIG, liveReference = false, onLiveLookup = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET }) {
