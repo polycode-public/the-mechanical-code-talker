@@ -49,6 +49,35 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   file list, in a worktree that already has a commit (so it can't be reclaimed mid-run), rather
   than the whole uncapped directory at once.
 
+- [ ] bedrock-meter's embedding-surface asks (`~/.claude/inboxes/bedrock-meter.md`,
+  2026-07-26) — bedrock-meter is embedding tmct in-process as marginalia's cap-breach fallback
+  (sqlite memory, learn-on-miss, narration+digest+facts on every response) and did a deep recon
+  of the 3.0.8 embedding surface. Ranked asks:
+  1. **Per-turn fact delta** — `touchedFactRows` (`src/domain/memory/touched-facts.mjs:14`) does
+     exactly what's needed but isn't exported or wired into `runTurn`'s return value. Either wire
+     it in (`runTurn` returns `factsTouched` alongside `answer`) or export it so a caller can diff.
+  2. **Structured narration** — `narrate: true` glues the trace onto `result.answer` under a
+     `"--- narrate ---"` string literal; `NARRATE_MARKER` isn't re-exported, so every embedder
+     would have to hardcode it. Re-export `NARRATE_MARKER`, or return `{ answer, narration }` as
+     siblings when `narrate` is on.
+  3. **On-demand digest** — `digestTermFromRows` (`src/domain/digest/`) is reachable only via
+     `bin/tmct.mjs digest`; no root export, no `./digest` subpath. A `./digest` subpath or root
+     re-export would let an embedder attach the composed digest paragraph to a fallback answer
+     without shelling out to the CLI.
+  4. **Memory backend constructors** — `openMemoryBackend`/`createSqliteMemoryStore`/
+     `createInMemoryStore`/`readFactRows`/`inspectMemory` are all unexported; `createSession` is
+     the only public route to a sqlite handle but drags session-log + sidecar + graph-upsert
+     writes per turn. Their workaround (call `createSession` once for the handle, then drive
+     `runTurn` directly with its `memoryDir`) works but is undocumented folklore — worth either a
+     blessed `./memory` subpath or a documented pattern.
+  5. **Real bug, not just a gap**: `dispatchTool("tmct_export")` calls
+     `openConfiguredMemoryBackend` (`src/tools/handlers/tmct-export.mjs:14`), which re-derives the
+     backend from env/toml config on disk — it ignores an embedding session's own `memoryBackend`
+     param entirely. An embedder using an in-process/explicit backend gets an export from the
+     wrong location (or an empty one), silently. Worth fixing regardless of the rest of this list.
+  Not asking for: packaging changes (pack weight/wordnet size flagged as low priority, explicitly
+  not a restructuring request). Reply in `~/.claude/inboxes/bedrock-meter.md`.
+
 ## Discipline
 
 `CLAUDE.md` is the standing working model: the coordinator/background-sub-agent split, the test
