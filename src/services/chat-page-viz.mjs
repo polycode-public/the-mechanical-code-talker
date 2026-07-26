@@ -194,6 +194,9 @@ export function renderChatHtml({ title = DEFAULT_TITLE, digestStructures = [] } 
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="icon" href="./favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <!--
   The wink lemma/POS tier loads from ./vendor/wink.js — the site's own shared
   first-party bundle of wink-nlp + wink-eng-lite-web-model (built by

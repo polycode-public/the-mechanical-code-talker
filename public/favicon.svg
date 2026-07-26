@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+<style>
+.bg { fill: #FAFAF9; }
+.fg { fill: #1A1A1A; }
+@media (prefers-color-scheme: dark) {
+.bg { fill: #17171A; }
+.fg { fill: #F3F3F2; }
+}
+</style>
+<rect class="bg" width="64" height="64" rx="14"/>
+<text x="32" y="41" text-anchor="middle" class="fg"
+  font-family="ui-rounded, 'SF Pro Rounded', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif"
+  font-weight="600" font-size="25" letter-spacing="-1.1">tmct</text>
+</svg>
