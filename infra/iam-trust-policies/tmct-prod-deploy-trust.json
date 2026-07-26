@@ -1,0 +1,13 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "AssumeFromTmctProdActionsRole",
+      "Effect": "Allow",
+      "Principal": {
+        "AWS": "arn:aws:iam::TBD_PROD_ACCOUNT_ID:role/tmct-prod-gitlab-actions-role"
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}

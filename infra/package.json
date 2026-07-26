@@ -1,0 +1,21 @@
+{
+  "name": "@polycode-projects/tmct-infra",
+  "version": "0.0.0",
+  "private": true,
+  "description": "CDK app that deploys the tmct public site (S3 + CloudFront + OAC + ACM + Route53) and the delegated tmct.polycode.co.uk hosted zone.",
+  "license": "AGPL-3.0-only",
+  "bin": { "app": "bin/app.ts" },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "synth": "cdk synth",
+    "deploy": "cdk deploy --all --require-approval never",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "aws-cdk": "^2.150.0",
+    "aws-cdk-lib": "^2.150.0",
+    "constructs": "^10.3.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.0"
+  }
+}
