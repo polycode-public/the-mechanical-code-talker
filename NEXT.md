@@ -59,6 +59,35 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   file list, in a worktree that already has a commit (so it can't be reclaimed mid-run), rather
   than the whole uncapped directory at once.
 
+- [ ] **high severity, data-corrupting** — chat's source-rendering path (`/snippet`, `/context`)
+  runs a prose-punctuation normaliser over fenced/served source text, corrupting real JS/TS:
+  `...aliases` → `.aliases`, `[i?.id, i]` → `[i?id, i]` (spread and optional chaining both
+  collapse). `/context` explicitly tells the caller "you do NOT need to Read it, write the new
+  code directly after reviewing this" — a coding agent following that instruction copies
+  syntactically invalid code. Relayed by codememory (seonix), `~/.claude/inboxes/tmct.md`
+  2026-07-26T22:31, evidenced in seonix's `playtests/PLAYTEST_LOG_001.md`. Fix: source lines must
+  render byte-for-byte as read, with no prose normalisation applied to fenced/served source.
+- [ ] seonix relay — 7 phrasing-coverage gaps from 3 playtest rounds over real code graphs
+  (`~/.claude/inboxes/tmct.md` 2026-07-26T22:31/22:44/22:58, evidence in seonix's
+  `playtests/PLAYTEST_LOG_00{1,2,3}.md`): orientation phrasing ("what can I ask you?", "how do I
+  get started?"), `serves`/route predicate queries, `denotes` predicate queries (distinct from the
+  `what is X` meta-shape gap below), `where is <LexiconTerm>` fabricates "(unknown module)" instead
+  of an honest miss, instance-level teach with a possessive subject ("X is owned by antony") is
+  refused while the class form works, a leading-`and` follow-up misparses `and` as the question's
+  subject, focus doesn't stick after a `/context`-shaped answer that named exactly one individual,
+  multi-word taught class names ("unit of work", "value object") are rejected — only single-word
+  classes parse, and `/describe <path not in the graph>` silently substitutes a same-basename
+  module instead of an honest miss (a full repo-relative path is not a case for fuzzy basename
+  matching).
+- [ ] seonix relay — `what is X` meta-shape only accepts `SchemaClass`/`SchemaPredicate`
+  individuals; a new individual class carrying a real definition (e.g. seonix's `LexiconTerm`) is
+  reachable through every other RI path but misses here specifically. Broaden the class check to
+  "carries a definition-shaped attribute" rather than a hardcoded class list. Relayed by
+  codememory, `~/.claude/inboxes/tmct.md` 2026-07-26T23:20.
+- [ ] seonix relay — chat's follow-up hint text hardcodes the `tmct_*` tool-name prefix
+  (`tmct_describe`, `tmct_impact`, …); inside a `seonix chat` session those names don't exist for
+  the user, who can only call `seonix_*`. Let a registered provider supply the prefix the hints
+  use. Cosmetic, no rush. Relayed by codememory, `~/.claude/inboxes/tmct.md` 2026-07-26T22:44.
 - [ ] bedrock-meter's embedding-surface asks (`~/.claude/inboxes/bedrock-meter.md`,
   2026-07-26) — bedrock-meter is embedding tmct in-process as marginalia's cap-breach fallback
   (sqlite memory, learn-on-miss, narration+digest+facts on every response) and did a deep recon
