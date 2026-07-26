@@ -32,6 +32,21 @@
       "reason": "synthetic git identity test-benchmarks/idxbench/run.mjs stamps on its throwaway per-run history repos (.invalid is the RFC 2606 reserved TLD, unroutable by construction)"
     },
     {
+      "match": "polycodelimited@gmail.com",
+      "kind": "email",
+      "reason": "the org's management-account contact email and the base address the AWS sub-addressed CI/prod contact emails derive from (AWS_ACCOUNTS.md) — a public organizational identity, not a private individual"
+    },
+    {
+      "match": "polycodelimited+aws-tmct-ci@gmail.com",
+      "kind": "email",
+      "reason": "the tmct-ci AWS account's contact email — a sub-addressed technical/organizational identity, same pattern as every sibling repo's *-ci account (PLAN_AWS.md, AWS_ACCOUNTS.md, docs/AWS_SETUP.md)"
+    },
+    {
+      "match": "polycodelimited+aws-tmct-prod@gmail.com",
+      "kind": "email",
+      "reason": "the tmct-prod AWS account's contact email — a sub-addressed technical/organizational identity, same pattern as every sibling repo's *-prod account (PLAN_AWS.md, AWS_ACCOUNTS.md, docs/AWS_SETUP.md)"
+    },
+    {
       "match": "Antony at Polycode",
       "kind": "name",
       "reason": "the intended public author identity (the repository's git committer name)"
