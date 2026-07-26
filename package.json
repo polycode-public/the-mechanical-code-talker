@@ -47,7 +47,8 @@
     "./createCompletionsGraphAdapter": "./src/services/completions.mjs",
     "./ingest": "./src/services/extract-facts.mjs",
     "./repository-interface": "./src/adapters/repository-interface.mjs",
-    "./conformance": "./src/tools/conformance.mjs"
+    "./conformance": "./src/tools/conformance.mjs",
+    "./ask-browser": "./src/surfaces/web/graph-ask-browser-entry.mjs"
   },
   "files": [
     "bin/",
