@@ -36,6 +36,20 @@ first commit (partial chat.mjs edits discarded); its four items stay OPEN below.
 - [ ] the four CONVERSATION dead-ends (block below) — a fix agent was dispatched and lost to a
   spend limit before committing; re-dispatch is the next session's first cheap win
 
+- [ ] a new AWS-hosted backend for the memory store — **needed for marginalia** (which is migrating
+  onto tmct and needs a durable store that survives a Lambda's scale-to-zero, not a local file).
+  tmct ships only `memory` (process-only) and `sqlite` (local file) today; the backend seam
+  (`src/adapters/memory/core.mjs`) has no formal plugin interface — `sqlite`/`memory` are inline
+  `isMemoryHandle`/`isSqliteHandle` branches, not a registered shape, so formalizing an explicit
+  `{load, persist, close}` interface is worth doing as groundwork before or alongside this. marginalia
+  already runs a working AWS-hosted graph store with the same underlying shape as tmct's sqlite
+  backend — full materialization, mutate in JS, write-behind — against S3+DynamoDB instead of a local
+  file: one JSON object per graph version in S3, with DynamoDB holding only a lightweight
+  manifest/version-pointer row to the latest version. Build tmct's new backend the same way — an
+  `s3`/`s3+dynamo` backend behind the existing `--memory-backend` precedence — so seonix, marginalia,
+  and bedrock-meter all get it for free the moment it lands here, instead of each repo bolting on its
+  own AWS persistence layer independently (see `seonix/PLAN_TMCT.md`'s "Graph backend evolution"
+  section for the full writeup this item is drawn from)
 - [ ] wire `bind()`'s `{ tieRefuses: true }` into the plural temporal-comparison lane
   (`PLURAL_TEMPORAL_COMPARISON_RE` in `chat.mjs`) alongside the singular one — built on a base
   before slice 4 landed, so it still binds a same-turn tie by recency; a real plural tie isn't
