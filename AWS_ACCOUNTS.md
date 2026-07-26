@@ -54,8 +54,8 @@ The CI project path is the tmct repo
 
 | Account | OIDC provider | Actions role | Deployment role | Trust scope (`gitlab.com:sub`) |
 |---------|---------------|--------------|-----------------|--------------------------------|
-| tmct-ci (`026621560310`) | `arn:aws:iam::026621560310:oidc-provider/gitlab.com` (not yet provisioned) | `tmct-ci-gitlab-actions-role` | `tmct-ci-deployment-role` | StringLike `project_path:polycode-projects/the-mechanical-code-talker:ref_type:branch:ref:*` |
-| tmct-prod (`000868243177`) | `arn:aws:iam::000868243177:oidc-provider/gitlab.com` (not yet provisioned) | `tmct-prod-gitlab-actions-role` | `tmct-prod-deployment-role` | StringEquals `project_path:polycode-projects/the-mechanical-code-talker:ref_type:branch:ref:main` |
+| tmct-ci (`026621560310`) | `arn:aws:iam::026621560310:oidc-provider/gitlab.com` | `tmct-ci-gitlab-actions-role` | `tmct-ci-deployment-role` (not yet provisioned) | StringLike `project_path:polycode-projects/the-mechanical-code-talker:ref_type:branch:ref:*` |
+| tmct-prod (`000868243177`) | `arn:aws:iam::000868243177:oidc-provider/gitlab.com` | `tmct-prod-gitlab-actions-role` | `tmct-prod-deployment-role` (not yet provisioned) | StringEquals `project_path:polycode-projects/the-mechanical-code-talker:ref_type:branch:ref:main` |
 
 GitLab OIDC thumbprint: `3c4a8b66430edde6b6f03fd431e01a5e30fce540`.
 Trust-policy JSON lives in `infra/iam-trust-policies/`.
@@ -75,7 +75,9 @@ Trust-policy JSON lives in `infra/iam-trust-policies/`.
 
 - ✅ **tmct-ci / tmct-prod accounts created**, `026621560310` / `000868243177`, both placed in
   the Workloads OU.
-- ⏳ GitLab OIDC provider + actions roles — `infra/provision-oidc.sh`, next.
+- ✅ **GitLab OIDC provider + actions roles provisioned**, both accounts — `infra/provision-oidc.sh`
+  run and verified (`tmct-ci-gitlab-actions-role` / `tmct-prod-gitlab-actions-role` exist, each
+  with its OIDC provider and `assume-deployment-role` inline policy).
 - ⏳ Deployment role (`…-deployment-role`) + `AdministratorAccess` — pending an explicit
   operator grant (same high-severity gate as seonix's).
 - ⏳ CDK bootstrap (`hnb659fds`, ×2 regions per account) — `infra/bootstrap-accounts.sh`, after
