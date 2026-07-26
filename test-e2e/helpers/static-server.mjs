@@ -33,8 +33,19 @@ function resolveRequestPath(root, url) {
 /**
  * Serve `root` on an ephemeral port.
  * Resolves to `{ origin, close }` once the port is listening.
+ *
+ * When TMCT_E2E_BASE_URL is set, `root` is ignored and this resolves to that
+ * URL instead of binding a local server — the deployed-site e2e job points
+ * tests at the real AWS-hosted site rather than a local build snapshot.
+ * `close` is a no-op since there is no local server to tear down.
  */
 export async function serveDirectory(root) {
+  if (process.env.TMCT_E2E_BASE_URL) {
+    return {
+      origin: process.env.TMCT_E2E_BASE_URL.replace(/\/+$/, ""),
+      close: async () => {},
+    };
+  }
   const servedRoot = path.resolve(root);
 
   const server = createServer((req, res) => {

@@ -21,8 +21,14 @@ const TRACKED_SITE_FILES = ["index.html", "demo-ui.mjs", "demo-templates.mjs", "
 /**
  * Build the site into a fresh temp directory and return its path.
  * The caller owns the directory for the lifetime of the test run.
+ *
+ * When TMCT_E2E_BASE_URL is set, the test is pointed at an already-deployed
+ * site instead (see static-server.mjs's serveDirectory), so there is nothing
+ * local to build. Returns undefined; callers already guard the temp-dir
+ * cleanup on a truthy siteDir.
  */
 export function buildDemoSiteSnapshot() {
+  if (process.env.TMCT_E2E_BASE_URL) return undefined;
   const siteDir = mkdtempSync(path.join(tmpdir(), "tmct-site-"));
   for (const entry of TRACKED_SITE_FILES) {
     cpSync(path.join(repoRoot, "public", entry), path.join(siteDir, entry), { recursive: true });

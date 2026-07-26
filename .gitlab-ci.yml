@@ -1,9 +1,12 @@
 # CI for @polycode-projects/the-mechanical-code-talker (tmct) — a single
-# published npm package plus a static GitLab Pages home page (no AWS, no
-# benchmark rig). Three jobs: run the tests, publish to public npm on a
-# deliberate version bump, and deploy public/ to Pages on main. Mirrors the
-# seonix repo's publish:npm shape, minus the --workspace flag (tmct is a
-# single package, not a workspace).
+# published npm package plus a static home page (no benchmark rig). Core
+# jobs: run the tests, publish to public npm on a deliberate version bump,
+# and deploy public/ to a home page on main. The home page is mid-migration
+# from GitLab Pages (`pages`) to an AWS-hosted edge (`deploy:website`,
+# `e2e:deployed`) — see PLAN_AWS.md. `pages` keeps running through the
+# burn-in period; only PLAN_AWS.md's own cutover phase retires it. Mirrors
+# the seonix repo's publish:npm and deploy:website shapes, minus the
+# --workspace flag (tmct is a single package, not a workspace).
 
 image: node:24.18.0
 
@@ -29,6 +32,21 @@ variables:
   # the on-disk graph memory, node_modules is dependencies.
   SAST_EXCLUDED_PATHS: "corpus, data, public, node_modules, .tmct"
   SECRET_DETECTION_EXCLUDED_PATHS: "corpus, data, public, node_modules, .tmct"
+
+# ---- AWS deploy CI/CD variables (documentation only — set via `glab variable
+# set`, masked + environment-scoped, once the tmct-ci/tmct-prod accounts exist
+# per PLAN_AWS.md Phase 1) ----------------------------------------------------
+# None of these are declared with values here: they don't exist yet (no AWS
+# account has been created), and `deploy:website` / `e2e:deployed` below fail
+# closed (rules require the variable present) until they are set, the same
+# gate publish:npm already uses for NPM_TOKEN.
+#   CI_AWS_ACTIONS_ROLE_ARN    — tmct-ci OIDC actions-role ARN (branch-scoped)
+#   CI_AWS_DEPLOY_ROLE_ARN     — tmct-ci deployment-role ARN
+#   PROD_AWS_ACTIONS_ROLE_ARN  — tmct-prod OIDC actions-role ARN (main only)
+#   PROD_AWS_DEPLOY_ROLE_ARN   — tmct-prod deployment-role ARN; gates deploy:website
+#   TMCT_PROD_ACCOUNT_ID       — tmct-prod AWS account ID
+#   TMCT_PROD_CERT_ARN         — ACM cert for tmct.polycode.co.uk (us-east-1)
+#   TMCT_PROD_ZONE_ID          — tmct-prod's Route53 hosted zone ID
 
 semgrep-sast:
   stage: verify
@@ -470,6 +488,38 @@ publish:npm:
         npm publish --provenance --access public
       fi
 
+# Deploy the built site to the AWS-hosted edge (tmct.polycode.co.uk) via the
+# GitLab OIDC -> AWS role chain (no static keys) — see PLAN_AWS.md. Builds the
+# same public/ the `pages` job below builds, then hands it to CDK instead of
+# a Pages artifact; no artifact upload, so the ~85 MB payload never transits
+# GitLab. `pages` keeps deploying in parallel during burn-in (see the `pages`
+# job's own comment) — this job does not replace it yet.
+deploy:website:
+  stage: deploy
+  image: nikolaik/python-nodejs:python3.13-nodejs24
+  rules:
+    # schedule-guarded: the nightly dep:audit schedule must not redeploy the site.
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    # Fails closed until PROD_AWS_DEPLOY_ROLE_ARN is set (see the AWS deploy
+    # CI/CD variables block near the top of this file) — same posture as
+    # publish:npm's NPM_TOKEN gate.
+    - if: '$CI_COMMIT_BRANCH == "main" && $PROD_AWS_DEPLOY_ROLE_ARN'
+      changes: *consumer-paths
+  id_tokens:
+    GITLAB_OIDC_TOKEN:
+      aud: https://gitlab.com
+  script:
+    - npm ci
+    - npm run build:ask-bundle
+    - npm run demo:build
+    - source scripts/assume-aws.sh prod
+    - cd infra
+    - npx cdk deploy tmct-prod-prod-website --require-approval never
+        -c env=prod -c slug=prod -c account="${TMCT_PROD_ACCOUNT_ID}" -c region=eu-west-2
+        -c hostname=tmct.polycode.co.uk -c certArn="${TMCT_PROD_CERT_ARN}"
+        -c hostedZoneId="${TMCT_PROD_ZONE_ID}" -c zoneName=tmct.polycode.co.uk
+
 # GitLab Pages: the static home page. GitLab's convention is a job literally
 # named `pages` whose artifact is the `public/` directory — the repo already
 # keeps the site there, so this job just hands it over. Main branch only.
@@ -484,6 +534,11 @@ publish:npm:
 # committed examples/mini-webapp fixture (scripts/build-demo-graph.mjs — real tmct code,
 # schema-docs.mjs's ingestSchemaDocs, run offline) so the published demo graph can never
 # drift from source.
+#
+# Stays in the pipeline alongside deploy:website during the AWS migration's
+# burn-in period (PLAN_AWS.md) — this is still the live site, so it keeps
+# publishing until the cutover phase repoints things at the AWS edge and
+# retires this job.
 pages:
   stage: deploy
   rules:
@@ -538,3 +593,42 @@ smoke:post-deploy:
   retry: 2
   script:
     - npm run smoke:deploy
+
+# Browser e2e run against the LIVE AWS-deployed site (test-e2e/helpers'
+# TMCT_E2E_BASE_URL switch points the fixture at the deployed URL instead of
+# a local build snapshot — see demo-site.mjs / static-server.mjs). Confirms
+# the AWS edge actually serves a working site on every main deploy, not just
+# that the CDK deploy succeeded. Starts with the same channel `e2e-web-index`
+# covers locally; grow the file list toward the full browser matrix as more
+# channels prove stable against the deployed edge.
+#
+# allow_failure: true is temporary, for the burn-in period only, because the
+# real site isn't cut over to AWS yet — flip it to blocking once this job has
+# a green history, per PLAN_AWS.md's cutover phase.
+e2e:deployed:
+  stage: verify
+  needs:
+    - deploy:website
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    - if: '$CI_COMMIT_BRANCH == "main" && $PROD_AWS_DEPLOY_ROLE_ARN'
+      changes: *consumer-paths
+  allow_failure: true
+  retry: 2
+  variables:
+    TMCT_E2E_BASE_URL: "https://tmct.polycode.co.uk"
+    PLAYWRIGHT_BROWSERS_PATH: "$CI_PROJECT_DIR/.playwright-browsers"
+  cache:
+    key:
+      files:
+        - package-lock.json
+    paths:
+      - .playwright-browsers
+  before_script:
+    - npm ci
+    - npx playwright install --with-deps chromium
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      test-e2e/pages-index.test.mjs test-e2e/pages-home.test.mjs test-e2e/readme-examples.test.mjs
