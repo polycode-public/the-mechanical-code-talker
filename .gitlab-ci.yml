@@ -518,6 +518,7 @@ deploy:website:
     - npm ci
     - npm run build:ask-bundle
     - npm run demo:build
+    - command -v aws >/dev/null || pip install --quiet awscli
     - source scripts/assume-aws.sh prod
     - cd infra
     - npm ci
@@ -592,6 +593,13 @@ smoke:post-deploy:
   needs:
     - publish:npm
     - deploy:website
+  # Needed so this job's own rule can see PROD_AWS_DEPLOY_ROLE_ARN (production-
+  # scoped) -- without it the rule's `&&` sees an empty variable, evaluates
+  # false, and the job is omitted from the pipeline entirely (not skipped,
+  # just absent) -- caught live: it silently vanished from a real pipeline
+  # until this was added.
+  environment:
+    name: production
   rules:
     - if: '$CI_PIPELINE_SOURCE == "schedule"'
       when: never
