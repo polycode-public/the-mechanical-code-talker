@@ -59,6 +59,7 @@ import {
 } from "./verdict-cache.mjs";
 import { familyIndex } from "./rubrics.mjs";
 import { batchRows, buildBatchPrompt } from "./batch-judge.mjs";
+import { matcherPasses } from "./matchers.mjs";
 
 const execFileP = promisify(execFile);
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -201,7 +202,7 @@ export function isHardFail(dimMeans) {
 }
 
 /** Fold judged rows (+ product rows for tags/tier1) into summary.json's shape. */
-export function computeSummary(productRows, judgedRows, { stamp, samples } = {}) {
+export function computeSummary(productRows, judgedRows, { stamp, samples, judgeModel = JUDGE_MODEL } = {}) {
   const byCase = new Map(productRows.map((r) => [r.caseId, r]));
   const grouped = new Map();
   for (const j of judgedRows) {
@@ -242,7 +243,7 @@ export function computeSummary(productRows, judgedRows, { stamp, samples } = {})
   }
   return {
     stamp: stamp ?? productRows[0]?.stamp ?? null,
-    judgeModel: JUDGE_MODEL,
+    judgeModel,
     promptVersion: PROMPT_VERSION,
     samplesPerCase: samples ?? null,
     overall: {
@@ -278,6 +279,14 @@ function parseArgs(argv) {
       "--only": { key: "only", value: (v) => v.split(",").map((s) => s.trim()).filter(Boolean) },
       "--cache": { key: "cache" },
       "--batch": { key: "batch", value: Number },
+      // PLAN lever 2: a case whose distilled matcher (chatbench/distill.mjs)
+      // still passes on this cycle's answer text skips the judge entirely,
+      // reusing its stored reference judged samples — see partitionByPromotion.
+      "--promoted": { key: "promoted" },
+      // Overrides the pinned JUDGE_MODEL for this invocation only — for lever 3's
+      // paired frontier/small calibration runs (calibrate.mjs), never for an
+      // ordinary product-judging cycle, which always wants the pinned model.
+      "--model": { key: "model" },
     },
   });
 }
@@ -305,13 +314,31 @@ export async function main(argv = process.argv.slice(2)) {
   let rows = parseJsonl(await readFile(args.product, "utf8"));
   if (args.only) rows = rows.filter((r) => args.only.includes(r.caseId));
 
+  const model = args.model || JUDGE_MODEL;
+
+  // Tier promotion (lever 2): a case whose distilled matcher (distill.mjs)
+  // still passes on THIS cycle's answer text skips both the cache check and
+  // the judge entirely — its contribution to judged.jsonl/summary.json is its
+  // stored reference judged samples, reused verbatim. A promoted case whose
+  // matcher now FAILS (a real tier-1 regression) falls through to the normal
+  // cache+judge path below, exactly the "judge is the appeal court" the plan
+  // names.
+  const promoted = args.promoted ? await loadCache(args.promoted) : {};
+  const promotedJudged = [];
+  const rowsForJudging = [];
+  for (const row of rows) {
+    const entry = promoted[row.caseId];
+    if (entry && matcherPasses(entry.matcher, row)) promotedJudged.push(...(entry.referenceJudged ?? []));
+    else rowsForJudging.push(row);
+  }
+
   // Delta-judging (lever 1): with --cache, judge only the cases whose answer text
   // or judge identity changed; the rest inherit the prior verdict verbatim.
-  const ctx = { judgeModel: JUDGE_MODEL, promptVersion: PROMPT_VERSION };
+  const ctx = { judgeModel: model, promptVersion: PROMPT_VERSION };
   const priorCache = await loadCache(args.cache);
   const { fresh, inherited, counts } = args.cache
-    ? partition(rows, priorCache, ctx)
-    : { fresh: rows, inherited: new Map(), counts: { total: rows.length, fresh: rows.length, inherited: 0 } };
+    ? partition(rowsForJudging, priorCache, ctx)
+    : { fresh: rowsForJudging, inherited: new Map(), counts: { total: rowsForJudging.length, fresh: rowsForJudging.length, inherited: 0 } };
 
   const prompts = fresh.map((row) => ({
     caseId: row.caseId,
@@ -321,7 +348,8 @@ export async function main(argv = process.argv.slice(2)) {
 
   if (args.dryRun) {
     const file = join(outDir, "prompts.jsonl");
-    const inheritNote = args.cache ? ` (${counts.inherited} inherited from cache, ${counts.fresh} fresh)` : "";
+    const promotedNote = args.promoted ? `, ${promotedJudged.length ? new Set(promotedJudged.map((r) => r.caseId)).size : 0} promoted` : "";
+    const inheritNote = args.cache ? ` (${counts.inherited} inherited from cache, ${counts.fresh} fresh${promotedNote})` : promotedNote ? ` (${promotedNote.replace(/^, /, "")})` : "";
     // Batch mode (lever 6): emit ONE prompt per rubric-family batch of up to
     // --batch cases, instead of one per case — the shared criteria/context are
     // paid once per batch. Dry-run only here; the pure logic is batch-judge.mjs.
@@ -352,7 +380,7 @@ export async function main(argv = process.argv.slice(2)) {
   let done = 0;
   const schemaJson = JSON.stringify(JSON.parse(await readFile(SCHEMA_FILE, "utf8"))); // inline schema (see callJudgeOnce)
   const judged = await pool(jobs, args.concurrency, async (job) => {
-    let r = await judgeSample(job.prompt, { model: JUDGE_MODEL, schemaJson });
+    let r = await judgeSample(job.prompt, { model, schemaJson });
     const masked = r.void ? null : maskScores(r.scores, job.dimensions);
     if (masked && Object.values(masked).every((v) => v === null)) {
       // the judge scored none of the case's requested dimensions — a format
@@ -364,7 +392,7 @@ export async function main(argv = process.argv.slice(2)) {
     return {
       caseId: job.caseId,
       sample: job.sample,
-      judgeModel: JUDGE_MODEL,
+      judgeModel: model,
       promptVersion: PROMPT_VERSION,
       void: r.void,
       ...(r.reason ? { reason: r.reason } : {}),
@@ -375,24 +403,30 @@ export async function main(argv = process.argv.slice(2)) {
   });
   process.stderr.write("\n");
 
-  // Fold the freshly-judged rows back together with the inherited ones, so
-  // judged.jsonl + summary cover the WHOLE product set even when only the changed
-  // cases were re-judged. Then rewrite the cache from this run (inherited entries
-  // carried forward, judged entries refreshed) so the next cycle inherits from it.
-  const allJudged = args.cache ? mergeJudged(judged, inherited) : judged;
+  // Fold the freshly-judged rows back together with the inherited ones and the
+  // promoted-matcher rows, so judged.jsonl + summary cover the WHOLE product
+  // set even when only the changed cases were re-judged. Then rewrite the
+  // cache from this run (inherited entries carried forward, judged entries
+  // refreshed) so the next cycle inherits from it. buildCache/the cache itself
+  // only ever sees rowsForJudging — a promoted case is never cache-inherited,
+  // it is matcher-validated fresh every cycle, which is the stronger guarantee
+  // lever 2 adds over lever 1's byte-identity check.
+  const allJudged = (args.cache ? mergeJudged(judged, inherited) : judged).concat(promotedJudged);
   const judgedFile = join(outDir, "judged.jsonl");
   await writeFile(judgedFile, allJudged.map((r) => JSON.stringify(r)).join("\n") + "\n");
-  const summary = computeSummary(rows, allJudged, { samples: args.samples });
+  const summary = computeSummary(rows, allJudged, { samples: args.samples, judgeModel: model });
   const summaryFile = join(outDir, "summary.json");
   await writeFile(summaryFile, JSON.stringify(summary, null, 2) + "\n");
 
   if (args.cache) {
-    const nextCache = buildCache(rows, judged, inherited, ctx, priorCache);
+    const nextCache = buildCache(rowsForJudging, judged, inherited, ctx, priorCache);
     await writeFile(args.cache, JSON.stringify(nextCache, null, 2) + "\n");
   }
 
-  console.log(`judged ${summary.overall.cases} case(s) x ${args.samples} sample(s) with ${JUDGE_MODEL} (${PROMPT_VERSION}).`);
+  const promotedCount = new Set(promotedJudged.map((r) => r.caseId)).size;
+  console.log(`judged ${summary.overall.cases} case(s) x ${args.samples} sample(s) with ${model} (${PROMPT_VERSION}).`);
   if (args.cache) console.log(`delta-judging: ${counts.fresh} judged, ${counts.inherited} inherited from cache (${counts.total} total).`);
+  if (args.promoted) console.log(`tier promotion: ${promotedCount} case(s) skipped the judge (matcher still passes).`);
   console.log(`overall mean ${summary.overall.mean} / 2 — hard fails ${summary.overall.hardFailCount} — voided samples ${summary.overall.voidCount}.`);
   console.log(`judged: ${judgedFile}\nsummary: ${summaryFile}`);
   return 0;

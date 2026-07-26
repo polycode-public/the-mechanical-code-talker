@@ -135,6 +135,16 @@ test("matchers: distillMatcher returns a tight matcher for a grounded answer, nu
   assert.equal(distillMatcher(missRow), null);
   // no distinctive grounded token -> null (leave it to the judge)
   assert.equal(distillMatcher(row("c3", "yes it does indeed")), null);
+  // a bare single digit is a real escaped-literal token but too weak to trust
+  // alone -- any answer containing that digit anywhere would pass -> null,
+  // same as no distinctive token at all
+  assert.equal(distillMatcher(row("c4", "1 module")), null);
+  // a multi-digit bare number is specific enough to stand alone
+  const multiDigit = distillMatcher(row("c5", "12 modules"));
+  assert.deepEqual(multiDigit.answerMatch, ["12"]);
+  // a single digit alongside a real token still promotes on the real token
+  const mixed = distillMatcher(row("c6", "1 caller: fnAlpha (id fn-alpha)"));
+  assert.ok(mixed.answerMatch.includes(escapeRegex("fn-alpha")));
 });
 
 test("matchers: matcherPasses requires every grounded token present and the miss gate to hold", () => {

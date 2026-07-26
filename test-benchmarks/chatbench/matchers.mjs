@@ -60,16 +60,29 @@ export function groundedTokens(text) {
   return out;
 }
 
+// A bare single digit (0-9) is syntactically a distinctive token (an escaped
+// literal drawn from the real answer) but semantically a weak one: any answer
+// containing that digit anywhere — including a wrong one, or an unrelated
+// count elsewhere in the text — would pass. Reviewing the first real bulk
+// distillation pass (2026-07-27, comparing two judged cycles) found 123 of 563
+// proposals whose ENTIRE matcher was a single bare digit like `["1"]` — tight
+// by construction, not tight in practice. A multi-digit bare number (10+) is
+// specific enough to keep on its own; a single digit needs company.
+const isWeakBareDigit = (tok) => /^\d$/.test(tok);
+
 /** Distil a deterministic matcher from a product row's answer: `miss:false` plus
  *  an `answerMatch` of escaped-literal grounded tokens. Returns null when the
  *  answer is a miss (a miss case is not a candidate for a positive matcher — its
- *  honesty is what the judge scores) or carries no distinctive grounded token
- *  (nothing tight to require; leave it to the judge). */
+ *  honesty is what the judge scores), carries no distinctive grounded token
+ *  (nothing tight to require; leave it to the judge), or every token is a bare
+ *  single digit (too weak to trust alone, even though each is a real escaped
+ *  literal — see isWeakBareDigit). */
 export function distillMatcher(row) {
   const missTurn = (row.transcript ?? []).some((t) => t.miss === true);
   if (missTurn) return null;
   const tokens = groundedTokens(answerText(row));
   if (!tokens.length) return null;
+  if (tokens.every(isWeakBareDigit)) return null;
   return { miss: false, answerMatch: tokens.map(escapeRegex) };
 }
 
