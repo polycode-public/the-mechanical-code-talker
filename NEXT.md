@@ -16,23 +16,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## Open items
 
-- [ ] no public browser-safe entry point for `ask()` — **needed by seonix's tmct-3.x upgrade**
-  (`seonix/PLAN_TMCT.md`, its browser ask-bundle builder). `ask` is already re-exported from the
-  package root (`src/services/index.mjs:16`), but importing the root pulls in the full Node-side
-  composition root (`setDefaultNlpAdapter`/`setConstructionBanks`, wink-nlp, fs-based corpus
-  reads) — nothing a browser bundle can link. tmct already solved this for its OWN browser bundles
-  (`src/surfaces/web/memory-ask-browser-entry.mjs`, built via `scripts/build-ask-bundle.mjs`'s
-  Node-builtin-stub + optional-adapter-stub esbuild plugins in `scripts/lib/browser-bundle.mjs`),
-  but that entry file isn't part of the public package surface — a downstream consumer can't
-  import it, only tmct's own build scripts can (repo-relative access). seonix's stopgap today:
-  `createGraphService` via a `COMPLETIONS_STORE` side door off `./generateCompletion` (fragile —
-  not a committed contract) and an esbuild `onResolve` plugin that maps tmct's `src/...` paths
-  straight to disk at bundle time (works for their build, not for any Node-side import). Designing
-  a real public browser-safe `ask()` surface — likely a new subpath export pointing at a
-  consumer-usable equivalent of `memory-ask-browser-entry.mjs`, possibly publishing the stub-plugin
-  helpers too — is a genuine new-feature decision, not a one-line re-export; worth its own design
-  pass rather than a quick patch.
-
 - [ ] a new AWS-hosted backend for the memory store — **needed for marginalia** (which is migrating
   onto tmct and needs a durable store that survives a Lambda's scale-to-zero, not a local file).
   tmct ships only `memory` (process-only) and `sqlite` (local file) today; the backend seam
