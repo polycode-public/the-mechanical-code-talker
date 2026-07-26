@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "generatedFrom": {
-    "infbenchVersion": "3.0.7",
-    "stamp": "3.0.7",
+    "infbenchVersion": "3.0.8",
+    "stamp": "3.0.8",
     "caseCount": 379
   },
   "bands": [
