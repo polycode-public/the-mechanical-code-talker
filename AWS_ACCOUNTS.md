@@ -83,6 +83,12 @@ Trust-policy JSON lives in `infra/iam-trust-policies/`.
 - ✅ **CDK bootstrap complete**, `hnb659fds` qualifier, both accounts × both regions
   (`eu-west-2`, `us-east-1`) — `infra/bootstrap-accounts.sh` run and verified (all 4
   `CDKToolkit` stacks `CREATE_COMPLETE`).
+- ✅ **Apex (DNS zone) stacks deployed**, both accounts —
+  `tmct-ci-apex`: zone `Z097342215YVGJPQGXL7E`, nameservers
+  `ns-1583.awsdns-05.co.uk, ns-465.awsdns-58.com, ns-1291.awsdns-33.org, ns-890.awsdns-47.net`.
+  `tmct-prod-apex`: zone `Z016664215EH1WLK6NZGI`, nameservers
+  `ns-980.awsdns-58.net, ns-347.awsdns-43.com, ns-2006.awsdns-58.co.uk, ns-1232.awsdns-26.org`.
+  Neither is public yet — no NS delegation in the parent zone.
 - ⏳ SSO permission-set assignments (Admin+PowerUser on ci, Admin+ReadOnly on prod).
 - ⏳ ACM cert (us-east-1) + DNS validation; Route53 NS delegation.
 - ⏳ GitLab CI variables (the seven named in `.gitlab-ci.yml`'s Phase 6 comment block).
