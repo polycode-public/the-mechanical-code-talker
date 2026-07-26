@@ -1,17 +1,22 @@
 # PLAN_BENCHMARK_MECHANISATION.md — intelligence authored once, benchmarks run mechanical
 
-Status: harness machinery LANDED (levers 1, 2, 3, 6, 7), and lever 1's seed pass has RUN — the
-3.0.3 cycle judged the full 1,075-case pool and committed `test-benchmarks/chatbench/verdict-cache.json`
-(`reports/BENCHMARK_CEFR_ENGLISH_3.0.3.md`; its final top-up judged 47 and inherited 1,028, the
-mechanism working as designed). Lever 4's chatbench half has also LANDED: `chatbench/run.mjs`'s
+Status: **all seven levers LANDED**, and every paid run the plan named has RUN at least once.
+Lever 1's seed pass judged the full 1,075-case pool at 3.0.3
+(`test-benchmarks/chatbench/verdict-cache.json`, `reports/BENCHMARK_CEFR_ENGLISH_3.0.3.md`; its
+final top-up judged 47 and inherited 1,028). Lever 4's chatbench half: `chatbench/run.mjs`'s
 tier-1 carries `expect.subclassParaphrase`, checked with ingestbench's own ING-7 checker
 (`verifySubClassParaphrase`, `src/domain/paraphrase.mjs`) — a case whose answer only needs to be a
-valid subclass paraphrase, not one pinned literal string, now settles free instead of reaching the
-judge. Remaining scope: the bulk matcher distillation over the all-green pool (lever 2's authoring
-pass), the calibration grade (lever 3's paired frontier/small-model runs feeding `--gate`), and
-ING-8's own corpus-authored equivalence checker (a separate, larger piece — "The levers" §4 below;
-not touched by the chatbench wiring). Written 2026-07-24 against the nine `SKILL_BENCHMARK_*.md`
-docs at 2.11.10; the chatbench wiring landed 2026-07-27.
+valid subclass paraphrase, not one pinned literal string, settles free instead of reaching the
+judge. Lever 2's first bulk distillation pass (comparing the 3.0.3 and 3.0.10 judged cycles): 563
+candidates, 440 promoted after review (123 rejected as too weak — see "What landed" below, a real
+finding that hardened `distillMatcher` itself); a fresh judge run with promotion active reproduced
+the identical 1.773/2 mean at zero paid judge calls. Lever 3's calibration grade: the 52-case
+calibration set graded at both frontier and small-model tier, gating which rubric families can
+down-tier (`test-benchmarks/chatbench/downtier.json`). Still open: ING-8's own corpus-authored
+equivalence checker (a separate, larger piece — "The levers" §4 below; not touched by the
+chatbench wiring) — the one item this plan never called a lever and never claimed was in scope.
+Written 2026-07-24 against the nine `SKILL_BENCHMARK_*.md` docs at 2.11.10; levers 2/3/4 landed
+2026-07-27.
 
 ## What landed (the mechanism; the paid runs stay the coordinator's)
 

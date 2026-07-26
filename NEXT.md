@@ -30,6 +30,19 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   consumes tmct's backend the moment it lands here instead of maintaining its own AWS persistence
   layer. Full design writeup: `PLAN_MEMORY_BACKEND_AWS.md` (relocated from seonix's `PLAN_TMCT.md`
   2026-07-26; this is a tmct/marginalia concern, not a consumer-repo one)
+- [ ] CONVERSATION 3.0.10 sweep (`reports/BENCHMARK_CONVERSATION_3.0.10.md`), routed dead-ends —
+  the ladder now gates at FLOW-6:
+  1. "what am I talking to?" / "what even is this thing, like what does it do?" — colloquial
+     identity/meta questions parse as graph queries or hit the plain wall instead of an identity
+     answer. Extend the identity/meta intent recognizer to colloquial phrasings.
+  2. "what does tasks.mjs actually do internally" — an adverb-inserted variant of the working
+     "what does X do" shape gets the bare generic wall. Extend the bounded-fuzzy tolerance for
+     that shape.
+  3. (low priority) the compositional AND / anaphoric-continuation nudge for an unmet function/
+     method-level test-coverage query ("which functions call X and are untested") suggests "who
+     touched \<module\>", which doesn't address what was actually asked — this graph's `tests`
+     edges are module-level only, a real ceiling, not a routing bug. Reword the miss to name the
+     actual gap instead of an unrelated suggestion.
 - [ ] `PLAN_AWS.md`'s two burn-in follow-ups, now that live execution (Phases 1-8) is complete
   and the CI pipeline is green end to end (`deploy:website`/`e2e:deployed`/`smoke:post-deploy`
   all passed on a real push, `https://tmct.polycode.co.uk/` confirmed serving HTTP 200): flip

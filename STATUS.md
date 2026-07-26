@@ -6,19 +6,19 @@ This page is generated from the reports committed in `reports/`, the root `PLAN_
 `README.md`, and the most recent pipeline on `main` — see `SKILL_REFRESH_STATUS.md` for the
 refresh recipe. It does not re-run anything itself.
 
-**Measured tree: 3.0.3. Repo now at 3.0.6.** The numbers below are the last full sweep's
-numbers, not a live reading. Real work has landed since 3.0.3 was measured — discourse Part A
-slices 3–5 and the plural temporal-comparison lane (`PLAN_DISCOURSE_AND_RECOGNITION.md`), this
-repo-layout restructuring — none of it re-benchmarked yet. Treat every number here as "true as
-of 3.0.3", not "true today", until the next sweep lands.
+**Measured tree: 3.0.3 for eight of nine axes; CONVERSATION re-measured at 3.0.10. Repo now at
+3.0.10 (rolling to a minor release).** Most numbers below are the 3.0.3 sweep's, not a live
+reading — CEFR_ENGLISH's product path was re-verified byte-identical this cycle (see
+`reports/BENCHMARK_SUMMARY_3.0.10.md`) but not re-judged in full. Treat every non-CONVERSATION
+number here as "true as of 3.0.3", not "true today", until the next full sweep lands.
 
 ## Last CI pipeline: every consumer surface exercised, all green
 
-[Pipeline #2705534943](https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/pipelines/2705534943),
-commit `8e87d836`, 2026-07-25, **27/27 jobs green** in ~9 minutes wall-clock (jobs run in
-parallel; the longest single job was `unit:slow` at 133s). This is the pipeline that first
-validated the CI restructuring itself — the e2e suite split into 14 page-scoped channels and the
-`unit` job split into four tiers — landing clean on its first real run.
+[Pipeline #2707015398](https://gitlab.com/polycode-projects/the-mechanical-code-talker/-/pipelines/2707015398),
+commit `57050579`, 2026-07-26, **29/29 jobs green** in ~13 minutes wall-clock. This is the first
+pipeline to actually run `deploy:website`, `e2e:deployed`, and `smoke:post-deploy` for real
+against the live AWS-hosted edge (`https://tmct.polycode.co.uk/`, confirmed serving HTTP 200) —
+the GitLab-Pages-to-AWS cutover `PLAN_AWS.md` describes, executed live this session.
 
 | job | what it exercises at the consumer surface |
 |---|---|
@@ -41,45 +41,49 @@ validated the CI restructuring itself — the e2e suite split into 14 page-scope
 | `license:deps` | the dependency tree a consumer inherits stays inside the licence allowlist |
 | `publish:npm` | the real `npm publish` gate — version-checked, provenance-signed |
 | `deploy:website` | the AWS deploy (CloudFront + S3) — the live public site at tmct.polycode.co.uk |
+| `pages` | the old GitLab Pages origin — now a redirect stub to the AWS edge, kept for old deep links and previously-published npm versions' baked-in URLs |
 | `e2e:deployed` | read-only page checks run against the live deployed site, not a local build |
 | `smoke:post-deploy` | a post-deploy check against the **live** deployed site and the **live** npm registry, not a local approximation |
 | `links:check`, `pii:lint`, `semgrep-sast`, `secret_detection` | repo hygiene and security scanning — not consumer-facing directly, but gate what ships |
 
 `e2e:heavy` (a full `demo:build`, an uncapped ConceptNet seed, an export/import round trip) did
 not run on this push — it's gated on paths this push didn't touch, plus a nightly schedule.
-`deploy:website` and `e2e:deployed` are the post-cutover job names; the linked pipeline above
-predates the rename and ran under the old `pages` job.
+`pages` still runs alongside `deploy:website` too (it now publishes a redirect stub instead of
+the real site, for old deep links and previously-published npm versions' baked-in URLs) —
+retiring it entirely is one of `PLAN_AWS.md`'s two remaining burn-in follow-ups (`NEXT.md`).
 
 ## The nine axes, at a glance
 
-Source: `reports/BENCHMARK_SUMMARY_3.0.3.md`, itself drawn from the nine per-axis reports below.
+Source: `reports/BENCHMARK_SUMMARY_3.0.10.md` — a targeted refresh (CONVERSATION re-measured;
+the other eight axes carried from `reports/BENCHMARK_SUMMARY_3.0.3.md` unchanged).
 
 | axis | result | vs baseline | gate / ceiling | source |
 |---|---|---|---|---|
 | AGENT | 68/68 at the goal ceiling (TOOL-8), 0% hallucination on all four drivers | byte-identical to 2.11.0 | resolver floor tops at TOOL-6 | `reports/BENCHMARK_AGENT_3.0.3.md` |
 | INFERENCE | kernel 100/100, chat 379/379, 0% fabrication, all bands pass | byte-identical to 2.11.0 across 577 commits | INF-7/INF-8 ceiling-graded (56/379) | `reports/BENCHMARK_INFERENCE_3.0.3.md` |
-| CEFR_ENGLISH | full 1,075-case pool judged: mean 1.773/2, 1068/1075 tier-1, 60 hard fails, 0 voids | 2.11.0 judged a 92-case sample (1.787); same tier-1 fail family (`g-b2-count-temp-*`), 12× the coverage | C1/C2 carry 36 of 60 hard fails | `reports/BENCHMARK_CEFR_ENGLISH_3.0.3.md` |
-| CONVERSATION | 37/40 judged turns FLOW; dead-end density ~43% → ~8% of turns; 12 new frozen regressions | ladder advances FLOW-0 → gates at FLOW-3 | two routing edges (overview-of-project, packages) | `reports/BENCHMARK_CONVERSATION_3.0.3.md` |
+| CEFR_ENGLISH | full 1,075-case pool judged: mean 1.773/2, 1068/1075 tier-1, 60 hard fails, 0 voids | byte-identical tier-1 replay + judged mean reconfirmed at 3.0.10 (0 tier-1 regressions, 1 case's wording changed and re-judged identically) | C1/C2 carry 36 of 60 hard fails | `reports/BENCHMARK_CEFR_ENGLISH_3.0.3.md` |
+| **CONVERSATION** | **45/50 turns FLOW; all 4 of 3.0.3's routed dead-ends confirmed fixed live; 2 new dead-ends routed** | **ladder advances FLOW-3 → gates at FLOW-6** | **identity-phrasing gap, "what does X do" adverb-insertion gap** | **`reports/BENCHMARK_CONVERSATION_3.0.10.md`** |
 | CODE_INDEX (founding) | IDX-0..9 all pass; conformance 180/180; 0 fabrication on 21 check surfaces | — | IDX-10 has no cases yet; C# reads unmeasured | `reports/BENCHMARK_CODE_INDEX_3.0.3.md` |
 | CODE_SYNTHESIS (founding) | SYN-0 passes its gate: 4/4, 100% verified completion, 0 false-pass, byte-deterministic | — | SYN-1..8 named markers; SYN-3's rename operator is next | `reports/BENCHMARK_CODE_SYNTHESIS_3.0.3.md` |
 | INGEST (founding) | ING-0..5 at 100% recall/precision; precision 100% on every rung | — | gates at ING-6 (38% recall vs 50% floor — the ordinal/temporal horizon); judged headroom: ING-8 2.0/2, ING-9 1.5/2 | `reports/BENCHMARK_INGEST_3.0.3.md` |
 | RESEARCH (founding) | RES-0/RES-1 pass; zero invented traversal | — | gates at RES-2 (ordering 67% vs 80% floor — no relevance ranking yet) | `reports/BENCHMARK_RESEARCH_3.0.3.md` |
 | AGI_SCALES | all eight entry rungs held; three scales moved (temporal-causal, stability×plasticity, loop closure) | 2.11.10 assessment | 2/8 scales scalar via the aggregator | `reports/BENCHMARK_AGI_3.0.3.md` |
 
-**Headline (3.0.3): zero fabrication on every axis.** No harness, judge, or playtest found a
-single invented fact in the sweep.
+**Headline: zero fabrication on every axis.** No harness, judge, or playtest — this cycle or
+3.0.3's — found a single invented fact.
 
 ## The gates, ranked by leverage
 
-From `reports/BENCHMARK_SUMMARY_3.0.3.md`'s own ranking — the fixes with the widest downstream
+From `reports/BENCHMARK_SUMMARY_3.0.10.md`'s own ranking — the fixes with the widest downstream
 unlock, most leveraged first:
 
 1. **RES-2 ordering (67% vs 80%)** — one relevance-ordering pass in `src/services/research.mjs`
    un-gates RES-3..6, which already hold receipts.
 2. **ING-6 ordinal/temporal threading (38% vs 50%)** — the "First … Then …" slice; lifting it
    un-gates ING-7 and promotes the strong judged headroom.
-3. **FLOW-3's two routing edges** — closed-set additions (overview-of-project phrasing, packages
-   as a listable kind).
+3. **CONVERSATION's two FLOW-6 gates** — closed-set additions (colloquial identity-question
+   phrasing, "what does X do" adverb-insertion tolerance); FLOW-3's two gates from 3.0.3 are
+   closed.
 4. **SYN-3's rename operator** — the first real transformation for the synthesis ladder.
 
 All four are tracked as open items in `NEXT.md` with their owning plan docs.
@@ -95,7 +99,7 @@ retire to `archive/`; everything below is still live.
 | plan | goal | delivered | design horizon (known engineering) | research horizon (open problem) |
 |---|---|---|---|---|
 | `PLAN_DISCOURSE_AND_RECOGNITION.md` | two bounded, typed, refusable records: cross-turn discourse referents, and agent goal recognition | Part A (discourse) slices 1–5 all built — referents register, bind, tie-refuse, and a plural temporal comparison composes over a set | Part B (goal recognition: fitting a trace to a declared goal by operator containment, an N+1 "reject" class) is still design | — |
-| `PLAN_BENCHMARK_MECHANISATION.md` | author judge intelligence once, replay benchmark runs mechanically thereafter | levers 1 (verdict cache), 2 (tier-promotion matchers), 3 (rubric compilation), 6 (execution speed), 7 (AGI-scales aggregation) landed; lever 1's seed pass ran the full 1,075-case CEFR pool | lever 4 (wiring ingestbench's equivalence checker into the judged cycle), lever 2's bulk matcher-distillation authoring pass, lever 3's paired calibration grade | — |
+| `PLAN_BENCHMARK_MECHANISATION.md` | author judge intelligence once, replay benchmark runs mechanically thereafter | all seven levers landed: 1 (verdict cache, full 1,075-case CEFR pool seeded), 2 (tier-promotion matchers, 440 promoted), 3 (rubric compilation + calibration-gated down-tiering, 52-case calibration set graded both tiers), 4 (ingestbench's ING-7 paraphrase-equivalence checker wired into chatbench tier-1), 6 (execution speed), 7 (AGI-scales aggregation) | ING-8's own corpus-authored equivalence checker (research horizon, no settled approach yet) | — |
 | `PLAN_CODE_PLANNING.md` | planning over code states: search + verification over closed operator catalogues, never an LLM guessing code | Track 1 (`test-benchmarks/synthbench/`) shipped; Track 5 §3.1–3.3 (state, operator catalogue, planner) shipped as `src/domain/codeplan/`; §3.6's re-index dependency shipped | §2.1's stage-1 build (read-only rule admission), Track 5 §3.4–3.5 (adaptor, verification tiers), §3.6's re-index wiring into the plan-act-verify loop, §3.7's two-step refactor milestone | — |
 | `PLAN_CONSISTENCY_CHECK.md` | tmct as a consistency-checking service: an LLM tool loop proposes a claim in tmct's grammar, tmct returns a verdict (including an honest "unknown", never a silent pass) and the canonical form | approved in outline by the operator | the whole build — grammar-gated claim intake, the four-verdict check, one-shot semantics | — |
 | `PLAN_PARAPHRASE_VERIFICATION.md` | a verified paraphrase shown alongside a literal answer, never instead of it, checked against the graph rather than assumed | the isa-family narrow slice (`paraphraseVerifiedSubClass`, closure-backed) already ships in the teach confirmation | the general `verifyParaphrase()`: this doc's own finding is that most paraphrase shapes need triple-equality checking, not `syllogise.mjs` entailment — only class-swap-along-⊑ paraphrases fit the closure kernels, and that generator doesn't exist yet either | — |

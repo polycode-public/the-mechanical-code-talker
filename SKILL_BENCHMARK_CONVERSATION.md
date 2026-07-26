@@ -580,12 +580,17 @@ Report structure:
 - **Verify every offered example, in-state.** If a turn's reply says `try "X"`, actually ask `X` in
   that same session/seed state before calling the turn FLOW. A suggestion that wasn't checked is a
   guess wearing a helpful voice — score it a dead-end if it would fail (§0).
-- **Don't invent new farewell test cases.** Don't add cases that test elaborate goodbye or thanks phrasing.
-  A short, clear close beats a clever one, and stretching the closing-phrase matcher to cover more
-  wording adds ambiguity about when the conversation actually ends. If a round turns up a genuine
-  farewell dead-end, note it and move on rather than generalizing the matcher further (operator
-  decision, 2026-07-10). This is about not INVENTING new farewell cases to chase, not a bar on fixing
-  a real bug where a non-farewell gets MISREAD as one — that's an ordinary dead-end, route it normally.
+- **Don't chase irregular sign-offs at all — invented or organically found.** Don't add cases that
+  test elaborate goodbye or thanks phrasing, and don't route one that turns up on its own either
+  (operator decision, 2026-07-10, hardened 2026-07-27 after a persona sweep re-surfaced the same
+  class — "thanks, that's all for now" and its siblings — as a dead-end worth chasing). A short,
+  clear close beats a clever one; stretching the closing-phrase matcher to cover more wording adds
+  ambiguity about when the conversation actually ends, for a class of input that's low-value to
+  chase indefinitely. If a round turns up an irregular-sign-off dead-end, note it in the report and
+  stop there — no `NEXT.md` item, no routing, no further sweep effort on that class. This is about
+  irregular SIGN-OFFS specifically, not a bar on fixing a real bug where a non-farewell gets
+  MISREAD as one (a false match, not a missed match) — that's an ordinary dead-end, route it
+  normally.
 - **Delegate long-running work under the coordinator model.** Persona-sweep mode (§3.4) is the
   clearest example of this — every persona's CHAT step is an independent, parallel background
   sub-agent , which is also why it's the default single-run mode (§3's capped sprint is
