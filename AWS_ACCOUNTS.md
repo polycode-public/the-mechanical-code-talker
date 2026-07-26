@@ -78,10 +78,11 @@ Trust-policy JSON lives in `infra/iam-trust-policies/`.
 - ✅ **GitLab OIDC provider + actions roles provisioned**, both accounts — `infra/provision-oidc.sh`
   run and verified (`tmct-ci-gitlab-actions-role` / `tmct-prod-gitlab-actions-role` exist, each
   with its OIDC provider and `assume-deployment-role` inline policy).
-- ⏳ Deployment role (`…-deployment-role`) + `AdministratorAccess` — pending an explicit
-  operator grant (same high-severity gate as seonix's).
-- ⏳ CDK bootstrap (`hnb659fds`, ×2 regions per account) — `infra/bootstrap-accounts.sh`, after
-  the deploy roles.
+- ✅ **Deployment role (`…-deployment-role`) + `AdministratorAccess` granted**, both accounts —
+  operator confirmed the grant explicitly; `infra/provision-deploy-roles.sh` run for ci and prod.
+- ✅ **CDK bootstrap complete**, `hnb659fds` qualifier, both accounts × both regions
+  (`eu-west-2`, `us-east-1`) — `infra/bootstrap-accounts.sh` run and verified (all 4
+  `CDKToolkit` stacks `CREATE_COMPLETE`).
 - ⏳ SSO permission-set assignments (Admin+PowerUser on ci, Admin+ReadOnly on prod).
 - ⏳ ACM cert (us-east-1) + DNS validation; Route53 NS delegation.
 - ⏳ GitLab CI variables (the seven named in `.gitlab-ci.yml`'s Phase 6 comment block).
