@@ -5,7 +5,8 @@
 // exercised directly on a synthetic same-turn record, then driven through
 // runTurn against the committed mini-webapp graph. No real chat lane registers
 // two same-turn singular referents yet (that arrives with superlative-winner
-// registration), so the record is hand-built on purpose.
+// registration), so the record is hand-built on purpose. The plural sibling at
+// the foot does the same for a `set` referent and the plural lane.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -67,4 +68,35 @@ test("the temporal-comparison lane refuses and lists a same-turn tie rather than
   });
   assert.match(String(r.answer), /^"that" could mean e5f6a1b2c3d4 or 1b2c3d4e5f60 — which do you mean\?/);
   assert.doesNotMatch(String(r.answer), /came (?:before|after)|landed on the same day/, "it never composes a comparison over a tie");
+});
+
+/** A complete set referent spec — the shape a listing/filter answer registers. */
+const setSpec = (over = {}) => ({
+  kind: "set", class: "Commit", label: "2 commits",
+  ids: ["commit:1b2c3d4e5f60", "commit:e5f6a1b2c3d4"], attrs: { count: 2 },
+  from: { lane: "commitFilter", query: "what changed before 1b2c3d4e5f60" },
+  ...over,
+});
+
+/** Two sets registered in one turn — the plural synthetic tie. */
+function sameTurnSetPair() {
+  let rec = advanceTurn(emptyRecord());
+  rec = register(rec, setSpec());
+  rec = register(rec, setSpec({ label: "3 commits", ids: ["commit:0a1b2c3d4e5f"], attrs: { count: 3 } }));
+  return rec;
+}
+
+test("two sets sharing a registration turn tie on the plural forms too", () => {
+  const tied = bind(sameTurnSetPair(), "those", { tieRefuses: true });
+  assert.equal(tied.referent, undefined, "no set is picked");
+  assert.equal(tied.tie.length, 2);
+  assert.deepEqual(tied.tie.map((r) => r.label).sort(), ["2 commits", "3 commits"]);
+});
+
+test("the plural temporal-comparison lane refuses and lists a same-turn set tie", async () => {
+  const r = await runTurn("were those before logger.mjs was touched", {
+    config: { graphFile: GRAPH_FILE }, graph, discourse: sameTurnSetPair(),
+  });
+  assert.match(String(r.answer), /^"those" could mean 3 commits or 2 commits — which set do you mean\?/);
+  assert.doesNotMatch(String(r.answer), /\bof the\b|all \d|none of/, "it never quantifies over a tie");
 });

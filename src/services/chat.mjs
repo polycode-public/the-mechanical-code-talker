@@ -12167,7 +12167,11 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         note(trace, `lane: PLURAL_TEMPORAL_COMPARISON_RE — "${form}" could not compose a set comparison; a specific miss names why, never the teach-offer cascade`);
         return plainTurn(query, text, { via: "miss", miss: true, focus, goal: temporalGoal });
       };
-      const bound = discourseHolder ? bindDiscourseForm(discourseHolder.record, form) : null;
+      const bound = discourseHolder ? bindDiscourseForm(discourseHolder.record, form, { tieRefuses: true }) : null;
+      if (bound?.tie) {
+        const options = joinOr(bound.tie.map((r) => r.label));
+        return refMiss(`"${form}" could mean ${options} — which set do you mean?`);
+      }
       if (!bound?.referent) {
         return refMiss(`I don't have a set for "${form}" yet — nothing answered earlier in this conversation binds it. Ask for the set first (e.g. "what changed before <commit>"), then ask the comparison again.`);
       }
