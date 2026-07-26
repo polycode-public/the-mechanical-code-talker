@@ -104,15 +104,22 @@ Trust-policy JSON lives in `infra/iam-trust-policies/`.
   production`; `deploy:website`/`e2e:deployed` given a matching `environment: production` so the
   scope actually applies — GitLab only injects a non-wildcard-scoped variable into a job whose
   `environment` matches it).
-- ✅ **Website stack deployed**: `tmct-prod-prod-website`, CloudFront `d1wf3da8rbekm0.cloudfront.net`
-  (distribution `E1YEAO48PKAJHE`), bucket `tmct-prod-prod-web-000868243177`. Confirmed serving
-  real content directly via the CloudFront domain (HTTP 200); `tmct.polycode.co.uk` itself was
-  still resolving through a stale negative-DNS-cache entry from pre-deploy nameserver checks at
-  last check (the SOA's negative-cache TTL is 24h) — the A-record and CloudFront are both
-  confirmed correct via the AWS API, so this clears on its own, not a real fault.
+- ✅ **Website stack deployed and live**: `tmct-prod-prod-website`, CloudFront
+  `d1wf3da8rbekm0.cloudfront.net` (distribution `E1YEAO48PKAJHE`), bucket
+  `tmct-prod-prod-web-000868243177`. `https://tmct.polycode.co.uk/` confirmed serving HTTP 200
+  publicly (the earlier stale negative-DNS-cache entry from pre-deploy nameserver checks cleared
+  on its own).
 - ✅ **Cutover done**: `package.json`'s `homepage` now points at `https://tmct.polycode.co.uk/`;
   `pages` now publishes a meta-refresh + canonical-link redirect stub instead of the real site;
   `smoke:post-deploy` now needs `deploy:website` instead of `pages`.
+- ✅ **CI pipeline fully green end to end**: `deploy:website`, `e2e:deployed`, and
+  `smoke:post-deploy` all passed on a real push (two live bugs found and fixed along the way —
+  the deploy image had no AWS CLI installed, and `smoke:post-deploy` needed its own
+  `environment: production` to see the production-scoped gate variable its rule now checks).
+  **PLAN_AWS.md's live execution is complete.** Remaining: flip `e2e:deployed`'s
+  `allow_failure: true` off once it has a longer green history (per the plan's own stated
+  burn-in criterion), and the post-cutover `SKILL_PAGE_WEIGHTS` run for `reports/PAGE_WEIGHTS.md`
+  revision 2.
 - ⏳ Post-cutover `SKILL_PAGE_WEIGHTS` run → `reports/PAGE_WEIGHTS.md` revision 2 (once DNS
   fully clears, so the measurement hits the real deployed edge, not a stale-cache miss).
 

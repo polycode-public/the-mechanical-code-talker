@@ -30,15 +30,12 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   consumes tmct's backend the moment it lands here instead of maintaining its own AWS persistence
   layer. Full design writeup: `PLAN_MEMORY_BACKEND_AWS.md` (relocated from seonix's `PLAN_TMCT.md`
   2026-07-26; this is a tmct/marginalia concern, not a consumer-repo one)
-- [ ] `PLAN_AWS.md` (website migration to AWS, distinct from the memory-backend plan above) —
-  Phases 2-5's file deliverables are built and merged (`infra/` CDK workspace, `AWS_ACCOUNTS.md`,
-  `docs/AWS_SETUP.md`, `scripts/assume-aws.sh`, `scripts/fast-deploy-web.sh`, plus Phase 6/7's
-  `deploy:website`/`e2e:deployed` CI jobs and the `TMCT_E2E_BASE_URL` e2e switch). Phase 1 is done
-  live: `tmct-ci` (`026621560310`) and `tmct-prod` (`000868243177`) exist, in the Workloads OU,
-  recorded in `AWS_ACCOUNTS.md`. Still open: OIDC/actions-role provisioning (Phase 3, trust-policy
-  placeholders are already filled with the real account IDs), the deployment-role admin grant, CDK
-  bootstrap+deploy, DNS/cert, CI variables, and cutover — remaining checklist lives in
-  `PLAN_AWS.md` itself.
+- [ ] `PLAN_AWS.md`'s two burn-in follow-ups, now that live execution (Phases 1-8) is complete
+  and the CI pipeline is green end to end (`deploy:website`/`e2e:deployed`/`smoke:post-deploy`
+  all passed on a real push, `https://tmct.polycode.co.uk/` confirmed serving HTTP 200): flip
+  `e2e:deployed`'s `allow_failure: true` off once it has a longer green history, and run
+  `SKILL_PAGE_WEIGHTS` post-cutover for `reports/PAGE_WEIGHTS.md` revision 2. Full status in
+  `AWS_ACCOUNTS.md`'s provisioning-status section.
 - [ ] `test-e2e/pages-ledger-teach.test.mjs` (bundle-load and refocus assertions) flakes under real
   multi-file e2e contention — investigated once more without a confirmed root cause. A solo run
   passes cleanly with wide timing margin (each `turn()` resolves in 1-2s against a 20s deadline).
