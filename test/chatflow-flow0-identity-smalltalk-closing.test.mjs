@@ -132,3 +132,59 @@ test("a vague-touch opener whose term resolves to nothing (\"wat about xyzzy\") 
   const r = await onMiniWebapp("wat about xyzzy");
   assert.match(r.answer, /deterministic, offline code-graph assistant/i);
 });
+
+// ---- colloquial identity questions: a greeting frame, and a comma-joined tail ----
+
+test("an identity question behind a greeting frame (\"hello there, what am I talking to?\") gets the self-description, not a module lookup for \"I\"", async () => {
+  const r = await bare("hello there, what am I talking to?");
+  assert.match(r.answer, /deterministic, offline chat assistant/i);
+  assert.doesNotMatch(r.answer, /no module matching/i);
+  assert.equal(r.record.miss, false);
+});
+
+test("an identity question with an inserted adverb and a self-referential tail (\"what even is this thing, like what does it do?\") gets the self-description", async () => {
+  const r = await bare("what even is this thing, like what does it do?");
+  assert.match(r.answer, /deterministic, offline chat assistant/i);
+  assert.equal(r.record.miss, false);
+});
+
+test("a bare \"what is this?\" still gets the self-description once the adverb slot is optional", async () => {
+  const r = await bare("what is this?");
+  assert.match(r.answer, /deterministic, offline chat assistant/i);
+  assert.equal(r.record.miss, false);
+});
+
+test("an identity clause comma-joined to a REAL graph question keeps the graph answer — the clause split never swallows the second half", async () => {
+  const r = await onMiniWebapp("what is this, and which modules import validate.mjs");
+  assert.match(r.answer, /validate\.mjs/);
+  assert.doesNotMatch(r.answer, /deterministic, offline chat assistant/i);
+  assert.equal(r.record.miss, false);
+});
+
+// ---- orientation questions with "I" as the subject, not "you" ----
+
+test("\"what can I ask you?\" gets the orientation card, not a graph query on the bare \"I\"", async () => {
+  const r = await bare("what can I ask you?");
+  assert.match(r.answer, /deterministic, offline code-graph assistant/i);
+  assert.equal(r.record.miss, false);
+});
+
+test("\"what questions can I ask?\" gets the orientation card", async () => {
+  const r = await bare("what questions can I ask?");
+  assert.match(r.answer, /deterministic, offline code-graph assistant/i);
+  assert.equal(r.record.miss, false);
+});
+
+test("\"what kind of questions can I ask about this codebase?\" gets the orientation card", async () => {
+  const r = await bare("what kind of questions can I ask about this codebase?");
+  assert.match(r.answer, /deterministic, offline code-graph assistant/i);
+  assert.equal(r.record.miss, false);
+});
+
+test("\"how do I get started with this?\" reaches the same orientation answer the untailed \"how do I get started\" already did", async () => {
+  const tailed = await bare("how do I get started with this?");
+  const bareForm = await bare("how do I get started?");
+  assert.equal(tailed.answer, bareForm.answer);
+  assert.equal(tailed.record.miss, false);
+  assert.doesNotMatch(tailed.answer, /couldn't parse this as a graph question/i);
+});
