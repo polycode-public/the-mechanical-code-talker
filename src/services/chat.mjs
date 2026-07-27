@@ -257,7 +257,12 @@ function renderNarration(trace, { record, detail, fallbackGoal }) {
  *  renderVerbose) see the exact same text a narrate:false run would have
  *  produced; narrate is purely additive to what's PRINTED, never to what's
  *  REMEMBERED. No-op (returns `result` unchanged, by reference) when `trace`
- *  is null (narrate off) or empty (nothing was traced). */
+ *  is null (narrate off) or empty (nothing was traced).
+ *
+ *  The same trace block also rides the result as its own `narration` field, so
+ *  an embedding caller reads the answer and the trace apart without splitting
+ *  the printed text on NARRATE_MARKER. `answer` keeps the glued form it always
+ *  had — the field is additive, and absent on a turn that traced nothing. */
 function withNarration(result, trace, fallbackGoal) {
   if (!trace || !trace.length) return result;
   const narrative = renderNarration(trace, { record: result.record, detail: result.detail, fallbackGoal });
@@ -265,7 +270,7 @@ function withNarration(result, trace, fallbackGoal) {
   const logLines = Array.isArray(result.logLines)
     ? result.logLines.map((l) => (l === result.answer ? answer : l))
     : result.logLines;
-  return { ...result, answer, logLines };
+  return { ...result, answer, narration: narrative, logLines };
 }
 
 /** A short "Goal (inferred): …" line appended (never prepended) after every
@@ -14813,7 +14818,60 @@ function vocabAntecedentFrom(last) {
   return m[1];
 }
 
-export async function runTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false } = {}) {
+/** Commands whose answer is SERVED SOURCE TEXT — lines read byte-for-byte off a
+ *  file on disk, which a caller may paste straight into an edit. The prose
+ *  grammar rules rewrite real code into code that no longer parses: a spread
+ *  (`...base`) and an optional chain (`?.`) both read as runs of terminal
+ *  punctuation and collapse to a single character. So the whole answer goes to
+ *  finish() as ONE protected `code` span and comes back untouched. */
+const SOURCE_RENDERING_COMMANDS = new Set(["context", "snippet"]);
+
+/** finish() a dispatched turn, byte-protecting a served-source answer. A
+ *  producer that segmented its own answer keeps its own segments; everything
+ *  else is masked and grammar-corrected exactly as before. */
+function finishTurn(result, ctx) {
+  const preSegmented = Array.isArray(result?.segments) && result.segments.length > 0;
+  if (!preSegmented && typeof result?.answer === "string"
+      && SOURCE_RENDERING_COMMANDS.has(result?.record?.command)) {
+    return finish({ ...result, segments: [{ type: "code", text: result.answer }] }, ctx);
+  }
+  return finish(result, ctx);
+}
+
+/** An uncached readFactRows() snapshot of the memory store — one half of the
+ *  before/after pair a turn's `factsTouched` diff is taken over. Deliberately
+ *  bypasses the turn's factRowsCache: the cache is invalidated by only some
+ *  write paths, and a diff read through it would miss the very writes it exists
+ *  to report. Null (rather than []) when there is no store or it won't load, so
+ *  the caller can tell "nothing to diff" from "diffed, nothing moved". */
+async function factRowSnapshot(memoryDir) {
+  if (!memoryDir) return null;
+  try { return readStoredFactRows(await loadMemoryStore(memoryDir)); } catch { return null; }
+}
+
+/** The Fact rows this turn wrote, diffed against the snapshot taken before it.
+ *  Empty when the turn had no store to write to, or wrote nothing. */
+async function factsTouchedSince(memoryDir, before) {
+  if (!before) return [];
+  const after = await factRowSnapshot(memoryDir);
+  if (!after) return [];
+  const { touchedFactRows } = await import("../domain/memory/touched-facts.mjs");
+  return touchedFactRows(before, after);
+}
+
+/** Run one turn and report which Fact rows it wrote, as `factsTouched` beside
+ *  the answer/record/logLines every caller already reads. The dispatch itself
+ *  is dispatchTurn, below; this wrapper exists so the field lands on EVERY
+ *  return path (dispatched, conversational, multi-sentence) from one place. */
+export async function runTurn(input, options = {}) {
+  const memoryDir = options?.memoryDir ?? null;
+  const before = await factRowSnapshot(memoryDir);
+  const result = await dispatchTurn(input, options);
+  if (!result || typeof result !== "object") return result;
+  return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
+}
+
+async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -14891,7 +14949,7 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
   // what the shell prints. The narrate block is applied AFTER `last` is
   // captured from the PRE-narration finished result.
   const withLast = (result, fallbackGoal = "unclear — no goal signal for this turn type") => {
-    const finished = attachDialogueAct(finish(result, { graph }), trace);
+    const finished = attachDialogueAct(finishTurn(result, { graph }), trace);
     // The logged transcript echo is ALWAYS the verbatim user line — no dispatch
     // path's internal rewrite (the indirect-request wrapper, the vocab-opener /
     // cleft / ESL rewrites, a discourse substitution) may leak into what the
@@ -15182,8 +15240,11 @@ export async function runTurn(input, { config, source = defaultSource, graph = n
         let f = focus; let l = last; let ps = planHolder.state; let d = discourseHolder.record;
         const receipts = [];
         let finalRec = null;
+        // dispatchTurn, not runTurn: the OUTER wrapper's before/after snapshot
+        // already spans every sentence, so a per-sentence diff would only pay
+        // for a narrower answer to the same question.
         for (const sentence of sentences) {
-          const r = await runTurn(sentence, {
+          const r = await dispatchTurn(sentence, {
             config, source, graph, focus: f, last: l, memoryDir, sessionId, env, lexicon,
             narrate: false, vocabHint, tel, biasByBundle, planState: ps, discourse: d, _noSplit: true,
           });

@@ -14,9 +14,10 @@ import { PassThrough, Readable } from "node:stream";
 import {
   uuidv7, runTurn, runChat, helpText, COMMANDS, SESSION_LOG_DIR, PROMPT,
   answerCount, renderStats, isConversational,
-  renderVerbose, WALL_MISS_RE,
+  renderVerbose, WALL_MISS_RE, NARRATE_MARKER,
 } from "../../src/services/chat.mjs";
 import { dispatchTool } from "../../src/tools/server.mjs";
+import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { parseEntities } from "../../src/domain/codegraph.mjs";
 import * as source from "../../src/adapters/source.mjs";
 import { CANONICAL_LINE_RE } from "../helpers/session.mjs";
@@ -152,6 +153,83 @@ test("runTurn: every slash-command dispatches the tool + arg key it maps to", as
     const direct = await dispatchTool(tool, args, { config: CONFIG }).catch((e) => String(e?.message || e));
     assert.equal(answer, `${direct}\n\nGoal (inferred): ${goal}`, `${line} → ${tool}(${JSON.stringify(args)})`);
   }
+});
+
+/** A temp repo holding one real JS source file plus a graph built over it, so a
+ *  source-serving command has actual bytes on disk to read. */
+async function repoWithRealSource(sourceText) {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-real-source-"));
+  await writeFile(join(dir, "a.mjs"), sourceText);
+  const modules = [{
+    path: "a.mjs", dotted: "a", imports: [], calls: [],
+    defines: [{ name: "mergeIndex", kind: "function", lineno: 1, end_lineno: 5, decorators: [] }],
+  }];
+  const entities = buildEntities(modules, [], { generatedAt: new Date().toISOString() });
+  await mkdir(join(dir, ".tmct"), { recursive: true });
+  await writeFile(join(dir, ".tmct", "graph.json"), JSON.stringify(entities));
+  return { dir, entities, config: { graphFile: join(dir, ".tmct", "graph.json") } };
+}
+
+// The source-serving commands hand a caller lines to paste into an edit, so the
+// prose finishing pass must not reach them. A spread and an optional chain are
+// the two shapes that break loudest: both read as runs of terminal punctuation,
+// and collapsing them ("...base" -> ".base", "i?.id" -> "i?id") turns served
+// source into source that no longer parses.
+test("runTurn: /snippet and /context serve real source byte-for-byte, spreads and optional chains intact", async () => {
+  const REAL_SOURCE = [
+    "export function mergeIndex(base, extra) {",
+    "  const merged = { ...base, ...extra.aliases };",
+    "  const pairs = extra.items.map((i) => [i?.id, i]);",
+    "  return { merged, pairs };",
+    "}",
+    "",
+  ].join("\n");
+  const { dir, entities, config } = await repoWithRealSource(REAL_SOURCE);
+  try {
+    const g = parseEntities(entities);
+    for (const [line, tool] of [["/snippet mergeIndex", "tmct_snippet"], ["/context mergeIndex", "tmct_context"]]) {
+      const { answer } = await runTurn(line, { config, graph: g });
+      const direct = await dispatchTool(tool, { symbol: "mergeIndex" }, { config });
+      assert.ok(answer.startsWith(direct), `${line} must serve the tool's exact bytes, got:\n${answer}`);
+      assert.match(answer, /\{ \.\.\.base, \.\.\.extra\.aliases \};/, `${line} keeps both spreads`);
+      assert.match(answer, /\[i\?\.id, i\]/, `${line} keeps the optional chain`);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runTurn: factsTouched reports the Fact rows the turn wrote, and is empty for a read", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-facts-touched-"));
+  try {
+    const taught = await runTurn("a dog is an animal", { memoryDir: dir, sessionId: "facts-touched" });
+    assert.equal(taught.factsTouched.length, 1, "the teach wrote exactly one Fact row");
+    assert.equal(taught.factsTouched[0].subject, "dog");
+    assert.equal(taught.factsTouched[0].object, "animal");
+    assert.ok(taught.factsTouched[0].provenance, "the touched row carries its provenance");
+
+    const read = await runTurn("what is a dog", { memoryDir: dir, sessionId: "facts-touched" });
+    assert.deepEqual(read.factsTouched, [], "a read touches nothing");
+
+    // Every sentence of a multi-sentence teach counts once, from one diff.
+    const multi = await runTurn("a cat is an animal. a fox is an animal.", { memoryDir: dir, sessionId: "facts-touched" });
+    assert.equal(multi.factsTouched.length, 2);
+
+    const noStore = await runTurn("which modules import a.mjs", { config: CONFIG, graph: await graph() });
+    assert.deepEqual(noStore.factsTouched, [], "a turn with no memory store reports no touched rows");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("runTurn: a narrated turn carries the trace as its own `narration` field, and still glues it onto the answer", async () => {
+  const g = await graph();
+  const on = await runTurn("which modules import a.mjs", { config: CONFIG, graph: g, narrate: true });
+  assert.equal(typeof on.narration, "string");
+  assert.ok(on.narration.startsWith(NARRATE_MARKER), "the field is the whole trace block, marker and all");
+  assert.ok(on.answer.endsWith(`\n\n${on.narration}`), "the glued answer is unchanged");
+  const off = await runTurn("which modules import a.mjs", { config: CONFIG, graph: g });
+  assert.equal(off.narration, undefined, "no stray field when nothing was traced");
 });
 
 test("runTurn: unknown /command is handled with a /help nudge, not a crash", async () => {
