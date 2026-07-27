@@ -54,6 +54,12 @@ The required quartet is `subject / object / predicate / prop`. `edges(id, kind)`
 | `inherits` | `tmct:extends` |
 | `cochange` | `tmct:dependsOn` |
 | `reexports` | `tmct:exports` |
+| `serves` | `tmct:serves` |
+| `denotes` | `tmct:denotes` |
+
+The last two are provider-declared. tmct's own indexer emits neither, so a graph it built
+carries no such edge and `edges(id, "serves")` answers honestly empty there. A provider that
+supplies them gets the same traversal every other kind gets.
 
 ## The error contract — an honest miss is a value, never a throw
 

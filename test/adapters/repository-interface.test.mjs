@@ -18,6 +18,7 @@ import {
   INTERFACE_VERSION,
   MISS_REASONS,
   EDGE_KINDS,
+  EDGE_KIND_TO_TMCT,
   SERVICES,
   SOURCE_SERVICES,
   isHit,
@@ -32,6 +33,8 @@ import { fixtureProvider } from "../../src/adapters/providers/fixture.mjs";
 import { ask } from "../../src/domain/ask.mjs";
 import { bootstrapProvider } from "../../src/adapters/providers/bootstrap.mjs";
 import { runConformance, assertIndividual, assertEdge, assertResult } from "../../src/tools/conformance.mjs";
+import { createGraphService } from "../../src/adapters/providers/graph-service.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
 
 const REASONS = new Set(Object.values(MISS_REASONS));
 
@@ -89,6 +92,52 @@ test("prose peer: docs/repository-interface.md names every service, edge kind an
   const namedReasons = reasons.filter((r) => doc.includes(r));
   assert.deepEqual(namedReasons, reasons, "every reason in MISS_REASONS is named in the prose");
   assert.equal(namedReasons.length, reasons.length, "the prose names exactly the MISS_REASONS count");
+});
+
+test("every edge kind is grounded in a tmct: object property the ontology declares", async () => {
+  const ttl = await readFile(fileURLToPath(new URL("../../ontology/tmct-core.ttl", import.meta.url)), "utf8");
+  for (const kind of EDGE_KINDS) {
+    const prop = EDGE_KIND_TO_TMCT[kind];
+    assert.ok(prop, `${kind} names a tmct: property`);
+    assert.ok(ttl.includes(`${prop} a owl:ObjectProperty`), `${prop} is declared in the ontology`);
+  }
+});
+
+test("edges() traverses the provider-declared serves/denotes kinds a graph supplies", () => {
+  const graph = parseEntities({
+    individuals: [
+      { id: "mod:handler.mjs", label: "handler.mjs", class: "Module", derived_from: [], mentions: [], attributes: [] },
+      { id: "mod:route.mjs", label: "route.mjs", class: "Module", derived_from: [], mentions: [], attributes: [] },
+      { id: "lex:task", label: "task", class: "Function", derived_from: [], mentions: [], attributes: [] },
+    ],
+    objectProperties: [
+      { predicate: "serves", prop: "mgx:serves", count: 1, examples: [
+        { subject: "mod:handler.mjs", object: "mod:route.mjs", subjectLabel: "handler.mjs", objectLabel: "route.mjs" }] },
+      { predicate: "denotes", prop: "mgx:denotes", count: 1, examples: [
+        { subject: "lex:task", object: "mod:handler.mjs", subjectLabel: "task", objectLabel: "handler.mjs" }] },
+    ],
+  });
+  const svc = createGraphService(graph, { ask });
+
+  const served = svc.edges("mod:handler.mjs", "serves");
+  assert.ok(isHit(served), "a serves traversal is a hit, not an unknown-kind throw");
+  assert.equal(served.value.edges.length, 1);
+  assertEdge(served.value.edges[0], "serves");
+  assert.equal(served.value.edges[0].object, "mod:route.mjs");
+  assert.equal(served.value.edges[0].prop, "mgx:serves");
+
+  const denoted = svc.edges("lex:task", "denotes");
+  assert.ok(isHit(denoted));
+  assert.equal(denoted.value.edges[0].object, "mod:handler.mjs");
+
+  // a graph tmct's own indexer built carries neither kind — an empty hit, never a guess
+  const indexerGraph = parseEntities({
+    individuals: [{ id: "mod:a.mjs", label: "a.mjs", class: "Module", derived_from: [], mentions: [], attributes: [] }],
+    objectProperties: [],
+  });
+  const empty = createGraphService(indexerGraph, { ask }).edges("mod:a.mjs", "serves");
+  assert.ok(isHit(empty));
+  assert.deepEqual(empty.value.edges, []);
 });
 
 test("miss() rejects a reason outside the closed set", () => {

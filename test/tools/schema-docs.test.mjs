@@ -77,6 +77,13 @@ test("ingestSchemaDocs: appends one SchemaClass + one SchemaPredicate individual
   const cochangeDoc = schemaPredicates.find((i) => i.label === "cochange");
   assert.ok(cochangeDoc, "cochange must be queryable by its human-facing kind name, not just its raw prop token");
   assert.equal(cochangeDoc.attributes.find((a) => a.key === "token").value, "mgx:changeCoupledWith");
+  // the provider-declared kinds are documented too, so "what does serves mean"
+  // answers from the schema even in a graph that carries no such edge
+  for (const [kind, token] of [["serves", "mgx:serves"], ["denotes", "mgx:denotes"]]) {
+    const doc = schemaPredicates.find((i) => i.label === kind);
+    assert.ok(doc, `${kind} is queryable by its human-facing kind name`);
+    assert.equal(doc.attributes.find((a) => a.key === "token").value, token);
+  }
 });
 
 test("every schema individual publishes its definition under the mgx:schemaDoc prop, which is what the meta lane keys on", () => {

@@ -22,6 +22,8 @@ test("shortMissHint keeps the honest opening, drops the grammar wall, and tailor
   assert.match(imp, /import/, "an import-flavoured query gets an import example");
   assert.match(shortMissHint("who calls stuff around here"), /calls <name>/, "a call-flavoured query gets a call example");
   assert.match(shortMissHint("explain the class hierarchy"), /inherit from|subclasses/, "hierarchy gets an inherit example");
+  assert.match(shortMissHint("which thing serves the widget rack"), /<name> serve/, "a serve-flavoured query gets a serves example");
+  assert.match(shortMissHint("the frobnicator denotes something"), /denotes <name>/, "a denote-flavoured query gets a denotes example");
 });
 
 test("a membership question with a broken article gets the article hint, not the wall (no-memory library surface)", async () => {

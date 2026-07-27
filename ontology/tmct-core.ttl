@@ -701,6 +701,16 @@ tmct:implements a owl:ObjectProperty ; rdfs:label "implements" .
 tmct:exports a owl:ObjectProperty ; rdfs:label "exports" ; rdfs:seeAlso mgx:reExports .
 tmct:covers a owl:ObjectProperty ; rdfs:label "covers" ; rdfs:seeAlso mgx:testsCoverage .
 
+tmct:serves a owl:ObjectProperty ;
+  rdfs:label "serves" ;
+  rdfs:seeAlso mgx:serves ;
+  rdfs:comment "Subject provides or backs object — a handler serving a route, a module serving a surface. Provider-declared: tmct's own indexer emits no such edge, so it reaches a graph only through the provider seam." .
+
+tmct:denotes a owl:ObjectProperty ;
+  rdfs:label "denotes" ;
+  rdfs:seeAlso mgx:denotes ;
+  rdfs:comment "Subject names object — a glossary or lexicon term denoting a code entity. Provider-declared, like tmct:serves." .
+
 # ---------------------------------------------------------------------------
 # 5. Possessive-noun and data-adjective properties (patterns 7 and 8) — the
 #    lexicon's declared typings: property=data nouns and type=data adjectives

@@ -30,6 +30,7 @@ export const ENTITY_CLASSES = Object.freeze([
 export const EDGE_PREDICATES = Object.freeze([
   "imports", "calls", "callsSymbol", "defines", "tests",
   "touches", "touchesSymbol", "contains", "inherits", "cochange", "reexports",
+  "serves", "denotes",
 ]);
 
 /** The closed effect vocabulary — every way an operator's declared delta can

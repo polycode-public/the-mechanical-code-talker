@@ -128,6 +128,8 @@ const GOAL_BY_KIND = {
   touchesSymbol: "understand commit/change history",
   cochange: "understand change-coupling between modules",
   reexports: "understand a module's public exports/API surface",
+  serves: "understand which component provides or backs another",
+  denotes: "understand which vocabulary term names a code entity",
 };
 const goalNoun = (entityType) => (entityType ? `${String(entityType).toLowerCase()}(s)` : "entities");
 
@@ -2240,6 +2242,8 @@ const MISS_EXAMPLES = {
   define: ['"where is <name> defined"', '"where is <name> mentioned"'],
   meaning: ['"what is a <ClassName>"', '"what does <term> mean"'],
   count: ['"how many classes are there"', '"how many modules are there"'],
+  serve: ['"what does <name> serve"', '"what serves <name>"'],
+  denote: ['"what does <name> denote"', '"what denotes <name>"'],
 };
 const MISS_DEFAULT = ['"which modules import <name>"', '"what calls <name>"'];
 
@@ -2251,6 +2255,8 @@ function tailoredExamples(q) {
   const has = (re) => re.test(q);
   if (has(/\bimport/)) return MISS_EXAMPLES.import;
   if (has(/\bexport/)) return MISS_EXAMPLES.export;
+  if (has(/\bserv(?:e|es|ed|ing|ice)\b/)) return MISS_EXAMPLES.serve;
+  if (has(/\bdenot(?:e|es|ed|ing|ation)\b/)) return MISS_EXAMPLES.denote;
   if (has(/\b(?:calls?|caller|callee)\b/)) return MISS_EXAMPLES.call;
   if (has(/\b(?:tests?|cover|covering|tested)\b/)) return MISS_EXAMPLES.test;
   if (has(/\b(?:inherit|subclass|extends?|superclass|hierarchy|base class|parent class)\b/)) return MISS_EXAMPLES.inherit;

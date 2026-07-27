@@ -50,12 +50,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   file list, in a worktree that already has a commit (so it can't be reclaimed mid-run), rather
   than the whole uncapped directory at once.
 
-- [ ] seonix relay — `serves`/`denotes` are only wired in the ask/traversal lane (2026-07-27); the
-  concept lane (`concept.mjs`'s four relation tables), `corpus/seon/relations.jsonl`,
-  `schema-docs.mjs`'s `PREDICATE_DOCS`, `chat.mjs`'s `GOAL_BY_KIND`/`MISS_EXAMPLES`,
-  `code-explorer-hints.mjs`, and `repository-interface.mjs`'s `EDGE_KINDS` are untouched, so "tell
-  me about serves" and `edges(id, "serves")` on the tool surface still don't resolve. Genuinely
-  separate body of work from the traversal fix, `chat.mjs` is high-collision.
 - [ ] wink-model.mjs's top-level `import { createRequire } from "node:module"`
   (`src/adapters/wink-model.mjs:12`) collides with esbuild's own auto-injected `createRequire`
   shim when a consumer bundles a single-file Lambda with `esbuild --bundle`, a module-parse-time
@@ -67,12 +61,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   "the loader stays synchronous" as a deliberate invariant, and going lazy would cascade
   `loadWinkModel()`/`nodeRequireWink()` and their callers (`ask-nlp.mjs`, `prose-nlp.mjs`) to
   async. Needs a design decision, not a rushed fix. `~/.claude/inboxes/tmct.md` 2026-07-27T23:02.
-- [ ] seonix wants to unify their own narrow/wide test-path split (`src/domain/paths.mjs`'s
-  `isTestLabel` vs `isTestModuleLabel`) but can't do it alone: their own parity test asserts their
-  narrow classifier stays in lockstep with tmct's `src/domain/module-paths.mjs`'s `isTestPath`.
-  Needs seonix to specify what the unified behavior should actually be before tmct's side can
-  move — no design detail sent yet. Not urgent, flagged so it doesn't fall through a
-  cross-session gap. `~/.claude/inboxes/tmct.md` 2026-07-27T22:45.
 
 ## Discipline
 

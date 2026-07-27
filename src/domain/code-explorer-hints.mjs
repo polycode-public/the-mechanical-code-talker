@@ -42,6 +42,8 @@ const FORWARD_TEMPLATE = Object.freeze({
   contains: (f) => `what is in ${f}`,
   defines: (f) => `what does ${f} define`,
   inherits: (f) => `what does ${f} inherit from`,
+  serves: (f) => `what does ${f} serve`,
+  denotes: (f) => `what does ${f} denote`,
 });
 
 // Reverse reading (focus is the object): "what <kind> <focus>".
@@ -51,6 +53,8 @@ const REVERSE_TEMPLATE = Object.freeze({
   tests: (f) => `what tests ${f}`,
   inherits: (f) => `what inherits from ${f}`,
   contains: (f) => `what contains ${f}`,
+  serves: (f) => `what serves ${f}`,
+  denotes: (f) => `what denotes ${f}`,
 });
 
 /** Index a payload into the counts and adjacency the hints read: class →
