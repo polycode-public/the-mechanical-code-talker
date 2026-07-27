@@ -664,6 +664,44 @@
    ]
   },
   {
+   "id": "schema:predicate:mgx:serves",
+   "label": "serves",
+   "class": "SchemaPredicate",
+   "derived_from": [],
+   "mentions": [],
+   "attributes": [
+    {
+     "prop": "mgx:schemaDoc",
+     "key": "doc",
+     "value": "Module/Function → Module/Route/surface. A provider-declared \"this component provides or backs that one\" edge — a handler serving a route, a module serving a surface. An owned term with no SEON equivalent; tmct's own indexer emits none, so it appears only in a graph supplied through the provider seam."
+    },
+    {
+     "prop": "mgx:schemaToken",
+     "key": "token",
+     "value": "mgx:serves"
+    }
+   ]
+  },
+  {
+   "id": "schema:predicate:mgx:denotes",
+   "label": "denotes",
+   "class": "SchemaPredicate",
+   "derived_from": [],
+   "mentions": [],
+   "attributes": [
+    {
+     "prop": "mgx:schemaDoc",
+     "key": "doc",
+     "value": "Vocabulary term → any code entity. A provider-declared naming edge: a glossary or lexicon term is the word for this module, class or function. An owned term with no SEON equivalent; tmct's own indexer emits none, so it appears only in a graph supplied through the provider seam."
+    },
+    {
+     "prop": "mgx:schemaToken",
+     "key": "token",
+     "value": "mgx:denotes"
+    }
+   ]
+  },
+  {
    "id": "schema:predicate:mgx:asksAbout",
    "label": "asksAbout",
    "class": "SchemaPredicate",

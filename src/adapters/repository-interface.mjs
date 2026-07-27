@@ -46,6 +46,7 @@ export const MISS_REASONS = Object.freeze({
 export const EDGE_KINDS = Object.freeze([
   "imports", "calls", "callsSymbol", "defines", "tests",
   "touches", "touchesSymbol", "contains", "inherits", "cochange", "reexports",
+  "serves", "denotes",
 ]);
 
 /** edge-kind → the `tmct:` object property it realizes (the OWL grounding). */
@@ -61,6 +62,8 @@ export const EDGE_KIND_TO_TMCT = Object.freeze({
   inherits: "tmct:extends",
   cochange: "tmct:dependsOn",
   reexports: "tmct:exports",
+  serves: "tmct:serves",
+  denotes: "tmct:denotes",
 });
 
 /** The named services, grouped as in the plan's six-group inventory. Names are

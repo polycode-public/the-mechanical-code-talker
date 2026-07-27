@@ -50,12 +50,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   file list, in a worktree that already has a commit (so it can't be reclaimed mid-run), rather
   than the whole uncapped directory at once.
 
-- [ ] seonix relay — `serves`/`denotes` are only wired in the ask/traversal lane (2026-07-27); the
-  concept lane (`concept.mjs`'s four relation tables), `corpus/seon/relations.jsonl`,
-  `schema-docs.mjs`'s `PREDICATE_DOCS`, `chat.mjs`'s `GOAL_BY_KIND`/`MISS_EXAMPLES`,
-  `code-explorer-hints.mjs`, and `repository-interface.mjs`'s `EDGE_KINDS` are untouched, so "tell
-  me about serves" and `edges(id, "serves")` on the tool surface still don't resolve. Genuinely
-  separate body of work from the traversal fix, `chat.mjs` is high-collision.
 - [ ] seonix relay, round 3 item not covered by 2026-07-27's fix batch — a digest-shaped request
   misparses: `"give me everything I need to change renderSummaryMd"` parses "everything I need" as
   the subject of a `touches` question instead of routing through the context/digest lane the way

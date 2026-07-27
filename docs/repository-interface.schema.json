@@ -18,7 +18,9 @@
     "contains",
     "inherits",
     "cochange",
-    "reexports"
+    "reexports",
+    "serves",
+    "denotes"
   ],
   "types": {
     "Individual": {

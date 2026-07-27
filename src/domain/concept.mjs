@@ -219,6 +219,10 @@ export const RELATION_TERM = Object.freeze({
   export: "reexports", exports: "reexports", exporting: "reexports", exported: "reexports",
   reexport: "reexports", reexports: "reexports", reexporting: "reexports",
   "re-export": "reexports", "re-exports": "reexports", "re-exporting": "reexports",
+  // provider-declared kinds: tmct's own indexer emits neither, so a graph it
+  // built degrades to the honest two-band "no edges" answer rather than a miss.
+  serve: "serves", serves: "serves", serving: "serves", served: "serves",
+  denote: "denotes", denotes: "denotes", denoting: "denotes", denoted: "denotes",
 });
 
 /** concept key → the relationKind()s whose edges it enumerates. A concept can span
@@ -234,6 +238,8 @@ const RELATION_KINDS = Object.freeze({
   touches: ["touches", "touchesSymbol"],
   cochange: ["cochange"],
   reexports: ["reexports"],
+  serves: ["serves"],
+  denotes: ["denotes"],
 });
 
 /** concept key → the verb phrase that renders an edge as an English sentence
@@ -248,6 +254,8 @@ const RELATION_RENDER = Object.freeze({
   touches: { verb: "touches", edgeNoun: "touch" },
   cochange: { verb: "changes together with", edgeNoun: "change-coupling" },
   reexports: { verb: "re-exports", edgeNoun: "re-export" },
+  serves: { verb: "serves", edgeNoun: "service" },
+  denotes: { verb: "denotes", edgeNoun: "denotation" },
 });
 
 /** Per concept key, the candidate follow-up shapes in priority order — each
@@ -289,6 +297,14 @@ const RELATION_FOLLOWUP_SHAPES = Object.freeze({
   reexports: [
     { side: "subj", make: (x) => `what does ${x} export` },
     { side: "obj", make: (x) => `where is ${x} defined` },
+  ],
+  serves: [
+    { side: "subj", make: (x) => `what does ${x} serve` },
+    { side: "obj", make: (x) => `what serves ${x}` },
+  ],
+  denotes: [
+    { side: "subj", make: (x) => `what does ${x} denote` },
+    { side: "obj", make: (x) => `what denotes ${x}` },
   ],
 });
 

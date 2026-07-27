@@ -106,3 +106,35 @@ test("an explicit focus overrides the default when it is a real term", () => {
 test("the limit caps the returned hint count", () => {
   assert.ok(generateCodeHints(sampleGraph(), { limit: 3 }).hints.length <= 3);
 });
+
+// The provider-declared kinds. tmct's own indexer emits neither, so sampleGraph
+// carries no such edge and no such hint — a graph supplied over the provider
+// seam gets the same forward/reverse pair every other relation gets.
+function providerGraph() {
+  return {
+    individuals: [
+      { id: "mod:handler.mjs", label: "handler.mjs", class: "Module" },
+      { id: "mod:route.mjs", label: "route.mjs", class: "Module" },
+      { id: "lex:task", label: "task", class: "Function" },
+    ],
+    objectProperties: [
+      { predicate: "serves", count: 1, examples: [{ subject: "mod:handler.mjs", object: "mod:route.mjs", subjectLabel: "handler.mjs", objectLabel: "route.mjs" }] },
+      { predicate: "denotes", count: 1, examples: [{ subject: "lex:task", object: "mod:handler.mjs", subjectLabel: "task", objectLabel: "handler.mjs" }] },
+    ],
+  };
+}
+
+test("a serves edge suggests the query from whichever end the focus sits on", () => {
+  assert.ok(texts(providerGraph(), { focus: "handler.mjs", limit: 40 }).includes("what does handler.mjs serve"));
+  assert.ok(texts(providerGraph(), { focus: "route.mjs", limit: 40 }).includes("what serves route.mjs"));
+});
+
+test("a denotes edge suggests the naming query from either end", () => {
+  assert.ok(texts(providerGraph(), { focus: "task", limit: 40 }).includes("what does task denote"));
+  assert.ok(texts(providerGraph(), { focus: "handler.mjs", limit: 40 }).includes("what denotes handler.mjs"));
+});
+
+test("no serves/denotes hint appears for a graph that carries neither edge", () => {
+  const t = texts(sampleGraph(), { limit: 40 });
+  assert.ok(!t.some((s) => /\bserve\b|\bdenote\b/.test(s)), "a hint names only a relation the graph actually holds");
+});

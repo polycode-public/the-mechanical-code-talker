@@ -7,3 +7,5 @@
 {"relation":"touches","definition":"A touch is a commit changing a file or a symbol in the codebase.","sense":"software"}
 {"relation":"cochange","definition":"Change-coupling is two files that tend to be changed together in the same commits.","sense":"software"}
 {"relation":"reexports","definition":"A re-export is a module passing another module's definition through as part of its own public API.","sense":"software"}
+{"relation":"serves","definition":"A service edge is one part of the codebase providing or backing another, such as a handler serving a route.","sense":"software"}
+{"relation":"denotes","definition":"A denotation is a vocabulary term naming a code entity, linking the word to the thing it refers to.","sense":"software"}
