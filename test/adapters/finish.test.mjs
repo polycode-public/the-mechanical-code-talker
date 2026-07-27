@@ -227,6 +227,24 @@ test("GOLDEN rule 5 — terminal punctuation (collapse a run of stops)", () => {
   golden(rules, [{ type: "path", text: "a.mjs" }, { type: "prose", text: " and " }, { type: "path", text: "b.mjs" }], "a.mjs and b.mjs");
 });
 
+// The masker cannot recognise source text, so a producer that serves code says
+// so by handing finish() a `code` span. Real JS carries the two shapes the
+// terminal-punctuation rule eats — a spread and an optional chain — and both
+// have to come back untouched, or a caller pastes source that no longer parses.
+test("a producer-supplied `code` span survives the whole live rule table byte-for-byte", () => {
+  const source = [
+    "export function mergeIndex(base, extra) {",
+    "  const merged = { ...base, ...extra.aliases };",
+    "  const pairs = extra.items.map((i) => [i?.id, i]);",
+    "}",
+  ].join("\n");
+  const result = finish({ answer: source, segments: [{ type: "code", text: source }] });
+  assert.equal(result.answer, source);
+  // ...and the same text left as prose is exactly what gets corrupted
+  const asProse = finish({ answer: source });
+  assert.notEqual(asProse.answer, source);
+});
+
 test("applyGrammar over the WHOLE table preserves the protected multiset (necessary gate)", () => {
   const input = [
     { type: "prose", text: "every module is a " }, { type: "entity", text: "artifact" },

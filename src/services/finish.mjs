@@ -20,7 +20,12 @@ const GRAMMAR_DIR = dirname(fileURLToPath(import.meta.url));
 /** The data-driven grammar-rule table. */
 const GRAMMAR_RULES_FILE = join(GRAMMAR_DIR, "..", "..", "data", "templates", "grammar-rules.toml");
 
-/** The segment type vocabulary. `prose` is the only unprotected type. */
+/** The segment type vocabulary. `prose` is the only unprotected type.
+ *
+ *  `code` is the one type maskSegments never infers: no regex tells source text
+ *  from prose reliably enough to be trusted with a caller's edit. A producer
+ *  that KNOWS it is serving source (chat's /snippet and /context) says so by
+ *  handing finish() its own `code` span, and gets its bytes back exactly. */
 export const SEGMENT_TYPES = Object.freeze([
   "prose", "entity", "path", "number", "code", "provenance", "receipt",
 ]);
