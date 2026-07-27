@@ -56,6 +56,10 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   `code-explorer-hints.mjs`, and `repository-interface.mjs`'s `EDGE_KINDS` are untouched, so "tell
   me about serves" and `edges(id, "serves")` on the tool surface still don't resolve. Genuinely
   separate body of work from the traversal fix, `chat.mjs` is high-collision.
+- [ ] seonix relay, round 3 item not covered by 2026-07-27's fix batch — a digest-shaped request
+  misparses: `"give me everything I need to change renderSummaryMd"` parses "everything I need" as
+  the subject of a `touches` question instead of routing through the context/digest lane the way
+  `"give me the context for X"` does. `~/.claude/inboxes/tmct.md` 2026-07-26T22:58.
 
 ## Discipline
 
