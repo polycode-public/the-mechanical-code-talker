@@ -44,7 +44,7 @@ export const TOOLS = HOT_TOOLS.map(({ name, agentDescription, inputSchema }) => 
   inputSchema,
 }));
 
-export async function dispatchTool(name, args, { config, source = defaultSource, tel = null, ingest = null } = {}) {
+export async function dispatchTool(name, args, { config, source = defaultSource, tel = null, ingest = null, memoryBackend = null } = {}) {
   // Reject an unknown tool BEFORE touching the graph — an unknown name never
   // triggers a load. hasOwn, so an inherited name ("constructor", "toString")
   // is unknown rather than a callable found on the prototype chain.
@@ -52,13 +52,18 @@ export async function dispatchTool(name, args, { config, source = defaultSource,
   const handle = HANDLERS[name];
   // `ingest` is the recognizer seam a caller in the service layer injects (the
   // tool layer sits UNDER services and must not import one, so a tool that needs
-  // the chat recognizer receives it here rather than importing it).
-  if (handle.ownsGraphLoad) return handle(args, { config, source, tel, ingest });
+  // the chat recognizer receives it here rather than importing it). `memoryBackend`
+  // is the same kind of seam for a caller that already holds an open memory-store
+  // handle (e.g. a session's own `memoryDir`) — a handler that reads the
+  // conversational memory store (tmct_export) prefers it over re-deriving a
+  // backend from config when one is supplied; every other caller leaves it null
+  // and gets today's re-derive-from-config behaviour unchanged.
+  if (handle.ownsGraphLoad) return handle(args, { config, source, tel, ingest, memoryBackend });
   const graph = await loadGraph(config, source);
   // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json). Passed to
   // createGraphService so svc.snippet()/svc.context() are usable directly, and on to the
   // handlers that do their own safe source reads.
   const repoRoot = dirname(dirname(config.graphFile));
   const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel, ask });
-  return handle(args, { graph, svc, config, repoRoot });
+  return handle(args, { graph, svc, config, repoRoot, memoryBackend });
 }
