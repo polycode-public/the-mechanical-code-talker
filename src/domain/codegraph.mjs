@@ -75,6 +75,10 @@ const PROP_KIND = {
   "seon:hassupertype": "inherits",
   "mgx:changecoupledwith": "cochange",
   "mgx:reexports": "reexports",
+  // provider-declared edges: tmct's own indexer emits neither, so these classify
+  // only in a graph supplied through the provider seam
+  "mgx:serves": "serves",
+  "mgx:denotes": "denotes",
   // symbol-level edges stay separate kinds so the module-coarse impact closure is unchanged
   "mgx:touchessymbol": "touchesSymbol",
   "mgx:callssymbol": "callsSymbol",

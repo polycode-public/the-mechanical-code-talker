@@ -709,6 +709,25 @@ test("embedded-question de-inversion stands alone too: 'what a dog is' -> 'what 
   assert.equal(applyPreambleFrames("do you know what dog means"), "what does dog mean");
 });
 
+test("a leading connective is stripped from a bare relative-clause follow-up, so the utterance reads as its own bare form", () => {
+  // The remainder names a thing instead of asking outright, so none of the
+  // interrogative/auxiliary gates fire — without the relative-clause gate the
+  // connective survives and the parser reads "and" as the subject.
+  assert.equal(applyPreambleFrames("and the tests that cover it"), "the tests that cover it");
+  assert.equal(applyPreambleFrames("so the module that imports http.mjs"), "the module that imports http.mjs");
+  assert.equal(applyPreambleFrames("but the classes which extend Base"), "the classes which extend Base");
+  assert.equal(applyPreambleFrames("and the author who touched it"), "the author who touched it");
+});
+
+test("the relative-clause strip leaves a mid-clause boolean branch and a bare noun remainder alone", () => {
+  // "and are tested" is a set operator over the previous clause, not framing.
+  assert.equal(applyPreambleFrames("and are tested"), "are tested");
+  // no relative pronoun -> the connective is not framing, so it stays put
+  assert.equal(applyPreambleFrames("and the payment class"), "and the payment class");
+  // a determiner-less remainder is out of the closed shape
+  assert.equal(applyPreambleFrames("and tests that cover it"), "and tests that cover it");
+});
+
 test("the know/want wrappers never unwrap a non-interrogative remainder, and long relative clauses are never re-inverted", () => {
   // small-talk stays small-talk
   assert.equal(applyPreambleFrames("do you know anything about movies"), "do you know anything about movies");

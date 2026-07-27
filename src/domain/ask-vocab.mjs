@@ -164,6 +164,29 @@ export const RELATIONS = {
       "exporting",
     ],
   },
+  // serves/denotes classify edges a PROVIDER declares (mgx:serves / mgx:denotes).
+  // tmct's own indexer emits neither, so they are absent from a graph it built
+  // and answer honestly empty there; a provider graph that carries them gets the
+  // same one-hop traversal every other kind gets, instead of only /describe's
+  // kind-agnostic edge walk.
+  serves: {
+    bare: "serve",
+    comment: "subject provides or backs the object — a handler serving a route, a module serving a surface (mgx:serves).",
+    verbs: [
+      "serves", "serve",
+      // gerund (g-drop normalization)
+      "serving",
+    ],
+  },
+  denotes: {
+    bare: "denote",
+    comment: "subject names the object — a glossary/lexicon term denoting a code entity (mgx:denotes).",
+    verbs: [
+      "denotes", "denote",
+      // gerund (g-drop normalization)
+      "denoting",
+    ],
+  },
 };
 
 /** The closed set of reverse `inherits` verb phrasings a strategy checks to
