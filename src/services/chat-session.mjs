@@ -360,6 +360,11 @@ export async function createSession({
   return {
     repo, config, graph, lexicon, memoryDir, moduleCount, version, sessionId,
     logFile, sidecarFile, bannerLines, empty, biasByBundle,
+    // Same handle as `memoryDir`, named to match dispatchTool's `memoryBackend`
+    // context param — a caller that wants a tool call (tmct_export, …) to read
+    // from THIS session's already-open store passes `memoryBackend: session.memoryBackend`
+    // rather than letting the tool re-derive a backend from config/tmct.toml.
+    memoryBackend: memoryDir,
     // Mutable between-turn state — read-only to the caller, so a shell can render the
     // prompt/expand-hint without reaching into runTurn's threading.
     get focus() { return focus; },

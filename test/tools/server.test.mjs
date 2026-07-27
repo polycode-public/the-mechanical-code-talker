@@ -12,7 +12,7 @@ import { HANDLERS } from "../../src/tools/handlers/index.mjs";
 import { renderToolsCatalog } from "../../src/tools/catalog.mjs";
 import { TOOL_DEFINITIONS, HOT_TOOLS, COLD_TOOLS, TOOL_NAMES } from "../../src/tools/definitions.mjs";
 import { ToolError } from "../../src/adapters/config.mjs";
-import { appendFact, openConfiguredMemoryBackend } from "../../src/adapters/memory/core.mjs";
+import { appendFact, openConfiguredMemoryBackend, createInMemoryStore } from "../../src/adapters/memory/core.mjs";
 import { ingestText } from "../../src/services/extract-facts.mjs";
 
 const fixture = JSON.parse(
@@ -297,6 +297,21 @@ test("tmct_export dumps the memory store's every fact as JSONL, provenance on ea
     const gizmo = records.find((r) => r.subject === "gizmo");
     assert.deepEqual(gizmo, { subject: "gizmo", predicate: "rdfs:subClassOf", object: "software", provenance: "corpus:conceptnet /r/IsA" });
     assert.ok(records.every((r) => r.provenance.length > 0), "every exported line carries its provenance");
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test("tmct_export prefers a caller-supplied memoryBackend over re-deriving one from config", async () => {
+  // Two distinct backends: the config-derived sqlite store (from repoWithMemoryFacts,
+  // holding "gizmo"/"software") and a separate in-memory store the caller opened
+  // itself (holding "explicit-fact"). tmct_export must read from the SUPPLIED
+  // backend when one is passed, never from the one config.graphFile would derive.
+  const { dir, config: memConfig } = await repoWithMemoryFacts();
+  const explicitBackend = createInMemoryStore();
+  try {
+    await appendFact(explicitBackend, { subject: "explicit-fact", predicate: "rdfs:subClassOf", object: "thing", provenance: "test:explicit" });
+    const out = await dispatchTool("tmct_export", {}, { config: memConfig, source: stubSource, memoryBackend: explicitBackend });
+    const records = out.split("\n").filter(Boolean).map((l) => JSON.parse(l));
+    assert.deepEqual(records.map((r) => r.subject), ["explicit-fact"], "reads the supplied backend's facts, not the config-derived store's");
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
 
