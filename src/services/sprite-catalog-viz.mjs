@@ -464,7 +464,9 @@ function sectionHtml(group, entries) {
  *  same two template sets) and references the sibling
  *  ./sprites-browser.bundle.js scripts/build-demo-site.mjs builds alongside
  *  it. Left false, the page renders exactly as before — no dock, no bundle
- *  reference, nothing extra to 404. */
+ *  reference, nothing extra to 404 — including the favicon links, since the
+ *  CLI's standalone export (also `spritesBundleAvailable: false`) can't carry
+ *  a dangling relative ./favicon.svg either. */
 export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false } = {}) {
   const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows });
   const totalSwatches = entries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
@@ -607,9 +609,9 @@ const SPRITE_CHAT = ${embedJson({ rows: dockRows })};
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
-<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+${spritesBundleAvailable ? `<link rel="icon" href="./favicon.svg" type="image/svg+xml">
 <link rel="icon" href="./favicon.ico" sizes="any">
-<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">` : ""}
 <style>
 ${THEME_TOKENS_CSS}
   html { background: var(--bg); }

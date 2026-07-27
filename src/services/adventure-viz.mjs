@@ -508,7 +508,9 @@ export function roomCaptionText(rows, state, here) {
  *  the engine into the page instead of the sibling `<script src>`, for the
  *  CLI's standalone export — one downloadable file that runs from file://
  *  with no sibling assets. Default empty keeps the site build's sibling-file
- *  arrangement byte-identical. */
+ *  arrangement byte-identical, favicon links included; the standalone export
+ *  drops them too, since a relative ./favicon.svg would be a dangling
+ *  external reference the "no sibling assets" export can't carry. */
 export function renderAdventureHtml({
   title = DEFAULT_TITLE,
   worldPayload = { facts: [], rules: [], opening: "" },
@@ -530,9 +532,9 @@ export function renderAdventureHtml({
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escapeHtml(title)}</title>
-<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+${engineBundleJs ? "" : `<link rel="icon" href="./favicon.svg" type="image/svg+xml">
 <link rel="icon" href="./favicon.ico" sizes="any">
-<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">`}
 <style>
 ${THEME_TOKENS_CSS}
   /* Murder-mystery board-game chrome — layered over the shared neutrals/
