@@ -1557,3 +1557,134 @@ test("ask(): 'how many of them are <kind>' counts the narrowed set and names tha
   assert.match(ask(miniWebappGraph, "how many of them are modules", { prev }).content, new RegExp(`^${prev.length} modules\\.`));
   assert.match(ask(miniWebappGraph, "how many of them are functions", { prev }).content, /^0 functions\./);
 });
+
+// ---- §coverage grain: a coverage filter over SYMBOLS has no function-grain
+// edges to read, because `tests` is recorded module to module. The empty set is a
+// grain mismatch, so the miss says that rather than offering the generic nudge. ----
+
+test("ask(): an empty coverage-filtered function set explains the module-grain limit instead of the generic rephrase nudge", () => {
+  const { content, tmct_ask } = ask(miniWebappGraph, "which functions call loadStore and are untested");
+  assert.equal(tmct_ask.miss, true);
+  assert.match(content, /^nothing in the index matches that \(functions\)\./);
+  assert.match(content, /records tests edges module to module/);
+  assert.match(content, /no function-grain coverage to filter on/);
+  // the generic touches/history nudge would send the reader somewhere unrelated
+  assert.doesNotMatch(content, /who touched/);
+});
+
+test("ask(): the grain note is confined to coverage filters over symbols — a module-grain coverage query still answers, and a non-coverage qualifier is untouched", () => {
+  // Modules DO carry tests edges, so the same qualifier answers at module grain.
+  const modules = ask(miniWebappGraph, "which modules import http.mjs and are untested");
+  assert.equal(modules.tmct_ask.miss, false);
+  assert.doesNotMatch(modules.content, /function-grain/);
+  // A visibility qualifier over functions reads real attributes, so it answers.
+  const visibility = ask(miniWebappGraph, "which functions call loadStore and are public");
+  assert.doesNotMatch(visibility.content, /function-grain/);
+});
+
+// ---- §provider-declared individuals and edges: a graph supplied through the
+// provider seam can carry a documented individual class of its own and
+// mgx:serves/mgx:denotes edges. Both answer through the ordinary lanes. ----
+
+function buildProviderGraph() {
+  const entities = buildEntities([
+    { path: "src/handlers/tasks.mjs", dotted: "src.handlers.tasks", imports: [], calls: [], defines: [] },
+    { path: "src/routes/api.mjs", dotted: "src.routes.api", imports: [], calls: [], defines: [] },
+  ], [], { generatedAt: "t" });
+  ingestSchemaDocs(entities);
+  // A documented individual whose class is NEITHER SchemaClass nor SchemaPredicate,
+  // and which carries no code `site` attribute — it is vocabulary, not code.
+  entities.individuals.push({
+    id: "lex:task", label: "task", class: "LexiconTerm", derived_from: [], mentions: [],
+    attributes: [{ prop: "mgx:schemaDoc", key: "doc", value: "A unit of scheduled work tracked by the app." }],
+  });
+  entities.objectProperties.push({
+    predicate: "serves", prop: "mgx:serves", count: 1,
+    examples: [{
+      subject: "mod:src/handlers/tasks.mjs", object: "mod:src/routes/api.mjs",
+      subjectLabel: "src/handlers/tasks.mjs", objectLabel: "src/routes/api.mjs",
+    }],
+  });
+  entities.objectProperties.push({
+    predicate: "denotes", prop: "mgx:denotes", count: 1,
+    examples: [{
+      subject: "lex:task", object: "mod:src/handlers/tasks.mjs",
+      subjectLabel: "task", objectLabel: "src/handlers/tasks.mjs",
+    }],
+  });
+  return parseEntities(entities);
+}
+
+test("ask(): a `serves` query traverses the provider-declared edge in both directions", () => {
+  const graph = buildProviderGraph();
+  const forward = ask(graph, "what does src/handlers/tasks.mjs serve");
+  assert.equal(forward.tmct_ask.miss, false);
+  assert.equal(forward.content, "src/routes/api.mjs.");
+  assert.match(forward.tmct_ask.traversal, /serves edges where subject = src\/handlers\/tasks\.mjs/);
+  const reverse = ask(graph, "which modules serve src/routes/api.mjs");
+  assert.equal(reverse.tmct_ask.miss, false);
+  assert.equal(reverse.content, "src/handlers/tasks.mjs.");
+  assert.match(reverse.tmct_ask.traversal, /serves edges where object = src\/routes\/api\.mjs/);
+});
+
+test("ask(): a `denotes` query traverses the provider-declared edge in both directions", () => {
+  const graph = buildProviderGraph();
+  const forward = ask(graph, "what does task denote");
+  assert.equal(forward.tmct_ask.miss, false);
+  assert.equal(forward.content, "src/handlers/tasks.mjs.");
+  const reverse = ask(graph, "what denotes src/handlers/tasks.mjs");
+  assert.equal(reverse.tmct_ask.miss, false);
+  assert.equal(reverse.content, "task.");
+});
+
+test("ask(): a yes/no `serves` question answers off the same edge", () => {
+  const graph = buildProviderGraph();
+  const { content, tmct_ask } = ask(graph, "does src/handlers/tasks.mjs serve src/routes/api.mjs");
+  assert.equal(tmct_ask.miss, false);
+  assert.match(content, /^Yes —/);
+});
+
+test("ask(): serves/denotes are absent from a graph tmct's own indexer built, and answer honestly empty there", () => {
+  const graph = buildGraph();
+  assert.equal(ask(graph, "what does myFile.mjs serve").tmct_ask.miss, true);
+});
+
+// ---- §meta shape reaches any individual carrying a definition, not a fixed
+// class-name list — a graph can declare its own documented vocabulary class. ----
+
+test("ask(): \"what is X\" answers from a documented individual whose class is neither SchemaClass nor SchemaPredicate", () => {
+  const graph = buildProviderGraph();
+  for (const q of ["what is task", "what does task mean"]) {
+    const { content, tmct_ask } = ask(graph, q);
+    assert.equal(tmct_ask.miss, false, `${q} should reach the meta lane`);
+    assert.match(content, /A unit of scheduled work tracked by the app\./);
+    // the kind word is read off the individual's own class, not guessed as "predicate"
+    assert.match(content, /task is a LexiconTerm in this graph's vocabulary/);
+    assert.doesNotMatch(content, /predicate \(relation\)/);
+  }
+});
+
+test("ask(): broadening the meta gate leaves the schema vocabulary's own wording untouched", () => {
+  const graph = buildGraph();
+  assert.match(ask(graph, "what is a Commit").content, /^Commit is a class in the graph's schema:/);
+  assert.match(ask(graph, "what does cochange mean").content, /^cochange is a predicate \(relation\) in the graph's schema:/);
+});
+
+// ---- §where: an individual the index places in no module gets an honest miss,
+// never a fabricated "(unknown module)" location. ----
+
+test("ask(): \"where is X\" for a non-code individual with no module is an honest miss, not a fabricated location", () => {
+  const graph = buildProviderGraph();
+  const { content, tmct_ask } = ask(graph, "where is task");
+  assert.equal(tmct_ask.miss, true);
+  assert.match(content, /no recorded code location in this index/);
+  assert.doesNotMatch(content, /unknown module/);
+  assert.doesNotMatch(content, /is defined in/);
+});
+
+test("ask(): \"where is X\" still cites a real location for a symbol the index does place", () => {
+  const graph = buildGraph();
+  const { content, tmct_ask } = ask(graph, "where is startup");
+  assert.equal(tmct_ask.miss, false);
+  assert.match(content, /is defined in myFile\.mjs/);
+});

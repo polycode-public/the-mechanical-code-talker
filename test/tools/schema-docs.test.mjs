@@ -79,6 +79,23 @@ test("ingestSchemaDocs: appends one SchemaClass + one SchemaPredicate individual
   assert.equal(cochangeDoc.attributes.find((a) => a.key === "token").value, "mgx:changeCoupledWith");
 });
 
+test("every schema individual publishes its definition under the mgx:schemaDoc prop, which is what the meta lane keys on", () => {
+  const e = fakeEntities();
+  ingestSchemaDocs(e);
+  const vocabNodes = e.individuals.filter((i) => i.class === "SchemaClass" || i.class === "SchemaPredicate");
+  assert.equal(vocabNodes.length, CLASS_DOCS.length + PREDICATE_DOCS.length);
+  for (const node of vocabNodes) {
+    const def = node.attributes.find((a) => a.prop === "mgx:schemaDoc");
+    assert.ok(def && def.value, `${node.label} publishes no mgx:schemaDoc definition`);
+  }
+  // The plain `doc` KEY is shared with a code entity's docstring (seon:hasDoc),
+  // so the prop is the part that identifies a vocabulary node. A definition-shaped
+  // attribute is the gate, not the class name — which is how a graph can declare
+  // its own documented individual class and have "what is X" answer for it.
+  const codeEntity = { attributes: [{ prop: "seon:hasDoc", key: "doc", value: "Render the widget." }] };
+  assert.equal(codeEntity.attributes.some((a) => a.prop === "mgx:schemaDoc"), false);
+});
+
 test("ingestSchemaDocs: real code individuals are never displaced, and the real Module individual is untouched", () => {
   const e = fakeEntities();
   const before = JSON.stringify(e.individuals[0]);

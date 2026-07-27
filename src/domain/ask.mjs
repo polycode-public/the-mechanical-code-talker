@@ -35,6 +35,7 @@ import { parseKeywordSpot, findPhrase } from "./interpret/strategies/keywords.mj
 import { runStrategiesSync } from "./interpret/pipeline.mjs";
 import { mergeStrategyResults, alternateLines } from "./interpret/merge.mjs";
 import { lookupByProseTokens, splitIdentifierWords } from "./prose.mjs";
+import { articleFor } from "./digest/words.mjs";
 import { pickPhrase } from "./answer-variants.mjs";
 
 // Normalization stays importable from its original site (tests + chat surface).
@@ -137,7 +138,7 @@ function verbFor(kind) {
 const PLURAL_SUBJECT_VERB = {
   imports: "import", calls: "call", callsSymbol: "call", inherits: "inherit from",
   contains: "contain", tests: "test", touches: "touch", cochange: "cochange",
-  reexports: "export", uses: "use",
+  reexports: "export", uses: "use", serves: "serve", denotes: "denote",
 };
 const pluralVerbFor = (kind) => PLURAL_SUBJECT_VERB[kind] || verbFor(kind);
 
@@ -2187,7 +2188,28 @@ function describeFindHit(ind) {
   const label = ["Function", "Method"].includes(ind.class) ? `${ind.label}()` : ind.label;
   if (ind.class === "Module") return label;
   const mod = moduleLabelOf(ind);
-  return mod && mod !== "(unknown module)" ? `${label} in ${mod}` : label;
+  return mod ? `${label} in ${mod}` : label;
+}
+
+/** Does any branch of a compositional AST filter on test coverage? Keyed off
+ *  QUALIFIERS' own `via` field, so a new coverage adjective in the vocabulary
+ *  is picked up here without a second list to keep in step. */
+function filtersOnCoverage(node) {
+  if (!node || typeof node !== "object") return false;
+  if (Array.isArray(node)) return node.some(filtersOnCoverage);
+  if (Array.isArray(node.filters)
+    && node.filters.some((f) => QUALIFIERS[String(f).toLowerCase()]?.via === "tested")) return true;
+  return Object.values(node).some(filtersOnCoverage);
+}
+
+/** An empty coverage-filtered set over symbols is a grain mismatch, not an
+ *  absent answer: `tests` edges are recorded module to module, so no
+ *  function-grain coverage exists to filter on. Say that instead of the
+ *  generic rephrase nudge, which would send the reader somewhere unrelated. */
+function coverageGrainNote(parsed, entityType) {
+  if (!["Function", "Method"].includes(entityType)) return null;
+  if (!filtersOnCoverage(parsed)) return null;
+  return "This index records tests edges module to module, so it holds no function-grain coverage to filter on — ask whether the module a function lives in is tested instead.";
 }
 
 function renderComposite(parsed, result, graph) {
@@ -2210,7 +2232,7 @@ function renderComposite(parsed, result, graph) {
       }
       const hit = result.matches[0];
       const modLabel = moduleLabelOf(hit);
-      const definedIn = hit.class === "Module" ? "" : (modLabel && modLabel !== "(unknown module)" ? `, ${pickPhrase("defined-in", hit.id, "defined in")} ${modLabel}` : "");
+      const definedIn = hit.class === "Module" ? "" : (modLabel ? `, ${pickPhrase("defined-in", hit.id, "defined in")} ${modLabel}` : "");
       return { content: `Yes — ${hit.label} is a ${kindSingular}${definedIn}.`, miss: false, ambiguous: false, matches: result.matches };
     }
     if (!result.matches.length) {
@@ -2386,7 +2408,8 @@ function renderComposite(parsed, result, graph) {
   }
   // set-producing
   if (!result.matches.length) {
-    return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${touchesRephraseHint(graph)}`, miss: true, ambiguous: false, matches: [] };
+    const hint = coverageGrainNote(parsed, result.entityType) || touchesRephraseHint(graph);
+    return { content: `nothing in the index matches that${result.entityType ? ` (${nounFor(result.entityType, 2)})` : ""}. ${hint}`, miss: true, ambiguous: false, matches: [] };
   }
   return { content: `${compositeList(result.matches)}.`, miss: false, ambiguous: false, matches: result.matches };
 }
@@ -2963,6 +2986,25 @@ function modifierIsWired(shape, kind, entityType) {
 }
 const TRANSITIVE_MAX_DEPTH = 8; // matches renderImpact's own default (codegraph.mjs)
 
+/** A graph's own vocabulary nodes carry their definition text under this
+ *  property. A code entity's docstring rides `seon:hasDoc` and shares the
+ *  plain `doc` key, so the PROP is what separates the two. */
+const SCHEMA_DOC_PROP = "mgx:schemaDoc";
+
+/** The definition text an individual publishes about itself, or null. Reading
+ *  the meta lane off this attribute rather than a fixed class-name list lets a
+ *  graph declare its own documented individual class (a glossary term, say)
+ *  and have "what is X" answer for it like any other vocabulary node. */
+function schemaDefinitionOf(ind) {
+  return (ind?.attributes || []).find((a) => a.prop === SCHEMA_DOC_PROP)?.value || null;
+}
+
+function schemaKindWordFor(cls) {
+  if (cls === "SchemaClass") return "a class in the graph's schema";
+  if (cls === "SchemaPredicate") return "a predicate (relation) in the graph's schema";
+  return `${articleFor(cls)} ${cls} in this graph's vocabulary`;
+}
+
 /** Compile a parsed query into a graph lookup. Pure given (graph, parsed, opts).
  *  `opts.contextId` resolves a context pronoun ("this"/"it"/…) when the parse
  *  needed one. Returns {matches, objMatch, candidates, traversal, ambiguous,
@@ -2992,7 +3034,7 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
     const term = String(parsed.object || "").trim();
     const termLc = term.toLowerCase();
     const match = (graph.individuals || []).find((i) => {
-      if (i.class !== "SchemaClass" && i.class !== "SchemaPredicate") return false;
+      if (!schemaDefinitionOf(i)) return false;
       if (String(i.label).toLowerCase() === termLc) return true;
       const token = (i.attributes || []).find((a) => a.key === "token")?.value;
       return token && String(token).toLowerCase() === termLc;
@@ -3435,12 +3477,15 @@ export function traverse(graph, parsed, { contextId = null, prev = null, pinnedO
 // ---- templated renderer: string interpolation + grouping/pluralization/
 // overflow rules, never generation. ----
 
+/** The module an individual lives in, or null when the index places it in
+ *  none — a graph can carry individuals that are not code (a glossary term,
+ *  a schema node), and naming a module for those would be a fabrication. */
 function moduleLabelOf(ind) {
   if (ind.class === "Module") return ind.label;
   const site = (ind.attributes || []).find((a) => a.key === "site")?.value;
   if (site) return String(site).split(":")[0];
   const m = String(ind.id || "").match(/^fn:(.+)#/);
-  return m ? m[1] : "(unknown module)";
+  return m ? m[1] : null;
 }
 
 function symbolLabelOf(ind) {
@@ -3653,9 +3698,8 @@ function renderCore(parsed, result, graph) {
     if (result.metaCodeClass) {
       return { content: result.metaFallbackText, miss: false, ambiguous: false, matches: result.matches };
     }
-    const doc = (result.objMatch.attributes || []).find((a) => a.key === "doc")?.value || "";
-    const kindWord = result.objMatch.class === "SchemaClass" ? "a class in the graph's schema" : "a predicate (relation) in the graph's schema";
-    return { content: `${result.objMatch.label} is ${kindWord}: ${doc}`, miss: false, ambiguous: false, matches: result.matches };
+    const doc = schemaDefinitionOf(result.objMatch) || "";
+    return { content: `${result.objMatch.label} is ${schemaKindWordFor(result.objMatch.class)}: ${doc}`, miss: false, ambiguous: false, matches: result.matches };
   }
   // mentions: the prose surface — checked before the generic objMatch-null miss
   // below, because a mentions result deliberately carries no resolved object
@@ -3810,8 +3854,15 @@ function renderCore(parsed, result, graph) {
       const lines = m[3] && m[3] !== m[2] ? `lines ${m[2]}-${m[3]}` : `line ${m[2]}`;
       return { content: `${symbolLabelOf(ind)} is defined in ${m[1]} at ${lines}.`, miss: false, ambiguous: false, matches: result.matches };
     }
+    const mod = moduleLabelOf(ind);
+    if (!mod) {
+      return {
+        content: `${ind.label} has no recorded code location in this index — it carries no source site, and nothing places it in a module.`,
+        miss: true, ambiguous: false,
+      };
+    }
     return {
-      content: `${symbolLabelOf(ind)} is defined in ${moduleLabelOf(ind)} (no line span recorded in this index).`,
+      content: `${symbolLabelOf(ind)} is defined in ${mod} (no line span recorded in this index).`,
       miss: false, ambiguous: false, matches: result.matches,
     };
   }
@@ -3974,7 +4025,7 @@ function renderCore(parsed, result, graph) {
   // "there is … in {module}" (module trails, not leads).
   const byModule = new Map();
   for (const m of result.matches.slice(0, OVERFLOW_CAP)) {
-    const mod = moduleLabelOf(m);
+    const mod = moduleLabelOf(m) || "no recorded module";
     if (!byModule.has(mod)) byModule.set(mod, []);
     byModule.get(mod).push(symbolLabelOf(m));
   }
@@ -4066,8 +4117,7 @@ function fuzzyCascadeWord(w) {
  *  question. Exact/substring/prose matches are untouched. */
 function schemaTypoTrap(resolution, term) {
   if (!resolution?.match || resolution.matchedVia !== "fuzzy" || resolution.ambiguous) return false;
-  const cls = resolution.match.class;
-  if (cls !== "SchemaClass" && cls !== "SchemaPredicate") return false;
+  if (!schemaDefinitionOf(resolution.match)) return false;
   const lc = String(term || "").trim().toLowerCase();
   const kindNoun = fuzzyCascadeWord(lc);
   return !!kindNoun && kindNoun !== lc && !!ENTITY_TO_TYPE[kindNoun];

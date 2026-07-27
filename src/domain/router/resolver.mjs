@@ -54,6 +54,8 @@ export const UNMAPPED_KINDS = Object.freeze({
   imports: "no importer/imports query tool in the registry (there is no tmct_imports); refusing beats mis-routing to calls",
   uses: "a query-side UNION (imports+calls+callsSymbol) with no single capability; a router that must emit ONE call cannot honour it — refuse",
   defines: "Module->symbol `defines` has no dedicated capability (tmct_members is Class-scoped `contains`); refuse rather than answer a different grain",
+  serves: "a provider-declared edge with no capability in the registry; the ask lane traverses it directly, so refusing here beats mis-routing to a code-grain tool",
+  denotes: "a provider-declared edge with no capability in the registry; the ask lane traverses it directly, so refusing here beats mis-routing to a code-grain tool",
 });
 
 // ---- capabilities the NL surface cannot reach today (named, not accidental) ---

@@ -196,6 +196,12 @@ const SHOW_GIVE_ME_RE = /^(?:show|give)\s+me\s+(?:the\s+)?(.+?)\??$/i;
  *  noise-strip layer never drops. */
 const LEADING_CONNECTIVE_RE = /^(?:and|also|so|then|now|but)\s+(.+)$/i;
 const QUESTION_AUX_LEAD_RE = /^(?:does|do|did|is|are|was|were|has|have|had|can|could|will|would|should)\b/i;
+/** A bare relative-clause remainder ("the tests that cover it"), the shape an
+ *  anaphoric follow-up takes when it names a thing instead of asking outright.
+ *  Anchored on a determiner and a short head noun so a mid-clause boolean
+ *  branch ("and are tested", "and call Y") never reaches it. */
+const RELATIVE_CLAUSE_LEAD_RE =
+  /^(?:the|its|their|his|her|our|my)\s+[\w'-]+(?:\s+[\w'-]+){0,2}\s+(?:that|which|who)\s+\S/i;
 
 /** A topic-switch/self-interruption preamble ("actually never mind, <Q>"),
  *  repeating so a stack of markers peels in one pass. Distinct from
@@ -261,6 +267,7 @@ export function applyPreambleFrames(text) {
         INTERROGATIVE_LEAD_RE.test(rest) || QUESTION_AUX_LEAD_RE.test(rest)
         || TOPIC_SWITCH_PREAMBLE_RE.test(rest) || ACK_PREAMBLE_RE.test(rest)
         || HEDGE_ADVERB_PREAMBLE_RE.test(rest) || BROWSING_PREAMBLE_RE.test(rest)
+        || RELATIVE_CLAUSE_LEAD_RE.test(rest)
       ) q = rest;
     }
     if (q === before) break;
