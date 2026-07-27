@@ -1135,6 +1135,8 @@ The `<where-marker>` slot takes any of *defined*, *declared*, *located*, *implem
 - **touches** — *touched*, *touches*, *changed*, *change*, and more
 - **cochange** — *changed with*, *co-changes with*, *co-change with*, *changes alongside*, and more
 - **reexports** — *exports*, *export*, *re-exports*, *re-export*, and more
+- **serves** — *serves*, *serve*, *serving*, and more
+- **denotes** — *denotes*, *denote*, *denoting*, and more
 
 Every question in that table runs against the example graph:
 
