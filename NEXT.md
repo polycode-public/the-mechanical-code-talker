@@ -56,10 +56,23 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   `code-explorer-hints.mjs`, and `repository-interface.mjs`'s `EDGE_KINDS` are untouched, so "tell
   me about serves" and `edges(id, "serves")` on the tool surface still don't resolve. Genuinely
   separate body of work from the traversal fix, `chat.mjs` is high-collision.
-- [ ] seonix relay, round 3 item not covered by 2026-07-27's fix batch — a digest-shaped request
-  misparses: `"give me everything I need to change renderSummaryMd"` parses "everything I need" as
-  the subject of a `touches` question instead of routing through the context/digest lane the way
-  `"give me the context for X"` does. `~/.claude/inboxes/tmct.md` 2026-07-26T22:58.
+- [ ] wink-model.mjs's top-level `import { createRequire } from "node:module"`
+  (`src/adapters/wink-model.mjs:12`) collides with esbuild's own auto-injected `createRequire`
+  shim when a consumer bundles a single-file Lambda with `esbuild --bundle`, a module-parse-time
+  `SyntaxError` that crashes the whole bundle even when the code path reaching `wink-model.mjs` is
+  never executed. Caused a real ~1hr marginalia prod outage (2026-07-27); bedrock-meter worked
+  around it on their side (a new `./fallback-http` subpath that never reaches `wink-model.mjs`).
+  The suggested fix — making the import lazy (`await import("node:module")` inside
+  `nodeRequireWink()`) — is a real design tradeoff, not a one-liner: the file's own docblock states
+  "the loader stays synchronous" as a deliberate invariant, and going lazy would cascade
+  `loadWinkModel()`/`nodeRequireWink()` and their callers (`ask-nlp.mjs`, `prose-nlp.mjs`) to
+  async. Needs a design decision, not a rushed fix. `~/.claude/inboxes/tmct.md` 2026-07-27T23:02.
+- [ ] seonix wants to unify their own narrow/wide test-path split (`src/domain/paths.mjs`'s
+  `isTestLabel` vs `isTestModuleLabel`) but can't do it alone: their own parity test asserts their
+  narrow classifier stays in lockstep with tmct's `src/domain/module-paths.mjs`'s `isTestPath`.
+  Needs seonix to specify what the unified behavior should actually be before tmct's side can
+  move — no design detail sent yet. Not urgent, flagged so it doesn't fall through a
+  cross-session gap. `~/.claude/inboxes/tmct.md` 2026-07-27T22:45.
 
 ## Discipline
 
