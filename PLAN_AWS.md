@@ -3,7 +3,7 @@
 Plan to move tmct's public site from GitLab Pages to a new AWS-hosted main site at
 **`tmct.polycode.co.uk`**, mirroring seonix's account/edge/CI pattern (`seonix/AWS_ACCOUNTS.md`,
 `seonix/infra/`, `seonix/docs/AWS_SETUP.md`). Written 2026-07-26 against tmct 3.0.6 and the
-`.gitlab-ci.yml` of the same date. Nothing in this plan is executed yet.
+`.gitlab-ci.yml` of the same date. Phases 1–8 are live — see `AWS_ACCOUNTS.md`'s "Provisioning status (2026-07-26)" for current state.
 
 **Lift and shift, no content changes.** The artifact stays exactly what `npm run build:ask-bundle`
 + `npm run demo:build` produce into `public/` today — same 10 pages, same bundles, same
@@ -248,14 +248,14 @@ until the next publish either way, which is cosmetic; keep the AWS stack up whil
 
 ## Deliverables checklist
 
-- [ ] `AWS_ACCOUNTS.md` (this repo) — accounts, SSO, OIDC, DNS tables with real IDs
-- [ ] `docs/AWS_SETUP.md` — ported runbook incl. manual-steps list
-- [ ] `infra/` — cdk.json, workspace package.json, tsconfig, bin/app.ts, lib/apex-stack.ts,
+- [x] `AWS_ACCOUNTS.md` (this repo) — accounts, SSO, OIDC, DNS tables with real IDs
+- [x] `docs/AWS_SETUP.md` — ported runbook incl. manual-steps list
+- [x] `infra/` — cdk.json, workspace package.json, tsconfig, bin/app.ts, lib/apex-stack.ts,
       lib/website-stack.ts (with the Phase-4 differences), three provision/bootstrap scripts,
       five trust-policy JSONs
-- [ ] `scripts/assume-aws.sh` (verbatim), `scripts/fast-deploy-web.sh` (`SITE_DIR=public`)
-- [ ] `.gitlab-ci.yml` — `deploy:website`, `e2e:deployed`, smoke `needs` repoint, `pages`
+- [x] `scripts/assume-aws.sh` (verbatim), `scripts/fast-deploy-web.sh` (`SITE_DIR=public`)
+- [x] `.gitlab-ci.yml` — `deploy:website`, `e2e:deployed`, smoke `needs` repoint, `pages`
       retirement (cutover)
-- [ ] `test-e2e/helpers/` — `TMCT_E2E_BASE_URL` switch
-- [ ] Reference updates + version roll + publish (cutover commit)
+- [x] `test-e2e/helpers/` — `TMCT_E2E_BASE_URL` switch
+- [x] Reference updates + version roll + publish (cutover commit)
 - [ ] Post-cutover `SKILL_PAGE_WEIGHTS` run → `reports/PAGE_WEIGHTS.md` revision 2

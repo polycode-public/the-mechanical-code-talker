@@ -8,10 +8,7 @@ bedrock-meter `AWS_ACCOUNTS.md`), same org as seonix. Workloads live in
 (polycode-management) · **Workloads OU:** `ou-k4f6-nxhap4c0` · **Org root:**
 `r-k4f6`
 
-> Both tmct accounts exist and are placed in the Workloads OU. OIDC, deploy
-> roles, CDK bootstrap, DNS, and CI variables are not provisioned yet — see
-> PLAN_AWS.md Phase 3 onward and [docs/AWS_SETUP.md](docs/AWS_SETUP.md) for the
-> remaining steps and the reproduce block below.
+> All provisioning is complete and live. See "Provisioning status (2026-07-26)" below for details.
 
 ## Accounts
 
