@@ -4766,12 +4766,18 @@ async function teachLane(query, { memoryDir, sessionId = "", lexicon = null, cac
     if (stored) return stored;
   }
   // PASSIVE ownership — "<X> is owned by <Name>". Same bare-form gate as the
-  // active shape just above: a Capitalized owner
-  // name AND no interrogative lead, so "is TaskController owned by anyone"
-  // (a genuine yes/no QUESTION, handled by factReadBack instead) never lands
-  // a bogus fact here.
+  // active shape just above, reading EITHER side and requiring no
+  // interrogative lead, so "is TaskController owned by anyone" (a genuine
+  // yes/no QUESTION, handled by factReadBack instead) never lands a bogus
+  // fact here. Reading both sides matters as much as it does for the active
+  // shape, and the SUBJECT side gets the path test too: "src/domain/
+  // lexicon.mjs is owned by antony" states ownership just as plainly as a
+  // capitalized owner does, while "the car is owned by john" still declines.
   const ownPassive = ownSrc.match(OWNS_PASSIVE_TEACH_RE);
-  if (ownPassive && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion && (wrapped || /^[A-Z]/.test(ownPassive[2]))) {
+  const ownPassiveSubject = ownPassive?.[1]?.trim() ?? "";
+  if (ownPassive && memoryDir && !QUESTION_LEAD_RE.test(ownSrc) && !ownSrcMidQuestion
+    && (wrapped || /^[A-Z]/.test(ownPassive[2]) || /^[A-Z]/.test(ownPassiveSubject)
+      || MODULE_PATH_RE.test(ownPassiveSubject))) {
     const stored = await teachFact(memoryDir, sessionId, {
       subject: ownPassive[1], predicate: OWNED_BY_PREDICATE, object: ownPassive[2],
     });
@@ -5517,17 +5523,19 @@ async function memorySummary(memoryDir, graph) {
 // #2(e) MODULE-GRAIN OVERVIEW. META_ORIENT_RE (above) can't match a module
 // path/symbol name, so "what does app/lib/a.mjs do" needs its own lane.
 // CASE-PRESERVING: reads the ORIGINAL query text, never metaLane's lowercased `q`.
-/** A trailing intensifier/filler adverb tacked onto "do"/"does" ("what does the
- *  store module do exactly?", "...do exactly", "what X does really") — the
- *  closed-form anchor below requires "do"/"does" to be the LAST word before
- *  the optional "?", so this one extra word past it would otherwise hit the
- *  raw grammar wall even though the shared FILLER_WORDS/normalizeQuery pass
- *  (used elsewhere in the file) never sees this lane's case-preserving text
- *  at all. Mirrors MODULE_ORIENT_POLITENESS_RE
- *  just below: closed, optional, single-lane blast radius — a bare "what does
- *  X do" still matches with this suffix empty. */
-const TRAILING_ADVERB_RE = "(?:\\s+(?:exactly|really|actually|anyway))?";
-const MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)\\s+do${TRAILING_ADVERB_RE}\\??$`, "i");
+/** One intensifier/filler adverb sitting either side of "do"/"does" ("what does
+ *  the store module do exactly?", "what does tasks.mjs actually do
+ *  internally", "what X does really") — the closed-form anchors below pin
+ *  "do"/"does" against the term on one side and the optional "?" on the
+ *  other, so either extra word would hit the raw grammar wall even though the
+ *  shared FILLER_WORDS/normalizeQuery pass (used elsewhere in the file) never
+ *  sees this lane's case-preserving text at all. Mirrors
+ *  MODULE_ORIENT_POLITENESS_RE just below: closed, optional, single-lane blast
+ *  radius — a bare "what does X do" still matches with both slots empty. The
+ *  PRE-verb slot also keeps an adverb out of the term capture, so
+ *  "tasks.mjs actually" never reaches entity resolution as one name. */
+const ORIENT_ADVERB_SLOT_RE = "(?:\\s+(?:exactly|really|actually|truly|anyway|internally|properly))?";
+const MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)${ORIENT_ADVERB_SLOT_RE}\\s+do${ORIENT_ADVERB_SLOT_RE}\\??$`, "i");
 /** The SUBJECT-FIRST word order of the SAME question ("what saveStore does" vs
  *  "what does saveStore do") — a perfectly natural alternate phrasing of an
  *  ALREADY-recognized intent that would otherwise hit the raw grammar wall
@@ -5537,7 +5545,7 @@ const MODULE_ORIENT_RE = new RegExp(`^what\\s+does\\s+(.+?)\\s+do${TRAILING_ADVE
  *  UNIQUE graph entity or this lane declines) is what keeps this loose an
  *  ending safe — a syntactic match against a term that isn't a real entity
  *  simply falls through unchanged, same as every other lane in this file. */
-const MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB_RE}\\??$`, "i");
+const MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)${ORIENT_ADVERB_SLOT_RE}\\s+does${ORIENT_ADVERB_SLOT_RE}\\??$`, "i");
 /** "whats X do" / "what's X do" / "what is X do" — the CONTRACTED phrasing of
  *  "what does X do", where the auxiliary collapses into the "what's"/"whats"
  *  opener and "do" trails the term. MODULE_ORIENT_RE's own "does BEFORE the
@@ -5548,7 +5556,7 @@ const MODULE_ORIENT_SVO_RE = new RegExp(`^what\\s+(.+?)\\s+does${TRAILING_ADVERB
  *  that is not a real unique entity (a pronoun subject "whats it do", a
  *  non-word) simply declines. The "what(?:'s|s|\s+is)" opener mirrors
  *  MODULE_PURPOSE_RE's tolerance for the apostrophe-less "whats" contraction. */
-const MODULE_ORIENT_IS_DO_RE = new RegExp(`^what(?:'s|s|\\s+is)\\s+(.+?)\\s+do${TRAILING_ADVERB_RE}\\??$`, "i");
+const MODULE_ORIENT_IS_DO_RE = new RegExp(`^what(?:'s|s|\\s+is)\\s+(.+?)${ORIENT_ADVERB_SLOT_RE}\\s+do${ORIENT_ADVERB_SLOT_RE}\\??$`, "i");
 // Purpose/identity phrasing: "whats X for"/"what's X
 // about"/"what is X for", the sibling of "what does X do" that asks for the
 // SAME module-grain overview. Deliberately does NOT claim the literal noun
@@ -10927,9 +10935,24 @@ const STACCATO_PRONOUN_RE = /^(?:and|also|so|then|now)\s+(it|that|this|those|the
 const DESCRIBE_GRAIN_WORD_RE = new RegExp(
   `^(?:(?:the|a|an)\\s+)?(.+?)\\s+(${Object.keys(ENTITY_TO_TYPE).join("|")})$`, "i",
 );
+/** A LEADING noise phrase glued onto the captured term by an outer bridge, the
+ *  mirror of the trailing grain word DESCRIBE_GRAIN_WORD_RE strips. "give me
+ *  the context for src/core/store.mjs" reaches this lane as "describe context
+ *  for src/core/store.mjs" (normalize.mjs's show/give-me frame rewrites the
+ *  whole tail into the term), and every resolver downstream then reads
+ *  "context" as part of the name. Closed list, and the term still has to
+ *  resolve afterwards, so a phrase that leaves nothing resolvable simply
+ *  declines to the ordinary miss. */
+const DESCRIBE_LEADING_NOISE_RE =
+  /^(?:the\s+)?(?:context|details|detail|info|information|background)\s+(?:for|on|about|of|around)\s+/i;
+function stripDescribeLeadingNoise(term) {
+  const stripped = String(term || "").replace(DESCRIBE_LEADING_NOISE_RE, "").trim();
+  return stripped || String(term || "").trim();
+}
+
 async function describeGrainRescue(graph, term) {
   if (!graph) return null;
-  const m = String(term || "").trim().match(DESCRIBE_GRAIN_WORD_RE);
+  const m = stripDescribeLeadingNoise(term).match(DESCRIBE_GRAIN_WORD_RE);
   if (!m) return null;
   const [, head, grainWord] = m;
   const expectedClass = ENTITY_TO_TYPE[grainWord.toLowerCase()];
@@ -10959,6 +10982,11 @@ async function describeWrapperAnswer(query, { config, source, focus, graph, tel 
   // "describe about X" (a doubled verb) leaves a redundant leading "about "
   // glued to the captured term.
   term = term.replace(/^about\s+/i, "");
+  // "give me the context for X" arrives bridged into "describe context for X".
+  // Cleaned once here so the grain rescue, the /describe dispatch and the
+  // focus-setting resolveEntity below all read the same clean term — the
+  // answer was already right without this, but the focus never updated.
+  term = stripDescribeLeadingNoise(term);
   // A trailing bare discourse tag ("describe Record then") glued onto the
   // captured term, same class of gap stripTrailingDiscourseTag (ask-vocab.mjs)
   // already fixes for the meta-whatis vocab lane.
