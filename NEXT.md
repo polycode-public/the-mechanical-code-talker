@@ -30,19 +30,10 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   consumes tmct's backend the moment it lands here instead of maintaining its own AWS persistence
   layer. Full design writeup: `PLAN_MEMORY_BACKEND_AWS.md` (relocated from seonix's `PLAN_TMCT.md`
   2026-07-26; this is a tmct/marginalia concern, not a consumer-repo one)
-- [ ] CONVERSATION 3.0.10 sweep (`reports/BENCHMARK_CONVERSATION_3.0.10.md`), routed dead-ends —
-  the ladder now gates at FLOW-6:
-  1. "what am I talking to?" / "what even is this thing, like what does it do?" — colloquial
-     identity/meta questions parse as graph queries or hit the plain wall instead of an identity
-     answer. Extend the identity/meta intent recognizer to colloquial phrasings.
-  2. "what does tasks.mjs actually do internally" — an adverb-inserted variant of the working
-     "what does X do" shape gets the bare generic wall. Extend the bounded-fuzzy tolerance for
-     that shape.
-  3. (low priority) the compositional AND / anaphoric-continuation nudge for an unmet function/
-     method-level test-coverage query ("which functions call X and are untested") suggests "who
-     touched \<module\>", which doesn't address what was actually asked — this graph's `tests`
-     edges are module-level only, a real ceiling, not a routing bug. Reword the miss to name the
-     actual gap instead of an unrelated suggestion.
+- [ ] the ACE grammar's `resolveNP` has no N-of-N noun-phrase support (`"a unit of work"` parses
+  with `residue: ["of"]` rather than as one noun phrase) — surfaced while widening multi-word
+  class-name teach (2026-07-27), deliberately not fixed there: it's real grammar work outside that
+  fix's region, not a routing gap. `src/domain/grammar/ace.mjs`'s `parseCopula`/`resolveNP`.
 - [ ] `PLAN_AWS.md`'s two burn-in follow-ups, now that live execution (Phases 1-8) is complete
   and the CI pipeline is green end to end (`deploy:website`/`e2e:deployed`/`smoke:post-deploy`
   all passed on a real push, `https://tmct.polycode.co.uk/` confirmed serving HTTP 200): flip
@@ -59,63 +50,12 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   file list, in a worktree that already has a commit (so it can't be reclaimed mid-run), rather
   than the whole uncapped directory at once.
 
-- [ ] **high severity, data-corrupting** — chat's source-rendering path (`/snippet`, `/context`)
-  runs a prose-punctuation normaliser over fenced/served source text, corrupting real JS/TS:
-  `...aliases` → `.aliases`, `[i?.id, i]` → `[i?id, i]` (spread and optional chaining both
-  collapse). `/context` explicitly tells the caller "you do NOT need to Read it, write the new
-  code directly after reviewing this" — a coding agent following that instruction copies
-  syntactically invalid code. Relayed by codememory (seonix), `~/.claude/inboxes/tmct.md`
-  2026-07-26T22:31, evidenced in seonix's `playtests/PLAYTEST_LOG_001.md`. Fix: source lines must
-  render byte-for-byte as read, with no prose normalisation applied to fenced/served source.
-- [ ] seonix relay — 7 phrasing-coverage gaps from 3 playtest rounds over real code graphs
-  (`~/.claude/inboxes/tmct.md` 2026-07-26T22:31/22:44/22:58, evidence in seonix's
-  `playtests/PLAYTEST_LOG_00{1,2,3}.md`): orientation phrasing ("what can I ask you?", "how do I
-  get started?"), `serves`/route predicate queries, `denotes` predicate queries (distinct from the
-  `what is X` meta-shape gap below), `where is <LexiconTerm>` fabricates "(unknown module)" instead
-  of an honest miss, instance-level teach with a possessive subject ("X is owned by antony") is
-  refused while the class form works, a leading-`and` follow-up misparses `and` as the question's
-  subject, focus doesn't stick after a `/context`-shaped answer that named exactly one individual,
-  multi-word taught class names ("unit of work", "value object") are rejected — only single-word
-  classes parse, and `/describe <path not in the graph>` silently substitutes a same-basename
-  module instead of an honest miss (a full repo-relative path is not a case for fuzzy basename
-  matching).
-- [ ] seonix relay — `what is X` meta-shape only accepts `SchemaClass`/`SchemaPredicate`
-  individuals; a new individual class carrying a real definition (e.g. seonix's `LexiconTerm`) is
-  reachable through every other RI path but misses here specifically. Broaden the class check to
-  "carries a definition-shaped attribute" rather than a hardcoded class list. Relayed by
-  codememory, `~/.claude/inboxes/tmct.md` 2026-07-26T23:20.
-- [ ] seonix relay — chat's follow-up hint text hardcodes the `tmct_*` tool-name prefix
-  (`tmct_describe`, `tmct_impact`, …); inside a `seonix chat` session those names don't exist for
-  the user, who can only call `seonix_*`. Let a registered provider supply the prefix the hints
-  use. Cosmetic, no rush. Relayed by codememory, `~/.claude/inboxes/tmct.md` 2026-07-26T22:44.
-- [ ] bedrock-meter's embedding-surface asks (`~/.claude/inboxes/bedrock-meter.md`,
-  2026-07-26) — bedrock-meter is embedding tmct in-process as marginalia's cap-breach fallback
-  (sqlite memory, learn-on-miss, narration+digest+facts on every response) and did a deep recon
-  of the 3.0.8 embedding surface. Ranked asks:
-  1. **Per-turn fact delta** — `touchedFactRows` (`src/domain/memory/touched-facts.mjs:14`) does
-     exactly what's needed but isn't exported or wired into `runTurn`'s return value. Either wire
-     it in (`runTurn` returns `factsTouched` alongside `answer`) or export it so a caller can diff.
-  2. **Structured narration** — `narrate: true` glues the trace onto `result.answer` under a
-     `"--- narrate ---"` string literal; `NARRATE_MARKER` isn't re-exported, so every embedder
-     would have to hardcode it. Re-export `NARRATE_MARKER`, or return `{ answer, narration }` as
-     siblings when `narrate` is on.
-  3. **On-demand digest** — `digestTermFromRows` (`src/domain/digest/`) is reachable only via
-     `bin/tmct.mjs digest`; no root export, no `./digest` subpath. A `./digest` subpath or root
-     re-export would let an embedder attach the composed digest paragraph to a fallback answer
-     without shelling out to the CLI.
-  4. **Memory backend constructors** — `openMemoryBackend`/`createSqliteMemoryStore`/
-     `createInMemoryStore`/`readFactRows`/`inspectMemory` are all unexported; `createSession` is
-     the only public route to a sqlite handle but drags session-log + sidecar + graph-upsert
-     writes per turn. Their workaround (call `createSession` once for the handle, then drive
-     `runTurn` directly with its `memoryDir`) works but is undocumented folklore — worth either a
-     blessed `./memory` subpath or a documented pattern.
-  5. **Real bug, not just a gap**: `dispatchTool("tmct_export")` calls
-     `openConfiguredMemoryBackend` (`src/tools/handlers/tmct-export.mjs:14`), which re-derives the
-     backend from env/toml config on disk — it ignores an embedding session's own `memoryBackend`
-     param entirely. An embedder using an in-process/explicit backend gets an export from the
-     wrong location (or an empty one), silently. Worth fixing regardless of the rest of this list.
-  Not asking for: packaging changes (pack weight/wordnet size flagged as low priority, explicitly
-  not a restructuring request). Reply in `~/.claude/inboxes/bedrock-meter.md`.
+- [ ] seonix relay — `serves`/`denotes` are only wired in the ask/traversal lane (2026-07-27); the
+  concept lane (`concept.mjs`'s four relation tables), `corpus/seon/relations.jsonl`,
+  `schema-docs.mjs`'s `PREDICATE_DOCS`, `chat.mjs`'s `GOAL_BY_KIND`/`MISS_EXAMPLES`,
+  `code-explorer-hints.mjs`, and `repository-interface.mjs`'s `EDGE_KINDS` are untouched, so "tell
+  me about serves" and `edges(id, "serves")` on the tool surface still don't resolve. Genuinely
+  separate body of work from the traversal fix, `chat.mjs` is high-collision.
 
 ## Discipline
 
