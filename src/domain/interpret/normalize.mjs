@@ -186,6 +186,12 @@ const EMBEDDED_MEANS_RE = /^what\s+((?:an?\s+|the\s+)?[\w'-]+(?:\s+[\w'-]+){0,2}
  *  untouched, a relation/interrogative remainder unwraps to itself, anything
  *  else bridges to "describe <thing>". */
 const SHOW_GIVE_ME_RE = /^(?:show|give)\s+me\s+(?:the\s+)?(.+?)\??$/i;
+/** An "everything I need [to <verb>|for X]" remainder always bridges to
+ *  "describe <thing>", even when its purpose clause happens to contain a
+ *  relation verb ("everything I need to change X") — RELATION_VERB_RE's
+ *  bag-of-words probe would otherwise misread that verb as making the
+ *  remainder itself an already-relational clause. */
+const EVERYTHING_I_NEED_RE = /^everything\s+i(?:'d|\s+would)?\s+need\b/i;
 
 /** Leading STACCATO connective before an ALREADY well-formed question ("and
  *  what imports it") -> the question alone. Gated on the remainder starting
@@ -254,7 +260,9 @@ export function applyPreambleFrames(text) {
     if (m) {
       const rest = m[1].trim();
       if (!isListingRemainder(rest)) {
-        q = (RELATION_VERB_RE.test(rest) || INTERROGATIVE_LEAD_RE.test(rest)) ? rest : `describe ${rest}`;
+        const isRelationClause = !EVERYTHING_I_NEED_RE.test(rest)
+          && (RELATION_VERB_RE.test(rest) || INTERROGATIVE_LEAD_RE.test(rest));
+        q = isRelationClause ? rest : `describe ${rest}`;
       }
     }
     m = q.match(LEADING_CONNECTIVE_RE);

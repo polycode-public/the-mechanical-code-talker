@@ -11009,9 +11009,18 @@ const DESCRIBE_GRAIN_WORD_RE = new RegExp(
  *  whole tail into the term), and every resolver downstream then reads
  *  "context" as part of the name. Closed list, and the term still has to
  *  resolve afterwards, so a phrase that leaves nothing resolvable simply
- *  declines to the ordinary miss. */
+ *  declines to the ordinary miss.
+ *
+ *  The "everything i need ..." branch is the same shape with a purpose clause
+ *  instead of a bare noun: "give me everything i need to change X"/"...for X"
+ *  both reach here as "describe everything i need to change X"/"describe
+ *  everything i need for X". The "to <verb...>" purpose clause is never split
+ *  word-by-word (a multi-word clause like "to work on X" would mis-split into
+ *  a captured verb plus a dangling remainder) — the greedy `.*\s` instead
+ *  always backtracks to the LAST whitespace run in the match, so the whole
+ *  clause strips as one unit and only the trailing symbol/path survives. */
 const DESCRIBE_LEADING_NOISE_RE =
-  /^(?:the\s+)?(?:context|details|detail|info|information|background)\s+(?:for|on|about|of|around)\s+/i;
+  /^(?:(?:the\s+)?(?:context|details|detail|info|information|background)\s+(?:for|on|about|of|around)\s+|everything\s+i(?:'d|\s+would)?\s+need\s+(?:to\s+.*\s|for\s+))/i;
 function stripDescribeLeadingNoise(term) {
   const stripped = String(term || "").replace(DESCRIBE_LEADING_NOISE_RE, "").trim();
   return stripped || String(term || "").trim();
@@ -13355,6 +13364,15 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
     const described = await describeWrapperAnswer(query, { config, source, focus: newFocus, graph, tel });
     if (described) {
       answer = described.text; via = described.miss ? "miss" : "describe"; recordMiss = !!described.miss;
+      // The composed engine's failed parse above (`via` was still "composed"
+      // to reach this lane at all) can have deduced a goal/canonical for a
+      // DIFFERENT reading it never resolved — e.g. "give me everything i need
+      // to change X" bag-of-words-matches "change" as a touches verb and
+      // deduces subject="describe everything i need". This rescue answers a
+      // different question, so that stale interpretation must not survive
+      // into its answer (same staleness the FUZZY-VERB DECLINE lane guards
+      // against, below).
+      canonical = null; deduced = null;
       note(trace, "lane: (4d) DESCRIBE-WRAPPER RESCUE — a polite wrapper around \"describe/tell me about <symbol>\" resolved via /describe, tried last after every other lane declined");
       note(trace, "goal: get a symbol's definition/kind/relations (phrased conversationally)");
       // Carry the resolved entity forward as the new focus, same class-gated
