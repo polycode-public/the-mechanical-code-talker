@@ -17,12 +17,15 @@
 // Tier-1 expectations (deterministic, evaluated here — the LLM judge is tier 2,
 // chatbench/judge.mjs): miss flag, answer regex/substring, answered/resolved id
 // membership, post-turn focus label, session end, subclass-paraphrase
-// equivalence. The last of these settles a case whose answer only needs to be
-// a valid subClassOf paraphrase of a given (subject, object) — not one
-// verbatim string — via ingestbench's own deterministic checker
-// (verifySubClassParaphrase, src/domain/paraphrase.mjs): free and exact,
-// where an answerMatch pin would otherwise force the case author to hardcode
-// which of the closed template set the product happened to pick. A turn marked
+// equivalence, and ING-8 relation-paraphrase equivalence. The paraphrase checks
+// settle a case whose answer only needs to be a valid paraphrase of a given
+// fact — not one verbatim string — via ingestbench's own deterministic
+// checkers: verifySubClassParaphrase (src/domain/paraphrase.mjs) for isa/
+// subclass facts, verifyRelationParaphrase (src/domain/paraphrase-ing8.mjs,
+// the ING-8 corpus-authored checker) for the closed non-isa relation
+// vocabulary (has/creates/capableOf). Both are free and exact, where an
+// answerMatch pin would otherwise force the case author to hardcode which of
+// the closed template set the product happened to pick. A turn marked
 // evaluated and recorded but never fail the case; if they all pass, the case is
 // flagged `improvedBaselineTurns` (a lever fixed a documented weakness). Once a
 // lever DOES fix it, the turn gains expect.improvedIn:"<cycle>" (cycle 2 onward):
@@ -71,6 +74,7 @@ import {
 } from "./graded.mjs";
 import { CLASS_DOCS, PREDICATE_DOCS } from "../../src/tools/schema-docs.mjs";
 import { verifySubClassParaphrase } from "../../src/domain/paraphrase.mjs";
+import { verifyRelationParaphrase, RELATION_FAMILY_IDS } from "../../src/domain/paraphrase-ing8.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(dirname(HERE));
@@ -91,7 +95,7 @@ const EXTRA_TAGS = ["graded", "template-lane"];
 export const EXPECT_KEYS = [
   "miss", "answerMatch", "answerNotMatch", "answeredIdsInclude",
   "resolvedIdsInclude", "focusLabel", "end", "baselineFail", "improvedIn",
-  "subclassParaphrase",
+  "subclassParaphrase", "ing8Paraphrase",
 ];
 export const JUDGE_DIMENSIONS = ["groundedness", "correctness", "honesty", "rephrase"];
 const MODES = ["turns", "session"];
@@ -217,6 +221,13 @@ export function parseCases(text) {
             errors.push(`${tat}: subclassParaphrase must be {subject, object} strings`);
           }
         }
+        if ("ing8Paraphrase" in turn.expect) {
+          const rp = turn.expect.ing8Paraphrase;
+          if (!rp || typeof rp !== "object" || typeof rp.subject !== "string" || typeof rp.object !== "string"
+            || !RELATION_FAMILY_IDS.includes(rp.family)) {
+            errors.push(`${tat}: ing8Paraphrase must be {family, subject, object} with family one of ${RELATION_FAMILY_IDS.join("|")}`);
+          }
+        }
       }
     });
     if (c.judge) {
@@ -234,8 +245,8 @@ export function parseCases(text) {
 
 const toArray = (v) => (Array.isArray(v) ? v : [v]);
 
-/** Candidate substrings a subclassParaphrase check tries against a turn's
- *  answer text: each parenthetical clause (the shape chat.mjs's
+/** Candidate substrings a subclassParaphrase or ing8Paraphrase check tries
+ *  against a turn's answer text: each parenthetical clause (the shape chat.mjs's
  *  paraphraseVerifiedSubClass suffix produces — "noted — remembered 1 fact:
  *  cache rdfs:subClassOf component (every cache is a component)") plus the
  *  whole answer, so the check isn't coupled to that one formatting
@@ -275,6 +286,12 @@ export function evaluateExpect(expect, outcome) {
     const verified = subclassParaphraseCandidates(outcome.answer)
       .some((candidate) => verifySubClassParaphrase(subject, object, candidate, existingEdges).verified);
     add("subclassParaphrase", verified, { subject, object }, outcome.answer ?? "");
+  }
+  if (expect.ing8Paraphrase) {
+    const { family, subject, object } = expect.ing8Paraphrase;
+    const verified = subclassParaphraseCandidates(outcome.answer)
+      .some((candidate) => verifyRelationParaphrase(family, subject, object, candidate).verified);
+    add("ing8Paraphrase", verified, { family, subject, object }, outcome.answer ?? "");
   }
   return checks;
 }
