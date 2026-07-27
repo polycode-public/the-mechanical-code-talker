@@ -127,6 +127,33 @@ test("\"what does validate.mjs do\" reads the module digest with its defined fun
   assert.equal(r.record.miss, false);
 });
 
+test("\"what does X actually do internally\" reads the same module digest as the bare phrasing", async () => {
+  const bare = await ask("what does tasks.mjs do");
+  for (const q of [
+    "what does tasks.mjs actually do internally",
+    "what does tasks.mjs do internally",
+    "what does tasks.mjs actually do",
+  ]) {
+    const r = await ask(q);
+    assert.equal(r.record.miss, false, `"${q}" must reach the digest, not the wall`);
+    assert.match(r.answer, /src\/handlers\/tasks\.mjs is a module/);
+    assert.equal(r.answer, bare.answer, `"${q}" must answer exactly as the bare phrasing does`);
+  }
+});
+
+test("\"give me the context for <module>\" answers the card and leaves that module as the focus", async () => {
+  const t1 = await ask("give me the context for src/core/validate.mjs");
+  assert.equal(t1.record.miss, false);
+  assert.match(t1.answer, /^src\/core\/validate\.mjs — Module/);
+  assert.doesNotMatch(t1.answer, /context/i, "the noise lead never leaks into the answer as an unmatched term");
+  assert.equal(t1.focus?.id, "mod:src/core/validate.mjs");
+
+  const t2 = await ask("what does it import",
+    { discourse: t1.discourse, focus: t1.focus, last: t1.last });
+  assert.equal(t2.record.miss, false, "the standing focus resolves the pronoun");
+  assert.match(t2.answer, /src\/core\/model\.mjs/);
+});
+
 test("a vocabulary term read-back cites its source (in-session, after a prior vocabulary turn opens the child pack)", async () => {
   const memoryDir = mkdtempSync(join(tmpdir(), "tmct-chatflow-vocab-"));
   await runTurn("what is a cache", { config, graph, memoryDir });

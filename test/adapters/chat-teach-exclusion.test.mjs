@@ -101,6 +101,27 @@ test("real declarative teach shapes still store through the narrowed lane", asyn
   });
 });
 
+test("a passive ownership teach stores on a code-shaped subject even when the owner name is lowercase", async () => {
+  await withStore(async (dir) => {
+    const { answer } = await runTurn("src/domain/lexicon.mjs is owned by antony", { memoryDir: dir, sessionId: "s1" });
+    assert.match(answer, /noted — remembered: src\/domain\/lexicon\.mjs is owned by antony/);
+    const rows = await factRows(dir);
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].subject, "src/domain/lexicon.mjs");
+    assert.equal(rows[0].object, "antony");
+  });
+});
+
+test("a passive ownership sentence with neither a code-shaped subject nor a capitalized side stores nothing", async () => {
+  await withStore(async (dir) => {
+    for (const s of ["the car is owned by john", "is TaskController owned by anyone"]) {
+      const { answer } = await runTurn(s, { memoryDir: dir, sessionId: "s1" });
+      assert.doesNotMatch(answer, /noted — remembered/, `"${s}" must never store`);
+    }
+    assert.equal((await factRows(dir)).length, 0);
+  });
+});
+
 test("a wrapped first-person sentence keeps the pronoun-specific decline and stores nothing", async () => {
   await withStore(async (dir) => {
     const { answer } = await runTurn("remember that i am a developer", { memoryDir: dir, sessionId: "s1" });
