@@ -1,5 +1,7 @@
 # PLAN_BENCHMARK_MECHANISATION.md — intelligence authored once, benchmarks run mechanical
 
+Status: DELIVERED (2026-07-27; measured at 3.1.2). All seven levers landed, archived.
+
 ## Landed (context)
 
 Levers 1, 2, 3, 5, 6, 7, and lever 4 (both chatbench's subclass-paraphrase check and INGEST's ING-8
