@@ -26,8 +26,10 @@ export function resolveOrThrow(svc, symbol, what) {
   return { match, candidates };
 }
 
-/** The shape most cold tools share: one required `symbol`, resolved, then rendered. */
-export const symbolHandler = (render) => (args, { graph, svc }) => {
+/** The shape most cold tools share: one required `symbol`, resolved, then rendered.
+ *  `config.toolNamePrefix` (default "tmct_", set by e.g. seonix's own tool naming)
+ *  threads through so a render's own follow-up hints stay accurate outside tmct. */
+export const symbolHandler = (render) => (args, { graph, svc, config }) => {
   const { match } = resolveOrThrow(svc, requiredArg(args, "symbol"), "symbol");
-  return render(graph, match);
+  return render(graph, match, { toolNamePrefix: config?.toolNamePrefix });
 };

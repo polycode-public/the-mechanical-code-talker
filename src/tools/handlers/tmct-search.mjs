@@ -13,6 +13,7 @@ export async function tmct_search(args, { graph, config }) {
     kind,
     decorator: String(args?.decorator || "").trim(),
     name: String(args?.name || "").trim(),
+    toolNamePrefix: config?.toolNamePrefix,
   });
   if (!kind && /^no module matches/.test(out)) {
     const fallback = renderMemoryDefinition(await memoryFactRows(config), query);

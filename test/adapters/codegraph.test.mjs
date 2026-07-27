@@ -125,6 +125,22 @@ test("resolveSymbol: misses invent nothing; ties break on attestation", () => {
   assert.equal(r.candidates[0].id, "mod:app/lib/b.mjs"); // 1 commit ref → next
 });
 
+test("resolveSymbol: a multi-segment path that doesn't exist honestly misses, even when another file shares its basename", () => {
+  const withOtherIndex = parseEntities({
+    individuals: [
+      { id: "mod:examples/ejs/index.js", label: "examples/ejs/index.js", class: "Module" },
+    ],
+  });
+  // "index.js" alone is a legitimate bare-filename basename match.
+  assert.equal(resolveSymbol(withOtherIndex, "index.js").match.id, "mod:examples/ejs/index.js");
+  // "lib/router/index.js" reads as a repo-relative path that isn't in the graph at
+  // all; it must not fuzzy-match onto the unrelated examples/ejs/index.js just
+  // because the last segment happens to match.
+  const miss = resolveSymbol(withOtherIndex, "lib/router/index.js");
+  assert.equal(miss.match, null);
+  assert.deepEqual(miss.candidates, []);
+});
+
 test("impactClosure: reverse closure, diamond collapsed, cycle terminated", () => {
   const levels = impactClosure(graph, graph.byId.get("mod:app/lib/a.mjs"));
   assert.deepEqual(levels[0].map((d) => d.id).sort(), ["mod:app/lib/b.mjs", "mod:app/lib/c.mjs", "mod:app/lib/e.mjs", "mod:scripts/g.mjs"]);
@@ -307,6 +323,18 @@ test("renderSearch: finds the module by defined-symbol name, ranked, compact", (
   assert.match(text, /tmct_describe/);
   assert.match(renderSearch(graph, "nothing-matches-this"), /no module matches/);
   assert.equal(renderSearch(graph, "   "), "empty query");
+});
+
+test("renderSearch/renderMembers/renderSignature/renderCallers: toolNamePrefix replaces the hardcoded tmct_ in follow-up hints, and defaults to tmct_ when omitted", () => {
+  const seonix = { toolNamePrefix: "seonix_" };
+  assert.match(renderSearch(graph, "fnAlpha", seonix), /seonix_describe/);
+  assert.doesNotMatch(renderSearch(graph, "fnAlpha", seonix), /tmct_/);
+  assert.match(renderMembers(graph, graph.byId.get("cls-base"), seonix), /seonix_describe/);
+  assert.match(renderMembers(graph, graph.byId.get("cls-widget"), seonix), /seonix_snippet/);
+  assert.match(renderSignature(graph, graph.byId.get("m-render"), seonix), /seonix_snippet/);
+  assert.match(renderCallers(graph, graph.byId.get("mod:app/lib/f.mjs"), seonix), /seonix_impact/);
+  // omitted toolNamePrefix keeps today's tmct_ hints, byte-identical to before this option existed
+  assert.match(renderSearch(graph, "fnAlpha"), /tmct_describe/);
 });
 
 test("renderSearch kind= switches to symbol search with name/decorator filters", () => {

@@ -36,6 +36,7 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   // bodies) with top-up, and it OVERRIDES trim so even secondary modules get the full bundle. Used
   // by the tmct-max arm to test whether more injection re-bloats.
   const max = Boolean(args?.max);
+  const toolNamePrefix = config?.toolNamePrefix || "tmct_";
   const graph = await loadGraph(config, source);
   // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json) — computed
   // before createGraphService so the RI service can be constructed source-capable: this
@@ -123,7 +124,7 @@ export async function buildContextBundle(args, { config, source = defaultSource,
       out.push(`  ${s.class} ${s.label}${s.site ? ` :${s.site.start}` : ""}  ${dec}${sig}${r}`);
     }
     if (plan.siblings.length > plan.siblingCap) {
-      out.push(`  …+${plan.siblings.length - plan.siblingCap} more (use tmct_search kind=function or tmct_snippet <name> for any of them)`);
+      out.push(`  …+${plan.siblings.length - plan.siblingCap} more (use ${toolNamePrefix}search kind=function or ${toolNamePrefix}snippet <name> for any of them)`);
     }
   }
   if (mask.allExports && plan.allExports) {
@@ -148,7 +149,7 @@ export async function buildContextBundle(args, { config, source = defaultSource,
   out.push(`\nYou now have the snippet, the sibling style, the registration anchor and the tests. ` +
     `Write the new code with Edit/Write — do NOT Read ${plan.moduleLabel}.`);
   if (tier !== "FULL") {
-    out.push(`(bundle tier ${tier}; for any omitted sections run tmct_context_more {"symbol":"${symbol}"}, or tmct_context with depth="full".)`);
+    out.push(`(bundle tier ${tier}; for any omitted sections run ${toolNamePrefix}context_more {"symbol":"${symbol}"}, or ${toolNamePrefix}context with depth="full".)`);
   }
   return { text: out.join("\n"), tier, topup };
 }

@@ -9,7 +9,7 @@ import { requiredArg, resolveOrThrow } from "./kit.mjs";
 export async function tmct_members(args, { graph, svc, config }) {
   const symbol = requiredArg(args, "class");
   const { match } = resolveSymbol(svc.graph, symbol);
-  if (match) return renderMembers(graph, match); // code-map wins when present
+  if (match) return renderMembers(graph, match, { toolNamePrefix: config?.toolNamePrefix }); // code-map wins when present
   const fallback = renderMemorySubclasses(await memoryFactRows(config), symbol);
   if (fallback) return fallback;
   resolveOrThrow(svc, symbol, "class"); // the honest miss
