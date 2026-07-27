@@ -154,6 +154,19 @@ test("\"give me the context for <module>\" answers the card and leaves that modu
   assert.match(t2.answer, /src\/core\/model\.mjs/);
 });
 
+test("\"give me everything I need to change/for <module>\" answers the card, not a stray touches question", async () => {
+  for (const q of [
+    "give me everything I need to change src/core/validate.mjs",
+    "give me everything I need for src/core/validate.mjs",
+  ]) {
+    const r = await ask(q);
+    assert.equal(r.record.miss, false, `"${q}" must reach the card, not the miss wall`);
+    assert.match(r.answer, /^src\/core\/validate\.mjs — Module/);
+    assert.doesNotMatch(r.answer, /everything i need/i, `"${q}" must not leak the noise phrase into the answer`);
+    assert.equal(r.focus?.id, "mod:src/core/validate.mjs");
+  }
+});
+
 test("a vocabulary term read-back cites its source (in-session, after a prior vocabulary turn opens the child pack)", async () => {
   const memoryDir = mkdtempSync(join(tmpdir(), "tmct-chatflow-vocab-"));
   await runTurn("what is a cache", { config, graph, memoryDir });
