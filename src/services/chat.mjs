@@ -1111,14 +1111,26 @@ const CAPABILITY_PHRASES = [
   // anything nameable. Answered the same as any other vague opener: sure,
   // here's what I can help with.
   /^can i ask (?:you\s+)?something(?:\s+random)?\??$/i,
+  // The same orientation request with the SUBJECT flipped to "I" — "what can I
+  // ask you" rather than "what can you do". Every entry above reads "you" as
+  // the subject, so the flipped phrasings matched nothing and the bare "I"
+  // token went to the code-graph lane as a module name. The optional
+  // about-tail reuses META_ORIENT_RE's own closed self-referential noun list,
+  // so "what questions can I ask about <a real module>" is untouched.
+  /^what can (?:i|we) ask(?:\s+(?:you|u))?(?:\s+about (?:this|the)\s+(?:app|codebase|repo|repository|project|code))?\??$/i,
+  /^what questions can (?:i|we) ask(?:\s+(?:you|u))?(?:\s+about (?:this|the)\s+(?:app|codebase|repo|repository|project|code))?\??$/i,
+  /^what (?:kind|kinds|sort|sorts|type|types) of questions can (?:i|we) ask(?:\s+(?:you|u))?(?:\s+about (?:this|the)\s+(?:app|codebase|repo|repository|project|code))?\??$/i,
 ];
 /** IDENTITY questions — "who/what are you", by name, in plain or ESL-ish phrasing.
  *  Routed to a self-description (identity-self) that works regardless of graph
  *  state, never the code-graph deflection. */
 const IDENTITY_PHRASES = [
-  /^who are you\??$/i, /^what (is|are|r) (this|you)\??$/i,
+  // The optional adverb ("what EVEN is this thing", "what REALLY is this") is
+  // emphasis on the same question — without it the casual spelling missed the
+  // closed set entirely and the bare "this"/"I" token went to the graph lane.
+  /^who are you\??$/i, /^what (?:even |really |actually )?(is|are|r) (this|you)\??$/i,
   /^what('?s| is) your name\??$/i, /^what exactly are you\??$/i,
-  /^(tell me about|introduce) yourself\??$/i, /^what is this thing\??$/i,
+  /^(tell me about|introduce) yourself\??$/i, /^what (?:even |really |actually )?is this thing\??$/i,
   /^what am i (talking|speaking|chatting) (to|with)\??$/i,
   /^you are what\??$/i, /^what thing (are|is) you\??$/i,
   // "explain [to me|please]* what (you are|this is)" in EITHER word order — a
@@ -1246,6 +1258,34 @@ function aiIdentityMatch(raw) {
   const text = String(raw);
   if (AI_IDENTITY_PHRASES.some((re) => re.test(text))) return true;
   return splitClauses(text).some((clause) => AI_IDENTITY_PHRASES.some((re) => re.test(clause)));
+}
+
+/** The self-referential tail a casual identity question trails after a comma
+ *  ("what even is this thing, like what does it do?"). It names no term at all
+ *  — "it"/"this"/"you" is the thing already asked about in the first clause —
+ *  so it adds nothing to answer and only has to be RECOGNIZED, not routed. */
+const SELF_REFERENTIAL_TAIL_RE = /^(?:like\s+|so\s+|and\s+)?what (?:does|do|can) (?:it|this|you|u) do\??$/i;
+
+/** IDENTITY_PHRASES matched against the raw turn, its preamble-peeled twin, or
+ *  a comma-joined identity clause trailed only by self-referential filler.
+ *
+ *  The peeled check mirrors what CAPABILITY_PHRASES' own dispatch already does
+ *  ("hello there, what am I talking to?" is an exact identity question behind a
+ *  greeting frame, and every entry is anchored, so the frame alone sank it).
+ *
+ *  The clause check is deliberately narrower than aiIdentityMatch's: it splits
+ *  on commas/"and" (conversationalClauses), which a real graph question can sit
+ *  on the far side of, so a match requires the FIRST clause to be an identity
+ *  question AND every later clause to be self-referential filler. "what is
+ *  this, and which modules import walk.mjs" therefore stays a graph query. */
+function identityPhraseMatch(raw) {
+  const text = String(raw);
+  const anchored = (s) => IDENTITY_PHRASES.some((re) => re.test(s));
+  if (anchored(text) || anchored(applyPreambleFrames(text))) return true;
+  const clauses = conversationalClauses(applyPreambleFrames(text).trim());
+  if (clauses.length < 2) return false;
+  return anchored(clauses[0].replace(/[?.!]+$/, ""))
+    && clauses.slice(1).every((c) => SELF_REFERENTIAL_TAIL_RE.test(c));
 }
 
 /** "Do you have feelings/emotions" — with no closed-set match, this would
@@ -2009,7 +2049,7 @@ function conversationalTurn(line, ctx) {
       { lane: "help" },
     );
   }
-  if (IDENTITY_PHRASES.some((re) => re.test(raw))) {
+  if (identityPhraseMatch(raw)) {
     note(ctx.trace, "goal: identity — who/what tmct is, not a capability listing");
     note(ctx.trace, "lane: conversational — identity (IDENTITY_PHRASES closed set)");
     return mk(t(T_IDENTITY_SELF), { lane: "help" });
@@ -2126,7 +2166,12 @@ const ORIENTATION_EMPTY_FALLBACK = "I'm tmct — a deterministic, offline chat a
  *  branch uses, so there is exactly one copy of that wording to keep in sync, not
  *  two hand-duplicated strings. */
 function orientationText(graph, templates, vocabHint) {
-  if (noCodeGraph(graph)) {
+  // A null (never-loaded) graph reads as "unknown, not empty" to noCodeGraph,
+  // which is the right call for the greeting/orientation CARD — but there is no
+  // entity count to render from one either, so the empty wording is the only
+  // truthful thing left to say. Without this the entity tally below threw on a
+  // graph-less runTurn.
+  if (!graph || noCodeGraph(graph)) {
     return tRender(templates, T_ORIENTATION_EMPTY, { vocabHint }) ?? ORIENTATION_EMPTY_FALLBACK;
   }
   const by = (cls) => (graph.individuals || []).filter((i) => (i.class || "") === cls).length;
@@ -2245,7 +2290,14 @@ const TEACH_RE = /^(?:please\s+)?(?:i\s+(?:want|wanted)\s+you\s+to\s+|i(?:'d|\s+
 // stayed null) before ever trying the unknown-subject/object mint fallbacks
 // below — the SAME sentence typed without the period worked. Mirrors
 // UNKNOWN_SUBJECT_RE's own identical tolerance, added for the same reason.
-const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:a |an )?[\w-]+(?: too)?[.!?]*$/i;
+// This is the gate that decides whether a bare declarative becomes a teach
+// payload at all, so a complement narrower than UNKNOWN_SUBJECT_RE's own object
+// capture kept a multi-word class name out of the mint fallbacks downstream no
+// matter how wide their captures were. A multi-word complement is admitted ONLY
+// behind an article — "is A unit of work" names a class, while the article-less
+// "is nice today" / "are fast animals" is ordinary prose that happens to carry a
+// copula, and admitting THAT grounds filler sentences as facts.
+const BARE_DECLARATIVE_RE = /^(?:every |each |all |a |an )?[\w-]+(?: [\w-]+)? (?:is|are) (?:(?:a |an )[\w-]+(?: [\w-]+){0,2}|[\w-]+)(?: too)?[.!?]*$/i;
 /** "X is <comparative> than Y" — the comparative teach/ask surface. The
  *  comparative slot is closed by SHAPE (-er word, better/worse, or a
  *  more/less + adjective pair), never a hand-list of adjectives. */
@@ -2842,7 +2894,11 @@ export { singularizeSurface };
  *  and unknownObjectFallback's own docblocks) — a proper noun that happens to
  *  end in "s" ("redis") naively strips to "redi" if singularized on an "is"
  *  sentence, where no such fold is ever needed.
- *  Y (the object) is a single token, same as parseAce's own copula fragments;
+ *  Y (the object) is ONE TO THREE tokens, so a natural multi-word class name
+ *  ("every Function is a unit of work") reaches the mint instead of failing
+ *  the match outright and falling to the grammar wall; the greedy quantifier
+ *  plus the end anchor keep a longer trailing phrase ("rex is a dog in the
+ *  garden") rejected exactly as before.
  *  X (the subject) is ONE OR TWO tokens, to cover a natural 2-word noun
  *  phrase ("vulcan gizmo is a tool"), the same class of gap OWNS_TEACH_RE's
  *  own object needed widening for, above. The greedy quantifier tries the
@@ -2867,7 +2923,7 @@ export { singularizeSurface };
  *  captures themselves are unaffected (`[\w-]+` never included the period in
  *  the first place), so this only widens WHICH sentences reach the match,
  *  never what gets captured out of one that already did. */
-const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|any\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(is|are)\s+(?:an?\s+)?([\w-]+)[.!?]*$/i;
+const UNKNOWN_SUBJECT_RE = /^(every\s+|each\s+|all\s+|any\s+|a\s+|an\s+)?([\w-]+(?:\s+[\w-]+)?)\s+(is|are)\s+(?:an?\s+)?([\w-]+(?:\s+[\w-]+){0,2})[.!?]*$/i;
 
 /** ISA-family predicates (mirrors the private ISA_PREDICATES set defined near
  *  memoryFacts, below, at module scope — both are simple top-level consts
@@ -3124,6 +3180,12 @@ async function unknownSubjectFallback(payload, { memoryDir, sessionId, lexicon }
  *  tagging surprise, degrades to a null tag treated as "no signal" (never a
  *  decline) — matching every other optional-adapter path in this file. */
 async function objectReadsAsNonNoun(word) {
+  // A MULTI-WORD complement only ever reaches here from behind an article, so
+  // it is a noun phrase by construction and the adjective question doesn't
+  // arise. Asking wink anyway tags the joined string as one opaque token and
+  // reads back nonsense ("key value store" → ADJ), which then diverted a plain
+  // class claim into the property lane.
+  if (/\s/.test(String(word || "").trim())) return false;
   try {
     const { nlpAdapter } = await import("../adapters/ask-nlp.mjs");
     const adapter = nlpAdapter();
@@ -5469,7 +5531,7 @@ const WHAT_KNOW_RE = /^(?:what\s+(?:do\s+you|d'?you)\s+know(?:\s+so\s+far)?|what
 // do" needs the noun OPTIONAL after "this" (kept REQUIRED after "the") or it
 // falls through to MODULE_ORIENT_RE, which fails to resolve "this" as an
 // entity and hits the raw grammar wall.
-const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+this(?:\s+(?:app|code|codebase|project|repo))?\s+do|what\s+does\s+the\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:start|begin|get\s+started|get\s+going|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)(?:\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)?|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
+const META_ORIENT_RE = /^(?:what(?:'s| is| are)?\s+this(?:\s+(?:app|codebase|repo|repository|project|code|thing))?|what\s+(?:codebase|repo|repository|project)\s+is\s+this|what\s+does\s+this(?:\s+(?:app|code|codebase|project|repo))?\s+do|what\s+does\s+the\s+(?:app|code|codebase|project|repo)\s+do|what\s+is\s+(?:this|the)\s+app(?:\s+for)?|what\s+am\s+i\s+looking\s+at|what\s+is\s+tmct|how\s+do\s+i\s+(?:(?:start|begin|get\s+started|get\s+going)(?:\s+(?:with|on)\s+(?:this|it))?|load\s+(?:my\s+)?code|index\s+(?:my\s+)?(?:code|repo|repository)|use\s+(?:this|you|tmct))|where\s+do\s+i\s+(?:start|begin)(?:\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)?|what\s+should\s+i\s+(?:read|look\s+at)\s+first(?:\s+to\s+understand\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+should\s+i\s+start\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?|where\s+do\s+i\s+begin\s+reading(?:\s+(?:this\s+)?(?:codebase|code|repo|repository|project))?)$/;
 /** A bare "what is in here"/"what's in here"/"whats in here" — the SAME
  *  orientation intent as META_ORIENT_RE's own
  *  "what's in this repo"-shaped members, just phrased with the CONTEXT_WORDS
