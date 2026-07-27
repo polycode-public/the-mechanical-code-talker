@@ -203,6 +203,50 @@ test("evaluateExpect: subclassParaphrase rejects a paraphrase of the wrong pair 
   assert.equal(noParaphrase[0].pass, false, "the machine-notation triple alone is not a paraphrase claim");
 });
 
+// ---- ING-8: the harder, non-isa paraphrase shapes ING-7's own checker
+// doesn't cover, wired in the same free way (src/domain/paraphrase-ing8.mjs) ----
+
+test("evaluateExpect: ing8Paraphrase accepts any valid closed-template paraphrase of a non-isa relation", () => {
+  const possessesForm = evaluateExpect(
+    { ing8Paraphrase: { family: "has", subject: "bird", object: "feather" } },
+    { answer: "noted — remembered 1 fact: bird tmct:has feather (bird possesses a feather)" },
+  );
+  assert.equal(possessesForm.length, 1);
+  assert.equal(possessesForm[0].pass, true, JSON.stringify(possessesForm));
+
+  const ownsForm = evaluateExpect(
+    { ing8Paraphrase: { family: "has", subject: "bird", object: "feather" } },
+    { answer: "noted — remembered 1 fact: bird tmct:has feather (bird owns a feather)" },
+  );
+  assert.equal(ownsForm[0].pass, true, "a different closed template for the SAME pair still verifies");
+
+  const wholeAnswerForm = evaluateExpect(
+    { ing8Paraphrase: { family: "capableOf", subject: "bird", object: "fly" } },
+    { answer: "bird knows how to fly" },
+  );
+  assert.equal(wholeAnswerForm[0].pass, true, "checks the whole answer too, not only a parenthetical clause");
+});
+
+test("evaluateExpect: ing8Paraphrase rejects a swapped pair, the wrong relation family, or no paraphrase at all", () => {
+  const swapped = evaluateExpect(
+    { ing8Paraphrase: { family: "has", subject: "bird", object: "feather" } },
+    { answer: "noted — remembered 1 fact: bird tmct:has feather (feather possesses a bird)" },
+  );
+  assert.equal(swapped[0].pass, false, "subject/object swap is a different claim, never accepted as equivalent");
+
+  const wrongFamily = evaluateExpect(
+    { ing8Paraphrase: { family: "has", subject: "bird", object: "feather" } },
+    { answer: "noted — remembered 1 fact: bird tmct:has feather (bird creates a feather)" },
+  );
+  assert.equal(wrongFamily[0].pass, false, "a different relation family is a different claim");
+
+  const noParaphrase = evaluateExpect(
+    { ing8Paraphrase: { family: "has", subject: "bird", object: "feather" } },
+    { answer: "noted — remembered 1 fact: bird tmct:has feather" },
+  );
+  assert.equal(noParaphrase[0].pass, false, "the machine-notation triple alone is not a paraphrase claim");
+});
+
 test("summarizeTier1: baselineFail turns never fail the case; all-green baselineFail flags improvement", () => {
   const ok = { checks: [{ key: "miss", pass: true }], baselineFail: false };
   const bad = { checks: [{ key: "miss", pass: false, expected: false, actual: true }], baselineFail: false };
