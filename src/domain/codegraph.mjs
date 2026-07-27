@@ -152,6 +152,11 @@ export function resolveSymbol(graph, symbol) {
   const s = normPath(symbol);
   if (!s) return { match: null, candidates: [] };
   const sBase = basename(s);
+  // A bare filename (no "/") legitimately fuzzy-matches on basename alone. A
+  // multi-segment input reads as a repo-relative path the caller believes exists;
+  // matching it against an unrelated file that merely shares a basename would
+  // fabricate a hit, so those only match via an exact path suffix, never basename alone.
+  const isBareFilename = !s.includes("/");
   const scored = [];
   for (const ind of graph.individuals) {
     const label = normPath(ind.label);
@@ -160,8 +165,7 @@ export function resolveSymbol(graph, symbol) {
     if (label === s || id === s) score = 100;
     else if (
       label.endsWith(`/${s}`) ||
-      basename(label) === sBase ||
-      basename(label).replace(/\.[a-z]+$/, "") === sBase
+      (isBareFilename && (basename(label) === sBase || basename(label).replace(/\.[a-z]+$/, "") === sBase))
     )
       score = 80;
     else if (label.includes(s)) score = Math.max(10, 50 - (label.length - s.length));
@@ -1090,7 +1094,7 @@ export function compileNameFilter(name, { now = Date.now } = {}) {
   };
 }
 
-export function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", decorator = "", name = "" } = {}) {
+export function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", decorator = "", name = "", toolNamePrefix = "tmct_" } = {}) {
   const tokens = String(query || "").toLowerCase().split(/[^a-z0-9_]+/).filter(Boolean);
   const wantKind = String(kind || "").trim().toLowerCase();
   const decFilter = String(decorator || "").trim().toLowerCase();
@@ -1104,7 +1108,7 @@ export function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", de
   // default (no kind) keeps the module "where does this live" search unchanged.
   if (wantKind && wantKind !== "module") {
     try {
-      return searchSymbols(graph, tokens, { limit, kind: wantKind, decFilter, nameRe });
+      return searchSymbols(graph, tokens, { limit, kind: wantKind, decFilter, nameRe, toolNamePrefix });
     } catch (e) {
       if (e instanceof NameFilterBudgetExceeded) return e.message;
       throw e;
@@ -1113,7 +1117,7 @@ export function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", de
   if (!tokens.length && !nameRe && !decFilter) return "empty query";
   const scored = scoreModules(graph, tokens);
   if (!scored.length) {
-    return `no module matches "${query}". Try broader keywords, or tmct_describe <path> if you know where it lives.`;
+    return `no module matches "${query}". Try broader keywords, or ${toolNamePrefix}describe <path> if you know where it lives.`;
   }
   const hits = scored.slice(0, limit);
   const lines = [`${scored.length} module(s) match "${query}" (top ${hits.length}):`];
@@ -1121,7 +1125,7 @@ export function renderSearch(graph, query, { limit = SEARCH_LIMIT, kind = "", de
     const m = matching.length ? ` — matching: ${capJoin([...new Set(matching)], SEARCH_SYMBOLS_SHOWN)}` : "";
     lines.push(`- ${ind.label} (defines ${defineCount} symbol(s))${m}`);
   }
-  lines.push("Then tmct_describe <path> for the full sibling list + typed edges, or tmct_impact <path> for dependents.");
+  lines.push(`Then ${toolNamePrefix}describe <path> for the full sibling list + typed edges, or ${toolNamePrefix}impact <path> for dependents.`);
   return lines.join("\n");
 }
 
@@ -1187,11 +1191,11 @@ const CALL_CAP = 30;
 
 /** A class's methods + attributes (with sites/decorators) in one slice — replaces
  *  reading the class body. Uses the `contains` (seon:containsCodeEntity) relation. */
-export function renderMembers(graph, ind) {
+export function renderMembers(graph, ind, { toolNamePrefix = "tmct_" } = {}) {
   const lines = [`${ind.label} — ${classHeading(ind.class)} (id: ${ind.id})`];
   const contains = edgesOfKind(graph, "contains").filter((e) => e.subject === ind.id);
   if (!contains.length) {
-    lines.push("members: none recorded (empty class, or members not in the extracted graph). Use tmct_describe for its edges.");
+    lines.push(`members: none recorded (empty class, or members not in the extracted graph). Use ${toolNamePrefix}describe for its edges.`);
     return lines.join("\n");
   }
   const methods = [];
@@ -1205,7 +1209,7 @@ export function renderMembers(graph, ind) {
   }
   if (methods.length) lines.push(`methods (${methods.length}): ${capJoin(methods, MEMBERS_CAP)}`);
   if (attrs.length) lines.push(`attributes (${attrs.length}): ${capJoin(attrs, MEMBERS_CAP)}`);
-  lines.push("Use tmct_snippet <Class.member> for an exact body.");
+  lines.push(`Use ${toolNamePrefix}snippet <Class.member> for an exact body.`);
   return lines.join("\n");
 }
 
@@ -1215,7 +1219,7 @@ const attrVal = (ind, key) => (ind?.attributes || []).find((a) => a.key === key)
  *  return annotation, raises/catches, self-fields, flags, decorators, one-line doc —
  *  so the agent gets the API surface without reading the body. Deterministic ast facts
  *  (kept OUT of tmct_context's lean bundle; this is the targeted tool for them). */
-export function renderSignature(graph, ind) {
+export function renderSignature(graph, ind, { toolNamePrefix = "tmct_" } = {}) {
   const site = siteOf(ind);
   const lines = [`${ind.label} — ${classHeading(ind.class)}${spanTag(site)}`];
   const params = attrVal(ind, "params");
@@ -1242,8 +1246,8 @@ export function renderSignature(graph, ind) {
   if (value) lines.push(`value: ${value}`);
   const doc = attrVal(ind, "doc");
   if (doc) lines.push(`doc: ${doc}`);
-  if (lines.length === 1) lines.push("(no signature detail recorded for this symbol — likely a module or attribute; use tmct_snippet for its source.)");
-  lines.push("Use tmct_snippet for the exact body.");
+  if (lines.length === 1) lines.push(`(no signature detail recorded for this symbol — likely a module or attribute; use ${toolNamePrefix}snippet for its source.)`);
+  lines.push(`Use ${toolNamePrefix}snippet for the exact body.`);
   return lines.join("\n");
 }
 
@@ -1391,18 +1395,18 @@ export function renderHistory(graph, ind) {
 // classes whose call graph lives on the fn/method-precise callsSymbol edge, not module-coarse calls
 const CALL_SYMBOL_CLASSES = new Set(["Function", "Method"]);
 
-export function renderCallers(graph, ind) {
+export function renderCallers(graph, ind, { toolNamePrefix = "tmct_" } = {}) {
   // symbol grain: a fine symbol's callers are the SUBJECTS of callsSymbol edges into it.
   if (CALL_SYMBOL_CLASSES.has(ind.class)) {
     const callers = [...new Set(edgesOfKind(graph, "callsSymbol").filter((e) => e.object === ind.id).map((e) => e.subjectLabel || e.subject))];
-    if (!callers.length) return `${ind.label}: no recorded callers (fine-grained call edges are conservative — absence is not proof). Try tmct_impact for the full reverse closure.`;
+    if (!callers.length) return `${ind.label}: no recorded callers (fine-grained call edges are conservative — absence is not proof). Try ${toolNamePrefix}impact for the full reverse closure.`;
     return `${ind.label} — called by ${callers.length} symbol(s):\n  ${capJoin(callers, CALL_CAP, "\n  ")}`;
   }
   const modId = moduleIdOf(graph, ind);
   if (!modId) return `cannot map ${ind.label} to a module.`;
   const modLabel = graph.byId.get(modId)?.label || modId;
   const callers = [...new Set(edgesOfKind(graph, "calls").filter((e) => e.object === modId).map((e) => e.subjectLabel || e.subject))];
-  if (!callers.length) return `${modLabel}: no recorded callers (calls are coarse/import-backed — absence is not proof). Try tmct_impact for the full reverse closure.`;
+  if (!callers.length) return `${modLabel}: no recorded callers (calls are coarse/import-backed — absence is not proof). Try ${toolNamePrefix}impact for the full reverse closure.`;
   return `${modLabel} — called by ${callers.length} module(s):\n  ${capJoin(callers, CALL_CAP, "\n  ")}`;
 }
 
@@ -1632,7 +1636,7 @@ export function scoreSymbolsRanked(graph, tokens, { kind, decFilter = "", nameRe
   return hits;
 }
 
-function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, nameRe }) {
+function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, nameRe, toolNamePrefix = "tmct_" }) {
   const targetClass = SYMBOL_CLASSES[kind];
   if (!targetClass) return `unknown kind "${kind}" (use function, class, method, attribute, or module).`;
   const hits = scoreSymbolsRanked(graph, tokens, { kind, decFilter, nameRe });
@@ -1640,7 +1644,7 @@ function searchSymbols(graph, tokens, { limit = SEARCH_LIMIT, kind, decFilter, n
   const top = hits.slice(0, limit);
   const lines = [`${hits.length} ${kind}(s) match (top ${top.length}):`];
   for (const { ind } of top) lines.push(`- ${ind.label}${spanTag(siteOf(ind))}`);
-  lines.push("Then tmct_snippet <name> for the exact body, or tmct_describe for its edges.");
+  lines.push(`Then ${toolNamePrefix}snippet <name> for the exact body, or ${toolNamePrefix}describe for its edges.`);
   return lines.join("\n");
 }
 
