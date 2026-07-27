@@ -56,11 +56,13 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   `SyntaxError` that crashes the whole bundle even when the code path reaching `wink-model.mjs` is
   never executed. Caused a real ~1hr marginalia prod outage (2026-07-27); bedrock-meter worked
   around it on their side (a new `./fallback-http` subpath that never reaches `wink-model.mjs`).
-  The suggested fix — making the import lazy (`await import("node:module")` inside
-  `nodeRequireWink()`) — is a real design tradeoff, not a one-liner: the file's own docblock states
-  "the loader stays synchronous" as a deliberate invariant, and going lazy would cascade
-  `loadWinkModel()`/`nodeRequireWink()` and their callers (`ask-nlp.mjs`, `prose-nlp.mjs`) to
-  async. Needs a design decision, not a rushed fix. `~/.claude/inboxes/tmct.md` 2026-07-27T23:02.
+  Candidate fix that avoids the sync→async cascade entirely (tmct requires Node ≥24): get
+  `createRequire` via `process.getBuiltinModule("node:module")` inside `nodeRequireWink()` at call
+  time instead of a top-level static import — no API shape change for any of the 5 callers
+  (`ask-nlp.mjs`, `prose-nlp.mjs`, `sentences.mjs`, `extract-facts.mjs`,
+  `ingest-browser-entry.mjs`). Not yet verified against a real esbuild collision — asked
+  bedrock-meter for their exact bundling config/stack trace (`~/.claude/inboxes/bedrock-meter.md`
+  2026-07-27T23:53) rather than ship a guessed fix. `~/.claude/inboxes/tmct.md` 2026-07-27T23:02.
 
 ## Discipline
 
