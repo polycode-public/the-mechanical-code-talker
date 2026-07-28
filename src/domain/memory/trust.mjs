@@ -40,11 +40,13 @@ function parseChatTagRest(rest) {
  *      same tier the hand-written tier2 corpus already scores at; the :turnN
  *      segment a snapshot write carries records when, not who, and is not
  *      part of the Source identity)
- *   mud:<character>[:turnN]    -> { kind:"corpus",   name:"mud:<character>" }
+ *   mud:<character>[:turnN][:gone] -> { kind:"corpus", name:"mud:<character>" }
  *     (one character's own testimony in a multi-character world — what it told
- *      someone, what it examined for itself. Same tier as the world, but one
- *      Source per character; the `mud:` prefix in the name keeps that Source
- *      apart from a world of the same literal name)
+ *      someone, what it examined for itself, and with `:gone` what it saw leave
+ *      the world. Same tier as the world, but one Source per character; the
+ *      `mud:` prefix in the name keeps that Source apart from a world of the
+ *      same literal name. Both trailing segments say when and what, not who, so
+ *      neither is part of the Source identity)
  *   ace:chat:<session>@<ts>    -> { kind:"operator",  createdAt:<ts>, sessionId:<session> }
  *   teach:chat:<session>@<ts>  -> { kind:"teach",     createdAt:<ts>, sessionId:<session> }
  *   web:<url> | url:<url>      -> { kind:"web",       url:<url> }

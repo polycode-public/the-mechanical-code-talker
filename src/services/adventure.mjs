@@ -549,13 +549,25 @@ async function writeWorldTurn(memoryDir, world, k, facts, cache) {
 // trust track record. The side effect is that worldActionRows filters these
 // out of the playable state fold, which is what you want — being told about a
 // stone must never move the stone.
+//
+// A claim can also go out of date, and none of them is ever retracted. Eating
+// the last carrot appends a SECOND claim to the same edge, tagged `:gone`, and
+// appendFacts unions the two tags onto the one fact exactly as it unions any
+// repeat assertion. "The carrot was here on turn 2" and "the carrot is gone on
+// turn 5" are both true; the reader's job is to say which one rules, the same
+// recency question the p2p layer asks of its own tags. So reading knowledge
+// back means reading the newest claim per edge, never the union of every claim
+// ever made.
 
-const characterTestimonyTag = (character, k) => `mud:${character}:turn${k}`;
+const VOIDED_TESTIMONY_SUFFIX = ":gone";
 
-async function appendTestimony(memoryDir, { knower, source, thing, k, cache }) {
+const characterTestimonyTag = (character, k, voided = false) =>
+  `mud:${character}:turn${k}${voided ? VOIDED_TESTIMONY_SUFFIX : ""}`;
+
+async function appendTestimony(memoryDir, { knower, source, thing, k, voided = false, cache }) {
   await appendFacts(memoryDir, [{
     subject: knower, predicate: KNOWS_ABOUT_PREDICATE, object: thing,
-    provenance: characterTestimonyTag(source, k),
+    provenance: characterTestimonyTag(source, k, voided),
   }]);
   if (cache) cache.rows = null;
 }
@@ -572,6 +584,70 @@ export async function recordTold(memoryDir, { asker, teller, thing, k, cache = n
  *  it is its own source for it. */
 export async function recordExamined(memoryDir, { observer, thing, k, cache = null }) {
   return appendTestimony(memoryDir, { knower: observer, source: observer, thing, k, cache });
+}
+
+/** Record that `observer` saw `thing` leave the world on turn `k` — it ate the
+ *  last of it. Written as a fresh claim on the SAME edge an older one already
+ *  sits on, so the older claim stands untouched and stops being the one that
+ *  rules. The observer is its own source, the way examining is. */
+export async function recordGone(memoryDir, { observer, thing, k, cache = null }) {
+  return appendTestimony(memoryDir, { knower: observer, source: observer, thing, k, voided: true, cache });
+}
+
+const TESTIMONY_TAG_RE = /^mud:([^:\s]+):turn(\d+)(:gone)?$/;
+const TURN_STAMP_RE = /:turn(\d+)\b/;
+
+/** How one provenance segment on a knows-about edge stands as a claim about
+ *  what `knower` knows: whether the knower vouches for it itself, the turn it
+ *  was asserted on, and whether it says the thing is gone. A tag that is no
+ *  character's testimony — a world's own seed fact, a dig spawn — reads as
+ *  hearsay stamped with whatever turn it carries. */
+function testimonyClaim(segment, knower) {
+  const mine = TESTIMONY_TAG_RE.exec(segment);
+  const stamp = Number(mine ? mine[2] : (TURN_STAMP_RE.exec(segment)?.[1] ?? 0));
+  return {
+    firsthand: !!mine && mine[1] === knower,
+    turn: Number.isFinite(stamp) ? stamp : 0,
+    voided: !!(mine && mine[3]),
+  };
+}
+
+/** Firsthand beats hearsay outright, then the later turn wins, then "gone"
+ *  takes the tie — an animal that examined a carrot and ate it on one turn ate
+ *  it second. Tier ABOVE recency is what stops an animal being talked back into
+ *  a meal it ate itself: a room-mate can tell it about that carrot the turn
+ *  after, and its own eyes still hold. */
+const outranksClaim = (claim, best) => (
+  claim.firsthand !== best.firsthand ? claim.firsthand
+    : claim.turn !== best.turn ? claim.turn > best.turn
+      : claim.voided && !best.voided
+);
+
+/** The claim that rules on one knows-about edge, across every segment its
+ *  provenance carries. */
+function rulingTestimonyClaim(provenance, knower) {
+  let best = null;
+  for (const segment of String(provenance || "").split(" | ")) {
+    const tag = segment.trim();
+    if (!tag) continue;
+    const claim = testimonyClaim(tag, knower);
+    if (!best || outranksClaim(claim, best)) best = claim;
+  }
+  return best;
+}
+
+/** What `person` knows about NOW: the object of every knows-about edge whose
+ *  ruling claim still stands, in the order the edges were first written.
+ *  Nothing is deleted — an edge whose newest claim says the thing is gone just
+ *  stops reading back. */
+function currentKnowsAboutTopics(rows, person) {
+  const topics = [];
+  for (const row of rows || []) {
+    if (row.subject !== person || row.predicate !== KNOWS_ABOUT_PREDICATE) continue;
+    if (rulingTestimonyClaim(row.provenance, person)?.voided) continue;
+    topics.push(row.object);
+  }
+  return topics;
 }
 
 /**
@@ -1066,7 +1142,8 @@ function containerDatatypeState(state, object) {
  *  thing's current location, a hidden one included: talking to the staff is
  *  the sanctioned way to learn a hiding place, while the where-is aside keeps
  *  declining. `knows-objective` states the quest. `knows-about` topics come
- *  back for the caller to digest. Pure. */
+ *  back for the caller to digest, each one read from its newest surviving
+ *  claim. Pure. */
 export function personKnowledgeLines(rows, state, person) {
   const lines = [];
   for (const objective of factObjects(rows, person, "mgx:knows-objective")) {
@@ -1079,7 +1156,7 @@ export function personKnowledgeLines(rows, state, person) {
       ? `you'll find the ${thing} in the ${place.object}.`
       : `the ${thing} is in the ${place.object}.`);
   }
-  return { lines, aboutTopics: factObjects(rows, person, KNOWS_ABOUT_PREDICATE) };
+  return { lines, aboutTopics: currentKnowsAboutTopics(rows, person) };
 }
 
 /** The FOOD_CLASS things `person` durably knows about — from being told, or
@@ -1090,7 +1167,7 @@ export function personKnowledgeLines(rows, state, person) {
  *  food query has no per-topic sub-digest to hand back, so this returns the
  *  plain list of known food things rather than a {lines, topics} pair. Pure. */
 export function personKnownFoodLines(rows, state, person) {
-  return factObjects(rows, person, KNOWS_ABOUT_PREDICATE)
+  return currentKnowsAboutTopics(rows, person)
     .filter((thing) => objectClassChain(rows, thing).includes(FOOD_CLASS));
 }
 
@@ -1492,6 +1569,11 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
     }
     const gained = state.masses.get(object)?.value ?? DEFAULT_FOOD_MASS;
     const grown = Math.round(((eaterMass ?? 0) + gained) * 100) / 100;
+    // Eating is the one act that ends a thing, so the eater is the one witness
+    // whose knowledge of it goes out of date on the spot. Every route into the
+    // eat verb — a typed command, a scripted mud turn — passes here, so the
+    // claim gets written once for all of them.
+    await recordGone(memoryDir, { observer: actingSubject, thing: object, k, cache });
     return commit(
       [
         { subject: `${actingSubject}@turn${k}`, predicate: MASS_PREDICATE, object: String(grown) },

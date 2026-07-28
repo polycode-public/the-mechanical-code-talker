@@ -342,11 +342,13 @@ test("two characters playing several turns never inherit each other's knowledge 
         ["mole-1", "vole-1"].includes(row.subject),
         `only the two acting characters accumulate knowledge, got ${row.subject}`,
       );
-      const teller = row.provenance.replace(/^mud:/, "").replace(/:turn\d+$/, "");
-      assert.ok(
-        row.subject === teller || ["mole-1", "vole-1"].includes(teller),
-        "every claim names a real character as its source",
-      );
+      for (const tag of row.provenance.split(" | ")) {
+        const teller = tag.replace(/^mud:/, "").replace(/:turn\d+(?::gone)?$/, "");
+        assert.ok(
+          row.subject === teller || ["mole-1", "vole-1"].includes(teller),
+          `every claim names a real character as its source, got ${tag}`,
+        );
+      }
     }
 
     // seed sits in the burrow and is not food, so the ask step never offers
