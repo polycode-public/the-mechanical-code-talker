@@ -591,16 +591,22 @@ other browsers in the room.
 WebRTC matchmaking over public infrastructure already running for other purposes — BitTorrent
 trackers, Nostr relays, or MQTT brokers. That infrastructure is only ever a signaling rendezvous,
 the handshake that lets two browsers find each other and agree connection details. Once the
-DataChannel opens, game traffic goes peer to peer and never touches it again. A "server" is just an
-agreed room name: `joinRoom({appId}, serverName)`. That name can travel as a URL param
-(`mud.html?world=name`), so joining a world is pasting a link. Passing a `password` to `joinRoom`
-encrypts the signaling payload, so the relay can't see connection details and an outsider without
-the password can't complete a connection at all — this is the design's real security boundary, not
-the room name. A shareable link becomes `?world=name&key=secret`, and a high-entropy room name (or
-one derived by hashing the name and secret together) keeps onlookers from even seeing which rooms
-exist. A fully manual fallback also exists: offer/answer blobs copied and pasted through any
-channel, including a chat app like WhatsApp, with no third party at all. It works for two peers but
-gets clunky past that, since each pair needs its own manual exchange.
+DataChannel opens, game traffic goes peer to peer and never touches it again. Starting a world
+generates one UUID in the browser, on the spot, never issued or seen by any server. That UUID is
+the world's whole credential: it's the Trystero room id, and passed as `joinRoom`'s `password`, it's
+also the key that encrypts the signaling payload — a relay sees only that some handshake happened,
+never who or where, and nobody without the UUID can complete a connection at all. Alongside it, the
+page generates a human-readable name for the world by drawing a few words from its own taxonomy, the
+same lexicon that grounds every fact — a mnemonic label for the players, not a second secret. The
+shareable artifact is a URL carrying both, `mud.html?world=<uuid>&name=<generated-name>`, and sharing
+it is exactly as ordinary as sharing any other link: copy it, drop it in a message, AirDrop it,
+whatever channel two people already use. A joiner who opens the link adopts the UUID the same way
+its creator did — no separate join step, no account, nothing for the page's own hosting to know
+about. `tmct.polycode.co.uk` serves the same static files to everyone and never sees which worlds
+exist or who's in one; the server is not a party to any of this. A fully manual fallback also
+exists for when even a link can't travel: offer/answer blobs copied and pasted through any channel,
+with no room id or third party at all. It works for two peers but gets clunky past that, since each
+pair needs its own manual exchange.
 
 **The lexicon as ingest validator.** `mud.html`'s world vocabulary already ships in the page as a
 closed-world grammar. Free-text input gets parsed against it today, and only facts grounded in that
@@ -650,8 +656,8 @@ with `navigator.wakeLock.request('screen')`, added to the home screen as a PWA, 
 battery optimization) or a small headless Node process, joining the same room but never playing.
 Two things about this shape are worth naming as open design questions rather than solved: the
 triple set (and its retraction tombstones) only ever grows, so it eventually wants compaction or
-spatial sharding, and the room name and password are currently the only credential a world has —
-see forgery prevention, below, for the piece that adds real per-player identity on top.
+spatial sharding, and the world's UUID is currently its only credential — see forgery prevention,
+below, for the piece that adds real per-player identity on top.
 
 **Preventing forgery.** Give every player an Ed25519 keypair, generated with WebCrypto and
 persisted in IndexedDB. Sign every fact as it's created: `{triple, author: pubkey, opId, timestamp,
@@ -670,30 +676,17 @@ participants.
 **Snooping.** WebRTC DataChannels are mandatorily DTLS-encrypted on every pairwise connection, even
 when a TURN relay is needed for NAT traversal, since DTLS terminates at the two peers rather than at
 the relay. An observer on the network path, an ISP or a shared Wi-Fi network, sees only ciphertext.
-Trystero's `password` option, described under Networking above, protects the signaling handshake
-itself the same way. What none of this hides is traffic metadata: that two IP addresses talked, and
-when. That's a real, known limitation of this design, not a solved problem, and it's worth stating
-as such rather than glossing over it.
+The world's UUID, passed as Trystero's `password` option (described under Networking above),
+protects the signaling handshake itself the same way. What none of this hides is traffic metadata:
+that two IP addresses talked, and when. That's a real, known limitation of this design, not a solved
+problem, and it's worth stating as such rather than glossing over it.
 
-**Public and private world discovery — an "announce board."** Finding a world to join needs one
-small piece of server infrastructure, the one part of this design that isn't fully serverless: a
-Lambda behind a closed CloudFront distribution, backed by S3. A world announces itself by submitting
-its link and a short human-readable tag, drawn from the same page lexicon (three to five words), to
-the Lambda. The Lambda validates every field server-side and renders everything as plain text, never
-markup, so nothing submitted can inject HTML. It writes a small object keyed by a UUIDv7. Because a
-UUIDv7's embedded timestamp makes the key itself time-ordered, listing "recently active" worlds is a
-cheap `ListObjectsV2` call with `start-after` computed from "now minus N minutes" — an S3 lifecycle
-rule is only a backstop cleanup, not the actual expiry mechanism. Re-announcing a world is
-effectively a heartbeat, and should be rate-limited per source so the listing only shows worlds that
-are actually live right now. Private worlds can be listed too, if the shared secret that derives
-their room name and key carries enough entropy to resist offline brute-forcing once an encrypted
-announcement is published — a memory-hard key-derivation function (Argon2id) plus at least four or
-five lexicon words of entropy (roughly 2^44 or more) is a reasonable bar, with the room id itself
-derived from the same secret so an outsider can locate an announcement but still can't locate the
-room without decrypting it first. This piece should be described plainly for what it is: a small
-amount of server infrastructure inside an otherwise serverless design. The game itself stays fully
-peer to peer either way, and keeps working even if the discovery service is down. Discovery is
-optional. Playing the game does not depend on it.
+Finding a world to join needs no infrastructure at all: a world's UUID is generated client-side and
+never touches any server, including `tmct.polycode.co.uk`'s own hosting, so there is nothing to
+discover except by receiving the link directly from someone already in the world. The only channel
+for that is whatever the two people already share — a message, an email, AirDrop, a paste. This
+keeps the design fully serverless: there's no public listing, no announce step, and no third party
+that ever learns a world exists.
 
 This combination doesn't appear to exist yet as a shipped project. The individual pieces are each
 precedented on their own — serverless peer-to-peer games built on Trystero, CRDT-over-WebRTC
