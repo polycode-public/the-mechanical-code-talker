@@ -715,7 +715,7 @@ ${THEME_TOKENS_CSS}
      page ink: at that size an ink-black icon out-shouts every person and
      prop standing in front of it, and this is a mark ON the wall, not
      another thing in the room. */
-  .room-kind-icon { position: absolute; top: .5rem; right: .6rem; width: 120px; height: 120px; color: var(--gilt); opacity: .42; }
+  .room-kind-icon { position: absolute; top: .5rem; right: .6rem; width: 120px; height: 120px; color: var(--gilt); opacity: .5; }
   .room-kind-icon svg { width: 100%; height: 100%; display: block; }
   .room-kind-icon:empty { display: none; }
   /* the doorways — every written way out drawn where it actually points,
