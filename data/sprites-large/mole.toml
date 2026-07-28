@@ -1,8 +1,11 @@
-# mole — the tunnel's own creature at the sprite tier: no visible ears
-# (a mole's ear is a hidden fold, not a flap, so this is the one animal
-# in the pack that draws none), a blunt merged snout with a pink tip,
-# tiny near-blind eyes, and two oversized spade-shaped front paws for
-# digging — the tier's usual gradient/highlight, no material.
+# mole — the tunnel's own creature at the sprite tier: no visible ears (a
+# mole's ear is a hidden fold, not a flap, so this is the one animal in the
+# pack that draws none), a narrow pink cone snout carried straight off a
+# neckless head, a near-blind pinprick eye, and two outward-turned spade
+# hands whose pale claws are the reason the animal is shaped the way it is.
+# The snout, hands and claws are fixed colours because they are bare skin
+# and horn, not coat, and a theme that repaints the fur should leave them
+# alone — the same split badger.toml makes between its stripes and its body.
 classes = ["mole"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,20 +15,48 @@ svg = """
       <stop offset="55%" stop-color="currentColor"/>
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
+    <radialGradient id="mole-underside" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 42%, #f6efe2)" stop-opacity="0.72"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 42%, #f6efe2)" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="mole-sheen" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.26"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <ellipse cx="13" cy="14.8" rx="7.4" ry="5.2" fill="url(#mole-fill)"/>
-  <ellipse cx="6.4" cy="12.4" rx="3.6" ry="3.2" fill="url(#mole-fill)"/>
-  <path d="M2 12.2 C1.8 10.8 3 10.2 4 10.8 C3.4 11.6 3.4 13 4 13.8 C2.8 14 2.2 13.4 2 12.2 Z" fill="#e8a6a0"/>
-  <circle cx="5.6" cy="11.6" r="0.4" fill="#000000" opacity="0.55"/>
-  <circle cx="7.6" cy="11.2" r="0.4" fill="#000000" opacity="0.55"/>
-  <path d="M4.6 17.6 C2.6 17.2 0.8 18.4 1.2 20.4 C1.6 22 3.8 22.2 5.4 21.4 C6.2 20 5.8 18 4.6 17.6 Z" fill="url(#mole-fill)"/>
-  <path d="M10.6 19 C8.8 18.4 6.8 19.4 7 21.4 C7.2 22.8 9.2 23.2 10.8 22.4 C11.6 21 11.4 19.4 10.6 19 Z" fill="url(#mole-fill)"/>
-  <g stroke="#000000" stroke-width="0.35" opacity="0.45" stroke-linecap="round">
-    <path d="M2 20 L1 21.2"/>
-    <path d="M3.2 20.8 L2.6 22.2"/>
-    <path d="M4.6 20.8 L4.6 22.2"/>
+  <path d="M20.6 13.2 C22.4 12.2 23.8 13.2 23.5 14.7 C23.3 15.7 22.3 16 21.9 15.2 C22.4 14.6 22.2 13.9 21.5 13.7 Z" fill="url(#mole-fill)"/>
+  <ellipse cx="23" cy="14.7" rx="0.6" ry="0.5" fill="#b58a82"/>
+  <ellipse cx="13.6" cy="14.6" rx="7.6" ry="5.4" fill="url(#mole-fill)"/>
+  <ellipse cx="13.4" cy="17.8" rx="5.6" ry="2.2" fill="url(#mole-underside)"/>
+  <ellipse cx="18.4" cy="19.3" rx="1.8" ry="1.4" fill="url(#mole-fill)"/>
+  <ellipse cx="7.2" cy="12.9" rx="4.6" ry="4.2" fill="url(#mole-fill)"/>
+  <path d="M2 12.8 C3.2 12 4.8 11.7 6.4 11.8 C6.9 11.85 7.2 12.3 7.2 12.9 C7.2 13.5 6.9 13.9 6.4 13.95 C4.8 14.05 3.2 13.6 2 12.8 Z" fill="#ac8079"/>
+  <ellipse cx="2.4" cy="12.85" rx="0.45" ry="0.55" fill="#8d635d"/>
+  <g stroke="#3a2f28" stroke-width="0.22" opacity="0.28" stroke-linecap="round">
+    <path d="M2.8 11.7 L2.1 10.9"/>
+    <path d="M2.9 13.8 L2.2 14.5"/>
+    <path d="M3.7 14.3 L3.4 15.2"/>
   </g>
-  <path d="M19.6 14.6 C22.2 14 22.6 16.4 21 17 C20.6 16.1 20.1 15.3 19.6 14.6 Z" fill="url(#mole-fill)"/>
-  <ellipse cx="10.6" cy="12.6" rx="3.2" ry="1.7" fill="#ffffff" opacity="0.26"/>
+  <circle cx="6.5" cy="11.5" r="0.46" fill="#171313"/>
+  <circle cx="6.36" cy="11.36" r="0.16" fill="#ffffff" opacity="0.6"/>
+  <g transform="translate(12.6 18.2) rotate(24)">
+    <ellipse cx="0" cy="0" rx="1.4" ry="1.1" fill="#96706a"/>
+    <g fill="#cbbfad">
+      <path d="M-1.2 -0.6 L-2.1 -1.2 L-1.3 -0.2 Z"/>
+      <path d="M-1.4 -0.1 L-2.3 -0.3 L-1.4 0.4 Z"/>
+      <path d="M-1.2 0.5 L-2 0.9 L-1.1 1 Z"/>
+    </g>
+  </g>
+  <g transform="translate(7.8 19.2) rotate(-6)">
+    <ellipse cx="0" cy="0" rx="1.8" ry="1.4" fill="#ac8079"/>
+    <g fill="#ded1bd">
+      <path d="M-1.6 -0.8 L-2.8 -1.5 L-1.7 -0.3 Z"/>
+      <path d="M-1.8 -0.2 L-3 -0.4 L-1.8 0.5 Z"/>
+      <path d="M-1.6 0.6 L-2.7 1 L-1.5 1.2 Z"/>
+      <path d="M-1.1 1.2 L-2 1.8 L-0.9 1.6 Z"/>
+    </g>
+  </g>
+  <ellipse cx="13" cy="11.6" rx="5" ry="2.6" fill="url(#mole-sheen)"/>
+  <circle cx="7" cy="10.8" r="1.9" fill="url(#mole-sheen)"/>
 </svg>
 """

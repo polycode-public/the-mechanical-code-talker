@@ -1,0 +1,53 @@
+# fox — drawn sitting and facing the viewer, the one predator in this pack:
+# a broad triangular face over an upright chest, with the brush tail curled
+# forward across the feet. Three markings name the animal on their own —
+# black-backed ears, a pale cheek ruff running down into the muzzle and
+# throat, and the white tail tip — and the slit amber eye is what makes it
+# read as a hunter rather than another burrower. All four are fixed colours,
+# following badger.toml: they are the fox's pattern, not its coat, so a
+# theme repaints the fur around them and leaves them alone.
+classes = ["fox"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="fox-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <radialGradient id="fox-ruff" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="#f2e9da" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#f2e9da" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="fox-sheen" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <ellipse cx="15" cy="16.8" rx="5.2" ry="4.9" fill="url(#fox-fill)"/>
+  <path d="M9.6 10.4 C12.6 10 14.8 12 15.4 15 C15.8 17.2 15.5 19 14.8 20.4 L9.6 20.4 C8 17.4 7.9 13.2 9.6 10.4 Z" fill="url(#fox-fill)"/>
+  <ellipse cx="11.9" cy="14.8" rx="2.2" ry="3.2" fill="url(#fox-ruff)"/>
+  <path d="M18.8 12.2 C23.2 13.8 24.2 19.4 20.8 21.8 C17.2 24.2 9.2 23.6 5.2 21.2 C5.6 19.8 6.8 19.4 8 20 C11.6 21.8 16.8 21.4 18.8 19 C21.2 16.6 21.2 14.4 18.8 12.2 Z" fill="url(#fox-fill)"/>
+  <path d="M5.2 21.2 C5.6 19.8 6.8 19.4 8 20 C8.6 20.3 9.2 20.55 9.7 20.75 C9.6 22.1 7.4 22.5 5.2 21.2 Z" fill="#f2e9da"/>
+  <path d="M4.4 6 L2.4 0.9 L7.6 3.8 Z" fill="#20191a"/>
+  <path d="M14.8 6 L16.8 0.9 L11.6 3.8 Z" fill="#20191a"/>
+  <path d="M5.1 6 L3.7 2.6 L7.4 4.6 Z" fill="url(#fox-fill)"/>
+  <path d="M14.1 6 L15.5 2.6 L11.8 4.6 Z" fill="url(#fox-fill)"/>
+  <path d="M4 5.2 C5.4 3.8 8 3.2 9.6 3.2 C11.2 3.2 13.8 3.8 15.2 5.2 C15.9 7.2 14.7 10 12.4 11.6 C11.2 12.4 10.1 13.2 9.6 14 C9.1 13.2 8 12.4 6.8 11.6 C4.5 10 3.3 7.2 4 5.2 Z" fill="url(#fox-fill)"/>
+  <path d="M5.6 8.4 C5.2 10 6 11.6 7.6 12.6 C8.4 13.1 9.1 13.7 9.6 14.3 C10.1 13.7 10.8 13.1 11.6 12.6 C13.2 11.6 14 10 13.6 8.4 C12.6 10.4 11.2 11.6 9.6 12 C8 11.6 6.6 10.4 5.6 8.4 Z" fill="url(#fox-ruff)"/>
+  <ellipse cx="9.6" cy="11.4" rx="1.9" ry="1.5" fill="url(#fox-ruff)"/>
+  <ellipse cx="9.6" cy="12.2" rx="0.85" ry="0.68" fill="#1c1c1c"/>
+  <g>
+    <ellipse cx="7.5" cy="7.5" rx="0.9" ry="0.76" fill="#d99a35"/>
+    <ellipse cx="7.5" cy="7.5" rx="0.3" ry="0.64" fill="#1c1c1c"/>
+    <circle cx="7.28" cy="7.2" r="0.21" fill="#ffffff" opacity="0.85"/>
+  </g>
+  <g>
+    <ellipse cx="11.7" cy="7.5" rx="0.9" ry="0.76" fill="#d99a35"/>
+    <ellipse cx="11.7" cy="7.5" rx="0.3" ry="0.64" fill="#1c1c1c"/>
+    <circle cx="11.48" cy="7.2" r="0.21" fill="#ffffff" opacity="0.85"/>
+  </g>
+  <ellipse cx="8.2" cy="6" rx="2.4" ry="1.8" fill="url(#fox-sheen)"/>
+  <ellipse cx="16.8" cy="15.4" rx="2.8" ry="2.2" fill="url(#fox-sheen)"/>
+</svg>
+"""
