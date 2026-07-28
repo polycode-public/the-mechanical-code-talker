@@ -54,7 +54,13 @@ again for it.
   (excluding mud/adventure creature sprites, owned by the agents above) and a design-consistency +
   plain-prose copy audit of every OTHER demo page (index, spider-fly, plan, ledger, code, research,
   ingest, sprites.html) — explicitly excludes mud.html/adventure.html/chat.html's own viz files, which
-  get the same treatment as a follow-up once their own agents above land.
+  get the same treatment as a follow-up once their own agents above land. Also carries, folded in
+  2026-07-29: sprites.html should show each sprite's own class chain, group the catalog by inherited
+  concept, and — the real content gap — every class that appears as an ANCESTOR anywhere in the sprite
+  corpus (not just mud/adventure's) needs its own sprite, so a future leaf concept added to the graph
+  gets a sensible sprite via the fallback chain with no new art required at the moment it's added.
+  Index.html is explicitly hands-off — operator likes it as shipped; skip restyling it, only fix a
+  genuine bug (typo, real AI-ism) there if found.
 
 **Queued, not yet dispatched** — real dependencies, not forgotten: mud.html's own P2P integration
 (share/join, node labels, wave button+animation) waits on the NPC-slider and EDIT-mode agents landing
