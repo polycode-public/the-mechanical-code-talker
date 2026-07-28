@@ -1,15 +1,15 @@
 // mud-viz: renderMudHtml is a pure string builder over an embedded world
 // payload and character roster, mirroring adventure-viz.test.mjs's own
-// style — these tests pin the page's STRUCTURE (two character-agnostic
-// panes, the deck's controls, the explanatory note, the omniscient burrow
-// survey), plus the pure render-glue functions the page splices into its own
-// inline script: speciesOfCharacter, mudRoomSceneObjects, carriedItemsFor,
+// style — these tests pin the page's STRUCTURE (the default cast's
+// character-agnostic panes, the deck's controls including the players
+// slider, the explanatory note, the omniscient burrow survey), plus the pure
+// render-glue functions the page splices into its own inline script: speciesOfCharacter, mudRoomSceneObjects, carriedItemsFor,
 // levelsOf, charactersInRoom, burrowGraph, diggableDirections, itemLabel,
 // isCreature.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  renderMudHtml, speciesOfCharacter, mudRoomSceneObjects, carriedItemsFor,
+  renderMudHtml, paneMarkup, speciesOfCharacter, mudRoomSceneObjects, carriedItemsFor,
   levelsOf, charactersInRoom, burrowGraph, diggableDirections, itemLabel, isCreature,
 } from "../../src/services/mud-viz.mjs";
 import { foldWorldState } from "../../src/services/adventure.mjs";
@@ -53,23 +53,61 @@ const BURROW_ROWS = [
   { subject: "root-burrow-1-south", predicate: "mgx:located-in", object: "mole-1" },
 ];
 
-test("renderMudHtml: renders one character-agnostic pane per slot, two of them", () => {
+test("renderMudHtml: ships the default cast's panes, character-agnostic, and no more", () => {
   const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
   for (const slot of ["a", "b"]) {
     assert.match(html, new RegExp(`id="window-${slot}"`), `window-${slot} is present`);
     assert.match(html, new RegExp(`class="mud-window pane-${slot}"[^>]*id="window-${slot}"`), `window-${slot} carries the mud-window class`);
   }
-  assert.doesNotMatch(html, /id="window-c"/, "no third pane, whatever the roster holds");
+  assert.doesNotMatch(html, /id="window-c"/, "the shipped stage holds the default two, whatever the roster holds");
+  assert.match(html, /id="mudStage" data-panes="2"/, "the grid lays out against the count the stage declares");
   assert.match(html, /id="window-a" data-slot="a" data-character=""/, "a pane binds its character at boot, not at build time");
 });
 
-test("renderMudHtml: the deck carries play/turns/delay/max-turns/reset controls", () => {
+test("renderMudHtml: a roster smaller than the default cast ships only the panes it can fill", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: [CHARACTERS[0]] });
+  assert.match(html, /id="mudStage" data-panes="1"/);
+  assert.match(html, /id="window-a"/);
+  assert.doesNotMatch(html, /id="window-b"/, "no pane is shipped for an animal the roster does not have");
+});
+
+test("paneMarkup: one slot's whole pane, keyed on the slot alone", () => {
+  const html = paneMarkup("d");
+  assert.match(html, /class="mud-window pane-d" id="window-d" data-slot="d" data-character=""/);
+  assert.match(html, /id="window-d-chatlog"/);
+  assert.match(html, /id="window-d-dir-north"/);
+});
+
+test("renderMudHtml: the deck carries play/turns/players/delay/max-turns/reset controls", () => {
   const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
   assert.match(html, /id="autoToggle"/);
   assert.match(html, /id="globalTurnCount"/);
+  assert.match(html, /id="playerCountSlider"/);
   assert.match(html, /id="delaySlider"/);
   assert.match(html, /id="maxTurnsSlider"/);
   assert.match(html, /id="resetBtn"/);
+});
+
+test("renderMudHtml: the players slider runs on the three counts, starting at two", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  assert.match(html, /<label class="deck-slider">players/, "the control says what it picks");
+  assert.match(html, /id="playerCountSlider" min="0" max="2" step="1"\s+value="1"/, "three detents, the middle one on load");
+  for (const count of [1, 2, 4]) {
+    assert.match(html, new RegExp(`<option value="\\d" label="${count}">`), `${count} is one of the detents`);
+  }
+  assert.match(html, /"playerCounts":\[1,2,4\]/, "the page script picks the count off the same list");
+  assert.match(html, /"defaultPlayerCount":2/);
+  assert.match(html, /"paneSlots":\["a","b","c","d"\]/, "there is a slot for every count the slider offers");
+});
+
+test("renderMudHtml: the stage is rebuilt in the browser from the same pane builder the page ships", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  assert.match(html, /const paneMarkup = function paneMarkup/, "paneMarkup is spliced into the page script");
+  assert.match(html, /stage\.setAttribute\("data-panes"/, "a boot restates the count for the grid");
+  assert.match(html, /\.mud-stage\[data-panes="1"\]/, "a single character gets its own layout, not a half-empty grid");
+  assert.match(html, /--actor-c:/, "a four-strong cast has four colours to tell its animals apart");
+  assert.match(html, /--actor-d:/);
+  assert.match(html, /\.mud-window\.pane-d \{ border-top-color: var\(--actor-d\); \}/);
 });
 
 test("renderMudHtml: the page leads with the deck, not a headline", () => {
