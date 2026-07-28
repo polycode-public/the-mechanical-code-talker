@@ -225,7 +225,7 @@ test("an unexamined thing in the room becomes durably known after a turn", async
     const examined = played.actions.find((a) => a.kind === "examine");
     assert.ok(examined, "the investigate step examined something");
     assert.ok(
-      ["basket-1", "carrot-1", "stone-1"].includes(examined.thing),
+      ["basket", "carrot", "stone"].includes(examined.thing),
       `it examined a thing really standing in the garden, got ${examined.thing}`,
     );
 
@@ -239,7 +239,7 @@ test("an unexamined thing in the room becomes durably known after a turn", async
 
 test("a character never re-examines a thing it already knows about", async () => {
   await withMudGarden("no-re-examine", async (dir) => {
-    for (const thing of ["basket-1", "carrot-1", "stone-1"]) {
+    for (const thing of ["basket", "carrot", "stone"]) {
       await recordExamined(dir, { observer: "mole-1", thing, k: 1 });
     }
     const played = await turn(dir, "mole-1", 2);
@@ -279,7 +279,7 @@ test("the same starting store plays the same turn out identically every time", a
 
 test("two characters playing several turns never inherit each other's knowledge unasked", async () => {
   await withMudGarden("no-cross-contamination", async (dir) => {
-    await recordExamined(dir, { observer: "mole-1", thing: "seed-1", k: 0 });
+    await recordExamined(dir, { observer: "mole-1", thing: "seed", k: 0 });
 
     for (let k = 1; k <= 4; k += 1) {
       await turn(dir, "mole-1", k);
@@ -299,9 +299,9 @@ test("two characters playing several turns never inherit each other's knowledge 
       );
     }
 
-    // seed-1 sits in the burrow and is not food, so the ask step never offers
+    // seed sits in the burrow and is not food, so the ask step never offers
     // it: the vole can only come to know it by standing in the burrow itself.
-    const voleKnowsSeed = (await topicsOf(dir, "vole-1")).includes("seed-1");
+    const voleKnowsSeed = (await topicsOf(dir, "vole-1")).includes("seed");
     const voleVisitedBurrow = rows.some((r) => /^vole-1@turn\d+$/.test(r.subject) && r.object === "burrow-1");
     assert.equal(
       voleKnowsSeed && !voleVisitedBurrow, false,

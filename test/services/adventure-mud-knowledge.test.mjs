@@ -88,33 +88,33 @@ test("a character never told about a thing does not know it", async () => {
 
 test("examining a thing makes the observer its own source for it", async () => {
   await withMudGarden("examined", async (dir) => {
-    await recordExamined(dir, { observer: "mole-1", thing: "basket-1", k: 7 });
+    await recordExamined(dir, { observer: "mole-1", thing: "basket", k: 7 });
 
     const { rows, state } = await rowsAndState(dir);
     const written = knowsAboutRows(rows);
     assert.equal(written.length, 1);
     assert.deepEqual(
       { subject: written[0].subject, object: written[0].object, provenance: written[0].provenance },
-      { subject: "mole-1", object: "basket-1", provenance: "mud:mole-1:turn7" },
+      { subject: "mole-1", object: "basket", provenance: "mud:mole-1:turn7" },
       "the observer stands in both the subject and the provenance",
     );
 
-    assert.ok(personKnowledgeLines(rows, state, "mole-1").aboutTopics.includes("basket-1"));
-    assert.ok(!personKnowledgeLines(rows, state, "vole-1").aboutTopics.includes("basket-1"));
+    assert.ok(personKnowledgeLines(rows, state, "mole-1").aboutTopics.includes("basket"));
+    assert.ok(!personKnowledgeLines(rows, state, "vole-1").aboutTopics.includes("basket"));
   });
 });
 
 test("one character accumulates knowledge from several sources across turns", async () => {
   await withMudGarden("accumulate", async (dir) => {
     await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "burrow-1", k: 1 });
-    await recordTold(dir, { asker: "vole-1", teller: "badger-1", thing: "carrot-1", k: 6 });
-    await recordExamined(dir, { observer: "vole-1", thing: "stone-1", k: 9 });
+    await recordTold(dir, { asker: "vole-1", teller: "badger-1", thing: "carrot", k: 6 });
+    await recordExamined(dir, { observer: "vole-1", thing: "stone", k: 9 });
 
     const { rows, state } = await rowsAndState(dir);
     const { aboutTopics } = personKnowledgeLines(rows, state, "vole-1");
     assert.deepEqual(
       [...aboutTopics].sort(),
-      ["burrow-1", "carrot-1", "stone-1"],
+      ["burrow-1", "carrot", "stone"],
       "an earlier telling is not overwritten by a later one",
     );
 
@@ -140,12 +140,12 @@ test("asking what food you know about reports only the food-classed things you w
     await appendFacts(dir, [{
       subject: "apple-1", predicate: "rdf:type", object: "food", provenance: worldProvenanceTag(WORLD),
     }]);
-    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "carrot-1", k: 1 });
+    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "carrot", k: 1 });
     await recordExamined(dir, { observer: "vole-1", thing: "apple-1", k: 2 });
-    await recordTold(dir, { asker: "vole-1", teller: "badger-1", thing: "stone-1", k: 3 });
+    await recordTold(dir, { asker: "vole-1", teller: "badger-1", thing: "stone", k: 3 });
 
     const result = await askFood(dir, "what food do you know about", "vole-1");
-    assert.equal(result.text, "you know about: the carrot-1, the apple-1.");
+    assert.equal(result.text, "you know about: the carrot, the apple-1.");
     assert.equal(result.miss, false, "a populated answer is a real answer, never a miss");
   });
 });
@@ -160,9 +160,9 @@ test("a character with no known food gets the honest empty answer, not a guess",
 
 test("the inverted phrasing answers the same food query", async () => {
   await withMudGarden("food-phrasing", async (dir) => {
-    await recordExamined(dir, { observer: "mole-1", thing: "carrot-1", k: 1 });
+    await recordExamined(dir, { observer: "mole-1", thing: "carrot", k: 1 });
     const result = await askFood(dir, "what do you know about food", "mole-1");
-    assert.equal(result.text, "you know about: the carrot-1.");
+    assert.equal(result.text, "you know about: the carrot.");
   });
 });
 
@@ -172,10 +172,10 @@ test("a character's food query never leaks another character's own separately-to
       subject: "bread-1", predicate: "rdf:type", object: "food", provenance: worldProvenanceTag(WORLD),
     }]);
     await recordExamined(dir, { observer: "mole-1", thing: "bread-1", k: 1 });
-    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "carrot-1", k: 2 });
+    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "carrot", k: 2 });
 
     const voleResult = await askFood(dir, "what food do you know about", "vole-1");
-    assert.equal(voleResult.text, "you know about: the carrot-1.", "the vole reports its own food knowledge only");
+    assert.equal(voleResult.text, "you know about: the carrot.", "the vole reports its own food knowledge only");
     assert.doesNotMatch(voleResult.text, /bread-1/, "the mole's own examined food never leaks into the vole's answer");
 
     const moleResult = await askFood(dir, "what food do you know about", "mole-1");
@@ -186,18 +186,18 @@ test("a character's food query never leaks another character's own separately-to
 test("testimony never folds into the playable world state", async () => {
   await withMudGarden("no-fold", async (dir) => {
     const before = await rowsAndState(dir);
-    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "stone-1", k: 3 });
+    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "stone", k: 3 });
 
     const { rows, state } = await rowsAndState(dir);
     assert.equal(
-      state.placements.get("stone-1").object, before.state.placements.get("stone-1").object,
+      state.placements.get("stone").object, before.state.placements.get("stone").object,
       "hearing about the stone leaves the stone exactly where it stood",
     );
     assert.equal(state.turnCount, before.state.turnCount, "a telling does not advance the world's turn counter");
     assert.equal(
-      worldActionRows(rows).filter((r) => r.predicate === "mgx:knows-about" && r.object === "stone-1").length, 0,
+      worldActionRows(rows).filter((r) => r.predicate === "mgx:knows-about" && r.object === "stone").length, 0,
       "the testimony row is filtered out of the state fold's input",
     );
-    assert.ok(personKnowledgeLines(rows, state, "vole-1").aboutTopics.includes("stone-1"), "yet it still reads back");
+    assert.ok(personKnowledgeLines(rows, state, "vole-1").aboutTopics.includes("stone"), "yet it still reads back");
   });
 });

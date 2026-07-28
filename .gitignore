@@ -81,6 +81,7 @@ public/ledger.html
 public/plan.html
 public/spider-fly.html
 public/adventure.html
+public/mud.html
 public/chat.html
 public/sprites.html
 public/code.html
@@ -89,6 +90,7 @@ public/research.html
 public/chat-browser.bundle.js
 public/spider-fly-browser.bundle.js
 public/adventure-browser.bundle.js
+public/mud-browser.bundle.js
 public/plan-browser.bundle.js
 public/ledger-browser.bundle.js
 public/sprites-browser.bundle.js

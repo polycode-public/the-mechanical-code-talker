@@ -3,7 +3,7 @@
   "generated": "by scripts/build-worlds-pack.mjs from corpus/worlds/src/",
   "counts": {
     "worlds": 3,
-    "facts": 603,
+    "facts": 621,
     "rules": 40
   },
   "budgets": {
@@ -19,8 +19,8 @@
     },
     {
       "file": "src/mud-garden.jsonl",
-      "bytes": 6334,
-      "sha256": "91e341834bb835d9aa36d0308930388e57ae0183cd0ebe11e6a6e55c309dd05e"
+      "bytes": 8153,
+      "sha256": "fe60529dc755ee4318c8852448d8b8073bf10bc162c2dcf0ea16d87c83246443"
     },
     {
       "file": "src/spider-fly.jsonl",
@@ -41,8 +41,8 @@
     },
     {
       "file": "shards/mud-garden.jsonl.gz",
-      "bytes": 788,
-      "sha256": "6b42755d680371b7b197139b36a94350af820caea5fd9fc0f733b281baeb6285"
+      "bytes": 907,
+      "sha256": "7e7f176deda2bbf4e4d91d0885779467bc3c37a4bb61fb117fa27108ecc20380"
     },
     {
       "file": "shards/spider-fly.jsonl.gz",

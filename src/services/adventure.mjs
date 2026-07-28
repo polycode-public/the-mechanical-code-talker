@@ -707,7 +707,7 @@ const OPPOSITE_DIRECTION = new Map([
 // What a freshly dug room holds. The pool is placeholder scenery so a new room
 // is never bare; a later workstream swaps it for the garden's real food
 // content, which this module has no business naming.
-const DIG_SPAWN_KINDS = ["root", "beetle", "worm"];
+const DIG_SPAWN_KINDS = ["root", "carrot", "worm"];
 const DIG_SPAWN_MIN = 0;
 const DIG_SPAWN_MAX = 2;
 
@@ -1093,15 +1093,21 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
     }
     const dug = freshRoomId(rows, here, direction);
     const spawnCount = DIG_SPAWN_MIN + stableIndex(dug, DIG_SPAWN_MAX - DIG_SPAWN_MIN + 1);
-    const spawned = DIG_SPAWN_KINDS.slice(0, spawnCount).map((kind) => `${kind}-${dug}`);
+    const spawnedKinds = DIG_SPAWN_KINDS.slice(0, spawnCount);
+    const spawned = spawnedKinds.map((kind) => `${kind}-${dug}`);
     return commit(
       [
         { subject: dug, predicate: "rdf:type", object: "room" },
         { subject: here, predicate: `mgx:has-exit-${direction}`, object: dug },
         { subject: dug, predicate: `mgx:has-exit-${back}`, object: here },
-        ...spawned.flatMap((thing) => ([
-          { subject: thing, predicate: "rdf:type", object: "portable" },
-          { subject: thing, predicate: "mgx:located-in", object: dug },
+        // Typed to its OWN kind, not a flat "portable" — a spawned kind the
+        // world already declares rdfs:subClassOf food (DIG_SPAWN_KINDS may
+        // carry one) needs its real class reachable here for isFood's own
+        // objectClassChain walk, or digging up "carrot-..." would still read
+        // as inedible scenery.
+        ...spawnedKinds.flatMap((kind, i) => ([
+          { subject: spawned[i], predicate: "rdf:type", object: kind },
+          { subject: spawned[i], predicate: "mgx:located-in", object: dug },
         ])),
       ],
       spawned.length

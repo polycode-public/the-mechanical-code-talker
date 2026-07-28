@@ -383,6 +383,52 @@ let largeSpriteManifest = null;
   }
 }
 
+// The mud demo: mud-garden's real facts+rules, read ONCE through the same
+// Node worlds-pack provider (mud-viz.mjs's own header explains why — same
+// reasoning as the adventure block above), plus this game's own dedicated
+// four-character browser bundle. The large-tier sprite set is read again
+// here (not shared with spider-fly's own spriteLargeTemplates above) so this
+// block stays self-contained regardless of build-step ordering, matching
+// the spider-fly block's own posture.
+{
+  const { getWorldsPackProvider, clearWorldsPackCache } = await import(join(ROOT, "src", "adapters", "corpus", "worlds-pack.mjs"));
+  clearWorldsPackCache();
+  const world = await getWorldsPackProvider({}).load("mud-garden");
+  if (!world) {
+    console.log("mud-garden world not found in the worlds pack — run `npm run gen:worlds-pack` first; the mud demo has no world to embed, so this is a heads-up, not a build failure");
+  } else {
+    const { main: buildMudBundle } = await import(join(here, "build-mud-bundle.mjs"));
+    const { outPath: mudBundlePath, size: mudBundleBytes } = await buildMudBundle(SITE);
+    console.log(`wrote ${mudBundlePath} (${(mudBundleBytes / 1024).toFixed(0)} KB)`);
+    const { renderMudHtml } = await import(join(ROOT, "src", "services", "mud-viz.mjs"));
+    const worldPayload = {
+      name: world.name,
+      facts: world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
+      rules: world.rules.map((r) => ({ name: r.name, ruleKind: r.ruleKind, slots: r.slots })),
+      opening: world.meta?.opening || "",
+    };
+    // Four windows, NW/NE/SW/SE, in the order mud-garden.jsonl actually
+    // places its cast: mole-1/vole-1 start together in the garden,
+    // badger-2/groundhog-1 start together in the sett — adjacent windows
+    // for characters that share a room on load, so the very first redraw
+    // can already show a speech bubble once they talk.
+    const mudCharacters = [
+      { id: "mole-1", slot: "nw", species: "mole" },
+      { id: "vole-1", slot: "ne", species: "vole" },
+      { id: "badger-2", slot: "sw", species: "badger" },
+      { id: "groundhog-1", slot: "se", species: "groundhog" },
+    ];
+    const mudSpriteTemplates = readSpriteLargeTemplateFiles();
+    const mudPath = join(SITE, "mud.html");
+    await writeF(mudPath, renderMudHtml({
+      worldPayload,
+      characters: mudCharacters,
+      spriteTemplates: mudSpriteTemplates,
+    }));
+    console.log(`wrote ${mudPath}`);
+  }
+}
+
 // The site's service worker, version-stamped so a version bump rolls the
 // cache name and the activate step drops the previous release's entries.
 // What it caches is best-effort and volatile — browser storage can be

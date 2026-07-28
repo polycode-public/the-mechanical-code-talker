@@ -132,22 +132,22 @@ test("a dug room is reachable by the ordinary go verb on the turn after the dig"
 
 test("eating food moves its mass onto the eater and takes the food out of the world", async () => {
   await withMudGarden("eat", async (dir) => {
-    const eaten = await run(dir, { verb: "eat", object: "carrot-1" }, "vole-1");
+    const eaten = await run(dir, { verb: "eat", object: "carrot" }, "vole-1");
     assert.equal(eaten.miss, false);
-    assert.match(eaten.text, /you eat the carrot-1\./);
+    assert.match(eaten.text, /you eat the carrot\./);
 
     const state = await foldOf(dir);
     assert.equal(state.masses.get("vole-1").value, 9, "the vole's 6 plus the carrot's 3");
     assert.equal(state.masses.get("mole-1").value, 8, "the other character's mass is untouched");
-    assert.notEqual(state.placements.get("carrot-1").object, "garden", "the carrot left the garden");
+    assert.notEqual(state.placements.get("carrot").object, "garden", "the carrot left the garden");
 
     const { rows, state: fresh } = await rowsAndState(dir);
     assert.ok(
-      !roomAffordances(rows, fresh, "garden", "mole-1").includes("take carrot-1"),
+      !roomAffordances(rows, fresh, "garden", "mole-1").includes("take carrot"),
       "an eaten thing is no longer offered as a room affordance",
     );
     assert.ok(
-      !worldDigestRows(rows, fresh, "mole-1").some((r) => /carrot-1/i.test(`${r.subject} ${r.object}`)),
+      !worldDigestRows(rows, fresh, "mole-1").some((r) => /carrot/i.test(`${r.subject} ${r.object}`)),
       "an eaten thing is out of the room digest entirely",
     );
   });
@@ -155,19 +155,19 @@ test("eating food moves its mass onto the eater and takes the food out of the wo
 
 test("eat declines by name on a thing that is present but not food", async () => {
   await withMudGarden("eat-nonfood", async (dir) => {
-    const declined = await run(dir, { verb: "eat", object: "stone-1" }, "mole-1");
+    const declined = await run(dir, { verb: "eat", object: "stone" }, "mole-1");
     assert.equal(declined.miss, true);
-    assert.equal(declined.text, "the stone-1 isn't food.");
+    assert.equal(declined.text, "the stone isn't food.");
     const state = await foldOf(dir);
-    assert.equal(state.placements.get("stone-1").object, "garden", "a declined eat writes nothing");
+    assert.equal(state.placements.get("stone").object, "garden", "a declined eat writes nothing");
   });
 });
 
 test("eat declines by name on food that is in another room", async () => {
   await withMudGarden("eat-absent", async (dir) => {
-    const declined = await run(dir, { verb: "eat", object: "seed-1" }, "mole-1");
+    const declined = await run(dir, { verb: "eat", object: "seed" }, "mole-1");
     assert.equal(declined.miss, true);
-    assert.equal(declined.text, "I don't see a seed-1 here.");
+    assert.equal(declined.text, "I don't see a seed here.");
   });
 });
 
@@ -177,16 +177,16 @@ test("eat declines a character already at half its reference mass", async () => 
       subject: "mole-1@turn9", predicate: "mgx:hasMass", object: "15",
       provenance: `${worldProvenanceTag(WORLD)}:turn9`,
     }]);
-    const declined = await run(dir, { verb: "eat", object: "carrot-1" }, "mole-1");
+    const declined = await run(dir, { verb: "eat", object: "carrot" }, "mole-1");
     assert.equal(declined.miss, true);
-    assert.equal(declined.text, "you're too full to eat the carrot-1.");
+    assert.equal(declined.text, "you're too full to eat the carrot.");
   });
 });
 
 test("a carried thing can be eaten without dropping it first", async () => {
   await withMudGarden("eat-carried", async (dir) => {
-    await run(dir, { verb: "take", object: "carrot-1" }, "vole-1");
-    const eaten = await run(dir, { verb: "eat", object: "carrot-1" }, "vole-1");
+    await run(dir, { verb: "take", object: "carrot" }, "vole-1");
+    const eaten = await run(dir, { verb: "eat", object: "carrot" }, "vole-1");
     assert.equal(eaten.miss, false);
     const state = await foldOf(dir);
     assert.equal(state.masses.get("vole-1").value, 9);
@@ -195,79 +195,79 @@ test("a carried thing can be eaten without dropping it first", async () => {
 
 test("put places a carried thing into an open container standing in the room", async () => {
   await withMudGarden("put", async (dir) => {
-    await run(dir, { verb: "take", object: "stone-1" }, "mole-1");
-    const put = await run(dir, { verb: "put", object: "stone-1", indirectObject: "basket-1" }, "mole-1");
+    await run(dir, { verb: "take", object: "stone" }, "mole-1");
+    const put = await run(dir, { verb: "put", object: "stone", indirectObject: "basket" }, "mole-1");
     assert.equal(put.miss, false);
-    assert.match(put.text, /you put the stone-1 in the basket-1\./);
+    assert.match(put.text, /you put the stone in the basket\./);
 
     const state = await foldOf(dir);
     assert.deepEqual(
-      { predicate: state.placements.get("stone-1").predicate, object: state.placements.get("stone-1").object },
-      { predicate: "mgx:located-in", object: "basket-1" },
+      { predicate: state.placements.get("stone").predicate, object: state.placements.get("stone").object },
+      { predicate: "mgx:located-in", object: "basket" },
     );
   });
 });
 
 test("put declines by name when the thing isn't carried, the target is absent, or the target is shut", async () => {
   await withMudGarden("put-declines", async (dir) => {
-    const notCarried = await run(dir, { verb: "put", object: "stone-1", indirectObject: "basket-1" }, "mole-1");
+    const notCarried = await run(dir, { verb: "put", object: "stone", indirectObject: "basket" }, "mole-1");
     assert.equal(notCarried.miss, true);
-    assert.equal(notCarried.text, "you're not carrying the stone-1.");
+    assert.equal(notCarried.text, "you're not carrying the stone.");
 
-    await run(dir, { verb: "take", object: "stone-1" }, "mole-1");
+    await run(dir, { verb: "take", object: "stone" }, "mole-1");
 
-    const absent = await run(dir, { verb: "put", object: "stone-1", indirectObject: "bucket-1" }, "mole-1");
+    const absent = await run(dir, { verb: "put", object: "stone", indirectObject: "bucket-1" }, "mole-1");
     assert.equal(absent.miss, true);
     assert.equal(absent.text, "I don't see a bucket-1 here.");
 
-    await run(dir, { verb: "close", object: "basket-1" }, "mole-1");
-    const shut = await run(dir, { verb: "put", object: "stone-1", indirectObject: "basket-1" }, "mole-1");
+    await run(dir, { verb: "close", object: "basket" }, "mole-1");
+    const shut = await run(dir, { verb: "put", object: "stone", indirectObject: "basket" }, "mole-1");
     assert.equal(shut.miss, true);
-    assert.equal(shut.text, "the basket-1 is closed.");
+    assert.equal(shut.text, "the basket is closed.");
   });
 });
 
 test("put declines by name when the target holds nothing at all", async () => {
   await withMudGarden("put-noncontainer", async (dir) => {
-    await run(dir, { verb: "take", object: "stone-1" }, "mole-1");
-    const declined = await run(dir, { verb: "put", object: "stone-1", indirectObject: "carrot-1" }, "mole-1");
+    await run(dir, { verb: "take", object: "stone" }, "mole-1");
+    const declined = await run(dir, { verb: "put", object: "stone", indirectObject: "carrot" }, "mole-1");
     assert.equal(declined.miss, true);
-    assert.equal(declined.text, "the carrot-1 doesn't hold things.");
+    assert.equal(declined.text, "the carrot doesn't hold things.");
   });
 });
 
 test("a thing one character carries is out of the room for every other character too", async () => {
   await withMudGarden("carried-visibility", async (dir) => {
-    const taken = await run(dir, { verb: "take", object: "stone-1" }, "vole-1");
+    const taken = await run(dir, { verb: "take", object: "stone" }, "vole-1");
     assert.equal(taken.miss, false);
 
     const { rows, state } = await rowsAndState(dir);
 
     assert.ok(
-      !roomAffordances(rows, state, "garden", "mole-1").includes("take stone-1"),
+      !roomAffordances(rows, state, "garden", "mole-1").includes("take stone"),
       "the mole is never offered a stone the vole is holding",
     );
     assert.ok(
-      roomAffordances(rows, state, "garden", "vole-1").includes("take carrot-1"),
+      roomAffordances(rows, state, "garden", "vole-1").includes("take carrot"),
       "what really is loose in the room stays on offer",
     );
 
-    const seenByMole = await run(dir, { verb: "take", object: "stone-1" }, "mole-1");
+    const seenByMole = await run(dir, { verb: "take", object: "stone" }, "mole-1");
     assert.equal(seenByMole.miss, true);
-    assert.equal(seenByMole.text, "I don't see a stone-1 here.");
+    assert.equal(seenByMole.text, "I don't see a stone here.");
 
     assert.ok(
-      !personRoomReport(rows, state, "vole-1", "mole-1").includes("stone-1"),
+      !personRoomReport(rows, state, "vole-1", "mole-1").includes("stone"),
       "a room report never lists a carried thing as standing in the room",
     );
 
     const digest = worldDigestRows(rows, state, "mole-1");
     assert.ok(
-      digest.some((r) => r.subject === "Vole-1" && r.predicate === "carries the" && r.object === "stone-1"),
+      digest.some((r) => r.subject === "Vole-1" && r.predicate === "carries the" && r.object === "stone"),
       "the holder reads as carrying it, not as a place the stone sits in",
     );
     assert.ok(
-      !digest.some((r) => r.subject === "Mole-1" && r.predicate === "carries the" && r.object === "stone-1"),
+      !digest.some((r) => r.subject === "Mole-1" && r.predicate === "carries the" && r.object === "stone"),
       "the acting character is not credited with another character's load",
     );
   });
@@ -275,12 +275,12 @@ test("a thing one character carries is out of the room for every other character
 
 test("each character's inventory is its own", async () => {
   await withMudGarden("inventory", async (dir) => {
-    await run(dir, { verb: "take", object: "stone-1" }, "vole-1");
+    await run(dir, { verb: "take", object: "stone" }, "vole-1");
     const state = await foldOf(dir);
     const carriedBySubject = (subject) => [...state.placements]
       .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === subject)
       .map(([thing]) => thing);
-    assert.deepEqual(carriedBySubject("vole-1"), ["stone-1"]);
+    assert.deepEqual(carriedBySubject("vole-1"), ["stone"]);
     assert.deepEqual(carriedBySubject("mole-1"), []);
   });
 });
