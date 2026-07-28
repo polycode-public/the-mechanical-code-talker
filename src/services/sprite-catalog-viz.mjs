@@ -532,8 +532,6 @@ export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates =
 
   const dockCss = !spritesBundleAvailable ? "" : `
   .dockwrap { margin: .2rem 0 1.3rem; }
-  .dockwrap .panel { background: var(--card); border: 1px solid var(--line); border-top: 2px solid var(--taught); padding: .75rem .85rem; }
-  .dockwrap h2 { font-family: ${SERIF_STACK}; font-variant: small-caps; font-size: .82rem; letter-spacing: .04em; color: var(--muted); font-weight: 600; margin: 0 0 .55rem; }
   .dock-note { color: var(--muted); font-size: .8rem; margin: 0 0 .6rem; max-width: 72ch; }
   .docklog { display: flex; flex-direction: column; gap: .4rem; max-height: 240px; overflow-y: auto; margin-bottom: .5rem; }
   .docklog:empty { display: none; margin-bottom: 0; }
@@ -544,8 +542,8 @@ export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates =
   .docklog .a.grounded { border-left: 2px solid var(--taught); padding-left: .5rem; }
   .dockask { display: flex; align-items: center; gap: .5rem; }
   .dockask .prompt { color: var(--taught); font-size: .78rem; }
-  .dockask input { flex: 1; font-family: ${MONO_STACK}; font-size: .82rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: .38rem .6rem; min-width: 0; }
-  .dockask input:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
+  .dockask input { flex: 1; font-family: ${MONO_STACK}; font-size: .82rem; background: var(--ai-panel-hi); color: var(--ink); border: 1px solid var(--ai-edge); border-radius: 3px; padding: .38rem .6rem; min-width: 0; }
+  .dockask input:focus-visible { outline: 2px solid var(--corpus); outline-offset: 2px; }
   .dockask input:disabled { opacity: .5; }
   .dock-status { font-size: .72rem; color: var(--muted); margin-top: .55rem; }
 `;
@@ -707,6 +705,7 @@ ${THEME_TOKENS_CSS}
   .pill:hover { border-color: var(--corpus); color: var(--corpus); }
   .scene-frame { min-height: 5.6rem; display: flex; align-items: center; }
   .scene-row { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-start; width: 100%; }
+  .scene-row:empty { display: none; }
   .scene-card { display: flex; flex-direction: column; align-items: center; width: 74px; }
   .scene-sprite { width: 60px; height: 60px; border-radius: 3px; border: 1px solid var(--ai-edge); display: flex; align-items: center; justify-content: center; padding: 6px; box-sizing: border-box; background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%), linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%); background-position: 0 0, 5px 5px; background-size: 10px 10px; background-color: var(--card); }
   .scene-sprite svg { width: 100%; height: 100%; display: block; filter: var(--sprite-pop); }
