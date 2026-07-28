@@ -7,6 +7,18 @@
 // controls with no fog of war at all, the one deliberate exception
 // PLAN_MUD.md names.
 //
+// The deck's second cast slider adds NPCs: one to ten more animals in the
+// same world, drawn from the same roster, running the same scripted turn as
+// a pane's own character and differing in exactly one way — no pane. They are
+// ordinary world individuals throughout, so every reader here (the survey,
+// a pane's room view, the talk affordances, the room caption) picks them up
+// as "another character present" without knowing they exist. Two things do
+// know: the survey draws them in one shared colour because the four actor
+// hues belong to the panes, and the eaten scene needs a pane to play in, so a
+// taken NPC just stops. They carry no mgx:is-npc marker either — that
+// predicate drives adventure.mjs's scripted-by-data scheduler, which is a
+// different mechanism from these.
+//
 // The stage is built in the browser, never fixed at build time: paneMarkup is
 // spliced into the page script alongside the render glue, and every boot
 // rebuilds #mudStage with one call per cast member. The page ships the
@@ -86,11 +98,17 @@ const PANE_SLOTS = ["a", "b", "c", "d"];
 // grid evenly, so no layout ever carries a half-empty row.
 const PLAYER_COUNTS = [1, 2, 4];
 const DEFAULT_PLAYER_COUNT = 2;
+// The npcs slider is a plain count, not a detent list: nothing lays an NPC
+// out, so every number between its ends is as good as any other.
+const NPC_COUNT_MIN = 1;
+const NPC_COUNT_MAX = 10;
+const NPC_COUNT_LABELLED = [1, 5, 10];
+const DEFAULT_NPC_COUNT = 2;
 const DEFAULT_DELAY_MS = 650;
 const DEFAULT_MAX_TURNS = 400;
 
 const MUD_NOTE_LINES = [
-  "Burrowing animals share one world here, and the players slider picks how many. Each one only knows what it has dug up, asked about, or been told. Nobody sees the whole burrow except you, watching from the survey above.",
+  "Burrowing animals share one world here. The players slider picks how many get a window of their own; the npcs slider adds more animals that dig and forage without one. Each one only knows what it has dug up, asked about, or been told. Nobody sees the whole burrow except you, watching from the survey above.",
   `This is a MUD, short for Multi Underground creature Dig. The name nods to MUD, or in its current form MUDII (mudii.co.uk), one of the first multiplayer text games. The dig-your-own-rooms idea came from a skim of Wikipedia's Colossal Cave Adventure article, the game that started the genre.`,
 ];
 
@@ -285,6 +303,7 @@ export function renderMudHtml({
     paneSlots: PANE_SLOTS,
     playerCounts: PLAYER_COUNTS,
     defaultPlayerCount: DEFAULT_PLAYER_COUNT,
+    defaultNpcCount: DEFAULT_NPC_COUNT,
     rootRoom: ROOT_ROOM,
     defaultDelayMs: DEFAULT_DELAY_MS,
     defaultMaxTurns: DEFAULT_MAX_TURNS,
@@ -325,6 +344,16 @@ ${MUD_STYLE}
                  list="playerCountTicks" aria-valuetext="${DEFAULT_PLAYER_COUNT} players">
           <datalist id="playerCountTicks">${PLAYER_COUNTS.map((n, i) => `<option value="${i}" label="${n}"></option>`).join("")}</datalist>
           <span class="mono" id="playerCountValue">${DEFAULT_PLAYER_COUNT}</span>
+        </label>
+        <label class="deck-slider">npcs
+          <input type="range" id="npcCountSlider" min="${NPC_COUNT_MIN}" max="${NPC_COUNT_MAX}" step="1"
+                 value="${DEFAULT_NPC_COUNT}"
+                 list="npcCountTicks" aria-valuetext="${DEFAULT_NPC_COUNT} npcs">
+          <datalist id="npcCountTicks">${Array.from({ length: NPC_COUNT_MAX - NPC_COUNT_MIN + 1 }, (_, i) => {
+            const n = NPC_COUNT_MIN + i;
+            return NPC_COUNT_LABELLED.includes(n) ? `<option value="${n}" label="${n}"></option>` : `<option value="${n}"></option>`;
+          }).join("")}</datalist>
+          <span class="mono" id="npcCountValue">${DEFAULT_NPC_COUNT}</span>
         </label>
         <label class="deck-slider">delay
           <input type="range" id="delaySlider" min="80" max="2000" step="20" value="${DEFAULT_DELAY_MS}">
@@ -535,7 +564,8 @@ const MUD_STYLE = `
   .world-map-board { flex: 1; min-height: 168px; display: flex; align-items: center; justify-content: center; }
   .world-map-board svg { width: 100%; height: 100%; max-height: 230px; }
   .world-map-key { display: flex; flex-wrap: wrap; gap: .5rem; font-family: ${MONO_STACK}; font-size: .58rem; opacity: .85; }
-  .key-actor { display: inline-flex; align-items: center; gap: .28rem; }
+  .key-actor, .key-npcs { display: inline-flex; align-items: center; gap: .28rem; }
+  .key-npcs { opacity: .75; }
   .key-dot { width: .5rem; height: .5rem; border-radius: 50%; display: inline-block; }
 
   /* ---- the survey itself, drawn twice at two sizes ---- */
@@ -590,7 +620,13 @@ const MUD_STYLE = `
   .wall-item.hangs-low { margin-top: 14px; }
   .wall-item svg { width: 100%; display: block; }
   .floor-band { position: absolute; left: 0; right: 0; bottom: 0; height: 86px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 6px 4px; box-sizing: border-box; }
-  .floor-others { display: flex; align-items: flex-end; gap: 6px; }
+  /* A room can hold a dozen animals once the npcs slider is up, and the floor
+     is one row wide either way — so the crowd shares the row it has instead of
+     the surplus running off the edge under the overflow clip. --mate-width is
+     set per redraw from the room's own measured width. */
+  .floor-others { display: flex; align-items: flex-end; gap: 6px; min-width: 0; }
+  .floor-others .sprite-card { max-width: var(--mate-width, 76px); }
+  .floor-others .sprite { width: min(40px, var(--mate-width, 40px)); }
   .sprite { width: 40px; }
   .sprite svg { width: 100%; display: block; }
   .floor-self .sprite { width: 48px; }
@@ -887,6 +923,7 @@ function pageScript() {
   const roster = DATA.characters.map(function (c) { return c.id; });
   let slots = [];
   const ACTOR_COLORS = ["var(--actor-a)", "var(--actor-b)", "var(--actor-c)", "var(--actor-d)"];
+  const NPC_COLOR = "var(--chalk)";
   const COMPASS = ["north", "south", "east", "west", "up", "down"];
   const DIR_GLYPH = { north: "\\u25B2 N", south: "\\u25BC S", west: "\\u25C0 W", east: "E \\u25B6", up: "\\u21E1", down: "\\u21E3" };
   const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -905,30 +942,36 @@ function pageScript() {
 
   let session = null;
   let cast = [];
-  const slotOf = {};
+  // The animals with no pane. They act through the same session windows and
+  // the same tick queue as the cast; every list below that says "everyone"
+  // means both, and every list that says "cast" means the panes alone.
+  let npcs = [];
+  let slotOf = {};
   let globalTurn = 0;
-  const turnsTaken = {};
-  const eaten = {};
-  // Which ending each out-of-play character got — "eaten" or "starved" — read
-  // off the engine rather than assumed, and what the pane's fate badge prints.
-  const fates = {};
+  let turnsTaken = {};
+  let finished = {};
   let maxTurns = DATA.defaultMaxTurns;
   let delayMs = DATA.defaultDelayMs;
   const wait = function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
   const liveWait = function () { return wait(delayMs); };
 
   let freshlyDugRoom = null;
-  // The last omniscient read, kept so the eaten scene can draw the predator's
-  // own den after the engine has already moved the character out of every room.
+  // The last omniscient read, kept so the pounce can draw the predator's own
+  // den after the engine has already moved the character out of every room.
   let lastSnapshot = null;
   const speechBubbles = new Map(); // room -> [{ speaker, text, expiresAtTurn }]
 
-  const tickers = {};
+  let tickers = {};
   let autoOn = false;
 
   function hasNext() { return globalTurn < maxTurns; }
+  function everyone() { return cast.concat(npcs); }
+  function hasPane(character) { return Boolean(slotOf[character]); }
   function paneIdFor(character) { return "window-" + slotOf[character]; }
-  function colorFor(character) { return ACTOR_COLORS[cast.indexOf(character) % ACTOR_COLORS.length]; }
+  function colorFor(character) {
+    const seat = cast.indexOf(character);
+    return seat === -1 ? NPC_COLOR : ACTOR_COLORS[seat % ACTOR_COLORS.length];
+  }
 
   // The engine keeps each character's own tally (its scripted ticks AND its
   // typed commands), which is the only one that can be right: a typed "dig
@@ -942,8 +985,12 @@ function pageScript() {
   }
 
   async function runOneTurn(character) {
+    // A tick already queued when a reset lands belongs to a world that no
+    // longer exists, and a dozen animals make that overlap ordinary rather
+    // than rare.
+    const bootAt = bootSeq;
     return serializeTick(async function () {
-      if (eaten[character]) return { outOfPlay: true };
+      if (bootAt !== bootSeq || finished[character]) return { outOfPlay: true };
       globalTurn += 1;
       const result = await session.windows[character].autoplayTick(globalTurn);
       if (!result.outOfPlay) turnsTaken[character] = (turnsTaken[character] || 0) + 1;
@@ -952,27 +999,31 @@ function pageScript() {
     });
   }
 
-  // A character out of play keeps its pane, its final turn count and its chat
-  // log, and loses everything that would advance it — the engine declines its
-  // turns from here on, so offering the controls would promise a turn that never
-  // runs. WHICH ending it was travels with it: the two read nothing alike, and a
-  // pane that says "eaten" over an animal that quietly starved is just wrong.
+  // A character whose run has ended keeps its pane, its final turn count and
+  // its chat log, and loses everything that would advance it — the engine
+  // declines its turns from here on, so offering the controls would promise a
+  // turn that never runs. An NPC has none of that to lose: it stops ticking and
+  // the survey stops drawing it, which is the whole of its ending. WHICH ending
+  // it was is never cached here — every reader asks the engine fresh, so a pane
+  // that says "eaten" over an animal that quietly starved is never possible.
   function markOutOfPlay(character, reason, note) {
-    if (eaten[character]) return;
-    eaten[character] = true;
-    fates[character] = reason || "eaten";
+    if (finished[character]) return;
+    finished[character] = true;
     const ticker = tickers[character];
     if (ticker) ticker.pause();
+    if (!hasPane(character)) return;
     const w = paneIdFor(character);
     el(w + "-play").disabled = true;
     el(w + "-step").disabled = true;
     el(w + "-chatq").disabled = true;
     el(w + "-chatpills").innerHTML = "";
-    const phrase = window.tmctMud && window.tmctMud.outOfPlayPhrase
-      ? window.tmctMud.outOfPlayPhrase(character, fates[character])
-      : "the " + character + " is out of play";
-    appendChat(character, "a", note || (phrase + ". It takes no more turns."));
-    playEndingScene(character);
+    const fate = reason === "starved" ? "starved" : "eaten";
+    // A run that ended on a TYPED command carries no note of its own — the
+    // world's ending sentence comes from the engine either way, never a second
+    // wording of the same event.
+    appendChat(character, "a", note
+      || (window.tmctMud.outOfPlayPhrase(character, fate) + ". It takes no more turns."));
+    playFateScene(character, fate);
   }
 
   // Whichever individual the WORLD marks dangerous, never a species this page
@@ -988,20 +1039,20 @@ function pageScript() {
   // Cutting straight to the banner throws away the only moment this demo has to
   // show what took the character: the character's last drawn room is the one it
   // walked out OF, so the scene is redrawn against the den first, then the fox
-  // crosses it. Reduced motion, a world with no marked predator, or an animal
-  // that starved rather than being caught settles straight into the end state —
-  // there is no pounce to draw when nothing pounced.
-  function playEndingScene(character) {
+  // crosses it. An animal that ran out of mass was taken by nothing, so it
+  // settles straight into its banner — as does reduced motion, or a world with
+  // no marked predator.
+  function playFateScene(character, fate) {
     const w = paneIdFor(character);
     const settle = function () {
       el(w).classList.add("out-of-play");
-      const fate = el(w + "-fate");
-      fate.hidden = false;
-      fate.textContent = fates[character] + " \\u00b7 " + turnsFor(character) + " turns";
+      const banner = el(w + "-fate");
+      banner.hidden = false;
+      banner.textContent = fate + " \\u00b7 " + turnsFor(character) + " turns";
     };
     const predator = lastSnapshot ? predatorInRows(lastSnapshot.rows) : null;
     const den = predator ? (lastSnapshot.state.placements.get(predator) || {}).object : null;
-    if (reduceMotion || !den || fates[character] !== "eaten") { settle(); return; }
+    if (fate === "starved" || reduceMotion || !den) { settle(); return; }
 
     const rows = lastSnapshot.rows;
     const state = lastSnapshot.state;
@@ -1028,8 +1079,12 @@ function pageScript() {
   }
 
   function afterEngineTurn(character, result) {
-    if (result && result.outOfPlay) { markOutOfPlay(character, result.outOfPlayReason, result.text); renderAll(); return; }
-    if (!result || !result.room) { renderAll(); return; }
+    if (result && result.outOfPlay) {
+      markOutOfPlay(character, result.outOfPlayReason, result.text);
+      renderSoon();
+      return;
+    }
+    if (!result || !result.room) { renderSoon(); return; }
     if (result.roomAfter && result.roomAfter !== result.room) freshlyDugRoom = result.roomAfter;
     for (const action of result.actions || []) {
       if (action.kind !== "ask" && action.kind !== "talk") continue;
@@ -1038,16 +1093,16 @@ function pageScript() {
       if (other && action.thing) noteSpeech(result.room, other, { thing: action.thing });
       else if (other && action.text) noteSpeech(result.room, other, { text: action.text });
     }
-    renderAll();
+    renderSoon();
   }
 
   function ensureTicker(character) {
     if (tickers[character]) return tickers[character];
-    const playBtn = el(paneIdFor(character) + "-play");
+    const playBtn = hasPane(character) ? el(paneIdFor(character) + "-play") : null;
     tickers[character] = createTicker({
       onTick: function () { return runOneTurn(character); },
       onRender: function (state) {
-        playBtn.textContent = state.playing ? "\\u23F8 pause" : "\\u25B6 play";
+        if (playBtn) playBtn.textContent = state.playing ? "\\u23F8 pause" : "\\u25B6 play";
       },
       hasNext: hasNext,
       wait: liveWait,
@@ -1093,7 +1148,7 @@ function pageScript() {
     appendChat(character, "u", line);
     return serializeTick(function () { return session.windows[character].turn(line); }).then(function (res) {
       appendChat(character, "a", res.answer);
-      renderAll();
+      renderSoon();
       return res;
     });
   }
@@ -1146,14 +1201,14 @@ function pageScript() {
     el(w + "-room").addEventListener("click", function (e) {
       const card = e.target.closest(".sprite-card[data-command]");
       const character = characterInSlot(slot);
-      if (!card || !character || eaten[character]) return;
+      if (!card || !character || finished[character]) return;
       sendCommand(character, card.getAttribute("data-command"));
     });
     el(w + "-room").addEventListener("keydown", function (e) {
       if (e.key !== "Enter" && e.key !== " ") return;
       const card = e.target.closest(".sprite-card[data-command]");
       const character = characterInSlot(slot);
-      if (!card || !character || eaten[character]) return;
+      if (!card || !character || finished[character]) return;
       e.preventDefault();
       sendCommand(character, card.getAttribute("data-command"));
     });
@@ -1301,7 +1356,11 @@ function pageScript() {
         '<div class="hook"></div><div class="sprite-frame">' + objectSvgFor(obj.subject, rows) + "</div>",
         commands[obj.subject], "wall-item " + hang, massOf(state, obj.subject)));
     }
-    el(w + "-others").innerHTML = others.join("");
+    const othersEl = el(w + "-others");
+    othersEl.innerHTML = others.join("");
+    const floorForMates = el(w + "-room").clientWidth - 68;
+    othersEl.style.setProperty("--mate-width",
+      Math.max(18, Math.min(76, Math.floor(floorForMates / Math.max(1, others.length)) - 6)) + "px");
     el(w + "-wall").innerHTML = wall.join("");
 
     const live = (speechBubbles.get(here) || []).filter(function (b) { return b.expiresAtTurn >= globalTurn; });
@@ -1492,8 +1551,12 @@ function pageScript() {
       const fit = label.length * (compact ? 3.6 : 4.3) > roomW - 6
         ? ' textLength="' + (roomW - 6) + '" lengthAdjust="spacingAndGlyphs"' : "";
       const cast = occupants[n.id] || [];
+      // The room's own width is the budget: a dozen animals down one hole must
+      // still read as a dozen dots inside that room rather than a line running
+      // out of it, so the gap closes as the crowd grows.
+      const step = Math.min(compact ? 6 : 9, (roomW - 6) / Math.max(1, cast.length));
       const dots = cast.map(function (c, i) {
-        const spread = (i - (cast.length - 1) / 2) * (compact ? 6 : 9);
+        const spread = (i - (cast.length - 1) / 2) * step;
         return '<circle class="occupant" cx="' + (cx(n) + spread) + '" cy="' + (cy(n) + roomH / 2) + '" r="' + (compact ? 2.4 : 3.6)
           + '" fill="' + c.color + '"><title>' + esc(c.character) + "</title></circle>";
       }).join("");
@@ -1518,40 +1581,69 @@ function pageScript() {
     const graph = burrowGraph(state, roomIds, DATA.rootRoom);
     const occupants = {};
     for (const room of roomIds) {
-      const here = charactersInRoom(state, room, cast);
+      const here = charactersInRoom(state, room, everyone());
       if (!here.length) continue;
       occupants[room] = here.map(function (c) { return { character: c, color: colorFor(c) }; });
     }
     el("worldMapBoard").innerHTML = burrowSvg(graph, {
       occupants: occupants, fresh: freshlyDugRoom, label: "every room in the burrow, and who stands where",
     });
-    el("worldMapKey").innerHTML = cast.map(function (c) {
+    // One key entry per pane, because a pane is what a colour identifies. The
+    // npcs share the last entry: naming ten of them would take more room than
+    // the survey they annotate, and each one's own dot already carries its name.
+    const keys = cast.map(function (c) {
       const room = state.placements.get(c) ? state.placements.get(c).object : "?";
-      const where = eaten[c] ? "eaten" : "in " + esc(room);
+      const fate = window.tmctMud.outOfPlayReasonOf(state, c);
+      const where = fate ? fate : "in " + esc(room);
       return '<span class="key-actor"><span class="key-dot" style="background:' + colorFor(c) + '"></span>'
         + esc(speciesOfCharacter(c)) + " " + where + "</span>";
-    }).join("");
+    });
+    if (npcs.length) {
+      const live = npcs.filter(function (c) { return !finished[c]; }).length;
+      const tally = live === npcs.length ? String(npcs.length) : live + " of " + npcs.length;
+      keys.push('<span class="key-npcs"><span class="key-dot" style="background:' + NPC_COLOR + '"></span>'
+        + tally + (live === 1 ? " npc" : " npcs") + " digging</span>");
+    }
+    el("worldMapKey").innerHTML = keys.join("");
     el("worldMapTurn").textContent = "turn " + globalTurn;
   }
 
+  // A whole redraw per turn is one thing at two characters and quite another at
+  // fourteen, where the ticks land faster than a snapshot can be read. Requests
+  // arriving mid-render collapse into a single follow-up, so the page always
+  // ends up drawing the newest state and never queues a backlog of stale ones.
+  let rendering = false;
+  let renderAgain = false;
+  async function renderSoon() {
+    if (rendering) { renderAgain = true; return; }
+    rendering = true;
+    try {
+      await renderAll();
+    } finally {
+      rendering = false;
+    }
+    if (renderAgain) { renderAgain = false; renderSoon(); }
+  }
+
   // A character eaten on its OWN turn is out of play the moment that turn
-  // returns, one whole tick before autoplayTick would report it — so the pane's
-  // state is read from the engine's own isOutOfPlay every redraw, not only off
-  // a tick result.
+  // returns, one whole tick before autoplayTick would report it — so every
+  // character's fate is read from the engine every redraw, not only off a tick
+  // result. It reads against the snapshot this redraw already holds: a
+  // per-window call would re-fold the whole world once per animal.
   async function renderAll() {
     if (!session) return;
     el("globalTurnCount").textContent = "turns: " + globalTurn;
     const snap = await session.snapshot();
     lastSnapshot = snap;
     const roomIds = allRoomIds(snap.rows);
-    for (const character of cast) {
-      if (eaten[character] || !(await session.windows[character].isOutOfPlay())) continue;
-      markOutOfPlay(character, await session.windows[character].outOfPlayReason());
+    for (const character of everyone()) {
+      const reason = window.tmctMud.outOfPlayReasonOf(snap.state, character);
+      if (reason) markOutOfPlay(character, reason, null);
     }
     renderWorldMap(snap.rows, snap.state, roomIds);
     for (const character of cast) {
       el(paneIdFor(character) + "-turn").textContent = "turn " + turnsFor(character);
-      if (eaten[character]) continue;
+      if (finished[character]) continue;
       const place = snap.state.placements.get(character);
       const here = place ? place.object : null;
       if (!here) continue;
@@ -1746,7 +1838,7 @@ function pageScript() {
     el("playerCountSlider").disabled = !on;
     el("resetBtn").disabled = !on;
     for (const character of cast) {
-      if (eaten[character]) continue;
+      if (finished[character]) continue;
       el(paneIdFor(character) + "-play").disabled = !on;
       el(paneIdFor(character) + "-step").disabled = !on;
     }
@@ -1804,17 +1896,31 @@ function pageScript() {
     el("playerCountSlider").setAttribute("aria-valuetext", count + (count === 1 ? " player" : " players"));
   }
 
+  // The npcs slider carries its own count, so it needs no detent table.
+  function chosenNpcCount() {
+    const picked = Number(el("npcCountSlider").value);
+    return Number.isFinite(picked) ? picked : DATA.defaultNpcCount;
+  }
+
+  function showNpcCount(count) {
+    el("npcCountValue").textContent = String(count);
+    el("npcCountSlider").setAttribute("aria-valuetext", count + (count === 1 ? " npc" : " npcs"));
+  }
+
   function wireDeck() {
     const playBtn = el("autoToggle");
     const delaySlider = el("delaySlider");
     const maxTurnsSlider = el("maxTurnsSlider");
     const playerCountSlider = el("playerCountSlider");
+    const npcCountSlider = el("npcCountSlider");
     playBtn.addEventListener("click", function () {
       if (!session) return;
       autoOn = !autoOn;
       playBtn.setAttribute("aria-pressed", autoOn ? "true" : "false");
       playBtn.textContent = autoOn ? "\\u23F8 pause" : "\\u25B6 play";
-      for (const character of cast) {
+      // Every animal in the world, pane or none: the deck's play control is the
+      // world running, and an npc has no other control that could start it.
+      for (const character of everyone()) {
         const ticker = tickers[character];
         if (!ticker) continue;
         if (autoOn) ticker.play(); else ticker.pause();
@@ -1833,6 +1939,8 @@ function pageScript() {
     // away, a whole shared world per step.
     playerCountSlider.addEventListener("input", function () { showPlayerCount(chosenPlayerCount()); });
     playerCountSlider.addEventListener("change", function () { boot(); });
+    npcCountSlider.addEventListener("input", function () { showNpcCount(chosenNpcCount()); });
+    npcCountSlider.addEventListener("change", function () { boot(); });
     el("resetBtn").addEventListener("click", function () { boot(); });
     el("editModeBtn").addEventListener("click", function () {
       if (!session) return;
@@ -1894,43 +2002,51 @@ function pageScript() {
     const playBtn = el("autoToggle");
     playBtn.setAttribute("aria-pressed", "false");
     playBtn.textContent = "\\u25B6 play";
-    for (const character of cast) {
-      const ticker = tickers[character];
-      if (ticker) ticker.pause();
-      delete tickers[character];
-    }
+    for (const character of Object.keys(tickers)) tickers[character].pause();
+    tickers = {};
     globalTurn = 0;
     freshlyDugRoom = null;
     lastSnapshot = null;
     speechBubbles.clear();
     tickChain = Promise.resolve();
-    for (const character of cast) { delete eaten[character]; delete fates[character]; }
+    // Rebuilt rather than pruned: a character that had a pane last boot can be
+    // an npc in this one, and a stale seat would send its ending to a pane now
+    // showing somebody else.
+    finished = {};
+    turnsTaken = {};
+    slotOf = {};
 
     // ONE draw, the engine's own, and the same list the session is built from:
     // a second independent draw here would leave the page showing animals the
     // shared world was never opened for. The stage follows the draw rather
     // than the slider, so a roster too small for the chosen count draws every
-    // animal it has and no empty pane.
+    // animal it has and no empty pane. The npcs draw from what the panes left,
+    // out of a roster grown to hold everyone, so no animal is ever both.
+    const npcCount = chosenNpcCount();
     cast = window.tmctMud.pickMudRoster(roster, { count: chosenPlayerCount() });
+    const pool = window.tmctMud.expandMudRoster(roster, cast.length + npcCount)
+      .filter(function (id) { return cast.indexOf(id) === -1; });
+    npcs = window.tmctMud.pickMudRoster(pool, { count: npcCount });
     slots = DATA.paneSlots.slice(0, cast.length);
     showPlayerCount(cast.length);
+    showNpcCount(npcs.length);
     renderStage();
-    const opened = await window.tmctMud.createMudSession(DATA.worldPayload, { characters: cast });
+    const opened = await window.tmctMud.createMudSession(DATA.worldPayload, { characters: everyone() });
     if (seq !== bootSeq) return;
     session = opened;
-    for (let i = 0; i < cast.length; i += 1) {
-      turnsTaken[cast[i]] = 0;
-      slotOf[cast[i]] = slots[i];
-    }
+    for (let i = 0; i < cast.length; i += 1) slotOf[cast[i]] = slots[i];
     bindPanes();
     for (const character of cast) {
       const w = paneIdFor(character);
       el(w + "-play").disabled = false;
       el(w + "-step").disabled = false;
       el(w + "-chatq").disabled = false;
+    }
+    for (const character of everyone()) {
+      turnsTaken[character] = 0;
       ensureTicker(character);
     }
-    renderAll();
+    renderSoon();
   }
 
   wireDeck();
