@@ -70,6 +70,17 @@ both page integrations existing. The mud/adventure/chat sprite-detail-pop + copy
 on this batch's own three page-owning agents. mud.html's own theme pass (see below) also waits on the
 two mud.html agents currently in flight, same reason.
 
+**Alternate-scenario dropdowns, mud.html and adventure.html (operator-specified 2026-07-29, explicitly
+sequenced after both):** a dropdown next to RESET on each page to load one of several alternate world
+scenarios (different sizes/complexity/aspects — not just the one default world each page ships today);
+EDIT mode then edits whichever scenario is currently loaded. mud.html's own EDIT-mode + externalization
+pass is done (merged `4aa4c63e`) — that half of the prerequisite is met. adventure.html's is NOT: its
+audit (same merge, see the six-item "adventure.html-side sweep" above) found real externalization
+candidates (`roomAffordances`' hardcoded verb menu, `VIEW_EXCLUDED_PREDICATES`, wrong win-condition
+wording, hardcoded `"player"` in `adventure-viz.mjs`, `isCastMember`'s heuristic, the closed verb
+if-chain) but fixed none of them — that's still open, not yet dispatched as its own pass. Dispatch the
+scenario dropdowns once both sides are actually done, not just audited.
+
 **Per-page thematic direction, operator-specified 2026-07-29** (relayed to the relevant in-flight
 agents already, except mud.html's — dispatch that as its own follow-up once the NPC-slider and
 EDIT-mode agents land): adventure.html → Agatha Christie (English country-house mystery — fits the
