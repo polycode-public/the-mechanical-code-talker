@@ -2,9 +2,9 @@
   "version": 1,
   "generated": "by scripts/build-worlds-pack.mjs from corpus/worlds/src/",
   "counts": {
-    "worlds": 2,
-    "facts": 575,
-    "rules": 19
+    "worlds": 3,
+    "facts": 603,
+    "rules": 40
   },
   "budgets": {
     "sourceBytesPerWorld": 131072,
@@ -18,6 +18,11 @@
       "sha256": "18e58700a59ae3876dd4f949ede7fa17e19f3a8c2dc8ae4644dbddf98c138524"
     },
     {
+      "file": "src/mud-garden.jsonl",
+      "bytes": 6334,
+      "sha256": "91e341834bb835d9aa36d0308930388e57ae0183cd0ebe11e6a6e55c309dd05e"
+    },
+    {
       "file": "src/spider-fly.jsonl",
       "bytes": 53693,
       "sha256": "879c45652d0636c27f937e809e9883d0039b20fdc11032ac2040894d08c6a0a4"
@@ -26,13 +31,18 @@
   "files": [
     {
       "file": "index.json.gz",
-      "bytes": 63,
-      "sha256": "507cce433933fcd95c19e6616985006d247f8cb448b3b8a6c9136c9c859e0c08"
+      "bytes": 80,
+      "sha256": "7778b3a2652c20a9c12176ccdba95953eb271b99d1218e20898be17ed0317a71"
     },
     {
       "file": "shards/ashcombe-hall.jsonl.gz",
       "bytes": 1292,
       "sha256": "a8e61a93ebf992a8b87221c5a9a9f53bf92b7798cee86fb9d6915a1844d960dd"
+    },
+    {
+      "file": "shards/mud-garden.jsonl.gz",
+      "bytes": 788,
+      "sha256": "6b42755d680371b7b197139b36a94350af820caea5fd9fc0f733b281baeb6285"
     },
     {
       "file": "shards/spider-fly.jsonl.gz",

@@ -183,7 +183,12 @@ const PLACEMENT_PREDICATES = new Set([
 // which surface a thing rests against.
 const POSITION_PREDICATES = new Set(["mgx:on-top-of", "mgx:on-plane", "mgx:under"]);
 const OPEN_PREDICATE = "mgx:is-open";
+const MASS_PREDICATE = "mgx:hasMass";
 const EXIT_PREDICATE_RE = /^mgx:has-exit-([a-z]+)$/;
+// Where an eaten thing is placed. The world has no other way to say "out of
+// play", and no room can be called this, so the sentinel is the whole
+// convention: the readers below skip it exactly as they skip a hiding place.
+const CONSUMED_PLACE = "eaten";
 
 /** The rows a live world's STATE fold may see: those the world itself wrote
  *  (provenance empty, or `world:*` — the loaded shard and its @turn
@@ -201,12 +206,13 @@ export function worldActionRows(rows) {
 
 /** Fold fact rows into the CURRENT world state: per subject, the newest
  *  placement (base row = turn 0, @turnN snapshots override), the newest
- *  open/closed state, the exit map, and the turn counter (the largest @turnN
- *  suffix written so far — derived, never stored). Pure. */
+ *  open/closed state, the newest mass, the exit map, and the turn counter (the
+ *  largest @turnN suffix written so far — derived, never stored). Pure. */
 export function foldWorldState(factRows) {
   const placements = new Map(); // subject -> { predicate, object, turn }
   const positions = new Map();  // subject -> { predicate, object, turn }
   const openness = new Map();   // subject -> { open, turn }
+  const masses = new Map();     // subject -> { value, turn }
   const exits = new Map();      // room -> Map(direction -> room)
   let turnCount = 0;
   for (const row of factRows || []) {
@@ -229,13 +235,20 @@ export function foldWorldState(factRows) {
       if (!prior || turn >= prior.turn) openness.set(base, { open: row.object === "true", turn });
       continue;
     }
+    if (row.predicate === MASS_PREDICATE) {
+      const value = Number(row.object);
+      if (!Number.isFinite(value)) continue; // masses hold numbers; an unparsable one is no mass at all
+      const prior = masses.get(base);
+      if (!prior || turn >= prior.turn) masses.set(base, { value, turn });
+      continue;
+    }
     const exit = EXIT_PREDICATE_RE.exec(row.predicate);
     if (exit && !m) {
       if (!exits.has(row.subject)) exits.set(row.subject, new Map());
       exits.get(row.subject).set(exit[1], row.object);
     }
   }
-  return { placements, positions, openness, exits, turnCount };
+  return { placements, positions, openness, masses, exits, turnCount };
 }
 
 /** A subject's CURRENT within-room position, or null. A position goes stale
@@ -305,15 +318,17 @@ function visibleRoomOf(thing, { rows, state }) {
   if (!place || place.predicate === "mgx:hidden-in") return null;
   if (place.predicate === "mgx:currently-in" || isTyped(rows, place.object, "room")) return place.object;
   const holder = place.object;
-  if (holder === "player") return null; // carried, not on show in a room
+  // A non-container holder is a character carrying the thing, whoever they
+  // are — carried, so not on show in the room they stand in.
+  if (!isContainer(rows, holder)) return null;
   if (!state.openness.get(holder)?.open) return null;
   const holderPlace = state.placements.get(holder);
   return holderPlace && holderPlace.predicate !== "mgx:hidden-in" ? holderPlace.object : null;
 }
 
-const carriedByPlayer = (state, thing) => {
+const carriedBy = (state, thing, holder) => {
   const place = state.placements.get(thing);
-  return !!place && place.predicate === "mgx:located-in" && place.object === "player";
+  return !!place && place.predicate === "mgx:located-in" && place.object === holder;
 };
 
 /** True when `object` is never a real placed game entity (no entry in
@@ -337,13 +352,13 @@ function backgroundOnlyMention(rows, state, object) {
  *  would then refuse. A locked container offers "unlock", never "open" (that
  *  would only decline); an already-open one offers neither, since there is
  *  nothing left for either verb to do. Pure. */
-export function roomAffordances(rows, state, here) {
+export function roomAffordances(rows, state, here, actingSubject = "player") {
   const actions = [];
   for (const direction of state.exits.get(here)?.keys() ?? []) {
     actions.push(`go ${direction}`);
   }
   for (const subject of [...state.placements.keys()].sort()) {
-    if (subject === "player") continue;
+    if (subject === actingSubject) continue;
     if (visibleRoomOf(subject, { rows, state }) !== here) continue;
     const place = state.placements.get(subject);
     const container = isContainer(rows, subject);
@@ -448,6 +463,9 @@ async function writeWorldTurn(memoryDir, world, k, facts, cache) {
 
 const VIEW_EXCLUDED_PREDICATES = new Set([
   "mgx:hidden-in", "mgx:is-open", "mgx:is-npc", "mgx:is-container",
+  // A bare number reads as an untranslated triple in room prose ("Mole-1
+  // mgx:hasMass 8"). Mass reaches a player through the verbs that change it.
+  MASS_PREDICATE,
   "mgx:unlocks-with", "mgx:acts-on-turn", "mgx:acts-toward",
   // is-objective is an internal marker for auto-play's goal inference — the
   // same information the opening narration already tells a human player in
@@ -497,7 +515,7 @@ function isNonWorldSourced(row) {
  *  subjects so the pipeline's sentence splitter sees real sentences. Room text
  *  is world-sourced only — a merged corpus's overlap on a room's own vocabulary
  *  never leaks into the description. Pure. */
-export function worldDigestRows(rows, state) {
+export function worldDigestRows(rows, state, actingSubject = "player") {
   const out = [];
   const seen = new Set();
   const push = (subject, phrase, object) => {
@@ -506,13 +524,19 @@ export function worldDigestRows(rows, state) {
     seen.add(key);
     out.push({ subject: sentenceCase(subject), predicate: phrase, object });
   };
+  // Whoever holds a located-in thing is carrying it rather than housing it,
+  // and the cast are exactly the individuals the world places with
+  // currently-in — props ride located-in/fixed-in/stands-locked-in, rooms are
+  // never placed at all.
+  const isCarryingCharacter = (holder) =>
+    isTyped(rows, holder, "person") || state.placements.get(holder)?.predicate === "mgx:currently-in";
   for (const [subject, place] of state.placements) {
-    if (place.predicate === "mgx:hidden-in") continue;
-    if (place.predicate === "mgx:located-in" && place.object === "player") {
-      push("player", "carries the", subject);
+    if (place.predicate === "mgx:hidden-in" || place.object === CONSUMED_PLACE) continue;
+    if (place.predicate === "mgx:located-in" && place.object === actingSubject) {
+      push(actingSubject, "carries the", subject);
       continue;
     }
-    if (place.predicate === "mgx:located-in" && isTyped(rows, place.object, "person")) {
+    if (place.predicate === "mgx:located-in" && isCarryingCharacter(place.object)) {
       push(place.object, "carries the", subject);
       continue;
     }
@@ -530,14 +554,18 @@ export function worldDigestRows(rows, state) {
   // already assumes, so it is left unsaid.
   const POSITION_PHRASE = { "mgx:on-top-of": "is on the", "mgx:on-plane": "is on the", "mgx:under": "is under the" };
   for (const [subject, place] of state.placements) {
-    if (place.predicate === "mgx:hidden-in" || place.object === "player") continue;
+    if (place.predicate === "mgx:hidden-in" || place.object === actingSubject || place.object === CONSUMED_PLACE) continue;
     const pos = currentPosition(state, subject);
     if (pos && POSITION_PHRASE[pos.predicate]) { push(subject, POSITION_PHRASE[pos.predicate], pos.object); continue; }
     const plane = classDefaultPlane(rows, subject);
     if (plane && plane !== "floor") push(subject, "is usually on the", plane);
   }
+  const consumed = new Set([...state.placements]
+    .filter(([, place]) => place.object === CONSUMED_PLACE)
+    .map(([subject]) => subject));
   for (const row of rows || []) {
     if (SNAPSHOT_RE.test(row.subject)) continue;                 // folded above
+    if (consumed.has(row.subject)) continue;                     // eaten, so out of the world entirely
     // Room text comes from the world source only. A merged corpus overlaps a
     // room's own vocabulary ("library rdfs:subClassOf literary study"), and
     // without this those rows leak into the room description as stray sentences.
@@ -564,9 +592,9 @@ export function worldDigestRows(rows, state) {
  *  the class hierarchy renders that as its own is-a chain instead. A carried
  *  object surfaces through the "carries the" line the digest already produces.
  *  Pure. */
-export function objectLookProperties(rows, state, object) {
+export function objectLookProperties(rows, state, object, actingSubject = "player") {
   const subjectCased = sentenceCase(object);
-  return worldDigestRows(rows, state)
+  return worldDigestRows(rows, state, actingSubject)
     .filter((r) => (r.subject === subjectCased && r.predicate !== "is a" && r.predicate !== "is an")
       || (r.predicate === "carries the" && r.object === object))
     .map((r) => `${r.subject} ${r.predicate} ${r.object}.`);
@@ -595,8 +623,8 @@ export function objectClassChain(rows, object) {
   return chain;
 }
 
-async function worldDigest(prompt, { memoryDir, memory, rows, state, graph }) {
-  const view = worldDigestRows(rows, state);
+async function worldDigest(prompt, { memoryDir, memory, rows, state, graph, actingSubject = "player" }) {
+  const view = worldDigestRows(rows, state, actingSubject);
   const store = {
     ...COMPLETIONS_STORE,
     readFactRows: () => view,
@@ -625,6 +653,51 @@ async function worldDigest(prompt, { memoryDir, memory, rows, state, graph }) {
 const answer = (text, note, { goal, miss = false } = {}) => ({
   text, note, lane: "game-answer", miss, ...(goal ? { goal } : {}),
 });
+
+// A dug room needs the way back written too, and the exit vocabulary is only
+// ever a direction word in a predicate name, so the pairing lives here.
+const OPPOSITE_DIRECTION = new Map([
+  ["north", "south"], ["south", "north"],
+  ["east", "west"], ["west", "east"],
+  ["up", "down"], ["down", "up"],
+]);
+
+// What a freshly dug room holds. The pool is placeholder scenery so a new room
+// is never bare; a later workstream swaps it for the garden's real food
+// content, which this module has no business naming.
+const DIG_SPAWN_KINDS = ["root", "beetle", "worm"];
+const DIG_SPAWN_MIN = 0;
+const DIG_SPAWN_MAX = 2;
+
+const FOOD_CLASS = "food";
+// A shared reference mass standing in for per-species maxima until the game
+// config carries them, and what an eaten thing is worth when the world wrote
+// it no mass of its own.
+const ASSUMED_FULL_MASS = 20;
+const HUNGRY_FRACTION = 0.5;
+const DEFAULT_FOOD_MASS = 1;
+
+/** A stable small number for a string, so the same dig always opens the same
+ *  room: this world writes no randomness anywhere, and a re-run that differed
+ *  would make the fold's own history unreproducible. Pure. */
+function stableIndex(seed, span) {
+  let h = 0;
+  for (const ch of String(seed)) h = (h * 31 + ch.codePointAt(0)) % 100003;
+  return h % span;
+}
+
+/** An unused id for a newly dug room, reading as the room it was dug from
+ *  plus the direction ("garden-down"). A collision takes a numeric suffix, so
+ *  digging never renames or overwrites a room that already stands. Pure. */
+function freshRoomId(rows, here, direction) {
+  const base = `${here}-${direction}`;
+  const taken = (id) => (rows || []).some((r) => r.subject === id || r.object === id);
+  if (!taken(base)) return base;
+  for (let n = 2; n <= (rows || []).length + 2; n += 1) {
+    if (!taken(`${base}-${n}`)) return `${base}-${n}`;
+  }
+  return `${base}-${(rows || []).length + 3}`;
+}
 
 /** A container's open/locked status, stated plainly, and (only once already
  *  open) its visible contents — the one thing examine/talk's reused
@@ -687,11 +760,11 @@ export function personKnowledgeLines(rows, state, person) {
 /** What a person can report from where they stand this turn — derived each
  *  turn, never stored: who and what shares their room, each container's
  *  open/locked status, and what unlocks a locked one there. Pure. */
-export function personRoomReport(rows, state, person) {
+export function personRoomReport(rows, state, person, actingSubject = "player") {
   const room = state.placements.get(person)?.object ?? null;
   if (!room) return "";
   const here = [...state.placements.keys()]
-    .filter((s) => s !== person && s !== "player" && visibleRoomOf(s, { rows, state }) === room)
+    .filter((s) => s !== person && s !== actingSubject && visibleRoomOf(s, { rows, state }) === room)
     .sort();
   const parts = [];
   if (here.length) parts.push(`here in the ${room}: the ${here.join(", the ")}.`);
@@ -706,11 +779,11 @@ export function personRoomReport(rows, state, person) {
   return parts.join(" ");
 }
 
-async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
+export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache, actingSubject = "player" }) {
   const memory = await loadMemory(memoryDir);
   const rows = readFactRows(memory);
   const state = foldWorldState(worldActionRows(rows));
-  const here = state.placements.get("player")?.object ?? null;
+  const here = state.placements.get(actingSubject)?.object ?? null;
   const noteFor = (detail) => `ADVENTURE — ${detail}`;
 
   if (cmd.residue?.length) {
@@ -729,8 +802,8 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
   }
 
   if (cmd.verb === "look" && !cmd.object) {
-    const digest = await worldDigest(here, { memoryDir, memory, rows, state, graph });
-    const actions = roomAffordances(rows, state, here);
+    const digest = await worldDigest(here, { memoryDir, memory, rows, state, graph, actingSubject });
+    const actions = roomAffordances(rows, state, here, actingSubject);
     return answer(
       `${digest ?? `you are in the ${here}. Nothing more about it is written down yet.`}${affordanceSuffix(actions)}`,
       noteFor(`look — an extractive completions digest over the current world facts mentioning "${here}"; appended the room's roomAffordances action list`),
@@ -744,7 +817,7 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     // null for anything held by the player) — examine and look still apply to
     // it, the same way "what am I carrying" already reads inventory contents.
     // talk has no carried exception: NPCs are never portable.
-    const carried = (cmd.verb === "examine" || cmd.verb === "look") && carriedByPlayer(state, object);
+    const carried = (cmd.verb === "examine" || cmd.verb === "look") && carriedBy(state, object, actingSubject);
     // The room the player is standing in is never the SUBJECT of a placement
     // fact (only ever the OBJECT other things are placed in), so
     // visibleRoomOf(object) can never equal `here` for a room's own name —
@@ -786,7 +859,7 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     // placed facts of its own, so it falls through to the examine digest below
     // (the same general-knowledge answer "what is a flower" gives).
     if (cmd.verb === "look" && !backgroundOnlyMention(rows, state, object)) {
-      const propLines = objectLookProperties(rows, state, object);
+      const propLines = objectLookProperties(rows, state, object, actingSubject);
       const chain = objectClassChain(rows, object);
       const parts = [`you look closely at the ${object}.`];
       if (propLines.length) parts.push(propLines.join(" "));
@@ -805,10 +878,10 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
       const { lines, aboutTopics } = personKnowledgeLines(rows, state, object);
       const aboutLines = [];
       for (const topic of aboutTopics) {
-        const digested = await worldDigest(topic, { memoryDir, memory, rows, state, graph });
+        const digested = await worldDigest(topic, { memoryDir, memory, rows, state, graph, actingSubject });
         if (digested) aboutLines.push(digested);
       }
-      const report = personRoomReport(rows, state, object);
+      const report = personRoomReport(rows, state, object, actingSubject);
       const said = [...lines, ...aboutLines, report].filter(Boolean).join(" ");
       return answer(
         said ? `the ${object} says: ${said}` : `the ${object} has nothing to tell you right now.`,
@@ -816,7 +889,7 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
         { goal: `talk to the ${object}` },
       );
     }
-    const digest = await worldDigest(object, { memoryDir, memory, rows, state, graph });
+    const digest = await worldDigest(object, { memoryDir, memory, rows, state, graph, actingSubject });
     const body = digest ?? `nothing more about the ${object} is written down yet.`;
     const containerNote = !person && isContainer(rows, object) ? ` ${containerStatusPhrase(object, { state })}` : "";
     // Framing follows the VERB the player typed, not the object's type: talking
@@ -858,8 +931,8 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     const freshMemory = await loadMemory(memoryDir);
     const freshRows = readFactRows(freshMemory);
     const freshState = foldWorldState(worldActionRows(freshRows));
-    const relookDigest = await worldDigest(playerRoomAfter, { memoryDir, memory: freshMemory, rows: freshRows, state: freshState, graph });
-    const actions = roomAffordances(freshRows, freshState, playerRoomAfter);
+    const relookDigest = await worldDigest(playerRoomAfter, { memoryDir, memory: freshMemory, rows: freshRows, state: freshState, graph, actingSubject });
+    const actions = roomAffordances(freshRows, freshState, playerRoomAfter, actingSubject);
     const relook = `you are in the ${playerRoomAfter}. ${relookDigest ?? "Nothing more about it is written down yet."}${affordanceSuffix(actions)}`;
     return answer(
       `${text2} ${relook}`,
@@ -880,9 +953,9 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
       );
     }
     return commit(
-      [{ subject: `player@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:currently-in", object: target }],
+      [{ subject: `${actingSubject}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:currently-in", object: target }],
       `you go ${cmd.direction}. Now in the ${target}.`,
-      `go — the taught "go" family fired; player moves ${here} -> ${target}`,
+      `go — the taught "go" family fired; ${actingSubject} moves ${here} -> ${target}`,
       `move through the world (now in the ${target})`,
       target,
     );
@@ -892,7 +965,7 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
     if (isTyped(rows, object, "room")) {
       return answer(`you can't take the ${object} — it's a whole room.`, noteFor("take — the object is a room; declined"), { miss: true });
     }
-    if (carriedByPlayer(state, object)) {
+    if (carriedBy(state, object, actingSubject)) {
       return answer(`you're already carrying the ${object}.`, noteFor("take — already carried; declined"), { miss: true });
     }
     if (place && (place.predicate === "mgx:fixed-in" || place.predicate === "mgx:stands-locked-in") && place.object === here) {
@@ -916,7 +989,7 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
       return answer(`I don't see a ${object} here.`, noteFor(`take — ${object} isn't visible in the ${here}; declined, hidden things stay hidden`), { miss: true });
     }
     return commit(
-      [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: "player" }],
+      [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: actingSubject }],
       `you take the ${object}.`,
       `take — the taught "take" family fired; ${object} is now carried`,
       `carry the ${object}`,
@@ -924,7 +997,7 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
   }
 
   if (cmd.verb === "drop" || cmd.verb === "give") {
-    if (!carriedByPlayer(state, object)) {
+    if (!carriedBy(state, object, actingSubject)) {
       return answer(`you're not carrying the ${object}.`, noteFor(`${cmd.verb} — ${object} isn't carried; precondition declined by name`), { miss: true });
     }
     if (cmd.verb === "drop") {
@@ -944,6 +1017,119 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
       `you give the ${object} to the ${receiver}.`,
       `give — the taught "give" family fired; the ${receiver} holds the ${object}`,
       `hand the ${object} over`,
+    );
+  }
+
+  if (cmd.verb === "dig") {
+    const direction = cmd.direction;
+    if (state.exits.get(here)?.get(direction)) {
+      return answer(
+        `there's already an exit ${direction} from the ${here}.`,
+        noteFor(`dig — an mgx:has-exit-${direction} fact already stands on ${here}; declined, a dig never overwrites an exit`),
+        { miss: true },
+      );
+    }
+    const back = OPPOSITE_DIRECTION.get(direction);
+    if (!back) {
+      return answer(
+        `I don't know which way back a ${direction} tunnel would run.`,
+        noteFor(`dig — "${direction}" has no opposite to write the return exit with; declined by name`),
+        { miss: true },
+      );
+    }
+    const dug = freshRoomId(rows, here, direction);
+    const spawnCount = DIG_SPAWN_MIN + stableIndex(dug, DIG_SPAWN_MAX - DIG_SPAWN_MIN + 1);
+    const spawned = DIG_SPAWN_KINDS.slice(0, spawnCount).map((kind) => `${kind}-${dug}`);
+    return commit(
+      [
+        { subject: dug, predicate: "rdf:type", object: "room" },
+        { subject: here, predicate: `mgx:has-exit-${direction}`, object: dug },
+        { subject: dug, predicate: `mgx:has-exit-${back}`, object: here },
+        ...spawned.flatMap((thing) => ([
+          { subject: thing, predicate: "rdf:type", object: "portable" },
+          { subject: thing, predicate: "mgx:located-in", object: dug },
+        ])),
+      ],
+      spawned.length
+        ? `you dig ${direction} and open up a new room. In the loose earth: the ${spawned.join(", the ")}.`
+        : `you dig ${direction} and open up a new room. There's nothing in it but bare earth.`,
+      `dig — minted the room ${dug} with exits both ways (${direction} out, ${back} back)${spawned.length ? `, and ${spawned.length} object(s) in it` : ""}; digging spends the turn, so the digger stays in the ${here}`,
+      `dig ${direction} out of the ${here}`,
+    );
+  }
+
+  if (cmd.verb === "eat") {
+    const present = visibleRoomOf(object, { rows, state }) === here || carriedBy(state, object, actingSubject);
+    if (!present) {
+      return answer(
+        `I don't see a ${object} here.`,
+        noteFor(`eat — ${object} is neither visible in the ${here} nor carried; declined`),
+        { miss: true },
+      );
+    }
+    if (!objectClassChain(rows, object).includes(FOOD_CLASS)) {
+      return answer(
+        `the ${object} isn't food.`,
+        noteFor(`eat — ${object}'s rdf:type/rdfs:subClassOf chain never reaches "${FOOD_CLASS}"; declined by name`),
+        { miss: true },
+      );
+    }
+    const eaterMass = state.masses.get(actingSubject)?.value ?? null;
+    if (eaterMass !== null && eaterMass >= ASSUMED_FULL_MASS * HUNGRY_FRACTION) {
+      return answer(
+        `you're too full to eat the ${object}.`,
+        noteFor(`eat — ${actingSubject} weighs ${eaterMass}, at or over half of ${ASSUMED_FULL_MASS}; declined by name`),
+        { miss: true },
+      );
+    }
+    const gained = state.masses.get(object)?.value ?? DEFAULT_FOOD_MASS;
+    const grown = Math.round(((eaterMass ?? 0) + gained) * 100) / 100;
+    return commit(
+      [
+        { subject: `${actingSubject}@turn${k}`, predicate: MASS_PREDICATE, object: String(grown) },
+        { subject: `${object}@turn${k}`, predicate: "mgx:located-in", object: CONSUMED_PLACE },
+      ],
+      `you eat the ${object}. It adds ${gained} to your mass, so you weigh ${grown} now.`,
+      `eat — the ${object}'s ${gained} mass moves onto ${actingSubject} (now ${grown}) and the ${object} leaves the world`,
+      `eat the ${object}`,
+    );
+  }
+
+  if (cmd.verb === "put") {
+    const container = cmd.indirectObject;
+    if (!carriedBy(state, object, actingSubject)) {
+      return answer(
+        `you're not carrying the ${object}.`,
+        noteFor(`put — ${object} isn't carried; precondition declined by name`),
+        { miss: true },
+      );
+    }
+    if (visibleRoomOf(container, { rows, state }) !== here) {
+      return answer(
+        `I don't see a ${container} here.`,
+        noteFor(`put — ${container} isn't visible in the ${here}; declined`),
+        { miss: true },
+      );
+    }
+    if (!isContainer(rows, container)) {
+      return answer(
+        `the ${container} doesn't hold things.`,
+        noteFor(`put — no mgx:is-container fact on ${container}; declined by name`),
+        { miss: true },
+      );
+    }
+    if (!state.openness.get(container)?.open) {
+      return answer(
+        `the ${container} is closed.`,
+        noteFor(`put — the ${container} isn't open; precondition declined by name`),
+        { miss: true },
+      );
+    }
+    return commit(
+      [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: container }],
+      `you put the ${object} in the ${container}.`,
+      `put — the taught "put" family fired; the ${object} now sits in the ${container}`,
+      `put the ${object} in the ${container}`,
     );
   }
 
@@ -981,14 +1167,14 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
       );
     }
     const factState = containerDatatypeState(state, object);
-    const failed = taughtAction.preconds.find((p) => !precondHolds(p, "player", object, factState, domain));
+    const failed = taughtAction.preconds.find((p) => !precondHolds(p, actingSubject, object, factState, domain));
     if (failed) {
       const text = failed.predicate === "mgx:stands-locked-in"
         ? `the ${object} is locked.`
         : cmd.verb === "open" ? `the ${object} is already open.` : `the ${object} isn't open.`;
       return answer(text, noteFor(`${cmd.verb} — the taught "${cmd.verb}" family's ${failed.predicate} precondition declined by name`), { miss: true });
     }
-    const effSubject = roleBinding(effect.subjectRole, "player", object, domain);
+    const effSubject = roleBinding(effect.subjectRole, actingSubject, object, domain);
     const writeIsOpen = { subject: `${effSubject}@turn${k}`, predicate: effect.predicate, object: effect.value };
 
     if (cmd.verb === "open") {
@@ -1035,7 +1221,7 @@ async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache }) {
       { miss: true },
     );
   }
-  if (!carriedByPlayer(state, cmd.instrument)) {
+  if (!carriedBy(state, cmd.instrument, actingSubject)) {
     return answer(
       `you're not carrying the ${cmd.instrument}.`,
       noteFor(`unlock — the ${cmd.instrument} isn't carried; precondition declined by name`),
@@ -1076,7 +1262,7 @@ const WORLD_IS_OPEN_RE = /^is\s+(?:the\s+|a\s+|an\s+)?(.+?)\s+(open|closed|shut)
  *  when the asked thing has no placement in the world, so an ordinary
  *  locative question (a code symbol, a taught board piece) keeps its lane. A
  *  hidden thing is declined without naming its hiding place. */
-async function worldWhereAnswer(line, { memoryDir }) {
+async function worldWhereAnswer(line, { memoryDir, actingSubject = "player" }) {
   const m = String(line).match(WORLD_WHERE_RE);
   if (!m) return null;
   const thing = normFactTerm(m[1]);
@@ -1092,14 +1278,21 @@ async function worldWhereAnswer(line, { memoryDir }) {
       { miss: true, goal: `locate the ${thing}` },
     );
   }
-  if (thing === "player") {
+  if (place.object === CONSUMED_PLACE) {
+    return answer(
+      `the ${thing} has been eaten — it's gone from the world.`,
+      `ADVENTURE — where-aside: ${thing} was eaten, so it has no place left to name`,
+      { goal: `locate the ${thing}` },
+    );
+  }
+  if (thing === actingSubject) {
     return answer(
       `you are in the ${place.object}.`,
       "ADVENTURE — where-aside: the player's own room, from the current world fold",
       { goal: "check where you are" },
     );
   }
-  if (place.object === "player") {
+  if (place.object === actingSubject) {
     return answer(
       `you are carrying the ${thing}.`,
       `ADVENTURE — where-aside: ${thing} is carried, from the current world fold`,
@@ -1147,7 +1340,7 @@ const WORLD_QUEST_RE = /^(?:what(?:'s|\s+is)\s+(?:the\s+|my\s+)?(?:quest|goal|ob
 /** The in-game orientation asides, answered from the world fold: the player's
  *  room, the room's real affordances, and the world's objective. Null when the
  *  line is none of them, so an ordinary question keeps its lane. */
-async function worldContextAnswer(line, { memoryDir }) {
+async function worldContextAnswer(line, { memoryDir, actingSubject = "player" }) {
   const l = String(line).trim();
   const asksWhere = WORLD_WHERE_AM_I_RE.test(l);
   const asksOptions = WORLD_OPTIONS_RE.test(l);
@@ -1156,7 +1349,7 @@ async function worldContextAnswer(line, { memoryDir }) {
   let rows;
   try { rows = readFactRows(await loadMemory(memoryDir)); } catch { return null; }
   const state = foldWorldState(worldActionRows(rows));
-  const here = state.placements.get("player")?.object ?? null;
+  const here = state.placements.get(actingSubject)?.object ?? null;
 
   if (asksWhere) {
     return here
@@ -1165,7 +1358,7 @@ async function worldContextAnswer(line, { memoryDir }) {
   }
 
   if (asksOptions) {
-    const actions = here ? roomAffordances(rows, state, here) : [];
+    const actions = here ? roomAffordances(rows, state, here, actingSubject) : [];
     return answer(
       actions.length ? `you can: ${actions.join(", ")}.` : `nothing obvious here — say "look" to look around${here ? ` the ${here}` : ""}.`,
       `ADVENTURE — options aside: the ${here}'s roomAffordances, the same list "look" appends`,
@@ -1187,12 +1380,12 @@ async function worldContextAnswer(line, { memoryDir }) {
       );
 }
 
-async function inventoryAnswer({ memoryDir, graph }) {
+async function inventoryAnswer({ memoryDir, graph, actingSubject = "player" }) {
   const memory = await loadMemory(memoryDir);
   const rows = readFactRows(memory);
   const state = foldWorldState(worldActionRows(rows));
   const carried = [...state.placements]
-    .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === "player")
+    .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === actingSubject)
     .map(([thing]) => thing)
     .sort();
   if (!carried.length) {
@@ -1202,7 +1395,7 @@ async function inventoryAnswer({ memoryDir, graph }) {
       { goal: "check what you carry" },
     );
   }
-  const digest = await worldDigest("player", { memoryDir, memory, rows, state, graph });
+  const digest = await worldDigest(actingSubject, { memoryDir, memory, rows, state, graph, actingSubject });
   return answer(
     digest ?? `you are carrying the ${carried.join(", the ")}.`,
     "ADVENTURE — inventory: an extractive completions digest over the facts mentioning the player",
@@ -1246,14 +1439,14 @@ const commandHasPronoun = (cmd) => PRONOUN_SLOTS.some((s) => cmd[s] && OBJECT_PR
  *  real, actionable object from the current room when one is on show (else a
  *  static example). Never the "I don't know the word" line — the vocabulary
  *  misdiagnosis is unreachable for a pronoun. */
-async function noFocusPronounNudge(pronoun, { memoryDir }) {
+async function noFocusPronounNudge(pronoun, { memoryDir, actingSubject = "player" }) {
   let example = null;
   try {
     const rows = readFactRows(await loadMemory(memoryDir));
     const state = foldWorldState(worldActionRows(rows));
-    const here = state.placements.get("player")?.object ?? null;
+    const here = state.placements.get(actingSubject)?.object ?? null;
     if (here) {
-      for (const action of roomAffordances(rows, state, here)) {
+      for (const action of roomAffordances(rows, state, here, actingSubject)) {
         const m = action.match(/^(?:examine|take|open|unlock|talk to) (.+)$/);
         if (m) { example = m[1]; break; }
       }
@@ -1274,14 +1467,15 @@ async function noFocusPronounNudge(pronoun, { memoryDir }) {
  *  passes straight through untouched. All four surface pronouns
  *  (it/them/him/her) normalize to the one `it` probe, then bind to the newest
  *  referent THIS lane registered — the record may also hold code-graph
- *  referents, so the bind is scoped to `lane: "adventure"`. */
-async function bindPronouns(cmd, { discourseHolder, memoryDir }) {
+ *  referents, so the bind is scoped to `lane: "adventure"`. The record is one
+ *  per session, so several acting subjects sharing a world share one focus. */
+async function bindPronouns(cmd, { discourseHolder, memoryDir, actingSubject = "player" }) {
   if (!commandHasPronoun(cmd)) return { cmd };
   const probe = discourseHolder ? bindDiscourseForm(discourseHolder.record, "it") : null;
   const focusTerm = (probe?.candidates || []).find((r) => r.from?.lane === "adventure")?.label ?? null;
   if (!focusTerm) {
     const pronoun = PRONOUN_SLOTS.map((s) => cmd[s]).find((v) => v && OBJECT_PRONOUNS.has(v));
-    return { nudge: await noFocusPronounNudge(pronoun, { memoryDir }) };
+    return { nudge: await noFocusPronounNudge(pronoun, { memoryDir, actingSubject }) };
   }
   const bound = { ...cmd };
   for (const s of PRONOUN_SLOTS) {
@@ -1301,7 +1495,7 @@ async function bindPronouns(cmd, { discourseHolder, memoryDir }) {
  * recognizer, injected so the two lanes can never disagree about what a plan
  * frame is.
  */
-export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "", env, lexicon = null, graph = null, cache = null, isPlanFrameLine = () => false, discourseHolder = null }) {
+export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "", env, lexicon = null, graph = null, cache = null, isPlanFrameLine = () => false, discourseHolder = null, actingSubject = "player" }) {
   const slot = planHolder?.state ?? null;
   const adventure = slot?.adventure ?? null;
   const opening = matchAdventureOpening(line);
@@ -1357,13 +1551,13 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
       note: "ADVENTURE — a plan frame arrived mid-adventure; the slot holds one thing at a time",
     };
   }
-  if (INVENTORY_RE.test(line)) return inventoryAnswer({ memoryDir, graph });
+  if (INVENTORY_RE.test(line)) return inventoryAnswer({ memoryDir, graph, actingSubject });
   const parsed = parseImperative(line, lexicon ?? undefined);
   if (parsed) {
-    const bound = await bindPronouns(parsed, { discourseHolder, memoryDir });
+    const bound = await bindPronouns(parsed, { discourseHolder, memoryDir, actingSubject });
     if (bound.nudge) return bound.nudge;
     const cmd = bound.cmd;
-    const result = await runWorldCommand(cmd, { world: adventure.world, memoryDir, env, graph, cache });
+    const result = await runWorldCommand(cmd, { world: adventure.world, memoryDir, env, graph, cache, actingSubject });
     // The object a command SUCCESSFULLY named registers as a discourse referent
     // a later pronoun binds to — so "look lamp" then "examine it" reads the
     // lamp, and "talk to housekeeper" makes "him"/"her" the housekeeper. A miss
@@ -1387,11 +1581,11 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
       note: `${result.note}; corrected ${cmd.corrected.map((c) => `"${c.from}" -> "${c.to}"`).join(", ")} before executing`,
     };
   }
-  const whereAside = await worldWhereAnswer(line, { memoryDir });
+  const whereAside = await worldWhereAnswer(line, { memoryDir, actingSubject });
   if (whereAside) return whereAside;
   const opennessAside = await worldOpennessAnswer(line, { memoryDir });
   if (opennessAside) return opennessAside;
-  const contextAside = await worldContextAnswer(line, { memoryDir });
+  const contextAside = await worldContextAnswer(line, { memoryDir, actingSubject });
   if (contextAside) return contextAside;
   return null; // a mid-game aside — the ordinary lanes answer, world untouched
 }
