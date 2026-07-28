@@ -587,26 +587,23 @@ through a hosted DynamoDB table one client at a time. This design has no server 
 all — every browser holds a full copy of the world and stays in sync by talking directly to the
 other browsers in the room.
 
-**Networking**: WebRTC DataChannels, set up via Trystero, a small ESM library that does serverless
-WebRTC matchmaking over public infrastructure already running for other purposes — BitTorrent
-trackers, Nostr relays, or MQTT brokers. That infrastructure is only ever a signaling rendezvous,
-the handshake that lets two browsers find each other and agree connection details. Once the
-DataChannel opens, game traffic goes peer to peer and never touches it again. Starting a world
-generates one UUID in the browser, on the spot, never issued or seen by any server. That UUID is
-the world's whole credential: it's the Trystero room id, and passed as `joinRoom`'s `password`, it's
-also the key that encrypts the signaling payload — a relay sees only that some handshake happened,
-never who or where, and nobody without the UUID can complete a connection at all. Alongside it, the
-page generates a human-readable name for the world by drawing a few words from its own taxonomy, the
-same lexicon that grounds every fact — a mnemonic label for the players, not a second secret. The
-shareable artifact is a URL carrying both, `mud.html?world=<uuid>&name=<generated-name>`, and sharing
-it is exactly as ordinary as sharing any other link: copy it, drop it in a message, AirDrop it,
-whatever channel two people already use. A joiner who opens the link adopts the UUID the same way
-its creator did — no separate join step, no account, nothing for the page's own hosting to know
-about. `tmct.polycode.co.uk` serves the same static files to everyone and never sees which worlds
-exist or who's in one; the server is not a party to any of this. A fully manual fallback also
-exists for when even a link can't travel: offer/answer blobs copied and pasted through any channel,
-with no room id or third party at all. It works for two peers but gets clunky past that, since each
-pair needs its own manual exchange.
+**Networking**: no rendezvous service, not even a public one. Every connection is a direct WebRTC
+offer/answer exchange between two browsers, and nothing else is involved. Starting a world generates
+one UUID in the browser, on the spot — it never touches a server; it's the stable id a browser uses
+to keep this world's triple store separate from any other one it's part of. The page also draws a
+few words from its own taxonomy, the same lexicon that grounds every fact, to give the world a
+human-readable name — a mnemonic for the players, not a credential. To invite someone, a live
+member's page creates a fresh SDP offer and encodes it into a URL alongside the world id and name:
+`mud.html?offer=<blob>&world=<uuid>&name=<generated-name>`. That link travels however the two people
+already talk: pasted into a message, AirDropped, read out over the phone, whatever's at hand. Opening
+it makes the joiner's browser generate the matching answer, which then has to travel back the same
+informal way before the connection completes. This only works while the peer being invited is
+actually online to answer — it's a phone call, not a mailbox, and a link on its own can't finish a
+connection to someone who's stepped away. Once that first DataChannel opens, joining the rest of the
+room needs no further manual exchanges: the peer who answered already knows everyone else currently
+connected and introduces the newcomer to each of them automatically over the channel that's now open.
+The archivist peer described under Persistence, below, is the natural target for invites for exactly
+this reason — it's the one member guaranteed to be there to answer.
 
 **The lexicon as ingest validator.** `mud.html`'s world vocabulary already ships in the page as a
 closed-world grammar. Free-text input gets parsed against it today, and only facts grounded in that
@@ -656,8 +653,9 @@ with `navigator.wakeLock.request('screen')`, added to the home screen as a PWA, 
 battery optimization) or a small headless Node process, joining the same room but never playing.
 Two things about this shape are worth naming as open design questions rather than solved: the
 triple set (and its retraction tombstones) only ever grows, so it eventually wants compaction or
-spatial sharding, and the world's UUID is currently its only credential — see forgery prevention,
-below, for the piece that adds real per-player identity on top.
+spatial sharding, and the world currently has no membership gate beyond someone being online to
+answer your connection offer — see forgery prevention, below, for the piece that adds real
+per-player identity on top.
 
 **Preventing forgery.** Give every player an Ed25519 keypair, generated with WebCrypto and
 persisted in IndexedDB. Sign every fact as it's created: `{triple, author: pubkey, opId, timestamp,
@@ -676,10 +674,11 @@ participants.
 **Snooping.** WebRTC DataChannels are mandatorily DTLS-encrypted on every pairwise connection, even
 when a TURN relay is needed for NAT traversal, since DTLS terminates at the two peers rather than at
 the relay. An observer on the network path, an ISP or a shared Wi-Fi network, sees only ciphertext.
-The world's UUID, passed as Trystero's `password` option (described under Networking above),
-protects the signaling handshake itself the same way. What none of this hides is traffic metadata:
-that two IP addresses talked, and when. That's a real, known limitation of this design, not a solved
-problem, and it's worth stating as such rather than glossing over it.
+There's no signaling relay left to protect, either, since the offer and answer travel directly
+between the two people through whatever channel they already use — the same channel they'd trust to
+coordinate anything else. What none of this hides is traffic metadata: that two IP addresses talked,
+and when. That's a real, known limitation of this design, not a solved problem, and it's worth
+stating as such rather than glossing over it.
 
 Finding a world to join needs no infrastructure at all: a world's UUID is generated client-side and
 never touches any server, including `tmct.polycode.co.uk`'s own hosting, so there is nothing to
