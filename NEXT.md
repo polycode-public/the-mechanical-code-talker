@@ -39,15 +39,13 @@ again for it.
   `outOfPlayReason`/`outOfPlayPhrase` (already shipped on `main`, engine side) so a starved character
   doesn't display as eaten. Touches `mud-viz.mjs`, `mud-browser-entry.mjs`, `adventure.mjs`,
   `mud-turn.mjs`, `game-config.mjs`, `adventure-viz.mjs`.
-- [ ] **`ad873437090ea0cb2`** — the temporal-trust fix: replace the point-patch (walk/dig-gamble reads
-  filtering against live ground truth) with a real latest-wins-with-trust-tiering read over
-  `mgx:knows-about`, so `personKnownFoodLines`/"what do you know about food" also stops listing food a
-  character already ate. Touches `adventure.mjs`, `mud-turn.mjs`.
-- [ ] **`a50d49b5ade5aa375`** — chat.html's P2P integration: share/join/accept flow against
+- [ ] **`ad873437090ea0cb2`** — chat.html's P2P integration: share/join/accept flow against
   `src/services/p2p-room.mjs` (already shipped on `main`), the node list panel, presence-scoped wave,
   heavy traffic-exposure panel (operator's explicit ask — "go heavy... surface all we can"), a new
   `test-e2e/pages-chat-p2p.test.mjs`. Touches `src/services/chat-page-viz.mjs`, possibly a new
-  `scripts/build-p2p-vendor.mjs`. No file overlap with the mud.html agents.
+  `scripts/build-p2p-vendor.mjs`. No file overlap with the mud.html agents. (Corrected 2026-07-29: this
+  agent id was originally mislabeled here as the temporal-trust fix — that fix is done, merged as
+  `90059401`, and its own line is removed per this doc's own "completed work is not narrated here" rule.)
 - [ ] **`afae5cf118f722f87`** — adventure.html: compare/port mud.html's compass-ring direction UI,
   confirm/fix its own sprite-fallback chain-walking, and a sprite-quality pass on adventure's own
   creature roster to match mud's new bar. Touches `adventure-viz.mjs` and adventure-specific
@@ -72,6 +70,12 @@ bucket `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PR
 
 ## Open items
 
+- [ ] the mud/adventure chat lane misroutes the exact phrasing "what food do you know about" (through
+  `runTurn`, the browser/chat path — not `adventureTurn` directly) to the recall lane, answering
+  "i learned: food is a kind of portable" instead of the real food-knowledge digest. Every other
+  phrasing works ("what do you know about food", "what food have you found", "do you know of any
+  food"), and mud.html's own vocabHint pill suggests exactly the broken one. A lane-order issue in
+  `chat.mjs`, found while building the temporal-trust fix (2026-07-29), not yet fixed.
 - [ ] a new AWS-hosted backend for the memory store — **needed for marginalia** (which is migrating
   onto tmct and needs a durable store that survives a Lambda's scale-to-zero, not a local file).
   tmct ships only `memory` (process-only) and `sqlite` (local file) today; the backend seam
