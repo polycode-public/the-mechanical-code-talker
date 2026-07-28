@@ -179,16 +179,20 @@ test("asking the character standing beside you writes what it says as your own p
     assert.ok(played.learned.includes("carrot-2"), "the turn reports what the character learned");
 
     // Being told sent the vole down the burrow after the carrot; walk it back
-    // beside the mole so the second ask has the same room-mate as the first.
+    // beside the mole so the second turn faces the same room-mate as the first.
     await appendFacts(dir, [{
       subject: "vole-1@turn30", predicate: "mgx:currently-in", object: "garden",
       provenance: `${worldProvenanceTag(WORLD)}:turn30`,
     }]);
     const again = await turn(dir, "vole-1", 31);
-    const repeat = again.actions.find((a) => a.kind === "ask");
-    assert.ok(repeat, "two animals in one room always exchange something");
-    assert.equal(repeat.thing, null, "but the same food is never told twice");
-    assert.match(repeat.text, /greets the mole-1, but hears nothing new about food/);
+    assert.equal(
+      again.actions.some((a) => a.kind === "ask"), false,
+      "a room-mate it has met and drained of food news is not worth speaking to again",
+    );
+    assert.ok(
+      stepsOf(again, "investigate").some((a) => a.kind === "none" && /already heard everything/.test(a.reason)),
+      "and the step says why it stayed quiet instead of repeating the same exchange",
+    );
     const { rows: afterRows } = await rowsAndState(dir);
     assert.equal(
       knowsAboutRows(afterRows).filter((r) => r.subject === "vole-1" && r.object === "carrot-2").length, 1,
@@ -197,7 +201,7 @@ test("asking the character standing beside you writes what it says as your own p
   });
 });
 
-test("an animal always speaks to a room-mate, and names what it did or didn't learn", async () => {
+test("an animal greets a room-mate it hasn't met, and names what it did or didn't learn", async () => {
   await withMudGarden("ask-skips", async (dir) => {
     const beside = await turn(dir, "vole-1", 1);
     const greeting = beside.actions.find((a) => a.kind === "ask");
@@ -222,6 +226,27 @@ test("an animal always speaks to a room-mate, and names what it did or didn't le
       stepsOf(alone, "investigate").some((a) => a.kind === "none" && /no other character/.test(a.reason)),
       "with nobody there, the reason is the empty room, not an empty answer",
     );
+  });
+});
+
+test("the same empty greeting never repeats, and talking resumes the moment the room-mate learns a food", async () => {
+  await withMudGarden("greet-once-then-news", async (dir) => {
+    await plantCarrotInBurrow(dir);
+
+    const met = await turn(dir, "vole-1", 1);
+    assert.ok(met.actions.some((a) => a.kind === "ask"), "the first meeting is a real exchange");
+
+    const second = await turn(dir, "vole-1", 2);
+    assert.equal(
+      second.actions.some((a) => a.kind === "ask"), false,
+      "with nothing new to hear, the pair does not trade the same greeting again",
+    );
+
+    await recordExamined(dir, { observer: "mole-1", thing: "carrot-2", k: 3 });
+    const resumed = await turn(dir, "vole-1", 4);
+    const heard = resumed.actions.find((a) => a.kind === "ask");
+    assert.ok(heard, "a room-mate that has learned a food is worth speaking to again");
+    assert.deepEqual({ teller: heard.teller, thing: heard.thing }, { teller: "mole-1", thing: "carrot-2" });
   });
 });
 
@@ -258,9 +283,10 @@ test("a character never re-examines a thing it already knows about", async () =>
       stepsOf(played, "investigate").some((a) => a.kind === "none" && /unexamined/.test(a.reason)),
     );
     const { rows } = await rowsAndState(dir);
-    assert.equal(
-      knowsAboutRows(rows).filter((r) => r.subject === "mole-1").length, 3,
-      "no duplicate knows-about row is written",
+    assert.deepEqual(
+      knowsAboutRows(rows).filter((r) => r.subject === "mole-1").map((r) => r.object).sort(),
+      ["basket", "carrot", "stone", "vole-1"],
+      "the three props keep one row each, and the only row added is the room-mate the mole greeted",
     );
   });
 });

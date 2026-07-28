@@ -257,23 +257,39 @@ export async function runMudTurn(character, { world, memoryDir, env, graph, cach
 }
 
 /** Step one: talk to a room-mate, examine something unexamined, then make one
- *  seeded attempt at take/put/eat. Talking comes first and always happens when
- *  anyone else is standing here — two animals in one room greet each other,
- *  and only what they had to SAY varies. The talk and the examine write
- *  testimony, which never folds into the playable state; only the
- *  manipulation touches the world. */
+ *  seeded attempt at take/put/eat. Talking comes first, and an animal speaks
+ *  to a room-mate it has not met yet or that has food news for it. Once a
+ *  partner has neither, this one has nothing left to say and spends the step
+ *  on the room instead — two animals that stay put would otherwise trade the
+ *  same empty greeting every turn for the rest of the run. The talk and the
+ *  examine write testimony, which never folds into the playable state; only
+ *  the manipulation touches the world. */
 async function investigateRoom({ character, turn, room, memoryDir, cache, recordSkip, runCommand, actions, notes }) {
   const { rows, state } = await readWorld(memoryDir);
   const roomMates = castIn(state, room, character);
   const alreadyKnown = knownTopics(rows, state, character);
+  const foodNewsFrom = (mate) => knownFood(rows, state, mate).filter((thing) => !alreadyKnown.has(thing));
+  const worthSpeakingTo = roomMates.filter((mate) => !alreadyKnown.has(mate) || foodNewsFrom(mate).length);
 
-  const teller = pickSeeded(roomMates, character, turn, room, "ask-who");
+  const teller = pickSeeded(worthSpeakingTo, character, turn, room, "ask-who");
   if (!teller) {
-    recordSkip("investigate", "no other character stands here to ask", "");
+    recordSkip(
+      "investigate",
+      roomMates.length
+        ? `the ${character} has already heard everything the animals standing here can tell it about food`
+        : "no other character stands here to ask",
+      "",
+    );
   } else {
-    const tellerFood = knownFood(rows, state, teller);
-    const offers = tellerFood.filter((thing) => !alreadyKnown.has(thing));
-    const told = pickSeeded(offers, character, turn, room, `ask-${teller}`);
+    const told = pickSeeded(foodNewsFrom(teller), character, turn, room, `ask-${teller}`);
+    // Speaking to an animal is how this one comes to know it, and that note is
+    // the whole escape from the loop: a pair with no news left for each other
+    // drops out of worthSpeakingTo, and drops back in the moment either side
+    // learns a food the other has not heard of.
+    if (!alreadyKnown.has(teller)) {
+      await recordExamined(memoryDir, { observer: character, thing: teller, k: turn, cache });
+      alreadyKnown.add(teller);
+    }
     if (!told) {
       // Still a real exchange, and still narrated as one: an animal that meets
       // another animal always says something. Only the testimony is missing,
@@ -282,9 +298,7 @@ async function investigateRoom({ character, turn, room, memoryDir, cache, record
         step: "investigate", kind: "ask", teller, thing: null, miss: false,
         text: `the ${character} greets the ${teller}, but hears nothing new about food.`,
       });
-      notes.push(`MUD — talk: ${character} greeted ${teller}; ${tellerFood.length
-        ? `${character} already knows every food ${teller} could name`
-        : `${teller} knows of no food to share`}`);
+      notes.push(`MUD — talk: ${character} greeted ${teller}; ${teller} knows of no food to share`);
     } else {
       await recordTold(memoryDir, { asker: character, teller, thing: told, k: turn, cache });
       alreadyKnown.add(told);
@@ -325,9 +339,15 @@ async function manipulateSomething({ character, turn, room, memoryDir, runComman
   const { rows, state } = await readWorld(memoryDir);
   const chosen = MANIPULATIONS[Math.floor(rollFor(character, turn, room, "manipulate") * MANIPULATIONS.length)];
 
-  const looseHere = [...state.placements]
-    .filter(([, place]) => place.predicate === "mgx:located-in" && place.object === room)
+  // Everything the take verb would really accept here: loose on the floor, or
+  // sitting in an open container standing in this room. Reading only the floor
+  // made putting something into the basket a one-way trip, and in a room whose
+  // only food went into the basket that left nothing to take and nothing to
+  // eat for the rest of the run.
+  const withinReach = [...state.placements]
+    .filter(([, place]) => place.predicate === "mgx:located-in")
     .map(([thing]) => thing)
+    .filter((thing) => visibleRoomOf(rows, state, thing) === room)
     .sort();
   const carried = [...state.placements]
     .filter(([, place]) => place.predicate === "mgx:located-in" && place.object === character)
@@ -335,8 +355,8 @@ async function manipulateSomething({ character, turn, room, memoryDir, runComman
     .sort();
 
   if (chosen === "take") {
-    const target = pickSeeded(looseHere, character, turn, room, "take-what");
-    if (!target) return recordSkip("investigate", "nothing loose here to take", "");
+    const target = pickSeeded(withinReach, character, turn, room, "take-what");
+    if (!target) return recordSkip("investigate", "nothing here it could pick up", "");
     return runCommand("investigate", { pattern: "imperative", verb: "take", object: target }, { object: target });
   }
 
@@ -358,7 +378,7 @@ async function manipulateSomething({ character, turn, room, memoryDir, runComman
     );
   }
 
-  const edible = [...new Set([...looseHere, ...carried])].filter((thing) => isFood(rows, thing)).sort();
+  const edible = [...new Set([...withinReach, ...carried])].filter((thing) => isFood(rows, thing)).sort();
   const target = pickSeeded(edible, character, turn, room, "eat-what");
   if (!target) return recordSkip("investigate", "no food is within reach here", "");
   return runCommand("investigate", { pattern: "imperative", verb: "eat", object: target }, { object: target });
@@ -371,13 +391,12 @@ async function rollAtEdge({ character, turn, memoryDir, runCommand, recordSkip }
   const { rows, state } = await readWorld(memoryDir);
   const room = state.placements.get(character)?.object ?? null;
   if (!room) return recordSkip("edge", "it has no position to roll from", "");
-  // The room's OWN kind decides which way a dig can go — there is nothing to
-  // tunnel sideways through above ground, and the burrow runs one level deep
-  // — so the candidate set is the dig verb's own, never a flat compass. A
-  // roll on a direction the verb would refuse spends the turn on a decline.
-  const edges = diggableDirections(rows, state, room);
-  if (!edges.length) return recordSkip("edge", `there is nowhere left to dig from the ${room}`, "");
 
+  // The exit gamble runs before the dig rolls and whether or not this room can
+  // still be dug at all. A room mapped on every side its kind allows is
+  // exactly where a character with food somewhere else has nothing left but
+  // its existing exits to gamble on, so gating it behind a diggable direction
+  // stranded animals in a finished room for the rest of the run.
   const foodItKnows = knownFood(rows, state, character);
   const foodStandsHere = foodItKnows.some((thing) => visibleRoomOf(rows, state, thing) === room);
   if (foodItKnows.length && !foodStandsHere) {
@@ -386,6 +405,13 @@ async function rollAtEdge({ character, turn, memoryDir, runCommand, recordSkip }
       return runCommand("edge", { pattern: "imperative", verb: "go", direction }, { direction, reason: "exit-toward-food" });
     }
   }
+
+  // The room's OWN kind decides which way a dig can go — there is nothing to
+  // tunnel sideways through above ground, and the burrow runs one level deep
+  // — so the candidate set is the dig verb's own, never a flat compass. A
+  // roll on a direction the verb would refuse spends the turn on a decline.
+  const edges = diggableDirections(rows, state, room);
+  if (!edges.length) return recordSkip("edge", `there is nowhere left to dig from the ${room}`, "");
 
   for (const direction of edges.filter((d) => LATERAL_DIRECTIONS.includes(d))) {
     if (rollFor(character, turn, room, `edge-follow-${direction}`) >= EDGE_FOLLOW_DIG_CHANCE) continue;
