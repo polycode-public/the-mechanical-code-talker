@@ -43,6 +43,7 @@ import { loadLexicon, thirdPerson } from "../../src/domain/grammar/lexicon.mjs";
 import { normFactTerm } from "../../src/adapters/memory/core.mjs";
 import { fnv1a32 as fnv1a } from "../../src/domain/hash.mjs";
 import { nlpAdapter } from "../../src/adapters/ask-nlp.mjs";
+import { pluralOf } from "../../src/domain/inflect.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = dirname(dirname(HERE));
@@ -82,12 +83,45 @@ const CLASS_NOUNS = Object.keys(RAW_LEXICON.nouns)
   .filter((n) => !RAW_LEXICON.nouns[n].property && !PROPER_NAME_LEMMAS.has(n))
   .sort();
 
+/** A lemma whose regular ("+s"/"-ies") plural surface form is ALSO, itself, a
+ *  separately declared lexicon noun — e.g. "board" pluralizes to "boards",
+ *  and "boards" is its own distinct dictionary entry; "cookie" and "cooky"
+ *  both pluralize to "cookies". Either way the C1 cardinality template's
+ *  `r = "exactly-N-" + n2` / `r = "max-0-" + n2` id (built from the LEMMA)
+ *  can miss what the parser actually mints for the sentence's plural surface
+ *  form, which resolves against whichever declared noun the parser's own NP
+ *  lookup prefers — not necessarily the lemma the template started from.
+ *  Found via inflect.mjs's own `pluralOf`, the same regular-inflection engine
+ *  the real-word collision table is built from — not a hand-picked word. */
+const PLURAL_COLLIDES_ACROSS_LEMMAS = (() => {
+  const classNounSet = new Set(CLASS_NOUNS);
+  const byPlural = new Map();
+  for (const n of CLASS_NOUNS) {
+    const p = pluralOf(n);
+    if (!byPlural.has(p)) byPlural.set(p, []);
+    byPlural.get(p).push(n);
+  }
+  const colliding = new Set();
+  for (const [plural, lemmas] of byPlural) {
+    // Two different lemmas share one regular plural ("cookie"/"cooky" -> "cookies").
+    if (lemmas.length > 1) for (const n of lemmas) colliding.add(n);
+    // A lemma's own regular plural is itself a separately declared noun
+    // ("board" -> "boards", and "boards" is its own dictionary entry).
+    if (classNounSet.has(plural)) for (const n of lemmas) colliding.add(n);
+  }
+  return colliding;
+})();
+
 /** The subset of CLASS_NOUNS whose plural is a plain "+s" (no -es/-ies
  *  insertion) — keeps the C1 cardinality template's surface forms legible.
  *  lookupNoun's foldCandidates would fold an irregular plural back to its
- *  lemma anyway (this is a readability filter, not a parse requirement). */
+ *  lemma anyway (this is a readability filter, not a parse requirement).
+ *  Also excludes any lemma whose plural collides with a DIFFERENT lemma's
+ *  plural (see PLURAL_COLLIDES_ACROSS_LEMMAS) — that one IS a parse
+ *  requirement, since the template's synthetic restriction-node id assumes
+ *  the surface plural re-singularizes back to the same lemma it started from. */
 const REGULAR_PLURAL_NOUNS = CLASS_NOUNS.filter(
-  (n) => !/(?:[sxz]|ch|sh)$/.test(n) && !/[^aeiou]y$/.test(n),
+  (n) => !/(?:[sxz]|ch|sh)$/.test(n) && !/[^aeiou]y$/.test(n) && !PLURAL_COLLIDES_ACROSS_LEMMAS.has(n),
 );
 
 const OBJECT_PROPERTY_NOUNS = Object.keys(RAW_LEXICON.nouns).filter((n) => RAW_LEXICON.nouns[n].property === "object");
