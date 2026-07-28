@@ -575,6 +575,134 @@ touches a network):
 7. Home-page and screenshot wiring: `index.html`'s tenth claim card + feature section,
    `gen-screenshots.mjs`'s `PAGE_ORDER` entry.
 
+## Proposed next architecture — real multi-browser worlds over WebRTC
+
+**No networking or state-sharing code exists in `mud.html` today.** Everything above this section
+runs the whole simulation inside one browser tab; nothing a visitor does ever leaves their machine.
+What follows is a proposed design for the next real step: two or more separate people, each in
+their own browser, sharing one live mud world over the network. It is design capture only. Nothing
+here is built, and this section names it as a distinct next architecture rather than a description
+of what ships. It's a different shape from Backend D, above: Backend D routes reads and writes
+through a hosted DynamoDB table one client at a time. This design has no server for game state at
+all — every browser holds a full copy of the world and stays in sync by talking directly to the
+other browsers in the room.
+
+**Networking**: WebRTC DataChannels, set up via Trystero, a small ESM library that does serverless
+WebRTC matchmaking over public infrastructure already running for other purposes — BitTorrent
+trackers, Nostr relays, or MQTT brokers. That infrastructure is only ever a signaling rendezvous,
+the handshake that lets two browsers find each other and agree connection details. Once the
+DataChannel opens, game traffic goes peer to peer and never touches it again. A "server" is just an
+agreed room name: `joinRoom({appId}, serverName)`. That name can travel as a URL param
+(`mud.html?world=name`), so joining a world is pasting a link. Passing a `password` to `joinRoom`
+encrypts the signaling payload, so the relay can't see connection details and an outsider without
+the password can't complete a connection at all — this is the design's real security boundary, not
+the room name. A shareable link becomes `?world=name&key=secret`, and a high-entropy room name (or
+one derived by hashing the name and secret together) keeps onlookers from even seeing which rooms
+exist. A fully manual fallback also exists: offer/answer blobs copied and pasted through any
+channel, including a chat app like WhatsApp, with no third party at all. It works for two peers but
+gets clunky past that, since each pair needs its own manual exchange.
+
+**The lexicon as ingest validator.** `mud.html`'s world vocabulary already ships in the page as a
+closed-world grammar. Free-text input gets parsed against it today, and only facts grounded in that
+ontology are ever accepted. A networked world reuses that same gate as the front door for shared
+state: validate before storing or broadcasting a fact, and validate again on receipt of any peer's
+fact. Re-checking on receipt is defense in depth. It means a malicious or simply buggy peer can
+never inject an ungrounded fact just by being on the wire.
+
+**Replication as a CRDT.** The closed-world triple store becomes a state-based G-Set CRDT: merge by
+set union. Union is commutative, associative, and idempotent, so peers converge on the same state
+regardless of what order facts arrive in or how many times the same fact shows up. Each accepted
+triple broadcasts as an op to the room. On peer join, exchange full state (or just a hash of it
+first, skipping the transfer entirely when it already matches). Plain union has no way to remove a
+fact, so retraction needs one more piece: an OR-Set, tagging each assertion with a UUID and
+retracting by tag, or last-writer-wins on a (subject, predicate) pair for functional predicates like
+a character's location, with timestamp and peer id as the tiebreak.
+
+**Efficient world sync for a new joiner: deterministic sharding.** Partition the converged triple
+set by `hash(canonicalTriple) % K` for a fixed K (say 64). Every peer computes the same shard
+hashes from the same triples, so the partition needs no coordination. A joiner asks everyone in the
+room for a manifest, `{rootHash, shardHashes[K]}`, takes whichever manifest most peers agree on,
+then assigns the K shards round robin across the P peers who answered. Each peer uploads roughly
+1/P of the world, so the joiner's total download is about one full copy split across many
+connections instead of one. The joiner checks each shard against its hash and re-requests any
+mismatch from a different peer. It subscribes to live fact ops from the moment it starts syncing,
+not after — because the CRDT merge is idempotent, any overlap between the historical sync and the
+live stream is harmless. A later, slower per-shard Merkle comparison can mop up stragglers if some
+peers hadn't fully converged before the sync ran.
+
+**Direct pairwise chat.** With a mesh of DataChannels already open to everyone in the room, a
+targeted chat action, `sendChat(msg, peerId)`, is already point to point. It never transits another
+participant's browser. Chat itself stays out of the triple store entirely: it's ephemeral, never
+gossiped, sharded, or exported. What does belong in the triple store is a small character-to-peer
+registry, kept as last-writer-wins facts such as `(alice, playedBy, peer:abc123)`, so a chat target
+still resolves correctly after someone reconnects with a new peer id.
+
+**Persistence — an infinite, serverless-durable world.** Each browser persists its triple store to
+IndexedDB, not `localStorage` (too small, and synchronous). Calling `navigator.storage.persist()`
+asks the browser not to evict it under storage pressure. On rejoin, a peer loads its local copy
+first, then runs the shard/Merkle sync above to catch up on anything it missed. Because merge is
+union, offline time, divergence while disconnected, and a later reunion are all harmless — there's
+no canonical server copy to protect, every player's browser is a mirror of the whole world. The
+world only dies if every copy is cleared at once. The existing JSONL export/import format doubles
+as a backup and reseed path. For durability that doesn't depend on any player being online, a
+dedicated "archivist" peer works well: a pinned browser tab (an old phone on charger, kept awake
+with `navigator.wakeLock.request('screen')`, added to the home screen as a PWA, and exempted from
+battery optimization) or a small headless Node process, joining the same room but never playing.
+Two things about this shape are worth naming as open design questions rather than solved: the
+triple set (and its retraction tombstones) only ever grows, so it eventually wants compaction or
+spatial sharding, and the room name and password are currently the only credential a world has —
+see forgery prevention, below, for the piece that adds real per-player identity on top.
+
+**Preventing forgery.** Give every player an Ed25519 keypair, generated with WebCrypto and
+persisted in IndexedDB. Sign every fact as it's created: `{triple, author: pubkey, opId, timestamp,
+sig}`. Peers verify the signature on ingest, as one more step in the same validation pipeline that
+already checks a fact against the lexicon, and drop anything that doesn't verify — a forged fact
+never enters the CRDT, even if a well-behaved peer unknowingly relays it. Bind a character to a key
+inside the ontology itself, `(alice, controlledBy, key:abc...)`, decided first-claim-wins through
+the same CRDT merge, so the lexicon can enforce that only the matching key's signature can assert
+facts about that character. Impersonation becomes a failed validation check, not something players
+have to police socially. Sign the timestamps used for last-writer-wins tiebreaks too, otherwise a
+malicious peer could replay an old fact under a fresh timestamp — unique op ids plus signed
+timestamps make a replayed fact a harmless no-op instead of a rollback. The same per-player keys
+also support optional pairwise-encrypted private chat, using an ECDH-derived key between the two
+participants.
+
+**Snooping.** WebRTC DataChannels are mandatorily DTLS-encrypted on every pairwise connection, even
+when a TURN relay is needed for NAT traversal, since DTLS terminates at the two peers rather than at
+the relay. An observer on the network path, an ISP or a shared Wi-Fi network, sees only ciphertext.
+Trystero's `password` option, described under Networking above, protects the signaling handshake
+itself the same way. What none of this hides is traffic metadata: that two IP addresses talked, and
+when. That's a real, known limitation of this design, not a solved problem, and it's worth stating
+as such rather than glossing over it.
+
+**Public and private world discovery — an "announce board."** Finding a world to join needs one
+small piece of server infrastructure, the one part of this design that isn't fully serverless: a
+Lambda behind a closed CloudFront distribution, backed by S3. A world announces itself by submitting
+its link and a short human-readable tag, drawn from the same page lexicon (three to five words), to
+the Lambda. The Lambda validates every field server-side and renders everything as plain text, never
+markup, so nothing submitted can inject HTML. It writes a small object keyed by a UUIDv7. Because a
+UUIDv7's embedded timestamp makes the key itself time-ordered, listing "recently active" worlds is a
+cheap `ListObjectsV2` call with `start-after` computed from "now minus N minutes" — an S3 lifecycle
+rule is only a backstop cleanup, not the actual expiry mechanism. Re-announcing a world is
+effectively a heartbeat, and should be rate-limited per source so the listing only shows worlds that
+are actually live right now. Private worlds can be listed too, if the shared secret that derives
+their room name and key carries enough entropy to resist offline brute-forcing once an encrypted
+announcement is published — a memory-hard key-derivation function (Argon2id) plus at least four or
+five lexicon words of entropy (roughly 2^44 or more) is a reasonable bar, with the room id itself
+derived from the same secret so an outsider can locate an announcement but still can't locate the
+room without decrypting it first. This piece should be described plainly for what it is: a small
+amount of server infrastructure inside an otherwise serverless design. The game itself stays fully
+peer to peer either way, and keeps working even if the discovery service is down. Discovery is
+optional. Playing the game does not depend on it.
+
+This combination doesn't appear to exist yet as a shipped project. The individual pieces are each
+precedented on their own — serverless peer-to-peer games built on Trystero, CRDT-over-WebRTC
+research prototypes like BrickSync, browser mud clients that shell out to a telnet server — but a
+lexicon-constrained closed-world triple store, replicated as a CRDT over WebRTC and used as a game's
+entire state substrate, doesn't turn up in what's been surveyed so far. That's worth noting as an
+observation, not a strong claim; the search may simply not have found it. The point of this section
+is the design itself, not the novelty claim.
+
 ## Phasing
 
 1. Backend D itself: the DynamoDB-backed store implementing the same individual read/write shape
