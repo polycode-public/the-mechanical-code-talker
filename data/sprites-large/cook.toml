@@ -1,7 +1,9 @@
-# cook — Ashcombe Hall's own cook at the sprite tier: the toque, head and
-# body all share the one gradient (a chef's whites read as one tonal
-# family), with a highlight on the toque itself since that's the tallest,
-# most light-catching part of the silhouette.
+# cook — Ashcombe Hall's own cook. Same standing figure as the rest of the
+# hall's staff, with the class colour on the jacket and the whites fixed:
+# a chef's toque and apron read as linen whatever the page repaints the
+# uniform, the same reason badger.toml holds its face out of currentColor.
+# The oxblood neckerchief and the brass ladle are what name her at the 40px
+# the room view draws.
 classes = ["cook"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -11,11 +13,41 @@ svg = """
       <stop offset="55%" stop-color="currentColor"/>
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
+    <radialGradient id="cook-sheen" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <ellipse cx="12" cy="3.4" rx="5.4" ry="3" fill="url(#cook-fill)"/>
-  <rect x="8.6" y="5.6" width="6.8" height="2.2" rx="0.6" fill="url(#cook-fill)"/>
-  <circle cx="12" cy="10" r="3.1" fill="url(#cook-fill)"/>
-  <path d="M6 21 C6 15.6 8.7 13.2 12 13.2 C15.3 13.2 18 15.6 18 21 Z" fill="url(#cook-fill)"/>
-  <ellipse cx="9.6" cy="2.2" rx="1.8" ry="1" fill="#ffffff" opacity="0.35"/>
+  <ellipse cx="9.7" cy="21.6" rx="2" ry="1.05" fill="#221e1b"/>
+  <ellipse cx="14.3" cy="21.6" rx="2" ry="1.05" fill="#221e1b"/>
+  <path d="M9.4 16.8 H11.5 L11.2 21 H9.6 Z" fill="url(#cook-fill)"/>
+  <path d="M12.5 16.8 H14.6 L14.4 21 H12.8 Z" fill="url(#cook-fill)"/>
+  <path d="M8.5 13 C8.5 11.4 9.9 10.5 12 10.5 C14.1 10.5 15.5 11.4 15.5 13 L16.1 18 H7.9 Z" fill="url(#cook-fill)"/>
+  <path d="M10.1 12.4 H13.9 L14.4 17.6 H9.6 Z" fill="#efe4ce"/>
+  <path d="M10.6 10.9 L10.2 12.6 M13.4 10.9 L13.8 12.6" stroke="#efe4ce" stroke-width="0.7" stroke-linecap="round" fill="none"/>
+  <path d="M9.6 17.6 H14.4 L14.5 18.4 H9.5 Z" fill="#d8c9ac"/>
+  <path d="M7.9 12.8 C7 13.4 6.5 15 6.6 17 C6.65 18.1 6.9 18.8 7.4 19.1 L8.9 18.4 C8.5 17.6 8.4 16 8.7 14.2 Z" fill="url(#cook-fill)"/>
+  <path d="M16.1 12.8 C17.4 13.3 18.4 14.3 18.7 15.4 L17 16.3 C16.7 15.5 16.1 14.8 15.3 14.3 Z" fill="url(#cook-fill)"/>
+  <path d="M17 16.3 L18.7 15.4 C19 14.3 18.6 13.3 17.8 12.8 L16.4 14 C16.8 14.6 17 15.4 17 16.3 Z" fill="url(#cook-fill)"/>
+  <ellipse cx="7.7" cy="19.4" rx="1.05" ry="1.15" fill="#dcb894"/>
+  <ellipse cx="17.6" cy="12.7" rx="1.05" ry="1.1" fill="#dcb894"/>
+  <path d="M18.1 12.1 L20.4 8.4" stroke="#b08d3a" stroke-width="0.85" stroke-linecap="round" fill="none"/>
+  <ellipse cx="20.5" cy="7.5" rx="1.55" ry="1.35" fill="#b08d3a"/>
+  <ellipse cx="20.5" cy="7.2" rx="1.55" ry="1.35" fill="#dcc079"/>
+  <ellipse cx="20.1" cy="6.9" rx="0.6" ry="0.4" fill="#ffffff" opacity="0.5"/>
+  <path d="M10.4 9.9 L12 11.6 L13.6 9.9 Z" fill="#6e2c2c"/>
+  <circle cx="12" cy="7.1" r="2.75" fill="#dcb894"/>
+  <circle cx="10.9" cy="7.05" r="0.42" fill="#221e1b"/>
+  <circle cx="13.1" cy="7.05" r="0.42" fill="#221e1b"/>
+  <circle cx="10.77" cy="6.9" r="0.15" fill="#ffffff" opacity="0.75"/>
+  <circle cx="12.97" cy="6.9" r="0.15" fill="#ffffff" opacity="0.75"/>
+  <path d="M11 8.5 C11.4 8.85 12.6 8.85 13 8.5" stroke="#a9764f" stroke-width="0.4" stroke-linecap="round" fill="none"/>
+  <rect x="8.9" y="3.9" width="6.2" height="1.6" rx="0.45" fill="#efe4ce"/>
+  <rect x="8.9" y="5" width="6.2" height="0.5" rx="0.25" fill="#d8c9ac"/>
+  <circle cx="9.7" cy="2.9" r="2.05" fill="#efe4ce"/>
+  <circle cx="14.3" cy="2.9" r="2.05" fill="#efe4ce"/>
+  <circle cx="12" cy="2.3" r="2.4" fill="#efe4ce"/>
+  <ellipse cx="10.7" cy="1.7" rx="1.25" ry="0.7" fill="#ffffff" opacity="0.55"/>
+  <ellipse cx="10.2" cy="14" rx="2.4" ry="2.1" fill="url(#cook-sheen)"/>
 </svg>
 """

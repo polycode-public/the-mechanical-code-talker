@@ -1,8 +1,10 @@
-# gardener — Ashcombe Hall's own gardener at the sprite tier: sunhat brim,
-# crown, head and body share one gradient, with a highlight along the
-# brim's own leading edge (the widest, most light-catching part of the
-# silhouette, the same reason the icon tier made the brim wide in the
-# first place).
+# gardener — Ashcombe Hall's own gardener. The smock keeps the class colour;
+# the straw hat with its library-green band, the leather apron, the green
+# wellingtons and the potted cutting under one arm are fixed palette, since
+# straw, leather and terracotta are what they are whatever the page repaints
+# the uniform — the same split badger.toml makes between its stripes and its
+# coat. The wide brim is still the widest part of the silhouette, so the
+# highlight sits along its leading edge.
 classes = ["gardener"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,11 +14,38 @@ svg = """
       <stop offset="55%" stop-color="currentColor"/>
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
+    <radialGradient id="gardener-sheen" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <ellipse cx="12" cy="5.6" rx="7.4" ry="2" fill="url(#gardener-fill)"/>
-  <path d="M8.8 5.2 C8.8 3.1 10.2 1.6 12 1.6 C13.8 1.6 15.2 3.1 15.2 5.2 C15.2 5.6 15.1 6 15 6.3 L9 6.3 C8.9 6 8.8 5.6 8.8 5.2 Z" fill="url(#gardener-fill)" opacity="0.92"/>
-  <circle cx="12" cy="8.6" r="3.1" fill="url(#gardener-fill)"/>
-  <path d="M6 21 C6 15.5 8.7 13.1 12 13.1 C15.3 13.1 18 15.5 18 21 Z" fill="url(#gardener-fill)"/>
-  <ellipse cx="8.6" cy="4.9" rx="2.4" ry="0.7" fill="#ffffff" opacity="0.32"/>
+  <path d="M8.2 18.6 H11.4 L11.1 21.9 H8.5 Z" fill="#3f5a45"/>
+  <path d="M12.6 18.6 H15.8 L15.5 21.9 H12.9 Z" fill="#3f5a45"/>
+  <ellipse cx="9.9" cy="21.9" rx="1.7" ry="0.75" fill="#2f4434"/>
+  <ellipse cx="14.2" cy="21.9" rx="1.7" ry="0.75" fill="#2f4434"/>
+  <path d="M9.2 16.4 H11.4 L11.3 19 H9.4 Z" fill="url(#gardener-fill)"/>
+  <path d="M12.6 16.4 H14.8 L14.6 19 H12.7 Z" fill="url(#gardener-fill)"/>
+  <path d="M8.4 12.6 C8.4 11 9.9 10.1 12 10.1 C14.1 10.1 15.6 11 15.6 12.6 L16.2 17.6 H7.8 Z" fill="url(#gardener-fill)"/>
+  <path d="M9.9 12.4 H14.1 L14.5 17.4 H9.5 Z" fill="#7a4f2e"/>
+  <path d="M10.5 10.8 L10.1 12.6 M13.5 10.8 L13.9 12.6" stroke="#7a4f2e" stroke-width="0.75" stroke-linecap="round" fill="none"/>
+  <path d="M16.2 12.4 C17.1 13 17.6 14.6 17.5 16.6 C17.45 17.7 17.2 18.4 16.7 18.7 L15.2 18 C15.6 17.2 15.7 15.6 15.4 13.8 Z" fill="url(#gardener-fill)"/>
+  <path d="M7.8 12.4 C6.9 13 6.4 14.4 6.5 16.2 L8.3 16.7 C8.3 15.4 8.5 14.3 8.8 13.6 Z" fill="url(#gardener-fill)"/>
+  <ellipse cx="16.5" cy="19" rx="1.05" ry="1.15" fill="#dcb894"/>
+  <path d="M4.5 17.6 H9 L8.4 20.9 H5.1 Z" fill="#9a4f3c"/>
+  <rect x="4.2" y="16.7" width="5.1" height="1.2" rx="0.35" fill="#b25c46"/>
+  <path d="M6.75 16.7 C6.75 14.9 6 14 5 13.6 C5.9 13.5 6.7 14 6.9 14.8 C7.2 13.7 8.2 13.1 9.2 13.2 C8.3 13.8 7.6 15 7.5 16.7 Z" fill="#3f5a45"/>
+  <ellipse cx="7.4" cy="16.3" rx="1.1" ry="1.15" fill="#dcb894"/>
+  <circle cx="12" cy="8" r="2.75" fill="#dcb894"/>
+  <circle cx="10.9" cy="8.35" r="0.42" fill="#221e1b"/>
+  <circle cx="13.1" cy="8.35" r="0.42" fill="#221e1b"/>
+  <circle cx="10.77" cy="8.2" r="0.15" fill="#ffffff" opacity="0.75"/>
+  <circle cx="12.97" cy="8.2" r="0.15" fill="#ffffff" opacity="0.75"/>
+  <path d="M11 9.6 C11.4 9.95 12.6 9.95 13 9.6" stroke="#a9764f" stroke-width="0.4" stroke-linecap="round" fill="none"/>
+  <path d="M9.1 6.4 C9.1 4.3 10.4 3.1 12 3.1 C13.6 3.1 14.9 4.3 14.9 6.4 Z" fill="#d8b76c"/>
+  <path d="M9.15 5.7 C9.6 5.4 10.6 5.2 12 5.2 C13.4 5.2 14.4 5.4 14.85 5.7 L14.9 6.4 H9.1 Z" fill="#3f5a45"/>
+  <ellipse cx="12" cy="6.5" rx="7.3" ry="1.85" fill="#d8b76c"/>
+  <ellipse cx="12" cy="6.5" rx="7.3" ry="1.85" fill="none" stroke="#b8934f" stroke-width="0.3"/>
+  <ellipse cx="8.7" cy="5.9" rx="2.6" ry="0.72" fill="#ffffff" opacity="0.38"/>
+  <ellipse cx="10.3" cy="13.6" rx="2.3" ry="2" fill="url(#gardener-sheen)"/>
 </svg>
 """

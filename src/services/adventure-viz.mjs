@@ -711,8 +711,11 @@ ${THEME_TOKENS_CSS}
      falls back through room's own ancestor chain to the generic room icon).
      Rendered at 120px — twice a room-object sprite's own 60px frame
      (.sprite-frame below) — so the room itself reads as the biggest thing
-     drawn in its own scene. */
-  .room-kind-icon { position: absolute; top: .5rem; right: .6rem; width: 120px; height: 120px; opacity: .92; }
+     drawn in its own scene. It takes the wall's own brass rather than the
+     page ink: at that size an ink-black icon out-shouts every person and
+     prop standing in front of it, and this is a mark ON the wall, not
+     another thing in the room. */
+  .room-kind-icon { position: absolute; top: .5rem; right: .6rem; width: 120px; height: 120px; color: var(--gilt); opacity: .42; }
   .room-kind-icon svg { width: 100%; height: 100%; display: block; }
   .room-kind-icon:empty { display: none; }
   /* the doorways — every written way out drawn where it actually points,
