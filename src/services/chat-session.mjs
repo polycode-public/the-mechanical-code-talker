@@ -128,6 +128,12 @@ export async function createSession({
   // already-resolved value; full precedence (this param > TMCT_MEMORY_BACKEND
   // env > tmct.toml > the sqlite default) resolved below.
   memoryBackend = null,
+  // The tool-name prefix a host's own follow-up hints should use in place of
+  // "tmct_" (e.g. seonix's own tool names) — threaded onto `config` below so
+  // dispatchTool's handlers (kit.mjs/tmct-search.mjs/tmct-members.mjs/
+  // tmct-context.mjs) render hints under the host's own names. Omitted (the
+  // default) preserves today's "tmct_" behavior exactly.
+  toolNamePrefix,
 } = {}) {
   // EPHEMERAL mode (--ephemeral, or TMCT_EPHEMERAL=1): read the target graph but
   // write NOTHING back into it. The shipped examples run this way so a demo never
@@ -193,6 +199,10 @@ export async function createSession({
       ({ config, toml } = await resolveRuntimeConfig({ argv, cwd, env, gitRoot }));
     }
   }
+  // Every `config` branch above ends up here — set once so every downstream
+  // hint-rendering call site (dispatchTool's handlers, via config.toolNamePrefix)
+  // sees the same value regardless of which branch built `config`.
+  config.toolNamePrefix = toolNamePrefix || "tmct_";
 
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap), resolved once per
@@ -465,11 +475,12 @@ export async function runChat({
   narrate = false,
   liveReference = false,
   memoryBackend = null,
+  toolNamePrefix,
 } = {}) {
   // createSession's first-run seed (~2-3s) produces ZERO output until it fully
   // resolves, which otherwise reads as `npm run chat` hanging with total silence.
   output.write("tmct — starting…\n");
-  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, liveReference, memoryBackend });
+  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, liveReference, memoryBackend, toolNamePrefix });
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
   for (const line of session.bannerLines) output.write(dim(line) + "\n");
