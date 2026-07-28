@@ -465,6 +465,7 @@
   "src/surfaces/web/memory-ask-browser.bundle.js",
   "src/surfaces/web/memory-stats.mjs",
   "src/surfaces/web/mud-browser-entry.mjs",
+  "src/surfaces/web/p2p-browser-entry.mjs",
   "src/surfaces/web/plan-browser-entry.mjs",
   "src/surfaces/web/research-browser-entry.mjs",
   "src/surfaces/web/spider-fly-browser-entry.mjs",
