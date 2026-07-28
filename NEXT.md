@@ -61,7 +61,21 @@ again for it.
 first (same files). The cross-cutting P2P e2e scenarios (3-peer mesh, disconnect/rejoin, the
 multi-player-lab + mesh mud.html modes, chat.html inference over learned-vs-distributed facts) wait on
 both page integrations existing. The mud/adventure/chat sprite-detail-pop + copy-audit follow-up waits
-on this batch's own three page-owning agents.
+on this batch's own three page-owning agents. mud.html's own theme pass (see below) also waits on the
+two mud.html agents currently in flight, same reason.
+
+**Per-page thematic direction, operator-specified 2026-07-29** (relayed to the relevant in-flight
+agents already, except mud.html's — dispatch that as its own follow-up once the NPC-slider and
+EDIT-mode agents land): adventure.html → Agatha Christie (English country-house mystery — fits the
+existing Ashcombe Hall setting); spider-fly.html → The Addams Family (gothic-whimsical, Charles Addams
+ink cross-hatch); mud.html → Lemmings (the classic dig/build puzzle game — fits the burrowing-animal
+premise closely, not yet dispatched); chat.html → "genericGPT" (deliberately reads like a familiar
+mainstream AI-chat surface, in contrast with the actually-deterministic no-LLM behavior underneath —
+lean into the contrast, don't fight it); plan.html → Cubase (the Steinberg DAW — dark, dense,
+timeline/track-based, transport-style controls); ledger.html & research.html → New Relic (dark-mode,
+data-dense observability-dashboard register); sprites.html → Adobe Illustrator chrome for the catalog
+page itself, plus a separate, larger follow-up (not yet scoped) for "multi-expression, multi-direction
+cycles" — real new sprite content (variant art), not just a restyle.
 
 Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline):
 bucket `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`
