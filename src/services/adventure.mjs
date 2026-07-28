@@ -198,6 +198,11 @@ const ORIGIN_PREDICATE = "mgx:is-origin";
 const DIG_SPAWN_PREDICATE = "mgx:dig-spawns";
 const DEN_SPAWN_PREDICATE = "mgx:den-spawns";
 const DEN_RESIDENT_PREDICATE = "mgx:den-resident";
+const DIG_REACH_PREDICATE = "mgx:dig-reach";
+const DIG_SPAWN_MAX_PREDICATE = "mgx:dig-spawn-max";
+const DEN_CHANCE_PREDICATE = "mgx:den-chance-in";
+const DEN_RESIDENT_CHANCE_PREDICATE = "mgx:den-resident-chance-in";
+const MASS_DRAIN_PREDICATE = "mgx:mass-drain-per-turn";
 // Where a thing that has left the world is placed. The world has no other way
 // to say "out of play", and no room can be called either of these, so the
 // sentinel is the whole convention: the readers below skip it exactly as they
@@ -646,6 +651,10 @@ const VIEW_EXCLUDED_PREDICATES = new Set([
   // a dug room may hold and how far the world reaches, and says nothing about
   // the room anyone is standing in.
   ORIGIN_PREDICATE, DIG_SPAWN_PREDICATE, DEN_SPAWN_PREDICATE, DEN_RESIDENT_PREDICATE,
+  DIG_REACH_PREDICATE, DIG_SPAWN_MAX_PREDICATE, DEN_CHANCE_PREDICATE, DEN_RESIDENT_CHANCE_PREDICATE,
+  // How fast a turn wears a species down is the mass economy's own wiring, and
+  // reads as a bare number in room prose the same way hasMass does.
+  MASS_DRAIN_PREDICATE,
 ]);
 
 const sentenceCase = (term) => String(term).charAt(0).toUpperCase() + String(term).slice(1);
@@ -828,28 +837,65 @@ const OPPOSITE_DIRECTION = new Map([
 ]);
 
 // What a freshly dug room holds, and how often a dig opens something better
-// than a bare tunnel. The world names the content — a room kind declares the
-// kinds a plain dig turns up, the richer set a den holds, and the animal that
-// lives in one — and this module only decides how many and how often. The
-// pools below are the fallback for a world that declares none.
+// than a bare tunnel. The world names all of it — a room kind declares the
+// kinds a plain dig turns up, how many of them, the richer set a den holds, how
+// often a dig finds one, and which animal lives in it. The numbers below are
+// only the fallback for a world that declares none.
 const DIG_SPAWN_KINDS = ["root", "carrot", "worm"];
 const DIG_SPAWN_MIN = 0;
-const DIG_SPAWN_MAX = 2;
-// One dug room in five is a den: somebody's larder, holding the whole den pool
-// rather than a scrap or two. One den in three is lived in, and its resident is
-// another animal to ask about food — which is the point of digging one out.
-const DEN_CHANCE_IN = 5;
-const DEN_RESIDENT_CHANCE_IN = 3;
+const DEFAULT_DIG_SPAWN_MAX = 2;
+const DEFAULT_DEN_CHANCE_IN = 5;
+const DEFAULT_DEN_RESIDENT_CHANCE_IN = 3;
 const DEN_ROOM_CLASS = "den";
 
-// How far from the world's origin room a dig may carry it. Without a cap a
-// burrow sprawls in every direction at once, and an animal twenty hops out has
-// nothing around it, no food it knows of, and no reason to be anywhere — the
-// stranding this bound exists to stop. Six keeps every room inside one
-// pathfinder search of the origin (mud-turn.mjs walks eight hops), so an animal
-// standing at the frontier can always still walk home to the rooms with food in
-// them.
-const DIG_MAX_DISTANCE_FROM_ORIGIN = 6;
+// How far from the world's origin room a dig may carry it, when the origin
+// writes no reach of its own. Without a cap a burrow sprawls in every direction
+// at once, and an animal twenty hops out has nothing around it, no food it
+// knows of, and no reason to be anywhere — the stranding this bound exists to
+// stop. Six keeps every room inside one pathfinder search of the origin
+// (mud-turn.mjs walks eight hops), so an animal standing at the frontier can
+// always still walk home to the rooms with food in them.
+const DEFAULT_DIG_REACH = 6;
+
+/** The NEWEST value `subject` declares under `predicate`, as a number, or null
+ *  when it declares none. Newest rather than first on purpose: the store is
+ *  append-only, so a later write is the current truth — the same rule
+ *  foldWorldState already applies to placements, and what lets an edit to one of
+ *  these knobs take effect over the world's own seed fact. Pure. */
+function declaredNumber(rows, subject, predicate) {
+  const written = factObjects(rows, subject, predicate);
+  if (!written.length) return null;
+  const value = Number(written[written.length - 1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+/** A positive count `subject` declares under `predicate`, or `fallback` when it
+ *  declares none (or writes something that is not a usable count). Pure. */
+function declaredCountOr(rows, subject, predicate, fallback) {
+  const written = declaredNumber(rows, subject, predicate);
+  return written !== null && written > 0 ? written : fallback;
+}
+
+/** How many rooms out from its origin this world lets a dig reach — the origin
+ *  room's own `mgx:dig-reach` fact, or the shipped default when it writes none.
+ *  Pure. */
+export function digReachOf(rows) {
+  const origin = originRoomOf(rows);
+  return origin ? declaredCountOr(rows, origin, DIG_REACH_PREDICATE, DEFAULT_DIG_REACH) : DEFAULT_DIG_REACH;
+}
+
+/** What one turn costs `subject` in mass, from a `mgx:mass-drain-per-turn` fact
+ *  on its own class chain (so a whole species is tuned in one line, and one
+ *  individual can still overrule its species by writing its own). Null when
+ *  nothing in the chain declares one — a knob nobody set is not a reason to
+ *  invent a number and starve something with it. Pure. */
+export function massDrainPerTurnOf(rows, subject) {
+  for (const kind of objectClassChain(rows, subject)) {
+    const written = declaredNumber(rows, kind, MASS_DRAIN_PREDICATE);
+    if (written !== null && written >= 0) return written;
+  }
+  return null;
+}
 
 // Which way a room of each kind can be dug, and what the room it opens is
 // typed as. Above ground there is nothing to tunnel sideways through, so the
@@ -930,7 +976,7 @@ export function roomDistanceFromOrigin(rows, state, room) {
 function atDigBoundary(rows, state, room) {
   if (!originRoomOf(rows)) return false;
   const distance = roomDistanceFromOrigin(rows, state, room);
-  return distance === null || distance >= DIG_MAX_DISTANCE_FROM_ORIGIN;
+  return distance === null || distance >= digReachOf(rows);
 }
 
 /** Every direction a dig could actually open a room in from `room`: allowed
@@ -1411,13 +1457,15 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
         `the earth ${direction} of the ${here} is packed hard and endless — you have reached the far edge of the burrow.`,
         noteFor(reach === null
           ? `dig — no chain of exits joins the ${here} to the ${originRoomOf(rows)}, so there is no distance to measure a dig against; declined`
-          : `dig — the ${here} stands ${reach} rooms from the ${originRoomOf(rows)}, and this world digs ${DIG_MAX_DISTANCE_FROM_ORIGIN}; declined by distance from the origin`),
+          : `dig — the ${here} stands ${reach} rooms from the ${originRoomOf(rows)}, and this world digs ${digReachOf(rows)}; declined by distance from the origin`),
         { miss: true },
       );
     }
     const dug = freshRoomId(rows, here, direction);
-    const isDen = dugKind === "underground-space" && stableIndex(`den:${dug}`, DEN_CHANCE_IN) === 0;
-    const spawnCount = DIG_SPAWN_MIN + stableIndex(dug, DIG_SPAWN_MAX - DIG_SPAWN_MIN + 1);
+    const denChanceIn = declaredCountOr(rows, dugKind, DEN_CHANCE_PREDICATE, DEFAULT_DEN_CHANCE_IN);
+    const isDen = dugKind === "underground-space" && stableIndex(`den:${dug}`, denChanceIn) === 0;
+    const spawnMax = declaredCountOr(rows, dugKind, DIG_SPAWN_MAX_PREDICATE, DEFAULT_DIG_SPAWN_MAX);
+    const spawnCount = DIG_SPAWN_MIN + stableIndex(dug, spawnMax - DIG_SPAWN_MIN + 1);
     const spawnedKinds = isDen
       ? declaredKindsOr(rows, dugKind, DEN_SPAWN_PREDICATE, DIG_SPAWN_KINDS)
       : declaredKindsOr(rows, dugKind, DIG_SPAWN_PREDICATE, DIG_SPAWN_KINDS).slice(0, spawnCount);
@@ -1427,7 +1475,8 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
       minted.add(id);
       return id;
     });
-    const residentKind = isDen && stableIndex(`resident:${dug}`, DEN_RESIDENT_CHANCE_IN) === 0
+    const residentChanceIn = declaredCountOr(rows, dugKind, DEN_RESIDENT_CHANCE_PREDICATE, DEFAULT_DEN_RESIDENT_CHANCE_IN);
+    const residentKind = isDen && stableIndex(`resident:${dug}`, residentChanceIn) === 0
       ? factObjects(rows, dugKind, DEN_RESIDENT_PREDICATE)[0] ?? null
       : null;
     const resident = residentKind ? freshObjectId(rows, residentKind, minted) : null;

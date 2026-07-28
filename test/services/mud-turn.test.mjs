@@ -14,10 +14,10 @@ import { join } from "node:path";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
 import { runMudTurn } from "../../src/services/mud-turn.mjs";
 import {
-  recordTold, recordExamined, personKnowledgeLines, foldWorldState, worldActionRows,
+  recordTold, recordExamined, personKnowledgeLines, foldWorldState, worldActionRows, massDrainPerTurnOf,
 } from "../../src/services/adventure.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
-import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
+import { DEFAULT_GAME_CONFIG, mudMassDrainPerTurn } from "../../src/domain/game-config.mjs";
 import { appendFacts, appendRule, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 
 const WORLD = "mud-garden";
@@ -461,8 +461,11 @@ test("the explore step never walks into a room a predator is standing in", async
 
 test("a character that runs out of mass starves on the turn it happens, and is declined after", async () => {
   await withMudGarden("starve-through-a-turn", async (dir) => {
-    const starving = { ...DEFAULT_GAME_CONFIG.mud, moleMassDecrementPerTurn: 5 };
-    const play = (k) => runMudTurn("mole-1", { world: WORLD, memoryDir: dir, k, mudConfig: starving });
+    await appendFacts(dir, [{
+      subject: "mole-1", predicate: "mgx:mass-drain-per-turn", object: "5",
+      provenance: worldProvenanceTag(WORLD),
+    }]);
+    const play = (k) => runMudTurn("mole-1", { world: WORLD, memoryDir: dir, k });
 
     const first = await play(1);
     assert.equal(first.mass, 3, "the mole's 8 less the 5 a turn costs it");
@@ -484,6 +487,32 @@ test("a character that runs out of mass starves on the turn it happens, and is d
       "every later turn is declined outright",
     );
     assert.match(after.text, /the mole-1 has starved\. It takes no more turns\./);
+  });
+});
+
+test("a rewritten drain fact supersedes the world's own seed, and the config still covers a character the world weighs no drain for", async () => {
+  await withMudGarden("drain-precedence", async (dir) => {
+    const seeded = readFactRows(await loadMemory(dir));
+    assert.equal(massDrainPerTurnOf(seeded, "vole-1"), 0.05, "the world writes the vole its own cost of living");
+
+    await appendFacts(dir, [{
+      subject: "vole-1", predicate: "mgx:mass-drain-per-turn", object: "1",
+      provenance: worldProvenanceTag(WORLD),
+    }]);
+    const rewritten = readFactRows(await loadMemory(dir));
+    assert.equal(
+      massDrainPerTurnOf(rewritten, "vole-1"), 1,
+      "the newer write is what a turn charges, not the seed underneath it — so an edit takes effect",
+    );
+
+    assert.equal(
+      massDrainPerTurnOf(rewritten, "mouse-1"), null,
+      "a character the world weighs no drain for reads as none rather than an invented number",
+    );
+    assert.equal(
+      mudMassDrainPerTurn(DEFAULT_GAME_CONFIG.mud, "mole-1"), DEFAULT_GAME_CONFIG.mud.moleMassDecrementPerTurn,
+      "and the shipped config table is what such a character still falls back to",
+    );
   });
 });
 

@@ -53,7 +53,7 @@ import { DEFAULT_GAME_CONFIG, mudMassDrainPerTurn } from "../domain/game-config.
 import {
   foldWorldState, worldActionRows, runWorldCommand, recordTold, recordExamined,
   recordMassDrain, personKnowledgeLines, objectClassChain, diggableDirections,
-  isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
+  isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase, massDrainPerTurnOf,
 } from "./adventure.mjs";
 
 const FOOD_CLASS = "food";
@@ -256,8 +256,9 @@ function stepTowardUnvisitedRoom(rows, state, character, here) {
  * A turn that ends the character's run also carries `outOfPlay: true` and
  * `outOfPlayReason` ("eaten" or "starved"), and so does every turn after it.
  *
- * `mudConfig` is the resolved `mud` section of the game config, which is where
- * the per-species mass drain a turn charges comes from.
+ * `mudConfig` is the resolved `mud` section of the game config — the fallback
+ * for the per-species mass drain a turn charges, used only when the world
+ * itself writes the character no `mgx:mass-drain-per-turn` fact.
  */
 export async function runMudTurn(character, {
   world, memoryDir, env, graph, cache, k = null, mudConfig = DEFAULT_GAME_CONFIG.mud,
@@ -318,8 +319,15 @@ export async function runMudTurn(character, {
     if (!edge.acted) await exploreUnvisited({ character, memoryDir, runCommand, recordSkip });
   }
 
+  // The world's own word first: a `mgx:mass-drain-per-turn` fact on the
+  // character or its species is something a player can read and change, and the
+  // shipped config table is only what a world that writes none falls back to.
+  const writtenDrain = massDrainPerTurnOf(opened.rows, character);
   const drained = await recordMassDrain(memoryDir, {
-    world, subject: character, drainPerTurn: mudMassDrainPerTurn(mudConfig, character), cache,
+    world,
+    subject: character,
+    drainPerTurn: writtenDrain === null ? mudMassDrainPerTurn(mudConfig, character) : writtenDrain,
+    cache,
   });
   if (drained.mass === null) {
     notes.push(`MUD — mass: the world writes ${character} no mass, so a turn costs it nothing`);

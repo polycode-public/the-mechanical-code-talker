@@ -29,15 +29,20 @@
 // concurrent calls into the same memoryDir, the same way two callers writing
 // into any shared store concurrently would need their own queue.
 import { runTurn } from "../../services/chat.mjs";
-import { createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows } from "../../adapters/memory/core.mjs";
+import {
+  createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows, removeFacts,
+} from "../../adapters/memory/core.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import {
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines,
-  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, roomKindOf,
+  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
+  roomKindOf,
 } from "../../services/adventure.mjs";
+import { relatedForTerm } from "../../domain/skos-view.mjs";
 import { runMudTurn } from "../../services/mud-turn.mjs";
+import { parseMudEditorText, planMudEditorSync } from "../../services/mud-editor.mjs";
 import { worldProvenanceTag } from "../../domain/worlds-pack.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
@@ -190,7 +195,40 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
     return { rows, state };
   }
 
-  return { memoryDir, windows, snapshot };
+  /** The world editor's own store sync: parse `text` (mud-editor.mjs's own
+   *  parseMudEditorText), plan the writes it implies, and apply them — scoped to
+   *  THIS world's provenance tag only. Returns `{ unrecognized, added, removed }`.
+   *
+   *  Two things this does that a fresh, unplayed world would not need.
+   *  Retractions run only when the WHOLE document parsed cleanly, so a half-typed
+   *  line is never read as "this fact is gone". And a fold-versioned write
+   *  (a placement, an openness, a mass) is stamped `subject@turnN` at one past
+   *  the world's own turn count, exactly the way every in-game action's commit
+   *  writes: the fold takes the newest turn, so an untagged row would sit at turn
+   *  zero and lose to the snapshot the last played turn already left behind —
+   *  the edit would look accepted and change nothing. */
+  async function applyEdit(text) {
+    const allRows = readFactRows(await loadMemory(memoryDir));
+    const worldRows = allRows.filter((r) => typeof r.provenance === "string" && r.provenance.indexOf(tag) === 0);
+    const state = foldWorldState(worldRows);
+    const { triples, unrecognized } = parseMudEditorText(text);
+    const { toAppend, toRemoveIds } = planMudEditorSync(worldRows, state, triples);
+    const editTurn = state.turnCount + 1;
+    if (toAppend.length) {
+      await appendFacts(memoryDir, toAppend.map((f) => ({
+        subject: f.kind === "other" ? f.subject : `${f.subject}@turn${editTurn}`,
+        predicate: f.predicate,
+        object: f.object,
+        provenance: f.kind === "other" ? tag : `${tag}:turn${editTurn}`,
+      })));
+    }
+    const removed = unrecognized.length === 0 && toRemoveIds.length
+      ? (await removeFacts(memoryDir, toRemoveIds)).removed.length
+      : 0;
+    return { unrecognized, added: toAppend.length, removed };
+  }
+
+  return { memoryDir, windows, snapshot, applyEdit };
 }
 
 /** `count` entries drawn at random from `roster`, in random order, without
@@ -217,5 +255,9 @@ globalThis.tmctMud = {
   resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain, resolveSpriteAsset,
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines,
-  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, roomKindOf,
+  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
+  roomKindOf,
+  // The edit mode's own reach-throughs: the SKOS neighbourhood and the is-a
+  // chain its cursor-suggestion pills read, neither of which is splice-safe.
+  relatedForTerm,
 };
