@@ -14,6 +14,62 @@ holds ONLY what to do next. Completed work is not narrated here; `git log` and t
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
+## In-flight right now — mud.html/adventure.html/chat.html P2P + design session (2026-07-29)
+
+Six background agents are live in worktrees under `.claude/worktrees/`, dispatched from a coordinator
+session working through `PLAN_MUD.md`'s v1 P2P design plus a round of mud/adventure/chat polish. If
+this session's context is lost, resume by: `git worktree list` to confirm each path is still there: if
+gone, don't `SendMessage` it, dispatch fresh instead (per the Discipline section's rule 3, below). If
+present, `git -C <path> log -1` and `git -C <path> status --short` to see what's actually committed,
+then merge with `git merge --no-ff worktree-agent-<id>` from the main checkout (several of these are
+expected to conflict with each other in `src/services/mud-viz.mjs` — resolve in favor of whichever
+side's change is more complete/more recently verified live, the same way this session's own merges
+did), run the file's own test tier, remove the worktree + branch, then re-run the full suite before
+the next push. **Version is already rolled to 4.0.0** (`42bf8129`) for this line of work — don't roll
+again for it.
+
+- [ ] **`a5f3d9fa7f76551bf`** (`.claude/worktrees/agent-a5f3d9fa7f76551bf`, branch
+  `worktree-agent-a5f3d9fa7f76551bf`) — mud.html NPC slider (1–10, default 2): background characters
+  with no dashboard pane that still autoplay and are visible/talkable when co-located. Touches
+  `src/services/mud-viz.mjs`, `src/surfaces/web/mud-browser-entry.mjs`.
+- [ ] **`a30017f041d374072`** (`.claude/worktrees/agent-a30017f041d374072`) — mud.html EDIT mode (a
+  world-fact editor mirroring adventure.html's own "edit the world"), an audit of both mud.html's and
+  adventure.html's engine for hardcoded logic that should be an externalized fact, and a small folded-in
+  fix: `mud-viz.mjs`'s `markEaten()` still hardcodes `"eaten"` regardless of cause — needs to read
+  `outOfPlayReason`/`outOfPlayPhrase` (already shipped on `main`, engine side) so a starved character
+  doesn't display as eaten. Touches `mud-viz.mjs`, `mud-browser-entry.mjs`, `adventure.mjs`,
+  `mud-turn.mjs`, `game-config.mjs`, `adventure-viz.mjs`.
+- [ ] **`ad873437090ea0cb2`** — the temporal-trust fix: replace the point-patch (walk/dig-gamble reads
+  filtering against live ground truth) with a real latest-wins-with-trust-tiering read over
+  `mgx:knows-about`, so `personKnownFoodLines`/"what do you know about food" also stops listing food a
+  character already ate. Touches `adventure.mjs`, `mud-turn.mjs`.
+- [ ] **`a50d49b5ade5aa375`** — chat.html's P2P integration: share/join/accept flow against
+  `src/services/p2p-room.mjs` (already shipped on `main`), the node list panel, presence-scoped wave,
+  heavy traffic-exposure panel (operator's explicit ask — "go heavy... surface all we can"), a new
+  `test-e2e/pages-chat-p2p.test.mjs`. Touches `src/services/chat-page-viz.mjs`, possibly a new
+  `scripts/build-p2p-vendor.mjs`. No file overlap with the mud.html agents.
+- [ ] **`afae5cf118f722f87`** — adventure.html: compare/port mud.html's compass-ring direction UI,
+  confirm/fix its own sprite-fallback chain-walking, and a sprite-quality pass on adventure's own
+  creature roster to match mud's new bar. Touches `adventure-viz.mjs` and adventure-specific
+  `data/sprites-large/*.toml`.
+- [ ] **`a0900f2c71f7c24b0`** (Fable + frontend-design skill) — project-wide sprite detail/pop pass
+  (excluding mud/adventure creature sprites, owned by the agents above) and a design-consistency +
+  plain-prose copy audit of every OTHER demo page (index, spider-fly, plan, ledger, code, research,
+  ingest, sprites.html) — explicitly excludes mud.html/adventure.html/chat.html's own viz files, which
+  get the same treatment as a follow-up once their own agents above land.
+
+**Queued, not yet dispatched** — real dependencies, not forgotten: mud.html's own P2P integration
+(share/join, node labels, wave button+animation) waits on the NPC-slider and EDIT-mode agents landing
+first (same files). The cross-cutting P2P e2e scenarios (3-peer mesh, disconnect/rejoin, the
+multi-player-lab + mesh mud.html modes, chat.html inference over learned-vs-distributed facts) wait on
+both page integrations existing. The mud/adventure/chat sprite-detail-pop + copy-audit follow-up waits
+on this batch's own three page-owning agents.
+
+Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline):
+bucket `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`
+(operator already ran `aws sso login --profile tmct-prod` this session). Full clean path is a push to
+`main` with a remote — GitLab CI's `deploy:website` job.
+
 ## Open items
 
 - [ ] a new AWS-hosted backend for the memory store — **needed for marginalia** (which is migrating
