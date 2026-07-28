@@ -191,10 +191,22 @@ const KNOWS_ABOUT_PREDICATE = "mgx:knows-about";
 // this predicate is the only place the two are allowed to differ.
 const DISPLAY_NAME_PREDICATE = "mgx:display-name";
 const EXIT_PREDICATE_RE = /^mgx:has-exit-([a-z]+)$/;
-// Where an eaten thing is placed. The world has no other way to say "out of
-// play", and no room can be called this, so the sentinel is the whole
-// convention: the readers below skip it exactly as they skip a hiding place.
+// The dig mechanic's own wiring: which room a world measures distance from, the
+// kinds a dug room turns up, the richer set a den holds, and who lives in one.
+// All four are the world's answers to the dig verb's questions, never scenery.
+const ORIGIN_PREDICATE = "mgx:is-origin";
+const DIG_SPAWN_PREDICATE = "mgx:dig-spawns";
+const DEN_SPAWN_PREDICATE = "mgx:den-spawns";
+const DEN_RESIDENT_PREDICATE = "mgx:den-resident";
+// Where a thing that has left the world is placed. The world has no other way
+// to say "out of play", and no room can be called either of these, so the
+// sentinel is the whole convention: the readers below skip it exactly as they
+// skip a hiding place. Which sentinel a character sits at IS the reason it is
+// out — eaten by a predator, or starved once its mass ran out — so a caller
+// can say which without a second fact to read.
 const CONSUMED_PLACE = "eaten";
+const STARVED_PLACE = "starved";
+const OUT_OF_PLAY_PLACES = new Set([CONSUMED_PLACE, STARVED_PLACE]);
 
 /** The rows a live world's STATE fold may see: those the world itself wrote
  *  (provenance empty, or `world:*` — the loaded shard and its @turn
@@ -399,10 +411,24 @@ function predatorIn(rows, state, room) {
     .find((subject) => factObjects(rows, subject, PREDATOR_PREDICATE).includes("true")) ?? null;
 }
 
-/** True when `subject` has been eaten: placed at the out-of-play sentinel no
- *  room can be called. Its part in the world is finished — every command it
+/** True when `subject` has left the world: placed at an out-of-play sentinel
+ *  no room can be called. Its part in the world is finished — every command it
  *  gives declines, and its scripted turns stop. Pure. */
-export const isOutOfPlay = (state, subject) => state.placements.get(subject)?.object === CONSUMED_PLACE;
+export const isOutOfPlay = (state, subject) => OUT_OF_PLAY_PLACES.has(state.placements.get(subject)?.object);
+
+/** WHY `subject` is out of play — "eaten" or "starved" — or null while it is
+ *  still playing. The two fates end a run the same way and read nothing alike,
+ *  so anything narrating one needs to tell them apart. Pure. */
+export const outOfPlayReasonOf = (state, subject) => {
+  const place = state.placements.get(subject)?.object;
+  return OUT_OF_PLAY_PLACES.has(place) ? place : null;
+};
+
+/** How a fate reads in a sentence: "the mole-1 has been eaten", "the mole-1 has
+ *  starved". One phrase per sentinel, so nothing anywhere else has to spell the
+ *  difference out. Pure. */
+export const outOfPlayPhrase = (subject, reason) =>
+  (reason === STARVED_PLACE ? `the ${subject} has starved` : `the ${subject} has been eaten`);
 
 /** The room's real affordances — every exit, and every visible object's
  *  applicable verb — read from the EXACT SAME data take/open/talk/examine
@@ -548,6 +574,34 @@ export async function recordExamined(memoryDir, { observer, thing, k, cache = nu
   return appendTestimony(memoryDir, { knower: observer, source: observer, thing, k, cache });
 }
 
+/**
+ * Charge `subject` the mass a turn costs it, and place it out of play at the
+ * starved sentinel once nothing is left. Returns `{ mass, starved }` — the mass
+ * it is left with, and whether that ended its run. Writes nothing and charges
+ * nothing when the drain is zero, when the subject is already out of play, or
+ * when the world gives it no mass at all (`mass` is then null: a thing with no
+ * mass cannot run out of it).
+ *
+ * The write lands on the world's OWN next turn, read fresh here rather than
+ * taken from the caller. A scripted turn runs several world commands, each
+ * stamping a turn of its own, so a caller's tick number can trail the world's
+ * count — and a mass snapshot stamped behind the newest placement would fold
+ * away as stale the moment it was written.
+ */
+export async function recordMassDrain(memoryDir, { world, subject, drainPerTurn, cache = null }) {
+  const rows = readFactRows(await loadMemory(memoryDir));
+  const state = foldWorldState(worldActionRows(rows));
+  const mass = state.masses.get(subject)?.value ?? null;
+  if (mass === null || !(drainPerTurn > 0) || isOutOfPlay(state, subject)) return { mass, starved: false };
+  const left = Math.max(0, Math.round((mass - drainPerTurn) * 100) / 100);
+  const k = state.turnCount + 1;
+  await writeWorldTurn(memoryDir, world, k, [
+    { subject: `${subject}@turn${k}`, predicate: MASS_PREDICATE, object: String(left) },
+    ...(left > 0 ? [] : [{ subject: `${subject}@turn${k}`, predicate: "mgx:currently-in", object: STARVED_PLACE }]),
+  ], cache);
+  return { mass: left, starved: left <= 0 };
+}
+
 // ---- the look/inventory digest ----------------------------------------------
 //
 // "look" and "what am I carrying" are generateCompletion calls (the shipped
@@ -588,6 +642,10 @@ const VIEW_EXCLUDED_PREDICATES = new Set([
   // Which individual is dangerous is the predator mechanic's own wiring; a
   // room look that announced it would give the trap away as a bare triple.
   "mgx:is-predator",
+  // The dig mechanic's wiring is the same kind of thing: it tells the verb what
+  // a dug room may hold and how far the world reaches, and says nothing about
+  // the room anyone is standing in.
+  ORIGIN_PREDICATE, DIG_SPAWN_PREDICATE, DEN_SPAWN_PREDICATE, DEN_RESIDENT_PREDICATE,
 ]);
 
 const sentenceCase = (term) => String(term).charAt(0).toUpperCase() + String(term).slice(1);
@@ -638,7 +696,7 @@ export function worldDigestRows(rows, state, actingSubject = "player") {
   const isCarryingCharacter = (holder) =>
     isTyped(rows, holder, "person") || state.placements.get(holder)?.predicate === "mgx:currently-in";
   for (const [subject, place] of state.placements) {
-    if (place.predicate === "mgx:hidden-in" || place.object === CONSUMED_PLACE) continue;
+    if (place.predicate === "mgx:hidden-in" || OUT_OF_PLAY_PLACES.has(place.object)) continue;
     if (place.predicate === "mgx:located-in" && place.object === actingSubject) {
       push(actingSubject, "carries the", subject);
       continue;
@@ -661,18 +719,18 @@ export function worldDigestRows(rows, state, actingSubject = "player") {
   // already assumes, so it is left unsaid.
   const POSITION_PHRASE = { "mgx:on-top-of": "is on the", "mgx:on-plane": "is on the", "mgx:under": "is under the" };
   for (const [subject, place] of state.placements) {
-    if (place.predicate === "mgx:hidden-in" || place.object === actingSubject || place.object === CONSUMED_PLACE) continue;
+    if (place.predicate === "mgx:hidden-in" || place.object === actingSubject || OUT_OF_PLAY_PLACES.has(place.object)) continue;
     const pos = currentPosition(state, subject);
     if (pos && POSITION_PHRASE[pos.predicate]) { push(subject, POSITION_PHRASE[pos.predicate], pos.object); continue; }
     const plane = classDefaultPlane(rows, subject);
     if (plane && plane !== "floor") push(subject, "is usually on the", plane);
   }
-  const consumed = new Set([...state.placements]
-    .filter(([, place]) => place.object === CONSUMED_PLACE)
+  const gone = new Set([...state.placements]
+    .filter(([, place]) => OUT_OF_PLAY_PLACES.has(place.object))
     .map(([subject]) => subject));
   for (const row of rows || []) {
     if (SNAPSHOT_RE.test(row.subject)) continue;                 // folded above
-    if (consumed.has(row.subject)) continue;                     // eaten, so out of the world entirely
+    if (gone.has(row.subject)) continue;                         // out of the world entirely
     // Room text comes from the world source only. A merged corpus overlaps a
     // room's own vocabulary ("library rdfs:subClassOf literary study"), and
     // without this those rows leak into the room description as stray sentences.
@@ -769,12 +827,29 @@ const OPPOSITE_DIRECTION = new Map([
   ["up", "down"], ["down", "up"],
 ]);
 
-// What a freshly dug room holds. The pool is placeholder scenery so a new room
-// is never bare; a later workstream swaps it for the garden's real food
-// content, which this module has no business naming.
+// What a freshly dug room holds, and how often a dig opens something better
+// than a bare tunnel. The world names the content — a room kind declares the
+// kinds a plain dig turns up, the richer set a den holds, and the animal that
+// lives in one — and this module only decides how many and how often. The
+// pools below are the fallback for a world that declares none.
 const DIG_SPAWN_KINDS = ["root", "carrot", "worm"];
 const DIG_SPAWN_MIN = 0;
 const DIG_SPAWN_MAX = 2;
+// One dug room in five is a den: somebody's larder, holding the whole den pool
+// rather than a scrap or two. One den in three is lived in, and its resident is
+// another animal to ask about food — which is the point of digging one out.
+const DEN_CHANCE_IN = 5;
+const DEN_RESIDENT_CHANCE_IN = 3;
+const DEN_ROOM_CLASS = "den";
+
+// How far from the world's origin room a dig may carry it. Without a cap a
+// burrow sprawls in every direction at once, and an animal twenty hops out has
+// nothing around it, no food it knows of, and no reason to be anywhere — the
+// stranding this bound exists to stop. Six keeps every room inside one
+// pathfinder search of the origin (mud-turn.mjs walks eight hops), so an animal
+// standing at the frontier can always still walk home to the rooms with food in
+// them.
+const DIG_MAX_DISTANCE_FROM_ORIGIN = 6;
 
 // Which way a room of each kind can be dug, and what the room it opens is
 // typed as. Above ground there is nothing to tunnel sideways through, so the
@@ -811,11 +886,60 @@ export function roomKindOf(rows, room) {
   return "indoor";
 }
 
+/** The room a world calls its origin — the one every dig is measured from — or
+ *  null when it names none. A world with no origin fact is simply not bounded.
+ *  Pure. */
+export function originRoomOf(rows) {
+  return (rows || []).find((r) => r.predicate === ORIGIN_PREDICATE && r.object === "true")?.subject ?? null;
+}
+
+/** How many exits a walk from the world's origin to `room` crosses, or null
+ *  when the world declares no origin or no chain of exits joins the two. Pure. */
+export function roomDistanceFromOrigin(rows, state, room) {
+  const origin = originRoomOf(rows);
+  if (!origin) return null;
+  if (origin === room) return 0;
+  const seen = new Set([origin]);
+  let frontier = [origin];
+  for (let distance = 1; frontier.length; distance += 1) {
+    const next = [];
+    for (const from of frontier) {
+      for (const target of state.exits.get(from)?.values() ?? []) {
+        if (seen.has(target)) continue;
+        seen.add(target);
+        if (target === room) return distance;
+        next.push(target);
+      }
+    }
+    frontier = next;
+  }
+  return null;
+}
+
+/** True when `room` is as far from the origin as this world digs, or off the
+ *  origin's map altogether. A freshly dug room's only other exit is the one
+ *  back, so its distance is always this room's plus one — which makes the whole
+ *  boundary test a property of where the digger stands, never of the direction
+ *  it faces.
+ *
+ *  A room the origin cannot reach is the strictest case, not the loosest: it
+ *  has no measurable distance, so nothing would ever stop it growing, and a
+ *  burrow with no way home is precisely what the bound exists to prevent. A
+ *  world that declares no origin at all is a different thing and stays
+ *  unbounded. Pure. */
+function atDigBoundary(rows, state, room) {
+  if (!originRoomOf(rows)) return false;
+  const distance = roomDistanceFromOrigin(rows, state, room);
+  return distance === null || distance >= DIG_MAX_DISTANCE_FROM_ORIGIN;
+}
+
 /** Every direction a dig could actually open a room in from `room`: allowed
- *  by the room's own kind, and with no exit already written that way. This is
- *  the exact set the dig verb accepts, so a caller offering these as hints can
- *  never suggest a dig the verb would then refuse. Pure. */
+ *  by the room's own kind, with no exit already written that way, and inside
+ *  the world's dig boundary. This is the exact set the dig verb accepts, so a
+ *  caller offering these as hints can never suggest a dig the verb would then
+ *  refuse. Pure. */
 export function diggableDirections(rows, state, room) {
+  if (atDigBoundary(rows, state, room)) return [];
   const exits = state.exits.get(room);
   return [...(DIGGABLE_BY_ROOM_KIND.get(roomKindOf(rows, room)) ?? new Map()).keys()]
     .filter((direction) => !exits?.has(direction));
@@ -863,6 +987,34 @@ function freshObjectId(rows, kind, alsoTaken) {
     if (!taken(`${kind}-${n}`)) return `${kind}-${n}`;
   }
   return `${kind}-${(rows || []).length + 3}`;
+}
+
+/** The kinds a room kind declares for one of the spawn pools, in the order the
+ *  world wrote them, or `fallback` when it declares none. Pure. */
+function declaredKindsOr(rows, roomClass, predicate, fallback) {
+  const declared = factObjects(rows, roomClass, predicate);
+  return declared.length ? declared : fallback;
+}
+
+/** The mass row a freshly minted instance needs, copied off its own class, or
+ *  nothing when the class declares no mass. eat reads the instance's mass, so a
+ *  dug carrot with none would be worth the flat default however the world
+ *  values a carrot. Pure. */
+function classMassFacts(rows, instance, kind) {
+  const mass = factObjects(rows, kind, MASS_PREDICATE)[0];
+  return mass ? [{ subject: instance, predicate: MASS_PREDICATE, object: mass }] : [];
+}
+
+/** What a dig reads like: a bare tunnel, a scrap or two in the loose earth, or
+ *  a den — and, when somebody lives in it, who looked up. Pure. */
+function digNarration(direction, { isDen, spawned, resident }) {
+  const opened = isDen
+    ? `you dig ${direction} and break into a den somebody hollowed out.`
+    : `you dig ${direction} and open up a new room.`;
+  const held = spawned.length
+    ? ` ${isDen ? "Stored in it" : "In the loose earth"}: the ${spawned.join(", the ")}.`
+    : " There's nothing in it but bare earth.";
+  return `${opened}${held}${resident ? ` The ${resident} lives here, and looks up as you come through.` : ""}`;
 }
 
 /** What a thing should be CALLED on screen: its declared display name, else
@@ -985,10 +1137,10 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
       { miss: true },
     );
   }
-  if (here === CONSUMED_PLACE) {
+  if (OUT_OF_PLAY_PLACES.has(here)) {
     return answer(
-      `the ${actingSubject} has been eaten — it takes no more turns in this world.`,
-      noteFor(`${cmd.verb} — ${actingSubject} is placed out of play; every command it gives declines from here on`),
+      `${outOfPlayPhrase(actingSubject, here)} — it takes no more turns in this world.`,
+      noteFor(`${cmd.verb} — ${actingSubject} is placed out of play (${here}); every command it gives declines from here on`),
       { miss: true },
     );
   }
@@ -1253,36 +1405,63 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
         { miss: true },
       );
     }
+    if (atDigBoundary(rows, state, here)) {
+      const reach = roomDistanceFromOrigin(rows, state, here);
+      return answer(
+        `the earth ${direction} of the ${here} is packed hard and endless — you have reached the far edge of the burrow.`,
+        noteFor(reach === null
+          ? `dig — no chain of exits joins the ${here} to the ${originRoomOf(rows)}, so there is no distance to measure a dig against; declined`
+          : `dig — the ${here} stands ${reach} rooms from the ${originRoomOf(rows)}, and this world digs ${DIG_MAX_DISTANCE_FROM_ORIGIN}; declined by distance from the origin`),
+        { miss: true },
+      );
+    }
     const dug = freshRoomId(rows, here, direction);
+    const isDen = dugKind === "underground-space" && stableIndex(`den:${dug}`, DEN_CHANCE_IN) === 0;
     const spawnCount = DIG_SPAWN_MIN + stableIndex(dug, DIG_SPAWN_MAX - DIG_SPAWN_MIN + 1);
-    const spawnedKinds = DIG_SPAWN_KINDS.slice(0, spawnCount);
+    const spawnedKinds = isDen
+      ? declaredKindsOr(rows, dugKind, DEN_SPAWN_PREDICATE, DIG_SPAWN_KINDS)
+      : declaredKindsOr(rows, dugKind, DIG_SPAWN_PREDICATE, DIG_SPAWN_KINDS).slice(0, spawnCount);
     const minted = new Set();
     const spawned = spawnedKinds.map((kind) => {
       const id = freshObjectId(rows, kind, minted);
       minted.add(id);
       return id;
     });
+    const residentKind = isDen && stableIndex(`resident:${dug}`, DEN_RESIDENT_CHANCE_IN) === 0
+      ? factObjects(rows, dugKind, DEN_RESIDENT_PREDICATE)[0] ?? null
+      : null;
+    const resident = residentKind ? freshObjectId(rows, residentKind, minted) : null;
     return commit(
       [
         { subject: dug, predicate: "rdf:type", object: "room" },
         { subject: dug, predicate: "rdf:type", object: dugKind },
+        ...(isDen ? [{ subject: dug, predicate: "rdf:type", object: DEN_ROOM_CLASS }] : []),
         { subject: here, predicate: `mgx:has-exit-${direction}`, object: dug },
         { subject: dug, predicate: `mgx:has-exit-${back}`, object: here },
         // Typed to its OWN kind, not a flat "portable" — a spawned kind the
-        // world already declares rdfs:subClassOf food (DIG_SPAWN_KINDS may
-        // carry one) needs its real class reachable here for isFood's own
-        // objectClassChain walk, or digging up "carrot-1" would still read
-        // as inedible scenery.
+        // world declares rdfs:subClassOf food needs its real class reachable
+        // here for isFood's own objectClassChain walk, or digging up "carrot-1"
+        // would still read as inedible scenery. The class's own mass copies
+        // onto the instance for the same reason: eat reads the instance.
         ...spawnedKinds.flatMap((kind, i) => ([
           { subject: spawned[i], predicate: "rdf:type", object: kind },
           { subject: spawned[i], predicate: DISPLAY_NAME_PREDICATE, object: kind },
           { subject: spawned[i], predicate: "mgx:located-in", object: dug },
+          ...classMassFacts(rows, spawned[i], kind),
         ])),
+        // A resident is placed with currently-in, the predicate that makes an
+        // individual one of the cast, and knows about what its own den holds —
+        // so an animal that digs one out has somebody new to ask about food.
+        ...(resident ? [
+          { subject: resident, predicate: "rdf:type", object: residentKind },
+          { subject: resident, predicate: DISPLAY_NAME_PREDICATE, object: residentKind },
+          { subject: resident, predicate: "mgx:currently-in", object: dug },
+          ...classMassFacts(rows, resident, residentKind),
+          ...spawned.map((thing) => ({ subject: resident, predicate: KNOWS_ABOUT_PREDICATE, object: thing })),
+        ] : []),
       ],
-      spawned.length
-        ? `you dig ${direction} and open up a new room. In the loose earth: the ${spawned.join(", the ")}.`
-        : `you dig ${direction} and open up a new room. There's nothing in it but bare earth.`,
-      `dig — minted the ${dugKind} ${dug} with exits both ways (${direction} out, ${back} back)${spawned.length ? `, and ${spawned.length} object(s) in it` : ""}; digging spends the turn, so the digger stays in the ${here}`,
+      digNarration(direction, { isDen, spawned, resident }),
+      `dig — minted the ${isDen ? `${DEN_ROOM_CLASS} ` : ""}${dugKind} ${dug} with exits both ways (${direction} out, ${back} back)${spawned.length ? `, and ${spawned.length} object(s) in it` : ""}${resident ? `, lived in by ${resident}` : ""}; digging spends the turn, so the digger stays in the ${here}`,
       `dig ${direction} out of the ${here}`,
     );
   }
@@ -1507,10 +1686,10 @@ async function worldWhereAnswer(line, { memoryDir, actingSubject = "player" }) {
       { miss: true, goal: `locate the ${thing}` },
     );
   }
-  if (place.object === CONSUMED_PLACE) {
+  if (OUT_OF_PLAY_PLACES.has(place.object)) {
     return answer(
-      `the ${thing} has been eaten — it's gone from the world.`,
-      `ADVENTURE — where-aside: ${thing} was eaten, so it has no place left to name`,
+      `${outOfPlayPhrase(thing, place.object)} — it's gone from the world.`,
+      `ADVENTURE — where-aside: ${thing} is out of play (${place.object}), so it has no place left to name`,
       { goal: `locate the ${thing}` },
     );
   }

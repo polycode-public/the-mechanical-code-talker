@@ -11,7 +11,9 @@ import { join } from "node:path";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
 import {
   runWorldCommand, foldWorldState, worldActionRows, roomAffordances,
-  worldDigestRows, personRoomReport,
+  worldDigestRows, personRoomReport, personKnowledgeLines,
+  diggableDirections, roomDistanceFromOrigin,
+  recordMassDrain, isOutOfPlay, outOfPlayReasonOf,
 } from "../../src/services/adventure.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
@@ -84,28 +86,29 @@ test("a character with no placement of its own is declined, never given another 
 
 test("dig mints a room with exits both ways and leaves the digger where it stood", async () => {
   await withMudGarden("dig", async (dir) => {
-    const dug = await run(dir, { verb: "dig", direction: "north" }, "badger-2");
+    await run(dir, { verb: "go", direction: "west" }, "badger-2");
+    const dug = await run(dir, { verb: "dig", direction: "south" }, "badger-2");
     assert.equal(dug.miss, false);
-    assert.match(dug.text, /you dig north and open up a new room\./);
+    assert.match(dug.text, /you dig south and open up a new room\./);
 
     const state = await foldOf(dir);
-    assert.equal(state.exits.get("sett-1").get("north"), "sett-1-north", "the id scheme is <room>-<direction>");
-    assert.equal(state.exits.get("sett-1-north").get("south"), "sett-1", "the way back is written too");
-    assert.equal(state.placements.get("badger-2").object, "sett-1", "digging spends the turn without moving the digger");
+    assert.equal(state.exits.get("burrow-1").get("south"), "burrow-1-south", "the id scheme is <room>-<direction>");
+    assert.equal(state.exits.get("burrow-1-south").get("north"), "burrow-1", "the way back is written too");
+    assert.equal(state.placements.get("badger-2").object, "burrow-1", "digging spends the turn without moving the digger");
 
     const { rows } = await rowsAndState(dir);
     assert.ok(
-      rows.some((r) => r.subject === "sett-1-north" && r.predicate === "rdf:type" && r.object === "room"),
+      rows.some((r) => r.subject === "burrow-1-south" && r.predicate === "rdf:type" && r.object === "room"),
       "the dug room is typed as a room",
     );
     assert.ok(
-      rows.some((r) => r.subject === "sett-1-north" && r.predicate === "rdf:type" && r.object === "underground-space"),
+      rows.some((r) => r.subject === "burrow-1-south" && r.predicate === "rdf:type" && r.object === "underground-space"),
       "a room dug sideways out of the burrow is underground too",
     );
     const spawned = [...state.placements]
-      .filter(([, p]) => p.object === "sett-1-north" && p.predicate === "mgx:located-in")
+      .filter(([, p]) => p.object === "burrow-1-south" && p.predicate === "mgx:located-in")
       .map(([thing]) => thing);
-    assert.ok(spawned.length <= 2, `a dig spawns a bounded number of objects, got ${spawned.length}`);
+    assert.ok(spawned.length <= 2, `a plain dig spawns a bounded number of objects, got ${spawned.length}`);
     for (const thing of spawned) {
       assert.match(thing, /^[a-z]+-\d+$/, "a spawned object reads as its kind and a small number, never a room path");
       assert.equal(
@@ -114,6 +117,72 @@ test("dig mints a room with exits both ways and leaves the digger where it stood
         "and carries the plain kind as the name to show it by",
       );
     }
+  });
+});
+
+test("some digs break into a den: a food store, and sometimes a resident to ask about it", async () => {
+  await withMudGarden("dig-den", async (dir) => {
+    const dug = await run(dir, { verb: "dig", direction: "north" }, "badger-2");
+    assert.equal(dug.miss, false);
+    assert.match(dug.text, /you dig north and break into a den somebody hollowed out\./);
+    assert.match(dug.text, /Stored in it: the carrot-1, the root-1, the worm-1\./);
+    assert.match(dug.text, /The mouse-1 lives here/);
+
+    const { rows, state } = await rowsAndState(dir);
+    assert.ok(
+      rows.some((r) => r.subject === "sett-1-north" && r.predicate === "rdf:type" && r.object === "den"),
+      "the room carries the den class the world declares, on top of its ordinary room typing",
+    );
+    assert.equal(
+      state.masses.get("carrot-1").value, 3,
+      "a dug instance copies the mass its own class declares, so eating it is worth what a carrot is worth",
+    );
+    assert.equal(
+      state.placements.get("mouse-1").predicate, "mgx:currently-in",
+      "the resident is placed like the rest of the cast, so it can be talked to",
+    );
+    assert.deepEqual(
+      personKnowledgeLines(rows, state, "mouse-1").aboutTopics, ["carrot-1", "root-1", "worm-1"],
+      "and knows what its own den holds, which is what a visitor comes to ask about",
+    );
+  });
+});
+
+test("digging stops at the world's own boundary rather than sprawling on forever", async () => {
+  await withMudGarden("dig-boundary", async (dir) => {
+    const tag = worldProvenanceTag(WORLD);
+    // A straight line of rooms running east from the sett, laid down directly
+    // so each one's distance from the garden is a fixed, stated number rather
+    // than whatever a run of seeded digs happens to produce. The sett itself
+    // already stands two exits out, so far-3 through far-6 are three to six.
+    const chain = ["sett-1", "far-3", "far-4", "far-5", "far-6"];
+    const links = [];
+    for (let i = 1; i < chain.length; i += 1) {
+      links.push({ subject: chain[i], predicate: "rdf:type", object: "room", provenance: tag });
+      links.push({ subject: chain[i], predicate: "rdf:type", object: "underground-space", provenance: tag });
+      links.push({ subject: chain[i - 1], predicate: "mgx:has-exit-east", object: chain[i], provenance: tag });
+      links.push({ subject: chain[i], predicate: "mgx:has-exit-west", object: chain[i - 1], provenance: tag });
+    }
+    await appendFacts(dir, links);
+
+    const { rows, state } = await rowsAndState(dir);
+    assert.equal(roomDistanceFromOrigin(rows, state, "far-6"), 6, "far-6 sits six exits from the garden");
+    assert.deepEqual(
+      diggableDirections(rows, state, "far-6"), [],
+      "a room at the boundary offers no dig at all, so nothing suggests one the verb would refuse",
+    );
+    assert.ok(
+      diggableDirections(rows, state, "far-5").includes("north"),
+      "one room short of it still has a frontier",
+    );
+
+    await appendFacts(dir, [{
+      subject: "badger-2@turn40", predicate: "mgx:currently-in", object: "far-6", provenance: `${tag}:turn40`,
+    }]);
+    const declined = await run(dir, { verb: "dig", direction: "north" }, "badger-2");
+    assert.equal(declined.miss, true);
+    assert.match(declined.text, /far edge of the burrow/);
+    assert.match(declined.note, /distance from the origin/);
   });
 });
 
@@ -157,6 +226,39 @@ test("walking into the fox's den ends that animal's run", async () => {
     const after = await run(dir, { verb: "look" }, "mole-1");
     assert.equal(after.miss, true);
     assert.match(after.text, /has been eaten — it takes no more turns/);
+  });
+});
+
+test("a character whose mass runs out starves, and is out of play the same way an eaten one is", async () => {
+  await withMudGarden("starve", async (dir) => {
+    const first = await recordMassDrain(dir, { world: WORLD, subject: "vole-1", drainPerTurn: 2 });
+    assert.deepEqual(first, { mass: 4, starved: false }, "the vole's 6 less the 2 a turn costs it");
+
+    await recordMassDrain(dir, { world: WORLD, subject: "vole-1", drainPerTurn: 2 });
+    const last = await recordMassDrain(dir, { world: WORLD, subject: "vole-1", drainPerTurn: 2 });
+    assert.deepEqual(last, { mass: 0, starved: true });
+
+    const state = await foldOf(dir);
+    assert.equal(state.placements.get("vole-1").object, "starved", "it is placed out of play, not left standing in the garden");
+    assert.equal(isOutOfPlay(state, "vole-1"), true);
+    assert.equal(outOfPlayReasonOf(state, "vole-1"), "starved", "and the reason tells starving apart from being eaten");
+    assert.equal(state.placements.get("mole-1").object, "garden", "nobody else is touched by it");
+
+    const after = await run(dir, { verb: "look" }, "vole-1");
+    assert.equal(after.miss, true);
+    assert.match(after.text, /the vole-1 has starved — it takes no more turns/);
+
+    const drainedAgain = await recordMassDrain(dir, { world: WORLD, subject: "vole-1", drainPerTurn: 2 });
+    assert.deepEqual(drainedAgain, { mass: 0, starved: false }, "a starved character is charged nothing further");
+  });
+});
+
+test("a subject the world writes no mass for is charged nothing and never starves", async () => {
+  await withMudGarden("starve-massless", async (dir) => {
+    const drained = await recordMassDrain(dir, { world: WORLD, subject: "basket", drainPerTurn: 2 });
+    assert.deepEqual(drained, { mass: null, starved: false });
+    const state = await foldOf(dir);
+    assert.equal(state.placements.get("basket").object, "garden");
   });
 });
 

@@ -1,21 +1,22 @@
 // mud-turn.mjs — one acting character's whole turn in a mud world: investigate
-// the room it stands in, walk toward food it actually knows about, and (only
-// when that walk has nowhere to go) roll for digging out of the room's
-// frontier. The split mirrors spider-fly.mjs / spider-fly-turn.mjs: adventure
-// .mjs owns the read/fold/write primitives, this file owns the per-tick
-// decisions that drive them. Nothing here writes a fact of its own — every
-// change goes out through runWorldCommand, recordTold or recordExamined.
+// the room it stands in, walk toward food it actually knows about, roll for
+// digging out of the room's frontier, and (when none of that came to anything)
+// set off for a room it has never stood in. The split mirrors spider-fly.mjs /
+// spider-fly-turn.mjs: adventure.mjs owns the read/fold/write primitives, this
+// file owns the per-tick decisions that drive them. Nothing here writes a fact
+// of its own — every change goes out through runWorldCommand, recordTold,
+// recordExamined or recordMassDrain.
 //
 // Every roll is seeded from (character, turn, room, decision name) through
 // fnv1a32/mulberry32, so a run reproduces exactly from its inputs. The world
 // layer writes no bare Math.random anywhere, and this file keeps that.
 //
-// Three things the design leaves open, settled here:
+// Four things the design leaves open, settled here:
 //
-// A character moves once per turn. The directed walk and the edge rolls draw
-// on the same budget, so the edge rolls only run when the walk found nowhere
-// to go. A walk that stepped reached the next room on a known path; it did not
-// reach an edge.
+// A character moves once per turn. The directed walk, the edge rolls and the
+// explore step draw on the same budget, in that order, so each only runs when
+// the one before it came up empty. A walk that stepped reached the next room on
+// a known path; it did not reach an edge.
 //
 // There are two separate reasons to dig — plain exploration, and following
 // the level's own frontier toward food — and both cash out as a dig. They are
@@ -30,14 +31,29 @@
 // the one case where an exit is worth a gamble and the walk still had nothing
 // to follow. A character that knows about no food at all rolls nothing: that
 // silence is the honest miss, and it holds all the way down.
+//
+// A turn that found nothing to do anywhere above ends on the explore step, and
+// that step is a different claim from the food walk. It never guesses where
+// food is. It reads which rooms this character has itself stood in — its own
+// placement history, written turn by turn — and steps toward the nearest one it
+// has not. "I have not been down there yet" is something an animal genuinely
+// knows about itself, so acting on it invents nothing; without it a character
+// that digs itself into a quiet corner stands there for the rest of the run.
+//
+// The two limits that make that stop being a treadmill live elsewhere:
+// adventure.mjs bounds how far from the origin a dig may reach, so the set of
+// rooms to explore is finite, and every turn charges mass. An animal really out
+// of world eventually starves, which is an ending, not a freeze.
 
 import { mulberry32 } from "../domain/seeded-random.mjs";
 import { fnv1a32 } from "../domain/hash.mjs";
 import { bfsLevels } from "../domain/planning.mjs";
 import { loadMemory, readFactRows } from "../adapters/memory/core.mjs";
+import { DEFAULT_GAME_CONFIG, mudMassDrainPerTurn } from "../domain/game-config.mjs";
 import {
   foldWorldState, worldActionRows, runWorldCommand, recordTold, recordExamined,
-  personKnowledgeLines, objectClassChain, diggableDirections, isOutOfPlay,
+  recordMassDrain, personKnowledgeLines, objectClassChain, diggableDirections,
+  isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
 } from "./adventure.mjs";
 
 const FOOD_CLASS = "food";
@@ -45,6 +61,7 @@ const LATERAL_DIRECTIONS = ["north", "south", "east", "west"];
 // Deep enough to cross a whole burrow without letting one character's
 // pathfinder walk a whole grown world every tick.
 const WALK_SEARCH_DEPTH = 8;
+const SNAPSHOT_RE = /^(.+)@turn(\d+)$/;
 
 const EXIT_TOWARD_FOOD_CHANCE = 0.5;
 const EDGE_FOLLOW_DIG_CHANCE = 0.25;
@@ -114,6 +131,15 @@ function knownFood(rows, state, character) {
   return [...new Set(aboutTopics)].filter((thing) => isFood(rows, thing)).sort();
 }
 
+/** The food a character knows about that is still somewhere it could be
+ *  reached — on a floor, or in an open container. A knows-about fact outlives
+ *  what it names: eat the carrot and the fact stays true as testimony while the
+ *  carrot itself leaves the world. Anything deciding where to GO has to read
+ *  this list rather than the raw one, or a character spends the rest of the run
+ *  crossing the burrow after a meal somebody already ate. */
+const standingKnownFood = (rows, state, character) =>
+  knownFood(rows, state, character).filter((thing) => visibleRoomOf(rows, state, thing) !== null);
+
 const knownTopics = (rows, state, character) =>
   new Set(personKnowledgeLines(rows, state, character).aboutTopics);
 
@@ -130,20 +156,14 @@ const castIn = (state, room, exclude) => [...state.placements]
 
 /**
  * The first step of a shortest room-graph path from `here` to the nearest room
- * holding a food-classed thing `character` knows about, as
- * `{ direction, room, hops }`. Null when the character knows of no food, or
- * when none of it sits in a room reachable within the search depth — the
- * honest "I don't know where any food is", never a fallback wander.
+ * `wanted` accepts, as `{ direction, room, hops }`. Null when nothing within
+ * the search depth qualifies. Ties break on the room name, so a fork never
+ * turns on fact-row order. Rooms in `avoid` are neither entered nor routed
+ * through.
  */
-function stepTowardKnownFood(rows, state, character, here) {
-  const foodRooms = new Set(
-    knownFood(rows, state, character)
-      .map((thing) => visibleRoomOf(rows, state, thing))
-      .filter(Boolean),
-  );
-  if (!foodRooms.size || foodRooms.has(here)) return null;
-
+function firstStepToward(state, here, wanted, avoid = new Set()) {
   const successorsOf = (room) => [...(state.exits.get(room)?.entries() ?? [])]
+    .filter(([, target]) => !avoid.has(target))
     .map(([direction, target]) => ({ room: target, direction, from: room }));
 
   const cameFrom = new Map(); // room -> { via, from }
@@ -151,7 +171,7 @@ function stepTowardKnownFood(rows, state, character, here) {
   for (const level of bfsLevels(here, successorsOf, { maxDepth: WALK_SEARCH_DEPTH, keyOf: (item) => item.room })) {
     hops += 1;
     for (const item of level) cameFrom.set(item.room, { via: item.direction, from: item.from });
-    const goal = level.map((item) => item.room).filter((room) => foodRooms.has(room)).sort()[0];
+    const goal = level.map((item) => item.room).filter(wanted).sort()[0];
     if (!goal) continue;
     let room = goal;
     let firstStep = null;
@@ -166,6 +186,55 @@ function stepTowardKnownFood(rows, state, character, here) {
   return null;
 }
 
+/**
+ * The first step toward the nearest room holding a food-classed thing
+ * `character` knows about. Null when the character knows of no food, or when
+ * none of it sits in a room reachable within the search depth — the honest
+ * "I don't know where any food is", never a fallback wander.
+ */
+function stepTowardKnownFood(rows, state, character, here) {
+  const foodRooms = new Set(
+    standingKnownFood(rows, state, character).map((thing) => visibleRoomOf(rows, state, thing)),
+  );
+  if (!foodRooms.size || foodRooms.has(here)) return null;
+  return firstStepToward(state, here, (room) => foodRooms.has(room));
+}
+
+/** Every room `character` has itself stood in: its base placement and every
+ *  @turnN snapshot of one, read over the world's OWN rows so a taught locative
+ *  can never write a visit that never happened. */
+function roomsStoodIn(rows, character) {
+  const visited = new Set();
+  for (const row of worldActionRows(rows)) {
+    if (row.predicate !== "mgx:currently-in") continue;
+    const snapshot = SNAPSHOT_RE.exec(row.subject);
+    if ((snapshot ? snapshot[1] : row.subject) !== character) continue;
+    visited.add(row.object);
+  }
+  return visited;
+}
+
+/** Every room a predator is standing in. An animal with nothing better to do
+ *  does not go and look into one: leaving them in would make the explore step a
+ *  funnel straight to the den, since the unvisited room nearest the burrow is
+ *  exactly where the fox lives. The den stays reachable by the food gamble
+ *  below, which is a gamble and is meant to be. */
+const predatorRooms = (rows, state) => new Set((rows || [])
+  .filter((r) => r.predicate === "mgx:is-predator" && r.object === "true")
+  .map((r) => state.placements.get(r.subject)?.object)
+  .filter(Boolean));
+
+/**
+ * The first step toward the nearest room `character` has never stood in. This
+ * is the one move that runs on the character's OWN history rather than on
+ * anything it knows about the world's contents — it says "I have not been that
+ * way yet", which is true whatever turns out to be there.
+ */
+function stepTowardUnvisitedRoom(rows, state, character, here) {
+  const visited = roomsStoodIn(rows, character);
+  return firstStepToward(state, here, (room) => !visited.has(room), predatorRooms(rows, state));
+}
+
 // ---- the turn ----------------------------------------------------------------
 
 /**
@@ -176,13 +245,23 @@ function stepTowardKnownFood(rows, state, character, here) {
  * turn. Room-mates are discovered from the fold, so the caller passes no cast
  * list.
  *
- * Returns `{ character, k, room, roomAfter, actions, learned, text, note }`.
- * `actions` is the machine-readable spine — one entry per sub-step that fired,
- * each `{ step, kind, ..., text, miss }` — and a sub-step whose precondition
- * did not hold this turn records `kind: "none"` with its reason rather than
- * dropping out silently or being narrated as a success.
+ * Returns `{ character, k, room, roomAfter, actions, learned, mass, text,
+ * note }`. `actions` is the machine-readable spine — one entry per sub-step
+ * that fired, each `{ step, kind, ..., text, miss }` — and a sub-step whose
+ * precondition did not hold this turn records `kind: "none"` with its reason
+ * rather than dropping out silently or being narrated as a success. `mass` is
+ * what the character weighs once this turn's drain is charged, or null when the
+ * world writes it no mass.
+ *
+ * A turn that ends the character's run also carries `outOfPlay: true` and
+ * `outOfPlayReason` ("eaten" or "starved"), and so does every turn after it.
+ *
+ * `mudConfig` is the resolved `mud` section of the game config, which is where
+ * the per-species mass drain a turn charges comes from.
  */
-export async function runMudTurn(character, { world, memoryDir, env, graph, cache, k = null } = {}) {
+export async function runMudTurn(character, {
+  world, memoryDir, env, graph, cache, k = null, mudConfig = DEFAULT_GAME_CONFIG.mud,
+} = {}) {
   const opened = await readWorld(memoryDir);
   const room = opened.state.placements.get(character)?.object ?? null;
   const turn = k ?? opened.state.turnCount + 1;
@@ -198,10 +277,12 @@ export async function runMudTurn(character, { world, memoryDir, env, graph, cach
     };
   }
   if (isOutOfPlay(opened.state, character)) {
+    const reason = outOfPlayReasonOf(opened.state, character);
     return {
-      character, k: turn, room: null, roomAfter: null, actions, learned: [], outOfPlay: true,
-      text: `the ${character} has been eaten. It takes no more turns.`,
-      note: `MUD — ${character} is placed out of play; the turn is declined, and every later one will be too`,
+      character, k: turn, room: null, roomAfter: null, actions, learned: [],
+      outOfPlay: true, outOfPlayReason: reason,
+      text: `${outOfPlayPhrase(character, reason)}. It takes no more turns.`,
+      note: `MUD — ${character} is placed out of play (${reason}); the turn is declined, and every later one will be too`,
     };
   }
 
@@ -229,21 +310,32 @@ export async function runMudTurn(character, { world, memoryDir, env, graph, cach
     });
     moved = !res.miss;
   } else {
-    recordSkip(
-      "walk",
-      knownFood(walked.rows, walked.state, character).length
-        ? "no room it knows holds food is reachable from here"
-        : "it knows of no food to walk toward",
-      `the ${character} has nowhere it knows to walk to.`,
-    );
+    recordSkip("walk", walkSkipReason(walked.rows, walked.state, character), `the ${character} has nowhere it knows to walk to.`);
   }
 
   if (!moved) {
-    await rollAtEdge({ character, turn, memoryDir, runCommand, recordSkip });
+    const edge = await rollAtEdge({ character, turn, memoryDir, runCommand, recordSkip });
+    if (!edge.acted) await exploreUnvisited({ character, memoryDir, runCommand, recordSkip });
+  }
+
+  const drained = await recordMassDrain(memoryDir, {
+    world, subject: character, drainPerTurn: mudMassDrainPerTurn(mudConfig, character), cache,
+  });
+  if (drained.mass === null) {
+    notes.push(`MUD — mass: the world writes ${character} no mass, so a turn costs it nothing`);
+  } else {
+    notes.push(`MUD — mass: ${character} is down to ${drained.mass}${drained.starved ? " and starves" : ""}`);
   }
 
   const closed = await readWorld(memoryDir);
   const learned = [...knownTopics(closed.rows, closed.state, character)].filter((t) => !learnedBefore.has(t)).sort();
+  const texts = actions.map((a) => a.text).filter(Boolean);
+  if (drained.starved) texts.push(`the ${character} runs out of mass and starves. It takes no more turns.`);
+  // Read off the closed world rather than off the drain alone: a character can
+  // also end this turn eaten, by walking into the predator's room on it, and a
+  // caller watching for a fate should not have to know which of the two ways it
+  // was to find out that one happened.
+  const fate = outOfPlayReasonOf(closed.state, character);
   return {
     character,
     k: turn,
@@ -251,9 +343,41 @@ export async function runMudTurn(character, { world, memoryDir, env, graph, cach
     roomAfter: closed.state.placements.get(character)?.object ?? room,
     actions,
     learned,
-    text: actions.map((a) => a.text).filter(Boolean).join(" "),
+    mass: drained.mass,
+    ...(fate ? { outOfPlay: true, outOfPlayReason: fate } : {}),
+    text: texts.join(" "),
     note: notes.join("; "),
   };
+}
+
+/** Why a turn's food walk took no step — three different situations, each
+ *  named on its own terms rather than collapsed into one shrug. */
+function walkSkipReason(rows, state, character) {
+  if (!knownFood(rows, state, character).length) return "it knows of no food to walk toward";
+  if (!standingKnownFood(rows, state, character).length) return "every food it knows about has already been eaten";
+  return "no room it knows holds food is reachable from here";
+}
+
+/** The last move of a turn that found nothing else to do: one step toward the
+ *  nearest room this character has never stood in. Reached only when the walk
+ *  took no step and the edge rolls fired nothing, so it never competes for the
+ *  move budget — and when every room within reach has already been walked, it
+ *  says so and the character stands still. */
+async function exploreUnvisited({ character, memoryDir, runCommand, recordSkip }) {
+  const { rows, state } = await readWorld(memoryDir);
+  const here = state.placements.get(character)?.object ?? null;
+  if (!here) return recordSkip("explore", "it has no position to set out from", "");
+  const step = stepTowardUnvisitedRoom(rows, state, character, here);
+  if (!step) {
+    return recordSkip(
+      "explore",
+      "it has already stood in every room it can reach",
+      `the ${character} has been everywhere this burrow goes.`,
+    );
+  }
+  return runCommand("explore", { pattern: "imperative", verb: "go", direction: step.direction }, {
+    direction: step.direction, toward: step.room, hops: step.hops, reason: "unvisited",
+  });
 }
 
 /** Step one: talk to a room-mate, examine something unexamined, then make one
@@ -386,42 +510,54 @@ async function manipulateSomething({ character, turn, room, memoryDir, runComman
 
 /** Step three: the room's unexplored sides, one independent roll per reason
  *  per direction. Only reached on a turn whose walk took no step, so the move
- *  budget is still unspent. */
+ *  budget is still unspent. Reports `{ acted }` — whether a roll actually came
+ *  up — so the caller knows whether the turn still has a move to spend. */
 async function rollAtEdge({ character, turn, memoryDir, runCommand, recordSkip }) {
   const { rows, state } = await readWorld(memoryDir);
   const room = state.placements.get(character)?.object ?? null;
-  if (!room) return recordSkip("edge", "it has no position to roll from", "");
+  if (!room) {
+    recordSkip("edge", "it has no position to roll from", "");
+    return { acted: false };
+  }
 
   // The exit gamble runs before the dig rolls and whether or not this room can
   // still be dug at all. A room mapped on every side its kind allows is
   // exactly where a character with food somewhere else has nothing left but
   // its existing exits to gamble on, so gating it behind a diggable direction
   // stranded animals in a finished room for the rest of the run.
-  const foodItKnows = knownFood(rows, state, character);
+  const foodItKnows = standingKnownFood(rows, state, character);
   const foodStandsHere = foodItKnows.some((thing) => visibleRoomOf(rows, state, thing) === room);
   if (foodItKnows.length && !foodStandsHere) {
     for (const direction of [...(state.exits.get(room)?.keys() ?? [])].sort()) {
       if (rollFor(character, turn, room, `exit-${direction}`) >= EXIT_TOWARD_FOOD_CHANCE) continue;
-      return runCommand("edge", { pattern: "imperative", verb: "go", direction }, { direction, reason: "exit-toward-food" });
+      await runCommand("edge", { pattern: "imperative", verb: "go", direction }, { direction, reason: "exit-toward-food" });
+      return { acted: true };
     }
   }
 
   // The room's OWN kind decides which way a dig can go — there is nothing to
-  // tunnel sideways through above ground, and the burrow runs one level deep
-  // — so the candidate set is the dig verb's own, never a flat compass. A
-  // roll on a direction the verb would refuse spends the turn on a decline.
+  // tunnel sideways through above ground, the burrow runs one level deep, and
+  // past the world's dig boundary nothing is offered at all — so the candidate
+  // set is the dig verb's own, never a flat compass. A roll on a direction the
+  // verb would refuse spends the turn on a decline.
   const edges = diggableDirections(rows, state, room);
-  if (!edges.length) return recordSkip("edge", `there is nowhere left to dig from the ${room}`, "");
+  if (!edges.length) {
+    recordSkip("edge", `there is nowhere left to dig from the ${room}`, "");
+    return { acted: false };
+  }
 
   for (const direction of edges.filter((d) => LATERAL_DIRECTIONS.includes(d))) {
     if (rollFor(character, turn, room, `edge-follow-${direction}`) >= EDGE_FOLLOW_DIG_CHANCE) continue;
-    return runCommand("edge", { pattern: "imperative", verb: "dig", direction }, { direction, reason: "edge-follow" });
+    await runCommand("edge", { pattern: "imperative", verb: "dig", direction }, { direction, reason: "edge-follow" });
+    return { acted: true };
   }
 
   for (const direction of edges) {
     if (rollFor(character, turn, room, `dig-${direction}`) >= EXPLORATORY_DIG_CHANCE) continue;
-    return runCommand("edge", { pattern: "imperative", verb: "dig", direction }, { direction, reason: "explore" });
+    await runCommand("edge", { pattern: "imperative", verb: "dig", direction }, { direction, reason: "explore" });
+    return { acted: true };
   }
 
-  return recordSkip("edge", `no roll came up at the ${room}'s edge`, "");
+  recordSkip("edge", `no roll came up at the ${room}'s edge`, "");
+  return { acted: false };
 }

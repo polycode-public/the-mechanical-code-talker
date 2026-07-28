@@ -189,11 +189,12 @@ test("a dug object is reachable by the short id it was minted under, not by its 
       // Digging deterministically spawns one object of kind "root", minted as
       // "root-1" — short enough to read in a pouch, and distinct from the
       // world's own props.
-      const dug = await badger.turn("dig north");
+      await badger.turn("go west");
+      const dug = await badger.turn("dig south");
       assert.match(dug.answer, /In the loose earth: the root-1/, "a spawned object reads as its kind and a number, not a room path");
 
-      const walked = await badger.turn("go north");
-      assert.match(walked.answer, /[Nn]ow in the sett-1-north/);
+      const walked = await badger.turn("go south");
+      assert.match(walked.answer, /[Nn]ow in the burrow-1-south/);
 
       const byId = await badger.turn("take the root-1");
       assert.match(byId.answer, /you take the root-1/, "the world declares its own minted ids, so the dug object is addressable");

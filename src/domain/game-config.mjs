@@ -27,25 +27,32 @@ export const DEFAULT_GAME_CONFIG = Object.freeze({
     minHatchlingMass: 3,
     webDurationTurns: 10,
   }),
+  // The drains are what make a mud character mortal: every scripted turn
+  // charges one, and a character whose mass reaches zero starves and takes no
+  // more turns. They are sized against the demo page's own default run (400
+  // shared turns, so roughly 200 each for two animals) — an animal that never
+  // eats dies about two thirds of the way through, and one that forages does
+  // not. A drain that emptied a starting mass in twenty turns would end every
+  // run before it had shown anything.
   mud: Object.freeze({
     moleInitialMass: 8,
-    moleMassDecrementPerTurn: 0.3,
+    moleMassDecrementPerTurn: 0.06,
     moleSpeed: 1,
     moleDigReach: 1,
     voleInitialMass: 6,
-    voleMassDecrementPerTurn: 0.25,
+    voleMassDecrementPerTurn: 0.05,
     voleSpeed: 1,
     voleDigReach: 1,
     badgerInitialMass: 20,
-    badgerMassDecrementPerTurn: 0.5,
+    badgerMassDecrementPerTurn: 0.08,
     badgerSpeed: 2,
     badgerDigReach: 2,
     groundhogInitialMass: 12,
-    groundhogMassDecrementPerTurn: 0.4,
+    groundhogMassDecrementPerTurn: 0.06,
     groundhogSpeed: 2,
     groundhogDigReach: 2,
     meerkatInitialMass: 9,
-    meerkatMassDecrementPerTurn: 0.35,
+    meerkatMassDecrementPerTurn: 0.05,
     meerkatSpeed: 1,
     meerkatDigReach: 1,
   }),
@@ -120,6 +127,20 @@ function mergeSection(defaults, raw, keyMap) {
     if (raw[tomlKey] !== undefined) out[camelKey] = raw[tomlKey];
   }
   return out;
+}
+
+/** The species a mud character id names — "mole-1" -> "mole" — which is how
+ *  every per-species knob above is keyed. Pure. */
+export function mudSpeciesOf(characterId) {
+  return String(characterId).replace(/-\d+$/, "");
+}
+
+/** What one turn costs `characterId` in mass, from the resolved `mud` section.
+ *  Zero for a species the config carries no drain for: a knob nobody set is not
+ *  a reason to invent a number and starve something with it. Pure. */
+export function mudMassDrainPerTurn(mudConfig, characterId) {
+  const drain = mudConfig?.[`${mudSpeciesOf(characterId)}MassDecrementPerTurn`];
+  return Number.isFinite(drain) ? drain : 0;
 }
 
 /**
