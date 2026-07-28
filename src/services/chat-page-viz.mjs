@@ -109,36 +109,42 @@ export function wireStateLabel(state) {
     case "sharing":
       return {
         tone: "waiting",
+        pill: "waiting",
         word: "waiting for their reply",
         note: "nothing is in flight yet. this stays live as long as you leave the tab open.",
       };
     case "answering":
       return {
         tone: "waiting",
+        pill: "reply sent",
         word: "send your reply back",
         note: "they connect the moment they paste it. leave this tab open.",
       };
     case "connecting":
       return {
         tone: "working",
+        pill: "connecting",
         word: "connecting",
         note: "both halves are exchanged. this settles either way in a few seconds.",
       };
     case "connected":
       return {
         tone: "live",
+        pill: "connected",
         word: "connected",
         note: "what you teach from here reaches every node below, and theirs reaches you.",
       };
     case "failed":
       return {
         tone: "failed",
+        pill: "can't connect",
         word: "couldn't connect",
         note: "your two machines can't reach each other directly. this works on the same network, or between machines that can already see each other.",
       };
     default:
       return {
         tone: "idle",
+        pill: "not shared",
         word: "not shared",
         note: "this browser holds the only copy of what you teach it.",
       };
@@ -233,6 +239,21 @@ export function nodeRowsFor({ peers, factRows, myPeerId, myDisplayName, nameFor,
   }
   rows.sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0));
   return rows;
+}
+
+/**
+ * A node's monogram: the first letter of each of the two words its name is
+ * made of ("mossy-acorn" -> "ma"), falling back to the first two characters
+ * of anything that isn't shaped that way. Never empty, so a row never draws
+ * a blank circle.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function nodeInitials(name) {
+  const words = String(name || "").split(/[^a-z0-9]+/i).filter(Boolean);
+  if (words.length >= 2) return (words[0][0] + words[1][0]).toLowerCase();
+  if (words.length === 1) return words[0].slice(0, 2).toLowerCase();
+  return "??";
 }
 
 /**
@@ -398,14 +419,20 @@ ${THEME_TOKENS_CSS}
      scroll away mid-wave. */
   .chatCol { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; position: relative; }
   .mono { font-family: ${MONO_STACK}; }
+  /* every display rule below would otherwise beat the hidden attribute, and a
+     hidden-but-displayed overlay still swallows clicks meant for the page. */
+  [hidden] { display: none !important; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; border: none; }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   a { color: var(--corpus); }
 
-  .topbar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .55rem 1.1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  /* brand, then the controls, then the legend pushed to the far right — the
+     legend is passive and takes whatever room is left, so the controls never
+     get folded onto a second line by a wide one. */
+  .topbar { flex: 0 0 auto; display: flex; align-items: center; gap: 1rem; padding: .55rem 1.1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .brand { display: flex; align-items: baseline; gap: .55rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .08em; color: var(--muted); }
-  .legend { display: flex; gap: .8rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
+  .legend { display: flex; gap: .8rem; margin-left: auto; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
   .legend-item { display: inline-flex; align-items: center; gap: .32rem; white-space: nowrap; }
   .dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
   .dot-taught { background: var(--taught); } .dot-corpus { background: var(--corpus); } .dot-entail { background: var(--entail); }
@@ -518,14 +545,18 @@ ${THEME_TOKENS_CSS}
      The connection's state belongs in the chrome, not only in a rail that a
      narrow window hides: the pill, the wave, the invite and the help link stay
      reachable at every width. */
-  .chrome { display: flex; align-items: center; gap: .45rem; }
-  .chrome-btn { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .03em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .2rem .55rem; background: var(--card); text-decoration: none; display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
+  /* The composer is already this page's most familiar-chat element — a pill
+     input and a round send button. The chrome's controls take the same shape,
+     so the page's networking reads as ordinary chat furniture rather than as
+     an instrument bolted on. */
+  .chrome { display: flex; align-items: center; gap: .4rem; }
+  .chrome-btn { font-family: ${SERIF_STACK}; font-size: .8rem; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .22rem .75rem; background: var(--card); text-decoration: none; display: inline-flex; align-items: center; gap: .32rem; white-space: nowrap; line-height: 1.35; }
   .chrome-btn:hover { color: var(--ink); border-color: var(--ink); }
   .chrome-btn.share { color: var(--ink); }
-  .chrome-btn.help { width: 1.55rem; justify-content: center; padding: .2rem 0; }
-  .chrome-btn .hand { font-size: .82rem; line-height: 1; }
+  .chrome-btn.help, .chrome-btn.icon { width: 1.7rem; height: 1.7rem; justify-content: center; padding: 0; }
+  .chrome-btn .hand { font-size: .9rem; line-height: 1; }
 
-  .state-pill { display: inline-flex; align-items: center; gap: .4rem; font-family: ${MONO_STACK}; font-size: .64rem; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .2rem .62rem; background: var(--card); white-space: nowrap; }
+  .state-pill { display: inline-flex; align-items: center; gap: .4rem; font-family: ${SERIF_STACK}; font-size: .8rem; line-height: 1.35; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .22rem .78rem; background: var(--card); white-space: nowrap; }
   .state-pill .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
   .state-pill[data-tone="waiting"] .pill-dot, .state-pill[data-tone="working"] .pill-dot { background: var(--corpus); animation: wire-breathe 2.4s ease-in-out infinite; }
   .state-pill[data-tone="working"] .pill-dot { animation-duration: .9s; }
@@ -544,29 +575,32 @@ ${THEME_TOKENS_CSS}
   .net-block { display: flex; flex-direction: column; gap: .45rem; }
   .netPanel h2 { font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
   .netPanel h2 .h2-count { letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
-  .net-field { display: flex; flex-direction: column; gap: .18rem; }
-  .net-label { font-size: .6rem; color: var(--muted); letter-spacing: .04em; }
-  .net-name-input { font-family: ${MONO_STACK}; font-size: .76rem; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: .28rem .45rem; width: 100%; box-sizing: border-box; }
+  .net-field { display: flex; flex-direction: column; gap: .2rem; }
+  .net-label { font-family: ${SERIF_STACK}; font-size: .74rem; color: var(--muted); }
+  .net-name-input { font-family: ${SERIF_STACK}; font-size: .86rem; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .32rem .6rem; width: 100%; box-sizing: border-box; }
   .net-name-input:read-only { background: none; border-color: transparent; padding-left: 0; color: var(--muted); }
-  .net-note { font-size: .6rem; color: var(--muted); margin: 0; }
-  .net-help { font-size: .6rem; color: var(--corpus); }
-  .net-btn { font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .03em; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: .32rem .62rem; background: var(--card); align-self: flex-start; }
+  .net-note { font-family: ${SERIF_STACK}; font-size: .74rem; color: var(--muted); margin: 0; }
+  .net-help { font-family: ${SERIF_STACK}; font-size: .74rem; color: var(--corpus); }
+  .net-btn { font-family: ${SERIF_STACK}; font-size: .82rem; line-height: 1.35; color: var(--ink); border: 1px solid var(--line); border-radius: 99px; padding: .32rem .85rem; background: var(--card); align-self: flex-start; }
   .net-btn:hover { border-color: var(--ink); }
   .net-btn:disabled { opacity: .5; cursor: default; }
   .net-btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-  .net-btn.ghost { border-color: transparent; color: var(--muted); padding-left: 0; }
-  .net-blob { width: 100%; box-sizing: border-box; font-family: ${MONO_STACK}; font-size: .58rem; line-height: 1.35; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: .35rem .45rem; resize: vertical; word-break: break-all; }
+  .net-btn.ghost { border-color: transparent; color: var(--muted); padding-left: 0; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+  .net-btn.ghost:hover { color: var(--ink); text-decoration-color: var(--ink); }
+  /* the blobs stay mono: they are machine text a person only ever copies, and
+     a serif face on base64 is a lie about what it is. */
+  .net-blob { width: 100%; box-sizing: border-box; font-family: ${MONO_STACK}; font-size: .58rem; line-height: 1.35; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .4rem .5rem; resize: vertical; word-break: break-all; }
   .net-blob:focus { color: var(--ink); }
-  .net-problem { margin: 0; font-size: .64rem; color: var(--alert); border-left: 2px solid var(--alert); padding-left: .5rem; }
+  .net-problem { margin: 0; font-family: ${SERIF_STACK}; font-size: .78rem; color: var(--alert); border-left: 2px solid var(--alert); padding-left: .5rem; }
   .net-invite { display: flex; flex-direction: column; gap: .4rem; padding-top: .2rem; }
 
   /* connection state, as a real visual state at every point: a calm slow
      breath while nothing is in flight, a quicker one while ICE runs, a solid
      green edge when the channel is open, and a static dashed red when it
      failed — a fault should not twitch. */
-  .wire-state { position: relative; overflow: hidden; border: 1px solid var(--line); border-left-width: 3px; border-radius: 3px; padding: .5rem .6rem .55rem .7rem; background: var(--card); }
-  .wire-state-word { display: block; font-size: .84rem; color: var(--ink); }
-  .wire-state-note { display: block; margin-top: .25rem; font-size: .6rem; color: var(--muted); }
+  .wire-state { position: relative; overflow: hidden; border: 1px solid var(--line); border-left-width: 3px; border-radius: 8px; padding: .55rem .7rem .6rem .75rem; background: var(--card); font-family: ${SERIF_STACK}; }
+  .wire-state-word { display: block; font-size: .95rem; color: var(--ink); }
+  .wire-state-note { display: block; margin-top: .25rem; font-size: .74rem; line-height: 1.4; color: var(--muted); }
   .wire-state[data-tone="waiting"], .wire-state[data-tone="working"] { border-left-color: var(--corpus); }
   .wire-state[data-tone="waiting"]::before, .wire-state[data-tone="working"]::before { content: ""; position: absolute; left: -3px; top: 0; bottom: 0; width: 3px; background: var(--corpus); animation: wire-breathe 2.4s ease-in-out infinite; }
   .wire-state[data-tone="working"]::before { animation-duration: .9s; }
@@ -576,17 +610,23 @@ ${THEME_TOKENS_CSS}
   .wire-state[data-tone="failed"] .wire-state-word { color: var(--alert); }
   @keyframes wire-breathe { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
 
+  /* a member list, the way every chat app already draws one: a monogram, a
+     presence badge on it, the name, and when they were last heard from. The
+     monogram is neutral on purpose — on this page colour means provenance,
+     and an avatar palette would spend that meaning on decoration. */
   .node-list { list-style: none; margin: 0; padding: 0; }
-  .node-row { display: flex; align-items: center; gap: .45rem; padding: .3rem .1rem; border-bottom: 1px dotted var(--line); }
-  .node-row:last-child { border-bottom: none; }
-  .node-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--taught); flex: 0 0 auto; }
-  .node-row[data-away="true"] .node-dot { background: none; box-shadow: inset 0 0 0 1px var(--muted); }
-  .node-name { color: var(--ink); font-size: .74rem; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-  .node-row[data-self="true"] .node-name::after { content: " (you)"; color: var(--muted); font-size: .62rem; }
-  .node-when { color: var(--muted); font-size: .6rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .node-hand { display: inline-block; font-size: .82rem; opacity: 0; transform-origin: 70% 80%; }
+  .node-row { display: flex; align-items: center; gap: .55rem; padding: .3rem 0; }
+  .node-avatar { position: relative; flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--line); color: var(--muted); display: flex; align-items: center; justify-content: center; font-family: ${MONO_STACK}; font-size: .58rem; letter-spacing: .04em; text-transform: uppercase; }
+  .node-row[data-self="true"] .node-avatar { background: var(--ink); color: var(--bg); }
+  .node-dot { position: absolute; right: -1px; bottom: -1px; width: 7px; height: 7px; border-radius: 50%; background: var(--taught); box-shadow: 0 0 0 2px var(--bg); }
+  .node-row[data-away="true"] .node-dot { background: var(--muted); }
+  .node-name { font-family: ${SERIF_STACK}; color: var(--ink); font-size: .86rem; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .node-row[data-self="true"] .node-name::after { content: " (you)"; color: var(--muted); font-size: .74rem; }
+  .node-row[data-away="true"] .node-name { color: var(--muted); }
+  .node-when { color: var(--muted); font-family: ${MONO_STACK}; font-size: .62rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .node-hand { display: inline-block; font-size: .88rem; opacity: 0; transform-origin: 70% 80%; }
   .node-row[data-waving="true"] .node-hand { opacity: 1; animation: hand-wave .8s ease-in-out infinite; }
-  .node-empty { color: var(--muted); font-size: .64rem; margin: 0; }
+  .node-empty { font-family: ${SERIF_STACK}; color: var(--muted); font-size: .76rem; line-height: 1.4; margin: 0; }
   @keyframes hand-wave { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(20deg); } }
 
   /* the wire tape — this page's own instrument. Every message in and out, in
@@ -615,7 +655,7 @@ ${THEME_TOKENS_CSS}
   .tape-row[data-family="signal"] .tape-bar { background: var(--entail-t1); }
   .tape-row[data-family="fault"] .tape-bar { background: var(--alert); }
   .tape-row[data-family="fault"] .tape-type { color: var(--alert); }
-  .tape-empty { color: var(--muted); font-size: .62rem; padding: .45rem 0 0; margin: 0; }
+  .tape-empty { font-family: ${SERIF_STACK}; color: var(--muted); font-size: .76rem; line-height: 1.4; padding: .45rem 0 0; margin: 0; }
   @keyframes tape-arrive { from { background: var(--corpus-soft); } to { background: transparent; } }
 
   .netPanel-close { display: none; align-self: flex-end; font-family: ${MONO_STACK}; font-size: .8rem; color: var(--muted); padding: 0 .2rem; }
@@ -624,20 +664,22 @@ ${THEME_TOKENS_CSS}
      generated two-word name is the one place it gets to be a headline. */
   .joinCard { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
   .joinCard-inner { background: var(--card); border: 1px solid var(--line); border-radius: 8px; width: 100%; max-width: 27rem; padding: 1.5rem 1.6rem 1.3rem; box-shadow: 0 18px 48px rgba(0, 0, 0, .3); display: flex; flex-direction: column; gap: .8rem; }
-  .joinCard-eyebrow { font-family: ${MONO_STACK}; font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0; }
-  .joinCard-world { font-size: 1.75rem; line-height: 1.1; margin: -.35rem 0 0; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
-  .joinCard-body { font-size: .88rem; color: var(--muted); margin: 0; max-width: 36ch; }
-  .joinCard .net-btn.primary { font-size: .8rem; padding: .45rem .9rem; }
+  .joinCard-eyebrow { font-size: .82rem; color: var(--muted); margin: 0; }
+  .joinCard-world { font-size: 1.75rem; line-height: 1.1; margin: -.45rem 0 0; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+  .joinCard-body { font-size: .9rem; color: var(--muted); margin: 0; max-width: 36ch; }
+  .joinCard .net-btn.primary { font-size: .95rem; padding: .5rem 1.15rem; }
   .joinCard-reply { display: flex; flex-direction: column; gap: .45rem; }
 
   /* a wave, on every page it reaches: the waver's node name, over the
-     conversation, for as long as the wave is recent. */
-  .waveBurst { position: absolute; left: 50%; bottom: 1.1rem; transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; align-items: center; gap: .3rem; pointer-events: none; }
-  .wave-pill { display: flex; align-items: center; gap: .45rem; background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: .28rem .8rem .28rem .6rem; font-family: ${MONO_STACK}; font-size: .7rem; color: var(--ink); box-shadow: 0 4px 14px rgba(0, 0, 0, .16); animation: wave-rise .3s ease-out; }
+     conversation, for as long as the wave is recent. Anchored under the
+     topbar, where a chat app puts a presence toast — the foot of the column
+     belongs to the composer, and a burst there lands behind it. */
+  .waveBurst { position: absolute; left: 50%; top: 3.4rem; transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; align-items: center; gap: .3rem; pointer-events: none; }
+  .wave-pill { display: flex; align-items: center; gap: .45rem; background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: .3rem .9rem .3rem .7rem; font-family: ${SERIF_STACK}; font-size: .85rem; color: var(--ink); box-shadow: 0 4px 14px rgba(0, 0, 0, .16); animation: wave-rise .3s ease-out; }
   .wave-pill .hand { display: inline-block; font-size: 1rem; transform-origin: 70% 80%; animation: hand-wave .8s ease-in-out infinite; }
   @keyframes wave-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
-  .copyTip { position: fixed; z-index: 60; background: var(--ink); color: var(--bg); font-family: ${MONO_STACK}; font-size: .64rem; padding: .28rem .55rem; border-radius: 4px; pointer-events: none; box-shadow: 0 3px 10px rgba(0, 0, 0, .22); animation: wave-rise .14s ease-out; }
+  .copyTip { position: fixed; z-index: 60; background: var(--ink); color: var(--bg); font-family: ${SERIF_STACK}; font-size: .78rem; padding: .3rem .7rem; border-radius: 99px; pointer-events: none; box-shadow: 0 3px 10px rgba(0, 0, 0, .22); animation: wave-rise .14s ease-out; }
 
   @media (max-width: 1080px) {
     /* the rail becomes a drawer rather than disappearing: the invite flow has
@@ -646,13 +688,16 @@ ${THEME_TOKENS_CSS}
     body.net-open .netPanel { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, .3); }
     .netPanel-close { display: block; }
   }
+  @media (max-width: 1360px) {
+    /* the legend is decorative and the controls are not, so the legend goes
+       first rather than folding the controls onto a second row. */
+    .legend { display: none; }
+  }
   @media (max-width: 860px) {
     .statsPanel { display: none; }
   }
   @media (max-width: 560px) {
-    .legend { display: none; }
     .bubble { max-width: 92%; }
-    .chrome-btn.share span.share-word { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     * { scroll-behavior: auto !important; }
@@ -743,21 +788,22 @@ ${THEME_TOKENS_CSS}
       <div class="brand">
         <span class="eyebrow">the-mechanical-code-talker</span>
       </div>
-      <div class="legend" aria-hidden="true">${legendHtml}</div>
       <div class="chrome">
         <button type="button" class="state-pill" id="statePill" data-tone="idle"
           title="the shared-world connection; click to open the network panel">
           <i class="pill-dot"></i><span id="statePillWord">not shared</span>
         </button>
-        <button type="button" class="chrome-btn" id="waveBtn" title="wave to everyone connected to this graph">
-          <span class="hand">&#128075;</span> wave
+        <button type="button" class="chrome-btn icon" id="waveBtn"
+          title="wave to everyone connected to this graph" aria-label="wave to everyone connected to this graph">
+          <span class="hand">&#128075;</span>
         </button>
         <button type="button" class="chrome-btn share" id="shareBtn" title="copy a link that invites one person into this graph">
-          invite<span class="share-word"> someone</span>
+          invite
         </button>
         <a class="chrome-btn help" href="./help.html#chat" target="_blank" rel="noopener"
           title="how this page works, in a new tab" aria-label="help, opens in a new tab">?</a>
       </div>
+      <div class="legend" aria-hidden="true">${legendHtml}</div>
     </header>
     <div class="waveBurst" id="waveBurst" aria-live="polite"></div>
     <main class="chatMain">
@@ -841,6 +887,7 @@ ${THEME_TOKENS_CSS}
   const wireStateLabel = ${wireStateLabel.toString()};
   const tapeRowFor = ${tapeRowFor.toString()};
   const nodeRowsFor = ${nodeRowsFor.toString()};
+  const nodeInitials = ${nodeInitials.toString()};
   const inviteLinkFor = ${inviteLinkFor.toString()};
   const inviteParamsFrom = ${inviteParamsFrom.toString()};
   const DIGEST_STRUCTURES = ${digestStructuresJson};
@@ -1142,6 +1189,10 @@ ${THEME_TOKENS_CSS}
     saveTimer = null;
     if (persist) await persist.clear();
     restoredCount = 0;
+    // The room holds the OLD session's store, so it can't outlive the swap —
+    // it would keep merging peers' facts into a store nothing reads any more.
+    // Rejoining is a fresh invite, which is what a dropped node needs anyway.
+    dropRoom();
     window.tmctChatSession = newSession();
     const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
     addSystemLine("forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats, bandLabelFor) + ").");
@@ -1283,7 +1334,10 @@ ${THEME_TOKENS_CSS}
         : "wink-nlp: loading\\u2026";
     const liveReference = window.tmctChatSession ? window.tmctChatSession.liveReference : liveReferenceForMode(checkedWikiMode());
     const livePart = "live wikipedia: " + liveStatusWord(liveReference);
-    statusEl.textContent = seedPart + " \\u00b7 " + winkPart + " \\u00b7 " + livePart;
+    const netPart = room
+      ? " \\u00b7 world \\u201c" + worldName + "\\u201d: " + wireStateLabel(room.state).word
+      : "";
+    statusEl.textContent = seedPart + " \\u00b7 " + winkPart + " \\u00b7 " + livePart + netPart;
   }
 
   // A "/wiki on|off|supplement|always" turn flips the session's own state;
@@ -1346,7 +1400,12 @@ ${THEME_TOKENS_CSS}
       // were lost on reload when only via==="assert" saved. Commands write
       // nothing, so they stay out. The save is debounced, so a read-through
       // that changed nothing costs at most one coalesced write.
-      if (result.record && result.record.via !== "command") scheduleSave();
+      if (result.record && result.record.via !== "command") {
+        scheduleSave();
+        // Whatever this turn wrote goes out to every connected node. The room
+        // diffs the store itself, so a turn that stored nothing costs nothing.
+        if (room) room.afterLocalChange().catch(function () { /* a dead channel reports itself through its own close */ });
+      }
       await renderStatsPanel(); // a teach or learned-load turn grew this session's memory; a plain ask leaves it unchanged either way
       await noteResearchLearned(result);
     } catch (err) {
@@ -1371,6 +1430,15 @@ ${THEME_TOKENS_CSS}
     const q = inputEl.value.trim();
     if (!q || busy || !window.tmctChatSession) return;
     inputEl.value = "";
+    const lowered = q.toLowerCase();
+    if (lowered === "wave" || lowered === "/wave") {
+      addUserBubble(q);
+      transcript.push({ role: "you", text: q, chipTier: null, ts: Date.now() });
+      addSystemLine("you waved — everyone connected to this graph sees it.");
+      waveNow();
+      inputEl.focus();
+      return;
+    }
     submitLine(q).then(() => inputEl.focus());
   });
 
@@ -1515,7 +1583,10 @@ ${THEME_TOKENS_CSS}
     } catch (err) {
       addSystemLine("something went wrong ingesting " + file.name + " (" + (err && err.message ? err.message : err) + ").");
     }
-    if (grounded) scheduleSave();
+    if (grounded) {
+      scheduleSave();
+      if (room) room.afterLocalChange().catch(function () { /* a dead channel reports itself through its own close */ });
+    }
     const skipped = sentences.length - grounded;
     addSystemLine("ingested " + file.name + " \\u2014 " + sentences.length + " sentence"
       + (sentences.length === 1 ? "" : "s") + " read, " + grounded + " fact"
@@ -1673,6 +1744,10 @@ ${THEME_TOKENS_CSS}
     });
     room.onStateChanged(function (state) {
       noteTape("note", state === "failed" ? "fault" : "state", "state " + state, "");
+      // The join card exists to produce one reply. Once the channel is open
+      // the reply has done its job, and a full-screen card over a live
+      // conversation is just something in the way.
+      if (state === "connected") joinCardEl.hidden = true;
       renderWire();
       renderStatus();
     });
@@ -1695,6 +1770,20 @@ ${THEME_TOKENS_CSS}
     renderStatus();
     if (!nodeClockTimer) nodeClockTimer = setInterval(renderNodes, 10000);
     return room;
+  }
+
+  function dropRoom() {
+    if (!room) return;
+    room.close();
+    room = null;
+    window.tmctP2pRoom = null;
+    clearInterval(nodeClockTimer);
+    nodeClockTimer = null;
+    shareLinkEl.value = "";
+    replyOutEl.value = "";
+    noteTape("note", "link", "world closed", worldName);
+    renderWire();
+    renderNodes();
   }
 
   // ---- the wire tape: every message, as it happens ------------------------
@@ -1788,9 +1877,12 @@ ${THEME_TOKENS_CSS}
     wireStateWordEl.textContent = label.word;
     wireStateNoteEl.textContent = label.note;
     statePillEl.dataset.tone = label.tone;
-    statePillWordEl.textContent = label.word;
+    statePillWordEl.textContent = label.pill;
+    statePillEl.title = label.note;
     sharePanelEl.hidden = !shareLinkEl.value;
-    answerPanelEl.hidden = !replyOutEl.value;
+    // Once the channel is open the reply has been used; leaving "send this
+    // back" on screen would be asking for something already done.
+    answerPanelEl.hidden = !replyOutEl.value || (room && room.state === "connected");
   }
 
   function relativeWhen(at, nowMs) {
@@ -1828,9 +1920,13 @@ ${THEME_TOKENS_CSS}
       item.dataset.away = String(!entry.connected);
       item.dataset.peer = entry.peerId;
       item.dataset.waving = String(room.isWaving("peer:" + entry.peerId, nowMs));
+      const avatar = document.createElement("span");
+      avatar.className = "node-avatar";
+      avatar.textContent = nodeInitials(entry.name);
+      avatar.title = entry.connected ? "connected" : "away — closed the tab or dropped offline; everything it contributed stays";
       const dot = document.createElement("i");
       dot.className = "node-dot";
-      dot.title = entry.connected ? "connected" : "away — closed the tab or dropped offline; everything it contributed stays";
+      avatar.appendChild(dot);
       const name = document.createElement("span");
       name.className = "node-name";
       name.textContent = entry.name;
@@ -1843,7 +1939,7 @@ ${THEME_TOKENS_CSS}
       when.title = entry.lastActiveAt
         ? "last contributed a fact at " + new Date(entry.lastActiveAt).toLocaleTimeString()
         : "has contributed no fact yet";
-      item.appendChild(dot);
+      item.appendChild(avatar);
       item.appendChild(name);
       item.appendChild(hand);
       item.appendChild(when);
@@ -1974,6 +2070,10 @@ ${THEME_TOKENS_CSS}
     }
     replyProblemEl.hidden = true;
     replyBoxEl.value = "";
+    // The box stays open on purpose. If two people opened the same link, the
+    // second reply still arrives, and it needs somewhere to land so the page
+    // can say the invite has already been used rather than swallowing it.
+    renderWire();
   });
 
   copyReplyBtn.addEventListener("click", async function () {
@@ -2008,6 +2108,7 @@ ${THEME_TOKENS_CSS}
   async function prepareJoinCard() {
     joinCardEl.hidden = false;
     joinWorldEl.textContent = invite.worldName || "a shared graph";
+    joinBtn.focus();
     const mod = await loadP2p();
     const decoded = mod.decodeInviteBlob(invite.offer);
     if (decoded.error || decoded.value.kind !== "offer") {
@@ -2130,6 +2231,10 @@ ${THEME_TOKENS_CSS}
     renderStatus();
     setBusy(false);
     inputEl.focus();
+    // Off the boot path on purpose: this fetches the shared P2P asset so the
+    // rail can show a real node name and world name before anyone clicks
+    // anything. A failure here costs sharing, never the chat.
+    ensureIdentity().then(renderNodes).catch(function () { /* the tape already carries the reason */ });
   }
 
   window.tmctChatReady = boot().catch((err) => {

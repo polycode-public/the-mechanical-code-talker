@@ -669,8 +669,13 @@ is the design itself, not the novelty claim.
 
 The section above sets the shape. This one is concrete enough to build from: exact wire messages,
 exact files, exact test scenarios, for a v1 that ships two things — networked `mud.html` and
-networked `chat.html` — sharing one P2P/CRDT layer between them. Nothing here is built yet; this is
-still design, not code. Two discoveries changed how much of it needs writing at all.
+networked `chat.html` — sharing one P2P/CRDT layer between them. Two discoveries changed how much
+of it needs writing at all.
+
+Built so far: the pure modules, the WebRTC transport, room orchestration, the shared
+`public/vendor/p2p.js` asset, and chat.html's whole integration — share, join, paste-reply,
+connection state, the node list, live wire traffic and waving. mud.html's own integration and the
+scenarios needing three or more peers are still design.
 
 **The CRDT merge function already exists.** `appendFacts` (`src/adapters/memory/core.mjs`) upserts a
 fact by its content-addressed id (a hash of subject, predicate, object) and unions the incoming
