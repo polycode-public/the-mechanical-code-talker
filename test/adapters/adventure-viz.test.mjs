@@ -60,6 +60,30 @@ test("spriteAncestryRows: a no-op when the subject's own name already equals its
   assert.equal(spriteAncestryRows(rows, "portable"), rows);
 });
 
+test("spriteAncestryRows: mirrors every rdf:type hop further up the chain, so a sprite walk that only follows subClassOf still reaches a distant ancestor", () => {
+  const rows = [
+    { subject: "turnip-1", predicate: "rdf:type", object: "turnip" },
+    { subject: "turnip", predicate: "rdf:type", object: "vegetable" },
+    { subject: "vegetable", predicate: "rdfs:subClassOf", object: "plant" },
+    { subject: "plant", predicate: "rdf:type", object: "living thing" },
+  ];
+  const synthesized = spriteAncestryRows(rows, "turnip-1").filter((r) => !rows.includes(r));
+  assert.deepEqual(synthesized, [
+    { subject: "turnip-1", predicate: "rdfs:subClassOf", object: "turnip" },
+    { subject: "turnip", predicate: "rdfs:subClassOf", object: "vegetable" },
+    { subject: "plant", predicate: "rdfs:subClassOf", object: "living thing" },
+  ]);
+});
+
+test("spriteAncestryRows: a self-typed class never synthesizes an edge to itself", () => {
+  const rows = [
+    { subject: "carrot-1", predicate: "rdf:type", object: "carrot" },
+    { subject: "carrot", predicate: "rdf:type", object: "carrot" },
+  ];
+  const synthesized = spriteAncestryRows(rows, "carrot-1").filter((r) => !rows.includes(r));
+  assert.deepEqual(synthesized, [{ subject: "carrot-1", predicate: "rdfs:subClassOf", object: "carrot" }]);
+});
+
 test("factsForSubject: returns only the rows belonging to the named subject", () => {
   assert.deepEqual(factsForSubject(ROWS, "lamp"), [
     { subject: "lamp", predicate: "rdf:type", object: "portable" },

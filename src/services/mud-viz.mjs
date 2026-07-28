@@ -16,8 +16,9 @@
 // self-contained, `.toString()`-splice-safe room-scene helpers are spliced
 // into the inline script exactly the way spider-fly-viz.mjs splices its own
 // render-glue — `roomSceneObjects`/`scenePlacement`/`spriteClassForObject`/
-// `visibleRoomOf`/`roomKindForRoom` are REUSED directly from
-// adventure-viz.mjs rather than re-derived: mud-garden ships no individual
+// `spriteAncestryRows`/`factsForSubject`/`visibleRoomOf`/`roomKindForRoom`
+// are REUSED directly from adventure-viz.mjs rather than re-derived:
+// mud-garden ships no individual
 // named "player" (the whole point of the multi-character demo), so those
 // functions' own hardcoded "player" exclusion never fires for a mud
 // character — every character reads back as an ordinary visible object of
@@ -56,7 +57,7 @@
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
 import {
-  roomSceneObjects, scenePlacement, spriteClassForObject,
+  roomSceneObjects, scenePlacement, spriteClassForObject, spriteAncestryRows, factsForSubject,
   visibleRoomOf, roomKindForRoom, allRoomIds,
 } from "./adventure-viz.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
@@ -492,8 +493,13 @@ const MUD_STYLE = `
   .wall-item .hook { width: 1px; height: 6px; background: rgba(0,0,0,.45); }
   .wall-item .frame { width: 100%; padding: 2px; box-sizing: border-box; background: rgba(239,230,216,.85); border: 1px solid var(--soil-deep); border-radius: 1px; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
   .wall-item.hangs-high { margin-top: 0; }
-  .wall-item.hangs-low { margin-top: 18px; }
+  .wall-item.hangs-low { margin-top: 12px; }
   .wall-item svg { width: 100%; display: block; }
+  .wall-label {
+    margin-top: 2px; max-width: 42px; font-family: ${MONO_STACK}; font-size: .5rem; line-height: 1.1;
+    letter-spacing: .02em; text-align: center; color: var(--chalk); text-shadow: 0 1px 2px rgba(0,0,0,.85);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   .floor-band { position: absolute; left: 0; right: 0; bottom: 0; height: 66px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 6px 4px; box-sizing: border-box; }
   .floor-others { display: flex; align-items: flex-end; gap: 4px; }
   .floor-self, .floor-others .sprite { display: block; }
@@ -601,6 +607,8 @@ function pageScript() {
   const roomSceneObjects = ${roomSceneObjects.toString()};
   const scenePlacement = ${scenePlacement.toString()};
   const spriteClassForObject = ${spriteClassForObject.toString()};
+  const spriteAncestryRows = ${spriteAncestryRows.toString()};
+  const factsForSubject = ${factsForSubject.toString()};
   const visibleRoomOf = ${visibleRoomOf.toString()};
   const roomKindForRoom = ${roomKindForRoom.toString()};
   const allRoomIds = ${allRoomIds.toString()};
@@ -788,9 +796,20 @@ function pageScript() {
     return "";
   }
 
-  function objectSvgFor(spriteClass, rows) {
-    if (window.tmctMud && window.tmctMud.resolveSpriteForClass) {
-      return window.tmctMud.resolveSpriteForClass(spriteClass, rows, window.tmctMud.SPRITE_REGISTRY);
+  // A wall-hung object resolves through the SAME property-aware, large-tier
+  // resolver the characters do, keyed on the object's OWN name (via
+  // spriteAncestryRows' synthetic subClassOf edge to its declared class), so
+  // a carrot draws a carrot and only a class with no template anywhere falls
+  // back. The fallback root is "portable", not the resolver's default
+  // "animal": everything hung on this wall is a thing, and a thing with no
+  // sprite should read as a plain parcel rather than a creature.
+  function objectSvgFor(subject, rows) {
+    if (window.tmctMud && window.tmctMud.resolveSpriteAsset) {
+      return window.tmctMud.resolveSpriteAsset(
+        subject, spriteAncestryRows(rows, subject), factsForSubject(rows, subject),
+        DATA.spriteTemplates, window.tmctMud.SPRITE_REGISTRY,
+        { rootFallback: "portable", instanceKey: subject },
+      );
     }
     return "";
   }
@@ -866,8 +885,12 @@ function pageScript() {
       if (isCreature(state, obj.subject)) continue;
       const plane = scenePlacement(rows, state, obj.subject).plane;
       const hang = plane === "ceiling" || plane === "wall" ? "hangs-high" : "hangs-low";
-      wall.push('<div class="wall-item ' + hang + '" title="' + esc(labelForItem(rows, obj.subject, roomIds)) + '"><div class="hook"></div><div class="frame">'
-        + objectSvgFor(obj.spriteClass, rows) + "</div></div>");
+      // The caption is always the THING'S own name, never the class whose
+      // sprite ended up drawn — an item wearing an ancestor's icon because
+      // its own class has no sprite yet still has to say what it is.
+      const label = labelForItem(rows, obj.subject, roomIds);
+      wall.push('<div class="wall-item ' + hang + '" title="' + esc(label) + '"><div class="hook"></div><div class="frame">'
+        + objectSvgFor(obj.subject, rows) + '</div><span class="wall-label">' + esc(label) + "</span></div>");
     }
     el(w + "-others").innerHTML = others.join("");
     el(w + "-wall").innerHTML = wall.join("");

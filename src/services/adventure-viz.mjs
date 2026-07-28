@@ -109,22 +109,41 @@ export function spriteClassForObject(rows, subject) {
   return typeRow ? typeRow.object : "portable";
 }
 
-/** `rows` plus one synthetic rdfs:subClassOf edge from `subject`'s own name
- *  to its declared sprite class (spriteClassForObject's own result) — never
- *  written back to the corpus, just handed to sprite-templates.mjs's
- *  resolver so a NAMED object (`cabinet`, `butler`) can carry its own sprite
- *  template while an unauthored object of the same declared class still
- *  falls back through it cleanly. Ashcombe Hall's own objects have no
- *  rdfs:subClassOf chain of their own (each is directly typed, e.g. `cabinet
- *  rdf:type furniture`); this is the exact same ancestor-walk mechanism
- *  spider-fly's real poodle-IsA-dog taxonomy already exercises, just
- *  synthesized at render time for a world whose taxonomy doesn't reach this
- *  deep. A no-op when the subject's own name already IS its declared class
- *  (nothing to synthesize). Pure. */
+/** `rows` plus synthetic rdfs:subClassOf edges covering `subject`'s whole
+ *  class chain — never written back to the corpus, just handed to
+ *  sprite-templates.mjs's resolver so a NAMED object (`cabinet`, `butler`)
+ *  can carry its own sprite template while an unauthored object of the same
+ *  class still falls back cleanly, one ancestor at a time, to the nearest
+ *  ancestor that HAS a sprite. Two kinds of edge are synthesized: one from
+ *  the subject's own name to its declared sprite class
+ *  (spriteClassForObject's own result), and one mirroring every `rdf:type`
+ *  hop further up the chain. The mirroring is what makes the fallback reach
+ *  past the first hop: the resolver walks rdfs:subClassOf only, so a world
+ *  that writes `turnip rdf:type vegetable` would otherwise stop at `turnip`
+ *  and skip a perfectly good `vegetable` sprite. Ashcombe Hall's own objects
+ *  have no rdfs:subClassOf chain at all (each is directly typed, e.g.
+ *  `cabinet rdf:type furniture`); this is the same ancestor-walk mechanism
+ *  spider-fly's real poodle-IsA-dog taxonomy already exercises, synthesized
+ *  at render time for a world whose taxonomy doesn't reach that deep. Returns
+ *  `rows` itself when there is nothing to synthesize. Pure. */
 export function spriteAncestryRows(rows, subject) {
   const declaredClass = spriteClassForObject(rows, subject);
-  if (subject === declaredClass) return rows;
-  return [...(rows || []), { subject, predicate: "rdfs:subClassOf", object: declaredClass }];
+  const synthesized = [];
+  if (subject !== declaredClass) synthesized.push({ subject, predicate: "rdfs:subClassOf", object: declaredClass });
+  const seen = new Set([subject]);
+  const queue = [declaredClass];
+  while (queue.length) {
+    const node = queue.shift();
+    if (seen.has(node)) continue;
+    seen.add(node);
+    for (const row of rows || []) {
+      if (row.subject !== node || row.object === node) continue;
+      if (row.predicate === "rdf:type") synthesized.push({ subject: node, predicate: "rdfs:subClassOf", object: row.object });
+      else if (row.predicate !== "rdfs:subClassOf") continue;
+      queue.push(row.object);
+    }
+  }
+  return synthesized.length ? [...(rows || []), ...synthesized] : rows;
 }
 
 /** Every fact row belonging to `subject` — the small `{predicate, object}`

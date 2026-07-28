@@ -9,6 +9,7 @@
 {"subject":"autumn sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"baby sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"badger sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"basket sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"bathroom sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"beach sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"bear sprite","predicate":"rdf:type","object":"sprite class"}
@@ -31,6 +32,7 @@
 {"subject":"butterfly sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"cabinet sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"car sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"carrot sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"castle sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"cat sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"cellar sprite","predicate":"rdf:type","object":"sprite class"}
@@ -78,6 +80,7 @@
 {"subject":"fox sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"friend sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"frog sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"fruit sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"furniture sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"garden sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"gardener sprite","predicate":"rdf:type","object":"sprite class"}
@@ -113,6 +116,7 @@
 {"subject":"lawyer sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"leader sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"letter sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"lettuce sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"library sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"lion sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"love sprite","predicate":"rdf:type","object":"sprite class"}
@@ -156,8 +160,10 @@
 {"subject":"river sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"road sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"room sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"root sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"salt sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"school sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"seed sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"servant sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"sheep sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"shirt sprite","predicate":"rdf:type","object":"sprite class"}
@@ -187,6 +193,7 @@
 {"subject":"teacher sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"team sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"tiger sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"tomato sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"town sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"train sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"tree sprite","predicate":"rdf:type","object":"sprite class"}
@@ -206,6 +213,7 @@
 {"subject":"wolf sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"woman sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"worker sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"worm sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"writer sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"adventurer sprite","predicate":"mgx:render-at","object":"icon tier"}
 {"subject":"animal sprite","predicate":"mgx:render-at","object":"icon tier"}
@@ -248,6 +256,7 @@
 {"subject":"autumn sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"baby sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"badger sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"basket sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"bathroom sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"beach sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"bear sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -270,6 +279,7 @@
 {"subject":"butterfly sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"cabinet sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"car sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"carrot sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"castle sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"cat sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"cellar sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -317,6 +327,7 @@
 {"subject":"fox sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"friend sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"frog sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"fruit sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"furniture sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"garden sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"gardener sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -352,6 +363,7 @@
 {"subject":"lawyer sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"leader sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"letter sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"lettuce sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"library sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"lion sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"love sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -395,8 +407,10 @@
 {"subject":"river sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"road sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"room sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"root sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"salt sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"school sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"seed sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"servant sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"sheep sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"shirt sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -426,6 +440,7 @@
 {"subject":"teacher sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"team sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"tiger sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"tomato sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"town sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"train sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"tree sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -445,6 +460,7 @@
 {"subject":"wolf sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"woman sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"worker sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"worm sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"writer sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"dog sprite","predicate":"mgx:take-parameter","object":"colour"}
 {"subject":"dog sprite","predicate":"mgx:accept-colour","object":"black"}

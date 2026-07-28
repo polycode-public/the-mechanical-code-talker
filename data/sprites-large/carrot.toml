@@ -1,0 +1,28 @@
+# carrot — a tapered orange root under a three-frond green top. The orange
+# is fixed rather than currentColor-shaded, the same reason bread.toml fixes
+# its crust: an orange body and a green top are the whole of what makes a
+# carrot read as a carrot, and this sprite has to survive being drawn 28px
+# wide in the mud room view. Three ridge marks and one highlight are all the
+# interior detail that still resolves at that size.
+classes = ["carrot"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="carrot-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#f7b26a"/>
+      <stop offset="55%" stop-color="#e07a1f"/>
+      <stop offset="100%" stop-color="#a04c08"/>
+    </linearGradient>
+  </defs>
+  <path d="M11.4 7 C9.6 5.6 8.8 3.6 9.4 1.8 C11 3 11.6 5 11.8 7 Z" fill="#4a7a34"/>
+  <path d="M11.8 7 C11.4 4.8 11.8 2.6 13 1.2 C13.6 3.4 13.2 5.4 12.4 7 Z" fill="#5a9040"/>
+  <path d="M12.4 7 C13.2 5.2 14.6 3.8 16.4 3.4 C15.6 5.2 14.2 6.4 13 7 Z" fill="#4a7a34"/>
+  <path d="M9.2 8.4 C9 7.6 10 7 11 7 L13 7 C14 7 15 7.6 14.8 8.4 L12.9 20.6 C12.7 21.6 11.3 21.6 11.1 20.6 Z" fill="url(#carrot-fill)"/>
+  <g stroke="#7a3806" stroke-width="0.5" opacity="0.35" stroke-linecap="round">
+    <path d="M9.9 11.2 L14.1 11.2"/>
+    <path d="M10.4 14.2 L13.6 14.2"/>
+    <path d="M10.9 17.2 L13.1 17.2"/>
+  </g>
+  <ellipse cx="10.7" cy="10.4" rx="0.85" ry="2.2" fill="#ffffff" opacity="0.32" transform="rotate(6 10.7 10.4)"/>
+</svg>
+"""

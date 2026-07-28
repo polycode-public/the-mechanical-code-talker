@@ -1,0 +1,32 @@
+# basket — a woven wicker body with an arched handle and a dark opening at
+# the rim. It specializes container.toml, which draws a plain crate and can
+# only fill its own gradient from a taught mgx:madeOf value; a basket's
+# weave and handle are fixed facts about the thing, so they are drawn
+# outright. Wicker tan is fixed for the same reason bread.toml fixes its
+# crust.
+classes = ["basket"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="basket-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#e8cd97"/>
+      <stop offset="55%" stop-color="#c19a53"/>
+      <stop offset="100%" stop-color="#86642c"/>
+    </linearGradient>
+  </defs>
+  <path d="M7.2 10.6 C7.6 5.4 16.4 5.4 16.8 10.6" fill="none" stroke="#a97f3c" stroke-width="1.6" stroke-linecap="round"/>
+  <path d="M8.4 10.2 C8.8 6.8 15.2 6.8 15.6 10.2" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.35" stroke-linecap="round"/>
+  <path d="M4.8 11.2 L19.2 11.2 L17.4 19.7 C17.2 20.7 16.4 21.1 15.4 21.1 L8.6 21.1 C7.6 21.1 6.8 20.7 6.6 19.7 Z" fill="url(#basket-fill)"/>
+  <g stroke="#725426" stroke-width="0.55" opacity="0.35" stroke-linecap="round">
+    <path d="M8 11.8 L8.9 20.4"/>
+    <path d="M10.7 11.8 L11.1 20.6"/>
+    <path d="M13.3 11.8 L12.9 20.6"/>
+    <path d="M16 11.8 L15.1 20.4"/>
+    <path d="M5.4 14.4 L18.6 14.4"/>
+    <path d="M6 17.6 L18 17.6"/>
+  </g>
+  <ellipse cx="12" cy="11.2" rx="7.5" ry="1.9" fill="#dcbb7e"/>
+  <ellipse cx="12" cy="11.2" rx="6.1" ry="1.15" fill="#5d431c" opacity="0.6"/>
+  <ellipse cx="8.4" cy="14.6" rx="1.1" ry="2.2" fill="#ffffff" opacity="0.22" transform="rotate(6 8.4 14.6)"/>
+</svg>
+"""
