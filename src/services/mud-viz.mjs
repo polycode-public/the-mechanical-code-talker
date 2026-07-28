@@ -313,6 +313,7 @@ ${MUD_STYLE}
       <div class="deck-controls">
         <button type="button" class="deck-play" id="autoToggle" aria-pressed="false">&#9654; play</button>
         <button type="button" id="resetBtn">reset</button>
+        <button type="button" class="deck-info-btn" id="deckInfoBtn" aria-expanded="false" aria-controls="deckInfoPopup" aria-label="about this demo">?</button>
         <span class="mono deck-turns" id="globalTurnCount">turns: 0</span>
       </div>
       <div class="deck-sliders">
@@ -332,9 +333,10 @@ ${MUD_STYLE}
           <span class="mono" id="maxTurnsValue">${DEFAULT_MAX_TURNS}</span>
         </label>
       </div>
-      <div class="deck-note mud-note">
+      <div class="deck-info-popup mud-note" id="deckInfoPopup" role="dialog" aria-label="about this demo" hidden>
         <p>${escapeHtml(MUD_NOTE_LINES[0])}</p>
         <p>${escapeHtml(MUD_NOTE_LINES[1])}</p>
+        <button type="button" class="deck-info-popup-close" id="deckInfoClose" aria-label="close">&times;</button>
       </div>
     </section>
     <section class="world-map" id="worldMap" aria-label="the whole burrow, every room, every character">
@@ -454,13 +456,20 @@ const MUD_STYLE = `
   button:disabled { opacity: .4; cursor: default; }
 
   /* ---- top row: the control deck, and the survey beside it ---- */
-  .deck-row { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; align-items: stretch; margin-bottom: 1rem; }
+  .deck-row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: stretch; margin-bottom: 1rem; }
   .deck {
+    position: relative;
     background: var(--parchment); border: 1px solid var(--soil-mid); border-radius: 4px;
     box-shadow: 0 2px 0 rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.35);
     padding: .8rem .9rem; display: flex; flex-direction: column; gap: .55rem; min-width: 0;
   }
   .deck-controls { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+  .deck-info-btn {
+    font-family: ${MONO_STACK}; font-size: .78rem; line-height: 1; width: 1.5rem; height: 1.5rem;
+    border-radius: 50%; border: 1px solid var(--soil-mid); background: rgba(255,255,255,.5);
+    color: var(--soil-mid); padding: 0; flex: 0 0 auto;
+  }
+  .deck-info-btn:hover, .deck-info-btn[aria-expanded="true"] { border-color: var(--burrow-glow); color: var(--mud-ink); }
   .deck button, .pane-controls button {
     font-family: ${MONO_STACK}; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
     padding: .32rem .7rem; border: 1px solid var(--soil-mid); border-radius: 3px; background: rgba(255,255,255,.5);
@@ -472,9 +481,22 @@ const MUD_STYLE = `
   .deck-sliders { display: flex; flex-wrap: wrap; gap: 1rem; }
   .deck-slider { display: flex; align-items: center; gap: .35rem; font-family: ${MONO_STACK}; font-size: .62rem; text-transform: uppercase; letter-spacing: .08em; color: var(--soil-mid); }
   .deck-slider input[type="range"] { accent-color: var(--burrow-glow); width: 8rem; max-width: 34vw; }
-  .deck-note { margin-top: auto; padding-top: .5rem; border-top: 1px solid var(--soil-light); font-size: .78rem; color: var(--soil-mid); }
-  .deck-note p { margin: 0 0 .4rem; max-width: 62ch; }
-  .deck-note p:last-child { margin-bottom: 0; }
+  .deck-info-popup {
+    position: absolute; left: .9rem; right: .9rem; top: calc(100% + 8px); z-index: 8;
+    background: var(--soil-deep); color: var(--parchment);
+    border: 1px solid var(--burrow-glow); border-radius: 4px;
+    padding: .55rem 1.6rem .6rem .65rem; box-shadow: 0 8px 18px rgba(0,0,0,.5);
+    animation: popup-rise .16s ease-out;
+  }
+  .deck-info-popup::before {
+    content: ""; position: absolute; left: 1.1rem; top: -6px; width: 0; height: 0;
+    border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 6px solid var(--burrow-glow);
+  }
+  .deck-info-popup p { margin: 0 0 .4rem; max-width: 62ch; font-size: .78rem; line-height: 1.4; }
+  .deck-info-popup p:last-child { margin-bottom: 0; }
+  .deck-info-popup-close { position: absolute; top: .1rem; right: .3rem; font-size: 1rem; line-height: 1; color: var(--parchment); padding: .1rem .2rem; }
+  .deck-info-popup-close:hover { color: var(--burrow-glow); }
+  @media (prefers-reduced-motion: reduce) { .deck-info-popup { animation: none; } }
 
   .world-map {
     background: var(--soil-deep); color: var(--parchment);
@@ -1496,6 +1518,25 @@ function pageScript() {
     playerCountSlider.addEventListener("input", function () { showPlayerCount(chosenPlayerCount()); });
     playerCountSlider.addEventListener("change", function () { boot(); });
     el("resetBtn").addEventListener("click", function () { boot(); });
+
+    const infoBtn = el("deckInfoBtn");
+    const infoPopup = el("deckInfoPopup");
+    function openDeckInfo() {
+      infoPopup.hidden = false;
+      infoBtn.setAttribute("aria-expanded", "true");
+    }
+    function closeDeckInfo() {
+      infoPopup.hidden = true;
+      infoBtn.setAttribute("aria-expanded", "false");
+    }
+    infoBtn.addEventListener("click", function () { if (infoPopup.hidden) openDeckInfo(); else closeDeckInfo(); });
+    el("deckInfoClose").addEventListener("click", closeDeckInfo);
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && !infoPopup.hidden) closeDeckInfo(); });
+    document.addEventListener("click", function (e) {
+      if (infoPopup.hidden) return;
+      if (e.target === infoBtn || infoPopup.contains(e.target)) return;
+      closeDeckInfo();
+    });
   }
 
   // The stage is the cast's, so it is rebuilt for the cast: one paneMarkup

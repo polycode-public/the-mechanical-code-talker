@@ -245,7 +245,10 @@ test("the compass ring offers only ways the world allows, and a dig opens a new 
     const replies = await page.locator("#window-a-chatlog .a").allTextContents();
     const dug = replies[replies.length - 1];
     assert.doesNotMatch(dug, /don't know the word|couldn't|unrecognized/i, "a dig the ring offered is never refused");
-    assert.match(dug, /new room/, "the reply confirms a new room opened");
+    // Most digs open a bare new room; roughly one in five instead breaks into a
+    // den (a resident mouse, a real food store) — both are a successful dig,
+    // confirmed either way by the survey's own room count growing, above.
+    assert.match(dug, /new room|den somebody hollowed out/, "the reply confirms a new room or den opened");
 
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
     assert.deepEqual(consoleErrors, [], "no console error digging a new room open");
