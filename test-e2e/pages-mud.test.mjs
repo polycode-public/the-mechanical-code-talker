@@ -204,21 +204,26 @@ test("the compass ring offers only ways the world allows, and a dig opens a new 
     }
 
     // A character standing above ground can only sink a shaft, and the garden
-    // already has one — so walk down first when the ring offers no dig at all.
-    if (await page.locator(".dir-pill.dig").count() === 0) {
-      await page.locator('.dir-pill[aria-label="go down"]').first().click();
-      await page.waitForFunction(() => document.querySelectorAll(".dir-pill.dig").length > 0, null, { timeout: ANSWER_TIMEOUT_MS });
+    // already has one — so walk down first when this pane's ring offers no dig
+    // at all. One pane throughout, so the dig and the reply belong together.
+    if (await page.locator("#window-a-dirs .dir-pill.dig").count() === 0) {
+      await page.locator('#window-a-dirs .dir-pill[aria-label="go down"]').first().click();
+      await page.waitForFunction(
+        () => document.querySelectorAll("#window-a-dirs .dir-pill.dig").length > 0,
+        null,
+        { timeout: ANSWER_TIMEOUT_MS },
+      );
     }
 
     const roomsBefore = await page.locator("#worldMapBoard .room").count();
-    await page.locator(".dir-pill.dig").first().click();
+    await page.locator("#window-a-dirs .dir-pill.dig").first().click();
     await page.waitForFunction(
       (n) => document.querySelectorAll("#worldMapBoard .room").length > n,
       roomsBefore,
       { timeout: ANSWER_TIMEOUT_MS },
     );
 
-    const replies = await page.locator(".chatlog .a").allTextContents();
+    const replies = await page.locator("#window-a-chatlog .a").allTextContents();
     const dug = replies[replies.length - 1];
     assert.doesNotMatch(dug, /don't know the word|couldn't|unrecognized/i, "a dig the ring offered is never refused");
     assert.match(dug, /new room/, "the reply confirms a new room opened");
@@ -233,12 +238,16 @@ test("the compass ring offers only ways the world allows, and a dig opens a new 
 test("a dig typed for a direction the ring never offered is refused in the world's own terms, never silently done", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudPage();
   try {
+    // One pane's OWN ring, never both at once: the two panes are cast from a
+    // live draw and can stand in different rooms, so the union of their rings
+    // covers every direction whenever one of them starts underground — and the
+    // refusal under test belongs to the room the command is typed into.
     const offeredDirections = await page
-      .locator(".dir-pill")
+      .locator("#window-a-dirs .dir-pill")
       .evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")?.split(" ")[1]).filter(Boolean));
     const allDirections = ["north", "south", "east", "west", "up", "down"];
     const refusedDirection = allDirections.find((d) => !offeredDirections.includes(d));
-    assert.ok(refusedDirection, "at least one direction is never offered by the ring in the starting room");
+    assert.ok(refusedDirection, "at least one direction is never offered by this pane's own ring");
 
     const roomsBefore = await page.locator("#worldMapBoard .room").count();
     await sendMudCommand(page, "a", `dig ${refusedDirection}`);

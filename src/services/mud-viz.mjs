@@ -78,7 +78,7 @@ const DEFAULT_MAX_TURNS = 400;
 
 const MUD_NOTE_LINES = [
   "Two burrowing animals share one world here. Each one only knows what it has dug up, asked about, or been told. Nobody sees the whole burrow except you, watching from the survey above.",
-  `This is a MUD, short for Multi Underground creature Dig. The name nods to MUDII (mudii.co.uk), one of the first multiplayer text games. The dig-your-own-rooms idea came from a skim of Wikipedia's Colossal Cave Adventure article, the game that started the genre.`,
+  `This is a MUD, short for Multi Underground creature Dig. The name nods to MUD, or in its current form MUDII (mudii.co.uk), one of the first multiplayer text games. The dig-your-own-rooms idea came from a skim of Wikipedia's Colossal Cave Adventure article, the game that started the genre.`,
 ];
 
 /** A character id's species — "mole-1" -> "mole", "groundhog-1" ->
@@ -352,7 +352,7 @@ function paneMarkup(slot) {
       </div>
       <div class="room-stage">
         <div class="room-view" id="${w}-room">
-          <canvas id="${w}-canvas" width="420" height="132" aria-hidden="true"></canvas>
+          <canvas id="${w}-canvas" width="420" height="152" aria-hidden="true"></canvas>
           <div class="wall-band" id="${w}-wall"></div>
           <div class="floor-band">
             <div class="floor-others" id="${w}-others"></div>
@@ -360,6 +360,7 @@ function paneMarkup(slot) {
           </div>
           <div class="bubbles" id="${w}-bubbles"></div>
           <div class="dig-flourish" id="${w}-flourish" hidden></div>
+          <div class="strike-flash" id="${w}-strike" aria-hidden="true"></div>
         </div>
         <div class="dir-ring" id="${w}-dirs" aria-label="ways out of this room">
           <div class="dir-slot dir-north" id="${w}-dir-north"></div>
@@ -384,6 +385,12 @@ function paneMarkup(slot) {
       </div>
       <div class="chat">
         <div class="chatlog" id="${w}-chatlog" aria-live="polite"></div>
+        <div class="log-popup" id="${w}-logpop" role="dialog" aria-label="the whole reply" hidden>
+          <p class="log-popup-text" id="${w}-logpop-text"></p>
+          <button type="button" class="log-popup-close" id="${w}-logpop-close" aria-label="close the whole reply">&times;</button>
+        </div>
+      </div>
+      <div class="chat-console">
         <div class="chatpills" id="${w}-chatpills" role="group" aria-label="quick commands"></div>
         <form class="chatask" id="${w}-chatform">
           <span class="prompt mono">tmct&gt;</span>
@@ -404,7 +411,7 @@ const MUD_STYLE = `
     --root-moss: #6B7A4F; --parchment: #EFE6D8; --mud-ink: #2A211A;
     --burrow-glow: #E8A33D; --chalk: #D9CDB9;
     --actor-a: #E0912A; --actor-b: #5F97B3;
-    --pane-height: 492px;
+    --pane-height: 618px;
   }
   html { background: var(--soil-deep); }
   body { margin: 0; background: linear-gradient(180deg, var(--root-moss) 0%, var(--soil-light) 14%, var(--soil-mid) 48%, var(--soil-deep) 100%) fixed; color: var(--mud-ink); font-family: ${SANS_STACK}; font-size: 15px; line-height: 1.5; }
@@ -485,21 +492,40 @@ const MUD_STYLE = `
 
   /* ---- room view: one row of soil, the compass around it ---- */
   .room-stage { position: relative; padding: 19px 34px; flex: 0 0 auto; }
-  .room-view { position: relative; height: 118px; border-radius: 3px; overflow: hidden; border: 1px solid var(--soil-mid); }
+  .room-view { position: relative; height: 152px; border-radius: 3px; overflow: hidden; border: 1px solid var(--soil-mid); }
   .room-view canvas { display: block; width: 100%; height: 100%; }
-  .wall-band { position: absolute; left: 0; right: 0; top: 6px; height: 58px; display: flex; align-items: flex-start; justify-content: center; gap: .5rem; }
-  .wall-item { display: flex; flex-direction: column; align-items: center; width: 34px; }
-  .wall-item .hook { width: 1px; height: 6px; background: rgba(0,0,0,.45); }
-  .wall-item .frame { width: 100%; padding: 2px; box-sizing: border-box; background: rgba(239,230,216,.85); border: 1px solid var(--soil-deep); border-radius: 1px; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
+  .wall-band { position: absolute; left: 0; right: 0; top: 4px; height: 62px; display: flex; align-items: flex-start; justify-content: center; gap: .5rem; }
+  .wall-item { display: flex; flex-direction: column; align-items: center; min-width: 34px; max-width: 72px; }
+  .wall-item .hook { width: 1px; height: 5px; background: rgba(0,0,0,.45); }
+  .wall-item .sprite-frame { width: 30px; padding: 2px; box-sizing: border-box; background: rgba(239,230,216,.85); border: 1px solid var(--soil-deep); border-radius: 1px; box-shadow: 0 1px 2px rgba(0,0,0,.35); }
   .wall-item.hangs-high { margin-top: 0; }
-  .wall-item.hangs-low { margin-top: 18px; }
+  .wall-item.hangs-low { margin-top: 14px; }
   .wall-item svg { width: 100%; display: block; }
-  .floor-band { position: absolute; left: 0; right: 0; bottom: 0; height: 66px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 6px 4px; box-sizing: border-box; }
-  .floor-others { display: flex; align-items: flex-end; gap: 4px; }
-  .floor-self, .floor-others .sprite { display: block; }
+  .floor-band { position: absolute; left: 0; right: 0; bottom: 0; height: 86px; display: flex; align-items: flex-end; justify-content: space-between; padding: 0 6px 4px; box-sizing: border-box; }
+  .floor-others { display: flex; align-items: flex-end; gap: 6px; }
   .sprite { width: 40px; }
   .sprite svg { width: 100%; display: block; }
-  .floor-self .sprite { width: 52px; }
+  .floor-self .sprite { width: 48px; }
+
+  /* ---- sprite cards: adventure.html's own frame-plus-nameplate treatment,
+     shrunk to the one soil row a mud pane has for it. The plate names the
+     real subject (mole-1, carrot), never a class word. ---- */
+  .sprite-card { display: flex; flex-direction: column; align-items: center; max-width: 76px; }
+  .sprite-label {
+    margin-top: 2px; max-width: 100%; box-sizing: border-box;
+    font-family: ${MONO_STACK}; font-size: .5rem; line-height: 1.25; letter-spacing: .01em; text-align: center;
+    color: var(--mud-ink); background: rgba(239,230,216,.92); border: 1px solid var(--soil-mid); border-radius: 2px;
+    padding: 0 .22rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .sprite-mass {
+    margin-top: 1px; font-family: ${MONO_STACK}; font-size: .46rem; line-height: 1.3; letter-spacing: .02em;
+    color: var(--parchment); background: rgba(36,23,16,.72); border-radius: 2px; padding: 0 .2rem; white-space: nowrap;
+  }
+  .sprite-card.actionable { cursor: pointer; }
+  .sprite-card.actionable:hover .sprite-frame, .sprite-card.actionable:focus-visible .sprite-frame { border-color: var(--burrow-glow); }
+  .sprite-card.actionable:hover .sprite-label, .sprite-card.actionable:focus-visible .sprite-label { border-color: var(--burrow-glow); background: var(--burrow-glow); }
+  .sprite-card.actionable:focus-visible { outline: 2px solid var(--burrow-glow); outline-offset: 1px; }
+  .wall-band .sprite-card.actionable { pointer-events: auto; }
 
   /* ---- the compass ring: each way out sits where it points ---- */
   .dir-ring { position: absolute; inset: 0; pointer-events: none; }
@@ -550,17 +576,77 @@ const MUD_STYLE = `
   .minimap .burrow .room.here rect { fill: var(--burrow-glow); }
   .minimap .burrow .room.here text { fill: var(--mud-ink); }
 
-  .chat { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: .3rem; }
-  .chatlog { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: .28rem; overflow-y: auto; }
-  .chatlog .u { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--soil-mid); }
+  /* The log is the ONLY thing in a pane allowed to grow, and it grows inward:
+     flex-basis 0 keeps its own content out of the pane's height arithmetic, so
+     a hundred turns of narration scroll inside it instead of pushing the
+     command console off the bottom of a fixed-height pane. */
+  .chat { position: relative; flex: 1 1 0; min-height: 2.6rem; display: flex; flex-direction: column; }
+  /* Block flow, deliberately, not a flex column: a scrolled log's own lines
+     must keep their natural height, and flex items inside a height-capped
+     column shrink toward zero instead. */
+  .chatlog {
+    flex: 1 1 0; min-height: 0; display: block;
+    overflow-y: scroll; overscroll-behavior: contain; padding-right: .25rem;
+  }
+  .chatlog > * { margin: 0 0 .28rem; }
+  .chatlog > *:last-child { margin-bottom: 0; }
+  /* A styled webkit scrollbar reserves its own gutter, where the overlay one
+     Chromium defaults to on macOS shows nothing until you already scroll. The
+     standard properties go behind @supports because setting them at all makes
+     Blink ignore the pseudo-elements and fall back to that overlay bar. */
+  .chatlog::-webkit-scrollbar { width: 9px; }
+  .chatlog::-webkit-scrollbar-track { background: rgba(122,90,61,.18); border-radius: 5px; }
+  .chatlog::-webkit-scrollbar-thumb { background: var(--soil-light); border-radius: 5px; border: 2px solid var(--parchment); }
+  .chatlog::-webkit-scrollbar-thumb:hover { background: var(--soil-mid); }
+  @supports not selector(::-webkit-scrollbar) {
+    .chatlog { scrollbar-width: thin; scrollbar-color: var(--soil-light) rgba(122,90,61,.18); }
+  }
+  .chatlog .u { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--soil-mid); overflow-wrap: anywhere; }
   .chatlog .u::before { content: "tmct> "; color: var(--burrow-glow); }
-  .chatlog .a { font-size: .74rem; line-height: 1.35; }
+  /* A reply is capped at four rendered lines. A capped one says so and opens the
+     whole text in the popup above, so no single answer can take the log over.
+     The unclamped variant exists only to be measured against: a line-clamped box
+     reports its clamped height as its scrollHeight. */
+  .chatlog .a { font-size: .74rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+  .chatlog .a.unclamped { display: block; -webkit-line-clamp: none; overflow: visible; }
+  .chatlog .clipped { position: relative; cursor: pointer; padding-right: 2.4rem; }
+  .chatlog .clipped::after {
+    content: "more"; position: absolute; right: 0; bottom: 0;
+    font-family: ${MONO_STACK}; font-size: .5rem; letter-spacing: .06em; text-transform: uppercase;
+    color: var(--mud-ink); background: var(--burrow-glow); border-radius: 99px; padding: 0 .32rem;
+  }
+  .chatlog .clipped:hover::after, .chatlog .clipped:focus-visible::after { background: var(--mud-ink); color: var(--parchment); }
+  .chatlog .clipped:focus-visible { outline: 2px solid var(--burrow-glow); outline-offset: 1px; }
+
+  .log-popup {
+    position: absolute; left: 0; right: 0; bottom: calc(100% - 1.4rem); z-index: 8;
+    background: var(--soil-deep); color: var(--parchment);
+    border: 1px solid var(--burrow-glow); border-radius: 4px;
+    padding: .45rem 1.5rem .5rem .55rem; box-shadow: 0 8px 18px rgba(0,0,0,.5);
+    max-height: 13rem; overflow-y: auto; animation: popup-rise .16s ease-out;
+  }
+  .log-popup::after {
+    content: ""; position: absolute; left: 1.4rem; bottom: -6px; width: 0; height: 0;
+    border-left: 6px solid transparent; border-right: 6px solid transparent; border-top: 6px solid var(--burrow-glow);
+  }
+  .log-popup-text { margin: 0; font-size: .74rem; line-height: 1.4; }
+  .log-popup-close { position: absolute; top: .1rem; right: .25rem; font-size: 1rem; line-height: 1; color: var(--parchment); padding: .1rem .2rem; }
+  .log-popup-close:hover { color: var(--burrow-glow); }
+  @keyframes popup-rise { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .log-popup { animation: none; } }
+
+  /* The console never moves: pills and prompt sit outside the log's own flex
+     track, so no amount of narration can reach them. */
+  .chat-console { flex: 0 0 auto; display: flex; flex-direction: column; gap: .3rem; margin-top: .3rem; }
   .chatask { display: flex; align-items: center; gap: .4rem; }
   .chatask .prompt { color: var(--burrow-glow); font-size: .7rem; }
   .chatask input { flex: 1; min-width: 0; font-family: ${MONO_STACK}; font-size: .7rem; background: rgba(255,255,255,.6); color: var(--mud-ink); border: 1px solid var(--soil-mid); border-radius: 2px; padding: .26rem .45rem; box-sizing: border-box; }
-  .chatpills { display: flex; flex-wrap: wrap; gap: .22rem; max-height: 2.6rem; overflow: hidden; }
-  .pill { font-family: ${MONO_STACK}; font-size: .58rem; padding: .14rem .45rem; border: 1px solid var(--soil-mid); border-radius: 99px; background: rgba(255,255,255,.5); }
-  .pill:hover:not(:disabled) { border-color: var(--burrow-glow); }
+  .chatpills { display: flex; flex-wrap: wrap; gap: .22rem; max-height: 3.9rem; overflow-y: auto; scrollbar-width: thin; }
+  .chatpills:empty { display: none; }
+  .pill { font-family: ${MONO_STACK}; font-size: .58rem; padding: .14rem .45rem; border: 1px solid var(--soil-mid); border-radius: 99px; background: rgba(255,255,255,.5); white-space: nowrap; }
+  .pill:hover:not(:disabled) { border-color: var(--burrow-glow); background: var(--burrow-glow); }
+  .pill.affordance { border-style: dashed; border-color: var(--soil-light); }
+  .pill.way { border-style: solid; border-color: var(--soil-mid); background: rgba(232,163,61,.16); }
   .pane-controls { flex: 0 0 auto; display: flex; align-items: center; gap: .4rem; }
   .pane-fate {
     margin: 0; font-family: ${MONO_STACK}; font-size: .62rem; text-transform: uppercase; letter-spacing: .08em;
@@ -568,11 +654,46 @@ const MUD_STYLE = `
   }
   .mud-window.out-of-play { border-top-color: var(--soil-mid); }
   .mud-window.out-of-play .pane-controls button { display: none; }
+  .room-view, .pane-columns { transition: filter .4s ease, opacity .4s ease; }
   .mud-window.out-of-play .room-view, .mud-window.out-of-play .pane-columns { filter: grayscale(1); opacity: .5; }
   .mud-window.out-of-play .dir-ring { display: none; }
 
+  /* ---- the pounce: the one violent beat on a page that otherwise only fades.
+     Every other motion here eases out; this one accelerates into the prey and
+     stops dead. It plays once, on the tick a character is first out of play,
+     and the pane grays out underneath it when it lands. ---- */
+  .strike-flash {
+    position: absolute; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(circle at 76% 72%, rgba(158,32,16,.95) 0%, rgba(36,23,16,.62) 40%, transparent 72%);
+  }
+  @keyframes strike-flash { 0%, 42% { opacity: 0; } 50% { opacity: .92; } 100% { opacity: 0; } }
+  @keyframes fox-pounce {
+    0% { transform: translateX(0) scale(1); }
+    16% { transform: translateX(-7px) scale(.94); }
+    54% { transform: translateX(var(--pounce-x, 180px)) scale(1.48); }
+    100% { transform: translateX(var(--pounce-x, 180px)) scale(1.44); }
+  }
+  @keyframes prey-taken {
+    0%, 40% { transform: none; opacity: 1; }
+    47% { transform: translateX(-6px) rotate(-8deg); }
+    54% { transform: translateX(6px) rotate(7deg); }
+    61% { transform: translateX(-4px) rotate(-4deg); }
+    100% { transform: translateX(3px) rotate(4deg) scale(.82); opacity: 0; }
+  }
+  .room-view.pounce .sprite-card.lunging { position: relative; z-index: 3; transform-origin: 50% 100%; animation: fox-pounce 1.05s cubic-bezier(.6,0,.85,.4) forwards; }
+  .room-view.pounce .floor-self { transform-origin: 50% 100%; animation: prey-taken 1.05s cubic-bezier(.4,0,.2,1) forwards; }
+  .room-view.pounce .strike-flash { animation: strike-flash 1.05s ease-out forwards; }
+  .room-view.pounce .bubbles, .room-view.pounce .wall-band { opacity: .35; }
+  @keyframes fate-drop { from { opacity: 0; transform: translateY(-7px); } to { opacity: 1; transform: none; } }
+  .pane-fate { animation: fate-drop .3s ease-out; }
+  @media (prefers-reduced-motion: reduce) {
+    .room-view, .pane-columns { transition: none; }
+    .pane-fate { animation: none; }
+    .room-view.pounce .sprite-card.lunging, .room-view.pounce .floor-self, .room-view.pounce .strike-flash { animation: none; }
+  }
+
   @media (max-width: 900px) {
-    :root { --pane-height: 470px; }
+    :root { --pane-height: 596px; }
     .deck-row { grid-template-columns: 1fr; }
     .mud-stage { grid-template-columns: 1fr; }
     .world-map-board { min-height: 150px; }
@@ -637,6 +758,9 @@ function pageScript() {
   const liveWait = function () { return wait(delayMs); };
 
   let freshlyDugRoom = null;
+  // The last omniscient read, kept so the eaten scene can draw the predator's
+  // own den after the engine has already moved the character out of every room.
+  let lastSnapshot = null;
   const speechBubbles = new Map(); // room -> [{ speaker, text, expiresAtTurn }]
 
   const tickers = {};
@@ -678,15 +802,55 @@ function pageScript() {
     const ticker = tickers[character];
     if (ticker) ticker.pause();
     const w = paneIdFor(character);
-    el(w).classList.add("out-of-play");
     el(w + "-play").disabled = true;
     el(w + "-step").disabled = true;
     el(w + "-chatq").disabled = true;
     el(w + "-chatpills").innerHTML = "";
-    const fate = el(w + "-fate");
-    fate.hidden = false;
-    fate.textContent = "eaten \\u00b7 " + turnsFor(character) + " turns";
     appendChat(character, "a", note || ("the " + character + " has been eaten. It takes no more turns."));
+    playEatenScene(character);
+  }
+
+  // Whichever individual the WORLD marks dangerous, never a species this page
+  // hardcodes — the same fact adventure.mjs's own predator check reads.
+  function predatorInRows(rows) {
+    for (const row of rows) {
+      if (row.predicate === "mgx:is-predator" && row.object === "true") return row.subject;
+    }
+    return null;
+  }
+
+  // The pane holds on the den for the length of one pounce before it grays out.
+  // Cutting straight to the banner throws away the only moment this demo has to
+  // show what took the character: the character's last drawn room is the one it
+  // walked out OF, so the scene is redrawn against the den first, then the fox
+  // crosses it. Reduced motion, or a world with no marked predator, settles
+  // straight into the end state.
+  function playEatenScene(character) {
+    const w = paneIdFor(character);
+    const settle = function () {
+      el(w).classList.add("out-of-play");
+      const fate = el(w + "-fate");
+      fate.hidden = false;
+      fate.textContent = "eaten \\u00b7 " + turnsFor(character) + " turns";
+    };
+    const predator = lastSnapshot ? predatorInRows(lastSnapshot.rows) : null;
+    const den = predator ? (lastSnapshot.state.placements.get(predator) || {}).object : null;
+    if (reduceMotion || !den) { settle(); return; }
+
+    const rows = lastSnapshot.rows;
+    const state = lastSnapshot.state;
+    renderRoomView(character, rows, state, den, allRoomIds(rows),
+      window.tmctMud.castInRoom(rows, state, den, character));
+
+    const room = el(w + "-room");
+    const lunger = room.querySelector('.floor-others .sprite-card[data-subject="' + predator + '"]');
+    const prey = el(w + "-self");
+    if (!lunger || !prey) { settle(); return; }
+    const gap = prey.getBoundingClientRect().left - lunger.getBoundingClientRect().left;
+    lunger.style.setProperty("--pounce-x", Math.max(0, Math.round(gap) - 8) + "px");
+    room.classList.add("pounce");
+    lunger.classList.add("lunging");
+    setTimeout(settle, 1000);
   }
 
   // A bubble carries what was SAID, not the sentence: the answer names a
@@ -726,13 +890,37 @@ function pageScript() {
   }
 
   // ---- chat docks ---------------------------------------------------------
+  // The line's own text is never shortened, only its rendered height — the whole
+  // thing stays readable through the popup, and stays in the DOM for anything
+  // reading the log.
   function appendChat(character, cls, text) {
     const log = el(paneIdFor(character) + "-chatlog");
     const d = document.createElement("div");
     d.className = cls;
     d.textContent = text;
     log.appendChild(d);
+    // A line-clamped box reports scrollHeight EQUAL to its clamped height, so
+    // the overflow has to be read against the same box with the clamp lifted.
+    d.classList.add("unclamped");
+    const wholeHeight = d.scrollHeight;
+    d.classList.remove("unclamped");
+    if (wholeHeight - d.clientHeight > 2) {
+      d.classList.add("clipped");
+      d.setAttribute("role", "button");
+      d.setAttribute("tabindex", "0");
+      d.setAttribute("title", "read the whole line");
+    }
     log.scrollTop = log.scrollHeight;
+  }
+
+  function openLogPopup(slot, text) {
+    const w = "window-" + slot;
+    el(w + "-logpop-text").textContent = text;
+    el(w + "-logpop").hidden = false;
+  }
+
+  function closeLogPopup(slot) {
+    el("window-" + slot + "-logpop").hidden = true;
   }
 
   function sendCommand(character, line) {
@@ -767,6 +955,41 @@ function pageScript() {
     el(w + "-step").addEventListener("click", function () {
       const character = characterInSlot(slot);
       if (character) ensureTicker(character).stepOnce();
+    });
+
+    const log = el(w + "-chatlog");
+    log.addEventListener("click", function (e) {
+      const line = e.target.closest(".clipped");
+      if (line) openLogPopup(slot, line.textContent);
+    });
+    log.addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const line = e.target.closest(".clipped");
+      if (!line) return;
+      e.preventDefault();
+      openLogPopup(slot, line.textContent);
+    });
+    el(w + "-logpop-close").addEventListener("click", function () { closeLogPopup(slot); });
+    el(w).addEventListener("keydown", function (e) {
+      if (e.key === "Escape") closeLogPopup(slot);
+    });
+
+    // Clicking a drawn thing runs the same grounded command its pill would, so
+    // the room view is a second way into one action set rather than its own.
+    // A sprite the room grants no action on carries no command and does nothing.
+    el(w + "-room").addEventListener("click", function (e) {
+      const card = e.target.closest(".sprite-card[data-command]");
+      const character = characterInSlot(slot);
+      if (!card || !character || eaten[character]) return;
+      sendCommand(character, card.getAttribute("data-command"));
+    });
+    el(w + "-room").addEventListener("keydown", function (e) {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      const card = e.target.closest(".sprite-card[data-command]");
+      const character = characterInSlot(slot);
+      if (!card || !character || eaten[character]) return;
+      e.preventDefault();
+      sendCommand(character, card.getAttribute("data-command"));
     });
   }
 
@@ -852,22 +1075,51 @@ function pageScript() {
     ctx.fillRect(0, h - 26, w, 26);
   }
 
+  // The world's own hasMass fold, the same one the pouch's stat line reads.
+  // Null for anything the world never weighed, which draws no figure at all
+  // rather than a guessed one.
+  function massOf(state, subject) {
+    const mass = state.masses.get(subject);
+    return mass ? mass.value : null;
+  }
+
+  // A sprite card: adventure.html's own frame-plus-nameplate, carrying the one
+  // command this room currently grants on its subject (none, for a thing the
+  // room offers nothing on) and the subject's own mass under the name.
+  function spriteCardHtml(subject, label, inner, command, extraClass, mass) {
+    const action = command
+      ? ' actionable" data-command="' + esc(command) + '" role="button" tabindex="0" title="' + esc(command) + '"'
+      : '" title="' + esc(label) + '"';
+    return '<div class="sprite-card ' + (extraClass || "") + action + ' data-subject="' + esc(subject) + '">'
+      + inner + '<div class="sprite-label">' + esc(label) + "</div>"
+      + (mass === null || mass === undefined ? "" : '<div class="sprite-mass">mass ' + esc(mass) + "</div>")
+      + "</div>";
+  }
+
   function renderRoomView(character, rows, state, here, roomIds, roomMates) {
     const w = paneIdFor(character);
     drawRoomBackdrop(el(w + "-canvas"), roomKindForRoom(rows, here), here);
+    const commands = commandsBySubject(affordancesFor(rows, state, here, character));
 
-    el(w + "-self").innerHTML = '<div class="sprite">' + spriteSvgFor(speciesOfCharacter(character), rows, character) + "</div>";
+    el(w + "-self").innerHTML = spriteCardHtml(
+      character, character,
+      '<div class="sprite">' + spriteSvgFor(speciesOfCharacter(character), rows, character) + "</div>",
+      null, "self", massOf(state, character),
+    );
 
     const others = roomMates.map(function (mate) {
-      return '<div class="sprite" title="' + esc(mate) + '">' + spriteSvgFor(speciesOfCharacter(mate), rows, mate) + "</div>";
+      return spriteCardHtml(mate, mate,
+        '<div class="sprite">' + spriteSvgFor(speciesOfCharacter(mate), rows, mate) + "</div>",
+        commands[mate], "", massOf(state, mate));
     });
     const wall = [];
     for (const obj of mudRoomSceneObjects(rows, state, here, character)) {
       if (isCreature(state, obj.subject)) continue;
       const plane = scenePlacement(rows, state, obj.subject).plane;
       const hang = plane === "ceiling" || plane === "wall" ? "hangs-high" : "hangs-low";
-      wall.push('<div class="wall-item ' + hang + '" title="' + esc(labelForItem(rows, obj.subject, roomIds)) + '"><div class="hook"></div><div class="frame">'
-        + objectSvgFor(obj.spriteClass, rows) + "</div></div>");
+      wall.push(spriteCardHtml(obj.subject, labelForItem(rows, obj.subject, roomIds),
+        '<div class="hook"></div><div class="sprite-frame">' + objectSvgFor(obj.spriteClass, rows) + "</div>",
+        commands[obj.subject], "wall-item " + hang, massOf(state, obj.subject)));
     }
     el(w + "-others").innerHTML = others.join("");
     el(w + "-wall").innerHTML = wall.join("");
@@ -901,7 +1153,12 @@ function pageScript() {
     const lines = view.filter(function (r) { return r.subject.toLowerCase() === here.toLowerCase(); })
       .map(function (r) { return r.subject + " " + r.predicate + " " + r.object + "."; });
     parts.push(lines.length ? lines.join(" ") : "You are in the " + here + ".");
-    if (roomMates.length) parts.push("Here with you: the " + roomMates.join(", the ") + ".");
+    if (roomMates.length) {
+      parts.push("Here with you: " + roomMates.map(function (mate) {
+        const mass = massOf(state, mate);
+        return "the " + mate + (mass === null ? "" : " (mass " + mass + ")");
+      }).join(", ") + ".");
+    }
     return parts.join(" ");
   }
 
@@ -931,19 +1188,50 @@ function pageScript() {
     }
   }
 
-  function renderChatPills(character, roomMates) {
+  // ---- the pill row --------------------------------------------------------
+  // Every action the room actually grants comes from the engine's own
+  // roomAffordances — the SAME list the "You can:" line in a look reply is built
+  // from — so nothing the reply above offers can be missing from the row beneath
+  // it. Exits appear in both the row and the compass ring on purpose: the ring
+  // says WHERE a way out points, the row says what it is called.
+  function affordancesFor(rows, state, here, character) {
+    const fromEngine = window.tmctMud && window.tmctMud.roomAffordances;
+    return fromEngine ? fromEngine(rows, state, here, character) : [];
+  }
+
+  function subjectOfAction(action) {
+    return action.indexOf("talk to ") === 0 ? action.slice(8) : action.slice(action.indexOf(" ") + 1);
+  }
+
+  function commandsBySubject(actions) {
+    const bySubject = {};
+    for (const action of actions) {
+      if (action.indexOf("go ") === 0) continue;
+      bySubject[subjectOfAction(action)] = action;
+    }
+    return bySubject;
+  }
+
+  function renderChatPills(character, rows, state, here, roomIds) {
     const w = paneIdFor(character);
     const pillsEl = el(w + "-chatpills");
-    const commands = ["look", "what do you know about food"];
-    for (const mate of roomMates) commands.push("talk to " + mate);
-    pillsEl.innerHTML = commands.map(function (c) {
-      return '<button type="button" class="pill" data-fill="' + esc(c) + '">' + esc(c) + "</button>";
+    const pills = [
+      { command: "look", label: "look", cls: "" },
+      { command: "what do you know about food", label: "what do you know about food", cls: "" },
+    ];
+    for (const action of affordancesFor(rows, state, here, character)) {
+      if (action.indexOf("go ") === 0) { pills.push({ command: action, label: action, cls: " affordance way" }); continue; }
+      const subject = subjectOfAction(action);
+      const label = action.slice(0, action.length - subject.length) + labelForItem(rows, subject, roomIds);
+      pills.push({ command: action, label: label, cls: " affordance" });
+    }
+    pillsEl.innerHTML = pills.map(function (p) {
+      return '<button type="button" class="pill' + p.cls + '" data-command="' + esc(p.command)
+        + '" title="' + esc(p.command) + '">' + esc(p.label) + "</button>";
     }).join("");
-    const input = el(w + "-chatq");
     for (const pill of pillsEl.querySelectorAll(".pill")) {
       pill.addEventListener("click", function () {
-        input.value = pill.getAttribute("data-fill");
-        input.focus();
+        sendCommand(character, pill.getAttribute("data-command"));
       });
     }
   }
@@ -1074,6 +1362,7 @@ function pageScript() {
     if (!session) return;
     el("globalTurnCount").textContent = "turns: " + globalTurn;
     const snap = await session.snapshot();
+    lastSnapshot = snap;
     const roomIds = allRoomIds(snap.rows);
     for (const character of cast) {
       if (await session.windows[character].isOutOfPlay()) markEaten(character);
@@ -1088,7 +1377,7 @@ function pageScript() {
       const roomMates = window.tmctMud.castInRoom(snap.rows, snap.state, here, character);
       renderRoomView(character, snap.rows, snap.state, here, roomIds, roomMates);
       renderDirections(character, snap.rows, snap.state, here);
-      renderChatPills(character, roomMates);
+      renderChatPills(character, snap.rows, snap.state, here, roomIds);
       renderPouch(character, snap.rows, snap.state, roomIds);
       renderMinimap(character, snap.rows, snap.state, here);
     }
@@ -1151,6 +1440,7 @@ function pageScript() {
     }
     globalTurn = 0;
     freshlyDugRoom = null;
+    lastSnapshot = null;
     speechBubbles.clear();
     tickChain = Promise.resolve();
     for (const character of cast) delete eaten[character];
@@ -1160,6 +1450,8 @@ function pageScript() {
       el(w + "-play").textContent = "\\u25B6 play";
       el(w).classList.remove("out-of-play");
       el(w + "-fate").hidden = true;
+      el(w + "-logpop").hidden = true;
+      el(w + "-room").classList.remove("pounce");
     }
 
     // ONE draw, the engine's own, and the same list the session is built from:
