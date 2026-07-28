@@ -698,6 +698,154 @@ entire state substrate, doesn't turn up in what's been surveyed so far. That's w
 observation, not a strong claim; the search may simply not have found it. The point of this section
 is the design itself, not the novelty claim.
 
+### v1 implementation design
+
+The section above sets the shape. This one is concrete enough to build from: exact wire messages,
+exact files, exact test scenarios, for a v1 that ships two things — networked `mud.html` and
+networked `chat.html` — sharing one P2P/CRDT layer between them. Nothing here is built yet; this is
+still design, not code. Two discoveries changed how much of it needs writing at all.
+
+**The CRDT merge function already exists.** `appendFacts` (`src/adapters/memory/core.mjs`) upserts a
+fact by its content-addressed id (a hash of subject, predicate, object) and unions the incoming
+provenance tag onto whatever's already stored at that id. That's a G-Set's merge rule, byte for
+byte. A peer's incoming fact batch needs validating, then one call to `appendFacts` — no new merge
+algorithm to write.
+
+**The provenance UI already renders "taught by X."** `chat-page-viz.mjs`'s answer chip and citation
+text already parse a fact's raw `teach:...` provenance tag and show it as "taught." A tag shaped
+`teach:peer:<node name>@<timestamp>` parses under that same existing rule with no rendering changes
+at all — the `sessionId` slot the parser already expects just holds a peer's node name instead of a
+local session id.
+
+**Signaling.** A share action creates an SDP offer and encodes it, along with the world id and world
+name, into one base64url JSON blob carried in the URL (`?offer=<blob>&world=<uuid>&name=<name>`).
+`RTCPeerConnection` is created with `iceServers: []` — no STUN, no TURN, nobody's infrastructure in
+the loop at all. That's the real production setting the earlier section already committed to, not a
+shortcut: it means signaling only completes between peers that can already reach each other directly
+(same machine, same LAN, or a NAT that happens to allow it), which is a stated boundary of staying
+fully serverless, not a bug to fix later. Candidate gathering runs to completion before the
+offer is read out (no trickle needed without STUN), so the two-paste flow from the section above
+stays exactly as described: one blob out, one blob back, done.
+
+**Messages, once a channel is open**, all plain JSON:
+
+- `hello { peerId, displayName }` — sent the moment any channel opens.
+- `peer-list { peers: [{peerId, displayName}] }` — sent right after `hello`, so a newcomer learns
+  who else is in the room.
+- `intro-offer` / `intro-answer { from, to, sdp }` — mesh introduction. When peer C's first
+  connection lands on peer B, and B already holds a channel to A, B relays a fresh offer from A to C
+  and C's answer back to A, over the channels that are already open. This reuses the exact same SDP
+  offer/answer machinery the manual link flow uses — only the transport for exchanging the blobs
+  changes, from copy-paste to an open DataChannel. Once `intro-answer` lands, A and C are directly
+  connected; B never relays game traffic afterward, only that one signaling round trip. Every peer
+  ends up directly connected to every other peer this way — for a room of two or three people this
+  is the right amount of mesh, not gossip relay.
+- `sync-request` / `sync-response { facts: [...] }` — see state sync, below.
+- `op { from, facts: [...] }` — a batch of newly-asserted facts, broadcast to every directly
+  connected peer after a turn completes.
+
+**Provenance relabeling.** A fact a person actually taught keeps its own local tag,
+`teach:chat:<sessionId>@<ts>`, in their own store, untouched. Only the copy going out over the wire
+gets relabeled: any `teach`- or `operator`-kind tag becomes `teach:peer:<my node name>@<ts>` before
+broadcast. World-state and testimony tags from mud.html (`world:...`, `mud:...`) pass through
+unchanged — they're already attributed to a world or a character, not a person, and relabeling them
+would lose information rather than add it. On the receiving side, `appendFacts` unions this new tag
+onto the same fact id exactly like any other provenance, including the case where the receiving
+peer independently taught the identical fact — both tags corroborate the same id, correctly.
+
+**Node identity is a fact, not a UI setting.** The host names the shared world when they start
+sharing; that name is written once as `(<worldId>, mgx:worldName, "<name>")`. Every participant,
+host and joiner alike, can set their own node's display name, written as `(peer:<peerId>,
+mgx:nodeName, "<name>")` whenever it's set or changed. Both are ordinary add-only facts — changing a
+name asserts a new one rather than retracting the old, and whoever's reading just takes the latest
+by timestamp for that subject. That's an application-level "latest wins" read, not a new CRDT
+primitive, and it stays consistent with the pure add-only design below. The default for both the
+world name and a node's own name, before anyone overrides it, is two words drawn from the graph's
+own lexicon — the same taxonomy-naming idea already used elsewhere in this document — with no
+forced numbering; a number only gets appended if a live collision actually shows up among peers
+currently in the room.
+
+**The node list, on chat.html.** A panel listing every peer this graph currently knows about: each
+one's node name (from its latest `mgx:nodeName` fact) and the timestamp of its most recent
+contributed fact, sorted most-recently-active first. It reads existing data through the existing
+panel-rendering conventions already used elsewhere on that page — it doesn't need new plumbing, just
+a new query over facts that are already there.
+
+**State sync on a join.** Every peer's page already ships with the identical build-time seed data,
+so those facts already share the same content-addressed ids before any network traffic happens —
+sending them again would be pure waste. What actually needs syncing is the delta: on chat.html,
+every fact whose provenance is teach- or operator-kind; on mud.html, every fact carrying a per-turn
+provenance tag (a move, an action, testimony) rather than the bare unsuffixed seed tag. A joiner
+subscribes to live `op` traffic from the moment sync starts, not after it finishes — because merging
+is idempotent by id, any overlap between the historical sync and the live stream is harmless. This
+is deliberately simpler than the sharded/manifest scheme described above in this document; that
+scheme is for a world too large for one browser to hold, and nothing at this scale needs it yet.
+
+**mud.html: one human, one character.** A person claims a character by asserting `(<characterId>,
+mgx:playedBy, <peerId>)` — an add-only fact, first claim wins by timestamp. A character nobody has
+claimed simply sits still; deciding who autoplays an unclaimed character across several peers, with
+no shared clock, is real coordination work that no scenario here actually needs yet, so it's left
+for later rather than solved speculatively now. Talking to another player's character needs nothing
+new at all: the room-cast lookup and the `talk` verb already read whoever's placed in a room from
+shared facts, with no check for who controls them — a remote peer's character asserting an ordinary
+movement fact is indistinguishable, to that machinery, from a local one.
+
+**Conflict handling stays a pure add-only set for v1.** None of the scenarios this version needs to
+support ever retract a fact, so there's no OR-Set or last-writer-wins predicate to build yet. The one
+real, narrow risk worth naming: two peers both acting on the same object at nearly the same moment
+could transiently fold to different results if their local fact arrays happen to be ordered
+differently when each one reads them. The fix lives entirely in the new networking layer — sort
+facts deterministically after every merge — so once two peers hold the same set of facts they always
+fold it the same way, and the mismatch is only ever momentary. A fuller fix, giving every move its
+own causally-ordered clock, is real future work and is named here so it's a known next step, not a
+surprise.
+
+**Persistence.** chat.html already snapshots its whole fact store to IndexedDB a moment after any
+turn that changes it; because a peer-synced fact merges into that same store, it's covered by that
+existing mechanism with no new save path, just one small added field recording which world a session
+belongs to. mud.html has no persistence today and gets none in v1 either — nothing in the scenarios
+this version supports exercises a mud reload, so a reload behaves as it already does: a fresh local
+world, rejoin by a fresh invite.
+
+**New files**: small, pure, Node-testable modules for peer/world id and default-name generation, for
+the wire message shapes, for the sync filters, and for provenance relabeling; two browser-only
+modules for the WebRTC transport itself and for room orchestration (mesh introduction, diff-and-
+broadcast, merge, sync); one new build script producing a single shared bundle for both pages to
+load at runtime, following the same pattern this project already uses for its one other real
+browser dependency, so the networking code isn't duplicated into two separate page bundles; and one
+small additive export from the mud world engine, bundling predicates that already exist but are
+currently private, so the sync filter can tell state-changing facts apart from anything else. No
+existing session factory's signature changes.
+
+**Build order**: the pure modules first, since nothing else can be tested without them; then the
+WebRTC transport alone, proven with the smallest possible two-page handshake test, so the one
+genuinely novel and least-precedented piece in this whole design gets its own fast-failing checkpoint
+before any page integration exists to obscure a failure in it; then room orchestration against a
+fake transport, so its logic is fully covered without needing real WebRTC in every test; then the
+shared bundle; then chat.html, since it's the smaller integration and it's where the taught-fact
+scenario below lives, so it proves the whole stack end to end first; then mud.html; then the
+scenarios that need more than two peers.
+
+**The scenarios a working v1 needs to demonstrate**, each simulated by reading a generated link or
+reply directly out of one browser context and feeding it into another's — never a real clipboard,
+never a real chat app, since that's not what's under test:
+
+- Two peers connect by the manual link-and-reply exchange, and a message sent over the resulting
+  channel arrives.
+- On chat.html: one peer asks about something ungrounded and gets an honest miss; another peer
+  teaches the fact; the first peer asks again and gets a grounded answer whose citation names the
+  peer who taught it, with the matching "taught" chip.
+- On mud.html: two peers each claim a different character, meet in the same room, and can talk to
+  each other's character through the ordinary `talk` verb, getting back that character's own
+  knowledge.
+- Three peers connect in a chain — the third only ever manually exchanges links with the second —
+  and end up directly connected to all three, with a fact taught after the chain completes reaching
+  everyone.
+- One peer disconnects; the remaining two keep converging on new facts between themselves; a fresh
+  browser context (storage cleared, standing in for a new device) asks the same ungrounded question
+  and gets an honest miss again, then rejoins the room using a fresh link from one of the two who
+  stayed, and recovers the grounded answer along with its provenance.
+
 ## Phasing
 
 1. Backend D itself: the DynamoDB-backed store implementing the same individual read/write shape
