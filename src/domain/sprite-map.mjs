@@ -96,9 +96,17 @@ const FURNITURE_SVG =
   + '<rect x="4" y="8" width="3" height="12" fill="currentColor"/>'
   + '<rect x="17" y="8" width="3" height="12" fill="currentColor"/></svg>';
 
+// A drawstring parcel: the plainest "some small thing you could pick up"
+// shape in the set. The body-plus-shackle outline this replaced drew a
+// padlock, which reads as "restricted" rather than "unidentified" — the
+// wrong thing to say about an object whose class simply has no sprite yet.
+// Matches the silhouette data/sprites/portable-icon.toml already draws, so
+// the same class looks the same whichever tier answers.
 const PORTABLE_SVG =
-  '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="9" width="14" height="11" rx="1.5" fill="currentColor"/>'
-  + '<path d="M9 9 V6.5 A3 3 0 0 1 15 6.5 V9" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+  '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 6 C7.5 6 5 9.4 5 13.4 C5 17.7 8.1 20 12 20 '
+  + 'C15.9 20 19 17.7 19 13.4 C19 9.4 16.5 6 12 6 Z" fill="currentColor"/>'
+  + '<path d="M9.4 6.4 C9.9 4.6 10.8 3.4 12 3.4 C13.2 3.4 14.1 4.6 14.6 6.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>'
+  + '<ellipse cx="9.8" cy="11.6" rx="1.6" ry="2.1" fill="currentColor" opacity="0.28"/></svg>';
 
 const PERSON_SVG =
   '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="6.5" r="3.2" fill="currentColor"/>'

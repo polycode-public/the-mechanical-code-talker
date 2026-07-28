@@ -38,6 +38,44 @@ test("every class in the wider vocabulary pack has at least one dedicated templa
   assert.deepEqual(missing, [], `classes with no sprite-tier template at all: ${missing.join(", ")}`);
 });
 
+// Everything a mud-garden player can find: the world's own placed props
+// plus every kind a dig can turn up. Each needs a template of its own, or
+// the room view hangs a generic fallback on the wall in place of the thing
+// the digest just named.
+const MUD_ITEM_CLASSES = ["carrot", "lettuce", "tomato", "stone", "seed", "basket", "root", "worm"];
+
+test("every object class a mud-garden player can meet resolves to its own dedicated template", () => {
+  for (const cls of MUD_ITEM_CLASSES) {
+    const svg = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY, { rootFallback: "portable" });
+    assert.ok(svg.includes(`id="${cls}-fill"`), `${cls} resolved without its own gradient id: ${svg}`);
+    assert.ok(!svg.includes("{{FILL"), `${cls} left an unresolved placeholder token`);
+  }
+});
+
+// The mid-level classes a specific food item climbs to when its own class
+// has no sprite: a turnip reaches vegetable, an apple reaches fruit, moss
+// reaches plant. Each needs a picture for that climb to be worth making.
+test("the mid-level fallback classes a food item climbs to each carry their own template", () => {
+  for (const cls of ["food", "fruit", "vegetable", "plant", "flower"]) {
+    const svg = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY, { rootFallback: "portable" });
+    assert.ok(svg.includes(`id="${cls}-fill"`), `${cls} resolved without its own gradient id: ${svg}`);
+  }
+});
+
+test("a class whose whole chain has no sprite lands on the plain portable parcel, never the animal root", () => {
+  const rows = [{ subject: "gizmo", predicate: "rdfs:subClassOf", object: "widget" }];
+  const svg = resolveSpriteAsset("gizmo", rows, [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY, { rootFallback: "portable" });
+  assert.ok(svg.includes('id="portable-plain-fill"'), `expected the plain parcel, got: ${svg}`);
+  assert.ok(!svg.includes("{{FILL"), "an untaught portable must never leak a placeholder token");
+});
+
+test("a taught mgx:madeOf value still wins over the plain parcel", () => {
+  const facts = [{ subject: "the-thing", predicate: "mgx:madeOf", object: "wood" }];
+  const svg = resolveSpriteAsset("portable", [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY, { rootFallback: "portable" });
+  assert.ok(svg.includes(MATERIAL_PALETTE.wood.base), "the taught material's own gradient must appear");
+  assert.ok(!svg.includes('id="portable-plain-fill"'), "the plain fallback must not shadow a filled material template");
+});
+
 test("every real sprite-tier template is internally consistent", () => {
   for (const t of REAL_LARGE_TEMPLATES) {
     const problems = spriteTemplateProblems(t);

@@ -395,7 +395,8 @@ on the page, everything else stays quiet and disciplined around it.
   drawn at random each time the world starts or resets, one per pane.
 - **Room view**: one row tall. The viewing character's own sprite stands on the right; any other
   character present in the room stands on the left; loose objects hang on the back wall in
-  portrait frames rather than scattered across the floor. Built over the same shared world state
+  portrait frames rather than scattered across the floor, each captioned with the thing's own
+  name whichever tier of sprite ends up drawn. Built over the same shared world state
   the chat log reads — the graphic is a rendering of it, not a second source of truth. **When two
   characters share a room and one talks to the other, a speech bubble renders over the speaker** in
   both panes that can see the room, holding the short form of what was said (the full exchange
@@ -501,6 +502,13 @@ species, was added for the den. The meerkat sprite, used elsewhere in the sprite
 of this demo's own roster, is now the visually weakest of the group and is a candidate for the
 same treatment. Nature-corpus content (real facts about each animal and its food) is unchanged
 from the original plan.
+
+Every object a player can find now has a sprite of its own too: carrot, lettuce, tomato, seed,
+basket, and the root and worm a dig turns up, alongside the stone the pack already carried. The
+room view resolves them through the same property-aware, large-tier resolver the characters use,
+climbing the object's own class chain and drawing the nearest ancestor that has a picture — so a
+future kind with no sprite of its own still shows its vegetable, fruit, or plant, and only a
+chain with nothing anywhere lands on a plain tied bundle.
 
 ### Multiplayer threading
 

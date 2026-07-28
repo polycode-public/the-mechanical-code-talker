@@ -1,0 +1,22 @@
+# worm — a fat S-curve of body with a saddle band near the middle. The
+# segment rings are one dashed overlay stroked along the SAME path as the
+# body, so they space themselves evenly around both bends instead of being
+# hand-placed and drifting off the curve. Pink is fixed: an earthworm shaded
+# from currentColor would read as any other tube on a dark page.
+classes = ["worm"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="worm-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#edb0a8"/>
+      <stop offset="55%" stop-color="#cf7f74"/>
+      <stop offset="100%" stop-color="#96504a"/>
+    </linearGradient>
+  </defs>
+  <path d="M5.4 19.4 C4.4 15.8 7.4 13.6 10.6 13.9 C13.8 14.2 15.6 12.4 15.1 9.9 C14.6 7.4 11.8 6.2 9.2 7.4" fill="none" stroke="url(#worm-fill)" stroke-width="4.6" stroke-linecap="round"/>
+  <path d="M5.4 19.4 C4.4 15.8 7.4 13.6 10.6 13.9 C13.8 14.2 15.6 12.4 15.1 9.9 C14.6 7.4 11.8 6.2 9.2 7.4" fill="none" stroke="#8f4a44" stroke-width="4.6" stroke-linecap="butt" stroke-dasharray="0.55 2.4" opacity="0.24"/>
+  <ellipse cx="11.4" cy="14" rx="1.5" ry="2.5" fill="#a85f57" opacity="0.4" transform="rotate(80 11.4 14)"/>
+  <path d="M6.6 17.6 C6.4 15.8 8 14.8 9.8 14.8" fill="none" stroke="#ffffff" stroke-width="0.9" opacity="0.3" stroke-linecap="round"/>
+  <circle cx="9.5" cy="6.9" r="0.45" fill="#5e2f2b" opacity="0.75"/>
+</svg>
+"""

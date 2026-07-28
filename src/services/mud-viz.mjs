@@ -16,8 +16,9 @@
 // self-contained, `.toString()`-splice-safe room-scene helpers are spliced
 // into the inline script exactly the way spider-fly-viz.mjs splices its own
 // render-glue — `roomSceneObjects`/`scenePlacement`/`spriteClassForObject`/
-// `visibleRoomOf`/`roomKindForRoom` are REUSED directly from
-// adventure-viz.mjs rather than re-derived: mud-garden ships no individual
+// `spriteAncestryRows`/`factsForSubject`/`visibleRoomOf`/`roomKindForRoom`
+// are REUSED directly from adventure-viz.mjs rather than re-derived:
+// mud-garden ships no individual
 // named "player" (the whole point of the multi-character demo), so those
 // functions' own hardcoded "player" exclusion never fires for a mud
 // character — every character reads back as an ordinary visible object of
@@ -56,7 +57,7 @@
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
 import {
-  roomSceneObjects, scenePlacement, spriteClassForObject,
+  roomSceneObjects, scenePlacement, spriteClassForObject, spriteAncestryRows, factsForSubject,
   visibleRoomOf, roomKindForRoom, allRoomIds,
 } from "./adventure-viz.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
@@ -722,6 +723,8 @@ function pageScript() {
   const roomSceneObjects = ${roomSceneObjects.toString()};
   const scenePlacement = ${scenePlacement.toString()};
   const spriteClassForObject = ${spriteClassForObject.toString()};
+  const spriteAncestryRows = ${spriteAncestryRows.toString()};
+  const factsForSubject = ${factsForSubject.toString()};
   const visibleRoomOf = ${visibleRoomOf.toString()};
   const roomKindForRoom = ${roomKindForRoom.toString()};
   const allRoomIds = ${allRoomIds.toString()};
@@ -1011,9 +1014,20 @@ function pageScript() {
     return "";
   }
 
-  function objectSvgFor(spriteClass, rows) {
-    if (window.tmctMud && window.tmctMud.resolveSpriteForClass) {
-      return window.tmctMud.resolveSpriteForClass(spriteClass, rows, window.tmctMud.SPRITE_REGISTRY);
+  // A wall-hung object resolves through the SAME property-aware, large-tier
+  // resolver the characters do, keyed on the object's OWN name (via
+  // spriteAncestryRows' synthetic subClassOf edge to its declared class), so
+  // a carrot draws a carrot and only a class with no template anywhere falls
+  // back. The fallback root is "portable", not the resolver's default
+  // "animal": everything hung on this wall is a thing, and a thing with no
+  // sprite should read as a plain parcel rather than a creature.
+  function objectSvgFor(subject, rows) {
+    if (window.tmctMud && window.tmctMud.resolveSpriteAsset) {
+      return window.tmctMud.resolveSpriteAsset(
+        subject, spriteAncestryRows(rows, subject), factsForSubject(rows, subject),
+        DATA.spriteTemplates, window.tmctMud.SPRITE_REGISTRY,
+        { rootFallback: "portable", instanceKey: subject },
+      );
     }
     return "";
   }
@@ -1117,8 +1131,11 @@ function pageScript() {
       if (isCreature(state, obj.subject)) continue;
       const plane = scenePlacement(rows, state, obj.subject).plane;
       const hang = plane === "ceiling" || plane === "wall" ? "hangs-high" : "hangs-low";
+      // The caption is always the THING'S own name, never the class whose
+      // sprite ended up drawn — an item wearing an ancestor's icon because
+      // its own class has no sprite yet still has to say what it is.
       wall.push(spriteCardHtml(obj.subject, labelForItem(rows, obj.subject, roomIds),
-        '<div class="hook"></div><div class="sprite-frame">' + objectSvgFor(obj.spriteClass, rows) + "</div>",
+        '<div class="hook"></div><div class="sprite-frame">' + objectSvgFor(obj.subject, rows) + "</div>",
         commands[obj.subject], "wall-item " + hang, massOf(state, obj.subject)));
     }
     el(w + "-others").innerHTML = others.join("");
