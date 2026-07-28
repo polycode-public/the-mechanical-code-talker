@@ -300,6 +300,7 @@
   "src/adapters/memory/export-jsonl.mjs",
   "src/adapters/memory/inspect.mjs",
   "src/adapters/memory/shacl.mjs",
+  "src/adapters/p2p/webrtc-transport.mjs",
   "src/adapters/prose-nlp.mjs",
   "src/adapters/providers/bootstrap.mjs",
   "src/adapters/providers/fixture.mjs",
