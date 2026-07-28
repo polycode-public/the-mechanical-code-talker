@@ -30,6 +30,22 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   consumes tmct's backend the moment it lands here instead of maintaining its own AWS persistence
   layer. Full design writeup: `PLAN_MEMORY_BACKEND_AWS.md` (relocated from seonix's `PLAN_TMCT.md`
   2026-07-26; this is a tmct/marginalia concern, not a consumer-repo one)
+- [ ] marginalia wants bedrock-meter-proxy's embedded over-cap fallback session grounded in
+  marginalia's own memory graph, not tmct's default seeded persona — explicitly no timeline
+  pressure, planning ahead. Ruled out the Repository Interface themselves (memory is documented as
+  "tmct's alone", and the type vocabulary is code-graph-shaped, not conversational-fact-shaped —
+  correct call, not something to revisit). Points at `openMemoryBackend`/`openConfiguredMemoryBackend`'s
+  backend registry in `src/adapters/memory/core.mjs` as the real seam, same one the AWS-hosted
+  backend item above would extend — these two are related, possibly worth designing together.
+  Two candidate shapes, both genuinely undecided on their side: (1) periodic sync — marginalia
+  exports flat fact triples in the same shape `export-jsonl.mjs` already emits, a scheduled job
+  imports via the existing `tmct import --file` path into a store the proxy's Lambda reads at cold
+  start; possibly zero new backend code needed, just confirming the import path tolerates
+  marginalia's scale and refresh cadence. (2) live read-through — a genuine new backend querying an
+  AWS-hosted store on every read/write, either speaking marginalia's DynamoDB schema directly (real
+  cross-project coupling) or a thin client against a neutral flat-triple read API marginalia would
+  expose. Full write-up: `PLAN_TMCT.md` §7 in the marginalia repo (§6 for the related bedrock-meter
+  sidecar-routing ask). `~/.claude/inboxes/tmct.md` 2026-07-27T23:49.
 - [ ] the ACE grammar's `resolveNP` has no N-of-N noun-phrase support (`"a unit of work"` parses
   with `residue: ["of"]` rather than as one noun phrase) — surfaced while widening multi-word
   class-name teach (2026-07-27), deliberately not fixed there: it's real grammar work outside that
