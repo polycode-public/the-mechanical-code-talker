@@ -1,4 +1,4 @@
-{"world":"spider-fly","kind":"meta","opening":"a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move — watch, or address one by name in chat."}
+{"world":"spider-fly","kind":"meta","opening":"a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move. Watch, or address one by name in chat."}
 {"world":"spider-fly","kind":"fact","subject":"cell-1-1","predicate":"rdf:type","object":"cell"}
 {"world":"spider-fly","kind":"fact","subject":"cell-1-1","predicate":"mgx:has-exit-south","object":"cell-1-2"}
 {"world":"spider-fly","kind":"fact","subject":"cell-1-1","predicate":"mgx:has-exit-east","object":"cell-2-1"}

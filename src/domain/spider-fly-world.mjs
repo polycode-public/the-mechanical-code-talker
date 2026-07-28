@@ -122,7 +122,7 @@ export const SEED_TAXONOMY = Object.freeze([
 ]);
 
 export const WORLD_OPENING =
-  "a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move — watch, or address one by name in chat.";
+  "a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move. Watch, or address one by name in chat.";
 
 /** Every fact row the shipped world source carries: cell typing, grid
  *  adjacency (mgx:has-exit-<direction>), the web block (mgx:in-web) and the
