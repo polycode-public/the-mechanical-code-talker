@@ -30,6 +30,7 @@ const PAGE_ORDER = [
   "ingest",
   "sprites",
   "research",
+  "mud",
 ];
 
 // Plates whose screenshot the capture script has not written yet. The page
