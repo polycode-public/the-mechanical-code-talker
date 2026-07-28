@@ -80,10 +80,49 @@ test("resolveGameConfig: a partial [games.guess-number] override leaves the unse
   assert.equal(resolved.guessNumber.maxBound, DEFAULT_GAME_CONFIG.guessNumber.maxBound);
 });
 
+test("resolveGameConfig: mud game defaults resolve correctly for at least two species", () => {
+  const resolved = resolveGameConfig(null);
+  assert.equal(resolved.mud.moleInitialMass, DEFAULT_GAME_CONFIG.mud.moleInitialMass);
+  assert.equal(resolved.mud.moleSpeed, 1);
+  assert.equal(resolved.mud.badgerInitialMass, DEFAULT_GAME_CONFIG.mud.badgerInitialMass);
+  assert.equal(resolved.mud.badgerSpeed, 2, "larger animals have higher speed");
+  assert.equal(resolved.mud.groundhogDigReach, 2, "larger animals have higher dig reach");
+});
+
+test("resolveGameConfig: a partial [games.mud] override merges over the defaults without dropping unset siblings", () => {
+  const toml = { games: { mud: { mole_speed: 3 } } };
+  const resolved = resolveGameConfig(toml);
+  assert.equal(resolved.mud.moleSpeed, 3, "the set key overrides the default");
+  assert.equal(resolved.mud.moleInitialMass, DEFAULT_GAME_CONFIG.mud.moleInitialMass, "every unset sibling keeps its default");
+  assert.equal(resolved.mud.badgerSpeed, DEFAULT_GAME_CONFIG.mud.badgerSpeed, "unrelated species are untouched");
+  assert.deepEqual(resolved.spiderFly, DEFAULT_GAME_CONFIG.spiderFly, "an unrelated table is completely untouched");
+});
+
+test("resolveGameConfig: [games.mud] snake_case keys map onto camelCase counterparts", () => {
+  const toml = {
+    games: {
+      mud: {
+        mole_initial_mass: 10,
+        mole_speed: 2,
+        badger_initial_mass: 25,
+        badger_dig_reach: 3,
+        groundhog_mass_decrement_per_turn: 0.5,
+      },
+    },
+  };
+  const resolved = resolveGameConfig(toml);
+  assert.equal(resolved.mud.moleInitialMass, 10);
+  assert.equal(resolved.mud.moleSpeed, 2);
+  assert.equal(resolved.mud.badgerInitialMass, 25);
+  assert.equal(resolved.mud.badgerDigReach, 3);
+  assert.equal(resolved.mud.groundhogMassDecrementPerTurn, 0.5);
+});
+
 test("resolveGameConfig returns a fully populated object of the same shape every time, never sparse", () => {
   const resolved = resolveGameConfig({ games: { "spider-fly": { spider_vision_radius: 2 } } });
-  assert.deepEqual(Object.keys(resolved).sort(), ["guessNumber", "planning", "spiderFly"]);
+  assert.deepEqual(Object.keys(resolved).sort(), ["guessNumber", "mud", "planning", "spiderFly"]);
   assert.deepEqual(Object.keys(resolved.spiderFly).sort(), Object.keys(DEFAULT_GAME_CONFIG.spiderFly).sort());
+  assert.deepEqual(Object.keys(resolved.mud).sort(), Object.keys(DEFAULT_GAME_CONFIG.mud).sort());
   assert.deepEqual(Object.keys(resolved.guessNumber).sort(), Object.keys(DEFAULT_GAME_CONFIG.guessNumber).sort());
   assert.deepEqual(Object.keys(resolved.planning).sort(), Object.keys(DEFAULT_GAME_CONFIG.planning).sort());
 });

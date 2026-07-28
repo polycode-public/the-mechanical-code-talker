@@ -297,6 +297,7 @@ export const CORPUSES = {
         // human-nature
         "dog", "cat", "horse", "cow", "pig", "sheep", "bird", "fish",
         "mouse", "rabbit", "bear", "lion", "tiger", "elephant", "snake",
+        "mole", "vole", "badger", "groundhog", "meerkat",
         "tree", "flower", "grass", "leaf", "root", "seed", "fruit", "water",
         "air", "fire", "earth", "stone", "sand", "gold", "iron", "rain",
         "snow", "wind", "cloud", "sun", "moon", "star", "owl", "wolf",
@@ -313,7 +314,7 @@ export const CORPUSES = {
         "bread", "meat", "milk", "egg", "cheese", "vegetable", "meal",
         "breakfast", "dinner", "drink", "wine", "tea", "coffee", "tongue",
         "tooth", "finger", "toe", "shoulder", "knee", "brain", "lung",
-        "sugar", "salt",
+        "sugar", "salt", "carrot", "lettuce", "tomato",
         // human-mind
         "word", "story", "news", "idea", "thought", "mind", "memory",
         "dream", "belief", "love", "hate", "fear", "joy", "anger", "hope",
@@ -568,6 +569,11 @@ export const CORPUSES = {
       ["ant", "/r/IsA", "insect"],
       ["butterfly", "/r/IsA", "insect"], ["butterfly", "/r/HasProperty", "colorful"],
       ["spider", "/r/IsA", "animal"], ["spider", "/r/HasA", "leg"],
+      ["mole", "/r/IsA", "mammal"], ["mole", "/r/HasProperty", "small"], ["mole", "/r/CapableOf", "dig"],
+      ["vole", "/r/IsA", "rodent"], ["vole", "/r/HasProperty", "small"], ["vole", "/r/CapableOf", "burrow"],
+      ["badger", "/r/IsA", "mammal"], ["badger", "/r/HasProperty", "large"], ["badger", "/r/CapableOf", "dig"],
+      ["groundhog", "/r/IsA", "rodent"], ["groundhog", "/r/HasProperty", "burrowing"], ["groundhog", "/r/CapableOf", "hibernate"],
+      ["meerkat", "/r/IsA", "mammal"], ["meerkat", "/r/HasProperty", "social"], ["meerkat", "/r/CapableOf", "stand_upright"],
       ["river", "/r/IsA", "waterway"], ["river", "/r/CapableOf", "flow"],
       ["ocean", "/r/IsA", "body_of_water"], ["ocean", "/r/HasProperty", "salty"],
 
@@ -643,6 +649,9 @@ export const CORPUSES = {
       ["lung", "/r/PartOf", "body"], ["lung", "/r/UsedFor", "breathing"],
       ["sugar", "/r/IsA", "food"], ["sugar", "/r/HasProperty", "sweet"],
       ["salt", "/r/IsA", "food"], ["salt", "/r/HasProperty", "salty"],
+      ["carrot", "/r/IsA", "vegetable"], ["carrot", "/r/AtLocation", "garden"], ["carrot", "/r/HasProperty", "orange"],
+      ["lettuce", "/r/IsA", "vegetable"], ["lettuce", "/r/AtLocation", "garden"],
+      ["tomato", "/r/IsA", "vegetable"], ["tomato", "/r/AtLocation", "garden"], ["tomato", "/r/HasProperty", "red"],
 
       // ---- human-mind (~70 facts) ----
       ["word", "/r/PartOf", "language"], ["word", "/r/UsedFor", "communicating"],

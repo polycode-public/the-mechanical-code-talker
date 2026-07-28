@@ -440,6 +440,21 @@
 {"start":"/c/en/butterfly","rel":"/r/HasProperty","end":"/c/en/colorful","weight":1,"surfaceText":"[[butterfly]] HasProperty [[colorful]]"}
 {"start":"/c/en/spider","rel":"/r/IsA","end":"/c/en/animal","weight":1,"surfaceText":"[[spider]] IsA [[animal]]"}
 {"start":"/c/en/spider","rel":"/r/HasA","end":"/c/en/leg","weight":1,"surfaceText":"[[spider]] HasA [[leg]]"}
+{"start":"/c/en/mole","rel":"/r/IsA","end":"/c/en/mammal","weight":1,"surfaceText":"[[mole]] IsA [[mammal]]"}
+{"start":"/c/en/mole","rel":"/r/HasProperty","end":"/c/en/small","weight":1,"surfaceText":"[[mole]] HasProperty [[small]]"}
+{"start":"/c/en/mole","rel":"/r/CapableOf","end":"/c/en/dig","weight":1,"surfaceText":"[[mole]] CapableOf [[dig]]"}
+{"start":"/c/en/vole","rel":"/r/IsA","end":"/c/en/rodent","weight":1,"surfaceText":"[[vole]] IsA [[rodent]]"}
+{"start":"/c/en/vole","rel":"/r/HasProperty","end":"/c/en/small","weight":1,"surfaceText":"[[vole]] HasProperty [[small]]"}
+{"start":"/c/en/vole","rel":"/r/CapableOf","end":"/c/en/burrow","weight":1,"surfaceText":"[[vole]] CapableOf [[burrow]]"}
+{"start":"/c/en/badger","rel":"/r/IsA","end":"/c/en/mammal","weight":1,"surfaceText":"[[badger]] IsA [[mammal]]"}
+{"start":"/c/en/badger","rel":"/r/HasProperty","end":"/c/en/large","weight":1,"surfaceText":"[[badger]] HasProperty [[large]]"}
+{"start":"/c/en/badger","rel":"/r/CapableOf","end":"/c/en/dig","weight":1,"surfaceText":"[[badger]] CapableOf [[dig]]"}
+{"start":"/c/en/groundhog","rel":"/r/IsA","end":"/c/en/rodent","weight":1,"surfaceText":"[[groundhog]] IsA [[rodent]]"}
+{"start":"/c/en/groundhog","rel":"/r/HasProperty","end":"/c/en/burrowing","weight":1,"surfaceText":"[[groundhog]] HasProperty [[burrowing]]"}
+{"start":"/c/en/groundhog","rel":"/r/CapableOf","end":"/c/en/hibernate","weight":1,"surfaceText":"[[groundhog]] CapableOf [[hibernate]]"}
+{"start":"/c/en/meerkat","rel":"/r/IsA","end":"/c/en/mammal","weight":1,"surfaceText":"[[meerkat]] IsA [[mammal]]"}
+{"start":"/c/en/meerkat","rel":"/r/HasProperty","end":"/c/en/social","weight":1,"surfaceText":"[[meerkat]] HasProperty [[social]]"}
+{"start":"/c/en/meerkat","rel":"/r/CapableOf","end":"/c/en/stand_upright","weight":1,"surfaceText":"[[meerkat]] CapableOf [[stand upright]]"}
 {"start":"/c/en/river","rel":"/r/IsA","end":"/c/en/waterway","weight":1,"surfaceText":"[[river]] IsA [[waterway]]"}
 {"start":"/c/en/river","rel":"/r/CapableOf","end":"/c/en/flow","weight":1,"surfaceText":"[[river]] CapableOf [[flow]]"}
 {"start":"/c/en/ocean","rel":"/r/IsA","end":"/c/en/body_of_water","weight":1,"surfaceText":"[[ocean]] IsA [[body of water]]"}
@@ -582,6 +597,14 @@
 {"start":"/c/en/sugar","rel":"/r/HasProperty","end":"/c/en/sweet","weight":1,"surfaceText":"[[sugar]] HasProperty [[sweet]]"}
 {"start":"/c/en/salt","rel":"/r/IsA","end":"/c/en/food","weight":1,"surfaceText":"[[salt]] IsA [[food]]"}
 {"start":"/c/en/salt","rel":"/r/HasProperty","end":"/c/en/salty","weight":1,"surfaceText":"[[salt]] HasProperty [[salty]]"}
+{"start":"/c/en/carrot","rel":"/r/IsA","end":"/c/en/vegetable","weight":1,"surfaceText":"[[carrot]] IsA [[vegetable]]"}
+{"start":"/c/en/carrot","rel":"/r/AtLocation","end":"/c/en/garden","weight":1,"surfaceText":"[[carrot]] AtLocation [[garden]]"}
+{"start":"/c/en/carrot","rel":"/r/HasProperty","end":"/c/en/orange","weight":1,"surfaceText":"[[carrot]] HasProperty [[orange]]"}
+{"start":"/c/en/lettuce","rel":"/r/IsA","end":"/c/en/vegetable","weight":1,"surfaceText":"[[lettuce]] IsA [[vegetable]]"}
+{"start":"/c/en/lettuce","rel":"/r/AtLocation","end":"/c/en/garden","weight":1,"surfaceText":"[[lettuce]] AtLocation [[garden]]"}
+{"start":"/c/en/tomato","rel":"/r/IsA","end":"/c/en/vegetable","weight":1,"surfaceText":"[[tomato]] IsA [[vegetable]]"}
+{"start":"/c/en/tomato","rel":"/r/AtLocation","end":"/c/en/garden","weight":1,"surfaceText":"[[tomato]] AtLocation [[garden]]"}
+{"start":"/c/en/tomato","rel":"/r/HasProperty","end":"/c/en/red","weight":1,"surfaceText":"[[tomato]] HasProperty [[red]]"}
 {"start":"/c/en/word","rel":"/r/PartOf","end":"/c/en/language","weight":1,"surfaceText":"[[word]] PartOf [[language]]"}
 {"start":"/c/en/word","rel":"/r/UsedFor","end":"/c/en/communicating","weight":1,"surfaceText":"[[word]] UsedFor [[communicating]]"}
 {"start":"/c/en/language","rel":"/r/UsedFor","end":"/c/en/communicating","weight":1,"surfaceText":"[[language]] UsedFor [[communicating]]"}

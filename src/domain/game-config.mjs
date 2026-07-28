@@ -27,6 +27,28 @@ export const DEFAULT_GAME_CONFIG = Object.freeze({
     minHatchlingMass: 3,
     webDurationTurns: 10,
   }),
+  mud: Object.freeze({
+    moleInitialMass: 8,
+    moleMassDecrementPerTurn: 0.3,
+    moleSpeed: 1,
+    moleDigReach: 1,
+    voleInitialMass: 6,
+    voleMassDecrementPerTurn: 0.25,
+    voleSpeed: 1,
+    voleDigReach: 1,
+    badgerInitialMass: 20,
+    badgerMassDecrementPerTurn: 0.5,
+    badgerSpeed: 2,
+    badgerDigReach: 2,
+    groundhogInitialMass: 12,
+    groundhogMassDecrementPerTurn: 0.4,
+    groundhogSpeed: 2,
+    groundhogDigReach: 2,
+    meerkatInitialMass: 9,
+    meerkatMassDecrementPerTurn: 0.35,
+    meerkatSpeed: 1,
+    meerkatDigReach: 1,
+  }),
   guessNumber: Object.freeze({
     defaultLo: 1,
     defaultHi: 100,
@@ -53,6 +75,29 @@ const SPIDER_FLY_KEY_MAP = Object.freeze({
   egg_hatch_count: "eggHatchCount",
   min_hatchling_mass: "minHatchlingMass",
   web_duration_turns: "webDurationTurns",
+});
+
+const MUD_KEY_MAP = Object.freeze({
+  mole_initial_mass: "moleInitialMass",
+  mole_mass_decrement_per_turn: "moleMassDecrementPerTurn",
+  mole_speed: "moleSpeed",
+  mole_dig_reach: "moleDigReach",
+  vole_initial_mass: "voleInitialMass",
+  vole_mass_decrement_per_turn: "voleMassDecrementPerTurn",
+  vole_speed: "voleSpeed",
+  vole_dig_reach: "voleDigReach",
+  badger_initial_mass: "badgerInitialMass",
+  badger_mass_decrement_per_turn: "badgerMassDecrementPerTurn",
+  badger_speed: "badgerSpeed",
+  badger_dig_reach: "badgerDigReach",
+  groundhog_initial_mass: "groundhogInitialMass",
+  groundhog_mass_decrement_per_turn: "groundhogMassDecrementPerTurn",
+  groundhog_speed: "groundhogSpeed",
+  groundhog_dig_reach: "groundhogDigReach",
+  meerkat_initial_mass: "meerkatInitialMass",
+  meerkat_mass_decrement_per_turn: "meerkatMassDecrementPerTurn",
+  meerkat_speed: "meerkatSpeed",
+  meerkat_dig_reach: "meerkatDigReach",
 });
 
 const GUESS_NUMBER_KEY_MAP = Object.freeze({
@@ -90,6 +135,7 @@ export function resolveGameConfig(toml) {
   const games = toml?.games ?? {};
   return {
     spiderFly: mergeSection(DEFAULT_GAME_CONFIG.spiderFly, games["spider-fly"], SPIDER_FLY_KEY_MAP),
+    mud: mergeSection(DEFAULT_GAME_CONFIG.mud, games.mud, MUD_KEY_MAP),
     guessNumber: mergeSection(DEFAULT_GAME_CONFIG.guessNumber, games["guess-number"], GUESS_NUMBER_KEY_MAP),
     planning: mergeSection(DEFAULT_GAME_CONFIG.planning, toml?.planning, PLANNING_KEY_MAP),
   };

@@ -67,9 +67,9 @@
         "tool": "corpus/tier2/generate.mjs"
       },
       "file": "human.jsonl",
-      "facts": 665,
-      "bytes": 81540,
-      "sha256": "7710c88c4c96a73fbbae19fe1989b0be40fed5ed40205016e90cc221bcb79607",
+      "facts": 688,
+      "bytes": 84400,
+      "sha256": "8aaf9f8300d63c5ef94e9ca06452a4be152872bda720ad810586fdb77b06f785",
       "license": "MPL-2.0"
     },
     {
