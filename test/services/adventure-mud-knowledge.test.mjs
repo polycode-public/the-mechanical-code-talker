@@ -3,6 +3,8 @@
 // mgx:knows-about edge the hearer carries from that turn on, tagged to whoever
 // vouched for it. personKnowledgeLines reads it back with no new code, because
 // it is the same predicate the shipped worlds already use for staff knowledge.
+// "what food do you know about" reads the same edges, filtered to whatever
+// class chain reaches "food", scoped to the asking character alone.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -11,6 +13,7 @@ import { join } from "node:path";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
 import {
   recordTold, recordExamined, personKnowledgeLines, foldWorldState, worldActionRows,
+  adventureTurn,
 } from "../../src/services/adventure.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
 import { provenanceTagToSource } from "../../src/domain/memory/trust.mjs";
@@ -47,6 +50,10 @@ async function rowsAndState(dir) {
 }
 
 const knowsAboutRows = (rows) => rows.filter((r) => r.predicate === "mgx:knows-about");
+
+const planHolderFor = () => ({ state: { adventure: { world: WORLD } } });
+const askFood = (dir, line, actingSubject) =>
+  adventureTurn(line, { planHolder: planHolderFor(), memoryDir: dir, actingSubject });
 
 test("being told about a thing writes the hearer a knows-about fact tagged to the teller", async () => {
   await withMudGarden("told", async (dir) => {
@@ -126,6 +133,54 @@ test("a character's testimony resolves to that character's own Source, apart fro
     told, provenanceTagToSource(`${worldProvenanceTag(WORLD)}:turn4`),
     "what an animal says is not credited to the world it stands in",
   );
+});
+
+test("asking what food you know about reports only the food-classed things you were told or examined", async () => {
+  await withMudGarden("food-query", async (dir) => {
+    await appendFacts(dir, [{
+      subject: "apple-1", predicate: "rdf:type", object: "food", provenance: worldProvenanceTag(WORLD),
+    }]);
+    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "carrot-1", k: 1 });
+    await recordExamined(dir, { observer: "vole-1", thing: "apple-1", k: 2 });
+    await recordTold(dir, { asker: "vole-1", teller: "badger-1", thing: "stone-1", k: 3 });
+
+    const result = await askFood(dir, "what food do you know about", "vole-1");
+    assert.equal(result.text, "you know about: the carrot-1, the apple-1.");
+    assert.equal(result.miss, false, "a populated answer is a real answer, never a miss");
+  });
+});
+
+test("a character with no known food gets the honest empty answer, not a guess", async () => {
+  await withMudGarden("food-none", async (dir) => {
+    const result = await askFood(dir, "what food do you know about", "vole-1");
+    assert.equal(result.text, "you don't know of any food yet.");
+    assert.equal(result.miss, false, "an honest 'nothing known' is still an on-topic answer");
+  });
+});
+
+test("the inverted phrasing answers the same food query", async () => {
+  await withMudGarden("food-phrasing", async (dir) => {
+    await recordExamined(dir, { observer: "mole-1", thing: "carrot-1", k: 1 });
+    const result = await askFood(dir, "what do you know about food", "mole-1");
+    assert.equal(result.text, "you know about: the carrot-1.");
+  });
+});
+
+test("a character's food query never leaks another character's own separately-told food knowledge", async () => {
+  await withMudGarden("food-isolation", async (dir) => {
+    await appendFacts(dir, [{
+      subject: "bread-1", predicate: "rdf:type", object: "food", provenance: worldProvenanceTag(WORLD),
+    }]);
+    await recordExamined(dir, { observer: "mole-1", thing: "bread-1", k: 1 });
+    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "carrot-1", k: 2 });
+
+    const voleResult = await askFood(dir, "what food do you know about", "vole-1");
+    assert.equal(voleResult.text, "you know about: the carrot-1.", "the vole reports its own food knowledge only");
+    assert.doesNotMatch(voleResult.text, /bread-1/, "the mole's own examined food never leaks into the vole's answer");
+
+    const moleResult = await askFood(dir, "what food do you know about", "mole-1");
+    assert.equal(moleResult.text, "you know about: the bread-1.");
+  });
 });
 
 test("testimony never folds into the playable world state", async () => {

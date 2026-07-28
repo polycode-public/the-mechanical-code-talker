@@ -799,6 +799,18 @@ export function personKnowledgeLines(rows, state, person) {
   return { lines, aboutTopics: factObjects(rows, person, KNOWS_ABOUT_PREDICATE) };
 }
 
+/** The FOOD_CLASS things `person` durably knows about — from being told, or
+ *  from having examined them itself (the mgx:knows-about facts
+ *  recordTold/recordExamined write, read back exactly like
+ *  personKnowledgeLines's own aboutTopics), filtered to whatever's
+ *  objectClassChain reaches "food". Unlike personKnowledgeLines's topics, a
+ *  food query has no per-topic sub-digest to hand back, so this returns the
+ *  plain list of known food things rather than a {lines, topics} pair. Pure. */
+export function personKnownFoodLines(rows, state, person) {
+  return factObjects(rows, person, KNOWS_ABOUT_PREDICATE)
+    .filter((thing) => objectClassChain(rows, thing).includes(FOOD_CLASS));
+}
+
 /** What a person can report from where they stand this turn — derived each
  *  turn, never stored: who and what shares their room, each container's
  *  open/locked status, and what unlocks a locked one there. Pure. */
@@ -1378,6 +1390,11 @@ async function worldOpennessAnswer(line, { memoryDir }) {
 const WORLD_WHERE_AM_I_RE = /^where\s+am\s+i(?:\s+now)?[?.!\s]*$/i;
 const WORLD_OPTIONS_RE = /^(?:what\s+can\s+i\s+do(?:\s+(?:here|now))?|what\s+are\s+my\s+options|what\s+(?:should|do)\s+i\s+do(?:\s+(?:here|now))?|what\s+now)[?.!\s]*$/i;
 const WORLD_QUEST_RE = /^(?:what(?:'s|\s+is)\s+(?:the\s+|my\s+)?(?:quest|goal|objective|mission|aim)|what\s+am\s+i\s+(?:trying\s+to\s+do|(?:supposed|meant)\s+to\s+do)|what\s+do\s+i\s+do\s+here)[?.!\s]*$/i;
+// "what food do you know about" and its natural variants — the asking
+// character's OWN durable food knowledge (personKnownFoodLines), never the
+// whole world's food. Covers the plural ("foods") and the "what do you know
+// about food" inversion alongside the base phrasing.
+const WORLD_KNOWN_FOOD_RE = /^(?:what\s+foods?\s+do\s+you\s+know\s+about|what\s+do\s+you\s+know\s+about\s+food)[?.!\s]*$/i;
 
 /** The in-game orientation asides, answered from the world fold: the player's
  *  room, the room's real affordances, and the world's objective. Null when the
@@ -1420,6 +1437,34 @@ async function worldContextAnswer(line, { memoryDir, actingSubject = "player" })
         "ADVENTURE — quest aside: no objective marker in this world",
         { goal: "explore the world" },
       );
+}
+
+/** "what food do you know about" — the ASKING character's own durable food
+ *  knowledge, read from the same mgx:knows-about facts recordTold/
+ *  recordExamined write (personKnownFoodLines). An honest "you don't know of
+ *  any food yet" when none is known — a real, on-topic answer, not a miss,
+ *  the same convention inventoryAnswer's own empty-carry case already uses.
+ *  Null when the line isn't this aside, so an ordinary question keeps its
+ *  lane. */
+async function worldKnownFoodAnswer(line, { memoryDir, actingSubject = "player" }) {
+  const l = String(line).trim();
+  if (!WORLD_KNOWN_FOOD_RE.test(l)) return null;
+  let rows;
+  try { rows = readFactRows(await loadMemory(memoryDir)); } catch { return null; }
+  const state = foldWorldState(worldActionRows(rows));
+  const foods = personKnownFoodLines(rows, state, actingSubject);
+  if (!foods.length) {
+    return answer(
+      "you don't know of any food yet.",
+      `ADVENTURE — known-food aside: ${actingSubject}'s mgx:knows-about facts reach no food-classed thing; the honest empty answer`,
+      { goal: "check what food you know about" },
+    );
+  }
+  return answer(
+    `you know about: the ${foods.join(", the ")}.`,
+    `ADVENTURE — known-food aside: ${actingSubject}'s durable mgx:knows-about facts, filtered to the food class`,
+    { goal: "check what food you know about" },
+  );
 }
 
 async function inventoryAnswer({ memoryDir, graph, actingSubject = "player" }) {
@@ -1629,5 +1674,7 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
   if (opennessAside) return opennessAside;
   const contextAside = await worldContextAnswer(line, { memoryDir, actingSubject });
   if (contextAside) return contextAside;
+  const knownFoodAside = await worldKnownFoodAnswer(line, { memoryDir, actingSubject });
+  if (knownFoodAside) return knownFoodAside;
   return null; // a mid-game aside — the ordinary lanes answer, world untouched
 }
