@@ -1,6 +1,9 @@
-# housekeeper — Ashcombe Hall's own housekeeper at the sprite tier:
-# mob-cap, head and body share one gradient, apron-tie kept as a flat
-# stroke accent, with a highlight along the cap brim.
+# housekeeper — Ashcombe Hall's own housekeeper. A long skirt gives her a
+# silhouette the hall's other staff don't share; the class colour stays on
+# the dress and the linen mob cap, pinafore and cuffs stay fixed cream, the
+# same split badger.toml makes between its stripes and its coat. The brass
+# chatelaine on her hip is the mark that names her, and it is the world's own
+# fact drawn: this is the one person in the hall who knows where the key is.
 classes = ["housekeeper"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -10,12 +13,43 @@ svg = """
       <stop offset="55%" stop-color="currentColor"/>
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
+    <radialGradient id="housekeeper-sheen" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <ellipse cx="12" cy="4.6" rx="5.6" ry="2.1" fill="url(#housekeeper-fill)"/>
-  <path d="M8.6 5 C8.6 3 10 1.7 12 1.7 C14 1.7 15.4 3 15.4 5 L15.4 5.6 L8.6 5.6 Z" fill="url(#housekeeper-fill)" opacity="0.92"/>
-  <circle cx="12" cy="7.6" r="3.1" fill="url(#housekeeper-fill)"/>
-  <path d="M6 21 C6 15.5 8.7 13.1 12 13.1 C15.3 13.1 18 15.5 18 21 Z" fill="url(#housekeeper-fill)"/>
-  <path d="M9 16 C10 15.4 14 15.4 15 16" fill="none" stroke="currentColor" stroke-width="1" opacity="0.45" stroke-linecap="round"/>
-  <ellipse cx="9.2" cy="3.9" rx="2" ry="0.6" fill="#ffffff" opacity="0.32"/>
+  <ellipse cx="10.5" cy="21.6" rx="1.55" ry="0.85" fill="#221e1b"/>
+  <ellipse cx="13.5" cy="21.6" rx="1.55" ry="0.85" fill="#221e1b"/>
+  <path d="M8.6 12.6 C8.6 11.1 10 10.2 12 10.2 C14 10.2 15.4 11.1 15.4 12.6 L17 20.7 H7 Z" fill="url(#housekeeper-fill)"/>
+  <path d="M10.1 12.4 H13.9 L15 20.1 H9 Z" fill="#efe4ce"/>
+  <path d="M9 20.1 H15 L15.1 20.7 H8.9 Z" fill="#d8c9ac"/>
+  <path d="M10.6 10.7 L10.2 12.6 M13.4 10.7 L13.8 12.6" stroke="#efe4ce" stroke-width="0.7" stroke-linecap="round" fill="none"/>
+  <path d="M7.9 12.4 C7 13 6.4 14.5 6.5 16.5 C6.55 17.6 6.8 18.3 7.3 18.6 L8.8 17.9 C8.4 17.1 8.3 15.5 8.6 13.7 Z" fill="url(#housekeeper-fill)"/>
+  <path d="M16.1 12.4 C17 13 17.6 14.5 17.5 16.5 C17.45 17.6 17.2 18.3 16.7 18.6 L15.2 17.9 C15.6 17.1 15.7 15.5 15.4 13.7 Z" fill="url(#housekeeper-fill)"/>
+  <rect x="6.5" y="17.3" width="2.4" height="0.9" rx="0.35" fill="#efe4ce"/>
+  <rect x="15.1" y="17.3" width="2.4" height="0.9" rx="0.35" fill="#efe4ce"/>
+  <ellipse cx="7.5" cy="18.9" rx="1.05" ry="1.15" fill="#dcb894"/>
+  <ellipse cx="16.5" cy="18.9" rx="1.05" ry="1.15" fill="#dcb894"/>
+  <circle cx="15.7" cy="14.3" r="1.2" fill="none" stroke="#b08d3a" stroke-width="0.65"/>
+  <path d="M14.5 15.5 H15.6 V16.6 H16.5 V17.4 H15.6 V18 H16.5 V18.8 H14.5 Z" fill="#dcc079" transform="rotate(-8 15.5 17)"/>
+  <path d="M16.6 15.4 H17.7 V16.4 H18.5 V17.1 H17.7 V18.3 H16.6 Z" fill="#b08d3a" transform="rotate(9 17.1 16.8)"/>
+  <path d="M10.4 9.7 L12 11.4 L13.6 9.7 Z" fill="#efe4ce"/>
+  <circle cx="12" cy="7.3" r="2.75" fill="#dcb894"/>
+  <circle cx="10.9" cy="7.35" r="0.42" fill="#221e1b"/>
+  <circle cx="13.1" cy="7.35" r="0.42" fill="#221e1b"/>
+  <circle cx="10.77" cy="7.2" r="0.15" fill="#ffffff" opacity="0.75"/>
+  <circle cx="12.97" cy="7.2" r="0.15" fill="#ffffff" opacity="0.75"/>
+  <path d="M11 8.75 C11.4 9.1 12.6 9.1 13 8.75" stroke="#a9764f" stroke-width="0.4" stroke-linecap="round" fill="none"/>
+  <path d="M8.7 5.6 C8.7 3.4 10.2 2.1 12 2.1 C13.8 2.1 15.3 3.4 15.3 5.6 Z" fill="#efe4ce"/>
+  <g fill="#efe4ce">
+    <circle cx="8.6" cy="5.4" r="0.95"/>
+    <circle cx="10.3" cy="5.75" r="0.95"/>
+    <circle cx="12" cy="5.85" r="0.95"/>
+    <circle cx="13.7" cy="5.75" r="0.95"/>
+    <circle cx="15.4" cy="5.4" r="0.95"/>
+  </g>
+  <path d="M8.6 5.4 C9.8 5.9 14.2 5.9 15.4 5.4" stroke="#d8c9ac" stroke-width="0.35" fill="none"/>
+  <ellipse cx="10.3" cy="3.6" rx="1.6" ry="0.8" fill="#ffffff" opacity="0.5"/>
+  <ellipse cx="10.2" cy="14.4" rx="2.3" ry="2.2" fill="url(#housekeeper-sheen)"/>
 </svg>
 """
