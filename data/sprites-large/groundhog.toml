@@ -1,8 +1,11 @@
 # groundhog — the one creature in this pack drawn sitting up on its
 # haunches rather than as a quadruped: a very plump upright body, two
-# rounded forepaws held at the chest, and a small unmarked head, so the
-# silhouette itself (posture and bulk) carries the identity rather than
-# a face pattern — the tier's usual gradient/highlight, no material.
+# clawed forepaws held at the chest, flat hind feet planted either side,
+# small round ears set low and wide, and the pair of chisel incisors every
+# marmot shows under a blunt dark nose. The teeth and the nose are fixed
+# colours because they are the reading the silhouette alone can't give
+# (upright and plump also describes a bear cub); the coat, the paler chest
+# and the sheen all stay anchored to currentColor.
 classes = ["groundhog"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,17 +15,55 @@ svg = """
       <stop offset="55%" stop-color="currentColor"/>
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
+    <radialGradient id="groundhog-underside" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 38%, #f6efe2)" stop-opacity="0.72"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 38%, #f6efe2)" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="groundhog-sheen" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <ellipse cx="12" cy="21.6" rx="5.6" ry="1.8" fill="url(#groundhog-fill)"/>
-  <ellipse cx="12" cy="15.6" rx="6.6" ry="7.4" fill="url(#groundhog-fill)"/>
-  <circle cx="12" cy="7.4" r="4.4" fill="url(#groundhog-fill)"/>
-  <circle cx="8.2" cy="4.4" r="1.3" fill="url(#groundhog-fill)"/>
-  <circle cx="15.8" cy="4.4" r="1.3" fill="url(#groundhog-fill)"/>
-  <circle cx="10.2" cy="7.6" r="0.7" fill="#000000" opacity="0.5"/>
-  <circle cx="13.8" cy="7.6" r="0.7" fill="#000000" opacity="0.5"/>
-  <ellipse cx="12" cy="9.2" rx="0.8" ry="0.6" fill="#000000" opacity="0.35"/>
-  <ellipse cx="9" cy="18.8" rx="2.2" ry="2.8" fill="url(#groundhog-fill)"/>
-  <ellipse cx="15" cy="18.8" rx="2.2" ry="2.8" fill="url(#groundhog-fill)"/>
-  <ellipse cx="9.4" cy="12.6" rx="3" ry="4" fill="#ffffff" opacity="0.22"/>
+  <path d="M17 17.6 C20.4 17.8 22.4 19.8 22 21.4 C21.7 22.6 20.3 22.8 19.9 21.8 C20.6 20.4 19.4 19 17 18.8 Z" fill="url(#groundhog-fill)"/>
+  <ellipse cx="12" cy="20.4" rx="6.4" ry="2.8" fill="url(#groundhog-fill)"/>
+  <ellipse cx="12" cy="14.6" rx="6.2" ry="6.8" fill="url(#groundhog-fill)"/>
+  <ellipse cx="12" cy="15.6" rx="3.8" ry="5" fill="url(#groundhog-underside)"/>
+  <g fill="url(#groundhog-fill)">
+    <ellipse cx="7.9" cy="21.3" rx="2.2" ry="1.3"/>
+    <ellipse cx="16.1" cy="21.3" rx="2.2" ry="1.3"/>
+  </g>
+  <g stroke="#efe4d3" stroke-width="0.3" opacity="0.55" stroke-linecap="round">
+    <path d="M6.3 21.6 L5.5 22.2"/>
+    <path d="M7.3 22 L6.8 22.7"/>
+    <path d="M16.7 22 L17.2 22.7"/>
+    <path d="M17.7 21.6 L18.5 22.2"/>
+  </g>
+  <circle cx="8.3" cy="4.9" r="1.6" fill="url(#groundhog-fill)"/>
+  <circle cx="8.4" cy="5.2" r="0.75" fill="#b98d84" opacity="0.4"/>
+  <circle cx="15.7" cy="4.9" r="1.6" fill="url(#groundhog-fill)"/>
+  <circle cx="15.6" cy="5.2" r="0.75" fill="#b98d84" opacity="0.4"/>
+  <circle cx="12" cy="7.2" r="4.4" fill="url(#groundhog-fill)"/>
+  <ellipse cx="12" cy="9.1" rx="2.7" ry="2.1" fill="url(#groundhog-underside)"/>
+  <ellipse cx="12" cy="8.1" rx="0.95" ry="0.72" fill="#1c1c1c"/>
+  <g fill="#f4ecdd">
+    <path d="M11.25 9.6 L11.9 9.6 L11.9 11.1 L11.5 11.4 L11.25 11.1 Z"/>
+    <path d="M12.1 9.6 L12.75 9.6 L12.75 11.1 L12.5 11.4 L12.1 11.1 Z"/>
+  </g>
+  <circle cx="9.75" cy="6.9" r="0.78" fill="#1c1c1c"/>
+  <circle cx="9.5" cy="6.62" r="0.27" fill="#ffffff" opacity="0.85"/>
+  <circle cx="14.25" cy="6.9" r="0.78" fill="#1c1c1c"/>
+  <circle cx="14" cy="6.62" r="0.27" fill="#ffffff" opacity="0.85"/>
+  <g fill="url(#groundhog-fill)">
+    <ellipse cx="9.4" cy="13.9" rx="1.6" ry="2" transform="rotate(-12 9.4 13.9)"/>
+    <ellipse cx="14.6" cy="13.9" rx="1.6" ry="2" transform="rotate(12 14.6 13.9)"/>
+  </g>
+  <g stroke="#efe4d3" stroke-width="0.28" opacity="0.6" stroke-linecap="round">
+    <path d="M8.7 15.4 L8.3 16.2"/>
+    <path d="M9.5 15.7 L9.3 16.5"/>
+    <path d="M14.5 15.7 L14.7 16.5"/>
+    <path d="M15.3 15.4 L15.7 16.2"/>
+  </g>
+  <ellipse cx="10" cy="12.6" rx="3.2" ry="4.2" fill="url(#groundhog-sheen)"/>
+  <circle cx="10.6" cy="6" r="2" fill="url(#groundhog-sheen)"/>
 </svg>
 """

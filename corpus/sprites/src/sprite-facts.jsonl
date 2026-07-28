@@ -75,6 +75,7 @@
 {"subject":"fly sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"food sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"forest sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"fox sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"friend sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"frog sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"furniture sprite","predicate":"rdf:type","object":"sprite class"}
@@ -313,6 +314,7 @@
 {"subject":"fly sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"food sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"forest sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"fox sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"friend sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"frog sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"furniture sprite","predicate":"mgx:render-at","object":"sprite tier"}

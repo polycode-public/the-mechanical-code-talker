@@ -1,8 +1,13 @@
-# vole — chubbier and shorter-tailed than mouse.toml: small round ears
-# (radius roughly half of mouse's), a blunt round head instead of a
-# pointed one, and a short thick tail held close to the body instead of
-# mouse's long thin curve — the tier's usual gradient/highlight, no
-# material.
+# vole — chubbier and shorter-tailed than mouse.toml: a blunt round head
+# with no neck, small ears half-sunk into the fur (a vole's ear barely
+# clears its coat, unlike a mouse's saucer), a short thick tail held low,
+# and four stubby feet under a low barrel body. The paler underside mixes
+# currentColor toward a warm cream rather than white, so a theme still owns
+# the coat and the belly never turns grey, and the back sheen fades out
+# through a radial stop instead of sitting on the fur as a flat white
+# decal. The eye bead, the nose and the ear lining are the only fixed
+# colours, the same restraint badger.toml uses for the one marking that
+# carries the animal's identity.
 classes = ["vole"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,15 +17,40 @@ svg = """
       <stop offset="55%" stop-color="currentColor"/>
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
+    <radialGradient id="vole-underside" cx="50%" cy="45%" r="55%">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 36%, #f6efe2)" stop-opacity="0.8"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 36%, #f6efe2)" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="vole-sheen" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.24"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <ellipse cx="11.4" cy="15.6" rx="6.8" ry="5.4" fill="url(#vole-fill)"/>
-  <circle cx="8.6" cy="9.6" r="4.6" fill="url(#vole-fill)"/>
-  <circle cx="5.6" cy="6.4" r="1.4" fill="url(#vole-fill)"/>
-  <circle cx="9.4" cy="5.2" r="1.5" fill="url(#vole-fill)"/>
-  <circle cx="7.6" cy="10.2" r="0.8" fill="#000000" opacity="0.55"/>
-  <ellipse cx="4.8" cy="10.6" rx="1" ry="0.8" fill="#c98c8c" opacity="0.7"/>
-  <ellipse cx="18.6" cy="17.2" rx="2.4" ry="1.8" fill="url(#vole-fill)"/>
-  <ellipse cx="9" cy="17" rx="3.2" ry="1.7" fill="#ffffff" opacity="0.28"/>
-  <ellipse cx="6" cy="5.6" rx="0.7" ry="0.5" fill="#ffffff" opacity="0.32"/>
+  <path d="M18.8 16.2 C21.4 16.4 23 18 23.2 19.8 C23.3 20.7 22.4 21 22 20.3 C21.6 18.8 20.4 17.8 18.6 17.4 Z" fill="url(#vole-fill)"/>
+  <ellipse cx="13.2" cy="15" rx="7.6" ry="5.8" fill="url(#vole-fill)"/>
+  <ellipse cx="12.8" cy="18.2" rx="5.6" ry="2.4" fill="url(#vole-underside)"/>
+  <g fill="url(#vole-fill)">
+    <ellipse cx="10.4" cy="20.4" rx="1.3" ry="1.2"/>
+    <ellipse cx="17.4" cy="20.2" rx="1.3" ry="1.2"/>
+    <ellipse cx="8.2" cy="20.9" rx="1.5" ry="1.4"/>
+    <ellipse cx="15.4" cy="20.8" rx="1.5" ry="1.4"/>
+  </g>
+  <circle cx="7.8" cy="7.4" r="1.85" fill="url(#vole-fill)"/>
+  <circle cx="7.9" cy="7.7" r="0.85" fill="#c08a86" opacity="0.4"/>
+  <circle cx="6.4" cy="11.4" r="4.4" fill="url(#vole-fill)"/>
+  <circle cx="4.6" cy="7.6" r="2" fill="url(#vole-fill)"/>
+  <circle cx="4.7" cy="7.9" r="0.95" fill="#c08a86" opacity="0.45"/>
+  <ellipse cx="3.4" cy="12.9" rx="2.4" ry="1.9" fill="url(#vole-fill)"/>
+  <ellipse cx="2.9" cy="13.7" rx="1.7" ry="1" fill="url(#vole-underside)"/>
+  <ellipse cx="1.5" cy="12.8" rx="0.9" ry="0.7" fill="#241d19"/>
+  <g stroke="#241d19" stroke-width="0.24" opacity="0.3" stroke-linecap="round">
+    <path d="M1.6 12.1 L0.9 11.4"/>
+    <path d="M1.4 13.6 L0.6 14"/>
+    <path d="M2.2 14.3 L1.9 15.1"/>
+  </g>
+  <circle cx="5.3" cy="10.6" r="0.7" fill="#1c1c1c"/>
+  <circle cx="5.08" cy="10.36" r="0.25" fill="#ffffff" opacity="0.85"/>
+  <ellipse cx="12.4" cy="11.8" rx="5" ry="2.8" fill="url(#vole-sheen)"/>
+  <circle cx="5.8" cy="9.4" r="2.2" fill="url(#vole-sheen)"/>
 </svg>
 """
