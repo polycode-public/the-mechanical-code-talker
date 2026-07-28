@@ -99,6 +99,52 @@ test("session handle: close() is idempotent — a second dispose is a no-op", as
   await rm(repo, { recursive: true, force: true });
 });
 
+// actingSubject/adventureWorld: several sessions can each play a different
+// individual against the SAME already-live world, rather than every session
+// always speaking for the single-player opener's "player". adventureWorld
+// bypasses openAdventure's "play <world>" opener (which requires a shipped
+// "player" individual mud-garden deliberately has none of) by seeding
+// planState directly; the caller seeds the world's own facts/rules once,
+// before any session opens.
+test("session handle: actingSubject + adventureWorld let two sessions each play their own character in one shared world", async () => {
+  const { openMemoryBackend, appendFacts, appendRule, loadMemory, readFactRows } = await import("../../src/adapters/memory/core.mjs");
+  const { getWorldsPackProvider } = await import("../../src/adapters/corpus/worlds-pack.mjs");
+  const { worldProvenanceTag } = await import("../../src/domain/worlds-pack.mjs");
+  const { foldWorldState, worldActionRows } = await import("../../src/services/adventure.mjs");
+
+  const repo = await mkdtemp(join(tmpdir(), "tmct-hnd-mud-"));
+  try {
+    const { dir: memoryDir } = await openMemoryBackend(repo, "");
+    const world = await getWorldsPackProvider({}).load("mud-garden");
+    const tag = worldProvenanceTag(world.name);
+    await appendFacts(memoryDir, world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object, provenance: tag })));
+    for (const rule of world.rules) await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: tag });
+
+    const mole = await createSession({ repoPath: repo, env: { TMCT_NO_SEED: "1" }, actingSubject: "mole-1", adventureWorld: "mud-garden" });
+    const vole = await createSession({ repoPath: repo, env: { TMCT_NO_SEED: "1" }, actingSubject: "vole-1", adventureWorld: "mud-garden" });
+    try {
+      const moleTurn = await mole.turn("go down");
+      assert.match(moleTurn.answer, /you go down/, "the world was already live — no \"play <world>\" opener needed");
+      assert.match(moleTurn.answer, /[Nn]ow in the burrow-1/);
+
+      const voleTurn = await vole.turn("dig north");
+      assert.match(voleTurn.answer, /you dig north/, "a second, independent session acts as its own character in the same world");
+
+      const rows = readFactRows(await loadMemory(memoryDir));
+      const state = foldWorldState(worldActionRows(rows));
+      assert.equal(state.placements.get("mole-1")?.object, "burrow-1", "mole-1 moved");
+      assert.equal(state.placements.get("vole-1")?.object, "garden", "vole-1 stayed put — digging spends the turn without moving");
+      assert.ok(state.exits.get("garden")?.get("north"), "vole-1's dig actually wrote the new exit into the SHARED world state");
+    } finally {
+      await mole.close();
+      await vole.close();
+    }
+  } finally {
+    clearCache();
+    await rm(repo, { recursive: true, force: true });
+  }
+});
+
 // NOTE: session.turn()'s try/catch around runTurn() (chat.mjs) and runChat()'s
 // try/finally around its turn loop (guaranteeing session.close() runs on any throw)
 // are deliberately NOT covered by an automated fault-injection test here — every

@@ -14957,7 +14957,7 @@ export async function runTurn(input, options = {}) {
   return { ...result, factsTouched: await factsTouchedSince(memoryDir, before) };
 }
 
-async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false } = {}) {
+async function dispatchTurn(input, { config, source = defaultSource, graph = null, focus = null, last = null, memoryDir = null, sessionId = "", env = process.env, lexicon = null, narrate = false, liveReference = false, onLiveLookup = null, vocabHint = null, tel = null, biasByBundle = {}, factRowsCache: injectedFactRowsCache = null, planState = null, gameConfig = null, uiContext = "cli", synthesisBudget = AUTO_SYNTHESIS_BUDGET, researchState = null, researchConfig = null, discourse = null, _noSplit = false, actingSubject = "player" } = {}) {
   // Every game's tuning knobs (spider-fly's mass economy, guess-the-number's
   // bounds, the shared plan lane's search-depth cap) — a caller's own
   // gameConfig (chat-session.mjs resolves one per session from tmct.toml)
@@ -15118,7 +15118,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   // otherwise read as a declarative or an orientation ask.
   {
     const advTurn = await adventureTurn(workingLine, {
-      planHolder, memoryDir, sessionId, env, lexicon, graph, cache: factRowsCache, isPlanFrameLine, discourseHolder,
+      planHolder, memoryDir, sessionId, env, lexicon, graph, cache: factRowsCache, isPlanFrameLine, discourseHolder, actingSubject,
     });
     if (advTurn) {
       note(trace, `lane: ${advTurn.note}`);

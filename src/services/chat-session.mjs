@@ -134,6 +134,26 @@ export async function createSession({
   // tmct-context.mjs) render hints under the host's own names. Omitted (the
   // default) preserves today's "tmct_" behavior exactly.
   toolNamePrefix,
+  // Which individual the adventure lane's world-mutating verbs act as —
+  // adventure.mjs's own actingSubject parameter, threaded up to session level
+  // so one session can play a single mud character rather than always
+  // "player". Omitted (the default) preserves today's single-player behavior
+  // exactly; a session speaks for exactly one character for its whole
+  // lifetime (four mud.html characters means four sessions, not one session
+  // switching identity turn to turn).
+  actingSubject,
+  // Marks a world already LIVE for this session, bypassing openAdventure's
+  // "play <world>" opener — that opener requires a shipped "player"
+  // individual (its own protection against mis-firing on a non-adventure
+  // world like spider-fly's board), which a multi-character world such as
+  // mud-garden deliberately never ships. The caller is responsible for
+  // seeding that world's facts/rules into this repo's store BEFORE opening
+  // any session against it (see test/services/adventure*.test.mjs's
+  // loadShippedWorldInto for the pattern) — one shared world, several
+  // sessions (one per actingSubject) pointed at the same repoPath. Omitted
+  // (the default) preserves today's behavior: a world only goes live via its
+  // own "play <world>" opener line.
+  adventureWorld,
 } = {}) {
   // EPHEMERAL mode (--ephemeral, or TMCT_EPHEMERAL=1): read the target graph but
   // write NOTHING back into it. The shipped examples run this way so a demo never
@@ -360,7 +380,11 @@ export async function createSession({
   let turns = 0;
   let focus = null; // the current focus entity ({id,label}) — threaded turn to turn
   let last = null;  // the last dispatched answer ({query,answer,detail}) — why/say-more re-renders it
-  let planState = null; // the in-progress plan (goals/moves/cursor) — cleared by completion or a fresh goal, never by an aside
+  // The in-progress plan (goals/moves/cursor) — cleared by completion or a
+  // fresh goal, never by an aside. `adventureWorld` seeds it as already
+  // playing that world (see the option's own doc comment above) instead of
+  // starting null and waiting for a "play <world>" opener line.
+  let planState = adventureWorld ? { adventure: { world: adventureWorld } } : null;
   let researchState = null; // the in-progress research queue — advanced by "research next", cleared by completion or "research stop"
   // The typed discourse record ([discourse] max_referents caps it) — session-scoped
   // like the focus, threaded turn to turn, never persisted.
@@ -394,7 +418,7 @@ export async function createSession({
     async turn(line) {
       let result;
       try {
-        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord });
+        result = await runTurn(line, { config, source, graph, focus, last, memoryDir, sessionId, env, lexicon, narrate: narrateOn, liveReference: liveReferenceOn, vocabHint, tel, biasByBundle, planState, gameConfig, researchState, researchConfig, discourse: discourseRecord, actingSubject });
       } catch (e) {
         const ts = new Date().toISOString();
         const message = e instanceof Error ? e.message : String(e);
@@ -476,11 +500,12 @@ export async function runChat({
   liveReference = false,
   memoryBackend = null,
   toolNamePrefix,
+  actingSubject,
 } = {}) {
   // createSession's first-run seed (~2-3s) produces ZERO output until it fully
   // resolves, which otherwise reads as `npm run chat` hanging with total silence.
   output.write("tmct — starting…\n");
-  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, liveReference, memoryBackend, toolNamePrefix });
+  const session = await createSession({ repoPath, graphPaths, configPath, source, env, cwd, gitRoot, ephemeral, narrate, liveReference, memoryBackend, toolNamePrefix, actingSubject });
 
   const dim = (s) => (env.NO_COLOR || !output.isTTY ? s : `\x1b[2m${s}\x1b[0m`);
   for (const line of session.bannerLines) output.write(dim(line) + "\n");
