@@ -1,4 +1,4 @@
-// Captures the eight marketing screenshots public/index.html's feature plates
+// Captures the marketing screenshots public/index.html's feature plates
 // show, plus the manifest that documents how they were captured: filename,
 // viewport, the PNG's own pixel dimensions, a sha256, and the package version
 // the capture ran against.
@@ -22,8 +22,18 @@ const READY_TIMEOUT_MS = 30_000;
 // for it, just insurance against a transition still mid-frame.
 const SETTLE_MS = 250;
 
+// mud.html is the one page whose plate needs to look busy rather than just
+// loaded (four characters mid-simulation, not four idle windows at boot), so
+// its own ready check drives the simulation forward before the shot fires.
+// The turn count is a floor chosen so the shot always shows multiple turns
+// across all four windows; the timeout budgets for that floor at the page's
+// default 650ms auto-play delay, spread across four characters ticking
+// independently rather than one at a time.
+const MUD_BUSY_TURN_THRESHOLD = 12;
+const MUD_BUSY_TIMEOUT_MS = 30_000;
+
 // Same order the home page lists its claim blocks and feature plates in.
-const PAGE_ORDER = ["chat", "spider-fly", "plan", "adventure", "ledger", "code", "ingest", "sprites", "research"];
+const PAGE_ORDER = ["chat", "spider-fly", "plan", "adventure", "ledger", "code", "ingest", "sprites", "research", "mud"];
 
 /** Each page's own boot signal, mirrored from its e2e file rather than a
  *  blind timeout: the composer/board/dashboard/catalog element the page
@@ -54,6 +64,74 @@ const READY_CHECKS = {
   research: async (page) => {
     await page.waitForFunction(() => window.tmctResearchReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
     await page.evaluate(() => window.tmctResearchReady);
+  },
+  // Every other ready check above only waits for boot. This one also drives
+  // the simulation itself: relying on auto-play's own turn-by-turn rolls to
+  // eventually dig a room and fill a pouch before the shot fires would make
+  // the wait unbounded and flaky, so it forces both deterministically first,
+  // then starts all four windows playing and waits for a real busy state.
+  mud: async (page) => {
+    await page.waitForFunction(
+      () => !document.querySelector("#window-nw-chatq")?.disabled,
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+
+    // The baseline chatlog count is read at boot, before the manual dig/take
+    // commands below add their own entries — auto-play ticks never write to
+    // a window's chatlog (only a typed chat turn does), so a baseline read
+    // any later would never see further growth once auto-play starts.
+    const chatEntriesAtBoot = await page.evaluate(
+      () => [...document.querySelectorAll('[id$="-chatlog"]')].reduce((sum, log) => sum + log.children.length, 0),
+    );
+
+    const nwInput = page.locator("#window-nw-chatq");
+
+    // "dig south" from the seeded garden always succeeds and always spawns a
+    // real object ("root-garden-south"), so this alone guarantees a genuine
+    // third room without depending on auto-play's own rolls.
+    await nwInput.fill("dig south");
+    await nwInput.press("Enter");
+    await page.waitForFunction(
+      () => document.querySelectorAll("#worldMapBands .map-room").length > 2,
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+
+    // Digging spends the turn without moving the digger, so the mole is still
+    // in the garden here. "carrot" is one of the world's hand-authored,
+    // bare-lemma-named static props (unlike a dug object's minted per-room
+    // id), so this deterministically fills the pouch too.
+    await nwInput.fill("take the carrot");
+    await nwInput.press("Enter");
+    await page.waitForFunction(
+      () => document.querySelectorAll('[id$="-pouch-list"] li').length > 0,
+      null,
+      { timeout: READY_TIMEOUT_MS },
+    );
+
+    // A real page.click() scrolls the rail's #autoToggle button into view
+    // first, which leaves the four windows and the world map above it
+    // scrolled out of the eventual screenshot — dispatching the click
+    // straight to the DOM fires the same listener without moving the page.
+    await page.evaluate(() => document.querySelector("#autoToggle").click());
+
+    await page.waitForFunction(
+      ({ threshold, before }) => {
+        const turnText = document.querySelector("#globalTurnCount")?.textContent ?? "";
+        const turns = Number((turnText.match(/\d+/) ?? ["0"])[0]);
+        const pouchNonEmpty = document.querySelectorAll('[id$="-pouch-list"] li').length > 0;
+        const chatEntries = [...document.querySelectorAll('[id$="-chatlog"]')].reduce((sum, log) => sum + log.children.length, 0);
+        return turns >= threshold && pouchNonEmpty && chatEntries > before;
+      },
+      { threshold: MUD_BUSY_TURN_THRESHOLD, before: chatEntriesAtBoot },
+      { timeout: MUD_BUSY_TIMEOUT_MS },
+    );
+    // Auto-play stays running into the capture on purpose — this plate is
+    // meant to show the simulation mid-motion, not paused for the shot. The
+    // scroll position, on the other hand, needs pinning: the typed commands
+    // above can leave the page scrolled to wherever the chat input sits.
+    await page.evaluate(() => window.scrollTo(0, 0));
   },
 };
 
