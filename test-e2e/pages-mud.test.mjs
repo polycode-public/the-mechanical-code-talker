@@ -1,5 +1,6 @@
 // mud.html's own shared-world dock, in a real browser: the page boots two
-// panes over one world with nothing playing until a control is clicked, a
+// panes over one world with nothing playing until a control is clicked, the
+// npcs slider adds animals that act without one, a
 // manually typed command in one pane updates only THAT pane's own chat log
 // with a real (not honest-miss) answer, a pane's own play control advances
 // that character's own turn count and nobody else's, the deck's play control
@@ -109,6 +110,35 @@ async function setPlayerCount(page, count) {
     { timeout: READY_TIMEOUT_MS },
   );
 }
+
+/** Move the npcs slider and wait for the fresh world the change opens. Its
+ *  value is the count itself, so there is no detent table to look through. */
+async function setNpcCount(page, count) {
+  await page.locator("#npcCountSlider").fill(String(count));
+  await page.locator("#npcCountSlider").dispatchEvent("change");
+  await page.waitForFunction(
+    (n) => {
+      const inputs = [...document.querySelectorAll(".mud-window input[type=text]")];
+      return document.getElementById("npcCountValue").textContent === String(n)
+        && inputs.length > 0 && inputs.every((i) => !i.disabled)
+        && document.querySelectorAll("#worldMapBoard .occupant").length > 0;
+    },
+    count,
+    { timeout: READY_TIMEOUT_MS },
+  );
+}
+
+/** Every character the omniscient survey draws, mapped to the room it stands
+ *  in — read off the board itself, so it covers the animals with no pane to
+ *  ask. */
+const whereEveryoneStands = async (page) => page.evaluate(() => {
+  const standing = {};
+  for (const room of document.querySelectorAll("#worldMapBoard .room")) {
+    const name = room.querySelector("text").textContent;
+    for (const who of room.querySelectorAll(".occupant title")) standing[who.textContent] = name;
+  }
+  return standing;
+});
 
 test("the page boots two panes over one world, with nothing playing until it is asked to", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudPage();
@@ -311,6 +341,45 @@ test("the players slider recasts the world at one, and again at four, with every
 
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
     assert.deepEqual(consoleErrors, [], "no console error recasting the world at one and at four");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the npcs slider adds animals to the world without adding a pane, and they take their own turns", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudPage();
+  try {
+    const dotsInSurvey = () => page.locator("#worldMapBoard .occupant").count();
+    assert.equal(await dotsInSurvey(), 4, "two panes and the two default npcs all stand somewhere");
+
+    await setNpcCount(page, 10);
+    assert.equal(await page.locator(".mud-window").count(), 2, "an npc never takes a pane of its own");
+    assert.equal(await dotsInSurvey(), 12, "ten npcs join the two cast animals in the one world");
+    assert.match(await page.locator("#worldMapKey .key-npcs").textContent(), /10 npcs/, "the survey keys them as one entry");
+    assert.equal(await page.locator("#worldMapKey .key-actor").count(), 2, "and keeps a colour key per pane, not per animal");
+
+    // Nothing plays until the deck says so, and then everything does: the npcs
+    // have no control of their own that could have started them.
+    const paneCharacters = await page.locator(".mud-window").evaluateAll((els) => els.map((e) => e.getAttribute("data-character")));
+    const before = await whereEveryoneStands(page);
+    await page.locator("#autoToggle").click();
+    await page.waitForFunction(
+      () => Number((document.querySelector("#globalTurnCount")?.textContent.match(/\d+/) ?? ["0"])[0]) > 24,
+      null,
+      { timeout: ANSWER_TIMEOUT_MS },
+    );
+    await page.locator("#autoToggle").click();
+
+    const after = await whereEveryoneStands(page);
+    const moved = Object.keys(before).filter((id) => !paneCharacters.includes(id) && before[id] !== after[id]);
+    assert.ok(moved.length > 0, "an animal with no pane still walks, digs and forages under the deck's own play");
+
+    await setNpcCount(page, 1);
+    assert.equal(await dotsInSurvey(), 3, "recasting draws a fresh, smaller crowd");
+    assert.match(await page.locator("#worldMapKey .key-npcs").textContent(), /1 npc digging/, "one reads as one");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error running a dozen animals through one shared world");
   } finally {
     await context.close();
   }

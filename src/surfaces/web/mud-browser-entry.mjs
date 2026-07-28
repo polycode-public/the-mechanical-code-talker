@@ -35,7 +35,7 @@ import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import {
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines,
-  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, roomKindOf,
+  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase, roomKindOf,
 } from "../../services/adventure.mjs";
 import { runMudTurn } from "../../services/mud-turn.mjs";
 import { mudSpeciesOf } from "../../domain/game-config.mjs";
@@ -284,5 +284,5 @@ globalThis.tmctMud = {
   resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain, resolveSpriteAsset,
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines,
-  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, roomKindOf,
+  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase, roomKindOf,
 };

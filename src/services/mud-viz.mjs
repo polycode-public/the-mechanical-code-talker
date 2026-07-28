@@ -869,15 +869,15 @@ function pageScript() {
   let slotOf = {};
   let globalTurn = 0;
   let turnsTaken = {};
-  let eaten = {};
+  let finished = {};
   let maxTurns = DATA.defaultMaxTurns;
   let delayMs = DATA.defaultDelayMs;
   const wait = function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
   const liveWait = function () { return wait(delayMs); };
 
   let freshlyDugRoom = null;
-  // The last omniscient read, kept so the eaten scene can draw the predator's
-  // own den after the engine has already moved the character out of every room.
+  // The last omniscient read, kept so the pounce can draw the predator's own
+  // den after the engine has already moved the character out of every room.
   let lastSnapshot = null;
   const speechBubbles = new Map(); // room -> [{ speaker, text, expiresAtTurn }]
 
@@ -910,7 +910,7 @@ function pageScript() {
     // than rare.
     const bootAt = bootSeq;
     return serializeTick(async function () {
-      if (bootAt !== bootSeq || eaten[character]) return { outOfPlay: true };
+      if (bootAt !== bootSeq || finished[character]) return { outOfPlay: true };
       globalTurn += 1;
       const result = await session.windows[character].autoplayTick(globalTurn);
       if (!result.outOfPlay) turnsTaken[character] = (turnsTaken[character] || 0) + 1;
@@ -919,14 +919,14 @@ function pageScript() {
     });
   }
 
-  // A character the predator has taken keeps its pane, its final turn count and
+  // A character whose run has ended keeps its pane, its final turn count and
   // its chat log, and loses everything that would advance it — the engine
   // declines its turns from here on, so offering the controls would promise a
   // turn that never runs. An NPC has none of that to lose: it stops ticking and
   // the survey stops drawing it, which is the whole of its ending.
-  function markEaten(character, note) {
-    if (eaten[character]) return;
-    eaten[character] = true;
+  function markOutOfPlay(character, reason, note) {
+    if (finished[character]) return;
+    finished[character] = true;
     const ticker = tickers[character];
     if (ticker) ticker.pause();
     if (!hasPane(character)) return;
@@ -935,8 +935,13 @@ function pageScript() {
     el(w + "-step").disabled = true;
     el(w + "-chatq").disabled = true;
     el(w + "-chatpills").innerHTML = "";
-    appendChat(character, "a", note || ("the " + character + " has been eaten. It takes no more turns."));
-    playEatenScene(character);
+    const fate = reason === "starved" ? "starved" : "eaten";
+    // A run that ended on a TYPED command carries no note of its own — the
+    // world's ending sentence comes from the engine either way, never a second
+    // wording of the same event.
+    appendChat(character, "a", note
+      || (window.tmctMud.outOfPlayPhrase(character, fate) + ". It takes no more turns."));
+    playFateScene(character, fate);
   }
 
   // Whichever individual the WORLD marks dangerous, never a species this page
@@ -952,19 +957,20 @@ function pageScript() {
   // Cutting straight to the banner throws away the only moment this demo has to
   // show what took the character: the character's last drawn room is the one it
   // walked out OF, so the scene is redrawn against the den first, then the fox
-  // crosses it. Reduced motion, or a world with no marked predator, settles
-  // straight into the end state.
-  function playEatenScene(character) {
+  // crosses it. An animal that ran out of mass was taken by nothing, so it
+  // settles straight into its banner — as does reduced motion, or a world with
+  // no marked predator.
+  function playFateScene(character, fate) {
     const w = paneIdFor(character);
     const settle = function () {
       el(w).classList.add("out-of-play");
-      const fate = el(w + "-fate");
-      fate.hidden = false;
-      fate.textContent = "eaten \\u00b7 " + turnsFor(character) + " turns";
+      const banner = el(w + "-fate");
+      banner.hidden = false;
+      banner.textContent = fate + " \\u00b7 " + turnsFor(character) + " turns";
     };
     const predator = lastSnapshot ? predatorInRows(lastSnapshot.rows) : null;
     const den = predator ? (lastSnapshot.state.placements.get(predator) || {}).object : null;
-    if (reduceMotion || !den) { settle(); return; }
+    if (fate === "starved" || reduceMotion || !den) { settle(); return; }
 
     const rows = lastSnapshot.rows;
     const state = lastSnapshot.state;
@@ -991,7 +997,11 @@ function pageScript() {
   }
 
   function afterEngineTurn(character, result) {
-    if (result && result.outOfPlay) { markEaten(character, result.text); renderSoon(); return; }
+    if (result && result.outOfPlay) {
+      markOutOfPlay(character, result.outOfPlayReason, result.text);
+      renderSoon();
+      return;
+    }
     if (!result || !result.room) { renderSoon(); return; }
     if (result.roomAfter && result.roomAfter !== result.room) freshlyDugRoom = result.roomAfter;
     for (const action of result.actions || []) {
@@ -1109,14 +1119,14 @@ function pageScript() {
     el(w + "-room").addEventListener("click", function (e) {
       const card = e.target.closest(".sprite-card[data-command]");
       const character = characterInSlot(slot);
-      if (!card || !character || eaten[character]) return;
+      if (!card || !character || finished[character]) return;
       sendCommand(character, card.getAttribute("data-command"));
     });
     el(w + "-room").addEventListener("keydown", function (e) {
       if (e.key !== "Enter" && e.key !== " ") return;
       const card = e.target.closest(".sprite-card[data-command]");
       const character = characterInSlot(slot);
-      if (!card || !character || eaten[character]) return;
+      if (!card || !character || finished[character]) return;
       e.preventDefault();
       sendCommand(character, card.getAttribute("data-command"));
     });
@@ -1501,12 +1511,13 @@ function pageScript() {
     // the survey they annotate, and each one's own dot already carries its name.
     const keys = cast.map(function (c) {
       const room = state.placements.get(c) ? state.placements.get(c).object : "?";
-      const where = eaten[c] ? "eaten" : "in " + esc(room);
+      const fate = window.tmctMud.outOfPlayReasonOf(state, c);
+      const where = fate ? fate : "in " + esc(room);
       return '<span class="key-actor"><span class="key-dot" style="background:' + colorFor(c) + '"></span>'
         + esc(speciesOfCharacter(c)) + " " + where + "</span>";
     });
     if (npcs.length) {
-      const live = npcs.filter(function (c) { return !eaten[c]; }).length;
+      const live = npcs.filter(function (c) { return !finished[c]; }).length;
       const tally = live === npcs.length ? String(npcs.length) : live + " of " + npcs.length;
       keys.push('<span class="key-npcs"><span class="key-dot" style="background:' + NPC_COLOR + '"></span>'
         + tally + (live === 1 ? " npc" : " npcs") + " digging</span>");
@@ -1534,10 +1545,9 @@ function pageScript() {
 
   // A character eaten on its OWN turn is out of play the moment that turn
   // returns, one whole tick before autoplayTick would report it — so every
-  // character's state is read from the engine's own isOutOfPlay every redraw,
-  // not only off a tick result. It reads against the snapshot this redraw
-  // already holds: a per-window call would re-fold the whole world once per
-  // animal.
+  // character's fate is read from the engine every redraw, not only off a tick
+  // result. It reads against the snapshot this redraw already holds: a
+  // per-window call would re-fold the whole world once per animal.
   async function renderAll() {
     if (!session) return;
     el("globalTurnCount").textContent = "turns: " + globalTurn;
@@ -1545,12 +1555,13 @@ function pageScript() {
     lastSnapshot = snap;
     const roomIds = allRoomIds(snap.rows);
     for (const character of everyone()) {
-      if (window.tmctMud.isOutOfPlay(snap.state, character)) markEaten(character);
+      const reason = window.tmctMud.outOfPlayReasonOf(snap.state, character);
+      if (reason) markOutOfPlay(character, reason, null);
     }
     renderWorldMap(snap.rows, snap.state, roomIds);
     for (const character of cast) {
       el(paneIdFor(character) + "-turn").textContent = "turn " + turnsFor(character);
-      if (eaten[character]) continue;
+      if (finished[character]) continue;
       const place = snap.state.placements.get(character);
       const here = place ? place.object : null;
       if (!here) continue;
@@ -1689,7 +1700,7 @@ function pageScript() {
     // Rebuilt rather than pruned: a character that had a pane last boot can be
     // an npc in this one, and a stale seat would send its ending to a pane now
     // showing somebody else.
-    eaten = {};
+    finished = {};
     turnsTaken = {};
     slotOf = {};
 

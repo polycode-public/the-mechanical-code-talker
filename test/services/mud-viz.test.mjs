@@ -173,6 +173,8 @@ test("renderMudHtml: each pane carries the out-of-play banner a taken character 
   for (const slot of ["a", "b"]) {
     assert.match(html, new RegExp(`id="window-${slot}-fate"`), `${slot} can say what became of its character`);
   }
+  assert.match(html, /reason === "starved" \? "starved" : "eaten"/, "the banner names the fate that actually happened");
+  assert.match(html, /fate === "starved" \|\| reduceMotion/, "and a starved animal is never shown a predator's pounce");
   assert.match(html, /\.mud-window\.out-of-play \.pane-controls button \{ display: none; \}/,
     "an eaten character is never offered a control that would advance a turn the engine declines");
 });
@@ -183,7 +185,7 @@ test("renderMudHtml: the page reads the engine's own seams rather than re-derivi
   assert.match(html, /tmctMud\.castInRoom/, "who stands in the room comes from the engine, so the caption and the talk pills agree");
   assert.match(html, /tmctMud\.displayNameOf/, "a pouch label comes from the world's own display-name fact");
   assert.match(html, /turnsTaken\(\)/, "a pane shows its character's own turn count, not the shared one");
-  assert.match(html, /tmctMud\.isOutOfPlay\(/, "who is still playing is read from the engine every redraw");
+  assert.match(html, /tmctMud\.outOfPlayReasonOf\(/, "how a run ended is read from the engine every redraw, never guessed");
   assert.match(html, /tmctMud\.expandMudRoster/, "the extra animals are minted by the engine, not named in the page");
 });
 

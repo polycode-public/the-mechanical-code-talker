@@ -345,8 +345,8 @@ Every demo page picks one visual register and commits to it: spider-fly's flat t
 grid, adventure's text-first room digest, plan's step-by-step block replay. `mud.html`'s own
 register is a **layered soil cross-section** — two burrow panes, side by side on desktop and
 stacked on mobile, with a control deck and a graphical burrow survey sharing the page's own top
-row: the deck takes the left two-thirds (play, reset, the delay and max-turns sliders, the
-explanatory note), the survey takes the right third. The survey draws every currently-dug room as
+row: the deck takes the left two-thirds (play, reset, the players/npcs/delay/max-turns sliders,
+the explanatory note), the survey takes the right third. The survey draws every currently-dug room as
 a real connected graph — named chambers, tunnels as strokes, a vertical shaft dashed — rather than
 a flat text list, so it reads as an actual map of the burrow.
 
@@ -369,8 +369,9 @@ rather than accidentally inconsistent.
 ```
 +----------------------------------------+-------------------+
 |  control deck                          |  BURROW SURVEY    |
-|  play · reset · delay · max turns ·    |  (every dug room, |
-|  the explanatory note                  |   every character,|
+|  play · reset · players · npcs ·       |  (every dug room, |
+|  delay · max turns ·                   |   every character,|
+|  the explanatory note                  |                   |
 |                                         |   no fog of war)  |
 +--------------------+--------------------+-------------------+
 |  pane A            |          pane B                        |
@@ -391,8 +392,11 @@ on the page, everything else stays quiet and disciplined around it.
 
 ### Per-pane UI (×2)
 
-- **Character**: two of the four burrowing-animal species (mole, vole, badger, groundhog) are
-  drawn at random each time the world starts or resets, one per pane.
+- **Character**: the burrowing animals (mole, vole, badger, groundhog) are drawn at random each
+  time the world starts or resets, one per pane. The world hand-authors four; a cast bigger than
+  that mints more instances of the same species (`mole-2`, `badger-3`), each opening with the
+  authored animal's own type, room and mass, and an authored animal nobody is playing is left out
+  of the world rather than standing in it inert.
 - **Room view**: one row tall. The viewing character's own sprite stands on the right; any other
   character present in the room stands on the left; loose objects hang on the back wall in
   portrait frames rather than scattered across the floor, each captioned with the thing's own
@@ -434,13 +438,18 @@ on the page, everything else stays quiet and disciplined around it.
 
 ### The control deck (the page's own top row, shared with the survey)
 
-- **Play**: starts every pane's ticker at once. Nothing plays on page load — a pane only starts
-  once its own play control, or the deck's, is clicked.
-- **Turn counter**: the shared count, incremented whenever any pane's character takes a turn —
-  shown alongside, and distinct from, each pane's own count.
+- **Play**: starts every animal's ticker at once, panes and npcs alike. Nothing plays on page load
+  — a pane only starts once its own play control, or the deck's, is clicked, and an npc only under
+  the deck's, since it has no control of its own.
+- **Turn counter**: the shared count, incremented whenever any character takes a turn — shown
+  alongside, and distinct from, each pane's own count.
+- **Players slider**: how many characters get a pane (1, 2 or 4), redrawn on release.
+- **Npcs slider**: how many more animals share the world with no pane at all (1 to 10, default 2).
+  They run the same scripted turn, appear in the survey and in any room view that can see them, and
+  can be talked to like any other character.
 - **Delay slider**: the wait between turns in play mode.
-- **Max-turns slider**: a hard cap on the simulation length.
-- **Reset**: starts a fresh world and redraws which two characters are cast.
+- **Max-turns slider**: a hard cap on the simulation length, shared by every animal in play.
+- **Reset**: starts a fresh world and redraws which characters are cast, panes and npcs both.
 - **A short explanatory note**: plain prose describing what's actually happening on the page — two
   independent characters, one shared world, gaps that stay unknown rather than get guessed at —
   not sales copy, an orientation for a first-time visitor.
