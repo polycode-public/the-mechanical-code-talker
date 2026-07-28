@@ -1,6 +1,8 @@
-# snow — the same cloud silhouette as rain.toml, its streaks replaced with
-# soft round flakes so the two read as a pair without being confused for
-# each other.
+# snow — the same cloud silhouette as rain.toml, its streaks replaced
+# with flakes so the two read as a pair without being confused for each
+# other. The three largest flakes are six-point crystal crosses, not
+# plain dots — a round dot alone reads as hail or rain-spray at 40px,
+# so the crystal cross is what actually says "snow".
 classes = ["snow"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13,12 +15,12 @@ svg = """
   </defs>
   <path d="M6.6 12 C4.2 12 3 10 4.2 8 C4.8 5.6 7.2 5 8.8 6.2 C9.8 4 13 3.6 14.6 5.8 C17.4 5.4 19.4 7.4 19 9.8 C20.6 10.2 21 12.2 19.4 13.2 C19 13.5 18.6 13.6 18 13.6 H7.4 C7.1 13.6 6.8 13.6 6.6 12 Z" fill="url(#snow-cloud)"/>
   <ellipse cx="9" cy="7.8" rx="2.2" ry="1.4" fill="#ffffff" opacity="0.4"/>
-  <g fill="#eaf3fb" opacity="0.9">
-    <circle cx="7.4" cy="17" r="1"/>
-    <circle cx="12.2" cy="19.2" r="1.1"/>
-    <circle cx="16.6" cy="16.6" r="0.9"/>
-    <circle cx="10" cy="15" r="0.7"/>
-    <circle cx="15" cy="20.4" r="0.7"/>
+  <circle cx="10" cy="15" r="0.7" fill="#eaf3fb" opacity="0.85"/>
+  <circle cx="15" cy="20.4" r="0.7" fill="#eaf3fb" opacity="0.85"/>
+  <g stroke="#eaf3fb" stroke-width="0.35" stroke-linecap="round" opacity="0.95">
+    <path d="M7.4 15.7 L7.4 18.3 M6.1 17 L8.7 17 M6.5 16.1 L8.3 17.9 M8.3 16.1 L6.5 17.9"/>
+    <path d="M12.2 17.8 L12.2 20.6 M10.8 19.2 L13.6 19.2 M11.2 18.2 L13.2 20.2 M13.2 18.2 L11.2 20.2"/>
+    <path d="M16.6 15.45 L16.6 17.75 M15.45 16.6 L17.75 16.6 M15.7 15.7 L17.5 17.5 M17.5 15.7 L15.7 17.5"/>
   </g>
 </svg>
 """

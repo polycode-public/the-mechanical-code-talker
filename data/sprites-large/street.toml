@@ -1,28 +1,42 @@
-# street — a road bordered by buildings on both sides, top-down, so it
-# reads distinct from road.toml's own driver's-eye perspective while
-# sharing the same dashed centre line.
+# street — a top-down block with a fixed asphalt roadway and lamp posts
+# lighting the pavement between the buildings on either side, distinct
+# from road.toml's own driver's-eye view. The asphalt and lamp glow are
+# fixed the way road.toml's own tarmac is.
 classes = ["street"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <defs>
-    <linearGradient id="street-fill" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#000000" stop-opacity="0.26"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.14"/>
+    <linearGradient id="street-wash" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 36%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 65%, black)"/>
     </linearGradient>
+    <linearGradient id="street-asphalt" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#4a4e54"/>
+      <stop offset="100%" stop-color="#26282c"/>
+    </linearGradient>
+    <radialGradient id="street-lamp" cx="50%" cy="50%" r="65%">
+      <stop offset="0%" stop-color="#ffd27a" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#ffd27a" stop-opacity="0"/>
+    </radialGradient>
   </defs>
-  <rect x="8.4" y="2" width="7.2" height="20" fill="url(#street-fill)"/>
-  <rect x="8.4" y="2" width="7.2" height="20" fill="none" stroke="currentColor" stroke-width="1.2"/>
-  <g stroke="#ffffff" stroke-width="1" stroke-linecap="round" opacity="0.55">
-    <line x1="12" y1="3.6" x2="12" y2="6.2"/>
-    <line x1="12" y1="8.8" x2="12" y2="11.4"/>
-    <line x1="12" y1="14" x2="12" y2="16.6"/>
-    <line x1="12" y1="19.2" x2="12" y2="21.4"/>
-  </g>
-  <g fill="currentColor" opacity="0.85">
+  <g fill="url(#street-wash)" stroke="currentColor" stroke-width="1.1">
     <rect x="2" y="5" width="4.4" height="8.6"/>
     <rect x="2" y="14.6" width="4.4" height="6.6"/>
     <rect x="17.6" y="3.4" width="4.4" height="9.6"/>
     <rect x="17.6" y="14.2" width="4.4" height="7"/>
   </g>
+  <rect x="8.4" y="2" width="7.2" height="20" fill="url(#street-asphalt)"/>
+  <rect x="8.4" y="2" width="7.2" height="20" fill="none" stroke="#1c1c1c" stroke-width="0.8"/>
+  <g stroke="#f4ece0" stroke-width="1" stroke-linecap="round" opacity="0.85">
+    <line x1="12" y1="3.6" x2="12" y2="6.2"/>
+    <line x1="12" y1="8.8" x2="12" y2="11.4"/>
+    <line x1="12" y1="14" x2="12" y2="16.6"/>
+    <line x1="12" y1="19.2" x2="12" y2="21.4"/>
+  </g>
+  <circle cx="7.4" cy="9.6" r="1.6" fill="url(#street-lamp)"/>
+  <line x1="7.4" y1="9.6" x2="7.4" y2="14.2" stroke="#3a3d40" stroke-width="0.5"/>
+  <circle cx="16.6" cy="16.4" r="1.6" fill="url(#street-lamp)"/>
+  <line x1="16.6" y1="16.4" x2="16.6" y2="21" stroke="#3a3d40" stroke-width="0.5"/>
 </svg>
 """

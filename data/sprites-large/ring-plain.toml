@@ -1,10 +1,10 @@
 # ring-plain — the fallback for a taught ring with no mgx:madeOf value at
-# all: the same band-and-gem silhouette as ring.toml, shaded from
-# currentColor instead of a material gradient, since neither ring.toml's
-# own material table nor the flat legacy sprite registry has anything to
-# fill in when no fact is taught (this class is new to both), and falling
-# all the way through to the generic animal root would be worse than a
-# currentColor-shaded ring.
+# all: the same band-and-gem silhouette as ring.toml, prong nubs, sparkle
+# glint and all, shaded from currentColor instead of a material gradient,
+# since neither ring.toml's own material table nor the flat legacy sprite
+# registry has anything to fill in when no fact is taught (this class is
+# new to both), and falling all the way through to the generic animal
+# root would be worse than a currentColor-shaded ring.
 classes = ["ring"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -16,9 +16,15 @@ svg = """
     </linearGradient>
   </defs>
   <circle cx="12" cy="14.5" r="6.2" fill="none" stroke="url(#ring-plain-fill)" stroke-width="2.4"/>
+  <g fill="url(#ring-plain-fill)">
+    <path d="M8.8 8.6 L8.1 9.7 L9.3 9.7 Z"/>
+    <path d="M15.2 8.6 L14.7 9.7 L15.9 9.7 Z"/>
+    <path d="M12 11.4 L11.3 12.3 L12.7 12.3 Z"/>
+  </g>
   <path d="M12 4.2 L15.2 8.6 L12 11.4 L8.8 8.6 Z" fill="#d8f3f7"/>
   <path d="M12 4.2 L15.2 8.6 L12 11.4 Z" fill="#aee0ea" opacity="0.7"/>
   <path d="M10.6 6.2 L12 4.2 L12 8.2 Z" fill="#ffffff" opacity="0.7"/>
   <path d="M7.4 12.4 A6.2 6.2 0 0 1 11.6 8.6" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-linecap="round" opacity="0.4"/>
+  <path d="M16 5.6 L16 7.2 M15.2 6.4 L16.8 6.4" stroke="#ffffff" stroke-width="0.4" stroke-linecap="round" opacity="0.9"/>
 </svg>
 """

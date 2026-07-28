@@ -1,7 +1,9 @@
 # coat — a long coat at the sprite tier: the same woven material
-# treatment clothing.toml uses, on a longer silhouette with lapels and a
-# button row (dark-tone overlay dots) to read as outerwear rather than a
-# t-shirt.
+# treatment clothing.toml uses, worn open — two lapel flaps fold back
+# from the collar to shadow the chest, the same dark-tone overlay
+# construction glove.toml uses for its own finger seams — over a button
+# row down the centre front, on a longer silhouette to read as outerwear
+# rather than a t-shirt.
 classes = ["coat"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13,13 +15,15 @@ svg = """
     </linearGradient>
   </defs>
   <path d="M9.4 3 C9.4 4.4 10.6 5.4 12 5.4 C13.4 5.4 14.6 4.4 14.6 3 L19.4 5 L18 9.4 L16.4 8.4 L17.2 21 C17.2 21.6 16.7 22 16.1 22 H7.9 C7.3 22 6.8 21.6 6.8 21 L7.6 8.4 L6 9.4 L4.6 5 Z" fill="url(#coat-fill)"/>
-  <path d="M10 4.4 L9.4 21.4 M14 4.4 L14.6 21.4" stroke="{{FILL_DARK}}" stroke-width="0.5" opacity="0.35"/>
+  <path d="M9.4 3 L12 9.8 L8.4 5.6 Z" fill="{{FILL_DARK}}" opacity="0.5"/>
+  <path d="M14.6 3 L12 9.8 L15.6 5.6 Z" fill="{{FILL_DARK}}" opacity="0.5"/>
+  <path d="M12 9.8 L11.2 21.6 M12 9.8 L12.8 21.6" stroke="{{FILL_DARK}}" stroke-width="0.4" opacity="0.35"/>
   <path d="M9.6 3.6 C10 4.6 10.9 5.2 12 5.2" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
-  <g fill="{{FILL_DARK}}" opacity="0.7">
-    <circle cx="12" cy="9" r="0.5"/>
-    <circle cx="12" cy="12" r="0.5"/>
-    <circle cx="12" cy="15" r="0.5"/>
-    <circle cx="12" cy="18" r="0.5"/>
+  <g fill="{{FILL_DARK}}" opacity="0.8">
+    <circle cx="12" cy="11.4" r="0.5"/>
+    <circle cx="12" cy="14.2" r="0.5"/>
+    <circle cx="12" cy="17" r="0.5"/>
+    <circle cx="12" cy="19.8" r="0.5"/>
   </g>
 </svg>
 """

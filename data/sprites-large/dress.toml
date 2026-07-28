@@ -1,7 +1,8 @@
-# dress — an A-line silhouette at the sprite tier: the same woven
-# material treatment clothing.toml/coat.toml use, off-shoulder straps and
-# a waist seam (dark-tone overlay) distinguishing its own shape from the
-# other two garments in this pack.
+# dress — a bodice-and-skirt silhouette at the sprite tier: the same
+# woven material treatment clothing.toml/coat.toml use, a scooped
+# neckline distinguishing the collar from shirt.toml's crew-neck, and a
+# waist seam (dark-tone overlay) marking where the fitted bodice gives
+# way to the flared skirt.
 classes = ["dress"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13,6 +14,7 @@ svg = """
     </linearGradient>
   </defs>
   <path d="M9.4 2.6 C9.4 3.8 10.6 4.6 12 4.6 C13.4 4.6 14.6 3.8 14.6 2.6 L17 4.4 L14.8 8.4 L14 7.6 L18 21 C18.2 21.6 17.7 22 17.1 22 H6.9 C6.3 22 5.8 21.6 6 21 L10 7.6 L9.2 8.4 L7 4.4 Z" fill="url(#dress-fill)"/>
+  <path d="M9.8 3 C10.4 4.2 11.1 4.8 12 4.8 C12.9 4.8 13.6 4.2 14.2 3" fill="none" stroke="{{FILL_DARK}}" stroke-width="0.4" opacity="0.4"/>
   <path d="M9.6 3.2 C10.1 4 11 4.4 12 4.4" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
   <path d="M8.6 12 C10 11.4 14 11.4 15.4 12" fill="none" stroke="{{FILL_DARK}}" stroke-width="0.6" opacity="0.4"/>
 </svg>

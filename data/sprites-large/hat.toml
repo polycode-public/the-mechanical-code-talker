@@ -1,11 +1,14 @@
-# hat — a brimmed hat at the sprite tier: a currentColor gradient
-# rather than a taught mgx:madeOf one. This pack's material system only
-# has a safe no-fact fallback for a class the legacy flat sprite
-# registry already carries (see sprite-map.mjs's own SPRITE_REGISTRY) —
-# an UNtaught hat would otherwise resolve with no match at its own
-# term and fall through to the generic animal sprite, so a currentColor
-# gradient (the same treatment plain creatures and plants use) is the
-# one that always renders correctly, taught or not.
+# hat — a crown, a brim and a hatband at the sprite tier: the band is a
+# solid color-mix darker tone rather than a black-opacity wash, since an
+# opacity wash blends toward whatever backdrop sits behind it and flips
+# contrast between light and dark themes. A currentColor gradient rather
+# than a taught mgx:madeOf one. This pack's material system only has a
+# safe no-fact fallback for a class the legacy flat sprite registry
+# already carries (see sprite-map.mjs's own SPRITE_REGISTRY) — an
+# UNtaught hat would otherwise resolve with no match at its own term and
+# fall through to the generic animal sprite, so a currentColor gradient
+# (the same treatment plain creatures and plants use) is the one that
+# always renders correctly, taught or not.
 classes = ["hat"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -18,7 +21,8 @@ svg = """
   </defs>
   <ellipse cx="12" cy="17.4" rx="9.4" ry="2.4" fill="url(#hat-fill)"/>
   <path d="M6.6 15.6 C6.2 9 8.8 4.4 12 4.4 C15.2 4.4 17.8 9 17.4 15.6 Z" fill="url(#hat-fill)"/>
-  <rect x="6.8" y="13.8" width="10.4" height="2" fill="#000000" opacity="0.22"/>
+  <rect x="6.6" y="13.6" width="10.8" height="2.2" fill="color-mix(in srgb, currentColor 55%, black)"/>
+  <rect x="10.6" y="13.5" width="2.8" height="2.4" rx="0.3" fill="color-mix(in srgb, currentColor 70%, black)"/>
   <path d="M8.2 14 C8 10 9.6 6.4 11.6 5.2" fill="none" stroke="#ffffff" stroke-width="0.7" opacity="0.4" stroke-linecap="round"/>
 </svg>
 """

@@ -1,14 +1,16 @@
-# jewelry — Ashcombe Hall's own ring at the sprite tier: a fixed warm
-# metal band rather than a taught mgx:madeOf one. This pack's material
-# system only has a safe no-fact fallback for a class the legacy flat
-# sprite registry already carries (see sprite-map.mjs's own
-# SPRITE_REGISTRY) — an UNtaught ring would otherwise resolve with no
-# match at its own term and fall through to the generic animal sprite,
-# so the band renders in the same fixed metal triple gold/money/metal
-# already use, since gold is jewelry's own single most common real
-# material anyway. The set stone stays its own fixed pale sparkle
-# regardless, since a gem's own colour comes from the stone, not the
-# metal it's set in.
+# jewelry — Ashcombe Hall's own necklace at the sprite tier, a chain arc
+# with a hanging pendant gem, kept distinct from ring.toml's own band-
+# and-stone shape so the two classes don't draw the same picture. A
+# fixed warm metal chain rather than a taught mgx:madeOf one. This
+# pack's material system only has a safe no-fact fallback for a class
+# the legacy flat sprite registry already carries (see sprite-map.mjs's
+# own SPRITE_REGISTRY) — an UNtaught necklace would otherwise resolve
+# with no match at its own term and fall through to the generic animal
+# sprite, so the chain renders in the same fixed metal triple
+# gold/money/metal already use, since gold is jewelry's own single most
+# common real material anyway. The pendant gem stays its own fixed pale
+# sparkle regardless, since a gem's own colour comes from the stone, not
+# the metal it's set in.
 classes = ["jewelry"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -19,11 +21,12 @@ svg = """
       <stop offset="100%" stop-color="#8a6a1e"/>
     </linearGradient>
   </defs>
-  <ellipse cx="12" cy="16.6" rx="6.6" ry="5.2" fill="none" stroke="url(#jewelry-fill)" stroke-width="2.6"/>
-  <path d="M8.4 9.6 L12 4 L15.6 9.6 L12 12.4 Z" fill="#bfe2e7"/>
-  <path d="M8.4 9.6 L12 12.4 L15.6 9.6" fill="none" stroke="#7fb6c1" stroke-width="0.5" opacity="0.6"/>
-  <path d="M12 4 L12 12.4" stroke="#eaf6f7" stroke-width="0.5" opacity="0.7"/>
-  <path d="M9.4 8.8 L12 5.4" stroke="#ffffff" stroke-width="0.6" opacity="0.7" stroke-linecap="round"/>
-  <path d="M8 13.6 A6.6 5.2 0 0 1 12.6 11.6" fill="none" stroke="#ffffff" stroke-width="0.7" opacity="0.4" stroke-linecap="round"/>
+  <path d="M4 5.6 C4 12 7.2 16.6 12 16.6 C16.8 16.6 20 12 20 5.6" fill="none" stroke="url(#jewelry-fill)" stroke-width="1.1" stroke-linecap="round"/>
+  <path d="M4.6 6.2 C4.9 11.6 7.7 15.6 12 15.6 C16.3 15.6 19.1 11.6 19.4 6.2" fill="none" stroke="#ffffff" stroke-width="0.3" opacity="0.35" stroke-linecap="round"/>
+  <circle cx="12" cy="16.8" r="1" fill="url(#jewelry-fill)"/>
+  <path d="M10.6 17.6 L12 21.4 L13.4 17.6 L12 16 Z" fill="#bfe2e7"/>
+  <path d="M10.6 17.6 L12 21.4 L13.4 17.6" fill="none" stroke="#7fb6c1" stroke-width="0.4" opacity="0.6"/>
+  <path d="M12 16 L12 21.4" stroke="#eaf6f7" stroke-width="0.4" opacity="0.7"/>
+  <path d="M11.1 17.3 L12 16.1" stroke="#ffffff" stroke-width="0.5" opacity="0.75" stroke-linecap="round"/>
 </svg>
 """

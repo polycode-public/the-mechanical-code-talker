@@ -1,8 +1,9 @@
-# shoe — a rounded toe, an arched laced tongue and a raised heel counter
-# read as a sneaker profile where the pack's first draft (a single sloped
-# triangle) read as a party hat; a sole reads dark regardless of the
-# shoe's own colour, the same fixed-accent reasoning as tiger.toml's
-# stripes.
+# shoe — a rounded toe, crossed laces over the tongue, a raised heel
+# counter and a thick sole line read as a sneaker profile where the
+# pack's first draft (a single sloped triangle) read as a party hat; the
+# heel counter is a dark-tone overlay rather than a second colour, and
+# the sole reads dark regardless of the shoe's own colour, the same
+# fixed-accent reasoning as tiger.toml's stripes.
 classes = ["shoe"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -14,8 +15,13 @@ svg = """
     </linearGradient>
   </defs>
   <path d="M2.6 18.2 C2.6 15 4.4 13.2 7.2 13 C7.6 10.8 9.4 9.6 11.4 10.2 C12 10.4 12.4 11 12.4 11.8 C14.8 11.3 17.4 12 19.2 13.8 C20.6 15.2 21.4 16.6 21.6 18.2 Z" fill="url(#shoe-fill)"/>
+  <path d="M17.4 12.6 C18.8 13.2 19.9 14.6 20.4 16.2 L20.4 18.2 L17 18.2 Z" fill="color-mix(in srgb, currentColor 78%, black)" opacity="0.55"/>
   <path d="M2.6 18.2 H21.6 V19.8 C21.6 20.4 21.2 20.8 20.6 20.8 H3.6 C3 20.8 2.6 20.4 2.6 19.8 Z" fill="#221f1c" opacity="0.85"/>
-  <path d="M10.6 11.4 L13.6 12.4 M10.2 12.8 L13.8 14 M9.8 14.2 L13.6 15.4" stroke="#000000" stroke-width="0.35" opacity="0.3"/>
+  <g stroke="#000000" stroke-width="0.4" opacity="0.4" stroke-linecap="round">
+    <path d="M9.6 11.6 L12.6 12.6 M9.6 12.6 L12.6 11.6"/>
+    <path d="M10 13.2 L13 14.2 M10 14.2 L13 13.2"/>
+    <path d="M10.4 14.8 L13.4 15.8 M10.4 15.8 L13.4 14.8"/>
+  </g>
   <path d="M19.6 14.4 C20.6 15.4 21.2 16.6 21.4 17.8" fill="none" stroke="#ffffff" stroke-width="0.4" opacity="0.35"/>
   <ellipse cx="5.6" cy="15.6" rx="1.6" ry="1" fill="#ffffff" opacity="0.28"/>
 </svg>

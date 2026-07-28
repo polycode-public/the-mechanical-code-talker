@@ -1,6 +1,9 @@
-# waterway — three stacked ripple strokes read as flowing water viewed
-# side-on, distinct from river.toml's own top-down winding band and
-# water.toml's single droplet.
+# waterway — a straight, banked channel rather than river.toml's winding
+# top-down band: two straight fixed-stone banks pen in a level water
+# strip, and a barge (hull, cabin, one window) sits in the channel as
+# the cue that reads "canal" rather than a generic stretch of water.
+# Banks and water are fixed for the same reason every water class in
+# this pack is: the colour is the identity, not a theme's to set.
 classes = ["waterway"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -9,10 +12,19 @@ svg = """
       <stop offset="0%" stop-color="#bfe2e7"/>
       <stop offset="100%" stop-color="#4c8fa8"/>
     </linearGradient>
+    <linearGradient id="waterway-bank" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#c7a874"/>
+      <stop offset="100%" stop-color="#9c7d4f"/>
+    </linearGradient>
   </defs>
-  <path d="M2 8.4 C4.4 6.4 6.8 6.4 9.2 8.4 C11.6 10.4 14 10.4 16.4 8.4 C18.8 6.4 21.2 6.4 22.6 8" fill="none" stroke="url(#waterway-fill)" stroke-width="2.2" stroke-linecap="round"/>
-  <path d="M1.4 14 C3.8 12 6.2 12 8.6 14 C11 16 13.4 16 15.8 14 C18.2 12 20.6 12 23 13.6" fill="none" stroke="url(#waterway-fill)" stroke-width="2.6" stroke-linecap="round"/>
-  <path d="M2 19.6 C4.4 17.6 6.8 17.6 9.2 19.6 C11.6 21.6 14 21.6 16.4 19.6 C18.8 17.6 21.2 17.6 22.6 19.2" fill="none" stroke="url(#waterway-fill)" stroke-width="3" stroke-linecap="round"/>
-  <path d="M2 8.4 C4.4 6.4 6.8 6.4 9.2 8.4" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.4"/>
+  <rect x="2" y="6.4" width="20" height="2.2" fill="url(#waterway-bank)"/>
+  <rect x="2" y="17.4" width="20" height="2.2" fill="url(#waterway-bank)"/>
+  <rect x="2" y="8.6" width="20" height="8.8" fill="url(#waterway-fill)"/>
+  <path d="M3 10.4 C5.4 9.6 7.6 9.6 10 10.4 C12.4 11.2 14.6 11.2 17 10.4 C18.8 9.8 20.4 9.8 21.4 10.2" fill="none" stroke="#eaf6f7" stroke-width="0.5" opacity="0.5"/>
+  <path d="M3 15.2 C5.4 14.4 7.6 14.4 10 15.2 C12.4 16 14.6 16 17 15.2 C18.8 14.6 20.4 14.6 21.4 15" fill="none" stroke="#eaf6f7" stroke-width="0.5" opacity="0.4"/>
+  <path d="M9 12.2 L17 12.2 L16.2 14.6 L9.8 14.6 Z" fill="#3c3430"/>
+  <path d="M9 12.2 L17 12.2" stroke="#1c1815" stroke-width="0.35" opacity="0.6"/>
+  <rect x="11.4" y="10.4" width="3.2" height="2" rx="0.3" fill="#5a4e46"/>
+  <rect x="12.1" y="10.8" width="0.9" height="0.9" fill="#bcd4de" opacity="0.8"/>
 </svg>
 """
