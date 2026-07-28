@@ -118,6 +118,24 @@ test("renderMudHtml: embeds the world payload and the whole roster as page data"
   assert.match(html, /badger-2/, "the roster the page may draw from is embedded whole");
 });
 
+test("renderMudHtml: each pane carries the out-of-play banner a taken character falls back to", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  for (const slot of ["a", "b"]) {
+    assert.match(html, new RegExp(`id="window-${slot}-fate"`), `${slot} can say what became of its character`);
+  }
+  assert.match(html, /\.mud-window\.out-of-play \.pane-controls button \{ display: none; \}/,
+    "an eaten character is never offered a control that would advance a turn the engine declines");
+});
+
+test("renderMudHtml: the page reads the engine's own seams rather than re-deriving them", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  assert.match(html, /tmctMud\.pickMudRoster/, "one roster draw feeds both the panes and the session opened for them");
+  assert.match(html, /tmctMud\.castInRoom/, "who stands in the room comes from the engine, so the caption and the talk pills agree");
+  assert.match(html, /tmctMud\.displayNameOf/, "a pouch label comes from the world's own display-name fact");
+  assert.match(html, /turnsTaken\(\)/, "a pane shows its character's own turn count, not the shared one");
+  assert.match(html, /isOutOfPlay\(\)/, "a pane reads out-of-play from the engine every redraw");
+});
+
 test("speciesOfCharacter: strips the trailing instance number", () => {
   assert.equal(speciesOfCharacter("mole-1"), "mole");
   assert.equal(speciesOfCharacter("groundhog-1"), "groundhog");

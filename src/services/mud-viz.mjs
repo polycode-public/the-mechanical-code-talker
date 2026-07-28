@@ -243,9 +243,9 @@ export function isCreature(state, subject) {
  *  computed in the browser once the sibling bundle loads.
  *  `characters` is the ROSTER this page may draw from, `[{ id, species }]`;
  *  the page renders one pane per PANE_SLOTS entry and binds a character to
- *  each at boot, so which two of the roster actually play is decided live
- *  (by the session, or by the page's own draw when the session hands back
- *  more characters than there are panes). `worldPayload` is `{ name, facts,
+ *  each at boot, so which two of the roster actually play is decided live by
+ *  the engine's own pickMudRoster — the same draw the shared session is then
+ *  opened for, never a second one. `worldPayload` is `{ name, facts,
  *  rules, opening }`, read once at build time through the real worlds-pack
  *  provider (see this module's own header). `spriteTemplates` is the
  *  large-tier sprite set (data/sprites-large/*.toml) so every species
@@ -393,6 +393,7 @@ function paneMarkup(slot) {
       <div class="pane-controls">
         <button type="button" id="${w}-play" disabled>&#9654; play</button>
         <button type="button" id="${w}-step" disabled>step</button>
+        <p class="pane-fate" id="${w}-fate" role="status" hidden></p>
       </div>
     </section>`;
 }
@@ -560,7 +561,15 @@ const MUD_STYLE = `
   .chatpills { display: flex; flex-wrap: wrap; gap: .22rem; max-height: 2.6rem; overflow: hidden; }
   .pill { font-family: ${MONO_STACK}; font-size: .58rem; padding: .14rem .45rem; border: 1px solid var(--soil-mid); border-radius: 99px; background: rgba(255,255,255,.5); }
   .pill:hover:not(:disabled) { border-color: var(--burrow-glow); }
-  .pane-controls { flex: 0 0 auto; display: flex; gap: .4rem; }
+  .pane-controls { flex: 0 0 auto; display: flex; align-items: center; gap: .4rem; }
+  .pane-fate {
+    margin: 0; font-family: ${MONO_STACK}; font-size: .62rem; text-transform: uppercase; letter-spacing: .08em;
+    padding: .3rem .6rem; border-radius: 3px; background: var(--soil-deep); color: var(--parchment);
+  }
+  .mud-window.out-of-play { border-top-color: var(--soil-mid); }
+  .mud-window.out-of-play .pane-controls button { display: none; }
+  .mud-window.out-of-play .room-view, .mud-window.out-of-play .pane-columns { filter: grayscale(1); opacity: .5; }
+  .mud-window.out-of-play .dir-ring { display: none; }
 
   @media (max-width: 900px) {
     :root { --pane-height: 470px; }
@@ -621,6 +630,7 @@ function pageScript() {
   const slotOf = {};
   let globalTurn = 0;
   const turnsTaken = {};
+  const eaten = {};
   let maxTurns = DATA.defaultMaxTurns;
   let delayMs = DATA.defaultDelayMs;
   const wait = function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
@@ -636,23 +646,47 @@ function pageScript() {
   function paneIdFor(character) { return "window-" + slotOf[character]; }
   function colorFor(character) { return ACTOR_COLORS[cast.indexOf(character) % ACTOR_COLORS.length]; }
 
-  // The per-character tally the engine keeps, when it keeps one; the page's
-  // own count of the ticks it drove otherwise, so a pane never falls back to
-  // showing the shared global figure as if it were its own.
+  // The engine keeps each character's own tally (its scripted ticks AND its
+  // typed commands), which is the only one that can be right: a typed "dig
+  // north" is a turn the page never drove. The page's own count of the ticks it
+  // fired is the fallback, so a pane never falls back to showing the shared
+  // global figure as if it were its own.
   function turnsFor(character) {
     const w = session && session.windows[character];
-    const own = w && (typeof w.turnCount === "function" ? w.turnCount() : w.turnCount);
+    const own = w && typeof w.turnsTaken === "function" ? w.turnsTaken() : null;
     return typeof own === "number" ? own : (turnsTaken[character] || 0);
   }
 
   async function runOneTurn(character) {
     return serializeTick(async function () {
+      if (eaten[character]) return { outOfPlay: true };
       globalTurn += 1;
-      turnsTaken[character] = (turnsTaken[character] || 0) + 1;
       const result = await session.windows[character].autoplayTick(globalTurn);
+      if (!result.outOfPlay) turnsTaken[character] = (turnsTaken[character] || 0) + 1;
       afterEngineTurn(character, result);
       return result;
     });
+  }
+
+  // A character the predator has taken keeps its pane, its final turn count and
+  // its chat log, and loses everything that would advance it — the engine
+  // declines its turns from here on, so offering the controls would promise a
+  // turn that never runs.
+  function markEaten(character, note) {
+    if (eaten[character]) return;
+    eaten[character] = true;
+    const ticker = tickers[character];
+    if (ticker) ticker.pause();
+    const w = paneIdFor(character);
+    el(w).classList.add("out-of-play");
+    el(w + "-play").disabled = true;
+    el(w + "-step").disabled = true;
+    el(w + "-chatq").disabled = true;
+    el(w + "-chatpills").innerHTML = "";
+    const fate = el(w + "-fate");
+    fate.hidden = false;
+    fate.textContent = "eaten \\u00b7 " + turnsFor(character) + " turns";
+    appendChat(character, "a", note || ("the " + character + " has been eaten. It takes no more turns."));
   }
 
   // A bubble carries what was SAID, not the sentence: the answer names a
@@ -664,6 +698,7 @@ function pageScript() {
   }
 
   function afterEngineTurn(character, result) {
+    if (result && result.outOfPlay) { markEaten(character, result.text); renderAll(); return; }
     if (!result || !result.room) { renderAll(); return; }
     if (result.roomAfter && result.roomAfter !== result.room) freshlyDugRoom = result.roomAfter;
     for (const action of result.actions || []) {
@@ -817,19 +852,18 @@ function pageScript() {
     ctx.fillRect(0, h - 26, w, 26);
   }
 
-  function renderRoomView(character, rows, state, here, roomIds) {
+  function renderRoomView(character, rows, state, here, roomIds, roomMates) {
     const w = paneIdFor(character);
     drawRoomBackdrop(el(w + "-canvas"), roomKindForRoom(rows, here), here);
 
     el(w + "-self").innerHTML = '<div class="sprite">' + spriteSvgFor(speciesOfCharacter(character), rows, character) + "</div>";
 
-    const others = [];
+    const others = roomMates.map(function (mate) {
+      return '<div class="sprite" title="' + esc(mate) + '">' + spriteSvgFor(speciesOfCharacter(mate), rows, mate) + "</div>";
+    });
     const wall = [];
     for (const obj of mudRoomSceneObjects(rows, state, here, character)) {
-      if (isCreature(state, obj.subject)) {
-        others.push('<div class="sprite" title="' + esc(obj.subject) + '">' + spriteSvgFor(speciesOfCharacter(obj.subject), rows, obj.subject) + "</div>");
-        continue;
-      }
+      if (isCreature(state, obj.subject)) continue;
       const plane = scenePlacement(rows, state, obj.subject).plane;
       const hang = plane === "ceiling" || plane === "wall" ? "hangs-high" : "hangs-low";
       wall.push('<div class="wall-item ' + hang + '" title="' + esc(labelForItem(rows, obj.subject, roomIds)) + '"><div class="hook"></div><div class="frame">'
@@ -852,15 +886,23 @@ function pageScript() {
       setTimeout(function () { flourishEl.classList.remove("shown"); flourishEl.hidden = true; }, 900);
     }
 
-    el(w + "-caption").textContent = roomCaptionFor(rows, state, here, character);
+    el(w + "-caption").textContent = roomCaptionFor(rows, state, here, character, roomMates);
   }
 
-  function roomCaptionFor(rows, state, here, character) {
-    if (!window.tmctMud) return here;
+  // The digest's own room sentences say what the ROOM is, and nothing about who
+  // is standing in it — a "Badger-2 is in the sett-1" row is filed under the
+  // badger, not the sett, so filtering the view to this room drops every mate.
+  // The cast sentence comes from the same list the talk pills and the floor
+  // sprites read, so the description can never name a different set of animals
+  // than the pane offers to talk to.
+  function roomCaptionFor(rows, state, here, character, roomMates) {
+    const parts = [];
     const view = window.tmctMud.worldDigestRows(rows, state, character);
     const lines = view.filter(function (r) { return r.subject.toLowerCase() === here.toLowerCase(); })
       .map(function (r) { return r.subject + " " + r.predicate + " " + r.object + "."; });
-    return lines.length ? lines.join(" ") : ("You are in the " + here + ".");
+    parts.push(lines.length ? lines.join(" ") : "You are in the " + here + ".");
+    if (roomMates.length) parts.push("Here with you: the " + roomMates.join(", the ") + ".");
+    return parts.join(" ");
   }
 
   // ---- the compass ring ----------------------------------------------------
@@ -889,13 +931,11 @@ function pageScript() {
     }
   }
 
-  function renderChatPills(character, rows, state, here) {
+  function renderChatPills(character, roomMates) {
     const w = paneIdFor(character);
     const pillsEl = el(w + "-chatpills");
     const commands = ["look", "what do you know about food"];
-    for (const obj of mudRoomSceneObjects(rows, state, here, character)) {
-      if (isCreature(state, obj.subject)) commands.push("talk to " + obj.subject);
-    }
+    for (const mate of roomMates) commands.push("talk to " + mate);
     pillsEl.innerHTML = commands.map(function (c) {
       return '<button type="button" class="pill" data-fill="' + esc(c) + '">' + esc(c) + "</button>";
     }).join("");
@@ -919,9 +959,13 @@ function pageScript() {
     el(w + "-stats").textContent = "mass " + (mass ? mass.value : "?") + (drain !== undefined ? " \\u00b7 drain/turn " + drain : "");
   }
 
+  // The world mints a dug object with its own display-name fact, so the engine
+  // can say "carrot" while every verb still resolves the distinct id
+  // ("carrot-1"). itemLabel is the fallback for an id carrying no such fact.
   function labelForItem(rows, subject, roomIds) {
-    const fromEngine = window.tmctMud && window.tmctMud.itemLabel;
-    return fromEngine ? fromEngine(rows, subject) : itemLabel(subject, roomIds);
+    const fromEngine = window.tmctMud && window.tmctMud.displayNameOf;
+    const name = fromEngine ? fromEngine(rows, subject) : null;
+    return name && name !== subject ? name : itemLabel(subject, roomIds);
   }
 
   // ---- the burrow survey ---------------------------------------------------
@@ -1015,31 +1059,40 @@ function pageScript() {
     });
     el("worldMapKey").innerHTML = cast.map(function (c) {
       const room = state.placements.get(c) ? state.placements.get(c).object : "?";
+      const where = eaten[c] ? "eaten" : "in " + esc(room);
       return '<span class="key-actor"><span class="key-dot" style="background:' + colorFor(c) + '"></span>'
-        + esc(speciesOfCharacter(c)) + " in " + esc(room) + "</span>";
+        + esc(speciesOfCharacter(c)) + " " + where + "</span>";
     }).join("");
     el("worldMapTurn").textContent = "turn " + globalTurn;
   }
 
-  function renderAll() {
+  // A character eaten on its OWN turn is out of play the moment that turn
+  // returns, one whole tick before autoplayTick would report it — so the pane's
+  // state is read from the engine's own isOutOfPlay every redraw, not only off
+  // a tick result.
+  async function renderAll() {
     if (!session) return;
     el("globalTurnCount").textContent = "turns: " + globalTurn;
-    session.snapshot().then(function (snap) {
-      const roomIds = allRoomIds(snap.rows);
-      renderWorldMap(snap.rows, snap.state, roomIds);
-      for (const character of cast) {
-        const place = snap.state.placements.get(character);
-        const here = place ? place.object : null;
-        el(paneIdFor(character) + "-turn").textContent = "turn " + turnsFor(character);
-        if (!here) continue;
-        renderRoomView(character, snap.rows, snap.state, here, roomIds);
-        renderDirections(character, snap.rows, snap.state, here);
-        renderChatPills(character, snap.rows, snap.state, here);
-        renderPouch(character, snap.rows, snap.state, roomIds);
-        renderMinimap(character, snap.rows, snap.state, here);
-      }
-      freshlyDugRoom = null;
-    });
+    const snap = await session.snapshot();
+    const roomIds = allRoomIds(snap.rows);
+    for (const character of cast) {
+      if (await session.windows[character].isOutOfPlay()) markEaten(character);
+    }
+    renderWorldMap(snap.rows, snap.state, roomIds);
+    for (const character of cast) {
+      el(paneIdFor(character) + "-turn").textContent = "turn " + turnsFor(character);
+      if (eaten[character]) continue;
+      const place = snap.state.placements.get(character);
+      const here = place ? place.object : null;
+      if (!here) continue;
+      const roomMates = window.tmctMud.castInRoom(snap.rows, snap.state, here, character);
+      renderRoomView(character, snap.rows, snap.state, here, roomIds, roomMates);
+      renderDirections(character, snap.rows, snap.state, here);
+      renderChatPills(character, roomMates);
+      renderPouch(character, snap.rows, snap.state, roomIds);
+      renderMinimap(character, snap.rows, snap.state, here);
+    }
+    freshlyDugRoom = null;
   }
 
   // ---- the control deck ----------------------------------------------------
@@ -1067,19 +1120,6 @@ function pageScript() {
       el("maxTurnsValue").textContent = String(maxTurns);
     });
     el("resetBtn").addEventListener("click", function () { boot(); });
-  }
-
-  /** Which characters play this round. The session decides when it hands back
-   *  a roster that already fits the panes; otherwise the page draws that many
-   *  at random, so a reset re-casts rather than replaying the same pair. */
-  function castFor(available) {
-    if (available.length <= slots.length) return available.slice();
-    const pool = available.slice();
-    const picked = [];
-    while (picked.length < slots.length && pool.length) {
-      picked.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
-    }
-    return picked;
   }
 
   function bindPanes() {
@@ -1113,13 +1153,20 @@ function pageScript() {
     freshlyDugRoom = null;
     speechBubbles.clear();
     tickChain = Promise.resolve();
+    for (const character of cast) delete eaten[character];
     for (const slot of slots) {
-      el("window-" + slot + "-chatlog").innerHTML = "";
-      el("window-" + slot + "-play").textContent = "\\u25B6 play";
+      const w = "window-" + slot;
+      el(w + "-chatlog").innerHTML = "";
+      el(w + "-play").textContent = "\\u25B6 play";
+      el(w).classList.remove("out-of-play");
+      el(w + "-fate").hidden = true;
     }
 
-    session = await window.tmctMud.createMudSession(DATA.worldPayload, { characters: roster });
-    cast = castFor(Object.keys(session.windows));
+    // ONE draw, the engine's own, and the same list the session is built from:
+    // a second independent draw here would leave the page showing animals the
+    // shared world was never opened for.
+    cast = window.tmctMud.pickMudRoster(roster, { count: slots.length });
+    session = await window.tmctMud.createMudSession(DATA.worldPayload, { characters: cast });
     for (let i = 0; i < cast.length; i += 1) {
       turnsTaken[cast[i]] = 0;
       slotOf[cast[i]] = slots[i];
