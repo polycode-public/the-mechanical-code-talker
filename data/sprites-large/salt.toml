@@ -1,6 +1,9 @@
-# salt — an angular mound with two jutting crystal chunks, gradient/
-# highlight only: salt's own whiteness is close enough to neutral that a
-# taught colour still reads plausibly through the gradient.
+# salt — a shaker, not a mound: a perforated cap over a rounded jar, the
+# holes the one cue that separates it from sugar.toml's tied sack at
+# icon size where both classes would otherwise be the same pale
+# gradient. Gradient/highlight only: salt's own whiteness is close
+# enough to neutral that a taught colour still reads plausibly through
+# it.
 classes = ["salt"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -11,11 +14,17 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 88%, black)"/>
     </linearGradient>
   </defs>
-  <path d="M4 20 C4 15.4 7.6 12 12 12 C16.4 12 20 15.4 20 20 Z" fill="url(#salt-fill)"/>
-  <path d="M8.6 12.6 L10.4 9.6 L12.4 12.2 L11 15 Z" fill="url(#salt-fill)"/>
-  <path d="M13 11.6 L15.2 9 L16.6 12.4 L14.4 14.2 Z" fill="url(#salt-fill)"/>
-  <path d="M9 11 L10.4 9.6 L11.2 11.4" fill="none" stroke="#ffffff" stroke-width="0.4" opacity="0.5"/>
-  <path d="M13.6 11 L15.2 9 L15.8 11.2" fill="none" stroke="#ffffff" stroke-width="0.4" opacity="0.5"/>
-  <ellipse cx="8.6" cy="17" rx="1.8" ry="1" fill="#ffffff" opacity="0.35"/>
+  <ellipse cx="12" cy="21" rx="6.2" ry="1.2" fill="#000000" opacity="0.16"/>
+  <path d="M6.4 10.4 C6.4 8.6 8.8 7.4 12 7.4 C15.2 7.4 17.6 8.6 17.6 10.4 L18.4 19 C18.5 20.2 17 21 12 21 C7 21 5.5 20.2 5.6 19 Z" fill="url(#salt-fill)"/>
+  <path d="M8.4 7.8 C8.4 5.6 9.8 4.2 12 4.2 C14.2 4.2 15.6 5.6 15.6 7.8 L15.6 9 C15.6 9.6 14 10 12 10 C10 10 8.4 9.6 8.4 9 Z" fill="url(#salt-fill)"/>
+  <g fill="#4a4a46" opacity="0.75">
+    <circle cx="10.2" cy="6.4" r="0.42"/>
+    <circle cx="12" cy="5.8" r="0.42"/>
+    <circle cx="13.8" cy="6.4" r="0.42"/>
+    <circle cx="10.9" cy="7.4" r="0.42"/>
+    <circle cx="13.1" cy="7.4" r="0.42"/>
+  </g>
+  <path d="M7.4 12 L16.8 12" stroke="#ffffff" stroke-width="0.4" opacity="0.35"/>
+  <ellipse cx="9.2" cy="14.4" rx="1.6" ry="3.2" fill="#ffffff" opacity="0.28" transform="rotate(6 9.2 14.4)"/>
 </svg>
 """

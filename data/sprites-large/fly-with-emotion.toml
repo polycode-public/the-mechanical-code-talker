@@ -1,6 +1,7 @@
-# fly-with-emotion — copies dog-with-emotion.toml's shape exactly. The head
-# capsule circle is this class's own head-equivalent — fly.toml carries no
-# eye/mouth markup to drop, so nothing is removed.
+# fly-with-emotion — copies fly.toml's upgraded shape exactly. The head
+# capsule circle is this class's own head-equivalent, so [face] anchors
+# there; fly.toml's own fixed compound eyes are dropped since the new
+# expression's own eyes replace them in the same spot.
 classes = ["fly"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -11,13 +12,14 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
   </defs>
-  <ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="url(#fly-with-emotion-fill)"/>
-  <circle cx="12" cy="7" r="2.7" fill="url(#fly-with-emotion-fill)"/>
-  <ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="#000000" opacity="0.22"/>
   <g fill="currentColor" opacity="0.5">
     <path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z"/>
     <path d="M15 10 C21 6 22 4 21 2 C18 2 15 6 13.5 10 Z"/>
   </g>
+  <path d="M6 6.4 C5.4 5 5.6 3.6 6.4 3" stroke="#5a4636" stroke-width="0.3" opacity="0.6" fill="none" stroke-linecap="round"/>
+  <ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="url(#fly-with-emotion-fill)"/>
+  <ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="#000000" opacity="0.22"/>
+  <circle cx="12" cy="7" r="2.7" fill="url(#fly-with-emotion-fill)"/>
   <g stroke="currentColor" stroke-width="1" stroke-linecap="round">
     <path d="M9.6 17 L7.4 19.4"/>
     <path d="M14.4 17 L16.6 19.4"/>

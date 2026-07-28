@@ -15,12 +15,15 @@ svg = """
   </defs>
   <ellipse cx="6.2" cy="7.4" rx="3.8" ry="4.4" fill="url(#elephant-with-emotion-fill)" opacity="0.55"/>
   <ellipse cx="14.5" cy="15" rx="7.2" ry="5.4" fill="url(#elephant-with-emotion-fill)"/>
-  <circle cx="8.8" cy="10.2" r="4.4" fill="url(#elephant-with-emotion-fill)"/>
-  <path d="M6.6 13.4 C4.2 14 3 17 3.8 19.6 C4.2 21 5.6 21.2 5.8 19.8 C5 18.4 4.6 16.2 5.4 14.2 C5.7 13.8 6.2 13.6 6.6 13.4 Z" fill="url(#elephant-with-emotion-fill)"/>
-  <g stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-    <line x1="10.6" y1="19.4" x2="10.6" y2="22"/>
-    <line x1="18.4" y1="19.4" x2="18.4" y2="22"/>
+  <g fill="url(#elephant-with-emotion-fill)">
+    <rect x="8.6" y="18.8" width="2" height="3.2" rx="1"/>
+    <rect x="12.4" y="19.2" width="2" height="3" rx="1"/>
+    <rect x="16.4" y="19.2" width="2" height="3" rx="1"/>
+    <rect x="19.6" y="18.8" width="2" height="3.2" rx="1"/>
   </g>
+  <circle cx="8.8" cy="10.2" r="4.4" fill="url(#elephant-with-emotion-fill)"/>
+  <path d="M6.4 13 C5.2 13.6 4.6 15 5 16.4 C5.7 15.6 6.3 14.5 6.7 13.1 Z" fill="#f4ecd8"/>
+  <path d="M6.6 13.4 C4.2 14 3 17 3.8 19.6 C4.2 21 5.6 21.2 5.8 19.8 C5 18.4 4.6 16.2 5.4 14.2 C5.7 13.8 6.2 13.6 6.6 13.4 Z" fill="url(#elephant-with-emotion-fill)"/>
   <ellipse cx="11.4" cy="12.6" rx="2.8" ry="1.7" fill="#ffffff" opacity="0.26"/>
   <ellipse cx="7.4" cy="8.2" rx="1.3" ry="1" fill="#ffffff" opacity="0.3"/>
   {{FACE}}

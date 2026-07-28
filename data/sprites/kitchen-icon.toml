@@ -1,13 +1,22 @@
-# kitchen — a room floor plan marked by a stove with two burners, the same
-# distinguishing cue the large tier uses, so the room-kind icon reads as a
-# kitchen rather than a plain room.
+# kitchen — a room floor plan marked by a stove with two burners and an
+# oven-door handle, the same distinguishing cue the large tier uses, so
+# the room-kind icon reads as a kitchen rather than a plain room. The wash
+# is a fixed white/black tint rather than currentColor-mixed (see
+# room-icon.toml's own header for why).
 classes = ["kitchen"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
-  <rect x="3" y="3" width="18" height="18" rx="1" fill="currentColor" opacity="0.14"/>
+  <defs>
+    <linearGradient id="kitchen-wash" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.1"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.14"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="18" height="18" rx="1" fill="url(#kitchen-wash)"/>
   <rect x="3" y="3" width="18" height="18" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
   <rect x="8" y="10" width="8" height="7" rx="0.6" fill="none" stroke="currentColor" stroke-width="1.2"/>
-  <circle cx="10.5" cy="12.6" r="1" fill="currentColor" opacity="0.7"/>
-  <circle cx="13.5" cy="12.6" r="1" fill="currentColor" opacity="0.7"/>
+  <circle cx="10.5" cy="12.4" r="1" fill="currentColor"/>
+  <circle cx="13.5" cy="12.4" r="1" fill="currentColor"/>
+  <path d="M9.4 15.8 H14.6" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/>
 </svg>
 """

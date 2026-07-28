@@ -1,17 +1,22 @@
-# fly — the spider-and-fly board's other agent. A round head, a tapered
-# body with a carved highlight, translucent wings, and two thin trailing
-# legs for a touch of character at rest.
+# fly — the spider-and-fly board's other agent. A round head with a pair
+# of large compound eyes, a tapered body with a carved highlight,
+# translucent wings (opacity carries real translucency here, not a
+# decorative wash, so it stays), and two thin trailing legs.
 classes = ["fly"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="currentColor"/>
   <circle cx="12" cy="7" r="2.7" fill="currentColor"/>
-  <ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="currentColor" opacity="0.3"/>
+  <ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="color-mix(in srgb, currentColor 70%, black)"/>
   <g fill="currentColor" opacity="0.55">
     <path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z"/>
     <path d="M15 10 C21 6 22 4 21 2 C18 2 15 6 13.5 10 Z"/>
   </g>
-  <g stroke="currentColor" stroke-width="1" stroke-linecap="round">
+  <g fill="color-mix(in srgb, currentColor 70%, black)">
+    <ellipse cx="10.1" cy="6.1" rx="1.5" ry="1.9" transform="rotate(-18 10.1 6.1)"/>
+    <ellipse cx="13.9" cy="6.1" rx="1.5" ry="1.9" transform="rotate(18 13.9 6.1)"/>
+  </g>
+  <g stroke="currentColor" stroke-width="1.1" stroke-linecap="round">
     <path d="M9.6 17 L7.4 19.4"/>
     <path d="M14.4 17 L16.6 19.4"/>
   </g>

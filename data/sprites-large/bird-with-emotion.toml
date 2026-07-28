@@ -1,8 +1,6 @@
-# bird-with-emotion — copies dog-with-emotion.toml's shape exactly. The beak
-# sits to the right of the head circle's own edge, clear of the new face's
-# band, so [face] can use that head circle directly; bird.toml's own eye dot
-# is dropped, the same dog precedent, since it sits where the real eyes now
-# go.
+# bird-with-emotion — copies bird.toml's upgraded shape exactly, including
+# the fixed robin breast, beak and legs. bird.toml's own eye dot is dropped,
+# the same dog precedent, since it sits where the real eyes now go.
 classes = ["bird"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -15,10 +13,11 @@ svg = """
   </defs>
   <ellipse cx="11.4" cy="13.4" rx="6.4" ry="5" fill="url(#bird-with-emotion-fill)"/>
   <circle cx="16.4" cy="8.4" r="3.4" fill="url(#bird-with-emotion-fill)"/>
-  <path d="M19.4 8.2 L22.4 7.4 L19.8 9.6 Z" fill="currentColor" opacity="0.8"/>
-  <path d="M6.4 12.4 C3 11.6 2.4 14.6 5.6 15.6 C7.4 16.2 8.4 14.4 6.4 12.4 Z" fill="url(#bird-with-emotion-fill)"/>
-  <ellipse cx="9.4" cy="11.4" rx="2.6" ry="1.6" fill="#ffffff" opacity="0.3"/>
-  <g stroke="currentColor" stroke-width="1.3" stroke-linecap="round">
+  <path d="M6.4 12.4 C3 11.6 2.4 14.6 5.6 15.6 C7.4 16.2 8.4 14.4 6.4 12.4 Z" fill="color-mix(in srgb, currentColor 78%, black)"/>
+  <path d="M8.6 11.4 C10.6 10.6 13 11.4 13.6 14 C14 16.2 12.4 17.8 10.4 17.4 C8.6 17 7.4 13.4 8.6 11.4 Z" fill="#c1552e"/>
+  <path d="M19.4 8.2 L22.4 7.4 L19.8 9.6 Z" fill="#e8a23a"/>
+  <ellipse cx="9.4" cy="10.6" rx="2.2" ry="1.3" fill="#ffffff" opacity="0.3"/>
+  <g stroke="#e8a23a" stroke-width="1.3" stroke-linecap="round">
     <line x1="9.4" y1="18" x2="8.4" y2="21"/>
     <line x1="12.4" y1="18.2" x2="13" y2="21"/>
   </g>

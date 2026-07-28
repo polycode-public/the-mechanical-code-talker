@@ -1,7 +1,10 @@
 # snake — a single thick gradient stroke tracing an S-curve stands in for
 # the whole body, the same reasoning spider.toml gives for keeping its own
 # legs flat strokes: a gradient FILL would read as noise at this width, a
-# gradient STROKE reads as a smooth cylindrical body.
+# gradient STROKE reads as a smooth cylindrical body. The skin stays
+# currentColor (a theme's to own), but a row of fixed dark diamond
+# markings down the spine and a proper slit-pupil eye are what let a bare
+# curved stroke read as a snake rather than a length of rope.
 classes = ["snake"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13,8 +16,15 @@ svg = """
     </linearGradient>
   </defs>
   <path d="M4 20 C4 16 9 17 9 13 C9 9.4 4.6 10 4.6 6.4 C4.6 4 6.6 2.6 9 3.2" fill="none" stroke="url(#snake-fill)" stroke-width="4.2" stroke-linecap="round"/>
+  <g fill="color-mix(in srgb, currentColor 78%, black)">
+    <ellipse cx="4.6" cy="18.4" rx="1" ry="1.3" transform="rotate(20 4.6 18.4)"/>
+    <ellipse cx="7.6" cy="14.6" rx="1" ry="1.3" transform="rotate(-30 7.6 14.6)"/>
+    <ellipse cx="6" cy="10.4" rx="1" ry="1.3" transform="rotate(35 6 10.4)"/>
+    <ellipse cx="5.2" cy="6" rx="1" ry="1.3" transform="rotate(-20 5.2 6)"/>
+  </g>
   <circle cx="9.3" cy="3.4" r="2.1" fill="url(#snake-fill)"/>
-  <ellipse cx="8.6" cy="2.8" rx="0.6" ry="0.8" fill="#000000" opacity="0.3"/>
+  <ellipse cx="8.6" cy="2.9" rx="0.75" ry="0.95" fill="#e8a23a"/>
+  <ellipse cx="8.6" cy="2.9" rx="0.22" ry="0.85" fill="#1c1c1c"/>
   <path d="M11 3 L13.4 3.6 L11 4.2" fill="none" stroke="#c0362f" stroke-width="0.6" stroke-linecap="round"/>
   <path d="M5.4 18.6 C5.4 16 8.4 16.6 8.4 14" fill="none" stroke="#ffffff" stroke-width="0.7" opacity="0.35"/>
 </svg>
