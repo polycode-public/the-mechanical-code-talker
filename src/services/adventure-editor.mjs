@@ -281,6 +281,14 @@ export function parseWorldEditorText(text, contextRows = []) {
 
 const tripleKey = (t) => `${t.subject} ${t.predicate} ${t.object}`;
 
+// The three flag predicates the renderer only ever writes a line for when they
+// read "true" ("Basket is a container."). A row saying "false" has no sentence
+// in this vocabulary, so it must not be diffable either — counted as editable
+// while being unrenderable, it sits in the diff's current set, matches nothing
+// the text can say, and gets retracted on the next clean parse: a fact the
+// player never saw, silently deleted by an edit somewhere else in the document.
+const TRUE_ONLY_FLAG_PREDICATES = ["mgx:is-container", "mgx:is-npc", "mgx:is-objective"];
+
 /** Every raw fact row this editor's "other" family (type/exits/container/
  *  puzzle — never placement/openness) is allowed to touch — the closed set
  *  planWorldEditorSync diffs against and the only rows a removal can ever
@@ -290,8 +298,8 @@ export function editableOtherRows(rows) {
     if (SNAPSHOT_RE.test(r.subject)) return false;
     if (r.predicate === "rdf:type") return true;
     if (EXIT_PREDICATE_RE.test(r.predicate)) return true;
-    return ["mgx:is-container", "mgx:is-npc", "mgx:is-objective", "mgx:unlocks-with", "mgx:acts-on-turn", "mgx:acts-toward"]
-      .includes(r.predicate);
+    if (TRUE_ONLY_FLAG_PREDICATES.includes(r.predicate)) return r.object === "true";
+    return ["mgx:unlocks-with", "mgx:acts-on-turn", "mgx:acts-toward"].includes(r.predicate);
   });
 }
 

@@ -316,6 +316,112 @@ test("the players slider recasts the world at one, and again at four, with every
   }
 });
 
+/** Open the world editor and wait for its textarea to hold the seeded world. */
+async function openEditor(page) {
+  await page.locator("#editModeBtn").click();
+  await page.waitForFunction(
+    () => document.body.classList.contains("editing")
+      && (document.getElementById("editorText")?.value ?? "").length > 0,
+    null,
+    { timeout: READY_TIMEOUT_MS },
+  );
+}
+
+/** Replace the whole editor buffer and wait for the debounced sync to report. */
+async function syncEditorText(page, text) {
+  await page.locator("#editorText").fill(text);
+  await page.waitForFunction(
+    () => (document.getElementById("editorStatus")?.textContent ?? "").length > 0
+      && !(document.getElementById("editorStatus")?.textContent ?? "").includes("reading the burrow"),
+    null,
+    { timeout: ANSWER_TIMEOUT_MS },
+  );
+  return page.locator("#editorStatus").textContent();
+}
+
+test("edit mode shows the whole burrow as sentences, and a typed room round-trips into play", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudPage();
+  try {
+    await openEditor(page);
+    assert.equal(await page.locator("#mudEditStage").isVisible(), true, "the editor takes the stage");
+    assert.equal(await page.locator("#mudStage").isVisible(), false, "and the panes step aside for it");
+    assert.equal(await page.locator("#autoToggle").isDisabled(), true, "nothing can take a turn mid-edit");
+
+    const seeded = await page.locator("#editorText").inputValue();
+    assert.match(seeded, /Garden has an exit down to the burrow-1\./, "the world's own exits read as sentences");
+    assert.match(seeded, /The burrow digs \d+ rooms out from the garden\./, "and so do the knobs that tune the dig");
+
+    // A clicked room reports what the edit buffer says stands in it.
+    await page.locator('#editMapBoard [data-room="sett-1"]').click();
+    assert.equal(await page.locator("#roomDetailTitle").textContent(), "sett-1");
+    assert.match(await page.locator("#roomDetailCaption").textContent(), /underground room/);
+    assert.ok(await page.locator("#roomDetailCast .sprite-card").count() > 0, "and draws what is placed there");
+
+    // A room this world never had, a way in and out of it, something to find
+    // there, and the pane's own animal moved into it — which animal that is was
+    // drawn live, so the line is written for whoever the pane actually holds.
+    const character = await page.locator("#window-a").getAttribute("data-character");
+    const added = [
+      "Larder is a room.",
+      "Larder is an underground-space.",
+      "Sett-1 has an exit east to the larder.",
+      "Larder has an exit west to the sett-1.",
+      "Turnip-9 is a turnip.",
+      "Turnip-9 lies in the larder.",
+      `${character} stands in the larder.`,
+    ].join("\n");
+    const status = await syncEditorText(page, `${seeded}\n${added}\n`);
+    assert.match(status, /synced/, "a document that parses cleanly writes");
+    assert.ok(
+      (await page.locator("#editMapBoard .room text").allTextContents()).includes("larder"),
+      "the survey redraws from what was typed",
+    );
+
+    await page.locator("#editModeBtn").click();
+    await page.waitForFunction(() => !document.body.classList.contains("editing"), null, { timeout: READY_TIMEOUT_MS });
+    assert.ok(
+      (await page.locator("#worldMapBoard .room text").allTextContents()).includes("larder"),
+      "and the room reaches the live world, not just the editor's own picture of it",
+    );
+
+    // The real proof: the engine plays the world the edit describes.
+    await sendMudCommand(page, "a", "look");
+    const replies = await page.locator("#window-a-chatlog .a").allTextContents();
+    const arrived = replies[replies.length - 1];
+    assert.match(arrived, /Larder is a room/, "a room that did not exist before the edit is the one it plays in");
+    assert.match(arrived, /take turnip-9/, "what was typed into it is a real thing the room offers");
+    assert.match(arrived, /go west/, "and the exit typed alongside it is a way the engine will take");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error editing the world and playing the result");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a line edit mode cannot read is reported and retracts nothing", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudPage();
+  try {
+    await openEditor(page);
+    const seeded = await page.locator("#editorText").inputValue();
+
+    const status = await syncEditorText(page, `${seeded}\nthe larder smells faintly of onions\n`);
+    assert.match(status, /not understood yet/, "the unreadable line is named, never silently dropped");
+    assert.match(status, /nothing is retracted/, "and a typo is never read as 'this fact is gone'");
+
+    // The world is untouched: every room the page opened with is still there.
+    const rooms = await page.locator("#editMapBoard .room text").allTextContents();
+    for (const room of ["garden", "burrow-1", "sett-1", "fox-den"]) {
+      assert.ok(rooms.includes(room), `the ${room} survives a document that does not parse`);
+    }
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error holding an unparseable document");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the deck's explanatory note frames the demo against MUDII and Colossal Cave Adventure", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudPage();
   try {

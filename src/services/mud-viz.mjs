@@ -67,6 +67,7 @@ import {
   roomSceneObjects, scenePlacement, spriteClassForObject, spriteAncestryRows, factsForSubject,
   visibleRoomOf, roomKindForRoom, allRoomIds,
 } from "./adventure-viz.mjs";
+import { renderMudEditorText, wordBeforeCursor } from "./mud-editor.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 
 const DEFAULT_TITLE = "tmct — the mud";
@@ -313,6 +314,7 @@ ${MUD_STYLE}
       <div class="deck-controls">
         <button type="button" class="deck-play" id="autoToggle" aria-pressed="false">&#9654; play</button>
         <button type="button" id="resetBtn">reset</button>
+        <button type="button" id="editModeBtn" aria-pressed="false">edit</button>
         <button type="button" class="deck-info-btn" id="deckInfoBtn" aria-expanded="false" aria-controls="deckInfoPopup" aria-label="about this demo">?</button>
         <span class="mono deck-turns" id="globalTurnCount">turns: 0</span>
       </div>
@@ -350,6 +352,30 @@ ${MUD_STYLE}
   </div>
   <div class="mud-stage" id="mudStage" data-panes="${openingCount}">
 ${paneHtml}
+  </div>
+  <div class="edit-stage" id="mudEditStage" aria-label="the burrow's own facts, in plain sentences">
+    <section class="edit-text" aria-label="the world's facts as editable sentences">
+      <h2>the burrow, in plain sentences</h2>
+      <p class="edit-lede">Every fact this world is built from. Change a line and the burrow changes with it &mdash; the survey beside you redraws as you type.</p>
+      <textarea id="editorText" spellcheck="false" aria-label="the world's own facts as plain sentences, one per line"></textarea>
+      <div class="chatpills" id="editorPills" aria-label="related words for the term before the cursor"></div>
+      <p class="edit-status" id="editorStatus" role="status"></p>
+    </section>
+    <aside class="edit-side" aria-label="the burrow as written, a clicked room, and the legend">
+      <section class="world-map edit-map" aria-label="every room this world writes">
+        <div class="world-map-head"><span class="world-map-title">the burrow as written</span></div>
+        <div class="world-map-board" id="editMapBoard"></div>
+      </section>
+      <section class="edit-panel" id="roomDetailPanel">
+        <h2 id="roomDetailTitle">click a room</h2>
+        <div class="room-detail-cast" id="roomDetailCast"></div>
+        <p class="edit-caption" id="roomDetailCaption">Click a room on the survey to see what stands in it.</p>
+      </section>
+      <section class="edit-panel">
+        <h2>legend</h2>
+        <div class="edit-legend" id="editLegend"></div>
+      </section>
+    </aside>
   </div>
 </main>
 <script>
@@ -760,6 +786,56 @@ const MUD_STYLE = `
     .room-view.pounce .sprite-card.lunging, .room-view.pounce .floor-self, .room-view.pounce .strike-flash { animation: none; }
   }
 
+  /* ---- edit mode ----
+     One page, two stages. Editing hides the panes AND the deck's own live
+     survey: the survey in here is drawn from the edit buffer, and two boards
+     showing two different burrows side by side would just be a puzzle. The deck
+     itself stays, because the way back out is a button on it. */
+  .edit-stage { display: none; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 1rem; align-items: start; }
+  body.editing .mud-stage, body.editing .deck-row .world-map { display: none; }
+  body.editing .deck-row { grid-template-columns: 1fr; }
+  body.editing .edit-stage { display: grid; }
+  #editModeBtn[aria-pressed="true"] { background: var(--burrow-glow); border-color: var(--burrow-glow); }
+
+  .edit-text, .edit-panel {
+    background: var(--parchment); border: 1px solid var(--soil-mid); border-radius: 4px;
+    box-shadow: 0 2px 0 rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.35);
+    padding: .7rem .8rem; min-width: 0;
+  }
+  .edit-text { display: flex; flex-direction: column; gap: .45rem; }
+  .edit-text h2, .edit-panel h2 {
+    font-family: ${MONO_STACK}; font-size: .58rem; text-transform: uppercase; letter-spacing: .12em;
+    color: var(--soil-mid); margin: 0;
+  }
+  .edit-lede { margin: 0; font-size: .74rem; color: var(--soil-mid); max-width: 62ch; }
+  #editorText {
+    width: 100%; box-sizing: border-box; min-height: 26rem; flex: 1 1 auto; resize: vertical;
+    font-family: ${MONO_STACK}; font-size: .74rem; line-height: 1.6;
+    color: var(--mud-ink); background: rgba(255,255,255,.6);
+    border: 1px solid var(--soil-mid); border-radius: 3px; padding: .55rem .6rem;
+  }
+  /* Three states, three colours, and the middle one is the important one: a
+     document that does not yet parse is holding its retractions back, and has to
+     look different from one that synced clean. */
+  .edit-status { margin: 0; font-family: ${MONO_STACK}; font-size: .62rem; min-height: 1.2em; color: var(--soil-mid); }
+  .edit-status.pending { color: #9A5B12; }
+  .edit-status.ok { color: #4E6B2E; }
+
+  .edit-side { display: flex; flex-direction: column; gap: 1rem; min-width: 0; }
+  .edit-map .world-map-board { min-height: 190px; }
+  .edit-map .burrow .room { cursor: pointer; }
+  .edit-map .burrow .room.here rect { stroke: var(--burrow-glow); stroke-width: 1.8; }
+  .edit-panel { display: flex; flex-direction: column; gap: .35rem; }
+  .edit-caption { margin: 0; font-size: .74rem; color: var(--soil-mid); }
+  .room-detail-cast, .edit-legend { display: flex; flex-wrap: wrap; gap: .4rem; }
+  .edit-legend .sprite-card, .room-detail-cast .sprite-card { max-width: 58px; }
+  .edit-legend .sprite-frame, .room-detail-cast .sprite-frame {
+    width: 34px; padding: 2px; box-sizing: border-box; background: rgba(255,255,255,.6);
+    border: 1px solid var(--soil-mid); border-radius: 2px;
+  }
+  .edit-legend .sprite-frame svg, .room-detail-cast .sprite-frame svg { width: 100%; display: block; }
+  .edit-empty { font-size: .74rem; font-style: italic; color: var(--soil-mid); }
+
   /* Narrow, every pane stacks and every count reads the same — including the
      single-pane one, whose centred column and extra height only buy anything
      when there is width to spare. */
@@ -770,6 +846,8 @@ const MUD_STYLE = `
       --pane-height: 596px; --room-height: 152px;
     }
     .world-map-board { min-height: 150px; }
+    .edit-stage { grid-template-columns: 1fr; }
+    #editorText { min-height: 18rem; }
   }
 `;
 
@@ -802,6 +880,8 @@ function pageScript() {
   const visibleRoomOf = ${visibleRoomOf.toString()};
   const roomKindForRoom = ${roomKindForRoom.toString()};
   const allRoomIds = ${allRoomIds.toString()};
+  const renderMudEditorText = ${renderMudEditorText.toString()};
+  const wordBeforeCursor = ${wordBeforeCursor.toString()};
 
   const el = (id) => document.getElementById(id);
   const roster = DATA.characters.map(function (c) { return c.id; });
@@ -829,6 +909,9 @@ function pageScript() {
   let globalTurn = 0;
   const turnsTaken = {};
   const eaten = {};
+  // Which ending each out-of-play character got — "eaten" or "starved" — read
+  // off the engine rather than assumed, and what the pane's fate badge prints.
+  const fates = {};
   let maxTurns = DATA.defaultMaxTurns;
   let delayMs = DATA.defaultDelayMs;
   const wait = function (ms) { return new Promise(function (resolve) { setTimeout(resolve, ms); }); };
@@ -869,13 +952,15 @@ function pageScript() {
     });
   }
 
-  // A character the predator has taken keeps its pane, its final turn count and
-  // its chat log, and loses everything that would advance it — the engine
-  // declines its turns from here on, so offering the controls would promise a
-  // turn that never runs.
-  function markEaten(character, note) {
+  // A character out of play keeps its pane, its final turn count and its chat
+  // log, and loses everything that would advance it — the engine declines its
+  // turns from here on, so offering the controls would promise a turn that never
+  // runs. WHICH ending it was travels with it: the two read nothing alike, and a
+  // pane that says "eaten" over an animal that quietly starved is just wrong.
+  function markOutOfPlay(character, reason, note) {
     if (eaten[character]) return;
     eaten[character] = true;
+    fates[character] = reason || "eaten";
     const ticker = tickers[character];
     if (ticker) ticker.pause();
     const w = paneIdFor(character);
@@ -883,8 +968,11 @@ function pageScript() {
     el(w + "-step").disabled = true;
     el(w + "-chatq").disabled = true;
     el(w + "-chatpills").innerHTML = "";
-    appendChat(character, "a", note || ("the " + character + " has been eaten. It takes no more turns."));
-    playEatenScene(character);
+    const phrase = window.tmctMud && window.tmctMud.outOfPlayPhrase
+      ? window.tmctMud.outOfPlayPhrase(character, fates[character])
+      : "the " + character + " is out of play";
+    appendChat(character, "a", note || (phrase + ". It takes no more turns."));
+    playEndingScene(character);
   }
 
   // Whichever individual the WORLD marks dangerous, never a species this page
@@ -900,19 +988,20 @@ function pageScript() {
   // Cutting straight to the banner throws away the only moment this demo has to
   // show what took the character: the character's last drawn room is the one it
   // walked out OF, so the scene is redrawn against the den first, then the fox
-  // crosses it. Reduced motion, or a world with no marked predator, settles
-  // straight into the end state.
-  function playEatenScene(character) {
+  // crosses it. Reduced motion, a world with no marked predator, or an animal
+  // that starved rather than being caught settles straight into the end state —
+  // there is no pounce to draw when nothing pounced.
+  function playEndingScene(character) {
     const w = paneIdFor(character);
     const settle = function () {
       el(w).classList.add("out-of-play");
       const fate = el(w + "-fate");
       fate.hidden = false;
-      fate.textContent = "eaten \\u00b7 " + turnsFor(character) + " turns";
+      fate.textContent = fates[character] + " \\u00b7 " + turnsFor(character) + " turns";
     };
     const predator = lastSnapshot ? predatorInRows(lastSnapshot.rows) : null;
     const den = predator ? (lastSnapshot.state.placements.get(predator) || {}).object : null;
-    if (reduceMotion || !den) { settle(); return; }
+    if (reduceMotion || !den || fates[character] !== "eaten") { settle(); return; }
 
     const rows = lastSnapshot.rows;
     const state = lastSnapshot.state;
@@ -939,7 +1028,7 @@ function pageScript() {
   }
 
   function afterEngineTurn(character, result) {
-    if (result && result.outOfPlay) { markEaten(character, result.text); renderAll(); return; }
+    if (result && result.outOfPlay) { markOutOfPlay(character, result.outOfPlayReason, result.text); renderAll(); return; }
     if (!result || !result.room) { renderAll(); return; }
     if (result.roomAfter && result.roomAfter !== result.room) freshlyDugRoom = result.roomAfter;
     for (const action of result.actions || []) {
@@ -1408,7 +1497,7 @@ function pageScript() {
         return '<circle class="occupant" cx="' + (cx(n) + spread) + '" cy="' + (cy(n) + roomH / 2) + '" r="' + (compact ? 2.4 : 3.6)
           + '" fill="' + c.color + '"><title>' + esc(c.character) + "</title></circle>";
       }).join("");
-      return '<g class="room' + surface + here + fresh + '"><rect x="' + (cx(n) - roomW / 2) + '" y="' + (cy(n) - roomH / 2)
+      return '<g class="room' + surface + here + fresh + '" data-room="' + label + '"><rect x="' + (cx(n) - roomW / 2) + '" y="' + (cy(n) - roomH / 2)
         + '" width="' + roomW + '" height="' + roomH + '" rx="3"></rect><text x="' + cx(n) + '" y="' + (cy(n) + (compact ? 2 : 2.5))
         + '"' + fit + ">" + label + "</text>" + dots + "</g>";
     }).join("");
@@ -1456,7 +1545,8 @@ function pageScript() {
     lastSnapshot = snap;
     const roomIds = allRoomIds(snap.rows);
     for (const character of cast) {
-      if (await session.windows[character].isOutOfPlay()) markEaten(character);
+      if (eaten[character] || !(await session.windows[character].isOutOfPlay())) continue;
+      markOutOfPlay(character, await session.windows[character].outOfPlayReason());
     }
     renderWorldMap(snap.rows, snap.state, roomIds);
     for (const character of cast) {
@@ -1473,6 +1563,232 @@ function pageScript() {
       renderMinimap(character, snap.rows, snap.state, here);
     }
     freshlyDugRoom = null;
+  }
+
+  // ---- edit mode -----------------------------------------------------------
+  // The textarea is seeded from renderMudEditorText over the world's OWN facts.
+  // Reads are scoped to this world's provenance tag the same way session
+  // .applyEdit scopes its writes: the live store also carries the default
+  // persona's background corpus, and this page must never show, or risk
+  // retracting, a fact that is not part of the burrow.
+  //
+  // Typing debounces two things at two paces. The suggestion pills are cheap
+  // in-memory lookups and can chase the cursor (~180ms). The store sync is the
+  // one that writes, so it waits for the typing to settle (~450ms) — a
+  // half-finished word must never be read as what somebody meant.
+  let editRows = [];
+  let editState = { placements: new Map(), openness: new Map(), masses: new Map(), exits: new Map(), turnCount: 0 };
+  let allStoreRows = [];
+  let selectedRoomId = null;
+  let editing = false;
+
+  function worldOnlyRows(rows) {
+    const prefix = "world:" + DATA.worldPayload.name;
+    return (rows || []).filter(function (r) {
+      return typeof r.provenance === "string" && r.provenance.indexOf(prefix) === 0;
+    });
+  }
+
+  function renderEditMap() {
+    const graph = burrowGraph(editState, allRoomIds(editRows), DATA.rootRoom);
+    el("editMapBoard").innerHTML = graph.nodes.length
+      ? burrowSvg(graph, { here: selectedRoomId, label: "every room this world writes" })
+      : '<span class="edit-empty">no rooms written yet</span>';
+  }
+
+  // A class card, the legend's and the room detail's shared unit — the sprite
+  // frame the panes already use, shrunk, with the subject's own name under it.
+  function editCardHtml(subject, label, svg) {
+    return '<div class="sprite-card" title="' + esc(subject) + '"><div class="sprite-frame">' + svg
+      + '</div><div class="sprite-label">' + esc(label) + "</div></div>";
+  }
+
+  // Every class this world actually puts in a room, by its own icon. A creature
+  // resolves on its species (the same read every pane's own sprite makes), a
+  // prop on its declared class — so the legend shows what the survey shows.
+  function renderEditLegend() {
+    const classes = {};
+    for (const subject of editState.placements.keys()) {
+      const cls = isCreature(editState, subject) ? speciesOfCharacter(subject) : spriteClassForObject(editRows, subject);
+      if (cls) classes[cls] = true;
+    }
+    const names = Object.keys(classes).sort();
+    el("editLegend").innerHTML = names.length
+      ? names.map(function (cls) { return editCardHtml(cls, cls, spriteSvgFor(cls, editRows, "legend-" + cls)); }).join("")
+      : '<span class="edit-empty">nothing placed yet</span>';
+  }
+
+  function renderRoomDetail() {
+    const titleEl = el("roomDetailTitle");
+    const castEl = el("roomDetailCast");
+    const captionEl = el("roomDetailCaption");
+    if (!selectedRoomId) {
+      titleEl.textContent = "click a room";
+      castEl.innerHTML = "";
+      captionEl.textContent = "Click a room on the survey to see what stands in it.";
+      return;
+    }
+    titleEl.textContent = selectedRoomId;
+    const roomIds = allRoomIds(editRows);
+    const here = [];
+    for (const subject of editState.placements.keys()) {
+      if (visibleRoomOf(editRows, editState, subject) !== selectedRoomId) continue;
+      const creature = isCreature(editState, subject);
+      here.push({
+        subject: subject,
+        label: creature ? subject : labelForItem(editRows, subject, roomIds),
+        svg: creature ? spriteSvgFor(speciesOfCharacter(subject), editRows, subject) : objectSvgFor(subject, editRows),
+      });
+    }
+    here.sort(function (a, b) { return a.subject.localeCompare(b.subject); });
+    castEl.innerHTML = here.map(function (t) { return editCardHtml(t.subject, t.label, t.svg); }).join("");
+    const kind = roomKindForRoom(editRows, selectedRoomId);
+    const ways = [...(editState.exits.get(selectedRoomId) || new Map()).keys()].sort();
+    captionEl.textContent = "An " + kind + " room. "
+      + (ways.length ? "Ways out: " + ways.join(", ") + ". " : "No way out written yet. ")
+      + (here.length ? here.length + " thing" + (here.length === 1 ? "" : "s") + " placed here." : "Nothing placed here.");
+  }
+
+  function refreshEditPanels() {
+    renderEditMap();
+    renderEditLegend();
+    renderRoomDetail();
+  }
+
+  el("editMapBoard").addEventListener("click", function (e) {
+    const g = e.target.closest("[data-room]");
+    if (!g) return;
+    selectedRoomId = g.getAttribute("data-room");
+    renderEditMap();
+    renderRoomDetail();
+  });
+
+  // The lateral SKOS neighbourhood plus the vertical is-a chain for whatever
+  // word the cursor sits behind. Read over the FULL store, not the world's own
+  // rows: a term's synonyms mostly live in the background corpus, not in the
+  // burrow's own vocabulary. Nothing found is nothing shown — an honest miss.
+  function renderSuggestionPills() {
+    const box = el("editorPills");
+    const term = wordBeforeCursor(el("editorText").value, el("editorText").selectionStart);
+    if (!term || !window.tmctMud) { box.innerHTML = ""; return; }
+    const related = window.tmctMud.relatedForTerm ? window.tmctMud.relatedForTerm(allStoreRows, term) : null;
+    const chain = window.tmctMud.classAncestorChain ? window.tmctMud.classAncestorChain(term, allStoreRows) : [];
+    const seen = { };
+    seen[term] = true;
+    const out = [];
+    const push = function (label) { if (label && !seen[label]) { seen[label] = true; out.push(label); } };
+    if (related) {
+      related.synonyms.forEach(push);
+      related.related.forEach(function (r) { push(r.prefLabel); });
+    }
+    chain.slice(1).forEach(push);
+    box.innerHTML = out.slice(0, 8).map(function (s) {
+      return '<button type="button" class="pill" data-insert="' + esc(s) + '">' + esc(s) + "</button>";
+    }).join("");
+  }
+
+  el("editorPills").addEventListener("click", function (e) {
+    const btn = e.target.closest(".pill");
+    if (!btn) return;
+    const area = el("editorText");
+    const pos = area.selectionStart;
+    const word = wordBeforeCursor(area.value, pos);
+    const insert = btn.getAttribute("data-insert");
+    area.value = area.value.slice(0, pos - word.length) + insert + area.value.slice(pos);
+    const next = pos - word.length + insert.length;
+    area.setSelectionRange(next, next);
+    area.focus();
+    onEditorChanged();
+  });
+
+  async function applyEditorText() {
+    if (!session) return;
+    const status = el("editorStatus");
+    status.className = "edit-status pending";
+    status.textContent = "reading the burrow\\u2026";
+    const result = await serializeTick(function () { return session.applyEdit(el("editorText").value); });
+    const snap = await session.snapshot();
+    allStoreRows = snap.rows;
+    editRows = worldOnlyRows(snap.rows);
+    editState = window.tmctMud.foldWorldState(window.tmctMud.worldActionRows(editRows));
+    if (result.unrecognized.length) {
+      const lines = result.unrecognized.map(function (u) { return u.line; }).join(", ");
+      status.className = "edit-status pending";
+      status.textContent = result.unrecognized.length + " line"
+        + (result.unrecognized.length === 1 ? "" : "s") + " not understood yet (line " + lines
+        + ") \\u2014 nothing is retracted until they are.";
+    } else {
+      status.className = "edit-status ok";
+      status.textContent = (result.added || result.removed)
+        ? "synced \\u2014 " + result.added + " fact(s) written, " + result.removed + " retracted."
+        : "synced \\u2014 no change.";
+    }
+    refreshEditPanels();
+  }
+
+  let suggestTimer = null;
+  let syncTimer = null;
+  function scheduleSuggestions() { clearTimeout(suggestTimer); suggestTimer = setTimeout(renderSuggestionPills, 180); }
+  function scheduleSync() { clearTimeout(syncTimer); syncTimer = setTimeout(applyEditorText, 450); }
+  function onEditorChanged() { scheduleSuggestions(); scheduleSync(); }
+  el("editorText").addEventListener("input", onEditorChanged);
+  el("editorText").addEventListener("click", scheduleSuggestions);
+  el("editorText").addEventListener("keyup", function (e) {
+    if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "Home", "End"].indexOf(e.key) !== -1) scheduleSuggestions();
+  });
+
+  // Nothing may tick while the world is being rewritten: a turn and an edit both
+  // write the same store, and a turn landing mid-sync would fold against rows
+  // the textarea no longer describes. So every ticker stops and every control
+  // that could start one is disabled for as long as the editor is open.
+  function setPlayControlsEnabled(on) {
+    el("autoToggle").disabled = !on;
+    el("playerCountSlider").disabled = !on;
+    el("resetBtn").disabled = !on;
+    for (const character of cast) {
+      if (eaten[character]) continue;
+      el(paneIdFor(character) + "-play").disabled = !on;
+      el(paneIdFor(character) + "-step").disabled = !on;
+    }
+  }
+
+  async function enterEditMode() {
+    editing = true;
+    autoOn = false;
+    const playBtn = el("autoToggle");
+    playBtn.setAttribute("aria-pressed", "false");
+    playBtn.textContent = "\\u25B6 play";
+    for (const character of cast) {
+      const ticker = tickers[character];
+      if (ticker) ticker.pause();
+    }
+    setPlayControlsEnabled(false);
+    const snap = await session.snapshot();
+    allStoreRows = snap.rows;
+    editRows = worldOnlyRows(snap.rows);
+    editState = window.tmctMud.foldWorldState(window.tmctMud.worldActionRows(editRows));
+    el("editorText").value = renderMudEditorText(editRows, editState);
+    el("editorStatus").className = "edit-status";
+    el("editorStatus").textContent = "";
+    el("editorPills").innerHTML = "";
+    selectedRoomId = null;
+    document.body.classList.add("editing");
+    el("editModeBtn").textContent = "back to playing";
+    el("editModeBtn").setAttribute("aria-pressed", "true");
+    refreshEditPanels();
+  }
+
+  async function exitEditMode() {
+    editing = false;
+    clearTimeout(syncTimer);
+    // One last sync on the way out, so a change typed in the final half-second
+    // before the button is clicked reaches the world like every other one.
+    await applyEditorText();
+    document.body.classList.remove("editing");
+    el("editModeBtn").textContent = "edit";
+    el("editModeBtn").setAttribute("aria-pressed", "false");
+    setPlayControlsEnabled(true);
+    await renderAll();
   }
 
   // ---- the control deck ----------------------------------------------------
@@ -1518,6 +1834,10 @@ function pageScript() {
     playerCountSlider.addEventListener("input", function () { showPlayerCount(chosenPlayerCount()); });
     playerCountSlider.addEventListener("change", function () { boot(); });
     el("resetBtn").addEventListener("click", function () { boot(); });
+    el("editModeBtn").addEventListener("click", function () {
+      if (!session) return;
+      if (editing) exitEditMode(); else enterEditMode();
+    });
 
     const infoBtn = el("deckInfoBtn");
     const infoPopup = el("deckInfoPopup");
@@ -1584,7 +1904,7 @@ function pageScript() {
     lastSnapshot = null;
     speechBubbles.clear();
     tickChain = Promise.resolve();
-    for (const character of cast) delete eaten[character];
+    for (const character of cast) { delete eaten[character]; delete fates[character]; }
 
     // ONE draw, the engine's own, and the same list the session is built from:
     // a second independent draw here would leave the page showing animals the

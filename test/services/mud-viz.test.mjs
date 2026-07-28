@@ -174,6 +174,32 @@ test("renderMudHtml: the page reads the engine's own seams rather than re-derivi
   assert.match(html, /isOutOfPlay\(\)/, "a pane reads out-of-play from the engine every redraw");
 });
 
+test("renderMudHtml: the deck offers an edit control, and the edit stage it swaps the panes for", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  assert.match(html, /id="editModeBtn"/, "the deck carries the way in");
+  assert.match(html, /id="editorText"/, "the world's facts are editable as text");
+  assert.match(html, /id="editMapBoard"/, "the survey redraws from the edit buffer, not the live session");
+  assert.match(html, /id="roomDetailPanel"/, "a clicked room says what stands in it");
+  assert.match(html, /id="editLegend"/, "and the legend names the classes this world really uses");
+  assert.match(html, /body\.editing \.mud-stage, body\.editing \.deck-row \.world-map \{ display: none; \}/,
+    "editing hides the panes and the live survey, so two burrows are never on screen at once");
+});
+
+test("renderMudHtml: nothing can take a turn while the world is being rewritten", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  assert.match(html, /setPlayControlsEnabled\(false\)/, "entering the editor disables every control that starts a turn");
+  assert.match(html, /session\.applyEdit/, "and the sync itself goes through the shared tick queue's own write path");
+});
+
+test("renderMudHtml: a pane's fate badge reads the engine's own reason rather than assuming one", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  assert.match(html, /outOfPlayReason/, "which ending it was comes from the engine");
+  assert.match(html, /fate\.textContent = fates\[character\] \+/,
+    "and the badge prints that reason, so a starved animal never reads as eaten");
+  assert.match(html, /fates\[character\] !== "eaten"/,
+    "the fox's pounce only plays for the ending it belongs to");
+});
+
 test("speciesOfCharacter: strips the trailing instance number", () => {
   assert.equal(speciesOfCharacter("mole-1"), "mole");
   assert.equal(speciesOfCharacter("groundhog-1"), "groundhog");

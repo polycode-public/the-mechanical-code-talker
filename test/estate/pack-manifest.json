@@ -433,6 +433,7 @@
   "src/services/init.mjs",
   "src/services/ledger-viz.mjs",
   "src/services/memory-panel-viz.mjs",
+  "src/services/mud-editor.mjs",
   "src/services/mud-turn.mjs",
   "src/services/mud-viz.mjs",
   "src/services/p2p-room.mjs",
