@@ -126,8 +126,23 @@ export function createP2pRoom({
   worldName,
   transportFactory,
   syncableFacts,
-  now = () => new Date().toISOString(),
+  now: rawNow = () => new Date().toISOString(),
 }) {
+  // Wall-clock resolution is 1ms; two facts minted in the same tick (a
+  // double-click wave, two rapid local writes) would otherwise share one
+  // timestamp — and since the diff key is (id, provenance), an identical
+  // provenance string for the same triple looks like no change at all, so
+  // the second write silently fails to broadcast. Monotonic nudging fixes
+  // that at the source rather than asking every caller to space calls out.
+  let lastTimestampMs = -Infinity;
+  const now = () => {
+    const raw = rawNow();
+    const ms = Date.parse(raw);
+    if (Number.isNaN(ms)) return raw; // an injected non-ISO now() is trusted as-is
+    const nudged = Math.max(ms, lastTimestampMs + 1);
+    lastTimestampMs = nudged;
+    return new Date(nudged).toISOString();
+  };
   let displayName = myDisplayName;
   let state = ROOM_IDLE;
   let lastError = null;
