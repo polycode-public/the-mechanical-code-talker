@@ -6,10 +6,12 @@
 // starts both, and the compass ring only ever offers a way the world allows —
 // clicking a dig opens a new room on the omniscient burrow survey, and a dig
 // typed for a direction the ring never offered is refused in the world's own
-// terms rather than silently done. Which two animals are cast is drawn live,
-// so every assertion here reads the pane's own data-character rather than
-// assuming a roster order. Mirrors pages-adventure.test.mjs's/
-// pages-spider-fly.test.mjs's own fixture setup and assertion style.
+// terms rather than silently done. The players slider recasts the world at
+// one and at four, and the panes only that count ever draws answer like the
+// default pair. Which animals are cast is drawn live, so every assertion here
+// reads the pane's own data-character rather than assuming a roster order.
+// Mirrors pages-adventure.test.mjs's/pages-spider-fly.test.mjs's own fixture
+// setup and assertion style.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
@@ -90,6 +92,23 @@ async function sendMudCommand(page, slot, text) {
 
 const turnCountOf = async (page, selector) =>
   Number(((await page.locator(selector).textContent()).match(/\d+/) ?? ["0"])[0]);
+
+/** Move the players slider to one of its detents and wait for the redraw the
+ *  change fires — the stage is rebuilt and a fresh shared world opened, so
+ *  "done" is the new panes' own chat inputs coming back enabled. */
+async function setPlayerCount(page, count) {
+  const detent = { 1: "0", 2: "1", 4: "2" }[count];
+  await page.locator("#playerCountSlider").fill(detent);
+  await page.waitForFunction(
+    (n) => {
+      const stage = document.getElementById("mudStage");
+      const inputs = [...document.querySelectorAll(".mud-window input[type=text]")];
+      return stage.getAttribute("data-panes") === String(n) && inputs.length === n && inputs.every((i) => !i.disabled);
+    },
+    count,
+    { timeout: READY_TIMEOUT_MS },
+  );
+}
 
 test("the page boots two panes over one world, with nothing playing until it is asked to", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudPage();
@@ -259,6 +278,36 @@ test("a dig typed for a direction the ring never offered is refused in the world
 
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
     assert.deepEqual(consoleErrors, [], "no console error refusing a dig the ring never offered");
+  } finally {
+    await context.close();
+  }
+});
+
+test("the players slider recasts the world at one, and again at four, with every pane playable", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudPage();
+  try {
+    await setPlayerCount(page, 1);
+    assert.equal(await page.locator(".mud-window").count(), 1, "one player draws one pane, and no empty siblings");
+    assert.equal(await page.locator("#playerCountValue").textContent(), "1", "the deck reports the count it drew");
+    assert.equal(await page.locator("#window-a-play").isEnabled(), true, "the lone pane can still be played");
+    assert.equal(await page.locator("#worldMapKey .key-actor").count(), 1, "the survey keys the one animal in play");
+
+    await setPlayerCount(page, 4);
+    const castIds = await page.locator(".mud-window").evaluateAll((els) => els.map((e) => e.getAttribute("data-character")));
+    assert.equal(castIds.length, 4, "four players draw four panes");
+    assert.equal(new Set(castIds).size, 4, "no animal is cast into two panes at once");
+    assert.equal(await turnCountOf(page, "#globalTurnCount"), 0, "recasting starts the shared world over");
+
+    // The pane the default two-up layout never has, driven end to end: the
+    // renderer is the same call for every count, so the third pane's own dock
+    // has to answer exactly like the first.
+    await sendMudCommand(page, "c", "look");
+    const lines = await page.locator("#window-c-chatlog > div").allTextContents();
+    assert.match(lines[lines.length - 1], /You can:/, "the third pane answers with its own grounded room digest");
+    assert.equal(await page.locator("#window-d-chatlog > div").count(), 0, "and only its own log carries it");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error recasting the world at one and at four");
   } finally {
     await context.close();
   }

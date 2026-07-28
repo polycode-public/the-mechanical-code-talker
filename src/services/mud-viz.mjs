@@ -1,10 +1,17 @@
 // mud-viz.mjs — mud.html: the self-contained proof of the shared,
-// multi-character shape PLAN_MUD.md's "Demo phase" section describes. Two
-// burrowing animals, picked from the world's own roster, each get their own
-// pane over ONE shared live world (mud-browser-entry.mjs's createMudSession);
-// an omniscient survey of the whole burrow sits in the top row beside the
+// multi-character shape PLAN_MUD.md's "Demo phase" section describes. One,
+// two or four burrowing animals — the deck's own players slider picks how
+// many — are drawn from the world's roster and each get their own pane over
+// ONE shared live world (mud-browser-entry.mjs's createMudSession); an
+// omniscient survey of the whole burrow sits in the top row beside the
 // controls with no fog of war at all, the one deliberate exception
 // PLAN_MUD.md names.
+//
+// The stage is built in the browser, never fixed at build time: paneMarkup is
+// spliced into the page script alongside the render glue, and every boot
+// rebuilds #mudStage with one call per cast member. The page ships the
+// default cast's panes so the first paint is not an empty box, and the grid
+// reads how many to lay out off the stage's own data-panes attribute.
 //
 // Shaped after adventure-viz.mjs/spider-fly-viz.mjs: one inlined <style>
 // over viz-theme.mjs's shared tokens, behaviour as an inlined IIFE, the
@@ -72,12 +79,16 @@ const DISPLAY_STACK = SERIF_STACK;
 const SANS_STACK = `"IBM Plex Sans", "Inter", -apple-system, BlinkMacSystemFont, sans-serif`;
 
 const ROOT_ROOM = "garden";
-const PANE_SLOTS = ["a", "b"];
+const PANE_SLOTS = ["a", "b", "c", "d"];
+// The players slider's own detents. Every count here divides the two-column
+// grid evenly, so no layout ever carries a half-empty row.
+const PLAYER_COUNTS = [1, 2, 4];
+const DEFAULT_PLAYER_COUNT = 2;
 const DEFAULT_DELAY_MS = 650;
 const DEFAULT_MAX_TURNS = 400;
 
 const MUD_NOTE_LINES = [
-  "Two burrowing animals share one world here. Each one only knows what it has dug up, asked about, or been told. Nobody sees the whole burrow except you, watching from the survey above.",
+  "Burrowing animals share one world here, and the players slider picks how many. Each one only knows what it has dug up, asked about, or been told. Nobody sees the whole burrow except you, watching from the survey above.",
   `This is a MUD, short for Multi Underground creature Dig. The name nods to MUD, or in its current form MUDII (mudii.co.uk), one of the first multiplayer text games. The dig-your-own-rooms idea came from a skim of Wikipedia's Colossal Cave Adventure article, the game that started the genre.`,
 ];
 
@@ -242,12 +253,14 @@ export function isCreature(state, subject) {
  *  input; every other piece of state (the live world, chat, ticks) is
  *  computed in the browser once the sibling bundle loads.
  *  `characters` is the ROSTER this page may draw from, `[{ id, species }]`;
- *  the page renders one pane per PANE_SLOTS entry and binds a character to
- *  each at boot, so which two of the roster actually play is decided live by
- *  the engine's own pickMudRoster — the same draw the shared session is then
- *  opened for, never a second one. `worldPayload` is `{ name, facts,
- *  rules, opening }`, read once at build time through the real worlds-pack
- *  provider (see this module's own header). `spriteTemplates` is the
+ *  the page ships the default cast's panes and rebuilds the whole stage at
+ *  every boot, so how many of the roster play, and which of them, is decided
+ *  live by the players slider and the engine's own pickMudRoster — the same
+ *  draw the shared session is then opened for, never a second one. A count
+ *  the roster cannot fill draws as many panes as it has animals.
+ *  `worldPayload` is `{ name, facts, rules, opening }`, read once at build
+ *  time through the real worlds-pack provider (see this module's own
+ *  header). `spriteTemplates` is the
  *  large-tier sprite set (data/sprites-large/*.toml) so every species
  *  resolves its own art instead of falling back to the flat animal icon.
  *  `mudConfig` defaults to game-config.mjs's own DEFAULT_GAME_CONFIG.mud —
@@ -264,16 +277,18 @@ export function renderMudHtml({
   mudConfig = DEFAULT_GAME_CONFIG.mud,
   engineBundleJs = "",
 } = {}) {
-  const slots = PANE_SLOTS.slice(0, Math.max(1, Math.min(PANE_SLOTS.length, characters.length || PANE_SLOTS.length)));
+  const openingCount = Math.max(1, Math.min(DEFAULT_PLAYER_COUNT, characters.length || DEFAULT_PLAYER_COUNT));
   const pageData = embedJson({
     worldPayload, characters, spriteTemplates, mudConfig,
-    slots,
+    paneSlots: PANE_SLOTS,
+    playerCounts: PLAYER_COUNTS,
+    defaultPlayerCount: DEFAULT_PLAYER_COUNT,
     rootRoom: ROOT_ROOM,
     defaultDelayMs: DEFAULT_DELAY_MS,
     defaultMaxTurns: DEFAULT_MAX_TURNS,
   });
 
-  const paneHtml = slots.map((slot) => paneMarkup(slot)).join("\n");
+  const paneHtml = PANE_SLOTS.slice(0, openingCount).map((slot) => paneMarkup(slot)).join("\n");
 
   return `<!doctype html>
 <html lang="en">
@@ -300,6 +315,13 @@ ${MUD_STYLE}
         <span class="mono deck-turns" id="globalTurnCount">turns: 0</span>
       </div>
       <div class="deck-sliders">
+        <label class="deck-slider">players
+          <input type="range" id="playerCountSlider" min="0" max="${PLAYER_COUNTS.length - 1}" step="1"
+                 value="${Math.max(0, PLAYER_COUNTS.indexOf(DEFAULT_PLAYER_COUNT))}"
+                 list="playerCountTicks" aria-valuetext="${DEFAULT_PLAYER_COUNT} players">
+          <datalist id="playerCountTicks">${PLAYER_COUNTS.map((n, i) => `<option value="${i}" label="${n}"></option>`).join("")}</datalist>
+          <span class="mono" id="playerCountValue">${DEFAULT_PLAYER_COUNT}</span>
+        </label>
         <label class="deck-slider">delay
           <input type="range" id="delaySlider" min="80" max="2000" step="20" value="${DEFAULT_DELAY_MS}">
           <span class="mono" id="delayValue">${DEFAULT_DELAY_MS}ms</span>
@@ -323,7 +345,7 @@ ${MUD_STYLE}
       <div class="world-map-key" id="worldMapKey"></div>
     </section>
   </div>
-  <div class="mud-stage" id="mudStage">
+  <div class="mud-stage" id="mudStage" data-panes="${openingCount}">
 ${paneHtml}
   </div>
 </main>
@@ -341,9 +363,11 @@ ${embedScriptText(pageScript())}
 
 /** One pane, character-agnostic: which animal it shows is stamped in at boot
  *  (`data-character`, the heading, the chat dock's own labels), so the page
- *  can draw a different pair out of the roster on every reset without a
- *  rebuild. */
-function paneMarkup(slot) {
+ *  can draw a different cast out of the roster on every reset without a
+ *  rebuild. Pure and self-contained (escapeHtml is spliced alongside it) —
+ *  the page script calls this same function to build the stage in the
+ *  browser, so the panes a count change adds are the panes this file ships. */
+export function paneMarkup(slot) {
   const w = `window-${slot}`;
   return `    <section class="mud-window pane-${escapeHtml(slot)}" id="${w}" data-slot="${escapeHtml(slot)}" data-character="">
       <div class="pane-head">
@@ -410,8 +434,12 @@ const MUD_STYLE = `
     --soil-deep: #241710; --soil-mid: #4A3324; --soil-light: #7A5A3D;
     --root-moss: #6B7A4F; --parchment: #EFE6D8; --mud-ink: #2A211A;
     --burrow-glow: #E8A33D; --chalk: #D9CDB9;
-    --actor-a: #E0912A; --actor-b: #5F97B3;
+    /* Four hues that stay apart at the size an occupant dot is drawn, and all
+       four sit on the dark soil board as well as on parchment. Nothing green
+       enough to sink into a turf-filled surface room. */
+    --actor-a: #E0912A; --actor-b: #5F97B3; --actor-c: #BFC85F; --actor-d: #AE749E;
     --pane-height: 618px;
+    --room-height: 152px;
   }
   html { background: var(--soil-deep); }
   body { margin: 0; background: linear-gradient(180deg, var(--root-moss) 0%, var(--soil-light) 14%, var(--soil-mid) 48%, var(--soil-deep) 100%) fixed; color: var(--mud-ink); font-family: ${SANS_STACK}; font-size: 15px; line-height: 1.5; }
@@ -476,8 +504,17 @@ const MUD_STYLE = `
   @keyframes dig-pulse { 0% { opacity: .25; } 100% { opacity: 1; } }
   @media (prefers-reduced-motion: reduce) { .burrow .room.freshly-dug rect { animation: none; } }
 
-  /* ---- the panes ---- */
-  .mud-stage { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  /* ---- the panes ----
+     Two columns hold every count the players slider offers: four fills them
+     twice over, two fills them once. One is the exception, and it earns it —
+     a lone animal takes a single centred column at a reading measure and
+     spends the width it saves on a taller room and a longer log, so the page
+     reads as one portrait rather than one pane marooned in an empty grid. */
+  .mud-stage { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; align-items: start; }
+  .mud-stage[data-panes="1"] {
+    grid-template-columns: minmax(0, 46rem); justify-content: center;
+    --pane-height: 700px; --room-height: 196px;
+  }
   .mud-window {
     background: var(--parchment); border: 1px solid var(--soil-mid); border-radius: 4px;
     box-shadow: 0 2px 0 rgba(0,0,0,.18), inset 0 1px 0 rgba(255,255,255,.35);
@@ -486,13 +523,15 @@ const MUD_STYLE = `
     border-top: 3px solid var(--actor-a);
   }
   .mud-window.pane-b { border-top-color: var(--actor-b); }
+  .mud-window.pane-c { border-top-color: var(--actor-c); }
+  .mud-window.pane-d { border-top-color: var(--actor-d); }
   .pane-head { display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
   .char-id { font-size: .66rem; color: var(--soil-mid); margin-left: .35rem; text-transform: none; }
   .pane-turn { font-size: .68rem; color: var(--soil-mid); }
 
   /* ---- room view: one row of soil, the compass around it ---- */
   .room-stage { position: relative; padding: 19px 34px; flex: 0 0 auto; }
-  .room-view { position: relative; height: 152px; border-radius: 3px; overflow: hidden; border: 1px solid var(--soil-mid); }
+  .room-view { position: relative; height: var(--room-height); border-radius: 3px; overflow: hidden; border: 1px solid var(--soil-mid); }
   .room-view canvas { display: block; width: 100%; height: 100%; }
   .wall-band { position: absolute; left: 0; right: 0; top: 4px; height: 62px; display: flex; align-items: flex-start; justify-content: center; gap: .5rem; }
   .wall-item { display: flex; flex-direction: column; align-items: center; min-width: 34px; max-width: 72px; }
@@ -561,7 +600,10 @@ const MUD_STYLE = `
   .dig-flourish.shown { opacity: .5; }
   @media (prefers-reduced-motion: reduce) { .dig-flourish { transition: none; opacity: 0 !important; } }
 
-  .room-caption { flex: 0 0 auto; font-size: .74rem; margin: 0; color: var(--soil-mid); height: 2.6em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  /* Two lines clamped, and a box tall enough to hold both of them: at 1.5
+     line-height that is 3em, and anything shorter cuts the second line's
+     descenders off. */
+  .room-caption { flex: 0 0 auto; font-size: .74rem; margin: 0; color: var(--soil-mid); height: 3em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 
   .pane-columns { flex: 0 0 auto; display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; height: 86px; }
   .pouch, .minimap { background: rgba(255,255,255,.35); border: 1px solid var(--soil-light); border-radius: 3px; padding: .35rem .45rem; overflow: hidden; display: flex; flex-direction: column; }
@@ -590,6 +632,9 @@ const MUD_STYLE = `
   }
   .chatlog > * { margin: 0 0 .28rem; }
   .chatlog > *:last-child { margin-bottom: 0; }
+  /* The log carries typed exchanges only — a scripted turn narrates through
+     the room view — so an untouched pane's log says what would fill it. */
+  .chatlog:empty::after { content: "Type a command below and the answer lands here."; color: var(--soil-mid); font-style: italic; font-size: .72rem; }
   /* A styled webkit scrollbar reserves its own gutter, where the overlay one
      Chromium defaults to on macOS shows nothing until you already scroll. The
      standard properties go behind @supports because setting them at all makes
@@ -692,10 +737,15 @@ const MUD_STYLE = `
     .room-view.pounce .sprite-card.lunging, .room-view.pounce .floor-self, .room-view.pounce .strike-flash { animation: none; }
   }
 
+  /* Narrow, every pane stacks and every count reads the same — including the
+     single-pane one, whose centred column and extra height only buy anything
+     when there is width to spare. */
   @media (max-width: 900px) {
-    :root { --pane-height: 596px; }
     .deck-row { grid-template-columns: 1fr; }
-    .mud-stage { grid-template-columns: 1fr; }
+    .mud-stage, .mud-stage[data-panes="1"] {
+      grid-template-columns: 1fr; justify-content: stretch;
+      --pane-height: 596px; --room-height: 152px;
+    }
     .world-map-board { min-height: 150px; }
   }
 `;
@@ -709,7 +759,9 @@ function pageScript() {
   "use strict";
   const DATA = MUD_PAGE_DATA;
   const createTicker = ${createTicker.toString()};
-  const esc = ${escapeHtml.toString()};
+  const escapeHtml = ${escapeHtml.toString()};
+  const esc = escapeHtml;
+  const paneMarkup = ${paneMarkup.toString()};
   const speciesOfCharacter = ${speciesOfCharacter.toString()};
   const mudRoomSceneObjects = ${mudRoomSceneObjects.toString()};
   const carriedItemsFor = ${carriedItemsFor.toString()};
@@ -728,8 +780,8 @@ function pageScript() {
 
   const el = (id) => document.getElementById(id);
   const roster = DATA.characters.map(function (c) { return c.id; });
-  const slots = DATA.slots;
-  const ACTOR_COLORS = ["var(--actor-a)", "var(--actor-b)"];
+  let slots = [];
+  const ACTOR_COLORS = ["var(--actor-a)", "var(--actor-b)", "var(--actor-c)", "var(--actor-d)"];
   const COMPASS = ["north", "south", "east", "west", "up", "down"];
   const DIR_GLYPH = { north: "\\u25B2 N", south: "\\u25BC S", west: "\\u25C0 W", east: "E \\u25B6", up: "\\u21E1", down: "\\u21E3" };
   const reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -932,9 +984,9 @@ function pageScript() {
     });
   }
 
-  // Wired ONCE per pane, never per boot: the pane outlives every reset, and
-  // each handler asks which character is cast in this pane at click time, so
-  // a re-cast pane drives its new animal with no re-binding.
+  // Wired as the pane is built. The stage is rebuilt on every boot, so a
+  // pane's listeners live and die with it; each one still reads its slot's
+  // character at click time, because the cast is bound after the markup.
   function wirePane(slot) {
     const w = "window-" + slot;
     const input = el(w + "-chatq");
@@ -1385,10 +1437,23 @@ function pageScript() {
   }
 
   // ---- the control deck ----------------------------------------------------
+  // The players slider runs on detents (1, 2, 4), so its own value is the
+  // index of the count, never the count.
+  function chosenPlayerCount() {
+    const picked = DATA.playerCounts[Number(el("playerCountSlider").value)];
+    return picked || DATA.defaultPlayerCount;
+  }
+
+  function showPlayerCount(count) {
+    el("playerCountValue").textContent = String(count);
+    el("playerCountSlider").setAttribute("aria-valuetext", count + (count === 1 ? " player" : " players"));
+  }
+
   function wireDeck() {
     const playBtn = el("autoToggle");
     const delaySlider = el("delaySlider");
     const maxTurnsSlider = el("maxTurnsSlider");
+    const playerCountSlider = el("playerCountSlider");
     playBtn.addEventListener("click", function () {
       if (!session) return;
       autoOn = !autoOn;
@@ -1408,7 +1473,22 @@ function pageScript() {
       maxTurns = Number(maxTurnsSlider.value);
       el("maxTurnsValue").textContent = String(maxTurns);
     });
+    // The readout follows the thumb, but a new cast waits for the drag to
+    // settle: booting on every intermediate detent would open, and throw
+    // away, a whole shared world per step.
+    playerCountSlider.addEventListener("input", function () { showPlayerCount(chosenPlayerCount()); });
+    playerCountSlider.addEventListener("change", function () { boot(); });
     el("resetBtn").addEventListener("click", function () { boot(); });
+  }
+
+  // The stage is the cast's, so it is rebuilt for the cast: one paneMarkup
+  // call per animal, the count on the stage itself for the grid to lay out
+  // against, and a fresh set of listeners for the panes that just appeared.
+  function renderStage() {
+    const stage = el("mudStage");
+    stage.setAttribute("data-panes", String(slots.length));
+    stage.innerHTML = slots.map(function (slot) { return paneMarkup(slot); }).join("");
+    for (const slot of slots) wirePane(slot);
   }
 
   function bindPanes() {
@@ -1416,8 +1496,6 @@ function pageScript() {
       const w = "window-" + slots[i];
       const character = cast[i];
       const pane = el(w);
-      if (!character) { pane.hidden = true; continue; }
-      pane.hidden = false;
       pane.setAttribute("data-character", character);
       pane.setAttribute("aria-label", speciesOfCharacter(character) + "'s own view of the shared world");
       el(w + "-name").innerHTML = esc(speciesOfCharacter(character)) + '<span class="mono char-id">' + esc(character) + "</span>";
@@ -1427,8 +1505,13 @@ function pageScript() {
 
   // Booting builds the shared world and draws the opening state. It never
   // starts a turn: nothing ticks until the deck's own play control (or a
-  // pane's) is clicked.
+  // pane's) is clicked. Opening the world is asynchronous and the controls
+  // that boot are not, so a boot overtaken by a later one drops its own
+  // session on the floor rather than binding it to the stage the newer boot
+  // has already drawn.
+  let bootSeq = 0;
   async function boot() {
+    const seq = bootSeq += 1;
     autoOn = false;
     const playBtn = el("autoToggle");
     playBtn.setAttribute("aria-pressed", "false");
@@ -1444,21 +1527,19 @@ function pageScript() {
     speechBubbles.clear();
     tickChain = Promise.resolve();
     for (const character of cast) delete eaten[character];
-    for (const slot of slots) {
-      const w = "window-" + slot;
-      el(w + "-chatlog").innerHTML = "";
-      el(w + "-play").textContent = "\\u25B6 play";
-      el(w).classList.remove("out-of-play");
-      el(w + "-fate").hidden = true;
-      el(w + "-logpop").hidden = true;
-      el(w + "-room").classList.remove("pounce");
-    }
 
     // ONE draw, the engine's own, and the same list the session is built from:
     // a second independent draw here would leave the page showing animals the
-    // shared world was never opened for.
-    cast = window.tmctMud.pickMudRoster(roster, { count: slots.length });
-    session = await window.tmctMud.createMudSession(DATA.worldPayload, { characters: cast });
+    // shared world was never opened for. The stage follows the draw rather
+    // than the slider, so a roster too small for the chosen count draws every
+    // animal it has and no empty pane.
+    cast = window.tmctMud.pickMudRoster(roster, { count: chosenPlayerCount() });
+    slots = DATA.paneSlots.slice(0, cast.length);
+    showPlayerCount(cast.length);
+    renderStage();
+    const opened = await window.tmctMud.createMudSession(DATA.worldPayload, { characters: cast });
+    if (seq !== bootSeq) return;
+    session = opened;
     for (let i = 0; i < cast.length; i += 1) {
       turnsTaken[cast[i]] = 0;
       slotOf[cast[i]] = slots[i];
@@ -1475,7 +1556,6 @@ function pageScript() {
   }
 
   wireDeck();
-  for (const slot of slots) wirePane(slot);
   boot();
 })();`;
 }

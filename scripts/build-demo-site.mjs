@@ -407,16 +407,15 @@ let largeSpriteManifest = null;
       rules: world.rules.map((r) => ({ name: r.name, ruleKind: r.ruleKind, slots: r.slots })),
       opening: world.meta?.opening || "",
     };
-    // Four windows, NW/NE/SW/SE, in the order mud-garden.jsonl actually
-    // places its cast: mole-1/vole-1 start together in the garden,
-    // badger-2/groundhog-1 start together in the sett — adjacent windows
-    // for characters that share a room on load, so the very first redraw
-    // can already show a speech bubble once they talk.
+    // The roster the page may draw its cast from, in the order mud-garden.jsonl
+    // places it: mole-1/vole-1 start together in the garden, badger-2/
+    // groundhog-1 together in the sett. The page's own players slider decides
+    // how many of them play, and pickMudRoster decides which.
     const mudCharacters = [
-      { id: "mole-1", slot: "nw", species: "mole" },
-      { id: "vole-1", slot: "ne", species: "vole" },
-      { id: "badger-2", slot: "sw", species: "badger" },
-      { id: "groundhog-1", slot: "se", species: "groundhog" },
+      { id: "mole-1", species: "mole" },
+      { id: "vole-1", species: "vole" },
+      { id: "badger-2", species: "badger" },
+      { id: "groundhog-1", species: "groundhog" },
     ];
     const mudSpriteTemplates = readSpriteLargeTemplateFiles();
     const mudPath = join(SITE, "mud.html");
