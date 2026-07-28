@@ -16,91 +16,92 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## In-flight right now — mud.html/adventure.html/chat.html P2P + design session (2026-07-29)
 
-Six background agents are live in worktrees under `.claude/worktrees/`, dispatched from a coordinator
-session working through `PLAN_MUD.md`'s v1 P2P design plus a round of mud/adventure/chat polish. If
-this session's context is lost, resume by: `git worktree list` to confirm each path is still there: if
-gone, don't `SendMessage` it, dispatch fresh instead (per the Discipline section's rule 3, below). If
-present, `git -C <path> log -1` and `git -C <path> status --short` to see what's actually committed,
-then merge with `git merge --no-ff worktree-agent-<id>` from the main checkout (several of these are
-expected to conflict with each other in `src/services/mud-viz.mjs` — resolve in favor of whichever
-side's change is more complete/more recently verified live, the same way this session's own merges
-did), run the file's own test tier, remove the worktree + branch, then re-run the full suite before
-the next push. **Version is already rolled to 4.0.0** (`42bf8129`) for this line of work — don't roll
-again for it.
+Five of the six agents this session dispatched are done and merged: the NPC slider, mud.html's EDIT
+mode + hardcoded-logic audit, chat.html's full P2P integration, and adventure.html's direction-UI +
+sprite-fallback + cast-sprite pass. **One is still running:**
 
-- [ ] **`a5f3d9fa7f76551bf`** (`.claude/worktrees/agent-a5f3d9fa7f76551bf`, branch
-  `worktree-agent-a5f3d9fa7f76551bf`) — mud.html NPC slider (1–10, default 2): background characters
-  with no dashboard pane that still autoplay and are visible/talkable when co-located. Touches
-  `src/services/mud-viz.mjs`, `src/surfaces/web/mud-browser-entry.mjs`.
-- [ ] **`a30017f041d374072`** (`.claude/worktrees/agent-a30017f041d374072`) — mud.html EDIT mode (a
-  world-fact editor mirroring adventure.html's own "edit the world"), an audit of both mud.html's and
-  adventure.html's engine for hardcoded logic that should be an externalized fact, and a small folded-in
-  fix: `mud-viz.mjs`'s `markEaten()` still hardcodes `"eaten"` regardless of cause — needs to read
-  `outOfPlayReason`/`outOfPlayPhrase` (already shipped on `main`, engine side) so a starved character
-  doesn't display as eaten. Touches `mud-viz.mjs`, `mud-browser-entry.mjs`, `adventure.mjs`,
-  `mud-turn.mjs`, `game-config.mjs`, `adventure-viz.mjs`.
-- [ ] **`ad873437090ea0cb2`** — chat.html's P2P integration: share/join/accept flow against
-  `src/services/p2p-room.mjs` (already shipped on `main`), the node list panel, presence-scoped wave,
-  heavy traffic-exposure panel (operator's explicit ask — "go heavy... surface all we can"), a new
-  `test-e2e/pages-chat-p2p.test.mjs`. Touches `src/services/chat-page-viz.mjs`, possibly a new
-  `scripts/build-p2p-vendor.mjs`. No file overlap with the mud.html agents. (Corrected 2026-07-29: this
-  agent id was originally mislabeled here as the temporal-trust fix — that fix is done, merged as
-  `90059401`, and its own line is removed per this doc's own "completed work is not narrated here" rule.)
-- [ ] **`afae5cf118f722f87`** — adventure.html: compare/port mud.html's compass-ring direction UI,
-  confirm/fix its own sprite-fallback chain-walking, and a sprite-quality pass on adventure's own
-  creature roster to match mud's new bar. Touches `adventure-viz.mjs` and adventure-specific
-  `data/sprites-large/*.toml`.
-- [ ] **`a0900f2c71f7c24b0`** (Fable + frontend-design skill) — project-wide sprite detail/pop pass
-  (excluding mud/adventure creature sprites, owned by the agents above) and a design-consistency +
-  plain-prose copy audit of every OTHER demo page (index, spider-fly, plan, ledger, code, research,
-  ingest, sprites.html) — explicitly excludes mud.html/adventure.html/chat.html's own viz files, which
-  get the same treatment as a follow-up once their own agents above land. Also carries, folded in
-  2026-07-29: sprites.html should show each sprite's own class chain, group the catalog by inherited
-  concept, and — the real content gap — every class that appears as an ANCESTOR anywhere in the sprite
-  corpus (not just mud/adventure's) needs its own sprite, so a future leaf concept added to the graph
-  gets a sensible sprite via the fallback chain with no new art required at the moment it's added.
-  Index.html is explicitly hands-off — operator likes it as shipped; skip restyling it, only fix a
-  genuine bug (typo, real AI-ism) there if found.
+- [ ] **`a0900f2c71f7c24b0`** (Fable + frontend-design skill, `.claude/worktrees/agent-a0900f2c71f7c24b0`)
+  — project-wide sprite detail/pop pass (excluding mud/adventure creature sprites, already done above)
+  and a design-consistency + plain-prose copy audit of every OTHER demo page (index — hands off, operator
+  likes it, bug fixes only — spider-fly, plan, ledger, code, research, ingest, sprites.html). Carries,
+  folded in along the way: per-page thematic direction (below), the spider-fly cobweb-in-the-corner
+  addition, and sprites.html's ontology-display + ancestor-sprite-coverage feature (below). If this
+  session's context is lost and the worktree is gone, dispatch fresh rather than resuming — see the
+  Discipline section's rule 3.
 
-**Queued, not yet dispatched** — real dependencies, not forgotten: mud.html's own P2P integration
-(share/join, node labels, wave button+animation) waits on the NPC-slider and EDIT-mode agents landing
-first (same files). The cross-cutting P2P e2e scenarios (3-peer mesh, disconnect/rejoin, the
-multi-player-lab + mesh mud.html modes, chat.html inference over learned-vs-distributed facts) wait on
-both page integrations existing. The mud/adventure/chat sprite-detail-pop + copy-audit follow-up waits
-on this batch's own three page-owning agents. mud.html's own theme pass (see below) also waits on the
-two mud.html agents currently in flight, same reason.
+**Now unblocked, not yet dispatched** — mud.html's own P2P integration (share/join, node labels, wave
+button+animation against `src/services/p2p-room.mjs`) was waiting on the NPC-slider and EDIT-mode
+agents; both landed (`e2474f1a`), so this is ready to dispatch. Its theme is Lemmings (below), also
+ready. The cross-cutting P2P e2e scenarios (3-peer mesh, disconnect/rejoin, the multi-player-lab + mesh
+mud.html modes, chat.html inference over learned-vs-distributed facts) still wait on mud.html's P2P
+integration landing (chat.html's own side is already done). The mud/adventure/chat sprite-detail-pop +
+copy-audit follow-up (the exclusion the still-running design-pass agent is carrying) waits on nothing
+further — dispatch once that agent lands.
 
 **Alternate-scenario dropdowns, mud.html and adventure.html (operator-specified 2026-07-29, explicitly
-sequenced after both):** a dropdown next to RESET on each page to load one of several alternate world
-scenarios (different sizes/complexity/aspects — not just the one default world each page ships today);
-EDIT mode then edits whichever scenario is currently loaded. mud.html's own EDIT-mode + externalization
-pass is done (merged `4aa4c63e`) — that half of the prerequisite is met. adventure.html's is NOT: its
-audit (same merge, see the six-item "adventure.html-side sweep" above) found real externalization
-candidates (`roomAffordances`' hardcoded verb menu, `VIEW_EXCLUDED_PREDICATES`, wrong win-condition
-wording, hardcoded `"player"` in `adventure-viz.mjs`, `isCastMember`'s heuristic, the closed verb
-if-chain) but fixed none of them — that's still open, not yet dispatched as its own pass. Dispatch the
-scenario dropdowns once both sides are actually done, not just audited.
+sequenced after both pages' own edit/externalization pass):** a dropdown next to RESET on each page to
+load one of several alternate world scenarios (different sizes/complexity/aspects, not just the one
+default world each page ships today); EDIT mode then edits whichever scenario is currently loaded.
+mud.html's half is done (merged `4aa4c63e`/`e2474f1a`). adventure.html's is NOT: its own audit (merged
+`4aa4c63e`, the "adventure.html-side sweep") found six real externalization candidates —
+`roomAffordances`' hardcoded verb menu, `VIEW_EXCLUDED_PREDICATES`, wrong win-condition wording,
+hardcoded `"player"` in `adventure-viz.mjs`, `isCastMember`'s heuristic, the closed verb if-chain — but
+fixed none of them, and that fix pass hasn't been dispatched. Dispatch the scenario dropdowns only once
+adventure's side is actually fixed, not just audited.
 
-**Per-page thematic direction, operator-specified 2026-07-29** (relayed to the relevant in-flight
-agents already, except mud.html's — dispatch that as its own follow-up once the NPC-slider and
-EDIT-mode agents land): adventure.html → Agatha Christie (English country-house mystery — fits the
-existing Ashcombe Hall setting); spider-fly.html → The Addams Family (gothic-whimsical, Charles Addams
-ink cross-hatch); mud.html → Lemmings (the classic dig/build puzzle game — fits the burrowing-animal
-premise closely, not yet dispatched); chat.html → "genericGPT" (deliberately reads like a familiar
-mainstream AI-chat surface, in contrast with the actually-deterministic no-LLM behavior underneath —
-lean into the contrast, don't fight it); plan.html → Cubase (the Steinberg DAW — dark, dense,
-timeline/track-based, transport-style controls); ledger.html & research.html → New Relic (dark-mode,
-data-dense observability-dashboard register); sprites.html → Adobe Illustrator chrome for the catalog
-page itself, plus a separate, larger follow-up (not yet scoped) for "multi-expression, multi-direction
-cycles" — real new sprite content (variant art), not just a restyle.
+**Per-page thematic direction, operator-specified 2026-07-29** (already relayed and applied for
+adventure.html/chat.html/spider-fly.html/plan.html/ledger.html/research.html/sprites.html via the agents
+above; index.html is explicitly excluded — see above): adventure.html → Agatha Christie; spider-fly.html
+→ The Addams Family; **mud.html → Lemmings (not yet dispatched — bundle with the mud.html P2P
+integration above, both waiting on the same "next mud.html pass" moment)**; chat.html → "genericGPT";
+plan.html → Cubase; ledger.html & research.html → New Relic; sprites.html → Adobe Illustrator chrome for
+the catalog itself, plus a separate not-yet-scoped follow-up for "multi-expression, multi-direction
+cycles" (real new sprite variant art, not a restyle).
+
+**sprites.html: show the ontology, ensure every ancestor class has a sprite (operator, 2026-07-29,
+folded into the still-running design-pass agent above).** Display each sprite's own class chain
+alongside it (carrot → vegetable → plant → object, read from the real corpus facts) and group the
+catalog by inherited concept rather than one flat list. The real content gap to close: walk every
+object's class chain across the whole sprite corpus and find every distinct class that appears as an
+ANCESTOR anywhere; any such class with no sprite of its own needs one authored, at the same quality bar
+as everything else. Payoff: once every level of the hierarchy is illustrated, a brand-new leaf concept
+added to the graph later gets a sensible sprite via the existing fallback chain with zero new art
+required at the moment it's added.
 
 Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline):
 bucket `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`
 (operator already ran `aws sso login --profile tmct-prod` this session). Full clean path is a push to
-`main` with a remote — GitLab CI's `deploy:website` job.
+`main` with a remote — GitLab CI's `deploy:website` job. **Version is already rolled to 4.0.0**
+(`42bf8129`) for this whole line of work — don't roll again for it.
 
 ## Open items
 
+- [ ] **demo-page JS that belongs in tmct itself, audited toward lib > tool > ask (operator,
+  2026-07-29).** Survey every `src/services/*-viz.mjs`/`src/surfaces/web/*-browser-entry.mjs` for logic
+  that's genuinely reusable across pages (especially anything already duplicated between two or more
+  demos) rather than specific to the one page that happens to host it today, and is not opinionated
+  about which page imports it. For both that to-be-moved code AND whatever already calls into tmct from
+  a demo page, work out which of it should become a real tool call rather than staying bespoke page JS
+  — and where something could become a tool call, prefer whichever option keeps the most of the
+  original natural-language request intact: move it into the plain library first if it doesn't need to
+  be agent-invocable at all, promote it to a real tool if it represents an action a user's own words
+  should be able to trigger, and prefer routing it through the existing `ask` tool specifically over a
+  new bespoke tool wherever the request is really a question the graph can already answer. The reason
+  this matters: the whole point of running many different demos (mud, adventure, spider-fly, chat, plan,
+  ...) is to exercise tmct's own engine from as many directions as possible — so page-specific game/UI
+  code that could instead be a generic library call or a real tool is exactly the gap between "a demo
+  that happens to use tmct" and the actual target: a consumer surface where chat calls tools, backed by
+  classical planning over the graph, with as little bespoke per-page logic in the way as we can manage.
+  Concrete shape the operator gave for what "done" looks like: a page should be able to call a single
+  generic function against a natural-language request and get back clean, render-ready data — e.g.
+  spider-fly.html calling `fn("list the locations of flies and spiders")` for the grid, or
+  `fn("get me the large sprite for a happy spider")` for one asset — routed through tmct's real
+  NL-understanding/tool-calling pipeline rather than each page hand-rolling its own fact-store/sprite-
+  resolver glue. Related operator principle to hold this work to: **if anyone views a demo page's
+  source, it should read as a showcase of what tmct is capable of at the highest level** — the page's
+  own JS should look like a thin, legible caller of real tmct capability, not obscured bespoke game
+  logic with tmct calls buried inside it. Not yet started — a survey-and-plan task, not something to
+  dispatch as a quick pass.
 - [ ] the mud/adventure chat lane misroutes the exact phrasing "what food do you know about" (through
   `runTurn`, the browser/chat path — not `adventureTurn` directly) to the recall lane, answering
   "i learned: food is a kind of portable" instead of the real food-knowledge digest. Every other
