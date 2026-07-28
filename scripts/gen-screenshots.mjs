@@ -23,12 +23,12 @@ const READY_TIMEOUT_MS = 30_000;
 const SETTLE_MS = 250;
 
 // mud.html is the one page whose plate needs to look busy rather than just
-// loaded (four characters mid-simulation, not four idle windows at boot), so
-// its own ready check drives the simulation forward before the shot fires.
-// The turn count is a floor chosen so the shot always shows multiple turns
-// across all four windows; the timeout budgets for that floor at the page's
-// default 650ms auto-play delay, spread across four characters ticking
-// independently rather than one at a time.
+// loaded (both animals mid-simulation, not two idle panes at boot), so its own
+// ready check drives the simulation forward before the shot fires. The turn
+// count is a floor chosen so the shot always shows multiple turns in both
+// panes; the timeout budgets for that floor at the page's default 650ms
+// auto-play delay, spread across two characters ticking independently rather
+// than one at a time.
 const MUD_BUSY_TURN_THRESHOLD = 12;
 const MUD_BUSY_TIMEOUT_MS = 30_000;
 
@@ -67,64 +67,51 @@ const READY_CHECKS = {
   },
   // Every other ready check above only waits for boot. This one also drives
   // the simulation itself: relying on auto-play's own turn-by-turn rolls to
-  // eventually dig a room and fill a pouch before the shot fires would make
-  // the wait unbounded and flaky, so it forces both deterministically first,
-  // then starts all four windows playing and waits for a real busy state.
+  // eventually open a second room before the shot fires would make the wait
+  // unbounded, so it digs one by hand first, then starts both panes playing
+  // and waits for a real busy state. Which two animals are cast is drawn live
+  // on every load, so the dig goes through the room's own compass ring (which
+  // offers only what this room actually allows) rather than a typed command
+  // that would depend on who happens to be standing where.
   mud: async (page) => {
     await page.waitForFunction(
-      () => !document.querySelector("#window-nw-chatq")?.disabled,
+      () => !document.querySelector("#window-a-chatq")?.disabled,
       null,
       { timeout: READY_TIMEOUT_MS },
     );
 
-    // The baseline chatlog count is read at boot, before the manual dig/take
-    // commands below add their own entries — auto-play ticks never write to
-    // a window's chatlog (only a typed chat turn does), so a baseline read
-    // any later would never see further growth once auto-play starts.
-    const chatEntriesAtBoot = await page.evaluate(
-      () => [...document.querySelectorAll('[id$="-chatlog"]')].reduce((sum, log) => sum + log.children.length, 0),
-    );
+    // A real page.click() scrolls the control it targets into view, which can
+    // leave the panes and the survey above it out of the eventual screenshot
+    // — dispatching the click straight to the DOM fires the same listener
+    // without moving the page.
+    const clickFirst = (selector) => page.evaluate((sel) => {
+      const node = document.querySelector(sel);
+      if (node) node.click();
+      return Boolean(node);
+    }, selector);
 
-    const nwInput = page.locator("#window-nw-chatq");
-
-    // "dig south" from the seeded garden always succeeds and always spawns a
-    // real object ("root-garden-south"), so this alone guarantees a genuine
-    // third room without depending on auto-play's own rolls.
-    await nwInput.fill("dig south");
-    await nwInput.press("Enter");
+    // Above ground the only way on is the shaft, so walk down before digging
+    // when the ring offers no dig at all.
+    if (!await clickFirst(".dir-pill.dig")) {
+      if (await clickFirst('.dir-pill[aria-label="go down"]')) {
+        await page.waitForFunction(() => document.querySelectorAll(".dir-pill.dig").length > 0, null, { timeout: READY_TIMEOUT_MS });
+        await clickFirst(".dir-pill.dig");
+      }
+    }
     await page.waitForFunction(
-      () => document.querySelectorAll("#worldMapBands .map-room").length > 2,
+      () => document.querySelectorAll("#worldMapBoard .room").length > 2,
       null,
       { timeout: READY_TIMEOUT_MS },
     );
 
-    // Digging spends the turn without moving the digger, so the mole is still
-    // in the garden here. "carrot" is one of the world's hand-authored,
-    // bare-lemma-named static props (unlike a dug object's minted per-room
-    // id), so this deterministically fills the pouch too.
-    await nwInput.fill("take the carrot");
-    await nwInput.press("Enter");
-    await page.waitForFunction(
-      () => document.querySelectorAll('[id$="-pouch-list"] li').length > 0,
-      null,
-      { timeout: READY_TIMEOUT_MS },
-    );
-
-    // A real page.click() scrolls the rail's #autoToggle button into view
-    // first, which leaves the four windows and the world map above it
-    // scrolled out of the eventual screenshot — dispatching the click
-    // straight to the DOM fires the same listener without moving the page.
-    await page.evaluate(() => document.querySelector("#autoToggle").click());
+    await clickFirst("#autoToggle");
 
     await page.waitForFunction(
-      ({ threshold, before }) => {
+      (threshold) => {
         const turnText = document.querySelector("#globalTurnCount")?.textContent ?? "";
-        const turns = Number((turnText.match(/\d+/) ?? ["0"])[0]);
-        const pouchNonEmpty = document.querySelectorAll('[id$="-pouch-list"] li').length > 0;
-        const chatEntries = [...document.querySelectorAll('[id$="-chatlog"]')].reduce((sum, log) => sum + log.children.length, 0);
-        return turns >= threshold && pouchNonEmpty && chatEntries > before;
+        return Number((turnText.match(/\d+/) ?? ["0"])[0]) >= threshold;
       },
-      { threshold: MUD_BUSY_TURN_THRESHOLD, before: chatEntriesAtBoot },
+      MUD_BUSY_TURN_THRESHOLD,
       { timeout: MUD_BUSY_TIMEOUT_MS },
     );
     // Auto-play stays running into the capture on purpose — this plate is
