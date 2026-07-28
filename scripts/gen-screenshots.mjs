@@ -87,11 +87,13 @@ const READY_CHECKS = {
 
     const nwInput = page.locator("#window-nw-chatq");
 
-    // "dig south" from the seeded garden always succeeds and always spawns a
-    // real object ("root-garden-south"), so this alone guarantees a genuine
-    // third room without depending on auto-play's own rolls.
-    await nwInput.fill("dig south");
-    await nwInput.press("Enter");
+    // The badger starts in the sett, under the soil, where a sideways dig is
+    // the one dig that always succeeds — above ground the only way to dig is
+    // straight down, and the garden's own way down is already open. This
+    // guarantees a genuine third room without depending on auto-play's rolls.
+    const swInput = page.locator("#window-sw-chatq");
+    await swInput.fill("dig north");
+    await swInput.press("Enter");
     await page.waitForFunction(
       () => document.querySelectorAll("#worldMapBands .map-room").length > 2,
       null,

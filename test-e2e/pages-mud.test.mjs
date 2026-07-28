@@ -3,8 +3,9 @@
 // manually typed command in one window updates only THAT window's own chat
 // log with a real (not honest-miss) answer, clicking the rail's #autoToggle
 // starts every window playing and the shared global turn counter advances,
-// and a deterministic "dig south" opens a new room on the omniscient world
-// map. Mirrors pages-adventure.test.mjs's/pages-spider-fly.test.mjs's own
+// and a deterministic dig underground opens a new room on the omniscient
+// world map while the same dig above ground is refused in the garden's own
+// terms. Mirrors pages-adventure.test.mjs's/pages-spider-fly.test.mjs's own
 // fixture setup and assertion style exactly.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
@@ -184,22 +185,25 @@ test("clicking #autoToggle starts every window playing, and the shared global tu
   }
 });
 
-test("a manual 'dig south' command opens a new room, growing the omniscient world map's own room list", async () => {
+test("a manual 'dig north' command underground opens a new room, growing the omniscient world map's own room list", async () => {
+  // The badger starts in the sett, under the soil. Digging sideways is
+  // underground work: above ground the only dig is straight down, and the
+  // garden's own way down is already open.
   const { context, page, consoleErrors, failedRequests } = await openMudPage();
   try {
     await pauseWindow(page, "nw");
     const beforeRooms = await page.locator("#worldMapBands .map-room").count();
 
-    await sendMudCommand(page, "nw", "dig south");
+    await sendMudCommand(page, "sw", "dig north");
 
-    const lines = await page.locator("#window-nw-chatlog > div").allTextContents();
+    const lines = await page.locator("#window-sw-chatlog > div").allTextContents();
     const reply = lines[lines.length - 1];
-    assert.doesNotMatch(reply, /don't know the word|couldn't|unrecognized/i, "digging south is not an honest miss");
-    assert.match(reply, /dig south/, "the reply confirms the direction actually dug");
+    assert.doesNotMatch(reply, /don't know the word|couldn't|unrecognized/i, "digging north out of the sett is not an honest miss");
+    assert.match(reply, /dig north/, "the reply confirms the direction actually dug");
     assert.match(reply, /new room/, "the reply confirms a new room opened");
 
     await page.waitForFunction(
-      () => Array.from(document.querySelectorAll("#worldMapBands .map-room")).some((el) => el.textContent.includes("garden-south")),
+      () => Array.from(document.querySelectorAll("#worldMapBands .map-room")).some((el) => el.textContent.includes("sett-1-north")),
       null,
       { timeout: ANSWER_TIMEOUT_MS },
     );
@@ -208,6 +212,24 @@ test("a manual 'dig south' command opens a new room, growing the omniscient worl
 
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
     assert.deepEqual(consoleErrors, [], "no console error digging a new room open");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a horizontal dig above ground is refused in the animal's own terms, never silently done", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudPage();
+  try {
+    await pauseWindow(page, "nw");
+    await sendMudCommand(page, "ne", "dig south");
+
+    const lines = await page.locator("#window-ne-chatlog > div").allTextContents();
+    const reply = lines[lines.length - 1];
+    assert.match(reply, /open ground/, "the garden says why it cannot be tunnelled sideways");
+    assert.doesNotMatch(reply, /new room/, "and no room is opened");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error refusing a dig");
   } finally {
     await context.close();
   }

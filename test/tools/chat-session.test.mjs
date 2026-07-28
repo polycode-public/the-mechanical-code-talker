@@ -127,14 +127,17 @@ test("session handle: actingSubject + adventureWorld let two sessions each play 
       assert.match(moleTurn.answer, /you go down/, "the world was already live — no \"play <world>\" opener needed");
       assert.match(moleTurn.answer, /[Nn]ow in the burrow-1/);
 
-      const voleTurn = await vole.turn("dig north");
-      assert.match(voleTurn.answer, /you dig north/, "a second, independent session acts as its own character in the same world");
+      // Sideways digging is underground work, so the vole follows the burrow
+      // down before it can open a room off it.
+      await vole.turn("go down");
+      const voleTurn = await vole.turn("dig west");
+      assert.match(voleTurn.answer, /you dig west/, "a second, independent session acts as its own character in the same world");
 
       const rows = readFactRows(await loadMemory(memoryDir));
       const state = foldWorldState(worldActionRows(rows));
       assert.equal(state.placements.get("mole-1")?.object, "burrow-1", "mole-1 moved");
-      assert.equal(state.placements.get("vole-1")?.object, "garden", "vole-1 stayed put — digging spends the turn without moving");
-      assert.ok(state.exits.get("garden")?.get("north"), "vole-1's dig actually wrote the new exit into the SHARED world state");
+      assert.equal(state.placements.get("vole-1")?.object, "burrow-1", "vole-1 stayed put — digging spends the turn without moving");
+      assert.ok(state.exits.get("burrow-1")?.get("west"), "vole-1's dig actually wrote the new exit into the SHARED world state");
     } finally {
       await mole.close();
       await vole.close();

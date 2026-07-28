@@ -4,21 +4,17 @@
 // calls into adventure.mjs's own functions (adventure-mud-threading.test.mjs
 // and adventure-mud-knowledge.test.mjs already cover that layer).
 //
-// Two engine limits surfaced while writing this, both confirmed by running
-// real turns rather than assumed from reading the grammar:
+// Two engine properties surfaced while writing this, both confirmed by
+// running real turns rather than assumed from reading the grammar:
 //
 // - mud-garden's own HAND-AUTHORED, single-instance props (carrot, stone,
-//   basket, seed) are bare-lemma-named (a later workstream renamed them from
-//   carrot-1/stone-1/basket-1/seed-1 specifically so typed natural language
-//   could reach them — matching ashcombe-hall's own "lamp"/"key" convention),
-//   so "take the carrot" resolves cleanly today. A DYNAMICALLY DUG object
-//   still can't be: digging mints a fresh, per-room id (e.g. "root-garden-
-//   south"), so its bare kind word ("root") never matches that placed
-//   subject's exact string — a structural property of minting unique ids for
-//   procedurally spawned content, not a naming oversight the way the static
-//   props' old numbered ids were. The dedicated test below proves both
-//   halves: the shipped static props resolve, a dug object's bare kind
-//   doesn't.
+//   basket, seed) are bare-lemma-named, matching ashcombe-hall's own
+//   "lamp"/"key" convention, so "take the carrot" resolves cleanly. A
+//   DYNAMICALLY DUG object gets a minted id instead ("root-1"), because a
+//   room can hold several of a kind; the world declares its own minted ids as
+//   vocabulary, so "take the root-1" resolves too, while the bare kind word
+//   "root" still names the lexicon lemma and no one instance. The dedicated
+//   test below proves all three.
 // - recordTold/recordExamined (the durable per-character "knows-about" writes
 //   the food-knowledge query reads) are only ever called from mud-turn.mjs's
 //   autonomous engine — no player-typed verb in adventure.mjs's own
@@ -97,16 +93,59 @@ test("movement: a session walks down into the burrow and back up, through real c
 test("digging: a session digs a new room and a follow-up turn actually reaches it", async () => {
   await withTempRepo("dig", async (repo) => {
     await loadMudGardenInto(repo);
-    const mole = await openCharacterSession(repo, "mole-1");
+    const badger = await openCharacterSession(repo, "badger-2");
     try {
-      const dug = await mole.turn("dig east");
+      const dug = await badger.turn("dig east");
       assert.match(dug.answer, /you dig east and open up a new room/, "the dig itself confirms a new room opened");
 
-      const walked = await mole.turn("go east");
+      const walked = await badger.turn("go east");
       assert.match(walked.answer, /you go east/);
-      assert.match(walked.answer, /[Nn]ow in the garden-east/, "the dug room is real and enterable, not just narrated");
+      assert.match(walked.answer, /[Nn]ow in the sett-1-east/, "the dug room is real and enterable, not just narrated");
+    } finally {
+      await badger.close();
+    }
+  });
+});
+
+test("digging follows the room's own kind, and the burrow stays one level deep", async () => {
+  await withTempRepo("dig-rules", async (repo) => {
+    await loadMudGardenInto(repo);
+    const mole = await openCharacterSession(repo, "mole-1");
+    try {
+      const sideways = await mole.turn("dig east");
+      assert.match(sideways.answer, /open ground/, "there is nothing to tunnel east through in a garden");
+
+      const under = await mole.turn("go down");
+      assert.match(under.answer, /[Nn]ow in the burrow-1/);
+
+      const deeper = await mole.turn("dig down");
+      assert.match(deeper.answer, /one level deep/, "the burrow does not grow a second storey");
+
+      const along = await mole.turn("dig west");
+      assert.match(along.answer, /you dig west and open up a new room/, "but it does spread along its own level");
     } finally {
       await mole.close();
+    }
+  });
+});
+
+test("naming another animal reaches it: talking to one, and asking one a question", async () => {
+  await withTempRepo("npc-vocabulary", async (repo) => {
+    await loadMudGardenInto(repo);
+    const badger = await openCharacterSession(repo, "badger-2");
+    try {
+      const spoken = await badger.turn("talk to groundhog-1");
+      assert.doesNotMatch(spoken.answer, /isn't in my vocabulary/, "a world's own cast id is vocabulary the world declares");
+      assert.match(spoken.answer, /the groundhog-1 says:/);
+
+      const addressed = await badger.turn("groundhog-1 what do you know about food");
+      assert.doesNotMatch(addressed.answer, /code question|code graph/, "naming who you are addressing never turns the line into a code question");
+      assert.match(addressed.answer, /you don't know of any food yet/);
+
+      const whoIsHere = await badger.turn("who is here");
+      assert.match(whoIsHere.answer, /the groundhog-1/, "the room's cast answers from the same placements the talk verb reads");
+    } finally {
+      await badger.close();
     }
   });
 });
@@ -139,30 +178,34 @@ test("taking/eating/putting succeed through real chat turns against the shipped 
   });
 });
 
-test("the shipped static props resolve by typed natural language; a dynamically dug object's bare kind word does not", async () => {
+test("a dug object is reachable by the short id it was minted under, not by its bare kind word", async () => {
   await withTempRepo("static-vs-dug-props", async (repo) => {
     await loadMudGardenInto(repo);
-    const mole = await openCharacterSession(repo, "mole-1");
+    const badger = await openCharacterSession(repo, "badger-2");
     try {
-      const takenCarrot = await mole.turn("take the carrot");
-      assert.match(takenCarrot.answer, /you take the carrot/, "the shipped world's own static prop resolves — its bare-lemma naming fix landed");
+      const takenLettuce = await badger.turn("take the lettuce");
+      assert.match(takenLettuce.answer, /you take the lettuce/, "the shipped world's own static prop resolves by its bare lemma");
 
-      // "dig south" deterministically spawns one object, kind "root", minted
-      // as "root-garden-south" — a per-room id, never the bare lemma "root".
-      const dug = await mole.turn("dig south");
-      assert.match(dug.answer, /In the loose earth: the root-garden-south/, "a dug room's spawned object carries a per-room id, not a bare lemma");
+      // Digging deterministically spawns one object of kind "root", minted as
+      // "root-1" — short enough to read in a pouch, and distinct from the
+      // world's own props.
+      const dug = await badger.turn("dig north");
+      assert.match(dug.answer, /In the loose earth: the root-1/, "a spawned object reads as its kind and a number, not a room path");
 
-      const walked = await mole.turn("go south");
-      assert.match(walked.answer, /[Nn]ow in the garden-south/);
+      const walked = await badger.turn("go north");
+      assert.match(walked.answer, /[Nn]ow in the sett-1-north/);
 
-      const bareNoun = await mole.turn("take the root");
+      const byId = await badger.turn("take the root-1");
+      assert.match(byId.answer, /you take the root-1/, "the world declares its own minted ids, so the dug object is addressable");
+
+      const bareNoun = await badger.turn("take the root");
       assert.match(
         bareNoun.answer,
         /isn't something you can take — it's only mentioned in passing here/,
-        "the bare kind word resolves to the lexicon lemma \"root\", never the placed \"root-garden-south\" — background vocabulary, not the real dug prop; a structural property of minting unique ids for dug content, not a naming oversight",
+        'the bare kind word still resolves to the lexicon lemma "root", never to any one of the placed instances',
       );
     } finally {
-      await mole.close();
+      await badger.close();
     }
   });
 });
@@ -194,22 +237,22 @@ test("the food-knowledge query, asked through real chat, isolates each character
 test("two characters, two sessions, one shared world: a dig by one is enterable by the other", async () => {
   await withTempRepo("cross-session-dig", async (repo) => {
     await loadMudGardenInto(repo);
-    const mole = await openCharacterSession(repo, "mole-1");
-    const vole = await openCharacterSession(repo, "vole-1");
+    const badger = await openCharacterSession(repo, "badger-2");
+    const groundhog = await openCharacterSession(repo, "groundhog-1");
     try {
-      const dug = await mole.turn("dig east");
+      const dug = await badger.turn("dig east");
       assert.match(dug.answer, /you dig east and open up a new room/);
 
-      const voleWalked = await vole.turn("go east");
-      assert.match(voleWalked.answer, /you go east/);
+      const groundhogWalked = await groundhog.turn("go east");
+      assert.match(groundhogWalked.answer, /you go east/);
       assert.match(
-        voleWalked.answer,
-        /[Nn]ow in the garden-east/,
-        "vole-1's SEPARATE session reads the exit mole-1's session wrote to the shared world state",
+        groundhogWalked.answer,
+        /[Nn]ow in the sett-1-east/,
+        "groundhog-1's SEPARATE session reads the exit badger-2's session wrote to the shared world state",
       );
     } finally {
-      await mole.close();
-      await vole.close();
+      await badger.close();
+      await groundhog.close();
     }
   });
 });

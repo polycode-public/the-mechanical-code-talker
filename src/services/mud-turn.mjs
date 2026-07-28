@@ -17,12 +17,11 @@
 // to go. A walk that stepped reached the next room on a known path; it did not
 // reach an edge.
 //
-// There are two separate reasons to dig — "each available dig direction
-// (including down)" and "each edge direction, to keep following the edge
-// toward food" — and both cash out as a dig. They are kept apart by candidate
-// set, which is what the "(including down)" aside marks. The first ranges over
-// every exit-less direction, vertical ones included, and is plain exploration.
-// The second ranges over the four lateral directions only: the frontier of the
+// There are two separate reasons to dig — plain exploration, and following
+// the level's own frontier toward food — and both cash out as a dig. They are
+// kept apart by candidate set. The first ranges over every direction the
+// room's kind allows and no exit already covers, vertical ones included. The
+// second ranges over the lateral part of that same set: the frontier of the
 // level the character already stands on. So a lateral direction draws two
 // independent rolls and gets dug more often than a vertical one.
 //
@@ -38,14 +37,13 @@ import { bfsLevels } from "../domain/planning.mjs";
 import { loadMemory, readFactRows } from "../adapters/memory/core.mjs";
 import {
   foldWorldState, worldActionRows, runWorldCommand, recordTold, recordExamined,
-  personKnowledgeLines, objectClassChain,
+  personKnowledgeLines, objectClassChain, diggableDirections, isOutOfPlay,
 } from "./adventure.mjs";
 
 const FOOD_CLASS = "food";
 const LATERAL_DIRECTIONS = ["north", "south", "east", "west"];
-const ALL_DIRECTIONS = [...LATERAL_DIRECTIONS, "up", "down"];
-// Deep enough to cross a burrow several levels down without letting one
-// character's pathfinder walk a whole grown world every tick.
+// Deep enough to cross a whole burrow without letting one character's
+// pathfinder walk a whole grown world every tick.
 const WALK_SEARCH_DEPTH = 8;
 
 const EXIT_TOWARD_FOOD_CHANCE = 0.5;
@@ -170,14 +168,6 @@ function stepTowardKnownFood(rows, state, character, here) {
 
 // ---- the turn ----------------------------------------------------------------
 
-/** A room's unexplored sides: every compass direction with no exit written
- *  from here yet. A room with none is fully mapped and has no edge to roll
- *  against. */
-const edgeDirectionsOf = (state, room) => {
-  const exits = state.exits.get(room);
-  return ALL_DIRECTIONS.filter((direction) => !exits?.has(direction));
-};
-
 /**
  * Run one acting character's whole turn against a live mud world.
  *
@@ -205,6 +195,13 @@ export async function runMudTurn(character, { world, memoryDir, env, graph, cach
       character, k: turn, room: null, roomAfter: null, actions, learned: [],
       text: `the ${character} has no written position in this world.`,
       note: `MUD — ${character} has no placement fact; the turn is declined rather than guessed`,
+    };
+  }
+  if (isOutOfPlay(opened.state, character)) {
+    return {
+      character, k: turn, room: null, roomAfter: null, actions, learned: [], outOfPlay: true,
+      text: `the ${character} has been eaten. It takes no more turns.`,
+      note: `MUD — ${character} is placed out of play; the turn is declined, and every later one will be too`,
     };
   }
 
@@ -259,8 +256,10 @@ export async function runMudTurn(character, { world, memoryDir, env, graph, cach
   };
 }
 
-/** Step one: ask a room-mate about food, examine something unexamined, then
- *  make one seeded attempt at take/put/eat. The ask and the examine write
+/** Step one: talk to a room-mate, examine something unexamined, then make one
+ *  seeded attempt at take/put/eat. Talking comes first and always happens when
+ *  anyone else is standing here — two animals in one room greet each other,
+ *  and only what they had to SAY varies. The talk and the examine write
  *  testimony, which never folds into the playable state; only the
  *  manipulation touches the world. */
 async function investigateRoom({ character, turn, room, memoryDir, cache, recordSkip, runCommand, actions, notes }) {
@@ -276,13 +275,16 @@ async function investigateRoom({ character, turn, room, memoryDir, cache, record
     const offers = tellerFood.filter((thing) => !alreadyKnown.has(thing));
     const told = pickSeeded(offers, character, turn, room, `ask-${teller}`);
     if (!told) {
-      recordSkip(
-        "investigate",
-        tellerFood.length
-          ? `the ${character} already knows every food the ${teller} could name`
-          : `the ${teller} knows of no food to share`,
-        "",
-      );
+      // Still a real exchange, and still narrated as one: an animal that meets
+      // another animal always says something. Only the testimony is missing,
+      // because the teller had nothing this one didn't already know.
+      actions.push({
+        step: "investigate", kind: "ask", teller, thing: null, miss: false,
+        text: `the ${character} greets the ${teller}, but hears nothing new about food.`,
+      });
+      notes.push(`MUD — talk: ${character} greeted ${teller}; ${tellerFood.length
+        ? `${character} already knows every food ${teller} could name`
+        : `${teller} knows of no food to share`}`);
     } else {
       await recordTold(memoryDir, { asker: character, teller, thing: told, k: turn, cache });
       alreadyKnown.add(told);
@@ -369,8 +371,12 @@ async function rollAtEdge({ character, turn, memoryDir, runCommand, recordSkip }
   const { rows, state } = await readWorld(memoryDir);
   const room = state.placements.get(character)?.object ?? null;
   if (!room) return recordSkip("edge", "it has no position to roll from", "");
-  const edges = edgeDirectionsOf(state, room);
-  if (!edges.length) return recordSkip("edge", `the ${room} is mapped on every side`, "");
+  // The room's OWN kind decides which way a dig can go — there is nothing to
+  // tunnel sideways through above ground, and the burrow runs one level deep
+  // — so the candidate set is the dig verb's own, never a flat compass. A
+  // roll on a direction the verb would refuse spends the turn on a decline.
+  const edges = diggableDirections(rows, state, room);
+  if (!edges.length) return recordSkip("edge", `there is nowhere left to dig from the ${room}`, "");
 
   const foodItKnows = knownFood(rows, state, character);
   const foodStandsHere = foodItKnows.some((thing) => visibleRoomOf(rows, state, thing) === room);
