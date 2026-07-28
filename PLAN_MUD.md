@@ -333,33 +333,29 @@ anywhere). What it proves is the *governing shape* this whole document is named 
 world several characters mutate together, one of them able to dig new content into existence,
 each pathing toward a goal built from what it's actually been told. Backend D is how that shape
 eventually reaches a network; `mud.html` is proof the shape itself works, independent of and prior
-to that question — the same relationship `PLAN_ADVENTURE.md`'s single-player groundwork had to
-this document's own multi-user shift (see "Still named `PLAN_MUD.md`," above).
+to that question.
 
-Linked from the home page like the other nine demonstrations (`public/index.html`'s existing
-two-block-per-demo shape: a compact claim card in `<section class="claims">` — icon, `<h3>`
-headline, one-line description, `<span class="claim-page">` — plus a fuller feature section with
-an `<a class="open-link">` and a `<figure class="plate">` screenshot; bump the "nine
-demonstrations" eyebrow to "ten"). Capability claim: **"Multiple actors, one shared world."**
-`gen-screenshots.mjs`'s `PAGE_ORDER` array and per-page ready-wait function need a `"mud"` entry;
-`screenshots/manifest.json` follows automatically once that runs.
+Shipped and linked from the home page as the tenth demonstration (`public/index.html`'s
+two-block-per-demo shape: a claim card plus a fuller feature section with a screenshot).
+Capability claim: **"Multiple actors, one shared world."**
 
 ### Layout — a soil cross-section, not a flat grid
 
-Every existing demo page picks one visual register and commits to it: spider-fly's flat top-down
-canvas grid, adventure's text-first room digest, plan's step-by-step block replay. `mud.html`'s
-own register is a **layered soil cross-section** — four burrow-window cards in a 2×2 grid, with
-one large world map drawn as stacked strata bands (level 0 at the top down to level -4) that
-physically overlaps the seam between all four windows. The map gets in the way a little on
-purpose: it's the one visual reminder that all four "separate" windows are really one shared,
-physical world underneath them.
+Every demo page picks one visual register and commits to it: spider-fly's flat top-down canvas
+grid, adventure's text-first room digest, plan's step-by-step block replay. `mud.html`'s own
+register is a **layered soil cross-section** — two burrow panes, side by side on desktop and
+stacked on mobile, with a control deck and a graphical burrow survey sharing the page's own top
+row: the deck takes the left two-thirds (play, reset, the delay and max-turns sliders, the
+explanatory note), the survey takes the right third. The survey draws every currently-dug room as
+a real connected graph — named chambers, tunnels as strokes, a vertical shaft dashed — rather than
+a flat text list, so it reads as an actual map of the burrow.
 
 **Palette** — named for the subject, not a template default (not cream+terracotta, not
-near-black+acid-green): `--soil-deep #2B1D14` (level −4, background), `--soil-mid #4A3324`,
-`--soil-light #7A5A3D` (upper strata), `--root-moss #6B7A4F` (level 0's garden surface),
-`--parchment #EFE6D8` (window/card background — dug clay, not white), `--ink #2A211A` (text, warm
-near-black), `--burrow-glow #E8A33D` (the one warm accent — active windows, the currently-selected
-turn, a freshly-dug room's flourish — spent in one place, not scattered).
+near-black+acid-green): `--soil-deep #2B1D14` (background), `--soil-mid #4A3324`, `--soil-light
+#7A5A3D` (upper strata), `--root-moss #6B7A4F` (the garden surface), `--parchment #EFE6D8`
+(pane/card background — dug clay, not white), `--ink #2A211A` (text, warm near-black),
+`--burrow-glow #E8A33D` (the one warm accent — active panes, the current turn, a freshly-dug
+room's flourish — spent in one place, not scattered).
 
 **Type** — a characterful, slightly hand-cut display face for headings and room names (something
 in Fraunces' register — an ink-trap serif with real personality, used with restraint), a plain
@@ -371,209 +367,139 @@ rather than accidentally inconsistent.
 **Wireframe**:
 
 ```
++----------------------------------------+-------------------+
+|  control deck                          |  BURROW SURVEY    |
+|  play · reset · delay · max turns ·    |  (every dug room, |
+|  the explanatory note                  |   every character,|
+|                                         |   no fog of war)  |
++--------------------+--------------------+-------------------+
+|  pane A            |          pane B                        |
+|  (room · pouch ·   |          (room · pouch ·                |
+|   compass ring ·   |           compass ring ·                |
+|   chat+pills ·     |           chat+pills ·                  |
+|   known ground)    |           known ground)                 |
 +---------------------+---------------------+
-|  window NW           |          window NE  |
-|  (room · pouch ·     |    (room · pouch ·  |
-|   chat+pills · ctrl) |     chat+pills ·    |
-|            +---------+----------+  ctrl)   |
-|            |    WORLD MAP        |         |
-|            |  (all 5 strata,     |         |
-|            |   all 4 characters, |         |
-|            |   no fog of war)    |         |
-|            +---------+----------+          |
-|  window SW           |          window SE  |
-+---------------------+---------------------+
-   [auto] [turns: N] [delay ▬▬○▬▬] [max turns ▬▬▬○▬] [reset]   <- global rail
 ```
 
-**Signature element**: a dug room visibly opens into its strata band the turn it's created — a
-short, `prefers-reduced-motion`-respecting dirt-particle flourish in `--burrow-glow` — the one bold
-move on the page, everything else (the four windows, the rail) stays quiet and disciplined around
-it.
+Mobile stacks the same pieces top to bottom instead of side by side: the deck-and-survey row
+first, then pane A, then pane B, scrolling — each pane a fixed size regardless of how much its
+room description grows.
 
-### Per-window UI (×4)
+**Signature element**: a dug room visibly opens into the survey the turn it's created — a short,
+`prefers-reduced-motion`-respecting dirt-particle flourish in `--burrow-glow` — the one bold move
+on the page, everything else stays quiet and disciplined around it.
 
-- **Character**: one randomly selected burrowing-animal sprite, spawned at a random map location.
-- **Room view**: a burrow-graphic rendering of the current room, built over `adventure.mjs`'s
-  existing `worldDigest`/`worldDigestRows` text digest (`adventure.mjs:598,500`) the same way
-  spider-fly-viz.mjs layers absolutely-positioned sprite `<div>`s over a `<canvas>` board — the
-  digest stays the ground truth, the graphic is a rendering of it, not a replacement. **When two
-  characters share a room and one speaks** (the turn algorithm's ask/answer step, below) — **a
-  speech bubble renders over the room view**, anchored to the speaking character's sprite, holding
-  the short form of what was said (the full exchange still lands in that window's chat log). This
-  applies to any window whose room happens to hold the conversation, not just the two participants'
-  own windows — a bystander character's window shows the bubble too, since they're looking at the
-  same shared room. A short, `prefers-reduced-motion`-respecting fade, matching the dug-room
-  flourish's own restraint — not a second competing animation.
-- **Pouch** (this demo's name for the inventory — a satchel doesn't fit a burrowing animal).
-- **Chat, with pills**: reuse `plan-viz.mjs`'s existing `.chatlog`/`.chatask`/`.chatpills` block
-  close to verbatim — it already ships a scrolling log, a text input, and quick-fill pill buttons
-  (`data-fill="..."`), which is exactly the "chat with last messages and pills" the brief asks for.
-- **Movement**: `go <direction>` including `up`/`down` — **zero new grammar work**, `ace.mjs`'s
-  `IMPERATIVE_DIRECTIONS` (`ace.mjs:529`) already includes `up`/`down`, and `EXIT_PREDICATE_RE`
-  (`adventure.mjs:186`) already treats direction as a generic capture group, not a hardcoded
-  cardinal list. Multi-level movement needs new world *content* (exit facts wiring levels
-  together), not new parsing.
-- **`dig <direction>`** where no exit currently exists: creates a new room. This is genuinely new
-  interpreter code, not a taught-action-family extension — `IMPERATIVE_VERBS`
-  (`ace.mjs:528`) is a hard closed set with no `dig`/`eat`/`put` today, and every existing taught
-  action (Ashcombe's `RULE_KIND_ACTION_SIGNATURE`/`PRECOND`/`EFFECT`/`CONSTRAINT`) only ever states
-  facts about *existing* individuals — none of them mint a brand-new one. Digging mints a new room
-  individual, writes its exit facts, and spawns a random number of objects inside it. Say this
-  plainly rather than undersell it as "just another verb."
-- **Per-window play/pause/step, and a per-player turn counter**: reuse `viz-ticker.mjs`'s
-  `createTicker` — already extracted, already shared between spider-fly-viz.mjs and the
-  guess-number demo — one ticker instance per window.
-- **Mini-map** (top-right): the player's own level only, showing only what that character has
-  personally discovered — real fog of war. No existing precedent for this (neither adventure nor
-  spider-fly ships a minimap); new rendering work.
+### Per-pane UI (×2)
 
-### Global controls (the rail)
+- **Character**: two of the four burrowing-animal species (mole, vole, badger, groundhog) are
+  drawn at random each time the world starts or resets, one per pane.
+- **Room view**: one row tall. The viewing character's own sprite stands on the right; any other
+  character present in the room stands on the left; loose objects hang on the back wall in
+  portrait frames rather than scattered across the floor. Built over the same shared world state
+  the chat log reads — the graphic is a rendering of it, not a second source of truth. **When two
+  characters share a room and one talks to the other, a speech bubble renders over the speaker** in
+  both panes that can see the room, holding the short form of what was said (the full exchange
+  still lands in the chat log). A short, `prefers-reduced-motion`-respecting fade, matching the
+  dug-room flourish's own restraint.
+- **Pouch** (this demo's name for the inventory — a satchel doesn't fit a burrowing animal): shows
+  clean item names, not the underlying minted id a dug object carries internally.
+- **Chat, with pills**: a compass ring lays the six directions out at their own points on the
+  room view — north/south centered top and bottom, east/west at the side edges, up/down as their
+  own round chips — and offers only a `go` or a `dig` the world actually allows in that direction;
+  a direction with neither draws nothing. Non-movement pills (`look`, `what do you know about
+  food`, `talk to <character>`) sit below the ring, and only ever name a character actually
+  present in the room.
+- **Movement / dig**: `go <direction>` unchanged from the original grammar work. `dig <direction>`
+  still only succeeds where no exit exists yet, and now also respects the room's own kind: an
+  underground room can be dug on any exit-less side, the surface can only ever be dug straight
+  down (and back up again, once underground) — never sideways.
+- **Per-pane play/pause/step, and a genuine per-character turn count** — that character's own
+  tally, distinct from the deck's shared count.
+- **Known ground** (this demo's fog-of-war minimap): the room names that character has personally
+  visited, nothing more.
+- **Eaten**: a character that digs into the fox's den (below) is eaten. Its pane grays out, its
+  controls disappear behind a plain "eaten · N turns" notice, and it takes no further turns.
 
-- **Auto**: switches all four windows to play at once. Default on page load: only the top-left
-  window is in play mode, the other three start paused.
-- **Turn counter**: increments whenever *any* window's character takes a turn (not four separate
-  counters — this one is global, on top of each window's own per-player count).
-- **Delay slider**: the wait between turns in play mode. `plan-viz.mjs`'s existing play mode uses a
-  fixed-pace `wait(ms) => new Promise(r => setTimeout(r, ms))` helper — the slider is new, feeding
-  that same helper a variable value instead of a constant.
+### The control deck (the page's own top row, shared with the survey)
+
+- **Play**: starts every pane's ticker at once. Nothing plays on page load — a pane only starts
+  once its own play control, or the deck's, is clicked.
+- **Turn counter**: the shared count, incremented whenever any pane's character takes a turn —
+  shown alongside, and distinct from, each pane's own count.
+- **Delay slider**: the wait between turns in play mode.
 - **Max-turns slider**: a hard cap on the simulation length.
-- **Reset**.
-- **A short explanatory note**: plain prose describing what's actually happening on the page (four
-  independent characters, a shared world, honest not-yet-known gaps rather than omniscience) — not
-  sales copy, an orientation for a first-time visitor.
+- **Reset**: starts a fresh world and redraws which two characters are cast.
+- **A short explanatory note**: plain prose describing what's actually happening on the page — two
+  independent characters, one shared world, gaps that stay unknown rather than get guessed at —
+  not sales copy, an orientation for a first-time visitor.
 
 ### World / map model
 
-- **Level 0 is the garden** — pre-authored, all-surface, can only be dug *down* from (never up;
-  the surface is the ceiling). Predators live here, drawing on spider-fly's ecology-pass ordering
-  (`runEcologyPass`, `spider-fly.mjs:388` — catch → eat → starve → lay → hatch → spawn) as the
-  precedent for a threat sequence, though a predator's own decision rules are a smaller, separate
-  detail this document names rather than fully specifies here.
-- **Levels −1 through −4**: reached only by digging down from a room that has one.
-- **The central world map is the operator's omniscient view** — every level, every character, no
-  fog of war. This is deliberately the one place fog-of-war doesn't apply; each window's own
-  mini-map is where it does.
+- **The garden is the surface** — pre-authored, all outdoor, and can only be dug straight down
+  from, never sideways; the surface is the ceiling. A stationary fox lives in a den one dig off
+  the underground start room and never moves on its own; a character that digs into it is eaten.
+- **One level underground**, reached by digging down from the garden and extended sideways from
+  there by digging any side with no exit yet.
+- **The central survey is the operator's omniscient view** — every dug room, every character, no
+  fog of war, drawn as a real graph rather than a flat list. Each pane's own "known ground" is
+  where fog of war still applies.
 
 ### Creature stats
 
-Per-species mass and hunger-drain rate, directly generalizing `game-config.mjs`'s already
-per-species constants (`spiderMassDecrementPerTurn`, `flyMassDecrementPerTurn`,
-`game-config.mjs:16-29`) — one new constant table entry per burrowing-animal species, not a new
-mechanism. Larger species move and dig more than one position per turn — a new per-species
-speed/dig-reach stat with no existing precedent (spider-fly's agents always move exactly one cell).
+Per-species mass and hunger-drain rate, generalizing `game-config.mjs`'s per-species constants —
+one table entry per species. The fox is stationary and doesn't carry the same move/dig-reach stat
+the roaming species do; it only ever needs to be present in its den.
 
 ### The turn algorithm
 
 Every acting character's turn, in order:
 
 1. **Investigate the room** (always, every turn):
-   1. Ask another character present (or reachable) what food they know about.
-   2. Answer, if asked.
-   3. Learn: whatever the answer was becomes a new fact in the asking character's *own* memory,
-      with real provenance — this is new. Spider-fly's own told-fact mechanism
-      (`spider-fly-turn.mjs:401-429`) is an ephemeral single-tick JS object today, discarded after
-      the turn it arrives on, and there is no agent-to-agent ask/tell anywhere in the codebase —
-      only a human addressing one agent via chat. `mud.html` needs a genuinely durable version of
-      the same idea: a real fact write, not a one-tick parameter.
-   4. If an unexamined object or food item is present, examine it and remember the detail — also a
-      new durable, provenanced fact. `personKnowledgeLines`/`personRoomReport`
-      (`adventure.mjs:672,690`) are the closest existing precedent, but they read *static,
-      pre-authored* `mgx:knows-*` facts about NPCs, not facts a character accumulates dynamically
-      while playing — this needs new per-character fact-accumulation, not a reuse of that path
-      as-is.
-   5. Randomly do one of: take an object, put an object, eat an object (if it's food and the
-      character is below 50% mass) — reuses spider-fly's real mass economy directly: eating
-      transfers the eaten item's remaining mass, the same way the ecology pass's catch→eat step
-      already works.
-   6. Update memory with whatever changed.
-2. **Walk toward the nearest unexplored edge**, via a room-graph pathfinder built on
-   `planning.mjs`'s `findActionPath`/`findReachableSet` (`planning.mjs:30,63`) — domain-agnostic
-   BFS, exactly the layer `domain.mjs`'s generic taught-action interpreter already sits on for the
-   Hanoi/river-crossing chat lane, **not** `src/domain/codeplan/` (that planner is real but
-   code-graph-specific; forcing an animal's position into its entities/edges shape would be a
-   stretch). The goal: reach a room containing a food fact this character actually knows about.
-   Because `domain.mjs` is not omniscient by construction — every fact/action it can see comes
-   from the memory store's own rows — a character with no food fact yet simply has nothing to path
-   toward, and `findActionPath` returns its honest `null`. That miss *is* "I don't know where any
-   food is," not a bug to patch around.
+   1. If another character is present, talking to it is preferred over the other investigate
+      steps below — two characters sharing a room default to talking to each other, not past each
+      other.
+   2. Otherwise, ask what's known about food, answer if asked, and learn from the answer — a real,
+      provenanced fact written into the asking character's own memory, not a one-tick value.
+   3. If an unexamined object or food item is present, examine it and remember the detail, also as
+      a durable, provenanced fact.
+   4. Randomly do one of: take an object, put an object, eat an object (if it's food and the
+      character is below 50% mass) — eating transfers the eaten item's remaining mass.
+   5. Update memory with whatever changed.
+2. **Walk toward the nearest unexplored edge**, via a room-graph pathfinder. The goal is a room
+   holding a food fact this character actually knows about. A character with no food fact yet has
+   nothing to path toward, and the pathfinder returns a plain miss — that miss *is* "I don't know
+   where any food is," not a bug to patch around.
 3. **If this turn's walk reaches an edge**, independently roll a chance for *each* of the
-   following (not a single pick-one-of-three — a separate roll per option, per the brief's own
-   "1 chance per exit"/"1 chance per available direction"/"1 chance per edge direction"):
+   following (a separate roll per option, not a single pick-one-of-three):
    - each available exit toward food,
-   - each available dig direction (including down) — digging spends the whole turn, no movement,
-     and spawns a random number of objects in the new room,
+   - each available dig direction the room's own kind allows — digging into the fox's den ends
+     that character's run instead of opening a room,
    - each edge direction, to just keep following the edge toward food.
 
 ### A new NLP lane: listing what a character knows
 
-"What food do you know about" (and similar simple-English phrasings) needs a new reverse query:
-every food-class individual *this specific character* has a fact about — not the whole world's
-food. `objectClassChain` (`adventure.mjs:580`) already walks `rdf:type`/`rdfs:subClassOf` edges to
-check whether one object *is* food; listing every food a character knows about is a new, small
-query in the other direction, following the render conventions `personKnowledgeLines` already
-uses.
+"What food do you know about," and the same question addressed to a specific character by name
+("groundhog-1, what do you know about food"), both answer from that character's own accumulated
+food-knowledge facts — never the whole world's food, and never falling through to the code-graph
+chat lane's own fallback reply on a near-miss phrasing.
 
-### Sprites and the nature corpus — real new content, not a stretch
+### Sprites and the nature corpus
 
-- **Sprites**: `data/sprites/*.toml` (icon tier) and `data/sprites-large/*.toml` (large tier) are
-  hand-authored SVG-in-TOML, keyed by a `classes` field — `rabbit` and `mouse` already exist as
-  real precedent; mole, vole, badger, groundhog, and meerkat don't. Adding one is authoring a new
-  `.toml` file with an inline SVG body — no script changes, `sprite-facts.mjs`/`gen-sprite-facts.mjs`
-  auto-derive the rendering-metadata facts from any new `classes` entry. This only grounds facts
-  *about the icon* (what renders at what tier) — not real-world facts about the animal, which is
-  the corpus's job, below.
-- **Nature corpus**: `corpus/tier2/human.jsonl`/`human-large.jsonl`, fed by the already-defined
-  `"human-nature"` persona clump (`persona/codegen.mjs`), already has real precedent — `rabbit IsA
-  animal`, `badger IsA musteline mammal`, and a real `food` class with members like `bread`,
-  `vegetable`, `egg`. It does **not** have `carrot`, or any of mole/vole/groundhog/meerkat — this
-  confirms the brief's own instinct that it needs real new content, not just sprites, but there's a
-  clean, already-tested way to add it: either hand-extend `human.jsonl`/`human-large.jsonl` in the
-  same `{start, rel, end, weight, surfaceText}` row shape the existing rabbit/badger/food rows use,
-  or grow `corpus/conceptnet/filter-dump.mjs`'s `SEED_TERMS`/`EXTRA_SEEDS` list the same documented
-  way the tech domain was already grown once (`corpus/conceptnet/README.md`'s "Growing the slice").
-  Also more food spawning in the garden (level 0) generally — a content-tuning request, not new
-  mechanism.
+Mole, vole, badger, and groundhog all have hand-authored sprites; badger set the quality bar
+(a fixed-palette marking carrying the animal's own identity, limbs breaking the silhouette, a
+highlight that stays inside the body), and vole, mole, and groundhog have since been brought up to
+match it. A new fox sprite, sitting and marked as a predator rather than one of the playable
+species, was added for the den. The meerkat sprite, used elsewhere in the sprite set and not part
+of this demo's own roster, is now the visually weakest of the group and is a candidate for the
+same treatment. Nature-corpus content (real facts about each animal and its food) is unchanged
+from the original plan.
 
 ### Multiplayer threading
 
-`adventure.mjs`'s command-execution path hardcodes the literal string `"player"` in roughly 15
-call sites (`adventureTurn` and its precondition/effect/position/inventory helpers) — but the
-underlying state-reading primitives it calls (`currentPosition`, `visibleRoomOf`,
-`roomAffordances`, `objectClassChain`) already take an arbitrary subject individual, not
-`"player"` specifically. The real gap is threading an acting-subject parameter through those ~15
-call sites so four characters can each issue commands against the same shared world — a moderate,
-scoped refactor, not a rewrite. `runNpcPass` (`adventure.mjs:402`) is the closest existing
-precedent for driving several characters per tick, but only its *shape* (walk N individuals, read
-each one's own state, fire an action) is reusable — its actual decision logic (one deterministic,
-turn-gated taught Rule per NPC) is far simpler than this turn algorithm's ask/answer/learn/
-examine/take-or-put-or-eat/edge-walk-or-dig tree, so the decision function itself is new code, not
-a reuse.
-
-**No shared "agent loop" abstraction across spider-fly/adventure/plan/mud.** `PLAN_ADVENTURE.md`'s
-own Phase 5 already considered and explicitly closed this as not warranted — every existing demo
-composes the same underlying primitives (`findActionPath`, `domain.mjs`, `viz-ticker.mjs`) without
-a common wrapper, and `mud.html` follows that same precedent rather than inventing one.
-
-**Phasing for this demo** (independent of Backend D's phases 1-7, above — none of the following
-touches a network):
-
-1. World-model extension: multi-level exit facts (level 0 down to −4), the `dig`/`eat`/`put`
-   interpreter work (new room-minting code, new closed-set verbs), and the acting-subject threading
-   through `adventureTurn` for four simultaneous characters.
-2. Durable per-character learned facts and a real agent-to-agent ask/tell mechanism — extending
-   spider-fly's ephemeral told-fact into a genuine provenanced write; this piece doesn't exist
-   anywhere today and is the least precedented part of the whole demo.
-3. The food-seeking planner: a new room-graph operator catalogue over `planning.mjs`'s
-   `findActionPath`, honest-miss-by-construction via `domain.mjs`'s not-omniscient property.
-4. The new "what food do you know about" NLP query lane.
-5. Sprites (new burrowing-animal `.toml` files) and nature-corpus content (new
-   `human.jsonl`/`human-large.jsonl` rows or a grown ConceptNet seed slice).
-6. The page itself: the 2×2 grid + soil-cross-section map (the design plan above), per-window
-   controls (`viz-ticker.mjs` + `plan-viz.mjs`'s chat/pills UI), the global rail, and the new
-   per-window mini-map.
-7. Home-page and screenshot wiring: `index.html`'s tenth claim card + feature section,
-   `gen-screenshots.mjs`'s `PAGE_ORDER` entry.
+Done: `adventure.mjs` threads a real acting-subject parameter through its command path instead of
+a hardcoded `"player"`, and this demo casts as many simultaneous characters as it needs from that
+— no shared "agent loop" abstraction across spider-fly/adventure/plan/mud was needed to get there,
+consistent with `PLAN_ADVENTURE.md`'s own earlier call that a common wrapper isn't warranted.
 
 ## Proposed next architecture — real multi-browser worlds over WebRTC
 
