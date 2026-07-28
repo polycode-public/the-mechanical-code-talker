@@ -525,7 +525,7 @@ export function parseAce(sentence, lexicon = loadLexicon()) {
 // it is reported back on the command (`corrected`) for the caller to name in
 // its response — a synonym executes silently, a typo fix does not.
 
-const IMPERATIVE_VERBS = new Set(["go", "take", "drop", "open", "unlock", "close", "give", "look", "talk", "examine"]);
+const IMPERATIVE_VERBS = new Set(["go", "take", "drop", "open", "unlock", "close", "give", "look", "talk", "examine", "dig", "eat", "put"]);
 const IMPERATIVE_DIRECTIONS = new Set(["north", "south", "east", "west", "up", "down"]);
 
 // The object pronouns an imperative object slot may carry ("examine it", "take
@@ -665,13 +665,13 @@ export function parseImperative(sentence, lexicon = loadLexicon()) {
     if (object.term == null) return miss(object.unknown);
     return command({ object: object.term });
   }
-  if (verb === "examine" || verb === "talk") {
+  if (verb === "examine" || verb === "talk" || verb === "eat") {
     if (!rest.length) return null;
     const object = imperativeNP(lexicon, rest);
     if (object.term == null) return miss(object.unknown);
     return command({ object: object.term });
   }
-  if (verb === "go") {
+  if (verb === "go" || verb === "dig") {
     if (rest.length === 1) {
       if (IMPERATIVE_DIRECTIONS.has(lower[0])) return command({ direction: lower[0] });
       const fuzzyDir = fuzzyMatchInSet(lower[0], [...IMPERATIVE_DIRECTIONS], IMPERATIVE_FUZZY_BOUND);
@@ -689,6 +689,14 @@ export function parseImperative(sentence, lexicon = loadLexicon()) {
     const indirect = imperativeNP(lexicon, rest.slice(toIdx + 1));
     if (object.term == null || indirect.term == null) return miss([...object.unknown, ...indirect.unknown]);
     return command({ object: object.term, indirectObject: indirect.term });
+  }
+  if (verb === "put") {
+    const inIdx = lower.indexOf("in");
+    if (inIdx < 1 || inIdx === rest.length - 1) return null;
+    const object = imperativeNP(lexicon, rest.slice(0, inIdx));
+    const container = imperativeNP(lexicon, rest.slice(inIdx + 1));
+    if (object.term == null || container.term == null) return miss([...object.unknown, ...container.unknown]);
+    return command({ object: object.term, indirectObject: container.term });
   }
   if (verb === "unlock") {
     const withIdx = lower.indexOf("with");
