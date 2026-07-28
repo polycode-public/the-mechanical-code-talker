@@ -596,12 +596,15 @@ human-readable name — a mnemonic for the players, not a credential. To invite 
 member's page creates a fresh SDP offer and encodes it into a URL alongside the world id and name:
 `mud.html?offer=<blob>&world=<uuid>&name=<generated-name>`. That link travels however the two people
 already talk: pasted into a message, AirDropped, read out over the phone, whatever's at hand. Opening
-it makes the joiner's browser generate the matching answer, which then has to travel back the same
-informal way before the connection completes. This only works while the peer being invited is
-actually online to answer — it's a phone call, not a mailbox, and a link on its own can't finish a
-connection to someone who's stepped away. Once that first DataChannel opens, joining the rest of the
-room needs no further manual exchanges: the peer who answered already knows everyone else currently
-connected and introduces the newcomer to each of them automatically over the channel that's now open.
+it makes the joiner's browser generate the matching answer and offer it straight back as its own copy
+action, so sending it home is the same motion as receiving the invite was — paste the reply into the
+same thread. The inviter's page sits with a small "paste a reply to connect" box open, waiting; pasting
+the friend's reply there is what actually completes the connection. Two paste actions, one each way,
+and nothing automatic in between. This only works while the peer being invited is actually online to
+answer — it's a phone call, not a mailbox, and a link on its own can't finish a connection to someone
+who's stepped away. Once that first DataChannel opens, joining the rest of the room needs no further
+manual exchanges: the peer who answered already knows everyone else currently connected and introduces
+the newcomer to each of them automatically over the channel that's now open.
 The archivist peer described under Persistence, below, is the natural target for invites for exactly
 this reason — it's the one member guaranteed to be there to answer.
 
