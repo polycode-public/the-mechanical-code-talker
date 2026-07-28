@@ -341,6 +341,11 @@ e2e-web-adventure:
       node --disable-warning=ExperimentalWarning --test
       test-e2e/pages-adventure.test.mjs test-e2e/pages-adventure-edit.test.mjs
 
+e2e-web-mud:
+  extends: .e2e-web-base
+  script:
+    - node --disable-warning=ExperimentalWarning --test test-e2e/pages-mud.test.mjs
+
 # Its own job: dynamically-named tests (one per page x orientation), the
 # heaviest single file (~36s), cross-cutting so it doesn't fit any one channel.
 e2e-web-screenshot-sweep:
@@ -444,6 +449,8 @@ publish:npm:
     - job: e2e-web-plan
       optional: true
     - job: e2e-web-adventure
+      optional: true
+    - job: e2e-web-mud
       optional: true
     - job: e2e-web-screenshot-sweep
       optional: true
