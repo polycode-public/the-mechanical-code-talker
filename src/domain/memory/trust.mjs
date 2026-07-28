@@ -40,6 +40,11 @@ function parseChatTagRest(rest) {
  *      same tier the hand-written tier2 corpus already scores at; the :turnN
  *      segment a snapshot write carries records when, not who, and is not
  *      part of the Source identity)
+ *   mud:<character>[:turnN]    -> { kind:"corpus",   name:"mud:<character>" }
+ *     (one character's own testimony in a multi-character world — what it told
+ *      someone, what it examined for itself. Same tier as the world, but one
+ *      Source per character; the `mud:` prefix in the name keeps that Source
+ *      apart from a world of the same literal name)
  *   ace:chat:<session>@<ts>    -> { kind:"operator",  createdAt:<ts>, sessionId:<session> }
  *   teach:chat:<session>@<ts>  -> { kind:"teach",     createdAt:<ts>, sessionId:<session> }
  *   web:<url> | url:<url>      -> { kind:"web",       url:<url> }
@@ -98,6 +103,14 @@ export function provenanceTagToSource(tag) {
   // authored shipped content scored at the corpus tier; the per-turn tail is
   // dropped from the id so every write of one world corroborates one Source.
   if (head.startsWith("world:")) return { kind: "corpus", name: head.slice("world:".length).split(":")[0] || "unknown" };
+  // mud:<character>[:turnN] — one character's own testimony inside a multi-
+  // character world: what it told another character, and what it saw for
+  // itself. Same corpus tier as the world it stands in, but a Source per
+  // CHARACTER, so every claim an animal makes over a whole game accumulates on
+  // that animal's own track record rather than the world's. The name keeps the
+  // `mud:` prefix so `src:corpus:mud:<character>` can never collide with a
+  // `world:<name>` Source that happens to share the literal name.
+  if (head.startsWith("mud:")) return { kind: "corpus", name: `mud:${head.slice("mud:".length).split(":")[0] || "unknown"}` };
   if (head.startsWith("ace:")) return { kind: "operator", ...parseChatTagRest(head.slice("ace:".length)) };
   if (head.startsWith("teach:")) {
     // the chat teach lane's natural frames — chat.mjs's teachProvenanceTag

@@ -354,6 +354,37 @@ test("a world-tagged fact scores the corpus prior and materialises one Source pe
   }
 });
 
+test("a character's testimony tag parses to one Source per character, at the same tier as the world it stands in", () => {
+  assert.deepEqual(provenanceTagToSource("mud:badger:turn3"),
+    { kind: "corpus", name: "mud:badger" });
+  // the :turnN tail records when the character said it, not who — one Source
+  // per character, however many turns it keeps talking for
+  assert.deepEqual(provenanceTagToSource("mud:badger"),
+    { kind: "corpus", name: "mud:badger" });
+  // two characters are two Sources, and neither is the world's
+  assert.notDeepEqual(provenanceTagToSource("mud:badger"), provenanceTagToSource("mud:mole"));
+  assert.notDeepEqual(provenanceTagToSource("mud:ashcombe-hall"), provenanceTagToSource("world:ashcombe-hall"));
+});
+
+test("a testimony-tagged fact scores the corpus prior and materialises the character's own Source", async () => {
+  const dir = await mkdtemp(join(tmpdir(), "tmct-mud-trust-"));
+  try {
+    await appendFact(dir, {
+      subject: "vole-1", predicate: "mgx:knows-about", object: "burrow-1",
+      provenance: "mud:mole-1:turn4", createdAt: FRESH,
+    });
+    const m = await loadMemory(dir);
+    const source = m.individuals.find((i) => i.class === SOURCE_CLASS && i.id === "src:corpus:mud:mole-1");
+    assert.ok(source, "the character who spoke gets a Source of its own");
+    assert.equal(source.attributes.find((a) => a.prop === "mgx:sourceType")?.value, "corpus");
+    const fact = m.individuals.find((i) => i.class === "Fact");
+    const score = Number(fact.attributes.find((a) => a.prop === "mgx:trustScore")?.value);
+    assert.ok(score > SOURCE_PRIOR.corpusWeak && score <= SOURCE_PRIOR.corpus, `${score} sits at the corpus tier`);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test("entailed hook: min(premise trusts) × rule-confidence when premises are supplied; bare prior otherwise", () => {
   const sources = { e: src("e", "entailed") };
   // no premises → the bare entailed prior (0.3)

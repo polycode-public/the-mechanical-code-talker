@@ -184,6 +184,7 @@ const PLACEMENT_PREDICATES = new Set([
 const POSITION_PREDICATES = new Set(["mgx:on-top-of", "mgx:on-plane", "mgx:under"]);
 const OPEN_PREDICATE = "mgx:is-open";
 const MASS_PREDICATE = "mgx:hasMass";
+const KNOWS_ABOUT_PREDICATE = "mgx:knows-about";
 const EXIT_PREDICATE_RE = /^mgx:has-exit-([a-z]+)$/;
 // Where an eaten thing is placed. The world has no other way to say "out of
 // play", and no room can be called this, so the sentinel is the whole
@@ -448,6 +449,47 @@ async function writeWorldTurn(memoryDir, world, k, facts, cache) {
   if (cache) cache.rows = null;
 }
 
+// ---- what a character knows, and who it heard it from -----------------------
+//
+// A character telling another character about something, or looking at
+// something itself, leaves a REAL fact behind: an mgx:knows-about edge the
+// hearer carries from that turn on, readable by personKnowledgeLines exactly
+// like a world-authored one. Nothing here is per-tick or in-memory — one
+// animal can walk off, come back ten turns later, and still know what it was
+// told.
+//
+// These deliberately bypass writeWorldTurn. That tags everything
+// `world:<name>:turnN`, which credits the WORLD for the claim; a character's
+// testimony belongs to the character, so it carries its own
+// `mud:<character>:turnN` tag and lands on that character's own Source and
+// trust track record. The side effect is that worldActionRows filters these
+// out of the playable state fold, which is what you want — being told about a
+// stone must never move the stone.
+
+const characterTestimonyTag = (character, k) => `mud:${character}:turn${k}`;
+
+async function appendTestimony(memoryDir, { knower, source, thing, k, cache }) {
+  await appendFacts(memoryDir, [{
+    subject: knower, predicate: KNOWS_ABOUT_PREDICATE, object: thing,
+    provenance: characterTestimonyTag(source, k),
+  }]);
+  if (cache) cache.rows = null;
+}
+
+/** Record that `teller` told `asker` about `thing` on turn `k`. The asker is
+ *  the subject — it is the one who now knows — and the teller is named in the
+ *  provenance, so the claim corroborates the teller's Source, not the asker's. */
+export async function recordTold(memoryDir, { asker, teller, thing, k, cache = null }) {
+  return appendTestimony(memoryDir, { knower: asker, source: teller, thing, k, cache });
+}
+
+/** Record that `observer` examined `thing` on turn `k`. The observer is both
+ *  the subject and the provenance's character: it learned this by looking, so
+ *  it is its own source for it. */
+export async function recordExamined(memoryDir, { observer, thing, k, cache = null }) {
+  return appendTestimony(memoryDir, { knower: observer, source: observer, thing, k, cache });
+}
+
 // ---- the look/inventory digest ----------------------------------------------
 //
 // "look" and "what am I carrying" are generateCompletion calls (the shipped
@@ -475,7 +517,7 @@ const VIEW_EXCLUDED_PREDICATES = new Set([
   // Staff knowledge is the whole puzzle: a room look must never leak
   // "Gardener knows-where letter" or the game is spoiled. It reaches the
   // player only through the talk lane, which resolves each pointer live.
-  "mgx:knows-where", "mgx:knows-objective", "mgx:knows-about",
+  "mgx:knows-where", "mgx:knows-objective", KNOWS_ABOUT_PREDICATE,
   // Class-schema facts describe the ontology, not the scene. default-contains
   // is already materialized into real instances at load; default-plane and
   // subClassOf drive positional rendering by their own readers, and read as
@@ -754,7 +796,7 @@ export function personKnowledgeLines(rows, state, person) {
       ? `you'll find the ${thing} in the ${place.object}.`
       : `the ${thing} is in the ${place.object}.`);
   }
-  return { lines, aboutTopics: factObjects(rows, person, "mgx:knows-about") };
+  return { lines, aboutTopics: factObjects(rows, person, KNOWS_ABOUT_PREDICATE) };
 }
 
 /** What a person can report from where they stand this turn — derived each
