@@ -93,6 +93,182 @@ export function provenanceChipFor(answer, record, bucketFor) {
 }
 
 /**
+ * One connection state as something a person can read: the headline word, the
+ * sentence under it, and the tone the page styles it by.
+ *
+ * The tones matter as much as the words. `sharing` and `answering` are
+ * open-ended BY DESIGN — until a blob is pasted nothing is in flight, so there
+ * is no network activity to time out on, and they get the calm "waiting" tone
+ * rather than error styling. `failed` is the opposite case: both blobs were
+ * exchanged and ICE gave up, which is a real fault and reads as one.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function wireStateLabel(state) {
+  switch (state) {
+    case "sharing":
+      return {
+        tone: "waiting",
+        word: "waiting for their reply",
+        note: "nothing is in flight yet. this stays live as long as you leave the tab open.",
+      };
+    case "answering":
+      return {
+        tone: "waiting",
+        word: "send your reply back",
+        note: "they connect the moment they paste it. leave this tab open.",
+      };
+    case "connecting":
+      return {
+        tone: "working",
+        word: "connecting",
+        note: "both halves are exchanged. this settles either way in a few seconds.",
+      };
+    case "connected":
+      return {
+        tone: "live",
+        word: "connected",
+        note: "what you teach from here reaches every node below, and theirs reaches you.",
+      };
+    case "failed":
+      return {
+        tone: "failed",
+        word: "couldn't connect",
+        note: "your two machines can't reach each other directly. this works on the same network, or between machines that can already see each other.",
+      };
+    default:
+      return {
+        tone: "idle",
+        word: "not shared",
+        note: "this browser holds the only copy of what you teach it.",
+      };
+  }
+}
+
+/**
+ * One wire message as a row for the traffic tape: its type, which colour
+ * family it belongs to, and the one number or name worth showing beside it.
+ *
+ * The families reuse the page's own provenance colours rather than inventing a
+ * fourth palette — facts crossing the wire wear the same green as the "taught"
+ * chip they will end up carrying, bulk state wears the corpus blue, and the
+ * introductions that get two peers talking wear the entailed amber.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function tapeRowFor(direction, message) {
+  const type = message && typeof message.type === "string" ? message.type : "unknown";
+  const FAMILIES = {
+    op: "facts",
+    "sync-response": "facts",
+    "sync-request": "state",
+    hello: "greeting",
+    "peer-list": "greeting",
+    "intro-offer": "signal",
+    "intro-answer": "signal",
+  };
+  const count = (list, one, many) => {
+    const n = Array.isArray(list) ? list.length : 0;
+    return n + " " + (n === 1 ? one : many);
+  };
+  let detail = "";
+  if (type === "op" || type === "sync-response") detail = count(message.facts, "fact", "facts");
+  else if (type === "peer-list") detail = count(message.peers, "node", "nodes");
+  else if (type === "hello") detail = String(message.displayName || "");
+  else if (type === "intro-offer" || type === "intro-answer") detail = String(message.to || "").slice(0, 8);
+  return { type: type, direction: direction, detail: detail, family: FAMILIES[type] || "link" };
+}
+
+/**
+ * The node list: every peer this graph knows about, each with the node name it
+ * chose and the timestamp of the most recent fact it contributed, most
+ * recently active first.
+ *
+ * Activity is read off the provenance the wire already carries. A fact a peer
+ * broadcast arrives tagged `teach:peer:<their node name>@<ts>`, so the tag
+ * names both who contributed it and when — no separate activity ledger to
+ * keep. This node's own row reads its local `teach:`/`ace:` tags instead,
+ * because a fact never leaves here relabelled in its own store.
+ *
+ * `nameFor` and `latestTimestampOf` are injected (the room's own
+ * `displayNameFor` and the P2P layer's `latestProvenanceTimestamp`) rather
+ * than imported, so this stays `.toString()`-splice safe — the same discipline
+ * provenanceChipFor's injected `bucketFor` holds.
+ */
+export function nodeRowsFor({ peers, factRows, myPeerId, myDisplayName, nameFor, latestTimestampOf }) {
+  const activeByName = new Map();
+  let mineLastActive = null;
+  for (const row of factRows || []) {
+    for (const segment of String(row.provenance || "").split(" | ")) {
+      if (!segment) continue;
+      const at = latestTimestampOf(segment);
+      if (at === null) continue;
+      if (segment.indexOf("teach:peer:") === 0) {
+        const marker = segment.lastIndexOf("@");
+        if (marker < 0) continue;
+        const name = segment.slice("teach:peer:".length, marker);
+        const prior = activeByName.get(name);
+        if (prior === undefined || at > prior) activeByName.set(name, at);
+      } else if (segment.indexOf("teach:") === 0 || segment.indexOf("ace:") === 0) {
+        if (mineLastActive === null || at > mineLastActive) mineLastActive = at;
+      }
+    }
+  }
+  const rows = [{
+    peerId: myPeerId,
+    name: myDisplayName,
+    connected: true,
+    isSelf: true,
+    lastActiveAt: mineLastActive,
+  }];
+  for (const peer of peers || []) {
+    const name = nameFor(peer.peerId);
+    rows.push({
+      peerId: peer.peerId,
+      name: name,
+      connected: Boolean(peer.connected),
+      isSelf: false,
+      lastActiveAt: activeByName.has(name) ? activeByName.get(name) : null,
+    });
+  }
+  rows.sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0));
+  return rows;
+}
+
+/**
+ * The invite link: this page's own address carrying the offer blob, the world
+ * id and the world's name. Any query or fragment the current address already
+ * had is dropped, so inviting from a page that was itself opened from an
+ * invite mints a clean link rather than stacking two offers.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function inviteLinkFor(pageUrl, { blob, world, worldName }) {
+  const url = new URL(String(pageUrl));
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("offer", blob);
+  url.searchParams.set("world", world);
+  if (worldName) url.searchParams.set("name", worldName);
+  return url.toString();
+}
+
+/**
+ * The invite an address carries, or null when it carries none. The world id
+ * and name are read here only to show the joiner what they were invited to
+ * before anything runs — the offer blob's own envelope is what actually
+ * decides, and it wins wherever the two disagree.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function inviteParamsFrom(search) {
+  const params = new URLSearchParams(String(search || ""));
+  const offer = params.get("offer");
+  if (!offer) return null;
+  return { offer: offer, world: params.get("world") || "", worldName: params.get("name") || "" };
+}
+
+/**
  * The boot statusline while the big assets stream in — "loading the engine…
  * X MB / Y MB", aggregated across every asset currently downloading. `parts`
  * is an array of { loaded, total } byte counts (total 0 when the response
@@ -217,13 +393,16 @@ ${THEME_TOKENS_CSS}
      stacked), so this page keeps working exactly as before, just inside one
      more layer. */
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; display: flex; overflow: hidden; }
-  .chatCol { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  /* position: relative so the wave burst can anchor to the conversation
+     column; main.chatMain scrolls, and a burst anchored inside it would
+     scroll away mid-wave. */
+  .chatCol { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; position: relative; }
   .mono { font-family: ${MONO_STACK}; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; border: none; }
   button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   a { color: var(--corpus); }
 
-  .topbar { flex: 0 0 auto; display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; padding: .7rem 1.1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  .topbar { flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .55rem 1.1rem; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   .brand { display: flex; align-items: baseline; gap: .55rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .08em; color: var(--muted); }
   .legend { display: flex; gap: .8rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
@@ -335,15 +514,151 @@ ${THEME_TOKENS_CSS}
   .statsPanel .researched-facts li { margin: .12rem 0; }
   .statsPanel .researched-none { color: var(--muted); font-style: italic; margin: .3rem 0 0; }
 
+  /* ---- the page chrome's network controls -------------------------------
+     The connection's state belongs in the chrome, not only in a rail that a
+     narrow window hides: the pill, the wave, the invite and the help link stay
+     reachable at every width. */
+  .chrome { display: flex; align-items: center; gap: .45rem; }
+  .chrome-btn { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .03em; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .2rem .55rem; background: var(--card); text-decoration: none; display: inline-flex; align-items: center; gap: .3rem; white-space: nowrap; }
+  .chrome-btn:hover { color: var(--ink); border-color: var(--ink); }
+  .chrome-btn.share { color: var(--ink); }
+  .chrome-btn.help { width: 1.55rem; justify-content: center; padding: .2rem 0; }
+  .chrome-btn .hand { font-size: .82rem; line-height: 1; }
+
+  .state-pill { display: inline-flex; align-items: center; gap: .4rem; font-family: ${MONO_STACK}; font-size: .64rem; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .2rem .62rem; background: var(--card); white-space: nowrap; }
+  .state-pill .pill-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); flex: 0 0 auto; }
+  .state-pill[data-tone="waiting"] .pill-dot, .state-pill[data-tone="working"] .pill-dot { background: var(--corpus); animation: wire-breathe 2.4s ease-in-out infinite; }
+  .state-pill[data-tone="working"] .pill-dot { animation-duration: .9s; }
+  .state-pill[data-tone="live"] { color: var(--taught); border-color: var(--taught-t1); }
+  .state-pill[data-tone="live"] .pill-dot { background: var(--taught); }
+  .state-pill[data-tone="failed"] { color: var(--alert); border-color: var(--alert); }
+  .state-pill[data-tone="failed"] .pill-dot { background: var(--alert); }
+
+  /* ---- the network rail --------------------------------------------------
+     The docks encode the two halves of a shared graph: the room on the left
+     (who else holds this graph, and what is crossing the wire between you),
+     the mind on the right (what it knows), the conversation between them.
+     Mono throughout — the conversation is prose, the network is telemetry,
+     and the register shift is the point. */
+  .netPanel { flex: 0 0 288px; max-width: 288px; overflow-y: auto; border-right: 1px solid var(--line); padding: 1rem 1rem 1.6rem; font-family: ${MONO_STACK}; font-size: .72rem; line-height: 1.5; display: flex; flex-direction: column; gap: 1.15rem; }
+  .net-block { display: flex; flex-direction: column; gap: .45rem; }
+  .netPanel h2 { font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
+  .netPanel h2 .h2-count { letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
+  .net-field { display: flex; flex-direction: column; gap: .18rem; }
+  .net-label { font-size: .6rem; color: var(--muted); letter-spacing: .04em; }
+  .net-name-input { font-family: ${MONO_STACK}; font-size: .76rem; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: .28rem .45rem; width: 100%; box-sizing: border-box; }
+  .net-name-input:read-only { background: none; border-color: transparent; padding-left: 0; color: var(--muted); }
+  .net-note { font-size: .6rem; color: var(--muted); margin: 0; }
+  .net-help { font-size: .6rem; color: var(--corpus); }
+  .net-btn { font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .03em; color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: .32rem .62rem; background: var(--card); align-self: flex-start; }
+  .net-btn:hover { border-color: var(--ink); }
+  .net-btn:disabled { opacity: .5; cursor: default; }
+  .net-btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .net-btn.ghost { border-color: transparent; color: var(--muted); padding-left: 0; }
+  .net-blob { width: 100%; box-sizing: border-box; font-family: ${MONO_STACK}; font-size: .58rem; line-height: 1.35; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: .35rem .45rem; resize: vertical; word-break: break-all; }
+  .net-blob:focus { color: var(--ink); }
+  .net-problem { margin: 0; font-size: .64rem; color: var(--alert); border-left: 2px solid var(--alert); padding-left: .5rem; }
+  .net-invite { display: flex; flex-direction: column; gap: .4rem; padding-top: .2rem; }
+
+  /* connection state, as a real visual state at every point: a calm slow
+     breath while nothing is in flight, a quicker one while ICE runs, a solid
+     green edge when the channel is open, and a static dashed red when it
+     failed — a fault should not twitch. */
+  .wire-state { position: relative; overflow: hidden; border: 1px solid var(--line); border-left-width: 3px; border-radius: 3px; padding: .5rem .6rem .55rem .7rem; background: var(--card); }
+  .wire-state-word { display: block; font-size: .84rem; color: var(--ink); }
+  .wire-state-note { display: block; margin-top: .25rem; font-size: .6rem; color: var(--muted); }
+  .wire-state[data-tone="waiting"], .wire-state[data-tone="working"] { border-left-color: var(--corpus); }
+  .wire-state[data-tone="waiting"]::before, .wire-state[data-tone="working"]::before { content: ""; position: absolute; left: -3px; top: 0; bottom: 0; width: 3px; background: var(--corpus); animation: wire-breathe 2.4s ease-in-out infinite; }
+  .wire-state[data-tone="working"]::before { animation-duration: .9s; }
+  .wire-state[data-tone="live"] { border-left-color: var(--taught); background: var(--taught-soft); }
+  .wire-state[data-tone="live"] .wire-state-word { color: var(--taught); }
+  .wire-state[data-tone="failed"] { border-style: dashed; border-left-style: solid; border-left-color: var(--alert); background: var(--alert-soft); }
+  .wire-state[data-tone="failed"] .wire-state-word { color: var(--alert); }
+  @keyframes wire-breathe { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
+
+  .node-list { list-style: none; margin: 0; padding: 0; }
+  .node-row { display: flex; align-items: center; gap: .45rem; padding: .3rem .1rem; border-bottom: 1px dotted var(--line); }
+  .node-row:last-child { border-bottom: none; }
+  .node-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--taught); flex: 0 0 auto; }
+  .node-row[data-away="true"] .node-dot { background: none; box-shadow: inset 0 0 0 1px var(--muted); }
+  .node-name { color: var(--ink); font-size: .74rem; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
+  .node-row[data-self="true"] .node-name::after { content: " (you)"; color: var(--muted); font-size: .62rem; }
+  .node-when { color: var(--muted); font-size: .6rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .node-hand { display: inline-block; font-size: .82rem; opacity: 0; transform-origin: 70% 80%; }
+  .node-row[data-waving="true"] .node-hand { opacity: 1; animation: hand-wave .8s ease-in-out infinite; }
+  .node-empty { color: var(--muted); font-size: .64rem; margin: 0; }
+  @keyframes hand-wave { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(20deg); } }
+
+  /* the wire tape — this page's own instrument. Every message in and out, in
+     arrival order, newest first so the latest is readable without scrolling.
+     The 3px bar carries the message family in the page's own provenance
+     colours; the type is spelled out beside it, so colour is never the only
+     thing distinguishing one row from another. */
+  .net-tape-block { flex: 1 1 auto; min-height: 0; }
+  .tape-meter { display: flex; flex-wrap: wrap; gap: .15rem .7rem; margin: 0 0 .3rem; }
+  .meter-item { display: inline-flex; align-items: center; gap: .3rem; font-size: .6rem; color: var(--muted); }
+  .meter-bar { width: 5px; height: 5px; border-radius: 1px; flex: 0 0 auto; }
+  .meter-n { color: var(--ink); font-variant-numeric: tabular-nums; }
+  .tape { list-style: none; margin: 0; padding: 0; max-height: 20rem; overflow-y: auto; border-top: 1px solid var(--line); }
+  .tape-row { display: grid; grid-template-columns: 3px auto minmax(0, 1fr) auto; align-items: center; gap: .4rem; padding: .18rem 0 .18rem .2rem; border-bottom: 1px dotted var(--line); font-size: .6rem; font-variant-numeric: tabular-nums; }
+  .tape-row:first-child { animation: tape-arrive .6s ease-out; }
+  .tape-bar { align-self: stretch; border-radius: 1px; background: var(--muted); }
+  .tape-clock { color: var(--muted); }
+  .tape-type { color: var(--ink); overflow-wrap: anywhere; }
+  .tape-detail { color: var(--muted); text-align: right; white-space: nowrap; }
+  .tape-row[data-dir="out"] .tape-type::before { content: "\\2192 "; color: var(--muted); }
+  .tape-row[data-dir="in"] .tape-type::before { content: "\\2190 "; color: var(--muted); }
+  .tape-row[data-dir="note"] .tape-type::before { content: "\\00b7 "; color: var(--muted); }
+  .tape-row[data-family="facts"] .tape-bar { background: var(--taught); }
+  .tape-row[data-family="state"] .tape-bar { background: var(--corpus); }
+  .tape-row[data-family="greeting"] .tape-bar { background: var(--entail); }
+  .tape-row[data-family="signal"] .tape-bar { background: var(--entail-t1); }
+  .tape-row[data-family="fault"] .tape-bar { background: var(--alert); }
+  .tape-row[data-family="fault"] .tape-type { color: var(--alert); }
+  .tape-empty { color: var(--muted); font-size: .62rem; padding: .45rem 0 0; margin: 0; }
+  @keyframes tape-arrive { from { background: var(--corpus-soft); } to { background: transparent; } }
+
+  .netPanel-close { display: none; align-self: flex-end; font-family: ${MONO_STACK}; font-size: .8rem; color: var(--muted); padding: 0 .2rem; }
+
+  /* the join card: the only thing a joiner sees until they act. The world's
+     generated two-word name is the one place it gets to be a headline. */
+  .joinCard { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
+  .joinCard-inner { background: var(--card); border: 1px solid var(--line); border-radius: 8px; width: 100%; max-width: 27rem; padding: 1.5rem 1.6rem 1.3rem; box-shadow: 0 18px 48px rgba(0, 0, 0, .3); display: flex; flex-direction: column; gap: .8rem; }
+  .joinCard-eyebrow { font-family: ${MONO_STACK}; font-size: .62rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+  .joinCard-world { font-size: 1.75rem; line-height: 1.1; margin: -.35rem 0 0; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+  .joinCard-body { font-size: .88rem; color: var(--muted); margin: 0; max-width: 36ch; }
+  .joinCard .net-btn.primary { font-size: .8rem; padding: .45rem .9rem; }
+  .joinCard-reply { display: flex; flex-direction: column; gap: .45rem; }
+
+  /* a wave, on every page it reaches: the waver's node name, over the
+     conversation, for as long as the wave is recent. */
+  .waveBurst { position: absolute; left: 50%; bottom: 1.1rem; transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; align-items: center; gap: .3rem; pointer-events: none; }
+  .wave-pill { display: flex; align-items: center; gap: .45rem; background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: .28rem .8rem .28rem .6rem; font-family: ${MONO_STACK}; font-size: .7rem; color: var(--ink); box-shadow: 0 4px 14px rgba(0, 0, 0, .16); animation: wave-rise .3s ease-out; }
+  .wave-pill .hand { display: inline-block; font-size: 1rem; transform-origin: 70% 80%; animation: hand-wave .8s ease-in-out infinite; }
+  @keyframes wave-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  .copyTip { position: fixed; z-index: 60; background: var(--ink); color: var(--bg); font-family: ${MONO_STACK}; font-size: .64rem; padding: .28rem .55rem; border-radius: 4px; pointer-events: none; box-shadow: 0 3px 10px rgba(0, 0, 0, .22); animation: wave-rise .14s ease-out; }
+
+  @media (max-width: 1080px) {
+    /* the rail becomes a drawer rather than disappearing: the invite flow has
+       to stay reachable on a laptop and a phone alike. */
+    .netPanel { position: fixed; left: 0; top: 0; bottom: 0; width: 288px; max-width: 86vw; flex: none; z-index: 30; background: var(--bg); transform: translateX(-101%); transition: transform .18s ease-out; }
+    body.net-open .netPanel { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, .3); }
+    .netPanel-close { display: block; }
+  }
   @media (max-width: 860px) {
     .statsPanel { display: none; }
   }
   @media (max-width: 560px) {
     .legend { display: none; }
     .bubble { max-width: 92%; }
+    .chrome-btn.share span.share-word { display: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     * { scroll-behavior: auto !important; }
+    .wire-state[data-tone="waiting"]::before, .wire-state[data-tone="working"]::before,
+    .state-pill .pill-dot, .tape-row:first-child, .netPanel { animation: none; transition: none; }
+    .wave-pill, .wave-pill .hand, .node-row[data-waving="true"] .node-hand, .copyTip { animation: none; }
   }
 
   /* print: the WHOLE transcript, not the scrolled-into-view slice — the
@@ -359,17 +674,92 @@ ${THEME_TOKENS_CSS}
     main.chatMain { overflow: visible; height: auto; }
     .messages { min-height: 0; }
     form.composer, .statusline, .statsPanel, .legend { display: none; }
+    .netPanel, .joinCard, .waveBurst, .chrome, .copyTip { display: none; }
   }
 </style>
 </head>
 <body>
+  <aside class="netPanel" id="netPanel" aria-label="the shared world: this node, its connection, the other nodes, and the wire">
+    <button type="button" class="netPanel-close" id="netPanelClose" aria-label="close the network panel">&times;</button>
+    <section class="net-block">
+      <h2>this node</h2>
+      <div class="net-field">
+        <label class="net-label" for="nodeNameInput">your node name</label>
+        <input class="net-name-input" id="nodeNameInput" type="text" autocomplete="off" spellcheck="false"
+          placeholder="two words from the graph's own vocabulary">
+      </div>
+      <div class="net-field">
+        <label class="net-label" for="worldNameInput">the graph you are sharing</label>
+        <input class="net-name-input" id="worldNameInput" type="text" autocomplete="off" spellcheck="false"
+          placeholder="named when you first invite someone">
+      </div>
+      <p class="net-note">both names are facts in the graph, not settings. change yours whenever you like.</p>
+    </section>
+
+    <section class="net-block">
+      <h2>connection</h2>
+      <div class="wire-state" id="wireState" data-tone="idle" role="status">
+        <span class="wire-state-word" id="wireStateWord">not shared</span>
+        <span class="wire-state-note" id="wireStateNote">this browser holds the only copy of what you teach it.</span>
+      </div>
+      <div class="net-invite" id="sharePanel" hidden>
+        <div class="net-field">
+          <label class="net-label" for="shareLink">the link, in case the copy didn&#8217;t take</label>
+          <textarea class="net-blob" id="shareLink" rows="2" readonly></textarea>
+        </div>
+        <p class="net-note">each link invites one person. invite again for the next.</p>
+        <div class="net-field">
+          <label class="net-label" for="replyBox">paste their reply here</label>
+          <textarea class="net-blob" id="replyBox" rows="3" placeholder="the reply they send back"></textarea>
+        </div>
+        <button type="button" class="net-btn" id="replyBtn">connect</button>
+        <p class="net-problem" id="replyProblem" role="alert" hidden></p>
+      </div>
+      <div class="net-invite" id="answerPanel" hidden>
+        <div class="net-field">
+          <label class="net-label" for="replyOut">your reply &#8212; send it back the same way the invite reached you</label>
+          <textarea class="net-blob" id="replyOut" rows="3" readonly></textarea>
+        </div>
+        <button type="button" class="net-btn" id="copyReplyBtn">copy it again</button>
+      </div>
+      <a class="net-help" href="./help.html#sharing" target="_blank" rel="noopener">how sharing works &#8599;</a>
+    </section>
+
+    <section class="net-block">
+      <h2>nodes <span class="h2-count" id="nodeCount"></span></h2>
+      <ul class="node-list" id="nodeList"></ul>
+      <p class="node-empty" id="nodeEmpty">nobody else yet. invite someone and their node appears here.</p>
+    </section>
+
+    <section class="net-block net-tape-block">
+      <h2>wire <span class="h2-count" id="tapeTotal"></span></h2>
+      <div class="tape-meter" id="tapeMeter"></div>
+      <ol class="tape" id="tape"></ol>
+      <p class="tape-empty" id="tapeEmpty">every message this browser sends or receives lands here, as it happens.</p>
+    </section>
+  </aside>
   <div class="chatCol">
     <header class="topbar">
       <div class="brand">
         <span class="eyebrow">the-mechanical-code-talker</span>
       </div>
       <div class="legend" aria-hidden="true">${legendHtml}</div>
+      <div class="chrome">
+        <button type="button" class="state-pill" id="statePill" data-tone="idle"
+          title="the shared-world connection; click to open the network panel">
+          <i class="pill-dot"></i><span id="statePillWord">not shared</span>
+        </button>
+        <button type="button" class="chrome-btn" id="waveBtn" title="wave to everyone connected to this graph">
+          <span class="hand">&#128075;</span> wave
+        </button>
+        <button type="button" class="chrome-btn share" id="shareBtn" title="copy a link that invites one person into this graph">
+          invite<span class="share-word"> someone</span>
+        </button>
+        <a class="chrome-btn help" href="./help.html#chat" target="_blank" rel="noopener"
+          title="how this page works, in a new tab" aria-label="help, opens in a new tab">?</a>
+      </div>
     </header>
+    <div class="waveBurst" id="waveBurst" aria-live="polite"></div>
     <main class="chatMain">
       <div class="messages" id="messages" role="log" aria-live="polite" aria-label="Conversation"></div>
     </main>
@@ -414,6 +804,22 @@ ${THEME_TOKENS_CSS}
     <div id="statsPanelStats"><p class="empty">loading memory stats&hellip;</p></div>
     <div id="researchedPanel"></div>
   </aside>
+  <div class="joinCard" id="joinCard" role="dialog" aria-labelledby="joinWorld" hidden>
+    <div class="joinCard-inner">
+      <p class="joinCard-eyebrow" id="joinEyebrow">you&#8217;ve been invited to</p>
+      <h1 class="joinCard-world" id="joinWorld"></h1>
+      <p class="joinCard-body" id="joinBody">Nothing has run yet. The button below makes your reply and copies it &#8212; send it back the same way this invite reached you, and leave this tab open.</p>
+      <button type="button" class="net-btn primary" id="joinBtn">create my reply</button>
+      <p class="net-problem" id="joinProblem" role="alert" hidden></p>
+      <div class="joinCard-reply" id="joinReplyWrap" hidden>
+        <label class="net-label" for="joinReply">your reply, copied &#8212; send it back now</label>
+        <textarea class="net-blob" id="joinReply" rows="3" readonly></textarea>
+        <button type="button" class="net-btn" id="joinCopyBtn">copy it again</button>
+      </div>
+      <button type="button" class="net-btn ghost" id="joinDismiss">start talking on your own instead</button>
+      <a class="net-help" href="./help.html#sharing" target="_blank" rel="noopener">how sharing works &#8599;</a>
+    </div>
+  </div>
 <script src="./chat-browser.bundle.js"></script>
 <script>
 (function () {
@@ -432,6 +838,11 @@ ${THEME_TOKENS_CSS}
   const renderStatsPanelInto = ${renderStatsPanelInto.toString()};
   const createTicker = ${createTicker.toString()};
   const prefersReducedMotion = ${prefersReducedMotion.toString()};
+  const wireStateLabel = ${wireStateLabel.toString()};
+  const tapeRowFor = ${tapeRowFor.toString()};
+  const nodeRowsFor = ${nodeRowsFor.toString()};
+  const inviteLinkFor = ${inviteLinkFor.toString()};
+  const inviteParamsFrom = ${inviteParamsFrom.toString()};
   const DIGEST_STRUCTURES = ${digestStructuresJson};
   const el = (id) => document.getElementById(id);
 
@@ -1126,6 +1537,543 @@ ${THEME_TOKENS_CSS}
     if (persist) await persist.clear();
     window.location.reload();
   });
+
+  // ---- the shared world: nodes, the wire, and the two-paste handshake -----
+  // Every piece of networking arrives from ./vendor/p2p.js, the site's own
+  // shared P2P asset, imported the first time it is actually wanted rather
+  // than at boot — a visitor who never shares never waits for it. The room
+  // owns signaling, the mesh and the merge; this block owns what a person
+  // sees and clicks, and nothing else.
+  const netPanelEl = el("netPanel");
+  const nodeNameInputEl = el("nodeNameInput");
+  const worldNameInputEl = el("worldNameInput");
+  const wireStateEl = el("wireState");
+  const wireStateWordEl = el("wireStateWord");
+  const wireStateNoteEl = el("wireStateNote");
+  const statePillEl = el("statePill");
+  const statePillWordEl = el("statePillWord");
+  const sharePanelEl = el("sharePanel");
+  const shareLinkEl = el("shareLink");
+  const replyBoxEl = el("replyBox");
+  const replyProblemEl = el("replyProblem");
+  const answerPanelEl = el("answerPanel");
+  const replyOutEl = el("replyOut");
+  const nodeListEl = el("nodeList");
+  const nodeEmptyEl = el("nodeEmpty");
+  const nodeCountEl = el("nodeCount");
+  const tapeEl = el("tape");
+  const tapeEmptyEl = el("tapeEmpty");
+  const tapeMeterEl = el("tapeMeter");
+  const tapeTotalEl = el("tapeTotal");
+  const waveBurstEl = el("waveBurst");
+  const joinCardEl = el("joinCard");
+  const joinWorldEl = el("joinWorld");
+  const joinEyebrowEl = el("joinEyebrow");
+  const joinBodyEl = el("joinBody");
+  const joinBtn = el("joinBtn");
+  const joinProblemEl = el("joinProblem");
+  const joinReplyWrapEl = el("joinReplyWrap");
+  const joinReplyEl = el("joinReply");
+  const joinDismissBtn = el("joinDismiss");
+  const shareBtn = el("shareBtn");
+  const waveBtn = el("waveBtn");
+  const copyReplyBtn = el("copyReplyBtn");
+  const joinCopyBtn = el("joinCopyBtn");
+
+  const P2P_ASSET = "./vendor/p2p.js";
+  const NODE_NAME_KEY = "tmct.chat.nodeName";
+  const invite = inviteParamsFrom(window.location.search);
+
+  let p2p = null;
+  let p2pLoad = null;
+  let room = null;
+  let myPeerId = null;
+  let myDisplayName = "";
+  let worldId = "";
+  let worldName = "";
+  let waveTimer = null;
+  let nodeClockTimer = null;
+  let channelCount = 0;
+
+  function loadP2p() {
+    if (!p2pLoad) {
+      p2pLoad = import(P2P_ASSET).then(function (mod) { p2p = mod; return mod; });
+      p2pLoad.catch(function (err) {
+        noteTape("note", "fault", "networking unavailable", err && err.message ? err.message : String(err));
+      });
+    }
+    return p2pLoad;
+  }
+  window.tmctP2pLoad = loadP2p;
+
+  function readStoredNodeName() {
+    try { return localStorage.getItem(NODE_NAME_KEY) || ""; } catch { return ""; }
+  }
+  function writeStoredNodeName(name) {
+    try { localStorage.setItem(NODE_NAME_KEY, name); } catch { /* private mode — the name still holds for this visit */ }
+  }
+
+  async function ensureIdentity() {
+    const mod = await loadP2p();
+    if (!myPeerId) myPeerId = mod.generatePeerId();
+    if (!myDisplayName) {
+      myDisplayName = readStoredNodeName() || mod.generateDisplayName();
+      nodeNameInputEl.value = myDisplayName;
+    }
+    if (!worldId) worldId = invite && invite.world ? invite.world : mod.generateWorldId();
+    if (!worldName) {
+      worldName = invite && invite.worldName ? invite.worldName : mod.generateDisplayName();
+      worldNameInputEl.value = worldName;
+    }
+  }
+
+  // The one place a transport gets made, which makes it the one place every
+  // message crossing one can be seen. The room asks for transports through
+  // this factory and never learns it is being watched.
+  function instrumentedTransport() {
+    const transport = p2p.createTransport({ iceServers: [] });
+    const channel = "ch" + (++channelCount);
+    transport.onMessage(function (message) { noteWire("in", message, channel); });
+    transport.onOpen(function () { noteTape("note", "link", "channel open", channel); });
+    transport.onClose(function () { noteTape("note", "link", "channel closed", channel); });
+    return {
+      createOffer: function () {
+        return transport.createOffer().then(function (sdp) { noteTape("note", "signal", "offer minted", channel); return sdp; });
+      },
+      createAnswerFor: function (offerSdp) {
+        return transport.createAnswerFor(offerSdp).then(function (sdp) { noteTape("note", "signal", "answer minted", channel); return sdp; });
+      },
+      completeWithAnswer: function (answerSdp) {
+        noteTape("note", "signal", "answer accepted", channel);
+        return transport.completeWithAnswer(answerSdp);
+      },
+      send: function (message) { transport.send(message); noteWire("out", message, channel); },
+      onMessage: function (fn) { transport.onMessage(fn); },
+      onOpen: function (fn) { transport.onOpen(fn); },
+      onClose: function (fn) { transport.onClose(fn); },
+      close: function () { transport.close(); },
+      get connectionState() { return transport.connectionState; },
+    };
+  }
+
+  async function ensureRoom() {
+    if (room) return room;
+    const mod = await loadP2p();
+    await ensureIdentity();
+    if (!window.tmctChatSession) await window.tmctChatReady;
+    if (!window.tmctChatSession) throw new Error("the chat engine didn't finish booting");
+    room = mod.createP2pRoom({
+      memoryDir: window.tmctChatSession.memoryDir,
+      myPeerId: myPeerId,
+      myDisplayName: myDisplayName,
+      worldId: worldId,
+      worldName: worldName,
+      transportFactory: instrumentedTransport,
+      syncableFacts: mod.chatSyncableFacts,
+    });
+    room.onStateChanged(function (state) {
+      noteTape("note", state === "failed" ? "fault" : "state", "state " + state, "");
+      renderWire();
+      renderStatus();
+    });
+    room.onPeersChanged(function () { renderNodes(); renderStatus(); });
+    room.onFactsChanged(function (payload) {
+      noteTape("note", "facts", "merged", payload.merged + (payload.merged === 1 ? " fact" : " facts"));
+      renderStatsPanel();
+      renderNodes();
+      renderWaves();
+    });
+    await room.start();
+    // The world's name is written into the graph the moment the room starts,
+    // and this version retracts nothing — so the field stops taking edits.
+    worldNameInputEl.readOnly = true;
+    worldNameInputEl.title = "written into the graph when this world started";
+    window.tmctP2pRoom = room;
+    noteTape("note", "link", "world " + worldName, myDisplayName);
+    renderWire();
+    renderNodes();
+    renderStatus();
+    if (!nodeClockTimer) nodeClockTimer = setInterval(renderNodes, 10000);
+    return room;
+  }
+
+  // ---- the wire tape: every message, as it happens ------------------------
+  const TAPE_CAP = 240;
+  const TAPE_FAMILY_COLOR = {
+    facts: "var(--taught)",
+    state: "var(--corpus)",
+    greeting: "var(--entail)",
+    signal: "var(--entail-t1)",
+    fault: "var(--alert)",
+    link: "var(--muted)",
+  };
+  const tapeCounts = new Map();
+  let wireMessageCount = 0;
+
+  function tapeClock() {
+    const at = new Date();
+    const pad = function (n, width) { return String(n).padStart(width, "0"); };
+    return pad(at.getHours(), 2) + ":" + pad(at.getMinutes(), 2) + ":" + pad(at.getSeconds(), 2) + "." + pad(at.getMilliseconds(), 3);
+  }
+
+  function pushTape(entry) {
+    // The meter counts real wire messages only; the tape below shows those
+    // plus the local notes (state changes, a channel opening) that explain
+    // them. Folding notes into the counts would make "12 op" mean two things.
+    if (entry.dir !== "note") {
+      wireMessageCount += 1;
+      tapeCounts.set(entry.type, (tapeCounts.get(entry.type) || 0) + 1);
+    }
+    tapeEmptyEl.hidden = true;
+    const row = document.createElement("li");
+    row.className = "tape-row";
+    row.dataset.dir = entry.dir;
+    row.dataset.family = entry.family;
+    row.dataset.type = entry.type;
+    const bar = document.createElement("i");
+    bar.className = "tape-bar";
+    const clock = document.createElement("span");
+    clock.className = "tape-clock";
+    clock.textContent = tapeClock();
+    const type = document.createElement("span");
+    type.className = "tape-type";
+    type.textContent = entry.type;
+    const detail = document.createElement("span");
+    detail.className = "tape-detail";
+    detail.textContent = entry.detail || "";
+    row.appendChild(bar);
+    row.appendChild(clock);
+    row.appendChild(type);
+    row.appendChild(detail);
+    tapeEl.insertBefore(row, tapeEl.firstChild);
+    while (tapeEl.childElementCount > TAPE_CAP) tapeEl.removeChild(tapeEl.lastElementChild);
+    renderTapeMeter();
+  }
+
+  function noteWire(direction, message, channel) {
+    const row = tapeRowFor(direction, message);
+    pushTape({ dir: direction, family: row.family, type: row.type, detail: row.detail || channel });
+  }
+  function noteTape(dir, family, type, detail) {
+    pushTape({ dir: dir, family: family, type: type, detail: detail });
+  }
+
+  function renderTapeMeter() {
+    tapeTotalEl.textContent = wireMessageCount + (wireMessageCount === 1 ? " message" : " messages");
+    tapeMeterEl.textContent = "";
+    const counted = [...tapeCounts.entries()].sort(function (a, b) { return b[1] - a[1]; });
+    for (const pair of counted) {
+      const item = document.createElement("span");
+      item.className = "meter-item";
+      item.dataset.type = pair[0];
+      const bar = document.createElement("i");
+      bar.className = "meter-bar";
+      bar.style.background = TAPE_FAMILY_COLOR[tapeRowFor("in", { type: pair[0] }).family] || "var(--muted)";
+      const label = document.createElement("span");
+      label.textContent = pair[0];
+      const count = document.createElement("span");
+      count.className = "meter-n";
+      count.textContent = String(pair[1]);
+      item.appendChild(bar);
+      item.appendChild(label);
+      item.appendChild(count);
+      tapeMeterEl.appendChild(item);
+    }
+  }
+
+  // ---- what a person sees: state, nodes, waves ----------------------------
+  function renderWire() {
+    const label = wireStateLabel(room ? room.state : "idle");
+    wireStateEl.dataset.tone = label.tone;
+    wireStateWordEl.textContent = label.word;
+    wireStateNoteEl.textContent = label.note;
+    statePillEl.dataset.tone = label.tone;
+    statePillWordEl.textContent = label.word;
+    sharePanelEl.hidden = !shareLinkEl.value;
+    answerPanelEl.hidden = !replyOutEl.value;
+  }
+
+  function relativeWhen(at, nowMs) {
+    if (at === null || at === undefined) return "—";
+    const seconds = Math.max(0, Math.round((nowMs - at) / 1000));
+    if (seconds < 5) return "now";
+    if (seconds < 60) return seconds + "s";
+    if (seconds < 3600) return Math.round(seconds / 60) + "m";
+    if (seconds < 86400) return Math.round(seconds / 3600) + "h";
+    return Math.round(seconds / 86400) + "d";
+  }
+
+  function renderNodes() {
+    if (!room || !p2p) {
+      nodeCountEl.textContent = "";
+      nodeListEl.textContent = "";
+      nodeEmptyEl.hidden = false;
+      return;
+    }
+    const rows = nodeRowsFor({
+      peers: room.peers(),
+      factRows: room.factRows(),
+      myPeerId: myPeerId,
+      myDisplayName: myDisplayName,
+      nameFor: room.displayNameFor,
+      latestTimestampOf: p2p.latestProvenanceTimestamp,
+    });
+    const nowMs = Date.now();
+    nodeCountEl.textContent = rows.length + (rows.length === 1 ? " node" : " nodes");
+    nodeListEl.textContent = "";
+    for (const entry of rows) {
+      const item = document.createElement("li");
+      item.className = "node-row";
+      item.dataset.self = String(entry.isSelf);
+      item.dataset.away = String(!entry.connected);
+      item.dataset.peer = entry.peerId;
+      item.dataset.waving = String(room.isWaving("peer:" + entry.peerId, nowMs));
+      const dot = document.createElement("i");
+      dot.className = "node-dot";
+      dot.title = entry.connected ? "connected" : "away — closed the tab or dropped offline; everything it contributed stays";
+      const name = document.createElement("span");
+      name.className = "node-name";
+      name.textContent = entry.name;
+      const hand = document.createElement("span");
+      hand.className = "node-hand";
+      hand.textContent = "👋";
+      const when = document.createElement("span");
+      when.className = "node-when";
+      when.textContent = relativeWhen(entry.lastActiveAt, nowMs);
+      when.title = entry.lastActiveAt
+        ? "last contributed a fact at " + new Date(entry.lastActiveAt).toLocaleTimeString()
+        : "has contributed no fact yet";
+      item.appendChild(dot);
+      item.appendChild(name);
+      item.appendChild(hand);
+      item.appendChild(when);
+      nodeListEl.appendChild(item);
+    }
+    nodeEmptyEl.hidden = rows.length > 1;
+  }
+
+  // A wave is a fact like any other, so it reaches every page through the
+  // same merge every other fact does; "currently waving" is a recency read
+  // over that fact, never stored state. Nothing here is a second live-update
+  // path — onFactsChanged is what wakes it, and the timer below only lets a
+  // wave stop rendering once its window has passed.
+  function renderWaves() {
+    if (!room) return;
+    const nowMs = Date.now();
+    const known = [{ peerId: myPeerId, name: myDisplayName }];
+    for (const peer of room.peers()) known.push({ peerId: peer.peerId, name: room.displayNameFor(peer.peerId) });
+    const waving = known.filter(function (entry) { return room.isWaving("peer:" + entry.peerId, nowMs); });
+    waveBurstEl.textContent = "";
+    for (const entry of waving) {
+      const pill = document.createElement("div");
+      pill.className = "wave-pill";
+      const hand = document.createElement("span");
+      hand.className = "hand";
+      hand.textContent = "👋";
+      const label = document.createElement("span");
+      label.textContent = entry.name + " waved";
+      pill.appendChild(hand);
+      pill.appendChild(label);
+      waveBurstEl.appendChild(pill);
+    }
+    for (const item of nodeListEl.children) {
+      item.dataset.waving = String(waving.some(function (entry) { return entry.peerId === item.dataset.peer; }));
+    }
+    clearTimeout(waveTimer);
+    if (waving.length) waveTimer = setTimeout(renderWaves, 1000);
+  }
+
+  async function waveNow() {
+    try {
+      const active = await ensureRoom();
+      await active.wave("peer:" + myPeerId, null);
+      noteTape("note", "facts", "waved", myDisplayName);
+      renderNodes();
+      renderWaves();
+    } catch (err) {
+      addSystemLine("couldn't wave (" + (err && err.message ? err.message : err) + ").");
+    }
+  }
+
+  // ---- copying: one tap, no menu, a tooltip that says it happened ---------
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch { /* fall through — the box on the page still holds the text */ }
+    try {
+      const holder = document.createElement("textarea");
+      holder.value = text;
+      holder.setAttribute("readonly", "");
+      holder.style.position = "fixed";
+      holder.style.opacity = "0";
+      document.body.appendChild(holder);
+      holder.select();
+      const copied = document.execCommand("copy");
+      holder.remove();
+      return copied;
+    } catch {
+      return false;
+    }
+  }
+
+  function flashTip(anchor, text) {
+    const tip = document.createElement("div");
+    tip.className = "copyTip";
+    tip.setAttribute("role", "status");
+    tip.textContent = text;
+    document.body.appendChild(tip);
+    const box = anchor.getBoundingClientRect();
+    const width = tip.offsetWidth;
+    tip.style.top = (box.bottom + 6) + "px";
+    tip.style.left = Math.max(6, Math.min(window.innerWidth - width - 6, box.left + box.width / 2 - width / 2)) + "px";
+    setTimeout(function () { tip.remove(); }, 2600);
+  }
+
+  const openNetPanel = () => document.body.classList.add("net-open");
+  const closeNetPanel = () => document.body.classList.remove("net-open");
+  el("netPanelClose").addEventListener("click", closeNetPanel);
+  statePillEl.addEventListener("click", function () {
+    if (document.body.classList.contains("net-open")) closeNetPanel();
+    else openNetPanel();
+  });
+
+  shareBtn.addEventListener("click", async function () {
+    shareBtn.disabled = true;
+    try {
+      const active = await ensureRoom();
+      const minted = await active.startSharing();
+      shareLinkEl.value = inviteLinkFor(window.location.href, { blob: minted.blob, world: worldId, worldName: worldName });
+      replyProblemEl.hidden = true;
+      renderWire();
+      openNetPanel();
+      await copyText(shareLinkEl.value);
+      flashTip(shareBtn, "link copied — send it to one person");
+    } catch (err) {
+      addSystemLine("couldn't create an invite (" + (err && err.message ? err.message : err) + ").");
+    } finally {
+      shareBtn.disabled = false;
+    }
+  });
+
+  // The inviter's page has exactly one paste target, so there is no wrong box
+  // to choose. A rejected paste keeps its text so the copy can be fixed.
+  el("replyBtn").addEventListener("click", async function () {
+    let active = room;
+    if (!active) {
+      try { active = await ensureRoom(); } catch { return; }
+    }
+    const outcome = await active.completeInvite(replyBoxEl.value);
+    if (outcome && outcome.error) {
+      replyProblemEl.textContent = outcome.message;
+      replyProblemEl.hidden = false;
+      noteTape("note", "fault", "reply rejected", outcome.error);
+      return;
+    }
+    replyProblemEl.hidden = true;
+    replyBoxEl.value = "";
+  });
+
+  copyReplyBtn.addEventListener("click", async function () {
+    await copyText(replyOutEl.value);
+    flashTip(copyReplyBtn, "reply copied");
+  });
+
+  function commitNodeName() {
+    const name = nodeNameInputEl.value.trim();
+    if (!name || name === myDisplayName) {
+      nodeNameInputEl.value = myDisplayName;
+      return;
+    }
+    myDisplayName = name;
+    writeStoredNodeName(name);
+    if (!room) { renderNodes(); return; }
+    room.setMyDisplayName(name)
+      .then(function () { noteTape("note", "facts", "renamed", name); renderNodes(); })
+      .catch(function () { /* the name still holds locally; the next broadcast carries it */ });
+  }
+  nodeNameInputEl.addEventListener("change", commitNodeName);
+  worldNameInputEl.addEventListener("change", function () {
+    if (worldNameInputEl.readOnly) return;
+    const name = worldNameInputEl.value.trim();
+    if (name) worldName = name;
+    worldNameInputEl.value = worldName;
+  });
+
+  waveBtn.addEventListener("click", waveNow);
+
+  // ---- joining: a card, one button, nothing running until it is pressed ---
+  async function prepareJoinCard() {
+    joinCardEl.hidden = false;
+    joinWorldEl.textContent = invite.worldName || "a shared graph";
+    const mod = await loadP2p();
+    const decoded = mod.decodeInviteBlob(invite.offer);
+    if (decoded.error || decoded.value.kind !== "offer") {
+      joinBtn.hidden = true;
+      joinEyebrowEl.textContent = "this link didn't arrive in one piece";
+      joinWorldEl.textContent = invite.worldName || "an invitation";
+      joinBodyEl.textContent = decoded.error
+        ? "Part of the link was lost on the way here. Ask for it to be sent again, and check the whole thing travels."
+        : "That link carries a reply rather than an invite. It belongs in the box on the page that sent the invite.";
+      joinDismissBtn.textContent = "start talking on your own";
+      return;
+    }
+    if (decoded.value.world) invite.world = decoded.value.world;
+    if (decoded.value.worldName) {
+      invite.worldName = decoded.value.worldName;
+      joinWorldEl.textContent = decoded.value.worldName;
+    }
+  }
+
+  joinBtn.addEventListener("click", async function () {
+    joinBtn.disabled = true;
+    try {
+      const active = await ensureRoom();
+      const outcome = await active.acceptInvite(invite.offer);
+      if (outcome && outcome.error) {
+        joinProblemEl.textContent = outcome.message;
+        joinProblemEl.hidden = false;
+        noteTape("note", "fault", "invite rejected", outcome.error);
+        joinBtn.disabled = false;
+        joinBtn.textContent = "try again";
+        return;
+      }
+      joinProblemEl.hidden = true;
+      joinReplyEl.value = outcome.blob;
+      replyOutEl.value = outcome.blob;
+      joinReplyWrapEl.hidden = false;
+      joinBtn.textContent = "reply created";
+      joinDismissBtn.textContent = "close this and start talking";
+      renderWire();
+      await copyText(outcome.blob);
+      flashTip(joinCopyBtn, "reply copied — send it back the same way");
+    } catch (err) {
+      joinProblemEl.textContent = "couldn't make a reply (" + (err && err.message ? err.message : err) + ").";
+      joinProblemEl.hidden = false;
+      joinBtn.disabled = false;
+    }
+  });
+
+  joinCopyBtn.addEventListener("click", async function () {
+    await copyText(joinReplyEl.value);
+    flashTip(joinCopyBtn, "reply copied");
+  });
+  joinDismissBtn.addEventListener("click", function () {
+    joinCardEl.hidden = true;
+    if (replyOutEl.value) openNetPanel();
+  });
+
+  renderWire();
+  renderTapeMeter();
+  if (invite) {
+    prepareJoinCard().catch(function (err) {
+      joinProblemEl.textContent = "the networking asset didn't load (" + (err && err.message ? err.message : err) + ").";
+      joinProblemEl.hidden = false;
+      joinBtn.hidden = true;
+    });
+  }
 
   async function boot() {
     if (!window.tmctChat) {

@@ -96,6 +96,16 @@ stampPageVersion();
   console.log(`wrote ${winkVendorPath} (${(winkVendorBytes / 1048576).toFixed(2)} MB)`);
 }
 
+// The shared P2P asset, built the same way and for the same reason: every page
+// that can join a shared world imports THIS one same-origin module at runtime,
+// so the networking layer is never copied into a per-page engine bundle. The
+// pages import it lazily, so a visitor who never shares never fetches it.
+{
+  const { buildP2pVendor } = await import(join(here, "build-p2p-vendor.mjs"));
+  const { outPath: p2pVendorPath, bytes: p2pVendorBytes } = await buildP2pVendor(SITE);
+  console.log(`wrote ${p2pVendorPath} (${(p2pVendorBytes / 1024).toFixed(0)} KB)`);
+}
+
 execFileSync(process.execPath, [join(here, "build-demo-graph.mjs"), join(SITE, "demo-graph.json")], { stdio: "inherit" });
 
 // The ledger hero: build the memory payload through the real teach paths, then
@@ -447,6 +457,7 @@ const PRECACHE = [
   "./chat-browser.bundle.js",
   "./sprites-browser.bundle.js",
   "./vendor/wink.js",
+  "./vendor/p2p.js",
   "./chat-seed.json",
   "./reference-pack/index.json",
 ];
