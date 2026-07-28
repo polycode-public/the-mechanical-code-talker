@@ -7,19 +7,18 @@
 // Two engine limits surfaced while writing this, both confirmed by running
 // real turns rather than assumed from reading the grammar:
 //
-// - mud-garden's own props (carrot-1, stone-1, basket-1, seed-1) can never be
-//   addressed by typed natural language at all, in either "take the carrot"
-//   or literal-id "take carrot-1" form. parseImperative resolves a bare noun
-//   to its LEXICON lemma ("carrot"), and runWorldCommand matches that lemma
-//   against a placement fact by exact subject string — mud-garden places
-//   "carrot-1", never "carrot", so the lemma never matches. The literal id
-//   form fares no better: "carrot-1" isn't a dictionary word, so the closed
-//   lexicon doesn't recognise it as a token at all. The take/eat/put tests
-//   below prove the MECHANISM works, using a supplementary bare-word fixture
-//   (a second "carrot"/"stone"/"basket" placed alongside the numbered ones,
-//   the same naming style ashcombe-hall's props already use), and a separate
-//   test pins down the honest decline mud-garden's own numbered props get
-//   today.
+// - mud-garden's own HAND-AUTHORED, single-instance props (carrot, stone,
+//   basket, seed) are bare-lemma-named (a later workstream renamed them from
+//   carrot-1/stone-1/basket-1/seed-1 specifically so typed natural language
+//   could reach them — matching ashcombe-hall's own "lamp"/"key" convention),
+//   so "take the carrot" resolves cleanly today. A DYNAMICALLY DUG object
+//   still can't be: digging mints a fresh, per-room id (e.g. "root-garden-
+//   south"), so its bare kind word ("root") never matches that placed
+//   subject's exact string — a structural property of minting unique ids for
+//   procedurally spawned content, not a naming oversight the way the static
+//   props' old numbered ids were. The dedicated test below proves both
+//   halves: the shipped static props resolve, a dug object's bare kind
+//   doesn't.
 // - recordTold/recordExamined (the durable per-character "knows-about" writes
 //   the food-knowledge query reads) are only ever called from mud-turn.mjs's
 //   autonomous engine — no player-typed verb in adventure.mjs's own
@@ -112,25 +111,12 @@ test("digging: a session digs a new room and a follow-up turn actually reaches i
   });
 });
 
-test("taking/eating/putting succeed through real chat turns against a lexicon-resolvable prop", async () => {
-  // mud-garden's own carrot-1/stone-1/basket-1 can't be addressed by typed NL
-  // at all (see the file-header note and the dedicated decline test below),
-  // so this proves the take/eat/put MECHANISM itself works end to end through
-  // the real chat interface, using a second, bare-word-named carrot/stone/
-  // basket placed alongside the numbered ones — the naming style
-  // ashcombe-hall's own props ("lamp", "key") already rely on.
+test("taking/eating/putting succeed through real chat turns against the shipped world's own props", async () => {
+  // mud-garden's static props (carrot, stone, basket) are bare-lemma-named
+  // (see the file-header note), so this drives them directly — no
+  // supplementary fixture needed.
   await withTempRepo("take-eat-put", async (repo) => {
-    await loadMudGardenInto(repo, [
-      { subject: "carrot", predicate: "rdf:type", object: "food" },
-      { subject: "carrot", predicate: "mgx:located-in", object: "garden" },
-      { subject: "carrot", predicate: "mgx:hasMass", object: "3" },
-      { subject: "stone", predicate: "rdf:type", object: "portable" },
-      { subject: "stone", predicate: "mgx:located-in", object: "garden" },
-      { subject: "basket", predicate: "rdf:type", object: "furniture" },
-      { subject: "basket", predicate: "mgx:fixed-in", object: "garden" },
-      { subject: "basket", predicate: "mgx:is-container", object: "true" },
-      { subject: "basket", predicate: "mgx:is-open", object: "true" },
-    ]);
+    await loadMudGardenInto(repo);
     const mole = await openCharacterSession(repo, "mole-1");
     try {
       const taken = await mole.turn("take the carrot");
@@ -153,23 +139,27 @@ test("taking/eating/putting succeed through real chat turns against a lexicon-re
   });
 });
 
-test("mud-garden's own numbered props stay unreachable by typed natural language, in either phrasing", async () => {
-  await withTempRepo("numbered-props-decline", async (repo) => {
+test("the shipped static props resolve by typed natural language; a dynamically dug object's bare kind word does not", async () => {
+  await withTempRepo("static-vs-dug-props", async (repo) => {
     await loadMudGardenInto(repo);
     const mole = await openCharacterSession(repo, "mole-1");
     try {
-      const bareNoun = await mole.turn("take the carrot");
+      const takenCarrot = await mole.turn("take the carrot");
+      assert.match(takenCarrot.answer, /you take the carrot/, "the shipped world's own static prop resolves — its bare-lemma naming fix landed");
+
+      // "dig south" deterministically spawns one object, kind "root", minted
+      // as "root-garden-south" — a per-room id, never the bare lemma "root".
+      const dug = await mole.turn("dig south");
+      assert.match(dug.answer, /In the loose earth: the root-garden-south/, "a dug room's spawned object carries a per-room id, not a bare lemma");
+
+      const walked = await mole.turn("go south");
+      assert.match(walked.answer, /[Nn]ow in the garden-south/);
+
+      const bareNoun = await mole.turn("take the root");
       assert.match(
         bareNoun.answer,
-        /isn't something you can take/,
-        "the bare class noun resolves to the lexicon lemma \"carrot\", never the placed \"carrot-1\"",
-      );
-
-      const literalId = await mole.turn("take carrot-1");
-      assert.equal(
-        literalId.answer,
-        'I don\'t know the word "carrot-1" — it isn\'t in my vocabulary.',
-        "the literal id isn't a dictionary word either, so the closed-set grammar never tokenizes it",
+        /isn't something you can take — it's only mentioned in passing here/,
+        "the bare kind word resolves to the lexicon lemma \"root\", never the placed \"root-garden-south\" — background vocabulary, not the real dug prop; a structural property of minting unique ids for dug content, not a naming oversight",
       );
     } finally {
       await mole.close();
@@ -184,13 +174,13 @@ test("the food-knowledge query, asked through real chat, isolates each character
     // engine (see file header) — seeded directly here, the same way
     // adventure-mud-knowledge.test.mjs's own unit tests do, so this test can
     // focus on the QUERY side's real chat-interface behavior.
-    await recordExamined(memoryDir, { observer: "mole-1", thing: "carrot-1", k: 1 });
+    await recordExamined(memoryDir, { observer: "mole-1", thing: "carrot", k: 1 });
 
     const mole = await openCharacterSession(repo, "mole-1");
     const vole = await openCharacterSession(repo, "vole-1");
     try {
       const moleKnows = await mole.turn("what do you know about food");
-      assert.match(moleKnows.answer, /you know about: the carrot-1/, "mole-1 learned about carrot-1 and reports it back");
+      assert.match(moleKnows.answer, /you know about: the carrot/, "mole-1 learned about the carrot and reports it back");
 
       const voleKnows = await vole.turn("what do you know about food");
       assert.match(voleKnows.answer, /you don't know of any food yet/, "vole-1 never examined anything — the honest empty answer, never a guess");
