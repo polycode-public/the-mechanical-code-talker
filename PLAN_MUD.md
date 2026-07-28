@@ -409,6 +409,14 @@ on the page, everything else stays quiet and disciplined around it.
   a direction with neither draws nothing. Non-movement pills (`look`, `what do you know about
   food`, `talk to <character>`) sit below the ring, and only ever name a character actually
   present in the room.
+- **Wave**: a typed `wave` command and a hand-icon button sitting with the non-movement pills,
+  both the same action. Waving writes a real room-scoped fact into the shared world state (exact
+  shape specified with the networking design, below), and every pane that can see the room — the
+  waver's own included — renders a brief, larger waving-hand animation over that character's
+  sprite the moment the fact lands. Same `prefers-reduced-motion` restraint as the dug-room
+  flourish and the speech bubble. Nothing about this needs a network: it's a small, independently
+  buildable addition to the shipped demo, and the P2P work below inherits it rather than
+  introducing it.
 - **Movement / dig**: `go <direction>` unchanged from the original grammar work. `dig <direction>`
   still only succeeds where no exit exists yet, and now also respects the room's own kind: an
   underground room can be dug on any exit-less side, the surface can only ever be dug straight
@@ -522,9 +530,9 @@ human-readable name — a mnemonic for the players, not a credential. To invite 
 member's page creates a fresh SDP offer and encodes it into a URL alongside the world id and name:
 `mud.html?offer=<blob>&world=<uuid>&name=<generated-name>`. That link travels however the two people
 already talk: pasted into a message, AirDropped, read out over the phone, whatever's at hand. Opening
-it makes the joiner's browser generate the matching answer and offer it straight back as its own copy
-action, so sending it home is the same motion as receiving the invite was — paste the reply into the
-same thread. The inviter's page sits with a small "paste a reply to connect" box open, waiting; pasting
+it lands the joiner on a join card naming the world; one click generates the matching answer and
+offers it straight back as its own copy action, so sending it home is the same motion as receiving
+the invite was — paste the reply into the same thread. The inviter's page sits with a small "paste a reply to connect" box open, waiting; pasting
 the friend's reply there is what actually completes the connection. Two paste actions, one each way,
 and nothing automatic in between. This only works while the peer being invited is actually online to
 answer — it's a phone call, not a mailbox, and a link on its own can't finish a connection to someone
@@ -653,6 +661,73 @@ fully serverless, not a bug to fix later. Candidate gathering runs to completion
 offer is read out (no trickle needed without STUN), so the two-paste flow from the section above
 stays exactly as described: one blob out, one blob back, done.
 
+**Blob shape, and validation on paste.** Both blobs — the offer carried in the link and the reply
+pasted back — are the same base64url JSON envelope: `{ v: 1, kind: "offer" | "answer", world,
+worldName, sdp }`. Every paste target decodes and checks the envelope before touching WebRTC, and
+each failure gets its own specific message rather than a generic one:
+
+- decode or parse failure (the common case is a truncated copy): "that doesn't look like a
+  complete reply — check the whole thing was copied, then paste it again";
+- right envelope, wrong `kind` (an invite link pasted into the reply box): "that's an invite, not
+  a reply — send it to the person you're inviting, or open it in a new tab to join their world";
+- right kind, wrong `world`: "that reply is for '<their world name>' — this page is sharing
+  '<this world name>'".
+
+The pasted text stays in the box on every one of these, so the person can fix the copy instead of
+starting over. A paste that validates clears the box and moves the connection on; the box is
+never left holding a consumed blob. The link's own offer blob gets the same check on page load: a
+`?offer=` that fails to decode shows "this invite looks cut short — ask for it to be sent again"
+instead of quietly loading the ordinary page, so a mangled link reads as a mangled link, not as
+no invite at all.
+
+**One link admits one person.** An SDP offer belongs to one `RTCPeerConnection`, so a link can
+complete exactly one connection. The share control mints a fresh offer every time it's used, and
+the page says so beside it ("each link invites one person — share again for the next"). If two
+people open the same link anyway, both can generate a reply, but only the first reply pasted
+connects; the second arrives after the pending connection has left its offer state, and the page
+says so plainly ("that reply matched an invite that's already been used — create a fresh link and
+send that instead") rather than failing silently.
+
+**Connection state is a small closed set, and the page always shows which one it's in.** Each
+pending or live connection is in exactly one of: `sharing` (offer minted, link copied, reply box
+open), `answering` (invite opened, reply generated, nothing left to do but send it), `connecting`
+(reply consumed, ICE running), `connected` (DataChannel open), or `failed` (ICE gave up). Waiting
+gets stated as what it is: before a reply is pasted nothing is in flight — there is no network
+activity to time out on — so `sharing` and `answering` are open-ended by design and styled as calm
+status ("waiting for their reply — this stays live as long as this tab is open"), with no error
+styling. `connecting` is the opposite case: once both blobs are exchanged, ICE either opens the
+channel or fails within seconds, so a failure there gets error styling and names the design's own
+stated boundary — "your two machines can't reach each other directly; this works on the same
+network, or between machines that can already see each other."
+
+**The invite flow, as each person sees it.** The wire design above only works if nobody is ever
+left guessing what to do next. Walked end to end:
+
+1. Alice clicks "invite someone". The page copies a link to her clipboard and flips into
+   `sharing`: it shows the link itself (in case the clipboard copy didn't take), one labeled box
+   — "paste their reply here" — and the status line "waiting for a reply…". The reply box is the
+   only paste target on her page, so there is no wrong box to choose.
+2. Bob opens the link. He doesn't land in a live world; he lands on a join card — "you've been
+   invited to '<world name>'" — with one button, "create my reply". Nothing runs until he clicks
+   it, and the card says what clicking will do. The click generates the answer, copies it, and
+   shows it in its own copyable box with the one instruction that matters: "send this back the
+   same way the invite reached you." His page is now in `answering`, status "waiting for them to
+   paste your reply…". Bob's page has no paste box at all — his half of the flow is copy and
+   send, and removing the box removes the mistake.
+3. Alice pastes the reply into her labeled box. It validates (above), the box clears, and both
+   pages flip to `connected` within seconds — hers because the answer completed the connection,
+   his because the DataChannel opened, which is the joiner's only signal and enough. Each page
+   now shows the other's node name in its node list; that row appearing is the confirmation, the
+   same signal on both sides.
+4. Carol joins through Bob. Bob clicks the same "invite someone" control — inviting is something
+   any live member can do, not a host privilege — and the same three steps repeat between Bob and
+   Carol. The moment Carol's channel to Bob opens, mesh introduction (the
+   `intro-offer`/`intro-answer` messages below) connects her to Alice with nothing more to paste;
+   Carol sees Alice's row appear in her node list a beat after Bob's.
+
+Both pages link to a shared help page from a small "?" in the page chrome; its content is
+specified in `PLAN_HELP.md`, and its sharing section walks this same flow in end-user words.
+
 **Messages, once a channel is open**, all plain JSON:
 
 - `hello { peerId, displayName }` — sent the moment any channel opens.
@@ -695,7 +770,9 @@ currently in the room.
 one's node name (from its latest `mgx:nodeName` fact) and the timestamp of its most recent
 contributed fact, sorted most-recently-active first. It reads existing data through the existing
 panel-rendering conventions already used elsewhere on that page — it doesn't need new plumbing, just
-a new query over facts that are already there.
+a new query over facts that are already there. A peer whose channel has closed stays in the list,
+marked away rather than removed: its facts and its name are still part of the graph, and
+reconnecting is just a fresh invite.
 
 **State sync on a join.** Every peer's page already ships with the identical build-time seed data,
 so those facts already share the same content-addressed ids before any network traffic happens —
@@ -715,6 +792,34 @@ for later rather than solved speculatively now. Talking to another player's char
 new at all: the room-cast lookup and the `talk` verb already read whoever's placed in a room from
 shared facts, with no check for who controls them — a remote peer's character asserting an ordinary
 movement fact is indistinguishable, to that machinery, from a local one.
+
+**A remote character carries its node's name on its label.** The room view's sprite name labels
+(the same style adventure.html uses) gain one addition when a world is shared: a character whose
+latest `mgx:playedBy` fact names a peer other than the viewing page's own draws a second, smaller
+line under its name — that peer's node name, read from its latest `mgx:nodeName` fact, dimmer and
+about two-thirds the size, e.g. "badger-1" over "via mossy-acorn". A character your own node
+plays, or one nobody has claimed, shows just its name, exactly as the single-browser demo draws
+it. If the controlling peer's `mgx:nodeName` fact hasn't synced yet, the line shows the shortened
+peer id until it does; the label doesn't wait for the name to arrive. This is an extension of the
+local label, not a second label system: same font, same placement, one extra line that only
+remote characters have.
+
+**Waving.** The wave gesture (Demo phase, above) is a fact, `(<characterId>, mgx:waved,
+<roomId>)`, carrying the same per-turn provenance tag every other mud action already carries.
+That's the whole networking story: an add-only fact replicates through `op` broadcast and
+`appendFacts` exactly like a move does — no new CRDT primitive, no new message type. Every page
+currently rendering that room, one browser today or several under this design, plays the same
+brief hand-wave animation over the waver's sprite when the fact reaches it, the waver's own page
+included, so everyone sees the same moment.
+
+A wave has no lasting meaning once the moment passes, and v1 retracts nothing. The resolution:
+"currently waving" is a read-time question, not a stored state. The renderer animates a wave fact
+only while its provenance timestamp sits inside a short recent window (a few seconds); an older
+wave simply stops rendering, with nothing deleted from the graph. Repeat waves need no special
+casing either: the same character waving in the same room re-asserts the same content-addressed
+triple, `appendFacts` unions the new provenance tag onto the existing fact id, and the recency
+read takes the newest tag — so waving again after the window has passed animates again, through
+the merge rule that already exists.
 
 **Conflict handling stays a pure add-only set for v1.** None of the scenarios this version needs to
 support ever retract a fact, so there's no OR-Set or last-writer-wins predicate to build yet. The one
