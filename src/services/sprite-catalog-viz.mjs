@@ -165,10 +165,10 @@ export const GROUP_OBJECT = "object";
 export const GROUP_EMOJI = "emoji";
 
 export const CATALOG_GROUPS = Object.freeze([
-  Object.freeze({ id: GROUP_ADVENTURE, label: "Ashcombe Hall's own adventure props", note: "the icon tier's own named cast and furniture — a dedicated 44px sprite exists for each" }),
+  Object.freeze({ id: GROUP_ADVENTURE, label: "Ashcombe Hall's own adventure props", note: "the icon tier's named cast and furniture. Each has its own 44px sprite." }),
   Object.freeze({ id: GROUP_PERSON, label: "Person roles" }),
   Object.freeze({ id: GROUP_OBJECT, label: "Physical objects, creatures & places" }),
-  Object.freeze({ id: GROUP_EMOJI, label: "Emotions & events", note: "abstract concepts with no honest single physical picture — rendered as the ubiquitous emoji instead" }),
+  Object.freeze({ id: GROUP_EMOJI, label: "Emotions & events", note: "abstract concepts with no single physical picture, drawn as the familiar emoji instead" }),
 ]);
 
 /** Which catalog section `cls` belongs in. Pure. `isIconTierClass`/`isEmoji`
@@ -179,6 +179,33 @@ export function groupForClass(cls, { isIconTierClass, isEmoji }) {
   if (isIconTierClass && !SPIDER_FLY_CREATURE_CLASSES.includes(cls) && cls !== "person") return GROUP_ADVENTURE;
   if (PERSON_ROLE_CLASSES.includes(cls)) return GROUP_PERSON;
   return GROUP_OBJECT;
+}
+
+/** Cluster one presentation group's entries under each class's nearest
+ *  ILLUSTRATED ancestor — the first term after the class itself, walking its
+ *  own real chain outward, that carries a sprite template at either tier. A
+ *  new leaf attached under that ancestor later resolves to the ancestor's
+ *  own sprite through the same walk, so these headings show exactly where
+ *  the graph can grow with no new art needed. A cluster needs two members
+ *  to earn a heading; singletons (and classes whose chain reaches no
+ *  illustrated ancestor) fold into one trailing `ancestor: null` bucket so
+ *  the section never shreds into one-card headings. Pure. */
+export function clusterEntriesByAncestor(entries, spritedClasses) {
+  const byKey = new Map();
+  for (const e of entries || []) {
+    const key = (e.chain || []).slice(1).find((t) => spritedClasses.has(t)) || "";
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key).push(e);
+  }
+  const clusters = [];
+  const rest = [];
+  for (const [key, list] of byKey) {
+    if (key && list.length >= 2) clusters.push({ ancestor: key, entries: list });
+    else rest.push(...list);
+  }
+  clusters.sort((a, b) => b.entries.length - a.entries.length || a.ancestor.localeCompare(b.ancestor));
+  if (rest.length) clusters.push({ ancestor: null, entries: [...rest].sort((a, b) => a.className.localeCompare(b.className)) });
+  return clusters;
 }
 
 function templatesForClass(cls, templates) {
@@ -438,14 +465,32 @@ function cardHtml(entry) {
   </article>`;
 }
 
-function sectionHtml(group, entries) {
+/** One ancestor cluster inside a section: a heading that carries the
+ *  ancestor's OWN resolved sprite (the proof the fallback has art to land
+ *  on), then that cluster's cards. `ancestorSvg` is null for the trailing
+ *  no-illustrated-ancestor bucket. */
+function clusterHtml(cluster, ancestorSvg) {
+  const name = cluster.ancestor || "everything else";
+  const chip = ancestorSvg ? `<span class="cluster-chip">${ancestorSvg}</span>` : "";
+  return `<div class="cluster">
+    <h3 class="cluster-head">${chip}<span class="cluster-name">${escapeHtml(name)}</span><span class="count">${cluster.entries.length}</span></h3>
+    <div class="cards">${cluster.entries.map(cardHtml).join("")}</div>
+  </div>`;
+}
+
+function sectionHtml(group, entries, { clusterBy = null } = {}) {
   const rows = entries.filter((e) => e.group === group.id);
   if (!rows.length) return "";
   const note = group.note ? `<p class="section-note">${escapeHtml(group.note)}</p>` : "";
+  const body = clusterBy
+    ? clusterEntriesByAncestor(rows, clusterBy.spritedClasses)
+        .map((c) => clusterHtml(c, c.ancestor ? clusterBy.resolveChip(c.ancestor) : null))
+        .join("")
+    : `<div class="cards">${rows.map(cardHtml).join("")}</div>`;
   return `<section class="group" id="g-${group.id}" aria-label="${escapeHtml(group.label)}">
     <h2>${escapeHtml(group.label)} <span class="count">${rows.length}</span></h2>
     ${note}
-    <div class="cards">${rows.map(cardHtml).join("")}</div>
+    ${body}
   </section>`;
 }
 
@@ -471,6 +516,15 @@ export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates =
   const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows });
   const totalSwatches = entries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
   const pageData = embedJson({ classCount: entries.length, swatchCount: totalSwatches });
+  // Ancestor clustering for the two big sections: the heading chip is the
+  // ancestor's OWN resolved sprite — visible proof that a new subclass
+  // attached there already has fallback art waiting for it.
+  const spritedClasses = new Set([...iconTemplates, ...largeTemplates].flatMap((t) => t?.classes || []));
+  const clusterBy = {
+    spritedClasses,
+    resolveChip: (ancestor) =>
+      resolveSpriteAsset(ancestor, [], [], largeTemplates, SPRITE_REGISTRY, { instanceKey: `cluster-${ancestor}` }),
+  };
   const dockRows = spritesBundleAvailable ? spriteFactRows({ iconTemplates, largeTemplates }) : [];
   const navHtml = CATALOG_GROUPS
     .map((g) => `<a class="jump" href="#g-${g.id}">${escapeHtml(g.label)} <span class="count">${entries.filter((e) => e.group === g.id).length}</span></a>`)
@@ -499,7 +553,7 @@ export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates =
   const dockHtml = !spritesBundleAvailable ? "" : `<div class="dockwrap">
     <section class="panel" aria-label="Ask about the sprite catalog">
       <h2>ask the catalog</h2>
-      <p class="dock-note">every answer is read from the sprite templates&rsquo; own facts &mdash; a question they can&rsquo;t ground gets a refusal, never a guess.</p>
+      <p class="dock-note">every answer is read from the sprite templates&rsquo; own facts. A question they can&rsquo;t ground gets a refusal, never a guess.</p>
       <div class="docklog" id="dockLog" aria-live="polite"></div>
       <form class="dockask" id="dockForm">
         <span class="prompt mono">tmct&gt;</span>
@@ -575,7 +629,7 @@ const SPRITE_CHAT = ${embedJson({ rows: dockRows })};
     addDockLine("u", q);
     const local = answerSpriteQuestion(q, SPRITE_CHAT.rows);
     if (local) { addDockLine("a grounded", local.answer); return; }
-    if (!session) { addDockLine("a miss", "the engine is still loading \\u2014 try again in a moment."); return; }
+    if (!session) { addDockLine("a miss", "the engine is still loading. Try again in a moment."); return; }
     withLock(async () => {
       const result = await session.turn(q);
       addDockLine(result.record && result.record.miss ? "a miss" : "a", result.answer);
@@ -594,9 +648,9 @@ const SPRITE_CHAT = ${embedJson({ rows: dockRows })};
       await tryLoadWink();
       session = await tmctSprites.createSpriteCatalogSession({ factRows: SPRITE_CHAT.rows });
       dockqEl.disabled = false;
-      dockStatusEl.textContent = SPRITE_CHAT.rows.length + " sprite facts on record \\u2014 ask away, or use a quick question.";
+      dockStatusEl.textContent = SPRITE_CHAT.rows.length + " sprite facts on record. Ask away, or use a quick question.";
     } catch (err) {
-      dockStatusEl.textContent = "the chat engine failed to load \\u2014 the catalog below still works.";
+      dockStatusEl.textContent = "the chat engine failed to load. The catalog below still works.";
       console.error("tmct sprites: dock boot failed", err);
     }
   })();
@@ -614,49 +668,66 @@ ${spritesBundleAvailable ? `<link rel="icon" href="./favicon.svg" type="image/sv
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">` : ""}
 <style>
 ${THEME_TOKENS_CSS}
-  html { background: var(--bg); }
-  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
+  html { background: var(--ai-canvas); }
+  /* Creative-app chrome: a dark document bar in BOTH themes (the app-window
+     read), panels and a recessed canvas that follow the theme, and a
+     transparency checker under every drawn swatch so each sprite proves it
+     holds its own boundary with nothing behind it. */
+  :root {
+    --ai-bar: #26272B; --ai-bar-ink: #E7E5DF;
+    --ai-panel: #EDECE8; --ai-panel-hi: #F4F3F0; --ai-canvas: #DFDEDA; --ai-edge: #C8C6C0;
+    --checker: rgba(0, 0, 0, .07);
+  }
+  @media (prefers-color-scheme: dark) { :root { --ai-panel: #26272B; --ai-panel-hi: #2D2E33; --ai-canvas: #1A1B1F; --ai-edge: #34363C; --checker: rgba(255, 255, 255, .055); } }
+  :root[data-theme="dark"] { --ai-panel: #26272B; --ai-panel-hi: #2D2E33; --ai-canvas: #1A1B1F; --ai-edge: #34363C; --checker: rgba(255, 255, 255, .055); }
+  :root[data-theme="light"] { --ai-panel: #EDECE8; --ai-panel-hi: #F4F3F0; --ai-canvas: #DFDEDA; --ai-edge: #C8C6C0; --checker: rgba(0, 0, 0, .07); }
+  body { margin: 0; background: var(--ai-canvas); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
-  main { max-width: 1180px; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
-  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-  h1 { font-size: 1.4rem; margin: .3rem 0 .6rem; text-wrap: balance; }
-
-  .composer { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: .6rem 0 1.3rem; }
+  main { max-width: 1240px; margin: 0 auto; padding: 0 1.2rem 3rem; }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--corpus); outline-offset: 2px; }
+  .appbar { display: flex; align-items: flex-end; gap: 1rem; margin: 0 -1.2rem; padding: .6rem 1.2rem 0; background: var(--ai-bar); }
+  .appbar h1 { font-family: ${MONO_STACK}; font-size: .84rem; font-weight: 600; letter-spacing: .02em; margin: 0; padding: .32rem .8rem .38rem; background: var(--ai-panel); color: var(--ink); border-radius: 4px 4px 0 0; }
+  .appbar .doc-sub { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: color-mix(in srgb, var(--ai-bar-ink) 65%, transparent); padding-bottom: .5rem; }
+  .topbar { position: sticky; top: 0; z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; background: var(--ai-panel); border-bottom: 1px solid var(--ai-edge); margin: 0 -1.2rem 1.4rem; padding: .5rem 1.2rem; }
+  .jump { font-family: ${MONO_STACK}; font-size: .7rem; padding: .2rem .6rem; border: 1px solid var(--ai-edge); border-radius: 3px; background: transparent; color: var(--ink); text-decoration: none; }
+  .jump:hover { border-color: var(--corpus); color: var(--corpus); }
+  .jump .count { color: var(--muted); }
+  .filter { margin-left: auto; display: flex; align-items: center; gap: .4rem; }
+  .filter input { font-family: ${MONO_STACK}; font-size: .78rem; background: var(--ai-panel-hi); color: var(--ink); border: 1px solid var(--ai-edge); border-radius: 3px; padding: .3rem .6rem; width: 200px; }
+  .filter .n { font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); white-space: nowrap; }
+  .composer { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.2rem 0 1.3rem; }
   @media (max-width: 700px) { .composer { grid-template-columns: 1fr; } }
-  .composer .panel { background: var(--card); border: 1px solid var(--line); border-top: 2px solid var(--taught); padding: .75rem .85rem; min-width: 0; }
-  .composer h2 { font-family: ${SERIF_STACK}; font-variant: small-caps; font-size: .82rem; letter-spacing: .04em; color: var(--muted); font-weight: 600; margin: 0 0 .55rem; }
+  .composer .panel, .dockwrap .panel { background: var(--ai-panel); border: 1px solid var(--ai-edge); border-radius: 4px; padding: .75rem .85rem; min-width: 0; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); }
+  .composer h2, .dockwrap h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin: -.75rem -.85rem .6rem; padding: .42rem .85rem; background: var(--ai-panel-hi); border-bottom: 1px solid var(--ai-edge); border-radius: 4px 4px 0 0; }
   .composeform { display: flex; align-items: center; gap: .5rem; }
   .composeform .prompt { color: var(--taught); font-size: .8rem; white-space: nowrap; }
-  .composeform input { flex: 1; font-family: ${MONO_STACK}; font-size: .82rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 4px; padding: .38rem .6rem; min-width: 0; }
-  .composeform input:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
+  .composeform input { flex: 1; font-family: ${MONO_STACK}; font-size: .82rem; background: var(--ai-panel-hi); color: var(--ink); border: 1px solid var(--ai-edge); border-radius: 3px; padding: .38rem .6rem; min-width: 0; }
   .pills { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .6rem; }
-  .pill { font-family: ${MONO_STACK}; font-size: .7rem; padding: .22rem .55rem; border: 1px solid var(--line); border-radius: 999px; background: var(--bg); color: var(--ink); cursor: pointer; }
-  .pill:hover { border-color: var(--taught); }
-  .pill:focus-visible { outline: 2px solid var(--taught); outline-offset: 2px; }
+  .pill { font-family: ${MONO_STACK}; font-size: .7rem; padding: .22rem .55rem; border: 1px solid var(--ai-edge); border-radius: 999px; background: var(--ai-panel-hi); color: var(--ink); cursor: pointer; }
+  .pill:hover { border-color: var(--corpus); color: var(--corpus); }
   .scene-frame { min-height: 5.6rem; display: flex; align-items: center; }
   .scene-row { display: flex; flex-wrap: wrap; gap: .8rem; align-items: flex-start; width: 100%; }
   .scene-card { display: flex; flex-direction: column; align-items: center; width: 74px; }
-  .scene-sprite { width: 60px; height: 60px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; padding: 8px; box-sizing: border-box; }
-  .scene-sprite svg { width: 100%; height: 100%; display: block; }
+  .scene-sprite { width: 60px; height: 60px; border-radius: 3px; border: 1px solid var(--ai-edge); display: flex; align-items: center; justify-content: center; padding: 6px; box-sizing: border-box; background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%), linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%); background-position: 0 0, 5px 5px; background-size: 10px 10px; background-color: var(--card); }
+  .scene-sprite svg { width: 100%; height: 100%; display: block; filter: var(--sprite-pop); }
   .scene-label { font-size: .7rem; text-align: center; color: var(--ink); margin-top: .3rem; line-height: 1.2; }
   .empty-note { font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); }
-  .topbar { position: sticky; top: 0; z-index: 2; background: var(--bg); display: flex; flex-wrap: wrap; align-items: center; gap: .5rem .9rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: .6rem 0; margin: 1rem 0 1.2rem; }
-  .jump { font-family: ${MONO_STACK}; font-size: .72rem; padding: .18rem .55rem; border: 1px solid var(--line); border-radius: 99px; background: var(--card); color: var(--ink); text-decoration: none; }
-  .jump:hover { border-color: var(--taught); }
-  .jump .count { color: var(--muted); }
-  .filter { margin-left: auto; display: flex; align-items: center; gap: .4rem; }
-  .filter input { font-family: ${MONO_STACK}; font-size: .8rem; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .32rem .6rem; width: 200px; }
-  .filter .n { font-family: ${MONO_STACK}; font-size: .7rem; color: var(--muted); white-space: nowrap; }
-  .group { margin: 2rem 0; content-visibility: auto; contain-intrinsic-size: 800px; }
-  .group h2 { font-size: 1.05rem; margin: 0 0 .2rem; display: flex; align-items: baseline; gap: .5rem; }
-  .group h2 .count { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); font-weight: 400; }
+  .group { margin: 2.2rem 0; content-visibility: auto; contain-intrinsic-size: 800px; }
+  .group h2 { font-family: ${MONO_STACK}; font-size: .78rem; text-transform: uppercase; letter-spacing: .09em; margin: 0 0 .2rem; display: flex; align-items: baseline; gap: .5rem; }
+  .group h2 .count { font-size: .7rem; color: var(--muted); font-weight: 400; }
   .section-note { color: var(--muted); font-size: .82rem; margin: 0 0 .8rem; max-width: 68ch; }
+  .cluster { margin: 1rem 0 1.5rem; }
+  .cluster-head { display: flex; align-items: center; gap: .45rem; font-family: ${MONO_STACK}; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); margin: 0 0 .55rem; }
+  .cluster-head .count { font-weight: 400; opacity: .75; }
+  .cluster-head::after { content: ""; flex: 1; height: 1px; background: var(--ai-edge); }
+  .cluster-chip { width: 26px; height: 26px; display: inline-flex; padding: 2px; box-sizing: border-box; border: 1px solid var(--ai-edge); border-radius: 3px; background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%), linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%); background-position: 0 0, 4px 4px; background-size: 8px 8px; background-color: var(--card); }
+  .cluster-chip svg { width: 100%; height: 100%; display: block; filter: var(--sprite-pop); }
   .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .7rem; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .6rem .7rem .7rem; content-visibility: auto; contain-intrinsic-size: 220px; }
+  .card { background: var(--card); border: 1px solid var(--ai-edge); border-radius: 4px; padding: .55rem .7rem .7rem; box-shadow: 0 1px 2px rgba(0, 0, 0, .08); content-visibility: auto; contain-intrinsic-size: 220px; }
   .card[hidden] { display: none; }
-  .card-name { font-size: .92rem; margin: 0 0 .3rem; font-weight: 600; }
+  .card-name { font-family: ${MONO_STACK}; font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 0 0 .35rem; }
   .chain { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); margin-bottom: .5rem; display: flex; flex-wrap: wrap; align-items: center; gap: .15rem; }
-  .chain-link { padding: .04rem .35rem; border: 1px solid var(--line); border-radius: 99px; }
+  .chain-link { padding: .04rem .35rem; border: 1px solid var(--ai-edge); border-radius: 99px; }
   .chain-link.own { border-color: var(--taught); color: var(--taught); }
   .chain-arrow { color: var(--muted); opacity: .6; }
   .chain-more { font-style: italic; opacity: .75; }
@@ -665,21 +736,24 @@ ${THEME_TOKENS_CSS}
   .tier-label { font-family: ${MONO_STACK}; font-size: .62rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
   .swatches { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .25rem; }
   .swatch { width: 64px; text-align: center; }
+  .swatch-img { border: 1px solid var(--ai-edge); border-radius: 3px; box-sizing: border-box; padding: 3px; background-image: linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%), linear-gradient(45deg, var(--checker) 25%, transparent 25% 75%, var(--checker) 75%); background-position: 0 0, 5px 5px; background-size: 10px 10px; background-color: var(--card); }
   .swatch.large .swatch-img { width: 64px; height: 64px; }
-  .swatch.icon .swatch-img { width: 34px; height: 34px; margin: 0 auto; }
-  .swatch-img svg { width: 100%; height: 100%; display: block; }
+  .swatch.icon .swatch-img { width: 36px; height: 36px; margin: 0 auto; }
+  .swatch-img svg { width: 100%; height: 100%; display: block; filter: var(--sprite-pop); }
   .swatch.fallback { opacity: .55; }
-  .swatch.fallback .swatch-img { outline: 1px dashed var(--line); outline-offset: 2px; }
+  .swatch.fallback .swatch-img { border-style: dashed; }
   .swatch-caption { font-family: ${MONO_STACK}; font-size: .58rem; color: var(--muted); line-height: 1.25; margin-top: .15rem; word-break: break-word; }
   .swatch-treat { display: block; opacity: .8; }
-  footer.page { max-width: 74ch; margin: 2.5rem 0 0; padding-top: 1rem; border-top: 1px solid var(--line); font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
-  @media (prefers-reduced-motion: no-preference) { .jump, .swatch, .pill { transition: border-color .12s ease, opacity .12s ease; } }
+  footer.page { max-width: 74ch; margin: 2.5rem 0 0; padding-top: 1rem; border-top: 1px solid var(--ai-edge); font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
+  @media (prefers-reduced-motion: no-preference) { .jump, .swatch, .pill { transition: border-color .12s ease, color .12s ease, opacity .12s ease; } }
 ${dockCss}</style>
 </head>
 <body>
 <main>
-  <div class="eyebrow">tmct &middot; the sprite library</div>
-  <h1>Sprites</h1>
+  <header class="appbar">
+    <h1>Sprites</h1>
+    <span class="doc-sub">tmct &middot; the sprite library</span>
+  </header>
   <div class="composer">
     <section class="panel compose-panel" aria-label="Describe a scene">
       <h2>describe a scene</h2>
@@ -702,7 +776,7 @@ ${dockCss}</style>
       <h2>the scene</h2>
       <div class="scene-frame" id="sceneFrame">
         <div class="scene-row" id="sceneRow" aria-live="polite"></div>
-        <span class="empty-note" id="sceneEmpty">nothing recognized yet &mdash; try &ldquo;a doctor with a hat, and a cabinet&rdquo;.</span>
+        <span class="empty-note" id="sceneEmpty">nothing recognized yet. Try &ldquo;a doctor with a hat, and a cabinet&rdquo;.</span>
       </div>
     </section>
   </div>
@@ -714,7 +788,7 @@ ${dockCss}</style>
       <span class="n mono" id="qcount"></span>
     </div>
   </div>
-  ${CATALOG_GROUPS.map((g) => sectionHtml(g, entries)).join("")}
+  ${CATALOG_GROUPS.map((g) => sectionHtml(g, entries, { clusterBy: g.id === GROUP_PERSON || g.id === GROUP_OBJECT ? clusterBy : null })).join("")}
   <footer class="page">${entries.length} classes &middot; ${totalSwatches} swatches &middot; icon tier 44px, sprite tier 400px</footer>
 </main>
 <script>
