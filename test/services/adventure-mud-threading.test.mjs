@@ -84,27 +84,79 @@ test("a character with no placement of its own is declined, never given another 
 
 test("dig mints a room with exits both ways and leaves the digger where it stood", async () => {
   await withMudGarden("dig", async (dir) => {
-    const dug = await run(dir, { verb: "dig", direction: "north" }, "mole-1");
+    const dug = await run(dir, { verb: "dig", direction: "north" }, "badger-2");
     assert.equal(dug.miss, false);
     assert.match(dug.text, /you dig north and open up a new room\./);
 
     const state = await foldOf(dir);
-    assert.equal(state.exits.get("garden").get("north"), "garden-north", "the id scheme is <room>-<direction>");
-    assert.equal(state.exits.get("garden-north").get("south"), "garden", "the way back is written too");
-    assert.equal(state.placements.get("mole-1").object, "garden", "digging spends the turn without moving the digger");
+    assert.equal(state.exits.get("sett-1").get("north"), "sett-1-north", "the id scheme is <room>-<direction>");
+    assert.equal(state.exits.get("sett-1-north").get("south"), "sett-1", "the way back is written too");
+    assert.equal(state.placements.get("badger-2").object, "sett-1", "digging spends the turn without moving the digger");
 
     const { rows } = await rowsAndState(dir);
     assert.ok(
-      rows.some((r) => r.subject === "garden-north" && r.predicate === "rdf:type" && r.object === "room"),
+      rows.some((r) => r.subject === "sett-1-north" && r.predicate === "rdf:type" && r.object === "room"),
       "the dug room is typed as a room",
     );
+    assert.ok(
+      rows.some((r) => r.subject === "sett-1-north" && r.predicate === "rdf:type" && r.object === "underground-space"),
+      "a room dug sideways out of the burrow is underground too",
+    );
     const spawned = [...state.placements]
-      .filter(([, p]) => p.object === "garden-north" && p.predicate === "mgx:located-in")
+      .filter(([, p]) => p.object === "sett-1-north" && p.predicate === "mgx:located-in")
       .map(([thing]) => thing);
     assert.ok(spawned.length <= 2, `a dig spawns a bounded number of objects, got ${spawned.length}`);
     for (const thing of spawned) {
-      assert.match(thing, /-garden-north$/, "a spawned object's id names the room it was dug into");
+      assert.match(thing, /^[a-z]+-\d+$/, "a spawned object reads as its kind and a small number, never a room path");
+      assert.equal(
+        rows.find((r) => r.subject === thing && r.predicate === "mgx:display-name")?.object,
+        thing.replace(/-\d+$/, ""),
+        "and carries the plain kind as the name to show it by",
+      );
     }
+  });
+});
+
+test("dig follows the room's own kind: sideways underground, straight down from the surface", async () => {
+  await withMudGarden("dig-kinds", async (dir) => {
+    const sideways = await run(dir, { verb: "dig", direction: "north" }, "mole-1");
+    assert.equal(sideways.miss, true, "the garden is open ground — there is nothing to tunnel north through");
+    assert.match(sideways.text, /open ground/);
+
+    const sky = await run(dir, { verb: "dig", direction: "up" }, "mole-1");
+    assert.equal(sky.miss, true);
+    assert.match(sky.text, /sky above the garden/);
+
+    const deeper = await run(dir, { verb: "dig", direction: "down" }, "badger-2");
+    assert.equal(deeper.miss, true, "the burrow runs one level deep");
+    assert.match(deeper.text, /one level deep/);
+
+    const surfaced = await run(dir, { verb: "dig", direction: "up" }, "badger-2");
+    assert.equal(surfaced.miss, false, "digging up out of the burrow breaks the surface");
+    const { rows } = await rowsAndState(dir);
+    assert.ok(
+      rows.some((r) => r.subject === "sett-1-up" && r.predicate === "rdf:type" && r.object === "outdoor-space"),
+      "and the room it opens is above ground",
+    );
+  });
+});
+
+test("walking into the fox's den ends that animal's run", async () => {
+  await withMudGarden("fox", async (dir) => {
+    const down = await run(dir, { verb: "go", direction: "down" }, "mole-1");
+    assert.equal(down.miss, false);
+
+    const eaten = await run(dir, { verb: "go", direction: "north" }, "mole-1");
+    assert.equal(eaten.miss, false);
+    assert.match(eaten.text, /the fox-1 is waiting\. It eats the mole-1/);
+
+    const state = await foldOf(dir);
+    assert.equal(state.placements.get("mole-1").object, "eaten", "the mole is out of the world, not standing in the den");
+    assert.equal(state.placements.get("vole-1").object, "garden", "and nobody else is touched by it");
+
+    const after = await run(dir, { verb: "look" }, "mole-1");
+    assert.equal(after.miss, true);
+    assert.match(after.text, /has been eaten — it takes no more turns/);
   });
 });
 
@@ -121,12 +173,12 @@ test("dig declines rather than overwriting an exit that already stands", async (
 
 test("a dug room is reachable by the ordinary go verb on the turn after the dig", async () => {
   await withMudGarden("dig-then-go", async (dir) => {
-    await run(dir, { verb: "dig", direction: "east" }, "vole-1");
-    const walked = await run(dir, { verb: "go", direction: "east" }, "vole-1");
+    await run(dir, { verb: "dig", direction: "east" }, "groundhog-1");
+    const walked = await run(dir, { verb: "go", direction: "east" }, "groundhog-1");
     assert.equal(walked.miss, false);
     const state = await foldOf(dir);
-    assert.equal(state.placements.get("vole-1").object, "garden-east");
-    assert.equal(state.placements.get("mole-1").object, "garden", "the other character never followed");
+    assert.equal(state.placements.get("groundhog-1").object, "sett-1-east");
+    assert.equal(state.placements.get("badger-2").object, "sett-1", "the other character never followed");
   });
 });
 

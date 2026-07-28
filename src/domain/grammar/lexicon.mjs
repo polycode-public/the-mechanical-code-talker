@@ -149,6 +149,19 @@ export function loadLexicon(extra, ns = DEFAULT_NS) {
   return lex;
 }
 
+/** `lexicon` with `names` additionally declared as proper names. The noun,
+ *  verb and adjective maps are SHARED with the base lexicon rather than
+ *  re-ingested — a caller that re-declares on every turn (a live game world
+ *  minting ids as it is played) would otherwise rebuild nine thousand core
+ *  entries to add half a dozen. Proper names outrank every other category, so
+ *  a name with no dictionary reading of its own ("groundhog-1", "carrot-2")
+ *  resolves as itself instead of dying as an undeclared word. */
+export function withProperNames(lexicon, names) {
+  const properNames = new Map(lexicon.properNames);
+  for (const name of names) properNames.set(String(name).toLowerCase(), String(name));
+  return { ...lexicon, properNames };
+}
+
 /** Noun lookup with plural folding; returns the entry ({lemma, property?}) or
  *  null. `opts.singularOnly` (an "a"/"an" determiner) prunes the irregular-
  *  plural fold in favor of a standalone-singular entry when both exist for

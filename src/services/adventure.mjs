@@ -10,6 +10,7 @@
 
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
 import { parseImperative, OBJECT_PRONOUNS } from "../domain/grammar/ace.mjs";
+import { loadLexicon, withProperNames, classify } from "../domain/grammar/lexicon.mjs";
 import { register as registerReferent, bind as bindDiscourseForm } from "../domain/discourse.mjs";
 import { createCompletionsGraphAdapter } from "../domain/completions/graph-adapter.mjs";
 import { actionFamilies } from "../domain/router/taught.mjs";
@@ -185,6 +186,10 @@ const POSITION_PREDICATES = new Set(["mgx:on-top-of", "mgx:on-plane", "mgx:under
 const OPEN_PREDICATE = "mgx:is-open";
 const MASS_PREDICATE = "mgx:hasMass";
 const KNOWS_ABOUT_PREDICATE = "mgx:knows-about";
+// What a thing is called on screen, when that differs from its id. A dug
+// object needs a distinct id per instance and a plain name to read by, and
+// this predicate is the only place the two are allowed to differ.
+const DISPLAY_NAME_PREDICATE = "mgx:display-name";
 const EXIT_PREDICATE_RE = /^mgx:has-exit-([a-z]+)$/;
 // Where an eaten thing is placed. The world has no other way to say "out of
 // play", and no room can be called this, so the sentinel is the whole
@@ -203,6 +208,20 @@ export function worldActionRows(rows) {
     const prov = String(r.provenance || "").trim();
     return prov === "" || prov.startsWith("world:");
   });
+}
+
+/** Every individual the world names — its rooms, its cast, its props, and
+ *  anything dug up since — as the plain id strings a parser has to have
+ *  DECLARED before it can resolve them. @turnN snapshots are skipped: a
+ *  snapshot only ever repeats a subject its base row already named. Pure. */
+export function worldIndividualNames(rows) {
+  const names = new Set();
+  for (const row of rows || []) {
+    if (SNAPSHOT_RE.test(row.subject)) continue;
+    if (row.predicate === "rdf:type" || PLACEMENT_PREDICATES.has(row.predicate)) names.add(row.subject);
+    if (EXIT_PREDICATE_RE.test(row.predicate)) { names.add(row.subject); names.add(row.object); }
+  }
+  return [...names].sort();
 }
 
 /** Fold fact rows into the CURRENT world state: per subject, the newest
@@ -346,6 +365,45 @@ function backgroundOnlyMention(rows, state, object) {
   return (rows || []).some((r) => r.subject === object || r.object === object);
 }
 
+/** True when `subject` is one of the world's cast rather than a prop: a
+ *  declared person, or anything the world places with mgx:currently-in — the
+ *  predicate every world reserves for a character standing in a room, props
+ *  riding located-in/fixed-in/stands-locked-in instead. Both halves matter:
+ *  ashcombe-hall types its staff `person`, while mud-garden types its animals
+ *  `adventurer` and places them the same way, so a person-only test leaves a
+ *  whole cast with nobody able to speak to it. */
+function isCastMember(rows, state, subject) {
+  return isTyped(rows, subject, "person") || state.placements.get(subject)?.predicate === "mgx:currently-in";
+}
+
+/** Who else is standing in `room` right now, sorted — the same currently-in
+ *  placement the talk verb and the room affordances read, exposed so a caller
+ *  rendering a room can name its cast without re-deriving the test. Pure. */
+export function castInRoom(rows, state, room, exclude = null) {
+  return [...state.placements.keys()]
+    .filter((subject) => subject !== exclude && subject !== room)
+    .filter((subject) => state.placements.get(subject).object === room)
+    .filter((subject) => isCastMember(rows, state, subject))
+    .sort();
+}
+
+// A predator eats whatever walks into its room. The marker is a world fact,
+// so which individual is dangerous is the world's business, never this
+// module's.
+const PREDATOR_PREDICATE = "mgx:is-predator";
+
+/** The predator standing in `room`, or null — read from the same placements
+ *  fold every other presence check uses. Pure. */
+function predatorIn(rows, state, room) {
+  return castInRoom(rows, state, room)
+    .find((subject) => factObjects(rows, subject, PREDATOR_PREDICATE).includes("true")) ?? null;
+}
+
+/** True when `subject` has been eaten: placed at the out-of-play sentinel no
+ *  room can be called. Its part in the world is finished — every command it
+ *  gives declines, and its scripted turns stop. Pure. */
+export const isOutOfPlay = (state, subject) => state.placements.get(subject)?.object === CONSUMED_PLACE;
+
 /** The room's real affordances — every exit, and every visible object's
  *  applicable verb — read from the EXACT SAME data take/open/talk/examine
  *  already check (visibleRoomOf, isContainer, isTyped, the placement
@@ -375,7 +433,7 @@ export function roomAffordances(rows, state, here, actingSubject = "player") {
       actions.push(`examine ${subject}`);
       continue;
     }
-    if (isTyped(rows, subject, "person")) {
+    if (isCastMember(rows, state, subject)) {
       actions.push(`talk to ${subject}`);
       continue;
     }
@@ -523,6 +581,13 @@ const VIEW_EXCLUDED_PREDICATES = new Set([
   // subClassOf drive positional rendering by their own readers, and read as
   // raw triples if they land in room prose.
   "mgx:default-contains", "mgx:default-plane", "rdfs:subClassOf",
+  // A screen name is presentation, not scenery — it reads as a raw triple in
+  // room prose ("Carrot-1 mgx:display-name carrot") and says nothing the
+  // room's own sentences don't already say.
+  DISPLAY_NAME_PREDICATE,
+  // Which individual is dangerous is the predator mechanic's own wiring; a
+  // room look that announced it would give the trap away as a bare triple.
+  "mgx:is-predator",
 ]);
 
 const sentenceCase = (term) => String(term).charAt(0).toUpperCase() + String(term).slice(1);
@@ -711,6 +776,51 @@ const DIG_SPAWN_KINDS = ["root", "carrot", "worm"];
 const DIG_SPAWN_MIN = 0;
 const DIG_SPAWN_MAX = 2;
 
+// Which way a room of each kind can be dug, and what the room it opens is
+// typed as. Above ground there is nothing to tunnel sideways through, so the
+// only dig is straight down into the soil; below ground the burrow spreads
+// across its own level and can surface again. Digging deeper is left out so
+// the burrow stays the one level the soil cross-section draws.
+const DIGGABLE_BY_ROOM_KIND = new Map([
+  ["outdoor", new Map([["down", "underground-space"]])],
+  ["underground", new Map([
+    ["north", "underground-space"],
+    ["south", "underground-space"],
+    ["east", "underground-space"],
+    ["west", "underground-space"],
+    ["up", "outdoor-space"],
+  ])],
+  ["indoor", new Map()],
+]);
+
+const DIG_DECLINE_BY_ROOM_KIND = {
+  outdoor: (room, direction) => (direction === "up"
+    ? `there's nothing but sky above the ${room}.`
+    : `you can't tunnel ${direction} out here — the ${room} is open ground, not soil to dig through. Dig down to get under it.`),
+  underground: (room) => `the earth below the ${room} is packed solid — this burrow runs one level deep.`,
+  indoor: (room, direction) => `you can't dig ${direction} out of the ${room}.`,
+};
+
+/** A room's own kind, from the rdf:type facts the world writes about it:
+ *  "outdoor" (the surface), "underground" (the burrow), or "indoor" for a
+ *  walled room that says neither. Pure. */
+export function roomKindOf(rows, room) {
+  const typedAs = (kind) => (rows || []).some((r) => r.subject === room && r.predicate === "rdf:type" && r.object === kind);
+  if (typedAs("outdoor-space")) return "outdoor";
+  if (typedAs("underground-space")) return "underground";
+  return "indoor";
+}
+
+/** Every direction a dig could actually open a room in from `room`: allowed
+ *  by the room's own kind, and with no exit already written that way. This is
+ *  the exact set the dig verb accepts, so a caller offering these as hints can
+ *  never suggest a dig the verb would then refuse. Pure. */
+export function diggableDirections(rows, state, room) {
+  const exits = state.exits.get(room);
+  return [...(DIGGABLE_BY_ROOM_KIND.get(roomKindOf(rows, room)) ?? new Map()).keys()]
+    .filter((direction) => !exits?.has(direction));
+}
+
 const FOOD_CLASS = "food";
 // A shared reference mass standing in for per-species maxima until the game
 // config carries them, and what an eaten thing is worth when the world wrote
@@ -739,6 +849,27 @@ function freshRoomId(rows, here, direction) {
     if (!taken(`${base}-${n}`)) return `${base}-${n}`;
   }
   return `${base}-${(rows || []).length + 3}`;
+}
+
+/** An unused id for a freshly dug object, reading as its plain kind and a
+ *  small number ("carrot-1"). The short id is what keeps a pouch readable:
+ *  naming a spawned object after the room it came out of inherits that room's
+ *  whole nested dig path ("carrot-sett-1-north-east-east"), which is an id, not
+ *  a name anyone can read. `alsoTaken` holds the ids minted earlier in this
+ *  same dig, which are not in `rows` yet. Pure. */
+function freshObjectId(rows, kind, alsoTaken) {
+  const taken = (id) => alsoTaken.has(id) || (rows || []).some((r) => r.subject === id || r.object === id);
+  for (let n = 1; n <= (rows || []).length + 2; n += 1) {
+    if (!taken(`${kind}-${n}`)) return `${kind}-${n}`;
+  }
+  return `${kind}-${(rows || []).length + 3}`;
+}
+
+/** What a thing should be CALLED on screen: its declared display name, else
+ *  its own id. A dug object carries one so a pouch can list "carrot" while the
+ *  world keeps the distinct id ("carrot-1") every verb resolves against. Pure. */
+export function displayNameOf(rows, subject) {
+  return factObjects(rows, subject, DISPLAY_NAME_PREDICATE)[0] ?? subject;
 }
 
 /** A container's open/locked status, stated plainly, and (only once already
@@ -854,6 +985,13 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
       { miss: true },
     );
   }
+  if (here === CONSUMED_PLACE) {
+    return answer(
+      `the ${actingSubject} has been eaten — it takes no more turns in this world.`,
+      noteFor(`${cmd.verb} — ${actingSubject} is placed out of play; every command it gives declines from here on`),
+      { miss: true },
+    );
+  }
 
   if (cmd.verb === "look" && !cmd.object) {
     const digest = await worldDigest(here, { memoryDir, memory, rows, state, graph, actingSubject });
@@ -903,7 +1041,7 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
         { miss: true },
       );
     }
-    const person = isTyped(rows, object, "person");
+    const person = isCastMember(rows, state, object);
     // "look <object>" on a real placed prop is the grounded close look: every
     // physical fact the world writes about the thing (its placement, its
     // within-room position, any datatype property — all via the SAME
@@ -1006,6 +1144,21 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
         { miss: true },
       );
     }
+    // A predator eats whatever walks in, and the room it guards is the one
+    // room a move never comes back from — so this write bypasses commit()
+    // entirely: the auto-relook there would describe a room the mover is no
+    // longer standing in, and the world has nobody left to look with.
+    const predator = predatorIn(rows, state, target);
+    if (predator) {
+      await writeWorldTurn(memoryDir, world, k, [
+        { subject: `${actingSubject}@turn${k}`, predicate: "mgx:currently-in", object: CONSUMED_PLACE },
+      ], cache);
+      return answer(
+        `you go ${cmd.direction} into the ${target} — and the ${predator} is waiting. It eats the ${actingSubject}. That's the end of its run.`,
+        noteFor(`go — the ${target} holds the predator ${predator}; ${actingSubject} is placed out of play at turn ${k} and takes no further turns`),
+        { goal: `move through the world (eaten by the ${predator} in the ${target})` },
+      );
+    }
     return commit(
       [{ subject: `${actingSubject}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:currently-in", object: target }],
       `you go ${cmd.direction}. Now in the ${target}.`,
@@ -1063,8 +1216,8 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
       );
     }
     const receiver = cmd.indirectObject;
-    if (!isTyped(rows, receiver, "person") || state.placements.get(receiver)?.object !== here) {
-      return answer(`the ${receiver} isn't here.`, noteFor(`give — ${receiver} isn't a person in the ${here}; precondition declined by name`), { miss: true });
+    if (!isCastMember(rows, state, receiver) || state.placements.get(receiver)?.object !== here) {
+      return answer(`the ${receiver} isn't here.`, noteFor(`give — ${receiver} isn't one of the cast standing in the ${here}; precondition declined by name`), { miss: true });
     }
     return commit(
       [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: receiver }],
@@ -1091,29 +1244,45 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
         { miss: true },
       );
     }
+    const roomKind = roomKindOf(rows, here);
+    const dugKind = (DIGGABLE_BY_ROOM_KIND.get(roomKind) ?? new Map()).get(direction) ?? null;
+    if (!dugKind) {
+      return answer(
+        DIG_DECLINE_BY_ROOM_KIND[roomKind](here, direction),
+        noteFor(`dig — the ${here} is an ${roomKind} room, which cannot be dug ${direction}; declined by the room's own kind`),
+        { miss: true },
+      );
+    }
     const dug = freshRoomId(rows, here, direction);
     const spawnCount = DIG_SPAWN_MIN + stableIndex(dug, DIG_SPAWN_MAX - DIG_SPAWN_MIN + 1);
     const spawnedKinds = DIG_SPAWN_KINDS.slice(0, spawnCount);
-    const spawned = spawnedKinds.map((kind) => `${kind}-${dug}`);
+    const minted = new Set();
+    const spawned = spawnedKinds.map((kind) => {
+      const id = freshObjectId(rows, kind, minted);
+      minted.add(id);
+      return id;
+    });
     return commit(
       [
         { subject: dug, predicate: "rdf:type", object: "room" },
+        { subject: dug, predicate: "rdf:type", object: dugKind },
         { subject: here, predicate: `mgx:has-exit-${direction}`, object: dug },
         { subject: dug, predicate: `mgx:has-exit-${back}`, object: here },
         // Typed to its OWN kind, not a flat "portable" — a spawned kind the
         // world already declares rdfs:subClassOf food (DIG_SPAWN_KINDS may
         // carry one) needs its real class reachable here for isFood's own
-        // objectClassChain walk, or digging up "carrot-..." would still read
+        // objectClassChain walk, or digging up "carrot-1" would still read
         // as inedible scenery.
         ...spawnedKinds.flatMap((kind, i) => ([
           { subject: spawned[i], predicate: "rdf:type", object: kind },
+          { subject: spawned[i], predicate: DISPLAY_NAME_PREDICATE, object: kind },
           { subject: spawned[i], predicate: "mgx:located-in", object: dug },
         ])),
       ],
       spawned.length
         ? `you dig ${direction} and open up a new room. In the loose earth: the ${spawned.join(", the ")}.`
         : `you dig ${direction} and open up a new room. There's nothing in it but bare earth.`,
-      `dig — minted the room ${dug} with exits both ways (${direction} out, ${back} back)${spawned.length ? `, and ${spawned.length} object(s) in it` : ""}; digging spends the turn, so the digger stays in the ${here}`,
+      `dig — minted the ${dugKind} ${dug} with exits both ways (${direction} out, ${back} back)${spawned.length ? `, and ${spawned.length} object(s) in it` : ""}; digging spends the turn, so the digger stays in the ${here}`,
       `dig ${direction} out of the ${here}`,
     );
   }
@@ -1396,11 +1565,28 @@ async function worldOpennessAnswer(line, { memoryDir }) {
 const WORLD_WHERE_AM_I_RE = /^where\s+am\s+i(?:\s+now)?[?.!\s]*$/i;
 const WORLD_OPTIONS_RE = /^(?:what\s+can\s+i\s+do(?:\s+(?:here|now))?|what\s+are\s+my\s+options|what\s+(?:should|do)\s+i\s+do(?:\s+(?:here|now))?|what\s+now)[?.!\s]*$/i;
 const WORLD_QUEST_RE = /^(?:what(?:'s|\s+is)\s+(?:the\s+|my\s+)?(?:quest|goal|objective|mission|aim)|what\s+am\s+i\s+(?:trying\s+to\s+do|(?:supposed|meant)\s+to\s+do)|what\s+do\s+i\s+do\s+here)[?.!\s]*$/i;
+// "who is here" — the room's cast, the question a shared world invites the
+// moment a second animal walks in. Answered from the same currently-in
+// placements the talk verb resolves against, so who is named is exactly who
+// can be talked to.
+const WORLD_WHO_HERE_RE =
+  /^(?:who(?:'s|\s+is|\s+are)\s+(?:else\s+)?(?:here|in\s+(?:the\s+|this\s+)?room|with\s+me)|who\s+else\s+is\s+(?:here|around))[?.!\s]*$/i;
 // "what food do you know about" and its natural variants — the asking
 // character's OWN durable food knowledge (personKnownFoodLines), never the
-// whole world's food. Covers the plural ("foods") and the "what do you know
-// about food" inversion alongside the base phrasing.
-const WORLD_KNOWN_FOOD_RE = /^(?:what\s+foods?\s+do\s+you\s+know\s+about|what\s+do\s+you\s+know\s+about\s+food)[?.!\s]*$/i;
+// whole world's food. The trailing "about" is optional, "know" swaps for
+// "found"/"seen"/"heard about", and the "what do you know about food"
+// inversion and a plain yes/no lead-in both count: every one of these is the
+// same question, and a phrasing this lane doesn't recognise leaves the world
+// entirely and comes back answered as vocabulary.
+const WORLD_KNOWN_FOOD_RE = new RegExp(
+  "^(?:"
+  + "what\\s+foods?\\s+(?:do\\s+you\\s+know(?:\\s+about)?|have\\s+you\\s+(?:found|seen|heard\\s+(?:about|of))|do\\s+you\\s+know\\s+of)"
+  + "|what\\s+do\\s+you\\s+know\\s+about\\s+(?:any\\s+)?foods?"
+  + "|do\\s+you\\s+know\\s+(?:about|of)\\s+(?:any\\s+)?foods?"
+  + "|where\\s+is\\s+(?:the\\s+)?food"
+  + ")[?.!\\s]*$",
+  "i",
+);
 
 /** The in-game orientation asides, answered from the world fold: the player's
  *  room, the room's real affordances, and the world's objective. Null when the
@@ -1410,11 +1596,23 @@ async function worldContextAnswer(line, { memoryDir, actingSubject = "player" })
   const asksWhere = WORLD_WHERE_AM_I_RE.test(l);
   const asksOptions = WORLD_OPTIONS_RE.test(l);
   const asksQuest = WORLD_QUEST_RE.test(l);
-  if (!asksWhere && !asksOptions && !asksQuest) return null;
+  const asksWhoIsHere = WORLD_WHO_HERE_RE.test(l);
+  if (!asksWhere && !asksOptions && !asksQuest && !asksWhoIsHere) return null;
   let rows;
   try { rows = readFactRows(await loadMemory(memoryDir)); } catch { return null; }
   const state = foldWorldState(worldActionRows(rows));
   const here = state.placements.get(actingSubject)?.object ?? null;
+
+  if (asksWhoIsHere) {
+    const cast = here ? castInRoom(rows, state, here, actingSubject) : [];
+    return answer(
+      cast.length
+        ? `here with you in the ${here}: the ${cast.join(", the ")}. You can talk to ${cast.length > 1 ? "any of them" : `the ${cast[0]}`}.`
+        : `nobody else is${here ? ` in the ${here}` : " here"} right now.`,
+      `ADVENTURE — who-is-here aside: the ${here}'s cast from the current placements fold, the same set the talk verb resolves against`,
+      { goal: "see who else is here" },
+    );
+  }
 
   if (asksWhere) {
     return here
@@ -1470,6 +1668,39 @@ async function worldKnownFoodAnswer(line, { memoryDir, actingSubject = "player" 
     `you know about: the ${foods.join(", the ")}.`,
     `ADVENTURE — known-food aside: ${actingSubject}'s durable mgx:knows-about facts, filtered to the food class`,
     { goal: "check what food you know about" },
+  );
+}
+
+// A question that names one of the world's OWN minted ids — "sett-1",
+// "groundhog-1", "carrot-2" — can only be about this world: nothing else in
+// the session has ever heard that token. So when no world shape matched it,
+// the fall-through is a plain misroute, and in a session with no code graph it
+// comes back as the code-graph wall, which says nothing true about a burrow.
+// The gate is the hyphen: a world id that is a plain dictionary word ("lamp",
+// "garden") stays out of this, so an ordinary mid-game question about an
+// ordinary word keeps the lane it has always had.
+const WORLD_QUESTION_LEAD_RE =
+  /^(?:who|what|where|which|how|why|when|tell\s+me|describe|do\s+you|does|is|are|can\s+you|any)\b/i;
+const WORLD_MINTED_ID_RE = /^[a-z][a-z0-9]*(?:-[a-z0-9]+)+$/;
+
+/** A digest about the world-minted id a question names, or null when the line
+ *  is not a question, names none, or the world places nothing by that name. */
+async function worldMentionAnswer(line, { memoryDir, graph, actingSubject = "player" }) {
+  const l = String(line).trim();
+  if (!/\?\s*$/.test(l) && !WORLD_QUESTION_LEAD_RE.test(l)) return null;
+  const spoken = new Set(l.toLowerCase().replace(/[?.!,;:"']/g, " ").split(/\s+/).filter(Boolean));
+  let memory;
+  try { memory = await loadMemory(memoryDir); } catch { return null; }
+  const rows = readFactRows(memory);
+  const state = foldWorldState(worldActionRows(rows));
+  const named = worldIndividualNames(rows)
+    .find((subject) => WORLD_MINTED_ID_RE.test(subject) && spoken.has(subject));
+  if (!named) return null;
+  const digest = await worldDigest(named, { memoryDir, memory, rows, state, graph, actingSubject });
+  return answer(
+    digest ?? `nothing more about the ${named} is written down yet.`,
+    `ADVENTURE — world-mention aside: "${named}" is an id this world minted, so the question is the world's to answer; digested from the current fold`,
+    { goal: `find out about the ${named}` },
   );
 }
 
@@ -1577,6 +1808,78 @@ async function bindPronouns(cmd, { discourseHolder, memoryDir, actingSubject = "
   return { cmd: bound };
 }
 
+// ---- the world's own vocabulary ----------------------------------------------
+//
+// A world's minted ids are words only that world knows. "groundhog-1" is in no
+// dictionary, so the parser's lexicon gate rejects "talk to groundhog-1" as an
+// undeclared word and the whole command dies before the talk verb ever sees
+// it. Declaring those ids as PROPER NAMES for the duration of a world command
+// fixes that: a proper name outranks every other category, so the id resolves
+// as itself. Ids the core lexicon already knows are left out, so no ordinary
+// word changes category because a world happens to use it — and the extension
+// is scoped to this lane, so the teach and ask lanes keep the plain lexicon.
+
+let worldLexiconCache = { key: null, base: null, lexicon: null };
+
+function worldLexicon(rows, base) {
+  const names = worldIndividualNames(rows).filter((name) => !classify(name, base));
+  const key = names.join(" ");
+  if (worldLexiconCache.base === base && worldLexiconCache.key === key) return worldLexiconCache.lexicon;
+  const lexicon = withProperNames(base, names);
+  worldLexiconCache = { key, base, lexicon };
+  return lexicon;
+}
+
+async function worldAwareLexicon(memoryDir, lexicon) {
+  const base = lexicon ?? loadLexicon();
+  try {
+    return worldLexicon(readFactRows(await loadMemory(memoryDir)), base);
+  } catch {
+    return base;
+  }
+}
+
+// ---- the vocative: naming who the line is addressed to ------------------------
+//
+// Give a window a character's name and players start using it: "groundhog-1
+// what do you know about food", "mole-1, dig north". The name is who the line
+// is addressed to, not part of the question — but it makes the line fit no
+// world shape at all, so the whole turn leaves this lane and comes back
+// answered as something else entirely (a code question, in a session with no
+// code graph). Stripping a vocative that names one of the world's OWN placed
+// individuals costs one fold read, and only on a line that has already failed
+// on its own terms.
+
+const escapeForRegExp = (s) => String(s).replace(/[.*+?^${}()|[\]\\-]/g, "\\$&");
+
+/** `line` with a leading or trailing vocative naming a placed world
+ *  individual removed, or null when it carries none (or when the name is the
+ *  whole line, which is a bare mention, not an address). Pure. */
+export function withoutWorldVocative(line, names) {
+  const l = String(line).trim();
+  for (const name of names) {
+    const escaped = escapeForRegExp(name);
+    const leading = new RegExp(`^${escaped}\\s*[,:;]?\\s+`, "i");
+    if (leading.test(l)) {
+      const rest = l.replace(leading, "").trim();
+      if (rest) return rest;
+    }
+    const trailing = new RegExp(`[\\s,]+${escaped}\\s*([?.!]*)$`, "i");
+    if (trailing.test(l)) {
+      const rest = l.replace(trailing, "$1").trim();
+      if (rest) return rest;
+    }
+  }
+  return null;
+}
+
+async function addressedLine(line, { memoryDir }) {
+  let rows;
+  try { rows = readFactRows(await loadMemory(memoryDir)); } catch { return null; }
+  const state = foldWorldState(worldActionRows(rows));
+  return withoutWorldVocative(line, [...state.placements.keys()].sort());
+}
+
 // ---- the lane ----------------------------------------------------------------
 
 /**
@@ -1644,13 +1947,29 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
       note: "ADVENTURE — a plan frame arrived mid-adventure; the slot holds one thing at a time",
     };
   }
+  const direct = await liveWorldAnswer(line, { world: adventure.world, memoryDir, env, graph, cache, lexicon, discourseHolder, actingSubject });
+  if (direct) return direct;
+  const addressed = await addressedLine(line, { memoryDir });
+  if (addressed) {
+    const readdressed = await liveWorldAnswer(addressed, { world: adventure.world, memoryDir, env, graph, cache, lexicon, discourseHolder, actingSubject });
+    if (readdressed) return readdressed;
+  }
+  return null; // a mid-game aside — the ordinary lanes answer, world untouched
+}
+
+/** One line against a LIVE world: inventory, an imperative command, then the
+ *  in-game asides. Null when the world has no answer for it, which is what
+ *  lets an ordinary mid-game question keep its own lane. Split out from the
+ *  lane itself so a line carrying a vocative can be re-offered here once,
+ *  stripped, without the two paths ever drifting apart. */
+async function liveWorldAnswer(line, { world, memoryDir, env, graph, cache, lexicon, discourseHolder, actingSubject }) {
   if (INVENTORY_RE.test(line)) return inventoryAnswer({ memoryDir, graph, actingSubject });
-  const parsed = parseImperative(line, lexicon ?? undefined);
+  const parsed = parseImperative(line, await worldAwareLexicon(memoryDir, lexicon));
   if (parsed) {
     const bound = await bindPronouns(parsed, { discourseHolder, memoryDir, actingSubject });
     if (bound.nudge) return bound.nudge;
     const cmd = bound.cmd;
-    const result = await runWorldCommand(cmd, { world: adventure.world, memoryDir, env, graph, cache, actingSubject });
+    const result = await runWorldCommand(cmd, { world, memoryDir, env, graph, cache, actingSubject });
     // The object a command SUCCESSFULLY named registers as a discourse referent
     // a later pronoun binds to — so "look lamp" then "examine it" reads the
     // lamp, and "talk to housekeeper" makes "him"/"her" the housekeeper. A miss
@@ -1682,5 +2001,7 @@ export async function adventureTurn(line, { planHolder, memoryDir, sessionId = "
   if (contextAside) return contextAside;
   const knownFoodAside = await worldKnownFoodAnswer(line, { memoryDir, actingSubject });
   if (knownFoodAside) return knownFoodAside;
+  const mentionAside = await worldMentionAnswer(line, { memoryDir, graph, actingSubject });
+  if (mentionAside) return mentionAside;
   return null; // a mid-game aside — the ordinary lanes answer, world untouched
 }

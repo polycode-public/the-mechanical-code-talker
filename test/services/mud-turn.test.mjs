@@ -185,21 +185,30 @@ test("asking the character standing beside you writes what it says as your own p
       provenance: `${worldProvenanceTag(WORLD)}:turn30`,
     }]);
     const again = await turn(dir, "vole-1", 31);
-    assert.equal(again.actions.some((a) => a.kind === "ask"), false, "the same food is never told twice");
-    assert.ok(
-      stepsOf(again, "investigate").some((a) => a.kind === "none" && /already knows every food/.test(a.reason)),
-      "a room-mate with food knowledge the asker already holds is a different skip from an empty one",
+    const repeat = again.actions.find((a) => a.kind === "ask");
+    assert.ok(repeat, "two animals in one room always exchange something");
+    assert.equal(repeat.thing, null, "but the same food is never told twice");
+    assert.match(repeat.text, /greets the mole-1, but hears nothing new about food/);
+    const { rows: afterRows } = await rowsAndState(dir);
+    assert.equal(
+      knowsAboutRows(afterRows).filter((r) => r.subject === "vole-1" && r.object === "carrot-2").length, 1,
+      "an exchange with nothing new in it writes no second testimony row",
     );
   });
 });
 
-test("an ask that cannot happen names which precondition failed", async () => {
+test("an animal always speaks to a room-mate, and names what it did or didn't learn", async () => {
   await withMudGarden("ask-skips", async (dir) => {
     const beside = await turn(dir, "vole-1", 1);
-    assert.equal(beside.actions.some((a) => a.kind === "ask"), false, "the mole knows no food yet, so it tells nothing");
-    assert.ok(
-      stepsOf(beside, "investigate").some((a) => a.kind === "none" && /knows of no food to share/.test(a.reason)),
-      "a present room-mate with nothing to share is recorded as exactly that",
+    const greeting = beside.actions.find((a) => a.kind === "ask");
+    assert.ok(greeting, "the mole is standing right there, so the vole speaks to it");
+    assert.equal(greeting.teller, "mole-1");
+    assert.equal(greeting.thing, null, "the mole knows no food yet, so it tells nothing");
+    assert.match(greeting.text, /greets the mole-1, but hears nothing new about food/);
+    const { rows: saidRows } = await rowsAndState(dir);
+    assert.deepEqual(
+      knowsAboutRows(saidRows).filter((r) => r.provenance.startsWith("mud:mole-1:")), [],
+      "and an empty answer leaves no testimony crediting the mole for anything",
     );
 
     await appendFacts(dir, [{
@@ -311,10 +320,13 @@ test("two characters playing several turns never inherit each other's knowledge 
 });
 
 test("a character at an edge with no walk to take digs, and only ever one direction per turn", async () => {
+  // The badger starts in the sett, under the soil: the only room kind with a
+  // frontier to dig at. Above ground the one dig is straight down, and the
+  // garden's own way down is already open.
   await withMudGarden("edge-dig", async (dir) => {
     const dug = [];
     for (let k = 1; k <= 12; k += 1) {
-      const played = await turn(dir, "mole-1", k);
+      const played = await turn(dir, "badger-2", k);
       for (const action of stepsOf(played, "edge")) {
         if (action.kind === "dig") dug.push({ k, direction: action.direction, reason: action.reason });
       }
@@ -327,12 +339,25 @@ test("a character at an edge with no walk to take digs, and only ever one direct
       assert.equal(movedAndDug, false, "a turn that walked never also spends the move budget at the edge");
     }
 
-    assert.ok(dug.length > 0, "over twelve turns at the garden's frontier, at least one dig fires");
+    assert.ok(dug.length > 0, "over twelve turns at the sett's frontier, at least one dig fires");
     const { state } = await rowsAndState(dir);
     for (const { direction } of dug) {
       assert.ok(
-        state.exits.get("garden")?.has(direction) || [...state.exits.keys()].some((r) => r.endsWith(`-${direction}`)),
+        state.exits.get("sett-1")?.has(direction) || [...state.exits.keys()].some((r) => r.endsWith(`-${direction}`)),
         `the ${direction} dig really opened a room`,
+      );
+    }
+  });
+});
+
+test("a character above ground never rolls a dig it would only be refused for", async () => {
+  await withMudGarden("surface-no-dig", async (dir) => {
+    for (let k = 1; k <= 12; k += 1) {
+      const played = await turn(dir, "mole-1", k);
+      if (played.room !== "garden") break;
+      assert.equal(
+        stepsOf(played, "edge").some((a) => a.kind === "dig"), false,
+        "the garden's only dig is down, and the way down is already open",
       );
     }
   });
@@ -342,7 +367,7 @@ test("both dig reasons are reachable, and the lateral frontier is the one that d
   await withMudGarden("dig-reasons", async (dir) => {
     const reasons = new Set();
     for (let k = 1; k <= 24; k += 1) {
-      for (const character of ["mole-1", "vole-1"]) {
+      for (const character of ["badger-2", "groundhog-1"]) {
         const played = await turn(dir, character, k);
         for (const action of stepsOf(played, "edge")) {
           if (action.kind === "dig") reasons.add(action.reason);

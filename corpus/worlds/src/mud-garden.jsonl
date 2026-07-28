@@ -1,11 +1,14 @@
-{"world":"mud-garden","kind":"meta","opening":"a vegetable garden on a wet morning, with a burrow already running under it. Say \"look\" to look around, \"go down\" to follow the burrow, and \"dig north\" (or south, east, west, up, down) to open a new room."}
+{"world":"mud-garden","kind":"meta","opening":"a vegetable garden on a wet morning, with a burrow already running under it. Say \"look\" to look around and \"go down\" to follow the burrow. Above ground the only dig is straight down; once you are under the soil you can dig north, south, east or west along the burrow, or up to break the surface. A fox keeps a den off the burrow, and it does not share."}
 {"world":"mud-garden","kind":"fact","subject":"garden","predicate":"rdf:type","object":"room"}
 {"world":"mud-garden","kind":"fact","subject":"burrow-1","predicate":"rdf:type","object":"room"}
 {"world":"mud-garden","kind":"fact","subject":"sett-1","predicate":"rdf:type","object":"room"}
+{"world":"mud-garden","kind":"fact","subject":"fox-den","predicate":"rdf:type","object":"room"}
 {"world":"mud-garden","kind":"fact","subject":"garden","predicate":"mgx:has-exit-down","object":"burrow-1"}
 {"world":"mud-garden","kind":"fact","subject":"burrow-1","predicate":"mgx:has-exit-up","object":"garden"}
 {"world":"mud-garden","kind":"fact","subject":"burrow-1","predicate":"mgx:has-exit-east","object":"sett-1"}
 {"world":"mud-garden","kind":"fact","subject":"sett-1","predicate":"mgx:has-exit-west","object":"burrow-1"}
+{"world":"mud-garden","kind":"fact","subject":"burrow-1","predicate":"mgx:has-exit-north","object":"fox-den"}
+{"world":"mud-garden","kind":"fact","subject":"fox-den","predicate":"mgx:has-exit-south","object":"burrow-1"}
 {"world":"mud-garden","kind":"fact","subject":"mole-1","predicate":"rdf:type","object":"adventurer"}
 {"world":"mud-garden","kind":"fact","subject":"vole-1","predicate":"rdf:type","object":"adventurer"}
 {"world":"mud-garden","kind":"fact","subject":"badger-2","predicate":"rdf:type","object":"adventurer"}
@@ -18,6 +21,12 @@
 {"world":"mud-garden","kind":"fact","subject":"vole-1","predicate":"mgx:hasMass","object":"6"}
 {"world":"mud-garden","kind":"fact","subject":"badger-2","predicate":"mgx:hasMass","object":"9"}
 {"world":"mud-garden","kind":"fact","subject":"groundhog-1","predicate":"mgx:hasMass","object":"7"}
+{"world":"mud-garden","kind":"fact","subject":"predator","predicate":"rdfs:subClassOf","object":"animal"}
+{"world":"mud-garden","kind":"fact","subject":"fox","predicate":"rdfs:subClassOf","object":"predator"}
+{"world":"mud-garden","kind":"fact","subject":"fox-1","predicate":"rdf:type","object":"fox"}
+{"world":"mud-garden","kind":"fact","subject":"fox-1","predicate":"mgx:currently-in","object":"fox-den"}
+{"world":"mud-garden","kind":"fact","subject":"fox-1","predicate":"mgx:is-predator","object":"true"}
+{"world":"mud-garden","kind":"fact","subject":"fox-1","predicate":"mgx:hasMass","object":"40"}
 {"world":"mud-garden","kind":"fact","subject":"food","predicate":"rdfs:subClassOf","object":"portable"}
 {"world":"mud-garden","kind":"fact","subject":"carrot","predicate":"rdfs:subClassOf","object":"food"}
 {"world":"mud-garden","kind":"fact","subject":"lettuce","predicate":"rdfs:subClassOf","object":"food"}
@@ -43,6 +52,7 @@
 {"world":"mud-garden","kind":"fact","subject":"garden","predicate":"rdf:type","object":"outdoor-space"}
 {"world":"mud-garden","kind":"fact","subject":"burrow-1","predicate":"rdf:type","object":"underground-space"}
 {"world":"mud-garden","kind":"fact","subject":"sett-1","predicate":"rdf:type","object":"underground-space"}
+{"world":"mud-garden","kind":"fact","subject":"fox-den","predicate":"rdf:type","object":"underground-space"}
 {"world":"mud-garden","kind":"fact","subject":"outdoor-space","predicate":"rdfs:subClassOf","object":"space"}
 {"world":"mud-garden","kind":"fact","subject":"underground-space","predicate":"rdfs:subClassOf","object":"space"}
 {"world":"mud-garden","kind":"rule","name":"go","ruleKind":"action-signature","slots":{"subjectClass":"adventurer","targetClass":"room"}}

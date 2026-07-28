@@ -4,11 +4,12 @@
 // with a real (not honest-miss) answer, a pane's own play control advances
 // that character's own turn count and nobody else's, the deck's play control
 // starts both, and the compass ring only ever offers a way the world allows —
-// clicking a dig opens a new room on the omniscient burrow survey. Which two
-// animals are cast is drawn live, so every assertion here reads the pane's
-// own data-character rather than assuming a roster order. Mirrors
-// pages-adventure.test.mjs's/pages-spider-fly.test.mjs's own fixture setup and
-// assertion style.
+// clicking a dig opens a new room on the omniscient burrow survey, and a dig
+// typed for a direction the ring never offered is refused in the world's own
+// terms rather than silently done. Which two animals are cast is drawn live,
+// so every assertion here reads the pane's own data-character rather than
+// assuming a roster order. Mirrors pages-adventure.test.mjs's/
+// pages-spider-fly.test.mjs's own fixture setup and assertion style.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
@@ -224,6 +225,31 @@ test("the compass ring offers only ways the world allows, and a dig opens a new 
 
     assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
     assert.deepEqual(consoleErrors, [], "no console error digging a new room open");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a dig typed for a direction the ring never offered is refused in the world's own terms, never silently done", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudPage();
+  try {
+    const offeredDirections = await page
+      .locator(".dir-pill")
+      .evaluateAll((els) => els.map((e) => e.getAttribute("aria-label")?.split(" ")[1]).filter(Boolean));
+    const allDirections = ["north", "south", "east", "west", "up", "down"];
+    const refusedDirection = allDirections.find((d) => !offeredDirections.includes(d));
+    assert.ok(refusedDirection, "at least one direction is never offered by the ring in the starting room");
+
+    const roomsBefore = await page.locator("#worldMapBoard .room").count();
+    await sendMudCommand(page, "a", `dig ${refusedDirection}`);
+
+    const lines = await page.locator("#window-a-chatlog > div").allTextContents();
+    const reply = lines[lines.length - 1];
+    assert.doesNotMatch(reply, /new room/, "a dig the ring never offered opens nothing");
+    assert.equal(await page.locator("#worldMapBoard .room").count(), roomsBefore, "the survey gains no room from a refused dig");
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error refusing a dig the ring never offered");
   } finally {
     await context.close();
   }

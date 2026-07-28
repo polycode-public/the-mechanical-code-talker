@@ -1,11 +1,13 @@
-// mud-browser-entry.mjs — the esbuild entry for mud.html's four-character,
+// mud-browser-entry.mjs — the esbuild entry for mud.html's multi-character,
 // one-shared-world browser session (public/mud-browser.bundle.js), mirroring
 // adventure-browser-entry.mjs's own session-factory shape. The difference is
 // the whole point of the mud demo: adventure-browser-entry.mjs drives ONE
-// player through one world; this file drives FOUR independent characters
-// through the SAME live world, over the SAME memoryDir.
+// player through one world; this file drives SEVERAL independent characters
+// through the SAME live world, over the SAME memoryDir. Which of the world's
+// animals are played is the caller's choice (pickMudRoster draws them fresh
+// each reset), never a fixed pair baked in here.
 //
-// What's shared across all four characters, and why: the store itself
+// What's shared across every character, and why: the store itself
 // (memoryDir) — mole-1's dig must be visible to vole-1's very next look — and
 // ONE planHolder.state, seeded once as "mud-garden is already live" the same
 // way adventure-browser-entry.mjs seeds it, since "is the world open" is a
@@ -22,7 +24,7 @@
 // page's chat dock); `autoplayTick(k)` runs mud-turn.mjs's runMudTurn — one
 // whole scripted turn (investigate, walk toward known food, dig at the
 // edge). The caller (mud-viz.mjs's own inlined script) is responsible for
-// SERIALIZING ticks across the four characters when more than one window is
+// SERIALIZING ticks across the characters when more than one window is
 // auto-playing at once — this file makes no ordering promise between two
 // concurrent calls into the same memoryDir, the same way two callers writing
 // into any shared store concurrently would need their own queue.
@@ -33,26 +35,27 @@ import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import {
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines,
+  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, roomKindOf,
 } from "../../services/adventure.mjs";
 import { runMudTurn } from "../../services/mud-turn.mjs";
 import { worldProvenanceTag } from "../../domain/worlds-pack.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
 
-/** A live, shared mud world four characters can each act in. `worldPayload`
+/** A live, shared mud world several characters can each act in. `worldPayload`
  *  is `{ name, facts, rules, opening }` — the same shape adventure-browser-
  *  entry.mjs's own worldPayload takes, read once at build time through the
  *  real Node worlds-pack provider (see mud-viz.mjs's header for why: the
  *  world's canonical source is a Node-only gzipped JSONL shard the browser
- *  cannot read). `characters` is the roster this page drives (e.g.
- *  `["mole-1", "vole-1", "badger-1", "groundhog-1"]`) — every character
- *  already placed by the world's own seed facts.
+ *  cannot read). `characters` is the roster this page drives (e.g. the two
+ *  ids pickMudRoster drew this reset) — every character already placed by the
+ *  world's own seed facts.
  *
  *  Returns `{ memoryDir, windows, snapshot }`. `windows` is a plain object
  *  keyed by character id, each value `{ character, turn, autoplayTick,
- *  visitedRoomIds }`. `snapshot()` is the one OMNISCIENT read this module
- *  exposes — the central world map's own data source, never a per-window
- *  one. */
+ *  visitedRoomIds, turnsTaken, isOutOfPlay }`. `snapshot()` is the one
+ *  OMNISCIENT read this module exposes — the central world map's own data
+ *  source, never a per-window one. */
 export async function createMudSession(worldPayload, { characters = [] } = {}) {
   const memoryDir = createInMemoryStore();
   const tag = worldProvenanceTag(worldPayload.name);
@@ -70,11 +73,19 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
   // shipped "player" individual mud-garden deliberately has none of).
   const planHolder = { state: { adventure: { world: worldPayload.name } } };
   const graph = parseEntities({ individuals: [], objectProperties: [] });
+  // The world's own minted ids ("groundhog-1", "carrot-2") are declared as
+  // vocabulary inside the adventure lane itself, for the length of one world
+  // command — see adventure.mjs's own worldLexicon. This page hands over the
+  // plain core lexicon and lets the lane do it.
   const lexicon = loadLexicon();
 
-  async function roomOf(character) {
+  async function readWorld() {
     const rows = readFactRows(await loadMemory(memoryDir));
-    const state = foldWorldState(worldActionRows(rows));
+    return { rows, state: foldWorldState(worldActionRows(rows)) };
+  }
+
+  async function roomOf(character) {
+    const { state } = await readWorld();
     return state.placements.get(character)?.object ?? null;
   }
 
@@ -88,6 +99,11 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
     let focus = null;
     let last = null;
     const visitedRoomIds = new Set();
+    // This character's OWN turns, not the page's shared tick counter: two
+    // windows playing at different speeds, or one paused while the other
+    // runs, have genuinely different counts, and showing the shared one under
+    // both animals says something untrue about each.
+    let turnsTaken = 0;
     const startRoom = await roomOf(character);
     if (startRoom) visitedRoomIds.add(startRoom);
 
@@ -115,6 +131,7 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
         focus = result.focus;
         last = result.last;
         if ("planState" in result) planHolder.state = result.planState;
+        turnsTaken += 1;
         const here = await roomOf(character);
         if (here) visitedRoomIds.add(here);
         return { answer: result.answer, end: Boolean(result.end) };
@@ -130,6 +147,7 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
        *  dig-flourish triggers straight off `actions`. */
       async autoplayTick(k) {
         const result = await runMudTurn(character, { world: worldPayload.name, memoryDir, env: {}, graph, k });
+        if (!result.outOfPlay) turnsTaken += 1;
         if (result.roomAfter) visitedRoomIds.add(result.roomAfter);
         return result;
       },
@@ -137,6 +155,18 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
       /** This character's own discovered-room history — real fog of war,
        *  never merged with a sibling window's. */
       visitedRoomIds: () => [...visitedRoomIds],
+
+      /** How many turns THIS character has taken — its own scripted ticks and
+       *  its own typed commands, and nobody else's. */
+      turnsTaken: () => turnsTaken,
+
+      /** True once a predator has eaten this character. It takes no further
+       *  turns and every command it gives declines, so a caller can stop
+       *  ticking it and say so on screen. */
+      async isOutOfPlay() {
+        const { state } = await readWorld();
+        return isOutOfPlay(state, character);
+      },
     };
   }
 
@@ -153,12 +183,29 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
   return { memoryDir, windows, snapshot };
 }
 
+/** `count` entries drawn at random from `roster`, in random order, without
+ *  repeats — which animals this visit is played with. Called fresh on every
+ *  reset, so the same page gives a different pairing each time and the world
+ *  never reads as one fixed cast. `random` is injectable so a caller can pin
+ *  the draw; the world engine itself still writes no randomness anywhere, and
+ *  this picks the players, never anything the world folds. */
+export function pickMudRoster(roster, { count = 2, random = Math.random } = {}) {
+  const pool = [...(roster || [])];
+  for (let i = pool.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool.slice(0, Math.min(count, pool.length));
+}
+
 // Re-exported so mud-viz.mjs's own inlined script never duplicates sprite
 // resolution or the digest/affordance/knowledge readers its room view and
 // chat pills already need — the same reach-through-the-global posture
 // adventure-browser-entry.mjs's own globalThis.tmctAdventure takes.
 globalThis.tmctMud = {
-  createMudSession, resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain, resolveSpriteAsset,
+  createMudSession, pickMudRoster,
+  resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain, resolveSpriteAsset,
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines,
+  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, roomKindOf,
 };
