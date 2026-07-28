@@ -8,6 +8,7 @@
 {"subject":"audience sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"autumn sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"baby sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"badger sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"bathroom sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"beach sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"bear sprite","predicate":"rdf:type","object":"sprite class"}
@@ -85,6 +86,7 @@
 {"subject":"grandfather sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"grandmother sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"grass sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"groundhog sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"guest sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"hat sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"hate sprite","predicate":"rdf:type","object":"sprite class"}
@@ -118,8 +120,10 @@
 {"subject":"market sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"meal sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"meat sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"meerkat sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"meeting sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"metal sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"mole sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"money sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"mother sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"mountain sprite","predicate":"rdf:type","object":"sprite class"}
@@ -190,6 +194,7 @@
 {"subject":"vehicle sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"village sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"visitor sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"vole sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"volunteer sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"water sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"waterway sprite","predicate":"rdf:type","object":"sprite class"}
@@ -241,6 +246,7 @@
 {"subject":"audience sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"autumn sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"baby sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"badger sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"bathroom sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"beach sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"bear sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -318,6 +324,7 @@
 {"subject":"grandfather sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"grandmother sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"grass sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"groundhog sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"guest sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"hat sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"hate sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -351,8 +358,10 @@
 {"subject":"market sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"meal sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"meat sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"meerkat sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"meeting sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"metal sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"mole sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"money sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"mother sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"mountain sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -423,6 +432,7 @@
 {"subject":"vehicle sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"village sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"visitor sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"vole sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"volunteer sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"water sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"waterway sprite","predicate":"mgx:render-at","object":"sprite tier"}

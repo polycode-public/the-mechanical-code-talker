@@ -1,0 +1,31 @@
+# mole — the tunnel's own creature at the sprite tier: no visible ears
+# (a mole's ear is a hidden fold, not a flap, so this is the one animal
+# in the pack that draws none), a blunt merged snout with a pink tip,
+# tiny near-blind eyes, and two oversized spade-shaped front paws for
+# digging — the tier's usual gradient/highlight, no material.
+classes = ["mole"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="mole-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="13" cy="14.8" rx="7.4" ry="5.2" fill="url(#mole-fill)"/>
+  <ellipse cx="6.4" cy="12.4" rx="3.6" ry="3.2" fill="url(#mole-fill)"/>
+  <path d="M2 12.2 C1.8 10.8 3 10.2 4 10.8 C3.4 11.6 3.4 13 4 13.8 C2.8 14 2.2 13.4 2 12.2 Z" fill="#e8a6a0"/>
+  <circle cx="5.6" cy="11.6" r="0.4" fill="#000000" opacity="0.55"/>
+  <circle cx="7.6" cy="11.2" r="0.4" fill="#000000" opacity="0.55"/>
+  <path d="M4.6 17.6 C2.6 17.2 0.8 18.4 1.2 20.4 C1.6 22 3.8 22.2 5.4 21.4 C6.2 20 5.8 18 4.6 17.6 Z" fill="url(#mole-fill)"/>
+  <path d="M10.6 19 C8.8 18.4 6.8 19.4 7 21.4 C7.2 22.8 9.2 23.2 10.8 22.4 C11.6 21 11.4 19.4 10.6 19 Z" fill="url(#mole-fill)"/>
+  <g stroke="#000000" stroke-width="0.35" opacity="0.45" stroke-linecap="round">
+    <path d="M2 20 L1 21.2"/>
+    <path d="M3.2 20.8 L2.6 22.2"/>
+    <path d="M4.6 20.8 L4.6 22.2"/>
+  </g>
+  <path d="M19.6 14.6 C22.2 14 22.6 16.4 21 17 C20.6 16.1 20.1 15.3 19.6 14.6 Z" fill="url(#mole-fill)"/>
+  <ellipse cx="10.6" cy="12.6" rx="3.2" ry="1.7" fill="#ffffff" opacity="0.26"/>
+</svg>
+"""
