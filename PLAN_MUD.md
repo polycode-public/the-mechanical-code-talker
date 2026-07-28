@@ -417,8 +417,11 @@ on the page, everything else stays quiet and disciplined around it.
   tally, distinct from the deck's shared count.
 - **Known ground** (this demo's fog-of-war minimap): the room names that character has personally
   visited, nothing more.
-- **Eaten**: a character that digs into the fox's den (below) is eaten. Its pane grays out, its
-  controls disappear behind a plain "eaten · N turns" notice, and it takes no further turns.
+- **Out of play, two ways**: a character that walks into the fox's den (below) is eaten, and one
+  whose mass reaches zero starves. Either way its pane grays out, its controls disappear behind a
+  plain "eaten · N turns" / "starved · N turns" notice, and it takes no further turns. The engine
+  places it at a sentinel named for the fate ("eaten", "starved"); `outOfPlayReasonOf(state,
+  character)` and each session window's own `outOfPlayReason()` give the page the word to show.
 
 ### The control deck (the page's own top row, shared with the survey)
 
@@ -440,6 +443,16 @@ on the page, everything else stays quiet and disciplined around it.
   the underground start room and never moves on its own; a character that digs into it is eaten.
 - **One level underground**, reached by digging down from the garden and extended sideways from
   there by digging any side with no exit yet.
+- **The burrow has an edge.** The world names its own origin (`garden mgx:is-origin true`) and no
+  dig may open a room more than six exits from it. A room at that distance offers no dig at all,
+  so the compass ring never suggests one and the verb never has to refuse one; typing the dig
+  anyway is declined in the world's own terms. Without the cap a character digs itself twenty-odd
+  hops out into rooms nobody else will ever reach.
+- **Some digs open a den.** One dug room in five is a food store rather than a bare tunnel, and
+  one den in three is lived in — a resident mouse that knows what its own den holds, so a
+  character that digs one out has somebody new to ask about food. What a dig turns up is the
+  world's to say, through `mgx:dig-spawns`, `mgx:den-spawns` and `mgx:den-resident` on the room
+  kind; the engine only decides how many and how often.
 - **The central survey is the operator's omniscient view** — every dug room, every character, no
   fog of war, drawn as a real graph rather than a flat list. Each pane's own "known ground" is
   where fog of war still applies.
@@ -449,6 +462,11 @@ on the page, everything else stays quiet and disciplined around it.
 Per-species mass and hunger-drain rate, generalizing `game-config.mjs`'s per-species constants —
 one table entry per species. The fox is stationary and doesn't carry the same move/dig-reach stat
 the roaming species do; it only ever needs to be present in its den.
+
+The drain is charged for real, at the end of every scripted turn, and a character that reaches
+zero starves. The rates are sized against the page's own default run (400 shared turns, so about
+200 each for two animals): an animal that never eats dies about two thirds of the way through, and
+one that forages does not.
 
 ### The turn algorithm
 
@@ -475,6 +493,13 @@ Every acting character's turn, in order:
    - each available dig direction the room's own kind allows — digging into the fox's den ends
      that character's run instead of opening a room,
    - each edge direction, to just keep following the edge toward food.
+4. **If nothing above moved it, set off for a room it has never stood in.** This step makes a
+   different claim from the food walk: it reads the character's own placement history, not
+   anything about where food might be, so it invents nothing. It skips rooms a predator stands in,
+   which keeps the fox a gamble rather than the nearest unvisited room everyone walks into. When
+   every room within reach has already been walked, it says so and the character stands still —
+   and the mass drain then decides how that ends.
+5. **Charge the turn's mass drain**, and place the character out of play if it hits zero.
 
 ### A new NLP lane: listing what a character knows
 

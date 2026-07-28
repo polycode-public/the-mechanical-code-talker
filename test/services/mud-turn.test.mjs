@@ -1,9 +1,11 @@
 // One character's whole turn, driven end to end: it investigates where it
-// stands, walks only toward food it has really been told about or seen, and
-// digs at the frontier on a seeded roll. Every decision is reproducible from
+// stands, walks only toward food it has really been told about or seen, digs at
+// the frontier on a seeded roll, and (when none of that came to anything) sets
+// off for a room it has never stood in. Every decision is reproducible from
 // (character, turn, room, decision), so the same starting store always plays
-// out the same way — and a character with no food fact simply has nowhere to
-// walk, which is the answer, not a gap.
+// out the same way. A character with no food fact still takes no food walk —
+// that stays the honest answer — and the explore step it falls through to makes
+// a different claim entirely, about where the character itself has been.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -15,6 +17,7 @@ import {
   recordTold, recordExamined, personKnowledgeLines, foldWorldState, worldActionRows,
 } from "../../src/services/adventure.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
+import { DEFAULT_GAME_CONFIG } from "../../src/domain/game-config.mjs";
 import { appendFacts, appendRule, loadMemory, readFactRows } from "../../src/adapters/memory/core.mjs";
 
 const WORLD = "mud-garden";
@@ -58,6 +61,16 @@ const turn = (dir, character, k) => runMudTurn(character, { world: WORLD, memory
 
 const stepsOf = (result, step) => result.actions.filter((a) => a.step === step);
 const kindsOf = (result, step) => stepsOf(result, step).map((a) => a.kind);
+
+/** Walk `character` back to `room` between turns. A turn with nothing else to
+ *  do sets off for a room the character has never stood in, so a test about two
+ *  animals talking has to put them back beside each other itself. */
+async function standBeside(dir, character, room, k) {
+  await appendFacts(dir, [{
+    subject: `${character}@turn${k}`, predicate: "mgx:currently-in", object: room,
+    provenance: `${worldProvenanceTag(WORLD)}:turn${k}`,
+  }]);
+}
 
 /** A carrot placed in the burrow, so a character told about it has somewhere
  *  real to walk. The garden's own carrot is moved out of the way first, so the
@@ -236,14 +249,16 @@ test("the same empty greeting never repeats, and talking resumes the moment the 
     const met = await turn(dir, "vole-1", 1);
     assert.ok(met.actions.some((a) => a.kind === "ask"), "the first meeting is a real exchange");
 
-    const second = await turn(dir, "vole-1", 2);
+    await standBeside(dir, "vole-1", "garden", 10);
+    const second = await turn(dir, "vole-1", 11);
     assert.equal(
       second.actions.some((a) => a.kind === "ask"), false,
       "with nothing new to hear, the pair does not trade the same greeting again",
     );
 
-    await recordExamined(dir, { observer: "mole-1", thing: "carrot-2", k: 3 });
-    const resumed = await turn(dir, "vole-1", 4);
+    await recordExamined(dir, { observer: "mole-1", thing: "carrot-2", k: 20 });
+    await standBeside(dir, "vole-1", "garden", 21);
+    const resumed = await turn(dir, "vole-1", 22);
     const heard = resumed.actions.find((a) => a.kind === "ask");
     assert.ok(heard, "a room-mate that has learned a food is worth speaking to again");
     assert.deepEqual({ teller: heard.teller, thing: heard.thing }, { teller: "mole-1", thing: "carrot-2" });
@@ -402,6 +417,108 @@ test("both dig reasons are reachable, and the lateral frontier is the one that d
     }
     assert.ok(reasons.has("edge-follow"), "the lateral edge-follow roll fires");
     assert.ok(reasons.has("explore"), "the plain exploratory roll fires too, on its own seed");
+  });
+});
+
+test("a turn with nothing else left sets off for a room the character has never stood in", async () => {
+  await withMudGarden("explore-unvisited", async (dir) => {
+    // The garden's own way down is already open and nothing above ground can be
+    // dug, so the mole has no walk and no roll — the exact turn that used to
+    // end in a shrug.
+    const played = await turn(dir, "mole-1", 1);
+
+    assert.deepEqual(kindsOf(played, "walk"), ["none"], "it still takes no food walk");
+    assert.deepEqual(kindsOf(played, "edge"), ["none"], "and no roll comes up at the edge");
+    const explore = stepsOf(played, "explore")[0];
+    assert.deepEqual(
+      { kind: explore.kind, direction: explore.direction, toward: explore.toward, reason: explore.reason },
+      { kind: "go", direction: "down", toward: "burrow-1", reason: "unvisited" },
+      "so it goes to the one room it has never been in",
+    );
+    assert.equal((await rowsAndState(dir)).state.placements.get("mole-1").object, "burrow-1");
+  });
+});
+
+test("the explore step never walks into a room a predator is standing in", async () => {
+  await withMudGarden("explore-avoids-predator", async (dir) => {
+    // Standing in the burrow, the fox's den is an unvisited room one hop north
+    // — the nearest one there is. Nothing else is reachable until the sett.
+    await appendFacts(dir, [{
+      subject: "mole-1@turn5", predicate: "mgx:currently-in", object: "burrow-1",
+      provenance: `${worldProvenanceTag(WORLD)}:turn5`,
+    }]);
+
+    for (let k = 6; k <= 10; k += 1) {
+      const played = await turn(dir, "mole-1", k);
+      for (const action of stepsOf(played, "explore")) {
+        assert.notEqual(action.toward, "fox-den", "the den is never the room it sets out for");
+      }
+      const { state } = await rowsAndState(dir);
+      assert.notEqual(state.placements.get("mole-1").object, "eaten", "and it is never eaten on an explore step");
+    }
+  });
+});
+
+test("a character that runs out of mass starves on the turn it happens, and is declined after", async () => {
+  await withMudGarden("starve-through-a-turn", async (dir) => {
+    const starving = { ...DEFAULT_GAME_CONFIG.mud, moleMassDecrementPerTurn: 5 };
+    const play = (k) => runMudTurn("mole-1", { world: WORLD, memoryDir: dir, k, mudConfig: starving });
+
+    const first = await play(1);
+    assert.equal(first.mass, 3, "the mole's 8 less the 5 a turn costs it");
+    assert.equal(first.outOfPlay, undefined, "still playing at three");
+
+    const last = await play(2);
+    assert.equal(last.mass, 0);
+    assert.deepEqual(
+      { outOfPlay: last.outOfPlay, reason: last.outOfPlayReason }, { outOfPlay: true, reason: "starved" },
+      "the turn it runs out is the turn it goes out of play, and it says which way",
+    );
+    assert.match(last.text, /runs out of mass and starves/);
+    assert.ok(last.actions.length, "and that turn still played out — the mass is charged at the end of it");
+
+    const after = await play(3);
+    assert.deepEqual(
+      { outOfPlay: after.outOfPlay, reason: after.outOfPlayReason, actions: after.actions },
+      { outOfPlay: true, reason: "starved", actions: [] },
+      "every later turn is declined outright",
+    );
+    assert.match(after.text, /the mole-1 has starved\. It takes no more turns\./);
+  });
+});
+
+test("an eaten character reports being eaten, not starved", async () => {
+  await withMudGarden("eaten-reason", async (dir) => {
+    await appendFacts(dir, [{
+      subject: "mole-1@turn5", predicate: "mgx:currently-in", object: "eaten",
+      provenance: `${worldProvenanceTag(WORLD)}:turn5`,
+    }]);
+    const played = await turn(dir, "mole-1", 6);
+    assert.deepEqual({ outOfPlay: played.outOfPlay, reason: played.outOfPlayReason }, { outOfPlay: true, reason: "eaten" });
+    assert.match(played.text, /has been eaten/);
+  });
+});
+
+test("a character stops walking after food that has already been eaten", async () => {
+  await withMudGarden("stale-food-knowledge", async (dir) => {
+    await plantCarrotInBurrow(dir);
+    await recordTold(dir, { asker: "mole-1", teller: "vole-1", thing: "carrot-2", k: 1 });
+    await appendFacts(dir, [{
+      subject: "carrot-2@turn2", predicate: "mgx:located-in", object: "eaten",
+      provenance: `${worldProvenanceTag(WORLD)}:turn2`,
+    }]);
+
+    const played = await turn(dir, "mole-1", 3);
+
+    assert.equal(kindsOf(played, "walk")[0], "none");
+    assert.match(
+      stepsOf(played, "walk")[0].reason, /already been eaten/,
+      "the reason names the eaten meal rather than blaming the map",
+    );
+    assert.equal(
+      played.actions.some((a) => a.step === "edge" && a.reason === "exit-toward-food"), false,
+      "and no exit is gambled on to reach something that no longer exists",
+    );
   });
 });
 

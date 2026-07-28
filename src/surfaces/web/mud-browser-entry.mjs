@@ -35,7 +35,7 @@ import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import {
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines,
-  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, roomKindOf,
+  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, roomKindOf,
 } from "../../services/adventure.mjs";
 import { runMudTurn } from "../../services/mud-turn.mjs";
 import { worldProvenanceTag } from "../../domain/worlds-pack.mjs";
@@ -53,9 +53,9 @@ import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
  *
  *  Returns `{ memoryDir, windows, snapshot }`. `windows` is a plain object
  *  keyed by character id, each value `{ character, turn, autoplayTick,
- *  visitedRoomIds, turnsTaken, isOutOfPlay }`. `snapshot()` is the one
- *  OMNISCIENT read this module exposes — the central world map's own data
- *  source, never a per-window one. */
+ *  visitedRoomIds, turnsTaken, isOutOfPlay, outOfPlayReason }`. `snapshot()` is
+ *  the one OMNISCIENT read this module exposes — the central world map's own
+ *  data source, never a per-window one. */
 export async function createMudSession(worldPayload, { characters = [] } = {}) {
   const memoryDir = createInMemoryStore();
   const tag = worldProvenanceTag(worldPayload.name);
@@ -147,7 +147,9 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
        *  dig-flourish triggers straight off `actions`. */
       async autoplayTick(k) {
         const result = await runMudTurn(character, { world: worldPayload.name, memoryDir, env: {}, graph, k });
-        if (!result.outOfPlay) turnsTaken += 1;
+        // A turn that ended in starvation still happened, and still counts —
+        // only a DECLINED turn (no room to act in) leaves the tally alone.
+        if (result.room) turnsTaken += 1;
         if (result.roomAfter) visitedRoomIds.add(result.roomAfter);
         return result;
       },
@@ -160,12 +162,20 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
        *  its own typed commands, and nobody else's. */
       turnsTaken: () => turnsTaken,
 
-      /** True once a predator has eaten this character. It takes no further
-       *  turns and every command it gives declines, so a caller can stop
-       *  ticking it and say so on screen. */
+      /** True once this character's run has ended — a predator ate it, or its
+       *  mass ran out. It takes no further turns and every command it gives
+       *  declines, so a caller can stop ticking it and say so on screen. */
       async isOutOfPlay() {
         const { state } = await readWorld();
         return isOutOfPlay(state, character);
+      },
+
+      /** WHICH ending it was — "eaten" or "starved" — or null while it is still
+       *  playing. The two read nothing alike on screen, so a pane showing a
+       *  fate needs the reason, not just the fact. */
+      async outOfPlayReason() {
+        const { state } = await readWorld();
+        return outOfPlayReasonOf(state, character);
       },
     };
   }
@@ -207,5 +217,5 @@ globalThis.tmctMud = {
   resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain, resolveSpriteAsset,
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines,
-  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, roomKindOf,
+  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, roomKindOf,
 };

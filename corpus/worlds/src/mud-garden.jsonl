@@ -1,5 +1,6 @@
 {"world":"mud-garden","kind":"meta","opening":"a vegetable garden on a wet morning, with a burrow already running under it. Say \"look\" to look around and \"go down\" to follow the burrow. Above ground the only dig is straight down; once you are under the soil you can dig north, south, east or west along the burrow, or up to break the surface. A fox keeps a den off the burrow, and it does not share."}
 {"world":"mud-garden","kind":"fact","subject":"garden","predicate":"rdf:type","object":"room"}
+{"world":"mud-garden","kind":"fact","subject":"garden","predicate":"mgx:is-origin","object":"true"}
 {"world":"mud-garden","kind":"fact","subject":"burrow-1","predicate":"rdf:type","object":"room"}
 {"world":"mud-garden","kind":"fact","subject":"sett-1","predicate":"rdf:type","object":"room"}
 {"world":"mud-garden","kind":"fact","subject":"fox-den","predicate":"rdf:type","object":"room"}
@@ -40,6 +41,20 @@
 {"world":"mud-garden","kind":"fact","subject":"tomato","predicate":"rdf:type","object":"tomato"}
 {"world":"mud-garden","kind":"fact","subject":"tomato","predicate":"mgx:located-in","object":"sett-1"}
 {"world":"mud-garden","kind":"fact","subject":"tomato","predicate":"mgx:hasMass","object":"2"}
+{"world":"mud-garden","kind":"fact","subject":"root","predicate":"rdfs:subClassOf","object":"food"}
+{"world":"mud-garden","kind":"fact","subject":"root","predicate":"mgx:hasMass","object":"2"}
+{"world":"mud-garden","kind":"fact","subject":"worm","predicate":"rdfs:subClassOf","object":"food"}
+{"world":"mud-garden","kind":"fact","subject":"worm","predicate":"mgx:hasMass","object":"2"}
+{"world":"mud-garden","kind":"fact","subject":"mouse","predicate":"rdfs:subClassOf","object":"animal"}
+{"world":"mud-garden","kind":"fact","subject":"mouse","predicate":"mgx:hasMass","object":"4"}
+{"world":"mud-garden","kind":"fact","subject":"den","predicate":"rdfs:subClassOf","object":"underground-space"}
+{"world":"mud-garden","kind":"fact","subject":"underground-space","predicate":"mgx:dig-spawns","object":"root"}
+{"world":"mud-garden","kind":"fact","subject":"underground-space","predicate":"mgx:dig-spawns","object":"carrot"}
+{"world":"mud-garden","kind":"fact","subject":"underground-space","predicate":"mgx:dig-spawns","object":"worm"}
+{"world":"mud-garden","kind":"fact","subject":"underground-space","predicate":"mgx:den-spawns","object":"carrot"}
+{"world":"mud-garden","kind":"fact","subject":"underground-space","predicate":"mgx:den-spawns","object":"root"}
+{"world":"mud-garden","kind":"fact","subject":"underground-space","predicate":"mgx:den-spawns","object":"worm"}
+{"world":"mud-garden","kind":"fact","subject":"underground-space","predicate":"mgx:den-resident","object":"mouse"}
 {"world":"mud-garden","kind":"fact","subject":"stone","predicate":"rdf:type","object":"portable"}
 {"world":"mud-garden","kind":"fact","subject":"stone","predicate":"mgx:located-in","object":"garden"}
 {"world":"mud-garden","kind":"fact","subject":"seed","predicate":"rdf:type","object":"portable"}
