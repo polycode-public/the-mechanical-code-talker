@@ -65,6 +65,14 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   run of `pages-ledger-teach.test.mjs` alongside 3-5 other heavy `pages-*` files via an explicit
   file list, in a worktree that already has a commit (so it can't be reclaimed mid-run), rather
   than the whole uncapped directory at once.
+- [ ] `config.toolNamePrefix` (the `tmct_*` hint-prefix fix, 2026-07-27) isn't actually reachable by
+  a library consumer — `createSession`/`runChat` (`src/services/chat-session.mjs`) build `config`
+  entirely internally via `resolveRuntimeConfig()` (CLI args/toml), with no param a caller can use
+  to inject `toolNamePrefix`. Only tmct's own standalone tool-handlers read it; `seonix chat`
+  (via `runChat`) and `seonix_ask` (via `createGraphService`) have nowhere to set it. Needs a new
+  optional param on `createSession`/`runChat` merged into the resolved `config` before use — the
+  fix was scoped to the hint-text call sites but never threaded through the actual entry points a
+  consumer uses. Found by seonix, `~/.claude/inboxes/tmct.md` 2026-07-28T00:54.
 
 
 ## Discipline
