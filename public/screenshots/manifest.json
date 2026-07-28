@@ -1,5 +1,5 @@
 {
-  "tmctVersion": "3.1.3",
+  "tmctVersion": "3.1.4",
   "viewport": {
     "width": 1024,
     "height": 600
@@ -81,7 +81,7 @@
         "width": 1024,
         "height": 600
       },
-      "sha256": "b64838d73968e30ff799ebe0438774761b5c19315b3dfa071db8d687d34a7ba6"
+      "sha256": "fdf899db72b1ec250956912d14488b0f249ac20a160cbba426eb66015806c920"
     },
     {
       "page": "ingest",
