@@ -1,0 +1,107 @@
+// mud-browser-entry: casting more animals than the world hand-authors. The
+// roster grows by numbering more instances of the species it already names,
+// each minted individual arrives with the authored one's own type, room and
+// mass, and the shared session opens for it exactly like an authored
+// character — its own window, its own scripted turn, its own placement in the
+// one omniscient snapshot.
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import {
+  createMudSession, expandMudRoster, mintedCharacterFacts, worldFactsForCast,
+} from "../../src/surfaces/web/mud-browser-entry.mjs";
+
+const ROSTER = ["mole-1", "vole-1", "badger-2", "groundhog-1"];
+
+const worldPayload = {
+  name: "mud-garden",
+  facts: [
+    { subject: "garden", predicate: "rdf:type", object: "room" },
+    { subject: "garden", predicate: "rdf:type", object: "outdoor-space" },
+    { subject: "garden", predicate: "mgx:is-origin", object: "true" },
+    { subject: "burrow-1", predicate: "rdf:type", object: "room" },
+    { subject: "burrow-1", predicate: "rdf:type", object: "underground-space" },
+    { subject: "garden", predicate: "mgx:has-exit-down", object: "burrow-1" },
+    { subject: "burrow-1", predicate: "mgx:has-exit-up", object: "garden" },
+    { subject: "mole-1", predicate: "rdf:type", object: "adventurer" },
+    { subject: "mole-1", predicate: "mgx:currently-in", object: "garden" },
+    { subject: "mole-1", predicate: "mgx:hasMass", object: "8" },
+    { subject: "badger-2", predicate: "rdf:type", object: "adventurer" },
+    { subject: "badger-2", predicate: "mgx:currently-in", object: "burrow-1" },
+    { subject: "badger-2", predicate: "mgx:hasMass", object: "9" },
+    { subject: "carrot", predicate: "rdf:type", object: "carrot" },
+    { subject: "carrot", predicate: "mgx:located-in", object: "garden" },
+  ],
+  rules: [
+    { name: "go", ruleKind: "action-signature", slots: { subjectClass: "adventurer", targetClass: "room" } },
+    { name: "go", ruleKind: "action-effect", slots: { predicate: "currently-in", subjectRole: "subject", objectRole: "target" } },
+    { name: "dig", ruleKind: "action-signature", slots: { subjectClass: "adventurer", targetClass: "room" } },
+  ],
+  opening: "a vegetable garden",
+};
+
+test("expandMudRoster: keeps the authored ids, then numbers more of the same species without colliding", () => {
+  const grown = expandMudRoster(ROSTER, 9);
+  assert.deepEqual(grown.slice(0, 4), ROSTER, "the authored animals come first, with their own numbers");
+  assert.equal(grown.length, 9);
+  assert.equal(new Set(grown).size, 9, "no id is minted twice, and none shadows an authored one");
+  for (const id of grown.slice(4)) {
+    assert.match(id, /^(?:mole|vole|badger|groundhog)-\d+$/, "an extra is another instance of a species the roster already names");
+  }
+  assert.ok(grown.includes("badger-1"), "a number the authored badger left free is used before a fresh round starts");
+});
+
+test("expandMudRoster: a size the roster already meets adds nothing, and an empty roster grows nothing", () => {
+  assert.deepEqual(expandMudRoster(ROSTER, 2), ROSTER, "shrinking is not this function's job");
+  assert.deepEqual(expandMudRoster([], 5), []);
+});
+
+test("mintedCharacterFacts: an unplaced character copies its species' authored type, room and mass", () => {
+  const minted = mintedCharacterFacts(worldPayload.facts, ["mole-4"]);
+  assert.deepEqual(minted, [
+    { subject: "mole-4", predicate: "rdf:type", object: "adventurer" },
+    { subject: "mole-4", predicate: "mgx:currently-in", object: "garden" },
+    { subject: "mole-4", predicate: "mgx:hasMass", object: "8" },
+  ]);
+});
+
+test("mintedCharacterFacts: an authored character mints nothing, and a species the world never authors is skipped", () => {
+  assert.deepEqual(mintedCharacterFacts(worldPayload.facts, ["mole-1", "badger-2"]), []);
+  assert.deepEqual(mintedCharacterFacts(worldPayload.facts, ["meerkat-1"]), []);
+});
+
+test("worldFactsForCast: an authored animal nobody is playing is left out of the world, props and rooms untouched", () => {
+  const opened = worldFactsForCast(worldPayload.facts, ["mole-1"]);
+  const subjects = new Set(opened.map((f) => f.subject));
+  assert.ok(subjects.has("mole-1"), "the animal in play is placed");
+  assert.ok(!subjects.has("badger-2"), "the animal nobody drives is not in the world at all");
+  assert.ok(subjects.has("carrot") && subjects.has("garden"), "the props and rooms are the world, not the cast");
+});
+
+test("worldFactsForCast: a minted character can copy an authored animal the cast itself leaves out", () => {
+  const opened = worldFactsForCast(worldPayload.facts, ["badger-5"]);
+  const badgerRows = opened.filter((f) => f.subject.startsWith("badger"));
+  assert.deepEqual(badgerRows.map((f) => f.subject), ["badger-5", "badger-5", "badger-5"]);
+  assert.equal(badgerRows.find((f) => f.predicate === "mgx:currently-in").object, "burrow-1");
+});
+
+test("a minted character opens a window of its own, starts where its species starts, and takes a real scripted turn", async () => {
+  const characters = ["mole-1", "badger-3"];
+  const session = await createMudSession(worldPayload, { characters });
+  assert.deepEqual(Object.keys(session.windows).sort(), ["badger-3", "mole-1"]);
+
+  const opening = await session.snapshot();
+  assert.equal(opening.state.placements.get("badger-3").object, "burrow-1", "it starts where the authored badger does");
+  assert.equal(opening.state.masses.get("badger-3").value, 9, "and weighs what the authored badger weighs");
+
+  const result = await session.windows["badger-3"].autoplayTick(1);
+  assert.equal(result.character, "badger-3");
+  assert.ok(result.room, "the turn ran in a real room rather than declining");
+  assert.equal(session.windows["badger-3"].turnsTaken(), 1);
+});
+
+test("a minted character is an ordinary room-mate: the authored one's own look sees it and can talk to it", async () => {
+  const session = await createMudSession(worldPayload, { characters: ["mole-1", "mole-2"] });
+  const looked = await session.windows["mole-1"].turn("look");
+  assert.match(looked.answer, /mole-2/, "the room digest names the minted animal standing in it");
+  assert.match(looked.answer, /talk to mole-2/, "and offers the same talk the authored cast would get");
+});

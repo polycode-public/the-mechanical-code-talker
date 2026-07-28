@@ -78,11 +78,12 @@ test("paneMarkup: one slot's whole pane, keyed on the slot alone", () => {
   assert.match(html, /id="window-d-dir-north"/);
 });
 
-test("renderMudHtml: the deck carries play/turns/players/delay/max-turns/reset controls", () => {
+test("renderMudHtml: the deck carries play/turns/players/npcs/delay/max-turns/reset controls", () => {
   const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
   assert.match(html, /id="autoToggle"/);
   assert.match(html, /id="globalTurnCount"/);
   assert.match(html, /id="playerCountSlider"/);
+  assert.match(html, /id="npcCountSlider"/);
   assert.match(html, /id="delaySlider"/);
   assert.match(html, /id="maxTurnsSlider"/);
   assert.match(html, /id="resetBtn"/);
@@ -98,6 +99,17 @@ test("renderMudHtml: the players slider runs on the three counts, starting at tw
   assert.match(html, /"playerCounts":\[1,2,4\]/, "the page script picks the count off the same list");
   assert.match(html, /"defaultPlayerCount":2/);
   assert.match(html, /"paneSlots":\["a","b","c","d"\]/, "there is a slot for every count the slider offers");
+});
+
+test("renderMudHtml: the npcs slider runs one to ten, starting at two, and adds no pane", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  assert.match(html, /<label class="deck-slider">npcs/, "the control says what it picks");
+  assert.match(html, /id="npcCountSlider" min="1" max="10" step="1"\s+value="2"/, "a plain count, defaulting to two");
+  assert.match(html, /aria-valuetext="2 npcs"/);
+  assert.match(html, /<datalist id="npcCountTicks">/, "the range carries its own detent ticks");
+  assert.match(html, /"defaultNpcCount":2/, "the page script boots the same count the markup shows");
+  assert.match(html, /id="mudStage" data-panes="2"/, "the npcs never take a pane of their own");
+  assert.match(html, /class="key-npcs"/, "the survey keys them together, apart from the panes' own colours");
 });
 
 test("renderMudHtml: the stage is rebuilt in the browser from the same pane builder the page ships", () => {
@@ -171,7 +183,8 @@ test("renderMudHtml: the page reads the engine's own seams rather than re-derivi
   assert.match(html, /tmctMud\.castInRoom/, "who stands in the room comes from the engine, so the caption and the talk pills agree");
   assert.match(html, /tmctMud\.displayNameOf/, "a pouch label comes from the world's own display-name fact");
   assert.match(html, /turnsTaken\(\)/, "a pane shows its character's own turn count, not the shared one");
-  assert.match(html, /isOutOfPlay\(\)/, "a pane reads out-of-play from the engine every redraw");
+  assert.match(html, /tmctMud\.isOutOfPlay\(/, "who is still playing is read from the engine every redraw");
+  assert.match(html, /tmctMud\.expandMudRoster/, "the extra animals are minted by the engine, not named in the page");
 });
 
 test("speciesOfCharacter: strips the trailing instance number", () => {

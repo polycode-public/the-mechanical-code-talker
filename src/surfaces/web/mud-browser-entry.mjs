@@ -38,6 +38,7 @@ import {
   diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, roomKindOf,
 } from "../../services/adventure.mjs";
 import { runMudTurn } from "../../services/mud-turn.mjs";
+import { mudSpeciesOf } from "../../domain/game-config.mjs";
 import { worldProvenanceTag } from "../../domain/worlds-pack.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
@@ -48,8 +49,10 @@ import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
  *  real Node worlds-pack provider (see mud-viz.mjs's header for why: the
  *  world's canonical source is a Node-only gzipped JSONL shard the browser
  *  cannot read). `characters` is the roster this page drives (e.g. the two
- *  ids pickMudRoster drew this reset) — every character already placed by the
- *  world's own seed facts.
+ *  ids pickMudRoster drew this reset). The world is opened for exactly that
+ *  list (worldFactsForCast, below): more animals than mud-garden hand-authors
+ *  are minted, fewer leaves the ones nobody is playing out of the world
+ *  altogether.
  *
  *  Returns `{ memoryDir, windows, snapshot }`. `windows` is a plain object
  *  keyed by character id, each value `{ character, turn, autoplayTick,
@@ -59,7 +62,8 @@ import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
 export async function createMudSession(worldPayload, { characters = [] } = {}) {
   const memoryDir = createInMemoryStore();
   const tag = worldProvenanceTag(worldPayload.name);
-  await appendFacts(memoryDir, worldPayload.facts.map((f) => ({
+  const seedFacts = worldFactsForCast(worldPayload.facts, characters);
+  await appendFacts(memoryDir, seedFacts.map((f) => ({
     subject: f.subject, predicate: f.predicate, object: f.object, provenance: tag,
   })));
   for (const rule of worldPayload.rules) {
@@ -208,12 +212,75 @@ export function pickMudRoster(roster, { count = 2, random = Math.random } = {}) 
   return pool.slice(0, Math.min(count, pool.length));
 }
 
+/** `roster` grown to `size` ids by numbering more instances of the species it
+ *  already names — "mole-2", "vole-3" — so a page can cast more animals than
+ *  the world hand-authors individuals for. The authored ids come first and
+ *  keep their own numbers; a minted id never collides with one. The species
+ *  round-robins, so the extras stay spread across the roster's animals rather
+ *  than piling ten moles into the garden. Pure. */
+export function expandMudRoster(roster, size) {
+  const ids = [...(roster || [])];
+  if (!ids.length) return ids;
+  const used = new Set(ids);
+  const species = [...new Set(ids.map(mudSpeciesOf))];
+  for (let instance = 1; ids.length < size; instance += 1) {
+    for (const kind of species) {
+      if (ids.length >= size) break;
+      const id = `${kind}-${instance}`;
+      if (used.has(id)) continue;
+      used.add(id);
+      ids.push(id);
+    }
+  }
+  return ids;
+}
+
+/** The facts that place `characters` the world's own `facts` never placed —
+ *  each one copied wholesale from an authored individual of the same species,
+ *  with the subject swapped. Copying rather than composing is what keeps a
+ *  minted animal an ORDINARY one: it arrives with the same type, the same
+ *  starting room and the same mass mud-garden gives its own mole, and it
+ *  picks up anything a later edit adds to that mole for free. A species the
+ *  world authors nobody of is skipped rather than guessed at. Pure. */
+export function mintedCharacterFacts(facts, characters) {
+  const rows = facts || [];
+  const placedIn = (subject) => rows.some((f) => f.subject === subject && f.predicate === "mgx:currently-in");
+  const minted = [];
+  for (const character of characters || []) {
+    if (placedIn(character) || minted.some((f) => f.subject === character)) continue;
+    const species = mudSpeciesOf(character);
+    const template = rows.find((f) => f.predicate === "mgx:currently-in" && mudSpeciesOf(f.subject) === species);
+    if (!template) continue;
+    for (const fact of rows) {
+      if (fact.subject !== template.subject) continue;
+      minted.push({ subject: character, predicate: fact.predicate, object: fact.object });
+    }
+  }
+  return minted;
+}
+
+/** `facts` opened for exactly `characters`: the playable animals nobody is
+ *  playing are left out of the world, and the characters the world authors
+ *  nobody for are minted in. The first half is what keeps the cast honest —
+ *  an authored animal nobody drives stands in its starting room for the whole
+ *  run, shows up in every room description and answers when talked to, all
+ *  without ever taking a turn. The fox, a den's resident mouse and every prop
+ *  are untouched: they are the world, not the cast. Pure. */
+export function worldFactsForCast(facts, characters) {
+  const rows = facts || [];
+  const cast = new Set(characters || []);
+  const uncast = new Set(rows
+    .filter((f) => f.predicate === "rdf:type" && f.object === "adventurer" && !cast.has(f.subject))
+    .map((f) => f.subject));
+  return rows.filter((f) => !uncast.has(f.subject)).concat(mintedCharacterFacts(rows, characters));
+}
+
 // Re-exported so mud-viz.mjs's own inlined script never duplicates sprite
 // resolution or the digest/affordance/knowledge readers its room view and
 // chat pills already need — the same reach-through-the-global posture
 // adventure-browser-entry.mjs's own globalThis.tmctAdventure takes.
 globalThis.tmctMud = {
-  createMudSession, pickMudRoster,
+  createMudSession, pickMudRoster, expandMudRoster, mintedCharacterFacts, worldFactsForCast,
   resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain, resolveSpriteAsset,
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines,
