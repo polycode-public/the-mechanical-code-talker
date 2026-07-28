@@ -66,19 +66,6 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
   file list, in a worktree that already has a commit (so it can't be reclaimed mid-run), rather
   than the whole uncapped directory at once.
 
-- [ ] wink-model.mjs's top-level `import { createRequire } from "node:module"`
-  (`src/adapters/wink-model.mjs:12`) collides with esbuild's own auto-injected `createRequire`
-  shim when a consumer bundles a single-file Lambda with `esbuild --bundle`, a module-parse-time
-  `SyntaxError` that crashes the whole bundle even when the code path reaching `wink-model.mjs` is
-  never executed. Caused a real ~1hr marginalia prod outage (2026-07-27); bedrock-meter worked
-  around it on their side (a new `./fallback-http` subpath that never reaches `wink-model.mjs`).
-  Candidate fix that avoids the sync→async cascade entirely (tmct requires Node ≥24): get
-  `createRequire` via `process.getBuiltinModule("node:module")` inside `nodeRequireWink()` at call
-  time instead of a top-level static import — no API shape change for any of the 5 callers
-  (`ask-nlp.mjs`, `prose-nlp.mjs`, `sentences.mjs`, `extract-facts.mjs`,
-  `ingest-browser-entry.mjs`). Not yet verified against a real esbuild collision — asked
-  bedrock-meter for their exact bundling config/stack trace (`~/.claude/inboxes/bedrock-meter.md`
-  2026-07-27T23:53) rather than ship a guessed fix. `~/.claude/inboxes/tmct.md` 2026-07-27T23:02.
 
 ## Discipline
 
