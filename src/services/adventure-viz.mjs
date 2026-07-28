@@ -33,7 +33,10 @@
 // ancestor walk, then floor), `roomSceneLayout` (the room split into a wall
 // band and floor stacks, over `roomSceneObjects` and `scenePlacement`),
 // `roomKindForRoom` (a room's border treatment, from its own rdf:type),
-// `carriedItems` (every object placed with the player), and `visitedRoomGraph`
+// `carriedItems` (every object placed with the player), `exitDoorways` (the
+// written ways out of one room, in compass order, each marked with whether
+// this session has walked it — what the room view's own door plates are
+// drawn from), and `visitedRoomGraph`
 // (a directions-only layout of the rooms a session has actually visited —
 // see its own header for the exposure discipline). None of these import
 // anything beyond this module's own exports, which is what keeps a raw
@@ -434,6 +437,28 @@ export function goalStatusLines(rows, state, visitedRoomIds) {
   });
 }
 
+/** Every written way out of `here`, in a fixed compass order, each with the
+ *  room it leads to and whether this session has already walked there:
+ *  `[{ direction, target, walked }]`. Only exits the world actually writes
+ *  appear, so a doorway drawn from this list can never offer a `go` the
+ *  engine would then refuse. `walked` reads the SAME visited set the manor
+ *  map and the goal lines already do — the rooms the player has stood in, so
+ *  marking a door as new tells them nothing they haven't earned. Ashcombe
+ *  Hall teaches no `dig` action family, so unlike the burrow's own compass
+ *  ring there is no second kind of way out to draw. Pure and
+ *  `.toString()`-splice-safe. */
+export function exitDoorways(state, here, visitedRoomIds) {
+  const compass = ["north", "east", "south", "west", "up", "down"];
+  const walked = new Set(visitedRoomIds || []);
+  const exits = state.exits.get(here);
+  if (!exits) return [];
+  return compass.filter((direction) => exits.has(direction)).map((direction) => ({
+    direction,
+    target: exits.get(direction),
+    walked: walked.has(exits.get(direction)),
+  }));
+}
+
 /** The clickable command suggestions for the room the player is CURRENTLY
  *  in — a thin, testable wrapper over adventure.mjs's own `roomAffordances`
  *  (the exact same data take/open/talk/examine already check), so a pill can
@@ -690,6 +715,40 @@ ${THEME_TOKENS_CSS}
   .room-kind-icon { position: absolute; top: .5rem; right: .6rem; width: 120px; height: 120px; opacity: .92; }
   .room-kind-icon svg { width: 100%; height: 100%; display: block; }
   .room-kind-icon:empty { display: none; }
+  /* the doorways — every written way out drawn where it actually points,
+     as a brass door plate set into the wall it leads through. The plate
+     borrows the room plaque's own treatment above (parchment ground, gilt
+     rule, inset mat): a manor has one brass vocabulary, and a door plate and
+     a room plate are the same object. North and south sit in a band OUTSIDE
+     the frame so neither fights the plaque or the room-kind icon; west and
+     east sit just inside their own walls. Stairs get a round chip instead —
+     neither up nor down is a compass point, and neither hangs on a wall. */
+  .room-stage { position: relative; padding: 1.35rem 0; }
+  .dir-ring { position: absolute; inset: 0; pointer-events: none; }
+  .dir-slot { position: absolute; pointer-events: auto; }
+  .dir-north { top: 0; left: 50%; transform: translateX(-50%); }
+  .dir-south { bottom: 0; left: 50%; transform: translateX(-50%); }
+  .dir-west { left: .3rem; top: 50%; transform: translateY(-50%); }
+  .dir-east { right: .3rem; top: 50%; transform: translateY(-50%); }
+  /* the stairs stand at the left of each band: the frame's own corner
+     flourishes sit top-left and bottom-right, and this is the one inset that
+     clears both. */
+  .dir-up { top: 0; left: 1.4rem; }
+  .dir-down { bottom: 0; left: 1.4rem; }
+  .dir-door {
+    position: relative; display: inline-flex; align-items: center; justify-content: center;
+    font-family: ${MONO_STACK}; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--gilt); background: var(--parchment); border: 1px solid var(--gilt);
+    box-shadow: inset 0 0 0 2px var(--parchment-strong);
+    padding: .2rem .6rem; white-space: nowrap;
+  }
+  .dir-door:hover, .dir-door:focus-visible { background: var(--parchment-strong); color: var(--ink); }
+  .dir-door.stair { border-radius: 50%; width: 1.5rem; height: 1.5rem; padding: 0; font-size: .72rem; letter-spacing: 0; }
+  /* a door onto a room this session has not stood in yet, marked with the
+     same gilt dot the manor board prints for a direction it cannot draw a
+     room for — one hint shape, two surfaces. */
+  .dir-door .unwalked { position: absolute; top: -.16rem; right: -.16rem; width: .34rem; height: .34rem; border-radius: 50%; background: var(--gilt); }
+
   .sprite-row { display: flex; align-items: flex-end; gap: .9rem .7rem; min-height: 2.5rem; }
   /* the floor band: every non-wall-mounted stack, wrapping and pinned to the
      left edge of the room, as the flat sprite row always has. */
@@ -893,6 +952,10 @@ ${THEME_TOKENS_CSS}
   #legendList { display: flex; flex-wrap: wrap; gap: .5rem .3rem; }
 
   body.preview .side, body.preview .stage-left > .panel, body.preview .controls-row, body.preview .status { display: none; }
+  /* the hero iframe is a picture of a room, not a control surface — every
+     other control is hidden there, and the doorways go with them. */
+  body.preview .room-stage { padding: 0; }
+  body.preview .dir-ring { display: none; }
   body.preview main { padding: 0; max-width: none; }
   body.preview .stage { display: block; }
   body.preview .eyebrow, body.preview .mode-toggle, body.preview #editStage, body.preview .page-note { display: none; }
@@ -923,13 +986,23 @@ ${THEME_TOKENS_CSS}
         <h2>satchel</h2>
         <div class="chips" id="carryList"></div>
       </div>
-      <div class="room-frame" id="roomFrame">
-        <div class="room-plaque mono" id="roomName"></div>
-        <div class="room-kind-icon" id="roomKindIcon"></div>
-        <div class="wall-row" id="wallRow"></div>
-        <div class="sprite-row" id="spriteRow">
-          <div class="floor-row" id="floorRow"></div>
-          <div class="you-slot" id="youSlot"></div>
+      <div class="room-stage">
+        <div class="room-frame" id="roomFrame">
+          <div class="room-plaque mono" id="roomName"></div>
+          <div class="room-kind-icon" id="roomKindIcon"></div>
+          <div class="wall-row" id="wallRow"></div>
+          <div class="sprite-row" id="spriteRow">
+            <div class="floor-row" id="floorRow"></div>
+            <div class="you-slot" id="youSlot"></div>
+          </div>
+        </div>
+        <div class="dir-ring" id="dirRing" aria-label="the ways out of this room">
+          <div class="dir-slot dir-north" id="dir-north"></div>
+          <div class="dir-slot dir-east" id="dir-east"></div>
+          <div class="dir-slot dir-south" id="dir-south"></div>
+          <div class="dir-slot dir-west" id="dir-west"></div>
+          <div class="dir-slot dir-up" id="dir-up"></div>
+          <div class="dir-slot dir-down" id="dir-down"></div>
         </div>
       </div>
       <div class="panel command">
@@ -1014,6 +1087,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const visitedRoomGraph = ${visitedRoomGraph.toString()};
   const allRoomIds = ${allRoomIds.toString()};
   const groundedPlaceholder = ${groundedPlaceholder.toString()};
+  const exitDoorways = ${exitDoorways.toString()};
   const spriteAncestryRows = ${spriteAncestryRows.toString()};
   const factsForSubject = ${factsForSubject.toString()};
   const renderWorldEditorText = ${renderWorldEditorText.toString()};
@@ -1023,6 +1097,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const roomFrameEl = el("roomFrame");
   const roomNameEl = el("roomName");
   const roomKindIconEl = el("roomKindIcon");
+  const dirRingEl = el("dirRing");
   const wallRowEl = el("wallRow");
   const floorRowEl = el("floorRow");
   const youSlotEl = el("youSlot");
@@ -1405,11 +1480,16 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // Clicking one inserts its exact command text into the input and focuses
   // it; it never auto-submits, so free typing still works and a clicked
   // suggestion can still be edited first.
+  //
+  // The row shows what to do with the things IN the room; the doorways above
+  // own every way OUT of it. A "go" command is the one affordance no player
+  // ever wants to edit before running, and drawing it in both places would
+  // make one control a suggestion and its twin an action.
   function pillsFor(rows, state, here) {
     return tmctAdventure.roomAffordances(rows, state, here);
   }
   function renderPills(rows, state, here) {
-    const actions = pillsFor(rows, state, here);
+    const actions = pillsFor(rows, state, here).filter((a) => a.indexOf("go ") !== 0);
     pillsEl.innerHTML = actions.map((a) => '<button type="button" class="pill">' + esc(a) + "</button>").join("");
     // The empty input teaches the grounded noun form off the same affordance
     // list the pills read — real props from THIS room, so a first-time player
@@ -1441,11 +1521,19 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // stay keyed on that declared class unchanged. The player's own "you" row
   // has no backing fact row, so it resolves directly by its fixed
   // "adventurer" class with no ancestry/property rows to check.
+  //
+  // When the whole chain misses, the root the resolver lands on is chosen by
+  // what KIND of thing the class is, never the resolver's own "animal"
+  // default: an unknown prop in a manor should read as a plain parcel and an
+  // unknown character as a figure, and neither should ever draw a creature.
+  const ROOT_FALLBACK_BY_CLASS = { adventurer: "person", person: "person", room: "room" };
+  const rootFallbackFor = (cls) => ROOT_FALLBACK_BY_CLASS[cls] || "portable";
   function resolveObjectSprite(rows, s) {
-    if (s.subject === "you") return tmctAdventure.resolveSpriteAsset("adventurer", [], [], activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY, { instanceKey: "you" });
+    if (s.subject === "you") return tmctAdventure.resolveSpriteAsset("adventurer", [], [], activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY, { rootFallback: "person", instanceKey: "you" });
     return tmctAdventure.resolveSpriteAsset(
       s.subject, spriteAncestryRows(rows, s.subject), factsForSubject(rows, s.subject),
-      activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY, { instanceKey: s.subject },
+      activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY,
+      { rootFallback: rootFallbackFor(s.spriteClass), instanceKey: s.subject },
     );
   }
 
@@ -1457,9 +1545,37 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   function roomKindIconSvg(rows, here) {
     return tmctAdventure.resolveSpriteAsset(
       here, spriteAncestryRows(rows, here), factsForSubject(rows, here),
-      activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY, { instanceKey: "roomkind-" + here },
+      activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY,
+      { rootFallback: "room", instanceKey: "roomkind-" + here },
     );
   }
+
+  // ---- the doorways — one brass plate per written exit, in the slot that
+  // exit actually points at, drawn from exitDoorways over the SAME snapshot
+  // the room scene reads. A direction the world writes no exit for draws
+  // nothing at all, so the ring never offers a "go" the engine would refuse.
+  const STAIR_GLYPH = { up: "\\u2191", down: "\\u2193" };
+  function renderDoorways(state, here, visitedRoomIds) {
+    const bySlot = {};
+    exitDoorways(state, here, visitedRoomIds).forEach((d) => { bySlot[d.direction] = d; });
+    for (const direction of ["north", "east", "south", "west", "up", "down"]) {
+      const slot = el("dir-" + direction);
+      const doorway = bySlot[direction];
+      if (!doorway) { slot.innerHTML = ""; continue; }
+      const stair = direction === "up" || direction === "down";
+      const label = "go " + direction + (doorway.walked ? "" : " (not walked yet)");
+      slot.innerHTML = '<button type="button" class="dir-door' + (stair ? " stair" : "") + '"'
+        + ' data-direction="' + esc(direction) + '" title="' + esc(label) + '" aria-label="' + esc(label) + '">'
+        + (stair ? STAIR_GLYPH[direction] : esc(direction))
+        + (doorway.walked ? "" : '<span class="unwalked" aria-hidden="true"></span>') + "</button>";
+    }
+  }
+  // A door is not a suggestion to edit — clicking one walks through it.
+  dirRingEl.addEventListener("click", (e) => {
+    const btn = e.target.closest(".dir-door");
+    if (!btn || !session) return;
+    runTurn("go " + btn.getAttribute("data-direction"));
+  });
 
   function redraw(snap) {
     lastSnapshot = snap;
@@ -1479,10 +1595,26 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     captionEl.textContent = captionFor(snap.rows, snap.state, snap.here);
     turnLabelEl.textContent = "turn: " + snap.turn;
     renderPills(snap.rows, snap.state, snap.here);
+    renderDoorways(snap.state, snap.here, snap.visitedRoomIds);
     renderCarrying(snap.rows, snap.state);
     renderRoomMap(snap.rows, snap.state, snap.visitedRoomIds);
     renderGoals(snap.rows, snap.state, snap.visitedRoomIds);
     schedulePersistSave();
+  }
+
+  // Every command a visitor issues by hand — typed, or walked through a
+  // doorway — runs here, so the transcript, the pause and the redraw are the
+  // same for both. A manual command lands mid-tick otherwise, so this pauses
+  // first, and stays paused until the visitor presses play again.
+  function runTurn(line) {
+    ticker.pause();
+    addChatLine("u", esc(line));
+    return withLock(async () => {
+      const result = await session.turn(line);
+      addChatLine("a", esc(result.answer).replace(/\\n/g, "<br>"));
+      const snap = await session.snapshot();
+      redraw(snap);
+    });
   }
 
   chatformEl.addEventListener("submit", (e) => {
@@ -1490,16 +1622,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     const q = chatqEl.value.trim();
     if (!q || !session) return;
     chatqEl.value = "";
-    // A manual command lands mid-tick otherwise — pause first, and stay
-    // paused until the visitor presses play again.
-    ticker.pause();
-    addChatLine("u", esc(q));
-    withLock(async () => {
-      const result = await session.turn(q);
-      addChatLine("a", esc(result.answer).replace(/\\n/g, "<br>"));
-      const snap = await session.snapshot();
-      redraw(snap);
-    });
+    runTurn(q);
   });
 
   // ---- edit mode ---------------------------------------------------------
@@ -1541,12 +1664,20 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // ---- legend — every known object/character class this world actually
   // uses, by its real icon. Scoped to worldOnlyRows so the background
   // corpus's own (unrelated) rdf:type vocabulary never floods the list.
+  // Each class resolves through the SAME ancestry walk and kind-aware root
+  // the room's own cards use, so a class an edited world invents climbs to
+  // the nearest ancestor that has a picture instead of dropping straight to
+  // a generic one.
   function renderLegend(rows) {
     const subjects = new Set(rows.filter((r) => r.predicate === "rdf:type").map((r) => r.subject));
     const classes = new Set(["adventurer"]);
     subjects.forEach((s) => { if (s !== "player") classes.add(spriteClassForObject(rows, s)); });
     legendListEl.innerHTML = Array.from(classes).sort().map((cls) => {
-      const svg = tmctAdventure.resolveSpriteAsset(cls, [], [], activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY, { instanceKey: "legend-" + cls });
+      const svg = tmctAdventure.resolveSpriteAsset(
+        cls, spriteAncestryRows(rows, cls), factsForSubject(rows, cls),
+        activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY,
+        { rootFallback: rootFallbackFor(cls), instanceKey: "legend-" + cls },
+      );
       return spriteCardHtml(cls, cls, svg);
     }).join("");
   }

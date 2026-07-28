@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import {
   renderAdventureHtml, spriteClassForObject, visibleRoomOf, roomSceneObjects, carriedItems,
   visitedRoomGraph, allRoomIds, goalStatusLines, roomCaptionText, pillsForRoom, groundedPlaceholder, suggestionsForTerm,
+  exitDoorways,
   spriteAncestryRows, factsForSubject, scenePlacement, roomSceneLayout, roomKindForRoom,
 } from "../../src/services/adventure-viz.mjs";
 import { foldWorldState } from "../../src/services/adventure.mjs";
@@ -53,6 +54,21 @@ test("spriteAncestryRows: synthesizes a subClassOf edge from the object's own na
   const withAncestry = spriteAncestryRows(ROWS, "cabinet");
   assert.ok(withAncestry.some((r) => r.subject === "cabinet" && r.predicate === "rdfs:subClassOf" && r.object === "container"));
   assert.equal(withAncestry.length, ROWS.length + 1, "a single synthetic row is appended, the original rows are untouched");
+});
+
+test("renderAdventureHtml: a class whose whole chain has no sprite lands on a root chosen by what kind of thing it is, never the resolver's own animal default", () => {
+  const html = renderAdventureHtml({ worldPayload: { facts: [], rules: [], opening: "" } });
+  assert.match(html, /ROOT_FALLBACK_BY_CLASS = \{ adventurer: "person", person: "person", room: "room" \}/);
+  assert.match(html, /rootFallbackFor = \(cls\) => ROOT_FALLBACK_BY_CLASS\[cls\] \|\| "portable"/);
+  assert.match(html, /rootFallback: rootFallbackFor\(s\.spriteClass\), instanceKey: s\.subject/, "a room prop picks its root by class");
+  assert.match(html, /rootFallback: "room", instanceKey: "roomkind-" \+ here/, "an unknown room draws a room, not a creature");
+});
+
+test("renderAdventureHtml: the legend resolves each class through the same ancestry walk the room's own cards use", () => {
+  const html = renderAdventureHtml({ worldPayload: { facts: [], rules: [], opening: "" } });
+  const legend = html.match(/function renderLegend\(rows\)[\s\S]*?\n  \}/)[0];
+  assert.match(legend, /spriteAncestryRows\(rows, cls\), factsForSubject\(rows, cls\)/);
+  assert.match(legend, /rootFallback: rootFallbackFor\(cls\)/);
 });
 
 test("spriteAncestryRows: a no-op when the subject's own name already equals its declared class (nothing to synthesize)", () => {
@@ -507,6 +523,56 @@ test("pillsForRoom: refreshes as the room's own state changes — unlocking a co
 
   const unlocked = [...locked, { subject: "cabinet@turn1", predicate: "mgx:fixed-in", object: "study" }];
   assert.deepEqual(pillsForRoom(unlocked, foldWorldState(unlocked), "study"), ["open cabinet"]);
+});
+
+// ---- exitDoorways — the room view's own compass ring ------------------------
+
+const DOORWAY_ROWS = [
+  { subject: "study", predicate: "rdf:type", object: "room" },
+  { subject: "study", predicate: "mgx:has-exit-north", object: "library" },
+  { subject: "study", predicate: "mgx:has-exit-down", object: "cellar" },
+  { subject: "study", predicate: "mgx:has-exit-east", object: "kitchen" },
+];
+
+test("exitDoorways: one entry per written exit, in compass order, each naming the room it leads to", () => {
+  const state = foldWorldState(DOORWAY_ROWS);
+  assert.deepEqual(exitDoorways(state, "study", ["study"]).map((d) => [d.direction, d.target]), [
+    ["north", "library"], ["east", "kitchen"], ["down", "cellar"],
+  ]);
+});
+
+test("exitDoorways: a direction the world writes no exit for is absent, never drawn as a refused move", () => {
+  const state = foldWorldState(DOORWAY_ROWS);
+  const drawn = exitDoorways(state, "study", []).map((d) => d.direction);
+  for (const missing of ["south", "west", "up"]) assert.ok(!drawn.includes(missing), `${missing} must not appear`);
+});
+
+test("exitDoorways: walked reflects the session's own visited set, so a door is only called new when the room behind it really is", () => {
+  const state = foldWorldState(DOORWAY_ROWS);
+  const byDirection = new Map(exitDoorways(state, "study", ["study", "library"]).map((d) => [d.direction, d.walked]));
+  assert.equal(byDirection.get("north"), true, "the library has been walked");
+  assert.equal(byDirection.get("east"), false, "the kitchen has not");
+  assert.equal(byDirection.get("down"), false, "the cellar has not");
+});
+
+test("exitDoorways: a room with no exits at all draws nothing", () => {
+  const rows = [{ subject: "vault", predicate: "rdf:type", object: "room" }];
+  assert.deepEqual(exitDoorways(foldWorldState(rows), "vault", ["vault"]), []);
+});
+
+test("renderAdventureHtml: the room view carries a doorway slot for every compass point, and the page fills them from exitDoorways", () => {
+  const html = renderAdventureHtml({ worldPayload: { facts: [], rules: [], opening: "" } });
+  for (const direction of ["north", "east", "south", "west", "up", "down"]) {
+    assert.match(html, new RegExp(`<div class="dir-slot dir-${direction}" id="dir-${direction}"></div>`));
+  }
+  assert.match(html, /const exitDoorways = function exitDoorways/, "the pure builder is spliced in, never re-implemented in the page");
+  assert.match(html, /renderDoorways\(snap\.state, snap\.here, snap\.visitedRoomIds\)/, "every redraw refreshes the ring");
+});
+
+test("renderAdventureHtml: a clicked doorway runs its go command outright, while the pill row keeps only what is left to do with the room's things", () => {
+  const html = renderAdventureHtml({ worldPayload: { facts: [], rules: [], opening: "" } });
+  assert.match(html, /runTurn\("go " \+ btn\.getAttribute\("data-direction"\)\)/);
+  assert.match(html, /pillsFor\(rows, state, here\)\.filter\(\(a\) => a\.indexOf\("go "\) !== 0\)/);
 });
 
 // ---- suggestionsForTerm — edit mode's cursor-driven pills --------------------
