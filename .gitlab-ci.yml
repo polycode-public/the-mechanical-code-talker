@@ -1,12 +1,11 @@
 # CI for @polycode-projects/the-mechanical-code-talker (tmct) — a single
 # published npm package plus a static home page (no benchmark rig). Core
 # jobs: run the tests, publish to public npm on a deliberate version bump,
-# and deploy public/ to a home page on main. The home page is mid-migration
-# from GitLab Pages (`pages`) to an AWS-hosted edge (`deploy:website`,
-# `e2e:deployed`) — see PLAN_AWS.md. `pages` keeps running through the
-# burn-in period; only PLAN_AWS.md's own cutover phase retires it. Mirrors
-# the seonix repo's publish:npm and deploy:website shapes, minus the
-# --workspace flag (tmct is a single package, not a workspace).
+# and deploy public/ to an AWS-hosted edge (`deploy:website`, `e2e:deployed`)
+# on main — see PLAN_AWS.md. The home page moved off GitLab Pages entirely
+# (2026-07-28); the old `pages` job and its redirect-stub burn-in period are
+# retired. Mirrors the seonix repo's publish:npm and deploy:website shapes,
+# minus the --workspace flag (tmct is a single package, not a workspace).
 
 image: node:24.18.0
 
@@ -489,11 +488,9 @@ publish:npm:
       fi
 
 # Deploy the built site to the AWS-hosted edge (tmct.polycode.co.uk) via the
-# GitLab OIDC -> AWS role chain (no static keys) — see PLAN_AWS.md. Builds the
-# same public/ the `pages` job below builds, then hands it to CDK instead of
-# a Pages artifact; no artifact upload, so the ~85 MB payload never transits
-# GitLab. `pages` keeps deploying in parallel during burn-in (see the `pages`
-# job's own comment) — this job does not replace it yet.
+# GitLab OIDC -> AWS role chain (no static keys) — see PLAN_AWS.md. Builds
+# public/ and hands it to CDK instead of a GitLab Pages artifact; no artifact
+# upload, so the ~85 MB payload never transits GitLab.
 deploy:website:
   stage: deploy
   image: nikolaik/python-nodejs:python3.13-nodejs24
@@ -526,56 +523,6 @@ deploy:website:
         -c env=prod -c slug=prod -c account="${TMCT_PROD_ACCOUNT_ID}" -c region=eu-west-2
         -c hostname=tmct.polycode.co.uk -c certArn="${TMCT_PROD_CERT_ARN}"
         -c hostedZoneId="${TMCT_PROD_ZONE_ID}" -c zoneName=tmct.polycode.co.uk
-
-# GitLab Pages: the static home page. GitLab's convention is a job literally
-# named `pages` whose artifact is the `public/` directory — the repo already
-# keeps the site there, so this job just hands it over. Main branch only.
-#
-# The page embeds a LIVE, client-side chat demo that runs the real src/domain/ask.mjs query
-# engine in the visitor's browser (no backend — GitLab Pages is static). src/ stays the
-# single source of truth: this job COPIES the small, already browser-clean transitive
-# import set src/domain/ask.mjs actually needs (verified: zero Node built-ins reachable at
-# runtime once public/engine-shims/*.mjs stand in for the three still-unconditionally-
-# imported `node:*` specifiers) into public/engine/, unmodified, byte-for-byte — no
-# transpilation, no bundling. It also regenerates public/demo-graph.json from the
-# committed examples/mini-webapp fixture (scripts/build-demo-graph.mjs — real tmct code,
-# schema-docs.mjs's ingestSchemaDocs, run offline) so the published demo graph can never
-# drift from source.
-#
-# Cut over to the AWS edge (deploy:website, tmct.polycode.co.uk): this job no
-# longer publishes the real site. It now publishes a one-page meta-refresh +
-# canonical-link stub so old deep links and the homepage field baked into
-# every previously published npm version keep resolving somewhere real,
-# instead of 404ing outright. Delete this job entirely once that old traffic
-# has died down.
-pages:
-  stage: deploy
-  rules:
-    # schedule-guarded: the nightly dep:audit schedule must not redeploy Pages.
-    - if: '$CI_PIPELINE_SOURCE == "schedule"'
-      when: never
-    - if: '$CI_COMMIT_BRANCH == "main"'
-  script:
-    - mkdir -p public
-    - rm -rf public/*
-    - |
-      cat > public/index.html <<'STUB'
-      <!doctype html>
-      <html lang="en">
-      <head>
-      <meta charset="utf-8">
-      <meta http-equiv="refresh" content="0; url=https://tmct.polycode.co.uk/">
-      <link rel="canonical" href="https://tmct.polycode.co.uk/">
-      <title>tmct has moved</title>
-      </head>
-      <body>
-      <p>tmct has moved to <a href="https://tmct.polycode.co.uk/">https://tmct.polycode.co.uk/</a>.</p>
-      </body>
-      </html>
-      STUB
-  artifacts:
-    paths:
-      - public
 
 # After a real publish, check that what the world serves is what we built: npm's
 # registry and the AWS-hosted home page must both show package.json's version.
