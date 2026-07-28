@@ -60,6 +60,7 @@ test("a sentence led by anything outside the closed verb set (or its synonyms/ty
   assert.equal(parse("walk north"), null, "'walk' reads as real English, not a typo of 'talk' — never silently reinterpreted");
   assert.equal(parse("the butler opens the cabinet"), null, "a subjectful declarative is not an imperative");
   assert.equal(parse(""), null);
+  assert.equal(parse("burrow north"), null, "adding dig/eat/put did not loosen the closed-set boundary");
 });
 
 test("examine and talk each take a single bare object, no direction or instrument", () => {
@@ -125,4 +126,26 @@ test("the fuzzy pre-pass also repairs a typo on a VERB_SYNONYMS word, including 
   assert.deepEqual(parse("chekc out the desk"), {
     pattern: "imperative", verb: "examine", object: "desk", residue: [], corrected: [{ from: "chekc", to: "check" }],
   });
+});
+
+test("dig takes exactly one closed-set direction, same shape as go", () => {
+  assert.deepEqual(parse("dig down"), { pattern: "imperative", verb: "dig", direction: "down", residue: [] });
+  assert.deepEqual(parse("dig north"), { pattern: "imperative", verb: "dig", direction: "north", residue: [] });
+  assert.equal(parse("dig"), null, "dig with no direction is not the pattern");
+  assert.equal(parse("dig sideways"), null, "an unlisted direction is a hard null, never a guess");
+  assert.deepEqual(parse("dig easte"), {
+    pattern: "imperative", verb: "dig", direction: "east", residue: [], corrected: [{ from: "easte", to: "east" }],
+  });
+});
+
+test("eat takes a single bare object, same shape as examine and talk", () => {
+  assert.deepEqual(parse("eat the lamp"), { pattern: "imperative", verb: "eat", object: "lamp", residue: [] });
+  assert.equal(parse("eat"), null, "eat with no object is not the pattern");
+});
+
+test("put carries its container through 'in', same shape as give's 'to'", () => {
+  assert.deepEqual(parse("put the lamp in the box"), {
+    pattern: "imperative", verb: "put", object: "lamp", indirectObject: "box", residue: [],
+  });
+  assert.equal(parse("put the lamp"), null, "a put with no container is not the pattern");
 });
