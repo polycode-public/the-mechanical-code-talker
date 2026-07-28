@@ -132,11 +132,12 @@ function knownFood(rows, state, character) {
 }
 
 /** The food a character knows about that is still somewhere it could be
- *  reached — on a floor, or in an open container. A knows-about fact outlives
- *  what it names: eat the carrot and the fact stays true as testimony while the
- *  carrot itself leaves the world. Anything deciding where to GO has to read
- *  this list rather than the raw one, or a character spends the rest of the run
- *  crossing the burrow after a meal somebody already ate. */
+ *  reached — on a floor, or in an open container. An eater's own claim about a
+ *  carrot ages out the moment it eats it, but a claim only ever HEARD stands
+ *  until somebody says otherwise, and that animal has no way to know the meal
+ *  is over. Anything deciding where to GO reads this list rather than the raw
+ *  one, or an animal spends the rest of the run crossing the burrow after
+ *  somebody else's meal. */
 const standingKnownFood = (rows, state, character) =>
   knownFood(rows, state, character).filter((thing) => visibleRoomOf(rows, state, thing) !== null);
 

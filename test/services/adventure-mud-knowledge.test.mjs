@@ -5,6 +5,11 @@
 // it is the same predicate the shipped worlds already use for staff knowledge.
 // "what food do you know about" reads the same edges, filtered to whatever
 // class chain reaches "food", scoped to the asking character alone.
+//
+// A claim can also age out. Eating the last carrot appends a second, `:gone`
+// claim to the same edge rather than retracting the first, and the read side
+// answers from whichever claim rules — firsthand before hearsay, then the later
+// turn.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -12,8 +17,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
 import {
-  recordTold, recordExamined, personKnowledgeLines, foldWorldState, worldActionRows,
-  adventureTurn,
+  recordTold, recordExamined, recordGone, personKnowledgeLines, personKnownFoodLines,
+  foldWorldState, worldActionRows, runWorldCommand, adventureTurn,
 } from "../../src/services/adventure.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
 import { provenanceTagToSource } from "../../src/domain/memory/trust.mjs";
@@ -180,6 +185,93 @@ test("a character's food query never leaks another character's own separately-to
 
     const moleResult = await askFood(dir, "what food do you know about", "mole-1");
     assert.equal(moleResult.text, "you know about: the bread-1.");
+  });
+});
+
+test("eating a thing appends a newer claim to the same edge instead of retracting the older one", async () => {
+  await withMudGarden("eat-appends", async (dir) => {
+    await recordExamined(dir, { observer: "mole-1", thing: "carrot", k: 1 });
+    await runWorldCommand(
+      { pattern: "imperative", verb: "eat", object: "carrot" },
+      { world: WORLD, memoryDir: dir, actingSubject: "mole-1" },
+    );
+
+    const { rows } = await rowsAndState(dir);
+    const written = knowsAboutRows(rows).filter((r) => r.subject === "mole-1" && r.object === "carrot");
+    assert.equal(written.length, 1, "both claims union onto the one edge, the way any repeat assertion does");
+    assert.equal(
+      written[0].provenance, "mud:mole-1:turn1 | mud:mole-1:turn1:gone",
+      "the older claim stands untouched beside the newer one that voids it",
+    );
+  });
+});
+
+test("food a character ate itself drops out of what it knows about, and off its food query", async () => {
+  await withMudGarden("eat-forgets", async (dir) => {
+    await recordExamined(dir, { observer: "mole-1", thing: "carrot", k: 1 });
+    const { rows: before, state: stateBefore } = await rowsAndState(dir);
+    assert.deepEqual(personKnownFoodLines(before, stateBefore, "mole-1"), ["carrot"]);
+
+    await runWorldCommand(
+      { pattern: "imperative", verb: "eat", object: "carrot" },
+      { world: WORLD, memoryDir: dir, actingSubject: "mole-1" },
+    );
+
+    const { rows, state } = await rowsAndState(dir);
+    assert.deepEqual(personKnownFoodLines(rows, state, "mole-1"), [], "the carrot it ate is no longer food it knows of");
+    assert.ok(
+      !personKnowledgeLines(rows, state, "mole-1").aboutTopics.includes("carrot"),
+      "and it drops off the general topic list too, not just the food one",
+    );
+
+    const asked = await askFood(dir, "what food do you know about", "mole-1");
+    assert.equal(asked.text, "you don't know of any food yet.");
+  });
+});
+
+test("a character's own eyes outrank a later telling about the food it already ate", async () => {
+  await withMudGarden("self-outranks-hearsay", async (dir) => {
+    await recordExamined(dir, { observer: "mole-1", thing: "carrot", k: 1 });
+    await recordGone(dir, { observer: "mole-1", thing: "carrot", k: 2 });
+    await recordTold(dir, { asker: "mole-1", teller: "vole-1", thing: "carrot", k: 9 });
+
+    const { rows, state } = await rowsAndState(dir);
+    assert.deepEqual(
+      personKnownFoodLines(rows, state, "mole-1"), [],
+      "being told about the carrot again never talks an animal back into a meal it ate itself",
+    );
+  });
+});
+
+test("a newer telling supersedes an older one for a hearer that never saw the thing itself", async () => {
+  await withMudGarden("hearsay-recency", async (dir) => {
+    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "carrot", k: 1 });
+    await appendFacts(dir, [{
+      subject: "vole-1", predicate: "mgx:knows-about", object: "carrot", provenance: "mud:mole-1:turn5:gone",
+    }]);
+
+    const { rows, state } = await rowsAndState(dir);
+    assert.deepEqual(
+      personKnownFoodLines(rows, state, "vole-1"), [],
+      "between two claims from the same teller, the later one rules",
+    );
+  });
+});
+
+test("a character told about food before it was eaten keeps believing in it until it hears otherwise", async () => {
+  await withMudGarden("stale-hearsay-stands", async (dir) => {
+    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "carrot", k: 1 });
+    await runWorldCommand(
+      { pattern: "imperative", verb: "eat", object: "carrot" },
+      { world: WORLD, memoryDir: dir, actingSubject: "mole-1" },
+    );
+
+    const { rows, state } = await rowsAndState(dir);
+    assert.deepEqual(personKnownFoodLines(rows, state, "mole-1"), [], "the eater knows what it did");
+    assert.deepEqual(
+      personKnownFoodLines(rows, state, "vole-1"), ["carrot"],
+      "a claim it was never given cannot reach it — what the vole believes is stale, and honestly reported",
+    );
   });
 });
 
