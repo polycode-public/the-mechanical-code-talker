@@ -397,7 +397,14 @@ it.
 - **Room view**: a burrow-graphic rendering of the current room, built over `adventure.mjs`'s
   existing `worldDigest`/`worldDigestRows` text digest (`adventure.mjs:598,500`) the same way
   spider-fly-viz.mjs layers absolutely-positioned sprite `<div>`s over a `<canvas>` board — the
-  digest stays the ground truth, the graphic is a rendering of it, not a replacement.
+  digest stays the ground truth, the graphic is a rendering of it, not a replacement. **When two
+  characters share a room and one speaks** (the turn algorithm's ask/answer step, below) — **a
+  speech bubble renders over the room view**, anchored to the speaking character's sprite, holding
+  the short form of what was said (the full exchange still lands in that window's chat log). This
+  applies to any window whose room happens to hold the conversation, not just the two participants'
+  own windows — a bystander character's window shows the bubble too, since they're looking at the
+  same shared room. A short, `prefers-reduced-motion`-respecting fade, matching the dug-room
+  flourish's own restraint — not a second competing animation.
 - **Pouch** (this demo's name for the inventory — a satchel doesn't fit a burrowing animal).
 - **Chat, with pills**: reuse `plan-viz.mjs`'s existing `.chatlog`/`.chatask`/`.chatpills` block
   close to verbatim — it already ships a scrolling log, a text input, and quick-fill pill buttons
