@@ -231,9 +231,9 @@ test("renderLedgerHtml: a non-empty bundle is inlined and the dock renders enabl
     assert.match(on, /id="chatform"/);
     assert.match(on, /resolveAnsweredTerm/, "the answer-to-focus helper ships in the page");
     assert.match(on, /Goal \(inferred\): /, "the dock renders the engine's goal field as chat's own goal line");
-    assert.doesNotMatch(on, /chat unavailable/);
+    assert.doesNotMatch(on, /chat unavailable/i);
     const off = renderLedgerHtml({ ...data, memoryAskBundle: "" });
-    assert.match(off, /chat unavailable/);
+    assert.match(off, /chat unavailable/i);
     assert.match(off, /npm run build:ask-bundle/);
     assert.doesNotMatch(off, /id="chatform"/);
   } finally {
