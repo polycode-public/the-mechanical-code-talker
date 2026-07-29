@@ -1,0 +1,38 @@
+# bear-facing-left — the same round-eared, tan-muzzled bear as bear.toml
+# turned to a left profile: the head sits at the body's left, the muzzle
+# and dark nose break the silhouette's left edge, one ear reads in front
+# with the far ear peeking behind, and a tail nub breaks the right. A
+# hand-authored [match] variant (the portrait-round.toml precedent),
+# selected only when the instance's own mgx:faces fact says "left".
+classes = ["bear"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="bear-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="13.2" cy="15.6" rx="7" ry="5.4" fill="url(#bear-facing-left-fill)"/>
+  <g fill="url(#bear-facing-left-fill)">
+    <ellipse cx="7.6" cy="20" rx="1.2" ry="1.4"/>
+    <ellipse cx="11" cy="20.5" rx="1.2" ry="1.4"/>
+    <ellipse cx="15.6" cy="20.5" rx="1.2" ry="1.4"/>
+    <ellipse cx="19" cy="19.9" rx="1.2" ry="1.4"/>
+  </g>
+  <circle cx="20.9" cy="13.4" r="1.2" fill="url(#bear-facing-left-fill)"/>
+  <circle cx="5.8" cy="5.2" r="1.6" fill="url(#bear-facing-left-fill)"/>
+  <circle cx="7.4" cy="8.8" r="4.6" fill="url(#bear-facing-left-fill)"/>
+  <circle cx="9.6" cy="4.8" r="2" fill="url(#bear-facing-left-fill)"/>
+  <ellipse cx="3.9" cy="10.2" rx="2.4" ry="1.8" fill="#c9a273"/>
+  <ellipse cx="2.5" cy="9.6" rx="0.85" ry="0.65" fill="#1c1c1c"/>
+  <ellipse cx="6" cy="7.8" rx="0.5" ry="0.62" fill="#1c1c1c"/>
+  <ellipse cx="8.4" cy="6.4" rx="1.4" ry="1" fill="#ffffff" opacity="0.3"/>
+  <ellipse cx="10.6" cy="13.6" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.26"/>
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"

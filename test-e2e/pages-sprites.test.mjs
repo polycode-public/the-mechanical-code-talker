@@ -52,8 +52,11 @@ after(async () => {
   if (siteDir) rmSync(siteDir, { recursive: true, force: true });
 });
 
-async function openSpritesPage({ viewport } = {}) {
-  const context = await browser.newContext(viewport ? { viewport } : {});
+async function openSpritesPage({ viewport, reducedMotion } = {}) {
+  const context = await browser.newContext({
+    ...(viewport ? { viewport } : {}),
+    ...(reducedMotion ? { reducedMotion } : {}),
+  });
   const page = await context.newPage();
   const consoleErrors = [];
   const failedRequests = [];
@@ -333,6 +336,64 @@ test("the person card renders all six curated emotion variants as genuinely diff
     }
     const markups = new Set(swatches.filter((s) => emotions.includes(s.label)).map((s) => s.svg));
     assert.equal(markups.size, emotions.length, "no two emotion variants share the same markup — the face genuinely changes");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a card with direction and expression variants gains a cycle swatch that steps through genuinely different frames on click", async () => {
+  // reducedMotion pins the page's auto-step off, so every frame change below
+  // is the test's own click and the walk is fully deterministic.
+  const { context, page, consoleErrors } = await openSpritesPage({ reducedMotion: "reduce" });
+  try {
+    const card = page.locator('.card[data-cls="bear"]');
+    await card.waitFor({ state: "visible" });
+    const cycleButton = card.locator(".swatch.cycle .swatch-img");
+    assert.equal(await cycleButton.count(), 1, "the bear card carries exactly one cycle swatch");
+    // The card sits far down a content-visibility:auto page — bring it on
+    // screen before reading, so the first frame's text is really rendered.
+    await cycleButton.scrollIntoViewIfNeeded();
+    const labels = [];
+    const markups = new Set();
+    // bear cycles plain + left + right + the six emotions = 9 frames; one
+    // extra click proves the wrap-around lands back on a real frame.
+    for (let i = 0; i < 10; i += 1) {
+      labels.push(await card.locator(".swatch.cycle .swatch-label").textContent());
+      markups.add(await cycleButton.innerHTML());
+      await cycleButton.click();
+    }
+    for (const expected of ["bear", "left", "right", "happy", "calm"]) {
+      assert.ok(labels.includes(expected), `the cycle walks through the ${expected} frame (saw: ${labels.join(", ")})`);
+    }
+    assert.equal(labels[9], labels[0], "the tenth click wraps back around to the first frame");
+    assert.ok(markups.size >= 9, `every frame is genuinely different markup, got ${markups.size} distinct frames`);
+    assert.deepEqual(consoleErrors, [], "cycling logs no console error");
+  } finally {
+    await context.close();
+  }
+});
+
+test("a card with only material variants never grows a cycle swatch — materials are choices, not motion", async () => {
+  const { context, page } = await openSpritesPage({ reducedMotion: "reduce" });
+  try {
+    const lamp = page.locator('.card[data-cls="lamp"]');
+    await lamp.waitFor({ state: "visible" });
+    assert.equal(await lamp.locator(".swatch.cycle").count(), 0);
+  } finally {
+    await context.close();
+  }
+});
+
+test("with motion allowed, the cycle swatch advances on its own — the page is a little alive with no interaction at all", async () => {
+  const { context, page } = await openSpritesPage();
+  try {
+    const label = page.locator('.card[data-cls="bear"] .swatch.cycle .swatch-label');
+    await label.waitFor({ state: "attached" });
+    const first = await label.innerText();
+    await page.waitForFunction(
+      ({ selector, before }) => document.querySelector(selector)?.textContent !== before,
+      { selector: '.card[data-cls="bear"] .swatch.cycle .swatch-label', before: first },
+    );
   } finally {
     await context.close();
   }

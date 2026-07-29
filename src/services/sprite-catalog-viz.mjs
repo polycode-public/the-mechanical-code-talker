@@ -445,7 +445,8 @@ function swatchHtml(s) {
   if (s.treatment) parts.push(`<span class="swatch-treat">&rarr; ${escapeHtml(s.treatment)} treatment</span>`);
   const title = s.property ? `${s.property} = ${s.label}` : s.label;
   const cls = ["swatch", s.tier, s.kind].filter(Boolean).join(" ");
-  return `<div class="${cls}" title="${escapeHtml(title)}"><div class="swatch-img">${s.svg}</div><div class="swatch-caption">${parts.join("")}</div></div>`;
+  const property = s.property ? ` data-property="${escapeHtml(s.property)}"` : "";
+  return `<div class="${cls}"${property} title="${escapeHtml(title)}"><div class="swatch-img">${s.svg}</div><div class="swatch-caption">${parts.join("")}</div></div>`;
 }
 
 function tierRowHtml(tierName, swatches) {
@@ -743,6 +744,9 @@ ${THEME_TOKENS_CSS}
   .swatch.fallback .swatch-img { border-style: dashed; }
   .swatch-caption { font-family: ${MONO_STACK}; font-size: .58rem; color: var(--muted); line-height: 1.25; margin-top: .15rem; word-break: break-word; }
   .swatch-treat { display: block; opacity: .8; }
+  .swatch.cycle .swatch-img { border-color: var(--taught); cursor: pointer; display: block; }
+  .swatch.cycle .swatch-img:hover { border-color: var(--corpus); }
+  .swatch.cycle .swatch-caption { color: var(--taught); }
   footer.page { max-width: 74ch; margin: 2.5rem 0 0; padding-top: 1rem; border-top: 1px solid var(--ai-edge); font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) { .jump, .swatch, .pill { transition: border-color .12s ease, color .12s ease, opacity .12s ease; } }
 ${dockCss}</style>
@@ -886,6 +890,53 @@ const SPRITE_CATALOG = ${pageData};
     renderScene(composeqEl.value);
   });
   renderScene("");
+
+  // ---- the variant cycle — a card whose large tier carries expression
+  // (mgx:feels) or direction (mgx:faces) variants gains one extra swatch
+  // that steps through them: plain, then each direction, then each face.
+  // Frames are the card's own already-rendered swatches (the same
+  // read-the-DOM posture classIndex takes above — never a second embedded
+  // copy), and one shared interval steps every cycle in sync. Reduced
+  // motion disables the auto-step only; the frame itself is a button, so a
+  // click or Enter always advances one frame by hand. Injected AFTER
+  // buildClassIndexFromDom ran, so a cycle frame never leaks into the
+  // composer's material index.
+  const CYCLE_PROPERTIES = ["mgx:faces", "mgx:feels"];
+  const cycleSteppers = [];
+  for (const card of cards) {
+    const swatchRow = card.querySelector('.tier-row[data-tier="large"] .swatches');
+    if (!swatchRow) continue;
+    const frames = [];
+    for (const swatch of swatchRow.querySelectorAll(".swatch")) {
+      if (CYCLE_PROPERTIES.indexOf(swatch.dataset.property || "") === -1) continue;
+      const img = swatch.querySelector(".swatch-img");
+      const label = swatch.querySelector(".swatch-label");
+      if (img && label) frames.push({ svg: img.innerHTML, label: label.textContent.trim() });
+    }
+    if (frames.length < 2) continue;
+    const baseImg = swatchRow.querySelector(".swatch.plain .swatch-img, .swatch.fallback .swatch-img");
+    if (baseImg) frames.unshift({ svg: baseImg.innerHTML, label: card.dataset.cls });
+    const holder = document.createElement("div");
+    holder.className = "swatch large cycle";
+    holder.innerHTML = '<button type="button" class="swatch-img" aria-label="step through the '
+      + esc(card.dataset.cls) + ' variants"></button><div class="swatch-caption"><span class="swatch-label"></span></div>';
+    const frameImgEl = holder.querySelector(".swatch-img");
+    const frameLabelEl = holder.querySelector(".swatch-label");
+    let frameIndex = 0;
+    const showFrame = () => {
+      frameImgEl.innerHTML = frames[frameIndex].svg;
+      frameLabelEl.textContent = frames[frameIndex].label;
+    };
+    const stepFrame = () => { frameIndex = (frameIndex + 1) % frames.length; showFrame(); };
+    frameImgEl.addEventListener("click", stepFrame);
+    showFrame();
+    swatchRow.insertBefore(holder, swatchRow.firstChild);
+    cycleSteppers.push(stepFrame);
+  }
+  const reducedMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  if (cycleSteppers.length && !reducedMotion) {
+    setInterval(() => { for (const stepFrame of cycleSteppers) stepFrame(); }, 800);
+  }
 })();
 </script>
 ${dockScripts}

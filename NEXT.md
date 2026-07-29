@@ -41,8 +41,11 @@ hardcoded `"player"` in `adventure-viz.mjs`, `isCastMember`'s heuristic, the clo
 fixed none of them, and that fix pass hasn't been dispatched. Dispatch the scenario dropdowns only once
 adventure's side is actually fixed, not just audited.
 
-**sprites.html's "multi-expression, multi-direction cycles"** (real new animated sprite variant art,
-not a restyle) — flagged 2026-07-29, not yet scoped as a build task.
+**sprites.html variant cycles — next slice** (v1 shipped: `mgx:faces` left/right profile pairs for
+bear/cat/dog/king as `[match]` variants, plus the catalog's auto-cycling variant swatch, which
+already animates every `-with-emotion` class): extend the facing pairs across the rest of the
+animal and person catalog, and design a profile-face anchor so a facing variant can carry the six
+`mgx:feels` expressions at the same time.
 
 **MUD3D — a rendered 3D town square, evaluated against `world-of-claudecraft`** (operator ask,
 2026-07-29): full assessment written into `PLAN_MUD.md`'s new "MUD3D" section. Not yet scoped as a
