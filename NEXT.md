@@ -86,74 +86,37 @@ message's `Received:` header chain (one entry per hop, appended, never merged or
 wasn't an accident — `PLAN_MUD.md` chose single-record-merge deliberately for CRDT convergence
 under P2P replication; the new model needs to reconcile with that, not just add a shape on top).
 
+## In-flight right now — closing four NEXT.md items via coordinator + sub-agents (2026-07-30)
+
+Four parallel, file-disjoint sub-agent dispatches, per `CLAUDE.md`'s coordinator model:
+
+- **chat.mjs weak-grounding + citation template** (was items 1+2 below): extend `366b916b`'s
+  `isRealGrounding()` fix to the "what do you know about X" reader (`KNOW_ABOUT_RE`) and the
+  TEACH-OFFER gate, plus parameterize the "trelvox" demo term's hardcoded reference-pack citation
+  template per-source. `src/services/chat.mjs` + `src/adapters/corpus/reference-pack.mjs` area.
+- **ACE grammar N-of-N noun phrases** (was item 6): `resolveNP`/`parseCopula` in
+  `src/domain/grammar/ace.mjs` — "a unit of work" should parse as one noun phrase, not residue.
+- **`PLAN_AWS.md` burn-in follow-ups** (was item 7): flip `e2e:deployed`'s `allow_failure` off if
+  its green history supports it, run `SKILL_PAGE_WEIGHTS` for `PAGE_WEIGHTS.md` revision 2.
+- **`pages-ledger-teach.test.mjs` flake investigation** (was item 8): the bounded-contention repro
+  named below, in a worktree.
+
+Update this section (mark done, delete the line) as each lands, in the same commit as its fix —
+don't let it go stale the way the MUD3D/PLAN_FACT blurbs above did.
+
 ## Open items
 
-- [ ] **demo-page JS that belongs in tmct itself, audited toward lib > tool > ask (operator,
-  2026-07-29).** Survey every `src/services/*-viz.mjs`/`src/surfaces/web/*-browser-entry.mjs` for logic
-  that's genuinely reusable across pages (especially anything already duplicated between two or more
-  demos) rather than specific to the one page that happens to host it today, and is not opinionated
-  about which page imports it. For both that to-be-moved code AND whatever already calls into tmct from
-  a demo page, work out which of it should become a real tool call rather than staying bespoke page JS
-  — and where something could become a tool call, prefer whichever option keeps the most of the
-  original natural-language request intact: move it into the plain library first if it doesn't need to
-  be agent-invocable at all, promote it to a real tool if it represents an action a user's own words
-  should be able to trigger, and prefer routing it through the existing `ask` tool specifically over a
-  new bespoke tool wherever the request is really a question the graph can already answer. The reason
-  this matters: the whole point of running many different demos (mud, adventure, spider-fly, chat, plan,
-  ...) is to exercise tmct's own engine from as many directions as possible — so page-specific game/UI
-  code that could instead be a generic library call or a real tool is exactly the gap between "a demo
-  that happens to use tmct" and the actual target: a consumer surface where chat calls tools, backed by
-  classical planning over the graph, with as little bespoke per-page logic in the way as we can manage.
-  Concrete shape the operator gave for what "done" looks like: a page should be able to call a single
-  generic function against a natural-language request and get back clean, render-ready data — e.g.
-  spider-fly.html calling `fn("list the locations of flies and spiders")` for the grid, or
-  `fn("get me the large sprite for a happy spider")` for one asset — routed through tmct's real
-  NL-understanding/tool-calling pipeline rather than each page hand-rolling its own fact-store/sprite-
-  resolver glue. Related operator principle to hold this work to: **if anyone views a demo page's
-  source, it should read as a showcase of what tmct is capable of at the highest level** — the page's
-  own JS should look like a thin, legible caller of real tmct capability, not obscured bespoke game
-  logic with tmct calls buried inside it. Not yet started — a survey-and-plan task, not something to
-  dispatch as a quick pass.
-- [ ] a new AWS-hosted backend for the memory store — **needed for marginalia** (which is migrating
-  onto tmct and needs a durable store that survives a Lambda's scale-to-zero, not a local file).
-  tmct ships only `memory` (process-only) and `sqlite` (local file) today; the backend seam
-  (`src/adapters/memory/core.mjs`) has no formal plugin interface — `sqlite`/`memory` are inline
-  `isMemoryHandle`/`isSqliteHandle` branches, not a registered shape, so formalizing an explicit
-  `{load, persist, close}` interface is worth doing as groundwork before or alongside this. marginalia
-  already runs a working AWS-hosted graph store with the same underlying shape as tmct's sqlite
-  backend — full materialization, mutate in JS, write-behind — against S3+DynamoDB instead of a local
-  file: one JSON object per graph version in S3, with DynamoDB holding only a lightweight
-  manifest/version-pointer row to the latest version. Build tmct's new backend the same way — an
-  `s3`/`s3+dynamo` backend behind the existing `--memory-backend` precedence — so marginalia
-  consumes tmct's backend the moment it lands here instead of maintaining its own AWS persistence
-  layer. Full design writeup: `PLAN_MEMORY_BACKEND_AWS.md` (relocated from seonix's `PLAN_TMCT.md`
-  2026-07-26; this is a tmct/marginalia concern, not a consumer-repo one)
-- [ ] marginalia wants bedrock-meter-proxy's embedded over-cap fallback session grounded in
-  marginalia's own memory graph, not tmct's default seeded persona — explicitly no timeline
-  pressure, planning ahead. Ruled out the Repository Interface themselves (memory is documented as
-  "tmct's alone", and the type vocabulary is code-graph-shaped, not conversational-fact-shaped —
-  correct call, not something to revisit). Points at `openMemoryBackend`/`openConfiguredMemoryBackend`'s
-  backend registry in `src/adapters/memory/core.mjs` as the real seam, same one the AWS-hosted
-  backend item above would extend — these two are related, possibly worth designing together.
-  Two candidate shapes, both genuinely undecided on their side: (1) periodic sync — marginalia
-  exports flat fact triples in the same shape `export-jsonl.mjs` already emits, a scheduled job
-  imports via the existing `tmct import --file` path into a store the proxy's Lambda reads at cold
-  start; possibly zero new backend code needed, just confirming the import path tolerates
-  marginalia's scale and refresh cadence. (2) live read-through — a genuine new backend querying an
-  AWS-hosted store on every read/write, either speaking marginalia's DynamoDB schema directly (real
-  cross-project coupling) or a thin client against a neutral flat-triple read API marginalia would
-  expose. Full write-up: `PLAN_TMCT.md` §7 in the marginalia repo (§6 for the related bedrock-meter
-  sidecar-routing ask). `~/.claude/inboxes/tmct.md` 2026-07-27T23:49.
 - [ ] the ACE grammar's `resolveNP` has no N-of-N noun-phrase support (`"a unit of work"` parses
   with `residue: ["of"]` rather than as one noun phrase) — surfaced while widening multi-word
   class-name teach (2026-07-27), deliberately not fixed there: it's real grammar work outside that
   fix's region, not a routing gap. `src/domain/grammar/ace.mjs`'s `parseCopula`/`resolveNP`.
+  **Dispatched 2026-07-30, see In-flight above.**
 - [ ] `PLAN_AWS.md`'s two burn-in follow-ups, now that live execution (Phases 1-8) is complete
   and the CI pipeline is green end to end (`deploy:website`/`e2e:deployed`/`smoke:post-deploy`
   all passed on a real push, `https://tmct.polycode.co.uk/` confirmed serving HTTP 200): flip
   `e2e:deployed`'s `allow_failure: true` off once it has a longer green history, and run
   `SKILL_PAGE_WEIGHTS` post-cutover for `reports/PAGE_WEIGHTS.md` revision 2. Full status in
-  `AWS_ACCOUNTS.md`'s provisioning-status section.
+  `AWS_ACCOUNTS.md`'s provisioning-status section. **Dispatched 2026-07-30, see In-flight above.**
 - [ ] `test-e2e/pages-ledger-teach.test.mjs` (bundle-load and refocus assertions) flakes under real
   multi-file e2e contention — investigated once more without a confirmed root cause. A solo run
   passes cleanly with wide timing margin (each `turn()` resolves in 1-2s against a 20s deadline).
@@ -162,7 +125,7 @@ under P2P replication; the new model needs to reconcile with that, not just add 
   unrelated files), not a genuine per-test race — not usable signal. Best next attempt: a bounded
   run of `pages-ledger-teach.test.mjs` alongside 3-5 other heavy `pages-*` files via an explicit
   file list, in a worktree that already has a commit (so it can't be reclaimed mid-run), rather
-  than the whole uncapped directory at once.
+  than the whole uncapped directory at once. **Dispatched 2026-07-30, see In-flight above.**
 
 
 ## Discipline

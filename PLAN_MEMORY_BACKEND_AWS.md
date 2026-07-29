@@ -78,3 +78,27 @@ rewrite first, not sqlite-style diffed writes: simpler, already proven at margin
 Landing it here means marginalia consumes tmct's backend instead of maintaining its own AWS
 persistence layer. Diffed writes can follow if whole-object rewrite proves too costly on real
 graph sizes.
+
+## Related, undecided: bedrock-meter's fallback-session grounding
+
+Moved here from `NEXT.md` (2026-07-30) — a related but distinct ask, no timeline pressure,
+planning ahead only. marginalia wants bedrock-meter-proxy's embedded over-cap fallback session
+grounded in marginalia's own memory graph, not tmct's default seeded persona. The Repository
+Interface itself was already ruled out for this (memory is documented as "tmct's alone", and its
+type vocabulary is code-graph-shaped, not conversational-fact-shaped — a correct call, not
+something to revisit). The real seam is the same one this document's own backend registry
+(`openMemoryBackend`/`openConfiguredMemoryBackend`, `src/adapters/memory/core.mjs`) would extend
+— these two concerns are related, and possibly worth designing together once this backend lands.
+
+Two candidate shapes, both genuinely undecided on marginalia's side:
+
+1. **Periodic sync** — marginalia exports flat fact triples in the same shape `export-jsonl.mjs`
+   already emits, a scheduled job imports via the existing `tmct import --file` path into a store
+   the proxy's Lambda reads at cold start. Possibly zero new backend code needed here at all —
+   just confirming the import path tolerates marginalia's scale and refresh cadence.
+2. **Live read-through** — a genuine new backend querying an AWS-hosted store on every read/write,
+   either speaking marginalia's DynamoDB schema directly (real cross-project coupling) or a thin
+   client against a neutral flat-triple read API marginalia would expose.
+
+Full write-up: `PLAN_TMCT.md` §7 in the marginalia repo (§6 for the related bedrock-meter
+sidecar-routing ask). `~/.claude/inboxes/tmct.md` 2026-07-27T23:49.
