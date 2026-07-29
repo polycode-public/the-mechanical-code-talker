@@ -1,6 +1,8 @@
 # PLAN_MUD.md — persistent, shared tmct worlds over a `server:` memory backend
 
-Status: RESEARCH / DESIGN — not yet implemented. Nothing in this document is live code.
+Status: mixed. The P2P/WebRTC multiplayer design (below) shipped 2026-07-29 in both `mud.html` and
+`chat.html`. Everything else in this document — Backend D, the server tiers, handles, MUD3D — is
+still RESEARCH / DESIGN, not yet implemented.
 
 ## Origin
 
@@ -551,17 +553,12 @@ a hardcoded `"player"`, and this demo casts as many simultaneous characters as i
 — no shared "agent loop" abstraction across spider-fly/adventure/plan/mud was needed to get there,
 consistent with `PLAN_ADVENTURE.md`'s own earlier call that a common wrapper isn't warranted.
 
-## Proposed next architecture — real multi-browser worlds over WebRTC
+## Multi-browser worlds over WebRTC — shipped 2026-07-29
 
-**No networking or state-sharing code exists in `mud.html` today.** Everything above this section
-runs the whole simulation inside one browser tab; nothing a visitor does ever leaves their machine.
-What follows is a proposed design for the next real step: two or more separate people, each in
-their own browser, sharing one live mud world over the network. It is design capture only. Nothing
-here is built, and this section names it as a distinct next architecture rather than a description
-of what ships. It's a different shape from Backend D, above: Backend D routes reads and writes
-through a hosted DynamoDB table one client at a time. This design has no server for game state at
-all — every browser holds a full copy of the world and stays in sync by talking directly to the
-other browsers in the room.
+Two or more separate people, each in their own browser, share one live world over the network
+with no server for game state at all: every browser holds a full copy of the world and stays in
+sync by talking directly to the other browsers in the room. It's a different shape from Backend D,
+above: Backend D routes reads and writes through a hosted DynamoDB table one client at a time.
 
 **Networking**: no rendezvous service, not even a public one. Every connection is a direct WebRTC
 offer/answer exchange between two browsers, and nothing else is involved. Starting a world generates
@@ -923,6 +920,56 @@ never a real chat app, since that's not what's under test:
   browser context (storage cleared, standing in for a new device) asks the same ungrounded question
   and gets an honest miss again, then rejoins the room using a fresh link from one of the two who
   stayed, and recovers the grounded answer along with its provenance.
+
+## MUD3D — a rendered town square, evaluated against world-of-claudecraft
+
+2026-07-29, operator ask: could a shared, walkable 3D town square — buying leather, making armour,
+the same shape as mud.html but rendered — build on `world-of-claudecraft`
+(github.com/levy-street/world-of-claudecraft, MIT, cloned locally at `../world-of-claudecraft`)?
+Checked the source directly rather than guessing from the README. Design capture only; nothing
+below is built.
+
+**What it actually is.** It's a real, large Three.js/TypeScript MMO — quests, combat, professions,
+markets, PvP — not a toy. Its "offline browser Sim" (`npm run dev`, gated out of production builds)
+isn't a stripped-down demo mode: it boots the literal authoritative `Sim` class (9,673 lines)
+client-side with no network, satisfying the same `IWorld` interface the renderer always reads. Sim
+and render genuinely are separated — `src/sim/` is guarded to have zero DOM/Three imports, and
+`Renderer` is typed only against `IWorld`, never a concrete Sim type — but `IWorld` itself is 256
+members (69 data fields, ~187 methods: quests, market, mail, dungeons, talents, professions, PvP,
+card duels...), and world state underneath it is a `Map<number, Entity>` of one monolithic
+RPG-shaped struct (`hp`, `stats`, `weapon`, `procState`...), mutated in place every tick. There's no
+graph, no ECS, no fact/tuple representation anywhere — the opposite pole from tmct's (subject,
+predicate, object) rows. Reusing the renderer for a different, tmct-fact-driven world means either
+satisfying all 256 `IWorld` members or forking a large fraction of `src/render`'s assumptions —
+their own in-repo map editor takes exactly this path (a frozen `Sim` under the real `Renderer`), and
+even that still carries the full interface, not a pruned one.
+
+**What's genuinely reusable.** Two concrete, MIT-licensed pieces, cheap to lift directly: the seeded
+value/fractal-noise terrain function (`src/sim/rng.ts`), sampled identically by sim and render from
+one seed with no external content files — a real precedent for "deterministic rendering from compact
+state," the exact idea behind mud.html's own room-cross-section rendering; and `PlacedAsset`
+(`{path, x, z, rotY, scale, collideRadius?}`) plus its 385-line renderer (`src/render/placed_assets.ts`)
+— an arbitrary GLB model at a transform, decoupled from combat/quests, built for their map editor.
+That's a clean fit for static scene-dressing: a town square's buildings, market stalls, a well. Also
+worth naming as a shape precedent, even though no code moves: `Sim` runs identically from three
+different harnesses (authoritative server, offline browser, headless RL/Gymnasium), the same "one
+deterministic core, several consumers" instinct tmct already has for its own graph.
+
+**The planning half doesn't need claudecraft at all.** "Walk to the market, buy leather, make armour"
+is a goal-directed action sequence over known facts — exactly what `src/domain/planning.mjs`'s
+`findActionPath`/`findReachableSet` already do, exercised today by `adventure-autoplay.mjs`'s
+goal-directed room search and `mud-turn.mjs`'s walk-toward-known-food behavior. A market/crafting
+scenario is more facts and verbs for that same machinery, not a new planning system — claudecraft's
+own crafting/economy code is bespoke RPG logic with no graph underneath, so there's nothing there to
+import for this half.
+
+**Shape this points toward, not yet scoped as a build phase**: a small, tmct-native render layer —
+mud.html-scale, driven directly from tmct fact rows (kind, position, label), not built on
+claudecraft's `Sim`/`IWorld` — using the noise-terrain and placed-asset techniques above as
+implementation reference rather than an imported dependency. That keeps the demo's own principle
+intact (a page's source should read as a thin caller of real tmct capability, not a skin over
+someone else's 256-member interface) at the cost of writing the actual 3D rendering ourselves rather
+than inheriting it.
 
 ## Phasing
 
