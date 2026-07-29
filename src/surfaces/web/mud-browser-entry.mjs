@@ -38,8 +38,9 @@ import {
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines,
   diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
-  roomKindOf,
+  roomKindOf, isMudStatePredicate,
 } from "../../services/adventure.mjs";
+import { waveFact, playedByFact, P2P_PREDICATES } from "../../domain/p2p/facts.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
 import { runMudTurn } from "../../services/mud-turn.mjs";
 import { parseMudEditorText, planMudEditorSync } from "../../services/mud-editor.mjs";
@@ -232,7 +233,44 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
     return { unrecognized, added: toAppend.length, removed };
   }
 
-  return { memoryDir, windows, snapshot, applyEdit };
+  // Wall-clock resolution is 1ms, and both writers below are content-addressed
+  // by (subject, predicate, object) — a second wave from the same character in
+  // the same room is the SAME fact id, so it only registers as a change if its
+  // provenance tag differs. Two writes inside one tick would share a timestamp,
+  // share a tag, and the second would silently vanish. p2p-room.mjs nudges its
+  // own clock for exactly this reason; this is the same nudge for the writes
+  // that happen before a room exists.
+  let lastWriteMs = -Infinity;
+  function stampNow() {
+    const nudged = Math.max(Date.now(), lastWriteMs + 1);
+    lastWriteMs = nudged;
+    return new Date(nudged).toISOString();
+  }
+
+  /** `character` waves in whichever room it currently stands in — an ordinary
+   *  add-only fact, so a page with no network renders it exactly like a page
+   *  sharing the world with three others. Returns the room waved in, or null
+   *  when the character stands nowhere (out of play). Nothing is ever
+   *  retracted: "currently waving" is a recency read over this fact's own
+   *  provenance timestamp. */
+  async function wave(character) {
+    const here = await roomOf(character);
+    if (!here) return null;
+    await appendFacts(memoryDir, [waveFact(character, here, stampNow())]);
+    return here;
+  }
+
+  /** Claim `characters` for `peerId` — one add-only `mgx:playedBy` fact each.
+   *  Claims never overwrite: two peers claiming the same animal both write,
+   *  and every reader settles it the same way by taking the oldest claim. */
+  async function claimCharacters(characters, peerId) {
+    const at = stampNow();
+    const claims = (characters || []).map((character) => playedByFact(character, peerId, at));
+    if (claims.length) await appendFacts(memoryDir, claims);
+    return claims.length;
+  }
+
+  return { memoryDir, windows, snapshot, applyEdit, wave, claimCharacters };
 }
 
 /** `count` entries drawn at random from `roster`, in random order, without
@@ -324,6 +362,10 @@ globalThis.tmctMud = {
   personKnowledgeLines, personKnownFoodLines,
   diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
   roomKindOf,
+  // The shared-world reach-throughs: which predicates carry live world state,
+  // and the P2P layer's own four. mud.html hands both to `mudSyncableFacts`,
+  // which is written to take the check rather than import the engine itself.
+  isMudStatePredicate, P2P_PREDICATES,
   // The edit mode's own reach-throughs: the SKOS neighbourhood and the is-a
   // chain its cursor-suggestion pills read, neither of which is splice-safe.
   relatedForTerm,

@@ -227,6 +227,33 @@ export function worldActionRows(rows) {
   });
 }
 
+// The predicates a played turn can write. Every one of them already exists
+// above as a private constant; this set is the one place they are gathered so
+// a caller outside this file can ask "is this fact part of the live world"
+// without learning each name. rdf:type and the display name earn their place
+// alongside the folded ones: a dug room and a dug object are minted mid-play,
+// and a reader that never receives their class or their plain name cannot draw
+// them at all.
+const MUD_STATE_PREDICATES = new Set([
+  ...PLACEMENT_PREDICATES,
+  ...POSITION_PREDICATES,
+  OPEN_PREDICATE,
+  MASS_PREDICATE,
+  KNOWS_ABOUT_PREDICATE,
+  DISPLAY_NAME_PREDICATE,
+  "rdf:type",
+]);
+
+/** Whether `predicate` carries live world state — where a thing stands, what
+ *  it weighs, whether it is open, what somebody knows, which way a room leads,
+ *  and the class and name a dug thing is minted with. The P2P sync filter
+ *  reads this to tell a fact a turn produced from the page chrome around it.
+ *  Pure. */
+export function isMudStatePredicate(predicate) {
+  const p = String(predicate || "");
+  return MUD_STATE_PREDICATES.has(p) || EXIT_PREDICATE_RE.test(p);
+}
+
 /** Every individual the world names — its rooms, its cast, its props, and
  *  anything dug up since — as the plain id strings a parser has to have
  *  DECLARED before it can resolve them. @turnN snapshots are skipped: a
