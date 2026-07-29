@@ -929,6 +929,12 @@ never a real chat app, since that's not what's under test:
   and gets an honest miss again, then rejoins the room using a fresh link from one of the two who
   stayed, and recovers the grounded answer along with its provenance.
 
+All five run as real-browser tests, in that order: `test-e2e/p2p-webrtc-handshake.test.mjs`,
+`pages-chat-p2p.test.mjs`, `pages-mud-p2p.test.mjs`, `p2p-mesh-three-peers.test.mjs` with
+`pages-mud-p2p-mesh.test.mjs` for the same mesh on mud.html, and `p2p-disconnect-rejoin.test.mjs`.
+`pages-chat-p2p-distributed-inference.test.mjs` adds the one the list doesn't name: a chain with one
+link taught on each page, proved on both.
+
 ## MUD3D — a rendered town square, evaluated against world-of-claudecraft
 
 2026-07-29, operator ask: could a shared, walkable 3D town square — buying leather, making armour,
