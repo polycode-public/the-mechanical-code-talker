@@ -63,6 +63,7 @@ import { normFactTerm } from "../domain/hash.mjs";
 import { winkInstance } from "../adapters/wink-model.mjs";
 import {
   loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName, predicateOf,
+  OF_CLASSIFIER_HEADS, OF_PARTITIVE_HEADS,
 } from "../domain/grammar/lexicon.mjs";
 
 export const USAGE = "usage: tmct extract <text-file>|--file <text-file> [--repo <path>] [--out <file.jsonl>] [--optimistic] [--canonical]";
@@ -111,14 +112,10 @@ const OPTIMISTIC_ENTITY_HOPS = 4;
 // read — the noun on the far side belongs to a different clause or to a
 // prepositional complement, not to "X is a Y".
 const COPULA_FRAME_BLOCKERS = new Set(["VERB", "AUX", "ADP", "SCONJ", "CCONJ"]);
-// Of-chain handling on a copula object: classifier heads read through to the
-// real class; partitive containers state composition and yield no isa.
-const COPULA_OF_READ_THROUGH = new Set(["type", "kind", "sort", "form", "class", "variety", "species", "breed", "genus"]);
 // Naming periphrases stay copular: "can be termed as a name", "is known as",
 // "is defined as" — the participle + "as" carries the same class claim the
 // bare copula does, unlike any other verb after "is".
 const COPULA_NAMING_PARTICIPLES = new Set(["termed", "known", "defined", "described", "referred", "called", "classified"]);
-const COPULA_PARTITIVE_HEADS = new Set(["body", "mass", "group", "collection", "set", "series", "number", "amount", "piece", "part", "lot", "pair", "bunch", "pile"]);
 // The relative pronouns that open a clause predicating about the SENTENCE
 // subject: "a mountain that has lava" is a fact about the volcano, so the
 // relative clause's verb binds to the copula's own subject, not to its object.
@@ -202,7 +199,7 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
       let k = g - 1;
       while (k >= 0 && !isNounish(k) && (ofChainSkip(k) || values[k]?.toLowerCase() === "of")) k -= 1;
       if (k < 0 || !isNounish(k)) return null; // no readable head — abstain
-      if (COPULA_OF_READ_THROUGH.has(String(values[k]).toLowerCase())) return lo; // classifier reads through
+      if (OF_CLASSIFIER_HEADS.has(String(values[k]).toLowerCase())) return lo; // classifier reads through
       lo = runLoOf(k);
     }
     return lo;
@@ -271,8 +268,8 @@ function optimisticTriplesPos(sentence, lexicon, nlp) {
       const headWord = String(values[hi]).toLowerCase();
       const nextIsOf = values[hi + 1]?.toLowerCase() === "of";
       if (!nextIsOf) return { label: entityRunAt(j), hi };
-      if (COPULA_OF_READ_THROUGH.has(headWord)) { i = hi + 1; j = hi + 1; continue; }
-      if (COPULA_PARTITIVE_HEADS.has(headWord)) return null;
+      if (OF_CLASSIFIER_HEADS.has(headWord)) { i = hi + 1; j = hi + 1; continue; }
+      if (OF_PARTITIVE_HEADS.has(headWord)) return null;
       return { label: entityRunAt(j), hi };
     }
     return null;

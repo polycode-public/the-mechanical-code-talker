@@ -28,7 +28,7 @@
 
 import {
   loadLexicon, lookupNoun, lookupVerb, lookupAdjective, lookupProperName,
-  predicateOf, numberOf, classify,
+  predicateOf, numberOf, classify, OF_CLASSIFIER_HEADS, OF_PARTITIVE_HEADS,
 } from "./lexicon.mjs";
 import { fuzzyMatchInSet } from "../interpret/fuzzy.mjs";
 
@@ -85,7 +85,15 @@ function local(lexicon, term) {
 const stripDet = (tokens) =>
   tokens.length > 1 && DET.has(tokens[0].toLowerCase()) ? tokens.slice(1) : tokens;
 
-/** Resolve a 1–2 word noun phrase: PROPERNAME | code-ref | NOUN | ADJ NOUN.
+/** A token a compound noun phrase may be built out of: a plain word (never a
+ *  code-shaped ref, a number or a CURIE) that is not a DECLARED proper name —
+ *  a name in a compound slot ("GitLab pipeline") is a structural miss, not a
+ *  compound. Shared by both compound arms of resolveNP below. */
+const compoundableWord = (lexicon, token) =>
+  /^[a-z][a-z'-]*$/i.test(token) && !lookupProperName(lexicon, token);
+
+/** Resolve a noun phrase: PROPERNAME | code-ref | NOUN | ADJ NOUN | NOUN NOUN
+ *  | NOUN of NOUN (the last two opt-in, see `allowCompound`).
  *  Returns { term, individual, extras, unknown } — `term` null on a miss with
  *  the undeclared tokens in `unknown` (empty `unknown` = structurally
  *  unparseable phrase → the caller returns a hard null). `extras` carries the
@@ -149,8 +157,7 @@ function resolveNP(lexicon, tokensIn, { allowCompound = false } = {}) {
     // DECLARED proper name in either slot ("GitLab pipeline") keeps the
     // structural miss below — a name in the wrong slot, not a compound.
     if (allowCompound
-      && !lookupProperName(lexicon, tokens[0]) && !lookupProperName(lexicon, tokens[1])
-      && /^[a-z][a-z'-]*$/i.test(tokens[0]) && /^[a-z][a-z'-]*$/i.test(tokens[1])) {
+      && compoundableWord(lexicon, tokens[0]) && compoundableWord(lexicon, tokens[1])) {
       const n0 = lookupNoun(lexicon, tokens[0], { singularOnly: false });
       const n1 = lookupNoun(lexicon, tokens[1], { singularOnly });
       if (n0 && n1) {
@@ -161,6 +168,35 @@ function resolveNP(lexicon, tokensIn, { allowCompound = false } = {}) {
     // wrong slot ("GitLab pipeline") is a structural miss, not an unknown
     const unknown = tokens.filter((t) => !classify(t, lexicon));
     return { term: null, individual: false, extras: [], unknown };
+  }
+  // "NOUN of NOUN" is ONE compound noun ("unit of work", "chain of command",
+  // "conflict of interest"), joined with its own "of" the same way two plain
+  // nouns are joined with a space, so the taught fact and the query side
+  // unify on one term. Opt-in through the same `allowCompound` gate and the
+  // same compoundableWord shape test as the two-noun arm above; the head noun
+  // leads, so an "a"/"an" agrees with IT.
+  //
+  // Which "of" this claims is decided by the head, against the two closed
+  // of-frame vocabularies in lexicon.mjs — the same ones the fact extractor
+  // reads. A CLASSIFIER head is a rewrite of the inner noun rather than a
+  // compound ("a kind of dog" is a dog), and a PARTITIVE head states quantity
+  // or composition rather than a class ("a piece of cake", "a lot of dogs");
+  // both decline here and land on the miss below. The relational reading is
+  // pattern 7's and is claimed before any of this: parseAce routes "the N of N
+  // is VALUE" to parseOfForm, so "the version of tmct is 0.2.0" never reaches
+  // a copula split at all. An inner determiner is likewise out of the shape —
+  // "a piece of the cake" is four tokens and no compound noun carries one.
+  if (tokens.length === 3 && allowCompound && tokens[1].toLowerCase() === "of"
+    && compoundableWord(lexicon, tokens[0]) && compoundableWord(lexicon, tokens[2])) {
+    const head = tokens[0].toLowerCase();
+    const inner = tokens[2].toLowerCase();
+    if (!OF_CLASSIFIER_HEADS.has(head) && !OF_PARTITIVE_HEADS.has(head)) {
+      const headNoun = lookupNoun(lexicon, head, { singularOnly });
+      const innerNoun = lookupNoun(lexicon, inner, { singularOnly: false });
+      if (headNoun && innerNoun) {
+        return { term: `${ns}${head} of ${inner}`, individual: false, noun: headNoun, extras: [], unknown: [] };
+      }
+    }
   }
   // 0 or 3+ tokens: not a fragment NP. Name the undeclared words if any.
   return { term: null, individual: false, extras: [], unknown: tokens.filter((t) => !classify(t, lexicon)) };
