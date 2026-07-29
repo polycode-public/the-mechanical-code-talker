@@ -90,6 +90,96 @@ test("renderMudHtml: the deck carries play/turns/players/npcs/delay/max-turns/re
   assert.match(html, /id="resetBtn"/);
 });
 
+test("renderMudHtml: one burrow ships no scenario dropdown at all", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  assert.doesNotMatch(html, /id="scenarioSelect"/, "nothing to pick between, so nothing to pick with");
+  assert.match(html, /"scenarios":\[\{/, "the one world still travels as a scenario, so the page has one code path");
+});
+
+test("renderMudHtml: several burrows ship a dropdown beside reset, opening on the first", () => {
+  const second = { ...WORLD_PAYLOAD, name: "mud-hollow", opening: "a mossy hollow" };
+  const html = renderMudHtml({
+    worldPayload: WORLD_PAYLOAD,
+    characters: CHARACTERS,
+    scenarios: [
+      { label: "mud garden (4 rooms, 1 fox)", worldPayload: WORLD_PAYLOAD, characters: CHARACTERS },
+      { label: "mud hollow (3 rooms, nothing hunting)", worldPayload: second, characters: [CHARACTERS[0]] },
+    ],
+  });
+  assert.match(html, /id="scenarioSelect"/);
+  assert.ok(
+    html.indexOf('id="resetBtn"') < html.indexOf('id="scenarioSelect"'),
+    "the dropdown sits next to reset, after it",
+  );
+  assert.match(html, /<option value="0" selected>mud garden \(4 rooms, 1 fox\)<\/option>/);
+  assert.match(html, /<option value="1">mud hollow \(3 rooms, nothing hunting\)<\/option>/);
+  assert.match(html, /"name":"mud-hollow"/, "the alternate's whole world travels with the page");
+});
+
+test("renderMudHtml: a scenario with no label of its own reads by its world name", () => {
+  const html = renderMudHtml({
+    worldPayload: WORLD_PAYLOAD,
+    characters: CHARACTERS,
+    scenarios: [
+      { worldPayload: WORLD_PAYLOAD, characters: CHARACTERS },
+      { worldPayload: { ...WORLD_PAYLOAD, name: "mud-warren" }, characters: CHARACTERS },
+    ],
+  });
+  assert.match(html, /<option value="0" selected>mud garden<\/option>/);
+  assert.match(html, /<option value="1">mud warren<\/option>/);
+});
+
+test("renderMudHtml: picking a burrow recasts through the same boot reset and the sliders run", () => {
+  const html = renderMudHtml({
+    worldPayload: WORLD_PAYLOAD,
+    characters: CHARACTERS,
+    scenarios: [
+      { worldPayload: WORLD_PAYLOAD, characters: CHARACTERS },
+      { worldPayload: { ...WORLD_PAYLOAD, name: "mud-warren" }, characters: CHARACTERS },
+    ],
+  });
+  assert.match(html, /scenarioSelect\.addEventListener\("change"/, "the settle event, not every keystroke");
+  assert.match(html, /scenarioIndex = picked;/);
+  assert.match(html, /await boot\("a different burrow opened/, "the same boot the sliders and reset call");
+  assert.match(html, /dropRoom\(note \|\|/, "a live shared room is dropped the one way this page drops rooms");
+  assert.match(
+    html,
+    /createMudSession\(scenario\(\)\.worldPayload/,
+    "the session opens over whichever burrow is picked, never a fixed one",
+  );
+  assert.match(html, /roster = rosterOf\(scenario\(\)\)/, "each burrow casts from its own animals");
+  assert.match(html, /rootRoom = rootRoomOf\(scenario\(\)\)/, "the survey lays out from the picked burrow's own origin");
+});
+
+test("renderMudHtml: edit mode follows the burrow that is loaded, not the one the page shipped", () => {
+  const html = renderMudHtml({
+    worldPayload: WORLD_PAYLOAD,
+    characters: CHARACTERS,
+    scenarios: [
+      { worldPayload: WORLD_PAYLOAD, characters: CHARACTERS },
+      { worldPayload: { ...WORLD_PAYLOAD, name: "mud-warren" }, characters: CHARACTERS },
+    ],
+  });
+  assert.match(
+    html,
+    /const prefix = "world:" \+ scenario\(\)\.worldPayload\.name;/,
+    "the editor's provenance filter reads the loaded burrow",
+  );
+  assert.match(html, /if \(wasEditing\) await exitEditMode\(\);/, "a half-typed edit lands in the burrow it was typed over");
+  assert.match(html, /if \(wasEditing\) await enterEditMode\(\);/, "the editor reopens on the burrow that just loaded");
+});
+
+test("renderMudHtml: a dropped room's reason survives the redraw that follows it", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  const dropRoom = /function dropRoom\(note\) \{([\s\S]*?)\n  \}/.exec(html);
+  assert.ok(dropRoom, "dropRoom is in the page script");
+  const body = dropRoom[1];
+  assert.ok(
+    body.indexOf("renderWire();") < body.indexOf('el("wireStateNote").textContent = note'),
+    "renderWire restates the idle note, so the reason is written after it, never before",
+  );
+});
+
 test("renderMudHtml: the players slider runs on the three counts, starting at two", () => {
   const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
   assert.match(html, /<label class="deck-slider">players/, "the control says what it picks");

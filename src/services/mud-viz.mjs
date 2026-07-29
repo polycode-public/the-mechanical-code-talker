@@ -73,7 +73,7 @@
 // queue is also what makes the deck's GLOBAL turn counter well-defined: it
 // increments in the exact order turns actually executed, never a race
 // between panes.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
 import {
   roomSceneObjects, scenePlacement, spriteClassForObject, spriteAncestryRows, factsForSubject,
@@ -384,7 +384,12 @@ export function nodeNameFor(rows, peerId) {
  *  the roster cannot fill draws as many panes as it has animals.
  *  `worldPayload` is `{ name, facts, rules, opening }`, read once at build
  *  time through the real worlds-pack provider (see this module's own
- *  header). `spriteTemplates` is the
+ *  header). `scenarios` is the list of burrows the deck's dropdown offers,
+ *  `[{ label, worldPayload, characters }]` — each one a whole world with its
+ *  own roster, so picking one recasts the page over that world's animals
+ *  rather than reskinning this one. `worldPayload`/`characters` name the
+ *  scenario the page opens with; a page given no `scenarios` is the
+ *  one-burrow case and ships no dropdown at all. `spriteTemplates` is the
  *  large-tier sprite set (data/sprites-large/*.toml) so every species
  *  resolves its own art instead of falling back to the flat animal icon.
  *  `mudConfig` defaults to game-config.mjs's own DEFAULT_GAME_CONFIG.mud —
@@ -397,13 +402,21 @@ export function renderMudHtml({
   title = DEFAULT_TITLE,
   worldPayload,
   characters = [],
+  scenarios = [],
   spriteTemplates = [],
   mudConfig = DEFAULT_GAME_CONFIG.mud,
   engineBundleJs = "",
 } = {}) {
-  const openingCount = Math.max(1, Math.min(DEFAULT_PLAYER_COUNT, characters.length || DEFAULT_PLAYER_COUNT));
+  const scenarioList = scenarios.length
+    ? scenarios
+    : [{ label: scenarioLabel(worldPayload?.name), worldPayload, characters }];
+  const opening = scenarioList[0];
+  const openingCount = Math.max(
+    1,
+    Math.min(DEFAULT_PLAYER_COUNT, (opening.characters || []).length || DEFAULT_PLAYER_COUNT),
+  );
   const pageData = embedJson({
-    worldPayload, characters, spriteTemplates, mudConfig,
+    scenarios: scenarioList, spriteTemplates, mudConfig,
     paneSlots: PANE_SLOTS,
     playerCounts: PLAYER_COUNTS,
     defaultPlayerCount: DEFAULT_PLAYER_COUNT,
@@ -437,6 +450,9 @@ ${MUD_STYLE}
       <div class="deck-controls">
         <button type="button" class="deck-play" id="autoToggle" aria-pressed="false">&#9654; play</button>
         <button type="button" id="resetBtn">reset</button>
+${scenarioList.length > 1 ? `        <select id="scenarioSelect" class="deck-select" aria-label="which burrow to play">
+${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " selected" : ""}>${escapeHtml(s.label || scenarioLabel(s.worldPayload?.name))}</option>`).join("\n")}
+        </select>` : ""}
         <button type="button" id="editModeBtn" aria-pressed="false">edit</button>
         <button type="button" id="shareBtn">share</button>
         <button type="button" id="joinOpenBtn">join</button>
@@ -697,6 +713,12 @@ const MUD_STYLE = `
     padding: .32rem .7rem; border: 1px solid var(--soil-mid); border-radius: 3px; background: rgba(255,255,255,.5);
   }
   .deck button:hover:not(:disabled), .pane-controls button:hover:not(:disabled) { border-color: var(--burrow-glow); }
+  .deck-select {
+    font-family: ${MONO_STACK}; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em;
+    padding: .32rem .7rem; border: 1px solid var(--soil-mid); border-radius: 3px;
+    background: rgba(255,255,255,.5); color: var(--mud-ink);
+  }
+  .deck-select:hover { border-color: var(--burrow-glow); }
   .deck-play { background: var(--mud-ink) !important; color: var(--parchment); border-color: var(--mud-ink) !important; padding: .38rem 1.1rem !important; }
   .deck-play[aria-pressed="true"] { background: var(--burrow-glow) !important; border-color: var(--burrow-glow) !important; color: var(--mud-ink); }
   .deck-turns { margin-left: auto; font-size: .74rem; color: var(--soil-mid); }
@@ -1244,7 +1266,24 @@ function pageScript() {
   const inviteParamsFrom = ${inviteParamsFrom.toString()};
 
   const el = (id) => document.getElementById(id);
-  const roster = DATA.characters.map(function (c) { return c.id; });
+  // Which of the shipped burrows is loaded. Every read of the world — the
+  // session it is opened over, the roster it is cast from, the provenance
+  // prefix edit mode filters on — goes through this one index, so switching
+  // scenarios needs no second copy of any of them.
+  let scenarioIndex = 0;
+  const scenario = function () { return DATA.scenarios[scenarioIndex]; };
+  const rosterOf = function (s) { return (s.characters || []).map(function (c) { return c.id; }); };
+  // Where the survey starts laying rooms out: the burrow's own origin, the
+  // same fact the dig mechanic measures its reach from. Falling back to the
+  // shipped default only matters for a world that declares no origin at all,
+  // and burrowGraph already copes by starting from whichever room sorts first.
+  const rootRoomOf = function (s) {
+    const facts = (s.worldPayload && s.worldPayload.facts) || [];
+    const origin = facts.find(function (f) { return f.predicate === "mgx:is-origin" && f.object === "true"; });
+    return origin ? origin.subject : DATA.rootRoom;
+  };
+  let roster = rosterOf(scenario());
+  let rootRoom = rootRoomOf(scenario());
   let slots = [];
   const ACTOR_COLORS = ["var(--actor-a)", "var(--actor-b)", "var(--actor-c)", "var(--actor-d)"];
   const NPC_COLOR = "var(--chalk)";
@@ -1960,14 +1999,14 @@ function pageScript() {
 
   function renderMinimap(character, rows, state, here) {
     const visited = session.windows[character].visitedRoomIds();
-    const graph = burrowGraph(state, visited, DATA.rootRoom);
+    const graph = burrowGraph(state, visited, rootRoom);
     el(paneIdFor(character) + "-minimap").innerHTML = burrowSvg(graph, {
       compact: true, here: here, label: "the ground " + character + " has covered",
     });
   }
 
   function renderWorldMap(rows, state, roomIds) {
-    const graph = burrowGraph(state, roomIds, DATA.rootRoom);
+    const graph = burrowGraph(state, roomIds, rootRoom);
     const occupants = {};
     for (const room of roomIds) {
       const here = charactersInRoom(state, room, everyone());
@@ -2092,14 +2131,14 @@ function pageScript() {
   let editing = false;
 
   function worldOnlyRows(rows) {
-    const prefix = "world:" + DATA.worldPayload.name;
+    const prefix = "world:" + scenario().worldPayload.name;
     return (rows || []).filter(function (r) {
       return typeof r.provenance === "string" && r.provenance.indexOf(prefix) === 0;
     });
   }
 
   function renderEditMap() {
-    const graph = burrowGraph(editState, allRoomIds(editRows), DATA.rootRoom);
+    const graph = burrowGraph(editState, allRoomIds(editRows), rootRoom);
     el("editMapBoard").innerHTML = graph.nodes.length
       ? burrowSvg(graph, { here: selectedRoomId, label: "every room this world writes" })
       : '<span class="edit-empty">no rooms written yet</span>';
@@ -2419,9 +2458,13 @@ function pageScript() {
     el("shareLink").value = "";
     el("replyOut").value = "";
     el("worldNameInput").readOnly = false;
-    if (note) el("wireStateNote").textContent = note;
     renderWire();
     renderNodes();
+    // Last, not first: renderWire restates the note for the state it has just
+    // read, which for a room that is gone is the idle one ("this browser holds
+    // the only copy"). WHY the room went is the thing worth saying, so it is
+    // written over the top rather than under it.
+    if (note) el("wireStateNote").textContent = note;
   }
 
   // The state machine is shared with chat.html and the words mostly are too.
@@ -2783,6 +2826,22 @@ function pageScript() {
     npcCountSlider.addEventListener("input", function () { showNpcCount(chosenNpcCount()); });
     npcCountSlider.addEventListener("change", function () { boot(); });
     el("resetBtn").addEventListener("click", function () { boot(); });
+    // Picking a burrow is a recast like any other, so it runs the same boot
+    // the sliders and reset run. Edit mode follows the world rather than the
+    // page: whatever is half-typed is flushed into the burrow it was typed
+    // over, and the editor reopens on the one that just loaded.
+    const scenarioSelect = el("scenarioSelect");
+    if (scenarioSelect) {
+      scenarioSelect.addEventListener("change", async function () {
+        const picked = Number(scenarioSelect.value);
+        if (!DATA.scenarios[picked] || picked === scenarioIndex) return;
+        const wasEditing = editing;
+        if (wasEditing) await exitEditMode();
+        scenarioIndex = picked;
+        await boot("a different burrow opened \\u2014 share again to link up.");
+        if (wasEditing) await enterEditMode();
+      });
+    }
     el("editModeBtn").addEventListener("click", function () {
       if (!session) return;
       if (editing) exitEditMode(); else enterEditMode();
@@ -2838,19 +2897,21 @@ function pageScript() {
   // has already drawn.
   let bootSeq = 0;
   let bootRun = null;
-  function boot() {
-    bootRun = openWorld();
+  function boot(note) {
+    bootRun = openWorld(note);
     return bootRun;
   }
 
-  async function openWorld() {
+  async function openWorld(note) {
     const seq = bootSeq += 1;
     autoOn = false;
     // A room is bound to the store it was opened over, and recasting mints a
     // brand new one — so a burrow that restarts leaves the link behind rather
     // than quietly syncing a world nobody else is in. Saying so is the whole
-    // handling; sharing again opens a fresh link over the new world.
-    dropRoom("the burrow restarted \\u2014 share again to link up.");
+    // handling; sharing again opens a fresh link over the new world. Picking a
+    // different burrow is the same drop for the same reason, and says so in
+    // its own words.
+    dropRoom(note || "the burrow restarted \\u2014 share again to link up.");
     claimedElsewhere = {};
     wavingNow = [];
     const playBtn = el("autoToggle");
@@ -2877,6 +2938,10 @@ function pageScript() {
     // animal it has and no empty pane. The npcs draw from what the panes left,
     // out of a roster grown to hold everyone, so no animal is ever both.
     const npcCount = chosenNpcCount();
+    // Read fresh, never cached at load: each burrow authors its own animals,
+    // so the roster belongs to the scenario rather than to the page.
+    roster = rosterOf(scenario());
+    rootRoom = rootRoomOf(scenario());
     cast = window.tmctMud.pickMudRoster(roster, { count: chosenPlayerCount() });
     const pool = window.tmctMud.expandMudRoster(roster, cast.length + npcCount)
       .filter(function (id) { return cast.indexOf(id) === -1; });
@@ -2885,7 +2950,7 @@ function pageScript() {
     showPlayerCount(cast.length);
     showNpcCount(npcs.length);
     renderStage();
-    const opened = await window.tmctMud.createMudSession(DATA.worldPayload, { characters: everyone() });
+    const opened = await window.tmctMud.createMudSession(scenario().worldPayload, { characters: everyone() });
     if (seq !== bootSeq) return;
     session = opened;
     for (let i = 0; i < cast.length; i += 1) slotOf[cast[i]] = slots[i];

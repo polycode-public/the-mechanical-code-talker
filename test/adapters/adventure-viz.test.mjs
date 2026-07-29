@@ -653,7 +653,7 @@ test("renderAdventureHtml: the room stage, sprite row and caption are present", 
 
 test("renderAdventureHtml: the world's own opening prose renders as a page note, escaped, right after the titlebar", () => {
   const html = renderAdventureHtml({ worldPayload: { ...WORLD_PAYLOAD, opening: 'a <script>alert(1)</script> opening line' } });
-  const noteMatch = html.match(/<\/div>\s*<p class="page-note">([\s\S]*?)<\/p>/);
+  const noteMatch = html.match(/<\/div>\s*<p class="page-note" id="pageNote">([\s\S]*?)<\/p>/);
   assert.ok(noteMatch, "a .page-note paragraph follows the titlebar");
   assert.ok(!noteMatch[1].includes("<script>"), "the opening text is escaped, never raw HTML");
   assert.match(html, /body\.preview[^{]*\.page-note \{ display: none; \}/, "the note is hidden in preview mode");
@@ -847,7 +847,72 @@ test("renderAdventureHtml: the world payload is embedded, not fetched separately
   const m = /const ADVENTURE = (.*);/.exec(html);
   assert.ok(m, "const ADVENTURE = ...; not found in the rendered page");
   const data = JSON.parse(m[1]);
-  assert.equal(data.world.name, "ashcombe-hall");
+  assert.equal(data.scenarios[0].worldPayload.name, "ashcombe-hall");
+});
+
+test("renderAdventureHtml: one world ships no scenario dropdown at all", () => {
+  const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
+  assert.doesNotMatch(html, /id="scenarioSelect"/, "nothing to pick between, so nothing to pick with");
+  assert.match(html, /"scenarios":\[\{/, "the one world still travels as a scenario, so the page has one code path");
+});
+
+test("renderAdventureHtml: several worlds ship a dropdown beside reset, opening on the first", () => {
+  const cottage = { ...WORLD_PAYLOAD, name: "lantern-cottage", opening: "the parlour of Lantern Cottage" };
+  const html = renderAdventureHtml({
+    worldPayload: WORLD_PAYLOAD,
+    scenarios: [
+      { label: "ashcombe hall (6 rooms, 1 lock)", worldPayload: WORLD_PAYLOAD },
+      { label: "lantern cottage (3 rooms, no locks)", worldPayload: cottage },
+    ],
+  });
+  assert.match(html, /id="scenarioSelect"/);
+  assert.ok(
+    html.indexOf('id="resetBtn"') < html.indexOf('id="scenarioSelect"'),
+    "the dropdown sits next to reset, after it",
+  );
+  assert.match(html, /<option value="0" selected>ashcombe hall \(6 rooms, 1 lock\)<\/option>/);
+  assert.match(html, /<option value="1">lantern cottage \(3 rooms, no locks\)<\/option>/);
+  assert.match(html, /"name":"lantern-cottage"/, "the alternate's whole world travels with the page");
+  assert.match(html, /class="page-note" id="pageNote"/, "the opening line has an id, so a switch can rewrite it");
+});
+
+test("renderAdventureHtml: picking a world reopens the session, the note and the saved progress over it", () => {
+  const html = renderAdventureHtml({
+    worldPayload: WORLD_PAYLOAD,
+    scenarios: [
+      { worldPayload: WORLD_PAYLOAD },
+      { worldPayload: { ...WORLD_PAYLOAD, name: "greyvale-museum" } },
+    ],
+  });
+  assert.match(html, /scenarioSelectEl\.addEventListener\("change"/);
+  assert.match(html, /worldIndex = picked;/);
+  assert.match(html, /createAdventureSession\(\s*world\(\),/, "the session opens over whichever world is picked");
+  assert.match(html, /pageNoteEl\.textContent = world\(\)\.opening/, "the opening line follows the world");
+  assert.match(
+    html,
+    /openPersistFor\(world\(\)\.name\)/,
+    "each world keeps its own saved progress, so no snapshot restores into another world's graph",
+  );
+});
+
+test("renderAdventureHtml: edit mode follows the world that is loaded, not the one the page shipped", () => {
+  const html = renderAdventureHtml({
+    worldPayload: WORLD_PAYLOAD,
+    scenarios: [
+      { worldPayload: WORLD_PAYLOAD },
+      { worldPayload: { ...WORLD_PAYLOAD, name: "greyvale-museum" } },
+    ],
+  });
+  assert.match(
+    html,
+    /const prefix = "world:" \+ world\(\)\.name;/,
+    "the editor's provenance filter reads the loaded world",
+  );
+  assert.match(
+    html,
+    /editRows = worldOnlyRows\(snap\.rows\)/,
+    "the editor seeds itself from the live session's own rows, so it can only ever show the loaded world",
+  );
 });
 
 test("renderAdventureHtml: the shared ticker is spliced in, not re-implemented", () => {

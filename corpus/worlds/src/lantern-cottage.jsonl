@@ -1,0 +1,60 @@
+{"world":"lantern-cottage","kind":"meta","opening":"the adventure begins. You are in the parlour of Lantern Cottage. Your grandmother's ring is somewhere in these three rooms, and she will tell you where if you find her. Say \"look\" to look around, \"go north\" (or south, east, west) to move, and \"stop playing\" to end the game."}
+{"world":"lantern-cottage","kind":"fact","subject":"player","predicate":"rdf:type","object":"adventurer"}
+{"world":"lantern-cottage","kind":"fact","subject":"parlour","predicate":"rdf:type","object":"room"}
+{"world":"lantern-cottage","kind":"fact","subject":"bedroom","predicate":"rdf:type","object":"room"}
+{"world":"lantern-cottage","kind":"fact","subject":"garden","predicate":"rdf:type","object":"room"}
+{"world":"lantern-cottage","kind":"fact","subject":"grandmother","predicate":"rdf:type","object":"person"}
+{"world":"lantern-cottage","kind":"fact","subject":"ring","predicate":"rdf:type","object":"portable"}
+{"world":"lantern-cottage","kind":"fact","subject":"lamp","predicate":"rdf:type","object":"portable"}
+{"world":"lantern-cottage","kind":"fact","subject":"flower","predicate":"rdf:type","object":"portable"}
+{"world":"lantern-cottage","kind":"fact","subject":"basket","predicate":"rdf:type","object":"furniture"}
+{"world":"lantern-cottage","kind":"fact","subject":"chair","predicate":"rdf:type","object":"furniture"}
+{"world":"lantern-cottage","kind":"fact","subject":"parlour","predicate":"mgx:has-exit-north","object":"bedroom"}
+{"world":"lantern-cottage","kind":"fact","subject":"bedroom","predicate":"mgx:has-exit-south","object":"parlour"}
+{"world":"lantern-cottage","kind":"fact","subject":"parlour","predicate":"mgx:has-exit-east","object":"garden"}
+{"world":"lantern-cottage","kind":"fact","subject":"garden","predicate":"mgx:has-exit-west","object":"parlour"}
+{"world":"lantern-cottage","kind":"fact","subject":"player","predicate":"mgx:currently-in","object":"parlour"}
+{"world":"lantern-cottage","kind":"fact","subject":"grandmother","predicate":"mgx:currently-in","object":"garden"}
+{"world":"lantern-cottage","kind":"fact","subject":"chair","predicate":"mgx:fixed-in","object":"parlour"}
+{"world":"lantern-cottage","kind":"fact","subject":"lamp","predicate":"mgx:located-in","object":"parlour"}
+{"world":"lantern-cottage","kind":"fact","subject":"flower","predicate":"mgx:located-in","object":"garden"}
+{"world":"lantern-cottage","kind":"fact","subject":"basket","predicate":"mgx:fixed-in","object":"bedroom"}
+{"world":"lantern-cottage","kind":"fact","subject":"basket","predicate":"mgx:is-container","object":"true"}
+{"world":"lantern-cottage","kind":"fact","subject":"ring","predicate":"mgx:hidden-in","object":"basket"}
+{"world":"lantern-cottage","kind":"fact","subject":"ring","predicate":"mgx:is-objective","object":"true"}
+{"world":"lantern-cottage","kind":"fact","subject":"grandmother","predicate":"mgx:is-npc","object":"true"}
+{"world":"lantern-cottage","kind":"fact","subject":"grandmother","predicate":"mgx:works-in","object":"garden"}
+{"world":"lantern-cottage","kind":"fact","subject":"grandmother","predicate":"mgx:knows-where","object":"ring"}
+{"world":"lantern-cottage","kind":"fact","subject":"grandmother","predicate":"mgx:knows-objective","object":"ring"}
+{"world":"lantern-cottage","kind":"fact","subject":"grandmother","predicate":"mgx:knows-about","object":"garden"}
+{"world":"lantern-cottage","kind":"fact","subject":"lantern cottage","predicate":"mgx:hasA","object":"3 rooms"}
+{"world":"lantern-cottage","kind":"fact","subject":"player","predicate":"mgx:hasA","object":"satchel"}
+{"world":"lantern-cottage","kind":"fact","subject":"satchel","predicate":"mgx:usedFor","object":"carrying what the player takes"}
+{"world":"lantern-cottage","kind":"fact","subject":"garden","predicate":"mgx:hasA","object":"row of lavender"}
+{"world":"lantern-cottage","kind":"fact","subject":"bedroom","predicate":"mgx:usedFor","object":"keeping what the cottage does not use every day"}
+{"world":"lantern-cottage","kind":"fact","subject":"room","predicate":"rdfs:subClassOf","object":"space"}
+{"world":"lantern-cottage","kind":"fact","subject":"outdoor-space","predicate":"rdfs:subClassOf","object":"space"}
+{"world":"lantern-cottage","kind":"fact","subject":"underground-space","predicate":"rdfs:subClassOf","object":"space"}
+{"world":"lantern-cottage","kind":"fact","subject":"garden","predicate":"rdf:type","object":"outdoor-space"}
+{"world":"lantern-cottage","kind":"fact","subject":"furniture","predicate":"mgx:default-plane","object":"floor"}
+{"world":"lantern-cottage","kind":"fact","subject":"portable","predicate":"mgx:default-plane","object":"floor"}
+{"world":"lantern-cottage","kind":"fact","subject":"lamp","predicate":"mgx:on-top-of","object":"chair"}
+{"world":"lantern-cottage","kind":"fact","subject":"book","predicate":"rdfs:subClassOf","object":"portable"}
+{"world":"lantern-cottage","kind":"fact","subject":"bedroom","predicate":"mgx:default-contains","object":"book"}
+{"world":"lantern-cottage","kind":"rule","name":"go","ruleKind":"action-signature","slots":{"subjectClass":"adventurer","targetClass":"room"}}
+{"world":"lantern-cottage","kind":"rule","name":"go","ruleKind":"action-signature","slots":{"subjectClass":"person","targetClass":"room"}}
+{"world":"lantern-cottage","kind":"rule","name":"go","ruleKind":"action-effect","slots":{"predicate":"currently-in","subjectRole":"subject","objectRole":"target"}}
+{"world":"lantern-cottage","kind":"rule","name":"take","ruleKind":"action-signature","slots":{"subjectClass":"portable","targetClass":"adventurer"}}
+{"world":"lantern-cottage","kind":"rule","name":"take","ruleKind":"action-effect","slots":{"predicate":"located-in","subjectRole":"subject","objectRole":"target"}}
+{"world":"lantern-cottage","kind":"rule","name":"drop","ruleKind":"action-signature","slots":{"subjectClass":"portable","targetClass":"room"}}
+{"world":"lantern-cottage","kind":"rule","name":"drop","ruleKind":"action-effect","slots":{"predicate":"located-in","subjectRole":"subject","objectRole":"target"}}
+{"world":"lantern-cottage","kind":"rule","name":"give","ruleKind":"action-signature","slots":{"subjectClass":"portable","targetClass":"person"}}
+{"world":"lantern-cottage","kind":"rule","name":"give","ruleKind":"action-effect","slots":{"predicate":"located-in","subjectRole":"subject","objectRole":"target"}}
+{"world":"lantern-cottage","kind":"rule","name":"open","ruleKind":"action-signature","slots":{"subjectClass":"adventurer","targetClass":"furniture"}}
+{"world":"lantern-cottage","kind":"rule","name":"open","ruleKind":"action-precond","slots":{"shape":"fact-value","predicate":"stands-locked-in","role":"target","scope":"any","negate":"true"}}
+{"world":"lantern-cottage","kind":"rule","name":"open","ruleKind":"action-precond","slots":{"shape":"fact-value","predicate":"is-open","role":"target","scope":"any","value":"true","negate":"true"}}
+{"world":"lantern-cottage","kind":"rule","name":"open","ruleKind":"action-effect","slots":{"predicate":"is-open","subjectRole":"target","value":"true"}}
+{"world":"lantern-cottage","kind":"rule","name":"unlock","ruleKind":"action-signature","slots":{"subjectClass":"adventurer","targetClass":"furniture"}}
+{"world":"lantern-cottage","kind":"rule","name":"close","ruleKind":"action-signature","slots":{"subjectClass":"adventurer","targetClass":"furniture"}}
+{"world":"lantern-cottage","kind":"rule","name":"close","ruleKind":"action-precond","slots":{"shape":"fact-value","predicate":"is-open","role":"target","scope":"any","value":"true"}}
+{"world":"lantern-cottage","kind":"rule","name":"close","ruleKind":"action-effect","slots":{"predicate":"is-open","subjectRole":"target","value":"false"}}

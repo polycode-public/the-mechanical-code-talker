@@ -92,8 +92,13 @@ test("--render adventure embeds the shipped world and boots from file://", async
   const embed = /const ADVENTURE = (.*);/.exec(html);
   assert.ok(embed, "the page data embed is present");
   const adventure = JSON.parse(embed[1]);
-  assert.ok(adventure.world.facts.length > 50, "the real world's facts travel with the page");
-  assert.ok(adventure.world.rules.length > 0, "the real world's rules travel with the page");
+  // The standalone export is the one-world case: one scenario, so the page
+  // ships no dropdown and stays a single downloadable file.
+  assert.equal(adventure.scenarios.length, 1, "the export carries exactly the world it was asked for");
+  assert.doesNotMatch(html, /id="scenarioSelect"/, "nothing to pick between, so nothing to pick with");
+  const world = adventure.scenarios[0].worldPayload;
+  assert.ok(world.facts.length > 50, "the real world's facts travel with the page");
+  assert.ok(world.rules.length > 0, "the real world's rules travel with the page");
 
   const { context, page, httpRequests, pageErrors } = await openFromFile(outPath);
   try {

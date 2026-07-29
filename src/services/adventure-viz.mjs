@@ -84,7 +84,7 @@
 // an edit implies run through the browser bundle's own `session.applyEdit`
 // (adventure-browser-entry.mjs), never here — this module only renders and
 // reads.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText, scenarioLabel } from "./viz-theme.mjs";
 import { createTicker } from "./viz-ticker.mjs";
 import { worldDigestRows, roomAffordances, foldWorldState } from "./adventure.mjs";
 import { exposedFacts } from "./adventure-autoplay.mjs";
@@ -565,12 +565,16 @@ export function roomCaptionText(rows, state, here) {
 export function renderAdventureHtml({
   title = DEFAULT_TITLE,
   worldPayload = { facts: [], rules: [], opening: "" },
+  scenarios = [],
   spriteTemplates = [],
   largeSpriteTemplates = [],
   engineBundleJs = "",
 } = {}) {
+  const scenarioList = scenarios.length
+    ? scenarios
+    : [{ label: scenarioLabel(worldPayload?.name), worldPayload }];
   const pageData = embedJson({
-    world: worldPayload,
+    scenarios: scenarioList,
     previewMaxTicks: PREVIEW_MAX_TICKS,
     tickWaitMs: TICK_WAIT_MS,
     spriteTemplates,
@@ -962,6 +966,9 @@ ${THEME_TOKENS_CSS}
   .controls-row button { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; padding: .38rem .85rem; border: 1px solid var(--gilt); background: var(--parchment); color: var(--ink); }
   .controls-row button:hover:not(:disabled) { background: var(--parchment-strong); }
   .controls-row button:disabled { opacity: .4; cursor: default; }
+  .controls-row select { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; padding: .38rem .85rem; border: 1px solid var(--gilt); background: var(--parchment); color: var(--ink); }
+  .controls-row select:hover:not(:disabled) { background: var(--parchment-strong); }
+  .controls-row select:disabled { opacity: .4; cursor: default; }
   .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .05em; text-transform: uppercase; color: var(--ink); background: var(--parchment); border: 1px solid var(--gilt); padding: .3rem .6rem; font-variant-numeric: tabular-nums; }
   .goal-line { font-family: ${MONO_STACK}; font-size: .78rem; color: var(--muted); margin-top: .5rem; }
   .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .3rem; }
@@ -1002,11 +1009,14 @@ ${THEME_TOKENS_CSS}
     <div class="eyebrow">tmct &middot; the adventure</div>
     <button id="editModeBtn" type="button" class="mode-toggle" disabled>edit the world</button>
   </div>
-  <p class="page-note">${escapeHtml(worldPayload.opening)}</p>
+  <p class="page-note" id="pageNote">${escapeHtml(scenarioList[0].worldPayload.opening || "")}</p>
   <div class="stage" id="playStage">
     <div class="stage-left">
       <div class="controls-row" id="playControls">
         <button id="resetBtn" type="button" disabled>reset</button>
+${scenarioList.length > 1 ? `        <select id="scenarioSelect" aria-label="which world to play" disabled>
+${scenarioList.map((s, i) => `          <option value="${i}"${i === 0 ? " selected" : ""}>${escapeHtml(s.label || scenarioLabel(s.worldPayload?.name))}</option>`).join("\n")}
+        </select>` : ""}
         <button id="playBtn" type="button" disabled>&#9654; play</button>
         <button id="stepBtn" type="button" disabled>step</button>
         <span class="turn mono" id="turnLabel">turn: 0</span>
@@ -1178,6 +1188,15 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const roomDetailSpritesEl = el("roomDetailSprites");
   const roomDetailCaptionEl = el("roomDetailCaption");
   const legendListEl = el("legendList");
+  const scenarioSelectEl = el("scenarioSelect");
+  const pageNoteEl = el("pageNote");
+
+  // Which of the shipped worlds is loaded. Every read of the world — the
+  // session it is opened over, its opening line, the provenance prefix edit
+  // mode filters on, the key its progress is saved under — goes through this
+  // one index, so picking another world needs no second copy of any of them.
+  let worldIndex = 0;
+  const world = () => ADVENTURE.scenarios[worldIndex].worldPayload;
 
   const params = new URLSearchParams(location.search);
   const preview = params.get("preview") === "1";
@@ -1682,7 +1701,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // diff + write; this page only ever reads its result back.
 
   function worldOnlyRows(rows) {
-    const prefix = "world:" + ADVENTURE.world.name;
+    const prefix = "world:" + world().name;
     return (rows || []).filter((r) => typeof r.provenance === "string" && r.provenance.indexOf(prefix) === 0);
   }
 
@@ -1831,7 +1850,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   async function boot({ fresh = false } = {}) {
     const saved = !fresh && persist ? await persist.load() : null;
     session = await tmctAdventure.createAdventureSession(
-      ADVENTURE.world,
+      world(),
       saved && saved.payload && saved.payload.memoryPayload
         ? { restoredPayload: saved.payload.memoryPayload, restoredVisitedRoomIds: saved.payload.visitedRoomIds }
         : {},
@@ -1842,12 +1861,14 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     goalLineEl.textContent = "";
     chatlogEl.innerHTML = "";
     statusEl.textContent = "";
-    addChatLine("t", esc(ADVENTURE.world.opening || "the adventure begins."));
+    if (pageNoteEl) pageNoteEl.textContent = world().opening || "";
+    addChatLine("t", esc(world().opening || "the adventure begins."));
     if (saved && snap.turn > 0) {
       addChatLine("t", "resumed where you left off (turn " + snap.turn + ") \\u2014 progress kept best-effort on this device; reset starts the manor over.");
     }
     chatqEl.disabled = false;
     resetBtn.disabled = false; playBtn.disabled = false; stepBtn.disabled = false; editModeBtn.disabled = false;
+    if (scenarioSelectEl) scenarioSelectEl.disabled = false;
   }
 
   const ticker = createTicker({
@@ -1882,11 +1903,34 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   stepBtn.addEventListener("click", () => ticker.stepOnce());
   resetBtn.addEventListener("click", () => ticker.reset());
 
+  // Each world keeps its own saved progress, so the stamp carries the world's
+  // name and a switch opens the store belonging to the world being switched
+  // to. Without that, one world's snapshot would restore into another's graph.
+  let siteVersion = "";
+  async function openPersistFor(worldName) {
+    if (preview || !tmctAdventure.openPersistedStore) return;
+    if (!siteVersion) siteVersion = await fetchSiteVersion();
+    persist = tmctAdventure.openPersistedStore({ storeKey: "adventure", stamp: siteVersion + ":" + worldName });
+  }
+
+  if (scenarioSelectEl) {
+    scenarioSelectEl.addEventListener("change", () => withLock(async () => {
+      const picked = Number(scenarioSelectEl.value);
+      if (!ADVENTURE.scenarios[picked] || picked === worldIndex) return;
+      ticker.pause();
+      // The pending save belongs to the world being left, and it is about to
+      // be written under the world being opened. Cancel it rather than let it
+      // land in the wrong store.
+      clearTimeout(persistSaveTimer);
+      persistSaveTimer = null;
+      worldIndex = picked;
+      await openPersistFor(world().name);
+      await boot();
+    }));
+  }
+
   (async () => {
-    if (!preview && tmctAdventure.openPersistedStore) {
-      const siteVersion = await fetchSiteVersion();
-      persist = tmctAdventure.openPersistedStore({ storeKey: "adventure", stamp: siteVersion + ":" + ADVENTURE.world.name });
-    }
+    await openPersistFor(world().name);
     await boot();
     if (preview) ticker.play();
   })();
