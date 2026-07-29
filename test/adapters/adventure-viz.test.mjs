@@ -178,6 +178,30 @@ test("carriedItems: an empty inventory is a plain empty array, never a fabricate
   assert.deepEqual(carriedItems(ROWS, state), []);
 });
 
+test("carriedItems: actingSubject is a real parameter, not a name baked into the function — a differently-named character's own inventory reads correctly, and 'player' carries nothing under that identity", () => {
+  const carried = [
+    ...ROWS,
+    { subject: "mole-1", predicate: "rdf:type", object: "adventurer" },
+    { subject: "lamp@turn1", predicate: "mgx:located-in", object: "mole-1" },
+  ];
+  const state = foldWorldState(carried);
+  assert.deepEqual(carriedItems(carried, state, "mole-1"), [{ subject: "lamp", spriteClass: "portable" }]);
+  assert.deepEqual(carriedItems(carried, state, "player"), [], "the default identity carries nothing here — the item belongs to mole-1");
+});
+
+test("roomSceneObjects/visibleRoomOf: actingSubject excludes and resolves against the real viewer, not the literal string \"player\"", () => {
+  const rows = [
+    { subject: "burrow", predicate: "rdf:type", object: "room" },
+    { subject: "mole-1", predicate: "rdf:type", object: "adventurer" },
+    { subject: "mole-1", predicate: "mgx:currently-in", object: "burrow" },
+    { subject: "acorn", predicate: "rdf:type", object: "portable" },
+    { subject: "acorn", predicate: "mgx:located-in", object: "mole-1" },
+  ];
+  const state = foldWorldState(rows);
+  assert.deepEqual(roomSceneObjects(rows, state, "burrow", "mole-1"), [], "mole-1 is the viewer here, so it draws itself separately and is excluded, same as the default player exclusion");
+  assert.equal(visibleRoomOf(rows, state, "acorn", "mole-1"), null, "carried by the real viewer, so it has no room, the same null a carried-by-player object gets under the default");
+});
+
 // ---- scenePlacement -----------------------------------------------------------
 
 test("scenePlacement: a current mgx:on-top-of row resolves to the surface plane, stacked on its own target", () => {
@@ -365,6 +389,18 @@ test("visitedRoomGraph: the current room is flagged, from the player's own place
   const graph = visitedRoomGraph(state, ["study", "library"]);
   assert.equal(graph.nodes.find((n) => n.id === "library").current, true);
   assert.equal(graph.nodes.find((n) => n.id === "study").current, false);
+});
+
+test("visitedRoomGraph: actingSubject reads the current room off the real viewer's own placement, not a literal \"player\"", () => {
+  const rows = [
+    ...MAP_ROWS,
+    { subject: "mole-1", predicate: "rdf:type", object: "adventurer" },
+    { subject: "mole-1", predicate: "mgx:currently-in", object: "study" },
+  ];
+  const state = foldWorldState(rows);
+  const graph = visitedRoomGraph(state, ["study", "library"], "mole-1");
+  assert.equal(graph.nodes.find((n) => n.id === "study").current, true, "mole-1 stands in the study, so that node is flagged current under its own identity");
+  assert.equal(graph.nodes.find((n) => n.id === "library").current, false);
 });
 
 test("visitedRoomGraph: an edge only exists between two rooms BOTH already visited", () => {
@@ -878,7 +914,7 @@ test("renderAdventureHtml: the editor's textarea is seeded through renderWorldEd
 test("renderAdventureHtml: the whole map reuses visitedRoomGraph fed allRoomIds — a parameter, not a second layout", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
   assert.match(html, /const allRoomIds = /);
-  assert.match(html, /visitedRoomGraph\(state, allRoomIds\(rows\)\)/);
+  assert.match(html, /visitedRoomGraph\(state, allRoomIds\(rows\), ACTING_SUBJECT\)/);
 });
 
 test("renderAdventureHtml: edit-mode writes reach the store through session.applyEdit, never a direct memory write from this page", () => {
