@@ -1466,7 +1466,7 @@ function pageScript() {
     for (const action of result.actions || []) {
       if (action.kind !== "ask" && action.kind !== "talk") continue;
       const other = action.teller || action.target || action.object;
-      noteSpeech(result.room, character, { text: "what food do you know about?" });
+      if (action.text) noteSpeech(result.room, character, { text: action.text });
       if (other && action.thing) noteSpeech(result.room, other, { thing: action.thing });
       else if (other && action.text) noteSpeech(result.room, other, { text: action.text });
     }

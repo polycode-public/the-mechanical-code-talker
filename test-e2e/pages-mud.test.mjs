@@ -243,6 +243,39 @@ test("the deck's play control starts both panes, and the shared turn counter adv
   }
 });
 
+test("a talking character's own speech bubble carries the engine's real narration, never a fixed line", async () => {
+  const { context, page, consoleErrors, failedRequests } = await openMudPage();
+  try {
+    await page.locator("#autoToggle").click();
+    const selfBubble = await page.waitForFunction(
+      () => {
+        for (const slot of ["a", "b"]) {
+          const bubble = document.querySelector(`#window-${slot}-bubbles .bubble.from-self`);
+          if (bubble && bubble.textContent) return { slot, text: bubble.textContent };
+        }
+        return null;
+      },
+      null,
+      { timeout: ANSWER_TIMEOUT_MS },
+    ).then((handle) => handle.jsonValue());
+    await page.locator("#autoToggle").click();
+
+    assert.notEqual(
+      selfBubble.text, "what food do you know about?",
+      "the asker's own bubble is never the old fixed placeholder line",
+    );
+    assert.match(
+      selfBubble.text, /\bthe \S+ (asks|greets) the \S+\b/,
+      "the asker's own bubble is the engine's real narration of the exchange, matching the teller's own",
+    );
+
+    assert.deepEqual(failedRequests, [], "every same-origin request the page makes resolves");
+    assert.deepEqual(consoleErrors, [], "no console error rendering a talking character's own speech bubble");
+  } finally {
+    await context.close();
+  }
+});
+
 test("the compass ring offers only ways the world allows, and a dig opens a new room on the survey", async () => {
   const { context, page, consoleErrors, failedRequests } = await openMudPage();
   try {
