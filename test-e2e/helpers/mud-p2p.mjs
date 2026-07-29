@@ -23,7 +23,12 @@ export const READY_TIMEOUT_MS = 30_000;
 export const HANDSHAKE_TIMEOUT_MS = 60_000;
 export const ANSWER_TIMEOUT_MS = 30_000;
 export const TEST_TIMEOUT_MS = 300_000;
-const RECAST_TRIES = 24;
+// The narrowest draw a scenario here waits on is one named animal out of the
+// burrow's four, so one boot in four. Twenty-four trips misses that about once
+// in a thousand runs; sixty-four misses it under once in ten million. A boot
+// costs about 60ms and a run stops as soon as it draws what it needs, so the
+// extra headroom is only ever spent by a run that was going to fail anyway.
+const RECAST_TRIES = 64;
 
 export const launchP2pBrowser = () =>
   chromium.launch({ args: ["--disable-features=WebRtcHideLocalIpsWithMdns"] });
@@ -79,16 +84,30 @@ export async function castOneAnimal(page) {
   return characterOf(page);
 }
 
-/** Recast until this page's own animal satisfies `wanted`. The draw is random
- *  by design, so the page's own redraw control is the honest way to reach a
- *  named pair rather than reaching into the engine. */
+/** Recast until this page's whole draw suits the scenario. `wanted` gets the
+ *  animal in the pane and every animal the page holds, because a page claims
+ *  all of them when it shares, so where the npc landed decides what is left
+ *  over for the pages that come after. A scenario that only cares about the
+ *  pane can ignore the second argument. The draw is random by design, so the
+ *  page's own redraw control is the way to reach a named cast rather than
+ *  reaching into the engine.
+ *
+ *  A run that never finds its cast reports what it drew instead. The failure
+ *  worth telling apart is a scenario asking for more distinct animals than the
+ *  roster can spare, and the draws are what show it. */
 export async function recastUntil(page, wanted) {
+  const drawn = [];
   for (let attempt = 0; attempt < RECAST_TRIES; attempt += 1) {
-    if (wanted(await characterOf(page))) return characterOf(page);
+    const character = await characterOf(page);
+    const held = await animalsIn(page);
+    if (wanted(character, held)) return character;
+    drawn.push(`${character} with ${held.join("+")}`);
     await page.locator("#resetBtn").click();
     await waitForCast(page, 1);
   }
-  throw new Error("the cast never drew an animal this scenario could use");
+  throw new Error(
+    `${RECAST_TRIES} resets never drew a cast this scenario could use; drew ${drawn.join(", ")}`,
+  );
 }
 
 /** Put this page's own animal in the garden through the world editor, so every

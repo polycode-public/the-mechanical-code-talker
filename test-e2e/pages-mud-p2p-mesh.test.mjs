@@ -80,7 +80,19 @@ test(
 
       second = await openMudPage({ browser, origin: server.origin });
       await castOneAnimal(second.page);
-      const secondAnimal = await recastUntil(second.page, (drawn) => drawn && !firstDrives.includes(drawn));
+      // Two conditions, and the second is what makes the third page possible.
+      // Every page holds two animals, the one in its pane and the npc drawn
+      // beside it, and claims both when it shares. The burrow's roster has
+      // four. Three pages cannot each hold two animals nobody else holds, so
+      // the second page redraws until its npc lands on one the first page
+      // already holds. That keeps the fourth animal free for the third page.
+      // Without it, half of all draws leave the third page nothing to play,
+      // and no number of its own resets can reach one.
+      const secondAnimal = await recastUntil(
+        second.page,
+        (drawn, held) => drawn && !firstDrives.includes(drawn)
+          && held.every((animal) => animal === drawn || firstDrives.includes(animal)),
+      );
       const secondDrives = await animalsIn(second.page);
       await standInTheGarden(second.page, secondAnimal);
 
@@ -93,6 +105,10 @@ test(
       const thirdAnimal = await recastUntil(
         third.page,
         (drawn) => drawn && !firstDrives.includes(drawn) && !secondDrives.includes(drawn),
+      );
+      assert.equal(
+        new Set([firstAnimal, secondAnimal, thirdAnimal]).size, 3,
+        "each page plays an animal of its own, which is what the recasts above are for",
       );
       await standInTheGarden(third.page, thirdAnimal);
 

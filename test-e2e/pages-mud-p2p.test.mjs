@@ -28,7 +28,13 @@ const READY_TIMEOUT_MS = 30_000;
 const HANDSHAKE_TIMEOUT_MS = 60_000;
 const ANSWER_TIMEOUT_MS = 30_000;
 const TEST_TIMEOUT_MS = 240_000;
-const RECAST_TRIES = 24;
+// The narrowest draw here is the claim-conflict test's, which waits for one
+// named animal out of the burrow's four, so one boot in four. Twenty-four trips
+// misses that about once in a thousand runs; sixty-four misses it under once in
+// ten million. A boot costs about 60ms and a run stops as soon as it draws what
+// it needs, so the extra headroom is only ever spent by a run heading for a
+// failure anyway.
+const RECAST_TRIES = 64;
 
 let siteDir;
 let server;
