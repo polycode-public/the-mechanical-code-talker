@@ -265,42 +265,48 @@ ${THEME_TOKENS_CSS}
   @media (prefers-color-scheme: dark) { :root { --fly: #D9A94B; } }
   :root[data-theme="dark"] { --fly: #D9A94B; }
   :root[data-theme="light"] { --fly: #A6791F; }
-  /* The dashboard chrome (Part C.4.2): a beveled control-panel palette
-     WRAPPING the dusty-window board scene above, never touching it — every
-     rule below this block styles .side/.controls-row/.tuning/.status only,
-     all of which are hidden in ?preview=1 mode alongside .side itself, so
-     none of this bleeds into the embedded home-page hero. --chrome-face is
-     the panel's own warm plastic face; --chrome-edge-hi/-lo are its raised-
-     bevel light/shadow edges; --chrome-brass is the console's metal accent
-     (borders, active/hover states); --chrome-well/-well-ink are the dark
-     "LCD" readout a real panel's numeric window would use, deliberately
-     near-black in both themes (a lit readout reads dark-with-a-glow whether
-     the room around it is light or dark). --chrome-shadow-raised/-inset
-     compose the two bevel directions once so every panel/button/well below
-     just references one of them, never re-deriving the edge colors. */
+  /* The console chrome, in this page's own gothic-whimsical register (a
+     Charles Addams cartoon: india-ink line work over aged paper, spooky-cute
+     rather than scary) WRAPPING the window-corner board scene above, never
+     touching it — every rule below this block styles
+     .side/.controls-row/.tuning/.status only, all of which are hidden in
+     ?preview=1 mode alongside .side itself, so none of this bleeds into the
+     embedded home-page hero. --chrome-face is the panel's aged-ivory (night
+     slate in dark) face, textured by --chrome-hatch, a two-direction ink
+     cross-hatch; --chrome-edge-hi/-lo are its raised-bevel light/shadow
+     edges; --chrome-accent is the ink-plum accent (borders, active/hover
+     states); --chrome-well/-well-ink are the near-black readout well with
+     bone-pale numerals, deliberately dark in both themes (a lit readout
+     reads dark-with-a-glow whether the room around it is light or dark).
+     --chrome-shadow-raised/-inset compose the two bevel directions once so
+     every panel/button/well below just references one of them. */
   :root {
-    --chrome-face: #DCD3B8; --chrome-face-hi: #EFE8CC; --chrome-edge-hi: #FBF7E6; --chrome-edge-lo: #8B7F5C;
-    --chrome-brass: #8A6A26; --chrome-brass-soft: rgba(138, 106, 38, .16);
-    --chrome-well: #201A10; --chrome-well-ink: #E8C876;
+    --chrome-face: #E7E1D3; --chrome-face-hi: #F2EDE0; --chrome-edge-hi: #FAF6EA; --chrome-edge-lo: #6E6A5E;
+    --chrome-accent: #5C4B66; --chrome-accent-soft: rgba(92, 75, 102, .14);
+    --chrome-well: #1A171C; --chrome-well-ink: #E4DDCB;
+    --chrome-hatch: repeating-linear-gradient(55deg, rgba(28, 23, 32, .05) 0 1px, transparent 1px 6px), repeating-linear-gradient(-35deg, rgba(28, 23, 32, .04) 0 1px, transparent 1px 9px);
     --chrome-shadow-raised: inset 0 1px 0 var(--chrome-edge-hi), inset 0 -1px 0 var(--chrome-edge-lo), 0 1px 2px rgba(0, 0, 0, .18);
     --chrome-shadow-inset: inset 0 1px 3px var(--chrome-edge-lo), inset 0 -1px 0 var(--chrome-edge-hi);
   }
   @media (prefers-color-scheme: dark) {
-    :root { --chrome-face: #2B2E23; --chrome-face-hi: #363A29; --chrome-edge-hi: #4C5138; --chrome-edge-lo: #14150D;
-      --chrome-brass: #D3AE5C; --chrome-brass-soft: rgba(211, 174, 92, .16);
-      --chrome-well: #0B0904; --chrome-well-ink: #F0D392; }
+    :root { --chrome-face: #262230; --chrome-face-hi: #302B3D; --chrome-edge-hi: #453E57; --chrome-edge-lo: #121016;
+      --chrome-accent: #A995BD; --chrome-accent-soft: rgba(169, 149, 189, .16);
+      --chrome-well: #0C0A10; --chrome-well-ink: #E0D8C6;
+      --chrome-hatch: repeating-linear-gradient(55deg, rgba(240, 235, 220, .04) 0 1px, transparent 1px 6px), repeating-linear-gradient(-35deg, rgba(240, 235, 220, .03) 0 1px, transparent 1px 9px); }
   }
-  :root[data-theme="dark"] { --chrome-face: #2B2E23; --chrome-face-hi: #363A29; --chrome-edge-hi: #4C5138; --chrome-edge-lo: #14150D;
-    --chrome-brass: #D3AE5C; --chrome-brass-soft: rgba(211, 174, 92, .16);
-    --chrome-well: #0B0904; --chrome-well-ink: #F0D392; }
-  :root[data-theme="light"] { --chrome-face: #DCD3B8; --chrome-face-hi: #EFE8CC; --chrome-edge-hi: #FBF7E6; --chrome-edge-lo: #8B7F5C;
-    --chrome-brass: #8A6A26; --chrome-brass-soft: rgba(138, 106, 38, .16);
-    --chrome-well: #201A10; --chrome-well-ink: #E8C876; }
+  :root[data-theme="dark"] { --chrome-face: #262230; --chrome-face-hi: #302B3D; --chrome-edge-hi: #453E57; --chrome-edge-lo: #121016;
+    --chrome-accent: #A995BD; --chrome-accent-soft: rgba(169, 149, 189, .16);
+    --chrome-well: #0C0A10; --chrome-well-ink: #E0D8C6;
+    --chrome-hatch: repeating-linear-gradient(55deg, rgba(240, 235, 220, .04) 0 1px, transparent 1px 6px), repeating-linear-gradient(-35deg, rgba(240, 235, 220, .03) 0 1px, transparent 1px 9px); }
+  :root[data-theme="light"] { --chrome-face: #E7E1D3; --chrome-face-hi: #F2EDE0; --chrome-edge-hi: #FAF6EA; --chrome-edge-lo: #6E6A5E;
+    --chrome-accent: #5C4B66; --chrome-accent-soft: rgba(92, 75, 102, .14);
+    --chrome-well: #1A171C; --chrome-well-ink: #E4DDCB;
+    --chrome-hatch: repeating-linear-gradient(55deg, rgba(28, 23, 32, .05) 0 1px, transparent 1px 6px), repeating-linear-gradient(-35deg, rgba(28, 23, 32, .04) 0 1px, transparent 1px 9px); }
   html { background: var(--bg); }
   body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
   main { max-width: 1120px; margin: 0 auto; padding: 1.4rem 1.2rem 2.2rem; }
-  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--chrome-brass); }
+  .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--chrome-accent); }
   h1 { font-size: 1.4rem; margin: .3rem 0 .9rem; text-wrap: balance; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; }
   button:focus-visible, input:focus-visible, .sprite:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -310,7 +316,7 @@ ${THEME_TOKENS_CSS}
      needing to sum to a full width. */
   .stage { display: grid; grid-template-columns: minmax(0, 8fr) minmax(280px, 3fr); gap: 1.2rem; align-items: start; }
   @media (max-width: 760px) { .stage { grid-template-columns: minmax(0, 1fr); } }
-  /* A dusty window corner: a soft light glow near the top-left (WEB_HOME
+  /* A moonlit window corner: a cool pale glow near the top-left (WEB_HOME
      already sits near that corner — spider-fly-world.mjs's own header
      comment), and a faint diagonal weave standing in for dust/silk caught
      in the light. Decoration only — the 10x10 game grid itself is drawn by
@@ -319,20 +325,26 @@ ${THEME_TOKENS_CSS}
     margin: 0 auto;
     position: relative; width: ${BOARD_PX}px; max-width: 100%; aspect-ratio: 1 / 1;
     background:
-      radial-gradient(140% 140% at 6% 6%, rgba(255, 241, 199, .55), transparent 52%),
-      repeating-linear-gradient(115deg, rgba(120, 110, 90, .06) 0 1px, transparent 1px 30px),
+      radial-gradient(140% 140% at 6% 6%, rgba(224, 224, 240, .55), transparent 52%),
+      repeating-linear-gradient(115deg, rgba(100, 95, 110, .06) 0 1px, transparent 1px 30px),
       var(--card);
     border: 1px solid var(--line);
     box-shadow: inset 0 0 0 6px var(--bg), inset 0 0 0 7px var(--line);
   }
-  @media (prefers-color-scheme: dark) { .board-frame { background: radial-gradient(140% 140% at 6% 6%, rgba(130, 112, 60, .32), transparent 52%), repeating-linear-gradient(115deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 30px), var(--card); } }
-  :root[data-theme="dark"] .board-frame { background: radial-gradient(140% 140% at 6% 6%, rgba(130, 112, 60, .32), transparent 52%), repeating-linear-gradient(115deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 30px), var(--card); }
+  @media (prefers-color-scheme: dark) { .board-frame { background: radial-gradient(140% 140% at 6% 6%, rgba(126, 120, 158, .30), transparent 52%), repeating-linear-gradient(115deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 30px), var(--card); } }
+  :root[data-theme="dark"] .board-frame { background: radial-gradient(140% 140% at 6% 6%, rgba(126, 120, 158, .30), transparent 52%), repeating-linear-gradient(115deg, rgba(255, 255, 255, .045) 0 1px, transparent 1px 30px), var(--card); }
   .board-frame canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+  /* The cobweb in the window corner — pure decoration over the moonlit
+     glow (never a game element; the ACTIVE web block is still drawn by
+     drawBoard() on the canvas). It sits under the sprite layer so agents
+     always pass in front of it. */
+  .cobweb { position: absolute; top: 7px; left: 7px; width: 36%; height: 36%; color: var(--ink); opacity: .26; pointer-events: none; }
+  .cobweb svg { width: 100%; height: 100%; display: block; }
   .sprite-layer { position: absolute; inset: 0; }
   .sprite { position: absolute; width: 7.6%; height: 7.6%; transform: translate(-50%, -50%); transition: left .25s ease, top .25s ease; }
   @media (prefers-reduced-motion: reduce) { .sprite, .sprite-face { transition: none !important; } }
   .sprite-face { width: 100%; height: 100%; transition: transform .25s ease; }
-  .sprite-face svg { width: 100%; height: 100%; display: block; }
+  .sprite-face svg { width: 100%; height: 100%; display: block; filter: var(--sprite-pop); }
   .sprite[data-cls="spider"] { color: var(--taught); }
   .sprite[data-cls="fly"] { color: var(--fly); }
   .sprite[data-cls="egg"] { color: var(--muted); }
@@ -350,7 +362,7 @@ ${THEME_TOKENS_CSS}
      nameplate header below bleeds to this same panel's own edges via a
      negative margin equal to this padding, so it reads as one welded unit,
      not a label floating inside a box. */
-  .hud, .chat, .tuning { background: var(--chrome-face); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-raised); border-radius: 2px; padding: .6rem .75rem; }
+  .hud, .chat, .tuning { background: var(--chrome-hatch), var(--chrome-face); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-raised); border-radius: 2px; padding: .6rem .75rem; }
   /* Both the controls strip above the board and the tuning strip below it
      match the board's own width (not the wider stage-left column they sit
      in), so all three line up as one visual stack. */
@@ -380,12 +392,12 @@ ${THEME_TOKENS_CSS}
   .hud-row { display: flex; align-items: flex-start; gap: .6rem; padding: .4rem 0; border-top: 1px solid var(--chrome-edge-lo); box-shadow: inset 0 1px 0 var(--chrome-edge-hi); }
   .hud-row:first-of-type { border-top: none; box-shadow: none; }
   .hud-row.clickable { cursor: pointer; }
-  .hud-row.clickable:hover, .hud-row.clickable:focus-visible { background: var(--chrome-brass-soft); }
+  .hud-row.clickable:hover, .hud-row.clickable:focus-visible { background: var(--chrome-accent-soft); }
   .hud-main { display: flex; flex-direction: column; gap: .1rem; flex: 1 1 auto; min-width: 0; }
   .hud-id { font-family: ${MONO_STACK}; font-size: .74rem; font-weight: 600; }
   .hud-id.spider { color: var(--taught); } .hud-id.fly { color: var(--fly); } .hud-id.egg { color: var(--muted); }
   .hud-goal { font-size: .85rem; }
-  .hud-plan, .hud-belief { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); margin-top: .25rem; line-height: 1.4; padding-left: .5rem; border-left: 2px solid var(--chrome-brass); }
+  .hud-plan, .hud-belief { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); margin-top: .25rem; line-height: 1.4; padding-left: .5rem; border-left: 2px solid var(--chrome-accent); }
   /* the click-expand facts panel (§28): beside the clicked spider/fly's own
      row, never a separate popover or a second panel elsewhere on the page —
      the same believedCellOf/beliefSnapshotFor read path spider-fly.mjs
@@ -417,7 +429,7 @@ ${THEME_TOKENS_CSS}
   .chatask input:disabled { opacity: .5; }
   .chatpills { display: flex; flex-wrap: wrap; gap: .3rem; margin-top: .5rem; }
   .pill { font-family: ${MONO_STACK}; font-size: .68rem; padding: .2rem .6rem; border: 1px solid var(--chrome-edge-lo); border-radius: 99px; background: var(--chrome-face); color: var(--ink); box-shadow: inset 0 1px 0 var(--chrome-edge-hi); white-space: nowrap; }
-  .pill:hover:not(:disabled) { border-color: var(--chrome-brass); }
+  .pill:hover:not(:disabled) { border-color: var(--chrome-accent); }
   .pill:disabled { opacity: .45; cursor: default; }
   .pill[data-role="addr"].active { border-color: var(--taught); color: var(--taught); }
   /* The dynamic deception-pill rail (§A.2.4): a true/false tag shown ONLY
@@ -437,7 +449,7 @@ ${THEME_TOKENS_CSS}
   .tuning-col.spider h3 { color: var(--taught); } .tuning-col.fly h3 { color: var(--fly); }
   .tuning-col label { display: block; font-size: .68rem; color: var(--muted); margin-bottom: .6rem; }
   /* Every live number on this page (this readout, the turn plaque below)
-     shares the same brass-on-well "LED" treatment — one readout language,
+     shares the same bone-on-ink readout treatment — one readout language,
      not a one-off flourish. */
   .tuning-col .tuning-val { font-family: ${MONO_STACK}; font-variant-numeric: tabular-nums; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-edge-lo); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: 0 .35rem; float: right; }
   .tuning-col input[type="range"] {
@@ -446,7 +458,7 @@ ${THEME_TOKENS_CSS}
     -webkit-appearance: none; appearance: none;
   }
   .tuning-col.fly input[type="range"] { accent-color: var(--fly); }
-  /* A lever-look thumb (a molded brass-edged cap) — appearance: none above
+  /* A lever-look thumb (a molded, ink-edged cap) — appearance: none above
      drops the OS's own native slider look in browsers that honor it;
      accent-color just above is the fallback for any that don't. */
   .tuning-col input[type="range"]::-webkit-slider-thumb {
@@ -469,14 +481,14 @@ ${THEME_TOKENS_CSS}
      control panel", and it costs nothing under reduced-motion since neither
      state involves a transition, just an instant bevel swap. */
   .controls-row button { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .03em; text-transform: uppercase; padding: .4rem .85rem; border-radius: 2px; border: 1px solid var(--chrome-edge-lo); background: var(--chrome-face); box-shadow: var(--chrome-shadow-raised); color: var(--ink); }
-  .controls-row button:hover:not(:disabled) { border-color: var(--chrome-brass); }
+  .controls-row button:hover:not(:disabled) { border-color: var(--chrome-accent); }
   .controls-row button:active:not(:disabled) { box-shadow: var(--chrome-shadow-inset); }
   .controls-row button:disabled { opacity: .4; cursor: default; box-shadow: none; }
-  /* The signature element: a brass-framed digital turn counter, the same
+  /* The turn counter plaque: an accent-framed readout, the same
      inset-well readout language as every stat above it — the one thing this
      page is remembered by. */
-  .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .82rem; letter-spacing: .05em; text-transform: uppercase; font-variant-numeric: tabular-nums; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-brass); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: .3rem .7rem; }
-  .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .5rem; padding-left: .5rem; border-left: 2px solid var(--chrome-brass); }
+  .controls-row .turn { margin-left: auto; font-family: ${MONO_STACK}; font-size: .82rem; letter-spacing: .05em; text-transform: uppercase; font-variant-numeric: tabular-nums; color: var(--chrome-well-ink); background: var(--chrome-well); border: 1px solid var(--chrome-accent); box-shadow: var(--chrome-shadow-inset); border-radius: 2px; padding: .3rem .7rem; }
+  .status { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--muted); margin-top: .5rem; padding-left: .5rem; border-left: 2px solid var(--chrome-accent); }
   body.preview .side, body.preview .controls-panel, body.preview .tuning { display: none; }
   body.preview main { padding: 0; max-width: none; }
   body.preview .stage, body.preview .stage-left { display: block; }
@@ -507,11 +519,23 @@ ${THEME_TOKENS_CSS}
     <div class="board-frame" id="boardFrame">
       <canvas id="board" width="${BOARD_PX}" height="${BOARD_PX}" aria-label="the 10x10 board"></canvas>
       <canvas id="pov" width="${BOARD_PX}" height="${BOARD_PX}" aria-hidden="true"></canvas>
+      <div class="cobweb" aria-hidden="true"><svg viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-linecap="round">
+        <g stroke-width="0.7">
+          <path d="M0 0 L73.8 5.2"/><path d="M0 0 L68.6 27.7"/><path d="M0 0 L52.3 52.3"/><path d="M0 0 L27.7 68.6"/><path d="M0 0 L5.2 73.8"/>
+        </g>
+        <g stroke-width="0.55">
+          <path d="M20 1.4 Q16.8 3.9 18.5 7.5 Q14.3 9.5 14.1 14.1 Q9.5 14.3 7.5 18.5 Q3.9 16.8 1.4 20"/>
+          <path d="M33.9 2.4 Q28.4 6.6 31.5 12.7 Q24.4 16.1 24 24 Q16.1 24.4 12.7 31.5 Q6.6 28.4 2.4 33.9"/>
+          <path d="M49.9 3.5 Q41.9 9.7 46.4 18.7 Q35.9 23.7 35.4 35.4 Q23.7 35.9 18.7 46.4 Q9.7 41.9 3.5 49.9"/>
+          <path d="M67.8 4.8 Q57 13.2 63 25.5 Q48.8 32.3 48.1 48.1 Q32.3 48.8 25.5 63 Q13.2 57 4.8 67.8"/>
+        </g>
+        <path d="M48.1 48.1 Q49.5 54 48.6 59.5" stroke-width="0.5"/>
+      </svg></div>
       <div class="sprite-layer" id="spriteLayer"></div>
       <div class="thread-tip" id="threadTip"></div>
     </div>
     <div class="tuning" id="tuning">
-      <h2>live tuning &mdash; mass loss, spawn rate, vision, per class</h2>
+      <h2>live tuning &middot; mass loss, spawn rate, vision, per class</h2>
       <div class="tuning-grid">
         <div class="tuning-col spider">
           <h3>spider</h3>

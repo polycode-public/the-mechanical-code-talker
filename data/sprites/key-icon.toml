@@ -1,6 +1,7 @@
 # key — Ashcombe Hall's own key (hidden in the portrait, unlocks the
 # cabinet): a classic round-bow skeleton key, bold strokes so it stays
-# legible at a 44px render.
+# legible at a 44px render, plus a thin specular arc tracing the bow's own
+# upper-left curve so the ring reads as metal rather than a flat ring.
 classes = ["key"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -8,5 +9,6 @@ svg = """
   <path d="M10.4 12 L19.5 21.1" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
   <path d="M16.4 17.1 L18.6 14.9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
   <path d="M18.6 19.3 L20.6 17.3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+  <path d="M5 6.6 A4.4 4.4 0 0 1 8.6 4.8" fill="none" stroke="color-mix(in srgb, currentColor 25%, white)" stroke-width="1" stroke-linecap="round"/>
 </svg>
 """

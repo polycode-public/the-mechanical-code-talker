@@ -83,8 +83,8 @@ export function renderIngestHtml({ title = DEFAULT_TITLE } = {}) {
   The wink lemma/POS tier loads from ./vendor/wink.js — the site's own shared
   first-party bundle (built by scripts/build-wink-vendor.mjs), one cached copy
   for every page, no CDN. The ingest engine needs wink to split sentences and
-  to parse each teach frame; a failed load degrades to the honest "nothing
-  recognized" answer, never an error.
+  to parse each teach frame. A failed load still answers "nothing
+  recognized" instead of erroring.
 -->
 <style>
 ${THEME_TOKENS_CSS}
@@ -140,7 +140,7 @@ ${THEME_TOKENS_CSS}
   #facts .fact .pred { color: var(--corpus); white-space: nowrap; }
   #facts .fact .obj { color: var(--ink); word-break: break-word; }
   #facts .fact .prov { grid-column: 1 / -1; color: var(--muted); font-size: .66rem; }
-  #facts .empty { color: var(--muted); padding: .5rem 0; }
+  #facts .empty { color: var(--muted); text-align: center; max-width: 24rem; line-height: 1.6; margin: 3rem auto 0; }
 
   .actions { flex: 0 0 auto; display: flex; align-items: center; gap: .6rem; padding: .6rem 1.1rem; border-top: 1px solid var(--line); flex-wrap: wrap; }
   .actions .btn { font-family: ${MONO_STACK}; font-size: .74rem; color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .35rem .9rem; background: var(--card); }
@@ -153,7 +153,7 @@ ${THEME_TOKENS_CSS}
      the same class names and breakpoint chat-page-viz.mjs's own docked panel
      uses, re-rendered after boot and after every ingest from
      window.tmctIngest's own memoryStats(). */
-  .statsPanel { flex: 0 0 300px; max-width: 300px; overflow-y: auto; border-left: 1px solid var(--line); padding: 1.1rem 1.2rem 1.6rem; font-family: ${MONO_STACK}; font-size: .74rem; line-height: 1.55; }
+  .statsPanel { flex: 0 0 300px; max-width: 300px; overflow-y: auto; border-left: 1px solid var(--line); padding: 1.1rem 1.2rem 1.6rem; font-family: ${MONO_STACK}; font-size: .74rem; line-height: 1.55; display: flex; flex-direction: column; }
   .statsPanel h2 { font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 1.3rem 0 .5rem; }
   .statsPanel h2:first-child { margin-top: 0; }
   .statsPanel .band-row { display: flex; justify-content: space-between; gap: .6rem; margin: 0; padding: .12rem 0; }
@@ -161,9 +161,12 @@ ${THEME_TOKENS_CSS}
   .statsPanel .taught-item { margin: 0 0 .7rem; }
   .statsPanel .taught-tag { display: block; color: var(--muted); font-size: .66rem; margin-top: .15rem; word-break: break-word; }
   .statsPanel .empty { color: var(--muted); margin: 0; }
-  .statsPanel .forget-btn { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .18rem .55rem; margin-top: 1.1rem; background: var(--card); }
+  /* The reset action anchors to the bottom of the rail via the auto margin —
+     on a tall viewport with little taught yet, that reads as a pinned
+     footer control instead of leaving a trailing gap under it. */
+  .statsPanel .forget-btn { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .18rem .55rem; margin-top: auto; background: var(--card); flex: none; }
   .statsPanel .forget-btn:hover { color: var(--ink); }
-  .statsPanel .persist-note { color: var(--muted); font-size: .64rem; margin: .4rem 0 0; }
+  .statsPanel .persist-note { color: var(--muted); font-size: .64rem; margin: .4rem 0 0; flex: none; }
 
   @media (max-width: 860px) {
     .statsPanel { display: none; }
@@ -179,7 +182,7 @@ ${THEME_TOKENS_CSS}
     <header class="topbar">
       <div class="brand">
         <span class="eyebrow">the-mechanical-code-talker</span>
-        <span class="subtitle">ingest &mdash; paste or drop text; it keeps only the facts it can ground, and skips the rest honestly</span>
+        <span class="subtitle">ingest &mdash; paste or drop text. It keeps the facts it can ground and skips the rest.</span>
       </div>
       <div class="pills" role="group" aria-label="Input mode">
         <button type="button" id="modeText" aria-pressed="true">Text</button>
@@ -187,11 +190,11 @@ ${THEME_TOKENS_CSS}
       </div>
     </header>
     <div class="optionsRow" id="optionsRow">
-      <label class="optionToggle" title="Loads chat.html's own starter memory (persona, ConceptNet, WordNet and the rest) before ingesting, so a taught fact can link into what it already knows. Off keeps the previous empty-store fast path.">
+      <label class="optionToggle" title="Loads chat.html's own starter memory (persona, ConceptNet, WordNet and the rest) before ingesting, so a taught fact can link into what it already knows. Off starts from an empty store, which loads faster.">
         <input type="checkbox" id="seedToggle" checked>
         seed with general knowledge
       </label>
-      <label class="optionToggle" title="On a miss, also tries a copula or known relation verb flanked by two resolvable entities as a low-trust candidate fact, tagged optimistic-extract — below every curated source, and never able to corroborate one.">
+      <label class="optionToggle" title="On a miss, also tries a copula or a known relation verb between two resolvable entities, tagged optimistic-extract. It ranks below every curated source and can never corroborate one.">
         <input type="checkbox" id="fuzzyToggle">
         fuzzy tier (low-trust candidates)
       </label>
@@ -373,7 +376,7 @@ ${THEME_TOKENS_CSS}
     }
     renderStatsPanelInto(statsPanelEl, stats, {
       bandLabel: bandLabelFor,
-      taughtHint: "nothing yet \\u2014 ingest some text and its grounded facts land here, with their source.",
+      taughtHint: "nothing yet. Ingest some text and its grounded facts land here, with their source.",
       onForget: persist ? forgetEverything : null,
       persistNote: "taught facts are kept best-effort on this device (IndexedDB), never sent anywhere.",
     });
@@ -488,7 +491,7 @@ ${THEME_TOKENS_CSS}
     clearFactsPane();
     updateIngestEnabled();
     const stats = await window.tmctIngest.memoryStats(session.memoryDir);
-    statusEl.textContent = "forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats, bandLabelFor) + ").";
+    statusEl.textContent = "forgot everything taught on this device. Back to the fresh seed (" + statsSummaryLine(stats, bandLabelFor) + ").";
     await renderStatsPanel(stats);
   }
 
@@ -506,7 +509,7 @@ ${THEME_TOKENS_CSS}
     session = newSession();
     clearFactsPane();
     const stats = await window.tmctIngest.memoryStats(session.memoryDir);
-    statusEl.textContent = statsSummaryLine(stats, bandLabelFor) + " \\u2014 ready.";
+    statusEl.textContent = statsSummaryLine(stats, bandLabelFor) + ". Ready.";
     await renderStatsPanel(stats);
     updateIngestEnabled();
     sourceEl.focus();
@@ -514,7 +517,7 @@ ${THEME_TOKENS_CSS}
 
   async function boot() {
     if (!window.tmctIngest) {
-      statusEl.textContent = "the ingest engine didn't load \\u2014 this page needs its build step (npm run demo:build)";
+      statusEl.textContent = "the ingest engine didn't load. This page needs its build step (npm run demo:build)";
       return;
     }
     seedToggleEl.checked = readSeedPref();
@@ -536,9 +539,9 @@ ${THEME_TOKENS_CSS}
     const stats = await window.tmctIngest.memoryStats(session.memoryDir);
     const winkPart = winkStatus === "loaded"
       ? "wink-nlp: loaded"
-      : "wink-nlp unavailable \\u2014 the recognizer can't split sentences without it";
+      : "wink-nlp unavailable. The recognizer can't split sentences without it";
     statusEl.textContent = statsSummaryLine(stats, bandLabelFor) + " \\u00b7 " + winkPart
-      + (savedRecord ? " \\u2014 restored from your last visit." : " \\u2014 paste or drop text, then ingest.");
+      + (savedRecord ? ". Restored from your last visit." : ". Paste or drop text, then ingest.");
     await renderStatsPanel(stats);
     sourceEl.focus();
   }
@@ -562,7 +565,7 @@ ${THEME_TOKENS_CSS}
       });
       statusEl.textContent = summary.sentences + " sentence" + (summary.sentences === 1 ? "" : "s")
         + " read, " + summary.recognized + " grounded, " + summary.skipped + " skipped"
-        + (summary.skipped ? " (not a recognized fact shape \\u2014 honest, expected)" : "");
+        + (summary.skipped ? " (not a recognized fact shape, as expected)" : "");
       if (!summary.recognized) {
         const empty = factsEl.querySelector(".empty");
         if (!empty) {

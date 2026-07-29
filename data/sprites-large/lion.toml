@@ -1,8 +1,7 @@
-# lion — the menagerie's own big cat at the sprite tier: the dog/
-# animal body shape with a radiating spike mane rather than rounded
-# curls (a curl cluster reads as a poodle's own coat at this scale, a
-# sunburst of triangular tufts reads as a mane), the tier's usual
-# gradient/highlight, no material.
+# lion — a sunburst of triangular mane tufts fixed to a shade darker than
+# the coat (a lion's mane reads dimmer than its body regardless of the
+# individual's own coat tone, from pale straw to near-black), the dog/
+# animal body shape underneath it, four legs and a tail tuft.
 classes = ["lion"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -14,7 +13,13 @@ svg = """
     </linearGradient>
   </defs>
   <ellipse cx="13.4" cy="15.6" rx="6.4" ry="4.4" fill="url(#lion-fill)"/>
-  <g fill="url(#lion-fill)" opacity="0.9">
+  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <line x1="9" y1="19.2" x2="9" y2="22"/>
+    <line x1="11.8" y1="19.8" x2="11.8" y2="22"/>
+    <line x1="15" y1="19.8" x2="15" y2="22"/>
+    <line x1="17.8" y1="19.2" x2="17.8" y2="22"/>
+  </g>
+  <g fill="color-mix(in srgb, currentColor 55%, black)">
     <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z"/>
     <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(40 7.6 8)"/>
     <path d="M6.8 4.2 L7.6 0.6 L8.4 4.2 Z" transform="rotate(80 7.6 8)"/>
@@ -29,11 +34,8 @@ svg = """
   <path d="M5.2 5.4 L4.6 3.4 L6.6 4.8 Z" fill="url(#lion-fill)"/>
   <path d="M10 5.4 L10.6 3.4 L8.6 4.8 Z" fill="url(#lion-fill)"/>
   <ellipse cx="6.4" cy="7" rx="1" ry="1.3" fill="#000000" opacity="0.22"/>
+  <path d="M6.8 9.1 L7.8 9.1 L7.3 9.8 Z" fill="#1c1c1c"/>
   <path d="M6.6 9.6 C7.2 10.2 8 10.2 8.6 9.6" stroke="#000000" stroke-width="0.5" opacity="0.4" fill="none" stroke-linecap="round"/>
-  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-    <line x1="9.4" y1="19.4" x2="9.4" y2="22"/>
-    <line x1="17.4" y1="19.4" x2="17.4" y2="22"/>
-  </g>
   <path d="M19.4 13.6 C22.4 13 23.4 15.8 21 17 C20 16.4 19.2 15.2 19 13.9 Z" fill="url(#lion-fill)"/>
   <ellipse cx="10" cy="12.8" rx="2.6" ry="1.4" fill="#ffffff" opacity="0.26"/>
   <ellipse cx="6" cy="6.4" rx="1.1" ry="0.8" fill="#ffffff" opacity="0.3"/>

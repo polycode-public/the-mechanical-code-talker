@@ -15,13 +15,41 @@
 // doesn't do: it reads the checked-in chat-dock engine bundle.
 
 import { loadMemory, readFactRows, findContradictions, normFactTerm } from "../adapters/memory/core.mjs";
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml, embedJson } from "./viz-theme.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const LEDGER_ROW_LIMIT_DEFAULT = 20000;
+
+// The ledger reads as an observability dashboard (dense stat tiles, bar
+// panels, a log-style fact stream) rather than an editorial page, so its
+// chrome runs the system sans everywhere instead of THEME_TOKENS_CSS's
+// serif body face; MONO_STACK still carries every metric, label, and log row.
+const DASH_SANS_STACK = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+
+// This page pins a dark, New-Relic-style dashboard register in BOTH site
+// themes — a deliberate departure from THEME_TOKENS_CSS's light/dark switch,
+// which every other generated page still follows. --taught/--corpus/--entail/
+// --alert stay the shared semantic provenance tokens; here they're pinned to
+// their dark-theme-friendly values (viz-theme.mjs's own dark token table) so
+// the palette that ships in dark mode elsewhere is what this page always
+// shows. viz-theme.mjs exports only the assembled THEME_TOKENS_CSS string,
+// not its per-mode token table, so the dark set is restated here from that
+// table rather than recomputed.
+const DASH_DARK_CHROME_CSS = `
+  :root { color-scheme: dark; }
+  body {
+    --bg: #15181C; --ink: #E7E5DF; --muted: #9A9E95; --line: #2B3036; --card: #1C2126;
+    --taught: #5FBE8B; --corpus: #6C93BF; --entail: #D9A554; --alert: #D08070;
+    --taught-t1: rgba(95,190,139,.35); --taught-t2: rgba(95,190,139,.65); --taught-t3: rgba(95,190,139,1);
+    --corpus-t1: rgba(108,147,191,.35); --corpus-t2: rgba(108,147,191,.65); --corpus-t3: rgba(108,147,191,1);
+    --entail-t1: rgba(217,165,84,.35); --entail-t2: rgba(217,165,84,.65); --entail-t3: rgba(217,165,84,1);
+    --taught-soft: rgba(95,190,139,.14); --corpus-soft: rgba(108,147,191,.14);
+    --entail-soft: rgba(217,165,84,.16); --alert-soft: rgba(208,128,112,.16);
+  }
+`;
 
 /** Read the checked-in browser memory-ask-engine bundle
  *  (`src/surfaces/web/memory-ask-browser.bundle.js`) — the real memory-graph answer engine
@@ -407,7 +435,7 @@ function dashboardHtml(stats, { fresh = false } = {}) {
   const total = s.totalFacts || 0;
   const freshCls = fresh ? " fresh" : "";
   if (!total) {
-    return `<section class="dash${freshCls}" id="dash" aria-label="Ledger metrics"><div class="tile"><span class="tile-label">facts.total</span><span class="tile-value">0</span><span class="tile-sub">nothing taught yet</span></div></section>`;
+    return `<section class="dash${freshCls}" id="dash" aria-label="Ledger metrics"><div class="kpirow"><div class="tile"><span class="tile-label">facts.total</span><span class="tile-value">0</span><span class="tile-sub">nothing taught yet</span></div></div></section>`;
   }
   const terms = s.totalTerms || 0;
   const qualityCls = s.contradictionCount > 0 ? " tile-alert" : "";
@@ -415,33 +443,42 @@ function dashboardHtml(stats, { fresh = false } = {}) {
   const predicatesHtml = s.predicates?.length
     ? microbarsHtml(s.predicates.map((p) => ({ label: p.phrase || p.predicate, count: p.count })))
     : `<span class="tile-sub">none yet</span>`;
+  // Two explicit-column grids — a 4-up KPI row, then a 2-up row of bar-chart
+  // tiles — instead of one auto-fill grid: auto-fill's column count depends
+  // on viewport width, so a wide-tile mid-row wrap used to strand empty
+  // tracks on the right of both rows. Both stay `.tile` (the dashboard-strip
+  // e2e test counts six of them under `.dash`, whatever their sub-grid).
   return `<section class="dash${freshCls}" id="dash" aria-label="Ledger metrics">
-    <div class="tile">
-      <span class="tile-label">facts.total</span>
-      <span class="tile-value">${total}</span>
-      <span class="tile-sub">${terms} term${terms === 1 ? "" : "s"} tracked</span>
+    <div class="kpirow">
+      <div class="tile">
+        <span class="tile-label">facts.total</span>
+        <span class="tile-value">${total}</span>
+        <span class="tile-sub">${terms} term${terms === 1 ? "" : "s"} tracked</span>
+      </div>
+      <div class="tile tile-tier">
+        <span class="tile-label">facts.by-tier</span>
+        ${tierTileHtml(s.byProv || {}, total)}
+      </div>
+      <div class="tile">
+        <span class="tile-label">graph.avg-degree</span>
+        <span class="tile-value">${(s.density || 0).toFixed(1)}</span>
+        <span class="tile-sub">facts per term</span>
+      </div>
+      <div class="tile${qualityCls}">
+        <span class="tile-label">data.quality</span>
+        <span class="tile-value">${s.contradictionCount || 0}</span>
+        <span class="tile-sub">term${s.contradictionCount === 1 ? "" : "s"} with more than one answer</span>
+      </div>
     </div>
-    <div class="tile tile-wide">
-      <span class="tile-label">facts.by-tier</span>
-      ${tierTileHtml(s.byProv || {}, total)}
-    </div>
-    <div class="tile">
-      <span class="tile-label">graph.avg-degree</span>
-      <span class="tile-value">${(s.density || 0).toFixed(1)}</span>
-      <span class="tile-sub">facts per term</span>
-    </div>
-    <div class="tile${qualityCls}">
-      <span class="tile-label">data.quality</span>
-      <span class="tile-value">${s.contradictionCount || 0}</span>
-      <span class="tile-sub">term${s.contradictionCount === 1 ? "" : "s"} with more than one answer</span>
-    </div>
-    <div class="tile tile-wide">
-      <span class="tile-label">corpus.bundles</span>
-      <div class="bundlebars">${bundlesHtml}</div>
-    </div>
-    <div class="tile tile-wide">
-      <span class="tile-label">predicate.top</span>
-      <div class="bundlebars">${predicatesHtml}</div>
+    <div class="barpanels">
+      <div class="tile tile-bars">
+        <span class="tile-label">corpus.bundles</span>
+        <div class="bundlebars">${bundlesHtml}</div>
+      </div>
+      <div class="tile tile-bars">
+        <span class="tile-label">predicate.top</span>
+        <div class="bundlebars">${predicatesHtml}</div>
+      </div>
     </div>
   </section>`;
 }
@@ -534,7 +571,7 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
           <button type="button" id="ingestToggle" class="dockbtn">ingest text&hellip;</button>
           <button type="button" id="exportFacts" class="dockbtn">export facts</button>
         </div>
-        <div class="researchrow" title="Fetches the topic from Simple English Wikipedia into this graph, then queues the topics its lead section links to — each queued topic runs as its own dock turn, paced politely. Asking is the network consent for these fetches.">
+        <div class="researchrow" title="Fetches the topic from Simple English Wikipedia into this graph, then queues the topics its lead section links to. Each queued topic runs as its own dock turn, paced politely. Asking is the network consent for these fetches.">
           <label for="researchTopic" class="mono">research:</label>
           <input id="researchTopic" type="text" autocomplete="off" spellcheck="false"
             placeholder="a topic, e.g. owls" aria-label="Topic to research on Simple English Wikipedia">
@@ -544,7 +581,7 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
         </div>
         <div class="ingestpanel" id="ingestPanel" hidden>
           <textarea id="ingestText" spellcheck="false" aria-label="Text to ingest into the graph"
-            placeholder="Paste text or drop a .txt/.md file. Each sentence it recognizes as a fact is added to the graph; the rest are skipped honestly."></textarea>
+            placeholder="Paste text or drop a .txt/.md file. Each sentence it recognizes as a fact is added to the graph. The rest are skipped."></textarea>
           <div class="ingestrow">
             <button type="button" class="dockbtn" id="ingestBrowse">browse&hellip;</button>
             <input type="file" id="ingestFile" accept=".txt,.md,text/plain,text/markdown" hidden>
@@ -562,7 +599,7 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
         </form>
         ${ingestHtml}
       </div>`
-    : `<div class="chat chat-off"><p class="chatnote">chat unavailable — run <span class="mono">npm run build:ask-bundle</span> to enable the in-page ask engine.</p></div>`;
+    : `<div class="chat chat-off"><p class="chatnote">Chat unavailable. Run <span class="mono">npm run build:ask-bundle</span> to enable the in-page ask engine.</p></div>`;
 
   return `<!doctype html>
 <html lang="en">
@@ -587,46 +624,52 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
 -->
 <style>
 ${THEME_TOKENS_CSS}
+${DASH_DARK_CHROME_CSS}
   html { background: var(--bg); }
-  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${DASH_SANS_STACK}; font-size: 15px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
-  main { max-width: 1080px; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
+  main { max-width: 1200px; margin: 0 auto; padding: 1.4rem 1.2rem 3rem; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); display: flex; flex-wrap: wrap; gap: .4em 1.2em; margin-bottom: .9rem; }
   button { font: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
-  button:focus-visible, input:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; border-radius: 4px; }
-  .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); padding: .5rem 0; margin-bottom: 1.1rem; }
+  button:focus-visible, input:focus-visible { outline: 2px solid var(--corpus); outline-offset: 2px; border-radius: 4px; }
+  .topbar { display: flex; flex-wrap: wrap; align-items: center; gap: .8rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .7rem; margin-bottom: 1.1rem; }
   .crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: .35rem; font-size: .78rem; }
   .crumbs .sep { color: var(--muted); }
-  .crumb { font-family: ${MONO_STACK}; font-size: .74rem; padding: .12rem .5rem; border: 1px solid var(--line); border-radius: 99px; background: var(--card); }
+  .crumb { font-family: ${MONO_STACK}; font-size: .74rem; padding: .12rem .5rem; border: 1px solid var(--line); border-radius: 99px; background: var(--bg); }
   .crumb[aria-current="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
   .search { margin-left: auto; display: flex; align-items: center; gap: .5rem; }
-  .search input { font-family: ${MONO_STACK}; font-size: .78rem; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .6rem; width: 170px; }
+  .search input { font-family: ${MONO_STACK}; font-size: .78rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .3rem .6rem; width: 170px; }
   .search .miss { font-size: .72rem; color: var(--alert); font-family: ${MONO_STACK}; }
-  .dash { display: grid; grid-template-columns: repeat(auto-fill, minmax(148px, 1fr)); gap: .6rem; margin: 0 0 1.1rem; }
-  .tile { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .55rem .7rem .6rem; display: flex; flex-direction: column; gap: .15rem; min-width: 0; }
-  .tile-wide { grid-column: span 2; }
-  .tile-alert { border-color: var(--alert); }
+  /* Two explicit-column grids instead of one auto-fill grid: a 4-up KPI row,
+     then a 2-up row of bar-chart tiles, so both rows fill the container's
+     full width at any viewport rather than stranding a leftover track. */
+  .dash { display: flex; flex-direction: column; gap: .6rem; margin: 0 0 1.1rem; }
+  .kpirow { display: grid; grid-template-columns: repeat(4, 1fr); gap: .6rem; }
+  .barpanels { display: grid; grid-template-columns: repeat(2, 1fr); gap: .6rem; }
+  @media (max-width: 700px) { .kpirow { grid-template-columns: repeat(2, 1fr); } .barpanels { grid-template-columns: 1fr; } }
+  .tile { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 6px; padding: .6rem .75rem .65rem; display: flex; flex-direction: column; gap: .18rem; min-width: 0; }
+  .tile-alert { border-left-color: var(--alert); }
   .tile-label { font-family: ${MONO_STACK}; font-size: .62rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); }
-  .tile-value { font-family: ${MONO_STACK}; font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
+  .tile-value { font-family: ${MONO_STACK}; font-size: 1.6rem; font-weight: 600; font-variant-numeric: tabular-nums; line-height: 1.15; }
   .tile-alert .tile-value { color: var(--alert); }
   .tile-sub { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
-  .tierbar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: var(--line); margin-top: .3rem; }
+  .tierbar { display: flex; height: 8px; border-radius: 99px; overflow: hidden; background: var(--line); margin-top: .35rem; }
   .tseg { height: 100%; }
   .tseg.t-taught { background: var(--taught); } .tseg.t-corpus { background: var(--corpus); } .tseg.t-entail { background: var(--entail); }
   .tierlegend { display: flex; flex-wrap: wrap; gap: .15rem .7rem; margin-top: .35rem; font-family: ${MONO_STACK}; font-size: .65rem; }
   .tleg.t-taught { color: var(--taught); } .tleg.t-corpus { color: var(--corpus); } .tleg.t-entail { color: var(--entail); }
-  .bundlebars { display: flex; flex-direction: column; gap: .22rem; margin-top: .35rem; }
-  .bbar { display: grid; grid-template-columns: minmax(0,1fr) 3.4rem 1.6rem; align-items: center; gap: .4rem; font-family: ${MONO_STACK}; font-size: .68rem; }
+  .bundlebars { display: flex; flex-direction: column; gap: .26rem; margin-top: .4rem; }
+  .bbar { display: grid; grid-template-columns: minmax(0,1fr) 3.4rem 1.6rem; align-items: center; gap: .4rem; font-family: ${MONO_STACK}; font-size: .7rem; }
   .bblabel { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .bbtrack { background: var(--line); border-radius: 99px; height: 5px; overflow: hidden; }
-  .bbfill { display: block; height: 100%; background: var(--ink); opacity: .55; border-radius: 99px; }
+  .bbfill { display: block; height: 100%; background: var(--ink); opacity: .6; border-radius: 99px; }
   .bbn { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
   .sparkwrap { margin-top: .5rem; }
   .spark { display: block; width: 100%; height: 44px; }
   .spark .fill { fill: var(--muted); opacity: .18; stroke: none; }
   .spark .line { fill: none; stroke: var(--ink); stroke-width: 1.4; }
   .spark .dot { fill: var(--ink); }
-  .app { display: grid; grid-template-columns: 190px minmax(0,1fr) 230px; gap: 1.3rem; grid-template-areas: "rail ledger aside"; }
+  .app { display: grid; grid-template-columns: 190px minmax(0,1fr) 240px; gap: 1.1rem; grid-template-areas: "rail ledger aside"; align-items: start; }
   .rail { grid-area: rail; } .ledger { grid-area: ledger; } .aside { grid-area: aside; }
   @media (max-width: 880px) { .app { grid-template-columns: 1fr; grid-template-areas: "ledger" "aside" "rail"; } .search { margin-left: 0; } }
   .rail h2, .aside h2 { font-family: ${MONO_STACK}; font-size: .66rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 1rem 0 .4rem; }
@@ -641,7 +684,7 @@ ${THEME_TOKENS_CSS}
   .seg.on.neutral { background: var(--ink); color: var(--bg); } .seg.on.neutral .n { color: var(--bg); }
   .seg.on.c-taught { background: var(--taught); } .seg.on.c-corpus { background: var(--corpus); } .seg.on.c-entail { background: var(--entail); }
   .d-taught { background: var(--taught); } .d-corpus { background: var(--corpus); } .d-entail { background: var(--entail); }
-  .focuscard { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .8rem 1rem; margin-bottom: 1rem; }
+  .focuscard { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .85rem 1rem; margin-bottom: 1rem; }
   .focuscard .term { font-size: 1.35rem; font-weight: 700; }
   .focuscard .klass, .focuscard .stats { font-family: ${MONO_STACK}; font-size: .72rem; color: var(--muted); margin-top: .3rem; font-variant-numeric: tabular-nums; }
   .focuscard .focusdigest { margin-top: .7rem; font-size: .92rem; line-height: 1.5; }
@@ -656,8 +699,13 @@ ${THEME_TOKENS_CSS}
   .group { margin: 1.1rem 0; }
   .group h3 { font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 400; margin: 0 0 .35rem; display: flex; align-items: baseline; gap: .5rem; }
   .group h3::after { content: ""; flex: 1; border-top: 1px solid var(--line); transform: translateY(-.2em); }
-  .rows { display: flex; flex-direction: column; gap: .35rem; }
-  .row { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: 0 8px 8px 0; padding: .45rem .75rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .5rem; font-size: .95rem; }
+  /* The fact stream reads as a dense query-result log: full-width rows, a
+     hairline between each, a provenance-colored left rail, no per-row card
+     chrome. */
+  .rows { display: flex; flex-direction: column; }
+  .row { background: transparent; border: none; border-left: 3px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 0; padding: .42rem .7rem; display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem .5rem; font-family: ${MONO_STACK}; font-size: .82rem; }
+  .rows .row:last-child { border-bottom: none; }
+  .row:hover { background: var(--line); }
   .row.p-taught.t3 { border-left-color: var(--taught-t3); } .row.p-taught.t2 { border-left-color: var(--taught-t2); } .row.p-taught.t1 { border-left-color: var(--taught-t1); }
   .row.p-corpus.t3 { border-left-color: var(--corpus-t3); } .row.p-corpus.t2 { border-left-color: var(--corpus-t2); } .row.p-corpus.t1 { border-left-color: var(--corpus-t1); }
   .row.p-entail.t3 { border-left-color: var(--entail-t3); } .row.p-entail.t2 { border-left-color: var(--entail-t2); } .row.p-entail.t1 { border-left-color: var(--entail-t1); }
@@ -668,18 +716,18 @@ ${THEME_TOKENS_CSS}
   .prov.p-taught { color: var(--taught); background: var(--taught-soft); }
   .prov.p-corpus { color: var(--corpus); background: var(--corpus-soft); }
   .prov.p-entail { color: var(--entail); background: var(--entail-soft); }
-  .contra { border: 1px solid var(--alert); border-radius: 10px; padding: .5rem; margin-top: .35rem; }
+  .contra { border: 1px solid var(--alert); border-radius: 6px; padding: .5rem; margin-top: .35rem; }
   .contra .label { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--alert); margin: 0 0 .35rem .2rem; }
-  .empty { color: var(--muted); font-size: .9rem; border: 1px dashed var(--line); border-radius: 8px; padding: .8rem 1rem; }
+  .empty { color: var(--muted); font-size: .88rem; border: 1px dashed var(--line); border-radius: 6px; padding: .8rem 1rem; }
   .looks { display: flex; flex-direction: column; gap: .45rem; }
-  .look { display: block; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .5rem .65rem; font-size: .8rem; width: 100%; }
+  .look { display: block; text-align: left; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .65rem; font-size: .8rem; width: 100%; }
   .look:hover { border-color: var(--ink); }
   .look .tag { display: block; font-family: ${MONO_STACK}; font-size: .62rem; letter-spacing: .06em; text-transform: uppercase; margin-bottom: .18rem; }
   .look.k-taught .tag { color: var(--taught); } .look.k-alert .tag { color: var(--alert); } .look.k-hub .tag { color: var(--corpus); }
-  .mapwrap { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .45rem; margin-top: .45rem; }
+  .mapwrap { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .45rem; margin-top: .45rem; }
   .mapwrap canvas { display: block; width: 100%; height: 160px; cursor: pointer; }
   .mapnote { font-family: ${MONO_STACK}; font-size: .62rem; color: var(--muted); margin: .3rem .2rem 0; }
-  .chat { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .65rem .85rem; margin-bottom: 1rem; }
+  .chat { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .65rem .85rem; margin-bottom: 1rem; }
   .chatlog { display: flex; flex-direction: column; gap: .45rem; max-height: 220px; overflow-y: auto; }
   .chatlog:empty { display: none; }
   .chatlog .u { font-family: ${MONO_STACK}; font-size: .76rem; color: var(--muted); }
@@ -712,6 +760,7 @@ ${THEME_TOKENS_CSS}
   .ingeststatus { font-size: .68rem; color: var(--muted); }
   @media (prefers-reduced-motion: no-preference) {
     .seg, .chip, .look { transition: border-color .12s ease, background-color .12s ease; }
+    .row { transition: background-color .1s ease; }
     /* A live teach re-render swaps the dash section wholesale (dashboardHtml
        is called again in full — see the inline script below), so the "this
        just changed" signal has to be an animation on the fresh markup itself,
@@ -934,7 +983,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       for (const [, grp] of groupsHere) {
         if (grp.length < 2) continue;
         grp.forEach((r) => bracketed.add(r.id));
-        inner += '<div class="contra"><p class="label">more than one answer on record &mdash; shown, never merged</p><div class="rows">' + grp.map(rowHtml).join("") + "</div></div>";
+        inner += '<div class="contra"><p class="label">more than one answer on record, shown, not merged</p><div class="rows">' + grp.map(rowHtml).join("") + "</div></div>";
       }
       html += '<div class="group"><h3>' + esc(FAM_LABEL[fam]) + '</h3><div class="rows">' + inner + "</div></div>";
     }
@@ -952,7 +1001,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       looks.push({ cls: "k-taught", tag: "newest teach", target: w.newestTaught.term, body: r ? esc(r.s + " " + r.phrase + " " + r.o) : esc(w.newestTaught.term) });
     }
     if (w.contradictions && w.contradictions.count) {
-      looks.push({ cls: "k-alert", tag: w.contradictions.count + " with more than one answer", target: w.contradictions.firstFocusTerm, body: '<span class="mono">' + esc(w.contradictions.firstFocusTerm) + "</span> has answers that differ &mdash; read both" });
+      looks.push({ cls: "k-alert", tag: w.contradictions.count + " with more than one answer", target: w.contradictions.firstFocusTerm, body: '<span class="mono">' + esc(w.contradictions.firstFocusTerm) + "</span> has answers that differ. Read both." });
     }
     if (w.biggestHub) {
       looks.push({ cls: "k-hub", tag: "biggest hub", target: w.biggestHub.term, body: '<span class="mono">' + esc(w.biggestHub.term) + "</span> touches " + w.biggestHub.degree + " facts" });

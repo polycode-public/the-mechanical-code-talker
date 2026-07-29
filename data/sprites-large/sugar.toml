@@ -1,7 +1,9 @@
-# sugar — three overlapping pale lobes read as a heaped, granular mound
-# where the pack's first draft (one plain dome) read as a hill; a small
-# cube keeps a dimpled grid line rather than a diagonal ribbon stripe, so
-# it reads as a sugar cube rather than a wrapped gift.
+# sugar — a tied sack rather than salt.toml's rigid shaker, so the two
+# white-powder classes read apart at icon size: a gathered neck with a
+# tie line instead of a perforated cap, and scattered granule flecks
+# across the body instead of shaker holes. A small cube beside the sack
+# keeps its own dimpled grid line rather than a diagonal ribbon stripe,
+# so it reads as a sugar cube rather than a wrapped gift.
 classes = ["sugar"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,20 +14,21 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 85%, black)"/>
     </linearGradient>
   </defs>
-  <g fill="url(#sugar-fill)">
-    <circle cx="7.4" cy="17.6" r="3.2"/>
-    <circle cx="11.4" cy="16" r="3.8"/>
-    <circle cx="15.2" cy="17.8" r="3"/>
-  </g>
-  <rect x="13.6" y="6.8" width="5.2" height="5.2" rx="0.4" fill="url(#sugar-fill)" transform="rotate(-10 16.2 9.4)"/>
-  <path d="M13.9 7.6 L18.9 7" stroke="#ffffff" stroke-width="0.4" opacity="0.5" transform="rotate(-10 16.2 9.4)"/>
-  <path d="M13.6 9.4 H18.8 M16.2 6.8 V12" stroke="#000000" stroke-width="0.25" opacity="0.22" transform="rotate(-10 16.2 9.4)"/>
+  <ellipse cx="11" cy="21" rx="6.6" ry="1.2" fill="#000000" opacity="0.16"/>
+  <path d="M4.6 12.4 C4 17 5.6 20.4 11 20.4 C16.4 20.4 18 17 17.4 12.4 C17 9.2 14.6 7.2 11 7.2 C7.4 7.2 5 9.2 4.6 12.4 Z" fill="url(#sugar-fill)"/>
+  <path d="M8 7.6 C7.6 6 8.4 4.6 11 4.4 C13.6 4.6 14.4 6 14 7.6 C12.8 7 9.2 7 8 7.6 Z" fill="url(#sugar-fill)"/>
+  <path d="M8.4 4.8 L13.6 4.8" stroke="#7a6a4a" stroke-width="1" stroke-linecap="round" opacity="0.55"/>
   <g fill="#ffffff" opacity="0.85">
-    <circle cx="8.2" cy="15.4" r="0.55"/>
-    <circle cx="11.8" cy="13.6" r="0.55"/>
-    <circle cx="14.4" cy="15.8" r="0.5"/>
-    <circle cx="6" cy="18.2" r="0.4"/>
+    <circle cx="8" cy="14.4" r="0.4"/>
+    <circle cx="10.4" cy="12.8" r="0.4"/>
+    <circle cx="13" cy="14.8" r="0.4"/>
+    <circle cx="11.4" cy="16.6" r="0.4"/>
+    <circle cx="14.4" cy="12.4" r="0.35"/>
+    <circle cx="7" cy="17" r="0.35"/>
   </g>
-  <ellipse cx="9.4" cy="15.2" rx="2.2" ry="1.2" fill="#ffffff" opacity="0.32"/>
+  <ellipse cx="8.2" cy="12.4" rx="2" ry="1.4" fill="#ffffff" opacity="0.3" transform="rotate(-18 8.2 12.4)"/>
+  <rect x="15.8" y="15.6" width="4.2" height="4.2" rx="0.35" fill="url(#sugar-fill)" transform="rotate(-8 17.9 17.7)"/>
+  <path d="M16 16.2 L19.9 15.7" stroke="#ffffff" stroke-width="0.35" opacity="0.5" transform="rotate(-8 17.9 17.7)"/>
+  <path d="M15.8 17.7 H20 M17.9 15.6 V19.8" stroke="#000000" stroke-width="0.22" opacity="0.22" transform="rotate(-8 17.9 17.7)"/>
 </svg>
 """

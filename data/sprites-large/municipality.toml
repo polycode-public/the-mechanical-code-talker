@@ -1,0 +1,33 @@
+# municipality — the parent behind city.toml's skyline and town.toml's
+# blocks: a civic hall with a pediment, columns and a small flagged tower,
+# flanked by two humbler cottage roofs, so the tower and flag read as
+# "seat of government" rather than any one house. Same white/black wash
+# over currentColor that village.toml and town.toml use for their own
+# roofs; the flag stays fixed civic red because a flag's own colour is a
+# fixed real-world fact, not a theme's to own.
+classes = ["municipality"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="municipality-wash" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.16"/>
+    </linearGradient>
+  </defs>
+  <path d="M1.6 14.8 L4.8 11.4 L8 14.8 V21 H1.6 Z" fill="url(#municipality-wash)" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+  <rect x="3.8" y="17.4" width="2" height="3.6" fill="currentColor" opacity="0.5"/>
+  <path d="M16 14.8 L19.2 11.4 L22.4 14.8 V21 H16 Z" fill="url(#municipality-wash)" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+  <rect x="18.2" y="17.4" width="2" height="3.6" fill="currentColor" opacity="0.5"/>
+  <rect x="7.6" y="12" width="8.8" height="9" fill="url(#municipality-wash)" stroke="currentColor" stroke-width="1.2"/>
+  <path d="M7.2 12 L12 8 L16.8 12 Z" fill="url(#municipality-wash)" stroke="currentColor" stroke-width="1" stroke-linejoin="round"/>
+  <g fill="currentColor" opacity="0.45">
+    <rect x="9" y="14" width="0.8" height="5"/>
+    <rect x="11.6" y="14" width="0.8" height="5"/>
+    <rect x="14.2" y="14" width="0.8" height="5"/>
+  </g>
+  <rect x="10.6" y="17.6" width="2.8" height="5.4" fill="currentColor" opacity="0.5"/>
+  <rect x="11" y="4.4" width="2" height="4" fill="url(#municipality-wash)" stroke="currentColor" stroke-width="0.8"/>
+  <line x1="12" y1="1.6" x2="12" y2="4.4" stroke="currentColor" stroke-width="0.5"/>
+  <path d="M12 1.6 L15 2.4 L12 3.2 Z" fill="#c0392b"/>
+</svg>
+"""

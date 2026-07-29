@@ -1,5 +1,7 @@
-# glove — Ashcombe Hall's own pair of gloves at the sprite tier: a
-# currentColor gradient rather than a taught mgx:madeOf one. This
+# glove — Ashcombe Hall's own pair of gloves at the sprite tier: four
+# separate fingers and a thumb, each its own rounded shape rather than a
+# mitten blob with painted-on seam lines, over a wide cuff band. A
+# currentColor gradient rather than a taught mgx:madeOf one, since this
 # pack's material system only has a safe no-fact fallback for a class
 # the legacy flat sprite registry already carries (see sprite-map.mjs's
 # own SPRITE_REGISTRY) — an UNtaught glove would otherwise resolve with
@@ -17,14 +19,21 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
   </defs>
-  <path d="M7.6 20.4 V11.2 C7.6 9 9.2 7.4 11.2 7.4 C13.2 7.4 14.8 9 14.8 11.2 V20.4 Z" fill="url(#glove-fill)"/>
-  <path d="M7.8 12.4 C5.8 12.2 4.6 13.8 5 15.6 C5.4 17.2 6.8 17.8 8 17.2 Z" fill="url(#glove-fill)"/>
-  <rect x="6.8" y="18.8" width="9.2" height="3" rx="1.2" fill="url(#glove-fill)"/>
-  <g stroke="#000000" stroke-width="0.4" opacity="0.25">
-    <line x1="9.4" y1="8.4" x2="9.4" y2="11.6"/>
-    <line x1="11.2" y1="7.6" x2="11.2" y2="11.8"/>
-    <line x1="13" y1="8.4" x2="13" y2="11.6"/>
+  <path d="M6.4 13 C4.6 12.6 3.3 14 3.6 15.8 C3.8 17.3 5.1 18.1 6.4 17.5 Z" fill="url(#glove-fill)"/>
+  <rect x="7.4" y="13.4" width="7.6" height="6.4" rx="2.2" fill="url(#glove-fill)"/>
+  <g fill="url(#glove-fill)">
+    <rect x="7.6" y="7.6" width="1.7" height="6.6" rx="0.85"/>
+    <rect x="9.7" y="6.4" width="1.7" height="7.8" rx="0.85"/>
+    <rect x="11.8" y="6.4" width="1.7" height="7.8" rx="0.85"/>
+    <rect x="13.9" y="7.6" width="1.7" height="6.6" rx="0.85"/>
   </g>
-  <path d="M8.4 9.4 C8 12.4 8.2 16 9 19.4" fill="none" stroke="#ffffff" stroke-width="0.6" opacity="0.35" stroke-linecap="round"/>
+  <rect x="6.8" y="18.8" width="9.2" height="3.2" rx="1.2" fill="url(#glove-fill)"/>
+  <g stroke="#000000" stroke-width="0.3" opacity="0.22">
+    <line x1="9.4" y1="7.8" x2="9.4" y2="13.6"/>
+    <line x1="11.5" y1="6.6" x2="11.5" y2="13.6"/>
+    <line x1="13.6" y1="7.8" x2="13.6" y2="13.6"/>
+  </g>
+  <path d="M8.2 8.2 C7.9 11.4 8 15 8.6 18.8" fill="none" stroke="#ffffff" stroke-width="0.5" opacity="0.35" stroke-linecap="round"/>
+  <path d="M8.2 19.6 L14.8 19.6" stroke="#000000" stroke-width="0.3" opacity="0.2"/>
 </svg>
 """

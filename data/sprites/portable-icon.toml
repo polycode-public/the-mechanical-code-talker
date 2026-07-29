@@ -1,12 +1,14 @@
 # portable — the generic fallback for any carryable object with no sprite
-# of its own: a drawstring parcel silhouette, replacing the old
-# generic-gift-box outline so it reads as "an unspecified small thing"
-# rather than a gift.
+# of its own: a drawstring parcel silhouette with a small tag hanging from
+# the neck, so it reads as "an unspecified small thing someone packed"
+# rather than a gift or a sack of grain.
 classes = ["portable"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <path d="M12 6 C7.5 6 5 9.4 5 13.4 C5 17.7 8.1 20 12 20 C15.9 20 19 17.7 19 13.4 C19 9.4 16.5 6 12 6 Z" fill="currentColor"/>
   <path d="M9.4 6.4 C9.9 4.6 10.8 3.4 12 3.4 C13.2 3.4 14.1 4.6 14.6 6.4" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/>
-  <ellipse cx="9.8" cy="11.6" rx="1.6" ry="2.1" fill="currentColor" opacity="0.28"/>
+  <ellipse cx="9.8" cy="11.6" rx="1.6" ry="2.1" fill="color-mix(in srgb, currentColor 25%, white)"/>
+  <path d="M14.4 6.6 L17.4 8.8 L15.6 10.4 L14 8 Z" fill="color-mix(in srgb, currentColor 65%, black)"/>
+  <circle cx="16.1" cy="8.5" r="0.35" fill="color-mix(in srgb, currentColor 20%, white)"/>
 </svg>
 """

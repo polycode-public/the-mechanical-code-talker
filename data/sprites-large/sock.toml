@@ -1,6 +1,7 @@
-# sock — a bent tube silhouette with a fixed contrasting cuff stripe, the
-# stripe fixed the way a sports sock's own trim rarely matches its body
-# colour.
+# sock — a bent tube silhouette with a fixed contrasting cuff, and a heel
+# patch and a toe patch in that same fixed accent, the way a sports
+# sock's own trim rarely matches its body colour. The cuff carries a few
+# ribbed lines rather than reading as a plain stripe.
 classes = ["sock"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,7 +13,14 @@ svg = """
     </linearGradient>
   </defs>
   <path d="M8.4 2.6 H15.2 V12.4 C15.2 13.6 15.8 14.4 16.8 15 L20.6 17.2 C21.6 17.8 21.6 19.2 20.6 19.8 C18.6 21 16 21.4 13.4 20.6 C10.4 19.6 8.4 17 8.4 13.8 Z" fill="url(#sock-fill)"/>
+  <path d="M8.5 14.2 C8.8 16.2 9.7 17.8 11.2 18.7 C10 19 8.8 18.3 8.5 16.7 C8.3 15.8 8.3 15 8.5 14.2 Z" fill="#e05a4f"/>
+  <path d="M17.6 14.8 C19 15.4 20.1 16.2 20.7 17.4 C21.1 18.4 20.7 19.3 19.6 19.6 C18.2 20 17 19.3 16.5 18 C16.1 16.9 16.5 15.6 17.6 14.8 Z" fill="#e05a4f"/>
   <rect x="8.4" y="2.6" width="6.8" height="2.6" fill="#e05a4f"/>
+  <g stroke="#ffffff" stroke-width="0.3" opacity="0.35">
+    <line x1="9.7" y1="2.6" x2="9.7" y2="5.2"/>
+    <line x1="11.4" y1="2.6" x2="11.4" y2="5.2"/>
+    <line x1="13.1" y1="2.6" x2="13.1" y2="5.2"/>
+  </g>
   <path d="M9 5.6 L9 12" stroke="#ffffff" stroke-width="0.5" opacity="0.3"/>
 </svg>
 """

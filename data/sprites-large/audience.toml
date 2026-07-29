@@ -1,6 +1,10 @@
 # audience — three busts (head and shoulder only, no legs) above a thin
 # baseline, reading as a row of people seated behind an edge rather than
-# standing in the open the way crowd.toml's full-height figures do.
+# standing in the open the way crowd.toml's full-height figures do. A bust
+# has no forearm to break with adult.toml's own arm silhouette, and a
+# collar notch at this scale reads as a stray mark rather than a collar, so
+# the bust itself — head, shoulder line, baseline — stays the identifying
+# shape here.
 classes = ["audience"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">

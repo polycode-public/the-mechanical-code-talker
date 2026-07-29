@@ -1,12 +1,22 @@
-# cellar — an underground space: a room box with a stair stepping down and
-# stone coursing, so the room-kind icon reads as below ground rather than a
-# plain room, matching the underground border.
+# cellar — an underground space: a room box with a stair stepping down into
+# it and stone coursing on the back wall, so the room-kind icon reads as
+# below ground rather than a plain room, matching the underground border.
+# The wash is a fixed white/black tint rather than currentColor-mixed (the
+# same reason room.toml's own wash is fixed): a tint built from currentColor
+# reverses direction between a light and a dark theme, a plain white/black
+# one never does.
 classes = ["cellar"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
-  <rect x="3" y="3" width="18" height="18" rx="1" fill="currentColor" opacity="0.14"/>
+  <defs>
+    <linearGradient id="cellar-wash" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.06"/>
+      <stop offset="100%" stop-color="#000000" stop-opacity="0.22"/>
+    </linearGradient>
+  </defs>
+  <rect x="3" y="3" width="18" height="18" rx="1" fill="url(#cellar-wash)"/>
   <rect x="3" y="3" width="18" height="18" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
-  <path d="M6 8 H10 V11 H14 V14 H18 V18 H6 Z" fill="currentColor" opacity="0.55"/>
-  <path d="M3 12 H21 M3 16.5 H21" stroke="currentColor" stroke-width="0.5" opacity="0.4"/>
+  <path d="M8 3 V21 M14 3 V21" stroke="currentColor" stroke-width="0.4" opacity="0.25"/>
+  <path d="M6 7.5 H10 V10.5 H14 V13.5 H18 V17.5 H6 Z" fill="currentColor"/>
 </svg>
 """

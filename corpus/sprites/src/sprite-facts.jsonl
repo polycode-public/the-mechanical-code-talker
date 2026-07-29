@@ -28,6 +28,7 @@
 {"subject":"breakfast sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"bridge sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"brother sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"building sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"butler sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"butterfly sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"cabinet sprite","predicate":"rdf:type","object":"sprite class"}
@@ -35,6 +36,7 @@
 {"subject":"carrot sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"castle sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"cat sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"celestial body sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"cellar sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"chair sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"champion sprite","predicate":"rdf:type","object":"sprite class"}
@@ -64,6 +66,7 @@
 {"subject":"earth sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"egg sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"elephant sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"emotion sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"employee sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"engineer sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"factory sprite","predicate":"rdf:type","object":"sprite class"}
@@ -72,6 +75,8 @@
 {"subject":"farmer sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"father sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"fear sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"feel sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"feeling sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"fish sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"flower sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"fly sprite","predicate":"rdf:type","object":"sprite class"}
@@ -84,6 +89,7 @@
 {"subject":"furniture sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"garden sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"gardener sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"gathering sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"girl sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"glove sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"gold sprite","predicate":"rdf:type","object":"sprite class"}
@@ -94,6 +100,7 @@
 {"subject":"guest sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"hat sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"hate sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"herb sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"holiday sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"home sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"hope sprite","predicate":"rdf:type","object":"sprite class"}
@@ -133,12 +140,14 @@
 {"subject":"mother sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"mountain sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"mouse sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"municipality sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"museum sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"neighbor sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"nurse sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"ocean sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"office sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"officer sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"organism sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"owl sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"pan sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"parent sprite","predicate":"rdf:type","object":"sprite class"}
@@ -150,6 +159,7 @@
 {"subject":"poodle sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"portable sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"portrait sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"precipitation sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"president sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"priest sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"queen sprite","predicate":"rdf:type","object":"sprite class"}
@@ -163,8 +173,10 @@
 {"subject":"root sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"salt sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"school sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"season sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"seed sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"servant sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"settlement sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"sheep sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"shirt sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"shoe sprite","predicate":"rdf:type","object":"sprite class"}
@@ -182,6 +194,7 @@
 {"subject":"stone sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"stranger sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"street sprite","predicate":"rdf:type","object":"sprite class"}
+{"subject":"structure sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"student sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"study sprite","predicate":"rdf:type","object":"sprite class"}
 {"subject":"sugar sprite","predicate":"rdf:type","object":"sprite class"}
@@ -275,6 +288,7 @@
 {"subject":"breakfast sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"bridge sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"brother sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"building sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"butler sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"butterfly sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"cabinet sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -282,6 +296,7 @@
 {"subject":"carrot sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"castle sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"cat sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"celestial body sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"cellar sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"chair sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"champion sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -311,6 +326,7 @@
 {"subject":"earth sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"egg sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"elephant sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"emotion sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"employee sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"engineer sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"factory sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -319,6 +335,8 @@
 {"subject":"farmer sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"father sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"fear sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"feel sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"feeling sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"fish sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"flower sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"fly sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -331,6 +349,7 @@
 {"subject":"furniture sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"garden sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"gardener sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"gathering sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"girl sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"glove sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"gold sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -341,6 +360,7 @@
 {"subject":"guest sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"hat sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"hate sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"herb sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"holiday sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"home sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"hope sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -380,12 +400,14 @@
 {"subject":"mother sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"mountain sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"mouse sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"municipality sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"museum sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"neighbor sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"nurse sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"ocean sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"office sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"officer sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"organism sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"owl sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"pan sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"parent sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -397,6 +419,7 @@
 {"subject":"poodle sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"portable sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"portrait sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"precipitation sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"president sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"priest sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"queen sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -410,8 +433,10 @@
 {"subject":"root sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"salt sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"school sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"season sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"seed sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"servant sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"settlement sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"sheep sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"shirt sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"shoe sprite","predicate":"mgx:render-at","object":"sprite tier"}
@@ -429,6 +454,7 @@
 {"subject":"stone sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"stranger sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"street sprite","predicate":"mgx:render-at","object":"sprite tier"}
+{"subject":"structure sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"student sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"study sprite","predicate":"mgx:render-at","object":"sprite tier"}
 {"subject":"sugar sprite","predicate":"mgx:render-at","object":"sprite tier"}

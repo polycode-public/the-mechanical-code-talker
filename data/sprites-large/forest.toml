@@ -1,5 +1,8 @@
 # forest — several overlapping fir trees at the sprite tier: more than
-# one tree distinguishes it from park's own single shade tree.
+# one tree distinguishes it from park's own single shade tree. Two
+# smaller firs sit behind the three full trees, colour-mixed toward
+# black rather than washed with opacity, so the back rank reads as
+# genuinely further away instead of just fainter.
 classes = ["forest"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -10,6 +13,10 @@ svg = """
     </linearGradient>
   </defs>
   <rect x="2" y="18.6" width="20" height="3" fill="url(#forest-wash)"/>
+  <path d="M9.4 15.2 L9.8 12.4 L10.2 15.2 Z" fill="color-mix(in srgb, currentColor 60%, black)" opacity="0.6"/>
+  <path d="M9 12.8 L9.8 9.6 L10.6 12.8 Z" fill="color-mix(in srgb, currentColor 60%, black)" opacity="0.6"/>
+  <path d="M17 15.8 L17.3 13.4 L17.6 15.8 Z" fill="color-mix(in srgb, currentColor 60%, black)" opacity="0.55"/>
+  <path d="M16.6 13.8 L17.3 11 L18 13.8 Z" fill="color-mix(in srgb, currentColor 60%, black)" opacity="0.55"/>
   <path d="M5.4 20.4 L5.4 16.4" stroke="currentColor" stroke-width="1" opacity="0.6"/>
   <path d="M4.4 16.6 L5.4 12 L6.4 16.6 Z" fill="url(#forest-wash)" stroke="currentColor" stroke-width="1"/>
   <path d="M3.6 13.4 L5.4 8.8 L7.2 13.4 Z" fill="url(#forest-wash)" stroke="currentColor" stroke-width="1"/>

@@ -1,13 +1,18 @@
 # cabinet — Ashcombe Hall's own locked cabinet (a container): a two-door
-# wardrobe silhouette, the gap between the doors reading as the seam, with
-# two knobs and a cornice band.
+# wardrobe silhouette, the gap between the doors reading as the seam. Each
+# door carries a recessed raised-panel outline, the classic wardrobe-door
+# cue, plus a cornice band above and a plinth below so it reads as a
+# standing piece of furniture rather than a wall panel.
 classes = ["cabinet"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <rect x="4.5" y="2.5" width="7.2" height="19" rx="1" fill="currentColor"/>
   <rect x="12.3" y="2.5" width="7.2" height="19" rx="1" fill="currentColor"/>
-  <rect x="4.5" y="2.5" width="15" height="1.4" fill="currentColor" opacity="0.4"/>
-  <circle cx="10.6" cy="12" r="0.9" fill="currentColor" opacity="0.35"/>
-  <circle cx="13.4" cy="12" r="0.9" fill="currentColor" opacity="0.35"/>
+  <rect x="4.5" y="2.5" width="15" height="1.6" fill="color-mix(in srgb, currentColor 70%, black)"/>
+  <rect x="4.5" y="20.1" width="15" height="1.4" fill="color-mix(in srgb, currentColor 70%, black)"/>
+  <rect x="6" y="5.4" width="4.2" height="13.4" rx="0.4" fill="none" stroke="color-mix(in srgb, currentColor 55%, black)" stroke-width="0.6"/>
+  <rect x="13.8" y="5.4" width="4.2" height="13.4" rx="0.4" fill="none" stroke="color-mix(in srgb, currentColor 55%, black)" stroke-width="0.6"/>
+  <circle cx="10.6" cy="12" r="1" fill="color-mix(in srgb, currentColor 65%, black)"/>
+  <circle cx="13.4" cy="12" r="1" fill="color-mix(in srgb, currentColor 65%, black)"/>
 </svg>
 """

@@ -1,7 +1,12 @@
-# tree — a four-lobe gradient canopy over a fixed brown trunk, the trunk
-# fixed for the same reason a lamp's flame stays fixed regardless of the
+# tree — a four-lobe canopy over a fixed brown trunk, the trunk fixed
+# for the same reason a lamp's flame stays fixed regardless of the
 # lamp's own material: bark colour doesn't vary with the rest of the
-# sprite's palette the way foliage does.
+# sprite's palette the way foliage does. All four lobes still share one
+# gradient so the canopy stays a smooth, coherent shape at any theme
+# colour; thin black/white overlays on the two side lobes and the
+# bottom lobe read as a shadowed back rank and a lit front lobe without
+# ever flattening the shared gradient into a patchwork. A soft ground
+# shadow grounds the trunk.
 classes = ["tree"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -12,6 +17,7 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
   </defs>
+  <ellipse cx="12" cy="22" rx="4.2" ry="0.9" fill="#000000" opacity="0.18"/>
   <rect x="10.8" y="14" width="2.4" height="8" fill="#7a5230"/>
   <path d="M11 21.6 H13.4" stroke="#5a3a1c" stroke-width="0.6"/>
   <g fill="url(#tree-fill)">
@@ -20,6 +26,9 @@ svg = """
     <circle cx="12" cy="6.4" r="5"/>
     <circle cx="12" cy="12.4" r="4.8"/>
   </g>
+  <circle cx="8.4" cy="10" r="4.6" fill="#000000" opacity="0.16"/>
+  <circle cx="15.6" cy="10" r="4.6" fill="#000000" opacity="0.16"/>
+  <circle cx="12" cy="12.4" r="4.8" fill="#ffffff" opacity="0.14"/>
   <ellipse cx="9" cy="7.6" rx="2.6" ry="1.8" fill="#ffffff" opacity="0.28"/>
 </svg>
 """

@@ -41,10 +41,12 @@ const TOKENS = Object.freeze({
   light: Object.freeze({
     bg: "#F7F6F2", ink: "#23272B", muted: "#6E7168", line: "#DDD9D0", card: "#FFFFFF",
     taught: "#2E7D4F", corpus: "#5A80AC", entail: "#B07C2E", alert: "#B0503F",
+    popRimAlpha: 0.66, popShadow: "0 1px 1.2px rgba(0, 0, 0, .30)",
   }),
   dark: Object.freeze({
     bg: "#15181C", ink: "#E7E5DF", muted: "#9A9E95", line: "#2B3036", card: "#1C2126",
     taught: "#5FBE8B", corpus: "#6C93BF", entail: "#D9A554", alert: "#D08070",
+    popRimAlpha: 0.45, popShadow: "0 1px 1.4px rgba(0, 0, 0, .55)",
   }),
 });
 
@@ -59,6 +61,11 @@ function tokenBlock(t) {
     tiers("taught"), tiers("corpus"), tiers("entail"),
     `--taught-soft: ${rgba(t.taught, 0.12)}; --corpus-soft: ${rgba(t.corpus, 0.12)};`,
     `--entail-soft: ${rgba(t.entail, 0.14)}; --alert-soft: ${rgba(t.alert, 0.12)};`,
+    // The sprite rim keys off ink so it flips with the theme: a dark edge on
+    // light grounds, a faint rim-light on dark ones — the sprite holds its
+    // silhouette against either without per-page tuning. Apply as
+    // `filter: var(--sprite-pop)` on any element that draws a sprite SVG.
+    `--sprite-pop: drop-shadow(0 0 .6px ${rgba(t.ink, t.popRimAlpha)}) drop-shadow(${t.popShadow});`,
   ].join(" ");
 }
 

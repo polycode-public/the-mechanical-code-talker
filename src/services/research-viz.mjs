@@ -19,11 +19,31 @@
 // renderResearchHtml() is pure: no I/O, deterministic output for identical
 // input. scripts/build-demo-site.mjs calls it directly and writes the result to
 // public/research.html, after research-browser.bundle.js already exists.
-import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
+import { THEME_TOKENS_CSS, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
 import { fetchWithProgress } from "./memory-panel-viz.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
 
 const DEFAULT_TITLE = "the-mechanical-code-talker — research";
+
+// research.html reads as ledger.html's dashboard sibling (dense stat/control
+// panels, monospace metrics), so it runs the same system sans + forced dark
+// chrome — see ledger-viz.mjs's own DASH_SANS_STACK/DASH_DARK_CHROME_CSS for
+// the fuller rationale. Kept as a separate copy rather than a shared import:
+// each generated-page builder is a standalone, self-contained module (no
+// cross-page runtime dependency), matching every sibling page builder here.
+const DASH_SANS_STACK = `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif`;
+const DASH_DARK_CHROME_CSS = `
+  :root { color-scheme: dark; }
+  body {
+    --bg: #15181C; --ink: #E7E5DF; --muted: #9A9E95; --line: #2B3036; --card: #1C2126;
+    --taught: #5FBE8B; --corpus: #6C93BF; --entail: #D9A554; --alert: #D08070;
+    --taught-t1: rgba(95,190,139,.35); --taught-t2: rgba(95,190,139,.65); --taught-t3: rgba(95,190,139,1);
+    --corpus-t1: rgba(108,147,191,.35); --corpus-t2: rgba(108,147,191,.65); --corpus-t3: rgba(108,147,191,1);
+    --entail-t1: rgba(217,165,84,.35); --entail-t2: rgba(217,165,84,.65); --entail-t3: rgba(217,165,84,1);
+    --taught-soft: rgba(95,190,139,.14); --corpus-soft: rgba(108,147,191,.14);
+    --entail-soft: rgba(217,165,84,.16); --alert-soft: rgba(208,128,112,.16);
+  }
+`;
 
 /** The human label + short colour key for one source snapshot entry
  *  ({ key, band }). A seed band folds to a readable corpus name; the three
@@ -99,34 +119,48 @@ export function renderResearchHtml({ title = DEFAULT_TITLE, digestStructures = [
 -->
 <style>
 ${THEME_TOKENS_CSS}
+${DASH_DARK_CHROME_CSS}
   html, body { min-height: 100%; }
-  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${SERIF_STACK}; font-size: 16px; line-height: 1.5; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: ${DASH_SANS_STACK}; font-size: 15px; line-height: 1.5; }
   .mono { font-family: ${MONO_STACK}; }
   button { font: inherit; color: inherit; background: none; cursor: pointer; border: none; }
-  button:focus-visible, textarea:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  button:focus-visible, textarea:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--corpus); outline-offset: 2px; }
   a { color: var(--corpus); }
 
-  .wrap { max-width: 1100px; margin: 0 auto; padding: 1.1rem 1.1rem 3rem; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 1.1rem 1.1rem 3rem; }
 
-  header.topbar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
-  .brand { display: flex; flex-direction: column; gap: .12rem; }
-  .eyebrow { font-family: ${MONO_STACK}; font-size: .78rem; letter-spacing: .08em; color: var(--muted); }
-  .subtitle { font-size: .86rem; color: var(--muted); max-width: 46ch; }
-  .status { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
+  /* A brand block on the left and a small stat-readout panel on the right —
+     the readout fills the row instead of one status line stranded beside a
+     wide gap, and it doubles as the boot-progress display. */
+  header.topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 1.4rem; flex-wrap: wrap; padding: .6rem 0 1rem; border-bottom: 1px solid var(--line); margin-bottom: 1.3rem; }
+  .brand { display: flex; flex-direction: column; gap: .3rem; max-width: 640px; }
+  .eyebrow { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .subtitle { font-size: .92rem; color: var(--ink); opacity: .82; max-width: 58ch; }
+  .statuspanel { display: flex; gap: 1.1rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .9rem; }
+  .statuspanel .stat { display: flex; flex-direction: column; gap: .14rem; min-width: 7rem; }
+  .statuspanel .stat-label { font-family: ${MONO_STACK}; font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .statuspanel .stat-value { font-family: ${MONO_STACK}; font-size: .82rem; font-variant-numeric: tabular-nums; color: var(--ink); }
+  .enginenote { margin: -.5rem 0 1.2rem; padding: .55rem .8rem; border: 1px solid var(--alert); border-radius: 6px; background: var(--alert-soft); color: var(--alert); font-family: ${MONO_STACK}; font-size: .78rem; }
+  .enginenote[hidden] { display: none; }
 
   h2.band { font-family: ${MONO_STACK}; font-size: .7rem; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin: 1.6rem 0 .7rem; border-bottom: 1px solid var(--line); padding-bottom: .35rem; }
 
-  /* the three ways to grow the graph — three cards in one row, stacking on a
-     narrow screen. */
-  .grow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
-  .grow .card { background: var(--bg); padding: .9rem 1rem 1.1rem; display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
-  .grow .card h3 { margin: 0; font-size: .95rem; }
+  /* the three ways to grow the graph, as one control-bar row of panels: a
+     hairline grid gap (painted by the shared background) separates them
+     instead of individual card borders, and each carries a top accent in
+     its own tone color. Stacks on a narrow screen. */
+  .grow { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+  .grow .card { background: var(--card); border-top: 2px solid var(--line); padding: .9rem 1rem 1.1rem; display: flex; flex-direction: column; gap: .55rem; min-width: 0; }
+  .grow .card.card-research { border-top-color: var(--corpus); }
+  .grow .card.card-taught { border-top-color: var(--taught); }
+  .grow .card.card-ingest { border-top-color: var(--entail); }
+  .grow .card h3 { margin: 0; font-size: .95rem; font-weight: 600; }
   .grow .card .hint { font-size: .76rem; color: var(--muted); margin: 0; }
   .grow .card .tone { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: .35rem; vertical-align: baseline; }
   .tone-taught { background: var(--taught); } .tone-ingest { background: var(--entail); }
   .tone-research { background: var(--corpus); } .tone-seed { background: var(--muted); }
 
-  .grow input[type="text"], .grow textarea { width: 100%; box-sizing: border-box; font-family: ${MONO_STACK}; font-size: .8rem; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .4rem .55rem; }
+  .grow input[type="text"], .grow textarea { width: 100%; box-sizing: border-box; font-family: ${MONO_STACK}; font-size: .8rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .4rem .55rem; }
   .grow textarea { resize: vertical; min-height: 5.5rem; line-height: 1.5; }
   .grow input::placeholder, .grow textarea::placeholder { color: var(--muted); }
   .row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
@@ -138,35 +172,45 @@ ${THEME_TOKENS_CSS}
   .optionToggle input { margin: 0; accent-color: var(--corpus); }
   .knobs { display: flex; gap: .9rem; align-items: center; flex-wrap: wrap; }
   .knob { display: inline-flex; align-items: center; gap: .4rem; font-family: ${MONO_STACK}; font-size: .68rem; color: var(--muted); }
-  .knob input[type="number"] { width: 3.4rem; font-family: ${MONO_STACK}; font-size: .74rem; background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .25rem .35rem; text-align: right; }
+  .knob input[type="number"] { width: 3.4rem; font-family: ${MONO_STACK}; font-size: .74rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .25rem .35rem; text-align: right; }
 
   /* highlights + ask, two columns */
   .cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.4rem; align-items: start; }
 
-  .panel { border: 1px solid var(--line); border-radius: 10px; padding: .9rem 1rem 1rem; background: var(--card); }
-  .panel h3 { margin: 0 0 .6rem; font-size: .9rem; }
+  .panel { border: 1px solid var(--line); border-radius: 6px; padding: .9rem 1rem 1rem; background: var(--card); }
+  .panel h3 { margin: 0 0 .6rem; font-size: .9rem; font-weight: 600; }
   .panel .empty { color: var(--muted); font-size: .8rem; margin: .3rem 0; }
 
-  .fact { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: .45rem; align-items: baseline; padding: .28rem 0; border-bottom: 1px solid var(--line); font-family: ${MONO_STACK}; font-size: .76rem; }
+  /* recently-learned: a dense feed of the facts just grounded. */
+  .fact { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: .45rem; align-items: baseline; padding: .3rem .3rem; margin: 0 -.3rem; border-radius: 4px; border-bottom: 1px solid var(--line); font-family: ${MONO_STACK}; font-size: .76rem; }
   .fact:last-child { border-bottom: none; }
+  .fact:hover { background: var(--line); }
   .fact .dot { width: 7px; height: 7px; border-radius: 50%; align-self: center; }
   .fact .subj { color: var(--ink); word-break: break-word; }
   .fact .pred { color: var(--corpus); white-space: nowrap; }
   .fact .obj { color: var(--ink); word-break: break-word; }
 
-  .chips { display: flex; flex-wrap: wrap; gap: .4rem; }
+  /* best-connected terms: a top-N ranked list (a mini bar chart), styled as
+     ledger.html's own predicate.top panel so the two pages read as siblings.
+     Each row keeps the "chip tapchip" contract the page's click handling and
+     its own e2e coverage rely on; the ranked-bar look rides inside it. */
+  .chips { display: flex; flex-direction: column; gap: .2rem; }
   .chip { font-family: ${MONO_STACK}; font-size: .74rem; border: 1px solid var(--line); border-radius: 99px; padding: .2rem .6rem; background: var(--bg); }
-  .chip.tapchip { cursor: pointer; }
-  .chip.tapchip:hover { border-color: var(--ink); }
-  .chip .deg { color: var(--muted); margin-left: .35rem; }
+  .chip.tapchip { cursor: pointer; display: grid; grid-template-columns: 1.5rem minmax(0,1fr) 4.6rem 3.6rem; align-items: center; gap: .5rem; width: 100%; text-align: left; border: none; border-radius: 4px; padding: .3rem .4rem; background: none; }
+  .chip.tapchip:hover { background: var(--line); }
+  .chip .rank { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .chip .term { color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip .track { background: var(--line); border-radius: 99px; height: 5px; overflow: hidden; }
+  .chip .fill { display: block; height: 100%; background: var(--ink); opacity: .6; border-radius: 99px; }
+  .chip .deg { color: var(--muted); text-align: right; font-variant-numeric: tabular-nums; }
 
   /* the term digest: a narrative card, its sources, and the flat fact list one
      click away behind "show the facts". */
   .digestpanel .hint { font-size: .78rem; color: var(--muted); margin: 0 0 .55rem; }
   .digestout { min-height: 1.4rem; }
   .digestout .empty { color: var(--muted); font-size: .82rem; margin: .2rem 0; }
-  .digestout .miss { color: var(--muted); font-size: .88rem; border: 1px dashed var(--line); border-radius: 8px; padding: .55rem .7rem; }
-  .dgcard { border: 1px solid var(--line); border-radius: 8px; padding: .7rem .85rem .8rem; background: var(--bg); }
+  .digestout .miss { color: var(--muted); font-size: .88rem; border: 1px dashed var(--line); border-radius: 6px; padding: .55rem .7rem; }
+  .dgcard { border: 1px solid var(--line); border-radius: 6px; padding: .7rem .85rem .8rem; background: var(--bg); }
   .dgterm { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); margin-bottom: .4rem; }
   .dgcard p { margin: 0 0 .5rem; font-size: .95rem; }
   .dgcard p:last-of-type { margin-bottom: 0; }
@@ -178,15 +222,19 @@ ${THEME_TOKENS_CSS}
 
   /* ask, scoped by source */
   .askRow { display: flex; gap: .5rem; margin: .2rem 0 .7rem; }
-  .askRow input { flex: 1; min-width: 0; font-family: ${SERIF_STACK}; font-size: .92rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 8px; padding: .45rem .7rem; }
-  #answer { font-size: .9rem; white-space: pre-wrap; word-break: break-word; padding: .55rem .7rem; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); min-height: 1.4rem; }
+  .askRow input { flex: 1; min-width: 0; font-family: inherit; font-size: .92rem; background: var(--bg); color: var(--ink); border: 1px solid var(--line); border-radius: 6px; padding: .45rem .7rem; }
+  #answer { font-size: .9rem; white-space: pre-wrap; word-break: break-word; padding: .55rem .7rem; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); min-height: 1.4rem; }
   #answer.miss { color: var(--muted); border-style: dashed; }
   .sourcesHead { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; margin: .2rem 0 .5rem; }
   .sourcesHead .toggleAll { font-family: ${MONO_STACK}; font-size: .66rem; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: .12rem .5rem; background: var(--bg); }
 
+  /* scope by source: a filterable table — a header row names the columns,
+     then one row per source with its own checkbox, count, and history. */
+  .sourceTableHead { display: flex; justify-content: space-between; padding: 0 .3rem .3rem; font-family: ${MONO_STACK}; font-size: .6rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); margin-bottom: .2rem; }
   details.source { border-bottom: 1px solid var(--line); }
   details.source:last-of-type { border-bottom: none; }
-  details.source > summary { list-style: none; display: flex; align-items: center; gap: .5rem; padding: .35rem 0; cursor: pointer; font-family: ${MONO_STACK}; font-size: .78rem; }
+  details.source > summary { list-style: none; display: flex; align-items: center; gap: .5rem; padding: .35rem .3rem; margin: 0 -.3rem; border-radius: 4px; cursor: pointer; font-family: ${MONO_STACK}; font-size: .78rem; }
+  details.source > summary:hover { background: var(--line); }
   details.source > summary::-webkit-details-marker { display: none; }
   details.source > summary .srcLabel { flex: 1; display: inline-flex; align-items: center; gap: .4rem; }
   details.source > summary input { margin: 0; accent-color: var(--corpus); }
@@ -201,23 +249,32 @@ ${THEME_TOKENS_CSS}
   @media (max-width: 820px) {
     .grow { grid-template-columns: 1fr; }
     .cols { grid-template-columns: 1fr; }
+    .chip.tapchip { grid-template-columns: 1.5rem minmax(0,1fr) 3.2rem; }
+    .chip.tapchip .track { display: none; }
   }
   @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
+  @media (prefers-reduced-motion: no-preference) {
+    .fact, .chip.tapchip, details.source > summary { transition: background-color .1s ease; }
+  }
 </style>
 </head>
 <body>
   <div class="wrap">
     <header class="topbar">
       <div class="brand">
-        <span class="eyebrow">the-mechanical-code-talker</span>
-        <span class="subtitle">research &mdash; grow one graph three ways, watch what it learns, and ask it a question scoped to the sources you trust.</span>
+        <span class="eyebrow">the-mechanical-code-talker &middot; research</span>
+        <span class="subtitle">Grow one graph three ways. Watch what it learns, then ask a question scoped to the sources you trust.</span>
       </div>
-      <span class="status" id="status">loading the engine&hellip;</span>
+      <div class="statuspanel" id="statusPanel" aria-live="polite">
+        <div class="stat"><span class="stat-label">seed</span><span class="stat-value" id="statSeed">&mdash;</span></div>
+        <div class="stat"><span class="stat-label">engine</span><span class="stat-value" id="statEngine">booting&hellip;</span></div>
+      </div>
     </header>
+    <div class="enginenote" id="engineNote" hidden></div>
 
     <h2 class="band">grow the graph</h2>
     <section class="grow">
-      <div class="card">
+      <div class="card card-research">
         <h3><span class="tone tone-research"></span>research a term</h3>
         <p class="hint">Fetches the topic from Simple English Wikipedia and stores the facts it grounds, then queues the topics its lead section links to. Asking is the consent for these fetches.</p>
         <div class="row">
@@ -236,24 +293,24 @@ ${THEME_TOKENS_CSS}
         </div>
         <p class="note" id="researchNote"></p>
       </div>
-      <div class="card">
+      <div class="card card-taught">
         <h3><span class="tone tone-taught"></span>teach by telling</h3>
-        <p class="hint">Type a plain fact and it is stored if the recognizer can ground it &mdash; &ldquo;a beagle is a kind of dog&rdquo;, &ldquo;a dog has a tail&rdquo;. No guessing: an unrecognized sentence is skipped, honestly.</p>
+        <p class="hint">Type a plain fact and it's stored if the recognizer can ground it, for example &ldquo;a beagle is a kind of dog&rdquo; or &ldquo;a dog has a tail&rdquo;. An unrecognized sentence is skipped.</p>
         <div class="row">
           <input id="teachInput" type="text" autocomplete="off" spellcheck="false" placeholder="a beagle is a kind of dog" aria-label="A fact to teach">
           <button type="button" class="btn primary" id="teachGo" disabled>teach</button>
         </div>
         <p class="note" id="teachNote"></p>
       </div>
-      <div class="card">
+      <div class="card card-ingest">
         <h3><span class="tone tone-ingest"></span>ingest documents</h3>
-        <p class="hint">Paste or drop text; it keeps only the sentences it can ground as facts and skips the rest. The same recognizer the ingest page runs.</p>
+        <p class="hint">Paste or drop text. It keeps only the sentences it can ground as facts and skips the rest, using the same recognizer the ingest page runs.</p>
         <textarea id="ingestText" spellcheck="false" placeholder="Paste a paragraph or drop a .txt/.md file here." aria-label="Text to ingest"></textarea>
         <div class="row">
           <button type="button" class="btn primary" id="ingestGo" disabled>ingest</button>
           <button type="button" class="btn" id="ingestBrowse">browse&hellip;</button>
           <input type="file" id="ingestFile" accept=".txt,.md,text/plain,text/markdown" hidden>
-          <label class="optionToggle" title="On a miss, also tries a copula or known relation verb flanked by two resolvable entities as a low-trust candidate, tagged optimistic-extract — below every curated source.">
+          <label class="optionToggle" title="On a miss, also tries a copula or known relation verb flanked by two resolvable entities as a low-trust candidate, tagged optimistic-extract, below every curated source.">
             <input type="checkbox" id="fuzzyToggle"> fuzzy tier
           </label>
         </div>
@@ -275,7 +332,7 @@ ${THEME_TOKENS_CSS}
 
     <h2 class="band">read a term back</h2>
     <div class="panel digestpanel">
-      <p class="hint">Pick a term the graph knows and it reads back a short narrative &mdash; the facts it holds, composed into sentences with the sources named, deterministic and never a guess. The full fact list stays one click away behind &ldquo;show the facts&rdquo;.</p>
+      <p class="hint">Pick a term the graph knows. It reads back a short narrative built from the facts it holds, with each source named. The narrative is deterministic and never a guess. The full fact list stays one click away behind &ldquo;show the facts&rdquo;.</p>
       <div class="askRow">
         <input id="digestInput" type="text" autocomplete="off" spellcheck="false" placeholder="a term the graph knows, e.g. dog" aria-label="A term to read back as a digest" disabled>
         <button type="button" class="btn primary" id="digestGo" disabled>digest</button>
@@ -298,6 +355,7 @@ ${THEME_TOKENS_CSS}
           <h3 style="margin:0">scope by source</h3>
           <button type="button" class="toggleAll" id="toggleAll">all / none</button>
         </div>
+        <div class="sourceTableHead" aria-hidden="true"><span>source</span><span>facts</span></div>
         <div id="sourcesList"><p class="empty">loading sources&hellip;</p></div>
       </div>
     </div>
@@ -326,7 +384,14 @@ ${THEME_TOKENS_CSS}
 
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./tmct-sw.js").catch(() => {});
 
-  const statusEl = el("status");
+  // The header's stat panel replaces one status line: "seed" carries the
+  // fact-count readout (boot progress, then the final count), "engine"
+  // carries the wink-nlp load result. engineNote is a separate banner for
+  // the one case that needs more room than a stat value: the whole engine
+  // bundle failing to load.
+  const statSeedEl = el("statSeed");
+  const statEngineEl = el("statEngine");
+  const engineNoteEl = el("engineNote");
   let session = null;
   let researchQueue = null;   // the engine's latest research snapshot, null when no run stands
   const checkedSources = new Set(); // source keys currently checked for the ask
@@ -337,7 +402,7 @@ ${THEME_TOKENS_CSS}
   let progressActive = true;
   function noteProgress(key, loaded, total) {
     progressParts[key] = { loaded: loaded, total: total };
-    if (progressActive) statusEl.textContent = loadProgressLine(Object.values(progressParts));
+    if (progressActive) statEngineEl.textContent = loadProgressLine(Object.values(progressParts));
   }
 
   async function tryLoadWink() {
@@ -398,15 +463,19 @@ ${THEME_TOKENS_CSS}
 
   async function boot() {
     if (!window.tmctResearch) {
-      statusEl.textContent = "the research engine didn't load — this page needs its build step (npm run demo:build)";
+      engineNoteEl.hidden = false;
+      engineNoteEl.textContent = "The research engine did not load. Run npm run demo:build, then reload this page.";
+      statSeedEl.textContent = "—";
+      statEngineEl.textContent = "unavailable";
       return;
     }
     const [winkStatus] = await Promise.all([tryLoadWink(), fetchSeed()]);
     progressActive = false;
     window.tmctResearch.registerReferencePackProvider(fetchPackProvider);
     session = newSession();
-    const winkPart = winkStatus === "loaded" ? "wink-nlp: loaded" : "wink-nlp unavailable — curated tiers only";
-    statusEl.textContent = (seedPayload ? seedFacts + " seed facts" : "no seed") + " · " + winkPart + " — ready.";
+    const winkPart = winkStatus === "loaded" ? "wink-nlp loaded" : "wink-nlp unavailable, curated tiers only";
+    statSeedEl.textContent = seedPayload ? seedFacts.toLocaleString() + " facts" : "no seed";
+    statEngineEl.textContent = winkPart + " · ready";
     enableInputs();
     await refresh();
   }
@@ -459,6 +528,11 @@ ${THEME_TOKENS_CSS}
     for (const fact of recent) box.appendChild(factRow(fact));
   }
 
+  // A top-N ranked bar list, styled after ledger.html's own predicate.top
+  // panel so the two pages' widgets read as siblings. Each row keeps the
+  // page's "chip tapchip" contract (its click-to-digest behaviour and its
+  // own e2e coverage key off those two classes); the rank/track/fill bar
+  // rides inside it.
   function renderHubs(hubs) {
     const box = el("hubsList");
     box.textContent = "";
@@ -468,19 +542,24 @@ ${THEME_TOKENS_CSS}
       box.appendChild(p);
       return;
     }
-    for (const hub of hubs) {
+    const max = hubs.reduce((m, h) => Math.max(m, h.degree), 0) || 1;
+    hubs.forEach((hub, i) => {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = "chip tapchip";
       chip.setAttribute("aria-label", "read a digest of " + hub.term);
-      chip.appendChild(document.createTextNode(hub.term));
+      const rank = document.createElement("span"); rank.className = "rank"; rank.textContent = String(i + 1).padStart(2, "0");
+      const term = document.createElement("span"); term.className = "term"; term.textContent = hub.term;
+      const track = document.createElement("span"); track.className = "track";
+      const fill = document.createElement("span"); fill.className = "fill"; fill.style.width = ((hub.degree / max) * 100).toFixed(1) + "%";
+      track.appendChild(fill);
       const deg = document.createElement("span");
       deg.className = "deg";
       deg.textContent = hub.degree + (hub.degree === 1 ? " fact" : " facts");
-      chip.appendChild(deg);
+      chip.appendChild(rank); chip.appendChild(term); chip.appendChild(track); chip.appendChild(deg);
       chip.addEventListener("click", () => { el("digestInput").value = hub.term; digest(); });
       box.appendChild(chip);
-    }
+    });
   }
 
   function renderSources(sources, history) {
@@ -499,7 +578,7 @@ ${THEME_TOKENS_CSS}
     }
     if (!sources || !sources.length) {
       const p = document.createElement("p"); p.className = "empty";
-      p.textContent = "No facts yet — grow the graph above, then scope your question here.";
+      p.textContent = "No facts yet. Grow the graph above, then scope your question here.";
       box.appendChild(p);
       return;
     }
@@ -569,7 +648,7 @@ ${THEME_TOKENS_CSS}
     const answerEl = el("answer");
     if (boxes.length && checked.length === 0) {
       answerEl.className = "miss";
-      answerEl.textContent = "No source is checked — check at least one on the right to ask against it.";
+      answerEl.textContent = "No source is checked. Check at least one on the right to ask against it.";
       return;
     }
     answerEl.className = "";
@@ -605,7 +684,7 @@ ${THEME_TOKENS_CSS}
     box.textContent = "";
     if (!view) {
       const p = document.createElement("p"); p.className = "miss";
-      p.textContent = 'No grounded digest for "' + term + '" — nothing is stored about it, or nothing the digest could compose. It abstains rather than guess.';
+      p.textContent = 'No grounded digest for "' + term + '". Nothing is stored about it, or nothing the digest could compose. It abstains rather than guess.';
       box.appendChild(p);
       return;
     }
@@ -659,7 +738,7 @@ ${THEME_TOKENS_CSS}
       note.textContent = "stored: " + (res.answer || "remembered.");
       el("teachInput").value = "";
     } else {
-      note.textContent = res && res.answer ? res.answer : "not a recognized fact shape — nothing stored.";
+      note.textContent = res && res.answer ? res.answer : "not a recognized fact shape, nothing stored.";
     }
     await refresh();
   }
@@ -711,9 +790,9 @@ ${THEME_TOKENS_CSS}
       const depth = researchQueue.maxDepth || 1;
       const budget = researchQueue.maxTopics || 0;
       const knobs = " (depth " + depth + (budget ? ", budget " + budget : "") + ")";
-      const capped = researchQueue.nodeCapReached ? " — node budget reached" : "";
+      const capped = researchQueue.nodeCapReached ? " · node budget reached" : "";
       if (researchQueue.complete) {
-        note.textContent = 'research "' + researchQueue.topic + '" complete — '
+        note.textContent = 'research "' + researchQueue.topic + '" complete · '
           + researchQueue.done.length + " topic" + (researchQueue.done.length === 1 ? "" : "s") + " grounded" + knobs + capped + ".";
       } else {
         note.textContent = 'research "' + researchQueue.topic + '": '
@@ -793,7 +872,8 @@ ${THEME_TOKENS_CSS}
 
   window.tmctResearchReady = boot().catch((err) => {
     console.error("tmct research failed to boot", err);
-    statusEl.textContent = "the research page failed to start (" + (err && err.message ? err.message : err) + ")";
+    engineNoteEl.hidden = false;
+    engineNoteEl.textContent = "The research page failed to start (" + (err && err.message ? err.message : err) + ").";
   });
 })();
 </script>

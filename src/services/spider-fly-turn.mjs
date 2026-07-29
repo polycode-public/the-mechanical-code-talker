@@ -73,7 +73,7 @@ const SPIDER_FLY_TOLD_RE = new RegExp(
 const SPIDER_FLY_SEE_RE = /^what (?:does|can) the (spider|fly)(?:-(\d+))?\s+see[.!?\s]*$/i;
 
 const WORLD_OPENING_FALLBACK =
-  "a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move — watch, or address one by name in chat.";
+  "a spider waits in its web; a fly drifts in from the edge of the board. Neither is yours to move. Watch, or address one by name in chat.";
 
 // ---- the opening turn: load the shipped board through the worlds pack -------
 

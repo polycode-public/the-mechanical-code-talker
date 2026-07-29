@@ -1,6 +1,10 @@
 # person — the generic fallback for anyone with no NPC sprite of their own
 # (see butler/housekeeper/cook/gardener for Ashcombe Hall's own named
-# staff): gradient head and body, one highlight on the head.
+# staff): the pack's shared plain-adult body — a head on a short neck, an
+# arched torso with a collar notch, and two arms that break clear of the
+# torso outline instead of a single seamless blob. No prop, no invented
+# feature: this is the plainest figure the family has, so the only detail
+# is the body itself reading as a body.
 classes = ["person"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -11,9 +15,18 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
   </defs>
+  <g fill="url(#person-fill)">
+    <path d="M9.4 13.1 C7.6 13.2 5.9 14.7 5.6 17.4 C5.5 18.8 6.2 19.7 7.2 19.2 C7.3 17.1 7.9 15.1 9.7 14.2 Z"/>
+    <path d="M14.6 13.1 C16.4 13.2 18.1 14.7 18.4 17.4 C18.5 18.8 17.8 19.7 16.8 19.2 C16.7 17.1 16.1 15.1 14.3 14.2 Z"/>
+    <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
   <circle cx="12" cy="6.6" r="3.3" fill="url(#person-fill)"/>
-  <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z" fill="url(#person-fill)"/>
-  <path d="M12 12.8 C13.1 12.8 14.1 13 15 13.4" fill="none" stroke="currentColor" stroke-width="0.9" opacity="0.4" stroke-linecap="round"/>
+  <path d="M10.4 12.6 L12 13.9 L13.6 12.6" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M12 13.9 L12 20.2" fill="none" stroke="currentColor" stroke-width="0.4" stroke-linecap="round" opacity="0.22"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
   <path d="M9.6 4.2 C10.3 3.6 11.1 3.4 12 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
 </svg>
 """

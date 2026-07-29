@@ -1,8 +1,9 @@
 # ant — a small creature at the sprite tier, gradient-shaded like
 # dog/spider with no material table (an ant has no taught mgx:madeOf that
-# would mean anything): three body segments, six legs and two antennae,
-# kept deliberately small in byte terms the way egg/spider stayed small —
-# a simple insect earns a simple file.
+# would mean anything): three body segments, six legs and two antennae.
+# Fixed near-black compound eyes and a thin waist pinch between the
+# segments are the only fixed accents, the same small-accent restraint
+# vole.toml uses for its own eye bead.
 classes = ["ant"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -16,7 +17,10 @@ svg = """
   <circle cx="6.4" cy="9.4" r="2.6" fill="url(#ant-fill)"/>
   <ellipse cx="12" cy="12" rx="2.4" ry="2.1" fill="url(#ant-fill)"/>
   <ellipse cx="17.6" cy="14.6" rx="4" ry="3.4" fill="url(#ant-fill)"/>
+  <ellipse cx="14.6" cy="13.2" rx="0.5" ry="1.1" fill="#000000" opacity="0.25" transform="rotate(30 14.6 13.2)"/>
   <path d="M4.6 6.6 L2.6 4.6 M4.9 8.2 L2.2 7.6" stroke="currentColor" stroke-width="0.9" stroke-linecap="round"/>
+  <circle cx="2.6" cy="4.6" r="0.4" fill="#1c1c1c"/>
+  <circle cx="2.2" cy="7.6" r="0.4" fill="#1c1c1c"/>
   <g stroke="currentColor" stroke-width="0.9" stroke-linecap="round">
     <path d="M10.4 10.6 L6.6 9.6"/>
     <path d="M10.8 12.6 L6.4 13.2"/>
@@ -25,6 +29,7 @@ svg = """
     <path d="M13.8 12.4 L17 10"/>
     <path d="M14.2 14 L18.4 12.6"/>
   </g>
+  <ellipse cx="5.6" cy="8.6" rx="0.7" ry="0.55" fill="#1c1c1c"/>
   <ellipse cx="16.2" cy="13" rx="1.3" ry="1" fill="#ffffff" opacity="0.3"/>
 </svg>
 """

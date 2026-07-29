@@ -1,27 +1,33 @@
-# city — room.toml's own frame and wash, its interior swapped for a
-# skyline of four flat-filled blocks at varying heights, so a glance reads
-# "city" without needing a single named building.
+# city — room.toml's own card, its interior swapped for a stepped
+# skyline of four blocks each colour-mixed to its own depth and a
+# scatter of fixed warm-lit windows, so it reads as a dusk cityscape
+# rather than a flat silhouette.
 classes = ["city"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <defs>
-    <linearGradient id="city-fill" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.1"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.14"/>
+    <linearGradient id="city-fill" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 42%, white)"/>
+      <stop offset="60%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 70%, black)"/>
     </linearGradient>
   </defs>
   <rect x="3" y="3" width="18" height="18" rx="1" fill="url(#city-fill)"/>
   <rect x="3" y="3" width="18" height="18" rx="1" fill="none" stroke="currentColor" stroke-width="1.6"/>
-  <rect x="5" y="12" width="3.4" height="9" fill="currentColor" opacity="0.85"/>
-  <rect x="9.2" y="8" width="3.4" height="13" fill="currentColor" opacity="0.85"/>
-  <rect x="13.4" y="14.4" width="3.4" height="6.6" fill="currentColor" opacity="0.85"/>
-  <rect x="17.2" y="10.4" width="2.6" height="10.6" fill="currentColor" opacity="0.85"/>
-  <g fill="#ffffff" opacity="0.5">
+  <rect x="5" y="12" width="3.4" height="9" fill="color-mix(in srgb, currentColor 55%, black)"/>
+  <rect x="9.2" y="8" width="3.4" height="13" fill="color-mix(in srgb, currentColor 40%, black)"/>
+  <rect x="13.4" y="14.4" width="3.4" height="6.6" fill="color-mix(in srgb, currentColor 65%, black)"/>
+  <rect x="17.2" y="10.4" width="2.6" height="10.6" fill="color-mix(in srgb, currentColor 48%, black)"/>
+  <g fill="#ffd27a">
+    <rect x="5.7" y="14" width="0.7" height="0.7"/>
+    <rect x="7" y="16.4" width="0.7" height="0.7"/>
     <rect x="10" y="9.6" width="0.7" height="0.7"/>
-    <rect x="11.4" y="9.6" width="0.7" height="0.7"/>
-    <rect x="10" y="11.8" width="0.7" height="0.7"/>
     <rect x="11.4" y="11.8" width="0.7" height="0.7"/>
+    <rect x="10" y="14.2" width="0.7" height="0.7"/>
+    <rect x="14.2" y="16" width="0.7" height="0.7"/>
+    <rect x="17.8" y="12.4" width="0.7" height="0.7"/>
+    <rect x="17.8" y="16.8" width="0.7" height="0.7"/>
   </g>
-  <path d="M4 4 L11 4" stroke="#ffffff" stroke-width="1" opacity="0.4"/>
+  <path d="M4 4 L11 4" stroke="#ffffff" stroke-width="1" opacity="0.3"/>
 </svg>
 """

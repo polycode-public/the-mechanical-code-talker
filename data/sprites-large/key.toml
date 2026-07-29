@@ -1,7 +1,9 @@
-# key — Ashcombe Hall's own key at the sprite tier: the same stroke-only
-# skeleton-key geometry, its strokes now painted with the material
-# gradient instead of a flat colour, plus a thin white specular arc
-# tracing the bow's own upper-left curve.
+# key — Ashcombe Hall's own key at the sprite tier: a stroke-only bow with a
+# hole (the ring is drawn as a stroke, not a fill, so the hole reads at any
+# size) and a shaft ending in square-capped, stepped teeth cut at right
+# angles off the shaft rather than one flat blade, painted with the material
+# gradient plus a thin white specular arc tracing the bow's own upper-left
+# curve.
 classes = ["key"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -13,9 +15,12 @@ svg = """
     </linearGradient>
   </defs>
   <circle cx="7" cy="9" r="4.4" fill="none" stroke="url(#key-fill)" stroke-width="2.4"/>
-  <path d="M10.4 12 L19.5 21.1" stroke="url(#key-fill)" stroke-width="2.2" stroke-linecap="round"/>
-  <path d="M16.4 17.1 L18.6 14.9" stroke="url(#key-fill)" stroke-width="2" stroke-linecap="round"/>
-  <path d="M18.6 19.3 L20.6 17.3" stroke="url(#key-fill)" stroke-width="2" stroke-linecap="round"/>
+  <path d="M10.4 12 L19.5 21.1" stroke="url(#key-fill)" stroke-width="2.3" stroke-linecap="round"/>
+  <g stroke="url(#key-fill)" stroke-linecap="square">
+    <path d="M14.6 16.2 L16.4 14.4" stroke-width="1.8"/>
+    <path d="M16.7 18.3 L18.9 16.1" stroke-width="1.9"/>
+    <path d="M18.6 20.2 L20.4 18.4" stroke-width="1.6"/>
+  </g>
   <path d="M5.4 6.6 A4.4 4.4 0 0 1 8.6 5.1" fill="none" stroke="#ffffff" stroke-width="0.8" stroke-linecap="round" opacity="0.45"/>
 </svg>
 """

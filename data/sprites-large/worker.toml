@@ -1,5 +1,10 @@
-# worker — a smooth domed hard hat with a slight brim and a centre ridge,
-# the single construction-safety cue, kept smoother and rounder than
+# worker — the shared person body under a smooth domed hard hat, with
+# rolled-sleeve cuffs, a wrench in hand and a high-vis vest band across
+# the chest, the construction-safety cues. The hat and sleeves stay
+# currentColor since both vary by trade and theme; the wrench is fixed
+# tool-steel grey and the vest band fixed safety amber because both are
+# worn/carried at one canonical colour, the same reasoning carrot.toml
+# uses for its own fixed orange. Kept smoother and rounder than
 # officer.toml's structured, straight-brimmed cap.
 classes = ["worker"]
 svg = """
@@ -11,10 +16,24 @@ svg = """
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
   </defs>
-  <path d="M7.6 7.6 C7.6 4.9 9.5 2.8 12 2.8 C14.5 2.8 16.4 4.9 16.4 7.6 L16.4 7.9 L7.6 7.9 Z" fill="url(#worker-fill)"/>
-  <ellipse cx="12" cy="8" rx="5" ry="0.8" fill="url(#worker-fill)"/>
-  <circle cx="12" cy="9.4" r="3.1" fill="url(#worker-fill)"/>
-  <path d="M6 21 C6 15.6 8.7 13.2 12 13.2 C15.3 13.2 18 15.6 18 21 Z" fill="url(#worker-fill)"/>
-  <ellipse cx="9" cy="4.8" rx="1.6" ry="0.6" fill="#ffffff" opacity="0.32"/>
+  <path d="M7.8 3.6 C7.8 1.8 9.6 0.3 12 0.3 C14.4 0.3 16.2 1.8 16.2 3.6 L16.2 3.9 L7.8 3.9 Z" fill="url(#worker-fill)"/>
+  <ellipse cx="12" cy="3.9" rx="5" ry="0.7" fill="url(#worker-fill)"/>
+  <g fill="url(#worker-fill)">
+    <path d="M9.4 13.1 C7.6 13.2 5.9 14.7 5.6 17.4 C5.5 18.8 6.2 19.7 7.2 19.2 C7.3 17.1 7.9 15.1 9.7 14.2 Z"/>
+    <path d="M14.6 13.1 C16.4 13.2 18.1 14.7 18.4 17.4 C18.5 18.8 17.8 19.7 16.8 19.2 C16.7 17.1 16.1 15.1 14.3 14.2 Z"/>
+    <path d="M6 21 C6 15.3 8.7 12.8 12 12.8 C15.3 12.8 18 15.3 18 21 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
+  <rect x="7.2" y="15.6" width="9.6" height="1.3" rx="0.2" fill="#e8a325"/>
+  <rect x="7.2" y="16.45" width="9.6" height="0.35" fill="#f4f1ea" opacity="0.85"/>
+  <ellipse cx="6.7" cy="17.5" rx="1" ry="0.6" fill="color-mix(in srgb, currentColor 40%, white)" transform="rotate(-25 6.7 17.5)"/>
+  <ellipse cx="17.3" cy="17.5" rx="1" ry="0.6" fill="color-mix(in srgb, currentColor 40%, white)" transform="rotate(25 17.3 17.5)"/>
+  <path d="M16.4 17.6 C16.7 17.2 17.3 17.2 17.6 17.6 C17.8 17.9 17.8 18.2 17.6 18.5 L19.4 20.3 L18.9 20.8 L17.1 19 C16.8 19.2 16.5 19.2 16.2 19 C15.8 18.7 15.8 18.1 16.4 17.6 Z" fill="#8a8f99"/>
+  <circle cx="12" cy="6.6" r="3.3" fill="url(#worker-fill)"/>
+  <path d="M10.4 12.6 L12 13.9 L13.6 12.6" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <ellipse cx="9" cy="3.4" rx="1.6" ry="0.5" fill="#ffffff" opacity="0.32"/>
 </svg>
 """

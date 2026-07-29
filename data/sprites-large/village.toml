@@ -1,20 +1,29 @@
-# village — two small cottages with pitched roofs and a single tree,
-# distinguished from town.toml's taller uniform blocks by scale and roof
-# shape rather than by a different technique.
+# village — a couple of humble cottages under fixed thatch roofs, fewer
+# and lower than town's cluster, each doorway lit and one shade tree
+# filling the green between them. Thatch and the tree's own foliage
+# colour are fixed since both are real materials the roof and hedge
+# always carry.
 classes = ["village"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
   <defs>
-    <linearGradient id="village-fill" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.12"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0.16"/>
+    <linearGradient id="village-wash" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 36%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 65%, black)"/>
     </linearGradient>
   </defs>
-  <path d="M2.6 13.6 L6.4 10 L10.2 13.6 V19.4 H2.6 Z" fill="url(#village-fill)" stroke="currentColor" stroke-width="1.1" stroke-linejoin="round"/>
-  <path d="M11.4 15 L15.6 10.8 L19.8 15 V21 H11.4 Z" fill="url(#village-fill)" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
-  <rect x="14.6" y="17" width="2" height="4" fill="currentColor" opacity="0.5"/>
-  <circle cx="5" cy="7" r="2.4" fill="#5ea25a"/>
-  <rect x="4.6" y="8.6" width="0.8" height="2" fill="#7a5230"/>
-  <path d="M11.8 15.4 L15.6 11.4 L19.2 15.4" stroke="#ffffff" stroke-width="0.5" opacity="0.35"/>
+  <rect x="1.6" y="18.8" width="20.8" height="2.4" fill="#4a7a34" opacity="0.5"/>
+  <rect x="2.6" y="14.6" width="7.6" height="6.4" fill="url(#village-wash)" stroke="currentColor" stroke-width="1.1"/>
+  <path d="M2 14.6 L6.4 10.2 L10.8 14.6 Z" fill="#c9a24a" stroke="#8a6a2e" stroke-width="0.6"/>
+  <rect x="5.6" y="17.4" width="1.6" height="3.6" fill="#5c3f22"/>
+  <circle cx="6.9" cy="19.2" r="0.18" fill="#c9a227"/>
+  <rect x="12" y="15.6" width="7.6" height="5.4" fill="url(#village-wash)" stroke="currentColor" stroke-width="1.1"/>
+  <path d="M11.4 15.6 L15.8 11.4 L20.2 15.6 Z" fill="#c9a24a" stroke="#8a6a2e" stroke-width="0.6"/>
+  <rect x="15" y="17.8" width="1.6" height="3.2" fill="#5c3f22"/>
+  <circle cx="16.3" cy="19.4" r="0.18" fill="#c9a227"/>
+  <circle cx="21.4" cy="15.6" r="2.4" fill="#5ea25a"/>
+  <rect x="21" y="17.4" width="0.8" height="2.4" fill="#7a5230"/>
+  <path d="M13 16 L15.8 12.2 L18.4 16" stroke="#ffffff" stroke-width="0.5" opacity="0.3"/>
 </svg>
 """

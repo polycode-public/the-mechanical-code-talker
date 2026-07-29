@@ -21,6 +21,8 @@ svg = """
   <circle cx="16.4" cy="12.4" r="0.55" fill="#000000" opacity="0.4"/>
   <path d="M4.6 15.2 L3.8 20.5 L5.6 20.5 L6.2 15.2 Z" fill="url(#desk-fill)"/>
   <path d="M17.8 15.2 L17.2 20.5 L19 20.5 L18.2 15.2 Z" fill="url(#desk-fill)"/>
+  <rect x="3.5" y="20.5" width="2.3" height="0.7" rx="0.3" fill="{{FILL_DARK}}"/>
+  <rect x="17" y="20.5" width="2.3" height="0.7" rx="0.3" fill="{{FILL_DARK}}"/>
 </svg>
 """
 
