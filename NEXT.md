@@ -51,6 +51,46 @@ bucket `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PR
 `main` with a remote — GitLab CI's `deploy:website` job. **Version is already rolled to 4.0.0**
 (`42bf8129`) for this whole line of work — don't roll again for it.
 
+## In-flight right now — chat.html corpus scale-up + fact-provenance design (2026-07-29)
+
+The web chat's seed (`chat-seed.json`) is uncapped to match `npm run init:xl` exactly — 72,098
+facts, 85.6 MB raw / 4.6 MB brotli on the wire, boot budget still comfortable (composer ready
+~2.6s, first grounded answer ~3.4s against the 20s budget). `npm run init`/`init:small`/
+`init:large` are renamed: `init` now runs what `init:large` used to (37,821 facts, human persona +
+seon + conceptnet + aws/python/java — the CLI default going forward); `init:small` is the new name
+for the old minimal `init` (688 facts, human persona only, no big corpora), and is still exactly
+what a graph-less `npm run chat` auto-bootstraps (`chat-session.mjs`'s `seedBootstrapMemory` calls
+`initRepo` with the human persona directly, unaffected by the script rename). README.md/
+`public/index.html`/`docs/public-examples.md` gained two new verified examples: `examples/
+rover-infer.mjs` (a taught fact chaining through a corpus fact: "Rover is a dog" + corpus's "dog can
+bark" -> "yes, via..."), `examples/raw-fact-shape.mjs` (a raw Fact individual exactly as stored,
+`trustInputs` parsed for display readability only — storage format itself untouched).
+
+**OPEN — a real regression the corpus uncap caused, fix in progress.** `test-e2e/
+web-chat-memory.test.mjs`'s `learn-on-miss` test fails: ConceptNet's now-full weak-relation
+(`RelatedTo`) coverage means almost every ordinary term already has SOME grounding, so the
+reference-pack/Wikipedia fallback never fires for the demo term ("identifier"). Decided fix: a
+corpus-weak-ONLY match (the `"possibly: X is related to Y"` tier) should no longer count as
+sufficient grounding to skip that fallback — still honestly hedged, so it's right to also try
+live-grounding it — PLUS swap the demo term to a synthetic guaranteed-miss word as a second,
+independent safeguard (a 104-term sample of the full 4,224-term reference pack found zero
+surviving real-English terms that still miss under the uncapped corpus, so hunting for another real
+word to swap to is not a durable fix on its own). Dispatched to a background agent; hit four
+consecutive transient API "529 Overloaded" errors on resume in a row (not a real problem with the
+task) — if a resuming session finds this still stuck, retry again; if it's since landed, this whole
+paragraph is stale and should be deleted, not qualified.
+
+**OPEN — a real plan doc started, not just a discussion.** `PLAN_FACT.md`: the operator wants to
+move away from the current content-addressed-merge model — same `(subject,predicate,object)`
+always upserts ONE Fact record, corroborating sources onto it (confirmed both in `PLAN_MUD.md`'s
+G-Set CRDT design and in `src/adapters/memory/core.mjs`'s `appendFacts`, and in the `mgx:trustScore`/
+`mgx:trustInputs` machinery in `src/domain/memory/trust.mjs`) — toward a model that keeps MULTIPLE
+Fact records for an identical triple, each tracing its own source node id, closer to a MIME
+message's `Received:` header chain (one entry per hop, appended, never merged or collapsed). See
+`PLAN_FACT.md` for the worked example and the open trade-off against the current model (which
+wasn't an accident — `PLAN_MUD.md` chose single-record-merge deliberately for CRDT convergence
+under P2P replication; the new model needs to reconcile with that, not just add a shape on top).
+
 ## Open items
 
 - [ ] **demo-page JS that belongs in tmct itself, audited toward lib > tool > ask (operator,
