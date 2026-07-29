@@ -31,6 +31,14 @@ export function embedScriptText(js) {
   return String(js ?? "").replaceAll("</script", "<\\/script");
 }
 
+/** A world name read as a name in a scenario dropdown: "mud-garden" ->
+ *  "mud garden". The world's own hyphenated id is the only thing every caller
+ *  is guaranteed to have, so a scenario that wants a hand-written label passes
+ *  one instead of leaning on this. Pure. */
+export function scenarioLabel(worldName) {
+  return String(worldName || "").split("-").join(" ").trim() || "world";
+}
+
 /** hex "#RRGGBB" -> "rgba(r, g, b, a)" */
 function rgba(hex, alpha) {
   const n = parseInt(hex.slice(1), 16);

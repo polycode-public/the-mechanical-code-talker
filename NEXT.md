@@ -24,19 +24,14 @@ theme + corner cobweb; sprites.html Illustrator chrome + ancestor grouping; code
 restyled; ledger/research restyled dark New-Relic-style; plan.html toward its DAW theme). Nothing
 left running.
 
-**Known gap:** a mud room is bound
-to the store it was opened over, so recasting (RESET, or either slider) drops the link and says so.
-Carrying a live room across a recast needs the room to re-bind to the new store, which is a real
-piece of work in `p2p-room.mjs` rather than page wiring.
+Both pages now also offer an alternate-scenario dropdown next to RESET (mud.html: mud-garden,
+mud-hollow, mud-warren; adventure.html: ashcombe-hall, lantern-cottage, greyvale-museum), with EDIT
+mode, the cast, the map, and P2P all following whichever scenario is currently loaded.
 
-**Alternate-scenario dropdowns, mud.html and adventure.html (operator-specified 2026-07-29):** a
-dropdown next to RESET on each page to load one of several alternate world scenarios (different
-sizes/complexity/aspects, not just the one default world each page ships today); EDIT mode then edits
-whichever scenario is currently loaded. Both pages' own edit/externalization pass is now done —
-mud.html's (merged `4aa4c63e`/`e2474f1a`) and adventure.html's own six-item audit (`roomAffordances`'
-verb menu and `isCastMember` were already fact-driven; `VIEW_EXCLUDED_PREDICATES` is a legitimate
-schema-level exclusion; the win-condition wording, the hardcoded `"player"` in `adventure-viz.mjs`, and
-the closed verb if-chain were real and are fixed). Not yet dispatched.
+**Known gap:** a mud room is bound to the store it was opened over, so recasting (RESET, either
+slider, or the scenario dropdown) drops the link and says so. Carrying a live room across a recast
+needs the room to re-bind to the new store, which is a real piece of work in `p2p-room.mjs` rather
+than page wiring.
 
 **sprites.html variant cycles — next slice** (v1 shipped: `mgx:faces` left/right profile pairs for
 bear/cat/dog/king as `[match]` variants, plus the catalog's auto-cycling variant swatch, which

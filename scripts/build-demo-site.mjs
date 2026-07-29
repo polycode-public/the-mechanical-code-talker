@@ -360,32 +360,71 @@ let largeSpriteManifest = null;
   console.log(`wrote ${spiderFlyPath}`);
 }
 
-// The adventure hero: the shipped Ashcombe Hall world's real facts+rules,
-// read ONCE through the same Node worlds-pack provider the CLI itself uses
-// and embedded straight into the page (adventure-viz.mjs's own header
-// explains why — the world's canonical definition is a Node-only JSONL
-// corpus source, not a pure JS module the browser bundle could call
-// directly), plus this game's own dedicated browser bundle.
-{
+// What each scenario's dropdown entry says. The label names the difference
+// that made the world worth shipping — how big it is, and what it is that
+// makes it harder or easier — so picking one is a choice rather than a guess
+// at what a hyphenated world id means.
+const ADVENTURE_SCENARIO_LABELS = {
+  "ashcombe-hall": "ashcombe hall (6 rooms, 1 lock)",
+  "lantern-cottage": "lantern cottage (3 rooms, no locks)",
+  "greyvale-museum": "greyvale museum (9 rooms, 3 locks)",
+};
+const MUD_SCENARIO_LABELS = {
+  "mud-garden": "mud garden (4 rooms, 1 fox)",
+  "mud-hollow": "mud hollow (3 rooms, nothing hunting)",
+  "mud-warren": "mud warren (8 rooms, fox and owl)",
+};
+
+// The world payload every game page embeds: one shipped world's real
+// facts+rules, read through the same Node worlds-pack provider the CLI itself
+// uses (the viz headers explain why — a world's canonical definition is a
+// Node-only gzipped JSONL shard, not a pure JS module the browser bundle
+// could call directly).
+function worldPayloadOf(world) {
+  return {
+    name: world.name,
+    facts: world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
+    rules: world.rules.map((r) => ({ name: r.name, ruleKind: r.ruleKind, slots: r.slots })),
+    opening: world.meta?.opening || "",
+  };
+}
+
+/** The worlds a page's scenario dropdown offers, in the order named, skipping
+ *  any the pack does not carry. A page whose alternates are all missing still
+ *  builds — it just ships the one world it found. */
+async function loadScenarioWorlds(names) {
   const { getWorldsPackProvider, clearWorldsPackCache } = await import(join(ROOT, "src", "adapters", "corpus", "worlds-pack.mjs"));
   clearWorldsPackCache();
-  const world = await getWorldsPackProvider({}).load("ashcombe-hall");
-  if (!world) {
-    console.log("ashcombe-hall world not found in the worlds pack — run `npm run gen:worlds-pack` first; the adventure hero has no world to embed, so this is a heads-up, not a build failure");
+  const provider = getWorldsPackProvider({});
+  const found = [];
+  for (const name of names) {
+    const world = await provider.load(name);
+    if (world) found.push(worldPayloadOf(world));
+    else console.log(`${name} world not found in the worlds pack — run \`npm run gen:worlds-pack\`; skipping that scenario`);
+  }
+  return found;
+}
+
+// The adventure hero: Ashcombe Hall plus the two alternates its scenario
+// dropdown offers, a shorter cottage and a bigger museum with a deeper lock
+// chain. Ashcombe stays first, so the page opens on the world it always has.
+{
+  const worlds = await loadScenarioWorlds(["ashcombe-hall", "lantern-cottage", "greyvale-museum"]);
+  if (!worlds.length) {
+    console.log("no adventure worlds found in the worlds pack — the adventure hero has no world to embed, so this is a heads-up, not a build failure");
   } else {
     const { main: buildAdventureBundle } = await import(join(here, "build-adventure-bundle.mjs"));
     const { outPath: adventureBundlePath, size: adventureBundleBytes } = await buildAdventureBundle(SITE);
     console.log(`wrote ${adventureBundlePath} (${(adventureBundleBytes / 1024).toFixed(0)} KB)`);
     const { renderAdventureHtml } = await import(join(ROOT, "src", "services", "adventure-viz.mjs"));
-    const worldPayload = {
-      name: world.name,
-      facts: world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
-      rules: world.rules.map((r) => ({ name: r.name, ruleKind: r.ruleKind, slots: r.slots })),
-      opening: world.meta?.opening || "",
-    };
+    const scenarios = worlds.map((worldPayload) => ({
+      label: ADVENTURE_SCENARIO_LABELS[worldPayload.name] || worldPayload.name,
+      worldPayload,
+    }));
     const adventurePath = join(SITE, "adventure.html");
     await writeF(adventurePath, renderAdventureHtml({
-      worldPayload,
+      worldPayload: scenarios[0].worldPayload,
+      scenarios,
       spriteTemplates,
       largeSpriteTemplates: largeSpriteManifest ? largeSpriteManifest.templates : [],
     }));
@@ -393,45 +432,43 @@ let largeSpriteManifest = null;
   }
 }
 
-// The mud demo: mud-garden's real facts+rules, read ONCE through the same
-// Node worlds-pack provider (mud-viz.mjs's own header explains why — same
-// reasoning as the adventure block above), plus this game's own dedicated
-// four-character browser bundle. The large-tier sprite set is read again
-// here (not shared with spider-fly's own spriteLargeTemplates above) so this
-// block stays self-contained regardless of build-step ordering, matching
+// The mud demo: mud-garden plus the two alternates its scenario dropdown
+// offers, a three-room hollow with nothing hunting in it and an eight-room
+// warren with two predators and thin food. mud-garden stays first, so the
+// page opens on the burrow it always has. The large-tier sprite set is read
+// again here (not shared with spider-fly's own spriteLargeTemplates above) so
+// this block stays self-contained regardless of build-step ordering, matching
 // the spider-fly block's own posture.
 {
-  const { getWorldsPackProvider, clearWorldsPackCache } = await import(join(ROOT, "src", "adapters", "corpus", "worlds-pack.mjs"));
-  clearWorldsPackCache();
-  const world = await getWorldsPackProvider({}).load("mud-garden");
-  if (!world) {
-    console.log("mud-garden world not found in the worlds pack — run `npm run gen:worlds-pack` first; the mud demo has no world to embed, so this is a heads-up, not a build failure");
+  const worlds = await loadScenarioWorlds(["mud-garden", "mud-hollow", "mud-warren"]);
+  if (!worlds.length) {
+    console.log("no mud worlds found in the worlds pack — the mud demo has no world to embed, so this is a heads-up, not a build failure");
   } else {
     const { main: buildMudBundle } = await import(join(here, "build-mud-bundle.mjs"));
     const { outPath: mudBundlePath, size: mudBundleBytes } = await buildMudBundle(SITE);
     console.log(`wrote ${mudBundlePath} (${(mudBundleBytes / 1024).toFixed(0)} KB)`);
     const { renderMudHtml } = await import(join(ROOT, "src", "services", "mud-viz.mjs"));
-    const worldPayload = {
-      name: world.name,
-      facts: world.facts.map((f) => ({ subject: f.subject, predicate: f.predicate, object: f.object })),
-      rules: world.rules.map((r) => ({ name: r.name, ruleKind: r.ruleKind, slots: r.slots })),
-      opening: world.meta?.opening || "",
-    };
-    // The roster the page may draw its cast from, in the order mud-garden.jsonl
-    // places it: mole-1/vole-1 start together in the garden, badger-2/
-    // groundhog-1 together in the sett. The page's own players slider decides
-    // how many of them play, and pickMudRoster decides which.
-    const mudCharacters = [
-      { id: "mole-1", species: "mole" },
-      { id: "vole-1", species: "vole" },
-      { id: "badger-2", species: "badger" },
-      { id: "groundhog-1", species: "groundhog" },
-    ];
+    const { mudSpeciesOf } = await import(join(ROOT, "src", "domain", "game-config.mjs"));
+    // The roster each burrow may cast from, read off the burrow's own
+    // adventurers in the order its source file places them — never a list
+    // typed out here, which would go stale the moment a world's cast changed
+    // and would have nothing to say about a world this file never saw. The
+    // page's players slider decides how many of them play, and pickMudRoster
+    // decides which.
+    const rosterOf = (worldPayload) => worldPayload.facts
+      .filter((f) => f.predicate === "rdf:type" && f.object === "adventurer")
+      .map((f) => ({ id: f.subject, species: mudSpeciesOf(f.subject) }));
+    const scenarios = worlds.map((worldPayload) => ({
+      label: MUD_SCENARIO_LABELS[worldPayload.name] || worldPayload.name,
+      worldPayload,
+      characters: rosterOf(worldPayload),
+    }));
     const mudSpriteTemplates = readSpriteLargeTemplateFiles();
     const mudPath = join(SITE, "mud.html");
     await writeF(mudPath, renderMudHtml({
-      worldPayload,
-      characters: mudCharacters,
+      worldPayload: scenarios[0].worldPayload,
+      characters: scenarios[0].characters,
+      scenarios,
       spriteTemplates: mudSpriteTemplates,
     }));
     console.log(`wrote ${mudPath}`);
