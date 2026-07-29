@@ -29,6 +29,8 @@ Every fence carries a harness tag, and `test/readme/readme.test.mjs` asserts tha
 |---|---|---|---|---|
 | `README.md:27` | `js` — packaged exports smoke | `runChat` | `test/readme/readme.test.mjs` | replay |
 | `README.md:59` | `node examples/teach-and-infer.mjs` | `runChat`, `appendFact` | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
+| `README.md:137` | `node examples/rover-infer.mjs` | `runChat`, first-run corpus bootstrap (`seedBootstrapMemory`) | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
+| `README.md:153` | `node examples/raw-fact-shape.mjs` | `appendFact`, `loadMemory` | `test/readme/readme.test.mjs` (full stdout, no elision) | output |
 | `README.md:109` | `what does app.mjs talk to?` / `what talks to store.mjs?` | `runTurn` → `reverse(uses)` | `test/readme/readme.test.mjs` | replay |
 | `README.md:130` | `npm run demo:build` / `build:ask-bundle` | `scripts/build-demo-site.mjs` | `test-e2e/readme-examples.test.mjs` | replay |
 | `README.md:137` | `npx tmct viz` / `init` / `import` / `chat --render blocks` | `renderLedger`, `renderPlanHtml` | `test-e2e/readme-examples.test.mjs` | replay |
@@ -57,6 +59,7 @@ harness the README fences use.
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
 | `index.html:227` | `what is a dog` / `what is a quokka` | `runTurn`, corpus seed | `test-e2e/pages-examples.test.mjs` | replay |
+| `index.html:734` | `Rover is a dog.` / `Does Rover bark?` (via `examples/rover-infer.mjs`) | `runChat`, first-run corpus bootstrap | `test-e2e/pages-examples.test.mjs` | replay |
 | `index.html:290` | `what talks to store.mjs?` / `which modules do not import logger?` | `runTurn` → `reverse(uses)`, `composite(boolean)` | `test-e2e/pages-examples.test.mjs` | replay |
 | `index.html:287` | `npm install -g @polycode-projects/…` | — | `test-e2e/pages-home.test.mjs` | dom |
 | `index.html:302` | `tmct init` / `viz` / `syllogise` | `CLI_VERBS` | `test-e2e/pages-home.test.mjs` | dom |
@@ -125,10 +128,17 @@ Both figures were counted off the pools for this table and both match.
 | surface | example (verbatim) | implementation (symbol) | test that touches it | tier |
 |---|---|---|---|---|
 | `examples/teach-and-infer.mjs` | the whole script | `runChat` | `test/readme/readme.test.mjs` via `README.md:59` | output |
+| `examples/rover-infer.mjs` | the whole script | `runChat`, first-run corpus bootstrap | `test/readme/readme.test.mjs` via `README.md:137`, `test-e2e/pages-examples.test.mjs` via `index.html:734` | output |
+| `examples/raw-fact-shape.mjs` | the whole script | `appendFact`, `loadMemory` | `test/readme/readme.test.mjs` via `README.md:153` | output |
 | `examples/mini-webapp` | the fixture graph | `parseEntities` | `test/estate/fixture-repos.test.mjs` | estate |
 
-`teach-and-infer.mjs` carries no `assert` of its own. It does not need one: the
-README pins its **entire** stdout with no elision, so any drift fails the suite.
+`teach-and-infer.mjs`, `rover-infer.mjs`, and `raw-fact-shape.mjs` carry no
+`assert` of their own. They do not need one: the README pins each one's
+**entire** stdout with no elision (session-id/timestamp normalized to a
+literal placeholder first), so any drift fails the suite. `rover-infer.mjs`
+is also replayed as `index.html:734`'s `data-tmct-session` command — pointing
+that block at the example script itself, rather than the raw `tmct` binary,
+is what makes the same non-deterministic citation checkable there too.
 
 ## .tmct/TOOLS.md
 

@@ -130,6 +130,168 @@ and never run: one would touch the network, the other needs an LLM judge.
 `docs/public-examples.md` maps every example on every public surface to the
 test that holds it.
 
+Facts don't have to come entirely from teaching. tmct's corpus already knows
+a dog can bark; teach it that Rover is a dog and it reasons the rest, citing
+both the taught fact and the corpus fact the answer chained through:
+
+```output cmd="node examples/rover-infer.mjs" cwd=repo
+tmct> Rover is a dog.
+noted — remembered 1 fact: rover rdfs:subClassOf dog (rover is a type of dog)
+
+Goal (inferred): Teach/remember a new fact.
+
+Canonical: rover rdfs:subClassOf dog — fact("rover", "rdfs:subClassOf", "dog")
+
+tmct> Does Rover bark?
+yes — dog can bark (source: corpus:human /r/CapableOf) — via: rover is a kind of dog (source: ace:chat:<session-id>@<timestamp>)
+```
+
+Every fact above is a small stored record, not just words in an answer. Here
+are two of them exactly as they sit in the graph — `dog capableOf bark` and
+`dog subClassOf animal` — timestamps normalized so this stays reproducible:
+
+```output cmd="node examples/raw-fact-shape.mjs" cwd=repo
+{
+  "id": "fact:d5327019d311a956",
+  "label": "dog mgx:capableOf bark",
+  "class": "Fact",
+  "derived_from": [],
+  "mentions": [],
+  "attributes": [
+    {
+      "prop": "rdf:type",
+      "key": "type",
+      "value": "rdf:Statement"
+    },
+    {
+      "prop": "rdf:subject",
+      "key": "subject",
+      "value": "dog"
+    },
+    {
+      "prop": "rdf:predicate",
+      "key": "predicate",
+      "value": "mgx:capableOf"
+    },
+    {
+      "prop": "rdf:object",
+      "key": "object",
+      "value": "bark"
+    },
+    {
+      "prop": "mgx:createdAt",
+      "key": "createdAt",
+      "value": "<timestamp>"
+    },
+    {
+      "prop": "mgx:factProvenance",
+      "key": "provenance",
+      "value": "corpus:human /r/CapableOf"
+    },
+    {
+      "prop": "mgx:hasProseTokens",
+      "key": "prose_tokens",
+      "value": "bark capableof dog mgx"
+    },
+    {
+      "prop": "mgx:trustScore",
+      "key": "trustScore",
+      "value": "0.7"
+    },
+    {
+      "prop": "mgx:trustInputs",
+      "key": "trustInputs",
+      "value": {
+        "sourceTypes": [
+          "corpus"
+        ],
+        "corroboration": 1,
+        "createdAt": "<timestamp>",
+        "recency": 1
+      }
+    },
+    {
+      "prop": "mgx:updatedAt",
+      "key": "updatedAt",
+      "value": "<timestamp>"
+    }
+  ]
+}
+
+{
+  "id": "fact:08d02295fc0fed1c",
+  "label": "dog rdfs:subClassOf animal",
+  "class": "Fact",
+  "derived_from": [],
+  "mentions": [],
+  "attributes": [
+    {
+      "prop": "rdf:type",
+      "key": "type",
+      "value": "rdf:Statement"
+    },
+    {
+      "prop": "rdf:subject",
+      "key": "subject",
+      "value": "dog"
+    },
+    {
+      "prop": "rdf:predicate",
+      "key": "predicate",
+      "value": "rdfs:subClassOf"
+    },
+    {
+      "prop": "rdf:object",
+      "key": "object",
+      "value": "animal"
+    },
+    {
+      "prop": "mgx:createdAt",
+      "key": "createdAt",
+      "value": "<timestamp>"
+    },
+    {
+      "prop": "mgx:factProvenance",
+      "key": "provenance",
+      "value": "corpus:human /r/IsA"
+    },
+    {
+      "prop": "mgx:hasProseTokens",
+      "key": "prose_tokens",
+      "value": "animal dog rdfs subclassof"
+    },
+    {
+      "prop": "mgx:trustScore",
+      "key": "trustScore",
+      "value": "0.7"
+    },
+    {
+      "prop": "mgx:trustInputs",
+      "key": "trustInputs",
+      "value": {
+        "sourceTypes": [
+          "corpus"
+        ],
+        "corroboration": 1,
+        "createdAt": "<timestamp>",
+        "recency": 1
+      }
+    },
+    {
+      "prop": "mgx:updatedAt",
+      "key": "updatedAt",
+      "value": "<timestamp>"
+    }
+  ]
+}
+```
+
+Every attribute value here is a plain string except `mgx:trustInputs`, which
+is `JSON.stringify`'d into its `value` field in the actual store (parsed back
+out above for readability) since the flat attribute list has nowhere else to
+put a nested object. `mgx:trustScore` is computed from exactly those inputs —
+source type, corroboration count, recency — never guessed.
+
 Point it at a codebase's graph and the same engine answers structural questions.
 `examples/mini-webapp` ships in this repo, so this runs as written:
 
@@ -145,8 +307,8 @@ tmct> /exit
 **[Try it live in your browser →](https://tmct.polycode.co.uk/)**
 runs the actual query engine client-side. No server, no install. The landing
 page answers codebase questions live, and eight more pages each ground their
-own domain: a full chat seeded with 32,646 facts (the same nine bands as
-`npm run init:xl`, capped to a 38.7 MB download, 2.1 MB on the wire), the
+own domain: a full chat seeded with 72,098 facts (the same nine bands as
+`npm run init:xl`, uncapped, 4.4 MB on the wire), the
 **memory ledger** (every fact as a readable sentence; drill by clicking the
 terms inside), and the **code explorer** (the same ledger UI refocused on a
 code graph, with a hint rail of suggested next questions). An **ingest
@@ -897,13 +1059,19 @@ once with `tmct init --memory-backend <...>` and every later `tmct chat` in that
 repo picks it up with no flag needed.
 ```
 
-`npm run init:large` in `package.json` chains one `init` and five `import --corpus`
+`npm run init` in `package.json` chains one `init` and five `import --corpus`
 calls to combine every shipped bundle (human persona + seon + conceptnet +
-aws/python/java) into ~7,380 facts on the default sqlite backend, a working
-example to copy from. `init:xl` starts from the large persona tier and adds
-the wordnet-xl corpus (~72,000 facts); `init:xxl` swaps wordnet-xl for the
-full WordNet slice plus namenet (~239,000 facts, the biggest committed
-vocabulary, so expect its imports to take a minute). The xl chain, spelled out:
+aws/python/java) into ~37,800 facts on the default sqlite backend, a working
+example to copy from (`init:large` is now just an alias for it). `npm run
+init:small` is the lighter variant: a bare `tmct init`, default persona only,
+no big corpora, 688 facts. It's what a first `npm run chat` in an
+uninitialized repo bootstraps automatically, so no init command is required
+just to start talking; running `init:small` explicitly (after `rm -rf
+tmct.toml .tmct`) gets you back to that same minimal state on purpose.
+`init:xl` starts from the large persona tier and adds the wordnet-xl corpus
+(~72,000 facts); `init:xxl` swaps wordnet-xl for the full WordNet slice plus
+namenet (~239,000 facts, the biggest committed vocabulary, so expect its
+imports to take a minute). The xl chain, spelled out:
 
 ```bash e2e heavy
 npx tmct init --persona-size large   # npm run init:xl runs this whole chain from a clone

@@ -19,7 +19,7 @@ cold load per page (Playwright, CDP `Network.loadingFinished`
 | page | own HTML (raw) | eager assets (raw) | eager assets (br wire) | cold-load total (wire) | third-party requests |
 |---|---:|---:|---:|---:|---:|
 | index.html | 18,153 | 4,856,462 | 1,541,298 | 1,546,402 | 0 |
-| chat.html | 63,520 | 45,207,960 | 3,177,250 | 3,192,811 | 0 |
+| chat.html | 63,520 | 94,442,864 | 5,669,129 | 5,684,690 | 0 |
 | spider-fly.html | 614,718 | 845,819 | 233,567 | 269,923 | 0 |
 | ledger.html | 652,024 | 4,497,227 | 1,023,670 | 1,188,941 | 0 |
 | adventure.html | 638,500 | 855,135 | 237,588 | 276,409 | 0 |
@@ -36,9 +36,12 @@ byte comes from the site's own origin.
 
 **chat.html and code.html now reflect the live 2.11.10 deployment,** measured
 2026-07-24 via `curl` per asset and verified through browser network inspection.
-chat.html's seed (`chat-seed.json`) compresses ~19:1 under brotli and accounts
-for most of its wire size; the boot time remains under the 20-second budget
-since everything is local JSON parsing, not network latency.
+`chat-seed.json`'s fact caps (conceptnet, wordnet-xl) have since been removed, so
+the chat.html numbers in this report reflect the uncapped seed rather than that
+2.11.10 crawl; see the chat.html note below for the current size. It compresses
+~19:1 under brotli and accounts for most of chat.html's wire size; the boot time
+remains under the 20-second budget since everything is local JSON parsing, not
+network latency.
 
 **ingest.html and research.html are new pages in this release,** both measured
 against the live deployment. Each loads the shared `vendor/wink.js` plus its
@@ -47,12 +50,15 @@ respectively), mirroring the cold-load profile of plan.html (wink plus one
 bundle), so both add no new shared assets beyond what the other pages already
 transfer on their first visits.
 
-Whole set, summing the ten per-page totals: **78,780,957 bytes raw (75.1 MB),
-10,537,414 bytes wire (10.1 MB)**. Counting every distinct file once (what a
+Whole set, summing the ten per-page totals: **128,015,861 bytes raw (122.1 MB),
+13,029,293 bytes wire (12.4 MB)**. Counting every distinct file once (what a
 full cold crawl transfers, since the wink vendor and the service worker script
-are shared): **57 files, ~56.6 MB raw, ~5.8 MB wire**. The ten-page set adds
+are shared): **57 files, ~103.6 MB raw, ~8.2 MB wire**. The ten-page set adds
 ingest and research pages (both new to 2.11.10) with their own bundles, and
-includes the updated chat and code pages.
+includes the updated chat and code pages. These chat.html totals carry
+`chat-seed.json`'s fact caps removed (see the chat.html note below); they are
+computed from the uncapped seed's measured size, not yet from a fresh
+Playwright crawl of a redeployed site.
 
 ## Notes on the numbers
 
@@ -62,14 +68,14 @@ pages load it eagerly (index, chat, ledger, sprites, plan, ingest, research),
 but the browser pays for it once: HTTP cache plus the service worker's precache
 serve every later page from the first copy.
 
-**chat.html.** The seed, `chat-seed.json`, is 40,539,765 bytes raw but
-2,116,462 on the wire (br compresses the JSON ~19:1, same ratio as before the
-caps rose), so chat's whole cold boot is 3.1 MB. The page also fetches
-`tmct-sw.js` (2,756) to show the release stamp. The reference pack loads
-lazily: `reference-pack/index.json` (104,924 raw / 20,407 br) on the first
-citation, then one article JSON per citation (1–4 KB each; 4,224 terms
+**chat.html.** The seed, `chat-seed.json`, matches `npm run init:xl`'s band set
+uncapped: 72,098 facts, 89,774,669 bytes raw but 4,608,341 on the wire (br
+compresses the JSON ~19:1), so chat's whole cold boot is 5.4 MB. The page also
+fetches `tmct-sw.js` (2,756) to show the release stamp. The reference pack
+loads lazily: `reference-pack/index.json` (104,924 raw / 20,407 br) on the
+first citation, then one article JSON per citation (1–4 KB each; 4,224 terms
 mapping to 3,887 article files, ~15.5 MB on disk that is never bulk-fetched).
-The bigger seed cost only bytes, not boot time: a real-browser measurement
+The bigger seed costs only bytes, not boot time: a real-browser measurement
 (`test-e2e/pages-chat-boot-budget.test.mjs`) still grounds the first seeded
 answer at ~1.5 s against a 20 s budget, since everything here is local
 JSON parsing, not network latency.

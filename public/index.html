@@ -728,6 +728,14 @@ tmct&gt; /exit</code></pre>
 tmct viz          # write the ledger page — see the link below
 tmct syllogise    # offline: pre-derive entailed facts (a maintenance job)</code></pre>
 
+    <p>Facts don't have to come entirely from teaching. tmct's own corpus
+    already knows a dog can bark; teach it that Rover is a dog and it
+    reasons the rest, citing both facts it chained through:</p>
+    <pre data-tmct-session="node examples/rover-infer.mjs" data-tmct-cwd="repo"><code>tmct&gt; Rover is a dog.
+noted — remembered 1 fact: rover rdfs:subClassOf dog (rover is a type of dog)
+tmct&gt; Does Rover bark?
+yes — dog can bark (source: corpus:human /r/CapableOf) — via: rover is a kind of dog (source: ace:chat:&lt;session-id&gt;@&lt;timestamp&gt;)</code></pre>
+
     <p>
       A chatbot in the <em>ELIZA/PARRY lineage</em>, obsessed with software the way PARRY
       was obsessed with the mafia. Interpretation is <em>mechanical</em> and memory is an
