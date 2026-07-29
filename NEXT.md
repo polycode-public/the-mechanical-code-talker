@@ -16,27 +16,19 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## In-flight right now — mud.html/adventure.html/chat.html P2P + design session (2026-07-29)
 
-Five of the six agents this session dispatched are done and merged: the NPC slider, mud.html's EDIT
-mode + hardcoded-logic audit, chat.html's full P2P integration, and adventure.html's direction-UI +
-sprite-fallback + cast-sprite pass. **One is still running:**
-
-- [ ] **`a0900f2c71f7c24b0`** (Fable + frontend-design skill, `.claude/worktrees/agent-a0900f2c71f7c24b0`)
-  — project-wide sprite detail/pop pass (excluding mud/adventure creature sprites, already done above)
-  and a design-consistency + plain-prose copy audit of every OTHER demo page (index — hands off, operator
-  likes it, bug fixes only — spider-fly, plan, ledger, code, research, ingest, sprites.html). Carries,
-  folded in along the way: per-page thematic direction (below), the spider-fly cobweb-in-the-corner
-  addition, and sprites.html's ontology-display + ancestor-sprite-coverage feature (below). If this
-  session's context is lost and the worktree is gone, dispatch fresh rather than resuming — see the
-  Discipline section's rule 3.
+All six agents this session dispatched are done and merged: the NPC slider, mud.html's EDIT mode +
+hardcoded-logic audit, chat.html's full P2P integration, adventure.html's direction-UI +
+sprite-fallback + cast-sprite pass, and the project-wide sprite detail/pop + design-consistency +
+copy audit (sprites raised to the badger detail bar across every family; spider-fly.html gothic
+theme + corner cobweb; sprites.html Illustrator chrome + ancestor grouping; code-explorer/ingest
+restyled; ledger/research restyled dark New-Relic-style; plan.html toward its DAW theme). Nothing
+left running.
 
 **Now unblocked, not yet dispatched** — mud.html's own P2P integration (share/join, node labels, wave
-button+animation against `src/services/p2p-room.mjs`) was waiting on the NPC-slider and EDIT-mode
-agents; both landed (`e2474f1a`), so this is ready to dispatch. Its theme is Lemmings (below), also
-ready. The cross-cutting P2P e2e scenarios (3-peer mesh, disconnect/rejoin, the multi-player-lab + mesh
-mud.html modes, chat.html inference over learned-vs-distributed facts) still wait on mud.html's P2P
-integration landing (chat.html's own side is already done). The mud/adventure/chat sprite-detail-pop +
-copy-audit follow-up (the exclusion the still-running design-pass agent is carrying) waits on nothing
-further — dispatch once that agent lands.
+button+animation against `src/services/p2p-room.mjs`), bundled with its Lemmings theme. The
+cross-cutting P2P e2e scenarios (3-peer mesh, disconnect/rejoin, the multi-player-lab + mesh mud.html
+modes, chat.html inference over learned-vs-distributed facts) wait on mud.html's P2P integration
+landing (chat.html's own side is already done).
 
 **Alternate-scenario dropdowns, mud.html and adventure.html (operator-specified 2026-07-29, explicitly
 sequenced after both pages' own edit/externalization pass):** a dropdown next to RESET on each page to
@@ -49,24 +41,14 @@ hardcoded `"player"` in `adventure-viz.mjs`, `isCastMember`'s heuristic, the clo
 fixed none of them, and that fix pass hasn't been dispatched. Dispatch the scenario dropdowns only once
 adventure's side is actually fixed, not just audited.
 
-**Per-page thematic direction, operator-specified 2026-07-29** (already relayed and applied for
-adventure.html/chat.html/spider-fly.html/plan.html/ledger.html/research.html/sprites.html via the agents
-above; index.html is explicitly excluded — see above): adventure.html → Agatha Christie; spider-fly.html
-→ The Addams Family; **mud.html → Lemmings (not yet dispatched — bundle with the mud.html P2P
-integration above, both waiting on the same "next mud.html pass" moment)**; chat.html → "genericGPT";
-plan.html → Cubase; ledger.html & research.html → New Relic; sprites.html → Adobe Illustrator chrome for
-the catalog itself, plus a separate not-yet-scoped follow-up for "multi-expression, multi-direction
-cycles" (real new sprite variant art, not a restyle).
+**sprites.html's "multi-expression, multi-direction cycles"** (real new animated sprite variant art,
+not a restyle) — flagged 2026-07-29, not yet scoped as a build task.
 
-**sprites.html: show the ontology, ensure every ancestor class has a sprite (operator, 2026-07-29,
-folded into the still-running design-pass agent above).** Display each sprite's own class chain
-alongside it (carrot → vegetable → plant → object, read from the real corpus facts) and group the
-catalog by inherited concept rather than one flat list. The real content gap to close: walk every
-object's class chain across the whole sprite corpus and find every distinct class that appears as an
-ANCESTOR anywhere; any such class with no sprite of its own needs one authored, at the same quality bar
-as everything else. Payoff: once every level of the hierarchy is illustrated, a brand-new leaf concept
-added to the graph later gets a sensible sprite via the existing fallback chain with zero new art
-required at the moment it's added.
+**MUD3D — a rendered 3D town square, evaluated against `world-of-claudecraft`** (operator ask,
+2026-07-29): full assessment written into `PLAN_MUD.md`'s new "MUD3D" section. Not yet scoped as a
+build phase; the planning half (walk to market, buy leather, make armour) maps onto
+`src/domain/planning.mjs`'s existing `findActionPath`, the render half would be a small tmct-native
+Three.js layer rather than adopting claudecraft's `Sim`/`IWorld`.
 
 Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline):
 bucket `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`
