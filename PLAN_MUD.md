@@ -679,9 +679,17 @@ networked `chat.html` — sharing one P2P/CRDT layer between them. Two discoveri
 of it needs writing at all.
 
 Built so far: the pure modules, the WebRTC transport, room orchestration, the shared
-`public/vendor/p2p.js` asset, and chat.html's whole integration — share, join, paste-reply,
-connection state, the node list, live wire traffic and waving. mud.html's own integration and the
-scenarios needing three or more peers are still design.
+`public/vendor/p2p.js` asset, chat.html's whole integration (share, join, paste-reply, connection
+state, the node list, live wire traffic and waving), and mud.html's own — share and join, character
+claiming, the origin-node label, the wave button and its typed twin, and the sync filter wired to
+`adventure.mjs`'s `isMudStatePredicate`. The scenarios needing three or more peers are still design.
+
+Two things the mud integration settled that the design above left open. Claiming covers every animal
+a page drives, npcs included, not only the ones with panes: two peers each running scripted turns for
+one animal is the actual failure mode, and one claim per driven animal removes it without needing the
+leader election v1 leaves out. And a room is bound to the store it was opened over, so recasting the
+world drops the link and says so on the panel — carrying a room across a recast means re-binding it
+to a new store, which is room-orchestration work rather than page wiring.
 
 **The CRDT merge function already exists.** `appendFacts` (`src/adapters/memory/core.mjs`) upserts a
 fact by its content-addressed id (a hash of subject, predicate, object) and unions the incoming

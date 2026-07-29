@@ -105,3 +105,59 @@ test("a minted character is an ordinary room-mate: the authored one's own look s
   assert.match(looked.answer, /mole-2/, "the room digest names the minted animal standing in it");
   assert.match(looked.answer, /talk to mole-2/, "and offers the same talk the authored cast would get");
 });
+
+const rowsFor = (rows, predicate) => rows.filter((r) => r.predicate === predicate);
+
+test("a wave writes a room-scoped fact the world's own fold never reads as state", async () => {
+  const session = await createMudSession(worldPayload, { characters: ["mole-1"] });
+  const before = await session.snapshot();
+
+  assert.equal(await session.wave("mole-1"), "garden", "it waves in the room it is standing in");
+  const after = await session.snapshot();
+  const waves = rowsFor(after.rows, "mgx:waved");
+  assert.equal(waves.length, 1);
+  assert.equal(waves[0].subject, "mole-1");
+  assert.equal(waves[0].object, "garden");
+  assert.equal(
+    after.state.placements.get("mole-1").object,
+    before.state.placements.get("mole-1").object,
+    "a gesture moves nothing",
+  );
+  assert.equal(after.state.turnCount, before.state.turnCount, "and costs no turn");
+});
+
+test("waving twice in the same tick re-asserts one fact with a second, later tag", async () => {
+  const session = await createMudSession(worldPayload, { characters: ["mole-1"] });
+  await session.wave("mole-1");
+  await session.wave("mole-1");
+  const waves = rowsFor((await session.snapshot()).rows, "mgx:waved");
+  assert.equal(waves.length, 1, "the same character waving in the same room is the same fact id");
+  assert.equal(
+    waves[0].provenance.split(" | ").length,
+    2,
+    "so the second wave unions a fresh tag rather than vanishing into an identical one",
+  );
+});
+
+test("a claim is one add-only fact per animal, and two claims on one animal both stand", async () => {
+  const session = await createMudSession(worldPayload, { characters: ["mole-1", "badger-2"] });
+  assert.equal(await session.claimCharacters(["mole-1", "badger-2"], "alpha"), 2);
+  await session.claimCharacters(["mole-1"], "beta");
+
+  const claims = rowsFor((await session.snapshot()).rows, "mgx:playedBy");
+  assert.deepEqual(
+    claims.filter((r) => r.subject === "mole-1").map((r) => r.object).sort(),
+    ["alpha", "beta"],
+    "nothing is overwritten — both claims stand and every reader settles them the same way",
+  );
+  assert.deepEqual(claims.filter((r) => r.subject === "badger-2").map((r) => r.object), ["alpha"]);
+});
+
+test("neither a claim nor a wave can move a character or open a room", async () => {
+  const session = await createMudSession(worldPayload, { characters: ["mole-1"] });
+  await session.claimCharacters(["mole-1"], "alpha");
+  await session.wave("mole-1");
+  const snap = await session.snapshot();
+  assert.equal(snap.state.placements.get("mole-1").object, "garden");
+  assert.equal(snap.state.exits.get("garden").size, 1, "the garden still has exactly the one shaft it was written with");
+});

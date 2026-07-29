@@ -80,6 +80,9 @@ import {
   visibleRoomOf, roomKindForRoom, allRoomIds,
 } from "./adventure-viz.mjs";
 import { renderMudEditorText, wordBeforeCursor } from "./mud-editor.mjs";
+import {
+  wireStateLabel, nodeRowsFor, nodeInitials, inviteLinkFor, inviteParamsFrom,
+} from "./chat-page-viz.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
 
 const DEFAULT_TITLE = "tmct — the mud";
@@ -110,6 +113,7 @@ const DEFAULT_MAX_TURNS = 400;
 const MUD_NOTE_LINES = [
   "Burrowing animals share one world here. The players slider picks how many get a window of their own; the npcs slider adds more animals that dig and forage without one. Each one only knows what it has dug up, asked about, or been told. Nobody sees the whole burrow except you, watching from the survey above.",
   `This is a MUD, short for Multi Underground creature Dig. The name nods to MUD, or in its current form MUDII (mudii.co.uk), one of the first multiplayer text games. The dig-your-own-rooms idea came from a skim of Wikipedia's Colossal Cave Adventure article, the game that started the genre.`,
+  "Share the burrow and a second digger joins from another machine, browser to browser, with no server in the middle. Each animal is claimed by one node, one hand on one lemming, and everything either of you digs, eats or learns lands in the same graph.",
 ];
 
 /** A character id's species — "mole-1" -> "mole", "groundhog-1" ->
@@ -269,6 +273,106 @@ export function isCreature(state, subject) {
   return state.placements.get(subject)?.predicate === "mgx:currently-in";
 }
 
+// ---- the shared burrow: reading the P2P layer's own facts back ---------------
+// All four readers below work on plain fact rows and nothing else, so the page
+// draws a claim, a wave and a node name identically whether the world is shared
+// with three machines or with none. Pure and `.toString()`-splice safe.
+
+/** Every assertion time a provenance string carries, in milliseconds. A tag is
+ *  `<kind>:<id>@<ISO>`, and a fact asserted more than once holds several joined
+ *  by " | " — a peer's relabelled copy of a tag keeps the time the fact was
+ *  actually asserted, so reading them all back is what lets a claim be settled
+ *  by its oldest and a wave by its newest. Pure, self-contained. */
+export function provenanceStamps(provenance) {
+  const stamps = [];
+  const text = String(provenance || "");
+  const pattern = /@(\d{4}-\d{2}-\d{2}T[0-9:.]+Z)/g;
+  let found = pattern.exec(text);
+  while (found !== null) {
+    const at = Date.parse(found[1]);
+    if (!Number.isNaN(at)) stamps.push(at);
+    found = pattern.exec(text);
+  }
+  return stamps;
+}
+
+/** A peer id as the fact store actually holds it. `appendFacts` normalizes a
+ *  term by stripping its CURIE prefix and lowercasing, so the `peer:<id>` a
+ *  claim is written with reads back as the bare id — a comparison against a
+ *  raw peer id has to normalize the same way or it never matches. Pure,
+ *  self-contained. */
+export function peerTerm(peerId) {
+  return String(peerId || "").replace(/^[a-z][\w.-]*:/i, "").toLowerCase();
+}
+
+/** Which peer plays `character`, or null when nobody has claimed it. Claims are
+ *  add-only and never retracted, so two peers claiming the same animal both
+ *  write and every page settles it the same way: the OLDEST claim wins, with
+ *  the lower peer term breaking a dead heat so two machines reading the same
+ *  rows can never disagree. Pure, self-contained (provenanceStamps is spliced
+ *  alongside it). */
+export function claimantOf(rows, character) {
+  let owner = null;
+  let ownerAt = Infinity;
+  for (const row of rows || []) {
+    if (row.subject !== character || row.predicate !== "mgx:playedBy") continue;
+    let at = Infinity;
+    for (const stamp of provenanceStamps(row.provenance)) if (stamp < at) at = stamp;
+    if (at < ownerAt || (at === ownerAt && owner !== null && String(row.object) < owner)) {
+      ownerAt = at;
+      owner = String(row.object);
+    }
+  }
+  return owner;
+}
+
+/** Which characters are waving right now — a read-time recency question over
+ *  the newest tag on each `mgx:waved` fact, never stored state and never a
+ *  retraction. A wave older than the window simply stops being read as one.
+ *  Pure, self-contained. */
+export function wavingCharacters(rows, nowMs, windowMs = 8000) {
+  const waving = [];
+  for (const row of rows || []) {
+    if (row.predicate !== "mgx:waved") continue;
+    let newest = null;
+    for (const stamp of provenanceStamps(row.provenance)) if (newest === null || stamp > newest) newest = stamp;
+    if (newest === null) continue;
+    const age = nowMs - newest;
+    if (age < 0 || age > windowMs) continue;
+    if (waving.indexOf(row.subject) === -1) waving.push(row.subject);
+  }
+  return waving;
+}
+
+/** The offer blob inside whatever somebody actually pasted: the `offer`
+ *  parameter of a whole invite link, or the bare blob when that is what
+ *  arrived. Both are what people really paste, and telling them apart by
+ *  looking is cheaper than asking them to. Pure, self-contained. */
+export function offerBlobIn(pasted) {
+  const text = String(pasted || "").trim();
+  const marker = text.indexOf("offer=");
+  if (marker === -1) return text;
+  const rest = text.slice(marker + "offer=".length);
+  const end = rest.search(/[&#\s]/);
+  return decodeURIComponent(end === -1 ? rest : rest.slice(0, end));
+}
+
+/** The name a peer chose for its node, from its latest `mgx:nodeName` fact,
+ *  falling back to a shortened peer id. A label never waits for a name to
+ *  arrive. Pure, self-contained. */
+export function nodeNameFor(rows, peerId) {
+  const want = peerTerm(peerId);
+  let name = null;
+  let nameAt = -Infinity;
+  for (const row of rows || []) {
+    if (row.predicate !== "mgx:nodeName" || peerTerm(row.subject) !== want) continue;
+    let at = -Infinity;
+    for (const stamp of provenanceStamps(row.provenance)) if (stamp > at) at = stamp;
+    if (at >= nameAt) { nameAt = at; name = String(row.object); }
+  }
+  return name || want.slice(0, 8);
+}
+
 /** The self-contained mud.html page. Pure — identical output for identical
  *  input; every other piece of state (the live world, chat, ticks) is
  *  computed in the browser once the sibling bundle loads.
@@ -334,6 +438,10 @@ ${MUD_STYLE}
         <button type="button" class="deck-play" id="autoToggle" aria-pressed="false">&#9654; play</button>
         <button type="button" id="resetBtn">reset</button>
         <button type="button" id="editModeBtn" aria-pressed="false">edit</button>
+        <button type="button" id="shareBtn">share</button>
+        <button type="button" id="joinOpenBtn">join</button>
+        <button type="button" class="state-pill" id="statePill" aria-expanded="false" aria-controls="netPanel"
+                title="whether this burrow is shared with anyone"><i class="state-dot"></i><span id="statePillWord">not shared</span></button>
         <button type="button" class="deck-info-btn" id="deckInfoBtn" aria-expanded="false" aria-controls="deckInfoPopup" aria-label="about this demo">?</button>
         <span class="mono deck-turns" id="globalTurnCount">turns: 0</span>
       </div>
@@ -365,8 +473,7 @@ ${MUD_STYLE}
         </label>
       </div>
       <div class="deck-info-popup mud-note" id="deckInfoPopup" role="dialog" aria-label="about this demo" hidden>
-        <p>${escapeHtml(MUD_NOTE_LINES[0])}</p>
-        <p>${escapeHtml(MUD_NOTE_LINES[1])}</p>
+        ${MUD_NOTE_LINES.map((line) => `<p>${escapeHtml(line)}</p>`).join("\n        ")}
         <button type="button" class="deck-info-popup-close" id="deckInfoClose" aria-label="close">&times;</button>
       </div>
     </section>
@@ -378,6 +485,61 @@ ${MUD_STYLE}
       <div class="world-map-board" id="worldMapBoard"></div>
       <div class="world-map-key" id="worldMapKey"></div>
     </section>
+  </div>
+  <section class="net-panel" id="netPanel" aria-label="the shared burrow" hidden>
+    <div class="net-head">
+      <span class="net-title">the shared burrow</span>
+      <span class="net-state" id="wireState" data-tone="idle"><b id="wireStateWord">not shared</b><span id="wireStateNote">this browser holds the only copy of this burrow.</span></span>
+      <button type="button" class="net-close" id="netPanelClose" aria-label="close">&times;</button>
+    </div>
+    <div class="net-fields">
+      <label class="net-field">this node
+        <input type="text" id="nodeNameInput" spellcheck="false" aria-label="the name this node goes by">
+      </label>
+      <label class="net-field">this burrow
+        <input type="text" id="worldNameInput" spellcheck="false" aria-label="the name of the shared burrow">
+      </label>
+    </div>
+    <div class="net-block" id="sharePanel" hidden>
+      <p class="net-hint">Each link invites one person. Share again for the next.</p>
+      <textarea id="shareLink" readonly rows="2" aria-label="the invite link"></textarea>
+    </div>
+    <div class="net-block" id="invitePanel" hidden>
+      <label class="net-label" for="inviteBox">paste the invite you were sent</label>
+      <textarea id="inviteBox" rows="2" spellcheck="false"></textarea>
+      <button type="button" id="inviteBtn">make my reply</button>
+      <p class="net-problem" id="inviteProblem" role="alert" hidden></p>
+    </div>
+    <div class="net-block" id="replyPanel">
+      <label class="net-label" for="replyBox">paste their reply here</label>
+      <textarea id="replyBox" rows="2" spellcheck="false"></textarea>
+      <button type="button" id="replyBtn">connect</button>
+      <p class="net-problem" id="replyProblem" role="alert" hidden></p>
+    </div>
+    <div class="net-block" id="answerPanel" hidden>
+      <label class="net-label" for="replyOut">send this back the same way the invite reached you</label>
+      <textarea id="replyOut" readonly rows="2"></textarea>
+      <button type="button" id="copyReplyBtn">copy the reply</button>
+    </div>
+    <div class="net-block">
+      <div class="net-label">nodes <span class="mono" id="nodeCount"></span></div>
+      <ul class="node-list" id="nodeList"></ul>
+      <p class="net-hint" id="nodeEmpty">Nobody else is digging here yet.</p>
+    </div>
+  </section>
+  <div class="join-card" id="joinCard" hidden>
+    <div class="join-inner" role="dialog" aria-label="an invitation to a shared burrow">
+      <p class="join-eyebrow" id="joinEyebrow">you have been invited to dig in</p>
+      <h2 class="join-world" id="joinWorld">a shared burrow</h2>
+      <p class="join-body" id="joinBody">Nothing runs until you press the button. It makes one reply for you to send back the way the invite reached you.</p>
+      <button type="button" id="joinBtn">create my reply</button>
+      <p class="net-problem" id="joinProblem" role="alert" hidden></p>
+      <div class="join-reply" id="joinReplyWrap" hidden>
+        <textarea id="joinReply" readonly rows="2" aria-label="your reply"></textarea>
+        <button type="button" id="joinCopyBtn">copy the reply</button>
+      </div>
+      <button type="button" class="join-dismiss" id="joinDismiss">dig on your own instead</button>
+    </div>
   </div>
   <div class="mud-stage" id="mudStage" data-panes="${openingCount}">
 ${paneHtml}
@@ -430,6 +592,7 @@ export function paneMarkup(slot) {
   return `    <section class="mud-window pane-${escapeHtml(slot)}" id="${w}" data-slot="${escapeHtml(slot)}" data-character="">
       <div class="pane-head">
         <h2 id="${w}-name">waiting</h2>
+        <span class="pane-node" id="${w}-node" hidden></span>
         <span class="mono pane-turn" id="${w}-turn">turn 0</span>
       </div>
       <div class="room-stage">
@@ -473,7 +636,11 @@ export function paneMarkup(slot) {
         </div>
       </div>
       <div class="chat-console">
-        <div class="chatpills" id="${w}-chatpills" role="group" aria-label="quick commands"></div>
+        <div class="pill-strip">
+          <button type="button" class="pill wave-btn" id="${w}-wave" title="wave, so everyone in this room sees it"
+                  aria-label="wave">&#128075; wave</button>
+          <div class="chatpills" id="${w}-chatpills" role="group" aria-label="quick commands"></div>
+        </div>
         <form class="chatask" id="${w}-chatform">
           <span class="prompt mono">tmct&gt;</span>
           <input id="${w}-chatq" type="text" placeholder="look" aria-label="type a command" disabled>
@@ -885,6 +1052,152 @@ const MUD_STYLE = `
     .edit-stage { grid-template-columns: 1fr; }
     #editorText { min-height: 18rem; }
   }
+
+  /* ---- the control panel, in a Lemmings register ----
+     The 1991 game put everything a player touches in one chunky beveled strip
+     under the level: a DOS-blue face, raised grey keys with a hard highlight on
+     the top-left and a hard shadow on the bottom-right, and a lit readout in
+     the corner. That is what this deck is, so it wears it. The burrow itself
+     stays soil and parchment — the panel is the machine you drive it with, not
+     the world, and the two are supposed to read as different things.
+     Everything below overrides the parchment deck above it deliberately, so
+     the panel is one block a reader can find rather than a dozen edits. */
+  :root {
+    --lem-panel: #1B1B7E; --lem-panel-lo: #0C0C46; --lem-panel-hi: #3C3CB4;
+    --lem-face: #B4B4B4; --lem-face-hi: #ECECEC; --lem-face-lo: #6B6B6B;
+    --lem-go: #009C00; --lem-go-hi: #3CD43C;
+    --lem-alert: #D02000;
+    --lem-readout: #78E878; --lem-readout-bg: #08082A;
+    --lem-chalk: #C6C6E8;
+  }
+  .deck {
+    background: linear-gradient(180deg, var(--lem-panel-hi) 0%, var(--lem-panel) 16%, var(--lem-panel-lo) 100%);
+    color: #F2F2FF; border-color: var(--lem-panel-lo);
+    box-shadow: inset 2px 2px 0 rgba(255,255,255,.30), inset -2px -2px 0 rgba(0,0,0,.55), 0 3px 0 rgba(0,0,0,.42);
+  }
+  .deck-slider, .deck h3 { color: var(--lem-chalk); }
+  .deck-slider input[type="range"] { accent-color: var(--lem-go-hi); }
+  .deck button, .pane-controls button, .net-panel button, .join-inner button {
+    background: var(--lem-face); color: #16162A; border: 0; border-radius: 2px;
+    padding: .34rem .74rem;
+    box-shadow: inset 2px 2px 0 var(--lem-face-hi), inset -2px -2px 0 var(--lem-face-lo);
+  }
+  .deck button:hover:not(:disabled), .pane-controls button:hover:not(:disabled),
+  .net-panel button:hover:not(:disabled), .join-inner button:hover:not(:disabled) {
+    background: var(--lem-face-hi);
+  }
+  .deck button:active:not(:disabled), .pane-controls button:active:not(:disabled),
+  .net-panel button:active:not(:disabled), .join-inner button:active:not(:disabled) {
+    box-shadow: inset -2px -2px 0 var(--lem-face-hi), inset 2px 2px 0 var(--lem-face-lo);
+  }
+  .deck-play { background: var(--lem-go) !important; color: #FFF; border-color: transparent !important;
+    box-shadow: inset 2px 2px 0 var(--lem-go-hi), inset -2px -2px 0 rgba(0,0,0,.5); }
+  .deck-play[aria-pressed="true"] { background: var(--lem-alert) !important; color: #FFF;
+    box-shadow: inset 2px 2px 0 #FF6A48, inset -2px -2px 0 rgba(0,0,0,.5); }
+  /* The corner readout: a lit panel display, unreadable as anything else. */
+  .deck-turns { background: var(--lem-readout-bg); color: var(--lem-readout);
+    border: 1px solid #000; border-radius: 2px; padding: .1rem .5rem; }
+  .deck-info-btn { background: var(--lem-face); color: #16162A; border: 0;
+    box-shadow: inset 2px 2px 0 var(--lem-face-hi), inset -2px -2px 0 var(--lem-face-lo); }
+  .deck-info-btn:hover, .deck-info-btn[aria-expanded="true"] { background: var(--lem-face-hi); color: #16162A; }
+  .deck-info-popup { background: var(--lem-panel-lo); border-color: var(--lem-go-hi); color: #F2F2FF; }
+  .deck-info-popup::before { border-bottom-color: var(--lem-go-hi); }
+  .deck-info-popup-close { color: #F2F2FF; }
+  .deck-info-popup-close:hover { color: var(--lem-go-hi); }
+  #editModeBtn[aria-pressed="true"] { background: var(--lem-go-hi); }
+
+  /* ---- whether the burrow is shared, said in one word on the panel ---- */
+  .state-pill { display: inline-flex; align-items: center; gap: .34rem;
+    font-family: ${MONO_STACK}; font-size: .68rem; text-transform: uppercase; letter-spacing: .08em; }
+  .state-dot { width: .46rem; height: .46rem; border-radius: 50%; background: var(--lem-face-lo); flex: 0 0 auto; }
+  .state-pill[data-tone="waiting"] .state-dot { background: #E0912A; }
+  .state-pill[data-tone="working"] .state-dot { background: #E0912A; }
+  .state-pill[data-tone="live"] .state-dot { background: var(--lem-go); }
+  .state-pill[data-tone="failed"] .state-dot { background: var(--lem-alert); }
+
+  .net-panel {
+    background: linear-gradient(180deg, var(--lem-panel-hi) 0%, var(--lem-panel) 14%, var(--lem-panel-lo) 100%);
+    color: #F2F2FF; border: 1px solid var(--lem-panel-lo); border-radius: 3px;
+    box-shadow: inset 2px 2px 0 rgba(255,255,255,.28), inset -2px -2px 0 rgba(0,0,0,.55), 0 3px 0 rgba(0,0,0,.42);
+    padding: .7rem .8rem; margin-bottom: 1rem;
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .6rem .9rem; align-items: start;
+  }
+  .net-head { grid-column: 1 / -1; display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; }
+  .net-title { font-family: ${MONO_STACK}; font-size: .58rem; text-transform: uppercase; letter-spacing: .12em; opacity: .85; }
+  .net-state { font-size: .74rem; display: flex; gap: .4rem; flex-wrap: wrap; align-items: baseline; }
+  .net-state b { font-family: ${MONO_STACK}; font-size: .66rem; text-transform: uppercase; letter-spacing: .08em; }
+  .net-state[data-tone="live"] b { color: var(--lem-go-hi); }
+  .net-state[data-tone="failed"] b { color: #FF8C70; }
+  .net-state[data-tone="waiting"] b, .net-state[data-tone="working"] b { color: #F0C070; }
+  .net-state span { opacity: .8; }
+  .net-close { margin-left: auto; }
+  .net-fields, .net-block { display: flex; flex-direction: column; gap: .3rem; min-width: 0; }
+  .net-fields { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; gap: .8rem; }
+  .net-field, .net-label { font-family: ${MONO_STACK}; font-size: .58rem; text-transform: uppercase; letter-spacing: .1em; opacity: .85; }
+  .net-field { display: flex; flex-direction: column; gap: .2rem; }
+  .net-panel input[type="text"], .net-panel textarea {
+    font-family: ${MONO_STACK}; font-size: .68rem; color: var(--lem-readout); background: var(--lem-readout-bg);
+    border: 1px solid #000; border-radius: 2px; padding: .26rem .4rem; width: 100%; box-sizing: border-box;
+    resize: vertical; overflow-wrap: anywhere;
+  }
+  .net-panel input[readonly], .net-panel textarea[readonly] { opacity: .85; }
+  .net-panel button { align-self: flex-start; font-family: ${MONO_STACK}; font-size: .66rem;
+    text-transform: uppercase; letter-spacing: .08em; }
+  .net-hint { margin: 0; font-size: .7rem; opacity: .75; }
+  .net-problem { margin: 0; font-size: .72rem; color: #FFB4A0; }
+  .node-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .22rem; }
+  .node-row { display: flex; align-items: center; gap: .4rem; font-size: .74rem; }
+  .node-row[data-away="true"] { opacity: .55; }
+  .node-avatar { width: 1.25rem; height: 1.25rem; border-radius: 50%; background: var(--lem-face);
+    color: #16162A; font-family: ${MONO_STACK}; font-size: .52rem; display: inline-flex;
+    align-items: center; justify-content: center; flex: 0 0 auto; }
+  .node-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .node-self { font-family: ${MONO_STACK}; font-size: .54rem; text-transform: uppercase; letter-spacing: .08em; opacity: .6; }
+  .node-hand { opacity: 0; }
+  .node-row[data-waving="true"] .node-hand { opacity: 1; animation: hand-wave .8s ease-in-out infinite; }
+  .node-when { margin-left: auto; font-family: ${MONO_STACK}; font-size: .58rem; opacity: .6; }
+
+  .join-card { position: fixed; inset: 0; z-index: 40; display: flex; align-items: center; justify-content: center;
+    background: rgba(8,8,42,.86); padding: 1rem; }
+  /* Setting display at all outranks the browser's own [hidden] rule, so every
+     block here that is hidden by attribute has to say so a second time. */
+  .join-card[hidden], .net-panel[hidden], .net-block[hidden], .join-reply[hidden] { display: none; }
+  .join-inner { background: linear-gradient(180deg, var(--lem-panel-hi) 0%, var(--lem-panel) 16%, var(--lem-panel-lo) 100%);
+    color: #F2F2FF; border: 1px solid var(--lem-go-hi); border-radius: 3px;
+    box-shadow: inset 2px 2px 0 rgba(255,255,255,.28), inset -2px -2px 0 rgba(0,0,0,.55), 0 10px 26px rgba(0,0,0,.6);
+    padding: 1.1rem 1.2rem; max-width: 32rem; width: 100%; display: flex; flex-direction: column; gap: .55rem; }
+  .join-eyebrow { margin: 0; font-family: ${MONO_STACK}; font-size: .58rem; text-transform: uppercase; letter-spacing: .12em; opacity: .8; }
+  .join-world { font-family: ${DISPLAY_STACK}; font-size: 1.4rem; margin: 0; }
+  .join-body { margin: 0; font-size: .8rem; opacity: .9; max-width: 52ch; }
+  .join-reply { display: flex; flex-direction: column; gap: .3rem; }
+  .join-inner textarea { font-family: ${MONO_STACK}; font-size: .68rem; color: var(--lem-readout);
+    background: var(--lem-readout-bg); border: 1px solid #000; border-radius: 2px; padding: .3rem .4rem;
+    width: 100%; box-sizing: border-box; overflow-wrap: anywhere; }
+  .join-inner button { align-self: flex-start; font-family: ${MONO_STACK}; font-size: .68rem;
+    text-transform: uppercase; letter-spacing: .08em; }
+  .join-dismiss { background: transparent !important; box-shadow: none !important; color: #C6C6E8 !important;
+    text-decoration: underline; padding-left: 0 !important; }
+
+  /* ---- a wave, and the node a character is played from ---- */
+  .pill-strip { display: flex; align-items: flex-start; gap: .22rem; min-width: 0; }
+  .pill-strip .chatpills { flex: 1 1 auto; min-width: 0; }
+  .wave-btn { flex: 0 0 auto; }
+  .sprite-card { position: relative; }
+  .wave-hand { position: absolute; top: -0.55rem; right: -0.35rem; font-size: 1.1rem; line-height: 1;
+    transform-origin: 70% 80%; animation: hand-wave .8s ease-in-out infinite; pointer-events: none; }
+  @keyframes hand-wave { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(20deg); } }
+  .sprite-node {
+    margin-top: 1px; max-width: 100%; box-sizing: border-box;
+    font-family: ${MONO_STACK}; font-size: .34rem; line-height: 1.3; letter-spacing: .01em; text-align: center;
+    color: var(--soil-mid); background: rgba(239,230,216,.7); border-radius: 2px; padding: 0 .2rem;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .pane-node { font-family: ${MONO_STACK}; font-size: .56rem; color: var(--soil-mid); opacity: .85; }
+  .mud-window.remote .pane-controls button { display: none; }
+  .mud-window.remote .room-view { box-shadow: inset 0 0 0 2px rgba(60,60,180,.35); }
+  @media (prefers-reduced-motion: reduce) {
+    .wave-hand, .node-row[data-waving="true"] .node-hand { animation: none; }
+  }
 `;
 
 /** The inlined page script, as a plain function body handed to
@@ -918,6 +1231,17 @@ function pageScript() {
   const allRoomIds = ${allRoomIds.toString()};
   const renderMudEditorText = ${renderMudEditorText.toString()};
   const wordBeforeCursor = ${wordBeforeCursor.toString()};
+  const provenanceStamps = ${provenanceStamps.toString()};
+  const peerTerm = ${peerTerm.toString()};
+  const claimantOf = ${claimantOf.toString()};
+  const wavingCharacters = ${wavingCharacters.toString()};
+  const nodeNameFor = ${nodeNameFor.toString()};
+  const offerBlobIn = ${offerBlobIn.toString()};
+  const wireStateLabel = ${wireStateLabel.toString()};
+  const nodeRowsFor = ${nodeRowsFor.toString()};
+  const nodeInitials = ${nodeInitials.toString()};
+  const inviteLinkFor = ${inviteLinkFor.toString()};
+  const inviteParamsFrom = ${inviteParamsFrom.toString()};
 
   const el = (id) => document.getElementById(id);
   const roster = DATA.characters.map(function (c) { return c.id; });
@@ -956,6 +1280,15 @@ function pageScript() {
   const liveWait = function () { return wait(delayMs); };
 
   let freshlyDugRoom = null;
+  // Which animals another node has claimed, character -> that node's name.
+  // Refreshed from the store on every redraw, which is also every turn, so a
+  // claim that arrives from a peer takes effect on the next tick rather than
+  // being cached until something else happens to look.
+  let claimedElsewhere = {};
+  // Whoever is waving right now, and the timer that lets a wave stop being
+  // current. A wave is never retracted — it just stops being recent.
+  let wavingNow = [];
+  let waveRedrawTimer = null;
   // The last omniscient read, kept so the pounce can draw the predator's own
   // den after the engine has already moved the character out of every room.
   let lastSnapshot = null;
@@ -991,10 +1324,15 @@ function pageScript() {
     const bootAt = bootSeq;
     return serializeTick(async function () {
       if (bootAt !== bootSeq || finished[character]) return { outOfPlay: true };
+      // An animal another node claimed is played there, not here. Its moves
+      // still arrive as facts and it still draws, talks and can be waved at —
+      // this page just never takes its turn for it.
+      if (claimedElsewhere[character]) return { playedElsewhere: true };
       globalTurn += 1;
       const result = await session.windows[character].autoplayTick(globalTurn);
       if (!result.outOfPlay) turnsTaken[character] = (turnsTaken[character] || 0) + 1;
       afterEngineTurn(character, result);
+      await broadcastLocalChange();
       return result;
     });
   }
@@ -1146,11 +1484,40 @@ function pageScript() {
 
   function sendCommand(character, line) {
     appendChat(character, "u", line);
-    return serializeTick(function () { return session.windows[character].turn(line); }).then(function (res) {
+    const owner = claimedElsewhere[character];
+    if (owner) {
+      const refusal = character + " is played from " + owner + ". You can watch it and wave at it, but its turns are theirs.";
+      appendChat(character, "a", refusal);
+      return Promise.resolve({ answer: refusal, end: false });
+    }
+    // A wave is a gesture, not a world command — the engine has no verb for it
+    // and would answer with an honest miss. Both ways in (this typed line and
+    // the pane's own hand button) write the same fact.
+    if (/^\\/?wave$/i.test(line.trim())) {
+      return waveAs(character).then(function (here) {
+        appendChat(character, "a", here
+          ? "you wave. Everyone in the " + here + " sees it."
+          : character + " is standing nowhere, so there is nobody to wave at.");
+        return { answer: "", end: false };
+      });
+    }
+    return serializeTick(function () { return session.windows[character].turn(line); }).then(async function (res) {
       appendChat(character, "a", res.answer);
+      await broadcastLocalChange();
       renderSoon();
       return res;
     });
+  }
+
+  // A wave is an ordinary add-only fact in the shared world, so it needs no
+  // network to work: one browser renders it exactly the way four do, and the
+  // room broadcast below is the only part sharing adds.
+  async function waveAs(character) {
+    if (!session || finished[character]) return null;
+    const here = await serializeTick(function () { return session.wave(character); });
+    if (here) await broadcastLocalChange();
+    renderSoon();
+    return here;
   }
 
   // Wired as the pane is built. The stage is rebuilt on every boot, so a
@@ -1176,6 +1543,10 @@ function pageScript() {
     el(w + "-step").addEventListener("click", function () {
       const character = characterInSlot(slot);
       if (character) ensureTicker(character).stepOnce();
+    });
+    el(w + "-wave").addEventListener("click", function () {
+      const character = characterInSlot(slot);
+      if (character) sendCommand(character, "wave");
     });
 
     const log = el(w + "-chatlog");
@@ -1317,15 +1688,31 @@ function pageScript() {
 
   // A sprite card: adventure.html's own frame-plus-nameplate, carrying the one
   // command this room currently grants on its subject (none, for a thing the
-  // room offers nothing on) and the subject's own mass under the name.
-  function spriteCardHtml(subject, label, inner, command, extraClass, mass) {
+  // room offers nothing on) and the subject's own mass under the name. The
+  // last argument holds the two things only a shared burrow has: a hand over a
+  // character waving right now, and the node another peer plays it from — one
+  // more line under the name, in the same font, never a second label system.
+  function spriteCardHtml(subject, label, inner, command, extraClass, mass, extra) {
+    const opts = extra || {};
     const action = command
       ? ' actionable" data-command="' + esc(command) + '" role="button" tabindex="0" title="' + esc(command) + '"'
       : '" title="' + esc(label) + '"';
-    return '<div class="sprite-card ' + (extraClass || "") + action + ' data-subject="' + esc(subject) + '">'
+    return '<div class="sprite-card ' + (extraClass || "") + (opts.waving ? " waving" : "") + action
+      + ' data-subject="' + esc(subject) + '">'
+      + (opts.waving ? '<div class="wave-hand" aria-hidden="true">\\u{1F44B}</div>' : "")
       + inner + '<div class="sprite-label">' + esc(label) + "</div>"
+      + (opts.node ? '<div class="sprite-node">via ' + esc(opts.node) + "</div>" : "")
       + (mass === null || mass === undefined ? "" : '<div class="sprite-mass">mass ' + esc(mass) + "</div>")
       + "</div>";
+  }
+
+  // A character another node plays carries that node's name; one this node
+  // plays, or one nobody has claimed, carries nothing extra.
+  function nodeLabelFor(character) {
+    return claimedElsewhere[character] || null;
+  }
+  function isWavingNow(character) {
+    return wavingNow.indexOf(character) !== -1;
   }
 
   function renderRoomView(character, rows, state, here, roomIds, roomMates) {
@@ -1337,12 +1724,14 @@ function pageScript() {
       character, character,
       '<div class="sprite">' + spriteSvgFor(speciesOfCharacter(character), rows, character) + "</div>",
       null, "self", massOf(state, character),
+      { waving: isWavingNow(character), node: nodeLabelFor(character) },
     );
 
     const others = roomMates.map(function (mate) {
       return spriteCardHtml(mate, mate,
         '<div class="sprite">' + spriteSvgFor(speciesOfCharacter(mate), rows, mate) + "</div>",
-        commands[mate], "", massOf(state, mate));
+        commands[mate], "", massOf(state, mate),
+        { waving: isWavingNow(mate), node: nodeLabelFor(mate) });
     });
     const wall = [];
     for (const obj of mudRoomSceneObjects(rows, state, here, character)) {
@@ -1636,13 +2025,35 @@ function pageScript() {
     const snap = await session.snapshot();
     lastSnapshot = snap;
     const roomIds = allRoomIds(snap.rows);
+    const nowMs = Date.now();
+    wavingNow = wavingCharacters(snap.rows, nowMs);
+    // Every claimed animal, not just the ones this page cast: a character
+    // another node plays walks into this room as an ordinary room-mate, and
+    // its label has to name where it is played from just the same.
+    claimedElsewhere = {};
+    if (myPeerId) {
+      const claimed = {};
+      for (const row of snap.rows) if (row.predicate === "mgx:playedBy") claimed[row.subject] = true;
+      for (const character of Object.keys(claimed)) {
+        const owner = claimantOf(snap.rows, character);
+        if (owner === null || peerTerm(owner) === peerTerm(myPeerId)) continue;
+        claimedElsewhere[character] = nodeNameFor(snap.rows, owner);
+        const ticker = tickers[character];
+        if (ticker) ticker.pause();
+      }
+    }
     for (const character of everyone()) {
       const reason = window.tmctMud.outOfPlayReasonOf(snap.state, character);
       if (reason) markOutOfPlay(character, reason, null);
     }
     renderWorldMap(snap.rows, snap.state, roomIds);
     for (const character of cast) {
-      el(paneIdFor(character) + "-turn").textContent = "turn " + turnsFor(character);
+      const pane = paneIdFor(character);
+      el(pane + "-turn").textContent = "turn " + turnsFor(character);
+      const owner = claimedElsewhere[character];
+      el(pane).classList.toggle("remote", Boolean(owner));
+      el(pane + "-node").hidden = !owner;
+      el(pane + "-node").textContent = owner ? "played from " + owner : "";
       if (finished[character]) continue;
       const place = snap.state.placements.get(character);
       const here = place ? place.object : null;
@@ -1655,6 +2066,12 @@ function pageScript() {
       renderMinimap(character, snap.rows, snap.state, here);
     }
     freshlyDugRoom = null;
+    // A wave carries no retraction, so nothing tells the page when one stops
+    // being current — the recency window does, and only a redraw can notice it
+    // has passed. One follow-up per second while any hand is up, and none at
+    // all once they are all down.
+    clearTimeout(waveRedrawTimer);
+    if (wavingNow.length) waveRedrawTimer = setTimeout(renderSoon, 1000);
   }
 
   // ---- edit mode -----------------------------------------------------------
@@ -1799,6 +2216,7 @@ function pageScript() {
     status.className = "edit-status pending";
     status.textContent = "reading the burrow\\u2026";
     const result = await serializeTick(function () { return session.applyEdit(el("editorText").value); });
+    await broadcastLocalChange();
     const snap = await session.snapshot();
     allStoreRows = snap.rows;
     editRows = worldOnlyRows(snap.rows);
@@ -1881,6 +2299,429 @@ function pageScript() {
     el("editModeBtn").setAttribute("aria-pressed", "false");
     setPlayControlsEnabled(true);
     await renderAll();
+  }
+
+  // ---- the shared burrow: nodes, the wire, and the two-paste handshake -----
+  // Every piece of networking arrives from ./vendor/p2p.js, the site's own
+  // shared P2P asset, imported the first time somebody actually asks to share
+  // rather than at boot. The room owns signaling, the mesh and the merge; this
+  // block owns what a person sees and clicks, and nothing else.
+  const P2P_ASSET = "./vendor/p2p.js";
+  const NODE_NAME_KEY = "tmct.mud.nodeName";
+  const invite = inviteParamsFrom(window.location.search);
+
+  let p2p = null;
+  let p2pLoad = null;
+  let room = null;
+  let myPeerId = null;
+  let myDisplayName = "";
+  let worldId = "";
+  let worldName = "";
+  let nodeClockTimer = null;
+
+  function loadP2p() {
+    if (!p2pLoad) p2pLoad = import(P2P_ASSET).then(function (mod) { p2p = mod; return mod; });
+    return p2pLoad;
+  }
+  window.tmctP2pLoad = loadP2p;
+
+  function readStoredNodeName() {
+    try { return localStorage.getItem(NODE_NAME_KEY) || ""; } catch { return ""; }
+  }
+  function writeStoredNodeName(name) {
+    try { localStorage.setItem(NODE_NAME_KEY, name); } catch { /* private mode — the name still holds for this visit */ }
+  }
+
+  async function ensureIdentity() {
+    const mod = await loadP2p();
+    if (!myPeerId) myPeerId = mod.generatePeerId();
+    if (!myDisplayName) {
+      myDisplayName = readStoredNodeName() || mod.generateDisplayName();
+      el("nodeNameInput").value = myDisplayName;
+    }
+    if (!worldId) worldId = invite && invite.world ? invite.world : mod.generateWorldId();
+    if (!worldName) {
+      worldName = invite && invite.worldName ? invite.worldName : mod.generateDisplayName();
+      el("worldNameInput").value = worldName;
+    }
+  }
+
+  async function ensureRoom() {
+    if (room) return room;
+    const mod = await loadP2p();
+    await ensureIdentity();
+    if (!session && bootRun) await bootRun;
+    if (!session) throw new Error("the burrow hasn't finished opening");
+    // The one place this page decides what is worth replicating: whatever the
+    // engine calls live world state, plus the P2P layer's own four predicates.
+    // The check is handed over rather than imported, so the sync filter never
+    // learns the world engine's private predicate names.
+    const extraPredicates = (window.tmctMud.P2P_PREDICATES || []).slice();
+    const isState = window.tmctMud.isMudStatePredicate;
+    room = mod.createP2pRoom({
+      memoryDir: session.memoryDir,
+      myPeerId: myPeerId,
+      myDisplayName: myDisplayName,
+      worldId: worldId,
+      worldName: worldName,
+      transportFactory: function () { return mod.createTransport({ iceServers: [] }); },
+      syncableFacts: function (rows) { return mod.mudSyncableFacts(rows, isState, extraPredicates); },
+    });
+    room.onStateChanged(function (state) {
+      // The join card exists to produce one reply. Once the channel is open it
+      // has done its job, and a full-screen card over a live burrow is just
+      // something in the way.
+      if (state === "connected") el("joinCard").hidden = true;
+      renderWire();
+    });
+    room.onPeersChanged(function () { renderNodes(); renderWire(); });
+    room.onFactsChanged(function () { renderNodes(); renderSoon(); });
+    await room.start();
+    // The burrow's name is written into the graph the moment the room starts,
+    // and this version retracts nothing — so the field stops taking edits.
+    el("worldNameInput").readOnly = true;
+    window.tmctP2pRoom = room;
+    await claimMyAnimals();
+    renderWire();
+    renderNodes();
+    if (!nodeClockTimer) nodeClockTimer = setInterval(renderNodes, 10000);
+    return room;
+  }
+
+  // Every animal this page drives is claimed the moment the burrow is shared,
+  // panes and npcs alike: two peers each running scripted turns for one mole
+  // would be two hands on one lemming. The claim is add-only and the oldest
+  // wins, so a page that loses one simply stops driving that animal and
+  // watches somebody else play it instead.
+  async function claimMyAnimals() {
+    if (!session || !room) return;
+    await serializeTick(function () { return session.claimCharacters(everyone(), myPeerId); });
+    await broadcastLocalChange();
+    renderSoon();
+  }
+
+  // The room diffs the store against what it last saw and broadcasts whatever
+  // changed. The page calls it after every local turn, wave, claim and edit —
+  // a broadcast that fails is a dead channel, reported by its own close
+  // handler, and must never fail the turn that happened to carry it.
+  function broadcastLocalChange() {
+    if (!room) return Promise.resolve({ broadcast: 0 });
+    return room.afterLocalChange().catch(function () { return { broadcast: 0 }; });
+  }
+
+  function dropRoom(note) {
+    if (!room) return;
+    room.close();
+    room = null;
+    window.tmctP2pRoom = null;
+    clearInterval(nodeClockTimer);
+    nodeClockTimer = null;
+    el("shareLink").value = "";
+    el("replyOut").value = "";
+    el("worldNameInput").readOnly = false;
+    if (note) el("wireStateNote").textContent = note;
+    renderWire();
+    renderNodes();
+  }
+
+  // The state machine is shared with chat.html and the words mostly are too.
+  // Two of them are not: nothing is taught here and nothing is a node below,
+  // so those two notes are said in this page's own terms rather than forking
+  // the whole table for a burrow.
+  const MUD_WIRE_NOTES = {
+    idle: "this browser holds the only copy of this burrow.",
+    connected: "what you dig from here reaches every node in the burrow, and theirs reaches you.",
+  };
+
+  function renderWire() {
+    const state = room ? room.state : "idle";
+    const label = wireStateLabel(state);
+    const note = MUD_WIRE_NOTES[state] || label.note;
+    const wire = el("wireState");
+    wire.dataset.tone = label.tone;
+    el("wireStateWord").textContent = label.word;
+    el("wireStateNote").textContent = note;
+    const pill = el("statePill");
+    pill.dataset.tone = label.tone;
+    el("statePillWord").textContent = label.pill;
+    pill.title = note;
+    el("sharePanel").hidden = !el("shareLink").value;
+    // Once the channel is open the reply has been used; leaving "send this
+    // back" on screen would be asking for something already done.
+    el("answerPanel").hidden = !el("replyOut").value || (room && room.state === "connected");
+  }
+
+  function relativeWhen(at, nowMs) {
+    if (at === null || at === undefined) return "\\u2014";
+    const seconds = Math.max(0, Math.round((nowMs - at) / 1000));
+    if (seconds < 5) return "now";
+    if (seconds < 60) return seconds + "s";
+    if (seconds < 3600) return Math.round(seconds / 60) + "m";
+    if (seconds < 86400) return Math.round(seconds / 3600) + "h";
+    return Math.round(seconds / 86400) + "d";
+  }
+
+  function renderNodes() {
+    const listEl = el("nodeList");
+    if (!room || !p2p) {
+      el("nodeCount").textContent = "";
+      listEl.textContent = "";
+      el("nodeEmpty").hidden = false;
+      return;
+    }
+    const rows = nodeRowsFor({
+      peers: room.peers(),
+      factRows: room.factRows(),
+      myPeerId: myPeerId,
+      myDisplayName: myDisplayName,
+      nameFor: room.displayNameFor,
+      latestTimestampOf: p2p.latestProvenanceTimestamp,
+    });
+    const nowMs = Date.now();
+    const waving = wavingCharacters(room.factRows(), nowMs);
+    el("nodeCount").textContent = rows.length + (rows.length === 1 ? " node" : " nodes");
+    listEl.textContent = "";
+    for (const entry of rows) {
+      const item = document.createElement("li");
+      item.className = "node-row";
+      item.dataset.self = String(entry.isSelf);
+      item.dataset.away = String(!entry.connected);
+      item.dataset.peer = entry.peerId;
+      item.dataset.waving = String(waving.some(function (character) {
+        const owner = claimantOf(room.factRows(), character);
+        return owner !== null && peerTerm(owner) === peerTerm(entry.peerId);
+      }));
+      const avatar = document.createElement("span");
+      avatar.className = "node-avatar";
+      avatar.textContent = nodeInitials(entry.name);
+      avatar.title = entry.connected
+        ? "connected"
+        : "away \\u2014 closed the tab or dropped offline; everything it dug stays";
+      const name = document.createElement("span");
+      name.className = "node-name";
+      name.textContent = entry.name;
+      const hand = document.createElement("span");
+      hand.className = "node-hand";
+      hand.textContent = "\\u{1F44B}";
+      const when = document.createElement("span");
+      when.className = "node-when";
+      when.textContent = relativeWhen(entry.lastActiveAt, nowMs);
+      item.appendChild(avatar);
+      item.appendChild(name);
+      if (entry.isSelf) {
+        const self = document.createElement("span");
+        self.className = "node-self";
+        self.textContent = "you";
+        item.appendChild(self);
+      }
+      item.appendChild(hand);
+      item.appendChild(when);
+      listEl.appendChild(item);
+    }
+    el("nodeEmpty").hidden = rows.length > 1;
+  }
+
+  async function copyText(text) {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        return true;
+      }
+    } catch { /* fall through — the box on the page still holds the text */ }
+    return false;
+  }
+
+  const openNetPanel = function () {
+    el("netPanel").hidden = false;
+    el("statePill").setAttribute("aria-expanded", "true");
+  };
+  const closeNetPanel = function () {
+    el("netPanel").hidden = true;
+    el("statePill").setAttribute("aria-expanded", "false");
+  };
+
+  function wireNetPanel() {
+    el("netPanelClose").addEventListener("click", closeNetPanel);
+    el("statePill").addEventListener("click", function () {
+      if (el("netPanel").hidden) openNetPanel(); else closeNetPanel();
+    });
+
+    el("shareBtn").addEventListener("click", async function () {
+      const shareBtn = el("shareBtn");
+      shareBtn.disabled = true;
+      try {
+        const active = await ensureRoom();
+        const minted = await active.startSharing();
+        el("shareLink").value = inviteLinkFor(window.location.href, {
+          blob: minted.blob, world: worldId, worldName: worldName,
+        });
+        el("replyProblem").hidden = true;
+        openNetPanel();
+        renderWire();
+        await copyText(el("shareLink").value);
+      } catch (err) {
+        el("replyProblem").textContent = "couldn't create an invite (" + (err && err.message ? err.message : err) + ").";
+        el("replyProblem").hidden = false;
+        openNetPanel();
+      } finally {
+        shareBtn.disabled = false;
+      }
+    });
+
+    // The inviter's page has exactly one paste target, so there is no wrong box
+    // to choose. A rejected paste keeps its text so the copy can be fixed.
+    el("replyBtn").addEventListener("click", async function () {
+      let active = room;
+      if (!active) {
+        try { active = await ensureRoom(); } catch { return; }
+      }
+      const outcome = await active.completeInvite(el("replyBox").value);
+      if (outcome && outcome.error) {
+        el("replyProblem").textContent = outcome.message;
+        el("replyProblem").hidden = false;
+        return;
+      }
+      el("replyProblem").hidden = true;
+      el("replyBox").value = "";
+      renderWire();
+    });
+
+    el("copyReplyBtn").addEventListener("click", function () { copyText(el("replyOut").value); });
+
+    // The link flow lands somebody on the join card before they have dug
+    // anything. This is the other case: a burrow already open, an invite that
+    // arrived in a message, and no reason to throw the burrow away to take it.
+    el("joinOpenBtn").addEventListener("click", function () {
+      el("invitePanel").hidden = false;
+      openNetPanel();
+      el("inviteBox").focus();
+    });
+
+    el("inviteBtn").addEventListener("click", async function () {
+      const problem = el("inviteProblem");
+      const pasted = el("inviteBox").value.trim();
+      if (!pasted) {
+        problem.textContent = "paste the invite you were sent, then try again";
+        problem.hidden = false;
+        return;
+      }
+      if (room) {
+        problem.textContent = "this burrow is already shared. Reset it first, then take the invite.";
+        problem.hidden = false;
+        return;
+      }
+      // A whole link and a bare blob are both what people actually paste, so
+      // both are read. The blob's own envelope decides either way.
+      const blob = offerBlobIn(pasted);
+      const mod = await loadP2p();
+      const decoded = mod.decodeInviteBlob(blob);
+      if (decoded.error || decoded.value.kind !== "offer") {
+        problem.textContent = decoded.error
+          ? "this invite looks cut short \\u2014 ask for it to be sent again"
+          : "that's a reply, not an invite \\u2014 it belongs on the page that sent the invite";
+        problem.hidden = false;
+        return;
+      }
+      // The world id has to be the invite's before the room is opened: a room
+      // that minted its own would refuse the invite as belonging elsewhere.
+      await ensureIdentity();
+      worldId = decoded.value.world || worldId;
+      if (decoded.value.worldName) {
+        worldName = decoded.value.worldName;
+        el("worldNameInput").value = worldName;
+      }
+      try {
+        const active = await ensureRoom();
+        const outcome = await active.acceptInvite(blob);
+        if (outcome && outcome.error) {
+          problem.textContent = outcome.message;
+          problem.hidden = false;
+          return;
+        }
+        problem.hidden = true;
+        el("inviteBox").value = "";
+        el("replyOut").value = outcome.blob;
+        renderWire();
+        await copyText(outcome.blob);
+      } catch (err) {
+        problem.textContent = "couldn't make a reply (" + (err && err.message ? err.message : err) + ").";
+        problem.hidden = false;
+      }
+    });
+
+    el("nodeNameInput").addEventListener("change", function () {
+      const name = el("nodeNameInput").value.trim();
+      if (!name || name === myDisplayName) { el("nodeNameInput").value = myDisplayName; return; }
+      myDisplayName = name;
+      writeStoredNodeName(name);
+      if (!room) { renderNodes(); return; }
+      room.setMyDisplayName(name).then(renderNodes).catch(function () { /* the next broadcast carries it */ });
+    });
+    el("worldNameInput").addEventListener("change", function () {
+      const input = el("worldNameInput");
+      if (input.readOnly) { input.value = worldName; return; }
+      const name = input.value.trim();
+      if (name) worldName = name;
+      input.value = worldName;
+    });
+
+    el("joinBtn").addEventListener("click", async function () {
+      const joinBtn = el("joinBtn");
+      joinBtn.disabled = true;
+      try {
+        const active = await ensureRoom();
+        const outcome = await active.acceptInvite(invite.offer);
+        if (outcome && outcome.error) {
+          el("joinProblem").textContent = outcome.message;
+          el("joinProblem").hidden = false;
+          joinBtn.disabled = false;
+          joinBtn.textContent = "try again";
+          return;
+        }
+        el("joinProblem").hidden = true;
+        el("joinReply").value = outcome.blob;
+        el("replyOut").value = outcome.blob;
+        el("joinReplyWrap").hidden = false;
+        joinBtn.textContent = "reply created";
+        el("joinDismiss").textContent = "close this and start digging";
+        renderWire();
+        await copyText(outcome.blob);
+      } catch (err) {
+        el("joinProblem").textContent = "couldn't make a reply (" + (err && err.message ? err.message : err) + ").";
+        el("joinProblem").hidden = false;
+        joinBtn.disabled = false;
+      }
+    });
+    el("joinCopyBtn").addEventListener("click", function () { copyText(el("joinReply").value); });
+    el("joinDismiss").addEventListener("click", function () {
+      el("joinCard").hidden = true;
+      if (el("replyOut").value) openNetPanel();
+    });
+  }
+
+  // A link that lost part of itself on the way reads as a mangled link, never
+  // as no invite at all.
+  async function prepareJoinCard() {
+    el("joinCard").hidden = false;
+    el("joinWorld").textContent = invite.worldName || "a shared burrow";
+    el("joinBtn").focus();
+    const mod = await loadP2p();
+    const decoded = mod.decodeInviteBlob(invite.offer);
+    if (decoded.error || decoded.value.kind !== "offer") {
+      el("joinBtn").hidden = true;
+      el("joinEyebrow").textContent = "this link didn't arrive in one piece";
+      el("joinWorld").textContent = invite.worldName || "an invitation";
+      el("joinBody").textContent = decoded.error
+        ? "Part of the link was lost on the way here. Ask for it to be sent again, and check the whole thing travels."
+        : "That link carries a reply rather than an invite. It belongs in the box on the page that sent the invite.";
+      el("joinDismiss").textContent = "dig on your own instead";
+      return;
+    }
+    if (decoded.value.world) invite.world = decoded.value.world;
+    if (decoded.value.worldName) {
+      invite.worldName = decoded.value.worldName;
+      el("joinWorld").textContent = decoded.value.worldName;
+    }
   }
 
   // ---- the control deck ----------------------------------------------------
@@ -1996,9 +2837,22 @@ function pageScript() {
   // session on the floor rather than binding it to the stage the newer boot
   // has already drawn.
   let bootSeq = 0;
-  async function boot() {
+  let bootRun = null;
+  function boot() {
+    bootRun = openWorld();
+    return bootRun;
+  }
+
+  async function openWorld() {
     const seq = bootSeq += 1;
     autoOn = false;
+    // A room is bound to the store it was opened over, and recasting mints a
+    // brand new one — so a burrow that restarts leaves the link behind rather
+    // than quietly syncing a world nobody else is in. Saying so is the whole
+    // handling; sharing again opens a fresh link over the new world.
+    dropRoom("the burrow restarted \\u2014 share again to link up.");
+    claimedElsewhere = {};
+    wavingNow = [];
     const playBtn = el("autoToggle");
     playBtn.setAttribute("aria-pressed", "false");
     playBtn.textContent = "\\u25B6 play";
@@ -2050,6 +2904,20 @@ function pageScript() {
   }
 
   wireDeck();
+  wireNetPanel();
+  renderWire();
+  renderNodes();
   boot();
+  // Off the boot path on purpose: this fetches the shared P2P asset so the
+  // panel can show a real node name and burrow name before anyone clicks
+  // anything. A failure here costs sharing, never the digging.
+  ensureIdentity().catch(function () { /* sharing stays unavailable; the burrow does not */ });
+  if (invite) {
+    prepareJoinCard().catch(function (err) {
+      el("joinProblem").textContent = "the networking asset didn't load (" + (err && err.message ? err.message : err) + ").";
+      el("joinProblem").hidden = false;
+      el("joinBtn").hidden = true;
+    });
+  }
 })();`;
 }

@@ -11,8 +11,9 @@ import assert from "node:assert/strict";
 import {
   renderMudHtml, paneMarkup, speciesOfCharacter, mudRoomSceneObjects, carriedItemsFor,
   levelsOf, charactersInRoom, burrowGraph, diggableDirections, itemLabel, isCreature,
+  provenanceStamps, peerTerm, claimantOf, wavingCharacters, nodeNameFor, offerBlobIn,
 } from "../../src/services/mud-viz.mjs";
-import { foldWorldState } from "../../src/services/adventure.mjs";
+import { foldWorldState, isMudStatePredicate } from "../../src/services/adventure.mjs";
 
 const CHARACTERS = [
   { id: "mole-1", species: "mole" },
@@ -328,4 +329,149 @@ test("isCreature: an animal is placed with currently-in, a prop is not", () => {
   const state = foldWorldState(BURROW_ROWS);
   assert.equal(isCreature(state, "mole-1"), true);
   assert.equal(isCreature(state, "root-burrow-1-south"), false);
+});
+
+test("renderMudHtml: the deck carries share and join, and the panel they open", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  assert.match(html, /id="shareBtn"/, "one control mints an invite");
+  assert.match(html, /id="joinOpenBtn"/, "and one takes an invite that arrived some other way");
+  assert.match(html, /id="statePill"/, "the deck says in one word whether the burrow is shared");
+  for (const id of ["netPanel", "shareLink", "replyBox", "inviteBox", "replyOut", "nodeList", "nodeNameInput", "worldNameInput"]) {
+    assert.match(html, new RegExp(`id="${id}"`), `the panel carries ${id}`);
+  }
+  assert.match(html, /id="joinCard"/, "a link that arrives as a link still lands on its own card");
+  assert.match(html, /\.join-card\[hidden\][^{]*\{ display: none/, "and a hidden overlay is really hidden, not merely marked so");
+});
+
+test("renderMudHtml: every pane can wave, and has somewhere to say who plays it", () => {
+  const html = paneMarkup("a");
+  assert.match(html, /id="window-a-wave"/, "the hand sits with the pane's own quick commands");
+  assert.match(html, /class="pill wave-btn"/);
+  assert.match(html, /id="window-a-node" hidden/, "the origin-node line starts empty, for an unshared burrow has none");
+});
+
+test("renderMudHtml: the page reads its sync filter off the engine rather than naming predicates itself", () => {
+  const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
+  assert.match(html, /mudSyncableFacts\(rows, isState, extraPredicates\)/, "the predicate check is handed over, never inlined");
+  assert.match(html, /window\.tmctMud\.isMudStatePredicate/, "and it comes from the world engine's own export");
+  assert.match(html, /window\.tmctMud\.P2P_PREDICATES/, "alongside the P2P layer's own four");
+});
+
+// ---- the shared burrow's own readers ----------------------------------------
+// A claim, a wave and a node name are ordinary facts, so every reader below
+// takes plain rows and settles the question the same way on every machine.
+
+const claim = (character, peer, at) => ({
+  subject: character, predicate: "mgx:playedBy", object: peer, provenance: `ace:p2p:${character}@${at}`,
+});
+const waved = (character, room, at) => ({
+  subject: character, predicate: "mgx:waved", object: room, provenance: `ace:p2p:${character}-${room}@${at}`,
+});
+
+test("provenanceStamps reads every assertion time a joined provenance carries", () => {
+  const joined = "ace:p2p:mole-1@2026-07-29T10:00:00.000Z | teach:peer:mossy-acorn@2026-07-29T10:00:05.500Z";
+  assert.deepEqual(
+    provenanceStamps(joined),
+    [Date.parse("2026-07-29T10:00:00.000Z"), Date.parse("2026-07-29T10:00:05.500Z")],
+  );
+  assert.deepEqual(provenanceStamps(""), [], "a fact with no provenance carries no time");
+  assert.deepEqual(provenanceStamps("world:mud-garden"), [], "an untimed world tag carries none either");
+});
+
+test("peerTerm normalizes a peer id the way the fact store stores it", () => {
+  assert.equal(peerTerm("peer:AB12-CD34"), "ab12-cd34", "the CURIE prefix is stripped and the id lowercased");
+  assert.equal(peerTerm("ab12-cd34"), "ab12-cd34", "an already-stored term reads back unchanged");
+  assert.equal(peerTerm(null), "");
+});
+
+test("claimantOf settles two claims on one character by the oldest, never the newest", () => {
+  const rows = [
+    claim("mole-1", "alpha", "2026-07-29T10:00:03.000Z"),
+    claim("mole-1", "beta", "2026-07-29T10:00:01.000Z"),
+  ];
+  assert.equal(claimantOf(rows, "mole-1"), "beta", "the first hand on the animal keeps it");
+  assert.equal(claimantOf(rows, "vole-1"), null, "an animal nobody claimed has no owner");
+});
+
+test("claimantOf reads a claim through the tag a peer relabelled it with on the wire", () => {
+  const rows = [{
+    subject: "mole-1",
+    predicate: "mgx:playedBy",
+    object: "alpha",
+    provenance: "teach:peer:mossy-acorn@2026-07-29T10:00:01.000Z",
+  }, claim("mole-1", "beta", "2026-07-29T10:00:02.000Z")];
+  assert.equal(claimantOf(rows, "mole-1"), "alpha");
+});
+
+test("claimantOf breaks a dead heat the same way on every machine", () => {
+  const rows = [
+    claim("mole-1", "zeta", "2026-07-29T10:00:00.000Z"),
+    claim("mole-1", "alpha", "2026-07-29T10:00:00.000Z"),
+  ];
+  assert.equal(claimantOf(rows, "mole-1"), "alpha", "the lower peer term wins, so no two pages disagree");
+  assert.equal(claimantOf([...rows].reverse(), "mole-1"), "alpha", "and the row order it arrived in cannot change that");
+});
+
+test("a repeated claim by one peer never overtakes an older claim by another", () => {
+  const rows = [
+    claim("mole-1", "alpha", "2026-07-29T10:00:01.000Z"),
+    {
+      subject: "mole-1",
+      predicate: "mgx:playedBy",
+      object: "beta",
+      provenance: "ace:p2p:mole-1@2026-07-29T10:00:02.000Z | ace:p2p:mole-1@2026-07-29T10:09:00.000Z",
+    },
+  ];
+  assert.equal(claimantOf(rows, "mole-1"), "alpha", "a claim is settled on its first assertion, not its latest");
+});
+
+test("wavingCharacters reads a wave by recency, and an old wave simply stops being current", () => {
+  const now = Date.parse("2026-07-29T10:00:10.000Z");
+  const rows = [
+    waved("mole-1", "garden", "2026-07-29T10:00:07.000Z"),
+    waved("vole-1", "garden", "2026-07-29T09:59:00.000Z"),
+  ];
+  assert.deepEqual(wavingCharacters(rows, now), ["mole-1"]);
+  assert.deepEqual(wavingCharacters(rows, now, 120000), ["mole-1", "vole-1"], "a wider window reads both");
+});
+
+test("waving again after the window has passed reads as waving, through the newest tag on the same fact", () => {
+  const now = Date.parse("2026-07-29T10:00:10.000Z");
+  const rows = [{
+    subject: "mole-1",
+    predicate: "mgx:waved",
+    object: "garden",
+    provenance: "ace:p2p:mole-1-garden@2026-07-29T09:50:00.000Z | ace:p2p:mole-1-garden@2026-07-29T10:00:08.000Z",
+  }];
+  assert.deepEqual(wavingCharacters(rows, now), ["mole-1"], "the recency read takes the newest tag on the fact");
+});
+
+test("offerBlobIn reads the offer out of a whole link or takes a bare blob as it stands", () => {
+  assert.equal(offerBlobIn("https://example.test/mud.html?offer=BLOB123&world=w1&name=mossy-acorn"), "BLOB123");
+  assert.equal(offerBlobIn("BLOB123"), "BLOB123", "a bare blob is already the thing");
+  assert.equal(offerBlobIn("https://example.test/mud.html?world=w1&offer=BLOB123"), "BLOB123", "wherever it sits in the query");
+  assert.equal(offerBlobIn("  https://example.test/mud.html?offer=A%2BB  "), "A+B", "and it arrives decoded");
+  assert.equal(offerBlobIn(""), "");
+});
+
+test("nodeNameFor takes a peer's latest name, and falls back to a short id while none has arrived", () => {
+  const rows = [
+    { subject: "abc12345-6789", predicate: "mgx:nodeName", object: "mossy-acorn", provenance: "ace:p2p:abc@2026-07-29T10:00:01.000Z" },
+    { subject: "abc12345-6789", predicate: "mgx:nodeName", object: "quiet-badger", provenance: "ace:p2p:abc@2026-07-29T10:00:09.000Z" },
+  ];
+  assert.equal(nodeNameFor(rows, "peer:ABC12345-6789"), "quiet-badger", "a rename is an add, and the latest wins");
+  assert.equal(nodeNameFor(rows, "peer:ffffffff-0000"), "ffffffff", "a label never waits for a name to arrive");
+});
+
+test("isMudStatePredicate accepts what a turn writes and refuses the chrome around it", () => {
+  for (const predicate of [
+    "mgx:currently-in", "mgx:located-in", "mgx:hidden-in", "mgx:on-top-of", "mgx:is-open",
+    "mgx:hasMass", "mgx:knows-about", "mgx:display-name", "rdf:type",
+    "mgx:has-exit-north", "mgx:has-exit-down",
+  ]) {
+    assert.equal(isMudStatePredicate(predicate), true, `${predicate} is live world state`);
+  }
+  for (const predicate of ["mgx:playedBy", "mgx:waved", "mgx:nodeName", "mgx:worldName", "mgx:is-predator", ""]) {
+    assert.equal(isMudStatePredicate(predicate), false, `${predicate} is not world state a turn folds`);
+  }
 });
