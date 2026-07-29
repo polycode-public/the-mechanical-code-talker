@@ -1,7 +1,7 @@
 # PLAN_MUD.md — persistent, shared tmct worlds over a `server:` memory backend
 
 Status: mixed. The P2P/WebRTC multiplayer design (below) shipped 2026-07-29 in both `mud.html` and
-`chat.html`. Everything else in this document — Backend D, the server tiers, handles, MUD3D — is
+`chat.html`. Everything else in this document — Backend D, the server tiers, handles, MUDIII — is
 still RESEARCH / DESIGN, not yet implemented.
 
 ## Origin
@@ -935,55 +935,637 @@ All five run as real-browser tests, in that order: `test-e2e/p2p-webrtc-handshak
 `pages-chat-p2p-distributed-inference.test.mjs` adds the one the list doesn't name: a chain with one
 link taught on each page, proved on both.
 
-## MUD3D — a rendered town square, evaluated against world-of-claudecraft
+## MUDIII — a Three.js town square over the spider-fly planning engine
 
-2026-07-29, operator ask: could a shared, walkable 3D town square — buying leather, making armour,
-the same shape as mud.html but rendered — build on `world-of-claudecraft`
-(github.com/levy-street/world-of-claudecraft, MIT, cloned locally at `../world-of-claudecraft`)?
-Checked the source directly rather than guessing from the README. Design capture only; nothing
-below is built.
+Renamed from this section's earlier working title "MUD3D". The public name is MUDIII, with
+`mudiii.html` as the deliverable page and `mudiii.co.uk` as the eventual public URL. Read "Naming
+and lineage" at the end of this section before shipping that name anywhere public — the name
+carries real, specific risk that the design itself does not. The domain was unregistered as of
+2026-07-30 (Nominet WHOIS: `No match for "mudiii.co.uk"`).
 
-**What it actually is.** It's a real, large Three.js/TypeScript MMO — quests, combat, professions,
-markets, PvP — not a toy. Its "offline browser Sim" (`npm run dev`, gated out of production builds)
-isn't a stripped-down demo mode: it boots the literal authoritative `Sim` class (9,673 lines)
-client-side with no network, satisfying the same `IWorld` interface the renderer always reads. Sim
-and render genuinely are separated — `src/sim/` is guarded to have zero DOM/Three imports, and
-`Renderer` is typed only against `IWorld`, never a concrete Sim type — but `IWorld` itself is 256
-members (69 data fields, ~187 methods: quests, market, mail, dungeons, talents, professions, PvP,
-card duels...), and world state underneath it is a `Map<number, Entity>` of one monolithic
-RPG-shaped struct (`hp`, `stats`, `weapon`, `procState`...), mutated in place every tick. There's no
-graph, no ECS, no fact/tuple representation anywhere — the opposite pole from tmct's (subject,
-predicate, object) rows. Reusing the renderer for a different, tmct-fact-driven world means either
-satisfying all 256 `IWorld` members or forking a large fraction of `src/render`'s assumptions —
-their own in-repo map editor takes exactly this path (a frozen `Sim` under the real `Renderer`), and
-even that still carries the full interface, not a pruned one.
+2026-07-30 design pass, superseding the 2026-07-29 MUD3D assessment. That pass's
+world-of-claudecraft architecture findings are kept, compressed, in the claudecraft subsection
+below; its conclusion (render tmct-natively, keep the planning in tmct) stands. Nothing here is
+built.
 
-**What's genuinely reusable.** Two concrete, MIT-licensed pieces, cheap to lift directly: the seeded
-value/fractal-noise terrain function (`src/sim/rng.ts`), sampled identically by sim and render from
-one seed with no external content files — a real precedent for "deterministic rendering from compact
-state," the exact idea behind mud.html's own room-cross-section rendering; and `PlacedAsset`
-(`{path, x, z, rotY, scale, collideRadius?}`) plus its 385-line renderer (`src/render/placed_assets.ts`)
-— an arbitrary GLB model at a transform, decoupled from combat/quests, built for their map editor.
-That's a clean fit for static scene-dressing: a town square's buildings, market stalls, a well. Also
-worth naming as a shape precedent, even though no code moves: `Sim` runs identically from three
-different harnesses (authoritative server, offline browser, headless RL/Gymnasium), the same "one
-deterministic core, several consumers" instinct tmct already has for its own graph.
+**What it is.** One page. A Three.js view of a town square, with a prowling predator and a
+handful of scavengers visibly moving around it — v1 casts a wolf and goblins, and the pair is
+swappable data (see the cast subsection). Each character plans for itself over the same
+fact-graph memory every other demo uses,
+with vision-gated belief, exactly as spider-fly.html's agents do today. Under the 3D view sits the
+ordinary chat surface: the game stays text-addressable, the 3D canvas is a visualization layer
+over fact rows, and everything the player does lands in the store as facts. A single player
+watches, advances turns, asks the animals what they see, feeds them true or false positions, and
+places food. It is spider-fly's competing-planning-agents engine, reskinned to a new role pair and
+rendered, driven through a 1-player version of mud.html's deck, with no P2P.
 
-**The planning half doesn't need claudecraft at all.** "Walk to the market, buy leather, make armour"
-is a goal-directed action sequence over known facts — exactly what `src/domain/planning.mjs`'s
-`findActionPath`/`findReachableSet` already do, exercised today by `adventure-autoplay.mjs`'s
-goal-directed room search and `mud-turn.mjs`'s walk-toward-known-food behavior. A market/crafting
-scenario is more facts and verbs for that same machinery, not a new planning system — claudecraft's
-own crafting/economy code is bespoke RPG logic with no graph underneath, so there's nothing there to
-import for this half.
+### What already exists, verified against current source
 
-**Shape this points toward, not yet scoped as a build phase**: a small, tmct-native render layer —
-mud.html-scale, driven directly from tmct fact rows (kind, position, label), not built on
-claudecraft's `Sim`/`IWorld` — using the noise-terrain and placed-asset techniques above as
-implementation reference rather than an imported dependency. That keeps the demo's own principle
-intact (a page's source should read as a thin caller of real tmct capability, not a skin over
-someone else's 256-member interface) at the cost of writing the actual 3D rendering ourselves rather
-than inheriting it.
+- `src/domain/planning.mjs` — `findActionPath`/`findReachableSet`/`bfsLevels`, the pure search
+  kernel. Used unchanged.
+- `src/domain/spider-fly-world.mjs` — the pattern for a shipped world: one pure module owning grid
+  constants, `cellId`/`parseCellId`/`chebyshevDistance`/`visibleCells`/`perimeterCells`/
+  `DIRECTION_DELTA`, plus generators for the world's fact rows (`worldFactRows`: cell typing,
+  `mgx:has-exit-<direction>` adjacency, taxonomy) and self-describing `structuralFactRows` so
+  "what is the board?" grounds in chat. MUDIII gets a sibling, `town-square-world.mjs`.
+- `src/services/spider-fly.mjs` — the tick engine: `foldSpiderFlyState` (fold fact rows to
+  current state), `gridApplyActions` (successors from `has-exit` facts), `planSpiderPath`
+  (multi-step BFS chase), `greedyFlyMove`/`greedySpiderApproach`/`greedySpiderAvoid` (one-ply
+  Chebyshev scoring), `believedCellOf`/`beliefSnapshotFor` (vision-gated belief with a told-facts
+  channel), `runEcologyPass` (catch/eat/starve/lay/hatch/spawn in one fixed-order pass), all
+  seeded-deterministic (`mulberry32(fnv1a32(...))`, never `Math.random`). This is the machinery
+  MUDIII instantiates with new roles. The grid-planning question is already settled here:
+  hand-written `applyActions` over the world's own `has-exit` facts, because the taught
+  action-rule DSL's precondition shapes cannot express grid adjacency (the header of
+  `gridApplyActions` records this; `compileDomain`/`movesFromRules` in `src/domain/domain.mjs`
+  stay the plan lane's tool, not this game's).
+- `src/services/spider-fly-turn.mjs` — the chat lane pattern: closed-regex openers/stop/tick, the
+  addressed spatial teach-frame (`@spider the fly is east` / `at cell-7-3`), the read-only belief
+  question ("what does the fly see?"), in-game orientation asides, and `pillsForSpiderFly` (the
+  dynamic true/false claim-pill rail). MUDIII gets a sibling lane with role-parameterized
+  vocabulary.
+- `src/services/mud-viz.mjs` + `src/surfaces/web/mud-browser-entry.mjs` — the 1-player deck
+  MUDIII inherits: an in-memory fact store per session, `session.snapshot()` as the one
+  omniscient read, `serializeTick` (a shared promise chain making turn order well-defined), one
+  `createTicker` per animal, play/reset/delay/count sliders, scenario dropdown. mud.html is
+  already single-player-capable: its P2P layer is a lazily-imported add-on
+  (`import("./vendor/p2p.js")` on share/join only), so "1-player mud.html" means shipping without
+  that import and without the `.state-pill`/net-panel/join-card/claim machinery, and changing
+  nothing else.
+- `src/domain/game-config.mjs` — `DEFAULT_GAME_CONFIG.spiderFly`/`mud` plus tmct.toml overrides;
+  MUDIII adds its own table.
+
+### The world: a town square as a grid with buildings on it
+
+`src/domain/town-square-world.mjs`, mirroring `spider-fly-world.mjs`. A 12x12 grid (spider-fly is
+10x10; a square with buildings needs the extra room, and the size is one constant in one module).
+The town-square dressing — buildings around the edge, a well, market stalls — is authored as prop
+facts in the same world pack:
+
+    stall-1   rdf:type          prop
+    stall-1   mgx:currently-in  cell-4-3
+    stall-1   mgx:model         market-stall
+    stall-1   mgx:rotation      90
+
+A prop's cell is solid. The world generator simply omits `mgx:has-exit-*` edges into occupied
+cells, so buildings are pure topology: the planner routes around them with zero new code, the
+same way it already respects the board edge. This is the one structural difference from
+spider-fly's open board.
+
+`mgx:model` names an asset key the render layer resolves to a mesh; fact rows never carry file
+paths. The shape (name, cell, rotation, optional scale) follows world-of-claudecraft's
+`PlacedAsset` as a reference (see the claudecraft subsection), restated as fact rows so the scene
+stays askable in chat ("what is at cell-4-3?" grounds).
+
+### The cast: a parameterized predator/scavenger pair
+
+spider-fly hardcodes its roles everywhere: id regexes (`/^spider-\d+$/`), config keys
+(`spiderInitialMass`), chat vocabulary, and the viz layer's class literals (a fact NEXT.md's
+generic-page-API item already names). The operator plans several character pairs over time, so
+MUDIII does not copy that pattern. Two options:
+
+1. Parameterize `spider-fly.mjs` itself and make spider-fly one instantiation. Touches a shipped,
+   tested engine and its chat lane; largest payoff, largest regression surface.
+2. Write the new engine role-parameterized from day one — `src/services/predator-prey.mjs`,
+   taking a roles object — and leave spider-fly untouched. spider-fly can migrate onto it later
+   if that ever earns its cost.
+
+Option 2 is the design. The roles object is plain data:
+
+    { predator: { kind: "wolf",   idPrefix: "wolf"   },
+      prey:     { kind: "goblin", idPrefix: "goblin" },
+      food:     { spawnedKind: "crumb", placedKind: "morsel" } }
+
+with the numeric knobs in `DEFAULT_GAME_CONFIG.mudiii` keyed by role, not species
+(`predatorInitialMass`, `preyVisionRadius`, `foodSpawnIntervalTurns`, ...), so a later pair is a
+new roles object plus sprite/model mappings, with no engine edit. Note `game-config.mjs`'s `mud`
+table went the other way (per-species keys: `moleInitialMass`, `badgerSpeed`, ...); that fits
+mud's authored-cast worlds, but MUDIII's cast is a role pair by construction, so role-keyed knobs
+fit here.
+
+**Which pair, and why — three real options, all checked against claudecraft's own clip maps**
+(the per-model rig evidence sits in the claudecraft subsection below):
+
+1. **Wolf and goblins — the v1 cast.** Both bodies are CC0 with full wired ground rigs
+   (idle/walk/run/death), and the fiction maps 1:1 onto the mechanics: goblins raiding a
+   medieval square for scraps, a wolf hunting the goblins. Nothing in the crumb/forage/evade
+   design bends to fit it.
+2. **Cat and mouse — the pair first named for this demo, now a later pair.** Neither body
+   ships usable: the only cat (`yumi_cat.glb`) is licence-restricted and has no wired
+   locomotion clips, and no mouse-like model exists in the repo at all. When this pair lands
+   it needs both assets sourced upstream (a recolored CC0 fox is a workable cat; the CC0
+   libraries claudecraft draws on publish more animals than it bundles). The role machinery
+   makes that a data change.
+3. **Knight and dragon — a real option with a different fiction.** Both are CC0 and fully
+   rigged (the KayKit knight's full player clip set; the dragon's hover rig). But a knight is
+   no scavenger, so this pair needs reframing rather than a pure reskin — the prey role
+   becomes "patrol and collect" (a knight gathering dropped supplies, hunted by a dragon), or
+   the pair waits for a mechanics variant where the crumb role is something a knight would
+   chase. Named here so the option stays visible; the mechanics below read wolf/goblin.
+
+### Mechanics, as planning-domain content
+
+All of these run inside the engine's per-tick loop (fold, believe, decide, move, ecology pass,
+append this turn's `@turnN` facts), which carries over structurally intact.
+
+**Crumbs appear on their own.** A world-tick event in the ecology pass, exactly where fly
+spawning lives today: every `foodSpawnIntervalTurns` turns, one `crumb-N` is minted at a seeded
+pick among uncontested cells (seeded by world name, turn and id, so runs replay
+byte-identically). Crumbs are inert items, not agents: `rdf:type crumb`, `crumb rdfs:subClassOf
+food` in the pack taxonomy, `mgx:currently-in`, and `mgx:eaten-by` when consumed. Unlike
+spider-fly's perimeter-only fly spawns, crumbs land anywhere open — they are dropped bread, not
+arriving animals. Goblins still arrive at the perimeter, wandering in from the edge of view,
+which is the fly-spawn rule verbatim.
+
+**Goblins plan to eat crumbs.** A goblin that believes food stands somewhere runs
+`findActionPath` toward the nearest believed food cell and takes the first step (the spider's
+chase machinery, pointed at an item instead of an agent). Co-location eats it: an eat step in
+the ecology pass writes `mgx:eaten-by` and adds the crumb's mass to the goblin. Belief is
+vision-gated for food exactly as for agents — a goblin must wander within its vision radius of
+a crumb (or be told about it) before it will path to it. The alternative, food as common
+knowledge on spawn, would send every scavenger beelining across the square and kill the
+foraging feel; it stays a config experiment, never the default.
+
+**The wolf plans to eat goblins.** The spider's chase priority chain, minus webs: a wolf that
+believes a goblin is visible paths toward the believed cell (multi-step BFS when one exists,
+one-ply greedy approach otherwise) and eats on co-location, gaining the goblin's remaining
+mass. spider-fly separates catch from eat because eating needs a web; a wolf needs no
+apparatus, so catch and eat merge into one ecology step. Two wolves avoid each other
+(`greedySpiderAvoid`'s mirror), and a wolf with nothing in view wanders (seeded) rather than
+holding still — there is no web to build, and a motionless predator reads as a broken page in
+3D. Eggs and hatching stay out of v1; the goblin spawn interval keeps the population up, and
+the wolf count is a slider. Mass and starvation stay for both roles — hunger is what makes the
+foraging real.
+
+**Goblins evade the wolf; the eat-versus-evade conflict resolves by priority order.** The fly
+already resolves this shape: its move chain is trapped > evade > wander. The goblin's chain
+inserts the forage branch one rung down:
+
+    1. a wolf is believed visible -> evade: one-ply greedy, maximize Chebyshev distance
+                                     from the nearest believed wolf (greedyFlyMove verbatim)
+    2. food is believed somewhere -> forage: first step of findActionPath toward it
+    3. otherwise                  -> wander: seeded pick among stay + one-ply neighbors
+
+Threat response needs no event system: the whole engine replans every tick from the folded
+facts, so a wolf entering vision radius flips the goblin from rung 2 to rung 1 on the next tick
+by construction, and its goal line flips with it ("evading — last saw wolf-1 at cell-6-2"). The
+alternative — one blended one-ply score weighing wolf distance against crumb distance — was
+considered and parked: it needs new scoring machinery, its weights need tuning against a real
+board, and it turns the goal line into mush ("mostly evading, somewhat hungry") that neither the
+HUD nor chat can narrate cleanly. A cheap middle ground exists later without restructuring:
+when evading, break ties among equally-safe cells toward the nearest believed food. That is one
+comparator in the evade scorer, flagged as a tuning knob, not v1.
+
+**The player places food.** A chat verb (closed regex, in the lane: "put food at cell-3-4" /
+"drop a morsel at cell-3-4") and a click affordance in the 3D view (click an empty cell while
+the food pill is armed). Both append one fact set: `morsel-N rdf:type morsel`, `morsel
+rdfs:subClassOf food`, `mgx:currently-in cell-x-y`, with player provenance rather than the world
+tag — so "who put that there?" grounds, and the answer names the player. Goblins never
+distinguish crumbs from morsels: the forage read walks the `food` class chain
+(`objectClassChain`, as mud-turn.mjs's `isFood` does), so player food and world crumbs compete
+on distance alone. Placing food next to a lurking wolf is thereby a working trap, and nobody
+wrote a trap mechanic — it falls out of the three rules above.
+
+**Telling characters things carries over whole.** The addressed teach-frame ("@goblin the wolf
+is east", "@wolf the goblin is at cell-7-3") and the true/false claim-pill rail lift from
+spider-fly-turn.mjs with role vocabulary swapped, and the told-fact channel extends naturally
+to food ("@goblin the crumb is at cell-2-9"). Deception stays the page's sharpest trick: the
+belief panel shows the lie landing.
+
+### The render layer: vendored Three.js, facts in, meshes out
+
+**Vendoring.** `three` is not currently a dependency and no page loads anything from a CDN — the
+repo's standing rule, with the recipe already proven: `build-wink-vendor.mjs` bundles wink-nlp
+into `public/vendor/wink.js` (3.6 MB raw / 790 KB brotli), precached by the service worker so
+LAN demos work offline. Three.js follows the identical recipe: `npm i three`, a
+`scripts/build-three-vendor.mjs` copied from the wink one (esbuild, ESM, minified,
+write-to-tmp-and-rename), called from `build-demo-site.mjs`, added to the service-worker
+precache, and lazily `import("./vendor/three.js")`-ed from the page's inline script. A minimal
+three build is ~600 KB, well inside the wink precedent. OrbitControls ships in three's examples
+tree and joins the same vendor bundle, as does the meshopt decoder (see the claudecraft
+subsection for why).
+
+**Page anatomy** mirrors every other game page: `renderMudiiiHtml()` in
+`src/services/mudiii-viz.mjs` (markup + CSS + inline IIFE), an engine bundle from
+`src/surfaces/web/mudiii-browser-entry.mjs` stashing exports on `globalThis.tmctMudiii`, a
+`scripts/build-mudiii-bundle.mjs` through the shared `browser-bundle.mjs`, and a
+`build-demo-site.mjs` block writing `public/mudiii.html`.
+
+**Scene graph from facts.** One ground plane with the grid drawn on it; prop meshes at their
+authored cells (resolved from `mgx:model` keys); one mesh per live agent at its cell center; a
+small marker mesh per crumb/morsel. The renderer consumes exactly the tick payload spider-fly's
+2D page consumes (`{ turn, agents: { id: { cell, goal, plan, mass, belief } }, ecology }`) plus
+the prop facts once at boot. `plan[0]` drives facing, as it already does for 2D sprite rotation.
+
+**Movement is a snap with a cosmetic tween.** The engine's truth is one cell hop per tick, and
+characters can simply appear in new cells — which is what mud.html and adventure.html already
+do (both re-stamp the character at its new room per redraw; a survey of both viz files found no
+position tweening in either). spider-fly.html is the one page with interpolated motion:
+persistent per-agent DOM nodes whose `left`/`top` transition over 250ms, disabled under
+`prefers-reduced-motion`. The 3D layer copies that exact convention: per-agent meshes persist
+across ticks, a ~250ms lerp eases each one-cell hop, and the authoritative position is always
+the tick's cell (the lerp is presentation, never state). Spawns, despawns and any multi-cell
+appearance use a short scale/fade flourish at the destination cell, no path animation — the
+mud-viz event-flourish idiom (dig-pulse, fox-pounce) in 3D. Reduced motion disables both.
+
+**Camera and visibility.** v1 is one orbitable camera around the square's center, omniscient —
+the counterpart of mud.html's whole-burrow survey. "NPCs wandering in and out of view" is the
+agents' own vision model, never the camera's: what each animal can see stays vision-radius
+belief, surfaced through the belief panel and "what does the goblin see?". A per-agent POV mode
+(dim every cell outside the selected agent's `visibleCells` — spider-fly's fog canvas translated
+to material dimming) is phase 2 of this page, not v1.
+
+### The dashboard: a 1-player mud deck
+
+The deck carries over minus P2P: play/pause, reset, a delay slider, a scavenger-count slider
+(1..10) and a predator-count slider (1..3) in place of mud's players/npcs pair, and a scenario
+dropdown once a
+second map exists. Turn flow reuses `serializeTick` plus one ticker per animal. Below or beside
+the 3D view: the chat log and input with the pill rail, and per-agent HUD cards (mass bar, goal
+line, expandable belief panel) following spider-fly's HUD. mud's EDIT mode (the
+facts-as-sentences textarea in `mud-editor.mjs`) applies to this world unchanged, because the
+world is the same kind of fact rows; it is phase 2, not v1. The P2P layer can arrive later the
+same lazy way mud.html gained it, since the session store is the same shape; v1 deliberately
+ships without it.
+
+### "Pills and pointers", concretely
+
+What the phrase means in this codebase today (verified across all four pages): there is no
+single convention, and no pointer-from-chat-into-the-viz anywhere. The real inventory:
+
+- **Affordance pills** — click-to-fill (or double-click-to-run) command chips above the chat
+  input: adventure.html's `pillsForRoom` ("take lamp", "open desk"), mud.html's `.pill.way` (go)
+  and `.pill.affordance` (dashed), spider-fly.html's static address/direction pills.
+- **The deception rail** — spider-fly's dynamic `pillsForSpiderFly` claim pills, tagged true
+  (✓, taught-green border) or false (✕, dashed alert border) by CSS only, so the submitted
+  sentence never carries the tag.
+- **Provenance chips** — chat.html's `.provchip` / `.pc-taught|corpus|entail` under settled
+  answer bubbles; a miss gets no chip, the absence being the signal.
+- **`.state-pill`** — the P2P wire-state chip on chat.html and mud.html. P2P only.
+- **Pointer glyphs** — the compass/door rings: mud's `▲ N / ▼ S / ◀ W / E ▶` positioned around
+  the room box, adventure's `▸` door prefix and unwalked-door dot.
+
+MUDIII carries forward: the affordance pills (addresses `@wolf`/`@goblin`, tick, the food verb),
+the deception rail generalized to the role pair, and the goal/belief HUD. The compass ring dies
+here — an orbitable 3D camera replaces it, and directions live on in the teach-frame pills ("the
+wolf is north"). `.state-pill` stays out with the P2P layer. Provenance chips stay a chat.html
+surface; this page's chat is a game lane whose answers are board reads, and it follows
+spider-fly (no provchips) rather than chat.html.
+
+### The chat lane
+
+`src/services/mudiii-turn.mjs`, the fifth lane on the shared plan-slot, shaped exactly like
+spider-fly-turn.mjs with vocabulary from the roles object: openers ("visit the town square",
+"watch the wolf and the goblins"), stop, tick, the addressed teach-frame, "what does the goblin
+see?", the orientation asides (where/options/goal), plus the one new verb: the food placement.
+Every
+lane answer stays a board read or an appended fact; a line the lane cannot read gets the
+standing decline-never-guess treatment.
+
+### world-of-claudecraft: what it actually offers this page
+
+The 2026-07-29 architecture assessment stands, compressed: claudecraft is a real Three.js/
+TypeScript MMO whose authoritative `Sim` class (9,673 lines) satisfies a 256-member `IWorld`
+interface with a monolithic RPG entity map underneath — no graph, no fact/tuple representation
+anywhere. Reusing its renderer would mean satisfying that whole interface or forking
+`src/render`; its crafting/economy code has no graph to import from. So the planning and the
+render layer are tmct-native, and claudecraft's value to MUDIII is its assets and a handful of
+techniques. This pass surveyed both, file by file, in the sibling checkout at
+`../world-of-claudecraft`.
+
+**Licensing is two-layer, and the layer that matters is CREDITS.md.** The repo `LICENSE` is MIT
+("MIT License / Copyright (c) 2026 Levy Street"), but it covers source code only. `CREDITS.md`
+is the operative register for art: it states that the per-asset licence recorded there
+"controls over the project's MIT license", and that unlisted media assets are not licensed at
+all. Per-asset provenance therefore decides everything:
+
+- **CC0 1.0** (free, no attribution): the bulk of the 970 bundled GLBs — the KayKit character
+  and dungeon packs, the Quaternius creature/nature/Medieval Village/Fantasy Props kits, the
+  Kenney kits, ambientCG terrain textures, Poly Haven HDRIs.
+- **Attribution-required**: two entries only (an ESO galaxy panorama, CC BY 4.0; three.js water
+  normal maps, MIT). A town square needs neither.
+- **"With the project only"** — may not be extracted into a standalone demo. This tier is the
+  trap, because it holds exactly the two things this page would want most: the entire
+  `eastbrook_*` town kit (bank, smithy, inn, chapel, market stall, civic well, walls — the
+  repo's one worked town square) and `yumi_cat.glb`, the only cat model in the repo (which also
+  has no wired idle/walk/run clips, so it would need new animation work even if it were free).
+- **"Permission required"** (weapons, UI icon sets) and CC BY-NC audio: out entirely.
+
+**What we take (all CC0, sizes as shipped).** The Quaternius Medieval Village and Fantasy Props
+sets rebuild the square cleanly: `well.glb` (27K), `house_1/2/3.glb` (~83K each), `inn.glb`
+(91K), `blacksmith.glb` (95K), `market_stand_1/2.glb` (25K), `cart.glb`, `fence.glb`, barrels
+and crates, lanterns, plus foliage (`oak_*`, `bush`, ~180K each) and, for stall dressing and
+scavenger bait, the `resources/` food props (`food_apple_*`, `food_cheese`, `food_crate_large_apples`
+— a CC0 cheese model is a gift for baiting scavengers). A dozen props plus two character rigs
+lands around 1.5 MB, inside the wink vendor precedent. tmct keeps its own per-asset credit
+register listing each copied file's source and licence — the same discipline CREDITS.md itself
+models — even though CC0 requires none.
+
+**The cast, verified against their clip maps** (`src/render/characters/manifest.ts` — checked
+directly, since a model file proves nothing about its animations; `yumi_cat.glb` looks complete
+and ships with no wired idle/walk clips at all):
+
+- `goblin.glb` (47K, Quaternius, CC0) — wired as their `mob_kobold` with the ENEMY7 rig:
+  Idle/Walk/Run/Attack/HitRecieve/Death. A full ground-locomotion set, and Death gives the
+  eaten-flourish a real clip. The v1 scavenger.
+- `wolf_basic.glb` (325K, CC0) — their `mob_wolf`, the baked animal rig: Idle/Walk/Gallop plus
+  hit-reacts, Death, Sit and Fall. The v1 predator.
+- `knight.glb` (1.2M, KayKit, CC0) — full player clip set (Idle, Walk, Running_A, sit, fall,
+  attacks). Ready for the knight/dragon variant.
+- Dragon — the only dragon body is `dragonevolved.glb`, wired as `mob_dragonkin` with the
+  FLOATING rig (Flying_Idle as idle, Fast_Flying as walk/run, Headbutt/Punch, HitReact, Death;
+  it hovers rather than walks, which reads fine for a dragon). CREDITS.md's Quaternius row
+  says "dragon" and this is the only dragon file, so read it as covered — but check it against
+  Quaternius's own Dragon Evolved pack (CC0) before lifting, since the register names no file.
+- For the cat/mouse pair later: `fox.glb` (325K, CC0, same animal rig as the wolf) recolors
+  into a workable cat — claudecraft itself reuses the fox at 0.7 height as its generic small
+  critter ("no dedicated rabbit/mustelid asset ships"), which is also the precedent if a small
+  scavenger body is ever wanted before a real mouse lands. No mouse-like model exists in the
+  repo; that asset would come from the same upstream CC0 libraries.
+
+The pipeline this sets up — drop a CC0 GLB in, map its clip names — is what makes every later
+role pair cheap.
+
+**Code worth imitating (MIT, so copying is fine; no dependency is taken):**
+
+- `src/render/eastbrook_town.ts` (1,058 lines): a declarative town-square builder — a layout
+  table of buildings/stalls/fences with local-to-world helpers, geometry merging,
+  roof-fade-on-approach. The code is MIT and its structure maps directly onto our
+  props-as-facts; only its Tier-C assets are off limits. The strongest single reference for
+  scene assembly.
+- `src/sim/types.ts`'s `PlacedAsset` — `{ path, x, z, rotY, scale, collideRadius? }` — the
+  transform vocabulary our prop facts restate.
+- `src/render/placed_assets.ts` (385 lines): normalization discipline — every GLB scaled to a
+  target height before per-placement scale (their comment: catalogue GLBs "vary wildly in
+  source units"), lowest point seated on the ground, one cached template per path cloned per
+  placement.
+- `src/render/assets/loader.ts`: promise-cached loading with rejected-promise eviction (their
+  "black void" fix) and small concurrency queues.
+- `src/render/characters/manifest.ts`: per-rig maps from semantic slots (idle/walk/run/...) to
+  literal in-GLB clip names — saves reverse-engineering each rig by hand.
+- `src/sim/rng.ts`'s `fbm2` (89 lines, zero imports): the seeded value-noise terrain function.
+  A paved plaza is flat, so this stays reference-only unless the square gets ground-level
+  undulation.
+
+**One operational gotcha, documented in their own tree:** their GLBs are meshopt-compressed and
+their loader wires MeshoptDecoder only; such a file parses in offline tools but silently fails
+a bare browser `GLTFLoader`. Copied assets either keep meshopt (vendor the small decoder next
+to three.js) or get re-transcoded to plain GLB once at import. Vendoring the decoder keeps the
+files smaller and is the default. Their stack is plain Three.js `^0.165.0`, no framework —
+confirming a vanilla-three page is the right shape for ours.
+
+### Build order
+
+1. `town-square-world.mjs` + the worlds-pack build, and `predator-prey.mjs` with its tests —
+   pure modules first, provable headless in seconds, mirroring spider-fly's own test estate.
+2. `mudiii-turn.mjs` — the lane, playable from the CLI before any 3D exists (the same order
+   spider-fly shipped in).
+3. Vendored three + the minimal scene: ground, grid, box placeholders for agents and props,
+   tick wiring, the deck. The page is playable and ugly.
+4. Assets and polish: the claudecraft-derived models above, the movement tween, flourishes,
+   HUD cards, the pill rail.
+5. Phase-2 items, in whatever order earns it: per-agent POV mode, EDIT mode, a second map for
+   the scenario dropdown, the next role pair.
+6. The online phase — the published shared world, designed in the next subsection, built only
+   after the page itself has earned it.
+
+### MUDIII online — the published shared world (a later phase, design only)
+
+Everything above is self-contained: one browser, one in-memory store, no network. This phase
+adds one shared, AWS-hosted world with a public site. It is deliberately not v1, and it invents
+no parallel hosting story — it reuses Backend D and the tiers above, and fills the one gap they
+leave open.
+
+**The read path is a published snapshot, not a live query.** The precedent already ships:
+chat.html fetches `./chat-seed.json`, a corpus snapshot built by `scripts/build-chat-seed.mjs`
+and served as a static file. MUDIII online generalizes that from a fixed file to a changing
+world, and the model to copy is how live video travels over HTTP. HLS (IETF RFC 8216) serves a
+stream as an `.m3u8` playlist — a manifest listing short media segments — which a live player
+re-fetches as a sliding window; MPEG-DASH (ISO/IEC 23009-1) does the same with an XML `.mpd`
+manifest. Both exist because a client joining a live stream must never replay it from frame
+zero: encoders insert periodic keyframes, and a joiner starts at the nearest one. The tmct
+equivalents, all static JSON on the same host as the page:
+
+- `world-manifest.json` — the playlist: world name, the latest whole's URL and turn number,
+  the delta segments published since it (each with its turn range and content hash), and the
+  retained older wholes (for rewind, below).
+- `whole-<turn>.json` — the keyframe: the full consolidated fact snapshot as of that turn.
+- `delta-<fromTurn>-<toTurn>.json` — the frames between keyframes. Facts are append-only rows,
+  so a delta is literally the rows appended in that interval — cut at turn boundaries, no diff
+  algorithm anywhere.
+
+A joining client fetches the manifest, the latest whole, and any newer deltas; a playing
+client polls the manifest for fresh deltas, exactly an HLS live-playlist reload. The publisher
+periodically consolidates a new whole and trims the oldest deltas, continuously rebuilding the
+starting point so no client ever replays unbounded history.
+
+**This is the same artifact pair PLAN_MEMORY_BACKEND_AWS.md already designed, published.**
+That plan's marginalia precedent is one JSON object per graph version in S3 (`tree.vN.json`)
+with DynamoDB holding only a lightweight manifest/version-pointer row. The whole-plus-pointer
+half of this design is that pattern verbatim; what this phase adds is the delta segments
+between versions and a client-facing manifest on a public static host (S3 + CloudFront —
+PLAN_AWS.md's territory). Point at that plan; do not derive a second manifest design.
+
+**The publisher is also the authoritative ticker.** Somebody has to advance a shared world
+whose players are mostly absent. A scheduled batch job (the same CI-shaped species as Tier 1's
+corpus-seeding job — no request-serving Lambda, no API Gateway, keeping Backend D's
+no-server-to-operate posture) reads the world's Backend D table, runs K deterministic ticks,
+appends the world facts back, cuts the delta, consolidates a whole when the cadence says so,
+and publishes to the static host. The engine's determinism makes this job reproducible and
+auditable.
+
+**How this reconciles with the tiers: it is the missing read path, not a new tier.** Tier 1
+and Tier 2 answer who may write which DynamoDB table. Neither says how someone with no AWS
+credentials at all reads a world — the manifest is that answer, and it is a property any
+server can have: the guest world gets it from the maintainer's publisher job, and a Tier 2
+self-hoster can run the same job against their own table. Reading costs nothing and needs no
+identity. Writing splits three ways:
+
+- **Anonymous browser play**: read the snapshot, mutate locally, full game, nothing pushed.
+  Offline play is the same thing with the fetch skipped — and the local simulation continuing
+  the NPCs from their last-published state is just v1's own client-side engine doing what it
+  already does; no new mechanism.
+- **Authenticated write-back — Cognito, without resurrecting Tier 3.** Tier 1 already defines
+  a Cognito Identity Pool and uses its unauthenticated side. The browser write path is that
+  same pool's authenticated side: a Cognito User Pool sign-in feeding it, with the
+  authenticated IAM role allowed durable writes (no 8-hour TTL, or a much longer one) to the
+  shared world's table. The non-goal above dropped Cognito social-login federation with
+  per-server Groups as the mechanism for private servers; that stays dropped. This is
+  authenticated access to the one shared public world — the browser-shaped sibling of the
+  guest identity, on infrastructure Tier 1 already owns. Tier 2's Identity Center flow stays
+  the CLI answer for private servers; `aws sso login` has no place inside a browser page,
+  which is exactly why the browser path lands on Cognito.
+- **What pushes up**: the player-authored fact layer — placed morsels, told-facts, taught
+  knowledge — each already carrying player provenance. The world-turn history never pushes
+  up: the publisher owns the authoritative turn sequence, and two diverged `@turnN` histories
+  cannot merge (both fork minted their own turn 12). An offline session is a fork; rejoining
+  means fetching the latest whole plus deltas and replaying your own player-authored facts on
+  top, deduplicated by the same content-hashed-id idempotence `mergeIncomingFacts` already
+  gives the P2P path. Conflicting authed teaches resolve exactly as PLAN_FACT.md resolves
+  them everywhere else: latest-observation-wins with the tie steps and the contradiction
+  report — nothing MUDIII-specific.
+- **P2P**: a fetched snapshot is also a share-able world. The shipped WebRTC mesh works on
+  the same fact-row store, so a player can invite peers into their fork without the server
+  ever knowing.
+
+**Rewind is a filter, on two clocks that already exist.** Nothing here is a new mechanism —
+this is the fact-model work paying off:
+
+- **Board rewind (turns).** World facts are `subject@turnN` snapshots and the fold derives
+  its turn counter as the largest suffix seen. "Show the square at turn T" is the same fold
+  run over only the rows with suffix ≤ T. PLAN_FACT.md draws this boundary on purpose: its
+  per-source table stores no `mgx:observedAt` for mud/world turns, and it notes the fold is
+  latest-observation-wins in spirit "but its 'time' is the turn counter, not `observedAt`" —
+  the turn counter is the world's own clock.
+- **Testimony rewind (wall clock).** For the taught/told layer, PLAN_FACT.md's bitemporal
+  split (Snodgrass; SQL:2011) already defines the axis: `mgx:createdAt` is transaction time,
+  `mgx:observedAt` is valid time, and `effectiveObservedAt`'s fallback chain (stored
+  `observedAt`; agent-kind sources fall back to the provenance tag's timestamp then
+  `createdAt`; document-kind and entailed sources never fall back) gives every record its
+  place on it. "The world as of <date>" is a filter to `effectiveObservedAt ≤ T`, and that
+  plan's "as of <date>" teach frame already gives chat the vocabulary for dates.
+
+The published artifacts then make deep rewind cheap: a whole is a keyframe, so seeking to
+turn T means fetching the nearest retained whole at or before T and replaying deltas up to T
+— the exact seek-to-keyframe pattern every video player uses. How far back rewind reaches is
+a retention choice the manifest states outright (which old wholes and deltas stay published),
+never an unbounded promise.
+
+**Held open, for when this phase is picked up**: the whole-consolidation cadence (every K
+turns) and delta granularity; the retention window; whether anonymous writes to the shared
+world keep Tier 1's 8-hour TTL exactly (the default answer is yes); and whether the guest
+world and the published MUDIII world are one table or two.
+
+### Lineage notes (verified 2026-07-30)
+
+The genre this page joins started at the operator's own university: Roy Trubshaw wrote the
+first MUD on Essex University's DEC PDP-10 in 1978 (first in MACRO-10 assembler, then BCPL),
+and Richard Bartle, a fellow Essex student, took it over in 1980 and built out most of the
+world (en.wikipedia.org/wiki/MUD1; mud.co.uk). Essex MUD ran on the university machine into
+the late 1980s; MUD1 ran commercially on CompuServe as "British Legends" from 1985 until
+CompuServe's Y2K cleanup retired it in late 1999, and a licensed revival still runs at
+british-legends.com. MUD2, the 1985 successor, is still live — one of its two instances is
+`mudii.co.uk` (see Naming, below). Bartle released MUD1's 1986 source on GitHub in 2020 under
+a custom not-for-profit licence (github.com/PDP-10/MUD1).
+
+Two details of MUD1's own design are worth naming because this project independently repeats
+them. First, engine/content separation: MUD1's world was data, not code — rooms, objects and
+puzzles defined in MUDDL, the Multi-User Dungeon Definition Language, interpreted by a BCPL
+engine (mud.co.uk/muse/muddl.htm; the MUDDL definition PDF ships in the GitHub repo). tmct's
+worlds pack — a game as fact rows a fixed engine folds — is the same architecture nearly fifty
+years on, with the definition language upgraded to OWL-labelled triples. Second, on the
+question of a rendered successor: asked about a hypothetical MUD3, Bartle said it "would have
+to be a graphical world, because no-one would play it otherwise", that he was "some
+£50,000,000 short of the funding", and that he owned MUD3D.com for years before letting it
+lapse when it was clear he would never build it (arcadeattack.co.uk/richard-bartle/). A small
+rendered world over a text engine is squarely the shape he named — which cuts both ways, as
+the next subsection explains.
+
+## Naming and lineage — research on the name "MUDIII"
+
+**This subsection is informational research, not legal advice.** It records what was actually
+found on 2026-07-30, with sources, plus a risk read that is one researcher's opinion. Before
+any public use of "MUD"-derived branding — registering `mudiii.co.uk`, linking a page named
+MUDIII from tmct's home page — get a real trademark/IP attorney's opinion, ideally one who
+handles UK passing-off.
+
+### What the research found
+
+**The trademark question.** "MUD" was taken as a registered trademark by MUSE Ltd (Multi-User
+Entertainment Ltd), the company Trubshaw, Bartle and Simon Dally formed in 1985 to
+commercialize MUD (en.wikipedia.org/wiki/MUD1; mud.co.uk/muse/backgrnd.htm). The current
+status of that registration could not be verified from here: the UK IPO's trademark search
+(trademarks.ipo.gov.uk) is a JavaScript application this environment could not query, and its
+root served a "Service Unavailable" page during the attempt. What the reachable searches did
+show: no live "MUD" word mark for games surfaced in US-register secondary sources (only
+unrelated marks like MUD TRAX and MUDDIN', abandoned or cancelled); MUSE Ltd no longer appears
+on the active Companies House register (an advanced-search sweep of "multi-user" company names
+returns eleven companies, none of them Multi-User Entertainment — though Companies House only
+fully lists dissolutions since 2010, so read this as "long gone", never as a dated proof); and
+no record surfaced anywhere of MUSE or Bartle enforcing the mark against any of the thousands
+of games that have called themselves MUDs. mudii.co.uk's own FAQ still states "MUSE (or
+Multi-User Entertainment Ltd) owns the rights to MUD2". An attorney should run the actual IPO
+register check; it is cheap and definitive.
+
+**The genericization question.** As a genre term, "MUD" is about as generic as a coined term
+gets: by 1995 some 600 games called themselves MUDs
+(en.wikipedia.org/wiki/Multi-user_dungeon), the acronym was freely reinterpreted ("dimension",
+"domain"), a whole family of derivative terms (MUCK, MUSH, MU*) grew from it, and reference
+works from Wikipedia to Britannica use "a MUD" as a common noun. Bartle's own public writing
+uses it generically. Using "MUD" descriptively — "a MUD", "MUD-style", "in the MUD tradition"
+— is the safest imaginable use of the word. Branding a product with a MUD-series name is a
+different act, and that is where the rest of this analysis lives.
+
+**Bartle's own posture.** Everything found points to permissiveness about the genre and
+generosity with its history: he chose against locking the original up ("we could have clamped
+some intellectual property on it, but the reason that Roy and I wrote MUD wasn't to make
+money, it was because we wanted to make the real world a better place" — mattbarton.net/?p=1019,
+the Matt Chat interview), he released MUD1's source in 2020, and mud.co.uk hosts the genre's
+history for everyone. No statement was found of him objecting to anyone's use of "MUD" as a
+genre word. The specific name "MUD3" is different: he has publicly reserved it, rhetorically,
+for his own unbuilt dream game (the £50M and MUD3D.com quotes above). And no other project
+called "MUD3"/"MUD III"/"MUDIII" was found anywhere — no game, no product, no domain (a TikTok
+handle aside). The name is unclaimed precisely because the community treats it as Bartle's to
+claim.
+
+**What mudii.co.uk actually is.** A live, community-run home of MUD2 itself — the game, not a
+fan page. The domain was registered 17 Jan 2001, is renewed through 17 Jan 2027, and was last
+updated December 2025 (Nominet WHOIS); the site posts news through 2024 (a Discord server) and
+lists player events from summer 2025; the game answers on telnet port 23. The FAQ states
+Richard Bartle "is still active in the running of both MUD2s including MUDII". The missing SSL
+certificate means only that it is a plain-HTTP site of 2001 vintage, and nothing more. This
+matters more than any trademark: "MUDII" is the literal current name of a live service with 25
+years of goodwill, at a domain one letter from `mudiii.co.uk`.
+
+### The risk read (opinion, not clearance)
+
+The trademark-register risk looks low: the 1985 registration's owner has apparently been gone
+from the company register for over a decade, no live games-class "MUD" mark surfaced, the
+genre term is thoroughly generic, and no history of enforcement was found. The real exposure
+sits elsewhere, in three stacked facts this research established. UK passing-off needs no
+registered mark (the classic test is goodwill, misrepresentation, damage). "MUDII" is a live
+named service, and "MUDIII" is its successor by the naming convention the series itself
+established (MUD1 → MUD2 → MUDII). And Bartle has publicly staked "MUD3" as the name of his
+own hypothetical next game. A page called MUDIII at mudiii.co.uk, with no further context,
+does not read as "a new game in the MUD tradition". It reads as the next release of the thing
+at mudii.co.uk, by the people who run it — a misrepresentation of origin even with the
+friendliest intent — and it claims the one name in the namespace the community understands to
+be reserved for its founder. The people most likely to notice are the small, living MUD
+community, and its founder is active in it.
+
+Prominent credit changes the ethical picture and part of the legal one. A visible line on the
+page itself — named in homage to MUD1 and MUD2, created by Roy Trubshaw and Richard Bartle at
+the University of Essex from 1978; this project is not affiliated with, or endorsed by, them,
+MUSE Ltd, mudii.co.uk or british-legends.com — is the difference between homage and
+impersonation as a matter of good faith, and credit-plus-disclaimer weighs against confusion.
+What a disclaimer cannot fully cure is a name that itself asserts succession; that is why the
+attorney consult comes before the domain registration, not after.
+
+One move dominates all of this: ask Bartle. He is publicly reachable (mud.co.uk carries his
+contact details), famously responsive on MUD history, and the operator is an Essex alumnus
+building a deterministic, text-first world engine — squarely the tradition he founded and
+still gives his time to. His blessing converts the largest risk into the strongest possible
+asset (a lineage claim with the founder's nod); his objection, arriving before anything ships,
+costs a rename of one unshipped page. Either answer is worth more than any further desk
+research. If the name must proceed unblessed, the fallback keeps the homage explicit and the
+succession implicit: brand the page inside tmct's own namespace and let the MUD lineage live
+in the credit line rather than the product name. The design above does not change under any of
+these outcomes; only the masthead does.
+
+Sources checked 2026-07-30: en.wikipedia.org/wiki/MUD1, /MUD2, /Multi-user_dungeon,
+/Richard_Bartle; mud.co.uk (MUSE pages); mudii.co.uk (home + FAQ, via plain HTTP);
+british-legends.com (history); arcadeattack.co.uk/richard-bartle/; mattbarton.net/?p=1019;
+Nominet WHOIS for mudii.co.uk and mudiii.co.uk; Companies House advanced search;
+trademarks.ipo.gov.uk (unreachable from this environment — flagged for the attorney);
+US-register secondary sources (trademarks.justia.com).
+
+**Operator's chosen sequencing (2026-07-30), superseding "ask Bartle first" above.** Ship
+`mudiii.html` first, with credit-line prose in the spirit of `mud.html`'s own inspiration
+section — naming MUD1/MUD2 and Trubshaw/Bartle plainly — and give world-of-claudecraft a strong,
+visible credit on the same page. Once that's live at `mudiii.co.uk`, the operator will message
+Richard Bartle directly, in person, rather than have this session draft or send anything on
+their behalf. The attorney-consult point above still stands as its own, separate consideration —
+this note is about the ORDER of shipping vs. contacting Bartle, not a substitute for it.
 
 ## Phasing
 
