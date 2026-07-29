@@ -1,11 +1,10 @@
-# nurse-with-emotion — the same capped body as nurse.toml (a rounded cap
-# with a small flat cross cut into it, the single medical cue), plus the
-# shared face-fragment mechanism (sprite-expressions.mjs): a required
-# [face] anchor and a {{FACE}} placeholder that resolves to whichever of
-# the 6 curated mgx:feels words (happy/sad/angry/scared/surprised/calm) the
-# instance's own fact names. No mgx:feels fact falls through to the plain
-# nurse.toml sprite, the same dog/dog-with-colour precedent. {{FACE}} sits
-# as the last child before </svg>, painting over the body beneath it.
+# nurse-with-emotion — the same teal-scrub-and-cross-cap body as
+# nurse.toml, plus the shared face-fragment mechanism
+# (sprite-expressions.mjs): a required [face] anchor and a {{FACE}}
+# placeholder that resolves to whichever of the 6 curated mgx:feels words
+# the instance's own fact names. No mgx:feels fact falls through to the
+# plain nurse.toml sprite. {{FACE}} sits as the last child before
+# </svg>, painting over the body beneath it.
 #
 # The cap sits ABOVE the head as its own separate geometry (the domed cap
 # path peaking near y=0.8, the cross marks at y=2-5.5) — not the face
@@ -21,12 +20,27 @@ svg = """
       <stop offset="55%" stop-color="currentColor"/>
       <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
     </linearGradient>
+    <linearGradient id="nurse-with-emotion-scrub" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#a9cdd3"/>
+      <stop offset="100%" stop-color="#6f9aa3"/>
+    </linearGradient>
   </defs>
+  <g fill="url(#nurse-with-emotion-fill)">
+    <path d="M9.4 13.4 C7.6 13.5 5.9 15 5.6 17.7 C5.5 19.1 6.2 20 7.2 19.5 C7.3 17.4 7.9 15.4 9.7 14.5 Z"/>
+    <path d="M14.6 13.4 C16.4 13.5 18.1 15 18.4 17.7 C18.5 19.1 17.8 20 16.8 19.5 C16.7 17.4 16.1 15.4 14.3 14.5 Z"/>
+    <path d="M6 21 C6 15.5 8.7 13.1 12 13.1 C15.3 13.1 18 15.5 18 21 Z"/>
+    <path d="M10.75 11.3 L13.25 11.3 L13.05 13.3 L10.95 13.3 Z"/>
+  </g>
   <path d="M8.2 4.4 C8.2 2.4 9.9 0.8 12 0.8 C14.1 0.8 15.8 2.4 15.8 4.4 L15.8 5.5 C15.8 5.9 15.4 6.2 15 6.2 L9 6.2 C8.6 6.2 8.2 5.9 8.2 5.5 Z" fill="url(#nurse-with-emotion-fill)"/>
   <rect x="11.2" y="2" width="1.6" height="3.2" rx="0.3" fill="#ffffff" opacity="0.95"/>
   <rect x="10.4" y="2.8" width="3.2" height="1.6" rx="0.3" fill="#ffffff" opacity="0.95"/>
   <circle cx="12" cy="8.6" r="3.1" fill="url(#nurse-with-emotion-fill)"/>
-  <path d="M6 21 C6 15.5 8.7 13.1 12 13.1 C15.3 13.1 18 15.5 18 21 Z" fill="url(#nurse-with-emotion-fill)"/>
+  <path d="M10.4 12.9 L12 14.2 L13.6 12.9" fill="none" stroke="currentColor" stroke-width="0.55" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M9.3 13.9 C8 14.8 7.1 16.3 6.9 18.2" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.9 C16 14.8 16.9 16.3 17.1 18.2" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M6.6 14.9 C6.2 16.8 6 18.8 6 21 L18 21 C18 18.8 17.8 16.8 17.4 14.9 C16.2 16 14.2 16.7 12 16.7 C9.8 16.7 7.8 16 6.6 14.9 Z" fill="url(#nurse-with-emotion-scrub)"/>
+  <path d="M10.3 13.9 L12 16.7 L13.7 13.9" fill="none" stroke="#537882" stroke-width="0.5" opacity="0.6"/>
+  <rect x="10.6" y="18.4" width="2.8" height="1.8" rx="0.3" fill="none" stroke="#537882" stroke-width="0.3" opacity="0.55"/>
   <ellipse cx="9.4" cy="3.4" rx="1.4" ry="0.5" fill="#ffffff" opacity="0.3"/>
   {{FACE}}
 </svg>
