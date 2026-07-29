@@ -1075,58 +1075,44 @@ const MUD_STYLE = `
     #editorText { min-height: 18rem; }
   }
 
-  /* ---- the control panel, in a Lemmings register ----
+  /* ---- the control panel, in a Lemmings register, on the burrow's own palette ----
      The 1991 game put everything a player touches in one chunky beveled strip
-     under the level: a DOS-blue face, raised grey keys with a hard highlight on
-     the top-left and a hard shadow on the bottom-right, and a lit readout in
-     the corner. That is what this deck is, so it wears it. The burrow itself
-     stays soil and parchment — the panel is the machine you drive it with, not
-     the world, and the two are supposed to read as different things.
-     Everything below overrides the parchment deck above it deliberately, so
-     the panel is one block a reader can find rather than a dozen edits. */
+     under the level. This deck keeps that shape — one bordered block, a play
+     button that reads as the "go" key, a lit corner readout — but in the same
+     soil/parchment/burrow-glow palette every other panel on the page already
+     uses, so it reads as this world's own control panel rather than a
+     different game's console dropped on top of it. Everything below overrides
+     the parchment deck above it deliberately, so the panel is one block a
+     reader can find rather than a dozen edits. */
   :root {
-    --lem-panel: #1B1B7E; --lem-panel-lo: #0C0C46; --lem-panel-hi: #3C3CB4;
-    --lem-face: #B4B4B4; --lem-face-hi: #ECECEC; --lem-face-lo: #6B6B6B;
-    --lem-go: #009C00; --lem-go-hi: #3CD43C;
-    --lem-alert: #D02000;
-    --lem-readout: #78E878; --lem-readout-bg: #08082A;
-    --lem-chalk: #C6C6E8;
-  }
-  .deck {
-    background: linear-gradient(180deg, var(--lem-panel-hi) 0%, var(--lem-panel) 16%, var(--lem-panel-lo) 100%);
-    color: #F2F2FF; border-color: var(--lem-panel-lo);
-    box-shadow: inset 2px 2px 0 rgba(255,255,255,.30), inset -2px -2px 0 rgba(0,0,0,.55), 0 3px 0 rgba(0,0,0,.42);
+    --lem-face: var(--chalk); --lem-face-hi: #FBF7EF; --lem-face-lo: var(--soil-light);
+    --lem-go: var(--mud-ink); --lem-go-hi: var(--burrow-glow);
+    --lem-alert: #A5432B;
+    --lem-readout: var(--burrow-glow); --lem-readout-bg: var(--soil-deep);
+    --lem-chalk: var(--soil-mid);
   }
   .deck-slider, .deck h3 { color: var(--lem-chalk); }
-  .deck-slider input[type="range"] { accent-color: var(--lem-go-hi); }
+  .deck-slider input[type="range"] { accent-color: var(--burrow-glow); }
   .deck button, .pane-controls button, .net-panel button, .join-inner button {
-    background: var(--lem-face); color: #16162A; border: 0; border-radius: 2px;
-    padding: .34rem .74rem;
-    box-shadow: inset 2px 2px 0 var(--lem-face-hi), inset -2px -2px 0 var(--lem-face-lo);
+    background: var(--lem-face); color: var(--mud-ink); border: 1px solid var(--soil-mid); border-radius: 3px;
+    padding: .32rem .7rem; box-shadow: 0 1px 0 rgba(0,0,0,.12);
   }
   .deck button:hover:not(:disabled), .pane-controls button:hover:not(:disabled),
   .net-panel button:hover:not(:disabled), .join-inner button:hover:not(:disabled) {
-    background: var(--lem-face-hi);
+    background: var(--lem-face-hi); border-color: var(--burrow-glow);
   }
   .deck button:active:not(:disabled), .pane-controls button:active:not(:disabled),
   .net-panel button:active:not(:disabled), .join-inner button:active:not(:disabled) {
-    box-shadow: inset -2px -2px 0 var(--lem-face-hi), inset 2px 2px 0 var(--lem-face-lo);
+    background: var(--lem-face-lo); box-shadow: inset 0 1px 2px rgba(0,0,0,.25);
   }
-  .deck-play { background: var(--lem-go) !important; color: #FFF; border-color: transparent !important;
-    box-shadow: inset 2px 2px 0 var(--lem-go-hi), inset -2px -2px 0 rgba(0,0,0,.5); }
-  .deck-play[aria-pressed="true"] { background: var(--lem-alert) !important; color: #FFF;
-    box-shadow: inset 2px 2px 0 #FF6A48, inset -2px -2px 0 rgba(0,0,0,.5); }
-  /* The corner readout: a lit panel display, unreadable as anything else. */
+  .deck-play { background: var(--lem-go) !important; color: var(--parchment) !important; border-color: var(--lem-go) !important; }
+  .deck-play[aria-pressed="true"] { background: var(--lem-alert) !important; border-color: var(--lem-alert) !important; color: var(--parchment) !important; }
+  /* The corner readout: a lit panel display, in the burrow's own amber rather than DOS-console green. */
   .deck-turns { background: var(--lem-readout-bg); color: var(--lem-readout);
-    border: 1px solid #000; border-radius: 2px; padding: .1rem .5rem; }
-  .deck-info-btn { background: var(--lem-face); color: #16162A; border: 0;
-    box-shadow: inset 2px 2px 0 var(--lem-face-hi), inset -2px -2px 0 var(--lem-face-lo); }
-  .deck-info-btn:hover, .deck-info-btn[aria-expanded="true"] { background: var(--lem-face-hi); color: #16162A; }
-  .deck-info-popup { background: var(--lem-panel-lo); border-color: var(--lem-go-hi); color: #F2F2FF; }
-  .deck-info-popup::before { border-bottom-color: var(--lem-go-hi); }
-  .deck-info-popup-close { color: #F2F2FF; }
-  .deck-info-popup-close:hover { color: var(--lem-go-hi); }
-  #editModeBtn[aria-pressed="true"] { background: var(--lem-go-hi); }
+    border: 1px solid var(--soil-mid); border-radius: 2px; padding: .1rem .5rem; }
+  .deck-info-btn { background: var(--lem-face); color: var(--mud-ink); border: 1px solid var(--soil-mid); }
+  .deck-info-btn:hover, .deck-info-btn[aria-expanded="true"] { background: var(--lem-face-hi); border-color: var(--burrow-glow); color: var(--mud-ink); }
+  #editModeBtn[aria-pressed="true"] { background: var(--burrow-glow); border-color: var(--burrow-glow); color: var(--mud-ink); }
 
   /* ---- whether the burrow is shared, said in one word on the panel ---- */
   .state-pill { display: inline-flex; align-items: center; gap: .34rem;
@@ -1138,9 +1124,9 @@ const MUD_STYLE = `
   .state-pill[data-tone="failed"] .state-dot { background: var(--lem-alert); }
 
   .net-panel {
-    background: linear-gradient(180deg, var(--lem-panel-hi) 0%, var(--lem-panel) 14%, var(--lem-panel-lo) 100%);
-    color: #F2F2FF; border: 1px solid var(--lem-panel-lo); border-radius: 3px;
-    box-shadow: inset 2px 2px 0 rgba(255,255,255,.28), inset -2px -2px 0 rgba(0,0,0,.55), 0 3px 0 rgba(0,0,0,.42);
+    background: var(--soil-deep); color: var(--parchment);
+    border: 1px solid var(--burrow-glow); border-radius: 3px;
+    box-shadow: 0 2px 0 rgba(0,0,0,.3);
     padding: .7rem .8rem; margin-bottom: 1rem;
     display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: .6rem .9rem; align-items: start;
   }
@@ -1184,9 +1170,9 @@ const MUD_STYLE = `
   /* Setting display at all outranks the browser's own [hidden] rule, so every
      block here that is hidden by attribute has to say so a second time. */
   .join-card[hidden], .net-panel[hidden], .net-block[hidden], .join-reply[hidden] { display: none; }
-  .join-inner { background: linear-gradient(180deg, var(--lem-panel-hi) 0%, var(--lem-panel) 16%, var(--lem-panel-lo) 100%);
-    color: #F2F2FF; border: 1px solid var(--lem-go-hi); border-radius: 3px;
-    box-shadow: inset 2px 2px 0 rgba(255,255,255,.28), inset -2px -2px 0 rgba(0,0,0,.55), 0 10px 26px rgba(0,0,0,.6);
+  .join-inner { background: var(--soil-deep);
+    color: var(--parchment); border: 1px solid var(--burrow-glow); border-radius: 3px;
+    box-shadow: 0 10px 26px rgba(0,0,0,.5);
     padding: 1.1rem 1.2rem; max-width: 32rem; width: 100%; display: flex; flex-direction: column; gap: .55rem; }
   .join-eyebrow { margin: 0; font-family: ${MONO_STACK}; font-size: .58rem; text-transform: uppercase; letter-spacing: .12em; opacity: .8; }
   .join-world { font-family: ${DISPLAY_STACK}; font-size: 1.4rem; margin: 0; }
