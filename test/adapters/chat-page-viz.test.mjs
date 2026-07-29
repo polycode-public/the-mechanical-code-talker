@@ -158,7 +158,12 @@ test("renderChatHtml: the three trust tiers reuse viz-theme.mjs's own color toke
   assert.match(html, /--taught-soft/);
   assert.match(html, /--corpus-soft/);
   assert.match(html, /--entail-soft/);
-  assert.ok(!/#[0-9A-Fa-f]{6}/.test(html.replace(THEME_TOKENS_HEX_ALLOWANCE(html), "")), "no page-local hex color literal outside the imported token block");
+  // A numeric HTML entity (e.g. &#128075; for the wave button's hand emoji)
+  // can have an all-hex-digit body by coincidence — strip entities before
+  // checking, the same way the token block itself is stripped, so a real
+  // duplicated color and an emoji reference are never confused.
+  const stripped = html.replace(THEME_TOKENS_HEX_ALLOWANCE(html), "").replace(/&#\d+;/g, "");
+  assert.ok(!/#[0-9A-Fa-f]{6}/.test(stripped), "no page-local hex color literal outside the imported token block");
 });
 
 // THEME_TOKENS_CSS itself legitimately contains hex literals (viz-theme.mjs's
@@ -180,7 +185,12 @@ test("renderChatHtml: self-contained, both theme schemes present, reduced-motion
 
 test("renderChatHtml: fits a narrow viewport — the legend hides rather than overflowing", () => {
   const html = renderChatHtml();
-  assert.match(html, /max-width: 560px[\s\S]{0,80}\.legend \{ display: none; \}/);
+  // The network chrome (state pill, wave, invite, help) added a row of
+  // controls the legend now competes with, so the legend goes first at a
+  // wider breakpoint than it used to — the legend is decorative, the
+  // controls are not, so it's dropped rather than folding them onto a
+  // second row. 560px is narrower still and now only re-flows the bubbles.
+  assert.match(html, /max-width: 1360px[\s\S]{0,220}\.legend \{ display: none; \}/);
 });
 
 test("renderChatHtml: escapes a custom title", () => {
@@ -329,7 +339,7 @@ test("renderChatHtml: any store-writing turn schedules a debounced save of a pay
   const html = renderChatHtml();
   // Persist on any store write (teach OR a learn-on-miss load), not just a
   // teach turn; only pure commands, which write nothing, stay out.
-  assert.match(html, /result\.record\.via !== "command"\) scheduleSave\(\)/);
+  assert.match(html, /result\.record\.via !== "command"\) \{[\s\S]{0,20}scheduleSave\(\)/);
   assert.match(html, /structuredClone\(session\.memoryDir\.payload\)/);
   assert.match(html, /setTimeout\(\(\) => \{[\s\S]*?persist\.save/, "the save runs on a timer, not inline in the turn");
   assert.match(html, /\}, 500\)/, "the debounce window is present");
