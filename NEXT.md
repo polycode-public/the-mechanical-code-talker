@@ -66,19 +66,14 @@ rover-infer.mjs` (a taught fact chaining through a corpus fact: "Rover is a dog"
 bark" -> "yes, via..."), `examples/raw-fact-shape.mjs` (a raw Fact individual exactly as stored,
 `trustInputs` parsed for display readability only — storage format itself untouched).
 
-**OPEN — a real regression the corpus uncap caused, fix in progress.** `test-e2e/
-web-chat-memory.test.mjs`'s `learn-on-miss` test fails: ConceptNet's now-full weak-relation
-(`RelatedTo`) coverage means almost every ordinary term already has SOME grounding, so the
-reference-pack/Wikipedia fallback never fires for the demo term ("identifier"). Decided fix: a
-corpus-weak-ONLY match (the `"possibly: X is related to Y"` tier) should no longer count as
-sufficient grounding to skip that fallback — still honestly hedged, so it's right to also try
-live-grounding it — PLUS swap the demo term to a synthetic guaranteed-miss word as a second,
-independent safeguard (a 104-term sample of the full 4,224-term reference pack found zero
-surviving real-English terms that still miss under the uncapped corpus, so hunting for another real
-word to swap to is not a durable fix on its own). Dispatched to a background agent; hit four
-consecutive transient API "529 Overloaded" errors on resume in a row (not a real problem with the
-task) — if a resuming session finds this still stuck, retry again; if it's since landed, this whole
-paragraph is stale and should be deleted, not qualified.
+**DONE — the corpus-uncap regression above is fixed** (`366b916b`): a shared `isRealGrounding()`
+predicate in `chat.mjs` now demotes a hit set to "no real grounding" only when every fact in it is
+corpus-weak-only, at both decision points that had the bug (the bare "what is X" composer and the
+shared learn-on-miss gate). Demo term swapped to a coined word ("trelvox") as a second, durable
+safeguard. Full `npm test`: 4801/4801. Flagged, not fixed (same pattern, different lanes, out of
+today's scope): the "what do you know about X" reader and the teach-offer gate. Also flagged: the
+new demo term's reference-pack citation renders through a hardcoded "Simple English Wikipedia"
+template with a non-resolving URL, since that template isn't parameterized per-source.
 
 **OPEN — a real plan doc started, not just a discussion.** `PLAN_FACT.md`: the operator wants to
 move away from the current content-addressed-merge model — same `(subject,predicate,object)`
