@@ -84,12 +84,6 @@ bucket `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PR
   own JS should look like a thin, legible caller of real tmct capability, not obscured bespoke game
   logic with tmct calls buried inside it. Not yet started — a survey-and-plan task, not something to
   dispatch as a quick pass.
-- [ ] the mud/adventure chat lane misroutes the exact phrasing "what food do you know about" (through
-  `runTurn`, the browser/chat path — not `adventureTurn` directly) to the recall lane, answering
-  "i learned: food is a kind of portable" instead of the real food-knowledge digest. Every other
-  phrasing works ("what do you know about food", "what food have you found", "do you know of any
-  food"), and mud.html's own vocabHint pill suggests exactly the broken one. A lane-order issue in
-  `chat.mjs`, found while building the temporal-trust fix (2026-07-29), not yet fixed.
 - [ ] a new AWS-hosted backend for the memory store — **needed for marginalia** (which is migrating
   onto tmct and needs a durable store that survives a Lambda's scale-to-zero, not a local file).
   tmct ships only `memory` (process-only) and `sqlite` (local file) today; the backend seam

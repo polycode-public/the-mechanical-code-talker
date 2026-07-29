@@ -235,6 +235,32 @@ test("the food-knowledge query, asked through real chat, isolates each character
   });
 });
 
+test("the food-knowledge query resolves the same way with the topic noun leading, before \"do you know about\"", async () => {
+  await withTempRepo("food-query-noun-first", async (repo) => {
+    const memoryDir = await loadMudGardenInto(repo);
+    await recordExamined(memoryDir, { observer: "mole-1", thing: "carrot", k: 1 });
+
+    const mole = await openCharacterSession(repo, "mole-1");
+    const vole = await openCharacterSession(repo, "vole-1");
+    try {
+      // "what food do you know about" reads the same edges as "what do you
+      // know about food" — a bare noun leading the sentence must not be
+      // mistaken for the closed-set "what <class> do you know" enumeration
+      // (which asks what KINDS exist in taught vocabulary, a different
+      // question the world has no answer for at all).
+      const moleKnows = await mole.turn("what food do you know about");
+      assert.match(moleKnows.answer, /you know about: the carrot/, "mole-1 learned about the carrot and reports it back");
+      assert.doesNotMatch(moleKnows.answer, /i learned:/, "never the generic ontology fact line for the \"food\" class itself");
+
+      const voleKnows = await vole.turn("what food do you know about");
+      assert.match(voleKnows.answer, /you don't know of any food yet/, "vole-1 never examined anything — the honest empty answer, never a guess");
+    } finally {
+      await mole.close();
+      await vole.close();
+    }
+  });
+});
+
 test("two characters, two sessions, one shared world: a dig by one is enterable by the other", async () => {
   await withTempRepo("cross-session-dig", async (repo) => {
     await loadMudGardenInto(repo);

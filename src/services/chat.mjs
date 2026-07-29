@@ -14698,11 +14698,18 @@ const LIST_KNOWN_KINDS_RE = /^list\s+(?:the\s+|all\s+(?:the\s+)?)?(?!facts?\b|th
 // conditional over a NAMED subject or an arbitrary property is a rule, not a
 // subclass fact, and stays outside this frame.
 const UNIVERSAL_CONDITIONAL_RE = /^if\s+(?:something|somebody|someone|anything)\s+is\s+an?\s+([\w-]+)\s*,?\s*(?:then\s+)?(?:it|they)\s+(?:is|are)\s+an?\s+([\w-]+)[.!?\s]*$/i;
-function rewriteVocabOpener(line) {
+function rewriteVocabOpener(line, { adventureLive = false } = {}) {
   let m = line.match(DESIRE_ABOUT_RE) || line.match(TELL_ABOUT_VARIANT_RE);
   if (m) return `tell me about ${m[1].trim()}`;
   m = line.match(UNIVERSAL_CONDITIONAL_RE);
   if (m) return `every ${m[1]} is ${indefiniteArticleFor(m[2])} ${m[2]}`;
+  // "what <noun> do you know [about]" shares its surface form with a live
+  // adventure's own personal-knowledge asides ("what food do you know
+  // about") — those ask what the CHARACTER has learned in-world, not for
+  // the taught CLASS's members, so this closed-set enumeration rewrite
+  // stands down while a world is live and leaves the line for the
+  // adventure lane to recognise (or not) on its own terms.
+  if (adventureLive) return null;
   m = line.match(KNOWN_KINDS_RE) || line.match(LIST_KNOWN_KINDS_RE);
   if (m) {
     const noun = teachableSubjectOf(m[1]);
@@ -14977,7 +14984,7 @@ async function dispatchTurn(input, { config, source = defaultSource, graph = nul
   const indirectMatch = line.match(INDIRECT_REQUEST_RE);
   const indirectLine = indirectMatch ? indirectMatch[1].trim() : line;
   const preRewriteLine = rewriteEntryPointQuestion(indirectLine) || rewriteProveThat(indirectLine)
-    || rewriteVocabOpener(indirectLine) || indirectLine;
+    || rewriteVocabOpener(indirectLine, { adventureLive: Boolean(planState?.adventure) }) || indirectLine;
   // rewriteUsesAsBaseFrame's discontiguous-frame rewrite: applied here, once,
   // before ANY dispatch lane sees the text. Null (no-op) for every turn that
   // doesn't match one of the four discontiguous shapes.
