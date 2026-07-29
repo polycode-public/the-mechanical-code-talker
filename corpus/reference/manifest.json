@@ -9,29 +9,29 @@
   },
   "built": "2026-07-18",
   "counts": {
-    "articles": 3887,
+    "articles": 3888,
     "aliases": 337,
     "shards": 64
   },
   "budgets": {
     "textBytes": {
-      "used": 2591481,
+      "used": 2591621,
       "max": 10485760
     },
     "shardsGzBytes": {
-      "used": 1223112,
+      "used": 1223200,
       "max": 3670016
     },
     "indexGzBytes": {
-      "used": 55502,
+      "used": 55514,
       "max": 614400
     }
   },
   "files": [
     {
       "file": "index.json.gz",
-      "bytes": 55502,
-      "sha256": "3d66d7e464228950ab630dcc97a032b662aefaaaac79cdce1bb44232b4797d99"
+      "bytes": 55514,
+      "sha256": "3c7812b454707e9b9208c8dfb7f482632d46ce4fa2ca4eab7cda488957c29577"
     },
     {
       "file": "LICENSE-NOTICE",
@@ -45,8 +45,8 @@
     },
     {
       "file": "shards/ref-00.jsonl.gz",
-      "bytes": 17728,
-      "sha256": "424b91143053c5bc9832b26f964bddb980d2ecd1775042620590d8fa088a969b"
+      "bytes": 17816,
+      "sha256": "d9fca28976aaff23eccb16dc8cd6fda1933796b4effc86640bf8eddc96e1828a"
     },
     {
       "file": "shards/ref-01.jsonl.gz",

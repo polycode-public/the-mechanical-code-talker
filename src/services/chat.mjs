@@ -7758,6 +7758,13 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // teach frame, in a store written before the spellings converged) is
     // found by the curated spelling it means.
     let hits = predicate ? subjectHits.filter((f) => normFactPredicate(f.predicate) === predicate) : subjectHits;
+    // A bare "what is X" answered ONLY by corpus-weak ConceptNet association(s)
+    // is the hedged "possibly: X is related to Y" guess, not a definition — treated
+    // as no hit at all so the honest-miss cascade below (teach lane, reference-pack/
+    // Wikipedia fallback) still gets a turn, instead of the hedge silently standing
+    // in as "already answered". A predicate-specific ask ("X used for") is untouched:
+    // scoped to the SAME undifferentiated shape the reference-pack fallback serves.
+    if (!predicate && hits.length && !hits.some(isRealGrounding)) hits = [];
     if (!hits.length) {
       // The subject itself is known — as a fact subject, or as the standing
       // focus a pronoun just resolved to — but not under this specific
@@ -7777,7 +7784,9 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
       // ishmael"): surface those reverse relations rather than missing, the same
       // facts "what do you know about X" would list.
       if (!predicate) {
-        const objectHits = rankByBiasThenTrust((await factRows(memoryDir, cache)).filter((f) => variants.has(f.object)), biasByBundle);
+        let objectHits = rankByBiasThenTrust((await factRows(memoryDir, cache)).filter((f) => variants.has(f.object)), biasByBundle);
+        // Same corpus-weak-only demotion as the subject-side hits above.
+        if (objectHits.length && !objectHits.some(isRealGrounding)) objectHits = [];
         if (objectHits.length) {
           const objLines = objectHits.map(renderFactLine);
           const objShown = objLines.slice(0, FACT_ANSWER_CAP);
@@ -10674,14 +10683,36 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
   return { text: `${def} (source: corpus/seon)`, term };
 }
 
+/** True when `f` carries a source better than the ConceptNet `/r/RelatedTo`
+ *  corpus-weak tier — or no recorded source type at all (the conservative,
+ *  pre-existing read for legacy rows). A fact resolved ONLY by corpus-weak
+ *  source(s) is the hedged "possibly: X is related to Y" guess, not an
+ *  actual definition; callers treat it as no grounding at all rather than an
+ *  answer, so it can never by itself skip the honest-miss cascade below
+ *  (the teach lane, the reference-pack/Wikipedia fallback). Shared by the
+ *  bare "what is X" reader (factAnswerReaders) and the learn-on-miss gate
+ *  (cleanMissPackKey/cleanMissLiveKey) so the two can never disagree. */
+function isRealGrounding(f) {
+  const types = f.sourceTypes || [];
+  return types.length === 0 || types.some((t) => t !== "corpusWeak");
+}
+
 // ---- learn-on-miss: the shipped child + reference packs behind the cleanest miss ----
+
+/** A remembered fact naming `term` is real grounding only when SOME source
+ *  behind it outranks the ConceptNet `/r/RelatedTo` corpus-weak tier — see
+ *  isRealGrounding just above. */
+function hasNonWeakGrounding(rows, variants) {
+  return rows.some((f) => (variants.has(f.subject) || variants.has(f.object)) && isRealGrounding(f));
+}
 
 /** The learn-on-miss gate, shared by the child-pack hook, the articled
  *  reference hook and the bare-form fallback so the three can never disagree.
  *  Passes only on the CLEANEST miss: a definition-shaped term the lexicon
- *  knows, resolving to no graph entity and no remembered fact — then, and
- *  only then, may a pack provider be consulted. Null means the turn proceeds
- *  byte-identically to a pack-less run. */
+ *  knows, resolving to no graph entity and no fact grounded above the
+ *  corpus-weak tier — then, and only then, may a pack provider be
+ *  consulted. Null means the turn proceeds byte-identically to a pack-less
+ *  run. */
 async function cleanMissPackKey(term, { graph, memoryDir, lexicon, cache }) {
   if (!term || !memoryDir) return null;
   let key = null;
@@ -10695,7 +10726,7 @@ async function cleanMissPackKey(term, { graph, memoryDir, lexicon, cache }) {
   const variants = factTermVariants(normFactTerm, term);
   variants.add(key);
   const rows = await factRows(memoryDir, cache);
-  if (rows.some((f) => variants.has(f.subject) || variants.has(f.object))) return null;
+  if (hasNonWeakGrounding(rows, variants)) return null;
   // A taught RULE that owns this term outranks any pack load: surfacing
   // unrelated conceptnet content over the user's own taught concept is worse
   // than the honest miss the decline leaves standing.
@@ -10723,10 +10754,10 @@ async function referencePackMissAnswer(term, { graph, memoryDir, lexicon, env, c
 }
 
 /** The LIVE variant of cleanMissPackKey — the same resolveEntity and
- *  remembered-fact checks, but through cleanMissLiveTerm, which drops the
- *  lexicon-membership wall: a word the lexicon has never met is exactly what
- *  the live lookup exists for. Null means the turn proceeds byte-identically
- *  to a live-off run. */
+ *  above-corpus-weak grounding checks, but through cleanMissLiveTerm, which
+ *  drops the lexicon-membership wall: a word the lexicon has never met is
+ *  exactly what the live lookup exists for. Null means the turn proceeds
+ *  byte-identically to a live-off run. */
 async function cleanMissLiveKey(term, { graph, memoryDir, lexicon, cache }) {
   if (!term || !memoryDir) return null;
   let key = null;
@@ -10738,7 +10769,7 @@ async function cleanMissLiveKey(term, { graph, memoryDir, lexicon, cache }) {
   const variants = factTermVariants(normFactTerm, term);
   variants.add(key);
   const rows = await factRows(memoryDir, cache);
-  if (rows.some((f) => variants.has(f.subject) || variants.has(f.object))) return null;
+  if (hasNonWeakGrounding(rows, variants)) return null;
   return key;
 }
 

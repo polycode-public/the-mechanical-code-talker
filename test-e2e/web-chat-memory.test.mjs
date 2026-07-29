@@ -83,7 +83,7 @@ test("learn-on-miss: a pack term the memory misses is acquired from the referenc
   assert.ok(demo?.ready, "the learn-on-miss demo is live");
   const { answer, record } = await session.turn(demo.turns[0]);
   assert.ok(!record?.miss, "the pack lookup grounds the term instead of missing");
-  assert.match(answer, /\(source: reference article "Identifier", Simple English Wikipedia/, "the answer cites the reference article as its source");
+  assert.match(answer, /\(source: reference article "Trelvox", Simple English Wikipedia/, "the answer cites the reference article as its source");
   // The load stored the article's triples into the session's own store, so the
   // very same question now answers from memory rather than re-reading the pack.
   const again = await session.turn(demo.turns[0]);
