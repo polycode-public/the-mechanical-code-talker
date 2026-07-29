@@ -168,15 +168,21 @@ export function factsForSubject(rows, subject) {
  *  feeding it an exposure-filtered pair (as `goalStatusLines` does) is what
  *  keeps a not-yet-visited location unknown. Pure, self-contained — no
  *  reference to adventure.mjs's own private helpers, since those aren't
- *  exported. */
-export function visibleRoomOf(rows, state, subject) {
+ *  exported. `actingSubject` is the identity the world places as the
+ *  carrier/viewer — a parameter, not a baked-in name, the same way
+ *  adventure.mjs's own `runWorldCommand`/`roomAffordances` take it; it
+ *  defaults to "player" because that's the one identity Ashcombe Hall's own
+ *  world facts actually use, not because this function only ever means
+ *  that individual (mud-viz.mjs threads its own per-character viewer through
+ *  the same shape, see `mudRoomSceneObjects`/`carriedItemsFor`). */
+export function visibleRoomOf(rows, state, subject, actingSubject = "player") {
   const isRoom = (id) => (rows || []).some((r) => r.subject === id && r.predicate === "rdf:type" && r.object === "room");
   if (isRoom(subject)) return subject;
   const place = state.placements.get(subject);
   if (!place || place.predicate === "mgx:hidden-in") return null;
   if (place.predicate === "mgx:currently-in" || isRoom(place.object)) return place.object;
   const holder = place.object;
-  if (holder === "player") return null;
+  if (holder === actingSubject) return null;
   if (!state.openness.get(holder)?.open) return null;
   const holderPlace = state.placements.get(holder);
   return holderPlace && holderPlace.predicate !== "mgx:hidden-in" ? holderPlace.object : null;
@@ -185,13 +191,14 @@ export function visibleRoomOf(rows, state, subject) {
 /** Every subject actually visible in `here`, sorted, each with its sprite
  *  class — built over `visibleRoomOf` (one containment hop through an OPEN
  *  container) so this can never draw a hidden or carried object the text
- *  digest wouldn't also mention. `player` is excluded; the caller draws the
- *  player's own adventurer sprite separately. Pure. */
-export function roomSceneObjects(rows, state, here) {
+ *  digest wouldn't also mention. `actingSubject` is excluded (default
+ *  "player"); the caller draws that individual's own adventurer sprite
+ *  separately. Pure. */
+export function roomSceneObjects(rows, state, here, actingSubject = "player") {
   const out = [];
   for (const subject of [...state.placements.keys()].sort()) {
-    if (subject === "player") continue;
-    if (visibleRoomOf(rows, state, subject) !== here) continue;
+    if (subject === actingSubject) continue;
+    if (visibleRoomOf(rows, state, subject, actingSubject) !== here) continue;
     out.push({ subject, spriteClass: spriteClassForObject(rows, subject) });
   }
   return out;
@@ -329,13 +336,13 @@ export function roomKindForRoom(rows, roomId) {
   return "indoor";
 }
 
-/** Every object currently `mgx:located-in` "player", sorted, each with its
- *  sprite class — the exact placement `worldDigestRows`'/`inventoryAnswer`'s
- *  own "carries the" branch already reads, just returned as a plain list
- *  instead of prose. Pure. */
-export function carriedItems(rows, state) {
+/** Every object currently `mgx:located-in` `actingSubject` (default
+ *  "player"), sorted, each with its sprite class — the exact placement
+ *  `worldDigestRows`'/`inventoryAnswer`'s own "carries the" branch already
+ *  reads, just returned as a plain list instead of prose. Pure. */
+export function carriedItems(rows, state, actingSubject = "player") {
   return [...state.placements]
-    .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === "player")
+    .filter(([, p]) => p.predicate === "mgx:located-in" && p.object === actingSubject)
     .map(([subject]) => ({ subject, spriteClass: spriteClassForObject(rows, subject) }))
     .sort((a, b) => a.subject.localeCompare(b.subject));
 }
@@ -355,10 +362,10 @@ export function carriedItems(rows, state) {
  *  Disconnected visited rooms (not reachable from each other by traveled
  *  edges) lay out as separate side-by-side blocks rather than overlapping.
  *  Pure. */
-export function visitedRoomGraph(state, visitedRoomIds) {
+export function visitedRoomGraph(state, visitedRoomIds, actingSubject = "player") {
   const DELTA = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0], up: [0, -1], down: [0, 1] };
   const visited = new Set(visitedRoomIds || []);
-  const here = state.placements.get("player")?.object ?? null;
+  const here = state.placements.get(actingSubject)?.object ?? null;
   const positions = new Map();
   const edges = [];
   const edgeKeys = new Set();
@@ -726,31 +733,56 @@ ${THEME_TOKENS_CSS}
      the frame so neither fights the plaque or the room-kind icon; west and
      east sit just inside their own walls. Stairs get a round chip instead —
      neither up nor down is a compass point, and neither hangs on a wall. */
-  .room-stage { position: relative; padding: 1.35rem 0; }
+  .room-stage { position: relative; padding: 1.85rem 0; }
+  /* the "ways out" eyebrow — this ring is the ONLY place movement controls
+     exist on the page (the pill row deliberately drops every "go", see
+     renderPills), so a first-time player needs a named affordance here, not
+     just brass plates they have to guess at. */
+  .ways-out-label {
+    font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--gilt); opacity: .85; margin: 0 0 -.3rem .1rem;
+  }
   .dir-ring { position: absolute; inset: 0; pointer-events: none; }
   .dir-slot { position: absolute; pointer-events: auto; }
   .dir-north { top: 0; left: 50%; transform: translateX(-50%); }
   .dir-south { bottom: 0; left: 50%; transform: translateX(-50%); }
-  .dir-west { left: .3rem; top: 50%; transform: translateY(-50%); }
-  .dir-east { right: .3rem; top: 50%; transform: translateY(-50%); }
+  .dir-west { left: .4rem; top: 50%; transform: translateY(-50%); }
+  .dir-east { right: .4rem; top: 50%; transform: translateY(-50%); }
   /* the stairs stand at the left of each band: the frame's own corner
      flourishes sit top-left and bottom-right, and this is the one inset that
      clears both. */
-  .dir-up { top: 0; left: 1.4rem; }
-  .dir-down { bottom: 0; left: 1.4rem; }
+  .dir-up { top: 0; left: 1.5rem; }
+  .dir-down { bottom: 0; left: 1.5rem; }
+  /* a brass PUSH-plate, not a name plate: real button chrome (an outer drop
+     shadow, not just the inset highlight the static room/door plaques use),
+     a bigger touch target, and a lift on hover/press — so this reads as
+     clickable at a glance instead of blending into the wallpaper the way a
+     plain brass label would. The leading triangle is a direction-neutral
+     "go" cue, the same role an arrow plays on any door-push icon. */
   .dir-door {
-    position: relative; display: inline-flex; align-items: center; justify-content: center;
-    font-family: ${MONO_STACK}; font-size: .62rem; letter-spacing: .14em; text-transform: uppercase;
-    color: var(--gilt); background: var(--parchment); border: 1px solid var(--gilt);
-    box-shadow: inset 0 0 0 2px var(--parchment-strong);
-    padding: .2rem .6rem; white-space: nowrap;
+    position: relative; display: inline-flex; align-items: center; justify-content: center; gap: .3rem;
+    font-family: ${MONO_STACK}; font-size: .74rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--gilt); background: var(--parchment); border: 1px solid var(--gilt); border-radius: 3px;
+    box-shadow: inset 0 0 0 2px var(--parchment-strong), 0 2px 4px rgba(0, 0, 0, .25);
+    padding: .5rem .95rem; white-space: nowrap;
+    transition: transform .08s ease, box-shadow .08s ease, background .08s ease, color .08s ease;
   }
-  .dir-door:hover, .dir-door:focus-visible { background: var(--parchment-strong); color: var(--ink); }
-  .dir-door.stair { border-radius: 50%; width: 1.5rem; height: 1.5rem; padding: 0; font-size: .72rem; letter-spacing: 0; }
+  .dir-door::before { content: "\\25B8"; font-size: .62em; opacity: .9; }
+  .dir-door:hover, .dir-door:focus-visible {
+    background: var(--gilt); color: var(--parchment);
+    box-shadow: inset 0 0 0 2px var(--parchment-strong), 0 4px 7px rgba(0, 0, 0, .32);
+    transform: translateY(-1.5px);
+  }
+  .dir-door:active {
+    transform: translateY(0);
+    box-shadow: inset 0 0 0 2px var(--parchment-strong), 0 1px 2px rgba(0, 0, 0, .28);
+  }
+  .dir-door.stair { border-radius: 50%; width: 2.15rem; height: 2.15rem; padding: 0; font-size: .86rem; letter-spacing: 0; }
+  .dir-door.stair::before { content: ""; }
   /* a door onto a room this session has not stood in yet, marked with the
      same gilt dot the manor board prints for a direction it cannot draw a
      room for — one hint shape, two surfaces. */
-  .dir-door .unwalked { position: absolute; top: -.16rem; right: -.16rem; width: .34rem; height: .34rem; border-radius: 50%; background: var(--gilt); }
+  .dir-door .unwalked { position: absolute; top: -.2rem; right: -.2rem; width: .4rem; height: .4rem; border-radius: 50%; background: var(--gilt); border: 1px solid var(--parchment); }
 
   .sprite-row { display: flex; align-items: flex-end; gap: .9rem .7rem; min-height: 2.5rem; }
   /* the floor band: every non-wall-mounted stack, wrapping and pinned to the
@@ -989,6 +1021,7 @@ ${THEME_TOKENS_CSS}
         <h2>satchel</h2>
         <div class="chips" id="carryList"></div>
       </div>
+      <div class="ways-out-label" aria-hidden="true">ways out</div>
       <div class="room-stage">
         <div class="room-frame" id="roomFrame">
           <div class="room-plaque mono" id="roomName"></div>
@@ -1096,6 +1129,12 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const renderWorldEditorText = ${renderWorldEditorText.toString()};
   const wordBeforeCursor = ${wordBeforeCursor.toString()};
   const esc = ${escapeHtml.toString()};
+  // The identity Ashcombe Hall's own world facts place as the carrier/viewer
+  // — one named constant standing in for what was six separate "player"
+  // string literals scattered through the room/inventory/map drawing calls
+  // below, so a future scenario shipping a differently-named single
+  // character never falls out of step with the calls that use it.
+  const ACTING_SUBJECT = "player";
   const el = (id) => document.getElementById(id);
   const roomFrameEl = el("roomFrame");
   const roomNameEl = el("roomName");
@@ -1268,12 +1307,12 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // holding it has actually been visited this session.
   function goalStatusLinesFor(rows, state, visitedRoomIds) {
     const ids = Array.from(new Set(rows.filter((r) => r.predicate === "mgx:is-objective" && r.object === "true").map((r) => r.subject)));
-    const carriedIds = new Set(carriedItems(rows, state).map((o) => o.subject));
+    const carriedIds = new Set(carriedItems(rows, state, ACTING_SUBJECT).map((o) => o.subject));
     const exposedRows = tmctAdventure.exposedFacts(rows, visitedRoomIds);
     const exposedState = tmctAdventure.foldWorldState(exposedRows);
     return ids.map((id) => {
       if (carriedIds.has(id)) return { subject: id, status: "carried", text: "carrying the " + id + " \\u2014 the adventure is won." };
-      const room = visibleRoomOf(exposedRows, exposedState, id);
+      const room = visibleRoomOf(exposedRows, exposedState, id, ACTING_SUBJECT);
       return room
         ? { subject: id, status: "known", text: "last known: the " + id + " is in the " + room + "." }
         : { subject: id, status: "unknown", text: "there's a sought-after " + id + " somewhere." };
@@ -1284,7 +1323,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // the same non-interactive chip shape the room's own pills use for
   // actions, so the sidebar reads as one visual family.
   function renderCarrying(rows, state) {
-    const items = carriedItems(rows, state);
+    const items = carriedItems(rows, state, ACTING_SUBJECT);
     carryListEl.innerHTML = items.length
       ? items.map((o) => '<span class="chip">' + esc(o.subject) + "</span>").join("")
       : '<span class="empty-note">nothing yet</span>';
@@ -1329,7 +1368,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
       + edgesSvg + hintsSvg + nodesSvg + "</svg>";
   }
   function renderRoomMap(rows, state, visitedRoomIds) {
-    mapWrapEl.innerHTML = roomMapSvg(visitedRoomGraph(state, visitedRoomIds), false) || '<span class="empty-note">nowhere yet</span>';
+    mapWrapEl.innerHTML = roomMapSvg(visitedRoomGraph(state, visitedRoomIds, ACTING_SUBJECT), false) || '<span class="empty-note">nowhere yet</span>';
   }
 
   // ---- the map lightbox — clicking the fixed-square play-mode map redraws
@@ -1337,7 +1376,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // backdrop (not the board itself) or pressing Escape closes it.
   function openMapLightbox() {
     if (!lastSnapshot) return;
-    const svg = roomMapSvg(visitedRoomGraph(lastSnapshot.state, lastSnapshot.visitedRoomIds), false);
+    const svg = roomMapSvg(visitedRoomGraph(lastSnapshot.state, lastSnapshot.visitedRoomIds, ACTING_SUBJECT), false);
     if (!svg) return;
     mapLightboxInnerEl.innerHTML = svg;
     mapLightboxEl.hidden = false;
@@ -1445,7 +1484,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !objLightboxEl.hidden) closeObjectLightbox(); });
 
   function renderEditMap(rows, state) {
-    editMapWrapEl.innerHTML = roomMapSvg(visitedRoomGraph(state, allRoomIds(rows)), true) || '<span class="empty-note">this world defines no rooms</span>';
+    editMapWrapEl.innerHTML = roomMapSvg(visitedRoomGraph(state, allRoomIds(rows), ACTING_SUBJECT), true) || '<span class="empty-note">this world defines no rooms</span>';
   }
   editMapWrapEl.addEventListener("click", (e) => {
     const g = e.target.closest("[data-room]");
@@ -1657,7 +1696,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     }
     roomDetailPanelEl.setAttribute("data-room-kind", roomKindForRoom(editRows, selectedRoomId));
     roomDetailTitleEl.textContent = selectedRoomId;
-    const objects = roomSceneObjects(editRows, editState, selectedRoomId);
+    const objects = roomSceneObjects(editRows, editState, selectedRoomId, ACTING_SUBJECT);
     roomDetailSpritesEl.innerHTML = objects.length
       ? objects.map((o) => spriteCardHtml(o.subject, o.spriteClass, resolveObjectSprite(editRows, o))).join("")
       : '<span class="empty-note">nothing placed here yet</span>';
@@ -1674,7 +1713,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   function renderLegend(rows) {
     const subjects = new Set(rows.filter((r) => r.predicate === "rdf:type").map((r) => r.subject));
     const classes = new Set(["adventurer"]);
-    subjects.forEach((s) => { if (s !== "player") classes.add(spriteClassForObject(rows, s)); });
+    subjects.forEach((s) => { if (s !== ACTING_SUBJECT) classes.add(spriteClassForObject(rows, s)); });
     legendListEl.innerHTML = Array.from(classes).sort().map((cls) => {
       const svg = tmctAdventure.resolveSpriteAsset(
         cls, spriteAncestryRows(rows, cls), factsForSubject(rows, cls),

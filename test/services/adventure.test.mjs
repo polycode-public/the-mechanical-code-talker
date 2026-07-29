@@ -162,7 +162,8 @@ test("personKnowledgeLines resolves live pointers — a hidden thing revealed, a
   const { lines, aboutTopics } = personKnowledgeLines(rows, state, "gardener");
   assert.ok(lines.includes("the letter is in the cabinet."), "a hidden thing's place is revealed through talk");
   assert.ok(lines.includes("you'll find the butler in the drawing-room."), "a person is located");
-  assert.ok(lines.some((l) => /letter is what you're after/.test(l)), "the objective is named as the quest");
+  assert.ok(lines.includes("the letter is what you're after — find it and carry it, and the adventure is won."),
+    "the objective's own quest line states the same win condition goalStatusLines checks — carrying it, nothing about leaving the house");
   assert.deepEqual(aboutTopics, ["garden"], "about-topics come back for the caller to digest");
 });
 

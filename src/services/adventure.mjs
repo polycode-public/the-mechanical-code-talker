@@ -1193,7 +1193,7 @@ function containerDatatypeState(state, object) {
 export function personKnowledgeLines(rows, state, person) {
   const lines = [];
   for (const objective of factObjects(rows, person, "mgx:knows-objective")) {
-    lines.push(`the ${objective} is what you're after — find it and carry it out of the house.`);
+    lines.push(`the ${objective} is what you're after — find it and carry it, and the adventure is won.`);
   }
   for (const thing of factObjects(rows, person, "mgx:knows-where")) {
     const place = state.placements.get(thing);
@@ -1238,6 +1238,410 @@ export function personRoomReport(rows, state, person, actingSubject = "player") 
   }
   return parts.join(" ");
 }
+
+// ---- state-changing verb handlers --------------------------------------------
+//
+// One function per state-changing verb (or per shared-precondition group of
+// verbs), keyed by name in STATE_VERB_HANDLERS below rather than chained as
+// if/else-if branches: adding a verb means adding a table entry, never
+// widening an existing conditional. Each handler takes the one `ctx` object
+// runWorldCommand builds once per call — cmd, the current fold, the taught
+// action family, and the shared `commit`/`noteFor` closures — so a handler
+// reads exactly like the branch it replaces, just lifted to its own name.
+
+async function handleGoVerb(ctx) {
+  const { cmd, rows, state, here, k, family, commit, noteFor, memoryDir, world, cache, actingSubject } = ctx;
+  const target = state.exits.get(here)?.get(cmd.direction);
+  if (!target) {
+    return answer(
+      `there's no exit ${cmd.direction} from the ${here}.`,
+      noteFor(`go — no mgx:has-exit-${cmd.direction} fact on ${here}; precondition declined by name`),
+      { miss: true },
+    );
+  }
+  // A predator eats whatever walks in, and the room it guards is the one
+  // room a move never comes back from — so this write bypasses commit()
+  // entirely: the auto-relook there would describe a room the mover is no
+  // longer standing in, and the world has nobody left to look with.
+  const predator = predatorIn(rows, state, target);
+  if (predator) {
+    await writeWorldTurn(memoryDir, world, k, [
+      { subject: `${actingSubject}@turn${k}`, predicate: "mgx:currently-in", object: CONSUMED_PLACE },
+    ], cache);
+    return answer(
+      `you go ${cmd.direction} into the ${target} — and the ${predator} is waiting. It eats the ${actingSubject}. That's the end of its run.`,
+      noteFor(`go — the ${target} holds the predator ${predator}; ${actingSubject} is placed out of play at turn ${k} and takes no further turns`),
+      { goal: `move through the world (eaten by the ${predator} in the ${target})` },
+    );
+  }
+  return commit(
+    [{ subject: `${actingSubject}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:currently-in", object: target }],
+    `you go ${cmd.direction}. Now in the ${target}.`,
+    `go — the taught "go" family fired; ${actingSubject} moves ${here} -> ${target}`,
+    `move through the world (now in the ${target})`,
+    target,
+  );
+}
+
+async function handleTakeVerb(ctx) {
+  const { rows, state, here, k, family, object, place, commit, noteFor, actingSubject } = ctx;
+  if (isTyped(rows, object, "room")) {
+    return answer(`you can't take the ${object} — it's a whole room.`, noteFor("take — the object is a room; declined"), { miss: true });
+  }
+  if (carriedBy(state, object, actingSubject)) {
+    return answer(`you're already carrying the ${object}.`, noteFor("take — already carried; declined"), { miss: true });
+  }
+  if (place && (place.predicate === "mgx:fixed-in" || place.predicate === "mgx:stands-locked-in") && place.object === here) {
+    return answer(
+      `the ${object} is fixed in place — it can't be taken.`,
+      noteFor(`take — ${object} is placed by ${place.predicate}, not portable; precondition declined by name`),
+      { miss: true },
+    );
+  }
+  if (place && place.predicate === "mgx:currently-in" && place.object === here) {
+    return answer(`you can't take the ${object}.`, noteFor("take — the object is one of the cast; declined"), { miss: true });
+  }
+  if (visibleRoomOf(object, { rows, state }) !== here) {
+    if (backgroundOnlyMention(rows, state, object)) {
+      return answer(
+        `the ${object} isn't something you can take — it's only mentioned in passing here, not a real prop in this scene.`,
+        noteFor(`take — ${object} is a background-only mention, never a placed object; declined honestly`),
+        { miss: true },
+      );
+    }
+    return answer(`I don't see a ${object} here.`, noteFor(`take — ${object} isn't visible in the ${here}; declined, hidden things stay hidden`), { miss: true });
+  }
+  return commit(
+    [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: actingSubject }],
+    `you take the ${object}.`,
+    `take — the taught "take" family fired; ${object} is now carried`,
+    `carry the ${object}`,
+  );
+}
+
+async function handleDropOrGiveVerb(ctx) {
+  const { cmd, rows, state, here, k, family, object, commit, noteFor, actingSubject } = ctx;
+  if (!carriedBy(state, object, actingSubject)) {
+    return answer(`you're not carrying the ${object}.`, noteFor(`${cmd.verb} — ${object} isn't carried; precondition declined by name`), { miss: true });
+  }
+  if (cmd.verb === "drop") {
+    return commit(
+      [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: here }],
+      `you drop the ${object} in the ${here}.`,
+      `drop — the taught "drop" family fired; ${object} rests in the ${here}`,
+      `set the ${object} down`,
+    );
+  }
+  const receiver = cmd.indirectObject;
+  if (!isCastMember(rows, state, receiver) || state.placements.get(receiver)?.object !== here) {
+    return answer(`the ${receiver} isn't here.`, noteFor(`give — ${receiver} isn't one of the cast standing in the ${here}; precondition declined by name`), { miss: true });
+  }
+  return commit(
+    [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: receiver }],
+    `you give the ${object} to the ${receiver}.`,
+    `give — the taught "give" family fired; the ${receiver} holds the ${object}`,
+    `hand the ${object} over`,
+  );
+}
+
+async function handleDigVerb(ctx) {
+  const { cmd, rows, state, here, k, commit, noteFor } = ctx;
+  const direction = cmd.direction;
+  if (state.exits.get(here)?.get(direction)) {
+    return answer(
+      `there's already an exit ${direction} from the ${here}.`,
+      noteFor(`dig — an mgx:has-exit-${direction} fact already stands on ${here}; declined, a dig never overwrites an exit`),
+      { miss: true },
+    );
+  }
+  const back = OPPOSITE_DIRECTION.get(direction);
+  if (!back) {
+    return answer(
+      `I don't know which way back a ${direction} tunnel would run.`,
+      noteFor(`dig — "${direction}" has no opposite to write the return exit with; declined by name`),
+      { miss: true },
+    );
+  }
+  const roomKind = roomKindOf(rows, here);
+  const dugKind = (DIGGABLE_BY_ROOM_KIND.get(roomKind) ?? new Map()).get(direction) ?? null;
+  if (!dugKind) {
+    return answer(
+      DIG_DECLINE_BY_ROOM_KIND[roomKind](here, direction),
+      noteFor(`dig — the ${here} is an ${roomKind} room, which cannot be dug ${direction}; declined by the room's own kind`),
+      { miss: true },
+    );
+  }
+  if (atDigBoundary(rows, state, here)) {
+    const reach = roomDistanceFromOrigin(rows, state, here);
+    return answer(
+      `the earth ${direction} of the ${here} is packed hard and endless — you have reached the far edge of the burrow.`,
+      noteFor(reach === null
+        ? `dig — no chain of exits joins the ${here} to the ${originRoomOf(rows)}, so there is no distance to measure a dig against; declined`
+        : `dig — the ${here} stands ${reach} rooms from the ${originRoomOf(rows)}, and this world digs ${digReachOf(rows)}; declined by distance from the origin`),
+      { miss: true },
+    );
+  }
+  const dug = freshRoomId(rows, here, direction);
+  const denChanceIn = declaredCountOr(rows, dugKind, DEN_CHANCE_PREDICATE, DEFAULT_DEN_CHANCE_IN);
+  const isDen = dugKind === "underground-space" && stableIndex(`den:${dug}`, denChanceIn) === 0;
+  const spawnMax = declaredCountOr(rows, dugKind, DIG_SPAWN_MAX_PREDICATE, DEFAULT_DIG_SPAWN_MAX);
+  const spawnCount = DIG_SPAWN_MIN + stableIndex(dug, spawnMax - DIG_SPAWN_MIN + 1);
+  const spawnedKinds = isDen
+    ? declaredKindsOr(rows, dugKind, DEN_SPAWN_PREDICATE, DIG_SPAWN_KINDS)
+    : declaredKindsOr(rows, dugKind, DIG_SPAWN_PREDICATE, DIG_SPAWN_KINDS).slice(0, spawnCount);
+  const minted = new Set();
+  const spawned = spawnedKinds.map((kind) => {
+    const id = freshObjectId(rows, kind, minted);
+    minted.add(id);
+    return id;
+  });
+  const residentChanceIn = declaredCountOr(rows, dugKind, DEN_RESIDENT_CHANCE_PREDICATE, DEFAULT_DEN_RESIDENT_CHANCE_IN);
+  const residentKind = isDen && stableIndex(`resident:${dug}`, residentChanceIn) === 0
+    ? factObjects(rows, dugKind, DEN_RESIDENT_PREDICATE)[0] ?? null
+    : null;
+  const resident = residentKind ? freshObjectId(rows, residentKind, minted) : null;
+  return commit(
+    [
+      { subject: dug, predicate: "rdf:type", object: "room" },
+      { subject: dug, predicate: "rdf:type", object: dugKind },
+      ...(isDen ? [{ subject: dug, predicate: "rdf:type", object: DEN_ROOM_CLASS }] : []),
+      { subject: here, predicate: `mgx:has-exit-${direction}`, object: dug },
+      { subject: dug, predicate: `mgx:has-exit-${back}`, object: here },
+      // Typed to its OWN kind, not a flat "portable" — a spawned kind the
+      // world declares rdfs:subClassOf food needs its real class reachable
+      // here for isFood's own objectClassChain walk, or digging up "carrot-1"
+      // would still read as inedible scenery. The class's own mass copies
+      // onto the instance for the same reason: eat reads the instance.
+      ...spawnedKinds.flatMap((kind, i) => ([
+        { subject: spawned[i], predicate: "rdf:type", object: kind },
+        { subject: spawned[i], predicate: DISPLAY_NAME_PREDICATE, object: kind },
+        { subject: spawned[i], predicate: "mgx:located-in", object: dug },
+        ...classMassFacts(rows, spawned[i], kind),
+      ])),
+      // A resident is placed with currently-in, the predicate that makes an
+      // individual one of the cast, and knows about what its own den holds —
+      // so an animal that digs one out has somebody new to ask about food.
+      ...(resident ? [
+        { subject: resident, predicate: "rdf:type", object: residentKind },
+        { subject: resident, predicate: DISPLAY_NAME_PREDICATE, object: residentKind },
+        { subject: resident, predicate: "mgx:currently-in", object: dug },
+        ...classMassFacts(rows, resident, residentKind),
+        ...spawned.map((thing) => ({ subject: resident, predicate: KNOWS_ABOUT_PREDICATE, object: thing })),
+      ] : []),
+    ],
+    digNarration(direction, { isDen, spawned, resident }),
+    `dig — minted the ${isDen ? `${DEN_ROOM_CLASS} ` : ""}${dugKind} ${dug} with exits both ways (${direction} out, ${back} back)${spawned.length ? `, and ${spawned.length} object(s) in it` : ""}${resident ? `, lived in by ${resident}` : ""}; digging spends the turn, so the digger stays in the ${here}`,
+    `dig ${direction} out of the ${here}`,
+  );
+}
+
+async function handleEatVerb(ctx) {
+  const { rows, state, here, k, object, commit, noteFor, memoryDir, cache, actingSubject } = ctx;
+  const present = visibleRoomOf(object, { rows, state }) === here || carriedBy(state, object, actingSubject);
+  if (!present) {
+    return answer(
+      `I don't see a ${object} here.`,
+      noteFor(`eat — ${object} is neither visible in the ${here} nor carried; declined`),
+      { miss: true },
+    );
+  }
+  if (!objectClassChain(rows, object).includes(FOOD_CLASS)) {
+    return answer(
+      `the ${object} isn't food.`,
+      noteFor(`eat — ${object}'s rdf:type/rdfs:subClassOf chain never reaches "${FOOD_CLASS}"; declined by name`),
+      { miss: true },
+    );
+  }
+  const eaterMass = state.masses.get(actingSubject)?.value ?? null;
+  if (eaterMass !== null && eaterMass >= ASSUMED_FULL_MASS * HUNGRY_FRACTION) {
+    return answer(
+      `you're too full to eat the ${object}.`,
+      noteFor(`eat — ${actingSubject} weighs ${eaterMass}, at or over half of ${ASSUMED_FULL_MASS}; declined by name`),
+      { miss: true },
+    );
+  }
+  const gained = state.masses.get(object)?.value ?? DEFAULT_FOOD_MASS;
+  const grown = Math.round(((eaterMass ?? 0) + gained) * 100) / 100;
+  // Eating is the one act that ends a thing, so the eater is the one witness
+  // whose knowledge of it goes out of date on the spot. Every route into the
+  // eat verb — a typed command, a scripted mud turn — passes here, so the
+  // claim gets written once for all of them.
+  await recordGone(memoryDir, { observer: actingSubject, thing: object, k, cache });
+  return commit(
+    [
+      { subject: `${actingSubject}@turn${k}`, predicate: MASS_PREDICATE, object: String(grown) },
+      { subject: `${object}@turn${k}`, predicate: "mgx:located-in", object: CONSUMED_PLACE },
+    ],
+    `you eat the ${object}. It adds ${gained} to your mass, so you weigh ${grown} now.`,
+    `eat — the ${object}'s ${gained} mass moves onto ${actingSubject} (now ${grown}) and the ${object} leaves the world`,
+    `eat the ${object}`,
+  );
+}
+
+async function handlePutVerb(ctx) {
+  const { cmd, rows, state, here, k, family, object, commit, noteFor, actingSubject } = ctx;
+  const container = cmd.indirectObject;
+  if (!carriedBy(state, object, actingSubject)) {
+    return answer(
+      `you're not carrying the ${object}.`,
+      noteFor(`put — ${object} isn't carried; precondition declined by name`),
+      { miss: true },
+    );
+  }
+  if (visibleRoomOf(container, { rows, state }) !== here) {
+    return answer(
+      `I don't see a ${container} here.`,
+      noteFor(`put — ${container} isn't visible in the ${here}; declined`),
+      { miss: true },
+    );
+  }
+  if (!isContainer(rows, container)) {
+    return answer(
+      `the ${container} doesn't hold things.`,
+      noteFor(`put — no mgx:is-container fact on ${container}; declined by name`),
+      { miss: true },
+    );
+  }
+  if (!state.openness.get(container)?.open) {
+    return answer(
+      `the ${container} is closed.`,
+      noteFor(`put — the ${container} isn't open; precondition declined by name`),
+      { miss: true },
+    );
+  }
+  return commit(
+    [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: container }],
+    `you put the ${object} in the ${container}.`,
+    `put — the taught "put" family fired; the ${object} now sits in the ${container}`,
+    `put the ${object} in the ${container}`,
+  );
+}
+
+// open / unlock / close — the container verbs, sharing one handler (all
+// three keys in STATE_VERB_HANDLERS below point here) because they share a
+// precondition: presence and container-ness stay hand-checked (visibility
+// gating, not a state precondition), the same visibleRoomOf check
+// examine/talk/take already use, not a hand-rolled duplicate. unlock's
+// instrument match stays fully hand-written below it too — it needs a
+// third, externally-supplied binding beyond subject/target, which this
+// retrofit does not attempt. open/close's lock-state and open/closed
+// checks, and their mgx:is-open write, are taught "fact-value" precond/
+// effect rows consulted through domain.mjs; only the hidden-contents
+// reveal (a variable-arity effect over a discovered set) stays hand-written
+// JS, since no shipped rule shape covers that either.
+async function handleContainerVerb(ctx) {
+  const { cmd, rows, state, here, k, object, place, commit, noteFor, ruleRows } = ctx;
+  if (visibleRoomOf(object, { rows, state }) !== here) {
+    return answer(`I don't see a ${object} here.`, noteFor(`${cmd.verb} — ${object} isn't in the ${here}; declined`), { miss: true });
+  }
+  if (!isContainer(rows, object)) {
+    return answer(`the ${object} doesn't open.`, noteFor(`${cmd.verb} — no mgx:is-container fact on ${object}; declined by name`), { miss: true });
+  }
+
+  if (cmd.verb === "open" || cmd.verb === "close") {
+    const domain = compileDomain(rows, ruleRows);
+    const taughtAction = domain.actions.find((a) => a.name === cmd.verb);
+    const effect = taughtAction?.effects.find((e) => e.predicate === OPEN_PREDICATE);
+    if (!effect) {
+      return answer(
+        `this world doesn't teach how ${cmd.verb === "open" ? "opening" : "closing"} changes the ${object}.`,
+        noteFor(`${cmd.verb} — the taught "${cmd.verb}" family carries no ${OPEN_PREDICATE} effect; honest decline`),
+        { miss: true },
+      );
+    }
+    const factState = containerDatatypeState(state, object);
+    const failed = taughtAction.preconds.find((p) => !precondHolds(p, ctx.actingSubject, object, factState, domain));
+    if (failed) {
+      const text = failed.predicate === "mgx:stands-locked-in"
+        ? `the ${object} is locked.`
+        : cmd.verb === "open" ? `the ${object} is already open.` : `the ${object} isn't open.`;
+      return answer(text, noteFor(`${cmd.verb} — the taught "${cmd.verb}" family's ${failed.predicate} precondition declined by name`), { miss: true });
+    }
+    const effSubject = roleBinding(effect.subjectRole, ctx.actingSubject, object, domain);
+    const writeIsOpen = { subject: `${effSubject}@turn${k}`, predicate: effect.predicate, object: effect.value };
+
+    if (cmd.verb === "open") {
+      const revealed = [...state.placements]
+        .filter(([, p]) => p.predicate === "mgx:hidden-in" && p.object === object)
+        .map(([thing]) => thing)
+        .sort();
+      return commit(
+        [
+          writeIsOpen,
+          ...revealed.map((thing) => ({ subject: `${thing}@turn${k}`, predicate: "mgx:located-in", object })),
+        ],
+        revealed.length
+          ? `you open the ${object} — inside: the ${revealed.join(", the ")}.`
+          : `you open the ${object}. It's empty.`,
+        `open — ${object} opens${revealed.length ? `, revealing ${revealed.join(", ")}` : ""} via the taught "open" family's effect`,
+        `open the ${object}`,
+      );
+    }
+    return commit(
+      [writeIsOpen],
+      `you close the ${object}.`,
+      `close — ${object} closes via the taught "close" family's effect`,
+      `close the ${object}`,
+    );
+  }
+
+  // unlock
+  if (place.predicate !== "mgx:stands-locked-in") {
+    return answer(`the ${object} isn't locked.`, noteFor("unlock — not locked; declined"), { miss: true });
+  }
+  if (!cmd.instrument) {
+    return answer(
+      `unlock the ${object} with what? Name the thing to use, e.g. "unlock the ${object} with the key".`,
+      noteFor("unlock — no instrument named; asked, never guessed"),
+      { miss: true },
+    );
+  }
+  const required = factObjects(rows, object, "mgx:unlocks-with")[0] ?? null;
+  if (!required) {
+    return answer(
+      `nothing in this world says what unlocks the ${object}.`,
+      noteFor(`unlock — no mgx:unlocks-with fact on ${object}; honest decline`),
+      { miss: true },
+    );
+  }
+  if (!carriedBy(state, cmd.instrument, ctx.actingSubject)) {
+    return answer(
+      `you're not carrying the ${cmd.instrument}.`,
+      noteFor(`unlock — the ${cmd.instrument} isn't carried; precondition declined by name`),
+      { miss: true },
+    );
+  }
+  if (cmd.instrument !== required) {
+    return answer(
+      `the ${cmd.instrument} doesn't fit the ${object}'s lock.`,
+      noteFor(`unlock — the taught instrument is ${required}, not ${cmd.instrument}; declined by name`),
+      { miss: true },
+    );
+  }
+  return commit(
+    [{ subject: `${object}@turn${k}`, predicate: "mgx:fixed-in", object: here }],
+    `you unlock the ${object} with the ${required}.`,
+    `unlock — the lock releases; ${object} now stands unlocked (still fixed) in the ${here}`,
+    `unlock the ${object}`,
+  );
+}
+
+// The data-driven verb table itself: every state-changing verb this engine
+// knows, mapped to the handler that runs it. A world's own taught action
+// family (checked before this table is ever consulted) decides whether the
+// verb exists in THIS world; this table decides which JS runs once it does.
+const STATE_VERB_HANDLERS = {
+  go: handleGoVerb,
+  take: handleTakeVerb,
+  drop: handleDropOrGiveVerb,
+  give: handleDropOrGiveVerb,
+  dig: handleDigVerb,
+  eat: handleEatVerb,
+  put: handlePutVerb,
+  open: handleContainerVerb,
+  close: handleContainerVerb,
+  unlock: handleContainerVerb,
+};
 
 export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache, actingSubject = "player" }) {
   const memory = await loadMemory(memoryDir);
@@ -1410,376 +1814,18 @@ export async function runWorldCommand(cmd, { world, memoryDir, env, graph, cache
   const object = cmd.object;
   const place = object ? state.placements.get(object) ?? null : null;
 
-  if (cmd.verb === "go") {
-    const target = state.exits.get(here)?.get(cmd.direction);
-    if (!target) {
-      return answer(
-        `there's no exit ${cmd.direction} from the ${here}.`,
-        noteFor(`go — no mgx:has-exit-${cmd.direction} fact on ${here}; precondition declined by name`),
-        { miss: true },
-      );
-    }
-    // A predator eats whatever walks in, and the room it guards is the one
-    // room a move never comes back from — so this write bypasses commit()
-    // entirely: the auto-relook there would describe a room the mover is no
-    // longer standing in, and the world has nobody left to look with.
-    const predator = predatorIn(rows, state, target);
-    if (predator) {
-      await writeWorldTurn(memoryDir, world, k, [
-        { subject: `${actingSubject}@turn${k}`, predicate: "mgx:currently-in", object: CONSUMED_PLACE },
-      ], cache);
-      return answer(
-        `you go ${cmd.direction} into the ${target} — and the ${predator} is waiting. It eats the ${actingSubject}. That's the end of its run.`,
-        noteFor(`go — the ${target} holds the predator ${predator}; ${actingSubject} is placed out of play at turn ${k} and takes no further turns`),
-        { goal: `move through the world (eaten by the ${predator} in the ${target})` },
-      );
-    }
-    return commit(
-      [{ subject: `${actingSubject}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:currently-in", object: target }],
-      `you go ${cmd.direction}. Now in the ${target}.`,
-      `go — the taught "go" family fired; ${actingSubject} moves ${here} -> ${target}`,
-      `move through the world (now in the ${target})`,
-      target,
-    );
-  }
-
-  if (cmd.verb === "take") {
-    if (isTyped(rows, object, "room")) {
-      return answer(`you can't take the ${object} — it's a whole room.`, noteFor("take — the object is a room; declined"), { miss: true });
-    }
-    if (carriedBy(state, object, actingSubject)) {
-      return answer(`you're already carrying the ${object}.`, noteFor("take — already carried; declined"), { miss: true });
-    }
-    if (place && (place.predicate === "mgx:fixed-in" || place.predicate === "mgx:stands-locked-in") && place.object === here) {
-      return answer(
-        `the ${object} is fixed in place — it can't be taken.`,
-        noteFor(`take — ${object} is placed by ${place.predicate}, not portable; precondition declined by name`),
-        { miss: true },
-      );
-    }
-    if (place && place.predicate === "mgx:currently-in" && place.object === here) {
-      return answer(`you can't take the ${object}.`, noteFor("take — the object is one of the cast; declined"), { miss: true });
-    }
-    if (visibleRoomOf(object, { rows, state }) !== here) {
-      if (backgroundOnlyMention(rows, state, object)) {
-        return answer(
-          `the ${object} isn't something you can take — it's only mentioned in passing here, not a real prop in this scene.`,
-          noteFor(`take — ${object} is a background-only mention, never a placed object; declined honestly`),
-          { miss: true },
-        );
-      }
-      return answer(`I don't see a ${object} here.`, noteFor(`take — ${object} isn't visible in the ${here}; declined, hidden things stay hidden`), { miss: true });
-    }
-    return commit(
-      [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: actingSubject }],
-      `you take the ${object}.`,
-      `take — the taught "take" family fired; ${object} is now carried`,
-      `carry the ${object}`,
-    );
-  }
-
-  if (cmd.verb === "drop" || cmd.verb === "give") {
-    if (!carriedBy(state, object, actingSubject)) {
-      return answer(`you're not carrying the ${object}.`, noteFor(`${cmd.verb} — ${object} isn't carried; precondition declined by name`), { miss: true });
-    }
-    if (cmd.verb === "drop") {
-      return commit(
-        [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: here }],
-        `you drop the ${object} in the ${here}.`,
-        `drop — the taught "drop" family fired; ${object} rests in the ${here}`,
-        `set the ${object} down`,
-      );
-    }
-    const receiver = cmd.indirectObject;
-    if (!isCastMember(rows, state, receiver) || state.placements.get(receiver)?.object !== here) {
-      return answer(`the ${receiver} isn't here.`, noteFor(`give — ${receiver} isn't one of the cast standing in the ${here}; precondition declined by name`), { miss: true });
-    }
-    return commit(
-      [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: receiver }],
-      `you give the ${object} to the ${receiver}.`,
-      `give — the taught "give" family fired; the ${receiver} holds the ${object}`,
-      `hand the ${object} over`,
-    );
-  }
-
-  if (cmd.verb === "dig") {
-    const direction = cmd.direction;
-    if (state.exits.get(here)?.get(direction)) {
-      return answer(
-        `there's already an exit ${direction} from the ${here}.`,
-        noteFor(`dig — an mgx:has-exit-${direction} fact already stands on ${here}; declined, a dig never overwrites an exit`),
-        { miss: true },
-      );
-    }
-    const back = OPPOSITE_DIRECTION.get(direction);
-    if (!back) {
-      return answer(
-        `I don't know which way back a ${direction} tunnel would run.`,
-        noteFor(`dig — "${direction}" has no opposite to write the return exit with; declined by name`),
-        { miss: true },
-      );
-    }
-    const roomKind = roomKindOf(rows, here);
-    const dugKind = (DIGGABLE_BY_ROOM_KIND.get(roomKind) ?? new Map()).get(direction) ?? null;
-    if (!dugKind) {
-      return answer(
-        DIG_DECLINE_BY_ROOM_KIND[roomKind](here, direction),
-        noteFor(`dig — the ${here} is an ${roomKind} room, which cannot be dug ${direction}; declined by the room's own kind`),
-        { miss: true },
-      );
-    }
-    if (atDigBoundary(rows, state, here)) {
-      const reach = roomDistanceFromOrigin(rows, state, here);
-      return answer(
-        `the earth ${direction} of the ${here} is packed hard and endless — you have reached the far edge of the burrow.`,
-        noteFor(reach === null
-          ? `dig — no chain of exits joins the ${here} to the ${originRoomOf(rows)}, so there is no distance to measure a dig against; declined`
-          : `dig — the ${here} stands ${reach} rooms from the ${originRoomOf(rows)}, and this world digs ${digReachOf(rows)}; declined by distance from the origin`),
-        { miss: true },
-      );
-    }
-    const dug = freshRoomId(rows, here, direction);
-    const denChanceIn = declaredCountOr(rows, dugKind, DEN_CHANCE_PREDICATE, DEFAULT_DEN_CHANCE_IN);
-    const isDen = dugKind === "underground-space" && stableIndex(`den:${dug}`, denChanceIn) === 0;
-    const spawnMax = declaredCountOr(rows, dugKind, DIG_SPAWN_MAX_PREDICATE, DEFAULT_DIG_SPAWN_MAX);
-    const spawnCount = DIG_SPAWN_MIN + stableIndex(dug, spawnMax - DIG_SPAWN_MIN + 1);
-    const spawnedKinds = isDen
-      ? declaredKindsOr(rows, dugKind, DEN_SPAWN_PREDICATE, DIG_SPAWN_KINDS)
-      : declaredKindsOr(rows, dugKind, DIG_SPAWN_PREDICATE, DIG_SPAWN_KINDS).slice(0, spawnCount);
-    const minted = new Set();
-    const spawned = spawnedKinds.map((kind) => {
-      const id = freshObjectId(rows, kind, minted);
-      minted.add(id);
-      return id;
-    });
-    const residentChanceIn = declaredCountOr(rows, dugKind, DEN_RESIDENT_CHANCE_PREDICATE, DEFAULT_DEN_RESIDENT_CHANCE_IN);
-    const residentKind = isDen && stableIndex(`resident:${dug}`, residentChanceIn) === 0
-      ? factObjects(rows, dugKind, DEN_RESIDENT_PREDICATE)[0] ?? null
-      : null;
-    const resident = residentKind ? freshObjectId(rows, residentKind, minted) : null;
-    return commit(
-      [
-        { subject: dug, predicate: "rdf:type", object: "room" },
-        { subject: dug, predicate: "rdf:type", object: dugKind },
-        ...(isDen ? [{ subject: dug, predicate: "rdf:type", object: DEN_ROOM_CLASS }] : []),
-        { subject: here, predicate: `mgx:has-exit-${direction}`, object: dug },
-        { subject: dug, predicate: `mgx:has-exit-${back}`, object: here },
-        // Typed to its OWN kind, not a flat "portable" — a spawned kind the
-        // world declares rdfs:subClassOf food needs its real class reachable
-        // here for isFood's own objectClassChain walk, or digging up "carrot-1"
-        // would still read as inedible scenery. The class's own mass copies
-        // onto the instance for the same reason: eat reads the instance.
-        ...spawnedKinds.flatMap((kind, i) => ([
-          { subject: spawned[i], predicate: "rdf:type", object: kind },
-          { subject: spawned[i], predicate: DISPLAY_NAME_PREDICATE, object: kind },
-          { subject: spawned[i], predicate: "mgx:located-in", object: dug },
-          ...classMassFacts(rows, spawned[i], kind),
-        ])),
-        // A resident is placed with currently-in, the predicate that makes an
-        // individual one of the cast, and knows about what its own den holds —
-        // so an animal that digs one out has somebody new to ask about food.
-        ...(resident ? [
-          { subject: resident, predicate: "rdf:type", object: residentKind },
-          { subject: resident, predicate: DISPLAY_NAME_PREDICATE, object: residentKind },
-          { subject: resident, predicate: "mgx:currently-in", object: dug },
-          ...classMassFacts(rows, resident, residentKind),
-          ...spawned.map((thing) => ({ subject: resident, predicate: KNOWS_ABOUT_PREDICATE, object: thing })),
-        ] : []),
-      ],
-      digNarration(direction, { isDen, spawned, resident }),
-      `dig — minted the ${isDen ? `${DEN_ROOM_CLASS} ` : ""}${dugKind} ${dug} with exits both ways (${direction} out, ${back} back)${spawned.length ? `, and ${spawned.length} object(s) in it` : ""}${resident ? `, lived in by ${resident}` : ""}; digging spends the turn, so the digger stays in the ${here}`,
-      `dig ${direction} out of the ${here}`,
-    );
-  }
-
-  if (cmd.verb === "eat") {
-    const present = visibleRoomOf(object, { rows, state }) === here || carriedBy(state, object, actingSubject);
-    if (!present) {
-      return answer(
-        `I don't see a ${object} here.`,
-        noteFor(`eat — ${object} is neither visible in the ${here} nor carried; declined`),
-        { miss: true },
-      );
-    }
-    if (!objectClassChain(rows, object).includes(FOOD_CLASS)) {
-      return answer(
-        `the ${object} isn't food.`,
-        noteFor(`eat — ${object}'s rdf:type/rdfs:subClassOf chain never reaches "${FOOD_CLASS}"; declined by name`),
-        { miss: true },
-      );
-    }
-    const eaterMass = state.masses.get(actingSubject)?.value ?? null;
-    if (eaterMass !== null && eaterMass >= ASSUMED_FULL_MASS * HUNGRY_FRACTION) {
-      return answer(
-        `you're too full to eat the ${object}.`,
-        noteFor(`eat — ${actingSubject} weighs ${eaterMass}, at or over half of ${ASSUMED_FULL_MASS}; declined by name`),
-        { miss: true },
-      );
-    }
-    const gained = state.masses.get(object)?.value ?? DEFAULT_FOOD_MASS;
-    const grown = Math.round(((eaterMass ?? 0) + gained) * 100) / 100;
-    // Eating is the one act that ends a thing, so the eater is the one witness
-    // whose knowledge of it goes out of date on the spot. Every route into the
-    // eat verb — a typed command, a scripted mud turn — passes here, so the
-    // claim gets written once for all of them.
-    await recordGone(memoryDir, { observer: actingSubject, thing: object, k, cache });
-    return commit(
-      [
-        { subject: `${actingSubject}@turn${k}`, predicate: MASS_PREDICATE, object: String(grown) },
-        { subject: `${object}@turn${k}`, predicate: "mgx:located-in", object: CONSUMED_PLACE },
-      ],
-      `you eat the ${object}. It adds ${gained} to your mass, so you weigh ${grown} now.`,
-      `eat — the ${object}'s ${gained} mass moves onto ${actingSubject} (now ${grown}) and the ${object} leaves the world`,
-      `eat the ${object}`,
-    );
-  }
-
-  if (cmd.verb === "put") {
-    const container = cmd.indirectObject;
-    if (!carriedBy(state, object, actingSubject)) {
-      return answer(
-        `you're not carrying the ${object}.`,
-        noteFor(`put — ${object} isn't carried; precondition declined by name`),
-        { miss: true },
-      );
-    }
-    if (visibleRoomOf(container, { rows, state }) !== here) {
-      return answer(
-        `I don't see a ${container} here.`,
-        noteFor(`put — ${container} isn't visible in the ${here}; declined`),
-        { miss: true },
-      );
-    }
-    if (!isContainer(rows, container)) {
-      return answer(
-        `the ${container} doesn't hold things.`,
-        noteFor(`put — no mgx:is-container fact on ${container}; declined by name`),
-        { miss: true },
-      );
-    }
-    if (!state.openness.get(container)?.open) {
-      return answer(
-        `the ${container} is closed.`,
-        noteFor(`put — the ${container} isn't open; precondition declined by name`),
-        { miss: true },
-      );
-    }
-    return commit(
-      [{ subject: `${object}@turn${k}`, predicate: familyEffectPredicate(family) ?? "mgx:located-in", object: container }],
-      `you put the ${object} in the ${container}.`,
-      `put — the taught "put" family fired; the ${object} now sits in the ${container}`,
-      `put the ${object} in the ${container}`,
-    );
-  }
-
-  // open / unlock / close — the container verbs. presence and container-ness
-  // stay hand-checked here (visibility gating, not a state precondition);
-  // unlock's instrument match stays fully hand-written below it too — it
-  // needs a third, externally-supplied binding beyond subject/target, which
-  // this retrofit does not attempt. open/close's lock-state and open/closed
-  // checks, and their mgx:is-open write, are now taught "fact-value"
-  // precond/effect rows consulted through domain.mjs below; only the
-  // hidden-contents reveal (a variable-arity effect over a discovered set)
-  // stays hand-written JS, since no shipped rule shape covers that either.
-  // Presence reuses visibleRoomOf (the SAME check examine/talk/take already
-  // use), not a hand-rolled duplicate: an earlier version of this check
-  // excluded mgx:currently-in outright, so a genuinely-present NPC (placed
-  // that way, not fixed-in/stands-locked-in) fell into "I don't see a X
-  // here" instead of reaching the isContainer check just below, which would
-  // have honestly said "the X doesn't open."
-  if (visibleRoomOf(object, { rows, state }) !== here) {
-    return answer(`I don't see a ${object} here.`, noteFor(`${cmd.verb} — ${object} isn't in the ${here}; declined`), { miss: true });
-  }
-  if (!isContainer(rows, object)) {
-    return answer(`the ${object} doesn't open.`, noteFor(`${cmd.verb} — no mgx:is-container fact on ${object}; declined by name`), { miss: true });
-  }
-
-  if (cmd.verb === "open" || cmd.verb === "close") {
-    const domain = compileDomain(rows, ruleRows);
-    const taughtAction = domain.actions.find((a) => a.name === cmd.verb);
-    const effect = taughtAction?.effects.find((e) => e.predicate === OPEN_PREDICATE);
-    if (!effect) {
-      return answer(
-        `this world doesn't teach how ${cmd.verb === "open" ? "opening" : "closing"} changes the ${object}.`,
-        noteFor(`${cmd.verb} — the taught "${cmd.verb}" family carries no ${OPEN_PREDICATE} effect; honest decline`),
-        { miss: true },
-      );
-    }
-    const factState = containerDatatypeState(state, object);
-    const failed = taughtAction.preconds.find((p) => !precondHolds(p, actingSubject, object, factState, domain));
-    if (failed) {
-      const text = failed.predicate === "mgx:stands-locked-in"
-        ? `the ${object} is locked.`
-        : cmd.verb === "open" ? `the ${object} is already open.` : `the ${object} isn't open.`;
-      return answer(text, noteFor(`${cmd.verb} — the taught "${cmd.verb}" family's ${failed.predicate} precondition declined by name`), { miss: true });
-    }
-    const effSubject = roleBinding(effect.subjectRole, actingSubject, object, domain);
-    const writeIsOpen = { subject: `${effSubject}@turn${k}`, predicate: effect.predicate, object: effect.value };
-
-    if (cmd.verb === "open") {
-      const revealed = [...state.placements]
-        .filter(([, p]) => p.predicate === "mgx:hidden-in" && p.object === object)
-        .map(([thing]) => thing)
-        .sort();
-      return commit(
-        [
-          writeIsOpen,
-          ...revealed.map((thing) => ({ subject: `${thing}@turn${k}`, predicate: "mgx:located-in", object })),
-        ],
-        revealed.length
-          ? `you open the ${object} — inside: the ${revealed.join(", the ")}.`
-          : `you open the ${object}. It's empty.`,
-        `open — ${object} opens${revealed.length ? `, revealing ${revealed.join(", ")}` : ""} via the taught "open" family's effect`,
-        `open the ${object}`,
-      );
-    }
-    return commit(
-      [writeIsOpen],
-      `you close the ${object}.`,
-      `close — ${object} closes via the taught "close" family's effect`,
-      `close the ${object}`,
-    );
-  }
-
-  // unlock
-  if (place.predicate !== "mgx:stands-locked-in") {
-    return answer(`the ${object} isn't locked.`, noteFor("unlock — not locked; declined"), { miss: true });
-  }
-  if (!cmd.instrument) {
+  const handler = STATE_VERB_HANDLERS[cmd.verb];
+  if (!handler) {
     return answer(
-      `unlock the ${object} with what? Name the thing to use, e.g. "unlock the ${object} with the key".`,
-      noteFor("unlock — no instrument named; asked, never guessed"),
+      `this world doesn't know how to run the verb "${cmd.verb}" yet.`,
+      noteFor(`${cmd.verb} — a taught family exists but no handler is wired for it; honest decline`),
       { miss: true },
     );
   }
-  const required = factObjects(rows, object, "mgx:unlocks-with")[0] ?? null;
-  if (!required) {
-    return answer(
-      `nothing in this world says what unlocks the ${object}.`,
-      noteFor(`unlock — no mgx:unlocks-with fact on ${object}; honest decline`),
-      { miss: true },
-    );
-  }
-  if (!carriedBy(state, cmd.instrument, actingSubject)) {
-    return answer(
-      `you're not carrying the ${cmd.instrument}.`,
-      noteFor(`unlock — the ${cmd.instrument} isn't carried; precondition declined by name`),
-      { miss: true },
-    );
-  }
-  if (cmd.instrument !== required) {
-    return answer(
-      `the ${cmd.instrument} doesn't fit the ${object}'s lock.`,
-      noteFor(`unlock — the taught instrument is ${required}, not ${cmd.instrument}; declined by name`),
-      { miss: true },
-    );
-  }
-  return commit(
-    [{ subject: `${object}@turn${k}`, predicate: "mgx:fixed-in", object: here }],
-    `you unlock the ${object} with the ${required}.`,
-    `unlock — the lock releases; ${object} now stands unlocked (still fixed) in the ${here}`,
-    `unlock the ${object}`,
-  );
+  return handler({
+    cmd, rows, state, here, k, family, families, ruleRows, object, place,
+    commit, noteFor, actingSubject, memoryDir, world, cache, graph, memory,
+  });
 }
 
 // A mid-game "where is X" aside. Optional trailing "now": the question means
