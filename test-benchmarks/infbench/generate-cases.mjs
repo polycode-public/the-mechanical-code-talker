@@ -1249,6 +1249,104 @@ function b2PropertyInheritance(rng) {
   return cases;
 }
 
+// ======================================================================
+// INF-6 — c2SiblingResolution: how the store treats a SECOND assertion that
+// lands on, or beside, an existing fact — the sibling-resolution surface
+// PLAN_FACT.md designs. Four cells: a repeated identical teach corroborates
+// (one fact, never a duplicate, never a contradiction); a second object under
+// a multi-valued predicate merges (two facts, no disagreement); a second
+// object under a single-valued possessive keeps BOTH and surfaces both
+// (never silently resolved); and a dated "as of <year>" teach — the
+// sun/newspaper shape — pins today's floor (the dated surface is declined,
+// so only the undated assertion stores; verified live 4.0.0) with a ceiling
+// naming the PLAN_FACT.md lift. The quantified-has teaches are chat lanes
+// and the dated surface is deliberately unparsed, so those premises are
+// unlinted (as in b2PropertyInheritance/b1Existential); the possessive and
+// subclass premises lint as usual. The pool is gated on the same wink-nlp
+// NOUN check b2PropertyInheritance gates on, for the same reason (the
+// quantified-has teach declines a verb-tagged subject). Chat-arm only
+// throughout: every cell grades the STORE's second-assertion behavior, which
+// the kernel's stateless closure has no analogue for.
+// ======================================================================
+function c2SiblingResolution(rng) {
+  const cases = [];
+  const tagger = nlpAdapter();
+  if (!tagger) {
+    throw new Error("infbench/generate-cases.mjs: c2SiblingResolution needs the wink-nlp POS adapter — the quantified-has merge cell gates its subject noun on it");
+  }
+  const tagsAsNoun = (n) => { const [t] = tagger.posTags([n]); return t === "NOUN" || t === "PROPN"; };
+  const pool = REGULAR_PLURAL_NOUNS.filter((n) => !PERSONA_SEED_TERMS.has(n) && tagsAsNoun(n));
+  const shuffled = seededShuffle(pool, rng);
+  const propOrder = seededShuffle(OBJECT_PROPERTY_NOUNS, rng);
+  let cursor = 0;
+  for (let i = 0; i < 5; i += 1) {
+    const { picked, next } = pickClean(shuffled, cursor, 5);
+    cursor = next;
+    const [n1, n2, m1, m2, m3] = picked;
+    { // corroborate-repeat: the identical teach twice is corroboration onto
+      // one fact, and the read-back stays one clean yes.
+      const teach = `every ${n1} is a ${n2}`;
+      const scoEntailed = [{ subject: n1, predicate: "rdfs:subClassOf", object: n2 }];
+      checkEntailed(`c2-sib-repeat-${i + 1}`, [teach], scoEntailed);
+      cases.push(mkCase({
+        band: "INF-6", template: "c2SiblingResolution", variant: "corroborate-repeat",
+        arms: ["chat"], checkType: "isa",
+        premises: [teach, teach], query: `is a ${n1} a ${n2}`,
+        expect: { verdict: "yes", entailed: scoEntailed },
+        note: "Same (s,p,o) is corroboration, not contradiction (findContradictions' own contract): the repeat teach unions provenance onto the one stored fact today, and upserts the same per-source assertion record under PLAN_FACT.md's re-key — under both models the read-back is one clean yes, never a duplicate row or a disagreement. Guards the re-key's same-source idempotence.",
+      }));
+    }
+    { // merge-second-object: a multi-valued predicate's second object is a
+      // second fact, and the first keeps answering.
+      cases.push(mkCase({
+        band: "INF-6", template: "c2SiblingResolution", variant: "merge-second-object",
+        arms: ["chat"], checkType: "isa",
+        premises: [`every ${m1} has a ${m2}`, `every ${m1} has a ${m3}`],
+        query: `does a ${m1} have a ${m2}`,
+        expect: { verdict: "yes", entailed: [] },
+        note: "mgx:hasA is multi-valued (merge strategy, PLAN_FACT.md's predicate table): the second possession never displaces or contradicts the first, and the first still answers yes. Unlinted premises (the quantified-has teach is a chat lane, not ACE), so entailed stays empty.",
+      }));
+    }
+    { // contradiction-both-kept: a single-valued possessive taught two ways
+      // keeps both rows and surfaces both — never silently resolved.
+      const prop = propOrder[(2 * i) % propOrder.length];
+      const owner = mintIndividual();
+      const o1 = mintIndividual();
+      const o2 = mintIndividual();
+      const premises = [`${owner}'s ${prop} is ${o1}`, `${owner}'s ${prop} is ${o2}`];
+      const entailed = [
+        { subject: owner, predicate: `tmct:${prop}`, object: o1 },
+        { subject: owner, predicate: `tmct:${prop}`, object: o2 },
+      ];
+      checkEntailed(`c2-sib-both-${i + 1}`, premises, entailed);
+      cases.push(mkCase({
+        band: "INF-6", template: "c2SiblingResolution", variant: "contradiction-both-kept",
+        arms: ["chat"], checkType: "recall",
+        premises, query: `what do you know about ${owner}`,
+        expect: { mentions: [o1, o2], entailed },
+        note: "Two different objects for one single-valued possessive are a real disagreement: both facts stay stored and the recall surfaces both — 'both kept, never silently resolved' is the contract PLAN_FACT.md's contradiction default keeps, and an answer that quietly dropped either object fails the mentions pin.",
+      }));
+    }
+    { // observed-at-conflict: the sun/newspaper shape. Today's floor: the
+      // dated surface is declined, so only the undated assertion stores.
+      const prop = propOrder[(2 * i + 1) % propOrder.length];
+      const owner = mintIndividual();
+      const o1 = mintIndividual();
+      const o2 = mintIndividual();
+      cases.push(mkCase({
+        band: "INF-6", template: "c2SiblingResolution", variant: "observed-at-conflict",
+        arms: ["chat"], checkType: "recall",
+        premises: [`${owner}'s ${prop} is ${o1} as of 2019`, `${owner}'s ${prop} is ${o2}`],
+        query: `what do you know about ${owner}`,
+        expect: { mentions: [o2], entailed: [] },
+        ceiling: "PLAN_FACT.md dated-teach frame ('as of <date>' -> mgx:observedAt) + latest-observation-wins sibling resolution",
+        note: "The sun/newspaper shape: a 2019-dated claim beside an undated live one. Floor today (verified live 4.0.0): the 'as of' surface is declined, only the undated assertion stores, and the recall mentions it alone. Once the dated-teach frame ships, the 2019 assertion stores as its own dated record and this pin must be raised IN PLACE to mentions [both], with the undated assertion still the preferred current value (effectiveObservedAt ranks the live teach as observed now, after 2019) — the c1Cardinality fixed-in-place precedent: leaving the stale floor pinned after the capability ships would itself be the regression.",
+      }));
+    }
+  }
+  return cases;
+}
+
 // ---- id assignment (mirrors chatbench's `g-${grade}-${slug}-${i+1}`) ----
 const TEMPLATE_SLUG = {
   a1Lookup: "lookup", a2ChainLen2: "chain2", b1Disjoint: "disjoint",
@@ -1259,6 +1357,7 @@ const TEMPLATE_SLUG = {
   dlDisjunction: "dldisj", dlComplement: "dlcompl", dlDisjointProofSoundness: "dlsound",
   a1UniversalConditional: "conditional", a2Reflexive: "reflexive", a2Converse: "converse",
   a2EntailedRetraction: "retract", b1DisjointVeto: "disjveto", b2PropertyInheritance: "prophas",
+  c2SiblingResolution: "sibling",
 };
 function assignIds(cases) {
   const counters = new Map();
@@ -1301,6 +1400,7 @@ export function generateCases({ seed = DEFAULT_SEED } = {}) {
     a2EntailedRetraction: a2EntailedRetraction(rng),
     b1DisjointVeto: b1DisjointVeto(rng),
     b2PropertyInheritance: b2PropertyInheritance(rng),
+    c2SiblingResolution: c2SiblingResolution(rng),
   };
   const all = Object.values(groups).flat();
   assignIds(all);

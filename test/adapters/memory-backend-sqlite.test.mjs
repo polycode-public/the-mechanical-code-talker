@@ -94,7 +94,15 @@ test("Backend C round trip: the SAME appendFact/appendFacts/appendUtterance(s)/a
     const sqliteMemory = await loadMemory(handle);
     const fileMemory = await loadMemory(fileDir);
 
-    const norm = (rows) => rows.map((r) => ({ ...r, sourceIds: [...r.sourceIds].sort() }))
+    // trust is recomputed via recencyNudge(createdAt, now = Date.now()) — the SAME wall-clock
+    // dependence as mgx:updatedAt below, just one layer deeper (through the trust calculation
+    // rather than the timestamp itself). The two sequential ops() calls above legitimately
+    // compute it a fraction of a millisecond apart; ordinarily that's far below the 6-decimal
+    // storage precision, but a raw value sitting close enough to a rounding boundary can still
+    // flip the last stored digit between backends. Round for comparison only (never stored data)
+    // to absorb that noise while still catching any REAL trust divergence between backends,
+    // which would differ by far more than one unit at the 6th decimal.
+    const norm = (rows) => rows.map((r) => ({ ...r, sourceIds: [...r.sourceIds].sort(), trust: Math.round(r.trust * 1e4) / 1e4 }))
       .sort((a, b) => a.id.localeCompare(b.id));
     assert.deepEqual(norm(readFactRows(sqliteMemory)), norm(readFactRows(fileMemory)));
 

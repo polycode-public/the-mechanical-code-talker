@@ -174,7 +174,9 @@ SPECIFIC content (which fact, which topic, which task) run to run, per §1 step 
    `SKILL_BENCHMARK_CONVERSATION.md` §1 names). The highest-value probes here mix a taught fact
    with a codebase-grounded one in a single inference — a genuinely different, harder path than
    either alone, and one neither `SKILL_BENCHMARK_CONVERSATION.md`'s generic teach-then-infer
-   probes nor a pure-codebase drill-down would reach.
+   probes nor a pure-codebase drill-down would reach. Also probe what a SECOND assertion does to
+   a first here — re-teach the same fact, teach a conflicting one, add a dated "as of <year>"
+   claim — per the sibling-resolution axis (§4.1), which lives in this area.
 5. **Asking for changes in state — planning, framed as a simple code task, not the Hanoi puzzle.**
    tmct's built-in planning demo is Towers-of-Hanoi; this area deliberately asks for a plan
    against the SAME indexed codebase instead — "how would I rename the Store class to
@@ -222,6 +224,20 @@ elsewhere, roughly in order of yield:
   known thin spot; establish where it starts failing rather than that it fails.
 - **The teach/query boundary.** Bare declaratives ("dogs bark") — teach, query, or refusal?
   Whatever it does, is it the same every time?
+- **Sibling resolution and the dated teach** (design: `PLAN_FACT.md`; bench pins: infbench's
+  `c2SiblingResolution` template). What does a SECOND assertion do to a first? Walk the four
+  shapes: (1) teach the identical fact twice — the re-teach must corroborate onto one fact, never
+  duplicate it or read as a contradiction; (2) teach a second object under a multi-valued
+  predicate ("a dog has legs", then "a dog has a tail") — both must hold, no disagreement
+  warning, and the first still answers; (3) teach a conflicting object under a single-valued one
+  ("rex's owner is anna", then "rex's owner is bruno") — both must stay stored AND both must
+  surface on the read-back, never one silently dropped; (4) teach a claim dated earlier than a
+  live one — "the probe's owner is anna as of 2019", then "the probe's owner is bruno" — and
+  confirm the resolution: until the dated-teach frame ships, the "as of" surface being DECLINED
+  (not silently stored undated, which would invert the sun/newspaper ordering) is the correct
+  behavior to verify; once it ships, the dated record must store, the read-back must show both,
+  and the undated live teach must win as the current value. A dated teach that stores WITHOUT its
+  date is this axis's highest-value edge — file it, don't shrug it.
 
 Don't force all eight axes into one session — spend them where §4's baseline pass already found
 something worth pushing on, and log which axes got real use this run (§1 step 1) so a later run

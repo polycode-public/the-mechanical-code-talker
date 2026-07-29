@@ -3,7 +3,7 @@
   "generatedFrom": {
     "infbenchVersion": "4.0.0",
     "stamp": "4.0.0",
-    "caseCount": 379
+    "caseCount": 399
   },
   "bands": [
     "INF-1",
@@ -84,7 +84,7 @@
       "gatePass": true,
       "metrics": {
         "overall": {
-          "n": 379,
+          "n": 399,
           "completion": 1,
           "fabricationRate": 0,
           "gatePass": true
@@ -131,12 +131,12 @@
             "ceilingGradedPassed": 0
           },
           "INF-6": {
-            "n": 20,
+            "n": 40,
             "completion": 1,
             "fabricationRate": 0,
             "gatePass": true,
-            "ceilingGraded": 0,
-            "ceilingGradedPassed": 0
+            "ceilingGraded": 5,
+            "ceilingGradedPassed": 5
           },
           "INF-7": {
             "n": 14,
@@ -166,6 +166,9 @@
         "INF-8": [
           "OWL 2 DL complement classes (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 complementOf representation",
           "OWL 2 DL reasoning by cases (Stage DL, PLAN_SYLLOGIST_EL_DL.md) + phase-0 unionOf/negative-assertion representation"
+        ],
+        "INF-6": [
+          "PLAN_FACT.md dated-teach frame ('as of <date>' -> mgx:observedAt) + latest-observation-wins sibling resolution"
         ]
       }
     }
