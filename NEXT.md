@@ -30,16 +30,14 @@ cross-cutting P2P e2e scenarios (3-peer mesh, disconnect/rejoin, the multi-playe
 modes, chat.html inference over learned-vs-distributed facts) wait on mud.html's P2P integration
 landing (chat.html's own side is already done).
 
-**Alternate-scenario dropdowns, mud.html and adventure.html (operator-specified 2026-07-29, explicitly
-sequenced after both pages' own edit/externalization pass):** a dropdown next to RESET on each page to
-load one of several alternate world scenarios (different sizes/complexity/aspects, not just the one
-default world each page ships today); EDIT mode then edits whichever scenario is currently loaded.
-mud.html's half is done (merged `4aa4c63e`/`e2474f1a`). adventure.html's is NOT: its own audit (merged
-`4aa4c63e`, the "adventure.html-side sweep") found six real externalization candidates —
-`roomAffordances`' hardcoded verb menu, `VIEW_EXCLUDED_PREDICATES`, wrong win-condition wording,
-hardcoded `"player"` in `adventure-viz.mjs`, `isCastMember`'s heuristic, the closed verb if-chain — but
-fixed none of them, and that fix pass hasn't been dispatched. Dispatch the scenario dropdowns only once
-adventure's side is actually fixed, not just audited.
+**Alternate-scenario dropdowns, mud.html and adventure.html (operator-specified 2026-07-29):** a
+dropdown next to RESET on each page to load one of several alternate world scenarios (different
+sizes/complexity/aspects, not just the one default world each page ships today); EDIT mode then edits
+whichever scenario is currently loaded. Both pages' own edit/externalization pass is now done —
+mud.html's (merged `4aa4c63e`/`e2474f1a`) and adventure.html's own six-item audit (`roomAffordances`'
+verb menu and `isCastMember` were already fact-driven; `VIEW_EXCLUDED_PREDICATES` is a legitimate
+schema-level exclusion; the win-condition wording, the hardcoded `"player"` in `adventure-viz.mjs`, and
+the closed verb if-chain were real and are fixed). Not yet dispatched.
 
 **sprites.html's "multi-expression, multi-direction cycles"** (real new animated sprite variant art,
 not a restyle) — flagged 2026-07-29, not yet scoped as a build task.
