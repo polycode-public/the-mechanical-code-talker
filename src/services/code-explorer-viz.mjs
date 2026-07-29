@@ -182,7 +182,13 @@ const CLIENT_JS = String.raw`
     renderHints(data);
   }
 
+  function clearEmptyState() {
+    var e = document.getElementById("chat-empty");
+    if (e) e.remove();
+  }
+
   function appendTurn(role, text) {
+    clearEmptyState();
     var div = document.createElement("div");
     div.className = "turn turn-" + role;
     div.innerHTML = '<span class="who">' + (role === "you" ? "you" : "tmct") + '</span><span class="said">' + esc(text) + '</span>';
@@ -190,10 +196,16 @@ const CLIENT_JS = String.raw`
     els.log.scrollTop = els.log.scrollHeight;
   }
 
-  function appendNote(text) {
+  function renderEmptyState() {
     var div = document.createElement("div");
-    div.className = "turn turn-note";
-    div.textContent = text;
+    div.className = "chat-empty";
+    div.id = "chat-empty";
+    div.innerHTML = api
+      ? '<p class="chat-empty-head">Ask the graph, or ask it anything</p>'
+        + '<p>Ask about the code graph on the left, or about anything its general knowledge covers, like “what is a queue”.</p>'
+        + '<p class="chat-empty-hint">Try one of the questions below, or type your own.</p>'
+      : '<p class="chat-empty-head">Static view</p>'
+        + '<p>This page shows a fixed snapshot of the graph. The live chat is not available here.</p>';
     els.log.appendChild(div);
   }
 
@@ -247,7 +259,7 @@ const CLIENT_JS = String.raw`
       console.warn("tmct code explorer: chat-seed unavailable, continuing graph-only", e);
     }
     seedState.status = "absent";
-    seedNote("graph-only — general knowledge unavailable");
+    seedNote("graph-only, general knowledge unavailable");
   }
   var seedPromise = api ? loadSeed() : Promise.resolve();
 
@@ -315,6 +327,7 @@ const CLIENT_JS = String.raw`
           window.__CODE_EXPLORER__ = DATA;
           if (updateSource && els.source) els.source.textContent = picked.name || "(loaded graph)";
           els.log.innerHTML = "";
+          renderEmptyState();
           mountView(DATA);
         }
       } finally { btn.disabled = false; }
@@ -324,12 +337,11 @@ const CLIENT_JS = String.raw`
   wirePicker("open-repo", "openRepo", true);
 
   if (!api) {
-    if (els.dockNote) els.dockNote.textContent = "static view — the live chat is unavailable on this page.";
+    if (els.dockNote) els.dockNote.textContent = "static view, live chat unavailable here.";
     if (els.input) els.input.disabled = true;
     seedNote("static view");
-  } else {
-    appendNote("Ask about this code graph — or anything its general knowledge covers, like “what is a queue”.");
   }
+  renderEmptyState();
 
   mountView(DATA);
 })();
@@ -397,13 +409,16 @@ ul.rows { list-style: none; margin: 0; padding: 0; }
 .turn-you .said { font-family: ${MONO_STACK}; font-size: 0.84rem; }
 .turn-tmct { border-left: 2px solid var(--entail); padding-left: 0.7rem; }
 .turn-tmct .said { white-space: pre-wrap; }
-.turn-note { color: var(--muted); font-style: italic; font-size: 0.85rem; }
-.suggest { flex: none; border-top: 1px solid var(--line); padding: 0.45rem 1.1rem 0.1rem; }
+.chat-empty { margin: auto; max-width: 26rem; text-align: center; color: var(--muted); }
+.chat-empty-head { color: var(--ink); font-weight: 600; font-size: 1.05rem; margin: 0 0 0.5rem; }
+.chat-empty p { margin: 0.3rem 0; line-height: 1.55; font-size: 0.92rem; }
+.chat-empty-hint { font-size: 0.82rem; }
+.suggest { flex: none; border-top: 1px solid var(--line); padding: 0.65rem 1.1rem 0.4rem; }
 .suggest-label { font-family: ${MONO_STACK}; font-size: 0.66rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted); }
-.hints { display: flex; flex-wrap: wrap; gap: 0.35rem; max-height: 5.6rem; overflow-y: auto; padding: 0.35rem 0 0.45rem; }
+.hints { display: flex; flex-wrap: wrap; gap: 0.4rem; max-height: 5.6rem; overflow-y: auto; padding: 0.45rem 0 0.55rem; }
 .hint { background: var(--bg); border: 1px solid var(--line); border-radius: 999px; padding: 0.24rem 0.7rem; font-size: 0.8rem; color: var(--ink); text-align: left; }
 .hint:hover { border-color: var(--entail); }
-#chat-form { flex: none; display: flex; gap: 0.5rem; padding: 0.55rem 1.1rem 0.8rem; border-top: 1px solid var(--line); }
+#chat-form { flex: none; display: flex; gap: 0.5rem; padding: 0.75rem 1.1rem 0.9rem; border-top: 1px solid var(--line); }
 #chat-input { flex: 1; min-width: 0; font: inherit; font-size: 0.92rem; padding: 0.5rem 0.65rem; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); color: var(--ink); }
 #chat-form button { background: var(--entail); color: var(--card); font-weight: 600; border: none; border-radius: 4px; padding: 0.5rem 1rem; font-size: 0.9rem; }
 

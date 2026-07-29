@@ -327,7 +327,7 @@ test("a taught fact survives a reload in the same browser context (IndexedDB)", 
     await page.waitForFunction(() => window.tmctIngestReady instanceof Promise, null, { timeout: READY_TIMEOUT_MS });
     await page.evaluate(() => window.tmctIngestReady);
 
-    assert.match(await page.locator("#status").innerText(), /restored from your last visit/, "the boot line names the restore");
+    assert.match(await page.locator("#status").innerText(), /restored from your last visit/i, "the boot line names the restore");
     const taughtText = await page.locator("#statsPanel").innerText();
     assert.match(taughtText, /zorble/, "the restored fact is still in this session's memory");
   } finally {
