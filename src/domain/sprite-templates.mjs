@@ -21,12 +21,14 @@
 //     substitution (e.g. `black = "#22201d"`). A value with no entry in that
 //     map is not a match for this template at all — it falls through to a
 //     less specific one, never a guessed/invented substitution.
-//   - a fully-specific hand-authored VARIANT — `{class}-with-{property}-
-//     {value}.toml` (e.g. a hypothetical `dog-with-colour-black.toml`, not
-//     authored this pass) — carries the same `classes` as the class it
-//     specializes, plus a `[match]` table (`property`, `value`) naming the
-//     exact fact it requires, so it outranks the parameterized template
-//     when both would otherwise apply.
+//   - a fully-specific hand-authored VARIANT — carries the same `classes`
+//     as the class it specializes, plus a `[match]` table (`property`,
+//     `value`) naming the exact fact it requires, so it outranks the
+//     parameterized template when both would otherwise apply. The filename
+//     is free-form and reads `{class}-{what it shows}` in practice
+//     (`portrait-round.toml` for mgx:hasProperty = round,
+//     `bear-facing-left.toml` for mgx:faces = left) — the `[match]` table,
+//     never the name, is what selects it.
 //
 // A parameterized template's `[parameters.<name>]` table comes in two
 // shapes, picked by which of `placeholder`/`placeholders` it declares:

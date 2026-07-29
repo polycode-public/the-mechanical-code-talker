@@ -146,6 +146,34 @@ test("a real lamp material variant's treatment is labeled from the real MATERIAL
   assert.equal(byLabel.glass, "glass");
 });
 
+// ---- direction variants and the cycle swatch ----
+
+test("a class with facing variants renders a left and a right swatch, each a real [match] render distinct from the plain sprite", () => {
+  const swatches = tierSwatchesFor("bear", largeTemplates, SPRITE_REGISTRY, "large");
+  const left = swatches.find((s) => s.label === "left");
+  const right = swatches.find((s) => s.label === "right");
+  const plain = swatches.find((s) => s.label === "plain");
+  assert.ok(left && right && plain, "bear shows plain, left and right swatches");
+  assert.equal(left.property, "mgx:faces");
+  assert.equal(right.property, "mgx:faces");
+  assert.notEqual(left.svg, plain.svg);
+  assert.notEqual(right.svg, left.svg);
+});
+
+test("a swatch born from a property fact carries that property as a data attribute the page's cycle script can select on", () => {
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
+  assert.match(html, /data-property="mgx:faces"/, "direction swatches are selectable by property");
+  assert.match(html, /data-property="mgx:feels"/, "expression swatches are selectable by property");
+  assert.doesNotMatch(html, /class="swatch large plain"[^>]*data-property/, "a plain swatch never claims a property");
+});
+
+test("the rendered page ships the variant-cycle machinery: the frame properties, the stepper, and the reduced-motion guard", () => {
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
+  assert.match(html, /CYCLE_PROPERTIES = \["mgx:faces", "mgx:feels"\]/);
+  assert.match(html, /prefers-reduced-motion: reduce/);
+  assert.match(html, /\.swatch\.cycle \.swatch-img/, "the cycle swatch has its own styling");
+});
+
 // ---- grouping ----
 
 test("groupForClass: an icon-tier adventure prop (not a spider-fly creature, not 'person') lands in the adventure group", () => {

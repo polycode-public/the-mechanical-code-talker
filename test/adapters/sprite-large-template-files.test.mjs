@@ -120,7 +120,7 @@ test("an object with no taught mgx:madeOf value still resolves to a complete, pl
 });
 
 test("an object with no material vocabulary at all (dog) never carries a [parameters.material] table at the sprite tier", () => {
-  const dog = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes("dog") && !t.parameters?.emotion);
+  const dog = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes("dog") && !t.parameters?.emotion && !t.match);
   assert.ok(dog, "sprite-large/dog.toml not found");
   assert.equal(dog.parameters, undefined);
 });
@@ -204,12 +204,12 @@ test("a garment class among the new pack (coat) resolves the woven material trea
 test("a sample of the wider vocabulary pack resolves to its own dedicated template, not a shared fallback", () => {
   const sample = ["rabbit", "tree", "sun", "river", "shirt", "salt", "stone", "waterway", "school", "wolf"];
   for (const cls of sample) {
-    // a class this batch also gave a -with-emotion.toml sibling now has TWO
-    // templates by design (the plain one plus the emotion-parameterized
-    // one) — the plain, un-parameterized template is still the one that
-    // must resolve here, so exclude the emotion sibling rather than assume
-    // exactly one template exists for every class in this sample.
-    const own = templatesFor(cls).filter((t) => !t.parameters?.emotion);
+    // a class with a -with-emotion.toml or -facing-*.toml sibling has
+    // several templates by design — the plain, un-parameterized,
+    // un-matched template is still the one that must resolve here, so
+    // exclude the siblings rather than assume exactly one template exists
+    // for every class in this sample.
+    const own = templatesFor(cls).filter((t) => !t.parameters?.emotion && !t.match);
     assert.equal(own.length, 1, `${cls}: expected exactly one dedicated PLAIN template, found ${own.length}`);
     const svg = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
     assert.ok(svg.includes("<svg"), `${cls}: resolved svg must be a real <svg> string`);
@@ -389,7 +389,7 @@ test("none of the pack's own 35 classes carries a [parameters.material] table, s
     // a class also given a -with-emotion.toml sibling carries a real
     // [parameters.emotion] table on THAT file — find the plain template
     // specifically, since it's the one this assertion is actually about.
-    const t = REAL_LARGE_TEMPLATES.find((x) => x.classes.includes(cls) && !x.parameters?.emotion);
+    const t = REAL_LARGE_TEMPLATES.find((x) => x.classes.includes(cls) && !x.parameters?.emotion && !x.match);
     assert.ok(t, `${cls}: no plain (non-emotion) template found`);
     assert.equal(t.parameters, undefined, `${cls}.toml should carry no material parameters`);
   }
@@ -426,7 +426,7 @@ for (const cls of EMOTION_CLASSES) {
 
 test("a class with no mgx:feels fact at all still resolves to the plain, faceless template — the dog/dog-with-colour precedent", () => {
   for (const cls of EMOTION_CLASSES) {
-    const plain = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes(cls) && !t.parameters?.emotion);
+    const plain = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes(cls) && !t.parameters?.emotion && !t.match);
     const svg = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
     assert.equal(svg, plain.svg, `${cls}: an untaught instance must resolve to the plain ${cls}.toml sprite, never the emotion template`);
     for (const word of EMOTION_WORDS) assert.ok(!svg.includes(EXPRESSION_PALETTE[word]), `${cls}: no face fragment may leak in with no mgx:feels fact`);
@@ -435,6 +435,61 @@ test("a class with no mgx:feels fact at all still resolves to the plain, faceles
 
 test("an mgx:feels value outside the 6-word curated vocabulary is never a guessed face — falls through to the plain template", () => {
   const svg = resolveSpriteAsset("dog", [], feels("the-dog", "ecstatic"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
-  const plain = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes("dog") && !t.parameters?.emotion);
+  const plain = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes("dog") && !t.parameters?.emotion && !t.match);
   assert.equal(svg, plain.svg);
+});
+
+// ---- the *-facing-{left,right}.toml [match] direction variants ------------
+
+const FACING_CLASSES = ["bear", "cat", "dog", "king"];
+
+const faces = (subject, object) => [{ subject, predicate: "mgx:faces", object }];
+
+test("every facing pair loads as two real [match] templates on mgx:faces, one per direction", () => {
+  for (const cls of FACING_CLASSES) {
+    for (const direction of ["left", "right"]) {
+      const variant = REAL_LARGE_TEMPLATES.find(
+        (t) => t.classes.includes(cls) && t.match?.property === "mgx:faces" && t.match?.value === direction,
+      );
+      assert.ok(variant, `${cls}-facing-${direction}.toml not found among the loaded sprite-tier templates`);
+    }
+  }
+});
+
+for (const cls of FACING_CLASSES) {
+  test(`${cls} taught mgx:faces left resolves its own profile art, distinct from the plain front-facing sprite and from the right profile`, () => {
+    const plain = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    const left = resolveSpriteAsset(cls, [], faces(`the-${cls}`, "left"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    const right = resolveSpriteAsset(cls, [], faces(`the-${cls}`, "right"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.notEqual(left, plain, `${cls}: the left profile must differ from the plain sprite`);
+    assert.notEqual(right, plain, `${cls}: the right profile must differ from the plain sprite`);
+    assert.notEqual(left, right, `${cls}: the two directions must differ from each other`);
+    assert.ok(left.includes(`${cls}-facing-left-fill`), `${cls}: the left profile carries its own gradient id`);
+    assert.ok(right.includes(`${cls}-facing-right-fill`), `${cls}: the right profile carries its own gradient id`);
+  });
+}
+
+test("a right profile is the left profile's mirror: the same geometry under one flip transform", () => {
+  for (const cls of FACING_CLASSES) {
+    const left = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes(cls) && t.match?.value === "left");
+    const right = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes(cls) && t.match?.value === "right");
+    assert.ok(right.svg.includes('transform="translate(24 0) scale(-1 1)"'), `${cls}: the right file mirrors rather than redrawing`);
+    // Strip the id-bearing direction word and the mirror wrapper's own lines;
+    // what remains — the drawn shapes — must be identical between the pair.
+    const shapeLines = (svg, direction) => svg
+      .split("\n")
+      .map((line) => line.trim().split(`facing-${direction}`).join("facing"))
+      .filter((line) => line.startsWith("<ellipse") || line.startsWith("<circle") || line.startsWith("<path") || line.startsWith("<rect") || line.startsWith("<line"));
+    assert.deepEqual(shapeLines(right.svg, "right"), shapeLines(left.svg, "left"), `${cls}: the mirrored file must not silently redraw any shape`);
+  }
+});
+
+test("an mgx:faces value outside left/right is never a guessed pose — falls through to the plain template", () => {
+  const plain = resolveSpriteAsset("bear", [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+  assert.equal(resolveSpriteAsset("bear", [], faces("the-bear", "north"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY), plain);
+});
+
+test("a facing fact on a class with no facing variant resolves to that class's plain sprite, never a neighbour's profile", () => {
+  const plain = resolveSpriteAsset("rabbit", [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+  assert.equal(resolveSpriteAsset("rabbit", [], faces("the-rabbit", "left"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY), plain);
 });
