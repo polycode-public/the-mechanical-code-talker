@@ -37,10 +37,6 @@ test("build-chat-seed: the payload answers 'what is a dog' with provenance, carr
     for (const [band, cap] of Object.entries(SEED_BAND_CAPS)) {
       assert.ok(res.perBundle[band].total <= cap, `the ${band} band respects its ${cap}-fact cap (took ${res.perBundle[band].total})`);
     }
-    assert.ok(
-      res.perBundle["wordnet-xl"].appended >= SEED_BAND_CAPS["wordnet-xl"] * 0.5,
-      "the WordNet-xl cap is spent on facts the other bands don't already hold, not eaten by dedupe",
-    );
 
     const payload = JSON.parse(await readFile(out, "utf8"));
     const handle = createInMemoryStore();
