@@ -482,6 +482,7 @@ const PLAN = ${embedded};
 <script>
 (function () {
   "use strict";
+  const escapeHtml = ${escapeHtml.toString()};
   // Best-effort: a copy of this page opened without the sibling worker file
   // (a tmct --render plan --output file, a file:// open) just swallows the
   // registration failure and works exactly as before.
@@ -573,7 +574,7 @@ const PLAN = ${embedded};
       goalline.hidden = true;
     }
     factsEl.innerHTML = "<b>board@step" + step + "</b> — " +
-      plan.facts[step].map((f) => f.replace(/&/g, "&amp;").replace(/</g, "&lt;")).join(" · ") +
+      plan.facts[step].map((f) => escapeHtml(f)).join(" · ") +
       ' <span style="opacity:.7">(plan: findActionPath)</span>';
     [...movelist.querySelectorAll("li:not(.phasehead)")].forEach((li, i) => {
       li.classList.toggle("done", i < step);
