@@ -24,13 +24,7 @@ theme + corner cobweb; sprites.html Illustrator chrome + ancestor grouping; code
 restyled; ledger/research restyled dark New-Relic-style; plan.html toward its DAW theme). Nothing
 left running.
 
-**Now unblocked** — the cross-cutting P2P e2e scenarios (3-peer mesh, disconnect/rejoin, the
-multi-player-lab + mesh mud.html modes, chat.html inference over learned-vs-distributed facts).
-mud.html's own P2P integration has landed (share/join, character claims, origin-node labels, the
-wave button and its animation, and the Lemmings-register control panel), so both pages are now on
-`src/services/p2p-room.mjs` and the multi-peer scenarios have two real integrations to run against.
-
-**Known gap this leaves, worth naming before the mesh scenarios are written:** a mud room is bound
+**Known gap:** a mud room is bound
 to the store it was opened over, so recasting (RESET, or either slider) drops the link and says so.
 Carrying a live room across a recast needs the room to re-bind to the new store, which is a real
 piece of work in `p2p-room.mjs` rather than page wiring.

@@ -231,8 +231,9 @@ license:deps:
 #
 # Two base templates: `.e2e-web-base` installs Chromium for channels that spawn
 # a real browser page; `.e2e-lite-base` skips it for the CLI/TUI channels that
-# never do (confirmed via `grep -l 'from "playwright"' test-e2e/*.test.mjs`, 24 of
-# 52 files). .npmrc's ignore-scripts=true stops playwright's install hook, so
+# never do. A file can reach playwright through test-e2e/helpers/ rather than
+# importing it, so check both before putting one on the lite base.
+# .npmrc's ignore-scripts=true stops playwright's install hook, so
 # `npm ci` never downloads a browser as a side effect; the browsers land in the
 # project dir (PLAYWRIGHT_BROWSERS_PATH) so the cache can carry them, keyed on
 # the lockfile because the pinned playwright version lives there.
@@ -345,6 +346,29 @@ e2e-web-mud:
   extends: .e2e-web-base
   script:
     - node --disable-warning=ExperimentalWarning --test test-e2e/pages-mud.test.mjs
+
+# Sharing between browsers, in two channels because every file here drives two
+# or three browser contexts at once and each one pays a full site build. The
+# first channel is one page's own sharing surface; the second is the scenarios
+# that span pages — the mesh a third peer joins through the second, a peer
+# leaving and a new device catching up, and inference over facts that arrived
+# from different nodes.
+e2e-web-p2p:
+  extends: .e2e-web-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      test-e2e/p2p-webrtc-handshake.test.mjs test-e2e/pages-chat-p2p.test.mjs
+      test-e2e/pages-mud-p2p.test.mjs
+
+e2e-web-p2p-mesh:
+  extends: .e2e-web-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test
+      test-e2e/p2p-mesh-three-peers.test.mjs test-e2e/pages-mud-p2p-mesh.test.mjs
+      test-e2e/p2p-disconnect-rejoin.test.mjs
+      test-e2e/pages-chat-p2p-distributed-inference.test.mjs
 
 # Its own job: dynamically-named tests (one per page x orientation), the
 # heaviest single file (~36s), cross-cutting so it doesn't fit any one channel.
