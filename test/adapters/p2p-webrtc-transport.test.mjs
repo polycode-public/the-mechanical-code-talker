@@ -5,7 +5,7 @@
 // exchange between two browsers is proven in test-e2e/p2p-webrtc-handshake.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { createTransport } from "../../src/adapters/p2p/webrtc-transport.mjs";
+import { createTransport, DEFAULT_ICE_SERVERS } from "../../src/adapters/p2p/webrtc-transport.mjs";
 
 class ScriptedDataChannel extends EventTarget {
   constructor(label) {
@@ -134,10 +134,11 @@ test("an absent RTCPeerConnection fails at construction with a message naming th
   }
 });
 
-test("no ICE servers are configured unless the caller asks for them", () => {
-  assert.deepEqual(scriptedTransport().connection.config, { iceServers: [] });
+test("a caller who doesn't choose ICE servers gets the module's default public STUN list, not an empty one", () => {
+  assert.deepEqual(scriptedTransport().connection.config, { iceServers: DEFAULT_ICE_SERVERS });
   const chosen = [{ urls: "stun:example.invalid" }];
   assert.deepEqual(scriptedTransport({ iceServers: chosen }).connection.config, { iceServers: chosen });
+  assert.deepEqual(scriptedTransport({ iceServers: [] }).connection.config, { iceServers: [] }, "an explicit empty list is still honored, e.g. for a loopback-only test");
 });
 
 test("createOffer holds the SDP back until ICE gathering completes", async () => {
@@ -154,6 +155,23 @@ test("createOffer holds the SDP back until ICE gathering completes", async () =>
   connection.finishGathering();
   await pending;
   assert.equal(resolved, "v=0 offer-sdp");
+});
+
+test("createOffer proceeds with whatever it has if ICE gathering never signals complete", async (t) => {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const { transport, connection } = scriptedTransport();
+  let resolved = null;
+  const pending = transport.createOffer().then((sdp) => {
+    resolved = sdp;
+  });
+
+  await settle();
+  assert.equal(resolved, null, "still waiting before the timeout fires");
+  assert.notEqual(connection.iceGatheringState, "complete", "gathering genuinely never completed — a dropped STUN reply, not a fast path");
+
+  t.mock.timers.tick(5000);
+  await pending;
+  assert.equal(resolved, "v=0 offer-sdp", "a caller waiting on the blob gets one instead of hanging forever");
 });
 
 test("createAnswerFor takes the remote offer, waits for gathering, and returns its own SDP", async () => {

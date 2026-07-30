@@ -59,7 +59,7 @@ const INVITE_PROBLEM_MESSAGES = {
     "unsupported-version": "that reply came from a newer version of the page than this one",
     "wrong-kind": "that's an invite, not a reply — send it to the person you're inviting, or open it in a new tab to join their world",
     "no-pending-invite": "that reply matched an invite that's already been used — create a fresh link and send that instead",
-    "connect-failed": "your two machines can't reach each other directly; this works on the same network, or between machines that can already see each other",
+    "connect-failed": "your two machines couldn't find a path to each other — a public STUN server helps with most networks, but some firewalls or strict NATs still block it",
   },
 };
 

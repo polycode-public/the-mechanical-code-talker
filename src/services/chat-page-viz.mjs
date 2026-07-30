@@ -143,7 +143,7 @@ export function wireStateLabel(state) {
         tone: "failed",
         pill: "can't connect",
         word: "couldn't connect",
-        note: "your two machines can't reach each other directly. this works on the same network, or between machines that can already see each other.",
+        note: "your two machines couldn't find a path to each other. a public STUN server helps with most networks, but some firewalls or strict NATs still block it.",
       };
     default:
       return {
@@ -1687,7 +1687,7 @@ ${shareOverlayHtml({ withTape: true })}
   // message crossing one can be seen. The room asks for transports through
   // this factory and never learns it is being watched.
   function instrumentedTransport() {
-    const transport = p2p.createTransport({ iceServers: [] });
+    const transport = p2p.createTransport();
     const channel = "ch" + (++channelCount);
     transport.onMessage(function (message) { noteWire("in", message, channel); });
     transport.onOpen(function () { noteTape("note", "link", "channel open", channel); });

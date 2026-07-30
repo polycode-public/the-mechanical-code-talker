@@ -9,10 +9,16 @@
 // RTCPeerConnection's own state ("new" | "connecting" | "connected" | "failed"
 // | "closed"), so a caller can poll it without registering a handler.
 //
-// `iceServers` defaults to [] and this design keeps it empty: no STUN, no
-// TURN, no third party in the loop at all. Peers that cannot already reach
-// each other directly (same machine, same LAN, or a NAT that allows it) never
-// finish the handshake, which is the stated boundary of staying serverless.
+// `iceServers` defaults to DEFAULT_ICE_SERVERS below: a couple of public STUN
+// servers, no TURN, no relay — a STUN server only tells each peer its own
+// public-facing (server-reflexive) address; no application data ever passes
+// through it. Real-browser cross-engine testing found host-candidate-only
+// (no STUN) connections depend on OS-level local-network/mDNS behavior that
+// varies by machine and can fail for a real user even where the raw handshake
+// works in an automated test; STUN candidates sidestep that because they use
+// the peer's real address rather than an mDNS-obscured local one. TURN (a
+// relay that data actually flows through) is still not in scope — that's a
+// bigger trust/cost trade a STUN server isn't.
 //
 // Both `createOffer` and `createAnswerFor` resolve only once ICE gathering has
 // completed, so the SDP string they return already carries every candidate.
@@ -26,7 +32,11 @@
 
 const CHANNEL_LABEL = "tmct";
 
-export function createTransport({ iceServers = [] } = {}) {
+export const DEFAULT_ICE_SERVERS = [
+  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+];
+
+export function createTransport({ iceServers = DEFAULT_ICE_SERVERS } = {}) {
   const PeerConnection = globalThis.RTCPeerConnection;
   if (typeof PeerConnection !== "function") {
     throw new Error("no RTCPeerConnection here: this transport runs in a browser, not in bare node");
@@ -80,15 +90,28 @@ export function createTransport({ iceServers = [] } = {}) {
     if (state === "failed" || state === "closed") announceClose();
   });
 
+  // Bounded, not open-ended: a STUN request that never gets a reply (a
+  // dropped packet, a rate-limited public server, two peer connections in one
+  // tab racing for the same server) must not hang the offer/answer blob
+  // forever — the blob is still useful with only the host candidates it
+  // already has, and a caller waiting on it deserves a result either way.
+  const ICE_GATHERING_TIMEOUT_MS = 5000;
+
   async function whenIceGatheringCompletes() {
     if (connection.iceGatheringState === "complete") return;
     await new Promise((resolve) => {
+      let timer;
       const settle = () => {
         if (connection.iceGatheringState !== "complete") return;
+        clearTimeout(timer);
         connection.removeEventListener("icegatheringstatechange", settle);
         resolve();
       };
       connection.addEventListener("icegatheringstatechange", settle);
+      timer = setTimeout(() => {
+        connection.removeEventListener("icegatheringstatechange", settle);
+        resolve();
+      }, ICE_GATHERING_TIMEOUT_MS);
     });
   }
 

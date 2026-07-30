@@ -2220,7 +2220,7 @@ function pageScript() {
       myNodeId: myNodeId,
       worldId: worldId,
       worldName: worldName,
-      transportFactory: function () { return mod.createTransport({ iceServers: [] }); },
+      transportFactory: function () { return mod.createTransport(); },
       syncableFacts: function (rows) { return mod.mudSyncableFacts(rows, isState, extraPredicates); },
     });
     room.onStateChanged(function (state) {

@@ -7,11 +7,12 @@
 // pasting into a message stands in for here, and a clipboard would only add a
 // permission prompt to the thing under test.
 //
-// `iceServers` is empty by design, so both contexts have to find each other on
-// host candidates alone. Chromium hides local IPs behind mDNS hostnames by
-// default, which two instances on one machine cannot resolve for each other,
-// so the launch turns that off — the standard mitigation for a loopback WebRTC
-// test rather than anything the transport needs in production.
+// The page now defaults to a public STUN server (DEFAULT_ICE_SERVERS,
+// webrtc-transport.mjs), but this suite still runs same-engine Chromium
+// contexts on host candidates: Chromium hides local IPs behind mDNS hostnames
+// by default, which two instances on one machine cannot resolve for each
+// other, so the launch turns that off — a loopback-test mitigation, not
+// something a real user's browser gets to opt into.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";

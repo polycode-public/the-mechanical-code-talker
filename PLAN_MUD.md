@@ -709,13 +709,15 @@ local session id.
 
 **Signaling.** A share action creates an SDP offer and encodes it, along with the world id and world
 name, into one base64url JSON blob carried in the URL (`?offer=<blob>&world=<uuid>&name=<name>`).
-`RTCPeerConnection` is created with `iceServers: []` — no STUN, no TURN, nobody's infrastructure in
-the loop at all. That's the real production setting the earlier section already committed to, not a
-shortcut: it means signaling only completes between peers that can already reach each other directly
-(same machine, same LAN, or a NAT that happens to allow it), which is a stated boundary of staying
-fully serverless, not a bug to fix later. Candidate gathering runs to completion before the
-offer is read out (no trickle needed without STUN), so the two-paste flow from the section above
-stays exactly as described: one blob out, one blob back, done.
+`RTCPeerConnection` is created with `iceServers: []` today — no STUN, no TURN. That means signaling
+only completes between peers that can already reach each other on host candidates alone (same
+machine, same LAN, or a NAT that happens to allow it); real-browser cross-engine testing this session
+found this depends on OS-level local-network/mDNS behavior that varies by machine, not just network
+topology, and can fail for a real user even where the raw handshake works in an automated test. Open
+to revisiting with a STUN server (server-reflexive candidates, still no relay/TURN, no data through a
+third party — see NEXT.md). Candidate gathering runs to completion before the offer is read out (no
+trickle needed without STUN), so the two-paste flow from the section above stays exactly as
+described: one blob out, one blob back, done.
 
 **Blob shape, and validation on paste.** Both blobs — the offer carried in the link and the reply
 pasted back — are the same base64url JSON envelope: `{ v: 1, kind: "offer" | "answer", world,
@@ -752,9 +754,9 @@ gets stated as what it is: before a reply is pasted nothing is in flight — the
 activity to time out on — so `sharing` and `answering` are open-ended by design and styled as calm
 status ("waiting for their reply — this stays live as long as this tab is open"), with no error
 styling. `connecting` is the opposite case: once both blobs are exchanged, ICE either opens the
-channel or fails within seconds, so a failure there gets error styling and names the design's own
-stated boundary — "your two machines can't reach each other directly; this works on the same
-network, or between machines that can already see each other."
+channel or fails within seconds, so a failure there gets error styling and names what actually
+happened in plain terms — "your two machines couldn't find a path to each other. a public STUN
+server helps with most networks, but some firewalls or strict NATs still block it."
 
 **The invite flow, as each person sees it.** The wire design above only works if nobody is ever
 left guessing what to do next. Walked end to end:
