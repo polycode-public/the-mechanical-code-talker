@@ -443,7 +443,19 @@ test("an mgx:feels value outside the 6-word curated vocabulary is never a guesse
 
 // ---- the *-facing-{left,right}.toml [match] direction variants ------------
 
-const FACING_CLASSES = ["bear", "cat", "dog", "king"];
+const FACING_CLASSES = [
+  "bear", "cat", "dog", "king",
+  "father", "friend", "girl", "grandfather", "grandmother", "guest", "human",
+];
+
+// The person-role wave also ships a centre-facing `<class>-moving.toml`, a
+// single-constraint mgx:pose = "moving" variant with no facing requirement —
+// bear/cat/dog/king have no such file, since their own moving art only
+// exists combined with a facing angle. The generic "pose alone lands on the
+// plain sprite" test below is only true for classes with no such file, so it
+// is scoped away from these; the paragraph after it covers what these
+// classes do instead.
+const CENTER_MOVING_CLASSES = ["father", "friend", "girl", "grandfather", "grandmother", "guest", "human"];
 
 const faces = (subject, object) => [{ subject, predicate: "mgx:faces", object }];
 
@@ -681,13 +693,23 @@ test("each of the four angles resolves its own art, and no two angles of one cla
 });
 
 test("the pose fact only bites alongside the facing it was drawn for: on its own it resolves the plain sprite", () => {
-  for (const cls of FACING_CLASSES) {
+  for (const cls of FACING_CLASSES.filter((c) => !CENTER_MOVING_CLASSES.includes(c))) {
     const plain = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
     assert.equal(
       resolveSpriteAsset(cls, [], poses(`the-${cls}`, "moving"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY),
       plain,
       `${cls}: a pose with no facing on record has no art of its own to land on`,
     );
+  }
+});
+
+test("a class with its own centre-facing moving template resolves that art when the pose fact stands alone", () => {
+  for (const cls of CENTER_MOVING_CLASSES) {
+    const plain = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    const moving = resolveSpriteAsset(cls, [], poses(`the-${cls}`, "moving"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.notEqual(moving, plain, `${cls}: an unfaced moving instance has its own centre-facing art, not the plain sprite`);
+    assert.ok(moving.includes(`${cls}-moving-fill`), `${cls}: the centre-facing moving template's own gradient id must render`);
+    assert.ok(!moving.includes("{{"), `${cls}: no unresolved placeholder token may reach the output`);
   }
 });
 
