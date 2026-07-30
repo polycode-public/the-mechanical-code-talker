@@ -586,7 +586,7 @@ ${THEME_TOKENS_CSS}
   .fact-pill { display: inline-flex; align-items: baseline; gap: .34rem; font-family: ${MONO_STACK}; font-size: .68rem; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border: 1px solid var(--corpus-t1); border-radius: 99px; padding: .2rem .8rem; background: var(--corpus-soft); white-space: nowrap; }
   .fact-pill .fact-pill-value { font-size: .96rem; letter-spacing: 0; font-variant-numeric: tabular-nums; font-weight: 600; color: var(--ink); }
 
-  .chrome { display: flex; align-items: center; gap: .4rem; }
+  .chrome { display: flex; align-items: center; gap: .4rem; flex-wrap: wrap; }
   .chrome-btn { font-family: ${SERIF_STACK}; font-size: .8rem; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: .22rem .75rem; background: var(--card); text-decoration: none; display: inline-flex; align-items: center; gap: .32rem; white-space: nowrap; line-height: 1.35; }
   .chrome-btn:hover { color: var(--ink); border-color: var(--ink); }
   .chrome-btn.share { color: var(--ink); }

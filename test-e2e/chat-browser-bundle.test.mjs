@@ -55,7 +55,15 @@ function factIndividual(id, subject, predicate, object, provenance) {
   };
 }
 
-function seededSession(ctx) {
+// tmct.open(...) is always async (publishTmctSurface's own contract), so its
+// completion value has to be awaited before __s is usable — vm.runInContext
+// itself is synchronous and hands back exactly that unresolved promise.
+async function openSession(ctx, expr) {
+  const opened = vm.runInContext(`(${expr})`, ctx);
+  ctx.__s = await opened;
+}
+
+async function seededSession(ctx) {
   ctx.__payload = {
     individuals: [
       factIndividual("fact:1", "dog", "rdfs:subClassOf", "animal", "corpus:human /r/IsA"),
@@ -63,7 +71,7 @@ function seededSession(ctx) {
     ],
     objectProperties: [],
   };
-  vm.runInContext("globalThis.__s = tmct.open({ seedPayload: __payload, vocabSeeded: true })", ctx);
+  await openSession(ctx, "tmct.open({ seedPayload: __payload, vocabSeeded: true })");
 }
 
 const turn = (ctx, line) => vm.runInContext(`__s.turn(${JSON.stringify(line)})`, ctx);
@@ -85,14 +93,14 @@ test("the bundle evaluates as a classic script in a browser-shaped context (cons
 
 test("a seeded session answers a vocabulary question with its source line", async () => {
   const ctx = browserContext();
-  seededSession(ctx);
+  await seededSession(ctx);
   const { answer } = await turn(ctx, "what is a dog");
   assert.match(answer, /dog is a kind of animal \(source: corpus:human/);
 });
 
 test("teach + syllogism: 'every dog is a mammal' / 'rex is a dog' / 'is rex a mammal' answers yes with a two-fact proof chain", async () => {
   const ctx = browserContext();
-  seededSession(ctx);
+  await seededSession(ctx);
   const teach1 = await turn(ctx, "every dog is a mammal");
   assert.match(teach1.answer, /^noted — remembered: dog is a kind of mammal/);
   const teach2 = await turn(ctx, "rex is a dog");
@@ -106,7 +114,7 @@ test("teach + syllogism: 'every dog is a mammal' / 'rex is a dog' / 'is rex a ma
 
 test("an unknown term gets the honest miss, never a fabricated answer", async () => {
   const ctx = browserContext();
-  seededSession(ctx);
+  await seededSession(ctx);
   const { answer, record } = await turn(ctx, "what is a zorblatt");
   assert.match(answer, /I don't know "zorblatt" yet/);
   assert.equal(record?.miss, true, "the turn records itself as a miss");
@@ -114,14 +122,14 @@ test("an unknown term gets the honest miss, never a fabricated answer", async ()
 
 test("a code-structure question hits the no-code-graph wall — the session's graph is known-empty, not absent", async () => {
   const ctx = browserContext();
-  seededSession(ctx);
+  await seededSession(ctx);
   const { answer } = await turn(ctx, "which modules import src/core/store.mjs?");
   assert.match(answer, /no code graph is loaded in this session/);
 });
 
 test("the guessing game runs in the browser context: bisection guesses land and the win names the number", async () => {
   const ctx = browserContext();
-  seededSession(ctx);
+  await seededSession(ctx);
   const opening = await turn(ctx, "I'm thinking of a number between 1 and 100");
   assert.match(opening.answer, /My guess: 50\. Say higher, lower, or correct\./);
   const second = await turn(ctx, "higher");
@@ -136,7 +144,7 @@ test("the guessing game runs in the browser context: bisection guesses land and 
 
 test("learn-on-miss reaches a registered pack provider from inside the bundle and answers cited", async () => {
   const ctx = browserContext();
-  seededSession(ctx);
+  await seededSession(ctx);
   ctx.__article = {
     term: "otter", title: "Otter",
     text: "Otters are water animals. They swim well.",
@@ -170,7 +178,7 @@ test("a session created with digestStructures answers a long term list with a co
   const ctx = browserContext();
   ctx.__digestPayload = digestFixturePayload();
   ctx.__digestStructures = DIGEST_STRUCTURES;
-  vm.runInContext("globalThis.__s = tmct.open({ seedPayload: __digestPayload, vocabSeeded: true, digestStructures: __digestStructures })", ctx);
+  await openSession(ctx, "tmct.open({ seedPayload: __digestPayload, vocabSeeded: true, digestStructures: __digestStructures })");
   const { answer } = await turn(ctx, "what is a gizmo");
   // termDigestReadBack's own escape line ("Say 'show the facts' for all N
   // stored facts.") only ever appears on the digest path — the flat/grouped
@@ -185,7 +193,7 @@ test("a session created with digestStructures answers a long term list with a co
 test("a session created with no digestStructures still degrades to the flat fact list for the same long term list, and never throws", async () => {
   const ctx = browserContext();
   ctx.__digestPayload = digestFixturePayload();
-  vm.runInContext("globalThis.__s = tmct.open({ seedPayload: __digestPayload, vocabSeeded: true })", ctx);
+  await openSession(ctx, "tmct.open({ seedPayload: __digestPayload, vocabSeeded: true })");
   const { answer } = await turn(ctx, "what is a gizmo");
   assert.doesNotMatch(answer, /Say 'show the facts' for all \d+ stored facts\./, "with no structure table the digest path never fires");
   assert.match(answer, /gizmo is a kind of apple/, "the flat fact-line list still answers, one bracketed line per fact");
@@ -193,7 +201,7 @@ test("a session created with no digestStructures still degrades to the flat fact
 
 test("an unseeded session still turns, and the false vocab hint offers the teach pointer instead of an unanswerable example", async () => {
   const ctx = browserContext();
-  vm.runInContext("globalThis.__s = tmct.open({})", ctx);
+  await openSession(ctx, "tmct.open({})");
   const { answer } = await turn(ctx, "what is a dog");
   assert.match(answer, /I don't know "dog" yet/);
   const hint = vm.runInContext("tmct.page.vocabExampleHint(false)", ctx);
