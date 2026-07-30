@@ -2127,7 +2127,7 @@ export { moduleCountOf };
 /** A KNOWN-empty code graph: a loaded graph object with 0 modules. A null graph
  *  (a bare runTurn that wasn't handed one) is "unknown", NOT empty — the empty
  *  orientation/greeting only fires when we actually hold an empty graph. */
-const noCodeGraph = (graph) => !!graph && moduleCountOf(graph) === 0;
+export const noCodeGraph = (graph) => !!graph && moduleCountOf(graph) === 0;
 
 /** LIVE orientation examples: the example queries on the orientation card name
  *  entities from the LOADED graph — the sorted-first Module label and the

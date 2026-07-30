@@ -184,7 +184,7 @@ export function burrowGraph(state, roomIds, root = "garden") {
  *  allows that has no written exit yet. Above ground there is nothing to
  *  tunnel sideways THROUGH, so a garden digs straight down and no other way;
  *  underground, all six are open soil. The engine is the authority on this —
- *  the page prefers `tmctMud.diggableDirections` whenever the bundle exposes
+ *  the page prefers `tmct.page.diggableDirections` whenever the bundle exposes
  *  one and only falls back to the rule below. Pure, self-contained
  *  (roomKindForRoom is spliced alongside it). */
 export function diggableDirections(rows, state, here) {
@@ -1339,7 +1339,7 @@ function pageScript() {
     // world's ending sentence comes from the engine either way, never a second
     // wording of the same event.
     appendChat(character, "a", note
-      || (window.tmctMud.outOfPlayPhrase(character, fate) + ". It takes no more turns."));
+      || (window.tmct.page.outOfPlayPhrase(character, fate) + ". It takes no more turns."));
     playFateScene(character, fate);
   }
 
@@ -1372,7 +1372,7 @@ function pageScript() {
     const rows = lastSnapshot.rows;
     const state = lastSnapshot.state;
     renderRoomView(character, rows, state, den, allRoomIds(rows),
-      window.tmctMud.castInRoom(rows, state, den, character));
+      window.tmct.page.castInRoom(rows, state, den, character));
 
     const room = el(w + "-room");
     const lunger = room.querySelector('.floor-others .sprite-card[data-subject="' + predator + '"]');
@@ -1462,7 +1462,7 @@ function pageScript() {
         return { answer: "", end: false };
       });
     }
-    return serializeTick(function () { return session.windows[character].turn(line); }).then(async function (res) {
+    return serializeTick(function () { return tmct.turn(line, { as: character }); }).then(async function (res) {
       appendChat(character, "a", res.answer);
       await broadcastLocalChange();
       renderSoon();
@@ -1556,8 +1556,8 @@ function pageScript() {
   }
 
   function spriteSvgFor(species, rows, instanceKey) {
-    if (window.tmctMud && window.tmctMud.resolveSpriteAsset) {
-      return window.tmctMud.resolveSpriteAsset(species, rows, [], DATA.spriteTemplates, window.tmctMud.SPRITE_REGISTRY, { instanceKey: instanceKey });
+    if (window.tmct && window.tmct.page.resolveSpriteAsset) {
+      return window.tmct.page.resolveSpriteAsset(species, rows, [], DATA.spriteTemplates, window.tmct.page.SPRITE_REGISTRY, { instanceKey: instanceKey });
     }
     return "";
   }
@@ -1570,10 +1570,10 @@ function pageScript() {
   // "animal": everything hung on this wall is a thing, and a thing with no
   // sprite should read as a plain parcel rather than a creature.
   function objectSvgFor(subject, rows) {
-    if (window.tmctMud && window.tmctMud.resolveSpriteAsset) {
-      return window.tmctMud.resolveSpriteAsset(
+    if (window.tmct && window.tmct.page.resolveSpriteAsset) {
+      return window.tmct.page.resolveSpriteAsset(
         subject, spriteAncestryRows(rows, subject), factsForSubject(rows, subject),
-        DATA.spriteTemplates, window.tmctMud.SPRITE_REGISTRY,
+        DATA.spriteTemplates, window.tmct.page.SPRITE_REGISTRY,
         { rootFallback: "portable", instanceKey: subject },
       );
     }
@@ -1736,7 +1736,7 @@ function pageScript() {
   // than the pane offers to talk to.
   function roomCaptionFor(rows, state, here, character, roomMates) {
     const parts = [];
-    const view = window.tmctMud.worldDigestRows(rows, state, character);
+    const view = window.tmct.page.worldDigestRows(rows, state, character);
     const lines = view.filter(function (r) { return r.subject.toLowerCase() === here.toLowerCase(); })
       .map(function (r) { return r.subject + " " + r.predicate + " " + r.object + "."; });
     parts.push(lines.length ? lines.join(" ") : "You are in the " + here + ".");
@@ -1755,7 +1755,7 @@ function pageScript() {
   // direction with neither draws nothing, so the ring never offers a command
   // the world would refuse.
   function diggableFor(rows, state, here) {
-    const fromEngine = window.tmctMud && window.tmctMud.diggableDirections;
+    const fromEngine = window.tmct && window.tmct.page.diggableDirections;
     return fromEngine ? fromEngine(rows, state, here) : diggableDirections(rows, state, here);
   }
 
@@ -1782,7 +1782,7 @@ function pageScript() {
   // it. Exits appear in both the row and the compass ring on purpose: the ring
   // says WHERE a way out points, the row says what it is called.
   function affordancesFor(rows, state, here, character) {
-    const fromEngine = window.tmctMud && window.tmctMud.roomAffordances;
+    const fromEngine = window.tmct && window.tmct.page.roomAffordances;
     return fromEngine ? fromEngine(rows, state, here, character) : [];
   }
 
@@ -1838,7 +1838,7 @@ function pageScript() {
   // can say "carrot" while every verb still resolves the distinct id
   // ("carrot-1"). itemLabel is the fallback for an id carrying no such fact.
   function labelForItem(rows, subject, roomIds) {
-    const fromEngine = window.tmctMud && window.tmctMud.displayNameOf;
+    const fromEngine = window.tmct && window.tmct.page.displayNameOf;
     const name = fromEngine ? fromEngine(rows, subject) : null;
     return name && name !== subject ? name : itemLabel(subject, roomIds);
   }
@@ -1878,7 +1878,7 @@ function pageScript() {
     // the survey they annotate, and each one's own dot already carries its name.
     const keys = cast.map(function (c) {
       const room = state.placements.get(c) ? state.placements.get(c).object : "?";
-      const fate = window.tmctMud.outOfPlayReasonOf(state, c);
+      const fate = window.tmct.page.outOfPlayReasonOf(state, c);
       const where = fate ? fate : "in " + esc(room);
       return '<span class="key-actor"><span class="key-dot" style="background:' + colorFor(c) + '"></span>'
         + esc(speciesOfCharacter(c)) + " " + where + "</span>";
@@ -1939,7 +1939,7 @@ function pageScript() {
       }
     }
     for (const character of everyone()) {
-      const reason = window.tmctMud.outOfPlayReasonOf(snap.state, character);
+      const reason = window.tmct.page.outOfPlayReasonOf(snap.state, character);
       if (reason) markOutOfPlay(character, reason, null);
     }
     renderWorldMap(snap.rows, snap.state, roomIds);
@@ -1954,7 +1954,7 @@ function pageScript() {
       const place = snap.state.placements.get(character);
       const here = place ? place.object : null;
       if (!here) continue;
-      const roomMates = window.tmctMud.castInRoom(snap.rows, snap.state, here, character);
+      const roomMates = window.tmct.page.castInRoom(snap.rows, snap.state, here, character);
       renderRoomView(character, snap.rows, snap.state, here, roomIds, roomMates);
       renderDirections(character, snap.rows, snap.state, here);
       renderChatPills(character, snap.rows, snap.state, here, roomIds);
@@ -2072,9 +2072,9 @@ function pageScript() {
   function renderSuggestionPills() {
     const box = el("editorPills");
     const term = wordBeforeCursor(el("editorText").value, el("editorText").selectionStart);
-    if (!term || !window.tmctMud) { box.innerHTML = ""; return; }
-    const related = window.tmctMud.relatedForTerm ? window.tmctMud.relatedForTerm(allStoreRows, term) : null;
-    const chain = window.tmctMud.classAncestorChain ? window.tmctMud.classAncestorChain(term, allStoreRows) : [];
+    if (!term || !window.tmct) { box.innerHTML = ""; return; }
+    const related = window.tmct.page.relatedForTerm ? window.tmct.page.relatedForTerm(allStoreRows, term) : null;
+    const chain = window.tmct.page.classAncestorChain ? window.tmct.page.classAncestorChain(term, allStoreRows) : [];
     const seen = { };
     seen[term] = true;
     const out = [];
@@ -2113,7 +2113,7 @@ function pageScript() {
     const snap = await session.snapshot();
     allStoreRows = snap.rows;
     editRows = worldOnlyRows(snap.rows);
-    editState = window.tmctMud.foldWorldState(window.tmctMud.worldActionRows(editRows));
+    editState = window.tmct.page.foldWorldState(window.tmct.page.worldActionRows(editRows));
     if (result.unrecognized.length) {
       const lines = result.unrecognized.map(function (u) { return u.line; }).join(", ");
       status.className = "edit-status pending";
@@ -2169,7 +2169,7 @@ function pageScript() {
     const snap = await session.snapshot();
     allStoreRows = snap.rows;
     editRows = worldOnlyRows(snap.rows);
-    editState = window.tmctMud.foldWorldState(window.tmctMud.worldActionRows(editRows));
+    editState = window.tmct.page.foldWorldState(window.tmct.page.worldActionRows(editRows));
     el("editorText").value = renderMudEditorText(editRows, editState);
     el("editorStatus").className = "edit-status";
     el("editorStatus").textContent = "";
@@ -2249,8 +2249,8 @@ function pageScript() {
     // engine calls live world state, plus the P2P layer's own four predicates.
     // The check is handed over rather than imported, so the sync filter never
     // learns the world engine's private predicate names.
-    const extraPredicates = (window.tmctMud.P2P_PREDICATES || []).slice();
-    const isState = window.tmctMud.isMudStatePredicate;
+    const extraPredicates = (window.tmct.page.P2P_PREDICATES || []).slice();
+    const isState = window.tmct.page.isMudStatePredicate;
     room = mod.createP2pRoom({
       memoryDir: session.memoryDir,
       myPeerId: myPeerId,
@@ -2803,15 +2803,15 @@ function pageScript() {
     // so the roster belongs to the scenario rather than to the page.
     roster = rosterOf(scenario());
     rootRoom = rootRoomOf(scenario());
-    cast = window.tmctMud.pickMudRoster(roster, { count: chosenPlayerCount() });
-    const pool = window.tmctMud.expandMudRoster(roster, cast.length + npcCount)
+    cast = window.tmct.page.pickMudRoster(roster, { count: chosenPlayerCount() });
+    const pool = window.tmct.page.expandMudRoster(roster, cast.length + npcCount)
       .filter(function (id) { return cast.indexOf(id) === -1; });
-    npcs = window.tmctMud.pickMudRoster(pool, { count: npcCount });
+    npcs = window.tmct.page.pickMudRoster(pool, { count: npcCount });
     slots = DATA.paneSlots.slice(0, cast.length);
     showPlayerCount(cast.length);
     showNpcCount(npcs.length);
     renderStage();
-    const opened = await window.tmctMud.createMudSession(scenario().worldPayload, { characters: everyone(), epoch: nextEpoch });
+    const opened = await window.tmct.open(scenario().worldPayload, { characters: everyone(), epoch: nextEpoch });
     if (seq !== bootSeq) return;
     session = opened;
     if (liveRoom) {

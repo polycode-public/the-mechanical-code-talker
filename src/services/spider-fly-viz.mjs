@@ -83,7 +83,7 @@ function webCellIds() {
  * `geometry` is `{ parseCellId, cellId, directionDelta }` — the exact three
  * grid-geometry primitives spider-fly-world.mjs exports, injected rather
  * than imported so this function stays `.toString()`-splice safe (the
- * inlined page calls it with `window.tmctSpiderFly`'s own re-exports of the
+ * inlined page calls it with `window.tmct`'s own re-exports of the
  * same three). Returns the ordered cell-id array (length > 1) or null.
  */
 export function threadCellsForSpiderPlan(agents, geometry) {
@@ -558,7 +558,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // lanes read exactly as much better with wink loaded as they do on every
   // other page. Fired eagerly here so it is likely settled well before a
   // visitor's first ordinary (non-game) question.
-  loadWinkVendor({ register: (factory) => tmctSpiderFly.registerWinkModel(factory) })();
+  loadWinkVendor({ register: (factory) => tmct.page.registerWinkModel(factory) })();
   const el = (id) => document.getElementById(id);
   const boardFrame = el("boardFrame");
   const boardCanvas = el("board");
@@ -661,12 +661,12 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // takes, answered by the same pure resolver the tool wraps (sprite-request.mjs,
   // spliced in above) — the page holds the state and nothing else.
   function resolveSpriteFace(spriteRequest) {
-    if (!window.tmctSpiderFly) return "";
+    if (!window.tmct) return "";
     return resolveSpriteRequest(spriteRequest, {
       factRows: (session && session.taxonomyRows) || [],
       templates: SPIDERFLY.spriteTemplates,
-      spriteRegistry: tmctSpiderFly.SPRITE_REGISTRY,
-      resolveSpriteAsset: tmctSpiderFly.resolveSpriteAsset,
+      spriteRegistry: tmct.page.SPRITE_REGISTRY,
+      resolveSpriteAsset: tmct.page.resolveSpriteAsset,
     }).svg || "";
   }
 
@@ -718,7 +718,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     for (const [id, a] of Object.entries(agents)) {
       const cls = agentKindOf(id);
       const node = ensureSpriteEl(id, cls, a);
-      const parsed = tmctSpiderFly.parseCellId(a.cell);
+      const parsed = tmct.page.parseCellId(a.cell);
       if (!parsed) continue;
       const pct = cellCenterPct(parsed.x, parsed.y);
       node.style.left = pct.leftPct + "%";
@@ -778,7 +778,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
         spriteLayer.appendChild(node);
         corpseEls[id] = node;
       }
-      const deathCell = tmctSpiderFly.parseCellId(corpse.cell);
+      const deathCell = tmct.page.parseCellId(corpse.cell);
       if (!deathCell) continue;
       const pct = cellCenterPct(deathCell.x, SPIDERFLY.gridSize);
       node.style.left = pct.leftPct + "%";
@@ -863,9 +863,9 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   });
 
   const threadGeometry = {
-    parseCellId: (id) => tmctSpiderFly.parseCellId(id),
-    cellId: (x, y) => tmctSpiderFly.cellId(x, y),
-    directionDelta: tmctSpiderFly.DIRECTION_DELTA,
+    parseCellId: (id) => tmct.page.parseCellId(id),
+    cellId: (x, y) => tmct.page.cellId(x, y),
+    directionDelta: tmct.page.DIRECTION_DELTA,
   };
 
   function drawBoard(agents, activeWebs) {
@@ -873,7 +873,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     boardCtx.clearRect(0, 0, w, h);
     boardCtx.fillStyle = cssVar("--taught-soft") || "rgba(46,125,79,.12)";
     for (const wc of SPIDERFLY.webCells) {
-      const p = tmctSpiderFly.parseCellId(wc);
+      const p = tmct.page.parseCellId(wc);
       boardCtx.fillRect((p.x - 1) * cellSize, (p.y - 1) * cellSize, cellSize, cellSize);
     }
     // A spider-built dynamic web is a distinct color from the always-on
@@ -884,7 +884,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     boardCtx.lineWidth = 1;
     boardCtx.setLineDash([3, 2]);
     for (const web of activeWebs || []) {
-      const p = tmctSpiderFly.parseCellId(web.cell);
+      const p = tmct.page.parseCellId(web.cell);
       if (!p) continue;
       boardCtx.fillRect((p.x - 1) * cellSize, (p.y - 1) * cellSize, cellSize, cellSize);
       boardCtx.strokeRect((p.x - 1) * cellSize + 0.5, (p.y - 1) * cellSize + 0.5, cellSize - 1, cellSize - 1);
@@ -904,7 +904,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
       boardCtx.beginPath();
       let prev = null;
       thread.forEach((c, i) => {
-        const p = tmctSpiderFly.parseCellId(c);
+        const p = tmct.page.parseCellId(c);
         const px = (p.x - 0.5) * cellSize, py = (p.y - 0.5) * cellSize;
         if (i === 0) boardCtx.moveTo(px, py); else boardCtx.lineTo(px, py);
         if (prev) threadHits.push({ x: (prev.x + px) / 2, y: (prev.y + py) / 2, step: i });
@@ -919,19 +919,19 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     if (!povAgentId) return;
     const agent = lastAgents[povAgentId];
     if (!agent) { povAgentId = null; return; }
-    const p = tmctSpiderFly.parseCellId(agent.cell);
+    const p = tmct.page.parseCellId(agent.cell);
     // The live, slider-adjustable per-class radius (falling back to the
     // engine's own shipped default before the session has finished
     // booting) — a POV toggle always reflects whatever vision range this
     // class currently actually has, not a fixed constant.
     const radius = agentKindOf(povAgentId) === "spider"
-      ? (liveConfig.spiderVisionRadius ?? tmctSpiderFly.DEFAULT_VISION_RADIUS)
-      : (liveConfig.flyVisionRadius ?? tmctSpiderFly.DEFAULT_VISION_RADIUS);
-    const visible = new Set(tmctSpiderFly.visibleCells(p.x, p.y, radius));
+      ? (liveConfig.spiderVisionRadius ?? tmct.page.DEFAULT_VISION_RADIUS)
+      : (liveConfig.flyVisionRadius ?? tmct.page.DEFAULT_VISION_RADIUS);
+    const visible = new Set(tmct.page.visibleCells(p.x, p.y, radius));
     povCtx.fillStyle = "rgba(0,0,0,.55)";
     for (let gy = 1; gy <= SPIDERFLY.gridSize; gy += 1) {
       for (let gx = 1; gx <= SPIDERFLY.gridSize; gx += 1) {
-        if (visible.has(tmctSpiderFly.cellId(gx, gy))) continue;
+        if (visible.has(tmct.page.cellId(gx, gy))) continue;
         povCtx.fillRect((gx - 1) * cellSize, (gy - 1) * cellSize, cellSize, cellSize);
       }
     }
@@ -983,7 +983,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     chatqEl.value = "";
     addChatLine("u", esc(q));
     withLock(async () => {
-      const result = await session.turn(q);
+      const result = await tmct.turn(q);
       addChatLine("a", esc(result.answer).replace(/\\n/g, "<br>"));
       const snap = await session.snapshot();
       redraw(snap.agents, snap.turn, snap.activeWebs);
@@ -1027,14 +1027,14 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   refreshPills();
 
   // ---- deception pills (§A.2.4): a SEPARATE dynamic rail, alongside (never
-  // replacing) the static one above. tmctSpiderFly.pillsForSpiderFly is the
+  // replacing) the static one above. tmct.page.pillsForSpiderFly is the
   // exact same pure function spider-fly-turn.mjs exports — this page never
   // reimplements the true/false claim logic, only renders its output and
   // fills #chatq on click, same click-to-fill discipline as every other
   // pill on this page (never auto-submits).
   function renderDynamicPills() {
     if (!session || !Object.keys(lastAgents).length) { dynamicPillsEl.innerHTML = ""; return; }
-    const result = tmctSpiderFly.pillsForSpiderFly(lastAgents, selectedAddresseeId, {});
+    const result = tmct.page.pillsForSpiderFly(lastAgents, selectedAddresseeId, {});
     selectedAddresseeId = result.addresseeId;
     const addrHtml = result.addressPills.map((p) =>
       '<button type="button" class="pill" data-role="dyn-addr" data-id="' + esc(p.id) + '"'
@@ -1099,7 +1099,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 
   let tuningInitialized = false;
   async function boot() {
-    session = await tmctSpiderFly.createSpiderFlySession();
+    session = await tmct.open();
     // A reset mints a brand-new session (fresh board, fresh config) — the
     // FIRST boot seeds the sliders from the engine's own shipped defaults;
     // every boot after that re-applies whatever the visitor already had the

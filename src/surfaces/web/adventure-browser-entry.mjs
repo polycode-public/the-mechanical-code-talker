@@ -35,6 +35,8 @@
 // game-shaped falls through to the ordinary conversational layer, exactly
 // like a real CLI session.
 import { createTurnSession } from "./turn-session.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
+import { graphAsk, enginePlan } from "./engine-surface.mjs";
 import {
   createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows, removeFacts,
 } from "../../adapters/memory/core.mjs";
@@ -127,6 +129,7 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
 
   return {
     memoryDir,
+    graph,
 
     /** One auto-play tick: infer the goal, execute exactly one move through
      *  adventureTurn (adventure-autoplay.mjs's own contract), thread the
@@ -192,25 +195,21 @@ export async function createAdventureSession(worldPayload, { restoredPayload = n
   };
 }
 
-// Re-exported so the page's own rendering script (adventure-viz.mjs) never
-// has to duplicate sprite resolution, the digest reader, the room
-// affordances the chat dock's own pills read from, or (foldWorldState,
-// exposedFacts) the exposure-filtered fold the goal-status panel mirrors —
-// the same posture spider-fly-browser-entry.mjs's own
-// globalThis.tmctSpiderFly re-export takes. `relatedForTerm`/
-// `classAncestorChain` back the edit mode's own cursor-suggestion pills
-// (adventure-viz.mjs's suggestionsForTerm mirrors this same pairing against
-// the global, the same reach-through-the-global pattern captionFor/pillsFor
-// already use for their own adventure.mjs calls). `directedGridLayout`/
-// `roomGraphSvg` (viz-room-graph.mjs's shared BFS-grid room-map layout and
-// SVG renderer) back the manor-map panel, its lightbox and its edit-mode
-// whole-map twin the same way — neither is `.toString()`-splice-safe
-// (roomGraphSvg needs escapeHtml, directedGridLayout needs its own
-// module-level exit-delta table), so the page reaches them here instead of
-// re-implementing the layout a second time.
-globalThis.tmctAdventure = {
-  createAdventureSession, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
-  worldDigestRows, roomAffordances, foldWorldState, exposedFacts,
-  relatedForTerm, classAncestorChain, openPersistedStore,
-  directedGridLayout, roomGraphSvg,
-};
+// `tmct.page` keeps what the page draws with and the engine has no
+// plain-English form for: sprite resolution, the digest reader, the room
+// affordances the chat pills read from, the exposure-filtered fold the
+// goal-status panel mirrors, the SKOS neighbourhood and is-a chain behind the
+// edit mode's cursor pills, the persisted-store wrapper, and the manor map's
+// own BFS-grid layout and SVG renderer (neither is `.toString()`-splice-safe:
+// roomGraphSvg needs escapeHtml, directedGridLayout its own exit-delta table).
+publishTmctSurface({
+  open: createAdventureSession,
+  ask: graphAsk,
+  plan: enginePlan,
+  page: {
+    resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
+    worldDigestRows, roomAffordances, foldWorldState, exposedFacts,
+    relatedForTerm, classAncestorChain, openPersistedStore,
+    directedGridLayout, roomGraphSvg,
+  },
+});

@@ -51,6 +51,8 @@ import { registerLiveReferenceProvider, registerResearchProvider } from "../../a
 // decides when to save/load/clear; this entry only carries the wrapper
 // across the bundle boundary.
 import { openPersistedStore } from "./idb-persist.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
+import { graphAsk, enginePlan } from "./engine-surface.mjs";
 
 /**
  * A browser chat session over the real turn engine.
@@ -70,7 +72,7 @@ import { openPersistedStore } from "./idb-persist.mjs";
  * is module-scope, last write wins, and every session created after this one
  * shares it.
  *
- * Returns { memoryDir, sessionId, turn }. `turn(line)` resolves to
+ * Returns { memoryDir, sessionId, graph, turn }. `turn(line)` resolves to
  * { answer, end, record, plan } and threads focus/last/planState between
  * calls exactly as the CLI session does.
  */
@@ -112,6 +114,7 @@ export function createChatSession({ seedPayload = null, vocabSeeded = false, liv
   return {
     memoryDir,
     sessionId,
+    graph,
     get liveReference() { return liveReferenceOn; },
     /** The page's toggle seam: set the live Wikipedia mode for every later turn
      *  (the `/wiki on|off|supplement|always` command sets the same state). */
@@ -144,4 +147,20 @@ export async function researchedFactRows(memoryDir) {
     .map((row) => ({ subject: row.subject, predicate: row.predicate, object: row.object }));
 }
 
-globalThis.tmctChat = { createChatSession, registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, registerResearchProvider, normFactTerm, vocabExampleHint, memoryStats, openPersistedStore, exportFactsJsonl, researchedFactRows, splitSentences: splitSentencesPreservingPaths };
+// The page reaches the engine through the one shared surface: `tmct.open()`
+// opens this session, `tmct.turn()` runs the dock, `tmct.ask()` puts a
+// question to the session's own graph. What stays on `tmct.page` is what has
+// no plain-English form — the vendor/provider seams the page registers before
+// the first turn, its IndexedDB wrapper, and the two serializers its export
+// and paste-ingest controls run.
+publishTmctSurface({
+  open: createChatSession,
+  ask: graphAsk,
+  plan: enginePlan,
+  page: {
+    registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider,
+    registerResearchProvider, normFactTerm, vocabExampleHint, memoryStats,
+    openPersistedStore, exportFactsJsonl, researchedFactRows,
+    splitSentences: splitSentencesPreservingPaths,
+  },
+});

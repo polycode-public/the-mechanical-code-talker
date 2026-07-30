@@ -631,7 +631,7 @@ const SPRITE_CHAT = ${embedJson({ rows: dockRows })};
           import("./vendor/wink.js"),
           winkTimeout(WINK_LOAD_TIMEOUT_MS, "wink vendor asset load timed out"),
         ]);
-        tmctSprites.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
+        tmct.page.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
       } catch (err) {
         console.warn("tmct sprites: the wink vendor asset failed to load, continuing without the lemma/POS tier", err);
       }
@@ -661,7 +661,7 @@ const SPRITE_CHAT = ${embedJson({ rows: dockRows })};
     addDockLine("u", q);
     if (!session) { addDockLine("a miss", "the engine is still loading. Try again in a moment."); return; }
     withLock(async () => {
-      const result = await session.turn(q);
+      const result = await tmct.turn(q);
       const missed = !!(result.record && result.record.miss);
       addDockLine(missed ? "a miss" : "a grounded", result.answer);
     });
@@ -677,7 +677,7 @@ const SPRITE_CHAT = ${embedJson({ rows: dockRows })};
   (async () => {
     try {
       await tryLoadWink();
-      session = await tmctSprites.createSpriteCatalogSession({ factRows: SPRITE_CHAT.rows });
+      session = await tmct.open({ factRows: SPRITE_CHAT.rows });
       dockqEl.disabled = false;
       dockStatusEl.textContent = SPRITE_CHAT.rows.length + " sprite facts on record. Ask away, or use a quick question.";
     } catch (err) {
@@ -865,7 +865,7 @@ ${spriteBundleScript}
   function wireSceneComposer() {
     const composeqEl = document.getElementById("composeq");
     if (!composeqEl) return;
-    const extractSceneItems = tmctSprites.extractSceneItems;
+    const extractSceneItems = tmct.page.extractSceneItems;
     const composeFormEl = document.getElementById("composeForm");
     const composePillsEl = document.getElementById("composePills");
     const sceneRowEl = document.getElementById("sceneRow");

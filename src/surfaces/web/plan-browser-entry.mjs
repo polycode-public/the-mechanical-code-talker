@@ -34,7 +34,7 @@ import { planToPddl } from "../../services/plan-pddl.mjs";
 import { createTurnSession } from "./turn-session.mjs";
 // Re-exported so the page can register a CDN-loaded wink-nlp pair before the
 // first teach, the same seam chat-browser-entry.mjs exposes as
-// tmctChat.registerWinkModel — see wink-model.mjs's own header. The hanoi
+// tmct.page.registerWinkModel — see wink-model.mjs's own header. The hanoi
 // lesson's own "moving a disk onto a target makes the disk rest on the
 // target" sentence needs a REAL lemmatiser (verbLemma reduces "moving" to
 // "move" to match the taught "move onto" action family) — without it, that
@@ -44,10 +44,12 @@ import { createTurnSession } from "./turn-session.mjs";
 // model because their own gameplay never asks a taught rule to reduce a
 // verb; the hanoi lesson is the first live session here that does.
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
+import { graphAsk, enginePlan } from "./engine-surface.mjs";
 
 /** A live in-memory towers-of-hanoi session this page's live controls AND
- *  chat dock can both drive. Returns `{ memoryDir, sessionId, diskCount,
- *  maxDepth, plan, turn }`. `plan` is the puzzle's freshly solved plan (the
+ *  chat dock can both drive. Returns `{ memoryDir, sessionId, graph,
+ *  diskCount, maxDepth, plan, turn }`. `plan` is the puzzle's freshly solved plan (the
  *  same shape chat.mjs's planLaneAnswer returns, enriched with
  *  `becauseText` — see `turn()` below), or null when `maxDepth` was too low
  *  to find one (an honest miss, not an error: `turn()`'s own answer text
@@ -84,13 +86,18 @@ export async function createPlanSession({ diskCount = 3, maxDepth = DEFAULT_GAME
     if (r.plan) plan = r.plan;
   }
 
-  return { memoryDir, sessionId, diskCount, maxDepth, plan, turn: session.turn };
+  return { memoryDir, sessionId, graph, diskCount, maxDepth, plan, turn: session.turn };
 }
 
-// Re-exported so the page's own rendering script (plan-viz.mjs's inlined
-// script) never has to duplicate board layout or PDDL/OWL-RDF formatting —
-// the same posture adventure-browser-entry.mjs/spider-fly-browser-entry.mjs
-// take re-exporting their own engines' pure helpers.
-globalThis.tmctPlan = {
-  createPlanSession, computeBlocksLayout, planToPageData, renderInputsFromPlan, planToPddl, registerWinkModel,
-};
+// `tmct.page` keeps the board layout and the PDDL/OWL-RDF formatting the
+// page's own script draws with, plus the wink seam the hanoi lesson needs
+// registered before its first teach. Note that `tmct.plan(...)` here is the
+// CAPABILITY planner, not the puzzle solver: a typed "solve it" is a
+// conversational turn like any other, so the page reaches the hanoi plan
+// through `tmct.turn("solve it", { maxDepth })` and reads `.plan` off it.
+publishTmctSurface({
+  open: createPlanSession,
+  ask: graphAsk,
+  plan: enginePlan,
+  page: { computeBlocksLayout, planToPageData, renderInputsFromPlan, planToPddl, registerWinkModel },
+});

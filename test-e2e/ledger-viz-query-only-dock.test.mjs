@@ -1,16 +1,17 @@
-// ledger-viz-query-only-dock.test.mjs — the query-only tmctMemoryAsk dock,
+// ledger-viz-query-only-dock.test.mjs — the query-only fallback dock (the
+// committed, question-only bundle publishing `tmct.fallback === true`),
 // driven in a real browser. Every other browser-driven ledger test
 // (browser-chat.test.mjs, pages-ledger-teach.test.mjs, pages-ledger.test.mjs)
-// serves the Pages DEMO SITE, where the live teach-and-ask bundle
-// (tmctLedger) always loads and wins the dock's submit handler over
-// tmctMemoryAsk (ledger-viz.mjs's own else-if). That means the CLI's actual
-// output — `tmct viz` never links tmctLedger, only the checked-in
-// tmctMemoryAsk bundle (bin/tmct.mjs's own viz mode, ledgerBundleAvailable
-// left at renderLedgerHtml's default false) — has never been driven in a
-// browser: this file closes that gap, and with it audits the two English
-// phrasings ledger-viz.mjs itself generates for this exact dock (the
-// example-term placeholder and the miss-time "try: ..." tips) by actually
-// typing them back in and checking they ground.
+// serves the Pages DEMO SITE, where the live teach-and-ask engine always
+// loads and wins the dock's submit handler over the fallback stand-in
+// (ledger-viz.mjs's own else-if). That means the CLI's actual output —
+// `tmct viz` never links the live engine, only the checked-in question-only
+// bundle (bin/tmct.mjs's own viz mode, ledgerBundleAvailable left at
+// renderLedgerHtml's default false) — has never been driven in a browser:
+// this file closes that gap, and with it audits the two English phrasings
+// ledger-viz.mjs itself generates for this exact dock (the example-term
+// placeholder and the miss-time "try: ..." tips) by actually typing them
+// back in and checking they ground.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
@@ -45,8 +46,8 @@ async function seededRepo() {
 }
 
 /** Render exactly what `bin/tmct.mjs viz` writes (ledgerBundleAvailable left
- *  at its default false: only tmctMemoryAsk links, never tmctLedger) into a
- *  throwaway directory, and serve it. */
+ *  at its default false: only the question-only fallback bundle links, never
+ *  the live teach engine) into a throwaway directory, and serve it. */
 async function buildAndServeQueryOnlyLedger(memoryDir) {
   const data = await computeLedgerData(memoryDir);
   const memoryAskBundle = await readMemoryAskBundle();
@@ -106,18 +107,18 @@ async function ask(page, question) {
   return { text: (await reply.textContent()) ?? "", isMiss: className.split(/\s+/).includes("miss") };
 }
 
-test("the CLI's own ledger output links only tmctMemoryAsk, never tmctLedger — the query-only branch is the one this file drives", async () => {
+test("the CLI's own ledger output links only the question-only fallback bundle, never the live teach engine — the query-only branch is the one this file drives", async () => {
   const memoryDir = await seededRepo();
   const { siteDir, server } = await buildAndServeQueryOnlyLedger(memoryDir);
   try {
     const { context, page } = await openPage(server);
     try {
       const engines = await page.evaluate(() => ({
-        hasMemoryAsk: typeof window.tmctMemoryAsk !== "undefined",
-        hasLedger: typeof window.tmctLedger !== "undefined",
+        hasTmct: typeof window.tmct !== "undefined",
+        isFallback: typeof window.tmct !== "undefined" && window.tmct.fallback === true,
       }));
-      assert.equal(engines.hasMemoryAsk, true, "the checked-in query-only bundle loaded");
-      assert.equal(engines.hasLedger, false, "the CLI's own output never links the live teach bundle");
+      assert.equal(engines.hasTmct, true, "the checked-in query-only bundle loaded");
+      assert.equal(engines.isFallback, true, "the CLI's own output never links the live teach engine, so the question-only stand-in never yields");
     } finally {
       await context.close();
     }
@@ -176,8 +177,8 @@ test("an honest miss names this dock's OWN canned wording and offers real, term-
       const reply = await ask(page, "what is a quokka");
       assert.equal(reply.isMiss, true, "an unknown term is reported as a miss");
       // This dock's own narrower canned text (never runTurn's richer teach-me
-      // cascade — that only exists on the live tmctLedger branch this page
-      // doesn't carry): see ledger-viz.mjs's tmctMemoryAsk fallback branch.
+      // cascade — that only exists on the live engine branch this page
+      // doesn't carry): see ledger-viz.mjs's query-only fallback branch.
       assert.match(reply.text, /I can't ground that in this graph/);
       const tipMatch = /try: (.+)\.$/.exec(reply.text);
       assert.ok(tipMatch, `the miss offers suggested queries: ${reply.text}`);
@@ -230,8 +231,9 @@ test("the query-only page reads a refocused term back as a digest, computed clie
     const { context, page } = await openPage(server);
     try {
       // Refocus to a term that composes, through the search box. No live teach
-      // bundle is present here, so a digest for the new focus can only come from
-      // the client path over tmctMemoryAsk — the CLI page's own engine.
+      // engine is present here, so a digest for the new focus can only come
+      // from the client path over the question-only bundle — the CLI page's
+      // own engine.
       await page.fill("#q", "cat");
       await page.press("#q", "Enter");
       await page.waitForFunction(

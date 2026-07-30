@@ -48,6 +48,8 @@ import { worldProvenanceTag } from "../../domain/worlds-pack.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
 import { createTurnSession } from "./turn-session.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
+import { graphAsk, enginePlan } from "./engine-surface.mjs";
 
 /** A live, shared mud world several characters can each act in. `worldPayload`
  *  is `{ name, facts, rules, opening }` — the same shape adventure-browser-
@@ -60,7 +62,7 @@ import { createTurnSession } from "./turn-session.mjs";
  *  are minted, fewer leaves the ones nobody is playing out of the world
  *  altogether.
  *
- *  Returns `{ memoryDir, windows, snapshot }`. `windows` is a plain object
+ *  Returns `{ memoryDir, graph, windows, snapshot }`. `windows` is a plain object
  *  keyed by character id, each value `{ character, turn, autoplayTick,
  *  visitedRoomIds, turnsTaken, isOutOfPlay, outOfPlayReason }`. `snapshot()` is
  *  the one OMNISCIENT read this module exposes — the central world map's own
@@ -270,7 +272,7 @@ export async function createMudSession(worldPayload, { characters = [], epoch = 
     return claims.length;
   }
 
-  return { memoryDir, windows, snapshot, applyEdit, wave, claimCharacters };
+  return { memoryDir, graph, windows, snapshot, applyEdit, wave, claimCharacters };
 }
 
 /** `count` entries drawn at random from `roster`, in random order, without
@@ -351,22 +353,41 @@ export function worldFactsForCast(facts, characters) {
   return rows.filter((f) => !uncast.has(f.subject)).concat(mintedCharacterFacts(rows, characters));
 }
 
-// Re-exported so mud-viz.mjs's own inlined script never duplicates sprite
-// resolution or the digest/affordance/knowledge readers its room view and
-// chat pills already need — the same reach-through-the-global posture
-// adventure-browser-entry.mjs's own globalThis.tmctAdventure takes.
-globalThis.tmctMud = {
-  createMudSession, pickMudRoster, expandMudRoster, mintedCharacterFacts, worldFactsForCast,
-  resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain, resolveSpriteAsset,
-  foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
-  personKnowledgeLines, personKnownFoodLines,
-  diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
-  roomKindOf,
-  // The shared-world reach-throughs: which predicates carry live world state,
-  // and the P2P layer's own four. mud.html hands both to `mudSyncableFacts`,
-  // which is written to take the check rather than import the engine itself.
-  isMudStatePredicate, P2P_PREDICATES,
-  // The edit mode's own reach-throughs: the SKOS neighbourhood and the is-a
-  // chain its cursor-suggestion pills read, neither of which is splice-safe.
-  relatedForTerm,
-};
+// Several characters, one world, so a line has to say who is speaking:
+// `tmct.turn(line, { as: "mole-1" })` routes to that character's own window,
+// which owns its private focus/last and its own fog of war. Everything else a
+// window does — a scripted autoplayTick, its visited rooms, whether it is
+// still in play — stays on `tmct.session.windows[id]`, because those are
+// per-character state rather than questions anyone could ask in words.
+//
+// `tmct.page` keeps the sprite resolution and the digest/affordance/knowledge
+// readers the room view and chat pills render from, the roster helpers that
+// decide which animals this visit is played with, the two predicate lists the
+// P2P layer checks against, and the SKOS neighbourhood behind the edit mode's
+// cursor pills — none of which is `.toString()`-splice-safe.
+publishTmctSurface({
+  open: createMudSession,
+  turn: (line, options, session) => {
+    const character = options?.as;
+    const characterWindow = character ? session.windows[character] : null;
+    if (!characterWindow) {
+      return {
+        answer: `say which character is speaking — tmct.turn(line, { as: "${Object.keys(session.windows)[0] || "mole-1"}" })`,
+        end: false, record: null, plan: null, research: null,
+      };
+    }
+    return characterWindow.turn(line);
+  },
+  ask: graphAsk,
+  plan: enginePlan,
+  page: {
+    pickMudRoster, expandMudRoster, mintedCharacterFacts, worldFactsForCast,
+    resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain, resolveSpriteAsset,
+    foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
+    personKnowledgeLines, personKnownFoodLines,
+    diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
+    roomKindOf,
+    isMudStatePredicate, P2P_PREDICATES,
+    relatedForTerm,
+  },
+});

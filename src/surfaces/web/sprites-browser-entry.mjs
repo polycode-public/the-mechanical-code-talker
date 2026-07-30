@@ -25,9 +25,11 @@ import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { SPRITE_FACTS_PROVENANCE } from "../../domain/sprite-facts.mjs";
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
 import { createTurnSession } from "./turn-session.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
+import { graphAsk, enginePlan } from "./engine-surface.mjs";
 
 /** A live in-memory chat session seeded with the embedded sprite-facts rows.
- *  Returns { memoryDir, sessionId, factCount, turn }. */
+ *  Returns { memoryDir, sessionId, graph, factCount, turn }. */
 export async function createSpriteCatalogSession({ factRows = [] } = {}) {
   const memoryDir = createInMemoryStore();
   await appendFacts(memoryDir, factRows.map((f) => ({
@@ -43,13 +45,20 @@ export async function createSpriteCatalogSession({ factRows = [] } = {}) {
   return {
     memoryDir,
     sessionId,
+    graph,
     factCount: factRows.length,
     turn: session.turn,
   };
 }
 
-// registerWinkModel is re-exported so the page's own inline script can hand in
-// the self-hosted wink pair (./vendor/wink.js) exactly the way chat.html/
-// ledger.html/plan.html register theirs — the bundle itself never imports
-// wink-nlp (wink-model.mjs's own header explains why).
-globalThis.tmctSprites = { createSpriteCatalogSession, registerWinkModel, normFactTerm, extractSceneItems };
+// `tmct.page` keeps the wink seam (the page hands in the self-hosted pair from
+// ./vendor/wink.js, exactly the way chat.html/ledger.html/plan.html register
+// theirs — the bundle itself never imports wink-nlp), the term normalizer, and
+// the scene composer's parser, which reads a typed line into drawable items
+// rather than answering anything.
+publishTmctSurface({
+  open: createSpriteCatalogSession,
+  ask: graphAsk,
+  plan: enginePlan,
+  page: { registerWinkModel, normFactTerm, extractSceneItems },
+});

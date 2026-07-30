@@ -108,9 +108,16 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   its parser now lives behind `extractSceneItems`'/`scene-compose.mjs`'s real bundle, which a bare
   CLI render doesn't have. Decide whether that page needs its own small bundle to get the composer
   back, or whether a static render never needed it.
-- [ ] **`PLAN_TOOL_SURFACE.md` phase 10, Gap C** — one `globalThis.tmct` (`ask`, `plan`, `turn`,
-  `session`) replacing the eleven per-page global bags. Needs phases 3, 5 and 8 (all done) —
-  unblocked, not yet dispatched.
+- [ ] **`tmct.ask` on a memory-only page lands on the honest miss.** Gap C wired the same
+  `ask(request)` verb into all eleven pages, but `ask()` traverses a graph and chat/ledger/ingest/
+  research/sprites/plan hold a fact store with an empty one. spider-fly is the page that closed
+  this for its own world, by projecting its rows through `worldRelationGraphPayload` before every
+  turn. The same route is open to any page whose rows have a shape worth asking over; until one is
+  built, those pages answer questions through `tmct.turn` and `tmct.ask` refuses honestly.
+- [ ] **`tmctChatSession`/`tmctChatReady`/`tmctIngestReady`/`tmctAdventureLastSave` are still their
+  own page globals.** They are page-lifecycle flags the e2e suite and `gen-screenshots.mjs` wait on,
+  not part of the engine contract Gap C unified, so they were left alone. `tmctChatSession` is now
+  redundant with `tmct.session` and could fold into it.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 11** — the showcase pass: every viz module builds its page
   script the `mud-viz.mjs` way; `code-explorer-viz.mjs`'s `CLIENT_JS` raw-text block is the one
   remaining holdout (chat's four helpers already converted this session).

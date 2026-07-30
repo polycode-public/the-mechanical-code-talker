@@ -665,7 +665,7 @@ const PLAN = ${embedded};
   mountPlan(PLAN);
 
   // ---- live re-solve: disk-count/max-depth controls + the chat-assert dock
-  // over the sibling plan-browser.bundle.js (window.tmctPlan). Degrades
+  // over the sibling plan-browser.bundle.js (window.tmct). Degrades
   // honestly when the bundle failed to load or wasn't built alongside this
   // page (e.g. a plain renderPlanHtml() call with no bundle nearby) — the
   // baked-in replay above already stands on its own either way.
@@ -678,7 +678,7 @@ const PLAN = ${embedded};
   const chatqEl = document.getElementById("chatq");
   const chatpillsEl = document.getElementById("chatpills");
 
-  const liveAvailable = typeof tmctPlan !== "undefined" && typeof tmctPlan.createPlanSession === "function";
+  const liveAvailable = typeof tmct !== "undefined" && typeof tmct.open === "function";
   if (!liveAvailable) {
     liveStatusEl.textContent = "live re-solve unavailable here — showing the baked-in replay only.";
     liveStatusEl.classList.add("isError");
@@ -712,7 +712,7 @@ const PLAN = ${embedded};
             import("./vendor/wink.js"),
             winkTimeout(WINK_LOAD_TIMEOUT_MS, "wink vendor asset load timed out"),
           ]);
-          tmctPlan.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
+          tmct.page.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
         } catch (err) {
           // eslint-disable-next-line no-console
           console.warn("tmct plan: the wink vendor asset failed to load, continuing without the lemma/POS tier", err);
@@ -729,9 +729,9 @@ const PLAN = ${embedded};
     }
     function applyPlan(freshPlan) {
       if (!freshPlan) return;
-      const { rendersAs, sizeOrder } = tmctPlan.renderInputsFromPlan(freshPlan);
-      mountPlan(tmctPlan.planToPageData({ plan: freshPlan, rendersAs, sizeOrder }));
-      if (pddlEl) pddlEl.textContent = tmctPlan.planToPddl(freshPlan);
+      const { rendersAs, sizeOrder } = tmct.page.renderInputsFromPlan(freshPlan);
+      mountPlan(tmct.page.planToPageData({ plan: freshPlan, rendersAs, sizeOrder }));
+      if (pddlEl) pddlEl.textContent = tmct.page.planToPddl(freshPlan);
       // The <title>/<h1> were baked from the INITIAL plan's own goal text —
       // a live re-solve toward a different goal (a fresh puzzle, or a
       // taught goal revision) must not leave them stating the old one.
@@ -742,7 +742,7 @@ const PLAN = ${embedded};
     async function ensureSession() {
       if (session) return session;
       await tryLoadWink();
-      session = await tmctPlan.createPlanSession({
+      session = await tmct.open({
         diskCount: Math.max(1, Math.min(7, parseInt(diskCountEl.value, 10) || 3)),
         maxDepth: Math.max(1, parseInt(maxDepthEl.value, 10) || 300),
       });
@@ -757,7 +757,7 @@ const PLAN = ${embedded};
       liveStatusEl.textContent = "solving a " + n + "-disk puzzle…";
       liveStatusEl.classList.remove("isError");
       await tryLoadWink();
-      session = await tmctPlan.createPlanSession({ diskCount: n, maxDepth: d });
+      session = await tmct.open({ diskCount: n, maxDepth: d });
       if (session.plan) {
         applyPlan(session.plan);
         liveStatusEl.textContent = "live — " + countLabel(n, "disk", "disks") + ", max depth " + d + ".";
@@ -777,7 +777,7 @@ const PLAN = ${embedded};
       withLock(async () => {
         const s = await ensureSession();
         const maxDepth = Math.max(1, parseInt(maxDepthEl.value, 10) || 300);
-        const result = await s.turn(q, { maxDepth });
+        const result = await tmct.turn(q, { maxDepth });
         addChatLine("a", result.answer);
         if (result.plan) applyPlan(result.plan);
       });

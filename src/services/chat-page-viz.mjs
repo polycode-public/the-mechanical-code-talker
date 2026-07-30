@@ -2,7 +2,7 @@
 // document shaped exactly like spider-fly-viz.mjs/adventure-viz.mjs's own
 // page-builders — one inlined <style> importing viz-theme.mjs's shared
 // tokens, behaviour as an inlined IIFE — running the full chat engine
-// (chat-browser.bundle.js's globalThis.tmctChat, chat-seed.json,
+// (chat-browser.bundle.js's globalThis.tmct, chat-seed.json,
 // public/reference-pack/) by same-origin relative paths. The same
 // relationship spider-fly-viz.mjs's own inlined chat dock has with
 // createSpiderFlySession: both call the shared session.turn(line), neither
@@ -539,7 +539,7 @@ ${THEME_TOKENS_CSS}
 
   /* the provenance stats panel: what this session's memory holds, docked to
      the right of the chat column (a real layout column, not an overlay) —
-     re-rendered after boot and after every turn from window.tmctChat's own
+     re-rendered after boot and after every turn from window.tmct's own
      memoryStats(), never a second provenance computation. */
   .statsPanel { flex: 0 0 300px; max-width: 300px; overflow-y: auto; border-left: 1px solid var(--line); padding: 1.1rem 1.2rem 1.6rem; font-family: ${MONO_STACK}; font-size: .74rem; line-height: 1.55; }
   .statsPanel h2 { font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 1.3rem 0 .5rem; }
@@ -554,7 +554,7 @@ ${THEME_TOKENS_CSS}
   .statsPanel .persist-note { color: var(--muted); font-size: .64rem; margin: .4rem 0 0; }
 
   /* the "researched this session" panel: its own section under the memory
-     stats, filled from window.tmctChat.researchedFactRows() plus each
+     stats, filled from window.tmct.page.researchedFactRows() plus each
      settled research turn's own answer text — the passage tmct actually
      read, the article it read it from, and the facts that passage grounded.
      A sibling section, not folded into #statsPanelStats — that div's own
@@ -1124,7 +1124,7 @@ ${THEME_TOKENS_CSS}
         })(),
         stallGuard(),
       ]);
-      window.tmctChat.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
+      window.tmct.page.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
       winkStatus = "loaded";
     } catch (err) {
       winkStatus = "unavailable";
@@ -1171,7 +1171,7 @@ ${THEME_TOKENS_CSS}
     try { return structuredClone(seedPayload); } catch { return JSON.parse(JSON.stringify(seedPayload)); }
   };
   function newSession() {
-    return window.tmctChat.createChatSession({
+    return window.tmct.open({
       seedPayload: cloneSeed(),
       vocabSeeded: Boolean(seedPayload),
       liveReference: liveReferenceForMode(checkedWikiMode()),
@@ -1205,7 +1205,7 @@ ${THEME_TOKENS_CSS}
   };
 
   // ---- persistence: what you taught it survives a reload, on this device -
-  // Best-effort IndexedDB (window.tmctChat.openPersistedStore): the whole
+  // Best-effort IndexedDB (window.tmct.page.openPersistedStore): the whole
   // Backend-B payload snapshots after each teach turn, debounced so a burst
   // of teaching costs one multi-MB write, not one per fact. The stamp ties a
   // snapshot to this deploy (site version) AND this seed (its fact count and
@@ -1247,13 +1247,13 @@ ${THEME_TOKENS_CSS}
     // Rejoining is a fresh invite, which is what a dropped node needs anyway.
     dropRoom();
     window.tmctChatSession = newSession();
-    const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
+    const stats = await window.tmct.page.memoryStats(window.tmctChatSession.memoryDir);
     addSystemLine("forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats, bandLabelFor) + ").");
     await renderStatsPanel(stats);
   }
 
   // ---- memory stats: the boot message's own numbers, and the docked panel -
-  // Both read window.tmctChat.memoryStats(memoryDir) (chat-browser-entry.mjs)
+  // Both read window.tmct.page.memoryStats(memoryDir) (chat-browser-entry.mjs)
   // — one computation, reused, so the boot line and the panel can never
   // disagree with each other about what this session's memory holds.
   // bandLabelFor/statsSummaryLine/renderStatsPanelInto are the shared
@@ -1266,8 +1266,8 @@ ${THEME_TOKENS_CSS}
    *  rather than blanking it. */
   async function renderStatsPanel(stats) {
     if (!stats) {
-      if (!window.tmctChatSession || !window.tmctChat.memoryStats) return;
-      try { stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir); }
+      if (!window.tmctChatSession || !window.tmct.page.memoryStats) return;
+      try { stats = await window.tmct.page.memoryStats(window.tmctChatSession.memoryDir); }
       catch { return; }
     }
     factPillValueEl.textContent = Number(stats.total || 0).toLocaleString();
@@ -1282,7 +1282,7 @@ ${THEME_TOKENS_CSS}
   // and grounded so far — each entry pairs the passage a settled research
   // turn's own answer cites (parseResearchAnswer, off the SAME "(source:
   // research article ...)" text the chat bubble already shows) with the real
-  // facts that turn stored, read back through window.tmctChat.
+  // facts that turn stored, read back through window.tmct.
   // researchedFactRows(memoryDir) rather than re-deriving them from the
   // answer text — the citation names WHERE tmct read, the fact rows name
   // WHAT it kept, and this panel never invents either from the other.
@@ -1348,9 +1348,9 @@ ${THEME_TOKENS_CSS}
    *  own entry — the passage was still read, even where nothing new stuck. */
   async function noteResearchLearned(result) {
     if (result.research === undefined || !result.record || result.record.miss) return;
-    if (!window.tmctChat.researchedFactRows || !window.tmctChatSession) return;
+    if (!window.tmct.page.researchedFactRows || !window.tmctChatSession) return;
     let rows;
-    try { rows = await window.tmctChat.researchedFactRows(window.tmctChatSession.memoryDir); }
+    try { rows = await window.tmct.page.researchedFactRows(window.tmctChatSession.memoryDir); }
     catch { return; }
     const newFacts = [];
     for (const row of rows) {
@@ -1446,7 +1446,7 @@ ${THEME_TOKENS_CSS}
     setBusy(true);
     let result = null;
     try {
-      result = await window.tmctChatSession.turn(q);
+      result = await window.tmct.turn(q);
       settleAssistantBubble(pendingRow, result.answer, result.record);
       // Persist on ANY store write, not just a teach turn: a learn-on-miss
       // load (a child pack, a reference or live-Wikipedia article, a
@@ -1587,10 +1587,10 @@ ${THEME_TOKENS_CSS}
   // CLI paths emit), so what you taught leaves in the standard shape.
   el("exportFacts").addEventListener("click", async () => {
     const session = window.tmctChatSession;
-    if (!session || !window.tmctChat.exportFactsJsonl) return;
+    if (!session || !window.tmct.page.exportFactsJsonl) return;
     let jsonl;
     try {
-      jsonl = await window.tmctChat.exportFactsJsonl(session.memoryDir);
+      jsonl = await window.tmct.page.exportFactsJsonl(session.memoryDir);
     } catch (err) {
       statusEl.textContent = "couldn't export the facts (" + (err && err.message ? err.message : err) + ")";
       return;
@@ -1607,7 +1607,7 @@ ${THEME_TOKENS_CSS}
   });
 
   // "ingest file" feeds a whole .txt/.md through the SAME session, one
-  // sentence at a time (window.tmctChat.splitSentences, then session.turn),
+  // sentence at a time (window.tmct.page.splitSentences, then session.turn),
   // teaching every sentence the recognizer grounds and skipping the rest
   // honestly — the same pipeline the ingest page runs, reaching the chat's own
   // memory so the taught facts answer questions straight away.
@@ -1616,7 +1616,7 @@ ${THEME_TOKENS_CSS}
     const file = e.target.files && e.target.files[0];
     e.target.value = "";
     const session = window.tmctChatSession;
-    if (!file || busy || !session || !window.tmctChat.splitSentences) return;
+    if (!file || busy || !session || !window.tmct.page.splitSentences) return;
     let text;
     try {
       text = await file.text();
@@ -1624,14 +1624,14 @@ ${THEME_TOKENS_CSS}
       addSystemLine("couldn't read that file (" + (err && err.message ? err.message : err) + ").");
       return;
     }
-    const sentences = window.tmctChat.splitSentences(text);
+    const sentences = window.tmct.page.splitSentences(text);
     if (!sentences.length) { addSystemLine("nothing to ingest in " + file.name + "."); return; }
     setBusy(true);
     statusEl.textContent = "ingesting " + file.name + "\\u2026";
     let grounded = 0;
     try {
       for (const sentence of sentences) {
-        const result = await session.turn(sentence);
+        const result = await tmct.turn(sentence);
         if (result.record && result.record.via === "assert" && !result.record.miss) grounded += 1;
       }
     } catch (err) {
@@ -2221,16 +2221,16 @@ ${THEME_TOKENS_CSS}
   }
 
   async function boot() {
-    if (!window.tmctChat) {
+    if (!window.tmct) {
       statusEl.textContent = "the chat engine didn't load \\u2014 this page needs its build step (npm run demo:build)";
       inputEl.placeholder = "chat engine unavailable";
       return;
     }
     await Promise.all([fetchSeed(), tryLoadWink(), fetchSiteVersion().then((v) => { siteVersion = v; })]);
     progressActive = false;
-    window.tmctChat.registerReferencePackProvider(fetchPackProvider);
-    if (window.tmctChat.openPersistedStore) {
-      persist = window.tmctChat.openPersistedStore({ storeKey: "chat", stamp: siteVersion + ":" + seedFacts + ":" + SEED_STAMP });
+    window.tmct.page.registerReferencePackProvider(fetchPackProvider);
+    if (window.tmct.page.openPersistedStore) {
+      persist = window.tmct.page.openPersistedStore({ storeKey: "chat", stamp: siteVersion + ":" + seedFacts + ":" + SEED_STAMP });
     }
     const savedRecord = persist ? await persist.load() : null;
     const initialMode = readWikiMode();
@@ -2239,7 +2239,7 @@ ${THEME_TOKENS_CSS}
     synthSliderEl.value = String(readSynthBudget());
     synthValueEl.textContent = synthSliderEl.value;
     if (savedRecord && savedRecord.payload) {
-      window.tmctChatSession = window.tmctChat.createChatSession({
+      window.tmctChatSession = window.tmct.open({
         seedPayload: savedRecord.payload,
         vocabSeeded: true,
         liveReference: liveReferenceForMode(initialMode),
@@ -2250,7 +2250,7 @@ ${THEME_TOKENS_CSS}
     } else {
       window.tmctChatSession = newSession();
     }
-    const stats = await window.tmctChat.memoryStats(window.tmctChatSession.memoryDir);
+    const stats = await window.tmct.page.memoryStats(window.tmctChatSession.memoryDir);
     if (savedRecord) restoredCount = stats.taught.length;
     const restoredNote = savedRecord
       ? " Restored " + restoredCount + " taught fact" + (restoredCount === 1 ? "" : "s")
@@ -2264,14 +2264,14 @@ ${THEME_TOKENS_CSS}
     // seen-set from them so a later research turn only reports what's
     // actually new, without fabricating passages for a visit this page
     // was never open to read.
-    if (window.tmctChat.researchedFactRows) {
+    if (window.tmct.page.researchedFactRows) {
       try {
-        const existingResearch = await window.tmctChat.researchedFactRows(window.tmctChatSession.memoryDir);
+        const existingResearch = await window.tmct.page.researchedFactRows(window.tmctChatSession.memoryDir);
         for (const row of existingResearch) researchedFactKeysSeen.add(row.subject + "|" + row.predicate + "|" + row.object);
       } catch { /* best-effort seeding only — a fresh session has none to seed */ }
     }
     renderResearchedPanel();
-    inputEl.placeholder = seedPayload ? 'try "what is a dog" or "list facts"' : window.tmctChat.vocabExampleHint(false);
+    inputEl.placeholder = seedPayload ? 'try "what is a dog" or "list facts"' : window.tmct.page.vocabExampleHint(false);
     renderStatus();
     setBusy(false);
     inputEl.focus();

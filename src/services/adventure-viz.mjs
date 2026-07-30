@@ -42,17 +42,17 @@
 //
 // Four further pure helpers are exported for testing but NOT spliced,
 // because each calls another module's export — the in-page script instead
-// reaches through the browser bundle's own `tmctAdventure` global (mirroring
-// how the inline script calls `tmctSpiderFly.*` rather than re-importing
+// reaches through the browser bundle's own `tmct` surface (mirroring
+// how the spider-fly page's inline script calls it rather than re-importing
 // spider-fly-world.mjs): `roomCaptionText` (calls `worldDigestRows`; the
-// in-page `captionFor` mirrors it against `tmctAdventure.worldDigestRows`),
+// in-page `captionFor` mirrors it against `tmct.page.worldDigestRows`),
 // `pillsForRoom` (a thin wrapper over adventure.mjs's own exported
 // `roomAffordances`, whose header explains why its list can never promise an
 // action one of take/open/talk/examine would then refuse; the in-page
-// `pillsFor` mirrors it against `tmctAdventure.roomAffordances`),
+// `pillsFor` mirrors it against `tmct.page.roomAffordances`),
 // `goalStatusLines` (calls `foldWorldState` and adventure-autoplay.mjs's own
 // `exposedFacts`; the in-page `goalStatusLinesFor` mirrors both against the
-// `tmctAdventure` global too), and `visitedRoomGraph` (a directions-only
+// `tmct` surface too), and `visitedRoomGraph` (a directions-only
 // layout of the rooms a session has actually visited, now a thin wrapper over
 // viz-room-graph.mjs's shared `directedGridLayout` — mud-viz.mjs's own
 // burrowGraph wrote the same BFS-grid layout a second time under its own
@@ -60,7 +60,7 @@
 // header for the algorithm and what `hints`/disconnected components mean).
 // The in-page script never splices `directedGridLayout`/`roomGraphSvg`
 // either, for the same not-self-contained reason: it calls
-// `tmctAdventure.directedGridLayout`/`tmctAdventure.roomGraphSvg` straight
+// `tmct.page.directedGridLayout`/`tmct.page.roomGraphSvg` straight
 // through the bundle instead of re-implementing the room map a second time.
 //
 // The chat dock (chatlog/chatform/chatq/pills, below) mirrors
@@ -479,8 +479,8 @@ export function groundedPlaceholder(actions, fallback) {
  *  row. `[]` on an honest miss (neither lookup returns anything) — never a
  *  fabricated suggestion. NOT .toString()-splice-safe (it calls two other
  *  modules' exports) — the in-page script mirrors this same combination
- *  against the browser bundle's own `tmctAdventure.relatedForTerm`/
- *  `tmctAdventure.classAncestorChain`, the same reach-through-the-global
+ *  against the browser bundle's own `tmct.page.relatedForTerm`/
+ *  `tmct.page.classAncestorChain`, the same reach-through-the-global
  *  pattern `pillsFor`/`captionFor` already use for their own adventure.mjs
  *  calls (see this module's header). */
 export function suggestionsForTerm(rows, term) {
@@ -1199,7 +1199,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   let allStoreRows = [];
 
   // ---- persistence — the manor remembers your visit, on this device -------
-  // Best-effort IndexedDB (tmctAdventure.openPersistedStore): after any
+  // Best-effort IndexedDB (tmct.page.openPersistedStore): after any
   // state-changing redraw, the whole Backend-B payload plus the visited-room
   // exposure set snapshots under the "adventure" key, debounced. Restored on
   // boot; reset clears it and starts the world over. The home page's preview
@@ -1297,22 +1297,22 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 
   function captionFor(rows, state, here) {
     const hereCased = here.charAt(0).toUpperCase() + here.slice(1);
-    const lines = tmctAdventure.worldDigestRows(rows, state)
+    const lines = tmct.page.worldDigestRows(rows, state)
       .filter((row) => row.subject !== "Player" && (row.object === here || row.subject === hereCased))
       .map((row) => row.subject + " " + row.predicate + " " + row.object + ".");
     return lines.length ? lines.join(" ") : "Nothing more about the " + here + " is written down yet.";
   }
 
   // ---- goal status — mirrors adventure-viz.mjs's own goalStatusLines
-  // against tmctAdventure.foldWorldState/tmctAdventure.exposedFacts (the
+  // against tmct.page.foldWorldState/tmct.page.exposedFacts (the
   // same mirroring captionFor/pillsFor already do against their own
   // adventure.mjs exports), so a location is never claimed before the room
   // holding it has actually been visited this session.
   function goalStatusLinesFor(rows, state, visitedRoomIds) {
     const ids = Array.from(new Set(rows.filter((r) => r.predicate === "mgx:is-objective" && r.object === "true").map((r) => r.subject)));
     const carriedIds = new Set(carriedItems(rows, state, ACTING_SUBJECT).map((o) => o.subject));
-    const exposedRows = tmctAdventure.exposedFacts(rows, visitedRoomIds);
-    const exposedState = tmctAdventure.foldWorldState(exposedRows);
+    const exposedRows = tmct.page.exposedFacts(rows, visitedRoomIds);
+    const exposedState = tmct.page.foldWorldState(exposedRows);
     return ids.map((id) => {
       if (carriedIds.has(id)) return { subject: id, status: "carried", text: "carrying the " + id + " \\u2014 the adventure is won." };
       const room = visibleRoomOf(exposedRows, exposedState, id, ACTING_SUBJECT);
@@ -1340,21 +1340,21 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // cursor per node; play mode's own map stays purely informational.
   // roomGraphSvgFor mirrors the OLD inline roomMapSvg's own board-game sizing
   // (a 64px square cell, 56x26px room footprints) through the shared
-  // viz-room-graph.mjs renderer, reached via the tmctAdventure global the
+  // viz-room-graph.mjs renderer, reached via the tmct surface the
   // same way captionFor/pillsFor already reach their own adventure.mjs
   // calls: roomGraphSvg needs escapeHtml and a module-level exit-delta table
   // this splice-safe script carries neither of, so it runs through the
   // bundle rather than being spliced as text (see this page's own module
   // header). visitedRoomGraphFor is the same posture for the layout half.
   function roomGraphSvgFor(graph, clickable) {
-    return tmctAdventure.roomGraphSvg(graph, {
+    return tmct.page.roomGraphSvg(graph, {
       cellX: 64, cellY: 64, roomW: 56, roomH: 26,
       clickable, selectedRoomId,
       label: clickable ? "the whole manor \\u2014 click a room to inspect it" : "the rooms visited so far",
     });
   }
   function visitedRoomGraphFor(state, visitedIds) {
-    return tmctAdventure.directedGridLayout(state, visitedIds, { actingSubject: ACTING_SUBJECT });
+    return tmct.page.directedGridLayout(state, visitedIds, { actingSubject: ACTING_SUBJECT });
   }
   function renderRoomMap(rows, state, visitedRoomIds) {
     mapWrapEl.innerHTML = roomGraphSvgFor(visitedRoomGraphFor(state, visitedRoomIds), false) || '<span class="empty-note">nowhere yet</span>';
@@ -1417,7 +1417,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     addChatLine("u", esc(line));
     addObjDockLine("u", esc(line));
     return withLock(async () => {
-      const result = await session.turn(line);
+      const result = await tmct.turn(line);
       addChatLine("a", esc(result.answer).replace(/\\n/g, "<br>"));
       addObjDockLine("a", esc(result.answer).replace(/\\n/g, "<br>"));
       const snap = await session.snapshot();
@@ -1442,7 +1442,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     // nothing, so it needs no main-transcript echo — it IS the board's own
     // content); pill/typed turns below do echo, since they can change state.
     await withLock(async () => {
-      const result = await session.turn("look " + subject);
+      const result = await tmct.turn("look " + subject);
       objLookEl.textContent = result.answer;
     });
   }
@@ -1505,8 +1505,8 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 
   // ---- contextual pills — refreshed every redraw from the CURRENT room's
   // own roomAffordances-derived list (mirroring pillsForRoom against
-  // tmctAdventure.roomAffordances, the same way captionFor above mirrors
-  // roomCaptionText against tmctAdventure.worldDigestRows), so a pill for a
+  // tmct.page.roomAffordances, the same way captionFor above mirrors
+  // roomCaptionText against tmct.page.worldDigestRows), so a pill for a
   // room the player has left, or an object already taken, never lingers.
   // Clicking one inserts its exact command text into the input and focuses
   // it; it never auto-submits, so free typing still works and a clicked
@@ -1517,7 +1517,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // ever wants to edit before running, and drawing it in both places would
   // make one control a suggestion and its twin an action.
   function pillsFor(rows, state, here) {
-    return tmctAdventure.roomAffordances(rows, state, here);
+    return tmct.page.roomAffordances(rows, state, here);
   }
   function renderPills(rows, state, here) {
     const actions = pillsFor(rows, state, here).filter((a) => a.indexOf("go ") !== 0);
@@ -1560,10 +1560,10 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const ROOT_FALLBACK_BY_CLASS = { adventurer: "person", person: "person", room: "room" };
   const rootFallbackFor = (cls) => ROOT_FALLBACK_BY_CLASS[cls] || "portable";
   function resolveObjectSprite(rows, s) {
-    if (s.subject === "you") return tmctAdventure.resolveSpriteAsset("adventurer", [], [], activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY, { rootFallback: "person", instanceKey: "you" });
-    return tmctAdventure.resolveSpriteAsset(
+    if (s.subject === "you") return tmct.page.resolveSpriteAsset("adventurer", [], [], activeSpriteTemplates, tmct.page.SPRITE_REGISTRY, { rootFallback: "person", instanceKey: "you" });
+    return tmct.page.resolveSpriteAsset(
       s.subject, spriteAncestryRows(rows, s.subject), factsForSubject(rows, s.subject),
-      activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY,
+      activeSpriteTemplates, tmct.page.SPRITE_REGISTRY,
       { rootFallback: rootFallbackFor(s.spriteClass), instanceKey: s.subject },
     );
   }
@@ -1574,9 +1574,9 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // everything else falls back through room's own ancestor chain to the
   // generic room icon.
   function roomKindIconSvg(rows, here) {
-    return tmctAdventure.resolveSpriteAsset(
+    return tmct.page.resolveSpriteAsset(
       here, spriteAncestryRows(rows, here), factsForSubject(rows, here),
-      activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY,
+      activeSpriteTemplates, tmct.page.SPRITE_REGISTRY,
       { rootFallback: "room", instanceKey: "roomkind-" + here },
     );
   }
@@ -1641,7 +1641,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     ticker.pause();
     addChatLine("u", esc(line));
     return withLock(async () => {
-      const result = await session.turn(line);
+      const result = await tmct.turn(line);
       addChatLine("a", esc(result.answer).replace(/\\n/g, "<br>"));
       const snap = await session.snapshot();
       redraw(snap);
@@ -1703,9 +1703,9 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     const classes = new Set(["adventurer"]);
     subjects.forEach((s) => { if (s !== ACTING_SUBJECT) classes.add(spriteClassForObject(rows, s)); });
     legendListEl.innerHTML = Array.from(classes).sort().map((cls) => {
-      const svg = tmctAdventure.resolveSpriteAsset(
+      const svg = tmct.page.resolveSpriteAsset(
         cls, spriteAncestryRows(rows, cls), factsForSubject(rows, cls),
-        activeSpriteTemplates, tmctAdventure.SPRITE_REGISTRY,
+        activeSpriteTemplates, tmct.page.SPRITE_REGISTRY,
         { rootFallback: rootFallbackFor(cls), instanceKey: "legend-" + cls },
       );
       return spriteCardHtml(cls, cls, svg);
@@ -1724,8 +1724,8 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   }
 
   // ---- cursor-driven suggestion pills — the lateral SKOS neighbourhood
-  // (tmctAdventure.relatedForTerm) plus the vertical is-a ancestor chain
-  // (tmctAdventure.classAncestorChain), mirroring adventure-viz.mjs's own
+  // (tmct.page.relatedForTerm) plus the vertical is-a ancestor chain
+  // (tmct.page.classAncestorChain), mirroring adventure-viz.mjs's own
   // suggestionsForTerm against the browser bundle's global (the same
   // reach-through-the-global pattern captionFor/pillsFor already use).
   // Reads the FULL store (allStoreRows), not worldOnlyRows — a term's
@@ -1734,8 +1734,8 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   function renderSuggestionPills() {
     const term = wordBeforeCursor(editorTextEl.value, editorTextEl.selectionStart);
     if (!term) { editorPillsEl.innerHTML = ""; return; }
-    const related = tmctAdventure.relatedForTerm(allStoreRows, term);
-    const chain = tmctAdventure.classAncestorChain(term, allStoreRows);
+    const related = tmct.page.relatedForTerm(allStoreRows, term);
+    const chain = tmct.page.classAncestorChain(term, allStoreRows);
     const seen = new Set([term]);
     const out = [];
     const push = (label) => { if (label && !seen.has(label)) { seen.add(label); out.push(label); } };
@@ -1766,7 +1766,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     const snap = await session.snapshot();
     allStoreRows = snap.rows;
     editRows = worldOnlyRows(snap.rows);
-    editState = tmctAdventure.foldWorldState(editRows);
+    editState = tmct.page.foldWorldState(editRows);
     if (result.unrecognized.length) {
       const lines = result.unrecognized.map((u) => u.line).join(", ");
       editorStatusEl.className = "edit-status pending";
@@ -1797,7 +1797,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     const snap = await session.snapshot();
     allStoreRows = snap.rows;
     editRows = worldOnlyRows(snap.rows);
-    editState = tmctAdventure.foldWorldState(editRows);
+    editState = tmct.page.foldWorldState(editRows);
     editorTextEl.value = renderWorldEditorText(editRows, editState);
     editorStatusEl.className = "edit-status";
     editorStatusEl.textContent = "";
@@ -1818,7 +1818,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
 
   async function boot({ fresh = false } = {}) {
     const saved = !fresh && persist ? await persist.load() : null;
-    session = await tmctAdventure.createAdventureSession(
+    session = await tmct.open(
       world(),
       saved && saved.payload && saved.payload.memoryPayload
         ? { restoredPayload: saved.payload.memoryPayload, restoredVisitedRoomIds: saved.payload.visitedRoomIds }
@@ -1877,9 +1877,9 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   // to. Without that, one world's snapshot would restore into another's graph.
   let siteVersion = "";
   async function openPersistFor(worldName) {
-    if (preview || !tmctAdventure.openPersistedStore) return;
+    if (preview || !tmct.page.openPersistedStore) return;
     if (!siteVersion) siteVersion = await fetchSiteVersion();
-    persist = tmctAdventure.openPersistedStore({ storeKey: "adventure", stamp: siteVersion + ":" + worldName });
+    persist = tmct.page.openPersistedStore({ storeKey: "adventure", stamp: siteVersion + ":" + worldName });
   }
 
   if (scenarioSelectEl) {

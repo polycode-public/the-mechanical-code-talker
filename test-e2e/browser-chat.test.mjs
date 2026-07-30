@@ -1,13 +1,13 @@
 // The in-page chat dock, driven in a real browser. The ledger page always
-// embeds the committed ask bundle (tmctMemoryAsk, the same query engine the
+// embeds the committed question-only ask bundle (the same query engine the
 // CLI runs), but on the Pages DEMO SITE this file builds and serves, the
-// live teach-and-ask bundle (tmctLedger) also loads and takes over the
-// dock's submit handler — the live-teach round trip itself is
+// live teach-and-ask engine also loads and takes over the dock's submit
+// handler — the live-teach round trip itself is
 // e2e/pages-ledger-teach.test.mjs's job; this file's grounded-answer
 // assertions still hold either way (factAnswer/factReadBack's own phrasing
 // is shared code, not duplicated per engine), but an honest MISS routes
-// through runTurn's own richer cascade here, not tmctMemoryAsk's narrower
-// canned miss text.
+// through runTurn's own richer cascade here, not the question-only bundle's
+// narrower canned miss text.
 //
 // The page carries its own engine and payload, so third-party hosts are blocked:
 // the run is the same offline, and nothing here waits on a CDN.
@@ -55,7 +55,7 @@ async function openLedgerPage() {
   // arrived. The dock rewrites the input's placeholder in the same synchronous
   // run that registers its submit handler, so wait for that.
   await page.waitForFunction(
-    () => typeof window.tmctLedger?.createLedgerSession === "function"
+    () => typeof window.tmct?.open === "function" && !window.tmct.fallback
       && /teach/i.test(document.getElementById("chatq")?.placeholder ?? ""),
     null,
     { timeout: ANSWER_TIMEOUT_MS },
@@ -114,8 +114,9 @@ test("a term the graph has never seen is a miss, never a fabricated definition",
   try {
     const reply = await ask(page, "what is a quokka");
     assert.equal(reply.isMiss, true, "an unknown term is reported as a miss");
-    // runTurn's own honest-miss cascade, not tmctMemoryAsk's canned text —
-    // see this file's own header for why the live dock answers here.
+    // runTurn's own honest-miss cascade, not the question-only bundle's
+    // canned text — see this file's own header for why the live dock
+    // answers here.
     assert.match(reply.text, /don't know "quokka" yet/, "the dock says it cannot answer");
     // The miss's own teach hint literally contains "quokka is a <thing>" as a
     // fill-in-the-blank template — a real word after "is a" would be an
