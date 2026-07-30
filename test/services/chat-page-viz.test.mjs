@@ -7,10 +7,12 @@ import {
   renderChatHtml,
   wireStateLabel,
   tapeRowFor,
+  tapeClock,
   nodeRowsFor,
   inviteLinkFor,
   inviteParamsFrom,
   nodeInitials,
+  relativeWhen,
   provenanceChipFor,
 } from "../../src/services/chat-page-viz.mjs";
 import { provBucketFor } from "../../src/services/ledger-viz.mjs";
@@ -62,6 +64,30 @@ test("message families reuse the page's own provenance colours, and anything unk
   assert.equal(tapeRowFor("in", { type: "intro-answer" }).family, "signal");
   assert.equal(tapeRowFor("in", { type: "something-new" }).family, "link");
   assert.equal(tapeRowFor("in", null).type, "unknown", "a message with no type at all still makes a row");
+});
+
+test("tapeClock stamps HH:MM:SS.mmm, zero-padded, off the current local time", () => {
+  const real = Date;
+  class FixedDate extends real {
+    constructor() { super("2026-07-20T03:04:05.006"); }
+  }
+  globalThis.Date = FixedDate;
+  try {
+    assert.equal(tapeClock(), "03:04:05.006");
+  } finally {
+    globalThis.Date = real;
+  }
+});
+
+test("relativeWhen coarsens to the largest unit that still reads as one number", () => {
+  const now = Date.parse("2026-07-20T12:00:00.000Z");
+  assert.equal(relativeWhen(null, now), "—", "no activity yet reads as a dash, never a bogus duration");
+  assert.equal(relativeWhen(undefined, now), "—");
+  assert.equal(relativeWhen(now - 2000, now), "now", "under 5s reads as now");
+  assert.equal(relativeWhen(now - 30_000, now), "30s");
+  assert.equal(relativeWhen(now - 5 * 60_000, now), "5m");
+  assert.equal(relativeWhen(now - 3 * 3600_000, now), "3h");
+  assert.equal(relativeWhen(now - 2 * 86400_000, now), "2d");
 });
 
 const nameFor = (peerId) => ({ p2: "mossy-acorn", p3: "vet-departure" }[peerId] || peerId);

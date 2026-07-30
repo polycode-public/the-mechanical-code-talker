@@ -186,6 +186,18 @@ export function tapeRowFor(direction, message) {
 }
 
 /**
+ * The wire tape's own clock stamp for a message as it arrives —
+ * `HH:MM:SS.mmm`, local time, zero-padded.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function tapeClock() {
+  const at = new Date();
+  const pad = (n, width) => String(n).padStart(width, "0");
+  return pad(at.getHours(), 2) + ":" + pad(at.getMinutes(), 2) + ":" + pad(at.getSeconds(), 2) + "." + pad(at.getMilliseconds(), 3);
+}
+
+/**
  * The node list: every peer this graph knows about, each with the node name it
  * chose and the timestamp of the most recent fact it contributed, most
  * recently active first.
@@ -254,6 +266,24 @@ export function nodeInitials(name) {
   if (words.length >= 2) return (words[0][0] + words[1][0]).toLowerCase();
   if (words.length === 1) return words[0].slice(0, 2).toLowerCase();
   return "??";
+}
+
+/**
+ * How long ago a node's most recent fact landed, relative to `nowMs`: "now"
+ * under 5s, otherwise the whole seconds/minutes/hours/days, coarsest unit
+ * that still reads as one number. `at` null/undefined (a peer with no
+ * activity yet) reads as an em dash rather than a bogus duration.
+ *
+ * Self-contained (no outer refs), `.toString()`-splice safe.
+ */
+export function relativeWhen(at, nowMs) {
+  if (at === null || at === undefined) return "—";
+  const seconds = Math.max(0, Math.round((nowMs - at) / 1000));
+  if (seconds < 5) return "now";
+  if (seconds < 60) return seconds + "s";
+  if (seconds < 3600) return Math.round(seconds / 60) + "m";
+  if (seconds < 86400) return Math.round(seconds / 3600) + "h";
+  return Math.round(seconds / 86400) + "d";
 }
 
 /**
@@ -902,6 +932,8 @@ ${THEME_TOKENS_CSS}
   const nodeInitials = ${nodeInitials.toString()};
   const inviteLinkFor = ${inviteLinkFor.toString()};
   const inviteParamsFrom = ${inviteParamsFrom.toString()};
+  const tapeClock = ${tapeClock.toString()};
+  const relativeWhen = ${relativeWhen.toString()};
   const DIGEST_STRUCTURES = ${digestStructuresJson};
   const el = (id) => document.getElementById(id);
 
@@ -1827,12 +1859,6 @@ ${THEME_TOKENS_CSS}
   const tapeCounts = new Map();
   let wireMessageCount = 0;
 
-  function tapeClock() {
-    const at = new Date();
-    const pad = function (n, width) { return String(n).padStart(width, "0"); };
-    return pad(at.getHours(), 2) + ":" + pad(at.getMinutes(), 2) + ":" + pad(at.getSeconds(), 2) + "." + pad(at.getMilliseconds(), 3);
-  }
-
   function pushTape(entry) {
     // The meter counts real wire messages only; the tape below shows those
     // plus the local notes (state changes, a channel opening) that explain
@@ -1911,16 +1937,6 @@ ${THEME_TOKENS_CSS}
     // Once the channel is open the reply has been used; leaving "send this
     // back" on screen would be asking for something already done.
     answerPanelEl.hidden = !replyOutEl.value || (room && room.state === "connected");
-  }
-
-  function relativeWhen(at, nowMs) {
-    if (at === null || at === undefined) return "—";
-    const seconds = Math.max(0, Math.round((nowMs - at) / 1000));
-    if (seconds < 5) return "now";
-    if (seconds < 60) return seconds + "s";
-    if (seconds < 3600) return Math.round(seconds / 60) + "m";
-    if (seconds < 86400) return Math.round(seconds / 3600) + "h";
-    return Math.round(seconds / 86400) + "d";
   }
 
   function renderNodes() {
