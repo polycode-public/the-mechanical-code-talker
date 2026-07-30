@@ -549,7 +549,7 @@ function sparkCaptionHtml(stats) {
  *  self-contained document with no external requests. Only
  *  scripts/build-demo-site.mjs, which builds the sibling bundle itself
  *  first, passes `true`. The dock's own runtime code below ALSO gates on
- *  `typeof tmctLedger !== "undefined"` regardless — the two checks answer
+ *  `typeof tmct !== "undefined"` regardless — the two checks answer
  *  different questions (did this render even offer the reference; did the
  *  browser actually manage to load it), and both must hold for the live
  *  path to run. */
@@ -564,7 +564,7 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
   // really in this payload, otherwise a real term from this graph. Left as
   // the query-only wording even when the live bundle is offered — the dock's
   // own script swaps it for a teach-aware placeholder the moment it confirms
-  // tmctLedger actually loaded (never claimed ahead of that confirmation).
+  // the live engine actually loaded (never claimed ahead of that confirmation).
   // The example term skips anything under 3 characters — the SAME floor the
   // dock's own miss-tips apply below — so a graph whose highest-degree term
   // is a short stopword-shaped fragment (init:large corpora carry plenty:
@@ -575,7 +575,7 @@ export function renderLedgerHtml({ rows, terms, edges, focus, contradictions, wo
     ? "who is the grandfather of ishmael"
     : (exampleTerm ? `ask the graph… e.g. what is ${exampleTerm.term}` : "ask the graph…");
   // The paste-and-drop ingest panel plus the JSONL export ride the LIVE
-  // engine (window.tmctLedger): both teach into and read the dock's own
+  // engine (window.tmct): both teach into and read the dock's own
   // session store, so they appear only where that bundle is offered — the
   // demo site, never the CLI's self-contained tmct viz page.
   const ingestHtml = ledgerBundleAvailable
@@ -888,14 +888,13 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   // exists it points at that session's store, which teach/research grow in
   // place, so a digest of a just-taught term reads the fresh facts.
   let getLivePayload = () => PAYLOAD;
-  // Whichever loaded bundle carries the browser digest helper — the demo
-  // ledger's own live engine (tmctLedger) or the committed memory-ask engine
-  // the CLI viz page inlines (tmctMemoryAsk). Null before either loads, and the
-  // focus card then keeps whatever server-computed digest it shipped.
+  // The browser digest helper, from whichever engine this page loaded — the
+  // demo ledger's live one or the committed query-only one the CLI viz page
+  // inlines. Both publish it in the same place now, so there is one lookup
+  // rather than two. Null before either loads, and the focus card then keeps
+  // whatever server-computed digest it shipped.
   const digestHelper = () =>
-    (typeof tmctLedger !== "undefined" && tmctLedger && tmctLedger.digestTermFromPayloadBrowser)
-    || (typeof tmctMemoryAsk !== "undefined" && tmctMemoryAsk && tmctMemoryAsk.digestTermFromPayloadBrowser)
-    || null;
+    (typeof tmct !== "undefined" && tmct.page && tmct.page.digestTermFromPayloadBrowser) || null;
   // The digest for one term, computed live in the browser from the embedded
   // structure table, or null when no structures were embedded, no engine has
   // loaded, or the term holds nothing to compose.
@@ -1138,9 +1137,9 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   }
 
   // ---- the chat dock: LIVE teach+ask over the sibling ledger-browser.bundle.js
-  // (window.tmctLedger) when the demo build offered it AND it actually
-  // loaded; falls back to the read-only tmctMemoryAsk engine below —
-  // unchanged from before this page could teach at all — otherwise.
+  // (window.tmct) when the demo build offered it AND it actually
+  // loaded; falls back to the read-only engine below, which publishes the
+  // same surface as a stand-in and says so through tmct.fallback.
   // bin/tmct.mjs's own \`tmct viz\` output never offers the live bundle
   // (renderLedgerHtml's own ledgerBundleAvailable defaults false there), so
   // this branch is simply never reachable on a CLI-generated page.
@@ -1148,7 +1147,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
   const createTicker = ${createTicker.toString()};
   const prefersReducedMotion = ${prefersReducedMotion.toString()};
   const chatForm = el("chatform");
-  if (chatForm && typeof tmctLedger !== "undefined" && typeof tmctLedger.createLedgerSession === "function") {
+  if (chatForm && typeof tmct !== "undefined" && !tmct.fallback) {
     const log = el("chatlog");
     const chatqEl = el("chatq");
     chatqEl.placeholder = 'ask or teach the graph\\u2026 e.g. "blue is a peg"';
@@ -1183,7 +1182,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
             import("./vendor/wink.js"),
             winkTimeout(WINK_LOAD_TIMEOUT_MS, "wink vendor asset load timed out"),
           ]);
-          tmctLedger.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
+          tmct.page.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
         } catch (err) {
           // eslint-disable-next-line no-console
           console.warn("tmct ledger: the wink vendor asset failed to load, continuing without the lemma/POS tier", err);
@@ -1196,7 +1195,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
     async function ensureSession() {
       if (session) return session;
       await tryLoadWink();
-      session = await tmctLedger.createLedgerSession({ seedPayload: PAYLOAD });
+      session = await tmct.open({ seedPayload: PAYLOAD });
       // From here the live store is the source of truth for the digest, so a
       // digest of a term taught this session reads its fresh facts — the store
       // grows in place, so this one closure stays current.
@@ -1214,15 +1213,15 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       chatqEl.disabled = true;
       withLock(async () => {
         try {
-          const s = await ensureSession();
-          const result = await s.turn(q);
+          const live = await ensureSession();
+          const result = await tmct.turn(q);
           const record = result.record;
           const taught = !!record && record.miss === false && (record.via === "assert" || record.via === "retract");
           const body = esc(result.answer).replace(/\\n/g, "<br>");
           pending.className = "a" + (taught ? " taught" : (record && record.miss ? " miss" : ""));
           pending.innerHTML = taught ? '<span class="tag">taught</span>' + body : body;
           if (taught) {
-            const fresh = tmctLedger.computeLedgerDataFromPayload(s.memoryDir.payload, {});
+            const fresh = tmct.page.computeLedgerDataFromPayload(live.memoryDir.payload, {});
             applyLedgerData(fresh);
           } else if (!(record && record.miss)) {
             // Only a genuine answer (never a miss) tries to resolve a
@@ -1231,7 +1230,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
             // ordinary English word (e.g. "run", if the graph happens to
             // hold it), and resolveAnsweredTerm has no way to tell that
             // apart from the term genuinely being discussed.
-            const hit = resolveAnsweredTerm(result.answer, q, LEDGER.terms, tmctLedger.normFactTerm);
+            const hit = resolveAnsweredTerm(result.answer, q, LEDGER.terms, tmct.page.normFactTerm);
             if (hit) refocusWithLabel(hit, q);
           }
         } catch {
@@ -1246,7 +1245,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
 
     // ---- ingest + export: bring your own text, take the graph away ---------
     // The ingest panel runs pasted/dropped/browsed text through the SAME dock
-    // session, one sentence at a time (tmctLedger.splitSentences, then
+    // session, one sentence at a time (tmct.page.splitSentences, then
     // s.turn), keeping only the sentences the recognizer grounds — then
     // re-derives the whole ledger so the new facts can be examined in place.
     // Export serializes that same session store to canonical JSONL.
@@ -1282,13 +1281,13 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
         withLock(async () => {
           try {
             const s = await ensureSession();
-            const sentences = tmctLedger.splitSentences(text);
+            const sentences = tmct.page.splitSentences(text);
             let grounded = 0;
             for (const sentence of sentences) {
-              const r = await s.turn(sentence);
+              const r = await tmct.turn(sentence);
               if (r.record && r.record.miss === false && r.record.via === "assert") grounded += 1;
             }
-            const fresh = tmctLedger.computeLedgerDataFromPayload(s.memoryDir.payload, {});
+            const fresh = tmct.page.computeLedgerDataFromPayload(s.memoryDir.payload, {});
             applyLedgerData(fresh);
             const skipped = sentences.length - grounded;
             statusEl.textContent = countLabel(sentences.length, "sentence")
@@ -1308,7 +1307,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
         withLock(async () => {
           try {
             const s = await ensureSession();
-            const jsonl = await tmctLedger.exportFactsJsonl(s.memoryDir);
+            const jsonl = await tmct.page.exportFactsJsonl(s.memoryDir);
             const blob = new Blob([jsonl], { type: "application/x-ndjson" });
             const url = URL.createObjectURL(blob);
             const link = document.createElement("a");
@@ -1354,8 +1353,8 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
         const pending = addLine("a pending", "researching\\u2026");
         return withLock(async () => {
           try {
-            const s = await ensureSession();
-            const result = await s.turn(q);
+            const live = await ensureSession();
+            const result = await tmct.turn(q);
             const missed = !result.record || Boolean(result.record.miss);
             pending.className = "a" + (missed ? " miss" : "");
             pending.innerHTML = esc(result.answer).replace(/\\n/g, "<br>");
@@ -1363,7 +1362,7 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
               researchQueue = result.research;
               renderResearchControls();
               if (!missed) {
-                const fresh = tmctLedger.computeLedgerDataFromPayload(s.memoryDir.payload, {});
+                const fresh = tmct.page.computeLedgerDataFromPayload(live.memoryDir.payload, {});
                 applyLedgerData(fresh);
               }
             }
@@ -1406,9 +1405,11 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
         else researchTicker.play();
       });
     }
-  } else if (chatForm && typeof tmctMemoryAsk !== "undefined") {
-    const memHandle = tmctMemoryAsk.createInMemoryStore();
-    memHandle.payload = PAYLOAD;
+  } else if (chatForm && typeof tmct !== "undefined") {
+    // The query-only dock. One session over the page's own embedded payload,
+    // and every line goes to tmct.ask — the cascade that used to be chained
+    // here by hand now lives behind that one call.
+    const opened = tmct.open({ payload: PAYLOAD });
     const log = el("chatlog");
     const addLine = (cls, html) => {
       const d = document.createElement("div");
@@ -1423,20 +1424,16 @@ ${ledgerBundleAvailable ? `<script src="./ledger-browser.bundle.js"></script>` :
       input.value = "";
       addLine("u", esc(q));
       (async () => {
-        let fact = null;
-        try { fact = await tmctMemoryAsk.factAnswer(memHandle, q, null, true, {}); } catch { fact = null; }
-        // runAsk's own cascade is factAnswer ?? factReadBack; chain the same
-        // way when the bundle exposes the second reader (relation chases —
-        // "who is the grandfather of ishmael" — live there, not in factAnswer).
-        if (!(fact && fact.text) && typeof tmctMemoryAsk.factReadBack === "function") {
-          try { fact = await tmctMemoryAsk.factReadBack(memHandle, q, null, true, null); } catch { fact = null; }
-        }
-        if (fact && fact.text) {
-          addLine("a", esc(fact.text).replace(/\\n/g, "<br>"));
+        await opened;
+        let answer = null;
+        let data = null;
+        try { ({ answer, data } = await tmct.ask(q)); } catch { answer = null; data = null; }
+        if (answer) {
+          addLine("a", esc(answer).replace(/\\n/g, "<br>"));
           // Same formatting contract as chat's withGoalLine: capitalized,
           // full-stop-terminated, rendered only when the engine deduced one.
-          if (fact.goal) addLine("a goal", "Goal (inferred): " + esc(fact.goal.charAt(0).toUpperCase() + fact.goal.slice(1)) + ".");
-          const hit = resolveAnsweredTerm(fact.text, q, LEDGER.terms, tmctMemoryAsk.normFactTerm);
+          if (data && data.goal) addLine("a goal", "Goal (inferred): " + esc(data.goal.charAt(0).toUpperCase() + data.goal.slice(1)) + ".");
+          const hit = resolveAnsweredTerm(answer, q, LEDGER.terms, tmct.page.normFactTerm);
           if (hit) refocusWithLabel(hit, q);
         } else {
           const tips = LEDGER.terms.filter((t) => t.term.length >= 3).slice(0, 2)

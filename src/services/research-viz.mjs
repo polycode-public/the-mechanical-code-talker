@@ -2,7 +2,7 @@
 // document shaped exactly like ingest-viz.mjs/chat-page-viz.mjs's own
 // page-builders — one inlined <style> importing viz-theme.mjs's shared tokens,
 // behaviour as an inlined IIFE — running the research engine
-// (research-browser.bundle.js's globalThis.tmctResearch) by same-origin
+// (research-browser.bundle.js's globalThis.tmct) by same-origin
 // relative paths.
 //
 // One in-memory graph grows three ways, each visible on the page:
@@ -392,7 +392,7 @@ ${DASH_DARK_CHROME_CSS}
     if (progressActive) statEngineEl.textContent = loadProgressLine(Object.values(progressParts));
   }
 
-  const loadWink = loadWinkVendor({ register: (factory) => window.tmctResearch.registerWinkModel(factory) });
+  const loadWink = loadWinkVendor({ register: (factory) => window.tmct.page.registerWinkModel(factory) });
 
   let seedPayload = null;
   let seedFacts = 0;
@@ -407,7 +407,7 @@ ${DASH_DARK_CHROME_CSS}
     }
   }
   function newSession() {
-    return window.tmctResearch.createResearchSession({ seedPayload: cloneMemoryPayload(seedPayload), vocabSeeded: Boolean(seedPayload), digestStructures: DIGEST_STRUCTURES });
+    return window.tmct.open({ seedPayload: cloneMemoryPayload(seedPayload), vocabSeeded: Boolean(seedPayload), digestStructures: DIGEST_STRUCTURES });
   }
 
   // The curated reference pack provider, same fetch seam chat.html registers,
@@ -432,7 +432,7 @@ ${DASH_DARK_CHROME_CSS}
   };
 
   async function boot() {
-    if (!window.tmctResearch) {
+    if (!window.tmct) {
       engineNoteEl.hidden = false;
       engineNoteEl.textContent = "The research engine did not load. Run npm run demo:build, then reload this page.";
       statSeedEl.textContent = "—";
@@ -441,7 +441,7 @@ ${DASH_DARK_CHROME_CSS}
     }
     const [winkStatus] = await Promise.all([loadWink(), fetchSeed()]);
     progressActive = false;
-    window.tmctResearch.registerReferencePackProvider(fetchPackProvider);
+    window.tmct.page.registerReferencePackProvider(fetchPackProvider);
     session = newSession();
     const winkPart = winkStatus === "loaded" ? "wink-nlp loaded" : "wink-nlp unavailable, curated tiers only";
     statSeedEl.textContent = seedPayload ? seedFacts.toLocaleString() + " facts" : "no seed";
@@ -465,7 +465,7 @@ ${DASH_DARK_CHROME_CSS}
   async function refresh() {
     if (!session) return;
     let snap;
-    try { snap = await window.tmctResearch.researchSnapshot(session.memoryDir, session.sessionIds); }
+    try { snap = await window.tmct.page.researchSnapshot(session.memoryDir, session.sessionIds); }
     catch (err) { console.warn("tmct research: snapshot failed", err); return; }
     const total = (snap.sources || []).reduce((sum, source) => sum + (Number(source.count) || 0), 0);
     statFactsEl.textContent = total.toLocaleString();
@@ -626,15 +626,15 @@ ${DASH_DARK_CHROME_CSS}
     answerEl.className = "";
     answerEl.textContent = "thinking…";
     let res;
-    try { res = await session.ask(q, { sources: allChecked ? null : checked }); }
-    catch (err) { res = { text: "", miss: true }; }
-    if (res.miss || !res.text) {
+    try { res = await tmct.ask(q, { sources: allChecked ? null : checked }); }
+    catch (err) { res = { answer: "", miss: true }; }
+    if (res.miss || !res.answer) {
       answerEl.className = "miss";
       const scope = allChecked ? "any checked source" : "the " + checked.length + " checked source" + (checked.length === 1 ? "" : "s");
       answerEl.textContent = "No grounded answer from " + scope + ". It abstains rather than guess.";
     } else {
       answerEl.className = "";
-      answerEl.textContent = res.text;
+      answerEl.textContent = res.answer;
     }
   }
   el("askGo").addEventListener("click", ask);
@@ -705,7 +705,7 @@ ${DASH_DARK_CHROME_CSS}
     const note = el("teachNote");
     note.textContent = "…";
     let res;
-    try { res = await session.turn(q); } catch { res = null; }
+    try { res = await tmct.turn(q); } catch { res = null; }
     if (res && res.record && res.record.via === "assert" && !res.record.miss) {
       note.textContent = "stored: " + (res.answer || "remembered.");
       el("teachInput").value = "";
@@ -786,7 +786,7 @@ ${DASH_DARK_CHROME_CSS}
   async function researchStep(line) {
     if (!session) return;
     let res;
-    try { res = await session.turn(line); } catch { res = null; }
+    try { res = await tmct.turn(line); } catch { res = null; }
     if (res && res.research !== undefined) {
       researchQueue = res.research;
       renderResearchControls();
@@ -817,9 +817,9 @@ ${DASH_DARK_CHROME_CSS}
 
   // ---- tools --------------------------------------------------------------
   el("exportFacts").addEventListener("click", async () => {
-    if (!session || !window.tmctResearch.exportFactsJsonl) return;
+    if (!session || !window.tmct.page.exportFactsJsonl) return;
     let jsonl;
-    try { jsonl = await window.tmctResearch.exportFactsJsonl(session.memoryDir); }
+    try { jsonl = await window.tmct.page.exportFactsJsonl(session.memoryDir); }
     catch { return; }
     const blob = new Blob([jsonl], { type: "application/x-ndjson" });
     const url = URL.createObjectURL(blob);

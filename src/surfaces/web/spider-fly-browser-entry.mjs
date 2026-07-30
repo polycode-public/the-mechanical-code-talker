@@ -44,6 +44,8 @@
 // them back (hand-written pathfinding over has-exit-* facts, not the taught
 // action-rule DSL), so nothing here depends on them being loaded.
 import { createTurnSession } from "./turn-session.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
+import { graphAsk, enginePlan } from "./engine-surface.mjs";
 import { registerWinkModel } from "../../adapters/wink-model.mjs";
 import {
   createInMemoryStore, normFactTerm, appendFacts, loadMemory, readFactRows,
@@ -137,6 +139,16 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
     initial: { turn: 0, agents: initialAgents, activeWebs: [] },
     taxonomyRows,
 
+    /** The board as a graph, as of the last refresh. Every tick moves the
+     *  pieces, so a caller putting a question to it calls `refreshGraph()`
+     *  first — which is exactly what `turn()` below already does. */
+    get graph() { return graph; },
+
+    /** Rebuild the board graph from the store's current rows. Exposed so a
+     *  question asked outside the chat dock (tmct.ask) reads this turn's
+     *  positions and not last turn's, the same way a typed one does. */
+    refreshGraph: refreshWorldGraph,
+
     /** Run one real engine turn directly. Returns spider-fly.mjs's own
      *  { turn, agents, ecology } shape unmodified. */
     async tick() {
@@ -189,16 +201,23 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
   };
 }
 
-// cellId/parseCellId/DIRECTION_DELTA/visibleCells/DEFAULT_VISION_RADIUS are
-// re-exported so the page's own rendering script (spider-fly-viz.mjs) never
-// has to duplicate grid geometry or the vision-radius default: reconstructing
-// a spider's remaining silk-thread path from its returned direction list, and
-// computing the POV overlay's visible-cell mask, both need them.
-// pillsForSpiderFly/oneStepDirectionBetween are re-exported so the same page
-// can build its own dynamic deception-pill container without duplicating
-// spider-fly-turn.mjs's own pill logic.
-globalThis.tmctSpiderFly = {
-  createSpiderFlySession, normFactTerm, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
-  cellId, parseCellId, DIRECTION_DELTA, visibleCells, DEFAULT_VISION_RADIUS,
-  pillsForSpiderFly, oneStepDirectionBetween, DEFAULT_GAME_CONFIG, registerWinkModel,
-};
+// `tmct.page` is grid geometry and sprite resolution — the two things on this
+// page the engine has no plain-English form for. Reconstructing a spider's
+// remaining silk-thread path from its returned direction list and masking the
+// POV overlay's visible cells both need the raw cell math; the deception pills
+// need spider-fly-turn.mjs's own pill logic.
+publishTmctSurface({
+  open: createSpiderFlySession,
+  // The board moves every tick, so a question rebuilds the graph first —
+  // the same refresh a typed turn does before it dispatches.
+  ask: async (request, options, session) => {
+    await session.refreshGraph();
+    return graphAsk(request, options, session);
+  },
+  plan: enginePlan,
+  page: {
+    normFactTerm, resolveSpriteForClass, SPRITE_REGISTRY, resolveSpriteAsset,
+    cellId, parseCellId, DIRECTION_DELTA, visibleCells, DEFAULT_VISION_RADIUS,
+    pillsForSpiderFly, oneStepDirectionBetween, DEFAULT_GAME_CONFIG, registerWinkModel,
+  },
+});

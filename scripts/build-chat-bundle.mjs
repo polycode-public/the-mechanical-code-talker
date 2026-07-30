@@ -14,7 +14,7 @@
 //
 // Stub selection differs from build-ask-bundle.mjs in two deliberate ways:
 //   - ask-nlp/wink-model stay LIVE — the page registers a CDN-loaded wink
-//     model through tmctChat.registerWinkModel, so the lemma/POS tier can
+//     model through tmct.page.registerWinkModel, so the lemma/POS tier can
 //     come up in the browser; without a registration the loader's internal
 //     catch degrades it to null, same as a checkout without the optional deps;
 //   - the ace strategy stays LIVE — grammar/ace.mjs reads its lexicon as an

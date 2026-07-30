@@ -100,13 +100,13 @@ test("createPlanSession: a solved plan round-trips cleanly through planToPageDat
   assert.ok(!/undefined/.test(pddl));
 });
 
-test("importing plan-browser-entry.mjs exposes the live-session factory and its pure helpers on globalThis.tmctPlan", async () => {
+test("importing plan-browser-entry.mjs publishes globalThis.tmct with the live-session factory as its open() verb and the pure page helpers on tmct.page", async () => {
   await import("../src/surfaces/web/plan-browser-entry.mjs");
-  assert.equal(typeof globalThis.tmctPlan.createPlanSession, "function");
-  assert.equal(typeof globalThis.tmctPlan.planToPageData, "function");
-  assert.equal(typeof globalThis.tmctPlan.planToPddl, "function");
-  assert.equal(typeof globalThis.tmctPlan.renderInputsFromPlan, "function");
-  assert.equal(typeof globalThis.tmctPlan.computeBlocksLayout, "function");
+  assert.equal(typeof globalThis.tmct.open, "function");
+  assert.equal(typeof globalThis.tmct.page.planToPageData, "function");
+  assert.equal(typeof globalThis.tmct.page.planToPddl, "function");
+  assert.equal(typeof globalThis.tmct.page.renderInputsFromPlan, "function");
+  assert.equal(typeof globalThis.tmct.page.computeBlocksLayout, "function");
 });
 
 test("createPlanSession: a smaller puzzle (1 disk) is trivially solved with a single move", async () => {

@@ -4,7 +4,7 @@
 // One IIFE bundle from src/surfaces/web/code-explorer-browser-entry.mjs: the
 // full chat turn engine over a code graph (imports/calls/contains lanes plus
 // teach/recall), exposing createCodeExplorerSession and the re-derivation
-// helpers on window.tmctCodeExplorer. The output is gitignored and built fresh
+// helpers on window.tmct.page. The output is gitignored and built fresh
 // (by scripts/build-electron-app.mjs and `npm run build:code-explorer-bundle`),
 // so the shipped bundle can never drift from src/. Stub selection matches the
 // ledger dock's: the same runTurn pulls in the same optional adapters that

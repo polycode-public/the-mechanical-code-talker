@@ -22,6 +22,8 @@ import * as source from "../../adapters/source.mjs";
 import { computeCodeExplorerData, computeCodeLedger, edgePhrase } from "../../services/code-explorer-viz.mjs";
 import { generateCodeHints } from "../../domain/code-explorer-hints.mjs";
 import { createTurnSession } from "./turn-session.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
+import { graphAsk, enginePlan } from "./engine-surface.mjs";
 import { tmct_ask } from "../../tools/handlers/tmct-ask.mjs";
 import { RELATIONS } from "../../domain/ask-vocab.mjs";
 
@@ -37,7 +39,7 @@ import { RELATIONS } from "../../domain/ask-vocab.mjs";
  * payload carries the starter vocabulary. Teaches land in the same in-memory
  * store, so a taught fact never touches disk.
  *
- * Returns { memoryDir, sessionId, turn }, the createChatSession shape the
+ * Returns { memoryDir, sessionId, graph, turn }, the createChatSession shape the
  * page's chat expects.
  */
 export function createCodeExplorerSession({ graphPayload, seedPayload = null, vocabSeeded = false } = {}) {
@@ -69,6 +71,7 @@ export function createCodeExplorerSession({ graphPayload, seedPayload = null, vo
   return {
     memoryDir,
     sessionId,
+    graph,
     turn: turnSession.turn,
   };
 }
@@ -223,17 +226,27 @@ export function askRelatedFacts(graphPayload, term) {
   return { term, rows, asked, grounded };
 }
 
-// Exposed for the page's inline client: the re-derivation helpers so a graph
-// swapped through the desktop picker re-renders without duplicating logic, the
-// engine's own answer to "what relates to the focus", plus the wink loader hook
-// registerWinkModel and normFactTerm the chat shares with the ledger page.
-globalThis.tmctCodeExplorer = {
-  createCodeExplorerSession,
-  askRelatedFacts,
-  computeCodeExplorerData,
-  computeCodeLedger,
-  generateCodeHints,
-  parseEntities,
-  normFactTerm,
-  registerWinkModel,
-};
+// This page holds a REAL code graph, so `tmct.ask` is the engine answering
+// over it — the same round trip askRelatedFacts already makes twice per
+// relation kind to build the sidebar's rows.
+//
+// `tmct.page` keeps the re-derivation helpers a graph swapped through the
+// desktop picker re-renders with, plus the wink and term-normalizing seams the
+// chat shares with the ledger page. `createCodeExplorerSession` sits there
+// too: this page's client script is still one raw-text block, and it reaches
+// its factory through the bag rather than through `tmct.open()`.
+publishTmctSurface({
+  open: createCodeExplorerSession,
+  ask: graphAsk,
+  plan: enginePlan,
+  page: {
+    createCodeExplorerSession,
+    askRelatedFacts,
+    computeCodeExplorerData,
+    computeCodeLedger,
+    generateCodeHints,
+    parseEntities,
+    normFactTerm,
+    registerWinkModel,
+  },
+});

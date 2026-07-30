@@ -138,6 +138,9 @@ already computes; `runCapabilityPlan`'s loop result already carries `composed` (
 
 ### Gap C — the page's contract with the engine is eleven ad-hoc global bags
 
+**Closed.** See phase 10 below for what landed. The rest of this section is the state it was
+written against.
+
 Each browser entry dumps a different set of primitives onto its own global:
 
 `globalThis.tmctResearch` (`research-browser-entry.mjs:345`), `tmctPlan` (`plan-browser-entry.mjs:112`),
@@ -468,9 +471,21 @@ Ordered so each phase is useful on its own and unblocks the next.
    and a drawn sprite carries no citation to audit. That move also puts the parser in the page's
    bundle, so the composer panel now needs the bundle the same way the dock does (the standalone
    CLI's own `--render sprites` export doesn't have one — tracked in NEXT.md).
-10. **Gap C, one `globalThis.tmct`.** `ask`, `plan`, `turn`, `session`. The eleven per-page bags shrink
-    to whatever has no natural-language form. Late, because it needs 3, 5 and 8 to have somewhere to
-    go.
+10. **Gap C, one `globalThis.tmct` — landed.** `tmct-surface.mjs`'s `publishTmctSurface` installs one
+    surface for every page: `open(...args)` (the page's own session factory, unchanged),
+    `session`, `turn(line, options)`, `ask(request, options)`, `plan(request, options)`, and
+    `page` for whatever has no plain-English form. The eleven bags are gone; what is left on
+    `tmct.page` is canvas geometry, sprite templates and registration seams, so a reader can tell
+    tmct answering (`tmct.ask`) from the page drawing (`tmct.page.cellId`) at a glance.
+    `ask`/`plan` are supplied per page because what a page can ground against genuinely differs —
+    `engine-surface.mjs` carries the two standard ones (`graphAsk` through
+    `dispatchToolStructured("tmct_ask")`, `enginePlan` through `buildCapabilityPlanCtx`'s
+    memory-only mode), and a page that wires neither refuses honestly instead of guessing.
+    Three things the migration needed: `runHandler` now takes a caller-supplied `graph`, so a
+    browser session's in-memory graph reaches the tool layer with no config or file behind it;
+    `createTurnSession` exposes that graph; and the surface publishes with a `fallback` flag, so
+    the ledger page's two bundles (the committed question-only one and the demo site's full
+    engine) settle precedence explicitly rather than by load order.
 11. **The showcase pass.** Every viz module builds its page script the `mud-viz.mjs` way; the two
     raw-text holdouts convert; each page's source is read start to finish against the operator's
     test — does this read as a thin caller of real tmct capability.

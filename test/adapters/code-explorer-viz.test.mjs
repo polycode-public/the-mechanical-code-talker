@@ -154,8 +154,9 @@ function stubPage() {
 }
 
 /** Run the shell's inline client against a stub page and a stub engine surface,
- *  and hand back what it rendered. `api` is the page's window.tmctCodeExplorer;
- *  null is the static page, which has no engine to ask. */
+ *  and hand back what it rendered. `api` is the page-local bag the client
+ *  reaches through `window.tmct.page`; null is the static page, which has no
+ *  engine to ask. */
 function runPageClient(data, api) {
   const page = stubPage();
   const context = {
@@ -166,7 +167,7 @@ function runPageClient(data, api) {
   context.window = context;
   context.globalThis = context;
   context.window.__CODE_EXPLORER__ = { payload: data.payload, ledger: data.ledger, hints: data.hints, focus: data.focus, meta: data.meta };
-  context.window.tmctCodeExplorer = api;
+  context.window.tmct = api ? { page: api } : null;
   const html = renderCodeExplorerHtml(data);
   const clientJs = html.slice(html.lastIndexOf("<script>") + "<script>".length, html.lastIndexOf("</script>"));
   vm.runInContext(clientJs, vm.createContext(context));

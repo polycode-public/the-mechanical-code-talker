@@ -76,9 +76,9 @@ test("renderChatHtml: fetches the seed, wink vendor asset and reference-pack fro
   assert.match(html, /fetchWithProgress\("\.\/chat-seed\.json"/);
   assert.match(html, /fetchWithProgress\("\.\/vendor\/wink\.js"/);
   assert.match(html, /fetch\("\.\/reference-pack\/index\.json"\)/);
-  assert.match(html, /window\.tmctChat\.createChatSession/);
-  assert.match(html, /window\.tmctChat\.registerWinkModel/);
-  assert.match(html, /window\.tmctChat\.registerReferencePackProvider/);
+  assert.match(html, /window\.tmct\.open/);
+  assert.match(html, /window\.tmct\.page\.registerWinkModel/);
+  assert.match(html, /window\.tmct\.page\.registerReferencePackProvider/);
 });
 
 test("renderChatHtml: registers the site service worker, tolerating its absence", () => {
@@ -392,9 +392,9 @@ test("renderChatHtml: a second docked section, seeded empty, sits alongside the 
   assert.match(html, /const researchedPanelEl = el\("researchedPanel"\);/);
 });
 
-test("renderChatHtml: the researched panel reads real fact rows through window.tmctChat.researchedFactRows, never re-deriving them from the answer text", () => {
+test("renderChatHtml: the researched panel reads real fact rows through window.tmct.page.researchedFactRows, never re-deriving them from the answer text", () => {
   const html = renderChatHtml();
-  assert.match(html, /window\.tmctChat\.researchedFactRows\(window\.tmctChatSession\.memoryDir\)/);
+  assert.match(html, /window\.tmct\.page\.researchedFactRows\(window\.tmctChatSession\.memoryDir\)/);
   assert.match(html, /const parseResearchAnswer = /, "the pure citation parser is spliced in, not reimplemented");
 });
 

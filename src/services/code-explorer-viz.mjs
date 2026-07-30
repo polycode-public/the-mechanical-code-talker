@@ -110,7 +110,7 @@ export function computeCodeExplorerData(payload, opts = {}) {
 const CLIENT_JS = String.raw`
 (function () {
   var DATA = window.__CODE_EXPLORER__;
-  var api = window.tmctCodeExplorer || null;
+  var api = window.tmct ? window.tmct.page : null;
   var els = {
     focus: document.getElementById("focus-name"),
     ledger: document.getElementById("ledger"),

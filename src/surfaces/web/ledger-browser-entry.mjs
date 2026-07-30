@@ -27,6 +27,8 @@ import { computeLedgerDataFromPayload } from "../../services/ledger-viz.mjs";
 import { digestTermFromPayloadBrowser } from "./digest-client.mjs";
 import { createTurnSession } from "./turn-session.mjs";
 import { exportFactsJsonl } from "./memory-stats.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
+import { graphAsk, enginePlan } from "./engine-surface.mjs";
 
 /**
  * A browser ledger-dock session over the real turn engine — createChatSession's
@@ -35,7 +37,7 @@ import { exportFactsJsonl } from "./memory-stats.mjs";
  * a fact taught through the dock extends the SAME graph the page renders
  * from, never a disconnected one.
  *
- * Returns { memoryDir, sessionId, turn }, identical to createChatSession.
+ * Returns { memoryDir, sessionId, graph, turn }, identical to createChatSession.
  * ledger-viz.mjs's own inline script calls computeLedgerDataFromPayload
  * (re-exported below) on `memoryDir.payload` after a turn whose record shows
  * a successful write (`via: "assert"` or `via: "retract"`, `miss: false`) to
@@ -52,14 +54,20 @@ export function createLedgerSession({ seedPayload = null, vocabSeeded = false } 
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
 
   const session = createTurnSession({ memoryDir, graph, lexicon, sessionId, vocabHint });
-  return { memoryDir, sessionId, turn: session.turn };
+  return { memoryDir, sessionId, graph, turn: session.turn };
 }
 
-// Re-exported so ledger-viz.mjs's own inline script never has to duplicate
-// the derivation logic that builds rows/terms/edges/contradictions/
-// worthALook/stats from a payload — the same posture chat-browser-entry.mjs
-// takes re-exporting registerWinkModel for its own page's CDN wink load.
-// splitSentences + exportFactsJsonl carry the dock's paste-and-drop ingest and
-// its JSONL export across the bundle boundary, the same one-serializer posture
-// chat-browser-entry.mjs holds for its own page.
-globalThis.tmctLedger = { createLedgerSession, computeLedgerDataFromPayload, normFactTerm, registerWinkModel, registerResearchProvider, splitSentences: splitSentencesPreservingPaths, exportFactsJsonl, digestTermFromPayloadBrowser };
+// `tmct.page` keeps what the page's own script renders with and the engine has
+// no plain-English form for: the payload-to-rows/terms/edges/stats derivation
+// the ledger view re-mounts from after a successful teach, the digest reader,
+// the wink and research seams, and the two serializers behind the dock's
+// paste-ingest and JSONL export.
+publishTmctSurface({
+  open: createLedgerSession,
+  ask: graphAsk,
+  plan: enginePlan,
+  page: {
+    computeLedgerDataFromPayload, normFactTerm, registerWinkModel, registerResearchProvider,
+    splitSentences: splitSentencesPreservingPaths, exportFactsJsonl, digestTermFromPayloadBrowser,
+  },
+});

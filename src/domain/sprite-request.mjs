@@ -10,7 +10,7 @@
 // spider-fly-viz.mjs's threadCellsForSpiderPlan takes its grid geometry as an
 // argument: a function with no module-scope references survives `.toString()`
 // splicing into a page script, and the browser already holds its own copies of
-// those primitives on window.tmctSpiderFly.
+// those primitives on window.tmct.
 //
 // The resolution CHAIN is derived by OBSERVATION, never by re-implementing
 // sprite-templates.mjs's specificity order. At each term of the ancestor chain

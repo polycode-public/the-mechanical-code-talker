@@ -39,6 +39,8 @@ import { groundTextToFacts } from "./ingest-browser-entry.mjs";
 import { openPersistedStore } from "./idb-persist.mjs";
 import { digestTermFromPayloadBrowser } from "./digest-client.mjs";
 import { createTurnSession } from "./turn-session.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
+import { enginePlan } from "./engine-surface.mjs";
 import { exportFactsJsonl } from "./memory-stats.mjs";
 
 // The Fact individual's first-write-wins timestamp, read straight off the
@@ -247,6 +249,7 @@ export function createResearchSession({ seedPayload = null, vocabSeeded = false,
 
   return {
     memoryDir,
+    graph,
     chatSessionId,
     ingestSessionId,
     sessionIds,
@@ -327,8 +330,22 @@ export function createResearchSession({ seedPayload = null, vocabSeeded = false,
   };
 }
 
-globalThis.tmctResearch = {
-  createResearchSession, researchSnapshot, exportFactsJsonl,
-  registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, registerResearchProvider,
-  normFactTerm, vocabExampleHint, openPersistedStore,
-};
+// This page's ask is already source-scoped: `tmct.ask(q, { sources })` keeps
+// the checked source keys and runs the same factAnswer/factReadBack cascade
+// the ledger dock runs, so a visitor can see the answer change as they tick
+// sources off. `tmct.page` keeps the provider and wink seams the page
+// registers, the run snapshot its timeline reads, its persisted store and its
+// JSONL export.
+publishTmctSurface({
+  open: createResearchSession,
+  ask: async (request, options, session) => {
+    const { text, miss } = await session.ask(request, options);
+    return { answer: text, data: null, miss };
+  },
+  plan: enginePlan,
+  page: {
+    researchSnapshot, exportFactsJsonl,
+    registerWinkModel, registerReferencePackProvider, registerLiveReferenceProvider, registerResearchProvider,
+    normFactTerm, vocabExampleHint, openPersistedStore,
+  },
+});

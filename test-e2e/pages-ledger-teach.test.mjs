@@ -1,6 +1,6 @@
 // The ledger page's LIVE chat dock, driven in a real browser: unlike
-// e2e/browser-chat.test.mjs (which drives the query-only tmctMemoryAsk
-// engine every ledger.html carries, CLI output included), this file exists
+// e2e/browser-chat.test.mjs (which drives the committed question-only
+// bundle every ledger.html carries, CLI output included), this file exists
 // because the Pages demo site's own ledger.html links a SECOND, sibling
 // bundle (public/ledger-browser.bundle.js, built by
 // scripts/build-ledger-bundle.mjs) that runs the FULL runTurn engine — teach
@@ -82,7 +82,7 @@ async function openLedgerPage({ viewport, colorScheme } = {}) {
  *  Neither of the gates above says that. `#chatform` is static markup, so it is
  *  visible before a single script has run, and "networkidle" says only that the
  *  network went quiet, which it also does when the sibling bundle failed to
- *  arrive at all. Both can pass with `window.tmctLedger` still undefined and no
+ *  arrive at all. Both can pass with `window.tmct` still undefined and no
  *  submit handler attached, and then every test in this file is driving a form
  *  that nothing is listening to.
  *
@@ -92,7 +92,7 @@ async function openLedgerPage({ viewport, colorScheme } = {}) {
 async function waitForLiveDock(page, { consoleErrors, failedRequests }) {
   try {
     await page.waitForFunction(
-      () => typeof window.tmctLedger?.createLedgerSession === "function"
+      () => typeof window.tmct?.open === "function" && !window.tmct.fallback
         && /teach/i.test(document.getElementById("chatq")?.placeholder ?? ""),
       null,
       { timeout: DOCK_READY_TIMEOUT_MS },
@@ -136,10 +136,10 @@ async function turn(page, text) {
   };
 }
 
-test("the live dock is offered on the demo site: window.tmctLedger loaded and the placeholder announces teaching", async () => {
+test("the live dock is offered on the demo site: window.tmct loaded and the placeholder announces teaching", async () => {
   const { context, page } = await openLedgerPage();
   try {
-    const hasLedgerSession = await page.evaluate(() => typeof window.tmctLedger?.createLedgerSession === "function");
+    const hasLedgerSession = await page.evaluate(() => typeof window.tmct?.open === "function" && !window.tmct.fallback);
     assert.equal(hasLedgerSession, true, "the sibling ledger-browser.bundle.js loaded and exposed createLedgerSession");
     const placeholder = await page.locator("#chatq").getAttribute("placeholder");
     assert.match(placeholder, /teach/i, "the placeholder acknowledges the dock can teach, not just answer");
@@ -191,7 +191,7 @@ test("a live teach's fresh focus card reads the just-taught term back as a diges
 
     // The focus card's digest is not a build-time artifact — "blue" was never
     // in the static snapshot, so this paragraph can only be a client recompute
-    // over the store the teach just grew, through the live tmctLedger engine.
+    // over the store the teach just grew, through the live teach-and-ask engine.
     const digest = page.locator(".focuscard .focusdigest");
     await digest.waitFor({ state: "visible", timeout: TURN_TIMEOUT_MS });
     const paras = await digest.locator("p:not(.dgsrc)").allInnerTexts();

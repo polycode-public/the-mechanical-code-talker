@@ -55,8 +55,11 @@ function turnErrorFallback(message) {
  * grow a visited-rooms set, bump a turn tally). Never runs on a throw: none
  * of the nine originals touch their own state when `runTurn` itself failed.
  *
- * Returns `{ memoryDir, sessionId, turn, focus, last, planState,
- * setPlanState, researchState, setResearchState }`. `turn(line, callArgs)`
+ * Returns `{ memoryDir, sessionId, graph, turn, focus, last, planState,
+ * setPlanState, researchState, setResearchState }`. `graph` is the one this
+ * session was built over, exposed so a caller can put a question to the same
+ * graph its turns run against (engine-surface.mjs's `graphAsk`) without
+ * holding a second reference to it. `turn(line, callArgs)`
  * resolves to `{ answer, end, record, plan, research }` — the union of every
  * field any of the nine originals reads; a caller ignores what it doesn't
  * need. `research` is passed through undefined/null/a queue snapshot exactly
@@ -109,6 +112,7 @@ export function createTurnSession({
   return {
     memoryDir,
     sessionId,
+    graph,
     get focus() { return focus; },
     get last() { return last; },
     get planState() { return planState; },

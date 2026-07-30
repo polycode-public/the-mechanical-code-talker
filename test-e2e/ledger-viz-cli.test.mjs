@@ -129,7 +129,7 @@ test("the generated page inlines the checked-in memory-ask bundle and renders th
     const res = runCli(dir, dir, "--output", out);
     assert.equal(res.status, 0, res.stderr);
     const html = await readFile(out, "utf8");
-    assert.match(html, /tmctMemoryAsk/, "the memory-ask bundle is inlined");
+    assert.match(html, /no session is open on this page yet/, "the memory-ask bundle is inlined");
     assert.match(html, /id="chatform"/, "the dock form renders");
     assert.doesNotMatch(html, /chat unavailable/, "the disabled note is absent when the bundle is present");
   } finally {

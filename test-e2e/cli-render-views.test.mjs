@@ -68,7 +68,7 @@ test("--render spider-fly writes one file whose inlined engine boots from file:/
   const html = await readFile(outPath, "utf8");
   assertSelfContained(html, "spider-fly");
   assert.match(html, /const SPIDERFLY = /, "the page data embed is present");
-  assert.match(html, /tmctSpiderFly/, "the engine bundle is inlined");
+  assert.match(html, /DEFAULT_VISION_RADIUS/, "the engine bundle is inlined");
 
   const { context, page, httpRequests, pageErrors } = await openFromFile(outPath);
   try {
@@ -88,7 +88,7 @@ test("--render adventure embeds the shipped world and boots from file://", async
   const outPath = renderView("adventure");
   const html = await readFile(outPath, "utf8");
   assertSelfContained(html, "adventure");
-  assert.match(html, /tmctAdventure/, "the engine bundle is inlined");
+  assert.match(html, /roomGraphSvg/, "the engine bundle is inlined");
   const embed = /const ADVENTURE = (.*);/.exec(html);
   assert.ok(embed, "the page data embed is present");
   const adventure = JSON.parse(embed[1]);

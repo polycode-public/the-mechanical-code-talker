@@ -97,7 +97,7 @@ test("build-demo-site writes a public/ledger.html with the ledger payload and a 
   const ledger = JSON.parse(m[1]);
   assert.ok(ledger.rows.length > 0, "the demo payload renders real fact rows");
   assert.ok(ledger.rows.some((r) => r.s === "disk-1" || r.o === "disk-1"), "the hanoi-3 demo facts are present");
-  assert.match(html, /tmctMemoryAsk/);
+  assert.match(html, /no session is open on this page yet/, "the memory-ask bundle is inlined");
   assert.match(html, /id="chatform"/);
   assert.ok(!html.includes("chat unavailable"), "the dock renders enabled, not the disabled note");
   // The live teach-capable bundle is a demo-site-only addition (never shipped

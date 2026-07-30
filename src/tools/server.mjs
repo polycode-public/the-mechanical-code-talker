@@ -50,7 +50,7 @@ export const TOOLS = HOT_TOOLS.map(({ name, agentDescription, inputSchema }) => 
   inputSchema,
 }));
 
-async function runHandler(name, args, { config, source = defaultSource, tel = null, ingest = null, memoryBackend = null } = {}) {
+async function runHandler(name, args, { config, source = defaultSource, tel = null, ingest = null, memoryBackend = null, graph: suppliedGraph = null } = {}) {
   // Reject an unknown tool BEFORE touching the graph — an unknown name never
   // triggers a load. hasOwn, so an inherited name ("constructor", "toString")
   // is unknown rather than a callable found on the prototype chain.
@@ -64,13 +64,20 @@ async function runHandler(name, args, { config, source = defaultSource, tel = nu
   // conversational memory store (tmct_export) prefers it over re-deriving a
   // backend from config when one is supplied; every other caller leaves it null
   // and gets today's re-derive-from-config behaviour unchanged.
-  if (handle.ownsGraphLoad) return handle(args, { config, source, tel, ingest, memoryBackend });
-  const graph = await loadGraph(config, source);
+  if (handle.ownsGraphLoad) return handle(args, { config, source, tel, ingest, memoryBackend, graph: suppliedGraph });
+  // `graph` is the third seam of the same kind: a caller that ALREADY holds a
+  // parsed graph hands it over instead of making the tool layer load one. A
+  // browser session is the case that needs it — its graph is built in memory
+  // (a seed payload, or a live board projected through worldRelationGraphPayload)
+  // and there is no config or file behind it to load from.
+  const graph = suppliedGraph || await loadGraph(config, source);
   // repo root = the dir containing .tmct/ (graphFile = <repo>/.tmct/graph.json). Passed to
   // createGraphService so svc.snippet()/svc.context() are usable directly, and on to the
-  // handlers that do their own safe source reads.
-  const repoRoot = dirname(dirname(config.graphFile));
-  const svc = createGraphService(graph, { sourceAccess: true, repoRoot, readFile, tel, ask });
+  // handlers that do their own safe source reads. A supplied graph has no repo on
+  // disk behind it, so those reads are off rather than pointed at a path that
+  // isn't there.
+  const repoRoot = config?.graphFile ? dirname(dirname(config.graphFile)) : null;
+  const svc = createGraphService(graph, { sourceAccess: Boolean(repoRoot), repoRoot, readFile, tel, ask });
   return handle(args, { graph, svc, config, repoRoot, memoryBackend });
 }
 

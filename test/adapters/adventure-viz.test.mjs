@@ -739,7 +739,7 @@ test("renderAdventureHtml: a room sprite is clickable and opens the object light
   assert.match(html, /roomFrameEl\.addEventListener\("click"/, "a delegated click on the room frame opens the lightbox");
   assert.match(html, /\.sprite-card\[data-look-subject\]/);
   assert.match(html, /pillsFor\(rows, state, here\)\.filter\(\(a\) => a\.split\(" "\)\.pop\(\) === subject\)/, "the object's pills are the room's own affordance list filtered to this object");
-  assert.match(html, /const result = await session\.turn\(line\);/, "a dock turn runs through the one live session");
+  assert.match(html, /const result = await tmct\.turn\(line\);/, "a dock turn runs through the one live session");
   assert.match(html, /if \(e\.target === objLightboxEl\) closeObjectLightbox\(\)/, "a click inside the board must not close it");
 });
 
@@ -801,9 +801,9 @@ test("renderAdventureHtml: the chat dock's log, pills row and input form are all
   assert.match(html, /id="chatq"/);
 });
 
-test("renderAdventureHtml: the pill row reads the room's affordances through the shared tmctAdventure global, not a re-implementation", () => {
+test("renderAdventureHtml: the pill row reads the room's affordances through the shared surface, not a re-implementation", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
-  assert.match(html, /tmctAdventure\.roomAffordances/);
+  assert.match(html, /tmct\.page\.roomAffordances/);
   assert.match(html, /renderPills\(/);
 });
 
@@ -886,7 +886,7 @@ test("renderAdventureHtml: picking a world reopens the session, the note and the
   });
   assert.match(html, /scenarioSelectEl\.addEventListener\("change"/);
   assert.match(html, /worldIndex = picked;/);
-  assert.match(html, /createAdventureSession\(\s*world\(\),/, "the session opens over whichever world is picked");
+  assert.match(html, /tmct\.open\(\s*world\(\),/, "the session opens over whichever world is picked");
   assert.match(html, /pageNoteEl\.textContent = world\(\)\.opening/, "the opening line follows the world");
   assert.match(
     html,
@@ -980,7 +980,7 @@ test("renderAdventureHtml: the whole map reuses the shared layout fed allRoomIds
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
   assert.match(html, /const allRoomIds = /);
   assert.match(html, /visitedRoomGraphFor\(state, allRoomIds\(rows\)\)/);
-  assert.match(html, /tmctAdventure\.directedGridLayout\(state, visitedIds, \{ actingSubject: ACTING_SUBJECT \}\)/);
+  assert.match(html, /tmct\.page\.directedGridLayout\(state, visitedIds, \{ actingSubject: ACTING_SUBJECT \}\)/);
 });
 
 test("renderAdventureHtml: edit-mode writes reach the store through session.applyEdit, never a direct memory write from this page", () => {
@@ -990,8 +990,8 @@ test("renderAdventureHtml: edit-mode writes reach the store through session.appl
 
 test("renderAdventureHtml: suggestion pills read the browser bundle's relatedForTerm/classAncestorChain through the shared global", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
-  assert.match(html, /tmctAdventure\.relatedForTerm/);
-  assert.match(html, /tmctAdventure\.classAncestorChain/);
+  assert.match(html, /tmct\.page\.relatedForTerm/);
+  assert.match(html, /tmct\.page\.classAncestorChain/);
 });
 
 test("renderAdventureHtml: the large sprite tier is embedded as page data — no runtime fetch — with the icon tier as a working fallback", () => {
@@ -1016,7 +1016,7 @@ test("renderAdventureHtml: with no large tier passed, the icon tier is the activ
 test("renderAdventureHtml: the manor map draws each room as a named board footprint through the shared room-graph renderer", () => {
   const html = renderAdventureHtml({ worldPayload: WORLD_PAYLOAD });
   assert.match(html, /function roomGraphSvgFor\(graph, clickable\)/, "the board is built through the shared viz-room-graph.mjs renderer, not a local reimplementation");
-  assert.match(html, /tmctAdventure\.roomGraphSvg\(graph, \{/);
+  assert.match(html, /tmct\.page\.roomGraphSvg\(graph, \{/);
   assert.match(html, /cellX: 64, cellY: 64, roomW: 56, roomH: 26/, "the board keeps its own footprint sizing");
   assert.match(html, /\.roommap \.room-node rect \{ fill: var\(--parchment\)/, "the footprint fills with the parchment token in both schemes");
   assert.match(html, /\.map-viewport \{[^}]*background: var\(--baize\)/, "the board sits on the baize felt");

@@ -32,6 +32,7 @@ import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { registerWinkModel, winkInstance } from "../../adapters/wink-model.mjs";
 import { memoryStats, exportFactsJsonl } from "./memory-stats.mjs";
 import { openPersistedStore } from "./idb-persist.mjs";
+import { publishTmctSurface } from "./tmct-surface.mjs";
 
 // The pronoun subjects a bounded carry substitutes with the last unique
 // grounded subject in the SAME paragraph. Reset at every blank line, so a
@@ -192,7 +193,15 @@ export function createIngestSession({ seedPayload = null, vocabSeeded = false } 
   };
 }
 
-globalThis.tmctIngest = {
-  createIngestSession, groundTextToFacts, exportFactsJsonl, registerWinkModel, normFactTerm,
-  memoryStats, openPersistedStore,
-};
+// This page grounds pasted prose into facts; it holds no conversation, so
+// `tmct.turn` is unwired and says so, and the one call the page makes is
+// `tmct.session.ingest(text)`. `tmct.page` keeps the recognizer entry point
+// the page also drives directly, the wink seam, the stats fold behind its
+// counters, its IndexedDB wrapper and its JSONL export.
+publishTmctSurface({
+  open: createIngestSession,
+  page: {
+    groundTextToFacts, exportFactsJsonl, registerWinkModel, normFactTerm,
+    memoryStats, openPersistedStore,
+  },
+});

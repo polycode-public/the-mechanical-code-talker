@@ -90,8 +90,8 @@ test("the page still hands the resolver its own state — taxonomy rows, embedde
   const html = renderSpiderFlyHtml();
   assert.match(html, /factRows: \(session && session\.taxonomyRows\) \|\| \[\]/);
   assert.match(html, /templates: SPIDERFLY\.spriteTemplates/);
-  assert.match(html, /spriteRegistry: tmctSpiderFly\.SPRITE_REGISTRY/);
-  assert.match(html, /resolveSpriteAsset: tmctSpiderFly\.resolveSpriteAsset/);
+  assert.match(html, /spriteRegistry: tmct\.page\.SPRITE_REGISTRY/);
+  assert.match(html, /resolveSpriteAsset: tmct\.page\.resolveSpriteAsset/);
 });
 
 test("the page asks for an expression by name, never by hand-building an mgx:feels fact row", () => {

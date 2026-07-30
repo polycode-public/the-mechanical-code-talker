@@ -1,6 +1,6 @@
 // The home page's chat bundle (scripts/build-chat-bundle.mjs's output,
 // gitignored, rebuilt on every deploy), proven end to end in a vm: it
-// evaluates as a classic script, exposes globalThis.tmctChat, and runs REAL
+// evaluates as a classic script, exposes globalThis.tmct, and runs REAL
 // turns through the full engine — a seeded vocabulary answer with its source,
 // a taught syllogism read back with proof, the honest miss, and the
 // no-code-graph wall — against an in-memory Backend-B handle, zero fs I/O.
@@ -63,19 +63,23 @@ function seededSession(ctx) {
     ],
     objectProperties: [],
   };
-  vm.runInContext("globalThis.__s = tmctChat.createChatSession({ seedPayload: __payload, vocabSeeded: true })", ctx);
+  vm.runInContext("globalThis.__s = tmct.open({ seedPayload: __payload, vocabSeeded: true })", ctx);
 }
 
 const turn = (ctx, line) => vm.runInContext(`__s.turn(${JSON.stringify(line)})`, ctx);
 
-test("the bundle evaluates as a classic script in a browser-shaped context (console + TextEncoder, NO process) and exposes globalThis.tmctChat", () => {
+test("the bundle evaluates as a classic script in a browser-shaped context (console + TextEncoder, NO process) and exposes globalThis.tmct with its verbs and page bag", () => {
   assert.ok(bundle.length < MAX_BUNDLE_BYTES, `bundle is ${bundle.length} bytes — under the ${MAX_BUNDLE_BYTES}-byte ceiling`);
   assert.doesNotMatch(bundle, /^import\s/m, "an import statement survived bundling — not a valid classic <script>");
   const ctx = browserContext();
   assert.equal(vm.runInContext("typeof process", ctx), "undefined", "no process global exists — the engine must never reach for one");
-  const keys = vm.runInContext("Object.keys(tmctChat)", ctx);
-  for (const name of ["createChatSession", "registerWinkModel", "registerReferencePackProvider", "normFactTerm", "vocabExampleHint"]) {
-    assert.ok(keys.includes(name), `tmctChat.${name} is exposed`);
+  const verbs = vm.runInContext("Object.keys(tmct)", ctx);
+  for (const name of ["open", "turn", "ask", "plan", "page"]) {
+    assert.ok(verbs.includes(name), `tmct.${name} is exposed`);
+  }
+  const pageKeys = vm.runInContext("Object.keys(tmct.page)", ctx);
+  for (const name of ["registerWinkModel", "registerReferencePackProvider", "normFactTerm", "vocabExampleHint"]) {
+    assert.ok(pageKeys.includes(name), `tmct.page.${name} is exposed`);
   }
 });
 
@@ -139,7 +143,7 @@ test("learn-on-miss reaches a registered pack provider from inside the bundle an
     summary: "Otters are water animals.",
     url: "https://simple.wikipedia.org/wiki/Otter", revid: 424242, isa: "animal",
   };
-  vm.runInContext("tmctChat.registerReferencePackProvider({ lookup: async (t) => (t === 'otter' ? __article : null) })", ctx);
+  vm.runInContext("tmct.page.registerReferencePackProvider({ lookup: async (t) => (t === 'otter' ? __article : null) })", ctx);
   try {
     const { answer, record } = await turn(ctx, "what is an otter");
     assert.match(answer, /^otter — Otters are water animals\./);
@@ -148,7 +152,7 @@ test("learn-on-miss reaches a registered pack provider from inside the bundle an
     const second = await turn(ctx, "what is an otter");
     assert.match(second.answer, /otter is a kind of animal/, "the stored isa fact answers the second ask from memory");
   } finally {
-    vm.runInContext("tmctChat.registerReferencePackProvider(null)", ctx);
+    vm.runInContext("tmct.page.registerReferencePackProvider(null)", ctx);
   }
 });
 
@@ -166,7 +170,7 @@ test("a session created with digestStructures answers a long term list with a co
   const ctx = browserContext();
   ctx.__digestPayload = digestFixturePayload();
   ctx.__digestStructures = DIGEST_STRUCTURES;
-  vm.runInContext("globalThis.__s = tmctChat.createChatSession({ seedPayload: __digestPayload, vocabSeeded: true, digestStructures: __digestStructures })", ctx);
+  vm.runInContext("globalThis.__s = tmct.open({ seedPayload: __digestPayload, vocabSeeded: true, digestStructures: __digestStructures })", ctx);
   const { answer } = await turn(ctx, "what is a gizmo");
   // termDigestReadBack's own escape line ("Say 'show the facts' for all N
   // stored facts.") only ever appears on the digest path — the flat/grouped
@@ -181,7 +185,7 @@ test("a session created with digestStructures answers a long term list with a co
 test("a session created with no digestStructures still degrades to the flat fact list for the same long term list, and never throws", async () => {
   const ctx = browserContext();
   ctx.__digestPayload = digestFixturePayload();
-  vm.runInContext("globalThis.__s = tmctChat.createChatSession({ seedPayload: __digestPayload, vocabSeeded: true })", ctx);
+  vm.runInContext("globalThis.__s = tmct.open({ seedPayload: __digestPayload, vocabSeeded: true })", ctx);
   const { answer } = await turn(ctx, "what is a gizmo");
   assert.doesNotMatch(answer, /Say 'show the facts' for all \d+ stored facts\./, "with no structure table the digest path never fires");
   assert.match(answer, /gizmo is a kind of apple/, "the flat fact-line list still answers, one bracketed line per fact");
@@ -189,9 +193,9 @@ test("a session created with no digestStructures still degrades to the flat fact
 
 test("an unseeded session still turns, and the false vocab hint offers the teach pointer instead of an unanswerable example", async () => {
   const ctx = browserContext();
-  vm.runInContext("globalThis.__s = tmctChat.createChatSession({})", ctx);
+  vm.runInContext("globalThis.__s = tmct.open({})", ctx);
   const { answer } = await turn(ctx, "what is a dog");
   assert.match(answer, /I don't know "dog" yet/);
-  const hint = vm.runInContext("tmctChat.vocabExampleHint(false)", ctx);
+  const hint = vm.runInContext("tmct.page.vocabExampleHint(false)", ctx);
   assert.match(hint, /teach me directly/);
 });

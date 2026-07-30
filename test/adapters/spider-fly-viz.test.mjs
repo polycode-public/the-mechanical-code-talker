@@ -83,12 +83,12 @@ test("renderSpiderFlyHtml: the play/pause/step/reset controls are all present", 
   assert.match(html, />play<\/button>|play<\/button>/);
 });
 
-test("renderSpiderFlyHtml: the chat dock markup is present, wired to session.turn", () => {
+test("renderSpiderFlyHtml: the chat dock markup is present, wired to the live turn engine", () => {
   const html = renderSpiderFlyHtml();
   assert.match(html, /id="chatform"/);
   assert.match(html, /id="chatq"/);
   assert.match(html, /id="chatlog"/);
-  assert.match(html, /session\.turn\(/, "the dock submits through the live chat turn engine");
+  assert.match(html, /tmct\.turn\(/, "the dock submits through the live chat turn engine");
 });
 
 test("renderSpiderFlyHtml: the chat dock offers addressee and direction pills with canned, grammar-accepted text", () => {

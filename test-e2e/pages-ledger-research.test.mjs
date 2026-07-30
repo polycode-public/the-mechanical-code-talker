@@ -56,7 +56,7 @@ async function openLedgerPage() {
   // the input's placeholder in the same synchronous run that registers its
   // submit handler, so wait for that.
   await page.waitForFunction(
-    () => typeof window.tmctLedger?.createLedgerSession === "function"
+    () => typeof window.tmct?.open === "function" && !window.tmct.fallback
       && /teach/i.test(document.getElementById("chatq")?.placeholder ?? ""),
     null,
     { timeout: TURN_TIMEOUT_MS },

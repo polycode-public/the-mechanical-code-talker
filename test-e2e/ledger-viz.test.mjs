@@ -17,6 +17,17 @@ const T_OLD = "2026-06-01T10:00:00.000Z";
 const T_WEEK = "2026-07-12T10:00:00.000Z";
 const T_NEW = "2026-07-15T09:00:00.000Z";
 
+// A minimally-shaped `globalThis.tmct` standing in for the real committed
+// bundle: enough for the query-only dock branch ledger-viz.mjs's inline
+// script runs (`typeof tmct !== "undefined"`, then `tmct.open`/`tmct.ask`/
+// `tmct.page.normFactTerm`) without pulling in the real engine. `fallback:
+// true` marks it as the question-only stand-in, the same flag the real
+// bundle publishes so a live engine loaded alongside it always wins.
+const FAKE_TMCT_FALLBACK_BUNDLE = "/* fake-bundle-marker */ globalThis.tmct = "
+  + '{ fallback: true, open: async () => ({}), '
+  + "ask: async () => ({ answer: null, data: null, miss: true }), "
+  + "page: { normFactTerm: (s) => s } };";
+
 async function seededRepo() {
   const dir = await mkdtemp(join(tmpdir(), "tmct-ledger-"));
   await appendFact(dir, { subject: "dog", predicate: "rdfs:subClassOf", object: "animal", provenance: "corpus:human /r/IsA", createdAt: T_OLD });
@@ -184,7 +195,7 @@ test("renderLedgerHtml: the query-only placeholder's example term skips short, s
     await appendFact(dir, { subject: "os", predicate: "mgx:capableOf", object: "boot", provenance: "corpus:human" });
     const data = await computeLedgerData(dir);
     assert.equal(data.terms[0].term, "os", "the fixture's own degree ranking puts the short term first");
-    const fake = "/* fake-bundle-marker */ globalThis.tmctMemoryAsk = {};";
+    const fake = FAKE_TMCT_FALLBACK_BUNDLE;
     const html = renderLedgerHtml({ ...data, memoryAskBundle: fake });
     const placeholder = /placeholder="([^"]*)"[^>]*aria-label="Ask the graph"/.exec(html)?.[1];
     assert.ok(placeholder, "the chat input's placeholder attribute renders");
@@ -225,7 +236,7 @@ test("renderLedgerHtml: a non-empty bundle is inlined and the dock renders enabl
   const dir = await seededRepo();
   try {
     const data = await computeLedgerData(dir);
-    const fake = "/* fake-bundle-marker */ globalThis.tmctMemoryAsk = {};";
+    const fake = FAKE_TMCT_FALLBACK_BUNDLE;
     const on = renderLedgerHtml({ ...data, memoryAskBundle: fake });
     assert.ok(on.includes(fake), "the bundle string is embedded verbatim");
     assert.match(on, /id="chatform"/);
@@ -241,7 +252,7 @@ test("renderLedgerHtml: a non-empty bundle is inlined and the dock renders enabl
   }
 });
 
-test("chat dock chain: a store taught via runTurn answers through the real bundle in a vm; the canonical exchange upgrades when factReadBack ships on the bundle surface", async () => {
+test("chat dock chain: a store taught via runTurn answers through the real committed bundle in a vm, chasing the canonical relation question via tmct.ask's own factAnswer-then-factReadBack cascade", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-ledger-dock-"));
   const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
   try {
@@ -262,28 +273,22 @@ test("chat dock chain: a store taught via runTurn answers through the real bundl
     const ctx = vm.createContext({ console });
     vm.runInContext(bundle, ctx);
     ctx.__payload = payload;
-    vm.runInContext("globalThis.__handle = tmctMemoryAsk.createInMemoryStore(); __handle.payload = __payload;", ctx);
+    await vm.runInContext("tmct.open({ payload: __payload })", ctx);
 
-    // factAnswer's own surface answers the definition shape from this store.
-    const def = await vm.runInContext('tmctMemoryAsk.factAnswer(__handle, "what is a father", null, true, {})', ctx);
-    assert.ok(def && def.text, "factAnswer answers a definition question from the taught store");
-    assert.match(def.text, /father is a kind of parent/);
+    // The definition shape answers straight from factAnswer's own lane.
+    const def = await vm.runInContext('tmct.ask("what is a father")', ctx);
+    assert.ok(def && def.answer, "tmct.ask answers a definition question from the taught store");
+    assert.match(def.answer, /father is a kind of parent/);
 
-    // The canonical exchange is a relation chase, which lives in factReadBack
-    // (runAsk's cascade is factAnswer ?? factReadBack). The dock chains both.
-    const hasReadBack = vm.runInContext('typeof tmctMemoryAsk.factReadBack === "function"', ctx);
-    const fact = hasReadBack
-      ? await vm.runInContext('tmctMemoryAsk.factAnswer(__handle, "who is the grandfather of ishmael", null, true, {}).then((f) => f && f.text ? f : tmctMemoryAsk.factReadBack(__handle, "who is the grandfather of ishmael", null, true, null))', ctx)
-      : await vm.runInContext('tmctMemoryAsk.factAnswer(__handle, "who is the grandfather of ishmael", null, true, {})', ctx);
-    if (hasReadBack) {
-      assert.ok(fact && fact.text, "the chained engines answer the canonical exchange");
-      assert.match(fact.text, /ahab/);
-      assert.equal(fact.goal, "look up a taught fact about a subject/verb/object", "the relation chase carries the additive goal field for the dock's goal line");
-      const term = resolveAnsweredTerm(fact.text, "who is the grandfather of ishmael", [{ term: "ahab" }, { term: "john" }, { term: "ishmael" }], normFactTerm);
-      assert.equal(term, "ahab", "answer-to-focus lands on the answering term");
-    } else {
-      assert.equal(fact, null, "without factReadBack on the bundle surface, factAnswer alone misses honestly — never fabricates");
-    }
+    // The canonical exchange is a relation chase, which only factReadBack
+    // reaches — tmct.ask runs factAnswer then falls back to factReadBack
+    // internally, so one call carries both.
+    const fact = await vm.runInContext('tmct.ask("who is the grandfather of ishmael")', ctx);
+    assert.ok(fact && fact.answer, "the cascade answers the canonical exchange");
+    assert.match(fact.answer, /ahab/);
+    assert.equal(fact.data.goal, "look up a taught fact about a subject/verb/object", "the relation chase carries the additive goal field for the dock's goal line");
+    const term = resolveAnsweredTerm(fact.answer, "who is the grandfather of ishmael", [{ term: "ahab" }, { term: "john" }, { term: "ishmael" }], normFactTerm);
+    assert.equal(term, "ahab", "answer-to-focus lands on the answering term");
   } finally {
     clearCache();
     await rm(dir, { recursive: true, force: true });

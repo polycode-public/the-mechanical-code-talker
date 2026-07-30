@@ -2,7 +2,7 @@
 // self-contained document shaped exactly like chat-page-viz.mjs's own
 // page-builder — one inlined <style> importing viz-theme.mjs's shared tokens,
 // behaviour as an inlined IIFE — running the ingest engine
-// (ingest-browser.bundle.js's globalThis.tmctIngest) by same-origin relative
+// (ingest-browser.bundle.js's globalThis.tmct) by same-origin relative
 // paths.
 //
 // The page's own chrome is a two-pane translate-tool layout: mode pills
@@ -133,7 +133,7 @@ ${THEME_TOKENS_CSS}
      the right of the ingest column (a real layout column, not an overlay) —
      the same class names and breakpoint chat-page-viz.mjs's own docked panel
      uses, re-rendered after boot and after every ingest from
-     window.tmctIngest's own memoryStats(). */
+     window.tmct's own memoryStats(). */
   .statsPanel { flex: 0 0 300px; max-width: 300px; overflow-y: auto; border-left: 1px solid var(--line); padding: 1.1rem 1.2rem 1.6rem; font-family: ${MONO_STACK}; font-size: .74rem; line-height: 1.55; display: flex; flex-direction: column; }
   .statsPanel h2 { font-size: .66rem; letter-spacing: .07em; text-transform: uppercase; color: var(--muted); margin: 1.3rem 0 .5rem; }
   .statsPanel h2:first-child { margin-top: 0; }
@@ -359,8 +359,8 @@ ${THEME_TOKENS_CSS}
   // ---- memory stats: the docked panel, same convention as chat.html --------
   async function renderStatsPanel(stats) {
     if (!stats) {
-      if (!session || !window.tmctIngest.memoryStats) return;
-      try { stats = await window.tmctIngest.memoryStats(session.memoryDir); }
+      if (!session || !window.tmct.page.memoryStats) return;
+      try { stats = await window.tmct.page.memoryStats(session.memoryDir); }
       catch { return; }
     }
     factPillValueEl.textContent = Number(stats.total || 0).toLocaleString();
@@ -416,12 +416,12 @@ ${THEME_TOKENS_CSS}
   }
   const cloneMemoryPayload = ${cloneMemoryPayload.toString()};
   function newSession() {
-    return window.tmctIngest.createIngestSession({ seedPayload: cloneMemoryPayload(seedPayload), vocabSeeded: Boolean(seedPayload) });
+    return window.tmct.open({ seedPayload: cloneMemoryPayload(seedPayload), vocabSeeded: Boolean(seedPayload) });
   }
 
   // ---- engine boot ---------------------------------------------------------
   const loadWinkVendor = ${loadWinkVendor.toString()};
-  const tryLoadWink = loadWinkVendor({ register: (factory) => window.tmctIngest.registerWinkModel(factory) });
+  const tryLoadWink = loadWinkVendor({ register: (factory) => window.tmct.page.registerWinkModel(factory) });
 
   // The deploy's own version, read off the service worker file the build
   // already stamps — the only same-origin place the number exists at runtime
@@ -470,7 +470,7 @@ ${THEME_TOKENS_CSS}
     session = newSession();
     clearFactsPane();
     updateIngestEnabled();
-    const stats = await window.tmctIngest.memoryStats(session.memoryDir);
+    const stats = await window.tmct.page.memoryStats(session.memoryDir);
     statusEl.textContent = "forgot everything taught on this device. Back to the fresh seed (" + statsSummaryLine(stats, bandLabelFor) + ").";
     await renderStatsPanel(stats);
   }
@@ -488,7 +488,7 @@ ${THEME_TOKENS_CSS}
     saveTimer = null;
     session = newSession();
     clearFactsPane();
-    const stats = await window.tmctIngest.memoryStats(session.memoryDir);
+    const stats = await window.tmct.page.memoryStats(session.memoryDir);
     statusEl.textContent = statsSummaryLine(stats, bandLabelFor) + ". Ready.";
     await renderStatsPanel(stats);
     updateIngestEnabled();
@@ -496,7 +496,7 @@ ${THEME_TOKENS_CSS}
   });
 
   async function boot() {
-    if (!window.tmctIngest) {
+    if (!window.tmct) {
       statusEl.textContent = "the ingest engine didn't load. This page needs its build step (npm run demo:build)";
       return;
     }
@@ -507,16 +507,16 @@ ${THEME_TOKENS_CSS}
       fetchSiteVersion().then((v) => { siteVersion = v; }),
     ]);
     progressActive = false;
-    if (window.tmctIngest.openPersistedStore) {
-      persist = window.tmctIngest.openPersistedStore({ storeKey: "ingest", stamp: siteVersion + ":" + seedFacts + ":" + SEED_STAMP });
+    if (window.tmct.page.openPersistedStore) {
+      persist = window.tmct.page.openPersistedStore({ storeKey: "ingest", stamp: siteVersion + ":" + seedFacts + ":" + SEED_STAMP });
     }
     const savedRecord = persist ? await persist.load() : null;
     session = savedRecord && savedRecord.payload
-      ? window.tmctIngest.createIngestSession({ seedPayload: savedRecord.payload, vocabSeeded: true })
+      ? window.tmct.open({ seedPayload: savedRecord.payload, vocabSeeded: true })
       : newSession();
     setMode(false);
     updateIngestEnabled();
-    const stats = await window.tmctIngest.memoryStats(session.memoryDir);
+    const stats = await window.tmct.page.memoryStats(session.memoryDir);
     const winkPart = winkStatus === "loaded"
       ? "wink-nlp: loaded"
       : "wink-nlp unavailable. The recognizer can't split sentences without it";
@@ -569,10 +569,10 @@ ${THEME_TOKENS_CSS}
 
   // ---- download the canonical facts as JSONL -------------------------------
   downloadBtn.addEventListener("click", async () => {
-    if (!session || !window.tmctIngest.exportFactsJsonl) return;
+    if (!session || !window.tmct.page.exportFactsJsonl) return;
     let jsonl;
     try {
-      jsonl = await window.tmctIngest.exportFactsJsonl(session.memoryDir);
+      jsonl = await window.tmct.page.exportFactsJsonl(session.memoryDir);
     } catch (err) {
       statusEl.textContent = "couldn't build the download (" + (err && err.message ? err.message : err) + ")";
       return;

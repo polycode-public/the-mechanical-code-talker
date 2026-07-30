@@ -144,7 +144,7 @@ test("renderMudHtml: picking a burrow recasts through the same boot reset and th
   assert.match(html, /liveRoom\.rebind\(\{ memoryDir: opened\.memoryDir/, "a live shared room re-binds to the new burrow's store instead of dropping");
   assert.match(
     html,
-    /createMudSession\(scenario\(\)\.worldPayload/,
+    /tmct\.open\(scenario\(\)\.worldPayload/,
     "the session opens over whichever burrow is picked, never a fixed one",
   );
   assert.match(html, /roster = rosterOf\(scenario\(\)\)/, "each burrow casts from its own animals");
@@ -289,12 +289,12 @@ test("renderMudHtml: each pane carries the out-of-play banner a taken character 
 
 test("renderMudHtml: the page reads the engine's own seams rather than re-deriving them", () => {
   const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
-  assert.match(html, /tmctMud\.pickMudRoster/, "one roster draw feeds both the panes and the session opened for them");
-  assert.match(html, /tmctMud\.castInRoom/, "who stands in the room comes from the engine, so the caption and the talk pills agree");
-  assert.match(html, /tmctMud\.displayNameOf/, "a pouch label comes from the world's own display-name fact");
+  assert.match(html, /tmct\.page\.pickMudRoster/, "one roster draw feeds both the panes and the session opened for them");
+  assert.match(html, /tmct\.page\.castInRoom/, "who stands in the room comes from the engine, so the caption and the talk pills agree");
+  assert.match(html, /tmct\.page\.displayNameOf/, "a pouch label comes from the world's own display-name fact");
   assert.match(html, /turnsTaken\(\)/, "a pane shows its character's own turn count, not the shared one");
-  assert.match(html, /tmctMud\.outOfPlayReasonOf\(/, "how a run ended is read from the engine every redraw, never guessed");
-  assert.match(html, /tmctMud\.expandMudRoster/, "the extra animals are minted by the engine, not named in the page");
+  assert.match(html, /tmct\.page\.outOfPlayReasonOf\(/, "how a run ended is read from the engine every redraw, never guessed");
+  assert.match(html, /tmct\.page\.expandMudRoster/, "the extra animals are minted by the engine, not named in the page");
 });
 
 test("renderMudHtml: the deck offers an edit control, and the edit stage it swaps the panes for", () => {
@@ -460,8 +460,8 @@ test("renderMudHtml: every pane can wave, and has somewhere to say who plays it"
 test("renderMudHtml: the page reads its sync filter off the engine rather than naming predicates itself", () => {
   const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
   assert.match(html, /mudSyncableFacts\(rows, isState, extraPredicates\)/, "the predicate check is handed over, never inlined");
-  assert.match(html, /window\.tmctMud\.isMudStatePredicate/, "and it comes from the world engine's own export");
-  assert.match(html, /window\.tmctMud\.P2P_PREDICATES/, "alongside the P2P layer's own four");
+  assert.match(html, /window\.tmct\.page\.isMudStatePredicate/, "and it comes from the world engine's own export");
+  assert.match(html, /window\.tmct\.page\.P2P_PREDICATES/, "alongside the P2P layer's own four");
 });
 
 // ---- the shared burrow's own readers ----------------------------------------
