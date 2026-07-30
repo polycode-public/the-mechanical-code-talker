@@ -446,8 +446,8 @@ test("the mass fold takes the newest snapshot per subject and ignores an unparsa
     { subject: "vole-1", predicate: "mgx:hasMass", object: "6" },
     { subject: "badger-1", predicate: "mgx:hasMass", object: "heavy" },
   ]);
-  assert.deepEqual(state.masses.get("mole-1"), { value: 11, turn: 2 });
-  assert.deepEqual(state.masses.get("vole-1"), { value: 6, turn: 0 });
+  assert.deepEqual(state.masses.get("mole-1"), { value: 11, turn: 2, epoch: 0 });
+  assert.deepEqual(state.masses.get("vole-1"), { value: 6, turn: 0, epoch: 0 });
   assert.equal(state.masses.has("badger-1"), false, "a mass that isn't a number is no mass at all");
   assert.equal(state.turnCount, 2);
 });

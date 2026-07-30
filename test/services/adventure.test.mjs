@@ -8,7 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
-import { foldWorldState, runNpcPass, roomAffordances, worldDigestRows, currentPosition, worldActionRows, personKnowledgeLines, personRoomReport } from "../../src/services/adventure.mjs";
+import { foldWorldState, runNpcPass, roomAffordances, worldDigestRows, currentPosition, worldActionRows, personKnowledgeLines, personRoomReport, parseSnapshotSubject, snapshotSubject } from "../../src/services/adventure.mjs";
 import { driveSessionTurns } from "../helpers/session.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, openMemoryBackend, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
@@ -92,10 +92,63 @@ test("the world-state fold takes the newest @turnN snapshot per subject and deri
   ];
   const state = foldWorldState(rows);
   assert.equal(state.turnCount, 3);
-  assert.deepEqual(state.placements.get("player"), { predicate: "mgx:currently-in", object: "kitchen", turn: 2 });
-  assert.deepEqual(state.placements.get("cabinet"), { predicate: "mgx:fixed-in", object: "study", turn: 3 });
+  assert.deepEqual(state.placements.get("player"), { predicate: "mgx:currently-in", object: "kitchen", turn: 2, epoch: 0 });
+  assert.deepEqual(state.placements.get("cabinet"), { predicate: "mgx:fixed-in", object: "study", turn: 3, epoch: 0 });
   assert.equal(state.openness.get("portrait").open, true);
   assert.equal(state.exits.get("study").get("north"), "library");
+});
+
+test("a recast's epoch marker resets the fold to the seed even against higher-turn snapshots from the old run", () => {
+  const rows = [
+    { subject: "mole-1", predicate: "mgx:currently-in", object: "garden" },
+    { subject: "mole-1@turn9", predicate: "mgx:currently-in", object: "sett-1" },
+    { subject: "world", predicate: "mgx:world-epoch", object: "1" },
+  ];
+  const state = foldWorldState(rows);
+  assert.equal(state.epoch, 1, "the marker moves the whole fold onto the new run");
+  assert.equal(state.turnCount, 0, "the new run has played no turns yet");
+  assert.equal(state.placements.get("mole-1").object, "garden",
+    "the seed row outranks the old run's turn-9 snapshot, because the seed is the state the recast starts from");
+});
+
+test("a low-turn snapshot from the current epoch outranks a high-turn snapshot from the run before it", () => {
+  const rows = [
+    { subject: "mole-1", predicate: "mgx:currently-in", object: "garden" },
+    { subject: "mole-1@turn9", predicate: "mgx:currently-in", object: "sett-1" },
+    { subject: "mole-1@epoch1@turn1", predicate: "mgx:currently-in", object: "burrow-1" },
+  ];
+  const state = foldWorldState(rows);
+  assert.equal(state.epoch, 1, "an epoch-stamped snapshot carries the run it belongs to");
+  assert.equal(state.turnCount, 1, "only the current run's turns count");
+  assert.deepEqual(state.placements.get("mole-1"),
+    { predicate: "mgx:currently-in", object: "burrow-1", turn: 1, epoch: 1 });
+});
+
+test("within one epoch the turn ordering is exactly what it was without epochs", () => {
+  const stamped = foldWorldState([
+    { subject: "mole-1", predicate: "mgx:currently-in", object: "garden" },
+    { subject: "mole-1@epoch2@turn1", predicate: "mgx:currently-in", object: "burrow-1" },
+    { subject: "mole-1@epoch2@turn3", predicate: "mgx:currently-in", object: "sett-1" },
+  ]);
+  assert.equal(stamped.placements.get("mole-1").object, "sett-1", "the newest turn of the current run wins");
+  assert.equal(stamped.turnCount, 3);
+  const legacy = foldWorldState([
+    { subject: "mole-1", predicate: "mgx:currently-in", object: "garden" },
+    { subject: "mole-1@turn1", predicate: "mgx:currently-in", object: "burrow-1" },
+    { subject: "mole-1@turn3", predicate: "mgx:currently-in", object: "sett-1" },
+  ]);
+  assert.equal(legacy.placements.get("mole-1").object, "sett-1");
+  assert.equal(legacy.turnCount, 3);
+  assert.equal(legacy.epoch, 0, "a store with no marker and no stamped snapshot is wholly on epoch 0");
+});
+
+test("parseSnapshotSubject and snapshotSubject agree on both subject forms", () => {
+  assert.deepEqual(parseSnapshotSubject("mole-1@turn4"), { base: "mole-1", epoch: 0, turn: 4 });
+  assert.deepEqual(parseSnapshotSubject("mole-1@epoch2@turn4"), { base: "mole-1", epoch: 2, turn: 4 });
+  assert.equal(parseSnapshotSubject("mole-1"), null, "a base subject is no snapshot");
+  assert.equal(snapshotSubject("mole-1", 4, 0), "mole-1@turn4", "epoch 0 keeps the bare form every existing store uses");
+  assert.equal(snapshotSubject("mole-1", 4, 2), "mole-1@epoch2@turn4");
+  assert.deepEqual(parseSnapshotSubject(snapshotSubject("vole-1", 7, 3)), { base: "vole-1", epoch: 3, turn: 7 });
 });
 
 test("the digest view folds placements, phrases the predicates, and keeps hidden contents and puzzle wiring out", () => {
@@ -130,7 +183,7 @@ test("a position is current until the subject is placed anew, then goes stale wi
   ];
   const state = foldWorldState(rows);
   const before = foldWorldState(rows.slice(0, 2));
-  assert.deepEqual(currentPosition(before, "lamp"), { predicate: "mgx:on-top-of", object: "desk", turn: 0 },
+  assert.deepEqual(currentPosition(before, "lamp"), { predicate: "mgx:on-top-of", object: "desk", turn: 0, epoch: 0 },
     "on the desk while it still rests in the study");
   assert.equal(currentPosition(state, "lamp"), null, "taking the lamp (turn 4) supersedes the turn-0 position with no retraction row");
 });

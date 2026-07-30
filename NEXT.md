@@ -55,9 +55,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] MUDIII implementation itself (Three.js town square) — fully designed in `PLAN_MUD.md`, not
   started.
 - [ ] `PLAN_FACT.md` implementation itself — fully designed, not started.
-- [ ] a mud room is bound to the store it was opened over, so recasting (RESET, either slider, or
-  the scenario dropdown) drops the link and says so. Carrying a live room across a recast needs the
-  room to re-bind to the new store — real work in `p2p-room.mjs`, not page wiring.
 - [ ] **the turntable and the move pose — content wave**: bear/cat/dog/king carry four `mgx:faces`
   angles plus a `mgx:pose = moving` frame at the left angle. Fill in the rest: the moving frame at
   the other three angles, then both axes across the remaining animal and person catalog. The shape
@@ -69,6 +66,9 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   precache an old seed, swap in changed content, assert the next load serves the new bytes and
   "reset to seed" recovers a stuck session); no browser/DOM run confirming the fact-count pills
   render correctly (unit-level only so far).
+- [ ] mud room rebind's epoch fold covers world-state predicates only — `knows-about` testimony
+  claims still rank by bare turn across epochs, so a pre-recast "the fox is gone" claim can outrank
+  a fresh post-recast sighting of the same fox. Real remainder from `p2p-room.mjs`'s rebind work.
 
 
 ## Discipline

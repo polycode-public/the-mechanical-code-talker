@@ -37,7 +37,7 @@ import {
   foldWorldState, worldActionRows, worldDigestRows, roomAffordances,
   personKnowledgeLines, personKnownFoodLines,
   diggableDirections, castInRoom, displayNameOf, isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase,
-  roomKindOf, isMudStatePredicate,
+  roomKindOf, isMudStatePredicate, worldEpochFact, snapshotSubject,
 } from "../../services/adventure.mjs";
 import { waveFact, playedByFact, P2P_PREDICATES } from "../../domain/p2p/facts.mjs";
 import { relatedForTerm } from "../../domain/skos-view.mjs";
@@ -65,13 +65,18 @@ import { createTurnSession } from "./turn-session.mjs";
  *  visitedRoomIds, turnsTaken, isOutOfPlay, outOfPlayReason }`. `snapshot()` is
  *  the one OMNISCIENT read this module exposes — the central world map's own
  *  data source, never a per-window one. */
-export async function createMudSession(worldPayload, { characters = [] } = {}) {
+export async function createMudSession(worldPayload, { characters = [], epoch = 0 } = {}) {
   const memoryDir = createInMemoryStore();
   const tag = worldProvenanceTag(worldPayload.name);
   const seedFacts = worldFactsForCast(worldPayload.facts, characters);
   await appendFacts(memoryDir, seedFacts.map((f) => ({
     subject: f.subject, predicate: f.predicate, object: f.object, provenance: tag,
   })));
+  // A recast opens the same deterministic ids over a fresh store while peers
+  // may still hold the old run's snapshots. The epoch marker is what makes
+  // every fold — local and merged — treat this seed as the newer state. An
+  // unrecast boot writes nothing, so a solo session's store is unchanged.
+  if (epoch > 0) await appendFacts(memoryDir, [{ ...worldEpochFact(epoch), provenance: tag }]);
   for (const rule of worldPayload.rules) {
     await appendRule(memoryDir, { name: rule.name, kind: rule.ruleKind, slots: rule.slots, provenance: tag });
   }
@@ -216,7 +221,7 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
     const editTurn = state.turnCount + 1;
     if (toAppend.length) {
       await appendFacts(memoryDir, toAppend.map((f) => ({
-        subject: f.kind === "other" ? f.subject : `${f.subject}@turn${editTurn}`,
+        subject: f.kind === "other" ? f.subject : snapshotSubject(f.subject, editTurn, state.epoch),
         predicate: f.predicate,
         object: f.object,
         provenance: f.kind === "other" ? tag : `${tag}:turn${editTurn}`,
