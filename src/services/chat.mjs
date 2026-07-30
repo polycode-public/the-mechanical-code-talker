@@ -953,9 +953,35 @@ async function answerMemoryClassQuery(memoryDir, query) {
 // literal quantifier lookup. Placed ahead of it in runTurn: HOW_MANY_ARE_RE
 // reads "there" as a second noun and answers "I was never told a quantifier",
 // stealing the phrasing before a member count ever runs.
-const TAUGHT_CLASS_COUNT_RE = /^how\s+many\s+([a-z][\w-]*)\s*(.*)$/i;
+const TAUGHT_CLASS_COUNT_RE = /^how\s+many\s+([a-z][\w-]*(?:\s+[a-z][\w-]*)*)\s*(.*)$/i;
 
-/** Count the taught members of a class named by a plain noun ("how many animals
+/** The longest leading run of `nounRun`'s words that names a class something was
+ *  actually taught about, as `{asked, tail, members}` — its taught members and
+ *  whatever words are left over, joined onto `trailing` as the restrictor tail.
+ *  A class name is a noun PHRASE, not a word ("sprite class", "body of water"),
+ *  so the run is tried longest-first and the shortest reading wins only when no
+ *  longer one is on record. That ordering is what keeps a single-word class
+ *  carrying a restrictor ("list the animals in the graph") reading exactly as it
+ *  did when only the first word was ever considered. */
+async function longestTaughtClassInRun(memoryDir, nounRun, trailing, biasByBundle, cache) {
+  const words = String(nounRun || "").trim().split(/\s+/).filter(Boolean);
+  if (!words.length) return null;
+  if (COUNT_NOUNS[words[0].toLowerCase()]) return null; // a real graph-countable class — the code lanes own it
+  let normFactTerm;
+  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
+  const rows = await factRows(memoryDir, cache);
+  const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
+  for (let take = words.length; take >= 1; take -= 1) {
+    const asked = words.slice(0, take).join(" ").toLowerCase();
+    const variants = factTermVariants(normFactTerm, asked);
+    const members = rankByBiasThenTrust(isa.filter((f) => variants.has(f.object)), biasByBundle);
+    if (!members.length) continue; // nothing taught under this reading — try a shorter one
+    return { asked, tail: [words.slice(take).join(" "), String(trailing || "")].filter(Boolean).join(" ").trim(), members };
+  }
+  return null;
+}
+
+/** Count the taught members of a class named by a noun phrase ("how many animals
  *  are there" → every "X is a kind of animal"). Declines (null) for a real
  *  code-countable class (answerCount owns it) or a class nothing was taught
  *  about, so structural counts and the quantifier lane are unaffected. */
@@ -963,22 +989,16 @@ async function answerTaughtClassCount(memoryDir, query, biasByBundle = {}, cache
   if (!memoryDir) return null;
   const m = String(query).trim().match(TAUGHT_CLASS_COUNT_RE);
   if (!m) return null;
-  if (!DYNAMIC_TAIL_OK_RE.test((m[2] || "").trim())) return null;
-  const asked = m[1].toLowerCase();
-  if (COUNT_NOUNS[asked]) return null; // a real graph-countable class — answerCount owns it
-  let normFactTerm;
-  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
-  const rows = await factRows(memoryDir, cache);
-  const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
-  const variants = factTermVariants(normFactTerm, asked);
-  const members = rankByBiasThenTrust(isa.filter((f) => variants.has(f.object)), biasByBundle);
-  if (!members.length) return null; // nothing taught under this class name — later lanes own it
+  const hit = await longestTaughtClassInRun(memoryDir, m[1], m[2], biasByBundle, cache);
+  if (!hit) return null;
+  if (!DYNAMIC_TAIL_OK_RE.test(hit.tail)) return null;
   // A member whose SUBJECT is itself a countable graph class ("every class is a
   // component") is an asserted-vocabulary cardinality, not a member enumeration —
   // countFromFacts counts the real class, so defer to it rather than tallying the
   // one class-level fact.
-  if (members.some((f) => COUNT_NOUNS[String(f.subject).toLowerCase()])) return null;
-  return `${members.length} ${members.length === 1 ? asked.replace(/s$/, "") : asked}.`;
+  if (hit.members.some((f) => COUNT_NOUNS[String(f.subject).toLowerCase()])) return null;
+  const n = hit.members.length;
+  return `${n} ${n === 1 ? hit.asked.replace(/s$/, "") : hit.asked}.`;
 }
 
 // "list all animals" / "list the animals" — enumerate a taught class's members,
@@ -986,9 +1006,9 @@ async function answerTaughtClassCount(memoryDir, query, biasByBundle = {}, cache
 // leftovers: at scale the definition lane fills its cap with forward corpus facts
 // before the reverse-membership listing ever shows, and the conversational
 // orientation lane claims the bare "list …" phrasing before factReadBack runs.
-const MEMBERSHIP_LIST_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][\w-]*)\s*(.*)$/i;
+const MEMBERSHIP_LIST_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][\w-]*(?:\s+[a-z][\w-]*)*)\s*(.*)$/i;
 
-/** List the taught members of a class named by a plain noun ("list all animals"
+/** List the taught members of a class named by a noun phrase ("list all animals"
  *  → every "X is a kind of animal"). Declines (null) for a code-countable class
  *  or a class nothing was taught about; declines with a message for a real
  *  restrictor tail rather than answering as if it weren't there. */
@@ -996,16 +1016,9 @@ async function answerMembershipList(memoryDir, query, biasByBundle = {}, cache =
   if (!memoryDir) return null;
   const m = String(query).trim().match(MEMBERSHIP_LIST_RE);
   if (!m) return null;
-  const asked = m[1].toLowerCase();
-  if (COUNT_NOUNS[asked]) return null; // a real graph-countable class — the code list lane owns it
-  const tail = (m[2] || "").trim();
-  let normFactTerm;
-  try { ({ normFactTerm } = await import("../adapters/memory/core.mjs")); } catch { return null; }
-  const rows = await factRows(memoryDir, cache);
-  const isa = rows.filter((f) => ISA_PREDICATES.has(f.predicate));
-  const variants = factTermVariants(normFactTerm, asked);
-  const members = rankByBiasThenTrust(isa.filter((f) => variants.has(f.object)), biasByBundle);
-  if (!members.length) return null; // nothing taught under this class name — later lanes own it
+  const hit = await longestTaughtClassInRun(memoryDir, m[1], m[2], biasByBundle, cache);
+  if (!hit) return null;
+  const { asked, tail, members } = hit;
   if (!DYNAMIC_TAIL_OK_RE.test(tail)) {
     return {
       text: `I can list the ${asked}, but not the "${tail}" part of that question — `
@@ -7160,6 +7173,16 @@ const LOCATIVE_FACT_PREDICATE_RE = /^mgx:[a-z]+-(?:on|in|at|inside|under|below|a
  *  to the ordinary BARE_WHATIS_RE handling untouched. */
 const WHAT_IS_PREP_FACT_RE = new RegExp(`^what(?:'s|\\s+is|\\s+are)\\s+(${PREP_SRC})\\s+(.+?)\\s*[?.!]*$`, "i");
 
+/** "what parameters does a person sprite take" / "what materials does a bed
+ *  accept" — the object-fronted property question, where the property noun
+ *  leads and the verb closes. It reads the same folded verb-plus-noun predicates
+ *  the teach path already mints (mgx:take-parameter, mgx:accept-material,
+ *  mgx:offer-variant), so the predicate is recovered from the sentence's own two
+ *  ends rather than from a table of known property words: m[1] is the noun,
+ *  m[2] the subject, m[3] the verb. Consumed by factAnswer's (a-pre6) reader,
+ *  which diverts only on a real stored hit. */
+const OBJECT_FRONTED_PROPERTY_RE = /^what\s+([a-z][\w-]*)\s+(?:does|do)\s+(?:an?\s+|the\s+)?(.+?)\s+([a-z][a-z-]*)\s*[?.!]*$/i;
+
 // CAN_ASK_RE's remaining paraphrase-ladder siblings, all over the same
 // mgx:capableOf facts:
 //  - DO_VERB_ASK_RE: the do-support yes/no ("do birds fly", "does a dog
@@ -7655,6 +7678,35 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const variants = factTermVariants(normFactTerm, whatIsPrepQ[2].replace(/^(?:an?|the)\s+/i, "").trim());
     const hits = (await factRows(memoryDir, cache)).filter(
       (f) => LOCATIVE_FACT_PREDICATE_RE.test(f.predicate) && f.predicate.endsWith(`-${prep}`) && variants.has(f.object),
+    );
+    if (hits.length) {
+      const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
+      const lines = ranked.map(renderFactLine);
+      const shown = lines.slice(0, FACT_ANSWER_CAP);
+      const rest = lines.slice(FACT_ANSWER_CAP);
+      const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";
+      return { text: shown.join("\n") + extra, replace: true, ...(rest.length ? { pending: { items: rest, noun: "facts" } } : {}) };
+    }
+  }
+
+  // (a-pre6) "what parameters does a person sprite take" — the object-fronted
+  // property question over a folded verb-plus-noun predicate. Both ends of the
+  // sentence carry half the predicate the teach path minted, so the verb and the
+  // noun are rejoined into mgx:<verb>-<noun> and looked up directly; the noun is
+  // tried through its own plural variants, since a question asks for "parameters"
+  // where the stored predicate names one "parameter". Checked before (a) for the
+  // same reason as its siblings above — the leading "what …" would otherwise be
+  // claimed as one literal term to define — and hit-gated the same way, so a
+  // sentence of this shape with nothing on record falls through untouched.
+  const propertyQ = q.match(OBJECT_FRONTED_PROPERTY_RE);
+  if (propertyQ) {
+    const verb = propertyQ[3].toLowerCase();
+    const subjectVariants = factTermVariants(normFactTerm, propertyQ[2]);
+    const predicates = new Set(
+      [...factTermVariants(normFactTerm, propertyQ[1])].map((noun) => normFactPredicate(`mgx:${verb}-${noun.replace(/\s+/g, "-")}`)),
+    );
+    const hits = (await factRows(memoryDir, cache)).filter(
+      (f) => predicates.has(normFactPredicate(f.predicate)) && subjectVariants.has(normFactTerm(f.subject)),
     );
     if (hits.length) {
       const ranked = rankByBiasThenTrust(uniqueFacts(hits), biasByBundle);
@@ -12526,11 +12578,16 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let envelope = null;
   try {
     let text;
-    if (graph && (focus?.id || prev.length)) {
-      // Direct ask() when EITHER a focus is set (thread it as contextId so "it"
-      // binds) OR the previous turn produced a set to refer back to (thread it as
-      // `prev` for the anaphora node). Builds the SAME delimited envelope dispatchTool
-      // emits, so the parse below is identical either way.
+    if (graph?.individuals?.length || (graph && (focus?.id || prev.length))) {
+      // Direct ask() whenever the caller HANDED US a graph with something in it.
+      // The focus/prev pair is threaded through it (contextId so "it" binds, prev
+      // for the anaphora node), but neither is what earns the direct call: a
+      // caller that passes a real graph means that graph, and the tmct_ask branch
+      // below reads the CONFIG's graph instead — which an in-process session (a
+      // page's own world facts, say) has no file for. Gating on history alone
+      // refused every cold turn against a perfectly good graph and only started
+      // answering once a focus happened to be set. Builds the SAME delimited
+      // envelope dispatchTool emits, so the parse below is identical either way.
       const { ask } = await import("../domain/ask.mjs");
       const r = ask(graph, askQuery, { contextId: effectiveContextId, prev });
       text = `${r.content}${ASK_ENVELOPE_DELIM}${JSON.stringify(r.tmct_ask, null, 2)}`;

@@ -220,14 +220,20 @@ async function askDock(page, question) {
   return page.locator("#dockLog .a").last();
 }
 
-test("the dock grounds 'what parameters does a person sprite take?' in the template data's own real parameter", async () => {
+test("the dock grounds a parameter question, then its values, each in the template data's own real rows", async () => {
   const { context, page, consoleErrors, failedRequests } = await openSpritesPage();
   try {
-    const reply = await askDock(page, "what parameters does a person sprite take?");
-    const text = await reply.innerText();
-    assert.match(text, /emotion/, "the answer names the real parameter the person templates declare");
-    assert.match(text, /happy/, "the answer carries the parameter's own real value set");
-    assert.ok(await reply.evaluate((el) => el.classList.contains("grounded")), "the reply is marked as read from the embedded facts");
+    const params = await askDock(page, "what parameters does a person sprite take?");
+    const paramsText = await params.innerText();
+    assert.match(paramsText, /emotion/, "the answer names the real parameter the person templates declare");
+    assert.match(paramsText, /source: corpus:sprites/, "the answer cites the rows it was read from");
+    assert.ok(await params.evaluate((el) => el.classList.contains("grounded")), "the reply is marked as read from the embedded facts");
+
+    const values = await askDock(page, "what emotions does a person sprite accept?");
+    const valuesText = await values.innerText();
+    assert.match(valuesText, /happy/, "asking about that parameter carries its own real value set");
+    assert.ok(await values.evaluate((el) => el.classList.contains("grounded")));
+
     assert.deepEqual(failedRequests, [], "the dock's bundle and wink asset both load same-origin");
     assert.deepEqual(consoleErrors, [], "the dock answers without a console error");
   } finally {
@@ -253,10 +259,10 @@ test("the dock's classes-on-record question grounds in the embedded catalog rows
   const { context, page, consoleErrors } = await openSpritesPage();
   try {
     const catalogCards = await page.locator(".card").count();
-    const reply = await askDock(page, "what classes can you render?");
+    const reply = await askDock(page, "how many sprite classes are there?");
     const text = await reply.innerText();
-    const counted = Number((text.match(/^(\d+) sprite classes are on record/) || [])[1]);
-    assert.ok(Number.isFinite(counted), `the answer opens with a real count, got: ${text}`);
+    const counted = Number((text.match(/^(\d+) sprite classes\.$/) || [])[1]);
+    assert.ok(Number.isFinite(counted), `the answer is a real count, got: ${text}`);
     assert.equal(counted, catalogCards, "the dock's count and the rendered catalog agree card for card");
     assert.ok(await reply.evaluate((el) => el.classList.contains("grounded")), "the reply is marked as read from the embedded facts");
     assert.deepEqual(consoleErrors, [], "the classes question answers without a console error");
@@ -265,11 +271,25 @@ test("the dock's classes-on-record question grounds in the embedded catalog rows
   }
 });
 
+test("the dock enumerates the same classes it counts, straight off the rdf:type rows", async () => {
+  const { context, page, consoleErrors } = await openSpritesPage();
+  try {
+    const reply = await askDock(page, "list the sprite classes");
+    const text = await reply.innerText();
+    assert.match(text, /is a sprite class/, "the listing reads the membership rows themselves");
+    assert.match(text, /source: corpus:sprites/, "every listed member carries its source");
+    assert.ok(await reply.evaluate((el) => el.classList.contains("grounded")));
+    assert.deepEqual(consoleErrors, [], "the listing answers without a console error");
+  } finally {
+    await context.close();
+  }
+});
+
 test("a dock pill fills the input with its exact question without submitting it", async () => {
   const { context, page } = await openSpritesPage();
   try {
-    await page.locator('#dockPills .pill[data-q="what parameters does a cabinet sprite take?"]').click();
-    assert.equal(await page.locator("#dockq").inputValue(), "what parameters does a cabinet sprite take?");
+    await page.locator('#dockPills .pill[data-q="what materials does a cabinet sprite accept?"]').click();
+    assert.equal(await page.locator("#dockq").inputValue(), "what materials does a cabinet sprite accept?");
     assert.equal(await page.locator("#dockLog .a").count(), 0, "the pill only fills — the visitor presses Enter");
   } finally {
     await context.close();

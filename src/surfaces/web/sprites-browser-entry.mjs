@@ -9,11 +9,17 @@
 // (src/domain/sprite-facts.mjs's rows). A question the engine can't ground in
 // those rows gets the same refusal the CLI gives — never a guess.
 //
-// The page's own inline script answers the closed set of catalog-specific
-// question shapes (sprite-catalog-viz.mjs's answerSpriteQuestion) BEFORE
-// handing a line to this session, so this bundle carries no sprite-specific
-// grammar of its own.
+// Every line the dock takes goes to that session — the page intercepts
+// nothing, so a catalog question is answered by the same membership, count and
+// property lanes chat.mjs runs for any other caller, reading the sprite-facts
+// predicates straight.
+//
+// The scene composer's parser rides along here too: extractSceneItems resolves
+// a typed class name through ask.mjs's resolveObject, so it needs the real
+// resolver in the page rather than a self-contained function the page could
+// splice in as text.
 import { createInMemoryStore, appendFacts, normFactTerm } from "../../adapters/memory/core.mjs";
+import { extractSceneItems } from "../../domain/scene-compose.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import { SPRITE_FACTS_PROVENANCE } from "../../domain/sprite-facts.mjs";
@@ -46,4 +52,4 @@ export async function createSpriteCatalogSession({ factRows = [] } = {}) {
 // the self-hosted wink pair (./vendor/wink.js) exactly the way chat.html/
 // ledger.html/plan.html register theirs — the bundle itself never imports
 // wink-nlp (wink-model.mjs's own header explains why).
-globalThis.tmctSprites = { createSpriteCatalogSession, registerWinkModel, normFactTerm };
+globalThis.tmctSprites = { createSpriteCatalogSession, registerWinkModel, normFactTerm, extractSceneItems };

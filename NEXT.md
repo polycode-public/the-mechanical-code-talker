@@ -67,7 +67,16 @@ sweep in the plain swatch's slot, and a new idle/moving toggle in the happy swat
 through the existing tier-2 memory-fact-term oracle rather than a new one; "large" resolved to the
 scale tier `data/sprites-large/` ships, re-confirmed against the real 987-file catalog.
 `spider-fly-viz.mjs`'s five-argument sprite call collapsed into `src/domain/sprite-request.mjs`.
-Phase 9 is dispatched and in progress.
+Phase 9 landed too: `sprite-catalog-viz.mjs`'s two hand-rolled parsers are gone —
+`answerSpriteQuestion` deleted in favour of two generic `chat.mjs` lanes (a noun-phrase-aware class
+match shared by the membership/count lanes, and a new object-fronted property lane that reads a
+folded predicate straight off the question, so `mgx:accept-emotion`/`mgx:take-parameter`/
+`mgx:offer-variant` all answer with no hand-kept property-word table), and `extractSceneItems`
+moved into `src/domain/scene-compose.mjs`, resolving each span through `resolveObject`'s exact
+tier only (the fuzzy tier's "wood"→food/"glass"→grass matches are fine for a cited sentence, wrong
+for a sprite drawn silently). The cold-session `ask` condition Phase 6 flagged is fixed too —
+`chat.mjs` now prefers a passed-in graph whenever it holds individuals, so a fresh browser session
+answers a world question on its first turn, not its second.
 
 **Everything merged onto local `main` so far this session is green** (`npm test` full suite: 4939
 pass after the Wave 2/3 checkpoint; every subsequent wave re-verified with `npm run test:fast` plus
@@ -95,16 +104,10 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **`chat.mjs` reaches its own session's graph only when a focus is set.** `chat.mjs:12529`
-  routes the ask lane through `dispatchTool("tmct_ask", …, { config, source })` unless
-  `focus?.id || prev.length`, and a browser session has no config to load a graph from — so a page
-  that hands `runTurn` a real in-memory graph gets the no-code-graph wall on the first question and
-  a correct answer on the second. Phase 6's world listing answers through `runTurn` the moment a
-  focus exists, and through `ask()` always; this condition is the last hop. Prefer the passed graph
-  whenever it holds individuals. Handed to the Phase 9 agent, already mid-flight in this file.
-- [ ] **`PLAN_TOOL_SURFACE.md` phase 9** — key `chat.mjs`'s generic membership/property lanes on the
-  sprite-facts predicates so `answerSpriteQuestion` deletes; route `extractSceneItems` through
-  `resolveObject`. Dispatched to a background agent.
+- [ ] The standalone CLI's `--render sprites` export no longer ships the composer input panel —
+  its parser now lives behind `extractSceneItems`'/`scene-compose.mjs`'s real bundle, which a bare
+  CLI render doesn't have. Decide whether that page needs its own small bundle to get the composer
+  back, or whether a static render never needed it.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 10, Gap C** — one `globalThis.tmct` (`ask`, `plan`, `turn`,
   `session`) replacing the eleven per-page global bags. Needs phases 3, 5 and 8 (all done) —
   unblocked, not yet dispatched.
