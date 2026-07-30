@@ -344,3 +344,121 @@ test("Backend C cross-connection: a second connection's committed write is visib
     await rm(dir, { recursive: true, force: true });
   }
 });
+
+// ---- The `facts` projection ------------------------------------------------
+// Every Fact individual also lands in a `facts` table with real subject /
+// predicate / object / source / trust columns, so the database can answer
+// "which facts are about dog" instead of the caller loading the whole store and
+// scanning it. The JSON blob stays the source of truth; these tests hold the
+// projection to it. The read-path payoff is measured in
+// memory-facts-read-perf.test.mjs.
+
+const factsRows = (handle) => handle.db.prepare("SELECT * FROM facts ORDER BY id").all();
+
+test("the facts projection carries one row per Fact individual, with the triple, its source and its trust in columns", async () => {
+  const { dir, handle } = await sqliteHandle();
+  try {
+    await appendFact(handle, { subject: "dog", predicate: "capableOf", object: "bark", provenance: `teach:chat:${SESSION}@${TS1}`, createdAt: TS1 });
+    await appendFacts(handle, [
+      { subject: "cat", predicate: "capableOf", object: "purr", provenance: "corpus:conceptnet /r/CapableOf" },
+      { subject: "sky", predicate: "hasProperty", object: "blue", provenance: "" },
+    ]);
+    await appendRule(handle, {
+      name: "grandparent", kind: RULE_KIND_COMPOSE2, slots: { base1: "parent", base2: "parent" },
+      provenance: `teach:chat:${SESSION}@${TS1}`,
+    });
+    await appendUtterance(handle, { role: "visitor", text: "can a dog bark?", ts: TS1, sessionId: SESSION });
+
+    const rows = factsRows(handle);
+    const memory = await loadMemory(handle);
+    const factRows = readFactRows(memory);
+    assert.equal(rows.length, factRows.length, "a row per Fact — Rules, Sources and Utterances stay out");
+    assert.equal(rows.length, 3);
+
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    for (const fact of factRows) {
+      const row = byId.get(fact.id);
+      assert.ok(row, `${fact.id} is projected`);
+      assert.equal(row.triple_hash, fact.id, "a fact id addresses its triple alone, so it is its own group key");
+      assert.equal(row.subject, fact.subject);
+      assert.equal(row.predicate, fact.predicate);
+      assert.equal(row.object, fact.object);
+      assert.equal(row.trust_score, fact.trust);
+      assert.equal(JSON.parse(row.json).id, fact.id, "the blob column round-trips the individual");
+      assert.equal(row.observed_at, null, "nothing supplies an observation time yet");
+      assert.equal(row.superseded_by, null, "every record is a live head");
+    }
+
+    const dog = rows.find((r) => r.subject === "dog");
+    assert.equal(dog.source_id, `src:teach-chat:${SESSION}`);
+    assert.equal(dog.source_type, "teach");
+    assert.equal(dog.created_at, TS1);
+    const cat = rows.find((r) => r.subject === "cat");
+    assert.equal(cat.source_id, "src:corpus:conceptnet");
+    assert.equal(cat.source_type, "corpus");
+    // A fact whose provenance derives no Source still needs a key, so it lands
+    // on the named singleton rather than a NULL.
+    const sky = rows.find((r) => r.subject === "sky");
+    assert.equal(sky.source_id, "src:none");
+    assert.equal(sky.source_type, "");
+  } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("the facts projection follows a re-assert and a retraction: one row per fact after corroboration, none after removeFacts", async () => {
+  const { removeFacts } = await import("../../src/adapters/memory/core.mjs");
+  const { dir, handle } = await sqliteHandle();
+  try {
+    await appendFact(handle, { subject: "man", predicate: "IsA", object: "person", provenance: "corpus:conceptnet /r/IsA" });
+    const [before] = factsRows(handle);
+    const firstTrust = before.trust_score;
+
+    // The same triple from a second source — corroboration on one id today.
+    await appendFact(handle, { subject: "man", predicate: "IsA", object: "person", provenance: `teach:chat:${SESSION}@${TS2}` });
+    const after = factsRows(handle);
+    assert.equal(after.length, 1, "a re-assert upserts the projected row, never duplicates it");
+    assert.equal(after[0].id, before.id);
+    assert.ok(after[0].trust_score > firstTrust, "the projected trust follows the recomputed blob");
+    assert.equal(JSON.parse(after[0].json).attributes.find((a) => a.prop === "mgx:factProvenance").value.includes("teach:chat"), true);
+
+    await removeFacts(handle, [before.id]);
+    assert.deepEqual(factsRows(handle), [], "a retracted fact takes its projected row with it");
+  } finally {
+    closeSqliteMemoryStore(handle);
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("a store whose facts table predates the projection is backfilled from the individuals blobs when it is next opened", async () => {
+  const { dir, handle } = await sqliteHandle();
+  const dbPath = handle.dbPath;
+  try {
+    await appendFacts(handle, [
+      { subject: "dog", predicate: "IsA", object: "mammal", provenance: "corpus:conceptnet /r/IsA" },
+      { subject: "cat", predicate: "IsA", object: "mammal", provenance: "corpus:conceptnet /r/IsA" },
+    ]);
+    // What a store written before the projection existed looks like: the
+    // individuals rows are all there, the facts table is empty.
+    handle.db.exec("DELETE FROM facts");
+    assert.deepEqual(factsRows(handle), []);
+    closeSqliteMemoryStore(handle);
+
+    const reopened = await createSqliteMemoryStore(dbPath);
+    try {
+      const rows = factsRows(reopened);
+      assert.equal(rows.length, 2, "opening the store projects the facts it already held");
+      assert.deepEqual(rows.map((r) => r.subject).sort(), ["cat", "dog"]);
+      assert.equal(rows.every((r) => r.source_id === "src:corpus:conceptnet"), true);
+      // Idempotent: a second open of an already-projected store changes nothing.
+      const again = await createSqliteMemoryStore(dbPath);
+      assert.deepEqual(factsRows(again), rows);
+      closeSqliteMemoryStore(again);
+    } finally {
+      closeSqliteMemoryStore(reopened);
+    }
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
