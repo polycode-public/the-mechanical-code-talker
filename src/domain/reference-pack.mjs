@@ -35,25 +35,49 @@ export function isReferenceIndexEntry(e) {
     && Number.isInteger(e.r) && e.r > 0;
 }
 
-/** A shard row: {term, title, text, summary, url, revid, isa?}. */
+/** A shard row: {term, title, text, summary, url, revid, isa?, source?,
+ *  licence?}. `source`/`licence` are optional per-entry overrides of the
+ *  citation's source name and licence line (renderReferenceAnswer, below) —
+ *  absent on every real Simple English Wikipedia row the build pipeline
+ *  emits, present only on a hand-added synthetic entry (e.g. a demo/test
+ *  term) whose citation must name its OWN real source, not Wikipedia's. */
 export function isReferenceArticleRow(row) {
   if (!row || typeof row !== "object") return false;
   for (const field of ["term", "title", "text", "summary", "url"]) {
     if (typeof row[field] !== "string" || !row[field]) return false;
   }
   if (!Number.isInteger(row.revid) || row.revid <= 0) return false;
-  if (row.isa !== undefined && (typeof row.isa !== "string" || !row.isa)) return false;
+  for (const field of ["isa", "source", "licence"]) {
+    if (row[field] !== undefined && (typeof row[field] !== "string" || !row[field])) return false;
+  }
   return true;
 }
 
+/** The default citation source/licence — every article the build pipeline
+ *  (scripts/fetch-reference-pack.mjs) emits from the pinned Simple English
+ *  Wikipedia dump carries neither field, so this is what renderReferenceAnswer
+ *  falls back to for the overwhelming majority of rows. */
+export const DEFAULT_REFERENCE_SOURCE = "Simple English Wikipedia";
+export const DEFAULT_REFERENCE_LICENCE = "CC BY-SA 4.0";
+
 /** The cited answer for a clean miss the pack could ground: the article's
- *  summary with its title, licence and revision-pinned URL always visible,
- *  then the grain cue. Without the cue a reader has to recognize the source
- *  name to tell this apart from a fact read out of their own graph — both
- *  answer the same "what is X" question in the same voice. */
+ *  summary with its title, licence and source always visible, then the grain
+ *  cue. Without the cue a reader has to recognize the source name to tell
+ *  this apart from a fact read out of their own graph — both answer the same
+ *  "what is X" question in the same voice.
+ *
+ *  The source/licence line reads the article's OWN `source`/`licence` fields
+ *  when present, falling back to the Wikipedia defaults otherwise — every
+ *  real pack row renders byte-identically to before this existed. Wikipedia's
+ *  revision-pinned `?oldid=` query is a convention of that source alone, so it
+ *  is only appended when the article is citing the default source; a
+ *  non-Wikipedia entry's own `url` is shown bare. */
 export function renderReferenceAnswer(term, article) {
+  const source = article.source ?? DEFAULT_REFERENCE_SOURCE;
+  const licence = article.licence ?? DEFAULT_REFERENCE_LICENCE;
+  const url = source === DEFAULT_REFERENCE_SOURCE ? `${article.url}?oldid=${article.revid}` : article.url;
   return `${term} — ${article.summary} (source: reference article "${article.title}", `
-    + `Simple English Wikipedia, CC BY-SA 4.0 — ${article.url}?oldid=${article.revid})`
+    + `${source}, ${licence} — ${url})`
     + ` ${GENERAL_VOCABULARY_CUE}`;
 }
 

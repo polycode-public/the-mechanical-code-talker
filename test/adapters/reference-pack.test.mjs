@@ -72,6 +72,9 @@ test("index-entry and article-row validators accept the shipped shapes and rejec
   assert.ok(!isReferenceArticleRow({ ...good, summary: "" }));
   assert.ok(!isReferenceArticleRow({ ...good, revid: "9184482" }), "revid must be an integer");
   assert.ok(!isReferenceArticleRow({ ...good, isa: "" }), "an isa field, when present, must name a term");
+  assert.ok(isReferenceArticleRow({ ...good, source: "a demo corpus", licence: "none" }), "source/licence are accepted per-entry overrides");
+  assert.ok(!isReferenceArticleRow({ ...good, source: "" }), "a source field, when present, must name one");
+  assert.ok(!isReferenceArticleRow({ ...good, licence: "" }), "a licence field, when present, must name one");
 });
 
 test("renderReferenceAnswer cites title, licence and the revision-pinned URL in one line, then names the grain", () => {
@@ -82,6 +85,24 @@ test("renderReferenceAnswer cites title, licence and the revision-pinned URL in 
       + "CC BY-SA 4.0 — https://simple.wikipedia.org/wiki/otter?oldid=9184482)"
       + " General vocabulary, not from this codebase.",
   );
+});
+
+test("renderReferenceAnswer cites a synthetic entry's OWN source/licence/URL, never the Wikipedia default", () => {
+  const article = {
+    ...row("trelvox", 1),
+    url: "https://example.test/trelvox",
+    source: "a coined demo term, not from Wikipedia",
+    licence: "none — not third-party content",
+  };
+  assert.equal(
+    renderReferenceAnswer("trelvox", article),
+    'trelvox — A trelvox is a thing. (source: reference article "Trelvox", '
+      + "a coined demo term, not from Wikipedia, none — not third-party content — https://example.test/trelvox)"
+      + " General vocabulary, not from this codebase.",
+  );
+  // No Wikipedia revision-pinning on a non-Wikipedia URL: the bare url stands,
+  // not "https://example.test/trelvox?oldid=1".
+  assert.ok(!renderReferenceAnswer("trelvox", article).includes("?oldid="));
 });
 
 test("referenceProvenanceTag emits the tag trust.mjs parses back to the same pack and article", () => {

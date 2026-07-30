@@ -8352,6 +8352,16 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     // besides. The adventure's own where/openness readers answer the legitimate
     // in-game questions from the world fold.
     hits = hits.filter((f) => !WORLD_INTERNAL_PREDICATES.has(f.predicate));
+    // A corpus-weak-only result set (every hit resolved ONLY through
+    // ConceptNet's /r/RelatedTo tier) still composes its hedged "possibly"
+    // lines below exactly as before — this reader's whole job is showing
+    // those, weak or not, so they're never suppressed from the text. But the
+    // result is flagged `weakOnly` so the shared honest-miss cascade (the
+    // reference-pack/Wikipedia fallback, below in runAsk) still gets a turn
+    // instead of the hedge silently standing in as "already answered" —
+    // mirroring isRealGrounding's other two call sites without breaking this
+    // one's own job.
+    const weakOnly = hits.length > 0 && !hits.some(isRealGrounding);
     // A genuinely empty result here is a real miss: "what do you know about
     // the last commit" needs a TEACH-OFFER, not a bare wall — added as a LATE
     // runTurn-level addition, below, alongside the sibling "what is X" offer,
@@ -8402,11 +8412,16 @@ async function factAnswerReaders(memoryDir, query, envelope, miss, biasByBundle 
     const header = `${hits.length} remembered fact${hits.length === 1 ? "" : "s"} about ${term}`
       + `${viaSubtype ? " (including its known subtypes)" : ""}:`;
     const { lines, grouped } = senseSplitFactList(hits, rows, variants, { indent: "  " });
-    if (grouped) return { ...grouped, text: `${header}\n${grouped.text}` };
+    if (grouped) return { ...grouped, text: `${header}\n${grouped.text}`, ...(weakOnly ? { weakOnly: true } : {}) };
     const shown = lines.slice(0, FACT_ANSWER_CAP);
     const rest = lines.slice(FACT_ANSWER_CAP);
     const extra = rest.length ? `\n  …and ${rest.length} more — say 'more' to see them.` : "";
-    return { text: `${header}\n${shown.join("\n")}${extra}`, replace: true, ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}) };
+    return {
+      text: `${header}\n${shown.join("\n")}${extra}`,
+      replace: true,
+      ...(rest.length ? { pending: { items: rest.map((l) => l.trim()), noun: "facts" } } : {}),
+      ...(weakOnly ? { weakOnly: true } : {}),
+    };
   }
   return null;
 }
@@ -10690,8 +10705,9 @@ async function curatedDefinitionAnswer(query, envelope, { memoryDir, lexicon }) 
  *  actual definition; callers treat it as no grounding at all rather than an
  *  answer, so it can never by itself skip the honest-miss cascade below
  *  (the teach lane, the reference-pack/Wikipedia fallback). Shared by the
- *  bare "what is X" reader (factAnswerReaders) and the learn-on-miss gate
- *  (cleanMissPackKey/cleanMissLiveKey) so the two can never disagree. */
+ *  bare "what is X" reader, the "what do you know about X" reader (both in
+ *  factAnswerReaders) and the learn-on-miss gate (cleanMissPackKey/
+ *  cleanMissLiveKey) so none of them can ever disagree. */
 function isRealGrounding(f) {
   const types = f.sourceTypes || [];
   return types.length === 0 || types.some((t) => t !== "corpusWeak");
@@ -12672,6 +12688,13 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   let via = "composed";
   let recordMiss = miss;
   let factPending = null; // a truncated fact listing's held remainder (for "more" paging)
+  // Set when the memory-facts lane (W4, below) answered from a corpus-weak-only
+  // hit set (factAnswer's KNOW_ABOUT_RE reader, `weakOnly`) — the hedged
+  // "possibly" answer still stands as `answer`, but `via` is deliberately left
+  // at "composed" so the honest-miss cascade further down still gets a turn,
+  // and this flag lets the LEARN-ON-MISS PACKS lane resolve a reference-pack
+  // term for THIS query shape (which metaTermOf alone never recognizes).
+  let factLaneWeakOnly = false;
   // scm-svf1/cardinality-monotonicity/
   // cax-maxc0's LIVE proof chases (factReadBack) have no persisted Fact to
   // attach trust.mjs's entailed hook to, so they compute
@@ -13187,9 +13210,18 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
       // the empty-graph orientation pointer below stays off it — a pronoun
       // decline with an index pointer under it is two answers to one turn.
       if (fact.selfContainedMiss) selfContainedMiss = true;
-      if (!fact.miss) {
+      // A `weakOnly` hit (the "what do you know about X" reader's
+      // corpus-weak-only hedge) is shown as `answer` above like any other
+      // fact-lane hit, but doesn't count as REAL grounding — via/recordMiss
+      // stay untouched so the honest-miss cascade below (the reference-pack
+      // lane in particular) still gets a turn at replacing the hedge with a
+      // real answer, exactly the discipline isRealGrounding's other two call
+      // sites already apply.
+      if (!fact.miss && !fact.weakOnly) {
         via = "fact";
         recordMiss = false;
+      } else if (fact.weakOnly) {
+        factLaneWeakOnly = true;
       }
       if (fact.pending) factPending = fact.pending; // a truncated fact list → paginable remainder
       if (typeof fact.trust === "number") entailedTrust = fact.trust; // live-chase trust (see the `entailedTrust` declaration above)
@@ -13496,13 +13528,19 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
   // pack's article speak, cited as before. Both packs missing leaves the
   // honest miss byte-identical.
   if (miss && recordMiss && via === "composed" && memoryDir) {
-    const refTerm = metaTermOf(query, envelope);
+    // metaTermOf only recognizes the "what is X"/"define X" shapes — a
+    // "what do you know about X" query only reaches this lane at all when
+    // its own reader (above) answered with a corpus-weak-only hedge
+    // (factLaneWeakOnly), so the KNOW_ABOUT_RE term is resolved directly the
+    // same way the TEACH-OFFER lane below already does for that shape.
+    const refTerm = metaTermOf(query, envelope)
+      || (factLaneWeakOnly ? expandContractions(String(query).trim()).match(KNOW_ABOUT_RE)?.[1]?.trim() : null);
     const key = refTerm ? await cleanMissPackKey(refTerm, { graph, memoryDir, lexicon, cache }) : null;
     const learned = key ? await childPackFactsForKey(key, { memoryDir, env, cache, synthesisBudget }) : null;
     if (learned) {
       const fact = (await factAnswer(memoryDir, query, envelope, miss, biasByBundle, cache, newFocus?.label))
         ?? (await factReadBack(memoryDir, query, envelope, miss, graph, newFocus?.label, biasByBundle, cache));
-      if (fact && !fact.miss) {
+      if (fact && !fact.miss && !fact.weakOnly) {
         answer = fact.replace ? fact.text : `${answer}\n${fact.text}`;
         via = "fact";
         recordMiss = false;
@@ -13589,7 +13627,12 @@ async function runAsk(query, { config, source, graph, focus, last, templates, me
         const ent = knowAboutTerm ? null : await resolveEntity(graph, offerTerm);
         if (!ent) {
           const variants = factTermVariants(normFactTerm, offerTerm);
-          const known = (await memoryFacts(memoryDir)).some((f) => variants.has(f.subject) || variants.has(f.object));
+          // A corpus-weak-only match (ConceptNet's /r/RelatedTo hedge) is not
+          // real grounding — same isRealGrounding discipline as the bare
+          // "what is X" reader and the learn-on-miss gate, so a term with
+          // nothing but a loose association still gets the "teach me" offer
+          // rather than being silently counted as already known.
+          const known = hasNonWeakGrounding(await factRows(memoryDir, cache), variants);
           if (!known) teachOffer = unknownVocabTermOffer(cleanTerm);
         }
       }
