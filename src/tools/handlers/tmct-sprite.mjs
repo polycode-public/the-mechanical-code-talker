@@ -70,7 +70,7 @@ function chainSentence(chain) {
   return chain.map((step) => step.term).join(" -> ");
 }
 
-export async function tmct_sprite(args, { config }) {
+export async function tmct_sprite(args, { config, memoryBackend = null }) {
   const className = requiredArg(args, "class").toLowerCase();
   const expression = String(args?.expression || "").trim().toLowerCase();
   const size = String(args?.size || "").trim().toLowerCase();
@@ -87,7 +87,7 @@ export async function tmct_sprite(args, { config }) {
   }
 
   const { templates, tier } = templateTier();
-  const factRows = await memoryFactRows(config);
+  const factRows = await memoryFactRows(config, memoryBackend);
   const resolution = resolveSpriteRequest({ class: className, expression, size }, {
     factRows,
     templates,
