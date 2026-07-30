@@ -884,16 +884,12 @@ const MEMORY_CLASS_PLURALS = {
 const MEMORY_CLASS_LIST_TRIGGER_RE = /^(?:list|show(?:\s+me)?)\s+(?:all\s+|the\s+)?([a-z][a-z-]*)\s*(.*)$/i;
 const MEMORY_CLASS_COUNT_TRIGGER_RE = /^(?:how\s+many|number\s+of|count(?:\s+the)?)\s+(?:all\s+)?([a-z][a-z-]*)\s*(.*)$/i;
 
-/** One display line per stored individual of a class: a Fact reads back through
- *  the same renderFactLine every other fact list uses; the other classes show
- *  their own label. */
-function memoryClassLine(cls, ind, factByLabel) {
-  if (cls === "Fact") {
-    const row = factByLabel.get(ind.id);
-    if (row) return renderFactLine(row);
-  }
-  return String(ind.label || ind.id || "").trim();
-}
+/** One display line per stored individual of a class — its own label. Facts
+ *  never come through here: they are listed per TRIPLE, through the same
+ *  renderFactLine every other fact list uses, because the store holds one
+ *  record per asserting SOURCE and listing those would print a corroborated
+ *  triple once per source that vouched for it. */
+const memoryClassLine = (ind) => String(ind.label || ind.id || "").trim();
 
 /** Recognise "list <memory-class>" (any class) and "how many <meta-class>"
  *  (Session/Source/Rule — Fact/Utterance counts stay with answerMemoryCount) and
@@ -928,11 +924,11 @@ async function answerMemoryClassQuery(memoryDir, query) {
   try { ({ loadMemory, readFactRows } = await import("../adapters/memory/core.mjs")); } catch { return null; }
   let mem;
   try { mem = await loadMemory(memoryDir); } catch { return null; }
-  const inds = (mem.individuals || []).filter((i) => (i.class || "") === cls);
+  const rows = cls === "Fact" ? readFactRows(mem) : null;
+  const inds = rows || (mem.individuals || []).filter((i) => (i.class || "") === cls);
   if (countM) return { text: `${inds.length} ${inds.length === 1 ? plural.replace(/s$/, "") : plural}.`, kind: "count" };
   if (!inds.length) return { text: `I don't have any ${plural} stored yet.`, miss: true };
-  const factByLabel = cls === "Fact" ? new Map(readFactRows(mem).map((r) => [r.id, r])) : new Map();
-  const lines = inds.map((ind) => memoryClassLine(cls, ind, factByLabel));
+  const lines = rows ? rows.map(renderFactLine) : inds.map(memoryClassLine);
   const shown = lines.slice(0, FACT_ANSWER_CAP);
   const rest = lines.slice(FACT_ANSWER_CAP);
   const extra = rest.length ? `\n…and ${rest.length} more — say 'more' to see them.` : "";

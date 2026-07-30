@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { assertSentence as assertSentenceSeam, provenanceTag } from "../../src/domain/grammar/assert.mjs";
 import { loadLexicon } from "../../src/domain/grammar/lexicon.mjs";
-import { FACT_CLASS, MEMORY_DIR_REL, appendFact, loadMemory, normFactTerm } from "../../src/adapters/memory/core.mjs";
+import { FACT_CLASS, MEMORY_DIR_REL, appendFact, factGroupId, loadMemory, normFactTerm, readFactRows } from "../../src/adapters/memory/core.mjs";
 
 // assertSentence takes the store's writer injected; every call in this file
 // wires the real memory/core.mjs appendFact once here.
@@ -47,9 +47,11 @@ test("assertSentence: a subclass sentence lands as one Fact, normFactTerm-normal
     assert.equal(attr(facts[0], "object"), "unit");
     assert.equal(attr(facts[0], "provenance"), `ace:chat:${SESSION}@${TS}`);
 
-    // the store is a real graph: parseEntities loads it and the fact is queryable
+    // the store is a real graph: parseEntities loads it and the fact is
+    // queryable. assertSentence reports the PUBLIC fact id — the group — while
+    // the node holding it is that group's one assertion record.
     const g = parseEntities(m);
-    assert.ok(g.byId.has(r.ids[0]));
+    assert.ok([...g.byId.keys()].some((k) => factGroupId(k) === r.ids[0]));
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -66,7 +68,7 @@ test("assertSentence: a multi-triple restriction sentence lands one Fact per tri
     const m = await loadMemory(dir);
     const facts = m.individuals.filter((i) => i.class === FACT_CLASS);
     assert.equal(facts.length, 6);
-    const byId = new Map(facts.map((f) => [f.id, f]));
+    const byId = new Map(facts.map((f) => [factGroupId(f.id), f]));
     r.triples.forEach((t, i) => {
       const f = byId.get(r.ids[i]);
       assert.equal(attr(f, "subject"), normFactTerm(t.subject), `triple ${i} subject`);
@@ -91,11 +93,19 @@ test("assertSentence: re-assert upserts (same ids, no duplicates); a second writ
 
     const m = await loadMemory(dir);
     const facts = m.individuals.filter((i) => i.class === FACT_CLASS);
-    assert.equal(facts.length, 1, "upsert, never a duplicate");
+    assert.equal(facts.length, 2, "one record per asserting source, both under the one fact id");
+    assert.equal(new Set(facts.map((f) => factGroupId(f.id))).size, 1, "upsert, never a duplicate triple");
     assert.equal(attr(facts[0], "subject"), "tmct");
     assert.equal(attr(facts[0], "predicate"), "tmct:license");
     assert.equal(attr(facts[0], "object"), normFactTerm("MPL-2.0"));
-    assert.equal(attr(facts[0], "provenance"), `ace:chat:${SESSION}@${TS} | ace:corpus`, "provenance unions across writers");
+    // Each record carries only its own writer's tag; the union is synthesized
+    // over the group at read time, codepoint-sorted.
+    assert.deepEqual(
+      facts.map((f) => attr(f, "provenance")).sort(),
+      [`ace:chat:${SESSION}@${TS}`, "ace:corpus"].sort(),
+    );
+    const [row] = readFactRows(m);
+    assert.equal(row.provenance, `ace:chat:${SESSION}@${TS} | ace:corpus`, "provenance unions across writers");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
