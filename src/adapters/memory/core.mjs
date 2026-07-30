@@ -204,7 +204,100 @@ CREATE TABLE IF NOT EXISTS individuals (id TEXT PRIMARY KEY, ord INTEGER NOT NUL
 CREATE TABLE IF NOT EXISTS relations (prop TEXT PRIMARY KEY, ord INTEGER NOT NULL, predicate TEXT, count INTEGER);
 CREATE TABLE IF NOT EXISTS edges (prop TEXT NOT NULL, subject TEXT NOT NULL, object TEXT NOT NULL, subject_label TEXT, object_label TEXT, extra TEXT, PRIMARY KEY (prop, subject, object));
 CREATE INDEX IF NOT EXISTS edges_by_prop ON edges(prop);
+CREATE TABLE IF NOT EXISTS facts (
+  id            TEXT PRIMARY KEY,
+  triple_hash   TEXT NOT NULL,
+  subject       TEXT NOT NULL,
+  predicate     TEXT NOT NULL,
+  object        TEXT NOT NULL,
+  source_id     TEXT NOT NULL,
+  source_type   TEXT NOT NULL,
+  trust_score   REAL NOT NULL,
+  created_at    TEXT NOT NULL,
+  observed_at   TEXT,
+  superseded_by TEXT,
+  json          TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS facts_by_triple_hash       ON facts(triple_hash);
+CREATE INDEX IF NOT EXISTS facts_by_subject_predicate ON facts(subject, predicate);
+CREATE INDEX IF NOT EXISTS facts_by_predicate_object  ON facts(predicate, object);
+CREATE INDEX IF NOT EXISTS facts_current              ON facts(triple_hash, source_id, superseded_by);
 `;
+
+// ---- The `facts` projection ------------------------------------------------
+// `facts` holds one queryable row per Fact individual, written in the SAME
+// transaction as the `individuals` row it mirrors. The JSON blob stays the
+// single source of truth — the columns exist so a reader can ask the database
+// for "every fact about dog" instead of loading the whole store and scanning
+// it in JS, the same discipline `individuals` already applies to its own
+// `class`/`label` columns. Plain portable SQL: the schema above works
+// unchanged against Postgres/MySQL/Aurora, so a cloud relational backend
+// inherits the read path rather than reinventing it.
+
+// A Fact whose provenance tag maps to no Source at all still needs a key, so
+// it projects onto this singleton rather than a NULL.
+const NO_SOURCE_ID = "src:none";
+
+const OBSERVED_AT_PROP = "mgx:observedAt";      // valid time: when the asserting party witnessed the claim
+const SUPERSEDED_BY_PROP = "mgx:supersededBy";  // the id(s) that replaced this record; absent on a live head
+
+/** The Source key a Fact's provenance union projects onto: the first tag that
+ *  derives one, since the tags of one fact are asserted in arrival order and
+ *  the earliest is its primary source. `src:none` when no tag parses. */
+function primarySourceOf(provenance) {
+  for (const tag of String(provenance || "").split(" | ")) {
+    if (!tag) continue;
+    const info = sourceIdFor(provenanceTagToSource(tag));
+    if (info) return info;
+  }
+  return { id: NO_SOURCE_ID, type: "" };
+}
+
+/** The `facts` bind values for a Fact individual, in column order. `json` is
+ *  the already-serialized blob the `individuals` row stores, passed in so the
+ *  two rows can never disagree about the same individual. */
+function factProjectionValues(ind, json) {
+  const attr = (prop) => (ind.attributes || []).find((a) => a?.prop === prop)?.value || "";
+  const source = primarySourceOf(attr("mgx:factProvenance"));
+  // A collection in the blob; the column carries the common-case single
+  // successor, so a reader can filter for live heads without opening the JSON.
+  const supersededBy = attr(SUPERSEDED_BY_PROP).split(" ").filter(Boolean)[0] || null;
+  return [
+    ind.id,
+    ind.id, // triple_hash: a fact id addresses its (s,p,o) alone, so it IS the group key
+    attr("rdf:subject"), attr("rdf:predicate"), attr("rdf:object"),
+    source.id, source.type,
+    Number(attr(TRUST_SCORE_PROP)) || 0,
+    attr(CREATED_AT_PROP),
+    attr(OBSERVED_AT_PROP) || null,
+    supersededBy,
+    json,
+  ];
+}
+
+const FACT_PROJECTION_UPSERT_SQL =
+  "INSERT OR REPLACE INTO facts(id, triple_hash, subject, predicate, object, source_id, source_type, trust_score, created_at, observed_at, superseded_by, json)"
+  + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
+/** Project every Fact individual a store already holds into an empty `facts`
+ *  table — what a store written before the projection existed needs, once.
+ *  Runs at open so a read-only session gets the columns too. Cheap to skip: a
+ *  projected store answers the first probe with a row and returns. */
+function backfillFactsProjection(db) {
+  if (db.prepare("SELECT id FROM facts LIMIT 1").get()) return;
+  if (!db.prepare("SELECT id FROM individuals WHERE class = ? LIMIT 1").get(FACT_CLASS)) return;
+  const upsertFact = db.prepare(FACT_PROJECTION_UPSERT_SQL);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const row of db.prepare("SELECT json FROM individuals WHERE class = ?").all(FACT_CLASS)) {
+      upsertFact.run(...factProjectionValues(JSON.parse(row.json), row.json));
+    }
+    db.exec("COMMIT");
+  } catch (e) {
+    db.exec("ROLLBACK");
+    throw e;
+  }
+}
 
 // Edge keys with dedicated columns; any other key round-trips via `extra`.
 const STD_EDGE_KEYS = new Set(["subject", "object", "subjectLabel", "objectLabel"]);
@@ -237,6 +330,7 @@ export async function createSqliteMemoryStore(dbPath) {
   db.exec("PRAGMA journal_mode = WAL");
   db.exec("PRAGMA synchronous = NORMAL");
   db.exec(SQLITE_DDL);
+  backfillFactsProjection(db);
   return { backend: BACKEND_SQLITE, db, dbPath };
 }
 
@@ -438,6 +532,7 @@ function persistSqlitePayload(handle, payload) {
     const maxOrd = db.prepare("SELECT COALESCE(MAX(ord), -1) AS m FROM individuals").get().m;
     let nextOrd = maxOrd + 1;
     const upsertInd = db.prepare("INSERT OR REPLACE INTO individuals(id, ord, class, label, json) VALUES (?, ?, ?, ?, ?)");
+    const upsertFact = db.prepare(FACT_PROJECTION_UPSERT_SQL);
     const seenIds = new Set();
     for (const ind of payload.individuals || []) {
       seenIds.add(ind.id);
@@ -446,14 +541,22 @@ function persistSqlitePayload(handle, payload) {
       if (existing && existing.json === json) continue; // unchanged — skip the write entirely (cache already matches)
       const ord = existing ? existing.ord : nextOrd++;
       upsertInd.run(ind.id, ord, ind.class ?? null, ind.label ?? null, json);
+      // The queryable projection of the blob just written, same transaction —
+      // every write path that reaches a Fact (teach, corpus seed, entailment,
+      // migration, a trust recompute) lands here, so none can leave the two
+      // out of step.
+      if (ind.class === FACT_CLASS) upsertFact.run(...factProjectionValues(ind, json));
       if (cache) cacheUpsertIndividual(cache, ind);
     }
-    // Removal (no appendX function in this file ever removes an individual
-    // today — dead code path in practice, kept for correctness): a cheap
-    // index-only scan of the primary-key column only, never the JSON payload.
+    // Removal (what removeFacts' retraction lands as — every append path only
+    // ever adds): a cheap index-only scan of the primary-key column, never the
+    // JSON payload.
     const deleteInd = db.prepare("DELETE FROM individuals WHERE id = ?");
+    const deleteFact = db.prepare("DELETE FROM facts WHERE id = ?");
     for (const row of db.prepare("SELECT id FROM individuals").all()) {
-      if (!seenIds.has(row.id)) deleteInd.run(row.id);
+      if (seenIds.has(row.id)) continue;
+      deleteInd.run(row.id);
+      deleteFact.run(row.id); // a no-op for a non-Fact id; keeps the projection from outliving its blob
     }
     if (cache) cacheDropIndividualsExcept(cache, seenIds);
 
