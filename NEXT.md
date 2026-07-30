@@ -62,10 +62,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] **sprites.html turning-character demo**: an animated swatch cycling the four turntable angles
   next to the existing static emoting character. The page's own cycle only steps `mgx:faces` and
   `mgx:feels` today, so a combined facing-and-pose swatch sits outside it.
-- [ ] no Playwright regression test yet for the service-worker cache-busting fix itself (repro:
-  precache an old seed, swap in changed content, assert the next load serves the new bytes and
-  "reset to seed" recovers a stuck session); no browser/DOM run confirming the fact-count pills
-  render correctly (unit-level only so far).
 - [ ] mud room rebind's epoch fold covers world-state predicates only — `knows-about` testimony
   claims still rank by bare turn across epochs, so a pre-recast "the fox is gone" claim can outrank
   a fresh post-recast sighting of the same fox. Real remainder from `p2p-room.mjs`'s rebind work.

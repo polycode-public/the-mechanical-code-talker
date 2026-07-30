@@ -66,7 +66,7 @@ const spriteTemplates = readSpriteTemplateFiles();
 // reach the deployed page without anyone editing HTML. post-deploy-smoke.mjs
 // reads the same element back off that page.
 function stampPageVersion() {
-  const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+  const version = siteVersion();
   const page = join(SITE, "index.html");
   writeFileSync(page, stampVersion(readFileSync(page, "utf8"), version));
   console.log(`stamped ${page} with version ${version}`);
@@ -79,6 +79,16 @@ function stampPageVersion() {
 function contentHash(path) {
   if (!existsSync(path)) return "";
   return createHash("sha256").update(readFileSync(path)).digest("hex").slice(0, 12);
+}
+
+/** package.json's version, or TMCT_DEMO_VERSION_OVERRIDE when set. The
+ *  override lets a test drive two builds that differ only in the version
+ *  the site stamps and the service worker's cache name embeds, without
+ *  touching the repo's own package.json — test-e2e/pages-service-worker-
+ *  cache-bust.test.mjs is the one caller. */
+function siteVersion() {
+  const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+  return process.env.TMCT_DEMO_VERSION_OVERRIDE || version;
 }
 
 // Clear OUT first. Copying into it without clearing leaves every file src/ has
@@ -608,7 +618,7 @@ self.addEventListener("fetch", (event) => {
 }
 
 {
-  const { version } = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf8"));
+  const version = siteVersion();
   // Hashed over the built files themselves, so the cache name moves whenever
   // any precached asset's bytes move — the seed hash is reused rather than
   // recomputed over its 90-odd MB a second time.
