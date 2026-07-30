@@ -2528,15 +2528,17 @@ function pageScript() {
         shareBtn.disabled = false;
       }
     });
-    el("mintInviteBtn").addEventListener("click", async function () {
-      const btn = el("mintInviteBtn");
-      btn.disabled = true;
-      try {
-        await mintInvite(btn);
-      } finally {
-        btn.disabled = false;
-      }
-    });
+    for (const mintId of ["mintInviteBtn", "remintBtn"]) {
+      el(mintId).addEventListener("click", async function () {
+        const btn = el(mintId);
+        btn.disabled = true;
+        try {
+          await mintInvite(btn);
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    }
 
     el("copyLinkBtn").addEventListener("click", async function () {
       await copyText(el("shareLink").value);

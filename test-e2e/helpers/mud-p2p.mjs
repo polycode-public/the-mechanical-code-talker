@@ -138,6 +138,9 @@ export async function standInTheGarden(page, character) {
  *  non-empty, so a scenario never hands out a link somebody already used. */
 export async function mintInvite(page) {
   const previous = await page.inputValue("#shareLink");
+  // The share button lives in the header chrome, under the sharing overlay
+  // whenever that is open — close the lights-down first, as a person would.
+  if (!(await page.evaluate(() => document.getElementById("netPanel").hidden))) await page.keyboard.press("Escape");
   await page.click("#shareBtn");
   await page.waitForFunction(
     (was) => {
@@ -155,6 +158,7 @@ export async function mintInvite(page) {
  *  already digging, so nothing they have opened is thrown away. */
 export async function replyToInvite(page, invite) {
   const previous = await page.inputValue("#replyOut");
+  if (!(await page.evaluate(() => document.getElementById("netPanel").hidden))) await page.keyboard.press("Escape");
   await page.click("#joinOpenBtn");
   await page.fill("#inviteBox", invite);
   await page.click("#inviteBtn");
@@ -175,10 +179,7 @@ export async function acceptReply(page, reply) {
   await page.click("#replyBtn");
 }
 
-export const nodeNameOf = async (page) => {
-  await page.click("#statePill");
-  return page.inputValue("#nodeNameInput");
-};
+export const nodeNameOf = (page) => page.inputValue("#nodeNameInput");
 
 export const myPeerId = (page) => page.evaluate(() => window.tmctP2pRoom?.peerId ?? null);
 

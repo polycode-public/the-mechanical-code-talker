@@ -139,8 +139,11 @@ async function standInTheGarden(page, character) {
   await page.waitForFunction(() => !document.body.classList.contains("editing"), null, { timeout: READY_TIMEOUT_MS });
 }
 
-/** Click share and hand back the link it put in its own box. */
+/** Click share and hand back the link it put in its own box. The button
+ *  lives in the header chrome, under the sharing overlay whenever that is
+ *  open — close the lights-down first, as a person would. */
 async function mintInvite(page) {
+  if (!(await page.evaluate(() => document.getElementById("netPanel").hidden))) await page.keyboard.press("Escape");
   await page.click("#shareBtn");
   await page.waitForFunction(
     () => document.getElementById("shareLink").value.length > 0,
@@ -154,6 +157,7 @@ async function mintInvite(page) {
  *  that arrived, press one button, take the reply. This is the path for
  *  somebody already digging, so nothing they have opened is thrown away. */
 async function replyToInvite(page, invite) {
+  if (!(await page.evaluate(() => document.getElementById("netPanel").hidden))) await page.keyboard.press("Escape");
   await page.click("#joinOpenBtn");
   await page.fill("#inviteBox", invite);
   await page.click("#inviteBtn");

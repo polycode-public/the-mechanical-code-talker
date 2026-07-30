@@ -78,6 +78,7 @@ const nodeNames = (page) => page.locator(".node-row .node-name").allTextContents
 
 /** Click "invite someone" and hand back the link it copied into its own box. */
 async function mintInvite(page) {
+  if (!(await page.evaluate(() => document.getElementById("netPanel").hidden))) await page.keyboard.press("Escape");
   await page.click("#shareBtn");
   await page.waitForFunction(() => document.getElementById("shareLink").value.length > 0, null, { timeout: HANDSHAKE_TIMEOUT_MS });
   return page.inputValue("#shareLink");
@@ -108,10 +109,12 @@ test(
         "waiting for a reply is a calm state, not an error one — nothing is in flight yet",
       );
       assert.equal(await inviter.page.locator(".copyTip").textContent(), "link copied — send it to one person");
+      assert.equal(await inviter.page.locator("#shareLink").isVisible(), true, "the whole invite is on screen before anything is sent");
+      assert.equal(await inviter.page.locator("#replyBox").isVisible(), true, "and the box their reply lands in stands ready beside it");
       assert.equal(
-        await inviter.page.locator("#sharePanel textarea, #answerPanel textarea:visible").count(),
-        2,
-        "the inviter's page shows the link and exactly one box to paste a reply into",
+        await inviter.page.locator("#step-invite").getAttribute("data-status"),
+        "done",
+        "the ladder marks the minted invite done and moves the live step forward",
       );
 
       // The joiner lands on a card, not a live world: one button, no paste box.
@@ -155,13 +158,18 @@ test(
       assert.equal(
         await joiner.page.evaluate(() => document.getElementById("replyOut").value),
         reply,
-        "the reply the joiner sent is still recorded in the rail, even though its box has retired",
+        "the reply the joiner sent is still recorded in the overlay, even though its box has retired",
       );
       assert.equal(
-        await inviter.page.locator("#replyBox").isVisible(),
+        await inviter.page.evaluate(() => document.getElementById("netPanel").hidden),
         true,
-        "the paste box stays open: if two people opened the same link, the second reply still needs somewhere to land",
+        "the lights come back up on their own the moment the channel opens",
       );
+      // Reopening shows the paste box still standing: if two people opened the
+      // same link, the second reply still needs somewhere to land.
+      await inviter.page.click("#statePill");
+      assert.equal(await inviter.page.locator("#replyBox").isVisible(), true);
+      await inviter.page.keyboard.press("Escape");
 
       const joinerNode = await joiner.page.inputValue("#nodeNameInput");
       for (const [label, side] of [["inviter", inviter], ["joiner", joiner]]) {

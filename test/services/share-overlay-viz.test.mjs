@@ -86,7 +86,7 @@ test("the overlay carries every stable id both page scripts and the drivers addr
     "netPanel", "netPanelClose", "wireState", "wireStateWord", "wireStateNote",
     "joinCard", "joinEyebrow", "joinWorld", "joinBody", "joinBtn", "joinProblem",
     "joinReplyWrap", "joinReply", "joinCopyBtn", "joinShareBtn", "joinWaBtn", "joinDismiss",
-    "mintInviteBtn", "inviteSummary", "shareLink", "copyLinkBtn", "copyCodeBtn", "webShareBtn", "waShareBtn",
+    "mintInviteBtn", "remintBtn", "inviteSummary", "shareLink", "copyLinkBtn", "copyCodeBtn", "webShareBtn", "waShareBtn",
     "inviteBox", "inviteBtn", "inviteProblem",
     "replyOut", "copyReplyBtn", "replyShareBtn", "replyWaBtn",
     "replyBox", "replyBtn", "replyProblem",

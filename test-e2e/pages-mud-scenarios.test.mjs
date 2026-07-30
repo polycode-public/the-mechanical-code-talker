@@ -164,6 +164,9 @@ test("picking a burrow while a room is shared re-binds the link to the new burro
     assert.notEqual(await page.locator("#statePillWord").textContent(), "not shared", "a room is live before the switch");
     const linkBefore = await page.inputValue("#shareLink");
 
+    // The scenario picker sits in the deck, under the sharing overlay the
+    // share click opened — lights back up before reaching for it.
+    await page.keyboard.press("Escape");
     await pickScenario(page, "2", "warren-mouth");
 
     assert.notEqual(await page.locator("#statePillWord").textContent(), "not shared", "the link survives the recast, re-bound to the new burrow");
