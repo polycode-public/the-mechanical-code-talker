@@ -437,9 +437,18 @@ Ordered so each phase is useful on its own and unblocks the next.
    Decide which sense of "large" the schema carries (tier or property — see Theme 2). Then
    `fn("get me the large sprite for a happy spider")` works, and `spider-fly-viz.mjs:691-702`
    collapses.
-9. **The sprites.html interceptions.** Key `chat.mjs`'s generic membership and property lanes on the
-   sprite-facts predicates so `answerSpriteQuestion` (`sprite-catalog-viz.mjs:397-429`) deletes, and
-   route `extractSceneItems` (`:329-384`) through `resolveObject`. Needs phase 5.
+9. **The sprites.html interceptions — landed.** `answerSpriteQuestion` is deleted and the dock hands
+   every line straight to the session. Two generic changes carried it: a class name is now a noun
+   PHRASE in the membership and taught-class-count lanes (`longestTaughtClassInRun` takes the longest
+   leading run that's really on record, so "sprite class" resolves while "animals in the graph" still
+   reads as before), and a new object-fronted property lane rejoins a question's own two ends into the
+   folded predicate the rows were stored under — `OBJECT_FRONTED_PROPERTY_RE` reads "what emotions
+   does a person sprite accept" as `mgx:accept-emotion` with no table of property words, so
+   `mgx:take-parameter` / `mgx:offer-variant` come free. `extractSceneItems` moved to
+   `domain/scene-compose.mjs` and resolves each candidate span through `resolveObject`; it takes the
+   resolver's exact tier only, because the containment and fuzzy tiers read "wood" as the food class
+   and a drawn sprite carries no citation to audit. That move also puts the parser in the page's
+   bundle, so the composer panel now needs the bundle the same way the dock does.
 10. **Gap C, one `globalThis.tmct`.** `ask`, `plan`, `turn`, `session`. The eleven per-page bags shrink
     to whatever has no natural-language form. Late, because it needs 3, 5 and 8 to have somewhere to
     go.

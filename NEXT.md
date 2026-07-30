@@ -89,9 +89,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   and the multi-constraint resolver exists (this session's sprite work); still needs the capability
   record, the `FRAMES` entry, and a decision on which sense of "large" the schema carries (tier vs.
   property — see the doc's Theme 2 section).
-- [ ] **`PLAN_TOOL_SURFACE.md` phase 9** — key `chat.mjs`'s generic membership/property lanes on the
-  sprite-facts predicates so `answerSpriteQuestion` deletes; route `extractSceneItems` through
-  `resolveObject`. Gap A is fully landed, so nothing blocks this.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 10, Gap C** — one `globalThis.tmct` (`ask`, `plan`, `turn`,
   `session`) replacing the eleven per-page global bags. Needs phases 3 and 5 (both done) and 8 to
   exist first.

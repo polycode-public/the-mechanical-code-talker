@@ -28,6 +28,11 @@ export const stubNodeBuiltins = {
       //     seed, corpus-slice, and session-layer modules reference but the
       //     dock's factAnswer/factReadBack call chain never executes (it reads
       //     an in-memory Backend-B handle). They throw only if actually called.
+      //     readdirSync is the one thrower a page CAN reach: tmct_sprite's
+      //     template readers walk a directory, and every tool handler sits on
+      //     chat.mjs's own import path. Both readers already treat an
+      //     unreadable directory as an empty template set, so the throw lands
+      //     in their own catch and the tool refuses honestly.
       // Bindings no reachable module imports were removed here: writeFileSync,
       // extname, pathToFileURL, createHash, createRequireFromPath,
       // createServer (surfaces only), and DatabaseSync (node:sqlite Backend C,
@@ -36,6 +41,7 @@ export const stubNodeBuiltins = {
         "const unavailable = (name) => () => { throw new Error(name + ' unavailable in the browser ask bundle'); };\n"
         + "export const createRequire = unavailable('createRequire');\n"
         + "export const readFileSync = unavailable('readFileSync');\n"
+        + "export const readdirSync = unavailable('readdirSync');\n"
         + "export const access = unavailable('access');\n"
         + "export const readFile = unavailable('readFile');\n"
         + "export const writeFile = unavailable('writeFile');\n"

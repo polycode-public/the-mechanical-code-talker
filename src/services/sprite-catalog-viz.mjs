@@ -334,122 +334,30 @@ export function buildSpriteCatalogEntries({ iconTemplates = [], largeTemplates =
   });
 }
 
-// ---- scene composer (pure) ----
+// ---- scene composer ----
 //
-// The free-text "there is a..." box (PLAN_GAMES_UPLIFT_V3.md's own precedent:
-// adventure-viz.mjs's roomSceneObjects/room-frame) over THIS page's own
-// already-real classes — never a general NLU pass. extractSceneItems is the
-// one pure, unit-testable piece; the DOM index it's matched against
-// (className -> real swatch labels, read straight off this page's own
+// The free-text "there is a..." box (adventure-viz.mjs's roomSceneObjects/
+// room-frame is the same shape) over THIS page's own already-real classes.
+// The parser itself is scene-compose.mjs, which resolves a typed class name
+// through the real resolver; this page owns only the class index it is matched
+// against (className -> real swatch labels, read straight off this page's own
 // already-rendered `.card`/`.swatch-label` markup at load time — see this
 // module's own header for why that beats re-embedding the same SVG data a
-// second time) is built client-side in the inline script below, since
-// walking rendered DOM has no meaning in this pure module.
+// second time), which is built client-side, since walking rendered DOM has no
+// meaning in this pure module.
 
-/** `text`'s lowercase word runs with their token index, the unit
- *  extractSceneItems matches class names against — punctuation never fuses
- *  two real words into one token nor splits one real word into two. */
-function tokenizeSceneText(text) {
-  const tokens = [];
-  const re = /[A-Za-z]+/g;
-  let m;
-  while ((m = re.exec(String(text ?? "")))) tokens.push({ word: m[0].toLowerCase() });
-  return tokens;
-}
+export { extractSceneItems } from "../domain/scene-compose.mjs";
 
-/** Every real catalog class the free-typed `text` names, in the order each
- *  first appears, paired with the real material label (one of that SAME
- *  class's own swatch labels — never another class's, never a fabricated
- *  one) immediately preceding it, or `null`. `classIndex` is
- *  `{className: {materials}}` with `materials` keyed by lowercase label
- *  (sprite-catalog-viz's own client-side `buildClassIndexFromDom` output, or
- *  an equivalent test fixture) — a class name absent from `classIndex` can
- *  never match, and a modifier word that isn't one of ITS matched class's
- *  own material labels is silently dropped rather than guessed at, the same
- *  honest-miss posture an unrecognized class name gets (an unmatched word,
- *  e.g. "red" before a lamp with no red material, is never an error, just
- *  silently not drawn). A multi-word class name (e.g. "body of water") is
- *  checked, at every token position, before any shorter class that would
- *  otherwise claim part of it — candidates are tried longest-word-count
- *  first, so the longer name always wins the position it starts at. Pure. */
-export function extractSceneItems(text, classIndex) {
-  const index = classIndex || {};
-  const candidates = Object.keys(index)
-    .map((name) => ({ name, words: name.toLowerCase().split(/\s+/).filter(Boolean) }))
-    .filter((c) => c.words.length)
-    .sort((a, b) => b.words.length - a.words.length || b.name.length - a.name.length);
-  const tokens = tokenizeSceneText(text);
-  const used = new Array(tokens.length).fill(false);
-  const items = [];
-  for (let i = 0; i < tokens.length; i += 1) {
-    if (used[i]) continue;
-    const hit = candidates.find(({ words }) => {
-      if (i + words.length > tokens.length) return false;
-      for (let k = 0; k < words.length; k += 1) {
-        if (used[i + k] || tokens[i + k].word !== words[k]) return false;
-      }
-      return true;
-    });
-    if (!hit) continue;
-    let materialLabel = null;
-    if (i > 0 && !used[i - 1]) {
-      const materials = index[hit.name]?.materials || {};
-      const prevWord = tokens[i - 1].word;
-      if (Object.prototype.hasOwnProperty.call(materials, prevWord)) {
-        materialLabel = prevWord;
-        used[i - 1] = true;
-      }
-    }
-    for (let k = 0; k < hit.words.length; k += 1) used[i + k] = true;
-    items.push({ className: hit.name, materialLabel });
-  }
-  return items;
-}
-
-// ---- catalog question lane (pure) ----
-
-/** The closed set of catalog-shaped questions the chat dock answers straight
- *  off THIS page's own embedded sprite-facts rows (src/domain/
- *  sprite-facts.mjs's output), before a line ever reaches the full engine —
- *  the same closed-template posture extractSceneItems takes for the scene
- *  composer. Returns { answer, grounding } (grounding = how many real rows
- *  the answer was read from) or null for ANY question this lane doesn't own,
- *  including a catalog-shaped question about a class with no rows on record —
- *  the caller falls through to the engine, whose refusal is the honest miss.
- *  Self-contained (no outer refs), `.toString()`-splice safe. Pure. */
-export function answerSpriteQuestion(text, rows) {
-  const all = Array.isArray(rows) ? rows : [];
-  const q = String(text ?? "").trim().toLowerCase().replace(/[?.!\s]+$/, "");
-
-  if (/^what (?:classes|sprites|sprite classes) (?:can you|do you|are there)(?:\s+(?:render|draw|show))?$/.test(q)) {
-    const classes = all
-      .filter((r) => r.predicate === "rdf:type" && r.object === "sprite class")
-      .map((r) => String(r.subject).replace(/ sprite$/, ""));
-    if (!classes.length) return null;
-    const sample = classes.slice(0, 10).join(", ");
-    return {
-      answer: `${classes.length} sprite classes are on record — ${sample}, … (the catalog below lists every one).`,
-      grounding: classes.length,
-    };
-  }
-
-  const m = q.match(/^(?:what|which) parameters? (?:does|do|can|will) (?:a |an |the )?(.+?)(?: sprite)? (?:take|accept|use)s?$/);
-  if (m) {
-    const subject = `${m[1]} sprite`;
-    const params = all.filter((r) => r.subject === subject && r.predicate === "mgx:take-parameter").map((r) => r.object);
-    if (!params.length) return null;
-    let grounding = params.length;
-    const parts = params.map((p) => {
-      const values = all.filter((r) => r.subject === subject && r.predicate === `mgx:accept-${p}`).map((r) => r.object);
-      grounding += values.length;
-      return values.length ? `${p} (${values.join(", ")})` : p;
-    });
-    const lead = params.length === 1 ? "one parameter" : `${params.length} parameters`;
-    return { answer: `a ${subject} takes ${lead}: ${parts.join("; ")}.`, grounding };
-  }
-
-  return null;
-}
+// ---- the catalog question lane ----
+//
+// There isn't one. Every catalog-shaped question the dock takes — "how many
+// sprite classes are there", "list the sprite classes", "what parameters does
+// a person sprite take", "what emotions does a person sprite accept" — is
+// answered by the ordinary chat engine reading the same sprite-facts rows this
+// page embeds, through the membership, count and property lanes it already runs
+// for every other caller. The predicate spellings sprite-facts.mjs mints
+// (mgx:take-parameter, mgx:accept-emotion, mgx:offer-variant) are what those
+// lanes read, so the page hands the line over and renders what comes back.
 
 // ---- the animated swatches (pure) ----
 //
@@ -459,8 +367,7 @@ export function answerSpriteQuestion(text, rows) {
 // already-rendered swatches (see the inline script below — the same
 // read-the-DOM posture the scene composer's class index takes), but the
 // frame ORDER and the tempo are real logic worth pinning on their own, so
-// they live here as pure functions the page splices in by `.toString()` —
-// the same idiom extractSceneItems and answerSpriteQuestion already use.
+// they live here as pure functions the page splices in by `.toString()`.
 // One delay constant serves all three, so the three can't drift apart into
 // three tempos.
 //
@@ -595,14 +502,16 @@ function sectionHtml(group, entries, { clusterBy = null } = {}) {
  *  ancestor chains.
  *
  *  `spritesBundleAvailable: true` (ledger-viz.mjs's own ledgerBundleAvailable
- *  idiom) is what adds the chat dock at all: the page then embeds the
- *  sprite-facts rows (src/domain/sprite-facts.mjs, derived purely from the
+ *  idiom) is what adds the two interactive panels at all: the page then embeds
+ *  the sprite-facts rows (src/domain/sprite-facts.mjs, derived purely from the
  *  same two template sets) and references the sibling
  *  ./sprites-browser.bundle.js scripts/build-demo-site.mjs builds alongside
- *  it. Left false, the page renders exactly as before — no dock, no bundle
- *  reference, nothing extra to 404 — including the favicon links, since the
- *  CLI's standalone export (also `spritesBundleAvailable: false`) can't carry
- *  a dangling relative ./favicon.svg either. */
+ *  it. Both panels need that bundle — the dock for its chat session, the scene
+ *  composer for the resolver its parser asks. Left false, the page is the
+ *  catalog alone: no dock, no composer, no bundle reference, nothing extra to
+ *  404 — including the favicon links, since the CLI's standalone export (also
+ *  `spritesBundleAvailable: false`) can't carry a dangling relative
+ *  ./favicon.svg either. */
 export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates = [], largeTemplates = [], factRows = [], spritesBundleAvailable = false } = {}) {
   const entries = buildSpriteCatalogEntries({ iconTemplates, largeTemplates, factRows });
   const totalSwatches = entries.reduce((n, e) => n + e.iconSwatches.length + e.largeSwatches.length, 0);
@@ -652,22 +561,56 @@ export function renderSpriteCatalogHtml({ title = DEFAULT_TITLE, iconTemplates =
       </form>
       <div class="pills" id="dockPills" role="group" aria-label="quick questions to ask">
         <button type="button" class="pill" data-q="what parameters does a person sprite take?">person parameters</button>
-        <button type="button" class="pill" data-q="what parameters does a cabinet sprite take?">cabinet parameters</button>
-        <button type="button" class="pill" data-q="what classes can you render?">classes on record</button>
+        <button type="button" class="pill" data-q="what emotions does a person sprite accept?">person emotions</button>
+        <button type="button" class="pill" data-q="what materials does a cabinet sprite accept?">cabinet materials</button>
+        <button type="button" class="pill" data-q="how many sprite classes are there?">classes on record</button>
         <button type="button" class="pill" data-q="what is a portrait sprite?">about the portrait sprite</button>
       </div>
       <div class="dock-status mono" id="dockStatus">loading the engine&hellip;</div>
     </section>
   </div>`;
 
+  // The bundle carries the scene composer's parser as well as the dock's
+  // session, and the catalog script below calls it directly, so it loads ahead
+  // of that script rather than beside the dock's own wiring at the end.
+  const spriteBundleScript = !spritesBundleAvailable ? "" : `<script src="./sprites-browser.bundle.js"></script>`;
+
+  // The composer resolves a typed class name through the real resolver, which
+  // reaches the page in that bundle. Without it there is nothing to type into,
+  // so the panel stays out rather than rendering a box that can't answer.
+  const composerHtml = !spritesBundleAvailable ? "" : `<div class="composer">
+    <section class="panel compose-panel" aria-label="Describe a scene">
+      <h2>describe a scene</h2>
+      <form class="composeform" id="composeForm">
+        <span class="prompt mono">there is a</span>
+        <input id="composeq" type="text" autocomplete="off"
+          placeholder="red lamp, a doctor with a hat, and a cabinet"
+          aria-label="Continue the sentence: there is a&hellip;">
+      </form>
+      <div class="pills" id="composePills" role="group" aria-label="quick words to add">
+        <button type="button" class="pill" data-fill="doctor">doctor</button>
+        <button type="button" class="pill" data-fill="hat">hat</button>
+        <button type="button" class="pill" data-fill="wood cabinet">wood cabinet</button>
+        <button type="button" class="pill" data-fill="glass lamp">glass lamp</button>
+        <button type="button" class="pill" data-fill="cat">cat</button>
+        <button type="button" class="pill" data-fill="garden">garden</button>
+      </div>
+    </section>
+    <section class="panel viewer-panel" aria-label="The composed scene">
+      <h2>the scene</h2>
+      <div class="scene-frame" id="sceneFrame">
+        <div class="scene-row" id="sceneRow" aria-live="polite"></div>
+        <span class="empty-note" id="sceneEmpty">nothing recognized yet. Try &ldquo;a doctor with a hat, and a cabinet&rdquo;.</span>
+      </div>
+    </section>
+  </div>`;
+
   const dockScripts = !spritesBundleAvailable ? "" : `<script>
 const SPRITE_CHAT = ${embedJson({ rows: dockRows })};
 </script>
-<script src="./sprites-browser.bundle.js"></script>
 <script>
 (function () {
   "use strict";
-  const answerSpriteQuestion = ${answerSpriteQuestion.toString()};
   const dockLogEl = document.getElementById("dockLog");
   const dockFormEl = document.getElementById("dockForm");
   const dockqEl = document.getElementById("dockq");
@@ -716,12 +659,11 @@ const SPRITE_CHAT = ${embedJson({ rows: dockRows })};
     if (!q) return;
     dockqEl.value = "";
     addDockLine("u", q);
-    const local = answerSpriteQuestion(q, SPRITE_CHAT.rows);
-    if (local) { addDockLine("a grounded", local.answer); return; }
     if (!session) { addDockLine("a miss", "the engine is still loading. Try again in a moment."); return; }
     withLock(async () => {
       const result = await session.turn(q);
-      addDockLine(result.record && result.record.miss ? "a miss" : "a", result.answer);
+      const missed = !!(result.record && result.record.miss);
+      addDockLine(missed ? "a miss" : "a grounded", result.answer);
     });
   });
 
@@ -847,32 +789,7 @@ ${dockCss}</style>
     <h1>Sprites</h1>
     <span class="doc-sub">tmct &middot; the sprite library</span>
   </header>
-  <div class="composer">
-    <section class="panel compose-panel" aria-label="Describe a scene">
-      <h2>describe a scene</h2>
-      <form class="composeform" id="composeForm">
-        <span class="prompt mono">there is a</span>
-        <input id="composeq" type="text" autocomplete="off"
-          placeholder="red lamp, a doctor with a hat, and a cabinet"
-          aria-label="Continue the sentence: there is a&hellip;">
-      </form>
-      <div class="pills" id="composePills" role="group" aria-label="quick words to add">
-        <button type="button" class="pill" data-fill="doctor">doctor</button>
-        <button type="button" class="pill" data-fill="hat">hat</button>
-        <button type="button" class="pill" data-fill="wood cabinet">wood cabinet</button>
-        <button type="button" class="pill" data-fill="glass lamp">glass lamp</button>
-        <button type="button" class="pill" data-fill="cat">cat</button>
-        <button type="button" class="pill" data-fill="garden">garden</button>
-      </div>
-    </section>
-    <section class="panel viewer-panel" aria-label="The composed scene">
-      <h2>the scene</h2>
-      <div class="scene-frame" id="sceneFrame">
-        <div class="scene-row" id="sceneRow" aria-live="polite"></div>
-        <span class="empty-note" id="sceneEmpty">nothing recognized yet. Try &ldquo;a doctor with a hat, and a cabinet&rdquo;.</span>
-      </div>
-    </section>
-  </div>
+  ${composerHtml}
   ${dockHtml}
   <div class="topbar">
     <nav aria-label="Jump to group">${navHtml}</nav>
@@ -887,6 +804,7 @@ ${dockCss}</style>
 <script>
 const SPRITE_CATALOG = ${pageData};
 </script>
+${spriteBundleScript}
 <script>
 (function () {
   "use strict";
@@ -914,10 +832,10 @@ const SPRITE_CATALOG = ${pageData};
   // THIS page's own already-rendered card and swatch-label markup (this
   // module's own header explains why: never a second embedded copy of the
   // same swatch data), so the composed scene below only ever shows a sprite
-  // this same page already proved the resolver draws.
+  // this same page already proved the resolver draws. Which class a typed
+  // word names is the bundle's extractSceneItems, which asks the real
+  // resolver — the page never matches a class name itself.
   const esc = ${escapeHtml.toString()};
-  const tokenizeSceneText = ${tokenizeSceneText.toString()};
-  const extractSceneItems = ${extractSceneItems.toString()};
 
   function buildClassIndexFromDom() {
     const index = {};
@@ -944,42 +862,47 @@ const SPRITE_CATALOG = ${pageData};
     return index;
   }
 
-  const classIndex = buildClassIndexFromDom();
-  const composeqEl = document.getElementById("composeq");
-  const composeFormEl = document.getElementById("composeForm");
-  const composePillsEl = document.getElementById("composePills");
-  const sceneRowEl = document.getElementById("sceneRow");
-  const sceneEmptyEl = document.getElementById("sceneEmpty");
+  function wireSceneComposer() {
+    const composeqEl = document.getElementById("composeq");
+    if (!composeqEl) return;
+    const extractSceneItems = tmctSprites.extractSceneItems;
+    const composeFormEl = document.getElementById("composeForm");
+    const composePillsEl = document.getElementById("composePills");
+    const sceneRowEl = document.getElementById("sceneRow");
+    const sceneEmptyEl = document.getElementById("sceneEmpty");
+    const classIndex = buildClassIndexFromDom();
 
-  function renderScene(text) {
-    const items = extractSceneItems(text, classIndex);
-    if (!items.length) {
-      sceneRowEl.innerHTML = "";
-      sceneEmptyEl.hidden = false;
-      return;
+    function renderScene(text) {
+      const items = extractSceneItems(text, classIndex);
+      if (!items.length) {
+        sceneRowEl.innerHTML = "";
+        sceneEmptyEl.hidden = false;
+        return;
+      }
+      sceneEmptyEl.hidden = true;
+      sceneRowEl.innerHTML = items.map((item) => {
+        const entry = classIndex[item.className];
+        if (!entry) return "";
+        const svg = (item.materialLabel && entry.materials[item.materialLabel]) || entry.defaultSvg || "";
+        const label = item.materialLabel ? item.materialLabel + " " + item.className : item.className;
+        return '<div class="scene-card"><div class="scene-sprite">' + svg + '</div><div class="scene-label">' + esc(label) + "</div></div>";
+      }).join("");
     }
-    sceneEmptyEl.hidden = true;
-    sceneRowEl.innerHTML = items.map((item) => {
-      const entry = classIndex[item.className];
-      if (!entry) return "";
-      const svg = (item.materialLabel && entry.materials[item.materialLabel]) || entry.defaultSvg || "";
-      const label = item.materialLabel ? item.materialLabel + " " + item.className : item.className;
-      return '<div class="scene-card"><div class="scene-sprite">' + svg + '</div><div class="scene-label">' + esc(label) + "</div></div>";
-    }).join("");
-  }
 
-  composeqEl.addEventListener("input", () => renderScene(composeqEl.value));
-  composeFormEl.addEventListener("submit", (e) => { e.preventDefault(); renderScene(composeqEl.value); });
-  composePillsEl.addEventListener("click", (e) => {
-    const btn = e.target.closest(".pill");
-    if (!btn) return;
-    const phrase = btn.dataset.fill || "";
-    const current = composeqEl.value.trim();
-    composeqEl.value = current ? current + ", a " + phrase : phrase;
-    composeqEl.focus();
-    renderScene(composeqEl.value);
-  });
-  renderScene("");
+    composeqEl.addEventListener("input", () => renderScene(composeqEl.value));
+    composeFormEl.addEventListener("submit", (e) => { e.preventDefault(); renderScene(composeqEl.value); });
+    composePillsEl.addEventListener("click", (e) => {
+      const btn = e.target.closest(".pill");
+      if (!btn) return;
+      const phrase = btn.dataset.fill || "";
+      const current = composeqEl.value.trim();
+      composeqEl.value = current ? current + ", a " + phrase : phrase;
+      composeqEl.focus();
+      renderScene(composeqEl.value);
+    });
+    renderScene("");
+  }
+  wireSceneComposer();
 
   // ---- the animated swatches — a card's large tier gains one moving
   // swatch per axis its own templates actually vary on: mood (mgx:feels),
