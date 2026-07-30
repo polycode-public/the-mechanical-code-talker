@@ -136,7 +136,7 @@ ${DASH_DARK_CHROME_CSS}
   .brand { display: flex; flex-direction: column; gap: .3rem; max-width: 640px; }
   .eyebrow { font-family: ${MONO_STACK}; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .subtitle { font-size: .92rem; color: var(--ink); opacity: .82; max-width: 58ch; }
-  .statuspanel { display: flex; gap: 1.1rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .9rem; }
+  .statuspanel { display: flex; flex-wrap: wrap; gap: .5rem 1.1rem; background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: .5rem .9rem; }
   .statuspanel .stat { display: flex; flex-direction: column; gap: .14rem; min-width: 7rem; }
   .statuspanel .stat-label { font-family: ${MONO_STACK}; font-size: .6rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
   .statuspanel .stat-value { font-family: ${MONO_STACK}; font-size: .82rem; font-variant-numeric: tabular-nums; color: var(--ink); }
@@ -255,6 +255,7 @@ ${DASH_DARK_CHROME_CSS}
     .cols { grid-template-columns: 1fr; }
     .chip.tapchip { grid-template-columns: 1.5rem minmax(0,1fr) 3.2rem; }
     .chip.tapchip .track { display: none; }
+    .statuspanel .stat { min-width: 0; }
   }
   @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
   @media (prefers-reduced-motion: no-preference) {
