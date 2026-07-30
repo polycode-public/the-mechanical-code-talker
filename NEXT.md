@@ -124,28 +124,51 @@ green (5352/5352), pushed. Plan: `~/.claude/plans/please-use-the-coordinator-wit
 driving PLAN_FACT's remaining landing-order steps 3-8 in dependency order (steps 3→4 solo, then
 5/6/7 concurrent, then 8 solo — each step's own file-ownership rationale is in the plan doc).
 
-- [ ] Batch B — PLAN_FACT step 3, the re-key (`appendFact`/`appendFacts` per-assertion writes, the
-  on-load migration, `readFactRows`'s group fold + `computeAssertionGroupTrust`, the SHACL shape
-  update, the same-source supersession chain): worktree dispatched, Opus. Status: started. The
-  biggest, most subtle step — blast radius is `core.mjs`, `trust.mjs`, their test files, and every
-  trust-expectation pin in the estate. Batches C/D/E stay queued behind it (step 4 needs its
-  group-fold shape; 5/6/7 cascade from 4; 8 needs all of it) — not dispatchable concurrently.
-- [ ] A WebRTC connect-UX redesign (chat.html + mud.html): a full-page "lights down" overlay
-  replacing today's cramped netPanel/joinCard flow, a shared sponsor/joiner step diagram, custom
-  copy buttons with copy-preview, a URL-free invite fallback (see the bug below), mobile share-sheet
-  detection, a node roster with last-shared-fact + wave-to-one/wave-to-all. Dispatched as a single
-  Fable worktree agent per operator request, using the frontend-design skill. Not yet merged.
+- [x] Batch B — PLAN_FACT step 3, the re-key — merged, 4936/4936 non-e2e tests passed on the
+  worktree. One Fact record per assertion (`fact:<hash>@<sourceId>`, `#v<n>` once superseded),
+  `readFactRows` folds one row per group reading live heads only, `computeAssertionGroupTrust`
+  aggregates at read time with per-record recency. Two real defects fixed along the way
+  (supersession reading the wrong timestamp source; a provenance-less write silently swallowing
+  syllogise), not just expectation drift. Known, correctly-deferred gap: peer-teach records score
+  0.95 in the group aggregate, not the plan's worked-example 0.97375, until step 6's
+  `src:teach-node:` reliability-tracking join lands.
+- [ ] Batch C — PLAN_FACT step 4, resolver table + `effectiveObservedAt` + `findContradictions`
+  stage-2 rewire: worktree dispatched, Opus. Status: started. Batches D (5/6/7) and E (8) stay
+  queued behind it.
+- [x] WebRTC connect-UX redesign (chat.html + mud.html) — merged. A shared `share-overlay-viz.mjs`
+  full-page "lights down" component replaces chat's netPanel/joinCard and mud's independently-
+  duplicated net-panel/join-card: a two-browser wire diagram doubling as connection status, a
+  5-step ladder shared between sponsor/joiner roles, copy-link + copy-code-only + navigator.share +
+  wa.me affordances, a node roster with last-shared-fact and directional wave-to-one/wave-to-all,
+  WebRTC reference links. mud.html gained header chrome; sharing controls moved out of the
+  game-controls deck. Verified live in real browsers (49 scripted checks) by the building agent,
+  then 17/17 e2e p2p/mesh tests by the coordinator post-merge.
+- [x] **WebRTC now defaults to a public STUN server** (`DEFAULT_ICE_SERVERS`, `webrtc-transport.mjs`)
+  instead of `iceServers: []` — real-browser cross-engine testing (Chromium + Firefox, default
+  flags) found the old empty-list setting depends on OS-level local-network/mDNS behavior that
+  varies by machine, invisible to the e2e suite's own Chromium-only, mDNS-patched harness. STUN only
+  discovers each peer's own address; the connection still prefers a direct host-to-host path when
+  one exists, and no application data ever passes through the STUN server. Purged "not a bug to fix
+  later"/"stated boundary" framing for the no-STUN setting from `PLAN_MUD.md` and code comments —
+  described a decision as permanent that wasn't.
 
-**Bug found and fixed this session:** PLAN_FACT step 2's `teach:peer:<name>#node:<id>@<ts>` tag
-grammar landed clean in isolation, but broke chat.mjs's citation text — `renderFactLine` and ~9
-sibling call sites interpolated the raw provenance tag verbatim into `(source: ...)`, so a
-peer-taught fact's citation started showing the technical node id inline. Caught by CI's
-`e2e:deployed:mesh` post-deploy job (4 tests red), not by any local blast-radius run beforehand —
-worth noting as a real gap: none of A1-A6's own test scopes crossed into chat.mjs's citation
-rendering, since the change that broke it (the tag grammar) landed in a different worktree (A6)
-than the code it broke (chat.mjs, untouched by A6). Fixed with a `citationProvenance()` display
-helper (`chat.mjs`), mirroring the same `#node:` stripping chat-page-viz.mjs's node roster already
-does; verified against all 4 originally-failing e2e scenarios (7/7 green) before pushing.
+**Bugs found and fixed this session:**
+- PLAN_FACT step 2's `teach:peer:<name>#node:<id>@<ts>` tag grammar landed clean in isolation, but
+  broke chat.mjs's citation text — `renderFactLine` and ~9 sibling call sites interpolated the raw
+  provenance tag verbatim into `(source: ...)`. Caught by CI's `e2e:deployed:mesh` post-deploy job,
+  not by any local blast-radius run beforehand — none of A1-A6's own test scopes crossed into
+  chat.mjs's citation rendering, since the change that broke it (A6's tag grammar) landed in a
+  different worktree than the code it broke. Fixed with a `citationProvenance()` display helper.
+- `whenIceGatheringCompletes()` had no timeout of its own — a STUN request that never gets a reply
+  (rate-limited public server, two peer connections in one tab racing for it) hung the offer/answer
+  blob forever. Caught by a real, reproducible e2e failure (a page minting a second invite while its
+  first connection was already open), not by inspection. Now bounded at 5s.
+- `e2e:deployed:pages`/`e2e:deployed:shell` failed deterministically (all 3 retries, twice) with
+  "starter memory unavailable — starting empty." The deployed seed data was never actually broken
+  (fetched directly: 72,109 individuals, valid JSON, boots in ~3s once warm) — a CDN cold-cache
+  timing issue for the 89MB `chat-seed.json`, wider margin needed than `retry: 2` covers. Fixed with
+  `scripts/warm-deployed-cache.mjs`, run at the end of `deploy:website` before the `e2e:deployed:*`
+  jobs start.
 
 ## Open items
 
