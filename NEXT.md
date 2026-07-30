@@ -87,8 +87,9 @@ mode); a page wiring neither refuses honestly rather than failing on a method it
 (a payload, a world, a roster) can only come from the page itself. Each page's residual bag shrunk
 to whatever still has no natural-language form — canvas geometry, sprite templates/resolution,
 digest and affordance readers, vendor/provider registration seams; `code-explorer-viz.mjs` keeps
-its factory in a bag too, since its `CLIENT_JS` raw-text-to-splice conversion is phase 11, not this
-phase. Two real bugs surfaced and were fixed mid-migration: a rename sweep had silently eaten the
+its factory in a bag too, because the page's own session slot is created lazily on the first turn
+rather than the one `tmct.open` would install eagerly. Two real bugs surfaced and were fixed
+mid-migration: a rename sweep had silently eaten the
 page-lifecycle globals that share the `tmct*` prefix (restored), and three e2e probes were still
 checking a member (`window.tmct?.createLedgerSession`) that can no longer exist under the new
 shape (fixed).
@@ -129,9 +130,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   own page globals.** They are page-lifecycle flags the e2e suite and `gen-screenshots.mjs` wait on,
   not part of the engine contract Gap C unified, so they were left alone. `tmctChatSession` is now
   redundant with `tmct.session` and could fold into it.
-- [ ] **`PLAN_TOOL_SURFACE.md` phase 11** — the showcase pass: every viz module builds its page
-  script the `mud-viz.mjs` way; `code-explorer-viz.mjs`'s `CLIENT_JS` raw-text block is the one
-  remaining holdout (chat's four helpers already converted this session).
 - [ ] **`chat.mjs` still parses the `---tmct_ask---` delimiter** instead of reading
   `dispatchToolStructured`'s `data` directly (Gap B landed the contract this session, but
   `chat.mjs`'s own consumption is a separate, slightly fiddly move — the direct-`ask()` focus path
