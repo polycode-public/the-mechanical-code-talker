@@ -9,8 +9,8 @@ import { mkdtemp, mkdir, writeFile, readFile, readdir, rm } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { TMCT_BIN as BIN } from "./helpers/cli-bin.mjs";
 
-const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
 
 /** A temp repo whose .tmct/graph.json is the test fixture — lets us exercise the cli

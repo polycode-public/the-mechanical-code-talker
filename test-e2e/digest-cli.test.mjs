@@ -10,10 +10,9 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { appendFact, openMemoryBackend } from "../src/adapters/memory/core.mjs";
+import { TMCT_BIN as BIN } from "./helpers/cli-bin.mjs";
 
-const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const runDigest = (dir, ...args) =>
   spawnSync(process.execPath, [BIN, "digest", ...args, "--repo", dir], { encoding: "utf8" });
 

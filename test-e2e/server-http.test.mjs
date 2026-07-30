@@ -14,8 +14,8 @@ import { parseEntities } from "../src/domain/codegraph.mjs";
 import { dispatchTool } from "../src/tools/server.mjs";
 import { declaredCapabilityNames } from "../src/domain/router/drive.mjs";
 import * as source from "../src/adapters/source.mjs";
+import { TMCT_BIN as BIN } from "./helpers/cli-bin.mjs";
 
-const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
 const CONFIG = { graphFile: FIXTURE };
 

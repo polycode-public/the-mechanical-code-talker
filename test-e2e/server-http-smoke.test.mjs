@@ -28,8 +28,8 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { TMCT_BIN as BIN } from "./helpers/cli-bin.mjs";
 
-const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
 
 const READY_RE = /Anthropic Messages API at (http:\/\/\S+)\/v1\/messages/;

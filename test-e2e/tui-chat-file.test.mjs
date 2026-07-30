@@ -11,10 +11,9 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { loadMemory, openMemoryBackend, readFactRows } from "../src/adapters/memory/core.mjs";
+import { TMCT_BIN as BIN } from "./helpers/cli-bin.mjs";
 
-const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 
 test("the spawned chat shell answers the seed, plays the game, and learns from the pack into its default store", async () => {
   const dir = await mkdtemp(join(tmpdir(), "tmct-tui-file-"));

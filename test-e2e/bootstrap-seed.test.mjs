@@ -16,8 +16,8 @@ import { fileURLToPath } from "node:url";
 import { createSession, SEED_MARKER_REL } from "../src/services/chat.mjs";
 import { loadMemory, openMemoryBackend, FACT_CLASS } from "../src/adapters/memory/core.mjs";
 import { clearCache } from "../src/adapters/source.mjs";
+import { TMCT_BIN as BIN } from "./helpers/cli-bin.mjs";
 
-const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 const FIXTURE = fileURLToPath(new URL("../test/fixtures/entities.fixture.json", import.meta.url));
 
 // The graph-less bootstrap seeds every ACTIVE bundle (chat.mjs seedBootstrapMemory,

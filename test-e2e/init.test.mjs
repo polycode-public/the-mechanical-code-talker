@@ -19,6 +19,7 @@ import {
 import { loadTomlConfig, normalizeConfig } from "../src/adapters/toml-config.mjs";
 import { loadMemory, openMemoryBackend } from "../src/adapters/memory/core.mjs";
 import { resolveExtensions, seedActiveCorpusEntries } from "../src/services/extensions.mjs";
+import { TMCT_BIN as BIN } from "./helpers/cli-bin.mjs";
 
 async function tmp() {
   return mkdtemp(join(tmpdir(), "tmct-init-"));
@@ -339,8 +340,6 @@ test("initRepo({persona: PERSONA_PRESETS.human}): the new default persona's tmct
 
 test("bin/tmct.mjs: `tmct init --with-persona code` writes the persona, `--with-persona <unknown>` exits loudly and touches nothing", async () => {
   const { spawnSync } = await import("node:child_process");
-  const { fileURLToPath } = await import("node:url");
-  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 
   const dir = await tmp();
   try {
@@ -417,8 +416,6 @@ test("initRepo + re-init: a [memory] backend written to tmct.toml is read back i
 
 test("bin/tmct.mjs: `tmct init --memory-backend sqlite` writes [memory] backend = \"sqlite\" into tmct.toml", async () => {
   const { spawnSync } = await import("node:child_process");
-  const { fileURLToPath } = await import("node:url");
-  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 
   const dir = await tmp();
   try {
@@ -440,8 +437,6 @@ test("bin/tmct.mjs: `tmct init --memory-backend sqlite` writes [memory] backend 
 
 test("bin/tmct.mjs: `tmct init --memory-backend <unknown>` exits loudly, naming the valid choices, and touches nothing", async () => {
   const { spawnSync } = await import("node:child_process");
-  const { fileURLToPath } = await import("node:url");
-  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 
   const dir = await tmp();
   try {
@@ -458,8 +453,6 @@ test("bin/tmct.mjs: `tmct init --memory-backend <unknown>` exits loudly, naming 
 
 test("bin/tmct.mjs: `tmct import --memory-backend memory` on an already-initialized repo updates tmct.toml without a re-init", async () => {
   const { spawnSync } = await import("node:child_process");
-  const { fileURLToPath } = await import("node:url");
-  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 
   const dir = await tmp();
   try {
@@ -533,8 +526,6 @@ test("initRepo({ memoryBackend: 'memory', seed: true }): seed is honestly skippe
 
 test("bin/tmct.mjs: `tmct init --memory-backend sqlite` then a flagless `tmct chat` answers from the seeded corpus, not an empty session", async () => {
   const { spawnSync } = await import("node:child_process");
-  const { fileURLToPath } = await import("node:url");
-  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 
   const dir = await tmp();
   try {
@@ -565,8 +556,6 @@ test("bin/tmct.mjs: `tmct init --memory-backend sqlite` then a flagless `tmct ch
 
 test("bin/tmct.mjs REGRESSION: `tmct init --corpus aws --memory-backend sqlite` (combined in one call) seeds BOTH the default corpus AND aws into sqlite — write-ordering fix", async () => {
   const { spawnSync } = await import("node:child_process");
-  const { fileURLToPath } = await import("node:url");
-  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 
   const dir = await tmp();
   try {
@@ -597,8 +586,6 @@ test("bin/tmct.mjs REGRESSION: `tmct init --corpus aws --memory-backend sqlite` 
 
 test("bin/tmct.mjs REGRESSION: a later `tmct import --corpus <id>` (no --memory-backend flag) still seeds into the backend tmct.toml already names", async () => {
   const { spawnSync } = await import("node:child_process");
-  const { fileURLToPath } = await import("node:url");
-  const BIN = fileURLToPath(new URL("../bin/tmct.mjs", import.meta.url));
 
   const dir = await tmp();
   try {
