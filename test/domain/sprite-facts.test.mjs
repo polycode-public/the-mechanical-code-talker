@@ -6,6 +6,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spriteFactRows, spriteSubjectFor } from "../../src/domain/sprite-facts.mjs";
+import { matchConstraints } from "../../src/domain/sprite-templates.mjs";
 import { readSpriteTemplateFiles } from "../../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../../src/adapters/corpus/sprite-large-template-files.mjs";
 
@@ -53,7 +54,7 @@ test("every emitted fact traces to a real template entry — no minted terms", (
       const declared = templatesForCls.some((t) => Object.hasOwn(t?.parameters?.[param]?.values || {}, object));
       if (!declared) problems.push(`${subject} accepts ${param} "${object}" but no ${cls} template's values map carries it`);
     } else if (predicate === "mgx:offer-variant") {
-      const declared = templatesForCls.some((t) => t?.match && String(t.match.value) === object);
+      const declared = templatesForCls.some((t) => matchConstraints(t).some((c) => String(c.value) === object));
       if (!declared) problems.push(`${subject} offers variant "${object}" but no ${cls} template's [match] requires it`);
     } else {
       problems.push(`${subject} ${predicate} ${object}: predicate outside the generator's own closed vocabulary`);
@@ -79,6 +80,31 @@ test("the person sprite's emotion parameter and its six values come through", ()
 
 test("a hand-authored [match] variant emits its own offer-variant row", () => {
   assert.ok(rows.some((r) => r.subject === spriteSubjectFor("portrait") && r.predicate === "mgx:offer-variant" && r.object === "round"));
+});
+
+test("a variant requiring two facts at once stands behind both of them, one offer-variant row each", () => {
+  const large = [{
+    classes: ["dot"],
+    svg: "<svg/>",
+    match: [
+      { property: "mgx:faces", value: "left" },
+      { property: "mgx:pose", value: "moving" },
+    ],
+  }];
+  const offered = spriteFactRows({ largeTemplates: large })
+    .filter((r) => r.predicate === "mgx:offer-variant")
+    .map((r) => r.object);
+  assert.deepEqual(offered, ["left", "moving"]);
+});
+
+test("the sprite tier's own turntable angles and pose reach the fact rows for every class that draws them", () => {
+  for (const cls of ["bear", "cat", "dog", "king"]) {
+    const offered = rows
+      .filter((r) => r.subject === spriteSubjectFor(cls) && r.predicate === "mgx:offer-variant")
+      .map((r) => r.object)
+      .sort();
+    assert.deepEqual(offered, ["half-left", "half-right", "left", "moving", "right"], `${cls}: every angle it draws, plus the pose, is on record`);
+  }
 });
 
 test("a class present at both tiers carries both render-at rows; an icon-only shape carries one", () => {

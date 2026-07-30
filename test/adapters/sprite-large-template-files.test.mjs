@@ -9,7 +9,9 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readSpriteLargeTemplateFiles, SPRITE_LARGE_TEMPLATES_DIR } from "../../src/adapters/corpus/sprite-large-template-files.mjs";
 import { readSpriteTemplateFiles } from "../../src/adapters/corpus/sprite-template-files.mjs";
-import { resolveSpriteAsset, spriteTemplateProblems } from "../../src/domain/sprite-templates.mjs";
+import {
+  resolveSpriteAsset, spriteTemplateProblems, matchConstraints, FACING_PROPERTY, POSE_PROPERTY,
+} from "../../src/domain/sprite-templates.mjs";
 import { MATERIAL_PALETTE } from "../../src/domain/sprite-materials.mjs";
 import { EXPRESSION_PALETTE } from "../../src/domain/sprite-expressions.mjs";
 import { SPRITE_REGISTRY } from "../../src/domain/sprite-map.mjs";
@@ -484,7 +486,7 @@ test("a right profile is the left profile's mirror: the same geometry under one 
   }
 });
 
-test("an mgx:faces value outside left/right is never a guessed pose — falls through to the plain template", () => {
+test("an mgx:faces value outside the turntable's own angles is never a guessed view — falls through to the plain template", () => {
   const plain = resolveSpriteAsset("bear", [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
   assert.equal(resolveSpriteAsset("bear", [], faces("the-bear", "north"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY), plain);
 });
@@ -576,6 +578,183 @@ test("a mood with no facing fact still resolves the front-facing emotion templat
     assert.ok(svg.includes(EXPRESSION_PALETTE.happy), `${cls}: the happy fragment must appear`);
     assert.ok(!svg.includes("-facing-"), `${cls}: a mood alone must never select a profile variant`);
   }
+});
+
+// ---- the 5-point turntable and the mgx:pose axis ---------------------------
+// The turntable names four angles and leaves the centre view as the absent
+// mgx:faces fact; mgx:pose names one intermediate frame and leaves standing
+// still as the absent fact. A combined facing-and-pose file needs both facts
+// at once, which is what the plural [[match]] spelling is for.
+
+const HALF_ANGLES = ["half-left", "half-right"];
+const poses = (subject, object) => [{ subject, predicate: POSE_PROPERTY, object }];
+
+/** The one loaded `cls` template whose [match] requires EXACTLY `wanted`
+ *  (each entry written "property=value"), or undefined. */
+function variantRequiring(cls, wanted) {
+  const key = [...wanted].sort().join(" & ");
+  return REAL_LARGE_TEMPLATES.find((t) => {
+    if (!Array.isArray(t.classes) || !t.classes.includes(cls)) return false;
+    return matchConstraints(t).map((c) => `${c.property}=${c.value}`).sort().join(" & ") === key;
+  });
+}
+
+const angleVariant = (cls, angle) => variantRequiring(cls, [`${FACING_PROPERTY}=${angle}`]);
+const movingVariant = (cls) => variantRequiring(cls, [`${FACING_PROPERTY}=left`, `${POSE_PROPERTY}=moving`]);
+
+test("every reference class carries all four named turntable angles as real single-constraint variants", () => {
+  for (const cls of FACING_CLASSES) {
+    for (const angle of ["left", "half-left", "half-right", "right"]) {
+      assert.ok(angleVariant(cls, angle), `${cls} has no variant requiring ${FACING_PROPERTY} = ${angle}`);
+    }
+  }
+});
+
+test("every reference class carries a combined facing-and-pose variant requiring two facts at once", () => {
+  for (const cls of FACING_CLASSES) {
+    const variant = movingVariant(cls);
+    assert.ok(variant, `${cls} has no combined ${FACING_PROPERTY} + ${POSE_PROPERTY} variant`);
+    assert.equal(matchConstraints(variant).length, 2, `${cls}: the combined variant must require exactly the two facts`);
+    assert.ok(Array.isArray(variant.match), `${cls}: two constraints must be authored as repeated [[match]] tables`);
+  }
+});
+
+test("every new turntable and pose file is internally consistent on its own terms", () => {
+  for (const cls of FACING_CLASSES) {
+    for (const variant of [...HALF_ANGLES.map((a) => angleVariant(cls, a)), movingVariant(cls)]) {
+      assert.deepEqual(spriteTemplateProblems(variant), [], `${cls}: ${JSON.stringify(matchConstraints(variant))} has authoring problems`);
+      assert.deepEqual(
+        Object.keys(variant.parameters?.emotion?.values || {}).sort(),
+        [...EMOTION_WORDS].sort(),
+        `${cls}: all six curated moods must be mapped`,
+      );
+      for (const key of ["cx", "cy", "scale"]) {
+        assert.equal(typeof variant.face?.[key], "number", `${cls}: face.${key} must be a number`);
+      }
+    }
+  }
+});
+
+test("a half-angle face anchor sits between the full profile's and the front view's, the eyes half as narrowed", () => {
+  for (const cls of FACING_CLASSES) {
+    const profileScale = facingVariantFor(cls, "left").face.scale;
+    const frontScale = templatesFor(cls).find((t) => !t.match && t.parameters?.emotion).face.scale;
+    for (const angle of HALF_ANGLES) {
+      const halfScale = angleVariant(cls, angle).face.scale;
+      assert.ok(
+        halfScale > profileScale && halfScale < frontScale,
+        `${cls}/${angle}: a three-quarter view's face scale (${halfScale}) must sit between the profile's ${profileScale} and the front view's ${frontScale}`,
+      );
+    }
+  }
+});
+
+test("the half-right profile is the half-left one's mirror, in both its shapes and its face anchor", () => {
+  for (const cls of FACING_CLASSES) {
+    const left = angleVariant(cls, "half-left");
+    const right = angleVariant(cls, "half-right");
+    assert.ok(right.svg.includes('transform="translate(24 0) scale(-1 1)"'), `${cls}: the half-right file mirrors rather than redrawing`);
+    const shapeLines = (svg, direction) => svg
+      .split("\n")
+      .map((line) => line.trim().split(`facing-${direction}`).join("facing"))
+      .filter((line) => line.startsWith("<ellipse") || line.startsWith("<circle") || line.startsWith("<path") || line.startsWith("<rect") || line.startsWith("<line"));
+    assert.deepEqual(shapeLines(right.svg, "half-right"), shapeLines(left.svg, "half-left"), `${cls}: the mirrored half file must not silently redraw any shape`);
+    assert.ok(Math.abs(right.face.cx - (24 - left.face.cx)) < 1e-9, `${cls}: the half-right anchor must sit at 24 - ${left.face.cx}`);
+    assert.equal(right.face.cy, left.face.cy, `${cls}: a mirror never changes the face's height`);
+    assert.equal(right.face.scale, left.face.scale, `${cls}: a mirror never changes the face's size`);
+  }
+});
+
+test("each of the four angles resolves its own art, and no two angles of one class draw the same picture", () => {
+  for (const cls of FACING_CLASSES) {
+    const drawn = new Map();
+    for (const angle of ["left", "half-left", "half-right", "right"]) {
+      const svg = resolveSpriteAsset(cls, [], faces(`the-${cls}`, angle), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+      assert.ok(svg.includes(`${cls}-facing-${angle}-fill`), `${cls}/${angle}: that angle's own gradient id must render`);
+      assert.ok(!svg.includes("{{"), `${cls}/${angle}: no unresolved placeholder token may reach the output`);
+      for (const [seen, seenAngle] of drawn) {
+        assert.notEqual(svg, seen, `${cls}: ${angle} and ${seenAngle} resolve the same markup`);
+      }
+      drawn.set(svg, angle);
+    }
+  }
+});
+
+test("the pose fact only bites alongside the facing it was drawn for: on its own it resolves the plain sprite", () => {
+  for (const cls of FACING_CLASSES) {
+    const plain = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.equal(
+      resolveSpriteAsset(cls, [], poses(`the-${cls}`, "moving"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY),
+      plain,
+      `${cls}: a pose with no facing on record has no art of its own to land on`,
+    );
+  }
+});
+
+test("a facing fact with no pose still resolves the standing profile, never the moving frame", () => {
+  for (const cls of FACING_CLASSES) {
+    const standing = resolveSpriteAsset(cls, [], faces(`the-${cls}`, "left"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.equal(standing, facingVariantFor(cls, "left").svg.split("{{FACE}}").join(""), `${cls}: the standing profile is what an unposed instance gets`);
+    assert.ok(!standing.includes("-moving-"), `${cls}: the moving frame must not leak into an unposed instance`);
+  }
+});
+
+test("all three axes compose on the real files: the facing picks the frame, the pose picks the moving one, the mood wears it", () => {
+  for (const cls of FACING_CLASSES) {
+    const standing = resolveSpriteAsset(cls, [], faces(`the-${cls}`, "left"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    for (const word of EMOTION_WORDS) {
+      const facts = [
+        { subject: `the-${cls}`, predicate: FACING_PROPERTY, object: "left" },
+        { subject: `the-${cls}`, predicate: POSE_PROPERTY, object: "moving" },
+        { subject: `the-${cls}`, predicate: "mgx:feels", object: word },
+      ];
+      const svg = resolveSpriteAsset(cls, [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+      assert.ok(svg.includes(`${cls}-facing-left-moving-fill`), `${cls}/${word}: the moving frame's own art must be what renders`);
+      assert.ok(svg.includes(EXPRESSION_PALETTE[word]), `${cls}/${word}: that mood's own fragment markup must appear`);
+      assert.ok(!svg.includes("{{"), `${cls}/${word}: no unresolved placeholder token may reach the output`);
+      assert.notEqual(svg, standing, `${cls}/${word}: the moving frame must differ from the standing profile`);
+    }
+  }
+});
+
+test("a mood on the moving frame is still never guessed: an unmapped word keeps the pose and drops the face", () => {
+  for (const cls of FACING_CLASSES) {
+    const facts = [
+      { subject: `the-${cls}`, predicate: FACING_PROPERTY, object: "left" },
+      { subject: `the-${cls}`, predicate: POSE_PROPERTY, object: "moving" },
+      { subject: `the-${cls}`, predicate: "mgx:feels", object: "ecstatic" },
+    ];
+    const svg = resolveSpriteAsset(cls, [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.equal(svg, movingVariant(cls).svg.split("{{FACE}}").join(""), `${cls}: an unmapped mood renders exactly as the bare moving frame`);
+  }
+});
+
+test("a half angle also carries its moods, so the turntable and the expressions cross at every named angle it ships", () => {
+  for (const cls of FACING_CLASSES) {
+    for (const angle of HALF_ANGLES) {
+      for (const word of EMOTION_WORDS) {
+        const facts = [
+          { subject: `the-${cls}`, predicate: FACING_PROPERTY, object: angle },
+          { subject: `the-${cls}`, predicate: "mgx:feels", object: word },
+        ];
+        const svg = resolveSpriteAsset(cls, [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+        assert.ok(svg.includes(`${cls}-facing-${angle}-fill`), `${cls}/${angle}/${word}: the angle's own art must render`);
+        assert.ok(svg.includes(EXPRESSION_PALETTE[word]), `${cls}/${angle}/${word}: that mood's own fragment must appear`);
+      }
+    }
+  }
+});
+
+test("no two sprite-tier files share a gradient id, so one page can show every angle at once", () => {
+  const declaredBy = new Map();
+  const collisions = [];
+  for (const t of REAL_LARGE_TEMPLATES) {
+    for (const [, id] of String(t.svg).matchAll(/<(?:linear|radial)Gradient[^>]*\sid="([^"]+)"/g)) {
+      if (declaredBy.has(id)) collisions.push(`${id} declared by both ${declaredBy.get(id)} and ${t.classes.join("/")}`);
+      declaredBy.set(id, t.classes.join("/"));
+    }
+  }
+  assert.deepEqual(collisions, [], collisions.join("\n"));
 });
 
 test("portrait-round, the one [match] variant carrying no parameters, resolves byte-for-byte as its own raw template", () => {
