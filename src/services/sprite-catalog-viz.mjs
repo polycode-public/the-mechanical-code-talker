@@ -247,7 +247,16 @@ export function parameterVariantsFor(template) {
  *  generic root-fallback shape, not its own silhouette (this module's own
  *  header names the 19 large-tier classes this applies to). Every
  *  [parameters.*] value and every [match] variant renders through the real
- *  resolveSpriteAsset with the exact property fact it declares. A class
+ *  resolveSpriteAsset with the exact property fact it declares — and a
+ *  parameter sitting ON a [match] variant is rendered with BOTH facts, so a
+ *  facing profile's mood swatch shows the profile wearing that mood and is
+ *  labeled for the pair ("left + happy"). Rendering it on the parameter fact
+ *  alone would resolve a different template altogether (the front-facing
+ *  one) and label it as if it belonged to the profile. A value that a
+ *  match-free template of the same class already offers is listed once, from
+ *  that template: the facing pair and the `*-with-emotion.toml` file both
+ *  carry all six moods, and one swatch per mood is the catalog's unit. A
+ *  class
  *  with templates but no plain among them also gets one extra swatch,
  *  labeled `fallback: true`, showing exactly what the real resolver returns
  *  for that class with NO taught fact — honest engine behaviour, never
@@ -264,19 +273,25 @@ export function tierSwatchesFor(cls, templates, registry, tier) {
       svg: resolveSpriteAsset(cls, [], [], templates, registry, { instanceKey: `${cls}-${tier}-plain` }),
     });
   }
+  const valueKey = (v) => `${v.paramName}:${v.rawValue}`;
+  const shownByUnmatchedTemplate = new Set(
+    forClass.filter((t) => !t.match).flatMap((t) => parameterVariantsFor(t).map(valueKey)),
+  );
   for (const t of forClass) {
+    const matchFact = t.match ? [{ predicate: t.match.property, object: t.match.value }] : [];
+    const matchPrefix = t.match ? `${t.match.value} + ` : "";
     if (t.match) {
-      const propertyFacts = [{ predicate: t.match.property, object: t.match.value }];
       swatches.push({
         tier, label: t.match.value, kind: "variant", property: t.match.property,
-        svg: resolveSpriteAsset(cls, [], propertyFacts, templates, registry, { instanceKey: `${cls}-${tier}-match-${t.match.value}` }),
+        svg: resolveSpriteAsset(cls, [], matchFact, templates, registry, { instanceKey: `${cls}-${tier}-match-${t.match.value}` }),
       });
     }
     for (const v of parameterVariantsFor(t)) {
-      const propertyFacts = [{ predicate: v.property, object: v.rawValue }];
+      if (t.match && shownByUnmatchedTemplate.has(valueKey(v))) continue;
+      const propertyFacts = [...matchFact, { predicate: v.property, object: v.rawValue }];
       swatches.push({
-        tier, label: v.rawValue, kind: "material", property: v.property, treatment: v.treatment,
-        svg: resolveSpriteAsset(cls, [], propertyFacts, templates, registry, { instanceKey: `${cls}-${tier}-${v.paramName}-${v.rawValue}` }),
+        tier, label: `${matchPrefix}${v.rawValue}`, kind: "material", property: v.property, treatment: v.treatment,
+        svg: resolveSpriteAsset(cls, [], propertyFacts, templates, registry, { instanceKey: `${cls}-${tier}-${matchPrefix ? `${t.match.value}-` : ""}${v.paramName}-${v.rawValue}` }),
       });
     }
   }

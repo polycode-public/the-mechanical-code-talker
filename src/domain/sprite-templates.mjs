@@ -30,6 +30,16 @@
 //     `bear-facing-left.toml` for mgx:faces = left) — the `[match]` table,
 //     never the name, is what selects it.
 //
+// The two kinds compose rather than exclude each other: a VARIANT may also
+// declare its own `[parameters.*]` tables, and once its `[match]` selects
+// it those parameters fill from the instance's OTHER facts (the facing pair
+// files each carry `[face]` + `[parameters.emotion]`, so a bear taught both
+// mgx:faces = left and mgx:feels = happy renders the left profile wearing
+// the happy face). A satisfied `[match]` is the instance naming this art
+// directly, so a variant is never allowed to fall through the way an
+// unfilled parameterized template is — any placeholder no fact filled is
+// dropped instead, which keeps the returned markup complete.
+//
 // A parameterized template's `[parameters.<name>]` table comes in two
 // shapes, picked by which of `placeholder`/`placeholders` it declares:
 //   - single-placeholder (the shape above): one `placeholder` token, and
@@ -60,8 +70,9 @@
 // Specificity order, checked at EACH term of the class's ancestor chain
 // (nearest first, sprite-map.mjs's own classAncestorChain) before moving to
 // the next ancestor: an exact fully-specific variant whose [match] is
-// satisfied > a parameterized template filled with an observed matching
-// value > a plain class template > (repeat at the next ancestor) > the
+// satisfied (filled from its own [parameters.*] if it declares any) > a
+// parameterized template filled with an observed matching value > a plain
+// class template > (repeat at the next ancestor) > the
 // existing flat spriteRegistry entry for that same term (so a class not yet
 // migrated to its own template keeps resolving exactly as it did before this
 // module existed) > once the chain is exhausted, the same three-step check
@@ -125,15 +136,46 @@ function parameterizedFillAll(template, propertyFacts) {
   return filledCount > 0 ? svg : null;
 }
 
+/** Every placeholder token a template's own `[parameters.*]` tables name,
+ *  across both shapes — the single `placeholder` and every token in a
+ *  `placeholders` table. */
+function declaredPlaceholderTokens(template) {
+  const tokens = [];
+  for (const param of Object.values(template.parameters || {})) {
+    if (param?.placeholder) tokens.push(param.placeholder);
+    for (const token of Object.values(param?.placeholders || {})) tokens.push(token);
+  }
+  return tokens;
+}
+
+/** `svg` with every token `template` declares that no observed fact filled
+ *  dropped outright. Only the [match]-selected path wants this: a satisfied
+ *  [match] means the instance asked for THIS art by name, so the variant
+ *  can't fall through to a less specific template the way an unfilled
+ *  parameterized template does, and dropping the leftover token is what
+ *  keeps the returned markup complete rather than shipping a literal
+ *  "{{FACE}}" into the page. */
+function withUnfilledPlaceholdersDropped(template, svg) {
+  let out = svg;
+  for (const token of declaredPlaceholderTokens(template)) out = out.split(token).join("");
+  return out;
+}
+
 /** Resolve ONE class term (no ancestor walk here — the caller repeats this
  *  at every level of the chain) against the template set, in specificity
  *  order: fully-specific match variant > parameterized template filled with
- *  an observed value > plain class template. Returns the SVG string, or null
- *  when nothing at this level matches. */
+ *  an observed value > plain class template. A match variant that declares
+ *  its own `[parameters.*]` is filled from them first, so a facing profile
+ *  also carrying `[face]`/`[parameters.emotion]` renders the mood the
+ *  instance's own mgx:feels fact names. Returns the SVG string, or null when
+ *  nothing at this level matches. */
 function resolveAtTerm(term, propertyFacts, templates) {
   const candidates = templatesForClass(term, templates);
   const matched = candidates.find((t) => t.match && matchSatisfied(t.match, propertyFacts));
-  if (matched) return matched.svg;
+  if (matched && !matched.parameters) return matched.svg;
+  if (matched) {
+    return withUnfilledPlaceholdersDropped(matched, parameterizedFillAll(matched, propertyFacts) || matched.svg);
+  }
   for (const t of candidates) {
     if (t.match || !t.parameters) continue;
     const filled = parameterizedFillAll(t, propertyFacts);
@@ -192,7 +234,11 @@ export function resolveSpriteAsset(className, factRows, propertyFacts, templates
  *  anchor with nothing to select it, or an emotion parameter with nowhere to
  *  position its face fragment, is a real authoring mistake either way
  *  (sprite-expressions.mjs's own header explains why the face fragment
- *  needs the pairing). */
+ *  needs the pairing). Every check reads the tables a template actually
+ *  declares and none of them cares whether a `[match]` sits alongside, so a
+ *  facing variant carrying `[match]` + `[face]` + `[parameters.emotion]` is
+ *  held to exactly the same pairing and placeholder rules as a plain
+ *  `*-with-emotion.toml` file. */
 export function spriteTemplateProblems(template) {
   const problems = [];
   const t = template || {};

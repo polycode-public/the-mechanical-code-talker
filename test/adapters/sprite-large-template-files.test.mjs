@@ -493,3 +493,96 @@ test("a facing fact on a class with no facing variant resolves to that class's p
   const plain = resolveSpriteAsset("rabbit", [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
   assert.equal(resolveSpriteAsset("rabbit", [], faces("the-rabbit", "left"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY), plain);
 });
+
+// ---- a facing profile can also wear one of the six moods ------------------
+// (each *-facing-*.toml carries [face] + [parameters.emotion] of its own, so
+// the two dimensions compose instead of one shadowing the other)
+
+const facingVariantFor = (cls, direction) => REAL_LARGE_TEMPLATES.find(
+  (t) => t.classes.includes(cls) && t.match?.property === "mgx:faces" && t.match?.value === direction,
+);
+
+test("every facing variant declares its own numeric [face] anchor alongside its [parameters.emotion] table", () => {
+  for (const cls of FACING_CLASSES) {
+    for (const direction of ["left", "right"]) {
+      const variant = facingVariantFor(cls, direction);
+      assert.equal(typeof variant.face?.cx, "number", `${cls}-facing-${direction}: face.cx must be a number`);
+      assert.equal(typeof variant.face?.cy, "number", `${cls}-facing-${direction}: face.cy must be a number`);
+      assert.equal(typeof variant.face?.scale, "number", `${cls}-facing-${direction}: face.scale must be a number`);
+      assert.deepEqual(
+        Object.keys(variant.parameters?.emotion?.values || {}).sort(),
+        [...EMOTION_WORDS].sort(),
+        `${cls}-facing-${direction}: all six curated words must be mapped`,
+      );
+    }
+  }
+});
+
+test("a right profile's face anchor is its left twin's reflected across the canvas midline, at the same height and size", () => {
+  for (const cls of FACING_CLASSES) {
+    const left = facingVariantFor(cls, "left");
+    const right = facingVariantFor(cls, "right");
+    assert.ok(Math.abs(right.face.cx - (24 - left.face.cx)) < 1e-9, `${cls}: the right anchor must sit at 24 - ${left.face.cx}`);
+    assert.equal(right.face.cy, left.face.cy, `${cls}: a mirror never changes the face's height`);
+    assert.equal(right.face.scale, left.face.scale, `${cls}: a mirror never changes the face's size`);
+  }
+});
+
+for (const cls of FACING_CLASSES) {
+  for (const direction of ["left", "right"]) {
+    test(`${cls} taught mgx:faces ${direction} and an mgx:feels word renders that profile wearing that mood`, () => {
+      for (const word of EMOTION_WORDS) {
+        const both = [
+          { subject: `the-${cls}`, predicate: "mgx:faces", object: direction },
+          { subject: `the-${cls}`, predicate: "mgx:feels", object: word },
+        ];
+        const svg = resolveSpriteAsset(cls, [], both, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+        assert.ok(svg.includes(`${cls}-facing-${direction}-fill`), `${cls}/${direction}/${word}: the profile art must still be what renders`);
+        assert.ok(svg.includes(EXPRESSION_PALETTE[word]), `${cls}/${direction}/${word}: that mood's own fragment markup must appear`);
+        assert.ok(!svg.includes("{{FACE"), `${cls}/${direction}/${word}: no unresolved placeholder token may reach the output`);
+      }
+    });
+  }
+}
+
+test("a facing fact on its own renders the bare profile — the face placeholder is dropped rather than left in the markup", () => {
+  for (const cls of FACING_CLASSES) {
+    for (const direction of ["left", "right"]) {
+      const svg = resolveSpriteAsset(cls, [], faces(`the-${cls}`, direction), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+      assert.ok(svg.includes(`${cls}-facing-${direction}-fill`), `${cls}/${direction}: the profile art must render with no mood taught`);
+      assert.ok(!svg.includes("{{FACE"), `${cls}/${direction}: an untaught mood must never leak a placeholder token`);
+      for (const word of EMOTION_WORDS) {
+        assert.ok(!svg.includes(EXPRESSION_PALETTE[word]), `${cls}/${direction}: no face fragment may appear with no mgx:feels fact`);
+      }
+    }
+  }
+});
+
+test("a mood outside the curated six never guesses a face onto a profile, and never costs the instance the pose it asked for", () => {
+  for (const cls of FACING_CLASSES) {
+    const facts = [
+      { subject: `the-${cls}`, predicate: "mgx:faces", object: "left" },
+      { subject: `the-${cls}`, predicate: "mgx:feels", object: "ecstatic" },
+    ];
+    const svg = resolveSpriteAsset(cls, [], facts, REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    const facingOnly = resolveSpriteAsset(cls, [], faces(`the-${cls}`, "left"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.equal(svg, facingOnly, `${cls}: an unmapped mood renders exactly as the bare profile does`);
+  }
+});
+
+test("a mood with no facing fact still resolves the front-facing emotion template, never a profile", () => {
+  for (const cls of ["cat", "dog"]) {
+    const svg = resolveSpriteAsset(cls, [], feels(`the-${cls}`, "happy"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.ok(svg.includes(EXPRESSION_PALETTE.happy), `${cls}: the happy fragment must appear`);
+    assert.ok(!svg.includes("-facing-"), `${cls}: a mood alone must never select a profile variant`);
+  }
+});
+
+test("portrait-round, the one [match] variant carrying no parameters, resolves byte-for-byte as its own raw template", () => {
+  const round = facingVariantFor("portrait", "left");
+  assert.equal(round, undefined, "portrait has no facing variant — it matches on mgx:hasProperty instead");
+  const variant = REAL_LARGE_TEMPLATES.find((t) => t.classes.includes("portrait") && t.match);
+  assert.equal(variant.parameters, undefined, "portrait-round declares no parameters at all");
+  const svg = resolveSpriteAsset("portrait", [], [{ subject: "the-portrait", predicate: "mgx:hasProperty", object: "round" }], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+  assert.equal(svg, variant.svg, "a parameterless [match] variant is returned exactly as authored");
+});
