@@ -415,7 +415,7 @@ ${THEME_TOKENS_CSS}
     }
   }
   const cloneMemoryPayload = ${cloneMemoryPayload.toString()};
-  function newSession() {
+  async function newSession() {
     return window.tmct.open({ seedPayload: cloneMemoryPayload(seedPayload), vocabSeeded: Boolean(seedPayload) });
   }
 
@@ -467,7 +467,7 @@ ${THEME_TOKENS_CSS}
     clearTimeout(saveTimer);
     saveTimer = null;
     if (persist) await persist.clear();
-    session = newSession();
+    session = await newSession();
     clearFactsPane();
     updateIngestEnabled();
     const stats = await window.tmct.page.memoryStats(session.memoryDir);
@@ -486,7 +486,7 @@ ${THEME_TOKENS_CSS}
     await fetchSeedIfWanted();
     clearTimeout(saveTimer);
     saveTimer = null;
-    session = newSession();
+    session = await newSession();
     clearFactsPane();
     const stats = await window.tmct.page.memoryStats(session.memoryDir);
     statusEl.textContent = statsSummaryLine(stats, bandLabelFor) + ". Ready.";
@@ -512,8 +512,8 @@ ${THEME_TOKENS_CSS}
     }
     const savedRecord = persist ? await persist.load() : null;
     session = savedRecord && savedRecord.payload
-      ? window.tmct.open({ seedPayload: savedRecord.payload, vocabSeeded: true })
-      : newSession();
+      ? await window.tmct.open({ seedPayload: savedRecord.payload, vocabSeeded: true })
+      : await newSession();
     setMode(false);
     updateIngestEnabled();
     const stats = await window.tmct.page.memoryStats(session.memoryDir);

@@ -1,11 +1,11 @@
 // mud.html's scenario dropdown, in a real browser: the page ships three
 // burrows of different sizes, opens on mud garden, and picking another one
 // recasts the shared world over that burrow's own rooms and its own animals.
-// A live shared room is bound to the store it was opened over, so picking a
-// burrow drops the link and says so, exactly the way reset and the two cast
-// sliders already do. Edit mode then reads the burrow that is loaded rather
-// than the one the page shipped with. Mirrors pages-mud.test.mjs's own helper
-// shape.
+// A live shared room re-binds to the new burrow's own store rather than
+// dropping the link, exactly the way reset and the two cast sliders already
+// do — p2p-room.mjs's rebind() is what makes this possible. Edit mode then
+// reads the burrow that is loaded rather than the one the page shipped with.
+// Mirrors pages-mud.test.mjs's own helper shape.
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { rmSync } from "node:fs";
@@ -152,7 +152,7 @@ test("a burrow is cast from its own animals, never the burrow the page shipped w
   }
 });
 
-test("picking a burrow while a room is shared drops the link and says why, the same way reset does", async () => {
+test("picking a burrow while a room is shared re-binds the link to the new burrow, the same way reset does", async () => {
   const { context, page, consoleErrors } = await openMudPage();
   try {
     await page.click("#shareBtn");
@@ -162,15 +162,16 @@ test("picking a burrow while a room is shared drops the link and says why, the s
       { timeout: ANSWER_TIMEOUT_MS },
     );
     assert.notEqual(await page.locator("#statePillWord").textContent(), "not shared", "a room is live before the switch");
+    const linkBefore = await page.inputValue("#shareLink");
 
     await pickScenario(page, "2", "warren-mouth");
 
-    assert.equal(await page.locator("#statePillWord").textContent(), "not shared", "the link went with the old burrow");
-    assert.equal(await page.inputValue("#shareLink"), "", "and its invite went too");
+    assert.notEqual(await page.locator("#statePillWord").textContent(), "not shared", "the link survives the recast, re-bound to the new burrow");
+    assert.equal(await page.inputValue("#shareLink"), linkBefore, "the same invite still works — no peer has to re-join");
     const note = await page.locator("#wireStateNote").textContent();
-    assert.match(note, /a different burrow opened/, `the page says why the link went, got ${note}`);
-    assert.match(note, /share again/, "and what to do about it");
-    assert.deepEqual(consoleErrors, [], "no console error dropping the room");
+    assert.match(note, /a different burrow opened/, `the page says what changed, got ${note}`);
+    assert.match(note, /still linked/, "and that the link survived it");
+    assert.deepEqual(consoleErrors, [], "no console error recasting a shared room");
   } finally {
     await context.close();
   }

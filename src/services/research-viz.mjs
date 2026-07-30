@@ -406,7 +406,7 @@ ${DASH_DARK_CHROME_CSS}
       console.warn("tmct research: chat-seed.json unavailable — starting unseeded", err);
     }
   }
-  function newSession() {
+  async function newSession() {
     return window.tmct.open({ seedPayload: cloneMemoryPayload(seedPayload), vocabSeeded: Boolean(seedPayload), digestStructures: DIGEST_STRUCTURES });
   }
 
@@ -442,7 +442,7 @@ ${DASH_DARK_CHROME_CSS}
     const [winkStatus] = await Promise.all([loadWink(), fetchSeed()]);
     progressActive = false;
     window.tmct.page.registerReferencePackProvider(fetchPackProvider);
-    session = newSession();
+    session = await newSession();
     const winkPart = winkStatus === "loaded" ? "wink-nlp loaded" : "wink-nlp unavailable, curated tiers only";
     statSeedEl.textContent = seedPayload ? seedFacts.toLocaleString() + " facts" : "no seed";
     statEngineEl.textContent = winkPart + " · ready";
@@ -832,7 +832,7 @@ ${DASH_DARK_CHROME_CSS}
     researchTicker.pause();
     researchQueue = null;
     checkedSources.clear();
-    session = newSession();
+    session = await newSession();
     el("teachNote").textContent = "";
     el("ingestNote").textContent = "";
     el("researchNote").textContent = "";

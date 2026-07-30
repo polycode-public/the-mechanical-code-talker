@@ -2811,6 +2811,12 @@ function pageScript() {
     showPlayerCount(cast.length);
     showNpcCount(npcs.length);
     renderStage();
+    // slotOf has to match cast from the same synchronous stretch that just
+    // rebuilt the DOM for it \\u2014 a render triggered anywhere in the awaits
+    // below (rebind's own re-sync can trigger one) must never see this
+    // scenario's cast paired with the LAST scenario's pane ids, which is what
+    // a null pane-element lookup in renderAll means when it happens.
+    for (let i = 0; i < cast.length; i += 1) slotOf[cast[i]] = slots[i];
     const opened = await window.tmct.open(scenario().worldPayload, { characters: everyone(), epoch: nextEpoch });
     if (seq !== bootSeq) return;
     session = opened;
@@ -2828,7 +2834,6 @@ function pageScript() {
         dropRoom("the link didn't survive the recast \\u2014 share again to link up.");
       }
     }
-    for (let i = 0; i < cast.length; i += 1) slotOf[cast[i]] = slots[i];
     bindPanes();
     for (const character of cast) {
       const w = paneIdFor(character);

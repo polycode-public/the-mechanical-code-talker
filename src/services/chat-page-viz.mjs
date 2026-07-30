@@ -1170,7 +1170,7 @@ ${THEME_TOKENS_CSS}
     if (!seedPayload) return null;
     try { return structuredClone(seedPayload); } catch { return JSON.parse(JSON.stringify(seedPayload)); }
   };
-  function newSession() {
+  async function newSession() {
     return window.tmct.open({
       seedPayload: cloneSeed(),
       vocabSeeded: Boolean(seedPayload),
@@ -1246,7 +1246,7 @@ ${THEME_TOKENS_CSS}
     // it would keep merging peers' facts into a store nothing reads any more.
     // Rejoining is a fresh invite, which is what a dropped node needs anyway.
     dropRoom();
-    window.tmctChatSession = newSession();
+    window.tmctChatSession = await newSession();
     const stats = await window.tmct.page.memoryStats(window.tmctChatSession.memoryDir);
     addSystemLine("forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats, bandLabelFor) + ").");
     await renderStatsPanel(stats);
@@ -2239,7 +2239,7 @@ ${THEME_TOKENS_CSS}
     synthSliderEl.value = String(readSynthBudget());
     synthValueEl.textContent = synthSliderEl.value;
     if (savedRecord && savedRecord.payload) {
-      window.tmctChatSession = window.tmct.open({
+      window.tmctChatSession = await window.tmct.open({
         seedPayload: savedRecord.payload,
         vocabSeeded: true,
         liveReference: liveReferenceForMode(initialMode),
@@ -2248,7 +2248,7 @@ ${THEME_TOKENS_CSS}
         digestStructures: DIGEST_STRUCTURES,
       });
     } else {
-      window.tmctChatSession = newSession();
+      window.tmctChatSession = await newSession();
     }
     const stats = await window.tmct.page.memoryStats(window.tmctChatSession.memoryDir);
     if (savedRecord) restoredCount = stats.taught.length;
