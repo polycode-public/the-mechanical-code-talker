@@ -79,26 +79,21 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 ## Open items
 
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 6** — `fn("list the locations of flies and spiders")` via
-  `ask`, once Gap A's caller wiring (below) lands. The design fork is already decided in the doc's
-  own Theme 2 section: route through `ask`, keep `session.snapshot()` as the fast path.
+  `ask`. Gap A is fully landed, so nothing blocks this. The design fork is already decided in the
+  doc's own Theme 2 section: route through `ask`, keep `session.snapshot()` as the fast path.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 8** — the `tmct_sprite` tool. Mood is a fact (phase 7, landed)
   and the multi-constraint resolver exists (this session's sprite work); still needs the capability
   record, the `FRAMES` entry, and a decision on which sense of "large" the schema carries (tier vs.
   property — see the doc's Theme 2 section).
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 9** — key `chat.mjs`'s generic membership/property lanes on the
   sprite-facts predicates so `answerSpriteQuestion` deletes; route `extractSceneItems` through
-  `resolveObject`. Needs Gap A's caller wiring.
+  `resolveObject`. Gap A is fully landed, so nothing blocks this.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 10, Gap C** — one `globalThis.tmct` (`ask`, `plan`, `turn`,
-  `session`) replacing the eleven per-page global bags. Needs phases 3 (done), 5's caller wiring,
-  and 8 to exist first.
+  `session`) replacing the eleven per-page global bags. Needs phases 3 and 5 (both done) and 8 to
+  exist first.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 11** — the showcase pass: every viz module builds its page
   script the `mud-viz.mjs` way; `code-explorer-viz.mjs`'s `CLIENT_JS` raw-text block is the one
   remaining holdout (chat's four helpers already converted this session).
-- [ ] **Gap A's caller wiring** — the router half landed this session (`KINDS.MemoryTerm`,
-  `resolver.mjs`, a memory-only `buildCapabilityPlanCtx`), but the eight browser entries
-  (`adventure`/`chat`/`ledger`/`mud`/`plan`/`research`/`spider-fly`/`sprites`) still pass an empty
-  code graph instead of `memoryDir`, and `chat.mjs` still refuses `/plan` outright with "no graph
-  loaded." Blocks phases 6 and 9 above.
 - [ ] **`chat.mjs` still parses the `---tmct_ask---` delimiter** instead of reading
   `dispatchToolStructured`'s `data` directly (Gap B landed the contract this session, but
   `chat.mjs`'s own consumption is a separate, slightly fiddly move — the direct-`ask()` focus path

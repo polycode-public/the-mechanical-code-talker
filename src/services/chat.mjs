@@ -14084,9 +14084,20 @@ async function runCommand(line, { config, source, graph, focus, memoryDir, trace
   if (name === "plan") {
     note(trace, "goal: plan/execute a compound or maintenance-goal request over the graph (the capability router)");
     if (!argText) return mk("/plan needs a request, e.g. `/plan of the modules impacted by X, which are untested`.", { miss: true });
-    if (!graph) return mk("no graph loaded — /plan needs a code graph to plan over.", { miss: true });
+    // A KNOWN-EMPTY code graph is nothing to plan over, and it is what every
+    // memory-graph page and an un-pointed CLI session actually holds: each of
+    // its parameter slots would bind against an index with no entities in it.
+    // Where there is a memory store, hand the planner that instead — that is
+    // buildCapabilityPlanCtx's memory-only mode, where world facts bind and a
+    // code-graph capability refuses by naming the graph it hasn't got. Only a
+    // graph with something in it plans as a code graph. `source` travels with
+    // it: this turn reuses what it already holds and never loads one mid-turn.
+    const planGraph = graph && !noCodeGraph(graph) ? graph : null;
+    if (!planGraph && !memoryDir) return mk("no graph loaded — /plan needs a code graph or a memory store to plan over.", { miss: true });
     const { buildCapabilityPlanCtx, runCapabilityPlan, declaredCapabilityNames } = await import("../domain/router/drive.mjs");
-    const planCtx = await buildCapabilityPlanCtx({ ...capabilityPlanDeps(), config, source, tel, graph, memoryDir });
+    const planCtx = await buildCapabilityPlanCtx({
+      ...capabilityPlanDeps(), config, source: planGraph ? source : null, tel, graph: planGraph, memoryDir,
+    });
     try {
       const result = await runCapabilityPlan(argText, declaredCapabilityNames(), planCtx);
       if (result.refused) {

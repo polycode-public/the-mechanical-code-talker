@@ -17,9 +17,16 @@ const MEMORY_LIST_CAP = 40;
  *  the dir that CONTAINS .tmct/ (graphFile = <repo>/.tmct/graph.json). The read goes through
  *  the repo's CONFIGURED memory backend — the same store chat's taught facts land in — opened
  *  fresh per call and closed before returning, never the retired flat-file store off a raw
- *  repo path. */
-export async function memoryFactRows(config) {
+ *  repo path.
+ *
+ *  `memoryBackend` is dispatchTool's seam for a caller that already holds an open store
+ *  handle (a chat session's own `memoryDir`). When it is supplied the read goes straight to
+ *  that handle and the caller keeps ownership of closing it. That is the only route to the
+ *  store for a session whose store was never derived from a config at all — a browser page's
+ *  in-memory one, where `config` is null and deriving a backend would find nothing. */
+export async function memoryFactRows(config, memoryBackend = null) {
   try {
+    if (memoryBackend) return readFactRows(await loadMemory(memoryBackend));
     const { dir, close } = await openConfiguredMemoryBackend(dirname(dirname(config.graphFile)));
     try {
       return readFactRows(await loadMemory(dir));

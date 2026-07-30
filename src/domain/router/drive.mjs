@@ -320,7 +320,14 @@ export async function buildCapabilityPlanCtx({
     try {
       // `source ?? undefined` so a memory-only caller's explicit null never
       // suppresses dispatchTool's own default source for a tool that loads.
-      const text = await dispatchTool(name, input, { config, source: source ?? undefined, tel });
+      // `memoryBackend` hands a memory-reading tool the SAME open store this
+      // ctx binds its MemoryTerm slots against, so binding and dispatch can
+      // never answer from two different stores — and so a store that was never
+      // derived from a config (a browser page's in-memory one) is reachable at
+      // all.
+      const text = await dispatchTool(name, input, {
+        config, source: source ?? undefined, tel, memoryBackend: memoryDir ?? undefined,
+      });
       const primary = input && (input.symbol ?? input.module ?? input.class ?? input.query);
       const resolved = primary ? resolve(String(primary)).match : null;
       const result = g ? resultSetOf(g, name, input, resolved) : [];
