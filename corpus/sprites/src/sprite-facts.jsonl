@@ -527,9 +527,9 @@
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"calm"}
 {"subject":"bear sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"bear sprite","predicate":"mgx:offer-variant","object":"moving"}
 {"subject":"bear sprite","predicate":"mgx:offer-variant","object":"half-right"}
 {"subject":"bear sprite","predicate":"mgx:offer-variant","object":"left"}
-{"subject":"bear sprite","predicate":"mgx:offer-variant","object":"moving"}
 {"subject":"bear sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"bed sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"bed sprite","predicate":"mgx:accept-material","object":"wood"}
@@ -586,9 +586,9 @@
 {"subject":"cat sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"cat sprite","predicate":"mgx:accept-emotion","object":"calm"}
 {"subject":"cat sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"cat sprite","predicate":"mgx:offer-variant","object":"moving"}
 {"subject":"cat sprite","predicate":"mgx:offer-variant","object":"half-right"}
 {"subject":"cat sprite","predicate":"mgx:offer-variant","object":"left"}
-{"subject":"cat sprite","predicate":"mgx:offer-variant","object":"moving"}
 {"subject":"cat sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"chair sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"chair sprite","predicate":"mgx:accept-material","object":"wood"}
@@ -673,9 +673,9 @@
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"calm"}
 {"subject":"dog sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"dog sprite","predicate":"mgx:offer-variant","object":"moving"}
 {"subject":"dog sprite","predicate":"mgx:offer-variant","object":"half-right"}
 {"subject":"dog sprite","predicate":"mgx:offer-variant","object":"left"}
-{"subject":"dog sprite","predicate":"mgx:offer-variant","object":"moving"}
 {"subject":"dog sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"dress sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"dress sprite","predicate":"mgx:accept-material","object":"woven material"}
@@ -820,9 +820,9 @@
 {"subject":"king sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"king sprite","predicate":"mgx:accept-emotion","object":"calm"}
 {"subject":"king sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"king sprite","predicate":"mgx:offer-variant","object":"moving"}
 {"subject":"king sprite","predicate":"mgx:offer-variant","object":"half-right"}
 {"subject":"king sprite","predicate":"mgx:offer-variant","object":"left"}
-{"subject":"king sprite","predicate":"mgx:offer-variant","object":"moving"}
 {"subject":"king sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"lamp sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"lamp sprite","predicate":"mgx:accept-material","object":"gold"}

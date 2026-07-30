@@ -1,0 +1,71 @@
+# king-moving — king-with-emotion.toml's front view caught mid-stride, the
+# turntable's centre position (the absent mgx:faces fact) paired with the
+# mgx:pose = moving fact alone, so a single [match] table is enough — the
+# same shape a lone [[match]] entry already collapses to.
+#
+# The king has no visible legs under the robe in ANY view, front included,
+# so what moves is exactly what moves in king-facing-left-moving.toml: the
+# robe hem swept back, one arm swung forward and raised, the other trailing
+# back, and the shoulder line leaning slightly forward. That file's own
+# arm1/arm2/robe paths are reused here verbatim — the robe's own geometry
+# never changes with facing at all (king-with-emotion and king-facing-left
+# already share it byte-for-byte), so the same swap that turns standing
+# into moving at the profile works unchanged at the front.
+classes = ["king"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="king-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <linearGradient id="king-moving-crown-gold" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#f6d675"/>
+      <stop offset="55%" stop-color="#d9a635"/>
+      <stop offset="100%" stop-color="#9c6b12"/>
+    </linearGradient>
+  </defs>
+  <path d="M7.4 3.4 L8.3 0.9 L10.3 2.6 L12 0.25 L13.7 2.6 L15.7 0.9 L16.6 3.4 Z" fill="url(#king-moving-crown-gold)"/>
+  <circle cx="12" cy="1.1" r="0.55" fill="#a6283a"/>
+  <rect x="7.4" y="2.3" width="9.2" height="1.3" rx="0.4" fill="url(#king-moving-crown-gold)"/>
+  <g fill="url(#king-moving-fill)">
+    <path d="M9.4 13.1 C7.8 12.5 6.3 13.5 5.8 16.1 C5.6 17.5 6.2 18.5 7.3 18.2 C7.4 16.2 7.9 14.5 9.6 13.6 Z"/>
+    <path d="M14.6 13.1 C16.7 13.5 18.7 15.3 19 18.2 C19.1 19.5 18.3 20.3 17.2 19.7 C17 17.4 16.3 15.1 14.3 14.2 Z"/>
+    <path d="M6.3 21 C6.1 15.5 8.7 12.9 11.7 12.9 C15.1 12.9 17.6 14.8 17.1 19.6 C16.9 20.7 15.9 20.7 15.1 20.1 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
+  <path d="M8.4 13 C9.6 12.4 10.8 12.1 12 12.1 C13.2 12.1 14.4 12.4 15.6 13 L15.2 14.6 C14.1 14.1 13.1 13.8 12 13.8 C10.9 13.8 9.9 14.1 8.8 14.6 Z" fill="#f4f1ea"/>
+  <ellipse cx="9.6" cy="13.3" rx="0.22" ry="0.3" fill="#1c1c1c"/>
+  <ellipse cx="12" cy="12.9" rx="0.22" ry="0.3" fill="#1c1c1c"/>
+  <ellipse cx="14.4" cy="13.3" rx="0.22" ry="0.3" fill="#1c1c1c"/>
+  <circle cx="12" cy="6.6" r="3.3" fill="url(#king-moving-fill)"/>
+  <path d="M9.3 13.6 C8 14.5 7.1 16 6.9 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.6 C16 14.5 16.9 16 17.1 17.9" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:pose"
+value = "moving"
+
+# The head circle king.toml itself declares (cx=12 cy=6.6 r=3.3) — the head
+# doesn't move mid-stride.
+[face]
+cx = 12
+cy = 6.6
+scale = 3.3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

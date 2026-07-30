@@ -1,0 +1,65 @@
+# cat-moving — cat-with-emotion.toml's front view caught mid-stride, the
+# turntable's centre position (the absent mgx:faces fact) paired with the
+# mgx:pose = moving fact alone, so a single [match] table is enough — the
+# same shape a lone [[match]] entry already collapses to.
+#
+# A front view shows all four paws at once rather than a near/far pair, so
+# the profile files' own forward-swing cue doesn't apply directly. Instead
+# the two outer paws (the front legs) lift and draw slightly in, the two
+# inner paws (the back legs) plant and spread slightly out — the diagonal
+# gait read from the front, front-left with back-right lifting together and
+# front-right with back-left planting together, at the same lift/dip
+# magnitude cat-facing-left-moving.toml uses. The body dips down slightly
+# under the stride, matching that same file's own +0.4 body drop.
+classes = ["cat"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="cat-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="12.4" cy="16.8" rx="6" ry="4.2" fill="url(#cat-moving-fill)"/>
+  <g fill="url(#cat-moving-fill)">
+    <ellipse cx="7.9" cy="19.1" rx="1" ry="1.1"/>
+    <ellipse cx="10.5" cy="21" rx="1" ry="1.2"/>
+    <ellipse cx="14.3" cy="19.5" rx="1" ry="1.1"/>
+    <ellipse cx="16.9" cy="20.8" rx="1" ry="1.2"/>
+  </g>
+  <circle cx="9" cy="9.4" r="4.4" fill="url(#cat-moving-fill)"/>
+  <path d="M5.6 6.4 L4.8 2.4 L8 5.2 Z" fill="url(#cat-moving-fill)"/>
+  <path d="M12.4 6.4 L13.2 2.4 L10 5.2 Z" fill="url(#cat-moving-fill)"/>
+  <path d="M5.8 5.6 L5.3 3.4 L7.2 5 Z" fill="#e3a8a0"/>
+  <path d="M12.2 5.6 L12.7 3.4 L10.8 5 Z" fill="#e3a8a0"/>
+  <path d="M18.6 15 C21.6 13.4 22.4 16.6 20 18.2 C18.4 19.2 17 17.4 18.6 15 Z" fill="url(#cat-moving-fill)"/>
+  <path d="M6.4 9.4 L4 9 M6.6 10.4 L4.2 10.8 M11.6 9.4 L14 9 M11.4 10.4 L13.8 10.8" stroke="currentColor" stroke-width="0.6" opacity="0.6" stroke-linecap="round"/>
+  <path d="M8.2 10.6 L9.8 10.6 L9 11.4 Z" fill="#d98a86"/>
+  <ellipse cx="7" cy="7.6" rx="1.5" ry="1.1" fill="#ffffff" opacity="0.32"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:pose"
+value = "moving"
+
+# The same cx/cy/r cat.toml's own head circle declares — the head doesn't
+# move mid-stride.
+[face]
+cx = 9
+cy = 9.4
+scale = 4.4
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

@@ -1,0 +1,72 @@
+# cat-facing-half-right-moving — cat-facing-half-left-moving.toml's stride
+# mirrored across the canvas midline (every shape wrapped in one
+# translate-then-flip group), so the two directions stay geometrically
+# identical twins. The mirror flips the lit corner of the shared gradient
+# along with the pose, which reads as the same figure turned around under
+# the same light.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored — an expression should not
+# read back-to-front just because the body turned around.
+classes = ["cat"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="cat-facing-half-right-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <ellipse cx="14.7" cy="17" rx="5.8" ry="4" fill="url(#cat-facing-half-right-moving-fill)"/>
+    <g fill="url(#cat-facing-half-right-moving-fill)">
+      <ellipse cx="9.4" cy="19.3" rx="1" ry="1.1"/>
+      <ellipse cx="14.1" cy="21.1" rx="1" ry="1.2"/>
+      <ellipse cx="14.7" cy="19.7" rx="1" ry="1.1"/>
+      <ellipse cx="19.6" cy="20.9" rx="1" ry="1.2"/>
+    </g>
+    <path d="M20.5 13.2 C23.5 11.6 24.3 14.8 21.9 16.4 C20.3 17.4 18.9 15.6 20.5 13.2 Z" fill="url(#cat-facing-half-right-moving-fill)"/>
+    <path d="M5.6 6.3 L4.7 3.1 L7.4 5.2 Z" fill="url(#cat-facing-half-right-moving-fill)"/>
+    <circle cx="7.9" cy="9.6" r="4.2" fill="url(#cat-facing-half-right-moving-fill)"/>
+    <path d="M9.9 6.2 L10.9 2.4 L7.3 4.8 Z" fill="url(#cat-facing-half-right-moving-fill)"/>
+    <path d="M10.3 5.4 L10.7 3.3 L8.9 4.7 Z" fill="#e3a8a0"/>
+    <path d="M4.7 9 L3.5 8.8 M4.8 10.4 L3.6 10.6 M5.3 11.4 L4.3 11.9" stroke="currentColor" stroke-width="0.6" opacity="0.6" stroke-linecap="round"/>
+    <path d="M3.95 10.2 L3.95 11.1 L3.55 10.65 Z" fill="#d98a86"/>
+    <ellipse cx="10.3" cy="9" rx="0.3" ry="0.35" fill="#1c1c1c"/>
+    <ellipse cx="7.1" cy="8.8" rx="0.5" ry="0.62" fill="#1c1c1c"/>
+    <ellipse cx="8.7" cy="7.4" rx="1.2" ry="0.9" fill="#ffffff" opacity="0.32"/>
+    <ellipse cx="12.3" cy="15.2" rx="2.4" ry="1.4" fill="#ffffff" opacity="0.26"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "half-right"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+# cat-facing-half-left-moving.toml's anchor reflected across the canvas
+# midline (cx = 24 - 8.5); cy and scale are the mirror's own invariants.
+# Because the fragment sits outside the flip group, these are plain
+# unflipped canvas coordinates.
+[face]
+cx = 15.5
+cy = 9.33
+scale = 3.5
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
