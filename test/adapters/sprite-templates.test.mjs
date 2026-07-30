@@ -359,6 +359,104 @@ test("specificity order still holds with two parameters present: no fact at all 
   assert.equal(resolveSpriteAsset("lamp", [], [], templates, PLAIN_REGISTRY), "<svg>lamp-plain</svg>");
 });
 
+// ---- a [match] variant may carry its own [parameters.*] too ----------------
+// (the facing pairs: a satisfied [match] picks the profile art, and the
+// instance's OTHER facts then fill that same variant's placeholders, so one
+// sprite can be both turned left and visibly happy)
+
+const faces = (subject, object) => ({ subject, predicate: "mgx:faces", object });
+const feels = (subject, object) => ({ subject, predicate: "mgx:feels", object });
+
+const facingVariant = () => ({
+  classes: ["bear"],
+  svg: "<svg>left-profile{{FACE}}</svg>",
+  match: { property: "mgx:faces", value: "left" },
+  face: { cx: 7.2, cy: 8.25, scale: 3 },
+  parameters: { emotion: { property: "mgx:feels", placeholder: "{{FACE}}", values: { happy: "HAPPY-FACE", sad: "SAD-FACE" } } },
+});
+const frontEmotionTemplate = () => ({
+  classes: ["bear"],
+  svg: "<svg>front-view{{FACE}}</svg>",
+  face: { cx: 12, cy: 9, scale: 5 },
+  parameters: { emotion: { property: "mgx:feels", placeholder: "{{FACE}}", values: { happy: "HAPPY-FACE", sad: "SAD-FACE" } } },
+});
+const PLAIN_BEAR = { classes: ["bear"], svg: "<svg>bear-plain</svg>" };
+
+test("a [match] variant that also declares [parameters.emotion] fills that parameter from the instance's own second fact", () => {
+  const templates = [PLAIN_BEAR, facingVariant()];
+  const facts = [faces("the-bear", "left"), feels("the-bear", "happy")];
+  assert.equal(resolveSpriteAsset("bear", [], facts, templates, PLAIN_REGISTRY), "<svg>left-profileHAPPY-FACE</svg>");
+});
+
+test("each mood word fills the same [match] variant with its own substitution", () => {
+  const templates = [PLAIN_BEAR, facingVariant()];
+  const sad = [faces("the-bear", "left"), feels("the-bear", "sad")];
+  assert.equal(resolveSpriteAsset("bear", [], sad, templates, PLAIN_REGISTRY), "<svg>left-profileSAD-FACE</svg>");
+});
+
+test("a [match] variant selected on its match alone drops the placeholder nothing filled, never leaking the raw token", () => {
+  const templates = [PLAIN_BEAR, facingVariant()];
+  const svg = resolveSpriteAsset("bear", [], [faces("the-bear", "left")], templates, PLAIN_REGISTRY);
+  assert.equal(svg, "<svg>left-profile</svg>");
+});
+
+test("a satisfied [match] holds even when its own parameter finds nothing to fill — the profile art never falls through to the plain template", () => {
+  const templates = [PLAIN_BEAR, facingVariant()];
+  const facts = [faces("the-bear", "left"), feels("the-bear", "ecstatic")];
+  const svg = resolveSpriteAsset("bear", [], facts, templates, PLAIN_REGISTRY);
+  assert.equal(svg, "<svg>left-profile</svg>", "an unmapped mood is never a guessed face, and never costs the instance the pose it asked for");
+});
+
+test("a [match] variant outranks a sibling parameterized template that would fill the same fact", () => {
+  const templates = [PLAIN_BEAR, frontEmotionTemplate(), facingVariant()];
+  const facts = [faces("the-bear", "left"), feels("the-bear", "happy")];
+  assert.equal(resolveSpriteAsset("bear", [], facts, templates, PLAIN_REGISTRY), "<svg>left-profileHAPPY-FACE</svg>");
+});
+
+test("an emotion fact with no facing fact still reaches the parameterized front view, not the profile variant", () => {
+  const templates = [PLAIN_BEAR, frontEmotionTemplate(), facingVariant()];
+  assert.equal(
+    resolveSpriteAsset("bear", [], [feels("the-bear", "happy")], templates, PLAIN_REGISTRY),
+    "<svg>front-viewHAPPY-FACE</svg>",
+  );
+});
+
+test("a [match] variant declaring no parameters at all is still returned byte-for-byte, whatever other facts the instance carries", () => {
+  const templates = [
+    PLAIN_BEAR,
+    { classes: ["bear"], svg: "<svg>left-profile-no-face</svg>", match: { property: "mgx:faces", value: "left" } },
+  ];
+  const facts = [faces("the-bear", "left"), feels("the-bear", "happy"), hasProperty("the-bear", "black")];
+  assert.equal(resolveSpriteAsset("bear", [], facts, templates, PLAIN_REGISTRY), "<svg>left-profile-no-face</svg>");
+});
+
+test("spriteTemplateProblems flags a [match] variant whose face has no parameters.emotion to select it", () => {
+  const problems = spriteTemplateProblems({
+    classes: ["bear"], svg: "<svg>left-profile</svg>",
+    match: { property: "mgx:faces", value: "left" },
+    face: FACE_TABLE,
+  });
+  assert.ok(problems.some((p) => p.includes("face is declared without parameters.emotion")));
+});
+
+test("spriteTemplateProblems flags a [match] variant whose parameters.emotion has no face to anchor it", () => {
+  const problems = spriteTemplateProblems({
+    classes: ["bear"], svg: "<svg>left-profile{{FACE}}</svg>",
+    match: { property: "mgx:faces", value: "left" },
+    parameters: { emotion: EMOTION_PARAM },
+  });
+  assert.ok(problems.some((p) => p.includes("parameters.emotion is declared without a face")));
+});
+
+test("spriteTemplateProblems accepts a well-formed [match] + face + parameters.emotion variant", () => {
+  assert.deepEqual(spriteTemplateProblems(facingVariant()), []);
+});
+
+test("spriteTemplateProblems still catches a missing placeholder token on a [match] variant", () => {
+  const problems = spriteTemplateProblems({ ...facingVariant(), svg: "<svg>left-profile</svg>" });
+  assert.ok(problems.some((p) => p.includes("does not appear in svg")));
+});
+
 // ---- the icon tier and the sprite tier resolve independently ---------------
 // (never confused for each other even though both can carry templates for
 // the same class name, e.g. "lamp") — the two are selected by which

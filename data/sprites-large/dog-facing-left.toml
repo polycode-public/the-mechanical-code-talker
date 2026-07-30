@@ -2,7 +2,11 @@
 # profile: the snout wedge extends past the head's left edge to a dark
 # nose tip, the eye sits forward, all four legs stride the same way, and
 # the tail lifts at the right. Selected only when the instance's own
-# mgx:faces fact says "left".
+# mgx:faces fact says "left". It also carries the shared face-fragment
+# mechanism, so a dog taught BOTH mgx:faces = left and one of the 6 mgx:feels
+# words renders this profile wearing that mood; taught only the facing,
+# {{FACE}} resolves to nothing and the profile keeps the single forward eye it
+# draws itself.
 classes = ["dog"]
 svg = """
 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -36,9 +40,35 @@ svg = """
   <ellipse cx="5.2" cy="7.9" rx="0.55" ry="0.6" fill="#1c1c1c"/>
   <ellipse cx="10.4" cy="12.6" rx="2.4" ry="1.4" fill="#ffffff" opacity="0.28"/>
   <ellipse cx="5.6" cy="6.9" rx="1.1" ry="0.8" fill="#ffffff" opacity="0.32"/>
+  {{FACE}}
 </svg>
 """
 
 [match]
 property = "mgx:faces"
 value = "left"
+
+# Derived from THIS file's own profile geometry, not copied from
+# dog-with-emotion.toml's front-facing anchor (cx=7 cy=9 scale=3.6): the
+# profile head circle is cx=6.6 cy=9 r=3.6, and the forward eye this file
+# already draws sits at (5.2, 7.9). scale is ~0.65 of the head radius, which
+# pulls the fragment's two eyes closer together than a front view — the read
+# of a head turned three-quarters away — and cx/cy then place the fragment so
+# its own forward eye lands exactly on the drawn one at (5.2, 7.9), with the
+# mouth curve at the base of the snout wedge rather than out on the nose tip.
+[face]
+cx = 6.1
+cy = 8.25
+scale = 2.3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

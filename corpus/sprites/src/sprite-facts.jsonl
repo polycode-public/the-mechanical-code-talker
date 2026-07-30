@@ -519,8 +519,6 @@
 {"subject":"baby sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"baby sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"baby sprite","predicate":"mgx:accept-emotion","object":"calm"}
-{"subject":"bear sprite","predicate":"mgx:offer-variant","object":"left"}
-{"subject":"bear sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"bear sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -528,6 +526,8 @@
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"bear sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"bear sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"bear sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"bed sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"bed sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"bed sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -575,8 +575,6 @@
 {"subject":"car sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"car sprite","predicate":"mgx:accept-material","object":"metal"}
 {"subject":"car sprite","predicate":"mgx:accept-material","object":"plastic"}
-{"subject":"cat sprite","predicate":"mgx:offer-variant","object":"left"}
-{"subject":"cat sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"cat sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"cat sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"cat sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -584,6 +582,8 @@
 {"subject":"cat sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"cat sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"cat sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"cat sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"cat sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"chair sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"chair sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"chair sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -659,8 +659,6 @@
 {"subject":"doctor sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"doctor sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"doctor sprite","predicate":"mgx:accept-emotion","object":"calm"}
-{"subject":"dog sprite","predicate":"mgx:offer-variant","object":"left"}
-{"subject":"dog sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"dog sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -668,6 +666,8 @@
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"dog sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"dog sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"dog sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"dress sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"dress sprite","predicate":"mgx:accept-material","object":"woven material"}
 {"subject":"driver sprite","predicate":"mgx:take-parameter","object":"emotion"}
@@ -803,8 +803,6 @@
 {"subject":"key sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"key sprite","predicate":"mgx:accept-material","object":"gold"}
 {"subject":"key sprite","predicate":"mgx:accept-material","object":"metal"}
-{"subject":"king sprite","predicate":"mgx:offer-variant","object":"left"}
-{"subject":"king sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"king sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"king sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"king sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -812,6 +810,8 @@
 {"subject":"king sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"king sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"king sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"king sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"king sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"lamp sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"lamp sprite","predicate":"mgx:accept-material","object":"gold"}
 {"subject":"lamp sprite","predicate":"mgx:accept-material","object":"metal"}
