@@ -126,17 +126,29 @@ test("a wave writes a room-scoped fact the world's own fold never reads as state
   assert.equal(after.state.turnCount, before.state.turnCount, "and costs no turn");
 });
 
-test("waving twice in the same tick re-asserts one fact with a second, later tag", async () => {
+test("waving twice supersedes the first wave, so the live tag is the fresher one and the older is kept behind it", async () => {
   const session = await createMudSession(worldPayload, { characters: ["mole-1"] });
   await session.wave("mole-1");
+  const first = rowsFor((await session.snapshot()).rows, "mgx:waved")[0].provenance;
   await session.wave("mole-1");
   const waves = rowsFor((await session.snapshot()).rows, "mgx:waved");
   assert.equal(waves.length, 1, "the same character waving in the same room is the same fact id");
-  assert.equal(
-    waves[0].provenance.split(" | ").length,
-    2,
-    "so the second wave unions a fresh tag rather than vanishing into an identical one",
-  );
+  // One waver is one hop, so its record holds one tag: its CURRENT belief. The
+  // repeat wave replaces it rather than piling up, which is what keeps
+  // "currently waving" a recency read over a single timestamp.
+  assert.equal(waves[0].provenance.split(" | ").length, 1);
+  assert.notEqual(waves[0].provenance, first, "and the live tag is the later wave's");
+  assert.ok(Date.parse(waves[0].createdAt ?? waves[0].assertions[0].createdAt) > Date.parse(first.split("@").pop()));
+
+  // the first wave is not discarded — it moves behind the head, linked both ways
+  const { loadMemory } = await import("../../src/adapters/memory/core.mjs");
+  const m = await loadMemory(session.memoryDir);
+  const demoted = m.individuals.filter((i) => i.class === "Fact" && /#v1$/.test(i.id));
+  const attrOf = (ind, prop) => ind.attributes.find((a) => a.prop === prop)?.value;
+  assert.equal(demoted.length, 1, "exactly one superseded wave");
+  assert.equal(attrOf(demoted[0], "mgx:factProvenance"), first, "kept unmutated");
+  assert.equal(attrOf(demoted[0], "mgx:supersededBy"), waves[0].assertions[0].id);
+  assert.equal(attrOf(m.individuals.find((i) => i.id === waves[0].assertions[0].id), "mgx:supersedes"), demoted[0].id);
 });
 
 test("a recast session seeds its epoch marker, so a peer's leftover snapshots from the old run fold as history", async () => {

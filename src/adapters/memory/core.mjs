@@ -1626,14 +1626,52 @@ export function factRecordIdsFor(payload, groupId) {
  *  exception: it exists so a fact nobody can be credited for still HAS a
  *  record, so it is minted only when the triple has no record at all yet. A
  *  provenance-less write onto an already-asserted triple names no new source,
- *  so it adds nothing rather than filing a second, unattributable sibling
- *  beside the real ones. */
+ *  so it files no second, unattributable sibling beside the real ones — its
+ *  triple-level payload lands through restateFactGroup instead. */
 function assertionGroupsFor(payload, groupId, provenance) {
   const groups = groupTagsBySource(provenance);
   if (groups.length === 1 && groups[0].sourceId === NO_SOURCE_ID) {
     if (factRecordIdsFor(payload, groupId).length) return [];
   }
   return groups;
+}
+
+/**
+ * Apply a provenance-less write to the records a triple already has. Naming no
+ * source, it asserts nothing new — but it can still carry triple-level payload
+ * that belongs on the records already there, which is how a caller re-states a
+ * derivation's premises without claiming to be a fresh witness.
+ *
+ * Premise environments are a property of the TRIPLE, and readFactRows unions
+ * them across the group, so a re-statement REPLACES the group's whole view of
+ * them. That is what lets a retraction actually prune one: writing to a single
+ * record would leave a sibling rule's copy behind and the union would put it
+ * straight back. They land where they already live when anything holds them,
+ * since a justification explains an entailment, not the corroborators beside it.
+ *
+ * Returns the record ids it touched.
+ */
+function restateFactGroup(payload, groupId, { quantifier, environments }) {
+  const live = factRecordIdsFor(payload, groupId)
+    .map((id) => storedIndividual(payload, id))
+    .filter((record) => record && !(record.attributes || []).some((a) => a?.prop === SUPERSEDED_BY_PROP));
+  const touched = new Set();
+  if (environments) {
+    const carriers = live.filter((r) => (r.attributes || []).some((a) => a?.prop === "mgx:factJustification"));
+    for (const record of carriers.length ? carriers : live) {
+      setAttr(record, "mgx:factJustification", "justification", environments.map((e) => e.join(" ")).join(" | "));
+      touched.add(record.id);
+    }
+  }
+  if (quantifier) {
+    for (const record of live) {
+      // first-write-wins, exactly as a tagged re-assert treats it
+      if ((record.attributes || []).some((a) => a?.prop === "mgx:factQuantifier")) continue;
+      setAttr(record, "mgx:factQuantifier", "quantifier", quantifier);
+      touched.add(record.id);
+    }
+  }
+  return [...touched];
 }
 
 /** How deep this source's own chain for this triple already runs: the version
@@ -1718,12 +1756,31 @@ function planFactAssertion(payload, spec) {
   return { candidate, demote };
 }
 
+/** Drop a triple's `src:none` record once a real source asserts it. The
+ *  singleton exists so a fact nobody can be credited for still HAS a record; it
+ *  contributes no Source, no statedBy edge and no trust, so the moment someone
+ *  can be credited it is pure clutter. Cheap: the O(1) index check fails for
+ *  nearly every write, and only a group that actually holds a placeholder pays
+ *  for the removal. */
+function absorbAnonymousRecord(payload, groupId) {
+  const anonymousId = `${groupId}@${NO_SOURCE_ID}`;
+  const idx = memoryIndexOf(payload);
+  if (idx ? !idx.individualsById.has(anonymousId) : !payload.individuals.some((i) => i?.id === anonymousId)) return;
+  payload.individuals = payload.individuals.filter((i) => i?.id !== anonymousId);
+  if (!idx) return;
+  idx.individualsById.delete(anonymousId);
+  const held = (idx.factRecordsByGroup.get(groupId) || []).filter((id) => id !== anonymousId);
+  if (held.length) idx.factRecordsByGroup.set(groupId, held);
+  else idx.factRecordsByGroup.delete(groupId);
+}
+
 /** Land a planned assertion. The demoted record is never deleted and never
  *  rewritten: it moves to its own id carrying the same bytes, plus the forward
  *  link that makes it a leaf rather than a head. Returns every record id this
  *  touched, so the caller reconciles Sources and trust once per record. */
 function applyFactAssertion(payload, { candidate, demote }) {
   const touched = [];
+  if (!candidate.id.endsWith(`@${NO_SOURCE_ID}`)) absorbAnonymousRecord(payload, factGroupId(candidate.id));
   if (demote) {
     const leaf = { ...demote.head, id: demote.id, attributes: (demote.head.attributes || []).map((a) => ({ ...a })) };
     setAttr(leaf, SUPERSEDED_BY_PROP, "supersededBy", candidate.id);
@@ -1760,7 +1817,11 @@ export async function appendFact(dir, { subject, predicate, object, provenance =
   const tokens = proseTokensFor({ doc: text });
   const q = normText(quantifier);
   await mutateMemory(dir, async (payload) => {
-    for (const group of assertionGroupsFor(payload, groupId, normText(provenance))) {
+    const groups = assertionGroupsFor(payload, groupId, normText(provenance));
+    for (const id of groups.length ? [] : restateFactGroup(payload, groupId, { quantifier: q })) {
+      syncFactSources(payload, storedIndividual(payload, id), undefined, { premiseTrusts, ruleConfidence });
+    }
+    for (const group of groups) {
       const plan = planFactAssertion(payload, {
         groupId, s, p, o, label: labelOf(text), tokens, group, createdAt, observedAt, quantifier: q,
       });
@@ -1839,7 +1900,16 @@ export async function appendFacts(dir, facts) {
     const seen = new Set();
     const trustOptsById = new Map();
     for (const f of prepared) {
-      for (const group of assertionGroupsFor(payload, f.id, f.provenance)) {
+      const groups = assertionGroupsFor(payload, f.id, f.provenance);
+      // Naming no source, this write asserts nothing new — but its premise
+      // environments and quantifier still belong on the records already there.
+      for (const id of groups.length ? [] : restateFactGroup(payload, f.id, { quantifier: f.quantifier, environments: f.environments })) {
+        if (!seen.has(id)) { seen.add(id); touched.push(id); }
+        if (f.premiseTrusts !== undefined || f.ruleConfidence !== undefined) {
+          trustOptsById.set(id, { premiseTrusts: f.premiseTrusts, ruleConfidence: f.ruleConfidence });
+        }
+      }
+      for (const group of groups) {
         const plan = planFactAssertion(payload, {
           groupId: f.id, s: f.s, p: f.p, o: f.o, label: labelOf(f.text), tokens: f.tokens,
           group, createdAt: f.createdAt, observedAt: f.observedAt, quantifier: f.quantifier,

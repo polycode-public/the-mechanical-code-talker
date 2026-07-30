@@ -317,7 +317,11 @@ test("a child-tagged fact scores the 0.7 corpus prior and materialises the share
     // createdAt, so the assertion is the tier band, not a frozen number
     const score = Number(fact.attributes.find((a) => a.prop === "mgx:trustScore")?.value);
     assert.ok(score > SOURCE_PRIOR.corpusWeak && score <= SOURCE_PRIOR.corpus, `${score} sits at the corpus tier`);
-    assert.deepEqual(JSON.parse(fact.attributes.find((a) => a.prop === "mgx:trustInputs")?.value).sourceTypes, ["corpus"]);
+    // a record's own inputs describe exactly one source — the hop list of the
+    // whole triple is the SET of records, never a field inside any one of them
+    const inputs = JSON.parse(fact.attributes.find((a) => a.prop === "mgx:trustInputs")?.value);
+    assert.equal(inputs.sourceType, "corpus");
+    assert.equal(inputs.sourceId, "src:corpus:conceptnet");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -1403,7 +1403,7 @@ test("spiralExpand walks the MEMORY graph (provenance edge kinds, idNormalizer=(
 
     assert.equal(byNodeId.get(uttId), 0, "the seed itself is included, at hop 0");
     assert.equal(byNodeId.get(sessId), 1, "the Session is reached one hop away via saidInSession");
-    assert.equal(byNodeId.get(factId), 1, "the Fact is reached one hop away via canonicalisedFrom");
+    assert.equal(byNodeId.get(factRecordId), 1, "the Fact is reached one hop away via canonicalisedFrom");
     assert.equal(byNodeId.get(sourceInd.id), 2, "the Source is reached two hops away via statedBy (Utterance -> Fact -> Source)");
   } finally {
     await rm(dir, { recursive: true, force: true });

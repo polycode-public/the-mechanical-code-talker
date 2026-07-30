@@ -19,7 +19,7 @@ import {
   UTTERANCE_CLASS, FACT_CLASS, SOURCE_CLASS, SAID_IN_SESSION_PROP,
   emptyMemory, loadMemory,
   appendUtterance, appendUtterances, appendFact, appendFacts, appendRule,
-  findRuleByName, readFactRows, RULE_KIND_COMPOSE2, RULE_KIND_FILTER,
+  findRuleByName, readFactRows, factGroupId, RULE_KIND_COMPOSE2, RULE_KIND_FILTER,
   createSqliteMemoryStore, closeSqliteMemoryStore,
   resolveMemoryGraphFile, snapshotMemory,
   loadNodeId, saveNodeId,
@@ -137,15 +137,18 @@ test("Backend C round trip: the SAME appendFact/appendFacts/appendUtterance(s)/a
   }
 });
 
-test("Backend C: re-appending the same fact upserts via real SQLite INSERT OR REPLACE — no duplicate row, corroboration adds a second Source edge", async () => {
+test("Backend C: a second source asserting one triple writes its own row via real SQLite INSERT OR REPLACE, and the two fold back to one fact", async () => {
   const { dir, handle } = await sqliteHandle();
   try {
     const triple = { subject: "cache", predicate: "IsA", object: "storage-mechanism" };
     const { id: id1 } = await appendFact(handle, { ...triple, provenance: "corpus:seon" });
     const { id: id2 } = await appendFact(handle, { ...triple, provenance: "corpus:conceptnet" });
-    assert.equal(id1, id2);
+    assert.equal(id1, id2, "the public fact id is the triple's, whoever asserts it");
     const m = await loadMemory(handle);
-    assert.equal(m.individuals.filter((i) => i.class === FACT_CLASS).length, 1, "one Fact individual, not two");
+    const facts = m.individuals.filter((i) => i.class === FACT_CLASS);
+    assert.equal(facts.length, 2, "one record per asserting source");
+    assert.equal(new Set(facts.map((f) => factGroupId(f.id))).size, 1, "both under the one group");
+    assert.equal(readFactRows(m).length, 1, "and the group folds back to a single fact row");
     const row = readFactRows(m)[0];
     assert.equal(row.sourceIds.length, 2, "both provenance tags materialise as distinct Source edges");
   } finally {
@@ -376,16 +379,21 @@ test("the facts projection carries one row per Fact individual, with the triple,
     assert.equal(rows.length, factRows.length, "a row per Fact — Rules, Sources and Utterances stay out");
     assert.equal(rows.length, 3);
 
-    const byId = new Map(rows.map((r) => [r.id, r]));
+    const byGroup = new Map(rows.map((r) => [r.triple_hash, r]));
     for (const fact of factRows) {
-      const row = byId.get(fact.id);
+      const row = byGroup.get(fact.id);
       assert.ok(row, `${fact.id} is projected`);
-      assert.equal(row.triple_hash, fact.id, "a fact id addresses its triple alone, so it is its own group key");
+      // The record id keys the row; the group key is the public fact id, and the
+      // two diverge exactly at the `@<sourceId>` suffix that says who asserted it.
+      assert.equal(row.id, `${fact.id}@${row.source_id}`, "a record is addressed by its triple AND its source");
+      assert.notEqual(row.id, row.triple_hash);
       assert.equal(row.subject, fact.subject);
       assert.equal(row.predicate, fact.predicate);
       assert.equal(row.object, fact.object);
-      assert.equal(row.trust_score, fact.trust);
-      assert.equal(JSON.parse(row.json).id, fact.id, "the blob column round-trips the individual");
+      // The COLUMN carries this record's own single-source prior, deliberately
+      // not the group aggregate — that one is recomputed per read.
+      assert.equal(row.trust_score, fact.assertions[0].ownTrust);
+      assert.equal(JSON.parse(row.json).id, row.id, "the blob column round-trips the individual");
       assert.equal(row.observed_at, null, "nothing supplies an observation time yet");
       assert.equal(row.superseded_by, null, "every record is a live head");
     }
@@ -408,24 +416,31 @@ test("the facts projection carries one row per Fact individual, with the triple,
   }
 });
 
-test("the facts projection follows a re-assert and a retraction: one row per fact after corroboration, none after removeFacts", async () => {
+test("the facts projection follows corroboration and a retraction: a row per asserting source, none after removeFacts", async () => {
   const { removeFacts } = await import("../../src/adapters/memory/core.mjs");
   const { dir, handle } = await sqliteHandle();
   try {
-    await appendFact(handle, { subject: "man", predicate: "IsA", object: "person", provenance: "corpus:conceptnet /r/IsA" });
+    const { id: groupId } = await appendFact(handle, { subject: "man", predicate: "IsA", object: "person", provenance: "corpus:conceptnet /r/IsA" });
     const [before] = factsRows(handle);
-    const firstTrust = before.trust_score;
+    assert.equal(before.triple_hash, groupId);
 
-    // The same triple from a second source — corroboration on one id today.
+    // The same triple from a second source: its own record, sharing the group.
     await appendFact(handle, { subject: "man", predicate: "IsA", object: "person", provenance: `teach:chat:${SESSION}@${TS2}` });
     const after = factsRows(handle);
-    assert.equal(after.length, 1, "a re-assert upserts the projected row, never duplicates it");
-    assert.equal(after[0].id, before.id);
-    assert.ok(after[0].trust_score > firstTrust, "the projected trust follows the recomputed blob");
-    assert.equal(JSON.parse(after[0].json).attributes.find((a) => a.prop === "mgx:factProvenance").value.includes("teach:chat"), true);
+    assert.equal(after.length, 2, "a second source files its own row, never overwriting the first");
+    assert.equal(new Set(after.map((r) => r.triple_hash)).size, 1, "both rows key on the one triple");
+    assert.deepEqual(after.map((r) => r.source_id).sort(), ["src:corpus:conceptnet", `src:teach-chat:${SESSION}`]);
+    // The corpus record is untouched by the corroboration — its own prior is a
+    // property of ITS source, and the strengthening lives in the group fold.
+    const corpus = after.find((r) => r.source_id === "src:corpus:conceptnet");
+    assert.equal(corpus.trust_score, before.trust_score);
+    const [row] = readFactRows(await loadMemory(handle));
+    assert.ok(row.trust > corpus.trust_score, "the folded group reads stronger than either record alone");
 
-    await removeFacts(handle, [before.id]);
-    assert.deepEqual(factsRows(handle), [], "a retracted fact takes its projected row with it");
+    // Retracting by the PUBLIC fact id takes every source's record with it —
+    // a retracted triple cannot leave half its assertions standing.
+    await removeFacts(handle, [groupId]);
+    assert.deepEqual(factsRows(handle), [], "a retracted fact takes its projected rows with it");
   } finally {
     closeSqliteMemoryStore(handle);
     await rm(dir, { recursive: true, force: true });
