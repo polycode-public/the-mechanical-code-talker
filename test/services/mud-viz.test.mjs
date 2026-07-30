@@ -162,7 +162,7 @@ test("renderMudHtml: edit mode follows the burrow that is loaded, not the one th
   });
   assert.match(
     html,
-    /const prefix = "world:" \+ scenario\(\)\.worldPayload\.name;/,
+    /rowsForWorld\(rows, scenario\(\)\.worldPayload\.name\)/,
     "the editor's provenance filter reads the loaded burrow",
   );
   assert.match(html, /if \(wasEditing\) await exitEditMode\(\);/, "a half-typed edit lands in the burrow it was typed over");

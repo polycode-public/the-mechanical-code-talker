@@ -28,7 +28,6 @@
 // auto-playing at once — this file makes no ordering promise between two
 // concurrent calls into the same memoryDir, the same way two callers writing
 // into any shared store concurrently would need their own queue.
-import { runTurn } from "../../services/chat.mjs";
 import {
   createInMemoryStore, appendFacts, appendRule, loadMemory, readFactRows, removeFacts,
 } from "../../adapters/memory/core.mjs";
@@ -48,6 +47,7 @@ import { mudSpeciesOf } from "../../domain/game-config.mjs";
 import { worldProvenanceTag } from "../../domain/worlds-pack.mjs";
 import { resolveSpriteForClass, SPRITE_REGISTRY, classAncestorChain } from "../../domain/sprite-map.mjs";
 import { resolveSpriteAsset } from "../../domain/sprite-templates.mjs";
+import { createTurnSession } from "./turn-session.mjs";
 
 /** A live, shared mud world several characters can each act in. `worldPayload`
  *  is `{ name, facts, rules, opening }` — the same shape adventure-browser-
@@ -105,9 +105,10 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
     // "it"/"there" belongs to that window's own conversation, and its own
     // discovered-room history is the real fog of war this page promises —
     // sharing either across characters would leak one window's state into
-    // another's.
-    let focus = null;
-    let last = null;
+    // another's. createTurnSession owns focus/last for us; planState is the
+    // one piece that is NOT per-character (see planHolder above), so it is
+    // threaded through buildExtraOptions/captureExtraState instead of living
+    // in the session's own internal slot.
     const visitedRoomIds = new Set();
     // This character's OWN turns, not the page's shared tick counter: two
     // windows playing at different speeds, or one paused while the other
@@ -117,6 +118,20 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
     const startRoom = await roomOf(character);
     if (startRoom) visitedRoomIds.add(startRoom);
 
+    const turnSession = createTurnSession({
+      memoryDir, graph, lexicon, sessionId: character,
+      vocabHint: 'Try a world command ("dig north", "eat the carrot-1"), or ask "what food do you know about".',
+      buildExtraOptions: () => ({
+        uiContext: "browser", actingSubject: character, planState: planHolder.state,
+      }),
+      captureExtraState: async (result, state) => {
+        if ("planState" in result) planHolder.state = state.planState;
+        turnsTaken += 1;
+        const here = await roomOf(character);
+        if (here) visitedRoomIds.add(here);
+      },
+    });
+
     windows[character] = {
       character,
 
@@ -125,27 +140,7 @@ export async function createMudSession(worldPayload, { characters = [] } = {}) {
        *  character via actingSubject. A throwing runTurn must never end the
        *  session; this window has no other chance to show this turn's
        *  answer. */
-      async turn(line) {
-        let result;
-        try {
-          result = await runTurn(line, {
-            config: null, source: null, graph, focus, last, memoryDir,
-            sessionId: character, env: {}, lexicon, uiContext: "browser",
-            actingSubject: character, planState: planHolder.state,
-            vocabHint: 'Try a world command ("dig north", "eat the carrot-1"), or ask "what food do you know about".',
-          });
-        } catch (e) {
-          const message = e instanceof Error ? e.message : String(e);
-          return { answer: `Something went wrong answering that (${message}). Try rephrasing.`, end: false };
-        }
-        focus = result.focus;
-        last = result.last;
-        if ("planState" in result) planHolder.state = result.planState;
-        turnsTaken += 1;
-        const here = await roomOf(character);
-        if (here) visitedRoomIds.add(here);
-        return { answer: result.answer, end: Boolean(result.end) };
-      },
+      turn: turnSession.turn,
 
       /** One whole scripted turn (mud-turn.mjs's runMudTurn): investigate,
        *  walk toward known food, or roll at the edge (dig). `k` is the turn

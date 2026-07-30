@@ -127,3 +127,36 @@ export function wordBeforeCursor(text, cursorPos) {
   const m = head.match(/[A-Za-z][A-Za-z0-9-]*$/);
   return m ? m[0].toLowerCase() : "";
 }
+
+/** Append one line to a chat/event log element: a plain-text line, dropped
+ *  in with `textContent` (never `innerHTML` — the caller's text is untrusted
+ *  chat/answer text, not markup) and the log scrolled to show it. `clip`
+ *  (default false) turns on mud.html's own "read more" affordance: once the
+ *  line is in the DOM, measure its full (unclamped) height against its
+ *  actually-rendered one, and if a CSS line-clamp on `cls` is cutting it off,
+ *  mark the element `clipped` (with a button role/tabindex/title) so a click
+ *  or Enter can open the whole text elsewhere. `clip` is a no-op on a class
+ *  with no clamping rule — nothing to detect, nothing gets marked. Returns
+ *  the created element, so a caller with more to wire (a click handler) can.
+ *  Self-contained, `.toString()`-splice safe. */
+export function appendLogLine(el, cls, text, { clip = false } = {}) {
+  const d = document.createElement("div");
+  d.className = cls;
+  d.textContent = text;
+  el.appendChild(d);
+  if (clip) {
+    // A line-clamped box reports scrollHeight EQUAL to its clamped height, so
+    // the overflow has to be read against the same box with the clamp lifted.
+    d.classList.add("unclamped");
+    const wholeHeight = d.scrollHeight;
+    d.classList.remove("unclamped");
+    if (wholeHeight - d.clientHeight > 2) {
+      d.classList.add("clipped");
+      d.setAttribute("role", "button");
+      d.setAttribute("tabindex", "0");
+      d.setAttribute("title", "read the whole line");
+    }
+  }
+  el.scrollTop = el.scrollHeight;
+  return d;
+}

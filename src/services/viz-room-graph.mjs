@@ -25,7 +25,11 @@
 
 import { escapeHtml } from "./viz-theme.mjs";
 
-const EXIT_DELTA = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0], up: [0, -1], down: [0, 1] };
+// Exported (not just used internally) so a caller splicing directedGridLayout/
+// roomGraphSvg into its own inline page script — as data, via JSON.stringify,
+// never `.toString()` — can carry this table along too: a spliced function's
+// source text is its own body only, never a module-level const it closes over.
+export const EXIT_DELTA = { north: [0, -1], south: [0, 1], east: [1, 0], west: [-1, 0], up: [0, -1], down: [0, 1] };
 
 /** Every room's depth level, BFS from `root` at level 0: an "up"/"down" exit
  *  moves the level by ∓1, any other direction keeps it unchanged. A room
