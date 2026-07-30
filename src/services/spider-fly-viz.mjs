@@ -37,6 +37,7 @@ import { createTicker } from "./viz-ticker.mjs";
 import { GRID_SIZE, WEB_HOME, WEB_RADIUS, isInWebBlock, cellId } from "../domain/spider-fly-world.mjs";
 import { FLY_INITIAL_MASS, EGG_LAY_MASS_THRESHOLD } from "./spider-fly.mjs";
 import { DEFAULT_GAME_CONFIG } from "../domain/game-config.mjs";
+import { resolveSpriteRequest } from "../domain/sprite-request.mjs";
 
 // A larger cell than this page's first cut (44px) — the board sits in its
 // own full-width block, so a bigger cell keeps it reading as the page's
@@ -595,6 +596,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
   const threadCellsForSpiderPlan = ${threadCellsForSpiderPlan.toString()};
   const facingDegreesFor = ${facingDegreesFor.toString()};
   const emotionFor = ${emotionFor.toString()};
+  const resolveSpriteRequest = ${resolveSpriteRequest.toString()};
   const nextCorpses = ${nextCorpses.toString()};
   const esc = ${escapeHtml.toString()};
   const el = (id) => document.getElementById(id);
@@ -680,25 +682,32 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     }
   }
 
-  // maxMassFor/propertyFactsForAgent (emotionFor's own caller-side glue): only
+  // maxMassFor/expressionForAgent (emotionFor's own caller-side glue): only
   // spider/fly carry the mgx:feels parameter (data/sprites-large/*-with-
   // emotion.toml exists for those two classes only) — every other class (egg,
-  // and any class this page has no template for at all) keeps propertyFacts
-  // empty, resolving through its plain template exactly as before this page
+  // and any class this page has no template for at all) asks for no expression
+  // at all, resolving through its plain template exactly as before this page
   // wired emotion through. maxMassFor mirrors massBarHtml's own per-class
   // denominator below so the HUD's mass bar and the sprite's own expression
   // read the same "how full" scale.
   function maxMassFor(cls) {
     return cls === "spider" ? SPIDERFLY.maxSpiderMass : cls === "fly" ? SPIDERFLY.maxFlyMass : null;
   }
-  function propertyFactsForAgent(agent, cls) {
-    if (cls !== "spider" && cls !== "fly") return [];
-    return [{ predicate: "mgx:feels", object: emotionFor(agent, cls, maxMassFor(cls)) }];
+  function expressionForAgent(agent, cls) {
+    if (cls !== "spider" && cls !== "fly") return null;
+    return emotionFor(agent, cls, maxMassFor(cls));
   }
-  function resolveSpriteFace(cls, propertyFacts) {
-    return window.tmctSpiderFly
-      ? tmctSpiderFly.resolveSpriteAsset(cls, (session && session.taxonomyRows) || [], propertyFacts, SPIDERFLY.spriteTemplates, tmctSpiderFly.SPRITE_REGISTRY)
-      : "";
+  // One sprite request, in the same { class, expression } shape tmct_sprite
+  // takes, answered by the same pure resolver the tool wraps (sprite-request.mjs,
+  // spliced in above) — the page holds the state and nothing else.
+  function resolveSpriteFace(spriteRequest) {
+    if (!window.tmctSpiderFly) return "";
+    return resolveSpriteRequest(spriteRequest, {
+      factRows: (session && session.taxonomyRows) || [],
+      templates: SPIDERFLY.spriteTemplates,
+      spriteRegistry: tmctSpiderFly.SPRITE_REGISTRY,
+      resolveSpriteAsset: tmctSpiderFly.resolveSpriteAsset,
+    }).svg || "";
   }
 
   function togglePov(id) {
@@ -721,14 +730,14 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
     // through the matching data/sprites-large/*-with-emotion.toml template;
     // every other class (egg) keeps propertyFacts empty and resolves through
     // its plain class template (or the flat SPRITE_REGISTRY), unchanged.
-    const propertyFacts = propertyFactsForAgent(agent, cls);
-    emotionByAgent[id] = propertyFacts[0] ? propertyFacts[0].object : null;
+    const expression = expressionForAgent(agent, cls);
+    emotionByAgent[id] = expression;
     // The sprite SVG lives in its own inner wrapper so plan-driven facing
     // (a CSS rotate on THIS wrapper) never fights the outer .sprite node's
     // own translate(-50%,-50%) positioning transform.
     const face = document.createElement("div");
     face.className = "sprite-face";
-    face.innerHTML = resolveSpriteFace(cls, propertyFacts);
+    face.innerHTML = resolveSpriteFace({ class: cls, expression: expression });
     node.appendChild(face);
     if (!preview) {
       node.tabIndex = 0;
@@ -768,11 +777,10 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
         // so this must re-resolve every redraw, not just at sprite creation —
         // but only actually replace the DOM when the emotion word itself
         // changed since last render, never on every tick regardless.
-        const propertyFacts = propertyFactsForAgent(a, cls);
-        const emotion = propertyFacts[0] ? propertyFacts[0].object : null;
+        const emotion = expressionForAgent(a, cls);
         if (emotion !== emotionByAgent[id]) {
           emotionByAgent[id] = emotion;
-          face.innerHTML = resolveSpriteFace(cls, propertyFacts);
+          face.innerHTML = resolveSpriteFace({ class: cls, expression: emotion });
         }
       }
       if (a.goal) goalById[id] = a.goal;
@@ -805,7 +813,7 @@ ${engineBundleJs ? `<script>\n${embedScriptText(engineBundleJs)}\n</script>` : `
         // never emotion-parameterized at all (a rotting carcass has none),
         // just its class's own plain template under the grayscale/fade the
         // .sprite.corpse CSS rule already applies.
-        face.innerHTML = resolveSpriteFace(corpse.cls, []);
+        face.innerHTML = resolveSpriteFace({ class: corpse.cls });
         node.appendChild(face);
         spriteLayer.appendChild(node);
         corpseEls[id] = node;

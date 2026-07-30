@@ -26,6 +26,15 @@ export function resolveOrThrow(svc, symbol, what) {
   return { match, candidates };
 }
 
+/** A handler's STRUCTURED answer. `content` is the caller-facing sentence every
+ *  dispatchTool caller already receives; `data` is the same answer as data, for
+ *  a caller that would otherwise re-parse the sentence to get it back.
+ *  dispatchToolStructured (server.mjs) returns both; dispatchTool returns the
+ *  content, so a handler can adopt this shape without touching its callers. */
+export function toolResult(content, data) {
+  return { content: String(content ?? ""), data: data ?? null };
+}
+
 /** The shape most cold tools share: one required `symbol`, resolved, then rendered.
  *  `config.toolNamePrefix` (default "tmct_", set by e.g. seonix's own tool naming)
  *  threads through so a render's own follow-up hints stay accurate outside tmct. */

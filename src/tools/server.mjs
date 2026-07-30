@@ -44,7 +44,23 @@ export const TOOLS = HOT_TOOLS.map(({ name, agentDescription, inputSchema }) => 
   inputSchema,
 }));
 
-export async function dispatchTool(name, args, { config, source = defaultSource, tel = null, ingest = null, memoryBackend = null } = {}) {
+/** dispatchTool's structured twin: always `{ content, data }`. A handler that
+ *  returns kit.mjs's `toolResult` shape is passed through; a handler that
+ *  returns a plain string (all of them, historically) is wrapped with
+ *  `data: null`, so the two entry points never disagree about the sentence. */
+export async function dispatchToolStructured(name, args, opts = {}) {
+  const out = await dispatchHandler(name, args, opts);
+  if (out && typeof out === "object" && typeof out.content === "string") {
+    return { content: out.content, data: out.data ?? null };
+  }
+  return { content: String(out ?? ""), data: null };
+}
+
+export async function dispatchTool(name, args, opts = {}) {
+  return (await dispatchToolStructured(name, args, opts)).content;
+}
+
+async function dispatchHandler(name, args, { config, source = defaultSource, tel = null, ingest = null, memoryBackend = null } = {}) {
   // Reject an unknown tool BEFORE touching the graph — an unknown name never
   // triggers a load. hasOwn, so an inherited name ("constructor", "toString")
   // is unknown rather than a callable found on the prototype chain.

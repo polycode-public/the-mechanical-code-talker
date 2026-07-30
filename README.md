@@ -1268,7 +1268,7 @@ loads a repo's graph into a `{ dispatch, resolve, graph }` context,
 
 ## The tool surface
 
-Everything above runs on the same 25 tools. Each one is read-only, answers one question in a single call, and returns bounded output. None of them calls a model. A tool that cannot ground an answer says so — the same honest miss you get everywhere else in tmct.
+Everything above runs on the same 26 tools. Each one is read-only, answers one question in a single call, and returns bounded output. None of them calls a model. A tool that cannot ground an answer says so — the same honest miss you get everywhere else in tmct.
 
 Three of them are **hot**: their schemas stay resident, so an agent driving tmct sees them every turn and reaches for one call instead of a Read/Grep loop.
 
@@ -1329,6 +1329,7 @@ The remaining tools are **cold**: still served, but not billed to an agent every
 | `tmct_members` | A class's methods + attributes (file:line, decorators) in one slice. | `class` (required) |
 | `tmct_subclasses` | A class's base classes plus the transitive set of classes that extend it. | `class` (required) |
 | `tmct_related` | A term's synonyms (skos:altLabel) and related concepts (skos:related), from the memory graph's relation facts. | `term` (required) |
+| `tmct_sprite` | The sprite markup for a class, resolved up the taught rdfs:subClassOf chain — with the expression and size asked for, and the ancestor chain the resolver walked to find it. | `class` (required), `expression`, `size` |
 | `tmct_architecture` | Package/module map + the most-imported hub modules (optionally scoped to a package). | `package` |
 | `tmct_exports` | A module's public __all__ surface, each name resolved to the module that defines it. | `module` (required) |
 | `tmct_tests_for` | The test modules covering a symbol or module, from the typed test edges. | `symbol` (required) |
