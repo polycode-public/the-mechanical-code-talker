@@ -29,6 +29,10 @@
 // to public/chat.html, after chat-browser.bundle.js/chat-seed.json already
 // exist (both built earlier in that same script, for the embedded widget).
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
+import {
+  SHARE_OVERLAY_CSS, shareOverlayHtml, shareStepStates, activeWaves, offerBlobIn, peerTerm,
+  shareMessageFor, replyMessageFor, whatsAppShareUrl, isProbablyMobile, copyTextToClipboard, flashCopyTip,
+} from "./share-overlay-viz.mjs";
 import { provBucketFor } from "./ledger-viz.mjs";
 import { createTicker, prefersReducedMotion } from "./viz-ticker.mjs";
 import { sessionLogTimeOfDay, sessionLogHeaderMarkdown, sessionLogTurnMarkdown } from "./session-log-format.mjs";
@@ -199,7 +203,8 @@ export function tapeClock() {
 
 /**
  * The node list: every peer this graph knows about, each with the node name it
- * chose and the timestamp of the most recent fact it contributed, most
+ * chose, the timestamp of the most recent fact it contributed, and that fact
+ * itself (`lastFact` — subject/predicate/object, null before any lands), most
  * recently active first.
  *
  * Activity is read off the provenance the wire already carries. A fact a peer
@@ -217,7 +222,10 @@ export function tapeClock() {
  */
 export function nodeRowsFor({ peers, factRows, myPeerId, myDisplayName, nameFor, latestTimestampOf }) {
   const activeByName = new Map();
+  const factByName = new Map();
   let mineLastActive = null;
+  let mineLastFact = null;
+  const factOf = (row) => ({ subject: row.subject, predicate: row.predicate, object: row.object });
   for (const row of factRows || []) {
     for (const segment of String(row.provenance || "").split(" | ")) {
       if (!segment) continue;
@@ -233,9 +241,15 @@ export function nodeRowsFor({ peers, factRows, myPeerId, myDisplayName, nameFor,
         const node = label.indexOf("#node:");
         const name = node < 0 ? label : label.slice(0, node);
         const prior = activeByName.get(name);
-        if (prior === undefined || at > prior) activeByName.set(name, at);
+        if (prior === undefined || at > prior) {
+          activeByName.set(name, at);
+          factByName.set(name, factOf(row));
+        }
       } else if (segment.indexOf("teach:") === 0 || segment.indexOf("ace:") === 0) {
-        if (mineLastActive === null || at > mineLastActive) mineLastActive = at;
+        if (mineLastActive === null || at > mineLastActive) {
+          mineLastActive = at;
+          mineLastFact = factOf(row);
+        }
       }
     }
   }
@@ -245,6 +259,7 @@ export function nodeRowsFor({ peers, factRows, myPeerId, myDisplayName, nameFor,
     connected: true,
     isSelf: true,
     lastActiveAt: mineLastActive,
+    lastFact: mineLastFact,
   }];
   for (const peer of peers || []) {
     const name = nameFor(peer.peerId);
@@ -254,6 +269,7 @@ export function nodeRowsFor({ peers, factRows, myPeerId, myDisplayName, nameFor,
       connected: Boolean(peer.connected),
       isSelf: false,
       lastActiveAt: activeByName.has(name) ? activeByName.get(name) : null,
+      lastFact: factByName.has(name) ? factByName.get(name) : null,
     });
   }
   rows.sort((a, b) => (b.lastActiveAt || 0) - (a.lastActiveAt || 0));
@@ -609,77 +625,16 @@ ${THEME_TOKENS_CSS}
   .state-pill[data-tone="failed"] { color: var(--alert); border-color: var(--alert); }
   .state-pill[data-tone="failed"] .pill-dot { background: var(--alert); }
 
-  /* ---- the network rail --------------------------------------------------
-     The docks encode the two halves of a shared graph: the room on the left
-     (who else holds this graph, and what is crossing the wire between you),
-     the mind on the right (what it knows), the conversation between them.
-     Mono throughout — the conversation is prose, the network is telemetry,
-     and the register shift is the point. */
-  .netPanel { flex: 0 0 288px; max-width: 288px; overflow-y: auto; border-right: 1px solid var(--line); padding: 1rem 1rem 1.6rem; font-family: ${MONO_STACK}; font-size: .72rem; line-height: 1.5; display: flex; flex-direction: column; gap: 1.15rem; }
-  .net-block { display: flex; flex-direction: column; gap: .45rem; }
-  .netPanel h2 { font-size: .6rem; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: .5rem; }
-  .netPanel h2 .h2-count { letter-spacing: 0; text-transform: none; font-variant-numeric: tabular-nums; }
-  .net-field { display: flex; flex-direction: column; gap: .2rem; }
-  .net-label { font-family: ${SERIF_STACK}; font-size: .74rem; color: var(--muted); }
-  .net-name-input { font-family: ${SERIF_STACK}; font-size: .86rem; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: .32rem .6rem; width: 100%; box-sizing: border-box; }
-  .net-name-input:read-only { background: none; border-color: transparent; padding-left: 0; color: var(--muted); }
-  .net-note { font-family: ${SERIF_STACK}; font-size: .74rem; color: var(--muted); margin: 0; }
-  .net-help { font-family: ${SERIF_STACK}; font-size: .74rem; color: var(--corpus); }
-  .net-btn { font-family: ${SERIF_STACK}; font-size: .82rem; line-height: 1.35; color: var(--ink); border: 1px solid var(--line); border-radius: 99px; padding: .32rem .85rem; background: var(--card); align-self: flex-start; }
-  .net-btn:hover { border-color: var(--ink); }
-  .net-btn:disabled { opacity: .5; cursor: default; }
-  .net-btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-  .net-btn.ghost { border-color: transparent; color: var(--muted); padding-left: 0; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
-  .net-btn.ghost:hover { color: var(--ink); text-decoration-color: var(--ink); }
-  /* the blobs stay mono: they are machine text a person only ever copies, and
-     a serif face on base64 is a lie about what it is. */
-  .net-blob { width: 100%; box-sizing: border-box; font-family: ${MONO_STACK}; font-size: .58rem; line-height: 1.35; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .4rem .5rem; resize: vertical; word-break: break-all; }
-  .net-blob:focus { color: var(--ink); }
-  .net-problem { margin: 0; font-family: ${SERIF_STACK}; font-size: .78rem; color: var(--alert); border-left: 2px solid var(--alert); padding-left: .5rem; }
-  .net-invite { display: flex; flex-direction: column; gap: .4rem; padding-top: .2rem; }
-
-  /* connection state, as a real visual state at every point: a calm slow
-     breath while nothing is in flight, a quicker one while ICE runs, a solid
-     green edge when the channel is open, and a static dashed red when it
-     failed — a fault should not twitch. */
-  .wire-state { position: relative; overflow: hidden; border: 1px solid var(--line); border-left-width: 3px; border-radius: 8px; padding: .55rem .7rem .6rem .75rem; background: var(--card); font-family: ${SERIF_STACK}; }
-  .wire-state-word { display: block; font-size: .95rem; color: var(--ink); }
-  .wire-state-note { display: block; margin-top: .25rem; font-size: .74rem; line-height: 1.4; color: var(--muted); }
-  .wire-state[data-tone="waiting"], .wire-state[data-tone="working"] { border-left-color: var(--corpus); }
-  .wire-state[data-tone="waiting"]::before, .wire-state[data-tone="working"]::before { content: ""; position: absolute; left: -3px; top: 0; bottom: 0; width: 3px; background: var(--corpus); animation: wire-breathe 2.4s ease-in-out infinite; }
-  .wire-state[data-tone="working"]::before { animation-duration: .9s; }
-  .wire-state[data-tone="live"] { border-left-color: var(--taught); background: var(--taught-soft); }
-  .wire-state[data-tone="live"] .wire-state-word { color: var(--taught); }
-  .wire-state[data-tone="failed"] { border-style: dashed; border-left-style: solid; border-left-color: var(--alert); background: var(--alert-soft); }
-  .wire-state[data-tone="failed"] .wire-state-word { color: var(--alert); }
   @keyframes wire-breathe { 0%, 100% { opacity: .2; } 50% { opacity: 1; } }
-
-  /* a member list, the way every chat app already draws one: a monogram, a
-     presence badge on it, the name, and when they were last heard from. The
-     monogram is neutral on purpose — on this page colour means provenance,
-     and an avatar palette would spend that meaning on decoration. */
-  .node-list { list-style: none; margin: 0; padding: 0; }
-  .node-row { display: flex; align-items: center; gap: .55rem; padding: .3rem 0; }
-  .node-avatar { position: relative; flex: 0 0 auto; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--line); color: var(--muted); display: flex; align-items: center; justify-content: center; font-family: ${MONO_STACK}; font-size: .58rem; letter-spacing: .04em; text-transform: uppercase; }
-  .node-row[data-self="true"] .node-avatar { background: var(--ink); color: var(--bg); }
-  .node-dot { position: absolute; right: -1px; bottom: -1px; width: 7px; height: 7px; border-radius: 50%; background: var(--taught); box-shadow: 0 0 0 2px var(--bg); }
-  .node-row[data-away="true"] .node-dot { background: var(--muted); }
-  .node-name { font-family: ${SERIF_STACK}; color: var(--ink); font-size: .86rem; flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
-  .node-row[data-self="true"] .node-name::after { content: " (you)"; color: var(--muted); font-size: .74rem; }
-  .node-row[data-away="true"] .node-name { color: var(--muted); }
-  .node-when { color: var(--muted); font-family: ${MONO_STACK}; font-size: .62rem; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .node-hand { display: inline-block; font-size: .88rem; opacity: 0; transform-origin: 70% 80%; }
-  .node-row[data-waving="true"] .node-hand { opacity: 1; animation: hand-wave .8s ease-in-out infinite; }
-  .node-empty { font-family: ${SERIF_STACK}; color: var(--muted); font-size: .76rem; line-height: 1.4; margin: 0; }
   @keyframes hand-wave { 0%, 100% { transform: rotate(-14deg); } 50% { transform: rotate(20deg); } }
 
-  /* the wire tape — this page's own instrument. Every message in and out, in
-     arrival order, newest first so the latest is readable without scrolling.
-     The 3px bar carries the message family in the page's own provenance
-     colours; the type is spelled out beside it, so colour is never the only
-     thing distinguishing one row from another. */
-  .net-tape-block { flex: 1 1 auto; min-height: 0; }
-  .tape-meter { display: flex; flex-wrap: wrap; gap: .15rem .7rem; margin: 0 0 .3rem; }
+  /* the wire tape — this page's own instrument, riding inside the sharing
+     overlay's diagnostics fold. Every message in and out, in arrival order,
+     newest first so the latest is readable without scrolling. The 3px bar
+     carries the message family in the page's own provenance colours; the
+     type is spelled out beside it, so colour is never the only thing
+     distinguishing one row from another. */
+  .tape-meter { display: flex; flex-wrap: wrap; gap: .15rem .7rem; margin: .4rem 0 .3rem; }
   .meter-item { display: inline-flex; align-items: center; gap: .3rem; font-size: .6rem; color: var(--muted); }
   .meter-bar { width: 5px; height: 5px; border-radius: 1px; flex: 0 0 auto; }
   .meter-n { color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -702,18 +657,6 @@ ${THEME_TOKENS_CSS}
   .tape-empty { font-family: ${SERIF_STACK}; color: var(--muted); font-size: .76rem; line-height: 1.4; padding: .45rem 0 0; margin: 0; }
   @keyframes tape-arrive { from { background: var(--corpus-soft); } to { background: transparent; } }
 
-  .netPanel-close { display: none; align-self: flex-end; font-family: ${MONO_STACK}; font-size: .8rem; color: var(--muted); padding: 0 .2rem; }
-
-  /* the join card: the only thing a joiner sees until they act. The world's
-     generated two-word name is the one place it gets to be a headline. */
-  .joinCard { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, .45); display: flex; align-items: center; justify-content: center; padding: 1.2rem; }
-  .joinCard-inner { background: var(--card); border: 1px solid var(--line); border-radius: 8px; width: 100%; max-width: 27rem; padding: 1.5rem 1.6rem 1.3rem; box-shadow: 0 18px 48px rgba(0, 0, 0, .3); display: flex; flex-direction: column; gap: .8rem; }
-  .joinCard-eyebrow { font-size: .82rem; color: var(--muted); margin: 0; }
-  .joinCard-world { font-size: 1.75rem; line-height: 1.1; margin: -.45rem 0 0; color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
-  .joinCard-body { font-size: .9rem; color: var(--muted); margin: 0; max-width: 36ch; }
-  .joinCard .net-btn.primary { font-size: .95rem; padding: .5rem 1.15rem; }
-  .joinCard-reply { display: flex; flex-direction: column; gap: .45rem; }
-
   /* a wave, on every page it reaches: the waver's node name, over the
      conversation, for as long as the wave is recent. Anchored under the
      topbar, where a chat app puts a presence toast — the foot of the column
@@ -721,17 +664,10 @@ ${THEME_TOKENS_CSS}
   .waveBurst { position: absolute; left: 50%; top: 3.4rem; transform: translateX(-50%); z-index: 20; display: flex; flex-direction: column; align-items: center; gap: .3rem; pointer-events: none; }
   .wave-pill { display: flex; align-items: center; gap: .45rem; background: var(--card); border: 1px solid var(--line); border-radius: 99px; padding: .3rem .9rem .3rem .7rem; font-family: ${SERIF_STACK}; font-size: .85rem; color: var(--ink); box-shadow: 0 4px 14px rgba(0, 0, 0, .16); animation: wave-rise .3s ease-out; }
   .wave-pill .hand { display: inline-block; font-size: 1rem; transform-origin: 70% 80%; animation: hand-wave .8s ease-in-out infinite; }
+  /* a wave aimed at you, specifically: the same pill, insistently louder. */
+  .wave-pill--you { border-color: var(--taught); box-shadow: 0 4px 14px rgba(0, 0, 0, .16), 0 0 0 3px var(--taught-soft); font-weight: 600; }
   @keyframes wave-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 
-  .copyTip { position: fixed; z-index: 60; background: var(--ink); color: var(--bg); font-family: ${SERIF_STACK}; font-size: .78rem; padding: .3rem .7rem; border-radius: 99px; pointer-events: none; box-shadow: 0 3px 10px rgba(0, 0, 0, .22); animation: wave-rise .14s ease-out; }
-
-  @media (max-width: 1080px) {
-    /* the rail becomes a drawer rather than disappearing: the invite flow has
-       to stay reachable on a laptop and a phone alike. */
-    .netPanel { position: fixed; left: 0; top: 0; bottom: 0; width: 288px; max-width: 86vw; flex: none; z-index: 30; background: var(--bg); transform: translateX(-101%); transition: transform .18s ease-out; }
-    body.net-open .netPanel { transform: none; box-shadow: 0 0 40px rgba(0, 0, 0, .3); }
-    .netPanel-close { display: block; }
-  }
   @media (max-width: 1360px) {
     /* the legend is decorative and the controls are not, so the legend goes
        first rather than folding the controls onto a second row. */
@@ -745,9 +681,8 @@ ${THEME_TOKENS_CSS}
   }
   @media (prefers-reduced-motion: reduce) {
     * { scroll-behavior: auto !important; }
-    .wire-state[data-tone="waiting"]::before, .wire-state[data-tone="working"]::before,
-    .state-pill .pill-dot, .tape-row:first-child, .netPanel { animation: none; transition: none; }
-    .wave-pill, .wave-pill .hand, .node-row[data-waving="true"] .node-hand, .copyTip { animation: none; }
+    .state-pill .pill-dot, .tape-row:first-child { animation: none; transition: none; }
+    .wave-pill, .wave-pill .hand { animation: none; }
   }
 
   /* print: the WHOLE transcript, not the scrolled-into-view slice — the
@@ -763,70 +698,13 @@ ${THEME_TOKENS_CSS}
     main.chatMain { overflow: visible; height: auto; }
     .messages { min-height: 0; }
     form.composer, .statusline, .statsPanel, .legend { display: none; }
-    .netPanel, .joinCard, .waveBurst, .chrome, .copyTip { display: none; }
+    .shareOverlay, .waveBurst, .chrome, .copyTip { display: none; }
   }
+${SHARE_OVERLAY_CSS}
 </style>
 </head>
 <body>
-  <aside class="netPanel" id="netPanel" aria-label="the shared world: this node, its connection, the other nodes, and the wire">
-    <button type="button" class="netPanel-close" id="netPanelClose" aria-label="close the network panel">&times;</button>
-    <section class="net-block">
-      <h2>this node</h2>
-      <div class="net-field">
-        <label class="net-label" for="nodeNameInput">your node name</label>
-        <input class="net-name-input" id="nodeNameInput" type="text" autocomplete="off" spellcheck="false"
-          placeholder="two words from the graph's own vocabulary">
-      </div>
-      <div class="net-field">
-        <label class="net-label" for="worldNameInput">the graph you are sharing</label>
-        <input class="net-name-input" id="worldNameInput" type="text" autocomplete="off" spellcheck="false"
-          placeholder="named when you first invite someone">
-      </div>
-      <p class="net-note">both names are facts in the graph, not settings. change yours whenever you like.</p>
-    </section>
-
-    <section class="net-block">
-      <h2>connection</h2>
-      <div class="wire-state" id="wireState" data-tone="idle" role="status">
-        <span class="wire-state-word" id="wireStateWord">not shared</span>
-        <span class="wire-state-note" id="wireStateNote">this browser holds the only copy of what you teach it.</span>
-      </div>
-      <div class="net-invite" id="sharePanel" hidden>
-        <div class="net-field">
-          <label class="net-label" for="shareLink">the link, in case the copy didn&#8217;t take</label>
-          <textarea class="net-blob" id="shareLink" rows="2" readonly></textarea>
-        </div>
-        <p class="net-note">each link invites one person. invite again for the next.</p>
-        <div class="net-field">
-          <label class="net-label" for="replyBox">paste their reply here</label>
-          <textarea class="net-blob" id="replyBox" rows="3" placeholder="the reply they send back"></textarea>
-        </div>
-        <button type="button" class="net-btn" id="replyBtn">connect</button>
-        <p class="net-problem" id="replyProblem" role="alert" hidden></p>
-      </div>
-      <div class="net-invite" id="answerPanel" hidden>
-        <div class="net-field">
-          <label class="net-label" for="replyOut">your reply &#8212; send it back the same way the invite reached you</label>
-          <textarea class="net-blob" id="replyOut" rows="3" readonly></textarea>
-        </div>
-        <button type="button" class="net-btn" id="copyReplyBtn">copy it again</button>
-      </div>
-      <a class="net-help" href="./help.html#sharing" target="_blank" rel="noopener">how sharing works &#8599;</a>
-    </section>
-
-    <section class="net-block">
-      <h2>nodes <span class="h2-count" id="nodeCount"></span></h2>
-      <ul class="node-list" id="nodeList"></ul>
-      <p class="node-empty" id="nodeEmpty">nobody else yet. invite someone and their node appears here.</p>
-    </section>
-
-    <section class="net-block net-tape-block">
-      <h2>wire <span class="h2-count" id="tapeTotal"></span></h2>
-      <div class="tape-meter" id="tapeMeter"></div>
-      <ol class="tape" id="tape"></ol>
-      <p class="tape-empty" id="tapeEmpty">every message this browser sends or receives lands here, as it happens.</p>
-    </section>
-  </aside>
+${shareOverlayHtml({ withTape: true })}
   <div class="chatCol">
     <header class="topbar">
       <div class="brand">
@@ -898,22 +776,6 @@ ${THEME_TOKENS_CSS}
     <div id="statsPanelStats"><p class="empty">loading memory stats&hellip;</p></div>
     <div id="researchedPanel"></div>
   </aside>
-  <div class="joinCard" id="joinCard" role="dialog" aria-labelledby="joinWorld" hidden>
-    <div class="joinCard-inner">
-      <p class="joinCard-eyebrow" id="joinEyebrow">you&#8217;ve been invited to</p>
-      <h1 class="joinCard-world" id="joinWorld"></h1>
-      <p class="joinCard-body" id="joinBody">Nothing has run yet. The button below makes your reply and copies it &#8212; send it back the same way this invite reached you, and leave this tab open.</p>
-      <button type="button" class="net-btn primary" id="joinBtn">create my reply</button>
-      <p class="net-problem" id="joinProblem" role="alert" hidden></p>
-      <div class="joinCard-reply" id="joinReplyWrap" hidden>
-        <label class="net-label" for="joinReply">your reply, copied &#8212; send it back now</label>
-        <textarea class="net-blob" id="joinReply" rows="3" readonly></textarea>
-        <button type="button" class="net-btn" id="joinCopyBtn">copy it again</button>
-      </div>
-      <button type="button" class="net-btn ghost" id="joinDismiss">start talking on your own instead</button>
-      <a class="net-help" href="./help.html#sharing" target="_blank" rel="noopener">how sharing works &#8599;</a>
-    </div>
-  </div>
 <script src="./chat-browser.bundle.js"></script>
 <script>
 (function () {
@@ -941,6 +803,16 @@ ${THEME_TOKENS_CSS}
   const inviteParamsFrom = ${inviteParamsFrom.toString()};
   const tapeClock = ${tapeClock.toString()};
   const relativeWhen = ${relativeWhen.toString()};
+  const shareStepStates = ${shareStepStates.toString()};
+  const activeWaves = ${activeWaves.toString()};
+  const offerBlobIn = ${offerBlobIn.toString()};
+  const peerTerm = ${peerTerm.toString()};
+  const shareMessageFor = ${shareMessageFor.toString()};
+  const replyMessageFor = ${replyMessageFor.toString()};
+  const whatsAppShareUrl = ${whatsAppShareUrl.toString()};
+  const isProbablyMobile = ${isProbablyMobile.toString()};
+  const copyText = ${copyTextToClipboard.toString()};
+  const flashTip = ${flashCopyTip.toString()};
   const DIGEST_STRUCTURES = ${digestStructuresJson};
   const el = (id) => document.getElementById(id);
 
@@ -1222,6 +1094,7 @@ ${THEME_TOKENS_CSS}
   let saveTimer = null;
   let restoredCount = 0;
   let siteVersion = "dev";
+  let lastStatsTotal = null;
   window.tmctChatLastSave = null;
 
   function scheduleSave() {
@@ -1277,7 +1150,8 @@ ${THEME_TOKENS_CSS}
       try { stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir); }
       catch { return; }
     }
-    factPillValueEl.textContent = Number(stats.total || 0).toLocaleString();
+    lastStatsTotal = Number(stats.total || 0);
+    factPillValueEl.textContent = lastStatsTotal.toLocaleString();
     renderStatsPanelInto(statsPanelEl, stats, {
       bandLabel: bandLabelFor,
       onForget: persist ? forgetEverything : null,
@@ -1690,11 +1564,16 @@ ${THEME_TOKENS_CSS}
   const wireStateNoteEl = el("wireStateNote");
   const statePillEl = el("statePill");
   const statePillWordEl = el("statePillWord");
-  const sharePanelEl = el("sharePanel");
   const shareLinkEl = el("shareLink");
+  const inviteSummaryEl = el("inviteSummary");
+  const webShareBtnEl = el("webShareBtn");
+  const waShareBtnEl = el("waShareBtn");
+  const replyShareBtnEl = el("replyShareBtn");
+  const replyWaBtnEl = el("replyWaBtn");
+  const joinShareBtnEl = el("joinShareBtn");
+  const joinWaBtnEl = el("joinWaBtn");
   const replyBoxEl = el("replyBox");
   const replyProblemEl = el("replyProblem");
-  const answerPanelEl = el("answerPanel");
   const replyOutEl = el("replyOut");
   const nodeListEl = el("nodeList");
   const nodeEmptyEl = el("nodeEmpty");
@@ -1738,6 +1617,18 @@ ${THEME_TOKENS_CSS}
   let waveTimer = null;
   let nodeClockTimer = null;
   let channelCount = 0;
+  let mintedBlob = "";
+
+  // Which seat this page occupies in the handshake — "idle" until something
+  // happens, "sponsor" once an invite is minted here, "joiner" once an invite
+  // is opened here. The overlay's CSS reads it to decide which calls to
+  // action stand at each step; entry distinguishes an invite that arrived
+  // as a link (the hero card owns the reply) from one pasted in as text
+  // (step 4's own slot owns it).
+  function setOverlayRole(role, entry) {
+    netPanelEl.dataset.role = role;
+    netPanelEl.dataset.entry = entry || "";
+  }
 
   function loadP2p() {
     if (!p2pLoad) {
@@ -1825,10 +1716,14 @@ ${THEME_TOKENS_CSS}
     });
     room.onStateChanged(function (state) {
       noteTape("note", state === "failed" ? "fault" : "state", "state " + state, "");
-      // The join card exists to produce one reply. Once the channel is open
-      // the reply has done its job, and a full-screen card over a live
-      // conversation is just something in the way.
-      if (state === "connected") joinCardEl.hidden = true;
+      // The overlay exists to make one connection. The moment the channel is
+      // open its work is done — the lights come back up, and the pill in the
+      // chrome is the way back in.
+      if (state === "connected") {
+        joinCardEl.hidden = true;
+        closeNetPanel();
+        flashTip(statePillEl, "connected \\u2014 you're sharing live");
+      }
       renderWire();
       renderStatus();
     });
@@ -1862,6 +1757,8 @@ ${THEME_TOKENS_CSS}
     nodeClockTimer = null;
     shareLinkEl.value = "";
     replyOutEl.value = "";
+    mintedBlob = "";
+    setOverlayRole("idle", "");
     noteTape("note", "link", "world closed", worldName);
     renderWire();
     renderNodes();
@@ -1945,7 +1842,7 @@ ${THEME_TOKENS_CSS}
     }
   }
 
-  // ---- what a person sees: state, nodes, waves ----------------------------
+  // ---- what a person sees: state, the ladder, nodes, waves ----------------
   function renderWire() {
     const label = wireStateLabel(room ? room.state : "idle");
     wireStateEl.dataset.tone = label.tone;
@@ -1954,10 +1851,29 @@ ${THEME_TOKENS_CSS}
     statePillEl.dataset.tone = label.tone;
     statePillWordEl.textContent = label.pill;
     statePillEl.title = label.note;
-    sharePanelEl.hidden = !shareLinkEl.value;
-    // Once the channel is open the reply has been used; leaving "send this
-    // back" on screen would be asking for something already done.
-    answerPanelEl.hidden = !replyOutEl.value || (room && room.state === "connected");
+    netPanelEl.dataset.tone = label.tone;
+    renderSteps();
+  }
+
+  function renderSteps() {
+    const states = shareStepStates({
+      role: netPanelEl.dataset.role,
+      state: room ? room.state : "idle",
+      hasReply: Boolean(replyOutEl.value),
+    });
+    for (const step of states) {
+      const item = el("step-" + step.key);
+      if (item) item.dataset.status = step.status;
+    }
+  }
+
+  // The scene's two browser cards: this one wears the node's own name, the
+  // far one wears the first peer's the moment there is one to name.
+  function renderScene() {
+    el("sceneYouName").textContent = myDisplayName || "you";
+    const peers = room ? room.peers() : [];
+    const first = peers.find(function (p) { return p.connected; }) || peers[0];
+    el("sceneThemName").textContent = first ? room.displayNameFor(first.peerId) : "your friend";
   }
 
   function renderNodes() {
@@ -1965,6 +1881,7 @@ ${THEME_TOKENS_CSS}
       nodeCountEl.textContent = "";
       nodeListEl.textContent = "";
       nodeEmptyEl.hidden = false;
+      renderScene();
       return;
     }
     const rows = nodeRowsFor({
@@ -1976,6 +1893,7 @@ ${THEME_TOKENS_CSS}
       latestTimestampOf: p2p.latestProvenanceTimestamp,
     });
     const nowMs = Date.now();
+    const wavers = new Set(activeWaves(room.factRows(), nowMs).map(function (w) { return w.waver; }));
     nodeCountEl.textContent = rows.length + (rows.length === 1 ? " node" : " nodes");
     nodeListEl.textContent = "";
     for (const entry of rows) {
@@ -1984,7 +1902,7 @@ ${THEME_TOKENS_CSS}
       item.dataset.self = String(entry.isSelf);
       item.dataset.away = String(!entry.connected);
       item.dataset.peer = entry.peerId;
-      item.dataset.waving = String(room.isWaving("peer:" + entry.peerId, nowMs));
+      item.dataset.waving = String(wavers.has(peerTerm(entry.peerId)));
       const avatar = document.createElement("span");
       avatar.className = "node-avatar";
       avatar.textContent = nodeInitials(entry.name);
@@ -1992,132 +1910,260 @@ ${THEME_TOKENS_CSS}
       const dot = document.createElement("i");
       dot.className = "node-dot";
       avatar.appendChild(dot);
-      const name = document.createElement("span");
-      name.className = "node-name";
-      name.textContent = entry.name;
       const hand = document.createElement("span");
       hand.className = "node-hand";
       hand.textContent = "👋";
+      avatar.appendChild(hand);
+      const name = document.createElement("span");
+      name.className = "node-name";
+      name.textContent = entry.name;
       const when = document.createElement("span");
       when.className = "node-when";
       when.textContent = relativeWhen(entry.lastActiveAt, nowMs);
       when.title = entry.lastActiveAt
         ? "last contributed a fact at " + new Date(entry.lastActiveAt).toLocaleTimeString()
         : "has contributed no fact yet";
+      const fact = document.createElement("span");
+      fact.className = "node-fact";
+      if (entry.lastFact) {
+        const line = entry.lastFact.subject + " " + String(entry.lastFact.predicate || "").replace(/^[a-z0-9_-]+:/i, "") + " " + entry.lastFact.object;
+        fact.textContent = line;
+        fact.title = "last shared: " + line;
+      } else {
+        fact.textContent = "nothing shared yet";
+      }
+      const waveOne = document.createElement("button");
+      waveOne.type = "button";
+      waveOne.className = "node-wave-btn";
+      waveOne.textContent = "👋";
+      waveOne.title = entry.isSelf ? "wave at everyone" : "wave at " + entry.name + " — they see it as a fact arriving";
+      waveOne.setAttribute("aria-label", waveOne.title);
+      waveOne.addEventListener("click", function () { waveAt(entry.isSelf ? null : entry.peerId, waveOne); });
       item.appendChild(avatar);
       item.appendChild(name);
-      item.appendChild(hand);
       item.appendChild(when);
+      item.appendChild(waveOne);
+      item.appendChild(fact);
       nodeListEl.appendChild(item);
     }
     nodeEmptyEl.hidden = rows.length > 1;
+    renderScene();
   }
 
   // A wave is a fact like any other, so it reaches every page through the
   // same merge every other fact does; "currently waving" is a recency read
   // over that fact, never stored state. Nothing here is a second live-update
   // path — onFactsChanged is what wakes it, and the timer below only lets a
-  // wave stop rendering once its window has passed.
+  // wave stop rendering once its window has passed. The fact's object names
+  // the audience: the presence scope is everyone, a peer term is one node —
+  // and a wave aimed at this node says so to its face.
   function renderWaves() {
     if (!room) return;
     const nowMs = Date.now();
-    const known = [{ peerId: myPeerId, name: myDisplayName }];
-    for (const peer of room.peers()) known.push({ peerId: peer.peerId, name: room.displayNameFor(peer.peerId) });
-    const waving = known.filter(function (entry) { return room.isWaving("peer:" + entry.peerId, nowMs); });
+    const myTerm = peerTerm(myPeerId);
+    const nameByTerm = new Map([[myTerm, myDisplayName]]);
+    for (const peer of room.peers()) nameByTerm.set(peerTerm(peer.peerId), room.displayNameFor(peer.peerId));
+    const waves = activeWaves(room.factRows(), nowMs).filter(function (w) { return nameByTerm.has(w.waver); });
     waveBurstEl.textContent = "";
-    for (const entry of waving) {
+    for (const wave of waves) {
       const pill = document.createElement("div");
-      pill.className = "wave-pill";
+      pill.className = "wave-pill" + (wave.target === myTerm ? " wave-pill--you" : "");
       const hand = document.createElement("span");
       hand.className = "hand";
       hand.textContent = "👋";
       const label = document.createElement("span");
-      label.textContent = entry.name + " waved";
+      const who = nameByTerm.get(wave.waver);
+      label.textContent = !wave.target ? who + " waved at everyone"
+        : wave.target === myTerm ? who + " is waving at you"
+          : nameByTerm.has(wave.target) ? who + " is waving at " + nameByTerm.get(wave.target)
+            : who + " waved";
       pill.appendChild(hand);
       pill.appendChild(label);
       waveBurstEl.appendChild(pill);
     }
+    const wavers = new Set(waves.map(function (w) { return w.waver; }));
     for (const item of nodeListEl.children) {
-      item.dataset.waving = String(waving.some(function (entry) { return entry.peerId === item.dataset.peer; }));
+      item.dataset.waving = String(wavers.has(peerTerm(item.dataset.peer)));
     }
     clearTimeout(waveTimer);
-    if (waving.length) waveTimer = setTimeout(renderWaves, 1000);
+    if (waves.length) waveTimer = setTimeout(renderWaves, 1000);
   }
 
-  async function waveNow() {
+  async function waveAt(targetPeerId, anchor) {
     try {
       const active = await ensureRoom();
-      await active.wave("peer:" + myPeerId, null);
-      noteTape("note", "facts", "waved", myDisplayName);
+      await active.wave("peer:" + myPeerId, targetPeerId ? "peer:" + targetPeerId : null);
+      const audience = targetPeerId ? (active.displayNameFor(targetPeerId) || "one node") : "everyone";
+      noteTape("note", "facts", "waved", audience);
       renderNodes();
       renderWaves();
+      if (anchor) flashTip(anchor, "you waved at " + audience);
     } catch (err) {
       addSystemLine("couldn't wave (" + (err && err.message ? err.message : err) + ").");
     }
   }
+  function waveNow() { return waveAt(null, null); }
 
-  // ---- copying: one tap, no menu, a tooltip that says it happened ---------
-  async function copyText(text) {
-    try {
-      if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
-        return true;
-      }
-    } catch { /* fall through — the box on the page still holds the text */ }
-    try {
-      const holder = document.createElement("textarea");
-      holder.value = text;
-      holder.setAttribute("readonly", "");
-      holder.style.position = "fixed";
-      holder.style.opacity = "0";
-      document.body.appendChild(holder);
-      holder.select();
-      const copied = document.execCommand("copy");
-      holder.remove();
-      return copied;
-    } catch {
-      return false;
-    }
+  // ---- the overlay itself: the lights go down, the handshake takes the room
+  function openNetPanel() {
+    netPanelEl.hidden = false;
+    const card = netPanelEl.querySelector(".so-card");
+    if (card) card.focus({ preventScroll: true });
   }
-
-  function flashTip(anchor, text) {
-    const tip = document.createElement("div");
-    tip.className = "copyTip";
-    tip.setAttribute("role", "status");
-    tip.textContent = text;
-    document.body.appendChild(tip);
-    const box = anchor.getBoundingClientRect();
-    const width = tip.offsetWidth;
-    tip.style.top = (box.bottom + 6) + "px";
-    tip.style.left = Math.max(6, Math.min(window.innerWidth - width - 6, box.left + box.width / 2 - width / 2)) + "px";
-    setTimeout(function () { tip.remove(); }, 2600);
+  function closeNetPanel() {
+    netPanelEl.hidden = true;
   }
-
-  const openNetPanel = () => document.body.classList.add("net-open");
-  const closeNetPanel = () => document.body.classList.remove("net-open");
   el("netPanelClose").addEventListener("click", closeNetPanel);
-  statePillEl.addEventListener("click", function () {
-    if (document.body.classList.contains("net-open")) closeNetPanel();
-    else openNetPanel();
+  netPanelEl.addEventListener("click", function (e) {
+    if (e.target === netPanelEl) closeNetPanel();
   });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape" && !netPanelEl.hidden) closeNetPanel();
+  });
+  statePillEl.addEventListener("click", function () {
+    if (netPanelEl.hidden) openNetPanel();
+    else closeNetPanel();
+  });
+  if (isProbablyMobile()) netPanelEl.classList.add("so-mobile");
+  // The blobs are made to be copied whole — a click selects everything, so a
+  // manual copy can never take half a code.
+  for (const boxId of ["shareLink", "replyOut", "joinReply"]) {
+    el(boxId).addEventListener("focus", function (e) { e.target.select(); });
+  }
 
-  shareBtn.addEventListener("click", async function () {
-    shareBtn.disabled = true;
+  function renderInviteShare() {
+    const factsPart = lastStatsTotal === null ? "" : " \\u00b7 " + lastStatsTotal.toLocaleString() + " facts travel when they join";
+    inviteSummaryEl.textContent = "invites one person into \\u201c" + worldName + "\\u201d" + factsPart;
+    const message = shareMessageFor({ worldName: worldName, link: shareLinkEl.value, thing: "graph" });
+    waShareBtnEl.href = whatsAppShareUrl(message);
+    webShareBtnEl.hidden = !navigator.share;
+  }
+
+  function renderReplyShare() {
+    const message = replyMessageFor({ worldName: worldName, blob: replyOutEl.value });
+    replyWaBtnEl.href = whatsAppShareUrl(message);
+    joinWaBtnEl.href = whatsAppShareUrl(message);
+    replyShareBtnEl.hidden = !navigator.share;
+    joinShareBtnEl.hidden = !navigator.share;
+  }
+
+  async function mintInvite(anchor) {
     try {
       const active = await ensureRoom();
       const minted = await active.startSharing();
+      mintedBlob = minted.blob;
       shareLinkEl.value = inviteLinkFor(window.location.href, { blob: minted.blob, world: worldId, worldName: worldName });
+      setOverlayRole("sponsor", "");
+      renderInviteShare();
       replyProblemEl.hidden = true;
       renderWire();
       openNetPanel();
       await copyText(shareLinkEl.value);
-      flashTip(shareBtn, "link copied — send it to one person");
+      flashTip(anchor, "link copied — send it to one person");
     } catch (err) {
       addSystemLine("couldn't create an invite (" + (err && err.message ? err.message : err) + ").");
+    }
+  }
+
+  shareBtn.addEventListener("click", async function () {
+    shareBtn.disabled = true;
+    try {
+      await mintInvite(shareBtn);
     } finally {
       shareBtn.disabled = false;
     }
   });
+  el("mintInviteBtn").addEventListener("click", async function () {
+    const btn = el("mintInviteBtn");
+    btn.disabled = true;
+    try {
+      await mintInvite(btn);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  el("copyLinkBtn").addEventListener("click", async function () {
+    await copyText(shareLinkEl.value);
+    flashTip(el("copyLinkBtn"), "link copied — send it to one person");
+  });
+  el("copyCodeBtn").addEventListener("click", async function () {
+    await copyText(mintedBlob);
+    flashTip(el("copyCodeBtn"), "code copied — they paste it under step 3 on their page");
+  });
+  webShareBtnEl.addEventListener("click", function () {
+    navigator.share({
+      title: "join \\u201c" + worldName + "\\u201d",
+      text: shareMessageFor({ worldName: worldName, link: shareLinkEl.value, thing: "graph" }),
+    }).catch(function () { /* the sheet was closed — the copy buttons still stand */ });
+  });
+  function shareReplyViaSheet() {
+    navigator.share({
+      title: "my reply to \\u201c" + worldName + "\\u201d",
+      text: replyMessageFor({ worldName: worldName, blob: replyOutEl.value }),
+    }).catch(function () { /* the sheet was closed — the copy buttons still stand */ });
+  }
+  replyShareBtnEl.addEventListener("click", shareReplyViaSheet);
+  joinShareBtnEl.addEventListener("click", shareReplyViaSheet);
+
+  // The other way in: an invite that arrived as text rather than as a link.
+  // The same paste box reads a whole link or a bare code — telling them
+  // apart by looking is cheaper than asking anyone to.
+  el("inviteBtn").addEventListener("click", async function () {
+    const problem = el("inviteProblem");
+    const pasted = el("inviteBox").value.trim();
+    if (!pasted) {
+      problem.textContent = "paste the invite you were sent, then try again";
+      problem.hidden = false;
+      return;
+    }
+    if (room) {
+      problem.textContent = "this graph is already shared. reload the page first, then open the invite.";
+      problem.hidden = false;
+      return;
+    }
+    const blob = offerBlobIn(pasted);
+    const mod = await loadP2p();
+    const decoded = mod.decodeInviteBlob(blob);
+    if (decoded.error || decoded.value.kind !== "offer") {
+      problem.textContent = decoded.error
+        ? "this invite looks cut short — ask for it to be sent again"
+        : "that's a reply, not an invite — it belongs under step 5, on the page that sent the invite";
+      problem.hidden = false;
+      return;
+    }
+    // The world id has to be the invite's before the room is opened: a room
+    // that minted its own would refuse the invite as belonging elsewhere.
+    await ensureIdentity();
+    worldId = decoded.value.world || worldId;
+    if (decoded.value.worldName) {
+      worldName = decoded.value.worldName;
+      worldNameInputEl.value = worldName;
+    }
+    try {
+      const active = await ensureRoom();
+      const outcome = await active.acceptInvite(blob);
+      if (outcome && outcome.error) {
+        problem.textContent = outcome.message;
+        problem.hidden = false;
+        noteTape("note", "fault", "invite rejected", outcome.error);
+        return;
+      }
+      problem.hidden = true;
+      el("inviteBox").value = "";
+      replyOutEl.value = outcome.blob;
+      setOverlayRole("joiner", "paste");
+      renderReplyShare();
+      renderWire();
+      await copyText(outcome.blob);
+      flashTip(copyReplyBtn, "reply copied — send it back the same way");
+    } catch (err) {
+      problem.textContent = "couldn't make a reply (" + (err && err.message ? err.message : err) + ").";
+      problem.hidden = false;
+    }
+  });
+
+  el("waveAllBtn").addEventListener("click", function () { waveAt(null, el("waveAllBtn")); });
 
   // The inviter's page has exactly one paste target, so there is no wrong box
   // to choose. A rejected paste keeps its text so the copy can be fixed.
@@ -2169,10 +2215,13 @@ ${THEME_TOKENS_CSS}
 
   waveBtn.addEventListener("click", waveNow);
 
-  // ---- joining: a card, one button, nothing running until it is pressed ---
+  // ---- joining: the hero card, one button, nothing running until pressed --
   async function prepareJoinCard() {
+    setOverlayRole("joiner", "link");
     joinCardEl.hidden = false;
     joinWorldEl.textContent = invite.worldName || "a shared graph";
+    renderSteps();
+    openNetPanel();
     joinBtn.focus();
     const mod = await loadP2p();
     const decoded = mod.decodeInviteBlob(invite.offer);
@@ -2212,6 +2261,7 @@ ${THEME_TOKENS_CSS}
       joinReplyWrapEl.hidden = false;
       joinBtn.textContent = "reply created";
       joinDismissBtn.textContent = "close this and start talking";
+      renderReplyShare();
       renderWire();
       await copyText(outcome.blob);
       flashTip(joinCopyBtn, "reply copied — send it back the same way");
@@ -2226,10 +2276,7 @@ ${THEME_TOKENS_CSS}
     await copyText(joinReplyEl.value);
     flashTip(joinCopyBtn, "reply copied");
   });
-  joinDismissBtn.addEventListener("click", function () {
-    joinCardEl.hidden = true;
-    if (replyOutEl.value) openNetPanel();
-  });
+  joinDismissBtn.addEventListener("click", closeNetPanel);
 
   renderWire();
   renderTapeMeter();

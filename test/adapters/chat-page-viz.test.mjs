@@ -68,7 +68,10 @@ test("provenanceChipFor: an answer with no citation and no assert via carries no
 test("renderChatHtml: mounts the chat engine bundle by a same-origin relative path only", () => {
   const html = renderChatHtml();
   assert.match(html, /<script src="\.\/chat-browser\.bundle\.js"><\/script>/);
-  assert.ok(!/(?:src|href)=["']https?:/.test(html), "no external resource loads baked into the markup");
+  assert.ok(
+    !/<(?:script|link|img|iframe)[^>]*(?:src|href)=["']https?:/.test(html),
+    "no external resource loads baked into the markup — outbound reference links are fine, fetched assets are not",
+  );
 });
 
 test("renderChatHtml: fetches the seed, wink vendor asset and reference-pack from same-origin paths, never a second engine", () => {
@@ -438,7 +441,7 @@ test("renderChatHtml: the live fact count rides in the topbar, not only the stat
   assert.match(html, /<span class="fact-pill-value" id="factPillValue">/);
   assert.match(
     html,
-    /factPillValueEl\.textContent = Number\(stats\.total \|\| 0\)\.toLocaleString\(\);/,
+    /lastStatsTotal = Number\(stats\.total \|\| 0\);\s*factPillValueEl\.textContent = lastStatsTotal\.toLocaleString\(\);/,
     "it reads the same memoryStats total the docked panel does, so the two cannot disagree",
   );
 });
