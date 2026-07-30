@@ -64,9 +64,15 @@ async function ask(page, question) {
 test("teaching \"Rover is a dog.\" then asking \"Does Rover bark?\" renders the chained capability answer in the composer", async () => {
   const { context, page } = await openChatPage();
   try {
+    const factPillBefore = Number((await page.locator("#factPillValue").innerText()).replace(/[^\d]/g, ""));
+    assert.ok(factPillBefore > 0, `expected a real starter-memory fact count in the pill before teaching, got ${factPillBefore}`);
+
     const taughtRow = await ask(page, "Rover is a dog.");
     const taughtText = await taughtRow.locator(".bubble").innerText();
     assert.match(taughtText, /^noted — remembered 1 fact: rover rdfs:subClassOf dog \(rover is a type of dog\)/, "the teach turn records the ISA fact");
+
+    const factPillAfter = Number((await page.locator("#factPillValue").innerText()).replace(/[^\d]/g, ""));
+    assert.equal(factPillAfter, factPillBefore + 1, "the fact pill counts the newly taught rover-is-a-dog fact");
 
     const askedRow = await ask(page, "Does Rover bark?");
     const askedText = await askedRow.locator(".bubble").innerText();

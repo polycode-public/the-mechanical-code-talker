@@ -277,6 +277,7 @@ e2e-web-index:
       test-e2e/pages-index.test.mjs test-e2e/pages-home.test.mjs
       test-e2e/pages-demo-history.test.mjs test-e2e/pages-demo-templates.test.mjs
       test-e2e/pages-examples.test.mjs test-e2e/pages-service-worker.test.mjs
+      test-e2e/pages-service-worker-cache-bust.test.mjs
       test-e2e/memory-ask-browser-bundle.test.mjs test-e2e/readme-examples.test.mjs
       test-e2e/cli-render-views.test.mjs
 
@@ -292,6 +293,10 @@ e2e-web-index:
 # The fifth is different: pages-chat-boot-budget runs fine against a deployed
 # origin, but what it measures stops being the page's own boot cost and starts
 # being the CDN's — its own header says so. A budget wants a fixed origin.
+# The sixth, pages-service-worker-cache-bust, rebuilds its own served
+# directory in place under a second version partway through — a deployed
+# site is one live snapshot, with no second historical build to redeploy
+# over it, so this one is structurally local-only too.
 #
 # Not in `deploy:website`'s `needs`, so this job costs the deploy nothing; it
 # still gates `publish:npm`.
@@ -302,7 +307,7 @@ e2e-web-local-origin:
       node --disable-warning=ExperimentalWarning --test
       test-e2e/pages-sprites.test.mjs test-e2e/sprites-large-visual.test.mjs
       test-e2e/ledger-viz-query-only-dock.test.mjs test-e2e/p2p-webrtc-handshake.test.mjs
-      test-e2e/pages-chat-boot-budget.test.mjs
+      test-e2e/pages-chat-boot-budget.test.mjs test-e2e/pages-service-worker-cache-bust.test.mjs
 
 # No browser: pure stdio/process spawns.
 e2e-tui:

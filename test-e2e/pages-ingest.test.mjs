@@ -108,6 +108,9 @@ test("seeded boot (the default) shows band rows and a nonzero total in the docke
     assert.ok(total > 100, `expected a real starter-memory total, got ${total}`);
     const labels = await bandRowLabels(page);
     assert.ok(labels.length > 2, "more than just the total-facts row renders");
+
+    const pillValue = Number((await page.locator("#factPillValue").innerText()).replace(/[^\d]/g, ""));
+    assert.equal(pillValue, total, "the header fact pill tracks the same total the docked stats panel shows");
   } finally {
     await context.close();
   }
@@ -127,6 +130,8 @@ test("the seed toggle off skips the chat-seed.json fetch entirely and boots an e
 test("pasted text grounds into canonical facts live, citation residue is stripped, and the honest skip count is reported", async () => {
   const { context, page, consoleErrors } = await openIngestPage();
   try {
+    const pillBefore = Number((await page.locator("#factPillValue").innerText()).replace(/[^\d]/g, ""));
+
     await page.fill("#source", SAMPLE);
     assert.equal(await page.locator("#ingestBtn").isDisabled(), false, "text enables the ingest button");
 
@@ -149,6 +154,8 @@ test("pasted text grounds into canonical facts live, citation residue is strippe
       /4 sentences read, 2 grounded, 2 skipped/,
       "the skip is reported honestly, never hidden or guessed at",
     );
+    const pillAfter = Number((await page.locator("#factPillValue").innerText()).replace(/[^\d]/g, ""));
+    assert.equal(pillAfter, pillBefore + 2, "the header fact pill grows by exactly the two newly grounded facts");
     assert.deepEqual(consoleErrors, [], "grounding logs no error");
   } finally {
     await context.close();

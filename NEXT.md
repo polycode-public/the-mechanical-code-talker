@@ -62,10 +62,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   beyond bear/cat/dog/king across the rest of the animal and person catalog, and design a
   profile-face anchor so a facing variant can carry the six `mgx:feels` expressions at the same
   time.
-- [ ] no Playwright regression test yet for the service-worker cache-busting fix itself (repro:
-  precache an old seed, swap in changed content, assert the next load serves the new bytes and
-  "reset to seed" recovers a stuck session); no browser/DOM run confirming the fact-count pills
-  render correctly (unit-level only so far).
 
 
 ## Discipline
