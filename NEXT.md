@@ -78,15 +78,26 @@ for a sprite drawn silently). The cold-session `ask` condition Phase 6 flagged i
 `chat.mjs` now prefers a passed-in graph whenever it holds individuals, so a fresh browser session
 answers a world question on its first turn, not its second.
 
-**Everything merged onto local `main` so far this session is green** (`npm test` full suite: 4939
-pass after the Wave 2/3 checkpoint; every subsequent wave re-verified with `npm run test:fast` plus
-its own blast radius). Nothing has been pushed — a different git auth is in effect on this machine,
-so this session's own working instruction is local commits only.
+Gap C (phase 10) landed too: one `globalThis.tmct` — `open`/`session`/`turn`/`ask`/`plan`/`page` —
+replaces all eleven per-page global bags across 51 files. `ask`/`plan` are supplied per page
+(`engine-surface.mjs` carries the two standard ones: `graphAsk` via
+`dispatchToolStructured("tmct_ask")`, `enginePlan` via `buildCapabilityPlanCtx`'s memory-only
+mode); a page wiring neither refuses honestly rather than failing on a method it never had.
+`open` is a fifth name beyond the plan's original four, needed because page-specific open options
+(a payload, a world, a roster) can only come from the page itself. Each page's residual bag shrunk
+to whatever still has no natural-language form — canvas geometry, sprite templates/resolution,
+digest and affordance readers, vendor/provider registration seams; `code-explorer-viz.mjs` keeps
+its factory in a bag too, since its `CLIENT_JS` raw-text-to-splice conversion is phase 11, not this
+phase. Two real bugs surfaced and were fixed mid-migration: a rename sweep had silently eaten the
+page-lifecycle globals that share the `tmct*` prefix (restored), and three e2e probes were still
+checking a member (`window.tmct?.createLedgerSession`) that can no longer exist under the new
+shape (fixed).
 
-Pipeline `2717338870` (`17673980`), from before this session, passed every job on the first attempt
-— `deploy:website`, `publish:npm`, and all four `e2e:deployed:*` jobs (`shell`/`pages`/
-`pages-timing`/`mesh`) included. That state predates everything above; nothing from this session has
-reached CI yet since nothing has been pushed.
+**This session's work is now reaching CI.** The push restriction lifted; `v4.1.0` (phases 1-9 of
+this plan, the mud rebind, the sprite catalog + its animations, the two test-coverage gaps,
+`PLAN_FACT.md`'s supersession design) shipped and pushed first, full suite green (5268/5268)
+before the push. `v4.1.1` plus Gap C follow behind it as a second push once Gap C's own merge is
+verified — see `git log` for the exact commit sequence and CI status.
 
 **MUD3D renamed MUDIII, design only — not yet a build phase.** Full assessment (asset licensing
 against `world-of-claudecraft`, planning-domain mechanics, naming/lineage research re: Richard
