@@ -268,6 +268,45 @@ export function computeTrust(fact, sourcesById = {}, opts = {}) {
   return { score, inputs };
 }
 
+/** One assertion record's OWN effective prior: its single source's type prior,
+ *  nudged by that source's own reliability, clamped to [0,1]. A write-time
+ *  constant — recency is deliberately absent, because recency is a function of
+ *  the READING moment, not the writing one, and a stored number that bakes it
+ *  in is already wrong by the time anyone reads it. `source` is that record's
+ *  own Source individual; an absent/unknown one reads as the neutral 1.0. */
+export function assertionPrior(sourceType, source) {
+  const p = (SOURCE_PRIOR[sourceType] ?? 0) * sourceReliabilityOf(source);
+  return round(Math.max(0, Math.min(1, p)));
+}
+
+/**
+ * Trust for one assertion GROUP — every live head sharing a triple hash, one
+ * record per asserting source. Noisy-OR over each record's own effective prior,
+ * each decayed by ITS OWN assertion time rather than the group's first write:
+ * every hop ages separately, so a fresh assertion is no longer dragged down by
+ * an old corpus record's timestamp beside it.
+ *
+ * `records` supplies `{ ownTrust, assertedAt, sourceId?, sourceType? }` per
+ * head. Deterministic given the same inputs and `opts.now`. Returns
+ * { score, inputs }, inputs in the per-record order it was handed.
+ */
+export function computeAssertionGroupTrust(records, opts = {}) {
+  const now = typeof opts.now === "number" ? opts.now : Date.now();
+  const heads = Array.isArray(records) ? records : [];
+  let complement = 1;
+  const inputs = [];
+  for (const r of heads) {
+    const recency = recencyNudge(r?.assertedAt, now, opts.halfLifeMs);
+    const own = Math.max(0, Math.min(1, Number(r?.ownTrust) || 0));
+    complement *= 1 - Math.max(0, Math.min(1, own * recency));
+    inputs.push({
+      sourceId: r?.sourceId || "", sourceType: r?.sourceType || "",
+      ownTrust: own, recency: round(recency),
+    });
+  }
+  return { score: heads.length ? round(Math.min(1, 1 - complement)) : 0, inputs };
+}
+
 // Laplace/"add-k" pseudo-count: without it a single data point would saturate
 // mgx:sourceReliability to the bare max/min immediately.
 const RELIABILITY_CONFIDENCE_PSEUDOCOUNT = 19;

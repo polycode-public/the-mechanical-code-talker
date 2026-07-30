@@ -47,7 +47,7 @@ import {
 } from "../../src/domain/codegraph.mjs";
 import { buildEntities } from "../../src/adapters/graph-build.mjs";
 import { proseLayerHits } from "../../src/domain/prose.mjs";
-import { appendUtterance, appendFact, loadMemory, CREATED_AT_PROP, UPDATED_AT_PROP } from "../../src/adapters/memory/core.mjs";
+import { appendUtterance, appendFact, factRecordIdsFor, loadMemory, CREATED_AT_PROP, UPDATED_AT_PROP } from "../../src/adapters/memory/core.mjs";
 
 const fixture = JSON.parse(
   readFileSync(fileURLToPath(new URL("../fixtures/entities.fixture.json", import.meta.url)), "utf8"),
@@ -1379,14 +1379,18 @@ test("spiralExpand walks the MEMORY graph (provenance edge kinds, idNormalizer=(
     // The Fact → Utterance edges a fold produces, injected in that exact shape rather
     // than driving the whole session-fold pipeline just to prove spiralExpand's OWN
     // traversal mechanics work over the real edge inventory.
+    // appendFact reports the PUBLIC fact id — the group — while the node
+    // holding it is that group's own assertion record, which is what an edge
+    // endpoint has to name.
+    const [factRecordId] = factRecordIdsFor(m, factId);
     m.objectProperties.push({
       predicate: "canonicalisedFrom", prop: "mgx:canonicalisedFrom", count: 1,
-      examples: [{ subject: factId, object: uttId, subjectLabel: "sky mgx:hasProperty blue", objectLabel: "what colour is the sky?" }],
+      examples: [{ subject: factRecordId, object: uttId, subjectLabel: "sky mgx:hasProperty blue", objectLabel: "what colour is the sky?" }],
     });
 
     const g = parseEntities(m);
     const sessId = `session:${SESSION}`;
-    assert.ok(g.byId.has(uttId) && g.byId.has(factId) && g.byId.has(sessId) && g.byId.has(sourceInd.id), "fixture sanity: every individual exists");
+    assert.ok(g.byId.has(uttId) && g.byId.has(factRecordId) && g.byId.has(sessId) && g.byId.has(sourceInd.id), "fixture sanity: every individual exists");
 
     const results = spiralExpand(g, [], {
       // q: 1 (no hub pruning) — the utterance's hop-1 frontier is only 2 wide (Session + Fact) in
@@ -1399,7 +1403,7 @@ test("spiralExpand walks the MEMORY graph (provenance edge kinds, idNormalizer=(
 
     assert.equal(byNodeId.get(uttId), 0, "the seed itself is included, at hop 0");
     assert.equal(byNodeId.get(sessId), 1, "the Session is reached one hop away via saidInSession");
-    assert.equal(byNodeId.get(factId), 1, "the Fact is reached one hop away via canonicalisedFrom");
+    assert.equal(byNodeId.get(factRecordId), 1, "the Fact is reached one hop away via canonicalisedFrom");
     assert.equal(byNodeId.get(sourceInd.id), 2, "the Source is reached two hops away via statedBy (Utterance -> Fact -> Source)");
   } finally {
     await rm(dir, { recursive: true, force: true });

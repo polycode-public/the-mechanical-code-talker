@@ -111,7 +111,60 @@ mgx:FactShape a sh:NodeShape ;
         sh:minCount 0 ;
         sh:minLength 1 ;
         sh:message "mgx:factProvenance, when present, must be non-empty (optional — not every legitimate write carries one)." ;
+    ] ;
+    sh:property [
+        sh:path mgx:sourceId ;
+        sh:datatype xsd:string ;
+        sh:minCount 0 ;
+        sh:maxCount 1 ;
+        sh:minLength 1 ;
+        sh:message "mgx:sourceId, when present, must be exactly one non-empty Source key — the assertion key this record is filed under. Every record has one, src:none included; it is optional here only because a hand-built sparse individual predates the key." ;
+    ] ;
+    sh:property [
+        sh:path mgx:observedAt ;
+        sh:datatype xsd:dateTime ;
+        sh:minCount 0 ;
+        sh:maxCount 1 ;
+        sh:message "mgx:observedAt, when present, must be one parseable instant — valid time (when the asserting party witnessed the claim), distinct from mgx:createdAt's transaction time. Stored only when a caller supplies one; never fabricated, never backfilled." ;
+    ] ;
+    sh:property [
+        sh:path mgx:supersedes ;
+        sh:datatype xsd:string ;
+        sh:minCount 0 ;
+        sh:maxCount 1 ;
+        sh:minLength 1 ;
+        sh:message "mgx:supersedes, when present, must name at least one Fact record id (a space-joined LIST, not a single value). Absent — never empty — until this source supersedes its own prior record for the triple." ;
+    ] ;
+    sh:property [
+        sh:path mgx:supersededBy ;
+        sh:datatype xsd:string ;
+        sh:minCount 0 ;
+        sh:maxCount 1 ;
+        sh:minLength 1 ;
+        sh:message "mgx:supersededBy, when present, must name at least one Fact record id (a space-joined LIST: one logical source may have two live replicas that each supersede the same prior record before they sync, and that fork is real data). Its presence is what makes a record a demoted leaf rather than a live head." ;
     ] .
+
+# ---- Fact record id: a constraint with no sh:path to hang on -----------------
+# A Fact's id is `<groupId>@<sourceId>`, where groupId is the content-addressed
+# `fact:<hash>` every reader still uses as the public fact id, and sourceId is
+# the Source key this ONE assertion is filed under. A record its own source has
+# since superseded keeps its content and moves to `<groupId>@<sourceId>#v<n>`,
+# n counting how many times that source has replaced its own record here.
+#
+# The gate checks that form, but it gets NO shape above, deliberately. An id is
+# a payload field on the individual, not a predicate it carries, so there is no
+# sh:path to write a property shape against — and a hollow sh:NodeShape that
+# constrains nothing would document the rule while enforcing none of it. The
+# check lives in src/adapters/memory/shacl.mjs as a regex over `.id`; this note
+# is the sync point for it, exactly as the file header requires for everything
+# else here.
+#
+# Two deliberate limits on that check. Only the SUFFIXES are constrained — a
+# hand-built individual with a short opaque id is a legitimate sparse write, and
+# rejecting it is exactly the false positive this gate must never produce (see
+# the header's permissiveness note). And the sourceId part is matched loosely,
+# because a Source id is not a simple token: it carries colons, spaces and an
+# @revid of its own ("src:reference:simplewiki:Polar bear@912").
 
 # ---- Rule: name/kind/slots per the closed kind vocabulary -------------------
 # Targeted by mgx:ruleKind (only a Rule individual ever carries it).

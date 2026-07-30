@@ -213,6 +213,36 @@ mgx:factQuantifier a owl:DatatypeProperty ;
   rdfs:range xsd:string ;
   rdfs:comment "OPTIONAL: the quantifier word a plural class-membership teach used ('every'/'some'/'a few'), for literal recall by 'how many Xs are Ys'. Never real cardinality counting — the counted forms are owl:minCardinality / owl:maxCardinality / owl:cardinality (pattern 5)." .
 
+# --- One record per assertion ------------------------------------------------
+# A Fact individual records ONE source asserting one triple, not the triple
+# itself: its id is <groupId>@<sourceId>, where groupId is the content-addressed
+# triple hash every reader still uses as the public fact id. Two sources
+# asserting the same triple hold two Facts sharing a group; the group's trust is
+# folded over them at read time. This is the flat-file cousin of named graphs
+# (Carroll, Bizer, Hayes & Stickler, WWW 2005), which exist for the same reason:
+# a bare triple has nowhere to say who asserted it.
+
+mgx:sourceId a owl:DatatypeProperty ;
+  rdfs:domain tmct:Fact ;
+  rdfs:range xsd:string ;
+  rdfs:seeAlso prov:wasAttributedTo ;
+  rdfs:comment "The assertion key this Fact record is filed under — the tmct:Source id of the one party asserting the triple, which is also the @-suffix of the record's own id. 'src:none' when no provenance tag names a Source, so every record carries a key rather than a hole." .
+
+mgx:observedAt a owl:DatatypeProperty ;
+  rdfs:domain tmct:Fact ;
+  rdfs:range xsd:dateTime ;
+  rdfs:comment "OPTIONAL valid time: when the asserting party WITNESSED the claim, as against mgx:createdAt's transaction time (when this store recorded it). The split is Snodgrass's (TSQL2) and SQL:2011's application-time vs system-versioned axes, simplified to an instant rather than a period. It is what lets a stale article read today lose to an eyewitness report from yesterday, which ingestion order gets exactly backwards. Stored only when a caller supplies one — never fabricated, never backfilled by migration." .
+
+mgx:supersedes a owl:DatatypeProperty ;
+  rdfs:domain tmct:Fact ;
+  rdfs:range xsd:string ;
+  rdfs:comment "The space-joined record id(s) this Fact replaced, when its own source re-asserted the triple with a newer embedded timestamp. The new assertion takes the ORIGINAL stable id so nothing already holding it goes stale, and the record it replaces is kept whole under an #v<n> id. Absent — never empty — until a chain's first supersession." .
+
+mgx:supersededBy a owl:DatatypeProperty ;
+  rdfs:domain tmct:Fact ;
+  rdfs:range xsd:string ;
+  rdfs:comment "The space-joined record id(s) that replaced this one. Its presence is what makes a record a demoted leaf rather than a live head, and the read-time group fold skips it: a source's own past belief is not a second vote for the present one. A LIST because one logical source may have two live replicas that each supersede the same record before they sync — a real fork, resolved at read time, never by discarding a side." .
+
 mgx:factJustification a owl:DatatypeProperty ;
   rdfs:domain tmct:Fact ;
   rdfs:range xsd:string ;

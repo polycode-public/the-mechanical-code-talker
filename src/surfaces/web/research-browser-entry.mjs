@@ -43,13 +43,6 @@ import { publishTmctSurface } from "./tmct-surface.mjs";
 import { enginePlan } from "./engine-surface.mjs";
 import { exportFactsJsonl } from "./memory-stats.mjs";
 
-// The Fact individual's first-write-wins timestamp, read straight off the
-// stored attribute (mgx:createdAt) so a "recently learned" ordering never
-// has to re-parse a provenance tag — the research lane's own tags carry a
-// depth, not a timestamp, so the attribute is the one field every source
-// shares.
-const CREATED_AT_ATTR = "mgx:createdAt";
-
 /**
  * The source key ONE provenance tag folds to, for the page's per-source
  * checkboxes/history. `sessionIds` tells a teach tag apart: a teach:chat tag
@@ -102,18 +95,17 @@ const clonePayload = (payload) => {
   try { return structuredClone(payload); } catch { return JSON.parse(JSON.stringify(payload)); }
 };
 
-/** Fact rows plus the createdAt attribute readFactRows drops, in one pass over
- *  the loaded memory — the "recently learned" panels want the timestamp, the
- *  ask filter wants the id, both want the provenance. */
+/** Fact rows plus the createdAt readFactRows keeps per assertion rather than per
+ *  row — the "recently learned" panels want the timestamp, the ask filter wants
+ *  the id, both want the provenance. A triple asserted by several sources was
+ *  first learned when the EARLIEST of them said it, which is the moment those
+ *  panels are ordering by. */
 async function factRowsWithCreatedAt(memoryDir) {
   const memory = await loadMemory(memoryDir);
-  const createdById = new Map();
-  for (const ind of memory?.individuals || []) {
-    if (ind?.class !== "Fact") continue;
-    const at = (ind.attributes || []).find((a) => a?.prop === CREATED_AT_ATTR || a?.key === CREATED_AT_ATTR)?.value || "";
-    createdById.set(ind.id, at);
-  }
-  return readFactRows(memory).map((row) => ({ ...row, createdAt: createdById.get(row.id) || "" }));
+  return readFactRows(memory).map((row) => {
+    const stamps = (row.assertions || []).map((a) => a.createdAt).filter(Boolean).sort();
+    return { ...row, createdAt: stamps[0] || "" };
+  });
 }
 
 const SOURCE_ORDER = ["taught", "ingest", "research"];

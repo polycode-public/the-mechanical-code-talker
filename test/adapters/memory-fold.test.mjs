@@ -11,7 +11,7 @@ import { cleanSessionText } from "../../src/domain/memory/fold.mjs";
 import { foldSessionLogs } from "../../src/services/fold.mjs";
 import { sessionLogHeaderMarkdown, sessionLogTurnMarkdown, sessionLogEndMarkdown } from "../../src/services/session-log-format.mjs";
 import { BLOCKS_DIR_REL, loadBlockIndex, retrieveBlocks } from "../../src/adapters/memory/blocks.mjs";
-import { appendFact, appendUtterances, loadMemory, openMemoryBackend, readFactRows, CANONICALISED_FROM_PROP } from "../../src/adapters/memory/core.mjs";
+import { appendFact, appendUtterances, factGroupId, loadMemory, openMemoryBackend, readFactRows, CANONICALISED_FROM_PROP } from "../../src/adapters/memory/core.mjs";
 
 const SID = "01890000-0000-7000-8000-00000000f01d";
 const T = (n) => `2026-07-03T10:0${n}:00.000Z`;
@@ -199,8 +199,10 @@ test("foldSessionLogs: canonise+link edges the canonical Fact to its as-spoken u
     const links = (memory.objectProperties || []).find((g) => g.prop === CANONICALISED_FROM_PROP);
     assert.ok(links, "an mgx:canonicalisedFrom relation exists");
     const uttId = `utt:${S}#${TA}#visitor`;
+    // the edge names the assertion RECORD, since an endpoint has to be a node a
+    // walker can dereference; it groups under the fact id the row reports
     assert.ok(
-      links.examples.some((e) => e.subject === cacheStore.id && e.object === uttId),
+      links.examples.some((e) => factGroupId(e.subject) === cacheStore.id && e.object === uttId),
       "the canonical Fact edges back to its as-spoken utterance",
     );
     // the as-spoken prose is left VERBATIM (canonise never replaces)
@@ -218,7 +220,7 @@ test("foldSessionLogs: canonise+link edges the canonical Fact to its as-spoken u
     const routed2 = await openMemoryBackend(dir, "");
     const links2 = (await loadMemory(routed2.dir)).objectProperties.find((g) => g.prop === CANONICALISED_FROM_PROP);
     await routed2.close();
-    assert.equal(links2.examples.filter((e) => e.subject === cacheStore.id && e.object === uttId).length, 1);
+    assert.equal(links2.examples.filter((e) => factGroupId(e.subject) === cacheStore.id && e.object === uttId).length, 1);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

@@ -12,7 +12,7 @@ import {
   MEMORY_GRAPH_REL, MEMORY_DIR_REL, FACT_CLASS, SOURCE_CLASS,
   STATED_BY_PROP, CREATED_AT_PROP, OPERATOR_SOURCE_ID,
   emptyMemory, loadMemory, appendFact, appendUtterance,
-  provenanceTagToSource, readFactRows, findContradictions,
+  provenanceTagToSource, readFactRows, findContradictions, factGroupId, factIdForTriple,
 } from "../../src/adapters/memory/core.mjs";
 import { saveBlock, retrieveBlocks } from "../../src/adapters/memory/blocks.mjs";
 import { renderMemory } from "../../src/adapters/memory/inspect.mjs";
@@ -95,7 +95,10 @@ test("(b) appendFact derives Source individuals + statedBy edges — WITHOUT re-
     const src = sourcesOf(m).find((s) => s.id === "src:corpus:conceptnet");
     assert.ok(src, "the corpus Source individual exists (deterministic id)");
     assert.equal(attr(src, "mgx:sourceType"), "corpus");
-    assert.deepEqual(statedEdges(m).map((e) => [e.subject, e.object]), [[bare.id, "src:corpus:conceptnet"]]);
+    // the edge names the RECORD, since an edge endpoint has to be a node; the
+    // fact id it groups under is unchanged
+    assert.deepEqual(statedEdges(m).map((e) => [e.subject, e.object]),
+      [[`${bare.id}@src:corpus:conceptnet`, "src:corpus:conceptnet"]]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -109,7 +112,8 @@ test("(b) a corpusWeak-tagged fact mints its Source too (sourceIdFor had no corp
     const src = sourcesOf(m).find((s) => s.id === "src:corpus-weak:conceptnet");
     assert.ok(src, "the corpusWeak Source individual exists (previously silently dropped)");
     assert.equal(attr(src, "mgx:sourceType"), "corpusWeak");
-    assert.deepEqual(statedEdges(m).map((e) => [e.subject, e.object]), [[f.id, "src:corpus-weak:conceptnet"]]);
+    assert.deepEqual(statedEdges(m).map((e) => [e.subject, e.object]),
+      [[`${f.id}@src:corpus-weak:conceptnet`, "src:corpus-weak:conceptnet"]]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -121,14 +125,17 @@ test("(b) the ' | '-union becomes N statedBy edges (one per independent source);
     await appendFact(dir, { subject: "module", predicate: "rdfs:subClassOf", object: "artifact", provenance: "corpus:conceptnet /r/IsA" });
     await appendFact(dir, { subject: "module", predicate: "rdfs:subClassOf", object: "artifact", provenance: "ace:chat:s1@2026-07-01T00:00:00.000Z" });
     const m = await loadMemory(dir);
-    const [f] = factsOf(m);
-    // the legacy compat shim is preserved verbatim (chat.mjs readers key on it)
-    assert.equal(attr(f, "mgx:factProvenance"), "corpus:conceptnet /r/IsA | ace:chat:s1@2026-07-01T00:00:00.000Z");
+    // each record carries only its own source's tag; the compat shim readers
+    // key on is synthesized over the group at read time
+    const [row] = readFactRows(m).filter((r) => r.subject === "module");
+    assert.equal(row.provenance, "ace:chat:s1@2026-07-01T00:00:00.000Z | corpus:conceptnet /r/IsA");
+    assert.deepEqual(factsOf(m).map((x) => attr(x, "mgx:factProvenance")).sort(),
+      ["ace:chat:s1@2026-07-01T00:00:00.000Z", "corpus:conceptnet /r/IsA"]);
     // and two real statedBy edges now exist, one per distinct Source — the
     // operator Source is SESSION-SCOPED (Part B): "s1"'s own Source id, never
     // the bare singleton (every session's facts collapsing onto ONE operator
     // Source is exactly the desync Part B closes).
-    const objs = statedEdges(m).filter((e) => e.subject === f.id).map((e) => e.object).sort();
+    const objs = statedEdges(m).filter((e) => factGroupId(e.subject) === row.id).map((e) => e.object).sort();
     assert.deepEqual(objs, ["src:corpus:conceptnet", "src:operator-chat:s1"].sort());
     // recovered @ts seeds the session-scoped operator Source's createdAt
     const op = sourcesOf(m).find((s) => s.id === "src:operator-chat:s1");
@@ -144,12 +151,11 @@ test("(b) the ' | '-union becomes N statedBy edges (one per independent source);
 test("(b) lazy migration: a legacy store (factProvenance string, no edges) gains Sources + edges + trust on the next write, idempotently, string preserved", async () => {
   const dir = await tmpRepo();
   try {
-    // hand-build a pre-Source legacy store. The provenance migration must NEVER
-    // recompute the id — it only adds edges — so a fixed opaque literal (a
-    // current-width 16-hex id that is not the real hash of this (s,p,o)) proves
-    // the non-re-keying guarantee independently of the keying scheme.
+    // hand-build a pre-Source legacy store. The provenance migration itself
+    // only ever ADDS edges — it never re-keys — so the fact id a reader sees
+    // stays the content address of the triple across the whole load.
     const legacy = emptyMemory();
-    const factId = "fact:aaaaaaaaaaaaaaaa";
+    const factId = factIdForTriple("widget", "rdfs:subClassOf", "gadget");
     legacy.individuals.push({
       id: factId, label: "widget rdfs:subClassOf gadget", class: FACT_CLASS,
       derived_from: [], mentions: [],
@@ -169,19 +175,21 @@ test("(b) lazy migration: a legacy store (factProvenance string, no edges) gains
     await appendUtterance(dir, { role: "visitor", text: "trigger", ts: "2026-07-05T00:00:00.000Z", sessionId: "0189cccc-0000-7000-8000-000000000000" });
 
     const m1 = await loadMemory(dir);
-    const f1 = factsOf(m1).find((f) => f.id === factId);
-    assert.equal(attr(f1, "mgx:factProvenance"), "corpus:conceptnet /r/IsA | ace:chat:s0@2026-06-01T00:00:00.000Z", "string kept, never dropped");
+    const [row1] = readFactRows(m1).filter((r) => r.subject === "widget");
+    assert.equal(row1.id, factId, "the fact id is still the triple's own content address");
+    assert.equal(row1.provenance, "ace:chat:s0@2026-06-01T00:00:00.000Z | corpus:conceptnet /r/IsA", "every tag kept, never dropped");
     // the migrated operator Source is session-scoped too ("s0"'s own Source)
-    const objs1 = statedEdges(m1).filter((e) => e.subject === factId).map((e) => e.object).sort();
+    const objs1 = statedEdges(m1).filter((e) => factGroupId(e.subject) === factId).map((e) => e.object).sort();
     assert.deepEqual(objs1, ["src:corpus:conceptnet", "src:operator-chat:s0"].sort(), "both Sources linked");
-    assert.ok(attr(f1, "mgx:trustScore"), "trust materialised on migration");
-    assert.equal(f1.id, "fact:aaaaaaaaaaaaaaaa", "fact id never re-keyed by migration");
+    assert.equal(row1.assertions.length, 2, "the union split into one record per source");
+    assert.ok(row1.assertions.every((a) => a.ownTrust > 0), "trust materialised on migration");
 
     // idempotent: another write does not duplicate edges/sources
     await appendUtterance(dir, { role: "visitor", text: "again", ts: "2026-07-05T00:01:00.000Z", sessionId: "0189cccc-0000-7000-8000-000000000000" });
     const m2 = await loadMemory(dir);
-    assert.equal(statedEdges(m2).filter((e) => e.subject === factId).length, 2, "no duplicate statedBy edges");
+    assert.equal(statedEdges(m2).filter((e) => factGroupId(e.subject) === factId).length, 2, "no duplicate statedBy edges");
     assert.equal(sourcesOf(m2).length, 2, "no duplicate Source individuals");
+    assert.deepEqual(readFactRows(m2).filter((r) => r.subject === "widget").map((r) => r.id), [factId], "and the second load re-keys nothing");
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -200,12 +208,16 @@ test("(c) trust is materialised + auditable: a corroborated operator+corpus fact
     const lone = rows.find((r) => r.subject === "lonely");
     assert.ok(corroborated.trust > lone.trust, `${corroborated.trust} > ${lone.trust}`);
     assert.deepEqual(corroborated.sourceTypes.sort(), ["corpus", "operator"]);
-    // the inputs are stored so the score is reproducible
+    // the group's hop list is the audit trail: one entry per asserting source,
+    // each carrying the single-source prior it contributed
+    assert.deepEqual(corroborated.assertions.map((a) => a.sourceType).sort(), ["corpus", "operator"]);
+    // and each record's own stored inputs describe exactly ONE source
     const m = await loadMemory(dir);
-    const f = factsOf(m).find((x) => attr(x, "rdf:subject") === "cache");
-    const inputs = JSON.parse(attr(f, "mgx:trustInputs"));
-    assert.equal(inputs.corroboration, 2);
-    assert.deepEqual(inputs.sourceTypes, ["corpus", "operator"]);
+    const inputs = factsOf(m)
+      .filter((x) => attr(x, "rdf:subject") === "cache")
+      .map((x) => JSON.parse(attr(x, "mgx:trustInputs")));
+    assert.deepEqual(inputs.map((i) => i.sourceType).sort(), ["corpus", "operator"]);
+    assert.deepEqual(inputs.map((i) => i.sourceId).sort(), ["src:corpus:conceptnet", "src:operator-chat:s1"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -266,7 +278,8 @@ test("(d) same (s,p,o) from two writers is CORROBORATION, not a contradiction", 
     await appendFact(dir, { subject: "the sky", predicate: "mgx:hasProperty", object: "blue", provenance: "ace:chat:s1@2026-07-05T00:00:00.000Z" });
     await appendFact(dir, { subject: "the sky", predicate: "mgx:hasProperty", object: "blue", provenance: "corpus:conceptnet /r/HasProperty" });
     const m = await loadMemory(dir);
-    assert.equal(factsOf(m).length, 1, "one fact id, two statedBy edges");
+    assert.equal(factsOf(m).length, 2, "one record per writer, two statedBy edges");
+    assert.equal(readFactRows(m).length, 1, "and one fact id folding them both");
     assert.equal(findContradictions(m).length, 0, "agreement is never a contradiction");
   } finally {
     await rm(dir, { recursive: true, force: true });

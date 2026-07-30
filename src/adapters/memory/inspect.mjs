@@ -70,6 +70,17 @@ export function renderMemory({ memory, blocks }, { verbose = false } = {}) {
       }
     }
 
+    // ---- assertion spread: how many sources vouch for the most-corroborated
+    //      triple. A fact is stored one record per asserting source, so this is
+    //      the number that says when a group is getting big enough to be worth
+    //      compacting — reported so the moment is observable rather than
+    //      guessed at. ----
+    const widest = readFactRows(memory).reduce((a, b) => ((b.assertions?.length || 0) > (a?.assertions?.length || 0) ? b : a), null);
+    const spread = widest?.assertions?.length || 0;
+    if (spread > 1) {
+      lines.push("", `assertions — widest fact carries ${spread} independent sources: ${truncate(`${widest.subject} ${widest.predicate} ${widest.object}`, textCap)}`);
+    }
+
     // ---- contradictions: same (subject,predicate), differing object, both above
     //      the trust floor → surface BOTH with provenance, never silently pick ----
     const contradictions = findContradictions(memory);
