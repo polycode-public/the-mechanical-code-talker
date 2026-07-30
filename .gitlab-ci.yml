@@ -598,20 +598,24 @@ e2e:deployed:shell:
       test-e2e/cli-render-views.test.mjs
 
 # Every page the site ships, plus the engine-level and CLI files that shared a
-# channel with them. The largest slice by file count, and where two of the
-# three pipeline-2717061891 failures actually landed (pages-research,
-# pages-mud) — capped so at most 4 of these run their own real Chromium
-# instance at once, regardless of how many cores the runner has.
+# channel with them. The largest slice by file count — capped so at most 4 of
+# these run their own real Chromium instance at once, regardless of how many
+# cores the runner has. pages-mud (one of the pipeline-2717061891 failures)
+# lives here; the other three files that failed under contention across
+# pipelines 2717061891 and 2717201943 moved to `e2e:deployed:pages-timing`
+# below, since none of them were actually pages-research.test.mjs (that file
+# has never failed either pipeline) — every failure was in
+# pages-chat-research.test.mjs, pages-chat-live-toggle.test.mjs, or
+# pages-chat-persistence.test.mjs.
 e2e:deployed:pages:
   extends: .e2e-deployed-base
   script:
     - >-
       node --disable-warning=ExperimentalWarning --test --test-concurrency=4
-      test-e2e/pages-chat-fullscreen.test.mjs test-e2e/pages-chat-persistence.test.mjs
+      test-e2e/pages-chat-fullscreen.test.mjs
       test-e2e/pages-chat-export.test.mjs test-e2e/pages-chat-digest.test.mjs
       test-e2e/browser-chat.test.mjs test-e2e/chat-prompt.test.mjs
       test-e2e/chat-browser-bundle.test.mjs test-e2e/build-chat-assets.test.mjs
-      test-e2e/pages-chat-research.test.mjs test-e2e/pages-chat-live-toggle.test.mjs
       test-e2e/pages-chat-taught-capability-chain.test.mjs
       test-e2e/web-chat-memory.test.mjs test-e2e/pages-research.test.mjs
       test-e2e/pages-ingest.test.mjs test-e2e/pages-ledger.test.mjs
@@ -623,6 +627,26 @@ e2e:deployed:pages:
       test-e2e/pages-adventure-edit.test.mjs test-e2e/pages-adventure-scenarios.test.mjs
       test-e2e/pages-mud.test.mjs test-e2e/pages-mud-scenarios.test.mjs
       test-e2e/pages-screenshot-sweep.test.mjs
+
+# The three files whose own assertions race a real elapsed-time budget
+# against a mocked round trip that runs through THIS Node process (a fetch's
+# own abort timeout in pages-chat-live-toggle, an auto-play ticker's pacing
+# in pages-chat-research, a debounced autosave window in
+# pages-chat-persistence's reset-to-seed test) — each one documents the race
+# in its own comments already. Reproduced locally: doubling this repo's own
+# --test-concurrency=4 30-file run (two copies at once, to load the box the
+# way a 2-vCPU runner is loaded by 4 real concurrent Chromium instances)
+# reliably reproduced the exact pipeline-2717201943 failures in these three
+# files and only these three, never in pages-research.test.mjs. Alone, at
+# concurrency 1, none of the three have anything left to contend with.
+e2e:deployed:pages-timing:
+  extends: .e2e-deployed-base
+  script:
+    - >-
+      node --disable-warning=ExperimentalWarning --test --test-concurrency=1
+      test-e2e/pages-chat-persistence.test.mjs
+      test-e2e/pages-chat-research.test.mjs
+      test-e2e/pages-chat-live-toggle.test.mjs
 
 # Sharing between browsers: every file here drives two or three real browser
 # contexts at once, so the heaviest per-file Chromium load in the matrix and
