@@ -49,6 +49,30 @@ export function statsSummaryLine(stats, bandLabel) {
     : stats.total + " starter facts loaded";
 }
 
+/** Drop every asset the site's service worker has cached, and unregister the
+ *  worker itself, so the next load reads the shipped files off the network.
+ *  A page's own taught-facts store lives in IndexedDB, a different store
+ *  entirely — clearing that alone would still re-seed from whatever copy of
+ *  chat-seed.json the worker cached, which is the whole reason this exists.
+ *  Best-effort throughout: a browser with no Cache Storage, no worker, or a
+ *  storage call that throws just leaves the caller to reload as before.
+ *  Pure of this module's scope, so it stays `.toString()`-splice safe. */
+export async function clearSiteAssetCaches() {
+  try {
+    if (globalThis.caches) {
+      for (const key of await caches.keys()) {
+        if (key.startsWith("tmct-precache-")) await caches.delete(key);
+      }
+    }
+  } catch { /* the reload still re-reads whatever the worker will serve */ }
+  try {
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+      const registrations = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(registrations.map((registration) => registration.unregister()));
+    }
+  } catch { /* an un-unregisterable worker still has an empty cache now */ }
+}
+
 /** Fetch `url` reading the body as a stream, reporting (loadedBytes,
  *  totalBytes) after every chunk — total is 0 when the response carries no
  *  Content-Length. Resolves to a Blob of the whole body. Falls back to a
