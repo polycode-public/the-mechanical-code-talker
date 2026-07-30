@@ -58,10 +58,13 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] a mud room is bound to the store it was opened over, so recasting (RESET, either slider, or
   the scenario dropdown) drops the link and says so. Carrying a live room across a recast needs the
   room to re-bind to the new store — real work in `p2p-room.mjs`, not page wiring.
-- [ ] **sprites.html variant cycles — next slice**: extend the `mgx:faces` left/right profile pairs
-  beyond bear/cat/dog/king across the rest of the animal and person catalog, and design a
-  profile-face anchor so a facing variant can carry the six `mgx:feels` expressions at the same
-  time.
+- [ ] **the turntable and the move pose — content wave**: bear/cat/dog/king carry four `mgx:faces`
+  angles plus a `mgx:pose = moving` frame at the left angle. Fill in the rest: the moving frame at
+  the other three angles, then both axes across the remaining animal and person catalog. The shape
+  to copy and the anchor arithmetic are in `src/domain/sprite-templates.mjs`'s header.
+- [ ] **sprites.html turning-character demo**: an animated swatch cycling the four turntable angles
+  next to the existing static emoting character. The page's own cycle only steps `mgx:faces` and
+  `mgx:feels` today, so a combined facing-and-pose swatch sits outside it.
 - [ ] no Playwright regression test yet for the service-worker cache-busting fix itself (repro:
   precache an old seed, swap in changed content, assert the next load serves the new bytes and
   "reset to seed" recovers a stuck session); no browser/DOM run confirming the fact-count pills

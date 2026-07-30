@@ -405,7 +405,7 @@ world's state predicates (`src/services/adventure.mjs:178-245`), and the P2P lay
 | --- | --- |
 | `mgx:currently-in`, `mgx:located-in`, `mgx:fixed-in`, `mgx:stands-locked-in`, `mgx:hidden-in` | placements |
 | `mgx:on-top-of`, `mgx:on-plane`, `mgx:under` | positions |
-| `mgx:is-open`, `mgx:hasMass`, `mgx:feels`, `mgx:faces` | mutable state (mass drains per turn) |
+| `mgx:is-open`, `mgx:hasMass`, `mgx:feels`, `mgx:faces`, `mgx:pose` | mutable state (mass drains per turn) |
 | `mgx:display-name`, `mgx:nodeName`, `mgx:worldName` | latest rename wins — `PLAN_MUD.md` already reads these "latest by timestamp" |
 | `mgx:has-exit-<direction>` (the `EXIT_PREDICATE_RE` family) | digging rewires exits |
 

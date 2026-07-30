@@ -45,7 +45,7 @@
 // why the mechanism exists, just not exercised by any class shown here).
 
 import { classAncestorChain, SPRITE_REGISTRY } from "../domain/sprite-map.mjs";
-import { resolveSpriteAsset } from "../domain/sprite-templates.mjs";
+import { resolveSpriteAsset, matchConstraints } from "../domain/sprite-templates.mjs";
 import { MATERIAL_PALETTE } from "../domain/sprite-materials.mjs";
 import { spriteFactRows } from "../domain/sprite-facts.mjs";
 import { SEED_TAXONOMY } from "../domain/spider-fly-world.mjs";
@@ -247,7 +247,7 @@ export function parameterVariantsFor(template) {
  *  generic root-fallback shape, not its own silhouette (this module's own
  *  header names the 19 large-tier classes this applies to). Every
  *  [parameters.*] value and every [match] variant renders through the real
- *  resolveSpriteAsset with the exact property fact it declares — and a
+ *  resolveSpriteAsset with the exact property facts it declares — and a
  *  parameter sitting ON a [match] variant is rendered with BOTH facts, so a
  *  facing profile's mood swatch shows the profile wearing that mood and is
  *  labeled for the pair ("left + happy"). Rendering it on the parameter fact
@@ -278,20 +278,28 @@ export function tierSwatchesFor(cls, templates, registry, tier) {
     forClass.filter((t) => !t.match).flatMap((t) => parameterVariantsFor(t).map(valueKey)),
   );
   for (const t of forClass) {
-    const matchFact = t.match ? [{ predicate: t.match.property, object: t.match.value }] : [];
-    const matchPrefix = t.match ? `${t.match.value} + ` : "";
-    if (t.match) {
+    // A variant may require several facts at once (sprite-templates.mjs's own
+    // matchConstraints), so the swatch is rendered with EVERY fact its
+    // [match] asks for and labeled for the whole set — "left + moving" for a
+    // combined facing-and-pose file. A one-constraint variant reads exactly
+    // as it did before the plural spelling existed.
+    const constraints = matchConstraints(t);
+    const matchFact = constraints.map((c) => ({ predicate: c.property, object: c.value }));
+    const variantLabel = constraints.map((c) => c.value).join(" + ");
+    const variantKey = constraints.map((c) => c.value).join("-");
+    const matchPrefix = constraints.length ? `${variantLabel} + ` : "";
+    if (constraints.length) {
       swatches.push({
-        tier, label: t.match.value, kind: "variant", property: t.match.property,
-        svg: resolveSpriteAsset(cls, [], matchFact, templates, registry, { instanceKey: `${cls}-${tier}-match-${t.match.value}` }),
+        tier, label: variantLabel, kind: "variant", property: constraints.map((c) => c.property).join(" + "),
+        svg: resolveSpriteAsset(cls, [], matchFact, templates, registry, { instanceKey: `${cls}-${tier}-match-${variantKey}` }),
       });
     }
     for (const v of parameterVariantsFor(t)) {
-      if (t.match && shownByUnmatchedTemplate.has(valueKey(v))) continue;
+      if (constraints.length && shownByUnmatchedTemplate.has(valueKey(v))) continue;
       const propertyFacts = [...matchFact, { predicate: v.property, object: v.rawValue }];
       swatches.push({
         tier, label: `${matchPrefix}${v.rawValue}`, kind: "material", property: v.property, treatment: v.treatment,
-        svg: resolveSpriteAsset(cls, [], propertyFacts, templates, registry, { instanceKey: `${cls}-${tier}-${matchPrefix ? `${t.match.value}-` : ""}${v.paramName}-${v.rawValue}` }),
+        svg: resolveSpriteAsset(cls, [], propertyFacts, templates, registry, { instanceKey: `${cls}-${tier}-${matchPrefix ? `${variantKey}-` : ""}${v.paramName}-${v.rawValue}` }),
       });
     }
   }

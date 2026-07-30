@@ -30,6 +30,23 @@
 //     `bear-facing-left.toml` for mgx:faces = left) — the `[match]` table,
 //     never the name, is what selects it.
 //
+// A variant can require MORE THAN ONE fact at once, written as repeated
+// `[[match]]` tables (the array-of-tables idiom data/templates/
+// grammar-rules.toml's own `[[rule]]` already uses) instead of a single
+// `[match]` one. Every entry must hold for the variant to be selected, so
+// `bear-facing-left-moving.toml` asks for mgx:faces = left AND
+// mgx:pose = moving and draws the left profile mid-stride. The two spellings
+// are one constraint or many, never a different meaning: a lone `[match]`
+// table is exactly a one-entry list, which is why every file authored before
+// the plural spelling existed still resolves byte-for-byte as it did.
+//
+// Where two satisfied variants overlap, the one requiring MORE facts wins —
+// an instance taught both the facing and the pose gets the combined art, and
+// the same instance taught only the facing gets the plain profile, because
+// the combined variant's second constraint no longer holds. Specificity is
+// counted from the constraints, never read off the filename, so adding a
+// file can't silently reorder what an existing instance resolves to.
+//
 // The two kinds compose rather than exclude each other: a VARIANT may also
 // declare its own `[parameters.*]` tables, and once its `[match]` selects
 // it those parameters fill from the instance's OTHER facts (the facing pair
@@ -69,8 +86,8 @@
 //
 // Specificity order, checked at EACH term of the class's ancestor chain
 // (nearest first, sprite-map.mjs's own classAncestorChain) before moving to
-// the next ancestor: an exact fully-specific variant whose [match] is
-// satisfied (filled from its own [parameters.*] if it declares any) > a
+// the next ancestor: the satisfied fully-specific variant requiring the most
+// facts (filled from its own [parameters.*] if it declares any) > a
 // parameterized template filled with an observed matching value > a plain
 // class template > (repeat at the next ancestor) > the
 // existing flat spriteRegistry entry for that same term (so a class not yet
@@ -81,14 +98,77 @@
 import { classAncestorChain } from "./sprite-map.mjs";
 import { namespaceSvgIds } from "./svg-instance-ids.mjs";
 
+/** The predicate a variant matches on to pick a facing angle. */
+export const FACING_PROPERTY = "mgx:faces";
+
+/** The predicate a variant matches on to pick a pose. */
+export const POSE_PROPERTY = "mgx:pose";
+
+/** The facing angles a variant's [match] may require of mgx:faces — a
+ *  turntable read as five steps, of which four are named. Centre is the
+ *  ABSENT fact, never a word here: a figure with nothing on record about
+ *  which way it faces already renders its own front-facing art, so spending
+ *  a value on that would give one picture two names and let an instance ask
+ *  for the front view two different ways. */
+export const FACING_VALUES = Object.freeze(["left", "half-left", "half-right", "right"]);
+
+/** The poses a variant's [match] may require of mgx:pose. At rest is the
+ *  ABSENT fact, the same reasoning centre-facing gets above: a figure with no
+ *  pose on record is standing still, and that is what every plain template
+ *  already draws. "moving" is the one intermediate frame between two rests —
+ *  the read a walk cycle needs and the only pose that has to exist before
+ *  movement can be animated at all. */
+export const POSE_VALUES = Object.freeze(["moving"]);
+
 /** Every template in `templates` whose `classes` list names `term`. */
 function templatesForClass(term, templates) {
   return (templates || []).filter((t) => Array.isArray(t?.classes) && t.classes.includes(term));
 }
 
-function matchSatisfied(match, propertyFacts) {
-  if (!match || !match.property || match.value === undefined) return false;
-  return (propertyFacts || []).some((f) => f.predicate === match.property && f.object === match.value);
+/** One template's `[match]`/`[[match]]` tables as a flat list of raw entries,
+ *  whichever of the two spellings it used — the shape every reader wants
+ *  before it decides anything, so no caller re-answers "did I get a table or
+ *  a list of them" for itself. */
+function matchEntries(template) {
+  const match = template?.match;
+  if (!match) return [];
+  return Array.isArray(match) ? match : [match];
+}
+
+/**
+ * Every `{property, value}` fact one template's `[match]` requires, all of
+ * which must hold for the variant to apply. A single `[match]` table yields
+ * one constraint, repeated `[[match]]` tables one each, and a template with
+ * no `[match]` at all yields none. An entry missing either half is dropped
+ * rather than treated as a wildcard — a half-written constraint must never
+ * widen what a variant claims to match (spriteTemplateProblems reports it as
+ * the authoring mistake it is). Pure.
+ */
+export function matchConstraints(template) {
+  return matchEntries(template).filter((c) => c?.property && c.value !== undefined);
+}
+
+function matchSatisfied(constraints, propertyFacts) {
+  if (!constraints.length) return false;
+  return constraints.every((c) => (propertyFacts || []).some((f) => f.predicate === c.property && f.object === c.value));
+}
+
+/** The satisfied `[match]` variant among `candidates` requiring the MOST
+ *  facts, or null when none is satisfied — so a combined facing-and-pose
+ *  variant outranks the facing-only one it shares an angle with, and drops
+ *  back to it the moment the instance stops carrying the pose. A tie keeps
+ *  the earliest candidate, which is the load order the caller handed in. */
+function bestSatisfiedVariant(candidates, propertyFacts) {
+  let best = null;
+  let bestCount = 0;
+  for (const t of candidates) {
+    const constraints = matchConstraints(t);
+    if (constraints.length <= bestCount) continue;
+    if (!matchSatisfied(constraints, propertyFacts)) continue;
+    best = t;
+    bestCount = constraints.length;
+  }
+  return best;
 }
 
 /** Substitute one matched `[parameters.*.values]` entry into `svg`: a plain
@@ -164,14 +244,15 @@ function withUnfilledPlaceholdersDropped(template, svg) {
 /** Resolve ONE class term (no ancestor walk here — the caller repeats this
  *  at every level of the chain) against the template set, in specificity
  *  order: fully-specific match variant > parameterized template filled with
- *  an observed value > plain class template. A match variant that declares
- *  its own `[parameters.*]` is filled from them first, so a facing profile
- *  also carrying `[face]`/`[parameters.emotion]` renders the mood the
+ *  an observed value > plain class template. Among satisfied match variants
+ *  the most demanding one wins (bestSatisfiedVariant). A match variant that
+ *  declares its own `[parameters.*]` is filled from them first, so a facing
+ *  profile also carrying `[face]`/`[parameters.emotion]` renders the mood the
  *  instance's own mgx:feels fact names. Returns the SVG string, or null when
  *  nothing at this level matches. */
 function resolveAtTerm(term, propertyFacts, templates) {
   const candidates = templatesForClass(term, templates);
-  const matched = candidates.find((t) => t.match && matchSatisfied(t.match, propertyFacts));
+  const matched = bestSatisfiedVariant(candidates, propertyFacts);
   if (matched && !matched.parameters) return matched.svg;
   if (matched) {
     return withUnfilledPlaceholdersDropped(matched, parameterizedFillAll(matched, propertyFacts) || matched.svg);
@@ -229,7 +310,13 @@ export function resolveSpriteAsset(className, factRows, propertyFacts, templates
  *  names a `property` and exactly one of `placeholder`/`placeholders` (every
  *  token named appears in `svg`), its `values` map is non-empty and every
  *  entry matches the shape its own `placeholder`/`placeholders` choice
- *  expects, a `[match]` table names both `property` and `value`, and
+ *  expects, every `[match]`/`[[match]]` entry names both `property` and
+ *  `value`, no two entries demand different values of the SAME property (a
+ *  constraint set no instance can ever satisfy is dead art, not a stricter
+ *  variant), a constraint on one of the two CLOSED axes names a value that
+ *  axis actually has (mgx:faces one of FACING_VALUES, mgx:pose one of
+ *  POSE_VALUES — every other predicate stays open, since a variant may match
+ *  on any fact at all, mgx:hasProperty included), and
  *  `[face]`/`[parameters.emotion]` are always declared TOGETHER — a face
  *  anchor with nothing to select it, or an emotion parameter with nowhere to
  *  position its face fragment, is a real authoring mistake either way
@@ -279,8 +366,22 @@ export function spriteTemplateProblems(template) {
       }
     }
   }
-  if (t.match && (!t.match.property || t.match.value === undefined)) {
-    problems.push("match is missing property or value");
+  const entries = matchEntries(t);
+  for (const entry of entries) {
+    if (!entry?.property || entry?.value === undefined) problems.push("match is missing property or value");
+  }
+  const requiredBy = new Map();
+  for (const { property, value } of matchConstraints(t)) {
+    if (requiredBy.has(property) && requiredBy.get(property) !== value) {
+      problems.push(`match requires ${property} to be both "${requiredBy.get(property)}" and "${value}" — no instance can satisfy that`);
+    }
+    requiredBy.set(property, value);
+    if (property === FACING_PROPERTY && !FACING_VALUES.includes(value)) {
+      problems.push(`match requires ${FACING_PROPERTY} "${value}", which is not one of the turntable's angles (${FACING_VALUES.join(", ")}; the centre view is the absent fact)`);
+    }
+    if (property === POSE_PROPERTY && !POSE_VALUES.includes(value)) {
+      problems.push(`match requires ${POSE_PROPERTY} "${value}", which is not one of the known poses (${POSE_VALUES.join(", ")}; at rest is the absent fact)`);
+    }
   }
   if (t.face && !t.parameters?.emotion) {
     problems.push("face is declared without parameters.emotion — a face anchor with nothing to select it is dead data");
