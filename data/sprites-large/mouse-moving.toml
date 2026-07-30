@@ -1,0 +1,55 @@
+# mouse-moving — the centre-facing mouse caught mid-scurry, no facing fact
+# needed at all (an instance with no mgx:faces fact on record already
+# renders front-on, the same reasoning the turntable's own centre view
+# uses). The ears, nose and whiskers stay exactly as mouse-with-emotion.toml
+# draws them, since a head does not change shape mid-stride. What moves:
+# the body blob leans and stretches to one side under the stride, and the
+# tail sweeps out further and lifts higher than the standing curl.
+classes = ["mouse"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="mouse-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M3.6 20.2 C3 14.2 6.4 9.4 11.8 9.4 C17 9.2 19.6 13.2 18.6 17.8 C17.8 21 14.4 21.8 10.6 21.4 C7.2 21.1 4.2 21.8 3.6 20.2 Z" fill="url(#mouse-moving-fill)"/>
+  <circle cx="5.6" cy="6.4" r="2.6" fill="url(#mouse-moving-fill)"/>
+  <circle cx="11" cy="5.4" r="2.9" fill="url(#mouse-moving-fill)"/>
+  <path d="M18.6 16.6 C23 18 23.6 13 20.8 11 C21.8 14 20.4 15.8 18.6 16.6 Z" fill="url(#mouse-moving-fill)"/>
+  <ellipse cx="13.6" cy="12.4" rx="0.8" ry="0.6" fill="#c98c8c" opacity="0.7"/>
+  <g stroke="#000000" stroke-width="0.35" opacity="0.4">
+    <path d="M14.4 12 L18 11.2"/>
+    <path d="M14.4 12.6 L18 13"/>
+  </g>
+  <ellipse cx="8.6" cy="17.2" rx="3" ry="1.6" fill="#ffffff" opacity="0.28"/>
+  <ellipse cx="4.8" cy="5.4" rx="0.9" ry="0.7" fill="#ffffff" opacity="0.35"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:pose"
+value = "moving"
+
+# Reuses mouse-with-emotion.toml's own front-facing anchor unchanged — the
+# body leans and stretches under it, but the face sits on the same bulge at
+# the same size, because a stride does not change how large a face reads.
+[face]
+cx = 12.3
+cy = 11.3
+scale = 3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

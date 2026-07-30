@@ -1,0 +1,76 @@
+# pig-facing-left — the fused body/head ellipse pig-with-emotion.toml
+# already draws turned to a left profile: the snout now projects clearly
+# past the leading (left) edge, the near ear sits forward and larger with
+# the far ear peeking behind it, the four legs shift into a profile stance,
+# and the curly tail moves to the trailing (right) edge. A hand-authored
+# [match] variant (the portrait-round.toml precedent), selected only when
+# the instance's own mgx:faces fact says "left". It also carries the shared
+# face-fragment mechanism, so a pig taught BOTH mgx:faces = left and one of
+# the 6 mgx:feels words renders this profile wearing that mood; taught only
+# the facing, {{FACE}} resolves to nothing and the profile shows no eyes at
+# all, the same no-default-eye convention pig-with-emotion.toml already
+# established.
+classes = ["pig"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="pig-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="13.4" cy="14.8" rx="7.2" ry="4.6" fill="url(#pig-facing-left-fill)"/>
+  <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+    <line x1="9.4" y1="18.6" x2="9.1" y2="21.8"/>
+    <line x1="12.6" y1="19.2" x2="12.6" y2="22"/>
+    <line x1="16" y1="19.2" x2="16" y2="22"/>
+    <line x1="19" y1="18.6" x2="19.2" y2="21.8"/>
+  </g>
+  <g fill="#5c4438">
+    <ellipse cx="9.1" cy="22" rx="0.7" ry="0.4"/>
+    <ellipse cx="12.6" cy="22.2" rx="0.7" ry="0.4"/>
+    <ellipse cx="16" cy="22.2" rx="0.7" ry="0.4"/>
+    <ellipse cx="19.2" cy="22" rx="0.7" ry="0.4"/>
+  </g>
+  <path d="M9.8 10 L6.8 5.8 L11.2 7.2 Z" fill="url(#pig-facing-left-fill)"/>
+  <path d="M14.6 9.6 L15.3 7 L17.4 9.2 Z" fill="url(#pig-facing-left-fill)"/>
+  <ellipse cx="4" cy="14.8" rx="3.2" ry="2.3" fill="url(#pig-facing-left-fill)"/>
+  <circle cx="2.4" cy="14.1" r="0.48" fill="#5c4438"/>
+  <circle cx="2.4" cy="15.5" r="0.48" fill="#5c4438"/>
+  <path d="M20.8 12 C23.6 11 23.4 13.6 21.6 14 C21.6 13.2 21.2 12.4 20.8 12 Z" fill="url(#pig-facing-left-fill)"/>
+  <ellipse cx="15.8" cy="11.2" rx="3.2" ry="1.8" fill="#ffffff" opacity="0.28"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# Derived from THIS file's own profile geometry, not copied from
+# pig-with-emotion.toml's front-facing anchor (cx=12 cy=12 scale=4): pig has
+# no separate head circle (the body ellipse fuses both), so this file's own
+# fused ellipse vertical radius (ry=4.6) stands in for bear's separate
+# head-circle radius. scale is ~0.65 of that radius (2.99, rounded to 3) —
+# the same three-quarter-turn ratio bear's own profile uses. cx/cy sit in
+# the gap between the ear bases (y <= 10) and the snout's top edge (y =
+# 12.5), roughly over where the near ear meets the muzzle — pig draws no
+# default eye of its own, so the anchor only needs to clear the surrounding
+# artwork rather than land on a pre-drawn eye.
+[face]
+cx = 9.5
+cy = 11.3
+scale = 3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

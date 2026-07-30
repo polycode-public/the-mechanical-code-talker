@@ -1,0 +1,59 @@
+# owl-facing-half-left-moving — owl-facing-half-left.toml's own
+# three-quarter turn caught mid-flap. The head, tufts, both eyes, beak and
+# feet stay exactly as that file draws them; the two wing paths added here
+# use the same asymmetric up/down spread as owl-facing-left-moving.toml,
+# shifted right with the rest of this angle's body.
+classes = ["owl"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="owl-facing-half-left-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <path d="M8.7 4.6 C7.9 3 8.1 1.4 9.3 0.8 C9.8 2.4 10 3.8 9.9 5.1 Z" fill="color-mix(in srgb, currentColor 78%, black)"/>
+  <path d="M16.9 5.6 C17.4 4.4 17.3 3.4 16.6 2.9 C16.2 3.9 16 4.8 16.1 5.8 Z" fill="color-mix(in srgb, currentColor 78%, black)"/>
+  <path d="M6.7 7.6 C6.7 4.2 9.5 3.4 14.7 3.4 C18.9 3.4 19.1 5.6 19.1 8.6 C19.1 10.6 18.5 11.8 17.9 12.4 C20.3 13.6 21.7 16.4 21.7 18.8 C21.7 21.2 18.7 22.8 14.9 22.8 C11.3 22.8 6.9 21.8 6.9 19.8 C6.9 17.2 8.3 14.8 10.5 13.4 C8.3 12.2 6.7 10.4 6.7 7.6 Z" fill="url(#owl-facing-half-left-moving-fill)"/>
+  <path d="M19 11 C21 9.6 23 8.8 23.6 6.8 C23 9.2 22 11.2 19.8 12.8 C19.5 12.2 19.2 11.6 19 11 Z" fill="url(#owl-facing-half-left-moving-fill)"/>
+  <path d="M8 17.5 C5.4 18.4 3 19.8 2.6 22.2 C4.4 20.6 6.6 19.4 9 18.8 C8.7 18.3 8.3 17.9 8 17.5 Z" fill="url(#owl-facing-half-left-moving-fill)"/>
+  <circle cx="8.5" cy="8" r="2.6" fill="#f4ecd8"/>
+  <circle cx="8.5" cy="8" r="1.3" fill="#0d1a12"/>
+  <ellipse cx="16.7" cy="8.6" rx="1.1" ry="1.7" fill="#f4ecd8" opacity="0.9"/>
+  <ellipse cx="16.7" cy="8.6" rx="0.55" ry="0.85" fill="#0d1a12" opacity="0.9"/>
+  <path d="M6.7 9.6 L5.4 10.6 L6.7 11.8 Z" fill="#e8a23a"/>
+  <g stroke="#e8a23a" stroke-width="1.1" stroke-linecap="round">
+    <path d="M12.5 22.2 L12.3 23.4"/>
+    <path d="M17.3 22.4 L17.5 23.6"/>
+  </g>
+  <ellipse cx="13.8" cy="17.4" rx="3.4" ry="2" fill="#ffffff" opacity="0.22"/>
+  <circle cx="7.8" cy="7.2" r="0.55" fill="#ffffff" opacity="0.7"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "half-left"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 10.1
+cy = 8.6
+scale = 4.0
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

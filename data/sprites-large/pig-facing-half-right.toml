@@ -1,0 +1,70 @@
+# pig-facing-half-right — pig-facing-half-left.toml's three-quarter turn
+# mirrored across the canvas midline (every shape wrapped in one
+# translate-then-flip group), so the two directions stay geometrically
+# identical twins. The mirror flips the lit corner of the shared gradient
+# along with the pose, which reads as the same figure turned around under
+# the same light.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored — an expression should not
+# read back-to-front just because the body turned around.
+classes = ["pig"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="pig-facing-half-right-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <ellipse cx="15.6" cy="14.8" rx="7.2" ry="4.6" fill="url(#pig-facing-half-right-fill)"/>
+    <g stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+      <line x1="11.6" y1="18.6" x2="11.3" y2="21.8"/>
+      <line x1="14.8" y1="19.2" x2="14.8" y2="22"/>
+      <line x1="18.2" y1="19.2" x2="18.2" y2="22"/>
+      <line x1="21.2" y1="18.6" x2="21.4" y2="21.8"/>
+    </g>
+    <g fill="#5c4438">
+      <ellipse cx="11.3" cy="22" rx="0.7" ry="0.4"/>
+      <ellipse cx="14.8" cy="22.2" rx="0.7" ry="0.4"/>
+      <ellipse cx="18.2" cy="22.2" rx="0.7" ry="0.4"/>
+      <ellipse cx="21.4" cy="22" rx="0.7" ry="0.4"/>
+    </g>
+    <path d="M12 10.4 L9.4 6.2 L13.4 7.6 Z" fill="url(#pig-facing-half-right-fill)"/>
+    <path d="M16.6 9.8 L17.2 6.6 L19.8 9.4 Z" fill="url(#pig-facing-half-right-fill)"/>
+    <ellipse cx="8.3" cy="14.9" rx="2.5" ry="1.9" fill="url(#pig-facing-half-right-fill)"/>
+    <circle cx="6.3" cy="14.3" r="0.42" fill="#5c4438"/>
+    <circle cx="6.3" cy="15.5" r="0.42" fill="#5c4438"/>
+    <path d="M21.6 12 C23.9 11.2 23.8 13.5 22.2 13.9 C22.2 13.1 21.8 12.4 21.6 12 Z" fill="url(#pig-facing-half-right-fill)"/>
+    <ellipse cx="18" cy="11.2" rx="3.2" ry="1.8" fill="#ffffff" opacity="0.28"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-right"
+
+# pig-facing-half-left.toml's anchor reflected across the canvas midline
+# (cx = 24 - 11.7); cy and scale are the mirror's own invariants. Because
+# the fragment sits outside the flip group, these are plain unflipped
+# canvas coordinates.
+[face]
+cx = 12.3
+cy = 11.3
+scale = 3.8
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

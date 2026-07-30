@@ -1,0 +1,66 @@
+# rabbit-moving — a centre-facing rabbit caught mid-hop: no facing fact
+# required at all, matched on mgx:pose = "moving" alone. There is no existing
+# bear/cat/dog/king example of a centre-facing pose file, since none of those
+# classes has one yet — this is the first, so it follows the same authoring
+# conventions as every facing variant: the head is copied UNCHANGED from
+# rabbit-with-emotion.toml (a head doesn't change shape mid-hop, the same
+# reasoning bear-facing-left-moving.toml used for its own profile head), and
+# only the body, ears, tail and paws redraw into a mid-hop stance — the body
+# stretched and lifted, both ears swept back further than the front view's
+# resting splay, the tail lifted, and both front paws reaching forward and
+# down as if landing.
+classes = ["rabbit"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="rabbit-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="8.6" cy="5" rx="1.5" ry="4.6" fill="url(#rabbit-moving-fill)" transform="rotate(-24 8.6 5)"/>
+  <ellipse cx="13.8" cy="5" rx="1.5" ry="4.6" fill="url(#rabbit-moving-fill)" transform="rotate(24 13.8 5)"/>
+  <ellipse cx="8.6" cy="5.4" rx="0.65" ry="3" fill="#e3aca6" opacity="0.7" transform="rotate(-24 8.6 5.4)"/>
+  <ellipse cx="13.8" cy="5.4" rx="0.65" ry="3" fill="#e3aca6" opacity="0.7" transform="rotate(24 13.8 5.4)"/>
+  <ellipse cx="12" cy="15.2" rx="6.4" ry="4.9" fill="url(#rabbit-moving-fill)"/>
+  <circle cx="10.4" cy="9.6" r="4.2" fill="url(#rabbit-moving-fill)"/>
+  <circle cx="18.4" cy="16.2" r="2" fill="url(#rabbit-moving-fill)"/>
+  <g fill="url(#rabbit-moving-fill)">
+    <ellipse cx="6.4" cy="19" rx="1.5" ry="2"/>
+    <ellipse cx="16.2" cy="19.6" rx="1.5" ry="2"/>
+  </g>
+  <g stroke="#1c1c1c" stroke-width="0.2" opacity="0.4" stroke-linecap="round">
+    <path d="M9.8 11.2 L6.6 10.6"/>
+    <path d="M9.8 11.6 L6.6 12"/>
+    <path d="M11 11.6 L13.6 12.6"/>
+  </g>
+  <ellipse cx="8.6" cy="12" rx="2.4" ry="1.4" fill="#ffffff" opacity="0.28"/>
+  <ellipse cx="9.4" cy="8.6" rx="1.1" ry="0.8" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:pose"
+value = "moving"
+
+# The same cx/cy/r rabbit-with-emotion.toml's own [face] anchor uses — the
+# head is unchanged from the resting front view, so the anchor that already
+# lands on it stays exactly as-is.
+[face]
+cx = 10.4
+cy = 9.6
+scale = 4.2
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

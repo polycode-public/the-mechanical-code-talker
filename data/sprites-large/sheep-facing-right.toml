@@ -1,0 +1,72 @@
+# sheep-facing-right — sheep-facing-left.toml's profile mirrored across the
+# canvas midline (every shape wrapped in one translate-then-flip group), so
+# the two directions stay geometrically identical twins. The mirror flips
+# the lit corner of the shared gradient along with the pose, which reads as
+# the same sheep turned around under the same light.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored — an expression should not
+# read back-to-front just because the body turned around.
+classes = ["sheep"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="sheep-facing-right-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <g stroke="#3a352f" stroke-width="1.5" stroke-linecap="round">
+      <line x1="9.4" y1="18.2" x2="9.4" y2="21.4"/>
+      <line x1="11.6" y1="18.8" x2="11.6" y2="22"/>
+      <line x1="16" y1="18.4" x2="16" y2="21.6"/>
+      <line x1="18.2" y1="17.8" x2="18.2" y2="21"/>
+    </g>
+    <g fill="url(#sheep-facing-right-fill)">
+      <circle cx="11.2" cy="12.6" r="3.4"/>
+      <circle cx="15" cy="11" r="3.8"/>
+      <circle cx="18.5" cy="12.4" r="3"/>
+      <circle cx="12.8" cy="15.4" r="3.6"/>
+      <circle cx="17" cy="15.4" r="3.2"/>
+      <circle cx="21" cy="13.6" r="1.2"/>
+    </g>
+    <g stroke="color-mix(in srgb, currentColor 40%, black)" stroke-width="0.4" opacity="0.35" fill="none" stroke-linecap="round">
+      <path d="M12 10.4 C12.6 9.8 13.4 9.8 14 10.2"/>
+      <path d="M16 9 C16.6 8.6 17.4 8.7 17.9 9.2"/>
+      <path d="M18.6 11 C19.1 10.6 19.8 10.7 20.2 11.2"/>
+    </g>
+    <ellipse cx="5.8" cy="9.4" rx="0.75" ry="1.05" fill="#3a352f" transform="rotate(15 5.8 9.4)"/>
+    <ellipse cx="2.2" cy="9.8" rx="1.1" ry="1.5" fill="#3a352f" transform="rotate(-20 2.2 9.8)"/>
+    <ellipse cx="4" cy="13" rx="2.6" ry="2.2" fill="#3a352f"/>
+    <ellipse cx="15" cy="9.2" rx="2.3" ry="1.4" fill="#ffffff" opacity="0.3"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "right"
+
+# sheep-facing-left.toml's anchor reflected across the canvas midline
+# (cx = 24 - 4); cy and scale are the mirror's own invariants. Because the
+# fragment sits outside the flip group, these are plain unflipped canvas
+# coordinates.
+[face]
+cx = 20
+cy = 13
+scale = 1.56
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
