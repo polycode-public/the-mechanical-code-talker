@@ -1,0 +1,65 @@
+# writer-facing-half-left-moving — the three-quarter turn caught mid-stride:
+# writer-facing-half-left.toml's head, pen and notebook hold their shape and
+# position exactly, while the arms and torso hem take the same
+# forward-swept, trailing-arm redraw king-facing-left-moving.toml uses for
+# its own stride.
+classes = ["writer"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="writer-facing-half-left-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <linearGradient id="writer-facing-half-left-moving-notebook" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#a9764f"/>
+      <stop offset="100%" stop-color="#7d5738"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#writer-facing-half-left-moving-fill)">
+    <path d="M9.4 13.1 C7.8 12.5 6.3 13.5 5.8 16.1 C5.6 17.5 6.2 18.5 7.3 18.2 C7.4 16.2 7.9 14.5 9.6 13.6 Z"/>
+    <path d="M14.6 13.1 C16.7 13.5 18.7 15.3 19 18.2 C19.1 19.5 18.3 20.3 17.2 19.7 C17 17.4 16.3 15.1 14.3 14.2 Z"/>
+    <path d="M6.3 21 C6.1 15.5 8.7 12.9 11.7 12.9 C15.1 12.9 17.6 14.8 17.1 19.6 C16.9 20.7 15.9 20.7 15.1 20.1 Z"/>
+    <path d="M10.7 9.5 L13.3 9.5 L13.1 13 L10.9 13 Z"/>
+  </g>
+  <circle cx="11.7" cy="6.6" r="3.3" fill="url(#writer-facing-half-left-moving-fill)"/>
+  <path d="M8.6 6.1 Q7.9 7.4 8.6 8.1 Z" fill="url(#writer-facing-half-left-moving-fill)"/>
+  <ellipse cx="10" cy="6.1" rx="0.28" ry="0.34" fill="#1c1c1c"/>
+  <ellipse cx="14" cy="6.05" rx="0.18" ry="0.22" fill="#1c1c1c"/>
+  <path d="M16.4 12.8 L19.6 16 L18.6 17 L15.4 13.8 Z" fill="url(#writer-facing-half-left-moving-fill)" opacity="0.95"/>
+  <path d="M18.6 17 L17.6 19.4 L16.6 18.4 Z" fill="currentColor" opacity="0.85"/>
+  <path d="M16 13.2 L16.9 14.1" stroke="#ffffff" stroke-width="0.4" opacity="0.5"/>
+  <g transform="rotate(-15 7.6 16)">
+    <rect x="6.4" y="14" width="2.6" height="3.6" rx="0.3" fill="url(#writer-facing-half-left-moving-notebook)"/>
+    <rect x="6.7" y="14.3" width="0.5" height="3" fill="#f4f1ea" opacity="0.8"/>
+  </g>
+  <path d="M9.3 4.2 C10.0 3.6 10.8 3.4 11.7 3.5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "half-left"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 11.08
+cy = 6.51
+scale = 2.7
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
