@@ -5,10 +5,14 @@
 // values map key, a [match] value — never a minted term.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { spriteFactRows, spriteSubjectFor } from "../../src/domain/sprite-facts.mjs";
+import {
+  spriteFactRows, spriteSubjectFor, spriteFactGraphPayload, isSpriteAcceptPredicate, SPRITE_PREDICATES,
+} from "../../src/domain/sprite-facts.mjs";
 import { matchConstraints } from "../../src/domain/sprite-templates.mjs";
 import { readSpriteTemplateFiles } from "../../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../../src/adapters/corpus/sprite-large-template-files.mjs";
+import { parseEntities } from "../../src/domain/codegraph.mjs";
+import { ask } from "../../src/domain/ask.mjs";
 
 const iconTemplates = readSpriteTemplateFiles();
 const largeTemplates = readSpriteLargeTemplateFiles();
@@ -137,4 +141,72 @@ test("synthetic templates walk into exactly the expected row set", () => {
 test("empty template sets produce no rows at all", () => {
   assert.deepEqual(spriteFactRows({}), []);
   assert.deepEqual(spriteFactRows(), []);
+});
+
+test("isSpriteAcceptPredicate matches only a real mgx:accept-<name> tail", () => {
+  assert.ok(isSpriteAcceptPredicate("mgx:accept-emotion"));
+  assert.ok(isSpriteAcceptPredicate("mgx:accept-material"));
+  assert.ok(!isSpriteAcceptPredicate("mgx:accept-"));
+  assert.ok(!isSpriteAcceptPredicate("mgx:take-parameter"));
+  assert.ok(!isSpriteAcceptPredicate(null));
+});
+
+test("spriteFactGraphPayload: synthetic rows project into individuals classed for a generic list/count query, plus the raw predicate edges", () => {
+  const icon = [{ classes: ["dot"], svg: "<svg/>" }];
+  const large = [{
+    classes: ["dot"],
+    svg: "<svg>{{FILL}}</svg>",
+    parameters: { material: { property: "mgx:madeOf", placeholder: "{{FILL}}", values: { wood: "#a52" } } },
+  }, {
+    classes: ["dot"],
+    svg: "<svg/>",
+    match: { property: "mgx:hasProperty", value: "round" },
+  }];
+  const rows = spriteFactRows({ iconTemplates: icon, largeTemplates: large });
+  const payload = spriteFactGraphPayload(rows);
+
+  assert.deepEqual(
+    [...payload.individuals].sort((a, b) => a.id.localeCompare(b.id)),
+    [
+      { id: "dot sprite", label: "dot sprite", class: "sprite" },
+      { id: "material", label: "material", class: "parameter" },
+      { id: "wood", label: "wood", class: "material" },
+    ],
+  );
+
+  const byPredicate = Object.fromEntries(payload.objectProperties.map((g) => [g.predicate, g.examples]));
+  assert.deepEqual(byPredicate["mgx:take-parameter"], [{ subject: "dot sprite", object: "material" }]);
+  assert.deepEqual(byPredicate["mgx:accept-material"], [{ subject: "dot sprite", object: "wood" }]);
+  assert.deepEqual(byPredicate["mgx:offer-variant"], [{ subject: "dot sprite", object: "round" }]);
+  // Every group key is either a fixed SPRITE_PREDICATES entry or a real
+  // mgx:accept-<name> tail — never the rdf:type bookkeeping rows.
+  for (const predicate of Object.keys(byPredicate)) {
+    assert.ok(SPRITE_PREDICATES.includes(predicate) || isSpriteAcceptPredicate(predicate), predicate);
+  }
+});
+
+test("spriteFactGraphPayload: an empty row set projects into an empty graph", () => {
+  assert.deepEqual(spriteFactGraphPayload([]), { individuals: [], objectProperties: [] });
+  assert.deepEqual(spriteFactGraphPayload(), { individuals: [], objectProperties: [] });
+});
+
+test("tmct.ask over the real catalog's projected graph answers a sprite's accepted emotions and parameters honestly", () => {
+  const graph = parseEntities(spriteFactGraphPayload(rows));
+
+  // A direct, generic (no new vocabulary) listing question over the catalog's
+  // own mgx:accept-emotion rows — the same dynamicClassQuery capability
+  // ask-memory-class-query.test.mjs already holds a memory graph's classes to.
+  const emotions = ask(graph, "list emotions");
+  assert.equal(emotions.tmct_ask.miss, false);
+  const declaredEmotionValues = new Set(rows.filter((r) => r.predicate === "mgx:accept-emotion").map((r) => r.object));
+  for (const value of declaredEmotionValues) assert.ok(emotions.content.includes(value), value);
+
+  const parameterCount = ask(graph, "how many parameters are there");
+  assert.equal(parameterCount.tmct_ask.miss, false);
+  const declaredParameterNames = new Set(rows.filter((r) => r.predicate === "mgx:take-parameter").map((r) => r.object));
+  assert.match(parameterCount.content, new RegExp(`^${declaredParameterNames.size}\\b`));
+
+  // A class this graph carries no individual for honestly misses rather than
+  // fabricating an answer, the same standard worldRelationGraphPayload holds.
+  assert.equal(ask(graph, "list variants").tmct_ask.miss, true);
 });

@@ -559,6 +559,7 @@ async function writeStandaloneViewPage(archetype, rest) {
   const outPath = resolvePath(process.cwd(), strFlag(rest, ["--output", "--out"], `${archetype}.html`));
   let html;
   if (archetype === "sprites") {
+    const engineBundleJs = await buildEngineBundleJs("build-sprites-bundle.mjs");
     const { readSpriteTemplateFiles } = await import("../src/adapters/corpus/sprite-template-files.mjs");
     const { readSpriteLargeTemplateFiles } = await import("../src/adapters/corpus/sprite-large-template-files.mjs");
     const { loadSpriteOntologyFactRows, renderSpriteCatalogHtml } = await import("../src/services/sprite-catalog-viz.mjs");
@@ -566,6 +567,8 @@ async function writeStandaloneViewPage(archetype, rest) {
       iconTemplates: readSpriteTemplateFiles(),
       largeTemplates: readSpriteLargeTemplateFiles(),
       factRows: await loadSpriteOntologyFactRows(),
+      spritesBundleAvailable: true,
+      engineBundleJs,
     });
   } else if (archetype === "spider-fly") {
     const engineBundleJs = await buildEngineBundleJs("build-spider-fly-bundle.mjs");
