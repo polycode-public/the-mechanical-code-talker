@@ -4,6 +4,7 @@
 //
 // Trust tiers are precomputed rgba() values per provenance color so pages
 // render identically on browsers without color-mix() support.
+import { pluralOf } from "../domain/inflect.mjs";
 
 export const SERIF_STACK = `"Charter", "Bitstream Charter", Georgia, "Times New Roman", serif`;
 export const MONO_STACK = `ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace`;
@@ -45,7 +46,10 @@ function rgba(hex, alpha) {
   return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
 }
 
-const TOKENS = Object.freeze({
+/** The light/dark token table — the raw hex/alpha values `THEME_TOKENS_CSS`
+ *  compiles into CSS custom properties. Exported so a page's own inlined
+ *  dark-mode CSS can read a value directly instead of restating it. */
+export const TOKENS = Object.freeze({
   light: Object.freeze({
     bg: "#F7F6F2", ink: "#23272B", muted: "#6E7168", line: "#DDD9D0", card: "#FFFFFF",
     taught: "#2E7D4F", corpus: "#5A80AC", entail: "#B07C2E", alert: "#B0503F",
@@ -86,3 +90,40 @@ export const THEME_TOKENS_CSS = `
   :root[data-theme="dark"] { ${tokenBlock(TOKENS.dark)} }
   :root[data-theme="light"] { ${tokenBlock(TOKENS.light)} }
 `;
+
+/** "N word"/"N words" — every current hand-pluralized count in the estate
+ *  (`n === 1 ? "" : "s"`) is a regular plural, so this is a clean swap: pass
+ *  `plural` only for the rare irregular noun. Pure. */
+export function countLabel(n, singular, plural = pluralOf(singular)) {
+  return `${n} ${n === 1 ? singular : plural}`;
+}
+
+/** `rows` narrowed to the ones a world's own provenance tag ("world:<name>")
+ *  wrote — the same prefix filter mud.html's and adventure.html's edit modes
+ *  each apply to keep a world's own facts apart from whatever background
+ *  corpus shares the same live store. Pure. */
+export function rowsForWorld(rows, worldName) {
+  const prefix = "world:" + worldName;
+  return (rows || []).filter((r) => typeof r.provenance === "string" && r.provenance.indexOf(prefix) === 0);
+}
+
+/** A generic clamped-percentage meter: `<div class="meter-track"><div
+ *  class="meter-fill <cls>" style="width:N%"></div></div>`, empty when
+ *  `value` isn't a number or `max` is falsy (nothing to show, not a 0%
+ *  bar). `cls` rides on the inner fill for per-kind styling (e.g. a colour
+ *  per creature class). Pure. */
+export function meterBarHtml(cls, value, max) {
+  if (typeof value !== "number" || !max) return "";
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  return `<div class="meter-track"><div class="meter-fill ${escapeHtml(cls)}" style="width:${pct}%"></div></div>`;
+}
+
+/** The identifier-shaped word immediately before `cursorPos` in `text`,
+ *  lowercased — a cursor-suggestion pill's own lookup key. Empty when the
+ *  cursor sits after whitespace/punctuation rather than a word. Pure,
+ *  self-contained (no closure state), `.toString()`-splice safe. */
+export function wordBeforeCursor(text, cursorPos) {
+  const head = String(text || "").slice(0, cursorPos);
+  const m = head.match(/[A-Za-z][A-Za-z0-9-]*$/);
+  return m ? m[0].toLowerCase() : "";
+}

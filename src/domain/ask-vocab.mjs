@@ -189,6 +189,31 @@ export const RELATIONS = {
   },
 };
 
+// The regular English 3rd-person-singular suffix rule (the same regular
+// -s/-es/-ies shape src/domain/inflect.mjs's own `pluralOf` applies to a
+// noun) — not imported from there, since inflect.mjs sits downstream of
+// interpret/normalize.mjs, which imports THIS module: importing it back
+// here would be a real circular dependency, not just a style choice.
+function thirdPersonSingular(w) {
+  if (/(?:[sxz]|ch|sh)$/i.test(w)) return `${w}es`;
+  if (/[^aeiou]y$/i.test(w)) return `${w.slice(0, -1)}ies`;
+  return `${w}s`;
+}
+
+/** The third-person-singular sentence phrase for a stored relation `kind`
+ *  ("inherits" -> "inherits from", "cochange" -> "co-changes with"), derived
+ *  from RELATIONS' own `bare` infinitive rather than a second hand-curated
+ *  verb table. A symbol-grain kind ("callsSymbol", "touchesSymbol") reads its
+ *  coarse sibling's phrase; an unrecognized kind falls back to a plain
+ *  camelCase split. */
+export function phraseForRelation(kind) {
+  const key = String(kind || "");
+  const entry = RELATIONS[key] || (key.endsWith("Symbol") && RELATIONS[key.slice(0, -6)]) || null;
+  if (!entry) return key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+  const [head, ...rest] = entry.bare.split(" ");
+  return [thirdPersonSingular(head), ...rest].join(" ");
+}
+
 /** The closed set of reverse `inherits` verb phrasings a strategy checks to
  *  decide whether to swap subject/object. The three "the"-definite forms are
  *  named here but not reachable through VERB_TO_KIND (see above). */
