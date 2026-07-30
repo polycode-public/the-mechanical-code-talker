@@ -50,7 +50,11 @@ sub-agents landed this in eleven merges, most needing a hand-reconciled conflict
 `test/adapters/sprite-large-template-files.test.mjs` (several independently discovered and
 worked around the same "does this class have its own centre-moving file" question under different
 names — `CLASSES_WITH_CENTRE_MOVING` is the name that survived reconciliation). The sprite content
-wave is done; the turning-character demo UI and `tmct_sprite` tool (below) are what's left.
+wave is done, and so is the demo UI for it: `sprites.html` now animates three axes per card at a
+shared 800ms frame delay — the pre-existing mood cycle (top-left, unchanged), a new 5-angle turning
+sweep in the plain swatch's slot, and a new idle/moving toggle in the happy swatch's slot, using the
+`mgx:pose = "moving"` templates live rather than deferred as originally scoped. `tmct_sprite` (below)
+is what's left.
 
 **Everything merged onto local `main` so far this session is green** (`npm test` full suite: 4939
 pass after the Wave 2/3 checkpoint; every subsequent wave re-verified with `npm run test:fast` plus
@@ -104,10 +108,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
   `chat.mjs`'s own consumption is a separate, slightly fiddly move — the direct-`ask()` focus path
   and the split converge on one variable). `src/services/index.mjs` also only re-exports
   `dispatchTool`, not the structured sibling, for any external consumer that wants it.
-- [ ] **sprites.html turning-character demo**: an animated swatch cycling the five turntable angles
-  next to the existing static emoting character. The page's own variant cycle only steps
-  `mgx:faces`/`mgx:feels` today, so a combined facing-and-pose swatch sits outside it. The full
-  catalog is landed, so this is unblocked and ready to build.
 - [ ] mud room rebind's epoch fold covers world-state predicates only — `knows-about` testimony
   claims still rank by bare turn across epochs, so a pre-recast "the fox is gone" claim can outrank
   a fresh post-recast sighting of the same fox. Real remainder from `p2p-room.mjs`'s rebind work.
