@@ -122,8 +122,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 Driving all 5 open items below plus `PLAN_FACT.md`'s landing-order steps 1-2 concurrently, each in
 its own worktree, file-ownership-disjoint. Plan: `~/.claude/plans/please-use-the-coordinator-witty-riddle.md`.
 
-- [ ] A1 (NEXT #4, `chat.mjs` ask delimiter): worktree dispatched, Sonnet. Status: started.
-- [ ] A2 (NEXT #3, page-lifecycle globals fold): worktree dispatched, Sonnet. Status: started.
 - [ ] A3 (NEXT #5, mud epoch fold for knows-about): worktree dispatched, Opus. Status: started.
 - [ ] A4 (NEXT #1 + #2 sprites slice, CLI sprites bundle + tmct.ask sprites projection): worktree
   dispatched, Sonnet. Status: started.
@@ -151,15 +149,12 @@ new open item below once A4 lands.
   this for its own world, by projecting its rows through `worldRelationGraphPayload` before every
   turn. The same route is open to any page whose rows have a shape worth asking over; until one is
   built, those pages answer questions through `tmct.turn` and `tmct.ask` refuses honestly.
-- [ ] **`tmctChatSession`/`tmctChatReady`/`tmctIngestReady`/`tmctAdventureLastSave` are still their
-  own page globals.** They are page-lifecycle flags the e2e suite and `gen-screenshots.mjs` wait on,
-  not part of the engine contract Gap C unified, so they were left alone. `tmctChatSession` is now
-  redundant with `tmct.session` and could fold into it.
-- [ ] **`chat.mjs` still parses the `---tmct_ask---` delimiter** instead of reading
-  `dispatchToolStructured`'s `data` directly (Gap B landed the contract this session, but
-  `chat.mjs`'s own consumption is a separate, slightly fiddly move — the direct-`ask()` focus path
-  and the split converge on one variable). `src/services/index.mjs` also only re-exports
-  `dispatchTool`, not the structured sibling, for any external consumer that wants it.
+- [ ] `tmctChatReady`/`tmctIngestReady`/`tmctAdventureLastSave` (plus the same-shaped
+  `tmctChatLastSave`) remain their own page globals with no `tmct.*` equivalent — confirmed by this
+  session's fold-away of the one that WAS redundant (`tmctChatSession` → `tmct.session`, done).
+  These four are genuine page-lifecycle/persistence-timestamp state the engine surface contract
+  doesn't model; a `tmct.ready`-style member would need to be added to `tmct-surface.mjs`'s
+  contract, not just renamed. Not a bug, just undecided whether it's worth doing.
 - [ ] mud room rebind's epoch fold covers world-state predicates only — `knows-about` testimony
   claims still rank by bare turn across epochs, so a pre-recast "the fox is gone" claim can outrank
   a fresh post-recast sighting of the same fox. Real remainder from `p2p-room.mjs`'s rebind work.
