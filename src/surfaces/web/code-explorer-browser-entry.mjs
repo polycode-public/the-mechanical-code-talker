@@ -75,25 +75,9 @@ export function createCodeExplorerSession({ graphPayload, seedPayload = null, vo
 
 // ---- "what relates to X", asked ------------------------------------------
 
-// tmct_ask's handler appends its structured envelope after this delimiter
-// rather than widening dispatchTool's string-only return for one tool;
-// chat.mjs splits the identical shape on its own side.
-const ASK_ENVELOPE_DELIM = "\n\n---tmct_ask---\n";
-
 // A symbol-grain predicate asks as its coarse sibling: ask()'s relation
 // vocabulary carries one question per grain pair, not two.
 const COARSE_RELATION = { callsSymbol: "calls", touchesSymbol: "touches" };
-
-/** tmct_ask's structured half, or null when the text carries no envelope. */
-function askEnvelope(text) {
-  const envelopeJson = String(text).split(ASK_ENVELOPE_DELIM)[1];
-  if (!envelopeJson) return null;
-  try {
-    return JSON.parse(envelopeJson);
-  } catch {
-    return null;
-  }
-}
 
 /** The two questions ask() understands about one relation kind, both spelled
  *  from its own vocabulary: `verbs[0]` reads as the reverse direction ("what
@@ -205,7 +189,7 @@ export function askRelatedFacts(graphPayload, term) {
     const storedEdges = edgesByKind.get(kind) || new Set();
     const holdsEdge = (subjectId, objectId) => storedEdges.has(`${subjectId} ${objectId}`);
     for (const { shape, query } of relationQuestions(kind, term)) {
-      const envelope = askEnvelope(tmct_ask({ query }, { graph }));
+      const envelope = tmct_ask({ query }, { graph }).data;
       const parsed = envelope?.parsed;
       const answeredAsAsked = parsed?.shape === shape
         && parsed?.kind === kind
