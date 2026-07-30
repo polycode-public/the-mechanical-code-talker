@@ -18,24 +18,14 @@
 
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml, embedJson, embedScriptText } from "./viz-theme.mjs";
 import { generateCodeHints } from "../domain/code-explorer-hints.mjs";
+import { phraseForRelation } from "../domain/ask-vocab.mjs";
+import { fetchWithProgress } from "./memory-panel-viz.mjs";
 
-// Third-person verb for each stored relation kind, symbol grain folded onto its
-// coarse sibling. A kind with no row here reads back as itself, never breaking
-// the sentence.
-const EDGE_PHRASE = new Map([
-  ["imports", "imports"],
-  ["calls", "calls"], ["callsSymbol", "calls"],
-  ["contains", "contains"],
-  ["defines", "defines"],
-  ["inherits", "inherits from"],
-  ["tests", "tests"],
-  ["touches", "touches"], ["touchesSymbol", "touches"],
-  ["cochange", "co-changes with"],
-  ["reexports", "re-exports"],
-]);
-
+// Third-person verb for each stored relation kind, symbol grain folded onto
+// its coarse sibling — derived from ask-vocab.mjs's own RELATIONS table
+// rather than a second hand-curated relation-verb table.
 export function edgePhrase(kind) {
-  return EDGE_PHRASE.get(String(kind || "")) || String(kind || "").replace(/([a-z0-9])([A-Z])/g, "$1 $2").toLowerCase();
+  return phraseForRelation(kind);
 }
 
 // Both packagers (build-electron-app.mjs, build-demo-site.mjs) place
@@ -133,11 +123,7 @@ const CLIENT_JS = String.raw`
   };
   var session = null;
 
-  function esc(s) {
-    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
-      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
-    });
-  }
+  var esc = ${escapeHtml.toString()};
 
   function renderStats(data) {
     var s = data.ledger.stats;
@@ -233,23 +219,7 @@ const CLIENT_JS = String.raw`
   function seedNote(text) { if (els.seedStatus) els.seedStatus.textContent = text; }
   function mbText(n) { return (n / 1048576).toFixed(1); }
 
-  async function fetchTextWithProgress(url, onProgress) {
-    var res = await fetch(url);
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    var total = Number(res.headers.get("content-length")) || 0;
-    if (!res.body || !res.body.getReader) return res.text();
-    var reader = res.body.getReader();
-    var chunks = [];
-    var loaded = 0;
-    for (;;) {
-      var step = await reader.read();
-      if (step.done) break;
-      chunks.push(step.value);
-      loaded += step.value.byteLength;
-      onProgress(loaded, total);
-    }
-    return new Blob(chunks).text();
-  }
+  var fetchWithProgress = ${fetchWithProgress.toString()};
 
   async function loadSeed() {
     try {
@@ -258,9 +228,10 @@ const CLIENT_JS = String.raw`
         seedNote("loading general knowledge…");
         text = await window.tmctDesktop.readSeed();
       } else {
-        text = await fetchTextWithProgress("./chat-seed.json" + SEED_QUERY, function (loaded, total) {
+        var seedBlob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY, function (loaded, total) {
           seedNote("loading general knowledge… " + mbText(loaded) + (total ? " of " + mbText(total) : "") + " MB");
         });
+        text = await seedBlob.text();
       }
       if (text) {
         seedState.payload = JSON.parse(text);
