@@ -16,7 +16,13 @@ import { chromium } from "playwright";
 import { buildDemoSiteSnapshot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
 
-const TURN_TIMEOUT_MS = 20_000;
+// The first turn through this dock pays more than the engine. It waits on the
+// dock's own wink load, which the dock itself bounds at 8s, then builds the
+// whole store from the page's embedded payload. The wait resolves the moment
+// the answer lands, so a healthy run never spends this headroom.
+const TURN_TIMEOUT_MS = 30_000;
+// The same headroom for the dock to fetch its sibling bundle and wire itself up.
+const DOCK_READY_TIMEOUT_MS = 30_000;
 
 let siteDir;
 let server;
@@ -67,18 +73,57 @@ async function openLedgerPage({ viewport, colorScheme } = {}) {
 
   await page.goto(`${server.origin}/ledger.html`, { waitUntil: "networkidle" });
   await page.locator("#chatform").waitFor({ state: "visible" });
+  await waitForLiveDock(page, { consoleErrors, failedRequests });
   return { context, page, consoleErrors, failedRequests };
 }
 
-/** Type a turn into the dock and wait for its reply — the SAME wait-for-a-
- *  new-answer-line idiom e2e/browser-chat.test.mjs's own ask() uses. */
+/** Wait until the LIVE dock has actually wired itself to the form.
+ *
+ *  Neither of the gates above says that. `#chatform` is static markup, so it is
+ *  visible before a single script has run, and "networkidle" says only that the
+ *  network went quiet, which it also does when the sibling bundle failed to
+ *  arrive at all. Both can pass with `window.tmctLedger` still undefined and no
+ *  submit handler attached, and then every test in this file is driving a form
+ *  that nothing is listening to.
+ *
+ *  The dock rewrites the input's placeholder in the same synchronous run that
+ *  registers its submit handler, so the bundle's export plus that placeholder
+ *  is the pair that means "wired". */
+async function waitForLiveDock(page, { consoleErrors, failedRequests }) {
+  try {
+    await page.waitForFunction(
+      () => typeof window.tmctLedger?.createLedgerSession === "function"
+        && /teach/i.test(document.getElementById("chatq")?.placeholder ?? ""),
+      null,
+      { timeout: DOCK_READY_TIMEOUT_MS },
+    );
+  } catch (cause) {
+    throw new Error(
+      "the live ledger dock never wired itself to #chatform"
+      + ` (failed same-origin requests: ${JSON.stringify(failedRequests)},`
+      + ` page errors: ${JSON.stringify(consoleErrors)})`,
+      { cause },
+    );
+  }
+}
+
+/** Type a turn into the dock and wait for its reply.
+ *
+ *  The `:not(.pending)` matters and is the whole reason this helper can be
+ *  trusted. The dock appends its "computing…" placeholder as `div.a pending`
+ *  the instant the form submits, synchronously, before the engine has run —
+ *  so a bare `div.a` count crosses its threshold on the PLACEHOLDER, and
+ *  every assertion after it races the real answer. Solo that race is usually
+ *  won by luck (the engine settles inside the next CDP round trip); under
+ *  concurrent browser tests it is lost, and the turn reads back "computing…"
+ *  with no taught/miss class and a ledger view that has not refocused yet. */
 async function turn(page, text) {
-  const replies = page.locator("#chatlog > div.a");
+  const replies = page.locator("#chatlog > div.a:not(.pending)");
   const before = await replies.count();
   await page.fill("#chatq", text);
   await page.press("#chatq", "Enter");
   await page.waitForFunction(
-    (seen) => document.querySelectorAll("#chatlog > div.a").length > seen,
+    (seen) => document.querySelectorAll("#chatlog > div.a:not(.pending)").length > seen,
     before,
     { timeout: TURN_TIMEOUT_MS },
   );

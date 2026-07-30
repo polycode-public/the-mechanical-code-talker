@@ -49,6 +49,18 @@ async function openLedgerPage() {
 
   await page.goto(`${server.origin}/ledger.html`, { waitUntil: "networkidle" });
   await page.locator("#chatform").waitFor({ state: "visible" });
+  // Neither gate above means the live dock is wired, and the research row runs
+  // through that same dock session. #chatform is static markup, visible before
+  // a script has run, and "networkidle" says only that the network went quiet,
+  // which it also does when the sibling bundle never arrived. The dock rewrites
+  // the input's placeholder in the same synchronous run that registers its
+  // submit handler, so wait for that.
+  await page.waitForFunction(
+    () => typeof window.tmctLedger?.createLedgerSession === "function"
+      && /teach/i.test(document.getElementById("chatq")?.placeholder ?? ""),
+    null,
+    { timeout: TURN_TIMEOUT_MS },
+  );
   return { context, page, thirdPartyAttempts };
 }
 
@@ -121,12 +133,15 @@ test("the research row runs the queue through the dock — cited turns, auto-pla
     const hasQuokka = await page.evaluate(() => LEDGER.terms.some((t) => t.term === "quokka"));
     assert.equal(hasQuokka, true, "the term index now carries the researched topic");
 
-    // And the dock answers from what it just researched.
-    const replies = page.locator("#chatlog > div.a");
+    // And the dock answers from what it just researched. The dock's
+    // "computing…" placeholder is a `div.a pending` appended the instant the
+    // form submits, so it has to be excluded or the wait resolves on it and
+    // the reply below reads back the placeholder.
+    const replies = page.locator("#chatlog > div.a:not(.pending)");
     const seen = await replies.count();
     await page.fill("#chatq", "what is a quokka");
     await page.press("#chatq", "Enter");
-    await page.waitForFunction((n) => document.querySelectorAll("#chatlog > div.a").length > n, seen, { timeout: TURN_TIMEOUT_MS });
+    await page.waitForFunction((n) => document.querySelectorAll("#chatlog > div.a:not(.pending)").length > n, seen, { timeout: TURN_TIMEOUT_MS });
     assert.match(await replies.last().textContent(), /quokka is a kind of marsupial/);
   } finally {
     await context.close();
