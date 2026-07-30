@@ -1222,7 +1222,7 @@ ${THEME_TOKENS_CSS}
     clearTimeout(saveTimer);
     saveTimer = setTimeout(() => {
       saveTimer = null;
-      const session = window.tmctChatSession;
+      const session = window.tmct.session;
       if (!session) return;
       const started = performance.now();
       let snapshot;
@@ -1246,8 +1246,8 @@ ${THEME_TOKENS_CSS}
     // it would keep merging peers' facts into a store nothing reads any more.
     // Rejoining is a fresh invite, which is what a dropped node needs anyway.
     dropRoom();
-    window.tmctChatSession = await newSession();
-    const stats = await window.tmct.page.memoryStats(window.tmctChatSession.memoryDir);
+    await newSession();
+    const stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir);
     addSystemLine("forgot everything taught on this device \\u2014 back to the fresh seed (" + statsSummaryLine(stats, bandLabelFor) + ").");
     await renderStatsPanel(stats);
   }
@@ -1266,8 +1266,8 @@ ${THEME_TOKENS_CSS}
    *  rather than blanking it. */
   async function renderStatsPanel(stats) {
     if (!stats) {
-      if (!window.tmctChatSession || !window.tmct.page.memoryStats) return;
-      try { stats = await window.tmct.page.memoryStats(window.tmctChatSession.memoryDir); }
+      if (!window.tmct.session || !window.tmct.page.memoryStats) return;
+      try { stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir); }
       catch { return; }
     }
     factPillValueEl.textContent = Number(stats.total || 0).toLocaleString();
@@ -1348,9 +1348,9 @@ ${THEME_TOKENS_CSS}
    *  own entry — the passage was still read, even where nothing new stuck. */
   async function noteResearchLearned(result) {
     if (result.research === undefined || !result.record || result.record.miss) return;
-    if (!window.tmct.page.researchedFactRows || !window.tmctChatSession) return;
+    if (!window.tmct.page.researchedFactRows || !window.tmct.session) return;
     let rows;
-    try { rows = await window.tmct.page.researchedFactRows(window.tmctChatSession.memoryDir); }
+    try { rows = await window.tmct.page.researchedFactRows(window.tmct.session.memoryDir); }
     catch { return; }
     const newFacts = [];
     for (const row of rows) {
@@ -1386,7 +1386,7 @@ ${THEME_TOKENS_CSS}
       : winkStatus === "unavailable"
         ? "wink-nlp unavailable — curated + fuzzy tiers only (still zero guesses, zero LLM)"
         : "wink-nlp: loading\\u2026";
-    const liveReference = window.tmctChatSession ? window.tmctChatSession.liveReference : liveReferenceForMode(checkedWikiMode());
+    const liveReference = window.tmct.session ? window.tmct.session.liveReference : liveReferenceForMode(checkedWikiMode());
     const livePart = "live wikipedia: " + liveStatusWord(liveReference);
     const netPart = room
       ? " \\u00b7 world \\u201c" + worldName + "\\u201d: " + wireStateLabel(room.state).word
@@ -1399,7 +1399,7 @@ ${THEME_TOKENS_CSS}
   // "supplement" clears every radio (it has none of its own) rather than
   // leaving a stale mode checked.
   function mirrorWikiModeFromSession() {
-    const session = window.tmctChatSession;
+    const session = window.tmct.session;
     if (!session || typeof session.liveReference === "undefined") return;
     const liveReference = session.liveReference;
     const mode = liveReference === "always" ? "always" : liveReference === true ? "miss" : liveReference === false ? "off" : null;
@@ -1410,8 +1410,8 @@ ${THEME_TOKENS_CSS}
   wikiModeFieldset.addEventListener("change", function () {
     const mode = checkedWikiMode();
     writeWikiMode(mode);
-    if (window.tmctChatSession && window.tmctChatSession.setLiveReference) {
-      window.tmctChatSession.setLiveReference(liveReferenceForMode(mode));
+    if (window.tmct.session && window.tmct.session.setLiveReference) {
+      window.tmct.session.setLiveReference(liveReferenceForMode(mode));
     }
     renderStatus();
   });
@@ -1420,15 +1420,15 @@ ${THEME_TOKENS_CSS}
     const n = Number(synthSliderEl.value);
     synthValueEl.textContent = String(n);
     writeSynthBudget(n);
-    if (window.tmctChatSession && window.tmctChatSession.setSynthesisBudget) {
-      window.tmctChatSession.setSynthesisBudget(n);
+    if (window.tmct.session && window.tmct.session.setSynthesisBudget) {
+      window.tmct.session.setSynthesisBudget(n);
     }
   });
 
   let busy = true;
   function setBusy(v) {
     busy = v;
-    const ready = Boolean(window.tmctChatSession);
+    const ready = Boolean(window.tmct.session);
     inputEl.disabled = v || !ready;
     sendBtn.disabled = v || !ready;
   }
@@ -1439,7 +1439,7 @@ ${THEME_TOKENS_CSS}
   // bubble, settle, persist, stats. Resolves once the turn has settled (the
   // ticker awaits it before pacing the next step).
   async function submitLine(q) {
-    if (!q || busy || !window.tmctChatSession) return null;
+    if (!q || busy || !window.tmct.session) return null;
     addUserBubble(q);
     transcript.push({ role: "you", text: q, chipTier: null, ts: Date.now() });
     const pendingRow = addPendingAssistantBubble();
@@ -1482,7 +1482,7 @@ ${THEME_TOKENS_CSS}
   composerForm.addEventListener("submit", (e) => {
     e.preventDefault();
     const q = inputEl.value.trim();
-    if (!q || busy || !window.tmctChatSession) return;
+    if (!q || busy || !window.tmct.session) return;
     inputEl.value = "";
     const lowered = q.toLowerCase();
     if (lowered === "wave" || lowered === "/wave") {
@@ -1546,7 +1546,7 @@ ${THEME_TOKENS_CSS}
 
   researchGoBtn.addEventListener("click", () => {
     const topic = researchTopicEl.value.trim();
-    if (!topic || busy || !window.tmctChatSession) return;
+    if (!topic || busy || !window.tmct.session) return;
     researchTopicEl.value = "";
     submitLine("research " + topic);
   });
@@ -1567,7 +1567,7 @@ ${THEME_TOKENS_CSS}
   // @media print stylesheet above to un-pin the message column so every
   // turn reaches paper.
   el("exportMd").addEventListener("click", () => {
-    const sessionId = (window.tmctChatSession && window.tmctChatSession.sessionId) || "";
+    const sessionId = (window.tmct.session && window.tmct.session.sessionId) || "";
     const md = transcriptMarkdown(transcript, { version: siteVersion, sessionId: sessionId }, sessionLogHeaderMarkdown, sessionLogTurnMarkdown);
     const blob = new Blob([md], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
@@ -1586,7 +1586,7 @@ ${THEME_TOKENS_CSS}
   // subject/predicate/object/provenance shape the extract and memory-export
   // CLI paths emit), so what you taught leaves in the standard shape.
   el("exportFacts").addEventListener("click", async () => {
-    const session = window.tmctChatSession;
+    const session = window.tmct.session;
     if (!session || !window.tmct.page.exportFactsJsonl) return;
     let jsonl;
     try {
@@ -1615,7 +1615,7 @@ ${THEME_TOKENS_CSS}
   el("ingestInput").addEventListener("change", async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = "";
-    const session = window.tmctChatSession;
+    const session = window.tmct.session;
     if (!file || busy || !session || !window.tmct.page.splitSentences) return;
     let text;
     try {
@@ -1791,10 +1791,10 @@ ${THEME_TOKENS_CSS}
     if (room) return room;
     const mod = await loadP2p();
     await ensureIdentity();
-    if (!window.tmctChatSession) await window.tmctChatReady;
-    if (!window.tmctChatSession) throw new Error("the chat engine didn't finish booting");
+    if (!window.tmct.session) await window.tmctChatReady;
+    if (!window.tmct.session) throw new Error("the chat engine didn't finish booting");
     room = mod.createP2pRoom({
-      memoryDir: window.tmctChatSession.memoryDir,
+      memoryDir: window.tmct.session.memoryDir,
       myPeerId: myPeerId,
       myDisplayName: myDisplayName,
       worldId: worldId,
@@ -2239,7 +2239,7 @@ ${THEME_TOKENS_CSS}
     synthSliderEl.value = String(readSynthBudget());
     synthValueEl.textContent = synthSliderEl.value;
     if (savedRecord && savedRecord.payload) {
-      window.tmctChatSession = await window.tmct.open({
+      await window.tmct.open({
         seedPayload: savedRecord.payload,
         vocabSeeded: true,
         liveReference: liveReferenceForMode(initialMode),
@@ -2248,9 +2248,9 @@ ${THEME_TOKENS_CSS}
         digestStructures: DIGEST_STRUCTURES,
       });
     } else {
-      window.tmctChatSession = await newSession();
+      await newSession();
     }
-    const stats = await window.tmct.page.memoryStats(window.tmctChatSession.memoryDir);
+    const stats = await window.tmct.page.memoryStats(window.tmct.session.memoryDir);
     if (savedRecord) restoredCount = stats.taught.length;
     const restoredNote = savedRecord
       ? " Restored " + restoredCount + " taught fact" + (restoredCount === 1 ? "" : "s")
@@ -2266,7 +2266,7 @@ ${THEME_TOKENS_CSS}
     // was never open to read.
     if (window.tmct.page.researchedFactRows) {
       try {
-        const existingResearch = await window.tmct.page.researchedFactRows(window.tmctChatSession.memoryDir);
+        const existingResearch = await window.tmct.page.researchedFactRows(window.tmct.session.memoryDir);
         for (const row of existingResearch) researchedFactKeysSeen.add(row.subject + "|" + row.predicate + "|" + row.object);
       } catch { /* best-effort seeding only — a fresh session has none to seed */ }
     }

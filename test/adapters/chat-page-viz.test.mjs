@@ -233,7 +233,7 @@ test("renderChatHtml: the radio group is wired to the session and the stored pre
   assert.match(html, /"tmct\.chat\.wikiMode"/, "the mode persists under its own localStorage key");
   assert.match(html, /"tmct\.chat\.liveWikipedia"/, "the legacy key is still read, for migration");
   assert.match(html, /if \(localStorage\.getItem\(LEGACY_LIVE_PREF_KEY\) === "on"\) return "miss";/, "a legacy \"on\" preference migrates to the miss mode");
-  assert.match(html, /window\.tmctChatSession\.setLiveReference\(liveReferenceForMode\(mode\)\)/, "a flip reaches the running session");
+  assert.match(html, /window\.tmct\.session\.setLiveReference\(liveReferenceForMode\(mode\)\)/, "a flip reaches the running session");
   assert.match(html, /const initialMode = readWikiMode\(\);/, "boot restores the stored mode before the session starts");
   assert.match(html, /onLiveLookup: function \(\) \{ statusEl\.textContent = "searching wikipedia\\u2026"; \}/, "an in-flight lookup announces itself on the statusline");
   assert.match(html, /"live wikipedia: " \+ liveStatusWord\(liveReference\)/, "the statusline names the live state");
@@ -247,7 +247,7 @@ test("renderChatHtml: setLiveReference(false|true|\"always\") is exactly what th
 test("renderChatHtml: the synthesis slider is wired to setSynthesisBudget and its own storage key", () => {
   const html = renderChatHtml();
   assert.match(html, /"tmct\.chat\.synthBudget"/);
-  assert.match(html, /window\.tmctChatSession\.setSynthesisBudget\(n\)/);
+  assert.match(html, /window\.tmct\.session\.setSynthesisBudget\(n\)/);
 });
 
 test("renderChatHtml: a /wiki supplement turn clears every radio rather than leaving a stale one checked", () => {
@@ -394,7 +394,7 @@ test("renderChatHtml: a second docked section, seeded empty, sits alongside the 
 
 test("renderChatHtml: the researched panel reads real fact rows through window.tmct.page.researchedFactRows, never re-deriving them from the answer text", () => {
   const html = renderChatHtml();
-  assert.match(html, /window\.tmct\.page\.researchedFactRows\(window\.tmctChatSession\.memoryDir\)/);
+  assert.match(html, /window\.tmct\.page\.researchedFactRows\(window\.tmct\.session\.memoryDir\)/);
   assert.match(html, /const parseResearchAnswer = /, "the pure citation parser is spliced in, not reimplemented");
 });
 
