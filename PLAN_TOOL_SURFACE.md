@@ -1,8 +1,8 @@
 # PLAN_TOOL_SURFACE.md — demo-page JS audited toward library, tool, ask
 
-Status: SURVEY + DESIGN. Rows and phases marked **landed** are done; everything else is still a
-dispatch list: every item carries a file:line, a category, and a named target, so a future session
-can hand a row straight to a sub-agent without re-reading the estate.
+Status: **DONE.** All 11 phases landed, including the coordinator's own showcase-pass read-through
+across every demo page. Kept here as the design record; a future session extending this work should
+still read the Inventory and Theme sections for the reasoning behind each landed row.
 
 ## Origin
 
@@ -485,13 +485,25 @@ Ordered so each phase is useful on its own and unblocks the next.
     `createTurnSession` exposes that graph; and the surface publishes with a `fallback` flag, so
     the ledger page's two bundles (the committed question-only one and the demo site's full
     engine) settle precedence explicitly rather than by load order.
-11. **The showcase pass.** The mechanical half is landed: both raw-text holdouts,
+11. **The showcase pass — landed.** The mechanical half: both raw-text holdouts,
     `chat-page-viz.mjs`'s four helpers and `code-explorer-viz.mjs`'s `CLIENT_JS`, now build their
     page script the `mud-viz.mjs` way, every remaining hand-written piece extracted into a named,
     unit-tested module function and spliced in with `.toString()`
-    (`test/adapters/code-explorer-viz.test.mjs`). Still open: reading each page's source start to
-    finish against the operator's test — does this read as a thin caller of real tmct capability —
-    across the other viz modules.
+    (`test/adapters/code-explorer-viz.test.mjs`). The semantic half: the coordinator's own
+    read-through of every page's real question/answer surface against the operator's test — does
+    this read as a thin caller of real tmct capability. All ten pages' chat docks/composers route
+    their typed line straight to `tmct.turn`/`tmct.ask`/`tmct.plan`, properly awaited:
+    `chat-page-viz.mjs`, `ledger-viz.mjs` (both its live dock and its committed-bundle fallback),
+    `plan-viz.mjs`, `adventure-viz.mjs`, `mud-viz.mjs`, `research-viz.mjs`, `spider-fly-viz.mjs`,
+    `sprite-catalog-viz.mjs` (via `chat.mjs`'s generic lanes, phase 9). `ingest-viz.mjs` holds no
+    conversation by design (it grounds pasted prose into facts and answers nothing). Read
+    `code-explorer-viz.mjs`'s `askRelatedFacts` closely since it doesn't call the top-level
+    `tmct.ask()` verb directly — it wraps `tmct_ask` in a specialized per-relation-kind loop
+    appropriate to its sidebar UI (one answer per relation kind, not a free-text question box), and
+    that wrapper genuinely reaches the tool layer rather than reimplementing it. Every remaining
+    hand-rolled regex found across the ten pages (`ledger-viz.mjs`'s `PREP_FOLD_RE`/`COMPARATIVE_RE`,
+    for instance) parses a taught predicate's own name into display phrasing, not a question — the
+    same shape as `phraseForRelation`, not a competing understanding path. No violations found.
 
 ## Non-goals
 

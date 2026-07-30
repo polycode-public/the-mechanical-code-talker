@@ -16,7 +16,10 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## In-flight right now (2026-07-30)
 
-**`PLAN_TOOL_SURFACE.md` is most of the way landed, this session.** Coordinator + background
+**`PLAN_TOOL_SURFACE.md` is fully landed, this session — all 11 phases, including phase 11's
+mechanical splice conversion and the coordinator's own read-through of every page's chat/dock
+surface against the operator's "thin caller of real tmct capability" test (no violations found).
+Archivable.** Phases 1-10 landed as follows: Coordinator + background
 sub-agents pushed phases 1-5 and 7 to done: the pure-library sweep and `phraseForRelation` (all ten
 demo pages now share `turn-session.mjs`/`viz-boot.mjs`/`viz-room-graph.mjs`/`viz-theme.mjs`/
 `viz-ticker.mjs`/`memory-stats.mjs`/`ask-vocab.mjs`/`game-config.mjs` instead of duplicating them),
