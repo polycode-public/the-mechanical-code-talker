@@ -56,6 +56,14 @@ const OPTIONAL_ADAPTER_STUBS = {
   // phrasing variety stays OFF in the embedded chat — the browser answer is
   // always the base phrase, exactly as when the variants file can't be read.
   "answer-variants.mjs": "export const pickPhrase = (poolId, key, base) => base;\n",
+  // the fs+TOML side of the sprite template libraries — tmct_sprite is a cold
+  // (CLI-only) tool, but dispatchTool's handler registry imports every
+  // handler statically, so these two loaders are link-time reachable from
+  // this bundle even though nothing in it ever calls tmct_sprite. Both
+  // modules' own headers already declare "never imported by a browser entry"
+  // as the intended invariant; this restores it rather than changing it.
+  "corpus/sprite-template-files.mjs": "export const SPRITE_TEMPLATES_DIR = \"\";\nexport const readSpriteTemplateFiles = () => [];\n",
+  "corpus/sprite-large-template-files.mjs": "export const SPRITE_LARGE_TEMPLATES_DIR = \"\";\nexport const readSpriteLargeTemplateFiles = () => [];\n",
 };
 
 /** Build public/chat-browser.bundle.js into `outDir` (default the repo's own
