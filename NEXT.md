@@ -117,6 +117,28 @@ Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the C
 `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
 clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
+## In-flight: Batch A (2026-07-30, coordinator + 6 worktree sub-agents)
+
+Driving all 5 open items below plus `PLAN_FACT.md`'s landing-order steps 1-2 concurrently, each in
+its own worktree, file-ownership-disjoint. Plan: `~/.claude/plans/please-use-the-coordinator-witty-riddle.md`.
+
+- [ ] A1 (NEXT #4, `chat.mjs` ask delimiter): worktree dispatched, Sonnet. Status: started.
+- [ ] A2 (NEXT #3, page-lifecycle globals fold): worktree dispatched, Sonnet. Status: started.
+- [ ] A3 (NEXT #5, mud epoch fold for knows-about): worktree dispatched, Opus. Status: started.
+- [ ] A4 (NEXT #1 + #2 sprites slice, CLI sprites bundle + tmct.ask sprites projection): worktree
+  dispatched, Sonnet. Status: started.
+- [ ] A5 (PLAN_FACT step 1, SQL projection columns + read perf guard): worktree dispatched, Opus.
+  Status: started.
+- [ ] A6 (PLAN_FACT step 2, stable node id + tag grammar): worktree dispatched, Opus. Status:
+  started.
+
+**NEXT #2 scope decision:** only the sprites slice ships now (folded into A4). chat/ledger/ingest/
+research/plan are a documented, separate remainder — chat/ledger need a materially different
+open-vocabulary projector (not a `worldRelationGraphPayload` drop-in), ingest has no `ask`/`turn`
+route wired at all yet, research already has a working narrower `ask` route so isn't hitting the
+empty-graph miss, and plan's Hanoi-puzzle state has no board-shaped rows to project. Tracked as a
+new open item below once A4 lands.
+
 ## Open items
 
 - [ ] The standalone CLI's `--render sprites` export no longer ships the composer input panel —
