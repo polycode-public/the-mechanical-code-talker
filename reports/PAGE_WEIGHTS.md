@@ -1,129 +1,136 @@
 # Page weights — the demo site as deployed
 
-**Report revision 1** — measured 2026-07-24 against deployed version 2.11.10, 10 pages. The
-revision counter is this report's own version, independent of the package version: it advances
-every time this page is re-measured, whether or not a package version bump happened alongside.
-Refresh via `SKILL_PAGE_WEIGHTS.md`.
+**Report revision 2** — measured 2026-07-30 against deployed version 4.0.0, 11 pages, first
+revision since the AWS/CloudFront cutover. Revision 1 measured the old GitLab Pages deployment;
+this one measures the live `https://tmct.polycode.co.uk/` edge. The revision counter is this
+report's own version, independent of the package version. Refresh via `SKILL_PAGE_WEIGHTS.md`.
 
-What each page of https://the-mechanical-code-talker-36445d.gitlab.io/ costs to
-load, measured 2026-07-24 against the live deployment at version 2.11.10 (read
-off the home page's `#pkg-version` stamp before measuring). Two methods, and
-they agree within header noise: `curl` per asset (raw bytes with no
-`accept-encoding`; wire bytes with `accept-encoding: br, gzip` — GitLab Pages
-serves the precompressed `.br` siblings the build writes), and a real Chromium
-cold load per page (Playwright, CDP `Network.loadingFinished`
-`encodedDataLength` summed over every request).
+What each page of https://tmct.polycode.co.uk/ costs to load, measured 2026-07-30
+against the live deployment at version 4.0.0 (read off the home page's
+`#pkg-version` stamp before measuring). Two methods, and they agree within
+header noise (each page's curl-derived cold-load total sits within about 1%
+of the Chromium crawl's `Network.loadingFinished` sum): `curl` per asset (raw
+bytes with no `accept-encoding`; wire bytes with `accept-encoding: br, gzip`
+— CloudFront serves brotli either by compressing on the fly or, for assets
+over its on-the-fly compression ceiling, via a CloudFront Function that
+rewrites the request to the build's own precompressed `.br` sibling by
+`Accept-Encoding`), and a real Chromium cold load per page (Playwright, CDP
+`Network.loadingFinished` `encodedDataLength` summed over every request).
 
-## The ten pages
+## The eleven pages
 
 | page | own HTML (raw) | eager assets (raw) | eager assets (br wire) | cold-load total (wire) | third-party requests |
 |---|---:|---:|---:|---:|---:|
-| index.html | 18,153 | 4,856,462 | 1,541,298 | 1,546,402 | 0 |
-| chat.html | 63,520 | 94,442,864 | 5,669,129 | 5,684,690 | 0 |
-| spider-fly.html | 614,718 | 845,819 | 233,567 | 269,923 | 0 |
-| ledger.html | 652,024 | 4,497,227 | 1,023,670 | 1,188,941 | 0 |
-| adventure.html | 638,500 | 855,135 | 237,588 | 276,409 | 0 |
-| sprites.html | 1,290,920 | 4,490,799 | 1,021,426 | 1,067,525 | 0 |
-| plan.html | 37,857 | 4,500,964 | 1,024,446 | 1,032,627 | 0 |
-| code.html | 96,065 | 917,334 | 252,398 | 266,163 | 0 |
-| ingest.html | 35,397 | 4,560,416 | 1,039,121 | 1,047,819 | 0 |
-| research.html | 36,570 | 4,565,117 | 1,040,349 | 1,048,804 | 0 |
+| index.html | 58,001 | 5,520,568 | 2,220,706 | 2,231,327 | 0 |
+| chat.html | 118,157 | 94,547,712 | 5,973,788 | 6,004,064 | 0 |
+| spider-fly.html | 885,472 | 971,063 | 301,946 | 372,917 | 0 |
+| ledger.html | 718,379 | 4,623,517 | 1,300,457 | 1,506,680 | 0 |
+| adventure.html | 969,721 | 980,610 | 304,754 | 389,852 | 0 |
+| sprites.html | 1,954,186 | 4,615,841 | 1,297,624 | 1,479,469 | 0 |
+| plan.html | 43,378 | 4,626,224 | 1,301,356 | 1,312,088 | 0 |
+| code.html | 98,461 | 90,751,041 | 4,922,685 | 4,938,985 | 0 |
+| ingest.html | 36,225 | 94,396,088 | 5,917,793 | 5,927,753 | 0 |
+| research.html | 54,388 | 94,399,340 | 5,918,770 | 5,932,191 | 0 |
+| mud.html | 1,014,245 | 1,136,587 | 362,029 | 459,309 | 0 |
 
-Cold-load total is page HTML wire + eager assets wire. The Chromium run
-confirmed every page within ~0.1% (response headers account for the gap) and
-confirmed the request lists: no page makes any third-party request. Every
-byte comes from the site's own origin.
+Cold-load total is page HTML wire + eager assets wire. The Chromium run confirmed every page
+within about 1% (response headers and one client-generated `blob:` object URL on chat.html — 0
+wire bytes, not a network request — account for the gap) and confirmed the request lists: no page
+makes any third-party request. Every byte comes from the site's own origin.
 
-**chat.html and code.html now reflect the live 2.11.10 deployment,** measured
-2026-07-24 via `curl` per asset and verified through browser network inspection.
-`chat-seed.json`'s fact caps (conceptnet, wordnet-xl) have since been removed, so
-the chat.html numbers in this report reflect the uncapped seed rather than that
-2.11.10 crawl; see the chat.html note below for the current size. It compresses
-~19:1 under brotli and accounts for most of chat.html's wire size; the boot time
-remains under the 20-second budget since everything is local JSON parsing, not
-network latency.
+Whole set, summing the eleven per-page totals: **402,519,204 bytes raw (383.9 MiB),
+30,554,635 bytes wire (29.1 MiB)**. Counting every distinct file once (what a full cold crawl
+transfers, since the wink vendor, the P2P bundle, `chat-seed.json` and the service worker script
+are all shared across several pages): **66 files, ~106.0 MiB raw, ~10.2 MiB wire**.
 
-**ingest.html and research.html are new pages in this release,** both measured
-against the live deployment. Each loads the shared `vendor/wink.js` plus its
-own engine bundle (`ingest-browser.bundle.js` and `research-browser.bundle.js`
-respectively), mirroring the cold-load profile of plan.html (wink plus one
-bundle), so both add no new shared assets beyond what the other pages already
-transfer on their first visits.
+## What changed since revision 1
 
-Whole set, summing the ten per-page totals: **128,015,861 bytes raw (122.1 MB),
-13,029,293 bytes wire (12.4 MB)**. Counting every distinct file once (what a
-full cold crawl transfers, since the wink vendor and the service worker script
-are shared): **57 files, ~103.6 MB raw, ~8.2 MB wire**. The ten-page set adds
-ingest and research pages (both new to 2.11.10) with their own bundles, and
-includes the updated chat and code pages. These chat.html totals carry
-`chat-seed.json`'s fact caps removed (see the chat.html note below); they are
-computed from the uncapped seed's measured size, not yet from a fresh
-Playwright crawl of a redeployed site.
+Revision 1 measured 10 pages on GitLab Pages at version 2.11.10. This revision adds **mud.html**
+(new page, the Lemmings-style P2P mesh burrow) and reflects the AWS cutover plus everything that
+shipped in the 2.11.10 → 4.0.0 span:
+
+- **code.html, ingest.html and research.html now eager-load `chat-seed.json`** on cold boot —
+  code.html and research.html fetch it unconditionally; ingest.html fetches it because its seed
+  toggle defaults to checked. In revision 1, only chat.html paid this cost; these three pages
+  were among the lightest cold loads (code.html was the lightest of the ten). Now all three sit
+  close to chat.html's weight, around 4.9-5.9 MB wire.
+- **chat.html and mud.html both load `vendor/p2p.js`** (151,754 raw / 56,022 br), the P2P mesh
+  client — a new shared asset since revision 1, which had no P2P feature yet.
+- **`chat-seed.json` itself grew**: 89,774,669 bytes raw, 4,618,279 br (72,098 facts, per the
+  cap-removal noted in chat.html's own note below) — up from the capped seed revision 1 measured.
+- Several data-embedding pages grew their own HTML: adventure.html's embedded map (638,500 →
+  969,721 raw), sprites.html's embedded sprite data (1,290,920 → 1,954,186 raw), ledger.html's
+  embedded ledger data (652,024 → 718,379 raw).
 
 ## Notes on the numbers
 
 **The shared wink vendor.** `vendor/wink.js` (wink-nlp plus the English lite
-model, 3,655,359 raw / 790,260 br) is the single largest shared asset. Seven
-pages load it eagerly (index, chat, ledger, sprites, plan, ingest, research),
-but the browser pays for it once: HTTP cache plus the service worker's precache
-serve every later page from the first copy.
+model, 3,655,359 raw / 998,548 br) is the single largest shared asset. Seven
+pages load it eagerly (index, chat, ledger, sprites, plan, ingest, research) — the same set as
+revision 1. code.html, mud.html, adventure.html and spider-fly.html still don't load it eagerly.
+The browser pays for it once: HTTP cache plus the service worker's precache serve every later page
+from the first copy.
 
-**chat.html.** The seed, `chat-seed.json`, matches `npm run init:xl`'s band set
-uncapped: 72,098 facts, 89,774,669 bytes raw but 4,608,341 on the wire (br
-compresses the JSON ~19:1), so chat's whole cold boot is 5.4 MB. The page also
-fetches `tmct-sw.js` (2,756) to show the release stamp. The reference pack
-loads lazily: `reference-pack/index.json` (104,924 raw / 20,407 br) on the
-first citation, then one article JSON per citation (1–4 KB each; 4,224 terms
-mapping to 3,887 article files, ~15.5 MB on disk that is never bulk-fetched).
-The bigger seed costs only bytes, not boot time: a real-browser measurement
-(`test-e2e/pages-chat-boot-budget.test.mjs`) still grounds the first seeded
-answer at ~1.5 s against a 20 s budget, since everything here is local
-JSON parsing, not network latency.
+**chat.html.** The seed, `chat-seed.json`, is 72,098 facts, 89,774,669 bytes raw but 4,618,279 on
+the wire (br compresses the JSON ~19:1), so chat's whole cold boot is 6.0 MB. The page also fetches
+`tmct-sw.js` (2,817 raw / 956 br) to show the release stamp, and now `vendor/p2p.js` for the P2P
+mesh feature. The reference pack loads lazily: `reference-pack/index.json` (104,950 raw / 24,431
+br) on the first citation, then one article JSON per citation (1-4 KB each; ~3,889 terms mapping to
+article files, ~15 MB on disk that is never bulk-fetched). The bigger seed costs only bytes, not
+boot time — this report doesn't re-verify the boot budget; see
+`test-e2e/pages-chat-boot-budget.test.mjs` for that.
 
 **index.html.** Loads the ask demo as unbundled modules: 27 `engine/src/**`
-files (772,496 raw / 375,280 wire), `demo-graph.json`, the wink vendor, and
-four screenshot PNGs (350,961 bytes, served identity since PNG is already
-compressed).
+files, `demo-graph.json`, the wink vendor, and now nine screenshot PNGs (up from eight — mud.html's
+screenshot joined the set), 977,504 bytes total for the screenshots alone.
 
-**sprites.html.** Its own HTML carries the embedded sprite data (1,290,920
-raw, 46,099 br), plus the dock bundle `sprites-browser.bundle.js` and the
+**sprites.html.** Its own HTML carries the embedded sprite data (1,954,186
+raw, 181,845 br), plus the dock bundle `sprites-browser.bundle.js` and the
 wink vendor.
 
-**code.html.** Its own HTML carries the embedded demo code graph, so the page
-makes only one other eager request, `code-explorer.bundle.js`. Unlike the
-other dock pages here, it does not fetch the wink vendor at load; the dock
-loads it lazily, only once a visitor actually asks a question. At 266 KB wire,
-it remains the lightest of the ten cold loads.
+**code.html.** Its own HTML carries the embedded demo code graph, so the page's eager requests are
+`code-explorer.bundle.js` and, new since revision 1, an unconditional `chat-seed.json` fetch for
+the dock's general-knowledge answers. It still does not fetch the wink vendor at load — the dock
+loads it lazily, only once a visitor actually asks a question — so it remains the page that avoids
+the wink cost, even though it's no longer the lightest cold load overall.
 
-**ingest.html and research.html.** Both new in this release. Each loads
-`vendor/wink.js` plus its own engine bundle (`ingest-browser.bundle.js` and
-`research-browser.bundle.js`), matching the pattern of plan.html and the
-ledger/sprite pages: wink for natural-language splitting and parsing, one
-page-specific bundle for the UI and inference logic. Each cold-loads at just
-over 1 MB wire.
+**ingest.html and research.html.** Each loads `vendor/wink.js` plus its own engine bundle
+(`ingest-browser.bundle.js` and `research-browser.bundle.js`), matching the pattern of plan.html
+and the ledger/sprite pages. Both now also eager-load `chat-seed.json`: research.html
+unconditionally, ingest.html because its "seed starter memory" checkbox defaults checked (a
+visitor who unchecks it and reloads skips the fetch; a cold, cookie-less visit takes the default).
 
-**The service worker.** index, chat, ledger and plan register `tmct-sw.js`
-(adventure and chat also fetch it for the stamp). On install it precaches the
-boot tier: `index.html`, `chat.html`, `chat-browser.bundle.js`,
-`sprites-browser.bundle.js`, `vendor/wink.js`, `chat-seed.json`,
-`reference-pack/index.json`. It serves those cache-first (reference-pack
-articles too, once fetched); pages and bundles are network-first with the
-cache as offline fallback. So a second visit pays wire cost only for the
-page HTML and bundle revalidation, and a fully offline reload of chat works.
-`test-e2e/pages-service-worker.test.mjs` proves it, so it is not re-measured here.
+**mud.html.** New in this release: the Lemmings-style P2P mesh burrow. Its own HTML carries the
+embedded sprite/room data (1,014,245 raw, 97,280 br); it loads `mud-browser.bundle.js` and
+`vendor/p2p.js`, but not the wink vendor — the lightest cold load among the mesh/game-style pages
+at 459 KB wire.
 
-**Encoding coverage.** HTML, bundles and JSON ship `.br`/`.gz` siblings and
-serve br. Plain `.mjs` modules, PNGs and `tmct-sw.js` serve identity, which
-is why index's engine-module graph costs the same raw and wire.
+**The service worker.** Registration itself (`navigator.serviceWorker.register`) doesn't appear as
+a network request when measured with `serviceWorkers: "block"` — that's the point of blocking it.
+Three pages separately `fetch()` `tmct-sw.js` as plain text to read its release-stamp comment:
+chat, adventure and, new since revision 1, ingest. `test-e2e/pages-service-worker.test.mjs` covers
+registration and precache behavior, so it is not re-measured here.
+
+**Encoding coverage — changed from revision 1.** GitLab Pages served the build's own precompressed
+`.br` sibling for every compressible file, and left small plain `.mjs` modules and PNGs uncompressed
+(identity). CloudFront works differently: it compresses most objects on the fly regardless of file
+type, so the `engine/src/**` `.mjs` modules that served identity on Pages now compress under
+brotli too (e.g. `wink-model.mjs`: 3,504 raw → 1,450 br). Two exceptions remain identity: files
+under CloudFront's on-the-fly compression floor (`module-paths.mjs` and `nlp-registry.mjs`, both
+under 1 KB, serve identity), and PNGs (already compressed, so brotli would add work for no
+saving). The one asset large enough to sit over CloudFront's on-the-fly compression ceiling,
+`chat-seed.json` (89.7 MB raw), is the case revision 1's own methodology note anticipated: a
+CloudFront Function rewrites the request to the build's precompressed `.br` sibling by
+`Accept-Encoding` rather than compressing it live.
 
 ## How to re-measure
 
-Against `BASE=https://the-mechanical-code-talker-36445d.gitlab.io`:
+Against `BASE=https://tmct.polycode.co.uk`:
 
     # confirm the deployed version first
     curl -s "$BASE/" | grep -o 'id="pkg-version">[^<]*'
 
-    # raw bytes (no accept-encoding, Pages serves identity)
+    # raw bytes (no accept-encoding)
     curl -s -o /dev/null -w '%{size_download}' "$BASE/chat.html"
 
     # wire bytes (curl does not decompress without --compressed,
@@ -137,6 +144,9 @@ session with `Network.enable`, and per-page totals summed from
 `Network.loadingFinished` `encodedDataLength`. Pass
 `{ serviceWorkers: "block" }` to `newContext`, or the freshly installed
 service worker serves precached assets to the page with 0 wire bytes and the
-page total under-reads (index reads 0.76 MB instead of 1.55 MB without it).
-`npm run smoke:deploy` separately verifies version stamps and that the
-precompressed vendor asset serves with a `content-encoding`.
+page total under-reads. Watch for client-generated `blob:` object URLs in the
+request list (chat.html creates one) — they report 0 `encodedDataLength` and
+their `URL.host` parses empty, so a naive same-origin check misreads them as
+third-party; treat any non-`http(s)` scheme as same-origin unless proven
+otherwise. `npm run smoke:deploy` separately verifies version stamps and that
+compressible assets serve with a `content-encoding`.
