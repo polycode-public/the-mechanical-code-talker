@@ -144,26 +144,27 @@ mgx:FactShape a sh:NodeShape ;
         sh:message "mgx:supersededBy, when present, must name at least one Fact record id (a space-joined LIST: one logical source may have two live replicas that each supersede the same prior record before they sync, and that fork is real data). Its presence is what makes a record a demoted leaf rather than a live head." ;
     ] .
 
-# ---- Fact record id: the two suffixes the assertion model adds ---------------
+# ---- Fact record id: a constraint with no sh:path to hang on -----------------
 # A Fact's id is `<groupId>@<sourceId>`, where groupId is the content-addressed
 # `fact:<hash>` every reader still uses as the public fact id, and sourceId is
 # the Source key this ONE assertion is filed under. A record its own source has
 # since superseded keeps its content and moves to `<groupId>@<sourceId>#v<n>`,
 # n counting how many times that source has replaced its own record here.
 #
-# Only the SUFFIXES are constrained. The group part is deliberately unchecked:
-# a hand-built individual with a short opaque id is a legitimate sparse write,
-# and rejecting it is exactly the false-positive this gate must never produce
-# (see the file header's permissiveness note). The sourceId part is matched
-# loosely for the same reason a Source id is not a simple token — it carries
-# colons, spaces and an @revid of its own ("src:reference:simplewiki:Polar
-# bear@912"). src/adapters/memory/shacl.mjs implements this as a regex over
-# `.id`, which is a payload field rather than a predicate, so it has no
-# sh:path of its own to hang a property shape on.
-mgx:FactRecordIdShape a sh:NodeShape ;
-    sh:targetSubjectsOf rdf:subject ;
-    rdfs:comment "A Fact id carrying an assertion key must read <groupId>@<sourceId>, optionally suffixed #v<n> once its own source has superseded it. Checked only when the id actually carries one of those suffixes." ;
-    sh:message "A Fact record id must read <groupId>@<sourceId>, optionally suffixed #v<n> once superseded." .
+# The gate checks that form, but it gets NO shape above, deliberately. An id is
+# a payload field on the individual, not a predicate it carries, so there is no
+# sh:path to write a property shape against — and a hollow sh:NodeShape that
+# constrains nothing would document the rule while enforcing none of it. The
+# check lives in src/adapters/memory/shacl.mjs as a regex over `.id`; this note
+# is the sync point for it, exactly as the file header requires for everything
+# else here.
+#
+# Two deliberate limits on that check. Only the SUFFIXES are constrained — a
+# hand-built individual with a short opaque id is a legitimate sparse write, and
+# rejecting it is exactly the false positive this gate must never produce (see
+# the header's permissiveness note). And the sourceId part is matched loosely,
+# because a Source id is not a simple token: it carries colons, spaces and an
+# @revid of its own ("src:reference:simplewiki:Polar bear@912").
 
 # ---- Rule: name/kind/slots per the closed kind vocabulary -------------------
 # Targeted by mgx:ruleKind (only a Rule individual ever carries it).
