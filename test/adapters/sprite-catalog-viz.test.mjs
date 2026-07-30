@@ -246,16 +246,60 @@ test("the pose toggle alternates the idle sprite with the moving one, and needs 
   assert.deepEqual(movingFrameSequence(null, svgFrame("moving")), [], "no idle sprite, no toggle");
 });
 
-test("a real class's own facing swatches feed the sweep in turntable order, centre between the profiles", () => {
-  const swatches = tierSwatchesFor("bear", largeTemplates, SPRITE_REGISTRY, "large");
-  const facings = {};
-  for (const s of swatches) if (s.property === "mgx:faces") facings[s.label] = { svg: s.svg, label: s.label };
-  const plain = swatches.find((s) => s.label === "plain");
-  const frames = turnFrameSequence(FACING_TURN_ORDER, { svg: plain.svg, label: plain.label }, facings);
-  const expected = FACING_TURN_ORDER.filter((f) => f === null || facings[f]).map((f) => f ?? "centre");
-  assert.deepEqual(frames.map((f) => f.label), expected);
-  assert.equal(frames[Math.floor(frames.length / 2)].label, "centre", "the plain sprite sits mid-sweep");
-  assert.notEqual(frames[0].svg, frames[1].svg, "consecutive turntable frames are really different drawings");
+/** The three frame lists sprites.html's own inline script builds for one
+ *  class, selected off real tierSwatchesFor output by the same properties
+ *  and labels the page selects DOM swatches by. Keeps these tests honest
+ *  about the real catalog rather than about a hand-built frame fixture. */
+function pageCyclesFor(cls) {
+  const swatches = tierSwatchesFor(cls, largeTemplates, SPRITE_REGISTRY, "large");
+  const frameOf = (s) => ({ svg: s.svg, label: s.label });
+  const base = swatches.find((s) => s.kind === "plain" || s.kind === "fallback");
+  const baseFrame = base ? frameOf(base) : null;
+  const moodFrames = swatches.filter((s) => s.property === "mgx:feels").map(frameOf);
+  const facingFrames = {};
+  for (const s of swatches) if (s.property === "mgx:faces") facingFrames[s.label] = frameOf(s);
+  const movingSwatch = swatches.find((s) => s.property === "mgx:pose" && s.label === "moving");
+  return {
+    swatches,
+    mood: moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodFrames),
+    turn: turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames),
+    moving: movingFrameSequence(baseFrame, movingSwatch && frameOf(movingSwatch)),
+  };
+}
+
+test("a fully-turned real class sweeps all five turntable angles, the undirected sprite sitting centre", () => {
+  for (const cls of ["writer", "king", "dog", "cat"]) {
+    const { turn } = pageCyclesFor(cls);
+    assert.deepEqual(turn.map((f) => f.label), ["left", "half-left", "centre", "half-right", "right"], `${cls} sweeps the full turntable`);
+    assert.equal(new Set(turn.map((f) => f.svg)).size, 5, `${cls}: every angle is a distinct drawing, never the same art twice`);
+  }
+});
+
+test("a real class's moving sprite toggles against its own idle one, both real renders", () => {
+  for (const cls of ["writer", "king", "dog", "cat"]) {
+    const { moving } = pageCyclesFor(cls);
+    assert.deepEqual(moving.map((f) => f.label), ["idle", "moving"], `${cls} has both pose states`);
+    assert.notEqual(moving[0].svg, moving[1].svg, `${cls}: the moving sprite is really different art from the idle one`);
+    assert.ok(moving[1].svg.startsWith("<svg"), `${cls}: the moving frame is a real resolved sprite`);
+  }
+});
+
+test("a combined facing-and-pose variant joins neither single-axis cycle, so each animation stays on one axis", () => {
+  const { swatches, turn, moving, mood } = pageCyclesFor("writer");
+  const combined = swatches.filter((s) => String(s.property).includes(" + "));
+  assert.ok(combined.length, "writer really does carry combined facing+pose swatches, or this test proves nothing");
+  const combinedLabels = new Set(combined.map((s) => s.label));
+  for (const list of [turn, moving, mood]) {
+    for (const f of list) assert.ok(!combinedLabels.has(f.label), `${f.label} is a combined variant and must not be a single-axis frame`);
+  }
+  assert.deepEqual(mood.map((f) => f.label), ["writer", "happy", "sad", "angry", "scared", "surprised", "calm"], "the mood cycle carries moods only, never a facing");
+});
+
+test("a class the catalog gives no facing or pose art animates nothing on those axes rather than faking a frame", () => {
+  const { turn, moving, mood } = pageCyclesFor("person");
+  assert.deepEqual(turn, [], "no facing sprites, no sweep");
+  assert.deepEqual(moving, [], "no moving sprite, no toggle");
+  assert.equal(mood.length, 7, "its moods still cycle");
 });
 
 test("a moving-pose template's swatch carries mgx:pose, the property the page's toggle selects it by", () => {
