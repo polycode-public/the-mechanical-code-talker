@@ -141,9 +141,6 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 - [ ] mud room rebind's epoch fold covers world-state predicates only — `knows-about` testimony
   claims still rank by bare turn across epochs, so a pre-recast "the fox is gone" claim can outrank
   a fresh post-recast sighting of the same fox. Real remainder from `p2p-room.mjs`'s rebind work.
-- [ ] MUDIII implementation itself (Three.js town square) — fully designed in `PLAN_MUD.md`, not
-  started.
-- [ ] `PLAN_FACT.md` implementation itself — fully designed, not started.
 
 
 ## Discipline
