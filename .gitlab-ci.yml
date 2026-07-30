@@ -1,7 +1,7 @@
 # CI for @polycode-projects/the-mechanical-code-talker (tmct) — a single
 # published npm package plus a static home page (no benchmark rig). Core
 # jobs: run the tests, publish to public npm on a deliberate version bump,
-# and deploy public/ to an AWS-hosted edge (`deploy:website`, `e2e:deployed`)
+# and deploy public/ to an AWS-hosted edge (`deploy:website`, `e2e:deployed:*`)
 # on main — see PLAN_AWS.md. The home page moved off GitLab Pages entirely
 # (2026-07-28); the old `pages` job and its redirect-stub burn-in period are
 # retired. Mirrors the seonix repo's publish:npm and deploy:website shapes,
@@ -36,7 +36,7 @@ variables:
 # set`, masked + environment-scoped, once the tmct-ci/tmct-prod accounts exist
 # per PLAN_AWS.md Phase 1) ----------------------------------------------------
 # None of these are declared with values here: they don't exist yet (no AWS
-# account has been created), and `deploy:website` / `e2e:deployed` below fail
+# account has been created), and `deploy:website` / `e2e:deployed:*` below fail
 # closed (rules require the variable present) until they are set, the same
 # gate publish:npm already uses for NPM_TOKEN.
 #   CI_AWS_ACTIONS_ROLE_ARN    — tmct-ci OIDC actions-role ARN (branch-scoped)
@@ -229,7 +229,7 @@ license:deps:
 # can still say "this build is worth putting on the edge". `e2e-web-local-origin`
 # holds the files that can only run against a local server; it is not in the
 # deploy's `needs`. Everything else that used to run in this stage now runs
-# POST-deploy against the live site, in `e2e:deployed` at the bottom of this
+# POST-deploy against the live site, in the `e2e:deployed:*` jobs at the bottom of this
 # file. The trade is faster feedback for less pre-deploy certainty: a page
 # regression is caught after the edge has already served it, and the fix is a
 # new pipeline.
@@ -281,7 +281,7 @@ e2e-web-index:
       test-e2e/cli-render-views.test.mjs
 
 # The browser files that need a LOCAL origin, so they cannot move to
-# `e2e:deployed` with the rest of the matrix. Four of them build the page they
+# `e2e:deployed:pages` with the rest of the matrix. Four of them build the page they
 # open, and a deployed site has no equivalent to serve:
 #   pages-sprites            rewrites sprites.html with the chat dock enabled
 #   sprites-large-visual     writes its own single-page harness
@@ -438,7 +438,7 @@ deploy:website:
   # unit tiers mirrors publish:npm's reason — a README-only push has none of
   # them in the pipeline.
   #
-  # Everything the deploy no longer waits for runs in `e2e:deployed` after it,
+  # Everything the deploy no longer waits for runs in the `e2e:deployed:*` jobs after it,
   # against the site this job just published.
   needs:
     - job: unit:smoke
@@ -540,7 +540,22 @@ smoke:post-deploy:
 #
 # Not here, and why: the five files in `e2e-web-local-origin` need a local origin
 # — four build the page they open, and the boot budget wants a fixed one.
-e2e:deployed:
+#
+# Three jobs, not one, and each caps `--test-concurrency` rather than leaving
+# node's default (all files at once, bounded only by the runner's own core
+# count). At 44 files in one job (grown from 3 by this same restructure) a live
+# pipeline (2717061891) failed all three `retry: 2` attempts, each on a
+# DIFFERENT file — a real speech-bubble assertion race in pages-mud (fixed
+# below, in the same commit as this split: it was picking up either half of a
+# two-character exchange as "the asker's own bubble" and only one half is
+# narration) and, reproduced locally under the same concurrent-file load, an
+# intermittent dropped Playwright/CDP promise in pages-research. Neither file
+# is slow or wrong on its own; both surfaced only when several real Chromium
+# instances ran at once against the live site. Splitting means a retry only
+# re-runs its own slice, not the whole matrix, and the concurrency cap bounds
+# how many of THOSE Chromium instances run at once regardless of the runner's
+# core count.
+.e2e-deployed-base:
   stage: verify
   needs:
     - deploy:website
@@ -553,8 +568,8 @@ e2e:deployed:
       changes: *consumer-paths
   # Kept from the three-file version, and it earns more here: this job starts
   # seconds after a CDK deploy, so the first attempt can race CloudFront still
-  # settling. The cost of a retry is now the whole matrix, so a genuinely flaky
-  # file should be hardened rather than left to the retry.
+  # settling. A genuinely flaky file should be hardened rather than left to the
+  # retry — the split below already shrinks what a retry has to redo.
   retry: 2
   variables:
     TMCT_E2E_BASE_URL: "https://tmct.polycode.co.uk"
@@ -568,8 +583,12 @@ e2e:deployed:
   before_script:
     - npm ci
     - npx playwright install --with-deps chromium
+
+# The site shell, also run pre-deploy as e2e-web-index. Nine single-context
+# pages — the lightest slice, so it keeps node's default concurrency.
+e2e:deployed:shell:
+  extends: .e2e-deployed-base
   script:
-    # The site shell, also run pre-deploy as e2e-web-index.
     - >-
       node --disable-warning=ExperimentalWarning --test
       test-e2e/pages-index.test.mjs test-e2e/pages-home.test.mjs
@@ -577,10 +596,17 @@ e2e:deployed:
       test-e2e/pages-examples.test.mjs test-e2e/pages-service-worker.test.mjs
       test-e2e/memory-ask-browser-bundle.test.mjs test-e2e/readme-examples.test.mjs
       test-e2e/cli-render-views.test.mjs
-    # Every page the site ships, plus the engine-level and CLI files that shared
-    # a channel with them.
+
+# Every page the site ships, plus the engine-level and CLI files that shared a
+# channel with them. The largest slice by file count, and where two of the
+# three pipeline-2717061891 failures actually landed (pages-research,
+# pages-mud) — capped so at most 4 of these run their own real Chromium
+# instance at once, regardless of how many cores the runner has.
+e2e:deployed:pages:
+  extends: .e2e-deployed-base
+  script:
     - >-
-      node --disable-warning=ExperimentalWarning --test
+      node --disable-warning=ExperimentalWarning --test --test-concurrency=4
       test-e2e/pages-chat-fullscreen.test.mjs test-e2e/pages-chat-persistence.test.mjs
       test-e2e/pages-chat-export.test.mjs test-e2e/pages-chat-digest.test.mjs
       test-e2e/browser-chat.test.mjs test-e2e/chat-prompt.test.mjs
@@ -597,13 +623,18 @@ e2e:deployed:
       test-e2e/pages-adventure-edit.test.mjs test-e2e/pages-adventure-scenarios.test.mjs
       test-e2e/pages-mud.test.mjs test-e2e/pages-mud-scenarios.test.mjs
       test-e2e/pages-screenshot-sweep.test.mjs
-    # Sharing between browsers: every file here drives two or three real browser
-    # contexts at once, so they run as their own step. Nothing they do reaches
-    # another visitor — the transport has no signalling server and no room
-    # registry, and two contexts only find each other because the test carries
-    # the SDP blob from one to the other by hand.
+
+# Sharing between browsers: every file here drives two or three real browser
+# contexts at once, so the heaviest per-file Chromium load in the matrix and
+# the tightest cap — at most 2 of these files run their own contexts at once.
+# Nothing they do reaches another visitor — the transport has no signalling
+# server and no room registry, and two contexts only find each other because
+# the test carries the SDP blob from one to the other by hand.
+e2e:deployed:mesh:
+  extends: .e2e-deployed-base
+  script:
     - >-
-      node --disable-warning=ExperimentalWarning --test
+      node --disable-warning=ExperimentalWarning --test --test-concurrency=2
       test-e2e/pages-chat-p2p.test.mjs test-e2e/pages-mud-p2p.test.mjs
       test-e2e/p2p-mesh-three-peers.test.mjs test-e2e/pages-mud-p2p-mesh.test.mjs
       test-e2e/p2p-disconnect-rejoin.test.mjs
