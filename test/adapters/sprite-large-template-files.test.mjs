@@ -443,7 +443,17 @@ test("an mgx:feels value outside the 6-word curated vocabulary is never a guesse
 
 // ---- the *-facing-{left,right}.toml [match] direction variants ------------
 
-const FACING_CLASSES = ["bear", "cat", "dog", "king"];
+const FACING_CLASSES = [
+  "bear", "cat", "dog", "king",
+  "boy", "brother", "champion", "child", "citizen", "crowd", "customer",
+];
+
+// bear/cat/dog/king carry no bare centre-facing moving variant of their own —
+// mgx:pose = moving with no facing fact on record has nothing to land on but
+// the plain sprite. The person-role wave adds one (`<class>-moving.toml`),
+// so a bare pose fact resolves to real art for those seven instead.
+const CLASSES_WITHOUT_CENTRE_MOVING = ["bear", "cat", "dog", "king"];
+const CLASSES_WITH_CENTRE_MOVING = ["boy", "brother", "champion", "child", "citizen", "crowd", "customer"];
 
 const faces = (subject, object) => [{ subject, predicate: "mgx:faces", object }];
 
@@ -681,13 +691,23 @@ test("each of the four angles resolves its own art, and no two angles of one cla
 });
 
 test("the pose fact only bites alongside the facing it was drawn for: on its own it resolves the plain sprite", () => {
-  for (const cls of FACING_CLASSES) {
+  for (const cls of CLASSES_WITHOUT_CENTRE_MOVING) {
     const plain = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
     assert.equal(
       resolveSpriteAsset(cls, [], poses(`the-${cls}`, "moving"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY),
       plain,
       `${cls}: a pose with no facing on record has no art of its own to land on`,
     );
+  }
+});
+
+test("a bare pose fact resolves the dedicated centre-facing moving template for classes that ship one", () => {
+  for (const cls of CLASSES_WITH_CENTRE_MOVING) {
+    const plain = resolveSpriteAsset(cls, [], [], REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    const moving = resolveSpriteAsset(cls, [], poses(`the-${cls}`, "moving"), REAL_LARGE_TEMPLATES, SPRITE_REGISTRY);
+    assert.notEqual(moving, plain, `${cls}: a bare moving pose must render its own centre-facing stride, not the plain sprite`);
+    assert.ok(moving.includes(`${cls}-moving-fill`), `${cls}: the bare moving pose must carry its own dedicated gradient id`);
+    assert.ok(!moving.includes("{{"), `${cls}: no unresolved placeholder token may reach the rendered output`);
   }
 });
 

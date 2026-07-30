@@ -1,0 +1,59 @@
+# brother-facing-right-moving — brother-facing-left-moving.toml's stride
+# mirrored across the canvas midline (every shape wrapped in one
+# translate-then-flip group), the same twin relationship the standing pair
+# uses. {{FACE}} sits outside the flip group, never itself mirrored.
+classes = ["brother"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="brother-facing-right-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <g fill="url(#brother-facing-right-moving-fill)">
+      <path d="M9.4 14.9 C8.1 14.3 6.9 15.0 6.5 17.0 C6.35 18.1 6.9 18.9 7.8 18.7 C7.9 17.1 8.3 15.9 9.6 15.2 Z"/>
+      <path d="M14.6 14.9 C16.4 15.3 18.1 16.8 18.3 19.1 C18.35 20.1 17.6 20.7 16.7 20.2 C16.5 18.3 15.9 16.5 14.3 15.8 Z"/>
+      <path d="M7.7 21 C7.5 16.8 9.4 14.7 11.7 14.7 C14.4 14.7 16.2 16.1 15.7 19.6 C15.8 20.8 15.0 20.8 14.4 20.3 Z"/>
+      <path d="M10.8 11.4 L13.2 11.4 L13 14.6 L11 14.6 Z"/>
+    </g>
+    <ellipse cx="10.2" cy="18" rx="1.1" ry="1.6" fill="#ffffff" opacity="0.1"/>
+    <circle cx="11.35" cy="8.2" r="3.6" fill="url(#brother-facing-right-moving-fill)"/>
+    <path d="M8.0 7.55 Q6.6 8.65 8.0 9.8 Z" fill="url(#brother-facing-right-moving-fill)"/>
+    <ellipse cx="9.5" cy="7.65" rx="0.3" ry="0.37" fill="#1c1c1c"/>
+    <path d="M10.6 14.3 L12 15.4 L13.4 14.3" fill="none" stroke="currentColor" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+    <path d="M12 15.4 L12 20.2" fill="none" stroke="currentColor" stroke-width="0.35" stroke-linecap="round" opacity="0.22"/>
+    <path d="M9.3 15.3 C8.3 16 7.6 17.2 7.4 18.6" fill="none" stroke="currentColor" stroke-width="0.35" opacity="0.3" stroke-linecap="round"/>
+    <path d="M14.7 15.3 C15.7 16 16.4 17.2 16.6 18.6" fill="none" stroke="currentColor" stroke-width="0.35" opacity="0.3" stroke-linecap="round"/>
+    <path d="M9.15 5.6 C9.75 5.1 10.45 4.9 11.35 5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:faces"
+value = "right"
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+[face]
+cx = 13.6
+cy = 8.0
+scale = 2.3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

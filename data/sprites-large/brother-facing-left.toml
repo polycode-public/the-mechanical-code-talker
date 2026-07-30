@@ -1,0 +1,70 @@
+# brother-facing-left — brother.toml's child-scale figure turned to a left
+# profile: the head shifts toward the left shoulder, a nose wedge breaks the
+# head's left silhouette, a single forward eye replaces the front-facing
+# pair, and the brow-highlight arc follows the head. The torso, arms, neck
+# notch and shading strokes keep brother.toml's own geometry — a shirt reads
+# the same from the side. Selected only when the instance's own mgx:faces
+# fact says "left". It also carries the shared face-fragment mechanism, so a
+# brother taught BOTH mgx:faces = left and one of the 6 mgx:feels words
+# renders this profile wearing that mood; taught only the facing, {{FACE}}
+# resolves to nothing and the profile keeps the single forward eye it draws
+# itself.
+classes = ["brother"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="brother-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#brother-facing-left-fill)">
+    <path d="M9.4 14.9 C7.9 15 6.5 16.2 6.3 18.3 C6.25 19.4 6.9 20.1 7.7 19.7 C7.8 18 8.3 16.5 9.7 15.8 Z"/>
+    <path d="M14.6 14.9 C16.1 15 17.5 16.2 17.7 18.3 C17.75 19.4 17.1 20.1 16.3 19.7 C16.2 18 15.7 16.5 14.3 15.8 Z"/>
+    <path d="M7.4 21 C7.4 16.6 9.4 14.6 12 14.6 C14.6 14.6 16.6 16.6 16.6 21 Z"/>
+    <path d="M10.8 11.4 L13.2 11.4 L13 14.6 L11 14.6 Z"/>
+  </g>
+  <ellipse cx="10.2" cy="18" rx="1.1" ry="1.6" fill="#ffffff" opacity="0.1"/>
+  <circle cx="11.35" cy="8.2" r="3.6" fill="url(#brother-facing-left-fill)"/>
+  <path d="M8.0 7.55 Q6.6 8.65 8.0 9.8 Z" fill="url(#brother-facing-left-fill)"/>
+  <ellipse cx="9.5" cy="7.65" rx="0.3" ry="0.37" fill="#1c1c1c"/>
+  <path d="M10.6 14.3 L12 15.4 L13.4 14.3" fill="none" stroke="currentColor" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+  <path d="M12 15.4 L12 20.2" fill="none" stroke="currentColor" stroke-width="0.35" stroke-linecap="round" opacity="0.22"/>
+  <path d="M9.3 15.3 C8.3 16 7.6 17.2 7.4 18.6" fill="none" stroke="currentColor" stroke-width="0.35" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 15.3 C15.7 16 16.4 17.2 16.6 18.6" fill="none" stroke="currentColor" stroke-width="0.35" opacity="0.3" stroke-linecap="round"/>
+  <path d="M9.15 5.6 C9.75 5.1 10.45 4.9 11.35 5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# Derived from THIS file's own profile geometry, not copied from
+# brother-with-emotion.toml's front-facing anchor (cx=12 cy=8.2 scale=3.6):
+# the head shifts left by the same ratio king-facing-left.toml's own shift
+# bears to its head radius (0.6 / 3.3 = 0.1818), scaled to brother's own
+# radius 3.6 (0.1818 * 3.6 = 0.65), giving cx = 11.35. The forward eye this
+# file already draws sits at (9.5, 7.65), the same (-0.515, -0.152)*r offset
+# from the shifted head centre king's own profile uses. scale is
+# 0.6364 * 3.6 = 2.29, rounded to 2.3, and cx/cy place the fragment so its
+# own forward eye lands on the drawn one: cx = 9.5 + 0.4*2.3 = 10.4,
+# cy = 7.65 + 0.15*2.3 = 8.0.
+[face]
+cx = 10.4
+cy = 8.0
+scale = 2.3
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

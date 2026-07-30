@@ -562,6 +562,11 @@
 {"subject":"boy sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"boy sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"boy sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"boy sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"boy sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"boy sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"boy sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"boy sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"bridge sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"bridge sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"bridge sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -572,6 +577,11 @@
 {"subject":"brother sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"brother sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"brother sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"brother sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"brother sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"brother sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"brother sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"brother sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"cabinet sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"cabinet sprite","predicate":"mgx:accept-material","object":"wood"}
 {"subject":"cabinet sprite","predicate":"mgx:accept-material","object":"metal"}
@@ -601,6 +611,11 @@
 {"subject":"champion sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"champion sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"champion sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"champion sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"champion sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"champion sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"champion sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"champion sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"child sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"child sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"child sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -608,6 +623,11 @@
 {"subject":"child sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"child sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"child sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"child sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"child sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"child sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"child sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"child sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"citizen sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"citizen sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"citizen sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -615,6 +635,11 @@
 {"subject":"citizen sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"citizen sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"citizen sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"citizen sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"citizen sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"citizen sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"citizen sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"citizen sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"clothing sprite","predicate":"mgx:take-parameter","object":"material"}
 {"subject":"clothing sprite","predicate":"mgx:accept-material","object":"woven material"}
 {"subject":"coat sprite","predicate":"mgx:take-parameter","object":"material"}
@@ -641,6 +666,11 @@
 {"subject":"crowd sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"crowd sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"crowd sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"crowd sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"crowd sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"crowd sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"crowd sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"crowd sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"customer sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"customer sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"customer sprite","predicate":"mgx:accept-emotion","object":"sad"}
@@ -648,6 +678,11 @@
 {"subject":"customer sprite","predicate":"mgx:accept-emotion","object":"scared"}
 {"subject":"customer sprite","predicate":"mgx:accept-emotion","object":"surprised"}
 {"subject":"customer sprite","predicate":"mgx:accept-emotion","object":"calm"}
+{"subject":"customer sprite","predicate":"mgx:offer-variant","object":"half-left"}
+{"subject":"customer sprite","predicate":"mgx:offer-variant","object":"moving"}
+{"subject":"customer sprite","predicate":"mgx:offer-variant","object":"half-right"}
+{"subject":"customer sprite","predicate":"mgx:offer-variant","object":"left"}
+{"subject":"customer sprite","predicate":"mgx:offer-variant","object":"right"}
 {"subject":"daughter sprite","predicate":"mgx:take-parameter","object":"emotion"}
 {"subject":"daughter sprite","predicate":"mgx:accept-emotion","object":"happy"}
 {"subject":"daughter sprite","predicate":"mgx:accept-emotion","object":"sad"}
