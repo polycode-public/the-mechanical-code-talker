@@ -14,10 +14,13 @@
 // mgx:acts-toward, mgx:is-objective) — an editor has to show and change
 // exactly the facts a player is never told.
 //
-// No imports: every export here is .toString()-splice-safe, the same
-// discipline adventure-viz.mjs's own render-glue functions hold (see that
-// module's header) — this module's functions get spliced directly into the
-// adventure page's inline script the same way.
+// No imports of its own logic: every export here is .toString()-splice-safe,
+// the same discipline adventure-viz.mjs's own render-glue functions hold (see
+// that module's header) — this module's functions get spliced directly into
+// the adventure page's inline script the same way. The one exception,
+// wordBeforeCursor, re-exports viz-theme.mjs's own shared copy (byte-identical
+// to what used to live here, and to mud-editor.mjs's own copy) rather than
+// keep a third copy of the same regex.
 //
 // Two predicate families get different sync strategies, on purpose:
 //   - PLACEMENT/OPENNESS (mgx:currently-in/located-in/fixed-in/stands-
@@ -357,13 +360,4 @@ export function planWorldEditorSync(rows, state, triples) {
 
 // ---- cursor-driven suggestions ---------------------------------------------
 
-/** The word immediately before `cursorPos` in `text` — a run of letters/
- *  digits/hyphens, the same token shape this vocabulary's own terms use
- *  (kebab-case room names like "drawing-room"). Empty string when the
- *  cursor sits after whitespace/punctuation with no word directly behind
- *  it. Pure. */
-export function wordBeforeCursor(text, cursorPos) {
-  const head = String(text || "").slice(0, cursorPos);
-  const m = head.match(/[A-Za-z][A-Za-z0-9-]*$/);
-  return m ? m[0].toLowerCase() : "";
-}
+export { wordBeforeCursor } from "./viz-theme.mjs";
