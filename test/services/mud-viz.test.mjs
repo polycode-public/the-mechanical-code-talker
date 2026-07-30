@@ -438,16 +438,19 @@ test("isCreature: an animal is placed with currently-in, a prop is not", () => {
   assert.equal(isCreature(state, "root-burrow-1-south"), false);
 });
 
-test("renderMudHtml: the deck carries share and join, and the panel they open", () => {
+test("renderMudHtml: the header carries share and join, and the overlay they open", () => {
   const html = renderMudHtml({ worldPayload: WORLD_PAYLOAD, characters: CHARACTERS });
-  assert.match(html, /id="shareBtn"/, "one control mints an invite");
-  assert.match(html, /id="joinOpenBtn"/, "and one takes an invite that arrived some other way");
-  assert.match(html, /id="statePill"/, "the deck says in one word whether the burrow is shared");
-  for (const id of ["netPanel", "shareLink", "replyBox", "inviteBox", "replyOut", "nodeList", "nodeNameInput", "worldNameInput"]) {
-    assert.match(html, new RegExp(`id="${id}"`), `the panel carries ${id}`);
+  const header = /<header class="mud-topbar">[\s\S]*?<\/header>/.exec(html);
+  assert.ok(header, "the page opens with header chrome, the same arrangement chat.html holds");
+  assert.match(header[0], /id="shareBtn"/, "one control mints an invite");
+  assert.match(header[0], /id="joinOpenBtn"/, "and one takes an invite that arrived some other way");
+  assert.match(header[0], /id="statePill"/, "the header says in one word whether the burrow is shared");
+  assert.ok(!/<section class="deck"[\s\S]*?id="shareBtn"/.test(html), "sharing is page chrome, not a simulation control");
+  for (const id of ["netPanel", "shareLink", "replyBox", "inviteBox", "replyOut", "nodeList", "nodeNameInput", "worldNameInput", "waveAllBtn", "step-invite", "step-connect"]) {
+    assert.match(html, new RegExp(`id="${id}"`), `the overlay carries ${id}`);
   }
-  assert.match(html, /id="joinCard"/, "a link that arrives as a link still lands on its own card");
-  assert.match(html, /\.join-card\[hidden\][^{]*\{ display: none/, "and a hidden overlay is really hidden, not merely marked so");
+  assert.match(html, /id="joinCard"/, "a link that arrives as a link still lands on its own hero card");
+  assert.match(html, /\.shareOverlay\[hidden\] \{ display: none !important; \}/, "and a hidden overlay is really hidden, not merely marked so");
 });
 
 test("renderMudHtml: every pane can wave, and has somewhere to say who plays it", () => {
