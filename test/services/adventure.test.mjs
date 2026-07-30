@@ -8,7 +8,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { getWorldsPackProvider, clearWorldsPackCache } from "../../src/adapters/corpus/worlds-pack.mjs";
-import { foldWorldState, runNpcPass, roomAffordances, worldDigestRows, currentPosition, worldActionRows, personKnowledgeLines, personRoomReport, parseSnapshotSubject, snapshotSubject } from "../../src/services/adventure.mjs";
+import { foldWorldState, runNpcPass, roomAffordances, worldDigestRows, currentPosition, worldActionRows, personKnowledgeLines, personRoomReport, parseSnapshotSubject, snapshotSubject, characterTestimonyTag } from "../../src/services/adventure.mjs";
 import { driveSessionTurns } from "../helpers/session.mjs";
 import { worldProvenanceTag } from "../../src/domain/worlds-pack.mjs";
 import { appendFacts, appendRule, loadMemory, openMemoryBackend, readFactRows, readRuleRows } from "../../src/adapters/memory/core.mjs";
@@ -149,6 +149,97 @@ test("parseSnapshotSubject and snapshotSubject agree on both subject forms", () 
   assert.equal(snapshotSubject("mole-1", 4, 0), "mole-1@turn4", "epoch 0 keeps the bare form every existing store uses");
   assert.equal(snapshotSubject("mole-1", 4, 2), "mole-1@epoch2@turn4");
   assert.deepEqual(parseSnapshotSubject(snapshotSubject("vole-1", 7, 3)), { base: "vole-1", epoch: 3, turn: 7 });
+});
+
+test("characterTestimonyTag stamps the run only once the world has left epoch 0", () => {
+  assert.equal(characterTestimonyTag("mole-1", 4), "mud:mole-1:turn4", "epoch 0 keeps the bare form every existing store uses");
+  assert.equal(characterTestimonyTag("mole-1", 4, { epoch: 0, voided: true }), "mud:mole-1:turn4:gone");
+  assert.equal(characterTestimonyTag("mole-1", 4, { epoch: 2 }), "mud:mole-1:epoch2:turn4");
+  assert.equal(characterTestimonyTag("mole-1", 4, { epoch: 2, voided: true }), "mud:mole-1:epoch2:turn4:gone");
+});
+
+test("a testimony claim from the current run outranks a higher-turn claim from the run before it", () => {
+  const rows = [
+    { subject: "world", predicate: "mgx:world-epoch", object: "1" },
+    {
+      subject: "vole-1",
+      predicate: "mgx:knows-about",
+      object: "fox-1",
+      provenance: [
+        characterTestimonyTag("vole-1", 40, { voided: true }),
+        characterTestimonyTag("vole-1", 2, { epoch: 1 }),
+      ].join(" | "),
+    },
+  ];
+  const state = foldWorldState(rows);
+  assert.equal(state.epoch, 1);
+  assert.deepEqual(
+    personKnowledgeLines(rows, state, "vole-1").aboutTopics,
+    ["fox-1"],
+    "the turn-2 sighting in the new run rules over the turn-40 'it's gone' the recast replaced",
+  );
+});
+
+test("a claim voided in the current run stops the topic reading back, however late the older run saw it", () => {
+  const rows = [
+    { subject: "world", predicate: "mgx:world-epoch", object: "1" },
+    {
+      subject: "vole-1",
+      predicate: "mgx:knows-about",
+      object: "fox-1",
+      provenance: [
+        characterTestimonyTag("vole-1", 40),
+        characterTestimonyTag("vole-1", 2, { epoch: 1, voided: true }),
+      ].join(" | "),
+    },
+  ];
+  assert.deepEqual(personKnowledgeLines(rows, foldWorldState(rows), "vole-1").aboutTopics, []);
+});
+
+test("a world's own seed claim survives a stale 'it's gone' the recast left behind", () => {
+  const rows = [
+    { subject: "world", predicate: "mgx:world-epoch", object: "1" },
+    {
+      subject: "vole-1",
+      predicate: "mgx:knows-about",
+      object: "fox-1",
+      provenance: `${worldProvenanceTag("mud-garden")} | ${characterTestimonyTag("vole-1", 40, { voided: true })}`,
+    },
+  ];
+  assert.deepEqual(
+    personKnowledgeLines(rows, foldWorldState(rows), "vole-1").aboutTopics,
+    ["fox-1"],
+    "an unstamped seed is laid down fresh by every recast, so it belongs to the run being read",
+  );
+});
+
+test("within one run the testimony ordering is exactly what it was without epochs", () => {
+  const edge = (provenance) => ([{
+    subject: "vole-1", predicate: "mgx:knows-about", object: "fox-1", provenance,
+  }]);
+  const legacyVoided = edge([
+    characterTestimonyTag("vole-1", 2),
+    characterTestimonyTag("vole-1", 40, { voided: true }),
+  ].join(" | "));
+  assert.deepEqual(
+    personKnowledgeLines(legacyVoided, foldWorldState(legacyVoided), "vole-1").aboutTopics,
+    [],
+    "untagged claims read as epoch 0, so the later turn still wins on a store that never recast",
+  );
+  const stampedVoided = edge([
+    characterTestimonyTag("vole-1", 2, { epoch: 3 }),
+    characterTestimonyTag("vole-1", 40, { epoch: 3, voided: true }),
+  ].join(" | "));
+  assert.deepEqual(personKnowledgeLines(stampedVoided, foldWorldState(stampedVoided), "vole-1").aboutTopics, []);
+  const firsthandHolds = edge([
+    characterTestimonyTag("vole-1", 2, { epoch: 3, voided: true }),
+    characterTestimonyTag("mole-1", 40, { epoch: 3 }),
+  ].join(" | "));
+  assert.deepEqual(
+    personKnowledgeLines(firsthandHolds, foldWorldState(firsthandHolds), "vole-1").aboutTopics,
+    [],
+    "inside one run firsthand still sits above recency: what the vole ate itself outranks what it is told after",
+  );
 });
 
 test("the digest view folds placements, phrases the predicates, and keeps hidden contents and puzzle wiring out", () => {

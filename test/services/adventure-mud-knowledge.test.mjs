@@ -275,6 +275,61 @@ test("a character told about food before it was eaten keeps believing in it unti
   });
 });
 
+test("testimony written after a recast carries the run it was made in", async () => {
+  await withMudGarden("epoch-tagged", async (dir) => {
+    await recordExamined(dir, { observer: "mole-1", thing: "carrot", k: 3 });
+    await recordExamined(dir, { observer: "mole-1", thing: "basket", k: 3, epoch: 2 });
+
+    const { rows, state } = await rowsAndState(dir);
+    const tags = Object.fromEntries(knowsAboutRows(rows).map((r) => [r.object, r.provenance]));
+    assert.equal(tags.carrot, "mud:mole-1:turn3", "a claim made on epoch 0 keeps the bare tag every existing store holds");
+    assert.equal(tags.basket, "mud:mole-1:epoch2:turn3", "past epoch 0 the run is stamped into the tag");
+    assert.ok(
+      personKnowledgeLines(rows, state, "mole-1").aboutTopics.includes("basket"),
+      "a stamped claim reads back like any other",
+    );
+  });
+});
+
+test("a recast's first sighting outranks the replaced run's 'it's gone' on the same edge", async () => {
+  await withMudGarden("epoch-outranks", async (dir) => {
+    await recordExamined(dir, { observer: "mole-1", thing: "carrot", k: 39 });
+    await recordGone(dir, { observer: "mole-1", thing: "carrot", k: 40 });
+    await appendFacts(dir, [{
+      subject: "world", predicate: "mgx:world-epoch", object: "1", provenance: worldProvenanceTag(WORLD),
+    }]);
+    await recordExamined(dir, { observer: "mole-1", thing: "carrot", k: 2, epoch: 1 });
+
+    const { rows, state } = await rowsAndState(dir);
+    assert.equal(state.epoch, 1, "the marker moves the store onto the new run");
+    assert.deepEqual(
+      personKnownFoodLines(rows, state, "mole-1"), ["carrot"],
+      "a turn-2 sighting in the new run beats the turn-40 'it's gone' the recast replaced",
+    );
+  });
+});
+
+test("a legacy claim from before epochs existed ranks as the epoch-0 claim it is", async () => {
+  await withMudGarden("epoch-legacy", async (dir) => {
+    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "carrot", k: 1 });
+    await appendFacts(dir, [{
+      subject: "vole-1", predicate: "mgx:knows-about", object: "carrot", provenance: "mud:mole-1:turn5:gone",
+    }]);
+    const gone = await rowsAndState(dir);
+    assert.deepEqual(
+      personKnownFoodLines(gone.rows, gone.state, "vole-1"), [],
+      "two untagged claims rank against each other by turn, exactly as they did before epochs",
+    );
+
+    await recordTold(dir, { asker: "vole-1", teller: "mole-1", thing: "carrot", k: 1, epoch: 1 });
+    const recast = await rowsAndState(dir);
+    assert.deepEqual(
+      personKnownFoodLines(recast.rows, recast.state, "vole-1"), ["carrot"],
+      "and both lose to a claim from the run that replaced them",
+    );
+  });
+});
+
 test("testimony never folds into the playable world state", async () => {
   await withMudGarden("no-fold", async (dir) => {
     const before = await rowsAndState(dir);
