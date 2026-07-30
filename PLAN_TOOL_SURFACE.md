@@ -404,14 +404,14 @@ the fold disappears.
 
 Ordered so each phase is useful on its own and unblocks the next.
 
-1. **The pure-library sweep.** Every **lib** row above that needs no engine change: `turn-session.mjs`,
-   `applySeedPayload`, `cloneMemoryPayload`, `loadWinkVendor`, `viz-room-graph.mjs`,
-   `createSerialQueue`, `countLabel`, `rowsForWorld`, `wordBeforeCursor`, `carriedItems(holder)`,
-   `appendLogLine`, `fnv1a32`, the `memoryStats`/`exportFactsJsonl`/`loadProgressLine`/
-   `factTripleParts` de-duplications, and the `plan-viz.mjs:576` escape fix. Mechanical, wide, no
-   design decisions. Splits cleanly by file ownership across several sub-agents.
-2. **`phraseForRelation`.** The one drift risk in the survey — two hand-kept relation-verb tables.
-   Small, and it lands before anything else touches relation phrasing.
+1. **The pure-library sweep — landed.** Every **lib** row above that needed no engine change:
+   `turn-session.mjs`, `applySeedPayload`, `cloneMemoryPayload`, `loadWinkVendor`,
+   `viz-room-graph.mjs`, `createSerialQueue`, `countLabel`, `rowsForWorld`, `wordBeforeCursor`,
+   `carriedItems(holder)`, `appendLogLine`, `fnv1a32`, and the `memoryStats`/`exportFactsJsonl`/
+   `loadProgressLine`/`factTripleParts` de-duplications. All ten pages adopted the shared libraries.
+   The `plan-viz.mjs:576` escape fix landed separately, a day earlier (`94872a59`).
+2. **`phraseForRelation` — landed.** `code-explorer-viz.mjs`'s `EDGE_PHRASE` table is deleted;
+   `edgePhrase(kind)` now calls the shared export from `ask-vocab.mjs`.
 3. **Gap B, the structured tool result.** Landed. `dispatchToolStructured(name, args, ctx)` returns
    `{ content, data }` beside `dispatchTool`'s unchanged string; a handler opts in by returning
    `kit.mjs`'s `toolResult({ content, data, text })`, and `tmct_ask`, `tmct_related` and

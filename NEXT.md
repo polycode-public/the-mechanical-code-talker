@@ -16,23 +16,48 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## In-flight right now (2026-07-30)
 
-**No worktrees active. Everything green.** Pipeline `2717338870` (`17673980`) passed every job on
-the first attempt, no retries anywhere — `deploy:website`, `publish:npm`, and all four
-`e2e:deployed:*` jobs (`shell`/`pages`/`pages-timing`/`mesh`) included.
+**`PLAN_TOOL_SURFACE.md` is most of the way landed, this session.** Coordinator + background
+sub-agents pushed phases 1-5 and 7 to done: the pure-library sweep and `phraseForRelation` (all ten
+demo pages now share `turn-session.mjs`/`viz-boot.mjs`/`viz-room-graph.mjs`/`viz-theme.mjs`/
+`viz-ticker.mjs`/`memory-stats.mjs`/`ask-vocab.mjs`/`game-config.mjs` instead of duplicating them),
+Gap B (`dispatchToolStructured`, tool answers now carry `{ content, data }`), the code-explorer
+proof (its sidebar asks `tmct_ask` for real instead of filtering rows by hand — and found the doc's
+own `tmct_related` premise was wrong along the way, corrected in place), Gap A (memory-graph binding
+is a first-class `KINDS.MemoryTerm` capability-planner kind — router half only; the eight
+browser-entry callers still pass an empty graph, tracked below), and mood-becomes-a-fact
+(`spider-fly.mjs` writes a real `mgx:feels` fact per agent per turn; `emotionFor`'s prose-parsing is
+deleted). See the doc's own Phasing section for exact detail per phase.
 
-Chasing that down took three rounds after the 4.0.1 deploy, each real: (1) the new fact-count tile
-overflowed `research.html` on a 375px phone viewport, fixed in `6f1fca54`; (2) bundling
-`e2e:deployed` into 45 files in one job (this session's own CI restructure, `3315a0f8`) caused
-cross-file contention — split into `shell`/`pages`/`mesh` with capped `--test-concurrency`,
-`5cd0f652`; (3) three files (`pages-chat-research`/`pages-chat-live-toggle`/
-`pages-chat-persistence`, each racing a real elapsed-time budget against a mocked round trip) still
-contended inside `:pages` at concurrency 4 — isolated into their own `:pages-timing` job at
-concurrency 1, `fae19dd3`. Full detail in each commit's own message.
+Two NEXT.md items from before this session are also done: **the mud room rebind** (`p2p-room.mjs`'s
+`rebind()` swaps a live room's store while keeping peers connected; `adventure.mjs`'s
+`foldWorldState` is epoch-aware so a stale pre-recast snapshot can't outrank a fresh one — real
+remainder tracked below) and **the two test-coverage gaps** (a new
+`test-e2e/pages-service-worker-cache-bust.test.mjs` proves the redeploy repro end to end; the four
+existing chat/ingest/code/research e2e files now assert their fact-count pill's live DOM value, not
+just its generated markup).
 
-**Rover-bark regression coverage (`d6c84133`) and the service-worker stale-cache fix + visible
-fact count (`9a9b58f7`) are both done and merged** — unit/TUI/chat.html tests and the fact-count
-pills across chat/ingest/code/research all independently re-run green by the coordinator. Real
-remainder from the service-worker work moved to Open items below.
+**Sprites.html's turntable + move-pose catalog is mid-flight** — an operator-requested expansion
+of what was "extend facing pairs, next slice": a 5-point turntable (left/half-left/centre/
+half-right/right, up from left/centre/right) crossed with a new `mgx:pose = "moving"` axis, both
+crossed with the existing six `mgx:feels` moods. The resolver now supports combining several
+`[[match]]` constraints in one template (`src/domain/sprite-templates.mjs`'s header carries the
+exact shape and anchor arithmetic) — proven on bear/cat/dog/king, then rolled out class by class.
+Landed so far (this session): bear/cat/dog/king's reference set, and the full 9-file turntable for
+husband/judge/lawyer/leader/man/manager/mother, teacher/team/visitor/volunteer/wife/woman/worker/
+writer, tiger/wolf/adult/artist/audience/baby/boss, and boy/brother/champion/child/citizen/crowd/
+customer. Several more sub-agent groups are still authoring the remaining animal and person classes
+as this line is written — check `git log --oneline -20` for the latest `feat(sprites):` commits
+before resuming this wave, since the exact remaining-class list moves every merge.
+
+**Everything merged onto local `main` so far this session is green** (`npm test` full suite: 4939
+pass after the Wave 2/3 checkpoint; every subsequent wave re-verified with `npm run test:fast` plus
+its own blast radius). Nothing has been pushed — a different git auth is in effect on this machine,
+so this session's own working instruction is local commits only.
+
+Pipeline `2717338870` (`17673980`), from before this session, passed every job on the first attempt
+— `deploy:website`, `publish:npm`, and all four `e2e:deployed:*` jobs (`shell`/`pages`/
+`pages-timing`/`mesh`) included. That state predates everything above; nothing from this session has
+reached CI yet since nothing has been pushed.
 
 **MUD3D renamed MUDIII, design only — not yet a build phase.** Full assessment (asset licensing
 against `world-of-claudecraft`, planning-domain mechanics, naming/lineage research re: Richard
@@ -50,21 +75,47 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] `PLAN_TOOL_SURFACE.md` phase 1 — reviewed and recommended as worth doing before PLAN_FACT/
-  MUDIII implementation (low-risk, already fully scoped), not yet started.
-- [ ] MUDIII implementation itself (Three.js town square) — fully designed in `PLAN_MUD.md`, not
-  started.
-- [ ] `PLAN_FACT.md` implementation itself — fully designed, not started.
-- [ ] **the turntable and the move pose — content wave**: bear/cat/dog/king carry four `mgx:faces`
-  angles plus a `mgx:pose = moving` frame at the left angle. Fill in the rest: the moving frame at
-  the other three angles, then both axes across the remaining animal and person catalog. The shape
-  to copy and the anchor arithmetic are in `src/domain/sprite-templates.mjs`'s header.
-- [ ] **sprites.html turning-character demo**: an animated swatch cycling the four turntable angles
-  next to the existing static emoting character. The page's own cycle only steps `mgx:faces` and
-  `mgx:feels` today, so a combined facing-and-pose swatch sits outside it.
+- [ ] **the turntable and the move pose — content wave, in progress.** bear/cat/dog/king plus 32
+  more classes are done (see In-flight above for the exact list and where to check what's landed
+  since). Remaining: whatever's left of the ~39 unstarted animal/person classes once the in-flight
+  sub-agents land, following `src/domain/sprite-templates.mjs`'s header for the shape and anchor
+  arithmetic.
+- [ ] **`PLAN_TOOL_SURFACE.md` phase 6** — `fn("list the locations of flies and spiders")` via
+  `ask`, once Gap A's caller wiring (below) lands. The design fork is already decided in the doc's
+  own Theme 2 section: route through `ask`, keep `session.snapshot()` as the fast path.
+- [ ] **`PLAN_TOOL_SURFACE.md` phase 8** — the `tmct_sprite` tool. Mood is a fact (phase 7, landed)
+  and the multi-constraint resolver exists (this session's sprite work); still needs the capability
+  record, the `FRAMES` entry, and a decision on which sense of "large" the schema carries (tier vs.
+  property — see the doc's Theme 2 section).
+- [ ] **`PLAN_TOOL_SURFACE.md` phase 9** — key `chat.mjs`'s generic membership/property lanes on the
+  sprite-facts predicates so `answerSpriteQuestion` deletes; route `extractSceneItems` through
+  `resolveObject`. Needs Gap A's caller wiring.
+- [ ] **`PLAN_TOOL_SURFACE.md` phase 10, Gap C** — one `globalThis.tmct` (`ask`, `plan`, `turn`,
+  `session`) replacing the eleven per-page global bags. Needs phases 3 (done), 5's caller wiring,
+  and 8 to exist first.
+- [ ] **`PLAN_TOOL_SURFACE.md` phase 11** — the showcase pass: every viz module builds its page
+  script the `mud-viz.mjs` way; `code-explorer-viz.mjs`'s `CLIENT_JS` raw-text block is the one
+  remaining holdout (chat's four helpers already converted this session).
+- [ ] **Gap A's caller wiring** — the router half landed this session (`KINDS.MemoryTerm`,
+  `resolver.mjs`, a memory-only `buildCapabilityPlanCtx`), but the eight browser entries
+  (`adventure`/`chat`/`ledger`/`mud`/`plan`/`research`/`spider-fly`/`sprites`) still pass an empty
+  code graph instead of `memoryDir`, and `chat.mjs` still refuses `/plan` outright with "no graph
+  loaded." Blocks phases 6 and 9 above.
+- [ ] **`chat.mjs` still parses the `---tmct_ask---` delimiter** instead of reading
+  `dispatchToolStructured`'s `data` directly (Gap B landed the contract this session, but
+  `chat.mjs`'s own consumption is a separate, slightly fiddly move — the direct-`ask()` focus path
+  and the split converge on one variable). `src/services/index.mjs` also only re-exports
+  `dispatchTool`, not the structured sibling, for any external consumer that wants it.
+- [ ] **sprites.html turning-character demo**: an animated swatch cycling the five turntable angles
+  next to the existing static emoting character. The page's own variant cycle only steps
+  `mgx:faces`/`mgx:feels` today, so a combined facing-and-pose swatch sits outside it. Depends on
+  the content wave above having enough classes done to demo against.
 - [ ] mud room rebind's epoch fold covers world-state predicates only — `knows-about` testimony
   claims still rank by bare turn across epochs, so a pre-recast "the fox is gone" claim can outrank
   a fresh post-recast sighting of the same fox. Real remainder from `p2p-room.mjs`'s rebind work.
+- [ ] MUDIII implementation itself (Three.js town square) — fully designed in `PLAN_MUD.md`, not
+  started.
+- [ ] `PLAN_FACT.md` implementation itself — fully designed, not started.
 
 
 ## Discipline
@@ -151,6 +202,20 @@ Three hard-won lessons, carried forward:
    10.49x); the remaining weakness is that a RATIO amplifies leftover noise asymmetrically —
    the long batch's every trial can catch contention while the short batch catches a quiet
    moment. Its bar is now 20x, which still leaves the whole quadratic band (64x up) outside.
+
+8. (2026-07-30) Two new ones from this session's large parallel-sprite-content wave. First: the
+   coordinator's own shell can silently carry a stale working directory across Bash calls even with
+   an explicit `cd` earlier in the same turn — a `git merge` once ran inside a sub-agent's worktree
+   instead of the main checkout because of this, caught immediately by `pwd`/`git branch
+   --show-current` returning the wrong path before anything was touched. Always `cd
+   <repo-root>; pwd` as the very first line of any merge-sequence Bash call, never trust the prior
+   call's `cd` to have stuck. Second: sibling content-authoring agents that each append a test
+   section to the SAME shared file (here, `test/adapters/sprite-large-template-files.test.mjs`)
+   reliably collide on top-level `const`/`function` names even when their actual test content
+   doesn't overlap — `git merge` cannot auto-resolve a same-name redeclaration, and the fix is a
+   manual reconciliation renaming one side's identifiers, not a blind pick of one branch. Worth
+   briefing distinct naming into any future dispatch batch that has multiple agents extending one
+   test file, rather than discovering it at every merge.
 
 *Prior sessions' detailed handover (phases 0-13, releases 0.2.0 → 1.4.0) lives in this file's git
 history, plus the `reports/BENCHMARK_<axis>_<version>.md` reports and `archive/`.*

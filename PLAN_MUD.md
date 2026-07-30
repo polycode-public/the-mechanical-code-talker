@@ -687,9 +687,13 @@ claiming, the origin-node label, the wave button and its typed twin, and the syn
 Two things the mud integration settled that the design above left open. Claiming covers every animal
 a page drives, npcs included, not only the ones with panes: two peers each running scripted turns for
 one animal is the actual failure mode, and one claim per driven animal removes it without needing the
-leader election v1 leaves out. And a room is bound to the store it was opened over, so recasting the
-world drops the link and says so on the panel — carrying a room across a recast means re-binding it
-to a new store, which is room-orchestration work rather than page wiring.
+leader election v1 leaves out. And a room used to be bound to the store it was opened over, so
+recasting the world dropped the link — **landed**: `p2p-room.mjs`'s `room.rebind({ memoryDir,
+worldName, myDisplayName })` swaps the store under a live room, keeping peer connections open and
+re-syncing them against the new world, and `adventure.mjs`'s `foldWorldState` is now epoch-aware
+(ranks by `(epoch, turn)` rather than bare `turn`) so a stale pre-recast snapshot can never outrank a
+fresh post-recast one for the same subject. World-state predicates (placements, exits, names) are
+covered; `knows-about` testimony claims still rank by bare turn across epochs, tracked in `NEXT.md`.
 
 **The CRDT merge function already exists.** `appendFacts` (`src/adapters/memory/core.mjs`) upserts a
 fact by its content-addressed id (a hash of subject, predicate, object) and unions the incoming
