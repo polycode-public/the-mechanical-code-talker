@@ -16,11 +16,7 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## In-flight right now (2026-07-30)
 
-**All 11 commits through `6f1fca54` are pushed and live** (`f0cc2969` through `cc5a7f67`, then a
-hotfix `6f1fca54` — see below). Nothing local left unpushed.
-
-**One worktree active right now**: a sub-agent investigating/fixing `e2e:deployed` contention
-flakiness (see below) — check `git worktree list` for its current path before touching it.
+**No worktrees active.** Nothing local left unpushed once this commit lands — pushing now.
 
 **Real bug found and fixed post-push, 2026-07-30:** the new "facts in the graph" tile
 (`research-viz.mjs`, from the fact-count work below) pushed `.statuspanel`'s three fixed
@@ -29,16 +25,25 @@ overflowed sideways on mobile. Caught by `e2e:deployed` right after the 4.0.1 de
 `6f1fca54` (`flex-wrap` + a narrow-viewport `min-width: 0` override), verified against the exact
 failing assertion locally, full suite green, pushed and deployed.
 
-**Real CI reliability problem surfaced by that hotfix push, still open:** `e2e:deployed`'s 44-file
-matrix (grown from 3 files by this session's own CI restructure, `3315a0f8`) failed all 3 retries
-of pipeline `2717061891`, each time on a DIFFERENT test (`pages-mud.test.mjs`'s speech-bubble
-narration test, then a P2P mesh naming assertion, then a peer-disconnect convergence test) — none
-related to the actual pushed fix. `deploy:website`/`publish:npm`/`smoke:post-deploy`/
-`e2e:published-package` all passed every time; the live site itself is confirmed fine. Strong
-signal this is genuine cross-file contention at 44-file scale, introduced by bundling that many
-files into one job — not three unrelated regressions. Dispatched a sub-agent (in a worktree) to
-reproduce and harden this properly, same pattern as the earlier `pages-ledger-teach.test.mjs`
-contention investigation. **Do not push another commit to `main` until this lands or is
+**DONE — `e2e:deployed` contention flakiness fixed and merged** (`5cd0f652`): that hotfix push
+also surfaced a real CI reliability problem — the job's 45-file matrix (grown from 3 files by this
+session's own CI restructure, `3315a0f8`) failed all 3 retries of pipeline `2717061891`, each time
+on a DIFFERENT test (`pages-mud.test.mjs`'s speech-bubble narration test, a P2P mesh assertion, a
+peer-disconnect convergence test) — none related to the actual pushed fix, and
+`deploy:website`/`publish:npm`/`smoke:post-deploy`/`e2e:published-package` all passed every time,
+confirming the live site itself was fine throughout. Root cause (confirmed by reproducing
+concurrent-file contention locally against a served build): node's test runner parallelizes files
+by default, so 45 files in one job meant real concurrent Chromium load bounded only by the
+runner's core count. Two real findings — `pages-mud.test.mjs` had a genuine pre-existing race
+(grabbed whichever of two real "from-self" speech bubbles rendered first, asker's narration or
+answerer's literal line, instead of waiting for the asker's specifically; fixed to match the
+narration pattern explicitly), and `pages-research.test.mjs` dropped a Playwright/CDP promise once
+under load (not deterministically reproducible, consistent with the pipeline's sporadic pattern).
+Fix: split `e2e:deployed` into `e2e:deployed:shell`/`:pages`/`:mesh` (same 45 files, 9/30/6),
+capping `--test-concurrency` (4 / 2) so concurrent Chromium load no longer scales with runner
+cores, and a retry only re-runs its own slice. Verified: the mud fix held over 12 concurrent runs,
+the pages slice held over 4 rounds at cap 4, the mesh slice over 2 rounds at cap 2, full local
+suite green, `glab ci lint` valid, file-count audited (45 in, 45 out, no drops/dupes).
 explicitly deferred** — the pipeline is currently red on this job.
 
 **Two background sub-agents dispatched 2026-07-30, both winding down:**
