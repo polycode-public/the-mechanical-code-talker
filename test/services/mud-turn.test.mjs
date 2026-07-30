@@ -214,6 +214,39 @@ test("asking the character standing beside you writes what it says as your own p
   });
 });
 
+test("a turn played after a recast stamps its run onto the testimony it writes", async () => {
+  await withMudGarden("epoch-stamped-turn", async (dir) => {
+    await plantCarrotInBurrow(dir);
+    await recordExamined(dir, { observer: "mole-1", thing: "carrot-2", k: 1, epoch: 1 });
+    await appendFacts(dir, [
+      {
+        subject: "world", predicate: "mgx:world-epoch", object: "1",
+        provenance: worldProvenanceTag(WORLD),
+      },
+      // What the vole said about this carrot in the run the recast replaced.
+      {
+        subject: "vole-1", predicate: "mgx:knows-about", object: "carrot-2",
+        provenance: "mud:vole-1:turn40:gone",
+      },
+    ]);
+    assert.deepEqual(await topicsOf(dir, "vole-1"), [], "the old run's claim leaves the vole knowing nothing of the carrot");
+
+    const played = await turn(dir, "vole-1", 2);
+
+    const { rows } = await rowsAndState(dir);
+    const heard = knowsAboutRows(rows).find((r) => r.subject === "vole-1" && r.object === "carrot-2");
+    assert.ok(
+      heard.provenance.split(" | ").includes("mud:mole-1:epoch1:turn2"),
+      `the turn writes its run into the tag, got ${heard.provenance}`,
+    );
+    assert.match(played.note, /written as mud:mole-1:epoch1:turn2/, "and the note says exactly what was written");
+    assert.ok(
+      (await topicsOf(dir, "vole-1")).includes("carrot-2"),
+      "a turn-2 telling in the new run outranks the turn-40 'it's gone' the recast left behind",
+    );
+  });
+});
+
 test("an animal greets a room-mate it hasn't met, and names what it did or didn't learn", async () => {
   await withMudGarden("ask-skips", async (dir) => {
     const beside = await turn(dir, "vole-1", 1);

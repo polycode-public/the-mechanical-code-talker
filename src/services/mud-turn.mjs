@@ -55,7 +55,7 @@ import {
   foldWorldState, worldActionRows, runWorldCommand, recordTold, recordExamined,
   recordMassDrain, personKnowledgeLines, objectClassChain, diggableDirections,
   isOutOfPlay, outOfPlayReasonOf, outOfPlayPhrase, massDrainPerTurnOf,
-  parseSnapshotSubject,
+  parseSnapshotSubject, characterTestimonyTag,
 } from "./adventure.mjs";
 
 const FOOD_CLASS = "food";
@@ -267,6 +267,9 @@ export async function runMudTurn(character, {
   const opened = await readWorld(memoryDir);
   const room = opened.state.placements.get(character)?.object ?? null;
   const turn = k ?? opened.state.turnCount + 1;
+  // The run this turn belongs to, stamped onto the testimony it writes so a
+  // recast's first turns outrank whatever the replaced run had to say.
+  const epoch = opened.state.epoch;
   const actions = [];
   const notes = [];
   const learnedBefore = knownTopics(opened.rows, opened.state, character);
@@ -300,7 +303,7 @@ export async function runMudTurn(character, {
     notes.push(`MUD — ${step}: ${reason}`);
   };
 
-  await investigateRoom({ character, turn, room, memoryDir, cache, actions, notes, runCommand, recordSkip });
+  await investigateRoom({ character, turn, epoch, room, memoryDir, cache, actions, notes, runCommand, recordSkip });
 
   const walked = await readWorld(memoryDir);
   const walkedRoom = walked.state.placements.get(character)?.object ?? room;
@@ -397,7 +400,7 @@ async function exploreUnvisited({ character, memoryDir, runCommand, recordSkip }
  *  same empty greeting every turn for the rest of the run. The talk and the
  *  examine write testimony, which never folds into the playable state; only
  *  the manipulation touches the world. */
-async function investigateRoom({ character, turn, room, memoryDir, cache, recordSkip, runCommand, actions, notes }) {
+async function investigateRoom({ character, turn, epoch = 0, room, memoryDir, cache, recordSkip, runCommand, actions, notes }) {
   const { rows, state } = await readWorld(memoryDir);
   const roomMates = castIn(state, room, character);
   const alreadyKnown = knownTopics(rows, state, character);
@@ -420,7 +423,7 @@ async function investigateRoom({ character, turn, room, memoryDir, cache, record
     // drops out of worthSpeakingTo, and drops back in the moment either side
     // learns a food the other has not heard of.
     if (!alreadyKnown.has(teller)) {
-      await recordExamined(memoryDir, { observer: character, thing: teller, k: turn, cache });
+      await recordExamined(memoryDir, { observer: character, thing: teller, k: turn, epoch, cache });
       alreadyKnown.add(teller);
     }
     if (!told) {
@@ -433,13 +436,13 @@ async function investigateRoom({ character, turn, room, memoryDir, cache, record
       });
       notes.push(`MUD — talk: ${character} greeted ${teller}; ${teller} knows of no food to share`);
     } else {
-      await recordTold(memoryDir, { asker: character, teller, thing: told, k: turn, cache });
+      await recordTold(memoryDir, { asker: character, teller, thing: told, k: turn, epoch, cache });
       alreadyKnown.add(told);
       actions.push({
         step: "investigate", kind: "ask", teller, thing: told, miss: false,
         text: `the ${character} asks the ${teller} about food, and hears about the ${told}.`,
       });
-      notes.push(`MUD — ask: ${teller} told ${character} about ${told}; written as mud:${teller}:turn${turn}`);
+      notes.push(`MUD — ask: ${teller} told ${character} about ${told}; written as ${characterTestimonyTag(teller, turn, { epoch })}`);
     }
   }
 
@@ -452,13 +455,13 @@ async function investigateRoom({ character, turn, room, memoryDir, cache, record
   if (!examined) {
     recordSkip("investigate", "nothing unexamined stands here", "");
   } else {
-    await recordExamined(memoryDir, { observer: character, thing: examined, k: turn, cache });
+    await recordExamined(memoryDir, { observer: character, thing: examined, k: turn, epoch, cache });
     alreadyKnown.add(examined);
     actions.push({
       step: "investigate", kind: "examine", thing: examined, miss: false,
       text: `the ${character} examines the ${examined}.`,
     });
-    notes.push(`MUD — examine: ${character} looked at ${examined}; written as mud:${character}:turn${turn}`);
+    notes.push(`MUD — examine: ${character} looked at ${examined}; written as ${characterTestimonyTag(character, turn, { epoch })}`);
   }
 
   await manipulateSomething({ character, turn, room, memoryDir, runCommand, recordSkip });

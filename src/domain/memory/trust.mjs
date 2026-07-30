@@ -40,13 +40,14 @@ function parseChatTagRest(rest) {
  *      same tier the hand-written tier2 corpus already scores at; the :turnN
  *      segment a snapshot write carries records when, not who, and is not
  *      part of the Source identity)
- *   mud:<character>[:turnN][:gone] -> { kind:"corpus", name:"mud:<character>" }
+ *   mud:<character>[:epochE][:turnN][:gone] -> { kind:"corpus", name:"mud:<character>" }
  *     (one character's own testimony in a multi-character world — what it told
  *      someone, what it examined for itself, and with `:gone` what it saw leave
  *      the world. Same tier as the world, but one Source per character; the
  *      `mud:` prefix in the name keeps that Source apart from a world of the
- *      same literal name. Both trailing segments say when and what, not who, so
- *      neither is part of the Source identity)
+ *      same literal name. The trailing segments say which run of the world it
+ *      was, when, and what — none of them says who, so none is part of the
+ *      Source identity)
  *   ace:chat:<session>@<ts>    -> { kind:"operator",  createdAt:<ts>, sessionId:<session> }
  *   teach:chat:<session>@<ts>  -> { kind:"teach",     createdAt:<ts>, sessionId:<session> }
  *   web:<url> | url:<url>      -> { kind:"web",       url:<url> }
@@ -105,7 +106,7 @@ export function provenanceTagToSource(tag) {
   // authored shipped content scored at the corpus tier; the per-turn tail is
   // dropped from the id so every write of one world corroborates one Source.
   if (head.startsWith("world:")) return { kind: "corpus", name: head.slice("world:".length).split(":")[0] || "unknown" };
-  // mud:<character>[:turnN] — one character's own testimony inside a multi-
+  // mud:<character>[:epochE][:turnN] — one character's own testimony inside a multi-
   // character world: what it told another character, and what it saw for
   // itself. Same corpus tier as the world it stands in, but a Source per
   // CHARACTER, so every claim an animal makes over a whole game accumulates on

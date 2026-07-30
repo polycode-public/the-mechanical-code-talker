@@ -652,76 +652,101 @@ async function writeWorldTurn(memoryDir, world, k, facts, cache) {
 
 const VOIDED_TESTIMONY_SUFFIX = ":gone";
 
-const characterTestimonyTag = (character, k, voided = false) =>
-  `mud:${character}:turn${k}${voided ? VOIDED_TESTIMONY_SUFFIX : ""}`;
+/** The provenance tag one character's claim carries: who said it, which run of
+ *  the world it was said in, the turn it was said on, and whether it says the
+ *  thing has gone. The epoch segment follows snapshotSubject's convention —
+ *  written only once a recast has moved the world past epoch 0, so an unrecast
+ *  store and every tag written before epochs existed keep the bare form and
+ *  read back as epoch 0. */
+export function characterTestimonyTag(character, k, { epoch = 0, voided = false } = {}) {
+  const when = epoch > 0 ? `epoch${epoch}:turn${k}` : `turn${k}`;
+  return `mud:${character}:${when}${voided ? VOIDED_TESTIMONY_SUFFIX : ""}`;
+}
 
-async function appendTestimony(memoryDir, { knower, source, thing, k, voided = false, cache }) {
+async function appendTestimony(memoryDir, { knower, source, thing, k, epoch = 0, voided = false, cache }) {
   await appendFacts(memoryDir, [{
     subject: knower, predicate: KNOWS_ABOUT_PREDICATE, object: thing,
-    provenance: characterTestimonyTag(source, k, voided),
+    provenance: characterTestimonyTag(source, k, { epoch, voided }),
   }]);
   if (cache) cache.rows = null;
 }
 
-/** Record that `teller` told `asker` about `thing` on turn `k`. The asker is
- *  the subject — it is the one who now knows — and the teller is named in the
- *  provenance, so the claim corroborates the teller's Source, not the asker's. */
-export async function recordTold(memoryDir, { asker, teller, thing, k, cache = null }) {
-  return appendTestimony(memoryDir, { knower: asker, source: teller, thing, k, cache });
+/** Record that `teller` told `asker` about `thing` on turn `k` of `epoch`. The
+ *  asker is the subject — it is the one who now knows — and the teller is named
+ *  in the provenance, so the claim corroborates the teller's Source, not the
+ *  asker's. */
+export async function recordTold(memoryDir, { asker, teller, thing, k, epoch = 0, cache = null }) {
+  return appendTestimony(memoryDir, { knower: asker, source: teller, thing, k, epoch, cache });
 }
 
-/** Record that `observer` examined `thing` on turn `k`. The observer is both
- *  the subject and the provenance's character: it learned this by looking, so
- *  it is its own source for it. */
-export async function recordExamined(memoryDir, { observer, thing, k, cache = null }) {
-  return appendTestimony(memoryDir, { knower: observer, source: observer, thing, k, cache });
+/** Record that `observer` examined `thing` on turn `k` of `epoch`. The observer
+ *  is both the subject and the provenance's character: it learned this by
+ *  looking, so it is its own source for it. */
+export async function recordExamined(memoryDir, { observer, thing, k, epoch = 0, cache = null }) {
+  return appendTestimony(memoryDir, { knower: observer, source: observer, thing, k, epoch, cache });
 }
 
-/** Record that `observer` saw `thing` leave the world on turn `k` — it ate the
- *  last of it. Written as a fresh claim on the SAME edge an older one already
- *  sits on, so the older claim stands untouched and stops being the one that
- *  rules. The observer is its own source, the way examining is. */
-export async function recordGone(memoryDir, { observer, thing, k, cache = null }) {
-  return appendTestimony(memoryDir, { knower: observer, source: observer, thing, k, voided: true, cache });
+/** Record that `observer` saw `thing` leave the world on turn `k` of `epoch` —
+ *  it ate the last of it. Written as a fresh claim on the SAME edge an older one
+ *  already sits on, so the older claim stands untouched and stops being the one
+ *  that rules. The observer is its own source, the way examining is. */
+export async function recordGone(memoryDir, { observer, thing, k, epoch = 0, cache = null }) {
+  return appendTestimony(memoryDir, { knower: observer, source: observer, thing, k, epoch, voided: true, cache });
 }
 
-const TESTIMONY_TAG_RE = /^mud:([^:\s]+):turn(\d+)(:gone)?$/;
+const TESTIMONY_TAG_RE = /^mud:([^:\s]+):(?:epoch(\d+):)?turn(\d+)(:gone)?$/;
 const TURN_STAMP_RE = /:turn(\d+)\b/;
 
 /** How one provenance segment on a knows-about edge stands as a claim about
- *  what `knower` knows: whether the knower vouches for it itself, the turn it
- *  was asserted on, and whether it says the thing is gone. A tag that is no
- *  character's testimony — a world's own seed fact, a dig spawn — reads as
- *  hearsay stamped with whatever turn it carries. */
-function testimonyClaim(segment, knower) {
+ *  what `knower` knows: which run of the world it was made in, whether the
+ *  knower vouches for it itself, the turn it was asserted on, and whether it
+ *  says the thing is gone. A tag that is no character's testimony — a world's
+ *  own seed fact, a dig spawn — reads as hearsay stamped with whatever turn it
+ *  carries.
+ *
+ *  Epoch reads the same way foldWorldState reads a row's: a stamped tag names
+ *  its own run, a tag stamped with a turn but no epoch was written on epoch 0
+ *  (or before epochs existed), and a tag with no turn at all is a seed the
+ *  world lays down fresh on every recast, so it belongs to the run being read
+ *  now. */
+function testimonyClaim(segment, knower, currentEpoch = 0) {
   const mine = TESTIMONY_TAG_RE.exec(segment);
-  const stamp = Number(mine ? mine[2] : (TURN_STAMP_RE.exec(segment)?.[1] ?? 0));
+  const turnStamp = mine ? mine[3] : TURN_STAMP_RE.exec(segment)?.[1];
+  const stamp = Number(turnStamp ?? 0);
+  const epochStamp = mine?.[2];
   return {
+    epoch: epochStamp ? Number(epochStamp) : (turnStamp === undefined ? currentEpoch : 0),
     firsthand: !!mine && mine[1] === knower,
     turn: Number.isFinite(stamp) ? stamp : 0,
-    voided: !!(mine && mine[3]),
+    voided: !!(mine && mine[4]),
   };
 }
 
-/** Firsthand beats hearsay outright, then the later turn wins, then "gone"
- *  takes the tie — an animal that examined a carrot and ate it on one turn ate
- *  it second. Tier ABOVE recency is what stops an animal being talked back into
- *  a meal it ate itself: a room-mate can tell it about that carrot the turn
- *  after, and its own eyes still hold. */
+/** The later epoch beats everything, then firsthand beats hearsay, then the
+ *  later turn wins, then "gone" takes the tie — an animal that examined a carrot
+ *  and ate it on one turn ate it second.
+ *
+ *  Epoch on top mirrors the world-state fold: a recast starts the world over, so
+ *  nothing said in the run it replaced can rule over what a character has seen
+ *  since, however late in that old run it was said or however firsthand. Within
+ *  one run, firsthand sits above recency, and that is what stops an animal being
+ *  talked back into a meal it ate itself: a room-mate can tell it about that
+ *  carrot the turn after, and its own eyes still hold. */
 const outranksClaim = (claim, best) => (
-  claim.firsthand !== best.firsthand ? claim.firsthand
-    : claim.turn !== best.turn ? claim.turn > best.turn
-      : claim.voided && !best.voided
+  claim.epoch !== best.epoch ? claim.epoch > best.epoch
+    : claim.firsthand !== best.firsthand ? claim.firsthand
+      : claim.turn !== best.turn ? claim.turn > best.turn
+        : claim.voided && !best.voided
 );
 
 /** The claim that rules on one knows-about edge, across every segment its
  *  provenance carries. */
-function rulingTestimonyClaim(provenance, knower) {
+function rulingTestimonyClaim(provenance, knower, currentEpoch = 0) {
   let best = null;
   for (const segment of String(provenance || "").split(" | ")) {
     const tag = segment.trim();
     if (!tag) continue;
-    const claim = testimonyClaim(tag, knower);
+    const claim = testimonyClaim(tag, knower, currentEpoch);
     if (!best || outranksClaim(claim, best)) best = claim;
   }
   return best;
@@ -730,12 +755,13 @@ function rulingTestimonyClaim(provenance, knower) {
 /** What `person` knows about NOW: the object of every knows-about edge whose
  *  ruling claim still stands, in the order the edges were first written.
  *  Nothing is deleted — an edge whose newest claim says the thing is gone just
- *  stops reading back. */
-function currentKnowsAboutTopics(rows, person) {
+ *  stops reading back. `currentEpoch` is the run the reader is on, so a claim a
+ *  recast has left behind cannot decide what a character knows today. */
+function currentKnowsAboutTopics(rows, person, currentEpoch = 0) {
   const topics = [];
   for (const row of rows || []) {
     if (row.subject !== person || row.predicate !== KNOWS_ABOUT_PREDICATE) continue;
-    if (rulingTestimonyClaim(row.provenance, person)?.voided) continue;
+    if (rulingTestimonyClaim(row.provenance, person, currentEpoch)?.voided) continue;
     topics.push(row.object);
   }
   return topics;
@@ -1291,7 +1317,7 @@ export function personKnowledgeLines(rows, state, person) {
       ? `you'll find the ${thing} in the ${place.object}.`
       : `the ${thing} is in the ${place.object}.`);
   }
-  return { lines, aboutTopics: currentKnowsAboutTopics(rows, person) };
+  return { lines, aboutTopics: currentKnowsAboutTopics(rows, person, state?.epoch ?? 0) };
 }
 
 /** The FOOD_CLASS things `person` durably knows about — from being told, or
@@ -1302,7 +1328,7 @@ export function personKnowledgeLines(rows, state, person) {
  *  food query has no per-topic sub-digest to hand back, so this returns the
  *  plain list of known food things rather than a {lines, topics} pair. Pure. */
 export function personKnownFoodLines(rows, state, person) {
-  return currentKnowsAboutTopics(rows, person)
+  return currentKnowsAboutTopics(rows, person, state?.epoch ?? 0)
     .filter((thing) => objectClassChain(rows, thing).includes(FOOD_CLASS));
 }
 
