@@ -420,9 +420,12 @@ Ordered so each phase is useful on its own and unblocks the next.
    design decisions. Splits cleanly by file ownership across several sub-agents.
 2. **`phraseForRelation`.** The one drift risk in the survey — two hand-kept relation-verb tables.
    Small, and it lands before anything else touches relation phrasing.
-3. **Gap B, the structured tool result.** `dispatchToolStructured` returning `{ content, data }`,
-   promoting `tmct-ask.mjs:13`'s delimiter workaround into a contract. Self-contained in
-   `src/tools/`, testable against `test/tools/ask.test.mjs`'s existing envelope assertions.
+3. **Gap B, the structured tool result.** Landed. `dispatchToolStructured(name, args, ctx)` returns
+   `{ content, data }` beside `dispatchTool`'s unchanged string; a handler opts in by returning
+   `kit.mjs`'s `toolResult({ content, data, text })`, and `tmct_ask`, `tmct_related` and
+   `tmct_ingest` populate `data`. Follow-up: `chat.mjs` still splits the flat `---tmct_ask---`
+   string, so it should read the envelope off the structured entry instead. The delimiter is
+   exported as `ASK_ENVELOPE_DELIM` from the tool layer until it does.
 4. **The code-explorer proof.** Route `code-explorer-viz.mjs:148-163` through `tmct_related` /
    `tmct_ask`. This page already has a real graph, so it proves the round trip end to end before any
    engine change.

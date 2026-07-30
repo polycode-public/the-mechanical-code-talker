@@ -7,7 +7,7 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { dispatchTool, TOOLS } from "../../src/tools/server.mjs";
+import { dispatchTool, dispatchToolStructured, TOOLS } from "../../src/tools/server.mjs";
 import { HANDLERS } from "../../src/tools/handlers/index.mjs";
 import { renderToolsCatalog } from "../../src/tools/catalog.mjs";
 import { TOOL_DEFINITIONS, HOT_TOOLS, COLD_TOOLS, TOOL_NAMES } from "../../src/tools/definitions.mjs";
@@ -176,6 +176,40 @@ test("tmct_search runs locally (no LLM) against the fixture", async () => {
 test("tmct_ask answers a structural query and appends the machine envelope", async () => {
   const text = await call("tmct_ask", { query: "which modules import a.mjs" });
   assert.match(text, /---tmct_ask---/);
+});
+
+test("tmct_ask through dispatchToolStructured: the envelope arrives as data, the prose stays clean", async () => {
+  const { content, data } = await dispatchToolStructured("tmct_ask", { query: "which modules import a.mjs" }, { config, source: stubSource });
+  assert.doesNotMatch(content, /---tmct_ask---/, "a structured caller reads prose, never the in-band block");
+  assert.equal(data.miss, false);
+  assert.equal(data.mechanical, true);
+  assert.ok(data.matches.length > 0, "the typed matches a page would render");
+  for (const m of data.matches) {
+    assert.equal(typeof m.id, "string");
+    assert.equal(typeof m.label, "string");
+  }
+});
+
+test("the two dispatch entries are two views of one answer: the flat string is content + the delimited data", async () => {
+  const text = await call("tmct_ask", { query: "which modules import a.mjs" });
+  const { content, data } = await dispatchToolStructured("tmct_ask", { query: "which modules import a.mjs" }, { config, source: stubSource });
+  assert.equal(text, `${content}\n\n---tmct_ask---\n${JSON.stringify(data, null, 2)}`);
+});
+
+test("a prose-only tool answers dispatchToolStructured with the same string and no data", async () => {
+  const { content, data } = await dispatchToolStructured("tmct_describe", { symbol: "a.mjs" }, { config, source: stubSource });
+  assert.equal(content, await call("tmct_describe", { symbol: "a.mjs" }), "byte-identical to the string entry");
+  assert.equal(data, undefined, "nothing structured to add is a real answer, not a failure");
+});
+
+test("dispatchToolStructured rejects an unknown tool the same way, without touching the graph", async () => {
+  let loads = 0;
+  const countingSource = { fetchEntities: async () => { loads += 1; return fixture; } };
+  await assert.rejects(
+    dispatchToolStructured("tmct_nope", {}, { config, source: countingSource }),
+    (e) => { assert.ok(e instanceof ToolError); assert.match(e.message, /unknown tool/); return true; },
+  );
+  assert.equal(loads, 0);
 });
 
 test("unknown symbol → clean ToolError with a suggestion, no stack in the message", async () => {
