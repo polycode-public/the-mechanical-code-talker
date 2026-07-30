@@ -233,8 +233,9 @@ export function askRelatedFacts(graphPayload, term) {
 // `tmct.page` keeps the re-derivation helpers a graph swapped through the
 // desktop picker re-renders with, plus the wink and term-normalizing seams the
 // chat shares with the ledger page. `createCodeExplorerSession` sits there
-// too: this page's client script is still one raw-text block, and it reaches
-// its factory through the bag rather than through `tmct.open()`.
+// too: the page keeps its own session slot, created lazily on the first turn
+// once the general-knowledge seed has landed, rather than the one `tmct.open`
+// would install eagerly — so it calls the factory straight from the bag.
 publishTmctSurface({
   open: createCodeExplorerSession,
   ask: graphAsk,

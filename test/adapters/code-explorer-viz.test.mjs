@@ -13,6 +13,16 @@ import {
   renderCodeExplorerHtml,
   edgePhrase,
   DESKTOP_APP_URL,
+  statsSummaryLine,
+  factTotalText,
+  rowKey,
+  focusRowsHtml,
+  hintsHtml,
+  turnHtml,
+  chatEmptyStateHtml,
+  mbText,
+  seedFactsFromPayload,
+  seedLoadingNote,
 } from "../../src/services/code-explorer-viz.mjs";
 
 const payload = {
@@ -61,6 +71,87 @@ test("a row cap keeps the focus neighbourhood ahead of the rest instead of trunc
   const ledger = computeCodeLedger(wide, { focus: "hub.mjs", rowLimit: 2 });
   assert.equal(ledger.meta.truncated, true);
   assert.ok(ledger.rows.every((r) => r.s === "hub.mjs"), "the surviving rows all touch the focus");
+});
+
+// ---- the client script's spliced helpers, tested as ordinary functions ---
+// These are the pieces CLIENT_JS's inline script splices in with
+// `.toString()`, so each is written and tested exactly like any other pure
+// module function — the eval round trip into a <script> tag is only proved
+// end to end below, by running the whole shell against a stub page.
+
+test("statsSummaryLine names the graph's own counts, then up to four of its most common classes", () => {
+  const line = statsSummaryLine({ individuals: 3, edges: 2, classes: [["file", 2], ["function", 1]] });
+  assert.equal(line, "3 individuals  ·  2 edges  ·  2 file  ·  1 function");
+});
+
+test("statsSummaryLine caps the class tail at four entries", () => {
+  const classes = [["a", 5], ["b", 4], ["c", 3], ["d", 2], ["e", 1]];
+  const line = statsSummaryLine({ individuals: 1, edges: 1, classes });
+  assert.equal(line, "1 individuals  ·  1 edges  ·  5 a  ·  4 b  ·  3 c  ·  2 d", "the fifth class is dropped");
+});
+
+test("factTotalText sums the graph's own edges with the seed's fact count", () => {
+  assert.equal(factTotalText(2, 0), "2");
+  assert.equal(factTotalText(1200, 340), "1,540");
+});
+
+test("rowKey identifies a row by its subject, relation kind and object alone", () => {
+  const a = { s: "x", kind: "imports", o: "y", phrase: "imports" };
+  const b = { s: "x", kind: "imports", o: "y", phrase: "a different phrasing of the same edge" };
+  assert.equal(rowKey(a), rowKey(b), "the phrase does not distinguish two rows of the same edge");
+  assert.notEqual(rowKey(a), rowKey({ ...a, o: "z" }));
+});
+
+test("focusRowsHtml draws the engine's grounded neighbourhood first, then the rest of the row list", () => {
+  const data = { focus: "src/a.mjs", ledger: { rows: [{ s: "src/a.mjs", kind: "imports", phrase: "imports", o: "src/b.mjs" }] } };
+  const related = { grounded: true, rows: [{ s: "src/a.mjs", kind: "calls", phrase: "calls", o: "run" }] };
+  const html = focusRowsHtml(data, related);
+  assert.match(html, /<span class="verb">calls<\/span>/);
+  assert.ok(html.indexOf("run") < html.indexOf("src/b.mjs"), "the grounded row leads, the row list's own row follows");
+});
+
+test("focusRowsHtml falls back to filtering the row list when nothing grounded", () => {
+  const data = { focus: "src/a.mjs", ledger: { rows: [{ s: "src/a.mjs", kind: "imports", phrase: "imports", o: "src/b.mjs" }] } };
+  assert.match(focusRowsHtml(data, null), /src\/b\.mjs/);
+  assert.match(focusRowsHtml(data, { grounded: false, rows: [] }), /src\/b\.mjs/);
+});
+
+test("focusRowsHtml says an empty grounded answer differently from an empty graph", () => {
+  const data = { focus: "src/a.mjs", ledger: { rows: [] } };
+  assert.match(focusRowsHtml(data, { grounded: true, rows: [] }), /nothing in this graph relates to src\/a\.mjs/);
+  assert.match(focusRowsHtml(data, { grounded: false, rows: [] }), /no edges in this graph/);
+});
+
+test("hintsHtml draws one button per hint, or a muted note when there are none", () => {
+  assert.match(hintsHtml([{ text: "what imports run", rationale: "a common question" }]), /data-q="what imports run"/);
+  assert.match(hintsHtml([]), /nothing to suggest for this graph/);
+});
+
+test("turnHtml labels a turn by its role and escapes what was said", () => {
+  assert.match(turnHtml("you", "<script>"), /^<span class="who">you<\/span>/);
+  assert.match(turnHtml("tmct", "hello"), /^<span class="who">tmct<\/span>/);
+  assert.match(turnHtml("you", "<script>"), /&lt;script&gt;/);
+});
+
+test("chatEmptyStateHtml invites a question when the engine is loaded, and says so plainly when it is not", () => {
+  assert.match(chatEmptyStateHtml(true), /Ask the graph, or ask it anything/);
+  assert.match(chatEmptyStateHtml(false), /Static view/);
+});
+
+test("mbText renders a byte count in megabytes to one decimal place", () => {
+  assert.equal(mbText(1048576), "1.0");
+  assert.equal(mbText(1572864), "1.5");
+});
+
+test("seedFactsFromPayload counts only the Fact-classed individuals", () => {
+  const payload = { individuals: [{ class: "Fact" }, { class: "Fact" }, { class: "SkosConcept" }] };
+  assert.equal(seedFactsFromPayload(payload), 2);
+  assert.equal(seedFactsFromPayload({}), 0);
+});
+
+test("seedLoadingNote reports progress in megabytes, with a total once the response names one", () => {
+  assert.equal(seedLoadingNote(1048576, 0), "loading general knowledge… 1.0 MB");
+  assert.equal(seedLoadingNote(1048576, 2097152), "loading general knowledge… 1.0 of 2.0 MB");
 });
 
 function renderDefault(opts = {}) {

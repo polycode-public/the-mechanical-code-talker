@@ -79,8 +79,7 @@ works; most of the inventory below is places it was not followed.
 functions to `embedScriptText` via `Function.prototype.toString()`, listing each as a `const` binding
 at the top of the page's IIFE. `spider-fly-viz.mjs:593-599` does the same. This is the good pattern:
 the page's own source reads as named calls, and the functions behind those names are importable and
-testable in Node. Pages that instead type their JS as raw template text (`code-explorer-viz.mjs:117`
-`CLIENT_JS`) end up re-typing `escapeHtml` and `fetchWithProgress` by hand — see the inventory.
+testable in Node. Every viz module now follows it, `code-explorer-viz.mjs`'s `CLIENT_JS` included.
 
 ## The three structural gaps
 
@@ -389,9 +388,9 @@ the page source a visitor reads:
 | `sprite-catalog-viz.mjs` | 576-656, 796-890 | 174 |
 
 The splice pattern (`mud-viz.mjs:894`, `spider-fly-viz.mjs:593-599`) already lets a page's source read
-as a list of named calls into real, testable module functions. Two pages opted out and pay for it
-directly: `code-explorer-viz.mjs:117` (`CLIENT_JS` as raw text — hence the retyped `esc` and
-`fetchTextWithProgress` above) and the four `chat-page-viz.mjs` helpers in Theme 4's last row.
+as a list of named calls into real, testable module functions. `code-explorer-viz.mjs`'s `CLIENT_JS`
+and the four `chat-page-viz.mjs` helpers in Theme 4's last row were the two holdouts; both now follow it
+too (phase 11).
 
 **Target:** every viz module builds its page script the way `mud-viz.mjs` does, and every helper in
 that script is a named import or a spliced module function. That is the mechanical half of "the page
@@ -486,9 +485,13 @@ Ordered so each phase is useful on its own and unblocks the next.
     `createTurnSession` exposes that graph; and the surface publishes with a `fallback` flag, so
     the ledger page's two bundles (the committed question-only one and the demo site's full
     engine) settle precedence explicitly rather than by load order.
-11. **The showcase pass.** Every viz module builds its page script the `mud-viz.mjs` way; the two
-    raw-text holdouts convert; each page's source is read start to finish against the operator's
-    test — does this read as a thin caller of real tmct capability.
+11. **The showcase pass.** The mechanical half is landed: both raw-text holdouts,
+    `chat-page-viz.mjs`'s four helpers and `code-explorer-viz.mjs`'s `CLIENT_JS`, now build their
+    page script the `mud-viz.mjs` way, every remaining hand-written piece extracted into a named,
+    unit-tested module function and spliced in with `.toString()`
+    (`test/adapters/code-explorer-viz.test.mjs`). Still open: reading each page's source start to
+    finish against the operator's test — does this read as a thin caller of real tmct capability —
+    across the other viz modules.
 
 ## Non-goals
 

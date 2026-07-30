@@ -107,6 +107,85 @@ export function computeCodeExplorerData(payload, opts = {}) {
   return { payload, ledger, hints, focus: ledger.focus || focus, meta: { title: opts.title || "code graph" } };
 }
 
+// ---- client script pieces, spliced into CLIENT_JS below -------------------
+// Named module functions so the page's own source reads as a list of calls
+// into real, unit-tested code rather than an inlined block. Each is written
+// to survive a `.toString()` round trip into a browser `<script>` tag: no
+// closure over this module's own scope, only its parameters and whichever
+// sibling below it is also spliced into the same page script.
+
+/** One line naming the loaded graph's own size: individual/edge counts, then
+ *  up to four of its most common classes. */
+export function statsSummaryLine(ledgerStats) {
+  var parts = [ledgerStats.individuals + " individuals", ledgerStats.edges + " edges"];
+  var cls = ledgerStats.classes.slice(0, 4).map(function (c) { return c[1] + " " + c[0]; });
+  return parts.concat(cls).join("  ·  ");
+}
+
+/** Every fact the chat can draw on: the graph's own edges plus whatever the
+ *  general-knowledge seed has counted so far. */
+export function factTotalText(edges, seedFacts) {
+  return (edges + seedFacts).toLocaleString();
+}
+
+export function rowKey(row) { return JSON.stringify([row.s, row.kind, row.o]); }
+
+/** The sidebar's rows: the engine's own answer about the focus when it
+ *  grounded one, the row list's plain filter otherwise, then whatever
+ *  neither named — a fold over the rest of the graph. */
+export function focusRowsHtml(data, related) {
+  var focus = data.focus;
+  var rows = data.ledger.rows;
+  var grounded = Boolean(related && related.grounded);
+  var near = grounded ? related.rows : rows.filter(function (r) { return r.s === focus || r.o === focus; });
+  var nearKeys = {};
+  near.forEach(function (r) { nearKeys[rowKey(r)] = true; });
+  var rest = rows.filter(function (r) { return !nearKeys[rowKey(r)]; });
+  var ordered = near.concat(rest);
+  return ordered.map(function (r) {
+    var hot = (r.s === focus || r.o === focus) ? " row-focus" : "";
+    return '<li class="row' + hot + '">'
+      + '<button class="term" data-term="' + escapeHtml(r.s) + '">' + escapeHtml(r.s) + '</button> '
+      + '<span class="verb">' + escapeHtml(r.phrase) + '</span> '
+      + '<button class="term" data-term="' + escapeHtml(r.o) + '">' + escapeHtml(r.o) + '</button>'
+      + '</li>';
+  }).join("") || (grounded
+    ? '<li class="row muted">nothing in this graph relates to ' + escapeHtml(focus) + '.</li>'
+    : '<li class="row muted">no edges in this graph.</li>');
+}
+
+export function hintsHtml(hints) {
+  return hints.map(function (h) {
+    return '<button class="hint" data-q="' + escapeHtml(h.text) + '" title="' + escapeHtml(h.rationale) + '">'
+      + escapeHtml(h.text) + '</button>';
+  }).join("") || '<span class="muted">nothing to suggest for this graph.</span>';
+}
+
+export function turnHtml(role, text) {
+  return '<span class="who">' + (role === "you" ? "you" : "tmct") + '</span><span class="said">' + escapeHtml(text) + '</span>';
+}
+
+export function chatEmptyStateHtml(hasEngine) {
+  return hasEngine
+    ? '<p class="chat-empty-head">Ask the graph, or ask it anything</p>'
+      + '<p>Ask about the code graph on the left, or about anything its general knowledge covers, like “what is a queue”.</p>'
+      + '<p class="chat-empty-hint">Try one of the questions below, or type your own.</p>'
+    : '<p class="chat-empty-head">Static view</p>'
+      + '<p>This page shows a fixed snapshot of the graph. The live chat is not available here.</p>';
+}
+
+export function mbText(n) { return (n / 1048576).toFixed(1); }
+
+/** How many of the seed's own individuals are facts — the general-knowledge
+ *  half of the fact-total pill. */
+export function seedFactsFromPayload(payload) {
+  return (payload.individuals || []).filter(function (i) { return i.class === "Fact"; }).length;
+}
+
+export function seedLoadingNote(loadedBytes, totalBytes) {
+  return "loading general knowledge… " + mbText(loadedBytes) + (totalBytes ? " of " + mbText(totalBytes) : "") + " MB";
+}
+
 const CLIENT_JS = String.raw`
 (function () {
   var DATA = window.__CODE_EXPLORER__;
@@ -126,13 +205,17 @@ const CLIENT_JS = String.raw`
   };
   var session = null;
 
-  var esc = ${escapeHtml.toString()};
+  var escapeHtml = ${escapeHtml.toString()};
+  var rowKey = ${rowKey.toString()};
+  var statsSummaryLine = ${statsSummaryLine.toString()};
+  var factTotalText = ${factTotalText.toString()};
+  var focusRowsHtml = ${focusRowsHtml.toString()};
+  var hintsHtml = ${hintsHtml.toString()};
+  var turnHtml = ${turnHtml.toString()};
+  var chatEmptyStateHtml = ${chatEmptyStateHtml.toString()};
 
   function renderStats(data) {
-    var s = data.ledger.stats;
-    var parts = [s.individuals + " individuals", s.edges + " edges"];
-    var cls = s.classes.slice(0, 4).map(function (c) { return c[1] + " " + c[0]; });
-    els.stats.textContent = parts.concat(cls).join("  ·  ");
+    els.stats.textContent = statsSummaryLine(data.ledger.stats);
     renderFactTotal(data);
   }
 
@@ -141,7 +224,7 @@ const CLIENT_JS = String.raw`
   function renderFactTotal(data) {
     if (!els.factTotal) return;
     var edges = (data && data.ledger && data.ledger.stats && data.ledger.stats.edges) || 0;
-    els.factTotal.textContent = (edges + seedState.facts).toLocaleString();
+    els.factTotal.textContent = factTotalText(edges, seedState.facts);
   }
 
   // "What relates to the focus", put to the engine. askRelatedFacts asks
@@ -159,41 +242,19 @@ const CLIENT_JS = String.raw`
     }
   }
 
-  function rowKey(r) { return JSON.stringify([r.s, r.kind, r.o]); }
-
+  // The engine's answer whenever it grounded one. The row list's own split is
+  // what is left when there is no engine (the static page) or when every
+  // question came back parsed as something else — an identifier that is
+  // itself a relation verb reads as a question about the verb. Whatever the
+  // neighbourhood did not already name follows, in degree order: a bulk view
+  // of the rest of the graph, which is a fold and not a question.
   function renderFocusRows(data, related) {
-    var focus = data.focus;
-    var rows = data.ledger.rows;
-    // The engine's answer whenever it grounded one. The row list's own split is
-    // what is left when there is no engine (the static page) or when every
-    // question came back parsed as something else — an identifier that is
-    // itself a relation verb reads as a question about the verb.
-    var grounded = Boolean(related && related.grounded);
-    var near = grounded ? related.rows : rows.filter(function (r) { return r.s === focus || r.o === focus; });
-    var nearKeys = {};
-    near.forEach(function (r) { nearKeys[rowKey(r)] = true; });
-    // Whatever the neighbourhood did not already name, in degree order: a bulk
-    // view of the rest of the graph, which is a fold and not a question.
-    var rest = rows.filter(function (r) { return !nearKeys[rowKey(r)]; });
-    var ordered = near.concat(rest);
-    els.ledger.innerHTML = ordered.map(function (r) {
-      var hot = (r.s === focus || r.o === focus) ? " row-focus" : "";
-      return '<li class="row' + hot + '">'
-        + '<button class="term" data-term="' + esc(r.s) + '">' + esc(r.s) + '</button> '
-        + '<span class="verb">' + esc(r.phrase) + '</span> '
-        + '<button class="term" data-term="' + esc(r.o) + '">' + esc(r.o) + '</button>'
-        + '</li>';
-    }).join("") || (grounded
-      ? '<li class="row muted">nothing in this graph relates to ' + esc(focus) + '.</li>'
-      : '<li class="row muted">no edges in this graph.</li>');
-    els.focus.textContent = focus || "—";
+    els.ledger.innerHTML = focusRowsHtml(data, related);
+    els.focus.textContent = data.focus || "—";
   }
 
   function renderHints(data) {
-    els.hints.innerHTML = data.hints.map(function (h) {
-      return '<button class="hint" data-q="' + esc(h.text) + '" title="' + esc(h.rationale) + '">'
-        + esc(h.text) + '</button>';
-    }).join("") || '<span class="muted">nothing to suggest for this graph.</span>';
+    els.hints.innerHTML = hintsHtml(data.hints);
   }
 
   function focusOn(term) {
@@ -218,7 +279,7 @@ const CLIENT_JS = String.raw`
     clearEmptyState();
     var div = document.createElement("div");
     div.className = "turn turn-" + role;
-    div.innerHTML = '<span class="who">' + (role === "you" ? "you" : "tmct") + '</span><span class="said">' + esc(text) + '</span>';
+    div.innerHTML = turnHtml(role, text);
     els.log.appendChild(div);
     els.log.scrollTop = els.log.scrollHeight;
   }
@@ -227,12 +288,7 @@ const CLIENT_JS = String.raw`
     var div = document.createElement("div");
     div.className = "chat-empty";
     div.id = "chat-empty";
-    div.innerHTML = api
-      ? '<p class="chat-empty-head">Ask the graph, or ask it anything</p>'
-        + '<p>Ask about the code graph on the left, or about anything its general knowledge covers, like “what is a queue”.</p>'
-        + '<p class="chat-empty-hint">Try one of the questions below, or type your own.</p>'
-      : '<p class="chat-empty-head">Static view</p>'
-        + '<p>This page shows a fixed snapshot of the graph. The live chat is not available here.</p>';
+    div.innerHTML = chatEmptyStateHtml(Boolean(api));
     els.log.appendChild(div);
   }
 
@@ -248,9 +304,11 @@ const CLIENT_JS = String.raw`
   var SEED_QUERY = DATA.seedStamp ? "?b=" + DATA.seedStamp : "";
   var seedState = { status: api ? "loading" : "absent", payload: null, facts: 0 };
   function seedNote(text) { if (els.seedStatus) els.seedStatus.textContent = text; }
-  function mbText(n) { return (n / 1048576).toFixed(1); }
 
+  var mbText = ${mbText.toString()};
   var fetchWithProgress = ${fetchWithProgress.toString()};
+  var seedFactsFromPayload = ${seedFactsFromPayload.toString()};
+  var seedLoadingNote = ${seedLoadingNote.toString()};
 
   async function loadSeed() {
     try {
@@ -260,13 +318,13 @@ const CLIENT_JS = String.raw`
         text = await window.tmctDesktop.readSeed();
       } else {
         var seedBlob = await fetchWithProgress("./chat-seed.json" + SEED_QUERY, function (loaded, total) {
-          seedNote("loading general knowledge… " + mbText(loaded) + (total ? " of " + mbText(total) : "") + " MB");
+          seedNote(seedLoadingNote(loaded, total));
         });
         text = await seedBlob.text();
       }
       if (text) {
         seedState.payload = JSON.parse(text);
-        seedState.facts = (seedState.payload.individuals || []).filter(function (i) { return i.class === "Fact"; }).length;
+        seedState.facts = seedFactsFromPayload(seedState.payload);
         seedState.status = "ready";
         seedNote("general knowledge: " + seedState.facts + " facts");
         renderFactTotal(DATA);
