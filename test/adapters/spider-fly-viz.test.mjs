@@ -200,6 +200,13 @@ test("renderSpiderFlyHtml: the shared ticker is spliced in, not re-implemented",
   assert.match(html, /createTicker\(\{/);
 });
 
+test("renderSpiderFlyHtml: the sprite's expression comes from the engine's own mood word, never from re-reading its goal sentence", () => {
+  const html = renderSpiderFlyHtml();
+  assert.match(html, /predicate: "mgx:feels", object: \(agent && agent\.mood\)/, "the mgx:feels row the sprite resolver reads is the engine's structured mood");
+  assert.doesNotMatch(html, /goal\.startsWith\(/, "no page code parses the engine's rendered goal prose back apart");
+  assert.doesNotMatch(html, /const emotionFor = /, "the prose-matching emotion derivation is gone, not merely unused");
+});
+
 test("renderSpiderFlyHtml: the page references its sibling bundle by a same-origin relative path only", () => {
   const html = renderSpiderFlyHtml();
   assert.match(html, /<script src="\.\/spider-fly-browser\.bundle\.js"><\/script>/);
