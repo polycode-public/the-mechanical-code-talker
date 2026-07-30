@@ -196,15 +196,13 @@ graph already holds — `mgx:currently-in` placements plus an `rdf:type` taxonom
 
 The facts are all on record already. Nothing needs teaching first.
 
-Nothing answers this shape today. `spider-fly-turn.mjs:441` (`SF_WHERE_AGENT_RE`) takes one singular
-kind — "where is the spider" — and returns a sentence via `positionsOfKind`
-(`spider-fly-turn.mjs:448-470`), not the plural two-kind shape and not structured data. `chat.mjs`'s
-generic membership list (`MEMBERSHIP_LIST_RE`, `chat.mjs:986`) reads "locations" as the noun and finds
-no ISA facts for it, because `spider-1` is never taught as a kind of spider (`chat.mjs:1013-1019`).
-`tmct_ask` itself still reads the page's empty code graph — Gap A opened the capability planner's
-route to the memory store, not `ask`'s own.
+Before phase 6, nothing answered this shape. `spider-fly-turn.mjs`'s `SF_WHERE_AGENT_RE` takes one
+singular kind — "where is the spider" — and returns a sentence via `positionsOfKind`, not the plural
+two-kind shape and not structured data; it still owns that singular phrasing, ahead of `ask`.
+`chat.mjs`'s generic membership list (`MEMBERSHIP_LIST_RE`) reads "locations" as the noun and finds
+no ISA facts for it, because `spider-1` is never taught as a kind of spider.
 
-**This one has a real design fork, and it should be decided before the work is dispatched.**
+**The design fork this was dispatched with:**
 
 - *Route through `ask`.* The request is a relational listing over `mgx:currently-in` with a two-class
   subject filter, which is a question the graph can answer. `ask.mjs` already carries a dynamic
@@ -219,11 +217,15 @@ route to the memory store, not `ask`'s own.
   rules. The cost is that the page keeps a bespoke route to its own facts, which is the thing this
   plan exists to remove.
 
-The two are not mutually exclusive — a closed lane can ship first and be re-pointed at `ask` later.
-Recommendation: take `ask`, because a second closed lane per page is how the estate got here. Whoever picks up phase 6 should read both options and say which they took.
+**Decided and landed: the `ask` route.** See phase 6 below for what shipped. The remaining hop is
+not in this file's scope: `chat.mjs:12529` only calls `ask(graph, …)` directly when a focus or a
+prior result set exists, and otherwise dispatches `tmct_ask` against the *config's* graph, which a
+browser session doesn't have — so the page's own board graph is reached on a second question and
+walled on the first.
 
-- Sub-item, cat 1, **lib**: the web-id exclusion regex (`browser-entry.mjs:150`) and the
-  `removed`-set skip encode world rules that `spider-fly-world.mjs` should own, not the browser entry.
+- Sub-item, cat 1, **lib** — landed earlier: the web-id exclusion regex and the `removed`-set skip
+  are `spider-fly-world.mjs`'s `isWebIndividualId`/`isLiveRenderableAgent`, and the browser entry
+  calls them. Phase 6 reuses the same reader to decide which subjects reach the graph.
 
 **`fn("get me the large sprite for a happy spider")`.** Today:
 
@@ -425,9 +427,23 @@ Ordered so each phase is useful on its own and unblocks the next.
    the store the binding used. See Gap A above for why the eight entries kept their empty graph.
    Covered by `test/adapters/router-memory-binding.test.mjs` and
    `test/adapters/browser-entry-capability-plan.test.mjs`.
-6. **`fn("list the locations of flies and spiders")`.** Falls out of phase 5 as an `ask` call. Read
-   the design fork in Theme 2 first and record which option you took. Prove it against the spider-fly
-   grid, with `snapshot()` kept as the fast path.
+6. **`fn("list the locations of flies and spiders")` — landed, by the `ask` route.** `ask-vocab.mjs`
+   carries `WORLD_RELATIONS`: one entry per stored world predicate (`mgx:currently-in`, `mgx:feels`,
+   `mgx:mass`), each with the listing nouns a question reaches it by and the phrase one subject's
+   answer reads in. No `verbs` list and no `VERB_TO_KIND` entry — these answer a listing over a named
+   set, not RELATIONS' "does X <verb> Y" shapes. `ask.mjs` compiles a list trigger or a bare
+   "where are…" into a `worldRelation` AST over one predicate with a multi-class subject filter,
+   evaluated and rendered beside the other compositional nodes, and fired only after the normal
+   cascade has already missed. Classes resolve dynamically against the graph's own individuals, the
+   same way the memory-class count/list fallback does, so a world's taxonomy needs no entry in the
+   closed code-graph noun table. `worldRelationGraphPayload(rows, { classOf })` projects world fact
+   rows into the `parseEntities` payload, folding `@turnN`/`@stepN` rows onto their base subject —
+   without that the answer reports turn-0 positions. `classOf` returning null drops a subject, which
+   is the seam the spider-fly page filters dead agents and web individuals through
+   (`isLiveRenderableAgent`), keeping that rule in the world module. `session.snapshot()` is
+   untouched and still the render fast path. Covered by `test/adapters/ask-world-relation.test.mjs`,
+   whose last case ticks the real engine and asserts the answer equals `foldSpiderFlyState`'s own
+   placements.
 7. **Mood becomes a fact — landed.** `runSpiderFlyTick` assigns a `mood` word beside every `goal` it
    renders and appends it as an `mgx:feels` fact per agent per turn; `startSpiderFlyGame` writes the
    starting `calm`. `emotionFor` is deleted and the page reads `agent.mood`. Vocabulary: happy,

@@ -49,10 +49,11 @@ import {
   createInMemoryStore, normFactTerm, appendFacts, loadMemory, readFactRows,
 } from "../../adapters/memory/core.mjs";
 import { parseEntities } from "../../domain/codegraph.mjs";
+import { worldRelationGraphPayload } from "../../domain/ask.mjs";
 import { loadLexicon } from "../../domain/grammar/lexicon.mjs";
 import {
   worldFactRows, WORLD_NAME, WORLD_OPENING, cellId, parseCellId, DIRECTION_DELTA, visibleCells,
-  isLiveRenderableAgent,
+  isLiveRenderableAgent, agentKindOf,
 } from "../../domain/spider-fly-world.mjs";
 import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame, liveWebs, DEFAULT_VISION_RADIUS } from "../../services/spider-fly.mjs";
 import { pillsForSpiderFly, oneStepDirectionBetween } from "../../services/spider-fly-turn.mjs";
@@ -86,7 +87,24 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
     else if (f.predicate === "mgx:mass") initialAgents[f.subject] = { ...initialAgents[f.subject], mass: Number(f.object) };
   }
 
-  const graph = parseEntities({ individuals: [], objectProperties: [] });
+  // The graph the chat dock's own ask() traverses. There is no code graph
+  // here, so it holds the LIVE BOARD instead: one individual per agent, classed
+  // by its id, carrying its current cell, mass and mood. That is what makes
+  // "list the locations of flies and spiders" a real ask() capability call
+  // rather than another hand-written filter over the same rows. Rebuilt before
+  // every chat turn, since every tick moves the pieces.
+  let graph = parseEntities({ individuals: [], objectProperties: [] });
+  const readBoard = async () => {
+    const rows = readFactRows(await loadMemory(memoryDir));
+    return { rows, state: foldSpiderFlyState(rows) };
+  };
+  async function refreshWorldGraph() {
+    const { rows, state } = await readBoard();
+    graph = parseEntities(worldRelationGraphPayload(rows, {
+      classOf: (id) => (isLiveRenderableAgent(id, state) ? agentKindOf(id) : null),
+    }));
+  }
+  await refreshWorldGraph();
   const lexicon = loadLexicon();
   const sessionId = globalThis.crypto?.randomUUID?.() ?? String(Date.now());
 
@@ -106,7 +124,9 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
   // count either lane sees next.
   const turnSession = createTurnSession({
     memoryDir, graph, lexicon, sessionId, vocabHint: "",
-    buildExtraOptions: () => ({ gameConfig: { ...DEFAULT_GAME_CONFIG, spiderFly: config } }),
+    // `graph` is re-read here, not captured above: createTurnSession binds its
+    // own once at creation, and this board is rebuilt every turn.
+    buildExtraOptions: () => ({ graph, gameConfig: { ...DEFAULT_GAME_CONFIG, spiderFly: config } }),
   });
   turnSession.setPlanState({ spiderFly: { turn: 0 } });
 
@@ -128,8 +148,10 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
     /** One dispatched chat turn — the SAME runTurn the CLI and the home
      *  page's own chat run, over this session's own memoryDir, via the
      *  shared turn-dispatch wrapper (createTurnSession above) every browser
-     *  entry now uses. */
+     *  entry now uses. The board graph is rebuilt first, so a question about
+     *  where the pieces are reads this turn's positions and not last turn's. */
     async turn(line) {
+      await refreshWorldGraph();
       return turnSession.turn(line);
     },
 
@@ -139,8 +161,7 @@ export async function createSpiderFlySession({ flyCount = 1 } = {}) {
      *  chat-driven tick. Web individuals are never listed as agents (that's
      *  spider-1/fly-1/... only) — they surface only through activeWebs. */
     async snapshot() {
-      const rows = readFactRows(await loadMemory(memoryDir));
-      const state = foldSpiderFlyState(rows);
+      const { state } = await readBoard();
       const agents = {};
       for (const [id, place] of state.placements) {
         if (!isLiveRenderableAgent(id, state)) continue;

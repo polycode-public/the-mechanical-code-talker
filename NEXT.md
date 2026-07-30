@@ -28,6 +28,15 @@ browser-entry callers still pass an empty graph, tracked below), and mood-become
 (`spider-fly.mjs` writes a real `mgx:feels` fact per agent per turn; `emotionFor`'s prose-parsing is
 deleted). See the doc's own Phasing section for exact detail per phase.
 
+Phase 6 landed too, by the `ask` route Theme 2 recommended. `ask-vocab.mjs` now carries a
+`WORLD_RELATIONS` table (`mgx:currently-in`, `mgx:feels`, `mgx:mass`, each with its listing nouns),
+`ask.mjs` compiles "list the locations of flies and spiders" — and its where/position/mood/mass
+paraphrases — into a `worldRelation` AST over one predicate with a multi-class subject filter, and
+`worldRelationGraphPayload` projects a world's fact rows into a graph `ask` can traverse, folding
+`@turnN`/`@stepN` rows onto their base subject so the answer is this turn's board. The spider-fly
+page builds that graph before every chat turn; `session.snapshot()` is untouched and still the
+render fast path.
+
 Two NEXT.md items from before this session are also done: **the mud room rebind** (`p2p-room.mjs`'s
 `rebind()` swaps a live room's store while keeping peers connected; `adventure.mjs`'s
 `foldWorldState` is epoch-aware so a stale pre-recast snapshot can't outrank a fresh one — real
@@ -58,7 +67,7 @@ sweep in the plain swatch's slot, and a new idle/moving toggle in the happy swat
 through the existing tier-2 memory-fact-term oracle rather than a new one; "large" resolved to the
 scale tier `data/sprites-large/` ships, re-confirmed against the real 987-file catalog.
 `spider-fly-viz.mjs`'s five-argument sprite call collapsed into `src/domain/sprite-request.mjs`.
-Phases 6 and 9 are dispatched and in progress.
+Phase 9 is dispatched and in progress.
 
 **Everything merged onto local `main` so far this session is green** (`npm test` full suite: 4939
 pass after the Wave 2/3 checkpoint; every subsequent wave re-verified with `npm run test:fast` plus
@@ -86,15 +95,19 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 
 ## Open items
 
-- [ ] **`PLAN_TOOL_SURFACE.md` phase 6** — `fn("list the locations of flies and spiders")` via
-  `ask`. Dispatched to a background agent; route through `ask`, keep `session.snapshot()` as the
-  fast path, per the doc's own recorded Theme 2 decision.
+- [ ] **`chat.mjs` reaches its own session's graph only when a focus is set.** `chat.mjs:12529`
+  routes the ask lane through `dispatchTool("tmct_ask", …, { config, source })` unless
+  `focus?.id || prev.length`, and a browser session has no config to load a graph from — so a page
+  that hands `runTurn` a real in-memory graph gets the no-code-graph wall on the first question and
+  a correct answer on the second. Phase 6's world listing answers through `runTurn` the moment a
+  focus exists, and through `ask()` always; this condition is the last hop. Prefer the passed graph
+  whenever it holds individuals. Handed to the Phase 9 agent, already mid-flight in this file.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 9** — key `chat.mjs`'s generic membership/property lanes on the
   sprite-facts predicates so `answerSpriteQuestion` deletes; route `extractSceneItems` through
   `resolveObject`. Dispatched to a background agent.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 10, Gap C** — one `globalThis.tmct` (`ask`, `plan`, `turn`,
-  `session`) replacing the eleven per-page global bags. Needs phases 3 and 5 (both done) and 8 to
-  exist first.
+  `session`) replacing the eleven per-page global bags. Needs phases 3, 5 and 8 (all done) —
+  unblocked, not yet dispatched.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 11** — the showcase pass: every viz module builds its page
   script the `mud-viz.mjs` way; `code-explorer-viz.mjs`'s `CLIENT_JS` raw-text block is the one
   remaining holdout (chat's four helpers already converted this session).
