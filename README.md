@@ -152,7 +152,7 @@ are two of them exactly as they sit in the graph — `dog capableOf bark` and
 
 ```output cmd="node examples/raw-fact-shape.mjs" cwd=repo
 {
-  "id": "fact:d5327019d311a956",
+  "id": "fact:d5327019d311a956@src:corpus:human",
   "label": "dog mgx:capableOf bark",
   "class": "Fact",
   "derived_from": [],
@@ -184,6 +184,11 @@ are two of them exactly as they sit in the graph — `dog capableOf bark` and
       "value": "<timestamp>"
     },
     {
+      "prop": "mgx:sourceId",
+      "key": "sourceId",
+      "value": "src:corpus:human"
+    },
+    {
       "prop": "mgx:factProvenance",
       "key": "provenance",
       "value": "corpus:human /r/CapableOf"
@@ -202,12 +207,9 @@ are two of them exactly as they sit in the graph — `dog capableOf bark` and
       "prop": "mgx:trustInputs",
       "key": "trustInputs",
       "value": {
-        "sourceTypes": [
-          "corpus"
-        ],
-        "corroboration": 1,
-        "createdAt": "<timestamp>",
-        "recency": 1
+        "sourceType": "corpus",
+        "sourceId": "src:corpus:human",
+        "createdAt": "<timestamp>"
       }
     },
     {
@@ -219,7 +221,7 @@ are two of them exactly as they sit in the graph — `dog capableOf bark` and
 }
 
 {
-  "id": "fact:08d02295fc0fed1c",
+  "id": "fact:08d02295fc0fed1c@src:corpus:human",
   "label": "dog rdfs:subClassOf animal",
   "class": "Fact",
   "derived_from": [],
@@ -251,6 +253,11 @@ are two of them exactly as they sit in the graph — `dog capableOf bark` and
       "value": "<timestamp>"
     },
     {
+      "prop": "mgx:sourceId",
+      "key": "sourceId",
+      "value": "src:corpus:human"
+    },
+    {
       "prop": "mgx:factProvenance",
       "key": "provenance",
       "value": "corpus:human /r/IsA"
@@ -269,12 +276,9 @@ are two of them exactly as they sit in the graph — `dog capableOf bark` and
       "prop": "mgx:trustInputs",
       "key": "trustInputs",
       "value": {
-        "sourceTypes": [
-          "corpus"
-        ],
-        "corroboration": 1,
-        "createdAt": "<timestamp>",
-        "recency": 1
+        "sourceType": "corpus",
+        "sourceId": "src:corpus:human",
+        "createdAt": "<timestamp>"
       }
     },
     {
@@ -289,8 +293,17 @@ are two of them exactly as they sit in the graph — `dog capableOf bark` and
 Every attribute value here is a plain string except `mgx:trustInputs`, which
 is `JSON.stringify`'d into its `value` field in the actual store (parsed back
 out above for readability) since the flat attribute list has nowhere else to
-put a nested object. `mgx:trustScore` is computed from exactly those inputs —
-source type, corroboration count, recency — never guessed.
+put a nested object.
+
+The id says who asserted it: `fact:<triple-hash>@<source-id>`. One record is
+one source asserting one triple, so a fact two sources agree on is two
+records sharing the hash. The part before the `@` is the fact id you see in
+citations and premise lists, and it never changes. Each record's own
+`mgx:trustScore` is just that one source's prior, from its type and its own
+track record — never guessed. What the whole fact is worth, corroboration
+across sources and how recently each of them said it, is folded over those
+records when you read them, so it answers for today rather than for the day
+it was written.
 
 Point it at a codebase's graph and the same engine answers structural questions.
 `examples/mini-webapp` ships in this repo, so this runs as written:
