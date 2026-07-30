@@ -18,7 +18,11 @@ import { chromium } from "playwright";
 import { buildDemoSiteSnapshot } from "./helpers/demo-site.mjs";
 import { serveDirectory } from "./helpers/static-server.mjs";
 
-const ANSWER_TIMEOUT_MS = 15_000;
+// The dock's first turn waits on its own wink load, which the dock bounds at
+// 8s, then builds the whole store from the page's embedded payload, so the
+// engine has not even started for several seconds. The wait resolves the moment
+// the answer lands, so a healthy run never spends this headroom.
+const ANSWER_TIMEOUT_MS = 30_000;
 
 let siteDir;
 let server;
@@ -45,20 +49,34 @@ async function openLedgerPage() {
   });
   await page.goto(`${server.origin}/ledger.html`, { waitUntil: "networkidle" });
   await page.locator("#chatform").waitFor({ state: "visible" });
+  // Neither gate above means the live dock is wired. #chatform is static
+  // markup, visible before a script has run, and "networkidle" says only that
+  // the network went quiet, which it also does when the sibling bundle never
+  // arrived. The dock rewrites the input's placeholder in the same synchronous
+  // run that registers its submit handler, so wait for that.
+  await page.waitForFunction(
+    () => typeof window.tmctLedger?.createLedgerSession === "function"
+      && /teach/i.test(document.getElementById("chatq")?.placeholder ?? ""),
+    null,
+    { timeout: ANSWER_TIMEOUT_MS },
+  );
   return { context, page };
 }
 
 /**
  * Type a question into the dock and wait for the reply it prints.
- * The goal line is a separate entry, so it is excluded here.
+ * The goal line is a separate entry, so it is excluded here. So is the live
+ * dock's "computing…" placeholder, which it appends as `div.a pending` the
+ * instant the form submits — counting that as an answer resolves the wait
+ * before the engine has run, and the reply reads back "computing…".
  */
 async function ask(page, question) {
-  const replies = page.locator("#chatlog > div.a:not(.goal)");
+  const replies = page.locator("#chatlog > div.a:not(.goal):not(.pending)");
   const before = await replies.count();
   await page.fill("#chatq", question);
   await page.press("#chatq", "Enter");
   await page.waitForFunction(
-    (seen) => document.querySelectorAll("#chatlog > div.a:not(.goal)").length > seen,
+    (seen) => document.querySelectorAll("#chatlog > div.a:not(.goal):not(.pending)").length > seen,
     before,
     { timeout: ANSWER_TIMEOUT_MS },
   );
