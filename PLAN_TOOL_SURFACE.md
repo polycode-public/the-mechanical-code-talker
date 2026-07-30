@@ -87,40 +87,34 @@ testable in Node. Pages that instead type their JS as raw template text (`code-e
 Everything page-specific in the inventory is downstream of these three. Fixing them is what turns a
 demo that uses tmct into a consumer surface that calls tmct.
 
-### Gap A — eight browser entries hand the engine an empty code graph
+### Gap A — the capability layer could not reach a memory-graph page
 
-`parseEntities({ individuals: [], objectProperties: [] })` appears, identically, at:
+Eight browser entries (`adventure`/`chat`/`ledger`/`mud`/`plan`/`research`/`spider-fly`/`sprites`)
+hand the engine a known-empty code graph, because they live on the memory graph rather than a code
+map. Every parameter slot bound through `resolveObject` over that graph, so the whole capability
+layer was dark on every demo except code-explorer: `/plan` and `runCapabilityPlan` could not reach
+a single fact in a mud room or a spider's cell.
 
-| file | line |
-|---|---|
-| `src/surfaces/web/adventure-browser-entry.mjs` | 98 |
-| `src/surfaces/web/chat-browser-entry.mjs` | 86 |
-| `src/surfaces/web/ledger-browser-entry.mjs` | 51 |
-| `src/surfaces/web/mud-browser-entry.mjs` | 84 |
-| `src/surfaces/web/plan-browser-entry.mjs` | 57 |
-| `src/surfaces/web/research-browser-entry.mjs` | 210 |
-| `src/surfaces/web/spider-fly-browser-entry.mjs` | 87 |
-| `src/surfaces/web/sprites-browser-entry.mjs` | 31 |
+**Landed.** `KINDS.MemoryTerm` in `registry.mjs`, its `resolves` branch in `resolver.mjs`, and a
+`buildCapabilityPlanCtx` that accepts `memoryDir` alone with no code graph. Every page now gets the
+planner.
 
-Only `code-explorer-browser-entry.mjs:44` passes a real payload; `ingest-browser-entry.mjs` passes no
-graph at all. The empty graph is correct for what those pages do today — they live on the memory
-graph, not a code map — but it is also why the whole capability layer is dark on every demo except
-code-explorer. `chat.mjs:14013` refuses `/plan` outright
-with "no graph loaded", and `buildCapabilityPlanCtx` (`drive.mjs:295-301`) binds every parameter slot
-through `resolveObject` over that same code graph. So `tmct_ask`, `/plan`, and `runCapabilityPlan`
-cannot reach a single fact in a mud room or a spider's cell.
+The caller wiring went in one place rather than eight. The eight entries KEEP their known-empty
+graph: chat.mjs draws a deliberate line between a null graph ("unknown") and a known-empty one
+(`noCodeGraph`, `chat.mjs:2117`), and a dozen lanes answer differently across it — the identity-led
+greeting, the teach pointer under a miss, the count lane, `compare`, the concept/relation force
+lanes. An empty graph is what earns a demo page those answers, so taking it away to reach the
+planner would have paid for the planner with them. Instead `/plan` itself reads the distinction: a
+graph with nothing in it is nothing to plan over, so with a memory store in hand the planner gets
+memory-only mode, and only a populated graph plans as a code graph. An un-pointed CLI session with
+taught facts gets the same lift for free.
 
-The seam to widen already exists and is named as such. `registry.mjs:44` declares a `memoryFacts`
-precondition; `resolver.mjs:92` carries the one memory-graph-bound frame (`arg: "term"`, for
-`tmct_related`); `drive.mjs:322` wires `ctx.resolveMemoryTerm` as "the memory-graph sibling of
-`resolve`". One binding oracle exists for one slot. The work is to make memory-graph binding a
-first-class kind alongside `KINDS.Symbol` / `KINDS.Module` / `KINDS.Class`, so a capability can
-declare a slot that resolves against world facts.
-
-**Target:** a `KINDS.MemoryTerm` (or `KINDS.Individual`) parameter kind in
-`src/domain/router/registry.mjs`, a `resolves` branch for it in `resolver.mjs`, and a
-`buildCapabilityPlanCtx` that accepts `memoryDir` alone with no code graph. Then the eight entries
-above pass `memoryDir` where they currently pass an empty graph, and every page gets the planner.
+Binding alone was not enough to answer. `buildCapabilityPlanCtx` bound the term through
+`resolveMemoryTerm` and then dispatched `tmct_related` into a store derived from `config` — which a
+browser page has none of, so every grounded question died at dispatch. The ctx now hands the tool
+layer the SAME open store it binds against, through `dispatchTool`'s existing `memoryBackend` seam
+(`server.mjs:63`, already used by `tmct_export`); `memoryFactRows` prefers that handle over
+re-deriving one. Binding and dispatch can no longer read two different stores.
 
 ### Gap B — the tool contract returns a string, and a page needs data
 
@@ -207,7 +201,8 @@ kind — "where is the spider" — and returns a sentence via `positionsOfKind`
 (`spider-fly-turn.mjs:448-470`), not the plural two-kind shape and not structured data. `chat.mjs`'s
 generic membership list (`MEMBERSHIP_LIST_RE`, `chat.mjs:986`) reads "locations" as the noun and finds
 no ISA facts for it, because `spider-1` is never taught as a kind of spider (`chat.mjs:1013-1019`).
-And `tmct_ask` is pointed at the empty code graph, per Gap A.
+`tmct_ask` itself still reads the page's empty code graph — Gap A opened the capability planner's
+route to the memory store, not `ask`'s own.
 
 **This one has a real design fork, and it should be decided before the work is dispatched.**
 
@@ -217,16 +212,15 @@ And `tmct_ask` is pointed at the empty code graph, per Gap A.
   have an individual in the graph, plus `LIST_TRIGGERS` and `AGGREGATE_TRIGGERS` in `ask-vocab.mjs`.
   This keeps the whole sentence and is what the operator's ordering asks for. The cost is real:
   `ask-vocab.mjs`'s `RELATIONS` vocabulary is code-shaped (calls, imports, touches, history), so
-  world predicates need a home in it, and Gap A has to land first.
+  world predicates need a home in it. Gap A has landed, so the planner reaches these facts already.
 - *A new closed lane or tool.* `game_positions` in `spider-fly-turn.mjs`, or a `tmct_positions` tool,
   returning `foldSpiderFlyState`'s own `agents` map as structured data beside its sentence. Cheaper,
   and it matches this project's stated preference for closed template libraries over general grammar
   rules. The cost is that the page keeps a bespoke route to its own facts, which is the thing this
   plan exists to remove.
 
-The two are not mutually exclusive — a closed lane can ship first and be re-pointed at `ask` once
-Gap A lands. Recommendation: take `ask`, because a second closed lane per page is how the estate got
-here. Whoever picks up phase 6 should read both options and say which they took.
+The two are not mutually exclusive — a closed lane can ship first and be re-pointed at `ask` later.
+Recommendation: take `ask`, because a second closed lane per page is how the estate got here. Whoever picks up phase 6 should read both options and say which they took.
 
 - Sub-item, cat 1, **lib**: the web-id exclusion regex (`browser-entry.mjs:150`) and the
   `removed`-set skip encode world rules that `spider-fly-world.mjs` should own, not the browser entry.
@@ -301,7 +295,7 @@ answering natural language *in front of* the engine.
 | item | file:line | cat | target |
 |---|---|---|---|
 | `answerSpriteQuestion` answers two question shapes before the line reaches `session.turn` | `sprite-catalog-viz.mjs:397-429`, dispatched at `:628-634`, rationale at `:388-396` | 2 | **ask** — "what classes can you render" and "what parameters does a spider sprite take" are membership and property questions `chat.mjs:909-926` and `:995-1019` already answer generically over taught ISA facts. They are bespoke here only because the sprite-facts rows use predicates (`mgx:take-parameter`, `mgx:accept-<p>`) the generic lane does not key on. The rows are already in the same `memoryDir` the real session queries (`sprites-browser-entry.mjs:25-29`). Key the generic lane on those predicates and this lane deletes. Credit where due: it returns `null` on no rows so the engine still gets its honest miss — the interception is careful, it just should not exist. |
-| `extractSceneItems`/`tokenizeSceneText` — a longest-match multi-word tokenizer over free text, matched against a class index scraped from the DOM | `sprite-catalog-viz.mjs:329-384`, index at `:828-851`, scope note at `:316-324` | 2 | **ask** — term resolution is `ask.mjs`'s `resolveObject` (`ask.mjs:2857`), with exact, lemma and fuzzy tiers this hand-rolled matcher does not have. Blocked on Gap A. Largest bespoke-NLU block in the sprite family; the file's header calls it "never a general NLU pass", which is an accurate description of what it is and also the reason to replace it. |
+| `extractSceneItems`/`tokenizeSceneText` — a longest-match multi-word tokenizer over free text, matched against a class index scraped from the DOM | `sprite-catalog-viz.mjs:329-384`, index at `:828-851`, scope note at `:316-324` | 2 | **ask** — term resolution is `ask.mjs`'s `resolveObject` (`ask.mjs:2857`), with exact, lemma and fuzzy tiers this hand-rolled matcher does not have. Largest bespoke-NLU block in the sprite family; the file's header calls it "never a general NLU pass", which is an accurate description of what it is and also the reason to replace it. |
 
 ### Theme 3 — mud and adventure
 
@@ -421,14 +415,16 @@ Ordered so each phase is useful on its own and unblocks the next.
 4. **The code-explorer proof.** Route `code-explorer-viz.mjs:148-163` through `tmct_related` /
    `tmct_ask`. This page already has a real graph, so it proves the round trip end to end before any
    engine change.
-5. **Gap A, memory-graph binding.** Router half LANDED: `KINDS.MemoryTerm` in `registry.mjs`
+5. **Gap A, memory-graph binding — landed.** Router half: `KINDS.MemoryTerm` in `registry.mjs`
    (with `MEMORY_KINDS` and a `resolves("term", KINDS.MemoryTerm)` gate on `tmct_related`), the
    registry-driven oracle switch in `resolver.mjs` (`isMemoryTermSlot` + a two-tier
    `resolveMemoryTerm`: SKOS concept, then any world-fact subject/object), and
    `buildCapabilityPlanCtx`'s memory-only mode (`memoryDir` with no graph and no source; code-graph
-   capabilities refuse honestly). Covered by `test/adapters/router-memory-binding.test.mjs`.
-   Remaining: the eight entries in Gap A's table pass `memoryDir` instead of an empty graph, and
-   `chat.mjs` drops its `/plan` no-graph refusal — caller wiring, a separate small wave.
+   capabilities refuse honestly). Caller half: `/plan` routes a known-empty graph to memory-only
+   mode instead of refusing, and the ctx dispatches through `memoryBackend` so the tool layer reads
+   the store the binding used. See Gap A above for why the eight entries kept their empty graph.
+   Covered by `test/adapters/router-memory-binding.test.mjs` and
+   `test/adapters/browser-entry-capability-plan.test.mjs`.
 6. **`fn("list the locations of flies and spiders")`.** Falls out of phase 5 as an `ask` call. Read
    the design fork in Theme 2 first and record which option you took. Prove it against the spider-fly
    grid, with `snapshot()` kept as the fast path.

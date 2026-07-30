@@ -8,9 +8,9 @@ import { relatedForTerm } from "../../domain/skos-view.mjs";
 import { memoryFactRows } from "../memory-fallthrough.mjs";
 import { requiredArg, toolResult } from "./kit.mjs";
 
-export async function tmct_related(args, { config }) {
+export async function tmct_related(args, { config, memoryBackend = null }) {
   const term = requiredArg(args, "term");
-  const hit = relatedForTerm(await memoryFactRows(config), term);
+  const hit = relatedForTerm(await memoryFactRows(config, memoryBackend), term);
   if (!hit) {
     throw new ToolError(
       `no synonym or related facts for "${term}" in the memory graph. ` +
