@@ -1,0 +1,62 @@
+# daughter-facing-half-right — daughter-facing-half-left.toml's
+# three-quarter turn mirrored across the canvas midline (every shape
+# wrapped in one translate-then-flip group), so the two directions stay
+# geometrically identical twins. {{FACE}} sits outside the flip group, the
+# same rule the full profile pair uses, so a resolved expression never
+# reads back-to-front.
+classes = ["daughter"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="daughter-facing-half-right-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <g fill="url(#daughter-facing-half-right-fill)">
+      <path d="M9.4 14.9 C7.9 15 6.5 16.2 6.3 18.3 C6.25 19.4 6.9 20.1 7.7 19.7 C7.8 18 8.3 16.5 9.7 15.8 Z"/>
+      <path d="M14.6 14.9 C16.1 15 17.5 16.2 17.7 18.3 C17.75 19.4 17.1 20.1 16.3 19.7 C16.2 18 15.7 16.5 14.3 15.8 Z"/>
+      <path d="M7.4 21 C7.4 16.6 9.4 14.6 12 14.6 C14.6 14.6 16.6 16.6 16.6 21 Z"/>
+      <path d="M10.8 11.4 L13.2 11.4 L13 14.6 L11 14.6 Z"/>
+    </g>
+    <ellipse cx="10.2" cy="18" rx="1.1" ry="1.6" fill="#ffffff" opacity="0.1"/>
+    <path d="M10.6 14.3 L12 15.4 L13.4 14.3" fill="none" stroke="currentColor" stroke-width="0.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.4"/>
+    <path d="M12 15.4 L12 20.2" fill="none" stroke="currentColor" stroke-width="0.35" stroke-linecap="round" opacity="0.22"/>
+    <path d="M9.3 15.3 C8.3 16 7.6 17.2 7.4 18.6" fill="none" stroke="currentColor" stroke-width="0.35" opacity="0.3" stroke-linecap="round"/>
+    <path d="M14.7 15.3 C15.7 16 16.4 17.2 16.6 18.6" fill="none" stroke="currentColor" stroke-width="0.35" opacity="0.3" stroke-linecap="round"/>
+    <path d="M15.88 6.8 C17.28 8.6 17.28 11.2 15.88 13.8" fill="none" stroke="url(#daughter-facing-half-right-fill)" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M7.48 6.8 C6.08 8.6 6.08 11.2 7.48 13.8" fill="none" stroke="url(#daughter-facing-half-right-fill)" stroke-width="1.8" stroke-linecap="round"/>
+    <path d="M9.48 5.6 C10.08 5.1 10.78 4.9 11.68 5" fill="none" stroke="#ffffff" stroke-width="0.7" stroke-linecap="round" opacity="0.4"/>
+    <circle cx="11.68" cy="8.2" r="3.6" fill="url(#daughter-facing-half-right-fill)"/>
+    <path d="M8.3 7.65 Q7.53 9.07 8.3 9.84 Z" fill="url(#daughter-facing-half-right-fill)"/>
+    <ellipse cx="9.83" cy="7.65" rx="0.31" ry="0.37" fill="#1c1c1c"/>
+    <ellipse cx="14.19" cy="7.6" rx="0.2" ry="0.24" fill="#1c1c1c"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-right"
+
+# daughter-facing-half-left.toml's anchor reflected across the canvas
+# midline (cx = 24 - 11.01); cy and scale are the mirror's own invariants.
+[face]
+cx = 12.99
+cy = 8.09
+scale = 2.95
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
