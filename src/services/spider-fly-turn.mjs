@@ -17,6 +17,7 @@
 
 import {
   DIRECTION_DELTA, WORLD_NAME, cellId, parseCellId, inBounds, chebyshevDistance, oneStepDirectionBetween,
+  agentKindOf, liveIdsOfKind,
 } from "../domain/spider-fly-world.mjs";
 import { foldSpiderFlyState, runSpiderFlyTick, startSpiderFlyGame, beliefSnapshotFor } from "./spider-fly.mjs";
 import { worldProvenanceTag } from "../domain/worlds-pack.mjs";
@@ -121,11 +122,6 @@ async function openSpiderFlyGame({ planHolder, memoryDir, env, cache, gameConfig
 
 // ---- resolving an addressed agent / belief target ----------------------------
 
-const liveIdsOfKind = (kind, state) => {
-  const re = new RegExp(`^${kind}-\\d+$`);
-  return [...state.placements.keys()].filter((id) => re.test(id) && !state.removed.has(id)).sort();
-};
-
 /** An exact "kind-num" reference, or (no number given) the first live
  *  individual of that kind — null when nothing live matches. */
 function resolveAgentId(kind, num, state) {
@@ -133,7 +129,7 @@ function resolveAgentId(kind, num, state) {
     const id = `${kind}-${num}`;
     return state.placements.has(id) && !state.removed.has(id) ? id : null;
   }
-  const live = liveIdsOfKind(kind, state);
+  const live = liveIdsOfKind(state.placements, kind, state.removed);
   return live[0] ?? null;
 }
 
@@ -143,7 +139,7 @@ function resolveAgentId(kind, num, state) {
  *  than one spider or fly. */
 function resolveNearestAgentId(kind, num, state, nearCell) {
   if (num) return resolveAgentId(kind, num, state);
-  const live = liveIdsOfKind(kind, state);
+  const live = liveIdsOfKind(state.placements, kind, state.removed);
   if (!live.length || !nearCell) return live[0] ?? null;
   let best = live[0];
   let bestDist = Infinity;
@@ -193,11 +189,6 @@ export { oneStepDirectionBetween };
 // claim, true or false alike. A pill's `truth` tag is for the human eye
 // only — it never rides along in the submitted text itself.
 
-const liveIdsOfKindFromAgents = (kind, agents) => {
-  const re = new RegExp(`^${kind}-\\d+$`);
-  return Object.keys(agents || {}).filter((id) => re.test(id)).sort();
-};
-
 /** "spider"/"fly" bare when exactly one individual of that kind is live
  *  (nothing to disambiguate), else the individual's own numbered id — a
  *  pill-set legibility choice, not a grammar restriction (the addressed
@@ -246,8 +237,8 @@ function reflectedCell(cell) {
  */
 export function pillsForSpiderFly(agents, explicitAddresseeId, opts = {}) {
   const { defaultKind = "spider" } = opts;
-  const liveSpiders = liveIdsOfKindFromAgents("spider", agents);
-  const liveFlies = liveIdsOfKindFromAgents("fly", agents);
+  const liveSpiders = liveIdsOfKind(agents, "spider");
+  const liveFlies = liveIdsOfKind(agents, "fly");
 
   const addressPills = [
     ...liveSpiders.map((id) => ({ id, kind: "spider", label: `@${agentPillLabel("spider", id, liveSpiders)}` })),
@@ -258,7 +249,7 @@ export function pillsForSpiderFly(agents, explicitAddresseeId, opts = {}) {
   const addresseeId = (explicitAddresseeId && agents[explicitAddresseeId]) ? explicitAddresseeId : fallbackAddresseeId;
   if (!addresseeId) return { addressPills, claimPills: [], addresseeId: null };
 
-  const addresseeKind = /^spider-\d+$/.test(addresseeId) ? "spider" : "fly";
+  const addresseeKind = agentKindOf(addresseeId);
   const addresseeLabel = agentPillLabel(addresseeKind, addresseeId, addresseeKind === "spider" ? liveSpiders : liveFlies);
   const addresseeCell = parseCellId(agents[addresseeId].cell);
 
@@ -352,10 +343,11 @@ async function runTickAndRender({ planHolder, memoryDir, cache, toldFacts = [], 
 
 /** One `[id, cellId | null]` belief entry as a sentence: `"spider-1 is at
  *  cell-3-4."` when observed/told, `"fly-2 has not been observed."`
- *  otherwise — the same wording spider-fly-viz.mjs's own click-expand panel
- *  (observedFactsHtml) renders, so the chat phrasing and the browser panel
- *  never disagree about what an agent can see. */
-function observedFactSentence(id, believedCell) {
+ *  otherwise — exported so spider-fly-viz.mjs's own click-expand panel
+ *  (observedFactsHtml) renders from the SAME function instead of a
+ *  hand-typed copy, so the chat phrasing and the browser panel can never
+ *  drift apart. Pure, self-contained, `.toString()`-splice safe. */
+export function believedFactSentence(id, believedCell) {
   return believedCell ? `${id} is at ${believedCell}.` : `${id} has not been observed.`;
 }
 
@@ -374,14 +366,14 @@ async function spiderFlyBeliefAnswer(match, { memoryDir, gameConfig = DEFAULT_GA
   const observerId = resolveAgentId(kind, num, state);
   if (!observerId) return noSuchAgentAnswer(kind, "addressee");
   const observerCell = parseCellId(state.placements.get(observerId).cell);
-  const candidateIds = [...liveIdsOfKind("spider", state), ...liveIdsOfKind("fly", state)];
+  const candidateIds = [...liveIdsOfKind(state.placements, "spider", state.removed), ...liveIdsOfKind(state.placements, "fly", state.removed)];
   const visionRadius = kind === "spider"
     ? gameConfig?.spiderFly?.spiderVisionRadius
     : gameConfig?.spiderFly?.flyVisionRadius;
   const belief = beliefSnapshotFor(observerId, observerCell, candidateIds, state, { visionRadius });
   const entries = Object.entries(belief);
   const text = entries.length
-    ? `${observerId} sees: ${entries.map(([id, cell]) => observedFactSentence(id, cell)).join(" ")}`
+    ? `${observerId} sees: ${entries.map(([id, cell]) => believedFactSentence(id, cell)).join(" ")}`
     : `${observerId} is alone on the board — nothing else to see.`;
   return {
     text,
@@ -446,7 +438,7 @@ const SF_GOAL_RE = /^(?:what(?:'s|\s+is)\s+(?:the\s+|my\s+)?(?:goal|objective|po
 const WATCHER_STANCE = 'you have no piece here — both agents move on their own. Watch, say "tick" to advance, or address one, e.g. "@spider the fly is east".';
 
 const positionsOfKind = (kind, state) =>
-  liveIdsOfKind(kind, state).map((id) => `${id} at ${state.placements.get(id).cell}`);
+  liveIdsOfKind(state.placements, kind, state.removed).map((id) => `${id} at ${state.placements.get(id).cell}`);
 
 async function spiderFlyContextAnswer(line, { memoryDir }) {
   const l = String(line).trim();
