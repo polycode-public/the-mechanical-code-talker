@@ -223,14 +223,25 @@ export function tapeClock() {
 export function nodeRowsFor({ peers, factRows, myPeerId, myDisplayName, nameFor, latestTimestampOf }) {
   const activeByName = new Map();
   const factByName = new Map();
+  const factAtByName = new Map();
   let mineLastActive = null;
   let mineLastFact = null;
-  const factOf = (row) => ({ subject: row.subject, predicate: row.predicate, object: row.object });
+  let mineLastFactAt = null;
+  // The P2P layer's own bookkeeping rows (names, claims, waves) key on raw
+  // node ids, and the roster's rule is that no id ever reaches the screen —
+  // they still count as activity, they just never show as "last shared".
+  // The fact keeps its own newest-timestamp race, apart from activity, so a
+  // fresh wave can never mask an older real fact.
+  const BOOKKEEPING = ["mgx:worldName", "mgx:nodeName", "mgx:playedBy", "mgx:waved"];
+  const factOf = (row) => (BOOKKEEPING.indexOf(row.predicate) >= 0
+    ? null
+    : { subject: row.subject, predicate: row.predicate, object: row.object });
   for (const row of factRows || []) {
     for (const segment of String(row.provenance || "").split(" | ")) {
       if (!segment) continue;
       const at = latestTimestampOf(segment);
       if (at === null) continue;
+      const fact = factOf(row);
       if (segment.indexOf("teach:peer:") === 0) {
         const marker = segment.lastIndexOf("@");
         if (marker < 0) continue;
@@ -241,14 +252,17 @@ export function nodeRowsFor({ peers, factRows, myPeerId, myDisplayName, nameFor,
         const node = label.indexOf("#node:");
         const name = node < 0 ? label : label.slice(0, node);
         const prior = activeByName.get(name);
-        if (prior === undefined || at > prior) {
-          activeByName.set(name, at);
-          factByName.set(name, factOf(row));
+        if (prior === undefined || at > prior) activeByName.set(name, at);
+        const factPrior = factAtByName.get(name);
+        if (fact && (factPrior === undefined || at > factPrior)) {
+          factAtByName.set(name, at);
+          factByName.set(name, fact);
         }
       } else if (segment.indexOf("teach:") === 0 || segment.indexOf("ace:") === 0) {
-        if (mineLastActive === null || at > mineLastActive) {
-          mineLastActive = at;
-          mineLastFact = factOf(row);
+        if (mineLastActive === null || at > mineLastActive) mineLastActive = at;
+        if (fact && (mineLastFactAt === null || at > mineLastFactAt)) {
+          mineLastFactAt = at;
+          mineLastFact = fact;
         }
       }
     }

@@ -455,6 +455,7 @@
   "src/services/sentences.mjs",
   "src/services/session-log-format.mjs",
   "src/services/sessions.mjs",
+  "src/services/share-overlay-viz.mjs",
   "src/services/spider-fly-turn.mjs",
   "src/services/spider-fly-viz.mjs",
   "src/services/spider-fly.mjs",

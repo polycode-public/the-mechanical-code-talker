@@ -2966,7 +2966,7 @@ function pageScript() {
   // Off the boot path on purpose: this fetches the shared P2P asset so the
   // panel can show a real node name and burrow name before anyone clicks
   // anything. A failure here costs sharing, never the digging.
-  ensureIdentity().catch(function () { /* sharing stays unavailable; the burrow does not */ });
+  ensureIdentity().then(renderNodes).catch(function () { /* sharing stays unavailable; the burrow does not */ });
   if (invite) {
     prepareJoinCard().catch(function (err) {
       el("joinProblem").textContent = "the networking asset didn't load (" + (err && err.message ? err.message : err) + ").";
