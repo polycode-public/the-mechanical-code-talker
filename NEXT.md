@@ -14,118 +14,68 @@ holds ONLY what to do next. Completed work is not narrated here; `git log` and t
 Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.md` and
 `~/.claude/inboxes/tmct-hanoi.md`; `mechanic.md` is retired.
 
-## In-flight right now — mud.html/adventure.html/chat.html P2P + design session (2026-07-29)
+## In-flight right now (2026-07-30)
 
-All six agents this session dispatched are done and merged: the NPC slider, mud.html's EDIT mode +
-hardcoded-logic audit, chat.html's full P2P integration, adventure.html's direction-UI +
-sprite-fallback + cast-sprite pass, and the project-wide sprite detail/pop + design-consistency +
-copy audit (sprites raised to the badger detail bar across every family; spider-fly.html gothic
-theme + corner cobweb; sprites.html Illustrator chrome + ancestor grouping; code-explorer/ingest
-restyled; ledger/research restyled dark New-Relic-style; plan.html toward its DAW theme). Nothing
-left running.
+**No worktrees active.** The last one (`worktree-agent-aa5a7b1b6b420d7b9`, ledger-teach flake fix)
+was merged (`4f7d3f43`) and removed.
 
-Both pages now also offer an alternate-scenario dropdown next to RESET (mud.html: mud-garden,
-mud-hollow, mud-warren; adventure.html: ashcombe-hall, lantern-cottage, greyvale-museum), with EDIT
-mode, the cast, the map, and P2P all following whichever scenario is currently loaded.
+**Local commits not yet pushed to `origin/main`** (9, oldest first) — pending one full `npm test`
+pass then a single push: `f0cc2969` (ACE N-of-N grammar), `3315a0f8` (CI restructure, see
+`PLAN_AWS.md`), `af86e290` (chat.mjs weak-grounding extended to know-about + teach-offer, honest
+citations), `f1e5a578` (roll to 4.0.1), `dbb4bec0`+`4f7d3f43` (ledger-teach flake fix + merge),
+`9a9b58f7` (service-worker stale-cache wip fix), `d6c84133` (Rover-bark regression tests), `cc5a7f67`
+(4.0.1 artifact regen + `PAGE_WEIGHTS.md` revision 2). Everything through `c7782989` was already
+pushed and pipeline-verified.
 
-**Known gap:** a mud room is bound to the store it was opened over, so recasting (RESET, either
-slider, or the scenario dropdown) drops the link and says so. Carrying a live room across a recast
-needs the room to re-bind to the new store, which is a real piece of work in `p2p-room.mjs` rather
-than page wiring.
+**Two background sub-agents dispatched 2026-07-30, both winding down:**
 
-**sprites.html variant cycles — next slice** (v1 shipped: `mgx:faces` left/right profile pairs for
-bear/cat/dog/king as `[match]` variants, plus the catalog's auto-cycling variant swatch, which
-already animates every `-with-emotion` class): extend the facing pairs across the rest of the
-animal and person catalog, and design a profile-face anchor so a facing variant can carry the six
-`mgx:feels` expressions at the same time.
+- **Rover-bark regression coverage** — done. Unit test (`test/adapters/chat-rover-capability-chain.
+  test.mjs`), TUI e2e, and chat.html e2e all written, independently re-run by the coordinator, all
+  green. Committed `d6c84133`, wired into the right CI jobs (`e2e-tui`, `e2e:deployed`,
+  `e2e:published-package`).
+- **Service-worker stale-cache fix + visible fact count** — fix landed (`9a9b58f7`): `tmct-sw.js`'s
+  precache was cache-first keyed only on package version, so a content-only deploy (seed change, no
+  version bump) left an already-visited browser stuck on the old seed forever; "reset to seed" also
+  only cleared IndexedDB, never the separate Cache Storage the service worker owns. The visible
+  fact-count-in-topbar ask shipped alongside it across chat/ingest/code/research
+  (`chat-page-viz.mjs`, `ingest-viz.mjs`, `code-explorer-viz.mjs`, `research-viz.mjs` +
+  tests, all independently re-run green, swept into `d6c84133`/`cc5a7f67` by the coordinator when a
+  concurrent `git add` raced). Agent confirmed done, tree clean, nothing else of its own
+  outstanding. Real remainder it flagged: no Playwright regression test yet for the cache-busting
+  fix itself (repro: precache an old seed, swap in changed content, assert the next load serves
+  the new bytes and "reset to seed" recovers a stuck session); no browser/DOM run of the fact-count
+  pills. (Checked and closed: `infra/lib/website-stack.ts`'s CloudFront function matches on
+  `request.uri` alone, which CloudFront always splits from the querystring — the new
+  `chat-seed.json?b=<hash>` URL still hits the `.br`/`.gz` rewrite correctly, no conflict.)
 
-**MUD3D — a rendered 3D town square, evaluated against `world-of-claudecraft`** (operator ask,
-2026-07-29): full assessment written into `PLAN_MUD.md`'s new "MUD3D" section. Not yet scoped as a
-build phase; the planning half (walk to market, buy leather, make armour) maps onto
-`src/domain/planning.mjs`'s existing `findActionPath`, the render half would be a small tmct-native
-Three.js layer rather than adopting claudecraft's `Sim`/`IWorld`.
+**MUD3D renamed MUDIII, design only — not yet a build phase.** Full assessment (asset licensing
+against `world-of-claudecraft`, planning-domain mechanics, naming/lineage research re: Richard
+Bartle/mudii.co.uk) is in `PLAN_MUD.md`. Operator's chosen sequencing: ship `mudiii.html` with
+credit to `world-of-claudecraft` and MUD1/MUD2 first, email Bartle once it's live. Still waiting on
+the operator's call on timing for that email — noted directly in `PLAN_MUD.md`.
 
-Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline):
-bucket `tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`
-(operator already ran `aws sso login --profile tmct-prod` this session). Full clean path is a push to
-`main` with a remote — GitLab CI's `deploy:website` job. **Version is already rolled to 4.0.0**
-(`42bf8129`) for this whole line of work — don't roll again for it.
+**`PLAN_FACT.md`** (multi-record-per-assertion fact model) is a complete, reviewed design doc, not
+yet implemented. See the doc for the worked example, the Sybil/Riak-sibling-resolution research, the
+"as of &lt;date&gt;" grammar design, and the migration/schema.
 
-## In-flight right now — chat.html corpus scale-up + fact-provenance design (2026-07-29)
-
-The web chat's seed (`chat-seed.json`) is uncapped to match `npm run init:xl` exactly — 72,098
-facts, 85.6 MB raw / 4.6 MB brotli on the wire, boot budget still comfortable (composer ready
-~2.6s, first grounded answer ~3.4s against the 20s budget). `npm run init`/`init:small`/
-`init:large` are renamed: `init` now runs what `init:large` used to (37,821 facts, human persona +
-seon + conceptnet + aws/python/java — the CLI default going forward); `init:small` is the new name
-for the old minimal `init` (688 facts, human persona only, no big corpora), and is still exactly
-what a graph-less `npm run chat` auto-bootstraps (`chat-session.mjs`'s `seedBootstrapMemory` calls
-`initRepo` with the human persona directly, unaffected by the script rename). README.md/
-`public/index.html`/`docs/public-examples.md` gained two new verified examples: `examples/
-rover-infer.mjs` (a taught fact chaining through a corpus fact: "Rover is a dog" + corpus's "dog can
-bark" -> "yes, via..."), `examples/raw-fact-shape.mjs` (a raw Fact individual exactly as stored,
-`trustInputs` parsed for display readability only — storage format itself untouched).
-
-**DONE — the corpus-uncap regression above is fixed** (`366b916b`): a shared `isRealGrounding()`
-predicate in `chat.mjs` now demotes a hit set to "no real grounding" only when every fact in it is
-corpus-weak-only, at both decision points that had the bug (the bare "what is X" composer and the
-shared learn-on-miss gate). Demo term swapped to a coined word ("trelvox") as a second, durable
-safeguard. Full `npm test`: 4801/4801. Flagged, not fixed (same pattern, different lanes, out of
-today's scope): the "what do you know about X" reader and the teach-offer gate. Also flagged: the
-new demo term's reference-pack citation renders through a hardcoded "Simple English Wikipedia"
-template with a non-resolving URL, since that template isn't parameterized per-source.
-
-**OPEN — a real plan doc started, not just a discussion.** `PLAN_FACT.md`: the operator wants to
-move away from the current content-addressed-merge model — same `(subject,predicate,object)`
-always upserts ONE Fact record, corroborating sources onto it (confirmed both in `PLAN_MUD.md`'s
-G-Set CRDT design and in `src/adapters/memory/core.mjs`'s `appendFacts`, and in the `mgx:trustScore`/
-`mgx:trustInputs` machinery in `src/domain/memory/trust.mjs`) — toward a model that keeps MULTIPLE
-Fact records for an identical triple, each tracing its own source node id, closer to a MIME
-message's `Received:` header chain (one entry per hop, appended, never merged or collapsed). See
-`PLAN_FACT.md` for the worked example and the open trade-off against the current model (which
-wasn't an accident — `PLAN_MUD.md` chose single-record-merge deliberately for CRDT convergence
-under P2P replication; the new model needs to reconcile with that, not just add a shape on top).
-
-## In-flight right now — closing four NEXT.md items via coordinator + sub-agents (2026-07-30)
-
-Four parallel, file-disjoint sub-agent dispatches, per `CLAUDE.md`'s coordinator model:
-
-- **chat.mjs weak-grounding + citation template** (was items 1+2 below): extend `366b916b`'s
-  `isRealGrounding()` fix to the "what do you know about X" reader (`KNOW_ABOUT_RE`) and the
-  TEACH-OFFER gate, plus parameterize the "trelvox" demo term's hardcoded reference-pack citation
-  template per-source. `src/services/chat.mjs` + `src/adapters/corpus/reference-pack.mjs` area.
-- **ACE grammar N-of-N noun phrases** (was item 6): `resolveNP`/`parseCopula` in
-  `src/domain/grammar/ace.mjs` — "a unit of work" should parse as one noun phrase, not residue.
-- **`PLAN_AWS.md` burn-in follow-ups** (was item 7): flip `e2e:deployed`'s `allow_failure` off if
-  its green history supports it, run `SKILL_PAGE_WEIGHTS` for `PAGE_WEIGHTS.md` revision 2.
-- **`pages-ledger-teach.test.mjs` flake investigation** (was item 8): the bounded-contention repro
-  named below, in a worktree.
-
-Update this section (mark done, delete the line) as each lands, in the same commit as its fix —
-don't let it go stale the way the MUD3D/PLAN_FACT blurbs above did.
+Deploy target for `bash scripts/fast-deploy-web.sh <bucket> <dist>` (skips the CDK pipeline): bucket
+`tmct-prod-prod-web-000868243177`, distribution `E1YEAO48PKAJHE`, `AWS_PROFILE=tmct-prod`. Full
+clean path is a push to `main` with a remote — GitLab CI's `deploy:website` job.
 
 ## Open items
 
-- [ ] the ACE grammar's `resolveNP` has no N-of-N noun-phrase support (`"a unit of work"` parses
-  with `residue: ["of"]` rather than as one noun phrase) — surfaced while widening multi-word
-  class-name teach (2026-07-27), deliberately not fixed there: it's real grammar work outside that
-  fix's region, not a routing gap. `src/domain/grammar/ace.mjs`'s `parseCopula`/`resolveNP`.
-  **Dispatched 2026-07-30, see In-flight above.**
-- [ ] `PLAN_AWS.md`'s two burn-in follow-ups, now that live execution (Phases 1-8) is complete
-  and the CI pipeline is green end to end (`deploy:website`/`e2e:deployed`/`smoke:post-deploy`
-  all passed on a real push, `https://tmct.polycode.co.uk/` confirmed serving HTTP 200): flip
-  `e2e:deployed`'s `allow_failure: true` off once it has a longer green history, and run
-  `SKILL_PAGE_WEIGHTS` post-cutover for `reports/PAGE_WEIGHTS.md` revision 2. Full status in
-  `AWS_ACCOUNTS.md`'s provisioning-status section. **Dispatched 2026-07-30, see In-flight above.**
-- [ ] `test-e2e/pages-ledger-teach.test.mjs` (bundle-load and refocus assertions) flakes under real
-  multi-file e2e contention — investigated once more without a confirmed root cause. A solo run
-  passes cleanly with wide timing margin (each `turn()` resolves in 1-2s against a 20s deadline).
-  An attempt to reproduce under real contention (the full `test:e2e` directory, uncapped
-  concurrency) produced only environment-artifact failures (`ENOENT`/cwd-removed errors across
-  unrelated files), not a genuine per-test race — not usable signal. Best next attempt: a bounded
-  run of `pages-ledger-teach.test.mjs` alongside 3-5 other heavy `pages-*` files via an explicit
-  file list, in a worktree that already has a commit (so it can't be reclaimed mid-run), rather
-  than the whole uncapped directory at once. **Dispatched 2026-07-30, see In-flight above.**
+- [ ] `PLAN_TOOL_SURFACE.md` phase 1 — reviewed and recommended as worth doing before PLAN_FACT/
+  MUDIII implementation (low-risk, already fully scoped), not yet started.
+- [ ] MUDIII implementation itself (Three.js town square) — fully designed in `PLAN_MUD.md`, not
+  started.
+- [ ] `PLAN_FACT.md` implementation itself — fully designed, not started.
+- [ ] a mud room is bound to the store it was opened over, so recasting (RESET, either slider, or
+  the scenario dropdown) drops the link and says so. Carrying a live room across a recast needs the
+  room to re-bind to the new store — real work in `p2p-room.mjs`, not page wiring.
+- [ ] **sprites.html variant cycles — next slice**: extend the `mgx:faces` left/right profile pairs
+  beyond bear/cat/dog/king across the rest of the animal and person catalog, and design a
+  profile-face anchor so a facing variant can carry the six `mgx:feels` expressions at the same
+  time.
 
 
 ## Discipline
