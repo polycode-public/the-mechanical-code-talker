@@ -14,7 +14,8 @@ import assert from "node:assert/strict";
 import {
   renderSpriteCatalogHtml, buildSpriteCatalogEntries, groupForClass, paletteTreatmentFor,
   tierSwatchesFor, parameterVariantsFor, extractSceneItems, GROUP_ADVENTURE, GROUP_PERSON,
-  GROUP_OBJECT, GROUP_EMOJI, PERSON_ROLE_CLASSES,
+  GROUP_OBJECT, GROUP_EMOJI, PERSON_ROLE_CLASSES, CYCLE_FRAME_DELAY_MS, FACING_TURN_ORDER,
+  moodFrameSequence, turnFrameSequence, movingFrameSequence,
 } from "../../src/services/sprite-catalog-viz.mjs";
 import { readSpriteTemplateFiles } from "../../src/adapters/corpus/sprite-template-files.mjs";
 import { readSpriteLargeTemplateFiles } from "../../src/adapters/corpus/sprite-large-template-files.mjs";
@@ -195,11 +196,148 @@ test("a swatch born from a property fact carries that property as a data attribu
   assert.doesNotMatch(html, /class="swatch large plain"[^>]*data-property/, "a plain swatch never claims a property");
 });
 
-test("the rendered page ships the variant-cycle machinery: the frame properties, the stepper, and the reduced-motion guard", () => {
+test("the rendered page ships the animated-swatch machinery: one property per axis, the stepper, and the reduced-motion guard", () => {
   const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
-  assert.match(html, /CYCLE_PROPERTIES = \["mgx:faces", "mgx:feels"\]/);
+  assert.match(html, /MOOD_PROPERTY = "mgx:feels"/);
+  assert.match(html, /FACING_PROPERTY = "mgx:faces"/);
+  assert.match(html, /POSE_PROPERTY = "mgx:pose"/);
   assert.match(html, /prefers-reduced-motion: reduce/);
   assert.match(html, /\.swatch\.cycle \.swatch-img/, "the cycle swatch has its own styling");
+});
+
+// ---- the three animated swatches: mood, facing, pose ----
+
+const svgFrame = (label) => ({ svg: `<svg id="${label}"/>`, label });
+
+test("the mood cycle leads with the plain sprite, then every mood in the order the templates declare them", () => {
+  const frames = moodFrameSequence(svgFrame("person"), [svgFrame("happy"), svgFrame("sad"), svgFrame("calm")]);
+  assert.deepEqual(frames.map((f) => f.label), ["person", "happy", "sad", "calm"]);
+});
+
+test("a single mood is a blink, not a cycle, so the mood swatch stays static below two moods", () => {
+  assert.deepEqual(moodFrameSequence(svgFrame("person"), [svgFrame("happy")]), []);
+  assert.deepEqual(moodFrameSequence(svgFrame("person"), []), []);
+});
+
+test("the facing sweep steps left to right through the turntable, with the undirected sprite as the centre frame", () => {
+  const facings = Object.fromEntries(
+    ["left", "half-left", "half-right", "right"].map((f) => [f, svgFrame(f)]),
+  );
+  const frames = turnFrameSequence(FACING_TURN_ORDER, svgFrame("plain"), facings);
+  assert.deepEqual(frames.map((f) => f.label), ["left", "half-left", "centre", "half-right", "right"]);
+  assert.equal(frames[2].svg, "<svg id=\"plain\"/>", "the centre frame is the class's own plain sprite");
+});
+
+test("the facing sweep skips a turntable angle the class has no sprite for, keeping the rest in order", () => {
+  const frames = turnFrameSequence(FACING_TURN_ORDER, svgFrame("plain"), { left: svgFrame("left"), right: svgFrame("right") });
+  assert.deepEqual(frames.map((f) => f.label), ["left", "centre", "right"]);
+});
+
+test("a class with one facing or none has nothing to sweep through", () => {
+  assert.deepEqual(turnFrameSequence(FACING_TURN_ORDER, null, { left: svgFrame("left") }), []);
+  assert.deepEqual(turnFrameSequence(FACING_TURN_ORDER, svgFrame("plain"), {}), []);
+});
+
+test("the pose toggle alternates the idle sprite with the moving one, and needs both to animate at all", () => {
+  const frames = movingFrameSequence(svgFrame("plain"), svgFrame("moving"));
+  assert.deepEqual(frames.map((f) => f.label), ["idle", "moving"]);
+  assert.notEqual(frames[0].svg, frames[1].svg, "the two states are really different drawings");
+  assert.deepEqual(movingFrameSequence(svgFrame("plain"), null), [], "no moving sprite, no toggle");
+  assert.deepEqual(movingFrameSequence(null, svgFrame("moving")), [], "no idle sprite, no toggle");
+});
+
+/** The three frame lists sprites.html's own inline script builds for one
+ *  class, selected off real tierSwatchesFor output by the same properties
+ *  and labels the page selects DOM swatches by. Keeps these tests honest
+ *  about the real catalog rather than about a hand-built frame fixture. */
+function pageCyclesFor(cls) {
+  const swatches = tierSwatchesFor(cls, largeTemplates, SPRITE_REGISTRY, "large");
+  const frameOf = (s) => ({ svg: s.svg, label: s.label });
+  const base = swatches.find((s) => s.kind === "plain" || s.kind === "fallback");
+  const baseFrame = base ? frameOf(base) : null;
+  const moodFrames = swatches.filter((s) => s.property === "mgx:feels").map(frameOf);
+  const facingFrames = {};
+  for (const s of swatches) if (s.property === "mgx:faces") facingFrames[s.label] = frameOf(s);
+  const movingSwatch = swatches.find((s) => s.property === "mgx:pose" && s.label === "moving");
+  return {
+    swatches,
+    mood: moodFrameSequence(baseFrame && { svg: baseFrame.svg, label: cls }, moodFrames),
+    turn: turnFrameSequence(FACING_TURN_ORDER, baseFrame, facingFrames),
+    moving: movingFrameSequence(baseFrame, movingSwatch && frameOf(movingSwatch)),
+  };
+}
+
+test("a fully-turned real class sweeps all five turntable angles, the undirected sprite sitting centre", () => {
+  for (const cls of ["writer", "king", "dog", "cat"]) {
+    const { turn } = pageCyclesFor(cls);
+    assert.deepEqual(turn.map((f) => f.label), ["left", "half-left", "centre", "half-right", "right"], `${cls} sweeps the full turntable`);
+    assert.equal(new Set(turn.map((f) => f.svg)).size, 5, `${cls}: every angle is a distinct drawing, never the same art twice`);
+  }
+});
+
+test("a real class's moving sprite toggles against its own idle one, both real renders", () => {
+  for (const cls of ["writer", "king", "dog", "cat"]) {
+    const { moving } = pageCyclesFor(cls);
+    assert.deepEqual(moving.map((f) => f.label), ["idle", "moving"], `${cls} has both pose states`);
+    assert.notEqual(moving[0].svg, moving[1].svg, `${cls}: the moving sprite is really different art from the idle one`);
+    assert.ok(moving[1].svg.startsWith("<svg"), `${cls}: the moving frame is a real resolved sprite`);
+  }
+});
+
+test("a combined facing-and-pose variant joins neither single-axis cycle, so each animation stays on one axis", () => {
+  const { swatches, turn, moving, mood } = pageCyclesFor("writer");
+  const combined = swatches.filter((s) => String(s.property).includes(" + "));
+  assert.ok(combined.length, "writer really does carry combined facing+pose swatches, or this test proves nothing");
+  const combinedLabels = new Set(combined.map((s) => s.label));
+  for (const list of [turn, moving, mood]) {
+    for (const f of list) assert.ok(!combinedLabels.has(f.label), `${f.label} is a combined variant and must not be a single-axis frame`);
+  }
+  assert.deepEqual(mood.map((f) => f.label), ["writer", "happy", "sad", "angry", "scared", "surprised", "calm"], "the mood cycle carries moods only, never a facing");
+});
+
+test("a class the catalog gives no facing or pose art animates nothing on those axes rather than faking a frame", () => {
+  const { turn, moving, mood } = pageCyclesFor("person");
+  assert.deepEqual(turn, [], "no facing sprites, no sweep");
+  assert.deepEqual(moving, [], "no moving sprite, no toggle");
+  assert.equal(mood.length, 7, "its moods still cycle");
+});
+
+test("a moving-pose template's swatch carries mgx:pose, the property the page's toggle selects it by", () => {
+  const idle = { classes: ["walker"], svg: '<svg viewBox="0 0 24 24"><rect/></svg>' };
+  const moving = { classes: ["walker"], match: { property: "mgx:pose", value: "moving" }, svg: '<svg viewBox="0 0 24 24"><rect x="1"/></svg>' };
+  const swatches = tierSwatchesFor("walker", [idle, moving], SPRITE_REGISTRY, "large");
+  const movingSwatch = swatches.find((s) => s.label === "moving");
+  const plainSwatch = swatches.find((s) => s.label === "plain");
+  assert.equal(movingSwatch.property, "mgx:pose");
+  const frames = movingFrameSequence(
+    { svg: plainSwatch.svg, label: plainSwatch.label },
+    { svg: movingSwatch.svg, label: movingSwatch.label },
+  );
+  assert.deepEqual(frames.map((f) => f.label), ["idle", "moving"]);
+  assert.notEqual(frames[0].svg, frames[1].svg);
+});
+
+test("all three animated swatches run off one delay and one interval, so their tempos can never drift apart", () => {
+  assert.equal(CYCLE_FRAME_DELAY_MS, 800, "the mood cycle's established tempo, now shared by the sweep and the toggle");
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
+  assert.match(html, new RegExp(`const CYCLE_FRAME_DELAY_MS = ${CYCLE_FRAME_DELAY_MS};`));
+  assert.equal((html.match(/setInterval\(/g) || []).length, 1, "one interval drives every animated swatch on the page");
+  assert.match(html, /\}, CYCLE_FRAME_DELAY_MS\)/, "the interval is fed the shared constant, never a second hard-coded number");
+});
+
+test("the page splices in the same frame-order functions this file tests, never a second copy written inline", () => {
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
+  assert.ok(html.includes(moodFrameSequence.toString()), "the mood cycle's real ordering function reaches the page");
+  assert.ok(html.includes(turnFrameSequence.toString()), "the facing sweep's real ordering function reaches the page");
+  assert.ok(html.includes(movingFrameSequence.toString()), "the pose toggle's real ordering function reaches the page");
+  assert.match(html, /const FACING_TURN_ORDER = \["left","half-left",null,"half-right","right"\]/);
+});
+
+test("the facing sweep takes the plain swatch's place and the pose toggle takes happy's, so neither adds a grid cell", () => {
+  const html = renderSpriteCatalogHtml({ iconTemplates, largeTemplates, factRows: SEED_ROWS });
+  assert.match(html, /replaceChild\(makeCycleSwatch\(turnFrames[\s\S]{0,120}baseSwatch\)/, "the sweep replaces the plain swatch");
+  assert.match(html, /replaceChild\(makeCycleSwatch\(movingFrames[\s\S]{0,120}\(happyRow \|\| movingRow\)\.el\)/, "the toggle replaces the happy swatch");
+  assert.match(html, /insertBefore\(makeCycleSwatch\(moodFrames[\s\S]{0,120}swatchRow\.firstChild\)/, "the mood cycle still leads the row");
 });
 
 // ---- grouping ----
