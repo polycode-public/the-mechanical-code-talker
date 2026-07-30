@@ -128,7 +128,24 @@ driving PLAN_FACT's remaining landing-order steps 3-8 in dependency order (steps
   on-load migration, `readFactRows`'s group fold + `computeAssertionGroupTrust`, the SHACL shape
   update, the same-source supersession chain): worktree dispatched, Opus. Status: started. The
   biggest, most subtle step — blast radius is `core.mjs`, `trust.mjs`, their test files, and every
-  trust-expectation pin in the estate.
+  trust-expectation pin in the estate. Batches C/D/E stay queued behind it (step 4 needs its
+  group-fold shape; 5/6/7 cascade from 4; 8 needs all of it) — not dispatchable concurrently.
+- [ ] A WebRTC connect-UX redesign (chat.html + mud.html): a full-page "lights down" overlay
+  replacing today's cramped netPanel/joinCard flow, a shared sponsor/joiner step diagram, custom
+  copy buttons with copy-preview, a URL-free invite fallback (see the bug below), mobile share-sheet
+  detection, a node roster with last-shared-fact + wave-to-one/wave-to-all. Dispatched as a single
+  Fable worktree agent per operator request, using the frontend-design skill. Not yet merged.
+
+**Bug found and fixed this session:** PLAN_FACT step 2's `teach:peer:<name>#node:<id>@<ts>` tag
+grammar landed clean in isolation, but broke chat.mjs's citation text — `renderFactLine` and ~9
+sibling call sites interpolated the raw provenance tag verbatim into `(source: ...)`, so a
+peer-taught fact's citation started showing the technical node id inline. Caught by CI's
+`e2e:deployed:mesh` post-deploy job (4 tests red), not by any local blast-radius run beforehand —
+worth noting as a real gap: none of A1-A6's own test scopes crossed into chat.mjs's citation
+rendering, since the change that broke it (the tag grammar) landed in a different worktree (A6)
+than the code it broke (chat.mjs, untouched by A6). Fixed with a `citationProvenance()` display
+helper (`chat.mjs`), mirroring the same `#node:` stripping chat-page-viz.mjs's node roster already
+does; verified against all 4 originally-failing e2e scenarios (7/7 green) before pushing.
 
 ## Open items
 
