@@ -27,6 +27,8 @@
 // to public/ingest.html, after ingest-browser.bundle.js already exists.
 import { THEME_TOKENS_CSS, SERIF_STACK, MONO_STACK, escapeHtml } from "./viz-theme.mjs";
 import { bandLabelFor, statsSummaryLine, clearSiteAssetCaches, fetchWithProgress, renderStatsPanelInto } from "./memory-panel-viz.mjs";
+import { loadWinkVendor } from "./viz-boot.mjs";
+import { cloneMemoryPayload } from "../adapters/memory/core.mjs";
 
 const DEFAULT_TITLE = "the-mechanical-code-talker — ingest";
 
@@ -440,30 +442,14 @@ ${THEME_TOKENS_CSS}
       console.warn("tmct ingest: chat-seed.json unavailable — starting unseeded", err);
     }
   }
-  function cloneSeed() {
-    if (!seedPayload) return null;
-    try { return structuredClone(seedPayload); } catch { return JSON.parse(JSON.stringify(seedPayload)); }
-  }
+  const cloneMemoryPayload = ${cloneMemoryPayload.toString()};
   function newSession() {
-    return window.tmctIngest.createIngestSession({ seedPayload: cloneSeed(), vocabSeeded: Boolean(seedPayload) });
+    return window.tmctIngest.createIngestSession({ seedPayload: cloneMemoryPayload(seedPayload), vocabSeeded: Boolean(seedPayload) });
   }
 
   // ---- engine boot ---------------------------------------------------------
-  const WINK_LOAD_TIMEOUT_MS = 8000;
-  async function tryLoadWink() {
-    let settled = false;
-    const timeout = new Promise((_, reject) => setTimeout(() => { if (!settled) reject(new Error("wink load stalled")); }, WINK_LOAD_TIMEOUT_MS));
-    try {
-      const mod = await Promise.race([import("./vendor/wink.js"), timeout]);
-      settled = true;
-      window.tmctIngest.registerWinkModel(() => ({ winkNLP: mod.winkNLP, model: mod.model }));
-      return "loaded";
-    } catch (err) {
-      settled = true;
-      console.warn("tmct ingest: the wink vendor asset failed to load; the recognizer needs it to split and parse sentences", err);
-      return "unavailable";
-    }
-  }
+  const loadWinkVendor = ${loadWinkVendor.toString()};
+  const tryLoadWink = loadWinkVendor({ register: (factory) => window.tmctIngest.registerWinkModel(factory) });
 
   // The deploy's own version, read off the service worker file the build
   // already stamps — the only same-origin place the number exists at runtime
