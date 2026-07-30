@@ -16,22 +16,26 @@ Session handles (inboxes): `tmct` and `tmct-hanoi`. See `~/.claude/inboxes/tmct.
 
 ## In-flight right now (2026-07-30)
 
-**One worktree active right now**: a sub-agent isolating `pages-research.test.mjs` from
-`e2e:deployed:pages` (see below) — check `git worktree list` for its current path.
+**No worktrees active.**
 
-**OPEN — the contention fix above wasn't sufficient.** Pushing it (`efb704d1`) triggered pipeline
-`2717201943`, whose `e2e:deployed:pages` job (30 files, `--test-concurrency=4`) failed all 3
-retries — but every single failure across all 3 attempts, no exceptions, was in
-`test-e2e/pages-research.test.mjs`: reset-to-seed, the researched-panel, research-row pause/play,
-a typed research auto-play queue, and a `/wiki` live-Wikipedia supplement, each taking 2-6x its
-solo local runtime before failing. Every other job (`deploy:website`, `e2e:deployed:shell`,
-`e2e:deployed:mesh`, `smoke:post-deploy`, `e2e:published-package`) passed clean — the live site is
-confirmed fine, this is purely that one file's tests (timer/live-network-dependent: auto-play
-queues stepping over real time, a real Wikipedia fetch) not tolerating even `--test-concurrency=4`
-alongside 29 neighbors. Dispatched a sub-agent to isolate `pages-research.test.mjs` into its own
-low-concurrency lane (or fix whatever its reproduction actually finds) rather than just lowering
-`:pages`'s cap further for everyone. **`main` is still red on `e2e:deployed:pages` — do not push
-again until this lands**, though the live site itself needs no rollback (it's correct and healthy).
+**DONE — the `e2e:deployed:pages` contention follow-up, `fae19dd3`.** Pushing the first contention
+fix (`efb704d1`) triggered pipeline `2717201943`, whose `e2e:deployed:pages` job (30 files,
+`--test-concurrency=4`) failed all 3 retries. The coordinator's own first dispatch mis-attributed
+every failure to `pages-research.test.mjs` — wrong: independently re-checked against the raw
+`glab ci trace` logs, every failure across all 3 attempts was actually in
+`pages-chat-research.test.mjs`, `pages-chat-live-toggle.test.mjs`, or `pages-chat-persistence.test.mjs`
+(reset-to-seed, the researched-panel, research-row pause/play, a typed research auto-play queue, a
+`/wiki` live-Wikipedia supplement) — `pages-research.test.mjs` itself has never failed either
+contention pipeline. Every other job (`deploy:website`, `e2e:deployed:shell`, `e2e:deployed:mesh`,
+`smoke:post-deploy`, `e2e:published-package`) passed clean throughout — the live site was
+confirmed fine at every point. Root cause (reproduced locally by doubling the 30-file `:pages`
+matrix's own load to approximate runner-level contention): those three files' assertions each race
+a real elapsed-time budget (a fetch's own abort timeout, an auto-play ticker's pacing, a debounced
+autosave window) against a mocked round trip that runs through the same Node test process, so
+process-level contention — not just Chromium load — can lose the race. Fix: moved the three into a
+new `e2e:deployed:pages-timing` job at `--test-concurrency=1`; the remaining 27 stay in `:pages` at
+concurrency 4. File count re-audited (9+27+3+6=45, same total, no drops/dupes), `glab ci lint`
+clean. Merged, worktree removed. Not yet re-verified against a real deploy pipeline.
 
 **Real bug found and fixed post-push, 2026-07-30:** the new "facts in the graph" tile
 (`research-viz.mjs`, from the fact-count work below) pushed `.statuspanel`'s three fixed
