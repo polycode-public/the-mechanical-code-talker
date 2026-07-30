@@ -1,0 +1,63 @@
+# elephant-facing-half-right — elephant-facing-half-left.toml's
+# three-quarter turn mirrored across the canvas midline (every shape
+# wrapped in one translate-then-flip group), so the two directions stay
+# geometrically identical twins. The mirror flips the lit corner of the
+# shared gradient along with the pose, which reads as the same figure
+# turned around under the same light.
+#
+# {{FACE}} sits OUTSIDE the flip group, so the resolved face fragment is the
+# only thing on the canvas that is never mirrored.
+classes = ["elephant"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="elephant-facing-half-right-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g transform="translate(24 0) scale(-1 1)">
+    <ellipse cx="11.4" cy="7" rx="3.2" ry="3.7" fill="url(#elephant-facing-half-right-fill)" opacity="0.55"/>
+    <ellipse cx="16.6" cy="15.4" rx="7.2" ry="5.2" fill="url(#elephant-facing-half-right-fill)"/>
+    <g fill="url(#elephant-facing-half-right-fill)">
+      <rect x="10.8" y="18.6" width="2" height="3.2" rx="1"/>
+      <rect x="14.6" y="19" width="2" height="3" rx="1"/>
+      <rect x="18.6" y="19" width="2" height="3" rx="1"/>
+      <rect x="21.8" y="18.6" width="2" height="3.2" rx="1"/>
+    </g>
+    <ellipse cx="23.4" cy="13.8" rx="0.9" ry="1.2" fill="url(#elephant-facing-half-right-fill)"/>
+    <circle cx="8.6" cy="9.2" r="4.05" fill="url(#elephant-facing-half-right-fill)"/>
+    <path d="M6.6 12.4 C5.8 12.8 5.4 13.6 5.6 14.4 C6.1 13.9 6.5 13.2 6.8 12.5 Z" fill="#f4ecd8"/>
+    <path d="M6.8 12.6 C5.2 13 4.4 14.8 4.9 16.4 C5.2 17.2 6.1 17.3 6.2 16.5 C5.7 15.6 5.5 14.4 6 13.2 C6.2 13 6.5 12.8 6.8 12.6 Z" fill="url(#elephant-facing-half-right-fill)"/>
+    <ellipse cx="10.5" cy="8.9" rx="0.3" ry="0.38" fill="#1c1c1c"/>
+    <ellipse cx="6.7" cy="8.4" rx="0.55" ry="0.65" fill="#1c1c1c"/>
+    <ellipse cx="9.6" cy="6.8" rx="1.3" ry="1" fill="#ffffff" opacity="0.3"/>
+    <ellipse cx="13.6" cy="13.6" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.26"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-right"
+
+# elephant-facing-half-left.toml's anchor reflected across the canvas
+# midline (cx = 24 - 8.04); cy and scale are the mirror's own invariants.
+[face]
+cx = 15.96
+cy = 8.90
+scale = 3.34
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

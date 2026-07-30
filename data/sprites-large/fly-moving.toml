@@ -1,0 +1,59 @@
+# fly-moving — fly-with-emotion.toml's own front view caught mid flight,
+# used whenever mgx:pose = moving is taught with no facing fact alongside
+# it. The head and abdomen keep their front-on position and the face
+# anchor is unchanged; each wing gains a wider, more translucent twin
+# layered behind it to read as motion blur, and the legs tuck up instead
+# of trailing down. This is the class where "moving" most obviously means
+# flying, so the wing blur carries the whole read.
+classes = ["fly"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="fly-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g fill="currentColor">
+    <path d="M9 10 C2 5 1 2.5 2 1 C5.5 1 9.5 5.5 11 10 Z" opacity="0.25"/>
+    <path d="M9 10 C3 6 2 4 3 2 C6 2 9 6 10.5 10 Z" opacity="0.5"/>
+    <path d="M15 10 C22 5 23 2.5 22 1 C18.5 1 14.5 5.5 13 10 Z" opacity="0.25"/>
+    <path d="M15 10 C21 6 22 4 21 2 C18 2 15 6 13.5 10 Z" opacity="0.5"/>
+  </g>
+  <path d="M6 6.4 C5.4 5 5.6 3.6 6.4 3" stroke="#5a4636" stroke-width="0.3" opacity="0.6" fill="none" stroke-linecap="round"/>
+  <ellipse cx="12" cy="13.6" rx="3.4" ry="5.2" fill="url(#fly-moving-fill)"/>
+  <ellipse cx="11.1" cy="12" rx="1.1" ry="1.7" fill="#000000" opacity="0.22"/>
+  <circle cx="12" cy="7" r="2.7" fill="url(#fly-moving-fill)"/>
+  <g stroke="currentColor" stroke-width="1" stroke-linecap="round">
+    <path d="M9.6 17 L8.6 18"/>
+    <path d="M14.4 17 L15.4 18"/>
+  </g>
+  <ellipse cx="10.8" cy="10.6" rx="1.6" ry="1" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+# Reuses fly-with-emotion.toml's own front-facing anchor unchanged — this
+# is still the centre view, so the face fragment stays exactly where the
+# head circle already places it.
+[face]
+cx = 12
+cy = 7
+scale = 2.7
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

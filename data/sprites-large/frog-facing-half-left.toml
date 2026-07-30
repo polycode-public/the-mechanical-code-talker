@@ -1,0 +1,62 @@
+# frog-facing-half-left — the frog turned three-quarters, halfway between
+# frog-facing-left.toml's full profile and frog-with-emotion.toml's front
+# view. Both eye bulges show here, but asymmetrically: the near one is
+# still bigger and further forward, the far one is smaller but no longer
+# hidden — the cue that reads as a turned head rather than a flat
+# profile. The snout bump projects only about half as far past the near
+# bulge's edge, and the far leg lobe shows more of itself than in the
+# full profile.
+classes = ["frog"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="frog-facing-half-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="#a8d068"/>
+      <stop offset="55%" stop-color="#5a9040"/>
+      <stop offset="100%" stop-color="#2f5322"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="13.2" cy="15.1" rx="7.4" ry="5.3" fill="url(#frog-facing-half-left-fill)"/>
+  <ellipse cx="8.6" cy="17.7" rx="3" ry="2" fill="url(#frog-facing-half-left-fill)"/>
+  <ellipse cx="19" cy="17.5" rx="2.6" ry="1.8" fill="url(#frog-facing-half-left-fill)"/>
+  <g stroke="#2f5322" stroke-width="0.9" stroke-linecap="round">
+    <path d="M6.2 18.5 L5.2 19.9"/><path d="M8 19.5 L7.8 20.9"/><path d="M10.2 19.3 L10.6 20.7"/>
+    <path d="M17.4 18.5 L18.2 19.7"/><path d="M19.4 19.3 L19.6 20.6"/>
+  </g>
+  <ellipse cx="10.4" cy="16.8" rx="2.6" ry="1.7" fill="#dcead0" opacity="0.55"/>
+  <ellipse cx="9" cy="13.2" rx="1.4" ry="0.95" fill="#2f5322" opacity="0.4"/>
+  <ellipse cx="15" cy="13.1" rx="1" ry="0.7" fill="#2f5322" opacity="0.3"/>
+  <circle cx="11.8" cy="8.5" r="1.8" fill="url(#frog-facing-half-left-fill)"/>
+  <circle cx="11.8" cy="8.3" r="1.3" fill="#f4ecd8"/>
+  <circle cx="7.4" cy="8.7" r="2.6" fill="url(#frog-facing-half-left-fill)"/>
+  <circle cx="7.4" cy="8.5" r="1.9" fill="#f4ecd8"/>
+  <path d="M5.2 9.4 C4.2 9.6 4 10.2 4.6 10.7 C5.2 11 5.9 10.2 5.2 9.4 Z" fill="#5a9040"/>
+  <ellipse cx="11" cy="13.6" rx="2.4" ry="1.3" fill="#ffffff" opacity="0.22"/>
+  <ellipse cx="6.2" cy="7.6" rx="0.55" ry="0.42" fill="#ffffff" opacity="0.6"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-left"
+
+# Half scale is 0.825 * 2.39 = 1.97175, rounded to 1.97. The near eye-white
+# this file draws is centred at (7.4, 8.5), so cx = 7.4 + 0.4*1.97 = 8.19
+# and cy = 8.5 + 0.15*1.97 = 8.80.
+[face]
+cx = 8.19
+cy = 8.80
+scale = 1.97
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

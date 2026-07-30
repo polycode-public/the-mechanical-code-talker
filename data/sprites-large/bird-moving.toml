@@ -1,0 +1,55 @@
+# bird-moving — bird-with-emotion.toml's own front view caught in flight,
+# used whenever mgx:pose = moving is taught with no facing fact alongside
+# it. The head, beak and body keep their front-on position and the face
+# anchor is unchanged, since this is still the centre view; the single
+# dark tail patch becomes a matched pair of raised wings, lifted and swept
+# back on both sides for a bilaterally readable flap, and the legs tuck up
+# instead of hanging down.
+classes = ["bird"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="bird-moving-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="11.4" cy="13.7" rx="6.4" ry="5" fill="url(#bird-moving-fill)"/>
+  <path d="M6.4 8.4 C3 7.6 2.4 10.6 5.6 11.6 C7.4 12.2 8.4 10.4 6.4 8.4 Z" fill="color-mix(in srgb, currentColor 78%, black)"/>
+  <path d="M14.4 9.4 C17 7.6 18 9.6 16.4 11.8 C15 13 13.4 11.4 14.4 9.4 Z" fill="color-mix(in srgb, currentColor 70%, white)" opacity="0.85"/>
+  <path d="M8.6 11.4 C10.6 10.6 13 11.4 13.6 14 C14 16.2 12.4 17.8 10.4 17.4 C8.6 17 7.4 13.4 8.6 11.4 Z" fill="#c1552e"/>
+  <circle cx="16.4" cy="8.4" r="3.4" fill="url(#bird-moving-fill)"/>
+  <path d="M19.4 8.2 L22.4 7.4 L19.8 9.6 Z" fill="#e8a23a"/>
+  <ellipse cx="9.4" cy="10.9" rx="2.2" ry="1.3" fill="#ffffff" opacity="0.3"/>
+  <g stroke="#e8a23a" stroke-width="1.3" stroke-linecap="round">
+    <line x1="9.4" y1="17.5" x2="8.4" y2="18.5"/>
+    <line x1="12.4" y1="17.7" x2="13" y2="18.5"/>
+  </g>
+  {{FACE}}
+</svg>
+"""
+
+[[match]]
+property = "mgx:pose"
+value = "moving"
+
+# Reuses bird-with-emotion.toml's own front-facing anchor unchanged — this
+# is still the centre view, so the face fragment stays exactly where the
+# head circle already places it.
+[face]
+cx = 16.4
+cy = 8.4
+scale = 3.4
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"

@@ -1,0 +1,63 @@
+# elephant-facing-half-left — the elephant turned three-quarters, halfway
+# between elephant-facing-left.toml's full profile and
+# elephant-with-emotion.toml's front view. The head sits closer to centre,
+# the trunk hangs and curls only about half as far past the head's edge as
+# the full profile's does, and a small far eye now shows past the trunk
+# line alongside the near eye — the cue that reads as a turned head rather
+# than a flat profile. The ear, body, legs and tail nub keep the profile
+# file's own shapes, shifted right by the same amount the head moved.
+classes = ["elephant"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="elephant-facing-half-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="11.4" cy="7" rx="3.2" ry="3.7" fill="url(#elephant-facing-half-left-fill)" opacity="0.55"/>
+  <ellipse cx="16.6" cy="15.4" rx="7.2" ry="5.2" fill="url(#elephant-facing-half-left-fill)"/>
+  <g fill="url(#elephant-facing-half-left-fill)">
+    <rect x="10.8" y="18.6" width="2" height="3.2" rx="1"/>
+    <rect x="14.6" y="19" width="2" height="3" rx="1"/>
+    <rect x="18.6" y="19" width="2" height="3" rx="1"/>
+    <rect x="21.8" y="18.6" width="2" height="3.2" rx="1"/>
+  </g>
+  <ellipse cx="23.4" cy="13.8" rx="0.9" ry="1.2" fill="url(#elephant-facing-half-left-fill)"/>
+  <circle cx="8.6" cy="9.2" r="4.05" fill="url(#elephant-facing-half-left-fill)"/>
+  <path d="M6.6 12.4 C5.8 12.8 5.4 13.6 5.6 14.4 C6.1 13.9 6.5 13.2 6.8 12.5 Z" fill="#f4ecd8"/>
+  <path d="M6.8 12.6 C5.2 13 4.4 14.8 4.9 16.4 C5.2 17.2 6.1 17.3 6.2 16.5 C5.7 15.6 5.5 14.4 6 13.2 C6.2 13 6.5 12.8 6.8 12.6 Z" fill="url(#elephant-facing-half-left-fill)"/>
+  <ellipse cx="10.5" cy="8.9" rx="0.3" ry="0.38" fill="#1c1c1c"/>
+  <ellipse cx="6.7" cy="8.4" rx="0.55" ry="0.65" fill="#1c1c1c"/>
+  <ellipse cx="9.6" cy="6.8" rx="1.3" ry="1" fill="#ffffff" opacity="0.3"/>
+  <ellipse cx="13.6" cy="13.6" rx="2.6" ry="1.5" fill="#ffffff" opacity="0.26"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-left"
+
+# Half scale is 0.825 * head radius 4.05 = 3.34, the table's own halfway
+# point between the front view's 1.0*r and the profile's 0.65*r. The near
+# eye drawn above sits at (6.7, 8.4), so cx = 6.7 + 0.4*3.34 = 8.04 and
+# cy = 8.4 + 0.15*3.34 = 8.90, landing the shared face fragment's own near
+# eye on top of it.
+[face]
+cx = 8.04
+cy = 8.90
+scale = 3.34
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
