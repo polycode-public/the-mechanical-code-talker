@@ -1,0 +1,70 @@
+# soldier-facing-left — soldier-with-emotion.toml's body turned to a left
+# profile: the head and its helmet+brim shift together toward the left
+# shoulder (the helmet is head-attached, the same way king's crown follows
+# king's head shift), a nose wedge breaks the head's left silhouette, and a
+# single forward eye replaces the plain head circle. The epaulettes are
+# shoulder-attached, so they keep soldier.toml's own position. Selected
+# only when the instance's own mgx:faces fact says "left". It also carries
+# the shared face-fragment mechanism, so a soldier taught BOTH mgx:faces =
+# left and one of the 6 mgx:feels words renders this profile wearing that
+# mood; taught only the facing, {{FACE}} resolves to nothing and the
+# profile keeps the single forward eye it draws itself.
+classes = ["soldier"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="soldier-facing-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+  </defs>
+  <g fill="url(#soldier-facing-left-fill)">
+    <path d="M9.4 14 C7.6 14.1 5.9 15.6 5.6 18.3 C5.5 19.7 6.2 20.6 7.2 20.1 C7.3 18 7.9 16 9.7 15.1 Z"/>
+    <path d="M14.6 14 C16.4 14.1 18.1 15.6 18.4 18.3 C18.5 19.7 17.8 20.6 16.8 20.1 C16.7 18 16.1 16 14.3 15.1 Z"/>
+    <path d="M6 21 C6 16 8.5 13.7 12 13.7 C15.5 13.7 18 16 18 21 Z"/>
+    <path d="M10.85 12.3 L13.15 12.3 L13 13.9 L11 13.9 Z"/>
+  </g>
+  <path d="M6.48 8.4 C6.48 5.1 8.68 2.6 11.48 2.6 C14.28 2.6 16.48 5.1 16.48 8.4 L16.48 8.7 L6.48 8.7 Z" fill="url(#soldier-facing-left-fill)"/>
+  <path d="M5.88 8.4 L17.08 8.4 L17.08 9.4 L5.88 9.4 Z" fill="currentColor" opacity="0.5"/>
+  <circle cx="11.48" cy="9.8" r="2.9" fill="url(#soldier-facing-left-fill)"/>
+  <path d="M8.75 9.28 Q7.65 10.15 8.75 11.08 Z" fill="url(#soldier-facing-left-fill)"/>
+  <ellipse cx="9.99" cy="9.36" rx="0.25" ry="0.29" fill="#1c1c1c"/>
+  <path d="M9.3 14.5 C8 15.4 7.1 16.9 6.9 18.8" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 14.5 C16 15.4 16.9 16.9 17.1 18.8" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M7.8 13.9 L9.6 13.5 L9.9 14.6 L8.1 15 Z" fill="#6b7a4f"/>
+  <circle cx="8.85" cy="14.25" r="0.3" fill="#c9a13a"/>
+  <path d="M16.2 13.9 L14.4 13.5 L14.1 14.6 L15.9 15 Z" fill="#6b7a4f"/>
+  <circle cx="15.15" cy="14.25" r="0.3" fill="#c9a13a"/>
+  <ellipse cx="8.48" cy="5.4" rx="1.5" ry="0.6" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "left"
+
+# Derived from soldier's own front-facing head circle (cx=12 cy=9.8 r=2.9,
+# soldier-with-emotion.toml's own [face] anchor): head shift = 0.18*2.9 =
+# 0.52, so the profile head (and its helmet, which follows it) sits at
+# cx=11.48 cy=9.8 r=2.9. The forward eye this file draws sits at
+# (9.99, 9.36). scale = 0.65*2.9 = 1.89, and cx/cy place the fragment so
+# its own forward eye lands on the drawn one: cx = 9.99 + 0.4*1.89 = 10.75,
+# cy = 9.36 + 0.15*1.89 = 9.64.
+[face]
+cx = 10.75
+cy = 9.64
+scale = 1.89
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
