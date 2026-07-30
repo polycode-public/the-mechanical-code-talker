@@ -1,0 +1,58 @@
+classes = ["nurse"]
+svg = """
+<svg viewBox="0 0 24 24" aria-hidden="true">
+  <defs>
+    <linearGradient id="nurse-facing-half-left-fill" x1="0" y1="0" x2="0.4" y2="1">
+      <stop offset="0%" stop-color="color-mix(in srgb, currentColor 60%, white)"/>
+      <stop offset="55%" stop-color="currentColor"/>
+      <stop offset="100%" stop-color="color-mix(in srgb, currentColor 78%, black)"/>
+    </linearGradient>
+    <linearGradient id="nurse-facing-half-left-scrub" x1="0" y1="0" x2="0.3" y2="1">
+      <stop offset="0%" stop-color="#a9cdd3"/>
+      <stop offset="100%" stop-color="#6f9aa3"/>
+    </linearGradient>
+  </defs>
+  <path d="M7.92 4.4 C7.92 2.4 9.62 0.8 11.72 0.8 C13.82 0.8 15.52 2.4 15.52 4.4 L15.52 5.5 C15.52 5.9 15.12 6.2 14.72 6.2 L8.72 6.2 C8.32 6.2 7.92 5.9 7.92 5.5 Z" fill="url(#nurse-facing-half-left-fill)"/>
+  <rect x="10.92" y="2" width="1.6" height="3.2" rx="0.3" fill="#ffffff" opacity="0.95"/>
+  <rect x="10.12" y="2.8" width="3.2" height="1.6" rx="0.3" fill="#ffffff" opacity="0.95"/>
+  <g fill="url(#nurse-facing-half-left-fill)">
+    <path d="M9.4 13.4 C7.6 13.5 5.9 15 5.6 17.7 C5.5 19.1 6.2 20 7.2 19.5 C7.3 17.4 7.9 15.4 9.7 14.5 Z"/>
+    <path d="M14.6 13.4 C16.4 13.5 18.1 15 18.4 17.7 C18.5 19.1 17.8 20 16.8 19.5 C16.7 17.4 16.1 15.4 14.3 14.5 Z"/>
+    <path d="M6 21 C6 15.5 8.7 13.1 12 13.1 C15.3 13.1 18 15.5 18 21 Z"/>
+    <path d="M10.75 11.3 L13.25 11.3 L13.05 13.3 L10.95 13.3 Z"/>
+  </g>
+  <ellipse cx="10.4" cy="17" rx="1.4" ry="2.2" fill="#ffffff" opacity="0.1"/>
+  <path d="M6.6 14.9 C6.2 16.8 6 18.8 6 21 L18 21 C18 18.8 17.8 16.8 17.4 14.9 C16.2 16 14.2 16.7 12 16.7 C9.8 16.7 7.8 16 6.6 14.9 Z" fill="url(#nurse-facing-half-left-scrub)"/>
+  <path d="M10.3 13.9 L12 16.7 L13.7 13.9" fill="none" stroke="#537882" stroke-width="0.5" opacity="0.6"/>
+  <rect x="10.6" y="18.4" width="2.8" height="1.8" rx="0.3" fill="none" stroke="#537882" stroke-width="0.3" opacity="0.55"/>
+  <circle cx="11.72" cy="8.6" r="3.1" fill="url(#nurse-facing-half-left-fill)"/>
+  <path d="M8.81 8.13 Q8.15 9.35 8.81 10.01 Z" fill="url(#nurse-facing-half-left-fill)"/>
+  <ellipse cx="10.12" cy="8.13" rx="0.26" ry="0.32" fill="#1c1c1c"/>
+  <ellipse cx="13.88" cy="8.08" rx="0.17" ry="0.21" fill="#1c1c1c"/>
+  <path d="M9.3 13.9 C8 14.8 7.1 16.3 6.9 18.2" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <path d="M14.7 13.9 C16 14.8 16.9 16.3 17.1 18.2" fill="none" stroke="currentColor" stroke-width="0.4" opacity="0.3" stroke-linecap="round"/>
+  <ellipse cx="9.12" cy="3.4" rx="1.4" ry="0.5" fill="#ffffff" opacity="0.3"/>
+  {{FACE}}
+</svg>
+"""
+
+[match]
+property = "mgx:faces"
+value = "half-left"
+
+[face]
+cx = 11.14
+cy = 8.51
+scale = 2.54
+
+[parameters.emotion]
+property = "mgx:feels"
+placeholder = "{{FACE}}"
+
+[parameters.emotion.values]
+happy = "happy"
+sad = "sad"
+angry = "angry"
+scared = "scared"
+surprised = "surprised"
+calm = "calm"
