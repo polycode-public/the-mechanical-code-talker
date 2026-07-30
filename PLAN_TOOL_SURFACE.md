@@ -432,11 +432,13 @@ Ordered so each phase is useful on its own and unblocks the next.
    renders and appends it as an `mgx:feels` fact per agent per turn; `startSpiderFlyGame` writes the
    starting `calm`. `emotionFor` is deleted and the page reads `agent.mood`. Vocabulary: happy,
    angry, scared, calm. `tmct_sprite` now has a fact to ground "a happy spider" against.
-8. **`tmct_sprite`.** The new tool, its capability record, its `FRAMES` entry, and the expression and
-   size slots bound to `sprite-expressions.mjs` / `sprite-size.mjs` rather than a new hand-kept list.
-   Decide which sense of "large" the schema carries (tier or property — see Theme 2). Then
-   `fn("get me the large sprite for a happy spider")` works, and `spider-fly-viz.mjs:691-702`
-   collapses.
+8. **`tmct_sprite` — landed.** The tool, its capability record, its `FRAMES` entry, and the
+   expression and size slots bound to `sprite-expressions.mjs` / `sprite-size.mjs` rather than a
+   new hand-kept list. "Large" is the scale tier `data/sprites-large/` ships, re-confirmed against
+   the real 987-file catalog. `fn("get me the large sprite for a happy spider")` plans to a bound
+   `tmct_sprite` call and grounds it; `spider-fly-viz.mjs:691-702` collapsed into
+   `sprite-request.mjs`. The `class` slot binds through the existing tier-2 `"memory-fact-term"`
+   oracle — a taught taxonomy row is a stored fact row, so it needed no second view of its own.
 9. **The sprites.html interceptions.** Key `chat.mjs`'s generic membership and property lanes on the
    sprite-facts predicates so `answerSpriteQuestion` (`sprite-catalog-viz.mjs:397-429`) deletes, and
    route `extractSceneItems` (`:329-384`) through `resolveObject`. Needs phase 5.

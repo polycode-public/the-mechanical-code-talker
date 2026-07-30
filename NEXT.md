@@ -53,8 +53,12 @@ names — `CLASSES_WITH_CENTRE_MOVING` is the name that survived reconciliation)
 wave is done, and so is the demo UI for it: `sprites.html` now animates three axes per card at a
 shared 800ms frame delay — the pre-existing mood cycle (top-left, unchanged), a new 5-angle turning
 sweep in the plain swatch's slot, and a new idle/moving toggle in the happy swatch's slot, using the
-`mgx:pose = "moving"` templates live rather than deferred as originally scoped. `tmct_sprite` (below)
-is what's left.
+`mgx:pose = "moving"` templates live rather than deferred as originally scoped. `tmct_sprite`
+(phase 8) is landed too — the tool, its capability record, `FRAMES` entry, and `class` slot binding
+through the existing tier-2 memory-fact-term oracle rather than a new one; "large" resolved to the
+scale tier `data/sprites-large/` ships, re-confirmed against the real 987-file catalog.
+`spider-fly-viz.mjs`'s five-argument sprite call collapsed into `src/domain/sprite-request.mjs`.
+Phases 6 and 9 are dispatched and in progress.
 
 **Everything merged onto local `main` so far this session is green** (`npm test` full suite: 4939
 pass after the Wave 2/3 checkpoint; every subsequent wave re-verified with `npm run test:fast` plus
@@ -83,15 +87,11 @@ clean path is a push to `main` with a remote — GitLab CI's `deploy:website` jo
 ## Open items
 
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 6** — `fn("list the locations of flies and spiders")` via
-  `ask`. Gap A is fully landed, so nothing blocks this. The design fork is already decided in the
-  doc's own Theme 2 section: route through `ask`, keep `session.snapshot()` as the fast path.
-- [ ] **`PLAN_TOOL_SURFACE.md` phase 8** — the `tmct_sprite` tool. Mood is a fact (phase 7, landed)
-  and the multi-constraint resolver exists (this session's sprite work); still needs the capability
-  record, the `FRAMES` entry, and a decision on which sense of "large" the schema carries (tier vs.
-  property — see the doc's Theme 2 section).
+  `ask`. Dispatched to a background agent; route through `ask`, keep `session.snapshot()` as the
+  fast path, per the doc's own recorded Theme 2 decision.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 9** — key `chat.mjs`'s generic membership/property lanes on the
   sprite-facts predicates so `answerSpriteQuestion` deletes; route `extractSceneItems` through
-  `resolveObject`. Gap A is fully landed, so nothing blocks this.
+  `resolveObject`. Dispatched to a background agent.
 - [ ] **`PLAN_TOOL_SURFACE.md` phase 10, Gap C** — one `globalThis.tmct` (`ask`, `plan`, `turn`,
   `session`) replacing the eleven per-page global bags. Needs phases 3 and 5 (both done) and 8 to
   exist first.
